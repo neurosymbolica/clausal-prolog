@@ -8,9 +8,10 @@ import sympy as sp
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
 from clausal.terms import Add, Sub, Mult, Div, Pow, Negate
+from clausal.logic.exceptions import LogicException
 from clausal.modules.py.sympy import (
-    to_sympy, from_sympy, _ConversionContext,
-    sym, ToSympy, FromSympy,
+    _to_sympy, _from_sympy, _ConversionContext,
+    sym, sympy_term,
     simplify, expand, factor, solve, solve_all,
     diff, integrate, limit, series, subs, free_vars,
 )
@@ -53,17 +54,17 @@ def _first_solution(predicate, *args):
 class TestToSympy:
     def test_int(self):
         # nv
-        assert to_sympy(42) == sp.Integer(42)
+        assert _to_sympy(42) == sp.Integer(42)
 
     def test_float(self):
         # nv
-        assert to_sympy(3.14) == sp.Float(3.14)
+        assert _to_sympy(3.14) == sp.Float(3.14)
 
     def test_free_var(self):
         # nv
         v = Var()
         ctx = _ConversionContext()
-        result = to_sympy(v, ctx)
+        result = _to_sympy(v, ctx)
         assert isinstance(result, sp.Symbol)
 
     def test_bound_var_derefs(self):
@@ -71,7 +72,7 @@ class TestToSympy:
         v = Var()
         trail = Trail()
         unify(v, 5, trail)
-        assert to_sympy(v) == sp.Integer(5)
+        assert _to_sympy(v) == sp.Integer(5)
 
     def test_add(self):
         # nv
@@ -80,7 +81,7 @@ class TestToSympy:
         v = Var()
         ctx._var_to_sym[v._id] = x
         ctx._sym_to_var["x"] = v
-        result = to_sympy(Add(left=v, right=1), ctx)
+        result = _to_sympy(Add(left=v, right=1), ctx)
         assert result == x + 1
 
     def test_sub(self):
@@ -90,12 +91,12 @@ class TestToSympy:
         v = Var()
         ctx._var_to_sym[v._id] = x
         ctx._sym_to_var["x"] = v
-        result = to_sympy(Sub(left=v, right=1), ctx)
+        result = _to_sympy(Sub(left=v, right=1), ctx)
         assert result == x - 1
 
     def test_mult(self):
         # nv
-        result = to_sympy(Mult(left=3, right=7))
+        result = _to_sympy(Mult(left=3, right=7))
         assert result == sp.Integer(21)
 
     def test_pow(self):
@@ -105,12 +106,12 @@ class TestToSympy:
         v = Var()
         ctx._var_to_sym[v._id] = x
         ctx._sym_to_var["x"] = v
-        result = to_sympy(Pow(left=v, right=2), ctx)
+        result = _to_sympy(Pow(left=v, right=2), ctx)
         assert result == x**2
 
     def test_negate(self):
         # nv
-        result = to_sympy(Negate(operand=5))
+        result = _to_sympy(Negate(operand=5))
         assert result == sp.Integer(-5)
 
     def test_compound_sin(self):
@@ -120,12 +121,12 @@ class TestToSympy:
         v = Var()
         ctx._var_to_sym[v._id] = x
         ctx._sym_to_var["x"] = v
-        result = to_sympy(("sin", v), ctx)
+        result = _to_sympy(("sin", v), ctx)
         assert result == sp.sin(x)
 
     def test_compound_unknown(self):
         # nv
-        result = to_sympy(("foo", 1, 2))
+        result = _to_sympy(("foo", 1, 2))
         assert str(result) == "foo(1, 2)"
 
     def test_nested(self):
@@ -140,34 +141,34 @@ class TestToSympy:
             left=Add(left=Pow(left=v, right=2), right=Mult(left=2, right=v)),
             right=1,
         )
-        result = to_sympy(term, ctx)
+        result = _to_sympy(term, ctx)
         assert sp.expand(result - (x**2 + 2 * x + 1)) == 0
 
     def test_string_becomes_symbol(self):
         # nv
-        result = to_sympy("x")
+        result = _to_sympy("x")
         assert result == sp.Symbol("x")
 
     def test_sympy_passthrough(self):
         # nv
         expr = sp.sin(sp.Symbol("x"))
-        assert to_sympy(expr) is expr
+        assert _to_sympy(expr) is expr
 
     def test_div(self):
         # nv
-        result = to_sympy(Div(left=1, right=2))
+        result = _to_sympy(Div(left=1, right=2))
         assert result == sp.Rational(1, 2)
 
 
 class TestFromSympy:
     def test_integer(self):
         # nv
-        assert from_sympy(sp.Integer(42)) == 42
+        assert _from_sympy(sp.Integer(42)) == 42
 
     def test_symbol_passthrough(self):
         # nv
         ctx = _ConversionContext()
-        result = from_sympy(sp.Symbol("x"), ctx)
+        result = _from_sympy(sp.Symbol("x"), ctx)
         # Symbols without a Var mapping pass through as ground values
         assert isinstance(result, sp.Symbol)
         assert result == sp.Symbol("x")
@@ -177,80 +178,80 @@ class TestFromSympy:
         v = Var()
         ctx = _ConversionContext()
         sym = ctx.var_to_symbol(v)
-        result = from_sympy(sym, ctx)
+        result = _from_sympy(sym, ctx)
         assert result is v
 
     def test_add(self):
         # nv
         x = sp.Symbol("x")
         ctx = _ConversionContext()
-        result = from_sympy(x + 1, ctx)
+        result = _from_sympy(x + 1, ctx)
         assert isinstance(result, Add)
 
     def test_mul(self):
         # nv
         x = sp.Symbol("x")
         ctx = _ConversionContext()
-        result = from_sympy(3 * x, ctx)
+        result = _from_sympy(3 * x, ctx)
         assert isinstance(result, Mult)
 
     def test_pow(self):
         # nv
         x = sp.Symbol("x")
         ctx = _ConversionContext()
-        result = from_sympy(x**2, ctx)
+        result = _from_sympy(x**2, ctx)
         assert isinstance(result, Pow)
 
     def test_negation(self):
         # nv
         x = sp.Symbol("x")
         ctx = _ConversionContext()
-        result = from_sympy(-x, ctx)
+        result = _from_sympy(-x, ctx)
         assert isinstance(result, Negate)
 
     def test_rational(self):
         # nv
-        result = from_sympy(sp.Rational(3, 4))
+        result = _from_sympy(sp.Rational(3, 4))
         assert isinstance(result, Div)
         assert result.left == 3
         assert result.right == 4
 
     def test_rational_integer(self):
         # nv
-        result = from_sympy(sp.Rational(6, 2))
+        result = _from_sympy(sp.Rational(6, 2))
         assert result == 3
 
     def test_sin(self):
         # nv
         x = sp.Symbol("x")
         ctx = _ConversionContext()
-        result = from_sympy(sp.sin(x), ctx)
+        result = _from_sympy(sp.sin(x), ctx)
         assert type(result) is tuple
         assert result[0] == "sin"
 
     def test_float(self):
         # nv
-        result = from_sympy(sp.Float(2.5))
+        result = _from_sympy(sp.Float(2.5))
         assert result == 2.5
 
     def test_inverse_to_div(self):
         # nv
         x = sp.Symbol("x")
         ctx = _ConversionContext()
-        result = from_sympy(1 / x, ctx)
+        result = _from_sympy(1 / x, ctx)
         # 1/x = x**(-1) → Div(1, x)
         assert isinstance(result, Div)
 
 
 class TestRoundTrip:
-    """Test that to_sympy → simplify → from_sympy preserves variable identity."""
+    """Test that _to_sympy → simplify → _from_sympy preserves variable identity."""
 
     def test_var_preserved(self):
         # nv
         v = Var()
         ctx = _ConversionContext()
-        expr = to_sympy(Add(left=v, right=1), ctx)
-        back = from_sympy(expr, ctx)
+        expr = _to_sympy(Add(left=v, right=1), ctx)
+        back = _from_sympy(expr, ctx)
         # The Var in the result should be the same object
         assert isinstance(back, Add)
         # Find the var in the result tree
@@ -263,9 +264,9 @@ class TestRoundTrip:
         ctx = _ConversionContext()
         # (x+1)^2 → expand → x^2 + 2x + 1
         term = Pow(left=Add(left=v, right=1), right=2)
-        expr = to_sympy(term, ctx)
+        expr = _to_sympy(term, ctx)
         expanded = sp.expand(expr)
-        back = from_sympy(expanded, ctx)
+        back = _from_sympy(expanded, ctx)
         # Should contain the original Var
         found = _find_var(back)
         assert found is v
@@ -300,6 +301,132 @@ class TestSym:
         assert sol is not None
         assert isinstance(deref(result), sp.Symbol)
         assert str(deref(result)) == "x"
+
+
+class TestSympyTerm:
+    """sympy_term/2 -- the merged ToSympy/FromSympy relation (RULED
+    2026-10-02: the two directions are one ISO-atom_codes/2-style mode
+    switch, not two predicates)."""
+
+    def test_to_sympy_direction(self):
+        # Sympy unbound, Term bound -> Sympy is the SymPy equivalent.
+        # nv
+        result = Var()
+        sol = _first_solution(sympy_term, result, Add(left=1, right=2))
+        assert sol is not None
+        assert deref(result) == sp.Integer(3)
+
+    def test_from_sympy_direction(self):
+        # Sympy bound to a SymPy expression -> Term is the Clausal term.
+        # nv
+        result = Var()
+        sol = _first_solution(sympy_term, sp.Integer(3), result)
+        assert sol is not None
+        assert deref(result) == 3
+
+    def test_instantiation_error_both_unbound(self):
+        # nv
+        with pytest.raises(LogicException) as exc_info:
+            _first_solution(sympy_term, Var(), Var())
+        formal = exc_info.value.args[0] if exc_info.value.args else None
+        # error(instantiation_error, PI)
+        assert "instantiation_error" in str(exc_info.value)
+
+    def test_type_error_sympy_not_an_expression(self):
+        # Sympy bound to a plain int (not a SymPy Basic, not unbound).
+        # nv
+        sympy_arg = Var()
+        trail = Trail()
+        unify(sympy_arg, 42, trail)
+        with pytest.raises(LogicException) as exc_info:
+            _first_solution(sympy_term, sympy_arg, Var())
+        assert "type_error" in str(exc_info.value)
+        assert "sympy_expression" in str(exc_info.value)
+
+    def test_type_error_term_has_no_sympy_counterpart(self):
+        # Sympy unbound, Term bound to something _to_sympy can't convert.
+        # nv
+        with pytest.raises(LogicException) as exc_info:
+            _first_solution(sympy_term, Var(), object())
+        assert "type_error" in str(exc_info.value)
+        assert "sympy_expression" in str(exc_info.value)
+
+    def test_variable_round_trip_same_var(self):
+        # sympy_term(S, X+1), sympy_term(S, T) -> T = X+1 with the SAME X,
+        # even though each call gets its OWN fresh _ConversionContext.
+        # nv
+        x = Var()
+        s = Var()
+        sol = _first_solution(sympy_term, s, Add(left=x, right=1))
+        assert sol is not None
+        t = Var()
+        sol2 = _first_solution(sympy_term, deref(s), t)
+        assert sol2 is not None
+        back = deref(t)
+        assert isinstance(back, Add)
+        assert _find_var(back) is x
+
+    def test_variable_round_trip_two_distinct_vars(self):
+        # Two distinct Vars in ONE expression must never collapse onto
+        # the same Symbol, even though each gets the same auto-assigned
+        # display name ("x") in its own context.
+        # nv
+        x = Var()
+        y = Var()
+        s = Var()
+        sol = _first_solution(sympy_term, s, Add(left=x, right=y))
+        assert sol is not None
+        expr = deref(s)
+        assert len(expr.free_symbols) == 2
+
+        t = Var()
+        sol2 = _first_solution(sympy_term, expr, t)
+        assert sol2 is not None
+        back = deref(t)
+        left_var = getattr(back, "left", None)
+        right_var = getattr(back, "right", None)
+        recovered = {left_var, right_var}
+        assert recovered == {x, y}
+
+    def test_variable_round_trip_unrelated_calls_dont_collide(self):
+        # Two SEPARATE sympy_term calls for two DIFFERENT vars: both get
+        # the same display name "x" (each context's counter starts at 0),
+        # but round-tripping each back must never recover the OTHER var.
+        # nv
+        x = Var()
+        y = Var()
+        s1 = Var()
+        _first_solution(sympy_term, s1, Add(left=x, right=1))
+        s2 = Var()
+        _first_solution(sympy_term, s2, Add(left=y, right=2))
+
+        t1 = Var()
+        _first_solution(sympy_term, deref(s1), t1)
+        assert _find_var(deref(t1)) is x
+
+        t2 = Var()
+        _first_solution(sympy_term, deref(s2), t2)
+        assert _find_var(deref(t2)) is y
+
+    def test_canonicalisation_is_not_a_bijection(self):
+        # X+X canonicalises to 2*X on construction (SymPy, not us): the
+        # Term that comes back is EQUIVALENT, not the SAME shape.
+        # nv
+        x = Var()
+        s = Var()
+        sol = _first_solution(sympy_term, s, Add(left=x, right=x))
+        assert sol is not None
+        # it canonicalised to "2*Symbol", not "Symbol + Symbol":
+        expr = deref(s)
+        assert expr.is_Mul and expr.args[0] == 2
+
+        t = Var()
+        sol2 = _first_solution(sympy_term, expr, t)
+        assert sol2 is not None
+        back = deref(t)
+        # back is Mult(2, X), NOT Add(X, X) -- the var still round-trips.
+        assert isinstance(back, Mult)
+        assert _find_var(back) is x
 
 
 class TestSimplify:

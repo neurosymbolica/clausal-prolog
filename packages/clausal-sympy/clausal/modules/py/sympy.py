@@ -39,6 +39,7 @@ from typing import Any
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.trampoline import DONE
+from clausal.logic.exceptions import LogicException, instantiation_error, type_error
 from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
 
 _sp = _import_stdlib("sympy")
@@ -67,6 +68,93 @@ def _auto_name(index: int) -> str:
 
 
 # -- Term <-> SymPy conversion -----------------------------------------------
+
+
+class _VarSymbol(_sp.Dummy):
+    """A SymPy symbol tagged with the Clausal :class:`Var` it came from.
+
+    Used ONLY by ``sympy_term/2`` (see ``_tag_vars``/``_untag_vars``
+    below), never by :class:`_ConversionContext`/``var_to_symbol`` itself
+    -- those stay exactly as every OTHER predicate (``subs``, ``collect``,
+    ``sym_equal``, ...) already relies on them, so this does not change
+    how any other predicate maps variables.
+
+    ``sympy_term/2`` round-trips a variable across two SEPARATE predicate
+    calls, each with its OWN fresh :class:`_ConversionContext` -- so the
+    Var <-> Symbol mapping cannot live only in one context's dict; it has
+    to travel WITH the Symbol object that ends up embedded in the SymPy
+    expression the first call hands back to the caller. ``sympy_term/2``
+    does this as its OWN extra tagging pass, confined to itself.
+
+    This is a :class:`sympy.Dummy`, not a plain :class:`sympy.Symbol`,
+    because ``Symbol.__new__`` CACHES by ``(class, name, assumptions)``: two
+    separate ``Symbol("x", ...)`` constructions with the same name return
+    the literal SAME cached object, so a second variable's tag would
+    silently overwrite the first's (confirmed empirically: ``a is b`` for
+    two ``Symbol("x", clausal_var=...)`` constructions with different
+    tags). ``Dummy`` is SymPy's own mechanism for "guaranteed-unique even
+    with the same display name" (it folds a hidden counter into its
+    identity), which is exactly "two distinct variables must never share
+    a Symbol" and needs no override of equality/hashing. It prints as the
+    plain name in ``latex``/``pretty`` output (only its ``str()``/``repr()``
+    adds the leading-underscore convention) -- not that it matters here,
+    since ``_untag_vars`` always removes it before the term reaches the
+    caller.
+
+    The reference to the Var is a plain (strong) attribute, not a
+    ``weakref``: Clausal's ``Var`` (a C extension type) does not support
+    weak references at all (``weakref.ref(Var())`` raises ``TypeError``),
+    so neither a ``WeakKeyDictionary`` nor a ``WeakValueDictionary`` keyed
+    or valued by a Var is possible. Tying the reference to the Symbol
+    object instead of a separate module-level table means there is
+    nothing to leak: the Var stays alive exactly as long as the tagged
+    SymPy expression (built fresh by ``_tag_vars`` on every ``sympy_term``
+    call, held only by the trail's binding of the Sympy argument) stays
+    alive, and once that is unreachable, the Symbol and the Var it tags
+    become unreachable too and are collected normally.
+    """
+
+    def __new__(cls, name: str, clausal_var: Var, **assumptions):
+        obj = super().__new__(cls, name, **assumptions)
+        obj._clausal_var = clausal_var
+        return obj
+
+
+def _tag_vars(expr: Any, ctx: "_ConversionContext") -> Any:
+    """Replace each plain Symbol *ctx* minted (via ``var_to_symbol``) with
+    a :class:`_VarSymbol` carrying the Var it came from, so a LATER,
+    independent ``sympy_term/2`` call (fresh context) can recover it.
+    Confined to ``sympy_term/2``: *ctx* is a throwaway context created
+    just for this one conversion, never shared with any other predicate.
+    """
+    subs_map = {}
+    for name, v in ctx._sym_to_var.items():
+        sym = ctx._var_to_sym.get(v._id)
+        if sym is not None:
+            subs_map[sym] = _VarSymbol(name, v)
+    return expr.subs(subs_map) if subs_map else expr
+
+
+def _untag_vars(term: Any) -> Any:
+    """Undo :func:`_tag_vars`: replace any :class:`_VarSymbol` leaf left
+    in a Clausal term (by ``_from_sympy``'s ordinary "unknown Symbol
+    passes through as itself" behaviour) with the Var it carries.
+    Confined to ``sympy_term/2`` -- the shared ``_from_sympy_ctx`` engine
+    every other predicate runs through never produces or needs to
+    understand this tag.
+    """
+    if isinstance(term, _VarSymbol):
+        return term._clausal_var
+    if type(term) is tuple:
+        if term and type(term[0]) is str:
+            return (term[0],) + tuple(_untag_vars(a) for a in term[1:])
+        return tuple(_untag_vars(a) for a in term)
+    for attr in ("left", "right", "operand"):
+        if hasattr(term, attr):
+            kwargs = {a: _untag_vars(getattr(term, a))
+                      for a in ("left", "right", "operand") if hasattr(term, a)}
+            return type(term)(**kwargs)
+    return term
 
 
 class _ConversionContext:
@@ -104,7 +192,7 @@ class _ConversionContext:
         return v
 
 
-def to_sympy(term: Any, ctx: _ConversionContext | None = None) -> _sp.Expr:
+def _to_sympy(term: Any, ctx: _ConversionContext | None = None) -> _sp.Expr:
     """Convert a Clausal term to a SymPy expression.
 
     - Bound Vars are dereferenced first.
@@ -115,10 +203,10 @@ def to_sympy(term: Any, ctx: _ConversionContext | None = None) -> _sp.Expr:
     """
     if ctx is None:
         ctx = _ConversionContext()
-    return _to_sympy(term, ctx)
+    return _to_sympy_ctx(term, ctx)
 
 
-def _to_sympy(term: Any, ctx: _ConversionContext) -> _sp.Expr:
+def _to_sympy_ctx(term: Any, ctx: _ConversionContext) -> _sp.Expr:
     term = deref(term)
 
     # Free variable -> Symbol
@@ -150,32 +238,32 @@ def _to_sympy(term: Any, ctx: _ConversionContext) -> _sp.Expr:
     }
     for cls, sp_fn in _BINOP_MAP.items():
         if isinstance(term, cls):
-            l = _to_sympy(term.left, ctx)
-            r = _to_sympy(term.right, ctx)
+            l = _to_sympy_ctx(term.left, ctx)
+            r = _to_sympy_ctx(term.right, ctx)
             return sp_fn(l, r)
 
     if isinstance(term, Div):
-        l = _to_sympy(term.left, ctx)
-        r = _to_sympy(term.right, ctx)
+        l = _to_sympy_ctx(term.left, ctx)
+        r = _to_sympy_ctx(term.right, ctx)
         return l / r
 
     if isinstance(term, FloorDiv):
-        l = _to_sympy(term.left, ctx)
-        r = _to_sympy(term.right, ctx)
+        l = _to_sympy_ctx(term.left, ctx)
+        r = _to_sympy_ctx(term.right, ctx)
         return _sp.floor(l / r)
 
     if isinstance(term, Mod):
-        l = _to_sympy(term.left, ctx)
-        r = _to_sympy(term.right, ctx)
+        l = _to_sympy_ctx(term.left, ctx)
+        r = _to_sympy_ctx(term.right, ctx)
         return _sp.Mod(l, r)
 
     if isinstance(term, Negate):
-        return -_to_sympy(term.operand, ctx)
+        return -_to_sympy_ctx(term.operand, ctx)
 
     # Compound terms (cells ``(name, *args)``) -> SymPy function calls
     if type(term) is tuple and len(term) >= 2 and type(term[0]) is str:
         fn_name = term[0]
-        sp_args = [_to_sympy(a, ctx) for a in term[1:]]
+        sp_args = [_to_sympy_ctx(a, ctx) for a in term[1:]]
         sp_fn = _SYMPY_FUNCTIONS.get(fn_name)
         if sp_fn is not None:
             return sp_fn(*sp_args)
@@ -210,7 +298,7 @@ _SYMPY_FUNCTIONS: dict[str, Any] = {
 }
 
 
-def from_sympy(expr: _sp.Expr, ctx: _ConversionContext | None = None) -> Any:
+def _from_sympy(expr: _sp.Expr, ctx: _ConversionContext | None = None) -> Any:
     """Convert a SymPy expression back to a Clausal term.
 
     - SymPy Symbols -> Clausal Vars (preserving mapping if ctx provided).
@@ -220,10 +308,10 @@ def from_sympy(expr: _sp.Expr, ctx: _ConversionContext | None = None) -> Any:
     """
     if ctx is None:
         ctx = _ConversionContext()
-    return _from_sympy(expr, ctx)
+    return _from_sympy_ctx(expr, ctx)
 
 
-def _from_sympy(expr: _sp.Expr, ctx: _ConversionContext) -> Any:
+def _from_sympy_ctx(expr: _sp.Expr, ctx: _ConversionContext) -> Any:
     # Symbol -> Var (if known) or pass through as SymPy Symbol (ground value)
     if isinstance(expr, _sp.Symbol):
         v = ctx._sym_to_var.get(expr.name)
@@ -248,7 +336,7 @@ def _from_sympy(expr: _sp.Expr, ctx: _ConversionContext) -> Any:
 
     # Add -> nested Add terms
     if isinstance(expr, _sp.Add):
-        args = [_from_sympy(a, ctx) for a in expr.args]
+        args = [_from_sympy_ctx(a, ctx) for a in expr.args]
         result = args[0]
         for a in args[1:]:
             result = Add(left=result, right=a)
@@ -260,10 +348,10 @@ def _from_sympy(expr: _sp.Expr, ctx: _ConversionContext) -> Any:
         if len(args) >= 2 and args[0] == _sp.Integer(-1):
             inner = args[1:]
             if len(inner) == 1:
-                return Negate(operand=_from_sympy(inner[0], ctx))
+                return Negate(operand=_from_sympy_ctx(inner[0], ctx))
             inner_expr = _sp.Mul(*inner)
-            return Negate(operand=_from_sympy(inner_expr, ctx))
-        converted = [_from_sympy(a, ctx) for a in args]
+            return Negate(operand=_from_sympy_ctx(inner_expr, ctx))
+        converted = [_from_sympy_ctx(a, ctx) for a in args]
         result = converted[0]
         for a in converted[1:]:
             result = Mult(left=result, right=a)
@@ -271,8 +359,8 @@ def _from_sympy(expr: _sp.Expr, ctx: _ConversionContext) -> Any:
 
     # Pow -> Pow term
     if isinstance(expr, _sp.Pow):
-        base = _from_sympy(expr.args[0], ctx)
-        exp = _from_sympy(expr.args[1], ctx)
+        base = _from_sympy_ctx(expr.args[0], ctx)
+        exp = _from_sympy_ctx(expr.args[1], ctx)
         if exp == -1:
             return Div(left=1, right=base)
         return Pow(left=base, right=exp)
@@ -280,8 +368,8 @@ def _from_sympy(expr: _sp.Expr, ctx: _ConversionContext) -> Any:
     # Mod
     if isinstance(expr, _sp.Mod):
         return Mod(
-            left=_from_sympy(expr.args[0], ctx),
-            right=_from_sympy(expr.args[1], ctx),
+            left=_from_sympy_ctx(expr.args[0], ctx),
+            right=_from_sympy_ctx(expr.args[1], ctx),
         )
 
     # Known functions -> cell
@@ -289,22 +377,22 @@ def _from_sympy(expr: _sp.Expr, ctx: _ConversionContext) -> Any:
         if isinstance(expr, sp_fn.__class__) or (
             hasattr(sp_fn, "__name__") and type(expr).__name__ == sp_fn.__name__
         ):
-            c_args = tuple(_from_sympy(a, ctx) for a in expr.args)
+            c_args = tuple(_from_sympy_ctx(a, ctx) for a in expr.args)
             return (name, *c_args) if c_args else name   # arity 0: the atom
 
     # Applied function -> cell
     if isinstance(expr, _sp.Function):
         name = type(expr).__name__
-        c_args = tuple(_from_sympy(a, ctx) for a in expr.args)
+        c_args = tuple(_from_sympy_ctx(a, ctx) for a in expr.args)
         return (name, *c_args) if c_args else name   # arity 0: the atom
 
     # Derivative, Integral -> cell representation
     if isinstance(expr, _sp.Derivative):
-        c_args = tuple(_from_sympy(a, ctx) for a in expr.args)
+        c_args = tuple(_from_sympy_ctx(a, ctx) for a in expr.args)
         return ("derivative", *c_args)
 
     if isinstance(expr, _sp.Integral):
-        c_args = tuple(_from_sympy(a, ctx) for a in expr.args)
+        c_args = tuple(_from_sympy_ctx(a, ctx) for a in expr.args)
         return ("integral", *c_args)
 
     # Infinity, pi, e, etc. -- arity 0, so the ATOM (``foo()`` is not a term)
@@ -317,7 +405,7 @@ def _from_sympy(expr: _sp.Expr, ctx: _ConversionContext) -> Any:
 
     # Order term O(...)
     if isinstance(expr, _sp.Order):
-        c_args = tuple(_from_sympy(a, ctx) for a in expr.args)
+        c_args = tuple(_from_sympy_ctx(a, ctx) for a in expr.args)
         return ("O", *c_args)
 
     # Fallback: string representation
@@ -354,7 +442,7 @@ class SymExpr:
             elif isinstance(other, _sp.Basic):
                 other_expr = other
             else:
-                other_expr = to_sympy(other)
+                other_expr = _to_sympy(other)
 
             # Fast path: direct symbolic equality
             if _sp.simplify(self._expr - other_expr) == 0:
@@ -460,7 +548,7 @@ def _convert_multi(*terms):
     Returns (ctx, *sympy_exprs).
     """
     ctx = _ConversionContext()
-    return (ctx,) + tuple(_to_sympy(t, ctx) for t in terms)
+    return (ctx,) + tuple(_to_sympy_ctx(t, ctx) for t in terms)
 
 
 # -- Predicate: sym/2 -- named symbol (still available but rarely needed) ----
@@ -476,33 +564,61 @@ def _sym_2(name, result, trail, k):
         yield None
 
 
-# -- Predicate: ToSympy/2 -- explicit conversion -----------------------------
+# -- Predicate: sympy_term/2 -- explicit bidirectional conversion -----------
 
 
-def _to_sympy_2(term, result, trail, k):
-    """ToSympy/2: convert Clausal arithmetic term to SymPy expression."""
-    term = deref(term)
+def _sympy_term_2(sympy_arg, term_arg, trail, k):
+    """sympy_term(Sympy, Term): bidirectional conversion between a SymPy
+    expression and a Clausal arithmetic term, in the style of ISO
+    ``atom_codes/2``:
+
+    - Sympy already a SymPy expression -> Term is the equivalent Clausal
+      term (``_from_sympy``);
+    - Sympy unbound, Term bound to anything other than a bare unbound
+      variable (a number, an atom, a term that may itself contain
+      variables, e.g. ``X+1``) -> Sympy is the equivalent SymPy expression
+      (``_to_sympy``);
+    - Sympy and Term both unbound -> ``instantiation_error``;
+    - Sympy bound to something that is neither a SymPy expression nor
+      unbound -> ``type_error(sympy_expression, Sympy)``.
+
+    NOT a true bijection: SymPy canonicalises on construction (``X+X`` ->
+    ``2*X``, ``X*1`` -> ``X``, term reordering), so Term -> Sympy -> Term
+    returns an EQUIVALENT term, not necessarily the SAME one. Variables
+    round-trip exactly (see ``_VarSymbol``): two separate ``sympy_term/2``
+    calls sharing a SymPy expression recover the identical Clausal Var,
+    and two distinct Vars never collide onto one Symbol even if they
+    print with the same auto-assigned name.
+    """
+    sympy_val = deref(sympy_arg)
+    if isinstance(sympy_val, _sp.Basic):
+        try:
+            term = _from_sympy(sympy_val)
+        except (TypeError, ValueError):
+            raise LogicException(
+                type_error("clausal_term", sympy_val, "sympy_term/2: argument 1"))
+        term = _untag_vars(term)
+        if unify(term_arg, term, trail):
+            yield None
+        return
+
+    if not is_var(sympy_val):
+        # Sympy is bound, but to something that isn't a SymPy expression.
+        raise LogicException(
+            type_error("sympy_expression", sympy_val, "sympy_term/2: argument 1"))
+
+    term_val = deref(term_arg)
+    if is_var(term_val):
+        raise LogicException(instantiation_error("sympy_term/2"))
+
+    ctx = _ConversionContext()
     try:
-        expr = to_sympy(term)
+        expr = _to_sympy(term_val, ctx)
     except (TypeError, ValueError):
-        return
-    if unify(result, expr, trail):
-        yield None
-
-
-# -- Predicate: FromSympy/2 -- explicit conversion ---------------------------
-
-
-def _from_sympy_2(expr, result, trail, k):
-    """FromSympy/2: convert SymPy expression to Clausal term."""
-    expr = deref(expr)
-    if not isinstance(expr, _sp.Basic):
-        return
-    try:
-        term = from_sympy(expr)
-    except (TypeError, ValueError):
-        return
-    if unify(result, term, trail):
+        raise LogicException(
+            type_error("sympy_expression", term_val, "sympy_term/2: argument 2"))
+    expr = _tag_vars(expr, ctx)
+    if unify(sympy_arg, expr, trail):
         yield None
 
 
@@ -513,7 +629,7 @@ def _simplify_2(term, result, trail, k):
     """simplify/2: simplify an expression."""
     term = deref(term)
     try:
-        expr = to_sympy(term)
+        expr = _to_sympy(term)
         out = _to_pyval(_sp.simplify(expr))
     except (TypeError, ValueError):
         return
@@ -528,7 +644,7 @@ def _expand_2(term, result, trail, k):
     """expand/2: algebraically expand an expression."""
     term = deref(term)
     try:
-        expr = to_sympy(term)
+        expr = _to_sympy(term)
         out = _to_pyval(_sp.expand(expr))
     except (TypeError, ValueError):
         return
@@ -543,7 +659,7 @@ def _factor_2(term, result, trail, k):
     """factor/2: factor an expression."""
     term = deref(term)
     try:
-        expr = to_sympy(term)
+        expr = _to_sympy(term)
         out = _to_pyval(_sp.factor(expr))
     except (TypeError, ValueError):
         return
@@ -597,7 +713,7 @@ def _diff_2(term, result, trail, k):
     """diff/2: differentiate w.r.t. the single free variable."""
     term = deref(term)
     try:
-        expr = to_sympy(term)
+        expr = _to_sympy(term)
         free = list(expr.free_symbols)
         if len(free) != 1:
             return
@@ -628,7 +744,7 @@ def _integrate_2(term, result, trail, k):
     """integrate/2: indefinite integral w.r.t. the single free variable."""
     term = deref(term)
     try:
-        expr = to_sympy(term)
+        expr = _to_sympy(term)
         free = list(expr.free_symbols)
         if len(free) != 1:
             return
@@ -714,14 +830,14 @@ def _subs_3(term, bindings, result, trail, k):
     term = deref(term)
     bindings = deref(bindings)
     try:
-        expr = to_sympy(term)
+        expr = _to_sympy(term)
         if isinstance(bindings, dict):
-            sp_subs = {to_sympy(k_): to_sympy(v_) for k_, v_ in bindings.items()}
+            sp_subs = {_to_sympy(k_): _to_sympy(v_) for k_, v_ in bindings.items()}
         elif isinstance(bindings, (list, tuple)):
             sp_subs = {}
             for pair in bindings:
                 if isinstance(pair, (list, tuple)) and len(pair) == 2:
-                    sp_subs[to_sympy(pair[0])] = to_sympy(pair[1])
+                    sp_subs[_to_sympy(pair[0])] = _to_sympy(pair[1])
         else:
             return
         out = _to_pyval(expr.subs(sp_subs))
@@ -738,7 +854,7 @@ def _free_vars_2(term, vars_list, trail, k):
     """free_vars/2: get list of free symbol names in an expression."""
     term = deref(term)
     try:
-        expr = to_sympy(term)
+        expr = _to_sympy(term)
         names = sorted(str(s) for s in expr.free_symbols)
     except (TypeError, ValueError):
         return
@@ -763,8 +879,8 @@ def _sym_equal_2(a, b, trail, k):
     try:
         # Convert with a shared context so same-Var -> same-Symbol
         ctx = _ConversionContext()
-        sa = _to_sympy(a, ctx)
-        sb = _to_sympy(b, ctx)
+        sa = _to_sympy_ctx(a, ctx)
+        sb = _to_sympy_ctx(b, ctx)
 
         # Fast path: direct symbolic equality
         if _sp.simplify(sa - sb) == 0:
@@ -807,20 +923,11 @@ def _sym_str_2(term, result, trail, k):
     """sym_str/2: convert an expression to a readable string via SymPy."""
     term = deref(term)
     try:
-        expr = to_sympy(term)
+        expr = _to_sympy(term)
         s = str(expr)
     except (TypeError, ValueError):
         return
     if unify(result, s, trail):
-        yield None
-
-
-# -- Predicate: Inf/1 -- SymPy infinity (kept for backward compat) ----------
-
-
-def _inf_1(result, trail, k):
-    """Inf/1: unify with SymPy's oo (infinity)."""
-    if unify(result, _sp.oo, trail):
         yield None
 
 
@@ -844,7 +951,7 @@ def _cancel_2(term, result, trail, k):
     """cancel/2: cancel common factors in a rational expression."""
     term = deref(term)
     try:
-        out = _to_pyval(_sp.cancel(to_sympy(term)))
+        out = _to_pyval(_sp.cancel(_to_sympy(term)))
     except (TypeError, ValueError):
         return
     if unify(result, out, trail):
@@ -855,7 +962,7 @@ def _apart_2(term, result, trail, k):
     """apart/2: partial fraction decomposition w.r.t. the single free variable."""
     term = deref(term)
     try:
-        out = _to_pyval(_sp.apart(to_sympy(term)))
+        out = _to_pyval(_sp.apart(_to_sympy(term)))
     except (TypeError, ValueError):
         return
     if unify(result, out, trail):
@@ -879,7 +986,7 @@ def _together_2(term, result, trail, k):
     """together/2: combine fractions over a common denominator."""
     term = deref(term)
     try:
-        out = _to_pyval(_sp.together(to_sympy(term)))
+        out = _to_pyval(_sp.together(_to_sympy(term)))
     except (TypeError, ValueError):
         return
     if unify(result, out, trail):
@@ -890,7 +997,7 @@ def _degree_2(term, result, trail, k):
     """degree/2: polynomial degree w.r.t. the single free variable."""
     term = deref(term)
     try:
-        expr = to_sympy(term)
+        expr = _to_sympy(term)
         free = list(expr.free_symbols)
         if len(free) != 1:
             return
@@ -954,7 +1061,7 @@ def _trig_simp_2(term, result, trail, k):
     """trig_simp/2: simplify trigonometric expressions."""
     term = deref(term)
     try:
-        out = _to_pyval(_sp.trigsimp(to_sympy(term)))
+        out = _to_pyval(_sp.trigsimp(_to_sympy(term)))
     except (TypeError, ValueError):
         return
     if unify(result, out, trail):
@@ -965,7 +1072,7 @@ def _expand_trig_2(term, result, trail, k):
     """expand_trig/2: expand trig functions (e.g. sin(a+b) -> sin(a)cos(b)+cos(a)sin(b))."""
     term = deref(term)
     try:
-        out = _to_pyval(_sp.expand_trig(to_sympy(term)))
+        out = _to_pyval(_sp.expand_trig(_to_sympy(term)))
     except (TypeError, ValueError):
         return
     if unify(result, out, trail):
@@ -979,7 +1086,7 @@ def _latex_2(term, result, trail, k):
     """latex/2: convert expression to LaTeX string."""
     term = deref(term)
     try:
-        s = _sp.latex(to_sympy(term))
+        s = _sp.latex(_to_sympy(term))
     except (TypeError, ValueError):
         return
     if unify(result, s, trail):
@@ -990,7 +1097,7 @@ def _pretty_2(term, result, trail, k):
     """pretty/2: convert expression to Unicode pretty-print string."""
     term = deref(term)
     try:
-        s = _sp.pretty(to_sympy(term), use_unicode=True)
+        s = _sp.pretty(_to_sympy(term), use_unicode=True)
     except (TypeError, ValueError):
         return
     if unify(result, s, trail):
@@ -1002,7 +1109,7 @@ def _mathml_2(term, result, trail, k):
     term = deref(term)
     try:
         mathml = _sp.printing.mathml.mathml
-        s = mathml(to_sympy(term))
+        s = mathml(_to_sympy(term))
     except (TypeError, ValueError, ImportError):
         return
     if unify(result, s, trail):
@@ -1118,7 +1225,7 @@ def _binomial_3(n, k_val, result, trail, k):
     n = deref(n)
     k_val = deref(k_val)
     try:
-        out = _to_pyval(_sp.binomial(to_sympy(n), to_sympy(k_val)))
+        out = _to_pyval(_sp.binomial(_to_sympy(n), _to_sympy(k_val)))
     except (TypeError, ValueError):
         return
     if unify(result, out, trail):
@@ -1131,7 +1238,7 @@ def _binomial_3(n, k_val, result, trail, k):
 #     -import_from(sympy, [sin, cos, exp, diff])
 #     Test("diff sin") <- (diff(sin(X), X, R), R == cos(X))
 #
-# sin(X) -> the cell ("sin", X) which to_sympy converts to sympy.sin(Symbol).
+# sin(X) -> the cell ("sin", X) which _to_sympy converts to sympy.sin(Symbol).
 
 
 class _MathFunc:
@@ -1175,11 +1282,8 @@ e = _sp.E
 sym = ModulePredicate("sym")
 sym._register(2, simple_to_trampoline(_sym_2))
 
-ToSympy = ModulePredicate("ToSympy")
-ToSympy._register(2, simple_to_trampoline(_to_sympy_2))
-
-FromSympy = ModulePredicate("FromSympy")
-FromSympy._register(2, simple_to_trampoline(_from_sympy_2))
+sympy_term = ModulePredicate("sympy_term")
+sympy_term._register(2, simple_to_trampoline(_sympy_term_2))
 
 simplify = ModulePredicate("simplify")
 simplify._register(2, simple_to_trampoline(_simplify_2))
@@ -1222,9 +1326,6 @@ sym_equal._register(2, simple_to_trampoline(_sym_equal_2))
 
 sym_str = ModulePredicate("sym_str")
 sym_str._register(2, simple_to_trampoline(_sym_str_2))
-
-Inf = ModulePredicate("Inf")
-Inf._register(1, simple_to_trampoline(_inf_1))
 
 # Algebra extras
 collect = ModulePredicate("collect")

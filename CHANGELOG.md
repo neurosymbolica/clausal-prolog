@@ -22,19 +22,27 @@ since 0.4.0 finish three moves:
 
 - **The `clausal-scipy`, `clausal-sklearn`, `clausal-sympy` and `clausal-spacy`
   optional packages rename their TitleCase predicates to lower_snake_case**
-  (e.g. `Simplify` -> `simplify`, `KMeans` -> `k_means`, `ToSympy` ->
-  `to_sympy`). These names were registered from Python
-  (`ModulePredicate("Name")` / `_pred("Name", ...)` / `X._register(...)`),
+  (e.g. `Simplify` -> `simplify`, `KMeans` -> `k_means`, `Erf` -> `erf`).
+  These names were registered from Python (`ModulePredicate("Name")` /
+  `_pred("Name", ...)` / `_pred_bidir("Name", ...)` / `X._register(...)`),
   so the engine's TitleCase lint never saw them at load time, and Clausal
   code could not call them by name -- a TitleCase name in functor position
   is a load-time error. Acronyms collapse to one lowercase word (`FFT` ->
-  `fft`, `SVD` -> `svd`). Two names are kept TitleCase because they collide,
-  in the same module, with a pre-existing lower_snake_case name:
-  `sympy.Inf` (the module already exports a lowercase `inf` constant) and
-  `sympy.ToSympy` / `sympy.FromSympy` (the module already has private
-  `to_sympy()` / `from_sympy()` conversion helpers, used internally and
-  unit-tested directly). Full per-package rename tables are in each
-  package's `docs/RENAMES.md`.
+  `fft`, `SVD` -> `svd`). `sympy.Inf` (arity 1) is removed outright (ruled
+  2026-10-02): the module's existing `inf` value (`= sympy.oo`) already
+  covers it, and the predicate just unified a result with the same value.
+  `sympy.ToSympy` / `sympy.FromSympy` are MERGED into one relation,
+  **`sympy_term(Sympy, Term)`** (ruled 2026-10-02; neither old name
+  survives and there is no alias): an ISO-`atom_codes/2`-style mode
+  switch on which argument is bound, with `instantiation_error` /
+  `type_error(sympy_expression, _)` / `type_error(clausal_term, _)` for
+  the ill-moded and conversion-failure cases (replacing what used to be
+  a silent failure). It is not a true bijection -- SymPy canonicalises on
+  construction (`X+X` -> `2*X`), so `Term -> Sympy -> Term` returns an
+  equivalent term, not necessarily the same one -- but a Clausal variable
+  DOES round-trip exactly across two separate calls, and two distinct
+  variables never collapse onto one SymPy symbol; see `docs/sympy.md`.
+  Full per-package rename tables are in each package's `docs/RENAMES.md`.
 
 - **A file-system or network failure in a library adapter raises an ISO
   error** (ruled 2026-10-02) instead of failing the goal. The model is ISO

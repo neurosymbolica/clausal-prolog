@@ -1,5 +1,5 @@
 -double_quotes(atom)
--import_from(sympy, [sum_, product, binomial, sym_equal, Inf])
+-import_from(sympy, [sum_, product, binomial, sym_equal])
 
 # ── sum_/5 ──────────────────────────────────────────────────────────────
 

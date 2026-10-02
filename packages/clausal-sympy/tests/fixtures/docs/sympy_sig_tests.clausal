@@ -3,7 +3,7 @@
 
 -import_from(sympy, [simplify, expand, factor, solve, solve_all,
                              diff, integrate, limit, series, subs,
-                             free_vars, sym_equal, sym_str, sym, ToSympy, FromSympy,
+                             free_vars, sym_equal, sym_str, sym, sympy_term,
                              collect, cancel, apart, together,
                              degree, coeffs, roots,
                              trig_simp, expand_trig,

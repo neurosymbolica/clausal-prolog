@@ -374,9 +374,25 @@ Note: binding dicts with logic variable keys must be wrapped in `++()` so the Va
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:sym_2"
 ```
 
-#### ToSympy/2, FromSympy/2
+#### sympy_term/2
 
-Explicit conversion between Clausal terms and SymPy expressions. Rarely needed.
+`sympy_term(Sympy, Term)` — explicit bidirectional conversion between a SymPy expression and a Clausal term. Rarely needed (predicates auto-convert), but useful for inspecting or constructing a raw SymPy expression. Mode-switches like ISO `atom_codes/2`:
+
+- `Sympy` already a SymPy expression → `Term` is unified with the equivalent Clausal term.
+- `Sympy` unbound, `Term` bound to anything other than a bare unbound variable (a number, an atom, a term that may itself contain variables, e.g. `X+1`) → `Sympy` is unified with the equivalent SymPy expression.
+- Both unbound → `instantiation_error`.
+- `Sympy` bound to something that is neither a SymPy expression nor unbound → `type_error(sympy_expression, Sympy)`.
+- A `Term` with no SymPy counterpart (TO-SYMPY direction) → `type_error(sympy_expression, Term)`. A SymPy expression with no Clausal-term counterpart (FROM-SYMPY direction) → `type_error(clausal_term, Sympy)` (this one is believed unreachable today: the converter always has a string fallback, but the predicate does not rely on that staying true).
+
+**Not a true bijection.** SymPy canonicalises on construction: `X+X` becomes `2*X`, `X*1` becomes `X`, and term order is not preserved. So `Term → Sympy → Term` returns an *equivalent* term, not necessarily the *same* one:
+
+```
+sympy_term(S, X+X), sympy_term(S, T)   % T = 2*X, not X+X
+```
+
+Variables DO round-trip exactly, even across two separate calls with their own fresh conversion state: `sympy_term(S, X+1), sympy_term(S, T)` gives `T = X+1` with the *same* `X`. Two distinct variables never collapse onto one SymPy symbol, even if both happen to get the same auto-assigned display name.
+
+(`ToSympy/2` and `FromSympy/2` were merged into this one relation, RULED 2026-10-02 — neither old name survives, and there is no alias.)
 
 ---
 

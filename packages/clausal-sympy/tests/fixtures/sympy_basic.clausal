@@ -2,7 +2,7 @@
 -import_from(sympy, [simplify, expand, factor, solve, solve_all,
                              diff, integrate, limit, series, subs,
                              free_vars, sym_equal, sym_str, inf,
-                             sym, ToSympy, FromSympy])
+                             sym, sympy_term])
 
 # SymPy integration — native Clausal terms. No sym(), no ++() for math.
 # Results use == for symbolic comparison (SymExpr.__eq__ handles it).
