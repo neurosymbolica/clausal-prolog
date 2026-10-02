@@ -20,6 +20,22 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **Clausal Prolog may not reach a `.pl` module at run time either**
+  (the dialect gate, routes 2-7 of the 2026-10-01 one-way ruling; route 1,
+  the import, landed earlier). From a `.clausal` clause, a qualified goal
+  `M:G` -- written in the clause, or built at run time and run by
+  `call/N`, `maplist/N`, `findall/3`, a body term -- `assertz/asserta/
+  retract/retractall(M:C)`, `clause(M:H, B)` and `phrase(M:NT, L)` whose
+  module `M` (the innermost) is a `.pl` module raise
+  `error(permission_error(access, prolog_module, M), Context)`, the term
+  route 1 raises; a Python module `M` raises `permission_error(access,
+  python_module, M)`. **Strict for closures too:** a `.pl` caller's
+  closure handed to a Clausal Prolog `-meta_predicate` arrives as
+  `pl_module:G` and is refused when the Clausal Prolog code runs it -- the
+  one place the rule bites the allowed direction. `.pl` and `.seam`
+  callers are unaffected (`.seam` is the Python boundary), and so is
+  Python-side `solve()`. A run-time `M:G` from Clausal Prolog into a `.pl`
+  module some other code loaded used to run.
 - **Input text an adapter cannot read raises `syntax_error(Kind)`**
   (ruled 2026-10-02) instead of failing the goal or raising a
   `domain_error`. Text that does not PARSE -- `py.json` `parse/2,3` and
@@ -576,8 +592,8 @@ since 0.4.0 finish three moves:
   its `.pl` is imported as before. Both `.pl` front ends refuse it the same
   way. That surface has no extension until the extension flip, so the
   refusal is inactive today; `.pl` and seam importers are never affected.
-  A run-time `M:G` into a `.pl` module some other code loaded is not yet
-  refused.
+  The run-time routes are refused too since the dialect gate (see
+  Breaking).
 - **`library(...)` facades: Clausal Prolog reaches Python only through
   `.seam` modules** (ruled 2026-10-01). Every engine Python module has a
   generated `.seam` facade under `clausal/library/`, a pure re-export of

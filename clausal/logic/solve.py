@@ -290,7 +290,7 @@ def _term_to_goal(term: Any, db: Any = None) -> Any:
     if is_cell_goal:
         if functor == QUALIFIED_GOAL_FUNCTOR and len(term) == 3:
             _module, inner = resolve_qualified_goal_cell(
-                term, "solve/1", call_extra=0)
+                term, "solve/1", call_extra=0, dialect_gate=False)
             return _term_to_goal(inner, getattr(_module, "db", None))
         refuse_control_construct_cell(term, functor, "solve/1")
         return AstCall(
@@ -1577,7 +1577,8 @@ def _strip_module_qualification(goal, module):
         return goal, module
     raise_if_dangling_handle(_pre_functor, goal, "solve/1")
     target, inner = resolve_qualified_goal_cell(
-        goal, "solve/1", module, call_extra=0)
+        goal, "solve/1", module, call_extra=0,
+        dialect_gate=False)   # route 5: Python is outside the edge rule
     return inner, target
 
 
@@ -2109,7 +2110,8 @@ def _tabled_call_site(goal, module, trail):
         # honest answer for a goal that names no module is "no table".
         from clausal.logic.exceptions import LogicException  # noqa: PLC0415
         try:
-            mod, goal = resolve_qualified_goal_cell(goal, "query_wfs/2", mod)
+            mod, goal = resolve_qualified_goal_cell(
+                goal, "query_wfs/2", mod, dialect_gate=False)
         except LogicException:
             return None
         is_cell_goal, cell_functor = compound_cell_shape(goal)

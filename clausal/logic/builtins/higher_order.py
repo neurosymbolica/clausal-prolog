@@ -467,6 +467,13 @@ def _namespace_dispatch(db, functor, arity):
     canonical = _canonical_functor(db, pred_cls, functor)
     if home is db and canonical == functor:
         return None  # the lookup that already came back empty
+    if home is not db:
+        # Route 6 of the dialect gate (defensive): a class reached through
+        # the namespace of a Clausal Prolog module is only a .pl predicate
+        # if Python put it there (route 1 refuses the import) -- refuse it
+        # anyway, by the dialect of the row's HOME module.
+        from clausal.logic.dialect_edge import refuse_edge  # noqa: PLC0415
+        refuse_edge(db, home, f"{functor}/{arity}")
     return home.get_dispatch(canonical, arity)
 
 
