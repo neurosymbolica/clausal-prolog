@@ -21,7 +21,20 @@ since 0.4.0 finish three moves:
 ### Breaking
 
 - **Input text an adapter cannot read raises `syntax_error(Kind)`**
-  (ruled 2026-10-02) instead of failing the goal. `py.http`: a response
+  (ruled 2026-10-02) instead of failing the goal or raising a
+  `domain_error`. Text that does not PARSE -- `py.json` `parse/2,3` and
+  `read_file/2` (`syntax_error(invalid_json)`; a file that is not UTF-8
+  `syntax_error(invalid_data)`; both were `domain_error(json_text, S)` /
+  `domain_error(json_file, P)`), `py.datetime` `datetime_string/3`,
+  `datetime_string_iso/2` (`invalid_datetime`) and `date_string_iso/2`
+  (`invalid_date`; were `domain_error(datetime_text | iso_datetime |
+  iso_date, S)`), `py.url` `parse/2` and the `py.http` predicates on a URL
+  that does not parse (an unclosed IPv6 bracket, a port that is not a
+  number: `invalid_url`; was `domain_error(url, U)`), `py.uuid`
+  `uuid_str/2`, `uuid_hex/2`, `uuid_urn/2` (`invalid_uuid`; was
+  `domain_error(uuid_text | uuid_hex | uuid_urn, S)`). Text that parses but
+  names no value -- a 30th of February, a month 13, a port of 99999 --
+  keeps its `domain_error`. `py.http`: a response
   body that is not UTF-8 is `error(syntax_error(invalid_data), Name/Arity)`
   -- Scryer's term for bytes that are not UTF-8 on a text stream -- in
   `get/2,3`, `post/3,4`, `json_get/2`, `json_post/3` and `request/3`
@@ -106,25 +119,27 @@ since 0.4.0 finish three moves:
   `hash/3`, `hash_bytes/3`, `sign/4`, `verify/4` with an unknown algorithm
   or `shake_*` → `domain_error(hash_algorithm, A)`; `derive/4,5` with
   iterations or key length <= 0 → `domain_error(positive_integer, N)`;
-  `py.json` `parse/2,3` on malformed text → `domain_error(json_text, S)`,
-  `read_file/2` on a non-JSON file → `domain_error(json_file, Path)`;
+  (`py.json` malformed text: see the `syntax_error` entry above);
   `time/4` hour 25 → `domain_error(time, time(25, 0, 0))`, `datetime/7`
   month 13 or day 32 → `domain_error(datetime, datetime(...))`,
   `timedelta/3` past ±999999999 days → `domain_error(timedelta, ...)`;
   `ordinal/2` outside 1..3652059 → `domain_error(ordinal, N)`;
-  `datetime_string/3` → `domain_error(datetime_text, S)` or
+  `datetime_string/3` on text that parses but names no datetime →
+  `domain_error(datetime_text, S)`, a bad format →
   `domain_error(datetime_format, F)`; `datetime_string_iso/2`,
-  `date_string_iso/2` → `domain_error(iso_datetime, S)`,
-  `domain_error(iso_date, S)`; `timestamp/2` out of range or NaN →
+  `date_string_iso/2` on such text → `domain_error(iso_datetime, S)`,
+  `domain_error(iso_date, S)` (text that does not parse:
+  `syntax_error`, above); `timestamp/2` out of range or NaN →
   `domain_error(timestamp, X)`; `py.http` `get`, `post`, `request`,
   `json_get`, `json_post` with a URL urllib cannot use (no or unknown
-  scheme, no host, malformed authority) → `domain_error(url, U)`, and
+  scheme, no host) → `domain_error(url, U)`, and
   `request/3` with no `url` key → `domain_error(http_request_options,
   Opts)`, a negative timeout → `domain_error(not_less_than_zero, T)`, a
   non-number timeout or non-dict headers → `type_error` (both were ignored);
-  `py.url` `parse/2` → `domain_error(url, U)`; `uuid_str/2`, `uuid_hex/2`,
-  `uuid_urn/2`, `uuid_bytes/2`, `uuid_int/2` → `domain_error(uuid_text |
-  uuid_hex | uuid_urn | uuid_bytes | uuid_int, X)`; `generate_records/3`
+  `py.url` `parse/2` with a port out of range → `domain_error(url, U)`;
+  `uuid_bytes/2`, `uuid_int/2` → `domain_error(uuid_bytes | uuid_int, X)`
+  (`uuid_str/2`, `uuid_hex/2`, `uuid_urn/2` on text that is not a UUID:
+  `syntax_error`, above); `generate_records/3`
   with a record key the headers lack → `domain_error(csv_record, R)`;
   `sample/3` with a negative size → `domain_error(not_less_than_zero, N)`;
   `maybe/1` outside 0..1 → `domain_error(probability, P)`.

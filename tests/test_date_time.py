@@ -362,9 +362,18 @@ class TestDatetimeString:
         )
         assert len(results) == 0
 
-    def test_parse_invalid_raises_domain_error(self):
-        # vn -- text that does not match the format.
+    def test_parse_invalid_raises_syntax_error(self):
+        # vn -- text that does not match the format: RULED 2026-10-02 (unparseable text): syntax_error(invalid_datetime)
+        # (it was domain_error(datetime_text, S)).
         s = chars("not-a-date")
+        assert raised(_datetime_string_3, Var(), s, chars("%Y-%m-%d")) == (
+            'error', ('syntax_error', 'invalid_datetime'),
+            ('/', 'datetime_string', 3))
+
+    def test_parse_out_of_range_keeps_domain_error(self):
+        # Text that parses to fields naming no date is a VALUE outside the
+        # domain: domain_error(datetime_text, S), as before.
+        s = chars("2026-02-30")
         assert raised(_datetime_string_3, Var(), s, chars("%Y-%m-%d")) == (
             'error', ('domain_error', 'datetime_text', s),
             ('/', 'datetime_string', 3))
@@ -782,9 +791,16 @@ class TestDatetimeStringIso:
         assert len(results) == 1
         assert deref(v) == _T(dt.datetime(2026, 3, 16, 14, 30, 0))
 
-    def test_inverse_invalid_raises_domain_error(self):
-        # vn
+    def test_inverse_invalid_raises_syntax_error(self):
+        # vn -- RULED 2026-10-02 (unparseable text): syntax_error(invalid_datetime)
+        # (it was domain_error(iso_datetime, S)).
         s = chars("nope")
+        assert raised(_datetime_string_iso_2, Var(), s) == (
+            'error', ('syntax_error', 'invalid_datetime'),
+            ('/', 'datetime_string_iso', 2))
+
+    def test_inverse_out_of_range_keeps_domain_error(self):
+        s = chars("2026-01-01T25:00")
         assert raised(_datetime_string_iso_2, Var(), s) == (
             'error', ('domain_error', 'iso_datetime', s),
             ('/', 'datetime_string_iso', 2))
@@ -822,9 +838,16 @@ class TestDateStringIso:
             _date_string_iso_2, _T(dt.datetime(2026, 3, 16, 1, 2, 3)), Var()
         ) == ('error', ('type_error', 'date', ('datetime', 2026, 3, 16, 1, 2, 3, 0)), ('/', 'date_string_iso', 2))
 
-    def test_inverse_invalid_raises_domain_error(self):
-        # vn
+    def test_inverse_invalid_raises_syntax_error(self):
+        # vn -- RULED 2026-10-02 (unparseable text): syntax_error(invalid_date)
+        # (it was domain_error(iso_date, S)).
         s = chars("2026-03-16T00:00:00")
+        assert raised(_date_string_iso_2, Var(), s) == (
+            'error', ('syntax_error', 'invalid_date'),
+            ('/', 'date_string_iso', 2))
+
+    def test_inverse_out_of_range_keeps_domain_error(self):
+        s = chars("2026-13-01")
         assert raised(_date_string_iso_2, Var(), s) == (
             'error', ('domain_error', 'iso_date', s),
             ('/', 'date_string_iso', 2))

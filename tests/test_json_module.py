@@ -201,12 +201,13 @@ class TestParse:
         term = raised(_parse_2, Var(), Var())
         assert term == ('error', 'instantiation_error', ('/', 'parse', 2))
 
-    def test_invalid_json_raises_domain_error(self):
+    def test_invalid_json_raises_syntax_error(self):
         # nv -- RULED 2026-10-02: malformed JSON text is
-        # domain_error(json_text, Text); it used to fail with a note.
+        # syntax_error(invalid_json) (it was domain_error(json_text, Text),
+        # and before that it failed with a note).
         s = chars('{bad json}')
         assert raised(_parse_2, s, Var()) == (
-            'error', ('domain_error', 'json_text', s), ('/', 'parse', 2))
+            'error', ('syntax_error', 'invalid_json'), ('/', 'parse', 2))
 
     def test_trampoline(self):
         # nv

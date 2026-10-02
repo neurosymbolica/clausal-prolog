@@ -16,6 +16,7 @@ from clausal.modules.py import (
     _import_stdlib,
     expect_type,
     raise_domain_error,
+    raise_syntax_error,
     option,
     require_text,
     simple_to_trampoline,
@@ -85,12 +86,18 @@ def _parse_2(url, parts, trail, k):
     u = require_text(url_term, "parse/2", 1)
     try:
         # urlparse itself raises ValueError on e.g. an unclosed IPv6 bracket
-        # ("http://[::1"); .port raises on an out-of-range port — both are
-        # malformed input (F017), and raise (RULED 2026-10-02).
+        # ("http://[::1"), and .port on a port that is not a number: text
+        # that does not parse as a URL -> syntax_error(invalid_url) (RULED
+        # 2026-10-02: unparseable text; it was domain_error(url, U)).  A
+        # port that parses but is out of range is a VALUE outside the
+        # domain and keeps domain_error(url, U).
         parsed = _urllib_parse.urlparse(u)
         port = parsed.port  # int or None
-    except ValueError:
-        raise_domain_error("url", url_term, "parse/2", arg=1)
+    except ValueError as exc:
+        if "out of range" in str(exc):
+            raise_domain_error("url", url_term, "parse/2", arg=1)
+        raise_syntax_error("invalid_url", "parse/2",
+                           f"the text is not a URL: {exc}", cause=exc)
     result = DictTerm({
         mint("scheme"): parsed.scheme,
         mint("host"): parsed.hostname or "",

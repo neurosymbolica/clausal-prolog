@@ -239,11 +239,12 @@ class TestUUIDStr:
         results, _ = simple_solutions(_uuid_str_2, u, chars("not-a-match"))
         assert len(results) == 0
 
-    def test_bad_string_raises_domain_error(self):
-        # nv -- RULED 2026-10-02 (it used to fail with a note).
+    def test_bad_string_raises_syntax_error(self):
+        # nv -- RULED 2026-10-02 (unparseable text): syntax_error(invalid_uuid);
+        # it was domain_error(uuid_text, S), and before that it failed.
         s = chars("not-a-uuid")
         assert raised(_uuid_str_2, Var(), s) == (
-            'error', ('domain_error', 'uuid_text', s), ('/', 'uuid_str', 2))
+            'error', ('syntax_error', 'invalid_uuid'), ('/', 'uuid_str', 2))
 
 
 # ── uuid_hex ──────────────────────────────────────────────────────────────
@@ -274,16 +275,16 @@ class TestUUIDHex:
         simple_solutions(_uuid_hex_2, u_out, deref(h))
         assert deref(u_out) == u_in
 
-    def test_bad_hex_raises_domain_error(self):
-        # nv
+    def test_bad_hex_raises_syntax_error(self):
+        # nv -- RULED 2026-10-02 (unparseable text): syntax_error(invalid_uuid).
         s = chars("zzzz")
         assert raised(_uuid_hex_2, Var(), s) == (
-            'error', ('domain_error', 'uuid_hex', s), ('/', 'uuid_hex', 2))
+            'error', ('syntax_error', 'invalid_uuid'), ('/', 'uuid_hex', 2))
 
-    def test_bad_urn_raises_domain_error(self):
+    def test_bad_urn_raises_syntax_error(self):
         s = chars("urn:uuid:nope")
         assert raised(_uuid_urn_2, Var(), s) == (
-            'error', ('domain_error', 'uuid_urn', s), ('/', 'uuid_urn', 2))
+            'error', ('syntax_error', 'invalid_uuid'), ('/', 'uuid_urn', 2))
 
 
 # ── uuid_urn ──────────────────────────────────────────────────────────────

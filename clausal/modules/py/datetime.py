@@ -61,6 +61,7 @@ from clausal.modules.py import (
     NUMBER_TYPES,
     expect_type as _expect_type,
     raise_domain_error,
+    raise_syntax_error,
     simple_to_trampoline,
     to_text,
 )
@@ -654,6 +655,11 @@ def _datetime_string_3(dt_obj, s, fmt, trail, k):
                     or "stray %" in str(exc)):
                 raise_domain_error("datetime_format", fmt_term,
                                    "datetime_string/3", arg=3)
+            if _is_syntax_message(exc):
+                raise_syntax_error("invalid_datetime", "datetime_string/3",
+                                   f"the text does not parse: {exc}",
+                                   cause=exc)
+            # It parsed, but names no datetime ("day is out of range").
             raise_domain_error("datetime_text", s_term,
                                "datetime_string/3", arg=2)
         if unify(dt_obj, out, trail):
@@ -897,6 +903,17 @@ def _timestamp_2(dt_obj, stamp, trail, k):
 # ── ISO-8601 helpers — bidirectional, via isoformat/fromisoformat ────────
 
 
+def _is_syntax_message(exc) -> bool:
+    """Whether a ``strptime`` / ``fromisoformat`` ValueError says the TEXT
+    does not parse (RULED 2026-10-02: ``syntax_error``), rather than that it
+    parsed to fields naming no date ("day is out of range for month",
+    "month must be in 1..12"), which stays a ``domain_error``."""
+    msg = str(exc)
+    return (msg.startswith("Invalid isoformat string")
+            or msg.startswith("time data ")          # does not match format
+            or msg.startswith("unconverted data remains"))
+
+
 def _datetime_string_iso_2(dt_obj, s, trail, k):
     """datetime_string_iso/2: bidirectional ISO-8601 datetime.
 
@@ -913,7 +930,11 @@ def _datetime_string_iso_2(dt_obj, s, trail, k):
         s = s_text
         try:
             out = _dt.datetime.fromisoformat(s)
-        except ValueError:
+        except ValueError as exc:
+            if _is_syntax_message(exc):
+                raise_syntax_error("invalid_datetime", "datetime_string_iso/2",
+                                   f"the text does not parse: {exc}",
+                                   cause=exc)
             raise_domain_error("iso_datetime", s_term,
                                "datetime_string_iso/2", arg=2)
         if unify(dt_obj, out, trail):
@@ -940,7 +961,11 @@ def _date_string_iso_2(d_obj, s, trail, k):
         s = s_text
         try:
             out = _dt.date.fromisoformat(s)
-        except ValueError:
+        except ValueError as exc:
+            if _is_syntax_message(exc):
+                raise_syntax_error("invalid_date", "date_string_iso/2",
+                                   f"the text does not parse: {exc}",
+                                   cause=exc)
             raise_domain_error("iso_date", s_term, "date_string_iso/2", arg=2)
         if unify(d_obj, out, trail):
             yield None

@@ -677,20 +677,33 @@ print(repr(my_module.bar))            # 'bar'
     |---|---|
     | `hash(nope, "abc", H)`, `hash(shake_128, ...)`, `sign(nope, K, D, H)` | `domain_error(hash_algorithm, nope)` |
     | `derive(P, S, 0, DK)` (iterations or key length <= 0) | `domain_error(positive_integer, 0)` |
-    | `parse("{bad", T)` (`py.json`) | `domain_error(json_text, "{bad")` |
-    | `read_file(F, T)` (`py.json`) on a file that is not JSON | `domain_error(json_file, F)` |
     | `time(25, 0, 0, T)` | `domain_error(time, time(25, 0, 0))` |
     | `datetime(2026, 13, 1, 0, 0, 0, DT)` | `domain_error(datetime, datetime(2026, 13, 1, 0, 0, 0))` |
     | `ordinal(D, 0)` | `domain_error(ordinal, 0)` |
-    | `datetime_string(DT, "x", "%Y")` / `(..., "%Q")` | `domain_error(datetime_text, "x")` / `domain_error(datetime_format, "%Q")` |
-    | `date_string_iso(D, "nope")`, `datetime_string_iso(DT, "nope")` | `domain_error(iso_date, "nope")`, `domain_error(iso_datetime, "nope")` |
+    | `datetime_string(DT, "2026-02-30", "%Y-%m-%d")` / `(..., "%Q")` | `domain_error(datetime_text, "2026-02-30")` / `domain_error(datetime_format, "%Q")` |
+    | `date_string_iso(D, "2026-13-01")`, `datetime_string_iso(DT, "2026-01-01T25:00")` | `domain_error(iso_date, "2026-13-01")`, `domain_error(iso_datetime, ...)` |
     | `date_max(DT, Aware, M)` (a naive and an aware datetime) | `domain_error(naive_datetime, Aware)` |
-    | `get("not-a-url", B)`, `py.url.parse("http://[::1", P)` | `domain_error(url, "not-a-url")` |
+    | `get("not-a-url", B)` (no scheme), `py.url.parse("http://h:99999/", P)` (port out of range) | `domain_error(url, "not-a-url")` |
     | `request(Opts, S, B)` with no `url` key | `domain_error(http_request_options, Opts)` |
-    | `uuid_str(U, "nope")` (also `uuid_hex`, `uuid_urn`, `uuid_bytes`, `uuid_int`) | `domain_error(uuid_text, "nope")` |
+    | `uuid_bytes(U, B)` (not 16 bytes), `uuid_int(U, -1)` | `domain_error(uuid_bytes, B)`, `domain_error(uuid_int, -1)` |
     | `generate_records(Hs, [R], S)` with a key `Hs` lacks | `domain_error(csv_record, R)` |
     | `sample(L, -1, S)` | `domain_error(not_less_than_zero, -1)` |
     | `maybe(1.5)` | `domain_error(probability, 1.5)` |
+
+    Text that does not PARSE is not a value out of range: it raises ISO's
+    `error(syntax_error(Kind), Name/Arity)` (ruled 2026-10-02; these were
+    domain errors), as `read/1` does for unreadable input. A text that
+    parses but names no value (a 30th of February, a port of 99999) keeps
+    its `domain_error` above.
+
+    | Call | Error |
+    |---|---|
+    | `parse("{bad", T)` (`py.json`), `read_file(F, T)` on a file that is not JSON | `syntax_error(invalid_json)` |
+    | `read_file(F, T)` (`py.json`) on a file that is not UTF-8 | `syntax_error(invalid_data)` (Scryer's term) |
+    | `datetime_string(DT, "x", "%Y")`, `datetime_string_iso(DT, "nope")` | `syntax_error(invalid_datetime)` |
+    | `date_string_iso(D, "nope")` | `syntax_error(invalid_date)` |
+    | `py.url.parse("http://[::1", P)`, `get("http://h:ab/", B)` | `syntax_error(invalid_url)` |
+    | `uuid_str(U, "nope")` (also `uuid_hex`, `uuid_urn`) | `syntax_error(invalid_uuid)` |
 
     Mixing a plain `date` with a `datetime` (`date_max/3`, `date_min/3`,
     `date_diff/3`, `days_between/3`, `date_between/3`) is a TYPE error on

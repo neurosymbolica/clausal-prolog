@@ -101,20 +101,32 @@ def test_timestamp_out_of_range_raises_domain_error(stamp):
 # ── json ─────────────────────────────────────────────────────────────────
 
 
-def test_json_parse3_malformed_raises_domain_error():
+def test_json_parse3_malformed_raises_syntax_error():
+    # RULED 2026-10-02: unparseable text is syntax_error(invalid_json); it
+    # was domain_error(json_text, S).
     from clausal.modules.py.json import _parse_3
     s = chars("[1,")
     assert raised(_parse_3, s, Var(), []) == _err(
-        ("domain_error", "json_text", s), "parse", 3)
+        ("syntax_error", "invalid_json"), "parse", 3)
 
 
-def test_json_read_file_not_json_raises_domain_error(tmp_path):
+def test_json_read_file_not_json_raises_syntax_error(tmp_path):
+    # Was domain_error(json_file, P).
     from clausal.modules.py.json import _read_file_2
     p = tmp_path / "x.json"
     p.write_text("{not json")
     path = chars(str(p))
     assert raised(_read_file_2, path, Var()) == _err(
-        ("domain_error", "json_file", path), "read_file", 2)
+        ("syntax_error", "invalid_json"), "read_file", 2)
+
+
+def test_json_read_file_not_utf8_raises_invalid_data(tmp_path):
+    # Was domain_error(json_file, P): Scryer's term for such a stream.
+    from clausal.modules.py.json import _read_file_2
+    p = tmp_path / "x.json"
+    p.write_bytes(b'{"a": "\xff\xfe"}')
+    assert raised(_read_file_2, chars(str(p)), Var()) == _err(
+        ("syntax_error", "invalid_data"), "read_file", 2)
 
 
 def test_json_write_file_unserialisable_raises_and_writes_nothing(tmp_path):
@@ -206,12 +218,20 @@ def test_http_request_non_number_timeout_raises_type_error():
         ("type_error", "number", "soon"), "request", 3)
 
 
-@pytest.mark.parametrize("url", ["ftpx://a/b", "http:///path", "http://[::1"])
+@pytest.mark.parametrize("url", ["ftpx://a/b", "http:///path"])
 def test_http_unusable_url_raises_domain_error(url):
     # urllib refuses these itself, before any network traffic.
     from clausal.modules.py.http import _get_2
     u = chars(url)
     assert raised(_get_2, u, Var()) == _err(("domain_error", "url", u), "get", 2)
+
+
+@pytest.mark.parametrize("url", ["http://[::1", "http://h:ab/"])
+def test_http_url_that_does_not_parse_raises_syntax_error(url):
+    # RULED 2026-10-02 (unparseable text): it was domain_error(url, U).
+    from clausal.modules.py.http import _get_2
+    assert raised(_get_2, chars(url), Var()) == _err(
+        ("syntax_error", "invalid_url"), "get", 2)
 
 
 def test_http_network_failure_raises_system_error(monkeypatch):

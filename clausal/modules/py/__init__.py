@@ -454,7 +454,7 @@ def raise_domain_error(domain, culprit, pred, *, arg=None):
     behind it rejects (RULED 2026-10-02): month 13, an unknown hash
     algorithm, malformed JSON text, iterations <= 0.  *domain* is ISO's
     name where ISO has one (``not_less_than_zero``) and the wrapper's own
-    otherwise (``hash_algorithm``, ``json_text``, ``url``).  *culprit* is the
+    otherwise (``hash_algorithm``, ``csv_record``, ``url``).  *culprit* is the
     TERM the caller wrote (the dereferenced argument, not the ``str`` it
     converted to), and *arg* the 1-based position, carried in the message.
     """

@@ -457,14 +457,17 @@ def test_F017_url_parse_bad_port_raises_domain_error():
         "error", ("domain_error", "url", u), ("/", "parse", 2))
 
 
-def test_F017_url_parse_malformed_bracket_raises_domain_error():
+def test_F017_url_parse_malformed_bracket_raises_syntax_error():
     # A11-F017 residual: urlparse itself raises ValueError on "http://[::1"
-    # (unclosed IPv6 bracket) -- uniformly with the bad-port path, a
-    # domain_error(url, Url) (RULED 2026-10-02).
+    # (unclosed IPv6 bracket) -- text that does not parse as a URL,
+    # syntax_error(invalid_url) (RULED 2026-10-02; it was domain_error(url,
+    # Url)).  An out-of-range port still is domain_error (above).
     from clausal.modules.py.url import _parse_2
-    u = chars("http://[::1")
-    assert _raised_term(lambda: list(_parse_2(u, Var(), Trail(), None))) == (
-        "error", ("domain_error", "url", u), ("/", "parse", 2))
+    for text in ("http://[::1", "http://h:ab/"):
+        u = chars(text)
+        assert _raised_term(
+            lambda: list(_parse_2(u, Var(), Trail(), None))) == (
+            "error", ("syntax_error", "invalid_url"), ("/", "parse", 2))
 
 
 def test_F018_http_get_malformed_url_raises_domain_error():

@@ -38,8 +38,8 @@ from clausal.modules.py import (
     ModulePredicate,
     _import_stdlib,
     expect_type,
-    raise_domain_error,
     raise_os_error,
+    raise_syntax_error,
     require_text,
     simple_to_trampoline,
 )
@@ -281,8 +281,11 @@ def _parse_2(string, term, trail, k):
     string = require_text(text_term, "parse/2", 1)
     try:
         obj = _json.loads(string)
-    except ValueError:
-        raise_domain_error("json_text", text_term, "parse/2", arg=1)
+    except ValueError as exc:
+        # Text that is not JSON: ISO's term for unreadable input text
+        # (RULED 2026-10-02; it was domain_error(json_text, S)).
+        raise_syntax_error("invalid_json", "parse/2",
+                           f"the text is not JSON: {exc}", cause=exc)
     result = _python_to_clausal(obj)
     if unify(term, result, trail):
         yield None
@@ -301,8 +304,9 @@ def _parse_3(string, term, options, trail, k):
     atoms = _parse_options(options)
     try:
         obj = _json.loads(string)
-    except ValueError:
-        raise_domain_error("json_text", text_term, "parse/3", arg=1)
+    except ValueError as exc:
+        raise_syntax_error("invalid_json", "parse/3",
+                           f"the text is not JSON: {exc}", cause=exc)
     result = _python_to_clausal(obj, atoms)
     if unify(term, result, trail):
         yield None
@@ -374,9 +378,15 @@ def _read_file_2(path, term, trail, k):
     except OSError as exc:
         # RULED 2026-10-02: a file-system failure raises the ISO term.
         raise_os_error(exc, path_term, "read_file/2", arg=1, path=path)
-    except ValueError:
-        # The file is there and readable but is not JSON (or not UTF-8).
-        raise_domain_error("json_file", path_term, "read_file/2", arg=1)
+    except UnicodeDecodeError as exc:
+        # Bytes that are not UTF-8 (RULED 2026-10-02; they were
+        # domain_error(json_file, P)): Scryer's term for such a stream.
+        raise_syntax_error("invalid_data", "read_file/2",
+                           f"the file is not UTF-8 text: {exc}", cause=exc)
+    except ValueError as exc:
+        # UTF-8 text that is not JSON (was domain_error(json_file, P)).
+        raise_syntax_error("invalid_json", "read_file/2",
+                           f"the file is not JSON: {exc}", cause=exc)
     result = _python_to_clausal(obj)
     if unify(term, result, trail):
         yield None

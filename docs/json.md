@@ -52,7 +52,7 @@ the `atoms` vocabulary reaches every nested string value.
 
 ### parse/2
 
-`parse(String, Term)` — parse a JSON string into Clausal terms. Fails on invalid JSON or unbound String.
+`parse(String, Term)` — parse a JSON string into Clausal terms. Text that is not JSON raises `syntax_error(invalid_json)` (ruled 2026-10-02; it was `domain_error(json_text, S)`); an unbound String raises `instantiation_error`.
 
 ```seam
 parse_config(S, CONFIG) <- parse(S, CONFIG)
@@ -110,7 +110,7 @@ unbound, `get(DATA, KEY, V)` enumerates `KEY = name, V = "Ann"`.
 
 ### read_file/2
 
-`read_file(Path, Term)` — read and parse a JSON file. Fails on file or parse error.
+`read_file(Path, Term)` — read and parse a JSON file. A file that is not JSON raises `syntax_error(invalid_json)`, one that is not UTF-8 `syntax_error(invalid_data)` (both were `domain_error(json_file, Path)`); a file-system failure raises the ISO error ([`py.files`](files.md): `existence_error(source_sink, Path)`, ...).
 
 ```seam
 load_config(CONFIG) <- read_file("config.json", CONFIG)

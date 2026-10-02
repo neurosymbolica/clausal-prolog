@@ -25,6 +25,7 @@ from clausal.modules.py import (
     _import_stdlib,
     expect_type,
     raise_domain_error,
+    raise_syntax_error,
     simple_to_trampoline,
     text_or_str,
     to_text,
@@ -141,8 +142,11 @@ def _uuid_str_2(u, s, trail, k):
     elif (s_text := to_text(s)) is not None:
         try:
             val = _uuid.UUID(s_text)
-        except ValueError:
-            raise_domain_error("uuid_text", s, "uuid_str/2", arg=2)
+        except ValueError as exc:
+            # "badly formed hexadecimal UUID string": unparseable text
+            # (RULED 2026-10-02; it was domain_error(uuid_text, S)).
+            raise_syntax_error("invalid_uuid", "uuid_str/2",
+                               f"the text is not a UUID: {exc}", cause=exc)
         if unify(u, val, trail):
             yield None
     elif not is_var(u):
@@ -165,8 +169,9 @@ def _uuid_hex_2(u, h, trail, k):
     elif (h_text := to_text(h)) is not None:
         try:
             val = _uuid.UUID(hex=h_text)
-        except ValueError:
-            raise_domain_error("uuid_hex", h, "uuid_hex/2", arg=2)
+        except ValueError as exc:
+            raise_syntax_error("invalid_uuid", "uuid_hex/2",
+                               f"the text is not UUID hex: {exc}", cause=exc)
         if unify(u, val, trail):
             yield None
     elif not is_var(u):
@@ -189,8 +194,9 @@ def _uuid_urn_2(u, urn, trail, k):
     elif (urn_text := to_text(urn)) is not None:
         try:
             val = _uuid.UUID(urn_text)
-        except ValueError:
-            raise_domain_error("uuid_urn", urn, "uuid_urn/2", arg=2)
+        except ValueError as exc:
+            raise_syntax_error("invalid_uuid", "uuid_urn/2",
+                               f"the text is not a UUID URN: {exc}", cause=exc)
         if unify(u, val, trail):
             yield None
     elif not is_var(u):

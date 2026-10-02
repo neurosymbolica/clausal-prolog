@@ -88,9 +88,16 @@ def _do_request(url, method="GET", headers=None, data=None, timeout=30, *,
         data_bytes = to_bytes(data)
     try:
         req = _urllib_request.Request(url, data=data_bytes, method=method)
-    except ValueError:
-        # "unknown url type": no scheme, or not a URL at all (F018).
-        raise_domain_error("url", culprit, pred, arg=1)
+    except ValueError as e:
+        # "unknown url type": no scheme, or a scheme urllib cannot use
+        # (F018) -- text that parses but is not a URL a request can use,
+        # domain_error(url, U).  Anything else ("Invalid IPv6 URL") is text
+        # that does not parse as a URL: syntax_error(invalid_url) (RULED
+        # 2026-10-02; it was domain_error(url, U)).
+        if str(e).startswith("unknown url type"):
+            raise_domain_error("url", culprit, pred, arg=1)
+        raise_syntax_error("invalid_url", pred,
+                           f"the URL does not parse: {e}", cause=e)
     try:
         for k, v in headers.items():
             req.add_header(k, v)
@@ -111,15 +118,19 @@ def _do_request(url, method="GET", headers=None, data=None, timeout=30, *,
         raise_os_error(reason, culprit, pred)
     except ValueError as e:
         # A malformed authority: a non-numeric port (http.client.InvalidURL)
-        # or "Invalid IPv6 URL".  Any other ValueError (a header value with
+        # or "Invalid IPv6 URL" -- text that does not parse as a URL,
+        # syntax_error(invalid_url) (RULED 2026-10-02; it was
+        # domain_error(url, U)).  Any other ValueError (a header value with
         # CR/LF) is not the URL's and propagates as itself.
         if (isinstance(e, _http_client.InvalidURL)
                 or "IPv6" in str(e)):
-            raise_domain_error("url", culprit, pred, arg=1)
+            raise_syntax_error("invalid_url", pred,
+                               f"the URL does not parse: {e}", cause=e)
         raise
     except _http_client.HTTPException as e:
-        if isinstance(e, _http_client.InvalidURL):
-            raise_domain_error("url", culprit, pred, arg=1)   # the caller's URL
+        if isinstance(e, _http_client.InvalidURL):     # the caller's URL
+            raise_syntax_error("invalid_url", pred,
+                               f"the URL does not parse: {e}", cause=e)
         if isinstance(e, OSError):             # RemoteDisconnected: a reset
             raise_os_error(e, culprit, pred)
         from clausal.logic.exceptions import system_error  # noqa: PLC0415
