@@ -56,6 +56,33 @@ sizing plan, sec. 7.3 step 4): the `.clausal`-may-not-import-`.pl`
 refusal (route 1); and nothing may be renamed before every downstream glob
 reads a shared suffix list (positive control required).
 
+- **Route 1 READY (2026-10-02, feat/clausal-may-not-import-pl-2026-10-02).**
+  A Clausal Prolog module whose `use_module/1,2` resolves to a `.pl` file
+  is refused at load: `permission_error(access, prolog_module, M)`, "Clausal
+  Prolog may not import ISO Prolog (.pl), which may use cut; convert ... to
+  .clausal".  Keyed on the SURFACE of the importer and of the file the
+  finders picked (so a `.seam`/`.clausal` twin of a `.pl` is never
+  refused); inert until the tuple flips, active with no further edit.
+  Both front ends (native `_use_module`, the translator's
+  `_clausal_prolog_facade`).  Pinned (simulated flip) in
+  `tests/test_clausal_prolog_may_not_import_pl.py`.  Census on the flip
+  preview: 0 static in-repo sites (the 4 `.clausal` left there are seam
+  repros under `todo/done/` with no `use_module`); 1 test-generated site,
+  `test_extension_flip_prep.py::test_a_clausal_prolog_importer_is_told_use_module`,
+  repointed at a `.clausal` library on this branch.  Not covered (routes
+  2-7, later, with the dialect gate; route 2 RULED strict: a `.pl` closure
+  passed into a `.clausal` meta-predicate is refused too): a run-time
+  `M:G` / `call/N` into a `.pl` module some other code loaded still runs
+  (pinned as today's behaviour, labelled "closed by route 2").
+  Open Low (review): the defensive `.pl` check on mapped libraries in
+  `iso_l3_directives._use_library` is unreachable today (every mapped
+  module is `.py`/`.seam`), costs a `find_spec` per mapped-library import
+  under the Clausal Prolog surface, and has no twin in the translator's
+  mapped-library branch; a static test over `_LIBRARY_MODULES` /
+  `_LIBRARY_OVERRIDES` would replace it.
+  `ensure_loaded/1` is no native directive; `library(L)` never reaches a
+  `.pl` (built-in, mapped engine module, or `.seam` facade only).
+
 ### Still remaining, outside the two-line diff
 
 - The end-of-life translator (`clausal/tools/prolog_to_clausal.py`) spells

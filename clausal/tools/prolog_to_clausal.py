@@ -604,14 +604,16 @@ def _library_facade(lib: str) -> "str | None":
 
 
 def _clausal_prolog_facade(directive: str, dotted: str) -> "str | None":
-    """For a Clausal Prolog import of *dotted*: None when it is a Clausal
-    source (``.seam``/``.clausal``/``.pl``, imported as before); the facade
+    """For a Clausal Prolog import of *dotted*: None when it is a seam or
+    Clausal Prolog source (imported as before); a ``.pl`` module is refused
+    (:func:`iso_l3_directives._prolog_import_refusal`); the facade
     when it is a module NAME a seam alias resolves to an engine Python
     module (``european_union``, ``units``); else -- a Python path such as
     ``py/datetime`` -- a :class:`PrologTranslationError`.  The native front
     end's rule (``iso_l3_directives._use_module``), with its message."""
     from clausal.tools.iso_l3_directives import (  # noqa: PLC0415
-        _engine_module_path, _facade_for, _is_python_module, _module_source,
+        _engine_module_path, _facade_for, _is_iso_prolog_source,
+        _is_python_module, _module_source, _prolog_import_refusal,
         _python_import_refusal, _resolve_import_path)
     target = _engine_module_path(dotted)
     found = _module_source(target)
@@ -620,6 +622,10 @@ def _clausal_prolog_facade(directive: str, dotted: str) -> "str | None":
         target = _resolve_import_path(dotted)
         found = _module_source(target)
         via_alias = target != dotted
+    if _is_iso_prolog_source(found):
+        # One-way dependency: Clausal Prolog never imports a .pl module.
+        raise PrologTranslationError(
+            _prolog_import_refusal(directive, dotted, found))
     if found is None or not _is_python_module(found):
         return None
     facade = _facade_for(target) if via_alias else None
