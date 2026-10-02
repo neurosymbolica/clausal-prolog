@@ -49,7 +49,10 @@ def _connect_3(host, port, sock_out, trail, k):
     port_d = deref(port)
     if not expect_type(port_d, int, "connect/3", arg=2):
         return
-    s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+    try:
+        s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+    except OSError as exc:                 # EMFILE: resource_error
+        raise_os_error(exc, host_term, "connect/3")
     try:
         s.connect((host_d, port_d))
     except OSError as exc:
@@ -66,7 +69,10 @@ def _listen_3(host, port, server_out, trail, k):
     port_d = deref(port)
     if not expect_type(port_d, int, "listen/3", arg=2):
         return
-    s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+    try:
+        s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+    except OSError as exc:                 # EMFILE: resource_error
+        raise_os_error(exc, host_term, "listen/3")
     try:
         s.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)
         s.bind((host_d, port_d))

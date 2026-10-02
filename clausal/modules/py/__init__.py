@@ -494,6 +494,14 @@ _NETWORK_CODES = {
     _errno.EADDRNOTAVAIL: "address_not_available",
 }
 
+#: The same conditions by exception CLASS, for an instance with no errno.
+_NETWORK_CLASSES = (
+    (ConnectionRefusedError, "connection_refused"),
+    (ConnectionResetError, "connection_reset"),
+    (ConnectionAbortedError, "connection_aborted"),
+    (BrokenPipeError, "broken_pipe"),
+)
+
 #: errno -> ``resource_error(R)``.  ``file_descriptors`` is Scryer's term for
 #: an exhausted descriptor table (``open/4``'s fallback branch).
 _RESOURCE_CODES = {
@@ -574,6 +582,13 @@ def os_error_term(exc, culprit, pred, *, action="open", arg=None,
     if isinstance(exc, _ssl_mod.SSLError):     # errno is an SSL code, not errno
         return system_error("tls_failure", context)
     code = getattr(exc, "errno", None)
+    if code is None:
+        # Raised by class with no errno (``http.client.RemoteDisconnected``
+        # is a ConnectionResetError built from a message alone): the class
+        # says what happened.
+        for cls, name in _NETWORK_CLASSES:
+            if isinstance(exc, cls):
+                return system_error(name, context)
     if code == _errno.ENOENT:
         return existence_error("source_sink", culprit, context)
     if code == _errno.ENOTDIR:

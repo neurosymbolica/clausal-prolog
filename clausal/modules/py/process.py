@@ -71,7 +71,13 @@ def _raise_spawn_error(exc, program_term, pred, *, cwd=None, cwd_term=None):
     import errno as _errno  # noqa: PLC0415
     if cwd is not None and getattr(exc, "filename", None) == cwd:
         raise_os_error(exc, cwd_term, pred, path=cwd)
-    if exc.errno in (_errno.EACCES, _errno.EPERM, _errno.ENOEXEC):
+    from clausal.modules.py import _PERMISSION_ERRNOS  # noqa: PLC0415
+    import os as _os_mod  # noqa: PLC0415
+    program = getattr(exc, "filename", None)
+    if exc.errno in _PERMISSION_ERRNOS or exc.errno == _errno.ENOEXEC or (
+            exc.errno == _errno.ENOTDIR and program is not None
+            and _os_mod.path.lexists(program)):
+        # Every "it is there but cannot be run" is the one Scryer term.
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, permission_error,
         )

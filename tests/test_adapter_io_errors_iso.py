@@ -641,6 +641,34 @@ def test_http_connection_refused(closed_port):
         ("system_error", "connection_refused"), "request", 3)
 
 
+def test_os_error_term_maps_an_errno_less_connection_error_by_class():
+    import http.client
+    assert os_error_term(http.client.RemoteDisconnected("closed"), "U",
+                         "get/2") == _err(("system_error", "connection_reset"),
+                                          "get", 2)
+
+
+@_needs_sockets
+def test_http_server_closing_without_a_reply_is_connection_reset():
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+
+    def drop():
+        conn, _ = srv.accept()
+        conn.recv(65536)
+        conn.close()
+    t = threading.Thread(target=drop, daemon=True)
+    t.start()
+    try:
+        u = chars(f"http://127.0.0.1:{srv.getsockname()[1]}/")
+        assert raised(phttp._get_2, u, Var()) == _err(
+            ("system_error", "connection_reset"), "get", 2)
+    finally:
+        t.join(5)
+        srv.close()
+
+
 @_needs_sockets
 def test_http_unresolvable_host_is_an_existence_error():
     u = chars("http://no-such-host.invalid/")

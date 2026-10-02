@@ -180,8 +180,10 @@ def _rename_file_2(old, new, trail, k):
     the OS refuses to replace (a directory, a non-empty directory) or a
     place that may not be written ``permission_error(modify, source_sink,
     _)``.  ``os.rename`` names both paths in every error, so the culprit is
-    decided by looking: Old when Old is not there or may not be moved, New
-    otherwise."""
+    decided by looking: Old when Old is not there or its directory may not
+    be written, New otherwise.  Known limit: a refusal that is Old's yet
+    leaves its directory writable (EPERM on another user's file in a
+    sticky directory, an immutable file) blames New."""
     old_term, new_term = deref(old), deref(new)
     old = require_text(old, "rename_file/2", 1)
     new = require_text(new, "rename_file/2", 2)
