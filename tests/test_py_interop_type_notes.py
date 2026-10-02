@@ -126,6 +126,52 @@ def test_constructor_with_wrong_type_component_raises_type_error():
     assert term == ("error", ("type_error", "integer", 10.5), ("/", "time", 4))
 
 
+def _wrapper_cases():
+    from clausal.logic.cells import chars
+    from clausal.logic.variables import Var
+    from clausal.modules.py import http, random, uuid
+    from clausal.modules.py.datetime import _timedelta_3
+    return [
+        # integer_between/3 no longer int()-truncates a float or parses an
+        # atom spelled as a number.
+        (random._random_integer_3, (2.7, 5, Var()),
+         ("type_error", "integer", 2.7), "integer_between"),
+        (random._random_integer_3, ("3", 5, Var()),
+         ("type_error", "integer", "3"), "integer_between"),
+        (random._random_float_3, (True, 5, Var()),
+         ("type_error", "number", True), "float_between"),
+        (uuid._uuid3_3, (42, chars("n"), Var()),
+         ("type_error", "uuid", 42), "uuid_v3"),
+        (http._get_3, (chars("http://x.test/"), 42, Var()),
+         ("type_error", "dict", 42), "get"),
+        (http._post_4, (chars("http://x.test/"), chars("d"), 42, Var()),
+         ("type_error", "dict", 42), "post"),
+        (_timedelta_3, ("x", Var(), Var()),
+         ("type_error", "number", "x"), "timedelta"),
+    ]
+
+
+@pytest.mark.parametrize("i", range(7))
+def test_wrapper_wrong_type_raises(i, monkeypatch):
+    import clausal.modules.py.http as http_mod
+    from clausal.logic.variables import Trail
+    monkeypatch.setattr(http_mod, "_do_request", lambda *a, **kw: (200, "ok"))
+    fn, args, formal, name = _wrapper_cases()[i]
+    term = raised(lambda: list(fn(*args, Trail(), None)))
+    assert term[1] == formal and term[2][1] == name
+
+
+def test_timedelta_accepts_a_rational_day_count():
+    # A rational is a number: it crosses to timedelta as its float rather
+    # than being refused by the stdlib constructor.
+    from fractions import Fraction
+    from clausal.logic.variables import Trail, Var, deref
+    from clausal.modules.py.datetime import _timedelta_3
+    td = Var()
+    assert len(list(_timedelta_3(Fraction(3, 2), Var(), td, Trail(), None))) == 1
+    assert deref(td)[:3] == ("timedelta", 1, 43200)
+
+
 def test_note_rejected_call_records_exception():
     with collect_type_mismatch_notes() as notes:
         try:

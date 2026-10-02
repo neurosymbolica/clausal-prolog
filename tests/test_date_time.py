@@ -512,10 +512,10 @@ class TestDateOf:
         )
         assert len(results) == 0
 
-    def test_both_unbound_fails(self):
+    def test_both_unbound_raises(self):
         # vv
-        results, _ = simple_solutions(_date_of_2, Var(), Var())
-        assert len(results) == 0
+        assert raised(_date_of_2, Var(), Var()) == \
+            ('error', 'instantiation_error', ('/', 'date_of', 2))
 
     def test_non_datetime_first_arg_raises(self):
         # nv
@@ -942,10 +942,10 @@ class TestOrdinal:
         results, _ = simple_solutions(_ordinal_2, Var(), 0)
         assert len(results) == 0
 
-    def test_both_unbound_fails(self):
+    def test_both_unbound_raises(self):
         # vv
-        results, _ = simple_solutions(_ordinal_2, Var(), Var())
-        assert len(results) == 0
+        assert raised(_ordinal_2, Var(), Var()) == \
+            ('error', 'instantiation_error', ('/', 'ordinal', 2))
 
     def test_non_integer_reverse_raises(self):
         # vn

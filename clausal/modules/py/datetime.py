@@ -216,6 +216,13 @@ def expect_type(value, types, pred, *, expected=None, arg=None) -> bool:  # noqa
                         culprit=_dt_to_term(value))
 
 
+def _as_float_if_exact(v):
+    """A rational or decimal number as its float; anything else unchanged."""
+    if isinstance(v, NUMBER_TYPES) and not isinstance(v, (int, float)):
+        return float(v)
+    return v
+
+
 def _component_type_error(pred, comps, types, exc) -> None:
     """Raise ``type_error`` for the first construct-mode component of the
     wrong type, when the constructor's rejection was a ``TypeError``.
@@ -471,16 +478,21 @@ def _timedelta_3(days, seconds, td, trail, k):
         # and converts them exactly (1.5 days → 1 day 12 h), so floats are
         # supported here rather than rejected — never int()-truncated.
         try:
-            obj = _dt.timedelta(days=days,
-                                seconds=seconds if not is_var(seconds) else 0)
+            # stdlib timedelta takes an int or a float; a rational or a
+            # decimal is a number too, and crosses as its float.
+            obj = _dt.timedelta(days=_as_float_if_exact(days),
+                                seconds=_as_float_if_exact(seconds)
+                                if not is_var(seconds) else 0)
         except (TypeError, ValueError) as exc:
             # seconds is already substituted when unbound, so only days can
             # be unbound here.
             if is_var(days):
                 raise LogicException(
                     instantiation_error("timedelta/3")) from None
-            _component_type_error("timedelta/3", (days, seconds), NUMBER_TYPES,
-                                  exc)
+            _component_type_error(
+                "timedelta/3",
+                (days,) if is_var(seconds) else (days, seconds),
+                NUMBER_TYPES, exc)
             note_rejected_call("timedelta/3", exc)
             return
         if unify(td, obj, trail):
@@ -645,11 +657,11 @@ def _date_of_2(dt_obj, d, trail, k):
         out = _dt.datetime(d.year, d.month, d.day)
         if unify(dt_obj, out, trail):
             yield None
-    elif not is_var(d):
+    else:
+        # Date bound to a non-date -> type_error; unbound with nothing to
+        # compute from (DateTime unbound or a partial datetime term) ->
+        # instantiation_error.
         expect_type(d, _dt.date, "date_of/2", arg=2)
-    elif not is_var(dt_obj):
-        # A partial datetime term and no Date: nothing to compute from.
-        raise LogicException(instantiation_error("date_of/2"))
 
 
 # ── days_between/3 — integer day count ────────────────────────────────────
@@ -760,11 +772,11 @@ def _ordinal_2(d, n, trail, k):
             return
         if unify(d, out, trail):
             yield None
-    elif not is_var(n):
+    else:
+        # N bound to a non-integer -> type_error; N unbound with nothing to
+        # compute from (Date unbound or partial, ``date(Y, 3, 1)``) ->
+        # instantiation_error.
         expect_type(n, int, "ordinal/2", arg=2)
-    elif not is_var(d):
-        # A partial date term (``date(Y, 3, 1)`` with Y unbound) and no N.
-        raise LogicException(instantiation_error("ordinal/2"))
 
 
 # ── weekday/2 — weekday ─────────────────────────────────────────────────

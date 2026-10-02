@@ -40,7 +40,9 @@ since 0.4.0 finish three moves:
   component raise `type_error(integer, F)` as `date/3` already did;
   `http:post/3,4` with non-text data raises instead of sending a body-less
   POST; `uuid_v3/3`, `uuid_v5/3` with an unknown namespace alias raise
-  `domain_error(uuid_namespace, Ns)`. A right-typed value the library
+  `domain_error(uuid_namespace, Ns)`; `timedelta/3` accepts a rational or
+  decimal day count (as its float) instead of refusing it. A right-typed
+  value the library
   rejects (month 13, malformed JSON, an unknown hash name, a missing file)
   still fails, with its diagnostic note in the `clausal.testing` failure
   report. Wrap the call in `catch/3` where a caller wants the old failure.
