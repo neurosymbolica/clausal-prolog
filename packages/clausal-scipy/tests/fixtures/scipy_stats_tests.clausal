@@ -1,71 +1,71 @@
 -double_quotes(atom)
--import_from(scipy_stats, [StatsMean, StatsPearsonCorrelation, StatsLinearRegression, StatsTTest1Sample,
-    StatsNormalPdf, StatsNormalCdf, StatsNormalPpf, StatsChiSquare,
-    StatsKs2samp, StatsShapiro, ResultGet])
+-import_from(scipy_stats, [stats_mean, stats_pearson_correlation, stats_linear_regression, stats_t_test1_sample,
+    stats_normal_pdf, stats_normal_cdf, stats_normal_ppf, stats_chi_square,
+    stats_ks2samp, stats_shapiro, result_get])
 
-# StatsMean: mean of [1,2,3] = 2.0
+# stats_mean: mean of [1,2,3] = 2.0
 test("mean of list") <- (
-    StatsMean([1.0, 2.0, 3.0], RESULT),
+    stats_mean([1.0, 2.0, 3.0], RESULT),
     DIFF is ++(abs(float(RESULT) - 2.0)),
     DIFF < 1e-9)  # nv
 
-# StatsPearsonCorrelation: perfect positive correlation
+# stats_pearson_correlation: perfect positive correlation
 test("pearsonr perfect correlation") <- (
-    StatsPearsonCorrelation([1.0, 2.0, 3.0], [1.0, 2.0, 3.0], RESULT),
-    ResultGet(RESULT, 'statistic', STAT),
+    stats_pearson_correlation([1.0, 2.0, 3.0], [1.0, 2.0, 3.0], RESULT),
+    result_get(RESULT, 'statistic', STAT),
     DIFF is ++(abs(float(STAT) - 1.0)),
     DIFF < 1e-9)  # nv
 
-# StatsLinearRegression: y = 2*x has slope=2, intercept=0
+# stats_linear_regression: y = 2*x has slope=2, intercept=0
 test("linregress slope") <- (
-    StatsLinearRegression([1.0, 2.0, 3.0], [2.0, 4.0, 6.0], RESULT),
-    ResultGet(RESULT, 'slope', SLOPE),
+    stats_linear_regression([1.0, 2.0, 3.0], [2.0, 4.0, 6.0], RESULT),
+    result_get(RESULT, 'slope', SLOPE),
     DIFF is ++(abs(float(SLOPE) - 2.0)),
     DIFF < 1e-9)  # nv
 
-# StatsTTest1Sample: data with mean 2.0 vs popmean 2.0, stat near 0
+# stats_t_test1_sample: data with mean 2.0 vs popmean 2.0, stat near 0
 test("ttest1samp mean equal") <- (
-    StatsTTest1Sample([1.0, 2.0, 3.0], 2.0, RESULT),
-    ResultGet(RESULT, 'statistic', STAT),
+    stats_t_test1_sample([1.0, 2.0, 3.0], 2.0, RESULT),
+    result_get(RESULT, 'statistic', STAT),
     ABS is ++(abs(float(STAT))),
     ABS < 1e-9)  # nv
 
-# StatsNormalPdf: norm.pdf(0) = 1/sqrt(2*pi)
+# stats_normal_pdf: norm.pdf(0) = 1/sqrt(2*pi)
 test("norm pdf at zero") <- (
-    StatsNormalPdf(0.0, RESULT),
+    stats_normal_pdf(0.0, RESULT),
     EXPECTED is ++(1.0 / __import__('math').sqrt(2 * __import__('math').pi)),
     DIFF is ++(abs(float(RESULT) - float(EXPECTED))),
     DIFF < 1e-9)  # nv
 
-# StatsNormalCdf: norm.cdf(0) = 0.5
+# stats_normal_cdf: norm.cdf(0) = 0.5
 test("norm cdf at zero") <- (
-    StatsNormalCdf(0.0, RESULT),
+    stats_normal_cdf(0.0, RESULT),
     DIFF is ++(abs(float(RESULT) - 0.5)),
     DIFF < 1e-9)  # nv
 
-# StatsNormalPpf: ppf(0.5) = 0 (median of standard normal)
+# stats_normal_ppf: ppf(0.5) = 0 (median of standard normal)
 test("norm ppf median") <- (
-    StatsNormalPpf(0.5, RESULT),
+    stats_normal_ppf(0.5, RESULT),
     ABS is ++(abs(float(RESULT))),
     ABS < 1e-9)  # nv
 
-# StatsChiSquare: uniform counts, statistic = 0
+# stats_chi_square: uniform counts, statistic = 0
 test("chisquare uniform") <- (
-    StatsChiSquare([10, 10, 10], RESULT),
-    ResultGet(RESULT, 'statistic', STAT),
+    stats_chi_square([10, 10, 10], RESULT),
+    result_get(RESULT, 'statistic', STAT),
     ABS is ++(abs(float(STAT))),
     ABS < 1e-9)  # nv
 
-# StatsKs2samp: identical samples, statistic = 0
+# stats_ks2samp: identical samples, statistic = 0
 test("ks2samp identical") <- (
-    StatsKs2samp([1.0, 2.0, 3.0], [1.0, 2.0, 3.0], RESULT),
-    ResultGet(RESULT, 'statistic', STAT),
+    stats_ks2samp([1.0, 2.0, 3.0], [1.0, 2.0, 3.0], RESULT),
+    result_get(RESULT, 'statistic', STAT),
     ABS is ++(abs(float(STAT))),
     ABS < 1e-9)  # nv
 
-# StatsShapiro: returns a dict with statistic and pvalue
+# stats_shapiro: returns a dict with statistic and pvalue
 test("shapiro returns dict") <- (
-    StatsShapiro([1.0, 2.0, 3.0, 4.0, 5.0], RESULT),
-    ResultGet(RESULT, 'statistic', STAT2_UNUSED),
-    ResultGet(RESULT, 'pvalue', PVAL),
+    stats_shapiro([1.0, 2.0, 3.0, 4.0, 5.0], RESULT),
+    result_get(RESULT, 'statistic', STAT2_UNUSED),
+    result_get(RESULT, 'pvalue', PVAL),
     PVAL >= 0.0)  # nv

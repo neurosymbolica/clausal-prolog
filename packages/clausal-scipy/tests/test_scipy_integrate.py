@@ -5,7 +5,7 @@ Tests are organised per function family and cover:
 - multi-arity variants (optional args)
 - unification succeeds when RESULT is unbound
 - unification fails when RESULT is bound to a wrong value
-- Tier 2 dict results accessed via ResultGet
+- Tier 2 dict results accessed via result_get
 - Tier 1 direct array results
 """
 
@@ -19,10 +19,10 @@ import numpy as np
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py.scipy_integrate import (
-    Quad, DoubleQuad, TripleQuad, NQuad, QuadVec,
-    SolveInitialValueProblem, OdeIntegrate,
-    CumulativeTrapezoid, Trapezoid, Simpson,
-    ResultGet,
+    quad, double_quad, triple_quad, n_quad, quad_vec,
+    solve_initial_value_problem, ode_integrate,
+    cumulative_trapezoid, trapezoid, simpson,
+    result_get,
 )
 
 
@@ -43,9 +43,9 @@ def _drive(pred, *args):
 
 
 def _drive_result_get(result_dict, field):
-    """Use ResultGet to extract a field from a dict result."""
+    """Use result_get to extract a field from a dict result."""
     value = Var()
-    dispatch = ResultGet._get_dispatch()
+    dispatch = result_get._get_dispatch()
     trail = Trail()
     gen = dispatch(None, None, None, None, result_dict, field, value, trail)
     for parent, sentinel in gen:
@@ -71,14 +71,14 @@ def _fails_with_wrong_result(pred, *args):
 class TestQuad:
     def test_sin_0_to_pi(self):
         # nv
-        r = _drive(Quad, math.sin, 0.0, math.pi)
+        r = _drive(quad, math.sin, 0.0, math.pi)
         assert r is not None
         value = _drive_result_get(r, 'value')
         assert abs(float(value) - 2.0) < 1e-8
 
     def test_result_has_error(self):
         # nv
-        r = _drive(Quad, math.sin, 0.0, math.pi)
+        r = _drive(quad, math.sin, 0.0, math.pi)
         assert r is not None
         error = _drive_result_get(r, 'error')
         assert error is not None
@@ -87,28 +87,28 @@ class TestQuad:
     def test_with_args(self):
         # integrate lambda x, a: a*x from 0 to 1, a=2 -> result=1.0
         # nv
-        r = _drive(Quad, lambda x, a: a * x, 0.0, 1.0, (2.0,))
+        r = _drive(quad, lambda x, a: a * x, 0.0, 1.0, (2.0,))
         assert r is not None
         value = _drive_result_get(r, 'value')
         assert abs(float(value) - 1.0) < 1e-8
 
     def test_constant_function(self):
         # nv
-        r = _drive(Quad, lambda x: 1.0, 0.0, 3.0)
+        r = _drive(quad, lambda x: 1.0, 0.0, 3.0)
         assert r is not None
         value = _drive_result_get(r, 'value')
         assert abs(float(value) - 3.0) < 1e-8
 
     def test_result_get_value(self):
         # nv
-        r = _drive(Quad, math.sin, 0.0, math.pi)
+        r = _drive(quad, math.sin, 0.0, math.pi)
         value = _drive_result_get(r, 'value')
         assert value is not None
         assert abs(float(value) - 2.0) < 1e-8
 
     def test_wrong_result_fails(self):
         # nv
-        assert _fails_with_wrong_result(Quad, math.sin, 0.0, math.pi)
+        assert _fails_with_wrong_result(quad, math.sin, 0.0, math.pi)
 
 
 # ── TestDoubleQuad ────────────────────────────────────────────────────────
@@ -117,14 +117,14 @@ class TestDoubleQuad:
     def test_unit_square(self):
         # integral of f(x,y)=1 over [0,1]x[0,1] = 1.0
         # nv
-        r = _drive(DoubleQuad, lambda y, x: 1.0, 0.0, 1.0, 0.0, 1.0)
+        r = _drive(double_quad, lambda y, x: 1.0, 0.0, 1.0, 0.0, 1.0)
         assert r is not None
         value = _drive_result_get(r, 'value')
         assert abs(float(value) - 1.0) < 1e-8
 
     def test_result_has_error(self):
         # nv
-        r = _drive(DoubleQuad, lambda y, x: 1.0, 0.0, 1.0, 0.0, 1.0)
+        r = _drive(double_quad, lambda y, x: 1.0, 0.0, 1.0, 0.0, 1.0)
         assert r is not None
         error = _drive_result_get(r, 'error')
         assert error is not None
@@ -132,14 +132,14 @@ class TestDoubleQuad:
     def test_xy_product(self):
         # integral of x*y over [0,1]x[0,1] = 0.25
         # nv
-        r = _drive(DoubleQuad, lambda y, x: x * y, 0.0, 1.0, 0.0, 1.0)
+        r = _drive(double_quad, lambda y, x: x * y, 0.0, 1.0, 0.0, 1.0)
         assert r is not None
         value = _drive_result_get(r, 'value')
         assert abs(float(value) - 0.25) < 1e-8
 
     def test_wrong_result_fails(self):
         # nv
-        assert _fails_with_wrong_result(DoubleQuad, lambda y, x: 1.0, 0.0, 1.0, 0.0, 1.0)
+        assert _fails_with_wrong_result(double_quad, lambda y, x: 1.0, 0.0, 1.0, 0.0, 1.0)
 
 
 # ── TestTripleQuad ────────────────────────────────────────────────────────
@@ -148,14 +148,14 @@ class TestTripleQuad:
     def test_unit_cube(self):
         # integral of f(x,y,z)=1 over unit cube = 1.0
         # nv
-        r = _drive(TripleQuad, lambda z, y, x: 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0)
+        r = _drive(triple_quad, lambda z, y, x: 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0)
         assert r is not None
         value = _drive_result_get(r, 'value')
         assert abs(float(value) - 1.0) < 1e-6
 
     def test_result_has_error(self):
         # nv
-        r = _drive(TripleQuad, lambda z, y, x: 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0)
+        r = _drive(triple_quad, lambda z, y, x: 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0)
         assert r is not None
         error = _drive_result_get(r, 'error')
         assert error is not None
@@ -167,14 +167,14 @@ class TestNQuad:
     def test_unit_square(self):
         # 2D integration of f=1 over [[0,1],[0,1]] = 1.0
         # nv
-        r = _drive(NQuad, lambda x, y: 1.0, [[0.0, 1.0], [0.0, 1.0]])
+        r = _drive(n_quad, lambda x, y: 1.0, [[0.0, 1.0], [0.0, 1.0]])
         assert r is not None
         value = _drive_result_get(r, 'value')
         assert abs(float(value) - 1.0) < 1e-8
 
     def test_result_has_error(self):
         # nv
-        r = _drive(NQuad, lambda x, y: 1.0, [[0.0, 1.0], [0.0, 1.0]])
+        r = _drive(n_quad, lambda x, y: 1.0, [[0.0, 1.0], [0.0, 1.0]])
         assert r is not None
         error = _drive_result_get(r, 'error')
         assert error is not None
@@ -182,14 +182,14 @@ class TestNQuad:
     def test_1d(self):
         # 1D integration of sin(x) over [0, pi] = 2.0
         # nv
-        r = _drive(NQuad, math.sin, [[0.0, math.pi]])
+        r = _drive(n_quad, math.sin, [[0.0, math.pi]])
         assert r is not None
         value = _drive_result_get(r, 'value')
         assert abs(float(value) - 2.0) < 1e-8
 
     def test_wrong_result_fails(self):
         # nv
-        assert _fails_with_wrong_result(NQuad, lambda x, y: 1.0, [[0.0, 1.0], [0.0, 1.0]])
+        assert _fails_with_wrong_result(n_quad, lambda x, y: 1.0, [[0.0, 1.0], [0.0, 1.0]])
 
 
 # ── TestQuadVec ───────────────────────────────────────────────────────────
@@ -197,7 +197,7 @@ class TestNQuad:
 class TestQuadVec:
     def test_sin_0_to_pi(self):
         # nv
-        r = _drive(QuadVec, lambda x: np.sin(x), 0.0, math.pi)
+        r = _drive(quad_vec, lambda x: np.sin(x), 0.0, math.pi)
         assert r is not None
         y = _drive_result_get(r, 'y')
         assert y is not None
@@ -205,21 +205,21 @@ class TestQuadVec:
 
     def test_result_has_success(self):
         # nv
-        r = _drive(QuadVec, lambda x: np.sin(x), 0.0, math.pi)
+        r = _drive(quad_vec, lambda x: np.sin(x), 0.0, math.pi)
         assert r is not None
         success = _drive_result_get(r, 'success')
         assert success is True
 
     def test_result_has_err(self):
         # nv
-        r = _drive(QuadVec, lambda x: np.sin(x), 0.0, math.pi)
+        r = _drive(quad_vec, lambda x: np.sin(x), 0.0, math.pi)
         assert r is not None
         err = _drive_result_get(r, 'err')
         assert err is not None
 
     def test_result_has_neval(self):
         # nv
-        r = _drive(QuadVec, lambda x: np.sin(x), 0.0, math.pi)
+        r = _drive(quad_vec, lambda x: np.sin(x), 0.0, math.pi)
         assert r is not None
         neval = _drive_result_get(r, 'neval')
         assert neval is not None
@@ -232,7 +232,7 @@ class TestSolveInitialValueProblem:
     def test_exponential_decay(self):
         # dy/dt = -y, y(0) = 1 → y(1) ≈ e^-1
         # nv
-        r = _drive(SolveInitialValueProblem,
+        r = _drive(solve_initial_value_problem,
                    lambda t, y: [-y[0]],
                    [0.0, 1.0],
                    [1.0])
@@ -246,7 +246,7 @@ class TestSolveInitialValueProblem:
 
     def test_result_success(self):
         # nv
-        r = _drive(SolveInitialValueProblem,
+        r = _drive(solve_initial_value_problem,
                    lambda t, y: [-y[0]],
                    [0.0, 1.0],
                    [1.0])
@@ -256,7 +256,7 @@ class TestSolveInitialValueProblem:
 
     def test_with_method_rk45(self):
         # nv
-        r = _drive(SolveInitialValueProblem,
+        r = _drive(solve_initial_value_problem,
                    lambda t, y: [-y[0]],
                    [0.0, 1.0],
                    [1.0],
@@ -267,7 +267,7 @@ class TestSolveInitialValueProblem:
 
     def test_with_method_rk23(self):
         # nv
-        r = _drive(SolveInitialValueProblem,
+        r = _drive(solve_initial_value_problem,
                    lambda t, y: [-y[0]],
                    [0.0, 1.0],
                    [1.0],
@@ -280,7 +280,7 @@ class TestSolveInitialValueProblem:
     def test_with_t_eval(self):
         # nv
         t_eval = np.linspace(0, 1, 11)
-        r = _drive(SolveInitialValueProblem,
+        r = _drive(solve_initial_value_problem,
                    lambda t, y: [-y[0]],
                    [0.0, 1.0],
                    [1.0],
@@ -293,14 +293,14 @@ class TestSolveInitialValueProblem:
 
     def test_wrong_result_fails(self):
         # nv
-        assert _fails_with_wrong_result(SolveInitialValueProblem,
+        assert _fails_with_wrong_result(solve_initial_value_problem,
                                         lambda t, y: [-y[0]],
                                         [0.0, 1.0],
                                         [1.0])
 
     def test_result_has_nfev(self):
         # nv
-        r = _drive(SolveInitialValueProblem,
+        r = _drive(solve_initial_value_problem,
                    lambda t, y: [-y[0]],
                    [0.0, 1.0],
                    [1.0])
@@ -317,7 +317,7 @@ class TestOdeIntegrate:
         # dy/dt = -y, y(0) = 1 → y(t) = exp(-t)
         # nv
         t = np.linspace(0, 1, 11)
-        r = _drive(OdeIntegrate, lambda y, t: -y, [1.0], t)
+        r = _drive(ode_integrate, lambda y, t: -y, [1.0], t)
         assert r is not None
         y = _drive_result_get(r, 'y')
         assert y is not None
@@ -327,7 +327,7 @@ class TestOdeIntegrate:
     def test_result_has_y(self):
         # nv
         t = np.linspace(0, 1, 5)
-        r = _drive(OdeIntegrate, lambda y, t: -y, [1.0], t)
+        r = _drive(ode_integrate, lambda y, t: -y, [1.0], t)
         assert r is not None
         assert 'y' in r
 
@@ -335,7 +335,7 @@ class TestOdeIntegrate:
         # dy/dt = -a*y, a=2, y(0)=1 → y(1) = exp(-2)
         # nv
         t = np.linspace(0, 1, 11)
-        r = _drive(OdeIntegrate, lambda y, t, a: -a * y, [1.0], t, (2.0,))
+        r = _drive(ode_integrate, lambda y, t, a: -a * y, [1.0], t, (2.0,))
         assert r is not None
         y = _drive_result_get(r, 'y')
         assert y is not None
@@ -344,7 +344,7 @@ class TestOdeIntegrate:
     def test_wrong_result_fails(self):
         # nv
         t = np.linspace(0, 1, 5)
-        assert _fails_with_wrong_result(OdeIntegrate, lambda y, t: -y, [1.0], t)
+        assert _fails_with_wrong_result(ode_integrate, lambda y, t: -y, [1.0], t)
 
 
 # ── TestCumulativeTrapezoid ───────────────────────────────────────────────
@@ -353,7 +353,7 @@ class TestCumulativeTrapezoid:
     def test_uniform_1_2_3(self):
         # [1, 2, 3] dx=1 → cumulative trapezoids: [1.5, 4.0]
         # nv
-        r = _drive(CumulativeTrapezoid, [1.0, 2.0, 3.0])
+        r = _drive(cumulative_trapezoid, [1.0, 2.0, 3.0])
         assert r is not None
         assert abs(float(r[0]) - 1.5) < 1e-10
         assert abs(float(r[1]) - 4.0) < 1e-10
@@ -361,7 +361,7 @@ class TestCumulativeTrapezoid:
     def test_with_x(self):
         # same but with explicit x=[0,1,2]
         # nv
-        r = _drive(CumulativeTrapezoid, [1.0, 2.0, 3.0], [0.0, 1.0, 2.0])
+        r = _drive(cumulative_trapezoid, [1.0, 2.0, 3.0], [0.0, 1.0, 2.0])
         assert r is not None
         assert abs(float(r[0]) - 1.5) < 1e-10
         assert abs(float(r[1]) - 4.0) < 1e-10
@@ -369,14 +369,14 @@ class TestCumulativeTrapezoid:
     def test_constant_function(self):
         # [2, 2, 2] dx=1 → [2.0, 4.0]
         # nv
-        r = _drive(CumulativeTrapezoid, [2.0, 2.0, 2.0])
+        r = _drive(cumulative_trapezoid, [2.0, 2.0, 2.0])
         assert r is not None
         assert abs(float(r[0]) - 2.0) < 1e-10
         assert abs(float(r[1]) - 4.0) < 1e-10
 
     def test_wrong_result_fails(self):
         # nv
-        assert _fails_with_wrong_result(CumulativeTrapezoid, [1.0, 2.0, 3.0])
+        assert _fails_with_wrong_result(cumulative_trapezoid, [1.0, 2.0, 3.0])
 
 
 # ── TestTrapezoid ─────────────────────────────────────────────────────────
@@ -385,33 +385,33 @@ class TestTrapezoid:
     def test_uniform_1_2_3(self):
         # [1, 2, 3] dx=1 → 4.0
         # nv
-        r = _drive(Trapezoid, [1.0, 2.0, 3.0])
+        r = _drive(trapezoid, [1.0, 2.0, 3.0])
         assert r is not None
         assert abs(float(r) - 4.0) < 1e-10
 
     def test_with_x(self):
         # nv
-        r = _drive(Trapezoid, [1.0, 2.0, 3.0], [0.0, 1.0, 2.0])
+        r = _drive(trapezoid, [1.0, 2.0, 3.0], [0.0, 1.0, 2.0])
         assert r is not None
         assert abs(float(r) - 4.0) < 1e-10
 
     def test_constant(self):
         # [1, 1, 1] dx=1 → 2.0
         # nv
-        r = _drive(Trapezoid, [1.0, 1.0, 1.0])
+        r = _drive(trapezoid, [1.0, 1.0, 1.0])
         assert r is not None
         assert abs(float(r) - 2.0) < 1e-10
 
     def test_single_interval(self):
         # [0, 1] dx=1 → 0.5
         # nv
-        r = _drive(Trapezoid, [0.0, 1.0])
+        r = _drive(trapezoid, [0.0, 1.0])
         assert r is not None
         assert abs(float(r) - 0.5) < 1e-10
 
     def test_wrong_result_fails(self):
         # nv
-        assert _fails_with_wrong_result(Trapezoid, [1.0, 2.0, 3.0])
+        assert _fails_with_wrong_result(trapezoid, [1.0, 2.0, 3.0])
 
 
 # ── TestSimpson ───────────────────────────────────────────────────────────
@@ -420,26 +420,26 @@ class TestSimpson:
     def test_three_points_1_4_1(self):
         # [1, 4, 1] with dx=1, h=1 → h/3*(y0+4*y1+y2) = 1/3*(1+16+1) = 6.0
         # nv
-        r = _drive(Simpson, [1.0, 4.0, 1.0])
+        r = _drive(simpson, [1.0, 4.0, 1.0])
         assert r is not None
         assert abs(float(r) - 6.0) < 1e-10
 
     def test_with_x(self):
         # nv
-        r = _drive(Simpson, [1.0, 4.0, 1.0], [0.0, 1.0, 2.0])
+        r = _drive(simpson, [1.0, 4.0, 1.0], [0.0, 1.0, 2.0])
         assert r is not None
         assert abs(float(r) - 6.0) < 1e-10
 
     def test_constant(self):
         # [1, 1, 1] → 2.0
         # nv
-        r = _drive(Simpson, [1.0, 1.0, 1.0])
+        r = _drive(simpson, [1.0, 1.0, 1.0])
         assert r is not None
         assert abs(float(r) - 2.0) < 1e-10
 
     def test_wrong_result_fails(self):
         # nv
-        assert _fails_with_wrong_result(Simpson, [1.0, 4.0, 1.0])
+        assert _fails_with_wrong_result(simpson, [1.0, 4.0, 1.0])
 
 
 # ── TestResultGet ─────────────────────────────────────────────────────────
@@ -471,7 +471,7 @@ class TestResultGet:
     def test_non_string_field_fails(self):
         # nv
         value = Var()
-        dispatch = ResultGet._get_dispatch()
+        dispatch = result_get._get_dispatch()
         trail = Trail()
         field_var = Var()  # unbound var as field — should fail
         gen = dispatch(None, None, None, None, {'value': 1}, field_var, value, trail)
@@ -481,7 +481,7 @@ class TestResultGet:
     def test_bind_scalar_value(self):
         # nv
         d = {'success': True}
-        dispatch = ResultGet._get_dispatch()
+        dispatch = result_get._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, d, 'success', True, trail)
         solutions = [s for s in gen if s[1] is None]
@@ -551,14 +551,14 @@ from clausal.modules.py.units import metre, second, newton, kilogram
 
 
 class TestTrapezoidUnits:
-    """Phase 4 — Trapezoid/Simpson/CumulativeTrapezoid with Quantity inputs."""
+    """Phase 4 — trapezoid/simpson/cumulative_trapezoid with Quantity inputs."""
 
     def test_trapezoid_velocity_times_time(self):
         """velocity (m/s) over time (s) → displacement (m)."""
         # nv
         y = Quantity(np.array([0.0, 10.0, 20.0]), {metre: 1, second: -1})
         x = Quantity(np.array([0.0, 1.0, 2.0]), {second: 1})
-        result = _drive(Trapezoid, y, x)
+        result = _drive(trapezoid, y, x)
         assert result is not None
         assert isinstance(result, Quantity), f"Expected Quantity, got {type(result)}"
         assert result.value == pytest.approx(20.0)
@@ -567,51 +567,51 @@ class TestTrapezoidUnits:
     def test_trapezoid_plain_fast_path(self):
         """Plain arrays → plain result, unchanged."""
         # nv
-        result = _drive(Trapezoid, np.array([1.0, 2.0, 3.0]))
+        result = _drive(trapezoid, np.array([1.0, 2.0, 3.0]))
         assert result is not None
         assert not isinstance(result, Quantity)
         assert float(result) == pytest.approx(4.0)
 
     def test_simpson_with_units(self):
-        """Simpson with Quantity y and x."""
+        """simpson with Quantity y and x."""
         # nv
         y = Quantity(np.array([1.0, 4.0, 1.0]), {newton: 1})
         x = Quantity(np.array([0.0, 1.0, 2.0]), {metre: 1})
-        result = _drive(Simpson, y, x)
+        result = _drive(simpson, y, x)
         assert result is not None
         assert isinstance(result, Quantity)
         assert dict(result.dims) == {newton: 1, metre: 1}
 
     def test_cumulative_trapezoid_with_units(self):
-        """CumulativeTrapezoid with Quantity y and x."""
+        """cumulative_trapezoid with Quantity y and x."""
         # nv
         y = Quantity(np.array([0.0, 10.0, 20.0]), {metre: 1, second: -1})
         x = Quantity(np.array([0.0, 1.0, 2.0]), {second: 1})
-        result = _drive(CumulativeTrapezoid, y, x)
+        result = _drive(cumulative_trapezoid, y, x)
         assert result is not None
         assert isinstance(result, Quantity)
         assert dict(result.dims) == {metre: 1}
         np.testing.assert_allclose(result.value, [5.0, 20.0])
 
     def test_trapezoid_y_only_with_units(self):
-        """Trapezoid(y) with Quantity y and no x → dims = y_dims."""
+        """trapezoid(y) with Quantity y and no x → dims = y_dims."""
         # nv
         y = Quantity(np.array([1.0, 2.0, 3.0]), {newton: 1})
-        result = _drive(Trapezoid, y)
+        result = _drive(trapezoid, y)
         assert result is not None
         assert isinstance(result, Quantity)
         assert dict(result.dims) == {newton: 1}
 
 
 class TestQuadUnits:
-    """Phase 4 — Quad with Quantity inputs."""
+    """Phase 4 — quad with Quantity inputs."""
 
     def test_quad_units_propagated(self):
         """f: metre→newton, bounds in metre → integral in newton·metre."""
         # nv
         k = Quantity(9.8, {newton: 1, metre: -1})
         f = lambda x: x * k  # returns newton
-        result = _drive(Quad, f, Quantity(0.0, {metre: 1}), Quantity(1.0, {metre: 1}))
+        result = _drive(quad, f, Quantity(0.0, {metre: 1}), Quantity(1.0, {metre: 1}))
         assert result is not None
         v = result['value']
         assert isinstance(v, Quantity), f"Expected Quantity, got {type(v)}"
@@ -626,7 +626,7 @@ class TestQuadUnits:
         """f returns plain float → result value is plain."""
         # nv
         f = lambda x: x.value if isinstance(x, Quantity) else x
-        result = _drive(Quad, f, Quantity(0.0, {metre: 1}), Quantity(1.0, {metre: 1}))
+        result = _drive(quad, f, Quantity(0.0, {metre: 1}), Quantity(1.0, {metre: 1}))
         assert result is not None
         v = result['value']
         assert not isinstance(v, Quantity)
@@ -635,7 +635,7 @@ class TestQuadUnits:
     def test_quad_no_units_fast_path(self):
         """Plain bounds → plain result, unchanged."""
         # nv
-        result = _drive(Quad, lambda x: x, 0.0, 1.0)
+        result = _drive(quad, lambda x: x, 0.0, 1.0)
         assert result is not None
         v = result['value']
         assert not isinstance(v, Quantity)
@@ -646,7 +646,7 @@ class TestQuadUnits:
         # nv
         k = Quantity(1.0, {newton: 1, metre: -1})
         f = lambda x: x * k
-        result = _drive(Quad, f, Quantity(0.0, {metre: 1}), Quantity(1.0, {metre: 1}))
+        result = _drive(quad, f, Quantity(0.0, {metre: 1}), Quantity(1.0, {metre: 1}))
         assert result is not None
         err = result['error']
         assert isinstance(err, Quantity)

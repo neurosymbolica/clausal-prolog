@@ -7,14 +7,14 @@ The `scipy_differentiate` module wraps [`scipy.differentiate`](https://docs.scip
 ## Import
 
 ```clausal
--import_from(scipy_differentiate, [Derivative, Jacobian, Hessian, ResultGet])
+-import_from(scipy_differentiate, [derivative, jacobian, hessian, result_get])
 ```
 
 ---
 
 ## Tier
 
-All predicates are **Tier 2 — result record**: they return a dict with named fields that can be accessed via `ResultGet`. The predicate always succeeds if SciPy can evaluate the function; a `success` field in the result indicates whether the requested accuracy was achieved.
+All predicates are **Tier 2 — result record**: they return a dict with named fields that can be accessed via `result_get`. The predicate always succeeds if SciPy can evaluate the function; a `success` field in the result indicates whether the requested accuracy was achieved.
 
 ---
 
@@ -24,16 +24,16 @@ The `Diff` prefix from the spec is dropped since these predicates live in the `s
 
 | scipy function | Clausal predicate |
 |---|---|
-| `differentiate.derivative` | `Derivative` |
-| `differentiate.jacobian` | `Jacobian` |
-| `differentiate.hessian` | `Hessian` |
+| `differentiate.derivative` | `derivative` |
+| `differentiate.jacobian` | `jacobian` |
+| `differentiate.hessian` | `hessian` |
 
 ---
 
 ## Predicate catalogue
 
-### `Derivative(F, X, RESULT)`
-### `Derivative(F, X, ARGS, RESULT)`
+### `derivative(F, X, RESULT)`
+### `derivative(F, X, ARGS, RESULT)`
 
 Compute the scalar derivative of `F` at point `X` using Richardson extrapolation.
 
@@ -60,9 +60,9 @@ Compute the scalar derivative of `F` at point `X` using Richardson extrapolation
 
 ---
 
-### `Jacobian(F, X, RESULT)`
+### `jacobian(F, X, RESULT)`
 
-Compute the Jacobian matrix of a vector-valued function `F` at point `X`.
+Compute the jacobian matrix of a vector-valued function `F` at point `X`.
 
 - `F`: a callable `f(x)` returning a 1-D NumPy array — must accept NumPy array inputs
 - `X`: 1-D NumPy array of shape `(n,)`
@@ -72,11 +72,11 @@ Compute the Jacobian matrix of a vector-valued function `F` at point `X`.
 --8<-- "tests/fixtures/docs/scipy_differentiate_sigs.txt:jacobian"
 ```
 
-**Result fields** (note: `'x'` and `'nit'` are not present for Jacobian):
+**Result fields** (note: `'x'` and `'nit'` are not present for jacobian):
 
 | field | description |
 |---|---|
-| `'df'` | Jacobian matrix (ndarray, shape `(m, n)`) |
+| `'df'` | jacobian matrix (ndarray, shape `(m, n)`) |
 | `'error'` | estimated error (ndarray, same shape as `df`) |
 | `'success'` | bool array (same shape as `df`), `True` per element where tolerance met |
 | `'status'` | integer status code array |
@@ -84,9 +84,9 @@ Compute the Jacobian matrix of a vector-valued function `F` at point `X`.
 
 ---
 
-### `Hessian(F, X, RESULT)`
+### `hessian(F, X, RESULT)`
 
-Compute the Hessian matrix of a scalar-valued function `F` at point `X`.
+Compute the hessian matrix of a scalar-valued function `F` at point `X`.
 
 - `F`: a callable `f(x)` returning a scalar — must accept NumPy array inputs
 - `X`: 1-D NumPy array of shape `(n,)`
@@ -96,22 +96,22 @@ Compute the Hessian matrix of a scalar-valued function `F` at point `X`.
 --8<-- "tests/fixtures/docs/scipy_differentiate_sigs.txt:hessian"
 ```
 
-**Result fields** (note: `'x'`, `'nit'`, and `'nfev'` are not present for Hessian):
+**Result fields** (note: `'x'`, `'nit'`, and `'nfev'` are not present for hessian):
 
 | field | description |
 |---|---|
-| `'ddf'` | Hessian matrix (ndarray, shape `(n, n)`) |
+| `'ddf'` | hessian matrix (ndarray, shape `(n, n)`) |
 | `'error'` | estimated error (ndarray, same shape as `ddf`) |
 | `'success'` | bool array, `True` per element where tolerance met |
 | `'status'` | integer status code array |
 
 ---
 
-### `ResultGet(RESULT, FIELD, VALUE)`
+### `result_get(RESULT, FIELD, VALUE)`
 
 Extract a named field from a differentiation result dict.
 
-- `RESULT`: a result dict returned by `Derivative`, `Jacobian`, or `Hessian`
+- `RESULT`: a result dict returned by `derivative`, `jacobian`, or `hessian`
 - `FIELD`: string key — one of the field names listed above
 - `VALUE`: unified with `RESULT[FIELD]`
 
@@ -139,7 +139,7 @@ Fails if `FIELD` is not present in `RESULT`.
 - Lambda functions like `lambda x: x**2` work fine since `**` is overloaded for NumPy scalars
 
 ### Partial failures
-For `Jacobian` and `Hessian`, `success` is a boolean array — some elements may be `False` if the function is poorly conditioned at that point. The predicate still succeeds; inspect the `success` field to determine which elements converged.
+For `jacobian` and `hessian`, `success` is a boolean array — some elements may be `False` if the function is poorly conditioned at that point. The predicate still succeeds; inspect the `success` field to determine which elements converged.
 
 ### `success=False` policy
 Following the cross-cutting convention in `SCIPY_PORT.md`: a result with `success=False` still allows the predicate to succeed. The caller checks the `success` field. This makes it possible to inspect partial results.
@@ -168,9 +168,9 @@ automatically.
 
    | Predicate | `df` / `ddf` dims | `error` dims |
    |---|---|---|
-   | `Derivative` | `f_dims - x_dims` | same as `df` |
-   | `Jacobian` | `f_dims - x_dims` | same as `df` |
-   | `Hessian` | `f_dims - 2 * x_dims` | same as `ddf` |
+   | `derivative` | `f_dims - x_dims` | same as `df` |
+   | `jacobian` | `f_dims - x_dims` | same as `df` |
+   | `hessian` | `f_dims - 2 * x_dims` | same as `ddf` |
 
    The `'x'` field is wrapped with the input dims.
 
@@ -182,7 +182,7 @@ directly with **zero additional overhead**.
 ### Example
 
 ```
--import_from(scipy_differentiate, [Derivative, ResultGet])
+-import_from(scipy_differentiate, [derivative, result_get])
 -import_from(py.units, [metre, newton, has_units])
 
 % f: metre -> newton (linear), so df/dx has units newton/metre
@@ -193,8 +193,8 @@ Test("derivative units") <- (
             __import__('clausal.modules.py.units', fromlist=['newton','metre']).newton
             / __import__('clausal.modules.py.units', fromlist=['newton','metre']).metre
         )),
-    Derivative(++(lambda x, k=K: x * k), 1.0(metre), R),
-    ResultGet(R, 'df', DF),
+    derivative(++(lambda x, k=K: x * k), 1.0(metre), R),
+    result_get(R, 'df', DF),
     has_units(DF, newton/metre))
 ```
 

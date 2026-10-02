@@ -20,7 +20,7 @@ Or via the canonical `py.*` path:
 
 ## Tier
 
-All predicates are **Tier 1 — pure functions**: NumPy array in, NumPy array (or scalar array) directly in `RESULT`. No result dicts, no `ResultGet` needed.
+All predicates are **Tier 1 — pure functions**: NumPy array in, NumPy array (or scalar array) directly in `RESULT`. No result dicts, no `result_get` needed.
 
 ## Bidirectionality
 
@@ -28,13 +28,13 @@ The core transform predicates are **bidirectional relations**: they dispatch on 
 
 | Bidirectional predicate | Forward | Backward |
 |---|---|---|
-| `FFTransform(X, Y)` | `fft(x)` | `ifft(y)` |
-| `FFTransform2D(X, Y)` | `fft2(x)` | `ifft2(y)` |
-| `FFTransformND(X, Y)` | `fftn(x)` | `ifftn(y)` |
-| `RealFFT(X, Y)` | `rfft(x)` | `irfft(y)` |
-| `DiscreteCosineTransform(X, Y)` | `dct(x)` | `idct(y)` |
-| `DiscreteSineTransform(X, Y)` | `dst(x)` | `idst(y)` |
-| `FFTShift(X, Y)` | `fftshift(x)` | `ifftshift(y)` |
+| `fft_transform(X, Y)` | `fft(x)` | `ifft(y)` |
+| `fft_transform2d(X, Y)` | `fft2(x)` | `ifft2(y)` |
+| `fft_transformnd(X, Y)` | `fftn(x)` | `ifftn(y)` |
+| `real_fft(X, Y)` | `rfft(x)` | `irfft(y)` |
+| `discrete_cosine_transform(X, Y)` | `dct(x)` | `idct(y)` |
+| `discrete_sine_transform(X, Y)` | `dst(x)` | `idst(y)` |
+| `fft_shift(X, Y)` | `fftshift(x)` | `ifftshift(y)` |
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:bidirectionality"
@@ -48,28 +48,28 @@ Abbreviations that are the universal name are kept as-is; others are spelled out
 
 | scipy function | Clausal predicate |
 |---|---|
-| `fft` | `FFTransform` forward |
-| `ifft` | `FFTransform` backward |
-| `fft2` | `FFTransform2D` forward |
-| `ifft2` | `FFTransform2D` backward |
-| `fftn` | `FFTransformND` forward |
-| `ifftn` | `FFTransformND` backward |
-| `rfft` | `RealFFT` forward |
-| `irfft` | `RealFFT` backward |
-| `dct` | `DiscreteCosineTransform` forward |
-| `idct` | `DiscreteCosineTransform` backward |
-| `dst` | `DiscreteSineTransform` forward |
-| `idst` | `DiscreteSineTransform` backward |
-| `fftfreq` | `FFTFrequencies` |
-| `rfftfreq` | `RealFFTFrequencies` |
-| `fftshift` | `FFTShift` forward |
-| `ifftshift` | `FFTShift` backward |
+| `fft` | `fft_transform` forward |
+| `ifft` | `fft_transform` backward |
+| `fft2` | `fft_transform2d` forward |
+| `ifft2` | `fft_transform2d` backward |
+| `fftn` | `fft_transformnd` forward |
+| `ifftn` | `fft_transformnd` backward |
+| `rfft` | `real_fft` forward |
+| `irfft` | `real_fft` backward |
+| `dct` | `discrete_cosine_transform` forward |
+| `idct` | `discrete_cosine_transform` backward |
+| `dst` | `discrete_sine_transform` forward |
+| `idst` | `discrete_sine_transform` backward |
+| `fftfreq` | `fft_frequencies` |
+| `rfftfreq` | `real_fft_frequencies` |
+| `fftshift` | `fft_shift` forward |
+| `ifftshift` | `fft_shift` backward |
 
-**Why `FFTransform` instead of `FFT`?**
+**Why `fft_transform` instead of `FFT`?**
 
-in_ `.clausal` source, any identifier whose alphabetic characters are _all_ uppercase is parsed as a [logic variable](syntax.md), not a predicate name. `FFT`, `FFT2D`, and `FFTND` are entirely uppercase, so they would be treated as unbound variables rather than callable predicates. Spelling them as `FFTransform`, `FFTransform2D`, and `FFTransformND` introduces lowercase letters, making them unambiguously predicate names.
+in_ `.clausal` source, any identifier whose alphabetic characters are _all_ uppercase is parsed as a [logic variable](syntax.md), not a predicate name. `FFT`, `FFT2D`, and `FFTND` are entirely uppercase, so they would be treated as unbound variables rather than callable predicates. Spelling them as `fft_transform`, `fft_transform2d`, and `fft_transformnd` introduces lowercase letters, making them unambiguously predicate names.
 
-All other predicates in this module (`RealFFT`, `FFTShift`, `FFTFrequencies`, etc.) already contain lowercase letters from their prefixes and suffixes, so they work without this adjustment.
+All other predicates in this module (`real_fft`, `fft_shift`, `fft_frequencies`, etc.) already contain lowercase letters from their prefixes and suffixes, so they work without this adjustment.
 
 ---
 
@@ -84,12 +84,12 @@ All other predicates in this module (`RealFFT`, `FFTShift`, `FFTFrequencies`, et
 Example — frequency analysis of a sine wave:
 
 ```clausal
--import_from(scipy_fft, [FFTransform, FFTFrequencies])
+-import_from(scipy_fft, [fft_transform, fft_frequencies])
 
 frequency_spectrum(SIGNAL, FREQS, SPECTRUM) <- (
-    FFTransform(SIGNAL, SPECTRUM),
+    fft_transform(SIGNAL, SPECTRUM),
     LEN is ++(len(SIGNAL)),
-    FFTFrequencies(LEN, FREQS)
+    fft_frequencies(LEN, FREQS)
 )
 ```
 
@@ -104,11 +104,11 @@ frequency_spectrum(SIGNAL, FREQS, SPECTRUM) <- (
 Example — round-trip:
 
 ```clausal
--import_from(scipy_fft, [FFTransform2D])
+-import_from(scipy_fft, [fft_transform2d])
 
 round_trip2_d(IMAGE, RECOVERED) <- (
-    FFTransform2D(IMAGE, SPECTRUM),
-    FFTransform2D(RECOVERED, SPECTRUM)
+    fft_transform2d(IMAGE, SPECTRUM),
+    fft_transform2d(RECOVERED, SPECTRUM)
 )
 ```
 
@@ -124,7 +124,7 @@ round_trip2_d(IMAGE, RECOVERED) <- (
 
 ### Real-input transforms
 
-`RealFFT` exploits conjugate symmetry to halve storage for real signals. The output of `RealFFT` has length `N//2 + 1`.
+`real_fft` exploits conjugate symmetry to halve storage for real signals. The output of `real_fft` has length `N//2 + 1`.
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:real_input_transforms"
@@ -133,14 +133,14 @@ round_trip2_d(IMAGE, RECOVERED) <- (
 Example — filter a 1-D signal in the frequency domain:
 
 ```clausal
--import_from(scipy_fft, [RealFFT])
+-import_from(scipy_fft, [real_fft])
 
 low_pass_filter(SIGNAL, CUTOFF_BIN, FILTERED) <- (
-    RealFFT(SIGNAL, SPECTRUM),
+    real_fft(SIGNAL, SPECTRUM),
     ZEROED is ++(
         [SPECTRUM[i] if i < int(CUTOFF_BIN) else 0.0
          for i in range(len(SPECTRUM))]),
-    RealFFT(FILTERED, ++ZEROED)
+    real_fft(FILTERED, ++ZEROED)
 )
 ```
 
@@ -172,14 +172,14 @@ DCT types:
 Example — plot-ready spectrum:
 
 ```clausal
--import_from(scipy_fft, [FFTransform, FFTFrequencies, FFTShift])
+-import_from(scipy_fft, [fft_transform, fft_frequencies, fft_shift])
 
 centred_spectrum(SIGNAL, FREQS_CENTRED, SPECTRUM_CENTRED) <- (
     LEN is ++(len(SIGNAL)),
-    FFTransform(SIGNAL, SPECTRUM),
-    FFTFrequencies(LEN, FREQS),
-    FFTShift(SPECTRUM, SPECTRUM_CENTRED),
-    FFTShift(FREQS, FREQS_CENTRED)
+    fft_transform(SIGNAL, SPECTRUM),
+    fft_frequencies(LEN, FREQS),
+    fft_shift(SPECTRUM, SPECTRUM_CENTRED),
+    fft_shift(FREQS, FREQS_CENTRED)
 )
 ```
 
@@ -202,11 +202,11 @@ centred_spectrum(SIGNAL, FREQS_CENTRED, SPECTRUM_CENTRED) <- (
 ### Image spectrum (2-D)
 
 ```clausal
--import_from(scipy_fft, [FFTransform2D, FFTShift])
+-import_from(scipy_fft, [fft_transform2d, fft_shift])
 
 image_spectrum(IMAGE, CENTRED_SPECTRUM) <- (
-    FFTransform2D(IMAGE, SPECTRUM),
-    FFTShift(SPECTRUM, CENTRED_SPECTRUM)
+    fft_transform2d(IMAGE, SPECTRUM),
+    fft_shift(SPECTRUM, CENTRED_SPECTRUM)
 )
 ```
 
@@ -215,10 +215,10 @@ image_spectrum(IMAGE, CENTRED_SPECTRUM) <- (
 ## Notes
 
 - **Array inputs**: pass Python lists or NumPy arrays via [`++()`](python_integration.md).
-- **Complex output**: `FFTransform`, `FFTransform2D`, `FFTransformND`,
-  `RealFFT` all return complex128 arrays. Use `++(x.real)` to extract the
+- **Complex output**: `fft_transform`, `fft_transform2d`, `fft_transformnd`,
+  `real_fft` all return complex128 arrays. Use `++(x.real)` to extract the
   real part.
-- **RealFFT backward output length**: by default, output length is
+- **real_fft backward output length**: by default, output length is
   `2 * (len(X) - 1)`, which assumes the original signal had even length.
   Pass `N` explicitly for odd-length originals.
 - **Normalisation**: the default (un-normalised) convention is `fft` followed

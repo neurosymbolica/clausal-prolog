@@ -1,7 +1,7 @@
 """Tests for clausal.modules.py.scipy_constants — physical constants.
 
 Named constants are plain Quantity values; tests check value and dims directly.
-CODATA lookup predicates (Value, Unit, Precision, Lookup, Find, AllNames) are
+CODATA lookup predicates (value, unit, precision, lookup, find, all_names) are
 tested separately via their predicate interface.
 """
 
@@ -23,7 +23,7 @@ from clausal.modules.py.scipy_constants import (
     ElementaryCharge, ElectronMass, ProtonMass,
     ElectronVolt, StandardAtmosphere,
     Kilo, Mega, Giga,
-    Value, Unit, Precision, Lookup, Find, AllNames,
+    value, unit, precision, lookup, find, all_names,
 )
 
 
@@ -191,33 +191,33 @@ class TestPrefixes:
 class TestValuePredicate:
     def test_speed_of_light(self):
         # nv
-        assert _drive_pred(Value, "speed of light in vacuum") == pytest.approx(299792458.0)
+        assert _drive_pred(value, "speed of light in vacuum") == pytest.approx(299792458.0)
     def test_unknown_fails(self):
         # nv
-        assert _drive_pred(Value, "not a real constant xyz") is None
+        assert _drive_pred(value, "not a real constant xyz") is None
 
 
 class TestUnitPredicate:
     def test_speed_of_light_unit(self):
         # nv
-        u = _drive_pred(Unit, "speed of light in vacuum")
+        u = _drive_pred(unit, "speed of light in vacuum")
         assert isinstance(u, str) and "m" in u
 
 
 class TestPrecisionPredicate:
     def test_c_is_exact(self):
         # nv
-        assert _drive_pred(Precision, "speed of light in vacuum") == pytest.approx(0.0)
+        assert _drive_pred(precision, "speed of light in vacuum") == pytest.approx(0.0)
     def test_G_has_uncertainty(self):
         # nv
-        assert _drive_pred(Precision, "Newtonian constant of gravitation") > 0
+        assert _drive_pred(precision, "Newtonian constant of gravitation") > 0
 
 
 class TestLookupPredicate:
     def test_returns_all_three(self):
         # nv
         v, u_str, unc = Var(), Var(), Var()
-        dispatch = Lookup._get_dispatch()
+        dispatch = lookup._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, "electron mass", v, u_str, unc, trail)
         for parent, sentinel in gen:
@@ -230,7 +230,7 @@ class TestLookupPredicate:
     def test_unknown_fails(self):
         # nv
         v, u_str, unc = Var(), Var(), Var()
-        dispatch = Lookup._get_dispatch()
+        dispatch = lookup._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, "not real xyz", v, u_str, unc, trail)
         solutions = [s for s in gen if s[1] is None]
@@ -240,23 +240,23 @@ class TestLookupPredicate:
 class TestFindPredicate:
     def test_finds_electron_mass(self):
         # nv
-        names = _drive_pred(Find, "electron mass")
+        names = _drive_pred(find, "electron mass")
         assert "electron mass" in names
 
     def test_no_match_is_empty(self):
         # nv
-        names = _drive_pred(Find, "zzznomatch")
+        names = _drive_pred(find, "zzznomatch")
         assert names == []
 
 
 class TestAllNamesPredicate:
     def test_returns_many(self):
         # nv
-        names = _drive_pred(AllNames)
+        names = _drive_pred(all_names)
         assert len(names) >= 300
     def test_contains_known(self):
         # nv
-        names = _drive_pred(AllNames)
+        names = _drive_pred(all_names)
         assert "Planck constant" in names
 
 

@@ -1,26 +1,26 @@
 # === Import ===
 
 --8<-- [start:import]
--import_from(scipy_signal, [Butterworth, SOSForwardBackwardFilter, ResultGet, ...])
+-import_from(scipy_signal, [butterworth, sos_forward_backward_filter, result_get, ...])
 --8<-- [end:import]
 
 --8<-- [start:import_ex2]
--import_from(py.scipy_signal, [Butterworth, SOSForwardBackwardFilter, ResultGet, ...])
+-import_from(py.scipy_signal, [butterworth, sos_forward_backward_filter, result_get, ...])
 --8<-- [end:import_ex2]
 
 
 # === include design (Tier 2) ===
 
 --8<-- [start:include_design]
-Butterworth(4, 0.1, 'low', 'sos', FILTER_DESIGN),
-ResultGet(FILTER_DESIGN, 'sos', SOS).
+butterworth(4, 0.1, 'low', 'sos', FILTER_DESIGN),
+result_get(FILTER_DESIGN, 'sos', SOS).
 --8<-- [end:include_design]
 
 --8<-- [start:butterworth]
-Butterworth(N, WN, RESULT)
-Butterworth(N, WN, BTYPE, RESULT)
-Butterworth(N, WN, BTYPE, OUTPUT, RESULT)
-Butterworth(N, WN, BTYPE, OUTPUT, FS, RESULT)
+butterworth(N, WN, RESULT)
+butterworth(N, WN, BTYPE, RESULT)
+butterworth(N, WN, BTYPE, OUTPUT, RESULT)
+butterworth(N, WN, BTYPE, OUTPUT, FS, RESULT)
     N:      filter order
     WN:     cutoff frequency — normalised [0,1] or Hz when FS provided
     BTYPE:  'low' (default), 'high', 'band', 'bandstop'
@@ -29,38 +29,38 @@ Butterworth(N, WN, BTYPE, OUTPUT, FS, RESULT)
 --8<-- [end:butterworth]
 
 --8<-- [start:bessel]
-Bessel(N, WN, RESULT)
-Bessel(N, WN, BTYPE, RESULT)
-Bessel(N, WN, BTYPE, OUTPUT, RESULT)
+bessel(N, WN, RESULT)
+bessel(N, WN, BTYPE, RESULT)
+bessel(N, WN, BTYPE, OUTPUT, RESULT)
     Maximally flat group delay (linear phase) filter.
 --8<-- [end:bessel]
 
 --8<-- [start:chebyshevtype1]
-ChebyshevType1(N, RP, WN, RESULT)
-ChebyshevType1(N, RP, WN, BTYPE, RESULT)
-ChebyshevType1(N, RP, WN, BTYPE, OUTPUT, RESULT)
+chebyshev_type1(N, RP, WN, RESULT)
+chebyshev_type1(N, RP, WN, BTYPE, RESULT)
+chebyshev_type1(N, RP, WN, BTYPE, OUTPUT, RESULT)
     RP: maximum passband ripple in dB (e.g. 5)
 --8<-- [end:chebyshevtype1]
 
 --8<-- [start:chebyshevtype2]
-ChebyshevType2(N, RS, WN, RESULT)
-ChebyshevType2(N, RS, WN, BTYPE, RESULT)
-ChebyshevType2(N, RS, WN, BTYPE, OUTPUT, RESULT)
+chebyshev_type2(N, RS, WN, RESULT)
+chebyshev_type2(N, RS, WN, BTYPE, RESULT)
+chebyshev_type2(N, RS, WN, BTYPE, OUTPUT, RESULT)
     RS: minimum stopband attenuation in dB (e.g. 40)
 --8<-- [end:chebyshevtype2]
 
 --8<-- [start:elliptic]
-Elliptic(N, RP, RS, WN, RESULT)
-Elliptic(N, RP, RS, WN, BTYPE, RESULT)
-Elliptic(N, RP, RS, WN, BTYPE, OUTPUT, RESULT)
+elliptic(N, RP, RS, WN, RESULT)
+elliptic(N, RP, RS, WN, BTYPE, RESULT)
+elliptic(N, RP, RS, WN, BTYPE, OUTPUT, RESULT)
     RP: maximum passband ripple in dB
     RS: minimum stopband attenuation in dB
     Sharpest roll-off for a given order; equiripple in both bands.
 --8<-- [end:elliptic]
 
 --8<-- [start:frequencyresponse]
-FrequencyResponse(B, A, RESULT)
-FrequencyResponse(B, A, NFREQS, RESULT)
+frequency_response(B, A, RESULT)
+frequency_response(B, A, NFREQS, RESULT)
     B, A:   filter coefficients (from 'ba' output)
     NFREQS: number of frequency points (default 512)
     RESULT: dict {w, h}
@@ -72,9 +72,9 @@ FrequencyResponse(B, A, NFREQS, RESULT)
 # === Filtering (Tier 1) ===
 
 --8<-- [start:linearfilter]
-LinearFilter(B, A, X, RESULT)
-LinearFilter(B, A, X, AXIS, RESULT)
-LinearFilter(B, A, X, AXIS, ZI, RESULT)
+linear_filter(B, A, X, RESULT)
+linear_filter(B, A, X, AXIS, RESULT)
+linear_filter(B, A, X, AXIS, ZI, RESULT)
     B, A:   numerator / denominator coefficients
     X:      input signal array
     AXIS:   axis along which to filter (default -1)
@@ -83,34 +83,34 @@ LinearFilter(B, A, X, AXIS, ZI, RESULT)
 --8<-- [end:linearfilter]
 
 --8<-- [start:sosfilter]
-SOSFilter(SOS, X, RESULT)
-SOSFilter(SOS, X, AXIS, RESULT)
-SOSFilter(SOS, X, AXIS, ZI, RESULT)
+sos_filter(SOS, X, RESULT)
+sos_filter(SOS, X, AXIS, RESULT)
+sos_filter(SOS, X, AXIS, ZI, RESULT)
     SOS: second-order sections matrix (from 'sos' output)
     ZI:  initial conditions; when provided RESULT is dict {y, zf}
 --8<-- [end:sosfilter]
 
 --8<-- [start:forwardbackwardfilter]
-ForwardBackwardFilter(B, A, X, RESULT)
-ForwardBackwardFilter(B, A, X, AXIS, RESULT)
+forward_backward_filter(B, A, X, RESULT)
+forward_backward_filter(B, A, X, AXIS, RESULT)
     Produces zero-phase output at the cost of twice the computation.
     Cannot be used for real-time (causal) filtering.
 --8<-- [end:forwardbackwardfilter]
 
 --8<-- [start:sosforwardbackwardfilter]
-SOSForwardBackwardFilter(SOS, X, RESULT)
-SOSForwardBackwardFilter(SOS, X, AXIS, RESULT)
+sos_forward_backward_filter(SOS, X, RESULT)
+sos_forward_backward_filter(SOS, X, AXIS, RESULT)
 --8<-- [end:sosforwardbackwardfilter]
 
 --8<-- [start:decimate]
-Decimate(X, Q, RESULT)
-Decimate(X, Q, AXIS, RESULT)
+decimate(X, Q, RESULT)
+decimate(X, Q, AXIS, RESULT)
     Q: integer decimation factor
 --8<-- [end:decimate]
 
 --8<-- [start:resample]
-Resample(X, NUM, RESULT)
-Resample(X, NUM, AXIS, RESULT)
+resample(X, NUM, RESULT)
+resample(X, NUM, AXIS, RESULT)
     NUM: desired number of output samples
 --8<-- [end:resample]
 
@@ -118,24 +118,24 @@ Resample(X, NUM, AXIS, RESULT)
 # === Convolution and correlation (Tier 1) ===
 
 --8<-- [start:convolve]
-Convolve(IN1, IN2, RESULT)
-Convolve(IN1, IN2, MODE, RESULT)
-Convolve(IN1, IN2, MODE, METHOD, RESULT)
+convolve(IN1, IN2, RESULT)
+convolve(IN1, IN2, MODE, RESULT)
+convolve(IN1, IN2, MODE, METHOD, RESULT)
     MODE:   'full' (default), 'valid', 'same'
     METHOD: 'auto' (default), 'direct', 'fft'
 --8<-- [end:convolve]
 
 --8<-- [start:correlate]
-Correlate(IN1, IN2, RESULT)
-Correlate(IN1, IN2, MODE, RESULT)
-Correlate(IN1, IN2, MODE, METHOD, RESULT)
+correlate(IN1, IN2, RESULT)
+correlate(IN1, IN2, MODE, RESULT)
+correlate(IN1, IN2, MODE, METHOD, RESULT)
     Cross-correlation of IN1 and IN2.
-    Same MODE and METHOD options as Convolve.
+    Same MODE and METHOD options as convolve.
 --8<-- [end:correlate]
 
 --8<-- [start:fftconvolve]
-FFTConvolve(IN1, IN2, RESULT)
-FFTConvolve(IN1, IN2, MODE, RESULT)
+fft_convolve(IN1, IN2, RESULT)
+fft_convolve(IN1, IN2, MODE, RESULT)
     Always uses the FFT method.
     MODE: 'full' (default), 'valid', 'same'
 --8<-- [end:fftconvolve]
@@ -144,8 +144,8 @@ FFTConvolve(IN1, IN2, MODE, RESULT)
 # === Spectral analysis (Tier 2) ===
 
 --8<-- [start:periodogram]
-Periodogram(X, RESULT)
-Periodogram(X, FS, RESULT)
+periodogram(X, RESULT)
+periodogram(X, FS, RESULT)
     X:      input signal
     FS:     sample rate in Hz (default 1.0)
     RESULT: dict {f, Pxx}
@@ -154,14 +154,14 @@ Periodogram(X, FS, RESULT)
 --8<-- [end:periodogram]
 
 --8<-- [start:welch]
-Welch(X, RESULT)
-Welch(X, FS, RESULT)
+welch(X, RESULT)
+welch(X, FS, RESULT)
     RESULT: dict {f, Pxx}
 --8<-- [end:welch]
 
 --8<-- [start:spectrogram]
-Spectrogram(X, RESULT)
-Spectrogram(X, FS, RESULT)
+spectrogram(X, RESULT)
+spectrogram(X, FS, RESULT)
     RESULT: dict {f, t, Sxx}
         f   — frequency array in Hz
         t   — time array in seconds
@@ -169,10 +169,10 @@ Spectrogram(X, FS, RESULT)
 --8<-- [end:spectrogram]
 
 
-# === ResultGet ===
+# === result_get ===
 
 --8<-- [start:resultget]
-ResultGet(RESULT, FIELD, VALUE)
+result_get(RESULT, FIELD, VALUE)
     Extract RESULT[FIELD] → VALUE.
     RESULT must be a dict.  FIELD must be a ground string.
     Fails if FIELD is absent or RESULT is not a dict.
@@ -182,42 +182,42 @@ ResultGet(RESULT, FIELD, VALUE)
 # === Complete examples ===
 
 --8<-- [start:low_pass_filter_a_signal]
--import_from(scipy_signal, [Butterworth, SOSForwardBackwardFilter, ResultGet])
+-import_from(scipy_signal, [butterworth, sos_forward_backward_filter, result_get])
 
 LowPassFilter(SIGNAL, CUTOFF_HZ, SAMPLE_RATE, FILTERED) <- (
-    Butterworth(6, CUTOFF_HZ, 'low', 'sos', SAMPLE_RATE, DESIGN),
-    ResultGet(DESIGN, 'sos', SOS),
-    SOSForwardBackwardFilter(SOS, SIGNAL, FILTERED)
+    butterworth(6, CUTOFF_HZ, 'low', 'sos', SAMPLE_RATE, DESIGN),
+    result_get(DESIGN, 'sos', SOS),
+    sos_forward_backward_filter(SOS, SIGNAL, FILTERED)
 ).
 --8<-- [end:low_pass_filter_a_signal]
 
 --8<-- [start:inspect_frequency_response]
--import_from(scipy_signal, [Butterworth, FrequencyResponse, ResultGet])
+-import_from(scipy_signal, [butterworth, frequency_response, result_get])
 
 FilterResponse(N, WN, W, H) <- (
-    Butterworth(N, WN, DESIGN),
-    ResultGet(DESIGN, 'b', B),
-    ResultGet(DESIGN, 'a', A),
-    FrequencyResponse(B, A, 512, RESP),
-    ResultGet(RESP, 'w', W),
-    ResultGet(RESP, 'h', H)
+    butterworth(N, WN, DESIGN),
+    result_get(DESIGN, 'b', B),
+    result_get(DESIGN, 'a', A),
+    frequency_response(B, A, 512, RESP),
+    result_get(RESP, 'w', W),
+    result_get(RESP, 'h', H)
 ).
 --8<-- [end:inspect_frequency_response]
 
 --8<-- [start:power_spectral_density_with_welch_s_method]
--import_from(scipy_signal, [Welch, ResultGet])
+-import_from(scipy_signal, [welch, result_get])
 
 SignalPSD(SIGNAL, SAMPLE_RATE, FREQS, POWER) <- (
-    Welch(SIGNAL, SAMPLE_RATE, PSD),
-    ResultGet(PSD, 'f', FREQS),
-    ResultGet(PSD, 'Pxx', POWER)
+    welch(SIGNAL, SAMPLE_RATE, PSD),
+    result_get(PSD, 'f', FREQS),
+    result_get(PSD, 'Pxx', POWER)
 ).
 --8<-- [end:power_spectral_density_with_welch_s_method]
 
 --8<-- [start:convolve_two_signals]
--import_from(scipy_signal, [FFTConvolve])
+-import_from(scipy_signal, [fft_convolve])
 
 SmoothedSignal(SIGNAL, KERNEL, SMOOTHED) <- (
-    FFTConvolve(SIGNAL, KERNEL, 'same', SMOOTHED)
+    fft_convolve(SIGNAL, KERNEL, 'same', SMOOTHED)
 ).
 --8<-- [end:convolve_two_signals]

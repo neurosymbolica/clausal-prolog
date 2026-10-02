@@ -1,9 +1,9 @@
 -double_quotes(atom)
--import_from(scipy_differentiate, [Derivative, Jacobian, Hessian, ResultGet])
+-import_from(scipy_differentiate, [derivative, jacobian, hessian, result_get])
 
 # no units on x - plain fast path (verify existing behaviour is preserved)
 test("derivative no units plain fast path") <- (
-    Derivative(++(lambda x: x**2), 3.0, R),
-    ResultGet(R, 'df', DF),
+    derivative(++(lambda x: x**2), 3.0, R),
+    result_get(R, 'df', DF),
     DIFF is ++(abs(float(DF) - 6.0)),
     DIFF < 1.0e-8)  # nv

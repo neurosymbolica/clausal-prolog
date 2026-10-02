@@ -1,23 +1,23 @@
 """clausal.modules.py.spacy — spaCy NLP predicates for Clausal.
 
-Provides LoadModel, UnloadModel, CurrentModel, Process, Token, TokenText,
-TokenList, Pos, Tag, Lemma, Dep, Head, Shape, IsAlpha, IsStop, Entity,
-EntityList, Sentence, SentenceList, Similarity, NounChunk as importable
+Provides load_model, unload_model, current_model, process, token, token_text,
+token_list, pos, tag, lemma, dep, head, shape, is_alpha, is_stop, entity,
+entity_list, sentence, sentence_list, similarity, noun_chunk as importable
 predicate objects for use in .clausal files via::
 
-    -import_from(spacy, [LoadModel, Process, Token, Entity, ...])
+    -import_from(spacy, [load_model, process, token, entity, ...])
 
 Layers
 ------
-1. **Model management** — LoadModel/1,2, UnloadModel/1, CurrentModel/1
-2. **Document processing** — Process/3
-3. **Tokens** — Token/2,3, TokenText/2, TokenList/2
-4. **Annotations** — Pos/2, Tag/2, Lemma/2, Dep/2, Head/2, Shape/2,
-   IsAlpha/1, IsStop/1
-5. **NER** — Entity/2,3, EntityList/2
-6. **Sentences** — Sentence/2, SentenceList/2
-7. **Similarity** — Similarity/4
-8. **Noun chunks** — NounChunk/2
+1. **Model management** — load_model/1,2, unload_model/1, current_model/1
+2. **Document processing** — process/3
+3. **Tokens** — token/2,3, token_text/2, token_list/2
+4. **Annotations** — pos/2, tag/2, lemma/2, dep/2, head/2, shape/2,
+   is_alpha/1, is_stop/1
+5. **NER** — entity/2,3, entity_list/2
+6. **Sentences** — sentence/2, sentence_list/2
+7. **Similarity** — similarity/4
+8. **Noun chunks** — noun_chunk/2
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ def _get_model(alias: str) -> spacy.language.Language:
 class _SpacyPredicate:
     """Adapter with ``_get_dispatch()`` for a spaCy predicate.
 
-    Supports multi-arity dispatch (e.g. LoadModel/1 + LoadModel/2).
+    Supports multi-arity dispatch (e.g. load_model/1 + load_model/2).
     """
 
     __slots__ = ("_name", "_dispatch_fns")
@@ -105,7 +105,7 @@ def _simple_to_trampoline(simple_fn):
 # ── Helpers: spaCy objects → dicts ────────────────────────────────────────
 
 def _token_to_dict(tok) -> dict:
-    """Convert a spaCy Token to a plain dict."""
+    """Convert a spaCy token to a plain dict."""
     return {
         "text": tok.text,
         "lemma": tok.lemma_,
@@ -146,7 +146,7 @@ def _chunk_to_dict(chunk) -> dict:
 # ── Layer 1: Model management ────────────────────────────────────────────
 
 def _load_model_1(name, trail, k):
-    """LoadModel/1: load a spaCy model, alias defaults to name."""
+    """load_model/1: load a spaCy model, alias defaults to name."""
     name = deref(name)
     name_str = str(name)
     with _LOCK:
@@ -157,7 +157,7 @@ def _load_model_1(name, trail, k):
 
 
 def _load_model_2(name, alias, trail, k):
-    """LoadModel/2: load a spaCy model under a given alias."""
+    """load_model/2: load a spaCy model under a given alias."""
     name = deref(name)
     alias = deref(alias)
     name_str = str(name)
@@ -170,7 +170,7 @@ def _load_model_2(name, alias, trail, k):
 
 
 def _unload_model_1(alias, trail, k):
-    """UnloadModel/1: remove a model from the registry."""
+    """unload_model/1: remove a model from the registry."""
     alias = deref(alias)
     alias_str = str(alias)
     with _LOCK:
@@ -181,7 +181,7 @@ def _unload_model_1(alias, trail, k):
 
 
 def _current_model_1(this_generator, _proceed, _fail, _catcher, alias, trail):
-    """CurrentModel/1: enumerate registered model aliases."""
+    """current_model/1: enumerate registered model aliases."""
     alias = deref(alias)
     if not is_var(alias):
         if str(alias) in _MODELS:
@@ -201,7 +201,7 @@ def _current_model_1(this_generator, _proceed, _fail, _catcher, alias, trail):
 # ── Layer 2: Document processing ─────────────────────────────────────────
 
 def _process_3(alias, text, doc_var, trail, k):
-    """Process/3: run text through a model, unify result Doc."""
+    """process/3: run text through a model, unify result Doc."""
     alias = deref(alias)
     text = deref(text)
     nlp = _get_model(alias)
@@ -213,7 +213,7 @@ def _process_3(alias, text, doc_var, trail, k):
 # ── Layer 3: Tokens ──────────────────────────────────────────────────────
 
 def _token_2(this_generator, _proceed, _fail, _catcher, doc, tok_var, trail):
-    """Token/2: backtrack over all tokens in a Doc."""
+    """token/2: backtrack over all tokens in a Doc."""
     doc = deref(doc)
     for tok in doc:
         mark = trail.mark()
@@ -225,7 +225,7 @@ def _token_2(this_generator, _proceed, _fail, _catcher, doc, tok_var, trail):
 
 
 def _token_3(this_generator, _proceed, _fail, _catcher, doc, index, tok_var, trail):
-    """Token/3: get token by index, or iterate with index."""
+    """token/3: get token by index, or iterate with index."""
     doc = deref(doc)
     index = deref(index)
     if not is_var(index):
@@ -250,7 +250,7 @@ def _token_3(this_generator, _proceed, _fail, _catcher, doc, index, tok_var, tra
 
 
 def _token_text_2(tok, text_var, trail, k):
-    """TokenText/2: extract text from a token dict."""
+    """token_text/2: extract text from a token dict."""
     tok = deref(tok)
     text = tok["text"]
     if unify(text_var, text, trail):
@@ -258,7 +258,7 @@ def _token_text_2(tok, text_var, trail, k):
 
 
 def _token_list_2(doc, tokens_var, trail, k):
-    """TokenList/2: all tokens as a list of dicts."""
+    """token_list/2: all tokens as a list of dicts."""
     doc = deref(doc)
     tokens = [_token_to_dict(tok) for tok in doc]
     if unify(tokens_var, tokens, trail):
@@ -268,56 +268,56 @@ def _token_list_2(doc, tokens_var, trail, k):
 # ── Layer 4: Annotations ─────────────────────────────────────────────────
 
 def _pos_2(tok, tag_var, trail, k):
-    """Pos/2: coarse Pos tag from token dict."""
+    """pos/2: coarse pos tag from token dict."""
     tok = deref(tok)
     if unify(tag_var, tok["pos"], trail):
         yield None
 
 
 def _tag_2(tok, tag_var, trail, k):
-    """Tag/2: fine-grained Pos tag from token dict."""
+    """tag/2: fine-grained pos tag from token dict."""
     tok = deref(tok)
     if unify(tag_var, tok["tag"], trail):
         yield None
 
 
 def _lemma_2(tok, lem_var, trail, k):
-    """Lemma/2: lemma from token dict."""
+    """lemma/2: lemma from token dict."""
     tok = deref(tok)
     if unify(lem_var, tok["lemma"], trail):
         yield None
 
 
 def _dep_2(tok, label_var, trail, k):
-    """Dep/2: dependency label from token dict."""
+    """dep/2: dependency label from token dict."""
     tok = deref(tok)
     if unify(label_var, tok["dep"], trail):
         yield None
 
 
 def _head_2(tok, head_var, trail, k):
-    """Head/2: head text from token dict."""
+    """head/2: head text from token dict."""
     tok = deref(tok)
     if unify(head_var, tok["head_text"], trail):
         yield None
 
 
 def _shape_2(tok, shape_var, trail, k):
-    """Shape/2: shape from token dict."""
+    """shape/2: shape from token dict."""
     tok = deref(tok)
     if unify(shape_var, tok["shape"], trail):
         yield None
 
 
 def _is_alpha_1(tok, trail, k):
-    """IsAlpha/1: succeed if token is alphabetic."""
+    """is_alpha/1: succeed if token is alphabetic."""
     tok = deref(tok)
     if tok["is_alpha"]:
         yield None
 
 
 def _is_stop_1(tok, trail, k):
-    """IsStop/1: succeed if token is a stop word."""
+    """is_stop/1: succeed if token is a stop word."""
     tok = deref(tok)
     if tok["is_stop"]:
         yield None
@@ -326,7 +326,7 @@ def _is_stop_1(tok, trail, k):
 # ── Layer 5: NER ─────────────────────────────────────────────────────────
 
 def _entity_2(this_generator, _proceed, _fail, _catcher, doc, ent_var, trail):
-    """Entity/2: backtrack over all entities in a Doc."""
+    """entity/2: backtrack over all entities in a Doc."""
     doc = deref(doc)
     for ent in doc.ents:
         mark = trail.mark()
@@ -338,7 +338,7 @@ def _entity_2(this_generator, _proceed, _fail, _catcher, doc, ent_var, trail):
 
 
 def _entity_3(this_generator, _proceed, _fail, _catcher, doc, label, ent_var, trail):
-    """Entity/3: backtrack over entities filtered by label."""
+    """entity/3: backtrack over entities filtered by label."""
     doc = deref(doc)
     label = deref(label)
     label_str = str(label)
@@ -353,7 +353,7 @@ def _entity_3(this_generator, _proceed, _fail, _catcher, doc, label, ent_var, tr
 
 
 def _entity_list_2(doc, ents_var, trail, k):
-    """EntityList/2: all entities as a list of dicts."""
+    """entity_list/2: all entities as a list of dicts."""
     doc = deref(doc)
     ents = [_ent_to_dict(ent) for ent in doc.ents]
     if unify(ents_var, ents, trail):
@@ -363,7 +363,7 @@ def _entity_list_2(doc, ents_var, trail, k):
 # ── Layer 6: Sentences ───────────────────────────────────────────────────
 
 def _sentence_2(this_generator, _proceed, _fail, _catcher, doc, sent_var, trail):
-    """Sentence/2: backtrack over sentences as strings."""
+    """sentence/2: backtrack over sentences as strings."""
     doc = deref(doc)
     for sent in doc.sents:
         mark = trail.mark()
@@ -374,17 +374,17 @@ def _sentence_2(this_generator, _proceed, _fail, _catcher, doc, sent_var, trail)
 
 
 def _sentence_list_2(doc, sents_var, trail, k):
-    """SentenceList/2: all sentences as a list of strings."""
+    """sentence_list/2: all sentences as a list of strings."""
     doc = deref(doc)
     sents = [sent.text for sent in doc.sents]
     if unify(sents_var, sents, trail):
         yield None
 
 
-# ── Layer 7: Similarity ──────────────────────────────────────────────────
+# ── Layer 7: similarity ──────────────────────────────────────────────────
 
 def _similarity_4(alias, text1, text2, score_var, trail, k):
-    """Similarity/4: compute similarity between two texts."""
+    """similarity/4: compute similarity between two texts."""
     alias = deref(alias)
     text1 = deref(text1)
     text2 = deref(text2)
@@ -399,7 +399,7 @@ def _similarity_4(alias, text1, text2, score_var, trail, k):
 # ── Layer 8: Noun chunks ────────────────────────────────────────────────
 
 def _noun_chunk_2(this_generator, _proceed, _fail, _catcher, doc, chunk_var, trail):
-    """NounChunk/2: backtrack over noun chunks."""
+    """noun_chunk/2: backtrack over noun chunks."""
     doc = deref(doc)
     for chunk in doc.noun_chunks:
         mark = trail.mark()
@@ -412,68 +412,68 @@ def _noun_chunk_2(this_generator, _proceed, _fail, _catcher, doc, chunk_var, tra
 
 # ── Build and export predicate objects ───────────────────────────────────
 
-LoadModel = _SpacyPredicate("LoadModel")
-LoadModel._register(1, _simple_to_trampoline(_load_model_1))
-LoadModel._register(2, _simple_to_trampoline(_load_model_2))
+load_model = _SpacyPredicate("load_model")
+load_model._register(1, _simple_to_trampoline(_load_model_1))
+load_model._register(2, _simple_to_trampoline(_load_model_2))
 
-UnloadModel = _SpacyPredicate("UnloadModel")
-UnloadModel._register(1, _simple_to_trampoline(_unload_model_1))
+unload_model = _SpacyPredicate("unload_model")
+unload_model._register(1, _simple_to_trampoline(_unload_model_1))
 
-CurrentModel = _SpacyPredicate("CurrentModel")
-CurrentModel._register(1, _current_model_1)
+current_model = _SpacyPredicate("current_model")
+current_model._register(1, _current_model_1)
 
-Process = _SpacyPredicate("Process")
-Process._register(3, _simple_to_trampoline(_process_3))
+process = _SpacyPredicate("process")
+process._register(3, _simple_to_trampoline(_process_3))
 
-Token = _SpacyPredicate("Token")
-Token._register(2, _token_2)
-Token._register(3, _token_3)
+token = _SpacyPredicate("token")
+token._register(2, _token_2)
+token._register(3, _token_3)
 
-TokenText = _SpacyPredicate("TokenText")
-TokenText._register(2, _simple_to_trampoline(_token_text_2))
+token_text = _SpacyPredicate("token_text")
+token_text._register(2, _simple_to_trampoline(_token_text_2))
 
-TokenList = _SpacyPredicate("TokenList")
-TokenList._register(2, _simple_to_trampoline(_token_list_2))
+token_list = _SpacyPredicate("token_list")
+token_list._register(2, _simple_to_trampoline(_token_list_2))
 
-Pos = _SpacyPredicate("Pos")
-Pos._register(2, _simple_to_trampoline(_pos_2))
+pos = _SpacyPredicate("pos")
+pos._register(2, _simple_to_trampoline(_pos_2))
 
-Tag = _SpacyPredicate("Tag")
-Tag._register(2, _simple_to_trampoline(_tag_2))
+tag = _SpacyPredicate("tag")
+tag._register(2, _simple_to_trampoline(_tag_2))
 
-Lemma = _SpacyPredicate("Lemma")
-Lemma._register(2, _simple_to_trampoline(_lemma_2))
+lemma = _SpacyPredicate("lemma")
+lemma._register(2, _simple_to_trampoline(_lemma_2))
 
-Dep = _SpacyPredicate("Dep")
-Dep._register(2, _simple_to_trampoline(_dep_2))
+dep = _SpacyPredicate("dep")
+dep._register(2, _simple_to_trampoline(_dep_2))
 
-Head = _SpacyPredicate("Head")
-Head._register(2, _simple_to_trampoline(_head_2))
+head = _SpacyPredicate("head")
+head._register(2, _simple_to_trampoline(_head_2))
 
-Shape = _SpacyPredicate("Shape")
-Shape._register(2, _simple_to_trampoline(_shape_2))
+shape = _SpacyPredicate("shape")
+shape._register(2, _simple_to_trampoline(_shape_2))
 
-IsAlpha = _SpacyPredicate("IsAlpha")
-IsAlpha._register(1, _simple_to_trampoline(_is_alpha_1))
+is_alpha = _SpacyPredicate("is_alpha")
+is_alpha._register(1, _simple_to_trampoline(_is_alpha_1))
 
-IsStop = _SpacyPredicate("IsStop")
-IsStop._register(1, _simple_to_trampoline(_is_stop_1))
+is_stop = _SpacyPredicate("is_stop")
+is_stop._register(1, _simple_to_trampoline(_is_stop_1))
 
-Entity = _SpacyPredicate("Entity")
-Entity._register(2, _entity_2)
-Entity._register(3, _entity_3)
+entity = _SpacyPredicate("entity")
+entity._register(2, _entity_2)
+entity._register(3, _entity_3)
 
-EntityList = _SpacyPredicate("EntityList")
-EntityList._register(2, _simple_to_trampoline(_entity_list_2))
+entity_list = _SpacyPredicate("entity_list")
+entity_list._register(2, _simple_to_trampoline(_entity_list_2))
 
-Sentence = _SpacyPredicate("Sentence")
-Sentence._register(2, _sentence_2)
+sentence = _SpacyPredicate("sentence")
+sentence._register(2, _sentence_2)
 
-SentenceList = _SpacyPredicate("SentenceList")
-SentenceList._register(2, _simple_to_trampoline(_sentence_list_2))
+sentence_list = _SpacyPredicate("sentence_list")
+sentence_list._register(2, _simple_to_trampoline(_sentence_list_2))
 
-Similarity = _SpacyPredicate("Similarity")
-Similarity._register(4, _simple_to_trampoline(_similarity_4))
+similarity = _SpacyPredicate("similarity")
+similarity._register(4, _simple_to_trampoline(_similarity_4))
 
-NounChunk = _SpacyPredicate("NounChunk")
-NounChunk._register(2, _noun_chunk_2)
+noun_chunk = _SpacyPredicate("noun_chunk")
+noun_chunk._register(2, _noun_chunk_2)

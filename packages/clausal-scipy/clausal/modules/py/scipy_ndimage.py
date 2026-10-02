@@ -3,11 +3,11 @@
 Provides N-dimensional image processing routines from scipy.ndimage as
 importable predicate objects for use in .clausal files via::
 
-    -import_from(scipy_ndimage, [GaussianFilter, label, ...])
+    -import_from(scipy_ndimage, [gaussian_filter, label, ...])
 
 Or via the canonical ``py.*`` path::
 
-    -import_from(py.scipy_ndimage, [GaussianFilter, ...])
+    -import_from(py.scipy_ndimage, [gaussian_filter, ...])
 
 All predicates are **Tier 1 — pure functions**: accept NumPy arrays and return
 results directly in ``RESULT``.
@@ -15,33 +15,33 @@ results directly in ``RESULT``.
 Predicate catalogue
 -------------------
 Smoothing filters:
-    GaussianFilter(INPUT, SIGMA, RESULT)
-    UniformFilter(INPUT, RESULT)
-    UniformFilter(INPUT, SIZE, RESULT)
-    MedianFilter(INPUT, SIZE, RESULT)
+    gaussian_filter(INPUT, SIGMA, RESULT)
+    uniform_filter(INPUT, RESULT)
+    uniform_filter(INPUT, SIZE, RESULT)
+    median_filter(INPUT, SIZE, RESULT)
 
 Convolution:
-    Convolve(INPUT, WEIGHTS, RESULT)
+    convolve(INPUT, WEIGHTS, RESULT)
 
 Morphological operations (binary):
-    BinaryErosion(INPUT, RESULT)
-    BinaryDilation(INPUT, RESULT)
-    BinaryOpening(INPUT, RESULT)
-    BinaryClosing(INPUT, RESULT)
+    binary_erosion(INPUT, RESULT)
+    binary_dilation(INPUT, RESULT)
+    binary_opening(INPUT, RESULT)
+    binary_closing(INPUT, RESULT)
 
 Connected-component labelling:
     label(INPUT, RESULT)
         RESULT: dict with keys 'label_array' and 'num_features'
 
 Geometric transforms:
-    Zoom(INPUT, ZOOM, RESULT)
-    Rotate(INPUT, ANGLE, RESULT)
-    Shift(INPUT, SHIFT, RESULT)
+    zoom(INPUT, ZOOM, RESULT)
+    rotate(INPUT, ANGLE, RESULT)
+    shift(INPUT, SHIFT, RESULT)
 
 Measurement:
-    FindObjects(INPUT, RESULT)
+    find_objects(INPUT, RESULT)
         RESULT: list of slice-tuple regions per labelled component
-    CenterOfMass(INPUT, RESULT)
+    center_of_mass(INPUT, RESULT)
         RESULT: (row, col, ...) centroid tuple for the whole array
 """
 
@@ -111,19 +111,19 @@ def _pred(name: str, *arity_fns) -> ModulePredicate:
 
 # ── Smoothing filters ──────────────────────────────────────────────────────
 
-GaussianFilter = _pred("GaussianFilter",
+gaussian_filter = _pred("gaussian_filter",
     (3, _dispatch_fn(lambda inp, sigma:
         _ndi().gaussian_filter(inp, sigma))),
 )
 
-UniformFilter = _pred("UniformFilter",
+uniform_filter = _pred("uniform_filter",
     (2, _dispatch_fn(lambda inp:
         _ndi().uniform_filter(inp))),
     (3, _dispatch_fn(lambda inp, size:
         _ndi().uniform_filter(inp, size=size))),
 )
 
-MedianFilter = _pred("MedianFilter",
+median_filter = _pred("median_filter",
     (3, _dispatch_fn(lambda inp, size:
         _ndi().median_filter(inp, size=size))),
 )
@@ -131,7 +131,7 @@ MedianFilter = _pred("MedianFilter",
 
 # ── Convolution ────────────────────────────────────────────────────────────
 
-Convolve = _pred("Convolve",
+convolve = _pred("convolve",
     (3, _dispatch_fn(lambda inp, weights:
         _ndi().convolve(inp, weights))),
 )
@@ -162,22 +162,22 @@ label._register(2, _label_fn)
 
 # ── Morphological operations ───────────────────────────────────────────────
 
-BinaryErosion = _pred("BinaryErosion",
+binary_erosion = _pred("binary_erosion",
     (2, _dispatch_fn(lambda inp:
         _ndi().binary_erosion(inp))),
 )
 
-BinaryDilation = _pred("BinaryDilation",
+binary_dilation = _pred("binary_dilation",
     (2, _dispatch_fn(lambda inp:
         _ndi().binary_dilation(inp))),
 )
 
-BinaryOpening = _pred("BinaryOpening",
+binary_opening = _pred("binary_opening",
     (2, _dispatch_fn(lambda inp:
         _ndi().binary_opening(inp))),
 )
 
-BinaryClosing = _pred("BinaryClosing",
+binary_closing = _pred("binary_closing",
     (2, _dispatch_fn(lambda inp:
         _ndi().binary_closing(inp))),
 )
@@ -185,17 +185,17 @@ BinaryClosing = _pred("BinaryClosing",
 
 # ── Geometric transforms ───────────────────────────────────────────────────
 
-Zoom = _pred("Zoom",
+zoom = _pred("zoom",
     (3, _dispatch_fn(lambda inp, zoom:
         _ndi().zoom(inp, zoom))),
 )
 
-Rotate = _pred("Rotate",
+rotate = _pred("rotate",
     (3, _dispatch_fn(lambda inp, angle:
         _ndi().rotate(inp, angle))),
 )
 
-Shift = _pred("Shift",
+shift = _pred("shift",
     (3, _dispatch_fn(lambda inp, shift:
         _ndi().shift(inp, shift))),
 )
@@ -203,12 +203,12 @@ Shift = _pred("Shift",
 
 # ── Measurement ────────────────────────────────────────────────────────────
 
-FindObjects = _pred("FindObjects",
+find_objects = _pred("find_objects",
     (2, _dispatch_fn(lambda inp:
         _ndi().find_objects(inp))),
 )
 
-CenterOfMass = _pred("CenterOfMass",
+center_of_mass = _pred("center_of_mass",
     (2, _dispatch_fn(lambda inp:
         _ndi().center_of_mass(inp))),
 )

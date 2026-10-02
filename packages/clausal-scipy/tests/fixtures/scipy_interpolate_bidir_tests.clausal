@@ -1,75 +1,75 @@
 -double_quotes(atom)
--import_from(scipy_interpolate, [MakeSpline, EvalSpline, Free])
+-import_from(scipy_interpolate, [make_spline, eval_spline, free])
 
-# ── EvalSpline(HANDLE, X, Y) — arity-3 bidirectional ────────────────────
+# ── eval_spline(HANDLE, X, Y) — arity-3 bidirectional ────────────────────
 
 # forward
 test("eval spline forward at known point") <- (
-    MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
-    EvalSpline(HANDLE, 1.0, Y),
+    make_spline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
+    eval_spline(HANDLE, 1.0, Y),
     DIFF is ++(abs(float(Y) - 1.0)),
     DIFF < 1e-9,
-    Free(HANDLE))  # nv
+    free(HANDLE))  # nv
 
 test("eval spline forward at midpoint") <- (
-    MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
-    EvalSpline(HANDLE, 0.0, Y),
+    make_spline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
+    eval_spline(HANDLE, 0.0, Y),
     DIFF is ++(abs(float(Y) - 0.0)),
     DIFF < 1e-9,
-    Free(HANDLE))  # nv
+    free(HANDLE))  # nv
 
 # backward (root-finding via brentq)
 test("eval spline backward finds x for y=4.0") <- (
-    MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
-    EvalSpline(HANDLE, X, 4.0),
+    make_spline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
+    eval_spline(HANDLE, X, 4.0),
     DIFF is ++(abs(float(X) - 2.0)),
     DIFF < 1e-6,
-    Free(HANDLE))  # nv
+    free(HANDLE))  # nv
 
 test("eval spline backward finds x for y=1.0") <- (
-    MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
-    EvalSpline(HANDLE, X, 1.0),
+    make_spline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
+    eval_spline(HANDLE, X, 1.0),
     DIFF is ++(abs(float(X) - 1.0)),
     DIFF < 1e-6,
-    Free(HANDLE))  # nv
+    free(HANDLE))  # nv
 
 # both ground agrees
 test("eval spline consistency agrees") <- (
-    MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
-    EvalSpline(HANDLE, 1.0, 1.0),
-    Free(HANDLE))  # nv
+    make_spline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
+    eval_spline(HANDLE, 1.0, 1.0),
+    free(HANDLE))  # nv
 
 # both ground disagrees
 test("eval spline consistency disagrees fails") <- (
-    MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
-    not EvalSpline(HANDLE, 1.0, 999.0),
-    Free(HANDLE))  # nv
+    make_spline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
+    not eval_spline(HANDLE, 1.0, 999.0),
+    free(HANDLE))  # nv
 
 # backward fails for out-of-range target
 test("eval spline backward out of range fails") <- (
-    MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
-    not EvalSpline(HANDLE, _, 100.0),
-    Free(HANDLE))  # nv
+    make_spline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
+    not eval_spline(HANDLE, _, 100.0),
+    free(HANDLE))  # nv
 
 # round-trip
 test("eval spline round-trip") <- (
-    MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
-    EvalSpline(HANDLE, 1.5, Y),
-    EvalSpline(HANDLE, X, Y),
+    make_spline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
+    eval_spline(HANDLE, 1.5, Y),
+    eval_spline(HANDLE, X, Y),
     DIFF is ++(abs(float(X) - 1.5)),
     DIFF < 1e-6,
-    Free(HANDLE))  # nv
+    free(HANDLE))  # nv
 
-# ── EvalSpline(HANDLE, X, NU, Y) — arity-4 unidirectional ──────────────
+# ── eval_spline(HANDLE, X, NU, Y) — arity-4 unidirectional ──────────────
 
 test("eval spline derivative arity-4") <- (
-    MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
-    EvalSpline(HANDLE, 1.0, 0, Y),
+    make_spline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
+    eval_spline(HANDLE, 1.0, 0, Y),
     DIFF is ++(abs(float(Y) - 1.0)),
     DIFF < 1e-9,
-    Free(HANDLE))  # nv
+    free(HANDLE))  # nv
 
 test("eval spline first derivative") <- (
-    MakeSpline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
-    EvalSpline(HANDLE, 1.0, 1, DY_UNUSED),
-    Free(HANDLE))  # nv
+    make_spline([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 4.0, 9.0], HANDLE),
+    eval_spline(HANDLE, 1.0, 1, DY_UNUSED),
+    free(HANDLE))  # nv

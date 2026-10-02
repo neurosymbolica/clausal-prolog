@@ -1,99 +1,99 @@
 # Display snippets for docs/sympy.md
 
 --8<-- [start:symbolic_equality]
-Diff(X**3, X, R),
+diff(X**3, X, R),
 R == 3*X**2             # symbolic comparison, not structural
 --8<-- [end:symbolic_equality]
 
 --8<-- [start:chaining]
-Diff(X**4, X, D),
-Integrate(D, X, I),
+diff(X**4, X, D),
+integrate(D, X, I),
 I == X**4
 --8<-- [end:chaining]
 
 --8<-- [start:chaining_ex2]
-Diff(X**3, X, D),
+diff(X**3, X, D),
 R == D + 1,
 R == 3*X**2 + 1
 --8<-- [end:chaining_ex2]
 
 --8<-- [start:simplify_2]
-Simplify(X**2 + 2*X + 1 - (X + 1)**2, 0)
-Simplify((X**2 - 1) / (X - 1), R),  R == X + 1
+simplify(X**2 + 2*X + 1 - (X + 1)**2, 0)
+simplify((X**2 - 1) / (X - 1), R),  R == X + 1
 --8<-- [end:simplify_2]
 
 --8<-- [start:expand_2]
-Expand((X + 1)**2, R),  R == X**2 + 2*X + 1
-Expand((X + Y)**2, R),  R == X**2 + 2*X*Y + Y**2
+expand((X + 1)**2, R),  R == X**2 + 2*X + 1
+expand((X + Y)**2, R),  R == X**2 + 2*X*Y + Y**2
 --8<-- [end:expand_2]
 
 --8<-- [start:factor_2]
-Factor(X**2 - 1, R),      R == (X - 1) * (X + 1)
-Factor(X**2 + 5*X + 6, R), R == (X + 2) * (X + 3)
+factor(X**2 - 1, R),      R == (X - 1) * (X + 1)
+factor(X**2 + 5*X + 6, R), R == (X + 2) * (X + 3)
 --8<-- [end:factor_2]
 
 --8<-- [start:solve_3]
-Solve(2*X - 6, X, S),  S == 3
-Solve(X**2 - 4, X, S), S == 2     # first solution
-Solve(X**2 - 4, X, S), S == -2    # second solution (on backtracking)
+solve(2*X - 6, X, S),  S == 3
+solve(X**2 - 4, X, S), S == 2     # first solution
+solve(X**2 - 4, X, S), S == -2    # second solution (on backtracking)
 --8<-- [end:solve_3]
 
 --8<-- [start:solve_all_3]
-SolveAll(X**2 - 9, X, SOLS),
+solve_all(X**2 - 9, X, SOLS),
 S is ++sorted(SOLS),
 S == [-3, 3]
 --8<-- [end:solve_all_3]
 
 --8<-- [start:diff_2_3]
-Diff(X**3, X, R),          R == 3*X**2
-Diff(sin(X), X, R),        R == cos(X)
-Diff(X*Y + X**2, X, R),    R == Y + 2*X    # partial derivative
+diff(X**3, X, R),          R == 3*X**2
+diff(sin(X), X, R),        R == cos(X)
+diff(X*Y + X**2, X, R),    R == Y + 2*X    # partial derivative
 --8<-- [end:diff_2_3]
 
 --8<-- [start:integrate_2_3]
-Integrate(X**2, X, R),     R == X**3 / 3
-Integrate(cos(X), X, R),   R == sin(X)
+integrate(X**2, X, R),     R == X**3 / 3
+integrate(cos(X), X, R),   R == sin(X)
 --8<-- [end:integrate_2_3]
 
 --8<-- [start:limit_4]
-Limit(X + 1, X, 0, R),     R == 1
-Limit(1/X, X, inf, R),     R == 0
-Limit(sin(X)/X, X, 0, R),  R == 1
+limit(X + 1, X, 0, R),     R == 1
+limit(1/X, X, inf, R),     R == 0
+limit(sin(X)/X, X, 0, R),  R == 1
 --8<-- [end:limit_4]
 
 --8<-- [start:series_4_5]
-Series(1/(1-X), X, 4, R),
+series(1/(1-X), X, 4, R),
 R == 1 + X + X**2 + X**3
 --8<-- [end:series_4_5]
 
 --8<-- [start:collect_3]
-Collect(X**2 + 2*X + X*Y, X, R),
+collect(X**2 + 2*X + X*Y, X, R),
 R == X**2 + X*(Y + 2)
 --8<-- [end:collect_3]
 
 --8<-- [start:cancel_2]
-Cancel((X**2 - 1) / (X - 1), R),  R == X + 1
+cancel((X**2 - 1) / (X - 1), R),  R == X + 1
 --8<-- [end:cancel_2]
 
 --8<-- [start:apart_2_3]
-Apart(1 / (X**2 - 1), R),
+apart(1 / (X**2 - 1), R),
 R == 1/(2*(X - 1)) - 1/(2*(X + 1))
 --8<-- [end:apart_2_3]
 
 --8<-- [start:together_2]
-Together(1/X + 1/Y, R),  R == (X + Y) / (X * Y)
+together(1/X + 1/Y, R),  R == (X + Y) / (X * Y)
 --8<-- [end:together_2]
 
 --8<-- [start:degree_2_3]
-Degree(X**3 + 2*X + 1, X, D),  D == 3
+degree(X**3 + 2*X + 1, X, D),  D == 3
 --8<-- [end:degree_2_3]
 
 --8<-- [start:coeffs_3]
-Coeffs(2*X**3 - X + 7, X, C),  C == [2, 0, -1, 7]
+coeffs(2*X**3 - X + 7, X, C),  C == [2, 0, -1, 7]
 --8<-- [end:coeffs_3]
 
 --8<-- [start:roots_3]
-Roots(X**2 - 2*X + 1, X, PAIR),
+roots(X**2 - 2*X + 1, X, PAIR),
 ROOT is ++PAIR[0],
 MULT is ++PAIR[1],
 ROOT == 1,
@@ -101,30 +101,30 @@ MULT == 2
 --8<-- [end:roots_3]
 
 --8<-- [start:trig_simp_2]
-TrigSimp(sin(X)**2 + cos(X)**2, R),  R == 1
-TrigSimp(2 * sin(X) * cos(X), R),    R == sin(2*X)
+trig_simp(sin(X)**2 + cos(X)**2, R),  R == 1
+trig_simp(2 * sin(X) * cos(X), R),    R == sin(2*X)
 --8<-- [end:trig_simp_2]
 
 --8<-- [start:expand_trig_2]
-ExpandTrig(sin(X + Y), R),
+expand_trig(sin(X + Y), R),
 R == sin(X)*cos(Y) + sin(Y)*cos(X)
 --8<-- [end:expand_trig_2]
 
 --8<-- [start:is_prime_1]
-IsPrime(7)              # succeeds
-(not IsPrime(4))        # succeeds
+is_prime(7)              # succeeds
+(not is_prime(4))        # succeeds
 --8<-- [end:is_prime_1]
 
 --8<-- [start:next_prime_2]
-NextPrime(7, P),  P == 11
+next_prime(7, P),  P == 11
 --8<-- [end:next_prime_2]
 
 --8<-- [start:factor_int_2]
-FactorInt(360, F),  F is ++{2: 3, 3: 2, 5: 1}
+factor_int(360, F),  F is ++{2: 3, 3: 2, 5: 1}
 --8<-- [end:factor_int_2]
 
 --8<-- [start:divisors_2]
-Divisors(12, D),  D == [1, 2, 3, 4, 6, 12]
+divisors(12, D),  D == [1, 2, 3, 4, 6, 12]
 --8<-- [end:divisors_2]
 
 --8<-- [start:gcd_lcm_3]
@@ -139,55 +139,55 @@ sum_(I**2, I, 1, 5, R),   R == 55
 --8<-- [end:sum_5]
 
 --8<-- [start:product_5]
-Product(I, I, 1, 5, R),  R == 120
+product(I, I, 1, 5, R),  R == 120
 --8<-- [end:product_5]
 
 --8<-- [start:binomial_3]
-Binomial(5, 2, R),   R == 10
-Binomial(N, 2, R),   R == N*(N - 1)/2
+binomial(5, 2, R),   R == 10
+binomial(N, 2, R),   R == N*(N - 1)/2
 --8<-- [end:binomial_3]
 
 --8<-- [start:latex_2]
-Latex(X**2 + 1, S),  ++("x^{2}" in S)
+latex(X**2 + 1, S),  ++("x^{2}" in S)
 --8<-- [end:latex_2]
 
 --8<-- [start:pretty_2]
-Pretty(X**2, S),  ++("2" in S)
+pretty(X**2, S),  ++("2" in S)
 --8<-- [end:pretty_2]
 
 --8<-- [start:subs_3]
-Subs(X**2 + 1, ++{X: 3}, R),  R == 10
+subs(X**2 + 1, ++{X: 3}, R),  R == 10
 --8<-- [end:subs_3]
 
 --8<-- [start:free_vars_2]
-FreeVars(42, V),  V == []
+free_vars(42, V),  V == []
 --8<-- [end:free_vars_2]
 
 --8<-- [start:sym_str_2]
-SymStr(42, S),  S == "42"
+sym_str(42, S),  S == "42"
 --8<-- [end:sym_str_2]
 
 --8<-- [start:sym_equal_2]
-SymEqual(X**2 + 1, 1 + X**2)
-SymEqual((X + 1)**2 - X**2, 2*X + 1)
+sym_equal(X**2 + 1, 1 + X**2)
+sym_equal((X + 1)**2 - X**2, 2*X + 1)
 --8<-- [end:sym_equal_2]
 
 --8<-- [start:sym_2]
-Sym("x", X),
+sym("x", X),
 EXPR is ++(X**2 + 1),
 S is ++str(EXPR),
 S == "x**2 + 1"
 --8<-- [end:sym_2]
 
 --8<-- [start:math_functions_usage]
--import_from(sympy, [Diff, sin, cos, exp, log, sqrt])
+-import_from(sympy, [diff, sin, cos, exp, log, sqrt])
 
-Diff(sin(X), X, R),  R == cos(X)
-Simplify(exp(log(X)), R),  R == X
+diff(sin(X), X, R),  R == cos(X)
+simplify(exp(log(X)), R),  R == X
 --8<-- [end:math_functions_usage]
 
 --8<-- [start:constants_usage]
--import_from(sympy, [Limit, inf, pi])
+-import_from(sympy, [limit, inf, pi])
 
-Limit(1/X, X, inf, R),  R == 0
+limit(1/X, X, inf, R),  R == 0
 --8<-- [end:constants_usage]

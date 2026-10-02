@@ -46,27 +46,27 @@ from clausal.modules.py.spacy import (
     _token_to_dict,
     _ent_to_dict,
     _chunk_to_dict,
-    LoadModel,
-    UnloadModel,
-    CurrentModel,
-    Process,
-    Token,
-    TokenText,
-    TokenList,
-    Pos,
-    Tag,
-    Lemma,
-    Dep,
-    Head,
-    Shape,
-    IsAlpha,
-    IsStop,
-    Entity,
-    EntityList,
-    Sentence,
-    SentenceList,
-    Similarity,
-    NounChunk,
+    load_model,
+    unload_model,
+    current_model,
+    process,
+    token,
+    token_text,
+    token_list,
+    pos,
+    tag,
+    lemma,
+    dep,
+    head,
+    shape,
+    is_alpha,
+    is_stop,
+    entity,
+    entity_list,
+    sentence,
+    sentence_list,
+    similarity,
+    noun_chunk,
 )
 
 
@@ -204,7 +204,7 @@ class TestModelRegistry:
         alias = "_test_load1_"
         with _LOCK:
             _MODELS.pop(alias, None)
-        # LoadModel/1 uses name as alias
+        # load_model/1 uses name as alias
         results = list(_solutions_simple(_load_model_1_raw, "en_core_web_sm", trail=trail))
         assert len(results) == 1
         # Clean up
@@ -664,25 +664,25 @@ class TestSpacyPredicateAdapter:
     def test_single_arity_dispatch_direct(self):
         """Single-arity predicate returns its fn directly."""
         # nv
-        disp = UnloadModel._get_dispatch()
+        disp = unload_model._get_dispatch()
         assert callable(disp)
 
     def test_multi_arity_dispatch_is_multi(self):
         """Multi-arity predicate returns _multi_dispatch."""
         # nv
-        disp = LoadModel._get_dispatch()
+        disp = load_model._get_dispatch()
         assert callable(disp)
 
     def test_repr(self):
         # nv
-        assert "LoadModel" in repr(LoadModel)
+        assert "load_model" in repr(load_model)
 
     def test_multi_dispatch_wrong_arity_fails(self, trail):
         """Multi-dispatch returns DONE for unrecognised arity."""
         # nv
         from clausal.logic.trampoline import DONE
         sentinel = object()
-        results = list(LoadModel._multi_dispatch(sentinel, sentinel, sentinel, sentinel, trail))
+        results = list(load_model._multi_dispatch(sentinel, sentinel, sentinel, sentinel, trail))
         # arity 0 (just trail) not registered — should yield DONE immediately
         last = results[-1]
         assert last[1] is DONE

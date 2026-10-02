@@ -1,31 +1,31 @@
 -double_quotes(atom)
--import_from(sympy, [Latex, Pretty, Sym])
+-import_from(sympy, [latex, pretty, sym])
 
-# ── Latex/2 ──────────────────────────────────────────────────────────────────
+# ── latex/2 ──────────────────────────────────────────────────────────────────
 
 test("latex simple") <- (
-    Latex(X_UNUSED**2 + 1, S),
+    latex(X_UNUSED**2 + 1, S),
     ++("x^{2}" in S)
 )  # nv
 
 test("latex fraction") <- (
-    Latex(1 / X_UNUSED, S),
+    latex(1 / X_UNUSED, S),
     ++("frac" in S)
 )  # nv
 
 test("latex integer") <- (
-    Latex(42, S),
+    latex(42, S),
     S == "42"
 )  # nv
 
-# ── Pretty/2 ─────────────────────────────────────────────────────────────────
+# ── pretty/2 ─────────────────────────────────────────────────────────────────
 
 test("pretty integer") <- (
-    Pretty(42, S),
+    pretty(42, S),
     S == "42"
 )  # nv
 
 test("pretty expression") <- (
-    Pretty(X_UNUSED**2, S),
+    pretty(X_UNUSED**2, S),
     ++("2" in S)
 )  # nv

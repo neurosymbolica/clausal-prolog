@@ -1,42 +1,42 @@
 -double_quotes(atom)
--import_from(scipy_ndimage, [GaussianFilter,
-                              UniformFilter,
-                              MedianFilter,
-                              Convolve,
+-import_from(scipy_ndimage, [gaussian_filter,
+                              uniform_filter,
+                              median_filter,
+                              convolve,
                               label,
-                              BinaryErosion,
-                              BinaryDilation,
-                              BinaryOpening,
-                              BinaryClosing,
-                              Zoom,
-                              Rotate,
-                              Shift,
-                              FindObjects,
-                              CenterOfMass])
+                              binary_erosion,
+                              binary_dilation,
+                              binary_opening,
+                              binary_closing,
+                              zoom,
+                              rotate,
+                              shift,
+                              find_objects,
+                              center_of_mass])
 
 # Gaussian filter of constant array returns constant array
 test("gaussian filter constant") <- (
-    GaussianFilter([1.0, 1.0, 1.0, 1.0, 1.0], 1.0, RESULT),
+    gaussian_filter([1.0, 1.0, 1.0, 1.0, 1.0], 1.0, RESULT),
     V is ++(float(RESULT[2])),
     DIFF is ++(abs(V - 1.0)),
     DIFF < 1e-6)  # nv
 
 # Uniform filter of constant array returns constant array
 test("uniform filter constant") <- (
-    UniformFilter([2.0, 2.0, 2.0, 2.0, 2.0], RESULT),
+    uniform_filter([2.0, 2.0, 2.0, 2.0, 2.0], RESULT),
     V is ++(float(RESULT[2])),
     DIFF is ++(abs(V - 2.0)),
     DIFF < 1e-6)  # nv
 
 # Uniform filter with explicit size
 test("uniform filter with size") <- (
-    UniformFilter([1.0, 2.0, 3.0, 4.0, 5.0], 3, RESULT),
+    uniform_filter([1.0, 2.0, 3.0, 4.0, 5.0], 3, RESULT),
     LEN is ++(len(RESULT)),
     LEN == 5)  # nv
 
-# Convolve with identity kernel [0,1,0] returns same array
+# convolve with identity kernel [0,1,0] returns same array
 test("convolve identity kernel") <- (
-    Convolve([1.0, 2.0, 3.0, 4.0, 5.0], [0.0, 1.0, 0.0], RESULT),
+    convolve([1.0, 2.0, 3.0, 4.0, 5.0], [0.0, 1.0, 0.0], RESULT),
     V is ++(float(RESULT[2])),
     DIFF is ++(abs(V - 3.0)),
     DIFF < 1e-6)  # nv
@@ -49,7 +49,7 @@ test("label two regions") <- (
 
 # Binary erosion of solid block shrinks it
 test("binary erosion shrinks") <- (
-    BinaryErosion([False, True, True, True, False], RESULT),
+    binary_erosion([False, True, True, True, False], RESULT),
     CENTER is ++(bool(RESULT[2])),
     CENTER == True,
     EDGE is ++(bool(RESULT[1])),
@@ -57,7 +57,7 @@ test("binary erosion shrinks") <- (
 
 # Binary dilation of single True expands it
 test("binary dilation expands") <- (
-    BinaryDilation([False, False, True, False, False], RESULT),
+    binary_dilation([False, False, True, False, False], RESULT),
     LEFT is ++(bool(RESULT[1])),
     LEFT == True,
     RIGHT is ++(bool(RESULT[3])),
@@ -65,46 +65,46 @@ test("binary dilation expands") <- (
 
 # Binary opening (erosion then dilation): removes isolated points
 test("binary opening removes isolated") <- (
-    BinaryOpening([False, True, False, True, True, True, False], RESULT),
+    binary_opening([False, True, False, True, True, True, False], RESULT),
     ISOLATED is ++(bool(RESULT[1])),
     ISOLATED == False)  # nv
 
 # Binary closing (dilation then erosion): fills small gaps
 test("binary closing fills gap") <- (
-    BinaryClosing([True, True, False, True, True], RESULT),
+    binary_closing([True, True, False, True, True], RESULT),
     GAP is ++(bool(RESULT[2])),
     GAP == True)  # nv
 
-# Zoom: scale a one-dimensional array up by factor 2
+# zoom: scale a one-dimensional array up by factor 2
 test("zoom scales up") <- (
-    Zoom([1.0, 2.0, 3.0], 2.0, RESULT),
+    zoom([1.0, 2.0, 3.0], 2.0, RESULT),
     LEN is ++(len(RESULT)),
     LEN == 6)  # nv
 
-# Rotate two-dimensional array by 0 degrees returns same shape
+# rotate two-dimensional array by 0 degrees returns same shape
 test("rotate zero degrees") <- (
-    Rotate([[1.0, 2.0], [3.0, 4.0]], 0.0, RESULT),
+    rotate([[1.0, 2.0], [3.0, 4.0]], 0.0, RESULT),
     ROWS is ++(RESULT.shape[0]),
     COLS is ++(RESULT.shape[1]),
     ROWS == 2,
     COLS == 2)  # nv
 
-# Shift one-dimensional array by 0 returns same values
+# shift one-dimensional array by 0 returns same values
 test("shift by zero") <- (
-    Shift([1.0, 2.0, 3.0, 4.0, 5.0], 0.0, RESULT),
+    shift([1.0, 2.0, 3.0, 4.0, 5.0], 0.0, RESULT),
     V is ++(float(RESULT[2])),
     DIFF is ++(abs(V - 3.0)),
     DIFF < 1e-6)  # nv
 
-# FindObjects: two regions give two slice entries
+# find_objects: two regions give two slice entries
 test("find objects two regions") <- (
-    FindObjects([1, 1, 0, 2, 2], RESULT),
+    find_objects([1, 1, 0, 2, 2], RESULT),
     LEN is ++(len(RESULT)),
     LEN == 2)  # nv
 
-# CenterOfMass of uniform one-dimensional array is at centre
+# center_of_mass of uniform one-dimensional array is at centre
 test("center of mass uniform") <- (
-    CenterOfMass([1.0, 1.0, 1.0, 1.0, 1.0], COM),
+    center_of_mass([1.0, 1.0, 1.0, 1.0, 1.0], COM),
     C is ++(float(COM[0])),
     DIFF is ++(abs(C - 2.0)),
     DIFF < 1e-6)  # nv

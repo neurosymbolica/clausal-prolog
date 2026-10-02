@@ -1,52 +1,52 @@
 -double_quotes(atom)
--import_from(spacy, [LoadModel, UnloadModel, CurrentModel, Process, Token, TokenText, TokenList, Pos, Tag, Lemma, Dep, Head, Shape, IsAlpha, IsStop, Entity, EntityList, Sentence, SentenceList, Similarity, NounChunk])
+-import_from(spacy, [load_model, unload_model, current_model, process, token, token_text, token_list, pos, tag, lemma, dep, head, shape, is_alpha, is_stop, entity, entity_list, sentence, sentence_list, similarity, noun_chunk])
 
 # spaCy predicates — basic tests
 
 # ── Setup helper ─────────────────────────────────────────────────────────────
 
-setup(DOC) <- (LoadModel("en_core_web_sm", "test") and Process("test", "Apple is looking at buying U.K. startup for $1 billion.", DOC))
+setup(DOC) <- (load_model("en_core_web_sm", "test") and process("test", "Apple is looking at buying U.K. startup for $1 billion.", DOC))
 
 # ── Model management ────────────────────────────────────────────────────────
 
-test("load model") <- LoadModel("en_core_web_sm", "basic")  # nv
-test("load model idempotent") <- (LoadModel("en_core_web_sm", "basic") and LoadModel("en_core_web_sm", "basic"))  # nv
-test("current model") <- (LoadModel("en_core_web_sm", "cm") and CurrentModel("cm"))  # nv
+test("load model") <- load_model("en_core_web_sm", "basic")  # nv
+test("load model idempotent") <- (load_model("en_core_web_sm", "basic") and load_model("en_core_web_sm", "basic"))  # nv
+test("current model") <- (load_model("en_core_web_sm", "cm") and current_model("cm"))  # nv
 
-# ── Token iteration ─────────────────────────────────────────────────────────
+# ── token iteration ─────────────────────────────────────────────────────────
 
-test("token iteration") <- (setup(DOC) and Token(DOC, TOK) and TokenText(TOK, "Apple"))  # nv
+test("token iteration") <- (setup(DOC) and token(DOC, TOK) and token_text(TOK, "Apple"))  # nv
 
-test("token by index") <- (setup(DOC) and Token(DOC, 0, TOK) and TokenText(TOK, "Apple"))  # nv
+test("token by index") <- (setup(DOC) and token(DOC, 0, TOK) and token_text(TOK, "Apple"))  # nv
 
-test("token list") <- (setup(DOC) and TokenList(DOC, TOKS) and FIRST is ++TOKS[0] and T is ++FIRST["text"] and T == "Apple")  # nv
+test("token list") <- (setup(DOC) and token_list(DOC, TOKS) and FIRST is ++TOKS[0] and T is ++FIRST["text"] and T == "Apple")  # nv
 
 # ── Annotations ─────────────────────────────────────────────────────────────
 
-test("pos tag") <- (setup(DOC) and Token(DOC, 0, TOK) and Pos(TOK, P) and P == "PROPN")  # nv
+test("pos tag") <- (setup(DOC) and token(DOC, 0, TOK) and pos(TOK, P) and P == "PROPN")  # nv
 
-test("lemma") <- (setup(DOC) and Token(DOC, 2, TOK) and Lemma(TOK, L) and L == "look")  # nv
+test("lemma") <- (setup(DOC) and token(DOC, 2, TOK) and lemma(TOK, L) and L == "look")  # nv
 
-test("dep label") <- (setup(DOC) and Token(DOC, 0, TOK) and Dep(TOK, D) and D == "nsubj")  # nv
+test("dep label") <- (setup(DOC) and token(DOC, 0, TOK) and dep(TOK, D) and D == "nsubj")  # nv
 
-test("shape") <- (setup(DOC) and Token(DOC, 0, TOK) and Shape(TOK, S) and S == "Xxxxx")  # nv
+test("shape") <- (setup(DOC) and token(DOC, 0, TOK) and shape(TOK, S) and S == "Xxxxx")  # nv
 
-test("is alpha") <- (setup(DOC) and Token(DOC, 0, TOK) and IsAlpha(TOK))  # nv
+test("is alpha") <- (setup(DOC) and token(DOC, 0, TOK) and is_alpha(TOK))  # nv
 
 # ── NER ─────────────────────────────────────────────────────────────────────
 
-test("entity iteration") <- (setup(DOC) and Entity(DOC, E) and T is ++E["text"] and T == "Apple")  # nv
+test("entity iteration") <- (setup(DOC) and entity(DOC, E) and T is ++E["text"] and T == "Apple")  # nv
 
-test("entity by label") <- (setup(DOC) and Entity(DOC, "ORG", E) and T is ++E["text"] and T == "Apple")  # nv
+test("entity by label") <- (setup(DOC) and entity(DOC, "ORG", E) and T is ++E["text"] and T == "Apple")  # nv
 
-test("entity list") <- (setup(DOC) and EntityList(DOC, ENTS) and FIRST is ++ENTS[0] and T is ++FIRST["text"] and T == "Apple")  # nv
+test("entity list") <- (setup(DOC) and entity_list(DOC, ENTS) and FIRST is ++ENTS[0] and T is ++FIRST["text"] and T == "Apple")  # nv
 
 # ── Sentences ───────────────────────────────────────────────────────────────
 
-test("sentence iteration") <- (setup(DOC) and Sentence(DOC, S) and S == "Apple is looking at buying U.K. startup for $1 billion.")  # nv
+test("sentence iteration") <- (setup(DOC) and sentence(DOC, S) and S == "Apple is looking at buying U.K. startup for $1 billion.")  # nv
 
-test("sentence list") <- (setup(DOC) and SentenceList(DOC, SENTS) and FIRST is ++SENTS[0] and FIRST == "Apple is looking at buying U.K. startup for $1 billion.")  # nv
+test("sentence list") <- (setup(DOC) and sentence_list(DOC, SENTS) and FIRST is ++SENTS[0] and FIRST == "Apple is looking at buying U.K. startup for $1 billion.")  # nv
 
 # ── Noun chunks ─────────────────────────────────────────────────────────────
 
-test("noun chunk") <- (setup(DOC) and NounChunk(DOC, C) and T is ++C["text"] and T == "Apple")  # nv
+test("noun chunk") <- (setup(DOC) and noun_chunk(DOC, C) and T is ++C["text"] and T == "Apple")  # nv

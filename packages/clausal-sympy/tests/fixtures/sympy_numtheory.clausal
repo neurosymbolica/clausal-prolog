@@ -1,57 +1,57 @@
 -double_quotes(atom)
--import_from(sympy, [IsPrime, NextPrime, FactorInt, Divisors,
+-import_from(sympy, [is_prime, next_prime, factor_int, divisors,
                              gcd, lcm])
 
-# ── IsPrime/1 ────────────────────────────────────────────────────────────────
+# ── is_prime/1 ────────────────────────────────────────────────────────────────
 
-test("is prime 7") <- IsPrime(7)  # nv
-test("is prime 11") <- IsPrime(11)  # nv
-test("not prime 4") <- (not IsPrime(4))  # nv
-test("not prime 1") <- (not IsPrime(1))  # nv
+test("is prime 7") <- is_prime(7)  # nv
+test("is prime 11") <- is_prime(11)  # nv
+test("not prime 4") <- (not is_prime(4))  # nv
+test("not prime 1") <- (not is_prime(1))  # nv
 
-# ── NextPrime/2 ──────────────────────────────────────────────────────────────
+# ── next_prime/2 ──────────────────────────────────────────────────────────────
 
 test("next prime after 7") <- (
-    NextPrime(7, P),
+    next_prime(7, P),
     P == 11
 )  # nv
 
 test("next prime after 10") <- (
-    NextPrime(10, P),
+    next_prime(10, P),
     P == 11
 )  # nv
 
 test("next prime after 1") <- (
-    NextPrime(1, P),
+    next_prime(1, P),
     P == 2
 )  # nv
 
-# ── FactorInt/2 ──────────────────────────────────────────────────────────────
+# ── factor_int/2 ──────────────────────────────────────────────────────────────
 
 test("factor 12") <- (
-    FactorInt(12, F),
+    factor_int(12, F),
     F is {2: 2, 3: 1}
 )  # nv
 
 test("factor prime") <- (
-    FactorInt(13, F),
+    factor_int(13, F),
     F is {13: 1}
 )  # nv
 
 test("factor 360") <- (
-    FactorInt(360, F),
+    factor_int(360, F),
     F is {2: 3, 3: 2, 5: 1}
 )  # nv
 
-# ── Divisors/2 ───────────────────────────────────────────────────────────────
+# ── divisors/2 ───────────────────────────────────────────────────────────────
 
 test("divisors 12") <- (
-    Divisors(12, D),
+    divisors(12, D),
     D == [1, 2, 3, 4, 6, 12]
 )  # nv
 
 test("divisors prime") <- (
-    Divisors(7, D),
+    divisors(7, D),
     D == [1, 7]
 )  # nv
 

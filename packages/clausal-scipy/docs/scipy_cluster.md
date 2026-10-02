@@ -7,8 +7,8 @@ The `scipy_cluster` module wraps [`scipy.cluster.hierarchy`](https://docs.scipy.
 ## Import
 
 ```clausal
--import_from(scipy_cluster, [Linkage, FlatCluster, Dendrogram,
-                              Cophenet, Inconsistent,
+-import_from(scipy_cluster, [linkage, flat_cluster, dendrogram,
+                              cophenet, inconsistent,
                               k_means2, k_means, vector_quantize, whiten,
                               result_get])
 ```
@@ -33,11 +33,11 @@ The `Cluster` prefix is dropped since these predicates live in the cluster [modu
 
 | scipy function | Clausal predicate |
 |---|---|
-| `hierarchy.linkage` | `Linkage` |
-| `hierarchy.fcluster` | `FlatCluster` |
-| `hierarchy.dendrogram` | `Dendrogram` |
-| `hierarchy.cophenet` | `Cophenet` |
-| `hierarchy.inconsistent` | `Inconsistent` |
+| `hierarchy.linkage` | `linkage` |
+| `hierarchy.fcluster` | `flat_cluster` |
+| `hierarchy.dendrogram` | `dendrogram` |
+| `hierarchy.cophenet` | `cophenet` |
+| `hierarchy.inconsistent` | `inconsistent` |
 | `vq.kmeans2` | `k_means2` |
 | `vq.kmeans` | `k_means` |
 | `vq.vq` | `vector_quantize` |
@@ -49,10 +49,10 @@ The `Cluster` prefix is dropped since these predicates live in the cluster [modu
 
 ### Hierarchical clustering
 
-#### `Linkage(Y, RESULT)`
-#### `Linkage(Y, METHOD, RESULT)`
-#### `Linkage(Y, METHOD, METRIC, RESULT)`
-#### `Linkage(Y, METHOD, METRIC, OPTIMAL_ORDERING, RESULT)`
+#### `linkage(Y, RESULT)`
+#### `linkage(Y, METHOD, RESULT)`
+#### `linkage(Y, METHOD, METRIC, RESULT)`
+#### `linkage(Y, METHOD, METRIC, OPTIMAL_ORDERING, RESULT)`
 
 Compute a hierarchical clustering linkage matrix from observation matrix or condensed distance matrix `Y`.
 
@@ -67,9 +67,9 @@ Compute a hierarchical clustering linkage matrix from observation matrix or cond
 
 ---
 
-#### `FlatCluster(Z, T, RESULT)`
-#### `FlatCluster(Z, T, CRITERION, RESULT)`
-#### `FlatCluster(Z, T, CRITERION, DEPTH, RESULT)`
+#### `flat_cluster(Z, T, RESULT)`
+#### `flat_cluster(Z, T, CRITERION, RESULT)`
+#### `flat_cluster(Z, T, CRITERION, DEPTH, RESULT)`
 
 Form flat clusters from a hierarchical clustering linkage matrix `Z`.
 
@@ -84,8 +84,8 @@ Form flat clusters from a hierarchical clustering linkage matrix `Z`.
 
 ---
 
-#### `Dendrogram(Z, RESULT)`
-#### `Dendrogram(Z, TRUNCATE_MODE, RESULT)`
+#### `dendrogram(Z, RESULT)`
+#### `dendrogram(Z, TRUNCATE_MODE, RESULT)`
 
 Compute dendrogram layout data from linkage matrix `Z`. Always uses `no_plot=True` to avoid matplotlib dependency.
 
@@ -98,8 +98,8 @@ Compute dendrogram layout data from linkage matrix `Z`. Always uses `no_plot=Tru
 
 ---
 
-#### `Cophenet(Z, RESULT)`
-#### `Cophenet(Z, Y, RESULT)`
+#### `cophenet(Z, RESULT)`
+#### `cophenet(Z, Y, RESULT)`
 
 Compute cophenetic distances from linkage matrix `Z`.
 
@@ -112,8 +112,8 @@ Compute cophenetic distances from linkage matrix `Z`.
 
 ---
 
-#### `Inconsistent(Z, RESULT)`
-#### `Inconsistent(Z, DEPTH, RESULT)`
+#### `inconsistent(Z, RESULT)`
+#### `inconsistent(Z, DEPTH, RESULT)`
 
 Compute inconsistency statistics for each non-singleton cluster in linkage matrix `Z`.
 
@@ -201,7 +201,7 @@ k_means2(NORMALISED, 3, RESULT),
 
 Extract a named field from a Tier 2 result dict.
 
-- `RESULT`: dict returned by `k_means2`, `k_means`, `vector_quantize`, `Cophenet` (with Y), or `Dendrogram`
+- `RESULT`: dict returned by `k_means2`, `k_means`, `vector_quantize`, `cophenet` (with Y), or `dendrogram`
 - `FIELD`: string key
 - `VALUE`: unified with `RESULT[FIELD]`
 
@@ -225,7 +225,7 @@ result_get(R, 'distortion', D),
 
 - `k_means2` uses random initialisation by default; results are non-deterministic unless `SEED` is fixed.
 - `k_means` and `k_means2` may warn about empty clusters on small or degenerate data.
-- `Dendrogram` always passes `no_plot=True` internally — it returns the layout dict but never calls matplotlib. If you need a plot, access the raw data via `result_get` and draw it yourself.
+- `dendrogram` always passes `no_plot=True` internally — it returns the layout dict but never calls matplotlib. If you need a plot, access the raw data via `result_get` and draw it yourself.
 - All predicates fail silently (yield no solutions) on exceptions such as singular matrices or incompatible array shapes.
 
 ---

@@ -24,43 +24,43 @@ Predicate names follow Clausal conventions (TitleCase, readable), not scipy's te
 
 | Module name | Clausal name |
 |---|---|
-| `scipy.special.gamma` | `Gamma` |
-| `scipy.special.gammaln` | `GammaLog` |
-| `scipy.special.gammasgn` | `GammaSign` |
-| `scipy.special.betaln` | `BetaLog` |
-| `scipy.special.erfc` | `ErfComplement` |
-| `scipy.special.erfinv` | `Erf` backward direction |
-| `scipy.special.erfcinv` | `ErfComplement` backward direction |
-| `scipy.special.ndtr` | `NormalCdf` |
-| `scipy.special.ndtri` | `NormalCdf` backward direction |
-| `scipy.special.jn`, `jv` | `BesselJ`, `BesselJReal` |
-| `scipy.special.yn`, `yv` | `BesselY`, `BesselYReal` |
-| `scipy.special.kn` | `BesselK` |
-| `scipy.special.iv` | `BesselI` |
-| `scipy.special.hyp1f1` | `Hypergeometric1F1` |
-| `scipy.special.expit` | `Logit` backward direction |
-| `scipy.special.logit` | `Logit` (bidirectional: logit ↔ sigmoid) |
-| `scipy.special.gammainc` | `GammaInc` (bidirectional) |
-| `scipy.special.gammaincc` | `GammaIncComplement` (bidirectional) |
-| `scipy.special.betainc` | `BetaInc` (bidirectional) |
+| `scipy.special.gamma` | `gamma` |
+| `scipy.special.gammaln` | `gamma_log` |
+| `scipy.special.gammasgn` | `gamma_sign` |
+| `scipy.special.betaln` | `beta_log` |
+| `scipy.special.erfc` | `erf_complement` |
+| `scipy.special.erfinv` | `erf` backward direction |
+| `scipy.special.erfcinv` | `erf_complement` backward direction |
+| `scipy.special.ndtr` | `normal_cdf` |
+| `scipy.special.ndtri` | `normal_cdf` backward direction |
+| `scipy.special.jn`, `jv` | `bessel_j`, `bessel_j_real` |
+| `scipy.special.yn`, `yv` | `bessel_y`, `bessel_y_real` |
+| `scipy.special.kn` | `bessel_k` |
+| `scipy.special.iv` | `bessel_i` |
+| `scipy.special.hyp1f1` | `hypergeometric_1f1` |
+| `scipy.special.expit` | `logit` backward direction |
+| `scipy.special.logit` | `logit` (bidirectional: logit ↔ sigmoid) |
+| `scipy.special.gammainc` | `gamma_inc` (bidirectional) |
+| `scipy.special.gammaincc` | `gamma_inc_complement` (bidirectional) |
+| `scipy.special.betainc` | `beta_inc` (bidirectional) |
 | `scipy.special.boxcox` | `boxcox` (bidirectional; Lambda first) |
-| `scipy.special.boxcox1p` | `Boxcox1p` (bidirectional; Lambda first) |
-| `scipy.special.cbrt` | `CubeRoot` |
-| `scipy.special.kl_div` | `KlDivergence` |
+| `scipy.special.boxcox1p` | `boxcox1p` (bidirectional; Lambda first) |
+| `scipy.special.cbrt` | `cube_root` |
+| `scipy.special.kl_div` | `kl_divergence` |
 | `scipy.special.logsumexp` | `log_sum_exp` |
-| `scipy.special.lpmv` | `AssocLegendre` |
-| `scipy.special.eval_legendre` | `LegendrePoly` |
-| `scipy.special.eval_chebyt/u` | `ChebyshevT`, `ChebyshevU` |
-| `scipy.special.eval_hermite` | `HermiteH` |
-| `scipy.special.eval_genlaguerre` | `GeneralizedLaguerre` |
-| `scipy.special.xlogy` | `XLogY` |
-| `scipy.special.xlog1py` | `XLog1pY` |
+| `scipy.special.lpmv` | `assoc_legendre` |
+| `scipy.special.eval_legendre` | `legendre_poly` |
+| `scipy.special.eval_chebyt/u` | `chebyshev_t`, `chebyshev_u` |
+| `scipy.special.eval_hermite` | `hermite_h` |
+| `scipy.special.eval_genlaguerre` | `generalized_laguerre` |
+| `scipy.special.xlogy` | `x_log_y` |
+| `scipy.special.xlog1py` | `x_log1p_y` |
 
 ---
 
 ## Predicate catalogue
 
-### Gamma and related
+### gamma and related
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:gamma_and_related"
@@ -85,7 +85,7 @@ These predicates are **bidirectional relations**: they dispatch on argument grou
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:error_functions"
 ```
 
-Example — bidirectional NormalCdf acts as both CDF and quantile function:
+Example — bidirectional normal_cdf acts as both CDF and quantile function:
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:error_functions_ex2"
@@ -112,7 +112,7 @@ boxcox_round_trip(LAM, X) <- (
 
 ---
 
-### Bessel functions
+### bessel functions
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:bessel_functions"
@@ -120,7 +120,7 @@ boxcox_round_trip(LAM, X) <- (
 
 ---
 
-### Elliptic integrals
+### elliptic integrals
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:elliptic_integrals"
@@ -172,7 +172,7 @@ stable_log_prob(LOGITS, LP) <- (
 ## Complete example — Gaussian process kernel
 
 ```clausal
--import_from(scipy_special, [Gamma, BesselK, BesselJZeros])
+-import_from(scipy_special, [gamma, bessel_k, bessel_j_zeros])
 
 # Matérn 5/2 covariance function value at distance D
 matern52(D, NU_5_2, RESULT) <- (
@@ -185,7 +185,7 @@ matern52(D, NU_5_2, RESULT) <- (
 
 # First zero of J_0 (wave antinodes)
 first_antinode(ZERO) <- (
-    BesselJZeros(0, 1, ZEROS),
+    bessel_j_zeros(0, 1, ZEROS),
     ZERO is ++float(list(ZEROS)[0])
 )
 ```
@@ -195,8 +195,8 @@ first_antinode(ZERO) <- (
 ## Notes
 
 - All predicates accept Python `float`, `int`, or NumPy scalars/arrays; broadcasting is handled by scipy.
-- Multi-value outputs (e.g. `BesselJZeros`) return NumPy arrays that can be further processed via [`++` escapes](python_integration.md).
-- `LambertW` returns a complex value; use `++(float(W.real))` to extract the real part.
+- Multi-value outputs (e.g. `bessel_j_zeros`) return NumPy arrays that can be further processed via [`++` escapes](python_integration.md).
+- `lambert_w` returns a complex value; use `++(float(W.real))` to extract the real part.
 - Predicates fail (no solution) when `unify` with a bound `RESULT` fails; they propagate scipy exceptions otherwise.
 
 ---

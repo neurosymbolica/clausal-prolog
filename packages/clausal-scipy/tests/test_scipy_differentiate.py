@@ -1,10 +1,10 @@
 """Tests for clausal.modules.py.scipy_differentiate — scipy.differentiate predicates.
 
 Tests cover:
-- Derivative: scalar function, array function, with extra args
-- Jacobian: vector-valued function
-- Hessian: scalar multivariate function
-- ResultGet: field extraction from result dict
+- derivative: scalar function, array function, with extra args
+- jacobian: vector-valued function
+- hessian: scalar multivariate function
+- result_get: field extraction from result dict
 - Unification succeeds when RESULT is unbound
 - Unification fails when RESULT is bound to an incorrect value
 - .clausal fixture integration
@@ -23,7 +23,7 @@ from clausal.logic.trampoline import DONE
 from clausal.logic.solve import call
 from clausal.import_hook import _load_module
 from clausal.modules.py.scipy_differentiate import (
-    Derivative, Jacobian, Hessian, ResultGet,
+    derivative, jacobian, hessian, result_get,
 )
 
 
@@ -45,7 +45,7 @@ def _drive(pred, *args):
 
 def _drive_result_get(result_dict, field):
     value = Var()
-    dispatch = ResultGet._get_dispatch()
+    dispatch = result_get._get_dispatch()
     trail = Trail()
     gen = dispatch(None, None, None, None, result_dict, field, value, trail)
     for parent, sentinel in gen:
@@ -66,13 +66,13 @@ def _fails_when_bound_wrong(pred, *inputs):
     return len(solutions) == 0
 
 
-# ── Derivative ────────────────────────────────────────────────────────────
+# ── derivative ────────────────────────────────────────────────────────────
 
 class TestDerivative:
     def test_quadratic_at_3(self):
         # d/dx x² = 2x; at x=3 → 6
         # nv
-        result = _drive(Derivative, lambda x: x**2, 3.0)
+        result = _drive(derivative, lambda x: x**2, 3.0)
         assert result is not None
         assert result["df"] == pytest.approx(6.0, abs=1e-10)
 
@@ -80,47 +80,47 @@ class TestDerivative:
         # d/dx sin(x) = cos(x); at x=0 → 1
         # scipy.differentiate passes numpy scalars so must use numpy.sin
         # nv
-        result = _drive(Derivative, np.sin, 0.0)
+        result = _drive(derivative, np.sin, 0.0)
         assert result is not None
         assert result["df"] == pytest.approx(1.0, abs=1e-10)
 
     def test_exp_at_one(self):
         # d/dx e^x = e^x; at x=1 → e
         # nv
-        result = _drive(Derivative, np.exp, 1.0)
+        result = _drive(derivative, np.exp, 1.0)
         assert result is not None
         assert result["df"] == pytest.approx(math.e, rel=1e-8)
 
     def test_result_dict_has_required_fields(self):
         # nv
-        result = _drive(Derivative, lambda x: x**3, 2.0)
+        result = _drive(derivative, lambda x: x**3, 2.0)
         assert result is not None
         for field in ("x", "df", "error", "success", "status", "nfev", "nit"):
             assert field in result
 
     def test_success_flag(self):
         # nv
-        result = _drive(Derivative, lambda x: x**2, 1.0)
+        result = _drive(derivative, lambda x: x**2, 1.0)
         assert result["success"] is True or result["success"] == True  # noqa: E712
 
     def test_with_extra_args(self):
         # f(x, a) = a * x²; d/dx = 2*a*x; at x=2, a=3 → 12
         # nv
-        result = _drive(Derivative, lambda x, a: a * x**2, 2.0, [3.0])
+        result = _drive(derivative, lambda x, a: a * x**2, 2.0, [3.0])
         assert result is not None
         assert result["df"] == pytest.approx(12.0, abs=1e-8)
 
     def test_wrong_result_fails(self):
         # nv
-        assert _fails_when_bound_wrong(Derivative, lambda x: x, 1.0)
+        assert _fails_when_bound_wrong(derivative, lambda x: x, 1.0)
 
     def test_x_field_echoes_input(self):
         # nv
-        result = _drive(Derivative, lambda x: x**2, 5.0)
+        result = _drive(derivative, lambda x: x**2, 5.0)
         assert result["x"] == pytest.approx(5.0)
 
 
-# ── Jacobian ──────────────────────────────────────────────────────────────
+# ── jacobian ──────────────────────────────────────────────────────────────
 
 class TestJacobian:
     def test_linear_function(self):
@@ -129,7 +129,7 @@ class TestJacobian:
         def f(x):
             return np.array([2 * x[0], 3 * x[1]])
 
-        result = _drive(Jacobian, f, np.array([1.0, 1.0]))
+        result = _drive(jacobian, f, np.array([1.0, 1.0]))
         assert result is not None
         j = result["df"]
         assert j.shape == (2, 2)
@@ -140,9 +140,9 @@ class TestJacobian:
 
     def test_result_dict_has_required_fields(self):
         # nv
-        result = _drive(Jacobian, lambda x: np.array([x[0]**2]), np.array([2.0]))
+        result = _drive(jacobian, lambda x: np.array([x[0]**2]), np.array([2.0]))
         assert result is not None
-        # Jacobian result has no 'x' or 'nit' fields
+        # jacobian result has no 'x' or 'nit' fields
         for field in ("df", "error", "success", "status", "nfev"):
             assert field in result
 
@@ -152,7 +152,7 @@ class TestJacobian:
         def f(x):
             return np.array([x[0]**2 + x[1]**2])
 
-        result = _drive(Jacobian, f, np.array([1.0, 2.0]))
+        result = _drive(jacobian, f, np.array([1.0, 2.0]))
         assert result is not None
         j = result["df"]
         # J[0,0] ≈ 2*1=2, J[0,1] ≈ 2*2=4
@@ -162,13 +162,13 @@ class TestJacobian:
     def test_wrong_result_fails(self):
         # nv
         assert _fails_when_bound_wrong(
-            Jacobian,
+            jacobian,
             lambda x: np.array([x[0]]),
             np.array([1.0]),
         )
 
 
-# ── Hessian ───────────────────────────────────────────────────────────────
+# ── hessian ───────────────────────────────────────────────────────────────
 
 class TestHessian:
     def test_quadratic_hessian_is_identity_scaled(self):
@@ -177,7 +177,7 @@ class TestHessian:
         def f(x):
             return x[0]**2 + x[1]**2
 
-        result = _drive(Hessian, f, np.array([1.0, 2.0]))
+        result = _drive(hessian, f, np.array([1.0, 2.0]))
         assert result is not None
         h = result["ddf"]
         assert h.shape == (2, 2)
@@ -189,9 +189,9 @@ class TestHessian:
         def f(x):
             return x[0]**2
 
-        result = _drive(Hessian, f, np.array([1.0]))
+        result = _drive(hessian, f, np.array([1.0]))
         assert result is not None
-        # Hessian result has no 'x', 'nit', or 'nfev' fields
+        # hessian result has no 'x', 'nit', or 'nfev' fields
         for field in ("ddf", "error", "success", "status"):
             assert field in result
 
@@ -201,7 +201,7 @@ class TestHessian:
         def f(x):
             return x[0] * x[1]
 
-        result = _drive(Hessian, f, np.array([1.0, 1.0]))
+        result = _drive(hessian, f, np.array([1.0, 1.0]))
         assert result is not None
         h = result["ddf"]
         assert h[0, 0] == pytest.approx(0.0, abs=1e-6)
@@ -212,17 +212,17 @@ class TestHessian:
     def test_wrong_result_fails(self):
         # nv
         assert _fails_when_bound_wrong(
-            Hessian,
+            hessian,
             lambda x: x[0]**2,
             np.array([1.0]),
         )
 
 
-# ── ResultGet ─────────────────────────────────────────────────────────────
+# ── result_get ─────────────────────────────────────────────────────────────
 
 class TestResultGet:
     def _get_result(self):
-        return _drive(Derivative, lambda x: x**2, 3.0)
+        return _drive(derivative, lambda x: x**2, 3.0)
 
     def test_get_df(self):
         # nv
@@ -252,7 +252,7 @@ class TestResultGet:
         # nv
         r = self._get_result()
         v = Var()
-        dispatch = ResultGet._get_dispatch()
+        dispatch = result_get._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, r, "nonexistent_field", v, trail)
         solutions = [s for s in gen if s[1] is None]
@@ -263,7 +263,7 @@ class TestResultGet:
         r = self._get_result()
         # Bind VALUE to the correct answer → should succeed
         df_expected = r["df"]
-        dispatch = ResultGet._get_dispatch()
+        dispatch = result_get._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, r, "df", df_expected, trail)
         solutions = [s for s in gen if s[1] is None]
@@ -272,7 +272,7 @@ class TestResultGet:
     def test_bound_wrong_value_fails(self):
         # nv
         r = self._get_result()
-        dispatch = ResultGet._get_dispatch()
+        dispatch = result_get._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, r, "df", object(), trail)
         solutions = [s for s in gen if s[1] is None]
@@ -280,7 +280,7 @@ class TestResultGet:
 
     def test_hessian_result_get(self):
         # nv
-        r = _drive(Hessian, lambda x: x[0]**2 + x[1]**2, np.array([1.0, 2.0]))
+        r = _drive(hessian, lambda x: x[0]**2 + x[1]**2, np.array([1.0, 2.0]))
         ddf = _drive_result_get(r, "ddf")
         assert ddf is not None
         assert ddf.shape == (2, 2)
@@ -334,14 +334,14 @@ def _NpM():
 
 
 class TestDerivativeUnits:
-    """Phase 3 — Derivative with Quantity inputs."""
+    """Phase 3 — derivative with Quantity inputs."""
 
     def test_derivative_linear_newton_per_metre(self):
         """f(x) = x * k (k = 9.8 N/m) → df/dx = 9.8 N/m."""
         # nv
         k = Quantity(9.8, _NpM())
         f = lambda x: x * k
-        result = _drive(Derivative, f, Quantity(1.0, {metre: 1}))
+        result = _drive(derivative, f, Quantity(1.0, {metre: 1}))
         assert result is not None
         df = result["df"]
         assert isinstance(df, Quantity), f"Expected Quantity, got {type(df)}"
@@ -355,7 +355,7 @@ class TestDerivativeUnits:
         # nv
         k = Quantity(2.0, _NpM())
         f = lambda x: x * k
-        result = _drive(Derivative, f, Quantity(3.0, {metre: 1}))
+        result = _drive(derivative, f, Quantity(3.0, {metre: 1}))
         assert result is not None
         x = result["x"]
         assert isinstance(x, Quantity), f"Expected Quantity, got {type(x)}"
@@ -367,7 +367,7 @@ class TestDerivativeUnits:
         # nv
         k = Quantity(2.0, _NpM())
         f = lambda x: x * k
-        result = _drive(Derivative, f, Quantity(3.0, {metre: 1}))
+        result = _drive(derivative, f, Quantity(3.0, {metre: 1}))
         assert result is not None
         err = result["error"]
         assert isinstance(err, Quantity), f"Expected Quantity, got {type(err)}"
@@ -379,7 +379,7 @@ class TestDerivativeUnits:
         # f strips .value manually → returns float
         # nv
         f = lambda x: x.value ** 2
-        result = _drive(Derivative, f, Quantity(3.0, {metre: 1}))
+        result = _drive(derivative, f, Quantity(3.0, {metre: 1}))
         assert result is not None
         df = result["df"]
         assert not isinstance(df, Quantity), f"Expected plain, got Quantity"
@@ -388,7 +388,7 @@ class TestDerivativeUnits:
     def test_derivative_plain_fast_path(self):
         """No Quantity inputs → plain result, same as before."""
         # nv
-        result = _drive(Derivative, lambda x: x ** 2, 3.0)
+        result = _drive(derivative, lambda x: x ** 2, 3.0)
         assert result is not None
         df = result["df"]
         assert not isinstance(df, Quantity)
@@ -398,23 +398,23 @@ class TestDerivativeUnits:
         """dimensionless Quantity (dims={}) → x is still wrapped, df depends on f."""
         # nv
         f = lambda x: x ** 2  # returns plain float (since Quantity**2 works)
-        result = _drive(Derivative, f, Quantity(3.0, {}))
+        result = _drive(derivative, f, Quantity(3.0, {}))
         assert result is not None
         # x should not be wrapped (empty dims)
         assert not isinstance(result["x"], Quantity)
 
 
 class TestJacobianUnits:
-    """Phase 3 — Jacobian with Quantity inputs."""
+    """Phase 3 — jacobian with Quantity inputs."""
 
     def test_jacobian_linear_map(self):
-        """f: R^n(metre) → R^n(newton), Jacobian has dims newton/metre."""
+        """f: R^n(metre) → R^n(newton), jacobian has dims newton/metre."""
         # nv
         k = Quantity(9.8, _NpM())
-        # Jacobian requires array input → array output
+        # jacobian requires array input → array output
         f = lambda x: x * k
         x0 = Quantity(np.array([1.0, 2.0]), {metre: 1})
-        result = _drive(Jacobian, f, x0)
+        result = _drive(jacobian, f, x0)
         assert result is not None
         df = result["df"]
         assert isinstance(df, Quantity), f"Expected Quantity, got {type(df)}"
@@ -424,22 +424,22 @@ class TestJacobianUnits:
     def test_jacobian_plain_fast_path(self):
         """No Quantity inputs → plain result."""
         # nv
-        result = _drive(Jacobian, lambda x: x ** 2, np.array([3.0]))
+        result = _drive(jacobian, lambda x: x ** 2, np.array([3.0]))
         assert result is not None
         assert not isinstance(result["df"], Quantity)
 
 
 class TestHessianUnits:
-    """Phase 3 — Hessian with Quantity inputs."""
+    """Phase 3 — hessian with Quantity inputs."""
 
     def test_hessian_with_quantity_x(self):
-        """Hessian with Quantity x, plain f → x in result is wrapped."""
+        """hessian with Quantity x, plain f → x in result is wrapped."""
         # f doesn't accept Quantity (uses indexing), so probe falls back.
         # x in the result dict should still be wrapped with input dims.
         # nv
         f = lambda x: x[0] ** 2 + x[1] ** 2
         x0 = Quantity(np.array([1.0, 2.0]), {metre: 1})
-        result = _drive(Hessian, f, x0)
+        result = _drive(hessian, f, x0)
         assert result is not None
         # ddf is plain (f doesn't propagate units)
         ddf = result["ddf"]
@@ -449,6 +449,6 @@ class TestHessianUnits:
     def test_hessian_plain_fast_path(self):
         """No Quantity inputs → plain result."""
         # nv
-        result = _drive(Hessian, lambda x: x[0]**2 + x[1]**2, np.array([1.0, 2.0]))
+        result = _drive(hessian, lambda x: x[0]**2 + x[1]**2, np.array([1.0, 2.0]))
         assert result is not None
         assert not isinstance(result["ddf"], Quantity)

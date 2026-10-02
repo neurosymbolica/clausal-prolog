@@ -5,13 +5,13 @@
 The `sklearn` module provides predicates for machine learning via [scikit-learn](https://scikit-learn.org/). Data flows through tagged tuples — `Est`, `Dataset`, `Fitted`, `Split` — that unify naturally with Clausal's logic variables.
 
 ```clausal
--import_from(sklearn, [Est, Dataset, Fitted, LoadDataset, Fit, Predict, Score])
+-import_from(sklearn, [Est, Dataset, Fitted, load_dataset, fit, predict, score])
 
 train_and_predict(ALGO, DATASET, PREDS) <- (
-    LoadDataset(DATASET, D),
-    Fit(Est(ALGO, {}), D, F),
+    load_dataset(DATASET, D),
+    fit(Est(ALGO, {}), D, F),
     D is ("Dataset", X, Y),
-    Predict(F, X, PREDS)
+    predict(F, X, PREDS)
 )
 ```
 
@@ -21,9 +21,9 @@ Or via [module import](import.md):
 -import_module(sklearn)
 
 main <- (
-    sklearn.LoadDataset("iris", D),
-    sklearn.Fit(sklearn.Est("random_forest", {"n_estimators": 10}), D, F),
-    sklearn.Score(F, D, S),
+    sklearn.load_dataset("iris", D),
+    sklearn.fit(sklearn.Est("random_forest", {"n_estimators": 10}), D, F),
+    sklearn.score(F, D, S),
     ++print(f"Accuracy: {S}")
 )
 ```
@@ -35,15 +35,15 @@ main <- (
 ```clausal
 -import_from(sklearn, [
     Est, Dataset, Fitted, Split,
-    Algorithm, DefaultParams, ParamKey, MakeEst, Param,
-    LoadDataset, MakeDataset, SplitData, KFoldSplit, StratifiedSplit,
-    Fit, Predict, Transform, FitTransform, PredictProba, DecisionFunction,
-    Score, Metric, CrossValScore, CrossValidate,
-    ConfusionMatrix, ClassificationReport,
-    Pipeline, PipelineStep,
-    GridSearch, RandomSearch, BestParams, BestScore, SearchResults,
-    Learned, EncodeLabels, Binarize, Normalize, PolynomialFeatures,
-    SaveFitted, LoadFitted,
+    algorithm, default_params, param_key, make_est, param,
+    load_dataset, make_dataset, split_data, k_fold_split, stratified_split,
+    fit, predict, transform, fit_transform, predict_proba, decision_function,
+    score, metric, cross_val_score, cross_validate,
+    confusion_matrix, classification_report,
+    pipeline, pipeline_step,
+    grid_search, random_search, best_params, best_score, search_results,
+    learned, encode_labels, binarize, normalize, polynomial_features,
+    save_fitted, load_fitted,
     kfold
 ])
 ```
@@ -69,15 +69,15 @@ The module uses tagged tuples as its term language. These are plain Python tuple
 
 ## Algorithms
 
-The module ships with a registry of named algorithms. Use `Algorithm/2` to enumerate or check role membership.
+The module ships with a registry of named algorithms. Use `algorithm/2` to enumerate or check role membership.
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `Algorithm(Algo, Role)` | `?Algo, ?Role` | Enumerate or check algorithm/role pairs |
-| `DefaultParams(Algo, Params)` | `+Algo, -Params` | Default hyperparameters for an algorithm |
-| `ParamKey(Algo, Key, Domain)` | `+Algo, -Key, -Domain` | Enumerate valid parameter keys |
-| `MakeEst(Algo, Params, Est)` | `+Algo, +Params, -Est` | Construct `Est` term, filling defaults |
-| `Param(EstOrFitted, Key, Value)` | `+EstOrFitted, +Key, -Value` | Read a hyperparameter value |
+| `algorithm(Algo, Role)` | `?Algo, ?Role` | Enumerate or check algorithm/role pairs |
+| `default_params(Algo, Params)` | `+Algo, -Params` | Default hyperparameters for an algorithm |
+| `param_key(Algo, Key, Domain)` | `+Algo, -Key, -Domain` | Enumerate valid parameter keys |
+| `make_est(Algo, Params, Est)` | `+Algo, +Params, -Est` | Construct `Est` term, filling defaults |
+| `param(EstOrFitted, Key, Value)` | `+EstOrFitted, +Key, -Value` | Read a hyperparameter value |
 
 ??? example "Supported algorithms"
 
@@ -99,12 +99,12 @@ The module ships with a registry of named algorithms. Use `Algorithm/2` to enume
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `LoadDataset(Name, Dataset)` | `+Name, -Dataset` | Load a built-in dataset (`"iris"`, `"diabetes"`, `"wine"`, `"breast_cancer"`, `"digits"`, `"linnerud"`) |
-| `MakeDataset(Kind, Opts, Dataset)` | `+Kind, +Opts, -Dataset` | Generate synthetic data (`"classification"`, `"regression"`, `"blobs"`, `"moons"`, `"circles"`) |
-| `SplitData(Dataset, TestSize, Split)` | `+Dataset, +TestSize, -Split` | Train/test split |
-| `SplitData(Dataset, TestSize, Seed, Split)` | `+Dataset, +TestSize, +Seed, -Split` | Reproducible split |
-| `KFoldSplit(Dataset, K, Split)` | `+Dataset, +K, -Split` | K-fold splits via backtracking |
-| `StratifiedSplit(Dataset, K, Split)` | `+Dataset, +K, -Split` | Stratified K-fold via backtracking |
+| `load_dataset(Name, Dataset)` | `+Name, -Dataset` | Load a built-in dataset (`"iris"`, `"diabetes"`, `"wine"`, `"breast_cancer"`, `"digits"`, `"linnerud"`) |
+| `make_dataset(Kind, Opts, Dataset)` | `+Kind, +Opts, -Dataset` | Generate synthetic data (`"classification"`, `"regression"`, `"blobs"`, `"moons"`, `"circles"`) |
+| `split_data(Dataset, TestSize, Split)` | `+Dataset, +TestSize, -Split` | Train/test split |
+| `split_data(Dataset, TestSize, Seed, Split)` | `+Dataset, +TestSize, +Seed, -Split` | Reproducible split |
+| `k_fold_split(Dataset, K, Split)` | `+Dataset, +K, -Split` | K-fold splits via backtracking |
+| `stratified_split(Dataset, K, Split)` | `+Dataset, +K, -Split` | Stratified K-fold via backtracking |
 
 ```clausal
 --8<-- "tests/fixtures/docs/sklearn_sigs.txt:data_loading_examples"
@@ -116,13 +116,13 @@ The module ships with a registry of named algorithms. Use `Algorithm/2` to enume
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `Fit(Est, Dataset, Fitted)` | `+Est, +Dataset, -Fitted` | Fit estimator on a dataset |
-| `Fit(Est, X, Y, Fitted)` | `+Est, +X, +Y, -Fitted` | Fit on raw feature matrix + target |
-| `Predict(Fitted, X, Preds)` | `+Fitted, +X, -Preds` | Predict from fitted model |
-| `Transform(Fitted, X, Transformed)` | `+Fitted, +X, -Transformed` | Transform features |
-| `FitTransform(Est, Dataset, Transformed, Fitted)` | `+Est, +Dataset, -Transformed, -Fitted` | Fit + transform in one step |
-| `PredictProba(Fitted, X, Proba)` | `+Fitted, +X, -Proba` | Class probability matrix |
-| `DecisionFunction(Fitted, X, Scores)` | `+Fitted, +X, -Scores` | Decision function scores |
+| `fit(Est, Dataset, Fitted)` | `+Est, +Dataset, -Fitted` | fit estimator on a dataset |
+| `fit(Est, X, Y, Fitted)` | `+Est, +X, +Y, -Fitted` | fit on raw feature matrix + target |
+| `predict(Fitted, X, Preds)` | `+Fitted, +X, -Preds` | predict from fitted model |
+| `transform(Fitted, X, Transformed)` | `+Fitted, +X, -Transformed` | transform features |
+| `fit_transform(Est, Dataset, Transformed, Fitted)` | `+Est, +Dataset, -Transformed, -Fitted` | fit + transform in one step |
+| `predict_proba(Fitted, X, Proba)` | `+Fitted, +X, -Proba` | Class probability matrix |
+| `decision_function(Fitted, X, Scores)` | `+Fitted, +X, -Scores` | Decision function scores |
 
 ```clausal
 --8<-- "tests/fixtures/docs/sklearn_sigs.txt:fit_predict_examples"
@@ -134,14 +134,14 @@ The module ships with a registry of named algorithms. Use `Algorithm/2` to enume
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `Score(Fitted, Dataset, S)` | `+Fitted, +Dataset, -S` | Default metric score |
-| `Score(Fitted, Dataset, Metric, S)` | `+Fitted, +Dataset, +Metric, -S` | Score with explicit metric |
-| `Metric(Name, YTrue, YPred, S)` | `+Name, +YTrue, +YPred, -S` | Compute a named metric |
-| `CrossValScore(Est, Dataset, CV, Scores)` | `+Est, +Dataset, +CV, -Scores` | Cross-validation scores |
-| `CrossValScore(Est, Dataset, CV, Metric, Scores)` | `+Est, +Dataset, +CV, +Metric, -Scores` | CV with explicit metric |
-| `CrossValidate(Est, Dataset, CV, Metrics, Results)` | `+Est, +Dataset, +CV, +Metrics, -Results` | Multi-metric cross-validation |
-| `ConfusionMatrix(YTrue, YPred, Matrix)` | `+YTrue, +YPred, -Matrix` | Confusion matrix |
-| `ClassificationReport(YTrue, YPred, Classes, Report)` | `+YTrue, +YPred, +Classes, -Report` | Per-class precision/recall/F1 |
+| `score(Fitted, Dataset, S)` | `+Fitted, +Dataset, -S` | Default metric score |
+| `score(Fitted, Dataset, metric, S)` | `+Fitted, +Dataset, +metric, -S` | score with explicit metric |
+| `metric(Name, YTrue, YPred, S)` | `+Name, +YTrue, +YPred, -S` | Compute a named metric |
+| `cross_val_score(Est, Dataset, CV, Scores)` | `+Est, +Dataset, +CV, -Scores` | Cross-validation scores |
+| `cross_val_score(Est, Dataset, CV, metric, Scores)` | `+Est, +Dataset, +CV, +metric, -Scores` | CV with explicit metric |
+| `cross_validate(Est, Dataset, CV, Metrics, Results)` | `+Est, +Dataset, +CV, +Metrics, -Results` | Multi-metric cross-validation |
+| `confusion_matrix(YTrue, YPred, Matrix)` | `+YTrue, +YPred, -Matrix` | Confusion matrix |
+| `classification_report(YTrue, YPred, Classes, Report)` | `+YTrue, +YPred, +Classes, -Report` | Per-class precision/recall/F1 |
 
 Available metric names: `"accuracy"`, `"f1"`, `"f1_weighted"`, `"f1_macro"`, `"precision"`, `"recall"`, `"roc_auc"`, `"r2"`, `"mse"`, `"mae"`, `"rmse"`.
 
@@ -157,8 +157,8 @@ Available metric names: `"accuracy"`, `"f1"`, `"f1_weighted"`, `"f1_macro"`, `"p
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `Pipeline(Steps, PipeEst)` | `+Steps, -PipeEst` | Build a pipeline `Est` from named steps |
-| `PipelineStep(Fitted, StepName, StepFitted)` | `+Fitted, +StepName, -StepFitted` | Extract a fitted step from a fitted pipeline |
+| `pipeline(Steps, PipeEst)` | `+Steps, -PipeEst` | Build a pipeline `Est` from named steps |
+| `pipeline_step(Fitted, StepName, StepFitted)` | `+Fitted, +StepName, -StepFitted` | Extract a fitted step from a fitted pipeline |
 
 Steps are a list of `(name, Est(...))` tuples:
 
@@ -172,12 +172,12 @@ Steps are a list of `(name, Est(...))` tuples:
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `GridSearch(Est, ParamGrid, Dataset, CV, BestFitted)` | `+Est, +Grid, +Data, +CV, -Best` | Exhaustive grid search |
-| `GridSearch(Est, ParamGrid, Dataset, CV, Metric, BestFitted)` | `+Est, +Grid, +Data, +CV, +Metric, -Best` | Grid search with explicit metric |
-| `RandomSearch(Est, ParamDists, Dataset, CV, NIter, BestFitted)` | `+Est, +Dists, +Data, +CV, +N, -Best` | Randomized search |
-| `BestParams(BestFitted, Params)` | `+BestFitted, -Params` | Best parameters from search |
-| `BestScore(BestFitted, Score)` | `+BestFitted, -Score` | Best CV score from search |
-| `SearchResults(BestFitted, Results)` | `+BestFitted, -Results` | Full CV results dict |
+| `grid_search(Est, ParamGrid, Dataset, CV, BestFitted)` | `+Est, +Grid, +Data, +CV, -Best` | Exhaustive grid search |
+| `grid_search(Est, ParamGrid, Dataset, CV, metric, BestFitted)` | `+Est, +Grid, +Data, +CV, +metric, -Best` | Grid search with explicit metric |
+| `random_search(Est, ParamDists, Dataset, CV, NIter, BestFitted)` | `+Est, +Dists, +Data, +CV, +N, -Best` | Randomized search |
+| `best_params(BestFitted, Params)` | `+BestFitted, -Params` | Best parameters from search |
+| `best_score(BestFitted, score)` | `+BestFitted, -score` | Best CV score from search |
+| `search_results(BestFitted, Results)` | `+BestFitted, -Results` | Full CV results dict |
 
 ```clausal
 --8<-- "tests/fixtures/docs/sklearn_sigs.txt:grid_search_example"
@@ -185,11 +185,11 @@ Steps are a list of `(name, Est(...))` tuples:
 
 ---
 
-## Learned attributes
+## learned attributes
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `Learned(Fitted, Attr, Value)` | `+Fitted, +Attr, -Value` | Read a learned attribute (e.g. `"feature_importances"`, `"coef"`, `"n_features_in"`, `"mean"`) |
+| `learned(Fitted, Attr, Value)` | `+Fitted, +Attr, -Value` | Read a learned attribute (e.g. `"feature_importances"`, `"coef"`, `"n_features_in"`, `"mean"`) |
 
 ```clausal
 --8<-- "tests/fixtures/docs/sklearn_sigs.txt:learned_example"
@@ -201,10 +201,10 @@ Steps are a list of `(name, Est(...))` tuples:
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `EncodeLabels(Labels, Encoded, Mapping)` | `+Labels, -Encoded, -Mapping` | label encoding |
-| `Binarize(X, Threshold, Result)` | `+X, +Threshold, -Result` | Threshold to 0/1 |
-| `Normalize(X, Norm, Result)` | `+X, +Norm, -Result` | Row-wise normalization (`"l1"`, `"l2"`, `"max"`) |
-| `PolynomialFeatures(X, Degree, Result)` | `+X, +Degree, -Result` | Generate polynomial features |
+| `encode_labels(Labels, Encoded, Mapping)` | `+Labels, -Encoded, -Mapping` | label encoding |
+| `binarize(X, Threshold, Result)` | `+X, +Threshold, -Result` | Threshold to 0/1 |
+| `normalize(X, Norm, Result)` | `+X, +Norm, -Result` | Row-wise normalization (`"l1"`, `"l2"`, `"max"`) |
+| `polynomial_features(X, Degree, Result)` | `+X, +Degree, -Result` | Generate polynomial features |
 
 ---
 
@@ -212,8 +212,8 @@ Steps are a list of `(name, Est(...))` tuples:
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `SaveFitted(Fitted, Path)` | `+Fitted, +Path` | Persist a fitted model to disk (joblib) |
-| `LoadFitted(Path, Fitted)` | `+Path, -Fitted` | Load a persisted model |
+| `save_fitted(Fitted, Path)` | `+Fitted, +Path` | Persist a fitted model to disk (joblib) |
+| `load_fitted(Path, Fitted)` | `+Path, -Fitted` | Load a persisted model |
 
 ---
 
@@ -223,7 +223,7 @@ Steps are a list of `(name, Est(...))` tuples:
     --8<-- "tests/fixtures/docs/sklearn_sigs.txt:complete_workflow"
     ```
 
-??? example "Pipeline with grid search"
+??? example "pipeline with grid search"
 
     ```clausal
     --8<-- "tests/fixtures/docs/sklearn_sigs.txt:pipeline_grid_search"

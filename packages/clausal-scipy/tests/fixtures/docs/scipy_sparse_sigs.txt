@@ -1,136 +1,136 @@
 # === Import ===
 
 --8<-- [start:import]
--import_from(scipy_sparse, [MakeCSR, MakeCSC, MakeCOO, MakeDiagonals, MakeEye, ...])
+-import_from(scipy_sparse, [make_csr, make_csc, make_coo, make_diagonals, make_eye, ...])
 --8<-- [end:import]
 
 --8<-- [start:import_ex2]
--import_from(py.scipy_sparse, [MakeCSR, ...])
+-import_from(py.scipy_sparse, [make_csr, ...])
 --8<-- [end:import_ex2]
 
 
 # === Tier 3 — Construction ===
 
 --8<-- [start:makecsr]
-MakeCSR(DATA, INDICES, INDPTR, RESULT)
-MakeCSR(DATA, INDICES, INDPTR, SHAPE, RESULT)
-MakeCSR(DATA, INDICES, INDPTR, SHAPE, DTYPE, RESULT)
+make_csr(DATA, INDICES, INDPTR, RESULT)
+make_csr(DATA, INDICES, INDPTR, SHAPE, RESULT)
+make_csr(DATA, INDICES, INDPTR, SHAPE, DTYPE, RESULT)
 --8<-- [end:makecsr]
 
 --8<-- [start:makecsr_ex2]
 DATA is ++([1.0, 2.0, 3.0]),
 IDX  is ++([0, 1, 2]),
 PTR  is ++([0, 1, 2, 3]),
-MakeCSR(DATA, IDX, PTR, H)
+make_csr(DATA, IDX, PTR, H)
 --8<-- [end:makecsr_ex2]
 
 --8<-- [start:makecsc]
-MakeCSC(DATA, INDICES, INDPTR, RESULT)
-MakeCSC(DATA, INDICES, INDPTR, SHAPE, RESULT)
-MakeCSC(DATA, INDICES, INDPTR, SHAPE, DTYPE, RESULT)
+make_csc(DATA, INDICES, INDPTR, RESULT)
+make_csc(DATA, INDICES, INDPTR, SHAPE, RESULT)
+make_csc(DATA, INDICES, INDPTR, SHAPE, DTYPE, RESULT)
 --8<-- [end:makecsc]
 
 --8<-- [start:makecoo]
-MakeCOO(DATA, ROW, COL, RESULT)
-MakeCOO(DATA, ROW, COL, SHAPE, RESULT)
+make_coo(DATA, ROW, COL, RESULT)
+make_coo(DATA, ROW, COL, SHAPE, RESULT)
 --8<-- [end:makecoo]
 
 --8<-- [start:makecoo_ex2]
 DATA is ++([1.0, 2.0]),
 ROW  is ++([0, 1]),
 COL  is ++([1, 0]),
-MakeCOO(DATA, ROW, COL, ++(tuple([2, 2])), H)
+make_coo(DATA, ROW, COL, ++(tuple([2, 2])), H)
 --8<-- [end:makecoo_ex2]
 
 --8<-- [start:makediagonals]
-MakeDiagonals(DIAGONALS, RESULT)
-MakeDiagonals(DIAGONALS, OFFSETS, RESULT)
-MakeDiagonals(DIAGONALS, OFFSETS, SHAPE, RESULT)
+make_diagonals(DIAGONALS, RESULT)
+make_diagonals(DIAGONALS, OFFSETS, RESULT)
+make_diagonals(DIAGONALS, OFFSETS, SHAPE, RESULT)
 --8<-- [end:makediagonals]
 
 --8<-- [start:makediagonals_ex2]
-MakeDiagonals(++([1.0, 2.0, 3.0]), H)        % 3x3 identity-like diagonal
-MakeDiagonals(++([1.0, 2.0]), 1, ++(tuple([3, 3])), H)   % superdiagonal
+make_diagonals(++([1.0, 2.0, 3.0]), H)        % 3x3 identity-like diagonal
+make_diagonals(++([1.0, 2.0]), 1, ++(tuple([3, 3])), H)   % superdiagonal
 --8<-- [end:makediagonals_ex2]
 
 --8<-- [start:makeeye]
-MakeEye(N, RESULT)
-MakeEye(N, M, RESULT)
-MakeEye(N, M, K, RESULT)
+make_eye(N, RESULT)
+make_eye(N, M, RESULT)
+make_eye(N, M, K, RESULT)
 --8<-- [end:makeeye]
 
 --8<-- [start:makeeye_ex2]
-MakeEye(4, H),
-ToDense(H, D)   % D is the 4x4 identity matrix
+make_eye(4, H),
+to_dense(H, D)   % D is the 4x4 identity matrix
 --8<-- [end:makeeye_ex2]
 
 
 # === Tier 3 — Conversions ===
 
 --8<-- [start:todense]
-ToDense(HANDLE, RESULT)
-ToDense(HANDLE, ORDER, RESULT)
+to_dense(HANDLE, RESULT)
+to_dense(HANDLE, ORDER, RESULT)
 --8<-- [end:todense]
 
 --8<-- [start:fromdense]
-FromDense(DENSE, RESULT)
-FromDense(DENSE, FORMAT, RESULT)
+from_dense(DENSE, RESULT)
+from_dense(DENSE, FORMAT, RESULT)
 --8<-- [end:fromdense]
 
 --8<-- [start:fromdense_ex2]
 A is ++([[1.0, 0.0], [0.0, 2.0]]),
-FromDense(A, 'csc', H)
+from_dense(A, 'csc', H)
 --8<-- [end:fromdense_ex2]
 
 
 # === Tier 3 — Inspection ===
 
 --8<-- [start:shape]
-Shape(HANDLE, RESULT)
+shape(HANDLE, RESULT)
 --8<-- [end:shape]
 
 --8<-- [start:shape_ex2]
-Shape(H, S),
+shape(H, S),
 R is ++(S[0]),
 C is ++(S[1])
 --8<-- [end:shape_ex2]
 
 --8<-- [start:nonzerocount]
-NonzeroCount(HANDLE, RESULT)
+nonzero_count(HANDLE, RESULT)
 --8<-- [end:nonzerocount]
 
 
 # === scipy.sparse.linalg ===
 
 --8<-- [start:solve]
-Solve(A, B, RESULT)
-Solve(A, B, PERMC_SPEC, RESULT)
-Solve(A, B, PERMC_SPEC, USE_UMFPACK, RESULT)
+solve(A, B, RESULT)
+solve(A, B, PERMC_SPEC, RESULT)
+solve(A, B, PERMC_SPEC, USE_UMFPACK, RESULT)
 --8<-- [end:solve]
 
 --8<-- [start:solve_ex2]
-MakeCSR(DATA, IDX, PTR, ++(tuple([3, 3])), A),
-Solve(A, B, X),
-Free(A)
+make_csr(DATA, IDX, PTR, ++(tuple([3, 3])), A),
+solve(A, B, X),
+free(A)
 --8<-- [end:solve_ex2]
 
 --8<-- [start:eigendecomposehermitian]
-EigenDecomposeHermitian(A, RESULT)
-EigenDecomposeHermitian(A, K, RESULT)
+eigen_decompose_hermitian(A, RESULT)
+eigen_decompose_hermitian(A, K, RESULT)
 --8<-- [end:eigendecomposehermitian]
 
 --8<-- [start:eigendecomposehermitian_ex2]
-EigenDecomposeHermitian(H, 3, R),
+eigen_decompose_hermitian(H, 3, R),
 EV is ++(R['eigenvalues'])    % 3 smallest eigenvalues
 --8<-- [end:eigendecomposehermitian_ex2]
 
 --8<-- [start:singularvaluedecompose]
-SingularValueDecompose(A, RESULT)
-SingularValueDecompose(A, K, RESULT)
+singular_value_decompose(A, RESULT)
+singular_value_decompose(A, K, RESULT)
 --8<-- [end:singularvaluedecompose]
 
 --8<-- [start:singularvaluedecompose_ex2]
-SingularValueDecompose(H, 2, R),
+singular_value_decompose(H, 2, R),
 S is ++(R['s'])    % 2 largest singular values
 --8<-- [end:singularvaluedecompose_ex2]
 
@@ -138,5 +138,5 @@ S is ++(R['s'])    % 2 largest singular values
 # === Lifecycle ===
 
 --8<-- [start:free]
-Free(HANDLE)
+free(HANDLE)
 --8<-- [end:free]

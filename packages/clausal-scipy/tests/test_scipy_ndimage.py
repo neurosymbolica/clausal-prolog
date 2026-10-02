@@ -17,20 +17,20 @@ import numpy as np
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py.scipy_ndimage import (
-    GaussianFilter,
-    UniformFilter,
-    MedianFilter,
-    Convolve,
+    gaussian_filter,
+    uniform_filter,
+    median_filter,
+    convolve,
     label,
-    BinaryErosion,
-    BinaryDilation,
-    BinaryOpening,
-    BinaryClosing,
-    Zoom,
-    Rotate,
-    Shift,
-    FindObjects,
-    CenterOfMass,
+    binary_erosion,
+    binary_dilation,
+    binary_opening,
+    binary_closing,
+    zoom,
+    rotate,
+    shift,
+    find_objects,
+    center_of_mass,
 )
 
 
@@ -67,14 +67,14 @@ class TestGaussianFilter:
         # Gaussian filter of constant array should return constant
         # nv
         inp = np.ones(10)
-        result = _drive(GaussianFilter, inp, 1.0)
+        result = _drive(gaussian_filter, inp, 1.0)
         assert result is not None
         assert np.allclose(result, 1.0, atol=1e-6)
 
     def test_output_same_shape(self):
         # nv
         inp = np.array([1.0, 2.0, 3.0, 2.0, 1.0])
-        result = _drive(GaussianFilter, inp, 1.0)
+        result = _drive(gaussian_filter, inp, 1.0)
         assert result is not None
         assert result.shape == inp.shape
 
@@ -83,14 +83,14 @@ class TestGaussianFilter:
         # nv
         inp = np.zeros(11)
         inp[5] = 10.0
-        result = _drive(GaussianFilter, inp, 1.0)
+        result = _drive(gaussian_filter, inp, 1.0)
         assert result is not None
         assert result[5] < 10.0
 
     def test_2d_constant_array(self):
         # nv
         inp = np.ones((5, 5))
-        result = _drive(GaussianFilter, inp, 1.0)
+        result = _drive(gaussian_filter, inp, 1.0)
         assert result is not None
         assert result.shape == (5, 5)
         # centre value should remain close to 1.0
@@ -99,7 +99,7 @@ class TestGaussianFilter:
     def test_wrong_result_fails(self):
         # nv
         inp = np.ones(5)
-        assert _fails_with_wrong_result(GaussianFilter, inp, 1.0)
+        assert _fails_with_wrong_result(gaussian_filter, inp, 1.0)
 
 
 # ── TestUniformFilter ───────────────────────────────────────────────
@@ -108,7 +108,7 @@ class TestUniformFilter:
     def test_constant_array_unchanged(self):
         # nv
         inp = np.full(7, 3.0)
-        result = _drive(UniformFilter, inp)
+        result = _drive(uniform_filter, inp)
         assert result is not None
         assert np.allclose(result, 3.0, atol=1e-10)
 
@@ -116,8 +116,8 @@ class TestUniformFilter:
         # uniform_filter with size=3: centre of [1,2,3,4,5] → mean(1,2,3)=2
         # nv
         inp = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
-        result_default = _drive(UniformFilter, inp)
-        result_size3 = _drive(UniformFilter, inp, 3)
+        result_default = _drive(uniform_filter, inp)
+        result_size3 = _drive(uniform_filter, inp, 3)
         assert result_default is not None
         assert result_size3 is not None
         assert np.allclose(result_default, result_size3, atol=1e-10)
@@ -125,21 +125,21 @@ class TestUniformFilter:
     def test_with_explicit_size(self):
         # nv
         inp = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
-        result = _drive(UniformFilter, inp, 5)
+        result = _drive(uniform_filter, inp, 5)
         assert result is not None
         assert len(result) == 5
 
     def test_output_same_shape(self):
         # nv
         inp = np.arange(9.0).reshape(3, 3)
-        result = _drive(UniformFilter, inp)
+        result = _drive(uniform_filter, inp)
         assert result is not None
         assert result.shape == (3, 3)
 
     def test_wrong_result_fails(self):
         # nv
         inp = np.ones(5)
-        assert _fails_with_wrong_result(UniformFilter, inp)
+        assert _fails_with_wrong_result(uniform_filter, inp)
 
 
 # ── TestMedianFilter ────────────────────────────────────────────────
@@ -148,7 +148,7 @@ class TestMedianFilter:
     def test_constant_array_unchanged(self):
         # nv
         inp = np.full(7, 5.0)
-        result = _drive(MedianFilter, inp, 3)
+        result = _drive(median_filter, inp, 3)
         assert result is not None
         assert np.allclose(result, 5.0, atol=1e-10)
 
@@ -156,21 +156,21 @@ class TestMedianFilter:
         # median filter removes single-sample spike
         # nv
         inp = np.array([1.0, 1.0, 100.0, 1.0, 1.0])
-        result = _drive(MedianFilter, inp, 3)
+        result = _drive(median_filter, inp, 3)
         assert result is not None
         assert abs(result[2] - 1.0) < 1e-6
 
     def test_output_same_shape(self):
         # nv
         inp = np.arange(9.0).reshape(3, 3)
-        result = _drive(MedianFilter, inp, 3)
+        result = _drive(median_filter, inp, 3)
         assert result is not None
         assert result.shape == (3, 3)
 
     def test_wrong_result_fails(self):
         # nv
         inp = np.ones(5)
-        assert _fails_with_wrong_result(MedianFilter, inp, 3)
+        assert _fails_with_wrong_result(median_filter, inp, 3)
 
 
 # ── TestConvolve ────────────────────────────────────────────────────
@@ -181,7 +181,7 @@ class TestConvolve:
         # nv
         inp = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
         kernel = np.array([0.0, 1.0, 0.0])
-        result = _drive(Convolve, inp, kernel)
+        result = _drive(convolve, inp, kernel)
         assert result is not None
         assert np.allclose(result, inp, atol=1e-10)
 
@@ -190,7 +190,7 @@ class TestConvolve:
         # nv
         inp = np.array([3.0, 3.0, 3.0, 3.0, 3.0])
         kernel = np.array([1.0 / 3, 1.0 / 3, 1.0 / 3])
-        result = _drive(Convolve, inp, kernel)
+        result = _drive(convolve, inp, kernel)
         assert result is not None
         assert abs(result[2] - 3.0) < 1e-10
 
@@ -200,7 +200,7 @@ class TestConvolve:
         kernel = np.array([[0.0, 0.0, 0.0],
                            [0.0, 1.0, 0.0],
                            [0.0, 0.0, 0.0]])
-        result = _drive(Convolve, inp, kernel)
+        result = _drive(convolve, inp, kernel)
         assert result is not None
         assert np.allclose(result, inp, atol=1e-10)
 
@@ -208,7 +208,7 @@ class TestConvolve:
         # nv
         inp = np.ones(8)
         kernel = np.ones(3) / 3.0
-        result = _drive(Convolve, inp, kernel)
+        result = _drive(convolve, inp, kernel)
         assert result is not None
         assert result.shape == inp.shape
 
@@ -216,7 +216,7 @@ class TestConvolve:
         # nv
         inp = np.ones(5)
         kernel = np.array([0.0, 1.0, 0.0])
-        assert _fails_with_wrong_result(Convolve, inp, kernel)
+        assert _fails_with_wrong_result(convolve, inp, kernel)
 
 
 # ── TestLabel ───────────────────────────────────────────────────────
@@ -270,7 +270,7 @@ class TestBinaryErosion:
         # erosion removes boundary pixels
         # nv
         inp = np.array([False, True, True, True, False])
-        result = _drive(BinaryErosion, inp)
+        result = _drive(binary_erosion, inp)
         assert result is not None
         assert bool(result[2]) is True
         assert bool(result[1]) is False
@@ -279,21 +279,21 @@ class TestBinaryErosion:
         # single isolated True should disappear
         # nv
         inp = np.array([False, False, True, False, False])
-        result = _drive(BinaryErosion, inp)
+        result = _drive(binary_erosion, inp)
         assert result is not None
         assert not any(result)
 
     def test_output_same_shape(self):
         # nv
         inp = np.ones((3, 3), dtype=bool)
-        result = _drive(BinaryErosion, inp)
+        result = _drive(binary_erosion, inp)
         assert result is not None
         assert result.shape == (3, 3)
 
     def test_wrong_result_fails(self):
         # nv
         inp = np.array([False, True, True, True, False])
-        assert _fails_with_wrong_result(BinaryErosion, inp)
+        assert _fails_with_wrong_result(binary_erosion, inp)
 
 
 # ── TestBinaryDilation ──────────────────────────────────────────────
@@ -302,7 +302,7 @@ class TestBinaryDilation:
     def test_single_pixel_dilates(self):
         # nv
         inp = np.array([False, False, True, False, False])
-        result = _drive(BinaryDilation, inp)
+        result = _drive(binary_dilation, inp)
         assert result is not None
         assert bool(result[1]) is True
         assert bool(result[2]) is True
@@ -311,21 +311,21 @@ class TestBinaryDilation:
     def test_all_false_stays_false(self):
         # nv
         inp = np.zeros(5, dtype=bool)
-        result = _drive(BinaryDilation, inp)
+        result = _drive(binary_dilation, inp)
         assert result is not None
         assert not any(result)
 
     def test_output_same_shape(self):
         # nv
         inp = np.array([False, True, False])
-        result = _drive(BinaryDilation, inp)
+        result = _drive(binary_dilation, inp)
         assert result is not None
         assert result.shape == inp.shape
 
     def test_wrong_result_fails(self):
         # nv
         inp = np.array([False, False, True, False, False])
-        assert _fails_with_wrong_result(BinaryDilation, inp)
+        assert _fails_with_wrong_result(binary_dilation, inp)
 
 
 # ── TestBinaryOpening ───────────────────────────────────────────────
@@ -335,7 +335,7 @@ class TestBinaryOpening:
         # isolated True (surrounded by False) should be removed by opening
         # nv
         inp = np.array([False, True, False, True, True, True, False])
-        result = _drive(BinaryOpening, inp)
+        result = _drive(binary_opening, inp)
         assert result is not None
         assert bool(result[1]) is False
 
@@ -343,21 +343,21 @@ class TestBinaryOpening:
         # large solid region should survive opening
         # nv
         inp = np.array([False, True, True, True, False])
-        result = _drive(BinaryOpening, inp)
+        result = _drive(binary_opening, inp)
         assert result is not None
         assert bool(result[2]) is True
 
     def test_output_same_shape(self):
         # nv
         inp = np.ones(7, dtype=bool)
-        result = _drive(BinaryOpening, inp)
+        result = _drive(binary_opening, inp)
         assert result is not None
         assert result.shape == inp.shape
 
     def test_wrong_result_fails(self):
         # nv
         inp = np.array([False, True, False, True, True, True, False])
-        assert _fails_with_wrong_result(BinaryOpening, inp)
+        assert _fails_with_wrong_result(binary_opening, inp)
 
 
 # ── TestBinaryClosing ───────────────────────────────────────────────
@@ -367,7 +367,7 @@ class TestBinaryClosing:
         # single-False gap between two True regions should be filled
         # nv
         inp = np.array([True, True, False, True, True])
-        result = _drive(BinaryClosing, inp)
+        result = _drive(binary_closing, inp)
         assert result is not None
         assert bool(result[2]) is True
 
@@ -375,21 +375,21 @@ class TestBinaryClosing:
         # binary_closing on a solid array: centre values stay True
         # nv
         inp = np.ones(5, dtype=bool)
-        result = _drive(BinaryClosing, inp)
+        result = _drive(binary_closing, inp)
         assert result is not None
         assert bool(result[2]) is True
 
     def test_output_same_shape(self):
         # nv
         inp = np.array([True, False, True])
-        result = _drive(BinaryClosing, inp)
+        result = _drive(binary_closing, inp)
         assert result is not None
         assert result.shape == inp.shape
 
     def test_wrong_result_fails(self):
         # nv
         inp = np.array([True, True, False, True, True])
-        assert _fails_with_wrong_result(BinaryClosing, inp)
+        assert _fails_with_wrong_result(binary_closing, inp)
 
 
 # ── TestZoom ────────────────────────────────────────────────────────
@@ -398,35 +398,35 @@ class TestZoom:
     def test_zoom_doubles_length(self):
         # nv
         inp = np.array([1.0, 2.0, 3.0])
-        result = _drive(Zoom, inp, 2.0)
+        result = _drive(zoom, inp, 2.0)
         assert result is not None
         assert len(result) == 6
 
     def test_zoom_halves_length(self):
         # nv
         inp = np.array([1.0, 1.0, 2.0, 2.0, 3.0, 3.0])
-        result = _drive(Zoom, inp, 0.5)
+        result = _drive(zoom, inp, 0.5)
         assert result is not None
         assert len(result) == 3
 
     def test_zoom_1_returns_same_shape(self):
         # nv
         inp = np.array([1.0, 2.0, 3.0, 4.0])
-        result = _drive(Zoom, inp, 1.0)
+        result = _drive(zoom, inp, 1.0)
         assert result is not None
         assert len(result) == 4
 
     def test_zoom_2d_shape(self):
         # nv
         inp = np.ones((3, 3))
-        result = _drive(Zoom, inp, 2.0)
+        result = _drive(zoom, inp, 2.0)
         assert result is not None
         assert result.shape == (6, 6)
 
     def test_wrong_result_fails(self):
         # nv
         inp = np.array([1.0, 2.0, 3.0])
-        assert _fails_with_wrong_result(Zoom, inp, 2.0)
+        assert _fails_with_wrong_result(zoom, inp, 2.0)
 
 
 # ── TestRotate ──────────────────────────────────────────────────────
@@ -435,21 +435,21 @@ class TestRotate:
     def test_zero_rotation_preserves_shape(self):
         # nv
         inp = np.array([[1.0, 2.0], [3.0, 4.0]])
-        result = _drive(Rotate, inp, 0.0)
+        result = _drive(rotate, inp, 0.0)
         assert result is not None
         assert result.shape == inp.shape
 
     def test_360_rotation_round_trip(self):
         # nv
         inp = np.array([[1.0, 0.0], [0.0, 1.0]])
-        result = _drive(Rotate, inp, 360.0)
+        result = _drive(rotate, inp, 360.0)
         assert result is not None
         assert result.shape == inp.shape
 
     def test_90_rotation_shape(self):
         # nv
         inp = np.ones((4, 6))
-        result = _drive(Rotate, inp, 90.0)
+        result = _drive(rotate, inp, 90.0)
         assert result is not None
         # with reshape=True (default) shape becomes (6, 4) after 90° rotation
         assert result.shape in ((4, 6), (6, 4))
@@ -457,7 +457,7 @@ class TestRotate:
     def test_wrong_result_fails(self):
         # nv
         inp = np.eye(3)
-        assert _fails_with_wrong_result(Rotate, inp, 0.0)
+        assert _fails_with_wrong_result(rotate, inp, 0.0)
 
 
 # ── TestShift ───────────────────────────────────────────────────────
@@ -466,7 +466,7 @@ class TestShift:
     def test_zero_shift_identity(self):
         # nv
         inp = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
-        result = _drive(Shift, inp, 0.0)
+        result = _drive(shift, inp, 0.0)
         assert result is not None
         assert np.allclose(result, inp, atol=1e-10)
 
@@ -475,28 +475,28 @@ class TestShift:
         # is filled with 0.0 by default (constant mode)
         # nv
         inp = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
-        result = _drive(Shift, inp, 1.0)
+        result = _drive(shift, inp, 1.0)
         assert result is not None
         assert len(result) == 5
 
     def test_2d_zero_shift(self):
         # nv
         inp = np.array([[1.0, 2.0], [3.0, 4.0]])
-        result = _drive(Shift, inp, [0.0, 0.0])
+        result = _drive(shift, inp, [0.0, 0.0])
         assert result is not None
         assert np.allclose(result, inp, atol=1e-10)
 
     def test_output_same_shape(self):
         # nv
         inp = np.arange(10.0)
-        result = _drive(Shift, inp, 2.0)
+        result = _drive(shift, inp, 2.0)
         assert result is not None
         assert result.shape == inp.shape
 
     def test_wrong_result_fails(self):
         # nv
         inp = np.array([1.0, 2.0, 3.0])
-        assert _fails_with_wrong_result(Shift, inp, 0.0)
+        assert _fails_with_wrong_result(shift, inp, 0.0)
 
 
 # ── TestFindObjects ─────────────────────────────────────────────────
@@ -506,28 +506,28 @@ class TestFindObjects:
         # labeled array with two components → two slice entries
         # nv
         inp = np.array([1, 1, 0, 2, 2])
-        result = _drive(FindObjects, inp)
+        result = _drive(find_objects, inp)
         assert result is not None
         assert len(result) == 2
 
     def test_single_region(self):
         # nv
         inp = np.array([0, 1, 1, 1, 0])
-        result = _drive(FindObjects, inp)
+        result = _drive(find_objects, inp)
         assert result is not None
         assert len(result) == 1
 
     def test_empty_returns_empty_list(self):
         # nv
         inp = np.zeros(5, dtype=int)
-        result = _drive(FindObjects, inp)
+        result = _drive(find_objects, inp)
         assert result is not None
         assert len(result) == 0
 
     def test_each_entry_is_tuple_of_slices(self):
         # nv
         inp = np.array([1, 1, 0, 2, 2])
-        result = _drive(FindObjects, inp)
+        result = _drive(find_objects, inp)
         assert result is not None
         for entry in result:
             assert isinstance(entry, tuple)
@@ -536,7 +536,7 @@ class TestFindObjects:
     def test_wrong_result_fails(self):
         # nv
         inp = np.array([1, 1, 0, 2, 2])
-        assert _fails_with_wrong_result(FindObjects, inp)
+        assert _fails_with_wrong_result(find_objects, inp)
 
 
 # ── TestCenterOfMass ────────────────────────────────────────────────
@@ -546,14 +546,14 @@ class TestCenterOfMass:
         # centre of mass of uniform 1D array is at middle index
         # nv
         inp = np.ones(5)
-        result = _drive(CenterOfMass, inp)
+        result = _drive(center_of_mass, inp)
         assert result is not None
         assert abs(result[0] - 2.0) < 1e-6
 
     def test_uniform_2d_centre(self):
         # nv
         inp = np.ones((5, 5))
-        result = _drive(CenterOfMass, inp)
+        result = _drive(center_of_mass, inp)
         assert result is not None
         assert abs(result[0] - 2.0) < 1e-6
         assert abs(result[1] - 2.0) < 1e-6
@@ -562,21 +562,21 @@ class TestCenterOfMass:
         # mass at right side → centre of mass > middle
         # nv
         inp = np.array([0.0, 0.0, 0.0, 1.0, 1.0])
-        result = _drive(CenterOfMass, inp)
+        result = _drive(center_of_mass, inp)
         assert result is not None
         assert result[0] > 2.0
 
     def test_single_peak(self):
         # nv
         inp = np.array([0.0, 0.0, 5.0, 0.0, 0.0])
-        result = _drive(CenterOfMass, inp)
+        result = _drive(center_of_mass, inp)
         assert result is not None
         assert abs(result[0] - 2.0) < 1e-10
 
     def test_wrong_result_fails(self):
         # nv
         inp = np.ones(5)
-        assert _fails_with_wrong_result(CenterOfMass, inp)
+        assert _fails_with_wrong_result(center_of_mass, inp)
 
 
 # ── Fixture integration ────────────────────────────────────────────────────

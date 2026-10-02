@@ -1,292 +1,292 @@
 -double_quotes(atom)
--import_from(scipy_special, [Erf, ErfComplement, NormalCdf, Logit,
-                              GammaInc, GammaIncComplement, BetaInc,
-                              Boxcox, Boxcox1p])
+-import_from(scipy_special, [erf, erf_complement, normal_cdf, logit,
+                              gamma_inc, gamma_inc_complement, beta_inc,
+                              boxcox, boxcox1p])
 
-# ── Erf ──────────────────────────────────────────────────────────────────
+# ── erf ──────────────────────────────────────────────────────────────────
 
 # forward
 test("erf forward at 0") <- (
-    Erf(0.0, Y),
+    erf(0.0, Y),
     DIFF is ++(abs(float(Y) - 0.0)),
     DIFF < 1e-10)  # nv
 
 test("erf forward at 0.5") <- (
-    Erf(0.5, Y),
+    erf(0.5, Y),
     DIFF is ++(abs(float(Y) - 0.5204998778)),
     DIFF < 1e-6)  # nv
 
 # backward (erfinv direction)
 test("erf backward from 0.0") <- (
-    Erf(X, 0.0),
+    erf(X, 0.0),
     DIFF is ++(abs(float(X) - 0.0)),
     DIFF < 1e-10)  # nv
 
 test("erf backward from 0.5") <- (
-    Erf(X, 0.5),
+    erf(X, 0.5),
     DIFF is ++(abs(float(X) - 0.4769362762)),
     DIFF < 1e-6)  # nv
 
 # both ground
 test("erf consistency agrees") <- (
-    Erf(0.5, ++(__import__('scipy.special', fromlist=['erf']).erf(0.5))))  # nv
+    erf(0.5, ++(__import__('scipy.special', fromlist=['erf']).erf(0.5))))  # nv
 
-test("erf consistency disagrees fails") <- (not Erf(0.5, 0.0))  # nv
+test("erf consistency disagrees fails") <- (not erf(0.5, 0.0))  # nv
 
 # both unbound
-test("erf both unbound fails") <- (not Erf(_, _))  # nv
+test("erf both unbound fails") <- (not erf(_, _))  # nv
 
 # round-trip
 test("erf round-trip") <- (
-    Erf(0.8, Y),
-    Erf(X, Y),
+    erf(0.8, Y),
+    erf(X, Y),
     DIFF is ++(abs(float(X) - 0.8)),
     DIFF < 1e-9)  # nv
 
-# ── ErfComplement ────────────────────────────────────────────────────────
+# ── erf_complement ────────────────────────────────────────────────────────
 
 # forward
 test("erfc forward at 0") <- (
-    ErfComplement(0.0, Y),
+    erf_complement(0.0, Y),
     DIFF is ++(abs(float(Y) - 1.0)),
     DIFF < 1e-10)  # nv
 
 test("erfc forward at 1") <- (
-    ErfComplement(1.0, Y),
+    erf_complement(1.0, Y),
     DIFF is ++(abs(float(Y) - 0.15729920705)),
     DIFF < 1e-6)  # nv
 
 # backward
 test("erfc backward from 1.0") <- (
-    ErfComplement(X, 1.0),
+    erf_complement(X, 1.0),
     DIFF is ++(abs(float(X) - 0.0)),
     DIFF < 1e-10)  # nv
 
 test("erfc backward from 0.5") <- (
-    ErfComplement(X, 0.5),
+    erf_complement(X, 0.5),
     DIFF is ++(abs(float(X) - 0.4769362762)),
     DIFF < 1e-6)  # nv
 
 # both ground
 test("erfc consistency agrees") <- (
-    ErfComplement(0.0, 1.0))  # nv
+    erf_complement(0.0, 1.0))  # nv
 
-test("erfc consistency disagrees fails") <- (not ErfComplement(0.0, 0.0))  # nv
+test("erfc consistency disagrees fails") <- (not erf_complement(0.0, 0.0))  # nv
 
 # both unbound
-test("erfc both unbound fails") <- (not ErfComplement(_, _))  # nv
+test("erfc both unbound fails") <- (not erf_complement(_, _))  # nv
 
 # round-trip
 test("erfc round-trip") <- (
-    ErfComplement(0.7, Y),
-    ErfComplement(X, Y),
+    erf_complement(0.7, Y),
+    erf_complement(X, Y),
     DIFF is ++(abs(float(X) - 0.7)),
     DIFF < 1e-9)  # nv
 
-# ── NormalCdf ────────────────────────────────────────────────────────────
+# ── normal_cdf ────────────────────────────────────────────────────────────
 
 # forward
 test("normalcdf forward at 0") <- (
-    NormalCdf(0.0, P),
+    normal_cdf(0.0, P),
     DIFF is ++(abs(float(P) - 0.5)),
     DIFF < 1e-10)  # nv
 
 test("normalcdf forward at 1.96") <- (
-    NormalCdf(1.96, P),
+    normal_cdf(1.96, P),
     P > 0.974,
     P < 0.976)  # nv
 
 # backward
 test("normalcdf backward 0.975") <- (
-    NormalCdf(X, 0.975),
+    normal_cdf(X, 0.975),
     DIFF is ++(abs(float(X) - 1.959963985)),
     DIFF < 1e-6)  # nv
 
 test("normalcdf backward 0.5 is 0") <- (
-    NormalCdf(X, 0.5),
+    normal_cdf(X, 0.5),
     DIFF is ++(abs(float(X) - 0.0)),
     DIFF < 1e-10)  # nv
 
 # both ground
 test("normalcdf consistency agrees") <- (
-    NormalCdf(0.0, 0.5))  # nv
+    normal_cdf(0.0, 0.5))  # nv
 
-test("normalcdf consistency disagrees fails") <- (not NormalCdf(0.0, 0.0))  # nv
+test("normalcdf consistency disagrees fails") <- (not normal_cdf(0.0, 0.0))  # nv
 
 # both unbound
-test("normalcdf both unbound fails") <- (not NormalCdf(_, _))  # nv
+test("normalcdf both unbound fails") <- (not normal_cdf(_, _))  # nv
 
 # round-trip
 test("normalcdf round-trip") <- (
-    NormalCdf(1.96, P),
-    NormalCdf(X, P),
+    normal_cdf(1.96, P),
+    normal_cdf(X, P),
     DIFF is ++(abs(float(X) - 1.96)),
     DIFF < 1e-9)  # nv
 
-# ── Logit ────────────────────────────────────────────────────────────────
+# ── logit ────────────────────────────────────────────────────────────────
 
 # forward
 test("logit forward at 0.5") <- (
-    Logit(0.5, Y),
+    logit(0.5, Y),
     DIFF is ++(abs(float(Y) - 0.0)),
     DIFF < 1e-10)  # nv
 
 test("logit forward at 0.75") <- (
-    Logit(0.75, Y),
+    logit(0.75, Y),
     Y > 1.09,
     Y < 1.10)  # nv
 
 # backward (sigmoid / expit)
 test("logit backward from 0.0") <- (
-    Logit(X, 0.0),
+    logit(X, 0.0),
     DIFF is ++(abs(float(X) - 0.5)),
     DIFF < 1e-10)  # nv
 
 test("logit backward from large positive") <- (
-    Logit(X, 100.0),
+    logit(X, 100.0),
     X > 0.9999)  # nv
 
 # both ground
 test("logit consistency agrees") <- (
-    Logit(0.5, 0.0))  # nv
+    logit(0.5, 0.0))  # nv
 
-test("logit consistency disagrees fails") <- (not Logit(0.5, 999.0))  # nv
+test("logit consistency disagrees fails") <- (not logit(0.5, 999.0))  # nv
 
 # both unbound
-test("logit both unbound fails") <- (not Logit(_, _))  # nv
+test("logit both unbound fails") <- (not logit(_, _))  # nv
 
 # round-trip
 test("logit round-trip") <- (
-    Logit(0.3, Y),
-    Logit(X, Y),
+    logit(0.3, Y),
+    logit(X, Y),
     DIFF is ++(abs(float(X) - 0.3)),
     DIFF < 1e-9)  # nv
 
-# ── GammaInc ─────────────────────────────────────────────────────────────
+# ── gamma_inc ─────────────────────────────────────────────────────────────
 
 # forward
 test("gammainc forward") <- (
-    GammaInc(2.0, 1.0, Y),
+    gamma_inc(2.0, 1.0, Y),
     DIFF is ++(abs(float(Y) - 0.2642411176)),
     DIFF < 1e-6)  # nv
 
 # backward
 test("gammainc backward") <- (
-    GammaInc(2.0, X, 0.5940),
+    gamma_inc(2.0, X, 0.5940),
     X > 1.9,
     X < 2.1)  # nv
 
 # both ground
 test("gammainc consistency agrees") <- (
-    GammaInc(2.0, 1.0, ++(__import__('scipy.special', fromlist=['gammainc']).gammainc(2.0, 1.0))))  # nv
+    gamma_inc(2.0, 1.0, ++(__import__('scipy.special', fromlist=['gammainc']).gammainc(2.0, 1.0))))  # nv
 
-test("gammainc consistency disagrees fails") <- (not GammaInc(2.0, 1.0, 0.0))  # nv
+test("gammainc consistency disagrees fails") <- (not gamma_inc(2.0, 1.0, 0.0))  # nv
 
 # both unbound (fixed A, but X and Y both unbound)
-test("gammainc both unbound fails") <- (not GammaInc(2.0, _, _))  # nv
+test("gammainc both unbound fails") <- (not gamma_inc(2.0, _, _))  # nv
 
 # round-trip
 test("gammainc round-trip") <- (
-    GammaInc(3.0, 2.0, Y),
-    GammaInc(3.0, X, Y),
+    gamma_inc(3.0, 2.0, Y),
+    gamma_inc(3.0, X, Y),
     DIFF is ++(abs(float(X) - 2.0)),
     DIFF < 1e-9)  # nv
 
-# ── GammaIncComplement ───────────────────────────────────────────────────
+# ── gamma_inc_complement ───────────────────────────────────────────────────
 
 # forward
 test("gammaincc forward") <- (
-    GammaIncComplement(2.0, 1.0, Y),
+    gamma_inc_complement(2.0, 1.0, Y),
     DIFF is ++(abs(float(Y) - 0.7357588824)),
     DIFF < 1e-6)  # nv
 
 # backward
 test("gammaincc backward") <- (
-    GammaIncComplement(2.0, X, 0.7357588824),
+    gamma_inc_complement(2.0, X, 0.7357588824),
     DIFF is ++(abs(float(X) - 1.0)),
     DIFF < 1e-6)  # nv
 
 # both ground
 test("gammaincc consistency agrees") <- (
-    GammaIncComplement(2.0, 1.0, ++(__import__('scipy.special', fromlist=['gammaincc']).gammaincc(2.0, 1.0))))  # nv
+    gamma_inc_complement(2.0, 1.0, ++(__import__('scipy.special', fromlist=['gammaincc']).gammaincc(2.0, 1.0))))  # nv
 
-test("gammaincc consistency disagrees fails") <- (not GammaIncComplement(2.0, 1.0, 0.0))  # nv
+test("gammaincc consistency disagrees fails") <- (not gamma_inc_complement(2.0, 1.0, 0.0))  # nv
 
 # both unbound
-test("gammaincc both unbound fails") <- (not GammaIncComplement(2.0, _, _))  # nv
+test("gammaincc both unbound fails") <- (not gamma_inc_complement(2.0, _, _))  # nv
 
 # round-trip
 test("gammaincc round-trip") <- (
-    GammaIncComplement(3.0, 2.0, Y),
-    GammaIncComplement(3.0, X, Y),
+    gamma_inc_complement(3.0, 2.0, Y),
+    gamma_inc_complement(3.0, X, Y),
     DIFF is ++(abs(float(X) - 2.0)),
     DIFF < 1e-9)  # nv
 
-# ── BetaInc ──────────────────────────────────────────────────────────────
+# ── beta_inc ──────────────────────────────────────────────────────────────
 
 # forward
 test("betainc forward") <- (
-    BetaInc(2.0, 3.0, 0.5, Y),
+    beta_inc(2.0, 3.0, 0.5, Y),
     DIFF is ++(abs(float(Y) - 0.6875)),
     DIFF < 1e-6)  # nv
 
 # backward
 test("betainc backward") <- (
-    BetaInc(2.0, 3.0, X, 0.6875),
+    beta_inc(2.0, 3.0, X, 0.6875),
     DIFF is ++(abs(float(X) - 0.5)),
     DIFF < 1e-6)  # nv
 
 # both ground
 test("betainc consistency agrees") <- (
-    BetaInc(2.0, 3.0, 0.5, ++(__import__('scipy.special', fromlist=['betainc']).betainc(2.0, 3.0, 0.5))))  # nv
+    beta_inc(2.0, 3.0, 0.5, ++(__import__('scipy.special', fromlist=['betainc']).betainc(2.0, 3.0, 0.5))))  # nv
 
-test("betainc consistency disagrees fails") <- (not BetaInc(2.0, 3.0, 0.5, 0.0))  # nv
+test("betainc consistency disagrees fails") <- (not beta_inc(2.0, 3.0, 0.5, 0.0))  # nv
 
 # both unbound
-test("betainc both unbound fails") <- (not BetaInc(2.0, 3.0, _, _))  # nv
+test("betainc both unbound fails") <- (not beta_inc(2.0, 3.0, _, _))  # nv
 
 # round-trip
 test("betainc round-trip") <- (
-    BetaInc(2.0, 3.0, 0.4, Y),
-    BetaInc(2.0, 3.0, X, Y),
+    beta_inc(2.0, 3.0, 0.4, Y),
+    beta_inc(2.0, 3.0, X, Y),
     DIFF is ++(abs(float(X) - 0.4)),
     DIFF < 1e-9)  # nv
 
-# ── Boxcox ───────────────────────────────────────────────────────────────
+# ── boxcox ───────────────────────────────────────────────────────────────
 
 # forward
 test("boxcox forward") <- (
-    Boxcox(0.5, 4.0, Y),
+    boxcox(0.5, 4.0, Y),
     DIFF is ++(abs(float(Y) - 2.0)),
     DIFF < 1e-9)  # nv
 
 # backward
 test("boxcox backward") <- (
-    Boxcox(0.5, X, 2.0),
+    boxcox(0.5, X, 2.0),
     DIFF is ++(abs(float(X) - 4.0)),
     DIFF < 1e-9)  # nv
 
 # both ground
 test("boxcox consistency agrees") <- (
-    Boxcox(0.5, 4.0, 2.0))  # nv
+    boxcox(0.5, 4.0, 2.0))  # nv
 
-test("boxcox consistency disagrees fails") <- (not Boxcox(0.5, 4.0, 999.0))  # nv
+test("boxcox consistency disagrees fails") <- (not boxcox(0.5, 4.0, 999.0))  # nv
 
 # both unbound
-test("boxcox both unbound fails") <- (not Boxcox(0.5, _, _))  # nv
+test("boxcox both unbound fails") <- (not boxcox(0.5, _, _))  # nv
 
 # round-trip
 test("boxcox round-trip") <- (
-    Boxcox(0.5, 3.0, Y),
-    Boxcox(0.5, X, Y),
+    boxcox(0.5, 3.0, Y),
+    boxcox(0.5, X, Y),
     DIFF is ++(abs(float(X) - 3.0)),
     DIFF < 1e-9)  # nv
 
-# ── Boxcox1p ─────────────────────────────────────────────────────────────
+# ── boxcox1p ─────────────────────────────────────────────────────────────
 
 # forward
 test("boxcox1p forward") <- (
-    Boxcox1p(2.0, 1.0, Y),
+    boxcox1p(2.0, 1.0, Y),
     EXPECTED is ++(__import__('scipy.special', fromlist=['boxcox1p']).boxcox1p(1.0, 2.0)),
     DIFF is ++(abs(float(Y) - float(EXPECTED))),
     DIFF < 1e-9)  # nv
@@ -294,22 +294,22 @@ test("boxcox1p forward") <- (
 # backward
 test("boxcox1p backward") <- (
     Y is ++(__import__('scipy.special', fromlist=['boxcox1p']).boxcox1p(1.0, 2.0)),
-    Boxcox1p(2.0, X, Y),
+    boxcox1p(2.0, X, Y),
     DIFF is ++(abs(float(X) - 1.0)),
     DIFF < 1e-9)  # nv
 
 # both ground
 test("boxcox1p consistency agrees") <- (
-    Boxcox1p(2.0, 1.0, ++(__import__('scipy.special', fromlist=['boxcox1p']).boxcox1p(1.0, 2.0))))  # nv
+    boxcox1p(2.0, 1.0, ++(__import__('scipy.special', fromlist=['boxcox1p']).boxcox1p(1.0, 2.0))))  # nv
 
-test("boxcox1p consistency disagrees fails") <- (not Boxcox1p(2.0, 1.0, 999.0))  # nv
+test("boxcox1p consistency disagrees fails") <- (not boxcox1p(2.0, 1.0, 999.0))  # nv
 
 # both unbound
-test("boxcox1p both unbound fails") <- (not Boxcox1p(2.0, _, _))  # nv
+test("boxcox1p both unbound fails") <- (not boxcox1p(2.0, _, _))  # nv
 
 # round-trip
 test("boxcox1p round-trip") <- (
-    Boxcox1p(2.0, 1.0, Y),
-    Boxcox1p(2.0, X, Y),
+    boxcox1p(2.0, 1.0, Y),
+    boxcox1p(2.0, X, Y),
     DIFF is ++(abs(float(X) - 1.0)),
     DIFF < 1e-9)  # nv

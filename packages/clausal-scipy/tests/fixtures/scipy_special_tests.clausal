@@ -1,225 +1,225 @@
 -double_quotes(atom)
--import_from(scipy_special, [Gamma, GammaLog, GammaSign, BetaLog, Digamma, Polygamma,
-    Factorial, Comb, Perm,
-    Erf, ErfComplement,
-    NormalCdf,
-    BesselJ, BesselY, BesselJReal, BesselYReal, BesselK, BesselI,
-    BesselJZeros, SphericalBesselJ,
-    EllipticK, EllipticE, EllipticKIncomplete, EllipticEIncomplete,
-    Hypergeometric1F1, Hypergeometric2F1, Hypergeometric0F1,
-    Entr, KlDivergence, LogSumExp,
-    AssocLegendre, LegendrePoly, ChebyshevT, ChebyshevU,
-    HermiteH, GeneralizedLaguerre,
-    CubeRoot, Exp10, Exp2, Logit, LambertW, XLogY, XLog1pY])
+-import_from(scipy_special, [gamma, gamma_log, gamma_sign, beta_log, digamma, polygamma,
+    factorial, comb, perm,
+    erf, erf_complement,
+    normal_cdf,
+    bessel_j, bessel_y, bessel_j_real, bessel_y_real, bessel_k, bessel_i,
+    bessel_j_zeros, spherical_bessel_j,
+    elliptic_k, elliptic_e, elliptic_k_incomplete, elliptic_e_incomplete,
+    hypergeometric_1f1, hypergeometric_2f1, hypergeometric_0f1,
+    entr, kl_divergence, log_sum_exp,
+    assoc_legendre, legendre_poly, chebyshev_t, chebyshev_u,
+    hermite_h, generalized_laguerre,
+    cube_root, exp10, exp2, logit, lambert_w, x_log_y, x_log1p_y])
 
-# ── Gamma function ───────────────────────────────────────────────────────────
+# ── gamma function ───────────────────────────────────────────────────────────
 
-test("gamma 5") <- (Gamma(5.0, R), DIFF is ++(abs(float(R) - 24.0)), DIFF < 1e-9)  # nv
+test("gamma 5") <- (gamma(5.0, R), DIFF is ++(abs(float(R) - 24.0)), DIFF < 1e-9)  # nv
 
-test("gamma 0.5 sqrt pi") <- (Gamma(0.5, R), DIFF is ++(abs(float(R) - 1.7724538509055159)), DIFF < 1e-9)  # nv
+test("gamma 0.5 sqrt pi") <- (gamma(0.5, R), DIFF is ++(abs(float(R) - 1.7724538509055159)), DIFF < 1e-9)  # nv
 
-# ── GammaLog and GammaSign ───────────────────────────────────────────────────
+# ── gamma_log and gamma_sign ───────────────────────────────────────────────────
 
-test("gammalog 10") <- (GammaLog(10.0, R), DIFF is ++(abs(float(R) - 12.801827480081469)), DIFF < 1e-9)  # nv
+test("gammalog 10") <- (gamma_log(10.0, R), DIFF is ++(abs(float(R) - 12.801827480081469)), DIFF < 1e-9)  # nv
 
-test("gammasign positive") <- (GammaSign(2.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
+test("gammasign positive") <- (gamma_sign(2.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
-test("gammasign negative") <- (GammaSign(-0.5, R), DIFF is ++(abs(float(R) - (-1.0))), DIFF < 1e-9)  # nv
+test("gammasign negative") <- (gamma_sign(-0.5, R), DIFF is ++(abs(float(R) - (-1.0))), DIFF < 1e-9)  # nv
 
-# ── BetaLog ──────────────────────────────────────────────────────────────────
+# ── beta_log ──────────────────────────────────────────────────────────────────
 
-test("betalog 2 3") <- (BetaLog(2.0, 3.0, R), DIFF is ++(abs(float(R) - (-2.4849066497880004))), DIFF < 1e-9)  # nv
+test("betalog 2 3") <- (beta_log(2.0, 3.0, R), DIFF is ++(abs(float(R) - (-2.4849066497880004))), DIFF < 1e-9)  # nv
 
-test("betalog 1 1 is zero") <- (BetaLog(1.0, 1.0, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
+test("betalog 1 1 is zero") <- (beta_log(1.0, 1.0, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
 
-# ── Digamma and Polygamma ────────────────────────────────────────────────────
+# ── digamma and polygamma ────────────────────────────────────────────────────
 
-test("digamma 1") <- (Digamma(1.0, R), DIFF is ++(abs(float(R) - (-0.5772156649015329))), DIFF < 1e-9)  # nv
+test("digamma 1") <- (digamma(1.0, R), DIFF is ++(abs(float(R) - (-0.5772156649015329))), DIFF < 1e-9)  # nv
 
-test("digamma 2") <- (Digamma(2.0, R), DIFF is ++(abs(float(R) - 0.4227843350984671)), DIFF < 1e-9)  # nv
+test("digamma 2") <- (digamma(2.0, R), DIFF is ++(abs(float(R) - 0.4227843350984671)), DIFF < 1e-9)  # nv
 
-test("polygamma 0 1") <- (Polygamma(0, 1.0, R), DIFF is ++(abs(float(R) - (-0.5772156649015329))), DIFF < 1e-9)  # nv
+test("polygamma 0 1") <- (polygamma(0, 1.0, R), DIFF is ++(abs(float(R) - (-0.5772156649015329))), DIFF < 1e-9)  # nv
 
-test("polygamma 1 1") <- (Polygamma(1, 1.0, R), R > 1.6, R < 1.7)  # nv
+test("polygamma 1 1") <- (polygamma(1, 1.0, R), R > 1.6, R < 1.7)  # nv
 
-# ── Factorial ────────────────────────────────────────────────────────────────
+# ── factorial ────────────────────────────────────────────────────────────────
 
-test("factorial 5 inexact") <- (Factorial(5, R), DIFF is ++(abs(float(R) - 120.0)), DIFF < 1e-9)  # nv
+test("factorial 5 inexact") <- (factorial(5, R), DIFF is ++(abs(float(R) - 120.0)), DIFF < 1e-9)  # nv
 
-test("factorial 5 exact") <- (Factorial(5, True, R), R == 120)  # nv
+test("factorial 5 exact") <- (factorial(5, True, R), R == 120)  # nv
 
-test("factorial 0") <- (Factorial(0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
+test("factorial 0") <- (factorial(0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
-# ── Comb ─────────────────────────────────────────────────────────────────────
+# ── comb ─────────────────────────────────────────────────────────────────────
 
-test("comb 5 2 inexact") <- (Comb(5, 2, R), DIFF is ++(abs(float(R) - 10.0)), DIFF < 1e-9)  # nv
+test("comb 5 2 inexact") <- (comb(5, 2, R), DIFF is ++(abs(float(R) - 10.0)), DIFF < 1e-9)  # nv
 
-test("comb 5 2 exact") <- (Comb(5, 2, True, R), R == 10)  # nv
+test("comb 5 2 exact") <- (comb(5, 2, True, R), R == 10)  # nv
 
-test("comb 6 3") <- (Comb(6, 3, R), DIFF is ++(abs(float(R) - 20.0)), DIFF < 1e-9)  # nv
+test("comb 6 3") <- (comb(6, 3, R), DIFF is ++(abs(float(R) - 20.0)), DIFF < 1e-9)  # nv
 
-# ── Perm ─────────────────────────────────────────────────────────────────────
+# ── perm ─────────────────────────────────────────────────────────────────────
 
-test("perm 5 2") <- (Perm(5, 2, R), DIFF is ++(abs(float(R) - 20.0)), DIFF < 1e-9)  # nv
+test("perm 5 2") <- (perm(5, 2, R), DIFF is ++(abs(float(R) - 20.0)), DIFF < 1e-9)  # nv
 
-test("perm 4 4") <- (Perm(4, 4, R), DIFF is ++(abs(float(R) - 24.0)), DIFF < 1e-9)  # nv
+test("perm 4 4") <- (perm(4, 4, R), DIFF is ++(abs(float(R) - 24.0)), DIFF < 1e-9)  # nv
 
 # ── Error function ───────────────────────────────────────────────────────────
 
-test("erf 0") <- (Erf(0.0, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
+test("erf 0") <- (erf(0.0, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
 
-test("erf 1") <- (Erf(1.0, R), DIFF is ++(abs(float(R) - 0.8427007929497148)), DIFF < 1e-9)  # nv
+test("erf 1") <- (erf(1.0, R), DIFF is ++(abs(float(R) - 0.8427007929497148)), DIFF < 1e-9)  # nv
 
-test("erfc 1") <- (ErfComplement(1.0, R), DIFF is ++(abs(float(R) - 0.15729920705028516)), DIFF < 1e-9)  # nv
+test("erfc 1") <- (erf_complement(1.0, R), DIFF is ++(abs(float(R) - 0.15729920705028516)), DIFF < 1e-9)  # nv
 
-test("erfc 0 is 1") <- (ErfComplement(0.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
+test("erfc 0 is 1") <- (erf_complement(0.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
-test("erfinv 0.5") <- (Erf(R, 0.5), DIFF is ++(abs(float(R) - 0.4769362762044699)), DIFF < 1e-9)  # nv
+test("erfinv 0.5") <- (erf(R, 0.5), DIFF is ++(abs(float(R) - 0.4769362762044699)), DIFF < 1e-9)  # nv
 
-test("erfcinv 0.5") <- (ErfComplement(R, 0.5), DIFF is ++(abs(float(R) - 0.4769362762044699)), DIFF < 1e-9)  # nv
+test("erfcinv 0.5") <- (erf_complement(R, 0.5), DIFF is ++(abs(float(R) - 0.4769362762044699)), DIFF < 1e-9)  # nv
 
 # ── Normal CDF ───────────────────────────────────────────────────────────────
 
-test("normal cdf 0 is 0.5") <- (NormalCdf(0.0, R), DIFF is ++(abs(float(R) - 0.5)), DIFF < 1e-9)  # nv
+test("normal cdf 0 is 0.5") <- (normal_cdf(0.0, R), DIFF is ++(abs(float(R) - 0.5)), DIFF < 1e-9)  # nv
 
-test("normal cdf 1") <- (NormalCdf(1.0, R), DIFF is ++(abs(float(R) - 0.8413447460685429)), DIFF < 1e-9)  # nv
+test("normal cdf 1") <- (normal_cdf(1.0, R), DIFF is ++(abs(float(R) - 0.8413447460685429)), DIFF < 1e-9)  # nv
 
-test("normal cdf inverse 0.5 is 0") <- (NormalCdf(R, 0.5), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
+test("normal cdf inverse 0.5 is 0") <- (normal_cdf(R, 0.5), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
 
-test("normal cdf inverse 0.84") <- (NormalCdf(R, 0.8413447460685429), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-6)  # nv
+test("normal cdf inverse 0.84") <- (normal_cdf(R, 0.8413447460685429), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-6)  # nv
 
-# ── Bessel functions ─────────────────────────────────────────────────────────
+# ── bessel functions ─────────────────────────────────────────────────────────
 
-test("besselj 0 0") <- (BesselJ(0, 0.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
+test("besselj 0 0") <- (bessel_j(0, 0.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
-test("besselj 1 1") <- (BesselJ(1, 1.0, R), DIFF is ++(abs(float(R) - 0.4400505857449335)), DIFF < 1e-9)  # nv
+test("besselj 1 1") <- (bessel_j(1, 1.0, R), DIFF is ++(abs(float(R) - 0.4400505857449335)), DIFF < 1e-9)  # nv
 
-test("bessely 0 1") <- (BesselY(0, 1.0, R), DIFF is ++(abs(float(R) - 0.08825696421567697)), DIFF < 1e-9)  # nv
+test("bessely 0 1") <- (bessel_y(0, 1.0, R), DIFF is ++(abs(float(R) - 0.08825696421567697)), DIFF < 1e-9)  # nv
 
-test("bessely 1 1") <- (BesselY(1, 1.0, R), R > -0.782, R < -0.780)  # nv
+test("bessely 1 1") <- (bessel_y(1, 1.0, R), R > -0.782, R < -0.780)  # nv
 
-test("besseljreal 0.5 1") <- (BesselJReal(0.5, 1.0, R), DIFF is ++(abs(float(R) - 0.6713967071418032)), DIFF < 1e-9)  # nv
+test("besseljreal 0.5 1") <- (bessel_j_real(0.5, 1.0, R), DIFF is ++(abs(float(R) - 0.6713967071418032)), DIFF < 1e-9)  # nv
 
-test("besseljreal 1.5 2") <- (BesselJReal(1.5, 2.0, R), R > 0.49, R < 0.51)  # nv
+test("besseljreal 1.5 2") <- (bessel_j_real(1.5, 2.0, R), R > 0.49, R < 0.51)  # nv
 
-test("besselyreal 0.5 1") <- (BesselYReal(0.5, 1.0, R), R > -0.44, R < -0.43)  # nv
+test("besselyreal 0.5 1") <- (bessel_y_real(0.5, 1.0, R), R > -0.44, R < -0.43)  # nv
 
-test("besselyreal 1.5 2") <- (BesselYReal(1.5, 2.0, R), R > -0.397, R < -0.394)  # nv
+test("besselyreal 1.5 2") <- (bessel_y_real(1.5, 2.0, R), R > -0.397, R < -0.394)  # nv
 
-test("besselk 0 1") <- (BesselK(0, 1.0, R), DIFF is ++(abs(float(R) - 0.4210244382407083)), DIFF < 1e-9)  # nv
+test("besselk 0 1") <- (bessel_k(0, 1.0, R), DIFF is ++(abs(float(R) - 0.4210244382407083)), DIFF < 1e-9)  # nv
 
-test("besselk 1 1") <- (BesselK(1, 1.0, R), R > 0.6, R < 0.7)  # nv
+test("besselk 1 1") <- (bessel_k(1, 1.0, R), R > 0.6, R < 0.7)  # nv
 
-test("besseli 0 1") <- (BesselI(0, 1.0, R), DIFF is ++(abs(float(R) - 1.2660658777520082)), DIFF < 1e-9)  # nv
+test("besseli 0 1") <- (bessel_i(0, 1.0, R), DIFF is ++(abs(float(R) - 1.2660658777520082)), DIFF < 1e-9)  # nv
 
-test("besseli 1 1") <- (BesselI(1, 1.0, R), R > 0.56, R < 0.57)  # nv
+test("besseli 1 1") <- (bessel_i(1, 1.0, R), R > 0.56, R < 0.57)  # nv
 
-test("besseljzeros 0 first zero") <- (BesselJZeros(0, 1, ZEROS), LEN is ++(len(list(ZEROS))), LEN == 1)  # nv
+test("besseljzeros 0 first zero") <- (bessel_j_zeros(0, 1, ZEROS), LEN is ++(len(list(ZEROS))), LEN == 1)  # nv
 
-test("besseljzeros 0 three zeros") <- (BesselJZeros(0, 3, ZEROS), LEN is ++(len(list(ZEROS))), LEN == 3)  # nv
+test("besseljzeros 0 three zeros") <- (bessel_j_zeros(0, 3, ZEROS), LEN is ++(len(list(ZEROS))), LEN == 3)  # nv
 
-test("spherical besselj 0 at 0 is 1") <- (SphericalBesselJ(0, 0.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
+test("spherical besselj 0 at 0 is 1") <- (spherical_bessel_j(0, 0.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
-test("spherical besselj 1 at 0 is 0") <- (SphericalBesselJ(1, 0.0, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
+test("spherical besselj 1 at 0 is 0") <- (spherical_bessel_j(1, 0.0, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
 
-# ── Elliptic integrals ───────────────────────────────────────────────────────
+# ── elliptic integrals ───────────────────────────────────────────────────────
 
-test("elliptic k 0 is pi/2") <- (EllipticK(0.0, R), DIFF is ++(abs(float(R) - 1.5707963267948966)), DIFF < 1e-9)  # nv
+test("elliptic k 0 is pi/2") <- (elliptic_k(0.0, R), DIFF is ++(abs(float(R) - 1.5707963267948966)), DIFF < 1e-9)  # nv
 
-test("elliptic k 0.5") <- (EllipticK(0.5, R), R > 1.85, R < 1.86)  # nv
+test("elliptic k 0.5") <- (elliptic_k(0.5, R), R > 1.85, R < 1.86)  # nv
 
-test("elliptic e 0 is pi/2") <- (EllipticE(0.0, R), DIFF is ++(abs(float(R) - 1.5707963267948966)), DIFF < 1e-9)  # nv
+test("elliptic e 0 is pi/2") <- (elliptic_e(0.0, R), DIFF is ++(abs(float(R) - 1.5707963267948966)), DIFF < 1e-9)  # nv
 
-test("elliptic e 0.5") <- (EllipticE(0.5, R), R > 1.350, R < 1.352)  # nv
+test("elliptic e 0.5") <- (elliptic_e(0.5, R), R > 1.350, R < 1.352)  # nv
 
-test("elliptic k incomplete") <- (EllipticKIncomplete(0.5, 0.5, R), R > 0.0, R < 2.0)  # nv
+test("elliptic k incomplete") <- (elliptic_k_incomplete(0.5, 0.5, R), R > 0.0, R < 2.0)  # nv
 
-test("elliptic e incomplete") <- (EllipticEIncomplete(0.5, 0.5, R), R > 0.0, R < 2.0)  # nv
+test("elliptic e incomplete") <- (elliptic_e_incomplete(0.5, 0.5, R), R > 0.0, R < 2.0)  # nv
 
 # ── Hypergeometric functions ─────────────────────────────────────────────────
 
-test("hyp1f1 1 2 0.5") <- (Hypergeometric1F1(1.0, 2.0, 0.5, R), DIFF is ++(abs(float(R) - 1.2974425414002564)), DIFF < 1e-9)  # nv
+test("hyp1f1 1 2 0.5") <- (hypergeometric_1f1(1.0, 2.0, 0.5, R), DIFF is ++(abs(float(R) - 1.2974425414002564)), DIFF < 1e-9)  # nv
 
-test("hyp1f1 identity at 0") <- (Hypergeometric1F1(1.0, 1.0, 0.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
+test("hyp1f1 identity at 0") <- (hypergeometric_1f1(1.0, 1.0, 0.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
-test("hyp2f1 0.5 0.5 1.5 0.25") <- (Hypergeometric2F1(0.5, 0.5, 1.5, 0.25, R), DIFF is ++(abs(float(R) - 1.047197551196598)), DIFF < 1e-9)  # nv
+test("hyp2f1 0.5 0.5 1.5 0.25") <- (hypergeometric_2f1(0.5, 0.5, 1.5, 0.25, R), DIFF is ++(abs(float(R) - 1.047197551196598)), DIFF < 1e-9)  # nv
 
-test("hyp2f1 at 0 is 1") <- (Hypergeometric2F1(1.0, 1.0, 2.0, 0.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
+test("hyp2f1 at 0 is 1") <- (hypergeometric_2f1(1.0, 1.0, 2.0, 0.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
-test("hyp0f1 2 0.5") <- (Hypergeometric0F1(2.0, 0.5, R), DIFF is ++(abs(float(R) - 1.2717234563121371)), DIFF < 1e-9)  # nv
+test("hyp0f1 2 0.5") <- (hypergeometric_0f1(2.0, 0.5, R), DIFF is ++(abs(float(R) - 1.2717234563121371)), DIFF < 1e-9)  # nv
 
-test("hyp0f1 at 0 is 1") <- (Hypergeometric0F1(1.0, 0.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
+test("hyp0f1 at 0 is 1") <- (hypergeometric_0f1(1.0, 0.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
 # ── Information theory ───────────────────────────────────────────────────────
 
-test("entr 0.5") <- (Entr(0.5, R), DIFF is ++(abs(float(R) - 0.34657359027997264)), DIFF < 1e-9)  # nv
+test("entr 0.5") <- (entr(0.5, R), DIFF is ++(abs(float(R) - 0.34657359027997264)), DIFF < 1e-9)  # nv
 
-test("entr 1 is 0") <- (Entr(1.0, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
+test("entr 1 is 0") <- (entr(1.0, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
 
-test("kl divergence equal") <- (KlDivergence(0.5, 0.5, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
+test("kl divergence equal") <- (kl_divergence(0.5, 0.5, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
 
-test("kl divergence positive") <- (KlDivergence(0.5, 0.25, R), R > 0.0)  # nv
+test("kl divergence positive") <- (kl_divergence(0.5, 0.25, R), R > 0.0)  # nv
 
-test("log sum exp scalar 1") <- (LogSumExp(1.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
+test("log sum exp scalar 1") <- (log_sum_exp(1.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
-test("log sum exp scalar 0") <- (LogSumExp(0.0, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
+test("log sum exp scalar 0") <- (log_sum_exp(0.0, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
 
 # ── Orthogonal polynomials ───────────────────────────────────────────────────
 
-test("assoc legendre m0 v0 x0.5") <- (AssocLegendre(0, 0, 0.5, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
+test("assoc legendre m0 v0 x0.5") <- (assoc_legendre(0, 0, 0.5, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
-test("assoc legendre m0 v1 x0.5") <- (AssocLegendre(0, 1, 0.5, R), DIFF is ++(abs(float(R) - 0.5)), DIFF < 1e-9)  # nv
+test("assoc legendre m0 v1 x0.5") <- (assoc_legendre(0, 1, 0.5, R), DIFF is ++(abs(float(R) - 0.5)), DIFF < 1e-9)  # nv
 
-test("legendre poly 0") <- (LegendrePoly(0, 0.5, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
+test("legendre poly 0") <- (legendre_poly(0, 0.5, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
-test("legendre poly 1") <- (LegendrePoly(1, 0.5, R), DIFF is ++(abs(float(R) - 0.5)), DIFF < 1e-9)  # nv
+test("legendre poly 1") <- (legendre_poly(1, 0.5, R), DIFF is ++(abs(float(R) - 0.5)), DIFF < 1e-9)  # nv
 
-test("chebyshev t 0") <- (ChebyshevT(0, 0.5, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
+test("chebyshev t 0") <- (chebyshev_t(0, 0.5, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
-test("chebyshev t 1") <- (ChebyshevT(1, 0.5, R), DIFF is ++(abs(float(R) - 0.5)), DIFF < 1e-9)  # nv
+test("chebyshev t 1") <- (chebyshev_t(1, 0.5, R), DIFF is ++(abs(float(R) - 0.5)), DIFF < 1e-9)  # nv
 
-test("chebyshev u 0") <- (ChebyshevU(0, 0.5, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
+test("chebyshev u 0") <- (chebyshev_u(0, 0.5, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
-test("chebyshev u 1") <- (ChebyshevU(1, 0.5, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
+test("chebyshev u 1") <- (chebyshev_u(1, 0.5, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
-test("hermite h 0") <- (HermiteH(0, 1.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
+test("hermite h 0") <- (hermite_h(0, 1.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
-test("hermite h 1") <- (HermiteH(1, 1.0, R), DIFF is ++(abs(float(R) - 2.0)), DIFF < 1e-9)  # nv
+test("hermite h 1") <- (hermite_h(1, 1.0, R), DIFF is ++(abs(float(R) - 2.0)), DIFF < 1e-9)  # nv
 
-test("generalized laguerre 0 1 0.5") <- (GeneralizedLaguerre(0, 1.0, 0.5, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
+test("generalized laguerre 0 1 0.5") <- (generalized_laguerre(0, 1.0, 0.5, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
-test("generalized laguerre 1 1 0") <- (GeneralizedLaguerre(1, 1.0, 0.0, R), DIFF is ++(abs(float(R) - 2.0)), DIFF < 1e-9)  # nv
+test("generalized laguerre 1 1 0") <- (generalized_laguerre(1, 1.0, 0.0, R), DIFF is ++(abs(float(R) - 2.0)), DIFF < 1e-9)  # nv
 
 # ── Convenience / misc ───────────────────────────────────────────────────────
 
-test("cube root 8") <- (CubeRoot(8.0, R), DIFF is ++(abs(float(R) - 2.0)), DIFF < 1e-9)  # nv
+test("cube root 8") <- (cube_root(8.0, R), DIFF is ++(abs(float(R) - 2.0)), DIFF < 1e-9)  # nv
 
-test("cube root negative") <- (CubeRoot(-8.0, R), DIFF is ++(abs(float(R) - (-2.0))), DIFF < 1e-9)  # nv
+test("cube root negative") <- (cube_root(-8.0, R), DIFF is ++(abs(float(R) - (-2.0))), DIFF < 1e-9)  # nv
 
-test("exp10 2") <- (Exp10(2.0, R), DIFF is ++(abs(float(R) - 100.0)), DIFF < 1e-9)  # nv
+test("exp10 2") <- (exp10(2.0, R), DIFF is ++(abs(float(R) - 100.0)), DIFF < 1e-9)  # nv
 
-test("exp10 0 is 1") <- (Exp10(0.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
+test("exp10 0 is 1") <- (exp10(0.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
-test("exp2 3") <- (Exp2(3.0, R), DIFF is ++(abs(float(R) - 8.0)), DIFF < 1e-9)  # nv
+test("exp2 3") <- (exp2(3.0, R), DIFF is ++(abs(float(R) - 8.0)), DIFF < 1e-9)  # nv
 
-test("exp2 0 is 1") <- (Exp2(0.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
+test("exp2 0 is 1") <- (exp2(0.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
-test("sigmoid 0 is 0.5") <- (Logit(R, 0.0), DIFF is ++(abs(float(R) - 0.5)), DIFF < 1e-9)  # nv
+test("sigmoid 0 is 0.5") <- (logit(R, 0.0), DIFF is ++(abs(float(R) - 0.5)), DIFF < 1e-9)  # nv
 
-test("sigmoid large is 1") <- (Logit(R, 100.0), R > 0.9999)  # nv
+test("sigmoid large is 1") <- (logit(R, 100.0), R > 0.9999)  # nv
 
-test("logit 0.5 is 0") <- (Logit(0.5, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
+test("logit 0.5 is 0") <- (logit(0.5, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
 
-test("logit 0.75 positive") <- (Logit(0.75, R), R > 1.09, R < 1.10)  # nv
+test("logit 0.75 positive") <- (logit(0.75, R), R > 1.09, R < 1.10)  # nv
 
-test("lambert w 1") <- (LambertW(1.0, W), W > 0.5, W < 0.6)  # nv
+test("lambert w 1") <- (lambert_w(1.0, W), W > 0.5, W < 0.6)  # nv
 
-test("lambert w 0 is 0") <- (LambertW(0.0, W), DIFF is ++(abs(float(W) - 0.0)), DIFF < 1e-9)  # nv
+test("lambert w 0 is 0") <- (lambert_w(0.0, W), DIFF is ++(abs(float(W) - 0.0)), DIFF < 1e-9)  # nv
 
-test("xlogy 2 3") <- (XLogY(2.0, 3.0, R), DIFF is ++(abs(float(R) - 2.1972245773362196)), DIFF < 1e-9)  # nv
+test("xlogy 2 3") <- (x_log_y(2.0, 3.0, R), DIFF is ++(abs(float(R) - 2.1972245773362196)), DIFF < 1e-9)  # nv
 
-test("xlogy 0 anything is 0") <- (XLogY(0.0, 5.0, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
+test("xlogy 0 anything is 0") <- (x_log_y(0.0, 5.0, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
 
-test("xlog1py 2 3") <- (XLog1pY(2.0, 3.0, R), DIFF is ++(abs(float(R) - 2.772588722239781)), DIFF < 1e-9)  # nv
+test("xlog1py 2 3") <- (x_log1p_y(2.0, 3.0, R), DIFF is ++(abs(float(R) - 2.772588722239781)), DIFF < 1e-9)  # nv
 
-test("xlog1py 0 anything is 0") <- (XLog1pY(0.0, 5.0, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
+test("xlog1py 0 anything is 0") <- (x_log1p_y(0.0, 5.0, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv

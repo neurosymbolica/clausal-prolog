@@ -18,12 +18,12 @@ Use them in expressions exactly like the constants from ``py.units``::
 Numeric values come from the installed scipy CODATA release.
 
 CODATA database access (plain floats / strings):
-    Value(NAME, RESULT)                     — value (float) by CODATA name
-    Unit(NAME, RESULT)                      — SI unit string
-    Precision(NAME, RESULT)                 — relative uncertainty
-    Lookup(NAME, VALUE, UNIT, UNCERTAINTY)  — all three in one call
-    Find(SUBSTRING, NAMES)                  — search names by substring
-    AllNames(NAMES)                         — all CODATA constant names
+    value(NAME, RESULT)                     — value (float) by CODATA name
+    unit(NAME, RESULT)                      — SI unit string
+    precision(NAME, RESULT)                 — relative uncertainty
+    lookup(NAME, VALUE, UNIT, UNCERTAINTY)  — all three in one call
+    find(SUBSTRING, NAMES)                  — search names by substring
+    all_names(NAMES)                         — all CODATA constant names
 """
 
 from __future__ import annotations
@@ -83,15 +83,15 @@ def _pred(name: str, *arity_fns) -> ModulePredicate:
 
 # ── CODATA lookup predicates ───────────────────────────────────────────────
 
-Value = _pred("Value",
+value = _pred("value",
     (2, _lookup_fn(lambda name: _sc().value(name))),
 )
 
-Unit = _pred("Unit",
+unit = _pred("unit",
     (2, _lookup_fn(lambda name: _sc().unit(name))),
 )
 
-Precision = _pred("Precision",
+precision = _pred("precision",
     (2, _lookup_fn(lambda name: _sc().precision(name))),
 )
 
@@ -112,9 +112,9 @@ def _lookup_dispatch(this_generator, _proceed, _fail, _catcher, name, value_var,
 
 class _LookupPredicate:
     def _get_dispatch(self): return _lookup_dispatch
-    def __repr__(self): return "scipy.constants.Lookup/4"
+    def __repr__(self): return "scipy.constants.lookup/4"
 
-Lookup = _LookupPredicate()
+lookup = _LookupPredicate()
 
 
 def _find_dispatch(this_generator, _proceed, _fail, _catcher, substring, names_var, trail):
@@ -141,14 +141,14 @@ def _find_all_dispatch(this_generator, _proceed, _fail, _catcher, names_var, tra
 
 class _FindPredicate:
     def _get_dispatch(self): return _find_dispatch
-    def __repr__(self): return "scipy.constants.Find/2"
+    def __repr__(self): return "scipy.constants.find/2"
 
 class _AllNamesPredicate:
     def _get_dispatch(self): return _find_all_dispatch
-    def __repr__(self): return "scipy.constants.AllNames/1"
+    def __repr__(self): return "scipy.constants.all_names/1"
 
-Find = _FindPredicate()
-AllNames = _AllNamesPredicate()
+find = _FindPredicate()
+all_names = _AllNamesPredicate()
 
 
 # ── Physical constants as Quantity values ──────────────────────────────────

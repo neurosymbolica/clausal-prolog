@@ -1,18 +1,18 @@
 # Companion tests for docs/scipy_stats.md signature blocks.
 -double_quotes(atom)
--import_from(scipy_stats, [StatsMean, StatsNormalPdf, StatsNormalCdf, ResultGet])
+-import_from(scipy_stats, [stats_mean, stats_normal_pdf, stats_normal_cdf, result_get])
 
 test("stats mean exists") <- (
-    StatsMean([1.0, 2.0, 3.0], R),
+    stats_mean([1.0, 2.0, 3.0], R),
     DIFF is ++(abs(float(R) - 2.0)),
     DIFF < 1e-10)  # nv
 
 test("normal pdf exists") <- (
-    StatsNormalPdf(0.0, R),
+    stats_normal_pdf(0.0, R),
     DIFF is ++(abs(float(R) - 0.3989422804)),
     DIFF < 1e-6)  # nv
 
 test("normal cdf exists") <- (
-    StatsNormalCdf(0.0, R),
+    stats_normal_cdf(0.0, R),
     DIFF is ++(abs(float(R) - 0.5)),
     DIFF < 1e-10)  # nv

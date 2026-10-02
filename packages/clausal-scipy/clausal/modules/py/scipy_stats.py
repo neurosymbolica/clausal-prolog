@@ -3,37 +3,37 @@
 Provides statistical routines from scipy.stats as importable predicate
 objects for use in .clausal files via::
 
-    -import_from(scipy_stats, [StatsMean, StatsPearsonCorrelation, ResultGet, ...])
+    -import_from(scipy_stats, [stats_mean, stats_pearson_correlation, result_get, ...])
 
 Or via the canonical path::
 
-    -import_from(py.scipy_stats, [StatsMean, ...])
+    -import_from(py.scipy_stats, [stats_mean, ...])
 
 Tiers
 -----
 - **Tier 1** — descriptive statistics: return a plain Python value or dict
-    StatsDescribe, StatsMean, StatsGeometricMean, StatsHarmonicMean,
-    StatsMode, StatsSkew, StatsKurtosis, StatsInterquartileRange,
-    StatsZScore, StatsMedianAbsoluteDeviation
+    stats_describe, stats_mean, stats_geometric_mean, stats_harmonic_mean,
+    stats_mode, stats_skew, stats_kurtosis, stats_interquartile_range,
+    stats_z_score, stats_median_absolute_deviation
 
-- **Tier 2** — result-dict predicates (use ResultGet to access fields):
-    StatsPearsonCorrelation, StatsSpearmanCorrelation, StatsKendallTau,
-    StatsLinearRegression, StatsTheilSlopes,
-    StatsTTest1Sample, StatsTTestIndependent, StatsTTestRelated,
-    StatsChiSquare, StatsChiSquareContingency, StatsFisherExact,
-    StatsMannWhitneyU, StatsWilcoxon, StatsKruskal, StatsKs2samp,
-    StatsNormalityTest, StatsShapiro
+- **Tier 2** — result-dict predicates (use result_get to access fields):
+    stats_pearson_correlation, stats_spearman_correlation, stats_kendall_tau,
+    stats_linear_regression, stats_theil_slopes,
+    stats_t_test1_sample, stats_t_test_independent, stats_t_test_related,
+    stats_chi_square, stats_chi_square_contingency, stats_fisher_exact,
+    stats_mann_whitney_u, stats_wilcoxon, stats_kruskal, stats_ks2samp,
+    stats_normality_test, stats_shapiro
 
 - **Tier 1 functional** — distribution evaluation:
-    StatsDist(DIST, METHOD, X, RESULT) / StatsDist(DIST, METHOD, RESULT)
-    StatsNormalPdf, StatsNormalCdf, StatsNormalPpf, StatsNormalRvs
+    stats_dist(DIST, METHOD, X, RESULT) / stats_dist(DIST, METHOD, RESULT)
+    stats_normal_pdf, stats_normal_cdf, stats_normal_ppf, stats_normal_rvs
 
 - **Tier 3** — frozen distribution handles:
-    StatsFreezeDist, StatsFrozenPdf, StatsFrozenCdf,
-    StatsFrozenRvs, StatsFrozenStats, StatsFrozenFree
+    stats_freeze_dist, stats_frozen_pdf, stats_frozen_cdf,
+    stats_frozen_rvs, stats_frozen_stats, stats_frozen_free
 
 Helper:
-    ResultGet(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE
+    result_get(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE
 """
 
 from __future__ import annotations
@@ -121,19 +121,19 @@ def _describe_result(r) -> dict:
     }
 
 
-StatsDescribe = _pred("StatsDescribe",
+stats_describe = _pred("stats_describe",
     (2, _dispatch_fn(lambda a: _describe_result(_st().describe(a)))),
 )
 
-StatsMean = _pred("StatsMean",
+stats_mean = _pred("stats_mean",
     (2, _dispatch_fn(lambda a: float(_st().tmean(a)))),
 )
 
-StatsGeometricMean = _pred("StatsGeometricMean",
+stats_geometric_mean = _pred("stats_geometric_mean",
     (2, _dispatch_fn(lambda a: float(_st().gmean(a)))),
 )
 
-StatsHarmonicMean = _pred("StatsHarmonicMean",
+stats_harmonic_mean = _pred("stats_harmonic_mean",
     (2, _dispatch_fn(lambda a: float(_st().hmean(a)))),
 )
 
@@ -151,43 +151,43 @@ def _mode_result(r) -> dict:
     return {'mode': mode_val, 'count': count_val}
 
 
-StatsMode = _pred("StatsMode",
+stats_mode = _pred("stats_mode",
     (2, _dispatch_fn(lambda a: _mode_result(_st().mode(a)))),
 )
 
-StatsSkew = _pred("StatsSkew",
+stats_skew = _pred("stats_skew",
     (2, _dispatch_fn(lambda a: float(_st().skew(a)))),
 )
 
-StatsKurtosis = _pred("StatsKurtosis",
+stats_kurtosis = _pred("stats_kurtosis",
     (2, _dispatch_fn(lambda a: float(_st().kurtosis(a)))),
 )
 
-StatsInterquartileRange = _pred("StatsInterquartileRange",
+stats_interquartile_range = _pred("stats_interquartile_range",
     (2, _dispatch_fn(lambda x: float(_st().iqr(x)))),
 )
 
-StatsZScore = _pred("StatsZScore",
+stats_z_score = _pred("stats_z_score",
     (2, _dispatch_fn(lambda a: list(_st().zscore(a)))),
 )
 
-StatsMedianAbsoluteDeviation = _pred("StatsMedianAbsoluteDeviation",
+stats_median_absolute_deviation = _pred("stats_median_absolute_deviation",
     (2, _dispatch_fn(lambda x: float(_st().median_abs_deviation(x)))),
 )
 
 
 # ── Correlation and regression (Tier 2) ──────────────────────────────────
 
-StatsPearsonCorrelation = _pred("StatsPearsonCorrelation",
+stats_pearson_correlation = _pred("stats_pearson_correlation",
     (3, _dispatch_fn(lambda x, y: _stat_pvalue(_st().pearsonr(x, y)))),
 )
 
-StatsSpearmanCorrelation = _pred("StatsSpearmanCorrelation",
+stats_spearman_correlation = _pred("stats_spearman_correlation",
     (2, _dispatch_fn(lambda a: _stat_pvalue(_st().spearmanr(a)))),
     (3, _dispatch_fn(lambda a, b: _stat_pvalue(_st().spearmanr(a, b)))),
 )
 
-StatsKendallTau = _pred("StatsKendallTau",
+stats_kendall_tau = _pred("stats_kendall_tau",
     (3, _dispatch_fn(lambda x, y: _stat_pvalue(_st().kendalltau(x, y)))),
 )
 
@@ -203,7 +203,7 @@ def _linregress_result(r) -> dict:
     }
 
 
-StatsLinearRegression = _pred("StatsLinearRegression",
+stats_linear_regression = _pred("stats_linear_regression",
     (3, _dispatch_fn(lambda x, y: _linregress_result(_st().linregress(x, y)))),
 )
 
@@ -217,7 +217,7 @@ def _theilslopes_result(r) -> dict:
     }
 
 
-StatsTheilSlopes = _pred("StatsTheilSlopes",
+stats_theil_slopes = _pred("stats_theil_slopes",
     (2, _dispatch_fn(lambda y: _theilslopes_result(_st().theilslopes(y)))),
     (3, _dispatch_fn(lambda y, x: _theilslopes_result(_st().theilslopes(y, x)))),
 )
@@ -232,21 +232,21 @@ def _ttest_result(r) -> dict:
     return d
 
 
-StatsTTest1Sample = _pred("StatsTTest1Sample",
+stats_t_test1_sample = _pred("stats_t_test1_sample",
     (3, _dispatch_fn(lambda a, popmean: _ttest_result(_st().ttest_1samp(a, popmean)))),
 )
 
-StatsTTestIndependent = _pred("StatsTTestIndependent",
+stats_t_test_independent = _pred("stats_t_test_independent",
     (3, _dispatch_fn(lambda a, b: _ttest_result(_st().ttest_ind(a, b)))),
     (4, _dispatch_fn(lambda a, b, equal_var: _ttest_result(_st().ttest_ind(a, b, equal_var=bool(equal_var))))),
 )
 
-StatsTTestRelated = _pred("StatsTTestRelated",
+stats_t_test_related = _pred("stats_t_test_related",
     (3, _dispatch_fn(lambda a, b: _ttest_result(_st().ttest_rel(a, b)))),
 )
 
 
-StatsChiSquare = _pred("StatsChiSquare",
+stats_chi_square = _pred("stats_chi_square",
     (2, _dispatch_fn(lambda f_obs: _stat_pvalue(_st().chisquare(f_obs)))),
     (3, _dispatch_fn(lambda f_obs, f_exp: _stat_pvalue(_st().chisquare(f_obs, f_exp=f_exp)))),
 )
@@ -261,46 +261,46 @@ def _chi2_contingency_result(r) -> dict:
     }
 
 
-StatsChiSquareContingency = _pred("StatsChiSquareContingency",
+stats_chi_square_contingency = _pred("stats_chi_square_contingency",
     (2, _dispatch_fn(lambda observed: _chi2_contingency_result(_st().chi2_contingency(observed)))),
 )
 
 
-StatsFisherExact = _pred("StatsFisherExact",
+stats_fisher_exact = _pred("stats_fisher_exact",
     (2, _dispatch_fn(lambda table: _stat_pvalue(_st().fisher_exact(table)))),
 )
 
 
 # ── Nonparametric tests (Tier 2) ──────────────────────────────────────────
 
-StatsMannWhitneyU = _pred("StatsMannWhitneyU",
+stats_mann_whitney_u = _pred("stats_mann_whitney_u",
     (3, _dispatch_fn(lambda x, y: _stat_pvalue(_st().mannwhitneyu(x, y)))),
 )
 
-StatsWilcoxon = _pred("StatsWilcoxon",
+stats_wilcoxon = _pred("stats_wilcoxon",
     (2, _dispatch_fn(lambda x: _stat_pvalue(_st().wilcoxon(x)))),
     (3, _dispatch_fn(lambda x, y: _stat_pvalue(_st().wilcoxon(x, y)))),
 )
 
 
 def _kruskal_call(groups):
-    """StatsKruskal takes a list of arrays; unpack for scipy."""
+    """stats_kruskal takes a list of arrays; unpack for scipy."""
     return _stat_pvalue(_st().kruskal(*groups))
 
 
-StatsKruskal = _pred("StatsKruskal",
+stats_kruskal = _pred("stats_kruskal",
     (2, _dispatch_fn(_kruskal_call)),
 )
 
-StatsKs2samp = _pred("StatsKs2samp",
+stats_ks2samp = _pred("stats_ks2samp",
     (3, _dispatch_fn(lambda data1, data2: _stat_pvalue(_st().ks_2samp(data1, data2)))),
 )
 
-StatsNormalityTest = _pred("StatsNormalityTest",
+stats_normality_test = _pred("stats_normality_test",
     (2, _dispatch_fn(lambda a: _stat_pvalue(_st().normaltest(a)))),
 )
 
-StatsShapiro = _pred("StatsShapiro",
+stats_shapiro = _pred("stats_shapiro",
     (2, _dispatch_fn(lambda x: _stat_pvalue(_st().shapiro(x)))),
 )
 
@@ -330,10 +330,10 @@ def _dist_method_no_x(dist_name, method_name):
 
 
 class _StatsDistPredicate(ModulePredicate):
-    """StatsDist(DIST, METHOD, X, RESULT) and StatsDist(DIST, METHOD, RESULT)."""
+    """stats_dist(DIST, METHOD, X, RESULT) and stats_dist(DIST, METHOD, RESULT)."""
 
     def __init__(self):
-        super().__init__("StatsDist")
+        super().__init__("stats_dist")
 
     def _get_dispatch(self) -> Callable:
         return self._dispatch
@@ -342,7 +342,7 @@ class _StatsDistPredicate(ModulePredicate):
         trail = args[-1]
         arity = len(args) - 1  # exclude trail
         if arity == 4:
-            # StatsDist(DIST, METHOD, X, RESULT)
+            # stats_dist(DIST, METHOD, X, RESULT)
             dist_name, method_name, x, result_var = [deref(a) for a in args[:-1]]
             try:
                 out = _dist_method_x(dist_name, method_name, x)
@@ -350,7 +350,7 @@ class _StatsDistPredicate(ModulePredicate):
                 yield (_fail, DONE)
                 return
         elif arity == 3:
-            # StatsDist(DIST, METHOD, RESULT)
+            # stats_dist(DIST, METHOD, RESULT)
             dist_name, method_name, result_var = [deref(a) for a in args[:-1]]
             try:
                 out = _dist_method_no_x(dist_name, method_name)
@@ -369,25 +369,25 @@ class _StatsDistPredicate(ModulePredicate):
         yield (_fail, DONE)
 
 
-StatsDist = _StatsDistPredicate()
+stats_dist = _StatsDistPredicate()
 
 # Normal distribution shortcuts
-StatsNormalPdf = _pred("StatsNormalPdf",
+stats_normal_pdf = _pred("stats_normal_pdf",
     (2, _dispatch_fn(lambda x: float(_st().norm.pdf(x)))),
     (4, _dispatch_fn(lambda x, loc, scale: float(_st().norm.pdf(x, loc=loc, scale=scale)))),
 )
 
-StatsNormalCdf = _pred("StatsNormalCdf",
+stats_normal_cdf = _pred("stats_normal_cdf",
     (2, _dispatch_fn(lambda x: float(_st().norm.cdf(x)))),
     (4, _dispatch_fn(lambda x, loc, scale: float(_st().norm.cdf(x, loc=loc, scale=scale)))),
 )
 
-StatsNormalPpf = _pred("StatsNormalPpf",
+stats_normal_ppf = _pred("stats_normal_ppf",
     (2, _dispatch_fn(lambda q: float(_st().norm.ppf(q)))),
     (4, _dispatch_fn(lambda q, loc, scale: float(_st().norm.ppf(q, loc=loc, scale=scale)))),
 )
 
-StatsNormalRvs = _pred("StatsNormalRvs",
+stats_normal_rvs = _pred("stats_normal_rvs",
     (1, _dispatch_fn(lambda: float(_st().norm.rvs()))),
     (3, _dispatch_fn(lambda loc, scale: float(_st().norm.rvs(loc=loc, scale=scale)))),
     (4, _dispatch_fn(lambda loc, scale, size: _st().norm.rvs(loc=loc, scale=scale, size=size))),
@@ -423,10 +423,10 @@ def _freeze_dist(dist_name, params_dict):
 
 
 class _StatsFreezePredicate(ModulePredicate):
-    """StatsFreezeDist(DIST, PARAMS_DICT, RESULT)."""
+    """stats_freeze_dist(DIST, PARAMS_DICT, RESULT)."""
 
     def __init__(self):
-        super().__init__("StatsFreezeDist")
+        super().__init__("stats_freeze_dist")
 
     def _get_dispatch(self) -> Callable:
         return self._dispatch
@@ -450,11 +450,11 @@ class _StatsFreezePredicate(ModulePredicate):
         yield (_fail, DONE)
 
 
-StatsFreezeDist = _StatsFreezePredicate()
+stats_freeze_dist = _StatsFreezePredicate()
 
 
 class _StatsFrozenMethodPredicate(ModulePredicate):
-    """Base for StatsFrozenPdf."""
+    """Base for stats_frozen_pdf."""
 
     def __init__(self, name: str, method_name: str):
         super().__init__(name)
@@ -484,11 +484,11 @@ class _StatsFrozenMethodPredicate(ModulePredicate):
         yield (_fail, DONE)
 
 
-StatsFrozenPdf = _StatsFrozenMethodPredicate("StatsFrozenPdf", "pdf")
+stats_frozen_pdf = _StatsFrozenMethodPredicate("stats_frozen_pdf", "pdf")
 
 
 class _StatsFrozenCdfPredicate(ModulePredicate):
-    """StatsFrozenCdf(HANDLE, X, P) — bidirectional CDF / quantile.
+    """stats_frozen_cdf(HANDLE, X, P) — bidirectional CDF / quantile.
 
     HANDLE ground always.
     X ground, P unbound → P = dist.cdf(x)
@@ -497,7 +497,7 @@ class _StatsFrozenCdfPredicate(ModulePredicate):
     """
 
     def __init__(self):
-        super().__init__("StatsFrozenCdf")
+        super().__init__("stats_frozen_cdf")
 
     def _get_dispatch(self):
         return self._dispatch
@@ -539,14 +539,14 @@ class _StatsFrozenCdfPredicate(ModulePredicate):
         yield (_fail, DONE)
 
 
-StatsFrozenCdf = _StatsFrozenCdfPredicate()
+stats_frozen_cdf = _StatsFrozenCdfPredicate()
 
 
 class _StatsFrozenRvsPredicate(ModulePredicate):
-    """StatsFrozenRvs(HANDLE, RESULT) and StatsFrozenRvs(HANDLE, SIZE, RESULT)."""
+    """stats_frozen_rvs(HANDLE, RESULT) and stats_frozen_rvs(HANDLE, SIZE, RESULT)."""
 
     def __init__(self):
-        super().__init__("StatsFrozenRvs")
+        super().__init__("stats_frozen_rvs")
 
     def _get_dispatch(self) -> Callable:
         return self._dispatch
@@ -580,14 +580,14 @@ class _StatsFrozenRvsPredicate(ModulePredicate):
         yield (_fail, DONE)
 
 
-StatsFrozenRvs = _StatsFrozenRvsPredicate()
+stats_frozen_rvs = _StatsFrozenRvsPredicate()
 
 
 class _StatsFrozenStatsPredicate(ModulePredicate):
-    """StatsFrozenStats(HANDLE, RESULT) — returns dict with 'mean' and 'var'."""
+    """stats_frozen_stats(HANDLE, RESULT) — returns dict with 'mean' and 'var'."""
 
     def __init__(self):
-        super().__init__("StatsFrozenStats")
+        super().__init__("stats_frozen_stats")
 
     def _get_dispatch(self) -> Callable:
         return self._dispatch
@@ -612,14 +612,14 @@ class _StatsFrozenStatsPredicate(ModulePredicate):
         yield (_fail, DONE)
 
 
-StatsFrozenStats = _StatsFrozenStatsPredicate()
+stats_frozen_stats = _StatsFrozenStatsPredicate()
 
 
 class _StatsFrozenFreePredicate(ModulePredicate):
-    """StatsFrozenFree(HANDLE) — release frozen distribution from registry."""
+    """stats_frozen_free(HANDLE) — release frozen distribution from registry."""
 
     def __init__(self):
-        super().__init__("StatsFrozenFree")
+        super().__init__("stats_frozen_free")
 
     def _get_dispatch(self) -> Callable:
         return self._dispatch
@@ -633,13 +633,13 @@ class _StatsFrozenFreePredicate(ModulePredicate):
         yield (_fail, DONE)
 
 
-StatsFrozenFree = _StatsFrozenFreePredicate()
+stats_frozen_free = _StatsFrozenFreePredicate()
 
 
-# ── Helper: ResultGet ─────────────────────────────────────────────────────
+# ── Helper: result_get ─────────────────────────────────────────────────────
 
 class _ResultGetPredicate:
-    """ResultGet(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE.
+    """result_get(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE.
 
     RESULT must be a dict (or object with attribute access via getattr).
     FIELD must be a ground string key.
@@ -674,7 +674,7 @@ class _ResultGetPredicate:
         yield (_fail, DONE)
 
     def __repr__(self) -> str:
-        return "ResultGet/3"
+        return "result_get/3"
 
 
-ResultGet = _ResultGetPredicate()
+result_get = _ResultGetPredicate()

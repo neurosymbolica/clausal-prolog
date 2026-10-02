@@ -1,44 +1,44 @@
 # === Import ===
 
 --8<-- [start:import]
--import_from(py.scipy_constants, [Value, Unit, ...])
+-import_from(py.scipy_constants, [value, unit, ...])
 --8<-- [end:import]
 
 
 # === Predicate catalogue ===
 
 --8<-- [start:codata_lookup]
-Value('speed of light in vacuum', C),   % C = 299792458.0 m/s
-Value('Planck constant', H),            % H = 6.626070e-34 J·s
-Value('elementary charge', E)           % E = 1.602177e-19 C
+value('speed of light in vacuum', C),   % C = 299792458.0 m/s
+value('Planck constant', H),            % H = 6.626070e-34 J·s
+value('elementary charge', E)           % E = 1.602177e-19 C
 --8<-- [end:codata_lookup]
 
 --8<-- [start:codata_lookup_ex2]
-Lookup('electron mass', V, U, ERR)
+lookup('electron mass', V, U, ERR)
 # V = 9.109384e-31, U = 'kg', ERR = 2.8e-40
 --8<-- [end:codata_lookup_ex2]
 
 --8<-- [start:codata_lookup_ex3]
-Find('electron mass', NAMES)
+find('electron mass', NAMES)
 # NAMES = ['alpha particle-electron mass ratio',
 # 'deuteron-electron mass ratio', 'electron mass', ...]
 
-Find('zzznomatch', NAMES)
+find('zzznomatch', NAMES)
 # NAMES = []
 --8<-- [end:codata_lookup_ex3]
 
 --8<-- [start:codata_lookup_ex4]
-AllNames(NAMES),
+all_names(NAMES),
 ++(len(NAMES))   % 300+ depending on scipy version
 --8<-- [end:codata_lookup_ex4]
 
 --8<-- [start:codata_lookup_ex5]
-Unit('speed of light in vacuum', U)  % U = 'm s^-1'
+unit('speed of light in vacuum', U)  % U = 'm s^-1'
 --8<-- [end:codata_lookup_ex5]
 
 --8<-- [start:codata_lookup_ex6]
-Precision('Newtonian constant of gravitation', P)  % P > 0 (G has uncertainty)
-Precision('speed of light in vacuum', P)           % P = 0.0 (exact since 2019)
+precision('Newtonian constant of gravitation', P)  % P > 0 (G has uncertainty)
+precision('speed of light in vacuum', P)           % P = 0.0 (exact since 2019)
 --8<-- [end:codata_lookup_ex6]
 
 
@@ -46,7 +46,7 @@ Precision('speed of light in vacuum', P)           % P = 0.0 (exact since 2019)
 
 --8<-- [start:example]
 -import_from(scipy_constants, [SpeedOfLight, BoltzmannConstant,
-                                AvogadroConstant, Value, Unit])
+                                AvogadroConstant, value, unit])
 
 # Thermal energy at room temperature (kT at 300 K)
 ThermalEnergy(KT) <-
@@ -56,11 +56,11 @@ ThermalEnergy(KT) <-
 # Check that c agrees with CODATA lookup
 CheckC <-
     SpeedOfLight(C_DIRECT),
-    Value('speed of light in vacuum', C_LOOKUP),
+    value('speed of light in vacuum', C_LOOKUP),
     C_DIRECT == C_LOOKUP.
 
 # Print the unit of Planck's constant
 PlanckUnit <-
-    Unit('Planck constant', U),
+    unit('Planck constant', U),
     writeln(U).
 --8<-- [end:example]

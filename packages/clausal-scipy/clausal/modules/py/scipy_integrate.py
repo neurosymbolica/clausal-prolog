@@ -3,27 +3,27 @@
 Provides numerical integration routines from scipy.integrate as importable
 predicate objects for use in .clausal files via::
 
-    -import_from(scipy_integrate, [Quad, Trapezoid, SolveInitialValueProblem, ResultGet, ...])
+    -import_from(scipy_integrate, [quad, trapezoid, solve_initial_value_problem, result_get, ...])
 
 Tiers
 -----
 - **Tier 1** (direct value in RESULT):
-    CumulativeTrapezoid  → array
-    Trapezoid            → scalar or array
-    Simpson              → scalar or array
+    cumulative_trapezoid  → array
+    trapezoid            → scalar or array
+    simpson              → scalar or array
 
-- **Tier 2** (returns result dict; use ResultGet to access fields):
-    Quad                 → dict {value, error}
-    DoubleQuad           → dict {value, error}
-    TripleQuad           → dict {value, error}
-    NQuad                → dict {value, error}
-    QuadVec              → dict {y, err, status, success, message, neval}
-    SolveInitialValueProblem → dict {t, y, sol, t_events, y_events, nfev, njev, nlu,
+- **Tier 2** (returns result dict; use result_get to access fields):
+    quad                 → dict {value, error}
+    double_quad           → dict {value, error}
+    triple_quad           → dict {value, error}
+    n_quad                → dict {value, error}
+    quad_vec              → dict {y, err, status, success, message, neval}
+    solve_initial_value_problem → dict {t, y, sol, t_events, y_events, nfev, njev, nlu,
                                       status, message, success}
-    OdeIntegrate         → dict {y} or {y, infodict}
+    ode_integrate         → dict {y} or {y, infodict}
 
 Helper:
-    ResultGet(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE
+    result_get(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE
 """
 
 from __future__ import annotations
@@ -129,7 +129,7 @@ def _array_integrate_units(y, x):
     return out_dims, strip_quantity(y), strip_quantity(x)
 
 
-# ── Quad ──────────────────────────────────────────────────────────────────
+# ── quad ──────────────────────────────────────────────────────────────────
 
 def _quad_result(func, a, b, **kwargs):
     r = _integrate().quad(func, a, b, **kwargs)
@@ -140,7 +140,7 @@ def _quad_result(func, a, b, **kwargs):
 
 
 def _quad_quantity_call(func, a, b, **kwargs):
-    """Quantity-aware Quad: probe func, wrap bounds, wrap result."""
+    """Quantity-aware quad: probe func, wrap bounds, wrap result."""
     if not isinstance(a, Quantity) and not isinstance(b, Quantity):
         return _quad_result(func, a, b, **kwargs)
     x_dims = quantity_dims(a) or quantity_dims(b) or {}
@@ -159,7 +159,7 @@ def _quad_quantity_call(func, a, b, **kwargs):
     return result
 
 
-Quad = _pred("Quad",
+quad = _pred("quad",
     (4, _dispatch_fn(lambda func, a, b:
         _quad_quantity_call(func, a, b))),
     (5, _dispatch_fn(lambda func, a, b, args:
@@ -169,14 +169,14 @@ Quad = _pred("Quad",
 )
 
 
-# ── DoubleQuad ────────────────────────────────────────────────────────────
+# ── double_quad ────────────────────────────────────────────────────────────
 
 def _dblquad_result(func, a, b, gfun, hfun, **kwargs):
     r = _integrate().dblquad(func, a, b, gfun, hfun, **kwargs)
     return {'value': r[0], 'error': r[1]}
 
 
-DoubleQuad = _pred("DoubleQuad",
+double_quad = _pred("double_quad",
     (6, _dispatch_fn(lambda func, a, b, gfun, hfun:
         _dblquad_result(func, a, b, gfun, hfun))),
     (8, _dispatch_fn(lambda func, a, b, gfun, hfun, epsabs, epsrel:
@@ -184,20 +184,20 @@ DoubleQuad = _pred("DoubleQuad",
 )
 
 
-# ── TripleQuad ────────────────────────────────────────────────────────────
+# ── triple_quad ────────────────────────────────────────────────────────────
 
 def _tplquad_result(func, a, b, gfun, hfun, qfun, rfun, **kwargs):
     r = _integrate().tplquad(func, a, b, gfun, hfun, qfun, rfun, **kwargs)
     return {'value': r[0], 'error': r[1]}
 
 
-TripleQuad = _pred("TripleQuad",
+triple_quad = _pred("triple_quad",
     (8, _dispatch_fn(lambda func, a, b, gfun, hfun, qfun, rfun:
         _tplquad_result(func, a, b, gfun, hfun, qfun, rfun))),
 )
 
 
-# ── NQuad ─────────────────────────────────────────────────────────────────
+# ── n_quad ─────────────────────────────────────────────────────────────────
 
 def _nquad_result(func, ranges, **kwargs):
     r = _integrate().nquad(func, ranges, **kwargs)
@@ -207,7 +207,7 @@ def _nquad_result(func, ranges, **kwargs):
     return result
 
 
-NQuad = _pred("NQuad",
+n_quad = _pred("n_quad",
     (3, _dispatch_fn(lambda func, ranges:
         _nquad_result(func, ranges))),
     (4, _dispatch_fn(lambda func, ranges, args:
@@ -215,7 +215,7 @@ NQuad = _pred("NQuad",
 )
 
 
-# ── QuadVec ───────────────────────────────────────────────────────────────
+# ── quad_vec ───────────────────────────────────────────────────────────────
 
 def _quad_vec_result(func, a, b):
     if not isinstance(a, Quantity) and not isinstance(b, Quantity):
@@ -241,13 +241,13 @@ def _quad_vec_result(func, a, b):
     return result
 
 
-QuadVec = _pred("QuadVec",
+quad_vec = _pred("quad_vec",
     (4, _dispatch_fn(lambda func, a, b:
         _quad_vec_result(func, a, b))),
 )
 
 
-# ── SolveInitialValueProblem ──────────────────────────────────────────────
+# ── solve_initial_value_problem ──────────────────────────────────────────────
 
 def _solve_ivp_result(fun, t_span, y0, **kwargs):
     sol = _integrate().solve_ivp(fun, t_span, y0, **kwargs)
@@ -266,7 +266,7 @@ def _solve_ivp_result(fun, t_span, y0, **kwargs):
     }
 
 
-SolveInitialValueProblem = _pred("SolveInitialValueProblem",
+solve_initial_value_problem = _pred("solve_initial_value_problem",
     (4, _dispatch_fn(lambda fun, t_span, y0:
         _solve_ivp_result(fun, t_span, y0))),
     (5, _dispatch_fn(lambda fun, t_span, y0, method:
@@ -276,7 +276,7 @@ SolveInitialValueProblem = _pred("SolveInitialValueProblem",
 )
 
 
-# ── OdeIntegrate ──────────────────────────────────────────────────────────
+# ── ode_integrate ──────────────────────────────────────────────────────────
 
 def _odeint_result(func, y0, t, **kwargs):
     result = _integrate().odeint(func, y0, t, full_output=False, **kwargs)
@@ -291,7 +291,7 @@ def _odeint_result_full(func, y0, t, args):
     return {'y': arr, 'infodict': info}
 
 
-OdeIntegrate = _pred("OdeIntegrate",
+ode_integrate = _pred("ode_integrate",
     (4, _dispatch_fn(lambda func, y0, t:
         _odeint_result(func, y0, t))),
     (5, _dispatch_fn(lambda func, y0, t, args:
@@ -299,7 +299,7 @@ OdeIntegrate = _pred("OdeIntegrate",
 )
 
 
-# ── CumulativeTrapezoid ───────────────────────────────────────────────────
+# ── cumulative_trapezoid ───────────────────────────────────────────────────
 
 def _cumtrap_quantity(y, x=None):
     if x is not None:
@@ -314,7 +314,7 @@ def _cumtrap_quantity(y, x=None):
     return wrap_result(result, out_dims) if out_dims else result
 
 
-CumulativeTrapezoid = _pred("CumulativeTrapezoid",
+cumulative_trapezoid = _pred("cumulative_trapezoid",
     (2, _dispatch_fn(lambda y:
         _cumtrap_quantity(y))),
     (3, _dispatch_fn(lambda y, x:
@@ -322,7 +322,7 @@ CumulativeTrapezoid = _pred("CumulativeTrapezoid",
 )
 
 
-# ── Trapezoid ─────────────────────────────────────────────────────────────
+# ── trapezoid ─────────────────────────────────────────────────────────────
 
 def _trapezoid_quantity(y, x=None):
     if x is not None:
@@ -337,7 +337,7 @@ def _trapezoid_quantity(y, x=None):
     return wrap_result(result, out_dims) if out_dims else result
 
 
-Trapezoid = _pred("Trapezoid",
+trapezoid = _pred("trapezoid",
     (2, _dispatch_fn(lambda y:
         _trapezoid_quantity(y))),
     (3, _dispatch_fn(lambda y, x:
@@ -345,7 +345,7 @@ Trapezoid = _pred("Trapezoid",
 )
 
 
-# ── Simpson ───────────────────────────────────────────────────────────────
+# ── simpson ───────────────────────────────────────────────────────────────
 
 def _simpson_quantity(y, x=None):
     if x is not None:
@@ -360,7 +360,7 @@ def _simpson_quantity(y, x=None):
     return wrap_result(result, out_dims) if out_dims else result
 
 
-Simpson = _pred("Simpson",
+simpson = _pred("simpson",
     (2, _dispatch_fn(lambda y:
         _simpson_quantity(y))),
     (3, _dispatch_fn(lambda y, x:
@@ -368,10 +368,10 @@ Simpson = _pred("Simpson",
 )
 
 
-# ── Helper: ResultGet ─────────────────────────────────────────────────────
+# ── Helper: result_get ─────────────────────────────────────────────────────
 
 class _ResultGetPredicate:
-    """ResultGet(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE.
+    """result_get(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE.
 
     RESULT must be a dict (or dict-like).
     FIELD must be a ground string key.
@@ -401,7 +401,7 @@ class _ResultGetPredicate:
         yield (_fail, DONE)
 
     def __repr__(self) -> str:
-        return "ResultGet/3"
+        return "result_get/3"
 
 
-ResultGet = _ResultGetPredicate()
+result_get = _ResultGetPredicate()

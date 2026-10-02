@@ -1,11 +1,11 @@
 # Companion tests for docs/scipy_signal.md signature blocks.
 -double_quotes(atom)
--import_from(scipy_signal, [Convolve, Correlate, Butterworth, Resample])
+-import_from(scipy_signal, [convolve, correlate, butterworth, resample])
 
 test("convolve exists") <- (
-    Convolve([1.0, 2.0, 3.0], [0.0, 1.0, 0.5], R),
+    convolve([1.0, 2.0, 3.0], [0.0, 1.0, 0.5], R),
     nonvar(R))  # nv
 
 test("butterworth exists") <- (
-    Butterworth(4, 0.2, "low", R),
+    butterworth(4, 0.2, "low", R),
     nonvar(R))  # nv

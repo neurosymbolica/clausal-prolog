@@ -1,233 +1,233 @@
 # Companion tests for docs/sympy.md display snippets.
 -double_quotes(atom)
 
--import_from(sympy, [Simplify, Expand, Factor, Solve, SolveAll,
-                             Diff, Integrate, Limit, Series, Subs,
-                             FreeVars, SymEqual, SymStr, Sym, ToSympy, FromSympy,
-                             Collect, Cancel, Apart, Together,
-                             Degree, Coeffs, Roots,
-                             TrigSimp, ExpandTrig,
-                             IsPrime, NextPrime, FactorInt, Divisors,
+-import_from(sympy, [simplify, expand, factor, solve, solve_all,
+                             diff, integrate, limit, series, subs,
+                             free_vars, sym_equal, sym_str, sym, sympy_term,
+                             collect, cancel, apart, together,
+                             degree, coeffs, roots,
+                             trig_simp, expand_trig,
+                             is_prime, next_prime, factor_int, divisors,
                              gcd, lcm,
-                             sum_, Product, Binomial,
-                             Latex, Pretty,
+                             sum_, product, binomial,
+                             latex, pretty,
                              sin, cos, exp, log, sqrt, inf, pi])
 
 # ── Symbolic equality via == ────────────────────────────────────────────────
 
 test("symbolic equality via ==") <- (
-    Diff(X**3, X, R),
+    diff(X**3, X, R),
     R == 3*X**2
 )  # nv
 
 # ── Chaining ────────────────────────────────────────────────────────────────
 
 test("chaining diff integrate") <- (
-    Diff(X**4, X, D),
-    Integrate(D, X, I),
+    diff(X**4, X, D),
+    integrate(D, X, I),
     I == X**4
 )  # nv
 
-# ── Simplify/2 ──────────────────────────────────────────────────────────────
+# ── simplify/2 ──────────────────────────────────────────────────────────────
 
-test("simplify cancellation") <- Simplify(X**2 + 2*X + 1 - (X + 1)**2, 0)  # nv
+test("simplify cancellation") <- simplify(X**2 + 2*X + 1 - (X + 1)**2, 0)  # nv
 
 test("simplify fraction") <- (
-    Simplify((X**2 - 1) / (X - 1), R),
+    simplify((X**2 - 1) / (X - 1), R),
     R == X + 1
 )  # nv
 
-# ── Expand/2 ────────────────────────────────────────────────────────────────
+# ── expand/2 ────────────────────────────────────────────────────────────────
 
 test("expand square") <- (
-    Expand((X + 1)**2, R),
+    expand((X + 1)**2, R),
     R == X**2 + 2*X + 1
 )  # nv
 
 test("expand multivar") <- (
-    Expand((X + Y)**2, R),
+    expand((X + Y)**2, R),
     R == X**2 + 2*X*Y + Y**2
 )  # nv
 
-# ── Factor/2 ────────────────────────────────────────────────────────────────
+# ── factor/2 ────────────────────────────────────────────────────────────────
 
 test("factor diff of squares") <- (
-    Factor(X**2 - 1, R),
+    factor(X**2 - 1, R),
     R == (X - 1) * (X + 1)
 )  # nv
 
 test("factor quadratic") <- (
-    Factor(X**2 + 5*X + 6, R),
+    factor(X**2 + 5*X + 6, R),
     R == (X + 2) * (X + 3)
 )  # nv
 
-# ── Solve/3 ─────────────────────────────────────────────────────────────────
+# ── solve/3 ─────────────────────────────────────────────────────────────────
 
 test("solve linear") <- (
-    Solve(2*X - 6, X, S),
+    solve(2*X - 6, X, S),
     S == 3
 )  # nv
 
 test("solve quadratic") <- (
-    Solve(X**2 - 4, X, S),
+    solve(X**2 - 4, X, S),
     S == 2
 )  # nv
 
-# ── SolveAll/3 ──────────────────────────────────────────────────────────────
+# ── solve_all/3 ──────────────────────────────────────────────────────────────
 
 test("solve all quadratic") <- (
-    SolveAll(X**2 - 9, X, SOLS),
+    solve_all(X**2 - 9, X, SOLS),
     S is ++sorted(SOLS),
     S == [-3, 3]
 )  # nv
 
-# ── Diff/2,3 ────────────────────────────────────────────────────────────────
+# ── diff/2,3 ────────────────────────────────────────────────────────────────
 
 test("diff power rule") <- (
-    Diff(X**3, X, R),
+    diff(X**3, X, R),
     R == 3*X**2
 )  # nv
 
 test("diff sin") <- (
-    Diff(sin(X), X, R),
+    diff(sin(X), X, R),
     R == cos(X)
 )  # nv
 
 test("diff partial") <- (
-    Diff(X*Y + X**2, X, R),
+    diff(X*Y + X**2, X, R),
     R == Y + 2*X
 )  # nv
 
-# ── Integrate/2,3 ───────────────────────────────────────────────────────────
+# ── integrate/2,3 ───────────────────────────────────────────────────────────
 
 test("integrate power") <- (
-    Integrate(X**2, X, R),
+    integrate(X**2, X, R),
     R == X**3 / 3
 )  # nv
 
 test("integrate cos") <- (
-    Integrate(cos(X), X, R),
+    integrate(cos(X), X, R),
     R == sin(X)
 )  # nv
 
-# ── Limit/4 ─────────────────────────────────────────────────────────────────
+# ── limit/4 ─────────────────────────────────────────────────────────────────
 
 test("limit x+1 at 0") <- (
-    Limit(X + 1, X, 0, R),
+    limit(X + 1, X, 0, R),
     R == 1
 )  # nv
 
 test("limit 1/x at inf") <- (
-    Limit(1/X, X, inf, R),
+    limit(1/X, X, inf, R),
     R == 0
 )  # nv
 
 test("limit sinx/x at 0") <- (
-    Limit(sin(X)/X, X, 0, R),
+    limit(sin(X)/X, X, 0, R),
     R == 1
 )  # nv
 
-# ── Series/4 ────────────────────────────────────────────────────────────────
+# ── series/4 ────────────────────────────────────────────────────────────────
 
 test("series 1/(1-x) to 4") <- (
-    Series(1/(1-X), X, 4, R),
+    series(1/(1-X), X, 4, R),
     R == 1 + X + X**2 + X**3
 )  # nv
 
-# ── Collect/3 ───────────────────────────────────────────────────────────────
+# ── collect/3 ───────────────────────────────────────────────────────────────
 
 test("collect by x") <- (
-    Collect(X**2 + 2*X + X*Y, X, R),
+    collect(X**2 + 2*X + X*Y, X, R),
     R == X**2 + X*(Y + 2)
 )  # nv
 
-# ── Cancel/2 ────────────────────────────────────────────────────────────────
+# ── cancel/2 ────────────────────────────────────────────────────────────────
 
 test("cancel common factor") <- (
-    Cancel((X**2 - 1) / (X - 1), R),
+    cancel((X**2 - 1) / (X - 1), R),
     R == X + 1
 )  # nv
 
-# ── Apart/2 ─────────────────────────────────────────────────────────────────
+# ── apart/2 ─────────────────────────────────────────────────────────────────
 
 test("apart simple") <- (
-    Apart(1 / (X**2 - 1), R),
+    apart(1 / (X**2 - 1), R),
     R == 1/(2*(X - 1)) - 1/(2*(X + 1))
 )  # nv
 
-# ── Together/2 ──────────────────────────────────────────────────────────────
+# ── together/2 ──────────────────────────────────────────────────────────────
 
 test("together fractions") <- (
-    Together(1/X + 1/Y, R),
+    together(1/X + 1/Y, R),
     R == (X + Y) / (X * Y)
 )  # nv
 
-# ── Degree/3 ────────────────────────────────────────────────────────────────
+# ── degree/3 ────────────────────────────────────────────────────────────────
 
 test("degree cubic") <- (
-    Degree(X**3 + 2*X + 1, X, D),
+    degree(X**3 + 2*X + 1, X, D),
     D == 3
 )  # nv
 
-# ── Coeffs/3 ────────────────────────────────────────────────────────────────
+# ── coeffs/3 ────────────────────────────────────────────────────────────────
 
 test("coeffs cubic") <- (
-    Coeffs(2*X**3 - X + 7, X, C),
+    coeffs(2*X**3 - X + 7, X, C),
     C == [2, 0, -1, 7]
 )  # nv
 
-# ── Roots/3 ─────────────────────────────────────────────────────────────────
+# ── roots/3 ─────────────────────────────────────────────────────────────────
 
 test("roots repeated") <- (
-    Roots(X**2 - 2*X + 1, X, PAIR),
+    roots(X**2 - 2*X + 1, X, PAIR),
     ROOT is ++PAIR[0],
     MULT is ++PAIR[1],
     ROOT == 1,
     MULT == 2
 )  # nv
 
-# ── TrigSimp/2 ──────────────────────────────────────────────────────────────
+# ── trig_simp/2 ──────────────────────────────────────────────────────────────
 
 test("trig simp pythagorean") <- (
-    TrigSimp(sin(X)**2 + cos(X)**2, R),
+    trig_simp(sin(X)**2 + cos(X)**2, R),
     R == 1
 )  # nv
 
 test("trig simp double angle") <- (
-    TrigSimp(2 * sin(X) * cos(X), R),
+    trig_simp(2 * sin(X) * cos(X), R),
     R == sin(2*X)
 )  # nv
 
-# ── ExpandTrig/2 ────────────────────────────────────────────────────────────
+# ── expand_trig/2 ────────────────────────────────────────────────────────────
 
 test("expand trig sum") <- (
-    ExpandTrig(sin(X + Y), R),
+    expand_trig(sin(X + Y), R),
     R == sin(X)*cos(Y) + sin(Y)*cos(X)
 )  # nv
 
-# ── IsPrime/1 ───────────────────────────────────────────────────────────────
+# ── is_prime/1 ───────────────────────────────────────────────────────────────
 
-test("is prime 7") <- IsPrime(7)  # nv
-test("not prime 4") <- (not IsPrime(4))  # nv
+test("is prime 7") <- is_prime(7)  # nv
+test("not prime 4") <- (not is_prime(4))  # nv
 
-# ── NextPrime/2 ─────────────────────────────────────────────────────────────
+# ── next_prime/2 ─────────────────────────────────────────────────────────────
 
 test("next prime after 7") <- (
-    NextPrime(7, P),
+    next_prime(7, P),
     P == 11
 )  # nv
 
-# ── FactorInt/2 ─────────────────────────────────────────────────────────────
+# ── factor_int/2 ─────────────────────────────────────────────────────────────
 
 test("factor 360") <- (
-    FactorInt(360, F),
+    factor_int(360, F),
     F is {2: 3, 3: 2, 5: 1}
 )  # nv
 
-# ── Divisors/2 ──────────────────────────────────────────────────────────────
+# ── divisors/2 ──────────────────────────────────────────────────────────────
 
 test("divisors 12") <- (
-    Divisors(12, D),
+    divisors(12, D),
     D == [1, 2, 3, 4, 6, 12]
 )  # nv
 
@@ -260,70 +260,70 @@ test("sum of i^2 from 1 to 5") <- (
     R == 55
 )  # nv
 
-# ── Product/5 ───────────────────────────────────────────────────────────────
+# ── product/5 ───────────────────────────────────────────────────────────────
 
 test("product 1 to 5") <- (
-    Product(I, I, 1, 5, R),
+    product(I, I, 1, 5, R),
     R == 120
 )  # nv
 
-# ── Binomial/3 ──────────────────────────────────────────────────────────────
+# ── binomial/3 ──────────────────────────────────────────────────────────────
 
 test("binomial 5 choose 2") <- (
-    Binomial(5, 2, R),
+    binomial(5, 2, R),
     R == 10
 )  # nv
 
 test("binomial symbolic") <- (
-    Binomial(N, 2, R),
+    binomial(N, 2, R),
     R == N*(N - 1)/2
 )  # nv
 
-# ── Latex/2 ─────────────────────────────────────────────────────────────────
+# ── latex/2 ─────────────────────────────────────────────────────────────────
 
 test("latex expression") <- (
-    Latex(X_UNUSED**2 + 1, S),
+    latex(X_UNUSED**2 + 1, S),
     ++("x^{2}" in S)
 )  # nv
 
-# ── Pretty/2 ────────────────────────────────────────────────────────────────
+# ── pretty/2 ────────────────────────────────────────────────────────────────
 
 test("pretty expression") <- (
-    Pretty(X_UNUSED**2, S),
+    pretty(X_UNUSED**2, S),
     ++("2" in S)
 )  # nv
 
-# ── Subs/3 ──────────────────────────────────────────────────────────────────
+# ── subs/3 ──────────────────────────────────────────────────────────────────
 
 test("subs dict") <- (
-    Subs(X**2 + 1, ++{X: 3}, R),
+    subs(X**2 + 1, ++{X: 3}, R),
     R == 10
 )  # nv
 
-# ── FreeVars/2 ──────────────────────────────────────────────────────────────
+# ── free_vars/2 ──────────────────────────────────────────────────────────────
 
 test("free vars none") <- (
-    FreeVars(42, V),
+    free_vars(42, V),
     V == []
 )  # nv
 
-# ── SymStr/2 ────────────────────────────────────────────────────────────────
+# ── sym_str/2 ────────────────────────────────────────────────────────────────
 
 test("sym str constant") <- (
-    SymStr(42, S),
+    sym_str(42, S),
     S == "42"
 )  # nv
 
-# ── SymEqual/2 ──────────────────────────────────────────────────────────────
+# ── sym_equal/2 ──────────────────────────────────────────────────────────────
 
-test("sym equal reflexive") <- SymEqual(X**2 + 1, 1 + X**2)  # nv
+test("sym equal reflexive") <- sym_equal(X**2 + 1, 1 + X**2)  # nv
 
-test("sym equal nontrivial") <- SymEqual((X + 1)**2 - X**2, 2*X + 1)  # nv
+test("sym equal nontrivial") <- sym_equal((X + 1)**2 - X**2, 2*X + 1)  # nv
 
-# ── Sym/2 ───────────────────────────────────────────────────────────────────
+# ── sym/2 ───────────────────────────────────────────────────────────────────
 
 test("sym named") <- (
-    Sym("x", X),
+    sym("x", X),
     EXPR is ++(X**2 + 1),
     S is ++str(EXPR),
     S == "x**2 + 1"
@@ -332,18 +332,18 @@ test("sym named") <- (
 # ── Math functions ──────────────────────────────────────────────────────────
 
 test("diff sin cos") <- (
-    Diff(sin(X), X, R),
+    diff(sin(X), X, R),
     R == cos(X)
 )  # nv
 
 test("simplify exp log") <- (
-    Simplify(exp(log(X)), R),
+    simplify(exp(log(X)), R),
     R == X
 )  # nv
 
 # ── Constants ───────────────────────────────────────────────────────────────
 
 test("limit with inf") <- (
-    Limit(1/X, X, inf, R),
+    limit(1/X, X, inf, R),
     R == 0
 )  # nv

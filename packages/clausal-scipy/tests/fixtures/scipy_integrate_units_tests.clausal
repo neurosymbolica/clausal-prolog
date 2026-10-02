@@ -1,14 +1,14 @@
 -double_quotes(atom)
--import_from(scipy_integrate, [Quad, Trapezoid, CumulativeTrapezoid, Simpson, ResultGet])
+-import_from(scipy_integrate, [quad, trapezoid, cumulative_trapezoid, simpson, result_get])
 
 # no units on x - plain fast path (verify existing behaviour is preserved)
 test("trapezoid plain arrays returns plain") <- (
-    Trapezoid([1.0, 2.0, 3.0], RESULT),
+    trapezoid([1.0, 2.0, 3.0], RESULT),
     DIFF is ++(abs(float(RESULT) - 4.0)),
     DIFF < 1.0e-10)  # nv
 
 test("quad no units fast path") <- (
-    Quad(++(lambda x: x), 0.0, 1.0, RESULT),
-    ResultGet(RESULT, 'value', V),
+    quad(++(lambda x: x), 0.0, 1.0, RESULT),
+    result_get(RESULT, 'value', V),
     DIFF is ++(abs(float(V) - 0.5)),
     DIFF < 1.0e-9)  # nv

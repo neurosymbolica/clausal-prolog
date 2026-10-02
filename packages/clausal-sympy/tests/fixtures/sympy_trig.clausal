@@ -1,34 +1,34 @@
 -double_quotes(atom)
--import_from(sympy, [TrigSimp, ExpandTrig, Simplify,
-                             sin, cos, tan, exp, log, SymEqual])
+-import_from(sympy, [trig_simp, expand_trig, simplify,
+                             sin, cos, tan, exp, log, sym_equal])
 
-# ── TrigSimp/2 ───────────────────────────────────────────────────────────────
+# ── trig_simp/2 ───────────────────────────────────────────────────────────────
 
 test("trig simp pythagorean") <- (
-    TrigSimp(sin(X)**2 + cos(X)**2, R),
+    trig_simp(sin(X)**2 + cos(X)**2, R),
     R == 1
 )  # nv
 
 test("trig simp double angle") <- (
-    TrigSimp(2 * sin(X) * cos(X), R),
+    trig_simp(2 * sin(X) * cos(X), R),
     R == sin(2*X)
 )  # nv
 
-# ── ExpandTrig/2 ─────────────────────────────────────────────────────────────
+# ── expand_trig/2 ─────────────────────────────────────────────────────────────
 
 test("expand trig sum") <- (
-    ExpandTrig(sin(X + Y), R),
+    expand_trig(sin(X + Y), R),
     R == sin(X)*cos(Y) + sin(Y)*cos(X)
 )  # nv
 
 test("expand trig double") <- (
-    ExpandTrig(cos(2*X), R),
+    expand_trig(cos(2*X), R),
     R == 2*cos(X)**2 - 1
 )  # nv
 
 # ── Mixed: trig + calculus ───────────────────────────────────────────────────
 
 test("simplify exp log") <- (
-    Simplify(exp(log(X)), R),
+    simplify(exp(log(X)), R),
     R == X
 )  # nv

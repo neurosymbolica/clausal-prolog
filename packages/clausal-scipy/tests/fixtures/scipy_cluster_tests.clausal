@@ -1,74 +1,74 @@
 -double_quotes(atom)
--import_from(scipy_cluster, [Linkage, FlatCluster, Dendrogram,
-                              Cophenet, Inconsistent,
-                              KMeans2, KMeans, VectorQuantize, Whiten,
-                              ResultGet])
+-import_from(scipy_cluster, [linkage, flat_cluster, dendrogram,
+                              cophenet, inconsistent,
+                              k_means2, k_means, vector_quantize, whiten,
+                              result_get])
 
 # Sample data: 6 points in two clear clusters
 # Cluster A: around (1,1), Cluster B: around (5,5)
 sample_points(DATA) <- (DATA is [[1.0,1.0],[1.2,0.9],[0.8,1.1],[5.0,5.0],[5.1,4.9],[4.9,5.1]])
 
-# Linkage(POINTS, 'ward', RESULT) produces a (5 x 4) linkage matrix
+# linkage(POINTS, 'ward', RESULT) produces a (5 x 4) linkage matrix
 test("linkage ward produces matrix") <- (
     sample_points(DATA),
-    Linkage(DATA, 'ward', Z),
+    linkage(DATA, 'ward', Z),
     ROWS is ++(len(Z)),
     ROWS == 5)  # nv
 
-# FlatCluster with maxclust=2 separates the two groups
+# flat_cluster with maxclust=2 separates the two groups
 test("flat cluster two groups") <- (
     sample_points(DATA),
-    Linkage(DATA, 'ward', Z),
-    FlatCluster(Z, 2, 'maxclust', LABELS),
+    linkage(DATA, 'ward', Z),
+    flat_cluster(Z, 2, 'maxclust', LABELS),
     L0 is ++(int(LABELS[0])),
     L3 is ++(int(LABELS[3])),
     DIFF is ++(abs(L0 - L3)),
     DIFF > 0)  # nv
 
-# KMeans2 returns 2 centroids for 2-cluster data
+# k_means2 returns 2 centroids for 2-cluster data
 test("kmeans2 centroid count") <- (
     sample_points(DATA),
-    KMeans2(DATA, 2, RESULT),
-    ResultGet(RESULT, 'centroid', CENTROID),
+    k_means2(DATA, 2, RESULT),
+    result_get(RESULT, 'centroid', CENTROID),
     NCENTROIDS is ++(len(CENTROID)),
     NCENTROIDS == 2)  # nv
 
-# KMeans returns codebook with 2 entries
+# k_means returns codebook with 2 entries
 test("kmeans codebook shape") <- (
     sample_points(DATA),
-    KMeans(DATA, 2, RESULT),
-    ResultGet(RESULT, 'codebook', CODEBOOK),
+    k_means(DATA, 2, RESULT),
+    result_get(RESULT, 'codebook', CODEBOOK),
     NROWS is ++(len(CODEBOOK)),
     NROWS == 2)  # nv
 
-# VectorQuantize assigns each observation a code
+# vector_quantize assigns each observation a code
 test("vector quantize assigns codes") <- (
     sample_points(DATA),
-    KMeans(DATA, 2, KR),
-    ResultGet(KR, 'codebook', CODEBOOK),
-    VectorQuantize(DATA, CODEBOOK, VQR),
-    ResultGet(VQR, 'code', CODE),
+    k_means(DATA, 2, KR),
+    result_get(KR, 'codebook', CODEBOOK),
+    vector_quantize(DATA, CODEBOOK, VQR),
+    result_get(VQR, 'code', CODE),
     NCODES is ++(len(CODE)),
     NCODES == 6)  # nv
 
-# Whiten normalises observations to unit variance
+# whiten normalises observations to unit variance
 test("whiten unit variance") <- (
-    Whiten([[1.0,2.0],[3.0,4.0],[5.0,6.0],[7.0,8.0]], NORMALISED),
+    whiten([[1.0,2.0],[3.0,4.0],[5.0,6.0],[7.0,8.0]], NORMALISED),
     NROWS is ++(len(NORMALISED)),
     NROWS == 4)  # nv
 
-# Cophenet without Y returns condensed distance array (n*(n-1)/2 = 15 for 6 points)
+# cophenet without Y returns condensed distance array (n*(n-1)/2 = 15 for 6 points)
 test("cophenet with y high correlation") <- (
     sample_points(DATA),
-    Linkage(DATA, 'ward', Z),
-    Cophenet(Z, DISTANCES),
+    linkage(DATA, 'ward', Z),
+    cophenet(Z, DISTANCES),
     N is ++(len(DISTANCES)),
     N == 15)  # nv
 
-# Inconsistent returns a (5 x 4) array for 6-point data
+# inconsistent returns a (5 x 4) array for 6-point data
 test("inconsistent array shape") <- (
     sample_points(DATA),
-    Linkage(DATA, 'ward', Z),
-    Inconsistent(Z, ROWS),
+    linkage(DATA, 'ward', Z),
+    inconsistent(Z, ROWS),
     NROWS is ++(len(ROWS)),
     NROWS == 5)  # nv

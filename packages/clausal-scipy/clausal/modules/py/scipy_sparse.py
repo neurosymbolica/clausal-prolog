@@ -4,128 +4,128 @@ Provides sparse matrix construction, conversion, inspection, and linear algebra
 from ``scipy.sparse`` and ``scipy.sparse.linalg`` as importable predicate objects
 for use in .clausal files via::
 
-    -import_from(scipy_sparse, [MakeCSR, MakeCSC, MakeCOO, MakeDiagonals, MakeEye, ...])
+    -import_from(scipy_sparse, [make_csr, make_csc, make_coo, make_diagonals, make_eye, ...])
 
 Or via the canonical ``py.*`` path::
 
-    -import_from(py.scipy_sparse, [MakeCSR, ...])
+    -import_from(py.scipy_sparse, [make_csr, ...])
 
 Tiers
 -----
 **Tier 3 — handle-based sparse matrices** (construction):
-    MakeCSR, MakeCSC, MakeCOO, MakeDiagonals, MakeEye
+    make_csr, make_csc, make_coo, make_diagonals, make_eye
 
 **Tier 3 — conversions**:
-    ToDense, FromDense
+    to_dense, from_dense
 
 **Tier 3 — inspection**:
-    Shape, NonzeroCount
+    shape, nonzero_count
 
 **scipy.sparse.linalg** (sparse linear algebra):
-    Solve, EigenDecomposeHermitian, SingularValueDecompose
+    solve, eigen_decompose_hermitian, singular_value_decompose
 
 **Lifecycle**:
-    Free
+    free
 
 Predicate catalogue
 -------------------
 
 Construction (Tier 3):
-    MakeCSR(DATA, INDICES, INDPTR, RESULT)
-    MakeCSR(DATA, INDICES, INDPTR, SHAPE, RESULT)
-    MakeCSR(DATA, INDICES, INDPTR, SHAPE, DTYPE, RESULT)
+    make_csr(DATA, INDICES, INDPTR, RESULT)
+    make_csr(DATA, INDICES, INDPTR, SHAPE, RESULT)
+    make_csr(DATA, INDICES, INDPTR, SHAPE, DTYPE, RESULT)
         → scipy.sparse.csr_matrix((data, indices, indptr), shape=SHAPE, dtype=DTYPE)
         Build a CSR (Compressed Sparse Row) matrix.
         RESULT: integer HANDLE.
 
-    MakeCSC(DATA, INDICES, INDPTR, RESULT)
-    MakeCSC(DATA, INDICES, INDPTR, SHAPE, RESULT)
-    MakeCSC(DATA, INDICES, INDPTR, SHAPE, DTYPE, RESULT)
+    make_csc(DATA, INDICES, INDPTR, RESULT)
+    make_csc(DATA, INDICES, INDPTR, SHAPE, RESULT)
+    make_csc(DATA, INDICES, INDPTR, SHAPE, DTYPE, RESULT)
         → scipy.sparse.csc_matrix((data, indices, indptr), shape=SHAPE, dtype=DTYPE)
         Build a CSC (Compressed Sparse Column) matrix.
         RESULT: integer HANDLE.
 
-    MakeCOO(DATA, ROW, COL, RESULT)
-    MakeCOO(DATA, ROW, COL, SHAPE, RESULT)
+    make_coo(DATA, ROW, COL, RESULT)
+    make_coo(DATA, ROW, COL, SHAPE, RESULT)
         → scipy.sparse.coo_matrix((data, (row, col)), shape=SHAPE)
         Build a COO (Coordinate) sparse matrix.
         RESULT: integer HANDLE.
 
-    MakeDiagonals(DIAGONALS, RESULT)
-    MakeDiagonals(DIAGONALS, OFFSETS, RESULT)
-    MakeDiagonals(DIAGONALS, OFFSETS, SHAPE, RESULT)
+    make_diagonals(DIAGONALS, RESULT)
+    make_diagonals(DIAGONALS, OFFSETS, RESULT)
+    make_diagonals(DIAGONALS, OFFSETS, SHAPE, RESULT)
         → scipy.sparse.diags(diagonals, offsets=OFFSETS, shape=SHAPE)
         Build a sparse diagonal matrix.
         DIAGONALS: sequence of diagonal arrays (or single array for main diagonal).
         OFFSETS: integer offset (0=main) or list matching DIAGONALS.
         RESULT: integer HANDLE.
 
-    MakeEye(N, RESULT)
-    MakeEye(N, M, RESULT)
-    MakeEye(N, M, K, RESULT)
+    make_eye(N, RESULT)
+    make_eye(N, M, RESULT)
+    make_eye(N, M, K, RESULT)
         → scipy.sparse.eye(N, M=M, k=K)
         Build a sparse identity (or shifted-diagonal) matrix.
         RESULT: integer HANDLE.
 
 Conversions (Tier 3):
-    ToDense(HANDLE, RESULT)
-    ToDense(HANDLE, ORDER, RESULT)
+    to_dense(HANDLE, RESULT)
+    to_dense(HANDLE, ORDER, RESULT)
         → handle.toarray(order=ORDER)
         Convert a sparse matrix to a dense numpy array.
         ORDER: 'C' (row-major) or 'F' (column-major); default None → row-major.
 
-    FromDense(DENSE, RESULT)
-    FromDense(DENSE, FORMAT, RESULT)
+    from_dense(DENSE, RESULT)
+    from_dense(DENSE, FORMAT, RESULT)
         → scipy.sparse.csr_matrix(DENSE) or format-specific constructor
         Convert a dense array to a sparse matrix handle.
         FORMAT: 'csr', 'csc', 'coo', etc.  Default is 'csr'.
 
 Inspection (Tier 3):
-    Shape(HANDLE, RESULT)
+    shape(HANDLE, RESULT)
         → handle.shape
         Return the (rows, cols) shape tuple of the sparse matrix.
 
-    NonzeroCount(HANDLE, RESULT)
+    nonzero_count(HANDLE, RESULT)
         → handle.nnz
         Return the number of stored (non-zero) elements.
 
 scipy.sparse.linalg:
-    Solve(A, B, RESULT)
-    Solve(A, B, PERMC_SPEC, RESULT)
-    Solve(A, B, PERMC_SPEC, USE_UMFPACK, RESULT)
+    solve(A, B, RESULT)
+    solve(A, B, PERMC_SPEC, RESULT)
+    solve(A, B, PERMC_SPEC, USE_UMFPACK, RESULT)
         → scipy.sparse.linalg.spsolve(a, b, permc_spec=PERMC_SPEC,
                                        use_umfpack=USE_UMFPACK)
-        Solve the sparse linear system A @ X = B.
+        solve the sparse linear system A @ X = B.
         A: HANDLE to a square sparse matrix.
         RESULT: dense solution array X.
 
-    EigenDecomposeHermitian(A, RESULT)
-    EigenDecomposeHermitian(A, K, RESULT)
+    eigen_decompose_hermitian(A, RESULT)
+    eigen_decompose_hermitian(A, K, RESULT)
         → scipy.sparse.linalg.eigsh(a, k=K)
         Compute K eigenvalues/eigenvectors of a real-symmetric or complex-Hermitian
         sparse matrix.  Default K=6.
         A: HANDLE to a sparse matrix.
         RESULT: dict with keys 'eigenvalues' and 'eigenvectors'.
 
-    SingularValueDecompose(A, RESULT)
-    SingularValueDecompose(A, K, RESULT)
+    singular_value_decompose(A, RESULT)
+    singular_value_decompose(A, K, RESULT)
         → scipy.sparse.linalg.svds(a, k=K)
         Compute K largest singular values/vectors via ARPACK.  Default K=6.
         A: HANDLE to a sparse matrix.
         RESULT: dict with keys 'u', 's', 'vt'.
 
 Lifecycle:
-    Free(HANDLE)
+    free(HANDLE)
         Release the object registered under HANDLE.  Always succeeds.
 
 Usage example::
 
-    -import_from(scipy_sparse, [MakeCSR, ToDense, Solve, Free])
+    -import_from(scipy_sparse, [make_csr, to_dense, solve, free])
 
     solve_system(DATA, INDICES, INDPTR, SHAPE, B, X) <- (
-        MakeCSR(DATA, INDICES, INDPTR, SHAPE, A),
-        Solve(A, B, X),
-        Free(A)
+        make_csr(DATA, INDICES, INDPTR, SHAPE, A),
+        solve(A, B, X),
+        free(A)
     )
 """
 
@@ -274,12 +274,12 @@ def _pure(fn: Callable) -> Callable:
 # Tier 3 — Construction
 # ═══════════════════════════════════════════════════════════════════════════
 
-# ── MakeCSR ────────────────────────────────────────────────────────────────
-# MakeCSR(DATA, INDICES, INDPTR, RESULT) → arity 4
-# MakeCSR(DATA, INDICES, INDPTR, SHAPE, RESULT) → arity 5
-# MakeCSR(DATA, INDICES, INDPTR, SHAPE, DTYPE, RESULT) → arity 6
+# ── make_csr ────────────────────────────────────────────────────────────────
+# make_csr(DATA, INDICES, INDPTR, RESULT) → arity 4
+# make_csr(DATA, INDICES, INDPTR, SHAPE, RESULT) → arity 5
+# make_csr(DATA, INDICES, INDPTR, SHAPE, DTYPE, RESULT) → arity 6
 
-MakeCSR = _pred("MakeCSR",
+make_csr = _pred("make_csr",
     (4, _make(lambda data, indices, indptr:
         _sp().csr_matrix((data, indices, indptr)))),
     (5, _make(lambda data, indices, indptr, shape:
@@ -288,12 +288,12 @@ MakeCSR = _pred("MakeCSR",
         _sp().csr_matrix((data, indices, indptr), shape=tuple(shape), dtype=dtype))),
 )
 
-# ── MakeCSC ────────────────────────────────────────────────────────────────
-# MakeCSC(DATA, INDICES, INDPTR, RESULT) → arity 4
-# MakeCSC(DATA, INDICES, INDPTR, SHAPE, RESULT) → arity 5
-# MakeCSC(DATA, INDICES, INDPTR, SHAPE, DTYPE, RESULT) → arity 6
+# ── make_csc ────────────────────────────────────────────────────────────────
+# make_csc(DATA, INDICES, INDPTR, RESULT) → arity 4
+# make_csc(DATA, INDICES, INDPTR, SHAPE, RESULT) → arity 5
+# make_csc(DATA, INDICES, INDPTR, SHAPE, DTYPE, RESULT) → arity 6
 
-MakeCSC = _pred("MakeCSC",
+make_csc = _pred("make_csc",
     (4, _make(lambda data, indices, indptr:
         _sp().csc_matrix((data, indices, indptr)))),
     (5, _make(lambda data, indices, indptr, shape:
@@ -302,23 +302,23 @@ MakeCSC = _pred("MakeCSC",
         _sp().csc_matrix((data, indices, indptr), shape=tuple(shape), dtype=dtype))),
 )
 
-# ── MakeCOO ────────────────────────────────────────────────────────────────
-# MakeCOO(DATA, ROW, COL, RESULT) → arity 4
-# MakeCOO(DATA, ROW, COL, SHAPE, RESULT) → arity 5
+# ── make_coo ────────────────────────────────────────────────────────────────
+# make_coo(DATA, ROW, COL, RESULT) → arity 4
+# make_coo(DATA, ROW, COL, SHAPE, RESULT) → arity 5
 
-MakeCOO = _pred("MakeCOO",
+make_coo = _pred("make_coo",
     (4, _make(lambda data, row, col:
         _sp().coo_matrix((data, (row, col))))),
     (5, _make(lambda data, row, col, shape:
         _sp().coo_matrix((data, (row, col)), shape=tuple(shape)))),
 )
 
-# ── MakeDiagonals ──────────────────────────────────────────────────────────────
-# MakeDiagonals(DIAGONALS, RESULT) → arity 2
-# MakeDiagonals(DIAGONALS, OFFSETS, RESULT) → arity 3
-# MakeDiagonals(DIAGONALS, OFFSETS, SHAPE, RESULT) → arity 4
+# ── make_diagonals ──────────────────────────────────────────────────────────────
+# make_diagonals(DIAGONALS, RESULT) → arity 2
+# make_diagonals(DIAGONALS, OFFSETS, RESULT) → arity 3
+# make_diagonals(DIAGONALS, OFFSETS, SHAPE, RESULT) → arity 4
 
-MakeDiagonals = _pred("MakeDiagonals",
+make_diagonals = _pred("make_diagonals",
     (2, _make(lambda diagonals:
         _sp().diags(diagonals))),
     (3, _make(lambda diagonals, offsets:
@@ -327,12 +327,12 @@ MakeDiagonals = _pred("MakeDiagonals",
         _sp().diags(diagonals, offsets=offsets, shape=tuple(shape)))),
 )
 
-# ── MakeEye ────────────────────────────────────────────────────────────────
-# MakeEye(N, RESULT) → arity 2
-# MakeEye(N, M, RESULT) → arity 3
-# MakeEye(N, M, K, RESULT) → arity 4
+# ── make_eye ────────────────────────────────────────────────────────────────
+# make_eye(N, RESULT) → arity 2
+# make_eye(N, M, RESULT) → arity 3
+# make_eye(N, M, K, RESULT) → arity 4
 
-MakeEye = _pred("MakeEye",
+make_eye = _pred("make_eye",
     (2, _make(lambda n:
         _sp().eye(int(n)))),
     (3, _make(lambda n, m:
@@ -346,20 +346,20 @@ MakeEye = _pred("MakeEye",
 # Tier 3 — Conversions
 # ═══════════════════════════════════════════════════════════════════════════
 
-# ── ToDense ────────────────────────────────────────────────────────────────
-# ToDense(HANDLE, RESULT) → arity 2
-# ToDense(HANDLE, ORDER, RESULT) → arity 3
+# ── to_dense ────────────────────────────────────────────────────────────────
+# to_dense(HANDLE, RESULT) → arity 2
+# to_dense(HANDLE, ORDER, RESULT) → arity 3
 
-ToDense = _pred("ToDense",
+to_dense = _pred("to_dense",
     (2, _query(lambda obj:
         obj.toarray())),
     (3, _query(lambda obj, order:
         obj.toarray(order=str(order)))),
 )
 
-# ── FromDense ──────────────────────────────────────────────────────────────
-# FromDense(DENSE, RESULT) → arity 2
-# FromDense(DENSE, FORMAT, RESULT) → arity 3
+# ── from_dense ──────────────────────────────────────────────────────────────
+# from_dense(DENSE, RESULT) → arity 2
+# from_dense(DENSE, FORMAT, RESULT) → arity 3
 
 def _from_dense_fmt(dense, fmt):
     constructor = getattr(_sp(), f"{str(fmt)}_matrix", None)
@@ -367,7 +367,7 @@ def _from_dense_fmt(dense, fmt):
         raise ValueError(f"Unknown sparse format: {fmt!r}")
     return constructor(dense)
 
-FromDense = _pred("FromDense",
+from_dense = _pred("from_dense",
     (2, _make(lambda dense:
         _sp().csr_matrix(dense))),
     (3, _make(lambda dense, fmt:
@@ -379,17 +379,17 @@ FromDense = _pred("FromDense",
 # Tier 3 — Inspection
 # ═══════════════════════════════════════════════════════════════════════════
 
-# ── Shape ──────────────────────────────────────────────────────────────────
-# Shape(HANDLE, RESULT) → arity 2
+# ── shape ──────────────────────────────────────────────────────────────────
+# shape(HANDLE, RESULT) → arity 2
 
-Shape = _pred("Shape",
+shape = _pred("shape",
     (2, _query(lambda obj: obj.shape)),
 )
 
-# ── NonzeroCount ───────────────────────────────────────────────────────────
-# NonzeroCount(HANDLE, RESULT) → arity 2
+# ── nonzero_count ───────────────────────────────────────────────────────────
+# nonzero_count(HANDLE, RESULT) → arity 2
 
-NonzeroCount = _pred("NonzeroCount",
+nonzero_count = _pred("nonzero_count",
     (2, _query(lambda obj: obj.nnz)),
 )
 
@@ -398,10 +398,10 @@ NonzeroCount = _pred("NonzeroCount",
 # scipy.sparse.linalg
 # ═══════════════════════════════════════════════════════════════════════════
 
-# ── Solve ──────────────────────────────────────────────────────────────────
-# Solve(A, B, RESULT) → arity 3
-# Solve(A, B, PERMC_SPEC, RESULT) → arity 4
-# Solve(A, B, PERMC_SPEC, USE_UMFPACK, RESULT) → arity 5
+# ── solve ──────────────────────────────────────────────────────────────────
+# solve(A, B, RESULT) → arity 3
+# solve(A, B, PERMC_SPEC, RESULT) → arity 4
+# solve(A, B, PERMC_SPEC, USE_UMFPACK, RESULT) → arity 5
 
 def _sparse_solve_3(mat, b):
     return _la().spsolve(mat, b, permc_spec=None, use_umfpack=True)
@@ -412,15 +412,15 @@ def _sparse_solve_4(mat, b, permc_spec):
 def _sparse_solve_5(mat, b, permc_spec, use_umfpack):
     return _la().spsolve(mat, b, permc_spec=permc_spec, use_umfpack=bool(use_umfpack))
 
-Solve = _pred("Solve",
+solve = _pred("solve",
     (3, _linalg_op(_sparse_solve_3)),
     (4, _linalg_op(_sparse_solve_4)),
     (5, _linalg_op(_sparse_solve_5)),
 )
 
-# ── EigenDecomposeHermitian ────────────────────────────────────────────────
-# EigenDecomposeHermitian(A, RESULT) → arity 2  (default k=6)
-# EigenDecomposeHermitian(A, K, RESULT) → arity 3
+# ── eigen_decompose_hermitian ────────────────────────────────────────────────
+# eigen_decompose_hermitian(A, RESULT) → arity 2  (default k=6)
+# eigen_decompose_hermitian(A, K, RESULT) → arity 3
 
 def _eigsh_default(mat):
     w, v = _la().eigsh(mat, k=min(6, mat.shape[0] - 1))
@@ -430,14 +430,14 @@ def _eigsh_k(mat, k):
     w, v = _la().eigsh(mat, k=int(k))
     return {"eigenvalues": w, "eigenvectors": v}
 
-EigenDecomposeHermitian = _pred("EigenDecomposeHermitian",
+eigen_decompose_hermitian = _pred("eigen_decompose_hermitian",
     (2, _linalg_op(_eigsh_default)),
     (3, _linalg_op(_eigsh_k)),
 )
 
-# ── SingularValueDecompose ────────────────────────────────────────────────
-# SingularValueDecompose(A, RESULT) → arity 2  (default k=6)
-# SingularValueDecompose(A, K, RESULT) → arity 3
+# ── singular_value_decompose ────────────────────────────────────────────────
+# singular_value_decompose(A, RESULT) → arity 2  (default k=6)
+# singular_value_decompose(A, K, RESULT) → arity 3
 
 def _svds_default(mat):
     k = min(6, min(mat.shape) - 1)
@@ -448,14 +448,14 @@ def _svds_k(mat, k):
     u, s, vt = _la().svds(mat, k=int(k))
     return {"u": u, "s": s, "vt": vt}
 
-SingularValueDecompose = _pred("SingularValueDecompose",
+singular_value_decompose = _pred("singular_value_decompose",
     (2, _linalg_op(_svds_default)),
     (3, _linalg_op(_svds_k)),
 )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Lifecycle — Free
+# Lifecycle — free
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _free_dispatch(this_generator, _proceed, _fail, _catcher, handle, trail):
@@ -467,7 +467,7 @@ def _free_dispatch(this_generator, _proceed, _fail, _catcher, handle, trail):
     yield (_proceed, None)
     yield (_fail, DONE)
 
-Free = _pred("Free",
+free = _pred("free",
     (1, _free_dispatch),
 )
 
@@ -475,18 +475,18 @@ Free = _pred("Free",
 # ── Module-level exports ──────────────────────────────────────────────────
 
 __all__ = [
-    "MakeCSR",
-    "MakeCSC",
-    "MakeCOO",
-    "MakeDiagonals",
-    "MakeEye",
-    "ToDense",
-    "FromDense",
-    "Shape",
-    "NonzeroCount",
-    "Solve",
-    "EigenDecomposeHermitian",
-    "SingularValueDecompose",
-    "Free",
+    "make_csr",
+    "make_csc",
+    "make_coo",
+    "make_diagonals",
+    "make_eye",
+    "to_dense",
+    "from_dense",
+    "shape",
+    "nonzero_count",
+    "solve",
+    "eigen_decompose_hermitian",
+    "singular_value_decompose",
+    "free",
     "_SPARSE_REGISTRY",
 ]

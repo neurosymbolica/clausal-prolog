@@ -1,18 +1,18 @@
 # === Import ===
 
 --8<-- [start:import]
--import_from(scipy_fft, [FFTransform, RealFFT, FFTFrequencies, FFTShift, ...])
+-import_from(scipy_fft, [fft_transform, real_fft, fft_frequencies, fft_shift, ...])
 --8<-- [end:import]
 
 --8<-- [start:import_ex2]
--import_from(py.scipy_fft, [FFTransform, RealFFT, ...])
+-import_from(py.scipy_fft, [fft_transform, real_fft, ...])
 --8<-- [end:import_ex2]
 
 
 # === Bidirectionality ===
 
 --8<-- [start:bidirectionality]
-FFTransform(++(np.array([1,0,0,0])), RESULT),
+fft_transform(++(np.array([1,0,0,0])), RESULT),
 # RESULT is unified with the complex spectrum array
 --8<-- [end:bidirectionality]
 
@@ -20,87 +20,87 @@ FFTransform(++(np.array([1,0,0,0])), RESULT),
 # === Predicate catalogue ===
 
 --8<-- [start:fft_1d_transforms]
-FFTransform(X, Y)                  # bidirectional
+fft_transform(X, Y)                  # bidirectional
     X ground, Y unbound → Y = fft(x)   # forward DFT
     Y ground, X unbound → X = ifft(y)  # backward (inverse DFT)
     Both ground         → consistency check: succeeds iff fft(x) ≈ y
     X:      real or complex 1-D array
     Y:      complex array of length len(X)
 
-FFTransform(X, N, Y)               # bidirectional; N always ground
+fft_transform(X, N, Y)               # bidirectional; N always ground
     N: output length (zero-pads or truncates).
 --8<-- [end:fft_1d_transforms]
 
 --8<-- [start:fft_2d_transforms]
-FFTransform2D(X, Y)                # bidirectional
+fft_transform2d(X, Y)                # bidirectional
     X ground, Y unbound → Y = fft2(x)   # 2-D forward DFT over last two axes
     Y ground, X unbound → X = ifft2(y)  # backward (2-D inverse DFT)
     Both ground         → consistency check: succeeds iff fft2(x) ≈ y
     X:      2-D real or complex array
     Y:      complex array of the same shape
 
-FFTransform2D(X, S, Y)             # bidirectional; S always ground
+fft_transform2d(X, S, Y)             # bidirectional; S always ground
     S: output shape as (rows, cols); zero-pads or truncates X to this shape.
 --8<-- [end:fft_2d_transforms]
 
 --8<-- [start:fft_nd_transforms]
-FFTransformND(X, Y)                # bidirectional
+fft_transformnd(X, Y)                # bidirectional
     X ground, Y unbound → Y = fftn(x)   # N-D forward DFT over all axes
     Y ground, X unbound → X = ifftn(y)  # backward (N-D inverse DFT)
     Both ground         → consistency check: succeeds iff fftn(x) ≈ y
     Y:      complex array of the same shape as X
 
-FFTransformND(X, S, Y)             # bidirectional; S always ground
+fft_transformnd(X, S, Y)             # bidirectional; S always ground
     S: list of output lengths, one per axis.
 --8<-- [end:fft_nd_transforms]
 
 --8<-- [start:real_input_transforms]
-RealFFT(X, Y)                      # bidirectional
+real_fft(X, Y)                      # bidirectional
     X ground, Y unbound → Y = rfft(x)   forward: complex half-spectrum of length N//2 + 1
     Y ground, X unbound → X = irfft(y)  backward: real array of length 2*(len(Y)-1)
     Both ground         → consistency check: succeeds iff rfft(x) ≈ y
     Note: assumes even-length original signal when going backward without N.
 
-RealFFT(X, N, Y)                   # bidirectional; N always ground
+real_fft(X, N, Y)                   # bidirectional; N always ground
     N: explicit length for unambiguous round-trips of odd-length originals.
 --8<-- [end:real_input_transforms]
 
 --8<-- [start:cosine_and_sine_transforms]
-DiscreteCosineTransform(X, Y)              # bidirectional
+discrete_cosine_transform(X, Y)              # bidirectional
     X ground, Y unbound → Y = dct(x)   (type-2 default)
     Y ground, X unbound → X = idct(y)
     Both ground         → consistency check: succeeds iff dct(x) ≈ y
 
-DiscreteCosineTransform(X, TYPE, Y)        # bidirectional; TYPE always ground
+discrete_cosine_transform(X, TYPE, Y)        # bidirectional; TYPE always ground
     TYPE: integer 1–4 selecting the DCT variant.
 
-DiscreteSineTransform(X, Y)                # bidirectional
+discrete_sine_transform(X, Y)                # bidirectional
     X ground, Y unbound → Y = dst(x)   (type-2 default)
     Y ground, X unbound → X = idst(y)
     Both ground         → consistency check: succeeds iff dst(x) ≈ y
 
-DiscreteSineTransform(X, TYPE, Y)          # bidirectional; TYPE always ground
+discrete_sine_transform(X, TYPE, Y)          # bidirectional; TYPE always ground
 --8<-- [end:cosine_and_sine_transforms]
 
 --8<-- [start:utility]
-FFTFrequencies(N, RESULT)
+fft_frequencies(N, RESULT)
     DFT sample frequencies for a length-N transform with unit sample spacing.
     RESULT: real array of length N
     Layout: [0, 1/N, 2/N, ..., -k/N, ..., -1/N]
             where k = N//2
 
-FFTFrequencies(N, D, RESULT)
+fft_frequencies(N, D, RESULT)
     D: sample spacing in seconds (reciprocal of sample rate).
        Frequencies are in cycles per unit time (Hz if D is in seconds).
 
-RealFFTFrequencies(N, RESULT)
+real_fft_frequencies(N, RESULT)
     Sample frequencies for a length-N real FFT output.
     RESULT: real array of length N//2 + 1 (all non-negative)
 
-RealFFTFrequencies(N, D, RESULT)
+real_fft_frequencies(N, D, RESULT)
     D: sample spacing.
 
-FFTShift(X, Y)                     # bidirectional
+fft_shift(X, Y)                     # bidirectional
     X ground, Y unbound → Y = fftshift(x)   (DC to centre)
     Y ground, X unbound → X = ifftshift(y)  (DC back to index 0)
     Both ground         → consistency check: succeeds iff fftshift(x) ≈ y
@@ -110,11 +110,11 @@ FFTShift(X, Y)                     # bidirectional
 # === Complete examples ===
 
 --8<-- [start:round_trip_1_d_signal]
--import_from(scipy_fft, [FFTransform])
+-import_from(scipy_fft, [fft_transform])
 
 TestRoundTrip(SIGNAL) <- (
-    FFTransform(SIGNAL, SPECTRUM),
-    FFTransform(RECOVERED, SPECTRUM),
+    fft_transform(SIGNAL, SPECTRUM),
+    fft_transform(RECOVERED, SPECTRUM),
     % check first element recovered correctly
     ERR is ++(abs(float(RECOVERED[0].real) - float(SIGNAL[0]))),
     ERR < 1e-10
@@ -122,13 +122,13 @@ TestRoundTrip(SIGNAL) <- (
 --8<-- [end:round_trip_1_d_signal]
 
 --8<-- [start:convolution_via_fft]
--import_from(scipy_fft, [FFTransform])
+-import_from(scipy_fft, [fft_transform])
 
 # Linear convolution of two equal-length signals (circular; pad as needed)
-FFTConvolve(A, B, RESULT) <- (
-    FFTransform(A, FA),
-    FFTransform(B, FB),
+fft_convolve(A, B, RESULT) <- (
+    fft_transform(A, FA),
+    fft_transform(B, FB),
     PRODUCT is ++(FA * FB),
-    FFTransform(RESULT, ++PRODUCT)
+    fft_transform(RESULT, ++PRODUCT)
 )
 --8<-- [end:convolution_via_fft]

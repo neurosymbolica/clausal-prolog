@@ -1,23 +1,23 @@
 # Companion tests for docs/scipy_spatial.md signature blocks.
 -double_quotes(atom)
--import_from(scipy_spatial, [CrossDistance, PairwiseDistance, PointDistance,
-    MakeKdTree, KdTreeQuery, MakeConvexHull, ConvexHullAttr, Free])
+-import_from(scipy_spatial, [cross_distance, pairwise_distance, point_distance,
+    make_kd_tree, kd_tree_query, make_convex_hull, convex_hull_attr, free])
 
 test("cross distance exists") <- (
-    CrossDistance([[0.0, 0.0]], [[3.0, 4.0]], "euclidean", D),
+    cross_distance([[0.0, 0.0]], [[3.0, 4.0]], "euclidean", D),
     V is ++(float(D[0, 0])),
     ++(abs(V - 5.0)) < 1e-10)  # nv
 
 test("point distance exists") <- (
-    PointDistance("euclidean", ++([0.0, 0.0]), ++([3.0, 4.0]), D),
+    point_distance("euclidean", ++([0.0, 0.0]), ++([3.0, 4.0]), D),
     ++(abs(D - 5.0)) < 1e-10)  # nv
 
 test("kdtree exists") <- (
-    MakeKdTree([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], KD),
-    KdTreeQuery(KD, ++([0.0, 0.0]), R_UNUSED),
-    Free(KD))  # nv
+    make_kd_tree([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], KD),
+    kd_tree_query(KD, ++([0.0, 0.0]), R_UNUSED),
+    free(KD))  # nv
 
 test("convex hull exists") <- (
-    MakeConvexHull([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]], H),
-    ConvexHullAttr(H, "volume", _),
-    Free(H))  # nv
+    make_convex_hull([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]], H),
+    convex_hull_attr(H, "volume", _),
+    free(H))  # nv
