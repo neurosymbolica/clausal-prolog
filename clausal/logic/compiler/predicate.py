@@ -38,7 +38,7 @@ from clausal.logic.predicate import (
     _dispatch_at, head_cell as _head_cell,
     declare_head as _declare_head, keeps_predicate as _keeps_predicate,
 )
-from clausal.codegen import functiondef_to_function
+from clausal.codegen import GeneratedCodeError, functiondef_to_function
 
 from clausal.logic.solve import _deref_walk as _deref_walk_fn
 from clausal.logic.builtins import (  # noqa: F401
@@ -1624,6 +1624,14 @@ def _compile_predicate_trampoline_impl(
             )
 
             fn = functiondef_to_function(func_def, globals_=base_globals)
+    except GeneratedCodeError as exc:
+        # CPython refused the generated code: name the predicate and the
+        # clause, never a bare ``SyntaxError`` about ``<template>``.
+        if exc.predicate is None:
+            raise exc.for_predicate(
+                f"{functor}/{arity}",
+                [getattr(c, "position", None) for c in clauses]) from exc.original
+        raise
     except BareGoalVariableError as exc:
         # A clause body used a bare variable in goal position.  Re-raise
         # with the offending predicate's name so the load-time error
@@ -2246,6 +2254,14 @@ def _compile_predicate_shallow_impl(
             )
 
             fn = functiondef_to_function(func_def, globals_=base_globals)
+    except GeneratedCodeError as exc:
+        # CPython refused the generated code: name the predicate and the
+        # clause, never a bare ``SyntaxError`` about ``<template>``.
+        if exc.predicate is None:
+            raise exc.for_predicate(
+                f"{functor}/{arity}",
+                [getattr(c, "position", None) for c in clauses]) from exc.original
+        raise
     except BareGoalVariableError as exc:
         # Bare variable in goal position — locate the clause by predicate
         # name (mirrors compile_predicate_trampoline).

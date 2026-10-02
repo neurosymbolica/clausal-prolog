@@ -6,7 +6,9 @@ import ast
 import builtins as _builtins
 
 __all__ = [
+    "GeneratedCodeError",
     "functiondef_to_function",
+    "split_deep_nesting",
     "stmts_to_function",
 ]
 
@@ -116,6 +118,358 @@ def _infer_args(stmts: list[ast.stmt], globals_: dict | None = None) -> ast.argu
     )
 
 
+# ── Static block nesting ──────────────────────────────────────────────────────
+#
+# CPython refuses a function whose blocks nest more than CO_MAXBLOCKS deep
+# (20 in a generator, whose body sits inside an implicit StopIteration block;
+# 21 otherwise): ``SyntaxError: too many statically nested blocks``.  The
+# clause compiler opens one loop per backtracking call around the REST of the
+# body (``while _st is not DONE: <continuation>``), so a clause body with ~19
+# user calls nested past the limit and the module failed to load.
+#
+# ``split_deep_nesting`` keeps every generated function under the limit by
+# OUTLINING, bottom-up: a statement whose blocks nest ``_OUTLINE_HEIGHT``
+# deep moves into a nested helper function -- a generator delegated to with
+# ``yield from`` when it yields, a plain call otherwise -- and the helper
+# starts a fresh block stack.  Every name the moved code binds stays the
+# ORIGINAL function's local: the helper declares it ``nonlocal`` and the
+# original function keeps a never-run ``if False: name = None`` binding, so
+# the scoping is exactly the single-function scoping it replaced.  A
+# ``return`` in moved code comes back as a 1-tuple and is re-returned.
+#
+# ``functiondef_to_function`` runs the pass only after CPython has refused
+# the nesting, so functions under the limit -- everything but a very long
+# clause body -- compile exactly as before, at no extra cost.
+
+#: The deepest block nesting a generated function may reach, counted with the
+#: generator's own implicit block -- CPython raises past 20.
+_MAX_BLOCK_DEPTH = 20
+#: The nesting height at which a statement is outlined.  Leaves the helper and
+#: the statements around the call to it a margin under the limit.
+_OUTLINE_HEIGHT = 12
+
+_SCOPE_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+_LOOP_NODES = (ast.For, ast.While, ast.AsyncFor)
+_TRY_NODES = (ast.Try, ast.TryStar) if hasattr(ast, "TryStar") else (ast.Try,)
+
+
+def _child_lists(stmt: ast.stmt) -> list[tuple[int, ast.AST, str]]:
+    """``(added_depth, owner, field)`` for each statement list nested in
+    *stmt*, by CPython's frame-block accounting: a loop or ``with`` body +1, a
+    ``try`` body/``else``/``finally`` +1, an ``except`` handler +2 (handler +
+    cleanup); ``if``/``match`` bodies and a loop's ``else`` +0.  Nested
+    function and class bodies are scopes of their own and are not listed."""
+    if isinstance(stmt, _LOOP_NODES):
+        return [(1, stmt, "body"), (0, stmt, "orelse")]
+    if isinstance(stmt, (ast.With, ast.AsyncWith)):
+        return [(1, stmt, "body")]
+    if isinstance(stmt, _TRY_NODES):
+        return ([(1, stmt, "body"), (1, stmt, "orelse"), (1, stmt, "finalbody")]
+                + [(2, h, "body") for h in stmt.handlers])
+    if isinstance(stmt, ast.If):
+        return [(0, stmt, "body"), (0, stmt, "orelse")]
+    if isinstance(stmt, ast.Match):
+        return [(0, c, "body") for c in stmt.cases]
+    return []
+
+
+def _postorder(stmts: list[ast.stmt]) -> list[ast.stmt]:
+    """The statements of one scope (nested scopes excluded), children before
+    parents.  Iterative: the trees this exists for nest hundreds deep."""
+    out: list[ast.stmt] = []
+    stack = [(s, False) for s in reversed(stmts)]
+    while stack:
+        s, done = stack.pop()
+        if done:
+            out.append(s)
+            continue
+        stack.append((s, True))
+        for _, owner, field in reversed(_child_lists(s)):
+            stack.extend((c, False) for c in reversed(getattr(owner, field)))
+    return out
+
+
+def _height(stmt: ast.stmt, heights: dict) -> int:
+    return max((add + max((heights[id(c)] for c in getattr(owner, field)), default=0)
+                for add, owner, field in _child_lists(stmt)), default=0)
+
+
+def _function_depths(node) -> list[tuple[ast.AST, int]]:
+    """``(function, deepest nesting)`` for *node* and every function defined
+    in it, the nesting counting the generator block.  One statement-level
+    walk: functions only nest at statement level (a lambda holds no blocks)."""
+    out = []
+    work = [node]
+    while work:
+        fn = work.pop()
+        heights: dict = {}
+        for s in _postorder(fn.body):
+            heights[id(s)] = _height(s, heights)
+            if isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                work.append(s)
+            elif isinstance(s, ast.ClassDef):
+                work.extend(x for x in ast.walk(s)
+                            if isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef)))
+        out.append((fn, 1 + max((heights[id(s)] for s in fn.body), default=0)))
+    return out
+
+
+def _walk_same_scope(node: ast.AST):
+    """Every node under *node* (inclusive) evaluated in *node*'s scope: does
+    not descend into nested function, lambda or class bodies."""
+    stack = [node]
+    while stack:
+        n = stack.pop()
+        yield n
+        for c in ast.iter_child_nodes(n):
+            if isinstance(c, _SCOPE_NODES):
+                # The def binds its name here, and its decorators, defaults
+                # (and a class's bases) are evaluated here.
+                yield c
+                stack.extend(getattr(c, "decorator_list", ()))
+                if isinstance(c, ast.ClassDef):
+                    stack.extend(c.bases)
+                    stack.extend(c.keywords)
+                else:
+                    stack.extend(d for d in c.args.defaults + c.args.kw_defaults if d)
+            else:
+                stack.append(c)
+
+
+def _bound_names(node: ast.AST) -> set[str]:
+    """Names *node* binds in its own scope."""
+    out: set[str] = set()
+    for n in _walk_same_scope(node):
+        if isinstance(n, ast.Name) and isinstance(n.ctx, (ast.Store, ast.Del)):
+            out.add(n.id)
+        elif isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            out.add(n.name)
+        elif isinstance(n, ast.ExceptHandler) and n.name:
+            out.add(n.name)
+        elif isinstance(n, (ast.Import, ast.ImportFrom)):
+            for a in n.names:
+                out.add((a.asname or a.name).split(".")[0])
+        elif isinstance(n, (ast.MatchAs, ast.MatchStar)) and n.name:
+            out.add(n.name)
+        elif isinstance(n, ast.MatchMapping) and n.rest:
+            out.add(n.rest)
+    return out
+
+
+def _can_outline(stmt: ast.stmt) -> bool:
+    """False when moving *stmt* into a helper would change what it means: a
+    ``break``/``continue`` aimed at a loop outside it, or anything async."""
+    stack = [(stmt, False)]
+    while stack:
+        n, in_loop = stack.pop()
+        if isinstance(n, _SCOPE_NODES):
+            continue
+        if isinstance(n, (ast.Break, ast.Continue)) and not in_loop:
+            return False
+        if isinstance(n, (ast.Await, ast.AsyncFor, ast.AsyncWith)):
+            return False
+        if isinstance(n, _LOOP_NODES):
+            # A loop's ``else`` runs outside it: a break there leaves the
+            # enclosing loop.
+            stack.extend((x, True) for x in n.body)
+            stack.extend((x, in_loop) for x in n.orelse)
+            continue
+        stack.extend((c, in_loop) for c in ast.iter_child_nodes(n))
+    return True
+
+
+class _Outliner:
+    def __init__(self, globals_declared: set[str]):
+        self.globs = globals_declared
+        self.counter = 0
+        #: Every name a helper declared ``nonlocal``: the function being
+        #: split keeps a binding for each (see ``function``).
+        self.shared: set[str] = set()
+
+    def outline(self, s: ast.stmt) -> list[ast.stmt]:
+        """The statements that replace *s*: a helper holding it and a call."""
+        self.counter += 1
+        name = f"$nest{self.counter}"
+        res = f"$nest{self.counter}_r"
+        stored = _bound_names(s)
+        global_names = sorted(stored & self.globs)
+        nonlocal_names = sorted(stored - self.globs)
+        has_yield = has_return = False
+        for n in _walk_same_scope(s):
+            if isinstance(n, (ast.Yield, ast.YieldFrom)):
+                has_yield = True
+            elif isinstance(n, ast.Return):
+                has_return = True
+                n.value = ast.Tuple(
+                    elts=[n.value if n.value is not None else ast.Constant(None)],
+                    ctx=ast.Load())
+        body: list[ast.stmt] = []
+        if nonlocal_names:
+            body.append(ast.Nonlocal(names=nonlocal_names))
+        if global_names:
+            body.append(ast.Global(names=global_names))
+        body.append(s)
+        extra = {"type_params": []} if "type_params" in ast.FunctionDef._fields else {}
+        helper = ast.FunctionDef(
+            name=name,
+            args=ast.arguments(posonlyargs=[], args=[], vararg=None, kwonlyargs=[],
+                               kw_defaults=[], kwarg=None, defaults=[]),
+            body=body, decorator_list=[], returns=None, type_comment=None, **extra)
+        call = ast.Call(func=ast.Name(id=name, ctx=ast.Load()), args=[], keywords=[])
+        value = ast.YieldFrom(value=call) if has_yield else call
+        self.shared.update(nonlocal_names)
+        out: list[ast.stmt] = [helper]
+        if has_return:
+            out.append(ast.Assign(targets=[ast.Name(id=res, ctx=ast.Store())], value=value))
+            out.append(ast.If(
+                test=ast.Compare(left=ast.Name(id=res, ctx=ast.Load()),
+                                 ops=[ast.IsNot()], comparators=[ast.Constant(None)]),
+                body=[ast.Return(value=ast.Subscript(
+                    value=ast.Name(id=res, ctx=ast.Load()),
+                    slice=ast.Constant(0), ctx=ast.Load()))],
+                orelse=[]))
+        else:
+            out.append(ast.Expr(value=value))
+        for top in out:
+            stack = [top]
+            while stack:
+                c = stack.pop()
+                if c is s:
+                    continue
+                if "lineno" in c._attributes and getattr(c, "lineno", None) is None:
+                    ast.copy_location(c, s)
+                stack.extend(ast.iter_child_nodes(c))
+        return out
+
+    def function(self, fn) -> None:
+        """Outline, bottom-up, every statement of *fn*'s own scope whose
+        blocks nest ``_OUTLINE_HEIGHT`` deep."""
+        heights: dict = {}
+        marked: set = set()
+
+        def rebuilt(stmts):
+            if not any(id(c) in marked for c in stmts):
+                return stmts
+            out = []
+            for c in stmts:
+                if id(c) in marked:
+                    for x in self.outline(c):
+                        heights[id(x)] = 0   # a def, a call, never-run binds
+                        out.append(x)
+                else:
+                    out.append(c)
+            return out
+
+        for s in _postorder(fn.body):
+            for _, owner, field in _child_lists(s):
+                setattr(owner, field, rebuilt(getattr(owner, field)))
+            h = _height(s, heights)
+            if h >= _OUTLINE_HEIGHT and _can_outline(s):
+                marked.add(id(s))
+                h = 0
+            heights[id(s)] = h
+        fn.body = rebuilt(fn.body)
+        if self.shared:
+            # ``nonlocal`` resolves to the nearest enclosing function that
+            # binds the name, and a moved statement may have been its only
+            # binder: bind every shared name in *fn* itself, so each resolves
+            # to *fn*'s local exactly as before the split.  Never runs and
+            # compiles to nothing.
+            keep = ast.If(
+                test=ast.Constant(False),
+                body=[ast.Assign(targets=[ast.Name(id=k, ctx=ast.Store())],
+                                 value=ast.Constant(None))
+                      for k in sorted(self.shared)],
+                orelse=[])
+            ast.copy_location(keep, fn.body[0])
+            fn.body.insert(0, keep)
+
+
+def split_deep_nesting(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """Outline statements of *node* (and of the functions defined in it) that
+    would nest blocks past CPython's static limit.  Mutates *node*; returns
+    True when anything moved, False -- touching nothing -- for a function
+    already under the limit."""
+    moved = False
+    for fn, depth in _function_depths(node):
+        if depth <= _MAX_BLOCK_DEPTH:
+            continue
+        globs = {x for n in _walk_same_scope(fn) if isinstance(n, ast.Global)
+                 for x in n.names}
+        o = _Outliner(globs)
+        o.function(fn)
+        moved = moved or o.counter > 0
+    return moved
+
+
+def _fix_missing_locations(node: ast.AST) -> None:
+    """``ast.fix_missing_locations`` without its recursion: a long clause body
+    lowers to an AST nested deeper than the interpreter's recursion limit."""
+    stack = [(node, 1, 0, 1, 0)]
+    while stack:
+        n, lineno, col, end_lineno, end_col = stack.pop()
+        attrs = n._attributes
+        if "lineno" in attrs:
+            if getattr(n, "lineno", None) is None:
+                n.lineno = lineno
+            else:
+                lineno = n.lineno
+        if "end_lineno" in attrs:
+            if getattr(n, "end_lineno", None) is None:
+                n.end_lineno = end_lineno
+            else:
+                end_lineno = n.end_lineno
+        if "col_offset" in attrs:
+            if getattr(n, "col_offset", None) is None:
+                n.col_offset = col
+            else:
+                col = n.col_offset
+        if "end_col_offset" in attrs:
+            if getattr(n, "end_col_offset", None) is None:
+                n.end_col_offset = end_col
+            else:
+                end_col = n.end_col_offset
+        for c in ast.iter_child_nodes(n):
+            stack.append((c, lineno, col, end_lineno, end_col))
+
+
+class GeneratedCodeError(SyntaxError):
+    """Generated code CPython refused to compile.  Names the generated
+    function, and -- once :meth:`for_predicate` has enriched it -- the
+    predicate (``name/arity``) and the source file and line of the clause it
+    came from.  ``original`` is CPython's own exception."""
+
+    def __init__(self, message, function_name, original,
+                 filename=None, lineno=None, predicate=None):
+        self.function_name = function_name
+        self.original = original
+        self.predicate = predicate
+        self.reason = message
+        where = (f"{filename}:{lineno}: " if filename and lineno
+                 else f"{filename}: " if filename else "")
+        what = (f"a clause of {predicate}" if predicate
+                else f"generated function {function_name}")
+        super().__init__(f"{where}{what} could not be compiled: {message}")
+        self.filename = filename
+        self.lineno = lineno
+
+    def for_predicate(self, predicate: str, positions=()) -> "GeneratedCodeError":
+        """The same error naming *predicate*.  *positions* are the clauses'
+        source positions ``(line, col, end_line, end_col)`` (``None`` for a
+        clause with no source); the line is the one of the clause CPython's
+        error points into, else of the first clause that has one."""
+        spans = [p for p in positions if p]
+        line = self.lineno
+        hit = [p for p in spans if line and p[0] <= line <= (p[2] or p[0])]
+        if hit:
+            line = hit[0][0]
+        elif spans:
+            line = spans[0][0]
+        return GeneratedCodeError(self.reason, self.function_name, self.original,
+                                  filename=self.filename, lineno=line,
+                                  predicate=predicate)
+
+
 def functiondef_to_function(
     node: ast.FunctionDef | ast.AsyncFunctionDef,
     globals_: dict | None = None,
@@ -125,10 +479,37 @@ def functiondef_to_function(
 
     The function name is read from node.name.  globals_ provides names
     visible at definition time (closures, helper functions, etc.).
+
+    If CPython refuses the code for nesting blocks too deep, the deep
+    statements are outlined (``split_deep_nesting``) and the code compiled
+    again.  If CPython still refuses it, the error is a
+    :class:`GeneratedCodeError` naming the function and the source file and
+    line of the code it came from, never a bare ``SyntaxError`` about
+    ``<template>``.
     """
     module = ast.Module(body=[node], type_ignores=[])
-    ast.fix_missing_locations(module)
-    code = compile(module, filename, "exec")
+    _fix_missing_locations(module)
+    try:
+        try:
+            code = compile(module, filename, "exec")
+        except (SyntaxError, RecursionError) as exc:
+            # Outline only once CPython has refused the nesting, so a
+            # function under the limit -- every one but a very long clause
+            # body's -- pays nothing for the pass.  (A deep enough AST runs
+            # out of compiler recursion before it reaches the block check.)
+            if isinstance(exc, SyntaxError) and "nested blocks" not in str(exc.msg):
+                raise
+            if not split_deep_nesting(node):
+                raise
+            _fix_missing_locations(module)
+            code = compile(module, filename, "exec")
+    except (SyntaxError, RecursionError, ValueError) as exc:
+        src = (globals_ or {}).get("__file__") or (
+            filename if filename != "<template>" else None)
+        raise GeneratedCodeError(
+            getattr(exc, "msg", None) or str(exc) or type(exc).__name__,
+            node.name, exc, filename=src,
+            lineno=getattr(exc, "lineno", None)) from exc
     # Every tuple/frozenset constant of generated code is Var-free and
     # immutable: certify it so a goal-position seam can hand it out by
     # identity (clausal.logic.cells, the compiled-constant certificate).

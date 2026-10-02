@@ -911,6 +911,18 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **A clause body of any length loads**, on every front end (native `.pl`,
+  the translator, seam). Each backtracking goal compiles to a loop around
+  the rest of the body, so about 19 such goals (user calls, builtin calls,
+  DCG nonterminals, the goals inside a `findall/3` body) went past CPython's
+  limit of 20 nested blocks, and the module failed to load with
+  `SyntaxError: too many statically nested blocks`. The code generator now
+  moves the deep tail of such a body into nested helper generators, which
+  share the clause's variables. Shorter bodies compile exactly as before.
+  If the generated code still cannot be compiled, the error is a
+  `GeneratedCodeError` (a `SyntaxError`) that names the predicate and the
+  clause's file and line.
+
 - **`phrase/2,3` with an unbound grammar body raise
   `instantiation_error`**, as ISO and Scryer do: `phrase(_, L)`,
   `phrase(_, L, [])`, and so a variable grammar body (`v(B) --> B.`)
