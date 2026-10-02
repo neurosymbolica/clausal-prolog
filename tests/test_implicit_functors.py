@@ -47,7 +47,7 @@ from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 
 from tests.tagged_terms_support import capture_predicate_codegen
-from tests._suffix import SEAM
+from tests._suffix import SEAM, seam_path
 
 _FIXTURES_DIR = pathlib.Path(__file__).parent / "fixtures"
 
@@ -66,7 +66,7 @@ def _load_inline(name: str, source: str):
 
 def _load_fixture(basename: str):
     module_name = f"tests.fixtures.{basename}"
-    return _load_module(module_name, str(_FIXTURES_DIR / f"{basename}.clausal"))
+    return _load_module(module_name, str(seam_path(_FIXTURES_DIR / f"{basename}.clausal")))
 
 
 def _logic_module(mod):

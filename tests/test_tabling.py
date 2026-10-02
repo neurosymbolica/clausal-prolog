@@ -23,6 +23,7 @@ from clausal.logic.variables import Var, Trail, unify, deref, is_var
 from clausal.logic.database import Database, Clause, Module, head_key
 from clausal.logic.trampoline import StepGenerator, DONE, solutions
 from clausal.logic.solve import call, _deref_walk
+from tests._suffix import SEAM, seam_path
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -30,7 +31,7 @@ FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
 def _load(name):
     from clausal.import_hook import _load_module
-    return _load_module(name, os.path.join(FIXTURES, f"{name}.clausal"))
+    return _load_module(name, seam_path(os.path.join(FIXTURES, f"{name}.clausal")))
 
 
 def _module(mod):
@@ -849,7 +850,7 @@ class TestAbolishTable:
 class TestMultipleTabled:
     def test_two_tabled_predicates(self):
         # nv
-        fixture = os.path.join(FIXTURES, "_test_multi_tabled.clausal")
+        fixture = os.path.join(FIXTURES, f"_test_multi_tabled{SEAM}")
         with open(fixture, "w") as f:
             f.write("""-table(anc/2)
 -table(desc/2)

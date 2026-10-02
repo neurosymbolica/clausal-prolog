@@ -87,7 +87,7 @@ def temp_fixture_module():
     created = []
 
     def _make(name: str, source: str):
-        path = os.path.join(_FIXTURE_DIR, f"{name}.clausal")
+        path = os.path.join(_FIXTURE_DIR, f"{name}{SEAM}")
         with open(path, "w") as f:
             f.write(source)
         created.append((name, path))

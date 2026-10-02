@@ -36,6 +36,7 @@ from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Trail, Var
 
 from .conftest import SCRYER, run_scryer
+from tests._suffix import SEAM
 
 
 @pytest.fixture(autouse=True)
@@ -54,7 +55,7 @@ def _restore_process_flags():
     flags._PROCESS.update(saved)
 
 
-def _load(tmp_path, monkeypatch, name, src, ext="clausal"):
+def _load(tmp_path, monkeypatch, name, src, ext=SEAM.lstrip(".")):
     monkeypatch.syspath_prepend(str(tmp_path))
     path = tmp_path / f"{name}.{ext}"
     path.write_text(textwrap.dedent(src))

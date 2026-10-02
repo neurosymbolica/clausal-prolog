@@ -44,7 +44,7 @@ from clausal.logic.solve import call, query
 from clausal.logic.variables import Var, deref, Trail
 from clausal.logic.cells import chars
 from clausal.import_hook import _load_module
-from tests._suffix import SEAM
+from tests._suffix import SEAM, seam_path
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -716,7 +716,7 @@ _FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
 def _load_fixture(name):
-    path = os.path.join(_FIXTURE_DIR, f"{name}.clausal")
+    path = seam_path(os.path.join(_FIXTURE_DIR, f"{name}.clausal"))
     mod = _load_module(name, path)
     return mod.__dict__["$module"]
 

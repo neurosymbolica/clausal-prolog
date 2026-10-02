@@ -38,6 +38,7 @@ import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
+from tests._suffix import seam_path
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -45,7 +46,7 @@ FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
 def _load_fixture(stem: str):
     return _load_module(
-        f"tests.fixtures.{stem}", os.path.join(FIXTURES, f"{stem}.clausal")
+        f"tests.fixtures.{stem}", seam_path(os.path.join(FIXTURES, f"{stem}.clausal"))
     )
 
 

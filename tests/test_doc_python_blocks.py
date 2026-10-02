@@ -30,6 +30,7 @@ import pytest
 
 from clausal._suffixes import SEAM_SUFFIX
 from clausal.tools.doc_snippet_check import SEAM_FENCE_LANGS
+from tests._suffix import seam_path
 
 _ROOT = Path(__file__).resolve().parent.parent
 _DOCS = _ROOT / "docs"
@@ -78,7 +79,7 @@ def _show(solutions):
 
 
 def _example(name: str) -> str:
-    return (_ROOT / "clausal" / "examples" / f"{name}.clausal").read_text()
+    return seam_path(_ROOT / "clausal" / "examples" / f"{name}.clausal").read_text()
 
 
 # (id, page, anchor, {module file: source}, post, expected lines in stdout)

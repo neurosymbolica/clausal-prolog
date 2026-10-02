@@ -16,6 +16,7 @@ import pytest
 
 from clausal.logic.variables import Var
 from clausal.logic.solve import call
+from tests._suffix import seam_path
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -23,7 +24,7 @@ FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
 def _load(name):
     from clausal.import_hook import _load_module
-    return _load_module(name, os.path.join(FIXTURES, f"{name}.clausal"))
+    return _load_module(name, seam_path(os.path.join(FIXTURES, f"{name}.clausal")))
 
 
 def _module(mod):

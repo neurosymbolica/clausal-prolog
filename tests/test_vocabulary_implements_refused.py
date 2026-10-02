@@ -43,13 +43,13 @@ from clausal.logic.solve import call, solve
 from clausal.logic.variables import Var, deref, walk
 from clausal.pythonic_ast.nodes import ImportFromDirective
 from tests.load_write_spy_support import record_load_writes
-from tests._suffix import SEAM
+from tests._suffix import SEAM, seam_path
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
 def _fixture_path(stem: str) -> str:
-    return os.path.join(FIXTURES, f"{stem}.clausal")
+    return seam_path(os.path.join(FIXTURES, f"{stem}.clausal"))
 
 
 def _load_fixture(stem: str, as_name: str | None = None):

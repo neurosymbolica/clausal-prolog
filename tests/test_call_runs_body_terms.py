@@ -33,6 +33,7 @@ from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var, deref, is_var
 from clausal.pythonic_ast import nodes
+from tests._suffix import seam_path
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HOST = "call_body_terms"
@@ -63,7 +64,7 @@ def _load(name):
     from clausal.import_hook import _load_module
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        mod = _load_module(name, str(FIXTURES / f"{name}.clausal"))
+        mod = _load_module(name, str(seam_path(FIXTURES / f"{name}.clausal")))
     return mod.__dict__["$module"]
 
 

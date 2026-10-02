@@ -21,6 +21,7 @@ from clausal.logic.specialization import (
     _SpecTarget, _specialized_fields, _unfold, analyze_mi,
 )
 from clausal.logic.variables import Var
+from tests._suffix import seam_path
 
 
 def test_the_target_builds_the_cell_a_class_builds():
@@ -147,7 +148,7 @@ def _installed_by_loading(stem, monkeypatch):
     name = f"_spt_golden_{stem}"
     sys.modules.pop(name, None)
     try:
-        _load_module(name, os.path.join(_FIXTURES, f"{stem}.clausal"))
+        _load_module(name, seam_path(os.path.join(_FIXTURES, f"{stem}.clausal")))
     finally:
         sys.modules.pop(name, None)
     return captured

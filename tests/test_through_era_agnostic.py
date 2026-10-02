@@ -34,13 +34,14 @@ from clausal.logic.database import (
 )
 from clausal.logic.exceptions import LogicException
 from clausal.logic.predicate import resolve_predicate_row
+from tests._suffix import seam_path
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
 def _fixture_path(stem: str) -> str:
-    return os.path.join(FIXTURES, f"{stem}.clausal")
+    return seam_path(os.path.join(FIXTURES, f"{stem}.clausal"))
 
 
 def _load_fixture(stem: str, as_name: str | None = None):

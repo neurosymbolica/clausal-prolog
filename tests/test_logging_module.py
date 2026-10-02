@@ -28,6 +28,7 @@ from clausal.modules.py.logging import (
     _stream_handler_2, _file_handler_2, _set_formatter_2,
     _add_handler_2, _remove_handler_2, _basic_config_1,
 )
+from tests._suffix import seam_path
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -425,7 +426,7 @@ _FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
 def _load_fixture(name):
-    path = os.path.join(_FIXTURE_DIR, f"{name}.clausal")
+    path = seam_path(os.path.join(_FIXTURE_DIR, f"{name}.clausal"))
     mod = _load_module(name, path)
     return mod.__dict__["$module"]
 

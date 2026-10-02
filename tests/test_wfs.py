@@ -24,7 +24,7 @@ from clausal.logic.database import Database, Clause, Module, head_key
 from clausal.logic.trampoline import StepGenerator, DONE, solutions
 from clausal.logic.solve import call, query, query_wfs
 from clausal.terms import Undefined
-from tests._suffix import SEAM
+from tests._suffix import SEAM, seam_path
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -32,7 +32,7 @@ FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
 def _load(name):
     from clausal.import_hook import _load_module
-    return _load_module(name, os.path.join(FIXTURES, f"{name}.clausal"))
+    return _load_module(name, seam_path(os.path.join(FIXTURES, f"{name}.clausal")))
 
 
 def _module(mod):

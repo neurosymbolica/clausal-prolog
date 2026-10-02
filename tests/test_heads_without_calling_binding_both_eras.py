@@ -41,7 +41,7 @@ from clausal.logic.predicate import (
     mint_predicate_handle, resolve_predicate_row,
 )
 from clausal.logic.variables import Var, deref
-from tests._suffix import SEAM
+from tests._suffix import SEAM, seam_path
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 # ── the end-to-end loads: an importer's head names an imported predicate ────
@@ -57,7 +57,7 @@ def fixture_modules():
 
     def load(stem):
         return _load_module(f"tests.fixtures.{stem}",
-                            os.path.join(FIXTURES, f"{stem}.clausal"))
+                            seam_path(os.path.join(FIXTURES, f"{stem}.clausal")))
 
     yield load
     for k in [k for k in sys.modules if k.startswith("tests.fixtures.")]:

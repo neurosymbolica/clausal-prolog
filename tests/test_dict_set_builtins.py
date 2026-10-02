@@ -27,7 +27,7 @@ from clausal.logic.cells import chars
 from clausal.terms import Call, LoadName, DictTerm, SetTerm
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import is_atom, mint, spelling
-from tests._suffix import SEAM
+from tests._suffix import SEAM, seam_path
 
 _FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -617,7 +617,7 @@ class TestGenSet:
 
 
 def _load_fixture(name):
-    return _load_module(name, os.path.join(_FIXTURE_DIR, f"{name}.clausal"))
+    return _load_module(name, seam_path(os.path.join(_FIXTURE_DIR, f"{name}.clausal")))
 
 
 class TestClausalIntegration:

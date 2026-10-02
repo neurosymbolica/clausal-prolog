@@ -35,7 +35,7 @@ from clausal.logic.atoms import mint, mangle
 from clausal.logic.predicate import module_source_path
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
-from tests._suffix import SEAM
+from tests._suffix import SEAM, seam_path
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -263,10 +263,10 @@ def test_declare_then_import_then_define_is_refused_so_it_stamps_nothing(
     is refused with THAT refusal, and the exporter's row is not stamped with
     the importer's names -- the declaration never leaks onto the owner."""
     owner = _load_module(f"tests.fixtures.{schema}",
-                         os.path.join(FIXTURES, f"{schema}.clausal"))
+                         seam_path(os.path.join(FIXTURES, f"{schema}.clausal")))
     with pytest.raises(SyntaxError) as exc_info:
         _load_module(f"tests.fixtures.{use}",
-                     os.path.join(FIXTURES, f"{use}.clausal"))
+                     seam_path(os.path.join(FIXTURES, f"{use}.clausal")))
     assert f"only declares {functor}/2" in " ".join(str(exc_info.value).split())
     owner_row = owner.__dict__["$module"].db.row(functor, 2)
     if owner_row is not None:

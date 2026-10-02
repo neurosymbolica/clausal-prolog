@@ -41,6 +41,7 @@ from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var, deref, is_var
 from clausal.pythonic_ast import nodes
+from tests._suffix import seam_path
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HOST = "call_special_forms"
@@ -55,7 +56,7 @@ def _load(name):
     from clausal.import_hook import _load_module
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        mod = _load_module(name, str(FIXTURES / f"{name}.clausal"))
+        mod = _load_module(name, str(seam_path(FIXTURES / f"{name}.clausal")))
     return mod.__dict__["$module"]
 
 
@@ -129,7 +130,7 @@ def test_the_table_is_not_vacuous(host):
 def test_the_table_covers_every_special_form(host):
     """Every special form but halt/0,1 (below) has a row in the fixture."""
     from clausal.logic.builtins.call_body import SPECIAL_FORMS
-    text = (FIXTURES / f"{HOST}.clausal").read_text()
+    text = seam_path(FIXTURES / f"{HOST}.clausal").read_text()
     # A word boundary: "call_cleanup(" must not be found inside
     # "setup_call_cleanup(".
     missing = [name for (name, _) in SPECIAL_FORMS
