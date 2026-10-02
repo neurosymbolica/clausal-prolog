@@ -3,10 +3,10 @@
 Provides numerical differentiation from ``scipy.differentiate`` as
 importable predicate objects for use in .clausal files via::
 
-    -import_from(scipy_differentiate, [derivative, jacobian, hessian, ResultGet])
+    -import_from(scipy_differentiate, [derivative, jacobian, hessian, result_get])
 
 All predicates are **Tier 2 — result-record**: they return a dict with
-fields that can be accessed via ``ResultGet``.
+fields that can be accessed via ``result_get``.
 
 Predicate catalogue
 -------------------
@@ -36,7 +36,7 @@ Result dict fields
         'nit'      — number of iterations
 
 Helper:
-    ResultGet(RESULT, FIELD, VALUE)  — extract RESULT[FIELD] → VALUE
+    result_get(RESULT, FIELD, VALUE)  — extract RESULT[FIELD] → VALUE
 """
 
 from __future__ import annotations
@@ -283,7 +283,7 @@ hessian = _pred("hessian",
 )
 
 
-# ── ResultGet ─────────────────────────────────────────────────────────────
+# ── result_get ─────────────────────────────────────────────────────────────
 
 def _result_get_dispatch(this_generator, _proceed, _fail, _catcher, result, field, value, trail):
     result = deref(result)
@@ -307,7 +307,7 @@ class _ResultGetPredicate:
         return _result_get_dispatch
 
     def __repr__(self) -> str:
-        return "scipy.differentiate.ResultGet/3"
+        return "scipy.differentiate.result_get/3"
 
 
-ResultGet = _ResultGetPredicate()
+result_get = _ResultGetPredicate()

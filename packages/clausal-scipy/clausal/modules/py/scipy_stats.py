@@ -3,7 +3,7 @@
 Provides statistical routines from scipy.stats as importable predicate
 objects for use in .clausal files via::
 
-    -import_from(scipy_stats, [stats_mean, stats_pearson_correlation, ResultGet, ...])
+    -import_from(scipy_stats, [stats_mean, stats_pearson_correlation, result_get, ...])
 
 Or via the canonical path::
 
@@ -16,7 +16,7 @@ Tiers
     stats_mode, stats_skew, stats_kurtosis, stats_interquartile_range,
     stats_z_score, stats_median_absolute_deviation
 
-- **Tier 2** — result-dict predicates (use ResultGet to access fields):
+- **Tier 2** — result-dict predicates (use result_get to access fields):
     stats_pearson_correlation, stats_spearman_correlation, stats_kendall_tau,
     stats_linear_regression, stats_theil_slopes,
     stats_t_test1_sample, stats_t_test_independent, stats_t_test_related,
@@ -25,15 +25,15 @@ Tiers
     stats_normality_test, stats_shapiro
 
 - **Tier 1 functional** — distribution evaluation:
-    StatsDist(DIST, METHOD, X, RESULT) / StatsDist(DIST, METHOD, RESULT)
+    stats_dist(DIST, METHOD, X, RESULT) / stats_dist(DIST, METHOD, RESULT)
     stats_normal_pdf, stats_normal_cdf, stats_normal_ppf, stats_normal_rvs
 
 - **Tier 3** — frozen distribution handles:
-    StatsFreezeDist, StatsFrozenPdf, StatsFrozenCdf,
-    StatsFrozenRvs, StatsFrozenStats, StatsFrozenFree
+    stats_freeze_dist, stats_frozen_pdf, stats_frozen_cdf,
+    stats_frozen_rvs, stats_frozen_stats, stats_frozen_free
 
 Helper:
-    ResultGet(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE
+    result_get(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE
 """
 
 from __future__ import annotations
@@ -330,10 +330,10 @@ def _dist_method_no_x(dist_name, method_name):
 
 
 class _StatsDistPredicate(ModulePredicate):
-    """StatsDist(DIST, METHOD, X, RESULT) and StatsDist(DIST, METHOD, RESULT)."""
+    """stats_dist(DIST, METHOD, X, RESULT) and stats_dist(DIST, METHOD, RESULT)."""
 
     def __init__(self):
-        super().__init__("StatsDist")
+        super().__init__("stats_dist")
 
     def _get_dispatch(self) -> Callable:
         return self._dispatch
@@ -342,7 +342,7 @@ class _StatsDistPredicate(ModulePredicate):
         trail = args[-1]
         arity = len(args) - 1  # exclude trail
         if arity == 4:
-            # StatsDist(DIST, METHOD, X, RESULT)
+            # stats_dist(DIST, METHOD, X, RESULT)
             dist_name, method_name, x, result_var = [deref(a) for a in args[:-1]]
             try:
                 out = _dist_method_x(dist_name, method_name, x)
@@ -350,7 +350,7 @@ class _StatsDistPredicate(ModulePredicate):
                 yield (_fail, DONE)
                 return
         elif arity == 3:
-            # StatsDist(DIST, METHOD, RESULT)
+            # stats_dist(DIST, METHOD, RESULT)
             dist_name, method_name, result_var = [deref(a) for a in args[:-1]]
             try:
                 out = _dist_method_no_x(dist_name, method_name)
@@ -369,7 +369,7 @@ class _StatsDistPredicate(ModulePredicate):
         yield (_fail, DONE)
 
 
-StatsDist = _StatsDistPredicate()
+stats_dist = _StatsDistPredicate()
 
 # Normal distribution shortcuts
 stats_normal_pdf = _pred("stats_normal_pdf",
@@ -423,10 +423,10 @@ def _freeze_dist(dist_name, params_dict):
 
 
 class _StatsFreezePredicate(ModulePredicate):
-    """StatsFreezeDist(DIST, PARAMS_DICT, RESULT)."""
+    """stats_freeze_dist(DIST, PARAMS_DICT, RESULT)."""
 
     def __init__(self):
-        super().__init__("StatsFreezeDist")
+        super().__init__("stats_freeze_dist")
 
     def _get_dispatch(self) -> Callable:
         return self._dispatch
@@ -450,11 +450,11 @@ class _StatsFreezePredicate(ModulePredicate):
         yield (_fail, DONE)
 
 
-StatsFreezeDist = _StatsFreezePredicate()
+stats_freeze_dist = _StatsFreezePredicate()
 
 
 class _StatsFrozenMethodPredicate(ModulePredicate):
-    """Base for StatsFrozenPdf."""
+    """Base for stats_frozen_pdf."""
 
     def __init__(self, name: str, method_name: str):
         super().__init__(name)
@@ -484,11 +484,11 @@ class _StatsFrozenMethodPredicate(ModulePredicate):
         yield (_fail, DONE)
 
 
-StatsFrozenPdf = _StatsFrozenMethodPredicate("StatsFrozenPdf", "pdf")
+stats_frozen_pdf = _StatsFrozenMethodPredicate("stats_frozen_pdf", "pdf")
 
 
 class _StatsFrozenCdfPredicate(ModulePredicate):
-    """StatsFrozenCdf(HANDLE, X, P) — bidirectional CDF / quantile.
+    """stats_frozen_cdf(HANDLE, X, P) — bidirectional CDF / quantile.
 
     HANDLE ground always.
     X ground, P unbound → P = dist.cdf(x)
@@ -497,7 +497,7 @@ class _StatsFrozenCdfPredicate(ModulePredicate):
     """
 
     def __init__(self):
-        super().__init__("StatsFrozenCdf")
+        super().__init__("stats_frozen_cdf")
 
     def _get_dispatch(self):
         return self._dispatch
@@ -539,14 +539,14 @@ class _StatsFrozenCdfPredicate(ModulePredicate):
         yield (_fail, DONE)
 
 
-StatsFrozenCdf = _StatsFrozenCdfPredicate()
+stats_frozen_cdf = _StatsFrozenCdfPredicate()
 
 
 class _StatsFrozenRvsPredicate(ModulePredicate):
-    """StatsFrozenRvs(HANDLE, RESULT) and StatsFrozenRvs(HANDLE, SIZE, RESULT)."""
+    """stats_frozen_rvs(HANDLE, RESULT) and stats_frozen_rvs(HANDLE, SIZE, RESULT)."""
 
     def __init__(self):
-        super().__init__("StatsFrozenRvs")
+        super().__init__("stats_frozen_rvs")
 
     def _get_dispatch(self) -> Callable:
         return self._dispatch
@@ -580,14 +580,14 @@ class _StatsFrozenRvsPredicate(ModulePredicate):
         yield (_fail, DONE)
 
 
-StatsFrozenRvs = _StatsFrozenRvsPredicate()
+stats_frozen_rvs = _StatsFrozenRvsPredicate()
 
 
 class _StatsFrozenStatsPredicate(ModulePredicate):
-    """StatsFrozenStats(HANDLE, RESULT) — returns dict with 'mean' and 'var'."""
+    """stats_frozen_stats(HANDLE, RESULT) — returns dict with 'mean' and 'var'."""
 
     def __init__(self):
-        super().__init__("StatsFrozenStats")
+        super().__init__("stats_frozen_stats")
 
     def _get_dispatch(self) -> Callable:
         return self._dispatch
@@ -612,14 +612,14 @@ class _StatsFrozenStatsPredicate(ModulePredicate):
         yield (_fail, DONE)
 
 
-StatsFrozenStats = _StatsFrozenStatsPredicate()
+stats_frozen_stats = _StatsFrozenStatsPredicate()
 
 
 class _StatsFrozenFreePredicate(ModulePredicate):
-    """StatsFrozenFree(HANDLE) — release frozen distribution from registry."""
+    """stats_frozen_free(HANDLE) — release frozen distribution from registry."""
 
     def __init__(self):
-        super().__init__("StatsFrozenFree")
+        super().__init__("stats_frozen_free")
 
     def _get_dispatch(self) -> Callable:
         return self._dispatch
@@ -633,13 +633,13 @@ class _StatsFrozenFreePredicate(ModulePredicate):
         yield (_fail, DONE)
 
 
-StatsFrozenFree = _StatsFrozenFreePredicate()
+stats_frozen_free = _StatsFrozenFreePredicate()
 
 
-# ── Helper: ResultGet ─────────────────────────────────────────────────────
+# ── Helper: result_get ─────────────────────────────────────────────────────
 
 class _ResultGetPredicate:
-    """ResultGet(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE.
+    """result_get(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE.
 
     RESULT must be a dict (or object with attribute access via getattr).
     FIELD must be a ground string key.
@@ -674,7 +674,7 @@ class _ResultGetPredicate:
         yield (_fail, DONE)
 
     def __repr__(self) -> str:
-        return "ResultGet/3"
+        return "result_get/3"
 
 
-ResultGet = _ResultGetPredicate()
+result_get = _ResultGetPredicate()

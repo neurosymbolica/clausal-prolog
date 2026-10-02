@@ -378,7 +378,7 @@ make_radial_basis = _pred("make_radial_basis",
 # Arity-3 form is bidirectional: given Y, find X via brentq root-finding.
 
 def _eval_spline_bwd(interp, y_target):
-    """Find x such that interp(x) == y_target via brentq."""
+    """find x such that interp(x) == y_target via brentq."""
     import scipy.optimize as _opt
     # Determine search bounds from spline knot range
     t = interp.t if hasattr(interp, 't') else interp.x

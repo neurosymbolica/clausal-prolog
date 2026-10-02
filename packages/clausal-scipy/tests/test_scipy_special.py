@@ -20,8 +20,8 @@ from clausal.logic.trampoline import DONE
 from clausal.modules.py.scipy_special import (
     gamma, gamma_log, gamma_sign, beta_log, digamma, polygamma,
     factorial, comb, perm,
-    Erf, ErfComplement,
-    NormalCdf,
+    erf, erf_complement,
+    normal_cdf,
     bessel_j, bessel_y, bessel_j_real, bessel_y_real, bessel_k, bessel_i,
     bessel_j_zeros, spherical_bessel_j,
     elliptic_k, elliptic_e, elliptic_k_incomplete, elliptic_e_incomplete,
@@ -29,7 +29,7 @@ from clausal.modules.py.scipy_special import (
     entr, kl_divergence, log_sum_exp,
     assoc_legendre, legendre_poly, chebyshev_t, chebyshev_u,
     hermite_h, generalized_laguerre,
-    cube_root, exp10, exp2, Logit, lambert_w, x_log_y, x_log1p_y,
+    cube_root, exp10, exp2, logit, lambert_w, x_log_y, x_log1p_y,
 )
 
 
@@ -192,25 +192,25 @@ class TestPerm:
 class TestErf:
     def test_zero(self):
         # nv
-        r = _drive(Erf, 0.0)
+        r = _drive(erf, 0.0)
         assert approx(r, 0.0)
 
     def test_one(self):
         # nv
-        r = _drive(Erf, 1.0)
+        r = _drive(erf, 1.0)
         assert approx(r, sc.erf(1.0))
 
 
 class TestErfComplement:
     def test_one(self):
         # nv
-        r = _drive(ErfComplement, 1.0)
+        r = _drive(erf_complement, 1.0)
         assert approx(r, sc.erfc(1.0))
 
     def test_sums_to_one(self):
         # nv
-        erf_val = _drive(Erf, 1.0)
-        erfc_val = _drive(ErfComplement, 1.0)
+        erf_val = _drive(erf, 1.0)
+        erfc_val = _drive(erf_complement, 1.0)
         assert approx(erf_val + erfc_val, 1.0)
 
 
@@ -218,44 +218,44 @@ class TestErfInverse:
     def test_round_trip(self):
         # nv
         x = 0.5
-        erf_x = _drive(Erf, x)
-        # Backward direction of Erf: Erf(result_var, erf_x) → result_var = erfinv(erf_x)
-        inv = _drive_bwd(Erf, erf_x)
+        erf_x = _drive(erf, x)
+        # Backward direction of erf: erf(result_var, erf_x) → result_var = erfinv(erf_x)
+        inv = _drive_bwd(erf, erf_x)
         assert approx(inv, x)
 
 
 class TestErfComplementInverse:
     def test_basic(self):
-        # Backward direction of ErfComplement: ErfComplement(result_var, 0.5) → result_var = erfcinv(0.5)
+        # Backward direction of erf_complement: erf_complement(result_var, 0.5) → result_var = erfcinv(0.5)
         # nv
-        r = _drive_bwd(ErfComplement, 0.5)
+        r = _drive_bwd(erf_complement, 0.5)
         assert approx(r, sc.erfcinv(0.5))
 
 
 class TestNormalCdf:
     def test_zero(self):
         # nv
-        r = _drive(NormalCdf, 0.0)
+        r = _drive(normal_cdf, 0.0)
         assert approx(r, 0.5)
 
     def test_one(self):
         # nv
-        r = _drive(NormalCdf, 1.0)
+        r = _drive(normal_cdf, 1.0)
         assert approx(r, sc.ndtr(1.0))
 
 
 class TestNormalCdfInverse:
     def test_half(self):
-        # Backward direction of NormalCdf: NormalCdf(result_var, 0.5) → result_var = ndtri(0.5)
+        # Backward direction of normal_cdf: normal_cdf(result_var, 0.5) → result_var = ndtri(0.5)
         # nv
-        r = _drive_bwd(NormalCdf, 0.5)
+        r = _drive_bwd(normal_cdf, 0.5)
         assert approx(r, 0.0)
 
     def test_round_trip(self):
         # nv
         p = 0.975
-        x = _drive_bwd(NormalCdf, p)
-        back = _drive(NormalCdf, x)
+        x = _drive_bwd(normal_cdf, p)
+        back = _drive(normal_cdf, x)
         assert approx(back, p)
 
 
@@ -516,30 +516,30 @@ class TestExp2:
 
 class TestSigmoid:
     def test_zero_input(self):
-        # Backward direction of Logit: Logit(result_var, 0.0) → result_var = expit(0.0)
+        # Backward direction of logit: logit(result_var, 0.0) → result_var = expit(0.0)
         # nv
-        r = _drive_bwd(Logit, 0.0)
+        r = _drive_bwd(logit, 0.0)
         assert approx(r, 0.5)
 
     def test_large_input(self):
-        # Backward direction of Logit: expit(100.0) ≈ 1.0
+        # Backward direction of logit: expit(100.0) ≈ 1.0
         # nv
-        r = _drive_bwd(Logit, 100.0)
+        r = _drive_bwd(logit, 100.0)
         assert approx(r, 1.0)
 
     def test_round_trip_with_logit(self):
         # nv
         x = 0.3
-        # expit(x) via backward Logit, then logit(sig) via forward Logit should give back x
-        sig = _drive_bwd(Logit, x)
-        back = _drive(Logit, sig)
+        # expit(x) via backward logit, then logit(sig) via forward logit should give back x
+        sig = _drive_bwd(logit, x)
+        back = _drive(logit, sig)
         assert approx(back, x)
 
 
 class TestLogit:
     def test_half(self):
         # nv
-        r = _drive(Logit, 0.5)
+        r = _drive(logit, 0.5)
         assert approx(r, 0.0)
 
 

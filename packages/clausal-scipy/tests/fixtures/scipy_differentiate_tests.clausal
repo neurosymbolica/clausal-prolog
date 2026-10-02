@@ -1,30 +1,30 @@
 -double_quotes(atom)
--import_from(scipy_differentiate, [derivative, jacobian, hessian, ResultGet])
+-import_from(scipy_differentiate, [derivative, jacobian, hessian, result_get])
 
 # d/dx x² at x=3 is 6
 test("derivative of x squared at 3") <- (
     derivative(++(lambda x: x**2), 3.0, R),
-    ResultGet(R, 'df', DF),
+    result_get(R, 'df', DF),
     DIFF is ++(abs(DF - 6.0)),
     DIFF < 1.0e-8)  # nv
 
 # d/dx sin(x) at x=0 is 1 (use numpy.sin since scipy passes numpy scalars)
 test("derivative of sin at zero") <- (
     derivative(++(__import__('numpy').sin), 0.0, R),
-    ResultGet(R, 'df', DF),
+    result_get(R, 'df', DF),
     DIFF is ++(abs(DF - 1.0)),
     DIFF < 1.0e-8)  # nv
 
 # Result dict has a 'success' field
 test("derivative result has success field") <- (
     derivative(++(lambda x: x), 1.0, R),
-    ResultGet(R, 'success', OK),
+    result_get(R, 'success', OK),
     OK == True)  # nv
 
 # derivative with extra args: f(x, a) = a*x at x=2, a=5 → 5
 test("derivative with extra args") <- (
     derivative(++(lambda x, a: a * x), 2.0, [5.0], R),
-    ResultGet(R, 'df', DF),
+    result_get(R, 'df', DF),
     DIFF is ++(abs(DF - 5.0)),
     DIFF < 1.0e-8)  # nv
 
@@ -34,7 +34,7 @@ test("hessian of sum of squares") <- (
         ++(lambda x: x[0]**2 + x[1]**2),
         ++(__import__('numpy').array([1.0, 2.0])),
         R),
-    ResultGet(R, 'ddf', H),
+    result_get(R, 'ddf', H),
     H00 is ++(float(H[0, 0])),
     H11 is ++(float(H[1, 1])),
     DIFF00 is ++(abs(H00 - 2.0)),

@@ -5,7 +5,7 @@ Tests are organised per predicate family and cover:
 - multi-arity variants (optional args)
 - unification succeeds when RESULT is unbound
 - unification fails when RESULT is bound to a wrong value
-- Tier 2 dict results accessed via ResultGet
+- Tier 2 dict results accessed via result_get
 """
 
 import pytest
@@ -36,7 +36,7 @@ from clausal.modules.py.scipy_signal import (
     periodogram,
     welch,
     spectrogram,
-    ResultGet,
+    result_get,
 )
 
 
@@ -57,9 +57,9 @@ def _drive(pred, *args):
 
 
 def _drive_result_get(result_dict, field):
-    """Use ResultGet to extract a field from a dict result."""
+    """Use result_get to extract a field from a dict result."""
     value = Var()
-    dispatch = ResultGet._get_dispatch()
+    dispatch = result_get._get_dispatch()
     trail = Trail()
     gen = dispatch(None, None, None, None, result_dict, field, value, trail)
     for parent, sentinel in gen:
@@ -702,10 +702,10 @@ class TestResultGet:
         assert v is None
 
     def test_unify_with_bound_correct(self):
-        """ResultGet should succeed when VALUE is already bound to the correct value."""
+        """result_get should succeed when VALUE is already bound to the correct value."""
         # nv
         d = {'b': np.array([1.0])}
-        dispatch = ResultGet._get_dispatch()
+        dispatch = result_get._get_dispatch()
         trail = Trail()
         value_bound = d['b']
         gen = dispatch(None, None, None, None, d, 'b', value_bound, trail)
@@ -713,10 +713,10 @@ class TestResultGet:
         assert len(solutions) == 1
 
     def test_unify_with_bound_wrong_fails(self):
-        """ResultGet should fail when VALUE is bound to a different value."""
+        """result_get should fail when VALUE is bound to a different value."""
         # nv
         d = {'x': 42.0}
-        dispatch = ResultGet._get_dispatch()
+        dispatch = result_get._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, d, 'x', 99.0, trail)
         solutions = [s for s in gen if s[1] is None]

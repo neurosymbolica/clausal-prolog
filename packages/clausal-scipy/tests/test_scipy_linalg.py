@@ -5,7 +5,7 @@ Tests are organised per function family and cover:
 - multi-arity variants (optional args)
 - unification succeeds when RESULT is unbound
 - unification fails when RESULT is bound to a wrong value
-- Tier 2 dict results accessed via ResultGet
+- Tier 2 dict results accessed via result_get
 """
 
 import math
@@ -20,12 +20,12 @@ from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py.scipy_linalg import (
     solve, least_squares, solve_triangular,
-    LuDecompose, QrDecompose, singular_value_decompose,
-    Cholesky, EigenDecompose, eigen_decompose_hermitian, Schur,
-    Inverse, pseudo_inverse, determinant, norm,
-    MatrixExpLog, matrix_square_root, matrix_function,
+    lu_decompose, qr_decompose, singular_value_decompose,
+    cholesky, eigen_decompose, eigen_decompose_hermitian, schur,
+    inverse, pseudo_inverse, determinant, norm,
+    matrix_exp_log, matrix_square_root, matrix_function,
     lu_factor, lu_solve, cholesky_factor, cholesky_solve,
-    ResultGet,
+    result_get,
 )
 
 
@@ -46,9 +46,9 @@ def _drive(pred, *args):
 
 
 def _drive_result_get(result_dict, field):
-    """Use ResultGet to extract a field from a dict result."""
+    """Use result_get to extract a field from a dict result."""
     value = Var()
-    dispatch = ResultGet._get_dispatch()
+    dispatch = result_get._get_dispatch()
     trail = Trail()
     gen = dispatch(None, None, None, None, result_dict, field, value, trail)
     for parent, sentinel in gen:
@@ -203,18 +203,18 @@ class TestSolveTriangular:
         assert _fails_with_wrong_result(solve_triangular, U, b)
 
 
-# ── LuDecompose ───────────────────────────────────────────────────────────
+# ── lu_decompose ───────────────────────────────────────────────────────────
 
 class TestLuDecompose:
     def test_returns_dict(self, square_2x2):
         # nv
-        r = _drive(LuDecompose, square_2x2)
+        r = _drive(lu_decompose, square_2x2)
         assert isinstance(r, dict)
         assert set(r.keys()) == {"p", "l", "u"}
 
     def test_plu_reconstruct(self, square_2x2):
         # nv
-        r = _drive(LuDecompose, square_2x2)
+        r = _drive(lu_decompose, square_2x2)
         p = _drive_result_get(r, "p")
         l = _drive_result_get(r, "l")
         u = _drive_result_get(r, "u")
@@ -222,30 +222,30 @@ class TestLuDecompose:
 
     def test_result_get_p(self, square_2x2):
         # nv
-        r = _drive(LuDecompose, square_2x2)
+        r = _drive(lu_decompose, square_2x2)
         p = _drive_result_get(r, "p")
         assert p.shape == (2, 2)
 
 
-# ── QrDecompose ───────────────────────────────────────────────────────────
+# ── qr_decompose ───────────────────────────────────────────────────────────
 
 class TestQrDecompose:
     def test_returns_dict(self, square_2x2):
         # nv
-        r = _drive(QrDecompose, square_2x2)
+        r = _drive(qr_decompose, square_2x2)
         assert isinstance(r, dict)
         assert set(r.keys()) == {"q", "r"}
 
     def test_qr_reconstruct(self, square_2x2):
         # nv
-        r = _drive(QrDecompose, square_2x2)
+        r = _drive(qr_decompose, square_2x2)
         q = _drive_result_get(r, "q")
         rv = _drive_result_get(r, "r")
         assert approx_array(q @ rv, square_2x2)
 
     def test_q_orthogonal(self, square_2x2):
         # nv
-        r = _drive(QrDecompose, square_2x2)
+        r = _drive(qr_decompose, square_2x2)
         q = _drive_result_get(r, "q")
         assert approx_array(q @ q.T, np.eye(2))
 
@@ -274,52 +274,52 @@ class TestSingularValueDecompose:
         assert all(sv > 0 for sv in s)
 
 
-# ── Cholesky ──────────────────────────────────────────────────────────────
+# ── cholesky ──────────────────────────────────────────────────────────────
 
 class TestCholesky:
     def test_upper_default(self, spd_2x2):
         # nv
-        r = _drive(Cholesky, spd_2x2)
+        r = _drive(cholesky, spd_2x2)
         expected = la.cholesky(spd_2x2, lower=False)
         assert approx_array(r, expected)
 
     def test_lower_explicit(self, spd_2x2):
         # nv
-        r = _drive(Cholesky, spd_2x2, True)
+        r = _drive(cholesky, spd_2x2, True)
         expected = la.cholesky(spd_2x2, lower=True)
         assert approx_array(r, expected)
 
     def test_reconstruct_upper(self, spd_2x2):
         # nv
-        U = _drive(Cholesky, spd_2x2)
+        U = _drive(cholesky, spd_2x2)
         assert approx_array(U.T @ U, spd_2x2)
 
 
-# ── EigenDecompose ────────────────────────────────────────────────────────
+# ── eigen_decompose ────────────────────────────────────────────────────────
 
 class TestEigenDecompose:
     def test_returns_dict(self, square_2x2):
         # nv
-        r = _drive(EigenDecompose, square_2x2)
+        r = _drive(eigen_decompose, square_2x2)
         assert isinstance(r, dict)
         assert set(r.keys()) == {"eigenvalues", "eigenvectors"}
 
     def test_eigenvalue_count(self, square_2x2):
         # nv
-        r = _drive(EigenDecompose, square_2x2)
+        r = _drive(eigen_decompose, square_2x2)
         vals = _drive_result_get(r, "eigenvalues")
         assert len(vals) == 2
 
     def test_eigenvector_shape(self, square_2x2):
         # nv
-        r = _drive(EigenDecompose, square_2x2)
+        r = _drive(eigen_decompose, square_2x2)
         vecs = _drive_result_get(r, "eigenvectors")
         assert vecs.shape == (2, 2)
 
     def test_av_equals_lv(self, square_2x2):
         """A @ v ≈ λ * v for each eigenpair."""
         # nv
-        r = _drive(EigenDecompose, square_2x2)
+        r = _drive(eigen_decompose, square_2x2)
         vals = _drive_result_get(r, "eigenvalues")
         vecs = _drive_result_get(r, "eigenvectors")
         for i in range(2):
@@ -350,46 +350,46 @@ class TestEigenDecomposeHermitian:
         assert approx_array(vecs.T @ vecs, np.eye(2))
 
 
-# ── Schur ─────────────────────────────────────────────────────────────────
+# ── schur ─────────────────────────────────────────────────────────────────
 
 class TestSchur:
     def test_returns_dict(self, square_2x2):
         # nv
-        r = _drive(Schur, square_2x2)
+        r = _drive(schur, square_2x2)
         assert isinstance(r, dict)
         assert set(r.keys()) == {"t", "z"}
 
     def test_schur_reconstruct(self, square_2x2):
         # nv
-        r = _drive(Schur, square_2x2)
+        r = _drive(schur, square_2x2)
         t = _drive_result_get(r, "t")
         z = _drive_result_get(r, "z")
         assert approx_array(z @ t @ z.T, square_2x2)
 
     def test_complex_output(self, square_2x2):
         # nv
-        r = _drive(Schur, square_2x2, 'complex')
+        r = _drive(schur, square_2x2, 'complex')
         t = _drive_result_get(r, "t")
         assert t.dtype == complex or np.issubdtype(t.dtype, np.complexfloating)
 
 
-# ── Inverse ───────────────────────────────────────────────────────────────
+# ── inverse ───────────────────────────────────────────────────────────────
 
 class TestInverse:
     def test_inverse(self, square_2x2):
         # nv
-        r = _drive(Inverse, square_2x2)
+        r = _drive(inverse, square_2x2)
         assert approx_array(square_2x2 @ r, np.eye(2))
 
     def test_identity_inverse(self):
         # nv
         I = np.eye(3)
-        r = _drive(Inverse, I)
+        r = _drive(inverse, I)
         assert approx_array(r, I)
 
     def test_wrong_result_fails(self, square_2x2):
         # nv
-        assert _fails_with_wrong_result(Inverse, square_2x2)
+        assert _fails_with_wrong_result(inverse, square_2x2)
 
 
 # ── pseudo_inverse ─────────────────────────────────────────────────────────
@@ -463,14 +463,14 @@ class TestMatrixExponential:
     def test_zero_matrix(self):
         # nv
         Z = np.zeros((2, 2))
-        # Forward direction of MatrixExpLog: MatrixExpLog(Z, result_var) → result_var = expm(Z)
-        r = _drive(MatrixExpLog, Z)
+        # Forward direction of matrix_exp_log: matrix_exp_log(Z, result_var) → result_var = expm(Z)
+        r = _drive(matrix_exp_log, Z)
         assert approx_array(r, np.eye(2))
 
     def test_diagonal(self):
         # nv
         D = np.diag([1.0, 2.0])
-        r = _drive(MatrixExpLog, D)
+        r = _drive(matrix_exp_log, D)
         expected = np.diag([math.e, math.e ** 2])
         assert approx_array(r, expected, rtol=1e-6)
 
@@ -479,15 +479,15 @@ class TestMatrixExponential:
 
 class TestMatrixLogarithm:
     def test_identity(self):
-        # Backward direction of MatrixExpLog: MatrixExpLog(result_var, I) → result_var = logm(I)
+        # Backward direction of matrix_exp_log: matrix_exp_log(result_var, I) → result_var = logm(I)
         # nv
-        r = _drive_bwd(MatrixExpLog, np.eye(2))
+        r = _drive_bwd(matrix_exp_log, np.eye(2))
         assert approx_array(np.real(r), np.zeros((2, 2)))
 
     def test_expm_logm_roundtrip(self, spd_2x2):
         # nv
-        log_m = _drive_bwd(MatrixExpLog, spd_2x2)
-        r = _drive(MatrixExpLog, np.real(log_m))
+        log_m = _drive_bwd(matrix_exp_log, spd_2x2)
+        r = _drive(matrix_exp_log, np.real(log_m))
         assert approx_array(np.real(r), spd_2x2, rtol=1e-5)
 
 
@@ -511,7 +511,7 @@ class TestMatrixFunction:
     def test_exp_via_matrix_function(self, spd_2x2):
         # nv
         r = _drive(matrix_function, spd_2x2, np.exp)
-        expected_expm = _drive(MatrixExpLog, spd_2x2)
+        expected_expm = _drive(matrix_exp_log, spd_2x2)
         assert approx_array(np.real(r), np.real(expected_expm), rtol=1e-5)
 
     def test_identity_fn(self):
@@ -565,7 +565,7 @@ class TestCholeskyFactorSolve:
         assert approx_array(spd_2x2 @ x2, b2)
 
 
-# ── ResultGet ─────────────────────────────────────────────────────────────
+# ── result_get ─────────────────────────────────────────────────────────────
 
 class TestResultGet:
     def test_basic_extraction(self):
@@ -588,7 +588,7 @@ class TestResultGet:
     def test_non_string_field_fails(self):
         # nv
         value = Var()
-        dispatch = ResultGet._get_dispatch()
+        dispatch = result_get._get_dispatch()
         trail = Trail()
         field_var = Var()  # unbound var as field — should fail
         gen = dispatch(None, None, None, None, {"x": 1}, field_var, value, trail)
@@ -599,7 +599,7 @@ class TestResultGet:
         # nv
         d = {"rank": 2}
         value = 2
-        dispatch = ResultGet._get_dispatch()
+        dispatch = result_get._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, d, "rank", value, trail)
         solutions = [s for s in gen if s[1] is None]

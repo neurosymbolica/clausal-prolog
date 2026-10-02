@@ -3,29 +3,29 @@
 Provides linear algebra routines from scipy.linalg as importable predicate
 objects for use in .clausal files via::
 
-    -import_from(py.scipy_linalg, [solve, singular_value_decompose, Inverse, ...])
+    -import_from(py.scipy_linalg, [solve, singular_value_decompose, inverse, ...])
 
 Tiers
 -----
 - **Tier 1** (array inputs → array result):
-    solve, solve_triangular, Cholesky,
-    Inverse, pseudo_inverse, determinant, norm,
-    MatrixExpLog, matrix_square_root,
+    solve, solve_triangular, cholesky,
+    inverse, pseudo_inverse, determinant, norm,
+    matrix_exp_log, matrix_square_root,
     matrix_function, lu_solve, cholesky_solve
 
-- **Tier 2** (returns result dict; use ResultGet to access fields):
+- **Tier 2** (returns result dict; use result_get to access fields):
     least_squares           → dict {x, residuals, rank, s}
-    LuDecompose            → dict {p, l, u}
-    QrDecompose            → dict {q, r}
+    lu_decompose            → dict {p, l, u}
+    qr_decompose            → dict {q, r}
     singular_value_decompose → dict {u, s, vh}
-    EigenDecompose         → dict {eigenvalues, eigenvectors}
+    eigen_decompose         → dict {eigenvalues, eigenvectors}
     eigen_decompose_hermitian→ dict {eigenvalues, eigenvectors}
-    Schur                  → dict {t, z}
+    schur                  → dict {t, z}
     lu_factor               → opaque (lu, piv) tuple  (passed to lu_solve)
     cholesky_factor         → opaque (c, lower) tuple (passed to cholesky_solve)
 
 Helper:
-    ResultGet(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE
+    result_get(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE
 
 Predicate catalogue
 -------------------
@@ -37,23 +37,23 @@ Linear system solvers:
     solve_triangular(A, B, LOWER, RESULT)       # LOWER: bool (default False → upper)
 
 Matrix decompositions:
-    LuDecompose(A, RESULT)                     # RESULT: dict {p, l, u}
-    QrDecompose(A, RESULT)                     # RESULT: dict {q, r}
+    lu_decompose(A, RESULT)                     # RESULT: dict {p, l, u}
+    qr_decompose(A, RESULT)                     # RESULT: dict {q, r}
     singular_value_decompose(A, RESULT)          # RESULT: dict {u, s, vh}
-    Cholesky(A, RESULT)                        # default LOWER=False (upper factor)
-    Cholesky(A, LOWER, RESULT)
-    EigenDecompose(A, RESULT)                  # RESULT: dict {eigenvalues, eigenvectors}
+    cholesky(A, RESULT)                        # default LOWER=False (upper factor)
+    cholesky(A, LOWER, RESULT)
+    eigen_decompose(A, RESULT)                  # RESULT: dict {eigenvalues, eigenvectors}
     eigen_decompose_hermitian(A, RESULT)         # symmetric/Hermitian specialisation
-    Schur(A, RESULT)                           # RESULT: dict {t, z}
-    Schur(A, OUTPUT, RESULT)                   # OUTPUT: 'real' or 'complex'
+    schur(A, RESULT)                           # RESULT: dict {t, z}
+    schur(A, OUTPUT, RESULT)                   # OUTPUT: 'real' or 'complex'
 
 Matrix functions:
-    Inverse(A, RESULT)
+    inverse(A, RESULT)
     pseudo_inverse(A, RESULT)
     determinant(A, RESULT)
     norm(A, RESULT)
     norm(A, ORD, RESULT)
-    MatrixExpLog(A, B)                         # bidirectional: expm(a) / logm(b)
+    matrix_exp_log(A, B)                         # bidirectional: expm(a) / logm(b)
     matrix_square_root(A, RESULT)
     matrix_function(A, FUNC, RESULT)            # FUNC: Python callable
 
@@ -214,7 +214,7 @@ def _eigen_units(dims_list, result):
 
 
 def _schur_units(dims_list, result):
-    """Schur form T has same dims as A; unitary factor Z is dimensionless."""
+    """schur form T has same dims as A; unitary factor Z is dimensionless."""
     a_dims = dims_list[0]
     if not a_dims:
         return None
@@ -224,7 +224,7 @@ def _schur_units(dims_list, result):
 
 
 def _inverse_units(dims_list, result):
-    """Inverse dims = negated A dims."""
+    """inverse dims = negated A dims."""
     a_dims = dims_list[0]
     if not a_dims:
         return None
@@ -318,13 +318,13 @@ def _cholesky_bwd(r):
 
 # ── Matrix decompositions ─────────────────────────────────────────────────
 
-LuDecompose = _pred_bidir("LuDecompose",
+lu_decompose = _pred_bidir("lu_decompose",
     (2, _bidir_dispatch(
             make_quantity_aware(lambda a: dict(zip(("p", "l", "u"), _la().lu(a))), STRIP_TO_PLAIN),
             _lu_bwd)),
 )
 
-QrDecompose = _pred_bidir("QrDecompose",
+qr_decompose = _pred_bidir("qr_decompose",
     (2, _bidir_dispatch(
             make_quantity_aware(lambda a: dict(zip(("q", "r"), _la().qr(a))), _qr_units),
             _qr_bwd)),
@@ -336,7 +336,7 @@ singular_value_decompose = _pred_bidir("singular_value_decompose",
             _svd_bwd)),
 )
 
-Cholesky = _pred_bidir("Cholesky",
+cholesky = _pred_bidir("cholesky",
     (2, _bidir_dispatch(
             make_quantity_aware(_la_kw("cholesky", lower=False), REQUIRE_DIMENSIONLESS),
             _cholesky_bwd)),
@@ -344,7 +344,7 @@ Cholesky = _pred_bidir("Cholesky",
         lambda a, lower: _la().cholesky(a, lower=lower), REQUIRE_DIMENSIONLESS))),
 )
 
-EigenDecompose = _pred_bidir("EigenDecompose",
+eigen_decompose = _pred_bidir("eigen_decompose",
     (2, _bidir_dispatch(
             make_quantity_aware(
                 lambda a: dict(zip(("eigenvalues", "eigenvectors"), _la().eig(a))),
@@ -360,7 +360,7 @@ eigen_decompose_hermitian = _pred_bidir("eigen_decompose_hermitian",
             _eigen_bwd)),
 )
 
-Schur = _pred_bidir("Schur",
+schur = _pred_bidir("schur",
     (2, _bidir_dispatch(
             make_quantity_aware(
                 lambda a: dict(zip(("t", "z"), _la().schur(a))),
@@ -374,7 +374,7 @@ Schur = _pred_bidir("Schur",
 
 # ── Matrix functions ──────────────────────────────────────────────────────
 
-Inverse = _pred_bidir("Inverse",
+inverse = _pred_bidir("inverse",
     (2, _bidir_dispatch(make_quantity_aware(_la_fn("inv"), _inverse_units), _la_fn("inv"))),
 )
 
@@ -391,7 +391,7 @@ norm = _pred("norm",
     (3, _dispatch_fn(make_quantity_aware(lambda a, ord: _la().norm(a, ord=ord), PASS_THROUGH_FIRST))),
 )
 
-MatrixExpLog = _pred_bidir("MatrixExpLog",
+matrix_exp_log = _pred_bidir("matrix_exp_log",
     (2, _bidir_dispatch(
             make_quantity_aware(_la_fn("expm"), REQUIRE_DIMENSIONLESS),
             _la_fn("logm"))),
@@ -429,10 +429,10 @@ cholesky_solve = _pred("cholesky_solve",
 )
 
 
-# ── Helper: ResultGet ─────────────────────────────────────────────────────
+# ── Helper: result_get ─────────────────────────────────────────────────────
 
 class _ResultGetPredicate:
-    """ResultGet(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE.
+    """result_get(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE.
 
     RESULT must be a dict (as produced by Tier 2 predicates).
     FIELD must be a ground string key.
@@ -460,7 +460,7 @@ class _ResultGetPredicate:
         yield (_fail, DONE)
 
     def __repr__(self) -> str:
-        return "ResultGet/3"
+        return "result_get/3"
 
 
-ResultGet = _ResultGetPredicate()
+result_get = _ResultGetPredicate()

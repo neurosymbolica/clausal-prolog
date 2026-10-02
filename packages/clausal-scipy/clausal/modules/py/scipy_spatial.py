@@ -64,12 +64,12 @@ KD-tree (Tier 3):
 
     kd_tree_query_ball(HANDLE, X, RADIUS, RESULT)
         → handle.query_ball_point(x, r)
-        Find all points within RADIUS of each point in X.
+        find all points within RADIUS of each point in X.
         RESULT: list of index lists (one per query point).
 
     kd_tree_query_pairs(HANDLE, RADIUS, RESULT)
         → handle.query_pairs(r)
-        Find all pairs of points within RADIUS of each other.
+        find all pairs of points within RADIUS of each other.
         RESULT: set of (i, j) index pairs.
 
 ConvexHull (Tier 3):
@@ -93,7 +93,7 @@ Delaunay triangulation (Tier 3):
     delaunay_find_simplex(HANDLE, XI, RESULT)
     delaunay_find_simplex(HANDLE, XI, BRUTEFORCE, RESULT)
         → handle.find_simplex(xi, bruteforce=BRUTEFORCE)
-        Find the simplex containing each point in XI.
+        find the simplex containing each point in XI.
         RESULT: array of simplex indices (-1 if outside triangulation).
 
 Rotation (Tier 3, from scipy.spatial.transform):

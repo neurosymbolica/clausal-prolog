@@ -41,19 +41,19 @@ Predicate names use full English words; scipy's terse abbreviations are expanded
 | `scipy.linalg.solve` | `solve` |
 | `scipy.linalg.lstsq` | `least_squares` |
 | `scipy.linalg.solve_triangular` | `solve_triangular` |
-| `scipy.linalg.lu` | `LuDecompose` |
-| `scipy.linalg.qr` | `QrDecompose` |
+| `scipy.linalg.lu` | `lu_decompose` |
+| `scipy.linalg.qr` | `qr_decompose` |
 | `scipy.linalg.svd` | `singular_value_decompose` |
-| `scipy.linalg.cholesky` | `Cholesky` |
-| `scipy.linalg.eig` | `EigenDecompose` |
+| `scipy.linalg.cholesky` | `cholesky` |
+| `scipy.linalg.eig` | `eigen_decompose` |
 | `scipy.linalg.eigh` | `eigen_decompose_hermitian` |
-| `scipy.linalg.schur` | `Schur` |
-| `scipy.linalg.inv` | `Inverse` |
+| `scipy.linalg.schur` | `schur` |
+| `scipy.linalg.inv` | `inverse` |
 | `scipy.linalg.pinv` | `pseudo_inverse` |
 | `scipy.linalg.det` | `determinant` |
 | `scipy.linalg.norm` | `norm` |
-| `scipy.linalg.expm` | `MatrixExpLog` forward |
-| `scipy.linalg.logm` | `MatrixExpLog` backward |
+| `scipy.linalg.expm` | `matrix_exp_log` forward |
+| `scipy.linalg.logm` | `matrix_exp_log` backward |
 | `scipy.linalg.sqrtm` | `matrix_square_root` |
 | `scipy.linalg.funm` | `matrix_function` |
 | `scipy.linalg.lu_factor` | `lu_factor` |
@@ -141,7 +141,7 @@ solve_multiple(A, RHS_LIST, SOLUTIONS) <- (
 
 ---
 
-### ResultGet
+### result_get
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_linalg_sigs.txt:resultget"
@@ -177,8 +177,8 @@ explained_variance(X, K, RATIO) <- (
 
 - All array inputs are passed to scipy without copying; avoid mutating them after the call.
 - Tier 2 result dicts are plain Python dicts — they can be passed to [`++` escapes](python_integration.md) for further NumPy processing.
-- `EigenDecompose` may return complex eigenvalues for non-symmetric matrices; use `++(vals.real)` to extract real parts when appropriate.
-- `MatrixExpLog` (logm direction) and `matrix_square_root` may return complex results even for real inputs; wrap with `++(result.real)` if only the real part is needed.
+- `eigen_decompose` may return complex eigenvalues for non-symmetric matrices; use `++(vals.real)` to extract real parts when appropriate.
+- `matrix_exp_log` (logm direction) and `matrix_square_root` may return complex results even for real inputs; wrap with `++(result.real)` if only the real part is needed.
 - Predicates fail (no solution) when `result_get` cannot find the field, or when a bound `RESULT` does not unify with the computed value; scipy exceptions propagate as Python exceptions.
 
 ---

@@ -4,7 +4,7 @@ Tests cover:
 - derivative: scalar function, array function, with extra args
 - jacobian: vector-valued function
 - hessian: scalar multivariate function
-- ResultGet: field extraction from result dict
+- result_get: field extraction from result dict
 - Unification succeeds when RESULT is unbound
 - Unification fails when RESULT is bound to an incorrect value
 - .clausal fixture integration
@@ -23,7 +23,7 @@ from clausal.logic.trampoline import DONE
 from clausal.logic.solve import call
 from clausal.import_hook import _load_module
 from clausal.modules.py.scipy_differentiate import (
-    derivative, jacobian, hessian, ResultGet,
+    derivative, jacobian, hessian, result_get,
 )
 
 
@@ -45,7 +45,7 @@ def _drive(pred, *args):
 
 def _drive_result_get(result_dict, field):
     value = Var()
-    dispatch = ResultGet._get_dispatch()
+    dispatch = result_get._get_dispatch()
     trail = Trail()
     gen = dispatch(None, None, None, None, result_dict, field, value, trail)
     for parent, sentinel in gen:
@@ -218,7 +218,7 @@ class TestHessian:
         )
 
 
-# ── ResultGet ─────────────────────────────────────────────────────────────
+# ── result_get ─────────────────────────────────────────────────────────────
 
 class TestResultGet:
     def _get_result(self):
@@ -252,7 +252,7 @@ class TestResultGet:
         # nv
         r = self._get_result()
         v = Var()
-        dispatch = ResultGet._get_dispatch()
+        dispatch = result_get._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, r, "nonexistent_field", v, trail)
         solutions = [s for s in gen if s[1] is None]
@@ -263,7 +263,7 @@ class TestResultGet:
         r = self._get_result()
         # Bind VALUE to the correct answer → should succeed
         df_expected = r["df"]
-        dispatch = ResultGet._get_dispatch()
+        dispatch = result_get._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, r, "df", df_expected, trail)
         solutions = [s for s in gen if s[1] is None]
@@ -272,7 +272,7 @@ class TestResultGet:
     def test_bound_wrong_value_fails(self):
         # nv
         r = self._get_result()
-        dispatch = ResultGet._get_dispatch()
+        dispatch = result_get._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, r, "df", object(), trail)
         solutions = [s for s in gen if s[1] is None]

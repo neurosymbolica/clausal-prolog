@@ -1,11 +1,11 @@
 # === Import ===
 
 --8<-- [start:import]
--import_from(scipy_signal, [butterworth, sos_forward_backward_filter, ResultGet, ...])
+-import_from(scipy_signal, [butterworth, sos_forward_backward_filter, result_get, ...])
 --8<-- [end:import]
 
 --8<-- [start:import_ex2]
--import_from(py.scipy_signal, [butterworth, sos_forward_backward_filter, ResultGet, ...])
+-import_from(py.scipy_signal, [butterworth, sos_forward_backward_filter, result_get, ...])
 --8<-- [end:import_ex2]
 
 
@@ -13,7 +13,7 @@
 
 --8<-- [start:include_design]
 butterworth(4, 0.1, 'low', 'sos', FILTER_DESIGN),
-ResultGet(FILTER_DESIGN, 'sos', SOS).
+result_get(FILTER_DESIGN, 'sos', SOS).
 --8<-- [end:include_design]
 
 --8<-- [start:butterworth]
@@ -169,10 +169,10 @@ spectrogram(X, FS, RESULT)
 --8<-- [end:spectrogram]
 
 
-# === ResultGet ===
+# === result_get ===
 
 --8<-- [start:resultget]
-ResultGet(RESULT, FIELD, VALUE)
+result_get(RESULT, FIELD, VALUE)
     Extract RESULT[FIELD] → VALUE.
     RESULT must be a dict.  FIELD must be a ground string.
     Fails if FIELD is absent or RESULT is not a dict.
@@ -182,35 +182,35 @@ ResultGet(RESULT, FIELD, VALUE)
 # === Complete examples ===
 
 --8<-- [start:low_pass_filter_a_signal]
--import_from(scipy_signal, [butterworth, sos_forward_backward_filter, ResultGet])
+-import_from(scipy_signal, [butterworth, sos_forward_backward_filter, result_get])
 
 LowPassFilter(SIGNAL, CUTOFF_HZ, SAMPLE_RATE, FILTERED) <- (
     butterworth(6, CUTOFF_HZ, 'low', 'sos', SAMPLE_RATE, DESIGN),
-    ResultGet(DESIGN, 'sos', SOS),
+    result_get(DESIGN, 'sos', SOS),
     sos_forward_backward_filter(SOS, SIGNAL, FILTERED)
 ).
 --8<-- [end:low_pass_filter_a_signal]
 
 --8<-- [start:inspect_frequency_response]
--import_from(scipy_signal, [butterworth, frequency_response, ResultGet])
+-import_from(scipy_signal, [butterworth, frequency_response, result_get])
 
 FilterResponse(N, WN, W, H) <- (
     butterworth(N, WN, DESIGN),
-    ResultGet(DESIGN, 'b', B),
-    ResultGet(DESIGN, 'a', A),
+    result_get(DESIGN, 'b', B),
+    result_get(DESIGN, 'a', A),
     frequency_response(B, A, 512, RESP),
-    ResultGet(RESP, 'w', W),
-    ResultGet(RESP, 'h', H)
+    result_get(RESP, 'w', W),
+    result_get(RESP, 'h', H)
 ).
 --8<-- [end:inspect_frequency_response]
 
 --8<-- [start:power_spectral_density_with_welch_s_method]
--import_from(scipy_signal, [welch, ResultGet])
+-import_from(scipy_signal, [welch, result_get])
 
 SignalPSD(SIGNAL, SAMPLE_RATE, FREQS, POWER) <- (
     welch(SIGNAL, SAMPLE_RATE, PSD),
-    ResultGet(PSD, 'f', FREQS),
-    ResultGet(PSD, 'Pxx', POWER)
+    result_get(PSD, 'f', FREQS),
+    result_get(PSD, 'Pxx', POWER)
 ).
 --8<-- [end:power_spectral_density_with_welch_s_method]
 

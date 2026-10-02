@@ -20,7 +20,7 @@ Or via the canonical `py.*` path:
 
 ## Tier
 
-All predicates are **Tier 1 — pure functions**: NumPy array in, result directly in `RESULT`. No result dicts that need a `ResultGet` accessor (except `label`, which returns a plain Python dict with named keys you can access directly).
+All predicates are **Tier 1 — pure functions**: NumPy array in, result directly in `RESULT`. No result dicts that need a `result_get` accessor (except `label`, which returns a plain Python dict with named keys you can access directly).
 
 ---
 

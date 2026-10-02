@@ -9,7 +9,7 @@ def _bidir_dispatch(fwd_call, bwd_call, n_fixed=0):
 
     args layout: (fixed_0, ..., fixed_{n_fixed-1}, x_raw, result_var, trail)
 
-    n_fixed args are leading and always ground (e.g. 'a' in GammaInc(A,X,Y)).
+    n_fixed args are leading and always ground (e.g. 'a' in gamma_inc(A,X,Y)).
     x_raw and result_var are the variable pair.
     """
     def dispatch(this_generator, _proceed, _fail, _catcher, *args):

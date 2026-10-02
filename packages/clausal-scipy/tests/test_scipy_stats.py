@@ -5,7 +5,7 @@ Tests are organised per function family and cover:
 - multi-arity variants (optional args)
 - unification succeeds when RESULT is unbound
 - unification fails when RESULT is bound to a wrong value
-- Tier 2 dict results accessed via ResultGet
+- Tier 2 dict results accessed via result_get
 - Tier 3 frozen distribution handle lifecycle
 """
 
@@ -28,11 +28,11 @@ from clausal.modules.py.scipy_stats import (
     stats_chi_square, stats_chi_square_contingency, stats_fisher_exact,
     stats_mann_whitney_u, stats_wilcoxon, stats_kruskal, stats_ks2samp,
     stats_normality_test, stats_shapiro,
-    StatsDist,
+    stats_dist,
     stats_normal_pdf, stats_normal_cdf, stats_normal_ppf, stats_normal_rvs,
-    StatsFreezeDist, StatsFrozenPdf, StatsFrozenCdf,
-    StatsFrozenRvs, StatsFrozenStats, StatsFrozenFree,
-    ResultGet,
+    stats_freeze_dist, stats_frozen_pdf, stats_frozen_cdf,
+    stats_frozen_rvs, stats_frozen_stats, stats_frozen_free,
+    result_get,
 )
 
 
@@ -53,9 +53,9 @@ def _drive(pred, *args):
 
 
 def _drive_result_get(result_dict, field):
-    """Use ResultGet to extract a field from a dict result."""
+    """Use result_get to extract a field from a dict result."""
     value = Var()
-    dispatch = ResultGet._get_dispatch()
+    dispatch = result_get._get_dispatch()
     trail = Trail()
     gen = dispatch(None, None, None, None, result_dict, field, value, trail)
     for parent, sentinel in gen:
@@ -576,7 +576,7 @@ class TestStatsDist:
         # norm.pdf(0) = 1/sqrt(2*pi)
         # nv
         result = Var()
-        dispatch = StatsDist._get_dispatch()
+        dispatch = stats_dist._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, 'norm', 'pdf', 0.0, result, trail)
         val = None
@@ -591,7 +591,7 @@ class TestStatsDist:
     def test_norm_cdf_at_zero(self):
         # nv
         result = Var()
-        dispatch = StatsDist._get_dispatch()
+        dispatch = stats_dist._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, 'norm', 'cdf', 0.0, result, trail)
         val = None
@@ -603,10 +603,10 @@ class TestStatsDist:
         assert abs(val - 0.5) < 1e-9
 
     def test_norm_entropy_no_x(self):
-        # StatsDist(DIST, METHOD, RESULT) — 3-arity
+        # stats_dist(DIST, METHOD, RESULT) — 3-arity
         # nv
         result = Var()
-        dispatch = StatsDist._get_dispatch()
+        dispatch = stats_dist._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, 'norm', 'entropy', result, trail)
         val = None
@@ -707,7 +707,7 @@ class TestStatsFreezeDist:
     def test_returns_int_handle(self):
         # nv
         result = Var()
-        dispatch = StatsFreezeDist._get_dispatch()
+        dispatch = stats_freeze_dist._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
         handle = None
@@ -723,7 +723,7 @@ class TestStatsFreezeDist:
     def test_pdf_via_handle(self):
         # nv
         result = Var()
-        dispatch = StatsFreezeDist._get_dispatch()
+        dispatch = stats_freeze_dist._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
         handle = None
@@ -732,9 +732,9 @@ class TestStatsFreezeDist:
                 handle = deref(result)
                 break
 
-        # StatsFrozenPdf
+        # stats_frozen_pdf
         pdf_result = Var()
-        pdf_dispatch = StatsFrozenPdf._get_dispatch()
+        pdf_dispatch = stats_frozen_pdf._get_dispatch()
         trail2 = Trail()
         gen2 = pdf_dispatch(None, None, None, None, handle, 0.0, pdf_result, trail2)
         val = None
@@ -753,7 +753,7 @@ class TestStatsFreezeDist:
     def test_frozen_stats(self):
         # nv
         result = Var()
-        dispatch = StatsFreezeDist._get_dispatch()
+        dispatch = stats_freeze_dist._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, 'norm', {'loc': 3.0, 'scale': 2.0}, result, trail)
         handle = None
@@ -763,7 +763,7 @@ class TestStatsFreezeDist:
                 break
 
         stats_result = Var()
-        stats_dispatch = StatsFrozenStats._get_dispatch()
+        stats_dispatch = stats_frozen_stats._get_dispatch()
         trail2 = Trail()
         gen2 = stats_dispatch(None, None, None, None, handle, stats_result, trail2)
         val = None
@@ -782,7 +782,7 @@ class TestStatsFreezeDist:
         from clausal.modules.py.scipy_stats import _FROZEN_DIST_REGISTRY
 
         result = Var()
-        dispatch = StatsFreezeDist._get_dispatch()
+        dispatch = stats_freeze_dist._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
         handle = None
@@ -793,7 +793,7 @@ class TestStatsFreezeDist:
 
         assert handle in _FROZEN_DIST_REGISTRY
 
-        free_dispatch = StatsFrozenFree._get_dispatch()
+        free_dispatch = stats_frozen_free._get_dispatch()
         trail2 = Trail()
         gen2 = free_dispatch(None, None, None, None, handle, trail2)
         for _ in gen2:
@@ -804,7 +804,7 @@ class TestStatsFreezeDist:
     def test_frozen_cdf(self):
         # nv
         result = Var()
-        dispatch = StatsFreezeDist._get_dispatch()
+        dispatch = stats_freeze_dist._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
         handle = None
@@ -814,7 +814,7 @@ class TestStatsFreezeDist:
                 break
 
         cdf_result = Var()
-        cdf_dispatch = StatsFrozenCdf._get_dispatch()
+        cdf_dispatch = stats_frozen_cdf._get_dispatch()
         trail2 = Trail()
         gen2 = cdf_dispatch(None, None, None, None, handle, 0.0, cdf_result, trail2)
         val = None
@@ -830,7 +830,7 @@ class TestStatsFreezeDist:
     def test_frozen_ppf(self):
         # nv
         result = Var()
-        dispatch = StatsFreezeDist._get_dispatch()
+        dispatch = stats_freeze_dist._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
         handle = None
@@ -839,10 +839,10 @@ class TestStatsFreezeDist:
                 handle = deref(result)
                 break
 
-        # Backward direction of StatsFrozenCdf: StatsFrozenCdf(handle, x_var, 0.5)
+        # Backward direction of stats_frozen_cdf: stats_frozen_cdf(handle, x_var, 0.5)
         # x_var unbound, p=0.5 ground → x_var = dist.ppf(0.5)
         ppf_result = Var()
-        cdf_dispatch = StatsFrozenCdf._get_dispatch()
+        cdf_dispatch = stats_frozen_cdf._get_dispatch()
         trail2 = Trail()
         gen2 = cdf_dispatch(None, None, None, None, handle, ppf_result, 0.5, trail2)
         val = None
@@ -858,7 +858,7 @@ class TestStatsFreezeDist:
     def test_frozen_rvs_scalar(self):
         # nv
         result = Var()
-        dispatch = StatsFreezeDist._get_dispatch()
+        dispatch = stats_freeze_dist._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
         handle = None
@@ -868,7 +868,7 @@ class TestStatsFreezeDist:
                 break
 
         rvs_result = Var()
-        rvs_dispatch = StatsFrozenRvs._get_dispatch()
+        rvs_dispatch = stats_frozen_rvs._get_dispatch()
         trail2 = Trail()
         gen2 = rvs_dispatch(None, None, None, None, handle, rvs_result, trail2)
         val = None
@@ -884,7 +884,7 @@ class TestStatsFreezeDist:
     def test_frozen_rvs_with_size(self):
         # nv
         result = Var()
-        dispatch = StatsFreezeDist._get_dispatch()
+        dispatch = stats_freeze_dist._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, 'norm', {'loc': 0.0, 'scale': 1.0}, result, trail)
         handle = None
@@ -894,7 +894,7 @@ class TestStatsFreezeDist:
                 break
 
         rvs_result = Var()
-        rvs_dispatch = StatsFrozenRvs._get_dispatch()
+        rvs_dispatch = stats_frozen_rvs._get_dispatch()
         trail2 = Trail()
         gen2 = rvs_dispatch(None, None, None, None, handle, 10, rvs_result, trail2)
         val = None
@@ -927,7 +927,7 @@ class TestResultGet:
     def test_non_string_field_fails(self):
         # nv
         value = Var()
-        dispatch = ResultGet._get_dispatch()
+        dispatch = result_get._get_dispatch()
         trail = Trail()
         field_var = Var()
         gen = dispatch(None, None, None, None, {'x': 1}, field_var, value, trail)
@@ -938,7 +938,7 @@ class TestResultGet:
         # nv
         d = {'pvalue': 0.05}
         value = 0.05
-        dispatch = ResultGet._get_dispatch()
+        dispatch = result_get._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, d, 'pvalue', value, trail)
         solutions = [s for s in gen if s[1] is None]
@@ -947,7 +947,7 @@ class TestResultGet:
     def test_wrong_value_fails(self):
         # nv
         d = {'pvalue': 0.05}
-        dispatch = ResultGet._get_dispatch()
+        dispatch = result_get._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, d, 'pvalue', 0.99, trail)
         solutions = [s for s in gen if s[1] is None]

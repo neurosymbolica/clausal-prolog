@@ -93,7 +93,7 @@ shift(INPUT, SHIFT, RESULT)
 
 --8<-- [start:measurement]
 find_objects(INPUT, RESULT)
-    Find bounding-box slices for each labelled component in INPUT.
+    find bounding-box slices for each labelled component in INPUT.
     INPUT:  integer-labelled array (e.g., the 'label_array' from label)
     RESULT: list of slice-tuple bounding boxes, one per component;
             RESULT[i] is a tuple of slice objects covering component i+1;

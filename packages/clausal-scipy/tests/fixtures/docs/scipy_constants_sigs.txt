@@ -14,21 +14,21 @@ value('elementary charge', E)           % E = 1.602177e-19 C
 --8<-- [end:codata_lookup]
 
 --8<-- [start:codata_lookup_ex2]
-Lookup('electron mass', V, U, ERR)
+lookup('electron mass', V, U, ERR)
 # V = 9.109384e-31, U = 'kg', ERR = 2.8e-40
 --8<-- [end:codata_lookup_ex2]
 
 --8<-- [start:codata_lookup_ex3]
-Find('electron mass', NAMES)
+find('electron mass', NAMES)
 # NAMES = ['alpha particle-electron mass ratio',
 # 'deuteron-electron mass ratio', 'electron mass', ...]
 
-Find('zzznomatch', NAMES)
+find('zzznomatch', NAMES)
 # NAMES = []
 --8<-- [end:codata_lookup_ex3]
 
 --8<-- [start:codata_lookup_ex4]
-AllNames(NAMES),
+all_names(NAMES),
 ++(len(NAMES))   % 300+ depending on scipy version
 --8<-- [end:codata_lookup_ex4]
 

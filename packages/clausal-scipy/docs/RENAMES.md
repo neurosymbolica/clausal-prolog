@@ -5,10 +5,21 @@ which the engine's TitleCase lint rejects in functor position --
 Clausal code could not call them by name. They are renamed to
 lower_snake_case, matching clausal-jax / clausal-torch convention.
 Acronyms collapse to one lowercase word (e.g. `FFT` -> `fft`,
-`KMeans` -> `k_means`).
+`KMeans` -> `k_means`). Two names keep a manual spelling because the
+mechanical camel->snake rule produces an ugly split on a
+letter-sharing portmanteau: `FFTransform` -> `fft_transform` (not
+`ff_transform`), `FFTransform2D`/`FFTransformND` similarly.
+
+`scipy.optimize.Bounds` and `scipy.optimize.LinearConstraint` are
+real SciPy class names (PascalCase in SciPy's own API) that
+coincide with two of these predicate names; the two internal call
+sites that construct the real SciPy objects keep the SciPy spelling
+(`_opt().Bounds(...)`, `_opt().LinearConstraint(...)`) -- only the
+predicate names themselves (`bounds`, `linear_constraint`) are renamed.
 
 | Old (TitleCase) | New (lower_snake_case) |
 |---|---|
+| `AllNames` | `all_names` |
 | `AssocLegendre` | `assoc_legendre` |
 | `BasinHopping` | `basin_hopping` |
 | `Bessel` | `bessel` |
@@ -19,18 +30,22 @@ Acronyms collapse to one lowercase word (e.g. `FFT` -> `fft`,
 | `BesselK` | `bessel_k` |
 | `BesselY` | `bessel_y` |
 | `BesselYReal` | `bessel_y_real` |
+| `BetaInc` | `beta_inc` |
 | `BetaLog` | `beta_log` |
 | `BinaryClosing` | `binary_closing` |
 | `BinaryDilation` | `binary_dilation` |
 | `BinaryErosion` | `binary_erosion` |
 | `BinaryOpening` | `binary_opening` |
 | `Bounds` | `bounds` |
+| `Boxcox` | `boxcox` |
+| `Boxcox1p` | `boxcox1p` |
 | `Butterworth` | `butterworth` |
 | `CenterOfMass` | `center_of_mass` |
 | `ChebyshevT` | `chebyshev_t` |
 | `ChebyshevType1` | `chebyshev_type1` |
 | `ChebyshevType2` | `chebyshev_type2` |
 | `ChebyshevU` | `chebyshev_u` |
+| `Cholesky` | `cholesky` |
 | `CholeskyFactor` | `cholesky_factor` |
 | `CholeskySolve` | `cholesky_solve` |
 | `Comb` | `comb` |
@@ -49,8 +64,11 @@ Acronyms collapse to one lowercase word (e.g. `FFT` -> `fft`,
 | `Determinant` | `determinant` |
 | `DifferentialEvolution` | `differential_evolution` |
 | `Digamma` | `digamma` |
+| `DiscreteCosineTransform` | `discrete_cosine_transform` |
+| `DiscreteSineTransform` | `discrete_sine_transform` |
 | `DoubleQuad` | `double_quad` |
 | `DualAnnealing` | `dual_annealing` |
+| `EigenDecompose` | `eigen_decompose` |
 | `EigenDecomposeHermitian` | `eigen_decompose_hermitian` |
 | `Elliptic` | `elliptic` |
 | `EllipticE` | `elliptic_e` |
@@ -58,6 +76,8 @@ Acronyms collapse to one lowercase word (e.g. `FFT` -> `fft`,
 | `EllipticK` | `elliptic_k` |
 | `EllipticKIncomplete` | `elliptic_k_incomplete` |
 | `Entr` | `entr` |
+| `Erf` | `erf` |
+| `ErfComplement` | `erf_complement` |
 | `EvalRadialBasis` | `eval_radial_basis` |
 | `EvalRegularGrid` | `eval_regular_grid` |
 | `EvalSpline` | `eval_spline` |
@@ -65,7 +85,12 @@ Acronyms collapse to one lowercase word (e.g. `FFT` -> `fft`,
 | `Exp2` | `exp2` |
 | `FFTConvolve` | `fft_convolve` |
 | `FFTFrequencies` | `fft_frequencies` |
+| `FFTShift` | `fft_shift` |
+| `FFTransform` | `fft_transform` |
+| `FFTransform2D` | `fft_transform2d` |
+| `FFTransformND` | `fft_transformnd` |
 | `Factorial` | `factorial` |
+| `Find` | `find` |
 | `FindObjects` | `find_objects` |
 | `FlatCluster` | `flat_cluster` |
 | `ForwardBackwardFilter` | `forward_backward_filter` |
@@ -73,6 +98,8 @@ Acronyms collapse to one lowercase word (e.g. `FFT` -> `fft`,
 | `FrequencyResponse` | `frequency_response` |
 | `FromDense` | `from_dense` |
 | `Gamma` | `gamma` |
+| `GammaInc` | `gamma_inc` |
+| `GammaIncComplement` | `gamma_inc_complement` |
 | `GammaLog` | `gamma_log` |
 | `GammaSign` | `gamma_sign` |
 | `GaussianFilter` | `gaussian_filter` |
@@ -83,6 +110,7 @@ Acronyms collapse to one lowercase word (e.g. `FFT` -> `fft`,
 | `Hypergeometric1F1` | `hypergeometric_1f1` |
 | `Hypergeometric2F1` | `hypergeometric_2f1` |
 | `Inconsistent` | `inconsistent` |
+| `Inverse` | `inverse` |
 | `Jacobian` | `jacobian` |
 | `KMeans` | `k_means` |
 | `KMeans2` | `k_means2` |
@@ -98,6 +126,9 @@ Acronyms collapse to one lowercase word (e.g. `FFT` -> `fft`,
 | `LinearProgram` | `linear_program` |
 | `Linkage` | `linkage` |
 | `LogSumExp` | `log_sum_exp` |
+| `Logit` | `logit` |
+| `Lookup` | `lookup` |
+| `LuDecompose` | `lu_decompose` |
 | `LuFactor` | `lu_factor` |
 | `LuSolve` | `lu_solve` |
 | `MakeAkima` | `make_akima` |
@@ -116,6 +147,7 @@ Acronyms collapse to one lowercase word (e.g. `FFT` -> `fft`,
 | `MakeRegularGrid` | `make_regular_grid` |
 | `MakeRotation` | `make_rotation` |
 | `MakeSpline` | `make_spline` |
+| `MatrixExpLog` | `matrix_exp_log` |
 | `MatrixFunction` | `matrix_function` |
 | `MatrixSquareRoot` | `matrix_square_root` |
 | `MedianFilter` | `median_filter` |
@@ -126,6 +158,7 @@ Acronyms collapse to one lowercase word (e.g. `FFT` -> `fft`,
 | `NonlinearLeastSquares` | `nonlinear_least_squares` |
 | `NonzeroCount` | `nonzero_count` |
 | `Norm` | `norm` |
+| `NormalCdf` | `normal_cdf` |
 | `OdeIntegrate` | `ode_integrate` |
 | `PairwiseDistance` | `pairwise_distance` |
 | `Periodogram` | `periodogram` |
@@ -134,10 +167,13 @@ Acronyms collapse to one lowercase word (e.g. `FFT` -> `fft`,
 | `Polygamma` | `polygamma` |
 | `Precision` | `precision` |
 | `PseudoInverse` | `pseudo_inverse` |
+| `QrDecompose` | `qr_decompose` |
 | `Quad` | `quad` |
 | `QuadVec` | `quad_vec` |
+| `RealFFT` | `real_fft` |
 | `RealFFTFrequencies` | `real_fft_frequencies` |
 | `Resample` | `resample` |
+| `ResultGet` | `result_get` |
 | `Root` | `root` |
 | `RootScalar` | `root_scalar` |
 | `Rotate` | `rotate` |
@@ -147,6 +183,7 @@ Acronyms collapse to one lowercase word (e.g. `FFT` -> `fft`,
 | `RotationInverse` | `rotation_inverse` |
 | `SOSFilter` | `sos_filter` |
 | `SOSForwardBackwardFilter` | `sos_forward_backward_filter` |
+| `Schur` | `schur` |
 | `Shape` | `shape` |
 | `ShgoMinimize` | `shgo_minimize` |
 | `Shift` | `shift` |
@@ -164,7 +201,14 @@ Acronyms collapse to one lowercase word (e.g. `FFT` -> `fft`,
 | `StatsChiSquare` | `stats_chi_square` |
 | `StatsChiSquareContingency` | `stats_chi_square_contingency` |
 | `StatsDescribe` | `stats_describe` |
+| `StatsDist` | `stats_dist` |
 | `StatsFisherExact` | `stats_fisher_exact` |
+| `StatsFreezeDist` | `stats_freeze_dist` |
+| `StatsFrozenCdf` | `stats_frozen_cdf` |
+| `StatsFrozenFree` | `stats_frozen_free` |
+| `StatsFrozenPdf` | `stats_frozen_pdf` |
+| `StatsFrozenRvs` | `stats_frozen_rvs` |
+| `StatsFrozenStats` | `stats_frozen_stats` |
 | `StatsGeometricMean` | `stats_geometric_mean` |
 | `StatsHarmonicMean` | `stats_harmonic_mean` |
 | `StatsInterquartileRange` | `stats_interquartile_range` |

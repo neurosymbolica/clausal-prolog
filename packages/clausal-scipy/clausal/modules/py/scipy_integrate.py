@@ -3,7 +3,7 @@
 Provides numerical integration routines from scipy.integrate as importable
 predicate objects for use in .clausal files via::
 
-    -import_from(scipy_integrate, [quad, trapezoid, solve_initial_value_problem, ResultGet, ...])
+    -import_from(scipy_integrate, [quad, trapezoid, solve_initial_value_problem, result_get, ...])
 
 Tiers
 -----
@@ -12,7 +12,7 @@ Tiers
     trapezoid            → scalar or array
     simpson              → scalar or array
 
-- **Tier 2** (returns result dict; use ResultGet to access fields):
+- **Tier 2** (returns result dict; use result_get to access fields):
     quad                 → dict {value, error}
     double_quad           → dict {value, error}
     triple_quad           → dict {value, error}
@@ -23,7 +23,7 @@ Tiers
     ode_integrate         → dict {y} or {y, infodict}
 
 Helper:
-    ResultGet(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE
+    result_get(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE
 """
 
 from __future__ import annotations
@@ -368,10 +368,10 @@ simpson = _pred("simpson",
 )
 
 
-# ── Helper: ResultGet ─────────────────────────────────────────────────────
+# ── Helper: result_get ─────────────────────────────────────────────────────
 
 class _ResultGetPredicate:
-    """ResultGet(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE.
+    """result_get(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE.
 
     RESULT must be a dict (or dict-like).
     FIELD must be a ground string key.
@@ -401,7 +401,7 @@ class _ResultGetPredicate:
         yield (_fail, DONE)
 
     def __repr__(self) -> str:
-        return "ResultGet/3"
+        return "result_get/3"
 
 
-ResultGet = _ResultGetPredicate()
+result_get = _ResultGetPredicate()

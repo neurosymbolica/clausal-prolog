@@ -1,17 +1,17 @@
 -double_quotes(atom)
--import_from(scipy_integrate, [quad, solve_initial_value_problem, trapezoid, simpson, cumulative_trapezoid, ResultGet])
+-import_from(scipy_integrate, [quad, solve_initial_value_problem, trapezoid, simpson, cumulative_trapezoid, result_get])
 
 # quad: integral of sin(x) from 0 to pi ≈ 2.0
 test("quad sin 0 to pi") <- (
     quad(++(lambda x: __import__('math').sin(x)), 0.0, 3.14159265358979, RESULT),
-    ResultGet(RESULT, 'value', V),
+    result_get(RESULT, 'value', V),
     DIFF is ++(abs(float(V) - 2.0)),
     DIFF < 1e-4)  # nv
 
 # solve_initial_value_problem: dy/dt = -y, y(0)=1, check success
 test("solve ivp exponential decay") <- (
     solve_initial_value_problem(++(lambda t, y: [-y[0]]), [0.0, 1.0], [1.0], RESULT),
-    ResultGet(RESULT, 'success', S),
+    result_get(RESULT, 'success', S),
     S == True)  # nv
 
 # trapezoid: [1, 2, 3] dx=1 → 4.0

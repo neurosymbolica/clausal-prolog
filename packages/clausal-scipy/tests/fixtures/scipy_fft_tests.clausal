@@ -1,26 +1,26 @@
 -double_quotes(atom)
--import_from(scipy_fft, [FFTransform, FFTransform2D, FFTransformND,
-                          RealFFT, DiscreteCosineTransform,
-                          fft_frequencies, real_fft_frequencies, FFTShift])
+-import_from(scipy_fft, [fft_transform, fft_transform2d, fft_transformnd,
+                          real_fft, discrete_cosine_transform,
+                          fft_frequencies, real_fft_frequencies, fft_shift])
 
-# FFTransform of constant signal [1,1,1,1] - DC component should be 4.0
+# fft_transform of constant signal [1,1,1,1] - DC component should be 4.0
 test("fft constant signal") <- (
-    FFTransform([1.0, 1.0, 1.0, 1.0], RESULT),
+    fft_transform([1.0, 1.0, 1.0, 1.0], RESULT),
     DC is ++(abs(complex(RESULT[0]))),
     DIFF is ++(abs(float(DC) - 4.0)),
     DIFF < 1e-10)  # nv
 
-# FFTransform round-trip: backward direction should recover original
+# fft_transform round-trip: backward direction should recover original
 test("fft round trip") <- (
     X is [1.0, 2.0, 3.0, 4.0],
-    FFTransform(X, SPECTRUM),
-    FFTransform(RECOVERED, SPECTRUM),
+    fft_transform(X, SPECTRUM),
+    fft_transform(RECOVERED, SPECTRUM),
     ERR is ++(abs(float(RECOVERED[0].real) - 1.0)),
     ERR < 1e-10)  # nv
 
-# RealFFT: output length for 4-point input is 3 (n//2+1)
+# real_fft: output length for 4-point input is 3 (n//2+1)
 test("real fft output length") <- (
-    RealFFT([1.0, 0.0, 0.0, 0.0], RESULT),
+    real_fft([1.0, 0.0, 0.0, 0.0], RESULT),
     LEN is ++(len(RESULT)),
     LEN == 3)  # nv
 
@@ -41,21 +41,21 @@ test("real fft frequencies non negative") <- (
     F0 is ++(float(FREQS[0])),
     F0 == 0.0)  # nv
 
-# FFTShift round-trip via backward direction
+# fft_shift round-trip via backward direction
 test("fft shift and inverse") <- (
     X is [0.0, 1.0, 2.0, 3.0],
-    FFTShift(X, SHIFTED),
-    FFTShift(RECOVERED, SHIFTED),
+    fft_shift(X, SHIFTED),
+    fft_shift(RECOVERED, SHIFTED),
     V0 is ++(float(RECOVERED[0])),
     V0 == 0.0,
     V1 is ++(float(RECOVERED[1])),
     DIFF is ++(abs(V1 - 1.0)),
     DIFF < 1e-10)  # nv
 
-# DiscreteCosineTransform round-trip via backward direction
+# discrete_cosine_transform round-trip via backward direction
 test("dct round trip") <- (
     X is [1.0, 2.0, 3.0, 4.0],
-    DiscreteCosineTransform(X, COEFFS),
-    DiscreteCosineTransform(RECOVERED, COEFFS),
+    discrete_cosine_transform(X, COEFFS),
+    discrete_cosine_transform(RECOVERED, COEFFS),
     ERR is ++(abs(float(RECOVERED[0]) - 1.0)),
     ERR < 1e-10)  # nv

@@ -1,7 +1,7 @@
 # === Import ===
 
 --8<-- [start:import]
--import_from(scipy_optimize, [minimize, minimize_scalar, ResultGet, ...])
+-import_from(scipy_optimize, [minimize, minimize_scalar, result_get, ...])
 --8<-- [end:import]
 
 --8<-- [start:import_ex2]
@@ -13,8 +13,8 @@
 
 --8<-- [start:tiers]
 minimize(++(lambda x: x[0]**2 + x[1]**2), ++([1.0, 1.0]), RESULT),
-ResultGet(RESULT, 'x', X),
-ResultGet(RESULT, 'success', OK).
+result_get(RESULT, 'x', X),
+result_get(RESULT, 'success', OK).
 --8<-- [end:tiers]
 
 
@@ -96,7 +96,7 @@ curve_fit(F, XDATA, YDATA, P0, RESULT)
 
 --8<-- [start:root_finding]
 root_scalar(F, RESULT)
-    Find a root of a scalar function.
+    find a root of a scalar function.
     RESULT: dict {root, iterations, function_calls, converged, flag}
 
 root_scalar(F, METHOD, RESULT)
@@ -112,7 +112,7 @@ root_scalar(F, METHOD, X0, X1, RESULT)
             ('newton' uses X0; 'secant' uses X0 and X1)
 
 root(FUN, X0, RESULT)
-    Find a root of a vector function FUN: R^n → R^n.
+    find a root of a vector function FUN: R^n → R^n.
     X0:     initial guess (1-D array)
     RESULT: dict {x, fun, fjac, nfev, njev, status, success, message}
 
@@ -158,18 +158,18 @@ bounds(LB, UB, RESULT)
 --8<-- [end:linear_and_mixed_integer_programming]
 
 --8<-- [start:linear_and_mixed_integer_programming_ex2]
--import_from(scipy_optimize, [linear_program, ResultGet])
+-import_from(scipy_optimize, [linear_program, result_get])
 
 # Maximise x1 + 2*x2 subject to x1 + x2 <= 4, x1,x2 >= 0
 # equivalent to: minimise -x1 - 2*x2
 LpSolution(X) <- (
     linear_program(++([-1.0, -2.0]), ++([[1.0, 1.0]]), ++([4.0]), RESULT),
-    ResultGet(RESULT, 'x', X)
+    result_get(RESULT, 'x', X)
 )
 --8<-- [end:linear_and_mixed_integer_programming_ex2]
 
 --8<-- [start:resultget]
-ResultGet(RESULT, FIELD, VALUE)
+result_get(RESULT, FIELD, VALUE)
     Extract a named field from any Tier 2 result dict.
     RESULT: a dict returned by a Tier 2 predicate
     FIELD:  a ground string key (e.g. 'x', 'fun', 'success', 'root', 'popt')
@@ -181,7 +181,7 @@ ResultGet(RESULT, FIELD, VALUE)
 # === Complete example — Rosenbrock with gradient descent ===
 
 --8<-- [start:complete_example]
--import_from(scipy_optimize, [minimize, ResultGet])
+-import_from(scipy_optimize, [minimize, result_get])
 
 # The Rosenbrock function — minimum at (1, 1) with value 0
 Rosenbrock(X, Y) <-
@@ -193,7 +193,7 @@ RosenbrockMin(X, Y) <- (
         ++([0.0, 0.0]),
         'L-BFGS-B',
         RESULT),
-    ResultGet(RESULT, 'x', V),
+    result_get(RESULT, 'x', V),
     X is ++float(V[0]),
     Y is ++float(V[1])
 )

@@ -187,7 +187,7 @@ integer_plan(X) <- (
 
 ---
 
-### ResultGet
+### result_get
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_optimize_sigs.txt:resultget"

@@ -3,11 +3,11 @@
 Provides signal-processing routines from scipy.signal as importable predicate
 objects for use in .clausal files via::
 
-    -import_from(py.scipy_signal, [butterworth, sos_forward_backward_filter, ResultGet, ...])
+    -import_from(py.scipy_signal, [butterworth, sos_forward_backward_filter, result_get, ...])
 
 Tiers
 -----
-- **Tier 2** (returns result dict; use ResultGet to access fields):
+- **Tier 2** (returns result dict; use result_get to access fields):
     butterworth      → dict {b,a} or {z,p,k} or {sos} depending on OUTPUT
     bessel           → same
     chebyshev_type1   → same
@@ -30,7 +30,7 @@ Tiers
     fft_convolve                          → array
 
 Helper:
-    ResultGet(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE
+    result_get(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE
 
 Predicate catalogue
 -------------------
@@ -366,10 +366,10 @@ spectrogram = _pred("spectrogram",
 )
 
 
-# ── Helper: ResultGet ─────────────────────────────────────────────────────
+# ── Helper: result_get ─────────────────────────────────────────────────────
 
 class _ResultGetPredicate:
-    """ResultGet(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE.
+    """result_get(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE.
 
     RESULT must be a dict (as produced by Tier 2 predicates).
     FIELD must be a ground string key.
@@ -397,7 +397,7 @@ class _ResultGetPredicate:
         yield (_fail, DONE)
 
     def __repr__(self) -> str:
-        return "ResultGet/3"
+        return "result_get/3"
 
 
-ResultGet = _ResultGetPredicate()
+result_get = _ResultGetPredicate()

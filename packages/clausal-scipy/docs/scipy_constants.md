@@ -7,7 +7,7 @@ The `scipy_constants` module wraps [`scipy.constants`](https://docs.scipy.org/do
 ## Import
 
 ```clausal
--import_from(scipy_constants, [value, unit, precision, Lookup, Find, AllNames,
+-import_from(scipy_constants, [value, unit, precision, lookup, find, all_names,
                                 SpeedOfLight, PlanckConstant,
                                 ReducedPlanckConstant, GravitationalConstant,
                                 AvogadroConstant, BoltzmannConstant,
@@ -39,9 +39,9 @@ The `Const` prefix from the spec is dropped since these predicates live in the `
 | `constants.value(name)` | `value` |
 | `constants.unit(name)` | `unit` |
 | `constants.precision(name)` | `precision` |
-| `constants.physical_constants[name]` | `Lookup` |
-| `constants.find(sub)` | `Find` |
-| `constants.physical_constants.keys()` | `AllNames` |
+| `constants.physical_constants[name]` | `lookup` |
+| `constants.find(sub)` | `find` |
+| `constants.physical_constants.keys()` | `all_names` |
 | `constants.c` | `SpeedOfLight` |
 | `constants.h` | `PlanckConstant` |
 | `constants.hbar` | `ReducedPlanckConstant` |
@@ -80,7 +80,7 @@ Fails if `NAME` is not a recognised CODATA name.
 
 ---
 
-#### `Lookup(NAME, VALUE, UNIT, UNCERTAINTY)`
+#### `lookup(NAME, VALUE, UNIT, UNCERTAINTY)`
 
 Access all three CODATA fields for a constant in a single call.
 
@@ -96,7 +96,7 @@ Fails if `NAME` is not recognised, or if any output argument fails to unify.
 
 ---
 
-#### `Find(SUBSTRING, NAMES)`
+#### `find(SUBSTRING, NAMES)`
 
 Search the CODATA database by substring; returns all matching constant names.
 
@@ -109,7 +109,7 @@ Search the CODATA database by substring; returns all matching constant names.
 
 ---
 
-#### `AllNames(NAMES)`
+#### `all_names(NAMES)`
 
 Return all CODATA constant names as a list.
 

@@ -3,12 +3,12 @@
 Provides optimisation routines from scipy.optimize as importable predicate
 objects for use in .clausal files via::
 
-    -import_from(py.scipy_optimize, [minimize, minimize_scalar, ResultGet, ...])
+    -import_from(py.scipy_optimize, [minimize, minimize_scalar, result_get, ...])
 
 Tiers
 -----
 - **Tier 1**: linear_constraint, bounds (helper object constructors)
-- **Tier 2** (returns result dict; use ResultGet to access fields):
+- **Tier 2** (returns result dict; use result_get to access fields):
     minimize_scalar     → dict {x, fun, success, message, nit, nfev}
     minimize           → dict {x, fun, jac, nfev, njev, nit, success, status, message}
     differential_evolution → dict {x, fun, success, message, ...}
@@ -21,7 +21,7 @@ Tiers
     root               → dict {x, fun, fjac, nfev, success, message}
 
 Helper:
-    ResultGet(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE
+    result_get(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE
 """
 
 from __future__ import annotations
@@ -252,10 +252,10 @@ bounds = _pred("bounds",
 )
 
 
-# ── Helper: ResultGet ─────────────────────────────────────────────────────
+# ── Helper: result_get ─────────────────────────────────────────────────────
 
 class _ResultGetPredicate:
-    """ResultGet(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE.
+    """result_get(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE.
 
     RESULT must be a dict (or dict-like, e.g. OptimizeResult).
     FIELD must be a ground string key.
@@ -285,7 +285,7 @@ class _ResultGetPredicate:
         yield (_fail, DONE)
 
     def __repr__(self) -> str:
-        return "ResultGet/3"
+        return "result_get/3"
 
 
-ResultGet = _ResultGetPredicate()
+result_get = _ResultGetPredicate()

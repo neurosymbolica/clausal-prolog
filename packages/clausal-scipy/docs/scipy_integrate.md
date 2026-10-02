@@ -30,7 +30,7 @@ Or via the canonical `py.*` path:
 
 ### Tier 2 — result dict
 
-Quadrature and ODE predicates (`quad`, `double_quad`, `triple_quad`, `n_quad`, `quad_vec`, `solve_initial_value_problem`, `ode_integrate`) return a Python dict in `RESULT`. Use `ResultGet(RESULT, FIELD, VALUE)` to extract individual fields.
+Quadrature and ODE predicates (`quad`, `double_quad`, `triple_quad`, `n_quad`, `quad_vec`, `solve_initial_value_problem`, `ode_integrate`) return a Python dict in `RESULT`. Use `result_get(RESULT, FIELD, VALUE)` to extract individual fields.
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_integrate_sigs.txt:tier_2"
@@ -68,11 +68,11 @@ Predicate names use full English words; scipy abbreviations are expanded:
 Example:
 
 ```clausal
--import_from(scipy_integrate, [quad, ResultGet])
+-import_from(scipy_integrate, [quad, result_get])
 
 integrate_sin(V) <- (
     quad(++(lambda x: __import__('math').sin(x)), ++(0.0), ++(3.14159265), RESULT),
-    ResultGet(RESULT, 'value', V)
+    result_get(RESULT, 'value', V)
 )
 ```
 
@@ -95,7 +95,7 @@ integrate_sin(V) <- (
 Example — exponential decay:
 
 ```clausal
--import_from(scipy_integrate, [solve_initial_value_problem, ResultGet])
+-import_from(scipy_integrate, [solve_initial_value_problem, result_get])
 
 exponential_decay(T_FINAL, Y_FINAL) <- (
     solve_initial_value_problem(
@@ -103,8 +103,8 @@ exponential_decay(T_FINAL, Y_FINAL) <- (
         ++([0.0, float(T_FINAL)]),
         ++([1.0]),
         RESULT),
-    ResultGet(RESULT, 'success', True),
-    ResultGet(RESULT, 'y', Y),
+    result_get(RESULT, 'success', True),
+    result_get(RESULT, 'y', Y),
     Y_FINAL is ++(float(Y[0, -1]))
 )
 ```
@@ -127,7 +127,7 @@ Example:
 
 ---
 
-### ResultGet
+### result_get
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_integrate_sigs.txt:resultget"
@@ -149,14 +149,14 @@ Common fields by predicate:
 ### Quadrature: integrate sin over [0, π]
 
 ```clausal
--import_from(scipy_integrate, [quad, ResultGet])
+-import_from(scipy_integrate, [quad, result_get])
 
 sin_integral(VALUE) <- (
     quad(++(lambda x: __import__('math').sin(x)),
          ++(0.0),
          ++(3.14159265358979),
          RESULT),
-    ResultGet(RESULT, 'value', VALUE)
+    result_get(RESULT, 'value', VALUE)
 )
 ```
 
@@ -214,7 +214,7 @@ design work (see `SCIPY_UNITS_PLAN.md` Phase 4c).
 ### Example
 
 ```
--import_from(scipy_integrate, [trapezoid, quad, ResultGet])
+-import_from(scipy_integrate, [trapezoid, quad, result_get])
 -import_from(py.units, [metre, second, newton, has_units])
 
 % Velocity (m/s) integrated over time (s) gives displacement (m)
@@ -228,7 +228,7 @@ Test("trapezoid velocity times time") <- (
 Test("quad with units") <- (
     quad(++(lambda x: x * 1.0(newton/metre)),
          0.0(metre), 1.0(metre), RESULT),
-    ResultGet(RESULT, 'value', V),
+    result_get(RESULT, 'value', V),
     has_units(V, newton))
 ```
 

@@ -151,7 +151,7 @@ free(HANDLE)
 -import_from(scipy_spatial, [cross_distance, make_kd_tree, kd_tree_query,
                               make_rotation, rotation_apply, rotation_as, free])
 
-# Find the two nearest neighbours of each point
+# find the two nearest neighbours of each point
 nearest_two(POINTS, INDICES) <- (
     make_kd_tree(POINTS, KD),
     kd_tree_query(KD, POINTS, 2, R),

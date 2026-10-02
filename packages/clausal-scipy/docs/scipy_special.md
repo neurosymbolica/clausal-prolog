@@ -28,23 +28,23 @@ Predicate names follow Clausal conventions (TitleCase, readable), not scipy's te
 | `scipy.special.gammaln` | `gamma_log` |
 | `scipy.special.gammasgn` | `gamma_sign` |
 | `scipy.special.betaln` | `beta_log` |
-| `scipy.special.erfc` | `ErfComplement` |
-| `scipy.special.erfinv` | `Erf` backward direction |
-| `scipy.special.erfcinv` | `ErfComplement` backward direction |
-| `scipy.special.ndtr` | `NormalCdf` |
-| `scipy.special.ndtri` | `NormalCdf` backward direction |
+| `scipy.special.erfc` | `erf_complement` |
+| `scipy.special.erfinv` | `erf` backward direction |
+| `scipy.special.erfcinv` | `erf_complement` backward direction |
+| `scipy.special.ndtr` | `normal_cdf` |
+| `scipy.special.ndtri` | `normal_cdf` backward direction |
 | `scipy.special.jn`, `jv` | `bessel_j`, `bessel_j_real` |
 | `scipy.special.yn`, `yv` | `bessel_y`, `bessel_y_real` |
 | `scipy.special.kn` | `bessel_k` |
 | `scipy.special.iv` | `bessel_i` |
 | `scipy.special.hyp1f1` | `hypergeometric_1f1` |
-| `scipy.special.expit` | `Logit` backward direction |
-| `scipy.special.logit` | `Logit` (bidirectional: logit ↔ sigmoid) |
-| `scipy.special.gammainc` | `GammaInc` (bidirectional) |
-| `scipy.special.gammaincc` | `GammaIncComplement` (bidirectional) |
-| `scipy.special.betainc` | `BetaInc` (bidirectional) |
+| `scipy.special.expit` | `logit` backward direction |
+| `scipy.special.logit` | `logit` (bidirectional: logit ↔ sigmoid) |
+| `scipy.special.gammainc` | `gamma_inc` (bidirectional) |
+| `scipy.special.gammaincc` | `gamma_inc_complement` (bidirectional) |
+| `scipy.special.betainc` | `beta_inc` (bidirectional) |
 | `scipy.special.boxcox` | `boxcox` (bidirectional; Lambda first) |
-| `scipy.special.boxcox1p` | `Boxcox1p` (bidirectional; Lambda first) |
+| `scipy.special.boxcox1p` | `boxcox1p` (bidirectional; Lambda first) |
 | `scipy.special.cbrt` | `cube_root` |
 | `scipy.special.kl_div` | `kl_divergence` |
 | `scipy.special.logsumexp` | `log_sum_exp` |
@@ -85,7 +85,7 @@ These predicates are **bidirectional relations**: they dispatch on argument grou
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:error_functions"
 ```
 
-Example — bidirectional NormalCdf acts as both CDF and quantile function:
+Example — bidirectional normal_cdf acts as both CDF and quantile function:
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:error_functions_ex2"

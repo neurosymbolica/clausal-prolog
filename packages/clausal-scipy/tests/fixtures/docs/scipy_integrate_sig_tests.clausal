@@ -1,6 +1,6 @@
 # Companion tests for docs/scipy_integrate.md signature blocks.
 -double_quotes(atom)
--import_from(scipy_integrate, [quad, trapezoid, simpson, ResultGet])
+-import_from(scipy_integrate, [quad, trapezoid, simpson, result_get])
 
 test("trapezoid exists") <- (
     trapezoid([1.0, 2.0, 3.0], R),
@@ -9,6 +9,6 @@ test("trapezoid exists") <- (
 
 test("quad exists") <- (
     quad(++(lambda x: x**2), 0.0, 1.0, R),
-    ResultGet(R, "value", V),
+    result_get(R, "value", V),
     DIFF is ++(abs(float(V) - 1.0/3.0)),
     DIFF < 1e-4)  # nv

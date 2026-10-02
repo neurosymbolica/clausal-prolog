@@ -7,12 +7,12 @@ objects for use in .clausal files via::
     -import_from(scipy_cluster, [linkage, flat_cluster, dendrogram,
                                   cophenet, inconsistent,
                                   k_means2, k_means, vector_quantize, whiten,
-                                  ResultGet])
+                                  result_get])
 
 Tiers
 -----
 All predicates are **Tier 2** — they return result dicts (or plain NumPy
-arrays for simple cases).  Use ``ResultGet`` to access named fields.
+arrays for simple cases).  Use ``result_get`` to access named fields.
 
 Hierarchical clustering (``scipy.cluster.hierarchy``):
     linkage         → linkage matrix Z (ndarray, shape (n-1, 4))
@@ -28,7 +28,7 @@ Vector quantisation (``scipy.cluster.vq``):
     whiten          → normalised observation array (ndarray)
 
 Helper:
-    ResultGet(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE
+    result_get(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE
 """
 
 from __future__ import annotations
@@ -228,10 +228,10 @@ whiten = _pred("whiten",
 )
 
 
-# ── Helper: ResultGet ─────────────────────────────────────────────────────
+# ── Helper: result_get ─────────────────────────────────────────────────────
 
 class _ResultGetPredicate:
-    """ResultGet(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE.
+    """result_get(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE.
 
     RESULT must be a dict.
     FIELD must be a ground string key.
@@ -261,7 +261,7 @@ class _ResultGetPredicate:
         yield (_fail, DONE)
 
     def __repr__(self) -> str:
-        return "ResultGet/3"
+        return "result_get/3"
 
 
-ResultGet = _ResultGetPredicate()
+result_get = _ResultGetPredicate()

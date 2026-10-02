@@ -7,14 +7,14 @@ The `scipy_differentiate` module wraps [`scipy.differentiate`](https://docs.scip
 ## Import
 
 ```clausal
--import_from(scipy_differentiate, [derivative, jacobian, hessian, ResultGet])
+-import_from(scipy_differentiate, [derivative, jacobian, hessian, result_get])
 ```
 
 ---
 
 ## Tier
 
-All predicates are **Tier 2 — result record**: they return a dict with named fields that can be accessed via `ResultGet`. The predicate always succeeds if SciPy can evaluate the function; a `success` field in the result indicates whether the requested accuracy was achieved.
+All predicates are **Tier 2 — result record**: they return a dict with named fields that can be accessed via `result_get`. The predicate always succeeds if SciPy can evaluate the function; a `success` field in the result indicates whether the requested accuracy was achieved.
 
 ---
 
@@ -107,7 +107,7 @@ Compute the hessian matrix of a scalar-valued function `F` at point `X`.
 
 ---
 
-### `ResultGet(RESULT, FIELD, VALUE)`
+### `result_get(RESULT, FIELD, VALUE)`
 
 Extract a named field from a differentiation result dict.
 
@@ -182,7 +182,7 @@ directly with **zero additional overhead**.
 ### Example
 
 ```
--import_from(scipy_differentiate, [derivative, ResultGet])
+-import_from(scipy_differentiate, [derivative, result_get])
 -import_from(py.units, [metre, newton, has_units])
 
 % f: metre -> newton (linear), so df/dx has units newton/metre
@@ -194,7 +194,7 @@ Test("derivative units") <- (
             / __import__('clausal.modules.py.units', fromlist=['newton','metre']).metre
         )),
     derivative(++(lambda x, k=K: x * k), 1.0(metre), R),
-    ResultGet(R, 'df', DF),
+    result_get(R, 'df', DF),
     has_units(DF, newton/metre))
 ```
 

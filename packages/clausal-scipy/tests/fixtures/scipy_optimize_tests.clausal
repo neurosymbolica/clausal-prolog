@@ -1,46 +1,46 @@
 -double_quotes(atom)
 -import_from(scipy_optimize, [minimize, minimize_scalar, root, root_scalar,
-    linear_program, curve_fit, nonlinear_least_squares, ResultGet])
+    linear_program, curve_fit, nonlinear_least_squares, result_get])
 
 # minimize quadratic: x^2, starting from [3.0], minimum near [0.0]
 test("minimize quadratic bfgs") <- (
     minimize(++(lambda x: float(x[0]**2)), [3.0], RESULT),
-    ResultGet(RESULT, 'x', X),
+    result_get(RESULT, 'x', X),
     ABS is ++(abs(float(X[0]))),
     ABS < 1e-3)  # nv
 
 # minimize_scalar: (x-2)^2, minimum at x=2
 test("minimize scalar brent") <- (
     minimize_scalar(++(lambda x: (x - 2.0)**2), RESULT),
-    ResultGet(RESULT, 'x', X),
+    result_get(RESULT, 'x', X),
     DIFF is ++(abs(float(X) - 2.0)),
     DIFF < 1e-4)  # nv
 
 # minimize_scalar with method
 test("minimize scalar with method") <- (
     minimize_scalar(++(lambda x: (x - 1.5)**2), 'brent', RESULT),
-    ResultGet(RESULT, 'x', X),
+    result_get(RESULT, 'x', X),
     DIFF is ++(abs(float(X) - 1.5)),
     DIFF < 1e-4)  # nv
 
 # root_scalar: x^2 - 4 = 0, root at x=2
 test("root scalar bisect") <- (
     root_scalar(++(lambda x: x**2 - 4.0), 'bisect', [1.0, 3.0], RESULT),
-    ResultGet(RESULT, 'root', R),
+    result_get(RESULT, 'root', R),
     DIFF is ++(abs(float(R) - 2.0)),
     DIFF < 1e-6)  # nv
 
 # root: [x^2 - 4], starting from [1.0]
 test("root system") <- (
     root(++(lambda x: [x[0]**2 - 4.0]), [1.0], RESULT),
-    ResultGet(RESULT, 'x', X),
+    result_get(RESULT, 'x', X),
     DIFF is ++(abs(float(X[0]) - 2.0)),
     DIFF < 1e-6)  # nv
 
 # linear_program: min -x s.t. x <= 3 -> x=3
 test("linear program 1d") <- (
     linear_program([-1.0], [[1.0]], [3.0], RESULT),
-    ResultGet(RESULT, 'x', X),
+    result_get(RESULT, 'x', X),
     DIFF is ++(abs(float(X[0]) - 3.0)),
     DIFF < 1e-6)  # nv
 
@@ -51,19 +51,19 @@ test("curve fit linear") <- (
              [1.0, 3.0, 5.0],
              [1.0, 0.0],
              RESULT),
-    ResultGet(RESULT, 'popt', P),
+    result_get(RESULT, 'popt', P),
     SLOPE is ++(abs(float(P[0]) - 2.0)),
     SLOPE < 1e-4)  # nv
 
 # nonlinear_least_squares: residuals [x0-3, x1-4], minimum at [3,4]
 test("nonlinear least squares") <- (
     nonlinear_least_squares(++(lambda x: [x[0] - 3.0, x[1] - 4.0]), [0.0, 0.0], RESULT),
-    ResultGet(RESULT, 'x', X),
+    result_get(RESULT, 'x', X),
     DIFF is ++(abs(float(X[0]) - 3.0) + abs(float(X[1]) - 4.0)),
     DIFF < 1e-4)  # nv
 
-# ResultGet: success field
+# result_get: success field
 test("result get success") <- (
     minimize(++(lambda x: float(x[0]**2)), [1.0], RESULT),
-    ResultGet(RESULT, 'success', S),
+    result_get(RESULT, 'success', S),
     S == True)  # nv

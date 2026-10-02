@@ -135,7 +135,7 @@ Query the KD-tree for the `K` nearest neighbours of each point in `X`.
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:kdtreequeryball"
 ```
 
-Find all points within `RADIUS` of each query point.
+find all points within `RADIUS` of each query point.
 
 - `RESULT`: list of index lists (or a flat list if `X` is a single point)
 
@@ -145,7 +145,7 @@ Find all points within `RADIUS` of each query point.
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:kdtreequerypairs"
 ```
 
-Find all pairs of points in the tree within `RADIUS` of each other.
+find all pairs of points in the tree within `RADIUS` of each other.
 
 - `RESULT`: set of `(i, j)` index pairs
 
@@ -208,7 +208,7 @@ Wraps `scipy.spatial.Delaunay`.
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:delaunayfindsimplex"
 ```
 
-Find the simplex containing each point in `XI`.
+find the simplex containing each point in `XI`.
 
 - `XI`: `(m, d)` query points
 - `BRUTEFORCE`: if `True`, bypass spatial index (default `False`)

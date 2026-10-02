@@ -3,7 +3,7 @@
 Provides mathematical special functions from scipy.special as importable
 predicate objects for use in .clausal files via::
 
-    -import_from(py.scipy_special, [gamma, Erf, bessel_j, elliptic_k, ...])
+    -import_from(py.scipy_special, [gamma, erf, bessel_j, elliptic_k, ...])
 
 All predicates are **Tier 1 — pure functions**: accept scalar or NumPy array
 inputs (broadcasting handled by scipy) and unify the last argument with the
@@ -23,9 +23,9 @@ gamma/related:
     perm(N, K, RESULT)  /  perm(N, K, EXACT, RESULT)
 
 Error functions (bidirectional):
-    Erf(X, Y)                        # forward: erf(x); backward: erfinv(y)
-    ErfComplement(X, Y)              # forward: erfc(x); backward: erfcinv(y)
-    NormalCdf(X, P)                  # forward: Φ(x); backward: Φ⁻¹(p) (probit)
+    erf(X, Y)                        # forward: erf(x); backward: erfinv(y)
+    erf_complement(X, Y)              # forward: erfc(x); backward: erfcinv(y)
+    normal_cdf(X, P)                  # forward: Φ(x); backward: Φ⁻¹(p) (probit)
 
 bessel functions:
     bessel_j(N, X, RESULT)            # J_n(x), integer order
@@ -65,7 +65,7 @@ Convenience / misc:
     cube_root(X, RESULT)              # x^(1/3), works for negative x
     exp10(X, RESULT)                 # 10^x
     exp2(X, RESULT)                  # 2^x
-    Logit(X, Y)                      # bidirectional: logit(x) / expit(y) (sigmoid)
+    logit(X, Y)                      # bidirectional: logit(x) / expit(y) (sigmoid)
     lambert_w(Z, RESULT)  /  lambert_w(Z, K, TOL, RESULT)
     x_log_y(X, Y, RESULT)              # x·log(y), safe at x=0
     x_log1p_y(X, Y, RESULT)            # x·log(1+y), safe at x=0, y=-1
@@ -222,15 +222,15 @@ perm = _pred("perm",
 
 # ── Error functions ───────────────────────────────────────────────────────
 
-Erf = _pred_bidir("Erf",
+erf = _pred_bidir("erf",
     (2, _bidir_q(_sp_fn("erf"), _sp_fn("erfinv"))),
 )
 
-ErfComplement = _pred_bidir("ErfComplement",
+erf_complement = _pred_bidir("erf_complement",
     (2, _bidir_q(_sp_fn("erfc"), _sp_fn("erfcinv"))),
 )
 
-NormalCdf = _pred_bidir("NormalCdf",
+normal_cdf = _pred_bidir("normal_cdf",
     (2, _bidir_q(_sp_fn("ndtr"), _sp_fn("ndtri"))),
 )
 
@@ -365,33 +365,33 @@ exp2 = _pred("exp2",
     (2, _sp_fn("exp2")),
 )
 
-Logit = _pred_bidir("Logit",
+logit = _pred_bidir("logit",
     (2, _bidir_q(_sp_fn("logit"), _sp_fn("expit"))),
 )
 
 
 # ── Incomplete gamma / beta / Box-Cox ─────────────────────────────────────
 
-GammaInc = _pred_bidir("GammaInc",
+gamma_inc = _pred_bidir("gamma_inc",
     (3, _bidir_q(_sp_fn("gammainc"), _sp_fn("gammaincinv"), n_fixed=1)),
 )
 
-GammaIncComplement = _pred_bidir("GammaIncComplement",
+gamma_inc_complement = _pred_bidir("gamma_inc_complement",
     (3, _bidir_q(_sp_fn("gammaincc"), _sp_fn("gammainccinv"), n_fixed=1)),
 )
 
-BetaInc = _pred_bidir("BetaInc",
+beta_inc = _pred_bidir("beta_inc",
     (4, _bidir_q(_sp_fn("betainc"), _sp_fn("betaincinv"), n_fixed=2)),
 )
 
-Boxcox = _pred_bidir("Boxcox",
+boxcox = _pred_bidir("boxcox",
     (3, _bidir_q(
             lambda lam, x: _sp().boxcox(x, lam),
             lambda lam, y: _sp().inv_boxcox(y, lam),
             n_fixed=1)),
 )
 
-Boxcox1p = _pred_bidir("Boxcox1p",
+boxcox1p = _pred_bidir("boxcox1p",
     (3, _bidir_q(
             lambda lam, x: _sp().boxcox1p(x, lam),
             lambda lam, y: _sp().inv_boxcox1p(y, lam),

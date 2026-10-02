@@ -1,6 +1,6 @@
 # Companion tests for docs/scipy_special.md signature blocks.
 -double_quotes(atom)
--import_from(scipy_special, [gamma, Erf, ErfComplement, factorial, comb])
+-import_from(scipy_special, [gamma, erf, erf_complement, factorial, comb])
 
 test("gamma exists") <- (
     gamma(5.0, V),
@@ -8,7 +8,7 @@ test("gamma exists") <- (
     DIFF < 1e-10)  # nv
 
 test("erf exists") <- (
-    Erf(0.0, V),
+    erf(0.0, V),
     ++(abs(V)) < 1e-10)  # nv
 
 test("factorial exists") <- (

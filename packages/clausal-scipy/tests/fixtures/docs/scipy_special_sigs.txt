@@ -1,11 +1,11 @@
 # === Import ===
 
 --8<-- [start:import]
--import_from(scipy_special, [gamma, Erf, bessel_j, elliptic_k, ...])
+-import_from(scipy_special, [gamma, erf, bessel_j, elliptic_k, ...])
 --8<-- [end:import]
 
 --8<-- [start:import_ex2]
--import_from(py.scipy_special, [gamma, Erf, bessel_j, ...])
+-import_from(py.scipy_special, [gamma, erf, bessel_j, ...])
 --8<-- [end:import_ex2]
 
 
@@ -42,17 +42,17 @@ perm(N, K, EXACT, RESULT)             # EXACT=True returns an integer
 --8<-- [end:gamma_and_related]
 
 --8<-- [start:error_functions]
-Erf(X, Y)
+erf(X, Y)
     X ground, Y unbound → Y = erf(x)
     Y ground, X unbound → X = erfinv(y)   # inverse direction
     Both ground         → consistency check: succeeds iff erf(x) ≈ y
 
-ErfComplement(X, Y)
+erf_complement(X, Y)
     X ground, Y unbound → Y = erfc(x)
     Y ground, X unbound → X = erfcinv(y)
     Both ground         → consistency check: succeeds iff erfc(x) ≈ y
 
-NormalCdf(X, P)
+normal_cdf(X, P)
     X ground, P unbound → P = Φ(x)   # standard normal CDF
     P ground, X unbound → X = Φ⁻¹(p) # probit / quantile function
     Both ground         → consistency check: succeeds iff Φ(x) ≈ p
@@ -60,46 +60,46 @@ NormalCdf(X, P)
 
 --8<-- [start:error_functions_ex2]
 # Forward: P = Φ(1.96) ≈ 0.975
-NormalCdf(1.96, P)
+normal_cdf(1.96, P)
 
 # Backward: X = Φ⁻¹(0.975) ≈ 1.96
-NormalCdf(X, 0.975)
+normal_cdf(X, 0.975)
 
 # Round-trip
 CheckQuantile(X) <- (
-    NormalCdf(X, P),
-    NormalCdf(X2, P),
+    normal_cdf(X, P),
+    normal_cdf(X2, P),
     DIFF is ++(abs(float(X2) - float(X))),
     DIFF < 1e-9
 )
 --8<-- [end:error_functions_ex2]
 
 --8<-- [start:incomplete_gamma_beta_and_box_cox]
-GammaInc(A, X, Y)
+gamma_inc(A, X, Y)
     A fixed (always ground).
     X ground, Y unbound → Y = gammainc(a, x)    # regularised lower incomplete gamma
     Y ground, X unbound → X = gammaincinv(a, y)
     Both ground         → consistency check: succeeds iff gammainc(a, x) ≈ y
 
-GammaIncComplement(A, X, Y)
+gamma_inc_complement(A, X, Y)
     A fixed.
     X ground, Y unbound → Y = gammaincc(a, x)   # upper tail
     Y ground, X unbound → X = gammainccinv(a, y)
     Both ground         → consistency check: succeeds iff gammaincc(a, x) ≈ y
 
-BetaInc(A, B, X, Y)
+beta_inc(A, B, X, Y)
     A, B fixed.
     X ground, Y unbound → Y = betainc(a, b, x)
     Y ground, X unbound → X = betaincinv(a, b, y)
     Both ground         → consistency check: succeeds iff betainc(a, b, x) ≈ y
 
-Boxcox(Lambda, X, Y)
+boxcox(Lambda, X, Y)
     Lambda fixed (always first argument).
     X ground, Y unbound → Y = boxcox(x, lambda)
     Y ground, X unbound → X = inv_boxcox(y, lambda)
     Both ground         → consistency check: succeeds iff boxcox(x, lambda) ≈ y
 
-Boxcox1p(Lambda, X, Y)
+boxcox1p(Lambda, X, Y)
     Lambda fixed (always first argument).
     X ground, Y unbound → Y = boxcox1p(x, lambda)
     Y ground, X unbound → X = inv_boxcox1p(y, lambda)
@@ -189,7 +189,7 @@ exp10(X, RESULT)
 exp2(X, RESULT)
     RESULT = 2^x
 
-Logit(X, Y)                        # bidirectional
+logit(X, Y)                        # bidirectional
     X ground, Y unbound → Y = log(x / (1−x))      # logit function
     Y ground, X unbound → X = 1 / (1 + exp(−y))   # sigmoid / expit (inverse)
     Both ground         → consistency check: succeeds iff logit(x) ≈ y

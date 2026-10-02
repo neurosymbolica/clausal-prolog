@@ -1,8 +1,8 @@
 -double_quotes(atom)
 -import_from(scipy_special, [gamma, gamma_log, gamma_sign, beta_log, digamma, polygamma,
     factorial, comb, perm,
-    Erf, ErfComplement,
-    NormalCdf,
+    erf, erf_complement,
+    normal_cdf,
     bessel_j, bessel_y, bessel_j_real, bessel_y_real, bessel_k, bessel_i,
     bessel_j_zeros, spherical_bessel_j,
     elliptic_k, elliptic_e, elliptic_k_incomplete, elliptic_e_incomplete,
@@ -10,7 +10,7 @@
     entr, kl_divergence, log_sum_exp,
     assoc_legendre, legendre_poly, chebyshev_t, chebyshev_u,
     hermite_h, generalized_laguerre,
-    cube_root, exp10, exp2, Logit, lambert_w, x_log_y, x_log1p_y])
+    cube_root, exp10, exp2, logit, lambert_w, x_log_y, x_log1p_y])
 
 # ── gamma function ───────────────────────────────────────────────────────────
 
@@ -66,27 +66,27 @@ test("perm 4 4") <- (perm(4, 4, R), DIFF is ++(abs(float(R) - 24.0)), DIFF < 1e-
 
 # ── Error function ───────────────────────────────────────────────────────────
 
-test("erf 0") <- (Erf(0.0, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
+test("erf 0") <- (erf(0.0, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
 
-test("erf 1") <- (Erf(1.0, R), DIFF is ++(abs(float(R) - 0.8427007929497148)), DIFF < 1e-9)  # nv
+test("erf 1") <- (erf(1.0, R), DIFF is ++(abs(float(R) - 0.8427007929497148)), DIFF < 1e-9)  # nv
 
-test("erfc 1") <- (ErfComplement(1.0, R), DIFF is ++(abs(float(R) - 0.15729920705028516)), DIFF < 1e-9)  # nv
+test("erfc 1") <- (erf_complement(1.0, R), DIFF is ++(abs(float(R) - 0.15729920705028516)), DIFF < 1e-9)  # nv
 
-test("erfc 0 is 1") <- (ErfComplement(0.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
+test("erfc 0 is 1") <- (erf_complement(0.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
-test("erfinv 0.5") <- (Erf(R, 0.5), DIFF is ++(abs(float(R) - 0.4769362762044699)), DIFF < 1e-9)  # nv
+test("erfinv 0.5") <- (erf(R, 0.5), DIFF is ++(abs(float(R) - 0.4769362762044699)), DIFF < 1e-9)  # nv
 
-test("erfcinv 0.5") <- (ErfComplement(R, 0.5), DIFF is ++(abs(float(R) - 0.4769362762044699)), DIFF < 1e-9)  # nv
+test("erfcinv 0.5") <- (erf_complement(R, 0.5), DIFF is ++(abs(float(R) - 0.4769362762044699)), DIFF < 1e-9)  # nv
 
 # ── Normal CDF ───────────────────────────────────────────────────────────────
 
-test("normal cdf 0 is 0.5") <- (NormalCdf(0.0, R), DIFF is ++(abs(float(R) - 0.5)), DIFF < 1e-9)  # nv
+test("normal cdf 0 is 0.5") <- (normal_cdf(0.0, R), DIFF is ++(abs(float(R) - 0.5)), DIFF < 1e-9)  # nv
 
-test("normal cdf 1") <- (NormalCdf(1.0, R), DIFF is ++(abs(float(R) - 0.8413447460685429)), DIFF < 1e-9)  # nv
+test("normal cdf 1") <- (normal_cdf(1.0, R), DIFF is ++(abs(float(R) - 0.8413447460685429)), DIFF < 1e-9)  # nv
 
-test("normal cdf inverse 0.5 is 0") <- (NormalCdf(R, 0.5), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
+test("normal cdf inverse 0.5 is 0") <- (normal_cdf(R, 0.5), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
 
-test("normal cdf inverse 0.84") <- (NormalCdf(R, 0.8413447460685429), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-6)  # nv
+test("normal cdf inverse 0.84") <- (normal_cdf(R, 0.8413447460685429), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-6)  # nv
 
 # ── bessel functions ─────────────────────────────────────────────────────────
 
@@ -204,13 +204,13 @@ test("exp2 3") <- (exp2(3.0, R), DIFF is ++(abs(float(R) - 8.0)), DIFF < 1e-9)  
 
 test("exp2 0 is 1") <- (exp2(0.0, R), DIFF is ++(abs(float(R) - 1.0)), DIFF < 1e-9)  # nv
 
-test("sigmoid 0 is 0.5") <- (Logit(R, 0.0), DIFF is ++(abs(float(R) - 0.5)), DIFF < 1e-9)  # nv
+test("sigmoid 0 is 0.5") <- (logit(R, 0.0), DIFF is ++(abs(float(R) - 0.5)), DIFF < 1e-9)  # nv
 
-test("sigmoid large is 1") <- (Logit(R, 100.0), R > 0.9999)  # nv
+test("sigmoid large is 1") <- (logit(R, 100.0), R > 0.9999)  # nv
 
-test("logit 0.5 is 0") <- (Logit(0.5, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
+test("logit 0.5 is 0") <- (logit(0.5, R), DIFF is ++(abs(float(R) - 0.0)), DIFF < 1e-9)  # nv
 
-test("logit 0.75 positive") <- (Logit(0.75, R), R > 1.09, R < 1.10)  # nv
+test("logit 0.75 positive") <- (logit(0.75, R), R > 1.09, R < 1.10)  # nv
 
 test("lambert w 1") <- (lambert_w(1.0, W), W > 0.5, W < 0.6)  # nv
 

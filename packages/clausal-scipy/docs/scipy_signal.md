@@ -22,7 +22,7 @@ Or via the canonical `py.*` path:
 
 | Tier | Predicates | RESULT type |
 |---|---|---|
-| **Tier 2** | include design, frequency_response, periodogram, welch, spectrogram | dict — use `ResultGet` |
+| **Tier 2** | include design, frequency_response, periodogram, welch, spectrogram | dict — use `result_get` |
 | **Tier 1** | linear_filter, sos_filter, forward_backward_filter, sos_forward_backward_filter, decimate, resample, convolve, correlate, fft_convolve | array (or dict when `ZI` supplied) |
 
 ---
@@ -64,7 +64,7 @@ include design predicates return a result dict keyed by the `OUTPUT` format:
 | `'zpk'` | `z`, `p`, `k` |
 | `'sos'` | `sos` |
 
-Use `ResultGet` to extract fields:
+Use `result_get` to extract fields:
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:include_design"
@@ -212,7 +212,7 @@ Short-time Fourier transform power spectral density: time-frequency representati
 
 ---
 
-## ResultGet
+## result_get
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:resultget"

@@ -2,7 +2,7 @@
 -import_from(scipy_cluster, [linkage, flat_cluster, dendrogram,
                               cophenet, inconsistent,
                               k_means2, k_means, vector_quantize, whiten,
-                              ResultGet])
+                              result_get])
 
 # Sample data: 6 points in two clear clusters
 # Cluster A: around (1,1), Cluster B: around (5,5)
@@ -29,7 +29,7 @@ test("flat cluster two groups") <- (
 test("kmeans2 centroid count") <- (
     sample_points(DATA),
     k_means2(DATA, 2, RESULT),
-    ResultGet(RESULT, 'centroid', CENTROID),
+    result_get(RESULT, 'centroid', CENTROID),
     NCENTROIDS is ++(len(CENTROID)),
     NCENTROIDS == 2)  # nv
 
@@ -37,7 +37,7 @@ test("kmeans2 centroid count") <- (
 test("kmeans codebook shape") <- (
     sample_points(DATA),
     k_means(DATA, 2, RESULT),
-    ResultGet(RESULT, 'codebook', CODEBOOK),
+    result_get(RESULT, 'codebook', CODEBOOK),
     NROWS is ++(len(CODEBOOK)),
     NROWS == 2)  # nv
 
@@ -45,9 +45,9 @@ test("kmeans codebook shape") <- (
 test("vector quantize assigns codes") <- (
     sample_points(DATA),
     k_means(DATA, 2, KR),
-    ResultGet(KR, 'codebook', CODEBOOK),
+    result_get(KR, 'codebook', CODEBOOK),
     vector_quantize(DATA, CODEBOOK, VQR),
-    ResultGet(VQR, 'code', CODE),
+    result_get(VQR, 'code', CODE),
     NCODES is ++(len(CODE)),
     NCODES == 6)  # nv
 

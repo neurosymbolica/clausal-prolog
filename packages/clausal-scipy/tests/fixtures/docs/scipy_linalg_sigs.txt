@@ -1,7 +1,7 @@
 # === Import ===
 
 --8<-- [start:import]
--import_from(scipy_linalg, [solve, singular_value_decompose, Inverse, ...])
+-import_from(scipy_linalg, [solve, singular_value_decompose, inverse, ...])
 --8<-- [end:import]
 
 --8<-- [start:import_ex2]
@@ -13,9 +13,9 @@
 
 --8<-- [start:tiers]
 singular_value_decompose(A, RESULT),
-ResultGet(RESULT, 'u', U),
-ResultGet(RESULT, 's', S),
-ResultGet(RESULT, 'vh', Vh).
+result_get(RESULT, 'u', U),
+result_get(RESULT, 's', S),
+result_get(RESULT, 'vh', Vh).
 --8<-- [end:tiers]
 
 
@@ -33,7 +33,7 @@ solve(A, B, ASSUME_A, RESULT)      # unidirectional (arity-4)
 
 least_squares(A, B, RESULT)
     RESULT: dict {x, residuals, rank, s}
-    Minimises ||A @ x − b||₂; use ResultGet to extract fields
+    Minimises ||A @ x − b||₂; use result_get to extract fields
 
 solve_triangular(A, B, RESULT)
     A must be upper triangular (default)
@@ -43,12 +43,12 @@ solve_triangular(A, B, LOWER, RESULT)
 --8<-- [end:linear_system_solvers]
 
 --8<-- [start:matrix_decompositions]
-LuDecompose(A, R)              # bidirectional
+lu_decompose(A, R)              # bidirectional
     A ground → R = {p, l, u}   (A = P @ L @ U)
     R ground → A = P @ L @ U   (recompose)
     Both ground → consistency check
 
-QrDecompose(A, R)              # bidirectional
+qr_decompose(A, R)              # bidirectional
     A ground → R = {q, r}      (A = Q @ R)
     R ground → A = Q @ R       (recompose)
     Both ground → consistency check
@@ -58,15 +58,15 @@ singular_value_decompose(A, R)   # bidirectional
     R ground → A = U @ diag(s) @ Vh   (recompose)
     Both ground → consistency check
 
-Cholesky(A, R)                 # bidirectional (arity-2)
+cholesky(A, R)                 # bidirectional (arity-2)
     A ground → R = upper triangular factor U (U.T @ U = A)
     R ground → A = R.T @ R     (recompose)
     Both ground → consistency check
 
-Cholesky(A, LOWER, RESULT)     # unidirectional (arity-3)
+cholesky(A, LOWER, RESULT)     # unidirectional (arity-3)
     LOWER=True: returns lower triangular L such that L @ L.T = A
 
-EigenDecompose(A, R)           # bidirectional
+eigen_decompose(A, R)           # bidirectional
     A ground → R = {eigenvalues, eigenvectors}
     R ground → A = V @ diag(λ) @ inv(V)
     Both ground → consistency check
@@ -75,17 +75,17 @@ eigen_decompose_hermitian(A, R)  # bidirectional
     Symmetric/Hermitian specialisation; same recomposition.
     Both ground → consistency check
 
-Schur(A, R)                    # bidirectional (arity-2)
+schur(A, R)                    # bidirectional (arity-2)
     A ground → R = {t, z}      (A = Z @ T @ Z.H)
     R ground → A = Z @ T @ Z.H (recompose)
     Both ground → consistency check
 
-Schur(A, OUTPUT, RESULT)       # unidirectional (arity-3)
+schur(A, OUTPUT, RESULT)       # unidirectional (arity-3)
     OUTPUT: 'real' (default) or 'complex'
 --8<-- [end:matrix_decompositions]
 
 --8<-- [start:matrix_functions]
-Inverse(A, RESULT)             # bidirectional (self-inverse)
+inverse(A, RESULT)             # bidirectional (self-inverse)
     A ground, RESULT unbound → RESULT = inv(A)
     RESULT ground, A unbound → A = inv(RESULT)   # inv is self-inverse
 
@@ -101,7 +101,7 @@ norm(A, RESULT)
 norm(A, ORD, RESULT)
     ORD: None (default), 'fro', 'nuc', 1, -1, 2, -2, inf, -inf
 
-MatrixExpLog(A, B)                 # bidirectional
+matrix_exp_log(A, B)                 # bidirectional
     A ground, B unbound → B = expm(A)   # matrix exponential
     B ground, A unbound → A = logm(B)   # matrix logarithm
     Both ground         → consistency check: succeeds iff expm(A) ≈ B
@@ -111,7 +111,7 @@ matrix_square_root(A, RESULT)
 
 matrix_function(A, FUNC, RESULT)
     RESULT = f(A) where FUNC is a Python callable applied via eigendecomposition
-    Example: matrix_function(A, np.exp, RESULT) is equivalent to MatrixExpLog(A, RESULT) forward direction
+    Example: matrix_function(A, np.exp, RESULT) is equivalent to matrix_exp_log(A, RESULT) forward direction
 --8<-- [end:matrix_functions]
 
 --8<-- [start:two_step_factorisations]
@@ -132,7 +132,7 @@ cholesky_solve(C_LOWER, B, RESULT)
 --8<-- [end:two_step_factorisations]
 
 --8<-- [start:resultget]
-ResultGet(RESULT, FIELD, VALUE)
+result_get(RESULT, FIELD, VALUE)
     Extract a named field from a Tier 2 result dict.
     RESULT: a dict returned by a Tier 2 predicate
     FIELD:  a ground string key (e.g. 'x', 'eigenvalues', 'u')

@@ -1,7 +1,7 @@
 # === Import ===
 
 --8<-- [start:import]
--import_from(scipy_stats, [stats_mean, stats_pearson_correlation, ResultGet, ...])
+-import_from(scipy_stats, [stats_mean, stats_pearson_correlation, result_get, ...])
 --8<-- [end:import]
 
 --8<-- [start:import_ex2]
@@ -143,14 +143,14 @@ stats_shapiro(X, RESULT)
 --8<-- [end:nonparametric_tests]
 
 --8<-- [start:distribution_evaluation]
-StatsDist(DIST, METHOD, X, RESULT)
+stats_dist(DIST, METHOD, X, RESULT)
     Call scipy.stats.<DIST>.<METHOD>(X) for any distribution and method.
     DIST:   string name of a scipy.stats distribution (e.g. 'norm', 'expon')
     METHOD: string method name (e.g. 'pdf', 'cdf', 'ppf', 'sf', 'isf')
     X:      point at which to evaluate
     RESULT: float
 
-StatsDist(DIST, METHOD, RESULT)
+stats_dist(DIST, METHOD, RESULT)
     Call scipy.stats.<DIST>.<METHOD>() for zero-argument methods like 'entropy'.
 
 stats_normal_pdf(X, RESULT)
@@ -180,7 +180,7 @@ stats_normal_rvs(LOC, SCALE, SIZE, RESULT)
 --8<-- [end:distribution_evaluation]
 
 --8<-- [start:distribution_evaluation_ex2]
--import_from(scipy_stats, [stats_normal_pdf, stats_normal_cdf, StatsDist])
+-import_from(scipy_stats, [stats_normal_pdf, stats_normal_cdf, stats_dist])
 
 # Probability that X ~ N(0,1) falls in [-1, 1]
 NormalInterval(P) <- (
@@ -191,43 +191,43 @@ NormalInterval(P) <- (
 
 # Generic: exponential distribution entropy
 ExponEntropy(H) <- (
-    StatsDist('expon', 'entropy', H)
+    stats_dist('expon', 'entropy', H)
 )
 --8<-- [end:distribution_evaluation_ex2]
 
 --8<-- [start:frozen_distribution_handles]
-StatsFreezeDist(DIST, PARAMS_DICT, RESULT)
+stats_freeze_dist(DIST, PARAMS_DICT, RESULT)
     Create a frozen scipy.stats distribution.
     DIST:        string name of a scipy.stats distribution (e.g. 'norm', 'beta')
     PARAMS_DICT: Python dict of keyword arguments for the distribution constructor
                  (e.g. {'loc': 1.0, 'scale': 2.0})
     RESULT:      integer handle into the frozen-distribution registry
 
-StatsFrozenPdf(HANDLE, X, RESULT)
+stats_frozen_pdf(HANDLE, X, RESULT)
     PDF of the frozen distribution at point X.
 
-StatsFrozenCdf(HANDLE, X, P)          # bidirectional
+stats_frozen_cdf(HANDLE, X, P)          # bidirectional
     X ground, P unbound → P = dist.cdf(x)   # forward: evaluate CDF
     P ground, X unbound → X = dist.ppf(p)   # backward: compute quantile (inverse CDF)
     Both ground         → consistency check: succeeds iff dist.cdf(x) ≈ p
 
-StatsFrozenRvs(HANDLE, RESULT)
+stats_frozen_rvs(HANDLE, RESULT)
     Single random variate from the frozen distribution.
 
-StatsFrozenRvs(HANDLE, SIZE, RESULT)
+stats_frozen_rvs(HANDLE, SIZE, RESULT)
     Array of SIZE random variates.
 
-StatsFrozenStats(HANDLE, RESULT)
+stats_frozen_stats(HANDLE, RESULT)
     Mean and variance of the frozen distribution.
     RESULT: dict {mean, var}
 
-StatsFrozenFree(HANDLE)
+stats_frozen_free(HANDLE)
     Release the frozen distribution from the registry.
     Always succeeds. Call when the handle is no longer needed.
 --8<-- [end:frozen_distribution_handles]
 
 --8<-- [start:resultget]
-ResultGet(RESULT, FIELD, VALUE)
+result_get(RESULT, FIELD, VALUE)
     Extract a named field from any Tier 2 result dict.
     RESULT: a dict returned by a Tier 2 predicate (or an object with an attribute)
     FIELD:  a ground string key

@@ -21,9 +21,9 @@ CODATA database access (plain floats / strings):
     value(NAME, RESULT)                     — value (float) by CODATA name
     unit(NAME, RESULT)                      — SI unit string
     precision(NAME, RESULT)                 — relative uncertainty
-    Lookup(NAME, VALUE, UNIT, UNCERTAINTY)  — all three in one call
-    Find(SUBSTRING, NAMES)                  — search names by substring
-    AllNames(NAMES)                         — all CODATA constant names
+    lookup(NAME, VALUE, UNIT, UNCERTAINTY)  — all three in one call
+    find(SUBSTRING, NAMES)                  — search names by substring
+    all_names(NAMES)                         — all CODATA constant names
 """
 
 from __future__ import annotations
@@ -112,9 +112,9 @@ def _lookup_dispatch(this_generator, _proceed, _fail, _catcher, name, value_var,
 
 class _LookupPredicate:
     def _get_dispatch(self): return _lookup_dispatch
-    def __repr__(self): return "scipy.constants.Lookup/4"
+    def __repr__(self): return "scipy.constants.lookup/4"
 
-Lookup = _LookupPredicate()
+lookup = _LookupPredicate()
 
 
 def _find_dispatch(this_generator, _proceed, _fail, _catcher, substring, names_var, trail):
@@ -141,14 +141,14 @@ def _find_all_dispatch(this_generator, _proceed, _fail, _catcher, names_var, tra
 
 class _FindPredicate:
     def _get_dispatch(self): return _find_dispatch
-    def __repr__(self): return "scipy.constants.Find/2"
+    def __repr__(self): return "scipy.constants.find/2"
 
 class _AllNamesPredicate:
     def _get_dispatch(self): return _find_all_dispatch
-    def __repr__(self): return "scipy.constants.AllNames/1"
+    def __repr__(self): return "scipy.constants.all_names/1"
 
-Find = _FindPredicate()
-AllNames = _AllNamesPredicate()
+find = _FindPredicate()
+all_names = _AllNamesPredicate()
 
 
 # ── Physical constants as Quantity values ──────────────────────────────────

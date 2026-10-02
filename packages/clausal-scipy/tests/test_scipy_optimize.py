@@ -5,7 +5,7 @@ Tests are organised per function family and cover:
 - multi-arity variants (optional args)
 - unification succeeds when RESULT is unbound
 - unification fails when RESULT is bound to a wrong value
-- Tier 2 dict results accessed via ResultGet
+- Tier 2 dict results accessed via result_get
 """
 
 import pytest
@@ -24,7 +24,7 @@ from clausal.modules.py.scipy_optimize import (
     root_scalar, root,
     linear_program, mixed_integer_linear_program,
     linear_constraint, bounds,
-    ResultGet,
+    result_get,
 )
 
 
@@ -45,9 +45,9 @@ def _drive(pred, *args):
 
 
 def _drive_result_get(result_dict, field):
-    """Use ResultGet to extract a field from a dict result."""
+    """Use result_get to extract a field from a dict result."""
     value = Var()
-    dispatch = ResultGet._get_dispatch()
+    dispatch = result_get._get_dispatch()
     trail = Trail()
     gen = dispatch(None, None, None, None, result_dict, field, value, trail)
     for parent, sentinel in gen:
@@ -446,7 +446,7 @@ class TestResultGet:
     def test_non_string_field_fails(self):
         # nv
         value = Var()
-        dispatch = ResultGet._get_dispatch()
+        dispatch = result_get._get_dispatch()
         trail = Trail()
         field_var = Var()  # unbound var as field — should fail
         gen = dispatch(None, None, None, None, {'x': 1}, field_var, value, trail)
@@ -457,7 +457,7 @@ class TestResultGet:
         # nv
         d = {'rank': 2}
         value = 2
-        dispatch = ResultGet._get_dispatch()
+        dispatch = result_get._get_dispatch()
         trail = Trail()
         gen = dispatch(None, None, None, None, d, 'rank', value, trail)
         solutions = [s for s in gen if s[1] is None]

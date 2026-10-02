@@ -1,61 +1,61 @@
 -double_quotes(atom)
--import_from(scipy_stats, [StatsFreezeDist, StatsFrozenCdf, StatsFrozenFree])
+-import_from(scipy_stats, [stats_freeze_dist, stats_frozen_cdf, stats_frozen_free])
 
-# StatsFrozenCdf: forward
+# stats_frozen_cdf: forward
 test("frozen cdf forward at x=0") <- (
-    StatsFreezeDist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
-    StatsFrozenCdf(H, 0.0, P),
+    stats_freeze_dist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
+    stats_frozen_cdf(H, 0.0, P),
     DIFF is ++(abs(float(P) - 0.5)),
     DIFF < 1e-10,
-    StatsFrozenFree(H))  # nv
+    stats_frozen_free(H))  # nv
 
 test("frozen cdf forward at x=1.96") <- (
-    StatsFreezeDist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
-    StatsFrozenCdf(H, 1.96, P),
+    stats_freeze_dist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
+    stats_frozen_cdf(H, 1.96, P),
     P > 0.974,
     P < 0.976,
-    StatsFrozenFree(H))  # nv
+    stats_frozen_free(H))  # nv
 
-# StatsFrozenCdf: backward (ppf direction)
+# stats_frozen_cdf: backward (ppf direction)
 test("frozen cdf backward is ppf") <- (
-    StatsFreezeDist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
-    StatsFrozenCdf(H, X, 0.975),
+    stats_freeze_dist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
+    stats_frozen_cdf(H, X, 0.975),
     DIFF is ++(abs(float(X) - 1.9599639845)),
     DIFF < 1e-6,
-    StatsFrozenFree(H))  # nv
+    stats_frozen_free(H))  # nv
 
 test("frozen cdf backward at p=0.5") <- (
-    StatsFreezeDist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
-    StatsFrozenCdf(H, X, 0.5),
+    stats_freeze_dist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
+    stats_frozen_cdf(H, X, 0.5),
     DIFF is ++(abs(float(X) - 0.0)),
     DIFF < 1e-10,
-    StatsFrozenFree(H))  # nv
+    stats_frozen_free(H))  # nv
 
-# StatsFrozenCdf: round-trip
+# stats_frozen_cdf: round-trip
 test("frozen cdf round-trip") <- (
-    StatsFreezeDist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
-    StatsFrozenCdf(H, 1.5, P),
-    StatsFrozenCdf(H, X, P),
+    stats_freeze_dist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
+    stats_frozen_cdf(H, 1.5, P),
+    stats_frozen_cdf(H, X, P),
     DIFF is ++(abs(float(X) - 1.5)),
     DIFF < 1e-9,
-    StatsFrozenFree(H))  # nv
+    stats_frozen_free(H))  # nv
 
-# StatsFrozenCdf: consistency check (both ground)
+# stats_frozen_cdf: consistency check (both ground)
 test("frozen cdf consistency check succeeds") <- (
-    StatsFreezeDist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
+    stats_freeze_dist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
     P is ++(__import__('scipy.stats', fromlist=['norm']).norm.cdf(1.0)),
-    StatsFrozenCdf(H, 1.0, P),
-    StatsFrozenFree(H))  # nv
+    stats_frozen_cdf(H, 1.0, P),
+    stats_frozen_free(H))  # nv
 
 test("frozen cdf consistency fails on mismatch") <- (
-    StatsFreezeDist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
-    not StatsFrozenCdf(H, 1.0, 0.0),
-    StatsFrozenFree(H))  # nv
+    stats_freeze_dist('norm', ++({"loc": 0.0, "scale": 1.0}), H),
+    not stats_frozen_cdf(H, 1.0, 0.0),
+    stats_frozen_free(H))  # nv
 
 # Works with non-normal distributions
 test("frozen cdf backward for exponential dist") <- (
-    StatsFreezeDist('expon', ++({"scale": 2.0}), H),
-    StatsFrozenCdf(H, X, 0.5),
+    stats_freeze_dist('expon', ++({"scale": 2.0}), H),
+    stats_frozen_cdf(H, X, 0.5),
     DIFF is ++(abs(float(X) - 1.3862943611)),
     DIFF < 1e-6,
-    StatsFrozenFree(H))  # nv
+    stats_frozen_free(H))  # nv

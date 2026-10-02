@@ -1,7 +1,7 @@
 -double_quotes(atom)
 -import_from(scipy_stats, [stats_mean, stats_pearson_correlation, stats_linear_regression, stats_t_test1_sample,
     stats_normal_pdf, stats_normal_cdf, stats_normal_ppf, stats_chi_square,
-    stats_ks2samp, stats_shapiro, ResultGet])
+    stats_ks2samp, stats_shapiro, result_get])
 
 # stats_mean: mean of [1,2,3] = 2.0
 test("mean of list") <- (
@@ -12,21 +12,21 @@ test("mean of list") <- (
 # stats_pearson_correlation: perfect positive correlation
 test("pearsonr perfect correlation") <- (
     stats_pearson_correlation([1.0, 2.0, 3.0], [1.0, 2.0, 3.0], RESULT),
-    ResultGet(RESULT, 'statistic', STAT),
+    result_get(RESULT, 'statistic', STAT),
     DIFF is ++(abs(float(STAT) - 1.0)),
     DIFF < 1e-9)  # nv
 
 # stats_linear_regression: y = 2*x has slope=2, intercept=0
 test("linregress slope") <- (
     stats_linear_regression([1.0, 2.0, 3.0], [2.0, 4.0, 6.0], RESULT),
-    ResultGet(RESULT, 'slope', SLOPE),
+    result_get(RESULT, 'slope', SLOPE),
     DIFF is ++(abs(float(SLOPE) - 2.0)),
     DIFF < 1e-9)  # nv
 
 # stats_t_test1_sample: data with mean 2.0 vs popmean 2.0, stat near 0
 test("ttest1samp mean equal") <- (
     stats_t_test1_sample([1.0, 2.0, 3.0], 2.0, RESULT),
-    ResultGet(RESULT, 'statistic', STAT),
+    result_get(RESULT, 'statistic', STAT),
     ABS is ++(abs(float(STAT))),
     ABS < 1e-9)  # nv
 
@@ -52,20 +52,20 @@ test("norm ppf median") <- (
 # stats_chi_square: uniform counts, statistic = 0
 test("chisquare uniform") <- (
     stats_chi_square([10, 10, 10], RESULT),
-    ResultGet(RESULT, 'statistic', STAT),
+    result_get(RESULT, 'statistic', STAT),
     ABS is ++(abs(float(STAT))),
     ABS < 1e-9)  # nv
 
 # stats_ks2samp: identical samples, statistic = 0
 test("ks2samp identical") <- (
     stats_ks2samp([1.0, 2.0, 3.0], [1.0, 2.0, 3.0], RESULT),
-    ResultGet(RESULT, 'statistic', STAT),
+    result_get(RESULT, 'statistic', STAT),
     ABS is ++(abs(float(STAT))),
     ABS < 1e-9)  # nv
 
 # stats_shapiro: returns a dict with statistic and pvalue
 test("shapiro returns dict") <- (
     stats_shapiro([1.0, 2.0, 3.0, 4.0, 5.0], RESULT),
-    ResultGet(RESULT, 'statistic', STAT2_UNUSED),
-    ResultGet(RESULT, 'pvalue', PVAL),
+    result_get(RESULT, 'statistic', STAT2_UNUSED),
+    result_get(RESULT, 'pvalue', PVAL),
     PVAL >= 0.0)  # nv
