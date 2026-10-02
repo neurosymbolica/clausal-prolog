@@ -36,7 +36,7 @@
 The spec requires a workload isolating the NAF and general-ITE drive paths (nothing in `benchmarks/` exercises them today), plus a captured performance and test-failure baseline before anything changes.
 
 **Files:**
-- Create: `tests/fixtures/bench_naf_ite.clausal`
+- Create: `tests/fixtures/bench_naf_ite.seam`
 - Modify: `benchmarks/workloads.py` (add `bench_naf_ite`, register in the `__main__` list)
 
 **Interfaces:**
@@ -44,7 +44,7 @@ The spec requires a workload isolating the NAF and general-ITE drive paths (noth
 
 - [ ] **Step 1: Write the fixture**
 
-Create `tests/fixtures/bench_naf_ite.clausal`:
+Create `tests/fixtures/bench_naf_ite.seam`:
 
 ```
 # Workload fixture for benchmarks/workloads.py::bench_naf_ite.
@@ -104,12 +104,12 @@ def bench_naf_ite(n: int = 300) -> str:
     ITE condition driver in both the trivial one-step and many-step shapes.
 
     Each sub-loop recurses *n* times; every iteration drives one NAF or ITE
-    mini-trampoline.  See tests/fixtures/bench_naf_ite.clausal for the four
+    mini-trampoline.  See tests/fixtures/bench_naf_ite.seam for the four
     shapes.  Expected wall time: 0.2–1.0 s total (tune *n* to land there).
     """
     from clausal.testing import load_clausal_module
 
-    fixture = os.path.join(_FIXTURES, "bench_naf_ite.clausal")
+    fixture = os.path.join(_FIXTURES, "bench_naf_ite.seam")
     mod = load_clausal_module(fixture)
     for name in ("NafFactLoop", "NafChainLoop", "IteDetLoop", "IteMultiLoop"):
         pred = getattr(mod, name)
@@ -161,7 +161,7 @@ Expected: ~1 known pre-existing failure. Whatever the set is, it is now the base
 
 ```bash
 cd /workspace/clausal-bug-fix
-git add tests/fixtures/bench_naf_ite.clausal benchmarks/workloads.py
+git add tests/fixtures/bench_naf_ite.seam benchmarks/workloads.py
 git commit -m "bench: NAF/ITE drive-loop workload (baseline for the drive-loop refactor)"
 ```
 
@@ -174,7 +174,7 @@ Quote the baseline medians in the commit body.
 The bug is already confirmed live (2026-08-26, scratch probe): `If(cond_that_catches(...), then, else)` in trampoline mode lets the `ValueError` escape past the inner `catch/3`, because the ITE arm in `lower_python_trampoline.py` emits its own drive loop with no exception routing. The fix replaces that emitted loop with a call to the runtime's `_drive_until_yield`.
 
 **Files:**
-- Modify: `tests/fixtures/catch_trampolined.clausal` (new predicates + module exports)
+- Modify: `tests/fixtures/catch_trampolined.seam` (new predicates + module exports)
 - Modify: `tests/test_catch_trampolined.py` (four new tests)
 - Modify: `clausal/logic/compiler/lower_python_trampoline.py:99-181` (the `Branch(reified_test=None)` arm's `true_block`)
 - Modify: `clausal/logic/compiler/predicate.py` (import + two `$drive_until_yield` injections, next to the existing `$naf_has_solution` entries at ~line 769 and ~line 1515)
@@ -185,7 +185,7 @@ The bug is already confirmed live (2026-08-26, scratch probe): `If(cond_that_cat
 
 - [ ] **Step 1: Add fixture predicates**
 
-In `tests/fixtures/catch_trampolined.clausal`, append to the `-module(...)` export list:
+In `tests/fixtures/catch_trampolined.seam`, append to the `-module(...)` export list:
 
 ```
     cond_absorbs(R),
@@ -333,7 +333,7 @@ Run `benchmarks/workloads.py` 5× as in Task 1 Step 4; compare `bench_naf_ite` (
 
 ```bash
 cd /workspace/clausal-bug-fix
-git add tests/fixtures/catch_trampolined.clausal tests/test_catch_trampolined.py \
+git add tests/fixtures/catch_trampolined.seam tests/test_catch_trampolined.py \
         clausal/logic/compiler/lower_python_trampoline.py clausal/logic/compiler/predicate.py
 git commit -m "ite: route exceptions in the general-ITE condition driver
 

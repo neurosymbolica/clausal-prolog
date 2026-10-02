@@ -305,7 +305,7 @@ class TestExistingBehaviorUnchanged:
     def test_sudoku_example_loads(self):
         # nv
         from clausal.testing import load_clausal_module, collect_tests, run_test
-        mod = load_clausal_module("clausal/examples/sudoku.clausal")
+        mod = load_clausal_module("clausal/examples/sudoku.seam")
         tests = collect_tests(mod)
         for desc in tests:
             result = run_test(mod, desc)

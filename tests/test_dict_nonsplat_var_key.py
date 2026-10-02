@@ -23,7 +23,7 @@ from clausal.logic.variables import Var, deref
 def _load():
     return _load_module(
         "dict_nonsplat_var_key",
-        os.path.join(os.path.dirname(__file__), "fixtures", "dict_nonsplat_var_key.clausal"),
+        os.path.join(os.path.dirname(__file__), "fixtures", "dict_nonsplat_var_key.seam"),
     )
 
 

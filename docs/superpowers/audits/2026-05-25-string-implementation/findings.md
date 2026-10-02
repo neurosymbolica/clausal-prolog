@@ -723,7 +723,7 @@ The enclosing ``match`` falls through and the caller silently gets zero
 solutions.
 
 The probe drives the existing ``Bracket([*A, X, Y, *B], X, Y, A, B)``
-fixture in ``tests/clausal_modules/list_edge_cases.clausal`` with four
+fixture in ``tests/clausal_modules/list_edge_cases.seam`` with four
 targets — ``"abc"`` (control), ``['a','b','c']`` (control),
 ``SegString(["abc"])`` (ground probe), and ``SegString(["a",VarSeg(X),"c"])``
 (non-ground probe). Both controls yield 2 solutions; both SegString
@@ -2182,7 +2182,7 @@ principle promote.
   case. C9 test ``test_F054_seq_result_input_type_wins`` now codifies
   the option-A symmetry across the 8 predicates in the matrix.
   Lock-in updates: ``tests/test_list_util.py::TestReplicate`` and
-  ``tests/fixtures/list_util.clausal`` (replicate basic / zero) — both
+  ``tests/fixtures/list_util.seam`` (replicate basic / zero) — both
   previously asserted ``[["x","x","x"]]`` / ``[[]]``, updated to
   ``["xxx"]`` / ``[""]`` per F053 + option A.
 - **Location:** `clausal/logic/builtins/lists.py:60-65` (helper) plus
@@ -2989,9 +2989,9 @@ pre-check before dispatch (search ``_helpers._is_ground`` consumers).
   ``tests/test_string_list_builtins.py`` was renamed to
   ``test_is_list_string_now_succeeds`` with the inverted assertion;
   the strings-as-lists doc snippet in
-  ``tests/fixtures/docs/strings_as_lists_examples.clausal`` and the
+  ``tests/fixtures/docs/strings_as_lists_examples.seam`` and the
   type-checking table in ``docs/strings_as_lists.md`` were updated to
-  match. The ISO conformity fixtures (``iso_type_checking.clausal``
+  match. The ISO conformity fixtures (``iso_type_checking.seam``
   and its golden ``.pl``) only test ``is_list`` against lists and
   atom symbols, so they were unaffected by the contract change.
 - **Location:** `clausal/logic/builtins/type_checks.py:106-110`
@@ -3134,7 +3134,7 @@ reject Var, reject compound shapes, succeed.
   ``module_dict`` PredicateMeta entries. Compound, KWTerm,
   term-instance, and ``PredicateMeta`` classes continue to succeed
   unchanged. The conformity test in
-  ``tests/conformity/iso_type_checking.clausal`` (and its golden
+  ``tests/conformity/iso_type_checking.seam`` (and its golden
   ``.pl``) gained a *callable: registered predicate name* case and
   a *callable: arbitrary string fails* counter-case to pin down
   the tightened contract.

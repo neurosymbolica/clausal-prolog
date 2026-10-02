@@ -1,7 +1,7 @@
 """ISO Prolog conformity: type-checking — Python-only cases.
 
 Ground-literal behavior tests have moved to
-``tests/conformity/iso_type_checking.clausal``.
+``tests/conformity/iso_type_checking.seam``.
 
 What stays here:
 

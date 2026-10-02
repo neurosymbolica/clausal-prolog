@@ -117,7 +117,7 @@ as in Phase 1's `min_max_loc` pattern usage.
 ## Worked examples
 
 Each example below is an exact copy of an integration test in
-`tests/fixtures/opencv_phase4_thresh_contours.clausal`.
+`tests/fixtures/opencv_phase4_thresh_contours.seam`.
 
 ### Extract a single rectangle's outline
 

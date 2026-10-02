@@ -209,7 +209,7 @@ For rules with extra arguments, pass them as part of the rule:
 
 DCGs are a general state-passing mechanism — not just for parsing lists of tokens. The hidden difference-list pair can thread any state through `phrase/3`.
 
-A complete working example of all patterns below is in `clausal/examples/dcg_state.clausal`.
+A complete working example of all patterns below is in `clausal/examples/dcg_state.seam`.
 
 ### Core Pattern
 
@@ -293,7 +293,7 @@ valid_sentence(S) <- phrase(sentence, S)
     - **Recursive rules**: `ab` grammar
     - **phrase/2,3**: full parse, partial parse, remainder
     - **State threading**: counter, tree counting, accumulator
-    - **Fixture integration**: `dcg_grammar.clausal` with mixed rules and regular predicates
+    - **Fixture integration**: `dcg_grammar.seam` with mixed rules and regular predicates
 
 ---
 

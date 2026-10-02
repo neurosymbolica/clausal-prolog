@@ -1,6 +1,6 @@
 """Tests for meta-interpreter specialization via partial deduction.
 
-Phase 0: Pattern recognition on the five MIs from metainterpreters.clausal.
+Phase 0: Pattern recognition on the five MIs from metainterpreters.seam.
 Phase 1: Core unfolder — specialize each MI with natnum/graph programs and
          verify identical results to unspecialized versions.
 Phase 3: Object programs with builtins/external goals — residual goal

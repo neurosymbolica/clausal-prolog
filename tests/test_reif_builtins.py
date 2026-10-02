@@ -327,7 +327,7 @@ class TestReifCompiledIntegration:
     def test_eq_from_clausal_file(self):
         """eq/3 called from a .clausal predicate."""
         # nv
-        mod = self._load_fixture("reif_eq_test.clausal")
+        mod = self._load_fixture("reif_eq_test.seam")
         from clausal.logic.solve import query
         from clausal.pythonic_ast.nodes import Call, LoadName
 
@@ -340,7 +340,7 @@ class TestReifCompiledIntegration:
 
     def test_eq_ground_false_from_clausal(self):
         # nv
-        mod = self._load_fixture("reif_eq_test.clausal")
+        mod = self._load_fixture("reif_eq_test.seam")
         from clausal.logic.solve import query
         from clausal.pythonic_ast.nodes import Call, LoadName
 
@@ -353,7 +353,7 @@ class TestReifCompiledIntegration:
 
     def test_eq_undetermined_from_clausal(self):
         # nv
-        mod = self._load_fixture("reif_eq_test.clausal")
+        mod = self._load_fixture("reif_eq_test.seam")
         from clausal.logic.solve import query
         from clausal.pythonic_ast.nodes import Call, LoadName
 
@@ -371,13 +371,13 @@ class TestReifCompiledIntegration:
 
 
 class TestMemberdT:
-    """Test memberd_t/3 from clausal/stdlib/reif.clausal."""
+    """Test memberd_t/3 from clausal/stdlib/reif.seam."""
 
     def _load_stdlib_reif(self):
         from clausal.import_hook import _load_module
         path = os.path.join(
             os.path.dirname(__file__), os.pardir,
-            "clausal", "stdlib", "reif.clausal",
+            "clausal", "stdlib", "reif.seam",
         )
         path = os.path.normpath(path)
         return _load_module("_test_stdlib_reif", path)

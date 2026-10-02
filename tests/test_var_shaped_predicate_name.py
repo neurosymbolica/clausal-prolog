@@ -138,7 +138,7 @@ class TestNotNarrowed:
     """The check is an intersection; neither half alone may reject anything."""
 
     def test_var_shaped_head_never_read_as_a_variable_still_loads(self, tmp_path):
-        """``LP(X, Y, OBJ)`` in tests/fixtures/clpq_examples.clausal is this
+        """``LP(X, Y, OBJ)`` in tests/fixtures/clpq_examples.seam is this
         shape, and so are a couple of dozen inline test snippets."""
         module = _load(tmp_path, "headonly", """
             -module(m, [LP(X, Y, OBJ)])

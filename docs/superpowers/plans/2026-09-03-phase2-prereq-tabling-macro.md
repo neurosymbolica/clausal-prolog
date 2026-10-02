@@ -95,7 +95,7 @@ walker-heavy macro — therefore needs a workload whose TABLED ANSWERS ARE COMPO
 per-answer normalization/copying exercises the walkers (and Phase 0's `_clausal_new` fast path).
 
 Files: `benchmarks/workloads.py` (new `bench_struct_tabling(n, reps)`), a new fixture
-`tests/fixtures/` `.clausal` module (follow tabled_fib.clausal's conventions), measurement
+`tests/fixtures/` `.clausal` module (follow tabled_fib.seam's conventions), measurement
 report only for the A/B part.
 
 1. Design: a tabled predicate whose answers are deep chains of DECLARED compound functors —

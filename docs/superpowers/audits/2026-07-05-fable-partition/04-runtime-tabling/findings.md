@@ -180,7 +180,7 @@ findings); stopped per budget with map covered.
   retract queries *through* the tabled wrapper (mints table entries).
   Database-ops semantics are A09/A11; the table-store side effect is A04's.
 - **`findall([X,Y], Path(X,Y), L)` stale-dispatch note** in
-  `tests/fixtures/tabled_left_rec.clausal` (V2-2/V2-4b interaction) — prior
+  `tests/fixtures/tabled_left_rec.seam` (V2-2/V2-4b interaction) — prior
   art, intersects A03 findall + A04 tabling; not re-probed.
 - **F009 divergence** means `python -m clausal.testing` (solutions-driven)
   and Python-embedding entry points (`solve`/`call`) disagree on error

@@ -361,7 +361,7 @@ test("iso type_error term raises from a guard") <- (
 
 Regression coverage for the propagation-through-`findall` behaviour lives in
 `tests/test_exceptions.py::TestRaisingGuardThroughFindAll` (with the fixture
-`tests/fixtures/raising_guard_lib.clausal`).
+`tests/fixtures/raising_guard_lib.seam`).
 
 ---
 

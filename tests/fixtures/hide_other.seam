@@ -1,0 +1,14 @@
+# P3-1 Task 6 fixture (-hide cross-module isolation, §1a/§1b R1).
+#
+# A DIFFERENT module from `hide_owner.seam` that declares the SAME bare
+# spelling (`hide_secret`) but only via `-private` -- an ordinary global
+# atom (§1b/R2: global by spelling, no per-module identity), NOT hidden.
+# `reaches/1` therefore binds the plain global str `"hide_secret"`, which
+# is a different value from `hide_owner`'s mangled `hide_secret` and does
+# NOT unify with it -- see
+# tests/test_hide_directive.py::test_cross_module_same_spelling_does_not_unify.
+
+-module(hide_other, [reaches/1])
+-private([hide_secret])
+
+reaches(hide_secret),

@@ -180,7 +180,7 @@ class TestEscapes:
 
 class TestFiles:
     def test_file_head_names_from_real_example(self, matchers):
-        path = os.path.join(EXAMPLES_DIR, "graph.clausal")
+        path = os.path.join(EXAMPLES_DIR, "graph.seam")
         names = _all_bindings("file_head_name", chars(path), module=matchers)
         assert mint("path") in names
         assert names.count(mint("edge")) == 7
@@ -204,7 +204,7 @@ class TestSourceWrittenTextArgument:
 
     @pytest.fixture(scope="class")
     def literal_matchers(self, tmp_path_factory):
-        example = os.path.join(EXAMPLES_DIR, "graph.clausal")
+        example = os.path.join(EXAMPLES_DIR, "graph.seam")
         source = f'''\
 -double_quotes(atom)
 -import_from(reflection, [

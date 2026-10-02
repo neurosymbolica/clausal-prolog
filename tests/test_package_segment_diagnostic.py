@@ -87,7 +87,7 @@ def two_dirs_on_path(tmp_path):
 
 
 def _pkg(root, *segments, exports="aid/1"):
-    """A package directory ``root/seg/…`` carrying an ``__init__.clausal``."""
+    """A package directory ``root/seg/…`` carrying an ``__init__.seam``."""
     d = root
     for seg in segments:
         d = d / seg

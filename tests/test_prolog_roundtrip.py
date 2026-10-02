@@ -290,22 +290,22 @@ class TestClauseOrder:
 
 
 _CLAUSAL_FIXTURES = [
-    FIXTURES / "edge_graph.clausal",
-    FIXTURES / "fibonacci.clausal",
+    FIXTURES / "edge_graph.seam",
+    FIXTURES / "fibonacci.seam",
     # dcg_grammar excluded: DCG `>>` → `-->` → `>>` roundtrip produces
     # Prolog syntax that the clausal parser can't re-parse (commas in DCG
     # pushback lists, etc.)  Tested separately via one-leg tests.
-    FIXTURES / "meta_test.clausal",
-    FIXTURES / "clpfd_queens.clausal",
+    FIXTURES / "meta_test.seam",
+    FIXTURES / "clpfd_queens.seam",
 ]
 
 _CONFORMITY_FIXTURES = [
-    CONFORMITY / "iso_arithmetic.clausal",
-    CONFORMITY / "iso_control.clausal",
-    CONFORMITY / "iso_list_operations.clausal",
-    CONFORMITY / "iso_term_manipulation.clausal",
-    CONFORMITY / "iso_type_checking.clausal",
-    CONFORMITY / "iso_unification.clausal",
+    CONFORMITY / "iso_arithmetic.seam",
+    CONFORMITY / "iso_control.seam",
+    CONFORMITY / "iso_list_operations.seam",
+    CONFORMITY / "iso_term_manipulation.seam",
+    CONFORMITY / "iso_type_checking.seam",
+    CONFORMITY / "iso_unification.seam",
 ]
 
 _ALL_CLAUSAL = [p for p in _CLAUSAL_FIXTURES + _CONFORMITY_FIXTURES if p.exists()]
@@ -442,7 +442,7 @@ class TestCLIRoundtrip:
         # nv
         from clausal.tools.translate import main
         outfile = tmp_path / "out.pl"
-        code = main([str(FIXTURES / "edge_graph.clausal"), "-o", str(outfile)])
+        code = main([str(FIXTURES / "edge_graph.seam"), "-o", str(outfile)])
         assert code == 0
         content = outfile.read_text()
         assert "edge" in content
@@ -462,7 +462,7 @@ class TestCLIRoundtrip:
         # nv
         from clausal.tools.translate import main
         outfile = tmp_path / "out.pl"
-        code = main([str(FIXTURES / "edge_graph.clausal"),
+        code = main([str(FIXTURES / "edge_graph.seam"),
                       "--to", "swi", "-o", str(outfile)])
         assert code == 0
         content = outfile.read_text()
@@ -507,21 +507,22 @@ class TestDirectivePreservation:
 
 
 class TestSeamAliasDirection:
-    """A ``.seam`` input is the clausal → Prolog direction, like ``.clausal``."""
+    """A ``.seam`` input is the seam → Prolog direction.  Since the
+    extension flip ``.clausal`` is Clausal Prolog, read like ``.pl``."""
 
     def test_detect_direction_seam(self):
         # nv
         from clausal.tools.translate import _detect_direction
         assert _detect_direction("x.seam", None) == "clausal_to_prolog"
         assert _detect_direction("x.SEAM", None) == "clausal_to_prolog"
-        assert _detect_direction("x.clausal", None) == "clausal_to_prolog"
+        assert _detect_direction("x.clausal", None) == "prolog_to_clausal"
         assert _detect_direction("x.pl", None) == "prolog_to_clausal"
 
     def test_translate_seam_to_prolog_autodetect(self, tmp_path):
         # nv
         from clausal.tools.translate import main
         src = tmp_path / "edge_graph.seam"
-        src.write_text(seam_path(FIXTURES / "edge_graph.clausal").read_text())
+        src.write_text(seam_path(FIXTURES / "edge_graph.seam").read_text())
         outfile = tmp_path / "out.pl"
         code = main([str(src), "-o", str(outfile)])
         assert code == 0

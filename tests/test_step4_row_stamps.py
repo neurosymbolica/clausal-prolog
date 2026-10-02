@@ -62,7 +62,7 @@ def _write_module(tmp_path, name: str, source: str):
 def test_a_predicate_whose_name_is_bound_to_an_atom_is_owned_by_its_load():
     """The post-flip shape, available today: the name is not a class."""
     module = _load_module("tests.fixtures.t5b_local_pred",
-                          os.path.join(FIXTURES, "t5b_local_pred.clausal"))
+                          os.path.join(FIXTURES, "t5b_local_pred.seam"))
     lm = module.__dict__["$module"]
     assert not isinstance(module.__dict__.get("t5b_slot"), type), (
         "the fixture no longer exercises a non-class binding")
@@ -221,7 +221,7 @@ def test_a_name_bound_to_an_imported_atom_still_gets_its_signature(
     classes) with a same-named local predicate; before the ruling they got no
     signature at all."""
     module = _load_module("tests.fixtures.t5b_local_pred",
-                          os.path.join(FIXTURES, "t5b_local_pred.clausal"))
+                          os.path.join(FIXTURES, "t5b_local_pred.seam"))
     assert not isinstance(module.__dict__.get("t5b_slot"), type)
     lm = module.__dict__["$module"]
     assert lm.db.row("t5b_slot", 2).signature == ("arg_0", "arg_1")

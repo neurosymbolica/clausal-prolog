@@ -253,13 +253,17 @@ def test_a_seam_module_still_imports_a_pl_module(flip, tree):
     assert _q(tree.load("sey_imp")) == [6]
 
 
-def test_before_the_flip_nothing_is_refused(tree):
-    """Inert today: no file is on the Clausal Prolog surface, so a
-    ``.clausal`` (seam) and a ``.pl`` importer of a ``.pl`` both load."""
-    assert _suffixes.CLAUSAL_PROLOG_SUFFIXES == ()
+def test_the_flip_is_in_effect_without_patching(tree):
+    """No fixture patches the tuples: since the extension flip a real
+    ``.clausal`` importer of a ``.pl`` is refused, and a ``.seam`` and a
+    ``.pl`` importer of the same ``.pl`` still load."""
+    assert _suffixes.CLAUSAL_PROLOG_SUFFIXES == (".clausal",)
+    assert _suffixes.CLAUSAL_SUFFIXES == (".seam",)
     tree.write("pre_pl.pl", _PL_LIB.format(m="pre_pl", v=7))
     tree.importer("pre_plimp", "use_module(pre_pl, [p/1])", suffix=".pl")
-    tree.write("pre_seamimp.clausal",
+    tree.write("pre_seamimp.seam",
                "-import_from(pre_pl, [p])\nq(X) <- p(X),\n")
+    tree.importer("pre_cpimp", "use_module(pre_pl, [p/1])")
     assert _q(tree.load("pre_plimp")) == [7]
     assert _q(tree.load("pre_seamimp")) == [7]
+    assert REFUSAL.format(m="pre_pl") in _refused(tree, "pre_cpimp")

@@ -49,7 +49,7 @@ class Scryer:
     {'X': 'bob'}
 
     >>> s = Scryer()
-    >>> s.consult_file("clausal/examples/graph.clausal")
+    >>> s.consult_file("clausal/examples/graph.seam")
     >>> s.query_all("reachable(1, X).")
     [{'X': 2}, {'X': 3}, {'X': 4}, {'X': 5}, {'X': 6}]
     """

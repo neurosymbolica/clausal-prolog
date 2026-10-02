@@ -181,7 +181,7 @@ def loaded_hide_owner():
     from clausal.import_hook import _load_module
 
     fixture = os.path.join(
-        os.path.dirname(__file__), "fixtures", "hide_owner.clausal")
+        os.path.dirname(__file__), "fixtures", "hide_owner.seam")
     return _load_module("hide_owner", fixture)
 
 

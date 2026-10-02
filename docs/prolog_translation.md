@@ -505,7 +505,7 @@ The translation pipeline feeds directly into the [Scryer Prolog embedding](scrye
 from clausal.scryer import Scryer
 
 with Scryer() as s:
-    s.consult_file("clausal/examples/fibonacci.clausal")
+    s.consult_file("clausal/examples/fibonacci.seam")
     s.query_one("fib(10, R).")
     # {'R': 55}
 ```

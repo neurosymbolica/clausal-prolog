@@ -284,4 +284,4 @@ class TestCallN:
 
 
 # ── .clausal integration ────────────────────────────────────────────────────
-# TestClausalImport removed: behavior moved to tests/fixtures/meta_test.clausal.
+# TestClausalImport removed: behavior moved to tests/fixtures/meta_test.seam.

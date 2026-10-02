@@ -126,7 +126,7 @@ class TestDirectiveMintedPlaceholderMismatch:
         class; both were the idiom.)"""
         schema = _load_module(
             "tests.fixtures.fnmismatch_schema",
-            os.path.join(FIXTURES, "fnmismatch_schema.clausal"),
+            os.path.join(FIXTURES, "fnmismatch_schema.seam"),
         )
         # W4b-2d: the exporter's field names are read off its Database row
         # (the placeholder CLASS is gone -- the binding is a handle).
@@ -138,7 +138,7 @@ class TestDirectiveMintedPlaceholderMismatch:
         with pytest.raises(SyntaxError) as exc_info:
             _load_module(
                 "tests.fixtures.fnmismatch_use",
-                os.path.join(FIXTURES, "fnmismatch_use.clausal"),
+                os.path.join(FIXTURES, "fnmismatch_use.seam"),
             )
         assert not isinstance(exc_info.value, ClausalTermConstructionError)
         assert "only declares fnm_verdict/2" in " ".join(
@@ -172,13 +172,13 @@ class TestAtomShadowsPredicate:
     def test_loading_the_pair_raises_a_plain_type_error(self):
         _load_module(
             "tests.fixtures.atomshadow_schema",
-            os.path.join(FIXTURES, "atomshadow_schema.clausal"),
+            os.path.join(FIXTURES, "atomshadow_schema.seam"),
         )
         # Stage 2: the atom binding is the plain str.
         with pytest.raises(TypeError, match="'str' object is not callable"):
             _load_module(
                 "tests.fixtures.atomshadow_use",
-                os.path.join(FIXTURES, "atomshadow_use.clausal"),
+                os.path.join(FIXTURES, "atomshadow_use.seam"),
             )
 
     def test_atom_cause_is_detected_at_unit_level_too(self):

@@ -39,18 +39,18 @@ def _load_fixture(filename: str, mod_name: str | None = None) -> object:
 
 
 class TestBaseModule:
-    """Verify the importable_utils.clausal base fixture works standalone."""
+    """Verify the importable_utils.seam base fixture works standalone."""
 
     def test_base_module_has_predicates(self):
         # nv
-        mod = _load_fixture("importable_utils.clausal",
+        mod = _load_fixture("importable_utils.seam",
                             "tests.fixtures.importable_utils")
         assert hasattr(mod, "double")
         assert hasattr(mod, "helper")
 
     def test_base_double_ground(self):
         # nv
-        mod = _load_fixture("importable_utils.clausal",
+        mod = _load_fixture("importable_utils.seam",
                             "tests.fixtures.importable_utils")
         logic_mod = mod.__dict__["$module"]
         results = list(call("double", 2, 4, module=logic_mod))
@@ -58,7 +58,7 @@ class TestBaseModule:
 
     def test_base_helper_calls_double(self):
         # nv
-        mod = _load_fixture("importable_utils.clausal",
+        mod = _load_fixture("importable_utils.seam",
                             "tests.fixtures.importable_utils")
         logic_mod = mod.__dict__["$module"]
         results = list(call("helper", 3, 6, module=logic_mod))
@@ -66,7 +66,7 @@ class TestBaseModule:
 
     def test_base_double_with_var(self):
         # nv
-        mod = _load_fixture("importable_utils.clausal",
+        mod = _load_fixture("importable_utils.seam",
                             "tests.fixtures.importable_utils")
         logic_mod = mod.__dict__["$module"]
         y = Var()
@@ -82,7 +82,7 @@ class TestImportFrom:
 
     def test_imported_predicates_in_namespace(self):
         # nv
-        mod = _load_fixture("imports_from.clausal",
+        mod = _load_fixture("imports_from.seam",
                             "tests.fixtures.imports_from")
         assert hasattr(mod, "helper")
         assert hasattr(mod, "double")
@@ -91,7 +91,7 @@ class TestImportFrom:
 
     def test_use_helper_ground(self):
         # nv
-        mod = _load_fixture("imports_from.clausal",
+        mod = _load_fixture("imports_from.seam",
                             "tests.fixtures.imports_from")
         logic_mod = mod.__dict__["$module"]
         results = list(call("use_helper", 2, 4, module=logic_mod))
@@ -99,7 +99,7 @@ class TestImportFrom:
 
     def test_use_double_ground(self):
         # nv
-        mod = _load_fixture("imports_from.clausal",
+        mod = _load_fixture("imports_from.seam",
                             "tests.fixtures.imports_from")
         logic_mod = mod.__dict__["$module"]
         results = list(call("use_double", 3, 6, module=logic_mod))
@@ -107,7 +107,7 @@ class TestImportFrom:
 
     def test_use_helper_failure(self):
         # nv
-        mod = _load_fixture("imports_from.clausal",
+        mod = _load_fixture("imports_from.seam",
                             "tests.fixtures.imports_from")
         logic_mod = mod.__dict__["$module"]
         results = list(call("use_helper", 2, 999, module=logic_mod))
@@ -115,7 +115,7 @@ class TestImportFrom:
 
     def test_use_helper_with_var(self):
         # nv
-        mod = _load_fixture("imports_from.clausal",
+        mod = _load_fixture("imports_from.seam",
                             "tests.fixtures.imports_from")
         logic_mod = mod.__dict__["$module"]
         y = Var()
@@ -125,7 +125,7 @@ class TestImportFrom:
     def test_imported_predicate_directly_callable(self):
         """The imported helper predicate can be called directly too."""
         # nv
-        mod = _load_fixture("imports_from.clausal",
+        mod = _load_fixture("imports_from.seam",
                             "tests.fixtures.imports_from")
         logic_mod = mod.__dict__["$module"]
         results = list(call("helper", 2, 4, module=logic_mod))
@@ -134,7 +134,7 @@ class TestImportFrom:
     def test_multiple_solutions(self):
         """Imported predicate yields all solutions from the source module."""
         # nv
-        mod = _load_fixture("imports_from.clausal",
+        mod = _load_fixture("imports_from.seam",
                             "tests.fixtures.imports_from")
         logic_mod = mod.__dict__["$module"]
         y = Var()
@@ -153,14 +153,14 @@ class TestImportAlias:
 
     def test_alias_in_namespace(self):
         # nv
-        mod = _load_fixture("imports_alias.clausal",
+        mod = _load_fixture("imports_alias.seam",
                             "tests.fixtures.imports_alias")
         assert hasattr(mod, "hlp")
         assert hasattr(mod, "use_alias")
 
     def test_use_alias_ground(self):
         # nv
-        mod = _load_fixture("imports_alias.clausal",
+        mod = _load_fixture("imports_alias.seam",
                             "tests.fixtures.imports_alias")
         logic_mod = mod.__dict__["$module"]
         results = list(call("use_alias", 2, 4, module=logic_mod))
@@ -168,7 +168,7 @@ class TestImportAlias:
 
     def test_use_alias_with_var(self):
         # nv
-        mod = _load_fixture("imports_alias.clausal",
+        mod = _load_fixture("imports_alias.seam",
                             "tests.fixtures.imports_alias")
         logic_mod = mod.__dict__["$module"]
         y = Var()
@@ -204,7 +204,7 @@ class TestQualifiedCalls:
         from clausal.logic.database import Clause
 
         # Create a mock module with a predicate class
-        mod = _load_fixture("importable_utils.clausal",
+        mod = _load_fixture("importable_utils.seam",
                             "tests.fixtures.importable_utils")
         helper_cls = mod.helper
 
@@ -234,7 +234,7 @@ class TestQualifiedCalls:
 
     def test_dotted_name_dispatch(self):
         """Compiled code can dispatch via dotted globals key."""
-        mod = _load_fixture("importable_utils.clausal",
+        mod = _load_fixture("importable_utils.seam",
                             "tests.fixtures.importable_utils")
         from clausal.logic.atoms import is_mangled
         from clausal.logic.predicate import _dispatch_at
@@ -252,9 +252,9 @@ class TestQualifiedCalls:
         assert dispatch is mod.__dict__["$module"].db.get_dispatch("helper", 2)
 
     def test_import_module_fixture_loads(self):
-        """imports_module.clausal loads and use_imported works."""
+        """imports_module.seam loads and use_imported works."""
         # nv
-        mod = _load_fixture("imports_module.clausal",
+        mod = _load_fixture("imports_module.seam",
                             "tests.fixtures.imports_module")
         assert hasattr(mod, "use_imported")
         logic_mod = mod.__dict__["$module"]
@@ -263,7 +263,7 @@ class TestQualifiedCalls:
 
     def test_import_module_fixture_with_var(self):
         # nv
-        mod = _load_fixture("imports_module.clausal",
+        mod = _load_fixture("imports_module.seam",
                             "tests.fixtures.imports_module")
         logic_mod = mod.__dict__["$module"]
         y = Var()
@@ -286,8 +286,8 @@ class TestQualifiedValueAtoms:
 
     def test_qualified_atom_in_term_position_unifies_with_imported_bare(self):
         # nv
-        _load_fixture("qualified_atom_vocab.clausal", "qualified_atom_vocab")
-        mod = _load_fixture("qualified_atom_consumer.clausal",
+        _load_fixture("qualified_atom_vocab.seam", "qualified_atom_vocab")
+        mod = _load_fixture("qualified_atom_consumer.seam",
                             "qualified_atom_consumer")
         logic_mod = mod.__dict__["$module"]
 
@@ -310,8 +310,8 @@ class TestQualifiedValueAtoms:
 
     def test_qualified_atom_in_head_position_constructs_real_atom(self):
         # nv
-        _load_fixture("qualified_atom_vocab.clausal", "qualified_atom_vocab")
-        mod = _load_fixture("qualified_atom_consumer.clausal",
+        _load_fixture("qualified_atom_vocab.seam", "qualified_atom_vocab")
+        mod = _load_fixture("qualified_atom_consumer.seam",
                             "qualified_atom_consumer")
         logic_mod = mod.__dict__["$module"]
 
@@ -330,9 +330,9 @@ class TestQualifiedValueAtoms:
         would raise ``NameError`` for the cross-module atom.
         """
         # nv
-        vocab = _load_fixture("qualified_atom_vocab.clausal",
+        vocab = _load_fixture("qualified_atom_vocab.seam",
                               "qualified_atom_vocab")
-        mod = _load_fixture("qualified_atom_import_module_only.clausal",
+        mod = _load_fixture("qualified_atom_import_module_only.seam",
                             "qualified_atom_import_module_only")
         euro = vocab.euro  # foreign atom; its bare name is not in mod's globals
         results = list(solve(("known_currency", euro), mod))
@@ -347,7 +347,7 @@ class TestPythonImport:
 
     def test_python_import_existing_fixture(self):
         # nv
-        mod = _load_fixture("edge_graph.clausal", "tests.fixtures.edge_graph")
+        mod = _load_fixture("edge_graph.seam", "tests.fixtures.edge_graph")
         logic_mod = mod.__dict__["$module"]
         results = list(call("edge", 1, 2, module=logic_mod))
         assert len(results) == 1
@@ -379,7 +379,7 @@ class TestImportErrors:
                                          delete=False) as f:
             f.write(src)
             f.flush()
-            _load_fixture("importable_utils.clausal",
+            _load_fixture("importable_utils.seam",
                           "tests.fixtures.importable_utils")
             with pytest.raises((ImportError, AttributeError)):
                 _load_module("_test_bad_pred_import", f.name)
@@ -558,7 +558,7 @@ class TestDottedRemap:
     def test_import_from_uses_dotted_key(self):
         """Imported predicates are stored under dotted key in compiled globals."""
         # nv
-        mod = _load_fixture("imports_from.clausal",
+        mod = _load_fixture("imports_from.seam",
                             "tests.fixtures.imports_from")
         logic_mod = mod.__dict__["$module"]
         # The compiled dispatch should resolve the predicate under a
@@ -569,7 +569,7 @@ class TestDottedRemap:
     def test_alias_import_uses_dotted_key(self):
         """Aliased imports also use dotted key with original name."""
         # nv
-        mod = _load_fixture("imports_alias.clausal",
+        mod = _load_fixture("imports_alias.seam",
                             "tests.fixtures.imports_alias")
         logic_mod = mod.__dict__["$module"]
         results = list(call("use_alias", 3, 6, module=logic_mod))

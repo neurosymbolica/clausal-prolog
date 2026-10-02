@@ -66,7 +66,7 @@ def _copy_term_py(term: Any, var_map: dict, attvars: list | None = None) -> Any:
         # representation difference: a meta-interpreter's
         # ``copy_term(CLAUSE, [HEAD, BODY])`` then binds the PROGRAM's
         # variables on the first resolution step and every later step
-        # mismatches (``clausal/examples/metainterpreters.clausal``).
+        # mismatches (``clausal/examples/metainterpreters.seam``).
         #
         # ``type(...) is tuple``, not ``isinstance``: a namedtuple or other
         # tuple subclass would lose its type through ``tuple(...)``, and

@@ -1,8 +1,0 @@
-# Fixture for tests/test_imported_atom_head_index.py (two-hop package
-# re-export shape -- diagnosis's mini/pkg/schema.clausal, item 2 of the
-# diagnosis's own "Regression tests to pin it" list, §9).
-#
-# Declares the atoms; re-exported by the sibling atom_index_pkg/__init__.clausal
-# one hop up, so an importer of the PACKAGE (not this submodule directly)
-# reaches these atoms through two import hops.
--module(schema, [aa, bb, cc, dd])

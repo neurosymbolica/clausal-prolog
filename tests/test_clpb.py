@@ -1034,7 +1034,7 @@ class TestClpbFixture:
         import os
         from clausal.import_hook import _load_module
         fixture_path = os.path.join(
-            os.path.dirname(__file__), "fixtures", "clpb_circuit.clausal"
+            os.path.dirname(__file__), "fixtures", "clpb_circuit.seam"
         )
         self.mod = _load_module("clpb_circuit", fixture_path)
         self.logic_mod = self.mod.__dict__["$module"]

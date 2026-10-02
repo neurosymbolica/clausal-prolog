@@ -210,7 +210,7 @@ class TestScryerExamples:
         # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
-            s.consult_file(str(self.EXAMPLES / "fibonacci.clausal"))
+            s.consult_file(str(self.EXAMPLES / "fibonacci.seam"))
             sol = s.query_one("fib(10, R).")
             assert sol is not None
             assert sol["R"] == 55
@@ -219,9 +219,9 @@ class TestScryerExamples:
         # nv
         from clausal.scryer import Scryer
         with Scryer() as s:
-            # graph.clausal uses member/2 which needs library(lists) in Scryer
+            # graph.seam uses member/2 which needs library(lists) in Scryer
             s.consult_string(":- use_module(library(lists)).")
-            s.consult_file(str(self.EXAMPLES / "graph.clausal"))
+            s.consult_file(str(self.EXAMPLES / "graph.seam"))
             assert s.query_bool("reachable(1, 6).")
             assert not s.query_bool("reachable(5, 1).")
 

@@ -24,7 +24,7 @@ def test_non_clausal_file_errors(capsys, tmp_path):
     p.write_text("hello")
     rc = main([str(p)])
     assert rc == 2
-    assert "not a .clausal, .seam or .pl file" in capsys.readouterr().err
+    assert "not a .seam, .clausal or .pl file" in capsys.readouterr().err
 
 
 def test_testless_file_is_distinct_not_passed(capsys, tmp_path):
@@ -140,10 +140,10 @@ def test_uppercase_file_is_a_load_failure_for_the_runner(tmp_path):
 
 
 def test_witness_fixture_on_the_old_spelling_does_not_load():
-    """The checked-in witness (tests/fixtures/titlecase_test_spelling_witness.clausal)."""
+    """The checked-in witness (tests/fixtures/titlecase_test_spelling_witness.seam)."""
     # nv
     from pathlib import Path
-    p = Path(__file__).parent / "fixtures" / "titlecase_test_spelling_witness.clausal"
+    p = Path(__file__).parent / "fixtures" / "titlecase_test_spelling_witness.seam"
     with pytest.raises(SyntaxError) as ei:
         load_clausal_module(p)
     assert "Rename `Test` -> `test`" in str(ei.value)

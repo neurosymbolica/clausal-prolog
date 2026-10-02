@@ -71,7 +71,7 @@ def test_exit_codes_are_distinct():
 def test_empty_dir_exits_no_tests(capsys, tmp_path):
     rc, out, _ = _run(capsys, [str(tmp_path)])
     assert rc == EXIT_NO_TESTS
-    assert "no test files (.clausal, .seam or .pl) found" in out
+    assert "no test files (.seam, .clausal or .pl) found" in out
     assert "NO TESTS" in out and "--allow-empty" in out
     assert "PASSED" not in out
 
@@ -245,7 +245,7 @@ def test_unsupported_file_argument_is_a_usage_error(capsys, tmp_path):
     p.write_text("x")
     rc, _, err = _run(capsys, [str(p)])
     assert rc == EXIT_USAGE
-    assert "not a .clausal, .seam or .pl file" in err
+    assert "not a .seam, .clausal or .pl file" in err
 
 
 # ── D10: the pytest plugin collects .pl ──────────────────────────────────────

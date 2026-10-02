@@ -121,7 +121,7 @@ class TestBakeInReadsTheRow:
         UNLOCKED row — so ``invalidate()`` on an unlocked row can never
         orphan a baked reference."""
         mod = _load_module(
-            "_t4_bakein_fixture", os.path.join(FIXTURES, "family.clausal"))
+            "_t4_bakein_fixture", os.path.join(FIXTURES, "family.seam"))
         db = mod.__dict__["$module"].db
         unlocked = []
         for functor, arity in list(db._clauses):
@@ -147,7 +147,7 @@ class TestBakeInReadsTheRow:
         """Behaviour, not plumbing: bake-in sits on the call path, so a
         module whose predicates call each other must still answer."""
         mod = _load_module(
-            "_t4_bakein_answers", os.path.join(FIXTURES, "family.clausal"))
+            "_t4_bakein_answers", os.path.join(FIXTURES, "family.seam"))
         who = Var()
         got = sorted(deref(who) for _ in call(mod.ancestor, mint("tom"), who))
         assert got == [mint("ann"), mint("bob"), mint("liz"), mint("pat")]
@@ -257,7 +257,7 @@ class TestBackendSeam:
             self, clean_backend_seam):
         """End-to-end: with the seam wired but choosing ``python``, a module
         loads and answers exactly as it does with no chooser at all."""
-        path = os.path.join(FIXTURES, "family.clausal")
+        path = os.path.join(FIXTURES, "family.seam")
         baseline = _load_module("_t4_seam_baseline", path)
         Database.set_backend_chooser(lambda row: "python")
         with_seam = _load_module("_t4_seam_python", path)

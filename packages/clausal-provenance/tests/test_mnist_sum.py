@@ -44,7 +44,7 @@ def mnist_sum_program():
     """Load the .clausal fixture once for the test module."""
     import os
     here = os.path.dirname(__file__)
-    path = os.path.join(here, "fixtures", "mnist_sum.clausal")
+    path = os.path.join(here, "fixtures", "mnist_sum.seam")
     mod = load_clausal_module(path)
     cm = mod.__dict__["$module"]
     return mod.digit, mod.SumDigits, cm

@@ -22,7 +22,7 @@ import os
 @pytest.fixture(scope="module")
 def edge_mod():
     fixture = os.path.join(
-        os.path.dirname(__file__), "clausal_modules", "list_edge_cases.clausal"
+        os.path.dirname(__file__), "clausal_modules", "list_edge_cases.seam"
     )
     return _load_module("lec_head_str", fixture).__dict__["$module"]
 
@@ -30,7 +30,7 @@ def edge_mod():
 @pytest.fixture(scope="module")
 def lists_mod():
     fixture = os.path.join(
-        os.path.dirname(__file__), "clausal_modules", "lists.clausal"
+        os.path.dirname(__file__), "clausal_modules", "lists.seam"
     )
     return _load_module("lists_head_str", fixture).__dict__["$module"]
 

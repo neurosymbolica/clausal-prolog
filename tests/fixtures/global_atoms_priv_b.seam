@@ -1,0 +1,5 @@
+# Phase 2 fixture: independent -private declaration of the atom
+# global_atoms_priv_a.seam also declares -private (its companion).
+-private([phase2priv_orange])
+
+color_priv_b(phase2priv_orange),

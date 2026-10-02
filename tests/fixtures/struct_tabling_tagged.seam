@@ -1,0 +1,26 @@
+# Parity fixture (cell half) for the Phase 2 bridge's now-removed
+# ``-tagged_terms`` experiment -- originally the Task 3 parity corpus.
+#
+# Identical to struct_tabling.seam (recursion + compound answers, the
+# fixture Task 4's interning measurement depends on) apart from the module
+# name -- P3-2 made cells the unconditional compiled representation, so
+# both halves compile the same way now, kept as an old-vs-new regression
+# anchor.  cons/2 is a declared data functor with no clauses, so every
+# ``cons(N, T)`` construction/match lowers to the cell literal
+# ``('cons', n, t)``; the atom ``nil`` is an interned str (P3-1's atom
+# pivot), same as in every other module.
+#
+# Self-contained: every functor it constructs or matches is declared here.
+-module(struct_tabling_tagged, [
+    cons(H, T),
+    nil,
+    nats(N, L),
+])
+-table(nats/2)
+
+nats(0, nil),
+nats(N, cons(N, T)) <- (
+    N > 0,
+    N1 == N - 1,
+    nats(N1, T)
+)

@@ -5,42 +5,40 @@ file by its extension consults these tuples (or ``end_module.surface_of``)
 rather than spelling a suffix itself:
 
 * ``CLAUSAL_SUFFIXES`` -- SEAM source (Python syntax), loaded by
-  ``clausal.import_hook.PredicateLoader``.  Today ``.clausal`` and ``.seam``
-  both name it; ``.seam`` (``SEAM_SUFFIX``) is its own spelling and the one
-  messages name.
+  ``clausal.import_hook.PredicateLoader``: ``.seam`` (``SEAM_SUFFIX``).
 * ``CLAUSAL_PROLOG_SUFFIXES`` -- the Clausal Prolog surface (cut-free,
-  ISO-like), always loaded by the native front end.  Empty today.
+  ISO-like), always loaded by the native front end: ``.clausal``.
 
-``.pl`` is ISO Prolog source.  The extension flip is an edit of the two
-tuples alone: ``CLAUSAL_SUFFIXES = (".seam",)`` and
-``CLAUSAL_PROLOG_SUFFIXES = (".clausal",)``.
+``.pl`` is ISO Prolog source.  Until the extension flip ``.clausal`` was a
+seam alias of ``.seam``; the flip moved it from ``CLAUSAL_SUFFIXES`` to
+``CLAUSAL_PROLOG_SUFFIXES`` and renamed every seam file to ``.seam``.
 
 This module has no imports on purpose: the lazy stub finder, the diagnostics
 and the tools all need these names before ``clausal.import_hook`` is loaded.
 """
 
-#: Extensions of a SEAM source file, in finder priority order (today the
-#: order decides between ``name.clausal`` and ``name.seam`` in one
-#: directory; after the extension flip there is one seam suffix and no tie).
-CLAUSAL_SUFFIXES: tuple[str, ...] = (".clausal", ".seam")
+#: Extensions of a SEAM source file, in finder priority order (one since
+#: the extension flip, so there is no same-directory tie to break).
+CLAUSAL_SUFFIXES: tuple[str, ...] = (".seam",)
 
-#: The SEAM's own extension: correct before and after the extension flip,
-#: so a message telling a reader where to put seam code names this one.
+#: The SEAM's own extension: the one a message telling a reader where to
+#: put seam code names.
 SEAM_SUFFIX: str = ".seam"
 
 #: Extension of a Prolog source file the import hook translates on load.
 PROLOG_SUFFIX: str = ".pl"
 
 #: Extensions of a CLAUSAL PROLOG source file (the cut-free ISO surface).
-#: Empty today: that surface has no extension of its own until the
-#: extension flip, when ``.clausal`` moves here from ``CLAUSAL_SUFFIXES``.
 #: ``clausal.end_module.surface_of`` reads it, so a file here gets the
-#: Clausal Prolog defaults (end_module required) with no further change.
-CLAUSAL_PROLOG_SUFFIXES: tuple[str, ...] = ()
+#: Clausal Prolog defaults (end_module required, cut refused, native
+#: front end).
+CLAUSAL_PROLOG_SUFFIXES: tuple[str, ...] = (".clausal",)
 
-#: Every extension the import hook loads as a predicate module.
-SOURCE_SUFFIXES: tuple[str, ...] = (*CLAUSAL_SUFFIXES, PROLOG_SUFFIX,
-                                    *CLAUSAL_PROLOG_SUFFIXES)
+#: Every extension the import hook loads as a predicate module, in the
+#: finder's order: the seam group, then the Prolog group (Clausal Prolog
+#: before ``.pl``).
+SOURCE_SUFFIXES: tuple[str, ...] = (*CLAUSAL_SUFFIXES,
+                                    *CLAUSAL_PROLOG_SUFFIXES, PROLOG_SUFFIX)
 
 
 def prolog_suffixes() -> tuple[str, ...]:

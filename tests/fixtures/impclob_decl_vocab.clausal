@@ -1,7 +1,0 @@
-# Declaration-only vocabulary: impclob_verdict/2 is exported but never
-# defined here.  Supplying its clauses downstream (the "vocabulary-implements"
-# idiom) was DROPPED by operator ruling 2026-09-24: an importer that writes
-# clauses for it is refused at load (impclob_implements_vocab.clausal).  The
-# definition lives in impclob_implements.clausal, and users import it from
-# there.
--module(impclob_decl_vocab, [impclob_verdict/2])

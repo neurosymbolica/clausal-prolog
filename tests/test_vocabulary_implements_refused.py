@@ -648,7 +648,7 @@ def test_the_self_import_exemption_is_keyed_on_the_source_path(owners):
     from clausal.logic.predicate import module_source_path
     module, functor = owners[_VOCAB]
     path = module_source_path(module)
-    assert path and path.endswith("impclob_decl_vocab.clausal")
+    assert path and path.endswith("impclob_decl_vocab.seam")
     for era, binding in _eras(module, functor, _VOCAB).items():
         origins = _import_from_origins(
             [ImportFromDirective(module=_VOCAB, names=[functor])],

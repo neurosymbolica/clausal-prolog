@@ -1,6 +1,6 @@
 """Execute the bytes-as-lists doc-example fixture.
 
-The fixture ``tests/fixtures/docs/bytes_as_lists_examples.clausal`` claims in
+The fixture ``tests/fixtures/docs/bytes_as_lists_examples.seam`` claims in
 its header that "every test/1 clause here is executed by the test suite, so the
 examples in the documentation are guaranteed to stay correct." The doc-snippet
 coverage checker only verifies the file *exists* and *contains* Test clauses —
@@ -14,7 +14,7 @@ from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 
 _FIXTURE = (
-    Path(__file__).resolve().parent / "fixtures" / "docs" / "bytes_as_lists_examples.clausal"
+    Path(__file__).resolve().parent / "fixtures" / "docs" / "bytes_as_lists_examples.seam"
 )
 
 

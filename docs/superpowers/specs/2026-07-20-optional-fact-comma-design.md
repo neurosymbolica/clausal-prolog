@@ -24,8 +24,8 @@ distinct failure modes, both present in the live test corpus:
 | 3. Undeclared functor | `p(_ATOM, 1)` (no `-module`) | Functor `p` unbound → misleading `name 'p' is not defined`. |
 
 Case 1 is worse than the filed bug: **no signal at all**. It was found in ≥9
-fixture files (e.g. `tutorial_parallel_clausal_sig_tests.clausal`,
-`indexing_sig_tests.clausal`, `thread_safe_predicates.clausal`, and six
+fixture files (e.g. `tutorial_parallel_clausal_sig_tests.seam`,
+`indexing_sig_tests.seam`, `thread_safe_predicates.seam`, and six
 `clausal-provenance` fixtures) as the **last fact of a fact block** — the author
 comma-separated the block but omitted the final comma, so the last fact never
 reached the database. Confirmed empirically: a three-line `counter` block asserts

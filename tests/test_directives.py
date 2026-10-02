@@ -165,12 +165,12 @@ def _predicate_row(mod, name, arity):
 class TestDynamicImport:
     def test_dynamic_predicate_is_unlocked(self):
         # nv
-        mod = _load_fixture("dynamic_pred.clausal")
+        mod = _load_fixture("dynamic_pred.seam")
         assert not _predicate_row(mod, "color", 2).locked
 
     def test_dynamic_predicate_allows_runtime_assertz(self):
         # nv
-        mod = _load_fixture("dynamic_pred.clausal")
+        mod = _load_fixture("dynamic_pred.seam")
         row = _predicate_row(mod, "color", 2)
         logic_mod = mod.__dict__["$module"]
         initial_count = len(logic_mod.db.clauses_for("color", 2))
@@ -180,12 +180,12 @@ class TestDynamicImport:
 
     def test_static_predicate_is_locked(self):
         # nv
-        mod = _load_fixture("static_pred.clausal")
+        mod = _load_fixture("static_pred.seam")
         assert _predicate_row(mod, "fact", 2).locked
 
     def test_static_predicate_rejects_runtime_assertz(self):
         # nv
-        mod = _load_fixture("static_pred.clausal")
+        mod = _load_fixture("static_pred.seam")
         row = _predicate_row(mod, "fact", 2)
         before = len(row.clauses)
         db = mod.__dict__["$module"].db
@@ -196,13 +196,13 @@ class TestDynamicImport:
 
     def test_dynamic_flag_recorded_on_db(self):
         # nv
-        mod = _load_fixture("dynamic_pred.clausal")
+        mod = _load_fixture("dynamic_pred.seam")
         logic_mod = mod.__dict__["$module"]
         assert logic_mod.db.is_dynamic("color", 2)
 
     def test_static_not_dynamic_on_db(self):
         # nv
-        mod = _load_fixture("static_pred.clausal")
+        mod = _load_fixture("static_pred.seam")
         logic_mod = mod.__dict__["$module"]
         assert not logic_mod.db.is_dynamic("fact", 2)
 
@@ -262,14 +262,14 @@ class TestShallowDirectiveParsing:
 
     def test_shallow_flag_recorded_on_db(self):
         # nv
-        mod = _load_fixture("shallow_pred.clausal")
+        mod = _load_fixture("shallow_pred.seam")
         logic_mod = mod.__dict__["$module"]
         assert logic_mod.db.is_shallow("color", 2)
 
     def test_shallow_predicate_is_queryable(self):
         # nv
         from clausal.logic.solve import call
-        mod = _load_fixture("shallow_pred.clausal", "shallow_pred_q")
+        mod = _load_fixture("shallow_pred.seam", "shallow_pred_q")
         logic_mod = mod.__dict__["$module"]
         results = list(call("color", mint("sky"), mint("blue"), module=logic_mod))
         assert len(results) == 1

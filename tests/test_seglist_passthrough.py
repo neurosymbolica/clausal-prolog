@@ -37,7 +37,7 @@ class TestSingleStarPassthrough:
     """Compiled predicates with [HEAD, *TAIL] patterns receive ground SegLists."""
 
     def setup_method(self):
-        self.mod = _load_clausal_module("lists.clausal")
+        self.mod = _load_clausal_module("lists.seam")
 
     def test_append_first_arg_ground_seglist(self):
         """append([1, *V_BOUND], [3], R) where the SegList walks to [1, 2]."""
@@ -89,7 +89,7 @@ class TestMultiStarPassthrough:
     """Compiled predicates with [*A, *B] patterns receive ground SegLists."""
 
     def setup_method(self):
-        self.mod = _load_clausal_module("multistar.clausal")
+        self.mod = _load_clausal_module("multistar.seam")
 
     def _ground_seglist(self, elems):
         """Construct a ground SegList that walks to elems."""
@@ -170,7 +170,7 @@ class TestBodyStarPassthrough:
     """Body Is goals with star patterns against SegList targets."""
 
     def setup_method(self):
-        self.mod = _load_clausal_module("body_star.clausal")
+        self.mod = _load_clausal_module("body_star.seam")
 
     def test_head_tail_ground_seglist(self):
         """head_tail(ground_seglist, H, T) — body Is pattern against SegList."""
@@ -207,7 +207,7 @@ class TestSegListConcatPassthrough:
     """SegList + list / list + SegList concatenation used as predicate args."""
 
     def setup_method(self):
-        self.mod = _load_clausal_module("lists.clausal")
+        self.mod = _load_clausal_module("lists.seam")
 
     def test_append_result_via_add(self):
         """Use sl + [3] as the third argument to append."""

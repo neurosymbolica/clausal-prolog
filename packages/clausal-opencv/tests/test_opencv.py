@@ -35,7 +35,7 @@ def _succeeds(functor, *args, module):
 
 
 class TestOpencvPhase1Fixture:
-    """Run Test predicates from opencv_phase1_core.clausal."""
+    """Run Test predicates from opencv_phase1_core.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):

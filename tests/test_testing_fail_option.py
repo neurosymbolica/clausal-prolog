@@ -49,7 +49,9 @@ test(raises, fail) :- throw(boom).
 NAMES = ["positive", "no p of two", "p of one exists", "raises"]
 
 
-@pytest.fixture(params=[("neg.clausal", SEAM), ("neg.seam", SEAM),
+# Since the extension flip ``.clausal`` is Clausal Prolog: it carries the
+# Prolog text (the [clausal] id is kept so the test IDs are stable).
+@pytest.fixture(params=[("neg.clausal", PL), ("neg.seam", SEAM),
                         ("neg.pl", PL)], ids=["clausal", "seam", "pl"])
 def neg_file(request, tmp_path):
     name, text = request.param

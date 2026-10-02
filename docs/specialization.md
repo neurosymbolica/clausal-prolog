@@ -246,9 +246,9 @@ Pre-registration at Step 1c registers the specialized predicate's empty row and 
     - **Pipeline**: End-to-end `.clausal` fixtures for all specialization modes
     - **Equivalence**: Specialized predicates produce identical results to unspecialized MIs
 
-    Fixtures: `specialize_natnum.clausal`, `specialize_graph.clausal`,
-    `specialize_limit.clausal`, `specialize_builtins.clausal`,
-    `specialize_deep.clausal`, `specialize_cpd.clausal`.
+    Fixtures: `specialize_natnum.seam`, `specialize_graph.seam`,
+    `specialize_limit.seam`, `specialize_builtins.seam`,
+    `specialize_deep.seam`, `specialize_cpd.seam`.
 
 ---
 

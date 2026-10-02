@@ -39,7 +39,7 @@ def _fixture_path(name: str) -> str:
 def _load_hide_owner():
     """Load the REAL ``-hide`` fixture under sys.modules key ``"hide_owner"``
     -- no monkeypatch anywhere in this file (hazard 4)."""
-    return _load_module("hide_owner", _fixture_path("hide_owner.clausal"))
+    return _load_module("hide_owner", _fixture_path("hide_owner.seam"))
 
 
 # ── Database.is_predicate_name: the arities_for trap, verified directly ───
@@ -54,7 +54,7 @@ def test_arities_for_trap_dynamic_predicate_is_seen_by_both():
 def test_arities_for_trap_predicate_export_only_is_missed_by_arities_for():
     """A bare ``name/arity`` -module/-private export entry
     (``mark_predicate_export``, e.g. ``gv_free/1`` in
-    tests/fixtures/gate_vocab.clausal) has no row and no dispatch -- the
+    tests/fixtures/gate_vocab.seam) has no row and no dispatch -- the
     ``arities_for`` trap this whole accessor exists to route around."""
     db = Database()
     db.mark_predicate_export("q", 3)

@@ -209,7 +209,7 @@ name is given in parentheses.
 ## Worked examples
 
 The examples below are exact copies of the `.clausal` integration
-tests under `tests/fixtures/opencv_phase1_core.clausal`.
+tests under `tests/fixtures/opencv_phase1_core.seam`.
 
 ### Read a color image and check structure
 

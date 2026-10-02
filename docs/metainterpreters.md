@@ -10,7 +10,7 @@ This page follows the structure of Markus Triska's [A Couple of Meta-Interpreter
     `ALLCAPS`, rules use `<-` instead of `:-`, and [lists](lists.md) are Python-style. Keep
     this in mind when comparing with Prolog resources.
 
-The full source is in `clausal/examples/metainterpreters.clausal`.
+The full source is in `clausal/examples/metainterpreters.seam`.
 
 ---
 
@@ -279,7 +279,7 @@ natnum(succ(succ(0)))
 
 ??? info "Source and tests"
 
-    Full source: `clausal/examples/metainterpreters.clausal`
+    Full source: `clausal/examples/metainterpreters.seam`
 
     The file contains 28 `test` clauses covering all five interpreters across the natural number and graph programs, including the iterative deepening completeness test on the cyclic graph.
 

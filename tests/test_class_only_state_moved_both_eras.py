@@ -187,7 +187,7 @@ def test_query_wfs_annotates_an_imported_tabled_goal(tmp_path):
     (it read ``__module__`` -- ``'builtins'`` on a handle)."""
     sys.path.insert(0, FIXTURES)
     try:
-        owner = _load_module("wfs_win", os.path.join(FIXTURES, "wfs_win.clausal"))
+        owner = _load_module("wfs_win", os.path.join(FIXTURES, "wfs_win.seam"))
         p = tmp_path / f"r6_wfs_impfrom{SEAM}"
         p.write_text("-import_from(wfs_win, [win])\n\nuses_f(X) <- win(X)\n")
         use = _load_module("r6_wfs_impfrom", str(p))
@@ -222,7 +222,7 @@ def test_the_tabled_home_is_the_owner_row_not_a_stamp(xm_pair):
 def te_provider():
     saved = sys.modules.pop("expansion_provider", None)
     prov = _load_module("expansion_provider",
-                        os.path.join(FIXTURES, "expansion_provider.clausal"))
+                        os.path.join(FIXTURES, "expansion_provider.seam"))
     yield prov
     sys.modules.pop("expansion_provider", None)
     if saved is not None:
@@ -275,9 +275,9 @@ def test_imported_te_fixture_end_to_end():
     sys.path.insert(0, FIXTURES)
     try:
         prov = _load_module("expansion_provider",
-                            os.path.join(FIXTURES, "expansion_provider.clausal"))
+                            os.path.join(FIXTURES, "expansion_provider.seam"))
         mod = _load_module("_r6_exp_imp",
-                           os.path.join(FIXTURES, "expansion_importer.clausal"))
+                           os.path.join(FIXTURES, "expansion_importer.seam"))
         assert type(prov.__dict__["term_expansion"]) is str
         assert mod.__dict__["term_expansion"] == prov.__dict__["term_expansion"]
         x = Var()
@@ -305,7 +305,7 @@ def test_table_on_an_imported_target_names_the_owner():
     from clausal.logic.compiler_v2 import _refuse_untablable_target
     from clausal.logic.database import Database
     owner = _load_module("tests.fixtures.importable_utils",
-                         os.path.join(FIXTURES, "importable_utils.clausal"))
+                         os.path.join(FIXTURES, "importable_utils.seam"))
     binding = owner.__dict__["double"]
     assert binding == mint_predicate_handle(_lm(owner).db, "double")
     with pytest.raises(SyntaxError) as exc:
@@ -321,7 +321,7 @@ def test_table_on_an_imported_target_end_to_end():
     other_module`` under the flip."""
     with pytest.raises(SyntaxError) as exc:
         _load_module("r6_tbl_imported_target",
-                     os.path.join(FIXTURES, "table_imported_target.clausal"))
+                     os.path.join(FIXTURES, "table_imported_target.seam"))
     msg = str(exc.value)
     assert "-table(double/2)" in msg
     assert "another module" in msg
@@ -335,8 +335,8 @@ def test_table_on_an_imported_target_end_to_end():
 @pytest.fixture
 def arimp():
     lib = _load_module("tests.fixtures.arimp_lib",
-                       os.path.join(FIXTURES, "arimp_lib.clausal"))
-    use = _load_module("_r6_arimp_use", os.path.join(FIXTURES, "arimp_use.clausal"))
+                       os.path.join(FIXTURES, "arimp_lib.seam"))
+    use = _load_module("_r6_arimp_use", os.path.join(FIXTURES, "arimp_use.seam"))
     yield lib, use
     sys.modules.pop("_r6_arimp_use", None)
 
@@ -347,7 +347,7 @@ def test_the_declaration_site_is_on_the_row(arimp):
     row = _lm(lib).db.row("arimp_pair", 2)
     # the class era's ``_registered_at`` for this fixture (CLAUSAL_NO_FLIP=1,
     # 9e6c2633): the -module line, line 3
-    assert row.declared_at[0].endswith("arimp_lib.clausal")
+    assert row.declared_at[0].endswith("arimp_lib.seam")
     assert row.declared_at[1] == 3
 
 
@@ -361,7 +361,7 @@ def test_unqualified_wrong_arity_points_at_the_definition(arimp):
         _refuse_unqualified_other_arity(binding, "arimp_pair", 1, _lm(use).db)
     msg = str(exc.value)
     assert "arimp_pair takes 2 arguments" in msg
-    assert "arimp_lib.clausal:" in msg
+    assert "arimp_lib.seam:" in msg
 
 
 def test_direct_wrong_arity_points_at_the_definition(arimp):
@@ -375,7 +375,7 @@ def test_direct_wrong_arity_points_at_the_definition(arimp):
         _dispatch_at(use.__dict__["arimp_pair"], 1)
     msg = str(exc.value)
     assert "arimp_pair takes 2 arguments" in msg
-    assert "arimp_lib.clausal:" in msg
+    assert "arimp_lib.seam:" in msg
 
 
 def test_imported_wrong_arity_points_across_the_boundary_end_to_end():
@@ -387,15 +387,15 @@ def test_imported_wrong_arity_points_across_the_boundary_end_to_end():
              for n in ("tests.fixtures.arimp_lib", "_r6_arimp_use_e2e")}
     try:
         _load_module("tests.fixtures.arimp_lib",
-                     os.path.join(FIXTURES, "arimp_lib.clausal"))
+                     os.path.join(FIXTURES, "arimp_lib.seam"))
         use = _load_module("_r6_arimp_use_e2e",
-                           os.path.join(FIXTURES, "arimp_use.clausal"))
+                           os.path.join(FIXTURES, "arimp_use.seam"))
         assert type(use.__dict__["arimp_pair"]) is str
         with pytest.raises(PredicateArityMismatchError) as exc:
             list(call("arimp_uses", Var(), module=_lm(use)))
         msg = str(exc.value)
         assert "arimp_pair takes 2 arguments" in msg
-        assert "arimp_lib.clausal:" in msg
+        assert "arimp_lib.seam:" in msg
     finally:
         for n, m in saved.items():
             sys.modules.pop(n, None)

@@ -1145,7 +1145,7 @@ class TestTabledIteCondition:
     def test_tabled_condition_succeeds(self):
         """check_path(3, R) with tabled path(1,3) reachable → 'reachable'."""
         # nv
-        mod = self._load_fixture("tabled_ite.clausal")
+        mod = self._load_fixture("tabled_ite.seam")
         from clausal.logic.solve import query
 
         logic_mod = mod.__dict__["$module"]
@@ -1158,7 +1158,7 @@ class TestTabledIteCondition:
     def test_tabled_condition_fails(self):
         """check_path(99, R) with tabled path(1,99) unreachable → 'unreachable'."""
         # nv
-        mod = self._load_fixture("tabled_ite.clausal")
+        mod = self._load_fixture("tabled_ite.seam")
         from clausal.logic.solve import query
 
         logic_mod = mod.__dict__["$module"]
@@ -1186,7 +1186,7 @@ class TestIteImportIntegration:
     def test_classify_ground(self):
         """Import classify predicate and query with ground values."""
         # nv
-        mod = self._load_fixture("reified_max.clausal")
+        mod = self._load_fixture("reified_max.seam")
         from clausal.logic.solve import query
 
         logic_mod = mod.__dict__["$module"]
@@ -1210,7 +1210,7 @@ class TestIteImportIntegration:
         eliminates leftover choicepoints for ground queries.
         """
         # nv
-        mod = self._load_fixture("reified_memberd.clausal")
+        mod = self._load_fixture("reified_memberd.seam")
         from clausal.logic.solve import query
 
         logic_mod = mod.__dict__["$module"]
@@ -1223,7 +1223,7 @@ class TestIteImportIntegration:
     def test_memberd_ground_absent(self):
         """memberd(99, [1,2,3]) — ground element not in list → no solutions."""
         # nv
-        mod = self._load_fixture("reified_memberd.clausal")
+        mod = self._load_fixture("reified_memberd.seam")
         from clausal.logic.solve import query
 
         logic_mod = mod.__dict__["$module"]
@@ -1235,7 +1235,7 @@ class TestIteImportIntegration:
     def test_memberd_unbound_enumerates(self):
         """memberd(X, [a, b, c]) — unbound X enumerates all elements."""
         # nv
-        mod = self._load_fixture("reified_memberd.clausal")
+        mod = self._load_fixture("reified_memberd.seam")
         from clausal.logic.solve import query
 
         logic_mod = mod.__dict__["$module"]
@@ -1253,7 +1253,7 @@ class TestIteImportIntegration:
         constraints should yield 1 once and 2 once.
         """
         # nv
-        mod = self._load_fixture("reified_memberd.clausal")
+        mod = self._load_fixture("reified_memberd.seam")
         from clausal.logic.solve import query
 
         logic_mod = mod.__dict__["$module"]
@@ -1424,10 +1424,10 @@ class TestOnceClausal:
         from clausal.import_hook import _load_module
 
         fixture = os.path.join(
-            os.path.dirname(__file__), "fixtures", "once_member.clausal"
+            os.path.dirname(__file__), "fixtures", "once_member.seam"
         )
         if not os.path.exists(fixture):
-            pytest.skip("once_member.clausal fixture not created yet")
+            pytest.skip("once_member.seam fixture not created yet")
         mod = _load_module("once_member", fixture)
         from clausal.logic.solve import query
 

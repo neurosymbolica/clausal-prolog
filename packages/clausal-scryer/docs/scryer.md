@@ -142,7 +142,7 @@ s.query_all("reach(1, X).")
 ### Files
 
 ```python
-s.consult_file("clausal/examples/fibonacci.clausal")
+s.consult_file("clausal/examples/fibonacci.seam")
 s.query_one("fib(10, R).")
 # {'R': 55}
 

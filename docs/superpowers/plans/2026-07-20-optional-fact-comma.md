@@ -519,7 +519,7 @@ Facts that were silently dropped now land, which can shift exact solution counts
 - [ ] **Step 1: Run the full test suite**
 
 Run: `PYENV_VERSION=3.13.3 PYTHONPATH=/workspace/clausal-bug-fix python3 -m pytest tests/ -q`
-Expected: capture any failures. Likely candidates are the ≥9 fixtures whose last fact previously dropped: `tests/fixtures/docs/tutorial_parallel_clausal_sig_tests.clausal`, `tests/fixtures/docs/indexing_sig_tests.clausal`, `tests/clausal_modules/thread_safe_predicates.clausal`.
+Expected: capture any failures. Likely candidates are the ≥9 fixtures whose last fact previously dropped: `tests/fixtures/docs/tutorial_parallel_clausal_sig_tests.seam`, `tests/fixtures/docs/indexing_sig_tests.seam`, `tests/clausal_modules/thread_safe_predicates.seam`.
 
 - [ ] **Step 2: Run the package suites**
 

@@ -537,7 +537,7 @@ class TestTableOnASpecializeAliasIsRefused:
     has a database of its own) but kept the refusal; nothing pinned either
     the message or the ORDERING, which is what makes the failure clean:
     step 4b runs before step 6b, so the refusal cannot half-install an alias.
-    Fixture: ``tests/fixtures/specialize_tabled_alias.clausal``."""
+    Fixture: ``tests/fixtures/specialize_tabled_alias.seam``."""
 
     def _load(self):
         import tests.fixtures.specialize_tabled_alias  # noqa: F401

@@ -713,10 +713,10 @@ class TestTroImportHook(unittest.TestCase):
     """Test TRO via the .clausal import hook."""
 
     def test_fixture_loaded_with_tro(self):
-        """tro_predicates.clausal should load and pass all inline tests."""
+        """tro_predicates.seam should load and pass all inline tests."""
         # nv
         from clausal.testing import load_clausal_module
-        mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
+        mod = load_clausal_module('tests/fixtures/tro_predicates.seam')
         # Verify key predicates exist
         self.assertIn('acc_sum', mod.__dict__)
         self.assertIn('acc_factorial', mod.__dict__)
@@ -725,7 +725,7 @@ class TestTroImportHook(unittest.TestCase):
         """acc_sum via import hook produces correct results."""
         # nv
         from clausal.testing import load_clausal_module
-        mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
+        mod = load_clausal_module('tests/fixtures/tro_predicates.seam')
         lm = mod.__dict__['$module']
         # By NAME in this test's own load (module=lm), never the bare handle:
         # the same-named fixture load the .clausal collector holds would make
@@ -742,7 +742,7 @@ class TestTroImportHook(unittest.TestCase):
         """acc_factorial via import hook produces correct results."""
         # nv
         from clausal.testing import load_clausal_module
-        mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
+        mod = load_clausal_module('tests/fixtures/tro_predicates.seam')
         lm = mod.__dict__['$module']
         # By NAME in this test's own load (module=lm), never the bare handle:
         # the same-named fixture load the .clausal collector holds would make
@@ -759,7 +759,7 @@ class TestTroImportHook(unittest.TestCase):
         """TRO predicates from fixture use O(1) StepGenerators."""
         # nv
         from clausal.testing import load_clausal_module
-        mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
+        mod = load_clausal_module('tests/fixtures/tro_predicates.seam')
         lm = mod.__dict__['$module']
 
         counting_cls, counter = _make_counting_sg()
@@ -789,7 +789,7 @@ class TestTroGroundnessDispatch(unittest.TestCase):
         """my_nth_of-style predicate: TRO restarts land in different bucket."""
         # nv
         from clausal.testing import load_clausal_module
-        mod = load_clausal_module('tests/fixtures/deep_index.clausal')
+        mod = load_clausal_module('tests/fixtures/deep_index.seam')
         lm = mod.__dict__['$module']
         # By NAME in this test's own load (module=lm), never the bare handle:
         # the same-named fixture load the .clausal collector holds would make
@@ -808,7 +808,7 @@ class TestTroGroundnessDispatch(unittest.TestCase):
         """my_nth_of uses O(1) StepGenerators via dispatch-level TRO."""
         # nv
         from clausal.testing import load_clausal_module
-        mod = load_clausal_module('tests/fixtures/deep_index.clausal')
+        mod = load_clausal_module('tests/fixtures/deep_index.seam')
         lm = mod.__dict__['$module']
 
         counting_cls, counter = _make_counting_sg()
@@ -833,7 +833,7 @@ class TestTroRuntimeGroundCheck(unittest.TestCase):
         """acc_length with unbound first arg falls back to StepGenerator (no TRO)."""
         # nv
         from clausal.testing import load_clausal_module
-        mod = load_clausal_module('tests/fixtures/tro_predicates.clausal')
+        mod = load_clausal_module('tests/fixtures/tro_predicates.seam')
         lm = mod.__dict__['$module']
         # By NAME in this test's own load (module=lm), never the bare handle:
         # the same-named fixture load the .clausal collector holds would make

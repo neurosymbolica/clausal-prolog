@@ -1,7 +1,7 @@
 """Tests for clausal.logic.clportools — CP-SAT infrastructure unit tests.
 
 Problem-solving tests (domains, arithmetic, all_different, labeling,
-optimization, etc.) live in tests/fixtures/ortools_cpsat.clausal.
+optimization, etc.) live in tests/fixtures/ortools_cpsat.seam.
 
 These Python tests cover infrastructure that can't be tested from .clausal:
   - Internal var_map / rev_map data structures

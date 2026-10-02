@@ -358,8 +358,8 @@ class TestCompiledPredicateCreation:
     """Compiled predicates produce SegLists when star vars are unbound."""
 
     def setup_method(self):
-        self.mod = _load_clausal_module("lists.clausal")
-        self.mstar = _load_clausal_module("multistar.clausal")
+        self.mod = _load_clausal_module("lists.seam")
+        self.mstar = _load_clausal_module("multistar.seam")
 
     def test_append_unbound_rhs(self):
         """append([1,2], Y, Z) with Y unbound → Z is a SegList inside the solution."""

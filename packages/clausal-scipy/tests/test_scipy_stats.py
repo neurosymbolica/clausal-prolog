@@ -976,7 +976,7 @@ def _succeeds(functor, *args, module):
 
 
 class TestScipyStatsFixture:
-    """Run Test predicates from tests/fixtures/scipy_stats_tests.clausal."""
+    """Run Test predicates from tests/fixtures/scipy_stats_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):

@@ -44,8 +44,8 @@ test("description") <- goal1, goal2, ...
 --8<-- [end:test_syntax]
 
 --8<-- [start:test_output]
-clausal/examples/fibonacci.clausal::fib(0) = 0 PASSED
-clausal/examples/fibonacci.clausal::fib(5) = 5 PASSED
+clausal/examples/fibonacci.seam::fib(0) = 0 PASSED
+clausal/examples/fibonacci.seam::fib(5) = 5 PASSED
 --8<-- [end:test_output]
 
 # === examples.md ===

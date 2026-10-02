@@ -66,7 +66,7 @@ where `Spellings` is a list of the texts to mint; anything else raises
 `domain_error(json_option, Opt)`.
 
 ```seam
---8<-- "tests/fixtures/docs/json_examples.clausal:parse_atoms"
+--8<-- "tests/fixtures/docs/json_examples.seam:parse_atoms"
 ```
 
 Use it when a JSON document carries a closed vocabulary — a status, a colour,
@@ -82,7 +82,7 @@ to_json(DATA, JSON) <- generate(DATA, JSON)
 ```
 
 ```seam
---8<-- "tests/fixtures/docs/json_examples.clausal:generate_kinds"
+--8<-- "tests/fixtures/docs/json_examples.seam:generate_kinds"
 ```
 
 ### pretty_generate/2

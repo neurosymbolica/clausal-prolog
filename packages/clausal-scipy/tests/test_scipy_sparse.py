@@ -669,7 +669,7 @@ def _succeeds(functor, *args, module):
 
 
 class TestSciPySparseFixture:
-    """Run Test predicates from tests/fixtures/scipy_sparse_tests.clausal."""
+    """Run Test predicates from tests/fixtures/scipy_sparse_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):

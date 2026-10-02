@@ -124,7 +124,7 @@ class TestStratifiedSilence:
         assert strat == []
 
     def test_engine_fixture_wfs_win_is_silent(self, load):
-        src = open(os.path.join(FIXTURES, "wfs_win.clausal")).read()
+        src = open(os.path.join(FIXTURES, "wfs_win.seam")).read()
         _, strat = load("wfs_win_copy", src)
         assert strat == []
 

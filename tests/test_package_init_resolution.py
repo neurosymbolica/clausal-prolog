@@ -1,10 +1,10 @@
-"""Tests for ``__init__.clausal`` directory-as-package module resolution.
+"""Tests for ``__init__.seam`` directory-as-package module resolution.
 
-A directory ``foo/bar/`` that contains ``foo/bar/__init__.clausal`` must import
+A directory ``foo/bar/`` that contains ``foo/bar/__init__.seam`` must import
 as the package module ``foo.bar`` (reusing Python's ``__init__`` package
 mechanism), executing the init file's clauses into the package namespace.
 Submodule files under it (``foo/bar/baz.clausal``) continue to resolve as
-``foo.bar.baz``, both with and without an ``__init__.clausal`` present.
+``foo.bar.baz``, both with and without an ``__init__.seam`` present.
 
 See ``todo/package-init-clausal-module-resolution.md``.
 """
@@ -73,7 +73,7 @@ class TestFinderDirectoryBranch:
         assert list(spec.submodule_search_locations) == [str(pkg_b)]
 
     def test_bare_directory_without_init_returns_none(self, tmp_path):
-        """A directory with no ``__init__.clausal`` is left to PathFinder as a
+        """A directory with no ``__init__.seam`` is left to PathFinder as a
         PEP-420 namespace package (no regression)."""
         # nv
         pkg_b = tmp_path / "a" / "b"
@@ -85,7 +85,7 @@ class TestFinderDirectoryBranch:
         assert spec is None
 
     def test_flat_file_takes_priority_over_package_dir(self, tmp_path):
-        """When both ``b.clausal`` and ``b/__init__.clausal`` exist, the flat
+        """When both ``b.clausal`` and ``b/__init__.seam`` exist, the flat
         file wins so existing flat-module resolution is unchanged."""
         # nv
         (tmp_path / f"b{SEAM}").write_text("-module(b, [ping])\nping(1),\n")
@@ -152,7 +152,7 @@ class TestPackageInitEndToEnd:
         assert len(list(call("ping", 1, module=logic_mod))) == 1
 
     def test_reexport_through_init(self, on_path):
-        """``a/b/__init__.clausal`` re-exports ``a.b.c``; a consumer importing
+        """``a/b/__init__.seam`` re-exports ``a.b.c``; a consumer importing
         ``a.b`` resolves the re-exported predicate (thin-package-init pattern)."""
         # nv
         pkg = on_path / "a" / "b"
@@ -184,7 +184,7 @@ class TestPackageInitEndToEnd:
 
     def test_submodule_resolves_without_init(self, on_path):
         """``ns.leaf.mod`` resolves as a namespace-package submodule with no
-        ``__init__.clausal`` anywhere (no regression)."""
+        ``__init__.seam`` anywhere (no regression)."""
         # nv
         leaf = on_path / "ns" / "leaf"
         leaf.mkdir(parents=True)

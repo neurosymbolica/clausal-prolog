@@ -103,7 +103,7 @@ def test_a_specialize_target_is_flipped_after_step_6b():
     and the load's own test clauses still run through it."""
     name = "tests.fixtures.specialize_natnum"
     sys.modules.pop(name, None)
-    mod = _load_module(name, os.path.join(FIXTURES, "specialize_natnum.clausal"))
+    mod = _load_module(name, os.path.join(FIXTURES, "specialize_natnum.seam"))
     assert mod.solve_count_natnum == mangle(name, "solve_count_natnum")
     assert _classes(mod) == []
     lm = mod.__dict__["$module"]
@@ -123,7 +123,7 @@ def test_the_off_switch_is_gone():
         from clausal.import_hook import _load_module
         from tests._suffix import seam_path
         m = _load_module("_flip_off_probe", seam_path(os.path.join(
-            "tests", "fixtures", "specialize_natnum.clausal")))
+            "tests", "fixtures", "specialize_natnum.seam")))
         print(type(m.natnum_program).__name__,
               isinstance(m.natnum_program, type))
     """)
@@ -201,7 +201,7 @@ def test_a_local_predicate_at_another_arity_than_an_import_loads():
               "tests.fixtures.t5b_dual_owner"):
         sys.modules.pop(n, None)
     use = _load_module("tests.fixtures.t5b_dual_arity_clash",
-                       os.path.join(FIXTURES, "t5b_dual_arity_clash.clausal"))
+                       os.path.join(FIXTURES, "t5b_dual_arity_clash.seam"))
     lm = use.__dict__["$module"]
     A, B = Var(), Var()
     assert [(walk(deref(A)), walk(deref(B)))

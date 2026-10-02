@@ -24,7 +24,7 @@ from clausal.terms import Quantity
 @pytest.fixture(scope="module")
 def mod():
     fixture = os.path.join(
-        os.path.dirname(__file__), "clausal_modules", "quantity_head_literal.clausal"
+        os.path.dirname(__file__), "clausal_modules", "quantity_head_literal.seam"
     )
     return _load_module("quantity_head_literal_mod", fixture).__dict__["$module"]
 

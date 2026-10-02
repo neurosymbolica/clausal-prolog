@@ -24,7 +24,7 @@ from clausal.logic.variables import Var, deref
 @pytest.fixture(scope="module")
 def mod():
     fixture = os.path.join(
-        os.path.dirname(__file__), "clausal_modules", "structural_head_output_mode.clausal"
+        os.path.dirname(__file__), "clausal_modules", "structural_head_output_mode.seam"
     )
     return _load_module(
         "structural_head_output_mode_mod", fixture

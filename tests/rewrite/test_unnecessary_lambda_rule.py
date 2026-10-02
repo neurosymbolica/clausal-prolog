@@ -1,4 +1,4 @@
-"""unnecessary_lambda.clausal: eta-reduce forwarding lambdas; refuse the rest.
+"""unnecessary_lambda.seam: eta-reduce forwarding lambdas; refuse the rest.
 
 A lambda argument that merely forwards its parameters to a predicate --
 ``((X) <- add_one(X))`` -- is that predicate, and the engine treats the bare

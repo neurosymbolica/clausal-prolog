@@ -6633,7 +6633,7 @@ class EmbedTransformer(NodeTransformer):
           at this head.  When one *is* emitted (the functor's first clause) it
           re-mints the class to exactly the derived fields unless they already
           match, so the bound class is known here and keyword emission is
-          precise.  That is the shape ``tests/fixtures/impord_atom_then_pred.clausal``
+          precise.  That is the shape ``tests/fixtures/impord_atom_then_pred.seam``
           pins: import a 0-arity vocabulary atom, then define a same-named
           predicate whose first clause re-mints over the import.
         * the import must have been seen *earlier in the file*.  Before it, the

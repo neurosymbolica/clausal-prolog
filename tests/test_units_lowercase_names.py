@@ -184,13 +184,13 @@ class TestTitleCaseAliases:
         unit-annotation arguments specifically; nothing rules that today, so
         the behaviour is pinned rather than special-cased.
 
-        Fixture: tests/fixtures/titlecase_unit_spelling_witness.clausal."""
+        Fixture: tests/fixtures/titlecase_unit_spelling_witness.seam."""
         import pathlib
         from clausal.import_hook import _load_module
         from clausal.logic.solve import call
         from clausal.logic.variables import Var
         p = (pathlib.Path(__file__).parent / "fixtures"
-             / "titlecase_unit_spelling_witness.clausal")
+             / "titlecase_unit_spelling_witness.seam")
         mod = _load_module("_titlecase_unit_witness", str(p))  # loads now
         with pytest.raises(NameError) as ei:
             list(call("speed", Var(), module=mod.__dict__["$module"]))

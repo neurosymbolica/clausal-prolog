@@ -326,7 +326,7 @@ class TestTseitinTransformation:
         assert root == -vx
 
 
-# TestConstraintBlock: problem-solving tests moved to pysat_boolean.clausal
+# TestConstraintBlock: problem-solving tests moved to pysat_boolean.seam
 
 class TestLabelingInfrastructure:
     """Infrastructure tests for labeling — generator protocol, binding semantics."""
@@ -372,16 +372,16 @@ class TestLabelingInfrastructure:
         assert sorted(outer) == [(0, 1), (1, 2)]
 
 
-# TestCardinality: problem-solving tests moved to pysat_boolean.clausal
+# TestCardinality: problem-solving tests moved to pysat_boolean.seam
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Cardinality Edge Cases (infrastructure)
 # ═══════════════════════════════════════════════════════════════════════════
 
-# TestCardinality problem-solving removed (in pysat_boolean.clausal)
+# TestCardinality problem-solving removed (in pysat_boolean.seam)
 
 # TestCardinality and TestIntegration problem-solving tests moved to
-# pysat_boolean.clausal. Infrastructure tests kept below.
+# pysat_boolean.seam. Infrastructure tests kept below.
 
 class TestBacktrackingStress:
 

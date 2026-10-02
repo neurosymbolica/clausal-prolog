@@ -59,7 +59,9 @@ PASSED = {"fact_form": True, "true_body": True, "conj_true_body": True,
           "case(1)": True, "case(2)": False}
 
 
-@pytest.fixture(params=[("tb_seam.clausal", SEAM, None),
+# Since the extension flip ``.clausal`` is Clausal Prolog (always the native
+# front end): it carries the Prolog text; the [clausal] id is kept.
+@pytest.fixture(params=[("tb_cp.clausal", PL, None),
                         ("tb_seam2.seam", SEAM, None),
                         ("tb_native.pl", PL, "native"),
                         ("tb_translated.pl", PL, "translator")],

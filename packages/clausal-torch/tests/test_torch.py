@@ -31,7 +31,7 @@ def _succeeds(functor, *args, module):
 
 
 class TestTorchTensorFixture:
-    """Run Test predicates from tests/fixtures/torch_tensor_tests.clausal."""
+    """Run Test predicates from tests/fixtures/torch_tensor_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -120,7 +120,7 @@ class TestTorchTensorFixture:
 
 
 class TestTorchNnFixture:
-    """Run Test predicates from tests/fixtures/torch_nn_tests.clausal."""
+    """Run Test predicates from tests/fixtures/torch_nn_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -149,7 +149,7 @@ class TestTorchNnFixture:
 
 
 class TestTorchRegistryFixture:
-    """Run Test predicates from tests/fixtures/torch_registry_tests.clausal."""
+    """Run Test predicates from tests/fixtures/torch_registry_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -187,7 +187,7 @@ class TestTorchRegistryFixture:
 
 
 class TestTorchIoFixture:
-    """Run Test predicates from tests/fixtures/torch_io_tests.clausal."""
+    """Run Test predicates from tests/fixtures/torch_io_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -209,7 +209,7 @@ class TestTorchIoFixture:
 
 
 class TestTorchLinalgFixture:
-    """Run Test predicates from tests/fixtures/torch_linalg_tests.clausal."""
+    """Run Test predicates from tests/fixtures/torch_linalg_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -265,7 +265,7 @@ class TestTorchLinalgFixture:
 
 
 class TestTorchFFTFixture:
-    """Run Test predicates from tests/fixtures/torch_fft_tests.clausal."""
+    """Run Test predicates from tests/fixtures/torch_fft_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -306,7 +306,7 @@ class TestTorchFFTFixture:
 
 
 class TestTorchComparisonFixture:
-    """Run Test predicates from tests/fixtures/torch_comparison_tests.clausal."""
+    """Run Test predicates from tests/fixtures/torch_comparison_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -356,7 +356,7 @@ class TestTorchComparisonFixture:
 
 
 class TestTorchMathFixture:
-    """Run Test predicates from tests/fixtures/torch_math_tests.clausal."""
+    """Run Test predicates from tests/fixtures/torch_math_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -419,7 +419,7 @@ class TestTorchMathFixture:
 
 
 class TestTorchShape2Fixture:
-    """Run Test predicates from tests/fixtures/torch_shape2_tests.clausal."""
+    """Run Test predicates from tests/fixtures/torch_shape2_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -473,7 +473,7 @@ class TestTorchShape2Fixture:
 
 
 class TestTorchDistributionsFixture:
-    """Run Test predicates from tests/fixtures/torch_distributions_tests.clausal."""
+    """Run Test predicates from tests/fixtures/torch_distributions_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -521,7 +521,7 @@ class TestTorchDistributionsFixture:
 
 
 class TestTorchFunctionalFixture:
-    """Run Test predicates from tests/fixtures/torch_functional_tests.clausal."""
+    """Run Test predicates from tests/fixtures/torch_functional_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -583,7 +583,7 @@ class TestTorchFunctionalFixture:
 
 
 class TestTorchSchedulersFixture:
-    """Run Test predicates from tests/fixtures/torch_schedulers_tests.clausal."""
+    """Run Test predicates from tests/fixtures/torch_schedulers_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -678,7 +678,7 @@ class TestSchedulerGradUtils:
 
 
 class TestTorchCreation2Fixture:
-    """Run Test predicates from tests/fixtures/torch_creation2_tests.clausal."""
+    """Run Test predicates from tests/fixtures/torch_creation2_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):

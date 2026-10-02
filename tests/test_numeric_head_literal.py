@@ -22,7 +22,7 @@ from clausal.logic.variables import Var, deref
 @pytest.fixture(scope="module")
 def mod():
     fixture = os.path.join(
-        os.path.dirname(__file__), "clausal_modules", "numeric_head_literal.clausal"
+        os.path.dirname(__file__), "clausal_modules", "numeric_head_literal.seam"
     )
     return _load_module("numeric_head_literal_mod", fixture).__dict__["$module"]
 

@@ -319,14 +319,14 @@ class TestArrowSpacingDiscrimination:
 
 # ── The witness: the RED fixture named by the decision ────────────────
 
-# The witness is SYNTHETIC (tests/fixtures/lambda_in_term_position_witness.clausal):
+# The witness is SYNTHETIC (tests/fixtures/lambda_in_term_position_witness.seam):
 # three `<-` lambdas in term position written for this test. Its predecessor was
 # a verbatim snapshot of a closed-side file (c7f29564); closed-side
 # source does not enter this tree, so it was replaced (operator ruling
 # 2026-09-08). The shapes are the same three the class docstring names.
 LAMBDA_TERM_POSITION_WITNESS = (
     pathlib.Path(__file__).parent / "fixtures"
-    / "lambda_in_term_position_witness.clausal"
+    / "lambda_in_term_position_witness.seam"
 )
 
 

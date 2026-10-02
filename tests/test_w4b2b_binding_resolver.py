@@ -62,7 +62,7 @@ def _load_hide_owner():
     anywhere in this file (hazard 4): every mangled-atom test below either
     exercises an unloaded/foreign module (hazard 1c/1d) through the REAL
     ``_db_for_module_name``, or resolves through this REAL loaded module."""
-    return _load_module("hide_owner", _fixture_path("hide_owner.clausal"))
+    return _load_module("hide_owner", _fixture_path("hide_owner.seam"))
 
 
 # ── Hazard 1: six shapes, each with its own test, for BOTH functions ────────

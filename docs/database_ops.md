@@ -9,7 +9,7 @@ memoization, and self-modifying programs.
 ## Quick Example
 
 ```seam
---8<-- "tests/fixtures/docs/database_ops_examples.clausal:quick_example"
+--8<-- "tests/fixtures/docs/database_ops_examples.seam:quick_example"
 ```
 
 ---
@@ -23,7 +23,7 @@ ISO Prolog: modifying it raises
 as the culprit (Scryer's form; see [Exceptions](exceptions.md)).
 
 ```seam
---8<-- "tests/fixtures/docs/database_ops_examples.clausal:declare_first"
+--8<-- "tests/fixtures/docs/database_ops_examples.seam:declare_first"
 ```
 
 The declaration also makes the predicate exist before it has clauses: a
@@ -36,7 +36,7 @@ exist creates it as a dynamic procedure. An imported `.pl` module has it on.
 Declare several at once:
 
 ```seam
---8<-- "tests/fixtures/docs/database_ops_examples.clausal:dynamic_directive"
+--8<-- "tests/fixtures/docs/database_ops_examples.seam:dynamic_directive"
 ```
 
 See [Directives](directives.md) for the other directives.
@@ -75,7 +75,7 @@ static predicate that already has clauses.
 `assertz`).
 
 ```seam
---8<-- "tests/fixtures/docs/database_ops_examples.clausal:assertz_example"
+--8<-- "tests/fixtures/docs/database_ops_examples.seam:assertz_example"
 ```
 
 ### asserta/1
@@ -84,7 +84,7 @@ static predicate that already has clauses.
 Prolog's `asserta`). The new clause will be tried first on subsequent queries.
 
 ```seam
---8<-- "tests/fixtures/docs/database_ops_examples.clausal:asserta_example"
+--8<-- "tests/fixtures/docs/database_ops_examples.seam:asserta_example"
 ```
 
 ---
@@ -96,7 +96,7 @@ Prolog's `asserta`). The new clause will be tried first on subsequent queries.
 `retract(Term)` — remove the first clause whose head unifies with `Term`.
 
 ```seam
---8<-- "tests/fixtures/docs/database_ops_examples.clausal:retract_example"
+--8<-- "tests/fixtures/docs/database_ops_examples.seam:retract_example"
 ```
 
 As in ISO (8.9.3) and Scryer, `retract` of a name nothing declares simply
@@ -109,7 +109,7 @@ an unbound `Term` raises `instantiation_error`. (`retractall/1` and
 `retract` uses unification for matching, so you can retract by pattern:
 
 ```seam
---8<-- "tests/fixtures/docs/database_ops_examples.clausal:retract_pattern"
+--8<-- "tests/fixtures/docs/database_ops_examples.seam:retract_pattern"
 ```
 
 ---
@@ -122,7 +122,7 @@ an unbound `Term` raises `instantiation_error`. (`retractall/1` and
 predicate.
 
 ```seam
---8<-- "tests/fixtures/docs/database_ops_examples.clausal:abolish_table_example"
+--8<-- "tests/fixtures/docs/database_ops_examples.seam:abolish_table_example"
 ```
 
 ### abolish_all_tables/0
@@ -145,7 +145,7 @@ bind `X` to the unevaluated term (see [Operators](operators.md)).
 
 
 ```seam
---8<-- "tests/fixtures/docs/database_ops_examples.clausal:memoization_recipe"
+--8<-- "tests/fixtures/docs/database_ops_examples.seam:memoization_recipe"
 ```
 
 (For automatic memoization, consider [`-table`](tabling.md) instead.)
@@ -153,13 +153,13 @@ bind `X` to the unevaluated term (see [Operators](operators.md)).
 ### Counter / mutable state
 
 ```seam
---8<-- "tests/fixtures/docs/database_ops_examples.clausal:counter_recipe"
+--8<-- "tests/fixtures/docs/database_ops_examples.seam:counter_recipe"
 ```
 
 ### Collecting facts from a computation
 
 ```seam
---8<-- "tests/fixtures/docs/database_ops_examples.clausal:collect_recipe"
+--8<-- "tests/fixtures/docs/database_ops_examples.seam:collect_recipe"
 ```
 
 (Prefer [`findall`](meta_predicates.md) for this pattern — it is cleaner and

@@ -182,7 +182,7 @@ bytes-literal keys; an int-list head canonicalises into the same bucket).
 
 - **Severity:** medium (test quality / doc-rot)
 - **Status:** fixed in `910c1e7`
-- **Location:** `tests/fixtures/docs/bytes_as_lists_examples.clausal` (24 `Test/1`
+- **Location:** `tests/fixtures/docs/bytes_as_lists_examples.seam` (24 `Test/1`
   clauses). The only consumer, the doc-snippet coverage checker, merely
   regex-checks the file exists and contains `Test(` — it never loads or runs it.
 

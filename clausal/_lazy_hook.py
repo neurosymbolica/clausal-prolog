@@ -63,7 +63,7 @@ class _LazyHookFinder(MetaPathFinder):
                 return self._activate_and_retry(fullname, path, target)
 
         # Condition 3: .clausal (or .seam), or .pl, file on sys.path -- or a
-        # package directory whose ``__init__`` is one (``tail/__init__.clausal``).
+        # package directory whose ``__init__`` is one (``tail/__init__.seam``).
         # Without the package form, PathFinder claimed such a directory as a
         # PEP 420 namespace package when it was imported before
         # ``clausal.import_hook`` had loaded: no ``__init__`` ran, so no

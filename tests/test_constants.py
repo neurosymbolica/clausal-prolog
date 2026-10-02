@@ -645,9 +645,9 @@ def test_constants_rhs_can_construct_an_imported_functor():
 
     fixtures = pathlib.Path(__file__).parent / "fixtures"
     _load_module("tests.fixtures.const_functor_owner",
-                 str(fixtures / "const_functor_owner.clausal"))
+                 str(fixtures / "const_functor_owner.seam"))
     mod = _load_module("tests.fixtures.const_functor_importer",
-                       str(fixtures / "const_functor_importer.clausal"))
+                       str(fixtures / "const_functor_importer.seam"))
     lm = mod.__dict__["$module"]
 
     def one(goal):
@@ -666,7 +666,7 @@ def _load_const_functor_owner():
 
     fixtures = pathlib.Path(__file__).parent / "fixtures"
     return _load_module("tests.fixtures.const_functor_owner",
-                        str(fixtures / "const_functor_owner.clausal"))
+                        str(fixtures / "const_functor_owner.seam"))
 
 
 def test_constants_rhs_functor_over_arity_is_a_load_error(tmp_path):

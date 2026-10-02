@@ -173,7 +173,7 @@ class TestV2PipelineEquivalence:
     def test_edge_graph(self):
         """edge graph fixture: basic facts + rules."""
         # nv
-        path = os.path.join(FIXTURES_DIR, "edge_graph.clausal")
+        path = os.path.join(FIXTURES_DIR, "edge_graph.seam")
         md = _load_via_v2(path, "_v2_edge_graph")
         lm = md["$module"]
 
@@ -184,7 +184,7 @@ class TestV2PipelineEquivalence:
     def test_fibonacci(self):
         """Fibonacci fixture."""
         # nv
-        path = os.path.join(FIXTURES_DIR, "fibonacci.clausal")
+        path = os.path.join(FIXTURES_DIR, "fibonacci.seam")
         md = _load_via_v2(path, "_v2_fibonacci")
         lm = md["$module"]
 
@@ -196,7 +196,7 @@ class TestV2PipelineEquivalence:
     def test_dynamic_pred(self):
         """Dynamic predicate fixture."""
         # nv
-        path = os.path.join(FIXTURES_DIR, "dynamic_pred.clausal")
+        path = os.path.join(FIXTURES_DIR, "dynamic_pred.seam")
         md = _load_via_v2(path, "_v2_dynamic_pred")
         lm = md["$module"]
         assert lm.db.is_dynamic("color", 2)
@@ -204,7 +204,7 @@ class TestV2PipelineEquivalence:
     def test_facts_only(self):
         """Facts-only fixture (edge_graph has facts + rules)."""
         # nv
-        path = os.path.join(FIXTURES_DIR, "edge_graph.clausal")
+        path = os.path.join(FIXTURES_DIR, "edge_graph.seam")
         md = _load_via_v2(path, "_v2_edge_graph2")
         lm = md["$module"]
         a, b = Var(), Var()
@@ -214,7 +214,7 @@ class TestV2PipelineEquivalence:
     def test_tabled_fib(self):
         """Tabled fibonacci fixture."""
         # nv
-        path = os.path.join(FIXTURES_DIR, "tabled_fib.clausal")
+        path = os.path.join(FIXTURES_DIR, "tabled_fib.seam")
         md = _load_via_v2(path, "_v2_tabled_fib")
         lm = md["$module"]
         assert lm.db.is_tabled("fib", 2)
@@ -227,7 +227,7 @@ class TestV2PipelineEquivalence:
     def test_shallow_pred(self):
         """Shallow predicate fixture."""
         # nv
-        path = os.path.join(FIXTURES_DIR, "shallow_pred.clausal")
+        path = os.path.join(FIXTURES_DIR, "shallow_pred.seam")
         md = _load_via_v2(path, "_v2_shallow_pred")
         lm = md["$module"]
         assert lm.db.is_shallow("color", 2)
@@ -235,7 +235,7 @@ class TestV2PipelineEquivalence:
     def test_dcg_grammar(self):
         """DCG grammar fixture."""
         # nv
-        path = os.path.join(FIXTURES_DIR, "dcg_grammar.clausal")
+        path = os.path.join(FIXTURES_DIR, "dcg_grammar.seam")
         md = _load_via_v2(path, "_v2_dcg_grammar")
         lm = md["$module"]
         greeting_cls = md.get("greeting")
@@ -268,7 +268,7 @@ class TestV2CompileModule:
         that mirrors the implementation cannot see that.
         """
         # nv
-        path = os.path.join(FIXTURES_DIR, "static_pred.clausal")
+        path = os.path.join(FIXTURES_DIR, "static_pred.seam")
         md = _load_via_v2(path, "_v2_static_pred")
         db = md["$module"].db
 
@@ -305,7 +305,7 @@ class TestV2CompileModule:
     def test_dynamic_not_locked(self):
         """Dynamic predicates are NOT locked after compile_module."""
         # nv
-        path = os.path.join(FIXTURES_DIR, "dynamic_pred.clausal")
+        path = os.path.join(FIXTURES_DIR, "dynamic_pred.seam")
         md = _load_via_v2(path, "_v2_dynamic_pred2")
         Color = md.get("color")
         db = md["$module"].db

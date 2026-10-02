@@ -357,7 +357,7 @@ class TestBuiltinAsArgument:
         """Builtins passed as arguments in compiled .clausal code."""
         # nv
         from clausal.testing import load_clausal_module, collect_tests, run_test
-        mod = load_clausal_module("tests/fixtures/builtin_as_arg.clausal")
+        mod = load_clausal_module("tests/fixtures/builtin_as_arg.seam")
         tests = collect_tests(mod)
         assert len(tests) >= 5
         for desc in tests:

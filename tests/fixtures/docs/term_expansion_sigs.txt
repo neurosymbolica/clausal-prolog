@@ -31,7 +31,7 @@ term_expansion(debug(X), [], STATE, STATE) <- True
 --8<-- [end:suppressing_items]
 
 --8<-- [start:one_to_many_expansion]
-# Duplicate every item (expansion_provider.clausal)
+# Duplicate every item (expansion_provider.seam)
 term_expansion(TERM, [TERM, TERM], STATE, STATE) <- True
 --8<-- [end:one_to_many_expansion]
 
@@ -48,7 +48,7 @@ term_expansion(ITEM, ITEM, COUNT, NEXT) <- (
 --8<-- [end:module_state_threading]
 
 --8<-- [start:importing_expansion_rules]
-# expansion_provider.clausal
+# expansion_provider.seam
 term_expansion(TERM, [TERM, TERM], STATE, STATE) <- True
 --8<-- [end:importing_expansion_rules]
 

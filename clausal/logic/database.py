@@ -565,7 +565,7 @@ class Database:
         # dynfix 2026-09-23 (todo/dynamic-declarations-are-invisible-to-arm-3-
         # 2026-09-22.md): a bare ``name/arity`` entry in a ``-module``/
         # ``-private`` export list (R6b) -- ``gv_free/1`` in
-        # tests/fixtures/gate_vocab.clausal is the real-world case --
+        # tests/fixtures/gate_vocab.seam is the real-world case --
         # declares an ARITY, never field names, so it cannot go in
         # ``_declared`` above (that dict's values ARE the field names).
         # Deliberately NOT a row either: ``compiler_v2``'s load step 7 locks
@@ -892,7 +892,7 @@ class Database:
             # does this name mean here".  It must NOT answer a write: a
             # ``create=True`` caller is defining a predicate, and handing it
             # somebody else's row is how a local clause stops producing
-            # solutions (tests/fixtures/fnmismatch_use.clausal -- itself a
+            # solutions (tests/fixtures/fnmismatch_use.seam -- itself a
             # load error since 2026-09-24; the rule stands).
             if not create:
                 return self._adopted.get(key)
@@ -1351,7 +1351,7 @@ class Database:
         """Record a bare ``name/arity`` -module/-private export entry (R6b):
         *functor*/*arity* is declared PREDICATE-shaped -- callable, may get
         clauses later, possibly from an IMPORTER rather than this module
-        (``gv_free/1``, ``tests/fixtures/gate_vocab.clausal``) -- with no
+        (``gv_free/1``, ``tests/fixtures/gate_vocab.seam``) -- with no
         field names known anywhere.  See the comment on ``_predicate_export``
         in ``__init__`` for why this is not a row.  Read only by
         ``declared_kind``; ``declared_fields``/``signature_for`` stay

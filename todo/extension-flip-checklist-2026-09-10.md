@@ -4,6 +4,42 @@
 own. **Not a bug list.** Every item here is correct right now, which is exactly why no sweep
 run today will find it. The trigger is the landing, not the code.
 
+## Status 2026-10-02: plan step 4 DONE, PENDING LANDING (feat/extension-flip-2026-10-02)
+
+The flip candidate (held for landing) does, on canonical 8288dbea:
+
+- **Rename sweep: DONE.** All 457 tracked `.clausal` files moved to `.seam`
+  with `git mv` (clausal/ 21 incl. stdlib, examples and the rewrite rules;
+  tests/ 329; packages/ 103; todo/done 4 seam repros).  No same-stem twin
+  is left, and no `.clausal` file is tracked.  1085 references to renamed
+  files and 8 `*.clausal` globs repointed in the same commit.
+- **Tuple flip: DONE** (item 1 below): `CLAUSAL_SUFFIXES = (".seam",)`,
+  `CLAUSAL_PROLOG_SUFFIXES = (".clausal",)`.  `SOURCE_SUFFIXES` is now in
+  the finder's order (`.seam`, `.clausal`, `.pl`).
+- **Pre-flip pins: DONE** (item 3 below): 29 tests rewritten to assert the
+  post-flip truth (none deleted, IDs kept).  The route-1 `M:G` positive pin
+  is unchanged (route 2 is still to come).
+- **Transition census:** re-baselined; content identical (key order only).
+- Route 1 (`.clausal` may not import `.pl`) is active with no further edit.
+
+### What remains after the flip lands
+
+1. **Package docs re-fence:** `packages/*/docs` still carry 861 seam blocks
+   fenced ```` ```clausal ````.  Re-fence them ```` ```seam ````, check the
+   per-package snippet counts are unchanged, THEN
+2. **drop `"clausal"` from `clausal/tools/doc_snippet_check.SEAM_FENCE_LANGS`**
+   (in that order, or those blocks silently stop being tested); after that a
+   ```` ```clausal ```` fence can mean Clausal Prolog.
+3. Routes 2-7 of the dialect gate (route 2 ruled strict).
+4. The end-of-life translator's "seam twin" comment in
+   `prolog_to_clausal._find_module_file` (see below); docs prose that still
+   calls `.clausal` seam source.
+5. Downstream: the harness writes `.clausal` for Clausal Prolog and the kit
+   twin (`formalize_lib.clausal`) -- not engine work.
+
+Delete this file once 1-2 have landed; until then it is the place the
+re-fence reads.
+
 ## Status 2026-10-01 (engine preparation landed on feat/extension-flip-prep-2026-10-01)
 
 Read this section first; the original inventory follows, each item marked.

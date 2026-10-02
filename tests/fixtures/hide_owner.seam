@@ -1,0 +1,22 @@
+# P3-1 Task 6 fixture (-hide, design doc §1a/§1b, ruling R1).
+#
+# Declares module `hide_owner` and hides the atom `hide_secret`.  Companion
+# fixtures: `hide_other.seam` (a DIFFERENT module declaring the SAME
+# bare spelling globally, NOT hidden -- cross-module isolation) and
+# `hide_importer.seam` (imports `holds/1` FROM this module but still
+# cannot spell `hide_secret` itself -- see tests/test_hide_directive.py).
+#
+# `-strict_atoms` exercises the "strictness interplay" build requirement:
+# `-hide` entries count as DECLARED for strictness purposes even though
+# every reference here compiles to the mangled spelling, not the bare one
+# -- every bare `hide_secret` reference below must compile clean under
+# strict mode with no separate `-module`/`-private` listing of the name.
+
+-strict_atoms
+-module(hide_owner, [holds/1, label/1, same/2])
+-hide([hide_secret])
+
+holds(hide_secret),
+label(hide_secret),
+
+same(X, Y) <- (holds(X), label(Y)),

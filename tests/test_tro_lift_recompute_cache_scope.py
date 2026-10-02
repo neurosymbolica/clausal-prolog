@@ -29,7 +29,7 @@ STRUCTURAL property the chosen fix guarantees -- the shared
 ``_sweep_tro_eligible`` pass wrote, i.e. the bucket recompute never touches
 them again.
 
-Fixture: tests/fixtures/tro_lift_recompute_cache.clausal -- two
+Fixture: tests/fixtures/tro_lift_recompute_cache.seam -- two
 independent str-keyed buckets, "a" and "b", each indexed (first-arg str
 literal, 7 clauses total > ``_INDEX_THRESHOLD``), TRO-eligible (tail
 recursion), and -- since P3-2 Task 4/R8 retired the str half of the
@@ -53,7 +53,7 @@ from clausal.logic.variables import Var, deref
 from clausal.terms import Sub
 
 _FIXTURE = os.path.join(
-    os.path.dirname(__file__), "fixtures", "tro_lift_recompute_cache.clausal"
+    os.path.dirname(__file__), "fixtures", "tro_lift_recompute_cache.seam"
 )
 
 

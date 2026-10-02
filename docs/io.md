@@ -75,7 +75,7 @@ prints it in its source form, `(1 + 2)`; see [Operators](operators.md).
 writer only *shows* the cons structure.
 
 ```seam
---8<-- "tests/fixtures/docs/io_examples.clausal:three_writers"
+--8<-- "tests/fixtures/docs/io_examples.seam:three_writers"
 ```
 
 #### The text writers: `write_text/1`, `writeln_text/1`, `write_text_to_string/2`
@@ -139,7 +139,7 @@ An unrecognised option raises `domain_error(write_option, Opt)`; a non-list
 scope, so there is no `write_term/3`, and `max_depth(N)` is not supported.
 
 ```seam
---8<-- "tests/fixtures/docs/io_examples.clausal:write_term"
+--8<-- "tests/fixtures/docs/io_examples.seam:write_term"
 ```
 
 ### The newline and string forms of each family
@@ -153,7 +153,7 @@ scope, so there is no `write_term/3`, and `max_depth(N)` is not supported.
 | `write_canonical/1` | canonical | no |
 
 ```seam
---8<-- "tests/fixtures/docs/io_examples.clausal:write_family"
+--8<-- "tests/fixtures/docs/io_examples.seam:write_family"
 ```
 
 **When to use which:**

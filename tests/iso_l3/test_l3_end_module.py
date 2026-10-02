@@ -249,12 +249,13 @@ def test_the_surface_default_table():
 def test_surface_of_follows_the_suffix_tuples(monkeypatch):
     assert EM.surface_of("m.pl") == "pl"
     assert EM.surface_of("m.seam") == "seam"
-    assert EM.surface_of("m.clausal") == "seam"       # until the flip
-    # The flip moves .clausal into CLAUSAL_PROLOG_SUFFIXES; nothing else.
-    monkeypatch.setattr(_suffixes, "CLAUSAL_PROLOG_SUFFIXES", (".clausal",))
-    monkeypatch.setattr(_suffixes, "CLAUSAL_SUFFIXES", (".seam",))
+    # Since the extension flip .clausal is the Clausal Prolog surface.
     assert EM.surface_of("m.clausal") == "clausal_prolog"
     assert EM.end_module_required(EM.surface_of("m.clausal")) is True
+    # And surface_of reads the tuples at each call.
+    monkeypatch.setattr(_suffixes, "CLAUSAL_PROLOG_SUFFIXES", ())
+    monkeypatch.setattr(_suffixes, "CLAUSAL_SUFFIXES", (".clausal", ".seam"))
+    assert EM.surface_of("m.clausal") == "seam"
 
 
 def test_a_clausal_prolog_file_needs_end_module_through_the_lowering():

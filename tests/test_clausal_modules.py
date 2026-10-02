@@ -1,10 +1,10 @@
 """Tests for .clausal module files — Python-level term-inspection cases.
 
-Behavior tests for predicates in meta.clausal / higher_order.clausal /
-lambdas.clausal / exceptions.clausal have been migrated to Test clauses
+Behavior tests for predicates in meta.seam / higher_order.seam /
+lambdas.seam / exceptions.seam have been migrated to Test clauses
 inside those .clausal modules. What remains here is term-inspection
 behavior that requires Python-level Compound/Var construction (the
-term_inspection.clausal module's predicates take Compound/Var arguments
+term_inspection.seam module's predicates take Compound/Var arguments
 that can't be expressed at clausal surface).
 """
 
@@ -46,13 +46,13 @@ def _call_succeeds(functor: str, *args, mod: Module) -> int:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Term inspection builtins (term_inspection.clausal) — V2-13
+# Term inspection builtins (term_inspection.seam) — V2-13
 # ══════════════════════════════════════════════════════════════════════════════
 
 
 class TestTermInspectionCopyFresh:
     def setup_method(self):
-        self.mod = _load_clausal_module("term_inspection.clausal")
+        self.mod = _load_clausal_module("term_inspection.seam")
 
     def test_copy_ground_term(self):
         # nv
@@ -96,7 +96,7 @@ class TestTermInspectionCopyFresh:
 
 class TestTermInspectionHasNoVars:
     def setup_method(self):
-        self.mod = _load_clausal_module("term_inspection.clausal")
+        self.mod = _load_clausal_module("term_inspection.seam")
 
     def test_ground_term_no_vars(self):
         # nv
@@ -122,7 +122,7 @@ class TestTermInspectionHasNoVars:
 
 class TestTermInspectionCountVars:
     def setup_method(self):
-        self.mod = _load_clausal_module("term_inspection.clausal")
+        self.mod = _load_clausal_module("term_inspection.seam")
 
     def test_no_vars(self):
         # nv
@@ -158,7 +158,7 @@ class TestTermInspectionCountVars:
 
 class TestTermInspectionNumberAndCount:
     def setup_method(self):
-        self.mod = _load_clausal_module("term_inspection.clausal")
+        self.mod = _load_clausal_module("term_inspection.seam")
 
     def test_no_vars(self):
         # nv
@@ -187,7 +187,7 @@ class TestTermInspectionNumberAndCount:
 
 class TestTermInspectionCopyShared:
     def setup_method(self):
-        self.mod = _load_clausal_module("term_inspection.clausal")
+        self.mod = _load_clausal_module("term_inspection.seam")
 
     def test_sharing_preserved(self):
         """f(X, X) copied: the two args in copy should be the same fresh Var."""
@@ -220,7 +220,7 @@ class TestTermInspectionCopyShared:
 
 class TestTermInspectionVarList:
     def setup_method(self):
-        self.mod = _load_clausal_module("term_inspection.clausal")
+        self.mod = _load_clausal_module("term_inspection.seam")
 
     def test_empty_list(self):
         # nv
@@ -249,13 +249,13 @@ class TestTermInspectionVarList:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Exception handling (exceptions.clausal) — V2-14
+# Exception handling (exceptions.seam) — V2-14
 # ══════════════════════════════════════════════════════════════════════════════
 
 
 class TestExceptionsCatchAll:
     def setup_method(self):
-        self.mod = _load_clausal_module("exceptions.clausal")
+        self.mod = _load_clausal_module("exceptions.seam")
 
     def test_catch_integer(self):
         # nv
@@ -270,7 +270,7 @@ class TestExceptionsCatchAll:
 
 class TestExceptionsSafeRecip:
     def setup_method(self):
-        self.mod = _load_clausal_module("exceptions.clausal")
+        self.mod = _load_clausal_module("exceptions.seam")
 
     def test_safe_recip_nonzero(self):
         # nv
@@ -285,7 +285,7 @@ class TestExceptionsSafeRecip:
 
 class TestExceptionsNested:
     def setup_method(self):
-        self.mod = _load_clausal_module("exceptions.clausal")
+        self.mod = _load_clausal_module("exceptions.seam")
 
     def test_inner_miss(self):
         # nv
@@ -304,7 +304,7 @@ class TestExceptionsDeadChildRecovery:
     The second attempt must create fresh generators — no dead child reuse."""
 
     def setup_method(self):
-        self.mod = _load_clausal_module("exceptions.clausal")
+        self.mod = _load_clausal_module("exceptions.seam")
 
     def test_parent_backtracks(self):
         # nv
@@ -314,7 +314,7 @@ class TestExceptionsDeadChildRecovery:
 
 class TestExceptionsCatchTransparent:
     def setup_method(self):
-        self.mod = _load_clausal_module("exceptions.clausal")
+        self.mod = _load_clausal_module("exceptions.seam")
 
     def test_no_throw(self):
         # nv

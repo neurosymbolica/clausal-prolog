@@ -257,11 +257,11 @@ class TestFunctorSignatureRegistry:
         fixtures_dir = pathlib.Path(__file__).parent / "fixtures"
         owner = _load_module(
             "tests.fixtures.sig_registry_owner",
-            str(fixtures_dir / "sig_registry_owner.clausal"),
+            str(fixtures_dir / "sig_registry_owner.seam"),
         )
         importer = _load_module(
             "tests.fixtures.sig_registry_importer",
-            str(fixtures_dir / "sig_registry_importer.clausal"),
+            str(fixtures_dir / "sig_registry_importer.seam"),
         )
         assert owner.__dict__[FUNCTOR_SIGNATURES_KEY]["pt"] == ("x", "y")
         registry = importer.__dict__[FUNCTOR_SIGNATURES_KEY]
@@ -526,7 +526,7 @@ class TestHeadSignaturePlacement:
             kwargs=[Keyword(name=n, value=Var()) for n in kw_names],
         )
 
-    # ``tagged_shapes_tagged.clausal`` declares ``point(X, Y)`` -- the
+    # ``tagged_shapes_tagged.seam`` declares ``point(X, Y)`` -- the
     # fixture's field names are uppercase, so kwarg-shaped head references
     # against it must use the same spelling.
 
@@ -1124,7 +1124,7 @@ class TestHeadPatternReachability:
         # Demonstrate the SELECTION, not just the key: instrument the
         # compiled bucket and fallback functions of a real, >threshold
         # cell-headed predicate (``kind/2``, 6 clauses -- see
-        # tests/fixtures/tagged_shapes_tagged.clausal) and drive it
+        # tests/fixtures/tagged_shapes_tagged.seam) and drive it
         # end-to-end through ``call()``.  Before this task both counters
         # would read ``{"bucket": 0, "fallback": 1}`` -- the fallback was
         # the only reachable route for a cell caller.
@@ -1855,9 +1855,9 @@ def _load_head_compound_importer():
 
     here = os.path.join(os.path.dirname(__file__), "fixtures")
     _load_module("tests.fixtures.head_compound_owner",
-                 os.path.join(here, "head_compound_owner.clausal"))
+                 os.path.join(here, "head_compound_owner.seam"))
     return _load_module("tests.fixtures.head_compound_importer",
-                        os.path.join(here, "head_compound_importer.clausal"))
+                        os.path.join(here, "head_compound_importer.seam"))
 
 
 class TestNormalizer:

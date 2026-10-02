@@ -25,7 +25,7 @@ from clausal.logic.variables import Trail, Var, deref, is_var, unify
 @pytest.fixture(scope="module")
 def pymod():
     fixture = os.path.join(
-        os.path.dirname(__file__), "clausal_modules", "head_list_tail_call.clausal"
+        os.path.dirname(__file__), "clausal_modules", "head_list_tail_call.seam"
     )
     return _load_module("head_list_tail_call_mod", fixture)
 

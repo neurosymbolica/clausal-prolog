@@ -63,7 +63,7 @@ them — a fact with a shelf life does not survive a handoff.
 
 | fact | how it was measured | result |
 | --- | --- | --- |
-| `-constants` usage in tracked seam sources | `git grep -l -- "-constants(" -- '*.clausal' '*.seam'` | **1** file: `tests/fixtures/const_functor_importer.clausal` |
+| `-constants` usage in tracked seam sources | `git grep -l -- "-constants(" -- '*.clausal' '*.seam'` | **1** file: `tests/fixtures/const_functor_importer.seam` |
 | `-constants` usage in the sibling trees | `grep -rl` over the three sibling checkouts | **0** real sites (2 `.md` analysis docs only) |
 | `++name` over a plain Python module global in a clause body | probe `cp_escape2.clausal`: `big(thing) <- (++max_fine > 4000)` and `small(thing) <- (++max_fine > 6000)` | **works** — 1 answer and 0 answers respectively (positive AND negative control) |
 | a declared atom binds a module global | probe `cp_collide.clausal` | `pi` global is `('pi',)` |
@@ -84,7 +84,7 @@ The last row is why Task 3 exists, and it is also a pre-existing defect in its o
 | `clausal/tools/prolog_to_clausal.py` | `_is_constant_name_shape`, used only to choose a diagnostic half |
 | `tests/test_constants.py` | the directive's own suite — the bulk of the migration |
 | `tests/test_var_classifier_conformance.py` | the lockstep gate on the five copies |
-| `tests/fixtures/const_functor_importer.clausal` | the one tracked seam fixture |
+| `tests/fixtures/const_functor_importer.seam` | the one tracked seam fixture |
 | `docs/syntax.md`, `docs/directives.md`, `docs/builtins.md`, `docs/for_prolog_programmers.md` | the human-readable surface |
 
 ---
@@ -461,7 +461,7 @@ git commit -m "refactor(constants): a listed name is an atom; the shape gates go
 **Files:**
 - Modify: `clausal/templating/term_rewriting.py:7940-7960` (the bare-Name constant branch) and
   `:8004-8020` (the `alias(...)` constant branch)
-- Test: `tests/test_constants.py`, `tests/fixtures/const_functor_importer.clausal`
+- Test: `tests/test_constants.py`, `tests/fixtures/const_functor_importer.seam`
 
 **Interfaces:**
 - Consumes: `_is_constant_declaration_name` (Task 1).
@@ -499,7 +499,7 @@ def test_an_imported_constant_is_reached_through_the_escape(tmp_path):
 ```
 
 Use whatever two-module helper `tests/test_constants.py` already has for the importer fixture —
-`tests/fixtures/const_functor_importer.clausal` exists for exactly this shape, so follow it
+`tests/fixtures/const_functor_importer.seam` exists for exactly this shape, so follow it
 rather than inventing a new helper.
 
 - [ ] **Step 2: Run it to verify it fails**
@@ -621,7 +621,7 @@ git commit -m "refactor(vars): the logic-variable rule has no exceptions left"
 ### Task 7: migrate the fixture, the remaining tests, and the docs
 
 **Files:**
-- Modify: `tests/fixtures/const_functor_importer.clausal`
+- Modify: `tests/fixtures/const_functor_importer.seam`
 - Modify: `tests/test_constants.py`, `tests/test_atoms_as_cells_flip.py`,
   `tests/test_ipython_integration.py`, `tests/test_lint_titlecase.py`,
   `tests/test_module_constant_reflection.py`
@@ -637,7 +637,7 @@ git commit -m "refactor(vars): the logic-variable rule has no exceptions left"
 - [ ] **Step 1: Migrate the one tracked seam fixture**
 
 ```bash
-sed -n '1,40p' tests/fixtures/const_functor_importer.clausal
+sed -n '1,40p' tests/fixtures/const_functor_importer.seam
 ```
 
 Rewrite its `-constants` names to lowercase and every use site from a bare name to `++name`.

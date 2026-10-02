@@ -239,6 +239,22 @@ since 0.4.0 finish three moves:
   decimal day count (as its float) instead of refusing it. A right-typed
   value the library rejects raises too: see the next entry. Wrap the call
   in `catch/3` where a caller wants the old failure.
+- **`.clausal` is now Clausal Prolog; seam source is `.seam`** (the
+  extension flip). A `.clausal` file is read as cut-free, ISO-like Prolog
+  by the native front end, whatever `CLAUSAL_PL_FRONTEND` says: `!`,
+  `->` and `*->` are refused, a module file must end with
+  `:- end_module(Name).`, and it may not import a `.pl` module. Seam
+  (Python-syntax) source must be named `.seam`; a seam file left as
+  `.clausal` now fails to load with a Prolog syntax error. Every seam file
+  in this repository (stdlib, examples, rewrite rules, tests, packages) is
+  renamed. In one directory `name.seam` beats `name.clausal`, which beats
+  `name.pl`, for any importer. `clausal-fmt` and `clausal-rewrite` take
+  `.seam` and refuse `.clausal`. The test runner, the doc checks and the
+  diagnostics follow; its messages read ".seam, .clausal or .pl".
+  **Migrate:** `git mv name.clausal name.seam` for each seam file (MOVE,
+  never copy: a stale `name.clausal` beside `name.seam` is now a different,
+  Prolog, module), and update any glob or path that names `*.clausal`.
+  Bytecode caches need no action (a `.clausal` file has its own cache key).
 
 - **The seam's `if_/3` requires a reifiable condition** (ruled
   2026-10-01), as Scryer's library(reif) does and as the native `.pl` front

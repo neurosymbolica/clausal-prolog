@@ -366,7 +366,7 @@ Predicates are locked after module loading — `assertz`/`retract` on one raise 
 
     - `tests/test_compiled_programs.py` (41 tests): graph reachability, fibonacci, N-queens, NAF
     - `tests/test_predicate_meta.py`: predicate rows, handles and locking
-    - `tests/fixtures/edge_graph.clausal`: example fact + rule predicate file
+    - `tests/fixtures/edge_graph.seam`: example fact + rule predicate file
 
 ---
 

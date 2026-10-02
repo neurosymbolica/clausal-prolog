@@ -35,7 +35,7 @@ The DCG rewriter mints `_dcg{N}_` (`term_rewriting.py:2370`, `:2410`, and the `h
 
 **Files:**
 - Modify: `clausal/templating/term_rewriting.py:2370,2410,2500-2507` (and the DCG head-arg mint site — grep `_dcg0_`)
-- Modify: `tests/fixtures/edcg_counter.clausal` (hand-written `_edcg_*_` names mirror the minted convention)
+- Modify: `tests/fixtures/edcg_counter.seam` (hand-written `_edcg_*_` names mirror the minted convention)
 - Modify: `tests/test_lint_cons_bar_head.py` (references `_dcg` spellings — grep before editing)
 - Test: existing `tests/test_dcg.py` and the EDCG tests (grep `edcg` under `tests/`)
 
@@ -60,7 +60,7 @@ Record the full list; every hit gets edited in this task.
 ...
             fresh = f"_dcg{counter}"
 ```
-Update `tests/fixtures/edcg_counter.clausal` identically (the fixture interoperates with the minted names — they must stay in sync) and any doc mention found in Step 1.
+Update `tests/fixtures/edcg_counter.seam` identically (the fixture interoperates with the minted names — they must stay in sync) and any doc mention found in Step 1.
 
 - [ ] **Step 3: Run the DCG/EDCG/lint tests**
 
@@ -70,7 +70,7 @@ Expected: same failure set as before the edit (baseline it first on the unmodifi
 - [ ] **Step 4: Commit**
 
 ```bash
-git add clausal/templating/term_rewriting.py tests/fixtures/edcg_counter.clausal tests/test_lint_cons_bar_head.py
+git add clausal/templating/term_rewriting.py tests/fixtures/edcg_counter.seam tests/test_lint_cons_bar_head.py
 git commit -m "dcg/edcg: drop trailing underscore from minted hidden-variable names
 
 Prepares the _X_ lexical class for constants (see
@@ -88,7 +88,7 @@ name may be constant-shaped."
 - Modify: `clausal/logic/goal_expansion.py:203`
 - Modify: `clausal/tools/clausal_to_prolog.py:311`
 - Modify: `clausal/logic/predicate.py:60-67`
-- Modify: `tests/fixtures/callsite_joint_lib.clausal`, `tests/fixtures/secondary_dispatch_tro.clausal` (`_JOINT_COVERAGE_` → `_JOINT_COVERAGE`)
+- Modify: `tests/fixtures/callsite_joint_lib.seam`, `tests/fixtures/secondary_dispatch_tro.seam` (`_JOINT_COVERAGE_` → `_JOINT_COVERAGE`)
 - Create: `tests/test_var_classifier_conformance.py`
 
 **Interfaces:**
@@ -207,7 +207,7 @@ Mirror both into the other four copies **preserving each copy's local quirks** (
 
 - [ ] **Step 4: Rename the two fixture variables**
 
-`_JOINT_COVERAGE_` → `_JOINT_COVERAGE` in `tests/fixtures/callsite_joint_lib.clausal` and `tests/fixtures/secondary_dispatch_tro.clausal` (every occurrence; it stays a variable — leading underscore).
+`_JOINT_COVERAGE_` → `_JOINT_COVERAGE` in `tests/fixtures/callsite_joint_lib.seam` and `tests/fixtures/secondary_dispatch_tro.seam` (every occurrence; it stays a variable — leading underscore).
 
 - [ ] **Step 5: Run conformance + neighbors**
 
@@ -217,7 +217,7 @@ Expected: PASS (modulo the pre-existing baseline failure set).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add clausal/templating/term_rewriting.py clausal/templating/desugar.py clausal/logic/goal_expansion.py clausal/tools/clausal_to_prolog.py clausal/logic/predicate.py tests/test_var_classifier_conformance.py tests/fixtures/callsite_joint_lib.clausal tests/fixtures/secondary_dispatch_tro.clausal
+git add clausal/templating/term_rewriting.py clausal/templating/desugar.py clausal/logic/goal_expansion.py clausal/tools/clausal_to_prolog.py clausal/logic/predicate.py tests/test_var_classifier_conformance.py tests/fixtures/callsite_joint_lib.seam tests/fixtures/secondary_dispatch_tro.seam
 git commit -m "lexical: carve the _X_ constant class out of the variable namespace
 
 All five _is_logic_var_name copies exclude one-underscore-each-end

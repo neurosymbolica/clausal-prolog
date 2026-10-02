@@ -296,7 +296,7 @@ EOF
 ### Task 2: End-to-end `.clausal` ordering fixture
 
 **Files:**
-- Create: `tests/fixtures/date_time_ordering.clausal`
+- Create: `tests/fixtures/date_time_ordering.seam`
 - Modify: `tests/test_date_time_ordering.py` (append an end-to-end test class)
 
 **Interfaces:**
@@ -313,7 +313,7 @@ class TestEndToEnd:
         from clausal.testing import (
             load_clausal_module, collect_tests, run_test,
         )
-        mod = load_clausal_module("tests/fixtures/date_time_ordering.clausal")
+        mod = load_clausal_module("tests/fixtures/date_time_ordering.seam")
         descs = collect_tests(mod)
         assert descs, "fixture defined no Test/1 clauses"
         for desc in descs:
@@ -329,7 +329,7 @@ Expected: FAIL — the fixture file does not exist yet (`load_clausal_module` ra
 
 - [ ] **Step 3: Create the fixture**
 
-Create `tests/fixtures/date_time_ordering.clausal` (note: Clausal uses `<=`/`>=`, not `=<`):
+Create `tests/fixtures/date_time_ordering.seam` (note: Clausal uses `<=`/`>=`, not `=<`):
 
 ```
 # Ordering of date/datetime/time via the standard comparison operators,
@@ -353,12 +353,12 @@ Test("catch incomparable") <- catch((date(2020,1,1,A), datetime(2020,1,1,0,0,0,B
 
 Run: `cd /workspace/clausal-bug-fix && PYTHONPATH=/workspace/clausal-bug-fix /home/node/.pyenv/versions/3.13.3/bin/python -m pytest tests/test_date_time_ordering.py::TestEndToEnd -q -p no:cacheprovider`
 
-Expected: PASS. (You can also eyeball it directly: `... -m clausal.testing tests/fixtures/date_time_ordering.clausal` prints `9 tests: 9 passed`.)
+Expected: PASS. (You can also eyeball it directly: `... -m clausal.testing tests/fixtures/date_time_ordering.seam` prints `9 tests: 9 passed`.)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tests/fixtures/date_time_ordering.clausal tests/test_date_time_ordering.py
+git add tests/fixtures/date_time_ordering.seam tests/test_date_time_ordering.py
 git commit -m "$(cat <<'EOF'
 test(date_time): end-to-end ordering fixture for date/datetime/time
 

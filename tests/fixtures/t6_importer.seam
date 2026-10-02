@@ -1,0 +1,25 @@
+# Importer fixture for the P3-3 Task 6 qualified-goal tests.
+#
+# Defines its OWN p/1, tp/1 and home/1 with different facts from
+# t6_exporter.seam's, and imports the exporter as a module so the dotted
+# call-node spelling of a cross-module goal is available for the parity pin.
+-double_quotes(atom)
+-import_module(tests.fixtures.t6_exporter)
+-table(tp/1)
+
+p(1),
+p(2),
+
+tp(3),
+tp(4),
+
+home("importer"),
+
+# The dotted spelling of the same cross-module goal the qualified cell
+# ``(":", "tests.fixtures.t6_exporter", ("p", X))`` names — the parity oracle.
+dotted_p(X) <- tests.fixtures.t6_exporter.p(X)
+
+call_host1(G) <- call(G),
+call_host2(G, A) <- call(G, A),
+call_host3(G, A, B) <- call(G, A, B),
+call_host4(G, A, B, C) <- call(G, A, B, C),

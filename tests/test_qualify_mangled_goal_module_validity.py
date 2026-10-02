@@ -63,7 +63,7 @@ def test_a_mangled_atom_over_a_real_loaded_clausal_module_still_qualifies():
     IS a loaded `.clausal` module (declares `holds/1` among others) still
     qualifies to the `(":", module, goal)` form the engine resolves."""
     mod_name = "tests.fixtures.hide_owner"
-    _load_module(mod_name, _fixture_path("hide_owner.clausal"))
+    _load_module(mod_name, _fixture_path("hide_owner.seam"))
 
     cell = (mangle(mod_name, "holds"), 1)
     qualified = qualify_mangled_goal(cell)

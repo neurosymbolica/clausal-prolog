@@ -61,7 +61,7 @@ through `color_code/2`.
 ## Worked examples
 
 The examples below are exact copies of the `.clausal` integration
-tests under `tests/fixtures/opencv_phase2_color.clausal`.
+tests under `tests/fixtures/opencv_phase2_color.seam`.
 
 ### BGR → grayscale by code
 

@@ -18,7 +18,7 @@ from clausal.testing import load_clausal_module
 
 _EXAMPLE = os.path.join(
     os.path.dirname(__file__), os.pardir, "clausal", "examples",
-    "metainterpreters.clausal",
+    "metainterpreters.seam",
 )
 
 

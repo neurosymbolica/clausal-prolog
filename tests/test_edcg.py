@@ -484,11 +484,11 @@ class TestEdcgFixture:
     """Test EDCG via .clausal fixture files."""
 
     def test_counter_fixture(self, tmp_path):
-        """Load edcg_counter.clausal and run a scaled count."""
+        """Load edcg_counter.seam and run a scaled count."""
         # nv
         import shutil, os
         fixture_src = os.path.join(
-            os.path.dirname(__file__), "fixtures", "edcg_counter.clausal"
+            os.path.dirname(__file__), "fixtures", "edcg_counter.seam"
         )
         dest = tmp_path / f"edcg_counter{SEAM}"
         shutil.copy(fixture_src, dest)

@@ -2,7 +2,7 @@
 
 Arrays, sets, strings, and uninterpreted functions require Z3 sort objects
 as arguments, which can't be expressed in pure .clausal syntax.
-Problem-solving tests for other theories are in tests/fixtures/z3_*.clausal.
+Problem-solving tests for other theories are in tests/fixtures/z3_*.seam.
 """
 
 from __future__ import annotations

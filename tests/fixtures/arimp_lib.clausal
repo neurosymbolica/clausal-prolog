@@ -1,6 +1,0 @@
-# clausal: no-collect
-# Exports a /2 predicate.  `arimp_use.clausal` imports it and calls it at /1.
--module(arimp_lib, [arimp_pair(KEY, VALUE)])
--private([a])
-
-arimp_pair(a, 1)

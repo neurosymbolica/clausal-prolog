@@ -107,17 +107,17 @@ def load(tmp_path_factory):
 
 class TestOracles:
     def test_queens6_count(self, load):
-        m = load("queens", path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures", "clpfd_queens.clausal"))
+        m = load("queens", path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures", "clpfd_queens.seam"))
         qs = [Var() for _ in range(6)]
         assert sum(1 for _ in solve(("safe_queens", 6, qs), m)) == 4
 
     def test_queens8_count(self, load):
-        m = load("queens", path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures", "clpfd_queens.clausal"))
+        m = load("queens", path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures", "clpfd_queens.seam"))
         qs = [Var() for _ in range(8)]
         assert sum(1 for _ in solve(("safe_queens", 8, qs), m)) == 92
 
     def test_sendmore_unique(self, load):
-        m = load("sendmore", path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures", "clpfd_sendmore.clausal"))
+        m = load("sendmore", path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures", "clpfd_sendmore.seam"))
         vs = [Var() for _ in range(8)]
         sols = [tuple(deref(v) for v in vs) for _ in solve(("sendmoney", *vs), m)]
         assert sols == [(9, 5, 6, 7, 1, 0, 8, 2)]

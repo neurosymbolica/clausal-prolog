@@ -26,7 +26,7 @@ from clausal.terms import term_str
 @pytest.fixture(scope="module")
 def hop_mod():
     path = os.path.join(
-        os.path.dirname(__file__), "fixtures", "secondary_dispatch_tro.clausal"
+        os.path.dirname(__file__), "fixtures", "secondary_dispatch_tro.seam"
     )
     mod = _load_module("tests.fixtures.secondary_dispatch_tro", path)
     return mod

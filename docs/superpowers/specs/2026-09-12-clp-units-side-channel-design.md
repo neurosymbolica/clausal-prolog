@@ -23,7 +23,7 @@ leaf guard `_unknown_expr_leaf_error` (Quantity inside a tree). Both are
 correct refusals for what they were written against — a broken FD var — and
 neither is widened by this design.
 
-The workaround in `tests/fixtures/units_clpfd.clausal` is the shape the todo
+The workaround in `tests/fixtures/units_clpfd.seam` is the shape the todo
 objects to: constrain bare integers, label, then wrap with unit predicates
 afterwards. A value used both to decide and to compute is written twice.
 
@@ -460,7 +460,7 @@ value with the dimension, which is exactly what a `Quantity` is today.
 | `clausal/modules/currency.py` | money builtins accept the exact-number set (`int`, `Fraction`, `Decimal`) |
 | `clausal/logic/builtins/__init__.py` | import the new module for its hook registration, as `units_constraint` is |
 | `tests/test_units_clp.py` (new) | §6 |
-| `tests/fixtures/units_clp_side_channel.clausal` (new) | acceptance cases in the surface language |
+| `tests/fixtures/units_clp_side_channel.seam` (new) | acceptance cases in the surface language |
 | `tests/audit_2026_07_05/test_12_seams.py:276`, `tests/test_date_time_ordering.py:201` | the two tests that pin "Quantity against a Var raises" flip to the new behaviour (decision D6) |
 | `todo/clp-units-side-channel-2026-09-12.md` | `git mv` to `todo/done/` at the end |
 

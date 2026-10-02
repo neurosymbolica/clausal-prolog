@@ -444,7 +444,7 @@ class TestBignumIntegration:
         from clausal.testing import load_clausal_module
         from clausal.logic.solve import call
 
-        mod = load_clausal_module("tests/fixtures/wrap_tabled_fib.clausal")
+        mod = load_clausal_module("tests/fixtures/wrap_tabled_fib.seam")
         lm = mod.__dict__["$module"]
         trail = Trail()
         r = Var()

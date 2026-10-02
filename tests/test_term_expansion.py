@@ -146,10 +146,10 @@ class TestIdentityExpansion:
             assert _head_functor(p.head) == "foo"
 
     def test_identity_via_fixture(self):
-        """Full import of expansion_passthrough.clausal."""
+        """Full import of expansion_passthrough.seam."""
         # nv
         mod = _load_module(
-            "_exp_pt", os.path.join(FIXTURES_DIR, "expansion_passthrough.clausal")
+            "_exp_pt", os.path.join(FIXTURES_DIR, "expansion_passthrough.seam")
         )
         lm = mod.__dict__["$module"]
         x = Var()
@@ -175,10 +175,10 @@ class TestSuppression:
         assert result == []
 
     def test_suppress_via_fixture(self):
-        """Full import of expansion_suppress.clausal — no foo clauses."""
+        """Full import of expansion_suppress.seam — no foo clauses."""
         # nv
         mod = _load_module(
-            "_exp_sup", os.path.join(FIXTURES_DIR, "expansion_suppress.clausal")
+            "_exp_sup", os.path.join(FIXTURES_DIR, "expansion_suppress.seam")
         )
         lm = mod.__dict__["$module"]
         assert not lm.db.is_defined("foo", 1)
@@ -621,7 +621,7 @@ class TestImportedExpansionRules:
     """term_expansion rules imported from another module via -import_from."""
 
     def test_imported_te_via_fixture(self):
-        """Full import of expansion_importer.clausal which imports TE rules."""
+        """Full import of expansion_importer.seam which imports TE rules."""
         # nv
         import sys
         # Ensure fixtures dir is on path for -import_from resolution.
@@ -632,12 +632,12 @@ class TestImportedExpansionRules:
             # First load the provider so it's in sys.modules.
             _load_module(
                 "expansion_provider",
-                os.path.join(FIXTURES_DIR, "expansion_provider.clausal"),
+                os.path.join(FIXTURES_DIR, "expansion_provider.seam"),
             )
             # Now load the importer that uses -import_from(expansion_provider, ...).
             mod = _load_module(
                 "_exp_imp",
-                os.path.join(FIXTURES_DIR, "expansion_importer.clausal"),
+                os.path.join(FIXTURES_DIR, "expansion_importer.seam"),
             )
             lm = mod.__dict__["$module"]
             x = Var()
@@ -657,7 +657,7 @@ class TestImportedExpansionRules:
         # nv
         mod = _load_module(
             "_exp_prov",
-            os.path.join(FIXTURES_DIR, "expansion_provider.clausal"),
+            os.path.join(FIXTURES_DIR, "expansion_provider.seam"),
         )
         te_cls = mod.__dict__.get("term_expansion")
         assert te_cls is not None
@@ -780,7 +780,7 @@ class TestNestedVarSubstitution:
         # nv
         mod = _load_module(
             "_exp_nested_var",
-            os.path.join(FIXTURES_DIR, "expansion_nested_var.clausal"),
+            os.path.join(FIXTURES_DIR, "expansion_nested_var.seam"),
         )
         lm = mod.__dict__["$module"]
         x = Var()

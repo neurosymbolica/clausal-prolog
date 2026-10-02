@@ -28,7 +28,7 @@ def use_mod():
     # Loaded once per module — atoms and functor classes are module-scoped,
     # so tests must not mix objects across separate loads.
     path = os.path.join(
-        os.path.dirname(__file__), "fixtures", "callsite_bucket_use.clausal"
+        os.path.dirname(__file__), "fixtures", "callsite_bucket_use.seam"
     )
     mod = _load_module("tests.fixtures.callsite_bucket_use", path)
     return mod.__dict__["$module"]
@@ -65,7 +65,7 @@ class TestImportedGroundCallSite:
 @pytest.fixture(scope="module")
 def tabled_use_mod():
     path = os.path.join(
-        os.path.dirname(__file__), "fixtures", "callsite_tabled_use.clausal"
+        os.path.dirname(__file__), "fixtures", "callsite_tabled_use.seam"
     )
     mod = _load_module("tests.fixtures.callsite_tabled_use", path)
     return mod.__dict__["$module"]
@@ -128,7 +128,7 @@ class TestImportedGroundCallSiteMultiSolution:
 @pytest.fixture(scope="module")
 def joint_use_mod():
     path = os.path.join(
-        os.path.dirname(__file__), "fixtures", "callsite_joint_use.clausal"
+        os.path.dirname(__file__), "fixtures", "callsite_joint_use.seam"
     )
     mod = _load_module("tests.fixtures.callsite_joint_use", path)
     return mod.__dict__["$module"]
@@ -175,7 +175,7 @@ class TestImportedJointGroundCallSite:
 @pytest.fixture(scope="module")
 def throw_use_mod():
     path = os.path.join(
-        os.path.dirname(__file__), "fixtures", "callsite_throw_use.clausal"
+        os.path.dirname(__file__), "fixtures", "callsite_throw_use.seam"
     )
     mod = _load_module("tests.fixtures.callsite_throw_use", path)
     return mod.__dict__["$module"]

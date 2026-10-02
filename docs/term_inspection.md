@@ -234,7 +234,7 @@ names of a functor.
     fields are fixed by its declaration.
 
 ```seam
---8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:quick_example"
+--8<-- "tests/fixtures/docs/keyword_preds_examples.seam:quick_example"
 ```
 
 A term is never padded: a construction with fewer arguments than the declared
@@ -255,7 +255,7 @@ p(P) <- (P is point(_X, 20, 30))
 new values. `Overrides` is a Python dict mapping field names to new values.
 
 ```seam
---8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:vary_examples"
+--8<-- "tests/fixtures/docs/keyword_preds_examples.seam:vary_examples"
 ```
 
 Works for declared functor cells and term (dataclass) instances.
@@ -266,7 +266,7 @@ Works for declared functor cells and term (dataclass) instances.
 (contain logic variables).
 
 ```seam
---8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:unbound_keys_examples"
+--8<-- "tests/fixtures/docs/keyword_preds_examples.seam:unbound_keys_examples"
 ```
 
 ### signature/3
@@ -276,7 +276,7 @@ predicate. Given a functor name and arity, unifies `Names` with the tuple of
 field names.
 
 ```seam
---8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:signature_example"
+--8<-- "tests/fixtures/docs/keyword_preds_examples.seam:signature_example"
 ```
 
 This is a database-dependent operation — the predicate must have been defined

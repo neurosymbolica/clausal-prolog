@@ -307,7 +307,7 @@ class TestImportedPredicate:
         from clausal.logic.solve import call
         from clausal.logic.variables import Var
         mod = _load_module("_arimp_use",
-                           os.path.join(FIXTURES, "arimp_use.clausal"))
+                           os.path.join(FIXTURES, "arimp_use.seam"))
         # The CLASS is pinned, not just TypeError: a plain TypeError here is
         # exactly what the bug was.
         with pytest.raises(PredicateArityMismatchError) as exc:
@@ -318,7 +318,7 @@ class TestImportedPredicate:
         assert "arimp_pair takes 2 arguments" in self._error()
 
     def test_points_across_the_module_boundary(self):
-        assert "arimp_lib.clausal:" in self._error()
+        assert "arimp_lib.seam:" in self._error()
 
 
 # ── the unit-level message builder ───────────────────────────────────────────
@@ -377,7 +377,7 @@ class TestTermConstructionUnaffected:
 
     def test_partial_kwargs_functor(self):
         """``vec(x=1)`` builds a *term* — arity 1 against a /2 class."""
-        assert main([os.path.join(FIXTURES, "builtins_keywords.clausal")]) == 0
+        assert main([os.path.join(FIXTURES, "builtins_keywords.seam")]) == 0
 
     def test_partial_term_in_argument_position(self, tmp_path):
         """``citation(REF)`` as an *argument* — arity 1 against a /3 predicate.
@@ -411,7 +411,7 @@ class TestTermConstructionUnaffected:
         the dotted-owner-path clean-error half.
         """
         use = load_clausal_module(
-            os.path.join(FIXTURES, "impord_atom_then_pred.clausal"))
+            os.path.join(FIXTURES, "impord_atom_then_pred.seam"))
         lm = use.__dict__["$module"]
         k, v = Var(), Var()
         results = sorted(
@@ -433,7 +433,7 @@ class TestTermConstructionUnaffected:
         recorded is this.
         """
         use = load_clausal_module(
-            os.path.join(FIXTURES, "impord_atom_then_pred.clausal"))
+            os.path.join(FIXTURES, "impord_atom_then_pred.seam"))
         lm = use.__dict__["$module"]
         k, v = Var(), Var()
         results = sorted(
@@ -483,7 +483,7 @@ class TestForeignSingleArgumentImplementor:
         from clausal.logic.solve import call
         from clausal.logic.variables import Var, deref
         mod = _load_module("_fordisp_use",
-                           os.path.join(FIXTURES, "foreign_dispatch_use.clausal"))
+                           os.path.join(FIXTURES, "foreign_dispatch_use.seam"))
         v = Var()
         # Bindings are live on the yielded trail, not after it is undone.
         bound = [deref(v) for _ in call("fordisp_lookup", mint("b"), v,

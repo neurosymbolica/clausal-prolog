@@ -78,7 +78,7 @@ def test_a_bare_export_entry_is_a_predicate_with_no_declared_fields(
     2026-09-22.md).  Parity with ``test_dynamic_is_a_predicate_with_no_
     declared_fields`` above, for the OTHER spelling the todo names: a bare
     ``name/arity`` entry in a ``-module``/``-private`` export list (R6b) --
-    ``gv_free/1`` in ``tests/fixtures/gate_vocab.clausal`` is the
+    ``gv_free/1`` in ``tests/fixtures/gate_vocab.seam`` is the
     real-world case.  It synthesizes placeholder field names on its CLASS
     (mirroring ``-dynamic`` exactly -- see
     ``term_rewriting._declare_predicate_export``) but, before this fix,

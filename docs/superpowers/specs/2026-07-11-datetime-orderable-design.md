@@ -131,7 +131,7 @@ returns `False` for incomparable types rather than raising.
 ## Part 2 — Regression tests
 
 New file `tests/test_date_time_ordering.py` (Python level) plus a
-`tests/fixtures/date_time_ordering.clausal` fixture run through
+`tests/fixtures/date_time_ordering.seam` fixture run through
 `load_clausal_module` / `collect_tests` / `run_test` (end-to-end).
 
 Python level (exercises whichever `fd_*` implementation is active — the C
