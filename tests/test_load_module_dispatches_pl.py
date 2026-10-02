@@ -43,10 +43,19 @@ def test_pl_path_loads_through_the_selected_front_end(tmp_path, monkeypatch,
 
 @pytest.mark.parametrize("suffix", [".seam", ".clausal"])
 def test_seam_and_clausal_paths_are_unchanged(tmp_path, monkeypatch, suffix):
-    monkeypatch.setenv("CLAUSAL_PL_FRONTEND", "native")
+    """``.seam`` is seam source (PredicateLoader).  Since the extension flip
+    ``.clausal`` is Clausal Prolog: always the native loader, even with the
+    translator selected."""
+    monkeypatch.setenv("CLAUSAL_PL_FRONTEND",
+                       "native" if suffix == ".seam" else "translator")
     name = f"_lm_seam_{next(_N)}"
     p = tmp_path / f"{name}{suffix}"
-    p.write_text("-private([red])\ncolour(red),\n")
+    if suffix == ".seam":
+        p.write_text("-private([red])\ncolour(red),\n")
+        want = ih.PredicateLoader
+    else:
+        p.write_text("colour(red).\n")
+        want = ih.NativePrologLoader
     mod = _load_module(name, str(p))
-    assert type(mod.__loader__) is ih.PredicateLoader
+    assert type(mod.__loader__) is want
     assert _answers(mod, "colour") == ["red"]

@@ -16,7 +16,7 @@ The flip candidate (held for landing) does, on canonical 8288dbea:
 - **Tuple flip: DONE** (item 1 below): `CLAUSAL_SUFFIXES = (".seam",)`,
   `CLAUSAL_PROLOG_SUFFIXES = (".clausal",)`.  `SOURCE_SUFFIXES` is now in
   the finder's order (`.seam`, `.clausal`, `.pl`).
-- **Pre-flip pins: DONE** (item 3 below): 28 tests rewritten to assert the
+- **Pre-flip pins: DONE** (item 3 below): 29 tests rewritten to assert the
   post-flip truth (none deleted, IDs kept).  The route-1 `M:G` positive pin
   is unchanged (route 2 is still to come).
 - **Transition census:** re-baselined; content identical (key order only).
