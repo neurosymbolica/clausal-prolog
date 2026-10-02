@@ -20,6 +20,22 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **The `clausal-scipy`, `clausal-sklearn`, `clausal-sympy` and `clausal-spacy`
+  optional packages rename their TitleCase predicates to lower_snake_case**
+  (e.g. `Simplify` -> `simplify`, `KMeans` -> `k_means`, `ToSympy` ->
+  `to_sympy`). These names were registered from Python
+  (`ModulePredicate("Name")` / `_pred("Name", ...)` / `X._register(...)`),
+  so the engine's TitleCase lint never saw them at load time, and Clausal
+  code could not call them by name -- a TitleCase name in functor position
+  is a load-time error. Acronyms collapse to one lowercase word (`FFT` ->
+  `fft`, `SVD` -> `svd`). Two names are kept TitleCase because they collide,
+  in the same module, with a pre-existing lower_snake_case name:
+  `sympy.Inf` (the module already exports a lowercase `inf` constant) and
+  `sympy.ToSympy` / `sympy.FromSympy` (the module already has private
+  `to_sympy()` / `from_sympy()` conversion helpers, used internally and
+  unit-tested directly). Full per-package rename tables are in each
+  package's `docs/RENAMES.md`.
+
 - **A file-system or network failure in a library adapter raises an ISO
   error** (ruled 2026-10-02) instead of failing the goal. The model is ISO
   `open/4` (8.11.5.3 j, k): a path that does not exist (or goes through a
