@@ -177,7 +177,7 @@ class TestTreallaExamples:
         # nv
         from clausal.trealla import Trealla
         with Trealla() as t:
-            t.consult_file(str(self.EXAMPLES / "fibonacci.clausal"))
+            t.consult_file(str(self.EXAMPLES / "fibonacci.seam"))
             sol = t.query_one("fib(10, R).")
             assert sol is not None
             assert sol["R"] == 55
@@ -187,7 +187,7 @@ class TestTreallaExamples:
         from clausal.trealla import Trealla
         with Trealla() as t:
             t.consult_string(":- use_module(library(lists)).")
-            t.consult_file(str(self.EXAMPLES / "graph.clausal"))
+            t.consult_file(str(self.EXAMPLES / "graph.seam"))
             assert t.query_bool("reachable(1, 6).")
             assert not t.query_bool("reachable(5, 1).")
 

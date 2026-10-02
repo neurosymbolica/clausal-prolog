@@ -213,7 +213,7 @@ test("nested access") <- (
     - **Module:** `clausal/modules/yaml_module.py`
     - **Adapter class:** `_YamlPredicate` (same pattern as `_RegexPredicate`)
     - **Backend:** PyYAML (`yaml.safe_load`, `yaml.safe_dump`)
-    - **Tests:** `tests/test_yaml_module.py` (45 tests), `tests/fixtures/yaml_basic.clausal` (10 fixture tests)
+    - **Tests:** `tests/test_yaml_module.py` (45 tests), `tests/fixtures/yaml_basic.seam` (10 fixture tests)
 
     ---
 

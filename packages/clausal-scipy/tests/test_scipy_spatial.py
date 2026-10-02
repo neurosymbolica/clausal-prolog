@@ -696,7 +696,7 @@ def _succeeds(functor, *args, module):
 
 
 class TestSciPySpatialFixture:
-    """Run Test predicates from tests/fixtures/scipy_spatial_tests.clausal."""
+    """Run Test predicates from tests/fixtures/scipy_spatial_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):

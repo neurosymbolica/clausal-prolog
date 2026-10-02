@@ -77,7 +77,7 @@ unification, so they pass through unwrapped with reified operands. A body
 goal `X > 0` reifies as `Gt(left=Variable('X'), right=0)` and is matched by
 writing `Gt(A, B)` — the constructor names are available in every `.clausal`
 module. This keeps the operator subset matchable exactly as demonstrated by
-`clausal/examples/symbolic_diff.clausal`, at the cost of coupling matchers
+`clausal/examples/symbolic_diff.seam`, at the cost of coupling matchers
 to the `pythonic_ast` node names.
 
 Conjunctions normalise to Python lists wherever they appear in goal

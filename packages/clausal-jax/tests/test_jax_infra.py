@@ -31,7 +31,7 @@ def _succeeds(functor, *args, module):
 
 
 class TestJaxArrayFixture:
-    """Run Test predicates from tests/fixtures/jax_array_tests.clausal."""
+    """Run Test predicates from tests/fixtures/jax_array_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -136,7 +136,7 @@ class TestJaxArrayFixture:
 
 
 class TestJaxFftFixture:
-    """Run Test predicates from tests/fixtures/jax_fft_tests.clausal."""
+    """Run Test predicates from tests/fixtures/jax_fft_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -191,7 +191,7 @@ class TestJaxFftFixture:
 
 
 class TestJaxLinalgFixture:
-    """Run Test predicates from tests/fixtures/jax_linalg_tests.clausal."""
+    """Run Test predicates from tests/fixtures/jax_linalg_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -265,7 +265,7 @@ class TestJaxLinalgFixture:
 
 
 class TestJaxComparisonFixture:
-    """Run Test predicates from tests/fixtures/jax_comparison_tests.clausal."""
+    """Run Test predicates from tests/fixtures/jax_comparison_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -321,7 +321,7 @@ class TestJaxComparisonFixture:
 
 
 class TestJaxMathFixture:
-    """Run Test predicates from tests/fixtures/jax_math_tests.clausal."""
+    """Run Test predicates from tests/fixtures/jax_math_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -383,7 +383,7 @@ class TestJaxMathFixture:
 
 
 class TestJaxShapeExtrasFixture:
-    """Run Test predicates from tests/fixtures/jax_shape_extras_tests.clausal."""
+    """Run Test predicates from tests/fixtures/jax_shape_extras_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -453,7 +453,7 @@ class TestJaxShapeExtrasFixture:
 
 
 class TestJaxCreation2Fixture:
-    """Run Test predicates from tests/fixtures/jax_creation2_tests.clausal."""
+    """Run Test predicates from tests/fixtures/jax_creation2_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -508,7 +508,7 @@ class TestJaxCreation2Fixture:
 
 
 class TestJaxStatsFixture:
-    """Run Test predicates from tests/fixtures/jax_stats_tests.clausal."""
+    """Run Test predicates from tests/fixtures/jax_stats_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -564,7 +564,7 @@ class TestJaxStatsFixture:
 
 
 class TestJaxTreeFixture:
-    """Run Test predicates from tests/fixtures/jax_tree_tests.clausal."""
+    """Run Test predicates from tests/fixtures/jax_tree_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -621,7 +621,7 @@ class TestJaxTreeFixture:
 
 
 class TestJaxShardingFixture:
-    """Run Test predicates from tests/fixtures/jax_sharding_tests.clausal."""
+    """Run Test predicates from tests/fixtures/jax_sharding_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -675,7 +675,7 @@ class TestJaxShardingFixture:
 
 
 class TestJaxTransformsFixture:
-    """Run Test predicates from tests/fixtures/jax_transforms_tests.clausal."""
+    """Run Test predicates from tests/fixtures/jax_transforms_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -727,7 +727,7 @@ class TestJaxTransformsFixture:
 
 
 class TestJaxScipyFixture:
-    """Run Test predicates from tests/fixtures/jax_scipy_tests.clausal."""
+    """Run Test predicates from tests/fixtures/jax_scipy_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -795,7 +795,7 @@ class TestJaxScipyFixture:
 
 
 class TestJaxNnFixture:
-    """Run Test predicates from tests/fixtures/jax_nn_tests.clausal."""
+    """Run Test predicates from tests/fixtures/jax_nn_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -853,7 +853,7 @@ class TestJaxNnFixture:
 
 
 class TestJaxNnTreeIntegrationFixture:
-    """Run Test predicates from tests/fixtures/jax_nn_tree_integration.clausal."""
+    """Run Test predicates from tests/fixtures/jax_nn_tree_integration.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -876,7 +876,7 @@ class TestJaxNnTreeIntegrationFixture:
 
 
 class TestJaxRandomFixture:
-    """Run Test predicates from tests/fixtures/jax_random_tests.clausal."""
+    """Run Test predicates from tests/fixtures/jax_random_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -1056,7 +1056,7 @@ class TestJaxInfra:
 
 
 class TestJaxOptaxFixture:
-    """Run Test predicates from tests/fixtures/jax_optax_tests.clausal."""
+    """Run Test predicates from tests/fixtures/jax_optax_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -1153,7 +1153,7 @@ class TestJaxOptaxInfrastructure:
 
 
 class TestJaxEquinoxFixture:
-    """Run Test predicates from tests/fixtures/jax_equinox_tests.clausal."""
+    """Run Test predicates from tests/fixtures/jax_equinox_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -1275,7 +1275,7 @@ class TestJaxEquinoxInfrastructure:
 
 
 class TestJaxFlaxFixture:
-    """Run Test predicates from tests/fixtures/jax_flax_tests.clausal."""
+    """Run Test predicates from tests/fixtures/jax_flax_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):

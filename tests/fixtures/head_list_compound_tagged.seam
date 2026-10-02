@@ -1,0 +1,54 @@
+# Parity fixture (cell half) for the Phase 2 bridge's now-removed
+# ``-tagged_terms`` experiment -- originally the Task 3 parity corpus.
+#
+# Identical to head_list_compound.seam (list/tuple data mixing: declared
+# compound functors nested INSIDE list literals, in both head and body
+# position) apart from the module name -- P3-2 made cells the unconditional
+# compiled representation, so both halves compile the same way now, kept as
+# an old-vs-new regression anchor.  item2/1, pair/2, c/1 and d/1 are
+# declared data functors with no clauses, so every saturated construction
+# of one -- including as an argument nested inside a list, as in
+# ``ev_plain([item2(S)])`` -- lowers to a cell literal.  Every predicate
+# below has exactly one clause, well under the arg-index threshold, so each
+# stays on the ``_normalize_structural_head_args`` hoist path (P3-2 Task 2):
+# a head compound is a plain arg capture coupled to a body ``Unify`` goal
+# built from the cell literal.  (P3-2 Task 3 later taught the arg-index
+# bucket-lift, above that threshold, to rebuild a head compound into a real
+# MATCH pattern instead -- not exercised here, since nothing in this file
+# crosses the threshold; that coupling has its own coverage in
+# tests/test_tagged_terms.py::TestHeadPatternReachability.)
+#
+# Self-contained: every functor it constructs or matches is declared here.
+-double_quotes(atom)
+-private([item2(S), pair(A, B), c(X), d(Y)])
+
+prov(K, V) <- (K is "x", V is "met")
+
+# CONTROL: bare compound in head, inner var body-bound (worked since 2026-06-23).
+ev_bare(item2(S)) <- (prov("x", S))
+test("bare head compound, body-bound inner var ground") <- (
+    ev_bare(item2(S)), ground(S), S == "met")
+
+# list-nested compound, inner var bound by a PLAIN body goal.
+ev_plain([item2(S)]) <- (prov("x", S))
+test("list head compound, plain body-bound inner var ground") <- (
+    ev_plain([item2(S)]), ground(S), S == "met")
+
+# list-nested multi-arg compound, one var body-bound (multi-arg compound in a
+# list-nested head).
+mkpair([pair(A, B)]) <- (A is "k", call_goal(((K, V) <- prov(K, V)), "x", B))
+test("list multi-arg compound, body-bound inner var ground") <- (
+    mkpair([pair(A_UNUSED, B)]), ground(B), B == "met")
+
+# deeper nesting: [c(d(S))].
+ev_deep([c(d(S))]) <- (prov("x", S))
+test("deeply nested list compound output mode") <- (
+    ev_deep([c(d(S))]), ground(S), S == "met")
+
+# input mode: caller supplies a ground list-nested compound.
+test("list compound input mode succeeds") <- (ev_deep([c(d("met"))]))
+test("list compound input mode rejects mismatch") <- (not ev_deep([c(d("no"))]))
+
+# a head list of plain vars (no structural literal) must still head-to-head unify.
+echo2([A, B], A, B),
+test("plain list-of-vars head still unifies") <- (echo2([P, Q], 7, 8), P == 7, Q == 8)

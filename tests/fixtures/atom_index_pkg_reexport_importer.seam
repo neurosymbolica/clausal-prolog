@@ -1,0 +1,21 @@
+# Fixture for tests/test_imported_atom_head_index.py.
+#
+# Two-import-hop variant of atom_index_bare_importer.seam: imports the
+# atoms from the PACKAGE (tests.fixtures.atom_index_pkg), which itself
+# re-exports them from tests.fixtures.atom_index_pkg.schema via its own
+# -import_from in __init__.seam. This is the diagnosis's own item-2
+# regression shape (§9: "the same with the atom re-exported through a
+# package __init__ (two import hops)") -- distinct from the single-hop
+# bare-import fixture and from the literal-dotted-LoadAttr fixture.
+-import_from(tests.fixtures.atom_index_pkg, [aa, bb, cc, dd])
+-module(atom_index_pkg_reexport_importer, [level(N, L), src(N)])
+
+src(1),
+src(2),
+src(3),
+src(4),
+
+level(N, aa) <- (src(N), N == 1)
+level(N, bb) <- (src(N), N == 2)
+level(N, cc) <- (src(N), N == 3)
+level(N, dd) <- (src(N), N == 4)

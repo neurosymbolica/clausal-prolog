@@ -1,4 +1,4 @@
-"""Tests for clausal/stdlib/kleene.clausal — n-ary strong-Kleene connectives.
+"""Tests for clausal/stdlib/kleene.seam — n-ary strong-Kleene connectives.
 
 Covers the acceptance criteria of todo/kleene-nary-connectives-and4-or4.md:
 - binary tables (and3/or3/not3), fixed arities 4..9, and list folds;
@@ -25,7 +25,7 @@ def _load_stdlib_kleene():
     from clausal.import_hook import _load_module
     path = os.path.join(
         os.path.dirname(__file__), os.pardir,
-        "clausal", "stdlib", "kleene.clausal",
+        "clausal", "stdlib", "kleene.seam",
     )
     path = os.path.normpath(path)
     return _load_module("_test_stdlib_kleene", path)
@@ -51,7 +51,7 @@ class _KleeneBase:
     @classmethod
     def _unknown(cls):
         # The Undefined builtin is a process-wide singleton (clausal.terms.Undefined);
-        # the clauses in kleene.clausal unify against this same object.
+        # the clauses in kleene.seam unify against this same object.
         return Undefined
 
     @classmethod

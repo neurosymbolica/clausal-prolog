@@ -543,7 +543,7 @@ class TestTabledFib:
 
 # ── Integration tests: tabled compound-chain answers ─────────────────────────
 #
-# struct_tabling.clausal's Nats/2 is bench_struct_tabling's fixture (see
+# struct_tabling.seam's Nats/2 is bench_struct_tabling's fixture (see
 # benchmarks/workloads.py) -- a tabled predicate whose answers are cons/nil
 # chains, not scalars.  Unlike TestTabledFib above (which safely lets
 # `for trail in call(...)` run to natural exhaustion, since a scalar answer

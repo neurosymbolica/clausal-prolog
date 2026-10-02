@@ -353,8 +353,8 @@ def _time_struct_tabling(fixture_path, n=_TIMING_N, reps=_TIMING_REPS):
 class TestTimingSpotCheck:
     def test_struct_tabling_tagged_is_same_order_of_magnitude(self):
         here = os.path.dirname(__file__)
-        plain_path = os.path.join(here, "fixtures", "struct_tabling.clausal")
-        tagged_path = os.path.join(here, "fixtures", "struct_tabling_tagged.clausal")
+        plain_path = os.path.join(here, "fixtures", "struct_tabling.seam")
+        tagged_path = os.path.join(here, "fixtures", "struct_tabling_tagged.seam")
 
         plain_t = _time_struct_tabling(plain_path)
         tagged_t = _time_struct_tabling(tagged_path)

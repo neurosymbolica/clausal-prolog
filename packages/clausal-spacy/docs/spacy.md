@@ -402,7 +402,7 @@ noun_lemmas(TEXT, LEMMAS) <- (
     - **NounChunk**: chunk count, dict keys
     - **Adapter**: single-arity dispatch, multi-arity dispatch, repr, unknown arity → DONE
     - **py.spacy alias**: re-exports are identical objects
-    - **Fixture integration**: `spacy_basic.clausal` (17 Test predicates)
+    - **Fixture integration**: `spacy_basic.seam` (17 Test predicates)
 
 ??? abstract "Implementation"
 

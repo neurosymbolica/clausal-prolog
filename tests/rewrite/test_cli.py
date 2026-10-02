@@ -136,7 +136,7 @@ def test_seam_files_are_found_under_a_directory(tmp_path):
 #
 # `clausal/_suffixes.py` says every place that recognises a predicate module by
 # its extension consults its tuples rather than spelling ".clausal" itself.
-# Two sites here did not: `default_rule_names` globbed "*.clausal" and
+# Two sites here did not: `default_rule_names` globbed "*.seam" and
 # `rule_paths` built `f"{name}.clausal"`.  Renaming the shipped rules to
 # `.seam` — which the extension ruling requires — would therefore have emptied
 # the rule set SILENTLY: `--rules head_fold` answering "unknown rule class:
@@ -304,7 +304,7 @@ def test_no_rewrite_site_spells_the_suffix_itself():
                 if not any(sfx in node.value for sfx in CLAUSAL_SUFFIXES):
                     continue
                 # Prose mentions a suffix inside a sentence; a path or a glob
-                # is one whitespace-free token (`".clausal"`, `"*.clausal"`,
+                # is one whitespace-free token (`".clausal"`, `"*.seam"`,
                 # and the literal part of `f"{name}.clausal"`).  Help text
                 # and messages that NAME the suffixes are not sites.
                 if any(ch.isspace() for ch in node.value):
@@ -320,7 +320,7 @@ def test_no_rewrite_site_spells_the_suffix_itself():
         'def f(name):\n'
         '    """A docstring naming .clausal must NOT be flagged."""\n'
         '    a = D / f"{name}.clausal"\n'
-        '    b = D.glob("*.clausal")\n'
+        '    b = D.glob("*.seam")\n'
         '    return a, b\n')
     try:
         caught = _offenders(control)

@@ -43,7 +43,7 @@ single character `h`, not the one-character string `"h"`. So
 A string unifies with the list of its character atoms:
 
 ```seam
---8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:unification"
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.seam:unification"
 ```
 
 String-to-string unification is unchanged — `"abc" = "abc"` succeeds by
@@ -52,7 +52,7 @@ equality (no element-wise comparison needed).
 The empty string unifies with the empty list:
 
 ```seam
---8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:empty_string"
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.seam:empty_string"
 ```
 
 ---
@@ -64,7 +64,7 @@ Multi-star list patterns work on strings. Star variables bind to
 string):
 
 ```seam
---8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:pattern_matching"
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.seam:pattern_matching"
 ```
 
 This is the same pattern syntax used for lists — no special string patterns
@@ -79,7 +79,7 @@ recursive list-walking predicate written the obvious way therefore walks
 predicate must recurse over lists but pass strings through whole, gate the
 destructuring clause explicitly: `ISLIST is ++isinstance(X, list),
 ISLIST is True` before matching `[H, *T]`. (Found the expensive way by the
-rewriter's rule walker — see `clausal/rewrite/rules/head_fold.clausal` for
+rewriter's rule walker — see `clausal/rewrite/rules/head_fold.seam` for
 the in-tree example of the gate.)
 
 ---
@@ -92,37 +92,37 @@ is a character sequence, the result is returned as a string:
 ### append
 
 ```seam
---8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:append_examples"
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.seam:append_examples"
 ```
 
 ### length
 
 ```seam
---8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:length_example"
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.seam:length_example"
 ```
 
 ### in_ (Member)
 
 ```seam
---8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:member_examples"
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.seam:member_examples"
 ```
 
 ### reverse
 
 ```seam
---8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:reverse_example"
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.seam:reverse_example"
 ```
 
 ### take, drop, split_at
 
 ```seam
---8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:take_drop_split"
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.seam:take_drop_split"
 ```
 
 ### list_item
 
 ```seam
---8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:list_item_example"
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.seam:list_item_example"
 ```
 
 ---
@@ -192,7 +192,7 @@ None of the three accepts an **atom**: an atom is a symbol, not a sequence.
 The atom-flavoured predicates in the next section are the bridge between them.
 
 ```seam
---8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:type_checking"
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.seam:type_checking"
 ```
 
 ---
@@ -205,7 +205,7 @@ The ISO `atom_*` predicates (`atom_chars/2`, `atom_codes/2`, `atom_concat/3`,
 `type_error(atom, …)` — it is not a silent failure:
 
 ```seam
---8<-- "tests/fixtures/docs/strings_as_lists_examples.clausal:atom_family"
+--8<-- "tests/fixtures/docs/strings_as_lists_examples.seam:atom_family"
 ```
 
 That makes `atom_chars/2` the **bridge between the two kinds**: it turns an

@@ -1540,13 +1540,13 @@ git commit -m "feat(clp): in_domain/3 and label/1 accept quantity bounds and uni
 ### Task 7: Surface-language acceptance fixture and the two flipped tests
 
 **Files:**
-- Create: `tests/fixtures/units_clp_side_channel.clausal`
+- Create: `tests/fixtures/units_clp_side_channel.seam`
 - Modify: `tests/audit_2026_07_05/test_12_seams.py:271-277`, `tests/test_date_time_ordering.py:197-202`
 - Test: `tests/test_units_clp.py`
 
 - [ ] **Step 1: Write the fixture and the runner test**
 
-`tests/fixtures/units_clp_side_channel.clausal`:
+`tests/fixtures/units_clp_side_channel.seam`:
 
 ```
 -import_from(py.units, [metre, second, ampere, volt, ohm, watt, dimensionless, strip_units])
@@ -1700,7 +1700,7 @@ import os
 class TestSurfaceFixture:
     def test_fixture_passes_every_test_clause(self):
         from clausal.testing import run_file
-        path = os.path.join(os.path.dirname(__file__), "fixtures", "units_clp_side_channel.clausal")
+        path = os.path.join(os.path.dirname(__file__), "fixtures", "units_clp_side_channel.seam")
         results = run_file(path)
         failed = [(r.name, r.error) for r in results.results if not r.passed]
         assert not failed, failed
@@ -1740,7 +1740,7 @@ In `tests/test_date_time_ordering.py` replace `test_var_lt_quantity` with:
 - [ ] **Step 2: Run the fixture test to see which clauses fail**
 
 Run: `/workspace/clausal/venv/bin/python -m pytest tests/test_units_clp.py -q -k SurfaceFixture`
-Expected: it may PASS outright; if a clause fails, the failure list names it. Likely culprits and their fixes: (a) `1000(yen) / 3` — the surface `n(Unit)` sugar and `/` reach `fd_eq` as `Div(Quantity, 3)`; if the sugar is folded before the comparison as `eval_`, the test still holds; (b) `'units_mismatch'` atom identity — `CODE is 'units_mismatch'` compares the minted atom with the quoted atom; if it fails, spell it `CODE == 'units_mismatch'` as `tests/fixtures/dict_set_patterns.clausal:182-186` does with `TY is 'dict'`; (c) `findall` over `label` — if unavailable, replace with three explicit `label` solutions via `not (label([X]), X != 1(yen), X != 2(yen), X != 3(yen))`.
+Expected: it may PASS outright; if a clause fails, the failure list names it. Likely culprits and their fixes: (a) `1000(yen) / 3` — the surface `n(Unit)` sugar and `/` reach `fd_eq` as `Div(Quantity, 3)`; if the sugar is folded before the comparison as `eval_`, the test still holds; (b) `'units_mismatch'` atom identity — `CODE is 'units_mismatch'` compares the minted atom with the quoted atom; if it fails, spell it `CODE == 'units_mismatch'` as `tests/fixtures/dict_set_patterns.seam:182-186` does with `TY is 'dict'`; (c) `findall` over `label` — if unavailable, replace with three explicit `label` solutions via `not (label([X]), X != 1(yen), X != 2(yen), X != 3(yen))`.
 
 - [ ] **Step 3: Run the flipped tests**
 
@@ -1750,7 +1750,7 @@ Expected: all passed
 - [ ] **Step 4: Commit**
 
 ```bash
-git add tests/fixtures/units_clp_side_channel.clausal tests/test_units_clp.py tests/audit_2026_07_05/test_12_seams.py tests/test_date_time_ordering.py
+git add tests/fixtures/units_clp_side_channel.seam tests/test_units_clp.py tests/audit_2026_07_05/test_12_seams.py tests/test_date_time_ordering.py
 git commit -m "test(units): surface acceptance for units inside CLP; flip the two tests that pinned the refusal"
 ```
 
@@ -1806,7 +1806,7 @@ Do: translate at the builtin boundary (one helper, applied where
 so the same term is thrown from both paths, with the same context text
 (`_render_pair` in units_clp is the spelling). Keep the Python class as the
 internal signal. Pin the term in a fixture next to
-tests/fixtures/units_clp_side_channel.clausal.
+tests/fixtures/units_clp_side_channel.seam.
 
 **Footer:** finishing this todo includes `git mv`-ing it to `todo/done/`.
 ```
@@ -1824,7 +1824,7 @@ trail, op)`; one `strip_for_solver(l, r, ctx, trail)` call before
 `units_link` hook reattaches units without Z3 knowing. `in_z3` gets the
 `in_domain_units` treatment (its bounds are floats/ints; use a Z3 Real sort for
 money). Acceptance: the SI and money clauses of
-tests/fixtures/units_clp_side_channel.clausal re-spelled with z3 predicates,
+tests/fixtures/units_clp_side_channel.seam re-spelled with z3 predicates,
 skipped when z3-solver is not installed.
 
 **Footer:** finishing this todo includes `git mv`-ing it to `todo/done/`.

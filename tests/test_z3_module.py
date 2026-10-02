@@ -1,6 +1,6 @@
 """Infrastructure tests for the z3.* module API.
 
-Problem-solving tests are in tests/fixtures/z3_*.clausal.
+Problem-solving tests are in tests/fixtures/z3_*.seam.
 These Python tests cover internal mechanics not reachable from .clausal:
 variable registration, sort checking, error paths, backtracking internals.
 """

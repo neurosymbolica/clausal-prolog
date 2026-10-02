@@ -20,7 +20,7 @@ Two symptoms of testing it, both covered here:
   the *pre-lift* head, so the name is never defined and the compiled bucket
   raises ``NameError: name '$headlit_<id>' is not defined`` per goal, at
   runtime (this is what broke 6/10 self-tests of the shipped
-  ``clausal/examples/symbolic_diff.clausal``);
+  ``clausal/examples/symbolic_diff.seam``);
 * were the name injected, the pattern would compare the clause's source
   position against the caller's — silently zero solutions.
 """
@@ -143,7 +143,7 @@ class TestSymbolicDiffExampleEndToEnd:
     def test_all_self_tests_pass(self):
         from clausal.testing import run_file
 
-        results = run_file(os.path.join(EXAMPLES_DIR, "symbolic_diff.clausal"))
+        results = run_file(os.path.join(EXAMPLES_DIR, "symbolic_diff.seam"))
         failed = [(r.name, str(r.error)) for r in results.results if not r.passed]
         assert failed == []
         assert len(results.results) == 10

@@ -1,7 +1,7 @@
 """Infrastructure tests for CLP(Q) and CLP(R) constraint block evaluators.
 
-Problem-solving tests are in tests/fixtures/clpq_module.clausal and
-tests/fixtures/clpr_module.clausal. These Python tests cover error paths
+Problem-solving tests are in tests/fixtures/clpq_module.seam and
+tests/fixtures/clpr_module.seam. These Python tests cover error paths
 and internal mechanics.
 """
 

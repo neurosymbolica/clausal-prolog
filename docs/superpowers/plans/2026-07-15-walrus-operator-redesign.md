@@ -23,7 +23,7 @@
 - [x] **Task 0:** test command + baseline (9307 passed).
 - [x] **Task 1:** `DeprecationWarning` in `visit_NamedExpr` (`term_rewriting.py`; helper `_warn_walrus_deprecated`); test `test_walrus_emits_deprecation_warning`.
 - [x] **Task 2:** `tests/clausal_modules/*.clausal` → `==` (20 sites).
-- [x] **Task 3:** `iso_arithmetic.clausal` → `==` + regenerated fwd/reverse goldens.
+- [x] **Task 3:** `iso_arithmetic.seam` → `==` + regenerated fwd/reverse goldens.
 - [x] **Task 4a:** non-units fixtures → `==` (fibonacci, tabled_fib, clpfd_queens, ortools_cpsat, edcg_counter, meta_test); `builtins_call` lambda-naming → `is`; TRO fixtures (`deep_index`, `tro_predicates`) + `catch_test` → interim `is ++(...)` (re-migrated to `eval_/2` in Task 7); goldens for fibonacci/clpfd_queens/meta_test regenerated.
 
 ---
@@ -91,14 +91,14 @@ Match the exact destructuring/guard style of the sibling cases (some use keyword
 
 ### Task 7: Re-migrate interim `is ++(...)` sites → `eval_/2`
 
-**Files:** `tests/fixtures/deep_index.clausal` (4), `tests/fixtures/tro_predicates.clausal` (6), `tests/fixtures/catch_test.clausal` (1)
+**Files:** `tests/fixtures/deep_index.seam` (4), `tests/fixtures/tro_predicates.seam` (6), `tests/fixtures/catch_test.seam` (1)
 
 - [ ] **Step 1:** `N1 is ++(N - 1)` → `eval_(N - 1, N1)` etc.; `RESULT is ++(X // Y)` → `eval_(X // Y, RESULT)`. Update the tro_predicates comment ("prefix is deterministic (eval_/2)").
 - [ ] **Step 2:** `PYTEST tests/test_tail_recursion.py tests/test_deep_indexing.py tests/test_exceptions.py -q` — PASS, including both TRO allocation tests (1 SG each).
 
 ### Task 8: Units fixtures → `eval_/2`
 
-**Files:** `tests/fixtures/units_basic.clausal` (73), `units_clpfd.clausal` (30), `units_information.clausal` (22)
+**Files:** `tests/fixtures/units_basic.seam` (73), `units_clpfd.seam` (30), `units_information.seam` (22)
 
 - [ ] **Step 1:** Mechanical rewrite `VAR := EXPR` → `eval_(EXPR, VAR)` (script the line-wise transform; sites are single-line `X := E,`/`X := E` forms — verify with grep first; `n(Unit)` sugar and `++(...)` RHS stay verbatim inside `eval`'s first arg... EXCEPT sites already of the form `X := ++(...)` which are pure Python evaluation → prefer `X is ++(...)`).
 - [ ] **Step 2:** `PYTEST tests/test_units.py -q` — PASS (baseline count).
@@ -106,9 +106,9 @@ Match the exact destructuring/guard style of the sibling cases (some use keyword
 
 ### Task 9: Examples, module docstrings, embedded clausal in `tests/*.py`
 
-**Files:** `clausal/examples/nqueens.clausal`, `clausal/examples/lambdas.clausal`; docstrings in `clausal/modules/units.py`, `imperial.py`, `prolog.py`, `clausal/logic/specialization.py` (audit each `grep -rlP '(?<![=<>!:]):=' clausal/` hit — skip genuine Python walrus like `solve.py`'s `X := Var()` doc examples... verify each); clausal-source string literals in `tests/*.py` and `tests/audit_2026_07_05/*.py` (edcg `{_out := _in + _x}` → `==`; arith → `==`; units/eager → `eval`).
+**Files:** `clausal/examples/nqueens.seam`, `clausal/examples/lambdas.seam`; docstrings in `clausal/modules/units.py`, `imperial.py`, `prolog.py`, `clausal/logic/specialization.py` (audit each `grep -rlP '(?<![=<>!:]):=' clausal/` hit — skip genuine Python walrus like `solve.py`'s `X := Var()` doc examples... verify each); clausal-source string literals in `tests/*.py` and `tests/audit_2026_07_05/*.py` (edcg `{_out := _in + _x}` → `==`; arith → `==`; units/eager → `eval`).
 
-- [ ] **Step 1:** Migrate per idiom rule; `nqueens.clausal` `QS := [2, 4, 1, 3]` is list-binding → `is`; lambdas example bodies → `==`.
+- [ ] **Step 1:** Migrate per idiom rule; `nqueens.seam` `QS := [2, 4, 1, 3]` is list-binding → `is`; lambdas example bodies → `==`.
 - [ ] **Step 2:** Run the touched suites (`test_edcg.py`, `test_dcg.py`, `test_lambdas.py`, `test_units.py`, `test_bytes_list_builtins.py`, `test_source_locations.py`, audit suites, examples loader if one exists) — PASS.
 - [ ] **Step 3:** Sweep: `grep -rP '(?<![=<>!:]):=' clausal/ tests/ --include='*.clausal' --include='*.py'` → only Python-walrus and Phase-2-marked sites remain.
 

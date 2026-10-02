@@ -79,7 +79,7 @@ def fresh_spec_module():
 
     def load():
         return _load_module(_SPEC, os.path.join(FIXTURES,
-                                                "specialize_natnum.clausal"))
+                                                "specialize_natnum.seam"))
     yield load
     sys.modules.pop(_SPEC, None)
 

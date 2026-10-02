@@ -8,7 +8,7 @@ Clausal predicate files use the `.clausal` extension. `.seam` is an accepted ali
 import clausal  # installs the import hook as a side effect
 from clausal import Var, solve
 
-import fibonacci                  # loads fibonacci.clausal
+import fibonacci                  # loads fibonacci.seam
 
 for trail in solve(("fib", 7, F := Var()), module=fibonacci):
     print(F.value)  # 13

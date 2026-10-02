@@ -336,9 +336,9 @@ def test_an_imported_functor_shadowed_by_a_local_atom_decl_applies_as_the_functo
     from clausal.logic.builtins._helpers import functor_arity
 
     _load_module("tests.fixtures.t4f2_owner_functor",
-                 _fixture_path("t4f2_owner_functor.clausal"))
+                 _fixture_path("t4f2_owner_functor.seam"))
     mod = _load_module("tests.fixtures.t4f2_import_functor_shadow",
-                       _fixture_path("t4f2_import_functor_shadow.clausal"))
+                       _fixture_path("t4f2_import_functor_shadow.seam"))
     x = Var()
     answers = [deref(x) for _ in call(mod.c, x)]
     assert len(answers) == 1
@@ -356,13 +356,13 @@ def test_an_imported_ATOM_shadowed_by_a_local_atom_decl_is_refused():
     from clausal.import_hook import _load_module
 
     _load_module("tests.fixtures.t4f2_owner_atom",
-                 _fixture_path("t4f2_owner_atom.clausal"))
+                 _fixture_path("t4f2_owner_atom.seam"))
     with pytest.raises(SyntaxError) as exc_info:
         _load_module("tests.fixtures.t4f2_import_atom_shadow",
-                     _fixture_path("t4f2_import_atom_shadow.clausal"))
+                     _fixture_path("t4f2_import_atom_shadow.seam"))
     message = str(exc_info.value)
     assert "verdict" in message
-    assert "t4f2_import_atom_shadow.clausal:9" in message, message
+    assert "t4f2_import_atom_shadow.seam:9" in message, message
     assert "t4f2_owner_atom" in message, message
 
 
@@ -451,7 +451,7 @@ def test_the_deferred_item_never_reaches_reflection_output():
     from clausal.logic.variables import Var, deref
     from clausal.logic.builtins._helpers import functor_arity
 
-    path = _fixture_path("t4f2_import_functor_shadow.clausal")
+    path = _fixture_path("t4f2_import_functor_shadow.seam")
     with open(path, encoding="utf-8") as fh:
         source = fh.read()
     items = reify_source(source)
@@ -461,7 +461,7 @@ def test_the_deferred_item_never_reaches_reflection_output():
     assert not leaked, leaked
 
     _load_module("tests.fixtures.t4f2_owner_functor",
-                 _fixture_path("t4f2_owner_functor.clausal"))
+                 _fixture_path("t4f2_owner_functor.seam"))
     mod = _load_module("tests.fixtures.t4f2_import_functor_shadow", path)
     x = Var()
     answers = [deref(x) for _ in call(mod.c, x)]

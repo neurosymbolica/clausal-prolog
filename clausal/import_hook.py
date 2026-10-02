@@ -394,7 +394,7 @@ def _count_seam_transition_constructs(loader, source_nodes, db, filename):
 # unconditionally needs the real class to construct its clause bodies
 # (arithmetic/comparison/call nodes compile to bare ``Sub(...)``/``Call(...)``
 # constructor references — see the fixture regression this order fixes,
-# ``tests/fixtures/tagged_shapes.clausal``).  A module that DOES want to
+# ``tests/fixtures/tagged_shapes.seam``).  A module that DOES want to
 # declare that spelling as its own atom still gets it correctly:
 # ``_process_declarations`` runs AFTER this seeding and unconditionally
 # rebinds its own declared names, regardless of what seeding left there.
@@ -461,7 +461,7 @@ STRICTNESS_EXEMPT_RUNTIME_NAMES = frozenset({
     # with process-wide identity.  Task 8 fix round 1 (review-caught):
     # narrowing the distrust check to ``simple_ast.__all__`` only (rather
     # than exempting this name explicitly) broke ``clausal/stdlib/
-    # kleene.clausal`` (a bare ``Undefined`` reference), cascading into
+    # kleene.seam`` (a bare ``Undefined`` reference), cascading into
     # ~163 unrelated test failures across files that transitively load it.
     "Undefined",
 })
@@ -1330,7 +1330,7 @@ class _ExtensionFinder(MetaPathFinder):
                 os.path.join(dir_entry, tail + s) for s in suffixes)
             if flat is not None:
                 return flat, None, get_loader_cls
-            # Package form: ``dir_entry/tail/__init__.clausal`` → package
+            # Package form: ``dir_entry/tail/__init__.seam`` → package
             # ``tail``.  Reuses Python's __init__ package mechanism so
             # submodule files (``tail/sub.clausal``) then resolve as
             # ``fullname.sub``.  A bare directory *without* an __init__ is left

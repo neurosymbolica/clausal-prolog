@@ -523,7 +523,7 @@ import os
 class TestSurfaceFixture:
     def test_fixture_passes_every_test_clause(self):
         from clausal.testing import run_file
-        path = os.path.join(os.path.dirname(__file__), "fixtures", "units_clp_side_channel.clausal")
+        path = os.path.join(os.path.dirname(__file__), "fixtures", "units_clp_side_channel.seam")
         results = run_file(path)
         failed = [(r.name, r.error) for r in results.results if not r.passed]
         assert not failed, failed

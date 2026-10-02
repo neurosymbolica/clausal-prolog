@@ -1124,7 +1124,7 @@ def imported_atoms(module_or_package: Any) -> dict:
     its LOADED submodules -- never imported by asking).  The two answers are
     DISJOINT, so ``declared_atoms(m) | imported_atoms(m).keys()`` is every
     atom those files can name.  The motivating shape is a package
-    ``__init__.clausal`` with no ``-module`` list whose atoms all arrive by
+    ``__init__.seam`` with no ``-module`` list whose atoms all arrive by
     ``-import_from``.
 
     An entry of an ``-import_from(exporter, [...])`` directive counts when:

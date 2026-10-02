@@ -307,7 +307,7 @@ class TestHeadPatternRegression:
     def test_append_forward(self):
         """append([1,2], [3,4], R) → R=[1,2,3,4] (head-pattern star)."""
         # nv
-        mod = _load_clausal_module("lists.clausal")
+        mod = _load_clausal_module("lists.seam")
         r = Var()
         results = [deref(r) for _ in call("append", [1, 2], [3, 4], r, module=mod)]
         assert results == [[1, 2, 3, 4]]
@@ -315,7 +315,7 @@ class TestHeadPatternRegression:
     def test_append_reverse(self):
         """append(X, Y, [1,2,3]) → enumerates all splits (head-pattern star)."""
         # nv
-        mod = _load_clausal_module("lists.clausal")
+        mod = _load_clausal_module("lists.seam")
         x, y = Var(), Var()
         results = [
             (deref(x), deref(y))
@@ -331,7 +331,7 @@ class TestHeadPatternRegression:
     def test_length(self):
         """length([10, 20, 30], N) → N=3 (head-pattern star)."""
         # nv
-        mod = _load_clausal_module("lists.clausal")
+        mod = _load_clausal_module("lists.seam")
         n = Var()
         results = [deref(n) for _ in call("length", [10, 20, 30], n, module=mod)]
         assert results == [3]
@@ -339,7 +339,7 @@ class TestHeadPatternRegression:
     def test_length_empty(self):
         """length([], N) → N=0."""
         # nv
-        mod = _load_clausal_module("lists.clausal")
+        mod = _load_clausal_module("lists.seam")
         n = Var()
         results = [deref(n) for _ in call("length", [], n, module=mod)]
         assert results == [0]
@@ -359,7 +359,7 @@ class TestBodyStarInClausalFile:
         Deconstructs LIST into head H and tail T in the body.
         """
         # nv
-        mod = _load_clausal_module("body_star.clausal")
+        mod = _load_clausal_module("body_star.seam")
         h, t = Var(), Var()
         results = [
             (deref(h), deref(t))
@@ -370,7 +370,7 @@ class TestBodyStarInClausalFile:
     def test_head_tail_singleton(self):
         """head_tail([42], H, T) → H=42, T=[]."""
         # nv
-        mod = _load_clausal_module("body_star.clausal")
+        mod = _load_clausal_module("body_star.seam")
         h, t = Var(), Var()
         results = [
             (deref(h), deref(t))
@@ -381,7 +381,7 @@ class TestBodyStarInClausalFile:
     def test_head_tail_empty_fails(self):
         """head_tail([], H, T) → no solutions."""
         # nv
-        mod = _load_clausal_module("body_star.clausal")
+        mod = _load_clausal_module("body_star.seam")
         h, t = Var(), Var()
         results = list(call("head_tail", [], h, t, module=mod))
         assert results == []
@@ -392,7 +392,7 @@ class TestBodyStarInClausalFile:
         Trailing star pattern in body — splits off the last element.
         """
         # nv
-        mod = _load_clausal_module("body_star.clausal")
+        mod = _load_clausal_module("body_star.seam")
         init, last = Var(), Var()
         results = [
             (deref(init), deref(last))
@@ -403,7 +403,7 @@ class TestBodyStarInClausalFile:
     def test_init_last_singleton(self):
         """init_last([7], INIT, LAST) → INIT=[], LAST=7."""
         # nv
-        mod = _load_clausal_module("body_star.clausal")
+        mod = _load_clausal_module("body_star.seam")
         init, last = Var(), Var()
         results = [
             (deref(init), deref(last))
@@ -414,7 +414,7 @@ class TestBodyStarInClausalFile:
     def test_init_last_empty_fails(self):
         """init_last([], INIT, LAST) → no solutions."""
         # nv
-        mod = _load_clausal_module("body_star.clausal")
+        mod = _load_clausal_module("body_star.seam")
         init, last = Var(), Var()
         results = list(call("init_last", [], init, last, module=mod))
         assert results == []
@@ -425,7 +425,7 @@ class TestBodyStarInClausalFile:
         Extracts first, middle, and last from a list in the body.
         """
         # nv
-        mod = _load_clausal_module("body_star.clausal")
+        mod = _load_clausal_module("body_star.seam")
         h, mid, t = Var(), Var(), Var()
         results = [
             (deref(h), deref(mid), deref(t))
@@ -436,7 +436,7 @@ class TestBodyStarInClausalFile:
     def test_sandwich_minimum(self):
         """sandwich([1, 2], H, MID, T) → H=1, MID=[], T=2."""
         # nv
-        mod = _load_clausal_module("body_star.clausal")
+        mod = _load_clausal_module("body_star.seam")
         h, mid, t = Var(), Var(), Var()
         results = [
             (deref(h), deref(mid), deref(t))
@@ -450,7 +450,7 @@ class TestBodyStarInClausalFile:
         Star-only body deconstruction — just copies the list.
         """
         # nv
-        mod = _load_clausal_module("body_star.clausal")
+        mod = _load_clausal_module("body_star.seam")
         all_ = Var()
         results = [deref(all_) for _ in call("capture_body", [1, 2, 3], all_, module=mod)]
         assert results == [[1, 2, 3]]
@@ -458,7 +458,7 @@ class TestBodyStarInClausalFile:
     def test_capture_all_body_empty(self):
         """capture_body([], ALL) → ALL=[]."""
         # nv
-        mod = _load_clausal_module("body_star.clausal")
+        mod = _load_clausal_module("body_star.seam")
         all_ = Var()
         results = [deref(all_) for _ in call("capture_body", [], all_, module=mod)]
         assert results == [[]]
@@ -469,7 +469,7 @@ class TestBodyStarInClausalFile:
         Deconstruct in body, then use the result in a subsequent goal.
         """
         # nv
-        mod = _load_clausal_module("body_star.clausal")
+        mod = _load_clausal_module("body_star.seam")
         s = Var()
         results = [deref(s) for _ in call("sum_tail", [10, 20, 30, 40], s, module=mod)]
         assert results == [3]
@@ -480,7 +480,7 @@ class TestBodyStarInClausalFile:
         Two consecutive body deconstructions — extract the second element.
         """
         # nv
-        mod = _load_clausal_module("body_star.clausal")
+        mod = _load_clausal_module("body_star.seam")
         x = Var()
         results = [deref(x) for _ in call("second", [10, 20, 30], x, module=mod)]
         assert results == [20]
@@ -492,7 +492,7 @@ class TestBodyStarInClausalFile:
         Y should equal X.
         """
         # nv
-        mod = _load_clausal_module("body_star.clausal")
+        mod = _load_clausal_module("body_star.seam")
         y = Var()
         results = [deref(y) for _ in call("wrap_unwrap", 42, y, module=mod)]
         assert results == [42]
@@ -512,7 +512,7 @@ class TestBodyMultiStarDeconstruction:
         All 2-way splits enumerated via backtracking.
         """
         # nv
-        mod = _load_clausal_module("body_star.clausal")
+        mod = _load_clausal_module("body_star.seam")
         a, b = Var(), Var()
         results = [
             (deref(a), deref(b))
@@ -528,7 +528,7 @@ class TestBodyMultiStarDeconstruction:
     def test_body_split_empty(self):
         """body_split([], A, B) → A=[], B=[]."""
         # nv
-        mod = _load_clausal_module("body_star.clausal")
+        mod = _load_clausal_module("body_star.seam")
         a, b = Var(), Var()
         results = [
             (deref(a), deref(b))
@@ -539,7 +539,7 @@ class TestBodyMultiStarDeconstruction:
     def test_body_split_singleton(self):
         """body_split([1], A, B) → two solutions."""
         # nv
-        mod = _load_clausal_module("body_star.clausal")
+        mod = _load_clausal_module("body_star.seam")
         a, b = Var(), Var()
         results = [
             (deref(a), deref(b))

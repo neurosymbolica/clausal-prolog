@@ -84,7 +84,7 @@ scans the body for a `Unify(arg, term)` goal and recovers the index key from the
 other side (compounds included — "Phase 9a"). So normalizing a rule head the
 same way facts are normalized keeps first-argument indexing and
 groundness-keyed dispatch working. The existing `CheckIndexed` rule clauses in
-`tests/fixtures/head_compound_importer.clausal` exercise exactly this.
+`tests/fixtures/head_compound_importer.seam` exercise exactly this.
 
 ---
 

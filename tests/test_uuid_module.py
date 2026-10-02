@@ -543,12 +543,12 @@ class TestClausalInline:
 
 
 class TestFixtureIntegration:
-    """Load the uuid_basic.clausal fixture and run its test predicates."""
+    """Load the uuid_basic.seam fixture and run its test predicates."""
 
     @pytest.fixture(autouse=True)
     def _load_fixture(self):
         fixture = os.path.join(
-            os.path.dirname(__file__), "fixtures", "uuid_basic.clausal"
+            os.path.dirname(__file__), "fixtures", "uuid_basic.seam"
         )
         mod = _load_module("uuid_basic", fixture)
         self.module = mod.__dict__["$module"]

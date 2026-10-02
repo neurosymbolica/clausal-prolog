@@ -1,0 +1,124 @@
+# deep_index.seam — Phase 5 deep structural indexing tests.
+#
+# Each predicate is defined with nil/cons list patterns so the compiler
+# (after Phase 5) can route calls by list structure instead of trying
+# every clause in sequence.  These tests verify that correctness is
+# preserved regardless of whether the optimisation is applied.
+#
+# Predicates are kept intentionally simple so test failures point
+# clearly at the indexing logic, not at list-processing bugs.
+
+# ── my_len/2: list length ──────────────────────────────────────────────────────
+# Base case on [], recursive on [_|TAIL]. Index target: arg0.
+-double_quotes(atom)
+
+my_len([], 0),
+my_len([_, *TAIL], N) <- (my_len(TAIL, N1), eval_(N1 + 1, N))
+
+test("mylen empty") <- (my_len([], N) and N == 0)  # nv
+test("mylen one element") <- (my_len([42], N) and N == 1)  # nv
+test("mylen three elements") <- (my_len([1, 2, 3], N) and N == 3)  # nv
+test("mylen five elements") <- (my_len([1, 2, 3, 4, 5], N) and N == 5)  # nv
+test("mylen query mode") <- (my_len([A_UNUSED, B_UNUSED], N) and N == 2)  # nv
+
+# ── my_append/3: list concatenation ───────────────────────────────────────────
+# Index target: arg0 (first list): [] vs [HEAD|TAIL].
+
+my_append([], RHS, RHS),
+my_append([HEAD, *TAIL], RHS, [HEAD, *REST]) <- my_append(TAIL, RHS, REST)
+
+test("myappend nil left") <- (my_append([], [1, 2], R) and R == [1, 2])  # nv
+test("myappend nil right") <- (my_append([1, 2], [], R) and R == [1, 2])  # nv
+test("myappend both empty") <- (my_append([], [], R) and R == [])  # nv
+test("myappend one plus two") <- (my_append([1], [2, 3], R) and R == [1, 2, 3])  # nv
+test("myappend two plus two") <- (my_append([1, 2], [3, 4], R) and R == [1, 2, 3, 4])  # nv
+test("myappend split nil prefix") <- (my_append(A, B, [1, 2]) and A == [] and B == [1, 2])  # nv
+test("myappend split cons prefix") <- (my_append([1], B, [1, 2, 3]) and B == [2, 3])  # nv
+
+# ── my_member/2: list membership ───────────────────────────────────────────────
+# Two clauses both with [HEAD|TAIL] on arg1. Index target: arg1.
+# Empty list has no members so there is no [] base case.
+
+my_member(HEAD, [HEAD, *_]),
+my_member(ELEM, [_, *TAIL]) <- my_member(ELEM, TAIL)
+
+test("mymember first element") <- my_member(1, [1, 2, 3])  # nv
+test("mymember last element") <- my_member(3, [1, 2, 3])  # nv
+test("mymember middle element") <- my_member(2, [1, 2, 3])  # nv
+test("mymember singleton list") <- my_member(7, [7])  # nv
+test("mymember absent") <- (not my_member(4, [1, 2, 3]))  # nv
+test("mymember enumerate all") <- (findall(X, my_member(X, [10, 20, 30]), XS) and XS == [10, 20, 30])  # nv
+test("mymember duplicate values") <- (findall(X, my_member(X, [1, 1, 2]), XS) and XS == [1, 1, 2])  # nv
+
+# ── my_last/2: last element of a list ─────────────────────────────────────────
+# Singleton [LAST] base case; recursive on [_|TAIL]. Index target: arg0.
+
+my_last([LAST], LAST),
+my_last([_, *TAIL], LAST) <- my_last(TAIL, LAST)
+
+test("mylast singleton") <- (my_last([5], X) and X == 5)  # nv
+test("mylast two elements") <- (my_last([1, 2], X) and X == 2)  # nv
+test("mylast three elements") <- (my_last([1, 2, 3], X) and X == 3)  # nv
+test("mylast five elements") <- (my_last([1, 2, 3, 4, 5], X) and X == 5)  # nv
+
+# ── my_product/2: product of list elements ────────────────────────────────────
+# Same nil/cons structure as my_sum_list but multiplies. Index target: arg0.
+
+my_product([], 1),
+my_product([HEAD, *TAIL], P) <- (my_product(TAIL, P1), eval_(P1 * HEAD, P))
+
+test("myproduct empty") <- (my_product([], P) and P == 1)  # nv
+test("myproduct singleton") <- (my_product([5], P) and P == 5)  # nv
+test("myproduct three") <- (my_product([2, 3, 4], P) and P == 24)  # nv
+test("myproduct with zero") <- (my_product([1, 0, 99], P) and P == 0)  # nv
+test("myproduct five values") <- (my_product([1, 2, 3, 4, 5], P) and P == 120)  # nv
+
+# ── my_sum_list/2: sum elements of a numeric list ───────────────────────────────
+# Index target: arg0 ([] vs [HEAD|TAIL]).
+
+my_sum_list([], 0),
+my_sum_list([HEAD, *TAIL], S) <- (my_sum_list(TAIL, S1), eval_(S1 + HEAD, S))
+
+test("mysumlist empty") <- (my_sum_list([], S) and S == 0)  # nv
+test("mysumlist singleton") <- (my_sum_list([7], S) and S == 7)  # nv
+test("mysumlist three") <- (my_sum_list([1, 2, 3], S) and S == 6)  # nv
+test("mysumlist ten values") <- (my_sum_list([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], S) and S == 55)  # nv
+test("mysumlist negative") <- (my_sum_list([-1, -2, -3], S) and S == -6)  # nv
+
+# ── my_max/2: maximum of a non-empty list ─────────────────────────────────────
+# Singleton [X] base case; uses a helper my_max_of/3 to avoid ITE.
+# Index target on my_max: arg0 (singleton vs cons).
+
+my_max_of(X, Y, X) <- (X >= Y)
+my_max_of(X, Y, Y) <- (X < Y)
+
+my_max([X], X),
+my_max([HEAD, *TAIL], MAX) <- (my_max(TAIL, TMAX), my_max_of(HEAD, TMAX, MAX))
+
+test("mymax singleton") <- (my_max([3], M) and M == 3)  # nv
+test("mymax two ascending") <- (my_max([1, 5], M) and M == 5)  # nv
+test("mymax two descending") <- (my_max([5, 1], M) and M == 5)  # nv
+test("mymax three") <- (my_max([3, 1, 4], M) and M == 4)  # nv
+test("mymax all equal") <- (my_max([2, 2, 2], M) and M == 2)  # nv
+
+# ── Mixed structural arguments ────────────────────────────────────────────────
+# Predicate that patterns on both an integer first arg AND a list second arg,
+# ensuring multiple-position structural indexing does not break things.
+
+my_nth_of(0, [HEAD, *_], HEAD),
+my_nth_of(N, [_, *TAIL], ELEM) <- (N > 0, eval_(N - 1, N1), my_nth_of(N1, TAIL, ELEM))
+
+test("mynthof first") <- (my_nth_of(0, [10, 20, 30], E) and E == 10)  # nv
+test("mynthof second") <- (my_nth_of(1, [10, 20, 30], E) and E == 20)  # nv
+test("mynthof third") <- (my_nth_of(2, [10, 20, 30], E) and E == 30)  # nv
+
+# ── Interaction with backtracking ─────────────────────────────────────────────
+# Structural indexing must not suppress backtracking over multiple solutions.
+
+my_prefix([], _),
+my_prefix([HEAD, *TAIL], [HEAD, *REST]) <- my_prefix(TAIL, REST)
+
+test("myprefix empty of three") <- my_prefix([], [1, 2, 3])  # nv
+test("myprefix singleton") <- my_prefix([1], [1, 2, 3])  # nv
+test("myprefix full") <- my_prefix([1, 2, 3], [1, 2, 3])  # nv
+test("myprefix enumerate") <- (findall(P, my_prefix(P, [1, 2]), PS) and PS == [[], [1], [1, 2]])  # nv

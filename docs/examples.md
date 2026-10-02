@@ -13,7 +13,7 @@ Clausal ships with example programs in `clausal/examples/`. Each is a self-conta
 
 ## Basics
 
-### fibonacci.clausal
+### fibonacci.seam
 
 Classic Fibonacci sequence with pattern-matching base cases:
 
@@ -23,11 +23,11 @@ Classic Fibonacci sequence with pattern-matching base cases:
 
 *See: [Tabling](tabling.md), [Arithmetic builtins](builtins.md#arithmetic)*
 
-### peano.clausal
+### peano.seam
 
 Peano arithmetic: natural number representation, addition, multiplication, and ordering via structural recursion.
 
-### graph.clausal
+### graph.seam
 
 Graph traversal: `path/3` (path finding with cycle detection), `reachable/2`, and `connected/2` over edge facts.
 
@@ -35,7 +35,7 @@ Graph traversal: `path/3` (path finding with cycle detection), `reachable/2`, an
 
 ## Algorithms
 
-### sorting.clausal
+### sorting.seam
 
 Two sorting algorithms:
 
@@ -44,13 +44,13 @@ Two sorting algorithms:
 
 *See: [List builtins](builtins.md#lists)*
 
-### nqueens.clausal
+### nqueens.seam
 
 N-Queens puzzle using permutation-based search: `numlist`, `permutation`, `safe/1`, and `no_attack/3` diagonal constraint checking.
 
 *See: [List builtins](builtins.md#lists)*
 
-### hanoi.clausal
+### hanoi.seam
 
 Tower of Hanoi: generates the sequence of moves to solve the puzzle for N disks.
 
@@ -58,7 +58,7 @@ Tower of Hanoi: generates the sequence of moves to solve the puzzle for N disks.
 
 ## Symbolic Computation
 
-### symbolic_diff.clausal
+### symbolic_diff.seam
 
 Symbolic differentiation: `diff(EXPR, VAR, DERIV)` computes the derivative of an algebraic expression with respect to a variable. Handles constants, variables, addition, multiplication, power, and chain rule.
 
@@ -66,7 +66,7 @@ Symbolic differentiation: `diff(EXPR, VAR, DERIV)` computes the derivative of an
 
 ## Constraint Satisfaction
 
-### sudoku.clausal
+### sudoku.seam
 
 Classic Sudoku solver using CLP(ℤ) constraints, ported from [Markus Triska's `sudoku.pl`](https://www.metalevel.at/sudoku/). Posts row, column, and 3×3 block `all_different` constraints, then labels. Includes three sample puzzles.
 
@@ -86,7 +86,7 @@ Features: nested [star-list patterns](lists.md) (`[[HEAD, *TAIL], *ROWS]`), buil
 
 *See: [CLP(ℤ)](constraints.md), [Higher-order predicates](higher_order.md), [Meta-predicates](meta_predicates.md)*
 
-### map_coloring.clausal
+### map_coloring.seam
 
 Four-color map coloring: given a map of regions and adjacency constraints, finds valid colorings using `forall/2` and `is not` (structural disequality).
 
@@ -96,19 +96,19 @@ Four-color map coloring: given a map of regions and adjacency constraints, finds
 
 ## Higher-Order & Lambdas
 
-### lambdas.clausal
+### lambdas.seam
 
 Lambda (goal closure) examples: `apply_val`, `add_one`, `add_z`, `double_val`, and more. Demonstrates variable capture, multi-arg closures, and conjunction bodies.
 
 *See: [Lambdas](lambdas.md)*
 
-### higher_order.clausal
+### higher_order.seam
 
 Higher-order list predicates: `doubles` (maplist/3), `all_positive` (maplist/2), `keep_positive` (include/3), `remove_negative` (exclude/3), and `sum_list_fold` (foldl/4).
 
 *See: [Higher-order predicates](meta_predicates.md)*
 
-### meta_predicates.clausal
+### meta_predicates.seam
 
 Meta-predicate examples: `squares` (findall/3), `bag_positives` (bagof/3), `unique_members` (setof/3), `all_positive` (forall/2).
 
@@ -118,7 +118,7 @@ Meta-predicate examples: `squares` (findall/3), `bag_positives` (bagof/3), `uniq
 
 ## Meta-interpreters
 
-### metainterpreters.clausal
+### metainterpreters.seam
 
 Five meta-interpreters ported from Markus Triska's [A Couple of Meta-interpreters in Prolog](https://www.metalevel.at/acomip/). Object-level programs are represented as lists of `[HEAD, BODY]` clause pairs of ordinary terms (`[natnum(succ(X)), [natnum(X)]]`). [`copy_term/2`](term_inspection.md) provides fresh variable copies at each resolution step.
 
@@ -192,7 +192,7 @@ Three sample programs are included: natural numbers (`natnum_program`), an acycl
 
 ## DCGs
 
-### dcg_state.clausal
+### dcg_state.seam
 
 DCG state threading patterns: counter (`inc`, `count3`), tree leaf counting (`count_leaves`, `num_leaves`), and accumulator (`push`, `push_all`, `collect_items`).
 

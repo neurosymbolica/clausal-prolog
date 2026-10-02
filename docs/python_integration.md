@@ -704,7 +704,7 @@ export list and `-private([...])` list. It returns a `frozenset` of `str`.
 
 ```python
 import clausal
-import shapes                          # a package: shapes/__init__.clausal,
+import shapes                          # a package: shapes/__init__.seam,
 import shapes.colours, shapes.forms    # shapes/colours.clausal, shapes/forms.clausal
 
 clausal.declared_atoms("shapes")       # frozenset({'red', 'green', 'circle', ...})
@@ -742,7 +742,7 @@ dotted name of the module that exports it.
 
 ```python
 import clausal
-import shop             # shop/__init__.clausal has no -module list:
+import shop             # shop/__init__.seam has no -module list:
                         #   -import_from(shop.vocabulary, [open_kind, ...])
 
 clausal.declared_atoms("shop")   # frozenset()
@@ -785,7 +785,7 @@ database — and query it exactly as above:
 from clausal import Var, solve
 from clausal.testing import load_clausal_module
 
-fibonacci = load_clausal_module("clausal/examples/fibonacci.clausal")
+fibonacci = load_clausal_module("clausal/examples/fibonacci.seam")
 for trail in solve(("fib", 10, F := Var()), module=fibonacci):
     print(F.value)  # 55
 ```

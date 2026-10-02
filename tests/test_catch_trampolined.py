@@ -14,7 +14,7 @@ or an UndefinedNameError from an unimported sibling predicate, was not.
 
 The fixture puts each raising goal in its own predicate so the callee is always
 driven through the trampoline seam.  See
-``tests/fixtures/catch_trampolined.clausal``.
+``tests/fixtures/catch_trampolined.seam``.
 """
 
 from __future__ import annotations

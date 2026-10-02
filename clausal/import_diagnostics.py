@@ -4,7 +4,7 @@
 stale name surfaces as CPython's stock message::
 
     cannot import name 'within_limit' from 'acme.compliance.schema'
-    (/…/schema.clausal)
+    (/…/schema.seam)
 
 which names the file but never the vocabulary — the one thing a repair needs.
 See ``todo/done/import-error-should-list-module-exports.md``: this was the dominant

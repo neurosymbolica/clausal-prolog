@@ -6,7 +6,7 @@ hands back must be callable.  Before this, only a predicate-call goal was:
 ``if_`` or negation raised ``type_error(callable, ...)``
 (``_registry._ensure_trampoline_dispatch`` refuses every AST node).
 
-The central check is the ROW TABLE in ``tests/fixtures/call_body_terms.clausal``:
+The central check is the ROW TABLE in ``tests/fixtures/call_body_terms.seam``:
 for each row, ``b(N, X, Y)`` is the goal written as a clause body and
 ``g(N, X, Y, G)`` builds the same text in term position; ``run(N, X, Y)``
 calls it.  Both must answer alike for every input -- the compiled body is the

@@ -5,7 +5,7 @@ through the experimental Prolog importer, and reports each test/1 clause as an
 individual pytest test item (a file that fails to load or translate is one
 failing ``<load>`` item):
 
-    clausal/examples/fibonacci.clausal::fib(5) = 5
+    clausal/examples/fibonacci.seam::fib(5) = 5
 
 Also collects ```clausal blocks in docs/*.md files and reports each
 test/1 clause (or a compile-check for blocks without tests) as an item:
@@ -37,7 +37,7 @@ from clausal.tools.clear_pycache import clear_pycache
 from clausal.tools.doc_snippet_check import SEAM_FENCE_RE
 
 # Ensure test fixtures directory is importable (for -import_from directives
-# between fixture files, e.g. expansion_importer.clausal).
+# between fixture files, e.g. expansion_importer.seam).
 _fixtures_dir = str(Path(__file__).parent / "tests" / "fixtures")
 if _fixtures_dir not in sys.path:
     sys.path.insert(0, _fixtures_dir)

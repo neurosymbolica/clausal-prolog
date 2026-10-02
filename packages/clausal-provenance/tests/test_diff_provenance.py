@@ -121,7 +121,7 @@ def test_add_mult_prob_discard_below_eps():
 
 # add_mult_prob through the engine (two-hop, alternative paths via
 # noisy-OR, zero-input propagation) is dogfooded in
-# tests/fixtures/provenance_reach.clausal under the
+# tests/fixtures/provenance_reach.seam under the
 # "add_mult_prob through the engine" section.
 
 

@@ -1,0 +1,29 @@
+# Fixture for tests/test_imported_atom_head_index.py.
+#
+# Companion to atom_index_bare_importer.seam: same shape (a >= 4-clause
+# predicate whose rule heads name an imported atom), but the atom is
+# referenced via a literal DOTTED qualified expression
+# (``-import_module`` + ``atom_index_owner.aa`` written out in the head)
+# rather than a bare ``-import_from`` name.  This compiles to a real
+# ``LoadAttr(object=LoadName('atom_index_owner'), attr='aa')`` chain --
+# a DIFFERENT AST shape than the bare form's single dotted ``LoadName`` --
+# exercising the same ``_arg_to_index_key`` branch via
+# ``terms_to_ast._dotted_name_from_loadattr``'s LoadAttr-chain path.
+#
+# Loaded (like qualified_atom_vocab/qualified_atom_consumer) under its bare
+# module name rather than the ``tests.fixtures.`` dotted package path -- a
+# multi-level ``tests.fixtures.X.Y`` VALUE reference (not a call) hits an
+# unrelated, pre-existing attribute-chain evaluation quirk unconnected to
+# the atom-pivot bug this file targets.
+-import_module(atom_index_owner)
+-module(atom_index_dotted_importer, [level(N, L), src(N)])
+
+src(1),
+src(2),
+src(3),
+src(4),
+
+level(N, atom_index_owner.aa) <- (src(N), N == 1)
+level(N, atom_index_owner.bb) <- (src(N), N == 2)
+level(N, atom_index_owner.cc) <- (src(N), N == 3)
+level(N, atom_index_owner.dd) <- (src(N), N == 4)

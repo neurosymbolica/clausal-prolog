@@ -1019,9 +1019,9 @@ def test_regression_must_be_and_listing_errors(fix):
 
 
 def test_regression_dcg_state_oracle(fix):
-    """Differential oracle: clausal/examples/dcg_state.clausal semantics."""
+    """Differential oracle: clausal/examples/dcg_state.seam semantics."""
     pymod = _load_module(
-        "a09_dcg_oracle", os.path.join(REPO, "clausal/examples/dcg_state.clausal"))
+        "a09_dcg_oracle", os.path.join(REPO, "clausal/examples/dcg_state.seam"))
     m = pymod.__dict__["$module"]
     N = Var()
     assert _first(m, "phrase", pymod.count3, [0], [N]) and deref(N) == 3

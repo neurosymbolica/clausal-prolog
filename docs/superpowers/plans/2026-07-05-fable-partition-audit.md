@@ -647,7 +647,7 @@ Copy preamble, replace `{{DIR}}`→`04-runtime-tabling`, `{{ID}}`→`A04`, `{{TE
   keying (use the `clear_query_cache` fixture between differing solves).
 - Trampoline suspension/resume; deep recursion without Python stack overflow.
 - SLG tabling: `TableEntry`, `SuspendedConsumer`, cyclic paths (see
-  `tests/fixtures/tabled_path.clausal`), answer completeness, WFS delayed negation.
+  `tests/fixtures/tabled_path.seam`), answer completeness, WFS delayed negation.
 - Trail restoration correctness across suspension and backtracking.
 
 **C toolkit:** `refcount_stable` over solve/backtrack and table-fill loops; audit
@@ -736,8 +736,8 @@ Copy preamble, replace `{{DIR}}`→`06-clpfd`, `{{ID}}`→`A06`, `{{TEST_FILE}}`
 `todo/cross_cutting_issues.md`.
 
 **Oracle:** classic instances with known solution counts — N-queens
-(`tests/fixtures/clpfd_queens.clausal`) and SEND+MORE=MONEY
-(`tests/fixtures/clpfd_sendmore.clausal`) have unique known answers; a wrong
+(`tests/fixtures/clpfd_queens.seam`) and SEND+MORE=MONEY
+(`tests/fixtures/clpfd_sendmore.seam`) have unique known answers; a wrong
 count is a finding.
 
 **Seam notes for A12:** FD vars flow through the A01/A04 unifier and interact with
@@ -867,7 +867,7 @@ Copy preamble, replace `{{DIR}}`→`09-builtins`, `{{ID}}`→`A09`, `{{TEST_FILE
 `_chars_core.c`, `runtime/_list_unify.c` against `todo/cross_cutting_issues.md`.
 
 **Oracle:** Python's own list/string semantics for the pure list ops; DCG example
-`clausal/examples/dcg_state.clausal`.
+`clausal/examples/dcg_state.seam`.
 
 **Seam notes for A12:** builtins lean on A01 term shapes and A04 unify helpers.
 ```

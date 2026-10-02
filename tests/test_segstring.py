@@ -608,7 +608,7 @@ class TestClauseLevelStringPatterns:
         from clausal.import_hook import _load_module
         from clausal.logic.solve import call
         fixture = os.path.join(
-            os.path.dirname(__file__), "clausal_modules", "list_edge_cases.clausal"
+            os.path.dirname(__file__), "clausal_modules", "list_edge_cases.seam"
         )
         mod = _load_module("lec_segstr", fixture).__dict__["$module"]
         H, T = Var(), Var()

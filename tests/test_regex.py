@@ -722,7 +722,7 @@ def _load_fixture(name):
 
 
 class TestRegexBasicFixture:
-    """Run Test predicates from tests/fixtures/regex_basic.clausal."""
+    """Run Test predicates from tests/fixtures/regex_basic.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -761,7 +761,7 @@ class TestRegexBasicFixture:
 
 
 class TestRegexAutoBindFixture:
-    """Run Test predicates from tests/fixtures/regex_autobind.clausal."""
+    """Run Test predicates from tests/fixtures/regex_autobind.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):

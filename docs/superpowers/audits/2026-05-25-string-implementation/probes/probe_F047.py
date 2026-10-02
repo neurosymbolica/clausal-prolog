@@ -19,7 +19,7 @@ through, and the caller silently gets zero solutions.
 This probe constructs both a ground ``SegString(["abc"])`` and a
 non-ground ``SegString(["a", VarSeg(X), "c"])`` and feeds each to a
 multi-star clause ``Bracket([*A, X, Y, *B], X, Y, A, B)`` (the existing
-fixture in ``tests/clausal_modules/list_edge_cases.clausal``). For
+fixture in ``tests/clausal_modules/list_edge_cases.seam``). For
 reference it also calls the same predicate with the equivalent ``str``
 ``"abc"`` and plain ``list`` to confirm the normal path works.
 
@@ -46,7 +46,7 @@ def _repo_root() -> str:
 
 def _load_edge_mod():
     fixture = os.path.join(
-        _repo_root(), "tests", "clausal_modules", "list_edge_cases.clausal"
+        _repo_root(), "tests", "clausal_modules", "list_edge_cases.seam"
     )
     return _load_module("probe_f047_edge", fixture).__dict__["$module"]
 

@@ -83,7 +83,7 @@ def test_a_specialize_target_carries_its_directive_site():
     from clausal.import_hook import _load_module
     from clausal.logic.predicate import ClausalTermConstructionError
     from clausal.logic.specialization import _declared_site
-    path = os.path.join(_FIXTURES, "specialize_natnum.clausal")
+    path = os.path.join(_FIXTURES, "specialize_natnum.seam")
     name = "_spt_site_natnum"
     sys.modules.pop(name, None)
     try:

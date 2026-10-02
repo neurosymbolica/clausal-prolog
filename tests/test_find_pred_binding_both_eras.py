@@ -42,8 +42,8 @@ def pair():
     saved = sys.modules.get(_OWNER)
     sys.modules.pop(_OWNER, None)
     sys.modules.pop(_USER, None)
-    owner = _load_module(_OWNER, os.path.join(FIXTURES, "gate_dyn_owner.clausal"))
-    user = _load_module(_USER, os.path.join(FIXTURES, "gate_dyn_user.clausal"))
+    owner = _load_module(_OWNER, os.path.join(FIXTURES, "gate_dyn_owner.seam"))
+    user = _load_module(_USER, os.path.join(FIXTURES, "gate_dyn_user.seam"))
     yield owner, user
     sys.modules.pop(_USER, None)
     if saved is not None:
@@ -100,7 +100,7 @@ def test_call_n_reaches_the_imported_predicate(pair, owner_popped):
 def test_a_mangled_data_atom_is_not_taken_for_a_predicate(tmp_path):
     """A -hide atom whose owner does not resolve is data, not a lost handle:
     without an adopted row it does not answer."""
-    hide = _load_module("hide_owner", os.path.join(FIXTURES, "hide_owner.clausal"))
+    hide = _load_module("hide_owner", os.path.join(FIXTURES, "hide_owner.seam"))
     try:
         md = dict(hide.__dict__)
         md["hide_secret"] = mangle("_rows5859_not_loaded", "hide_secret")
@@ -114,7 +114,7 @@ def test_a_resolvable_handle_is_found_without_any_adopted_row(pair, tmp_path):
     test can recognise the handle."""
     owner, _user = pair
     plain = _load_module("_rows5859_plain",
-                         os.path.join(FIXTURES, "gate_dyn_owner.clausal"))
+                         os.path.join(FIXTURES, "gate_dyn_owner.seam"))
     try:
         md = dict(plain.__dict__)
         db = md["$module"].db

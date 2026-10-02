@@ -163,7 +163,7 @@ below.
 ## Worked examples
 
 Each example below is an exact copy of an integration test in
-`tests/fixtures/opencv_phase7_features.clausal`.
+`tests/fixtures/opencv_phase7_features.seam`.
 
 ### ORB detect-and-compute
 

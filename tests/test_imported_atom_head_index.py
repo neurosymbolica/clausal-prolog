@@ -51,7 +51,7 @@ def _fixture_path(filename: str) -> str:
 def _load_owner() -> None:
     _load_module(
         "tests.fixtures.atom_index_owner",
-        _fixture_path("atom_index_owner.clausal"),
+        _fixture_path("atom_index_owner.seam"),
     )
 
 
@@ -68,7 +68,7 @@ def _load_owner_bare() -> None:
     """
     _load_module(
         "atom_index_owner",
-        _fixture_path("atom_index_owner.clausal"),
+        _fixture_path("atom_index_owner.seam"),
     )
 
 
@@ -76,7 +76,7 @@ def _load_bare_importer() -> object:
     _load_owner()
     return _load_module(
         "tests.fixtures.atom_index_bare_importer",
-        _fixture_path("atom_index_bare_importer.clausal"),
+        _fixture_path("atom_index_bare_importer.seam"),
     )
 
 
@@ -84,7 +84,7 @@ def _load_dotted_importer() -> object:
     _load_owner_bare()
     return _load_module(
         "tests.fixtures.atom_index_dotted_importer",
-        _fixture_path("atom_index_dotted_importer.clausal"),
+        _fixture_path("atom_index_dotted_importer.seam"),
     )
 
 
@@ -161,7 +161,7 @@ def _load_pkg_reexport_importer() -> object:
     """Item 2 (as the diagnosis itself specified it, §9): the atom is
     re-exported through a package ``__init__`` -- TWO import hops
     (``tests.fixtures.atom_index_pkg.schema`` declares the atoms;
-    ``tests.fixtures.atom_index_pkg/__init__.clausal`` re-exports them via
+    ``tests.fixtures.atom_index_pkg/__init__.seam`` re-exports them via
     its own ``-import_from``; this importer imports the PACKAGE, not the
     schema submodule directly). No pre-load of the package/schema is
     needed -- loading the importer module triggers the real Python import
@@ -170,7 +170,7 @@ def _load_pkg_reexport_importer() -> object:
     """
     return _load_module(
         "tests.fixtures.atom_index_pkg_reexport_importer",
-        _fixture_path("atom_index_pkg_reexport_importer.clausal"),
+        _fixture_path("atom_index_pkg_reexport_importer.seam"),
     )
 
 
@@ -179,7 +179,7 @@ class TestPackageReexportedAtomHeadArg:
     "the same [imported-atom-head-arg] shape with the atom re-exported
     through a package ``__init__`` (two import hops)". This is the
     diagnosis's own ``mini/`` reproduction shape
-    (``pkg/schema.clausal`` -> ``pkg/__init__.clausal`` re-export ->
+    (``pkg/schema.seam`` -> ``pkg/__init__.seam`` re-export ->
     ``pkg.computation``'s bare use), reproduced here as a real fixture
     rather than referenced only from the diagnosis's scratch directory.
 

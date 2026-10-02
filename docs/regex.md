@@ -394,7 +394,7 @@ test("dynamic autobind") <- find_year(r"(?P<YEAR>\d+)", "2026", "2026")
     - **split/3**: comma, whitespace
     - **findall/3**: multiple matches, no matches
     - **Edge cases**: dynamic patterns, pattern variables
-    - **Fixture integration**: `regex_basic.clausal` (25 tests), `regex_autobind.clausal` (17 tests)
+    - **Fixture integration**: `regex_basic.seam` (25 tests), `regex_autobind.seam` (17 tests)
 
 ---
 

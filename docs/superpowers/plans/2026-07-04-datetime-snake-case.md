@@ -13,7 +13,7 @@
 - **Design spec:** `docs/superpowers/specs/2026-07-04-datetime-snake-case-design.md` — authoritative for names/semantics.
 - **Test runner (memory `running-tests-in-bug-fix-clone`):** ALWAYS use pyenv 3.13.3 with PYTHONPATH set to the clone. Never the venv python (its editable install shadows the clone).
   - Full: `cd /workspace/clausal-bug-fix && PYTHONPATH=/workspace/clausal-bug-fix /home/node/.pyenv/versions/3.13.3/bin/python -m pytest tests/ -q -p no:cacheprovider`
-  - A single `.clausal` fixture: `PYTHONPATH=/workspace/clausal-bug-fix /home/node/.pyenv/versions/3.13.3/bin/python -m pytest "tests/fixtures/docs/date_time_sig_tests.clausal" -q -p no:cacheprovider`
+  - A single `.clausal` fixture: `PYTHONPATH=/workspace/clausal-bug-fix /home/node/.pyenv/versions/3.13.3/bin/python -m pytest "tests/fixtures/docs/date_time_sig_tests.seam" -q -p no:cacheprovider`
   - A single docs page's blocks: `... -m pytest docs/date_time.md -q -p no:cacheprovider`
 - **Baseline (2026-07-02):** full suite ≈ 8253 passed, 2 skipped, 1 xfailed, 0 failures. End state must have 0 new failures.
 - **Module name stays `date_time`/`py.datetime`.** Do NOT alter `-import_from(date_time, …)` module names or the `_module="datetime"` value or the alias tables in `clausal/logic/compiler_v2.py:198` / `clausal/templating/term_rewriting.py:1316`. Only *predicate* identifiers change.
@@ -51,7 +51,7 @@ Atomic: the flag-day rename breaks the module and all its consumers at once, so 
 **Files:**
 - Modify: `clausal/modules/py/datetime.py` (whole export block, docstring, `_day_of_week_2`→`_weekday_2`, replace `_format_date_3`+`_parse_date_3` with `_datetime_string_3`)
 - Modify: `tests/test_date_time.py` (imports, `TestFormatDate`/`TestParseDate`→`TestDatetimeString`, `TestDayOfWeek` refs, `TestAdapters`, repr test)
-- Modify: `tests/fixtures/docs/date_time_sig_tests.clausal`
+- Modify: `tests/fixtures/docs/date_time_sig_tests.seam`
 - Modify: `tests/fixtures/docs/date_time_sigs.txt`
 - Modify: `tests/test_transitive_py_module_import.py`
 - Modify: `docs/date_time.md`, `docs/builtins.md`, `docs/compiler.md`, `docs/python_integration.md`
@@ -280,7 +280,7 @@ Expected: PASS (all classes green).
 
 - [ ] **Step 5: Update the `.clausal` fixture (collected & run by pytest).**
 
-In `tests/fixtures/docs/date_time_sig_tests.clausal`: apply the rename map to the `-import_from(date_time, [...])` list and every predicate call. Replace the import list with:
+In `tests/fixtures/docs/date_time_sig_tests.seam`: apply the rename map to the `-import_from(date_time, [...])` list and every predicate call. Replace the import list with:
 
 ```
 -import_from(date_time, [now, now_utc, today, date, time, datetime,
@@ -355,7 +355,7 @@ Expected: 0 failures (matches baseline; the datetime `.clausal` and doc-block it
 ```bash
 cd /workspace/clausal-bug-fix
 git add clausal/modules/py/datetime.py tests/test_date_time.py \
-  tests/fixtures/docs/date_time_sig_tests.clausal tests/fixtures/docs/date_time_sigs.txt \
+  tests/fixtures/docs/date_time_sig_tests.seam tests/fixtures/docs/date_time_sigs.txt \
   tests/test_transitive_py_module_import.py \
   docs/date_time.md docs/builtins.md docs/compiler.md docs/python_integration.md
 git commit -m "refactor(datetime): snake_case rename + fold format/parse into datetime_string/3
@@ -370,7 +370,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 **Files:**
 - Modify: `clausal/modules/py/datetime.py` (add `_timestamp_2` + `timestamp` export)
 - Modify: `tests/test_date_time.py` (import `timestamp`, `_timestamp_2`; add `TestTimestamp`; add adapter test)
-- Modify: `tests/fixtures/docs/date_time_sig_tests.clausal` (Test clause), `tests/fixtures/docs/date_time_sigs.txt` (snippet), `docs/date_time.md` (section + snippet ref), `docs/builtins.md`/`docs/compiler.md` (reference entry)
+- Modify: `tests/fixtures/docs/date_time_sig_tests.seam` (Test clause), `tests/fixtures/docs/date_time_sigs.txt` (snippet), `docs/date_time.md` (section + snippet ref), `docs/builtins.md`/`docs/compiler.md` (reference entry)
 
 **Interfaces:**
 - Consumes: `datetime/7` (to build a datetime in tests), `_dt.datetime`.
@@ -490,7 +490,7 @@ Expected: PASS.
   timestamp(DT, 0)     # inverse: DT = datetime.fromtimestamp(0)
   --8<-- [end:timestamp]
   ```
-- `tests/fixtures/docs/date_time_sig_tests.clausal`: add `timestamp` to the import list and a Test:
+- `tests/fixtures/docs/date_time_sig_tests.seam`: add `timestamp` to the import list and a Test:
   ```
   Test("timestamp roundtrip") <- (
       datetime(2026, 3, 16, 12, 0, 0, DT),
@@ -504,12 +504,12 @@ Expected: PASS.
 
 - [ ] **Step 6: Run docs + datetime tests, then commit.**
 
-Run: `... -m pytest tests/test_date_time.py "tests/fixtures/docs/date_time_sig_tests.clausal" docs/date_time.md -q -p no:cacheprovider`
+Run: `... -m pytest tests/test_date_time.py "tests/fixtures/docs/date_time_sig_tests.seam" docs/date_time.md -q -p no:cacheprovider`
 Expected: PASS.
 
 ```bash
 git add clausal/modules/py/datetime.py tests/test_date_time.py \
-  tests/fixtures/docs/date_time_sig_tests.clausal tests/fixtures/docs/date_time_sigs.txt \
+  tests/fixtures/docs/date_time_sig_tests.seam tests/fixtures/docs/date_time_sigs.txt \
   docs/date_time.md docs/builtins.md docs/compiler.md
 git commit -m "feat(datetime): add bidirectional timestamp/2
 
@@ -523,7 +523,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 **Files:**
 - Modify: `clausal/modules/py/datetime.py` (two dispatch fns + two exports)
 - Modify: `tests/test_date_time.py` (imports; `TestDatetimeStringIso`, `TestDateStringIso`; adapter tests)
-- Modify: `tests/fixtures/docs/date_time_sig_tests.clausal`, `tests/fixtures/docs/date_time_sigs.txt`, `docs/date_time.md`, `docs/builtins.md`, `docs/compiler.md`
+- Modify: `tests/fixtures/docs/date_time_sig_tests.seam`, `tests/fixtures/docs/date_time_sigs.txt`, `docs/date_time.md`, `docs/builtins.md`, `docs/compiler.md`
 
 **Interfaces:**
 - Consumes: `_dt.datetime`, `_dt.date`.
@@ -674,7 +674,7 @@ Expected: PASS.
   date_string_iso(D, S)         # S = "2026-03-16" / inverse parses it
   --8<-- [end:iso]
   ```
-- `tests/fixtures/docs/date_time_sig_tests.clausal`: add both to the import list and Tests:
+- `tests/fixtures/docs/date_time_sig_tests.seam`: add both to the import list and Tests:
   ```
   Test("datetime iso roundtrip") <- (
       datetime(2026, 3, 16, 14, 30, 0, DT),
@@ -700,7 +700,7 @@ Expected: 0 failures (baseline ≈ 8253 passed + the new tests).
 
 ```bash
 git add clausal/modules/py/datetime.py tests/test_date_time.py \
-  tests/fixtures/docs/date_time_sig_tests.clausal tests/fixtures/docs/date_time_sigs.txt \
+  tests/fixtures/docs/date_time_sig_tests.seam tests/fixtures/docs/date_time_sigs.txt \
   docs/date_time.md docs/builtins.md docs/compiler.md
 git commit -m "feat(datetime): add ISO-8601 helpers datetime_string_iso/2, date_string_iso/2
 

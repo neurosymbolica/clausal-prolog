@@ -89,7 +89,7 @@ The rest of this tutorial uses the `--` form; see
 
 ## Facts and rules
 
-Let's model a small family tree. Create `family.clausal`:
+Let's model a small family tree. Create `family.seam`:
 
 ```seam
 parent('alice', 'bob'),

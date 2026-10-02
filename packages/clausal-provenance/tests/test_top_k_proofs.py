@@ -277,7 +277,7 @@ def test_invalid_k_rejected():
 # ══════════════════════════════════════════════════════════════════════════
 # Engine integration — top-k two-hop, diamond, parity with amp, and the
 # zero/one boolean-equivalence corner case that filters reachable_topk
-# vs reachable_bool live in tests/fixtures/top_k_engine.clausal. The
+# vs reachable_bool live in tests/fixtures/top_k_engine.seam. The
 # Python tests below keep only the multi-set boolean-equivalence variant
 # because it exercises a Path(Var, Var) result-set comparison that's
 # easier to write in Python.
@@ -312,7 +312,7 @@ def test_engine_boolean_equivalence_at_zero_one_inputs():
 
 # Parity with add_mult_prob on disjoint proofs (top_k(k>=#proofs) ==
 # add_mult_prob exactly) is dogfooded in
-# tests/fixtures/top_k_engine.clausal. This Python file keeps only the
+# tests/fixtures/top_k_engine.seam. This Python file keeps only the
 # differentiable parity case below because gradcheck and tensor probs
 # don't fit a .clausal Test clause.
 

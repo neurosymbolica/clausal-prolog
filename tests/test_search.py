@@ -359,8 +359,8 @@ def _load_fixture(filename: str) -> Module:
 
 
 def _make_fib_module() -> Module:
-    """Load fib/2 from tests/fixtures/fibonacci.clausal."""
-    return _load_fixture("fibonacci.clausal")
+    """Load fib/2 from tests/fixtures/fibonacci.seam."""
+    return _load_fixture("fibonacci.seam")
 
 
 class TestFibonacci:
@@ -712,7 +712,7 @@ class TestRepeatedHeadVars:
     """Phase 2: Vars appearing multiple times in a clause head."""
 
     def _lists_mod(self) -> Module:
-        return _load_clausal_module("lists.clausal")
+        return _load_clausal_module("lists.seam")
 
     # ── append/3 — repeated HEAD in positions 1 and 3 ──
 
@@ -795,7 +795,7 @@ class TestAnonymousVar:
     """Phase 3: Anonymous _ variable in .clausal files."""
 
     def _anon_mod(self) -> Module:
-        return _load_clausal_module("anon.clausal")
+        return _load_clausal_module("anon.seam")
 
     def test_first_extracts_head(self):
         """first([H, *_], H) — _ ignores the tail."""
@@ -868,9 +868,9 @@ class TestAnonymousVar:
         assert results == []
 
     def test_last_anon_head_still_works(self):
-        """last/2 in lists.clausal uses _ for unused HEAD — verify it still works."""
+        """last/2 in lists.seam uses _ for unused HEAD — verify it still works."""
         # nv
-        mod = _load_clausal_module("lists.clausal")
+        mod = _load_clausal_module("lists.seam")
         x = Var()
         results = [deref(x) for _ in call("last", [1, 2, 3], x, module=mod)]
         assert results == [3]
@@ -880,7 +880,7 @@ class TestMultiStarPatterns:
     """Phase 4: Multiple stars in list head patterns — combinatorial backtracking."""
 
     def _ms_mod(self) -> Module:
-        return _load_clausal_module("multistar.clausal")
+        return _load_clausal_module("multistar.seam")
 
     def test_split_empty(self):
         """split([], A, B) → A=[], B=[] (one solution)."""

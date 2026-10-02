@@ -42,10 +42,10 @@ What a qualified goal now means, and what each pin here is for:
     called through a qualified cell tables into the EXPORTER's table store,
     not the caller's.
 
-The fixtures are real cross-module loads: ``tests/fixtures/t6_lib.clausal``
-(``libp/1``), ``t6_exporter.clausal`` (``p/1``, ``tp/1`` tabled, ``home/1``,
+The fixtures are real cross-module loads: ``tests/fixtures/t6_lib.seam``
+(``libp/1``), ``t6_exporter.seam`` (``p/1``, ``tp/1`` tabled, ``home/1``,
 ``pair/2``, ``ready/0``, plus ``libp/1`` imported from the lib) and
-``t6_importer.clausal``, which defines its own same-spelled ``p/1``, ``tp/1``
+``t6_importer.seam``, which defines its own same-spelled ``p/1``, ``tp/1``
 and ``home/1`` with different facts.
 """
 
@@ -97,9 +97,9 @@ def mods():
     Function-scoped on purpose: the tabling pins read ``db.table_store``, and a
     shared load would let one test's table decide another's assertion.
     """
-    lib = _load_module(LIB, _fixture_path("t6_lib.clausal"))
-    exporter = _load_module(EXPORTER, _fixture_path("t6_exporter.clausal"))
-    importer = _load_module(IMPORTER, _fixture_path("t6_importer.clausal"))
+    lib = _load_module(LIB, _fixture_path("t6_lib.seam"))
+    exporter = _load_module(EXPORTER, _fixture_path("t6_exporter.seam"))
+    importer = _load_module(IMPORTER, _fixture_path("t6_importer.seam"))
     return _Mods(lib, exporter, importer)
 
 
@@ -603,11 +603,11 @@ WFS_UNDEF = "tests.fixtures.t6_wfs_undefined"
 def undef():
     """A module whose tabled ``win/1`` is WFS-*Undefined* for every answer.
 
-    ``wfs_win.clausal`` is the suite's canonical symmetric win cycle; it is
+    ``wfs_win.seam`` is the suite's canonical symmetric win cycle; it is
     loaded here under a dotted name so the same goal can be asked with a str
     designator, with a Module, and through a qualification.
     """
-    return _load_module(WFS_UNDEF, _fixture_path("wfs_win.clausal"))
+    return _load_module(WFS_UNDEF, _fixture_path("wfs_win.seam"))
 
 
 class TestQueryWfsModuleResolution:

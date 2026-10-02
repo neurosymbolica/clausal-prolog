@@ -1,6 +1,6 @@
 """ISO Prolog conformity: Python-level infrastructure for unification.
 
-Behavior tests have moved to ``tests/conformity/iso_unification.clausal``.
+Behavior tests have moved to ``tests/conformity/iso_unification.seam``.
 What remains here needs Python-level access:
 
 - ``structural_unify()`` deep unification (C ``unify()`` does not recurse into

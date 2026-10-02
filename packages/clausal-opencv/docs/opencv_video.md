@@ -139,7 +139,7 @@ predicate-failure (not an exception).
 ## Worked examples
 
 Each example below is an exact copy of an integration test in
-`tests/fixtures/opencv_phase10_video.clausal`.
+`tests/fixtures/opencv_phase10_video.seam`.
 
 ### Read the first frame of a video
 

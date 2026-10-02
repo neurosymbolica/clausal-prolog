@@ -4,13 +4,13 @@ package's own files bring in via ``-import_from`` WITHOUT declaring them.
 The companion of ``declared_atoms`` (tests/test_declared_atoms.py): the two
 answers are disjoint, so ``declared_atoms(m) | imported_atoms(m).keys()`` is
 every atom the files can name.  The motivating shape is a package
-``__init__.clausal`` with no ``-module`` list whose atoms all arrive by
+``__init__.seam`` with no ``-module`` list whose atoms all arrive by
 ``-import_from`` -- ``declared_atoms`` rightly refuses them, and before this
 accessor a consumer had to read the compiler's internal dotted
 ``"<exporter>.<name>"`` namespace keys.
 
-Fixtures: tests/fixtures/ia_vocab.clausal, ia_vocab2.clausal,
-ia_plain_importer.clausal, ia_reexp_user.clausal and the ia_pkg/ and
+Fixtures: tests/fixtures/ia_vocab.seam, ia_vocab2.seam,
+ia_plain_importer.seam, ia_reexp_user.seam and the ia_pkg/ and
 ia_reexp/ packages.
 """
 

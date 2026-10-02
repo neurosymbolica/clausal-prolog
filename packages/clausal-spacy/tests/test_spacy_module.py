@@ -7,7 +7,7 @@ Two test layers:
 1. Unit tests — direct Python calls to the predicate dispatch functions,
    testing the adapter layer and data conversion helpers.
 
-2. Fixture integration — loads tests/fixtures/spacy_basic.clausal and runs
+2. Fixture integration — loads tests/fixtures/spacy_basic.seam and runs
    each ``test/1`` clause via ``call("test", name, module=mod)``.
 """
 
@@ -689,7 +689,7 @@ class TestSpacyPredicateAdapter:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Fixture integration: tests/fixtures/spacy_basic.clausal
+# Fixture integration: tests/fixtures/spacy_basic.seam
 # ══════════════════════════════════════════════════════════════════════════════
 
 _FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -708,7 +708,7 @@ def _succeeds(functor, *args, module):
 
 
 class TestSpacyBasicFixture:
-    """Run Test/1 predicates from tests/fixtures/spacy_basic.clausal."""
+    """Run Test/1 predicates from tests/fixtures/spacy_basic.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):

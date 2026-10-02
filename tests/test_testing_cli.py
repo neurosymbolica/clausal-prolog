@@ -140,10 +140,10 @@ def test_uppercase_file_is_a_load_failure_for_the_runner(tmp_path):
 
 
 def test_witness_fixture_on_the_old_spelling_does_not_load():
-    """The checked-in witness (tests/fixtures/titlecase_test_spelling_witness.clausal)."""
+    """The checked-in witness (tests/fixtures/titlecase_test_spelling_witness.seam)."""
     # nv
     from pathlib import Path
-    p = Path(__file__).parent / "fixtures" / "titlecase_test_spelling_witness.clausal"
+    p = Path(__file__).parent / "fixtures" / "titlecase_test_spelling_witness.seam"
     with pytest.raises(SyntaxError) as ei:
         load_clausal_module(p)
     assert "Rename `Test` -> `test`" in str(ei.value)

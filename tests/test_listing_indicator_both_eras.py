@@ -42,8 +42,8 @@ def pair():
     saved = sys.modules.get(_OWNER)
     sys.modules.pop(_OWNER, None)
     sys.modules.pop(_USER, None)
-    owner = _load_module(_OWNER, os.path.join(FIXTURES, "gate_dyn_owner.clausal"))
-    user = _load_module(_USER, os.path.join(FIXTURES, "gate_dyn_user.clausal"))
+    owner = _load_module(_OWNER, os.path.join(FIXTURES, "gate_dyn_owner.seam"))
+    user = _load_module(_USER, os.path.join(FIXTURES, "gate_dyn_user.seam"))
     yield owner, user
     sys.modules.pop(_USER, None)
     if saved is not None:
@@ -55,7 +55,7 @@ def pair():
 @pytest.fixture
 def hide():
     saved = sys.modules.pop(_HIDE, None)
-    mod = _load_module(_HIDE, os.path.join(FIXTURES, "hide_owner.clausal"))
+    mod = _load_module(_HIDE, os.path.join(FIXTURES, "hide_owner.seam"))
     yield mod
     sys.modules.pop(_HIDE, None)
     if saved is not None:
@@ -154,7 +154,7 @@ def aliased(pair):
     spelling ``gd_loc``, the owner's row by ``gd_p``."""
     owner, _user = pair
     sys.modules.pop(_ALIAS, None)
-    mod = _load_module(_ALIAS, os.path.join(FIXTURES, "row60_alias_user.clausal"))
+    mod = _load_module(_ALIAS, os.path.join(FIXTURES, "row60_alias_user.seam"))
     yield owner, mod
     sys.modules.pop(_ALIAS, None)
 

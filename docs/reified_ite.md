@@ -323,7 +323,7 @@ Key properties:
     - **dif interaction** (2): pre-existing dif constraint, undetermined with compatible dif
     - **Import integration** (5): `.clausal` file with ITE, memberd ground/absent/unbound/no-duplicates
     - **`once()` tests** (12): first solution only, failing goal, continuation backtracking, binding preservation, once-inside-if_, `.clausal` file integration — simple + trampoline modes
-    - **`once()` .clausal integration** (1): `once_member.clausal` fixture
+    - **`once()` .clausal integration** (1): `once_member.seam` fixture
 
 ---
 

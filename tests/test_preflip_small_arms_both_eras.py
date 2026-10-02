@@ -72,8 +72,8 @@ def gate_dyn():
     saved = {n: sys.modules.pop(n, None) for n in names}
 
     def load():
-        owner = _load_module(_OWNER, os.path.join(FIXTURES, "gate_dyn_owner.clausal"))
-        user = _load_module(names[1], os.path.join(FIXTURES, "gate_dyn_user.clausal"))
+        owner = _load_module(_OWNER, os.path.join(FIXTURES, "gate_dyn_owner.seam"))
+        user = _load_module(names[1], os.path.join(FIXTURES, "gate_dyn_user.seam"))
         return owner, user
 
     yield load
@@ -148,7 +148,7 @@ def test_a_hide_data_atom_keeps_its_mangled_functor_spelling():
     from clausal.logic.compiler.terms_to_ast import _functor_spelling
     saved = sys.modules.pop("hide_owner", None)
     try:
-        mod = _load_module("hide_owner", os.path.join(FIXTURES, "hide_owner.clausal"))
+        mod = _load_module("hide_owner", os.path.join(FIXTURES, "hide_owner.seam"))
         db = _lm(mod).db
         secret = mangle("hide_owner", "hide_secret")
         assert _functor_spelling(secret, "x") == secret
@@ -271,7 +271,7 @@ def test_bare_listing_of_a_hide_data_atom_keeps_its_own_spelling():
     atom names it by its own (mangled) spelling, not demangled."""
     saved = sys.modules.pop("hide_owner", None)
     try:
-        mod = _load_module("hide_owner", os.path.join(FIXTURES, "hide_owner.clausal"))
+        mod = _load_module("hide_owner", os.path.join(FIXTURES, "hide_owner.seam"))
         secret = mangle("hide_owner", "hide_secret")
         with pytest.raises(LogicException) as exc:
             list(call("listing", secret, module=_lm(mod)))
@@ -581,9 +581,9 @@ def vocab_rival():
 
 
 def test_a_clobbering_import_head_is_refused_by_the_gate(vocab_rival):
-    vocab = _load_module(vocab_rival[0], os.path.join(FIXTURES, "gate_vocab.clausal"))
+    vocab = _load_module(vocab_rival[0], os.path.join(FIXTURES, "gate_vocab.seam"))
     with pytest.raises(SyntaxError) as exc:
-        _load_module(vocab_rival[1], os.path.join(FIXTURES, "gate_rival.clausal"))
+        _load_module(vocab_rival[1], os.path.join(FIXTURES, "gate_rival.seam"))
     assert "may not write gv_owned/1" in str(exc.value)
     assert len(_lm(vocab).db.row("gv_owned", 1).clauses) == 1
 
@@ -591,7 +591,7 @@ def test_a_clobbering_import_head_is_refused_by_the_gate(vocab_rival):
 def test_a_variable_head_for_an_import_is_refused_by_the_gate(
         vocab_rival, tmp_path):
     """The derived name is a VARIABLE's (``colour``), not a placeholder."""
-    _load_module(vocab_rival[0], os.path.join(FIXTURES, "gate_vocab.clausal"))
+    _load_module(vocab_rival[0], os.path.join(FIXTURES, "gate_vocab.seam"))
     src = tmp_path / f"sa_hv{SEAM}"
     src.write_text("-module(sa_hv, [])\n"
                    "-import_from(tests.fixtures.gate_vocab, [gv_owned])\n"
@@ -607,12 +607,12 @@ def test_the_owner_s_own_head_keeps_its_construction_error(vocab_rival):
     the error, and it names the SITE the owner row records
     (``declared_at``), not ``<unknown>``."""
     from clausal.logic.predicate import ClausalTermConstructionError, head_cell
-    vocab = _load_module(vocab_rival[0], os.path.join(FIXTURES, "gate_vocab.clausal"))
+    vocab = _load_module(vocab_rival[0], os.path.join(FIXTURES, "gate_vocab.seam"))
     handle = mint_predicate_handle(_lm(vocab).db, "gv_owned")
     assert head_cell(handle, NAME="teal") == ("gv_owned", "teal")
     with pytest.raises(ClausalTermConstructionError) as exc:
         head_cell(handle, arg_0="teal")
-    assert "gate_vocab.clausal:" in str(exc.value)
+    assert "gate_vocab.seam:" in str(exc.value)
     assert "<unknown>" not in str(exc.value)
 
 
@@ -737,7 +737,7 @@ def test_deferral_compares_the_owner_by_database_identity(vocab_rival, home_is_o
     """``_defers_to_the_gate``: the owner is the Q0-resolved DATABASE, not a
     module-name string."""
     from clausal.logic.predicate import _defers_to_the_gate
-    vocab = _load_module(vocab_rival[0], os.path.join(FIXTURES, "gate_vocab.clausal"))
+    vocab = _load_module(vocab_rival[0], os.path.join(FIXTURES, "gate_vocab.seam"))
     handle = mint_predicate_handle(_lm(vocab).db, "gv_owned")
     if home_is_owner:
         home = vocab.__dict__
@@ -783,7 +783,7 @@ def test_a_head_through_a_python_held_handle_never_reaches_a_row(vocab_rival, tm
     -import_from, so step 3d does not refuse its head; the deferred head is
     refused by the compile-time check instead of being stored positionally
     on this module's own gv_owned/1 row."""
-    _load_module(vocab_rival[0], os.path.join(FIXTURES, "gate_vocab.clausal"))
+    _load_module(vocab_rival[0], os.path.join(FIXTURES, "gate_vocab.seam"))
     src = tmp_path / f"sa_hh{SEAM}"
     src.write_text("-module(sa_hh, [])\n"
                    "-allow_singletons\n"

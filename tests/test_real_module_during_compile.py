@@ -41,7 +41,7 @@ def load_natnum():
 
     def load():
         return _load_module(_NAME, os.path.join(FIXTURES,
-                                                "specialize_natnum.clausal"))
+                                                "specialize_natnum.seam"))
     yield load
     sys.modules.pop(_NAME, None)
 

@@ -373,7 +373,7 @@ class TestStructuredErrors:
 
 
 # ── TestClausalIntegration removed ─────────────────────────────────────────
-# Clausal-surface integration tests migrated to tests/fixtures/catch_test.clausal.
+# Clausal-surface integration tests migrated to tests/fixtures/catch_test.seam.
 
 
 # ── throw inside findall ─────────────────────────────────────────────────────
@@ -427,11 +427,11 @@ class TestThrowInFindAll:
 # nothing previously covered end-to-end at the .clausal surface.
 #
 # See docs/exceptions.md ("Raising well-formedness guards in library code") and
-# the fixture tests/fixtures/raising_guard_lib.clausal.
+# the fixture tests/fixtures/raising_guard_lib.seam.
 
 
 class TestRaisingGuardThroughFindAll:
-    _GUARD_FIXTURE = os.path.join(_FIXTURE_DIR, "raising_guard_lib.clausal")
+    _GUARD_FIXTURE = os.path.join(_FIXTURE_DIR, "raising_guard_lib.seam")
 
     def _run(self, description):
         from clausal.testing import load_clausal_module, run_test

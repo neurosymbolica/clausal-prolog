@@ -103,7 +103,7 @@ workflows — reading a flag from a config file or user input.
 ## Worked examples
 
 Examples below are exact copies of the integration tests under
-`tests/fixtures/opencv_phase3_filtering.clausal`.
+`tests/fixtures/opencv_phase3_filtering.seam`.
 
 ### Gaussian blur with explicit sigma
 

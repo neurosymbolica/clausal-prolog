@@ -109,7 +109,7 @@ order:
 `PredicateFinder` resolves per `sys.path` entry, in path order, as Python
 does: the first entry that holds the module wins, whatever its extension.
 Only within one entry does the extension decide: a flat `foo.clausal`, then
-`foo.seam`, then a `foo/__init__.clausal` or `foo/__init__.seam` package,
+`foo.seam`, then a `foo/__init__.seam` or `foo/__init__.seam` package,
 then a flat `foo.pl`, then a `foo/__init__.pl` package. So if both
 `foo.clausal` and `foo.pl` exist in the same directory, the `.clausal` file
 wins -- you can keep the original `.pl` alongside a hand-optimized

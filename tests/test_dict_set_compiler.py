@@ -4,7 +4,7 @@ Covers:
   - C-level __unify__ protocol: DictTerm pairwise unification, SetTerm equality
   - Trail undo on failed DictTerm unification
   - NotImplemented return for type mismatch
-  - Fixture integration: dict_set_patterns.clausal (13 tests)
+  - Fixture integration: dict_set_patterns.seam (13 tests)
   - Backtracking with DictTerm clauses
 """
 
@@ -27,7 +27,7 @@ _FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 def _load_fixture():
     return _load_module(
         "dict_set_patterns",
-        os.path.join(_FIXTURE_DIR, "dict_set_patterns.clausal"),
+        os.path.join(_FIXTURE_DIR, "dict_set_patterns.seam"),
     )
 
 
@@ -128,7 +128,7 @@ class TestCLevelUnify:
 # ── Fixture integration ─────────────────────────────────────────────────────
 
 class TestDictSetFixture:
-    """Integration tests via dict_set_patterns.clausal fixture."""
+    """Integration tests via dict_set_patterns.seam fixture."""
 
     @pytest.fixture(scope="class")
     def mod(self):

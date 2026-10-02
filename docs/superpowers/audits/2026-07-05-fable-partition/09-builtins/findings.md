@@ -139,7 +139,7 @@ Dimensions per predicate: **I** input mode (all ground), **O** output/var mode
 ### dcg.py
 | predicate | dims to hit |
 |---|---|
-| phrase/2,3 | I O(rest var) S Seg X(non-rule) oracle: examples/dcg_state.clausal |
+| phrase/2,3 | I O(rest var) S Seg X(non-rule) oracle: examples/dcg_state.seam |
 | sequence//3 | Modes A–D **P(var terminals — `==` vs unify)** S Y E |
 
 ### database_ops.py

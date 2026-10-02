@@ -1,0 +1,27 @@
+# Unit sugar on lists, scalars, variables and compound units.  Once the one
+# fixture kept on the TitleCase unit spelling; the TitleCase lint is an
+# error now, and the deprecation-window witness for the old spelling is
+# tests/fixtures/titlecase_unit_spelling_witness.seam.
+-double_quotes(atom)
+-import_from(py.units, [metre, second, newton])
+
+# [1,2,3](metre) - list with unit annotation
+test("list with unit") <- (
+    X is [1.0, 2.0, 3.0](metre),
+    has_units(X, metre))  # nv
+
+# Scalar sugar still works
+test("scalar with unit") <- (
+    X is 5.0(metre),
+    has_units(X, metre))  # nv
+
+# Variable sugar still works
+test("var with unit") <- (
+    V is 9.8,
+    X is V(newton),
+    has_units(X, newton))  # nv
+
+# Compound unit on list
+test("list with compound unit") <- (
+    X is [0.0, 10.0, 20.0](metre/second),
+    has_units(X, metre/second))  # nv

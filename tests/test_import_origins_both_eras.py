@@ -49,7 +49,7 @@ _OWNER = "_rows2729_impclob_owner"
 def owner():
     sys.modules.pop(_OWNER, None)
     module = _load_module(_OWNER, os.path.join(FIXTURES,
-                                               "impclob_owner.clausal"))
+                                               "impclob_owner.seam"))
     yield module
     sys.modules.pop(_OWNER, None)
 

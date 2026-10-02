@@ -179,7 +179,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `clausal/logic/database.py` — `LogicModule.define_predicate` (lines ~271-280)
-- Test: `tests/test_head_match_imported_compound.py` (add output-mode tests; existing fixtures `head_compound_owner.clausal` / `head_compound_importer.clausal` are reused — no new fixture)
+- Test: `tests/test_head_match_imported_compound.py` (add output-mode tests; existing fixtures `head_compound_owner.seam` / `head_compound_importer.seam` are reused — no new fixture)
 
 **Interfaces:**
 - Consumes: `_normalize_structural_head_args` from Task 1.
@@ -312,14 +312,14 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Files:**
 - Test: `tests/test_structural_head_normalization.py` (add an integration test)
-- Create: `tests/clausal_modules/undeclared_compound_head.clausal`
+- Create: `tests/clausal_modules/undeclared_compound_head.seam`
 
 **Interfaces:**
 - Consumes: behavior from Task 2. Pins the intended behavior change: an undeclared bare functor in output mode raises the helpful "not in scope as a term class" error, identically for rule and fact.
 
 - [ ] **Step 1: Write the test + fixture**
 
-Create `tests/clausal_modules/undeclared_compound_head.clausal`:
+Create `tests/clausal_modules/undeclared_compound_head.seam`:
 
 ```
 # `point` is never declared/imported — constructing it must raise the helpful
@@ -340,7 +340,7 @@ from clausal.logic.variables import Var
 
 def _undeclared_mod():
     path = os.path.join(
-        os.path.dirname(__file__), "clausal_modules", "undeclared_compound_head.clausal"
+        os.path.dirname(__file__), "clausal_modules", "undeclared_compound_head.seam"
     )
     return _load_module("undeclared_compound_head_mod", path).__dict__["$module"]
 
@@ -370,7 +370,7 @@ Expected: PASS. If the fact path does NOT raise the same way (e.g. it raises a d
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tests/test_structural_head_normalization.py tests/clausal_modules/undeclared_compound_head.clausal
+git add tests/test_structural_head_normalization.py tests/clausal_modules/undeclared_compound_head.seam
 git commit -m "test(database): undeclared-functor output mode raises consistently (rule == fact)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"

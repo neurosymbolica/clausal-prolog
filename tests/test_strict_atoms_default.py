@@ -516,7 +516,7 @@ class TestPredicateBuiltinsPoolSplit:
         ``Predicate(head=..., body=...)`` at module-exec time
         (EmbedTransformer's rewrite) -- a ``simple_ast`` name that must
         still resolve via ``runtime_builtins`` post-split.
-        ``quantity_head_literal.clausal`` is an existing, already
+        ``quantity_head_literal.seam`` is an existing, already
         suite-covered fixture (``tests/test_quantity_head_literal.py``)
         combining an f-string clause head (``Tagd(f"v{0}", tagged_)``)
         with arithmetic/quantity clause bodies."""
@@ -525,7 +525,7 @@ class TestPredicateBuiltinsPoolSplit:
 
         path = os.path.join(
             os.path.dirname(__file__), "clausal_modules",
-            "quantity_head_literal.clausal",
+            "quantity_head_literal.seam",
         )
         mod = _load_module("_p8_qty_fixture_regress", path)
         n = Var()

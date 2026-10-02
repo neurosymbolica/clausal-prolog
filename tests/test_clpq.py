@@ -1322,7 +1322,7 @@ class TestClausalIntegration:
     @pytest.fixture(autouse=True)
     def _load_module(self):
         from clausal.testing import load_clausal_module
-        self.mod = load_clausal_module("tests/fixtures/clpq_examples.clausal")
+        self.mod = load_clausal_module("tests/fixtures/clpq_examples.seam")
 
     def _run(self, name, arity):
         """Run a predicate and return the first solution's deref'd args."""

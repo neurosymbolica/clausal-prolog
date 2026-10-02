@@ -8,7 +8,7 @@
 Clausal brings Prolog-style logic programming to Python — not as a front-end to an external engine, but as a genuine part of the Python runtime. Python code and logic code call into each other freely, share the same objects, and run on the same VM, and the same garbage collector. No boilerplate, no latency, no memory leaks, no friction.
 
 ```seam
-# fibonacci.clausal
+# fibonacci.seam
 
 -table(fib/2)
 

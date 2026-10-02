@@ -367,13 +367,13 @@ Non-tabled predicates fall through to the existing inline NAF codegen (no behavi
     - `query_wfs` API: returns list with truth annotations
 
     **Fixtures:**
-    - `tests/fixtures/tabled_fib.clausal` — tabled fibonacci
-    - `tests/fixtures/tabled_path.clausal` — tabled cyclic path (1→2→3→1)
-    - `tests/fixtures/tabled_left_rec.clausal` — left-recursive path on acyclic graph (1→2→3→4)
-    - `tests/fixtures/tabled_same_gen.clausal` — same-generation problem
-    - `tests/fixtures/tabled_mutual_rec.clausal` — mutual recursion via alternating link types
-    - `tests/fixtures/wfs_win.clausal` — symmetric win/move (WFS: both undefined)
-    - `tests/fixtures/wfs_win_asym.clausal` — asymmetric win/move (WFS: win('a') true)
+    - `tests/fixtures/tabled_fib.seam` — tabled fibonacci
+    - `tests/fixtures/tabled_path.seam` — tabled cyclic path (1→2→3→1)
+    - `tests/fixtures/tabled_left_rec.seam` — left-recursive path on acyclic graph (1→2→3→4)
+    - `tests/fixtures/tabled_same_gen.seam` — same-generation problem
+    - `tests/fixtures/tabled_mutual_rec.seam` — mutual recursion via alternating link types
+    - `tests/fixtures/wfs_win.seam` — symmetric win/move (WFS: both undefined)
+    - `tests/fixtures/wfs_win_asym.seam` — asymmetric win/move (WFS: win('a') true)
 
 ---
 

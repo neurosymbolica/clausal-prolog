@@ -79,7 +79,7 @@ class TestNormalizeStructuralHeadArgs:
 
 def _undeclared_mod():
     path = os.path.join(
-        os.path.dirname(__file__), "clausal_modules", "undeclared_compound_head.clausal"
+        os.path.dirname(__file__), "clausal_modules", "undeclared_compound_head.seam"
     )
     return _load_module("undeclared_compound_head_mod", path).__dict__["$module"]
 

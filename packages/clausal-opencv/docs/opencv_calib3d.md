@@ -170,7 +170,7 @@ dft(F2, SPEC),                    % backward
 ## Worked examples
 
 The examples below are exact copies of the integration tests in
-`tests/fixtures/opencv_phase9_calib3d.clausal`.
+`tests/fixtures/opencv_phase9_calib3d.seam`.
 
 ### Homography from 4 corner correspondences
 

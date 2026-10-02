@@ -41,13 +41,13 @@ def _fixture(name: str) -> str:
 
 
 def _load_impexp_nomodule():
-    """The real ``impexp_nomodule.clausal`` fixture (no ``-module(...)``
+    """The real ``impexp_nomodule.seam`` fixture (no ``-module(...)``
     directive, two real predicates: ``impexp_nm_alpha/1``,
     ``impexp_nm_beta/2``) -- today's era, a genuinely loaded module whose
     own bindings are ``PredicateMeta`` classes."""
     modname = "_f9_defined_names_nomodule"
     sys.modules.pop(modname, None)
-    return _load_module(modname, _fixture("impexp_nomodule.clausal"))
+    return _load_module(modname, _fixture("impexp_nomodule.seam"))
 
 
 def _load_hide_owner():
@@ -56,7 +56,7 @@ def _load_hide_owner():
     the module name ``mangle("hide_owner", ...)`` uses, so a mangled atom
     built against it resolves through a REAL Database, no monkeypatch
     anywhere (same pattern as ``test_w4b2b_binding_resolver.py``)."""
-    return _load_module("hide_owner", _fixture("hide_owner.clausal"))
+    return _load_module("hide_owner", _fixture("hide_owner.seam"))
 
 
 # ── Positive control: class era (today) ─────────────────────────────────────

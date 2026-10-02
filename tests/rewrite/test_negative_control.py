@@ -2,7 +2,7 @@
 
 Every other test in this suite runs the CORRECT rule, so between them they
 establish that it behaves -- and nothing about whether the battery could tell
-if a legality condition went missing.  ``_broken_head_fold_control.clausal`` is
+if a legality condition went missing.  ``_broken_head_fold_control.seam`` is
 head_fold with the "occurs nowhere else in the body" goal deleted and nothing
 else changed.  These two tests say what that deletion costs, on the same input.
 

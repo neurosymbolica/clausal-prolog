@@ -188,7 +188,7 @@ def test_pl_facade_is_not_answered_by_a_later_clausal(roots, frontend, shape):
     ``flat_sibling``: fresh/{leakdom,sib}.pl, gold/sib.clausal -- the
     sibling is a top-level module found by walking ``sys.path``; before the
     fix it loaded gold's and the facade answered "GOLD".
-    ``gold_facade``: the ``package`` shape plus gold/leakdom/__init__.clausal
+    ``gold_facade``: the ``package`` shape plus gold/leakdom/__init__.seam
     -- before the fix gold's whole package won and answered "GOLD".
     """
     fresh, gold = roots("fresh", "gold")
@@ -256,13 +256,13 @@ def test_same_entry_priority_unchanged(roots, frontend):
     assert type(spec.loader) is PL_LOADER[frontend]
     # A .clausal PACKAGE beats a flat .pl in the same entry (the .clausal
     # group, flat then package, is asked before the .pl group).
-    _write(d / "d49same" / "__init__.clausal", "which(0),\n")
+    _write(d / "d49same" / "__init__.seam", "which(0),\n")
     importlib.invalidate_caches()
     spec = importlib.util.find_spec("d49same")
-    assert spec.origin.endswith(os.path.join("d49same", "__init__.clausal"))
+    assert spec.origin.endswith(os.path.join("d49same", "__init__.seam"))
     assert spec.submodule_search_locations == [str(d / "d49same")]
     # Within the .pl group a flat file beats a package.
-    (d / "d49same" / "__init__.clausal").unlink()
+    (d / "d49same" / "__init__.seam").unlink()
     _write(d / "d49same" / "__init__.pl", "which(0).\n")
     importlib.invalidate_caches()
     assert importlib.util.find_spec("d49same").origin == str(d / "d49same.pl")

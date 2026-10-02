@@ -15,7 +15,7 @@ The special forms are the goals the compiler lowers inline
 SPECIAL_FORMS`` is the table, held to the compiler below in both directions.
 
 The central check is the ROW TABLE in
-``tests/fixtures/call_special_forms.clausal``: ``b(N, X, Y)`` is the goal
+``tests/fixtures/call_special_forms.seam``: ``b(N, X, Y)`` is the goal
 written as a clause body, ``g(N, X, Y, G)`` builds the same text in term
 position, ``run(N, X, Y)`` calls it.  The Python-built cells below do not
 depend on the term-position half, so they fail on main as well.

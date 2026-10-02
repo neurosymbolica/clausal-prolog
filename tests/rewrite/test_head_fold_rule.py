@@ -1,4 +1,4 @@
-"""head_fold.clausal: fold ``V is TERM`` into the head; refuse everything else.
+"""head_fold.seam: fold ``V is TERM`` into the head; refuse everything else.
 
 ``X is T`` is unification, never arithmetic, so a body goal that only unifies a
 head variable with a term is saying something the head could say itself.  The

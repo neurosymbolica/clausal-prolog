@@ -387,7 +387,7 @@ class TestListingDivIndicatorArgument:
     arithmetic operator, so a structural (non-``is``) use of it stays a
     reified operator term rather than a cell or a ``Compound``. The earlier
     round's docs/comments claimed ``foo/2`` compiled to the cell; it does
-    not, and this class + ``tests/fixtures/listing_div_indicator.clausal``
+    not, and this class + ``tests/fixtures/listing_div_indicator.seam``
     pin what actually happens, byte-identically, plus the rejection case."""
 
     def test_div_of_an_atom_name_and_int_lists_the_predicate(self):

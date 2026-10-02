@@ -48,7 +48,7 @@ gd_loc_call(X) <- call(gd_loc(X))
 def aliased(tmp_path):
     saved = sys.modules.pop(_OWNER, None)
     sys.modules.pop(_ALIAS, None)
-    owner = _load_module(_OWNER, os.path.join(FIXTURES, "gate_dyn_owner.clausal"))
+    owner = _load_module(_OWNER, os.path.join(FIXTURES, "gate_dyn_owner.seam"))
     src = tmp_path / f"{_ALIAS}{SEAM}"
     src.write_text(_SRC)
     user = _load_module(_ALIAS, str(src))

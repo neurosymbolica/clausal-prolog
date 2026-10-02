@@ -54,12 +54,12 @@ def _db(mod):
 
 @pytest.fixture(scope="module")
 def owner():
-    return _load_module("hide_owner", _fixture_path("hide_owner.clausal"))
+    return _load_module("hide_owner", _fixture_path("hide_owner.seam"))
 
 
 @pytest.fixture(scope="module")
 def zero():
-    return _load_module("self_atom_zero", _fixture_path("self_atom_zero.clausal"))
+    return _load_module("self_atom_zero", _fixture_path("self_atom_zero.seam"))
 
 
 PREDICATES = ("holds", "label", "same")
@@ -271,7 +271,7 @@ def test_a_legitimate_unresolvable_hide_atom_round_trips():
         f"\nimport clausal, os\n"
         f"assert os.path.realpath(clausal.__file__).startswith(os.path.realpath({root!r}) + os.sep), clausal.__file__\n")
     out = subprocess.run(
-        [sys.executable, "-c", script, _fixture_path("hide_owner.clausal")],
+        [sys.executable, "-c", script, _fixture_path("hide_owner.seam")],
         cwd=root, env=env, capture_output=True, text=True, timeout=120)
     assert out.returncode == 0 and out.stdout.strip() == "OK", (
         f"rc={out.returncode}\nstdout:\n{out.stdout[-2000:]}\nstderr:\n{out.stderr[-2000:]}")
@@ -284,10 +284,10 @@ def test_goal_argument_must_be_qualified_to_reach_another_module():
     atom, which ``call/1`` resolves in the CALLING module; only the
     qualified form reaches the other module's predicate.  Modules are loaded
     here (not in a shared fixture) so a peer popping them cannot interfere."""
-    other = _load_module("sa_goal_other", _fixture_path("sa_goal_other.clausal"))
-    caller = _load_module("sa_goal_caller", _fixture_path("sa_goal_caller.clausal"))
+    other = _load_module("sa_goal_other", _fixture_path("sa_goal_other.seam"))
+    caller = _load_module("sa_goal_caller", _fixture_path("sa_goal_caller.seam"))
     local = _load_module("sa_goal_caller_local",
-                         _fixture_path("sa_goal_caller_local.clausal"))
+                         _fixture_path("sa_goal_caller_local.seam"))
     handle = mint_predicate_handle(_db(other), "z")
     assert other.z == handle
     bindings = (handle,)

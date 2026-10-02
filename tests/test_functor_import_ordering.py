@@ -19,7 +19,7 @@ The narrowing matters: heads are emitted positionally only where the file does
 NOT emit a guarded class block at the head itself.  Where it does (the first
 clause of a functor), the block re-mints the class to exactly the derived
 fields, so keyword emission is precise and is left alone — that is the shape
-``tests/fixtures/impord_atom_then_pred.clausal`` pins (import a 0-arity
+``tests/fixtures/impord_atom_then_pred.seam`` pins (import a 0-arity
 vocabulary atom, then define a same-named predicate).
 """
 
@@ -212,7 +212,7 @@ class TestImportThenDeclare:
 
 
 class TestZeroArityAtomThenPredicate:
-    """The shape ``tests/fixtures/impord_atom_then_pred.clausal`` pins: import
+    """The shape ``tests/fixtures/impord_atom_then_pred.seam`` pins: import
     a 0-arity vocabulary atom and then define a same-named predicate.
 
     P3-1 Task 2 fix round 1 (controller ruling, 2026-09-04): pre-pivot, the

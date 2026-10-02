@@ -1,3 +1,0 @@
-# Fixture for tests/test_imported_atoms.py: declares the atoms the sibling
-# ia_reexp/__init__.clausal imports.
--module(owner, [deep_atom, deep_declared])

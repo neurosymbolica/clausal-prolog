@@ -49,7 +49,7 @@ Use `clausal.testing` as a command-line tool:
 python -m clausal.testing clausal/examples/
 
 # Run a single file
-python -m clausal.testing clausal/examples/fibonacci.clausal
+python -m clausal.testing clausal/examples/fibonacci.seam
 
 # Verbose output (shows individual PASS/FAIL and every skipped file)
 python -m clausal.testing -v clausal/examples/
@@ -95,7 +95,7 @@ A `.pl` file the translator rejects (a syntax error, or a construct it cannot tr
 The `conftest.py` at the project root registers a pytest plugin that automatically collects `.clausal` files (and their `.seam` alias), Prolog `.pl` files (through the Prolog importer; a file that does not translate is one failing `<load>` item), and also every ```` ```seam ```` block (or its older alias ```` ```clausal ````) in `docs/*.md` that contains a `test/1` clause. The [import hook](import.md) handles loading and compilation. Each `test/1` clause appears as an individual pytest item:
 
 ```bash
-python -m pytest clausal/examples/fibonacci.clausal -v
+python -m pytest clausal/examples/fibonacci.seam -v
 ```
 
 Output looks like:

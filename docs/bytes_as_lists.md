@@ -7,7 +7,7 @@ term inspection, and DCGs the way character strings do under
 [strings as lists](strings_as_lists.md).
 
 ```seam
---8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:unification"
+--8<-- "tests/fixtures/docs/bytes_as_lists_examples.seam:unification"
 ```
 
 The motivating use case is **DCGs over binary protocols**: parsing and building
@@ -35,13 +35,13 @@ A byte therefore has **no fixed point** — it decomposes to an `int`, never to 
 one-byte `bytes`:
 
 ```seam
---8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:no_fixed_point"
+--8<-- "tests/fixtures/docs/bytes_as_lists_examples.seam:no_fixed_point"
 ```
 
 The empty `bytes` unifies with the empty list:
 
 ```seam
---8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:empty_bytes"
+--8<-- "tests/fixtures/docs/bytes_as_lists_examples.seam:empty_bytes"
 ```
 
 ### It is unification-equivalence, not conversion
@@ -86,7 +86,7 @@ The ISO inspection predicates follow the codes-model cons cell — an **int**
 head and a **`bytes`** tail (symmetric with the char cons cell for a string):
 
 ```seam
---8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:inspection"
+--8<-- "tests/fixtures/docs/bytes_as_lists_examples.seam:inspection"
 ```
 
 So `b"abc"` has functor `'.'`, arity `2`, first argument `97` (an int), and
@@ -101,7 +101,7 @@ Element results are int codes; sequence results reconstruct as `bytes`
 (input-type-wins):
 
 ```seam
---8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:list_predicates"
+--8<-- "tests/fixtures/docs/bytes_as_lists_examples.seam:list_predicates"
 ```
 
 ---
@@ -109,7 +109,7 @@ Element results are int codes; sequence results reconstruct as `bytes`
 ## Type Checks
 
 ```seam
---8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:type_checks"
+--8<-- "tests/fixtures/docs/bytes_as_lists_examples.seam:type_checks"
 ```
 
 `is_list/1` accepts a `bytes` (it is list-shaped). `is_codes/1` is the codes
@@ -178,7 +178,7 @@ Because byte codes are ordinary integers, **any** list of ints in `[0, 255]`
 unifies with the matching `bytes`:
 
 ```seam
---8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:promiscuity"
+--8<-- "tests/fixtures/docs/bytes_as_lists_examples.seam:promiscuity"
 ```
 
 This is intentional and symmetric with strings-as-lists (where any list of
@@ -191,7 +191,7 @@ int lists unify as int lists, and **nothing ever spuriously becomes `bytes`.**
 ## Out of Scope
 
 ```seam
---8<-- "tests/fixtures/docs/bytes_as_lists_examples.clausal:out_of_scope"
+--8<-- "tests/fixtures/docs/bytes_as_lists_examples.seam:out_of_scope"
 ```
 
 - **No string ↔ `bytes` cross-unification.** `"abc"` does not unify with

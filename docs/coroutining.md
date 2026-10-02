@@ -56,7 +56,7 @@ Generalized coroutining: delay `Goal` until `Condition` is satisfied.
 | `(C1 ; C2)` | Disjunction: either C1 or C2 suffices |
 
 ```seam
---8<-- "tests/fixtures/docs/coroutining_examples.clausal:supported_conditions"
+--8<-- "tests/fixtures/docs/coroutining_examples.seam:supported_conditions"
 ```
 
 ### How conditions decompose
@@ -91,7 +91,7 @@ Deterministic resource management — the logic programming equivalent of `try/f
 If **Setup fails**, the whole goal fails and Cleanup does **not** run.
 
 ```seam
---8<-- "tests/fixtures/docs/coroutining_examples.clausal:setup_call_cleanup_3_ex2"
+--8<-- "tests/fixtures/docs/coroutining_examples.seam:setup_call_cleanup_3_ex2"
 ```
 
 ---
@@ -125,7 +125,7 @@ Call `Goal` and succeed only on the **Nth solution**. The first N-1 solutions ar
 - Only the Nth solution's bindings are visible to the continuation.
 
 ```seam
---8<-- "tests/fixtures/docs/coroutining_examples.clausal:call_nth_2_ex2"
+--8<-- "tests/fixtures/docs/coroutining_examples.seam:call_nth_2_ex2"
 ```
 
 ---
@@ -141,7 +141,7 @@ Count the number of solutions of `Goal` without collecting them. Unifies `Count`
 Unlike [findall](meta_predicates.md) + `length`, `count_all` does not build a list — it just counts. Bindings from the inner goal are **not** visible after counting (the trail is unwound).
 
 ```seam
---8<-- "tests/fixtures/docs/coroutining_examples.clausal:count_all_2_ex2"
+--8<-- "tests/fixtures/docs/coroutining_examples.seam:count_all_2_ex2"
 ```
 
 ---
@@ -151,7 +151,7 @@ Unlike [findall](meta_predicates.md) + `length`, `count_all` does not build a li
 All of these are compiler special forms that compile their goal arguments inline. They nest freely inside other meta-predicates — [findall](meta_predicates.md), [once](control.md), [catch](exceptions.md), [forall](meta_predicates.md), and each other:
 
 ```seam
---8<-- "tests/fixtures/docs/coroutining_examples.clausal:nesting_inside_meta_predicates"
+--8<-- "tests/fixtures/docs/coroutining_examples.seam:nesting_inside_meta_predicates"
 ```
 
 ---
@@ -159,7 +159,7 @@ All of these are compiler special forms that compile their goal arguments inline
 ??? info "Test coverage"
 
     Tests are in `tests/test_coroutining.py` (51 tests) and
-    `tests/fixtures/coroutining.clausal` (20 tests).
+    `tests/fixtures/coroutining.seam` (20 tests).
 
     - **call_nth**: basic, first/last, too few solutions, N as variable, zero/negative/non-integer raises, fail goal, single solution
     - **count_all**: basic, empty, large range, already-bound correct/wrong, with filter, no side effects

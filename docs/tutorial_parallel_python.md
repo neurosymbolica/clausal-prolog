@@ -47,7 +47,7 @@ concurrently; they share only the (read-only) clause database.
 Write the query in a `.clausal` or `.seam` file, in
 [goal position](python_integration.md#goal-position-if-goal-for-in-goal).
 Every run of a `--` goal makes its own variables and its own Trail, so
-the function is safe to call from any thread. With `graph.clausal`:
+the function is safe to call from any thread. With `graph.seam`:
 
 ```seam
 edge('a', 'b'),

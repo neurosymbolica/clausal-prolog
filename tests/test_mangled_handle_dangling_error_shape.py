@@ -17,7 +17,7 @@ demangled before the term is built and so never appears in anything a
 loaded-but-missing distinction lives only in the context/message, never in
 the culprit.
 
-Fixture: ``tests/fixtures/hide_owner.clausal`` declares ``holds/1``,
+Fixture: ``tests/fixtures/hide_owner.seam`` declares ``holds/1``,
 ``label/1``, ``same/2`` -- a real loaded module with no ``nosuchpred``.
 """
 from __future__ import annotations
@@ -44,7 +44,7 @@ def hide_owner():
     """The real, loaded ``hide_owner`` module -- ``nosuchpred`` is genuinely
     absent from it (it declares only ``holds/1``, ``label/1``, ``same/2``)."""
     return _load_module("hide_owner_dangling_handle_fixture",
-                         _fixture_path("hide_owner.clausal"))
+                         _fixture_path("hide_owner.seam"))
 
 
 def _walk_for_hidden_sep(term) -> bool:

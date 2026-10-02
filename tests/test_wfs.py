@@ -1008,7 +1008,7 @@ class TestGoalShapeEdges:
         pkg.mkdir(parents=True)
         (tmp_path / "pkgn" / "__init__.py").write_text("")
         (pkg / "__init__.py").write_text("")
-        shutil.copy(os.path.join(FIXTURES, "wfs_win.clausal"),
+        shutil.copy(os.path.join(FIXTURES, "wfs_win.seam"),
                     str(pkg / f"winmod{SEAM}"))
         (tmp_path / f"nested_imp{SEAM}").write_text(
             "-import_module(pkgn.subn.winmod)\n\n"

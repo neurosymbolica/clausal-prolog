@@ -573,8 +573,8 @@ def pair():
     saved = sys.modules.get(_OWNER)
     sys.modules.pop(_OWNER, None)
     sys.modules.pop(_USER, None)
-    owner = _load_module(_OWNER, os.path.join(FIXTURES, "gate_dyn_owner.clausal"))
-    user = _load_module(_USER, os.path.join(FIXTURES, "gate_dyn_user.clausal"))
+    owner = _load_module(_OWNER, os.path.join(FIXTURES, "gate_dyn_owner.seam"))
+    user = _load_module(_USER, os.path.join(FIXTURES, "gate_dyn_user.seam"))
     yield owner, user
     sys.modules.pop(_USER, None)
     if saved is not None:

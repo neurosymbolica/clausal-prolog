@@ -379,7 +379,7 @@ class TestEndToEnd:
         from clausal.testing import (
             load_clausal_module, collect_tests, run_test,
         )
-        mod = load_clausal_module("tests/fixtures/date_time_ordering.clausal")
+        mod = load_clausal_module("tests/fixtures/date_time_ordering.seam")
         descs = collect_tests(mod)
         assert descs, "fixture defined no Test/1 clauses"
         for desc in descs:

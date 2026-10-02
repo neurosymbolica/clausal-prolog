@@ -2,9 +2,9 @@
 
 Behavior tests for left-recursion / mutual-recursion / same-generation
 have been migrated to Test clauses inside the corresponding fixtures:
-    tests/fixtures/tabled_left_rec.clausal
-    tests/fixtures/tabled_mutual_rec.clausal
-    tests/fixtures/tabled_same_gen.clausal
+    tests/fixtures/tabled_left_rec.seam
+    tests/fixtures/tabled_mutual_rec.seam
+    tests/fixtures/tabled_same_gen.seam
 
 What remains here are assertions on the SLG runtime that need
 Python-level access to ``Module.db.table_store`` / ``db.is_tabled``.

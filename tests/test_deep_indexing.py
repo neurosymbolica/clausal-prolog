@@ -45,7 +45,7 @@ FRAGILITY NOTES
 ─────────────────────────────────────────────────────────────────────────────
 
 TestDeepIndexBehavioral
-  • Tests load tests/fixtures/deep_index.clausal via load_clausal_module().
+  • Tests load tests/fixtures/deep_index.seam via load_clausal_module().
     The fixture file defines my_len, my_append, my_member, my_last, my_product,
     my_sum_list, my_max, MyNthOf, my_prefix.  If those predicates are renamed or
     removed the corresponding tests must be updated.
@@ -214,7 +214,7 @@ def _trampoline_solutions(dispatch_fn, args: tuple) -> list:
 class TestDeepIndexBehavioral:
     """Correctness tests via the .clausal fixture.
 
-    The fixture (tests/fixtures/deep_index.clausal) defines user-level list
+    The fixture (tests/fixtures/deep_index.seam) defines user-level list
     predicates.  These Python tests drive them via call() and verify results.
     All bindings are read *inside* the for-loop while the trail is live.
 
@@ -223,7 +223,7 @@ class TestDeepIndexBehavioral:
 
     @pytest.fixture(scope="class")
     def lm(self):
-        path = os.path.join(_FIXTURES, "deep_index.clausal")
+        path = os.path.join(_FIXTURES, "deep_index.seam")
         mod = load_clausal_module(path)
         return mod.__dict__["$module"]
 

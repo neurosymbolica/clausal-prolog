@@ -27,7 +27,7 @@ from clausal.logic.variables import Var, deref
 @pytest.fixture(scope="module")
 def prc_mod():
     path = os.path.join(
-        os.path.dirname(__file__), "fixtures", "tro_nonlast_arm_clobber.clausal"
+        os.path.dirname(__file__), "fixtures", "tro_nonlast_arm_clobber.seam"
     )
     return _load_module("tests.fixtures.tro_nonlast_arm_clobber", path)
 

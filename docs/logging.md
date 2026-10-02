@@ -250,7 +250,7 @@ Call `logging.basicConfig()` with a dict of options (`{level: "info"}`, keys dec
     - **Module:** `clausal/modules/py/logging.py`
     - **Predicates:** `ModulePredicate` wrappers, the same pattern as the other `clausal/modules/py/` modules
     - **Backend:** Python's `logging` module — all predicates delegate to `logging.Logger` methods
-    - **Tests:** `tests/test_logging_module.py`, `tests/fixtures/logging_basic.clausal`
+    - **Tests:** `tests/test_logging_module.py`, `tests/fixtures/logging_basic.seam`
 
     ---
 

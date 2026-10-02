@@ -36,8 +36,8 @@ contracts, method, and rules.
 `todo/cross_cutting_issues.md`.
 
 **Oracle:** classic instances with known solution counts — N-queens
-(`tests/fixtures/clpfd_queens.clausal`) and SEND+MORE=MONEY
-(`tests/fixtures/clpfd_sendmore.clausal`) have unique known answers; a wrong
+(`tests/fixtures/clpfd_queens.seam`) and SEND+MORE=MONEY
+(`tests/fixtures/clpfd_sendmore.seam`) have unique known answers; a wrong
 count is a finding.
 
 **Seam notes for A12:** FD vars flow through the A01/A04 unifier and interact with

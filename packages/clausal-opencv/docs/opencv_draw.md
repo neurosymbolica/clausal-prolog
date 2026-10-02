@@ -99,7 +99,7 @@ only when profiling actually shows the copies dominating.
 ## Worked examples
 
 Each example below is an exact copy of an integration test in
-`tests/fixtures/opencv_phase6_drawing.clausal`.
+`tests/fixtures/opencv_phase6_drawing.seam`.
 
 ### A green diagonal line on a color image
 

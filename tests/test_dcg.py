@@ -523,7 +523,7 @@ class TestFixtureIntegration:
     def load_fixture(self):
         import os
         fixture = os.path.join(
-            os.path.dirname(__file__), "fixtures", "dcg_grammar.clausal"
+            os.path.dirname(__file__), "fixtures", "dcg_grammar.seam"
         )
         mod = _load_module("dcg_grammar", fixture)
         self.mod = mod.__dict__["$module"]
@@ -864,18 +864,18 @@ class TestStateThreading:
             assert deref(n) == 2
 
 
-# ── Integration: dcg_state.clausal example ──────────────────────────────────
+# ── Integration: dcg_state.seam example ──────────────────────────────────
 
 
 class TestDcgStateExample:
-    """End-to-end tests against clausal/examples/dcg_state.clausal."""
+    """End-to-end tests against clausal/examples/dcg_state.seam."""
 
     @pytest.fixture(autouse=True)
     def load_example(self):
         import os
         example = os.path.join(
             os.path.dirname(__file__), os.pardir,
-            "clausal", "examples", "dcg_state.clausal",
+            "clausal", "examples", "dcg_state.seam",
         )
         mod = _load_module("dcg_state", os.path.abspath(example))
         self.mod = mod.__dict__["$module"]

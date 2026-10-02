@@ -49,11 +49,11 @@ def sol_var(goal, var, *, limit=50, mod=None):
 # ── Migration note ─────────────────────────────────────────────────────────
 # TestTypeChecks / TestArithmetic / TestListPredicates / TestAssertRetract /
 # TestPairHelpers have been removed — their coverage is in .clausal fixtures:
-#   tests/conformity/iso_type_checking.clausal
-#   tests/conformity/iso_arithmetic.clausal  (incl. Sign/Gcd/DivMod)
-#   tests/conformity/iso_list_operations.clausal + builtins_lists.clausal
-#   tests/conformity/iso_database.clausal + builtins_db.clausal
-#   tests/fixtures/phase5_builtins.clausal  (pairs_keys_values/_keys/_values)
+#   tests/conformity/iso_type_checking.seam
+#   tests/conformity/iso_arithmetic.seam  (incl. Sign/Gcd/DivMod)
+#   tests/conformity/iso_list_operations.seam + builtins_lists.seam
+#   tests/conformity/iso_database.seam + builtins_db.seam
+#   tests/fixtures/phase5_builtins.seam  (pairs_keys_values/_keys/_values)
 
 # ── functor/3 ─────────────────────────────────────────────────────────────────
 

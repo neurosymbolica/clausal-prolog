@@ -102,7 +102,7 @@ def test_a_directive_option_keyword_is_accepted(monkeypatch):
     and its keyword VALUES, never the directive ``Call`` itself."""
     monkeypatch.setattr(term_rewriting, "KEYWORD_ARGUMENT_SEVERITY", "warn")
     fixture = str(pathlib.Path(__file__).parent / "fixtures"
-                  / "specialize_natnum.clausal")
+                  / "specialize_natnum.seam")
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter("always")
         _load_module("kwl_specialize_natnum", fixture)

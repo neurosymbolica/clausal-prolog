@@ -91,7 +91,7 @@ def test_boolean_saturated_default():
 
 
 # ── End-to-end reachability is dogfooded in
-#    tests/fixtures/provenance_reach.clausal and mutual_recursion.clausal.
+#    tests/fixtures/provenance_reach.seam and mutual_recursion.seam.
 #    These Python tests retain only the cases that need pytest infra:
 #    error paths, custom Python semirings, and engine-internal probes.
 
@@ -324,8 +324,8 @@ def test_python_query_helper():
 
 # In-source provenance.solve/4 and recover/3 are dogfooded in the
 # .clausal fixtures; same for transitive-closure correctness on dense
-# graphs (top_k_engine.clausal exercises a 4-edge diamond, and
-# provenance_reach.clausal covers the disjoint-component case).
+# graphs (top_k_engine.seam exercises a 4-edge diamond, and
+# provenance_reach.seam covers the disjoint-component case).
 
 
 # ── Custom semiring contract ────────────────────────────────────────────

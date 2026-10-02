@@ -600,7 +600,7 @@ class TestPromotedStrSeqFields:
     promote a list of provably 1-char strs to the equivalent ``str``
     (``maybe_promote_to_str``) — so a reified term that rode through a rule
     answer can come back with ``Goal.args == "t"`` where ``["t"]`` was built
-    (the head-fold on ``TAG is "t"`` in ``catch_trampolined.clausal`` did
+    (the head-fold on ``TAG is "t"`` in ``catch_trampolined.seam`` did
     exactly this).  The promoted str IS that char list, so a seq field must
     read it as one rather than refuse it as "not a sequence"."""
 

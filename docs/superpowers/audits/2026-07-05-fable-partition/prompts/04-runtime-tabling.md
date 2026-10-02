@@ -31,7 +31,7 @@ contracts, method, and rules.
   keying (use the `clear_query_cache` fixture between differing solves).
 - Trampoline suspension/resume; deep recursion without Python stack overflow.
 - SLG tabling: `TableEntry`, `SuspendedConsumer`, cyclic paths (see
-  `tests/fixtures/tabled_path.clausal`), answer completeness, WFS delayed negation.
+  `tests/fixtures/tabled_path.seam`), answer completeness, WFS delayed negation.
 - Trail restoration correctness across suspension and backtracking.
 
 **C toolkit:** `refcount_stable` over solve/backtrack and table-fill loops; audit

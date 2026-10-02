@@ -487,7 +487,7 @@ class TestGroundnessWalkCompleteness:
         """End-to-end regression for the reviewer's exact scenario: a
         NON-tabled predicate that recurses over a cons-cell chain carried
         in its OWN indexed (position-0) argument
-        (tests/fixtures/gate_microbench.clausal, also used by the
+        (tests/fixtures/gate_microbench.seam, also used by the
         fix-round-1 bench transcript, task4-bench.txt).  correctness (the
         depth comes back right) and boundedness (it completes quickly for
         a chain far deeper than the walk's node budget) in one test.
@@ -498,7 +498,7 @@ class TestGroundnessWalkCompleteness:
         from clausal.logic.solve import call
 
         fixture = os.path.join(
-            os.path.dirname(__file__), "fixtures", "gate_microbench.clausal"
+            os.path.dirname(__file__), "fixtures", "gate_microbench.seam"
         )
         mod = _load_module("tests.fixtures.gate_microbench_regress", fixture)
         lm = mod.__dict__["$module"]
@@ -555,7 +555,7 @@ class TestDeepGateFlagComputation:
         as ``is_term_instance`` and wrongly said True, which would have
         turned the gate ON for every co-indexed cell bucket at the same
         position as a pad atom fact -- exactly the shape
-        tests/fixtures/gate_microbench.clausal exercises."""
+        tests/fixtures/gate_microbench.seam exercises."""
         from clausal.logic.compiler.list_dispatch import (
             _lifted_head_arg_needs_deep_gate,
         )

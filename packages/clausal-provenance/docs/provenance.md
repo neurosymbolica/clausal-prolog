@@ -402,7 +402,7 @@ predicted sum (0..18) comes out; loss is computed against the true
 sum; gradients train a CNN that has never seen image-level digit labels.
 
 ```clausal
-# packages/clausal-provenance/tests/fixtures/mnist_sum.clausal
+# packages/clausal-provenance/tests/fixtures/mnist_sum.seam
 -import_from(provenance, [bottom_up_, solve, boolean, add_mult_prob])
 
 -module(mnist_sum, [
@@ -425,7 +425,7 @@ import torch
 from clausal import load_clausal_module
 from clausal.modules.provenance import diff_add_mult_prob, query
 
-mod = load_clausal_module("mnist_sum.clausal")
+mod = load_clausal_module("mnist_sum.seam")
 Digit, SumDigits = mod.Digit, mod.SumDigits
 
 cnn = MyCnn()                                    # outputs logits over 10 digits

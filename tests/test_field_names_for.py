@@ -107,7 +107,7 @@ def test_arm3_mangled_name_resolves_against_a_REAL_loaded_module_NO_monkeypatch(
     which is the coverage the branch's whole thesis rests on.
     """
     fixture = os.path.join(
-        os.path.dirname(__file__), "fixtures", "hide_owner.clausal")
+        os.path.dirname(__file__), "fixtures", "hide_owner.seam")
     _load_module("hide_owner", fixture)
 
     assert field_names_for(mangle("hide_owner", "same"), arity=2) == (
@@ -151,7 +151,7 @@ def test_dynamic_only_declaration_has_no_field_names_but_IS_declared():
 def test_bare_export_entry_has_no_field_names_but_IS_declared():
     """Same shape, the OTHER spelling the todo names: a bare ``name/arity``
     entry in a ``-module``/``-private`` export list (``gv_free/1`` in
-    tests/fixtures/gate_vocab.clausal), reached through
+    tests/fixtures/gate_vocab.seam), reached through
     ``Database.mark_predicate_export``."""
     db = Database()
     db.mark_predicate_export("gv_free", 1)

@@ -189,7 +189,7 @@ class TestTableTargetRefused:
         with pytest.raises(SyntaxError) as exc:
             _load_module(
                 "tbl_imported_target",
-                os.path.join(FIXTURES, "table_imported_target.clausal"),
+                os.path.join(FIXTURES, "table_imported_target.seam"),
             )
         msg = str(exc.value)
         assert "-table(double/2)" in msg

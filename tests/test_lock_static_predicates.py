@@ -137,7 +137,7 @@ def test_a_static_predicate_whose_name_is_bound_to_an_atom_is_locked():
     to that atom -- and the module also defines a local ``t5b_slot/2``.  The
     module-dict walk never saw the predicate and left it writable."""
     path = os.path.join(os.path.dirname(__file__), "fixtures",
-                        "t5b_local_pred.clausal")
+                        "t5b_local_pred.seam")
     lm = _lm(_load_module("tests.fixtures.t5b_local_pred", path))
     assert lm.db.row("t5b_slot", 2).locked is True
     with pytest.raises(LogicException, match="static"):

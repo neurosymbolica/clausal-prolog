@@ -1,7 +1,7 @@
 """Tests for clausal.logic.clportools_lp — LP/MIP infrastructure unit tests.
 
 Problem-solving tests (feasibility, optimization, diet problem, MIP) live in
-tests/fixtures/ortools_lp.clausal and tests/fixtures/ortools_mip.clausal.
+tests/fixtures/ortools_lp.seam and tests/fixtures/ortools_mip.seam.
 
 These Python tests cover infrastructure that can't be tested from .clausal:
   - Internal var_map data structures

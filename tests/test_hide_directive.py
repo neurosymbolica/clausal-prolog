@@ -9,14 +9,14 @@ security).  See ``clausal/logic/atoms.py`` for the mangling helpers and
 ``clausal/templating/term_rewriting.py``'s ``_handle_hide_directive``/
 ``visit_Name`` for the compiler-side substitution.
 
-Fixtures (``tests/fixtures/hide_*.clausal``):
-  * ``hide_owner.clausal`` -- declares ``-module(hide_owner, ...)`` and
+Fixtures (``tests/fixtures/hide_*.seam``):
+  * ``hide_owner.seam`` -- declares ``-module(hide_owner, ...)`` and
     ``-hide([hide_secret])``; every ``hide_secret`` reference inside it
     compiles to the SAME mangled Constant.
-  * ``hide_other.clausal`` -- a DIFFERENT module declaring the SAME bare
+  * ``hide_other.seam`` -- a DIFFERENT module declaring the SAME bare
     spelling ``hide_secret``, but only via ``-private`` (an ordinary
     global atom, not hidden) -- cross-module isolation.
-  * ``hide_importer.clausal`` -- imports ``holds/1`` FROM ``hide_owner``
+  * ``hide_importer.seam`` -- imports ``holds/1`` FROM ``hide_owner``
     (so it can receive the mangled value as an opaque bound argument) and
     separately declares its OWN bare ``hide_secret`` -- proving that
     importing the hiding module does not grant the ability to SPELL the
@@ -132,7 +132,7 @@ def test_hidden_atom_unifies_within_its_module():
     its OWNING module (``holds(hide_secret)`` and ``label(hide_secret)``)
     both compile to the identical mangled Constant, so a rule joining them
     (``same(X, Y) <- holds(X), label(Y)``) solves with ``X == Y``."""
-    mod = _load_fixture("hide_owner.clausal", "tests.fixtures.hide_owner")
+    mod = _load_fixture("hide_owner.seam", "tests.fixtures.hide_owner")
     out_x, out_y = Var(), Var()
     # deref INSIDE the loop -- call()'s generator undoes trail bindings on
     # backtrack past the last yield (see test_global_atoms_default.py's
@@ -151,12 +151,12 @@ def test_hidden_atom_unifies_within_its_module():
 
 
 def test_cross_module_same_spelling_does_not_unify():
-    """``hide_other.clausal`` declares the SAME bare spelling
+    """``hide_other.seam`` declares the SAME bare spelling
     (``hide_secret``) but never hides it -- an ordinary global atom.  It
     must NOT unify with ``hide_owner``'s hidden atom of the same
     spelling: different (mangled vs. plain) runtime strs."""
-    owner = _load_fixture("hide_owner.clausal", "tests.fixtures.hide_owner")
-    other = _load_fixture("hide_other.clausal", "tests.fixtures.hide_other")
+    owner = _load_fixture("hide_owner.seam", "tests.fixtures.hide_owner")
+    other = _load_fixture("hide_other.seam", "tests.fixtures.hide_other")
 
     out_owner = Var()
     owner_vals = [deref(out_owner) for _ in solve(("holds", out_owner), owner)]
@@ -175,7 +175,7 @@ def test_cross_module_same_spelling_does_not_unify():
 
 
 def test_importer_cannot_spell_hidden_atom():
-    """``hide_importer.clausal`` imports ``holds/1`` from ``hide_owner``
+    """``hide_importer.seam`` imports ``holds/1`` from ``hide_owner``
     (so it CAN receive the mangled value as an opaque bound argument via
     ``imported_secret/1``) but independently declares its OWN bare
     ``hide_secret`` (via ``-private``, an ordinary global atom) bound by
@@ -183,7 +183,7 @@ def test_importer_cannot_spell_hidden_atom():
     that PRODUCES the hidden value does not grant the ability to SPELL
     that value."""
     importer = _load_fixture(
-        "hide_importer.clausal", "tests.fixtures.hide_importer")
+        "hide_importer.seam", "tests.fixtures.hide_importer")
 
     out_imported = Var()
     imported_vals = [
@@ -248,7 +248,7 @@ def test_near_miss_renderer_shows_human_form():
     ``demangle_for_display`` substitution point as the reflection
     renderer above."""
     mangled = mangle("hide_owner", "hide_secret")
-    text = _render_value(mint(mangled), path=_fixture_path("hide_owner.clausal"))
+    text = _render_value(mint(mangled), path=_fixture_path("hide_owner.seam"))
     assert text == "hide_owner.hide_secret"
 
 
@@ -256,11 +256,11 @@ def test_end_to_end_solved_value_renders_human_form():
     """A value actually solved out of the owning module (not a
     hand-constructed mangle() call) renders the same human form through
     the near-miss renderer."""
-    mod = _load_fixture("hide_owner.clausal", "tests.fixtures.hide_owner")
+    mod = _load_fixture("hide_owner.seam", "tests.fixtures.hide_owner")
     out = Var()
     vals = [deref(out) for _ in solve(("holds", out), mod)]
     assert len(vals) == 1
-    text = _render_value(vals[0], path=_fixture_path("hide_owner.clausal"))
+    text = _render_value(vals[0], path=_fixture_path("hide_owner.seam"))
     assert text == "hide_owner.hide_secret"
 
 
@@ -291,7 +291,7 @@ def _dispatch_solutions(name, arity, *args, snap):
 def test_write_to_string_renders_human_form_for_hidden_atom():
     """``write_to_string/2`` on a solved hidden-atom value renders the
     human ``module.name`` form -- no raw HIDDEN_SEP in the output."""
-    mod = _load_fixture("hide_owner.clausal", "tests.fixtures.hide_owner")
+    mod = _load_fixture("hide_owner.seam", "tests.fixtures.hide_owner")
     out = Var()
     vals = [deref(out) for _ in solve(("holds", out), mod)]
     assert len(vals) == 1
@@ -308,7 +308,7 @@ def test_write_to_string_renders_human_form_for_hidden_atom():
 def test_term_to_string_renders_human_form_for_hidden_atom():
     """``term_to_string/2`` (the ``term_str``-backed writer, also feeding
     ``print_term/1``) renders the same human form -- no raw HIDDEN_SEP."""
-    mod = _load_fixture("hide_owner.clausal", "tests.fixtures.hide_owner")
+    mod = _load_fixture("hide_owner.seam", "tests.fixtures.hide_owner")
     out = Var()
     vals = [deref(out) for _ in solve(("holds", out), mod)]
     val = vals[0]
@@ -326,7 +326,7 @@ def test_portray_clause_spot_check_renders_human_form():
     ``clausal.terms.term_pformat``, which itself starts from ``term_str``
     -- also renders the human form for a hidden atom, with no raw
     HIDDEN_SEP anywhere in its output."""
-    mod = _load_fixture("hide_owner.clausal", "tests.fixtures.hide_owner")
+    mod = _load_fixture("hide_owner.seam", "tests.fixtures.hide_owner")
     out = Var()
     vals = [deref(out) for _ in solve(("holds", out), mod)]
     val = vals[0]
@@ -451,7 +451,7 @@ def test_hide_without_functor_collision_still_works():
     anywhere in the file is unaffected by the new check (already covered
     by every other test in this file, but pinned explicitly here as the
     control for the three collision tests above)."""
-    mod = _load_fixture("hide_owner.clausal", "tests.fixtures.hide_owner")
+    mod = _load_fixture("hide_owner.seam", "tests.fixtures.hide_owner")
     out = Var()
     vals = [deref(out) for _ in solve(("holds", out), mod)]
     assert len(vals) == 1
@@ -466,7 +466,7 @@ def test_hide_entries_count_as_declared_for_strictness():
     ONLY via ``-hide`` (no separate ``-module``/``-private`` listing) with
     no ``NameError`` -- ``-hide`` registers into ``transformer._atoms`` for
     strictness purposes, same as ``-module``/``-private`` (build step 2).
-    ``hide_owner.clausal`` itself already carries ``-strict_atoms`` and
+    ``hide_owner.seam`` itself already carries ``-strict_atoms`` and
     loads clean (exercised by every other test above); this test isolates
     the claim with a minimal, self-contained fixture."""
     source = (

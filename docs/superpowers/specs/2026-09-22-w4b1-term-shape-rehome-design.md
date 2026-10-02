@@ -26,7 +26,7 @@ waste.
 
 **Keyword term CONSTRUCTION in `.clausal` is already gone** — retired
 2026-09-19; a term is built positionally
-(`tests/fixtures/builtins_keywords.clausal:17` records it). On that surface
+(`tests/fixtures/builtins_keywords.seam:17` records it). On that surface
 Clausal already agrees with ISO.
 
 Names are nonetheless live in four places:

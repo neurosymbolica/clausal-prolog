@@ -27,20 +27,20 @@ GOLDEN = FIXTURES / "prolog_golden"
 
 # (source_path, golden_path) pairs
 _FIXTURE_CASES = [
-    (FIXTURES / "edge_graph.clausal", GOLDEN / "edge_graph.pl"),
-    (FIXTURES / "fibonacci.clausal", GOLDEN / "fibonacci.pl"),
-    (FIXTURES / "dcg_grammar.clausal", GOLDEN / "dcg_grammar.pl"),
-    (FIXTURES / "meta_test.clausal", GOLDEN / "meta_test.pl"),
-    (FIXTURES / "clpfd_queens.clausal", GOLDEN / "clpfd_queens.pl"),
+    (FIXTURES / "edge_graph.seam", GOLDEN / "edge_graph.pl"),
+    (FIXTURES / "fibonacci.seam", GOLDEN / "fibonacci.pl"),
+    (FIXTURES / "dcg_grammar.seam", GOLDEN / "dcg_grammar.pl"),
+    (FIXTURES / "meta_test.seam", GOLDEN / "meta_test.pl"),
+    (FIXTURES / "clpfd_queens.seam", GOLDEN / "clpfd_queens.pl"),
 ]
 
 _CONFORMITY_CASES = [
-    (CONFORMITY / "iso_arithmetic.clausal", GOLDEN / "iso_arithmetic.pl"),
-    (CONFORMITY / "iso_control.clausal", GOLDEN / "iso_control.pl"),
-    (CONFORMITY / "iso_list_operations.clausal", GOLDEN / "iso_list_operations.pl"),
-    (CONFORMITY / "iso_term_manipulation.clausal", GOLDEN / "iso_term_manipulation.pl"),
-    (CONFORMITY / "iso_type_checking.clausal", GOLDEN / "iso_type_checking.pl"),
-    (CONFORMITY / "iso_unification.clausal", GOLDEN / "iso_unification.pl"),
+    (CONFORMITY / "iso_arithmetic.seam", GOLDEN / "iso_arithmetic.pl"),
+    (CONFORMITY / "iso_control.seam", GOLDEN / "iso_control.pl"),
+    (CONFORMITY / "iso_list_operations.seam", GOLDEN / "iso_list_operations.pl"),
+    (CONFORMITY / "iso_term_manipulation.seam", GOLDEN / "iso_term_manipulation.pl"),
+    (CONFORMITY / "iso_type_checking.seam", GOLDEN / "iso_type_checking.pl"),
+    (CONFORMITY / "iso_unification.seam", GOLDEN / "iso_unification.pl"),
 ]
 
 ALL_CASES = _FIXTURE_CASES + _CONFORMITY_CASES
@@ -374,20 +374,20 @@ class TestCLI:
 
 # (source .pl path, golden .clausal path) pairs
 _REVERSE_CASES = [
-    (GOLDEN / "edge_graph.pl", GOLDEN / "edge_graph.clausal"),
-    (GOLDEN / "fibonacci.pl", GOLDEN / "fibonacci.clausal"),
-    (GOLDEN / "dcg_grammar.pl", GOLDEN / "dcg_grammar.clausal"),
-    (GOLDEN / "meta_test.pl", GOLDEN / "meta_test.clausal"),
-    (GOLDEN / "clpfd_queens.pl", GOLDEN / "clpfd_queens.clausal"),
+    (GOLDEN / "edge_graph.pl", GOLDEN / "edge_graph.seam"),
+    (GOLDEN / "fibonacci.pl", GOLDEN / "fibonacci.seam"),
+    (GOLDEN / "dcg_grammar.pl", GOLDEN / "dcg_grammar.seam"),
+    (GOLDEN / "meta_test.pl", GOLDEN / "meta_test.seam"),
+    (GOLDEN / "clpfd_queens.pl", GOLDEN / "clpfd_queens.seam"),
 ]
 
 _REVERSE_CONFORMITY = [
-    (GOLDEN / "iso_arithmetic.pl", GOLDEN / "iso_arithmetic.clausal"),
-    (GOLDEN / "iso_control.pl", GOLDEN / "iso_control.clausal"),
-    (GOLDEN / "iso_list_operations.pl", GOLDEN / "iso_list_operations.clausal"),
-    (GOLDEN / "iso_term_manipulation.pl", GOLDEN / "iso_term_manipulation.clausal"),
-    (GOLDEN / "iso_type_checking.pl", GOLDEN / "iso_type_checking.clausal"),
-    (GOLDEN / "iso_unification.pl", GOLDEN / "iso_unification.clausal"),
+    (GOLDEN / "iso_arithmetic.pl", GOLDEN / "iso_arithmetic.seam"),
+    (GOLDEN / "iso_control.pl", GOLDEN / "iso_control.seam"),
+    (GOLDEN / "iso_list_operations.pl", GOLDEN / "iso_list_operations.seam"),
+    (GOLDEN / "iso_term_manipulation.pl", GOLDEN / "iso_term_manipulation.seam"),
+    (GOLDEN / "iso_type_checking.pl", GOLDEN / "iso_type_checking.seam"),
+    (GOLDEN / "iso_unification.pl", GOLDEN / "iso_unification.seam"),
 ]
 
 ALL_REVERSE = _REVERSE_CASES + _REVERSE_CONFORMITY
@@ -518,10 +518,10 @@ class TestUnifiedCLI:
 #: Narrow on purpose: a check that passed because it excluded everything
 #: interesting would be worse than none.
 _ROUND_TRIP_CASES = [
-    (FIXTURES / "edge_graph.clausal", GOLDEN / "edge_graph.clausal"),
-    (FIXTURES / "fibonacci.clausal", GOLDEN / "fibonacci.clausal"),
-    (FIXTURES / "meta_test.clausal", GOLDEN / "meta_test.clausal"),
-    (FIXTURES / "clpfd_queens.clausal", GOLDEN / "clpfd_queens.clausal"),
+    (FIXTURES / "edge_graph.seam", GOLDEN / "edge_graph.seam"),
+    (FIXTURES / "fibonacci.seam", GOLDEN / "fibonacci.seam"),
+    (FIXTURES / "meta_test.seam", GOLDEN / "meta_test.seam"),
+    (FIXTURES / "clpfd_queens.seam", GOLDEN / "clpfd_queens.seam"),
 ]
 
 

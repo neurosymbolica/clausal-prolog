@@ -385,7 +385,7 @@ def _succeeds(functor, *args, module):
 
 
 class TestListUtilFixture:
-    """Run Test predicates from tests/fixtures/list_util.clausal."""
+    """Run Test predicates from tests/fixtures/list_util.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):

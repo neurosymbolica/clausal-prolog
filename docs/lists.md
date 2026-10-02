@@ -343,7 +343,7 @@ rotate([FIRST, *REST], YS) <- (
 Using [call/N](higher_order.md#call18-and-call_goal18) to apply a predicate argument:
 
 ```seam
---8<-- "tests/fixtures/docs/lists_examples.clausal:partition_example"
+--8<-- "tests/fixtures/docs/lists_examples.seam:partition_example"
 ```
 
 ### Sliding window

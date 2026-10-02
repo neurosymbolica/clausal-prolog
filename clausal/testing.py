@@ -21,7 +21,7 @@ error (:class:`TestCollectionError`) naming it.
 Standalone usage
 ----------------
     python -m clausal.testing clausal/examples/
-    python -m clausal.testing clausal/examples/fibonacci.clausal
+    python -m clausal.testing clausal/examples/fibonacci.seam
     python -m clausal.testing path/to/rules.pl
 
 Exit codes: 0 all tests passed; 1 a test failed or a file failed to load

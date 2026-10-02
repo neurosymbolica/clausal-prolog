@@ -96,7 +96,7 @@ class TestFunctor:
         assert result is not None
         assert result[0] == mint("a")
 
-    # Numeric-literal decomposition migrated to iso_term_manipulation.clausal.
+    # Numeric-literal decomposition migrated to iso_term_manipulation.seam.
 
     def test_decompose_large_compound(self):
         """functor(f(a,b,c,d,e), Name, Arity) → Name=f, Arity=5."""
@@ -227,4 +227,4 @@ class TestUniv:
         assert result is not None
         assert result[0] == mint("a")
 
-    # Numeric-literal decomposition migrated to iso_term_manipulation.clausal.
+    # Numeric-literal decomposition migrated to iso_term_manipulation.seam.

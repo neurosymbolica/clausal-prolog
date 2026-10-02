@@ -1,0 +1,7 @@
+# Phase 2 fixture: a module-private declaration of an atom.
+# Companion to global_atoms_b.seam — both declare the same atom with
+# -private, independently (neither imports from the other).  Atoms are
+# global by spelling, so both files' `phase2red` must be the same atom.
+-private([phase2red])
+
+color_a(phase2red),

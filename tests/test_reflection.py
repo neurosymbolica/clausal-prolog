@@ -361,8 +361,8 @@ class TestStructuralMatching:
 
 class TestRealExamples:
     def test_graph_example_reifies(self):
-        source = open(os.path.join(EXAMPLES_DIR, "graph.clausal")).read()
-        items = reify_source(source, filename="graph.clausal")
+        source = open(os.path.join(EXAMPLES_DIR, "graph.seam")).read()
+        items = reify_source(source, filename="graph.seam")
         clauses = clauses_of(items)
         directives = directives_of(items)
         assert {vfield(d, "name") for d in directives} >= {"module", "private"}
@@ -376,8 +376,8 @@ class TestRealExamples:
         assert len(path_rules) == 1
 
     def test_symbolic_diff_example_reifies_operator_heads(self):
-        source = open(os.path.join(EXAMPLES_DIR, "symbolic_diff.clausal")).read()
-        items = reify_source(source, filename="symbolic_diff.clausal")
+        source = open(os.path.join(EXAMPLES_DIR, "symbolic_diff.seam")).read()
+        items = reify_source(source, filename="symbolic_diff.seam")
         assert clauses_of(items)
 
     def test_all_examples_reify_without_error(self):

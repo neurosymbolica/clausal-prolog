@@ -167,7 +167,7 @@ class TestOtherModule:
         sys.modules.pop("tests.fixtures.prednf_citations", None)
         from clausal.import_hook import _load_module
         mod = _load_module("_prednf_impuse",
-                           os.path.join(FIXTURES, "prednf_impmod_use.clausal"))
+                           os.path.join(FIXTURES, "prednf_impmod_use.seam"))
         with pytest.raises(KeyError) as exc:
             list(call("uses", Var(), Var(), module=mod.__dict__["$module"]))
         msg = str(exc.value)

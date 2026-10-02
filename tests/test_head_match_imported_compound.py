@@ -44,11 +44,11 @@ def _load_importer() -> object:
     # importer's -import_from(...) will then resolve cleanly.
     _load_module(
         "tests.fixtures.head_compound_owner",
-        _fixture_path("head_compound_owner.clausal"),
+        _fixture_path("head_compound_owner.seam"),
     )
     return _load_module(
         "tests.fixtures.head_compound_importer",
-        _fixture_path("head_compound_importer.clausal"),
+        _fixture_path("head_compound_importer.seam"),
     )
 
 

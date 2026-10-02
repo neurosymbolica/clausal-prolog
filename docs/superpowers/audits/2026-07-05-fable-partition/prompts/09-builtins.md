@@ -46,6 +46,6 @@ contracts, method, and rules.
 `_chars_core.c`, `clausal/logic/_lists_core.c` against `todo/cross_cutting_issues.md`.
 
 **Oracle:** Python's own list/string semantics for the pure list ops; DCG example
-`clausal/examples/dcg_state.clausal`.
+`clausal/examples/dcg_state.seam`.
 
 **Seam notes for A12:** builtins lean on A01 term shapes and A04 unify helpers.

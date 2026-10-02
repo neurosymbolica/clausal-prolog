@@ -301,7 +301,7 @@ sort_by_abs(XS, SS) <- sort_by(((X, K) <- abs_(X, K)), XS, SS)
 
     - `tests/test_meta.py`: findall, bagof, setof, forall, call/N, `.clausal` integration
     - `tests/test_higher_order.py` (34 tests): maplist/2,3, include/3, exclude/3, foldl/4, builtin predicates as arguments
-    - `tests/fixtures/builtin_as_arg.clausal` (5 tests): include/maplist with builtin predicates (number, integer, succ)
+    - `tests/fixtures/builtin_as_arg.seam` (5 tests): include/maplist with builtin predicates (number, integer, succ)
 
 ---
 

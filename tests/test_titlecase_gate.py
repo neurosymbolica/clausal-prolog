@@ -40,7 +40,7 @@ _SKIP_PARTS = {".git", "__pycache__", ".claude", "node_modules"}
 #: -- says nothing about it.  The file is clean by this census's measure; what
 #: it witnesses now is asserted by tests/test_units_lowercase_names.py.
 _WITNESSES = {
-    "tests/fixtures/titlecase_test_spelling_witness.clausal": {"Test"},
+    "tests/fixtures/titlecase_test_spelling_witness.seam": {"Test"},
 }
 
 
@@ -61,7 +61,7 @@ _NAMED = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)` is TitleCase")
 #: clause before the failing one.  Anything else that fails to parse is
 #: re-raised — a silently truncated census would prove nothing.
 _OTHER_LOAD_ERROR_WITNESSES = {
-    "tests/fixtures/lambda_in_term_position_witness.clausal",
+    "tests/fixtures/lambda_in_term_position_witness.seam",
 }
 
 

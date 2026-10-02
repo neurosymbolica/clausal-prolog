@@ -38,7 +38,7 @@ anyway so not even the tool's own ``.pyc`` lands anywhere::
     PYTHONDONTWRITEBYTECODE=1 python3 tools/atom_class_census/census.py \\
         [--engine-root <engine tree>/clausal] [--sites] [--json OUT] ROOT...
 
-It scans ``*.py`` plus ``*.clausal`` / ``*.seam`` (their hosted Python
+It scans ``*.py`` plus ``*.seam`` / ``*.seam`` (their hosted Python
 parses as Python; a file that does not parse is COUNTED and listed, never
 dropped).  It prints the SIZE of every population -- files found, parsed,
 unparsed, files that import the class, and each count -- so an empty result

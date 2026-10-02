@@ -77,11 +77,11 @@ def test_bare_atoms_share_identity_across_modules():
     imports it) see the same global atom: atoms are global by spelling.
     (The fixtures auto-minted it under -implicit_atoms before R8 removed it.)"""
     mod_a = _load_fixture(
-        "global_atoms_a.clausal",
+        "global_atoms_a.seam",
         "tests.fixtures.global_atoms_a",
     )
     mod_b = _load_fixture(
-        "global_atoms_b.clausal",
+        "global_atoms_b.seam",
         "tests.fixtures.global_atoms_b",
     )
     # THE FLIP (spec §5.1/§5.2): a bare atom lowers to the arity-0 CELL, and
@@ -106,11 +106,11 @@ def test_private_shadows_global():
     ``-private`` still has its module-local-identity story rewritten by
     ``-hide`` in Task 6; until then it is advisory only.)"""
     mod_a = _load_fixture(
-        "global_atoms_priv_a.clausal",
+        "global_atoms_priv_a.seam",
         "tests.fixtures.global_atoms_priv_a",
     )
     mod_b = _load_fixture(
-        "global_atoms_priv_b.clausal",
+        "global_atoms_priv_b.seam",
         "tests.fixtures.global_atoms_priv_b",
     )
     assert mod_a.phase2priv_orange == mint("phase2priv_orange")
@@ -127,11 +127,11 @@ def test_import_wins_over_global():
     bare-references the same name, the bare reference resolves to the
     imported class — not the global fallthrough."""
     mod_owner = _load_fixture(
-        "global_atoms_owner.clausal",
+        "global_atoms_owner.seam",
         "tests.fixtures.global_atoms_owner",
     )
     mod_importer = _load_fixture(
-        "global_atoms_importer.clausal",
+        "global_atoms_importer.seam",
         "tests.fixtures.global_atoms_importer",
     )
     # THE FLIP: the declared atom is the arity-0 cell.
@@ -151,11 +151,11 @@ def test_module_decl_atom_is_not_global():
     the opposite: ``mod_a.phase2declonly_green is not
     mod_b.phase2declonly_green``.)"""
     mod_a = _load_fixture(
-        "global_atoms_decl_only_a.clausal",
+        "global_atoms_decl_only_a.seam",
         "tests.fixtures.global_atoms_decl_only_a",
     )
     mod_b = _load_fixture(
-        "global_atoms_decl_only_b.clausal",
+        "global_atoms_decl_only_b.seam",
         "tests.fixtures.global_atoms_decl_only_b",
     )
     assert mod_a.phase2declonly_green == mint("phase2declonly_green")
@@ -258,7 +258,7 @@ def test_strict_atoms_private_atom_compiles():
     the same global-by-spelling str as the process-wide pool, not a distinct
     module-local class (pre-pivot this pinned ``is not``)."""
     mod = _load_fixture(
-        "strict_atoms_private.clausal",
+        "strict_atoms_private.seam",
         "tests.fixtures.strict_atoms_private",
     )
     assert mod.phase3strict_private_orange == mint("phase3strict_private_orange")
@@ -271,7 +271,7 @@ def test_strict_atoms_module_decl_atom_compiles():
     """A file with ``-strict_atoms`` and a bare reference to an atom listed
     in ``-module(M, [...])`` must compile successfully."""
     mod = _load_fixture(
-        "strict_atoms_module_decl.clausal",
+        "strict_atoms_module_decl.seam",
         "tests.fixtures.strict_atoms_module_decl",
     )
     # THE FLIP: a declared atom is the arity-0 cell.
@@ -283,11 +283,11 @@ def test_strict_atoms_imported_atom_compiles():
     in via ``-import_from`` must compile successfully — the import binds
     the name in module_dict before the strict-mode check runs."""
     mod_owner = _load_fixture(
-        "strict_atoms_import_owner.clausal",
+        "strict_atoms_import_owner.seam",
         "tests.fixtures.strict_atoms_import_owner",
     )
     mod_importer = _load_fixture(
-        "strict_atoms_import.clausal",
+        "strict_atoms_import.seam",
         "tests.fixtures.strict_atoms_import",
     )
     # THE FLIP: a declared atom is the arity-0 cell.
@@ -307,7 +307,7 @@ def test_strict_atoms_global_atom_builtin_compiles():
     in ``global_atom("phase3strict_global_red", _atom)`` is not a bare
     Name node, so strict mode never flags it."""
     mod = _load_fixture(
-        "strict_atoms_global_atom.clausal",
+        "strict_atoms_global_atom.seam",
         "tests.fixtures.strict_atoms_global_atom",
     )
     # Predicate compiled: lookup_strict_global/1 is a predicate with clauses.
@@ -319,7 +319,7 @@ def test_strict_atoms_empty_file_compiles():
     reference any atom must compile fine — strict mode has nothing to
     reject."""
     mod = _load_fixture(
-        "strict_atoms_empty.clausal",
+        "strict_atoms_empty.seam",
         "tests.fixtures.strict_atoms_empty",
     )
     assert _is_compiled_predicate(mod, "ok", 1)
@@ -375,13 +375,13 @@ def test_private_names_are_importable_and_share_identity():
     spelling, which the assertion below restates.
     """
     owner = _load_fixture(
-        "private_import_owner.clausal",
+        "private_import_owner.seam",
         "tests.fixtures.private_import_owner",
     )
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         consumer = _load_fixture(
-            "private_import_consumer.clausal",
+            "private_import_consumer.seam",
             "tests.fixtures.private_import_consumer",
         )
 
@@ -609,11 +609,11 @@ def test_declared_atoms_unify_across_module_and_private():
     are global by spelling, with no per-module identity (§1b/R2).
     """
     mod_a = _load_fixture(
-        "atompivot_module_a.clausal",
+        "atompivot_module_a.seam",
         "tests.fixtures.atompivot_module_a",
     )
     mod_b = _load_fixture(
-        "atompivot_private_b.clausal",
+        "atompivot_private_b.seam",
         "tests.fixtures.atompivot_private_b",
     )
     lm_a = mod_a.__dict__["$module"]

@@ -81,7 +81,7 @@ def _setup_negation_program():
 
 
 # Stratified negation under boolean and add_mult_prob is dogfooded in
-# tests/fixtures/negation_aggregate.clausal — the 6 cases there cover
+# tests/fixtures/negation_aggregate.seam — the 6 cases there cover
 # blocked / unblocked / all-blocked under boolean, and certain /
 # probabilistic / no-block under add_mult_prob.
 
@@ -233,7 +233,7 @@ def test_diff_add_mult_prob_aggregate_count_gradcheck():
 
 # provenance.aggregate/4 happy-path coverage (count / sum / argmax under
 # boolean and add_mult_prob) lives in
-# tests/fixtures/negation_aggregate.clausal. The Python tests below keep
+# tests/fixtures/negation_aggregate.seam. The Python tests below keep
 # only the rejection paths that need pytest.raises.
 
 

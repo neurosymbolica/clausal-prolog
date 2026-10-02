@@ -406,13 +406,13 @@ get_val(S, V) <- (read(S, D) and get(D, [99], V))
 
 
 class TestFixture:
-    """Load the yaml_basic.clausal fixture and run its Test predicates."""
+    """Load the yaml_basic.seam fixture and run its Test predicates."""
 
     @pytest.fixture(autouse=True)
     def _load_fixture(self):
         import os
         fixture = os.path.join(
-            os.path.dirname(__file__), "fixtures", "yaml_basic.clausal"
+            os.path.dirname(__file__), "fixtures", "yaml_basic.seam"
         )
         mod = _load_module("yaml_basic", fixture)
         self.module = mod.__dict__["$module"]

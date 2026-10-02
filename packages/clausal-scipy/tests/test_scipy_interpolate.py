@@ -519,7 +519,7 @@ def _succeeds(functor, *args, module):
 
 
 class TestScipyInterpolateFixture:
-    """Run Test predicates from tests/fixtures/scipy_interpolate_tests.clausal."""
+    """Run Test predicates from tests/fixtures/scipy_interpolate_tests.seam."""
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):

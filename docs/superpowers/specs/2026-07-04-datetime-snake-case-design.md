@@ -29,7 +29,7 @@ into one bidirectional relation and adds timestamp + ISO-8601 conveniences.
 - Update the module docstring.
 - Sweep the in-repo consumers so nothing breaks: `tests/test_date_time.py`,
   `tests/test_transitive_py_module_import.py`, the doc-signature fixtures under
-  `tests/fixtures/docs/` (`date_time_sigs.txt`, `date_time_sig_tests.clausal`), and
+  `tests/fixtures/docs/` (`date_time_sigs.txt`, `date_time_sig_tests.seam`), and
   `docs/date_time.md` (plus incidental mentions in other docs).
 
 **Out of scope (separate TODOs / repos):**
@@ -155,7 +155,7 @@ Mirrors Python `datetime.timestamp()` / `datetime.fromtimestamp()`; same bidirec
 - `tests/test_date_time.py` — rename all predicate references; add tests for the four new
   predicates (both directions, check mode, and the date→midnight-datetime round-trip caveat).
 - `tests/test_transitive_py_module_import.py` — update any TitleCase datetime references.
-- `tests/fixtures/docs/date_time_sigs.txt`, `tests/fixtures/docs/date_time_sig_tests.clausal` —
+- `tests/fixtures/docs/date_time_sigs.txt`, `tests/fixtures/docs/date_time_sig_tests.seam` —
   regenerate/rewrite to the new signatures (these back the doc-signature tests).
 - `docs/date_time.md` — rewrite examples and the predicate reference to the new names; document
   `datetime_string`, `timestamp`, and the ISO helpers, including the round-trip asymmetry.

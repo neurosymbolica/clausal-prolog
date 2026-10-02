@@ -16,7 +16,7 @@ def _specialize_items_fixture(module_dict):
     assembling that shape would just re-implement
     ``clausal.examples.metainterpreters``.  Reusing ``solve_count`` from
     there is the smallest fixture that actually satisfies ``analyze_mi``,
-    and it is the same class ``tests/fixtures/specialize_natnum.clausal``
+    and it is the same class ``tests/fixtures/specialize_natnum.seam``
     specializes end-to-end in ``test_specialization_pipeline.py``.
     """
     import clausal.examples.metainterpreters as mi_mod
