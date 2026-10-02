@@ -13,7 +13,7 @@ from clausal.modules.py.sympy import (
     _to_sympy, _from_sympy, _ConversionContext, SymExpr,
     sym, sympy_term,
     simplify, expand, factor, solve, solve_all,
-    diff, integrate, limit, series, subs, free_vars, sym_str,
+    diff, integrate, limit, series, subs, free_vars, sym_str, sym_equal,
 )
 
 
@@ -500,6 +500,75 @@ class TestSympyTerm:
         sol = _first_solution(free_vars, deref(s), names)
         assert sol is not None
         assert all("_" not in n for n in deref(names))
+
+    def test_tagged_expression_sym_equal_still_matches(self):
+        # sym_equal's OWN fresh conversion of X must still recognise the
+        # tagged Dummy in S as "the same symbol" (RULED 2026-10-02, code
+        # review: this is the predicate where a Dummy-vs-Symbol mismatch
+        # would silently return False instead of raising or misbehaving
+        # loudly).
+        # nv
+        x = Var()
+        s = Var()
+        _first_solution(sympy_term, s, Add(left=x, right=1))
+        sol = _first_solution(sym_equal, deref(s), Add(left=x, right=1))
+        assert sol is not None
+
+    def test_detag_dereferences_a_var_bound_after_tagging(self):
+        # sympy_term/2 tags X while it is still free; if X gets bound
+        # AFTERWARDS, every other predicate that detags S must see the
+        # BOUND value, not the stale "still free" Dummy (RULED 2026-10-02,
+        # code review: simplify(S, R) used to give the symbolic "x + 1"
+        # here instead of 3).
+        # nv
+        x = Var()
+        s = Var()
+        _first_solution(sympy_term, s, Add(left=x, right=1))
+        trail = Trail()
+        unify(x, 2, trail)
+        result = Var()
+        sol = _first_solution(simplify, deref(s), result)
+        assert sol is not None
+        assert deref(result) == 3
+
+    def test_identity_is_lost_once_the_expression_leaves_sympy_term(self):
+        # Documents the limitation, pinned: a Var's identity round-trips
+        # exactly through sympy_term/2 itself, but NOT through another
+        # predicate first. expand/2 does not know about sympy_term's
+        # tagging; the Symbol it hands back on the way out has no Var
+        # attached, so a LATER sympy_term/2 call recovers an opaque SymPy
+        # Symbol, not the original X (same as test_symbol_passthrough).
+        # nv
+        x = Var()
+        s = Var()
+        _first_solution(sympy_term, s, Add(left=x, right=1))
+        s2 = Var()
+        _first_solution(expand, deref(s), s2)
+        t = Var()
+        sol = _first_solution(sympy_term, deref(s2), t)
+        assert sol is not None
+        back = deref(t)
+        # the Var is gone: what comes back is a bare SymPy Symbol leaf,
+        # not Clausal's X.
+        assert _find_var(back) is None
+
+    def test_sympy_bound_to_a_bool_is_accepted(self):
+        # _to_pyval collapses S.true/S.false to Python True/False, not a
+        # SymExpr -- and a round trip via _sp.sympify would have lost it
+        # (RULED 2026-10-02, code review: _from_sympy_ctx has no case for
+        # a SymPy Boolean, so it used to come back as the STRING "True").
+        # nv
+        result = Var()
+        sol = _first_solution(sympy_term, True, result)
+        assert sol is not None
+        assert deref(result) is True
+
+    def test_sympy_bound_to_a_float_is_accepted(self):
+        # nv
+        result = Var()
+        sol = _first_solution(sympy_term, 3.5, result)
+        assert sol is not None
+        assert deref(result) == 3.5
 
 
 class TestSimplify:

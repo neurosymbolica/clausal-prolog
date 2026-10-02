@@ -118,11 +118,16 @@ class _VarSymbol(_sp.Dummy):
         obj = super().__new__(cls, name, **assumptions)
         # ``Dummy.__getnewargs_ex__`` (copy/deepcopy/pickle) reconstructs via
         # ``cls(name, dummy_index, **assumptions)`` -- its own positional
-        # ``dummy_index``, never ours. With ``clausal_var`` keyword-only and
-        # defaulted, that reconstruction path harmlessly leaves the tag
-        # unset instead of landing a stray int in it (RULED 2026-10-02,
-        # code review: confirmed ``deepcopy`` on an earlier positional-arg
-        # version silently set ``_clausal_var`` to the raw dummy index).
+        # ``dummy_index``, never ours. Nothing in this module's normal
+        # xreplace/free_symbols path copies or pickles a tagged Symbol, so
+        # this is a tripwire, not a live path: with ``clausal_var``
+        # keyword-only, that reconstruction call now raises ``TypeError``
+        # (confirmed empirically) instead of what an EARLIER, positional-arg
+        # version of this class did -- silently land the raw dummy_index
+        # int in ``_clausal_var`` (RULED 2026-10-02, code review).
+        # ``_detag_vars``/``_untag_vars`` both still guard on
+        # ``_clausal_var is not None`` regardless, in case a future caller
+        # ever constructs one of these without a tag.
         obj._clausal_var = clausal_var
         return obj
 
@@ -155,16 +160,20 @@ def _detag_vars(expr: Any, ctx: "_ConversionContext") -> Any:
     plain ``Symbol`` for the SAME Var that one of THEM creates afresh (e.g.
     ``subs``'s binding-key conversion), and its ``str()`` leaks a leading
     underscore (RULED 2026-10-02, code review). So every ``_VarSymbol``
-    found here is converted back to this call's own plain, ctx-local
-    Symbol for the Var it carries -- exactly the Symbol ``var_to_symbol``
-    would have minted had the caller passed the Var directly instead of a
-    pre-tagged sympy expression. A plain, untagged symbol is returned as
+    found here is converted via ``_to_sympy_ctx`` -- exactly as if the
+    caller had passed the Var directly instead of a pre-tagged sympy
+    expression. That is ``_to_sympy_ctx``, NOT ``ctx.var_to_symbol``
+    directly (RULED 2026-10-02, code review): the Var may have been
+    BOUND since ``sympy_term/2`` tagged it (``sympy_term(S, X+1), X = 2,
+    simplify(S, R)`` must give ``R = 3``, not the still-symbolic
+    ``x + 1``), and only ``_to_sympy_ctx`` dereferences before deciding
+    whether it is still free. A plain, untagged symbol is returned as
     itself (nothing to detag).
     """
     tagged = {s for s in expr.free_symbols if isinstance(s, _VarSymbol)}
     if not tagged:
         return expr
-    replace_map = {s: ctx.var_to_symbol(s._clausal_var) for s in tagged
+    replace_map = {s: _to_sympy_ctx(s._clausal_var, ctx) for s in tagged
                    if s._clausal_var is not None}
     return expr.xreplace(replace_map) if replace_map else expr
 
@@ -177,7 +186,7 @@ def _untag_vars(term: Any) -> Any:
     every other predicate runs through never produces or needs to
     understand this tag.
     """
-    if isinstance(term, _VarSymbol):
+    if isinstance(term, _VarSymbol) and term._clausal_var is not None:
         return term._clausal_var
     if type(term) is tuple:
         if term and type(term[0]) is str:
@@ -636,8 +645,17 @@ def _sympy_term_2(sympy_arg, term_arg, trail, k):
     # raise type_error(sympy_expression, S) just because S is a SymExpr).
     if isinstance(sympy_val, SymExpr):
         sympy_val = sympy_val._expr
-    elif isinstance(sympy_val, (int, float, bool)):
-        sympy_val = _sp.sympify(sympy_val)
+    if isinstance(sympy_val, (int, float, bool)):
+        # _to_pyval already collapsed a trivial result to exactly this
+        # value; Term IS that value -- no need to round-trip it through
+        # SymPy and back. (RULED 2026-10-02, code review: a round trip
+        # via _sp.sympify(True) -> _from_sympy_ctx DOES lose this one --
+        # _from_sympy_ctx has no case for a SymPy Boolean, so it falls to
+        # the str(expr) fallback and Term would come back the STRING
+        # "True", not the bool True.)
+        if unify(term_arg, sympy_val, trail):
+            yield None
+        return
     if isinstance(sympy_val, _sp.Basic):
         try:
             term = _from_sympy(sympy_val)
