@@ -318,9 +318,13 @@ def test_the_doc_checker_sees_both_seam_fences(tmp_path):
 
 def test_a_clausal_prolog_importer_is_told_use_module(flip, tmp_path,
                                                       monkeypatch):
-    # The private-procedure check guards imports from a .pl module.
-    (tmp_path / "efprivlib.pl").write_text(
-        ":- module(efprivlib, [p/1]).\np(1).\nhidden(2).\n")
+    # The private-procedure check guards imports from a Prolog-source
+    # module; a Clausal Prolog importer may only import Clausal Prolog (a
+    # .pl target is refused before this check: see
+    # tests/test_clausal_prolog_may_not_import_pl.py).
+    (tmp_path / "efprivlib.clausal").write_text(
+        ":- module(efprivlib, [p/1]).\np(1).\nhidden(2).\n"
+        ":- end_module(efprivlib).\n")
     (tmp_path / "efprivimp.clausal").write_text(
         ":- module(efprivimp, [q/1]).\n"
         ":- use_module(efprivlib, [hidden/1]).\n"

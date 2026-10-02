@@ -122,6 +122,22 @@ still wins over a `.py` module of the same name in an earlier entry.
 
 ---
 
+## Which way imports may go
+
+The dependency between the two Prolog surfaces is one-way. A `.pl` module
+may import a Clausal Prolog module or a seam (`.seam`) module. A Clausal
+Prolog module may **not** import a `.pl` module, because ISO Prolog may use
+cut: such a `use_module` is refused at load with
+`permission_error(access, prolog_module, M)`. Convert the Prolog code to
+Clausal Prolog, or wrap it in a `.seam` module, and import that. When a
+`.seam` or Clausal Prolog file sits beside the `.pl` of the same name, the
+finders pick it and the import is allowed. Seam modules may still import
+`.pl` modules (the rest of this page). Clausal Prolog has no file
+extension of its own until the extension flip, when it takes over
+`.clausal`; until then nothing is refused.
+
+---
+
 ## Importing data names from a `.pl` module
 
 A `.pl` module's export list holds only `name/arity` predicates, and data

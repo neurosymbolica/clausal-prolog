@@ -329,6 +329,19 @@ since 0.4.0 finish three moves:
   baseline (`clausal/tools/transition_census_baseline.json`; `--update`
   rewrites it). One test runs it against the baseline. Nothing is refused
   at load time.
+- **Clausal Prolog may not import ISO Prolog** (ruled 2026-10-01: the
+  dependency is one-way; a `.pl` module may import a Clausal Prolog or
+  `.seam` module, never the reverse, and there is no opt-in). Under the
+  Clausal Prolog surface, a `use_module/1,2` whose target resolves to a
+  `.pl` file is refused at load with `permission_error(access,
+  prolog_module, M)`: "Clausal Prolog may not import ISO Prolog (.pl),
+  which may use cut; convert it to .clausal". The check reads the file the
+  finders picked, so a name with a `.seam` or Clausal Prolog twin beside
+  its `.pl` is imported as before. Both `.pl` front ends refuse it the same
+  way. That surface has no extension until the extension flip, so the
+  refusal is inactive today; `.pl` and seam importers are never affected.
+  A run-time `M:G` into a `.pl` module some other code loaded is not yet
+  refused.
 - **`library(...)` facades: Clausal Prolog reaches Python only through
   `.seam` modules** (ruled 2026-10-01). Every engine Python module has a
   generated `.seam` facade under `clausal/library/`, a pure re-export of

@@ -874,6 +874,12 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
                            span)
         dotted = target = alias_facade
         found = _module_source(target)
+    if ctx.surface == _SURFACE_CLAUSAL_PROLOG and _is_iso_prolog_source(found):
+        # One-way dependency (operator ruling 2026-10-01): .pl may import
+        # Clausal Prolog, never the reverse.  *found* is the file the
+        # finders picked, so a name with a .seam or Clausal Prolog twin
+        # (which win over .pl) is never refused here.
+        raise _refused(_prolog_import_refusal(what, dotted, found), span)
     declared, exports, ops, sticky = _declared_exports(found)
     if _is_python_module(found):
         mod = _import_python_module(dotted, target, span, what)
@@ -1060,6 +1066,27 @@ def _python_import_refusal(what: str, dotted: str, target: str) -> str:
     return f"{head}; write a .seam wrapper over {dotted} and import that"
 
 
+def _is_iso_prolog_source(origin: "str | None") -> bool:
+    """True when *origin* is an ISO Prolog (``.pl``) source file -- by
+    SURFACE (``clausal.end_module.surface_of``), so it follows the suffix
+    tuples."""
+    from clausal.end_module import SURFACE_PL, surface_of  # noqa: PLC0415
+    return origin is not None and surface_of(origin) == SURFACE_PL
+
+
+def _prolog_import_refusal(what: str, dotted: str, origin: str) -> str:
+    """The message refusing a Clausal Prolog import whose target resolves
+    to an ISO Prolog (``.pl``) module (operator ruling 2026-10-01: ``.pl``
+    may import ``.clausal``, never the reverse; there is no opt-in)."""
+    from clausal._suffixes import (  # noqa: PLC0415
+        CLAUSAL_PROLOG_SUFFIXES, PROLOG_SUFFIX, SEAM_SUFFIX, suffix_list)
+    cp = suffix_list(CLAUSAL_PROLOG_SUFFIXES) or "Clausal Prolog"
+    return (f"{what}: permission_error(access, prolog_module, {dotted}) -- "
+            f"Clausal Prolog may not import ISO Prolog ({PROLOG_SUFFIX}), "
+            f"which may use cut; convert {origin} to {cp} (or write a "
+            f"{SEAM_SUFFIX} module) and import that")
+
+
 def _import_python_module(dotted, target, span, what):
     """Import the module *dotted* names; *target* is the path it resolved
     to (the ``py.X`` redirect, or a seam import alias)."""
@@ -1198,6 +1225,13 @@ def _use_library(ctx, lib, entries, span, what, listed_ops=()):
         groups.append((over_module, [(n, arity)]))
     out: list = []
     for mod, names in groups:
+        if names and ctx.surface == _SURFACE_CLAUSAL_PROLOG:
+            # A mapped library is engine code today (Python or seam); were
+            # one ever a .pl module, Clausal Prolog may not import it.
+            found = _module_source(mod)
+            if _is_iso_prolog_source(found):
+                raise _refused(_prolog_import_refusal(
+                    what, f"library({name})", found), span)
         if names:
             out.extend(ctx.imported(mod, ctx.seam(
                 "import_from",
