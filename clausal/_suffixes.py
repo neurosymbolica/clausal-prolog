@@ -34,9 +34,11 @@ PROLOG_SUFFIX: str = ".pl"
 #: front end).
 CLAUSAL_PROLOG_SUFFIXES: tuple[str, ...] = (".clausal",)
 
-#: Every extension the import hook loads as a predicate module.
-SOURCE_SUFFIXES: tuple[str, ...] = (*CLAUSAL_SUFFIXES, PROLOG_SUFFIX,
-                                    *CLAUSAL_PROLOG_SUFFIXES)
+#: Every extension the import hook loads as a predicate module, in the
+#: finder's order: the seam group, then the Prolog group (Clausal Prolog
+#: before ``.pl``).
+SOURCE_SUFFIXES: tuple[str, ...] = (*CLAUSAL_SUFFIXES,
+                                    *CLAUSAL_PROLOG_SUFFIXES, PROLOG_SUFFIX)
 
 
 def prolog_suffixes() -> tuple[str, ...]:
