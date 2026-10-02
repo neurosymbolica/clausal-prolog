@@ -77,7 +77,8 @@ import sys
 from typing import Any
 
 from clausal.logic.variables import deref, is_var
-from clausal.logic.dialect_edge import refuse_edge as _refuse_dialect_edge
+from clausal.logic.dialect_edge import (
+    _CACHE as _DIALECT_CACHE, refuse_edge as _refuse_dialect_edge)
 
 __all__ = [
     "FUNCTOR_SIGNATURES_KEY",
@@ -658,11 +659,12 @@ def resolve_qualified_goal_cell(
             f"{MAX_QUALIFICATION_DEPTH} deep, or is cyclic — there is no "
             f"innermost goal to run and so no module that answers",
         ))
-    if caller is not None and module is not None:
+    if (caller is not None and module is not None
+            and getattr(caller, _DIALECT_CACHE, None) is not False):
         # Clausal Prolog may never resolve into a .pl (or Python) module --
         # innermost wins, so ``pl:cp:G`` naming a Clausal Prolog module last
         # is allowed and ``cp:pl:G`` is not.  A .seam/.pl caller pays one
-        # cached attribute read.
+        # cached attribute read (the getattr above), not a call.
         _refuse_dialect_edge(caller, module, context)
     # THE FLIP (spec §6.4): the ``str`` → ``(str,)`` wrap that used to sit
     # here is gone — a ``str`` inner goal is a STRING, which is not callable,
