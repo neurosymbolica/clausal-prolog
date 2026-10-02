@@ -63,8 +63,9 @@ since 0.4.0 finish three moves:
   `instantiation_error`; `write_file/2` (JSON and CSV) checks before it opens
   the file, so a bad term leaves no truncated file. CSV `generate/2`,
   `write_file/2` with an unbound cell and `set_seed/1` with an unbound seed
-  are `instantiation_error`; `set_seed/1` with a non-number non-text seed is
-  `type_error(number, S)`.
+  are `instantiation_error`, as is `generate_records/3` with an unbound
+  record value (it wrote the variable's name); `set_seed/1` with a seed
+  that is not a number, text or bytes is `type_error(number, S)`.
   The non-`py` adapters follow the same rules: `graphs` (every predicate
   taking an edge list: an unbound or non-list Edges, an unbound node, start
   or end, and `path_cost/3`'s path; `shortest_path/4` with a negative weight

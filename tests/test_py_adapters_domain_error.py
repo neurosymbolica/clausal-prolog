@@ -188,6 +188,31 @@ def test_csv_generate_unbound_cell_raises_instantiation_error():
         "error", "instantiation_error", ("/", "generate", 2))
 
 
+def test_csv_generate_records_unbound_value_raises_instantiation_error():
+    from clausal.modules.py.csv import _generate_records_3
+    from clausal.terms import DictTerm
+    rec = DictTerm({"a": Var()})
+    assert raised(_generate_records_3, ["a"], [rec], Var()) == (
+        "error", "instantiation_error", ("/", "generate_records", 3))
+
+
+def test_http_bad_header_value_is_not_blamed_on_the_url(monkeypatch):
+    import clausal.modules.py.http as http
+
+    def bad_header(*a, **k):
+        raise ValueError("Invalid header value b'x\\r\\ny'")
+    monkeypatch.setattr(http, "_urlopen", bad_header)
+    # Not domain_error(url, _): the ValueError is the header's, and the
+    # dispatch boundary turns it into its python_error term.
+    with pytest.raises(ValueError, match="header"):
+        list(http._get_2(chars("http://x.test/"), Var(), Trail(), None))
+
+
+def test_set_seed_accepts_bytes():
+    from clausal.modules.py.random import _random_seed_1
+    assert len(list(_random_seed_1(b"seed", Trail(), None))) == 1
+
+
 def test_csv_write_file_unbound_cell_raises_and_writes_nothing(tmp_path):
     from clausal.modules.py.csv import _write_file_2
     p = tmp_path / "out.csv"

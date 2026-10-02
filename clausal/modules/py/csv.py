@@ -171,8 +171,14 @@ def _generate_records_3(headers, records, string, trail, k):
     for record in records:
         record = deref(record)
         expect_type(record, DictTerm, "generate_records/3", arg=2)
-        row_dict = {text_or_str(k): text_or_str(v)
-                    for k, v in record.data.items()}
+        row_dict = {}
+        for k, v in record.data.items():
+            v = deref(v)
+            if is_var(v):
+                # As generate/2's unbound cell: never the variable's name.
+                raise LogicException(instantiation_error(
+                    "generate_records/3: argument 2"))
+            row_dict[text_or_str(k)] = text_or_str(v)
         try:
             writer.writerow(row_dict)
         except ValueError:

@@ -123,6 +123,8 @@ def _random_seed_1(seed, trail, k):
     text = to_text(seed)
     if text is not None:
         _rng.seed(text)                # an atom or a string seeds by its text
+    elif isinstance(seed, bytes):
+        _rng.seed(seed)
     else:
         expect_type(seed, (int, float), "set_seed/1", arg=1)
         _rng.seed(seed)

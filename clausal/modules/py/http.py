@@ -27,6 +27,7 @@ _urllib_request = _import_stdlib("urllib.request")
 _urllib_error = _import_stdlib("urllib.error")
 _urllib_parse = _import_stdlib("urllib.parse")
 _json_mod = _import_stdlib("json")
+_http_client = _import_stdlib("http.client")
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.exceptions import (
@@ -91,9 +92,14 @@ def _do_request(url, method="GET", headers=None, data=None, timeout=30, *,
         if _is_url_rejection(e):
             raise_domain_error("url", culprit, pred, arg=1)
         return None
-    except ValueError:
-        # A malformed authority ("Invalid IPv6 URL", a non-numeric port).
-        raise_domain_error("url", culprit, pred, arg=1)
+    except ValueError as e:
+        # A malformed authority: a non-numeric port (http.client.InvalidURL)
+        # or "Invalid IPv6 URL".  Any other ValueError (a header value with
+        # CR/LF) is not the URL's and propagates as itself.
+        if (isinstance(e, _http_client.InvalidURL)
+                or "IPv6" in str(e)):
+            raise_domain_error("url", culprit, pred, arg=1)
+        raise
     except OSError:
         return None
     try:
