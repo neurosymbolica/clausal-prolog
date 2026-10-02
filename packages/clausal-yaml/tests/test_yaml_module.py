@@ -11,6 +11,7 @@ import pytest
 from clausal.logic.solve import call, query
 from clausal.logic.variables import Var, deref, Trail
 from clausal.import_hook import _load_module
+from clausal._suffixes import SEAM_SUFFIX
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -20,7 +21,7 @@ _YAML_IMPORT = '-import_from(yaml, [read, write, read_all, write_all, read_file,
 
 def _load(name, src_text, tmp_path):
     """write a .clausal file and load it."""
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM_SUFFIX}"
     p.write_text(_YAML_IMPORT + src_text)
     mod = _load_module(name, str(p))
     return mod.__dict__["$module"]

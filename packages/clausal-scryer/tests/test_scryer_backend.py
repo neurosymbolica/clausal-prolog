@@ -19,6 +19,7 @@ import pytest
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
 from clausal.tools.prolog_dialect import Dialect
 from clausal.tools.prolog_to_clausal import prolog_to_clausal
+from clausal._suffixes import SEAM_SUFFIX
 
 SCRYER = shutil.which("scryer-prolog")
 needs_scryer = pytest.mark.skipif(SCRYER is None, reason="scryer-prolog not on PATH")
@@ -69,7 +70,7 @@ def _run_scryer_file(pl_path: str | Path, query: str, *, timeout: int = 30) -> s
 
 def _translate_conformity(name: str) -> str:
     """Translate a conformity .clausal file to Scryer Prolog source."""
-    path = CONFORMITY / f"{name}.clausal"
+    path = CONFORMITY / f"{name}{SEAM_SUFFIX}"
     source = path.read_text(encoding="utf-8")
     return clausal_source_to_prolog(source, dialect=_SCRYER)
 
@@ -413,7 +414,7 @@ class TestScryerConformityRoundtrip:
     def _roundtrip_conformity(self, name: str) -> tuple[list[str], list[str]]:
         """Translate conformity file through a full roundtrip and execute."""
         # Leg 1: clausal → Prolog (Scryer dialect)
-        path = CONFORMITY / f"{name}.clausal"
+        path = CONFORMITY / f"{name}{SEAM_SUFFIX}"
         source = path.read_text(encoding="utf-8")
         pl1 = clausal_source_to_prolog(source, dialect=_SCRYER)
 
@@ -439,7 +440,7 @@ class TestScryerConformityRoundtrip:
     def test_roundtrip_parses(self, name):
         """Roundtripped Prolog output parses in Scryer without errors."""
         # nv
-        path = CONFORMITY / f"{name}.clausal"
+        path = CONFORMITY / f"{name}{SEAM_SUFFIX}"
         source = path.read_text(encoding="utf-8")
         pl1 = clausal_source_to_prolog(source, dialect=_SCRYER)
         rt_clausal = prolog_to_clausal(pl1, dialect=_SCRYER)

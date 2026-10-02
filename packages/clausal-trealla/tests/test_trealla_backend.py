@@ -19,6 +19,7 @@ import pytest
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
 from clausal.tools.prolog_dialect import Dialect
 from clausal.trealla._engine import TPL_BINARY
+from clausal._suffixes import SEAM_SUFFIX
 
 needs_trealla = pytest.mark.skipif(TPL_BINARY is None, reason="tpl not on PATH")
 
@@ -66,7 +67,7 @@ def _run_trealla_file(pl_path: str | Path, query: str, *, timeout: int = 30) -> 
 
 def _translate_conformity(name: str) -> str:
     """Translate a conformity .clausal file to Trealla Prolog source."""
-    path = CONFORMITY / f"{name}.clausal"
+    path = CONFORMITY / f"{name}{SEAM_SUFFIX}"
     source = path.read_text(encoding="utf-8")
     return clausal_source_to_prolog(source, dialect=_TREALLA)
 

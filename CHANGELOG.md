@@ -1026,6 +1026,14 @@ since 0.4.0 finish three moves:
   dependency is absent is read statically instead; any other import
   failure fails the gate. Run against the tree before the package renames,
   it reports 334 such names.
+- **The optional packages' suites run against the checkout, uninstalled.**
+  `packages/conftest.py` splices each package's source directories onto
+  the engine's namespaces, so `python -m pytest packages` from the
+  repository root tests this tree's package code. A package whose required
+  dependency is not importable is skipped, naming it; so is a test that
+  fails because a declared dependency is absent. The package tests now load
+  their seam fixtures under `.seam` (they still named `.clausal`).
+
 - **The `.pl` translator reads which twins hide a `.pl` from the finder
   order.** When a `use_module` names a `.pl` file, its `module/2` export
   list is read only if no twin the import hook loads first sits beside it.

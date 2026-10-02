@@ -46,6 +46,7 @@ from clausal.modules.py.scipy_spatial import (
     free,
     _SPATIAL_REGISTRY,
 )
+from clausal._suffixes import SEAM_SUFFIX
 
 
 # ── Test drivers ──────────────────────────────────────────────────────────
@@ -684,7 +685,7 @@ _FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
 def _load_fixture(name):
-    path = os.path.join(_FIXTURE_DIR, f"{name}.clausal")
+    path = os.path.join(_FIXTURE_DIR, f"{name}{SEAM_SUFFIX}")
     mod = _load_module(name, path)
     return mod.__dict__["$module"]
 
