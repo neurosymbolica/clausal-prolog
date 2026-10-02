@@ -5,7 +5,7 @@ The `spacy` module exposes spaCy's NLP pipeline as Clausal predicates. It provid
 **Requires:** `pip install spacy` and at least one downloaded spaCy model (e.g. `python -m spacy download en_core_web_sm`).
 
 ```clausal
--import_from(spacy, [load_model, process, token, Lemma, entity])
+-import_from(spacy, [load_model, process, token, lemma, entity])
 
 nouns(DOC, TOK) <- (
     load_model("en_core_web_sm", "nlp"),
@@ -21,12 +21,12 @@ nouns(DOC, TOK) <- (
 
 ```clausal
 -import_from(spacy, [
-    load_model, UnloadModel, current_model,
+    load_model, unload_model, current_model,
     process,
     token, token_text, token_list,
-    pos, Tag, Lemma, Dep, Head, Shape, IsAlpha, IsStop,
-    entity, EntityList,
-    Sentence, SentenceList,
+    pos, tag, lemma, dep, head, shape, is_alpha, is_stop,
+    entity, entity_list,
+    sentence, sentence_list,
     similarity,
     noun_chunk
 ])
@@ -62,7 +62,7 @@ Load `Name` under a custom `Alias`. Useful for loading the same model under mult
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:load_model_2_ex"
 ```
 
-### `UnloadModel/1`
+### `unload_model/1`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:unload_model_sig"
@@ -116,7 +116,7 @@ A token is represented as a plain Python dict with keys:
 | `dep` | str | Dependency label |
 | `head_text` | str | Surface form of the syntactic head |
 | `head_i` | int | Index of the syntactic head token |
-| `i` | int | Token index within the document |
+| `i` | int | token index within the document |
 | `is_alpha` | bool | True if the token consists of alphabetic characters |
 | `is_stop` | bool | True if the token is a stop word |
 | `shape` | str | Orthographic shape (e.g. `"Xxxxx"`, `"dd"`) |
@@ -187,7 +187,7 @@ Coarse-grained Universal Dependencies POS tag: `"NOUN"`, `"VERB"`, `"PROPN"`, `"
 !!! note "Why `pos` not `POS`?"
     `POS` is all-uppercase, which the term transformer would interpret as a logic variable. The predicate is therefore named `pos`.
 
-### `Tag/2`
+### `tag/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:tag_sig"
@@ -195,7 +195,7 @@ Coarse-grained Universal Dependencies POS tag: `"NOUN"`, `"VERB"`, `"PROPN"`, `"
 
 Fine-grained POS tag specific to the language model (e.g. `"NNS"`, `"VBZ"` for English Penn Treebank).
 
-### `Lemma/2`
+### `lemma/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:lemma_sig"
@@ -203,7 +203,7 @@ Fine-grained POS tag specific to the language model (e.g. `"NNS"`, `"VBZ"` for E
 
 Lemmatised form of the token (e.g. `"run"` for `"running"`).
 
-### `Dep/2`
+### `dep/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:dep_sig"
@@ -211,7 +211,7 @@ Lemmatised form of the token (e.g. `"run"` for `"running"`).
 
 Dependency relation to the syntactic head: `"nsubj"`, `"dobj"`, `"ROOT"`, etc.
 
-### `Head/2`
+### `head/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:head_sig"
@@ -219,7 +219,7 @@ Dependency relation to the syntactic head: `"nsubj"`, `"dobj"`, `"ROOT"`, etc.
 
 Surface form of the syntactic head token.
 
-### `Shape/2`
+### `shape/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:shape_sig"
@@ -227,7 +227,7 @@ Surface form of the syntactic head token.
 
 Orthographic shape string: `"Xxxxx"` for `"Apple"`, `"dd"` for `"42"`, etc.
 
-### `IsAlpha/1`
+### `is_alpha/1`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:is_alpha_sig"
@@ -235,7 +235,7 @@ Orthographic shape string: `"Xxxxx"` for `"Apple"`, `"dd"` for `"42"`, etc.
 
 **Succeeds** if the token consists entirely of alphabetic characters. **Fails** otherwise.
 
-### `IsStop/1`
+### `is_stop/1`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:is_stop_sig"
@@ -274,7 +274,7 @@ people(DOC, ENT) <- entity(DOC, "PERSON", ENT)
 orgs(DOC, ENT) <- entity(DOC, "ORG", ENT)
 ```
 
-### `EntityList/2`
+### `entity_list/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:entity_list_sig"
@@ -288,7 +288,7 @@ Unify `Ents` with a list of all entity dicts. Deterministic.
 
 Sentences are plain strings (the `.text` of each spaCy `span`).
 
-### `Sentence/2`
+### `sentence/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:sentence_sig"
@@ -296,7 +296,7 @@ Sentences are plain strings (the `.text` of each spaCy `span`).
 
 **Nondeterministic.** Yields one solution per sentence.
 
-### `SentenceList/2`
+### `sentence_list/2`
 
 ```clausal
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:sentence_list_sig"
@@ -305,11 +305,11 @@ Sentences are plain strings (the `.text` of each spaCy `span`).
 Unify `Sents` with a list of all sentence strings. Deterministic.
 
 !!! note
-    Sentence segmentation requires the `senter` or `sentencizer` component in the model pipeline. It is enabled by default in `en_core_web_sm` and other standard models.
+    sentence segmentation requires the `senter` or `sentencizer` component in the model pipeline. It is enabled by default in `en_core_web_sm` and other standard models.
 
 ---
 
-## Layer 7 — Similarity
+## Layer 7 — similarity
 
 ### `similarity/4`
 
@@ -317,7 +317,7 @@ Unify `Sents` with a list of all sentence strings. Deterministic.
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:similarity_sig"
 ```
 
-Process both texts through the model and unify `Score` with their cosine similarity as a float in `[0.0, 1.0]`.
+process both texts through the model and unify `Score` with their cosine similarity as a float in `[0.0, 1.0]`.
 
 ```clausal
 close(T1, T2) <- (
@@ -327,7 +327,7 @@ close(T1, T2) <- (
 ```
 
 !!! note
-    Similarity requires word vectors in the model. Use `en_core_web_md` or `en_core_web_lg` instead of `_sm` for meaningful scores.
+    similarity requires word vectors in the model. Use `en_core_web_md` or `en_core_web_lg` instead of `_sm` for meaningful scores.
 
 ---
 
@@ -356,7 +356,7 @@ subjects(DOC, CHUNK) <- (
 ## Working example
 
 ```clausal
--import_from(spacy, [load_model, process, token, pos, Lemma, entity, Dep])
+-import_from(spacy, [load_model, process, token, pos, lemma, entity, dep])
 
 # Find all noun subjects in a sentence
 noun_subjects(TEXT, LEMMA) <- (
@@ -364,8 +364,8 @@ noun_subjects(TEXT, LEMMA) <- (
     process("nlp", TEXT, DOC),
     token(DOC, TOK),
     pos(TOK, "NOUN"),
-    Dep(TOK, "nsubj"),
-    Lemma(TOK, LEMMA)
+    dep(TOK, "nsubj"),
+    lemma(TOK, LEMMA)
 )
 
 # Extract all organisation entities
@@ -380,7 +380,7 @@ orgs(TEXT, ORG_TEXT) <- (
 noun_lemmas(TEXT, LEMMAS) <- (
     load_model("en_core_web_sm", "nlp"),
     process("nlp", TEXT, DOC),
-    findall(L, (token(DOC, TOK), pos(TOK, "NOUN"), Lemma(TOK, L)), LEMMAS)
+    findall(L, (token(DOC, TOK), pos(TOK, "NOUN"), lemma(TOK, L)), LEMMAS)
 )
 ```
 
@@ -392,14 +392,14 @@ noun_lemmas(TEXT, LEMMAS) <- (
 
     - **Helpers**: `_token_to_dict`, `_ent_to_dict`, `_chunk_to_dict` key sets and values
     - **Model registry**: load/unload, idempotent load, `current_model` enumerate/check
-    - **Process**: returns Doc, error on unknown alias
-    - **Token/2,3**: iteration count, first token, by index, out-of-range, iterate with index
-    - **TokenText, TokenList**: extraction, list length and contents
-    - **Annotation predicates**: Pos (PROPN), Lemma (look), Dep, Shape, IsAlpha, IsStop
-    - **NER**: entity iteration, label filter, empty filter, EntityList
-    - **Sentences**: Sentence/2 iteration, SentenceList
-    - **Similarity**: identical texts (≈1.0), score is float in [0,1]
-    - **NounChunk**: chunk count, dict keys
+    - **process**: returns Doc, error on unknown alias
+    - **token/2,3**: iteration count, first token, by index, out-of-range, iterate with index
+    - **token_text, token_list**: extraction, list length and contents
+    - **Annotation predicates**: pos (PROPN), lemma (look), dep, shape, is_alpha, is_stop
+    - **NER**: entity iteration, label filter, empty filter, entity_list
+    - **Sentences**: sentence/2 iteration, sentence_list
+    - **similarity**: identical texts (≈1.0), score is float in [0,1]
+    - **noun_chunk**: chunk count, dict keys
     - **Adapter**: single-arity dispatch, multi-arity dispatch, repr, unknown arity → DONE
     - **py.spacy alias**: re-exports are identical objects
     - **Fixture integration**: `spacy_basic.clausal` (17 Test predicates)
@@ -413,12 +413,12 @@ noun_lemmas(TEXT, LEMMAS) <- (
     - **Nondeterministic predicates**: native trampoline protocol with `trail.mark()`/`trail.undo(mark)` per solution
     - **Lazy import**: `import spacy` is deferred to first use via `_get_spacy()` so the module loads cleanly even when spaCy is not installed
     - **Thread-safe registry**: model dict protected by `threading.Lock`
-    - **Token representation**: plain Python dicts (not opaque handles) — easy to inspect, log, and use with `++()` interop
+    - **token representation**: plain Python dicts (not opaque handles) — easy to inspect, log, and use with `++()` interop
 
 ??? abstract "Design decisions"
 
     1. **Doc as opaque handle** — the spaCy `Doc` object is passed directly as a logic term. It can be unified, stored, and passed around, but its internal structure is accessed only via the provided predicates.
-    2. **Token as dict** — tokens are converted to plain Python dicts. This makes them easy to access with `++TOK["text"]` and compatible with dict-handling builtins. Dicts are ground (no logic variables inside), so they unify structurally.
+    2. **token as dict** — tokens are converted to plain Python dicts. This makes them easy to access with `++TOK["text"]` and compatible with dict-handling builtins. Dicts are ground (no logic variables inside), so they unify structurally.
     3. **Filtered iteration** — `entity/3` and similar predicates filter at iteration time rather than via a separate filter predicate, following the pattern of `query/4` with SQL `WHERE` clauses.
     4. **Model aliases** — models are referenced by string aliases throughout, making predicates composable without carrying model references. The same pattern is used in the SQLite module.
     5. **`pos` not `POS`** — `POS` is all-uppercase and would be treated as a logic variable by the term transformer. `pos` (title-case) avoids the collision.
