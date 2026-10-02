@@ -62,10 +62,12 @@ def is_clausal_prolog_caller(obj: Any) -> bool:
     from clausal.end_module import (  # noqa: PLC0415
         SURFACE_CLAUSAL_PROLOG, surface_of)
     answer = surface_of(path) == SURFACE_CLAUSAL_PROLOG
-    try:
-        setattr(obj, _CACHE, answer)
-    except (AttributeError, TypeError):   # a dict / slotted object
-        pass
+    if not isinstance(obj, (dict, types.ModuleType)):
+        # Only on a Module / Database: never written into a namespace.
+        try:
+            setattr(obj, _CACHE, answer)
+        except (AttributeError, TypeError):   # a slotted object
+            pass
     return answer
 
 
@@ -81,13 +83,22 @@ def forbidden_kind(target: Any) -> "str | None":
     path = md.get("__file__")
     if not path or not isinstance(path, str):
         return None
+    try:
+        return _KIND_BY_PATH[path]
+    except KeyError:
+        pass
     from clausal.end_module import SURFACE_PL, surface_of  # noqa: PLC0415
     surface = surface_of(path)
-    if surface == SURFACE_PL:
-        return "prolog_module"
-    if surface is None:
-        return "python_module"
-    return None
+    kind = ("prolog_module" if surface == SURFACE_PL
+            else "python_module" if surface is None else None)
+    _KIND_BY_PATH[path] = kind
+    return kind
+
+
+#: ``__file__`` -> :func:`forbidden_kind`'s answer.  A path's suffix never
+#: changes, so the answer is cached for the process (the extension tuples
+#: are fixed since the flip).
+_KIND_BY_PATH: "dict[str, str | None]" = {}
 
 
 def _module_name(target: Any) -> str:
@@ -125,12 +136,14 @@ def edge_error(kind: str, target: Any, context: str):
         "access", kind, name, f"{context}: {why}"))
 
 
-def refuse_edge(caller: Any, target: Any, context: str) -> None:
+def refuse_edge(caller: Any, target: Any, context: str, *,
+                python: bool = True) -> None:
     """Raise :func:`edge_error` when *caller* is Clausal Prolog and *target*
-    is a ``.pl`` or Python module; a no-op otherwise (and for a ``.seam``
-    or ``.pl`` caller after one cached attribute read)."""
+    is a ``.pl`` module (or, with *python*, a Python module); a no-op
+    otherwise (and for a ``.seam`` or ``.pl`` caller after one cached
+    attribute read)."""
     if not is_clausal_prolog_caller(caller):
         return
     kind = forbidden_kind(target)
-    if kind is not None:
+    if kind is not None and (python or kind == "prolog_module"):
         raise edge_error(kind, target, context)

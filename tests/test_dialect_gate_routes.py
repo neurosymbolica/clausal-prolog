@@ -254,6 +254,43 @@ def test_route2_a_written_qualified_call_is_refused(tree, pl_first):
         ("permission_error", "access", "prolog_module", "dgw_pl")]
 
 
+_NESTED = {
+    "findall written": "findall(X, dgc_pl:p(X), L), R = L",
+    "findall of a variable goal": "G = dgc_pl:p(X), findall(X, G, R)",
+    "negation": "\\+ dgc_pl:p(3), R = x",
+    "disjunction": "( fail ; dgc_pl:p(1) ), R = x",
+    "forall": "forall(dgc_pl:p(X), integer(X)), R = x",
+    "once": "once(dgc_pl:p(_)), R = x",
+    "two levels inside call/1": (
+        "G = dgc_pl:p(_), call((true, (fail ; \\+ \\+ G))), R = x"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(_NESTED))
+def test_route2_inside_control_constructs(tree, case):
+    """A qualified goal under findall/forall/once/\\+/; -- written, or a
+    variable bound at run time -- is refused like a bare one."""
+    _lib(tree, ".pl", "dgc_pl")
+    tree.write("dgc_cp.clausal", ":- module(dgc_cp, [t/1]).\n"
+               f"t(R) :- {_NESTED[case]}.\n:- end_module(dgc_cp).\n")
+    _denied(tree.load("dgc_cp"), "t", Var(), target="dgc_pl")
+
+
+def test_route2_a_facade_predicate_reached_by_call_and_maplist(tree):
+    """A predicate a ``.seam`` library facade re-exports from an engine
+    Python module is allowed through every lookup, the namespace fallback
+    included (that route refuses only a ``.pl`` home)."""
+    tree.write("dgf_cp.clausal", ":- module(dgf_cp, [t/2]).\n"
+               ":- use_module(library(datetime), [days_between/3]).\n"
+               "t(a, N) :- call(days_between, date(2026, 1, 31), "
+               "date(2026, 1, 1), N).\n"
+               "t(b, L) :- maplist(days_between(date(2026, 1, 31)), "
+               "[date(2026, 1, 1)], L).\n:- end_module(dgf_cp).\n")
+    cp = tree.load("dgf_cp")
+    assert _answers(cp, "t", "a", Var()) == [30]
+    assert _answers(cp, "t", "b", Var()) == [[30]]
+
+
 def test_route2_a_pl_module_may_write_a_qualified_call_into_clausal(tree):
     _lib(tree, ".clausal", "dgw_cp2")
     tree.write("dgw_pl2.pl",
@@ -370,15 +407,14 @@ def test_route5_python_solve_is_not_gated(tree):
                                           module=cp)] == [1, 2]
 
 
-@pytest.mark.parametrize("body,why", [
-    ("X = ++foo", "Expected '.'"),       # ``++`` is no prefix operator
-])
-def test_route5_clausal_prolog_has_no_plusplus_escape(tree, body, why):
-    tree.write("dgr5pp.clausal", f":- module(dgr5pp, [q/1]).\nq(X) :- {body}."
-               "\n:- end_module(dgr5pp).\n")
+def test_route5_clausal_prolog_has_no_plusplus_escape(tree):
+    """``++`` is no prefix operator in Clausal Prolog: ``X = ++foo`` does
+    not read."""
+    tree.write("dgr5pp.clausal", ":- module(dgr5pp, [q/1]).\n"
+               "q(X) :- X = ++foo.\n:- end_module(dgr5pp).\n")
     with pytest.raises(SyntaxError) as ei:
         tree.load("dgr5pp")
-    assert why in str(ei.value)
+    assert "dgr5pp.clausal:2" in str(ei.value)
 
 
 def test_route5_plusplus_written_as_a_compound_is_no_escape(tree):

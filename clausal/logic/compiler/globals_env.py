@@ -1137,25 +1137,17 @@ def _unresolved_qualified_dispatch(dotted: str, arity: int, globals_, db):
     base_path, name = ".".join(parts[:-1]), parts[-1]
 
     def resolve_base():
-        base = globals_.get(parts[0]) if globals_ else None
-        if _term_is_atom(base):
-            # An ATOM binding of the qualifier is data (the atom pool binds
-            # a module name the file also writes as a term, e.g. inside
-            # ``call(m:G)``): it names the module, it is not the module.
-            base = None
-        for part in parts[1:-1]:
-            if base is None:
-                break
-            base = getattr(base, part, None)
-        if base is None:
-            base = _sys.modules.get(base_path)
-        return base
-
-    gated = _clausal_prolog_db(db)
+        # An ATOM binding of the qualifier is data (the atom pool binds a
+        # module name the file also writes as a term, e.g. inside
+        # ``call(m:G)``): it names the module, it is not the module.
+        return _dotted_base(parts, globals_)
 
     def dispatch(*args):
         base = resolve_base()
-        if gated:
+        # Asked per call (cached on the db after the first definite answer),
+        # never frozen at compile time: a db whose ``__file__`` was not yet
+        # known then must not compile the gate away.
+        if _clausal_prolog_db(db):
             # The dialect gate (route 2) for a base that loaded after this
             # clause set compiled: Clausal Prolog never calls into .pl.
             kind = _edge_kind(base)
