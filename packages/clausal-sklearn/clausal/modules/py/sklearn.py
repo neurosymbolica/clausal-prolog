@@ -394,14 +394,14 @@ def _unpack_split(s):
 def _build_pipeline(steps):
     """Build a sklearn pipeline from a list of (name, Est(...)) tuples."""
     _ensure_sklearn()
-    SkPipeline = _sk_pipeline.pipeline
+    SkPipeline = _sk_pipeline.Pipeline
     sk_steps = []
     for step in steps:
         step = deref(step)
         if isinstance(step, tuple) and len(step) == 2:
             name, est = str(deref(step[0])), deref(step[1])
         else:
-            raise ValueError(f"pipeline step must be (name, Est(...)): {step!r}")
+            raise ValueError(f"Pipeline step must be (name, Est(...)): {step!r}")
         algo, params = _unpack_est(est)
         sk_steps.append((name, _instantiate_estimator(algo, params)))
     return SkPipeline(sk_steps)
@@ -1111,7 +1111,7 @@ def _normalize_3(x, norm, result_var, trail, k):
 def _polynomial_features_3(x, degree, result_var, trail, k):
     """polynomial_features/3: generate polynomial features."""
     _ensure_sklearn()
-    SkPolyFeatures = _sk_preprocessing.polynomial_features
+    SkPolyFeatures = _sk_preprocessing.PolynomialFeatures
     x = deref(x)
     degree = int(deref(degree))
     pf = SkPolyFeatures(degree=degree)
