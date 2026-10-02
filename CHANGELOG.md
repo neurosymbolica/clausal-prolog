@@ -53,7 +53,14 @@ since 0.4.0 finish three moves:
   `syntax_error(invalid_data)`. `WriteFile/2` serialises before it opens
   the file, so a bad term leaves no file. A path must be text, as in
   `py.json` (`instantiation_error` / `type_error(text, P)`; it was `str()`
-  of the term), and files are read and written as UTF-8.
+  of the term), and files are read and written as UTF-8. The package's
+  predicates are renamed to lower_snake_case, with no aliases (a TitleCase
+  name no longer loads): `Read/2` -> `read/2`, `ReadAll/2` -> `read_all/2`,
+  `ReadFile/2` -> `read_file/2`, `WriteAll/2` -> `write_all/2`,
+  `WriteFile/2` -> `write_file/2`, `Get/3` -> `get/3`. `read/2` and
+  `read_all/2` take text (`instantiation_error` / `type_error(text, X)`
+  otherwise; a string was parsed as its Python repr), and `get/3` matches a
+  string key written in source.
 - **A file-system or network failure in a library adapter raises an ISO
   error** (ruled 2026-10-02) instead of failing the goal. The model is ISO
   `open/4` (8.11.5.3 j, k): a path that does not exist (or goes through a

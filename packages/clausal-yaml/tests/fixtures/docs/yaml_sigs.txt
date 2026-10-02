@@ -1,15 +1,15 @@
 # Display snippets for docs/yaml.md
 
 --8<-- [start:read_sig]
-Read(+YamlString, -Data)
+read(+YamlString, -Data)
 --8<-- [end:read_sig]
 
 --8<-- [start:read_all_sig]
-ReadAll(+YamlString, -DocList)
+read_all(+YamlString, -DocList)
 --8<-- [end:read_all_sig]
 
 --8<-- [start:read_file_sig]
-ReadFile(+Path, -Data)
+read_file(+Path, -Data)
 --8<-- [end:read_file_sig]
 
 --8<-- [start:write_sig]
@@ -17,53 +17,53 @@ write(+Data, -YamlString)
 --8<-- [end:write_sig]
 
 --8<-- [start:write_all_sig]
-WriteAll(+DocList, -YamlString)
+write_all(+DocList, -YamlString)
 --8<-- [end:write_all_sig]
 
 --8<-- [start:write_file_sig]
-WriteFile(+Path, +Data)
+write_file(+Path, +Data)
 --8<-- [end:write_file_sig]
 
 --8<-- [start:get_sig]
-Get(+Data, +Path, -Value)
+get(+Data, +Path, -Value)
 --8<-- [end:get_sig]
 
 --8<-- [start:parse_config]
--import_from(yaml_module, [ReadFile, Get])
+-import_from(yaml, [read_file, get])
 
-DbConfig(PATH, HOST, PORT, NAME) <- (
-    ReadFile(PATH, CFG),
-    Get(CFG, ["database", "host"], HOST),
-    Get(CFG, ["database", "port"], PORT),
-    Get(CFG, ["database", "name"], NAME)
+db_config(PATH, HOST, PORT, NAME) <- (
+    read_file(PATH, CFG),
+    get(CFG, ["database", "host"], HOST),
+    get(CFG, ["database", "port"], PORT),
+    get(CFG, ["database", "name"], NAME)
 )
 --8<-- [end:parse_config]
 
 --8<-- [start:round_trip]
--import_from(yaml_module, [Read, write, Get])
+-import_from(yaml, [read, write, get])
 
-RoundTrip(YAML, KEY, VAL) <- (
-    Read(YAML, D),
+round_trip(YAML, KEY, VAL) <- (
+    read(YAML, D),
     write(D, S),
-    Read(S, D2),
-    Get(D2, KEY, VAL)
+    read(S, D2),
+    get(D2, KEY, VAL)
 )
 --8<-- [end:round_trip]
 
 --8<-- [start:k8s_manifests]
--import_from(yaml_module, [ReadAll, Get])
+-import_from(yaml, [read_all, get])
 
-ServiceNames(YAML, NAMES) <- (
-    ReadAll(YAML, DOCS),
-    maplist([D, N] >> Get(D, ["metadata", "name"], N), DOCS, NAMES)
+service_names(YAML, NAMES) <- (
+    read_all(YAML, DOCS),
+    maplist([D, N] >> get(D, ["metadata", "name"], N), DOCS, NAMES)
 )
 --8<-- [end:k8s_manifests]
 
 --8<-- [start:python_interop]
--import_from(yaml_module, [Read])
+-import_from(yaml, [read])
 
-AllKeys(YAML, KEYS) <- (
-    Read(YAML, D),
+all_keys(YAML, KEYS) <- (
+    read(YAML, D),
     KEYS is ++(list(D.keys()))
 )
 --8<-- [end:python_interop]

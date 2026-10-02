@@ -56,19 +56,19 @@ class _Opaque:
 
 def test_read_2_raises_on_text_that_is_not_yaml():
     assert raised(pyaml._read_2, "{a: [}", Var()) == _err(
-        ("syntax_error", "invalid_yaml"), "Read", 2)
+        ("syntax_error", "invalid_yaml"), "read", 2)
 
 
 def test_read_all_2_raises_on_text_that_is_not_yaml():
     assert raised(pyaml._read_all_2, "a: 1\n---\n{b: [}", Var()) == _err(
-        ("syntax_error", "invalid_yaml"), "ReadAll", 2)
+        ("syntax_error", "invalid_yaml"), "read_all", 2)
 
 
 def test_read_file_2_raises_on_a_file_that_is_not_yaml(tmp_path):
     p = tmp_path / "bad.yaml"
     p.write_text("{a: [}\n")
     assert raised(pyaml._read_file_2, chars(str(p)), Var()) == _err(
-        ("syntax_error", "invalid_yaml"), "ReadFile", 2)
+        ("syntax_error", "invalid_yaml"), "read_file", 2)
 
 
 def test_valid_yaml_still_answers(tmp_path):
@@ -87,7 +87,7 @@ def test_read_file_2_raises_on_a_file_that_is_not_utf8(tmp_path):
     p = tmp_path / "bad.yaml"
     p.write_bytes(b"a: \xff\xfe\n")
     assert raised(pyaml._read_file_2, chars(str(p)), Var()) == _err(
-        ("syntax_error", "invalid_data"), "ReadFile", 2)
+        ("syntax_error", "invalid_data"), "read_file", 2)
 
 
 def test_a_path_that_is_not_text_raises():
@@ -105,13 +105,13 @@ def test_a_path_that_is_not_text_raises():
 def test_read_file_2_missing_file_is_existence_error(tmp_path):
     path = chars(str(tmp_path / "nope.yaml"))
     assert raised(pyaml._read_file_2, path, Var()) == _err(
-        ("existence_error", "source_sink", path), "ReadFile", 2)
+        ("existence_error", "source_sink", path), "read_file", 2)
 
 
 def test_read_file_2_directory_is_permission_error(tmp_path):
     path = chars(str(tmp_path))
     assert raised(pyaml._read_file_2, path, Var()) == _err(
-        ("permission_error", "open", "source_sink", path), "ReadFile", 2)
+        ("permission_error", "open", "source_sink", path), "read_file", 2)
 
 
 @_root
@@ -122,7 +122,7 @@ def test_read_file_2_unreadable_is_permission_error(tmp_path):
     try:
         path = chars(str(p))
         assert raised(pyaml._read_file_2, path, Var()) == _err(
-            ("permission_error", "open", "source_sink", path), "ReadFile", 2)
+            ("permission_error", "open", "source_sink", path), "read_file", 2)
     finally:
         os.chmod(p, stat.S_IRUSR | stat.S_IWUSR)
 
@@ -130,7 +130,7 @@ def test_read_file_2_unreadable_is_permission_error(tmp_path):
 def test_write_file_2_missing_directory_is_existence_error(tmp_path):
     path = chars(str(tmp_path / "no-such-dir" / "out.yaml"))
     assert raised(pyaml._write_file_2, path, {"a": 1}) == _err(
-        ("existence_error", "source_sink", path), "WriteFile", 2)
+        ("existence_error", "source_sink", path), "write_file", 2)
 
 
 def test_write_file_2_writes_a_text_path(tmp_path):
@@ -154,7 +154,7 @@ def test_write_2_raises_type_error_for_an_unrepresentable_term():
 def test_write_all_2_raises_type_error_for_an_unrepresentable_term():
     term = raised(pyaml._write_all_2, [{"a": 1}, _Opaque()], Var())
     assert term[1][:2] == ("type_error", "yaml_term")
-    assert term[2] == ("/", "WriteAll", 2)
+    assert term[2] == ("/", "write_all", 2)
 
 
 def test_write_file_2_unrepresentable_term_leaves_no_file(tmp_path):
@@ -162,3 +162,39 @@ def test_write_file_2_unrepresentable_term_leaves_no_file(tmp_path):
     term = raised(pyaml._write_file_2, chars(str(p)), {"a": _Opaque()})
     assert term[1][:2] == ("type_error", "yaml_term")
     assert not p.exists()
+
+
+# ── text input is text; a string key matches ───────────────────────────
+
+
+def test_read_2_parses_a_string_argument_as_its_text():
+    # It was str() of the term: ('$chars', 'a: 1') parsed as its repr.
+    out = Var()
+    assert len(solutions(pyaml._read_2, chars("a: 1"), out)) == 1
+    assert deref(out) == {"a": 1}
+    out = Var()
+    assert len(solutions(pyaml._read_all_2, chars("a: 1\n---\nb: 2"),
+                         out)) == 1
+    assert deref(out) == [{"a": 1}, {"b": 2}]
+
+
+def test_read_2_unbound_text_raises():
+    assert raised(pyaml._read_2, Var(), Var())[1] == "instantiation_error"
+
+
+def test_get_3_string_key_matches():
+    # A source-written "server" is the chars carrier; it never matched.
+    out = Var()
+    data = {"server": {"port": 8080}}
+    assert len(solutions(pyaml._get_3, data,
+                         [chars("server"), chars("port")], out)) == 1
+    assert deref(out) == 8080
+
+
+def test_predicates_are_lower_snake_case():
+    # RULED 2026-10-02: TitleCase names are not predicate names; no aliases.
+    for name in ("read", "write", "read_all", "write_all", "read_file",
+                 "write_file", "get"):
+        assert hasattr(pyaml, name), name
+    for old in ("Read", "ReadAll", "ReadFile", "WriteAll", "WriteFile", "Get"):
+        assert not hasattr(pyaml, old), old

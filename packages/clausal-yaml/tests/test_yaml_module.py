@@ -1,6 +1,6 @@
 """Tests for yaml_module — YAML parsing and generation predicates.
 
-Tests the Read, write, ReadAll, WriteAll, ReadFile, WriteFile, and Get
+Tests the read, write, read_all, write_all, read_file, write_file and get
 predicates, both as inline .clausal tests and direct Python-level calls.
 """
 
@@ -15,7 +15,7 @@ from clausal.import_hook import _load_module
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-_YAML_IMPORT = '-import_from(yaml, [Read, write, ReadAll, WriteAll, ReadFile, WriteFile, Get])\n'
+_YAML_IMPORT = '-import_from(yaml, [read, write, read_all, write_all, read_file, write_file, get])\n'
 
 
 def _load(name, src_text, tmp_path):
@@ -46,7 +46,7 @@ def _first(functor, *args, module, out_index=-1):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Read/2 — parse YAML string to Python object
+# read/2 — parse YAML string to Python object
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -235,7 +235,7 @@ round_trip(S, R) <- (read(S, D) and write(D, R))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ReadAll/2 — multi-document YAML
+# read_all/2 — multi-document YAML
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -244,31 +244,31 @@ class TestReadAll:
     def test_multi_doc(self, tmp_path):
         # nv
         mod = _load("yra1", """
-read_all(S, R) <- read_all(S, R)
+do_read_all(S, R) <- read_all(S, R)
 """, tmp_path)
         yaml_str = "a: 1\n---\nb: 2"
-        result = _first("read_all", yaml_str, module=mod)
+        result = _first("do_read_all", yaml_str, module=mod)
         assert result == [{"a": 1}, {"b": 2}]
 
     def test_single_doc(self, tmp_path):
         # nv
         mod = _load("yra2", """
-read_all(S, R) <- read_all(S, R)
+do_read_all(S, R) <- read_all(S, R)
 """, tmp_path)
-        result = _first("read_all", "x: 1", module=mod)
+        result = _first("do_read_all", "x: 1", module=mod)
         assert result == [{"x": 1}]
 
     def test_empty_stream(self, tmp_path):
         # nv
         mod = _load("yra3", """
-read_all(S, R) <- read_all(S, R)
+do_read_all(S, R) <- read_all(S, R)
 """, tmp_path)
-        result = _first("read_all", "", module=mod)
+        result = _first("do_read_all", "", module=mod)
         assert result == []
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# WriteAll/2 — multi-document serialization
+# write_all/2 — multi-document serialization
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -277,10 +277,10 @@ class TestWriteAll:
     def test_multi_doc_write(self, tmp_path):
         # nv
         mod = _load("ywa1", """
-write_all(D, S) <- write_all(D, S)
+do_write_all(D, S) <- write_all(D, S)
 """, tmp_path)
         docs = [{"a": 1}, {"b": 2}]
-        result = _first("write_all", docs, module=mod)
+        result = _first("do_write_all", docs, module=mod)
         assert "---" in result
         assert "a: 1" in result
         assert "b: 2" in result
@@ -297,7 +297,7 @@ round_trip_all(S, R) <- (read_all(S, D) and write_all(D, R))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ReadFile/2, WriteFile/2 — file I/O
+# read_file/2, write_file/2 — file I/O
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -308,9 +308,9 @@ class TestFileIO:
         yaml_file = tmp_path / "test.yaml"
         yaml_file.write_text("name: alice\nage: 30\n")
         mod = _load("yrf1", """
-read_file(P, R) <- read_file(P, R)
+do_read_file(P, R) <- read_file(P, R)
 """, tmp_path)
-        result = _first("read_file", str(yaml_file), module=mod)
+        result = _first("do_read_file", str(yaml_file), module=mod)
         assert result == {"name": "alice", "age": 30}
 
     def test_read_nonexistent_file_raises(self, tmp_path):
@@ -325,7 +325,7 @@ read_file(P, R) <- read_file(P, R)
         assert info.value.term[1] == ("existence_error", "source_sink", path)
 
     def test_write_and_read_back(self, tmp_path):
-        """write data to file via Python, then read back via ReadFile."""
+        """write data to file via Python, then read back via read_file."""
         # nv
         yaml_file = tmp_path / "output.yaml"
         mod = _load("ywf1", """
@@ -338,7 +338,7 @@ read_back(P, V) <- (read_file(P, D) and get(D, "greeting", V))
         assert _first("read_back", str(yaml_file), module=mod) == "hello"
 
     def test_write_file(self, tmp_path):
-        """write data to file via WriteFile, read back via Python."""
+        """write data to file via write_file, read back via Python."""
         # nv
         yaml_file = tmp_path / "written.yaml"
         mod = _load("ywf2", """
@@ -353,7 +353,7 @@ do_write(P, D) <- write_file(P, D)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Get/3 — nested structure navigation
+# get/3 — nested structure navigation
 # ══════════════════════════════════════════════════════════════════════════════
 
 

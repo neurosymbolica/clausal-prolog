@@ -3,13 +3,13 @@
 Provides predicates for parsing and generating YAML, wrapping Python's
 PyYAML library (``yaml.safe_load`` / ``yaml.safe_dump``).  Import via::
 
-    -import_from(yaml, [Read, write, ReadAll, WriteAll,
-                        ReadFile, WriteFile, Get])
+    -import_from(yaml, [read, write, read_all, write_all,
+                        read_file, write_file, get])
 
 Or via module import::
 
     -import_module(yaml)
-    # then use yaml.Read(...), yaml.Get(...), etc.
+    # then use yaml.read(...), yaml.get(...), etc.
 
 Data representation
 -------------------
@@ -42,6 +42,7 @@ _yaml = _import_stdlib("yaml")
 from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
+from clausal.logic.cells import chars_text, is_chars
 from clausal.logic.exceptions import LogicException, type_error
 
 
@@ -72,16 +73,18 @@ def _raise_unrepresentable(exc, data, pred):
         "yaml_term", culprit, f"{pred}: {exc}")) from exc
 
 
-# ── Read ─────────────────────────────────────────────────────────────────
+# ── read ─────────────────────────────────────────────────────────────────
 
 
 def _read_2(yaml_string, result, trail, k):
-    """Read/2: parse YAML string → Python object."""
-    yaml_string = deref(yaml_string)
+    """read/2: parse YAML string → Python object."""
+    # The YAML is TEXT (a string or an atom): it was ``str()`` of the term,
+    # so a string argument parsed as its Python repr.
+    text = require_text(deref(yaml_string), "read/2", 1)
     try:
-        data = _yaml.safe_load(str(yaml_string))
+        data = _yaml.safe_load(text)
     except _yaml.YAMLError as exc:
-        _raise_yaml_syntax(exc, "Read/2")
+        _raise_yaml_syntax(exc, "read/2")
     if unify(result, data, trail):
         yield None
 
@@ -103,85 +106,85 @@ def _write_2(data, result, trail, k):
         yield None
 
 
-# ── ReadAll ──────────────────────────────────────────────────────────────
+# ── read_all ──────────────────────────────────────────────────────────────
 
 
 def _read_all_2(yaml_string, result, trail, k):
-    """ReadAll/2: parse multi-document YAML string → list of objects."""
-    yaml_string = deref(yaml_string)
+    """read_all/2: parse multi-document YAML string → list of objects."""
+    text = require_text(deref(yaml_string), "read_all/2", 1)
     try:
-        docs = list(_yaml.safe_load_all(str(yaml_string)))
+        docs = list(_yaml.safe_load_all(text))
     except _yaml.YAMLError as exc:
-        _raise_yaml_syntax(exc, "ReadAll/2")
+        _raise_yaml_syntax(exc, "read_all/2")
     if unify(result, docs, trail):
         yield None
 
 
-# ── WriteAll ─────────────────────────────────────────────────────────────
+# ── write_all ─────────────────────────────────────────────────────────────
 
 
 def _write_all_2(docs, result, trail, k):
-    """WriteAll/2: serialize list of objects → multi-document YAML string."""
+    """write_all/2: serialize list of objects → multi-document YAML string."""
     docs = deref(docs)
     try:
         out = _yaml.safe_dump_all(docs, default_flow_style=False).rstrip("\n")
     except _yaml.YAMLError as exc:
-        _raise_unrepresentable(exc, docs, "WriteAll/2")
+        _raise_unrepresentable(exc, docs, "write_all/2")
     if unify(result, out, trail):
         yield None
 
 
-# ── ReadFile ─────────────────────────────────────────────────────────────
+# ── read_file ─────────────────────────────────────────────────────────────
 
 
 def _read_file_2(path, result, trail, k):
-    """ReadFile/2: read and parse YAML from file path."""
+    """read_file/2: read and parse YAML from file path."""
     path = deref(path)
     # A path is text (an atom or a string): unbound -> instantiation_error,
     # anything else -> type_error(text, P), as py.json's read_file/2.
-    name = require_text(path, "ReadFile/2", 1)
+    name = require_text(path, "read_file/2", 1)
     try:
         with open(name, encoding="utf-8") as f:
             data = _yaml.safe_load(f)
     except OSError as exc:
-        raise_os_error(exc, path, "ReadFile/2", arg=1, path=name)
+        raise_os_error(exc, path, "read_file/2", arg=1, path=name)
     except UnicodeDecodeError as exc:
         # Bytes that are not UTF-8: Scryer's term for such a text stream.
-        raise_syntax_error("invalid_data", "ReadFile/2",
+        raise_syntax_error("invalid_data", "read_file/2",
                            f"the file is not UTF-8 text: {exc}", cause=exc)
     except _yaml.YAMLError as exc:
-        _raise_yaml_syntax(exc, "ReadFile/2")
+        _raise_yaml_syntax(exc, "read_file/2")
     if unify(result, data, trail):
         yield None
 
 
-# ── WriteFile ────────────────────────────────────────────────────────────
+# ── write_file ────────────────────────────────────────────────────────────
 
 
 def _write_file_2(path, data, trail, k):
-    """WriteFile/2: write Python object as YAML to file path."""
+    """write_file/2: write Python object as YAML to file path."""
     path = deref(path)
     data = deref(data)
-    name = require_text(path, "WriteFile/2", 1)
+    name = require_text(path, "write_file/2", 1)
     # Serialised BEFORE the file is opened, as py.json's write_file/2 does:
     # a term YAML cannot represent raises and leaves no truncated file.
     try:
         text = _yaml.safe_dump(data, default_flow_style=False)
     except _yaml.YAMLError as exc:
-        _raise_unrepresentable(exc, data, "WriteFile/2")
+        _raise_unrepresentable(exc, data, "write_file/2")
     try:
         with open(name, "w", encoding="utf-8") as f:
             f.write(text)
     except OSError as exc:
-        raise_os_error(exc, path, "WriteFile/2", arg=1, path=name)
+        raise_os_error(exc, path, "write_file/2", arg=1, path=name)
     yield None
 
 
-# ── Get ──────────────────────────────────────────────────────────────────
+# ── get ──────────────────────────────────────────────────────────────────
 
 
 def _get_3(data, path, result, trail, k):
-    """Get/3: navigate nested structure by key/index path.
+    """get/3: navigate nested structure by key/index path.
 
     Path can be a single key (string or int) or a list of keys for
     nested access.  Fails if any key is missing or index is out of range.
@@ -194,6 +197,10 @@ def _get_3(data, path, result, trail, k):
     current = data
     for key in path:
         key = deref(key)
+        if is_chars(key):
+            # A string key written in source is the chars carrier; the
+            # loaded mapping's keys are ``str``.  It never matched.
+            key = chars_text(key)
         try:
             current = current[key]
         except (KeyError, IndexError, TypeError):
@@ -204,23 +211,23 @@ def _get_3(data, path, result, trail, k):
 
 # ── Build and export predicate objects ───────────────────────────────────
 
-Read = ModulePredicate("Read")
-Read._register(2, simple_to_trampoline(_read_2))
+read = ModulePredicate("read")
+read._register(2, simple_to_trampoline(_read_2))
 
 write = ModulePredicate("write")
 write._register(2, simple_to_trampoline(_write_2))
 
-ReadAll = ModulePredicate("ReadAll")
-ReadAll._register(2, simple_to_trampoline(_read_all_2))
+read_all = ModulePredicate("read_all")
+read_all._register(2, simple_to_trampoline(_read_all_2))
 
-WriteAll = ModulePredicate("WriteAll")
-WriteAll._register(2, simple_to_trampoline(_write_all_2))
+write_all = ModulePredicate("write_all")
+write_all._register(2, simple_to_trampoline(_write_all_2))
 
-ReadFile = ModulePredicate("ReadFile")
-ReadFile._register(2, simple_to_trampoline(_read_file_2))
+read_file = ModulePredicate("read_file")
+read_file._register(2, simple_to_trampoline(_read_file_2))
 
-WriteFile = ModulePredicate("WriteFile")
-WriteFile._register(2, simple_to_trampoline(_write_file_2))
+write_file = ModulePredicate("write_file")
+write_file._register(2, simple_to_trampoline(_write_file_2))
 
-Get = ModulePredicate("Get")
-Get._register(3, simple_to_trampoline(_get_3))
+get = ModulePredicate("get")
+get._register(3, simple_to_trampoline(_get_3))

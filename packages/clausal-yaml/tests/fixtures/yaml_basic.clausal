@@ -1,69 +1,69 @@
 -double_quotes(atom)
--import_from(yaml, [Read, write, Get])
+-import_from(yaml, [read, write, get])
 
 # ── Basic parsing ────────────────────────────────────────────────────
 
 test("parse scalar int") <- (
-    Read("42", N),
+    read("42", N),
     N == 42
 )  # nv
 
 test("parse scalar string") <- (
-    Read("hello", S),
+    read("hello", S),
     S == "hello"
 )  # nv
 
 test("parse mapping") <- (
-    Read("name: alice\nage: 30", DATA),
-    Get(DATA, "name", "alice"),
-    Get(DATA, "age", 30)
+    read("name: alice\nage: 30", DATA),
+    get(DATA, "name", "alice"),
+    get(DATA, "age", 30)
 )  # nv
 
 test("parse sequence") <- (
-    Read("[1, 2, 3]", DATA),
+    read("[1, 2, 3]", DATA),
     DATA == [1, 2, 3]
 )  # nv
 
 test("parse bool and null") <- (
-    Read("flag: true\nval: null", DATA),
-    Get(DATA, "flag", True),
-    Get(DATA, "val", None)
+    read("flag: true\nval: null", DATA),
+    get(DATA, "flag", True),
+    get(DATA, "val", None)
 )  # nv
 
 test("parse nested mapping") <- (
-    Read("server:\n  host: localhost\n  port: 8080", DATA),
-    Get(DATA, ["server", "host"], "localhost"),
-    Get(DATA, ["server", "port"], 8080)
+    read("server:\n  host: localhost\n  port: 8080", DATA),
+    get(DATA, ["server", "host"], "localhost"),
+    get(DATA, ["server", "port"], 8080)
 )  # nv
 
 # ── Nested access ────────────────────────────────────────────────────
 
 test("list of maps") <- (
-    Read("- name: alice\n  age: 30\n- name: bob\n  age: 25", DATA),
-    Get(DATA, [0, "name"], "alice"),
-    Get(DATA, [1, "age"], 25)
+    read("- name: alice\n  age: 30\n- name: bob\n  age: 25", DATA),
+    get(DATA, [0, "name"], "alice"),
+    get(DATA, [1, "age"], 25)
 )  # nv
 
 test("config pattern") <- (
-    Read("database:\n  host: db.example.com\n  port: 5432\n  name: myapp", DATA),
-    Get(DATA, ["database", "host"], "db.example.com"),
-    Get(DATA, ["database", "port"], 5432)
+    read("database:\n  host: db.example.com\n  port: 5432\n  name: myapp", DATA),
+    get(DATA, ["database", "host"], "db.example.com"),
+    get(DATA, ["database", "port"], 5432)
 )  # nv
 
 # ── Round-trip ───────────────────────────────────────────────────────
 
 test("round trip mapping") <- (
-    Read("x: 1\ny: 2", DATA),
+    read("x: 1\ny: 2", DATA),
     write(DATA, YAML),
-    Read(YAML, DATA2),
-    Get(DATA2, "x", 1),
-    Get(DATA2, "y", 2)
+    read(YAML, DATA2),
+    get(DATA2, "x", 1),
+    get(DATA2, "y", 2)
 )  # nv
 
 test("write and read back") <- (
-    Read("a: 1\nb:\n- 2\n- 3", DATA),
+    read("a: 1\nb:\n- 2\n- 3", DATA),
     write(DATA, YAML),
-    Read(YAML, DATA2),
-    Get(DATA2, "a", 1),
-    Get(DATA2, ["b", 0], 2)
+    read(YAML, DATA2),
+    get(DATA2, "a", 1),
+    get(DATA2, ["b", 0], 2)
 )  # nv

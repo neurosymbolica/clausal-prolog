@@ -1,25 +1,25 @@
 # Companion tests for docs/yaml.md display snippets.
 -double_quotes(atom)
 
--import_from(yaml, [Read, write, ReadAll, WriteAll, Get])
+-import_from(yaml, [read, write, read_all, write_all, get])
 
-# ── Read ─────────────────────────────────────────────────────────────────────
+# ── read ─────────────────────────────────────────────────────────────────────
 
 test("parse mapping") <- (
-    Read("name: alice\nage: 30", D),
-    Get(D, "name", "alice"),
-    Get(D, "age", 30)
+    read("name: alice\nage: 30", D),
+    get(D, "name", "alice"),
+    get(D, "age", 30)
 )  # nv
 
 test("parse list") <- (
-    Read("[1, 2, 3]", D),
+    read("[1, 2, 3]", D),
     D == [1, 2, 3]
 )  # nv
 
-# ── ReadAll ──────────────────────────────────────────────────────────────────
+# ── read_all ──────────────────────────────────────────────────────────────────
 
 test("multi doc") <- (
-    ReadAll("a: 1\n---\nb: 2", DOCS),
+    read_all("a: 1\n---\nb: 2", DOCS),
     LEN is ++len(DOCS),
     LEN == 2
 )  # nv
@@ -29,13 +29,13 @@ test("multi doc") <- (
 test("serialize roundtrip") <- (
     DATA is ++{"x": 1, "y": 2},
     write(DATA, S),
-    Read(S, D),
-    Get(D, "x", 1)
+    read(S, D),
+    get(D, "x", 1)
 )  # nv
 
-# ── Get (nested) ─────────────────────────────────────────────────────────────
+# ── get (nested) ─────────────────────────────────────────────────────────────
 
 test("nested access") <- (
-    Read("items:\n  - name: first\n  - name: second", D),
-    Get(D, ["items", 1, "name"], "second")
+    read("items:\n  - name: first\n  - name: second", D),
+    get(D, ["items", 1, "name"], "second")
 )  # nv
