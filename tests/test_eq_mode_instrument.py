@@ -14,6 +14,7 @@ from clausal.import_hook import _load_module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Trail, Var
 from clausal.tools.eq_analysis import instrument
+from tests._suffix import SEAM
 
 
 @pytest.fixture
@@ -38,7 +39,7 @@ def _module_tmpdir(tmp_path_factory):
 
 def _load(src, name):
     assert _TMP is not None, "_load needs the module-scoped tmpdir fixture"
-    path = os.path.join(str(_TMP), f"{name}.clausal")
+    path = os.path.join(str(_TMP), f"{name}{SEAM}")
     with open(path, "w") as fh:
         fh.write(src)
     return _load_module(name, path), path
@@ -84,7 +85,7 @@ def test_the_site_is_the_real_clausal_file_not_the_template(inst):
     _run(mod, "test_ground")
     files = {r["file"] for r in inst.records()}
     assert files == {os.path.abspath(path)}
-    assert all(f.endswith(".clausal") for f in files)
+    assert all(f.endswith(SEAM) for f in files)
 
 
 def test_one_record_per_execution_duplicates_preserved(inst):

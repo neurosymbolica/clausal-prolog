@@ -12,6 +12,7 @@ import pytest
 
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var
+from tests._suffix import SEAM
 
 _CASES = [
     # (goal source, expected error formal as a tuple, culprit indicator)
@@ -70,7 +71,7 @@ def mod(tmp_path_factory):
         # a filled-in SegList with an UNBOUND element is still a proper list
         "ok_seg_var(N) <- (L is [X, a, *T], T is [], sort(L, S), length(S, N))",
     ]
-    (d / f"{_MOD}.clausal").write_text("\n".join(lines) + "\n")
+    (d / f"{_MOD}{SEAM}").write_text("\n".join(lines) + "\n")
     sys.path.insert(0, str(d))
     try:
         yield importlib.import_module(_MOD)

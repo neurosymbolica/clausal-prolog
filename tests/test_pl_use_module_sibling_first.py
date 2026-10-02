@@ -23,6 +23,7 @@ import pytest
 from clausal import import_hook as ih
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
+from tests._suffix import SEAM
 
 FRONTENDS = ("native", "translator")
 
@@ -83,7 +84,7 @@ def test_sibling_beats_a_foreign_top_level_module(frontend, roots):
     ra, rb = roots("RA", "RB")
     _write(ra / "sfq_pkg" / "__init__.pl", _PKG)
     _write(ra / "sfq_pkg" / "sfq_sib.pl", ":- module(sfq_sib, [f/1]).\nf(inpkg).\n")
-    _write(rb / "sfq_sib.clausal", "-module(sfq_sib, [f(X)])\nf(7)\n")
+    _write(rb / f"sfq_sib{SEAM}", "-module(sfq_sib, [f(X)])\nf(7)\n")
     mod = importlib.import_module("sfq_pkg")
     assert _answers(mod, "g") == ["inpkg"]
     assert "sfq_pkg.sfq_sib" in sys.modules
@@ -152,7 +153,7 @@ def test_a_plain_directory_beside_the_importer_is_no_module(frontend, roots):
 def test_a_sibling_seam_module_is_imported_from_a_pl_file(frontend, roots):
     (ra,) = roots("RA")
     _write(ra / "sfq_pkg" / "__init__.pl", _PKG)
-    _write(ra / "sfq_pkg" / "sfq_sib.clausal",
+    _write(ra / "sfq_pkg" / f"sfq_sib{SEAM}",
            "-module(sfq_sib, [f(X)])\nf(8)\n")
     assert _answers(importlib.import_module("sfq_pkg"), "g") == [8]
 

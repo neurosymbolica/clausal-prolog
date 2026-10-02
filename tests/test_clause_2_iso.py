@@ -60,6 +60,7 @@ from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var, deref, is_var
 from clausal.pythonic_ast import nodes
+from tests._suffix import SEAM
 
 FIXTURES = Path(__file__).parent / "fixtures"
 NAME = "clause_2_iso"
@@ -652,7 +653,7 @@ def test_only_the_selected_rule_is_built(monkeypatch, tmp_path):
            "-dynamic(r/2)", "-allow_singletons", "qq(1),"]
     src += [f"r(k({i}), Y) <- qq(Y)," for i in range(300)]
     src[-1] = src[-1].rstrip(",")
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text("\n".join(src) + "\n")
     from clausal.import_hook import _load_module
     sys.modules.pop(name, None)

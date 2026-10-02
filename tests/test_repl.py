@@ -2,6 +2,7 @@
 
 import pytest
 from clausal.repl import Solutions, _format_bindings
+from tests._suffix import SEAM
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -218,7 +219,7 @@ def test_unqualified_cell_goal_without_module_is_loud():
 def test_user_predicate_cell_goal_and_qualified_cell(tmp_path):
     from clausal import Var
     from clausal.import_hook import _load_module
-    src = tmp_path / "repl_cell_goal_user.clausal"
+    src = tmp_path / f"repl_cell_goal_user{SEAM}"
     src.write_text("colour(1),\ncolour(2),\nok(),\n")
     mod = _load_module("repl_cell_goal_user", str(src))
     X = Var()

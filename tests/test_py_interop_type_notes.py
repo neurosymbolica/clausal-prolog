@@ -20,6 +20,7 @@ from clausal.modules.py import (
     note_rejected_call,
 )
 from clausal.testing import main
+from tests._suffix import SEAM
 
 
 def write(tmp_path, name, src):
@@ -174,7 +175,7 @@ def test_diagnose_failure_survives_broken_interop_import(
     import types
     monkeypatch.setitem(sys.modules, "clausal.modules.py",
                         types.ModuleType("clausal.modules.py"))
-    p = write(tmp_path, "plain.clausal", """
+    p = write(tmp_path, f"plain{SEAM}", """
     -double_quotes(atom)
     prc("alpha", 10),
 
@@ -203,7 +204,7 @@ test("window end computes") <- (
 
 
 def test_date_add_int_note_in_failure_report(capsys, tmp_path):
-    p = write(tmp_path, "dadd.clausal", DATE_ADD_INT_SRC)
+    p = write(tmp_path, f"dadd{SEAM}", DATE_ADD_INT_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "date_add/3 was called with int where timedelta is required" in out
@@ -228,7 +229,7 @@ test("window end via helper") <- (
 def test_note_survives_descent_into_user_predicate(capsys, tmp_path):
     # The ill-typed call sits one predicate down — the descent re-runs it,
     # so the guard note must still surface.
-    p = write(tmp_path, "dadd_deep.clausal", DATE_ADD_DEEP_SRC)
+    p = write(tmp_path, f"dadd_deep{SEAM}", DATE_ADD_DEEP_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "date_add/3 was called with int where timedelta is required" in out
@@ -246,7 +247,7 @@ test("month 13") <- (
 
 
 def test_constructor_rejection_noted(capsys, tmp_path):
-    p = write(tmp_path, "d13.clausal", CONSTRUCT_REJECT_SRC)
+    p = write(tmp_path, f"d13{SEAM}", CONSTRUCT_REJECT_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "date/3 rejected its arguments" in out
@@ -273,7 +274,7 @@ test("unbound timedelta is a mode, not a type error") <- (
 def test_unbound_arg_gets_no_type_note(capsys, tmp_path):
     # An unbound Var is a legitimate "different mode / no solution" signal —
     # rung-2 already covers it; a type note would be noise.
-    p = write(tmp_path, "dvar.clausal", UNBOUND_TD_SRC)
+    p = write(tmp_path, f"dvar{SEAM}", UNBOUND_TD_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "was called with" not in out

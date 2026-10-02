@@ -20,6 +20,7 @@ import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.solve import _deref_walk, call, solve
 from clausal.logic.variables import Var
+from tests._suffix import SEAM
 
 
 SRC = """\
@@ -52,7 +53,7 @@ list_of_names(L) <- (L is [integer, atom, in_, length])
 
 @pytest.fixture(scope="module")
 def mod(tmp_path_factory):
-    path = tmp_path_factory.mktemp("r12") / "r12_builtin_atoms.clausal"
+    path = tmp_path_factory.mktemp("r12") / f"r12_builtin_atoms{SEAM}"
     path.write_text(SRC)
     return _load_module("r12_builtin_atoms", str(path))
 
@@ -119,9 +120,9 @@ def test_builtin_atom_as_closure(mod, pred, arity, expected):
 # ---- the seam: a query and a ``--`` term ------------------------------------
 
 def test_seam_query_and_term(tmp_path, monkeypatch):
-    lib = tmp_path / "r12_seam_lib.clausal"
+    lib = tmp_path / f"r12_seam_lib{SEAM}"
     lib.write_text("kind(integer),\nkind(assertz),\n")
-    host = tmp_path / "r12_seam_host.clausal"
+    host = tmp_path / f"r12_seam_host{SEAM}"
     host.write_text(
         "-private([f(_)])\n"
         "-import_from(r12_seam_lib, [kind])\n"

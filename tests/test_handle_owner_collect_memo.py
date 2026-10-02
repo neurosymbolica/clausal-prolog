@@ -22,10 +22,11 @@ from clausal.logic.cells import qualify_mangled_goal
 from clausal.logic.predicate import (
     AmbiguousHandleOwnerError, _owner_db_or_none, resolve_predicate_row,
 )
+from tests._suffix import SEAM
 
 
 def _load_popped(tmp_path, name, source):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(source).lstrip())
     sys.modules.pop(name, None)
     module = _load_module(name, str(path))

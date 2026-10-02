@@ -71,6 +71,7 @@ from clausal.logic.predicate import resolve_predicate_row
 from clausal.logic.solve import call, solve
 from clausal.logic.variables import Var, deref, walk
 from clausal.testing import load_clausal_module
+from tests._suffix import SEAM
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -302,7 +303,7 @@ class TestRuntimeAssertzIsAlreadySafe:
     """``todo/…-replaced-not-extended.md`` flagged this as unverified."""
 
     def test_assertz_against_an_imported_functor_raises(self, tmp_path):
-        (tmp_path / "impclob_az.clausal").write_text(
+        (tmp_path / f"impclob_az{SEAM}").write_text(
             "-module(impclob_az, [go(X)])\n"
             "-import_from(tests.fixtures.impclob_owner, [impclob_colour])\n"
             "-private([blue])\n"
@@ -310,7 +311,7 @@ class TestRuntimeAssertzIsAlreadySafe:
         )
         owner = _load_fixture("impclob_owner")
         az = _load_module("tests.fixtures.impclob_az",
-                          str(tmp_path / "impclob_az.clausal"))
+                          str(tmp_path / f"impclob_az{SEAM}"))
         with pytest.raises(LogicException) as exc_info:
             next(solve(("go", Var()), az), None)
         assert "permission_error" in str(exc_info.value)

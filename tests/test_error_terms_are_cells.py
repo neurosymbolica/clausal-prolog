@@ -32,6 +32,7 @@ from clausal.logic.exceptions import (
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var, deref
 from clausal.terms import FloorDiv
+from tests._suffix import SEAM
 
 
 def _is_unbound(x) -> bool:
@@ -245,7 +246,7 @@ c_pi_name(N, A) <- catch(atom_length(_, _), error(instantiation_error, '/'(N, A)
 
 @pytest.fixture(scope="module")
 def mod():
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                      delete=False) as f:
         f.write(_SRC)
         path = f.name

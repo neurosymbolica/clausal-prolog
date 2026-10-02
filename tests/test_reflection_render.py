@@ -23,6 +23,8 @@ from clausal.reflection import (
     render_ast,
     render_source,
 )
+from tests._suffix import SEAM, seam_glob
+import pathlib
 
 
 def _kind(item):
@@ -640,7 +642,7 @@ class TestComprehensions:
         from clausal.logic.variables import Var, deref
         from clausal.pythonic_ast import nodes as simple_ast
 
-        path = tmp_path / "comp.clausal"
+        path = tmp_path / f"comp{SEAM}"
         path.write_text(self.DECLARED_LOOP_VAR)
         module = _load_module("_test_render_comprehension", str(path))
 
@@ -801,7 +803,7 @@ CORPUS_DIR = os.environ.get("CLAUSAL_CORPUS_DIR", "")
 def _corpus_files():
     if not CORPUS_DIR or not os.path.isdir(CORPUS_DIR):
         return []
-    return sorted(glob.glob(os.path.join(CORPUS_DIR, "**", "*.clausal"), recursive=True))
+    return [str(p) for p in seam_glob(pathlib.Path(CORPUS_DIR), recursive=True)]
 
 
 @pytest.mark.skipif(not _corpus_files(), reason="CLAUSAL_CORPUS_DIR not set or absent")

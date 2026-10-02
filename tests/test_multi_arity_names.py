@@ -29,9 +29,10 @@ from clausal.logic.predicate import field_names_for, is_declared_predicate
 from clausal.logic.solve import call
 from clausal.logic.variables import deref
 from clausal.predicate_diagnostics import PredicateArityMismatchError
+from tests._suffix import SEAM
 
 
-def _load(tmp_path, name, text, ext=".clausal"):
+def _load(tmp_path, name, text, ext=SEAM):
     path = os.path.join(tmp_path, name + ext)
     with open(path, "w") as fh:
         fh.write(textwrap.dedent(text))
@@ -242,7 +243,7 @@ def _rewrite(text):
     src = textwrap.dedent(text)
     tree = ast.parse(src)
     t = EmbedTransformer(source_lines=src.splitlines(keepends=True),
-                         filename="x.clausal")
+                         filename=f"x{SEAM}")
     tree = t.visit(tree)
     ast.fix_missing_locations(tree)
     return ast.unparse(tree), t._module_items

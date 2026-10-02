@@ -20,6 +20,7 @@ import pytest
 from clausal.logic.solve import solve   # P2: a cell goal is driven, never iterated
 from clausal.fmt import format_source, format_tree
 from clausal.fmt.comments import CommentTable
+from tests._suffix import SEAM
 
 LAMBDA = "t(B) <- (\n    fold(((X) <- p(X)), B)\n)\n"
 COMPARISON = "t(A, B) <- (\n    check(A < -B)\n)\n"
@@ -103,7 +104,7 @@ def test_a_formatted_lambda_still_runs(tmp_path):
         "    maplist(((X, Y) <- (Y == X * 2)), XS, YS)\n"
         ")\n"
     )
-    path = tmp_path / "fmt_arrow_probe.clausal"
+    path = tmp_path / f"fmt_arrow_probe{SEAM}"
     path.write_text(format_source(source))
     module = _load_module("fmt_arrow_probe", str(path))
     from clausal.logic.variables import Var, deref

@@ -25,6 +25,7 @@ from clausal.logic.predicate import (
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.terms import Call, LoadName
+from tests._suffix import SEAM
 
 _SRC = """\
 -double_quotes(atom)
@@ -42,13 +43,13 @@ p3(X, R) <- phrase(tok(X), ["x", "y"], R)
 @pytest.fixture
 def mod(tmp_path, request):
     name = "wac_" + "".join(c if c.isalnum() else "_" for c in request.node.name)
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(_SRC.format(name=name))
     return _load_module(name, str(p))
 
 
 def _load_src(tmp_path, name, src):
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(src)
     return _load_module(name, str(p))
 

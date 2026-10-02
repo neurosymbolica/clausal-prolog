@@ -8,6 +8,7 @@ from __future__ import annotations
 import traceback
 
 import pytest
+from tests._suffix import SEAM
 
 
 def _build(tmp_path, name, body):
@@ -16,7 +17,7 @@ def _build(tmp_path, name, body):
     lands on line 3, which callers use as the expected ``lineno``."""
     from clausal.import_hook import _load_module
 
-    src = tmp_path / f"{name}.clausal"
+    src = tmp_path / f"{name}{SEAM}"
     src.write_text("# line 1\n# line 2\n" + body)
     mod = _load_module(name, str(src))
     return mod.__dict__["$module"], src
@@ -52,7 +53,7 @@ class TestSourceLocations:
         from clausal.logic.solve import call
 
         # Source: ++(1/0) raises ZeroDivisionError on line 3.
-        src = tmp_path / "g_divzero.clausal"
+        src = tmp_path / f"g_divzero{SEAM}"
         src.write_text(
             "# line 1\n"
             "# line 2\n"

@@ -65,6 +65,7 @@ from clausal.terms import (
 )
 from clausal.import_hook import _load_module
 from clausal.logic.solve import solve, once
+from tests._suffix import SEAM
 
 
 PYTHON = sys.executable
@@ -91,7 +92,7 @@ def load(tmp_path_factory):
     def _load(name, source):
         if name not in _loaded:
             d = tmp_path_factory.mktemp("a05fix")
-            p = d / f"{name}.clausal"
+            p = d / f"{name}{SEAM}"
             p.write_text(source)
             _loaded[name] = _load_module(f"a05_{name}", str(p))
         return _loaded[name]

@@ -22,6 +22,7 @@ from clausal.import_hook import _load_module
 from clausal.lint_warnings import (
     ClausalAtomExportDefinedAsPredicateWarning, ClausalLintWarning,
 )
+from tests._suffix import SEAM
 
 
 @pytest.fixture
@@ -29,7 +30,7 @@ def load(tmp_path):
     names = []
 
     def _load(name, src):
-        path = tmp_path / f"{name}.clausal"
+        path = tmp_path / f"{name}{SEAM}"
         path.write_text(src)
         sys.modules.pop(name, None)
         names.append(name)

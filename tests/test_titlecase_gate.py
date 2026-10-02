@@ -26,6 +26,7 @@ import pytest
 from clausal.import_hook import _parse_clausal_source
 from clausal.templating import term_rewriting
 from clausal.templating.term_rewriting import ClausalTitleCaseIdentifierWarning
+from tests._suffix import SEAM, seam_glob
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
 _ROOTS = ("clausal", "tests", "packages")
@@ -45,7 +46,7 @@ _WITNESSES = {
 
 def _clausal_files():
     for root in _ROOTS:
-        for p in sorted((_ROOT / root).rglob("*.clausal")):
+        for p in seam_glob(_ROOT / root, recursive=True):
             # Repo-relative parts: the checkout itself may live under a
             # directory named like one of the skips.
             if _SKIP_PARTS & set(p.relative_to(_ROOT).parts):
@@ -113,7 +114,7 @@ def test_the_tree_has_clausal_files_to_check():
 ])
 def test_the_lint_still_sees_a_titlecase_head(tmp_path, text, names):
     """Positive control on the instrument: the census is the lint."""
-    p = tmp_path / "probe.clausal"
+    p = tmp_path / f"probe{SEAM}"
     p.write_text(text)
     assert _titlecase_names(p) == names
 

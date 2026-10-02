@@ -35,13 +35,14 @@ from clausal.import_hook import _load_module
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call as pcall
 from clausal.logic.variables import Var, deref, walk
+from tests._suffix import SEAM
 
 CUT_REFUSED = ("existence_error", "procedure", ("/", "!", 0))
 
 
 @pytest.fixture
 def lm(tmp_path):
-    path = tmp_path / "cutrefused.clausal"
+    path = tmp_path / f"cutrefused{SEAM}"
     path.write_text(textwrap.dedent("""
         -dynamic(h/1)
         p(1),
@@ -165,7 +166,7 @@ def test_true_and_fail_by_name_are_unchanged(lm):
 
 def test_the_seam_cannot_spell_a_cut(tmp_path):
     """The seam has no cut at all: Python's parser rejects ``!``."""
-    path = tmp_path / "seamcut.clausal"
+    path = tmp_path / f"seamcut{SEAM}"
     path.write_text("q(1),\np(X) <- (q(X), !),\n")
     with pytest.raises(SyntaxError):
         _load_module("seamcut", str(path))

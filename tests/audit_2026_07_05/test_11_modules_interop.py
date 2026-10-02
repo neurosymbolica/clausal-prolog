@@ -26,6 +26,7 @@ from clausal.logic.solve import call
 from clausal.logic.variables import Trail, deref
 from clausal.modules.py.datetime import _dt_to_term as _T
 from clausal.modules.py.datetime import _term_to_dt as _P  # py datetime -> its TERM
+from tests._suffix import SEAM
 
 _COUNTER = [0]
 
@@ -37,7 +38,7 @@ def _load(tmp_path, src, stem="a11mod"):
     """
     _COUNTER[0] += 1
     name = f"a11_{stem}_{_COUNTER[0]}"
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(src))
     return _load_module(name, str(path))
 

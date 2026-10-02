@@ -26,6 +26,7 @@ from clausal.logic.builtins import _registry as R
 from clausal.logic.predicate import _dispatch_at
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
+from tests._suffix import SEAM
 
 
 def _population():
@@ -109,7 +110,7 @@ def test_the_seam_and_the_python_object_build_the_identical_cell(tmp_path):
         def run():
             return [X for X in --between(1, 3, X)]
         """)
-    path = tmp_path / "_w4b3_seam_cells.clausal"
+    path = tmp_path / f"_w4b3_seam_cells{SEAM}"
     path.write_text(src)
     try:
         mod = _load_module("_w4b3_seam_cells", str(path))

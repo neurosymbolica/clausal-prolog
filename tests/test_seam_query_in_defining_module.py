@@ -10,10 +10,11 @@ import pytest
 import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.predicate_diagnostics import PredicateNotFoundError
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, name, src):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(src)
     return _load_module(name, str(path))
 
@@ -27,7 +28,7 @@ def test_same_module_top_level_query_is_a_located_error(tmp_path, stmt, line):
     with pytest.raises(PredicateNotFoundError) as exc:
         _load(tmp_path, name, f"r13_p(1),\nr13_p(2),\n{stmt}\n")
     msg = str(exc.value)
-    assert f"{name}.clausal:{line}: " in msg
+    assert f"{name}{SEAM}:{line}: " in msg
     assert "still loading" in msg
     assert "r13_p/1" in msg
     assert exc.value.term[1] == (

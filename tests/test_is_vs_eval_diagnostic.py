@@ -22,6 +22,7 @@ from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException, type_error
 from clausal.terms import Add, FloorDiv
 from clausal.testing import main
+from tests._suffix import SEAM
 
 
 def write(tmp_path, name, src):
@@ -92,7 +93,7 @@ test("term reaches a numeric builtin") <- (
 
 
 def test_note_reaches_the_test_report(capsys, tmp_path):
-    p = write(tmp_path, "suml.clausal", SUM_LIST_SRC)
+    p = write(tmp_path, f"suml{SEAM}", SUM_LIST_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "type_error" in out
@@ -114,7 +115,7 @@ test("effective value") <- (
 
 
 def test_nearest_solution_arith_term_names_the_operator(capsys, tmp_path):
-    p = write(tmp_path, "nearest.clausal", NEAREST_SRC)
+    p = write(tmp_path, f"nearest{SEAM}", NEAREST_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "did not unify" in out
@@ -134,7 +135,7 @@ test("caller wrote the expression") <- (
 def test_nearest_solution_names_it_when_the_caller_wrote_the_expression(
         capsys, tmp_path):
     """The mirror case: the goal's argument is the unevaluated term."""
-    p = write(tmp_path, "mirror.clausal", MIRROR_SRC)
+    p = write(tmp_path, f"mirror{SEAM}", MIRROR_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert IS_VS_EQ in out
@@ -154,7 +155,7 @@ test("ordinary near miss") <- (
 
 def test_ordinary_near_miss_says_nothing_about_arithmetic(capsys, tmp_path):
     """A near miss on a compound must not be blamed on `is`."""
-    p = write(tmp_path, "plain.clausal", COMPOUND_SRC)
+    p = write(tmp_path, f"plain{SEAM}", COMPOUND_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "did not unify" in out
@@ -172,7 +173,7 @@ test("plain numeric near miss") <- (
 
 
 def test_number_vs_number_near_miss_says_nothing(capsys, tmp_path):
-    p = write(tmp_path, "num.clausal", NUMERIC_SRC)
+    p = write(tmp_path, f"num{SEAM}", NUMERIC_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "did not unify" in out
@@ -218,7 +219,7 @@ def test_nearest_solution_note_fires_on_a_keyword_argument(capsys, tmp_path):
     machinery in P4; if that removal leaves it behind, this test is the
     reminder that nothing reaches it.
     """
-    p = write(tmp_path, "kwarg.clausal", KEYWORD_SRC)
+    p = write(tmp_path, f"kwarg{SEAM}", KEYWORD_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "keyword arguments" in out and "eff/1" in out

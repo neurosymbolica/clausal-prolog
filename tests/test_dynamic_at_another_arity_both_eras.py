@@ -27,10 +27,11 @@ from clausal.logic.predicate import (
     mint_predicate_handle, resolve_predicate_row)
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, name, src):
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(src)
     return _load_module(name, str(p))
 

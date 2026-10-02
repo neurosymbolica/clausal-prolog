@@ -35,6 +35,7 @@ from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, walk, is_var, get_attr
 from clausal.terms import Quantity, SetTerm, term_str
+from tests._suffix import SEAM
 
 SCRYER = "/workspace/scryer-prolog-clpq/target/release/scryer-prolog"
 
@@ -49,7 +50,7 @@ def _module(tmp_path, body: str, heads: list[str], extra: str = ""):
     name = f"_set_goal_{next(_N)}"
     src = (f"-module({name}, [{', '.join(heads)}])\n-allow_singletons\n"
            f"{extra}{body}\n")
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(src)
     return _load_module(name, str(p)).__dict__["$module"]
 

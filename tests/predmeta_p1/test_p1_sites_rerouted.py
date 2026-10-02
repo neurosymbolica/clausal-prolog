@@ -19,10 +19,11 @@ from clausal.import_hook import _load_module
 from clausal.logic.atoms import is_atom
 from clausal.logic.solve import call
 from clausal.logic.variables import deref
+from tests._suffix import SEAM
 
 
 def _write(tmp_path, name, src):
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(src)
     return p
 
@@ -139,7 +140,7 @@ def test_an_imported_predicate_passes_the_rerouted_membership_tests(
         tmp_path, monkeypatch):
     monkeypatch.syspath_prepend(str(tmp_path))
     _write(tmp_path, "exp_p1", "-module(exp_p1, [p(X)])\np(1),\np(2),\n")
-    _load_module("exp_p1", str(tmp_path / "exp_p1.clausal"))
+    _load_module("exp_p1", str(tmp_path / f"exp_p1{SEAM}"))
     mod = _load(tmp_path, "imp_p1",
                 "-import_from(exp_p1, [p])\nq(X) <- p(X),\n")
     assert _answers(mod, "q") == [1, 2]
@@ -207,7 +208,7 @@ def test_a_class_in_the_module_dict_without_a_local_row_still_resolves(
 
     monkeypatch.syspath_prepend(str(tmp_path))
     _write(tmp_path, "p1_pex", "-module(p1_pex, [pp(X)])\n\npp(1),\n")
-    exporter = _load_module("p1_pex", str(tmp_path / "p1_pex.clausal"))
+    exporter = _load_module("p1_pex", str(tmp_path / f"p1_pex{SEAM}"))
     mod = _load(tmp_path, "p1_pim", "other(1),\n")
     # What ``from p1_pex import pp`` leaves behind: the class, no row.
     mod.module_dict["pp"] = exporter.__dict__["pp"]
@@ -239,7 +240,7 @@ def test_an_imported_predicate_is_reached_through_the_adopted_row(tmp_path,
     """
     monkeypatch.syspath_prepend(str(tmp_path))
     _write(tmp_path, "p1_own", "-module(p1_own, [op_p(X)])\n\nop_p(1),\n")
-    owner = _load_module("p1_own", str(tmp_path / "p1_own.clausal"))
+    owner = _load_module("p1_own", str(tmp_path / f"p1_own{SEAM}"))
     mod = _load(tmp_path, "p1_use",
                 "-import_from(p1_own, [op_p])\np1_use_q(X) <- op_p(X),\n")
     owner_db = owner.__dict__["$module"].db
@@ -284,7 +285,7 @@ def test_a_clause_block_may_find_a_non_class_under_its_own_name(tmp_path,
     it guards calls ``_bind_row`` on whatever it found."""
     monkeypatch.syspath_prepend(str(tmp_path))
     _write(tmp_path, "p1_atomexp", "-module(p1_atomexp, [shared_name])\n")
-    _load_module("p1_atomexp", str(tmp_path / "p1_atomexp.clausal"))
+    _load_module("p1_atomexp", str(tmp_path / f"p1_atomexp{SEAM}"))
     mod = _load(tmp_path, "p1_atomuse",
                 "-import_from(p1_atomexp, [shared_name])\n"
                 "shared_name(1),\n")

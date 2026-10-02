@@ -23,6 +23,7 @@ from clausal.logic.exceptions import LogicException, render_error_term
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var, is_var
 from clausal.terms import ConcreteSeg, SegList
+from tests._suffix import SEAM
 
 _SRC = """\
 -allow_singletons
@@ -54,7 +55,7 @@ bagof_caret(L) <- bagof(X, Y^p(X), L)
 
 @pytest.fixture(scope="module")
 def mod():
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                      delete=False) as f:
         f.write(_SRC)
         path = f.name

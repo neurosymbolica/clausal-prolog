@@ -31,6 +31,7 @@ from clausal.testing import (
     SKIPPED_LIST_INLINE_MAX,
     main,
 )
+from tests._suffix import SEAM
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -90,7 +91,7 @@ def test_readme_only_dir_names_the_skipped_file(capsys, tmp_path):
 
 
 def test_dir_of_passing_tests_is_quiet_and_green(capsys, tmp_path):
-    (tmp_path / "a.clausal").write_text(PASSING_CLAUSAL)
+    (tmp_path / f"a{SEAM}").write_text(PASSING_CLAUSAL)
     (tmp_path / "b.seam").write_text(PASSING_CLAUSAL)
     rc, out, _ = _run(capsys, [str(tmp_path)])
     assert rc == EXIT_OK
@@ -99,14 +100,14 @@ def test_dir_of_passing_tests_is_quiet_and_green(capsys, tmp_path):
 
 
 def test_failing_test_exits_one(capsys, tmp_path):
-    (tmp_path / "bad.clausal").write_text(FAILING_CLAUSAL)
+    (tmp_path / f"bad{SEAM}").write_text(FAILING_CLAUSAL)
     rc, out, _ = _run(capsys, [str(tmp_path)])
     assert rc == EXIT_TESTS_FAILED
     assert "[FAILED]" in out
 
 
 def test_testless_file_exits_no_tests_and_strict_is_the_default(capsys, tmp_path):
-    p = tmp_path / "notests.clausal"
+    p = tmp_path / f"notests{SEAM}"
     p.write_text("foo(1),\n")
     assert main([str(p)]) == EXIT_NO_TESTS
     assert main(["--strict", str(p)]) == EXIT_NO_TESTS
@@ -123,16 +124,16 @@ def test_strict_and_allow_empty_are_exclusive(capsys, tmp_path):
 
 
 def test_testless_file_in_a_dir_is_reported_as_skipped(capsys, tmp_path):
-    (tmp_path / "helpers.clausal").write_text("foo(1),\n")
-    (tmp_path / "ok.clausal").write_text(PASSING_CLAUSAL)
+    (tmp_path / f"helpers{SEAM}").write_text("foo(1),\n")
+    (tmp_path / f"ok{SEAM}").write_text(PASSING_CLAUSAL)
     rc, out, _ = _run(capsys, [str(tmp_path)])
     assert rc == EXIT_OK
-    assert "helpers.clausal  (no test/1 clauses)" in out
+    assert f"helpers{SEAM}  (no test/1 clauses)" in out
     assert "1 passed, 0 failed [PASSED]" in out
 
 
 def test_long_skip_list_is_a_count_unless_verbose(capsys, tmp_path):
-    (tmp_path / "ok.clausal").write_text(PASSING_CLAUSAL)
+    (tmp_path / f"ok{SEAM}").write_text(PASSING_CLAUSAL)
     n = SKIPPED_LIST_INLINE_MAX + 2
     for i in range(n):
         (tmp_path / f"note{i}.txt").write_text("x")
@@ -146,7 +147,7 @@ def test_long_skip_list_is_a_count_unless_verbose(capsys, tmp_path):
 
 
 def test_pycache_and_hidden_files_are_not_reported(capsys, tmp_path):
-    (tmp_path / "ok.clausal").write_text(PASSING_CLAUSAL)
+    (tmp_path / f"ok{SEAM}").write_text(PASSING_CLAUSAL)
     (tmp_path / "__pycache__").mkdir()
     (tmp_path / "__pycache__" / "ok.cpython-313.pyc").write_bytes(b"")
     (tmp_path / ".hidden").mkdir()
@@ -168,14 +169,14 @@ def test_real_process_exit_status(tmp_path):
 
 
 def test_cli_honours_the_no_collect_marker(capsys, tmp_path):
-    (tmp_path / "ok.clausal").write_text(PASSING_CLAUSAL)
+    (tmp_path / f"ok{SEAM}").write_text(PASSING_CLAUSAL)
     (tmp_path / "data.pl").write_text("% clausal: no-collect\n" + BROKEN_PL)
-    (tmp_path / "fixture.clausal").write_text(
+    (tmp_path / f"fixture{SEAM}").write_text(
         "# clausal: no-collect\nthis is not clausal (\n")
     rc, out, _ = _run(capsys, [str(tmp_path)])
     assert rc == EXIT_OK, out
     assert "data.pl  (no-collect marker)" in out
-    assert "fixture.clausal  (no-collect marker)" in out
+    assert f"fixture{SEAM}  (no-collect marker)" in out
     assert "1 passed, 0 failed [PASSED]" in out
 
 
@@ -205,7 +206,7 @@ def test_passing_pl_file_is_green(capsys, tmp_path):
 
 
 def test_pl_files_are_discovered_under_a_directory(capsys, tmp_path):
-    (tmp_path / "a.clausal").write_text(PASSING_CLAUSAL)
+    (tmp_path / f"a{SEAM}").write_text(PASSING_CLAUSAL)
     (tmp_path / "b.pl").write_text(PASSING_PL)
     rc, out, _ = _run(capsys, ["-v", str(tmp_path)])
     assert rc == EXIT_OK
@@ -223,7 +224,7 @@ def test_pl_syntax_error_fails_with_the_translator_error(capsys, tmp_path):
 
 
 def test_pl_syntax_error_in_a_dir_is_not_skipped(capsys, tmp_path):
-    (tmp_path / "ok.clausal").write_text(PASSING_CLAUSAL)
+    (tmp_path / f"ok{SEAM}").write_text(PASSING_CLAUSAL)
     (tmp_path / "broken.pl").write_text(BROKEN_PL)
     rc, out, _ = _run(capsys, [str(tmp_path)])
     assert rc == EXIT_TESTS_FAILED
@@ -312,12 +313,12 @@ def test_cli_skips_the_golden_translator_inputs():
 
 
 def test_cli_honours_conftest_collect_ignore_glob(capsys, tmp_path):
-    (tmp_path / "ok.clausal").write_text(PASSING_CLAUSAL)
+    (tmp_path / f"ok{SEAM}").write_text(PASSING_CLAUSAL)
     sub = tmp_path / "golden"
     sub.mkdir()
     (sub / "conftest.py").write_text('collect_ignore_glob = ["*.pl"]\n')
     (sub / "input.pl").write_text(BROKEN_PL)
-    (sub / "kept.clausal").write_text(PASSING_CLAUSAL)
+    (sub / f"kept{SEAM}").write_text(PASSING_CLAUSAL)
     rc, out, _ = _run(capsys, ["-v", str(tmp_path)])
     assert rc == EXIT_OK, out
     assert "input.pl  (ignored by conftest.py)" in out, out
@@ -326,14 +327,14 @@ def test_cli_honours_conftest_collect_ignore_glob(capsys, tmp_path):
 
 def test_cli_honours_conftest_collect_ignore_paths(capsys, tmp_path):
     (tmp_path / "conftest.py").write_text(
-        'collect_ignore = ["broken.clausal", "data"]\n')
-    (tmp_path / "ok.clausal").write_text(PASSING_CLAUSAL)
-    (tmp_path / "broken.clausal").write_text("this is not clausal (\n")
+        f'collect_ignore = ["broken{SEAM}", "data"]\n')
+    (tmp_path / f"ok{SEAM}").write_text(PASSING_CLAUSAL)
+    (tmp_path / f"broken{SEAM}").write_text("this is not clausal (\n")
     (tmp_path / "data").mkdir()
     (tmp_path / "data" / "deep.pl").write_text(BROKEN_PL)
     rc, out, _ = _run(capsys, ["-v", str(tmp_path)])
     assert rc == EXIT_OK, out
-    assert "broken.clausal  (ignored by conftest.py)" in out, out
+    assert f"broken{SEAM}  (ignored by conftest.py)" in out, out
     assert "deep.pl  (ignored by conftest.py)" in out, out
     assert "1 passed, 0 failed [PASSED]" in out, out
 
@@ -342,13 +343,13 @@ def test_annotated_and_extended_conftest_lists_are_read(capsys, tmp_path):
     (tmp_path / "conftest.py").write_text(
         'collect_ignore_glob: list[str] = ["*.pl"]\n'
         'collect_ignore = []\n'
-        'collect_ignore += ["broken.clausal"]\n')
-    (tmp_path / "ok.clausal").write_text(PASSING_CLAUSAL)
-    (tmp_path / "broken.clausal").write_text("this is not clausal (\n")
+        f'collect_ignore += ["broken{SEAM}"]\n')
+    (tmp_path / f"ok{SEAM}").write_text(PASSING_CLAUSAL)
+    (tmp_path / f"broken{SEAM}").write_text("this is not clausal (\n")
     (tmp_path / "input.pl").write_text(BROKEN_PL)
     rc, out, _ = _run(capsys, ["-v", str(tmp_path)])
     assert rc == EXIT_OK, out
-    assert "broken.clausal  (ignored by conftest.py)" in out, out
+    assert f"broken{SEAM}  (ignored by conftest.py)" in out, out
     assert "input.pl  (ignored by conftest.py)" in out, out
 
 
@@ -357,7 +358,7 @@ def test_a_computed_conftest_list_is_not_executed(capsys, tmp_path):
     (tmp_path / "conftest.py").write_text(
         'raise SystemExit("executed")\n'
         'collect_ignore_glob = ["*" + ".pl"]\n')
-    (tmp_path / "ok.clausal").write_text(PASSING_CLAUSAL)
+    (tmp_path / f"ok{SEAM}").write_text(PASSING_CLAUSAL)
     (tmp_path / "input.pl").write_text(BROKEN_PL)
     rc, out, _ = _run(capsys, [str(tmp_path)])
     assert rc == EXIT_TESTS_FAILED, out
@@ -367,8 +368,8 @@ def test_a_computed_conftest_list_is_not_executed(capsys, tmp_path):
 def test_a_file_named_explicitly_is_not_conftest_ignored(capsys, tmp_path):
     """As in pytest, an explicit path argument is collected even when a
     conftest list covers it."""
-    (tmp_path / "conftest.py").write_text('collect_ignore_glob = ["*.clausal"]\n')
-    target = tmp_path / "ok.clausal"
+    (tmp_path / "conftest.py").write_text(f'collect_ignore_glob = ["*{SEAM}"]\n')
+    target = tmp_path / f"ok{SEAM}"
     target.write_text(PASSING_CLAUSAL)
     rc, out, _ = _run(capsys, [str(target)])
     assert rc == EXIT_OK, out

@@ -28,12 +28,13 @@ from clausal.logic.atoms import mangle
 from clausal.logic.predicate import _dispatch_at
 from clausal.predicate_diagnostics import PredicateArityMismatchError
 from clausal.logic.exceptions import LogicException
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, monkeypatch, name, body):
     from clausal.import_hook import _load_module
     monkeypatch.syspath_prepend(str(tmp_path))
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(textwrap.dedent(body).lstrip())
     mod = _load_module(name, str(p))
     assert sys.modules[name] is mod

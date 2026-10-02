@@ -38,6 +38,7 @@ from clausal.logic.predicate import ClausalTermConstructionError
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
 from clausal.templating.term_rewriting import EmbedTransformer
+from tests._suffix import SEAM
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -65,7 +66,7 @@ def _unparse(source: str) -> str:
         warnings.filterwarnings("ignore", category=SyntaxWarning)
         tree = ast.parse(source)
         rewritten = EmbedTransformer(
-            source_lines=source.splitlines(), filename="t.clausal",
+            source_lines=source.splitlines(), filename=f"t{SEAM}",
         ).visit(tree)
     ast.fix_missing_locations(rewritten)
     return ast.unparse(rewritten)

@@ -31,10 +31,11 @@ from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.terms import Quantity
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, name, text):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(text).lstrip())
     return _load_module(f"tcmu_{name}", str(path))
 
@@ -1005,7 +1006,7 @@ def test_the_currency_directive_is_listed_as_known():
         import textwrap, tempfile, os
         from clausal.import_hook import _load_module
         d = tempfile.mkdtemp()
-        p = os.path.join(d, "unknown_dir.clausal")
+        p = os.path.join(d, f"unknown_dir{SEAM}")
         open(p, "w").write("-no_such_directive(x)\n")
         _load_module("unknown_dir_probe", p)
     text = str(exc.value)

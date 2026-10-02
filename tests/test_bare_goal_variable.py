@@ -19,6 +19,7 @@ from clausal.logic.compiler.terms_to_goalop import (
     terms_to_goalop,
     BareGoalVariableError,
 )
+from tests._suffix import SEAM
 
 
 def test_bare_var_goal_raises_dedicated_error_not_notimplemented():
@@ -44,7 +45,7 @@ def test_bare_var_goal_load_error_is_located(tmp_path):
     cryptic internal ``goal shape not yet supported (AttVar)`` crash."""
     from clausal.testing import load_clausal_module
 
-    src = tmp_path / "attvar_min.clausal"
+    src = tmp_path / f"attvar_min{SEAM}"
     src.write_text(
         "-double_quotes(atom)\ngo(R) <- (\n"
         "    X == 5,\n"

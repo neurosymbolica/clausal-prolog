@@ -41,6 +41,7 @@ from clausal.logic.predicate import (
 from clausal.logic.variables import Trail, deref, unify
 from clausal.logic.solve import call
 from clausal.logic.builtins._helpers import functor_arity
+from tests._suffix import SEAM
 
 
 def _fixture_path(filename: str) -> str:
@@ -174,7 +175,7 @@ def _load_inline_clausal(name: str, source: str):
     in ``conftest.py`` to surface them as <load> failures.
     """
     with tempfile.NamedTemporaryFile(
-        suffix=".clausal", mode="w", delete=False
+        suffix=SEAM, mode="w", delete=False
     ) as f:
         f.write(source)
         f.flush()
@@ -438,7 +439,7 @@ def _atoms_mod(name):
     """A throwaway compiled module, just to give ``call()`` a database to
     resolve builtins against (mirrors ``tests/test_bytes_type_checks.py``'s
     ``_mod`` helper)."""
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w", delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w", delete=False) as f:
         f.write("noop(1),\n")
         f.flush()
         path = f.name

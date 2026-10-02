@@ -18,6 +18,7 @@ import pytest
 import clausal
 import clausal.import_hook  # noqa: F401 -- a directory package needs the real finder
 from clausal.logic.exceptions import LogicException
+from tests._suffix import SEAM
 
 
 VOCAB = "-module(da_vocab, [foreign_atom])\n"
@@ -44,12 +45,12 @@ PKG_ATOMS = frozenset({"red", "green", "hidden_a", "circle", "pkg_own"})
 
 @pytest.fixture
 def tree(tmp_path, request):
-    (tmp_path / "da_vocab.clausal").write_text(VOCAB)
+    (tmp_path / f"da_vocab{SEAM}").write_text(VOCAB)
     pkg = tmp_path / "da_pkg"
     pkg.mkdir()
-    (pkg / "__init__.clausal").write_text(INIT)
-    (pkg / "alpha.clausal").write_text(ALPHA)
-    (pkg / "beta.clausal").write_text(BETA)
+    (pkg / f"__init__{SEAM}").write_text(INIT)
+    (pkg / f"alpha{SEAM}").write_text(ALPHA)
+    (pkg / f"beta{SEAM}").write_text(BETA)
 
     def load(order):
         """Import *order* on a clean slate; returns an evict() callable."""
@@ -129,8 +130,8 @@ def test_only_loaded_submodules_count(tmp_path):
     asking does not import it."""
     pkg = tmp_path / "da_lazy"
     pkg.mkdir()
-    (pkg / "__init__.clausal").write_text("-module(da_lazy, [top])\n")
-    (pkg / "later.clausal").write_text("-module(later, [deep])\n")
+    (pkg / f"__init__{SEAM}").write_text("-module(da_lazy, [top])\n")
+    (pkg / f"later{SEAM}").write_text("-module(later, [deep])\n")
     before = set(sys.modules)
     sys.path.insert(0, str(tmp_path))
     importlib.invalidate_caches()
@@ -174,9 +175,9 @@ def test_package_answer_is_a_vocabulary_not_the_root_attributes(tmp_path):
     name, sub_atom, root_atom = f"da_voc_{tag}", f"only_in_sub_{tag}", f"in_root_{tag}"
     pkg_dir = tmp_path / name
     pkg_dir.mkdir()
-    (pkg_dir / "__init__.clausal").write_text(
+    (pkg_dir / f"__init__{SEAM}").write_text(
         f"-import_from({name}.sub, [s/1])\n-private([{root_atom}])\n")
-    (pkg_dir / "sub.clausal").write_text(
+    (pkg_dir / f"sub{SEAM}").write_text(
         f"-private([{sub_atom}])\ns({sub_atom}),\n")
     sys.path.insert(0, str(tmp_path))
     importlib.invalidate_caches()

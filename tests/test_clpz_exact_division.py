@@ -17,6 +17,7 @@ import pytest
 from clausal.import_hook import _load_module
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var
+from tests._suffix import SEAM
 
 PL = """\
 :- use_module(library(clpz)).
@@ -89,7 +90,7 @@ def seam_mod(tmp_path_factory):
     d = tmp_path_factory.mktemp("clpz_div_seam")
     src = "-allow_singletons\n" + "".join(
         f"g{i}(L) <- ({b}),\n" for i, (b, _) in enumerate(SEAM_ROWS))
-    p = d / "_clpz_exact_div.clausal"
+    p = d / f"_clpz_exact_div{SEAM}"
     p.write_text(src)
     return _load_module("_clpz_exact_div", str(p))
 

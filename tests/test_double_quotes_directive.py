@@ -23,11 +23,12 @@ from clausal.logic.cells import chars
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.solve import solve
+from tests._suffix import SEAM
 
 
 def _load_inline_clausal(name: str, source: str):
     with tempfile.NamedTemporaryFile(
-        suffix=".clausal", mode="w", delete=False
+        suffix=SEAM, mode="w", delete=False
     ) as f:
         f.write(source)
         f.flush()
@@ -251,7 +252,7 @@ def test_mixed_quote_styles_error_is_attributed_to_the_file():
     exc = exc_info.value
     assert "mixed quote styles" in exc.msg
     assert exc.filename is not None
-    assert exc.filename.endswith(".clausal")
+    assert exc.filename.endswith(SEAM)
     assert exc.lineno == 1
     assert getattr(exc, "clausal_report", "")
 
@@ -292,6 +293,6 @@ def test_reify_still_refuses_mixed_quote_styles():
 
     # ...and with a .clausal filename it earns the full caret window.
     with pytest.raises(ReifyError) as exc_info:
-        reify_source('p("a" \'b\'(1)),\n', filename="probe.clausal")
-    assert "probe.clausal" in str(exc_info.value)
+        reify_source('p("a" \'b\'(1)),\n', filename=f"probe{SEAM}")
+    assert f"probe{SEAM}" in str(exc_info.value)
     assert "^" in str(exc_info.value)

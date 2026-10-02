@@ -69,6 +69,7 @@ from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
 from clausal.modules.py.datetime import _dt_to_term as _T
 from clausal.modules.py.datetime import _term_to_dt as _P  # py datetime -> its TERM
 from tests._oracles import SCRYER, run_scryer
+from tests._suffix import SEAM
 
 SPEC = "implementation_plans/prolog-eq-mode-lowering.md"
 
@@ -88,7 +89,7 @@ def _translate(source: str) -> str:
 
 def _load_clausal(tmp_path, name: str, source: str):
     """Load *source* as a live Clausal module (the harness's own ground truth)."""
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(source)
     return _load_module(f"exec_harness_{name}", str(path))
 
@@ -592,7 +593,7 @@ class TestStrLiteralUnifiesWithImportedAtom:
         )
 
         # --- Clausal engine: the ground truth -------------------------------
-        (tmp_path / "keys.clausal").write_text(_KEYS_CLAUSAL)
+        (tmp_path / f"keys{SEAM}").write_text(_KEYS_CLAUSAL)
         import sys
         sys.path.insert(0, str(tmp_path))
         try:

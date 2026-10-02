@@ -18,6 +18,7 @@ import pytest
 
 from clausal.import_hook import _load_module
 from clausal.lint_warnings import ClausalImportedDataNameWarning
+from tests._suffix import SEAM
 
 FRONT_ENDS = ("translator", "native")
 
@@ -272,7 +273,7 @@ def test_a_clausal_target_is_unchanged(tmp_path, monkeypatch):
     root = tmp_path / "dn_clausal"
     root.mkdir()
     (root / "__init__.py").write_text("")
-    (root / "citations.clausal").write_text(
+    (root / f"citations{SEAM}").write_text(
         "-module(citations, [citation(KEY, META), yy_art1])\n"
         "citation(yy_art1, 1),\n")
     body = root / "body.seam"

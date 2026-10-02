@@ -14,6 +14,7 @@ import pytest
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var
 from clausal.terms import UnitsMismatch
+from tests._suffix import SEAM
 
 _SRC = """\
 -import_from(py.units, [metre, second, UnitsMismatch])
@@ -32,7 +33,7 @@ uncaught(X) <- eval_(5(metre) + 3(second), X)
 def mod(tmp_path_factory):
     from clausal.import_hook import _load_module
     d = tmp_path_factory.mktemp("umiso")
-    p = d / "umiso.clausal"
+    p = d / f"umiso{SEAM}"
     p.write_text(_SRC)
     return _load_module("umiso_mod", str(p))
 

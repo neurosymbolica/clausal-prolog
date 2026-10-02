@@ -21,6 +21,7 @@ from clausal.import_hook import _load_module
 from clausal.logic.solve import call, imported_atoms
 from clausal.logic.variables import deref
 from clausal.predicate_diagnostics import PredicateArityMismatchError
+from tests._suffix import SEAM
 
 
 LIB = """
@@ -44,7 +45,7 @@ def lib_dir(tmp_path):
 
 
 def _write(tmp_path, name, text):
-    path = os.path.join(tmp_path, name + ".clausal")
+    path = os.path.join(tmp_path, name + SEAM)
     with open(path, "w") as fh:
         fh.write(textwrap.dedent(text).lstrip("\n"))
     return path

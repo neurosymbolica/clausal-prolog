@@ -25,6 +25,7 @@ import pytest
 
 import clausal
 from clausal.lint_warnings import ClausalImportedDataNameWarning
+from tests._suffix import SEAM
 
 FRONT_ENDS = ("translator", "native")
 
@@ -59,7 +60,7 @@ def pkg(tmp_path, monkeypatch):
             textwrap.dedent(FACADE).replace("PKG", tag))
         (root / "sub.pl").write_text(textwrap.dedent(SUB))
         (root / "later.pl").write_text(textwrap.dedent(LATER))
-        (root / "cl.clausal").write_text("-module(cl, [go(X)])\ngo(1),\n")
+        (root / f"cl{SEAM}").write_text("-module(cl, [go(X)])\ngo(1),\n")
         (root / "py_side.py").write_text("x = 1\n")
         made.append(tag)
         importlib.invalidate_caches()

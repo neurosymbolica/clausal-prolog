@@ -8,6 +8,7 @@ Scryer's for the same program (2026-09-30)."""
 from __future__ import annotations
 
 import pytest
+from tests._suffix import SEAM
 
 SRC = """\
 :- dynamic(r/1).
@@ -49,7 +50,7 @@ def test_retractall_matches_the_head_whatever_the_body(tmp_path):
     from clausal.logic.variables import Var
     for name, goal, want in (("t1", "5", [7]), ("t2", "7", []),
                              ("t3", "_", [])):
-        p = tmp_path / f"_retractall_{name}.clausal"
+        p = tmp_path / f"_retractall_{name}{SEAM}"
         p.write_text("-allow_singletons\n-dynamic(h/1)\nh(X) <- (X is 3)\nh(7),\n"
                      f"t(L) <- (retractall(h({goal})), findall(Y, h(Y), L))\n")
         m = _load_module(f"_retractall_{name}", str(p))
@@ -123,7 +124,7 @@ def test_a_clause_with_no_term_form(tmp_path):
     from clausal.logic.exceptions import LogicException, render_error_term
     from clausal.logic.solve import _deref_walk, solve
     from clausal.logic.variables import Var
-    p = tmp_path / "_no_term_form.clausal"
+    p = tmp_path / f"_no_term_form{SEAM}"
     p.write_text("-allow_singletons\n-dynamic(h/1)\n-dynamic(k/2)\n"
                  "h(X) <- (Y is ++(X + 1))\n"
                  "k(A, ++(A + 1)) <- True\n"

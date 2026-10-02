@@ -11,6 +11,7 @@ from clausal.modules.py._helpers import to_python
 from clausal.logic.atoms import mint
 from clausal.logic.cells import chars
 from clausal.terms import DictTerm
+from tests._suffix import SEAM
 
 
 def test_to_python_unwraps_atoms_everywhere():
@@ -121,7 +122,7 @@ def test_a_cell_atom_reaches_a_thunk_as_its_spelling(tmp_path):
     from clausal.logic.solve import call
     from clausal.logic.variables import Var, deref
 
-    src = tmp_path / "boundary_thunk.clausal"
+    src = tmp_path / f"boundary_thunk{SEAM}"
     src.write_text("to_upper(_s, _r) <- (_r is ++_s.upper())\n")
     mod = _load_module("boundary_thunk", str(src))
     logic_mod = mod.__dict__["$module"]

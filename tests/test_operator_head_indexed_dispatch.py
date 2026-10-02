@@ -36,6 +36,7 @@ from clausal.logic.compiler.head_match import head_to_match_pattern
 from clausal.logic.solve import solve, _query_cache
 from clausal.logic.variables import Var, deref
 from clausal.pythonic_ast.nodes import Add, Mult
+from tests._suffix import SEAM
 
 
 EXAMPLES_DIR = os.path.join(
@@ -83,7 +84,7 @@ def _clear_query_cache():
 @pytest.fixture(scope="module")
 def indexed(tmp_path_factory):
     d = tmp_path_factory.mktemp("opidx")
-    p = d / "opidx.clausal"
+    p = d / f"opidx{SEAM}"
     p.write_text(INDEXED_SRC)
     return _load_module("opidx_mod", str(p))
 
@@ -91,7 +92,7 @@ def indexed(tmp_path_factory):
 @pytest.fixture(scope="module")
 def unindexed(tmp_path_factory):
     d = tmp_path_factory.mktemp("opnoidx")
-    p = d / "opnoidx.clausal"
+    p = d / f"opnoidx{SEAM}"
     p.write_text(UNINDEXED_SRC)
     return _load_module("opnoidx_mod", str(p))
 

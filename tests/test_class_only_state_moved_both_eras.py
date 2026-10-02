@@ -39,6 +39,7 @@ from clausal.logic.predicate import mint_predicate_handle
 from clausal.logic.solve import query_wfs
 from clausal.logic.variables import Trail, Var, unify
 from clausal.terms import Call as TermCall, LoadName, Undefined
+from tests._suffix import SEAM
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -105,12 +106,12 @@ def xm_pair(tmp_path):
         n = _COUNTER[0]
         lib_name = f"r6_xmnaf_lib_{os.getpid()}_{n}"
         use_name = f"r6_xmnaf_use_{os.getpid()}_{n}"
-        (tmp_path / f"{lib_name}.clausal").write_text(lib_src.format(name=lib_name))
-        (tmp_path / f"{use_name}.clausal").write_text(_USE.format(lib=lib_name))
+        (tmp_path / f"{lib_name}{SEAM}").write_text(lib_src.format(name=lib_name))
+        (tmp_path / f"{use_name}{SEAM}").write_text(_USE.format(lib=lib_name))
         sys.path.insert(0, str(tmp_path))
         try:
-            lib = _load_module(lib_name, str(tmp_path / f"{lib_name}.clausal"))
-            use = _load_module(use_name, str(tmp_path / f"{use_name}.clausal"))
+            lib = _load_module(lib_name, str(tmp_path / f"{lib_name}{SEAM}"))
+            use = _load_module(use_name, str(tmp_path / f"{use_name}{SEAM}"))
         finally:
             sys.path.remove(str(tmp_path))
         loaded.extend([lib_name, use_name])
@@ -187,7 +188,7 @@ def test_query_wfs_annotates_an_imported_tabled_goal(tmp_path):
     sys.path.insert(0, FIXTURES)
     try:
         owner = _load_module("wfs_win", os.path.join(FIXTURES, "wfs_win.clausal"))
-        p = tmp_path / "r6_wfs_impfrom.clausal"
+        p = tmp_path / f"r6_wfs_impfrom{SEAM}"
         p.write_text("-import_from(wfs_win, [win])\n\nuses_f(X) <- win(X)\n")
         use = _load_module("r6_wfs_impfrom", str(p))
         _assert_owner_handle(use, "win", owner)

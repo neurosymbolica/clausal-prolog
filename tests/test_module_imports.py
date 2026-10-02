@@ -19,6 +19,7 @@ from clausal.logic.solve import call, query, solve
 from clausal.logic.variables import Var, Trail, deref
 from clausal.logic.compiler.terms_to_ast import _dotted_name_from_loadattr
 from clausal.terms import LoadName, LoadAttr, Call as AstCall
+from tests._suffix import SEAM
 
 
 # ── Fixture loading helpers ──────────────────────────────────────────────────
@@ -362,7 +363,7 @@ class TestImportErrors:
         # nv
         import tempfile
         src = '-import_from(nonexistent_module_xyz_123, [Foo])\n'
-        with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+        with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                          delete=False) as f:
             f.write(src)
             f.flush()
@@ -374,7 +375,7 @@ class TestImportErrors:
         # nv
         import tempfile
         src = '-import_from(tests.fixtures.importable_utils, [NoSuchPredicate])\n'
-        with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+        with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                          delete=False) as f:
             f.write(src)
             f.flush()
@@ -388,7 +389,7 @@ class TestImportErrors:
         # nv
         import tempfile
         src = '-import_from(123, [Foo])\n'
-        with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+        with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                          delete=False) as f:
             f.write(src)
             f.flush()
@@ -400,7 +401,7 @@ class TestImportErrors:
         # nv
         import tempfile
         src = '-import_from(some_module)\n'
-        with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+        with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                          delete=False) as f:
             f.write(src)
             f.flush()
@@ -500,7 +501,7 @@ class TestVisitAttributeValidation:
             '-private([foo])\n'
             'bad(_x) <- _x.foo(_x)\n'
         )
-        with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+        with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                          delete=False) as f:
             f.write(src)
             f.flush()
@@ -516,7 +517,7 @@ class TestVisitAttributeValidation:
             '-private([foo])\n'
             'bad(_x, _v) <- (_v is _x.foo)\n'
         )
-        with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+        with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                          delete=False) as f:
             f.write(src)
             f.flush()
@@ -539,7 +540,7 @@ class TestVisitAttributeValidation:
             '-import_module(tests.fixtures.importable_utils)\n'
             'bad(_x) <- mod._x(_x)\n'
         )
-        with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+        with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                          delete=False) as f:
             f.write(src)
             f.flush()
@@ -582,7 +583,7 @@ class TestDottedRemap:
             '-import_from(tests.fixtures.importable_utils, [double])\n'
             'use_double(_x, _y) <- double(_x, _y)\n'
         )
-        with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+        with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                          delete=False) as f:
             f.write(src)
             f.flush()

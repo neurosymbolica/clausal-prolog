@@ -18,6 +18,7 @@ import clausal
 from clausal.logic.cells import chars, TUPLE_TAG
 from clausal.logic.variables import Var, Trail, unify
 from clausal.terms import SegList, SegString, VarSeg, ConcreteSeg
+from tests._suffix import SEAM
 
 
 # ── exported from the package ───────────────────────────────────────────────
@@ -125,7 +126,7 @@ def test_a_non_ground_seg_still_keys_in_the_opaque_band_and_sorts():
 def _mod():
     import os, tempfile
     from clausal.import_hook import _load_module
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w", delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w", delete=False) as f:
         f.write("noop(1),\n")
         path = f.name
     try:

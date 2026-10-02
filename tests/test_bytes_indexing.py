@@ -8,10 +8,11 @@ from clausal.logic.compiler.arg_index import (
     _build_first_arg_index,
 )
 from clausal.logic.database import Clause
+from tests._suffix import SEAM
 
 
 def _load_inline(name, source):
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w", delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w", delete=False) as f:
         f.write(source)
         f.flush()
         path = f.name

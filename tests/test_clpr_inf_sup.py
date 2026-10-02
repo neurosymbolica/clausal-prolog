@@ -17,6 +17,7 @@ import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.solve import _deref_walk, call
 from clausal.logic.variables import Var
+from tests._suffix import SEAM
 
 SRC = """\
 -private([foo(_), bar])
@@ -39,7 +40,7 @@ bad_atom(E, C) <- catch((in_real(X, 0.0, 1.0), sup(X + bar, _)), error(E, C), tr
 
 @pytest.fixture(scope="module")
 def mod(tmp_path_factory):
-    path = tmp_path_factory.mktemp("r17") / "r17_clpr_inf_sup.clausal"
+    path = tmp_path_factory.mktemp("r17") / f"r17_clpr_inf_sup{SEAM}"
     path.write_text(SRC)
     return _load_module("r17_clpr_inf_sup", str(path))
 

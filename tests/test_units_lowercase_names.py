@@ -23,10 +23,11 @@ from clausal.logic.variables import Var, deref
 from clausal.modules import units
 from clausal.terms import Quantity, UnitsMismatch
 from clausal.lint_warnings import ClausalDeprecatedSpellingWarning
+from tests._suffix import SEAM
 
 
 def _load(name, src_text, tmp_path):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(src_text)
     return _load_module(name, str(path)).__dict__["$module"]
 
@@ -202,7 +203,7 @@ class TestTitleCaseAliases:
         binds, still resolves at the use site, and still names the rename."""
         import textwrap
         from clausal.import_hook import _load_module
-        path = tmp_path / "tc_unit_ok.clausal"
+        path = tmp_path / f"tc_unit_ok{SEAM}"
         path.write_text(textwrap.dedent("""
             -import_from(py.units, [Metre])
             -module(tc_unit_ok, [speed(X)])
@@ -299,7 +300,7 @@ class TestTitleCaseAliases:
             "c(D) <- eval_(7(Second), D)\n"), tmp_path)
         assert len(warned) == 1
         msg = str(warned[0].message)
-        assert "tc_warn.clausal:1" in msg
+        assert f"tc_warn{SEAM}:1" in msg
         assert "`Metre` -> `metre`" in msg
         assert "`Second` -> `second`" in msg
         assert "will be removed" in msg

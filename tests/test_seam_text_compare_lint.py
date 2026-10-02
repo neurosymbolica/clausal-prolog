@@ -18,6 +18,7 @@ import pytest
 
 from clausal.import_hook import _load_module
 from clausal.lint_warnings import ClausalSeamTextCompareWarning
+from tests._suffix import SEAM
 
 
 def _load(name, source):
@@ -112,7 +113,7 @@ class TestFires:
         assert len(got) == 1, got
 
     def test_module_level_seam_over_an_imported_predicate(self, tmp_path):
-        rb = tmp_path / "lt_lib.clausal"
+        rb = tmp_path / f"lt_lib{SEAM}"
         rb.write_text("-module(lt_lib, [t(T)])\nt(\"x\"),\n")
         import sys
         sys.path.insert(0, str(tmp_path))

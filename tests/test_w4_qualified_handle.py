@@ -22,6 +22,7 @@ import pytest
 from clausal import cell_args, cell_functor
 from clausal.logic.atoms import mangle
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 
 LIB = "w4qlib"
@@ -31,7 +32,7 @@ LIB = "w4qlib"
 def lib(tmp_path, monkeypatch):
     from clausal.import_hook import _load_module
     monkeypatch.syspath_prepend(str(tmp_path))
-    p = tmp_path / f"{LIB}.clausal"
+    p = tmp_path / f"{LIB}{SEAM}"
     p.write_text(textwrap.dedent(f"""
         -module({LIB}, [pred(A), flag])
         pred(1),
@@ -45,7 +46,7 @@ def lib(tmp_path, monkeypatch):
 
 def _host(tmp_path, name, body):
     from clausal.import_hook import _load_module
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(f"-module({name}, [])\n-import_module({LIB})\n" + textwrap.dedent(body))
     return _load_module(name, str(p))
 
@@ -168,8 +169,8 @@ def test_the_handle_module_half_is_the_import_name_of_a_package_nested_module(tm
     monkeypatch.syspath_prepend(str(tmp_path))
     pkg = tmp_path / "w4pkg"; pkg.mkdir()
     (pkg / "__init__.py").write_text("")
-    (pkg / "inner.clausal").write_text("-module(inner, [pred(A)])\npred(9),\n")
-    _load_module("w4pkg.inner", str(pkg / "inner.clausal"))
+    (pkg / f"inner{SEAM}").write_text("-module(inner, [pred(A)])\npred(9),\n")
+    _load_module("w4pkg.inner", str(pkg / f"inner{SEAM}"))
     X = Var()
     assert [deref(X) for _ in solve((mangle("w4pkg.inner", "pred"), X))] == [9]
 
@@ -192,7 +193,7 @@ def test_the_funnel_resolves_a_handle_to_an_imported_predicate(lib, tmp_path):
     the way call/N does."""
     from clausal.import_hook import _load_module
     from clausal.logic.predicate import _dispatch_at
-    p = tmp_path / "w4importer.clausal"
+    p = tmp_path / f"w4importer{SEAM}"
     p.write_text(f"-module(w4importer, [])\n-import_from({LIB}, [pred])\nuse(X) <- pred(X)\n")
     _load_module("w4importer", str(p))
     assert callable(_dispatch_at(mangle("w4importer", "pred"), 1))
@@ -202,7 +203,7 @@ def test_a_mangled_inner_goal_under_an_explicit_qualification_wins(lib, tmp_path
     """Innermost qualification wins, for the mangled spelling as for `:`."""
     from clausal.import_hook import _load_module
     from clausal.logic.solve import solve
-    p = tmp_path / "w4other.clausal"
+    p = tmp_path / f"w4other{SEAM}"
     p.write_text("-module(w4other, [pred(A)])\npred(77),\n")
     _load_module("w4other", str(p))
     X = Var()
@@ -213,7 +214,7 @@ def test_a_mangled_inner_goal_under_an_explicit_qualification_wins(lib, tmp_path
 def test_an_explicit_module_argument_is_overridden_by_the_handle(lib, tmp_path):
     from clausal.import_hook import _load_module
     from clausal.logic.solve import call, solve
-    p = tmp_path / "w4other2.clausal"
+    p = tmp_path / f"w4other2{SEAM}"
     p.write_text("-module(w4other2, [pred(A)])\npred(77),\n")
     other = _load_module("w4other2", str(p))
     X = Var()

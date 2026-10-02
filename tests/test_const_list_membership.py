@@ -43,6 +43,7 @@ from clausal.logic.runtime.const_set import (
     _CONST_SET_TYPES,
     _cset_atom,
 )
+from tests._suffix import SEAM
 
 
 # ── Harness ───────────────────────────────────────────────────────────────────
@@ -99,7 +100,7 @@ band(5, X) <- (X in [e, a])
 
 def _load(name: str, const_set: bool):
     with tempfile.NamedTemporaryFile(
-        suffix=".clausal", mode="w", delete=False
+        suffix=SEAM, mode="w", delete=False
     ) as f:
         f.write(_SRC)
         path = f.name

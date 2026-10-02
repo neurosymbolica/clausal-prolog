@@ -20,11 +20,12 @@ from clausal.import_hook import _load_module
 from clausal.logic.cells import chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 
 def _load_inline(name: str, source: str):
     d = tempfile.mkdtemp()
-    path = os.path.join(d, f"{name}.clausal")
+    path = os.path.join(d, f"{name}{SEAM}")
     with open(path, "w") as fh:
         fh.write(source)
     return _load_module(name, path)

@@ -19,10 +19,11 @@ import os
 from clausal.logic.atoms import mint
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, source: str, name: str):
-    path = os.path.join(str(tmp_path), f"{name}.clausal")
+    path = os.path.join(str(tmp_path), f"{name}{SEAM}")
     with open(path, "w") as f:
         f.write(source)
     return _load_module(name, path)

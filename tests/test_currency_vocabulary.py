@@ -13,6 +13,7 @@ import pytest
 from clausal.logic.cells import chars
 from clausal.modules.countries._data import (
     CURRENCIES, CURRENCY_BINDINGS, JURISDICTIONS)
+from tests._suffix import SEAM
 
 # Authoritative ISO 4217 minor-unit exceptions; everything else is 2.
 ISO_SCALE0 = {"BIF", "CLP", "DJF", "GNF", "ISK", "JPY", "KMF", "KRW", "PYG",
@@ -80,7 +81,7 @@ class TestFullVocabulary:
         from clausal.logic.solve import call
         from clausal.logic.variables import Var, deref
         d = tempfile.mkdtemp()
-        p = os.path.join(d, "dates.clausal")
+        p = os.path.join(d, f"dates{SEAM}")
         with open(p, "w") as f:
             f.write("-import_from(germany, [dem])\n"
                     "-import_from(currency, [currency_end])\n"
@@ -97,7 +98,7 @@ class TestFullVocabulary:
         from clausal.logic.solve import call
         from clausal.logic.variables import Var, deref
         d = tempfile.mkdtemp()
-        p = os.path.join(d, "hist.clausal")
+        p = os.path.join(d, f"hist{SEAM}")
         with open(p, "w") as f:
             f.write("-private([half_up])\n"  # half_up is a bare rounding-mode atom
                     "-import_from(germany, [dem])\n"
@@ -134,7 +135,7 @@ class TestFullVocabulary:
         from clausal.import_hook import _load_module
         from clausal.logic.solve import call
         d = tempfile.mkdtemp()
-        p = os.path.join(d, "vocab.clausal")
+        p = os.path.join(d, f"vocab{SEAM}")
         with open(p, "w") as f:
             f.write("-private([half_up])\n"  # half_up is a bare rounding-mode atom
                     "-import_from(thailand, [baht])\n"

@@ -24,6 +24,7 @@ from clausal.logic.database import Database, Clause, Module, head_key
 from clausal.logic.trampoline import StepGenerator, DONE, solutions
 from clausal.logic.solve import call, query, query_wfs
 from clausal.terms import Undefined
+from tests._suffix import SEAM
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -858,7 +859,7 @@ class TestQueryWfsGoalShapes:
                 "-import_module(wfs_win)\n\n"
                 "probe_q(X) <- wfs_win.Win(X)\n"
             )
-            p = tmp_path / "wfs_importer_q.clausal"
+            p = tmp_path / f"wfs_importer_q{SEAM}"
             p.write_text(src)
             m = _load_module("wfs_importer_q", str(p))
             lm = m.__dict__["$module"]
@@ -990,7 +991,7 @@ class TestGoalShapeEdges:
         sys.path.insert(0, FIXTURES)
         try:
             from clausal.import_hook import _load_module
-            p = tmp_path / "wfs_impfrom.clausal"
+            p = tmp_path / f"wfs_impfrom{SEAM}"
             p.write_text("-import_from(wfs_win, [win])\n\nuses_f(X) <- win(X)\n")
             lm = _load_module("wfs_impfrom", str(p)).__dict__["$module"]
             assert _q(lm, "win") == [(1, Undefined), (2, Undefined)]
@@ -1008,15 +1009,15 @@ class TestGoalShapeEdges:
         (tmp_path / "pkgn" / "__init__.py").write_text("")
         (pkg / "__init__.py").write_text("")
         shutil.copy(os.path.join(FIXTURES, "wfs_win.clausal"),
-                    str(pkg / "winmod.clausal"))
-        (tmp_path / "nested_imp.clausal").write_text(
+                    str(pkg / f"winmod{SEAM}"))
+        (tmp_path / f"nested_imp{SEAM}").write_text(
             "-import_module(pkgn.subn.winmod)\n\n"
             "uses_n(X) <- pkgn.subn.winmod.Win(X)\n")
         sys.path.insert(0, str(tmp_path))
         try:
             from clausal.import_hook import _load_module
             lm = _load_module("nested_imp",
-                              str(tmp_path / "nested_imp.clausal")).__dict__["$module"]
+                              str(tmp_path / f"nested_imp{SEAM}")).__dict__["$module"]
             from clausal.terms import Call as TermCall, LoadName, LoadAttr
             X = Var()
             goal = TermCall(
@@ -1119,7 +1120,7 @@ class TestRootLeadConditionalDeferral:
         'evaluating' (mid-fixpoint), exactly as before the deferral."""
         # nv
         from clausal.import_hook import _load_module
-        p = tmp_path / "wfs_stream_probe.clausal"
+        p = tmp_path / f"wfs_stream_probe{SEAM}"
         p.write_text(
             "-table(cnt/1)\n\n"
             "cnt(0),\n"
@@ -1179,9 +1180,9 @@ def _load_xmnaf_pair(tmp_path, lib_src, use_src=_XMNAF_USE):
     n = _XMNAF_COUNTER[0]
     lib_name = f"xmnaf_lib_{os.getpid()}_{n}"
     use_name = f"xmnaf_use_{os.getpid()}_{n}"
-    lib_path = tmp_path / f"{lib_name}.clausal"
+    lib_path = tmp_path / f"{lib_name}{SEAM}"
     lib_path.write_text(lib_src.format(name=lib_name))
-    use_path = tmp_path / f"{use_name}.clausal"
+    use_path = tmp_path / f"{use_name}{SEAM}"
     use_path.write_text(use_src.format(lib=lib_name))
     lib = _load_module(lib_name, str(lib_path))
     use = _load_module(use_name, str(use_path))
@@ -1215,7 +1216,7 @@ class TestCrossModuleTabledNaf:
         from clausal.import_hook import _load_module
         _XMNAF_COUNTER[0] += 1
         name = f"xmnaf_single_{os.getpid()}_{_XMNAF_COUNTER[0]}"
-        p = tmp_path / f"{name}.clausal"
+        p = tmp_path / f"{name}{SEAM}"
         p.write_text(
             "-table(win/1)\n-table(res/1)\n\n"
             "move(1, 2),\nmove(2, 1),\n\n"
@@ -1288,7 +1289,7 @@ class TestQueryWfsJudgesCompositeGoals:
             "wins(X) <- (move(X, Y), not wins(Y))\n"
             "p(X) <- wins(X)\n"
         )
-        path = tmp_path / f"{name}.clausal"
+        path = tmp_path / f"{name}{SEAM}"
         path.write_text(src)
         from clausal.import_hook import _load_module
         return _load_module(name, str(path))
@@ -1354,7 +1355,7 @@ class TestAClausePrefixDelayCoversEveryAnswer:
     )
 
     def _mod(self, tmp_path, name):
-        path = tmp_path / f"{name}.clausal"
+        path = tmp_path / f"{name}{SEAM}"
         path.write_text(self.SRC.format(n=name))
         from clausal.import_hook import _load_module
         return _load_module(name, str(path))

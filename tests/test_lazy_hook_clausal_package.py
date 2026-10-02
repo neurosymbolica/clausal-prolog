@@ -12,6 +12,7 @@ import os
 import subprocess
 import sys
 import textwrap
+from tests._suffix import SEAM
 
 CLONE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -19,11 +20,11 @@ CLONE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def _write_package(root):
     pkg = root / "lazyhook_pkg_d15"
     pkg.mkdir()
-    (pkg / "__init__.clausal").write_text(
+    (pkg / f"__init__{SEAM}").write_text(
         "-module(lazyhook_pkg_d15, [p(X)])\n"
         "-import_from(lazyhook_pkg_d15.sib, [q])\n"
         "p(X) <- q(X)\n")
-    (pkg / "sib.clausal").write_text(
+    (pkg / f"sib{SEAM}").write_text(
         "-module(sib, [q(X)])\n"
         "q(1),\n")
 

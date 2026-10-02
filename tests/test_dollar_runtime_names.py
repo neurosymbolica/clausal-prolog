@@ -36,13 +36,14 @@ from clausal.pythonic_ast import nodes as simple_ast
 from clausal.templating.term_rewriting import EmbedTransformer
 
 from tests.tagged_terms_support import capture_predicate_codegen
+from tests._suffix import SEAM
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def _load_inline(name: str, source: str):
     with tempfile.NamedTemporaryFile(
-        suffix=".clausal", mode="w", delete=False
+        suffix=SEAM, mode="w", delete=False
     ) as f:
         f.write(source)
         path = f.name

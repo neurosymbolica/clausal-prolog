@@ -28,6 +28,7 @@ from clausal.logic.solve import call
 from clausal.logic.cells import chars
 from clausal.logic.variables import Var, Trail, deref, unify, is_var
 from clausal.pythonic_ast.nodes import StarUnpack
+from tests._suffix import SEAM
 
 
 # ── Trampoline dispatch driver ────────────────────────────────────────────────
@@ -863,7 +864,7 @@ class TestNestedStarIntegration:
     def _setup(self, request, tmp_path_factory):
         from clausal.import_hook import _load_module
         tmp = tmp_path_factory.mktemp("nested_star")
-        p = tmp / "nested_star.clausal"
+        p = tmp / f"nested_star{SEAM}"
         p.write_text(
             "extract([[HEAD, *TAIL], *ROWS], HEAD, TAIL, ROWS),\n"
             "\n"

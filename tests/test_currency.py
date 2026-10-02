@@ -7,6 +7,7 @@ import pytest
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.terms import UnitsMismatch
+from tests._suffix import SEAM
 
 
 class TestCurrencyVocabulary:
@@ -92,7 +93,7 @@ class TestCurrencyDecimalConstruction:
 
 def _load(name, src):
     d = tempfile.mkdtemp()
-    p = os.path.join(d, f"{name}.clausal")
+    p = os.path.join(d, f"{name}{SEAM}")
     with open(p, "w") as f:
         f.write(src)
     return _load_module(name, p).__dict__["$module"]

@@ -28,6 +28,7 @@ from clausal.logic.variables import Var, deref, is_var
 from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.terms import SegString, SetTerm
+from tests._suffix import SEAM
 
 PYTHON = sys.executable
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -101,7 +102,7 @@ lockretract(OK) <- (retract(locked_(1)), OK is 1)
 def fix():
     """Load the main fixture module ONCE (never reload — atoms/functors are
     module-scoped; see audit probe-pitfalls memory #1)."""
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                      delete=False) as f:
         f.write(FIXTURE_SRC)
         path = f.name
@@ -112,7 +113,7 @@ def fix():
 
 @pytest.fixture(scope="module")
 def locked_mod():
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                      delete=False) as f:
         f.write(LOCKED_SRC)
         path = f.name

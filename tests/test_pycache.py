@@ -28,6 +28,7 @@ from clausal.import_hook import PredicateLoader, _load_module
 from clausal.logic.compiler import compile_predicate_trampoline
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -38,7 +39,7 @@ def tmp_clausal(tmp_path):
 
     Cleans up __pycache__ and sys.modules on teardown.
     """
-    src = tmp_path / "test_cached.clausal"
+    src = tmp_path / f"test_cached{SEAM}"
     src.write_text(textwrap.dedent("""\
         -double_quotes(atom)
         greet("hello"),
@@ -136,7 +137,7 @@ class TestPycacheInvalidation:
         are pinned so both loads fall in the same integer second.
         """
         # nv
-        src = tmp_path / "same_size.clausal"
+        src = tmp_path / f"same_size{SEAM}"
         mod_name = "_pycache_same_size_test"
         pycache = tmp_path / "__pycache__"
         try:
@@ -192,7 +193,7 @@ class TestCachedCorrectness:
     def test_rules_from_cache(self, tmp_path):
         """Rules (head <- body) work from cache."""
         # nv
-        src = tmp_path / "rules_cached.clausal"
+        src = tmp_path / f"rules_cached{SEAM}"
         src.write_text(textwrap.dedent("""\
             double(_x, _y) <- (_y == _x * 2)
         """))
@@ -223,7 +224,7 @@ class TestDynamicAfterCache:
 
     def test_dynamic_assertz_after_cache(self, tmp_path):
         # nv
-        src = tmp_path / "dyn_cached.clausal"
+        src = tmp_path / f"dyn_cached{SEAM}"
         src.write_text(textwrap.dedent("""\
             -double_quotes(atom)
             -dynamic(color/1)
@@ -282,7 +283,7 @@ class TestDeferredCompilation:
         """With 3 facts for the same predicate, compile_predicate should be
         called exactly once (after all clauses asserted)."""
         # nv
-        src = tmp_path / "deferred.clausal"
+        src = tmp_path / f"deferred{SEAM}"
         src.write_text(textwrap.dedent("""\
             -double_quotes(atom)
             item("a"),
@@ -313,7 +314,7 @@ class TestDeferredCompilation:
     def test_multiple_predicates_compiled_once_each(self, tmp_path):
         """Multiple predicates each get compiled exactly once."""
         # nv
-        src = tmp_path / "multi_pred.clausal"
+        src = tmp_path / f"multi_pred{SEAM}"
         src.write_text(textwrap.dedent("""\
             -double_quotes(atom)
             foo("a"),
@@ -479,7 +480,7 @@ class TestAtomicCacheWrite:
     in, as CPython's ``importlib._bootstrap_external._write_atomic`` does."""
 
     def _loader(self, tmp_path):
-        src = tmp_path / "m.clausal"
+        src = tmp_path / f"m{SEAM}"
         src.write_text("p(1),\n")
         return PredicateLoader("m", str(src))
 
@@ -558,7 +559,7 @@ def _fingerprinted_relpaths():
     return out
 
 
-def _bytecode(source, filename="t.clausal"):
+def _bytecode(source, filename=f"t{SEAM}"):
     import marshal
     from clausal import import_hook as ih
     code, _ = ih._parse_clausal_source(source, filename)
@@ -721,7 +722,7 @@ def test_the_toklex_package_is_fingerprinted_and_used():
 
 
 def test_an_interrupted_write_leaves_no_stray_temp_file(tmp_path, monkeypatch):
-    src = tmp_path / "m.clausal"
+    src = tmp_path / f"m{SEAM}"
     src.write_text("p(1),\n")
     loader = PredicateLoader("m", str(src))
     target = tmp_path / "__pycache__" / "m.cpython-313.pyc"

@@ -16,10 +16,11 @@ import clausal.import_hook  # noqa: F401
 from clausal.import_hook import _load_module
 from clausal import Var, solve
 from clausal.logic import solve as _solve_mod
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, name, text):
-    src = tmp_path / f"{name}.clausal"
+    src = tmp_path / f"{name}{SEAM}"
     src.write_text(text)
     return _load_module(name, str(src))
 

@@ -14,6 +14,7 @@ from clausal.logic.variables import Var, Trail, unify, deref
 from clausal.logic.builtins import get_builtin_dispatch
 from clausal.logic.trampoline import StepGenerator, solutions
 from clausal.terms import term_str
+from tests._suffix import SEAM
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -595,7 +596,7 @@ class TestClausalIntegration:
     def test_writeln_from_clausal(self, tmp_path):
         """writeln works as a builtin call in a .clausal file."""
         # nv
-        src = tmp_path / "io_test.clausal"
+        src = tmp_path / f"io_test{SEAM}"
         src.write_text(
             "-double_quotes(atom)\ngreet(_name) <- writeln_text(f\"hello, {_name}!\")\n"
         )
@@ -616,7 +617,7 @@ class TestClausalIntegration:
     def test_write_fstring_from_clausal(self, tmp_path):
         """F-string with multiple vars works in .clausal."""
         # nv
-        src = tmp_path / "io_fstr.clausal"
+        src = tmp_path / f"io_fstr{SEAM}"
         src.write_text(
             "-double_quotes(atom)\nshow_pair(_a, _b) <- writeln_text(f\"{_a} and {_b}\")\n"
         )
@@ -637,7 +638,7 @@ class TestClausalIntegration:
     def test_fstring_len_expression(self, tmp_path):
         """f"{len(_l)}" works — Python function on a logic variable."""
         # nv
-        src = tmp_path / "io_len.clausal"
+        src = tmp_path / f"io_len{SEAM}"
         src.write_text(
             "-double_quotes(atom)\nshow_len(_l) <- writeln_text(f\"length is {len(_l)}\")\n"
         )
@@ -658,7 +659,7 @@ class TestClausalIntegration:
     def test_fstring_arithmetic_expression(self, tmp_path):
         """f"{_n + 1}" works — arithmetic on a logic variable."""
         # nv
-        src = tmp_path / "io_arith.clausal"
+        src = tmp_path / f"io_arith{SEAM}"
         src.write_text(
             "-double_quotes(atom)\nshow_next(_n) <- writeln_text(f\"next is {_n + 1}\")\n"
         )
@@ -679,7 +680,7 @@ class TestClausalIntegration:
     def test_fstring_str_upper(self, tmp_path):
         """f"{_s.upper()}" works — method call on a logic variable."""
         # nv
-        src = tmp_path / "io_upper.clausal"
+        src = tmp_path / f"io_upper{SEAM}"
         src.write_text(
             "-double_quotes(atom)\nshow_upper(_s) <- writeln_text(f\"{_s.upper()}\")\n"
         )
@@ -700,7 +701,7 @@ class TestClausalIntegration:
     def test_writeln_with_backtracking(self, tmp_path):
         """writeln fires once per solution during backtracking."""
         # nv
-        src = tmp_path / "io_bt.clausal"
+        src = tmp_path / f"io_bt{SEAM}"
         src.write_text(
             "color('red'),\n"
             "color('green'),\n"
@@ -724,7 +725,7 @@ class TestClausalIntegration:
     def test_fstring_format_spec_in_clausal(self, tmp_path):
         """f"{_x:.2f}" with format spec works in .clausal files."""
         # nv
-        src = tmp_path / "io_spec.clausal"
+        src = tmp_path / f"io_spec{SEAM}"
         src.write_text(
             "-double_quotes(atom)\nshow_float(_x) <- writeln_text(f\"{_x:.2f}\")\n"
         )
@@ -745,7 +746,7 @@ class TestClausalIntegration:
     def test_fstring_no_vars(self, tmp_path):
         """f-string with no logic variables produces a zero-arg lambda."""
         # nv
-        src = tmp_path / "io_novar.clausal"
+        src = tmp_path / f"io_novar{SEAM}"
         src.write_text(
             "-double_quotes(atom)\nhello() <- writeln_text(f\"hello world\")\n"
         )

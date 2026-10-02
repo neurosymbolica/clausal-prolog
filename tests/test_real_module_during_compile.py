@@ -29,6 +29,7 @@ from clausal.logic.predicate import (
 )
 from clausal.logic.solve import call, resolve_module
 from clausal.logic.variables import Var, deref, walk
+from tests._suffix import SEAM
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 _NAME = "_realmod_specialize_natnum"
@@ -144,17 +145,17 @@ def test_import_module_still_brings_no_term_expansion_rules(tmp_path,
     """
     from clausal.logic.atoms import mint
     monkeypatch.syspath_prepend(FIXTURES)
-    (tmp_path / "te_imod.clausal").write_text(
+    (tmp_path / f"te_imod{SEAM}").write_text(
         "-double_quotes(atom)\n-import_module(expansion_provider)\n\n"
         'color("red"),\ncolor("green"),\n')
-    (tmp_path / "te_ifrom.clausal").write_text(
+    (tmp_path / f"te_ifrom{SEAM}").write_text(
         "-double_quotes(atom)\n-import_from(expansion_provider, [term_expansion])\n\n"
         'color("red"),\ncolor("green"),\n')
     names = ("expansion_provider", "_realmod_te_imod", "_realmod_te_ifrom")
     try:
         answers = {}
         for stem, name in (("te_imod", names[1]), ("te_ifrom", names[2])):
-            mod = _load_module(name, str(tmp_path / f"{stem}.clausal"))
+            mod = _load_module(name, str(tmp_path / f"{stem}{SEAM}"))
             x = Var()
             answers[stem] = sorted(
                 deref(x) for _ in call("color", x,

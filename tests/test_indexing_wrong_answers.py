@@ -25,6 +25,7 @@ import pytest
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, Trail, walk, unify
 from clausal.terms import Call, LoadName, Unify
+from tests._suffix import SEAM
 
 
 SRC = """
@@ -46,7 +47,7 @@ kp(z, c),
 @pytest.fixture
 def M(tmp_path):
     from clausal.import_hook import _load_module
-    p = tmp_path / "ixw.clausal"
+    p = tmp_path / f"ixw{SEAM}"
     p.write_text(textwrap.dedent(SRC).lstrip())
     sys.path.insert(0, str(tmp_path))
     try:

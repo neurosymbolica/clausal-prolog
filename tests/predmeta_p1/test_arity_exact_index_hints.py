@@ -27,6 +27,7 @@ from tests.predicate_api_support import RowPredicate
 from clausal.logic.solve import call
 from clausal.logic.variables import deref
 from clausal.terms import Call, LoadName
+from tests._suffix import SEAM
 
 
 # ── fixture: one locked, indexed callee living in a real Database ────────────
@@ -247,7 +248,7 @@ def test_the_compile_pipeline_threads_its_db_to_the_populator():
 
 
 def _load(tmp_path, name, src):
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(src)
     return _load_module(name, str(p)).__dict__["$module"]
 

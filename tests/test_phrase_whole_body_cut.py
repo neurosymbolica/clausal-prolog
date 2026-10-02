@@ -27,11 +27,12 @@ from clausal.import_hook import _load_module
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call as pcall
 from clausal.logic.variables import Var, deref, walk
+from tests._suffix import SEAM
 
 
 @pytest.fixture
 def lm(tmp_path):
-    path = tmp_path / "phrasecut.clausal"
+    path = tmp_path / f"phrasecut{SEAM}"
     path.write_text(textwrap.dedent("""
         a(S, S),
         cg1(G) <- call(G),

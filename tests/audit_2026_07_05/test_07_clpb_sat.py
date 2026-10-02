@@ -30,6 +30,7 @@ from clausal.logic.clpb import (
     _expr_to_bdd, _collect_bdd_var_ids, _count_paths,
 )
 from clausal.pythonic_ast.nodes import BitAnd, BitOr, BitXor, Invert
+from tests._suffix import SEAM
 
 try:
     from clausal.logic.clpsat import _HAS_PYSAT
@@ -463,7 +464,7 @@ psolve(X, Y) <- (
 @pytest.fixture(scope="module")
 def clpb_mod(tmp_path_factory):
     from clausal.import_hook import _load_module
-    p = tmp_path_factory.mktemp("a07") / "a07_clpb.clausal"
+    p = tmp_path_factory.mktemp("a07") / f"a07_clpb{SEAM}"
     p.write_text(CLAUSAL_FIXTURE)
     return _load_module("a07_clpb", str(p))
 

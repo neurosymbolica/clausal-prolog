@@ -6,6 +6,7 @@ from clausal.logic.database import Module
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var
+from tests._suffix import SEAM
 
 
 def test_findall_4_from_python():
@@ -22,7 +23,7 @@ def test_findall_4_from_python():
 
 def test_findall_4_from_a_clause_body(tmp_path):
     from clausal.import_hook import _load_module
-    p = tmp_path / "f4b.clausal"
+    p = tmp_path / f"f4b{SEAM}"
     p.write_text("-private([a, b, c])\np(a),\np(b),\n"
                  "q(L) <- findall(X, p(X), L, [c])\n"
                  "r(L, T) <- findall(X, p(X), L, T)\n")

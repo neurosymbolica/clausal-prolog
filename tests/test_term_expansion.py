@@ -38,6 +38,7 @@ from clausal.logic.term_expansion import (
     _is_term_expansion_clause,
 )
 from clausal.logic.variables import Var, Trail, deref
+from tests._suffix import SEAM
 
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -289,7 +290,7 @@ def _load_src(name, source):
     """Write *source* to a temp ``.clausal`` file and load it fresh."""
     import tempfile
     with tempfile.TemporaryDirectory() as d:
-        path = os.path.join(d, f"{name}.clausal")
+        path = os.path.join(d, f"{name}{SEAM}")
         with open(path, "w") as fh:
             fh.write(source)
         return _load_module(name, path)
@@ -440,7 +441,7 @@ class TestRetiredQuasiQuoteWarning:
         assert len(hits) == 1
         msg = str(hits[0].message)
         assert "retired 2026-09-25" in msg and "term_expansion(fact(X)" in msg
-        assert ".clausal:2:" in msg   # the line of the first q(...)
+        assert f"{SEAM}:2:" in msg   # the line of the first q(...)
         # ...and the reason it warns: the rule no longer matches the item.
         assert _answers(mod, "fact") == [(1,)]
         lm = mod.__dict__["$module"]
@@ -511,7 +512,7 @@ class TestRetiredQuasiQuoteWarning:
         ), load_may_raise=True)
         assert len(hits) == 1
         assert "a clause of rewrite, reached from term_expansion/4" in str(hits[0].message)
-        assert ".clausal:3:" in str(hits[0].message)
+        assert f"{SEAM}:3:" in str(hits[0].message)
 
     def test_a_q_inside_a_python_escape_or_as_a_goal_is_quiet(self):
         """Roborev L3: ``++(...)`` is Python, where ``q(x)`` is Python's own
@@ -532,12 +533,12 @@ class TestRetiredQuasiQuoteWarning:
         monkeypatch.setattr(tr, "iter_child_nodes",
                             lambda n: (walked.append(n), real(n))[1])
         t = EmbedTransformer(source_lines=["term_expansion(fact(X), [], S, S)\n"],
-                             filename="x.clausal")
+                             filename=f"x{SEAM}")
         t._lint_retired_quasi_quote(
             ast.parse("term_expansion(fact(X), [], S, S)", mode="eval").body)
         assert walked == [] and t._retired_q_records == []
         t2 = EmbedTransformer(source_lines=["term_expansion(q(X), [], S, S)\n"],
-                              filename="x.clausal")
+                              filename=f"x{SEAM}")
         t2._lint_retired_quasi_quote(
             ast.parse("term_expansion(q(X), [], S, S)", mode="eval").body)
         assert walked and len(t2._retired_q_records) == 1
@@ -806,7 +807,7 @@ class TestExpansionResultIsValidated:
         # A file load, not ``_parse_and_collect``: the quote map that tells
         # ``"none"`` from ``'none'`` is built from the SOURCE LINES, which
         # the bare EmbedTransformer() there is never handed.
-        path = tmp_path / "te_chars_none.clausal"
+        path = tmp_path / f"te_chars_none{SEAM}"
         path.write_text(
             '-double_quotes(chars)\n'
             'term_expansion(_, "none", _m0, _m0) <- True\n'
@@ -918,7 +919,7 @@ class TestExpansionResultIsValidated:
         assert deref(result[0].head) == mint("bar") and result[0].body is True
 
     def test_the_chars_none_error_surfaces_through_a_full_load(self, tmp_path):
-        path = tmp_path / "te_chars_none_load.clausal"
+        path = tmp_path / f"te_chars_none_load{SEAM}"
         path.write_text(
             '-double_quotes(chars)\n'
             'term_expansion(_, "none", _m0, _m0) <- True\n'
@@ -963,7 +964,7 @@ class TestHelperInTheSameModule:
     module, and the helper's name was pre-minted as a DATA constructor."""
 
     def _load(self, tmp_path, name, src):
-        path = tmp_path / f"{name}.clausal"
+        path = tmp_path / f"{name}{SEAM}"
         path.write_text(src)
         return _load_module(name, str(path))
 

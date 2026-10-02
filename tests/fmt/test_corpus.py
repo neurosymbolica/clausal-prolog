@@ -23,6 +23,7 @@ import pytest
 from clausal.fmt import format_source
 from clausal.fmt.comments import arrow_nodes
 from clausal.fmt.verify import ast_equivalent
+from tests._suffix import SEAM, seam_glob
 
 REPO = Path(__file__).resolve().parents[2]
 SKIP_DIRS = {".git", "build", "dist", ".claude", "__pycache__", "node_modules"}
@@ -39,7 +40,7 @@ def _corpus_roots() -> list[Path]:
 def _clausal_files() -> list[Path]:
     found: list[Path] = []
     for root in _corpus_roots():
-        for path in sorted(root.rglob("*.clausal")):
+        for path in seam_glob(root, recursive=True):
             # Relative to the ROOT that produced it, never the absolute path:
             # a checkout may itself live under a directory named like one of
             # the skips — a git worktree under `.claude/`, say — and filtering
@@ -167,13 +168,13 @@ def test_a_root_living_under_a_skip_name_still_yields_its_files(tmp_path, monkey
     """
     root = tmp_path / ".claude" / "worktrees" / "wt"
     root.mkdir(parents=True)
-    (root / "a.clausal").write_text("p(1),\n")
+    (root / f"a{SEAM}").write_text("p(1),\n")
     monkeypatch.setenv("CLAUSAL_FMT_CORPUS", str(root))
     this_module = sys.modules[__name__]
     monkeypatch.setattr(this_module, "REPO", tmp_path / "nonexistent")
 
     found = this_module._clausal_files()
-    assert [p.name for p in found] == ["a.clausal"]
+    assert [p.name for p in found] == [f"a{SEAM}"]
 
 
 def test_a_skip_directory_INSIDE_the_root_is_still_skipped(tmp_path, monkeypatch):
@@ -182,11 +183,11 @@ def test_a_skip_directory_INSIDE_the_root_is_still_skipped(tmp_path, monkeypatch
     above."""
     root = tmp_path / "tree"
     (root / "build").mkdir(parents=True)
-    (root / "keep.clausal").write_text("p(1),\n")
-    (root / "build" / "generated.clausal").write_text("p(2),\n")
+    (root / f"keep{SEAM}").write_text("p(1),\n")
+    (root / "build" / f"generated{SEAM}").write_text("p(2),\n")
     monkeypatch.setenv("CLAUSAL_FMT_CORPUS", str(root))
     this_module = sys.modules[__name__]
     monkeypatch.setattr(this_module, "REPO", tmp_path / "nonexistent")
 
     found = this_module._clausal_files()
-    assert [p.name for p in found] == ["keep.clausal"]
+    assert [p.name for p in found] == [f"keep{SEAM}"]

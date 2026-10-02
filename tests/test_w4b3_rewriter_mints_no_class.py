@@ -29,6 +29,7 @@ from clausal.logic.atoms import mangle
 from clausal.logic.predicate import ClausalTermConstructionError
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 
 def _write(tmp_path, name, src):
@@ -39,7 +40,7 @@ def _write(tmp_path, name, src):
 
 def _load(tmp_path, name, src):
     sys.modules.pop(name, None)
-    return _load_module(name, _write(tmp_path, f"{name}.clausal", src))
+    return _load_module(name, _write(tmp_path, f"{name}{SEAM}", src))
 
 
 def _metaclass_instances():
@@ -125,7 +126,7 @@ def test_the_metaclass_census_sees_an_instance_when_there_is_one():
 
 def test_the_rewriter_output_names_no_predicate_class(tmp_path):
     from clausal.tools.dump_transformed import dump_source
-    source = dump_source(_write(tmp_path, "s5_dump.clausal", _EVERY_SHAPE))
+    source = dump_source(_write(tmp_path, f"s5_dump{SEAM}", _EVERY_SHAPE))
     tree = ast.parse(source.replace("$", "_D_"))
     classes = [n.name for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]
     assert "$declare_head(" in source          # positive control: the new statement
@@ -195,7 +196,7 @@ def test_the_declaration_site_reaches_the_row(tmp_path, monkeypatch):
     """)
     row = mod.__dict__["$module"].db.row("pair", 2)
     assert row is not None and row.declared_at is not None
-    assert row.declared_at[0].endswith("s5_site.clausal")
+    assert row.declared_at[0].endswith(f"s5_site{SEAM}")
     assert row.declared_at[1] == 1
 
 
@@ -229,13 +230,13 @@ def test_a_circular_import_still_lists_what_the_partial_module_defines(
     partially initialised module mid-exec.  Its names are handles by then,
     answered from the loading record (the class era listed the classes)."""
     monkeypatch.syspath_prepend(str(tmp_path))
-    _write(tmp_path, "s5_circ_a.clausal", """
+    _write(tmp_path, f"s5_circ_a{SEAM}", """
         s5ca_one(1),
         s5ca_two(1, 2),
         -import_from(s5_circ_b, [s5cb_pred])
         s5ca_other(X) <- s5cb_pred(X)
     """)
-    _write(tmp_path, "s5_circ_b.clausal", """
+    _write(tmp_path, f"s5_circ_b{SEAM}", """
         -import_from(s5_circ_a, [s5ca_missing])
         s5cb_pred(1),
     """)
@@ -263,7 +264,7 @@ def test_importlib_reload_rereads_the_body_without_duplicating_clauses(
     import os
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.delitem(sys.modules, "s5_rl_mod", raising=False)
-    path = _write(tmp_path, "s5_rl_mod.clausal", """
+    path = _write(tmp_path, f"s5_rl_mod{SEAM}", """
         -module(s5_rl_mod, [s5rl_p(X)])
         s5rl_p(1),
         s5rl_p(2),
@@ -276,7 +277,7 @@ def test_importlib_reload_rereads_the_body_without_duplicating_clauses(
         assert len(mod.__dict__["$module"].db.clauses_for("s5rl_p", 1)) == 2
         # An edited source (mtime bumped so the bytecode cache cannot serve the
         # old code) is what the reload reads.
-        _write(tmp_path, "s5_rl_mod.clausal", """
+        _write(tmp_path, f"s5_rl_mod{SEAM}", """
             -module(s5_rl_mod, [s5rl_p(X)])
             s5rl_p(1),
             s5rl_p(2),

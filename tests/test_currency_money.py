@@ -16,6 +16,7 @@ from clausal.logic.solve import _drive_trampoline
 from clausal.logic.exceptions import LogicException
 from clausal.logic.atoms import mint
 from clausal.logic.cells import chars, chars_text
+from tests._suffix import SEAM
 
 
 def _run(pred, *args):
@@ -40,7 +41,7 @@ def _load(name, src):
     # inline modules below MEAN STRINGS by ``"7.89"`` — a money amount is
     # text handed to ``Decimal``, not a symbol — so they read "..." as one.
     d = tempfile.mkdtemp()
-    p = os.path.join(d, f"{name}.clausal")
+    p = os.path.join(d, f"{name}{SEAM}")
     with open(p, "w") as f:
         f.write("-double_quotes(chars)\n" + src)
     return _load_module(name, p).__dict__["$module"]

@@ -3,10 +3,11 @@ import tempfile
 
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
+from tests._suffix import SEAM
 
 
 def _load_inline(name, source):
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w", delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w", delete=False) as f:
         f.write(source)
         f.flush()
         path = f.name

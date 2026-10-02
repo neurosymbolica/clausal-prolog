@@ -8,12 +8,13 @@ from clausal.logic.variables import Var, deref
 from clausal.import_hook import _load_module
 import tempfile
 import os
+from tests._suffix import SEAM
 
 
 @pytest.fixture(scope="module")
 def mod():
     """Module with character-level predicates for higher-order tests."""
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w", delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w", delete=False) as f:
         f.write(
             '-double_quotes(atom)\n'
             '-module(ho_str, [is_vowel(_c), is_upper(_c),'

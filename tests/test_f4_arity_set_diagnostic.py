@@ -30,6 +30,7 @@ from clausal.logic.atoms import mangle
 from clausal.logic.predicate import predicate_arities_for
 from clausal.predicate_diagnostics import describe_missing_predicate
 import clausal.predicate_diagnostics as pd
+from tests._suffix import SEAM
 
 
 LIB = "f4arity_lib"
@@ -73,14 +74,14 @@ probe_it(1),
 @pytest.fixture(scope="module")
 def mods(tmp_path_factory):
     d = tmp_path_factory.mktemp("f4arity")
-    (d / f"{LIB}.clausal").write_text(textwrap.dedent(LIB_SRC).lstrip())
-    (d / f"{USE}.clausal").write_text(textwrap.dedent(USE_SRC).lstrip())
-    (d / f"{REV}.clausal").write_text(textwrap.dedent(REV_SRC).lstrip())
+    (d / f"{LIB}{SEAM}").write_text(textwrap.dedent(LIB_SRC).lstrip())
+    (d / f"{USE}{SEAM}").write_text(textwrap.dedent(USE_SRC).lstrip())
+    (d / f"{REV}{SEAM}").write_text(textwrap.dedent(REV_SRC).lstrip())
     for name in (LIB, USE, REV):
         sys.modules.pop(name, None)
-    lib = _load_module(LIB, str(d / f"{LIB}.clausal"))
-    use = _load_module(USE, str(d / f"{USE}.clausal"))
-    _load_module(REV, str(d / f"{REV}.clausal"))
+    lib = _load_module(LIB, str(d / f"{LIB}{SEAM}"))
+    use = _load_module(USE, str(d / f"{USE}{SEAM}"))
+    _load_module(REV, str(d / f"{REV}{SEAM}"))
     yield lib, use
     for name in (LIB, USE, REV):
         sys.modules.pop(name, None)

@@ -37,6 +37,7 @@ from clausal.logic.predicate import is_declared_predicate_name
 from clausal.logic.solve import _deref_walk, call
 from clausal.logic.variables import Var, deref
 from clausal.predicate_diagnostics import PredicateArityMismatchError
+from tests._suffix import SEAM
 
 
 _SRC = """\
@@ -76,7 +77,7 @@ def lm(tmp_path):
     """A really loaded module (in ``sys.modules``, so a handle naming it
     resolves), under a fresh name per test."""
     name = f"w4b3dg_{next(_counter)}"
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(_SRC.format(name=name))
     mod = _load_module(name, str(p))
     assert sys.modules[name] is mod
@@ -98,7 +99,7 @@ def owner(tmp_path):
     """A second loaded module defining ``ping/0`` and ``last/1`` -- names the
     ``lm`` module (or a builtin) owns at a DIFFERENT arity."""
     name = f"w4b3own_{next(_counter)}"
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(_OWNER_SRC.format(name=name))
     mod = _load_module(name, str(p))
     try:
@@ -123,7 +124,7 @@ def stale(tmp_path):
     is no class to go stale; the binding is the handle, which names both
     rows.)"""
     name = f"w4b3stale_{next(_counter)}"
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(_STALE_SRC.format(name=name))
     mod = _load_module(name, str(p))
     m = mod.__dict__["$module"]

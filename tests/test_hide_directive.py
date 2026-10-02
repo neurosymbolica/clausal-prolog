@@ -50,6 +50,7 @@ from clausal.logic.trampoline import StepGenerator, solutions
 from clausal.logic.variables import Trail, Var, deref, unify
 from clausal.reflection import Atom, render_source
 from clausal.testing import _render_value
+from tests._suffix import SEAM
 
 
 def _fixture_path(filename: str) -> str:
@@ -70,7 +71,7 @@ def _load_inline_clausal(name: str, source: str):
     the same name.
     """
     with tempfile.NamedTemporaryFile(
-        suffix=".clausal", mode="w", delete=False
+        suffix=SEAM, mode="w", delete=False
     ) as f:
         f.write(source)
         f.flush()

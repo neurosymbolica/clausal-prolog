@@ -16,6 +16,7 @@ from clausal.import_hook import _load_module
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var, is_var
 from clausal.terms import DictTerm
+from tests._suffix import SEAM
 
 _SRC = """\
 -allow_singletons
@@ -39,7 +40,7 @@ put(D) <- dict_put_pairs(['-'('b', 2), 'b' - 3], {'a': 1}, D)
 
 @pytest.fixture(scope="module")
 def mod():
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                      delete=False) as f:
         f.write(_SRC)
         path = f.name

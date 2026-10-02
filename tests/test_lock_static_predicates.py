@@ -29,10 +29,11 @@ from clausal.logic.database import Clause, Database
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 
 def _write_module(tmp_path, name: str, source: str):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(source).lstrip())
     return _load_module(name, str(path))
 

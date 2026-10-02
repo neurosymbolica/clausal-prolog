@@ -39,6 +39,7 @@ from clausal.logic.variables import (
 )
 from clausal.logic.constraints import dif, DIF_KEY
 from clausal.logic.clpfd import in_domain, label, fd_eq, fd_ne, FD_KEY
+from tests._suffix import SEAM
 
 
 # ── Fixture loader ────────────────────────────────────────────────────────────
@@ -51,7 +52,7 @@ def load(tmp_path_factory):
     def _load(name, source):
         if name not in _loaded:
             d = tmp_path_factory.mktemp("a12fix")
-            p = d / f"{name}.clausal"
+            p = d / f"{name}{SEAM}"
             p.write_text(source)
             _loaded[name] = _load_module(f"a12_{name}", str(p))
         return _loaded[name]

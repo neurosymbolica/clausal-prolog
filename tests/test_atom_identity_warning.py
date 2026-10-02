@@ -33,6 +33,7 @@ import warnings
 
 from clausal.logic.atoms import mint
 from clausal.logic.compiler_v2 import _process_declarations
+from tests._suffix import SEAM
 
 
 _SRC_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -149,8 +150,8 @@ def _write_package(tmp_path):
     pkg = tmp_path / "atomid_pkg"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
-    (pkg / "atomlib.clausal").write_text(_LIB_SRC)
-    (pkg / "caller.clausal").write_text(_CALLER_SRC)
+    (pkg / f"atomlib{SEAM}").write_text(_LIB_SRC)
+    (pkg / f"caller{SEAM}").write_text(_CALLER_SRC)
     return tmp_path
 
 

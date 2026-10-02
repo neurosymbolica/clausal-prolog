@@ -13,6 +13,7 @@ from clausal.logic.database import Module
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var
+from tests._suffix import SEAM
 
 
 @pytest.fixture
@@ -69,7 +70,7 @@ def test_nth_on_seglists(tmp_path):
     """roborev (Medium): ``[X, *T]`` after ``T = [b]`` is a proper list; an
     unbound index over an open list answers its known prefix."""
     from clausal.import_hook import _load_module
-    p = tmp_path / "nth_seg.clausal"
+    p = tmp_path / f"nth_seg{SEAM}"
     p.write_text("-private([a, b])\n"
                  "t1(E) <- (L is [X, *T], T is [b], nth0(1, L, E))\n"
                  "t2(I) <- (L is [a, b, *T], nth0(I, L, a))\n")

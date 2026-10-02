@@ -23,6 +23,7 @@ import textwrap
 from pathlib import Path
 
 import pytest
+from tests._suffix import SEAM
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -42,7 +43,7 @@ pytest_collect_file = _plugin.pytest_collect_file
 """
 
 
-def run_plugin(tmp_path: Path, source: str, filename: str = "case.clausal") -> str:
+def run_plugin(tmp_path: Path, source: str, filename: str = f"case{SEAM}") -> str:
     """Run *source* as a .clausal file through the real conftest plugin."""
     (tmp_path / "conftest.py").write_text(
         _SHIM.format(path=str(REPO_ROOT / "conftest.py"))
@@ -150,7 +151,7 @@ def test_passing_test_computes_no_diagnostic_at_all(tmp_path):
     from clausal.import_hook import _load_module
     from clausal.testing import run_test
 
-    src = tmp_path / "green.clausal"
+    src = tmp_path / f"green{SEAM}"
     src.write_text(PASSING_SRC)
     mod = _load_module("_diag_guard_probe", str(src))
     result = run_test(mod, "passes", path=str(src), diagnose=True)

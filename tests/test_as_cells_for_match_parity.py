@@ -18,6 +18,7 @@ from typing import Any as _Any
 import pytest
 
 from clausal.logic.variables import Var, Trail, unify
+from tests._suffix import SEAM
 
 
 @_dataclass
@@ -92,7 +93,7 @@ def KW(tmp_path_factory):
     """A module declaring the data functors ``box/2`` and ``g/1``."""
     from clausal.import_hook import _load_module
     d = tmp_path_factory.mktemp("acfm_kw")
-    p = d / "acfm_kw.clausal"
+    p = d / f"acfm_kw{SEAM}"
     p.write_text("-module(acfm_kw, [])\n-private([box(Lo, Hi), g(A)])\n")
     sys.path.insert(0, str(d))
     try:

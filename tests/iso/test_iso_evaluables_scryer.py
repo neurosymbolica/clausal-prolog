@@ -26,6 +26,7 @@ from clausal.logic.solve import solve
 from clausal.logic.variables import Var, deref
 
 from .conftest import SCRYER, run_scryer
+from tests._suffix import SEAM
 
 #: (cell as written in the engine, the same in Scryer, what both print)
 ROWS = [
@@ -201,7 +202,7 @@ _SRC = "-allow_singletons\n" + "".join(
 
 @pytest.fixture(scope="module")
 def mod():
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                      delete=False) as f:
         f.write(_SRC)
         path = f.name

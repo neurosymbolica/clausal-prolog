@@ -24,6 +24,7 @@ from clausal.logic.variables import Var, deref
 from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.terms import LoadName
+from tests._suffix import SEAM
 
 _SRC = """\
 -double_quotes(atom)
@@ -52,7 +53,7 @@ g_tp(I, E) <- tpartition(tpos, [1, -2, 3], I, E),
 @pytest.fixture
 def mod(tmp_path, request):
     name = f"bpn_{request.node.name.replace('[', '_').replace(']', '')}"
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(_SRC.format(name=name))
     return _load_module(name, str(p))
 
@@ -230,7 +231,7 @@ def test_a_named_goal_naming_an_unknown_procedure_raises_iso_existence_error(
 
 def test_the_unknown_procedure_raise_is_catchable_in_source(tmp_path):
     name = "bpn_catch_unknown"
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(
         f"-module({name}, [])\n"
         "-private([procedure, bpn_absent_proc])\n"

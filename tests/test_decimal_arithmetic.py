@@ -31,6 +31,7 @@ from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.testing import load_clausal_module
+from tests._suffix import SEAM
 
 _HEADER = """-double_quotes(chars)
 -private([yes, no])
@@ -48,7 +49,7 @@ third(F) <- (F == 1 / 3)    # a CLP post: / is rational there (Q15)
 
 
 def _module(tmp_path, body):
-    path = tmp_path / "decarith.clausal"
+    path = tmp_path / f"decarith{SEAM}"
     path.write_text(_HEADER + body)
     return load_clausal_module(path)
 

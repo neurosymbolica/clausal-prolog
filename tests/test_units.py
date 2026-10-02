@@ -21,6 +21,7 @@ from clausal.modules.py.units import (
     metre, kilogram, second, ampere, kelvin, mole, candela,
 )
 from clausal.logic.units_constraint import UNITS_KEY, UnitState
+from tests._suffix import SEAM
 
 
 # ── Test helper ──────────────────────────────────────────────────────────────
@@ -1077,7 +1078,7 @@ class TestUnitsSugar:
             "-import_from(py.units, [metre])\n"
             "test <- (D1 is ++(metre(5)), eval_(5(metre), D2), D1 == D2)\n"
         )
-        p = tmp_path / "sugar_basic.clausal"
+        p = tmp_path / f"sugar_basic{SEAM}"
         p.write_text(src)
         mod = _load_module("sugar_basic", str(p)).__dict__["$module"]
         assert any(True for _ in call("test", module=mod))
@@ -1091,7 +1092,7 @@ class TestUnitsSugar:
             "-import_from(py.units, [newton])\n"
             "test <- (D1 is ++(newton(9.8)), eval_(9.8(newton), D2), D1 == D2)\n"
         )
-        p = tmp_path / "sugar_float.clausal"
+        p = tmp_path / f"sugar_float{SEAM}"
         p.write_text(src)
         mod = _load_module("sugar_float", str(p)).__dict__["$module"]
         assert any(True for _ in call("test", module=mod))
@@ -1105,7 +1106,7 @@ class TestUnitsSugar:
             "-import_from(py.units, [metre])\n"
             "test <- (eval_(-5(metre), D), V is ++(D.value), V == -5)\n"
         )
-        p = tmp_path / "sugar_neg.clausal"
+        p = tmp_path / f"sugar_neg{SEAM}"
         p.write_text(src)
         mod = _load_module("sugar_neg", str(p)).__dict__["$module"]
         assert any(True for _ in call("test", module=mod))
@@ -1119,7 +1120,7 @@ class TestUnitsSugar:
             "-import_from(py.units, [metre])\n"
             "test <- (eval_(5(metre) + 3(metre), S), S == 8(metre))\n"
         )
-        p = tmp_path / "sugar_add.clausal"
+        p = tmp_path / f"sugar_add{SEAM}"
         p.write_text(src)
         mod = _load_module("sugar_add", str(p)).__dict__["$module"]
         assert any(True for _ in call("test", module=mod))
@@ -1135,7 +1136,7 @@ class TestUnitsSugar:
             "-import_from(py.units, [metre])\n"
             "test <- (N == 5, eval_(N(metre), D), D == 5(metre))\n"
         )
-        p = tmp_path / "var_sugar_construct.clausal"
+        p = tmp_path / f"var_sugar_construct{SEAM}"
         p.write_text(src)
         mod = _load_module("var_sugar_construct", str(p)).__dict__["$module"]
         assert any(True for _ in call("test", module=mod))
@@ -1149,7 +1150,7 @@ class TestUnitsSugar:
             "-import_from(py.units, [metre, second])\n"
             "test <- (N == 10, eval_(N(metre/second), V), has_units(V, metre/second))\n"
         )
-        p = tmp_path / "var_sugar_compound.clausal"
+        p = tmp_path / f"var_sugar_compound{SEAM}"
         p.write_text(src)
         mod = _load_module("var_sugar_compound", str(p)).__dict__["$module"]
         assert any(True for _ in call("test", module=mod))
@@ -1163,7 +1164,7 @@ class TestUnitsSugar:
             "-import_from(py.units, [metre])\n"
             "test <- (eval_(5(metre), D), has_units(D, metre))\n"
         )
-        p = tmp_path / "has_units_match.clausal"
+        p = tmp_path / f"has_units_match{SEAM}"
         p.write_text(src)
         mod = _load_module("has_units_match", str(p)).__dict__["$module"]
         assert any(True for _ in call("test", module=mod))
@@ -1177,7 +1178,7 @@ class TestUnitsSugar:
             "-import_from(py.units, [metre, second])\n"
             "test <- (eval_(5(second), D), has_units(D, metre))\n"
         )
-        p = tmp_path / "has_units_fail.clausal"
+        p = tmp_path / f"has_units_fail{SEAM}"
         p.write_text(src)
         mod = _load_module("has_units_fail", str(p)).__dict__["$module"]
         assert not any(True for _ in call("test", module=mod))
@@ -1191,7 +1192,7 @@ class TestUnitsSugar:
             "-import_from(py.units, [metre])\n"
             "test <- (has_units(X, metre), X is 5(metre))\n"
         )
-        p = tmp_path / "has_units_constrain.clausal"
+        p = tmp_path / f"has_units_constrain{SEAM}"
         p.write_text(src)
         mod = _load_module("has_units_constrain", str(p)).__dict__["$module"]
         assert any(True for _ in call("test", module=mod))
@@ -1205,7 +1206,7 @@ class TestUnitsSugar:
             "-import_from(py.units, [metre, second])\n"
             "test <- (has_units(X, metre), X is 5(second))\n"
         )
-        p = tmp_path / "has_units_reject.clausal"
+        p = tmp_path / f"has_units_reject{SEAM}"
         p.write_text(src)
         mod = _load_module("has_units_reject", str(p)).__dict__["$module"]
         assert not any(True for _ in call("test", module=mod))
@@ -1221,7 +1222,7 @@ class TestUnitMismatchErrors:
 
     def _load(self, tmp_path, name, src):
         from clausal.import_hook import _load_module
-        p = tmp_path / f"{name}.clausal"
+        p = tmp_path / f"{name}{SEAM}"
         p.write_text(src)
         return _load_module(name, str(p)).__dict__["$module"]
 
@@ -1291,7 +1292,7 @@ class TestDimensionlessSugar:
 
     def _load(self, tmp_path, name, src):
         from clausal.import_hook import _load_module
-        p = tmp_path / f"{name}.clausal"
+        p = tmp_path / f"{name}{SEAM}"
         p.write_text(src)
         return _load_module(name, str(p)).__dict__["$module"]
 
@@ -1357,7 +1358,7 @@ class TestPythonExceptionCatch:
 
     def _load(self, tmp_path, name, src):
         from clausal.import_hook import _load_module
-        p = tmp_path / f"{name}.clausal"
+        p = tmp_path / f"{name}{SEAM}"
         p.write_text(src)
         return _load_module(name, str(p)).__dict__["$module"]
 

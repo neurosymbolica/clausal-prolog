@@ -30,6 +30,7 @@ import pytest
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 
 def _kind(item):
@@ -44,7 +45,7 @@ def _kind(item):
 
 
 def _load(tmp_path, name, text):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(text).lstrip())
     return _load_module(f"tests_qaf_{name}", str(path))
 
@@ -124,7 +125,7 @@ def test_bare_titlecase_functor_is_still_refused(tmp_path):
         """)
     message = str(exc_info.value)
     assert "`Foo` is TitleCase" in message
-    assert "bare.clausal:2" in message
+    assert f"bare{SEAM}:2" in message
 
 
 def test_bare_titlecase_body_goal_is_still_refused(tmp_path):

@@ -19,6 +19,7 @@ from clausal.lint_warnings import (
 )
 from clausal.logic.compiler_v2 import _warn_export_arity_mismatches
 from clausal.pythonic_ast.nodes import Directive, ModuleDeclaration
+from tests._suffix import SEAM
 
 
 @pytest.fixture
@@ -26,7 +27,7 @@ def load(tmp_path):
     names = []
 
     def _load(name, src):
-        path = tmp_path / f"{name}.clausal"
+        path = tmp_path / f"{name}{SEAM}"
         path.write_text(src)
         sys.modules.pop(name, None)
         names.append(name)

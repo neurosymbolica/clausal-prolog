@@ -40,6 +40,7 @@ from clausal.logic.solve import call
 from clausal.logic.variables import deref
 from clausal import Var
 from tests.predicate_api_support import term_ctor
+from tests._suffix import SEAM
 
 
 # ── Run time: positional overflow ──────────────────────────────────────────
@@ -135,7 +136,7 @@ class TestPositionalOverflowRaises:
 
 
 def _write(tmp_path, name, text):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(text).lstrip())
     return str(path)
 
@@ -185,8 +186,8 @@ class TestDeclarationClauseArityConflict:
         # Both ends located, in the file that actually contains them — a load
         # failure surfaces through the *importing* file, so the message has to
         # name its own.
-        assert "decl_fact.clausal:2" in msg   # the f(A) export entry
-        assert "decl_fact.clausal:5" in msg   # the offending clause
+        assert f"decl_fact{SEAM}:2" in msg   # the f(A) export entry
+        assert f"decl_fact{SEAM}:5" in msg   # the offending clause
 
     def test_rule_head_with_more_args_than_the_declaration(self, tmp_path):
         with pytest.raises(SyntaxError) as exc_info:
@@ -424,8 +425,8 @@ class TestShorterHeadAfterLongerIsRefused:
             foo(a, b),
             foo(a),
         """)
-        assert "merge_sites.clausal:1" in msg      # the arity-fixing declaration
-        assert "merge_sites.clausal:4" in msg      # the offending head
+        assert f"merge_sites{SEAM}:1" in msg      # the arity-fixing declaration
+        assert f"merge_sites{SEAM}:4" in msg      # the offending head
         flat = " ".join(msg.split())
         assert "not a partial term" in flat
         assert "different name" in flat            # the rename remedy

@@ -11,6 +11,7 @@ from clausal.logic.clpq import (
     _linearize, _get_tableau, _tableaux, _last_snapshot,
 )
 from clausal.terms import Add, Sub, Mult, Div, Negate
+from tests._suffix import SEAM
 
 
 @pytest.fixture(autouse=True)
@@ -1225,7 +1226,7 @@ class TestPythonicAliases:
         from clausal.testing import load_clausal_module
         import tempfile, os
         src = 'test(X) <- (rational(X), X == 1/3)\n'
-        with tempfile.NamedTemporaryFile(suffix='.clausal', mode='w', delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=SEAM, mode='w', delete=False) as f:
             f.write(src)
             path = f.name
         try:
@@ -1246,7 +1247,7 @@ class TestPythonicAliases:
         from clausal.testing import load_clausal_module
         import tempfile, os
         src = 'test(X) <- (rational(X), 0 <= X, X <= 10, X == 5)\n'
-        with tempfile.NamedTemporaryFile(suffix='.clausal', mode='w', delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=SEAM, mode='w', delete=False) as f:
             f.write(src)
             path = f.name
         try:
@@ -1273,7 +1274,7 @@ test_entailed(X) <- (
     entailed(X <= 5)
 )
 '''
-        with tempfile.NamedTemporaryFile(suffix='.clausal', mode='w', delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=SEAM, mode='w', delete=False) as f:
             f.write(src)
             path = f.name
         try:
@@ -1300,7 +1301,7 @@ test_not_entailed(X) <- (
     entailed(X <= 3)
 )
 '''
-        with tempfile.NamedTemporaryFile(suffix='.clausal', mode='w', delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=SEAM, mode='w', delete=False) as f:
             f.write(src)
             path = f.name
         try:

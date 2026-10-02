@@ -23,6 +23,7 @@ from clausal.tools.prolog_dialect import Dialect
 from clausal.tools.prolog_parser import parse
 from clausal.tools.prolog_to_clausal import prolog_to_clausal
 from clausal.tools.translate import roundtrip, translate
+from tests._suffix import SEAM, seam_path
 
 FIXTURES = Path(__file__).parent / "fixtures"
 CONFORMITY = Path(__file__).parent / "conformity"
@@ -419,7 +420,7 @@ class TestCLIRoundtrip:
         # nv
         from clausal.tools.translate import main
         import tempfile
-        with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w", delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w", delete=False) as f:
             f.write("foo(1, 2),\n")
             f.flush()
             code = main(["--roundtrip", "--dialect", "swi", f.name])
@@ -450,7 +451,7 @@ class TestCLIRoundtrip:
     def test_translate_prolog_to_clausal_autodetect(self, tmp_path):
         # nv
         from clausal.tools.translate import main
-        outfile = tmp_path / "out.clausal"
+        outfile = tmp_path / f"out{SEAM}"
         code = main([str(GOLDEN / "edge_graph.pl"), "-o", str(outfile)])
         assert code == 0
         content = outfile.read_text()
@@ -520,7 +521,7 @@ class TestSeamAliasDirection:
         # nv
         from clausal.tools.translate import main
         src = tmp_path / "edge_graph.seam"
-        src.write_text((FIXTURES / "edge_graph.clausal").read_text())
+        src.write_text(seam_path(FIXTURES / "edge_graph.clausal").read_text())
         outfile = tmp_path / "out.pl"
         code = main([str(src), "-o", str(outfile)])
         assert code == 0

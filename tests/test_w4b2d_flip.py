@@ -40,6 +40,7 @@ from clausal.logic.atoms import mangle
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
 from clausal.testing import load_clausal_module
+from tests._suffix import SEAM
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -52,7 +53,7 @@ def _write(tmp_path, name, src):
 
 def _load(tmp_path, name, src):
     sys.modules.pop(name, None)
-    return _load_module(name, _write(tmp_path, f"{name}.clausal", src))
+    return _load_module(name, _write(tmp_path, f"{name}{SEAM}", src))
 
 
 def _classes(module):
@@ -120,8 +121,9 @@ def test_the_off_switch_is_gone():
         import sys, os
         import clausal.import_hook
         from clausal.import_hook import _load_module
-        m = _load_module("_flip_off_probe", os.path.join(
-            "tests", "fixtures", "specialize_natnum.clausal"))
+        from tests._suffix import seam_path
+        m = _load_module("_flip_off_probe", seam_path(os.path.join(
+            "tests", "fixtures", "specialize_natnum.clausal")))
         print(type(m.natnum_program).__name__,
               isinstance(m.natnum_program, type))
     """)
@@ -145,12 +147,12 @@ def test_a_body_call_resolves_with_two_live_modules_under_one_name(tmp_path):
     b = tmp_path / "b"
     a.mkdir()
     b.mkdir()
-    first = load_clausal_module(_write(a, "t.clausal", """
+    first = load_clausal_module(_write(a, f"t{SEAM}", """
         -private([x])
         base(x),
         top(X) <- base(X),
     """))
-    second = load_clausal_module(_write(b, "t.clausal", """
+    second = load_clausal_module(_write(b, f"t{SEAM}", """
         -private([y])
         base(y),
         top(X) <- base(X),

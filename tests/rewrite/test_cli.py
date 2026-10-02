@@ -11,6 +11,7 @@ import subprocess
 import sys
 
 import pytest
+from tests._suffix import SEAM
 
 
 def _run(*args):
@@ -26,7 +27,7 @@ FOLDED = "r(K, unknown(M)) <- (\n    m(K, M)\n)\n"
 
 
 def test_rewrites_in_place(tmp_path):
-    path = tmp_path / "a.clausal"
+    path = tmp_path / f"a{SEAM}"
     path.write_text(FOLDABLE)
     result = _run(str(path))
     assert result.returncode == 0, result.stderr
@@ -34,23 +35,23 @@ def test_rewrites_in_place(tmp_path):
 
 
 def test_check_reports_would_change_without_writing(tmp_path):
-    path = tmp_path / "a.clausal"
+    path = tmp_path / f"a{SEAM}"
     path.write_text(FOLDABLE)
     result = _run("--check", str(path))
     assert result.returncode == 1
     assert path.read_text() == FOLDABLE
-    assert "a.clausal" in result.stdout
+    assert f"a{SEAM}" in result.stdout
 
 
 def test_check_passes_on_a_stable_file(tmp_path):
-    path = tmp_path / "a.clausal"
+    path = tmp_path / f"a{SEAM}"
     path.write_text("p(X) <- (\n    m(X)\n)\n")
     result = _run("--check", str(path))
     assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_diff_prints_a_unified_diff(tmp_path):
-    path = tmp_path / "a.clausal"
+    path = tmp_path / f"a{SEAM}"
     path.write_text("p(X) <- (X is 5)\n")
     result = _run("--diff", str(path))
     assert result.returncode == 1
@@ -60,14 +61,14 @@ def test_diff_prints_a_unified_diff(tmp_path):
 
 
 def test_named_rules_select_a_subset(tmp_path):
-    path = tmp_path / "a.clausal"
+    path = tmp_path / f"a{SEAM}"
     path.write_text(FOLDABLE)
     assert _run("--rules", "head_fold", str(path)).returncode == 0
     assert path.read_text() == FOLDED
 
 
 def test_unknown_rule_name_errors(tmp_path):
-    path = tmp_path / "a.clausal"
+    path = tmp_path / f"a{SEAM}"
     path.write_text(FOLDABLE)
     result = _run("--rules", "no_such_rule", str(path))
     assert result.returncode == 2
@@ -76,17 +77,17 @@ def test_unknown_rule_name_errors(tmp_path):
 
 
 def test_a_broken_file_is_reported_and_left_alone(tmp_path):
-    path = tmp_path / "broken.clausal"
+    path = tmp_path / f"broken{SEAM}"
     path.write_text("p(X <- (m(X))\n")
     result = _run(str(path))
     assert result.returncode == 2
-    assert "broken.clausal" in result.stderr
+    assert f"broken{SEAM}" in result.stderr
     assert path.read_text() == "p(X <- (m(X))\n"
 
 
 def test_recurses_into_directories(tmp_path):
     (tmp_path / "sub").mkdir()
-    path = tmp_path / "sub" / "a.clausal"
+    path = tmp_path / "sub" / f"a{SEAM}"
     path.write_text(FOLDABLE)
     (tmp_path / "sub" / "notes.py").write_text("x  =  1\n")
     assert _run(str(tmp_path)).returncode == 0
@@ -240,7 +241,7 @@ def test_a_rule_name_is_a_stem_not_a_path(name, monkeypatch, tmp_path):
 
     rules = tmp_path / "rules"
     (rules / "sub").mkdir(parents=True)
-    (rules / "sub" / "head_fold.clausal").write_text("# reachable by traversal\n")
+    (rules / "sub" / f"head_fold{SEAM}").write_text("# reachable by traversal\n")
     monkeypatch.setattr(cli, "RULES_DIR", rules)
 
     assert cli.rule_path(name) is None

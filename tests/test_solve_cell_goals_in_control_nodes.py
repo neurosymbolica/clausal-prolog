@@ -11,13 +11,14 @@ from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var
 from clausal.terms import And, Not, Or
+from tests._suffix import SEAM
 
 
 @pytest.fixture(scope="module")
 def mod(tmp_path_factory):
     from clausal.import_hook import _load_module
     d = tmp_path_factory.mktemp("scgcn")
-    p = d / "scgcn.clausal"
+    p = d / f"scgcn{SEAM}"
     p.write_text("p(1),\np(2),\nq(2),\nq(3),\n")
     return _load_module("scgcn_mod", str(p))
 

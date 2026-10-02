@@ -23,6 +23,7 @@ from clausal.import_hook import _load_module
 from clausal.logic.atoms import mangle
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 _OWNER = """\
 -dynamic(fdx_verdict/2)
@@ -38,7 +39,7 @@ rx_chk(R) <- fdx_verdict(R, C_UNUSED)
 
 
 def _load(tmp_path, name, src):
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(textwrap.dedent(src))
     return _load_module(name, str(p))
 

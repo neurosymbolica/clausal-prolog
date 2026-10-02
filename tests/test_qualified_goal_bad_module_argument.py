@@ -44,6 +44,7 @@ import pytest
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call, solve
 from clausal.logic.variables import Var
+from tests._suffix import SEAM
 
 _PL = """\
 :- module(bmapl, [r/2]).
@@ -115,7 +116,7 @@ def mods(tmp_path_factory):
     d = tmp_path_factory.mktemp("bma")
     (d / "bmapl.pl").write_text(_PL)
     (d / "bmabody.pl").write_text(_PL_BODY)
-    (d / "bmaseam.clausal").write_text(textwrap.dedent(_SEAM).lstrip())
+    (d / f"bmaseam{SEAM}").write_text(textwrap.dedent(_SEAM).lstrip())
     names = ("bmapl", "bmabody", "bmaseam")
     with pytest.MonkeyPatch.context() as mp:
         mp.setenv("CLAUSAL_PL_FRONTEND", "native")

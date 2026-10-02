@@ -25,6 +25,7 @@ from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, walk
 from clausal.terms import term_str
+from tests._suffix import SEAM as SEAM_EXT
 
 SCRYER = "/workspace/scryer-prolog-clpq/target/release/scryer-prolog"
 
@@ -35,7 +36,7 @@ def _module(tmp_path, body: str, exports: list[str]):
     name = f"_abolish_{next(_N)}"
     src = (f"-module({name}, [{', '.join(exports)}])\n-allow_singletons\n"
            f"{body}\n")
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM_EXT}"
     p.write_text(src)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")

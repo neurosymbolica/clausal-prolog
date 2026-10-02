@@ -22,6 +22,7 @@ from clausal.logic.solve import solve
 from clausal.logic.variables import Var
 
 from .conftest import SCRYER, run_scryer
+from tests._suffix import SEAM
 
 #: (engine clause body, Scryer goal, the error term both print)
 ROWS = [
@@ -53,7 +54,7 @@ _SRC = "-allow_singletons\n-private([esa_missing, a, integer])\n" + "".join(
 
 @pytest.fixture(scope="module")
 def mod():
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                      delete=False) as f:
         f.write(_SRC)
         path = f.name

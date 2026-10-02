@@ -18,6 +18,7 @@ from clausal.import_hook import _load_module
 from clausal.logic import solve as solve_mod
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, is_var, walk
+from tests._suffix import SEAM
 
 
 # ── Fixture module ────────────────────────────────────────────────────────────
@@ -260,7 +261,7 @@ solve_guard([GOAL, *GOALS], PROGRAM, LIM) <- (
 
 @pytest.fixture(scope="module")
 def mod(tmp_path_factory):
-    p = tmp_path_factory.mktemp("a03") / "a03_fixture.clausal"
+    p = tmp_path_factory.mktemp("a03") / f"a03_fixture{SEAM}"
     p.write_text(FIXTURE)
     return _load_module("a03_audit_fixture", str(p))
 
@@ -535,10 +536,10 @@ cimp(N, R) <- catch(thrower(7), kex(N), R is "caught")
 '''
 
     def test_imported_functor_catcher_resolves_to_same_class(self, tmp_path):
-        lib = tmp_path / "a03_f004_catchlib.clausal"
+        lib = tmp_path / f"a03_f004_catchlib{SEAM}"
         lib.write_text(self._F004_CATCH_LIB)
         _load_module("a03_f004_catchlib", str(lib))
-        imp = tmp_path / "a03_f004_catchimp.clausal"
+        imp = tmp_path / f"a03_f004_catchimp{SEAM}"
         imp.write_text(self._F004_CATCH_IMPORTER)
         m = _load_module("a03_f004_catchimp", str(imp))
         N, R = Var(), Var()
@@ -620,7 +621,7 @@ class TestF007SpecializationDropsMidBodyGoals:
         # emit a guard-less specialization. (Previously SolveGuardNat compiled
         # with the depth guard dropped, so it recursed without bound.)
         from clausal.logic.specialization import CannotSpecialize
-        p = tmp_path / "solveguard_spec.clausal"
+        p = tmp_path / f"solveguard_spec{SEAM}"
         p.write_text(_SOLVEGUARD_SPEC_FIXTURE)
         with pytest.raises(CannotSpecialize, match="not MI-related"):
             _load_module("a03_solveguard_refuse", str(p))

@@ -22,6 +22,7 @@ from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.terms import Quantity
 from clausal.testing import load_clausal_module
+from tests._suffix import SEAM
 
 _HEADER = """-double_quotes(chars)
 -private([yes, no])
@@ -35,7 +36,7 @@ third(F) <- 'is'(F, rdiv(1, 3))   # rdiv: exact (Q15)
 
 
 def _module(tmp_path, body=""):
-    path = tmp_path / "step6.clausal"
+    path = tmp_path / f"step6{SEAM}"
     path.write_text(_HEADER + body)
     return load_clausal_module(path)
 

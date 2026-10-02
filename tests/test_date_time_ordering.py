@@ -23,6 +23,7 @@ from clausal.logic.builtins.lists import (
 from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.logic.trampoline import DONE
+from tests._suffix import SEAM
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -334,7 +335,7 @@ class TestVarVsNonNumericOperand:
         from clausal.import_hook import _load_module
         from clausal.logic.solve import solve
         src = '-double_quotes(atom)\nstrlt_ok(X) <- ( X < "banana", X is "apple" )\n'
-        path = os.path.join(str(tmp_path), "strcmp_repro.clausal")
+        path = os.path.join(str(tmp_path), f"strcmp_repro{SEAM}")
         with open(path, "w") as f:
             f.write(src)
         mod = _load_module("strcmp_repro", path)

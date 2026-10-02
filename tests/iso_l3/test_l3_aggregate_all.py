@@ -5,6 +5,7 @@ load its library), so the rows pin the documented semantics: findall/3's
 solutions, sum 0 and count 0 over none, max/min arithmetic and FAILING over
 none, set as sort/2."""
 from __future__ import annotations
+from tests._suffix import SEAM
 
 SRC = """\
 p(1). p(3). p(2).
@@ -63,8 +64,8 @@ def test_aggregate_all_from_the_seam(tmp_path):
            "g2(C) <- aggregate_all(max(X), p(X), C)\n"
            "g3(C) <- aggregate_all(set(X), p(X), C)\n")
     name = f"_agg_seam_{uuid.uuid4().hex[:8]}"
-    (tmp_path / f"{name}.clausal").write_text(src)
-    m = _load_module(name, str(tmp_path / f"{name}.clausal"))
+    (tmp_path / f"{name}{SEAM}").write_text(src)
+    m = _load_module(name, str(tmp_path / f"{name}{SEAM}"))
     got = []
     for i in range(4):
         v = Var()

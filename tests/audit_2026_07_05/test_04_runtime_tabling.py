@@ -22,6 +22,7 @@ from clausal.import_hook import _load_module
 from clausal.logic.solve import solve, call, once, query, query_wfs, _query_cache
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.terms import Undefined
+from tests._suffix import SEAM
 
 
 # ── Fixture loader ────────────────────────────────────────────────────────────
@@ -34,7 +35,7 @@ def load(tmp_path_factory):
     def _load(name, source):
         if name not in _loaded:
             d = tmp_path_factory.mktemp("a04fix")
-            p = d / f"{name}.clausal"
+            p = d / f"{name}{SEAM}"
             p.write_text(source)
             _loaded[name] = _load_module(f"a04_{name}", str(p))
         return _loaded[name]

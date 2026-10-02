@@ -8,6 +8,7 @@ from clausal.fmt.verify import (
     check_idempotent,
     comments_only_change,
 )
+from tests._suffix import SEAM
 
 
 def test_ast_equivalent_ignores_layout_and_comments():
@@ -68,13 +69,13 @@ def test_build_repair_prompt_contains_diff_and_rules():
     from clausal.fmt.repair_prompt import build_repair_prompt
 
     p = build_repair_prompt(
-        "x.clausal",
+        f"x{SEAM}",
         "# a\np(X) <- (\n    q(X)\n)\n",
         "# a\np(X) <- (\n    q(X),\n    r(X)\n)\n",
     )
-    assert "--- x.clausal (before)" in p and "+++ x.clausal (after)" in p
+    assert f"--- x{SEAM} (before)" in p and f"+++ x{SEAM} (after)" in p
     assert "comments only" in p.lower()
-    assert "x.clausal" in p
+    assert f"x{SEAM}" in p
 
 
 def test_accept_repair_rejects_code_edits():

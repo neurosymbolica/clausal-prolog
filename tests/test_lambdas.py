@@ -32,6 +32,7 @@ from clausal.terms import (
     Unify, DoesNotUnify, Evaluate,
     Call, LoadName,
     Add, )
+from tests._suffix import SEAM
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -536,7 +537,7 @@ class TestLambdaImport:
     def test_lambda_unify_in_clausal_file(self, tmp_path):
         """Arrow lambda with unification body in a .clausal file."""
         # nv
-        clausal_file = tmp_path / "lambda_test.clausal"
+        clausal_file = tmp_path / f"lambda_test{SEAM}"
         clausal_file.write_text(
             "-module(lambda_test, [apply_val/2])\n"
             "\n"
@@ -551,7 +552,7 @@ class TestLambdaImport:
     def test_lambda_captures_head_var_in_clausal(self, tmp_path):
         """Arrow lambda in .clausal captures a variable from the clause head."""
         # nv
-        clausal_file = tmp_path / "capture_test.clausal"
+        clausal_file = tmp_path / f"capture_test{SEAM}"
         clausal_file.write_text(
             "-module(capture_test, [bind_z/2])\n"
             "\n"
@@ -566,7 +567,7 @@ class TestLambdaImport:
     def test_lambda_with_conjunction_in_clausal(self, tmp_path):
         """Arrow lambda with conjunction body in .clausal file."""
         # nv
-        clausal_file = tmp_path / "conj_test.clausal"
+        clausal_file = tmp_path / f"conj_test{SEAM}"
         clausal_file.write_text(
             "-module(conj_test, [bind_pair/3])\n"
             "\n"
@@ -586,7 +587,7 @@ class TestLambdaImport:
         Lambda node. (closure-loses-arity-when-stored-or-nested bug, case B.)
         """
         # nv
-        clausal_file = tmp_path / "lambda_var.clausal"
+        clausal_file = tmp_path / f"lambda_var{SEAM}"
         clausal_file.write_text(
             "-module(lambda_var, [run/1])\n"
             "\n"
@@ -608,7 +609,7 @@ class TestLambdaImport:
         closure. (closure-loses-arity-when-stored-or-nested bug, case C.)
         """
         # nv
-        clausal_file = tmp_path / "lambda_bundle.clausal"
+        clausal_file = tmp_path / f"lambda_bundle{SEAM}"
         clausal_file.write_text(
             "-module(lambda_bundle, [run/1])\n"
             "-private([bundle(_g)])\n"
@@ -628,7 +629,7 @@ class TestLambdaImport:
     def test_lambda_zero_arg_in_clausal(self, tmp_path):
         """Zero-arg arrow lambda in .clausal file."""
         # nv
-        clausal_file = tmp_path / "zero_arg_test.clausal"
+        clausal_file = tmp_path / f"zero_arg_test{SEAM}"
         clausal_file.write_text(
             "-module(zero_arg_test, [run_goal/1])\n"
             "\n"
@@ -647,7 +648,7 @@ class TestLambdaImport:
     def test_lambda_calls_user_predicate(self, tmp_path):
         """Arrow lambda body calling a user predicate via _tramp_call bridge."""
         # nv
-        clausal_file = tmp_path / "lambda_pred_call.clausal"
+        clausal_file = tmp_path / f"lambda_pred_call{SEAM}"
         clausal_file.write_text(
             "-module(lambda_pred_call, [double/2, apply_double/2])\n"
             "\n"
@@ -664,7 +665,7 @@ class TestLambdaImport:
     def test_lambda_calls_multi_solution_predicate(self, tmp_path):
         """Arrow lambda body calling a multi-solution predicate collects all answers."""
         # nv
-        clausal_file = tmp_path / "lambda_multi.clausal"
+        clausal_file = tmp_path / f"lambda_multi{SEAM}"
         clausal_file.write_text(
             "-double_quotes(atom)\n-module(lambda_multi, [color/1, get_color/1])\n"
             "\n"
@@ -687,7 +688,7 @@ class TestLambdaImport:
     def test_python_lambda_rejected_in_clausal_file(self, tmp_path):
         """Python lambda syntax raises SyntaxError in .clausal files."""
         # nv
-        clausal_file = tmp_path / "py_lambda.clausal"
+        clausal_file = tmp_path / f"py_lambda{SEAM}"
         clausal_file.write_text(
             "-module(py_lambda, [test/1])\n"
             "\n"
@@ -711,7 +712,7 @@ class TestLambdaImport:
         """
         # nv
         from clausal.logic.exceptions import LogicException
-        clausal_file = tmp_path / "bad_goal.clausal"
+        clausal_file = tmp_path / f"bad_goal{SEAM}"
         clausal_file.write_text(
             "-double_quotes(atom)\n"
             "-module(bad_goal, [run/1])\n"
@@ -837,7 +838,7 @@ class TestArrowLambdaCompiled:
     def test_arrow_lambda_arithmetic_in_clausal(self, tmp_path):
         """Arrow lambda with == arithmetic in .clausal file."""
         # nv
-        clausal_file = tmp_path / "arrow_arith.clausal"
+        clausal_file = tmp_path / f"arrow_arith{SEAM}"
         clausal_file.write_text(
             "-module(arrow_arith, [apply_inc/2])\n"
             "\n"
@@ -856,7 +857,7 @@ class TestArrowLambdaCompiled:
     def test_arrow_lambda_two_params_in_clausal(self, tmp_path):
         """Two-param arrow lambda in .clausal file."""
         # nv
-        clausal_file = tmp_path / "arrow_two.clausal"
+        clausal_file = tmp_path / f"arrow_two{SEAM}"
         clausal_file.write_text(
             "-module(arrow_two, [apply_add/3])\n"
             "\n"
@@ -875,7 +876,7 @@ class TestArrowLambdaCompiled:
     def test_arrow_lambda_zero_arg_in_clausal(self, tmp_path):
         """Zero-arg arrow lambda in .clausal file."""
         # nv
-        clausal_file = tmp_path / "arrow_zero.clausal"
+        clausal_file = tmp_path / f"arrow_zero{SEAM}"
         clausal_file.write_text(
             "-module(arrow_zero, [run_goal/1])\n"
             "\n"
@@ -894,7 +895,7 @@ class TestArrowLambdaCompiled:
     def test_arrow_lambda_captures_head_var(self, tmp_path):
         """Arrow lambda captures clause-head variable."""
         # nv
-        clausal_file = tmp_path / "arrow_capture.clausal"
+        clausal_file = tmp_path / f"arrow_capture{SEAM}"
         clausal_file.write_text(
             "-module(arrow_capture, [add_z/2])\n"
             "\n"
@@ -913,7 +914,7 @@ class TestArrowLambdaCompiled:
     def test_arrow_lambda_conjunction_in_clausal(self, tmp_path):
         """Arrow lambda with conjunction body in .clausal file."""
         # nv
-        clausal_file = tmp_path / "arrow_conj.clausal"
+        clausal_file = tmp_path / f"arrow_conj{SEAM}"
         clausal_file.write_text(
             "-module(arrow_conj, [transform/2])\n"
             "\n"
@@ -932,7 +933,7 @@ class TestArrowLambdaCompiled:
     def test_arrow_lambda_calls_user_predicate(self, tmp_path):
         """Arrow lambda calling a user-defined predicate."""
         # nv
-        clausal_file = tmp_path / "arrow_pred.clausal"
+        clausal_file = tmp_path / f"arrow_pred{SEAM}"
         clausal_file.write_text(
             "-module(arrow_pred, [double/2, apply_double/2])\n"
             "\n"

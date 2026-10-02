@@ -20,6 +20,7 @@ from clausal.logic.database import Clause, Database, Module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, Trail, deref
 from clausal.terms import Call, LoadName
+from tests._suffix import SEAM
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -607,7 +608,7 @@ class TestBetweenArithmeticBounds:
             "    findall(X, between(0, LENGTH - 1, X), XS),\n"
             ")\n"
         )
-        with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+        with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                          delete=False) as f:
             f.write(src)
             path = f.name

@@ -38,12 +38,13 @@ from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, is_var, walk
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, monkeypatch, name, body):
     from clausal.import_hook import _load_module
     monkeypatch.syspath_prepend(str(tmp_path))
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(textwrap.dedent(body).lstrip())
     mod = _load_module(name, str(p))
     assert sys.modules[name] is mod

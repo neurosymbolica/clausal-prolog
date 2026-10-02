@@ -26,6 +26,7 @@ from clausal.logic.compiler_v2 import _meta_interpreter_row
 from clausal.logic.database import Clause, Database
 from clausal.logic.predicate import resolve_predicate_row
 from clausal.logic.specialization import CannotSpecialize, analyze_mi
+from tests._suffix import SEAM
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 _MIS = "clausal.examples.metainterpreters"
@@ -164,14 +165,14 @@ def test_a_declared_mi_with_no_clauses_gets_analyze_mi_s_refusal(
     whose message is the one place it is spelled."""
     monkeypatch.syspath_prepend(str(tmp_path))
     sys.modules.pop("spec_empty_mi", None)
-    (tmp_path / "spec_empty_mi.clausal").write_text(
+    (tmp_path / f"spec_empty_mi{SEAM}").write_text(
         "-dynamic(empty_mi/2)\n\n"
         "prog(P) <- (P is [])\n\n"
         "-specialize(empty_mi, prog, alias=empty_spec)\n")
     try:
         with pytest.raises(CannotSpecialize,
                            match=r"empty_mi: expected at least 2 clauses .*got 0"):
-            _load_module("spec_empty_mi", str(tmp_path / "spec_empty_mi.clausal"))
+            _load_module("spec_empty_mi", str(tmp_path / f"spec_empty_mi{SEAM}"))
     finally:
         sys.modules.pop("spec_empty_mi", None)
 
@@ -218,7 +219,7 @@ def test_an_aliased_mi_import_specializes(tmp_path, monkeypatch):
     under the importer's spelling while its key carries the owner's name."""
     monkeypatch.syspath_prepend(str(tmp_path))
     sys.modules.pop("spec_alias_mi", None)
-    (tmp_path / "spec_alias_mi.clausal").write_text(
+    (tmp_path / f"spec_alias_mi{SEAM}").write_text(
         "-double_quotes(atom)\n-import_from(clausal.examples.metainterpreters, "
         "[alias(solve_count, sc)])\n\n"
         "natnum_program(PROGRAM) <- (\n"
@@ -230,7 +231,7 @@ def test_an_aliased_mi_import_specializes(tmp_path, monkeypatch):
         "-specialize(sc, natnum_program, alias=sc_natnum)\n")
     try:
         module = _load_module("spec_alias_mi",
-                              str(tmp_path / "spec_alias_mi.clausal"))
+                              str(tmp_path / f"spec_alias_mi{SEAM}"))
         db = module.__dict__["$module"].db
         row = db.row("sc_natnum", 2)
         assert row is not None and row.clauses and row.dispatch_fn is not None

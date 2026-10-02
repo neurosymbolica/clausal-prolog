@@ -13,10 +13,11 @@ import warnings
 
 from clausal.import_hook import _load_module
 from clausal.templating.term_rewriting import ClausalLintWarning
+from tests._suffix import SEAM
 
 
 def _lint_warnings(tmp_path, name, text):
-    src = tmp_path / f"{name}.clausal"
+    src = tmp_path / f"{name}{SEAM}"
     src.write_text(text)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")

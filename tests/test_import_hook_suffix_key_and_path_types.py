@@ -21,6 +21,7 @@ import pytest
 from clausal import import_hook as ih
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
+from tests._suffix import SEAM
 
 FRONTENDS = ("native", "translator")
 
@@ -43,7 +44,7 @@ def _evict(*names):
 
 def test_same_stem_pl_and_clausal_do_not_share_bytecode(frontend, tmp_path):
     pl = tmp_path / "sfxtwin.pl"
-    cl = tmp_path / "sfxtwin.clausal"
+    cl = tmp_path / f"sfxtwin{SEAM}"
     pl.write_text("which(2).%\n")
     cl.write_text("which(1), \n")
     assert pl.stat().st_size == cl.stat().st_size
@@ -62,7 +63,7 @@ def test_same_stem_pl_and_clausal_do_not_share_bytecode(frontend, tmp_path):
 
 
 def test_the_clausal_key_is_unchanged(tmp_path):
-    src = tmp_path / "sfxkey.clausal"
+    src = tmp_path / f"sfxkey{SEAM}"
     src.write_text("f(1),\n")
     stats = ih.PredicateLoader("sfxkey", str(src)).path_stats(str(src))
     assert stats["mtime"] == (os.stat(src).st_mtime_ns
@@ -70,7 +71,7 @@ def test_the_clausal_key_is_unchanged(tmp_path):
     assert ih._suffix_salt("a.seam") not in (0, ih._suffix_salt("a.pl"))
 
 
-@pytest.mark.parametrize("suffix,text", [(".clausal", "which(1),\n"),
+@pytest.mark.parametrize("suffix,text", [(SEAM, "which(1),\n"),
                                          (".pl", "which(1).\n")])
 def test_load_module_takes_a_path_on_a_warm_cache(frontend, tmp_path,
                                                   suffix, text):
@@ -90,7 +91,7 @@ def test_load_module_takes_a_path_on_a_warm_cache(frontend, tmp_path,
 @pytest.mark.parametrize("bad", [None, b"/nonexistent-bytes-entry", 7,
                                  pathlib.Path("/nonexistent-path-entry")])
 def test_a_non_str_sys_path_entry_is_skipped(tmp_path, bad):
-    (tmp_path / "sfxodd.clausal").write_text("which(3),\n")
+    (tmp_path / f"sfxodd{SEAM}").write_text("which(3),\n")
     saved = list(sys.path)
     sys.path[:] = [bad, str(tmp_path)] + saved
     importlib.invalidate_caches()

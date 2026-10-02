@@ -20,6 +20,7 @@ from clausal.import_hook import _load_module
 from clausal.logic.atoms import is_atom
 from clausal.logic.cells import chars, is_chars
 from clausal.terms import DictTerm, Var
+from tests._suffix import SEAM
 
 
 def _load(name, source):
@@ -133,7 +134,7 @@ class TestRawOut:
         assert m.gen() == ["permitted"]
 
     def test_with_bases_hands_back_the_raw_form(self, tmp_path):
-        rb = tmp_path / "ro_lib.clausal"
+        rb = tmp_path / f"ro_lib{SEAM}"
         rb.write_text("-module(ro_lib, [txt(T)])\n-double_quotes(chars)\ntxt(\"t\"),\n")
         host = _rb("_ro_g", (
             "from clausal.import_hook import _load_module\n"

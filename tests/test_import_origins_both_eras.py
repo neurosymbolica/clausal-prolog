@@ -36,6 +36,7 @@ from clausal.logic.predicate import (
     predicate_binding_name, resolve_predicate_row,
 )
 from clausal.pythonic_ast.nodes import ImportFromDirective
+from tests._suffix import SEAM
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -171,7 +172,7 @@ def test_the_load_refusal_fires_through_the_real_gate_in_both_eras(owner):
         origins = _import_from_origins(_aliased_import(), {"hue": binding})
         with pytest.raises(SyntaxError) as exc_info:
             _refuse_foreign_writes(Database(), [node], {_OWNER: owner},
-                                   origins, "/elsewhere/importer.clausal",
+                                   origins, f"/elsewhere/importer{SEAM}",
                                    "some_importer")
         texts[era] = strip(str(exc_info.value))
     assert " is declared at " not in texts["mangled"]

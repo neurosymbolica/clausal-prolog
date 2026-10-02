@@ -10,6 +10,7 @@ import pytest
 from clausal.logic.solve import _deref_walk, call, solve
 from clausal.logic.variables import Var
 from clausal.predicate_diagnostics import PredicateNotFoundError
+from tests._suffix import SEAM
 
 
 @pytest.fixture
@@ -17,9 +18,9 @@ def importer(tmp_path, monkeypatch):
     import sys
     from clausal.import_hook import _load_module
     monkeypatch.syspath_prepend(str(tmp_path))
-    (tmp_path / "cdf_alow.clausal").write_text(
+    (tmp_path / f"cdf_alow{SEAM}").write_text(
         "-module(cdf_alow, [numlist/1])\n-private([x])\nnumlist(x),\n")
-    p = tmp_path / "cdf_alowi.clausal"
+    p = tmp_path / f"cdf_alowi{SEAM}"
     p.write_text("-module(cdf_alowi, [t/1])\n-import_module(cdf_alow)\n"
                  "t(L) <- cdf_alow.numlist(3, L)\n")
     yield _load_module("cdf_alowi", str(p))

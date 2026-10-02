@@ -25,12 +25,13 @@ from clausal.terms import (
 )
 from clausal.logic.cells import chars
 from clausal.logic.solve import solve
+from tests._suffix import SEAM
 
 
 @pytest.fixture
 def mod():
     with tempfile.NamedTemporaryFile(
-        suffix=".clausal", mode="w", delete=False
+        suffix=SEAM, mode="w", delete=False
     ) as f:
         f.write("z0,\n")
         path = f.name

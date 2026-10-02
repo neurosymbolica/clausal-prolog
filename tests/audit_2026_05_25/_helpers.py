@@ -7,6 +7,7 @@ import tempfile
 from typing import Any
 
 from clausal.import_hook import _load_module
+from tests._suffix import SEAM
 
 
 def load_inline_clausal(name: str, source: str) -> Any:
@@ -21,7 +22,7 @@ def load_inline_clausal(name: str, source: str) -> Any:
     unit tests on `clausal.terms.SegList`/`.SegString` don't need this.
     """
     with tempfile.NamedTemporaryFile(
-        suffix=".clausal", mode="w", delete=False
+        suffix=SEAM, mode="w", delete=False
     ) as f:
         f.write(source)
         f.flush()

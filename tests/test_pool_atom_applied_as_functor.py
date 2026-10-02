@@ -25,6 +25,7 @@ import pytest
 from clausal.import_hook import _load_module, predicate_builtins
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 _N = itertools.count()
 
@@ -32,7 +33,7 @@ _N = itertools.count()
 def _load(stem, source):
     name = f"_pafn_{stem}_{next(_N)}"
     with tempfile.TemporaryDirectory() as d:
-        path = os.path.join(d, f"{name}.clausal")
+        path = os.path.join(d, f"{name}{SEAM}")
         with open(path, "w") as fh:
             fh.write(source)
         with warnings.catch_warnings():

@@ -27,6 +27,7 @@ from clausal.logic.cells import chars
 from clausal.terms import Call, LoadName, DictTerm, SetTerm
 from clausal.import_hook import _load_module
 from clausal.logic.atoms import is_atom, mint, spelling
+from tests._suffix import SEAM
 
 _FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -711,7 +712,7 @@ class TestInOperatorDictSet:
 
     @pytest.fixture(autouse=True)
     def _setup(self, tmp_path):
-        src = tmp_path / "in_dict.clausal"
+        src = tmp_path / f"in_dict{SEAM}"
         src.write_text(
             "-double_quotes(atom)\n# predicates\n"
             "\n"

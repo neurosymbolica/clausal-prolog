@@ -41,6 +41,7 @@ from clausal.logic.predicate import (
 )
 from clausal.logic.solve import _deref_walk, _templatize_query_goal, solve
 from clausal.logic.variables import Var, is_var
+from tests._suffix import SEAM
 
 
 def _fixture_path(name: str) -> str:
@@ -194,7 +195,7 @@ def test_zero_arity_source_fact_matches_both_binding_shapes(zero):
 
 def test_popped_module_local_handle_lowers_plain_only_with_the_db_hint(tmp_path):
     name = "self_atom_popped_2026_09_24"
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent("""
         sa_p(1),
     """).lstrip())

@@ -25,6 +25,7 @@ from clausal.logic.cells import chars
 from clausal import Var, solve
 from clausal.import_hook import _load_module, _load_prolog_module
 from clausal.logic.solve import call
+from tests._suffix import SEAM
 
 _COUNTER = [0]
 
@@ -36,7 +37,7 @@ def _load(tmp_path, src, stem="a10mod"):
     """
     _COUNTER[0] += 1
     name = f"a10_{stem}_{_COUNTER[0]}"
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(src))
     return _load_module(name, str(path))
 
@@ -173,7 +174,7 @@ def test_F004_local_clause_does_not_clobber_imported_predicate(tmp_path):
     See ``todo/done/imported-functor-clause-list-replaced-not-extended.md`` and
     ``tests/test_imported_functor_clause_clobber.py``.
     """
-    lib_path = tmp_path / "a10_f004_lib.clausal"
+    lib_path = tmp_path / f"a10_f004_lib{SEAM}"
     lib_path.write_text('twice(X, Y) <- (Y == X * 2)\n')
     lib = _load_module("a10_f004_lib", str(lib_path))
 
@@ -195,7 +196,7 @@ def test_F004_local_clause_does_not_clobber_imported_predicate(tmp_path):
 
 
 def test_F004_guard_plain_import_does_not_disturb_source(tmp_path):
-    lib_path = tmp_path / "a10_f004b_lib.clausal"
+    lib_path = tmp_path / f"a10_f004b_lib{SEAM}"
     lib_path.write_text('twice(X, Y) <- (Y == X * 2)\n')
     lib = _load_module("a10_f004b_lib", str(lib_path))
     m = _load(tmp_path, """
@@ -306,7 +307,7 @@ def test_F007_dump_source_runs_without_black(tmp_path):
     except ImportError:
         pass
     from clausal.tools.dump_transformed import dump_source
-    path = tmp_path / "a10_dump.clausal"
+    path = tmp_path / f"a10_dump{SEAM}"
     path.write_text('p(1),\n')
     out = dump_source(str(path))
     assert "$define_predicate" in out
@@ -314,7 +315,7 @@ def test_F007_dump_source_runs_without_black(tmp_path):
 
 def test_F007_dump_source_arrow_fidelity(tmp_path):
     from clausal.tools.dump_transformed import dump_source
-    path = tmp_path / "a10_dumpfid.clausal"
+    path = tmp_path / f"a10_dumpfid{SEAM}"
     path.write_text('g(X) <- (X< -3)\n')
     out = dump_source(str(path))
     assert "Lt(" in out and "Lambda(" not in out, \
@@ -405,7 +406,7 @@ def test_F010_stdlib_not_shadowed_by_clausal_file(tmp_path):
     clone = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     shadow = tmp_path / "shadow"
     shadow.mkdir()
-    (shadow / "wave.clausal").write_text("f(1),\n")
+    (shadow / f"wave{SEAM}").write_text("f(1),\n")
     code = _SHADOW_PROBE.format(clone=clone, shadow=str(shadow))
     r = subprocess.run([sys.executable, "-c", code], capture_output=True,
                        text=True, timeout=50)
@@ -560,7 +561,7 @@ def test_F016_guard_yield_dataclass_traversal_documented():
 
 
 def test_F017_single_letter_alias_rejected_at_load(tmp_path):
-    lib = tmp_path / "a10_f017_lib.clausal"
+    lib = tmp_path / f"a10_f017_lib{SEAM}"
     lib.write_text('twice(X, Y) <- (Y == X * 2)\n')
     _load_module("a10_f017_lib", str(lib))
     with pytest.raises(SyntaxError):
@@ -571,7 +572,7 @@ def test_F017_single_letter_alias_rejected_at_load(tmp_path):
 
 
 def test_F017_guard_titlecase_alias_works(tmp_path):
-    lib = tmp_path / "a10_f017b_lib.clausal"
+    lib = tmp_path / f"a10_f017b_lib{SEAM}"
     lib.write_text('twice(X, Y) <- (Y == X * 2)\n')
     _load_module("a10_f017b_lib", str(lib))
     m = _load(tmp_path, """
@@ -658,7 +659,7 @@ def test_guard_dcg_pushback_and_meta_nonterminal(tmp_path):
 
 
 def test_guard_qualified_import_and_var_rejection(tmp_path):
-    lib = tmp_path / "a10_qlib.clausal"
+    lib = tmp_path / f"a10_qlib{SEAM}"
     lib.write_text('twice(X, Y) <- (Y == X * 2)\n')
     _load_module("a10_qlib", str(lib))
     m = _load(tmp_path, """
@@ -729,7 +730,7 @@ def test_guard_pyc_cache_hit_preserves_directives(tmp_path):
     clone = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     moddir = tmp_path / "cachemod"
     moddir.mkdir()
-    (moddir / "a10dyncache.clausal").write_text("-dynamic(seen/1)\nseen(0),\n")
+    (moddir / f"a10dyncache{SEAM}").write_text("-dynamic(seen/1)\nseen(0),\n")
     code = textwrap.dedent(f"""
         import sys
         sys.path.insert(0, {str(clone)!r})
@@ -753,7 +754,7 @@ def test_guard_lazy_hook_activates_and_removes_itself(tmp_path):
     clone = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     moddir = tmp_path / "lazymod"
     moddir.mkdir()
-    (moddir / "a10lazyfacts.clausal").write_text("p(1),\np(2),\n")
+    (moddir / f"a10lazyfacts{SEAM}").write_text("p(1),\np(2),\n")
     code = textwrap.dedent(f"""
         import sys
         sys.path.insert(0, {str(clone)!r})
@@ -812,7 +813,7 @@ def test_F018_path_stats_folds_bytecode_tag(tmp_path):
     from clausal.import_hook import (
         _ClausalSourceLoader, CLAUSAL_BYTECODE_TAG, _effective_bytecode_tag,
         _compilation_fingerprint)
-    src = tmp_path / "a10f018.clausal"
+    src = tmp_path / f"a10f018{SEAM}"
     src.write_text("fact(1),\n")
     loader = _ClausalSourceLoader("a10f018", str(src))
     stats = loader.path_stats(str(src))

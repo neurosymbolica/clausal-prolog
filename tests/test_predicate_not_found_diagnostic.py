@@ -32,6 +32,7 @@ from clausal.predicate_diagnostics import (
     describe_missing_predicate,
 )
 from clausal.testing import main
+from tests._suffix import SEAM
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -145,16 +146,16 @@ test("citation record resolves") <- (
 class TestOtherModule:
 
     def test_unimported_sibling_file_is_found(self, capsys, tmp_path):
-        write(tmp_path, "prednf_citations.clausal", CITATIONS_SRC)
-        p = write(tmp_path, "sib_use.clausal", SIBLING_USE_SRC)
+        write(tmp_path, f"prednf_citations{SEAM}", CITATIONS_SRC)
+        p = write(tmp_path, f"sib_use{SEAM}", SIBLING_USE_SRC)
         assert main([str(p)]) == 1
         out = capsys.readouterr().out
         assert "citation/3" in out
         assert "prednf_citations" in out
 
     def test_sibling_is_flagged_as_not_imported(self, capsys, tmp_path):
-        write(tmp_path, "prednf_citations.clausal", CITATIONS_SRC)
-        p = write(tmp_path, "sib_use.clausal", SIBLING_USE_SRC)
+        write(tmp_path, f"prednf_citations{SEAM}", CITATIONS_SRC)
+        p = write(tmp_path, f"sib_use{SEAM}", SIBLING_USE_SRC)
         main([str(p)])
         out = capsys.readouterr().out
         assert "-import_from(" in out
@@ -193,14 +194,14 @@ test("absent predicate") <- (
 class TestNothingSimilar:
 
     def test_says_no_predicate_of_that_name(self, capsys, tmp_path):
-        p = write(tmp_path, "nothing.clausal", NOTHING_SRC)
+        p = write(tmp_path, f"nothing{SEAM}", NOTHING_SRC)
         assert main([str(p)]) == 1
         out = capsys.readouterr().out
         assert "no predicate named" in out
         assert "zzz_quux" in out
 
     def test_does_not_print_an_empty_candidate_list(self, capsys, tmp_path):
-        p = write(tmp_path, "nothing.clausal", NOTHING_SRC)
+        p = write(tmp_path, f"nothing{SEAM}", NOTHING_SRC)
         main([str(p)])
         out = capsys.readouterr().out
         # An empty list reads as "nothing is defined", a different claim.
@@ -208,7 +209,7 @@ class TestNothingSimilar:
         assert not re.search(r"did you mean:\s*\??\s*$", out, re.M)
 
     def test_still_lists_what_this_module_does_define(self, capsys, tmp_path):
-        p = write(tmp_path, "nothing.clausal", NOTHING_SRC)
+        p = write(tmp_path, f"nothing{SEAM}", NOTHING_SRC)
         main([str(p)])
         out = capsys.readouterr().out
         assert "local_ref/1" in out
@@ -239,7 +240,7 @@ test("builtin at the wrong arity") <- (
 class TestBuiltinArity:
 
     def test_points_at_the_builtin_arity(self, capsys, tmp_path):
-        p = write(tmp_path, "bi.clausal", BUILTIN_SRC)
+        p = write(tmp_path, f"bi{SEAM}", BUILTIN_SRC)
         assert main([str(p)]) == 1
         out = capsys.readouterr().out
         assert "atom_length/2" in out
@@ -248,7 +249,7 @@ class TestBuiltinArity:
     def test_does_not_claim_the_name_is_undefined(self, capsys, tmp_path):
         """The pre-fix message would have said "define atom_length/3" — a
         worse diagnosis than the bare line it replaces."""
-        p = write(tmp_path, "bi.clausal", BUILTIN_SRC)
+        p = write(tmp_path, f"bi{SEAM}", BUILTIN_SRC)
         main([str(p)])
         out = capsys.readouterr().out
         assert "no predicate named" not in out
@@ -270,7 +271,7 @@ test("near miss on the name") <- (
 def test_near_miss_on_the_name(capsys, tmp_path):
     """Same scoring as the import diagnostic: plain difflib rates this pair
     0.48 and would say nothing."""
-    p = write(tmp_path, "nearmiss.clausal", NEAR_MISS_SRC)
+    p = write(tmp_path, f"nearmiss{SEAM}", NEAR_MISS_SRC)
     main([str(p)])
     out = capsys.readouterr().out
     assert re.search(r"did you mean:[^\n]*exceeds_limit", out)
@@ -282,8 +283,8 @@ def test_near_miss_on_the_name(capsys, tmp_path):
 class TestCliRendering:
 
     def test_header_stays_one_line(self, capsys, tmp_path):
-        write(tmp_path, "prednf_citations.clausal", CITATIONS_SRC)
-        p = write(tmp_path, "sib_use.clausal", SIBLING_USE_SRC)
+        write(tmp_path, f"prednf_citations{SEAM}", CITATIONS_SRC)
+        p = write(tmp_path, f"sib_use{SEAM}", SIBLING_USE_SRC)
         main([str(p)])
         out = capsys.readouterr().out
         header = [ln for ln in out.splitlines() if ":: citation record" in ln]
@@ -291,8 +292,8 @@ class TestCliRendering:
         assert header[0].endswith("Predicate citation/2 not found")
 
     def test_candidates_are_indented_under_the_goal(self, capsys, tmp_path):
-        write(tmp_path, "prednf_citations.clausal", CITATIONS_SRC)
-        p = write(tmp_path, "sib_use.clausal", SIBLING_USE_SRC)
+        write(tmp_path, f"prednf_citations{SEAM}", CITATIONS_SRC)
+        p = write(tmp_path, f"sib_use{SEAM}", SIBLING_USE_SRC)
         main([str(p)])
         out = capsys.readouterr().out
         assert "goal 2 of 2 raised:" in out
@@ -301,8 +302,8 @@ class TestCliRendering:
                 assert line.startswith("      "), repr(line)
 
     def test_message_is_not_printed_twice(self, capsys, tmp_path):
-        write(tmp_path, "prednf_citations.clausal", CITATIONS_SRC)
-        p = write(tmp_path, "sib_use.clausal", SIBLING_USE_SRC)
+        write(tmp_path, f"prednf_citations{SEAM}", CITATIONS_SRC)
+        p = write(tmp_path, f"sib_use{SEAM}", SIBLING_USE_SRC)
         main([str(p)])
         out = capsys.readouterr().out
         assert out.count("did you mean:") == 1
@@ -332,8 +333,8 @@ def test_capped_sibling_scan_says_it_was_capped(tmp_path, monkeypatch):
 
     monkeypatch.setattr(pd, "_MAX_SIBLING_FILES", 3)
     for i in range(10):
-        write(tmp_path, f"m{i}.clausal", f"-module(m{i}, [p{i}(A)])\n\np{i}(1),\n")
-    p = write(tmp_path, "nothing.clausal", NOTHING_SRC)
+        write(tmp_path, f"m{i}{SEAM}", f"-module(m{i}, [p{i}(A)])\n\np{i}(1),\n")
+    p = write(tmp_path, f"nothing{SEAM}", NOTHING_SRC)
     msg = pd.describe_missing_predicate(
         "zzz_quux", 2, module_globals={"__name__": "m", "__file__": str(p)})
     assert "first 3 of 10" in msg

@@ -20,6 +20,7 @@ import pytest
 import clausal
 from clausal.tools.clausal_to_prolog import (
     UntranslatableConstructError, clausal_source_to_prolog)
+from tests._suffix import SEAM
 
 REPO = Path(clausal.__file__).resolve().parents[1]
 
@@ -100,8 +101,8 @@ def _answers(root: Path, frontend: str | None) -> dict:
 @pytest.fixture(scope="module")
 def truth(tmp_path_factory):
     root = tmp_path_factory.mktemp("d6_truth")
-    (root / "dm.clausal").write_text(LIB)
-    (root / "drv.clausal").write_text(DRIVER)
+    (root / f"dm{SEAM}").write_text(LIB)
+    (root / f"drv{SEAM}").write_text(DRIVER)
     return _answers(root, None)
 
 

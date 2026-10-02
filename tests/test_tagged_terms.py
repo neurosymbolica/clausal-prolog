@@ -37,6 +37,7 @@ from clausal.logic.solve import call
 from tests.tagged_terms_support import (
     capture_predicate_codegen, normalize_answers, normalize_term,
 )
+from tests._suffix import SEAM
 
 
 _GOLDEN_DIR = pathlib.Path(__file__).parent / "golden"
@@ -127,7 +128,7 @@ def _load_inline(name: str, source: str):
     from clausal.import_hook import _load_module
 
     with tempfile.TemporaryDirectory() as d:
-        path = os.path.join(d, f"{name}.clausal")
+        path = os.path.join(d, f"{name}{SEAM}")
         with open(path, "w") as fh:
             fh.write(source)
         return _load_module(name, path)

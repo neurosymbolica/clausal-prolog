@@ -14,6 +14,7 @@ import warnings
 import pytest
 
 from clausal.logic.stratification import ClausalStratificationWarning
+from tests._suffix import SEAM
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -24,7 +25,7 @@ _loaded = {}
 def load(tmp_path_factory):
     def _load(name, source, expect_warnings=False):
         d = tmp_path_factory.mktemp("strat")
-        p = d / f"{name}.clausal"
+        p = d / f"{name}{SEAM}"
         p.write_text(source)
         from clausal.import_hook import _load_module
         with warnings.catch_warnings(record=True) as caught:

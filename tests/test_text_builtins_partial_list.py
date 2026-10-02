@@ -5,6 +5,7 @@ import pytest
 
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var
+from tests._suffix import SEAM
 
 SRC = """\
 -allow_singletons
@@ -22,7 +23,7 @@ t_unbound_element(R) <- catch((L is [Y, *T], T is [b], atom_chars(X, L), R is X)
 def mod(tmp_path_factory):
     from clausal.import_hook import _load_module
     d = tmp_path_factory.mktemp("tbpl")
-    p = d / "tbpl.clausal"
+    p = d / f"tbpl{SEAM}"
     p.write_text(SRC)
     return _load_module("tbpl_mod", str(p))
 

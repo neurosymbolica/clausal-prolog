@@ -25,6 +25,7 @@ from clausal.reflection import (
     reify_ast,
     render_source,
 )
+from tests._suffix import SEAM
 
 
 def _reify_stmt(source):
@@ -40,7 +41,7 @@ def _reify_stmt(source):
 
 
 def _rules_module(tmp_path, name, text):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(text))
     return _load_module(name, str(path)).__dict__["$module"]
 
@@ -149,7 +150,7 @@ def test_render_of_mutated_clause_emits_valid_clausal():
 
 
 def _clausal_module(tmp_path, name, text):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(text))
     return _load_module(name, str(path)).__dict__["$module"]
 
@@ -195,7 +196,7 @@ def test_engine_accepts_bare_reference_through_user_call_goal(tmp_path):
 
 def test_engine_accepts_bare_dotted_reference(tmp_path):
     """A dotted callee eta-reduces to the dotted reference, same solutions."""
-    helper = tmp_path / "etahelper.clausal"
+    helper = tmp_path / f"etahelper{SEAM}"
     helper.write_text(
         "-module(etahelper, [bump(X, Y)])\n\nbump(X, Y) <- (Y == X + 1)\n"
     )

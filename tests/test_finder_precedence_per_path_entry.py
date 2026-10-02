@@ -28,6 +28,7 @@ import clausal
 from clausal import import_hook as ih
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
+from tests._suffix import SEAM
 
 FRONTENDS = ("native", "translator")
 PL_LOADER = {"native": ih.NativePrologLoader, "translator": ih.PrologLoader}
@@ -109,9 +110,9 @@ def _pl_and_clausal_trees(a, b):
     # Top-level package, and a subpackage of a namespace package that spans
     # both roots (so the submodule lookup's ``path`` is [a/d49ns, b/d49ns]).
     _write(a / "d49top" / "__init__.pl", "which(1).\n")
-    _write(b / "d49top" / "__init__.clausal", "which(2),\n")
+    _write(b / "d49top" / f"__init__{SEAM}", "which(2),\n")
     _write(a / "d49ns" / "sub" / "__init__.pl", "which(1).\n")
-    _write(b / "d49ns" / "sub" / "__init__.clausal", "which(2),\n")
+    _write(b / "d49ns" / "sub" / f"__init__{SEAM}", "which(2),\n")
 
 
 @pytest.mark.parametrize("order", ["AB", "BA"])
@@ -152,7 +153,7 @@ def test_pl_package_importing_its_own_submodule(roots, frontend, order):
         :- use_module(d49pkg/sub/helper, [helper_fact/1]).
         viahelper(X) :- helper_fact(X).
         """)
-    _write(b / "d49pkg" / "sub" / "__init__.clausal", "viahelper(1),\n")
+    _write(b / "d49pkg" / "sub" / f"__init__{SEAM}", "viahelper(1),\n")
     mod = importlib.import_module("d49pkg.sub")
     if order == "AB":
         assert _under(mod, a), mod.__file__
@@ -197,7 +198,7 @@ def test_pl_facade_is_not_answered_by_a_later_clausal(roots, frontend, shape):
             :- use_module(sib, [answer/1]).
             """)
         _write(fresh / "sib.pl", _FRESH_SIB)
-        _write(gold / "sib.clausal", _GOLD_SIB)
+        _write(gold / f"sib{SEAM}", _GOLD_SIB)
         sib_name = "sib"
     else:
         _write(fresh / "leakdom" / "__init__.pl", """\
@@ -205,9 +206,9 @@ def test_pl_facade_is_not_answered_by_a_later_clausal(roots, frontend, shape):
             :- use_module(leakdom/sib, [answer/1]).
             """)
         _write(fresh / "leakdom" / "sib.pl", _FRESH_SIB)
-        _write(gold / "leakdom" / "sib.clausal", _GOLD_SIB)
+        _write(gold / "leakdom" / f"sib{SEAM}", _GOLD_SIB)
         if shape == "gold_facade":
-            _write(gold / "leakdom" / "__init__.clausal", """\
+            _write(gold / "leakdom" / f"__init__{SEAM}", """\
                 -module(leakdom, [answer(X)])
                 -import_from(leakdom.sib, [answer])
                 """)
@@ -273,7 +274,7 @@ def test_same_entry_priority_unchanged(roots, frontend):
 def test_namespace_package_spanning_entries_unchanged(roots, frontend):
     a, b = roots("A", "B")
     _write(a / "d49ns" / "x.pl", "which(1).\n")
-    _write(b / "d49ns" / "y.clausal", "which(2),\n")
+    _write(b / "d49ns" / f"y{SEAM}", "which(2),\n")
     spec = importlib.util.find_spec("d49ns")
     assert spec.origin is None  # PEP 420, left to PathFinder
     assert list(spec.submodule_search_locations) == [
@@ -288,7 +289,7 @@ def test_py_package_earlier_still_loses_to_clausal_later(roots, frontend):
     entry beats a ``.py`` module in an earlier one.  Out of scope here."""
     c, b = roots("C", "B")
     _write(c / "d49py" / "__init__.py", "")
-    _write(b / "d49py" / "__init__.clausal", "which(2),\n")
+    _write(b / "d49py" / f"__init__{SEAM}", "which(2),\n")
     assert _under(importlib.util.find_spec("d49py"), b)
 
 
@@ -296,10 +297,10 @@ def test_invalid_frontend_breaks_only_pl_imports(roots, monkeypatch):
     """The .pl loader is chosen only once a .pl file is found, so a bad
     ``CLAUSAL_PL_FRONTEND`` cannot break a .clausal or plain import."""
     (d,) = roots("S")
-    _write(d / "d49top.clausal", "which(3),\n")
+    _write(d / f"d49top{SEAM}", "which(3),\n")
     _write(d / "d49bogus.pl", "which(5).\n")
     monkeypatch.setenv(ih.PL_FRONTEND_ENV, "bogus")
-    assert importlib.util.find_spec("d49top").origin.endswith(".clausal")
+    assert importlib.util.find_spec("d49top").origin.endswith(SEAM)
     assert importlib.util.find_spec("json") is not None
     with pytest.raises(ImportError, match="not a .pl front end"):
         importlib.util.find_spec("d49bogus")

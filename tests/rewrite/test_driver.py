@@ -14,6 +14,7 @@ import pytest
 
 from clausal.fmt import format_source
 from clausal.rewrite.driver import RewriteError, rewrite_source
+from tests._suffix import SEAM
 
 
 def test_folds_and_reformats(head_fold_rules):
@@ -153,7 +154,7 @@ def test_inline_lambda_in_a_surviving_goal_keeps_its_arrow(head_fold_rules):
 
 
 def test_runaway_rule_hits_the_bound(tmp_path, head_fold_rules):
-    runaway = tmp_path / "runaway.clausal"
+    runaway = tmp_path / f"runaway{SEAM}"
     runaway.write_text(textwrap.dedent("""\
         -double_quotes(chars)
         -import_from(reflection, [Clause])
@@ -171,7 +172,7 @@ def test_a_rule_that_invents_a_goal_is_refused_loudly(tmp_path):
     decision about where its comments come from.  Until then the driver says
     so rather than mis-splicing.
     """
-    inventive = tmp_path / "inventive.clausal"
+    inventive = tmp_path / f"inventive{SEAM}"
     inventive.write_text(textwrap.dedent("""\
         -double_quotes(chars)
         -import_from(reflection, [Clause, Goal])
@@ -191,7 +192,7 @@ def test_a_rule_that_puts_a_lambda_in_the_head_is_refused(tmp_path):
     has to be tested with one that can, or it is dead code.  It was: the guard
     matched a constant that never appears.
     """
-    lambda_head = tmp_path / "lambda_head.clausal"
+    lambda_head = tmp_path / f"lambda_head{SEAM}"
     lambda_head.write_text(textwrap.dedent("""\
         -double_quotes(chars)
         -import_from(reflection, [Clause, Goal])
@@ -210,7 +211,7 @@ def test_a_head_that_cannot_be_rendered_at_all_is_refused(tmp_path):
     That is a rule bug and is reported as one, not as a traceback escaping
     the driver.
     """
-    callable_head = tmp_path / "callable_head.clausal"
+    callable_head = tmp_path / f"callable_head{SEAM}"
     callable_head.write_text(textwrap.dedent("""\
         -double_quotes(chars)
         -import_from(reflection, [Clause, Goal])
@@ -234,7 +235,7 @@ def test_a_head_that_cannot_be_rendered_at_all_is_refused(tmp_path):
 
 def _rename_rule(tmp_path):
     """old(...) becomes new(...) -- a one-goal modification, same goal count."""
-    rule = tmp_path / "rename.clausal"
+    rule = tmp_path / f"rename{SEAM}"
     rule.write_text(textwrap.dedent("""\
         -double_quotes(chars)
         -private([old, new])
@@ -297,7 +298,7 @@ def test_modified_goal_keeps_a_genuine_less_than_negative(tmp_path):
 def test_equal_count_reorder_is_refused(tmp_path):
     """Swapping two goals keeps the count; the positional correspondence must
     not read the swap as two modifications and shuffle their comments."""
-    swap = tmp_path / "swap.clausal"
+    swap = tmp_path / f"swap{SEAM}"
     swap.write_text(textwrap.dedent("""\
         -double_quotes(chars)
         -import_from(reflection, [Clause])
@@ -310,7 +311,7 @@ def test_equal_count_reorder_is_refused(tmp_path):
 
 def test_modification_with_count_change_is_refused(tmp_path):
     """Modify one goal AND drop another: neither correspondence covers it."""
-    mixed = tmp_path / "mixed.clausal"
+    mixed = tmp_path / f"mixed{SEAM}"
     mixed.write_text(textwrap.dedent("""\
         -double_quotes(chars)
         -private([old, new])
@@ -325,7 +326,7 @@ def test_modification_with_count_change_is_refused(tmp_path):
 def test_modified_goal_that_is_not_a_goal_is_refused(tmp_path):
     """A conjunction group reifies as a bare list, which renders as a LIST
     LITERAL -- no faithful node, so the driver refuses rather than corrupt."""
-    grouping = tmp_path / "grouping.clausal"
+    grouping = tmp_path / f"grouping{SEAM}"
     grouping.write_text(textwrap.dedent("""\
         -double_quotes(chars)
         -import_from(reflection, [Clause, Goal])

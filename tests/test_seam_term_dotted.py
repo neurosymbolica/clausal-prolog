@@ -10,10 +10,11 @@ review's cross-module probe).  ``with_bases`` (goal position) reads
 import textwrap
 
 from clausal.import_hook import _load_module
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, name, text):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(text).lstrip())
     return _load_module(name, str(path))
 

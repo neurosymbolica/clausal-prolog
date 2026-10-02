@@ -25,11 +25,12 @@ import clausal.import_hook  # noqa: F401  (installs the import hook)
 from clausal.import_hook import _load_module
 from clausal import Var, solve
 from clausal.logic import solve as _solve_mod
+from tests._suffix import SEAM
 
 
 @pytest.fixture
 def plus_ten_module(tmp_path):
-    src = tmp_path / "leakmod.clausal"
+    src = tmp_path / f"leakmod{SEAM}"
     src.write_text("plus_ten(X, Y) <- (Y == X + 10)\n")
     return _load_module("leakmod_regression", str(src))
 
@@ -59,7 +60,7 @@ def test_interleaved_order_independent(plus_ten_module):
 
 def test_string_args_not_pinned(tmp_path):
     """Same leak guard for non-numeric ground args."""
-    src = tmp_path / "echomod.clausal"
+    src = tmp_path / f"echomod{SEAM}"
     src.write_text("echo(X, X),\n")
     mod = _load_module("echomod_regression", str(src))
 

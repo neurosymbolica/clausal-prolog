@@ -27,11 +27,12 @@ from clausal import cell_args, cell_functor
 from clausal.terms import term_canonical, term_str
 from clausal.modules.py.datetime import _dt_to_term as _T
 from clausal.modules.py.datetime import _term_to_dt as _P  # py datetime -> its TERM
+from tests._suffix import SEAM
 
 
 def _load_inline_clausal(name: str, source: str):
     with tempfile.NamedTemporaryFile(
-        suffix=".clausal", mode="w", delete=False
+        suffix=SEAM, mode="w", delete=False
     ) as f:
         f.write(source)
         f.flush()

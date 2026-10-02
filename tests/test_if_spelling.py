@@ -19,11 +19,12 @@ from clausal.logic.variables import Var, deref
 from clausal.reflection import IfThenElse, reify_source, render_source
 from clausal.terms import DictTerm
 from clausal.templating.term_rewriting import ClausalDeprecatedSpellingWarning
+from tests._suffix import SEAM
 
 
 def _load(name, src_text, tmp_path):
     """Write a .clausal file and load it, returning its logic module."""
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(src_text)
     return _load_module(name, str(path)).__dict__["$module"]
 
@@ -129,7 +130,7 @@ class TestLegacyIf:
         with pytest.raises(SyntaxError) as caught:
             _load("legacy_where", src, tmp_path)
         message = str(caught.value)
-        assert "legacy_where.clausal:3" in message
+        assert f"legacy_where{SEAM}:3" in message
         assert "classify(X, LABEL)" in message  # the offending source line
 
     def test_dcg_body_is_rejected(self, tmp_path):

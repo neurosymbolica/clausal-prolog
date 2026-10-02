@@ -23,11 +23,12 @@ import pytest
 
 from clausal.import_hook import _load_module
 from clausal.lint_warnings import ClausalCrossModeLiteralWarning
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, monkeypatch, name, body):
     monkeypatch.syspath_prepend(str(tmp_path))
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(textwrap.dedent(body).lstrip())
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -70,7 +71,7 @@ def test_a_chars_host_into_an_atom_module_warns_and_names_both_modes(
     assert host.go() is False
     assert len(hits) == 1
     msg = str(hits[0].message)
-    assert "xm_host_a1.clausal:5" in msg
+    assert f"xm_host_a1{SEAM}:5" in msg
     assert '"x"' in msg and "p" in msg and "xm_owner_a1" in msg
     assert "chars" in msg and "atom" in msg
     assert "'x'" in msg            # the remedy: an atom in every mode
@@ -342,7 +343,7 @@ def test_every_term_transformer_shares_the_modes_sink():
     from clausal.templating.term_rewriting import EmbedTransformer
     src = 'q(L) <- maplist((E <- (E == "y")), L)\n'
     t = EmbedTransformer(source_lines=src.splitlines(keepends=True),
-                         filename="lam.clausal")
+                         filename=f"lam{SEAM}")
     t.visit(ast.parse(src))
     assert t._double_quotes_modes_used == {"chars"}
 
@@ -388,7 +389,7 @@ def test_the_warning_survives_the_bytecode_cache(tmp_path, monkeypatch):
                      HOST.format(mode="chars", owner="xm_owner_cache", lit='"x"'))
     assert len(first) == 1
     from clausal.import_hook import _load_module
-    p = tmp_path / "xm_host_cache.clausal"
+    p = tmp_path / f"xm_host_cache{SEAM}"
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         _load_module("xm_host_cache_again", str(p))

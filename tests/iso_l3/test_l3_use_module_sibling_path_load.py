@@ -30,6 +30,7 @@ from clausal import import_hook as ih
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
 from clausal.testing import load_clausal_module
+from tests._suffix import SEAM
 
 FRONTENDS = ("native", "translator")
 
@@ -169,9 +170,9 @@ def test_package_root_round_trips_or_declines(tmp_path):
 
 @pytest.mark.parametrize("modname,fname", [
     ("sbp_pkg.dom", "__init__.clausal"),
-    ("sbp_pkg.dom.rules", "rules.clausal"),
+    ("sbp_pkg.dom.rules", f"rules{SEAM}"),
     ("_clausal_test___init__", "__init__.clausal"),
-    ("_clausal_test_rules", "rules.clausal"),
+    ("_clausal_test_rules", f"rules{SEAM}"),
 ])
 def test_undefined_name_hint_names_the_full_dotted_sibling(
         tmp_path, monkeypatch, modname, fname):
@@ -179,9 +180,9 @@ def test_undefined_name_hint_names_the_full_dotted_sibling(
     # exports the missing name qualifies it by the same package root.
     from clausal.predicate_diagnostics import UndefinedNameError
     dom = tmp_path / "fresh" / "sbp_pkg" / "dom"
-    _write(tmp_path / "fresh" / "sbp_pkg" / "__init__.clausal", "")
+    _write(tmp_path / "fresh" / "sbp_pkg" / f"__init__{SEAM}", "")
     _write(dom / fname, "answer(X) <- cite(X)\n")
-    _write(dom / "schema.clausal", "-module(schema, [cite(X)])\ncite(1)\n")
+    _write(dom / f"schema{SEAM}", "-module(schema, [cite(X)])\ncite(1)\n")
     monkeypatch.setattr(sys, "path", [str(tmp_path / "fresh")] + sys.path)
     exc = UndefinedNameError("name 'cite' is not defined", name="cite",
                              module_name=modname,

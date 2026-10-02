@@ -27,6 +27,7 @@ import pytest
 from clausal.import_hook import _load_module
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var
+from tests._suffix import SEAM as SEAM_EXT
 
 PL = """\
 :- use_module(library(clpz)).
@@ -181,7 +182,7 @@ late(R) <- (R * T <= 1000000, 1000000 - R * T < T, T is 7),
 @pytest.fixture(scope="module")
 def seam_mod(tmp_path_factory):
     d = tmp_path_factory.mktemp("clpz_lin_seam")
-    p = d / "_clpz_linear_ineq.clausal"
+    p = d / f"_clpz_linear_ineq{SEAM_EXT}"
     p.write_text(SEAM)
     return _load_module("_clpz_linear_ineq", str(p))
 

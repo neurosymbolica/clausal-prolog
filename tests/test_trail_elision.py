@@ -40,6 +40,7 @@ from clausal.logic.compiler.head_match import compile_head_to_match_case
 from clausal.logic.database import Clause, Database
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, Trail, deref, unify
+from tests._suffix import SEAM
 
 
 # ── AST walking helpers ──────────────────────────────────────────────────────
@@ -80,7 +81,7 @@ def _load_module(text: str):
     from clausal.testing import load_clausal_module
     import tempfile
     with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".clausal", delete=False
+        mode="w", suffix=SEAM, delete=False
     ) as f:
         f.write(text)
         f.flush()

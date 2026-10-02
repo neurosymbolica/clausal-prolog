@@ -16,11 +16,12 @@ from clausal.lint_warnings import (
     ClausalLintWarning,
     ClausalStringInCatchPatternWarning,
 )
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, monkeypatch, name, body):
     monkeypatch.syspath_prepend(str(tmp_path))
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(textwrap.dedent(body).lstrip())
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -54,7 +55,7 @@ def test_a_string_in_the_formal_warns_and_suggests_the_atom(tmp_path, monkeypatc
         form='catch(atom_length(1, _), error(type_error("atom", _), _), R is caught)'))
     assert len(hits) == 1
     text = str(hits[0].message)
-    assert "'atom'" in text and "catch/3" in text and "scp_fires.clausal" in text
+    assert "'atom'" in text and "catch/3" in text and f"scp_fires{SEAM}" in text
     # The hazard is real: the pattern does not catch, the error propagates.
     with pytest.raises(Exception) as info:
         mod.go()
@@ -140,7 +141,7 @@ def test_identical_sites_each_show_under_the_default_filter(tmp_path):
     repo = pathlib.Path(__file__).resolve().parent.parent
     site = ('catch(atom_length(1, _), error(type_error("atom", _), _), '
             'R is caught)')
-    (tmp_path / "scp_three.clausal").write_text(
+    (tmp_path / f"scp_three{SEAM}").write_text(
         "-private([caught])\n"
         + "".join(f"g{i}(R) <- {site}\n" for i in (1, 2, 3)))
     env = {k: v for k, v in os.environ.items() if k != "PYTHONWARNINGS"}
@@ -152,4 +153,4 @@ def test_identical_sites_each_show_under_the_default_filter(tmp_path):
     assert r.returncode == 0, r.stderr
     assert r.stderr.count("ClausalStringInCatchPatternWarning") == 3, r.stderr
     for line in (2, 3, 4):
-        assert f"scp_three.clausal:{line}:" in r.stderr, r.stderr
+        assert f"scp_three{SEAM}:{line}:" in r.stderr, r.stderr

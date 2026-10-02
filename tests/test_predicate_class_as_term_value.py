@@ -42,6 +42,7 @@ import pytest
 from clausal.logic.atoms import mint
 from clausal.import_hook import _load_module
 from clausal.logic.variables import Trail, Var, occurs_check, unify
+from tests._suffix import SEAM
 
 
 # ── unify ─────────────────────────────────────────────────────────────────
@@ -57,7 +58,7 @@ from clausal.logic.variables import Trail, Var, occurs_check, unify
 
 
 def _load(tmp_path, name, text):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(text).lstrip())
     return _load_module(f"tests_pcatv_{name}", str(path))
 

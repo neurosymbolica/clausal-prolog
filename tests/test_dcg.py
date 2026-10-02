@@ -14,6 +14,7 @@ from clausal.logic.cells import chars
 from clausal.logic.solve import call, query
 from clausal.logic.variables import Var, deref, Trail
 from clausal.import_hook import _load_module
+from tests._suffix import SEAM
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -34,7 +35,7 @@ def _nt(cls, *args):
 
 def _load(name, src_text, tmp_path):
     """write a .clausal file and load it as a module."""
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(src_text)
     mod = _load_module(name, str(p))
     return mod.__dict__["$module"]

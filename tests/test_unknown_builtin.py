@@ -28,6 +28,7 @@ from clausal.terms import Undefined, DictTerm, Call, LoadName
 from clausal.logic.database import Module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, Trail, deref, unify
+from tests._suffix import SEAM
 
 
 # ── Singleton behaviour ───────────────────────────────────────────────────────
@@ -90,7 +91,7 @@ class TestUnknownUnification:
 def _load_src(name: str, src: str):
     from clausal.import_hook import _load_module
     d = tempfile.mkdtemp()
-    path = os.path.join(d, f"{name}.clausal")
+    path = os.path.join(d, f"{name}{SEAM}")
     with open(path, "w") as f:
         f.write(src)
     return _load_module(name, path)

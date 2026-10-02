@@ -16,6 +16,7 @@ from clausal.logic.cells import chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.reflection import Clause, is_v
+from tests._suffix import SEAM
 
 
 EXAMPLES_DIR = os.path.join(
@@ -116,7 +117,7 @@ size(L, N) <- (N is ++len(L))
 
 @pytest.fixture(scope="module")
 def matchers(tmp_path_factory):
-    path = tmp_path_factory.mktemp("reflection") / "matchers.clausal"
+    path = tmp_path_factory.mktemp("reflection") / f"matchers{SEAM}"
     path.write_text(_MATCHERS)
     mod = _load_module("_test_reflection_matchers", str(path))
     return mod.__dict__["$module"]
@@ -223,7 +224,7 @@ literal_file_name(NAME) <- (
     goal_functor(HEAD, NAME, _)
 )
 '''
-        path = tmp_path_factory.mktemp("reflection_literal") / "m.clausal"
+        path = tmp_path_factory.mktemp("reflection_literal") / f"m{SEAM}"
         path.write_text(source)
         mod = _load_module("_test_reflection_literal_matchers", str(path))
         return mod.__dict__["$module"]

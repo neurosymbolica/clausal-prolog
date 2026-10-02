@@ -24,10 +24,11 @@ from clausal.logic.builtins.database_ops import _find_pred_cls
 from clausal.logic.predicate import (
     mint_predicate_handle, resolve_predicate_row,
 )
+from tests._suffix import SEAM
 
 
 def _write(tmp_path, name, src):
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(src)
     return p
 
@@ -52,7 +53,7 @@ def test_a_row_here_does_not_hide_a_class_bound_to_another_databases_row(
     """
     monkeypatch.syspath_prepend(str(tmp_path))
     _write(tmp_path, "fpc_ex", "-module(fpc_ex, [qq(X)])\n\nqq(1),\n")
-    exporter = _load_module("fpc_ex", str(tmp_path / "fpc_ex.clausal"))
+    exporter = _load_module("fpc_ex", str(tmp_path / f"fpc_ex{SEAM}"))
     exported = exporter.__dict__["qq"]      # a handle, post-flip
     exporter_row = resolve_predicate_row(
         exported, arity=1, db=exporter.__dict__["$module"].db)

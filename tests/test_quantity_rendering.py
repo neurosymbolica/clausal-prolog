@@ -37,6 +37,7 @@ from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.terms import Quantity
+from tests._suffix import SEAM
 
 
 def _reparse(tmp_path, name, text, imports):
@@ -47,7 +48,7 @@ def _reparse(tmp_path, name, text, imports):
     actually uses can settle that.
     """
     src = imports + f"\nv(X) <- eval_({text}, X)\n"
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(src).lstrip())
     m = _load_module(f"tqr_{name}", str(path))
     v = Var()

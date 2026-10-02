@@ -14,6 +14,7 @@ import clausal.import_hook  # noqa: F401
 from clausal.import_hook import _load_module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 _SRC = """\
 -allow_singletons
@@ -27,7 +28,7 @@ look(D, R) <- phrase(peek(D), [7, 8], R)
 
 @pytest.fixture(scope="module")
 def mod():
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                      delete=False) as f:
         f.write(_SRC)
         path = f.name

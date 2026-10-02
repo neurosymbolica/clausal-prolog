@@ -26,6 +26,7 @@ import pytest
 
 import clausal.import_hook  # installs the finders
 from clausal.import_hook import _load_module
+from tests._suffix import SEAM
 
 
 def _flat(text):
@@ -92,14 +93,14 @@ def _pkg(root, *segments, exports="aid/1"):
         d = d / seg
     d.mkdir(parents=True)
     name = segments[-1].replace("-", "_")
-    (d / "__init__.clausal").write_text(
+    (d / f"__init__{SEAM}").write_text(
         f"-module({name}, [{exports}])\n{exports.split('/')[0]}(1),\n")
     return d
 
 
 def _load_error(root, source, modname="_seg_use"):
     """Write *source* as the importing file and return the ImportError."""
-    use = root / "use.clausal"
+    use = root / f"use{SEAM}"
     use.write_text(source)
     sys.modules.pop(modname, None)
     with pytest.raises(ImportError) as exc:
@@ -135,7 +136,7 @@ class TestHyphenatedDirectory:
         """The shape from the migration: the hyphen is *not* the last segment,
         so ``exc.name`` is a strict prefix of the declared path."""
         pkg = _pkg(on_path, "orgs", "grant-aid")
-        (pkg / "grant_scheme.clausal").write_text(
+        (pkg / f"grant_scheme{SEAM}").write_text(
             "-module(grant_scheme, [grant_scheme/1])\ngrant_scheme(1),\n")
 
         # ``GrantScheme``, not ``G``: an ALL-CAPS imported name is refused at load
@@ -170,7 +171,7 @@ class TestHyphenatedDirectory:
 
     def test_it_stays_a_ModuleNotFoundError(self, on_path):
         _pkg(on_path, "orgs", "grant-aid")
-        use = on_path / "use.clausal"
+        use = on_path / f"use{SEAM}"
         use.write_text("-import_from(orgs.grant_aid, [Aid])\n")
         sys.modules.pop("_seg_cls", None)
         with pytest.raises(ModuleNotFoundError):
@@ -181,15 +182,15 @@ class TestHyphenatedSourceFile:
 
     def test_a_hyphenated_clausal_file_is_named_as_the_reason(self, on_path):
         pkg = _pkg(on_path, "orgs", exports="orgx/1")
-        (pkg / "grant-aid.clausal").write_text(
+        (pkg / f"grant-aid{SEAM}").write_text(
             "-module(grant_aid, [aid/1])\naid(1),\n")
 
         msg = _flat(str(_load_error(
             on_path, "-import_from(orgs.grant_aid, [Aid])\n")))
 
-        assert (f"{pkg / 'grant-aid.clausal'} is there, but 'grant-aid' is not "
+        assert (f"{pkg / 'grant-aid{SEAM}'} is there, but 'grant-aid' is not "
                 f"a valid Python identifier" in msg)
-        assert ("rename the file 'grant-aid.clausal' to 'grant_aid.clausal'. "
+        assert (f"rename the file 'grant-aid{SEAM}' to 'grant_aid{SEAM}'. "
                 "Renaming is the only repair: a module file is importable only "
                 "under its own name" in msg)
 

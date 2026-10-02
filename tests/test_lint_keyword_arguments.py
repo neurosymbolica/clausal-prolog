@@ -25,6 +25,7 @@ import pytest
 from clausal.import_hook import _load_module
 from clausal.templating import term_rewriting
 from clausal.templating.term_rewriting import ClausalKeywordArgumentWarning
+from tests._suffix import SEAM
 
 
 #: The severity the engine ships with; pinned by ``test_default_severity``.
@@ -32,7 +33,7 @@ _SHIPPED_SEVERITY = term_rewriting.KEYWORD_ARGUMENT_SEVERITY
 
 
 def _load(tmp_path, name, text):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(text).lstrip())
     return _load_module(f"kwl_{name}", str(path))
 

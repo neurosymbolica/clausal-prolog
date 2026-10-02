@@ -20,10 +20,11 @@ from clausal.import_hook import _load_module
 from clausal import Var, solve
 from clausal.logic.cells import cell_functor, make_cell
 from clausal.logic.database import Clause
+from tests._suffix import SEAM
 
 
 def _make_dynamic_module(tmp_path, name):
-    src = tmp_path / f"{name}.clausal"
+    src = tmp_path / f"{name}{SEAM}"
     src.write_text("-dynamic(p/2)\np(1, 10),\np(2, 20),\n")
     mod = _load_module(name, str(src))
     return mod, mod.__dict__["$module"]

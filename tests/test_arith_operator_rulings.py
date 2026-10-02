@@ -23,6 +23,7 @@ from clausal.import_hook import _load_module
 from clausal.logic.exceptions import LogicException, render_error_term
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 _N = itertools.count()
 
@@ -126,7 +127,7 @@ def mod(tmp_path_factory):
     # decimal/2 is an exact-number cell, not an evaluable functor
     src = "-allow_singletons\n-private([yes, no, decimal(M, S)])\n" + "".join(
         f"g{i}(X) <- ({body}),\n" for i, (body, _) in enumerate(BARE_ROWS))
-    p = d / "_arith_operator_rulings.clausal"
+    p = d / f"_arith_operator_rulings{SEAM}"
     p.write_text(src)
     return _load_module("_arith_operator_rulings", str(p))
 
@@ -152,7 +153,7 @@ def test_ne_prunes_a_zero_divisor_while_labelling(tmp_path):
     """The C-accelerated ``!=`` propagator's both-ground arm sees a no-value
     expression as differing from nothing, so the branch fails (ruling Q14;
     ``clpfd._eval_ground_for_c``) -- it raised before."""
-    p = tmp_path / "_arith_rulings_ne.clausal"
+    p = tmp_path / f"_arith_rulings_ne{SEAM}"
     p.write_text("-allow_singletons\n"
                  "g(X) <- findall(Y, (10 // Y != 3, in_domain(Y, 0, 4), "
                  "label([Y])), X)\n")
@@ -189,7 +190,7 @@ _EV_WANT = {1: Fraction(7, 2), 2: -3, 3: 8, 4: 8.0, 5: -4, 6: 1, 7: 3.5,
 def strict_mod(tmp_path_factory):
     d = tmp_path_factory.mktemp("arith_q16")
     name = f"_arith_q16_{next(_N)}"
-    p = d / f"{name}.clausal"
+    p = d / f"{name}{SEAM}"
     p.write_text(_STRICT_SRC.format(name=name))
     return _load_module(name, str(p))
 
@@ -214,7 +215,7 @@ def test_q16_as_data_and_in_a_head_they_are_just_terms(strict_mod):
 def test_q16_a_module_declaration_of_the_spelling_answers_first(tmp_path):
     """A module's own declaration of an evaluable spelling wins, with its
     usual arity error: a data functor rdiv/3 makes ``rdiv(1, 2)`` too few."""
-    p = tmp_path / "_arith_q16_shadow.clausal"
+    p = tmp_path / f"_arith_q16_shadow{SEAM}"
     p.write_text("-private([rdiv(A, B, C)])\n"
                  "g(X) <- 'is'(X, rdiv(1, 2))\n")
     with pytest.raises(SyntaxError, match=r"rdiv/3 was constructed with 2"):
@@ -242,7 +243,7 @@ def goal_pow_quoted():
 def seam_mod(tmp_path_factory):
     d = tmp_path_factory.mktemp("arith_rulings_seam")
     name = f"_arith_rulings_seam{next(_N)}"
-    p = d / f"{name}.clausal"
+    p = d / f"{name}{SEAM}"
     p.write_text(_SEAM_SRC.format(name=name))
     return _load_module(name, str(p))
 

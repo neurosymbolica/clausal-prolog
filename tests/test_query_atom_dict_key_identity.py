@@ -31,6 +31,7 @@ from clausal import Var, solve
 from clausal.logic import solve as _solve_mod
 from clausal.logic.variables import deref
 from clausal.terms import DictTerm
+from tests._suffix import SEAM
 
 
 ATOMS_SRC = """\
@@ -77,7 +78,7 @@ def _clear_query_cache():
 
 
 def _load(tmp_path, name, text):
-    src = tmp_path / f"{name}.clausal"
+    src = tmp_path / f"{name}{SEAM}"
     src.write_text(text)
     return _load_module(name, str(src))
 
@@ -204,7 +205,7 @@ def test_same_named_atom_from_a_second_load_is_not_conflated(tmp_path):
     """
     atoms = _load(tmp_path, "qk_atoms", ATOMS_SRC)
     reader = _load(tmp_path, "qk_reader", READER_SRC)
-    other = _load_module("qk_atoms_second", str(tmp_path / "qk_atoms.clausal"))
+    other = _load_module("qk_atoms_second", str(tmp_path / f"qk_atoms{SEAM}"))
     assert other.query_date is atoms.query_date
 
     assert _one(lambda V: ("soft_read", DictTerm({atoms.query_date: 5}), V), reader) == 5

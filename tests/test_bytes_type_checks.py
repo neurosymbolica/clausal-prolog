@@ -11,10 +11,11 @@ import tempfile
 from clausal.logic.cells import chars  # stage 2: a string is the carrier
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
+from tests._suffix import SEAM
 
 
 def _mod(name, src=""):
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w", delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w", delete=False) as f:
         f.write(src or "noop(1),\n")
         f.flush()
         path = f.name

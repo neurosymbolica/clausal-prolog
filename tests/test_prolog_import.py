@@ -30,6 +30,7 @@ from clausal.import_hook import PrologLoader, _load_prolog_module, _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.testing import collect_tests, run_test
+from tests._suffix import SEAM
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -323,7 +324,7 @@ class TestPriority:
     def test_clausal_wins_over_pl(self, tmp_path):
         # write .clausal with fact(1) — one clause.
         # nv
-        clausal_file = tmp_path / "prio_test.clausal"
+        clausal_file = tmp_path / f"prio_test{SEAM}"
         clausal_file.write_text("fact(1),\n")
 
         # write .pl with fact(1) and fact(2) — two clauses.

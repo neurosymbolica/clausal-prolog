@@ -20,6 +20,7 @@ from clausal.logic import solve as solve_mod
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, is_var, walk
 from clausal.terms import ConcreteSeg, SegList, VarSeg
+from tests._suffix import SEAM
 
 
 # ── Fixture module ────────────────────────────────────────────────────────────
@@ -243,7 +244,7 @@ good(1),
 
 @pytest.fixture(scope="module")
 def moddict(tmp_path_factory):
-    p = tmp_path_factory.mktemp("a02") / "a02_fixture.clausal"
+    p = tmp_path_factory.mktemp("a02") / f"a02_fixture{SEAM}"
     p.write_text(FIXTURE)
     return _load_module("a02_audit_fixture", str(p)).__dict__
 
@@ -859,7 +860,7 @@ class TestGoalOpShapes:
 
     def test_bare_goal_variable_rejected_at_load(self, tmp_path):
         from clausal.logic.compiler.terms_to_goalop import BareGoalVariableError
-        p = tmp_path / "a02_badvar.clausal"
+        p = tmp_path / f"a02_badvar{SEAM}"
         p.write_text(BAD_FIXTURE)
         with pytest.raises(BareGoalVariableError, match=r"bad/1"):
             _load_module("a02_badvar_fixture", str(p))

@@ -13,11 +13,12 @@ import tempfile
 import pytest
 
 from clausal.import_hook import _load_module
+from tests._suffix import SEAM
 
 
 def _load_inline(name: str, source: str):
     with tempfile.TemporaryDirectory() as d:
-        path = os.path.join(d, f"{name}.clausal")
+        path = os.path.join(d, f"{name}{SEAM}")
         with open(path, "w") as fh:
             fh.write(source)
         return _load_module(name, path)
@@ -256,10 +257,10 @@ class TestImportedVocabulary:
     def test_an_imported_atom_resolves_inside_the_seam(self, tmp_path, monkeypatch):
         host = self._load_tree(tmp_path, monkeypatch, {
             "seamprobe/__init__.py": "",
-            "seamprobe/lib.clausal": (
+            f"seamprobe/lib{SEAM}": (
                 "-module(lib, [verdict(STATUS, IDS), dummy(X), ok, bad])\n"
                 "dummy(ok),\n"),
-            "seamprobe/host.clausal": (
+            f"seamprobe/host{SEAM}": (
                 "-module(host, [])\n"
                 "-double_quotes(chars)\n"
                 "-import_from(seamprobe.lib, [verdict, ok])\n"

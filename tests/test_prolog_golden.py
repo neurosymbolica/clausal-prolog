@@ -19,6 +19,7 @@ import pytest
 
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
 from clausal.tools.prolog_to_clausal import prolog_to_clausal
+from tests._suffix import SEAM
 
 FIXTURES = Path(__file__).parent / "fixtures"
 CONFORMITY = Path(__file__).parent / "conformity"
@@ -352,7 +353,7 @@ class TestCLI:
     def test_cli_file(self, tmp_path):
         # nv
         import subprocess
-        src = tmp_path / "test.clausal"
+        src = tmp_path / f"test{SEAM}"
         src.write_text("Bar(_x) <- Baz(_x)\n")
         out = tmp_path / "test.pl"
         result = subprocess.run(

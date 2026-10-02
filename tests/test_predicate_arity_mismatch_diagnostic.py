@@ -38,6 +38,7 @@ from clausal.predicate_diagnostics import (
     describe_arity_mismatch,
 )
 from clausal.testing import load_clausal_module, main
+from tests._suffix import SEAM
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -63,7 +64,7 @@ CITATIONS = """
 """
 
 
-def _report(tmp_path, src, name="t.clausal"):
+def _report(tmp_path, src, name=f"t{SEAM}"):
     """Run *src* as a .clausal test file and return the printed report."""
     path = write(tmp_path, name, src)
     import io
@@ -107,7 +108,7 @@ class TestTheMessage:
             citation(art_1_2, "Reg-Z Article 1(2)", meta),
 
             test("both arities") <- citation({call_args}),
-        """, name=f"argboth{passes}.clausal")
+        """, name=f"argboth{passes}{SEAM}")
         assert f"citation takes 3 arguments, but this call passes {passes}" in out
 
     def test_states_the_fault_on_the_first_line(self, tmp_path):
@@ -120,7 +121,7 @@ class TestTheMessage:
 
     def test_points_at_the_definition(self, tmp_path):
         out = _report(tmp_path, CITATIONS)
-        assert "t.clausal:4" in out
+        assert f"t{SEAM}:4" in out
 
     def test_offers_a_remedy(self, tmp_path):
         out = _report(tmp_path, CITATIONS)
@@ -155,7 +156,7 @@ class TestTheMessage:
             citation(REF, META) <- citation(REF, _, META)
 
             test("citation record resolves") <- citation(REF, METADATA),
-        """, name="argfollow.clausal")
+        """, name=f"argfollow{SEAM}")
         assert "1 passed, 0 failed" in out
 
 
@@ -193,18 +194,18 @@ class TestOtherGoalPositions:
         """, name=name)
 
     def test_inside_negation(self, tmp_path):
-        out = self._out(tmp_path, "(not citation(REF, META))", "argneg.clausal")
+        out = self._out(tmp_path, "(not citation(REF, META))", f"argneg{SEAM}")
         assert "takes 3 arguments" in out
 
     def test_inside_findall(self, tmp_path):
         out = self._out(tmp_path, "findall(R, citation(R, M), L)",
-                        "argfa.clausal")
+                        f"argfa{SEAM}")
         assert "takes 3 arguments" in out
 
     def test_via_call_n(self, tmp_path):
         """``call/N`` resolves the goal at runtime, inside the builtin."""
         out = self._out(tmp_path, "call(citation, REF, META)",
-                        "argcall.clausal")
+                        f"argcall{SEAM}")
         assert "takes 3 arguments" in out
         assert "positional argument" not in out
 
@@ -244,7 +245,7 @@ class TestHigherOrderFamily:
         "span(citation, [art_1_2], YES, NO)",
     ])
     def test_element_only_family_passes_1(self, tmp_path, goal):
-        out = self._out(tmp_path, goal, f"argho1_{goal.split('(')[0]}.clausal")
+        out = self._out(tmp_path, goal, f"argho1_{goal.split('(')[0]}{SEAM}")
         assert "citation takes 3 arguments, but this call passes 1" in out
         assert "positional argument" not in out
         assert "citation__3" not in out
@@ -261,7 +262,7 @@ class TestHigherOrderFamily:
         "tpartition(citation, [art_1_2], YES, NO)",
     ])
     def test_element_and_slot_family_passes_2(self, tmp_path, goal):
-        out = self._out(tmp_path, goal, f"argho2_{goal.split('(')[0]}.clausal")
+        out = self._out(tmp_path, goal, f"argho2_{goal.split('(')[0]}{SEAM}")
         assert "citation takes 3 arguments, but this call passes 2" in out
         assert "positional argument" not in out
         assert "citation__3" not in out
@@ -269,7 +270,7 @@ class TestHigherOrderFamily:
     def test_foldl_passes_3(self, tmp_path):
         """Element plus both accumulators — /3 agrees, so a /2 callee pins it."""
         out = self._out(tmp_path, "foldl(citepair, [art_1_2], V0, V)",
-                        "argho3_foldl.clausal")
+                        f"argho3_foldl{SEAM}")
         assert "citepair takes 2 arguments, but this call passes 3" in out
         assert "positional argument" not in out
 
@@ -284,17 +285,17 @@ class TestHigherOrderFamily:
             cite_one(art_1_2),
 
             test("ok1") <- maplist(cite_one, [art_1_2]),
-        """, name="arghook1.clausal")
+        """, name=f"arghook1{SEAM}")
         assert "PASSED" in out
 
     def test_element_and_slot_at_its_arity_still_runs(self, tmp_path):
         out = self._out(tmp_path, "sort_by(citepair, [art_1_2], SORTED)",
-                        "arghook2.clausal")
+                        f"arghook2{SEAM}")
         assert "PASSED" in out
 
     def test_foldl_at_its_arity_still_runs(self, tmp_path):
         out = self._out(tmp_path, "foldl(citation, [art_1_2], LABEL, V)",
-                        "arghook3.clausal")
+                        f"arghook3{SEAM}")
         assert "PASSED" in out
 
 
@@ -348,8 +349,8 @@ class TestDescribe:
         assert msg == "citation takes 3 arguments, but this call passes 2"
 
     def test_mentions_the_site_when_known(self):
-        msg = describe_arity_mismatch("citation", 2, 3, ("t.clausal", 3))
-        assert "t.clausal:3" in msg
+        msg = describe_arity_mismatch("citation", 2, 3, (f"t{SEAM}", 3))
+        assert f"t{SEAM}:3" in msg
 
     def test_omits_the_site_when_unknown(self):
         msg = describe_arity_mismatch("citation", 2, 3, None)
@@ -577,7 +578,7 @@ class TestDynamicDeclaredArity:
             -dynamic(dfact/3)
 
             test("dyn wrong arity") <- dfact(_A, _B),
-        """, name="argdyn.clausal")
+        """, name=f"argdyn{SEAM}")
         assert "dfact takes 3 arguments, but this call passes 2" in out
         assert "positional argument" not in out
         assert "dfact__3" not in out
@@ -589,7 +590,7 @@ class TestDynamicDeclaredArity:
             -dynamic(dfact/3)
 
             test("dyn empty") <- dfact(_A, _B, _C),
-        """, name="argdynok.clausal")
+        """, name=f"argdynok{SEAM}")
         assert "TypeError" not in out
         assert "takes 3 arguments" not in out     # failed, not refused
         assert "1 failed" in out
@@ -601,7 +602,7 @@ class TestDynamicDeclaredArity:
             -dynamic(dfact/3)
 
             test("dyn assertz") <- (assertz(dfact(1, 2, 3)), dfact(_A, _B)),
-        """, name="argdynz.clausal")
+        """, name=f"argdynz{SEAM}")
         assert "dfact takes 3 arguments, but this call passes 2" in out
         assert "positional argument" not in out
 
@@ -612,7 +613,7 @@ class TestDynamicDeclaredArity:
             -dynamic(dfact/3)
 
             test("dyn maplist") <- maplist(dfact, [1]),
-        """, name="argdynho.clausal")
+        """, name=f"argdynho{SEAM}")
         assert "dfact takes 3 arguments, but this call passes 1" in out
         assert "positional argument" not in out
 
@@ -645,7 +646,7 @@ class TestRuntimeFunnels:
             citation(art_1_2, "Reg-Z Article 1(2)", meta),
 
             test("timed") <- time_goal(citation),
-        """, "arcmtime.clausal")
+        """, f"arcmtime{SEAM}")
         assert "citation takes 3 arguments" in out
         assert "passes 0" in out
         assert "positional argument" not in out
@@ -661,7 +662,7 @@ class TestRuntimeFunnels:
             arcmp_five(A, B, C, S0, S) <- (S0 == S),
 
             test("phrased") <- phrase(arcmp_five, [], []),
-        """, "arcmphrase.clausal")
+        """, f"arcmphrase{SEAM}")
         assert "arcmp_five takes 5 arguments" in out
         assert "passes 2" in out
         assert "positional argument" not in out
@@ -677,7 +678,7 @@ class TestRuntimeFunnels:
             greeting >> (["hello", "world"])
 
             test("greets") <- phrase(greeting, ["hello", "world"]),
-        """, "arcmdcg.clausal")
+        """, f"arcmdcg{SEAM}")
         assert "PASSED" in out
 
 
@@ -712,7 +713,7 @@ class TestZeroArityFactAtomHead:
     """
 
     def test_the_head_is_read_not_crashed(self, tmp_path):
-        mod = load_clausal_module(str(write(tmp_path, "arcmflag.clausal", """
+        mod = load_clausal_module(str(write(tmp_path, f"arcmflag{SEAM}", """
             -module(arcmflag, [arcm_flag])
 
             arcm_flag,
@@ -740,12 +741,12 @@ class TestZeroArityFactAtomHead:
         from clausal.logic.variables import Var
 
         monkeypatch.syspath_prepend(str(tmp_path))
-        write(tmp_path, "arcmflaglib.clausal", """
+        write(tmp_path, f"arcmflaglib{SEAM}", """
             -module(arcmflaglib, [arcm_flag])
 
             arcm_flag,
         """)
-        use = write(tmp_path, "arcmflaguse.clausal", """
+        use = write(tmp_path, f"arcmflaguse{SEAM}", """
             -import_from(arcmflaglib, [arcm_flag])
 
             arcm_flag_use(X) <- arcm_flag(X)
@@ -777,12 +778,12 @@ class TestZeroArityFactAtomHead:
         from clausal.logic.variables import Var
 
         monkeypatch.syspath_prepend(str(tmp_path))
-        write(tmp_path, "arcmpurelib.clausal", """
+        write(tmp_path, f"arcmpurelib{SEAM}", """
             -module(arcmpurelib, [arcm_pure_tag])
 
             arcm_pure_marker(arcm_pure_tag),
         """)
-        use = write(tmp_path, "arcmpureuse.clausal", """
+        use = write(tmp_path, f"arcmpureuse{SEAM}", """
             -import_from(arcmpurelib, [arcm_pure_tag])
 
             arcm_pure_use(X) <- arcm_pure_tag(X)
@@ -822,7 +823,7 @@ class TestTwoAritiesInOneFile:
             test("citation record resolves") <- citation(REF, METADATA),
             test("the long one is its own") <- citation(art_1_2, _, meta),
             test("nothing was padded") <- (not citation(art_1_2, meta, _)),
-        """, name="argremedy.clausal")
+        """, name=f"argremedy{SEAM}")
         assert "3 passed, 0 failed" in out
 
     def test_the_shorter_head_first_defines_both(self, tmp_path):
@@ -835,5 +836,5 @@ class TestTwoAritiesInOneFile:
 
             test("short") <- citation(art_1_2, meta),
             test("long") <- citation(art_1_2, _, meta),
-        """, name="argorder.clausal")
+        """, name=f"argorder{SEAM}")
         assert "2 passed, 0 failed" in out

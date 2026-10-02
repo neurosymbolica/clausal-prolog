@@ -18,6 +18,7 @@ import pytest
 from clausal.import_hook import _load_module
 from clausal import Var
 from clausal.logic.seam import once_bind, each, export
+from tests._suffix import SEAM
 
 SRC = """-module({name}, [d_today, d_add, d_between, d_sorted, d_weekday,
                         date(Y, M, D), timedelta(Days, Secs)])
@@ -34,7 +35,7 @@ d_sorted(S) <- (msort([date(2026,1,15), date(2026,1,2), date(2025,12,31)], S)),
 def mod():
     d = tempfile.mkdtemp()
     name = "dtterm"
-    p = os.path.join(d, f"{name}.clausal")
+    p = os.path.join(d, f"{name}{SEAM}")
     with open(p, "w") as fh:
         fh.write(SRC.format(name=name))
     return _load_module(name, p)

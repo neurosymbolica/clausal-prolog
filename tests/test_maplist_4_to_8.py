@@ -4,6 +4,7 @@ maplist/4)."""
 from clausal.logic.database import Module
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var
+from tests._suffix import SEAM
 
 
 def _q(goal, v):
@@ -25,7 +26,7 @@ def test_maplist_5_to_9_exist_and_run(tmp_path):
     from clausal.import_hook import _load_module
     src = "-allow_singletons\n" + "".join(
         f"ok{n}({', '.join(['_'] * n)}),\n" for n in range(4, 8))
-    p = tmp_path / "maplist_n_ok.clausal"
+    p = tmp_path / f"maplist_n_ok{SEAM}"
     p.write_text(src)
     m = _load_module("maplist_n_ok", str(p))
     for n_lists in range(4, 8):
@@ -35,7 +36,7 @@ def test_maplist_5_to_9_exist_and_run(tmp_path):
 
 def test_maplist_5_binds_outputs_and_checks_lengths(tmp_path):
     from clausal.import_hook import _load_module
-    p = tmp_path / "maplist5.clausal"
+    p = tmp_path / f"maplist5{SEAM}"
     p.write_text("sum3(A, B, C, S) <- (S == A + B + C)\n"
                  "two(X, Y, Z, W) <- (W is [X, Y, Z])\n")
     m = _load_module("maplist5", str(p))

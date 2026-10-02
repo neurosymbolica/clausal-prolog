@@ -4,6 +4,7 @@ callable/1).  Answers are Scryer's."""
 import pytest
 
 from clausal.logic.solve import solve
+from tests._suffix import SEAM
 
 SRC = """\
 -allow_singletons
@@ -21,7 +22,7 @@ c_var() <- callable(V)
 def mod(tmp_path_factory):
     from clausal.import_hook import _load_module
     d = tmp_path_factory.mktemp("cisoname")
-    p = d / "cisoname.clausal"
+    p = d / f"cisoname{SEAM}"
     p.write_text(SRC)
     return _load_module("cisoname_mod", str(p))
 

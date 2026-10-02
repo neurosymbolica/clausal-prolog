@@ -18,6 +18,7 @@ import pytest
 import clausal.import_hook  # noqa: F401  — installs the finders
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 
 SOLEDOM = """\
@@ -62,10 +63,10 @@ def two_paths(tmp_path):
     """
     pkg = tmp_path / "pkg"
     pkg.mkdir()
-    (pkg / "__init__.clausal").write_text("-module(pkg, [])\n")
-    (pkg / "soledom.clausal").write_text(SOLEDOM)
-    (tmp_path / "viaflat.clausal").write_text(VIA_FLAT)
-    (tmp_path / "viadotted.clausal").write_text(VIA_DOTTED)
+    (pkg / f"__init__{SEAM}").write_text("-module(pkg, [])\n")
+    (pkg / f"soledom{SEAM}").write_text(SOLEDOM)
+    (tmp_path / f"viaflat{SEAM}").write_text(VIA_FLAT)
+    (tmp_path / f"viadotted{SEAM}").write_text(VIA_DOTTED)
 
     saved_path = list(sys.path)
     saved_modules = {n: sys.modules[n] for n in _NAMES if n in sys.modules}
@@ -141,8 +142,8 @@ def test_symlinked_package_is_the_same_package(tmp_path):
     """Dedup is by resolved path, so a symlinked directory is not a second copy."""
     pkg = tmp_path / "pkg"
     pkg.mkdir()
-    (pkg / "__init__.clausal").write_text("-module(pkg, [])\n")
-    (pkg / "soledom.clausal").write_text(SOLEDOM)
+    (pkg / f"__init__{SEAM}").write_text("-module(pkg, [])\n")
+    (pkg / f"soledom{SEAM}").write_text(SOLEDOM)
     (tmp_path / "alias").symlink_to(pkg, target_is_directory=True)
 
     names = ("pkg", "pkg.soledom", "alias", "alias.soledom")
@@ -178,7 +179,7 @@ def test_load_module_helper_does_not_claim_the_path(two_paths):
     from clausal.import_hook import _load_module
 
     private = _load_module("_priv_soledom",
-                           str(two_paths / "pkg" / "soledom.clausal"))
+                           str(two_paths / "pkg" / f"soledom{SEAM}"))
     try:
         imported = importlib.import_module("soledom")
         assert imported is not private

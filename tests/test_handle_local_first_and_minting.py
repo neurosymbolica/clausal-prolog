@@ -28,11 +28,12 @@ from clausal.logic.predicate import (
     mint_predicate_handle, predicate_arities_for, predicate_binding_name,
     resolve_predicate_row,
 )
+from tests._suffix import SEAM
 
 
 def _load_popped(tmp_path, name, source):
     """Load a module, then drop it from ``sys.modules`` as the runner does."""
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(source).lstrip())
     sys.modules.pop(name, None)
     module = _load_module(name, str(path))
@@ -70,9 +71,9 @@ def test_a_handle_to_another_module_is_not_captured_by_the_caller(tmp_path):
     handle still resolves to its owner, even when the caller defines the
     same functor."""
     here = _load_popped(tmp_path, "q0_here", "q0_same(1),\n")
-    (tmp_path / "q0_there.clausal").write_text("q0_same(2),\n")
+    (tmp_path / f"q0_there{SEAM}").write_text("q0_same(2),\n")
     sys.modules.pop("q0_there", None)
-    there = _load_module("q0_there", str(tmp_path / "q0_there.clausal"))
+    there = _load_module("q0_there", str(tmp_path / f"q0_there{SEAM}"))
     try:
         there_db = there.__dict__["$module"].db
         foreign = mint_predicate_handle(there_db, "q0_same")

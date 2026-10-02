@@ -27,10 +27,11 @@ from clausal.logic.atoms import spelling
 from clausal.logic.cells import chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, name, text):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(text).lstrip())
     return _load_module(f"cvmit_{name}", str(path))
 
@@ -188,7 +189,7 @@ def test_marker_on_a_name_no_goal_binds_is_a_load_error(tmp_path):
     assert "--Node" in message, message
     # Located, with the offending line and a caret — the diagnostic has
     # to be reachable from the file, not just true.
-    assert "unbound.clausal, line 3" in message, message
+    assert f"unbound{SEAM}, line 3" in message, message
     assert 'f"{--Node}"' in message, message
 
     bare = _load(tmp_path, "unbound_bare", """
@@ -341,7 +342,7 @@ def test_a_marker_in_a_format_spec_is_a_load_error(tmp_path):
     message = str(excinfo.value)
     assert "--Width" in message, message
     assert "format spec" in message, message
-    assert "spec_marker.clausal, line 6" in message, message
+    assert f"spec_marker{SEAM}, line 6" in message, message
 
 
 def test_the_format_spec_refusal_fires_on_an_unbindable_name_too(tmp_path):

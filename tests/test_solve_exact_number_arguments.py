@@ -17,6 +17,7 @@ import pytest
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var
 from clausal.modules.units import metre
+from tests._suffix import SEAM
 
 _SRC = "idn(X, X),\ndbl(X, Y) <- eval_(X * 2, Y)\n"
 
@@ -25,7 +26,7 @@ _SRC = "idn(X, X),\ndbl(X, Y) <- eval_(X * 2, Y)\n"
 def mod(tmp_path_factory):
     from clausal.import_hook import _load_module
     d = tmp_path_factory.mktemp("sena")
-    p = d / "sena.clausal"
+    p = d / f"sena{SEAM}"
     p.write_text(_SRC)
     return _load_module("sena_mod", str(p))
 

@@ -1,6 +1,7 @@
 import os, re, tempfile
 import pytest
 from tests._oracles import SCRYER, run_scryer
+from tests._suffix import SEAM
 
 
 # Scryer is the BINDING oracle for this suite, so its absence is a FAILURE,
@@ -54,7 +55,7 @@ def run_clausal(tmp_path):
     def run(src: str, goal_head: tuple, nargs: int = 1) -> list[str]:
         counter[0] += 1
         name = f"_iso{counter[0]}"
-        path = tmp_path / f"{name}.clausal"
+        path = tmp_path / f"{name}{SEAM}"
         substituted = _H1_PLACEHOLDER.sub(name, src)
         substituted = _HN_PLACEHOLDER.sub(name, substituted)
         path.write_text(substituted)

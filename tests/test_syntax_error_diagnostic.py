@@ -22,6 +22,7 @@ import pytest
 
 from clausal.import_hook import _load_module
 from clausal.testing import main
+from tests._suffix import SEAM
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -80,13 +81,13 @@ test("t") <- (
 
 def test_reproduction_end_to_end(capsys, tmp_path, monkeypatch):
     """The todo's reproduction, through ``python -m clausal.testing``."""
-    write(tmp_path, "m.clausal", M_SRC)
-    p = write(tmp_path, "test_load.clausal", TEST_LOAD_SRC)
+    write(tmp_path, f"m{SEAM}", M_SRC)
+    p = write(tmp_path, f"test_load{SEAM}", TEST_LOAD_SRC)
     monkeypatch.syspath_prepend(str(tmp_path))
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     # Python's own one-liner is still there, verbatim.
-    assert "invalid syntax (m.clausal, line 6)" in out
+    assert f"invalid syntax (m{SEAM}, line 6)" in out
     # ...and now the source it was hiding.
     assert "Y is" in out
     assert "^" in out
@@ -96,23 +97,23 @@ def test_reproduction_end_to_end(capsys, tmp_path, monkeypatch):
 
 
 def test_reproduction_names_the_construct(tmp_path):
-    exc = load_error(tmp_path, "m.clausal", M_SRC)
+    exc = load_error(tmp_path, f"m{SEAM}", M_SRC)
     assert "`is` has no right-hand side" in str(exc)
 
 
 def test_reported_line_is_marked_as_where_the_parse_gave_up(tmp_path):
     """The reported line is correct code; say so rather than implying blame."""
-    exc = load_error(tmp_path, "m.clausal", M_SRC)
+    exc = load_error(tmp_path, f"m{SEAM}", M_SRC)
     assert "parse gave up here" in str(exc)
 
 
 def test_first_line_is_pythons_own_message(tmp_path):
-    exc = load_error(tmp_path, "m.clausal", M_SRC)
-    assert str(exc).splitlines()[0] == "invalid syntax (m.clausal, line 6)"
+    exc = load_error(tmp_path, f"m{SEAM}", M_SRC)
+    assert str(exc).splitlines()[0] == f"invalid syntax (m{SEAM}, line 6)"
 
 
 def test_caret_sits_under_the_offending_column(tmp_path):
-    exc = load_error(tmp_path, "m.clausal", M_SRC)
+    exc = load_error(tmp_path, f"m{SEAM}", M_SRC)
     lines = str(exc).splitlines()
     src_row = next(i for i, ln in enumerate(lines)
                    if ln.strip().startswith("5 | "))
@@ -128,20 +129,20 @@ def test_caret_sits_under_the_offending_column(tmp_path):
 
 
 def test_exception_attributes_are_preserved(tmp_path):
-    exc = load_error(tmp_path, "m.clausal", M_SRC)
+    exc = load_error(tmp_path, f"m{SEAM}", M_SRC)
     assert isinstance(exc, SyntaxError)
     assert exc.msg == "invalid syntax"          # unchanged, not the report
     assert exc.lineno == 6
     assert exc.offset == 1
     assert exc.text == ")\n"
-    assert exc.filename.endswith("m.clausal")
+    assert exc.filename.endswith(f"m{SEAM}")
 
 
 def test_enriched_error_still_pickles(tmp_path):
     """It degrades to the stock exception rather than raising PicklingError."""
     import pickle
 
-    exc = load_error(tmp_path, "m.clausal", M_SRC)
+    exc = load_error(tmp_path, f"m{SEAM}", M_SRC)
     round_tripped = pickle.loads(pickle.dumps(exc))
     assert type(round_tripped) is SyntaxError
     assert round_tripped.lineno == 6
@@ -149,7 +150,7 @@ def test_enriched_error_still_pickles(tmp_path):
 
 
 def test_indentation_error_keeps_its_class(tmp_path):
-    exc = load_error(tmp_path, "indent.clausal",
+    exc = load_error(tmp_path, f"indent{SEAM}",
                      "f(X) <- (\n    X > 1,\n  )\n   g(X),\n")
     assert isinstance(exc, IndentationError)
     assert type(exc).__name__ == "IndentationError"
@@ -157,7 +158,7 @@ def test_indentation_error_keeps_its_class(tmp_path):
 
 
 def test_report_reaches_the_traceback(tmp_path):
-    exc = load_error(tmp_path, "m.clausal", M_SRC)
+    exc = load_error(tmp_path, f"m{SEAM}", M_SRC)
     rendered = "".join(traceback.format_exception(type(exc), exc,
                                                   exc.__traceback__))
     assert "`is` has no right-hand side" in rendered
@@ -204,8 +205,8 @@ def test_only_clausal_files_are_enriched():
     for name in ("m.py", "m.pl", "<string>"):
         exc = _raw_error(src, name)
         assert enrich_syntax_error(exc, src, name) is None, name
-    exc = _raw_error(src, "m.clausal")
-    assert enrich_syntax_error(exc, src, "m.clausal") is not None
+    exc = _raw_error(src, f"m{SEAM}")
+    assert enrich_syntax_error(exc, src, f"m{SEAM}") is not None
 
 
 def test_error_from_another_file_is_not_re_rendered():
@@ -213,14 +214,14 @@ def test_error_from_another_file_is_not_re_rendered():
     from clausal.syntax_diagnostics import enrich_syntax_error
 
     src = "f(X) <- (\n    Y is\n)\n"
-    exc = _raw_error(src, "other.clausal")
-    assert enrich_syntax_error(exc, src, "m.clausal") is None
+    exc = _raw_error(src, f"other{SEAM}")
+    assert enrich_syntax_error(exc, src, f"m{SEAM}") is None
 
 
 def test_reify_file_gets_the_same_report(tmp_path):
     from clausal.reflection import ReifyError, reify_file
 
-    p = write(tmp_path, "m.clausal", M_SRC)
+    p = write(tmp_path, f"m{SEAM}", M_SRC)
     with pytest.raises(ReifyError) as exc:
         reify_file(str(p))
     assert "`is` has no right-hand side" in str(exc.value)
@@ -228,7 +229,7 @@ def test_reify_file_gets_the_same_report(tmp_path):
 
 def test_python_syntax_error_inside_clausal_is_still_enriched(tmp_path):
     """Embedded Python lives in the .clausal file, so it gets the treatment."""
-    exc = load_error(tmp_path, "emb.clausal", """
+    exc = load_error(tmp_path, f"emb{SEAM}", """
     def helper(x):
         return x +
 
@@ -238,7 +239,7 @@ def test_python_syntax_error_inside_clausal_is_still_enriched(tmp_path):
 
 
 def test_tab_indented_source_keeps_the_caret_aligned(tmp_path):
-    exc = load_error(tmp_path, "tabbed.clausal", "f(X) <- (\n\tX > 1,\n\tY is\n)\n")
+    exc = load_error(tmp_path, f"tabbed{SEAM}", "f(X) <- (\n\tX > 1,\n\tY is\n)\n")
     lines = str(exc).splitlines()
     src_row = next(i for i, ln in enumerate(lines)
                    if ln.strip().startswith("3 | "))
@@ -250,7 +251,7 @@ def test_tab_indented_source_keeps_the_caret_aligned(tmp_path):
 
 
 def test_prolog_clause_terminator_named(tmp_path):
-    exc = load_error(tmp_path, "dot.clausal", """
+    exc = load_error(tmp_path, f"dot{SEAM}", """
     f(X) <- (
         X > 1,
     ).
@@ -261,7 +262,7 @@ def test_prolog_clause_terminator_named(tmp_path):
 
 
 def test_unparenthesised_rule_body_named(tmp_path):
-    exc = load_error(tmp_path, "arrow.clausal", """
+    exc = load_error(tmp_path, f"arrow{SEAM}", """
     f(X) <-
         X > 1,
         g(X)
@@ -272,7 +273,7 @@ def test_unparenthesised_rule_body_named(tmp_path):
 
 
 def test_never_closed_body_shows_the_opening_line(tmp_path):
-    exc = load_error(tmp_path, "open.clausal", """
+    exc = load_error(tmp_path, f"open{SEAM}", """
     -module(m, [f(A)])
 
     f(X) <- (
@@ -285,7 +286,7 @@ def test_never_closed_body_shows_the_opening_line(tmp_path):
 
 
 def test_missing_comma_between_goals_named(tmp_path):
-    exc = load_error(tmp_path, "comma.clausal", """
+    exc = load_error(tmp_path, f"comma{SEAM}", """
     f(X) <- (
         X > 1
         Y = 2,
@@ -300,7 +301,7 @@ def test_missing_comma_between_goals_named(tmp_path):
 
 def test_operators_inside_string_literals_are_not_diagnosed(tmp_path):
     """`:-` in a string is not a Prolog rule; blame the real dangling `+`."""
-    exc = load_error(tmp_path, "quoted.clausal", """
+    exc = load_error(tmp_path, f"quoted{SEAM}", """
     f(X, Y) <- (
         Y = "a :- b" +
     )
@@ -311,7 +312,7 @@ def test_operators_inside_string_literals_are_not_diagnosed(tmp_path):
 
 
 def test_dangling_arithmetic_operator_named(tmp_path):
-    exc = load_error(tmp_path, "arith.clausal", """
+    exc = load_error(tmp_path, f"arith{SEAM}", """
     f(X, Y) <- (
         Y is X +
     )
@@ -341,7 +342,7 @@ f(X) <- (
 
 
 def test_context_window_is_bounded(tmp_path):
-    exc = load_error(tmp_path, "long.clausal", LONG_BODY)
+    exc = load_error(tmp_path, f"long{SEAM}", LONG_BODY)
     rows = source_rows(str(exc))
     assert len(rows) <= 6, f"too much source shown: {rows}"
     assert any(n == 14 for n, _ in rows)      # the reported line
@@ -351,14 +352,14 @@ def test_context_window_is_bounded(tmp_path):
 
 def test_enclosing_clause_head_is_shown(tmp_path):
     """Which clause am I in?  Say where, not only what."""
-    exc = load_error(tmp_path, "long.clausal", LONG_BODY)
+    exc = load_error(tmp_path, f"long{SEAM}", LONG_BODY)
     rows = source_rows(str(exc))
     assert (3, "f(X) <- (") in rows, rows
     assert "omitted" in str(exc)
 
 
 def test_report_has_a_remedy_line(tmp_path):
-    exc = load_error(tmp_path, "m.clausal", M_SRC)
+    exc = load_error(tmp_path, f"m{SEAM}", M_SRC)
     assert any(ln.strip().startswith("->") for ln in str(exc).splitlines())
 
 

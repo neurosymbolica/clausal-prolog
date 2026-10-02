@@ -32,6 +32,7 @@ import pytest
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call, solve
 from clausal.logic.variables import Var, walk
+from tests._suffix import SEAM
 
 _LIB = """
     -module(cfulib, [mp(X), z/0])
@@ -103,9 +104,9 @@ _USER = """
 @pytest.fixture(scope="module")
 def mods(tmp_path_factory):
     d = tmp_path_factory.mktemp("cfu")
-    (d / "cfulib.clausal").write_text(textwrap.dedent(_LIB).lstrip())
+    (d / f"cfulib{SEAM}").write_text(textwrap.dedent(_LIB).lstrip())
     (d / "cfupl.pl").write_text(_PL)
-    (d / "cfuuser.clausal").write_text(textwrap.dedent(_USER).lstrip())
+    (d / f"cfuuser{SEAM}").write_text(textwrap.dedent(_USER).lstrip())
     names = ("cfulib", "cfupl", "cfuuser")
     with pytest.MonkeyPatch.context() as mp:
         mp.setenv("CLAUSAL_PL_FRONTEND", "native")

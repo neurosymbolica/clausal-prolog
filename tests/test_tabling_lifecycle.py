@@ -29,6 +29,7 @@ from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.logic.database import Clause
+from tests._suffix import SEAM
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -46,7 +47,7 @@ def load(tmp_path):
     def _load(source):
         counter[0] += 1
         name = f"tbl_lifecycle_{os.getpid()}_{id(counter)}_{counter[0]}"
-        path = tmp_path / f"{name}.clausal"
+        path = tmp_path / f"{name}{SEAM}"
         path.write_text(source)
         return _load_module(name, str(path))
 

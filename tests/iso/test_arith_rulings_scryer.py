@@ -30,6 +30,7 @@ from clausal.logic.solve import solve
 from clausal.logic.variables import Var, deref
 
 from .conftest import SCRYER, run_scryer
+from tests._suffix import SEAM
 
 #: (evaluable cell as written in the engine, the same in Scryer, what both print)
 ROWS = [
@@ -121,7 +122,7 @@ _SRC = "-allow_singletons\n" + "".join(
 
 @pytest.fixture(scope="module")
 def mod():
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                      delete=False) as f:
         f.write(_SRC)
         path = f.name
@@ -185,7 +186,7 @@ def clp_mod():
     # declared as the atom AND as the data functor foo/1.
     src = ("-allow_singletons\n-private([foo, foo(_)])\n-implicit_functors\n" + "".join(
         f"c{i}(X) <- ({body}),\n" for i, (body, _, _) in enumerate(CLP_ROWS)))
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                      delete=False) as f:
         f.write(src)
         path = f.name

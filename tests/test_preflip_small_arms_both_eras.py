@@ -53,6 +53,7 @@ from clausal.logic.exceptions import LogicException
 from clausal.logic.predicate import mint_predicate_handle
 from clausal.logic.solve import call
 from clausal.terms import Call as TermCall, LoadName
+from tests._suffix import SEAM
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 _OWNER = "tests.fixtures.gate_dyn_owner"
@@ -169,10 +170,10 @@ def lister(tmp_path, monkeypatch):
     loaded = []
 
     def load(name, body):
-        (tmp_path / f"{name}.clausal").write_text(textwrap.dedent(body).lstrip())
+        (tmp_path / f"{name}{SEAM}").write_text(textwrap.dedent(body).lstrip())
         sys.modules.pop(name, None)
         loaded.append(name)
-        return _load_module(name, str(tmp_path / f"{name}.clausal"))
+        return _load_module(name, str(tmp_path / f"{name}{SEAM}"))
 
     yield load
     for name in loaded:
@@ -591,7 +592,7 @@ def test_a_variable_head_for_an_import_is_refused_by_the_gate(
         vocab_rival, tmp_path):
     """The derived name is a VARIABLE's (``colour``), not a placeholder."""
     _load_module(vocab_rival[0], os.path.join(FIXTURES, "gate_vocab.clausal"))
-    src = tmp_path / "sa_hv.clausal"
+    src = tmp_path / f"sa_hv{SEAM}"
     src.write_text("-module(sa_hv, [])\n"
                    "-import_from(tests.fixtures.gate_vocab, [gv_owned])\n"
                    "gv_owned(COLOUR) <- true\n")
@@ -783,7 +784,7 @@ def test_a_head_through_a_python_held_handle_never_reaches_a_row(vocab_rival, tm
     refused by the compile-time check instead of being stored positionally
     on this module's own gv_owned/1 row."""
     _load_module(vocab_rival[0], os.path.join(FIXTURES, "gate_vocab.clausal"))
-    src = tmp_path / "sa_hh.clausal"
+    src = tmp_path / f"sa_hh{SEAM}"
     src.write_text("-module(sa_hh, [])\n"
                    "-allow_singletons\n"
                    "from clausal.logic.atoms import mangle\n"

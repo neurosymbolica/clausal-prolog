@@ -39,6 +39,7 @@ from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, walk
+from tests._suffix import SEAM
 
 
 @pytest.fixture
@@ -46,7 +47,7 @@ def load(tmp_path):
     names = []
 
     def _load(name, src):
-        path = tmp_path / f"{name}.clausal"
+        path = tmp_path / f"{name}{SEAM}"
         path.write_text(src)
         sys.modules.pop(name, None)
         names.append(name)
@@ -260,7 +261,7 @@ def test_a_private_name_arity_entry_is_not_listed_as_an_export(load):
 
 def _module_items(src, name):
     from clausal.import_hook import _parse_clausal_source
-    _code, transformer = _parse_clausal_source(src, f"/nonexistent/{name}.clausal")
+    _code, transformer = _parse_clausal_source(src, f"/nonexistent/{name}{SEAM}")
     return transformer._module_items
 
 

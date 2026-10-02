@@ -10,10 +10,11 @@ import pytest
 
 from clausal.import_hook import _load_module
 from clausal.templating.term_rewriting import ClausalSingletonWarning
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, name, text):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(text).lstrip())
     return _load_module(f"tsl_{name}", str(path))
 

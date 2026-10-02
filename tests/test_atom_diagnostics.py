@@ -31,6 +31,7 @@ import pytest
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.atom_diagnostics import truth_literal_hint_lines
 from clausal.import_hook import _load_module
+from tests._suffix import SEAM
 
 
 # ── The pure helper ────────────────────────────────────────────────────────
@@ -134,7 +135,7 @@ def _load_inline_clausal(name: str, source: str):
     collector surfaces them as <load> failures.
     """
     with tempfile.NamedTemporaryFile(
-        suffix=".clausal", mode="w", delete=False
+        suffix=SEAM, mode="w", delete=False
     ) as f:
         f.write(source)
         f.flush()

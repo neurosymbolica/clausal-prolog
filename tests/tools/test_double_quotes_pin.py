@@ -5,6 +5,7 @@ import os
 import textwrap
 
 import pytest
+from tests._suffix import SEAM
 
 _TOOL = os.path.join(os.path.dirname(__file__), "..", "..", "tools", "double_quotes_pin.py")
 _spec = importlib.util.spec_from_file_location("double_quotes_pin", _TOOL)
@@ -14,7 +15,7 @@ _spec.loader.exec_module(d)
 
 def _lits(src):
     """The classified literals in SOURCE order (the walk itself is a stack)."""
-    found = d._dq_literals(src, "t.clausal")
+    found = d._dq_literals(src, f"t{SEAM}")
     return [(n.value, dcg, tn) for n, dcg, tn in
             sorted(found, key=lambda t: (t[0].lineno, t[0].col_offset))]
 
@@ -84,7 +85,7 @@ class TestLiteralClassification:
 
 class TestConvertFile:
     def test_a_file_that_does_not_parse_is_reported_not_raised(self, tmp_path, capsys):
-        p = tmp_path / "bad.clausal"
+        p = tmp_path / f"bad{SEAM}"
         p.write_text('p("x") <- (\n')
         assert d.convert_file(str(p), check=True) == (0, 0)
         assert "does not parse" in capsys.readouterr().out

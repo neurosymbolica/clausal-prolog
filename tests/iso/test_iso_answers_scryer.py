@@ -30,6 +30,7 @@ from clausal.logic.variables import Var, deref
 from clausal.terms import term_writeq
 
 from .conftest import SCRYER, run_scryer
+from tests._suffix import SEAM
 
 
 _VAR = re.compile(r"(?<![\w'])_[A-Za-z0-9_]*")
@@ -93,7 +94,7 @@ def _scryer_answers(program: str, goals: list[tuple[str, int]]) -> list[list[str
 def _load_seam(tmp_path, name: str, facts: str, rows) -> object:
     src = textwrap.dedent(facts) + "".join(
         f"r{i}(R) <- ({body}),\n" for i, (_, body, _, _, _) in enumerate(rows))
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(src)
     return _load_module(name, str(path))
 

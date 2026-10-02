@@ -17,6 +17,7 @@ import os
 import subprocess
 
 import pytest
+from tests._suffix import SEAM
 
 SCRYER = "/workspace/scryer-prolog-clpq/target/release/scryer-prolog"
 
@@ -215,7 +216,7 @@ def test_no_global_sum_builtin_shadows_pythons_sum(tmp_path):
     from clausal.logic.variables import Var, walk
     from clausal.tools.iso_l3_directives import _engine_goal
     assert not _engine_goal("sum")
-    p = tmp_path / "_seam_py_sum.clausal"
+    p = tmp_path / f"_seam_py_sum{SEAM}"
     p.write_text("-module(_seam_py_sum, [t/1])\nt(X) <- (X is ++sum([1, 2, 3]))\n")
     mod = _load_module("_seam_py_sum", str(p)).__dict__["$module"]
     x = Var()

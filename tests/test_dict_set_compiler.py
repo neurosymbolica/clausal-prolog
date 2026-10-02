@@ -19,6 +19,7 @@ from clausal.logic.cells import chars
 from clausal.logic.solve import call, solve, _deref_walk
 from clausal.import_hook import _load_module
 from clausal.terms import DictTerm, SetTerm
+from tests._suffix import SEAM
 
 _FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -411,7 +412,7 @@ class TestDotAttributeAccessLoad:
     """
 
     def _load_src(self, tmp_path, src, name):
-        path = tmp_path / f"{name}.clausal"
+        path = tmp_path / f"{name}{SEAM}"
         path.write_text(src)
         return _load_module(name, str(path))
 
@@ -470,7 +471,7 @@ class TestDictReadOnceLowering:
 
         monkeypatch.setattr(
             "clausal.logic.compiler.predicate._subscript", counting_subscript)
-        path = tmp_path / f"{name}.clausal"
+        path = tmp_path / f"{name}{SEAM}"
         path.write_text(src)
         mod = _load_module(name, str(path))
         return mod, mod.__dict__["$module"], reads

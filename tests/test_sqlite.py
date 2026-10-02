@@ -40,6 +40,7 @@ from clausal.modules.py.sqlite import (
     column,
     current_connection,
 )
+from tests._suffix import SEAM
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -52,7 +53,7 @@ _SQLITE_IMPORT = (
 
 def _load(name, src_text, tmp_path):
     """write a .clausal file and load it."""
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(_SQLITE_IMPORT + src_text)
     mod = _load_module(name, str(p))
     return mod.__dict__["$module"]

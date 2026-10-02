@@ -34,6 +34,7 @@ from clausal.logic.atoms import mint
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, walk
+from tests._suffix import SEAM
 
 _LIB = """
     -module(sqclib, [mp(X), q(A, B), z/0])
@@ -126,11 +127,11 @@ _USER_BARE = """
 @pytest.fixture(scope="module")
 def user(tmp_path_factory):
     d = tmp_path_factory.mktemp("sqc")
-    (d / "sqclib.clausal").write_text(textwrap.dedent(_LIB).lstrip())
+    (d / f"sqclib{SEAM}").write_text(textwrap.dedent(_LIB).lstrip())
     (d / "sqcpl.pl").write_text(_PL)
     (d / "sqcpyhelp.py").write_text(_PYHELP)
-    (d / "sqcuser.clausal").write_text(textwrap.dedent(_USER).lstrip())
-    (d / "sqcbare.clausal").write_text(textwrap.dedent(_USER_BARE).lstrip())
+    (d / f"sqcuser{SEAM}").write_text(textwrap.dedent(_USER).lstrip())
+    (d / f"sqcbare{SEAM}").write_text(textwrap.dedent(_USER_BARE).lstrip())
     names = ("sqclib", "sqcpl", "sqcpyhelp", "sqcuser", "sqcbare")
     with pytest.MonkeyPatch.context() as mp:
         mp.setenv("CLAUSAL_PL_FRONTEND", "native")

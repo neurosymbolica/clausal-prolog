@@ -7,6 +7,7 @@ import pytest
 from clausal.logic.database import Module
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var
+from tests._suffix import SEAM
 
 SRC = """\
 -allow_singletons
@@ -38,7 +39,7 @@ cp8(R) <- catch((current_predicate(foo/a), R is 1), E, R is E)
 @pytest.fixture
 def mod(tmp_path):
     from clausal.import_hook import _load_module
-    p = tmp_path / "isodbt.clausal"
+    p = tmp_path / f"isodbt{SEAM}"
     p.write_text(SRC)
     return _load_module("isodbt", str(p))
 

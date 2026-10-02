@@ -16,6 +16,7 @@ from clausal.modules.py.process import (
 )
 from clausal.terms import DictTerm
 from clausal.logic.trampoline import DONE
+from tests._suffix import SEAM
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -396,7 +397,7 @@ class TestOptionKeySpellings:
         directive, ``{"input": ...}`` written in source."""
         from clausal.import_hook import _load_module
         from clausal.logic.solve import call
-        p = tmp_path / "opt_keys.clausal"
+        p = tmp_path / f"opt_keys{SEAM}"
         p.write_text(
             "-import_from(py.process, [process_create])\n"
             'by_string(R) <- process_create("cat", [], {"input": "hello"}, R)\n'

@@ -27,10 +27,11 @@ from clausal.logic.predicate import (
 )
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref, walk
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, name, src):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(src).lstrip())
     sys.modules.pop(name, None)
     try:

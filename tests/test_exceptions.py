@@ -17,6 +17,7 @@ from clausal.logic.variables import Var, Trail, deref
 from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.terms import And, Call, LoadName, Unify as Is, in_
+from tests._suffix import SEAM
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -501,7 +502,7 @@ class TestAssertzAgainstADataFunctor:
     def _module(self, tmp_path):
         from clausal.import_hook import _load_module
 
-        path = tmp_path / "azdf.clausal"
+        path = tmp_path / f"azdf{SEAM}"
         path.write_text(self._SRC)
         return _load_module("azdf", str(path))
 
@@ -553,7 +554,7 @@ class TestAssertzAgainstADataFunctor:
         from clausal.logic.solve import call
         from clausal.logic.variables import Var, deref
 
-        path = tmp_path / "azdyn.clausal"
+        path = tmp_path / f"azdyn{SEAM}"
         path.write_text(
             "-module(azdyn, [f(A), go(X)])\n"
             "-dynamic(f/1)\n"

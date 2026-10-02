@@ -27,6 +27,7 @@ from clausal.logic.atoms import mangle
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call
 from clausal.terms import Div
+from tests._suffix import SEAM
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 _OWNER = "tests.fixtures.gate_dyn_owner"
@@ -193,7 +194,7 @@ def test_a_mangled_predicate_handle_is_authoritative_at_its_arity(
     -- no fall-through to the caller's same-named
     predicate at that arity (which the caller DOES define here, so a
     fall-through would list it)."""
-    src = tmp_path / "row60_local_holds.clausal"
+    src = tmp_path / f"row60_local_holds{SEAM}"
     src.write_text("holds(1, 2),\n")
     name = "_row60_local_holds"
     sys.modules.pop(name, None)

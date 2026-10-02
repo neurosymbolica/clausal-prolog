@@ -29,10 +29,11 @@ import pytest
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 
 def _write(tmp_path, name, text):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(text).lstrip())
     return str(path)
 
@@ -68,8 +69,8 @@ class TestReportedCrash:
         assert "'P'" in message
         assert "logic variable" in message
         # Both the declaration site and the variable read are attributed.
-        assert "sites.clausal:1" in message
-        assert "sites.clausal:2" in message
+        assert f"sites{SEAM}:1" in message
+        assert f"sites{SEAM}:2" in message
         # And the cryptic downstream failure is named so a search for it lands
         # here.
         assert "'AttVar' object is not callable" in message

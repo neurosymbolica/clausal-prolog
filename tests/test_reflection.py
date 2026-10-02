@@ -28,6 +28,8 @@ from clausal.reflection import (
     reify_ast,
     reify_source,
 )
+from tests._suffix import seam_glob
+import pathlib
 
 
 EXAMPLES_DIR = os.path.join(
@@ -381,7 +383,7 @@ class TestRealExamples:
     def test_all_examples_reify_without_error(self):
         import glob
 
-        for path in glob.glob(os.path.join(EXAMPLES_DIR, "*.clausal")):
+        for path in (str(p) for p in seam_glob(pathlib.Path(EXAMPLES_DIR))):
             items = reify_source(open(path).read(), filename=path)
             assert items, f"no items reified from {path}"
 

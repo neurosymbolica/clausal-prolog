@@ -29,6 +29,7 @@ from clausal.logic.atoms import mint
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, walk
+from tests._suffix import SEAM
 
 _LIB = """
     -module(bmqlib, [mp(X), q(A, B), decide(B, V), g(N, L, R),
@@ -82,7 +83,7 @@ def user(tmp_path_factory):
     mods = {}
     try:
         for name, body in (("bmqlib", _LIB), ("bmquser", _USER)):
-            p = d / f"{name}.clausal"
+            p = d / f"{name}{SEAM}"
             p.write_text(textwrap.dedent(body).lstrip())
             mods[name] = _load_module(name, str(p))
         yield mods["bmquser"].__dict__["$module"]
@@ -173,7 +174,7 @@ def test_a_local_predicate_named_like_the_builtin_keeps_its_own_argument(
     argument is data, the plain cell (ruling (a)), not ``bmqlib:q(1)``."""
     from clausal.import_hook import _load_module
     monkeypatch.syspath_prepend(str(tmp_path))
-    p = tmp_path / "bmqshadow.clausal"
+    p = tmp_path / f"bmqshadow{SEAM}"
     p.write_text(textwrap.dedent(_SHADOW).lstrip())
     try:
         m = _load_module("bmqshadow", str(p))

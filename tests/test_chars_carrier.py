@@ -14,12 +14,13 @@ from clausal.logic.cells import CHARS_TAG, chars, chars_text, is_chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.testing import load_clausal_module
+from tests._suffix import SEAM
 
 _HDR = "-double_quotes(chars)\n-private([yes, no, a, b, c, x, h, i, t, e, r])\n"
 
 
 def _mod(tmp_path, body):
-    p = tmp_path / "carrier.clausal"; p.write_text(_HDR + body)
+    p = tmp_path / f"carrier{SEAM}"; p.write_text(_HDR + body)
     return load_clausal_module(p)
 
 
@@ -130,7 +131,7 @@ class TestSlice3Funnels:
 
     def test_runner_reads_chars_test_names_and_runs_the_right_body(self, tmp_path):
         from clausal.testing import collect_tests, run_test
-        p = tmp_path / "t.clausal"
+        p = tmp_path / f"t{SEAM}"
         p.write_text(_HDR + 'test("first") <- (X is 1, X == 1)\ntest("second") <- (Y is 2, Y == 3)\n')
         mod = load_clausal_module(p)
         assert collect_tests(mod) == ["first", "second"]

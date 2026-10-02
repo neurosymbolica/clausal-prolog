@@ -19,6 +19,7 @@ from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal import reflection as R
 from clausal.pythonic_ast import nodes as simple_ast
+from tests._suffix import SEAM
 
 
 @pytest.fixture(autouse=True)
@@ -102,7 +103,7 @@ build_late(NEW) <- (op_node(NEW, "Gt", [X, 1]), X is 5)
 
 @pytest.fixture(scope="module")
 def matchers(tmp_path_factory):
-    path = tmp_path_factory.mktemp("op_node") / "matchers.clausal"
+    path = tmp_path_factory.mktemp("op_node") / f"matchers{SEAM}"
     path.write_text(_MATCHERS)
     mod = _load_module("_test_op_node_matchers", str(path))
     return mod.__dict__["$module"]
@@ -328,7 +329,7 @@ build_gt_str(NEW, L, R) <- op_node(NEW, "Gt", [L, R])
 
 @pytest.fixture(scope="module")
 def chars_matchers(tmp_path_factory):
-    path = tmp_path_factory.mktemp("op_node_chars") / "matchers.clausal"
+    path = tmp_path_factory.mktemp("op_node_chars") / f"matchers{SEAM}"
     path.write_text(_CHARS_MATCHERS)
     mod = _load_module("_test_op_node_chars_matchers", str(path))
     return mod.__dict__["$module"]

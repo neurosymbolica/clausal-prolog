@@ -29,6 +29,7 @@ from clausal.logic.exceptions import LogicException
 from clausal.logic.predicate import is_atom_value
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 CELL = "foo"
 
@@ -40,7 +41,7 @@ def _lm(module):
 @pytest.fixture
 def mod():
     with tempfile.NamedTemporaryFile(
-        suffix=".clausal", mode="w", delete=False
+        suffix=SEAM, mode="w", delete=False
     ) as f:
         f.write("z0,\n")
         path = f.name

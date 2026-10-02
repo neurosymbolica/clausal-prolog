@@ -16,6 +16,7 @@ from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call
 from clausal.logic.cells import chars, chars_text
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 
 @pytest.fixture(autouse=True)
@@ -68,7 +69,7 @@ mismatch(SRC, TEXT) <- (
 
 @pytest.fixture(scope="module")
 def matchers(tmp_path_factory):
-    path = tmp_path_factory.mktemp("clause_source") / "matchers.clausal"
+    path = tmp_path_factory.mktemp("clause_source") / f"matchers{SEAM}"
     path.write_text(_MATCHERS)
     mod = _load_module("_test_clause_source_matchers", str(path))
     return mod.__dict__["$module"]

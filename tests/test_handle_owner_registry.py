@@ -34,10 +34,11 @@ from clausal.logic.predicate import (
 )
 from clausal.logic.solve import resolve_module, solve
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 
 def _write(tmp_path, name, source):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(source).lstrip())
     return str(path)
 
@@ -187,7 +188,7 @@ def test_an_importer_resolves_the_owner_it_imported_by_identity(tmp_path):
     sys.path.insert(0, str(tmp_path))
     try:
         sys.modules.pop("q0r_src", None)
-        original = _load_module("q0r_src", str(tmp_path / "q0r_src.clausal"))
+        original = _load_module("q0r_src", str(tmp_path / f"q0r_src{SEAM}"))
         importer = _load_popped(tmp_path, "q0r_imp", """
             -import_from(q0r_src, [q0r_s])
             q0r_i(X) <- q0r_s(X)
@@ -198,7 +199,7 @@ def test_an_importer_resolves_the_owner_it_imported_by_identity(tmp_path):
         _write(tmp_path, "q0r_src", "-module(q0r_src, [q0r_s/1])\n\nq0r_s(2),\n")
         sys.modules.pop("q0r_src", None)
         replacement = _load_module("q0r_src",
-                                   str(tmp_path / "q0r_src.clausal"))
+                                   str(tmp_path / f"q0r_src{SEAM}"))
         assert sys.modules["q0r_src"] is replacement
         handle = mangle("q0r_src", "q0r_s")
         assert resolve_predicate_row(handle, arity=1, db=imp_db) \
@@ -254,7 +255,7 @@ def test_class_and_handle_agree_for_a_popped_owner_with_no_hint(tmp_path):
 def reused(tmp_path):
     """An importer of ``q0r_src2`` v1, then v2 loaded under the same name;
     all three popped and alive -- the registry alone is ambiguous."""
-    src = tmp_path / "q0r_src2.clausal"
+    src = tmp_path / f"q0r_src2{SEAM}"
     src.write_text("-module(q0r_src2, [q0r_s/1])\n\nq0r_s(1),\n")
     sys.path.insert(0, str(tmp_path))
     try:
@@ -342,7 +343,7 @@ def test_binding_grants_arity_finds_an_ambiguous_owner_by_identity(tmp_path):
     the owner is "unknown" and the not-imported arity would be granted."""
     from clausal.logic.database import Clause
     from clausal.logic.predicate import binding_grants_arity
-    src = tmp_path / "q0r_src3.clausal"
+    src = tmp_path / f"q0r_src3{SEAM}"
     src.write_text("-module(q0r_src3, [q0r_t/1])\n-dynamic(q0r_t/1)\n\n"
                    "q0r_t(1),\n")
     sys.path.insert(0, str(tmp_path))

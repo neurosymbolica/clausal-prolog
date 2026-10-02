@@ -41,6 +41,7 @@ from clausal.logic.predicate import (
     mint_predicate_handle, resolve_predicate_row,
 )
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 # ── the end-to-end loads: an importer's head names an imported predicate ────
@@ -173,7 +174,7 @@ _OWNER_SRC = textwrap.dedent("""\
 
 @pytest.fixture(scope="module")
 def owner(tmp_path_factory):
-    path = tmp_path_factory.mktemp("heads5") / "_heads5_owner.clausal"
+    path = tmp_path_factory.mktemp("heads5") / f"_heads5_owner{SEAM}"
     path.write_text(_OWNER_SRC)
     sys.modules.pop(_OWNER, None)
     module = _load_module(_OWNER, str(path))

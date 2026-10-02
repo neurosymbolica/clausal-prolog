@@ -35,10 +35,11 @@ from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.terms import Quantity
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, name, text):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(text).lstrip())
     return _load_module(f"tru_{name}", str(path))
 
@@ -367,7 +368,8 @@ def test_transforming_a_unit_free_file_does_not_import_the_units_module():
         assert os.path.realpath(clausal.__file__).startswith(
             os.path.join(os.getcwd(), "")), clausal.__file__
         from clausal.import_hook import _load_module
-        p = pathlib.Path(tempfile.mkdtemp()) / "plain.clausal"
+        from clausal._suffixes import SEAM_SUFFIX
+        p = pathlib.Path(tempfile.mkdtemp()) / ("plain" + SEAM_SUFFIX)
         p.write_text("-private([a])\\nthing(a),\\nother(X) <- thing(X),\\n")
         _load_module("plain_probe_units_flag", str(p))
         from clausal.logic import _units_flag

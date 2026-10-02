@@ -27,6 +27,7 @@ from clausal.logic.exceptions import LogicException
 from clausal.logic.predicate import mint_predicate_handle
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 _OWNER = "tests.fixtures.gate_dyn_owner"
@@ -48,7 +49,7 @@ def aliased(tmp_path):
     saved = sys.modules.pop(_OWNER, None)
     sys.modules.pop(_ALIAS, None)
     owner = _load_module(_OWNER, os.path.join(FIXTURES, "gate_dyn_owner.clausal"))
-    src = tmp_path / f"{_ALIAS}.clausal"
+    src = tmp_path / f"{_ALIAS}{SEAM}"
     src.write_text(_SRC)
     user = _load_module(_ALIAS, str(src))
     yield owner, user

@@ -30,6 +30,7 @@ from clausal.logic.variables import Var, deref
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
 from clausal.tools.prolog_dialect import Dialect, resolve_name
 from tests._oracles import SCRYER, TREALLA
+from tests._suffix import SEAM
 
 
 #: name -> goal body binding L. Every case is a findall, so the whole answer
@@ -82,7 +83,7 @@ def _fmt(value) -> str:
 
 @pytest.fixture(scope="module")
 def truth(tmp_path_factory):
-    path = tmp_path_factory.mktemp("d21") / "d21_cases.clausal"
+    path = tmp_path_factory.mktemp("d21") / f"d21_cases{SEAM}"
     path.write_text(TRUTH_SOURCE)
     mod = _load_module("d21_cases_truth", str(path))
     out = {}

@@ -19,6 +19,7 @@ from clausal.logic.variables import Var, deref
 from clausal.terms import term_str
 from clausal.pythonic_ast import nodes as simple_ast
 from clausal import reflection as R
+from tests._suffix import SEAM
 
 
 @pytest.fixture(autouse=True)
@@ -204,7 +205,7 @@ swap_gt_eto_gt(SRC, NEWCLAUSE) <- (
 
     @pytest.fixture(scope="class")
     def matchers(self, tmp_path_factory):
-        path = tmp_path_factory.mktemp("replace_subterm") / "m.clausal"
+        path = tmp_path_factory.mktemp("replace_subterm") / f"m{SEAM}"
         path.write_text(self._MATCHERS)
         mod = _load_module("_test_replace_subterm_matchers", str(path))
         return mod.__dict__["$module"]

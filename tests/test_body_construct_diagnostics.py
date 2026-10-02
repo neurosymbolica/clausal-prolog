@@ -25,10 +25,11 @@ import os
 import pytest
 
 from clausal.import_hook import _load_module
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, source: str, name: str):
-    path = os.path.join(str(tmp_path), f"{name}.clausal")
+    path = os.path.join(str(tmp_path), f"{name}{SEAM}")
     with open(path, "w") as f:
         f.write(source)
     return _load_module(name, path)
@@ -53,7 +54,7 @@ def test_slice_reports_line_and_alternatives(tmp_path):
     assert "slice" in str(e)
     assert "nth0" in str(e)
     assert e.lineno == 6, f"expected the offending clause's line, got {e.lineno!r}"
-    assert e.filename and e.filename.endswith("bcd_a.clausal")
+    assert e.filename and e.filename.endswith(f"bcd_a{SEAM}")
 
 
 def test_ellipsis_is_a_syntax_error_with_the_clause_line(tmp_path):
@@ -74,7 +75,7 @@ def test_logic_var_comprehension_target_names_var_and_findall(tmp_path):
     assert "`Y`" in str(e)
     assert "findall" in str(e)
     assert e.lineno == 6, f"expected the offending clause's line, got {e.lineno!r}"
-    assert e.filename and e.filename.endswith("bcd_c.clausal")
+    assert e.filename and e.filename.endswith(f"bcd_c{SEAM}")
 
 
 def test_underscore_led_logic_var_target_is_rejected_too(tmp_path):

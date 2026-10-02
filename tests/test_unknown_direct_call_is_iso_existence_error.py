@@ -44,12 +44,13 @@ from clausal.logic.exceptions import LogicException, error_prose
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, walk
 from clausal.predicate_diagnostics import PredicateNotFoundError
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, monkeypatch, name, body):
     from clausal.import_hook import _load_module
     monkeypatch.syspath_prepend(str(tmp_path))
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(textwrap.dedent(body).lstrip())
     mod = _load_module(name, str(p))
     assert sys.modules[name] is mod
@@ -374,8 +375,9 @@ from clausal import cell_args
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, walk
 sys.path.insert(1, TMP)
-_load_module("udcp_owner", os.path.join(TMP, "udcp_owner.clausal"))
-m = _load_module("udcp_caller", os.path.join(TMP, "udcp_caller.clausal"))
+from clausal._suffixes import SEAM_SUFFIX
+_load_module("udcp_owner", os.path.join(TMP, "udcp_owner" + SEAM_SUFFIX))
+m = _load_module("udcp_caller", os.path.join(TMP, "udcp_caller" + SEAM_SUFFIX))
 M = m.__dict__["$module"]
 out = {"drive": t._drive_until_yield.__module__}
 for g in ["pi", "in_findall", "in_once", "in_forall", "by_key_error",
@@ -392,9 +394,9 @@ print("RESULT" + json.dumps(out))
 
 
 def _run_parity(tmp_path, block_c):
-    (tmp_path / "udcp_owner.clausal").write_text(
+    (tmp_path / f"udcp_owner{SEAM}").write_text(
         textwrap.dedent(_OWNER.replace("udc_owner_ERA", "udcp_owner")).lstrip())
-    (tmp_path / "udcp_caller.clausal").write_text(textwrap.dedent(
+    (tmp_path / f"udcp_caller{SEAM}").write_text(textwrap.dedent(
         _CALLER.replace("udc_caller_ERA", "udcp_caller")
         .replace("udc_owner_ERA", "udcp_owner")).lstrip())
     repo = os.path.dirname(os.path.dirname(os.path.abspath(clausal.__file__)))

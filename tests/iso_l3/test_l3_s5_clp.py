@@ -21,6 +21,7 @@ import textwrap
 import pytest
 
 from clausal.tools import iso_l3 as L3
+from tests._suffix import SEAM
 
 SCRYER = "/workspace/scryer-prolog-clpq/target/release/scryer-prolog"
 
@@ -144,7 +145,7 @@ def test_the_builtins_from_solve(tmp_path, monkeypatch):
     assert clausal.__file__.startswith(root), (clausal.__file__, root)
     from clausal.logic.solve import solve
     from clausal.logic.variables import Var, walk
-    (tmp_path / "s5_empty.clausal").write_text("s5_anchor(1),\n")
+    (tmp_path / f"s5_empty{SEAM}").write_text("s5_anchor(1),\n")
     monkeypatch.syspath_prepend(str(tmp_path))
     importlib.invalidate_caches()
     sys.modules.pop("s5_empty", None)

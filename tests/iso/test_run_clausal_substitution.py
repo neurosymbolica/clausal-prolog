@@ -1,3 +1,4 @@
+from tests._suffix import SEAM
 def test_run_clausal_does_not_corrupt_near_miss_tokens(run_clausal, tmp_path):
     """Regression for review round 1, Finding 2: the `_h1`/`_hN` placeholder
     substitution in the `run_clausal` fixture must be word-bounded. A plain
@@ -20,7 +21,7 @@ def test_run_clausal_does_not_corrupt_near_miss_tokens(run_clausal, tmp_path):
     # This is the first run_clausal() call made in this test, so the fixture's
     # counter produced "_iso1" as the fresh module name — inspect what it
     # actually wrote to disk.
-    written = (tmp_path / "_iso1.clausal").read_text()
+    written = (tmp_path / f"_iso1{SEAM}").read_text()
     assert "-module(_iso1, [p(X)])" in written, written
     assert "_h10" in written, "near-miss token _h10 was corrupted:\n" + written
     assert "path_hN" in written, "near-miss token path_hN was corrupted:\n" + written

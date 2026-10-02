@@ -20,13 +20,14 @@ from clausal.logic.atoms import mangle
 from clausal.logic.database import Module
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var
+from tests._suffix import SEAM
 
 
 @pytest.fixture(scope="module")
 def owner(tmp_path_factory):
     from clausal.import_hook import _load_module
     d = tmp_path_factory.mktemp("qctm")
-    p = d / "qctm_owner.clausal"
+    p = d / f"qctm_owner{SEAM}"
     p.write_text("-module(qctm_owner, [p/1, q/1])\np(1),\nq(2),\n")
     mod = _load_module("qctm_owner", str(p))
     yield mod

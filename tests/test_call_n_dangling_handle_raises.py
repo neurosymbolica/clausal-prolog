@@ -35,6 +35,7 @@ from clausal.logic.atoms import HIDDEN_SEP, mangle
 from clausal import cell_args, cell_functor
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var
+from tests._suffix import SEAM
 
 
 LIB = "calln_dangling_lib"
@@ -48,7 +49,7 @@ def host(tmp_path_factory):
     d = tmp_path_factory.mktemp("calln_dangling")
     sys.path.insert(0, str(d))
     try:
-        (d / f"{LIB}.clausal").write_text(textwrap.dedent(f"""
+        (d / f"{LIB}{SEAM}").write_text(textwrap.dedent(f"""
             -module({LIB}, [pred(A), flag, pair(A, B)])
             pred(1),
             pred(2),
@@ -56,8 +57,8 @@ def host(tmp_path_factory):
             pair(1, 10),
             pair(2, 20),
         """).lstrip())
-        _load_module(LIB, str(d / f"{LIB}.clausal"))
-        (d / f"{HOST}.clausal").write_text(textwrap.dedent(f"""
+        _load_module(LIB, str(d / f"{LIB}{SEAM}"))
+        (d / f"{HOST}{SEAM}").write_text(textwrap.dedent(f"""
             -module({HOST}, [])
             -private([procedure])
             use1(H, X) <- call(H, X)
@@ -68,7 +69,7 @@ def host(tmp_path_factory):
             ph3(R, L, S) <- phrase(R, L, S)
             caught(H, I) <- catch(call(H, 1), error(existence_error(procedure, I), _), True)
         """).lstrip())
-        mod = _load_module(HOST, str(d / f"{HOST}.clausal"))
+        mod = _load_module(HOST, str(d / f"{HOST}{SEAM}"))
         yield mod.__dict__["$module"]
     finally:
         sys.path.remove(str(d))

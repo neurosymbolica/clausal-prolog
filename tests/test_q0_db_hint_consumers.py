@@ -21,12 +21,13 @@ from clausal.import_hook import _load_module
 from clausal.logic.predicate import (
     _HANDLE_OWNERS, is_declared_predicate_name, mint_predicate_handle,
 )
+from tests._suffix import SEAM
 
 
 def _load_popped(tmp_path, name, source):
     """Load a module, then drop it from ``sys.modules`` as the runner does;
     return ``(module, db, handle)`` for its predicate ``<name>_p/1``."""
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(source).lstrip())
     sys.modules.pop(name, None)
     module = _load_module(name, str(path))
@@ -94,7 +95,7 @@ def test_load_channel_hint_at_compile_module_s_own_point(tmp_path,
     import clausal.logic.compiler_v2 as cv
     from clausal.logic.compiler_v2 import ImportFromItem
     name = "q0c_real"
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(f"-module({name}, [{name}_p/1])\n{name}_p(1),\n")
     orig = cv._import_from_origins
     seen = {}

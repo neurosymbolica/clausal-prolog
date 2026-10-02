@@ -22,13 +22,14 @@ from clausal.pythonic_ast import nodes as simple_ast
 from clausal.pythonic_ast.nodes import ImplicitAtomsDeclaration
 from clausal.templating import term_rewriting
 from clausal.templating.term_rewriting import EmbedTransformer
+from tests._suffix import SEAM
 
 
 def _load_inline_clausal(name: str, source: str):
     """Write `source` to a temp .clausal file and load it (avoids the
     conftest .clausal collector that would surface persistent fixtures)."""
     with tempfile.NamedTemporaryFile(
-        suffix=".clausal", mode="w", delete=False
+        suffix=SEAM, mode="w", delete=False
     ) as f:
         f.write(source)
         f.flush()

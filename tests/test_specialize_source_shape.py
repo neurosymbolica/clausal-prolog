@@ -17,10 +17,11 @@ import pytest
 
 import clausal.import_hook  # noqa: F401 — installs the meta-path finder
 from clausal.import_hook import _load_module
+from tests._suffix import SEAM
 
 
 def test_a_hidden_data_atom_as_the_source_is_refused_by_name(tmp_path):
-    path = tmp_path / "spsrc_hide.clausal"
+    path = tmp_path / f"spsrc_hide{SEAM}"
     path.write_text(textwrap.dedent("""
         -module(spsrc_hide, [])
         -import_from(clausal.examples.metainterpreters, [solve_count])

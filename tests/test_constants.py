@@ -6,10 +6,11 @@ from clausal.logic.atoms import mint
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, name, text):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(text).lstrip())
     return _load_module(f"tc_{name}", str(path))
 
@@ -258,7 +259,7 @@ def test_structured_functor_constant_undeclared_functor_is_syntax_error(tmp_path
     with pytest.raises(SyntaxError, match="not a declared functor") as exc_info:
         _load(tmp_path, "s7", "-constant_value(c_p, point(0, 0))\np(X) <- (X is 1)\n")
     exc = exc_info.value
-    assert exc.filename == str(tmp_path / "s7.clausal")
+    assert exc.filename == str(tmp_path / f"s7{SEAM}")
     assert exc.lineno == 1
 
 
@@ -266,7 +267,7 @@ def test_structured_rhs_dict_splat_rejected_and_located(tmp_path):
     with pytest.raises(SyntaxError, match="dict-splat") as exc_info:
         _load(tmp_path, "s7b", "-constant_value(c_d, {**{1: 2}})\np(X) <- (X is 1)\n")
     exc = exc_info.value
-    assert exc.filename == str(tmp_path / "s7b.clausal")
+    assert exc.filename == str(tmp_path / f"s7b{SEAM}")
     assert exc.lineno == 1
 
 
@@ -276,7 +277,7 @@ def test_structured_rhs_generic_unsupported_shape_is_located(tmp_path):
     with pytest.raises(SyntaxError, match="unsupported RHS") as exc_info:
         _load(tmp_path, "s7c", "-constant_value(c_x, 1 < 2)\np(X) <- (X is 1)\n")
     exc = exc_info.value
-    assert exc.filename == str(tmp_path / "s7c.clausal")
+    assert exc.filename == str(tmp_path / f"s7c{SEAM}")
     assert exc.lineno == 1
 
 
@@ -285,7 +286,7 @@ def test_structured_rhs_logic_var_rejected(tmp_path):
         _load(tmp_path, "s8", "-constant_value(c_l, [1, X, 3])\np(Y) <- (Y is 1)\n")
     exc = exc_info.value
     assert "logic-variable" in str(exc)
-    assert exc.filename == str(tmp_path / "s8.clausal")
+    assert exc.filename == str(tmp_path / f"s8{SEAM}")
     assert exc.lineno == 1
 
 

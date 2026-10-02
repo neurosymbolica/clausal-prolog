@@ -32,6 +32,7 @@ from clausal.import_hook import _load_module
 from clausal import Var, solve
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import deref
+from tests._suffix import SEAM
 
 
 _SRC = """\
@@ -54,7 +55,7 @@ c_inst_wrong(R) <- (catch(raise_ve(_F), ++TypeError(_M2), R is "swallowed"))
 
 @pytest.fixture()
 def mod(tmp_path):
-    src = tmp_path / "cpe.clausal"
+    src = tmp_path / f"cpe{SEAM}"
     src.write_text(_SRC)
     return _load_module("cpe", str(src))
 
@@ -97,7 +98,7 @@ def test_superclass_catcher_matches_by_isinstance(mod):
 def test_structural_titlecase_catcher_is_a_syntax_error(tmp_path):
     """The transliterated shape ``ValueError(M)`` cannot be written any more:
     it is TitleCase in a Clausal position, and the error names the escape."""
-    src = tmp_path / "cpe_struct.clausal"
+    src = tmp_path / f"cpe_struct{SEAM}"
     src.write_text(
         "-double_quotes(atom)\n-module(cpe_struct, [raise_ve(X), c_structural(M)])\n"
         "raise_ve(X) <- (X is ++int(\"nope\"))\n"

@@ -23,6 +23,7 @@ from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, walk
 from clausal.terms import Quantity, term_str
+from tests._suffix import SEAM
 
 _N = itertools.count()
 
@@ -65,7 +66,7 @@ def mod(tmp_path_factory):
     body = "".join(f"{k}(Q) <- ({v})\n" for k, v in ROWS.items())
     src = (f"-module({name}, [{', '.join(k + '/1' for k in ROWS)}])\n"
            f"-allow_singletons\n{UNITS}{body}")
-    p = tmp / f"{name}.clausal"
+    p = tmp / f"{name}{SEAM}"
     p.write_text(src)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")

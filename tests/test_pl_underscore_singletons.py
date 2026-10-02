@@ -18,6 +18,7 @@ from clausal.import_hook import _load_module, _load_prolog_module
 from clausal.lint_warnings import ClausalSingletonWarning
 from clausal.logic.solve import call
 from clausal.logic.variables import deref, walk
+from tests._suffix import SEAM
 
 
 def _singleton_warnings(load):
@@ -58,7 +59,7 @@ def test_a_pl_plain_singleton_still_warns(tmp_path):
 
 
 def test_the_same_singleton_in_a_clausal_file_still_warns(tmp_path):
-    path = _write(tmp_path, "d19_clausal.clausal",
+    path = _write(tmp_path, f"d19_clausal{SEAM}",
                   "p(1, 10),\np(2, 20),\n"
                   "g(L) <- setof(X, p(X, _Y), L)\n")
     _mod, found = _singleton_warnings(

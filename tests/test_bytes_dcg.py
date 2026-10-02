@@ -27,6 +27,7 @@ from clausal.logic.cells import chars, is_chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.terms import SegBytes
+from tests._suffix import SEAM
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────
@@ -34,7 +35,7 @@ from clausal.terms import SegBytes
 
 def _load_inline(name: str, source: str):
     """Write *source* to a temp .clausal file and load it; return module obj."""
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w", delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w", delete=False) as f:
         f.write(source)
         f.flush()
         path = f.name

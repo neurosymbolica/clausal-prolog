@@ -26,6 +26,7 @@ from clausal.testing import (
     run_file,
     run_test,
 )
+from tests._suffix import SEAM as SEAM_EXT
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -89,7 +90,7 @@ def test_cli_reports_the_fail_spelling(capsys, neg_file):
 
 
 def test_all_green_fail_file(capsys, tmp_path):
-    p = tmp_path / "ok.clausal"
+    p = tmp_path / f"ok{SEAM_EXT}"
     p.write_text('p(1),\ntest("none", fail) <- p(2)\n')
     assert main([str(p)]) == EXIT_OK
 
@@ -98,9 +99,9 @@ def test_all_green_fail_file(capsys, tmp_path):
 
 
 @pytest.mark.parametrize("name,text,shown", [
-    ("o.clausal", 'p(1),\ntest("t", throws(\'x\')) <- p(1)\n', "throws"),
-    ("o.clausal", 'p(1),\ntest("t", \'nondet\') <- p(1)\n', "nondet"),
-    ("o.clausal", 'p(1),\ntest("t", [fail]) <- p(1)\n', "[fail]"),
+    (f"o{SEAM_EXT}", 'p(1),\ntest("t", throws(\'x\')) <- p(1)\n', "throws"),
+    (f"o{SEAM_EXT}", 'p(1),\ntest("t", \'nondet\') <- p(1)\n', "nondet"),
+    (f"o{SEAM_EXT}", 'p(1),\ntest("t", [fail]) <- p(1)\n', "[fail]"),
     ("o.pl", "p(1).\ntest(t, throws(x)) :- p(1).\n", "throws"),
     ("o.pl", "p(1).\ntest(t, timeout(5)) :- p(1).\n", "timeout(5)"),
     ("o.pl", "p(1).\ntest(t, blocked(why)) :- p(1).\n", "blocked"),
@@ -120,11 +121,11 @@ def test_unknown_option_is_a_collection_error(tmp_path, name, text, shown):
 
 
 def test_unknown_option_fails_the_file_in_the_cli(capsys, tmp_path):
-    p = tmp_path / "o.clausal"
+    p = tmp_path / f"o{SEAM_EXT}"
     p.write_text('p(1),\ntest("ok") <- p(1)\ntest("t", \'nondet\') <- p(1)\n')
     assert main([str(p)]) == EXIT_TESTS_FAILED
     out = capsys.readouterr().out
-    assert "o.clausal :: <collect>" in out
+    assert f"o{SEAM_EXT} :: <collect>" in out
     assert "nondet" in out
     r = run_file(p)
     assert [x.name for x in r.results] == ["<collect>"]
@@ -157,7 +158,7 @@ def _run_plugin(tmp_path: Path, files: dict[str, str]):
 
 
 def test_plugin_runs_fail_tests(tmp_path):
-    proc = _run_plugin(tmp_path, {"neg.clausal": SEAM, "neg2.pl": PL})
+    proc = _run_plugin(tmp_path, {f"neg{SEAM_EXT}": SEAM, "neg2.pl": PL})
     out = proc.stdout + proc.stderr
     assert "4 failed, 4 passed" in out, out
     assert "test('p of one exists', fail) succeeded" in out, out
@@ -165,10 +166,10 @@ def test_plugin_runs_fail_tests(tmp_path):
 
 def test_plugin_reports_an_unknown_option(tmp_path):
     proc = _run_plugin(tmp_path, {
-        "o.clausal": 'p(1),\ntest("t", \'nondet\') <- p(1)\n'})
+        f"o{SEAM_EXT}": 'p(1),\ntest("t", \'nondet\') <- p(1)\n'})
     out = proc.stdout + proc.stderr
     assert proc.returncode == 1, out
-    assert "o.clausal::<collect>" in out, out
+    assert f"o{SEAM_EXT}::<collect>" in out, out
     assert "nondet" in out, out
 
 
@@ -177,7 +178,7 @@ def test_plugin_reports_an_unknown_option(tmp_path):
 
 def test_run_test_direct_refuses_an_unknown_option(tmp_path):
     """run_test without collect_tests must not run throws(...) as `fail`."""
-    p = tmp_path / "o.clausal"
+    p = tmp_path / f"o{SEAM_EXT}"
     p.write_text("p(1),\ntest(\"t\", throws('x')) <- p(2)\n")
     mod = load_clausal_module(p)
     r = run_test(mod, "t")
@@ -203,7 +204,7 @@ def test_pl_test2_fact_and_call_still_unify(tmp_path):
 
 
 def test_same_description_under_test1_and_test2_warns(tmp_path):
-    p = tmp_path / "w.clausal"
+    p = tmp_path / f"w{SEAM_EXT}"
     p.write_text('p(1),\ntest("t") <- p(1)\ntest("t", fail) <- p(2)\n')
     mod = load_clausal_module(p)
     with pytest.warns(UserWarning, match=r"more than one of test/1"):

@@ -18,6 +18,7 @@ import sys
 import textwrap
 
 import pytest
+from tests._suffix import SEAM
 
 CLONE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -83,7 +84,7 @@ def test_clausal_source_module_still_activates_hook(tmp_path):
     """
     moddir = tmp_path / "lazyreentry"
     moddir.mkdir()
-    (moddir / "lazyhook_reentry_facts.clausal").write_text("p(1),\np(2),\n")
+    (moddir / f"lazyhook_reentry_facts{SEAM}").write_text("p(1),\np(2),\n")
     r = _run(f"""
         sys.path.insert(0, {str(moddir)!r})
         import lazyhook_reentry_facts as m

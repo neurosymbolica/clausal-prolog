@@ -46,6 +46,7 @@ import pytest
 from clausal.import_hook import _load_module
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, walk
+from tests._suffix import SEAM
 
 OWNERS = {
     "data": ("own_data", "-module(own_data, [edge(A, B)])\n"),
@@ -73,7 +74,7 @@ def load(tmp_path):
     names = []
 
     def _load(name, src):
-        path = tmp_path / f"{name}.clausal"
+        path = tmp_path / f"{name}{SEAM}"
         path.write_text(src)
         sys.modules.pop(name, None)
         names.append(name)

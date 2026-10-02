@@ -42,13 +42,14 @@ from clausal.import_hook import _load_module
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call as pcall
 from clausal.logic.variables import Var, deref, walk
+from tests._suffix import SEAM
 
 CUT_REFUSED = ("existence_error", "procedure", ("/", "!", 0))
 
 
 @pytest.fixture
 def lm(tmp_path):
-    path = tmp_path / "dcgbraces.clausal"
+    path = tmp_path / f"dcgbraces{SEAM}"
     path.write_text(textwrap.dedent("""
         -private([x])
         p(1),

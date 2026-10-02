@@ -15,11 +15,12 @@ import pytest
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.logic.cells import chars
+from tests._suffix import SEAM
 
 
 @pytest.fixture(scope="module")
 def mod():
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w", delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w", delete=False) as f:
         f.write("-module(rev_bi, [])\n")
         f.flush()
         m = _load(f.name)

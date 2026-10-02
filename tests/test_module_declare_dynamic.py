@@ -11,6 +11,7 @@ import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
 from clausal import LogicException, Module, Var, solve
 from clausal.import_hook import _load_module
 from clausal.logic.solve import _deref_walk
+from tests._suffix import SEAM
 
 
 def _answers(goal_fn, m):
@@ -84,7 +85,7 @@ def test_builtin_is_a_static_procedure():
 
 
 def test_static_predicate_with_clauses_is_refused(tmp_path):
-    src = tmp_path / "r14_static.clausal"
+    src = tmp_path / f"r14_static{SEAM}"
     src.write_text("-dynamic(d/1)\ns(1),\nd(1),\n")
     mod = _load_module("r14_static", str(src))
     m = mod.__clausal_module__

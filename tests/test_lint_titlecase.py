@@ -23,6 +23,7 @@ from clausal.templating.term_rewriting import (
     ClausalLintWarning,
     ClausalTitleCaseIdentifierWarning,
 )
+from tests._suffix import SEAM
 
 
 #: The severity the engine ships with.  Read at import, before any test's
@@ -41,7 +42,7 @@ def _lint_as_warning(monkeypatch):
 
 
 def _load(tmp_path, name, text):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(text).lstrip())
     return _load_module(f"tlt_{name}", str(path))
 
@@ -76,7 +77,7 @@ def test_titlecase_head_warns_once_naming_it_and_the_convention(tmp_path):
     assert "TitleCase" in msg
     assert "lowercase" in msg and "ALL_CAPS" in msg
     assert "++" in msg  # the Python-class escape is the named alternative
-    assert "b.clausal:2" in msg  # located like the other lints
+    assert f"b{SEAM}:2" in msg  # located like the other lints
     assert issubclass(ws[0].category, ClausalLintWarning)
 
 
@@ -178,7 +179,7 @@ def test_titlecase_head_fails_to_load_naming_old_and_new(tmp_path, monkeypatch):
     err = ei.value
     assert "`Foo` is TitleCase" in str(err)
     assert "Rename `Foo` -> `foo`" in str(err)
-    assert err.filename.endswith("sev_head.clausal") and err.lineno == 2
+    assert err.filename.endswith(f"sev_head{SEAM}") and err.lineno == 2
     assert "Foo(X) <- (bar(X))" in (err.text or "")
 
 
@@ -418,7 +419,7 @@ def test_private_directive_argument_still_warns(tmp_path):
         tmp_path, "cp",
         "-private([PrivHelper(X)])\nPrivHelper(1),\n")
     assert _named(ws) == ["PrivHelper"]
-    assert "cp.clausal:1" in str(ws[0].message)
+    assert f"cp{SEAM}:1" in str(ws[0].message)
 
 
 def test_escaped_body_call_is_silent(tmp_path):

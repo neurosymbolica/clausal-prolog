@@ -35,6 +35,7 @@ from clausal.logic.atoms import mint, mangle
 from clausal.logic.predicate import module_source_path
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -53,7 +54,7 @@ def _forget_s4rs_modules():
 
 
 def _write_module(tmp_path, name: str, source: str):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(source).lstrip())
     return _load_module(name, str(path))
 
@@ -294,7 +295,7 @@ def test_the_signature_survives_a_bytecode_cache_hit(tmp_path):
     re-derived by re-parsing the source.  The second process must not have
     rewritten anything (the positive control that the cache WAS hit) and must
     still stamp the same names."""
-    (tmp_path / "s4rs_cached.clausal").write_text(textwrap.dedent("""
+    (tmp_path / f"s4rs_cached{SEAM}").write_text(textwrap.dedent("""
         s4rs_cpair(1, 2),
         s4rs_cswap(R, S) <- s4rs_cpair(S, R),
     """).lstrip())

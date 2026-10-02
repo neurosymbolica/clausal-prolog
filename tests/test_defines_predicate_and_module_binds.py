@@ -20,6 +20,7 @@ import textwrap
 import pytest
 
 import clausal
+from tests._suffix import SEAM as SEAM_EXT
 
 FRONT_ENDS = ("translator", "native")
 
@@ -182,12 +183,12 @@ def thin(tmp_path, monkeypatch):
         root = tmp_path / tag
         root.mkdir()
         (root / "sub.pl").write_text(textwrap.dedent(SUB))
-        (root / "csub.clausal").write_text(textwrap.dedent(CSUB))
+        (root / f"csub{SEAM_EXT}").write_text(textwrap.dedent(CSUB))
         if kind == "pl":
             (root / "__init__.pl").write_text(
                 textwrap.dedent(THIN_PL).replace("PKG", tag))
         elif kind == "clausal":
-            (root / "__init__.clausal").write_text(
+            (root / f"__init__{SEAM_EXT}").write_text(
                 textwrap.dedent(THIN_CLAUSAL).replace("PKG", tag))
         else:
             (root / "__init__.py").write_text(

@@ -24,12 +24,13 @@ from clausal.import_hook import _load_module
 from clausal.logic.exceptions import LogicException, render_error_term
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 _counter = iter(range(10_000))
 
 
 def _load(src):
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                      delete=False) as f:
         f.write("-allow_singletons\n" + src)
         path = f.name

@@ -15,11 +15,12 @@ import pytest
 import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.solve import once, solve
+from tests._suffix import SEAM
 
 
 @pytest.fixture
 def mod(tmp_path):
-    path = tmp_path / "solvecut.clausal"
+    path = tmp_path / f"solvecut{SEAM}"
     path.write_text(textwrap.dedent("""
         p(1),
         p(2),

@@ -31,6 +31,7 @@ from clausal.predicate_diagnostics import (
     enrich_undefined_name,
 )
 from clausal.testing import main
+from tests._suffix import SEAM
 
 
 def _flat(text):
@@ -49,7 +50,7 @@ def write(directory, name, src):
 def pkg(tmp_path):
     """A two-file package on ``sys.path``, with its modules evicted after."""
     before = set(sys.modules)
-    write(tmp_path, "undefsib_citations.clausal", """
+    write(tmp_path, f"undefsib_citations{SEAM}", """
         # clausal: no-collect
         -module(undefsib_citations, [cite(KEY), art_9])
 
@@ -87,7 +88,7 @@ SOLVE_TIME_SRC = """
 """
 
 
-def _run(pkg, src, name="undefsib_use.clausal"):
+def _run(pkg, src, name=f"undefsib_use{SEAM}"):
     path = write(pkg, name, src)
     assert main([str(path)]) == 1
     return path
@@ -264,7 +265,7 @@ def _raised(pkg, src):
     from clausal.logic.solve import call
     from clausal.logic.variables import Var
 
-    path = write(pkg, "undefsib_exc.clausal", src)
+    path = write(pkg, f"undefsib_exc{SEAM}", src)
     mod = _load_module("undefsib_exc", str(path))
     with pytest.raises(NameError) as exc:
         list(call("grounds", Var(), module=mod.__dict__["$module"]))
@@ -325,7 +326,7 @@ class TestTheExceptionObject:
         monkeypatch.setattr(pd, "_undefined_name_lines", _boom)
         exc = UndefinedNameError("name 'cite' is not defined", name="cite",
                                  module_name="pkg.constants",
-                                 module_file="/nonexistent/constants.clausal")
+                                 module_file=f"/nonexistent/constants{SEAM}")
         assert exc.hint_lines is None
         assert str(exc) == "name 'cite' is not defined"
 
@@ -346,7 +347,7 @@ def test_no_scan_on_the_success_path(pkg, monkeypatch):
     from clausal.logic.solve import call
     from clausal.logic.variables import Var
 
-    path = write(pkg, "undefsib_ok.clausal", """
+    path = write(pkg, f"undefsib_ok{SEAM}", """
         -import_from(undefsib_citations, [art_9, cite])
 
         grounds(cite(art_9)),
@@ -402,15 +403,15 @@ def test_no_duplicate_import_advice_when_the_name_is_already_imported(
     """
     import clausal.predicate_diagnostics as pd
 
-    export = pd._Export("pkg.citations", "cite/1", "/pkg/citations.clausal")
+    export = pd._Export("pkg.citations", "cite/1", f"/pkg/citations{SEAM}")
     directives = [("pkg.citations", "pkg.citations", ["cite"])]
     monkeypatch.setattr(pd, "_import_from_directives", lambda path: directives)
 
-    assert pd._import_remedy("cite", export, "/pkg/constants.clausal",
+    assert pd._import_remedy("cite", export, f"/pkg/constants{SEAM}",
                              "pkg.constants") == []
 
     # ...but a name genuinely absent from that directive still gets advice.
     directives[0] = ("pkg.citations", "pkg.citations", ["art_9"])
-    remedy = pd._import_remedy("cite", export, "/pkg/constants.clausal",
+    remedy = pd._import_remedy("cite", export, f"/pkg/constants{SEAM}",
                                "pkg.constants")
     assert any("art_9, cite" in line for line in remedy)

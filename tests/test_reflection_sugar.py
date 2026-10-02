@@ -17,6 +17,7 @@ from clausal.import_hook import _load_module
 from clausal.logic.cells import chars
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
+from tests._suffix import SEAM
 
 
 @pytest.fixture(autouse=True)
@@ -80,7 +81,7 @@ _STRING_NOT_ATOM = '-double_quotes(chars)\ntagged(1, "ok"),\n'
 
 @pytest.fixture(scope="module")
 def matchers(tmp_path_factory):
-    path = tmp_path_factory.mktemp("reflection_sugar") / "sugar_matchers.clausal"
+    path = tmp_path_factory.mktemp("reflection_sugar") / f"sugar_matchers{SEAM}"
     path.write_text(_MATCHERS)
     mod = _load_module("_test_reflection_sugar", str(path))
     return mod.__dict__["$module"]

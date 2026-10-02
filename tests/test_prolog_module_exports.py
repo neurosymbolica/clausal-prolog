@@ -15,6 +15,7 @@ crosses as written, and only when the literal rule makes it an atom.
 import pytest
 
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
+from tests._suffix import SEAM
 
 _BODY = "edge(A, B) <- (A == B)\nnode(A) <- (A == 1)\n"
 
@@ -162,7 +163,7 @@ def test_export_acceptance_matches_the_engine(tmp_path, cid, prefix, element, cl
     from clausal.import_hook import _load_module
     name = f"expparity_{cid}"
     src = f"{prefix}-module({name}, [{element}])\n\n{clauses}"
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(src)
     sys.modules.pop(name, None)
     try:

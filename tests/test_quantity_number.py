@@ -15,10 +15,11 @@ from clausal.logic.variables import deref
 from clausal.modules import units
 from clausal.predicate_diagnostics import PredicateNotFoundError
 from clausal.terms import Quantity
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, src, name):
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(src)
     return _load_module(name, str(p)).__dict__["$module"]
 

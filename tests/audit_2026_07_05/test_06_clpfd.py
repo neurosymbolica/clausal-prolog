@@ -59,6 +59,7 @@ from clausal.logic.clpfd import (
     zcompare,
 )
 from clausal.terms import Add, Div, Mult, Negate, Sub
+from tests._suffix import SEAM
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -91,7 +92,7 @@ def load(tmp_path_factory):
         if name not in _loaded:
             if path is None:
                 d = tmp_path_factory.mktemp("a06fix")
-                p = d / f"{name}.clausal"
+                p = d / f"{name}{SEAM}"
                 p.write_text(source)
                 path = str(p)
             _loaded[name] = _load_module(f"a06_{name}", path)

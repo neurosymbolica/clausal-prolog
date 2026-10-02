@@ -8,11 +8,12 @@ import pytest
 
 from clausal.import_hook import _load_module
 from clausal.logic.cells import chars
+from tests._suffix import SEAM
 
 
 def _load_inline(name: str, source: str):
     with tempfile.TemporaryDirectory() as d:
-        path = os.path.join(d, f"{name}.clausal")
+        path = os.path.join(d, f"{name}{SEAM}")
         with open(path, "w") as fh:
             fh.write(source)
         return _load_module(name, path)
@@ -1328,7 +1329,7 @@ class TestDottedRuntimeModuleGoal:
     )
 
     def _rulebase(self, tmp_path, tag):
-        path = tmp_path / f"_dyn_rb_{tag}.clausal"
+        path = tmp_path / f"_dyn_rb_{tag}{SEAM}"
         path.write_text(self.RB.format(name=f"_dyn_rb_{tag}"))
         return str(path)
 
@@ -1517,7 +1518,7 @@ class TestTheHarnessShapeEndToEnd:
     )
 
     def test_a_comprehension_over_a_runtime_module_s_predicate(self, tmp_path):
-        path = tmp_path / "_hs_rb.clausal"
+        path = tmp_path / f"_hs_rb{SEAM}"
         path.write_text(self.RB.format(name="_hs_rb"))
         host = _load_inline("_hs_host", (
             "-module(_hs_host, [sp/1])\n"
@@ -1536,7 +1537,7 @@ class TestTheHarnessShapeEndToEnd:
         )
 
     def test_a_dict_comprehension_over_a_runtime_module(self, tmp_path):
-        path = tmp_path / "_hs_rb2.clausal"
+        path = tmp_path / f"_hs_rb2{SEAM}"
         path.write_text(self.RB.format(name="_hs_rb2"))
         host = _load_inline("_hs_host2", (
             "-module(_hs_host2, [])\n"
@@ -1567,7 +1568,7 @@ class TestTheHarnessShapeEndToEnd:
         Python escape as an input argument, a helper over the exported value,
         and a second goal variable that is not the target.
         """
-        path = tmp_path / "_hs_rb3.clausal"
+        path = tmp_path / f"_hs_rb3{SEAM}"
         path.write_text(
             "-module(_hs_rb3, [band_rate(P, R)])\n"
             "band_rate(100, 10),\n"
@@ -1598,9 +1599,9 @@ class TestTheHarnessShapeEndToEnd:
         rather than reasoned about: two rulebases with the same predicate and
         different clauses, loaded under the same call, alternating.
         """
-        first = tmp_path / "first.clausal"
+        first = tmp_path / f"first{SEAM}"
         first.write_text("-module(first, [sp/1])\nsp(1),\n")
-        second = tmp_path / "second.clausal"
+        second = tmp_path / f"second{SEAM}"
         second.write_text("-module(second, [sp/1])\nsp(2),\n")
         host = _load_inline("_hs_fresh", (
             "-module(_hs_fresh, [])\n"
@@ -1630,7 +1631,7 @@ class TestTheHarnessShapeEndToEnd:
         touches the GOAL SITE only, so that risk does not transfer — pinned
         here so a later refactor cannot quietly reintroduce it.
         """
-        path = tmp_path / "_hs_whole.clausal"
+        path = tmp_path / f"_hs_whole{SEAM}"
         path.write_text(
             "-module(_hs_whole, [sp/1, marker])\n"
             "-private([marker])\n"
@@ -1763,7 +1764,7 @@ class TestTheDottedFormStaysNarrow:
     def test_a_statically_qualified_goal_still_answers(self, tmp_path):
         """The other half of finding 3: an ``-import_from``'d spelling must
         keep resolving exactly as it did, and its answers must not move."""
-        lib = tmp_path / "_narrow_lib.clausal"
+        lib = tmp_path / f"_narrow_lib{SEAM}"
         lib.write_text("-module(_narrow_lib, [sp/1])\nsp(1),\nsp(2),\n")
         _load_module("_narrow_lib", str(lib))
         host = _load_inline("_narrow_host", (

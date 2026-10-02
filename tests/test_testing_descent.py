@@ -10,6 +10,7 @@ from __future__ import annotations
 import textwrap
 
 from clausal.testing import main
+from tests._suffix import SEAM
 
 
 def write(tmp_path, name, src):
@@ -32,7 +33,7 @@ test("both arguments differ") <- (
 
 
 def test_two_plus_args_differ_shows_example_solutions(capsys, tmp_path):
-    p = write(tmp_path, "pair.clausal", PAIR_SRC)
+    p = write(tmp_path, f"pair{SEAM}", PAIR_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "two or more arguments differ" in out   # old sentence survives
@@ -57,7 +58,7 @@ test("contradictory guards") <- (
 
 
 def test_contradictory_guard_named_with_value(capsys, tmp_path):
-    p = write(tmp_path, "guard.clausal", GUARD_SRC)
+    p = write(tmp_path, f"guard{SEAM}", GUARD_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "no clause body survives" in out
@@ -85,7 +86,7 @@ test("two routes both fail") <- (
 
 
 def test_each_clause_route_gets_a_leaf(capsys, tmp_path):
-    p = write(tmp_path, "routes.clausal", TWO_ROUTES_SRC)
+    p = write(tmp_path, f"routes{SEAM}", TWO_ROUTES_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "X < 0" in out    # clause 1's first failing conjunct (5 < 10 passed)
@@ -104,7 +105,7 @@ test("zero-clause predicate") <- (
 
 
 def test_zero_clause_predicate_keeps_old_message(capsys, tmp_path):
-    p = write(tmp_path, "dyn.clausal", DYN_SRC)
+    p = write(tmp_path, f"dyn{SEAM}", DYN_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "no solution for ANY arguments" in out
@@ -130,7 +131,7 @@ test("nested failure") <- (
 
 
 def test_descends_through_intermediate_predicate(capsys, tmp_path):
-    p = write(tmp_path, "nested.clausal", NESTED_SRC)
+    p = write(tmp_path, f"nested{SEAM}", NESTED_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "N > 100" in out   # the inner predicate's conjunct, not inner_rule(N)
@@ -141,12 +142,12 @@ def test_cross_module_descent(capsys, tmp_path, monkeypatch):
     import sys as _sys
     monkeypatch.syspath_prepend(str(tmp_path))
     _sys.modules.pop("descent_lib", None)
-    write(tmp_path, "descent_lib.clausal", """
+    write(tmp_path, f"descent_lib{SEAM}", """
         -module(descent_lib, [lib_check(N)])
 
         lib_check(N) <- (N > 100, N < 0)
     """)
-    p = write(tmp_path, "use.clausal", """
+    p = write(tmp_path, f"use{SEAM}", """
         -double_quotes(atom)
         -import_from(descent_lib, [lib_check])
 
@@ -160,7 +161,7 @@ def test_cross_module_descent(capsys, tmp_path, monkeypatch):
         assert "no clause body survives" in out
         assert "N > 100" in out
         assert "N = 5" in out
-        assert "descent_lib.clausal:" in out   # leaf names the DEFINING file
+        assert f"descent_lib{SEAM}:" in out   # leaf names the DEFINING file
     finally:
         _sys.modules.pop("descent_lib", None)
 
@@ -183,7 +184,7 @@ test("three levels") <- (
 
 
 def test_depth_cap_stops_at_two_levels(capsys, tmp_path):
-    p = write(tmp_path, "deep.clausal", DEEP_SRC)
+    p = write(tmp_path, f"deep{SEAM}", DEEP_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "lvl3(" in out          # depth-2 leaf is the lvl3 CALL...
@@ -222,7 +223,7 @@ test("cons head never matches") <- (
 
 
 def test_all_heads_fail_lists_the_heads(capsys, tmp_path):
-    p = write(tmp_path, "cons.clausal", CONS_SRC)
+    p = write(tmp_path, f"cons{SEAM}", CONS_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "no clause head unifies" in out
@@ -257,7 +258,7 @@ test("nested cons head") <- (
 
 
 def test_head_listing_attaches_beneath_parent_leaf(capsys, tmp_path):
-    p = write(tmp_path, "consn.clausal", CONS_NESTED_SRC)
+    p = write(tmp_path, f"consn{SEAM}", CONS_NESTED_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "wkn_totals(WEEKS, _TOTAL)" in out   # the parent leaf conjunct
@@ -294,7 +295,7 @@ test("six clauses") <- (
 
 
 def test_clause_cap_is_applied_and_noted(capsys, tmp_path):
-    p = write(tmp_path, "six.clausal", SIX_SRC)
+    p = write(tmp_path, f"six{SEAM}", SIX_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert out.count("N > 100") == 4          # DIAG_MAX_DESCENT_CLAUSES leaves
@@ -334,7 +335,7 @@ test("fan out") <- (
 
 
 def test_leaves_cap_bounds_total_findings_across_fanout(capsys, tmp_path):
-    p = write(tmp_path, "fanout.clausal", FANOUT_SRC)
+    p = write(tmp_path, f"fanout{SEAM}", FANOUT_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     # 8 findings fan out; exactly DIAG_MAX_DESCENT_LEAVES=6 are rendered.
@@ -369,7 +370,7 @@ test("six clause heads all mismatch") <- (
 
 
 def test_capped_head_listing_softens_headline_and_notes_cap(capsys, tmp_path):
-    p = write(tmp_path, "sixhead.clausal", SIX_HEADS_SRC)
+    p = write(tmp_path, f"sixhead{SEAM}", SIX_HEADS_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     # Softened headline bounds the claim to the first N heads examined.
@@ -411,7 +412,7 @@ test("totals over one week, pinned") <- (
 
 
 def test_unbound_near_miss_descends_to_head_listing(capsys, tmp_path):
-    p = write(tmp_path, "wtq.clausal", CONS_PINNED_SRC)
+    p = write(tmp_path, f"wtq{SEAM}", CONS_PINNED_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "none binds argument 1 to a concrete value" in out
@@ -439,7 +440,7 @@ test("lone one-sided bounds") <- (
 
 
 def test_unbound_near_miss_descends_to_clause_leaves(capsys, tmp_path):
-    p = write(tmp_path, "lone.clausal", LONE_BOUND_SRC)
+    p = write(tmp_path, f"lone{SEAM}", LONE_BOUND_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "none binds argument 1 to a concrete value" in out
@@ -473,7 +474,7 @@ test("totals over one week, outputs free") <- (
 
 
 def test_ground_base_case_near_miss_keeps_rung_1(capsys, tmp_path):
-    p = write(tmp_path, "wto.clausal", CONS_OUTPUT_SRC)
+    p = write(tmp_path, f"wto{SEAM}", CONS_OUTPUT_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "argument 1 differs" in out
@@ -482,7 +483,7 @@ def test_ground_base_case_near_miss_keeps_rung_1(capsys, tmp_path):
 
 
 def test_ground_fact_near_miss_keeps_rung_1(capsys, tmp_path):
-    p = write(tmp_path, "gpair.clausal", """
+    p = write(tmp_path, f"gpair{SEAM}", """
         -double_quotes(atom)
         gpair("a", 1),
         gpair("b", 2),
@@ -513,7 +514,7 @@ test("both couplings differ") <- (
 
 
 def test_degenerate_rung2_examples_descend(capsys, tmp_path):
-    p = write(tmp_path, "pairq.clausal", COUPLED_FACT_SRC)
+    p = write(tmp_path, f"pairq{SEAM}", COUPLED_FACT_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "none binds every argument to a concrete value" in out
@@ -529,7 +530,7 @@ def test_degenerate_near_miss_falls_back_when_descent_finds_nothing(
     # skipped), the weak rung-1 rendering is still better than silence.
     import clausal.testing as _t
     monkeypatch.setattr(_t, "_descend", lambda *a, **k: ([], "none"))
-    p = write(tmp_path, "fallback.clausal", LONE_BOUND_SRC)
+    p = write(tmp_path, f"fallback{SEAM}", LONE_BOUND_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "DID have a solution" in out
@@ -555,7 +556,7 @@ test("later concrete slot wins") <- (
 
 def test_concrete_near_miss_in_a_later_slot_wins_over_degenerate(
         capsys, tmp_path):
-    p = write(tmp_path, "mixf.clausal", MIXED_SLOTS_SRC)
+    p = write(tmp_path, f"mixf{SEAM}", MIXED_SLOTS_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "argument 2 differs" in out
@@ -585,7 +586,7 @@ def test_a_degenerate_keyword_argument_is_refused_at_load(capsys, tmp_path):
     that reached the branch no longer loads; the branch goes with the keyword
     machinery in P4, and this is the reminder that nothing reaches it.
     """
-    p = write(tmp_path, "kdeg.clausal", KWARG_DEG_SRC)
+    p = write(tmp_path, f"kdeg{SEAM}", KWARG_DEG_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "keyword arguments" in out and "kdeg/1" in out
@@ -597,7 +598,7 @@ def test_degenerate_rung2_falls_back_when_descent_finds_nothing(
     # weak, but they must survive when the descent has nothing better.
     import clausal.testing as _t
     monkeypatch.setattr(_t, "_descend", lambda *a, **k: ([], "none"))
-    p = write(tmp_path, "pairq_fb.clausal", COUPLED_FACT_SRC)
+    p = write(tmp_path, f"pairq_fb{SEAM}", COUPLED_FACT_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "it does have:" in out
@@ -628,7 +629,7 @@ test("all positive") <- (
 
 
 def test_forall_names_the_single_failing_element(capsys, tmp_path):
-    p = write(tmp_path, "fa_one.clausal", FORALL_ONE_SRC)
+    p = write(tmp_path, f"fa_one{SEAM}", FORALL_ONE_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     # The headline states how many of how many failed, and by which name.
@@ -650,7 +651,7 @@ test("all positive, several fail") <- (
 
 
 def test_forall_names_every_failing_element_within_the_bound(capsys, tmp_path):
-    p = write(tmp_path, "fa_many.clausal", FORALL_MANY_SRC)
+    p = write(tmp_path, f"fa_many{SEAM}", FORALL_MANY_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "failed for 3 of 5 elements" in out
@@ -676,7 +677,7 @@ test("long list, all fail") <- (
 def test_forall_bounds_the_number_of_named_elements(capsys, tmp_path):
     from clausal.testing import DIAG_MAX_DESCENT_LEAVES
 
-    p = write(tmp_path, "fa_long.clausal", FORALL_LONG_SRC)
+    p = write(tmp_path, f"fa_long{SEAM}", FORALL_LONG_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     # All ten elements fail, but only the first N are named...
@@ -702,7 +703,7 @@ test("all in range") <- (
 
 
 def test_forall_names_element_with_conjunction_body(capsys, tmp_path):
-    p = write(tmp_path, "fa_conj.clausal", FORALL_CONJ_SRC)
+    p = write(tmp_path, f"fa_conj{SEAM}", FORALL_CONJ_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "failed for 1 of 4 elements" in out
@@ -757,7 +758,7 @@ test("max additional days is 90") <- (
 
 
 def test_findall_collapse_behind_wrong_value_is_named(capsys, tmp_path):
-    p = write(tmp_path, "window_rule.clausal", WINDOW_SHAPE_SRC)
+    p = write(tmp_path, f"window_rule{SEAM}", WINDOW_SHAPE_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     # The downstream comparison is still the failing conjunct...
@@ -806,7 +807,7 @@ test("score is 90") <- (
 
 
 def test_findall_collapse_via_nested_producer(capsys, tmp_path):
-    p = write(tmp_path, "score.clausal", NESTED_PRODUCER_SRC)
+    p = write(tmp_path, f"score{SEAM}", NESTED_PRODUCER_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "MAX == 90" in out
@@ -841,7 +842,7 @@ test("good max is 90") <- (
 
 
 def test_healthy_findall_is_not_blamed(capsys, tmp_path):
-    p = write(tmp_path, "good.clausal", HEALTHY_FINDALL_SRC)
+    p = write(tmp_path, f"good{SEAM}", HEALTHY_FINDALL_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     # findall produced [10, 20]; max is 20, not 90.  The findall did its job —
@@ -876,7 +877,7 @@ test("forall over collapsed findall") <- (
 
 
 def test_forall_over_collapsed_findall_composes_element_first(capsys, tmp_path):
-    p = write(tmp_path, "fa_findall.clausal", FORALL_COLLAPSED_FINDALL_SRC)
+    p = write(tmp_path, f"fa_findall{SEAM}", FORALL_COLLAPSED_FINDALL_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     # One coherent forall report: every element named...
@@ -922,7 +923,7 @@ test("maxdays is 3") <- (
 
 
 def test_one_trivial_solution_collapse_is_named(capsys, tmp_path):
-    p = write(tmp_path, "trivial.clausal", TRIVIAL_COLLAPSE_SRC)
+    p = write(tmp_path, f"trivial{SEAM}", TRIVIAL_COLLAPSE_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     assert "MAX == 3" in out
@@ -946,7 +947,7 @@ def test_dotted_atom_comparison_reaches_producer(capsys, tmp_path, monkeypatch):
     import sys as _sys
     monkeypatch.syspath_prepend(str(tmp_path))
     _sys.modules.pop("verdict_lib", None)
-    write(tmp_path, "verdict_lib.clausal", """
+    write(tmp_path, f"verdict_lib{SEAM}", """
         -module(verdict_lib, [eligible, ineligible, assess(S, V)])
 
         ok_len(0),
@@ -960,7 +961,7 @@ def test_dotted_atom_comparison_reaches_producer(capsys, tmp_path, monkeypatch):
         verdict(MAX, eligible) <- (MAX > 0),
         verdict(MAX, ineligible) <- (MAX <= 0)
     """)
-    p = write(tmp_path, "dotted.clausal", """
+    p = write(tmp_path, f"dotted{SEAM}", """
         -double_quotes(atom)
         -import_from(verdict_lib, [eligible, assess])
 
@@ -1008,7 +1009,7 @@ test("deep wrapper chain") <- (
 
 
 def test_collapse_scan_descends_past_failing_call_depth_bound(capsys, tmp_path):
-    p = write(tmp_path, "deepwrap.clausal", DEEP_WRAPPER_SRC)
+    p = write(tmp_path, f"deepwrap{SEAM}", DEEP_WRAPPER_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     # The findall sits FOUR call levels below the failing comparison's
@@ -1045,7 +1046,7 @@ test("overdeep wrapper chain") <- (
 def test_collapse_scan_depth_exhaustion_is_noted(capsys, tmp_path):
     from clausal.testing import DIAG_MAX_COLLAPSE_DEPTH
 
-    p = write(tmp_path, "overdeep.clausal", OVERDEEP_WRAPPER_SRC)
+    p = write(tmp_path, f"overdeep{SEAM}", OVERDEEP_WRAPPER_SRC)
     assert main([str(p)]) == 1
     out = capsys.readouterr().out
     # The findall is one level beyond the bound: no finding is possible...

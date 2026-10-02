@@ -7,10 +7,11 @@ find a predicate's plans by (functor, arity) without the class.
 from clausal import Var
 from clausal.import_hook import _load_module
 from clausal.logic.predicate import resolve_predicate_row
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, name, src):
-    p = tmp_path / f"{name}.clausal"; p.write_text(src)
+    p = tmp_path / f"{name}{SEAM}"; p.write_text(src)
     return _load_module(name, str(p)).__dict__["$module"]
 
 

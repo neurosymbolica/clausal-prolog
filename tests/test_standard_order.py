@@ -30,6 +30,7 @@ from clausal.logic.variables import Var, Trail, deref
 from clausal.terms import DictTerm, SetTerm
 from clausal.logic.atoms import char_atom, is_atom, mint, spelling
 from clausal.logic.cells import chars
+from tests._suffix import SEAM
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -254,7 +255,7 @@ def _load_inline_clausal(name: str, source: str):
     import tempfile
     from clausal.import_hook import _load_module
 
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w", delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w", delete=False) as f:
         f.write(source)
         f.flush()
         path = f.name

@@ -41,6 +41,7 @@ from clausal.logic.predicate import resolve_predicate_row
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from tests.load_write_spy_support import record_load_writes
+from tests._suffix import SEAM
 
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -59,7 +60,7 @@ def _clause(functor, *args):
 
 
 def _write_module(tmp_path, name: str, source: str):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(source).lstrip())
     return _load_module(name, str(path))
 
@@ -228,7 +229,7 @@ def test_the_owner_load_stamps_the_row_with_its_source_path(tmp_path):
     load_stamps = [s for s in row.writes if s.kind == "load-clauses"]
     assert load_stamps, f"no load stamp in {row.writes}"
     assert load_stamps[0].author == os.path.realpath(
-        str(tmp_path / "gate_prov.clausal"))
+        str(tmp_path / f"gate_prov{SEAM}"))
 
 
 def test_assertz_records_its_own_author_not_the_loading_module(tmp_path):

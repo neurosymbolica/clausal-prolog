@@ -21,6 +21,7 @@ from clausal.logic.exceptions import (
     DispatchTargetError, LogicException,
 )
 from clausal.logic.predicate import _dispatch_at
+from tests._suffix import SEAM
 
 
 def test_a_module_target_raises_dispatch_target_error():
@@ -122,7 +123,7 @@ def test_a_compiled_dotted_goal_that_lands_on_a_submodule_raises_it(tmp_path, mo
     pkg.mkdir()
     (pkg / "__init__.py").write_text("from . import shadow\n")
     (pkg / "shadow.py").write_text("VALUE = 1\n")
-    use = _write(tmp_path, "w3shadowuse.clausal", """
+    use = _write(tmp_path, f"w3shadowuse{SEAM}", """
         -import_module(w3shadowpkg)
 
         w3_use(X) <- w3shadowpkg.shadow(X)

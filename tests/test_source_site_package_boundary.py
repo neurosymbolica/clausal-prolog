@@ -22,6 +22,7 @@ from __future__ import annotations
 import os
 
 from clausal.logic.predicate import _CLAUSAL_PKG_DIR, _source_site
+from tests._suffix import SEAM
 
 
 def _call_from(filename: str):
@@ -69,7 +70,7 @@ def test_a_real_member_of_the_package_is_still_skipped():
 def test_a_clausal_source_frame_wins_even_inside_the_package():
     """A ``.clausal`` frame is preferred outright — the first arm of the
     condition, pinned so the separator change did not disturb it."""
-    seam = os.path.join(_CLAUSAL_PKG_DIR, "stdlib", "somewhere.clausal")
+    seam = os.path.join(_CLAUSAL_PKG_DIR, "stdlib", f"somewhere{SEAM}")
     site = _call_from(seam)
     assert site is not None
     assert site[0] == seam

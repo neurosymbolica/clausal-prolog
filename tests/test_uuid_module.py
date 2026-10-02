@@ -23,6 +23,7 @@ from clausal.modules.py.uuid import (
 from clausal.logic.trampoline import DONE
 from clausal.logic.solve import call
 from clausal.import_hook import _load_module
+from tests._suffix import SEAM
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -53,7 +54,7 @@ _UUID_IMPORT = '-import_from(uuid, [uuid_v4, uuid_v1, uuid_v3, uuid_v5, uuid_str
 
 def _load(name, src_text, tmp_path):
     """write a .clausal file and load it."""
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(_UUID_IMPORT + src_text)
     mod = _load_module(name, str(p))
     return mod.__dict__["$module"]

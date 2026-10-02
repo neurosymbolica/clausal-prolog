@@ -24,6 +24,7 @@ from clausal.logic.atoms import is_mangled
 from clausal.pythonic_ast.nodes import Call, Keyword, StarUnpack
 from clausal.terms import LoadName
 from clausal.testing import _resolve_predicate, main
+from tests._suffix import SEAM
 
 
 def _write(tmp_path, name, src):
@@ -39,15 +40,15 @@ def _goal(name, *args):
 def test_resolution_does_not_read_the_module_dict_bindings(tmp_path):
     """The post-flip shape: every predicate binding replaced by a mangled
     atom.  The resolver answers the same row either way."""
-    _write(tmp_path, "r4flip.clausal", """
+    _write(tmp_path, f"r4flip{SEAM}", """
         r4_check(N) <- (N > 100, N < 0),
     """)
     sys.modules.pop("r4flip", None)
-    lm = _load_module("r4flip", str(tmp_path / "r4flip.clausal")).__dict__["$module"]
+    lm = _load_module("r4flip", str(tmp_path / f"r4flip{SEAM}")).__dict__["$module"]
     sys.modules.pop("r4flip", None)     # as the runner does
     goal = _goal("r4_check", 5)
 
-    before = _resolve_predicate(goal, lm, "caller.clausal")
+    before = _resolve_predicate(goal, lm, f"caller{SEAM}")
     assert before is not None, "nothing resolved: nothing compared"
     assert before[0] is lm.db.row("r4_check", 1)
 
@@ -58,7 +59,7 @@ def test_resolution_does_not_read_the_module_dict_bindings(tmp_path):
                   for k, v in lm.module_dict.items()}
     assert flipped_md["r4_check"] == mangle("r4flip", "r4_check")
     flipped = SimpleNamespace(db=lm.db, module_dict=flipped_md, name=lm.name)
-    after = _resolve_predicate(goal, flipped, "caller.clausal")
+    after = _resolve_predicate(goal, flipped, f"caller{SEAM}")
     assert after is not None
     assert after[0] is before[0]
 
@@ -66,11 +67,11 @@ def test_resolution_does_not_read_the_module_dict_bindings(tmp_path):
 def test_the_goal_s_arity_picks_the_row(tmp_path):
     """Resolved at the goal's own arity: a call at another arity names no
     row, rather than borrowing the one row the name has."""
-    _write(tmp_path, "r4arity.clausal", """
+    _write(tmp_path, f"r4arity{SEAM}", """
         r4_two(1, 2),
     """)
     sys.modules.pop("r4arity", None)
-    lm = _load_module("r4arity", str(tmp_path / "r4arity.clausal")).__dict__["$module"]
+    lm = _load_module("r4arity", str(tmp_path / f"r4arity{SEAM}")).__dict__["$module"]
     sys.modules.pop("r4arity", None)
     assert _resolve_predicate(_goal("r4_two", 1, 2), lm, "c")[0].key == ("r4_two", 2)
     assert _resolve_predicate(_goal("r4_two", 1), lm, "c") is None
@@ -85,12 +86,12 @@ def test_a_cross_module_leaf_names_its_defining_file_after_the_owner_is_popped(
     own database."""
     monkeypatch.syspath_prepend(str(tmp_path))
     sys.modules.pop("r4_popped_lib", None)
-    _write(tmp_path, "r4_popped_lib.clausal", """
+    _write(tmp_path, f"r4_popped_lib{SEAM}", """
         -module(r4_popped_lib, [r4_lib_check(N)])
 
         r4_lib_check(N) <- (N > 100, N < 0)
     """)
-    p = _write(tmp_path, "r4_use.clausal", """
+    p = _write(tmp_path, f"r4_use{SEAM}", """
         -double_quotes(atom)
         -import_from(r4_popped_lib, [r4_lib_check])
 
@@ -110,7 +111,7 @@ def test_a_cross_module_leaf_names_its_defining_file_after_the_owner_is_popped(
         assert main([str(p)]) == 1
         out = capsys.readouterr().out
         assert "N > 100" in out
-        assert "r4_popped_lib.clausal:" in out
+        assert f"r4_popped_lib{SEAM}:" in out
     finally:
         sys.modules.pop("r4_popped_lib", None)
 
@@ -118,11 +119,11 @@ def test_a_cross_module_leaf_names_its_defining_file_after_the_owner_is_popped(
 def test_a_splat_goal_has_no_knowable_arity_and_resolves_nothing(tmp_path):
     # Arity 1, the count a starred argument or a ``**`` splat would be
     # mistaken for, so miscounting one as an ordinary argument resolves it.
-    _write(tmp_path, "r4splat.clausal", """
+    _write(tmp_path, f"r4splat{SEAM}", """
         r4_sp(1),
     """)
     sys.modules.pop("r4splat", None)
-    lm = _load_module("r4splat", str(tmp_path / "r4splat.clausal")).__dict__["$module"]
+    lm = _load_module("r4splat", str(tmp_path / f"r4splat{SEAM}")).__dict__["$module"]
     sys.modules.pop("r4splat", None)
     star = Call(func=LoadName(name="r4_sp"),
                 args=[StarUnpack(value=LoadName(name="L"))], kwargs=[])
@@ -141,18 +142,18 @@ def test_a_qualified_name_finds_its_prefix_module_after_it_is_popped(
     monkeypatch.syspath_prepend(str(tmp_path))
     for n in ("r4q_lib", "r4q_use"):
         sys.modules.pop(n, None)
-    _write(tmp_path, "r4q_lib.clausal", """
+    _write(tmp_path, f"r4q_lib{SEAM}", """
         -module(r4q_lib, [r4q_check(N)])
 
         r4q_check(N) <- (N > 100, N < 0)
     """)
-    _write(tmp_path, "r4q_use.clausal", """
+    _write(tmp_path, f"r4q_use{SEAM}", """
         -import_module(r4q_lib)
 
         r4q_check(1),
     """)
     try:
-        use = _load_module("r4q_use", str(tmp_path / "r4q_use.clausal"))
+        use = _load_module("r4q_use", str(tmp_path / f"r4q_use{SEAM}"))
         lm = use.__dict__["$module"]
         lib_db = use.__dict__["r4q_lib"].__dict__["$module"].db
         for n in ("r4q_lib", "r4q_use"):

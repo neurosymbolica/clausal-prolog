@@ -13,6 +13,7 @@ import pytest
 
 from clausal.import_hook import _load_module
 from clausal.lint_warnings import ClausalBooleanSeamWarning
+from tests._suffix import SEAM
 
 _HEADER = (
     "-module({name}, [edge(A, B), a, b, zzz])\n"
@@ -25,7 +26,7 @@ def _load(name, body):
     """Load a host module whose hosted Python is *body*; return
     ``(module, [boolean-seam warning messages])``."""
     with tempfile.TemporaryDirectory() as d:
-        path = os.path.join(d, f"{name}.clausal")
+        path = os.path.join(d, f"{name}{SEAM}")
         with open(path, "w") as fh:
             fh.write(_HEADER.format(name=name) + body)
         with warnings.catch_warnings(record=True) as caught:
@@ -59,7 +60,7 @@ def test_a_boolean_context_warns_and_is_in_fact_always_true(body, always):
     module, messages = _load("_bsl_warn", body)
     assert len(messages) == 1, messages
     msg = messages[0]
-    assert "_bsl_warn.clausal:" in msg, msg          # names the site
+    assert f"_bsl_warn{SEAM}:" in msg, msg          # names the site
     assert "--edge(zzz, X)" in msg, msg
     assert "ALWAYS TRUE" in msg, msg
     assert "if --g:" in msg and "any(True for X in --g)" in msg, msg
@@ -136,5 +137,5 @@ def test_each_site_warns_once_with_its_own_line():
             "def g():\n    assert --edge(a, X)\n")
     _module, messages = _load("_bsl_sites", body)
     assert len(messages) == 2, messages
-    lines = sorted(m.split(".clausal:")[1].split(":")[0] for m in messages)
+    lines = sorted(m.split(f"{SEAM}:")[1].split(":")[0] for m in messages)
     assert lines == ["5", "7"], messages

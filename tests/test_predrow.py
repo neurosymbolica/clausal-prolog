@@ -13,6 +13,7 @@ import pytest
 
 from clausal.logic.atoms import mint
 from clausal.logic.database import Clause, Database, PredRow, WriteStamp
+from tests._suffix import SEAM
 
 
 def _clause(functor, *args):
@@ -428,7 +429,7 @@ def _load_pfn_module(tmp_path, monkeypatch, name, source):
         return result
 
     monkeypatch.setattr(cv2, "_predicate_functor_names", spy)
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(source).lstrip())
     module = _load_module(name, str(path))
     assert "names" in captured, "the spy never fired — the anchor moved"

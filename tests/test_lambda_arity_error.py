@@ -25,6 +25,7 @@ from clausal.import_hook import _load_module
 from clausal.logic.exceptions import LogicException, render_error_term
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var
+from tests._suffix import SEAM
 
 _SRC = """\
 -allow_singletons
@@ -39,7 +40,7 @@ p(1),
 
 @pytest.fixture(scope="module")
 def mod():
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w",
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w",
                                      delete=False) as f:
         f.write(_SRC)
         path = f.name

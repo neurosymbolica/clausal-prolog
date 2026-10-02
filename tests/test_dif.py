@@ -19,6 +19,7 @@ from clausal.terms import (
     Unify as Is, DoesNotUnify as IsNot, Evaluate,
     Call, LoadName,
 )
+from tests._suffix import SEAM
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -476,7 +477,7 @@ class TestDifImportHook:
     def test_clausal_file_with_dif(self, tmp_path):
         """A .clausal file using 'is not' with proper dif semantics."""
         # nv
-        src = tmp_path / "dif_test.clausal"
+        src = tmp_path / f"dif_test{SEAM}"
         src.write_text(
             "different(X_, Y_, R_) <- (\n"
             "    X_ is not Y_\n"

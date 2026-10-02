@@ -28,11 +28,12 @@ from clausal.terms import Undefined
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.testing import collect_tests, run_test
+from tests._suffix import SEAM
 
 
 def _load(name: str, source: str):
     with tempfile.NamedTemporaryFile(
-        suffix=".clausal", mode="w", delete=False
+        suffix=SEAM, mode="w", delete=False
     ) as f:
         f.write(source)
         f.flush()

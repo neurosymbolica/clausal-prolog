@@ -17,6 +17,7 @@ import pytest
 
 import clausal
 from clausal.import_hook import _load_module
+from tests._suffix import SEAM
 
 _TREE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -34,7 +35,7 @@ def mods():
     d = tempfile.mkdtemp()
 
     def write(name, text):
-        p = os.path.join(d, f"{name}.clausal")
+        p = os.path.join(d, f"{name}{SEAM}")
         with open(p, "w") as fh:
             fh.write(text)
         return p
@@ -58,9 +59,9 @@ def mods():
     sys.path.insert(0, d)
     try:
         return {
-            "exporter": _load_module("sr_exporter", os.path.join(d, "sr_exporter.clausal")),
-            "plain": _load_module("sr_plain", os.path.join(d, "sr_plain.clausal")),
-            "alias": _load_module("sr_alias", os.path.join(d, "sr_alias.clausal")),
+            "exporter": _load_module("sr_exporter", os.path.join(d, f"sr_exporter{SEAM}")),
+            "plain": _load_module("sr_plain", os.path.join(d, f"sr_plain{SEAM}")),
+            "alias": _load_module("sr_alias", os.path.join(d, f"sr_alias{SEAM}")),
         }
     finally:
         sys.path.remove(d)

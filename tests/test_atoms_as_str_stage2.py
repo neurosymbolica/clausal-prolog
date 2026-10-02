@@ -7,6 +7,7 @@ from clausal.logic.atoms import (mint, key_of, is_atom, spelling, char_atom,
                                  is_char_atom, NIL_KEY)
 from clausal.logic.cells import (chars, is_chars, refuse_reserved_1tuple,
                                  is_reserved_1tuple, compound_cell_shape, _cell_shape)
+from tests._suffix import SEAM
 
 
 def test_an_atom_is_the_interned_str():
@@ -43,7 +44,7 @@ def test_the_1_tuple_is_reserved():
 
 def _mod(tmp_path, body, hdr="-double_quotes(chars)\n-private([yes, no, a, b, foo])\n"):
     from clausal.testing import load_clausal_module
-    p = tmp_path / "s2.clausal"; p.write_text(hdr + body)
+    p = tmp_path / f"s2{SEAM}"; p.write_text(hdr + body)
     return load_clausal_module(p)
 
 

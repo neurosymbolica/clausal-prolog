@@ -27,10 +27,11 @@ import os
 import pytest
 
 from clausal.import_hook import _load_module
+from tests._suffix import SEAM
 
 
 def _load(tmp_path, source: str, name: str):
-    path = os.path.join(str(tmp_path), f"{name}.clausal")
+    path = os.path.join(str(tmp_path), f"{name}{SEAM}")
     with open(path, "w") as f:
         f.write(source)
     return _load_module(name, path)
@@ -54,7 +55,7 @@ def test_unparenthesised_multi_goal_body_reports_its_line(tmp_path):
     e = ei.value
     assert "parenthesized" in str(e)
     assert e.lineno == 6, f"expected the offending clause's line, got {e.lineno!r}"
-    assert e.filename and e.filename.endswith("abl_a.clausal")
+    assert e.filename and e.filename.endswith(f"abl_a{SEAM}")
     assert e.text and "bad_clause" in e.text
 
 

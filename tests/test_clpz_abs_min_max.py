@@ -15,6 +15,7 @@ import pytest
 from clausal.import_hook import _load_module
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var
+from tests._suffix import SEAM
 
 SEAM_ROWS = [
     ("findall(X, (in_domain(X, -3, 3), abs(X) == 2, label([X])), L)", [-2, 2]),
@@ -52,7 +53,7 @@ def mod(tmp_path_factory):
     d = tmp_path_factory.mktemp("clpz_abs")
     src = "-allow_singletons\n" + "".join(
         f"g{i}(L) <- ({body}),\n" for i, (body, _) in enumerate(SEAM_ROWS))
-    p = d / "_clpz_abs_min_max.clausal"
+    p = d / f"_clpz_abs_min_max{SEAM}"
     p.write_text(src)
     return _load_module("_clpz_abs_min_max", str(p))
 

@@ -22,6 +22,7 @@ from clausal.logic.solve import solve
 from clausal.logic.variables import Var, Trail, deref
 from clausal.terms import Call, LoadName, DictTerm, SetTerm
 from clausal.import_hook import _load_module
+from tests._suffix import SEAM
 
 
 def _goal(name, *args):
@@ -103,7 +104,7 @@ class TestPlainDictInputs:
 
 class TestPlainDictPairModeIn:
     def test_pair_mode_in_iterates_items_not_keys(self, tmp_path):
-        src = tmp_path / "pmi.clausal"
+        src = tmp_path / f"pmi{SEAM}"
         src.write_text(
             "pairs_of(D, P) <- (findall([K, V], ((K, V) in D), P))\n"
         )
@@ -116,7 +117,7 @@ class TestPlainDictPairModeIn:
             pytest.fail("pair-mode `in` yielded no solutions over a plain dict")
 
     def test_key_mode_in_still_iterates_keys(self, tmp_path):
-        src = tmp_path / "kmi.clausal"
+        src = tmp_path / f"kmi{SEAM}"
         src.write_text("keys_of(D, P) <- (findall(K, (K in D), P))\n")
         mod = _load_module("kmi", str(src))
         p = Var()

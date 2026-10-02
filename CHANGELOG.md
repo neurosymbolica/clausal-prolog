@@ -766,6 +766,15 @@ since 0.4.0 finish three moves:
 
 ### Changed
 
+- **The test suite writes seam source under the seam suffix.** A test that
+  writes seam (Python-syntax) source to a temporary file, or globs for seam
+  files, names the suffix through `tests/_suffix.py` (`SEAM`, which reads
+  `clausal._suffixes`: `.seam` before and after the extension flip;
+  `seam_glob` and `seam_path` find in-repo seam fixtures under either
+  spelling) rather than spelling `.clausal`. Tests that pin today's
+  `.clausal` seam alias, the `.clausal`/`.seam` finder priority, or the
+  simulated flip to Clausal Prolog keep `.clausal`.
+
 - **Preparation for the extension flip** (`.seam` becomes the only seam
   suffix and `.clausal` the Clausal Prolog surface). Nothing changes for a
   `.clausal` or `.seam` file today; the flip itself is now the edit of the

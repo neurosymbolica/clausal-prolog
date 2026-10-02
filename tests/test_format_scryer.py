@@ -17,6 +17,7 @@ from clausal.logic.atoms import mint
 from clausal.logic.cells import chars
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Var
+from tests._suffix import SEAM
 
 ROWS = [
     ("~s|", [chars("abc")], "abc|"),
@@ -98,7 +99,7 @@ def test_errors_match_scryer(fs, args, formal):
 def test_format_2_prints_from_a_clausal_body(tmp_path):
     from clausal.import_hook import _load_module
     from clausal.logic.solve import solve
-    p = tmp_path / "fmt_body.clausal"
+    p = tmp_path / f"fmt_body{SEAM}"
     p.write_text('-private([abc])\n'
                  'go() <- format("~a: ~d items~n", [abc, 3])\n'
                  'go1() <- format("hello~n")\n')

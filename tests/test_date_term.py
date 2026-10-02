@@ -19,6 +19,7 @@ from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.modules.py.datetime import date
 from clausal.modules.py.datetime import _dt_to_term as _T
 from clausal.modules.py.datetime import _term_to_dt as _P  # py datetime -> its TERM
+from tests._suffix import SEAM
 
 
 class TestConstruct:
@@ -170,7 +171,7 @@ class TestARawPythonDateIsNotATerm:
         import sys
         from clausal.import_hook import _load_module
         from clausal.logic.solve import solve
-        path = tmp_path / "s7_raw_dates.clausal"
+        path = tmp_path / f"s7_raw_dates{SEAM}"
         path.write_text(
             "-import_from(date_time, [date])\n"
             "-module(s7_raw_dates, [parts(D, Y, M, DD)])\n"
@@ -221,7 +222,7 @@ class TestDateTermShapesInAModule:
     def mod(self, tmp_path):
         import sys
         from clausal.import_hook import _load_module
-        path = tmp_path / "s7_dates.clausal"
+        path = tmp_path / f"s7_dates{SEAM}"
         path.write_text(self.SRC)
         sys.modules.pop("s7_dates", None)
         try:

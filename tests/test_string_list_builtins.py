@@ -13,12 +13,13 @@ from clausal.logic.variables import Var, deref
 from clausal.import_hook import _load_module
 import tempfile
 import os
+from tests._suffix import SEAM
 
 
 @pytest.fixture(scope="module")
 def mod():
     """Minimal module for calling builtins."""
-    with tempfile.NamedTemporaryFile(suffix=".clausal", mode="w", delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=SEAM, mode="w", delete=False) as f:
         f.write("-module(tmod, [])\n")
         f.flush()
         m = _load_module("tmod_phase4", f.name).__dict__["$module"]

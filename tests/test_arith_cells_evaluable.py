@@ -27,6 +27,7 @@ from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import call, solve
 from clausal.logic.variables import Var, walk
 from clausal.terms import Add, term_str
+from tests._suffix import SEAM
 
 _N = itertools.count()
 
@@ -35,7 +36,7 @@ def _module(tmp_path, body: str, heads: list[str], extra: str = ""):
     name = f"_arith_cells_{next(_N)}"
     src = (f"-module({name}, [{', '.join(heads)}])\n-allow_singletons\n"
            f"{extra}{body}\n")
-    p = tmp_path / f"{name}.clausal"
+    p = tmp_path / f"{name}{SEAM}"
     p.write_text(src)
     return _load_module(name, str(p)).__dict__["$module"]
 
@@ -522,7 +523,7 @@ def test_qualified_term_constructor_is_evaluated(tmp_path, monkeypatch):
     Python function: its result is evaluated or refused like any other term,
     while a qualified Python call's str result still binds (roborev job 276)."""
     lib = f"arith_qlib_{next(_N)}"
-    (tmp_path / f"{lib}.clausal").write_text(f"-module({lib}, [pt(X)])\npt(1),\n")
+    (tmp_path / f"{lib}{SEAM}").write_text(f"-module({lib}, [pt(X)])\npt(1),\n")
     monkeypatch.syspath_prepend(str(tmp_path))
     mod = _module(tmp_path, (
         f"q1(X) <- eval_({lib}.pt(3), X)\n"

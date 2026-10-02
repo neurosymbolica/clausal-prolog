@@ -36,13 +36,14 @@ from clausal.logic.variables._variables import (
 )
 from clausal.terms import Add, Div, FloorDiv, Mod, Mult, Pow, Sub
 from clausal.testing import load_clausal_module
+from tests._suffix import SEAM
 
 
 _HEADER = "-double_quotes(chars)\n"
 
 
 def _module(tmp_path, src):
-    path = tmp_path / "integral.clausal"
+    path = tmp_path / f"integral{SEAM}"
     path.write_text(_HEADER + src)
     return load_clausal_module(path)
 
@@ -373,7 +374,7 @@ class TestCompiledArithmetic:
 
     def test_seam_value_arithmetic(self, tmp_path):
         from clausal.import_hook import _load_module
-        path = tmp_path / "_seam_integral.clausal"
+        path = tmp_path / f"_seam_integral{SEAM}"
         path.write_text(
             "-module(_seam_integral, [verdict(A, B, C)])\n"
             "-double_quotes(chars)\n"
@@ -386,7 +387,7 @@ class TestCompiledArithmetic:
         assert type(got[1]) is int and type(got[2]) is int, got
         assert type(got[3]) is Fraction, got
         # a bare / in the seam is Python's true division (ruling Q15)
-        path2 = tmp_path / "_seam_py_div.clausal"
+        path2 = tmp_path / f"_seam_py_div{SEAM}"
         path2.write_text(
             "-module(_seam_py_div, [verdict(A, B)])\n"
             "def build():\n"
@@ -423,7 +424,7 @@ def _clausal_runner(src, name, nargs, ground=()):
 
 def _seam_runner(tmp_path):
     from clausal.import_hook import _load_module
-    path = tmp_path / "_seam_absence.clausal"
+    path = tmp_path / f"_seam_absence{SEAM}"
     path.write_text(
         "-module(_seam_absence, [verdict(A, B)])\n"
         "-double_quotes(chars)\n"

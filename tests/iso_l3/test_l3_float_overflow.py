@@ -4,6 +4,7 @@ answered inf; an integer too large to be a float beside one raised a raw
 OverflowError.  A BARE seam operator keeps Python's meaning (inf), as the
 2026-09-28 ruling has it."""
 from __future__ import annotations
+from tests._suffix import SEAM
 
 SRC = """\
 f1(E) :- catch(_ is 1.0e308 * 10, error(E, _), true).
@@ -29,7 +30,7 @@ def test_bare_seam_operator_keeps_python_inf(tmp_path):
     from clausal.import_hook import _load_module
     from clausal.logic.solve import _deref_walk, solve
     from clausal.logic.variables import Var
-    p = tmp_path / "_bare_overflow.clausal"
+    p = tmp_path / f"_bare_overflow{SEAM}"
     p.write_text("-allow_singletons\ng(X) <- eval_(1.0e308 * 10, X)\n")
     m = _load_module("_bare_overflow", str(p))
     v = Var()

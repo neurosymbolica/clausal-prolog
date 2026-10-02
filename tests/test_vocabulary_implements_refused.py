@@ -43,6 +43,7 @@ from clausal.logic.solve import call, solve
 from clausal.logic.variables import Var, deref, walk
 from clausal.pythonic_ast.nodes import ImportFromDirective
 from tests.load_write_spy_support import record_load_writes
+from tests._suffix import SEAM
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -111,7 +112,7 @@ def test_positive_control_the_spy_sees_the_same_load_without_the_idiom(
     source = open(_fixture_path("impclob_implements_vocab")).read()
     assert "impclob_verdict(ok, cited)," in source
     stripped = source.replace("impclob_verdict(ok, cited),\n", "")
-    path = tmp_path / "impclob_iv_control.clausal"
+    path = tmp_path / f"impclob_iv_control{SEAM}"
     path.write_text(stripped)
     _load_fixture("impclob_decl_vocab")
     writes = record_load_writes(monkeypatch)
@@ -180,7 +181,7 @@ def test_the_pre_pass_refuses_in_both_eras_with_the_same_text(
         with pytest.raises(SyntaxError) as exc_info:
             _refuse_foreign_writes(
                 Database(), [_head(functor, 2)], {local: binding}, origins,
-                "/elsewhere/implementer.clausal", "some_implementer")
+                f"/elsewhere/implementer{SEAM}", "some_implementer")
         texts[era] = str(exc_info.value)
     assert list(texts) == ["mangled"]
     assert f"{owner_name} only declares {functor}/2" in _flat(texts["mangled"])
@@ -211,7 +212,7 @@ _LOCAL = "_vocabdrop_local_def"
 @pytest.fixture(scope="module")
 def local_def(tmp_path_factory):
     """A module with its OWN ``impclob_verdict/2``, for the local binding."""
-    path = tmp_path_factory.mktemp("vocabdrop") / "local_def.clausal"
+    path = tmp_path_factory.mktemp("vocabdrop") / f"local_def{SEAM}"
     path.write_text(textwrap.dedent("""\
         -private([x, y])
         -module(local_def, [impclob_verdict/2])
@@ -313,7 +314,7 @@ def private_module():
 
 
 def _importer(tmp_path, name: str, exporter: str, functor: str, fact: str):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(textwrap.dedent(f"""\
         -private([ok, yes])
         -module({name}, [{name}_chk(R)])
@@ -482,7 +483,7 @@ def _assert_own_p2_answers_every_way(ulm):
 
 
 def _write(tmp_path, name, text):
-    path = tmp_path / f"{name}.clausal"
+    path = tmp_path / f"{name}{SEAM}"
     path.write_text(text)
     return str(path)
 
@@ -660,5 +661,5 @@ def test_the_self_import_exemption_is_keyed_on_the_source_path(owners):
         assert _implements_an_imported_declaration(
             origins, {functor: binding}, functor, 2,
             "_clausal_test_impclob_decl_vocab",
-            author="/elsewhere/other.clausal") is not None, era
+            author=f"/elsewhere/other{SEAM}") is not None, era
 

@@ -24,6 +24,7 @@ from clausal.templating.desugar import _is_logic_var_name as ds_var
 from clausal.logic.goal_expansion import _is_logic_var_name as ge_var
 from clausal.logic.predicate import _is_logic_var_name as pr_var
 from clausal.tools.clausal_to_prolog import _is_logic_var_name as cp_var
+from tests._suffix import seam_glob
 
 ALL = [tr_var, ds_var, ge_var, pr_var, cp_var]
 
@@ -136,7 +137,7 @@ def test_no_committed_file_declares_a_constant_the_retired_way():
     root = pathlib.Path(__file__).resolve().parent.parent
     offenders = []
     scanned = 0
-    for p in root.rglob("*.clausal"):
+    for p in seam_glob(root, recursive=True):
         if ".claude" in p.relative_to(root).parts:
             continue
         scanned += 1

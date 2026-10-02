@@ -9,10 +9,11 @@ empty run now exits 5 by default (tests/test_testing_empty_scan_and_pl.py).
 from __future__ import annotations
 
 from clausal.testing import main
+from tests._suffix import SEAM
 
 
 def test_missing_path_errors_nonzero(capsys, tmp_path):
-    rc = main([str(tmp_path / "does_not_exist.clausal")])
+    rc = main([str(tmp_path / f"does_not_exist{SEAM}")])
     assert rc == 2
     err = capsys.readouterr().err
     assert "no such file" in err
@@ -27,7 +28,7 @@ def test_non_clausal_file_errors(capsys, tmp_path):
 
 
 def test_testless_file_is_distinct_not_passed(capsys, tmp_path):
-    p = tmp_path / "notests.clausal"
+    p = tmp_path / f"notests{SEAM}"
     p.write_text("foo(1),\n")
     rc = main([str(p)])
     out = capsys.readouterr().out
@@ -37,7 +38,7 @@ def test_testless_file_is_distinct_not_passed(capsys, tmp_path):
 
 
 def test_testless_file_strict_fails(capsys, tmp_path):
-    p = tmp_path / "notests.clausal"
+    p = tmp_path / f"notests{SEAM}"
     p.write_text("foo(1),\n")
     # Failing on an empty run is the default now; the flags stay accepted.
     assert main(["--strict", str(p)]) == 5
@@ -45,7 +46,7 @@ def test_testless_file_strict_fails(capsys, tmp_path):
 
 
 def test_passing_file_still_passes(capsys, tmp_path):
-    p = tmp_path / "ok.clausal"
+    p = tmp_path / f"ok{SEAM}"
     p.write_text('-double_quotes(atom)\ntest("one is one") <- (1 == 1)\n')
     rc = main([str(p)])
     out = capsys.readouterr().out
@@ -54,7 +55,7 @@ def test_passing_file_still_passes(capsys, tmp_path):
 
 
 def test_failing_file_still_fails(capsys, tmp_path):
-    p = tmp_path / "bad.clausal"
+    p = tmp_path / f"bad{SEAM}"
     p.write_text('-double_quotes(atom)\ntest("one is two") <- (1 == 2)\n')
     rc = main([str(p)])
     assert rc == 1
@@ -102,7 +103,7 @@ UPPER = LOWER.replace("test(", "Test(")
 
 def test_lowercase_only_file_runs_all_silently(tmp_path):
     """# nv"""
-    p = tmp_path / "lower.clausal"
+    p = tmp_path / f"lower{SEAM}"
     p.write_text(LOWER)
     mod, spelling = _load_recording(p)
     assert spelling == []
@@ -115,14 +116,14 @@ def test_lowercase_only_file_runs_all_silently(tmp_path):
 
 def test_uppercase_file_does_not_load_and_names_the_rename(tmp_path):
     """# nv"""
-    p = tmp_path / "upper.clausal"
+    p = tmp_path / f"upper{SEAM}"
     p.write_text(UPPER)
     with pytest.raises(SyntaxError) as ei:
         load_clausal_module(p)
     message = str(ei.value)
     assert "`Test` is TitleCase" in message
     assert "Rename `Test` -> `test`" in message
-    assert "upper.clausal:2" in message  # the first offending site
+    assert f"upper{SEAM}:2" in message  # the first offending site
     assert ei.value.lineno == 2
 
 
@@ -130,7 +131,7 @@ def test_uppercase_file_is_a_load_failure_for_the_runner(tmp_path):
     """``run_file`` reports the load error as the single ``<load>`` result
     and the CLI exits 1 — never a green run."""
     # nv
-    p = tmp_path / "upper.clausal"
+    p = tmp_path / f"upper{SEAM}"
     p.write_text(UPPER)
     results = run_file(p)
     assert [(r.name, r.passed) for r in results.results] == [("<load>", False)]
@@ -154,7 +155,7 @@ def test_mixed_file_fails_at_the_first_uppercase_clause(tmp_path):
     """A file part-way through a rename does not load either; the error
     locates the first ``Test(`` clause, not the file's first line."""
     # nv
-    p = tmp_path / "mixed.clausal"
+    p = tmp_path / f"mixed{SEAM}"
     p.write_text(
         '-double_quotes(atom)\ntest("a") <- (1 == 1)\n'
         'Test("b") <- (1 == 1)\n'
@@ -162,13 +163,13 @@ def test_mixed_file_fails_at_the_first_uppercase_clause(tmp_path):
     )
     with pytest.raises(SyntaxError) as ei:
         load_clausal_module(p)
-    assert "mixed.clausal:3" in str(ei.value)
+    assert f"mixed{SEAM}:3" in str(ei.value)
     assert ei.value.lineno == 3
 
 
 def test_cli_messages_name_the_lowercase_predicate(capsys, tmp_path):
     """# nv"""
-    p = tmp_path / "notests.clausal"
+    p = tmp_path / f"notests{SEAM}"
     p.write_text("foo(1),\n")
     assert main([str(p)]) == 5
     out = capsys.readouterr().out
@@ -196,13 +197,13 @@ def test_seam_file_is_run(capsys, tmp_path):
 def test_seam_files_are_discovered_under_a_directory(capsys, tmp_path):
     (tmp_path / "sub").mkdir()
     (tmp_path / "sub" / "a.seam").write_text('-double_quotes(atom)\ntest("seam") <- (1 == 1)\n')
-    (tmp_path / "sub" / "b.clausal").write_text('-double_quotes(atom)\ntest("clausal") <- (1 == 1)\n')
+    (tmp_path / "sub" / f"b{SEAM}").write_text('-double_quotes(atom)\ntest("clausal") <- (1 == 1)\n')
     (tmp_path / "sub" / "c.txt").write_text('-double_quotes(atom)\ntest("txt") <- (1 == 1)\n')
     rc = main(["-v", str(tmp_path)])
     out = capsys.readouterr().out
     assert rc == 0
     assert "a.seam::seam" in out
-    assert "b.clausal::clausal" in out
+    assert f"b{SEAM}::clausal" in out
     assert "::txt" not in out                       # c.txt is not run...
     assert "c.txt  (unsupported suffix)" in out       # ...and is reported
     assert "2 passed, 0 failed [PASSED]" in out
@@ -210,10 +211,10 @@ def test_seam_files_are_discovered_under_a_directory(capsys, tmp_path):
 
 def test_discover_clausal_files_orders_both_extensions_together(tmp_path):
     from clausal.testing import discover_clausal_files
-    for name in ("b.seam", "a.clausal", "c.clausal", "d.txt"):
+    for name in ("b.seam", f"a{SEAM}", f"c{SEAM}", "d.txt"):
         (tmp_path / name).write_text("")
     found = [p.name for p in discover_clausal_files([tmp_path])]
-    assert found == ["a.clausal", "b.seam", "c.clausal"]
+    assert found == [f"a{SEAM}", "b.seam", f"c{SEAM}"]
 
 
 def test_seam_load_module_name_drops_the_suffix(tmp_path):

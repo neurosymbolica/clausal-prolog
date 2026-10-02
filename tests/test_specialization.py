@@ -23,6 +23,7 @@ from clausal.logic.specialization import (
     _has_residual_goals,
     _ast_unify,
 )
+from tests._suffix import SEAM
 
 
 @pytest.fixture(scope="module")
@@ -2516,7 +2517,7 @@ class TestDefiningDbOwnership:
         from clausal.logic.variables import Var, deref, walk
 
         name = "_spec_owner_loaded"
-        path = tmp_path / f"{name}.clausal"
+        path = tmp_path / f"{name}{SEAM}"
         path.write_text(f"-module({name}, [own(X)])\nown(1),\n")
         sys.modules.pop(name, None)
         mod = _load_module(name, str(path))

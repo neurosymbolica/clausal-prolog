@@ -8,6 +8,7 @@ from clausal.logic.database import Module
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import _deref_walk, solve
 from clausal.logic.variables import Var
+from tests._suffix import SEAM
 
 
 @pytest.fixture
@@ -65,7 +66,7 @@ def test_from_a_clausal_body_with_source_pairs(tmp_path):
     """A pair written in source (``b - 1``) is a Sub node, not the cell;
     keysort takes both spellings (roborev, High)."""
     from clausal.import_hook import _load_module
-    p = tmp_path / "ks_body.clausal"
+    p = tmp_path / f"ks_body{SEAM}"
     p.write_text("-private([a, b, c])\n"
                  "ks(S) <- keysort([b - 1, a - 2, c - 0, a - 1], S)\n"
                  "chk() <- keysort([b - 1, a - 2], [a - 2, b - 1])\n")
