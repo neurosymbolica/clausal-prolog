@@ -20,6 +20,24 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **Input text an adapter cannot read raises `syntax_error(Kind)`**
+  (ruled 2026-10-02) instead of failing the goal. `py.http`: a response
+  body that is not UTF-8 is `error(syntax_error(invalid_data), Name/Arity)`
+  -- Scryer's term for bytes that are not UTF-8 on a text stream -- in
+  `get/2,3`, `post/3,4`, `json_get/2`, `json_post/3` and `request/3`
+  (whatever the status: `request/3` used to read an undecodable error body
+  as `""`); a body `json_get/2` or `json_post/3` cannot parse is
+  `syntax_error(invalid_json)`. An error status still comes first in the
+  body-only predicates. A failed read of an error body now raises the
+  network error in `request/3` (it read as `""`). The `clausal-yaml`
+  package: text that is not YAML (`Read/2`, `ReadAll/2`, `ReadFile/2`) is
+  `syntax_error(invalid_yaml)`; a file-system failure in `ReadFile/2` and
+  `WriteFile/2` goes through the shared ISO mapping, as in `py.files`
+  (`existence_error(source_sink, Path)`, `permission_error(open,
+  source_sink, Path)`, ...); an object YAML cannot represent (`write/2`,
+  `WriteAll/2`, `WriteFile/2`) is `type_error(yaml_term, Culprit)`, as in
+  `py.json`. `WriteFile/2` serialises before it opens the file, so a bad
+  term leaves no file, and a string path names the file it spells.
 - **A file-system or network failure in a library adapter raises an ISO
   error** (ruled 2026-10-02) instead of failing the goal. The model is ISO
   `open/4` (8.11.5.3 j, k): a path that does not exist (or goes through a

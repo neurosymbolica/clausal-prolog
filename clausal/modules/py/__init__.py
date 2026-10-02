@@ -646,6 +646,34 @@ def raise_http_status(status, culprit, pred, *, reason=None):
     raise LogicException(term) from None
 
 
+# ── Malformed input text (RULED 2026-10-02: raise) ─────────────────────────
+#
+# Text an adapter READS from a source -- an HTTP response body, a YAML
+# file -- that is not in the expected encoding or grammar raises
+# ``syntax_error(Kind)``, ISO's term for input text read/1 cannot parse
+# (7.12.2 i).  Scryer raises the same family for bytes that are not UTF-8
+# on a text stream: ``get_char/2`` on such a file throws
+# ``error(syntax_error(invalid_data), get_char/2)``.  Kinds used here:
+#
+# - ``invalid_data``  -- bytes that are not UTF-8 text (Scryer's term);
+# - ``invalid_json``  -- text that is not JSON;
+# - ``invalid_yaml``  -- text that is not YAML.
+
+
+def syntax_error_term(kind, pred, reason=None):
+    """``error(syntax_error(Kind), Pred)`` with *reason* as the prose."""
+    from clausal.logic.exceptions import _error  # noqa: PLC0415
+    from clausal.logic.atoms import mint as _mint  # noqa: PLC0415
+    context = f"{pred}: {reason}" if reason else pred
+    return _error(("syntax_error", _mint(kind)), context)
+
+
+def raise_syntax_error(kind, pred, reason=None, *, cause=None):
+    """Raise :func:`syntax_error_term` (RULED 2026-10-02)."""
+    from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+    raise LogicException(syntax_error_term(kind, pred, reason)) from cause
+
+
 
 # ── Stdlib import helper ─────────────────────────────────────────────────────
 

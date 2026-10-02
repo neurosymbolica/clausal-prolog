@@ -70,7 +70,7 @@ Only `yaml.safe_load` is used — no arbitrary Python object construction from Y
 --8<-- "tests/fixtures/docs/yaml_sigs.txt:read_sig"
 ```
 
-Parse a YAML string into a Python object. Fails on invalid YAML.
+Parse a YAML string into a Python object. Text that is not YAML raises `syntax_error(invalid_yaml)` (see [Errors](#errors)).
 
 ```clausal
 -import_from(yaml_module, [Read, Get])
@@ -105,7 +105,7 @@ test("multi-doc") <- (
 --8<-- "tests/fixtures/docs/yaml_sigs.txt:read_file_sig"
 ```
 
-Read and parse a YAML file from disk. Fails if the file does not exist or contains invalid YAML.
+Read and parse a YAML file from disk. A missing file raises `existence_error(source_sink, Path)`, a file that is not YAML `syntax_error(invalid_yaml)` (see [Errors](#errors)).
 
 ```clausal
 load_config(PATH, CFG) <- read_file(PATH, CFG)
@@ -149,7 +149,23 @@ Serialize a list of Python objects to a multi-document YAML string with `---` se
 --8<-- "tests/fixtures/docs/yaml_sigs.txt:write_file_sig"
 ```
 
-write a Python object as YAML to a file. Always succeeds if the write completes; fails on I/O errors.
+write a Python object as YAML to a file. The object is serialised before the file is opened, so one YAML cannot represent leaves no file behind. A file-system failure raises (see [Errors](#errors)).
+
+---
+
+## Errors
+
+Every predicate except `Get/3` **raises** where it used to fail (ruled 2026-10-02):
+
+| Failure | Error |
+|---|---|
+| the file does not exist (`ReadFile`), or its directory does not (`WriteFile`) | `existence_error(source_sink, Path)` |
+| the file may not be opened; a directory where a file is needed | `permission_error(open, source_sink, Path)` |
+| any other file-system failure | as [`py.files`](files.md): the same shared mapping |
+| text that is not YAML (`Read`, `ReadAll`, `ReadFile`) | `syntax_error(invalid_yaml)` |
+| an object YAML cannot represent (`write`, `WriteAll`, `WriteFile`) | `type_error(yaml_term, Culprit)` |
+
+`syntax_error` is ISO's term for input text that cannot be read, the family `py.http` raises for a body that is not JSON (`invalid_json`); `type_error(yaml_term, _)` matches `py.json`'s `type_error(json_term, _)`. `Get/3` still fails on a missing key or index: that failure is its answer.
 
 ---
 
@@ -223,7 +239,7 @@ test("nested access") <- (
     2. **`safe_load` only** — prevents arbitrary code execution from YAML tags. This is the standard security practice.
     3. **`Get/3` for navigation** — a convenience predicate that avoids verbose `++()` chains for deep nested access. Accepts both single keys and key-path lists.
     4. **Module name is `yaml_module`** — avoids shadowing PyYAML's `yaml` package in the Python import machinery. With `-import_from`, the predicates are used without any prefix: `Read(...)`, `write(...)`, `Get(...)`.
-    5. **All predicates are deterministic** — YAML parsing produces exactly one result (or fails). No backtracking.
+    5. **All predicates are deterministic** — YAML parsing produces exactly one result (or raises). No backtracking.
     6. **Block-style output** — `write/2` uses `default_flow_style=False` for human-readable YAML output by default.
 
 ---

@@ -19,6 +19,7 @@ from clausal.modules.py import (
     raise_domain_error,
     raise_http_status,
     raise_os_error,
+    raise_syntax_error,
     require_text,
     simple_to_trampoline,
     text_or_str,
@@ -59,8 +60,11 @@ def _dict_term_to_headers(dt):
 
 def _do_request(url, method="GET", headers=None, data=None, timeout=30, *,
                 pred="request/3", url_term=None):
-    """Perform an HTTP request; return (status, body_str), or None when
-    the response body is not UTF-8 text.
+    """Perform an HTTP request; return ``(status, raw)``, *raw* the
+    response body as BYTES -- or, for an error status whose body could not
+    be read, the exception that stopped the read.  :func:`_body_text` turns
+    it into text, AFTER the caller has dealt with the status, so an error
+    status outranks a body that is not text.
 
     A URL ``urllib`` cannot use at all -- no scheme, an unknown scheme, a
     malformed host -- is the caller's value, not the network's answer, so it
@@ -94,10 +98,10 @@ def _do_request(url, method="GET", headers=None, data=None, timeout=30, *,
             raw, status = resp.read(), resp.status
     except _urllib_error.HTTPError as e:
         try:
-            body = e.read().decode("utf-8")
-        except Exception:
-            body = ""
-        return e.code, body
+            raw = e.read()
+        except Exception as read_exc:     # noqa: BLE001 -- see _body_text
+            raw = read_exc               # raised only if the body is asked for
+        return e.code, raw
     except _urllib_error.URLError as e:
         if _is_url_rejection(e):
             raise_domain_error("url", culprit, pred, arg=1)
@@ -123,10 +127,41 @@ def _do_request(url, method="GET", headers=None, data=None, timeout=30, *,
             "http_protocol_error", f"{pred}: {type(e).__name__}: {e}")) from e
     except OSError as e:                       # a timeout while reading, ...
         raise_os_error(e, culprit, pred)
+    return status, raw
+
+
+def _body_text(raw, culprit, pred):
+    """The response body *raw* (from :func:`_do_request`) as text.
+
+    A body that is not UTF-8 RAISES ``syntax_error(invalid_data)`` (RULED
+    2026-10-02: raise) -- Scryer's term for bytes that are not UTF-8 on a
+    text stream.  It used to fail the goal, or, for an error status, read
+    as the empty text.  A body whose read failed raises that failure.
+    """
+    if isinstance(raw, BaseException):
+        if isinstance(raw, OSError):
+            raise_os_error(raw, culprit, pred)
+        from clausal.logic.exceptions import system_error  # noqa: PLC0415
+        raise LogicException(system_error(
+            "http_protocol_error",
+            f"{pred}: {type(raw).__name__}: {raw}")) from raw
     try:
-        return status, raw.decode("utf-8")
-    except UnicodeDecodeError:
-        return None                    # the SERVER's bytes, not the caller's value
+        return raw.decode("utf-8")
+    except UnicodeDecodeError as e:
+        raise_syntax_error("invalid_data", pred,
+                           f"the response body is not UTF-8 text: {e}",
+                           cause=e)
+
+
+def _json_body(body_str, pred):
+    """The response body *body_str* parsed as JSON.  Text that is not JSON
+    RAISES ``syntax_error(invalid_json)`` (RULED 2026-10-02: raise); it
+    used to fail the goal."""
+    try:
+        return _json_mod.loads(body_str)
+    except ValueError as e:             # json.JSONDecodeError
+        raise_syntax_error("invalid_json", pred,
+                           f"the response body is not JSON: {e}", cause=e)
 
 
 def _is_url_rejection(exc) -> bool:
@@ -147,11 +182,10 @@ def _get_2(url, body, trail, k):
     if url_d is None:
         return
     result = _do_request(url_d, pred="get/2", url_term=deref(url))
-    if result is None:
-        return
-    status, body_str = result
+    status, raw = result
     if status >= 400:
         raise_http_status(status, deref(url), "get/2")
+    body_str = _body_text(raw, deref(url), "get/2")
     if unify(body, text_result(body_str), trail):
         yield None
 
@@ -168,11 +202,10 @@ def _get_3(url, headers, body, trail, k):
     hdrs = _dict_term_to_headers(headers_d) if not is_var(headers_d) else {}
     result = _do_request(url_d, headers=hdrs, pred="get/3",
                          url_term=deref(url))
-    if result is None:
-        return
-    status, body_str = result
+    status, raw = result
     if status >= 400:
         raise_http_status(status, deref(url), "get/3")
+    body_str = _body_text(raw, deref(url), "get/3")
     if unify(body, text_result(body_str), trail):
         yield None
 
@@ -189,11 +222,10 @@ def _post_3(url, data, body, trail, k):
         expect_type(data_d, (str, bytes), "post/3", arg=2)   # raises
     result = _do_request(url_d, method="POST", data=data_d, pred="post/3",
                          url_term=deref(url))
-    if result is None:
-        return
-    status, body_str = result
+    status, raw = result
     if status >= 400:
         raise_http_status(status, deref(url), "post/3")
+    body_str = _body_text(raw, deref(url), "post/3")
     if unify(body, text_result(body_str), trail):
         yield None
 
@@ -213,11 +245,10 @@ def _post_4(url, data, headers, body, trail, k):
     hdrs = _dict_term_to_headers(headers_d) if not is_var(headers_d) else {}
     result = _do_request(url_d, method="POST", data=data_d, headers=hdrs,
                          pred="post/4", url_term=deref(url))
-    if result is None:
-        return
-    status, body_str = result
+    status, raw = result
     if status >= 400:
         raise_http_status(status, deref(url), "post/4")
+    body_str = _body_text(raw, deref(url), "post/4")
     if unify(body, text_result(body_str), trail):
         yield None
 
@@ -268,9 +299,9 @@ def _request_3(options, status_out, body_out, trail, k):
     result = _do_request(url, method=text_or_str(method), headers=hdrs,
                          data=data, timeout=timeout, pred="request/3",
                          url_term=url_raw)
-    if result is None:
-        return
-    status, body_str = result
+    status, raw = result
+    # The status is a VALUE here, whatever it is; the body must be text.
+    body_str = _body_text(raw, url_raw, "request/3")
     if unify(status_out, text_result(status), trail) and unify(body_out, text_result(body_str), trail):
         yield None
 
@@ -282,15 +313,10 @@ def _json_get_2(url, term_out, trail, k):
         return
     result = _do_request(url_d, headers={"Accept": "application/json"},
                          pred="json_get/2", url_term=deref(url))
-    if result is None:
-        return
-    status, body_str = result
+    status, raw = result
     if status >= 400:
         raise_http_status(status, deref(url), "json_get/2")
-    try:
-        parsed = _json_mod.loads(body_str)
-    except (ValueError, TypeError):
-        return
+    parsed = _json_body(_body_text(raw, deref(url), "json_get/2"), "json_get/2")
     term = _python_to_clausal(parsed)
     if unify(term_out, term, trail):
         yield None
@@ -310,15 +336,10 @@ def _json_post_3(url, term_in, term_out, trail, k):
         headers={"Content-Type": "application/json", "Accept": "application/json"},
         pred="json_post/3", url_term=deref(url),
     )
-    if result is None:
-        return
-    status, body_str = result
+    status, raw = result
     if status >= 400:
         raise_http_status(status, deref(url), "json_post/3")
-    try:
-        parsed = _json_mod.loads(body_str)
-    except (ValueError, TypeError):
-        return
+    parsed = _json_body(_body_text(raw, deref(url), "json_post/3"), "json_post/3")
     term = _python_to_clausal(parsed)
     if unify(term_out, term, trail):
         yield None

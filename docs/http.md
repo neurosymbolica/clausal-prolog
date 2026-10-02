@@ -75,7 +75,8 @@ a double-quoted `"url"` is matched by its text too.
 
 Unlike `get` and `post`, `request` does **not** raise on 4xx/5xx — it
 returns the status code as a value so you can handle it explicitly (as
-Scryer's `http_open/3` does). A network failure raises in `request` too.
+Scryer's `http_open/3` does). A network failure raises in `request` too,
+and so does a body that is not UTF-8 text, whatever the status.
 
 ### Errors
 
@@ -94,6 +95,14 @@ used, otherwise the engine's `system_error(Code)` / `resource_error(R)`:
 | status 404, 410 (`get`, `post`, `json_get`, `json_post`) | `existence_error(source_sink, Url)` |
 | status 401, 403, 407 | `permission_error(open, source_sink, Url)` |
 | any other status >= 400 | `system_error(http_status(Status))` |
+| a response body that is not UTF-8 text | `syntax_error(invalid_data)` |
+| a body `json_get` / `json_post` cannot parse as JSON | `syntax_error(invalid_json)` |
+
+An error status is answered first: a 404 whose body is not text raises
+the 404. The body errors (ruled 2026-10-02; they used to fail, and
+`request` read an undecodable error body as `""`) are ISO's term for input
+text that cannot be read (`syntax_error`); `invalid_data` is Scryer's kind
+for bytes that are not UTF-8 on a text stream.
 
 Wrap a call in `catch/3` for the old failure:
 `catch(get(U, B), error(existence_error(source_sink, _), _), fail)`.

@@ -159,14 +159,15 @@ read_val(S, R) <- read(S, R)
             {"name": "bob", "age": 25},
         ]
 
-    def test_invalid_yaml_fails(self, tmp_path):
-        # nv
-        mod = _load("yr14", """
-read_val(S, R) <- read(S, R)
-""", tmp_path)
-        # Unbalanced braces — invalid YAML
-        result = _first("read_val", "{a: [}", module=mod)
-        assert result is None  # fails — no solution
+    def test_invalid_yaml_raises(self):
+        # RULED 2026-10-02: text that is not YAML raises
+        # syntax_error(invalid_yaml); it used to fail.  Called at the
+        # Python level -- see test_yaml_errors_iso.py.
+        from clausal.logic.exceptions import LogicException
+        from clausal.modules.py.yaml import _read_2
+        with pytest.raises(LogicException) as info:
+            list(_read_2("{a: [}", Var(), Trail(), None))   # unbalanced
+        assert info.value.term[1] == ("syntax_error", "invalid_yaml")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -312,13 +313,16 @@ read_file(P, R) <- read_file(P, R)
         result = _first("read_file", str(yaml_file), module=mod)
         assert result == {"name": "alice", "age": 30}
 
-    def test_read_nonexistent_file_fails(self, tmp_path):
-        # nv
-        mod = _load("yrf2", """
-read_file(P, R) <- read_file(P, R)
-""", tmp_path)
-        result = _first("read_file", str(tmp_path / "nope.yaml"), module=mod)
-        assert result is None  # fails
+    def test_read_nonexistent_file_raises(self, tmp_path):
+        # RULED 2026-10-02: a missing file raises
+        # existence_error(source_sink, Path), as py.files does; it used to
+        # fail.  Called at the Python level -- see test_yaml_errors_iso.py.
+        from clausal.logic.exceptions import LogicException
+        from clausal.modules.py.yaml import _read_file_2
+        path = str(tmp_path / "nope.yaml")
+        with pytest.raises(LogicException) as info:
+            list(_read_file_2(path, Var(), Trail(), None))
+        assert info.value.term[1] == ("existence_error", "source_sink", path)
 
     def test_write_and_read_back(self, tmp_path):
         """write data to file via Python, then read back via ReadFile."""

@@ -218,12 +218,13 @@ class TestHttpJson:
         assert r.data[mint("status")] == chars("ok")
 
     @patch("clausal.modules.py.http._urlopen")
-    def test_invalid_json_fails(self, mock_urlopen):
+    def test_invalid_json_raises_syntax_error(self, mock_urlopen):
         # nv
+        # RULED 2026-10-02: a body that is not JSON raises
+        # syntax_error(invalid_json) (it used to fail the goal).
         mock_urlopen.return_value = _mock_response(b"not json")
-        term = Var()
-        sols, _ = simple_solutions(_json_get_2, chars("http://example.com"), term)
-        assert len(sols) == 0
+        assert raised(_json_get_2, chars("http://example.com"), Var()) == (
+            "error", ("syntax_error", "invalid_json"), ("/", "json_get", 2))
 
 
 # ── URL encode/decode ────────────────────────────────────────────────────
