@@ -1,120 +1,120 @@
 -double_quotes(atom)
--import_from(sklearn, [Est, Dataset, Fitted, Split, LoadDataset, Fit, Predict,
-                       Score, Transform, Algorithm, Learned, Param, MakeEst,
-                       FitTransform, PredictProba, DecisionFunction])
+-import_from(sklearn, [Est, Dataset, Fitted, Split, load_dataset, fit, predict,
+                       score, transform, algorithm, learned, param, make_est,
+                       fit_transform, predict_proba, decision_function])
 
-# ── Algorithm enumeration ────────────────────────────────────────────
+# ── algorithm enumeration ────────────────────────────────────────────
 
 test("algorithm random_forest is classifier") <- (
-    Algorithm("random_forest", "classifier")
+    algorithm("random_forest", "classifier")
 )  # nv
 
 test("algorithm pca is transformer") <- (
-    Algorithm("pca", "transformer")
+    algorithm("pca", "transformer")
 )  # nv
 
 test("algorithm kmeans is clusterer") <- (
-    Algorithm("kmeans", "clusterer")
+    algorithm("kmeans", "clusterer")
 )  # nv
 
 # ── Dataset loading ──────────────────────────────────────────────────
 
 test("load iris dataset") <- (
-    LoadDataset("iris", DATASET),
+    load_dataset("iris", DATASET),
     DATASET is ("Dataset", X_UNUSED, Y_UNUSED)
 )  # nv
 
-# ── Fit and predict (classification) ────────────────────────────────
+# ── fit and predict (classification) ────────────────────────────────
 
 test("fit and predict random forest on iris") <- (
-    LoadDataset("iris", DATASET),
-    Fit(Est("random_forest", {"n_estimators": 10}), DATASET, FITTED),
+    load_dataset("iris", DATASET),
+    fit(Est("random_forest", {"n_estimators": 10}), DATASET, FITTED),
     FITTED is ("Fitted", INNER_UNUSED, HANDLE_UNUSED),
     DATASET is ("Dataset", X, Y_UNUSED),
-    Predict(FITTED, X, PREDS_UNUSED)
+    predict(FITTED, X, PREDS_UNUSED)
 )  # nv
 
-# ── Fit and score ────────────────────────────────────────────────────
+# ── fit and score ────────────────────────────────────────────────────
 
 test("fit and score logistic regression on iris") <- (
-    LoadDataset("iris", DATASET),
-    Fit(Est("logistic_regression", {"max_iter": 200}), DATASET, FITTED),
-    Score(FITTED, DATASET, SCORE),
+    load_dataset("iris", DATASET),
+    fit(Est("logistic_regression", {"max_iter": 200}), DATASET, FITTED),
+    score(FITTED, DATASET, SCORE),
     SCORE > 0.5
 )  # nv
 
-# ── Transform (PCA) ─────────────────────────────────────────────────
+# ── transform (PCA) ─────────────────────────────────────────────────
 
 test("fit and transform pca") <- (
-    LoadDataset("iris", DATASET),
+    load_dataset("iris", DATASET),
     DATASET is ("Dataset", X, Y_UNUSED),
-    Fit(Est("pca", {"n_components": 2}), ("Dataset", X, None), FITTED),
-    Transform(FITTED, X, TRANSFORMED_UNUSED)
+    fit(Est("pca", {"n_components": 2}), ("Dataset", X, None), FITTED),
+    transform(FITTED, X, TRANSFORMED_UNUSED)
 )  # nv
 
-# ── FitTransform ─────────────────────────────────────────────────────
+# ── fit_transform ─────────────────────────────────────────────────────
 
 test("fit_transform standard scaler") <- (
-    LoadDataset("iris", DATASET),
+    load_dataset("iris", DATASET),
     DATASET is ("Dataset", X, Y_UNUSED),
-    FitTransform(Est("standard_scaler", {}), ("Dataset", X, None), TRANSFORMED_UNUSED, FITTED),
+    fit_transform(Est("standard_scaler", {}), ("Dataset", X, None), TRANSFORMED_UNUSED, FITTED),
     FITTED is ("Fitted", INNER_UNUSED, HANDLE_UNUSED)
 )  # nv
 
-# ── Fit/4 (raw X, Y) ────────────────────────────────────────────────
+# ── fit/4 (raw X, Y) ────────────────────────────────────────────────
 
 test("fit with raw X and Y") <- (
-    LoadDataset("iris", DATASET),
+    load_dataset("iris", DATASET),
     DATASET is ("Dataset", X, Y),
-    Fit(Est("random_forest", {"n_estimators": 10}), X, Y, FITTED),
-    Score(FITTED, DATASET, SCORE),
+    fit(Est("random_forest", {"n_estimators": 10}), X, Y, FITTED),
+    score(FITTED, DATASET, SCORE),
     SCORE > 0.5
 )  # nv
 
-# ── Learned attributes ──────────────────────────────────────────────
+# ── learned attributes ──────────────────────────────────────────────
 
 test("learned feature importances") <- (
-    LoadDataset("iris", DATASET),
-    Fit(Est("random_forest", {"n_estimators": 10}), DATASET, FITTED),
-    Learned(FITTED, "feature_importances", IMPORTANCES_UNUSED)
+    load_dataset("iris", DATASET),
+    fit(Est("random_forest", {"n_estimators": 10}), DATASET, FITTED),
+    learned(FITTED, "feature_importances", IMPORTANCES_UNUSED)
 )  # nv
 
 test("learned n_features_in") <- (
-    LoadDataset("iris", DATASET),
-    Fit(Est("random_forest", {"n_estimators": 10}), DATASET, FITTED),
-    Learned(FITTED, "n_features_in", N),
+    load_dataset("iris", DATASET),
+    fit(Est("random_forest", {"n_estimators": 10}), DATASET, FITTED),
+    learned(FITTED, "n_features_in", N),
     N == 4
 )  # nv
 
-# ── Param ────────────────────────────────────────────────────────────
+# ── param ────────────────────────────────────────────────────────────
 
 test("param from est term") <- (
-    Param(Est("svc", {"C": 2.0, "kernel": "rbf"}), "C", VAL),
+    param(Est("svc", {"C": 2.0, "kernel": "rbf"}), "C", VAL),
     VAL == 2.0
 )  # nv
 
-# ── MakeEst ──────────────────────────────────────────────────────────
+# ── make_est ──────────────────────────────────────────────────────────
 
 test("make est fills defaults") <- (
-    MakeEst("random_forest", {"n_estimators": 200}, EST_OBJ),
+    make_est("random_forest", {"n_estimators": 200}, EST_OBJ),
     EST_OBJ is ("Est", ALG, PARAMS_UNUSED),
     ALG == "random_forest"
 )  # nv
 
-# ── PredictProba ─────────────────────────────────────────────────────
+# ── predict_proba ─────────────────────────────────────────────────────
 
 test("predict proba on iris") <- (
-    LoadDataset("iris", DATASET),
-    Fit(Est("random_forest", {"n_estimators": 10}), DATASET, FITTED),
+    load_dataset("iris", DATASET),
+    fit(Est("random_forest", {"n_estimators": 10}), DATASET, FITTED),
     DATASET is ("Dataset", X, Y_UNUSED),
-    PredictProba(FITTED, X, PROBA_UNUSED)
+    predict_proba(FITTED, X, PROBA_UNUSED)
 )  # nv
 
 # ── SVC with decision_function ───────────────────────────────────────
 
 test("svc decision function on iris") <- (
-    LoadDataset("iris", DATASET),
-    Fit(Est("svc", {"kernel": "linear"}), DATASET, FITTED),
+    load_dataset("iris", DATASET),
+    fit(Est("svc", {"kernel": "linear"}), DATASET, FITTED),
     DATASET is ("Dataset", X, Y_UNUSED),
-    DecisionFunction(FITTED, X, SCORES_UNUSED)
+    decision_function(FITTED, X, SCORES_UNUSED)
 )  # nv

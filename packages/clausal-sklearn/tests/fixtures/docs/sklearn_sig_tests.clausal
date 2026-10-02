@@ -1,54 +1,54 @@
 # Companion tests for docs/sklearn.md display snippets.
 -double_quotes(atom)
 
--import_from(sklearn, [Est, Dataset, Fitted, Split, LoadDataset, Fit, Predict,
-                       Score, Algorithm, Learned, MakeDataset, SplitData,
-                       Pipeline, CrossValScore])
+-import_from(sklearn, [Est, Dataset, Fitted, Split, load_dataset, fit, predict,
+                       score, algorithm, learned, make_dataset, split_data,
+                       pipeline, cross_val_score])
 
-# ── Algorithm registry ───────────────────────────────────────────────────────
+# ── algorithm registry ───────────────────────────────────────────────────────
 
-test("random_forest is classifier") <- Algorithm("random_forest", "classifier")  # nv
+test("random_forest is classifier") <- algorithm("random_forest", "classifier")  # nv
 
-test("pca is transformer") <- Algorithm("pca", "transformer")  # nv
+test("pca is transformer") <- algorithm("pca", "transformer")  # nv
 
 # ── Data loading ─────────────────────────────────────────────────────────────
 
 test("load iris") <- (
-    LoadDataset("iris", D),
+    load_dataset("iris", D),
     D is ("Dataset", _, _)
 )  # nv
 
 test("make synthetic") <- (
-    MakeDataset("classification",
+    make_dataset("classification",
                 {"n_samples": 50, "n_features": 4, "random_state": 42},
                 D),
     D is ("Dataset", _, _)
 )  # nv
 
-# ── Fit and predict ──────────────────────────────────────────────────────────
+# ── fit and predict ──────────────────────────────────────────────────────────
 
 test("fit and predict") <- (
-    LoadDataset("iris", D),
-    Fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), D, F),
+    load_dataset("iris", D),
+    fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), D, F),
     D is ("Dataset", X, _),
-    Predict(F, X, PREDS),
+    predict(F, X, PREDS),
     nonvar(PREDS)
 )  # nv
 
-# ── Score ────────────────────────────────────────────────────────────────────
+# ── score ────────────────────────────────────────────────────────────────────
 
 test("score") <- (
-    LoadDataset("iris", D),
-    Fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), D, F),
-    Score(F, D, S),
+    load_dataset("iris", D),
+    fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), D, F),
+    score(F, D, S),
     S > 0.8
 )  # nv
 
-# ── Learned attributes ───────────────────────────────────────────────────────
+# ── learned attributes ───────────────────────────────────────────────────────
 
 test("feature importances") <- (
-    LoadDataset("iris", D),
-    Fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), D, F),
-    Learned(F, "feature_importances", FI),
+    load_dataset("iris", D),
+    fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), D, F),
+    learned(F, "feature_importances", FI),
     nonvar(FI)
 )  # nv

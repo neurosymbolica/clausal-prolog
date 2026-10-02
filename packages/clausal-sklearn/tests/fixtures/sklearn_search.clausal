@@ -1,57 +1,57 @@
 -double_quotes(atom)
--import_from(sklearn, [Est, Dataset, LoadDataset, Fit, Score, GridSearch,
-                       RandomSearch, BestParams, BestScore, SearchResults,
+-import_from(sklearn, [Est, Dataset, load_dataset, fit, score, grid_search,
+                       random_search, best_params, best_score, search_results,
                        kfold])
 
-# ── GridSearch ───────────────────────────────────────────────────────
+# ── grid_search ───────────────────────────────────────────────────────
 
 test("grid search svc on iris") <- (
-    LoadDataset("iris", DATASET),
-    GridSearch(Est("svc", {}),
+    load_dataset("iris", DATASET),
+    grid_search(Est("svc", {}),
                {"C": [0.1, 1.0, 10.0], "kernel": ["rbf", "linear"]},
                DATASET, kfold(3), BEST),
-    Score(BEST, DATASET, SCORE),
+    score(BEST, DATASET, SCORE),
     SCORE > 0.5
 )  # nv
 
-# ── GridSearch with metric ───────────────────────────────────────────
+# ── grid_search with metric ───────────────────────────────────────────
 
 test("grid search with accuracy metric") <- (
-    LoadDataset("iris", DATASET),
-    GridSearch(Est("svc", {}),
+    load_dataset("iris", DATASET),
+    grid_search(Est("svc", {}),
                {"C": [0.1, 1.0], "kernel": ["rbf"]},
                DATASET, 3, "accuracy", BEST),
-    BestScore(BEST, SCORE),
+    best_score(BEST, SCORE),
     SCORE > 0.5
 )  # nv
 
-# ── BestParams ───────────────────────────────────────────────────────
+# ── best_params ───────────────────────────────────────────────────────
 
 test("best params from grid search") <- (
-    LoadDataset("iris", DATASET),
-    GridSearch(Est("svc", {}),
+    load_dataset("iris", DATASET),
+    grid_search(Est("svc", {}),
                {"C": [0.1, 1.0], "kernel": ["rbf", "linear"]},
                DATASET, kfold(3), BEST),
-    BestParams(BEST, PARAMS_UNUSED)
+    best_params(BEST, PARAMS_UNUSED)
 )  # nv
 
-# ── SearchResults ────────────────────────────────────────────────────
+# ── search_results ────────────────────────────────────────────────────
 
 test("search results from grid search") <- (
-    LoadDataset("iris", DATASET),
-    GridSearch(Est("svc", {}),
+    load_dataset("iris", DATASET),
+    grid_search(Est("svc", {}),
                {"C": [0.1, 1.0], "kernel": ["rbf"]},
                DATASET, kfold(3), BEST),
-    SearchResults(BEST, RESULTS_UNUSED)
+    search_results(BEST, RESULTS_UNUSED)
 )  # nv
 
-# ── RandomSearch ─────────────────────────────────────────────────────
+# ── random_search ─────────────────────────────────────────────────────
 
 test("random search on iris") <- (
-    LoadDataset("iris", DATASET),
-    RandomSearch(Est("random_forest", {}),
+    load_dataset("iris", DATASET),
+    random_search(Est("random_forest", {}),
                  {"n_estimators": [10, 50, 100], "max_depth": [3, 5, 10]},
                  DATASET, kfold(3), 5, BEST),
-    Score(BEST, DATASET, SCORE),
+    score(BEST, DATASET, SCORE),
     SCORE > 0.5
 )  # nv

@@ -2,7 +2,7 @@
 
 Provides predicates for machine learning via scikit-learn::
 
-    -import_from(sklearn, [Fit, Predict, Score, LoadDataset, Algorithm,
+    -import_from(sklearn, [fit, predict, score, load_dataset, algorithm,
                            Est, Dataset, Fitted, Split])
 
 Term constructors (tagged tuples for deep unification):
@@ -14,17 +14,17 @@ Term constructors (tagged tuples for deep unification):
 Layers
 ------
 1. **Term constructors & algorithm registry** — Est, Dataset, Fitted, Split,
-   Algorithm/2, DefaultParams/2, ParamKey/3
-2. **Data loading & splitting** — LoadDataset/2, MakeDataset/3, LoadCsv/3,
-   SplitData/3,4, KFoldSplit/3, StratifiedSplit/3
-3. **Fitting & prediction** — Fit/3,4, Predict/3, Transform/3,
-   FitTransform/4, PredictProba/3, DecisionFunction/3
-4. **Scoring & metrics** — Score/3,4, Metric/4, CrossValScore/4,5,
-   CrossValidate/5, ConfusionMatrix/3, ClassificationReport/4
-5. **Pipelines & search** — Pipeline/2, PipelineStep/3, GridSearch/5,6,
-   RandomSearch/6, SearchResults/2, BestParams/2, BestScore/2
-6. **Extras** — Learned/3, Param/3, MakeEst/3, EncodeLabels/3, Binarize/3,
-   Normalize/3, PolynomialFeatures/3, SaveFitted/2, LoadFitted/2
+   algorithm/2, default_params/2, param_key/3
+2. **Data loading & splitting** — load_dataset/2, make_dataset/3, load_csv/3,
+   split_data/3,4, k_fold_split/3, stratified_split/3
+3. **Fitting & prediction** — fit/3,4, predict/3, transform/3,
+   fit_transform/4, predict_proba/3, decision_function/3
+4. **Scoring & metrics** — score/3,4, metric/4, cross_val_score/4,5,
+   cross_validate/5, confusion_matrix/3, classification_report/4
+5. **Pipelines & search** — pipeline/2, pipeline_step/3, grid_search/5,6,
+   random_search/6, search_results/2, best_params/2, best_score/2
+6. **Extras** — learned/3, param/3, make_est/3, encode_labels/3, binarize/3,
+   normalize/3, polynomial_features/3, save_fitted/2, load_fitted/2
 """
 
 from __future__ import annotations
@@ -163,7 +163,7 @@ group_kfold = _CVFunc("group_kfold")
 loo = "loo"
 
 
-# ── Algorithm registry ────────────────────────────────────────────────────
+# ── algorithm registry ────────────────────────────────────────────────────
 
 # Maps algorithm name -> (sklearn class import path, default role)
 _ALGORITHM_REGISTRY: dict[str, tuple[str, str, str]] = {
@@ -208,11 +208,11 @@ _ALGORITHM_ALIASES = {
     "knn": "knn_classifier",
 }
 
-# Algorithm/role fact table for nondeterministic enumeration
+# algorithm/role fact table for nondeterministic enumeration
 _ALGORITHM_FACTS = []
 for _name, (_mod, _cls, _role) in _ALGORITHM_REGISTRY.items():
     _ALGORITHM_FACTS.append((_name, _role))
-# Pipeline can be any role
+# pipeline can be any role
 _ALGORITHM_FACTS.append(("pipeline", "classifier"))
 _ALGORITHM_FACTS.append(("pipeline", "regressor"))
 _ALGORITHM_FACTS.append(("pipeline", "transformer"))
@@ -244,15 +244,15 @@ def _instantiate_estimator(algorithm, params):
     """Create a sklearn estimator instance from algorithm name + params dict."""
     algorithm = str(algorithm)
     if algorithm == "pipeline":
-        # Handled separately via Pipeline predicate
-        raise ValueError("Use Pipeline/2 to construct pipeline estimators")
+        # Handled separately via pipeline predicate
+        raise ValueError("Use pipeline/2 to construct pipeline estimators")
     cls = _get_sklearn_class(algorithm)
     if isinstance(params, dict):
         return cls(**params)
     return cls()
 
 
-# ── Metric registry ──────────────────────────────────────────────────────
+# ── metric registry ──────────────────────────────────────────────────────
 
 _METRIC_REGISTRY = {
     "accuracy":     ("sklearn.metrics", "accuracy_score", {}),
@@ -392,16 +392,16 @@ def _unpack_split(s):
 # ── Helper: build pipeline from steps ─────────────────────────────────────
 
 def _build_pipeline(steps):
-    """Build a sklearn Pipeline from a list of (name, Est(...)) tuples."""
+    """Build a sklearn pipeline from a list of (name, Est(...)) tuples."""
     _ensure_sklearn()
-    SkPipeline = _sk_pipeline.Pipeline
+    SkPipeline = _sk_pipeline.pipeline
     sk_steps = []
     for step in steps:
         step = deref(step)
         if isinstance(step, tuple) and len(step) == 2:
             name, est = str(deref(step[0])), deref(step[1])
         else:
-            raise ValueError(f"Pipeline step must be (name, Est(...)): {step!r}")
+            raise ValueError(f"pipeline step must be (name, Est(...)): {step!r}")
         algo, params = _unpack_est(est)
         sk_steps.append((name, _instantiate_estimator(algo, params)))
     return SkPipeline(sk_steps)
@@ -418,11 +418,11 @@ def _deref_params(params):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Layer 1: Algorithm introspection (nondeterministic fact tables)
+# Layer 1: algorithm introspection (nondeterministic fact tables)
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _algorithm_2(this_generator, _proceed, _fail, _catcher, algo_var, role_var, trail):
-    """Algorithm/2: enumerate (algorithm, role) pairs."""
+    """algorithm/2: enumerate (algorithm, role) pairs."""
     algo_v = deref(algo_var)
     role_v = deref(role_var)
     for name, role in _ALGORITHM_FACTS:
@@ -434,7 +434,7 @@ def _algorithm_2(this_generator, _proceed, _fail, _catcher, algo_var, role_var, 
 
 
 def _default_params_2(algo, params_var, trail, k):
-    """DefaultParams/2: get default params for an algorithm."""
+    """default_params/2: get default params for an algorithm."""
     algo = str(deref(algo))
     algo = _resolve_algorithm(algo)
     if algo == "pipeline":
@@ -449,7 +449,7 @@ def _default_params_2(algo, params_var, trail, k):
 
 
 def _param_key_3(this_generator, _proceed, _fail, _catcher, algo_var, key_var, domain_var, trail):
-    """ParamKey/3: enumerate valid parameter keys for an algorithm."""
+    """param_key/3: enumerate valid parameter keys for an algorithm."""
     algo = str(deref(algo_var))
     algo = _resolve_algorithm(algo)
     if algo == "pipeline":
@@ -471,7 +471,7 @@ def _param_key_3(this_generator, _proceed, _fail, _catcher, algo_var, key_var, d
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _load_dataset_2(name, dataset_var, trail, k):
-    """LoadDataset/2: load a built-in sklearn dataset."""
+    """load_dataset/2: load a built-in sklearn dataset."""
     _ensure_sklearn()
     skd = _sk_datasets
     name = str(deref(name))
@@ -486,7 +486,7 @@ def _load_dataset_2(name, dataset_var, trail, k):
 
 
 def _make_dataset_3(kind, options, dataset_var, trail, k):
-    """MakeDataset/3: generate a synthetic dataset."""
+    """make_dataset/3: generate a synthetic dataset."""
     _ensure_sklearn()
     skd = _sk_datasets
     kind = str(deref(kind))
@@ -502,7 +502,7 @@ def _make_dataset_3(kind, options, dataset_var, trail, k):
 
 
 def _load_csv_3(path, options, dataset_var, trail, k):
-    """LoadCsv/3: load CSV into a Dataset term."""
+    """load_csv/3: load CSV into a Dataset term."""
     import pandas as pd
     path = str(deref(path))
     options = _deref_params(options)
@@ -538,7 +538,7 @@ def _load_csv_3(path, options, dataset_var, trail, k):
 
 
 def _split_data_3(dataset, test_size, split_var, trail, k):
-    """SplitData/3: single train/test split."""
+    """split_data/3: single train/test split."""
     _ensure_sklearn()
     train_test_split = _sk_model_selection.train_test_split
     X, y = _unpack_dataset(dataset)
@@ -554,7 +554,7 @@ def _split_data_3(dataset, test_size, split_var, trail, k):
 
 
 def _split_data_4(dataset, test_size, seed, split_var, trail, k):
-    """SplitData/4: train/test split with random seed."""
+    """split_data/4: train/test split with random seed."""
     _ensure_sklearn()
     train_test_split = _sk_model_selection.train_test_split
     X, y = _unpack_dataset(dataset)
@@ -573,7 +573,7 @@ def _split_data_4(dataset, test_size, seed, split_var, trail, k):
 
 
 def _kfold_split_3(this_generator, _proceed, _fail, _catcher, dataset, k_val, split_var, trail):
-    """KFoldSplit/3: K-fold splits via backtracking."""
+    """k_fold_split/3: K-fold splits via backtracking."""
     _ensure_sklearn()
     KFold = _sk_model_selection.KFold
     X, y = _unpack_dataset(dataset)
@@ -593,7 +593,7 @@ def _kfold_split_3(this_generator, _proceed, _fail, _catcher, dataset, k_val, sp
 
 
 def _stratified_split_3(this_generator, _proceed, _fail, _catcher, dataset, k_val, split_var, trail):
-    """StratifiedSplit/3: stratified K-fold via backtracking."""
+    """stratified_split/3: stratified K-fold via backtracking."""
     _ensure_sklearn()
     StratifiedKFold = _sk_model_selection.StratifiedKFold
     X, y = _unpack_dataset(dataset)
@@ -615,7 +615,7 @@ def _stratified_split_3(this_generator, _proceed, _fail, _catcher, dataset, k_va
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _fit_3(est_term, dataset, fitted_var, trail, k):
-    """Fit/3: fit an estimator on a Dataset term."""
+    """fit/3: fit an estimator on a Dataset term."""
     _ensure_sklearn()
     algo, params = _unpack_est(est_term)
     X, y = _unpack_dataset(dataset)
@@ -636,7 +636,7 @@ def _fit_3(est_term, dataset, fitted_var, trail, k):
 
 
 def _fit_4(est_term, x, y, fitted_var, trail, k):
-    """Fit/4: fit with raw X and Y."""
+    """fit/4: fit with raw X and Y."""
     _ensure_sklearn()
     algo, params = _unpack_est(est_term)
     x = deref(x)
@@ -658,7 +658,7 @@ def _fit_4(est_term, x, y, fitted_var, trail, k):
 
 
 def _predict_3(fitted, x, pred_var, trail, k):
-    """Predict/3: predict using a fitted estimator."""
+    """predict/3: predict using a fitted estimator."""
     _est, handle = _unpack_fitted(fitted)
     model = _get_model(handle)
     x = deref(x)
@@ -668,7 +668,7 @@ def _predict_3(fitted, x, pred_var, trail, k):
 
 
 def _transform_3(fitted, x, result_var, trail, k):
-    """Transform/3: transform data using a fitted transformer."""
+    """transform/3: transform data using a fitted transformer."""
     _est, handle = _unpack_fitted(fitted)
     model = _get_model(handle)
     x = deref(x)
@@ -678,7 +678,7 @@ def _transform_3(fitted, x, result_var, trail, k):
 
 
 def _fit_transform_4(est_term, dataset, transformed_var, fitted_var, trail, k):
-    """FitTransform/4: fit and transform in one step."""
+    """fit_transform/4: fit and transform in one step."""
     _ensure_sklearn()
     algo, params = _unpack_est(est_term)
     X, y = _unpack_dataset(dataset)
@@ -699,7 +699,7 @@ def _fit_transform_4(est_term, dataset, transformed_var, fitted_var, trail, k):
 
 
 def _predict_proba_3(fitted, x, proba_var, trail, k):
-    """PredictProba/3: predict class probabilities."""
+    """predict_proba/3: predict class probabilities."""
     _est, handle = _unpack_fitted(fitted)
     model = _get_model(handle)
     x = deref(x)
@@ -709,7 +709,7 @@ def _predict_proba_3(fitted, x, proba_var, trail, k):
 
 
 def _decision_function_3(fitted, x, scores_var, trail, k):
-    """DecisionFunction/3: raw decision scores."""
+    """decision_function/3: raw decision scores."""
     _est, handle = _unpack_fitted(fitted)
     model = _get_model(handle)
     x = deref(x)
@@ -723,7 +723,7 @@ def _decision_function_3(fitted, x, scores_var, trail, k):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _score_3(fitted, dataset, score_var, trail, k):
-    """Score/3: score with default metric."""
+    """score/3: score with default metric."""
     _est, handle = _unpack_fitted(fitted)
     model = _get_model(handle)
     X, y = _unpack_dataset(dataset)
@@ -733,7 +733,7 @@ def _score_3(fitted, dataset, score_var, trail, k):
 
 
 def _score_4(fitted, dataset, metric, score_var, trail, k):
-    """Score/4: score with explicit metric."""
+    """score/4: score with explicit metric."""
     _est, handle = _unpack_fitted(fitted)
     model = _get_model(handle)
     X, y = _unpack_dataset(dataset)
@@ -754,7 +754,7 @@ def _score_4(fitted, dataset, metric, score_var, trail, k):
 
 
 def _metric_4(metric_name, y_true, y_pred, score_var, trail, k):
-    """Metric/4: compute a metric from ground truth and predictions."""
+    """metric/4: compute a metric from ground truth and predictions."""
     _ensure_sklearn()
     metric_name = str(deref(metric_name))
     y_true = deref(y_true)
@@ -766,7 +766,7 @@ def _metric_4(metric_name, y_true, y_pred, score_var, trail, k):
 
 
 def _cross_val_score_4(est_term, dataset, cv_term, scores_var, trail, k):
-    """CrossValScore/4: cross-validation with default metric."""
+    """cross_val_score/4: cross-validation with default metric."""
     _ensure_sklearn()
     cross_val_score = _sk_model_selection.cross_val_score
     algo, params = _unpack_est(est_term)
@@ -786,7 +786,7 @@ def _cross_val_score_4(est_term, dataset, cv_term, scores_var, trail, k):
 
 
 def _cross_val_score_5(est_term, dataset, cv_term, metric, scores_var, trail, k):
-    """CrossValScore/5: cross-validation with explicit metric."""
+    """cross_val_score/5: cross-validation with explicit metric."""
     _ensure_sklearn()
     cross_val_score = _sk_model_selection.cross_val_score
     algo, params = _unpack_est(est_term)
@@ -810,7 +810,7 @@ def _cross_val_score_5(est_term, dataset, cv_term, metric, scores_var, trail, k)
 
 
 def _cross_validate_5(est_term, dataset, cv_term, metrics_list, results_var, trail, k):
-    """CrossValidate/5: cross-validate with multiple metrics."""
+    """cross_validate/5: cross-validate with multiple metrics."""
     _ensure_sklearn()
     sk_cross_validate = _sk_model_selection.cross_validate
     algo, params = _unpack_est(est_term)
@@ -848,7 +848,7 @@ def _cross_validate_5(est_term, dataset, cv_term, metrics_list, results_var, tra
 
 
 def _confusion_matrix_3(y_true, y_pred, matrix_var, trail, k):
-    """ConfusionMatrix/3: compute confusion matrix."""
+    """confusion_matrix/3: compute confusion matrix."""
     _ensure_sklearn()
     confusion_matrix = _sk_metrics.confusion_matrix
     y_true = deref(y_true)
@@ -859,7 +859,7 @@ def _confusion_matrix_3(y_true, y_pred, matrix_var, trail, k):
 
 
 def _classification_report_4(y_true, y_pred, classes, report_var, trail, k):
-    """ClassificationReport/4: per-class precision/recall/F1/support."""
+    """classification_report/4: per-class precision/recall/F1/support."""
     _ensure_sklearn()
     precision_recall_fscore_support = _sk_metrics.precision_recall_fscore_support
     y_true = deref(y_true)
@@ -878,7 +878,7 @@ def _classification_report_4(y_true, y_pred, classes, report_var, trail, k):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _pipeline_2(steps, est_var, trail, k):
-    """Pipeline/2: construct a pipeline Est term."""
+    """pipeline/2: construct a pipeline Est term."""
     steps = deref(steps)
     result = Est("pipeline", {"steps": steps})
     if unify(est_var, result, trail):
@@ -886,7 +886,7 @@ def _pipeline_2(steps, est_var, trail, k):
 
 
 def _pipeline_step_3(fitted_pipeline, name, step_fitted_var, trail, k):
-    """PipelineStep/3: extract a named step from a fitted pipeline."""
+    """pipeline_step/3: extract a named step from a fitted pipeline."""
     _est, handle = _unpack_fitted(fitted_pipeline)
     model = _get_model(handle)
     name = str(deref(name))
@@ -900,7 +900,7 @@ def _pipeline_step_3(fitted_pipeline, name, step_fitted_var, trail, k):
 
 
 def _grid_search_5(est_term, param_grid, dataset, cv_term, best_fitted_var, trail, k):
-    """GridSearch/5: exhaustive grid search."""
+    """grid_search/5: exhaustive grid search."""
     _ensure_sklearn()
     GridSearchCV = _sk_model_selection.GridSearchCV
     algo, params = _unpack_est(est_term)
@@ -925,7 +925,7 @@ def _grid_search_5(est_term, param_grid, dataset, cv_term, best_fitted_var, trai
 
 
 def _grid_search_6(est_term, param_grid, dataset, cv_term, metric, best_fitted_var, trail, k):
-    """GridSearch/6: grid search with explicit metric."""
+    """grid_search/6: grid search with explicit metric."""
     _ensure_sklearn()
     GridSearchCV = _sk_model_selection.GridSearchCV
     algo, params = _unpack_est(est_term)
@@ -951,7 +951,7 @@ def _grid_search_6(est_term, param_grid, dataset, cv_term, metric, best_fitted_v
 
 
 def _random_search_6(est_term, param_dists, dataset, cv_term, n_iter, best_fitted_var, trail, k):
-    """RandomSearch/6: random search over parameter distributions."""
+    """random_search/6: random search over parameter distributions."""
     _ensure_sklearn()
     RandomizedSearchCV = _sk_model_selection.RandomizedSearchCV
     algo, params = _unpack_est(est_term)
@@ -977,7 +977,7 @@ def _random_search_6(est_term, param_dists, dataset, cv_term, n_iter, best_fitte
 
 
 def _search_results_2(fitted_search, results_var, trail, k):
-    """SearchResults/2: full results from a grid/random search."""
+    """search_results/2: full results from a grid/random search."""
     _est, handle = _unpack_fitted(fitted_search)
     model = _get_model(handle)
     cv_results = model.cv_results_
@@ -992,7 +992,7 @@ def _search_results_2(fitted_search, results_var, trail, k):
 
 
 def _best_params_2(fitted_search, params_var, trail, k):
-    """BestParams/2: best parameters from a search."""
+    """best_params/2: best parameters from a search."""
     _est, handle = _unpack_fitted(fitted_search)
     model = _get_model(handle)
     best = dict(model.best_params_)
@@ -1001,7 +1001,7 @@ def _best_params_2(fitted_search, params_var, trail, k):
 
 
 def _best_score_2(fitted_search, score_var, trail, k):
-    """BestScore/2: best score from a search."""
+    """best_score/2: best score from a search."""
     _est, handle = _unpack_fitted(fitted_search)
     model = _get_model(handle)
     score = float(model.best_score_)
@@ -1014,7 +1014,7 @@ def _best_score_2(fitted_search, score_var, trail, k):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _learned_3(fitted, attr, value_var, trail, k):
-    """Learned/3: read a learned attribute from a fitted estimator."""
+    """learned/3: read a learned attribute from a fitted estimator."""
     _est, handle = _unpack_fitted(fitted)
     model = _get_model(handle)
     attr = str(deref(attr))
@@ -1031,7 +1031,7 @@ def _learned_3(fitted, attr, value_var, trail, k):
 
 
 def _param_3(est_or_fitted, key, value_var, trail, k):
-    """Param/3: read a hyperparameter from an Est or Fitted term."""
+    """param/3: read a hyperparameter from an Est or Fitted term."""
     term = deref(est_or_fitted)
     if isinstance(term, tuple) and len(term) == 3:
         tag = term[0]
@@ -1055,7 +1055,7 @@ def _param_3(est_or_fitted, key, value_var, trail, k):
 
 
 def _make_est_3(algo, params, est_var, trail, k):
-    """MakeEst/3: construct an Est term, filling defaults."""
+    """make_est/3: construct an Est term, filling defaults."""
     _ensure_sklearn()
     algo = str(deref(algo))
     algo = _resolve_algorithm(algo)
@@ -1075,7 +1075,7 @@ def _make_est_3(algo, params, est_var, trail, k):
 
 
 def _encode_labels_3(labels, encoded_var, mapping_var, trail, k):
-    """EncodeLabels/3: encode symbolic labels to integers."""
+    """encode_labels/3: encode symbolic labels to integers."""
     _ensure_sklearn()
     LabelEncoder = _sk_preprocessing.LabelEncoder
     labels = deref(labels)
@@ -1087,7 +1087,7 @@ def _encode_labels_3(labels, encoded_var, mapping_var, trail, k):
 
 
 def _binarize_3(x, threshold, result_var, trail, k):
-    """Binarize/3: threshold a matrix to 0/1."""
+    """binarize/3: threshold a matrix to 0/1."""
     _ensure_sklearn()
     binarize = _sk_preprocessing.binarize
     x = deref(x)
@@ -1098,7 +1098,7 @@ def _binarize_3(x, threshold, result_var, trail, k):
 
 
 def _normalize_3(x, norm, result_var, trail, k):
-    """Normalize/3: row-wise normalization."""
+    """normalize/3: row-wise normalization."""
     _ensure_sklearn()
     normalize = _sk_preprocessing.normalize
     x = deref(x)
@@ -1109,9 +1109,9 @@ def _normalize_3(x, norm, result_var, trail, k):
 
 
 def _polynomial_features_3(x, degree, result_var, trail, k):
-    """PolynomialFeatures/3: generate polynomial features."""
+    """polynomial_features/3: generate polynomial features."""
     _ensure_sklearn()
-    SkPolyFeatures = _sk_preprocessing.PolynomialFeatures
+    SkPolyFeatures = _sk_preprocessing.polynomial_features
     x = deref(x)
     degree = int(deref(degree))
     pf = SkPolyFeatures(degree=degree)
@@ -1121,7 +1121,7 @@ def _polynomial_features_3(x, degree, result_var, trail, k):
 
 
 def _save_fitted_2(fitted, path, trail, k):
-    """SaveFitted/2: save a fitted estimator to disk."""
+    """save_fitted/2: save a fitted estimator to disk."""
     import joblib
     _est, handle = _unpack_fitted(fitted)
     model = _get_model(handle)
@@ -1131,7 +1131,7 @@ def _save_fitted_2(fitted, path, trail, k):
 
 
 def _load_fitted_2(path, fitted_var, trail, k):
-    """LoadFitted/2: load a fitted estimator from disk."""
+    """load_fitted/2: load a fitted estimator from disk."""
     import joblib
     path = str(deref(path))
     model = joblib.load(path)
@@ -1148,118 +1148,118 @@ def _load_fitted_2(path, fitted_var, trail, k):
 # Build and export predicate objects
 # ═══════════════════════════════════════════════════════════════════════════
 
-Algorithm = ModulePredicate("Algorithm")
-Algorithm._register(2, _algorithm_2)
+algorithm = ModulePredicate("algorithm")
+algorithm._register(2, _algorithm_2)
 
-DefaultParams = ModulePredicate("DefaultParams")
-DefaultParams._register(2, simple_to_trampoline(_default_params_2))
+default_params = ModulePredicate("default_params")
+default_params._register(2, simple_to_trampoline(_default_params_2))
 
-ParamKey = ModulePredicate("ParamKey")
-ParamKey._register(3, _param_key_3)
+param_key = ModulePredicate("param_key")
+param_key._register(3, _param_key_3)
 
-LoadDataset = ModulePredicate("LoadDataset")
-LoadDataset._register(2, simple_to_trampoline(_load_dataset_2))
+load_dataset = ModulePredicate("load_dataset")
+load_dataset._register(2, simple_to_trampoline(_load_dataset_2))
 
-MakeDataset = ModulePredicate("MakeDataset")
-MakeDataset._register(3, simple_to_trampoline(_make_dataset_3))
+make_dataset = ModulePredicate("make_dataset")
+make_dataset._register(3, simple_to_trampoline(_make_dataset_3))
 
-LoadCsv = ModulePredicate("LoadCsv")
-LoadCsv._register(3, simple_to_trampoline(_load_csv_3))
+load_csv = ModulePredicate("load_csv")
+load_csv._register(3, simple_to_trampoline(_load_csv_3))
 
-SplitData = ModulePredicate("SplitData")
-SplitData._register(3, simple_to_trampoline(_split_data_3))
-SplitData._register(4, simple_to_trampoline(_split_data_4))
+split_data = ModulePredicate("split_data")
+split_data._register(3, simple_to_trampoline(_split_data_3))
+split_data._register(4, simple_to_trampoline(_split_data_4))
 
-KFoldSplit = ModulePredicate("KFoldSplit")
-KFoldSplit._register(3, _kfold_split_3)
+k_fold_split = ModulePredicate("k_fold_split")
+k_fold_split._register(3, _kfold_split_3)
 
-StratifiedSplit = ModulePredicate("StratifiedSplit")
-StratifiedSplit._register(3, _stratified_split_3)
+stratified_split = ModulePredicate("stratified_split")
+stratified_split._register(3, _stratified_split_3)
 
-Fit = ModulePredicate("Fit")
-Fit._register(3, simple_to_trampoline(_fit_3))
-Fit._register(4, simple_to_trampoline(_fit_4))
+fit = ModulePredicate("fit")
+fit._register(3, simple_to_trampoline(_fit_3))
+fit._register(4, simple_to_trampoline(_fit_4))
 
-Predict = ModulePredicate("Predict")
-Predict._register(3, simple_to_trampoline(_predict_3))
+predict = ModulePredicate("predict")
+predict._register(3, simple_to_trampoline(_predict_3))
 
-Transform = ModulePredicate("Transform")
-Transform._register(3, simple_to_trampoline(_transform_3))
+transform = ModulePredicate("transform")
+transform._register(3, simple_to_trampoline(_transform_3))
 
-FitTransform = ModulePredicate("FitTransform")
-FitTransform._register(4, simple_to_trampoline(_fit_transform_4))
+fit_transform = ModulePredicate("fit_transform")
+fit_transform._register(4, simple_to_trampoline(_fit_transform_4))
 
-PredictProba = ModulePredicate("PredictProba")
-PredictProba._register(3, simple_to_trampoline(_predict_proba_3))
+predict_proba = ModulePredicate("predict_proba")
+predict_proba._register(3, simple_to_trampoline(_predict_proba_3))
 
-DecisionFunction = ModulePredicate("DecisionFunction")
-DecisionFunction._register(3, simple_to_trampoline(_decision_function_3))
+decision_function = ModulePredicate("decision_function")
+decision_function._register(3, simple_to_trampoline(_decision_function_3))
 
-Score = ModulePredicate("Score")
-Score._register(3, simple_to_trampoline(_score_3))
-Score._register(4, simple_to_trampoline(_score_4))
+score = ModulePredicate("score")
+score._register(3, simple_to_trampoline(_score_3))
+score._register(4, simple_to_trampoline(_score_4))
 
-Metric = ModulePredicate("Metric")
-Metric._register(4, simple_to_trampoline(_metric_4))
+metric = ModulePredicate("metric")
+metric._register(4, simple_to_trampoline(_metric_4))
 
-CrossValScore = ModulePredicate("CrossValScore")
-CrossValScore._register(4, simple_to_trampoline(_cross_val_score_4))
-CrossValScore._register(5, simple_to_trampoline(_cross_val_score_5))
+cross_val_score = ModulePredicate("cross_val_score")
+cross_val_score._register(4, simple_to_trampoline(_cross_val_score_4))
+cross_val_score._register(5, simple_to_trampoline(_cross_val_score_5))
 
-CrossValidate = ModulePredicate("CrossValidate")
-CrossValidate._register(5, simple_to_trampoline(_cross_validate_5))
+cross_validate = ModulePredicate("cross_validate")
+cross_validate._register(5, simple_to_trampoline(_cross_validate_5))
 
-ConfusionMatrix = ModulePredicate("ConfusionMatrix")
-ConfusionMatrix._register(3, simple_to_trampoline(_confusion_matrix_3))
+confusion_matrix = ModulePredicate("confusion_matrix")
+confusion_matrix._register(3, simple_to_trampoline(_confusion_matrix_3))
 
-ClassificationReport = ModulePredicate("ClassificationReport")
-ClassificationReport._register(4, simple_to_trampoline(_classification_report_4))
+classification_report = ModulePredicate("classification_report")
+classification_report._register(4, simple_to_trampoline(_classification_report_4))
 
-Pipeline = ModulePredicate("Pipeline")
-Pipeline._register(2, simple_to_trampoline(_pipeline_2))
+pipeline = ModulePredicate("pipeline")
+pipeline._register(2, simple_to_trampoline(_pipeline_2))
 
-PipelineStep = ModulePredicate("PipelineStep")
-PipelineStep._register(3, simple_to_trampoline(_pipeline_step_3))
+pipeline_step = ModulePredicate("pipeline_step")
+pipeline_step._register(3, simple_to_trampoline(_pipeline_step_3))
 
-GridSearch = ModulePredicate("GridSearch")
-GridSearch._register(5, simple_to_trampoline(_grid_search_5))
-GridSearch._register(6, simple_to_trampoline(_grid_search_6))
+grid_search = ModulePredicate("grid_search")
+grid_search._register(5, simple_to_trampoline(_grid_search_5))
+grid_search._register(6, simple_to_trampoline(_grid_search_6))
 
-RandomSearch = ModulePredicate("RandomSearch")
-RandomSearch._register(6, simple_to_trampoline(_random_search_6))
+random_search = ModulePredicate("random_search")
+random_search._register(6, simple_to_trampoline(_random_search_6))
 
-SearchResults = ModulePredicate("SearchResults")
-SearchResults._register(2, simple_to_trampoline(_search_results_2))
+search_results = ModulePredicate("search_results")
+search_results._register(2, simple_to_trampoline(_search_results_2))
 
-BestParams = ModulePredicate("BestParams")
-BestParams._register(2, simple_to_trampoline(_best_params_2))
+best_params = ModulePredicate("best_params")
+best_params._register(2, simple_to_trampoline(_best_params_2))
 
-BestScore = ModulePredicate("BestScore")
-BestScore._register(2, simple_to_trampoline(_best_score_2))
+best_score = ModulePredicate("best_score")
+best_score._register(2, simple_to_trampoline(_best_score_2))
 
-Learned = ModulePredicate("Learned")
-Learned._register(3, simple_to_trampoline(_learned_3))
+learned = ModulePredicate("learned")
+learned._register(3, simple_to_trampoline(_learned_3))
 
-Param = ModulePredicate("Param")
-Param._register(3, simple_to_trampoline(_param_3))
+param = ModulePredicate("param")
+param._register(3, simple_to_trampoline(_param_3))
 
-MakeEst = ModulePredicate("MakeEst")
-MakeEst._register(3, simple_to_trampoline(_make_est_3))
+make_est = ModulePredicate("make_est")
+make_est._register(3, simple_to_trampoline(_make_est_3))
 
-EncodeLabels = ModulePredicate("EncodeLabels")
-EncodeLabels._register(3, simple_to_trampoline(_encode_labels_3))
+encode_labels = ModulePredicate("encode_labels")
+encode_labels._register(3, simple_to_trampoline(_encode_labels_3))
 
-Binarize = ModulePredicate("Binarize")
-Binarize._register(3, simple_to_trampoline(_binarize_3))
+binarize = ModulePredicate("binarize")
+binarize._register(3, simple_to_trampoline(_binarize_3))
 
-Normalize = ModulePredicate("Normalize")
-Normalize._register(3, simple_to_trampoline(_normalize_3))
+normalize = ModulePredicate("normalize")
+normalize._register(3, simple_to_trampoline(_normalize_3))
 
-PolynomialFeatures = ModulePredicate("PolynomialFeatures")
-PolynomialFeatures._register(3, simple_to_trampoline(_polynomial_features_3))
+polynomial_features = ModulePredicate("polynomial_features")
+polynomial_features._register(3, simple_to_trampoline(_polynomial_features_3))
 
-SaveFitted = ModulePredicate("SaveFitted")
-SaveFitted._register(2, simple_to_trampoline(_save_fitted_2))
+save_fitted = ModulePredicate("save_fitted")
+save_fitted._register(2, simple_to_trampoline(_save_fitted_2))
 
-LoadFitted = ModulePredicate("LoadFitted")
-LoadFitted._register(2, simple_to_trampoline(_load_fitted_2))
+load_fitted = ModulePredicate("load_fitted")
+load_fitted._register(2, simple_to_trampoline(_load_fitted_2))
