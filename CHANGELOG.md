@@ -1015,6 +1015,13 @@ since 0.4.0 finish three moves:
 
 ### Changed
 
+- **The `.pl` translator reads which twins hide a `.pl` from the finder
+  order.** When a `use_module` names a `.pl` file, its `module/2` export
+  list is read only if no twin the import hook loads first sits beside it.
+  That set was the literal `(".clausal", ".seam")`; it is now every
+  extension `clausal._suffixes.SOURCE_SUFFIXES` lists before `.pl`, read at
+  each call. Same answer today; it cannot drift from the hook.
+
 - **The test suite writes seam source under the seam suffix.** A test that
   writes seam (Python-syntax) source to a temporary file, or globs for seam
   files, names the suffix through `tests/_suffix.py` (`SEAM`, which reads

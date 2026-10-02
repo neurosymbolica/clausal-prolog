@@ -1613,14 +1613,20 @@ class _PrologToClausal:
         roots = [root] if root is not None else []
         roots.extend(os.path.abspath(e or os.getcwd()) for e in sys.path
                      if isinstance(e, str))
+        # A twin in any extension the import hook's finder tries BEFORE
+        # ``.pl`` is what an import loads, so the ``.pl`` is not the module.
+        # Read from the finder-order constants at each call, never spelled
+        # here, so a new or reordered surface cannot drift from the hook.
+        from clausal import _suffixes  # noqa: PLC0415
+        order = _suffixes.SOURCE_SUFFIXES
+        pl = _suffixes.PROLOG_SUFFIX
+        twins = order[:order.index(pl)]
         for root in roots:
             base = os.path.join(root, *parts)
-            if os.path.isfile(base + ".pl"):
-                # a .clausal/.seam twin is what the import hook loads
-                if any(os.path.isfile(base + ext)
-                       for ext in (".clausal", ".seam")):
+            if os.path.isfile(base + pl):
+                if any(os.path.isfile(base + ext) for ext in twins):
                     return None
-                return base + ".pl"
+                return base + pl
         return None
 
     def _dotted_or_refuse(self, path: str, directive: str,
