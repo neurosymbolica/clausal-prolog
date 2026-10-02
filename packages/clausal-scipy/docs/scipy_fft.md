@@ -60,8 +60,8 @@ Abbreviations that are the universal name are kept as-is; others are spelled out
 | `idct` | `DiscreteCosineTransform` backward |
 | `dst` | `DiscreteSineTransform` forward |
 | `idst` | `DiscreteSineTransform` backward |
-| `fftfreq` | `FFTFrequencies` |
-| `rfftfreq` | `RealFFTFrequencies` |
+| `fftfreq` | `fft_frequencies` |
+| `rfftfreq` | `real_fft_frequencies` |
 | `fftshift` | `FFTShift` forward |
 | `ifftshift` | `FFTShift` backward |
 
@@ -69,7 +69,7 @@ Abbreviations that are the universal name are kept as-is; others are spelled out
 
 in_ `.clausal` source, any identifier whose alphabetic characters are _all_ uppercase is parsed as a [logic variable](syntax.md), not a predicate name. `FFT`, `FFT2D`, and `FFTND` are entirely uppercase, so they would be treated as unbound variables rather than callable predicates. Spelling them as `FFTransform`, `FFTransform2D`, and `FFTransformND` introduces lowercase letters, making them unambiguously predicate names.
 
-All other predicates in this module (`RealFFT`, `FFTShift`, `FFTFrequencies`, etc.) already contain lowercase letters from their prefixes and suffixes, so they work without this adjustment.
+All other predicates in this module (`RealFFT`, `FFTShift`, `fft_frequencies`, etc.) already contain lowercase letters from their prefixes and suffixes, so they work without this adjustment.
 
 ---
 
@@ -84,12 +84,12 @@ All other predicates in this module (`RealFFT`, `FFTShift`, `FFTFrequencies`, et
 Example — frequency analysis of a sine wave:
 
 ```clausal
--import_from(scipy_fft, [FFTransform, FFTFrequencies])
+-import_from(scipy_fft, [FFTransform, fft_frequencies])
 
 frequency_spectrum(SIGNAL, FREQS, SPECTRUM) <- (
     FFTransform(SIGNAL, SPECTRUM),
     LEN is ++(len(SIGNAL)),
-    FFTFrequencies(LEN, FREQS)
+    fft_frequencies(LEN, FREQS)
 )
 ```
 
@@ -172,12 +172,12 @@ DCT types:
 Example — plot-ready spectrum:
 
 ```clausal
--import_from(scipy_fft, [FFTransform, FFTFrequencies, FFTShift])
+-import_from(scipy_fft, [FFTransform, fft_frequencies, FFTShift])
 
 centred_spectrum(SIGNAL, FREQS_CENTRED, SPECTRUM_CENTRED) <- (
     LEN is ++(len(SIGNAL)),
     FFTransform(SIGNAL, SPECTRUM),
-    FFTFrequencies(LEN, FREQS),
+    fft_frequencies(LEN, FREQS),
     FFTShift(SPECTRUM, SPECTRUM_CENTRED),
     FFTShift(FREQS, FREQS_CENTRED)
 )

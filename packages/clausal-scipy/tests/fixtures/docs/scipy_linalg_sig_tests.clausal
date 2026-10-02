@@ -1,9 +1,9 @@
 # Companion tests for docs/scipy_linalg.md signature blocks.
 -double_quotes(atom)
--import_from(scipy_linalg, [Solve, Inverse, ResultGet])
+-import_from(scipy_linalg, [solve, Inverse, ResultGet])
 
 test("solve exists") <- (
-    Solve([[1.0, 0.0], [0.0, 1.0]], [1.0, 2.0], X),
+    solve([[1.0, 0.0], [0.0, 1.0]], [1.0, 2.0], X),
     nonvar(X))  # nv
 
 test("inverse exists") <- (

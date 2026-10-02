@@ -23,7 +23,7 @@ from clausal.modules.py.scipy_fft import (
     FFTransformND,
     RealFFT,
     DiscreteCosineTransform,
-    FFTFrequencies, RealFFTFrequencies,
+    fft_frequencies, real_fft_frequencies,
     FFTShift,
 )
 
@@ -414,7 +414,7 @@ class TestFFTFrequencies:
     def test_length_4(self):
         # fftfreq(4) → [0, 0.25, -0.5, -0.25]
         # nv
-        result = _drive(FFTFrequencies, 4)
+        result = _drive(fft_frequencies, 4)
         assert result is not None
         expected = np.array([0.0, 0.25, -0.5, -0.25])
         assert np.allclose(result, expected, atol=1e-10)
@@ -422,20 +422,20 @@ class TestFFTFrequencies:
     def test_with_sample_spacing(self):
         # fftfreq(4, d=2.0) → [0, 0.125, -0.25, -0.125]
         # nv
-        result = _drive(FFTFrequencies, 4, 2.0)
+        result = _drive(fft_frequencies, 4, 2.0)
         assert result is not None
         expected = np.array([0.0, 0.125, -0.25, -0.125])
         assert np.allclose(result, expected, atol=1e-10)
 
     def test_length_equals_n(self):
         # nv
-        result = _drive(FFTFrequencies, 8)
+        result = _drive(fft_frequencies, 8)
         assert result is not None
         assert len(result) == 8
 
     def test_wrong_result_fails(self):
         # nv
-        assert _fails_with_wrong_result(FFTFrequencies, 4)
+        assert _fails_with_wrong_result(fft_frequencies, 4)
 
 
 # ── TestRealFFTFrequencies ────────────────────────────────────────────────
@@ -444,33 +444,33 @@ class TestRealFFTFrequencies:
     def test_length_4(self):
         # rfftfreq(4) → [0, 0.25, 0.5]  (length n//2+1)
         # nv
-        result = _drive(RealFFTFrequencies, 4)
+        result = _drive(real_fft_frequencies, 4)
         assert result is not None
         expected = np.array([0.0, 0.25, 0.5])
         assert np.allclose(result, expected, atol=1e-10)
 
     def test_length_is_n_half_plus_one(self):
         # nv
-        result = _drive(RealFFTFrequencies, 8)
+        result = _drive(real_fft_frequencies, 8)
         assert result is not None
         assert len(result) == 5  # 8//2 + 1
 
     def test_with_sample_spacing(self):
         # nv
-        result = _drive(RealFFTFrequencies, 4, 2.0)
+        result = _drive(real_fft_frequencies, 4, 2.0)
         assert result is not None
         expected = np.array([0.0, 0.125, 0.25])
         assert np.allclose(result, expected, atol=1e-10)
 
     def test_all_non_negative(self):
         # nv
-        result = _drive(RealFFTFrequencies, 8)
+        result = _drive(real_fft_frequencies, 8)
         assert result is not None
         assert all(f >= 0.0 for f in result)
 
     def test_wrong_result_fails(self):
         # nv
-        assert _fails_with_wrong_result(RealFFTFrequencies, 4)
+        assert _fails_with_wrong_result(real_fft_frequencies, 4)
 
 
 # ── TestFFTShift ──────────────────────────────────────────────────────────
@@ -488,7 +488,7 @@ class TestFFTShift:
     def test_moves_dc_to_centre(self):
         # after fftshift the DC component (index 0 of fftfreq) should be centred
         # nv
-        freqs = _drive(FFTFrequencies, 4)
+        freqs = _drive(fft_frequencies, 4)
         shifted_freqs = _drive(FFTShift, freqs)
         assert shifted_freqs is not None
         # centre of length-4 array is index 2 (or 1), DC (0.0) should be there

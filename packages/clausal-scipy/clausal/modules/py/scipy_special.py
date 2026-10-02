@@ -3,7 +3,7 @@
 Provides mathematical special functions from scipy.special as importable
 predicate objects for use in .clausal files via::
 
-    -import_from(py.scipy_special, [Gamma, Erf, BesselJ, EllipticK, ...])
+    -import_from(py.scipy_special, [gamma, Erf, bessel_j, elliptic_k, ...])
 
 All predicates are **Tier 1 — pure functions**: accept scalar or NumPy array
 inputs (broadcasting handled by scipy) and unify the last argument with the
@@ -11,64 +11,64 @@ result.
 
 Predicate catalogue
 -------------------
-Gamma/related:
-    Gamma(X, RESULT)
-    GammaLog(X, RESULT)              # log Γ(x), more numerically stable
-    GammaSign(X, RESULT)             # sign of Γ(x)
-    BetaLog(A, B, RESULT)            # log B(a,b)
-    Digamma(X, RESULT)               # ψ(x) = Γ'(x)/Γ(x)
-    Polygamma(N, X, RESULT)          # ψ^(n)(x)
-    Factorial(N, RESULT)  /  Factorial(N, EXACT, RESULT)
-    Comb(N, K, RESULT)  /  Comb(N, K, EXACT, RESULT)  /  Comb(N, K, EXACT, REPETITION, RESULT)
-    Perm(N, K, RESULT)  /  Perm(N, K, EXACT, RESULT)
+gamma/related:
+    gamma(X, RESULT)
+    gamma_log(X, RESULT)              # log Γ(x), more numerically stable
+    gamma_sign(X, RESULT)             # sign of Γ(x)
+    beta_log(A, B, RESULT)            # log B(a,b)
+    digamma(X, RESULT)               # ψ(x) = Γ'(x)/Γ(x)
+    polygamma(N, X, RESULT)          # ψ^(n)(x)
+    factorial(N, RESULT)  /  factorial(N, EXACT, RESULT)
+    comb(N, K, RESULT)  /  comb(N, K, EXACT, RESULT)  /  comb(N, K, EXACT, REPETITION, RESULT)
+    perm(N, K, RESULT)  /  perm(N, K, EXACT, RESULT)
 
 Error functions (bidirectional):
     Erf(X, Y)                        # forward: erf(x); backward: erfinv(y)
     ErfComplement(X, Y)              # forward: erfc(x); backward: erfcinv(y)
     NormalCdf(X, P)                  # forward: Φ(x); backward: Φ⁻¹(p) (probit)
 
-Bessel functions:
-    BesselJ(N, X, RESULT)            # J_n(x), integer order
-    BesselY(N, X, RESULT)            # Y_n(x), integer order
-    BesselJReal(V, Z, RESULT)        # J_v(z), real order
-    BesselYReal(V, Z, RESULT)        # Y_v(z), real order
-    BesselK(N, X, RESULT)            # K_n(x), modified Bessel of 2nd kind
-    BesselI(V, X, RESULT)            # I_v(x), modified Bessel of 1st kind
-    BesselJZeros(N, NT, RESULT)      # first NT zeros of J_n
-    SphericalBesselJ(N, Z, RESULT)  /  SphericalBesselJ(N, Z, DERIVATIVE, RESULT)
+bessel functions:
+    bessel_j(N, X, RESULT)            # J_n(x), integer order
+    bessel_y(N, X, RESULT)            # Y_n(x), integer order
+    bessel_j_real(V, Z, RESULT)        # J_v(z), real order
+    bessel_y_real(V, Z, RESULT)        # Y_v(z), real order
+    bessel_k(N, X, RESULT)            # K_n(x), modified bessel of 2nd kind
+    bessel_i(V, X, RESULT)            # I_v(x), modified bessel of 1st kind
+    bessel_j_zeros(N, NT, RESULT)      # first NT zeros of J_n
+    spherical_bessel_j(N, Z, RESULT)  /  spherical_bessel_j(N, Z, DERIVATIVE, RESULT)
 
-Elliptic integrals:
-    EllipticK(M, RESULT)             # complete elliptic integral K(m)
-    EllipticE(M, RESULT)             # complete elliptic integral E(m)
-    EllipticKIncomplete(PHI, M, RESULT)
-    EllipticEIncomplete(PHI, M, RESULT)
+elliptic integrals:
+    elliptic_k(M, RESULT)             # complete elliptic integral K(m)
+    elliptic_e(M, RESULT)             # complete elliptic integral E(m)
+    elliptic_k_incomplete(PHI, M, RESULT)
+    elliptic_e_incomplete(PHI, M, RESULT)
 
 Hypergeometric:
-    Hypergeometric1F1(A, B, X, RESULT)    # confluent hypergeometric ₁F₁
-    Hypergeometric2F1(A, B, C, Z, RESULT) # Gauss hypergeometric ₂F₁
-    Hypergeometric0F1(B, X, RESULT)       # ₀F₁
+    hypergeometric_1f1(A, B, X, RESULT)    # confluent hypergeometric ₁F₁
+    hypergeometric_2f1(A, B, C, Z, RESULT) # Gauss hypergeometric ₂F₁
+    hypergeometric_0f1(B, X, RESULT)       # ₀F₁
 
 Information theory:
-    Entr(X, RESULT)                  # -x·log(x); entropy element-wise
-    KlDivergence(X, Y, RESULT)       # Kullback-Leibler divergence element
-    LogSumExp(A, RESULT)  /  LogSumExp(A, AXIS, B, KEEPDIMS, RESULT)
+    entr(X, RESULT)                  # -x·log(x); entropy element-wise
+    kl_divergence(X, Y, RESULT)       # Kullback-Leibler divergence element
+    log_sum_exp(A, RESULT)  /  log_sum_exp(A, AXIS, B, KEEPDIMS, RESULT)
 
 Orthogonal polynomials:
-    AssocLegendre(M, V, X, RESULT)   # associated Legendre P_m^v(x)
-    LegendrePoly(N, X, RESULT)       # Legendre polynomial P_n(x)
-    ChebyshevT(N, X, RESULT)         # Chebyshev polynomial of 1st kind T_n(x)
-    ChebyshevU(N, X, RESULT)         # Chebyshev polynomial of 2nd kind U_n(x)
-    HermiteH(N, X, RESULT)           # Hermite polynomial H_n(x)
-    GeneralizedLaguerre(N, ALPHA, X, RESULT)  # generalised Laguerre L_n^α(x)
+    assoc_legendre(M, V, X, RESULT)   # associated Legendre P_m^v(x)
+    legendre_poly(N, X, RESULT)       # Legendre polynomial P_n(x)
+    chebyshev_t(N, X, RESULT)         # Chebyshev polynomial of 1st kind T_n(x)
+    chebyshev_u(N, X, RESULT)         # Chebyshev polynomial of 2nd kind U_n(x)
+    hermite_h(N, X, RESULT)           # Hermite polynomial H_n(x)
+    generalized_laguerre(N, ALPHA, X, RESULT)  # generalised Laguerre L_n^α(x)
 
 Convenience / misc:
-    CubeRoot(X, RESULT)              # x^(1/3), works for negative x
-    Exp10(X, RESULT)                 # 10^x
-    Exp2(X, RESULT)                  # 2^x
+    cube_root(X, RESULT)              # x^(1/3), works for negative x
+    exp10(X, RESULT)                 # 10^x
+    exp2(X, RESULT)                  # 2^x
     Logit(X, Y)                      # bidirectional: logit(x) / expit(y) (sigmoid)
-    LambertW(Z, RESULT)  /  LambertW(Z, K, TOL, RESULT)
-    XLogY(X, Y, RESULT)              # x·log(y), safe at x=0
-    XLog1pY(X, Y, RESULT)            # x·log(1+y), safe at x=0, y=-1
+    lambert_w(Z, RESULT)  /  lambert_w(Z, K, TOL, RESULT)
+    x_log_y(X, Y, RESULT)              # x·log(y), safe at x=0
+    x_log1p_y(X, Y, RESULT)            # x·log(1+y), safe at x=0, y=-1
 """
 
 from __future__ import annotations
@@ -177,44 +177,44 @@ def _bidir_q(fwd, bwd, n_fixed=0):
     )
 
 
-# ── Gamma and related ────────────────────────────────────────────────────
+# ── gamma and related ────────────────────────────────────────────────────
 
-Gamma = _pred("Gamma",
+gamma = _pred("gamma",
     (2, _sp_fn("gamma")),
 )
 
-GammaLog = _pred("GammaLog",
+gamma_log = _pred("gamma_log",
     (2, _sp_fn("gammaln")),
 )
 
-GammaSign = _pred("GammaSign",
+gamma_sign = _pred("gamma_sign",
     (2, _sp_fn("gammasgn")),
 )
 
-BetaLog = _pred("BetaLog",
+beta_log = _pred("beta_log",
     (3, _sp_fn("betaln")),
 )
 
-Digamma = _pred("Digamma",
+digamma = _pred("digamma",
     (2, _sp_fn("digamma")),
 )
 
-Polygamma = _pred("Polygamma",
+polygamma = _pred("polygamma",
     (3, _sp_fn("polygamma")),
 )
 
-Factorial = _pred("Factorial",
+factorial = _pred("factorial",
     (2, _sp_kw("factorial", exact=False)),
     (3, lambda n, exact: _sp().factorial(n, exact=exact)),
 )
 
-Comb = _pred("Comb",
+comb = _pred("comb",
     (3, _sp_kw("comb", exact=False, repetition=False)),
     (4, lambda n, k, exact: _sp().comb(n, k, exact=exact, repetition=False)),
     (5, lambda n, k, exact, rep: _sp().comb(n, k, exact=exact, repetition=rep)),
 )
 
-Perm = _pred("Perm",
+perm = _pred("perm",
     (3, _sp_kw("perm", exact=False)),
     (4, lambda n, k, exact: _sp().perm(n, k, exact=exact)),
 )
@@ -236,88 +236,88 @@ NormalCdf = _pred_bidir("NormalCdf",
 
 
 
-# ── Bessel functions ──────────────────────────────────────────────────────
+# ── bessel functions ──────────────────────────────────────────────────────
 
-BesselJ = _pred("BesselJ",
+bessel_j = _pred("bessel_j",
     (3, _sp_fn("jn")),
 )
 
-BesselY = _pred("BesselY",
+bessel_y = _pred("bessel_y",
     (3, _sp_fn("yn")),
 )
 
-BesselJReal = _pred("BesselJReal",
+bessel_j_real = _pred("bessel_j_real",
     (3, _sp_fn("jv")),
 )
 
-BesselYReal = _pred("BesselYReal",
+bessel_y_real = _pred("bessel_y_real",
     (3, _sp_fn("yv")),
 )
 
-BesselK = _pred("BesselK",
+bessel_k = _pred("bessel_k",
     (3, _sp_fn("kn")),
 )
 
-# scipy uses iv (not in) for modified Bessel I; BesselI is the readable name
-BesselI = _pred("BesselI",
+# scipy uses iv (not in) for modified bessel I; bessel_i is the readable name
+bessel_i = _pred("bessel_i",
     (3, _sp_fn("iv")),
 )
 
-BesselJZeros = _pred("BesselJZeros",
+bessel_j_zeros = _pred("bessel_j_zeros",
     (3, _sp_fn("jn_zeros")),
 )
 
-SphericalBesselJ = _pred("SphericalBesselJ",
+spherical_bessel_j = _pred("spherical_bessel_j",
     (3, _sp_kw("spherical_jn", derivative=False)),
     (4, lambda n, z, deriv: _sp().spherical_jn(n, z, derivative=deriv)),
 )
 
 
-# ── Elliptic integrals ────────────────────────────────────────────────────
+# ── elliptic integrals ────────────────────────────────────────────────────
 
-EllipticK = _pred("EllipticK",
+elliptic_k = _pred("elliptic_k",
     (2, _sp_fn("ellipk")),
 )
 
-EllipticE = _pred("EllipticE",
+elliptic_e = _pred("elliptic_e",
     (2, _sp_fn("ellipe")),
 )
 
-EllipticKIncomplete = _pred("EllipticKIncomplete",
+elliptic_k_incomplete = _pred("elliptic_k_incomplete",
     (3, _sp_fn("ellipkinc")),
 )
 
-EllipticEIncomplete = _pred("EllipticEIncomplete",
+elliptic_e_incomplete = _pred("elliptic_e_incomplete",
     (3, _sp_fn("ellipeinc")),
 )
 
 
 # ── Hypergeometric ────────────────────────────────────────────────────────
 
-Hypergeometric1F1 = _pred("Hypergeometric1F1",
+hypergeometric_1f1 = _pred("hypergeometric_1f1",
     (4, _sp_fn("hyp1f1")),
 )
 
-Hypergeometric2F1 = _pred("Hypergeometric2F1",
+hypergeometric_2f1 = _pred("hypergeometric_2f1",
     (5, _sp_fn("hyp2f1")),
 )
 
-Hypergeometric0F1 = _pred("Hypergeometric0F1",
+hypergeometric_0f1 = _pred("hypergeometric_0f1",
     (3, _sp_fn("hyp0f1")),
 )
 
 
 # ── Information theory ────────────────────────────────────────────────────
 
-Entr = _pred("Entr",
+entr = _pred("entr",
     (2, _sp_fn("entr")),
 )
 
-KlDivergence = _pred("KlDivergence",
+kl_divergence = _pred("kl_divergence",
     (3, _sp_fn("kl_div")),
 )
 
-LogSumExp = _pred("LogSumExp",
+log_sum_exp = _pred("log_sum_exp",
     (2, _sp_fn("logsumexp")),
     (5, lambda a, axis, b, keepdims:
         _sp().logsumexp(a, axis=axis, b=b, keepdims=keepdims)),
@@ -326,42 +326,42 @@ LogSumExp = _pred("LogSumExp",
 
 # ── Orthogonal polynomials ────────────────────────────────────────────────
 
-AssocLegendre = _pred("AssocLegendre",
+assoc_legendre = _pred("assoc_legendre",
     (4, _sp_fn("lpmv")),
 )
 
-LegendrePoly = _pred("LegendrePoly",
+legendre_poly = _pred("legendre_poly",
     (3, _sp_fn("eval_legendre")),
 )
 
-ChebyshevT = _pred("ChebyshevT",
+chebyshev_t = _pred("chebyshev_t",
     (3, _sp_fn("eval_chebyt")),
 )
 
-ChebyshevU = _pred("ChebyshevU",
+chebyshev_u = _pred("chebyshev_u",
     (3, _sp_fn("eval_chebyu")),
 )
 
-HermiteH = _pred("HermiteH",
+hermite_h = _pred("hermite_h",
     (3, _sp_fn("eval_hermite")),
 )
 
-GeneralizedLaguerre = _pred("GeneralizedLaguerre",
+generalized_laguerre = _pred("generalized_laguerre",
     (4, _sp_fn("eval_genlaguerre")),
 )
 
 
 # ── Convenience / misc ────────────────────────────────────────────────────
 
-CubeRoot = _pred("CubeRoot",
+cube_root = _pred("cube_root",
     (2, _sp_fn("cbrt")),
 )
 
-Exp10 = _pred("Exp10",
+exp10 = _pred("exp10",
     (2, _sp_fn("exp10")),
 )
 
-Exp2 = _pred("Exp2",
+exp2 = _pred("exp2",
     (2, _sp_fn("exp2")),
 )
 
@@ -398,15 +398,15 @@ Boxcox1p = _pred_bidir("Boxcox1p",
             n_fixed=1)),
 )
 
-LambertW = _pred("LambertW",
+lambert_w = _pred("lambert_w",
     (2, _sp_kw("lambertw", k=0, tol=1e-8)),
     (4, lambda z, k, tol: _sp().lambertw(z, k=k, tol=tol)),
 )
 
-XLogY = _pred("XLogY",
+x_log_y = _pred("x_log_y",
     (3, _sp_fn("xlogy")),
 )
 
-XLog1pY = _pred("XLog1pY",
+x_log1p_y = _pred("x_log1p_y",
     (3, _sp_fn("xlog1py")),
 )

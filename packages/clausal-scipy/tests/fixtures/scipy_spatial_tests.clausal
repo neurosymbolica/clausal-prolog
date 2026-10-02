@@ -1,159 +1,159 @@
 -double_quotes(atom)
 -import_from(scipy_spatial, [
-    CrossDistance, PairwiseDistance, SquareForm, PointDistance,
-    MakeKdTree, KdTreeQuery, KdTreeQueryBall, KdTreeQueryPairs,
-    MakeConvexHull, ConvexHullAttr,
-    MakeDelaunay, DelaunayFindSimplex,
-    MakeRotation, RotationApply, RotationAs, RotationCompose, RotationInverse,
-    Free
+    cross_distance, pairwise_distance, square_form, point_distance,
+    make_kd_tree, kd_tree_query, kd_tree_query_ball, kd_tree_query_pairs,
+    make_convex_hull, convex_hull_attr,
+    make_delaunay, delaunay_find_simplex,
+    make_rotation, rotation_apply, rotation_as, rotation_compose, rotation_inverse,
+    free
 ])
 
 test("cross distance shape") <- (
-    CrossDistance([[0.0, 0.0], [1.0, 0.0]], [[0.0, 1.0]], D),
+    cross_distance([[0.0, 0.0], [1.0, 0.0]], [[0.0, 1.0]], D),
     ROWS is ++(D.shape[0]),
     COLS is ++(D.shape[1]),
     ROWS == 2,
     COLS == 1)  # nv
 
 test("cross distance euclidean known value") <- (
-    CrossDistance([[0.0, 0.0]], [[3.0, 4.0]], 'euclidean', D),
+    cross_distance([[0.0, 0.0]], [[3.0, 4.0]], 'euclidean', D),
     V is ++(float(D[0, 0])),
     ++(abs(V - 5.0)) < 1e-10)  # nv
 
 test("cross distance with kwargs") <- (
-    CrossDistance([[0.0, 0.0]], [[1.0, 0.0], [0.0, 1.0]], 'minkowski', {'p': 1}, D),
+    cross_distance([[0.0, 0.0]], [[1.0, 0.0], [0.0, 1.0]], 'minkowski', {'p': 1}, D),
     V0 is ++(float(D[0, 0])),
     V1 is ++(float(D[0, 1])),
     ++(abs(V0 - 1.0)) < 1e-10,
     ++(abs(V1 - 1.0)) < 1e-10)  # nv
 
 test("pairwise distance length") <- (
-    PairwiseDistance([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], D),
+    pairwise_distance([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], D),
     LEN is ++(len(D)),
     LEN == 3)  # nv
 
 test("pairwise distance euclidean 3-4-5") <- (
-    PairwiseDistance([[0.0, 0.0], [3.0, 4.0]], 'euclidean', D),
+    pairwise_distance([[0.0, 0.0], [3.0, 4.0]], 'euclidean', D),
     V is ++(float(D[0])),
     ++(abs(V - 5.0)) < 1e-10)  # nv
 
 test("squareform round-trip") <- (
-    PairwiseDistance([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], 'euclidean', CONDENSED),
-    SquareForm(CONDENSED, SQUARE),
+    pairwise_distance([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], 'euclidean', CONDENSED),
+    square_form(CONDENSED, SQUARE),
     ROWS is ++(SQUARE.shape[0]),
     COLS is ++(SQUARE.shape[1]),
     ROWS == 3,
     COLS == 3)  # nv
 
 test("point distance euclidean 3-4-5") <- (
-    PointDistance('euclidean', [0.0, 0.0], [3.0, 4.0], D),
+    point_distance('euclidean', [0.0, 0.0], [3.0, 4.0], D),
     ++(abs(D - 5.0)) < 1e-10)  # nv
 
 test("point distance cityblock") <- (
-    PointDistance('cityblock', [0.0, 0.0], [1.0, 2.0], D),
+    point_distance('cityblock', [0.0, 0.0], [1.0, 2.0], D),
     ++(abs(D - 3.0)) < 1e-10)  # nv
 
 test("kdtree make returns handle") <- (
-    MakeKdTree([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], H),
+    make_kd_tree([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], H),
     ++(isinstance(H, int)),
-    Free(H))  # nv
+    free(H))  # nv
 
 test("kdtree query nearest neighbour") <- (
-    MakeKdTree([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], H),
-    KdTreeQuery(H, [[0.9, 0.0]], R),
+    make_kd_tree([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], H),
+    kd_tree_query(H, [[0.9, 0.0]], R),
     IDX is ++(int(R['indices'][0])),
     IDX == 1,
-    Free(H))  # nv
+    free(H))  # nv
 
 test("kdtree query k=2") <- (
-    MakeKdTree([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], H),
-    KdTreeQuery(H, [[0.0, 0.0]], 2, R),
+    make_kd_tree([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], H),
+    kd_tree_query(H, [[0.0, 0.0]], 2, R),
     DISTS is ++(R['distances'][0]),
     ++(float(DISTS[0])) < 1e-10,
-    Free(H))  # nv
+    free(H))  # nv
 
 test("kdtree query ball finds neighbours in radius") <- (
-    MakeKdTree([[0.0, 0.0], [0.5, 0.0], [2.0, 0.0]], H),
-    KdTreeQueryBall(H, [0.0, 0.0], 1.0, R),
+    make_kd_tree([[0.0, 0.0], [0.5, 0.0], [2.0, 0.0]], H),
+    kd_tree_query_ball(H, [0.0, 0.0], 1.0, R),
     LEN is ++(len(R)),
     ++(LEN >= 2),
-    Free(H))  # nv
+    free(H))  # nv
 
 test("convex hull make returns handle") <- (
-    MakeConvexHull([[0.0,0.0],[1.0,0.0],[0.0,1.0],[1.0,1.0]], H),
+    make_convex_hull([[0.0,0.0],[1.0,0.0],[0.0,1.0],[1.0,1.0]], H),
     ++(isinstance(H, int)),
-    Free(H))  # nv
+    free(H))  # nv
 
 test("convex hull vertices count") <- (
-    MakeConvexHull([[0.0,0.0],[1.0,0.0],[0.0,1.0],[1.0,1.0]], H),
-    ConvexHullAttr(H, 'vertices', V),
+    make_convex_hull([[0.0,0.0],[1.0,0.0],[0.0,1.0],[1.0,1.0]], H),
+    convex_hull_attr(H, 'vertices', V),
     ++(len(V) >= 3),
-    Free(H))  # nv
+    free(H))  # nv
 
 test("convex hull area unit square") <- (
-    MakeConvexHull([[0.0,0.0],[1.0,0.0],[0.0,1.0],[1.0,1.0]], H),
-    ConvexHullAttr(H, 'area', A),
+    make_convex_hull([[0.0,0.0],[1.0,0.0],[0.0,1.0],[1.0,1.0]], H),
+    convex_hull_attr(H, 'area', A),
     ++(abs(A - 4.0)) < 1e-6,
-    Free(H))  # nv
+    free(H))  # nv
 
 test("delaunay make returns handle") <- (
-    MakeDelaunay([[0.0,0.0],[1.0,0.0],[0.5,1.0]], H),
+    make_delaunay([[0.0,0.0],[1.0,0.0],[0.5,1.0]], H),
     ++(isinstance(H, int)),
-    Free(H))  # nv
+    free(H))  # nv
 
 test("delaunay find simplex interior point") <- (
-    MakeDelaunay([[0.0,0.0],[1.0,0.0],[0.5,1.0]], H),
-    DelaunayFindSimplex(H, [[0.5, 0.3]], IDX),
+    make_delaunay([[0.0,0.0],[1.0,0.0],[0.5,1.0]], H),
+    delaunay_find_simplex(H, [[0.5, 0.3]], IDX),
     ++(int(IDX[0]) >= 0),
-    Free(H))  # nv
+    free(H))  # nv
 
 test("delaunay find simplex exterior point returns -1") <- (
-    MakeDelaunay([[0.0,0.0],[1.0,0.0],[0.5,1.0]], H),
-    DelaunayFindSimplex(H, [[5.0, 5.0]], IDX),
+    make_delaunay([[0.0,0.0],[1.0,0.0],[0.5,1.0]], H),
+    delaunay_find_simplex(H, [[5.0, 5.0]], IDX),
     ++(int(IDX[0]) == -1),
-    Free(H))  # nv
+    free(H))  # nv
 
 test("rotation from rotvec apply identity") <- (
-    MakeRotation('rotvec', [0.0, 0.0, 0.0], H),
-    RotationApply(H, [1.0, 0.0, 0.0], OUT),
+    make_rotation('rotvec', [0.0, 0.0, 0.0], H),
+    rotation_apply(H, [1.0, 0.0, 0.0], OUT),
     ++(abs(float(OUT[0]) - 1.0)) < 1e-10,
     ++(abs(float(OUT[1]))) < 1e-10,
-    Free(H))  # nv
+    free(H))  # nv
 
 test("rotation as quat from identity rotvec") <- (
-    MakeRotation('rotvec', [0.0, 0.0, 0.0], H),
-    RotationAs(H, 'quat', Q),
+    make_rotation('rotvec', [0.0, 0.0, 0.0], H),
+    rotation_as(H, 'quat', Q),
     LEN is ++(len(Q)),
     LEN == 4,
-    Free(H))  # nv
+    free(H))  # nv
 
 test("rotation as matrix from identity") <- (
-    MakeRotation('rotvec', [0.0, 0.0, 0.0], H),
-    RotationAs(H, 'matrix', M),
+    make_rotation('rotvec', [0.0, 0.0, 0.0], H),
+    rotation_as(H, 'matrix', M),
     ROWS is ++(M.shape[0]),
     COLS is ++(M.shape[1]),
     ROWS == 3,
     COLS == 3,
-    Free(H))  # nv
+    free(H))  # nv
 
 test("rotation inverse of identity is identity") <- (
-    MakeRotation('rotvec', [0.0, 0.0, 0.0], H),
-    RotationInverse(H, HINV),
-    RotationApply(HINV, [1.0, 0.0, 0.0], OUT),
+    make_rotation('rotvec', [0.0, 0.0, 0.0], H),
+    rotation_inverse(H, HINV),
+    rotation_apply(HINV, [1.0, 0.0, 0.0], OUT),
     ++(abs(float(OUT[0]) - 1.0)) < 1e-10,
-    Free(H),
-    Free(HINV))  # nv
+    free(H),
+    free(HINV))  # nv
 
 test("rotation compose two 90 degree z rotations") <- (
-    MakeRotation('rotvec', [0.0, 0.0, 1.5707963267948966], H1),
-    MakeRotation('rotvec', [0.0, 0.0, 1.5707963267948966], H2),
-    RotationCompose(H1, H2, HC),
-    RotationApply(HC, [1.0, 0.0, 0.0], OUT),
+    make_rotation('rotvec', [0.0, 0.0, 1.5707963267948966], H1),
+    make_rotation('rotvec', [0.0, 0.0, 1.5707963267948966], H2),
+    rotation_compose(H1, H2, HC),
+    rotation_apply(HC, [1.0, 0.0, 0.0], OUT),
     ++(abs(float(OUT[0]) - (-1.0))) < 1e-6,
-    Free(H1),
-    Free(H2),
-    Free(HC))  # nv
+    free(H1),
+    free(H2),
+    free(HC))  # nv
 
 test("free handle succeeds") <- (
-    MakeKdTree([[0.0, 0.0], [1.0, 0.0]], H),
-    Free(H))  # nv
+    make_kd_tree([[0.0, 0.0], [1.0, 0.0]], H),
+    free(H))  # nv

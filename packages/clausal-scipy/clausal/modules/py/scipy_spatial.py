@@ -3,143 +3,143 @@
 Provides spatial algorithms from scipy.spatial as importable predicate objects
 for use in .clausal files via::
 
-    -import_from(scipy_spatial, [CrossDistance, PairwiseDistance, MakeKdTree, ...])
+    -import_from(scipy_spatial, [cross_distance, pairwise_distance, make_kd_tree, ...])
 
 Or via the canonical ``py.*`` path::
 
-    -import_from(py.scipy_spatial, [CrossDistance, ...])
+    -import_from(py.scipy_spatial, [cross_distance, ...])
 
 Tiers
 -----
 **Tier 1 — pure distance functions** (no handle):
-    CrossDistance, PairwiseDistance, SquareForm, PointDistance
+    cross_distance, pairwise_distance, square_form, point_distance
 
 **Tier 3 — handle-based spatial objects**:
-    KD-tree:    MakeKdTree, KdTreeQuery, KdTreeQueryBall, KdTreeQueryPairs
-    ConvexHull: MakeConvexHull, ConvexHullAttr
-    Delaunay:   MakeDelaunay, DelaunayFindSimplex
-    Rotation:   MakeRotation, RotationApply, RotationAs, RotationCompose,
-                RotationInverse
-    Lifecycle:  Free
+    KD-tree:    make_kd_tree, kd_tree_query, kd_tree_query_ball, kd_tree_query_pairs
+    ConvexHull: make_convex_hull, convex_hull_attr
+    Delaunay:   make_delaunay, delaunay_find_simplex
+    Rotation:   make_rotation, rotation_apply, rotation_as, rotation_compose,
+                rotation_inverse
+    Lifecycle:  free
 
 Predicate catalogue
 -------------------
 
 Distance functions (Tier 1, pure):
-    CrossDistance(XA, XB, RESULT)
-    CrossDistance(XA, XB, METRIC, RESULT)
-    CrossDistance(XA, XB, METRIC, KWARGS, RESULT)
+    cross_distance(XA, XB, RESULT)
+    cross_distance(XA, XB, METRIC, RESULT)
+    cross_distance(XA, XB, METRIC, KWARGS, RESULT)
         → scipy.spatial.distance.cdist(XA, XB, metric=METRIC, **(KWARGS or {}))
         Compute pairwise distances between each row of XA and each row of XB.
         RESULT: (nA × nB) distance matrix.
 
-    PairwiseDistance(X, RESULT)
-    PairwiseDistance(X, METRIC, RESULT)
-    PairwiseDistance(X, METRIC, KWARGS, RESULT)
+    pairwise_distance(X, RESULT)
+    pairwise_distance(X, METRIC, RESULT)
+    pairwise_distance(X, METRIC, KWARGS, RESULT)
         → scipy.spatial.distance.pdist(X, metric=METRIC, **(KWARGS or {}))
         Compute condensed pairwise distance vector for all pairs within X.
         RESULT: condensed 1-D distance array of length n*(n-1)/2.
 
-    SquareForm(X, RESULT)
+    square_form(X, RESULT)
         → scipy.spatial.distance.squareform(X)
         Convert between condensed distance vector and square distance matrix.
 
-    PointDistance(METRIC, X, Y, RESULT)
+    point_distance(METRIC, X, Y, RESULT)
         → scipy.spatial.distance.cdist([X], [Y], metric=METRIC)[0, 0]
         Compute a single scalar distance between points X and Y using the
         named metric (e.g. 'euclidean', 'cosine', 'cityblock').
 
 KD-tree (Tier 3):
-    MakeKdTree(DATA, RESULT)
-    MakeKdTree(DATA, LEAFSIZE, RESULT)
+    make_kd_tree(DATA, RESULT)
+    make_kd_tree(DATA, LEAFSIZE, RESULT)
         → scipy.spatial.KDTree(data, leafsize=LEAFSIZE)
         Build a KD-tree for fast nearest-neighbour lookup.
         RESULT: integer HANDLE.
 
-    KdTreeQuery(HANDLE, X, RESULT)
-    KdTreeQuery(HANDLE, X, K, RESULT)
+    kd_tree_query(HANDLE, X, RESULT)
+    kd_tree_query(HANDLE, X, K, RESULT)
         → handle.query(x, k=K)
         Query HANDLE for the K nearest neighbours of each point in X.
         RESULT: dict with keys 'distances' and 'indices'.
 
-    KdTreeQueryBall(HANDLE, X, RADIUS, RESULT)
+    kd_tree_query_ball(HANDLE, X, RADIUS, RESULT)
         → handle.query_ball_point(x, r)
         Find all points within RADIUS of each point in X.
         RESULT: list of index lists (one per query point).
 
-    KdTreeQueryPairs(HANDLE, RADIUS, RESULT)
+    kd_tree_query_pairs(HANDLE, RADIUS, RESULT)
         → handle.query_pairs(r)
         Find all pairs of points within RADIUS of each other.
         RESULT: set of (i, j) index pairs.
 
 ConvexHull (Tier 3):
-    MakeConvexHull(POINTS, RESULT)
+    make_convex_hull(POINTS, RESULT)
         → scipy.spatial.ConvexHull(points)
         Compute the convex hull of a set of points.
         RESULT: integer HANDLE.
 
-    ConvexHullAttr(HANDLE, ATTR, RESULT)
+    convex_hull_attr(HANDLE, ATTR, RESULT)
         Retrieve an attribute of the ConvexHull object.
         ATTR: 'vertices', 'simplices', 'equations', 'area', 'volume',
               'coplanar', 'neighbors'
         RESULT: the attribute value (array, float, etc.).
 
 Delaunay triangulation (Tier 3):
-    MakeDelaunay(POINTS, RESULT)
+    make_delaunay(POINTS, RESULT)
         → scipy.spatial.Delaunay(points)
         Compute the Delaunay triangulation of a set of points.
         RESULT: integer HANDLE.
 
-    DelaunayFindSimplex(HANDLE, XI, RESULT)
-    DelaunayFindSimplex(HANDLE, XI, BRUTEFORCE, RESULT)
+    delaunay_find_simplex(HANDLE, XI, RESULT)
+    delaunay_find_simplex(HANDLE, XI, BRUTEFORCE, RESULT)
         → handle.find_simplex(xi, bruteforce=BRUTEFORCE)
         Find the simplex containing each point in XI.
         RESULT: array of simplex indices (-1 if outside triangulation).
 
 Rotation (Tier 3, from scipy.spatial.transform):
-    MakeRotation(METHOD, DATA, RESULT)
+    make_rotation(METHOD, DATA, RESULT)
         → scipy.spatial.transform.Rotation.from_<method>(data)
         Construct a rotation from the given representation.
         METHOD: 'quat', 'matrix', 'rotvec', 'mrp'
                 'euler' requires DATA = (seq, angles) e.g. ('xyz', angles_array)
         RESULT: integer HANDLE.
 
-    RotationApply(HANDLE, VECTORS, RESULT)
-    RotationApply(HANDLE, VECTORS, INVERSE, RESULT)
+    rotation_apply(HANDLE, VECTORS, RESULT)
+    rotation_apply(HANDLE, VECTORS, INVERSE, RESULT)
         → handle.apply(vectors, inverse=INVERSE)
         Apply the rotation to an array of vectors.
         RESULT: rotated vectors array.
 
-    RotationAs(HANDLE, FORM, RESULT)
-    RotationAs(HANDLE, FORM, SEQ, RESULT)
+    rotation_as(HANDLE, FORM, RESULT)
+    rotation_as(HANDLE, FORM, SEQ, RESULT)
         → handle.as_quat() / as_matrix() / as_rotvec() / as_euler(seq)
         Export the rotation to the requested representation.
         FORM: 'quat', 'matrix', 'rotvec', 'mrp', 'euler'
         SEQ: required when FORM='euler', e.g. 'xyz'
 
-    RotationCompose(HANDLE_A, HANDLE_B, RESULT)
+    rotation_compose(HANDLE_A, HANDLE_B, RESULT)
         → handle_a * handle_b
         Compose two rotations (right-to-left: HANDLE_B applied first).
         RESULT: integer HANDLE for the composed rotation.
 
-    RotationInverse(HANDLE, RESULT)
+    rotation_inverse(HANDLE, RESULT)
         → handle.inv()
         Invert a rotation.
         RESULT: integer HANDLE for the inverse rotation.
 
 Lifecycle:
-    Free(HANDLE)
+    free(HANDLE)
         Release the object registered under HANDLE.  Always succeeds.
 
 Usage example::
 
-    -import_from(scipy_spatial, [CrossDistance, MakeKdTree, KdTreeQuery, Free])
+    -import_from(scipy_spatial, [cross_distance, make_kd_tree, kd_tree_query, free])
 
     closest_pair(POINTS, DISTANCES) <- (
-        MakeKdTree(POINTS, KD),
-        KdTreeQuery(KD, POINTS, 2, R),
+        make_kd_tree(POINTS, KD),
+        kd_tree_query(KD, POINTS, 2, R),
         DISTANCES is ++(R['distances'][:, 1]),
-        Free(KD)
+        free(KD)
     )
 """
 
@@ -286,13 +286,13 @@ def _make_returning_handle(constructor: Callable) -> Callable:
 # Tier 1 — distance functions
 # ═══════════════════════════════════════════════════════════════════════════
 
-# ── CrossDistance ─────────────────────────────────────────────────────────
+# ── cross_distance ─────────────────────────────────────────────────────────
 # Arity = number of args visible to user INCLUDING RESULT, excluding trail.
-# CrossDistance(XA, XB, RESULT) → arity 3
-# CrossDistance(XA, XB, METRIC, RESULT) → arity 4
-# CrossDistance(XA, XB, METRIC, KWARGS, RESULT) → arity 5
+# cross_distance(XA, XB, RESULT) → arity 3
+# cross_distance(XA, XB, METRIC, RESULT) → arity 4
+# cross_distance(XA, XB, METRIC, KWARGS, RESULT) → arity 5
 
-CrossDistance = _pred("CrossDistance",
+cross_distance = _pred("cross_distance",
     (3, _pure(lambda xa, xb:
         _dist().cdist(xa, xb))),
     (4, _pure(lambda xa, xb, metric:
@@ -301,12 +301,12 @@ CrossDistance = _pred("CrossDistance",
         _dist().cdist(xa, xb, metric=metric, **(kwargs or {})))),
 )
 
-# ── PairwiseDistance ──────────────────────────────────────────────────────
-# PairwiseDistance(X, RESULT) → arity 2
-# PairwiseDistance(X, METRIC, RESULT) → arity 3
-# PairwiseDistance(X, METRIC, KWARGS, RESULT) → arity 4
+# ── pairwise_distance ──────────────────────────────────────────────────────
+# pairwise_distance(X, RESULT) → arity 2
+# pairwise_distance(X, METRIC, RESULT) → arity 3
+# pairwise_distance(X, METRIC, KWARGS, RESULT) → arity 4
 
-PairwiseDistance = _pred("PairwiseDistance",
+pairwise_distance = _pred("pairwise_distance",
     (2, _pure(lambda x:
         _dist().pdist(x))),
     (3, _pure(lambda x, metric:
@@ -315,23 +315,23 @@ PairwiseDistance = _pred("PairwiseDistance",
         _dist().pdist(x, metric=metric, **(kwargs or {})))),
 )
 
-# ── SquareForm ────────────────────────────────────────────────────────────
-# SquareForm(X, RESULT) → arity 2
+# ── square_form ────────────────────────────────────────────────────────────
+# square_form(X, RESULT) → arity 2
 
-SquareForm = _pred("SquareForm",
+square_form = _pred("square_form",
     (2, _pure(lambda x:
         _dist().squareform(x))),
 )
 
-# ── PointDistance ─────────────────────────────────────────────────────────
-# PointDistance(METRIC, X, Y, RESULT) → arity 4
+# ── point_distance ─────────────────────────────────────────────────────────
+# point_distance(METRIC, X, Y, RESULT) → arity 4
 
 def _point_distance(metric, x, y):
     xa = _np.atleast_2d(x)
     ya = _np.atleast_2d(y)
     return float(_dist().cdist(xa, ya, metric=metric)[0, 0])
 
-PointDistance = _pred("PointDistance",
+point_distance = _pred("point_distance",
     (4, _pure(lambda metric, x, y: _point_distance(metric, x, y))),
 )
 
@@ -340,20 +340,20 @@ PointDistance = _pred("PointDistance",
 # Tier 3 — KD-tree
 # ═══════════════════════════════════════════════════════════════════════════
 
-# ── MakeKdTree ────────────────────────────────────────────────────────────
-# MakeKdTree(DATA, RESULT) → arity 2
-# MakeKdTree(DATA, LEAFSIZE, RESULT) → arity 3
+# ── make_kd_tree ────────────────────────────────────────────────────────────
+# make_kd_tree(DATA, RESULT) → arity 2
+# make_kd_tree(DATA, LEAFSIZE, RESULT) → arity 3
 
-MakeKdTree = _pred("MakeKdTree",
+make_kd_tree = _pred("make_kd_tree",
     (2, _make(lambda data:
         _sp().KDTree(data))),
     (3, _make(lambda data, leafsize:
         _sp().KDTree(data, leafsize=int(leafsize)))),
 )
 
-# ── KdTreeQuery ───────────────────────────────────────────────────────────
-# KdTreeQuery(HANDLE, X, RESULT) → arity 3
-# KdTreeQuery(HANDLE, X, K, RESULT) → arity 4
+# ── kd_tree_query ───────────────────────────────────────────────────────────
+# kd_tree_query(HANDLE, X, RESULT) → arity 3
+# kd_tree_query(HANDLE, X, K, RESULT) → arity 4
 
 def _kdtree_query(obj, x):
     distances, indices = obj.query(x, k=1)
@@ -363,23 +363,23 @@ def _kdtree_query_k(obj, x, k):
     distances, indices = obj.query(x, k=int(k))
     return {"distances": distances, "indices": indices}
 
-KdTreeQuery = _pred("KdTreeQuery",
+kd_tree_query = _pred("kd_tree_query",
     (3, _query(_kdtree_query)),
     (4, _query(_kdtree_query_k)),
 )
 
-# ── KdTreeQueryBall ───────────────────────────────────────────────────────
-# KdTreeQueryBall(HANDLE, X, RADIUS, RESULT) → arity 4
+# ── kd_tree_query_ball ───────────────────────────────────────────────────────
+# kd_tree_query_ball(HANDLE, X, RADIUS, RESULT) → arity 4
 
-KdTreeQueryBall = _pred("KdTreeQueryBall",
+kd_tree_query_ball = _pred("kd_tree_query_ball",
     (4, _query(lambda obj, x, radius:
         obj.query_ball_point(x, float(radius)))),
 )
 
-# ── KdTreeQueryPairs ──────────────────────────────────────────────────────
-# KdTreeQueryPairs(HANDLE, RADIUS, RESULT) → arity 3
+# ── kd_tree_query_pairs ──────────────────────────────────────────────────────
+# kd_tree_query_pairs(HANDLE, RADIUS, RESULT) → arity 3
 
-KdTreeQueryPairs = _pred("KdTreeQueryPairs",
+kd_tree_query_pairs = _pred("kd_tree_query_pairs",
     (3, _query(lambda obj, radius:
         obj.query_pairs(float(radius)))),
 )
@@ -389,21 +389,21 @@ KdTreeQueryPairs = _pred("KdTreeQueryPairs",
 # Tier 3 — ConvexHull
 # ═══════════════════════════════════════════════════════════════════════════
 
-# ── MakeConvexHull ────────────────────────────────────────────────────────
-# MakeConvexHull(POINTS, RESULT) → arity 2
+# ── make_convex_hull ────────────────────────────────────────────────────────
+# make_convex_hull(POINTS, RESULT) → arity 2
 
-MakeConvexHull = _pred("MakeConvexHull",
+make_convex_hull = _pred("make_convex_hull",
     (2, _make(lambda points:
         _sp().ConvexHull(points))),
 )
 
-# ── ConvexHullAttr ────────────────────────────────────────────────────────
-# ConvexHullAttr(HANDLE, ATTR, RESULT) → arity 3
+# ── convex_hull_attr ────────────────────────────────────────────────────────
+# convex_hull_attr(HANDLE, ATTR, RESULT) → arity 3
 
 def _convex_hull_attr(obj, attr):
     return getattr(obj, str(attr))
 
-ConvexHullAttr = _pred("ConvexHullAttr",
+convex_hull_attr = _pred("convex_hull_attr",
     (3, _query(_convex_hull_attr)),
 )
 
@@ -412,19 +412,19 @@ ConvexHullAttr = _pred("ConvexHullAttr",
 # Tier 3 — Delaunay
 # ═══════════════════════════════════════════════════════════════════════════
 
-# ── MakeDelaunay ──────────────────────────────────────────────────────────
-# MakeDelaunay(POINTS, RESULT) → arity 2
+# ── make_delaunay ──────────────────────────────────────────────────────────
+# make_delaunay(POINTS, RESULT) → arity 2
 
-MakeDelaunay = _pred("MakeDelaunay",
+make_delaunay = _pred("make_delaunay",
     (2, _make(lambda points:
         _sp().Delaunay(points))),
 )
 
-# ── DelaunayFindSimplex ───────────────────────────────────────────────────
-# DelaunayFindSimplex(HANDLE, XI, RESULT) → arity 3
-# DelaunayFindSimplex(HANDLE, XI, BRUTEFORCE, RESULT) → arity 4
+# ── delaunay_find_simplex ───────────────────────────────────────────────────
+# delaunay_find_simplex(HANDLE, XI, RESULT) → arity 3
+# delaunay_find_simplex(HANDLE, XI, BRUTEFORCE, RESULT) → arity 4
 
-DelaunayFindSimplex = _pred("DelaunayFindSimplex",
+delaunay_find_simplex = _pred("delaunay_find_simplex",
     (3, _query(lambda obj, xi:
         obj.find_simplex(xi))),
     (4, _query(lambda obj, xi, bruteforce:
@@ -436,7 +436,7 @@ DelaunayFindSimplex = _pred("DelaunayFindSimplex",
 # Tier 3 — Rotation (scipy.spatial.transform)
 # ═══════════════════════════════════════════════════════════════════════════
 
-# ── MakeRotation ─────────────────────────────────────────────────────────
+# ── make_rotation ─────────────────────────────────────────────────────────
 
 _ROTATION_CONSTRUCTORS = {
     "quat":   lambda data: _transform().Rotation.from_quat(data),
@@ -468,23 +468,23 @@ def _make_rotation_dispatch(this_generator, _proceed, _fail, _catcher, *args):
         yield (_proceed, None)
     yield (_fail, DONE)
 
-# MakeRotation(METHOD, DATA, RESULT) → arity 3
-MakeRotation = _pred("MakeRotation",
+# make_rotation(METHOD, DATA, RESULT) → arity 3
+make_rotation = _pred("make_rotation",
     (3, _make_rotation_dispatch),
 )
 
-# ── RotationApply ─────────────────────────────────────────────────────────
+# ── rotation_apply ─────────────────────────────────────────────────────────
 
-# RotationApply(HANDLE, VECTORS, RESULT) → arity 3
-# RotationApply(HANDLE, VECTORS, INVERSE, RESULT) → arity 4
-RotationApply = _pred("RotationApply",
+# rotation_apply(HANDLE, VECTORS, RESULT) → arity 3
+# rotation_apply(HANDLE, VECTORS, INVERSE, RESULT) → arity 4
+rotation_apply = _pred("rotation_apply",
     (3, _query(lambda obj, vectors:
         obj.apply(vectors))),
     (4, _query(lambda obj, vectors, inverse:
         obj.apply(vectors, inverse=bool(inverse)))),
 )
 
-# ── RotationAs ────────────────────────────────────────────────────────────
+# ── rotation_as ────────────────────────────────────────────────────────────
 
 def _rotation_as(obj, form):
     key = str(form).lower()
@@ -503,14 +503,14 @@ def _rotation_as_euler(obj, form, seq):
         raise ValueError(f"SEQ argument only valid for form='euler', got {form!r}")
     return obj.as_euler(str(seq))
 
-# RotationAs(HANDLE, FORM, RESULT) → arity 3
-# RotationAs(HANDLE, FORM, SEQ, RESULT) → arity 4
-RotationAs = _pred("RotationAs",
+# rotation_as(HANDLE, FORM, RESULT) → arity 3
+# rotation_as(HANDLE, FORM, SEQ, RESULT) → arity 4
+rotation_as = _pred("rotation_as",
     (3, _query(_rotation_as)),
     (4, _query(_rotation_as_euler)),
 )
 
-# ── RotationCompose ───────────────────────────────────────────────────────
+# ── rotation_compose ───────────────────────────────────────────────────────
 
 def _rotation_compose_dispatch(this_generator, _proceed, _fail, _catcher, *args):
     trail = args[-1]
@@ -529,12 +529,12 @@ def _rotation_compose_dispatch(this_generator, _proceed, _fail, _catcher, *args)
         yield (_proceed, None)
     yield (_fail, DONE)
 
-# RotationCompose(HANDLE_A, HANDLE_B, RESULT) → arity 3
-RotationCompose = _pred("RotationCompose",
+# rotation_compose(HANDLE_A, HANDLE_B, RESULT) → arity 3
+rotation_compose = _pred("rotation_compose",
     (3, _rotation_compose_dispatch),
 )
 
-# ── RotationInverse ───────────────────────────────────────────────────────
+# ── rotation_inverse ───────────────────────────────────────────────────────
 
 def _rotation_inverse_dispatch(this_generator, _proceed, _fail, _catcher, *args):
     trail = args[-1]
@@ -551,14 +551,14 @@ def _rotation_inverse_dispatch(this_generator, _proceed, _fail, _catcher, *args)
         yield (_proceed, None)
     yield (_fail, DONE)
 
-# RotationInverse(HANDLE, RESULT) → arity 2
-RotationInverse = _pred("RotationInverse",
+# rotation_inverse(HANDLE, RESULT) → arity 2
+rotation_inverse = _pred("rotation_inverse",
     (2, _rotation_inverse_dispatch),
 )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Lifecycle — Free
+# Lifecycle — free
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _free_dispatch(this_generator, _proceed, _fail, _catcher, handle, trail):
@@ -570,7 +570,7 @@ def _free_dispatch(this_generator, _proceed, _fail, _catcher, handle, trail):
     yield (_proceed, None)
     yield (_fail, DONE)
 
-Free = _pred("Free",
+free = _pred("free",
     (1, _free_dispatch),
 )
 
@@ -578,23 +578,23 @@ Free = _pred("Free",
 # ── Module-level exports ──────────────────────────────────────────────────
 
 __all__ = [
-    "CrossDistance",
-    "PairwiseDistance",
-    "SquareForm",
-    "PointDistance",
-    "MakeKdTree",
-    "KdTreeQuery",
-    "KdTreeQueryBall",
-    "KdTreeQueryPairs",
-    "MakeConvexHull",
-    "ConvexHullAttr",
-    "MakeDelaunay",
-    "DelaunayFindSimplex",
-    "MakeRotation",
-    "RotationApply",
-    "RotationAs",
-    "RotationCompose",
-    "RotationInverse",
-    "Free",
+    "cross_distance",
+    "pairwise_distance",
+    "square_form",
+    "point_distance",
+    "make_kd_tree",
+    "kd_tree_query",
+    "kd_tree_query_ball",
+    "kd_tree_query_pairs",
+    "make_convex_hull",
+    "convex_hull_attr",
+    "make_delaunay",
+    "delaunay_find_simplex",
+    "make_rotation",
+    "rotation_apply",
+    "rotation_as",
+    "rotation_compose",
+    "rotation_inverse",
+    "free",
     "_SPATIAL_REGISTRY",
 ]

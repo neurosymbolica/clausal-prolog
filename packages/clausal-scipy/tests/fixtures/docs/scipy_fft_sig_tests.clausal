@@ -1,6 +1,6 @@
 # Companion tests for docs/scipy_fft.md signature blocks.
 -double_quotes(atom)
--import_from(scipy_fft, [FFTransform, RealFFT, FFTFrequencies])
+-import_from(scipy_fft, [FFTransform, RealFFT, fft_frequencies])
 
 test("fft exists") <- (
     FFTransform([1.0, 1.0, 1.0, 1.0], R),
@@ -12,5 +12,5 @@ test("real fft exists") <- (
     nonvar(R))  # nv
 
 test("fft frequencies exists") <- (
-    FFTFrequencies(4, 1.0, R),
+    fft_frequencies(4, 1.0, R),
     nonvar(R))  # nv

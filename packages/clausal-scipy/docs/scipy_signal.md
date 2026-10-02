@@ -22,8 +22,8 @@ Or via the canonical `py.*` path:
 
 | Tier | Predicates | RESULT type |
 |---|---|---|
-| **Tier 2** | include design, FrequencyResponse, Periodogram, Welch, Spectrogram | dict — use `ResultGet` |
-| **Tier 1** | LinearFilter, SOSFilter, ForwardBackwardFilter, SOSForwardBackwardFilter, Decimate, Resample, Convolve, Correlate, FFTConvolve | array (or dict when `ZI` supplied) |
+| **Tier 2** | include design, frequency_response, periodogram, welch, spectrogram | dict — use `ResultGet` |
+| **Tier 1** | linear_filter, sos_filter, forward_backward_filter, sos_forward_backward_filter, decimate, resample, convolve, correlate, fft_convolve | array (or dict when `ZI` supplied) |
 
 ---
 
@@ -31,24 +31,24 @@ Or via the canonical `py.*` path:
 
 | scipy function | Clausal predicate |
 |---|---|
-| `butter` | `Butterworth` |
-| `bessel` | `Bessel` |
-| `cheby1` | `ChebyshevType1` |
-| `cheby2` | `ChebyshevType2` |
-| `ellip` | `Elliptic` |
-| `freqz` | `FrequencyResponse` |
-| `lfilter` | `LinearFilter` |
-| `sosfilt` | `SOSFilter` |
-| `filtfilt` | `ForwardBackwardFilter` |
-| `sosfiltfilt` | `SOSForwardBackwardFilter` |
-| `decimate` | `Decimate` |
-| `resample` | `Resample` |
-| `convolve` | `Convolve` |
-| `correlate` | `Correlate` |
-| `fftconvolve` | `FFTConvolve` |
-| `periodogram` | `Periodogram` |
-| `welch` | `Welch` |
-| `spectrogram` | `Spectrogram` |
+| `butter` | `butterworth` |
+| `bessel` | `bessel` |
+| `cheby1` | `chebyshev_type1` |
+| `cheby2` | `chebyshev_type2` |
+| `ellip` | `elliptic` |
+| `freqz` | `frequency_response` |
+| `lfilter` | `linear_filter` |
+| `sosfilt` | `sos_filter` |
+| `filtfilt` | `forward_backward_filter` |
+| `sosfiltfilt` | `sos_forward_backward_filter` |
+| `decimate` | `decimate` |
+| `resample` | `resample` |
+| `convolve` | `convolve` |
+| `correlate` | `correlate` |
+| `fftconvolve` | `fft_convolve` |
+| `periodogram` | `periodogram` |
+| `welch` | `welch` |
+| `spectrogram` | `spectrogram` |
 
 `SOS` (second-order sections) and `FFT` are kept as universal abbreviations. All other names are spelled out in full.
 
@@ -70,37 +70,37 @@ Use `ResultGet` to extract fields:
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:include_design"
 ```
 
-### Butterworth
+### butterworth
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:butterworth"
 ```
 
-### Bessel
+### bessel
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:bessel"
 ```
 
-### ChebyshevType1
+### chebyshev_type1
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:chebyshevtype1"
 ```
 
-### ChebyshevType2
+### chebyshev_type2
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:chebyshevtype2"
 ```
 
-### Elliptic
+### elliptic
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:elliptic"
 ```
 
-### FrequencyResponse
+### frequency_response
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:frequencyresponse"
@@ -110,7 +110,7 @@ Use `ResultGet` to extract fields:
 
 ## Filtering (Tier 1)
 
-### LinearFilter
+### linear_filter
 
 Causal IIR filter using direct-form II transposed implementation.
 
@@ -118,15 +118,15 @@ Causal IIR filter using direct-form II transposed implementation.
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:linearfilter"
 ```
 
-### SOSFilter
+### sos_filter
 
-Numerically more stable than `LinearFilter` for higher-order filters. Use when `OUTPUT='sos'` in filter design.
+Numerically more stable than `linear_filter` for higher-order filters. Use when `OUTPUT='sos'` in filter design.
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:sosfilter"
 ```
 
-### ForwardBackwardFilter
+### forward_backward_filter
 
 Zero-phase filtering: applies the filter twice (forward then backward), eliminating phase distortion. Signal length must be longer than the filter's padding requirements.
 
@@ -134,15 +134,15 @@ Zero-phase filtering: applies the filter twice (forward then backward), eliminat
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:forwardbackwardfilter"
 ```
 
-### SOSForwardBackwardFilter
+### sos_forward_backward_filter
 
-SOS form of `ForwardBackwardFilter`. Preferred for high-order filters.
+SOS form of `forward_backward_filter`. Preferred for high-order filters.
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:sosforwardbackwardfilter"
 ```
 
-### Decimate
+### decimate
 
 Low-pass filter then downsample by integer factor `Q`.
 
@@ -150,9 +150,9 @@ Low-pass filter then downsample by integer factor `Q`.
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:decimate"
 ```
 
-### Resample
+### resample
 
-Resample to exactly `NUM` samples using Fourier method. Suitable for arbitrary rational resampling ratios.
+resample to exactly `NUM` samples using Fourier method. Suitable for arbitrary rational resampling ratios.
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:resample"
@@ -162,19 +162,19 @@ Resample to exactly `NUM` samples using Fourier method. Suitable for arbitrary r
 
 ## Convolution and correlation (Tier 1)
 
-### Convolve
+### convolve
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:convolve"
 ```
 
-### Correlate
+### correlate
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:correlate"
 ```
 
-### FFTConvolve
+### fft_convolve
 
 Convolution via FFT — efficient for large arrays or long filters.
 
@@ -186,7 +186,7 @@ Convolution via FFT — efficient for large arrays or long filters.
 
 ## Spectral analysis (Tier 2)
 
-### Periodogram
+### periodogram
 
 Non-averaged power spectral density estimate.
 
@@ -194,15 +194,15 @@ Non-averaged power spectral density estimate.
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:periodogram"
 ```
 
-### Welch
+### welch
 
-Averaged power spectral density estimate using Welch's method. Lower variance than `Periodogram` at the cost of frequency resolution.
+Averaged power spectral density estimate using welch's method. Lower variance than `periodogram` at the cost of frequency resolution.
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:welch"
 ```
 
-### Spectrogram
+### spectrogram
 
 Short-time Fourier transform power spectral density: time-frequency representation.
 
@@ -234,13 +234,13 @@ Short-time Fourier transform power spectral density: time-frequency representati
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:inspect_frequency_response"
 ```
 
-### Power spectral density with Welch's method
+### Power spectral density with welch's method
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:power_spectral_density_with_welch_s_method"
 ```
 
-### Convolve two signals
+### convolve two signals
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:convolve_two_signals"
@@ -250,9 +250,9 @@ Short-time Fourier transform power spectral density: time-frequency representati
 
 ## Notes
 
-- **SOS preferred for high-order filters**: `SOSFilter` and `SOSForwardBackwardFilter` are numerically more stable than their `b`/`a` equivalents. Use `OUTPUT='sos'` in filter design and the `SOS*` filtering predicates.
-- **ForwardBackwardFilter cannot be used causally**: it processes the entire signal and cannot be applied sample-by-sample. Use `LinearFilter` or `SOSFilter` for streaming / real-time use.
-- **ZI for stateful filtering**: pass initial conditions `ZI` to `LinearFilter` or `SOSFilter` to get `{y, zf}` back; feed `zf` into the next call to process signals in chunks without boundary artefacts.
+- **SOS preferred for high-order filters**: `sos_filter` and `sos_forward_backward_filter` are numerically more stable than their `b`/`a` equivalents. Use `OUTPUT='sos'` in filter design and the `SOS*` filtering predicates.
+- **forward_backward_filter cannot be used causally**: it processes the entire signal and cannot be applied sample-by-sample. Use `linear_filter` or `sos_filter` for streaming / real-time use.
+- **ZI for stateful filtering**: pass initial conditions `ZI` to `linear_filter` or `sos_filter` to get `{y, zf}` back; feed `zf` into the next call to process signals in chunks without boundary artefacts.
 - **FS parameter**: when `FS` is omitted from [filter design](#filter-design-tier-2) predicates, cutoff frequencies `WN` must be normalised to the range `[0, 1]` (where `1` is the Nyquist frequency). when `FS` is provided, `WN` is in Hz.
 - **Predicates fail** (no solution) when scipy raises an exception (e.g. invalid filter parameters), or when a bound `RESULT` does not unify with the computed value.
 

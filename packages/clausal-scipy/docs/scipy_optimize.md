@@ -26,7 +26,7 @@ All optimisation predicates are **Tier 2**: RESULT is unified with a Python dict
 --8<-- "tests/fixtures/docs/scipy_optimize_sigs.txt:tiers"
 ```
 
-`LinearConstraint` and `Bounds` are helper object constructors whose RESULT is an opaque scipy object passed back to `MixedIntegerLinearProgram` or `LinearProgram`.
+`linear_constraint` and `bounds` are helper object constructors whose RESULT is an opaque scipy object passed back to `mixed_integer_linear_program` or `linear_program`.
 
 ---
 
@@ -37,22 +37,22 @@ Predicate names use full English words; scipy's abbreviations are expanded:
 | scipy function | Clausal predicate |
 |---|---|
 | `minimize_scalar` | `minimize_scalar` |
-| `minimize` | `Minimize` |
+| `minimize` | `minimize` |
 | `differential_evolution` | `differential_evolution` |
-| `basinhopping` | `BasinHopping` |
-| `dual_annealing` | `DualAnnealing` |
-| `shgo` | `ShgoMinimize` |
-| `least_squares` | `NonlinearLeastSquares` |
-| `curve_fit` | `CurveFit` |
-| `root_scalar` | `RootScalar` |
-| `root` | `Root` |
-| `linprog` | `LinearProgram` |
-| `milp` | `MixedIntegerLinearProgram` |
-| `LinearConstraint` | `LinearConstraint` |
-| `Bounds` | `Bounds` |
+| `basinhopping` | `basin_hopping` |
+| `dual_annealing` | `dual_annealing` |
+| `shgo` | `shgo_minimize` |
+| `least_squares` | `nonlinear_least_squares` |
+| `curve_fit` | `curve_fit` |
+| `root_scalar` | `root_scalar` |
+| `root` | `root` |
+| `linprog` | `linear_program` |
+| `milp` | `mixed_integer_linear_program` |
+| `linear_constraint` | `linear_constraint` |
+| `bounds` | `bounds` |
 
-`NonlinearLeastSquares` is named to distinguish it from `LeastSquares` in `scipy_linalg` (which is linear least squares via `lstsq`).
-`ShgoMinimize` expands the acronym SHGO (Simplicial Homology Global Optimization) while indicating its role.
+`nonlinear_least_squares` is named to distinguish it from `least_squares` in `scipy_linalg` (which is linear least squares via `lstsq`).
+`shgo_minimize` expands the acronym SHGO (Simplicial Homology Global Optimization) while indicating its role.
 
 ---
 
@@ -85,10 +85,10 @@ minimize_quadratic(RESULT) <- (
 Example:
 
 ```clausal
--import_from(scipy_optimize, [Minimize, result_get])
+-import_from(scipy_optimize, [minimize, result_get])
 
 rosenbrock_minimum(X) <- (
-    Minimize(++(lambda x: (1 - x[0])**2 + 100*(x[1] - x[0]**2)**2),
+    minimize(++(lambda x: (1 - x[0])**2 + 100*(x[1] - x[0]**2)**2),
              ++([0.0, 0.0]), 'L-BFGS-B', RESULT),
     result_get(RESULT, 'x', X)
 )
@@ -128,10 +128,10 @@ global_min(X) <- (
 Example — fit an exponential decay:
 
 ```clausal
--import_from(scipy_optimize, [CurveFit, result_get])
+-import_from(scipy_optimize, [curve_fit, result_get])
 
 fit_decay(XDATA, YDATA, PARAMS) <- (
-    CurveFit(++(lambda x, a, b: a * __import__('numpy').exp(-b * x)),
+    curve_fit(++(lambda x, a, b: a * __import__('numpy').exp(-b * x)),
              XDATA, YDATA, ++([1.0, 0.5]), RESULT),
     result_get(RESULT, 'popt', PARAMS)
 )
@@ -139,7 +139,7 @@ fit_decay(XDATA, YDATA, PARAMS) <- (
 
 ---
 
-### Root finding
+### root finding
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_optimize_sigs.txt:root_finding"
@@ -148,11 +148,11 @@ fit_decay(XDATA, YDATA, PARAMS) <- (
 Example:
 
 ```clausal
--import_from(scipy_optimize, [RootScalar, result_get])
+-import_from(scipy_optimize, [root_scalar, result_get])
 
 square_root(N, ROOT) <- (
     N > 0,
-    RootScalar(++(lambda x: x**2 - float(N)),
+    root_scalar(++(lambda x: x**2 - float(N)),
                'brentq', ++([0.0, float(N) + 1.0]), RESULT),
     result_get(RESULT, 'root', ROOT)
 )
@@ -175,12 +175,12 @@ Example — two-variable LP:
 Example — MILP with integrality constraints:
 
 ```clausal
--import_from(scipy_optimize, [MixedIntegerLinearProgram, LinearConstraint, Bounds, result_get])
+-import_from(scipy_optimize, [mixed_integer_linear_program, linear_constraint, bounds, result_get])
 
 integer_plan(X) <- (
-    LinearConstraint(++([[1.0, 1.0]]), ++([0.0]), ++([4.0]), CON),
-    Bounds(++([0.0, 0.0]), ++([3.0, 3.0]), BDS),
-    MixedIntegerLinearProgram(++([-1.0, -2.0]), CON, ++([1, 1]), BDS, RESULT),
+    linear_constraint(++([[1.0, 1.0]]), ++([0.0]), ++([4.0]), CON),
+    bounds(++([0.0, 0.0]), ++([3.0, 3.0]), BDS),
+    mixed_integer_linear_program(++([-1.0, -2.0]), CON, ++([1, 1]), BDS, RESULT),
     result_get(RESULT, 'x', X)
 )
 ```
@@ -197,14 +197,14 @@ Common fields by predicate:
 
 | Predicate | Useful fields |
 |---|---|
-| `Minimize`, `minimize_scalar` | `'x'`, `'fun'`, `'success'`, `'message'`, `'nit'` |
-| `differential_evolution`, `DualAnnealing`, `ShgoMinimize` | `'x'`, `'fun'`, `'success'` |
-| `BasinHopping` | `'x'`, `'fun'`, `'message'` |
-| `NonlinearLeastSquares` | `'x'`, `'cost'`, `'fun'`, `'success'` |
-| `CurveFit` | `'popt'`, `'pcov'` |
-| `RootScalar` | `'root'`, `'converged'`, `'iterations'` |
-| `Root` | `'x'`, `'fun'`, `'success'` |
-| `LinearProgram`, `MixedIntegerLinearProgram` | `'x'`, `'fun'`, `'success'`, `'message'` |
+| `minimize`, `minimize_scalar` | `'x'`, `'fun'`, `'success'`, `'message'`, `'nit'` |
+| `differential_evolution`, `dual_annealing`, `shgo_minimize` | `'x'`, `'fun'`, `'success'` |
+| `basin_hopping` | `'x'`, `'fun'`, `'message'` |
+| `nonlinear_least_squares` | `'x'`, `'cost'`, `'fun'`, `'success'` |
+| `curve_fit` | `'popt'`, `'pcov'` |
+| `root_scalar` | `'root'`, `'converged'`, `'iterations'` |
+| `root` | `'x'`, `'fun'`, `'success'` |
+| `linear_program`, `mixed_integer_linear_program` | `'x'`, `'fun'`, `'success'`, `'message'` |
 
 ---
 
@@ -220,8 +220,8 @@ Common fields by predicate:
 
 - **Callables**: pass Python functions via the [`++()` escape](python_integration.md) — e.g. `FUN=++(lambda x: x[0]**2)`. The predicate receives and passes on a plain Python callable; no special boundary wrapping is needed.
 - **Array inputs**: X0, BOUNDS, and coefficient arrays should be passed as Python lists or NumPy arrays via `++()`.
-- **Global methods** (`differential_evolution`, `DualAnnealing`, `BasinHopping`, `ShgoMinimize`) are stochastic or slow; pass `SEED=` for reproducibility in tests.
-- **`NonlinearLeastSquares` vs `LeastSquares`**: `NonlinearLeastSquares` (from `scipy_optimize`) minimises `||fun(x)||²` for a nonlinear `fun`. `LeastSquares` (from [`scipy_linalg`](scipy_linalg.md)) solves the linear system `A @ x ≈ b` via `lstsq`. They are different operations.
+- **Global methods** (`differential_evolution`, `dual_annealing`, `basin_hopping`, `shgo_minimize`) are stochastic or slow; pass `SEED=` for reproducibility in tests.
+- **`nonlinear_least_squares` vs `least_squares`**: `nonlinear_least_squares` (from `scipy_optimize`) minimises `||fun(x)||²` for a nonlinear `fun`. `least_squares` (from [`scipy_linalg`](scipy_linalg.md)) solves the linear system `A @ x ≈ b` via `lstsq`. They are different operations.
 - Predicates fail (no solution) when `result_get` cannot find the requested field, or when a bound `RESULT` does not unify with the computed value. Scipy exceptions propagate as Python exceptions.
 
 ---

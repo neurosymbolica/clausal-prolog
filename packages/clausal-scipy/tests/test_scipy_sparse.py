@@ -1,11 +1,11 @@
 """Tests for clausal.modules.py.scipy_sparse — scipy.sparse predicates.
 
 Tests cover:
-- Construction predicates: MakeCSR, MakeCSC, MakeCOO, MakeDiagonals, MakeEye
-- Conversion predicates: ToDense, FromDense
-- Inspection predicates: Shape, NonzeroCount
-- Linalg predicates: Solve, EigenDecomposeHermitian, SingularValueDecompose
-- Lifecycle: Free
+- Construction predicates: make_csr, make_csc, make_coo, make_diagonals, make_eye
+- Conversion predicates: to_dense, from_dense
+- Inspection predicates: shape, nonzero_count
+- Linalg predicates: solve, eigen_decompose_hermitian, singular_value_decompose
+- Lifecycle: free
 - Module exports
 - .clausal fixture integration
 """
@@ -21,19 +21,19 @@ import scipy.sparse
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py.scipy_sparse import (
-    MakeCSR,
-    MakeCSC,
-    MakeCOO,
-    MakeDiagonals,
-    MakeEye,
-    ToDense,
-    FromDense,
-    Shape,
-    NonzeroCount,
-    Solve,
-    EigenDecomposeHermitian,
-    SingularValueDecompose,
-    Free,
+    make_csr,
+    make_csc,
+    make_coo,
+    make_diagonals,
+    make_eye,
+    to_dense,
+    from_dense,
+    shape,
+    nonzero_count,
+    solve,
+    eigen_decompose_hermitian,
+    singular_value_decompose,
+    free,
     _SPARSE_REGISTRY,
 )
 
@@ -64,7 +64,7 @@ def _fails(pred, *args):
 
 
 def _free(handle):
-    dispatch = Free._get_dispatch()
+    dispatch = free._get_dispatch()
     trail = Trail()
     list(dispatch(None, None, None, None, handle, trail))
 
@@ -100,38 +100,38 @@ _DIAG_DATA = np.array([1.0, 2.0, 3.0])
 class TestMakeCSR:
     def test_arity4_returns_handle(self):
         # nv
-        h = _drive(MakeCSR, _DATA, _INDICES_CSR, _INDPTR_CSR)
+        h = _drive(make_csr, _DATA, _INDICES_CSR, _INDPTR_CSR)
         assert isinstance(h, int)
         _free(h)
 
     def test_arity5_with_shape(self):
         # nv
-        h = _drive(MakeCSR, _DATA, _INDICES_CSR, _INDPTR_CSR, _SHAPE)
+        h = _drive(make_csr, _DATA, _INDICES_CSR, _INDPTR_CSR, _SHAPE)
         assert isinstance(h, int)
         _free(h)
 
     def test_arity6_with_shape_dtype(self):
         # nv
-        h = _drive(MakeCSR, _DATA, _INDICES_CSR, _INDPTR_CSR, _SHAPE, "float64")
+        h = _drive(make_csr, _DATA, _INDICES_CSR, _INDPTR_CSR, _SHAPE, "float64")
         assert isinstance(h, int)
         _free(h)
 
     def test_handle_in_registry(self):
         # nv
-        h = _drive(MakeCSR, _DATA, _INDICES_CSR, _INDPTR_CSR)
+        h = _drive(make_csr, _DATA, _INDICES_CSR, _INDPTR_CSR)
         assert h in _SPARSE_REGISTRY
         _free(h)
         assert h not in _SPARSE_REGISTRY
 
     def test_registry_object_is_sparse(self):
         # nv
-        h = _drive(MakeCSR, _DATA, _INDICES_CSR, _INDPTR_CSR)
+        h = _drive(make_csr, _DATA, _INDICES_CSR, _INDPTR_CSR)
         assert scipy.sparse.issparse(_SPARSE_REGISTRY[h])
         _free(h)
 
     def test_correct_nnz(self):
         # nv
-        h = _drive(MakeCSR, _DATA, _INDICES_CSR, _INDPTR_CSR)
+        h = _drive(make_csr, _DATA, _INDICES_CSR, _INDPTR_CSR)
         assert _SPARSE_REGISTRY[h].nnz == 5
         _free(h)
 
@@ -147,7 +147,7 @@ class TestMakeCSC:
         data = np.array([1.0, 4.0, 3.0, 2.0, 5.0])
         indices = np.array([0, 2, 1, 0, 2])  # row indices
         indptr = np.array([0, 2, 3, 5])       # col pointers
-        h = _drive(MakeCSC, data, indices, indptr)
+        h = _drive(make_csc, data, indices, indptr)
         assert isinstance(h, int)
         _free(h)
 
@@ -156,7 +156,7 @@ class TestMakeCSC:
         data = np.array([1.0, 4.0, 3.0, 2.0, 5.0])
         indices = np.array([0, 2, 1, 0, 2])
         indptr = np.array([0, 2, 3, 5])
-        h = _drive(MakeCSC, data, indices, indptr, _SHAPE)
+        h = _drive(make_csc, data, indices, indptr, _SHAPE)
         assert isinstance(h, int)
         _free(h)
 
@@ -165,7 +165,7 @@ class TestMakeCSC:
         data = np.array([1.0, 4.0, 3.0, 2.0, 5.0])
         indices = np.array([0, 2, 1, 0, 2])
         indptr = np.array([0, 2, 3, 5])
-        h = _drive(MakeCSC, data, indices, indptr, _SHAPE, "float32")
+        h = _drive(make_csc, data, indices, indptr, _SHAPE, "float32")
         assert isinstance(h, int)
         obj = _SPARSE_REGISTRY[h]
         assert obj.dtype == np.float32
@@ -176,7 +176,7 @@ class TestMakeCSC:
         data = np.array([1.0, 2.0])
         indices = np.array([0, 1])
         indptr = np.array([0, 1, 2])
-        h = _drive(MakeCSC, data, indices, indptr)
+        h = _drive(make_csc, data, indices, indptr)
         assert scipy.sparse.issparse(_SPARSE_REGISTRY[h])
         _free(h)
 
@@ -188,32 +188,32 @@ class TestMakeCSC:
 class TestMakeCOO:
     def test_arity4_returns_handle(self):
         # nv
-        h = _drive(MakeCOO, _DATA, _ROW, _COL)
+        h = _drive(make_coo, _DATA, _ROW, _COL)
         assert isinstance(h, int)
         _free(h)
 
     def test_arity5_with_shape(self):
         # nv
-        h = _drive(MakeCOO, _DATA, _ROW, _COL, _SHAPE)
+        h = _drive(make_coo, _DATA, _ROW, _COL, _SHAPE)
         assert isinstance(h, int)
         _free(h)
 
     def test_registry_object_is_sparse(self):
         # nv
-        h = _drive(MakeCOO, _DATA, _ROW, _COL)
+        h = _drive(make_coo, _DATA, _ROW, _COL)
         assert scipy.sparse.issparse(_SPARSE_REGISTRY[h])
         _free(h)
 
     def test_correct_nnz(self):
         # nv
-        h = _drive(MakeCOO, _DATA, _ROW, _COL)
+        h = _drive(make_coo, _DATA, _ROW, _COL)
         assert _SPARSE_REGISTRY[h].nnz == 5
         _free(h)
 
     def test_todense_matches_expected(self):
         # nv
-        h = _drive(MakeCOO, _DATA, _ROW, _COL, _SHAPE)
-        dense = _drive(ToDense, h)
+        h = _drive(make_coo, _DATA, _ROW, _COL, _SHAPE)
+        dense = _drive(to_dense, h)
         np.testing.assert_allclose(dense, _DENSE, atol=1e-10)
         _free(h)
 
@@ -225,7 +225,7 @@ class TestMakeCOO:
 class TestMakeDiagonals:
     def test_arity2_main_diagonal(self):
         # nv
-        h = _drive(MakeDiagonals, _DIAG_DATA)
+        h = _drive(make_diagonals, _DIAG_DATA)
         assert isinstance(h, int)
         obj = _SPARSE_REGISTRY[h]
         assert scipy.sparse.issparse(obj)
@@ -233,28 +233,28 @@ class TestMakeDiagonals:
 
     def test_arity3_with_offset(self):
         # nv
-        h = _drive(MakeDiagonals, _DIAG_DATA, 0)
+        h = _drive(make_diagonals, _DIAG_DATA, 0)
         assert isinstance(h, int)
         _free(h)
 
     def test_arity4_with_shape(self):
         # nv
-        h = _drive(MakeDiagonals, _DIAG_DATA, 0, (3, 3))
+        h = _drive(make_diagonals, _DIAG_DATA, 0, (3, 3))
         assert isinstance(h, int)
         _free(h)
 
     def test_diagonal_values_correct(self):
         # nv
-        h = _drive(MakeDiagonals, _DIAG_DATA)
-        dense = _drive(ToDense, h)
+        h = _drive(make_diagonals, _DIAG_DATA)
+        dense = _drive(to_dense, h)
         np.testing.assert_allclose(np.diag(dense), _DIAG_DATA, atol=1e-10)
         _free(h)
 
     def test_superdiagonal(self):
         # nv
         diag = np.array([1.0, 2.0])
-        h = _drive(MakeDiagonals, diag, 1, (3, 3))
-        dense = _drive(ToDense, h)
+        h = _drive(make_diagonals, diag, 1, (3, 3))
+        dense = _drive(to_dense, h)
         # superdiagonal: [0,1]=1, [1,2]=2
         assert abs(dense[0, 1] - 1.0) < 1e-10
         assert abs(dense[1, 2] - 2.0) < 1e-10
@@ -268,13 +268,13 @@ class TestMakeDiagonals:
 class TestMakeEye:
     def test_arity2_returns_handle(self):
         # nv
-        h = _drive(MakeEye, 3)
+        h = _drive(make_eye, 3)
         assert isinstance(h, int)
         _free(h)
 
     def test_arity3_rectangular(self):
         # nv
-        h = _drive(MakeEye, 3, 4)
+        h = _drive(make_eye, 3, 4)
         assert isinstance(h, int)
         obj = _SPARSE_REGISTRY[h]
         assert obj.shape == (3, 4)
@@ -282,21 +282,21 @@ class TestMakeEye:
 
     def test_arity4_with_offset(self):
         # nv
-        h = _drive(MakeEye, 3, 3, 1)
+        h = _drive(make_eye, 3, 3, 1)
         assert isinstance(h, int)
         _free(h)
 
     def test_identity_values(self):
         # nv
-        h = _drive(MakeEye, 3)
-        dense = _drive(ToDense, h)
+        h = _drive(make_eye, 3)
+        dense = _drive(to_dense, h)
         np.testing.assert_allclose(dense, np.eye(3), atol=1e-10)
         _free(h)
 
     def test_nnz_identity(self):
         # nv
-        h = _drive(MakeEye, 4)
-        nnz = _drive(NonzeroCount, h)
+        h = _drive(make_eye, 4)
+        nnz = _drive(nonzero_count, h)
         assert nnz == 4
         _free(h)
 
@@ -307,35 +307,35 @@ class TestMakeEye:
 
 class TestToDense:
     def setup_method(self):
-        self._h = _drive(MakeCSR, _DATA, _INDICES_CSR, _INDPTR_CSR)
+        self._h = _drive(make_csr, _DATA, _INDICES_CSR, _INDPTR_CSR)
 
     def teardown_method(self):
         _free(self._h)
 
     def test_arity2_returns_array(self):
         # nv
-        result = _drive(ToDense, self._h)
+        result = _drive(to_dense, self._h)
         assert isinstance(result, np.ndarray)
 
     def test_correct_shape(self):
         # nv
-        result = _drive(ToDense, self._h)
+        result = _drive(to_dense, self._h)
         assert result.shape == (3, 3)
 
     def test_values_match(self):
         # nv
-        result = _drive(ToDense, self._h)
+        result = _drive(to_dense, self._h)
         np.testing.assert_allclose(result, _DENSE, atol=1e-10)
 
     def test_arity3_order_c(self):
         # nv
-        result = _drive(ToDense, self._h, "C")
+        result = _drive(to_dense, self._h, "C")
         assert isinstance(result, np.ndarray)
         np.testing.assert_allclose(result, _DENSE, atol=1e-10)
 
     def test_arity3_order_f(self):
         # nv
-        result = _drive(ToDense, self._h, "F")
+        result = _drive(to_dense, self._h, "F")
         assert isinstance(result, np.ndarray)
         np.testing.assert_allclose(result, _DENSE, atol=1e-10)
 
@@ -347,26 +347,26 @@ class TestToDense:
 class TestFromDense:
     def test_arity2_returns_handle(self):
         # nv
-        h = _drive(FromDense, _DENSE)
+        h = _drive(from_dense, _DENSE)
         assert isinstance(h, int)
         _free(h)
 
     def test_registry_object_is_sparse(self):
         # nv
-        h = _drive(FromDense, _DENSE)
+        h = _drive(from_dense, _DENSE)
         assert scipy.sparse.issparse(_SPARSE_REGISTRY[h])
         _free(h)
 
     def test_round_trip_todense(self):
         # nv
-        h = _drive(FromDense, _DENSE)
-        result = _drive(ToDense, h)
+        h = _drive(from_dense, _DENSE)
+        result = _drive(to_dense, h)
         np.testing.assert_allclose(result, _DENSE, atol=1e-10)
         _free(h)
 
     def test_arity3_csc_format(self):
         # nv
-        h = _drive(FromDense, _DENSE, "csc")
+        h = _drive(from_dense, _DENSE, "csc")
         assert isinstance(h, int)
         obj = _SPARSE_REGISTRY[h]
         assert scipy.sparse.isspmatrix_csc(obj)
@@ -374,7 +374,7 @@ class TestFromDense:
 
     def test_arity3_csr_format(self):
         # nv
-        h = _drive(FromDense, _DENSE, "csr")
+        h = _drive(from_dense, _DENSE, "csr")
         assert isinstance(h, int)
         obj = _SPARSE_REGISTRY[h]
         assert scipy.sparse.isspmatrix_csr(obj)
@@ -388,22 +388,22 @@ class TestFromDense:
 class TestShape:
     def test_shape_3x3(self):
         # nv
-        h = _drive(MakeCSR, _DATA, _INDICES_CSR, _INDPTR_CSR, _SHAPE)
-        result = _drive(Shape, h)
+        h = _drive(make_csr, _DATA, _INDICES_CSR, _INDPTR_CSR, _SHAPE)
+        result = _drive(shape, h)
         assert result == (3, 3)
         _free(h)
 
     def test_shape_eye_4x4(self):
         # nv
-        h = _drive(MakeEye, 4)
-        result = _drive(Shape, h)
+        h = _drive(make_eye, 4)
+        result = _drive(shape, h)
         assert result == (4, 4)
         _free(h)
 
     def test_shape_rectangular(self):
         # nv
-        h = _drive(MakeEye, 3, 5)
-        result = _drive(Shape, h)
+        h = _drive(make_eye, 3, 5)
+        result = _drive(shape, h)
         assert result == (3, 5)
         _free(h)
 
@@ -415,22 +415,22 @@ class TestShape:
 class TestNonzeroCount:
     def test_nnz_csr_5_elements(self):
         # nv
-        h = _drive(MakeCSR, _DATA, _INDICES_CSR, _INDPTR_CSR)
-        result = _drive(NonzeroCount, h)
+        h = _drive(make_csr, _DATA, _INDICES_CSR, _INDPTR_CSR)
+        result = _drive(nonzero_count, h)
         assert result == 5
         _free(h)
 
     def test_nnz_eye_3(self):
         # nv
-        h = _drive(MakeEye, 3)
-        result = _drive(NonzeroCount, h)
+        h = _drive(make_eye, 3)
+        result = _drive(nonzero_count, h)
         assert result == 3
         _free(h)
 
     def test_nnz_coo_matches(self):
         # nv
-        h = _drive(MakeCOO, _DATA, _ROW, _COL)
-        result = _drive(NonzeroCount, h)
+        h = _drive(make_coo, _DATA, _ROW, _COL)
+        result = _drive(nonzero_count, h)
         assert result == 5
         _free(h)
 
@@ -452,34 +452,34 @@ _X_EXPECTED = np.array([1.0, 2.0, 3.0])
 
 class TestSolve:
     def setup_method(self):
-        self._h = _drive(MakeCSR, _A_DATA, _A_INDICES, _A_INDPTR, _A_SHAPE)
+        self._h = _drive(make_csr, _A_DATA, _A_INDICES, _A_INDPTR, _A_SHAPE)
 
     def teardown_method(self):
         _free(self._h)
 
     def test_arity3_returns_array(self):
         # nv
-        result = _drive(Solve, self._h, _B_VEC)
+        result = _drive(solve, self._h, _B_VEC)
         assert isinstance(result, np.ndarray)
 
     def test_arity3_correct_solution(self):
         # nv
-        result = _drive(Solve, self._h, _B_VEC)
+        result = _drive(solve, self._h, _B_VEC)
         np.testing.assert_allclose(result, _X_EXPECTED, atol=1e-8)
 
     def test_arity4_with_permc_spec(self):
         # nv
-        result = _drive(Solve, self._h, _B_VEC, "NATURAL")
+        result = _drive(solve, self._h, _B_VEC, "NATURAL")
         np.testing.assert_allclose(result, _X_EXPECTED, atol=1e-8)
 
     def test_arity5_with_use_umfpack(self):
         # nv
-        result = _drive(Solve, self._h, _B_VEC, None, False)
+        result = _drive(solve, self._h, _B_VEC, None, False)
         np.testing.assert_allclose(result, _X_EXPECTED, atol=1e-8)
 
     def test_invalid_handle_fails(self):
         # nv
-        assert _fails(Solve, 999999, _B_VEC)
+        assert _fails(solve, 999999, _B_VEC)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -498,39 +498,39 @@ _SYM_DENSE = np.array([
 
 class TestEigenDecomposeHermitian:
     def setup_method(self):
-        self._h = _drive(FromDense, _SYM_DENSE, "csr")
+        self._h = _drive(from_dense, _SYM_DENSE, "csr")
 
     def teardown_method(self):
         _free(self._h)
 
     def test_arity2_returns_dict(self):
         # nv
-        result = _drive(EigenDecomposeHermitian, self._h)
+        result = _drive(eigen_decompose_hermitian, self._h)
         assert isinstance(result, dict)
         assert "eigenvalues" in result
         assert "eigenvectors" in result
 
     def test_arity2_eigenvalues_count(self):
         # nv
-        result = _drive(EigenDecomposeHermitian, self._h)
+        result = _drive(eigen_decompose_hermitian, self._h)
         # default k = min(6, n-1) = min(6, 4) = 4
         assert len(result["eigenvalues"]) >= 1
 
     def test_arity3_k2(self):
         # nv
-        result = _drive(EigenDecomposeHermitian, self._h, 2)
+        result = _drive(eigen_decompose_hermitian, self._h, 2)
         assert len(result["eigenvalues"]) == 2
         assert result["eigenvectors"].shape[1] == 2
 
     def test_arity3_eigenvalues_are_real(self):
         # nv
-        result = _drive(EigenDecomposeHermitian, self._h, 2)
+        result = _drive(eigen_decompose_hermitian, self._h, 2)
         # All eigenvalues of a real symmetric matrix are real
         assert np.all(np.isreal(result["eigenvalues"]))
 
     def test_invalid_handle_fails(self):
         # nv
-        assert _fails(EigenDecomposeHermitian, 999999)
+        assert _fails(eigen_decompose_hermitian, 999999)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -548,14 +548,14 @@ _SVD_DENSE = np.array([
 
 class TestSingularValueDecompose:
     def setup_method(self):
-        self._h = _drive(FromDense, _SVD_DENSE, "csr")
+        self._h = _drive(from_dense, _SVD_DENSE, "csr")
 
     def teardown_method(self):
         _free(self._h)
 
     def test_arity2_returns_dict(self):
         # nv
-        result = _drive(SingularValueDecompose, self._h)
+        result = _drive(singular_value_decompose, self._h)
         assert isinstance(result, dict)
         assert "u" in result
         assert "s" in result
@@ -563,19 +563,19 @@ class TestSingularValueDecompose:
 
     def test_arity3_k2(self):
         # nv
-        result = _drive(SingularValueDecompose, self._h, 2)
+        result = _drive(singular_value_decompose, self._h, 2)
         assert len(result["s"]) == 2
         assert result["u"].shape[1] == 2
         assert result["vt"].shape[0] == 2
 
     def test_singular_values_positive(self):
         # nv
-        result = _drive(SingularValueDecompose, self._h, 2)
+        result = _drive(singular_value_decompose, self._h, 2)
         assert np.all(result["s"] > 0)
 
     def test_reconstruction(self):
         # nv
-        result = _drive(SingularValueDecompose, self._h, 2)
+        result = _drive(singular_value_decompose, self._h, 2)
         u, s, vt = result["u"], result["s"], result["vt"]
         # Low-rank approximation should have rank 2
         approx = u @ np.diag(s) @ vt
@@ -583,7 +583,7 @@ class TestSingularValueDecompose:
 
     def test_invalid_handle_fails(self):
         # nv
-        assert _fails(SingularValueDecompose, 999999)
+        assert _fails(singular_value_decompose, 999999)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -593,21 +593,21 @@ class TestSingularValueDecompose:
 class TestFree:
     def test_free_removes_from_registry(self):
         # nv
-        h = _drive(MakeEye, 3)
+        h = _drive(make_eye, 3)
         assert h in _SPARSE_REGISTRY
         _free(h)
         assert h not in _SPARSE_REGISTRY
 
     def test_free_unknown_handle_succeeds(self):
         # nv
-        dispatch = Free._get_dispatch()
+        dispatch = free._get_dispatch()
         trail = Trail()
         results = list(dispatch(None, None, None, None, 999999, trail))
         assert any(sentinel is None for _, sentinel in results)
 
     def test_free_twice_succeeds(self):
         # nv
-        h = _drive(MakeEye, 3)
+        h = _drive(make_eye, 3)
         _free(h)
         _free(h)  # second free should not raise
 
@@ -621,11 +621,11 @@ class TestModuleExports:
         # nv
         import clausal.modules.py.scipy_sparse as m
         for name in [
-            "MakeCSR", "MakeCSC", "MakeCOO", "MakeDiagonals", "MakeEye",
-            "ToDense", "FromDense",
-            "Shape", "NonzeroCount",
-            "solve", "EigenDecomposeHermitian", "SingularValueDecompose",
-            "Free",
+            "make_csr", "make_csc", "make_coo", "make_diagonals", "make_eye",
+            "to_dense", "from_dense",
+            "shape", "nonzero_count",
+            "solve", "eigen_decompose_hermitian", "singular_value_decompose",
+            "free",
         ]:
             assert hasattr(m, name), f"Missing export: {name}"
 

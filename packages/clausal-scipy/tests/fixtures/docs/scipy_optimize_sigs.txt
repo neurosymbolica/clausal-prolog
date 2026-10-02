@@ -1,18 +1,18 @@
 # === Import ===
 
 --8<-- [start:import]
--import_from(scipy_optimize, [Minimize, MinimizeScalar, ResultGet, ...])
+-import_from(scipy_optimize, [minimize, minimize_scalar, ResultGet, ...])
 --8<-- [end:import]
 
 --8<-- [start:import_ex2]
--import_from(py.scipy_optimize, [Minimize, MinimizeScalar, ...])
+-import_from(py.scipy_optimize, [minimize, minimize_scalar, ...])
 --8<-- [end:import_ex2]
 
 
 # === Tiers ===
 
 --8<-- [start:tiers]
-Minimize(++(lambda x: x[0]**2 + x[1]**2), ++([1.0, 1.0]), RESULT),
+minimize(++(lambda x: x[0]**2 + x[1]**2), ++([1.0, 1.0]), RESULT),
 ResultGet(RESULT, 'x', X),
 ResultGet(RESULT, 'success', OK).
 --8<-- [end:tiers]
@@ -21,149 +21,149 @@ ResultGet(RESULT, 'success', OK).
 # === Predicate catalogue ===
 
 --8<-- [start:scalar_minimisation]
-MinimizeScalar(FUN, RESULT)
+minimize_scalar(FUN, RESULT)
     Minimise a scalar function of one variable (Brent method by default).
     RESULT: dict {x, fun, success, message, nit, nfev}
 
-MinimizeScalar(FUN, METHOD, RESULT)
+minimize_scalar(FUN, METHOD, RESULT)
     METHOD: 'brent' (default), 'golden', or 'bounded'
 
-MinimizeScalar(FUN, METHOD, BOUNDS, RESULT)
+minimize_scalar(FUN, METHOD, BOUNDS, RESULT)
     BOUNDS: (lower, upper) — required when METHOD='bounded'
 --8<-- [end:scalar_minimisation]
 
 --8<-- [start:multivariate_minimisation]
-Minimize(FUN, X0, RESULT)
+minimize(FUN, X0, RESULT)
     Minimise a multivariate function starting from X0 (BFGS by default).
     FUN:    Python callable accepting a 1-D array, returning a scalar
     X0:     initial guess (Python list or NumPy array)
     RESULT: dict {x, fun, jac, nfev, njev, nit, success, status, message}
 
-Minimize(FUN, X0, METHOD, RESULT)
+minimize(FUN, X0, METHOD, RESULT)
     METHOD: 'Nelder-Mead', 'Powell', 'CG', 'BFGS', 'L-BFGS-B',
             'TNC', 'COBYLA', 'SLSQP', 'trust-constr', and others
 
-Minimize(FUN, X0, METHOD, OPTIONS, RESULT)
+minimize(FUN, X0, METHOD, OPTIONS, RESULT)
     OPTIONS: Python dict of solver options (e.g. {'maxiter': 1000, 'disp': False})
 --8<-- [end:multivariate_minimisation]
 
 --8<-- [start:global_optimisation]
-DifferentialEvolution(FUNC, BOUNDS, RESULT)
+differential_evolution(FUNC, BOUNDS, RESULT)
     BOUNDS: list of (min, max) pairs, one per variable
     RESULT: dict {x, fun, success, message, nit, nfev, ...}
 
-DifferentialEvolution(FUNC, BOUNDS, SEED, RESULT)
+differential_evolution(FUNC, BOUNDS, SEED, RESULT)
     SEED: integer for reproducibility
 
-BasinHopping(FUNC, X0, RESULT)
+basin_hopping(FUNC, X0, RESULT)
     X0:     initial guess (1-D array or list)
     RESULT: dict {x, fun, message, ...}
 
-BasinHopping(FUNC, X0, ITERATIONS, RESULT)
+basin_hopping(FUNC, X0, ITERATIONS, RESULT)
     ITERATIONS: number of basin-hopping iterations (default 100)
 
-DualAnnealing(FUNC, BOUNDS, RESULT)
+dual_annealing(FUNC, BOUNDS, RESULT)
     RESULT: dict {x, fun, success, message, nit, nfev, ...}
 
-DualAnnealing(FUNC, BOUNDS, SEED, RESULT)
+dual_annealing(FUNC, BOUNDS, SEED, RESULT)
 
-ShgoMinimize(FUNC, BOUNDS, RESULT)
+shgo_minimize(FUNC, BOUNDS, RESULT)
     Simplicial Homology Global Optimisation.
     RESULT: dict {x, fun, success, message, ...}
 --8<-- [end:global_optimisation]
 
 --8<-- [start:least_squares_and_curve_fitting]
-NonlinearLeastSquares(FUN, X0, RESULT)
+nonlinear_least_squares(FUN, X0, RESULT)
     Nonlinear least-squares minimisation of sum(FUN(x)**2).
     FUN:    callable returning a 1-D array of residuals
     X0:     initial parameter guess
     RESULT: dict {x, cost, fun, jac, grad, optimality,
                   active_mask, nfev, njev, status, message, success}
 
-NonlinearLeastSquares(FUN, X0, BOUNDS, RESULT)
+nonlinear_least_squares(FUN, X0, BOUNDS, RESULT)
     BOUNDS: 2-tuple (lower_bounds, upper_bounds) for parameters
 
-CurveFit(F, XDATA, YDATA, RESULT)
+curve_fit(F, XDATA, YDATA, RESULT)
     Fit F(xdata, *params) to ydata using nonlinear least squares.
     F:      callable F(x, p1, p2, ...) → predicted y values
     RESULT: dict {popt, pcov}
               popt: optimal parameter values
               pcov: estimated covariance of popt
 
-CurveFit(F, XDATA, YDATA, P0, RESULT)
+curve_fit(F, XDATA, YDATA, P0, RESULT)
     P0: initial parameter guess (list)
 --8<-- [end:least_squares_and_curve_fitting]
 
 --8<-- [start:root_finding]
-RootScalar(F, RESULT)
+root_scalar(F, RESULT)
     Find a root of a scalar function.
     RESULT: dict {root, iterations, function_calls, converged, flag}
 
-RootScalar(F, METHOD, RESULT)
+root_scalar(F, METHOD, RESULT)
     METHOD: 'bisect', 'brentq', 'brenth', 'ridder', 'toms748',
             'newton', 'secant', 'halley'
 
-RootScalar(F, METHOD, BRACKET, RESULT)
+root_scalar(F, METHOD, BRACKET, RESULT)
     BRACKET: [lower, upper] — required for bracketing methods
              ('bisect', 'brentq', 'brenth', 'ridder', 'toms748')
 
-RootScalar(F, METHOD, X0, X1, RESULT)
+root_scalar(F, METHOD, X0, X1, RESULT)
     X0, X1: starting points — used by iterative methods
             ('newton' uses X0; 'secant' uses X0 and X1)
 
-Root(FUN, X0, RESULT)
+root(FUN, X0, RESULT)
     Find a root of a vector function FUN: R^n → R^n.
     X0:     initial guess (1-D array)
     RESULT: dict {x, fun, fjac, nfev, njev, status, success, message}
 
-Root(FUN, X0, METHOD, RESULT)
+root(FUN, X0, METHOD, RESULT)
     METHOD: 'hybr' (default), 'lm', 'broyden1', 'broyden2', 'anderson',
             'linearmixing', 'diagbroyden', 'excitingmixing', 'krylov', 'df-sane'
 --8<-- [end:root_finding]
 
 --8<-- [start:linear_and_mixed_integer_programming]
-LinearProgram(C, RESULT)
+linear_program(C, RESULT)
     Minimise C @ x subject to x >= 0 (no constraints).
     C:      cost vector (1-D array)
     RESULT: OptimizeResult dict {x, fun, ineqlin, eqlin, status, success, message, nit}
 
-LinearProgram(C, A_UB, B_UB, RESULT)
+linear_program(C, A_UB, B_UB, RESULT)
     Subject to A_UB @ x <= B_UB
 
-LinearProgram(C, A_UB, B_UB, A_EQ, B_EQ, RESULT)
+linear_program(C, A_UB, B_UB, A_EQ, B_EQ, RESULT)
     Subject to A_UB @ x <= B_UB and A_EQ @ x == B_EQ
 
-LinearProgram(C, A_UB, B_UB, A_EQ, B_EQ, BOUNDS, RESULT)
+linear_program(C, A_UB, B_UB, A_EQ, B_EQ, BOUNDS, RESULT)
     BOUNDS: sequence of (lower, upper) per variable (None means unbounded)
 
-MixedIntegerLinearProgram(C, RESULT)
+mixed_integer_linear_program(C, RESULT)
     Minimise C @ x with all variables continuous (no constraints).
     RESULT: OptimizeResult dict {x, fun, mip_node_count, mip_dual_bound,
                                   mip_gap, status, success, message}
 
-MixedIntegerLinearProgram(C, CONSTRAINTS, INTEGRALITY, BOUNDS, RESULT)
-    CONSTRAINTS:  LinearConstraint object (from LinearConstraint predicate)
+mixed_integer_linear_program(C, CONSTRAINTS, INTEGRALITY, BOUNDS, RESULT)
+    CONSTRAINTS:  linear_constraint object (from linear_constraint predicate)
     INTEGRALITY:  array: 0 = continuous, 1 = integer per variable
-    BOUNDS:       Bounds object (from Bounds predicate)
+    BOUNDS:       bounds object (from bounds predicate)
 
-LinearConstraint(A, LB, UB, RESULT)
+linear_constraint(A, LB, UB, RESULT)
     Create a scipy.optimize.LinearConstraint object.
     LB <= A @ x <= UB
-    Passes RESULT to MixedIntegerLinearProgram as CONSTRAINTS=
+    Passes RESULT to mixed_integer_linear_program as CONSTRAINTS=
 
-Bounds(LB, UB, RESULT)
+bounds(LB, UB, RESULT)
     Create a scipy.optimize.Bounds object.
     LB <= x <= UB element-wise
-    Passes RESULT to LinearProgram or MixedIntegerLinearProgram as BOUNDS=
+    Passes RESULT to linear_program or mixed_integer_linear_program as BOUNDS=
 --8<-- [end:linear_and_mixed_integer_programming]
 
 --8<-- [start:linear_and_mixed_integer_programming_ex2]
--import_from(scipy_optimize, [LinearProgram, ResultGet])
+-import_from(scipy_optimize, [linear_program, ResultGet])
 
 # Maximise x1 + 2*x2 subject to x1 + x2 <= 4, x1,x2 >= 0
 # equivalent to: minimise -x1 - 2*x2
 LpSolution(X) <- (
-    LinearProgram(++([-1.0, -2.0]), ++([[1.0, 1.0]]), ++([4.0]), RESULT),
+    linear_program(++([-1.0, -2.0]), ++([[1.0, 1.0]]), ++([4.0]), RESULT),
     ResultGet(RESULT, 'x', X)
 )
 --8<-- [end:linear_and_mixed_integer_programming_ex2]
@@ -181,14 +181,14 @@ ResultGet(RESULT, FIELD, VALUE)
 # === Complete example — Rosenbrock with gradient descent ===
 
 --8<-- [start:complete_example]
--import_from(scipy_optimize, [Minimize, ResultGet])
+-import_from(scipy_optimize, [minimize, ResultGet])
 
 # The Rosenbrock function — minimum at (1, 1) with value 0
 Rosenbrock(X, Y) <-
     (X - 1.0)**2 + 100.0 * (Y - X**2)**2.
 
 RosenbrockMin(X, Y) <- (
-    Minimize(
+    minimize(
         ++(lambda v: (v[0] - 1.0)**2 + 100.0*(v[1] - v[0]**2)**2),
         ++([0.0, 0.0]),
         'L-BFGS-B',

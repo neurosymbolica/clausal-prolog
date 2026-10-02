@@ -1,15 +1,15 @@
 -double_quotes(atom)
--import_from(scipy_linalg, [Solve, Inverse, MatrixExpLog,
-                             QrDecompose, SingularValueDecompose,
+-import_from(scipy_linalg, [solve, Inverse, MatrixExpLog,
+                             QrDecompose, singular_value_decompose,
                              LuDecompose, Cholesky,
-                             EigenDecompose, EigenDecomposeHermitian,
+                             EigenDecompose, eigen_decompose_hermitian,
                              Schur, ResultGet])
 
-# ── Solve(A, B, X) ──────────────────────────────────────────────────────
+# ── solve(A, B, X) ──────────────────────────────────────────────────────
 
 # forward (A, B ground -> X)
 test("solve forward") <- (
-    Solve([[1.0, 0.0], [0.0, 1.0]], [3.0, 4.0], X),
+    solve([[1.0, 0.0], [0.0, 1.0]], [3.0, 4.0], X),
     DIFF0 is ++(abs(float(X[0]) - 3.0)),
     DIFF1 is ++(abs(float(X[1]) - 4.0)),
     DIFF0 < 1e-10,
@@ -17,7 +17,7 @@ test("solve forward") <- (
 
 # backward (A, X ground -> B = A @ X)
 test("solve backward computes B") <- (
-    Solve([[2.0, 0.0], [0.0, 3.0]], B, [1.0, 2.0]),
+    solve([[2.0, 0.0], [0.0, 3.0]], B, [1.0, 2.0]),
     DIFF0 is ++(abs(float(B[0]) - 2.0)),
     DIFF1 is ++(abs(float(B[1]) - 6.0)),
     DIFF0 < 1e-10,
@@ -27,8 +27,8 @@ test("solve backward computes B") <- (
 test("solve round-trip") <- (
     A is ++(__import__('numpy').array([[2.0, 1.0], [1.0, 3.0]])),
     B is ++(__import__('numpy').array([5.0, 7.0])),
-    Solve(A, B, X),
-    Solve(A, B2, X),
+    solve(A, B, X),
+    solve(A, B2, X),
     DIFF is ++(__import__('numpy').max(__import__('numpy').abs(B2 - B))),
     DIFF < 1e-10)  # nv
 
@@ -129,12 +129,12 @@ test("qr recompose") <- (
 # both unbound
 test("qr both unbound fails") <- (not QrDecompose(_, _))  # nv
 
-# ── SingularValueDecompose(A, R) ─────────────────────────────────────────
+# ── singular_value_decompose(A, R) ─────────────────────────────────────────
 
 # forward
 test("svd forward") <- (
     A is ++(__import__('numpy').array([[1.0, 2.0], [3.0, 4.0]])),
-    SingularValueDecompose(A, R),
+    singular_value_decompose(A, R),
     ResultGet(R, 'u', U_UNUSED),
     ResultGet(R, 's', S_UNUSED),
     ResultGet(R, 'vh', VH_UNUSED))  # nv
@@ -142,14 +142,14 @@ test("svd forward") <- (
 # backward (recompose)
 test("svd recompose") <- (
     A is ++(__import__('numpy').array([[1.0, 2.0], [3.0, 4.0]])),
-    SingularValueDecompose(A, R),
-    SingularValueDecompose(A2, R),
+    singular_value_decompose(A, R),
+    singular_value_decompose(A2, R),
     DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
         __import__('numpy').real(A2) - A))),
     DIFF < 1e-10)  # nv
 
 # both unbound
-test("svd both unbound fails") <- (not SingularValueDecompose(_, _))  # nv
+test("svd both unbound fails") <- (not singular_value_decompose(_, _))  # nv
 
 # ── Cholesky(A, R) ──────────────────────────────────────────────────────
 
@@ -194,26 +194,26 @@ test("eigen recompose") <- (
 # both unbound
 test("eigen both unbound fails") <- (not EigenDecompose(_, _))  # nv
 
-# ── EigenDecomposeHermitian(A, R) ────────────────────────────────────────
+# ── eigen_decompose_hermitian(A, R) ────────────────────────────────────────
 
 # forward
 test("eigen hermitian forward") <- (
     A is ++(__import__('numpy').array([[4.0, 1.0], [1.0, 3.0]])),
-    EigenDecomposeHermitian(A, R),
+    eigen_decompose_hermitian(A, R),
     ResultGet(R, 'eigenvalues', VALS_UNUSED),
     ResultGet(R, 'eigenvectors', VECS_UNUSED))  # nv
 
 # backward (recompose)
 test("eigen hermitian recompose") <- (
     A is ++(__import__('numpy').array([[4.0, 1.0], [1.0, 3.0]])),
-    EigenDecomposeHermitian(A, R),
-    EigenDecomposeHermitian(A2, R),
+    eigen_decompose_hermitian(A, R),
+    eigen_decompose_hermitian(A2, R),
     DIFF is ++(__import__('numpy').max(__import__('numpy').abs(
         __import__('numpy').real(A2) - A))),
     DIFF < 1e-9)  # nv
 
 # both unbound
-test("eigen hermitian both unbound fails") <- (not EigenDecomposeHermitian(_, _))  # nv
+test("eigen hermitian both unbound fails") <- (not eigen_decompose_hermitian(_, _))  # nv
 
 # ── Schur(A, R) ──────────────────────────────────────────────────────────
 

@@ -3,22 +3,22 @@
 Provides optimisation routines from scipy.optimize as importable predicate
 objects for use in .clausal files via::
 
-    -import_from(py.scipy_optimize, [Minimize, MinimizeScalar, ResultGet, ...])
+    -import_from(py.scipy_optimize, [minimize, minimize_scalar, ResultGet, ...])
 
 Tiers
 -----
-- **Tier 1**: LinearConstraint, Bounds (helper object constructors)
+- **Tier 1**: linear_constraint, bounds (helper object constructors)
 - **Tier 2** (returns result dict; use ResultGet to access fields):
-    MinimizeScalar     → dict {x, fun, success, message, nit, nfev}
-    Minimize           → dict {x, fun, jac, nfev, njev, nit, success, status, message}
-    DifferentialEvolution → dict {x, fun, success, message, ...}
-    BasinHopping       → dict {x, fun, message, ...}
-    DualAnnealing      → dict {x, fun, success, message, ...}
-    ShgoMinimize       → dict {x, fun, success, message, ...}
-    NonlinearLeastSquares → dict {x, cost, fun, jac, ...}
-    CurveFit           → dict {popt, pcov}
-    RootScalar         → dict {root, iterations, function_calls, converged, flag}
-    Root               → dict {x, fun, fjac, nfev, success, message}
+    minimize_scalar     → dict {x, fun, success, message, nit, nfev}
+    minimize           → dict {x, fun, jac, nfev, njev, nit, success, status, message}
+    differential_evolution → dict {x, fun, success, message, ...}
+    basin_hopping       → dict {x, fun, message, ...}
+    dual_annealing      → dict {x, fun, success, message, ...}
+    shgo_minimize       → dict {x, fun, success, message, ...}
+    nonlinear_least_squares → dict {x, cost, fun, jac, ...}
+    curve_fit           → dict {popt, pcov}
+    root_scalar         → dict {root, iterations, function_calls, converged, flag}
+    root               → dict {x, fun, fjac, nfev, success, message}
 
 Helper:
     ResultGet(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE
@@ -88,9 +88,9 @@ def _pred(name: str, *arity_fns) -> ModulePredicate:
     return p
 
 
-# ── MinimizeScalar ────────────────────────────────────────────────────────
+# ── minimize_scalar ────────────────────────────────────────────────────────
 
-MinimizeScalar = _pred("MinimizeScalar",
+minimize_scalar = _pred("minimize_scalar",
     (2, _dispatch_fn(lambda fun:
         _opt().minimize_scalar(fun))),
     (3, _dispatch_fn(lambda fun, method:
@@ -100,9 +100,9 @@ MinimizeScalar = _pred("MinimizeScalar",
 )
 
 
-# ── Minimize ──────────────────────────────────────────────────────────────
+# ── minimize ──────────────────────────────────────────────────────────────
 
-Minimize = _pred("Minimize",
+minimize = _pred("minimize",
     (3, _dispatch_fn(lambda fun, x0:
         _opt().minimize(fun, x0))),
     (4, _dispatch_fn(lambda fun, x0, method:
@@ -112,9 +112,9 @@ Minimize = _pred("Minimize",
 )
 
 
-# ── DifferentialEvolution ─────────────────────────────────────────────────
+# ── differential_evolution ─────────────────────────────────────────────────
 
-DifferentialEvolution = _pred("DifferentialEvolution",
+differential_evolution = _pred("differential_evolution",
     (3, _dispatch_fn(lambda func, bounds:
         _opt().differential_evolution(func, bounds))),
     (4, _dispatch_fn(lambda func, bounds, seed:
@@ -122,9 +122,9 @@ DifferentialEvolution = _pred("DifferentialEvolution",
 )
 
 
-# ── BasinHopping ──────────────────────────────────────────────────────────
+# ── basin_hopping ──────────────────────────────────────────────────────────
 
-BasinHopping = _pred("BasinHopping",
+basin_hopping = _pred("basin_hopping",
     (3, _dispatch_fn(lambda func, x0:
         _opt().basinhopping(func, x0))),
     (4, _dispatch_fn(lambda func, x0, iterations:
@@ -132,9 +132,9 @@ BasinHopping = _pred("BasinHopping",
 )
 
 
-# ── DualAnnealing ─────────────────────────────────────────────────────────
+# ── dual_annealing ─────────────────────────────────────────────────────────
 
-DualAnnealing = _pred("DualAnnealing",
+dual_annealing = _pred("dual_annealing",
     (3, _dispatch_fn(lambda func, bounds:
         _opt().dual_annealing(func, bounds))),
     (4, _dispatch_fn(lambda func, bounds, seed:
@@ -142,17 +142,17 @@ DualAnnealing = _pred("DualAnnealing",
 )
 
 
-# ── ShgoMinimize ──────────────────────────────────────────────────────────
+# ── shgo_minimize ──────────────────────────────────────────────────────────
 
-ShgoMinimize = _pred("ShgoMinimize",
+shgo_minimize = _pred("shgo_minimize",
     (3, _dispatch_fn(lambda func, bounds:
         _opt().shgo(func, bounds))),
 )
 
 
-# ── NonlinearLeastSquares ─────────────────────────────────────────────────
+# ── nonlinear_least_squares ─────────────────────────────────────────────────
 
-NonlinearLeastSquares = _pred("NonlinearLeastSquares",
+nonlinear_least_squares = _pred("nonlinear_least_squares",
     (3, _dispatch_fn(lambda fun, x0:
         _opt().least_squares(fun, x0))),
     (4, _dispatch_fn(lambda fun, x0, bounds:
@@ -160,7 +160,7 @@ NonlinearLeastSquares = _pred("NonlinearLeastSquares",
 )
 
 
-# ── CurveFit ──────────────────────────────────────────────────────────────
+# ── curve_fit ──────────────────────────────────────────────────────────────
 
 def _curve_fit_2(f, xdata, ydata):
     popt, pcov = _opt().curve_fit(f, xdata, ydata)
@@ -172,13 +172,13 @@ def _curve_fit_3(f, xdata, ydata, p0):
     return {'popt': popt, 'pcov': pcov}
 
 
-CurveFit = _pred("CurveFit",
+curve_fit = _pred("curve_fit",
     (4, _dispatch_fn(_curve_fit_2)),
     (5, _dispatch_fn(_curve_fit_3)),
 )
 
 
-# ── RootScalar ────────────────────────────────────────────────────────────
+# ── root_scalar ────────────────────────────────────────────────────────────
 
 def _root_scalar_result(r):
     return {
@@ -190,7 +190,7 @@ def _root_scalar_result(r):
     }
 
 
-RootScalar = _pred("RootScalar",
+root_scalar = _pred("root_scalar",
     (2, _dispatch_fn(lambda f:
         _root_scalar_result(_opt().root_scalar(f)))),
     (3, _dispatch_fn(lambda f, method:
@@ -202,9 +202,9 @@ RootScalar = _pred("RootScalar",
 )
 
 
-# ── Root ──────────────────────────────────────────────────────────────────
+# ── root ──────────────────────────────────────────────────────────────────
 
-Root = _pred("Root",
+root = _pred("root",
     (3, _dispatch_fn(lambda fun, x0:
         _opt().root(fun, x0))),
     (4, _dispatch_fn(lambda fun, x0, method:
@@ -212,9 +212,9 @@ Root = _pred("Root",
 )
 
 
-# ── LinearProgram ─────────────────────────────────────────────────────────
+# ── linear_program ─────────────────────────────────────────────────────────
 
-LinearProgram = _pred("LinearProgram",
+linear_program = _pred("linear_program",
     (2, _dispatch_fn(lambda c:
         _opt().linprog(c))),
     (4, _dispatch_fn(lambda c, a_ub, b_ub:
@@ -226,9 +226,9 @@ LinearProgram = _pred("LinearProgram",
 )
 
 
-# ── MixedIntegerLinearProgram ─────────────────────────────────────────────
+# ── mixed_integer_linear_program ─────────────────────────────────────────────
 
-MixedIntegerLinearProgram = _pred("MixedIntegerLinearProgram",
+mixed_integer_linear_program = _pred("mixed_integer_linear_program",
     (2, _dispatch_fn(lambda c:
         _opt().milp(c))),
     (5, _dispatch_fn(lambda c, constraints, integrality, bounds:
@@ -236,17 +236,17 @@ MixedIntegerLinearProgram = _pred("MixedIntegerLinearProgram",
 )
 
 
-# ── LinearConstraint ──────────────────────────────────────────────────────
+# ── linear_constraint ──────────────────────────────────────────────────────
 
-LinearConstraint = _pred("LinearConstraint",
+linear_constraint = _pred("linear_constraint",
     (4, _dispatch_fn(lambda a, lb, ub:
         _opt().LinearConstraint(a, lb=lb, ub=ub))),
 )
 
 
-# ── Bounds ────────────────────────────────────────────────────────────────
+# ── bounds ────────────────────────────────────────────────────────────────
 
-Bounds = _pred("Bounds",
+bounds = _pred("bounds",
     (3, _dispatch_fn(lambda lb, ub:
         _opt().Bounds(lb=lb, ub=ub))),
 )

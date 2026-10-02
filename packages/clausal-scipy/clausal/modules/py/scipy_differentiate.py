@@ -3,32 +3,32 @@
 Provides numerical differentiation from ``scipy.differentiate`` as
 importable predicate objects for use in .clausal files via::
 
-    -import_from(scipy_differentiate, [Derivative, Jacobian, Hessian, ResultGet])
+    -import_from(scipy_differentiate, [derivative, jacobian, hessian, ResultGet])
 
 All predicates are **Tier 2 — result-record**: they return a dict with
 fields that can be accessed via ``ResultGet``.
 
 Predicate catalogue
 -------------------
-    Derivative(F, X, RESULT)              — scalar derivative at X
-    Derivative(F, X, ARGS, RESULT)        — derivative with extra function args
-    Jacobian(F, X, RESULT)               — Jacobian matrix at X
-    Hessian(F, X, RESULT)                — Hessian matrix at X
+    derivative(F, X, RESULT)              — scalar derivative at X
+    derivative(F, X, ARGS, RESULT)        — derivative with extra function args
+    jacobian(F, X, RESULT)               — jacobian matrix at X
+    hessian(F, X, RESULT)                — hessian matrix at X
 
 Result dict fields
 ------------------
-    Derivative / Jacobian result:
+    derivative / jacobian result:
         'x'        — evaluation point (echo of input X)
-        'df'       — derivative or Jacobian value
+        'df'       — derivative or jacobian value
         'error'    — estimated error
-        'success'  — bool (or bool array for Jacobian/Hessian)
+        'success'  — bool (or bool array for jacobian/hessian)
         'status'   — integer status code
         'nfev'     — number of function evaluations
         'nit'      — number of iterations
 
-    Hessian result:
+    hessian result:
         'x'        — evaluation point
-        'ddf'      — Hessian matrix
+        'ddf'      — hessian matrix
         'error'    — estimated error
         'success'  — bool array
         'status'   — integer status code
@@ -154,7 +154,7 @@ def _make_f_stripped(f, x_dims, f_accepts_quantity):
 
 
 def _derivative_quantity_call(f, x):
-    """Handle Quantity x for Derivative: probe f, strip, call scipy, wrap result."""
+    """Handle Quantity x for derivative: probe f, strip, call scipy, wrap result."""
     if not isinstance(x, Quantity):
         return _diff().derivative(f, x)
     x_dims = dict(x.dims)
@@ -172,7 +172,7 @@ def _derivative_quantity_call(f, x):
 
 
 def _derivative_quantity_call_args(f, x, args):
-    """Handle Quantity x for Derivative with extra args."""
+    """Handle Quantity x for derivative with extra args."""
     if not isinstance(x, Quantity):
         return _diff().derivative(f, x, args=tuple(args))
     x_dims = dict(x.dims)
@@ -195,7 +195,7 @@ def _derivative_quantity_call_args(f, x, args):
 
 
 def _jacobian_quantity_call(f, x):
-    """Handle Quantity x for Jacobian: probe f, strip, call scipy, wrap result."""
+    """Handle Quantity x for jacobian: probe f, strip, call scipy, wrap result."""
     if not isinstance(x, Quantity):
         return _diff().jacobian(f, x)
     x_dims = dict(x.dims)
@@ -214,7 +214,7 @@ def _jacobian_quantity_call(f, x):
 
 
 def _hessian_quantity_call(f, x):
-    """Handle Quantity x for Hessian: probe f, strip, call scipy, wrap result."""
+    """Handle Quantity x for hessian: probe f, strip, call scipy, wrap result."""
     if not isinstance(x, Quantity):
         return _diff().hessian(f, x)
     x_dims = dict(x.dims)
@@ -225,7 +225,7 @@ def _hessian_quantity_call(f, x):
     if x_dims and 'x' in result:
         result['x'] = wrap_result(result['x'], x_dims)
     if f_dims is not None:
-        # Hessian: second derivative → f_dims − 2·x_dims
+        # hessian: second derivative → f_dims − 2·x_dims
         ddf_dims = merge_dims(f_dims, x_dims, -2)
         result['ddf']   = wrap_result(result['ddf'],   ddf_dims)
         if 'error' in result:
@@ -261,24 +261,24 @@ def _dispatch_fn_quantity(call: Callable, output_key: str) -> Callable:
     return dispatch
 
 
-# ── Derivative ─────────────────────────────────────────────────────────────
+# ── derivative ─────────────────────────────────────────────────────────────
 
-Derivative = _pred("Derivative",
+derivative = _pred("derivative",
     (3, _dispatch_fn_quantity(_derivative_quantity_call, "df")),
     (4, _dispatch_fn_quantity(_derivative_quantity_call_args, "df")),
 )
 
 
-# ── Jacobian ───────────────────────────────────────────────────────────────
+# ── jacobian ───────────────────────────────────────────────────────────────
 
-Jacobian = _pred("Jacobian",
+jacobian = _pred("jacobian",
     (3, _dispatch_fn_quantity(_jacobian_quantity_call, "df")),
 )
 
 
-# ── Hessian ────────────────────────────────────────────────────────────────
+# ── hessian ────────────────────────────────────────────────────────────────
 
-Hessian = _pred("Hessian",
+hessian = _pred("hessian",
     (3, _dispatch_fn_quantity(_hessian_quantity_call, "ddf")),
 )
 

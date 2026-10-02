@@ -3,88 +3,88 @@
 Provides interpolation routines from scipy.interpolate as importable predicate
 objects for use in .clausal files via::
 
-    -import_from(scipy_interpolate, [MakeSpline, EvalSpline, Free, ...])
+    -import_from(scipy_interpolate, [make_spline, eval_spline, free, ...])
 
 Or via the canonical ``py.*`` path::
 
-    -import_from(py.scipy_interpolate, [MakeSpline, EvalSpline, ...])
+    -import_from(py.scipy_interpolate, [make_spline, eval_spline, ...])
 
 Tiers
 -----
 All predicates are **Tier 3** (handle-based): stateful interpolator objects are
 constructed with ``Make*`` predicates, which return an opaque integer
 ``HANDLE``.  The handle is passed to evaluation or query predicates.
-``Free(HANDLE)`` releases the object from the registry.
+``free(HANDLE)`` releases the object from the registry.
 
 Handle predicates
 -----------------
 Constructors — return an integer HANDLE:
-    MakeSpline(X, Y, RESULT)
-    MakeSpline(X, Y, K, RESULT)
-    MakeSpline(X, Y, K, BC_TYPE, RESULT)
+    make_spline(X, Y, RESULT)
+    make_spline(X, Y, K, RESULT)
+    make_spline(X, Y, K, BC_TYPE, RESULT)
         → scipy.interpolate.make_interp_spline(x, y, k=K, bc_type=BC_TYPE)
         Recommended 1-D spline constructor; returns a BSpline object.
 
-    MakeCubic(X, Y, RESULT)
-    MakeCubic(X, Y, BC_TYPE, RESULT)
+    make_cubic(X, Y, RESULT)
+    make_cubic(X, Y, BC_TYPE, RESULT)
         → scipy.interpolate.CubicSpline(x, y, bc_type=BC_TYPE)
 
-    MakePCHIP(X, Y, RESULT)
-    MakePCHIP(X, Y, EXTRAPOLATE, RESULT)
+    make_pchip(X, Y, RESULT)
+    make_pchip(X, Y, EXTRAPOLATE, RESULT)
         → scipy.interpolate.PchipInterpolator(x, y, extrapolate=EXTRAPOLATE)
         Monotone cubic; good for data with outliers.
 
-    MakeAkima(X, Y, RESULT)
+    make_akima(X, Y, RESULT)
         → scipy.interpolate.Akima1DInterpolator(x, y)
 
-    MakeLinear1D(X, Y, RESULT)
-    MakeLinear1D(X, Y, KIND, RESULT)
+    make_linear1d(X, Y, RESULT)
+    make_linear1d(X, Y, KIND, RESULT)
         → scipy.interpolate.interp1d(x, y, kind=KIND)
         Supports: 'linear','nearest','nearest-up','zero','slinear',
                   'quadratic','cubic','previous','next'
-        Note: deprecated in SciPy ≥ 1.14; prefer MakeSpline for new code.
+        Note: deprecated in SciPy ≥ 1.14; prefer make_spline for new code.
 
-    MakeRegularGrid(POINTS, VALUES, RESULT)
-    MakeRegularGrid(POINTS, VALUES, METHOD, RESULT)
+    make_regular_grid(POINTS, VALUES, RESULT)
+    make_regular_grid(POINTS, VALUES, METHOD, RESULT)
         → scipy.interpolate.RegularGridInterpolator(points, values, method=METHOD)
         N-D interpolation on a regular (rectilinear) grid.
 
-    MakeRadialBasis(X, Y, RESULT)
-    MakeRadialBasis(X, Y, FUNCTION, RESULT)
-    MakeRadialBasis(X, Y, FUNCTION, SMOOTH, RESULT)
+    make_radial_basis(X, Y, RESULT)
+    make_radial_basis(X, Y, FUNCTION, RESULT)
+    make_radial_basis(X, Y, FUNCTION, SMOOTH, RESULT)
         → scipy.interpolate.RBFInterpolator(x, y, kernel=FUNCTION, smoothing=SMOOTH)
 
 Evaluators — look up HANDLE and call the interpolator:
-    EvalSpline(HANDLE, X, RESULT)
-    EvalSpline(HANDLE, X, NU, RESULT)
+    eval_spline(HANDLE, X, RESULT)
+    eval_spline(HANDLE, X, NU, RESULT)
         Evaluate spline (or its NU-th derivative) at points X.
 
-    EvalRegularGrid(HANDLE, XI, RESULT)
-    EvalRegularGrid(HANDLE, XI, METHOD, RESULT)
+    eval_regular_grid(HANDLE, XI, RESULT)
+    eval_regular_grid(HANDLE, XI, METHOD, RESULT)
 
-    EvalRadialBasis(HANDLE, X, RESULT)
+    eval_radial_basis(HANDLE, X, RESULT)
 
 Spline utilities (operate on BSpline/CubicSpline/Pchip/Akima handles):
-    SplineIntegral(HANDLE, A, B, RESULT)
+    spline_integral(HANDLE, A, B, RESULT)
         Definite integral of the spline from A to B.
 
-    SplineDerivative(HANDLE, RESULT)
-    SplineDerivative(HANDLE, ORDER, RESULT)
+    spline_derivative(HANDLE, RESULT)
+    spline_derivative(HANDLE, ORDER, RESULT)
         Returns a new HANDLE for the derivative spline.
 
-    SplineRoots(HANDLE, RESULT)
+    spline_roots(HANDLE, RESULT)
         Returns the real roots (zero-crossings) of the spline as a list.
 
 Lifecycle:
-    Free(HANDLE)
+    free(HANDLE)
         Release HANDLE from the registry.  Always succeeds.
 
 Pipeline pattern::
 
-    MakeSpline(Xs, Ys, 3, HANDLE),
-    EvalSpline(HANDLE, NewXs, Values),
-    SplineIntegral(HANDLE, 0.0, 10.0, Area),
-    Free(HANDLE).
+    make_spline(Xs, Ys, 3, HANDLE),
+    eval_spline(HANDLE, NewXs, Values),
+    spline_integral(HANDLE, 0.0, 10.0, Area),
+    free(HANDLE).
 """
 
 from __future__ import annotations
@@ -236,10 +236,10 @@ def _pred(name: str, *arity_fns) -> ModulePredicate:
     return p
 
 
-# ── MakeSpline ───────────────────────────────────────────────────────
+# ── make_spline ───────────────────────────────────────────────────────
 # scipy.interpolate.make_interp_spline(x, y, k=3, bc_type=None)
 
-MakeSpline = _pred("MakeSpline",
+make_spline = _pred("make_spline",
     (3, _make_dispatch_units(lambda x, y:
         _si().make_interp_spline(x, y))),
     (4, _make_dispatch_units(lambda x, y, k:
@@ -249,10 +249,10 @@ MakeSpline = _pred("MakeSpline",
 )
 
 
-# ── MakeCubic ────────────────────────────────────────────────────────
+# ── make_cubic ────────────────────────────────────────────────────────
 # scipy.interpolate.CubicSpline(x, y, bc_type=...)
 
-MakeCubic = _pred("MakeCubic",
+make_cubic = _pred("make_cubic",
     (3, _make_dispatch_units(lambda x, y:
         _si().CubicSpline(x, y))),
     (4, _make_dispatch_units(lambda x, y, bc_type:
@@ -260,10 +260,10 @@ MakeCubic = _pred("MakeCubic",
 )
 
 
-# ── MakePCHIP ────────────────────────────────────────────────────────
+# ── make_pchip ────────────────────────────────────────────────────────
 # scipy.interpolate.PchipInterpolator(x, y, extrapolate=...)
 
-MakePCHIP = _pred("MakePCHIP",
+make_pchip = _pred("make_pchip",
     (3, _make_dispatch_units(lambda x, y:
         _si().PchipInterpolator(x, y))),
     (4, _make_dispatch_units(lambda x, y, extrapolate:
@@ -271,16 +271,16 @@ MakePCHIP = _pred("MakePCHIP",
 )
 
 
-# ── MakeAkima ────────────────────────────────────────────────────────
+# ── make_akima ────────────────────────────────────────────────────────
 # scipy.interpolate.Akima1DInterpolator(x, y)
 
-MakeAkima = _pred("MakeAkima",
+make_akima = _pred("make_akima",
     (3, _make_dispatch_units(lambda x, y:
         _si().Akima1DInterpolator(x, y))),
 )
 
 
-# ── MakeLinear1D ─────────────────────────────────────────────────────
+# ── make_linear1d ─────────────────────────────────────────────────────
 # scipy.interpolate.interp1d(x, y, kind=...) — deprecated in SciPy ≥ 1.14
 
 def _make_linear1d_arity3(this_generator, _proceed, _fail, _catcher, *args):
@@ -341,16 +341,16 @@ def _make_linear1d_arity4(this_generator, _proceed, _fail, _catcher, *args):
     yield (_fail, DONE)
 
 
-MakeLinear1D = _pred("MakeLinear1D",
+make_linear1d = _pred("make_linear1d",
     (3, _make_linear1d_arity3),
     (4, _make_linear1d_arity4),
 )
 
 
-# ── MakeRegularGrid ──────────────────────────────────────────────────
+# ── make_regular_grid ──────────────────────────────────────────────────
 # scipy.interpolate.RegularGridInterpolator(points, values, method=...)
 
-MakeRegularGrid = _pred("MakeRegularGrid",
+make_regular_grid = _pred("make_regular_grid",
     (3, _make_dispatch_units(lambda points, values:
         _si().RegularGridInterpolator(points, values))),
     (4, _make_dispatch_units(lambda points, values, method:
@@ -358,11 +358,11 @@ MakeRegularGrid = _pred("MakeRegularGrid",
 )
 
 
-# ── MakeRadialBasis ──────────────────────────────────────────────────────────
+# ── make_radial_basis ──────────────────────────────────────────────────────────
 # scipy.interpolate.RBFInterpolator(y, d, kernel=..., smoothing=...)
 # Note: RBFInterpolator(y, d) — first arg is sample points, second is values
 
-MakeRadialBasis = _pred("MakeRadialBasis",
+make_radial_basis = _pred("make_radial_basis",
     (3, _make_dispatch_units(lambda x, y:
         _si().RBFInterpolator(x, y))),
     (4, _make_dispatch_units(lambda x, y, function:
@@ -372,7 +372,7 @@ MakeRadialBasis = _pred("MakeRadialBasis",
 )
 
 
-# ── EvalSpline ───────────────────────────────────────────────────────
+# ── eval_spline ───────────────────────────────────────────────────────
 # Evaluate a spline (or its NU-th derivative) at points X.
 # Works for BSpline, CubicSpline, PchipInterpolator, Akima1DInterpolator.
 # Arity-3 form is bidirectional: given Y, find X via brentq root-finding.
@@ -393,7 +393,7 @@ def _eval_spline_bwd(interp, y_target):
 
 
 def _eval_spline_bidir(this_generator, _proceed, _fail, _catcher, *args):
-    """Bidirectional dispatch for EvalSpline(HANDLE, X, RESULT).
+    """Bidirectional dispatch for eval_spline(HANDLE, X, RESULT).
 
     HANDLE always ground.
     X ground, RESULT unbound → forward evaluation.
@@ -475,13 +475,13 @@ def _eval_spline_nu(obj, x_dims, y_dims, x, nu):
     return wrap_result(raw, out_dims)
 
 
-EvalSpline = _pred("EvalSpline",
+eval_spline = _pred("eval_spline",
     (3, _eval_spline_bidir),
     (4, _eval_dispatch(_eval_spline_nu)),
 )
 
 
-# ── EvalRegularGrid ──────────────────────────────────────────────────
+# ── eval_regular_grid ──────────────────────────────────────────────────
 
 def _eval_regular_grid(obj, x_dims, y_dims, xi, method=None):
     xi_val = strip_quantity(xi)
@@ -489,7 +489,7 @@ def _eval_regular_grid(obj, x_dims, y_dims, xi, method=None):
     return wrap_result(raw, y_dims) if y_dims else raw
 
 
-EvalRegularGrid = _pred("EvalRegularGrid",
+eval_regular_grid = _pred("eval_regular_grid",
     (3, _eval_dispatch(lambda obj, x_dims, y_dims, xi:
         _eval_regular_grid(obj, x_dims, y_dims, xi))),
     (4, _eval_dispatch(lambda obj, x_dims, y_dims, xi, method:
@@ -497,15 +497,15 @@ EvalRegularGrid = _pred("EvalRegularGrid",
 )
 
 
-# ── EvalRadialBasis ──────────────────────────────────────────────────────────
+# ── eval_radial_basis ──────────────────────────────────────────────────────────
 
-EvalRadialBasis = _pred("EvalRadialBasis",
+eval_radial_basis = _pred("eval_radial_basis",
     (3, _eval_dispatch(lambda obj, x_dims, y_dims, x:
         wrap_result(obj(strip_quantity(x)), y_dims) if y_dims else obj(x))),
 )
 
 
-# ── SplineIntegral ───────────────────────────────────────────────────
+# ── spline_integral ───────────────────────────────────────────────────
 # Definite integral from A to B; calls handle.integrate(a, b).
 
 def _spline_integral(obj, x_dims, y_dims, a, b):
@@ -517,12 +517,12 @@ def _spline_integral(obj, x_dims, y_dims, a, b):
     return wrap_result(raw, out_dims)
 
 
-SplineIntegral = _pred("SplineIntegral",
+spline_integral = _pred("spline_integral",
     (4, _eval_dispatch(_spline_integral)),
 )
 
 
-# ── SplineDerivative ─────────────────────────────────────────────────
+# ── spline_derivative ─────────────────────────────────────────────────
 # Returns a new handle for the derivative spline.
 # arity 2: (handle, result)   — default order=1
 # arity 3: (handle, order, result)
@@ -574,13 +574,13 @@ def _spline_derivative_arity3(this_generator, _proceed, _fail, _catcher, *args):
     yield (_fail, DONE)
 
 
-SplineDerivative = _pred("SplineDerivative",
+spline_derivative = _pred("spline_derivative",
     (2, _spline_derivative_arity2),
     (3, _spline_derivative_arity3),
 )
 
 
-# ── SplineRoots ──────────────────────────────────────────────────────
+# ── spline_roots ──────────────────────────────────────────────────────
 # Returns the real roots (zero-crossings) of the spline as a Python list.
 # arity 2: (handle, result)
 
@@ -592,18 +592,18 @@ def _spline_roots(obj, x_dims, y_dims):
     return roots
 
 
-SplineRoots = _pred("SplineRoots",
+spline_roots = _pred("spline_roots",
     (2, _eval_dispatch(_spline_roots)),
 )
 
 
-# ── Free ─────────────────────────────────────────────────────────────
+# ── free ─────────────────────────────────────────────────────────────
 
 class _FreePredicate(ModulePredicate):
-    """Free(HANDLE) — release interpolator handle from registry."""
+    """free(HANDLE) — release interpolator handle from registry."""
 
     def __init__(self):
-        super().__init__("Free")
+        super().__init__("free")
 
     def _get_dispatch(self) -> Callable:
         return self._dispatch
@@ -616,7 +616,7 @@ class _FreePredicate(ModulePredicate):
         yield (_fail, DONE)
 
     def __repr__(self) -> str:
-        return "scipy.interpolate.Free/1"
+        return "scipy.interpolate.free/1"
 
 
-Free = _FreePredicate()
+free = _FreePredicate()

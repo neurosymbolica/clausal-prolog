@@ -1,23 +1,23 @@
 # === Import ===
 
 --8<-- [start:import]
--import_from(scipy_integrate, [Quad, Trapezoid, SolveInitialValueProblem, ResultGet, ...])
+-import_from(scipy_integrate, [quad, trapezoid, solve_initial_value_problem, ResultGet, ...])
 --8<-- [end:import]
 
 --8<-- [start:import_ex2]
--import_from(py.scipy_integrate, [Quad, Trapezoid, ...])
+-import_from(py.scipy_integrate, [quad, trapezoid, ...])
 --8<-- [end:import_ex2]
 
 
 # === Tiers ===
 
 --8<-- [start:tier_1]
-Trapezoid(++([1.0, 2.0, 3.0]), RESULT),
+trapezoid(++([1.0, 2.0, 3.0]), RESULT),
 # RESULT is unified with 4.0
 --8<-- [end:tier_1]
 
 --8<-- [start:tier_2]
-Quad(++(lambda x: __import__('math').sin(x)), ++(0.0), ++(3.14159), RESULT),
+quad(++(lambda x: __import__('math').sin(x)), ++(0.0), ++(3.14159), RESULT),
 ResultGet(RESULT, 'value', V),
 ResultGet(RESULT, 'error', E).
 --8<-- [end:tier_2]
@@ -26,49 +26,49 @@ ResultGet(RESULT, 'error', E).
 # === Predicate catalogue ===
 
 --8<-- [start:scalar_quadrature]
-Quad(FUNC, A, B, RESULT)
+quad(FUNC, A, B, RESULT)
     Adaptive integration of FUNC(x) from A to B (QUADPACK DQAGS/DQAGSE).
     RESULT: dict {value, error}
 
-Quad(FUNC, A, B, ARGS, RESULT)
+quad(FUNC, A, B, ARGS, RESULT)
     ARGS: tuple of extra arguments passed to FUNC as FUNC(x, *ARGS).
 
-Quad(FUNC, A, B, ARGS, LIMIT, EPSABS, EPSREL, RESULT)
+quad(FUNC, A, B, ARGS, LIMIT, EPSABS, EPSREL, RESULT)
     LIMIT:  max number of sub-intervals (default 50)
     EPSABS: absolute error tolerance (default 1.49e-8)
     EPSREL: relative error tolerance (default 1.49e-8)
 --8<-- [end:scalar_quadrature]
 
 --8<-- [start:multi_dimensional_quadrature]
-DoubleQuad(FUNC, A, B, GFUN, HFUN, RESULT)
+double_quad(FUNC, A, B, GFUN, HFUN, RESULT)
     Double integral of FUNC(y, x) over a<=x<=b, gfun(x)<=y<=hfun(x).
     FUNC:  callable FUNC(y, x) → scalar
     GFUN, HFUN: lower/upper y-limit functions (callables or constants)
     RESULT: dict {value, error}
 
-DoubleQuad(FUNC, A, B, GFUN, HFUN, EPSABS, EPSREL, RESULT)
+double_quad(FUNC, A, B, GFUN, HFUN, EPSABS, EPSREL, RESULT)
 
-TripleQuad(FUNC, A, B, GFUN, HFUN, QFUN, RFUN, RESULT)
+triple_quad(FUNC, A, B, GFUN, HFUN, QFUN, RFUN, RESULT)
     Triple integral of FUNC(z, y, x).
     QFUN, RFUN: lower/upper z-limit functions
     RESULT: dict {value, error}
 
-NQuad(FUNC, RANGES, RESULT)
+n_quad(FUNC, RANGES, RESULT)
     N-dimensional integration via iterated quad.
     RANGES: list of [lower, upper] pairs, one per variable
     RESULT: dict {value, error}
 
-NQuad(FUNC, RANGES, ARGS, RESULT)
+n_quad(FUNC, RANGES, ARGS, RESULT)
     ARGS: extra arguments for FUNC.
 
-QuadVec(FUNC, A, B, RESULT)
+quad_vec(FUNC, A, B, RESULT)
     Adaptive integration of a vector-valued or scalar function.
     RESULT: dict {y, err, status, success, message, neval}
 --8<-- [end:multi_dimensional_quadrature]
 
 --8<-- [start:ode_solvers]
-SolveInitialValueProblem(FUN, T_SPAN, Y0, RESULT)
-    Solve dy/dt = FUN(t, y), y(T_SPAN[0]) = Y0, integrate to T_SPAN[1].
+solve_initial_value_problem(FUN, T_SPAN, Y0, RESULT)
+    solve dy/dt = FUN(t, y), y(T_SPAN[0]) = Y0, integrate to T_SPAN[1].
     FUN:    callable FUN(t, y) → array of derivatives
     T_SPAN: [t0, tf] — integration interval
     Y0:     initial state (list or array)
@@ -77,54 +77,54 @@ SolveInitialValueProblem(FUN, T_SPAN, Y0, RESULT)
     Note: result.y has shape (n_vars, n_timepoints); y[i, -1] is final
           value of variable i.
 
-SolveInitialValueProblem(FUN, T_SPAN, Y0, METHOD, RESULT)
+solve_initial_value_problem(FUN, T_SPAN, Y0, METHOD, RESULT)
     METHOD: 'RK45' (default), 'RK23', 'DOP853', 'Radau', 'BDF', 'LSODA'
 
-SolveInitialValueProblem(FUN, T_SPAN, Y0, METHOD, T_EVAL, RESULT)
+solve_initial_value_problem(FUN, T_SPAN, Y0, METHOD, T_EVAL, RESULT)
     T_EVAL: array of time points at which to evaluate the solution.
 
-OdeIntegrate(FUNC, Y0, T, RESULT)
+ode_integrate(FUNC, Y0, T, RESULT)
     Integrate dy/dt = FUNC(y, t) using LSODA (legacy interface).
     FUNC:   callable FUNC(y, t) → array
     Y0:     initial state
     T:      array of time points (result includes all these points)
     RESULT: dict {y} where y has shape (len(T), n_vars)
 
-OdeIntegrate(FUNC, Y0, T, ARGS, RESULT)
+ode_integrate(FUNC, Y0, T, ARGS, RESULT)
     ARGS: tuple of extra arguments for FUNC.
 --8<-- [end:ode_solvers]
 
 --8<-- [start:sampled_data_integration]
-CumulativeTrapezoid(Y, RESULT)
+cumulative_trapezoid(Y, RESULT)
     Cumulatively integrate Y using the composite trapezoidal rule.
     Y:      1-D array of sample values (uniform spacing dx=1)
     RESULT: array of length len(Y)-1
 
-CumulativeTrapezoid(Y, X, RESULT)
+cumulative_trapezoid(Y, X, RESULT)
     X: sample positions (non-uniform spacing allowed)
 
-Trapezoid(Y, RESULT)
+trapezoid(Y, RESULT)
     Total trapezoidal integration of Y (uniform dx=1).
     RESULT: scalar
 
-Trapezoid(Y, X, RESULT)
+trapezoid(Y, X, RESULT)
     X: sample positions.
 
-Simpson(Y, RESULT)
-    Total integration using composite Simpson's rule (uniform dx=1).
+simpson(Y, RESULT)
+    Total integration using composite simpson's rule (uniform dx=1).
     Requires an odd number of sample points (even number of sub-intervals).
     RESULT: scalar
 
-Simpson(Y, X, RESULT)
+simpson(Y, X, RESULT)
     X: sample positions.
 --8<-- [end:sampled_data_integration]
 
 --8<-- [start:sampled_data_integration_ex2]
--import_from(scipy_integrate, [Trapezoid, CumulativeTrapezoid])
+-import_from(scipy_integrate, [trapezoid, cumulative_trapezoid])
 
-TrapezoidIntegral(Y, RESULT) <- Trapezoid(Y, RESULT).
+TrapezoidIntegral(Y, RESULT) <- trapezoid(Y, RESULT).
 
-CumulativeIntegral(Y, CUMULATIVE) <- CumulativeTrapezoid(Y, CUMULATIVE).
+CumulativeIntegral(Y, CUMULATIVE) <- cumulative_trapezoid(Y, CUMULATIVE).
 --8<-- [end:sampled_data_integration_ex2]
 
 --8<-- [start:resultget]
@@ -140,11 +140,11 @@ ResultGet(RESULT, FIELD, VALUE)
 # === Complete examples ===
 
 --8<-- [start:ode_logistic_growth]
--import_from(scipy_integrate, [SolveInitialValueProblem, ResultGet])
+-import_from(scipy_integrate, [solve_initial_value_problem, ResultGet])
 
 # dy/dt = r*y*(1 - y/K), y(0) = y0
 LogisticGrowth(R, K, Y0, T_FINAL, Y_FINAL) <- (
-    SolveInitialValueProblem(
+    solve_initial_value_problem(
         ++(lambda t, y: [R * y[0] * (1.0 - y[0] / K)]),
         ++([0.0, float(T_FINAL)]),
         ++([float(Y0)]),
@@ -157,11 +157,11 @@ LogisticGrowth(R, K, Y0, T_FINAL, Y_FINAL) <- (
 --8<-- [end:ode_logistic_growth]
 
 --8<-- [start:sampled_integration]
--import_from(scipy_integrate, [Trapezoid, Simpson, CumulativeTrapezoid])
+-import_from(scipy_integrate, [trapezoid, simpson, cumulative_trapezoid])
 
 # Integrate a sampled signal using multiple methods
 CompareIntegrals(Y, TRAP, SIMP) <- (
-    Trapezoid(Y, TRAP),
-    Simpson(Y, SIMP)
+    trapezoid(Y, TRAP),
+    simpson(Y, SIMP)
 )
 --8<-- [end:sampled_integration]

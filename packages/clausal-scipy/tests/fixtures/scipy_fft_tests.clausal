@@ -1,7 +1,7 @@
 -double_quotes(atom)
 -import_from(scipy_fft, [FFTransform, FFTransform2D, FFTransformND,
                           RealFFT, DiscreteCosineTransform,
-                          FFTFrequencies, RealFFTFrequencies, FFTShift])
+                          fft_frequencies, real_fft_frequencies, FFTShift])
 
 # FFTransform of constant signal [1,1,1,1] - DC component should be 4.0
 test("fft constant signal") <- (
@@ -24,18 +24,18 @@ test("real fft output length") <- (
     LEN is ++(len(RESULT)),
     LEN == 3)  # nv
 
-# FFTFrequencies: fftfreq(4) first element is 0.0, second is 0.25
+# fft_frequencies: fftfreq(4) first element is 0.0, second is 0.25
 test("fft frequencies length 4") <- (
-    FFTFrequencies(4, FREQS),
+    fft_frequencies(4, FREQS),
     F0 is ++(float(FREQS[0])),
     F1 is ++(float(FREQS[1])),
     F0 == 0.0,
     DIFF is ++(abs(F1 - 0.25)),
     DIFF < 1e-10)  # nv
 
-# RealFFTFrequencies: 8-point real FFT gives 5 frequencies, first is 0.0
+# real_fft_frequencies: 8-point real FFT gives 5 frequencies, first is 0.0
 test("real fft frequencies non negative") <- (
-    RealFFTFrequencies(8, FREQS),
+    real_fft_frequencies(8, FREQS),
     LEN is ++(len(FREQS)),
     LEN == 5,
     F0 is ++(float(FREQS[0])),

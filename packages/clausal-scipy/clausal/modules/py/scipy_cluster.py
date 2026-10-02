@@ -4,9 +4,9 @@ Provides hierarchical clustering and vector quantisation routines from
 ``scipy.cluster.hierarchy`` and ``scipy.cluster.vq`` as importable predicate
 objects for use in .clausal files via::
 
-    -import_from(scipy_cluster, [Linkage, FlatCluster, Dendrogram,
-                                  Cophenet, Inconsistent,
-                                  KMeans2, KMeans, VectorQuantize, Whiten,
+    -import_from(scipy_cluster, [linkage, flat_cluster, dendrogram,
+                                  cophenet, inconsistent,
+                                  k_means2, k_means, vector_quantize, whiten,
                                   ResultGet])
 
 Tiers
@@ -15,17 +15,17 @@ All predicates are **Tier 2** — they return result dicts (or plain NumPy
 arrays for simple cases).  Use ``ResultGet`` to access named fields.
 
 Hierarchical clustering (``scipy.cluster.hierarchy``):
-    Linkage         → linkage matrix Z (ndarray, shape (n-1, 4))
-    FlatCluster     → flat cluster-assignment array (ndarray, shape (n,))
-    Dendrogram      → dict {icoord, dcoord, ivl, leaves, color_list}
-    Cophenet        → float c (coefficient) or dict {c, d} when Y supplied
-    Inconsistent    → inconsistency array (ndarray, shape (n-1, 4))
+    linkage         → linkage matrix Z (ndarray, shape (n-1, 4))
+    flat_cluster     → flat cluster-assignment array (ndarray, shape (n,))
+    dendrogram      → dict {icoord, dcoord, ivl, leaves, color_list}
+    cophenet        → float c (coefficient) or dict {c, d} when Y supplied
+    inconsistent    → inconsistency array (ndarray, shape (n-1, 4))
 
 Vector quantisation (``scipy.cluster.vq``):
-    KMeans2         → dict {centroid, label}
-    KMeans          → dict {codebook, distortion}
-    VectorQuantize  → dict {code, dist}
-    Whiten          → normalised observation array (ndarray)
+    k_means2         → dict {centroid, label}
+    k_means          → dict {codebook, distortion}
+    vector_quantize  → dict {code, dist}
+    whiten          → normalised observation array (ndarray)
 
 Helper:
     ResultGet(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE
@@ -102,9 +102,9 @@ def _pred(name: str, *arity_fns) -> ModulePredicate:
     return p
 
 
-# ── Linkage ───────────────────────────────────────────────────────────────
+# ── linkage ───────────────────────────────────────────────────────────────
 
-Linkage = _pred("Linkage",
+linkage = _pred("linkage",
     (2, _dispatch_fn(lambda y:
         _hier().linkage(y))),
     (3, _dispatch_fn(lambda y, method:
@@ -117,9 +117,9 @@ Linkage = _pred("Linkage",
 )
 
 
-# ── FlatCluster ───────────────────────────────────────────────────────────
+# ── flat_cluster ───────────────────────────────────────────────────────────
 
-FlatCluster = _pred("FlatCluster",
+flat_cluster = _pred("flat_cluster",
     (3, _dispatch_fn(lambda z, t:
         _hier().fcluster(z, t))),
     (4, _dispatch_fn(lambda z, t, criterion:
@@ -129,7 +129,7 @@ FlatCluster = _pred("FlatCluster",
 )
 
 
-# ── Dendrogram ────────────────────────────────────────────────────────────
+# ── dendrogram ────────────────────────────────────────────────────────────
 
 def _dendrogram_result(z, **kwargs):
     result = _hier().dendrogram(z, no_plot=True, **kwargs)
@@ -142,7 +142,7 @@ def _dendrogram_result(z, **kwargs):
     }
 
 
-Dendrogram = _pred("Dendrogram",
+dendrogram = _pred("dendrogram",
     (2, _dispatch_fn(lambda z:
         _dendrogram_result(z))),
     (3, _dispatch_fn(lambda z, truncate_mode:
@@ -150,14 +150,14 @@ Dendrogram = _pred("Dendrogram",
 )
 
 
-# ── Cophenet ──────────────────────────────────────────────────────────────
+# ── cophenet ──────────────────────────────────────────────────────────────
 
 def _cophenet_with_y(z, y):
     c, d = _hier().cophenet(z, y)
     return {'c': float(c), 'd': d}
 
 
-Cophenet = _pred("Cophenet",
+cophenet = _pred("cophenet",
     # Without Y: returns the cophenetic distance array (condensed form)
     (2, _dispatch_fn(lambda z:
         _hier().cophenet(z))),
@@ -166,9 +166,9 @@ Cophenet = _pred("Cophenet",
 )
 
 
-# ── Inconsistent ──────────────────────────────────────────────────────────
+# ── inconsistent ──────────────────────────────────────────────────────────
 
-Inconsistent = _pred("Inconsistent",
+inconsistent = _pred("inconsistent",
     (2, _dispatch_fn(lambda z:
         _hier().inconsistent(z))),
     (3, _dispatch_fn(lambda z, depth:
@@ -176,14 +176,14 @@ Inconsistent = _pred("Inconsistent",
 )
 
 
-# ── KMeans2 ───────────────────────────────────────────────────────────────
+# ── k_means2 ───────────────────────────────────────────────────────────────
 
 def _kmeans2_result(data, k, **kwargs):
     centroid, label = _vq().kmeans2(data, k, **kwargs)
     return {'centroid': centroid, 'label': label}
 
 
-KMeans2 = _pred("KMeans2",
+k_means2 = _pred("k_means2",
     (3, _dispatch_fn(lambda data, k:
         _kmeans2_result(data, k))),
     (4, _dispatch_fn(lambda data, k, iterations:
@@ -193,14 +193,14 @@ KMeans2 = _pred("KMeans2",
 )
 
 
-# ── KMeans ────────────────────────────────────────────────────────────────
+# ── k_means ────────────────────────────────────────────────────────────────
 
 def _kmeans_result(obs, k, **kwargs):
     codebook, distortion = _vq().kmeans(obs, k, **kwargs)
     return {'codebook': codebook, 'distortion': float(distortion)}
 
 
-KMeans = _pred("KMeans",
+k_means = _pred("k_means",
     (3, _dispatch_fn(lambda obs, k:
         _kmeans_result(obs, k))),
     (4, _dispatch_fn(lambda obs, k, iterations:
@@ -208,21 +208,21 @@ KMeans = _pred("KMeans",
 )
 
 
-# ── VectorQuantize ────────────────────────────────────────────────────────
+# ── vector_quantize ────────────────────────────────────────────────────────
 
 def _vq_result(obs, code_book):
     code, dist = _vq().vq(obs, code_book)
     return {'code': code, 'dist': dist}
 
 
-VectorQuantize = _pred("VectorQuantize",
+vector_quantize = _pred("vector_quantize",
     (3, _dispatch_fn(_vq_result)),
 )
 
 
-# ── Whiten ────────────────────────────────────────────────────────────────
+# ── whiten ────────────────────────────────────────────────────────────────
 
-Whiten = _pred("Whiten",
+whiten = _pred("whiten",
     (2, _dispatch_fn(lambda obs:
         _vq().whiten(obs))),
 )

@@ -19,12 +19,12 @@ import scipy.linalg as la
 from clausal.logic.variables import Var, Trail, deref, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py.scipy_linalg import (
-    Solve, LeastSquares, SolveTriangular,
-    LuDecompose, QrDecompose, SingularValueDecompose,
-    Cholesky, EigenDecompose, EigenDecomposeHermitian, Schur,
-    Inverse, PseudoInverse, Determinant, Norm,
-    MatrixExpLog, MatrixSquareRoot, MatrixFunction,
-    LuFactor, LuSolve, CholeskyFactor, CholeskySolve,
+    solve, least_squares, solve_triangular,
+    LuDecompose, QrDecompose, singular_value_decompose,
+    Cholesky, EigenDecompose, eigen_decompose_hermitian, Schur,
+    Inverse, pseudo_inverse, determinant, norm,
+    MatrixExpLog, matrix_square_root, matrix_function,
+    lu_factor, lu_solve, cholesky_factor, cholesky_solve,
     ResultGet,
 )
 
@@ -115,46 +115,46 @@ def rect_3x2():
     return np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
 
 
-# ── Solve ─────────────────────────────────────────────────────────────────
+# ── solve ─────────────────────────────────────────────────────────────────
 
 class TestSolve:
     def test_basic(self, square_2x2, rhs_2):
         # nv
-        r = _drive(Solve, square_2x2, rhs_2)
+        r = _drive(solve, square_2x2, rhs_2)
         assert approx_array(r, la.solve(square_2x2, rhs_2))
 
     def test_known_solution(self):
         # nv
         A = np.array([[1.0, 0.0], [0.0, 2.0]])
         b = np.array([3.0, 4.0])
-        r = _drive(Solve, A, b)
+        r = _drive(solve, A, b)
         assert approx_array(r, [3.0, 2.0])
 
     def test_with_assume_a(self, spd_2x2, rhs_2):
         # nv
-        r = _drive(Solve, spd_2x2, rhs_2, 'pos')
+        r = _drive(solve, spd_2x2, rhs_2, 'pos')
         expected = la.solve(spd_2x2, rhs_2, assume_a='pos')
         assert approx_array(r, expected)
 
     def test_wrong_result_fails(self, square_2x2, rhs_2):
         # nv
-        assert _fails_with_wrong_result(Solve, square_2x2, rhs_2)
+        assert _fails_with_wrong_result(solve, square_2x2, rhs_2)
 
 
-# ── LeastSquares ──────────────────────────────────────────────────────────
+# ── least_squares ──────────────────────────────────────────────────────────
 
 class TestLeastSquares:
     def test_returns_dict(self, rect_3x2):
         # nv
         b = np.array([1.0, 2.0, 3.0])
-        r = _drive(LeastSquares, rect_3x2, b)
+        r = _drive(least_squares, rect_3x2, b)
         assert isinstance(r, dict)
         assert set(r.keys()) >= {"x", "residuals", "rank", "s"}
 
     def test_x_field(self, rect_3x2):
         # nv
         b = np.array([1.0, 2.0, 3.0])
-        r = _drive(LeastSquares, rect_3x2, b)
+        r = _drive(least_squares, rect_3x2, b)
         x = _drive_result_get(r, "x")
         expected_x, *_ = la.lstsq(rect_3x2, b)
         assert approx_array(x, expected_x)
@@ -162,14 +162,14 @@ class TestLeastSquares:
     def test_rank_field(self, rect_3x2):
         # nv
         b = np.array([1.0, 2.0, 3.0])
-        r = _drive(LeastSquares, rect_3x2, b)
+        r = _drive(least_squares, rect_3x2, b)
         rank = _drive_result_get(r, "rank")
         assert rank == 2
 
     def test_result_get_missing_field(self, rect_3x2):
         # nv
         b = np.array([1.0, 2.0, 3.0])
-        r = _drive(LeastSquares, rect_3x2, b)
+        r = _drive(least_squares, rect_3x2, b)
         v = _drive_result_get(r, "nonexistent")
         assert v is None
 
@@ -179,28 +179,28 @@ class TestLeastSquares:
         assert v is None
 
 
-# ── SolveTriangular ───────────────────────────────────────────────────────
+# ── solve_triangular ───────────────────────────────────────────────────────
 
 class TestSolveTriangular:
     def test_upper(self):
         # nv
         U = np.array([[2.0, 1.0], [0.0, 3.0]])
         b = np.array([5.0, 3.0])
-        r = _drive(SolveTriangular, U, b)
+        r = _drive(solve_triangular, U, b)
         assert approx_array(r, la.solve_triangular(U, b))
 
     def test_lower(self):
         # nv
         L = np.array([[2.0, 0.0], [1.0, 3.0]])
         b = np.array([4.0, 5.0])
-        r = _drive(SolveTriangular, L, b, True)
+        r = _drive(solve_triangular, L, b, True)
         assert approx_array(r, la.solve_triangular(L, b, lower=True))
 
     def test_wrong_result_fails(self):
         # nv
         U = np.array([[1.0, 0.0], [0.0, 1.0]])
         b = np.array([1.0, 1.0])
-        assert _fails_with_wrong_result(SolveTriangular, U, b)
+        assert _fails_with_wrong_result(solve_triangular, U, b)
 
 
 # ── LuDecompose ───────────────────────────────────────────────────────────
@@ -250,18 +250,18 @@ class TestQrDecompose:
         assert approx_array(q @ q.T, np.eye(2))
 
 
-# ── SingularValueDecompose ────────────────────────────────────────────────
+# ── singular_value_decompose ────────────────────────────────────────────────
 
 class TestSingularValueDecompose:
     def test_returns_dict(self, square_2x2):
         # nv
-        r = _drive(SingularValueDecompose, square_2x2)
+        r = _drive(singular_value_decompose, square_2x2)
         assert isinstance(r, dict)
         assert set(r.keys()) == {"u", "s", "vh"}
 
     def test_reconstruct(self, square_2x2):
         # nv
-        r = _drive(SingularValueDecompose, square_2x2)
+        r = _drive(singular_value_decompose, square_2x2)
         u = _drive_result_get(r, "u")
         s = _drive_result_get(r, "s")
         vh = _drive_result_get(r, "vh")
@@ -269,7 +269,7 @@ class TestSingularValueDecompose:
 
     def test_singular_values_positive(self, square_2x2):
         # nv
-        r = _drive(SingularValueDecompose, square_2x2)
+        r = _drive(singular_value_decompose, square_2x2)
         s = _drive_result_get(r, "s")
         assert all(sv > 0 for sv in s)
 
@@ -328,24 +328,24 @@ class TestEigenDecompose:
             assert approx_array(np.real(lhs), np.real(rhs))
 
 
-# ── EigenDecomposeHermitian ───────────────────────────────────────────────
+# ── eigen_decompose_hermitian ───────────────────────────────────────────────
 
 class TestEigenDecomposeHermitian:
     def test_returns_dict(self, spd_2x2):
         # nv
-        r = _drive(EigenDecomposeHermitian, spd_2x2)
+        r = _drive(eigen_decompose_hermitian, spd_2x2)
         assert isinstance(r, dict)
         assert set(r.keys()) == {"eigenvalues", "eigenvectors"}
 
     def test_eigenvalues_real_positive(self, spd_2x2):
         # nv
-        r = _drive(EigenDecomposeHermitian, spd_2x2)
+        r = _drive(eigen_decompose_hermitian, spd_2x2)
         vals = _drive_result_get(r, "eigenvalues")
         assert all(v > 0 for v in np.real(vals))
 
     def test_eigenvectors_orthonormal(self, spd_2x2):
         # nv
-        r = _drive(EigenDecomposeHermitian, spd_2x2)
+        r = _drive(eigen_decompose_hermitian, spd_2x2)
         vecs = _drive_result_get(r, "eigenvectors")
         assert approx_array(vecs.T @ vecs, np.eye(2))
 
@@ -392,67 +392,67 @@ class TestInverse:
         assert _fails_with_wrong_result(Inverse, square_2x2)
 
 
-# ── PseudoInverse ─────────────────────────────────────────────────────────
+# ── pseudo_inverse ─────────────────────────────────────────────────────────
 
 class TestPseudoInverse:
     def test_square(self, square_2x2):
         # nv
-        r = _drive(PseudoInverse, square_2x2)
+        r = _drive(pseudo_inverse, square_2x2)
         expected = la.pinv(square_2x2)
         assert approx_array(r, expected)
 
     def test_rect(self, rect_3x2):
         # nv
-        r = _drive(PseudoInverse, rect_3x2)
+        r = _drive(pseudo_inverse, rect_3x2)
         # pseudoinverse: A+ @ A ≈ I_2
         assert approx_array(r @ rect_3x2, np.eye(2), rtol=1e-5)
 
 
-# ── Determinant ───────────────────────────────────────────────────────────
+# ── determinant ───────────────────────────────────────────────────────────
 
 class TestDeterminant:
     def test_identity(self):
         # nv
-        r = _drive(Determinant, np.eye(3))
+        r = _drive(determinant, np.eye(3))
         assert abs(float(r) - 1.0) < 1e-10
 
     def test_known_det(self, square_2x2):
         # det([[2,1],[5,3]]) = 2*3 - 1*5 = 1
         # nv
-        r = _drive(Determinant, square_2x2)
+        r = _drive(determinant, square_2x2)
         assert abs(float(r) - 1.0) < 1e-10
 
     def test_singular_det(self):
         # nv
         A = np.array([[1.0, 2.0], [2.0, 4.0]])
-        r = _drive(Determinant, A)
+        r = _drive(determinant, A)
         assert abs(float(r)) < 1e-10
 
 
-# ── Norm ──────────────────────────────────────────────────────────────────
+# ── norm ──────────────────────────────────────────────────────────────────
 
 class TestNorm:
     def test_vector_norm(self):
         # nv
         v = np.array([3.0, 4.0])
-        r = _drive(Norm, v)
+        r = _drive(norm, v)
         assert abs(float(r) - 5.0) < 1e-10
 
     def test_frobenius_norm(self, square_2x2):
         # nv
-        r = _drive(Norm, square_2x2)
+        r = _drive(norm, square_2x2)
         expected = la.norm(square_2x2)
         assert abs(float(r) - float(expected)) < 1e-10
 
     def test_norm_with_ord(self, square_2x2):
         # nv
-        r = _drive(Norm, square_2x2, 'fro')
+        r = _drive(norm, square_2x2, 'fro')
         expected = la.norm(square_2x2, ord='fro')
         assert abs(float(r) - float(expected)) < 1e-10
 
     def test_inf_norm(self, square_2x2):
         # nv
-        r = _drive(Norm, square_2x2, np.inf)
+        r = _drive(norm, square_2x2, np.inf)
         expected = la.norm(square_2x2, ord=np.inf)
         assert abs(float(r) - float(expected)) < 1e-10
 
@@ -491,76 +491,76 @@ class TestMatrixLogarithm:
         assert approx_array(np.real(r), spd_2x2, rtol=1e-5)
 
 
-# ── MatrixSquareRoot ──────────────────────────────────────────────────────
+# ── matrix_square_root ──────────────────────────────────────────────────────
 
 class TestMatrixSquareRoot:
     def test_identity(self):
         # nv
-        r = _drive(MatrixSquareRoot, np.eye(2))
+        r = _drive(matrix_square_root, np.eye(2))
         assert approx_array(np.real(r), np.eye(2))
 
     def test_sqrtm_squared(self, spd_2x2):
         # nv
-        s = _drive(MatrixSquareRoot, spd_2x2)
+        s = _drive(matrix_square_root, spd_2x2)
         assert approx_array(np.real(s @ s), spd_2x2, rtol=1e-5)
 
 
-# ── MatrixFunction ────────────────────────────────────────────────────────
+# ── matrix_function ────────────────────────────────────────────────────────
 
 class TestMatrixFunction:
     def test_exp_via_matrix_function(self, spd_2x2):
         # nv
-        r = _drive(MatrixFunction, spd_2x2, np.exp)
+        r = _drive(matrix_function, spd_2x2, np.exp)
         expected_expm = _drive(MatrixExpLog, spd_2x2)
         assert approx_array(np.real(r), np.real(expected_expm), rtol=1e-5)
 
     def test_identity_fn(self):
         # nv
         A = np.array([[2.0, 0.0], [0.0, 3.0]])
-        r = _drive(MatrixFunction, A, lambda x: x)
+        r = _drive(matrix_function, A, lambda x: x)
         assert approx_array(np.real(r), A, rtol=1e-5)
 
 
-# ── LuFactor / LuSolve ───────────────────────────────────────────────────
+# ── lu_factor / lu_solve ───────────────────────────────────────────────────
 
 class TestLuFactorSolve:
     def test_factor_then_solve(self, square_2x2, rhs_2):
         # nv
-        lu_piv = _drive(LuFactor, square_2x2)
+        lu_piv = _drive(lu_factor, square_2x2)
         assert lu_piv is not None
-        r = _drive(LuSolve, lu_piv, rhs_2)
+        r = _drive(lu_solve, lu_piv, rhs_2)
         expected = la.solve(square_2x2, rhs_2)
         assert approx_array(r, expected)
 
     def test_reuse_factorisation(self, square_2x2):
         # nv
-        lu_piv = _drive(LuFactor, square_2x2)
+        lu_piv = _drive(lu_factor, square_2x2)
         b1 = np.array([1.0, 0.0])
         b2 = np.array([0.0, 1.0])
-        x1 = _drive(LuSolve, lu_piv, b1)
-        x2 = _drive(LuSolve, lu_piv, b2)
+        x1 = _drive(lu_solve, lu_piv, b1)
+        x2 = _drive(lu_solve, lu_piv, b2)
         assert approx_array(square_2x2 @ x1, b1)
         assert approx_array(square_2x2 @ x2, b2)
 
 
-# ── CholeskyFactor / CholeskySolve ────────────────────────────────────────
+# ── cholesky_factor / cholesky_solve ────────────────────────────────────────
 
 class TestCholeskyFactorSolve:
     def test_factor_then_solve(self, spd_2x2, rhs_2):
         # nv
-        c_lower = _drive(CholeskyFactor, spd_2x2)
+        c_lower = _drive(cholesky_factor, spd_2x2)
         assert c_lower is not None
-        r = _drive(CholeskySolve, c_lower, rhs_2)
+        r = _drive(cholesky_solve, c_lower, rhs_2)
         expected = la.solve(spd_2x2, rhs_2)
         assert approx_array(r, expected)
 
     def test_reuse_factorisation(self, spd_2x2):
         # nv
-        c_lower = _drive(CholeskyFactor, spd_2x2)
+        c_lower = _drive(cholesky_factor, spd_2x2)
         b1 = np.array([1.0, 0.0])
         b2 = np.array([0.0, 1.0])
-        x1 = _drive(CholeskySolve, c_lower, b1)
-        x2 = _drive(CholeskySolve, c_lower, b2)
+        x1 = _drive(cholesky_solve, c_lower, b1)
+        x2 = _drive(cholesky_solve, c_lower, b2)
         assert approx_array(spd_2x2 @ x1, b1)
         assert approx_array(spd_2x2 @ x2, b2)
 

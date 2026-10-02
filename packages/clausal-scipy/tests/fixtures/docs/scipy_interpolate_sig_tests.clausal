@@ -1,17 +1,17 @@
 # Companion tests for docs/scipy_interpolate.md signature blocks.
 -double_quotes(atom)
--import_from(scipy_interpolate, [MakeSpline, MakeCubic, EvalSpline, Free])
+-import_from(scipy_interpolate, [make_spline, make_cubic, eval_spline, free])
 
 test("make spline exists") <- (
-    MakeSpline([0.0, 1.0, 2.0, 3.0, 4.0], [0.0, 1.0, 4.0, 9.0, 16.0], H),
-    EvalSpline(H, [0.0, 4.0], VALS),
+    make_spline([0.0, 1.0, 2.0, 3.0, 4.0], [0.0, 1.0, 4.0, 9.0, 16.0], H),
+    eval_spline(H, [0.0, 4.0], VALS),
     V0 is ++(float(VALS[0])),
     ++(abs(V0 - 0.0)) < 1e-8,
-    Free(H))  # nv
+    free(H))  # nv
 
 test("make cubic exists") <- (
-    MakeCubic([0.0, 1.0, 2.0, 3.0, 4.0], [0.0, 1.0, 4.0, 9.0, 16.0], H),
-    EvalSpline(H, [2.0], VALS),
+    make_cubic([0.0, 1.0, 2.0, 3.0, 4.0], [0.0, 1.0, 4.0, 9.0, 16.0], H),
+    eval_spline(H, [2.0], VALS),
     V is ++(float(VALS[0])),
     ++(abs(V - 4.0)) < 1e-8,
-    Free(H))  # nv
+    free(H))  # nv

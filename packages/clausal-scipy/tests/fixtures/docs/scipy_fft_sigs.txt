@@ -1,7 +1,7 @@
 # === Import ===
 
 --8<-- [start:import]
--import_from(scipy_fft, [FFTransform, RealFFT, FFTFrequencies, FFTShift, ...])
+-import_from(scipy_fft, [FFTransform, RealFFT, fft_frequencies, FFTShift, ...])
 --8<-- [end:import]
 
 --8<-- [start:import_ex2]
@@ -83,21 +83,21 @@ DiscreteSineTransform(X, TYPE, Y)          # bidirectional; TYPE always ground
 --8<-- [end:cosine_and_sine_transforms]
 
 --8<-- [start:utility]
-FFTFrequencies(N, RESULT)
+fft_frequencies(N, RESULT)
     DFT sample frequencies for a length-N transform with unit sample spacing.
     RESULT: real array of length N
     Layout: [0, 1/N, 2/N, ..., -k/N, ..., -1/N]
             where k = N//2
 
-FFTFrequencies(N, D, RESULT)
+fft_frequencies(N, D, RESULT)
     D: sample spacing in seconds (reciprocal of sample rate).
        Frequencies are in cycles per unit time (Hz if D is in seconds).
 
-RealFFTFrequencies(N, RESULT)
+real_fft_frequencies(N, RESULT)
     Sample frequencies for a length-N real FFT output.
     RESULT: real array of length N//2 + 1 (all non-negative)
 
-RealFFTFrequencies(N, D, RESULT)
+real_fft_frequencies(N, D, RESULT)
     D: sample spacing.
 
 FFTShift(X, Y)                     # bidirectional
@@ -125,7 +125,7 @@ TestRoundTrip(SIGNAL) <- (
 -import_from(scipy_fft, [FFTransform])
 
 # Linear convolution of two equal-length signals (circular; pad as needed)
-FFTConvolve(A, B, RESULT) <- (
+fft_convolve(A, B, RESULT) <- (
     FFTransform(A, FA),
     FFTransform(B, FB),
     PRODUCT is ++(FA * FB),

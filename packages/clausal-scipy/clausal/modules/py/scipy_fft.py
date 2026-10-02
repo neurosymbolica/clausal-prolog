@@ -3,7 +3,7 @@
 Provides fast Fourier transform routines from scipy.fft as importable
 predicate objects for use in .clausal files via::
 
-    -import_from(scipy_fft, [FFTransform, RealFFT, FFTShift, FFTFrequencies, ...])
+    -import_from(scipy_fft, [FFTransform, RealFFT, FFTShift, fft_frequencies, ...])
 
 All predicates are **Tier 1 — pure functions**: accept NumPy arrays and
 return transformed arrays directly in RESULT.
@@ -35,10 +35,10 @@ Cosine / Sine transforms:
     DiscreteSineTransform(X, TYPE, Y)    — with explicit type
 
 Utility:
-    FFTFrequencies(N, RESULT)            — DFT sample frequencies for length-N output
-    FFTFrequencies(N, D, RESULT)         — with sample spacing D (default 1.0)
-    RealFFTFrequencies(N, RESULT)        — frequencies for length-N real FFT
-    RealFFTFrequencies(N, D, RESULT)     — with sample spacing D
+    fft_frequencies(N, RESULT)            — DFT sample frequencies for length-N output
+    fft_frequencies(N, D, RESULT)         — with sample spacing D (default 1.0)
+    real_fft_frequencies(N, RESULT)        — frequencies for length-N real FFT
+    real_fft_frequencies(N, D, RESULT)     — with sample spacing D
     FFTShift(X, Y)                       — fftshift(x) / ifftshift(y)
 """
 
@@ -193,14 +193,14 @@ DiscreteSineTransform = _pred_bidir("DiscreteSineTransform",
 
 # ── Utility ───────────────────────────────────────────────────────────────
 
-FFTFrequencies = _pred("FFTFrequencies",
+fft_frequencies = _pred("fft_frequencies",
     (2, _dispatch_fn(lambda n:
         _fft().fftfreq(n))),
     (3, _dispatch_fn(lambda n, d:
         _fft().fftfreq(n, d=d))),
 )
 
-RealFFTFrequencies = _pred("RealFFTFrequencies",
+real_fft_frequencies = _pred("real_fft_frequencies",
     (2, _dispatch_fn(lambda n:
         _fft().rfftfreq(n))),
     (3, _dispatch_fn(lambda n, d:

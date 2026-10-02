@@ -22,7 +22,7 @@ Or via the canonical `py.*` path:
 
 ### Tier 1 — direct value
 
-`CumulativeTrapezoid`, `Trapezoid`, and `Simpson` return a NumPy array or scalar directly in `RESULT`.
+`cumulative_trapezoid`, `trapezoid`, and `simpson` return a NumPy array or scalar directly in `RESULT`.
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_integrate_sigs.txt:tier_1"
@@ -30,7 +30,7 @@ Or via the canonical `py.*` path:
 
 ### Tier 2 — result dict
 
-Quadrature and ODE predicates (`Quad`, `DoubleQuad`, `TripleQuad`, `NQuad`, `QuadVec`, `SolveInitialValueProblem`, `OdeIntegrate`) return a Python dict in `RESULT`. Use `ResultGet(RESULT, FIELD, VALUE)` to extract individual fields.
+Quadrature and ODE predicates (`quad`, `double_quad`, `triple_quad`, `n_quad`, `quad_vec`, `solve_initial_value_problem`, `ode_integrate`) return a Python dict in `RESULT`. Use `ResultGet(RESULT, FIELD, VALUE)` to extract individual fields.
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_integrate_sigs.txt:tier_2"
@@ -44,16 +44,16 @@ Predicate names use full English words; scipy abbreviations are expanded:
 
 | scipy function | Clausal predicate |
 |---|---|
-| `quad` | `Quad` |
-| `dblquad` | `DoubleQuad` |
-| `tplquad` | `TripleQuad` |
-| `nquad` | `NQuad` |
-| `quad_vec` | `QuadVec` |
-| `solve_ivp` | `SolveInitialValueProblem` |
-| `odeint` | `OdeIntegrate` |
-| `cumulative_trapezoid` | `CumulativeTrapezoid` |
-| `trapezoid` | `Trapezoid` |
-| `simpson` | `Simpson` |
+| `quad` | `quad` |
+| `dblquad` | `double_quad` |
+| `tplquad` | `triple_quad` |
+| `nquad` | `n_quad` |
+| `quad_vec` | `quad_vec` |
+| `solve_ivp` | `solve_initial_value_problem` |
+| `odeint` | `ode_integrate` |
+| `cumulative_trapezoid` | `cumulative_trapezoid` |
+| `trapezoid` | `trapezoid` |
+| `simpson` | `simpson` |
 
 ---
 
@@ -68,10 +68,10 @@ Predicate names use full English words; scipy abbreviations are expanded:
 Example:
 
 ```clausal
--import_from(scipy_integrate, [Quad, ResultGet])
+-import_from(scipy_integrate, [quad, ResultGet])
 
 integrate_sin(V) <- (
-    Quad(++(lambda x: __import__('math').sin(x)), ++(0.0), ++(3.14159265), RESULT),
+    quad(++(lambda x: __import__('math').sin(x)), ++(0.0), ++(3.14159265), RESULT),
     ResultGet(RESULT, 'value', V)
 )
 ```
@@ -95,10 +95,10 @@ integrate_sin(V) <- (
 Example — exponential decay:
 
 ```clausal
--import_from(scipy_integrate, [SolveInitialValueProblem, ResultGet])
+-import_from(scipy_integrate, [solve_initial_value_problem, ResultGet])
 
 exponential_decay(T_FINAL, Y_FINAL) <- (
-    SolveInitialValueProblem(
+    solve_initial_value_problem(
         ++(lambda t, y: [-y[0]]),
         ++([0.0, float(T_FINAL)]),
         ++([1.0]),
@@ -137,10 +137,10 @@ Common fields by predicate:
 
 | Predicate | Useful fields |
 |---|---|
-| `Quad`, `DoubleQuad`, `TripleQuad`, `NQuad` | `'value'`, `'error'` |
-| `QuadVec` | `'y'`, `'err'`, `'success'`, `'neval'`, `'message'` |
-| `SolveInitialValueProblem` | `'t'`, `'y'`, `'success'`, `'message'`, `'nfev'`, `'status'` |
-| `OdeIntegrate` | `'y'` |
+| `quad`, `double_quad`, `triple_quad`, `n_quad` | `'value'`, `'error'` |
+| `quad_vec` | `'y'`, `'err'`, `'success'`, `'neval'`, `'message'` |
+| `solve_initial_value_problem` | `'t'`, `'y'`, `'success'`, `'message'`, `'nfev'`, `'status'` |
+| `ode_integrate` | `'y'` |
 
 ---
 
@@ -149,10 +149,10 @@ Common fields by predicate:
 ### Quadrature: integrate sin over [0, π]
 
 ```clausal
--import_from(scipy_integrate, [Quad, ResultGet])
+-import_from(scipy_integrate, [quad, ResultGet])
 
 sin_integral(VALUE) <- (
-    Quad(++(lambda x: __import__('math').sin(x)),
+    quad(++(lambda x: __import__('math').sin(x)),
          ++(0.0),
          ++(3.14159265358979),
          RESULT),
@@ -182,18 +182,18 @@ result automatically.
 
 ### Array-based quadrature
 
-`Trapezoid`, `Simpson`, and `CumulativeTrapezoid` compute output dims as:
+`trapezoid`, `simpson`, and `cumulative_trapezoid` compute output dims as:
 
 | Form | Output dims |
 |---|---|
-| `Trapezoid(Y, X, R)` | `y_dims + x_dims` |
-| `Trapezoid(Y, R)` | `y_dims` (unit spacing is dimensionless) |
-| `Simpson(Y, X, R)` | `y_dims + x_dims` |
-| `CumulativeTrapezoid(Y, X, R)` | `y_dims + x_dims` |
+| `trapezoid(Y, X, R)` | `y_dims + x_dims` |
+| `trapezoid(Y, R)` | `y_dims` (unit spacing is dimensionless) |
+| `simpson(Y, X, R)` | `y_dims + x_dims` |
+| `cumulative_trapezoid(Y, X, R)` | `y_dims + x_dims` |
 
 ### Callable-based quadrature
 
-`Quad`, `QuadVec`, and other callable quadrature predicates use the same
+`quad`, `quad_vec`, and other callable quadrature predicates use the same
 probe-strip-wrap pattern as `scipy_differentiate`:
 
 1. **Probe** — call `f(a)` once to discover whether `f` returns a `Quantity`.
@@ -207,26 +207,26 @@ when no input is a `Quantity`, scipy is called directly with **zero overhead**.
 
 ### ODE solvers (deferred)
 
-`SolveInitialValueProblem` and `OdeIntegrate` do not yet propagate units.
+`solve_initial_value_problem` and `ode_integrate` do not yet propagate units.
 Their multi-variable state vectors and callable signatures require additional
 design work (see `SCIPY_UNITS_PLAN.md` Phase 4c).
 
 ### Example
 
 ```
--import_from(scipy_integrate, [Trapezoid, Quad, ResultGet])
+-import_from(scipy_integrate, [trapezoid, quad, ResultGet])
 -import_from(py.units, [metre, second, newton, has_units])
 
 % Velocity (m/s) integrated over time (s) gives displacement (m)
 Test("trapezoid velocity times time") <- (
-    Trapezoid(++(numpy.array([0.0(metre/second), 10.0(metre/second), 20.0(metre/second)])),
+    trapezoid(++(numpy.array([0.0(metre/second), 10.0(metre/second), 20.0(metre/second)])),
               ++(numpy.array([0.0(second), 1.0(second), 2.0(second)])),
               R),
     has_units(R, metre))
 
-% Quad with quantity-aware function
+% quad with quantity-aware function
 Test("quad with units") <- (
-    Quad(++(lambda x: x * 1.0(newton/metre)),
+    quad(++(lambda x: x * 1.0(newton/metre)),
          0.0(metre), 1.0(metre), RESULT),
     ResultGet(RESULT, 'value', V),
     has_units(V, newton))

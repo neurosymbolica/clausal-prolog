@@ -1,46 +1,46 @@
 # === Import ===
 
 --8<-- [start:import]
--import_from(py.scipy_cluster, [Linkage, FlatCluster, ...])
+-import_from(py.scipy_cluster, [linkage, flat_cluster, ...])
 --8<-- [end:import]
 
 
 # === Predicate catalogue ===
 
 --8<-- [start:hierarchical_clustering]
-Linkage(DATA, 'ward', Z),
+linkage(DATA, 'ward', Z),
 # Z is the linkage matrix for ward hierarchical clustering
 --8<-- [end:hierarchical_clustering]
 
 --8<-- [start:hierarchical_clustering_ex2]
-Linkage(DATA, 'ward', Z),
-FlatCluster(Z, 3, 'maxclust', LABELS),
+linkage(DATA, 'ward', Z),
+flat_cluster(Z, 3, 'maxclust', LABELS),
 # LABELS[i] is the cluster number for observation i
 --8<-- [end:hierarchical_clustering_ex2]
 
 --8<-- [start:hierarchical_clustering_ex3]
-Linkage(DATA, 'ward', Z),
-Dendrogram(Z, D),
+linkage(DATA, 'ward', Z),
+dendrogram(Z, D),
 ResultGet(D, 'leaves', LEAVES),
 # LEAVES is the list of leaf node indices
 --8<-- [end:hierarchical_clustering_ex3]
 
 --8<-- [start:hierarchical_clustering_ex4]
-Linkage(DATA, 'ward', Z),
+linkage(DATA, 'ward', Z),
 Y is ++(pdist(DATA)),
-Cophenet(Z, Y, RESULT),
+cophenet(Z, Y, RESULT),
 ResultGet(RESULT, 'c', C),
 # C is the cophenetic correlation coefficient (1.0 = perfect)
 --8<-- [end:hierarchical_clustering_ex4]
 
 --8<-- [start:hierarchical_clustering_ex5]
-Linkage(DATA, 'ward', Z),
-Inconsistent(Z, STATS),
+linkage(DATA, 'ward', Z),
+inconsistent(Z, STATS),
 # STATS[i, 3] is the inconsistency coefficient for merge i
 --8<-- [end:hierarchical_clustering_ex5]
 
 --8<-- [start:vector_quantisation]
-KMeans(DATA, 2, RESULT),
+k_means(DATA, 2, RESULT),
 ResultGet(RESULT, 'codebook', CODEBOOK),
 ResultGet(RESULT, 'distortion', D),
 # D is the mean Euclidean distance to the nearest centroid
@@ -51,15 +51,15 @@ ResultGet(RESULT, 'distortion', D),
 
 --8<-- [start:typical_pipeline]
 # 1. Load and whiten data
-Whiten(RAW_DATA, DATA),
+whiten(RAW_DATA, DATA),
 
 # 2. Hierarchical clustering to explore structure
-Linkage(DATA, 'ward', Z),
-FlatCluster(Z, 3, 'maxclust', LABELS),
+linkage(DATA, 'ward', Z),
+flat_cluster(Z, 3, 'maxclust', LABELS),
 
 # 3. k-means for production assignment
-KMeans(DATA, 3, KR),
+k_means(DATA, 3, KR),
 ResultGet(KR, 'codebook', CODEBOOK),
-VectorQuantize(DATA, CODEBOOK, VQR),
+vector_quantize(DATA, CODEBOOK, VQR),
 ResultGet(VQR, 'code', ASSIGNMENTS).
 --8<-- [end:typical_pipeline]

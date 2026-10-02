@@ -1,114 +1,114 @@
 # === Import ===
 
 --8<-- [start:import]
--import_from(scipy_spatial, [CrossDistance, PairwiseDistance, MakeKdTree, ...])
+-import_from(scipy_spatial, [cross_distance, pairwise_distance, make_kd_tree, ...])
 --8<-- [end:import]
 
 --8<-- [start:import_ex2]
--import_from(py.scipy_spatial, [CrossDistance, ...])
+-import_from(py.scipy_spatial, [cross_distance, ...])
 --8<-- [end:import_ex2]
 
 
 # === Tier 1 — Distance Functions ===
 
 --8<-- [start:crossdistance]
-CrossDistance(XA, XB, RESULT)
-CrossDistance(XA, XB, METRIC, RESULT)
-CrossDistance(XA, XB, METRIC, KWARGS, RESULT)
+cross_distance(XA, XB, RESULT)
+cross_distance(XA, XB, METRIC, RESULT)
+cross_distance(XA, XB, METRIC, KWARGS, RESULT)
 --8<-- [end:crossdistance]
 
 --8<-- [start:crossdistance_ex2]
-CrossDistance(++([[0.0, 0.0]]), ++([[3.0, 4.0]]), 'euclidean', D),
+cross_distance(++([[0.0, 0.0]]), ++([[3.0, 4.0]]), 'euclidean', D),
 V is ++(float(D[0, 0]))   % V = 5.0
 --8<-- [end:crossdistance_ex2]
 
 --8<-- [start:pairwisedistance]
-PairwiseDistance(X, RESULT)
-PairwiseDistance(X, METRIC, RESULT)
-PairwiseDistance(X, METRIC, KWARGS, RESULT)
+pairwise_distance(X, RESULT)
+pairwise_distance(X, METRIC, RESULT)
+pairwise_distance(X, METRIC, KWARGS, RESULT)
 --8<-- [end:pairwisedistance]
 
 --8<-- [start:pairwisedistance_ex2]
-PairwiseDistance(++([[0.0,0.0],[3.0,4.0]]), 'euclidean', D),
+pairwise_distance(++([[0.0,0.0],[3.0,4.0]]), 'euclidean', D),
 V is ++(float(D[0]))   % V = 5.0
 --8<-- [end:pairwisedistance_ex2]
 
 --8<-- [start:squareform]
-SquareForm(X, RESULT)
+square_form(X, RESULT)
 --8<-- [end:squareform]
 
 --8<-- [start:squareform_ex2]
-PairwiseDistance(PTS, CONDENSED),
-SquareForm(CONDENSED, SQUARE)   % SQUARE is the full n×n matrix
+pairwise_distance(PTS, CONDENSED),
+square_form(CONDENSED, SQUARE)   % SQUARE is the full n×n matrix
 --8<-- [end:squareform_ex2]
 
 --8<-- [start:pointdistance]
-PointDistance(METRIC, X, Y, RESULT)
+point_distance(METRIC, X, Y, RESULT)
 --8<-- [end:pointdistance]
 
 --8<-- [start:pointdistance_ex2]
-PointDistance('euclidean', ++([0.0, 0.0]), ++([3.0, 4.0]), D)  % D = 5.0
+point_distance('euclidean', ++([0.0, 0.0]), ++([3.0, 4.0]), D)  % D = 5.0
 --8<-- [end:pointdistance_ex2]
 
 
 # === Tier 3 — KD-Tree ===
 
 --8<-- [start:makekdtree]
-MakeKdTree(DATA, RESULT)
-MakeKdTree(DATA, LEAFSIZE, RESULT)
+make_kd_tree(DATA, RESULT)
+make_kd_tree(DATA, LEAFSIZE, RESULT)
 --8<-- [end:makekdtree]
 
 --8<-- [start:kdtreequery]
-KdTreeQuery(HANDLE, X, RESULT)
-KdTreeQuery(HANDLE, X, K, RESULT)
+kd_tree_query(HANDLE, X, RESULT)
+kd_tree_query(HANDLE, X, K, RESULT)
 --8<-- [end:kdtreequery]
 
 --8<-- [start:kdtreequery_ex2]
-MakeKdTree(DATA, KD),
-KdTreeQuery(KD, QUERY, 3, R),
+make_kd_tree(DATA, KD),
+kd_tree_query(KD, QUERY, 3, R),
 NEAREST is ++(R['indices'])
 --8<-- [end:kdtreequery_ex2]
 
 --8<-- [start:kdtreequeryball]
-KdTreeQueryBall(HANDLE, X, RADIUS, RESULT)
+kd_tree_query_ball(HANDLE, X, RADIUS, RESULT)
 --8<-- [end:kdtreequeryball]
 
 --8<-- [start:kdtreequerypairs]
-KdTreeQueryPairs(HANDLE, RADIUS, RESULT)
+kd_tree_query_pairs(HANDLE, RADIUS, RESULT)
 --8<-- [end:kdtreequerypairs]
 
 
 # === Tier 3 — ConvexHull ===
 
 --8<-- [start:makeconvexhull]
-MakeConvexHull(POINTS, RESULT)
+make_convex_hull(POINTS, RESULT)
 --8<-- [end:makeconvexhull]
 
 --8<-- [start:convexhullattr]
-ConvexHullAttr(HANDLE, ATTR, RESULT)
+convex_hull_attr(HANDLE, ATTR, RESULT)
 --8<-- [end:convexhullattr]
 
 --8<-- [start:convexhullattr_ex2]
-MakeConvexHull(PTS, H),
-ConvexHullAttr(H, 'volume', VOL),
-Free(H)
+make_convex_hull(PTS, H),
+convex_hull_attr(H, 'volume', VOL),
+free(H)
 --8<-- [end:convexhullattr_ex2]
 
 
 # === Tier 3 — Delaunay Triangulation ===
 
 --8<-- [start:makedelaunay]
-MakeDelaunay(POINTS, RESULT)
+make_delaunay(POINTS, RESULT)
 --8<-- [end:makedelaunay]
 
 --8<-- [start:delaunayfindsimplex]
-DelaunayFindSimplex(HANDLE, XI, RESULT)
-DelaunayFindSimplex(HANDLE, XI, BRUTEFORCE, RESULT)
+delaunay_find_simplex(HANDLE, XI, RESULT)
+delaunay_find_simplex(HANDLE, XI, BRUTEFORCE, RESULT)
 --8<-- [end:delaunayfindsimplex]
 
 --8<-- [start:delaunayfindsimplex_ex2]
-MakeDelaunay(PTS, H),
-DelaunayFindSimplex(H, ++([[0.5, 0.3]]), IDX),
+make_delaunay(PTS, H),
+delaunay_find_simplex(H, ++([[0.5, 0.3]]), IDX),
 ++(int(IDX[0]) >= 0)   % point is inside
 --8<-- [end:delaunayfindsimplex_ex2]
 
@@ -116,51 +116,51 @@ DelaunayFindSimplex(H, ++([[0.5, 0.3]]), IDX),
 # === Tier 3 — Rotation ===
 
 --8<-- [start:makerotation]
-MakeRotation(METHOD, DATA, RESULT)
+make_rotation(METHOD, DATA, RESULT)
 --8<-- [end:makerotation]
 
 --8<-- [start:rotationapply]
-RotationApply(HANDLE, VECTORS, RESULT)
-RotationApply(HANDLE, VECTORS, INVERSE, RESULT)
+rotation_apply(HANDLE, VECTORS, RESULT)
+rotation_apply(HANDLE, VECTORS, INVERSE, RESULT)
 --8<-- [end:rotationapply]
 
 --8<-- [start:rotationas]
-RotationAs(HANDLE, FORM, RESULT)
-RotationAs(HANDLE, FORM, SEQ, RESULT)
+rotation_as(HANDLE, FORM, RESULT)
+rotation_as(HANDLE, FORM, SEQ, RESULT)
 --8<-- [end:rotationas]
 
 --8<-- [start:rotationcompose]
-RotationCompose(HANDLE_A, HANDLE_B, RESULT)
+rotation_compose(HANDLE_A, HANDLE_B, RESULT)
 --8<-- [end:rotationcompose]
 
 --8<-- [start:rotationinverse]
-RotationInverse(HANDLE, RESULT)
+rotation_inverse(HANDLE, RESULT)
 --8<-- [end:rotationinverse]
 
 
-# === Lifecycle — Free ===
+# === Lifecycle — free ===
 
 --8<-- [start:lifecycle]
-Free(HANDLE)
+free(HANDLE)
 --8<-- [end:lifecycle]
 
 
 # === Complete Example ===
 
 --8<-- [start:complete_example]
--import_from(scipy_spatial, [CrossDistance, MakeKdTree, KdTreeQuery,
-                              MakeRotation, RotationApply, RotationAs, Free])
+-import_from(scipy_spatial, [cross_distance, make_kd_tree, kd_tree_query,
+                              make_rotation, rotation_apply, rotation_as, free])
 
 # Find the two nearest neighbours of each point
 nearest_two(POINTS, INDICES) <- (
-    MakeKdTree(POINTS, KD),
-    KdTreeQuery(KD, POINTS, 2, R),
+    make_kd_tree(POINTS, KD),
+    kd_tree_query(KD, POINTS, 2, R),
     INDICES is ++(R['indices'][:, 1]),
-    Free(KD))
+    free(KD))
 
-# Rotate a batch of vectors by 90 degrees around Z
+# rotate a batch of vectors by 90 degrees around Z
 rotate_z90(VECTORS, ROTATED) <- (
-    MakeRotation('rotvec', ++([0.0, 0.0, 1.5707963267948966]), ROT),
-    RotationApply(ROT, VECTORS, ROTATED),
-    Free(ROT))
+    make_rotation('rotvec', ++([0.0, 0.0, 1.5707963267948966]), ROT),
+    rotation_apply(ROT, VECTORS, ROTATED),
+    free(ROT))
 --8<-- [end:complete_example]

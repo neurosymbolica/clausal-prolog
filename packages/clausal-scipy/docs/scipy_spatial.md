@@ -21,18 +21,18 @@ or via the canonical `py.*` path:
 
 | Tier | Predicates | Notes |
 |------|-----------|-------|
-| 1 — pure | `CrossDistance`, `PairwiseDistance`, `SquareForm`, `PointDistance` | Array in, array/scalar out |
-| 3 — handle | `MakeKdTree`, `KdTreeQuery`, `KdTreeQueryBall`, `KdTreeQueryPairs` | KD-tree |
-| 3 — handle | `MakeConvexHull`, `ConvexHullAttr` | Convex hull |
-| 3 — handle | `MakeDelaunay`, `DelaunayFindSimplex` | Delaunay triangulation |
-| 3 — handle | `MakeRotation`, `RotationApply`, `RotationAs`, `RotationCompose`, `RotationInverse` | 3-D rotation |
-| lifecycle | `Free` | Release any handle |
+| 1 — pure | `cross_distance`, `pairwise_distance`, `square_form`, `point_distance` | Array in, array/scalar out |
+| 3 — handle | `make_kd_tree`, `kd_tree_query`, `kd_tree_query_ball`, `kd_tree_query_pairs` | KD-tree |
+| 3 — handle | `make_convex_hull`, `convex_hull_attr` | Convex hull |
+| 3 — handle | `make_delaunay`, `delaunay_find_simplex` | Delaunay triangulation |
+| 3 — handle | `make_rotation`, `rotation_apply`, `rotation_as`, `rotation_compose`, `rotation_inverse` | 3-D rotation |
+| lifecycle | `free` | Release any handle |
 
 ---
 
 ## Tier 1 — Distance Functions
 
-### CrossDistance
+### cross_distance
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:crossdistance"
@@ -50,7 +50,7 @@ Wraps `scipy.spatial.distance.cdist`.
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:crossdistance_ex2"
 ```
 
-### PairwiseDistance
+### pairwise_distance
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:pairwisedistance"
@@ -66,7 +66,7 @@ Wraps `scipy.spatial.distance.pdist`.
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:pairwisedistance_ex2"
 ```
 
-### SquareForm
+### square_form
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:squareform"
@@ -79,7 +79,7 @@ Wraps `scipy.spatial.distance.squareform`.
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:squareform_ex2"
 ```
 
-### PointDistance
+### point_distance
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:pointdistance"
@@ -100,7 +100,7 @@ metric.
 
 ## Tier 3 — KD-Tree
 
-### MakeKdTree
+### make_kd_tree
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:makekdtree"
@@ -113,7 +113,7 @@ Wraps `scipy.spatial.KDTree`.
 - `LEAFSIZE`: leaf-size threshold (default 10)
 - `RESULT`: integer handle
 
-### KdTreeQuery
+### kd_tree_query
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:kdtreequery"
@@ -129,7 +129,7 @@ Query the KD-tree for the `K` nearest neighbours of each point in `X`.
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:kdtreequery_ex2"
 ```
 
-### KdTreeQueryBall
+### kd_tree_query_ball
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:kdtreequeryball"
@@ -139,7 +139,7 @@ Find all points within `RADIUS` of each query point.
 
 - `RESULT`: list of index lists (or a flat list if `X` is a single point)
 
-### KdTreeQueryPairs
+### kd_tree_query_pairs
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:kdtreequerypairs"
@@ -153,7 +153,7 @@ Find all pairs of points in the tree within `RADIUS` of each other.
 
 ## Tier 3 — ConvexHull
 
-### MakeConvexHull
+### make_convex_hull
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:makeconvexhull"
@@ -165,7 +165,7 @@ Wraps `scipy.spatial.ConvexHull`.
 - `POINTS`: `(n, d)` array
 - `RESULT`: integer handle
 
-### ConvexHullAttr
+### convex_hull_attr
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:convexhullattr"
@@ -191,7 +191,7 @@ Retrieve an attribute of the `ConvexHull` object.
 
 ## Tier 3 — Delaunay Triangulation
 
-### MakeDelaunay
+### make_delaunay
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:makedelaunay"
@@ -202,7 +202,7 @@ Wraps `scipy.spatial.Delaunay`.
 
 - `RESULT`: integer handle
 
-### DelaunayFindSimplex
+### delaunay_find_simplex
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:delaunayfindsimplex"
@@ -224,7 +224,7 @@ Find the simplex containing each point in `XI`.
 
 Wraps `scipy.spatial.transform.Rotation`.
 
-### MakeRotation
+### make_rotation
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:makerotation"
@@ -242,7 +242,7 @@ Construct a rotation from a given representation.
 
 - `RESULT`: integer handle
 
-### RotationApply
+### rotation_apply
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:rotationapply"
@@ -253,7 +253,7 @@ Apply the rotation to an array of 3-D vectors.
 - `INVERSE`: if `True`, apply the inverse rotation
 - `RESULT`: rotated vectors array
 
-### RotationAs
+### rotation_as
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:rotationas"
@@ -264,7 +264,7 @@ Export the rotation to a different representation.
 - `FORM`: `'quat'`, `'matrix'`, `'rotvec'`, `'mrp'`, or `'euler'`
 - `SEQ`: required when `FORM='euler'` (e.g. `'xyz'`)
 
-### RotationCompose
+### rotation_compose
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:rotationcompose"
@@ -273,7 +273,7 @@ Export the rotation to a different representation.
 Compose two rotations: `HANDLE_B` is applied first, then `HANDLE_A`.
 Returns a new handle.
 
-### RotationInverse
+### rotation_inverse
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:rotationinverse"
@@ -283,7 +283,7 @@ Return the inverse of the rotation as a new handle.
 
 ---
 
-## Lifecycle — Free
+## Lifecycle — free
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:lifecycle"

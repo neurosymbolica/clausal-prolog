@@ -18,9 +18,9 @@ Use them in expressions exactly like the constants from ``py.units``::
 Numeric values come from the installed scipy CODATA release.
 
 CODATA database access (plain floats / strings):
-    Value(NAME, RESULT)                     — value (float) by CODATA name
-    Unit(NAME, RESULT)                      — SI unit string
-    Precision(NAME, RESULT)                 — relative uncertainty
+    value(NAME, RESULT)                     — value (float) by CODATA name
+    unit(NAME, RESULT)                      — SI unit string
+    precision(NAME, RESULT)                 — relative uncertainty
     Lookup(NAME, VALUE, UNIT, UNCERTAINTY)  — all three in one call
     Find(SUBSTRING, NAMES)                  — search names by substring
     AllNames(NAMES)                         — all CODATA constant names
@@ -83,15 +83,15 @@ def _pred(name: str, *arity_fns) -> ModulePredicate:
 
 # ── CODATA lookup predicates ───────────────────────────────────────────────
 
-Value = _pred("Value",
+value = _pred("value",
     (2, _lookup_fn(lambda name: _sc().value(name))),
 )
 
-Unit = _pred("Unit",
+unit = _pred("unit",
     (2, _lookup_fn(lambda name: _sc().unit(name))),
 )
 
-Precision = _pred("Precision",
+precision = _pred("precision",
     (2, _lookup_fn(lambda name: _sc().precision(name))),
 )
 
@@ -155,7 +155,7 @@ AllNames = _AllNamesPredicate()
 #
 # Initialized eagerly at first import of this module.  scipy.constants is a
 # pure-Python file (just a dict lookup) so loading it is negligible.
-# Unit predicate objects from py.units are used as dimension keys, matching
+# unit predicate objects from py.units are used as dimension keys, matching
 # the convention in py.units itself.
 
 def _init_quantities():

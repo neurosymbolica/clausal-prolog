@@ -7,7 +7,7 @@ The `scipy_constants` module wraps [`scipy.constants`](https://docs.scipy.org/do
 ## Import
 
 ```clausal
--import_from(scipy_constants, [Value, Unit, Precision, Lookup, Find, AllNames,
+-import_from(scipy_constants, [value, unit, precision, Lookup, Find, AllNames,
                                 SpeedOfLight, PlanckConstant,
                                 ReducedPlanckConstant, GravitationalConstant,
                                 AvogadroConstant, BoltzmannConstant,
@@ -36,9 +36,9 @@ The `Const` prefix from the spec is dropped since these predicates live in the `
 
 | scipy attribute / function | Clausal predicate |
 |---|---|
-| `constants.value(name)` | `Value` |
-| `constants.unit(name)` | `Unit` |
-| `constants.precision(name)` | `Precision` |
+| `constants.value(name)` | `value` |
+| `constants.unit(name)` | `unit` |
+| `constants.precision(name)` | `precision` |
 | `constants.physical_constants[name]` | `Lookup` |
 | `constants.find(sub)` | `Find` |
 | `constants.physical_constants.keys()` | `AllNames` |
@@ -65,7 +65,7 @@ The `Const` prefix from the spec is dropped since these predicates live in the `
 
 `scipy.constants.physical_constants` contains all 300+ CODATA recommended values. Every entry has a value (float), a unit string, and an absolute uncertainty. All four predicates below index into this same database.
 
-#### `Value(NAME, RESULT)`
+#### `value(NAME, RESULT)`
 
 Look up a CODATA physical constant value by its full name string.
 
@@ -86,7 +86,7 @@ Access all three CODATA fields for a constant in a single call.
 
 - `VALUE`: float, the physical quantity value in SI units
 - `UNIT`: string, the SI unit
-- `UNCERTAINTY`: float, absolute uncertainty (not relative — use `Precision` for relative)
+- `UNCERTAINTY`: float, absolute uncertainty (not relative — use `precision` for relative)
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:codata_lookup_ex2"
@@ -121,7 +121,7 @@ Return all CODATA constant names as a list.
 
 ---
 
-#### `Unit(NAME, RESULT)`
+#### `unit(NAME, RESULT)`
 
 Return the SI unit string for a named CODATA constant.
 
@@ -133,7 +133,7 @@ Return the SI unit string for a named CODATA constant.
 
 ---
 
-#### `Precision(NAME, RESULT)`
+#### `precision(NAME, RESULT)`
 
 Return the relative uncertainty of a named CODATA constant.
 
@@ -187,7 +187,7 @@ Proton rest mass: mₚ = 1.672 621 925 95 × 10⁻²⁷ kg.
 
 ---
 
-### Unit conversion and SI prefix factors
+### unit conversion and SI prefix factors
 
 #### `ElectronVolt(RESULT)`
 
@@ -222,8 +222,8 @@ SI giga prefix: 1 × 10⁹.
 ## Notes
 
 - All values reflect the 2018 CODATA recommended values as shipped with the installed version of SciPy.
-- Several fundamental constants (c, h, e, k, Nₐ) became exact definitions under the 2019 SI redefinition; their `Precision` is 0.0.
-- `Value`, `Unit`, and `Precision` accept the same name strings as `scipy.constants.value()`, `scipy.constants.unit()`, and `scipy.constants.precision()`. Unknown names cause the predicate to fail.
+- Several fundamental constants (c, h, e, k, Nₐ) became exact definitions under the 2019 SI redefinition; their `precision` is 0.0.
+- `value`, `unit`, and `precision` accept the same name strings as `scipy.constants.value()`, `scipy.constants.unit()`, and `scipy.constants.precision()`. Unknown names cause the predicate to fail.
 
 ---
 

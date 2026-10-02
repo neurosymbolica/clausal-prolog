@@ -1,7 +1,7 @@
 """Tests for clausal.modules.py.scipy_constants — physical constants.
 
 Named constants are plain Quantity values; tests check value and dims directly.
-CODATA lookup predicates (Value, Unit, Precision, Lookup, Find, AllNames) are
+CODATA lookup predicates (value, unit, precision, Lookup, Find, AllNames) are
 tested separately via their predicate interface.
 """
 
@@ -23,7 +23,7 @@ from clausal.modules.py.scipy_constants import (
     ElementaryCharge, ElectronMass, ProtonMass,
     ElectronVolt, StandardAtmosphere,
     Kilo, Mega, Giga,
-    Value, Unit, Precision, Lookup, Find, AllNames,
+    value, unit, precision, Lookup, Find, AllNames,
 )
 
 
@@ -191,26 +191,26 @@ class TestPrefixes:
 class TestValuePredicate:
     def test_speed_of_light(self):
         # nv
-        assert _drive_pred(Value, "speed of light in vacuum") == pytest.approx(299792458.0)
+        assert _drive_pred(value, "speed of light in vacuum") == pytest.approx(299792458.0)
     def test_unknown_fails(self):
         # nv
-        assert _drive_pred(Value, "not a real constant xyz") is None
+        assert _drive_pred(value, "not a real constant xyz") is None
 
 
 class TestUnitPredicate:
     def test_speed_of_light_unit(self):
         # nv
-        u = _drive_pred(Unit, "speed of light in vacuum")
+        u = _drive_pred(unit, "speed of light in vacuum")
         assert isinstance(u, str) and "m" in u
 
 
 class TestPrecisionPredicate:
     def test_c_is_exact(self):
         # nv
-        assert _drive_pred(Precision, "speed of light in vacuum") == pytest.approx(0.0)
+        assert _drive_pred(precision, "speed of light in vacuum") == pytest.approx(0.0)
     def test_G_has_uncertainty(self):
         # nv
-        assert _drive_pred(Precision, "Newtonian constant of gravitation") > 0
+        assert _drive_pred(precision, "Newtonian constant of gravitation") > 0
 
 
 class TestLookupPredicate:

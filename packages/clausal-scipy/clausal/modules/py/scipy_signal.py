@@ -3,31 +3,31 @@
 Provides signal-processing routines from scipy.signal as importable predicate
 objects for use in .clausal files via::
 
-    -import_from(py.scipy_signal, [Butterworth, SOSForwardBackwardFilter, ResultGet, ...])
+    -import_from(py.scipy_signal, [butterworth, sos_forward_backward_filter, ResultGet, ...])
 
 Tiers
 -----
 - **Tier 2** (returns result dict; use ResultGet to access fields):
-    Butterworth      → dict {b,a} or {z,p,k} or {sos} depending on OUTPUT
-    Bessel           → same
-    ChebyshevType1   → same
-    ChebyshevType2   → same
-    Elliptic         → same
-    FrequencyResponse → dict {w, h}
-    Periodogram      → dict {f, Pxx}
-    Welch            → dict {f, Pxx}
-    Spectrogram      → dict {f, t, Sxx}
+    butterworth      → dict {b,a} or {z,p,k} or {sos} depending on OUTPUT
+    bessel           → same
+    chebyshev_type1   → same
+    chebyshev_type2   → same
+    elliptic         → same
+    frequency_response → dict {w, h}
+    periodogram      → dict {f, Pxx}
+    welch            → dict {f, Pxx}
+    spectrogram      → dict {f, t, Sxx}
 
 - **Tier 1** (array inputs → array result, or dict when ZI supplied):
-    LinearFilter                         → array, or dict {y, zf} when ZI provided
-    SOSFilter            → array, or dict {y, zf} when ZI provided
-    ForwardBackwardFilter                → array
-    SOSForwardBackwardFilter → array
-    Decimate                             → array
-    Resample                             → array
-    Convolve                             → array
-    Correlate                            → array
-    FFTConvolve                          → array
+    linear_filter                         → array, or dict {y, zf} when ZI provided
+    sos_filter            → array, or dict {y, zf} when ZI provided
+    forward_backward_filter                → array
+    sos_forward_backward_filter → array
+    decimate                             → array
+    resample                             → array
+    convolve                             → array
+    correlate                            → array
+    fft_convolve                          → array
 
 Helper:
     ResultGet(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE
@@ -35,72 +35,72 @@ Helper:
 Predicate catalogue
 -------------------
 Filter design (Tier 2):
-    Butterworth(N, WN, RESULT)
-    Butterworth(N, WN, BTYPE, RESULT)            # BTYPE: 'low','high','band','bandstop'
-    Butterworth(N, WN, BTYPE, OUTPUT, RESULT)    # OUTPUT: 'ba','zpk','sos'
-    Butterworth(N, WN, BTYPE, OUTPUT, FS, RESULT)
+    butterworth(N, WN, RESULT)
+    butterworth(N, WN, BTYPE, RESULT)            # BTYPE: 'low','high','band','bandstop'
+    butterworth(N, WN, BTYPE, OUTPUT, RESULT)    # OUTPUT: 'ba','zpk','sos'
+    butterworth(N, WN, BTYPE, OUTPUT, FS, RESULT)
 
-    Bessel(N, WN, RESULT)
-    Bessel(N, WN, BTYPE, RESULT)
-    Bessel(N, WN, BTYPE, OUTPUT, RESULT)
+    bessel(N, WN, RESULT)
+    bessel(N, WN, BTYPE, RESULT)
+    bessel(N, WN, BTYPE, OUTPUT, RESULT)
 
-    ChebyshevType1(N, RP, WN, RESULT)
-    ChebyshevType1(N, RP, WN, BTYPE, RESULT)
-    ChebyshevType1(N, RP, WN, BTYPE, OUTPUT, RESULT)
+    chebyshev_type1(N, RP, WN, RESULT)
+    chebyshev_type1(N, RP, WN, BTYPE, RESULT)
+    chebyshev_type1(N, RP, WN, BTYPE, OUTPUT, RESULT)
 
-    ChebyshevType2(N, RS, WN, RESULT)
-    ChebyshevType2(N, RS, WN, BTYPE, RESULT)
-    ChebyshevType2(N, RS, WN, BTYPE, OUTPUT, RESULT)
+    chebyshev_type2(N, RS, WN, RESULT)
+    chebyshev_type2(N, RS, WN, BTYPE, RESULT)
+    chebyshev_type2(N, RS, WN, BTYPE, OUTPUT, RESULT)
 
-    Elliptic(N, RP, RS, WN, RESULT)
-    Elliptic(N, RP, RS, WN, BTYPE, RESULT)
-    Elliptic(N, RP, RS, WN, BTYPE, OUTPUT, RESULT)
+    elliptic(N, RP, RS, WN, RESULT)
+    elliptic(N, RP, RS, WN, BTYPE, RESULT)
+    elliptic(N, RP, RS, WN, BTYPE, OUTPUT, RESULT)
 
-    FrequencyResponse(B, A, RESULT)              # RESULT: dict {w, h}
-    FrequencyResponse(B, A, NFREQS, RESULT)      # NFREQS: number of frequency points
+    frequency_response(B, A, RESULT)              # RESULT: dict {w, h}
+    frequency_response(B, A, NFREQS, RESULT)      # NFREQS: number of frequency points
 
 Filtering (Tier 1):
-    LinearFilter(B, A, X, RESULT)
-    LinearFilter(B, A, X, AXIS, RESULT)
-    LinearFilter(B, A, X, AXIS, ZI, RESULT)      # RESULT: dict {y, zf}
+    linear_filter(B, A, X, RESULT)
+    linear_filter(B, A, X, AXIS, RESULT)
+    linear_filter(B, A, X, AXIS, ZI, RESULT)      # RESULT: dict {y, zf}
 
-    SOSFilter(SOS, X, RESULT)
-    SOSFilter(SOS, X, AXIS, RESULT)
-    SOSFilter(SOS, X, AXIS, ZI, RESULT)  # RESULT: dict {y, zf}
+    sos_filter(SOS, X, RESULT)
+    sos_filter(SOS, X, AXIS, RESULT)
+    sos_filter(SOS, X, AXIS, ZI, RESULT)  # RESULT: dict {y, zf}
 
-    ForwardBackwardFilter(B, A, X, RESULT)
-    ForwardBackwardFilter(B, A, X, AXIS, RESULT)
+    forward_backward_filter(B, A, X, RESULT)
+    forward_backward_filter(B, A, X, AXIS, RESULT)
 
-    SOSForwardBackwardFilter(SOS, X, RESULT)
-    SOSForwardBackwardFilter(SOS, X, AXIS, RESULT)
+    sos_forward_backward_filter(SOS, X, RESULT)
+    sos_forward_backward_filter(SOS, X, AXIS, RESULT)
 
-    Decimate(X, Q, RESULT)
-    Decimate(X, Q, AXIS, RESULT)
+    decimate(X, Q, RESULT)
+    decimate(X, Q, AXIS, RESULT)
 
-    Resample(X, NUM, RESULT)
-    Resample(X, NUM, AXIS, RESULT)
+    resample(X, NUM, RESULT)
+    resample(X, NUM, AXIS, RESULT)
 
 Convolution/correlation (Tier 1):
-    Convolve(IN1, IN2, RESULT)
-    Convolve(IN1, IN2, MODE, RESULT)              # MODE: 'full','valid','same'
-    Convolve(IN1, IN2, MODE, METHOD, RESULT)      # METHOD: 'auto','direct','fft'
+    convolve(IN1, IN2, RESULT)
+    convolve(IN1, IN2, MODE, RESULT)              # MODE: 'full','valid','same'
+    convolve(IN1, IN2, MODE, METHOD, RESULT)      # METHOD: 'auto','direct','fft'
 
-    Correlate(IN1, IN2, RESULT)
-    Correlate(IN1, IN2, MODE, RESULT)
-    Correlate(IN1, IN2, MODE, METHOD, RESULT)
+    correlate(IN1, IN2, RESULT)
+    correlate(IN1, IN2, MODE, RESULT)
+    correlate(IN1, IN2, MODE, METHOD, RESULT)
 
-    FFTConvolve(IN1, IN2, RESULT)
-    FFTConvolve(IN1, IN2, MODE, RESULT)
+    fft_convolve(IN1, IN2, RESULT)
+    fft_convolve(IN1, IN2, MODE, RESULT)
 
 Spectral analysis (Tier 2):
-    Periodogram(X, RESULT)                       # RESULT: dict {f, Pxx}
-    Periodogram(X, FS, RESULT)
+    periodogram(X, RESULT)                       # RESULT: dict {f, Pxx}
+    periodogram(X, FS, RESULT)
 
-    Welch(X, RESULT)                             # RESULT: dict {f, Pxx}
-    Welch(X, FS, RESULT)
+    welch(X, RESULT)                             # RESULT: dict {f, Pxx}
+    welch(X, FS, RESULT)
 
-    Spectrogram(X, RESULT)                       # RESULT: dict {f, t, Sxx}
-    Spectrogram(X, FS, RESULT)
+    spectrogram(X, RESULT)                       # RESULT: dict {f, t, Sxx}
+    spectrogram(X, FS, RESULT)
 """
 
 from __future__ import annotations
@@ -188,7 +188,7 @@ def _butterworth(n, wn, btype='low', output='ba', fs=None):
     return _filter_result(raw, output)
 
 
-Butterworth = _pred("Butterworth",
+butterworth = _pred("butterworth",
     (3, _dispatch_fn(lambda n, wn: _butterworth(n, wn))),
     (4, _dispatch_fn(lambda n, wn, btype: _butterworth(n, wn, btype=btype))),
     (5, _dispatch_fn(lambda n, wn, btype, output: _butterworth(n, wn, btype=btype, output=output))),
@@ -201,7 +201,7 @@ def _bessel(n, wn, btype='low', output='ba'):
     return _filter_result(raw, output)
 
 
-Bessel = _pred("Bessel",
+bessel = _pred("bessel",
     (3, _dispatch_fn(lambda n, wn: _bessel(n, wn))),
     (4, _dispatch_fn(lambda n, wn, btype: _bessel(n, wn, btype=btype))),
     (5, _dispatch_fn(lambda n, wn, btype, output: _bessel(n, wn, btype=btype, output=output))),
@@ -213,7 +213,7 @@ def _chebyshev_type1(n, rp, wn, btype='low', output='ba'):
     return _filter_result(raw, output)
 
 
-ChebyshevType1 = _pred("ChebyshevType1",
+chebyshev_type1 = _pred("chebyshev_type1",
     (4, _dispatch_fn(lambda n, rp, wn: _chebyshev_type1(n, rp, wn))),
     (5, _dispatch_fn(lambda n, rp, wn, btype: _chebyshev_type1(n, rp, wn, btype=btype))),
     (6, _dispatch_fn(lambda n, rp, wn, btype, output: _chebyshev_type1(n, rp, wn, btype=btype, output=output))),
@@ -225,7 +225,7 @@ def _chebyshev_type2(n, rs, wn, btype='low', output='ba'):
     return _filter_result(raw, output)
 
 
-ChebyshevType2 = _pred("ChebyshevType2",
+chebyshev_type2 = _pred("chebyshev_type2",
     (4, _dispatch_fn(lambda n, rs, wn: _chebyshev_type2(n, rs, wn))),
     (5, _dispatch_fn(lambda n, rs, wn, btype: _chebyshev_type2(n, rs, wn, btype=btype))),
     (6, _dispatch_fn(lambda n, rs, wn, btype, output: _chebyshev_type2(n, rs, wn, btype=btype, output=output))),
@@ -237,7 +237,7 @@ def _elliptic(n, rp, rs, wn, btype='low', output='ba'):
     return _filter_result(raw, output)
 
 
-Elliptic = _pred("Elliptic",
+elliptic = _pred("elliptic",
     (5, _dispatch_fn(lambda n, rp, rs, wn: _elliptic(n, rp, rs, wn))),
     (6, _dispatch_fn(lambda n, rp, rs, wn, btype: _elliptic(n, rp, rs, wn, btype=btype))),
     (7, _dispatch_fn(lambda n, rp, rs, wn, btype, output: _elliptic(n, rp, rs, wn, btype=btype, output=output))),
@@ -249,7 +249,7 @@ def _frequency_response(b, a=1, nfreqs=512):
     return {'w': w, 'h': h}
 
 
-FrequencyResponse = _pred("FrequencyResponse",
+frequency_response = _pred("frequency_response",
     (3, _dispatch_fn(lambda b, a: _frequency_response(b, a))),
     (4, _dispatch_fn(lambda b, a, nfreqs: _frequency_response(b, a, nfreqs=nfreqs))),
 )
@@ -264,7 +264,7 @@ def _linear_filter(b, a, x, axis=-1, zi=None):
     return _sig().lfilter(b, a, x, axis=axis)
 
 
-LinearFilter = _pred("LinearFilter",
+linear_filter = _pred("linear_filter",
     (4, _dispatch_fn(lambda b, a, x: _linear_filter(b, a, x))),
     (5, _dispatch_fn(lambda b, a, x, axis: _linear_filter(b, a, x, axis=axis))),
     (6, _dispatch_fn(lambda b, a, x, axis, zi: _linear_filter(b, a, x, axis=axis, zi=zi))),
@@ -278,32 +278,32 @@ def _second_order_sections_filter(sos, x, axis=-1, zi=None):
     return _sig().sosfilt(sos, x, axis=axis)
 
 
-SOSFilter = _pred("SOSFilter",
+sos_filter = _pred("sos_filter",
     (3, _dispatch_fn(lambda sos, x: _second_order_sections_filter(sos, x))),
     (4, _dispatch_fn(lambda sos, x, axis: _second_order_sections_filter(sos, x, axis=axis))),
     (5, _dispatch_fn(lambda sos, x, axis, zi: _second_order_sections_filter(sos, x, axis=axis, zi=zi))),
 )
 
 
-ForwardBackwardFilter = _pred("ForwardBackwardFilter",
+forward_backward_filter = _pred("forward_backward_filter",
     (4, _dispatch_fn(lambda b, a, x: _sig().filtfilt(b, a, x))),
     (5, _dispatch_fn(lambda b, a, x, axis: _sig().filtfilt(b, a, x, axis=axis))),
 )
 
 
-SOSForwardBackwardFilter = _pred("SOSForwardBackwardFilter",
+sos_forward_backward_filter = _pred("sos_forward_backward_filter",
     (3, _dispatch_fn(lambda sos, x: _sig().sosfiltfilt(sos, x))),
     (4, _dispatch_fn(lambda sos, x, axis: _sig().sosfiltfilt(sos, x, axis=axis))),
 )
 
 
-Decimate = _pred("Decimate",
+decimate = _pred("decimate",
     (3, _dispatch_fn(lambda x, q: _sig().decimate(x, q))),
     (4, _dispatch_fn(lambda x, q, axis: _sig().decimate(x, q, axis=axis))),
 )
 
 
-Resample = _pred("Resample",
+resample = _pred("resample",
     (3, _dispatch_fn(lambda x, num: _sig().resample(x, num))),
     (4, _dispatch_fn(lambda x, num, axis: _sig().resample(x, num, axis=axis))),
 )
@@ -311,21 +311,21 @@ Resample = _pred("Resample",
 
 # ── Convolution and correlation (Tier 1) ──────────────────────────────────
 
-Convolve = _pred("Convolve",
+convolve = _pred("convolve",
     (3, _dispatch_fn(lambda in1, in2: _sig().convolve(in1, in2))),
     (4, _dispatch_fn(lambda in1, in2, mode: _sig().convolve(in1, in2, mode=mode))),
     (5, _dispatch_fn(lambda in1, in2, mode, method: _sig().convolve(in1, in2, mode=mode, method=method))),
 )
 
 
-Correlate = _pred("Correlate",
+correlate = _pred("correlate",
     (3, _dispatch_fn(lambda in1, in2: _sig().correlate(in1, in2))),
     (4, _dispatch_fn(lambda in1, in2, mode: _sig().correlate(in1, in2, mode=mode))),
     (5, _dispatch_fn(lambda in1, in2, mode, method: _sig().correlate(in1, in2, mode=mode, method=method))),
 )
 
 
-FFTConvolve = _pred("FFTConvolve",
+fft_convolve = _pred("fft_convolve",
     (3, _dispatch_fn(lambda in1, in2: _sig().fftconvolve(in1, in2))),
     (4, _dispatch_fn(lambda in1, in2, mode: _sig().fftconvolve(in1, in2, mode=mode))),
 )
@@ -338,7 +338,7 @@ def _periodogram(x, fs=1.0):
     return {'f': f, 'Pxx': Pxx}
 
 
-Periodogram = _pred("Periodogram",
+periodogram = _pred("periodogram",
     (2, _dispatch_fn(lambda x: _periodogram(x))),
     (3, _dispatch_fn(lambda x, fs: _periodogram(x, fs=fs))),
 )
@@ -349,7 +349,7 @@ def _welch(x, fs=1.0):
     return {'f': f, 'Pxx': Pxx}
 
 
-Welch = _pred("Welch",
+welch = _pred("welch",
     (2, _dispatch_fn(lambda x: _welch(x))),
     (3, _dispatch_fn(lambda x, fs: _welch(x, fs=fs))),
 )
@@ -360,7 +360,7 @@ def _spectrogram(x, fs=1.0):
     return {'f': f, 't': t, 'Sxx': Sxx}
 
 
-Spectrogram = _pred("Spectrogram",
+spectrogram = _pred("spectrogram",
     (2, _dispatch_fn(lambda x: _spectrogram(x))),
     (3, _dispatch_fn(lambda x, fs: _spectrogram(x, fs=fs))),
 )
