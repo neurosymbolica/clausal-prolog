@@ -41,14 +41,9 @@ def _hash_3(algorithm, data, hex_out, trail, k):
     """hash/3: hash(Algorithm, Data, Hex) — compute hex digest."""
     algo = require_text(deref(algorithm), "hash/3")
     data_d = deref(data)
-    if algo is None:
-        return
-    if is_var(data_d):
-        return
     data_bytes = to_bytes(data_d)
     if data_bytes is None:
-        expect_type(data_d, (str, bytes), "hash/3", arg=2)
-        return
+        expect_type(data_d, (str, bytes), "hash/3", arg=2)   # raises
     try:
         h = _hashlib.new(algo)
     except ValueError as exc:  # unknown algorithm
@@ -68,14 +63,9 @@ def _hash_bytes_3(algorithm, data, bytes_out, trail, k):
     """hash_bytes/3: hash_bytes(Algorithm, Data, Bytes) — compute raw digest bytes."""
     algo = require_text(deref(algorithm), "hash_bytes/3")
     data_d = deref(data)
-    if algo is None:
-        return
-    if is_var(data_d):
-        return
     data_bytes = to_bytes(data_d)
     if data_bytes is None:
-        expect_type(data_d, (str, bytes), "hash_bytes/3", arg=2)
-        return
+        expect_type(data_d, (str, bytes), "hash_bytes/3", arg=2)   # raises
     try:
         h = _hashlib.new(algo)
     except ValueError as exc:  # unknown algorithm

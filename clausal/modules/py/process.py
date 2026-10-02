@@ -17,6 +17,7 @@ from clausal.modules.py import (
     text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
+    NUMBER_TYPES,
     expect_type,
     has_option,
     option,
@@ -152,8 +153,6 @@ def _process_create_4(program, args, options, result_var, trail, k):
         return
     if not expect_type(args, list, "process_create/4", arg=2):
         return
-    if is_var(options):
-        return
 
     cmd = [program] + [text_or_str(deref(a)) for a in args]
 
@@ -164,8 +163,7 @@ def _process_create_4(program, args, options, result_var, trail, k):
     elif isinstance(options, dict):
         opts_data = options
     else:
-        expect_type(options, (DictTerm, dict), "process_create/4",
-                    expected="dict", arg=3)
+        expect_type(options, (DictTerm, dict), "process_create/4", arg=3)
         return
 
     if has_option(opts_data, "cwd"):
@@ -218,11 +216,7 @@ def _process_create_4(program, args, options, result_var, trail, k):
 def _sleep_1(seconds, trail, k):
     """sleep/1: pause execution for the given number of seconds."""
     seconds = deref(seconds)
-    if is_var(seconds):
-        return
-    if not expect_type(seconds, (int, float), "sleep/1",
-                       expected="int or float", arg=1):
-        return
+    expect_type(seconds, NUMBER_TYPES, "sleep/1", arg=1)
     _time.sleep(float(seconds))
     yield None
 

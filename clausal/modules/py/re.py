@@ -27,7 +27,7 @@ from __future__ import annotations
 from clausal.modules.py import (
     ModulePredicate,
     _import_stdlib,
-    note_mismatch,
+    expect_type,
     simple_to_trampoline,
     to_text,
 )
@@ -44,8 +44,8 @@ from clausal.logic.runtime._seg_helpers import maybe_promote_to_str
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-# Sentinel: the subject cannot be interpreted as a string, so the predicate
-# must fail cleanly (yield no solution) rather than scan a Python repr.
+# Sentinel kept for the call sites' checks; since RULED 2026-10-02
+# ``_coerce_subject`` raises instead of answering it (never a repr scan).
 _NO_SUBJECT = object()
 
 
@@ -56,19 +56,19 @@ def _coerce_subject(string: Any, pred: str, arg: int) -> Any:
     match its own internal name ("_23"), and a char-list matched the repr
     brackets/quotes. Instead:
 
-    - unbound Var → ``_NO_SUBJECT`` (fail cleanly — no repr scanning);
+    - unbound Var → ``instantiation_error`` (no repr scanning);
     - ``str`` → itself;
     - a ``SegString``/``SegList`` that walks to a ``str`` → that ``str``;
     - a list/tuple of 1-char strings → joined ``str`` (strings-as-lists
       Liskov, docs/strings_as_lists.md); empty list → "";
-    - anything else (int, non-char list, …) → ``_NO_SUBJECT``, recording a
-      type-mismatch note (the value was bound, so this is an ill-typed
-      call, not a mode signal).  *pred* is the registered predicate
-      name/arity and *arg* the 1-based argument position for the note.
+    - anything else (int, non-char list, …) → ``type_error(text, S)``
+      (RULED 2026-10-02: the value was bound, so this is an ill-typed call,
+      not a mode signal).  *pred* is the registered predicate name/arity
+      and *arg* the 1-based argument position, both carried by the error.
     """
     s = deref(string)
     if is_var(s):
-        return _NO_SUBJECT
+        expect_type(s, str, pred, arg=arg)   # raises instantiation_error
     # THE FLIP (spec §9.4): an ATOM is text here too -- ``match(P, hello)``
     # and ``match(P, "hello")`` under ``-double_quotes(chars)`` hand over the
     # same ``str``.  Before the tuple arm, which would otherwise see the
@@ -90,13 +90,11 @@ def _coerce_subject(string: Any, pred: str, arg: int) -> Any:
             return chars_text(promoted)    # stage 1: the promotion funnel answers the carrier
         if isinstance(promoted, str):
             return promoted
-    note_mismatch(pred,
-                  f"was called with {type(s).__name__} where str or a list "
-                  f"of single-character strings is required (argument {arg})")
-    return _NO_SUBJECT
+    expect_type(s, str, pred, arg=arg)   # raises type_error(text, S)
+    raise AssertionError("unreachable: expect_type raised")
 
 
-def _compile_pattern(pat: Any) -> "_re.Pattern":
+def _compile_pattern(pat: Any, pred: str = "") -> "_re.Pattern":
     """Compile a pattern, accepting a pre-compiled pattern, a string or an ATOM.
 
     THE FLIP (spec §9.4): ``r"\\d+"`` in a ``.clausal`` file is an atom under
@@ -111,14 +109,14 @@ def _compile_pattern(pat: Any) -> "_re.Pattern":
     builtin must never produce -- so it is the documented
     ``type_error(text, …)`` here, exactly as in ``py/sqlite._text``: a
     pattern position is unambiguously text, so a non-text pattern is an
-    ill-typed call, not a mode signal.
+    ill-typed call, not a mode signal.  An unbound pattern is an
+    ``instantiation_error``.  *pred* (``"match/2"``) is the error's context.
     """
     if isinstance(pat, _re.Pattern):
         return pat
     text = to_text(pat)
     if text is None:
-        from clausal.logic.exceptions import LogicException, type_error
-        raise LogicException(type_error("text", pat, "py.re pattern"))
+        expect_type(deref(pat), str, f"{pred or 'py.re'}", arg=1)   # raises
     return _re.compile(text)
 
 
@@ -170,7 +168,7 @@ def _match_2(pat, string, trail, k):
     string = _coerce_subject(string, "match/2", 2)
     if string is _NO_SUBJECT:
         return
-    compiled = _compile_pattern(pat)
+    compiled = _compile_pattern(pat, "match/2")
     m = compiled.match(string)
     if m is not None:
         yield None
@@ -182,7 +180,7 @@ def _match_3(pat, string, groups, trail, k):
     string = _coerce_subject(string, "match/3", 2)
     if string is _NO_SUBJECT:
         return
-    compiled = _compile_pattern(pat)
+    compiled = _compile_pattern(pat, "match/3")
     m = compiled.match(string)
     if m is not None:
         result = _groups_dict(m)
@@ -199,7 +197,7 @@ def _search_2(pat, string, trail, k):
     string = _coerce_subject(string, "search/2", 2)
     if string is _NO_SUBJECT:
         return
-    compiled = _compile_pattern(pat)
+    compiled = _compile_pattern(pat, "search/2")
     m = compiled.search(string)
     if m is not None:
         yield None
@@ -211,7 +209,7 @@ def _search_3(pat, string, groups, trail, k):
     string = _coerce_subject(string, "search/3", 2)
     if string is _NO_SUBJECT:
         return
-    compiled = _compile_pattern(pat)
+    compiled = _compile_pattern(pat, "search/3")
     m = compiled.search(string)
     if m is not None:
         result = _groups_dict(m)
@@ -227,11 +225,11 @@ def _replace_4(pat, repl, string, result, trail, k):
     pat = deref(pat)
     repl = _coerce_subject(repl, "replace/4", 2)
     if repl is _NO_SUBJECT:
-        return  # unbound / non-string replacement — fail cleanly (F004)
+        return  # unreachable since 2026-10-02: _coerce_subject raises (F004)
     string = _coerce_subject(string, "replace/4", 3)
     if string is _NO_SUBJECT:
         return
-    compiled = _compile_pattern(pat)
+    compiled = _compile_pattern(pat, "replace/4")
     out = _out(compiled.sub(repl, string))
     if unify(result, out, trail):
         yield None
@@ -246,7 +244,7 @@ def _split_3(pat, string, parts, trail, k):
     string = _coerce_subject(string, "split/3", 2)
     if string is _NO_SUBJECT:
         return
-    compiled = _compile_pattern(pat)
+    compiled = _compile_pattern(pat, "split/3")
     out = [_out(p) for p in compiled.split(string)]
     if unify(parts, out, trail):
         yield None
@@ -268,7 +266,7 @@ def _findall_3(this_generator, _proceed, _fail, _catcher, pat, string, match_var
     if string is _NO_SUBJECT:
         yield (_fail, DONE)
         return
-    compiled = _compile_pattern(pat)
+    compiled = _compile_pattern(pat, "findall/3")
     matches = compiled.finditer(string)
     for m in matches:
         mark = trail.mark()

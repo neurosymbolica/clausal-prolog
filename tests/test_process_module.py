@@ -29,6 +29,16 @@ def simple_solutions(fn, *args):
     return results, trail
 
 
+def raised(fn, *args):
+    """The error term a simple-mode builtin raises.  RULED 2026-10-02: an
+    argument of the wrong type raises type_error, an unbound required one
+    instantiation_error -- neither fails the goal."""
+    from clausal.logic.exceptions import LogicException
+    with pytest.raises(LogicException) as info:
+        list(fn(*args, Trail(), None))
+    return info.value.term
+
+
 def trampoline_solutions(pred, *args):
     """Run a trampoline-protocol predicate and collect solution snapshots."""
     trail = Trail()
@@ -56,15 +66,15 @@ class TestShell1:
         sols, _ = simple_solutions(_shell_1, chars("false"))
         assert len(sols) == 0
 
-    def test_unbound_fails(self):
+    def test_unbound_raises(self):
         # nv
-        sols, _ = simple_solutions(_shell_1, Var())
-        assert len(sols) == 0
+        term = raised(_shell_1, Var())
+        assert term == ('error', 'instantiation_error', ('/', 'shell', 1))
 
-    def test_non_string_fails(self):
+    def test_non_string_raises(self):
         # nv
-        sols, _ = simple_solutions(_shell_1, 42)
-        assert len(sols) == 0
+        term = raised(_shell_1, 42)
+        assert term == ('error', ('type_error', 'text', 42), ('/', 'shell', 1))
 
     def test_trampoline_multi_arity(self):
         # Arity 1 via multi-dispatch
@@ -115,10 +125,10 @@ class TestShellOutput2:
         sols, _ = simple_solutions(_shell_output_2, chars("false"), Var())
         assert len(sols) == 0
 
-    def test_unbound_fails(self):
+    def test_unbound_raises(self):
         # nv
-        sols, _ = simple_solutions(_shell_output_2, Var(), Var())
-        assert len(sols) == 0
+        term = raised(_shell_output_2, Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'shell_output', 2))
 
     def test_trampoline(self):
         # nv
@@ -178,15 +188,15 @@ class TestProcessCreate3:
         )
         assert len(sols) == 0
 
-    def test_unbound_program_fails(self):
+    def test_unbound_program_raises(self):
         # nv
-        sols, _ = simple_solutions(_process_create_3, Var(), [], Var())
-        assert len(sols) == 0
+        term = raised(_process_create_3, Var(), [], Var())
+        assert term == ('error', 'instantiation_error', ('/', 'process_create', 3))
 
-    def test_unbound_args_fails(self):
+    def test_unbound_args_raises(self):
         # nv
-        sols, _ = simple_solutions(_process_create_3, chars("echo"), Var(), Var())
-        assert len(sols) == 0
+        term = raised(_process_create_3, chars("echo"), Var(), Var())
+        assert term == ('error', 'instantiation_error', ('/', 'process_create', 3))
 
     def test_trampoline(self):
         # nv
@@ -259,15 +269,15 @@ class TestSleep:
         assert len(sols) == 1
         assert elapsed >= 0.04  # allow small tolerance
 
-    def test_unbound_fails(self):
+    def test_unbound_raises(self):
         # nv
-        sols, _ = simple_solutions(_sleep_1, Var())
-        assert len(sols) == 0
+        term = raised(_sleep_1, Var())
+        assert term == ('error', 'instantiation_error', ('/', 'sleep', 1))
 
-    def test_non_numeric_fails(self):
+    def test_non_numeric_raises(self):
         # nv
-        sols, _ = simple_solutions(_sleep_1, "not a number")
-        assert len(sols) == 0
+        term = raised(_sleep_1, "not a number")
+        assert term == ('error', ('type_error', 'number', 'not a number'), ('/', 'sleep', 1))
 
     def test_trampoline(self):
         # nv

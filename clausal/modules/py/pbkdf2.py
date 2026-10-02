@@ -33,21 +33,17 @@ def _derive_5(password, salt, iterations, key_length, derived_key, trail, k):
     sa = deref(salt)
     it = deref(iterations)
     kl = deref(key_length)
-    if any(is_var(x) for x in (pw, sa, it, kl)):
-        return
     pw_b = to_bytes(pw)
+    if pw_b is None:
+        expect_type(pw, (str, bytes), "derive/5", arg=1)   # raises
     sa_b = to_bytes(sa)
-    if pw_b is None or sa_b is None:
-        expect_type(pw, (str, bytes), "derive/5", arg=1)
-        expect_type(sa, (str, bytes), "derive/5", arg=2)
-        return
-    if not expect_type(it, int, "derive/5", arg=3):
-        return
+    if sa_b is None:
+        expect_type(sa, (str, bytes), "derive/5", arg=2)   # raises
+    expect_type(it, int, "derive/5", arg=3)
     if it <= 0:
         note_mismatch("derive/5", "was called with iterations <= 0 (argument 3)")
         return
-    if not expect_type(kl, int, "derive/5", arg=4):
-        return
+    expect_type(kl, int, "derive/5", arg=4)
     if kl <= 0:
         note_mismatch("derive/5", "was called with key length <= 0 (argument 4)")
         return

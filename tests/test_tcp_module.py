@@ -30,6 +30,16 @@ def simple_solutions(fn, *args):
     return results, trail
 
 
+def raised(fn, *args):
+    """The error term a simple-mode builtin raises.  RULED 2026-10-02: an
+    argument of the wrong type raises type_error, an unbound required one
+    instantiation_error -- neither fails the goal."""
+    from clausal.logic.exceptions import LogicException
+    with pytest.raises(LogicException) as info:
+        list(fn(*args, Trail(), None))
+    return info.value.term
+
+
 def trampoline_solutions(pred, *args):
     """Run a trampoline-protocol predicate and collect solution snapshots."""
     trail = Trail()
@@ -134,17 +144,17 @@ class TestConnect:
         sols, _ = simple_solutions(_connect_3, chars("127.0.0.1"), 1, sock)
         assert len(sols) == 0
 
-    def test_unbound_host_fails(self):
+    def test_unbound_host_raises(self):
         # nv
         sock = Var()
-        sols, _ = simple_solutions(_connect_3, Var(), 80, sock)
-        assert len(sols) == 0
+        term = raised(_connect_3, Var(), 80, sock)
+        assert term == ('error', 'instantiation_error', ('/', 'connect', 3))
 
-    def test_unbound_port_fails(self):
+    def test_unbound_port_raises(self):
         # nv
         sock = Var()
-        sols, _ = simple_solutions(_connect_3, chars("localhost"), Var(), sock)
-        assert len(sols) == 0
+        term = raised(_connect_3, chars("localhost"), Var(), sock)
+        assert term == ('error', 'instantiation_error', ('/', 'connect', 3))
 
 
 # ── listen/3 + accept/2 ─────────────────────────────────────────────────
@@ -225,14 +235,14 @@ class TestSendReceive:
         assert deref(data) == chars("world")
         s.close()
 
-    def test_send_unbound_data_fails(self, echo_server):
+    def test_send_unbound_data_raises(self, echo_server):
         # nv
         host, port = echo_server
         sock = Var()
         simple_solutions(_connect_3, chars(host), port, sock)
         s = deref(sock)
-        sols, _ = simple_solutions(_send_2, s, Var())
-        assert len(sols) == 0
+        term = raised(_send_2, s, Var())
+        assert term == ('error', 'instantiation_error', ('/', 'send', 2))
         s.close()
 
     def test_send_bytes(self, echo_server):
@@ -274,10 +284,10 @@ class TestClose:
         sols, _ = simple_solutions(_close_1, s)
         assert len(sols) == 1
 
-    def test_close_unbound_fails(self):
+    def test_close_unbound_raises(self):
         # nv
-        sols, _ = simple_solutions(_close_1, Var())
-        assert len(sols) == 0
+        term = raised(_close_1, Var())
+        assert term == ('error', 'instantiation_error', ('/', 'close', 1))
 
 
 # ── set_timeout/2 ─────────────────────────────────────────────────────────
@@ -296,14 +306,14 @@ class TestSetTimeout:
         assert s.gettimeout() == 1.0
         s.close()
 
-    def test_unbound_seconds_fails(self, echo_server):
+    def test_unbound_seconds_raises(self, echo_server):
         # nv
         host, port = echo_server
         sock = Var()
         simple_solutions(_connect_3, chars(host), port, sock)
         s = deref(sock)
-        sols, _ = simple_solutions(_set_timeout_2, s, Var())
-        assert len(sols) == 0
+        term = raised(_set_timeout_2, s, Var())
+        assert term == ('error', 'instantiation_error', ('/', 'set_timeout', 2))
         s.close()
 
 

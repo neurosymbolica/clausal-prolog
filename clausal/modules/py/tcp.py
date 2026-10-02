@@ -14,6 +14,7 @@ from clausal.modules.py import (
     text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
+    NUMBER_TYPES,
     expect_type,
     require_text,
     simple_to_trampoline,
@@ -90,13 +91,9 @@ def _send_2(sock, data, trail, k):
     data_d = deref(data)
     if not expect_type(sock_d, _socket.socket, "send/2", arg=1):
         return
-    if is_var(data_d):
-        return
     data_bytes = to_bytes(data_d)
     if data_bytes is None:
-        expect_type(data_d, (str, bytes), "send/2",
-                    expected="str or bytes", arg=2)
-        return
+        expect_type(data_d, (str, bytes), "send/2", arg=2)   # raises
     try:
         sock_d.sendall(data_bytes)
     except (OSError, _socket.error):
@@ -151,8 +148,8 @@ def _set_timeout_2(sock, seconds, trail, k):
     sec_d = deref(seconds)
     if not expect_type(sock_d, _socket.socket, "set_timeout/2", arg=1):
         return
-    if is_var(sec_d):
-        return
+    if sec_d is not None:              # None: blocking, no timeout
+        expect_type(sec_d, NUMBER_TYPES, "set_timeout/2", arg=2)
     timeout = None if sec_d is None else float(sec_d)
     sock_d.settimeout(timeout)
     yield None

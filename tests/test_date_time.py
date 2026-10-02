@@ -52,6 +52,16 @@ def trampoline_solutions(pred, *args):
     return solutions, trail
 
 
+def raised(fn, *args):
+    """The error term a simple-mode builtin raises (RULED 2026-10-02: an
+    argument of the wrong type raises type_error, an unbound required one
+    instantiation_error -- neither fails the goal)."""
+    from clausal.logic.exceptions import LogicException
+    with pytest.raises(LogicException) as info:
+        list(fn(*args, Trail(), None))
+    return info.value.term
+
+
 # ── now / now_utc / today ────────────────────────────────────────────────
 
 
@@ -209,17 +219,20 @@ class TestDateAdd:
         assert len(results) == 1
         assert deref(r) == _T(dt.datetime(2026, 3, 16, 13, 0, 0))
 
-    def test_add_non_date_fails(self):
+    def test_add_non_date_raises(self):
         # nv
-        r = Var()
-        results, _ = simple_solutions(_date_add_3, "not-a-date", _T(dt.timedelta(1)), r)
-        assert len(results) == 0
+        assert raised(_date_add_3, "not-a-date", _T(dt.timedelta(1)), Var()) == \
+            ('error', ('type_error', 'date', 'not-a-date'), ('/', 'date_add', 3))
 
-    def test_add_non_timedelta_fails(self):
+    def test_add_non_timedelta_raises(self):
         # nv
-        r = Var()
-        results, _ = simple_solutions(_date_add_3, _T(dt.date(2026, 1, 1)), 7, r)
-        assert len(results) == 0
+        assert raised(_date_add_3, _T(dt.date(2026, 1, 1)), 7, Var()) == \
+            ('error', ('type_error', 'timedelta', 7), ('/', 'date_add', 3))
+
+    def test_add_unbound_timedelta_raises(self):
+        # vv -- a required input, not an output
+        assert raised(_date_add_3, _T(dt.date(2026, 1, 1)), Var(), Var()) == \
+            ('error', 'instantiation_error', ('/', 'date_add', 3))
 
 
 # ── date_sub/3 ───────────────────────────────────────────────────────────
@@ -282,11 +295,10 @@ class TestDateDiff:
         assert len(results) == 1
         assert deref(td) == _T(dt.timedelta(days=-6))
 
-    def test_diff_non_dates_fails(self):
+    def test_diff_non_dates_raises(self):
         # nv
-        td = Var()
-        results, _ = simple_solutions(_date_diff_3, "a", "b", td)
-        assert len(results) == 0
+        assert raised(_date_diff_3, "a", "b", Var()) == \
+            ('error', ('type_error', 'date', 'a'), ('/', 'date_diff', 3))
 
 
 # ── datetime_string/3 — bidirectional strftime/strptime ─────────────────
@@ -352,17 +364,16 @@ class TestDatetimeString:
         )
         assert len(results) == 0
 
-    def test_both_unbound_fails(self):
+    def test_both_unbound_raises(self):
         # vv
-        results, _ = simple_solutions(_datetime_string_3, Var(), Var(), chars("%Y-%m-%d"))
-        assert len(results) == 0
+        assert raised(_datetime_string_3, Var(), Var(), chars("%Y-%m-%d")) == \
+            ('error', 'instantiation_error', ('/', 'datetime_string', 3))
 
-    def test_unbound_format_fails(self):
+    def test_unbound_format_raises(self):
         # format arg must be ground
-        results, _ = simple_solutions(
+        assert raised(
             _datetime_string_3, _T(dt.date(2026, 3, 16)), Var(), Var()
-        )
-        assert len(results) == 0
+        ) == ('error', 'instantiation_error', ('/', 'datetime_string', 3))
 
     def test_date_roundtrips_to_midnight_datetime(self):
         """A date → string → back yields a midnight datetime (documented asymmetry)."""
@@ -396,11 +407,10 @@ class TestWeekday:
         assert len(results) == 1
         assert deref(dow) == 6
 
-    def test_non_date_fails(self):
+    def test_non_date_raises(self):
         # nv
-        dow = Var()
-        results, _ = simple_solutions(_weekday_2, "not-a-date", dow)
-        assert len(results) == 0
+        assert raised(_weekday_2, "not-a-date", Var()) == \
+            ('error', ('type_error', 'date', 'not-a-date'), ('/', 'weekday', 2))
 
 
 # ── date_between/3 (nondeterministic) ────────────────────────────────────
@@ -452,13 +462,13 @@ class TestDateBetween:
         )
         assert len(solutions) == 7
 
-    def test_non_date_fails(self):
+    def test_non_date_raises(self):
         # nv
-        d = Var()
-        solutions, _ = trampoline_solutions(
-            date_between, "2026-03-10", "2026-03-16", d
-        )
-        assert len(solutions) == 0
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as info:
+            trampoline_solutions(date_between, "2026-03-10", "2026-03-16", Var())
+        assert info.value.term == \
+            ('error', ('type_error', 'date', '2026-03-10'), ('/', 'date_between', 3))
 
 
 # ── date_of/2 (datetime ↔ date) ──────────────────────────────────────────
@@ -502,15 +512,15 @@ class TestDateOf:
         )
         assert len(results) == 0
 
-    def test_both_unbound_fails(self):
+    def test_both_unbound_raises(self):
         # vv
-        results, _ = simple_solutions(_date_of_2, Var(), Var())
-        assert len(results) == 0
+        assert raised(_date_of_2, Var(), Var()) == \
+            ('error', 'instantiation_error', ('/', 'date_of', 2))
 
-    def test_non_datetime_first_arg_fails(self):
+    def test_non_datetime_first_arg_raises(self):
         # nv
-        results, _ = simple_solutions(_date_of_2, "2026-03-16", Var())
-        assert len(results) == 0
+        assert raised(_date_of_2, "2026-03-16", Var()) == \
+            ('error', ('type_error', 'datetime', '2026-03-16'), ('/', 'date_of', 2))
 
 
 # ── days_between/3 (integer day count) ───────────────────────────────────
@@ -573,11 +583,10 @@ class TestDaysBetween:
         )
         assert len(results) == 0
 
-    def test_non_date_fails(self):
+    def test_non_date_raises(self):
         # nnv
-        n = Var()
-        results, _ = simple_solutions(_days_between_3, "a", "b", n)
-        assert len(results) == 0
+        assert raised(_days_between_3, "a", "b", Var()) == \
+            ('error', ('type_error', 'date', 'a'), ('/', 'days_between', 3))
 
 
 # ── timestamp/2 (bidirectional datetime ↔ POSIX epoch) ──────────────────
@@ -613,15 +622,14 @@ class TestTimestamp:
         results, _ = simple_solutions(_timestamp_2, d, _P(d).timestamp())
         assert len(results) == 1
 
-    def test_date_has_no_timestamp_fails(self):
-        # a plain date is not a datetime → forward fails
-        results, _ = simple_solutions(_timestamp_2, _T(dt.date(2026, 3, 16)), Var())
-        assert len(results) == 0
+    def test_date_has_no_timestamp_raises(self):
+        # a plain date is not a datetime → type_error, culprit the TERM
+        assert raised(_timestamp_2, _T(dt.date(2026, 3, 16)), Var()) == \
+            ('error', ('type_error', 'datetime', ('date', 2026, 3, 16)), ('/', 'timestamp', 2))
 
-    def test_both_unbound_fails(self):
+    def test_both_unbound_raises(self):
         # vv
-        results, _ = simple_solutions(_timestamp_2, Var(), Var())
-        assert len(results) == 0
+        assert raised(_timestamp_2, Var(), Var()) == ('error', 'instantiation_error', ('/', 'timestamp', 2))
 
 
 # ── Unification of datetime objects ─────────────────────────────────────
@@ -769,10 +777,10 @@ class TestDatetimeStringIso:
         results, _ = simple_solutions(_datetime_string_iso_2, v, chars("nope"))
         assert len(results) == 0
 
-    def test_both_unbound_fails(self):
+    def test_both_unbound_raises(self):
         # vv
-        results, _ = simple_solutions(_datetime_string_iso_2, Var(), Var())
-        assert len(results) == 0
+        assert raised(_datetime_string_iso_2, Var(), Var()) == \
+            ('error', 'instantiation_error', ('/', 'datetime_string_iso', 2))
 
 
 # ── date_string_iso/2 (bidirectional ISO-8601 date) ───────────────────────
@@ -796,12 +804,11 @@ class TestDateStringIso:
         assert isinstance(_P(out), dt.date) and not isinstance(_P(out), dt.datetime)
 
     def test_forward_rejects_datetime(self):
-        """A datetime is not a plain date → forward fails (guarded like date/4)."""
+        """A datetime is not a plain date → type_error(date, Culprit)."""
         # nv
-        results, _ = simple_solutions(
+        assert raised(
             _date_string_iso_2, _T(dt.datetime(2026, 3, 16, 1, 2, 3)), Var()
-        )
-        assert len(results) == 0
+        ) == ('error', ('type_error', 'date', ('datetime', 2026, 3, 16, 1, 2, 3, 0)), ('/', 'date_string_iso', 2))
 
     def test_inverse_invalid_fails(self):
         # vn
@@ -809,10 +816,10 @@ class TestDateStringIso:
         results, _ = simple_solutions(_date_string_iso_2, v, chars("2026-03-16T00:00:00"))
         assert len(results) == 0
 
-    def test_both_unbound_fails(self):
+    def test_both_unbound_raises(self):
         # vv
-        results, _ = simple_solutions(_date_string_iso_2, Var(), Var())
-        assert len(results) == 0
+        assert raised(_date_string_iso_2, Var(), Var()) == \
+            ('error', 'instantiation_error', ('/', 'date_string_iso', 2))
 
 
 # ── date_max/3, date_min/3 — earlier/later of two dates ──────────────────
@@ -879,12 +886,11 @@ class TestDateMaxMin:
         )
         assert len(results) == 0
 
-    def test_non_date_arg_fails(self):
+    def test_non_date_arg_raises(self):
         # nnv
-        results, _ = simple_solutions(
+        assert raised(
             _date_min_3, "2026-03-16", _T(dt.date(2026, 3, 23)), Var()
-        )
-        assert len(results) == 0
+        ) == ('error', ('type_error', 'date', '2026-03-16'), ('/', 'date_min', 3))
 
 
 # ── ordinal/2 — bidirectional proleptic-Gregorian ordinal ─────────────────
@@ -936,14 +942,14 @@ class TestOrdinal:
         results, _ = simple_solutions(_ordinal_2, Var(), 0)
         assert len(results) == 0
 
-    def test_both_unbound_fails(self):
+    def test_both_unbound_raises(self):
         # vv
-        results, _ = simple_solutions(_ordinal_2, Var(), Var())
-        assert len(results) == 0
+        assert raised(_ordinal_2, Var(), Var()) == \
+            ('error', 'instantiation_error', ('/', 'ordinal', 2))
 
-    def test_non_integer_reverse_fails(self):
+    def test_non_integer_reverse_raises(self):
         # vn
-        results, _ = simple_solutions(_ordinal_2, Var(), "737000")
-        assert len(results) == 0
+        assert raised(_ordinal_2, Var(), "737000") == \
+            ('error', ('type_error', 'integer', '737000'), ('/', 'ordinal', 2))
 
 

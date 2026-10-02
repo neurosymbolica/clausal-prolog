@@ -29,6 +29,16 @@ def simple_solutions(fn, *args):
     return results, trail
 
 
+def raised(fn, *args):
+    """The error term a simple-mode builtin raises.  RULED 2026-10-02: an
+    argument of the wrong type raises type_error, an unbound required one
+    instantiation_error -- neither fails the goal."""
+    from clausal.logic.exceptions import LogicException
+    with pytest.raises(LogicException) as info:
+        list(fn(*args, Trail(), None))
+    return info.value.term
+
+
 def trampoline_solutions(pred, *args):
     """Run a trampoline-protocol predicate and collect solution snapshots."""
     trail = Trail()
@@ -92,17 +102,17 @@ class TestHash:
         sols, _ = simple_solutions(_hash_3, chars("nonexistent"), chars("abc"), h)
         assert len(sols) == 0
 
-    def test_unbound_data_fails(self):
+    def test_unbound_data_raises(self):
         # nv
         h = Var()
-        sols, _ = simple_solutions(_hash_3, chars("sha256"), Var(), h)
-        assert len(sols) == 0
+        term = raised(_hash_3, chars("sha256"), Var(), h)
+        assert term == ('error', 'instantiation_error', ('/', 'hash', 3))
 
-    def test_unbound_algorithm_fails(self):
+    def test_unbound_algorithm_raises(self):
         # nv
         h = Var()
-        sols, _ = simple_solutions(_hash_3, Var(), chars("abc"), h)
-        assert len(sols) == 0
+        term = raised(_hash_3, Var(), chars("abc"), h)
+        assert term == ('error', 'instantiation_error', ('/', 'hash', 3))
 
     def test_trampoline_protocol(self):
         # nv
@@ -168,11 +178,11 @@ class TestHmacSign:
         simple_solutions(_sign_3, chars("key2"), chars("data"), h2)
         assert deref(h1) != deref(h2)
 
-    def test_unbound_key_fails(self):
+    def test_unbound_key_raises(self):
         # nv
         h = Var()
-        sols, _ = simple_solutions(_sign_3, Var(), chars("data"), h)
-        assert len(sols) == 0
+        term = raised(_sign_3, Var(), chars("data"), h)
+        assert term == ('error', 'instantiation_error', ('/', 'sign', 4))
 
     def test_custom_algorithm(self):
         """sign("sha512", KEY, DATA, HEX)."""
@@ -247,11 +257,11 @@ class TestPbkdf2:
         simple_solutions(_derive_5, chars("password"), chars("salt"), 1, 32, dk5)
         assert deref(dk4) == deref(dk5)
 
-    def test_unbound_password_fails(self):
+    def test_unbound_password_raises(self):
         # nv
         dk = Var()
-        sols, _ = simple_solutions(_derive_4, Var(), chars("salt"), 1, dk)
-        assert len(sols) == 0
+        term = raised(_derive_4, Var(), chars("salt"), 1, dk)
+        assert term == ('error', 'instantiation_error', ('/', 'derive', 5))
 
     def test_zero_iterations_fails(self):
         # nv

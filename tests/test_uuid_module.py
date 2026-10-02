@@ -36,6 +36,16 @@ def simple_solutions(fn, *args):
     return results, trail
 
 
+def raised(fn, *args):
+    """The error term a simple-mode builtin raises.  RULED 2026-10-02: an
+    argument of the wrong type raises type_error, an unbound required one
+    instantiation_error -- neither fails the goal."""
+    from clausal.logic.exceptions import LogicException
+    with pytest.raises(LogicException) as info:
+        list(fn(*args, Trail(), None))
+    return info.value.term
+
+
 def trampoline_solutions(pred, *args):
     """Run a trampoline-protocol predicate and collect solution snapshots."""
     trail = Trail()
@@ -145,17 +155,17 @@ class TestUuid3:
         results, _ = simple_solutions(_uuid3_3, uuid.NAMESPACE_DNS, chars("test"), v)
         assert len(results) == 1
 
-    def test_uuid3_bad_namespace_fails(self):
+    def test_uuid3_bad_namespace_raises(self):
         # nv
         v = Var()
-        results, _ = simple_solutions(_uuid3_3, chars("invalid"), chars("test"), v)
-        assert len(results) == 0
+        term = raised(_uuid3_3, chars("invalid"), chars("test"), v)
+        assert term == ('error', ('domain_error', 'uuid_namespace', ('$chars', 'invalid')), ('/', 'uuid_v3', 3))
 
-    def test_uuid3_unbound_name_fails(self):
+    def test_uuid3_unbound_name_raises(self):
         # nv
         v, name = Var(), Var()
-        results, _ = simple_solutions(_uuid3_3, chars("dns"), name, v)
-        assert len(results) == 0
+        term = raised(_uuid3_3, chars("dns"), name, v)
+        assert term == ('error', 'instantiation_error', ('/', 'uuid_v3', 3))
 
     def test_uuid3_trampoline(self):
         # nv
@@ -406,11 +416,11 @@ class TestUUIDVersion:
         assert len(results) == 1
         assert deref(v) == 5
 
-    def test_non_uuid_fails(self):
+    def test_non_uuid_raises(self):
         # nv
         v = Var()
-        results, _ = simple_solutions(_uuid_version_2, "not-a-uuid", v)
-        assert len(results) == 0
+        term = raised(_uuid_version_2, "not-a-uuid", v)
+        assert term == ('error', ('type_error', 'uuid', 'not-a-uuid'), ('/', 'uuid_version', 2))
 
 
 # ── uuid_fields ───────────────────────────────────────────────────────────
@@ -431,11 +441,11 @@ class TestUUIDFields:
         assert deref(csl) == fields[4]
         assert deref(node) == fields[5]
 
-    def test_non_uuid_fails(self):
+    def test_non_uuid_raises(self):
         # nv
         tl, tm, th, csh, csl, node = Var(), Var(), Var(), Var(), Var(), Var()
-        results, _ = simple_solutions(_uuid_fields_7, 42, tl, tm, th, csh, csl, node)
-        assert len(results) == 0
+        term = raised(_uuid_fields_7, 42, tl, tm, th, csh, csl, node)
+        assert term == ('error', ('type_error', 'uuid', 42), ('/', 'uuid_fields', 7))
 
 
 # ── is_uuid ───────────────────────────────────────────────────────────────
@@ -491,17 +501,17 @@ class TestEdgeCases:
         results, _ = simple_solutions(_uuid_version_2, nil, v)
         assert len(results) == 1
 
-    def test_both_unbound_str_fails(self):
+    def test_both_unbound_str_raises(self):
         # nv
         u, s = Var(), Var()
-        results, _ = simple_solutions(_uuid_str_2, u, s)
-        assert len(results) == 0
+        term = raised(_uuid_str_2, u, s)
+        assert term == ('error', 'instantiation_error', ('/', 'uuid_str', 2))
 
-    def test_both_unbound_hex_fails(self):
+    def test_both_unbound_hex_raises(self):
         # nv
         u, h = Var(), Var()
-        results, _ = simple_solutions(_uuid_hex_2, u, h)
-        assert len(results) == 0
+        term = raised(_uuid_hex_2, u, h)
+        assert term == ('error', 'instantiation_error', ('/', 'uuid_hex', 2))
 
 
 # ── Inline .clausal integration ──────────────────────────────────────────

@@ -234,7 +234,7 @@ Bidirectional ISO-8601 string conversion without a format argument:
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:iso"
 ```
 
-`datetime_string_iso/2` forward requires a `datetime` term and produces the full ISO-8601 string; inverse (datetime unbound, string bound) parses it. `date_string_iso/2` forward requires a `date` term (a `datetime` is rejected — use `date_of/2` first if needed) and produces `YYYY-MM-DD`; inverse parses it. Unparsable text or a wrong kind of term fails cleanly; both-unbound fails.
+`datetime_string_iso/2` forward requires a `datetime` term and produces the full ISO-8601 string; inverse (datetime unbound, string bound) parses it. `date_string_iso/2` forward requires a `date` term (a `datetime` is rejected — use `date_of/2` first if needed) and produces `YYYY-MM-DD`; inverse parses it. Unparsable text fails the goal; a wrong kind of term raises `type_error` (`date_string_iso(DT, S)` with a `datetime` is `type_error(date, datetime(...))`), and both arguments unbound raises `instantiation_error` (see [Wrong-type arguments raise](python_integration.md#what-the-py-wrappers-accept-and-answer)).
 
 ### date_between/3 — Nondeterministic
 

@@ -58,6 +58,7 @@ from clausal.modules.py import (
     text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
+    NUMBER_TYPES,
     expect_type as _expect_type,
     note_mismatch,
     note_rejected_call,
@@ -197,13 +198,44 @@ def _reject_dt_term(value, pred) -> None:
 
 
 def expect_type(value, types, pred, *, expected=None, arg=None) -> bool:  # noqa: F811
-    """The shared py-interop guard, plus :func:`_reject_dt_term`: a value of
-    the wrong class still FAILS the goal with a diagnostic note (the module
-    convention), but a date-family term that is not a date RAISES."""
-    if isinstance(value, types):
+    """The shared py-interop check, plus :func:`_reject_dt_term`.
+
+    RULED 2026-10-02: a value of the wrong type RAISES
+    ``type_error(Type, Culprit)`` and an unbound required argument
+    ``instantiation_error`` (the shared :func:`modules.py.expect_type`); a
+    date-family term that is not a date raises as :func:`_reject_dt_term`
+    says.  The type is the module's own name for what is required --
+    ``date`` (a ``datetime`` is one), ``datetime``, ``time``, ``timedelta``
+    -- or the ISO one (``integer``, ``number``, ``text``), and the culprit is
+    the TERM the caller wrote: the module seam converted a date term to a
+    Python value, so the value is converted back."""
+    if isinstance(value, types) and type(value) is not bool:
         return True
     _reject_dt_term(value, pred)
-    return _expect_type(value, types, pred, expected=expected, arg=arg)
+    return _expect_type(value, types, pred, arg=arg,
+                        culprit=_dt_to_term(value))
+
+
+def _as_float_if_exact(v):
+    """A rational or decimal number as its float; anything else unchanged."""
+    if isinstance(v, NUMBER_TYPES) and not isinstance(v, (int, float)):
+        return float(v)
+    return v
+
+
+def _component_type_error(pred, comps, types, exc) -> None:
+    """Raise ``type_error`` for the first construct-mode component of the
+    wrong type, when the constructor's rejection was a ``TypeError``.
+
+    ``time(10.5, 0, 0, T)`` is an ill-typed call (RULED 2026-10-02), the
+    same as ``date(2025.5, 1, 1)``; a component of the right type whose
+    VALUE the constructor rejects (hour 25) returns, and the caller keeps
+    recording the rejection note as before."""
+    if not isinstance(exc, TypeError):
+        return
+    for i, c in enumerate(comps, 1):
+        if not isinstance(c, types) or type(c) is bool:
+            expect_type(c, types, pred, arg=i)
 
 
 def date_term_to_python(value):
@@ -366,13 +398,13 @@ def _time_4(hour, minute, second, t, trail, k):
         try:
             tm = _dt.time(hour, minute, second)
         except (TypeError, ValueError) as exc:
-            # Fully-bound rejections only — see date/4.
-            if not (is_var(hour) or is_var(minute) or is_var(second)):
-                note_rejected_call("time/4", exc)
-            elif not is_var(t):
-                # A partial time term and unbound components: neither mode
+            comps = (hour, minute, second)
+            if any(is_var(c) for c in comps):
+                # Unbound components and nothing to decompose: neither mode
                 # can run, and failing would read as "no such time".
                 raise LogicException(instantiation_error("time/4")) from None
+            _component_type_error("time/4", comps, int, exc)
+            note_rejected_call("time/4", exc)    # right types, no such time
             return
         if unify(t, tm, trail):
             yield None
@@ -406,13 +438,12 @@ def _datetime_7(year, month, day, hour, minute, second, dt, trail, k):
         try:
             obj = _dt.datetime(year, month, day, hour, minute, second)
         except (TypeError, ValueError) as exc:
-            # Fully-bound rejections only — see date/4.
-            if not any(is_var(c) for c in
-                       (year, month, day, hour, minute, second)):
-                note_rejected_call("datetime/7", exc)
-            elif not is_var(dt):
+            comps = (year, month, day, hour, minute, second)
+            if any(is_var(c) for c in comps):
                 raise LogicException(
                     instantiation_error("datetime/7")) from None
+            _component_type_error("datetime/7", comps, int, exc)
+            note_rejected_call("datetime/7", exc)
             return
         if unify(dt, obj, trail):
             yield None
@@ -447,16 +478,22 @@ def _timedelta_3(days, seconds, td, trail, k):
         # and converts them exactly (1.5 days → 1 day 12 h), so floats are
         # supported here rather than rejected — never int()-truncated.
         try:
-            obj = _dt.timedelta(days=days,
-                                seconds=seconds if not is_var(seconds) else 0)
+            # stdlib timedelta takes an int or a float; a rational or a
+            # decimal is a number too, and crosses as its float.
+            obj = _dt.timedelta(days=_as_float_if_exact(days),
+                                seconds=_as_float_if_exact(seconds)
+                                if not is_var(seconds) else 0)
         except (TypeError, ValueError) as exc:
-            # Fully-bound rejections only — see date/4 (seconds is already
-            # substituted when unbound, so only days can be a probe Var).
-            if not is_var(days):
-                note_rejected_call("timedelta/3", exc)
-            elif not is_var(td):
+            # seconds is already substituted when unbound, so only days can
+            # be unbound here.
+            if is_var(days):
                 raise LogicException(
                     instantiation_error("timedelta/3")) from None
+            _component_type_error(
+                "timedelta/3",
+                (days,) if is_var(seconds) else (days, seconds),
+                NUMBER_TYPES, exc)
+            note_rejected_call("timedelta/3", exc)
             return
         if unify(td, obj, trail):
             yield None
@@ -480,7 +517,7 @@ def _date_add_3(d, td, result, trail, k):
     Result = D + TD.
     """
     d, td, result = deref(d), deref(td), deref(result)
-    if not expect_type(d, _dt.date, "date_add/3", expected="date or datetime", arg=1):
+    if not expect_type(d, _dt.date, "date_add/3", arg=1):
         return
     if not expect_type(td, _dt.timedelta, "date_add/3", arg=2):
         return
@@ -502,7 +539,7 @@ def _date_sub_3(d, td, result, trail, k):
     Result = D - TD.
     """
     d, td, result = deref(d), deref(td), deref(result)
-    if not expect_type(d, _dt.date, "date_sub/3", expected="date or datetime", arg=1):
+    if not expect_type(d, _dt.date, "date_sub/3", arg=1):
         return
     if not expect_type(td, _dt.timedelta, "date_sub/3", arg=2):
         return
@@ -524,9 +561,9 @@ def _date_diff_3(d1, d2, td, trail, k):
     Timedelta = D1 - D2.
     """
     d1, d2, td = deref(d1), deref(d2), deref(td)
-    if not expect_type(d1, _dt.date, "date_diff/3", expected="date or datetime", arg=1):
+    if not expect_type(d1, _dt.date, "date_diff/3", arg=1):
         return
-    if not expect_type(d2, _dt.date, "date_diff/3", expected="date or datetime", arg=2):
+    if not expect_type(d2, _dt.date, "date_diff/3", arg=2):
         return
     try:
         out = d1 - d2
@@ -581,8 +618,7 @@ def _datetime_string_3(dt_obj, s, fmt, trail, k):
         if unify(dt_obj, out, trail):
             yield None
     elif not is_var(dt_obj):
-        expect_type(dt_obj, _dt.date, "datetime_string/3",
-                    expected="date, time or datetime", arg=1)
+        expect_type(dt_obj, _dt.date, "datetime_string/3", arg=1)
     else:
         expect_type(s, str, "datetime_string/3", arg=2)
 
@@ -602,8 +638,8 @@ def _date_of_2(dt_obj, d, trail, k):
       DateTime to that date at midnight,
       ``datetime.datetime(Y, Mo, D, 0, 0, 0)``.
 
-    Fails if neither argument is usable (e.g. both unbound, or the first
-    is a non-datetime value).
+    Raises ``instantiation_error`` when both are unbound and
+    ``type_error`` for a value of the wrong type (RULED 2026-10-02).
     """
     dt_obj, d = deref(dt_obj), deref(d)
     if isinstance(dt_obj, _dt.datetime):
@@ -621,11 +657,11 @@ def _date_of_2(dt_obj, d, trail, k):
         out = _dt.datetime(d.year, d.month, d.day)
         if unify(dt_obj, out, trail):
             yield None
-    elif not is_var(d):
+    else:
+        # Date bound to a non-date -> type_error; unbound with nothing to
+        # compute from (DateTime unbound or a partial datetime term) ->
+        # instantiation_error.
         expect_type(d, _dt.date, "date_of/2", arg=2)
-    elif not is_var(dt_obj):
-        # A partial datetime term and no Date: nothing to compute from.
-        raise LogicException(instantiation_error("date_of/2"))
 
 
 # ── days_between/3 — integer day count ────────────────────────────────────
@@ -640,9 +676,9 @@ def _days_between_3(d1, d2, n, trail, k):
     date_diff.  With N bound this acts as a check.
     """
     d1, d2, n = deref(d1), deref(d2), deref(n)
-    if not expect_type(d1, _dt.date, "days_between/3", expected="date or datetime", arg=1):
+    if not expect_type(d1, _dt.date, "days_between/3", arg=1):
         return
-    if not expect_type(d2, _dt.date, "days_between/3", expected="date or datetime", arg=2):
+    if not expect_type(d2, _dt.date, "days_between/3", arg=2):
         return
     try:
         days = (d1 - d2).days
@@ -666,9 +702,9 @@ def _date_max_3(d1, d2, m, trail, k):
     than leaking the TypeError.
     """
     d1, d2, m = deref(d1), deref(d2), deref(m)
-    if not expect_type(d1, _dt.date, "date_max/3", expected="date or datetime", arg=1):
+    if not expect_type(d1, _dt.date, "date_max/3", arg=1):
         return
-    if not expect_type(d2, _dt.date, "date_max/3", expected="date or datetime", arg=2):
+    if not expect_type(d2, _dt.date, "date_max/3", arg=2):
         return
     try:
         out = max(d1, d2)
@@ -687,9 +723,9 @@ def _date_min_3(d1, d2, m, trail, k):
     ``date_max/3``.
     """
     d1, d2, m = deref(d1), deref(d2), deref(m)
-    if not expect_type(d1, _dt.date, "date_min/3", expected="date or datetime", arg=1):
+    if not expect_type(d1, _dt.date, "date_min/3", arg=1):
         return
-    if not expect_type(d2, _dt.date, "date_min/3", expected="date or datetime", arg=2):
+    if not expect_type(d2, _dt.date, "date_min/3", arg=2):
         return
     try:
         out = min(d1, d2)
@@ -715,7 +751,9 @@ def _ordinal_2(d, n, trail, k):
       ``ordinal(CS, A), ordinal(CE, B), numlist(A, B, Ns)`` mapped back
       through the inverse mode.  An out-of-range N fails the goal.
 
-    Fails if neither argument is usable (both unbound, or wrong types).
+    Raises ``instantiation_error`` when both are unbound and
+    ``type_error`` for a value of the wrong type (RULED 2026-10-02); an
+    out-of-range N fails.
     """
     d, n = deref(d), deref(n)
     if isinstance(d, _dt.date):
@@ -724,7 +762,7 @@ def _ordinal_2(d, n, trail, k):
             yield None
         return
     if not _is_open(d):
-        expect_type(d, _dt.date, "ordinal/2", expected="date or datetime", arg=1)
+        expect_type(d, _dt.date, "ordinal/2", arg=1)
         return
     if isinstance(n, int) and not isinstance(n, bool):
         try:
@@ -734,11 +772,11 @@ def _ordinal_2(d, n, trail, k):
             return
         if unify(d, out, trail):
             yield None
-    elif not is_var(n):
+    else:
+        # N bound to a non-integer -> type_error; N unbound with nothing to
+        # compute from (Date unbound or partial, ``date(Y, 3, 1)``) ->
+        # instantiation_error.
         expect_type(n, int, "ordinal/2", arg=2)
-    elif not is_var(d):
-        # A partial date term (``date(Y, 3, 1)`` with Y unbound) and no N.
-        raise LogicException(instantiation_error("ordinal/2"))
 
 
 # ── weekday/2 — weekday ─────────────────────────────────────────────────
@@ -750,7 +788,7 @@ def _weekday_2(d, dow, trail, k):
     Weekday = d.weekday() (0=Monday, 6=Sunday).
     """
     d, dow = deref(d), deref(dow)
-    if not expect_type(d, _dt.date, "weekday/2", expected="date or datetime", arg=1):
+    if not expect_type(d, _dt.date, "weekday/2", arg=1):
         return
     if unify(dow, d.weekday(), trail):
         yield None
@@ -765,8 +803,8 @@ def _date_between_3(this_generator, _proceed, _fail, _catcher, start, end, d, tr
     date_between(Start, End, D) succeeds once for each date D in [Start, End].
     """
     start, end = deref(start), deref(end)
-    if (not expect_type(start, _dt.date, "date_between/3", expected="date or datetime", arg=1)
-            or not expect_type(end, _dt.date, "date_between/3", expected="date or datetime", arg=2)):
+    if (not expect_type(start, _dt.date, "date_between/3", arg=1)
+            or not expect_type(end, _dt.date, "date_between/3", arg=2)):
         yield (_fail, DONE)
         return
     # A plain date and a datetime are not comparable (datetime subclasses
@@ -818,9 +856,13 @@ def _timestamp_2(dt_obj, stamp, trail, k):
             return
         if unify(stamp, out, trail):
             yield None
-    elif _is_open(dt_obj) and isinstance(stamp, (int, float)) and not isinstance(stamp, bool):
+    elif (_is_open(dt_obj) and isinstance(stamp, NUMBER_TYPES)
+            and not isinstance(stamp, bool)):
         try:
-            out = _dt.datetime.fromtimestamp(stamp)
+            # fromtimestamp takes an int or a float; a rational or a decimal
+            # is a number too, and crosses as its float.
+            out = _dt.datetime.fromtimestamp(
+                stamp if isinstance(stamp, (int, float)) else float(stamp))
         except (OverflowError, OSError, ValueError, TypeError) as exc:
             note_rejected_call("timestamp/2", exc)
             return
@@ -828,15 +870,9 @@ def _timestamp_2(dt_obj, stamp, trail, k):
             yield None
     elif not is_var(dt_obj):
         expect_type(dt_obj, _dt.datetime, "timestamp/2", arg=1)
-    elif isinstance(stamp, bool):
-        # bool passes isinstance(int), so expect_type below would pass it
-        # silently — but the binding branch above excludes it on purpose.
-        note_mismatch("timestamp/2",
-                      "was called with bool where int or float is required "
-                      "(argument 2)")
     else:
-        expect_type(stamp, (int, float), "timestamp/2",
-                    expected="int or float", arg=2)
+        # bool is excluded: true/false are atoms (D35), not numbers.
+        expect_type(stamp, NUMBER_TYPES, "timestamp/2", arg=2)
 
 
 # ── ISO-8601 helpers — bidirectional, via isoformat/fromisoformat ────────
@@ -889,9 +925,10 @@ def _date_string_iso_2(d_obj, s, trail, k):
         if unify(d_obj, out, trail):
             yield None
     elif isinstance(d_obj, _dt.datetime):
-        note_mismatch("date_string_iso/2",
-                      "was called with datetime where a plain date is "
-                      "required (argument 1) — use datetime_string_iso/2")
+        # A datetime is not the plain date this predicate formats (use
+        # datetime_string_iso/2): the wrong type, so a type_error.
+        raise LogicException(type_error(
+            "date", _dt_to_term(d_obj), "date_string_iso/2: argument 1"))
     elif not is_var(d_obj):
         expect_type(d_obj, _dt.date, "date_string_iso/2", arg=1)
     else:

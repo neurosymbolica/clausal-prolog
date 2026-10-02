@@ -20,6 +20,33 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **A `py.*` wrapper given an argument of the wrong type raises** (ruled
+  2026-10-02) instead of failing the goal. `date_add(90, TD, R)` is
+  `error(type_error(date, 90), date_add/3)`, `sleep(abc)` is
+  `type_error(number, abc)`, a non-text path, URL or command is
+  `type_error(text, Culprit)`, and an unbound input the call needs (both
+  arguments of a bidirectional conversion, `date_add(D, TD, R)` with `TD`
+  unbound, `read_file(P, T)` with `P` unbound) is `instantiation_error`.
+  Type names are ISO's where ISO has one (`integer`, `number`, `list`) and
+  the wrapper's own otherwise (`text`, `date`, `datetime`, `time`,
+  `timedelta`, `uuid`, `dict`, `socket`). This covers every wrapper in
+  `clausal.modules.py` (`csv`, `datetime`, `files`, `hash`, `hmac`, `http`,
+  `json`, `os`, `pbkdf2`, `process`, `random`, `re`, `tcp`, `url`, `uuid`):
+  the shared `expect_type`/`require_text` checks raise, and the wrappers'
+  own `is_var -> fail` and `int()`/`float()`-coercion paths go through
+  them. Also: a bool is no longer accepted as an integer or a number
+  (`true` is an atom); `integer_between/3` no longer truncates a float or
+  parses an atom spelled as a digit; `time/4` and `datetime/7` with a float
+  component raise `type_error(integer, F)` as `date/3` already did;
+  `http:post/3,4` with non-text data raises instead of sending a body-less
+  POST; `uuid_v3/3`, `uuid_v5/3` with an unknown namespace alias raise
+  `domain_error(uuid_namespace, Ns)`; `timedelta/3` accepts a rational or
+  decimal day count (as its float) instead of refusing it. A right-typed
+  value the library
+  rejects (month 13, malformed JSON, an unknown hash name, a missing file)
+  still fails, with its diagnostic note in the `clausal.testing` failure
+  report. Wrap the call in `catch/3` where a caller wants the old failure.
+
 - **The seam's `if_/3` requires a reifiable condition** (ruled
   2026-10-01), as Scryer's library(reif) does and as the native `.pl` front
   end already did. The condition is a reified comparison (`X is Y`,

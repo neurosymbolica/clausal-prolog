@@ -658,6 +658,19 @@ print(repr(my_module.bar))            # 'bar'
   `scheme`/`host`/`port`/`path`, `py.csv`'s header cells, `py.json.parse/2`'s
   object keys — are keyed by **atoms**, which is what makes `R.stdout` and
   `get(R, stdout, V)` work.
+- **Wrong-type arguments raise** (ruled 2026-10-02). An input argument of
+  the wrong type entirely raises `error(type_error(Type, Culprit), Name/Arity)`
+  -- `date_add(90, TD, R)` is `type_error(date, 90)`, `sleep(abc)` is
+  `type_error(number, abc)`, `read_file(f(x), T)` is `type_error(text, f(x))`
+  -- and an unbound input that the call needs is `instantiation_error`. The
+  type is ISO's name where there is one (`integer`, `number`, `list`) and the
+  wrapper's own otherwise (`text` for an atom-or-string position, `date`,
+  `datetime`, `time`, `timedelta`, `uuid`, `dict`, `socket`). A value of the
+  right type that the library rejects -- month 13, malformed JSON, an unknown
+  hash name, a file that does not exist -- still fails the goal, and the
+  failure report of `clausal.testing` names what was rejected. An output
+  argument is unchanged: leave it unbound. Wrap a call in `catch/3` where a
+  caller wants the old failure.
 
 !!! note "Interpolated containers are terms, not converted Python"
     The thunk path converts a **top-level** string (and a list's string

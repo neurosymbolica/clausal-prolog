@@ -36,6 +36,8 @@ _uuid = _import_stdlib("uuid")
 from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
+from clausal.logic.exceptions import (
+    LogicException, domain_error, instantiation_error)
 
 
 # ── Namespace resolver ───────────────────────────────────────────────────
@@ -65,6 +67,19 @@ def _resolve_namespace(ns):
     return None
 
 
+def _reject_namespace(ns, pred):
+    """Raise for a namespace argument :func:`_resolve_namespace` refused.
+
+    Unbound -> ``instantiation_error``; TEXT that is no alias (``"foo"``) ->
+    ``domain_error(uuid_namespace, Ns)``, the right type with no such value;
+    anything else -> ``type_error(uuid, Ns)`` (RULED 2026-10-02: a wrong-type
+    argument raises, it does not fail the goal)."""
+    if to_text(ns) is not None:
+        raise LogicException(
+            domain_error("uuid_namespace", ns, f"{pred}: argument 1"))
+    expect_type(ns, _uuid.UUID, pred, arg=1)   # raises
+
+
 # ── Generation predicates ────────────────────────────────────────────────
 
 
@@ -85,15 +100,9 @@ def _uuid3_3(ns, name, u, trail, k):
     ns, name = deref(ns), deref(name)
     namespace = _resolve_namespace(ns)
     if namespace is None:
-        if not is_var(ns):
-            note_mismatch(
-                "uuid_v3/3",
-                f"was called with {ns!r} where a uuid.UUID or a namespace "
-                'alias "dns", "url", "oid" or "x500" is required (argument 1)',
-            )
-        return
+        _reject_namespace(ns, "uuid_v3/3")
     if is_var(name):
-        return
+        raise LogicException(instantiation_error("uuid_v3/3: argument 2"))
     try:
         result = _uuid.uuid3(namespace, text_or_str(name))
     except (TypeError, ValueError) as exc:
@@ -108,15 +117,9 @@ def _uuid5_3(ns, name, u, trail, k):
     ns, name = deref(ns), deref(name)
     namespace = _resolve_namespace(ns)
     if namespace is None:
-        if not is_var(ns):
-            note_mismatch(
-                "uuid_v5/3",
-                f"was called with {ns!r} where a uuid.UUID or a namespace "
-                'alias "dns", "url", "oid" or "x500" is required (argument 1)',
-            )
-        return
+        _reject_namespace(ns, "uuid_v5/3")
     if is_var(name):
-        return
+        raise LogicException(instantiation_error("uuid_v5/3: argument 2"))
     try:
         result = _uuid.uuid5(namespace, text_or_str(name))
     except (TypeError, ValueError) as exc:
@@ -238,7 +241,7 @@ def _uuid_int_2(u, n, trail, k):
     if isinstance(u, _uuid.UUID):
         if unify(n, u.int, trail):
             yield None
-    elif isinstance(n, int) and not is_var(n):
+    elif isinstance(n, int) and type(n) is not bool:
         try:
             val = _uuid.UUID(int=n)
         except (ValueError, OverflowError) as exc:

@@ -49,7 +49,8 @@ from typing import Any
 
 from clausal.logic.atoms import crossing_value, is_atom, key_of, mint, spelling
 from clausal.logic.cells import TUPLE_TAG, chars, is_chars, chars_text
-from clausal.logic.exceptions import LogicException, domain_error, type_error
+from clausal.logic.exceptions import (
+    LogicException, domain_error, instantiation_error, type_error)
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.terms import DictTerm
 
@@ -247,7 +248,7 @@ def _generate_2(term, string, trail, k):
     """generate/2: serialize Clausal term to JSON string."""
     term = deref(term)
     if is_var(term):
-        return
+        raise LogicException(instantiation_error("generate/2: argument 1"))
     try:
         obj = _clausal_to_python(term, "py.json.generate/2")
         result = _json.dumps(obj, ensure_ascii=False)
@@ -263,7 +264,8 @@ def _pretty_generate_2(term, string, trail, k):
     """pretty_generate/2: serialize Clausal term to indented JSON string."""
     term = deref(term)
     if is_var(term):
-        return
+        raise LogicException(
+            instantiation_error("pretty_generate/2: argument 1"))
     try:
         obj = _clausal_to_python(term, "py.json.pretty_generate/2")
         result = _json.dumps(obj, indent=2, ensure_ascii=False)
@@ -322,10 +324,8 @@ def _read_file_2(path, term, trail, k):
 def _write_file_2(path, term, trail, k):
     """write_file/2: serialize and write a JSON file."""
     path, term = require_text(deref(path), "write_file/2", 1), deref(term)
-    if path is None:
-        return
     if is_var(term):
-        return
+        raise LogicException(instantiation_error("write_file/2: argument 2"))
     try:
         obj = _clausal_to_python(term, "py.json.write_file/2")
         with open(path, "w", encoding="utf-8") as f:
