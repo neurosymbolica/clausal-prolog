@@ -20,7 +20,7 @@ _YAML_IMPORT = '-import_from(yaml, [read, write, read_all, write_all, read_file,
 
 
 def _load(name, src_text, tmp_path):
-    """write a .clausal file and load it."""
+    """Write a seam (.seam) file and load it."""
     p = tmp_path / f"{name}{SEAM_SUFFIX}"
     p.write_text(_YAML_IMPORT + src_text)
     mod = _load_module(name, str(p))

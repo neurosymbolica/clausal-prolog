@@ -59,6 +59,10 @@ def _run_census(*extra: pathlib.Path, only_extra: bool = False) -> dict:
     argv.extend(str(p) for p in extra)
     proc = subprocess.run(argv, cwd=_ROOT, env=env, capture_output=True,
                           text=True, timeout=900)
+    if proc.returncode < 0:
+        pytest.fail(f"census child killed by signal {-proc.returncode} "
+                    "(SIGKILL is usually the OOM killer); stderr tail:\n"
+                    + proc.stderr[-2000:])
     assert proc.returncode == 0, proc.stderr[-4000:]
     census = json.loads(proc.stdout)
     engine = os.path.realpath(census["engine_file"])
@@ -198,10 +202,16 @@ def test_control_computed_name_in_an_ast_checked_module_fails(tmp_path):
         "nameprobe_dynamic": _HEADER + (
             "import nameprobe_absent_dep\n"
             "NAME = 'whatever'\n"
-            "p = ModulePredicate(NAME)\n"),
+            "p = ModulePredicate(NAME)\n"
+            # A function handed to an adapter is no computed NAME.
+            "class WrapPredicate(ModulePredicate):\n"
+            "    pass\n"
+            "q = WrapPredicate(_one)\n"),
     })
-    problems = _problems(_run_census(pkg, only_extra=True))
+    census = _run_census(pkg, only_extra=True)
+    problems = _problems(census)
     assert len(problems) == 1 and "computed names" in problems[0], problems
+    assert len(_by_stem(census)["nameprobe_dynamic"]["dynamic"]) == 1
 
 
 @pytest.mark.parametrize("body, needle", [

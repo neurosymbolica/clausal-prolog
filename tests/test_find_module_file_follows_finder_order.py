@@ -51,3 +51,14 @@ def test_the_twin_set_follows_the_finder_order(tmp_path, monkeypatch):
     (tmp_path / "lib.pl").write_text(":- module(lib, [p/1]).\n")
     (tmp_path / "lib.newsurface").write_text("")
     assert _finder(tmp_path)._find_module_file("lib") is None
+
+
+def test_a_surface_after_pl_does_not_hide_it(tmp_path, monkeypatch):
+    """The order matters, not mere presence: a surface the finder tries
+    AFTER ``.pl`` loses to it, so the ``.pl`` is still the module."""
+    monkeypatch.setattr(
+        _suffixes, "SOURCE_SUFFIXES",
+        (*_suffixes.SOURCE_SUFFIXES, ".latersurface"))
+    (tmp_path / "lib.pl").write_text(":- module(lib, [p/1]).\n")
+    (tmp_path / "lib.latersurface").write_text("")
+    assert _finder(tmp_path)._find_module_file("lib") == str(tmp_path / "lib.pl")

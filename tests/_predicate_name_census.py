@@ -79,6 +79,11 @@ DISABLED_PACKAGES = {
 _REGISTERING_CALLEES = {"ModulePredicate", "_pred", "_pred_bidir"}
 
 
+#: First-argument shapes that compute a NAME the static reading cannot see.
+_COMPUTED_TEXT = (ast.Name, ast.JoinedStr, ast.BinOp, ast.Subscript,
+                  ast.Attribute, ast.Call)
+
+
 def _callee_name(node: ast.AST) -> str | None:
     if isinstance(node, ast.Name):
         return node.id
@@ -119,6 +124,10 @@ def ast_registrations(source: str, filename: str) -> dict:
     this reading cannot see -- an AST-checked module with any is not clean.
     """
     tree = ast.parse(source, filename)
+    # Names a module-level ``def``/``class`` binds: handed to a constructor
+    # they are a callable, not a name.
+    defined = {n.name for n in tree.body if isinstance(
+        n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))}
     names: set[str] = set()
     dynamic: list[int] = []
     string_names: set[str] = set()
@@ -138,7 +147,12 @@ def ast_registrations(source: str, filename: str) -> dict:
                 first = node.args[0]
                 if isinstance(first, ast.Constant) and isinstance(first.value, str):
                     string_names.add(first.value)
-                else:
+                elif isinstance(first, _COMPUTED_TEXT) and not (
+                        isinstance(first, ast.Name) and first.id in defined):
+                    # A name the code computes: a variable, an f-string, a
+                    # concatenation or formatting call.  Anything else (a
+                    # function handed to an adapter's constructor, a number)
+                    # is no name at all.
                     dynamic.append(node.lineno)
         elif (isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)

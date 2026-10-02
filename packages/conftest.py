@@ -27,7 +27,6 @@ from __future__ import annotations
 import importlib.util
 import os
 import pathlib
-import re
 import sys
 import tomllib
 
@@ -110,7 +109,7 @@ def _missing_required(pkg_dir: pathlib.Path) -> list[str]:
         required, _ = _declared(pkg_dir)
         _MISSING_CACHE[pkg_dir] = [
             f"{dist} (import {_import_name(dist)})" for dist in required
-            if importlib.util.find_spec(_import_name(dist)) is None]
+            if _absent(_import_name(dist))]
     return _MISSING_CACHE[pkg_dir]
 
 
@@ -175,18 +174,39 @@ def pytest_runtest_setup(item):
                     f"interpreter: {', '.join(_missing_required(pkg))}")
 
 
-_NO_MODULE = re.compile(r"No module named \\?'([A-Za-z_][\w.]*)\\?'")
+def _absent(import_name: str) -> bool:
+    """True when *import_name* cannot be found by this interpreter.  A
+    module whose ``__spec__`` is ``None`` (a stub in ``sys.modules``) makes
+    ``find_spec`` raise ``ValueError``; it is present, not absent."""
+    try:
+        return importlib.util.find_spec(import_name) is None
+    except ValueError:
+        return False
+    except ImportError:
+        return True
 
 
-def _absent_declared(pkg: pathlib.Path, text: str) -> str | None:
-    """The first module *text* reports missing that is a declared
-    dependency of *pkg* (required or optional) and is really absent here."""
+def _absent_declared(pkg: pathlib.Path, exc: BaseException | None) -> str | None:
+    """The top-level name of the first ``ModuleNotFoundError`` in *exc*'s
+    chain (``__cause__`` / ``__context__``) that is a declared dependency of
+    *pkg* (required or optional) and really is absent here.
+
+    Only exception OBJECTS are read, never rendered text: a traceback's
+    source lines, an assertion message or captured output that merely
+    spells "No module named ..." must not turn a failure into a skip.  A
+    ``.seam`` test's failure keeps the chain (``ClausalTestFailure`` is
+    raised ``from`` the logic error, which a module predicate raises
+    ``from`` the original exception), so it is read the same way."""
     required, optional = _declared(pkg)
     declared = {_import_name(d) for d in (*required, *optional)}
-    for match in _NO_MODULE.finditer(text):
-        top = match.group(1).split(".")[0]
-        if top in declared and importlib.util.find_spec(top) is None:
-            return top
+    seen = set()
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        if isinstance(exc, ModuleNotFoundError) and exc.name:
+            top = exc.name.split(".")[0]
+            if top in declared and _absent(top):
+                return top
+        exc = exc.__cause__ or exc.__context__
     return None
 
 
@@ -194,27 +214,32 @@ def _absent_declared(pkg: pathlib.Path, text: str) -> str | None:
 def pytest_runtest_makereport(item, call):
     """A test that FAILS because a declared dependency of its package is
     absent -- imported lazily inside the test, or inside a predicate a
-    ``.seam`` fixture calls -- is reported as SKIPPED, naming it.  Only an
-    absent DECLARED dependency qualifies (a typo'd or undeclared import, or
-    a dependency that is installed, still fails), and only when the failure
-    text says so: a test that fails silently without naming the module
-    stays a failure."""
+    ``.seam`` fixture calls -- is reported as SKIPPED, naming it.  Only a
+    ``ModuleNotFoundError`` for an absent DECLARED dependency, found in the
+    failure's exception chain, qualifies: an undeclared or installed module
+    still fails, and so does a test that fails without raising one (a
+    predicate that swallows the import error and answers "no")."""
     report = yield
     pkg = _package_of(pathlib.Path(str(item.path)))
     if pkg is None or not report.failed or call.excinfo is None:
         return report
-    texts = []
-    exc = call.excinfo.value
-    while exc is not None and len(texts) < 20:
-        if isinstance(exc, ModuleNotFoundError) and exc.name:
-            texts.append(f"No module named '{exc.name}'")
-        texts.append(str(exc))
-        exc = exc.__cause__ or exc.__context__
-    texts.append(str(report.longrepr))
-    missing = _absent_declared(pkg, "\n".join(texts))
+    missing = _absent_declared(pkg, call.excinfo.value)
     if missing:
         report.outcome = "skipped"
         report.longrepr = (str(item.path), 0,
                            f"Skipped: {pkg.name}: dependency {missing!r} "
                            "not installed in this interpreter")
     return report
+
+
+def pytest_collection_modifyitems(session, config, items):
+    """The ``__path__`` splice above is process-wide, so the engine's own
+    suite must never share this session: it would import package code it
+    does not expect.  Refuse loudly rather than run it altered."""
+    stray = [i.nodeid for i in items if _package_of(pathlib.Path(str(i.path))) is None]
+    if stray:
+        raise pytest.UsageError(
+            "packages/conftest.py splices the package sources onto the "
+            "engine's namespaces for the whole session; run `pytest "
+            f"packages` on its own, not with {stray[0]!r} and "
+            f"{len(stray) - 1} other item(s) outside packages/")

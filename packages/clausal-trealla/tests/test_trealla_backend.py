@@ -66,7 +66,7 @@ def _run_trealla_file(pl_path: str | Path, query: str, *, timeout: int = 30) -> 
 
 
 def _translate_conformity(name: str) -> str:
-    """Translate a conformity .clausal file to Trealla Prolog source."""
+    """Translate a conformity seam (.seam) file to Trealla Prolog source."""
     path = CONFORMITY / f"{name}{SEAM_SUFFIX}"
     source = path.read_text(encoding="utf-8")
     return clausal_source_to_prolog(source, dialect=_TREALLA)
