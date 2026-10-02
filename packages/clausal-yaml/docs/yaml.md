@@ -163,6 +163,8 @@ Every predicate except `Get/3` **raises** where it used to fail (ruled 2026-10-0
 | the file may not be opened; a directory where a file is needed | `permission_error(open, source_sink, Path)` |
 | any other file-system failure | as [`py.files`](files.md): the same shared mapping |
 | text that is not YAML (`Read`, `ReadAll`, `ReadFile`) | `syntax_error(invalid_yaml)` |
+| a file that is not UTF-8 (`ReadFile`) | `syntax_error(invalid_data)` |
+| a path that is unbound / not text | `instantiation_error` / `type_error(text, Path)` |
 | an object YAML cannot represent (`write`, `WriteAll`, `WriteFile`) | `type_error(yaml_term, Culprit)` |
 
 `syntax_error` is ISO's term for input text that cannot be read, the family `py.http` raises for a body that is not JSON (`invalid_json`); `type_error(yaml_term, _)` matches `py.json`'s `type_error(json_term, _)`. `Get/3` still fails on a missing key or index: that failure is its answer.

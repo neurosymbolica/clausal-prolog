@@ -36,8 +36,11 @@ since 0.4.0 finish three moves:
   (`existence_error(source_sink, Path)`, `permission_error(open,
   source_sink, Path)`, ...); an object YAML cannot represent (`write/2`,
   `WriteAll/2`, `WriteFile/2`) is `type_error(yaml_term, Culprit)`, as in
-  `py.json`. `WriteFile/2` serialises before it opens the file, so a bad
-  term leaves no file, and a string path names the file it spells.
+  `py.json`. A YAML file that is not UTF-8 is
+  `syntax_error(invalid_data)`. `WriteFile/2` serialises before it opens
+  the file, so a bad term leaves no file. A path must be text, as in
+  `py.json` (`instantiation_error` / `type_error(text, P)`; it was `str()`
+  of the term), and files are read and written as UTF-8.
 - **A file-system or network failure in a library adapter raises an ISO
   error** (ruled 2026-10-02) instead of failing the goal. The model is ISO
   `open/4` (8.11.5.3 j, k): a path that does not exist (or goes through a

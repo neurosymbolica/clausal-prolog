@@ -37,7 +37,20 @@ from clausal.logic.variables import Trail, Var, deref
 from clausal.modules.py import http as phttp
 from clausal.terms import DictTerm
 
-from tests.test_adapter_io_errors_iso import _needs_sockets
+
+def _sockets_allowed() -> bool:
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind(("127.0.0.1", 0))
+        s.close()
+        return True
+    except OSError:
+        return False
+
+
+_needs_sockets = pytest.mark.skipif(
+    not _sockets_allowed(), reason="the sandbox forbids sockets")
 
 
 def raised(fn, *args):

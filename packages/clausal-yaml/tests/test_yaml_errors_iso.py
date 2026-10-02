@@ -83,6 +83,22 @@ def test_valid_yaml_still_answers(tmp_path):
     assert deref(out) == {"a": 1}
 
 
+def test_read_file_2_raises_on_a_file_that_is_not_utf8(tmp_path):
+    p = tmp_path / "bad.yaml"
+    p.write_bytes(b"a: \xff\xfe\n")
+    assert raised(pyaml._read_file_2, chars(str(p)), Var()) == _err(
+        ("syntax_error", "invalid_data"), "ReadFile", 2)
+
+
+def test_a_path_that_is_not_text_raises():
+    # It used to be ``str()`` of the term: an unbound path named a file
+    # after the variable's repr.
+    assert raised(pyaml._write_file_2, Var(), {"a": 1})[1] == \
+        "instantiation_error"
+    assert raised(pyaml._read_file_2, ("f", 1), Var())[1] == (
+        "type_error", "text", ("f", 1))
+
+
 # ── file-system failures: the shared ISO mapping ─────────────────────────
 
 
