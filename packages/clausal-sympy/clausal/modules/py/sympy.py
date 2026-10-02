@@ -114,8 +114,15 @@ class _VarSymbol(_sp.Dummy):
     become unreachable too and are collected normally.
     """
 
-    def __new__(cls, name: str, clausal_var: Var, **assumptions):
+    def __new__(cls, name: str, *, clausal_var: Var | None = None, **assumptions):
         obj = super().__new__(cls, name, **assumptions)
+        # ``Dummy.__getnewargs_ex__`` (copy/deepcopy/pickle) reconstructs via
+        # ``cls(name, dummy_index, **assumptions)`` -- its own positional
+        # ``dummy_index``, never ours. With ``clausal_var`` keyword-only and
+        # defaulted, that reconstruction path harmlessly leaves the tag
+        # unset instead of landing a stray int in it (RULED 2026-10-02,
+        # code review: confirmed ``deepcopy`` on an earlier positional-arg
+        # version silently set ``_clausal_var`` to the raw dummy index).
         obj._clausal_var = clausal_var
         return obj
 
@@ -126,13 +133,40 @@ def _tag_vars(expr: Any, ctx: "_ConversionContext") -> Any:
     independent ``sympy_term/2`` call (fresh context) can recover it.
     Confined to ``sympy_term/2``: *ctx* is a throwaway context created
     just for this one conversion, never shared with any other predicate.
+
+    ``xreplace`` (not ``subs``): an exact structural leaf swap, with no
+    re-evaluation/re-simplification pass over the result.
     """
-    subs_map = {}
+    replace_map = {}
     for name, v in ctx._sym_to_var.items():
         sym = ctx._var_to_sym.get(v._id)
         if sym is not None:
-            subs_map[sym] = _VarSymbol(name, v)
-    return expr.subs(subs_map) if subs_map else expr
+            replace_map[sym] = _VarSymbol(name, clausal_var=v)
+    return expr.xreplace(replace_map) if replace_map else expr
+
+
+def _detag_vars(expr: Any, ctx: "_ConversionContext") -> Any:
+    """The inverse half of :func:`_tag_vars`'s containment: an ALREADY-SymPy
+    expression handed to ``_to_sympy`` (the "pass-through" case every OTHER
+    predicate -- ``subs``, ``sym_equal``, ``sym_str``, ``free_vars``,
+    ``collect``, ...) -- may be one ``sympy_term/2`` tagged and handed back
+    to the caller. Those predicates have no idea what a ``_VarSymbol`` is;
+    left alone, a tagged ``Dummy`` would silently fail to unify/match a
+    plain ``Symbol`` for the SAME Var that one of THEM creates afresh (e.g.
+    ``subs``'s binding-key conversion), and its ``str()`` leaks a leading
+    underscore (RULED 2026-10-02, code review). So every ``_VarSymbol``
+    found here is converted back to this call's own plain, ctx-local
+    Symbol for the Var it carries -- exactly the Symbol ``var_to_symbol``
+    would have minted had the caller passed the Var directly instead of a
+    pre-tagged sympy expression. A plain, untagged symbol is returned as
+    itself (nothing to detag).
+    """
+    tagged = {s for s in expr.free_symbols if isinstance(s, _VarSymbol)}
+    if not tagged:
+        return expr
+    replace_map = {s: ctx.var_to_symbol(s._clausal_var) for s in tagged
+                   if s._clausal_var is not None}
+    return expr.xreplace(replace_map) if replace_map else expr
 
 
 def _untag_vars(term: Any) -> Any:
@@ -223,11 +257,14 @@ def _to_sympy_ctx(term: Any, ctx: _ConversionContext) -> _sp.Expr:
 
     # SymExpr wrapper -> unwrap
     if isinstance(term, SymExpr):
-        return term._expr
+        term = term._expr
 
-    # Already a SymPy expression (pass-through)
+    # Already a SymPy expression (pass-through) -- strip any sympy_term/2
+    # _VarSymbol tag first (see _detag_vars): this call's own ctx has no
+    # idea what that tag means, and every OTHER predicate that shares
+    # this conversion path must keep seeing a plain, ctx-local Symbol.
     if isinstance(term, _sp.Basic):
-        return term
+        return _detag_vars(term, ctx)
 
     # Binary arithmetic nodes
     _BINOP_MAP = {
@@ -591,6 +628,16 @@ def _sympy_term_2(sympy_arg, term_arg, trail, k):
     print with the same auto-assigned name.
     """
     sympy_val = deref(sympy_arg)
+    # Every other predicate hands its result back through _to_pyval,
+    # which collapses a trivial SymPy value straight to a Python
+    # int/float/bool and wraps anything else in SymExpr -- never a bare
+    # sympy.Basic. Both are "already a SymPy expression" here too (RULED
+    # 2026-10-02, code review: simplify(E, S), sympy_term(S, T) must not
+    # raise type_error(sympy_expression, S) just because S is a SymExpr).
+    if isinstance(sympy_val, SymExpr):
+        sympy_val = sympy_val._expr
+    elif isinstance(sympy_val, (int, float, bool)):
+        sympy_val = _sp.sympify(sympy_val)
     if isinstance(sympy_val, _sp.Basic):
         try:
             term = _from_sympy(sympy_val)

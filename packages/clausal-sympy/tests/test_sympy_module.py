@@ -10,10 +10,10 @@ from clausal.logic.trampoline import DONE
 from clausal.terms import Add, Sub, Mult, Div, Pow, Negate
 from clausal.logic.exceptions import LogicException
 from clausal.modules.py.sympy import (
-    _to_sympy, _from_sympy, _ConversionContext,
+    _to_sympy, _from_sympy, _ConversionContext, SymExpr,
     sym, sympy_term,
     simplify, expand, factor, solve, solve_all,
-    diff, integrate, limit, series, subs, free_vars,
+    diff, integrate, limit, series, subs, free_vars, sym_str,
 )
 
 
@@ -328,28 +328,64 @@ class TestSympyTerm:
         # nv
         with pytest.raises(LogicException) as exc_info:
             _first_solution(sympy_term, Var(), Var())
-        formal = exc_info.value.args[0] if exc_info.value.args else None
         # error(instantiation_error, PI)
-        assert "instantiation_error" in str(exc_info.value)
+        formal = exc_info.value.term
+        assert formal[0] == "error"
+        assert str(formal[1]) == "instantiation_error"
 
     def test_type_error_sympy_not_an_expression(self):
-        # Sympy bound to a plain int (not a SymPy Basic, not unbound).
+        # Sympy bound to something that is neither a SymPy expression, a
+        # Python number (both ARE accepted -- a trivial sympy_term result
+        # can come back as a plain int/float/bool), nor unbound.
         # nv
         sympy_arg = Var()
         trail = Trail()
-        unify(sympy_arg, 42, trail)
+        unify(sympy_arg, [1, 2, 3], trail)
         with pytest.raises(LogicException) as exc_info:
             _first_solution(sympy_term, sympy_arg, Var())
-        assert "type_error" in str(exc_info.value)
-        assert "sympy_expression" in str(exc_info.value)
+        formal = exc_info.value.term
+        assert formal[0] == "error"
+        assert formal[1][0] == "type_error"
+        assert str(formal[1][1]) == "sympy_expression"
+
+    def test_sympy_bound_to_a_plain_number_is_accepted(self):
+        # A trivial sympy_term result collapses to a bare Python number
+        # (the SAME path simplify/2 etc. use via _to_pyval): accepted as
+        # "already a SymPy expression", not a type_error.
+        # nv
+        result = Var()
+        sol = _first_solution(sympy_term, 3, result)
+        assert sol is not None
+        assert deref(result) == 3
+
+    def test_sympy_bound_to_a_symexpr_is_accepted(self):
+        # simplify(E, S), sympy_term(S, T): S is a SymExpr wrapper, not a
+        # bare sympy.Basic -- must not raise type_error(sympy_expression).
+        # (simplify/2 does not go through sympy_term/2's own var tagging,
+        # so the free Symbol it produced passes through as an opaque
+        # ground value here, same as test_symbol_passthrough -- only a
+        # Var that flowed THROUGH sympy_term/2 itself round-trips exactly.)
+        # nv
+        x = Var()
+        s = Var()
+        _first_solution(simplify, Add(left=x, right=x), s)
+        assert isinstance(deref(s), SymExpr)
+        t = Var()
+        sol = _first_solution(sympy_term, deref(s), t)
+        assert sol is not None
+        back = deref(t)
+        assert isinstance(back, Mult)
+        assert back.left == 2
 
     def test_type_error_term_has_no_sympy_counterpart(self):
         # Sympy unbound, Term bound to something _to_sympy can't convert.
         # nv
         with pytest.raises(LogicException) as exc_info:
             _first_solution(sympy_term, Var(), object())
-        assert "type_error" in str(exc_info.value)
-        assert "sympy_expression" in str(exc_info.value)
+        formal = exc_info.value.term
+        assert formal[0] == "error"
+        assert formal[1][0] == "type_error"
+        assert str(formal[1][1]) == "sympy_expression"
 
     def test_variable_round_trip_same_var(self):
         # sympy_term(S, X+1), sympy_term(S, T) -> T = X+1 with the SAME X,
@@ -427,6 +463,43 @@ class TestSympyTerm:
         # back is Mult(2, X), NOT Add(X, X) -- the var still round-trips.
         assert isinstance(back, Mult)
         assert _find_var(back) is x
+
+    def test_tagged_expression_still_subs_correctly(self):
+        # A sympy_term/2 output must stay usable by OTHER predicates:
+        # its internal _VarSymbol tagging (Dummy, not Symbol("x")) must
+        # not make subs/2's OWN fresh conversion of the same Var silently
+        # fail to match (RULED 2026-10-02, code review).
+        # nv
+        x = Var()
+        s = Var()
+        _first_solution(sympy_term, s, Add(left=x, right=1))
+        result = Var()
+        sol = _first_solution(subs, deref(s), [[x, 2]], result)
+        assert sol is not None
+        assert deref(result) == 3
+
+    def test_tagged_expression_sym_str_has_no_leaked_underscore(self):
+        # _VarSymbol is a sympy.Dummy, whose str() adds a leading "_" --
+        # that must never leak into sym_str's output (RULED 2026-10-02,
+        # code review).
+        # nv
+        x = Var()
+        s = Var()
+        _first_solution(sympy_term, s, Add(left=x, right=1))
+        out = Var()
+        sol = _first_solution(sym_str, deref(s), out)
+        assert sol is not None
+        assert "_" not in deref(out)
+
+    def test_tagged_expression_free_vars_has_no_leaked_underscore(self):
+        # nv
+        x = Var()
+        s = Var()
+        _first_solution(sympy_term, s, Add(left=x, right=1))
+        names = Var()
+        sol = _first_solution(free_vars, deref(s), names)
+        assert sol is not None
+        assert all("_" not in n for n in deref(names))
 
 
 class TestSimplify:
