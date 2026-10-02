@@ -28,6 +28,7 @@ from clausal.modules.py import (
     _import_stdlib,
     expect_type,
     raise_domain_error,
+    raise_os_error,
     require_text,
     simple_to_trampoline,
     text_or_str,
@@ -193,15 +194,14 @@ def _generate_records_3(headers, records, string, trail, k):
 
 def _read_file_2(path, rows, trail, k):
     """read_file/2: read and parse a CSV file into list of rows."""
-    path = require_text(deref(path), "read_file/2", 1)
-    if path is None:
-        return
+    path_term = deref(path)
+    path = require_text(path_term, "read_file/2", 1)
     try:
         with open(path, "r", encoding="utf-8", newline="") as f:
             reader = _csv.reader(f)
             result = [row for row in reader]
-    except OSError:
-        return
+    except OSError as exc:
+        raise_os_error(exc, path_term, "read_file/2", arg=1, path=path)
     if unify(rows, text_result(result), trail):
         yield None
 
@@ -211,9 +211,8 @@ def _read_records_2(path, records, trail, k):
 
     Records are keyed by the header cells' ATOMS, as ``parse_records/3``.
     """
-    path = require_text(deref(path), "read_records/2", 1)
-    if path is None:
-        return
+    path_term = deref(path)
+    path = require_text(path_term, "read_records/2", 1)
     try:
         with open(path, "r", encoding="utf-8", newline="") as f:
             reader = _csv.DictReader(f)
@@ -221,17 +220,16 @@ def _read_records_2(path, records, trail, k):
                 DictTerm({_field_key(k): v for k, v in row.items()})
                 for row in reader
             ]
-    except OSError:
-        return
+    except OSError as exc:
+        raise_os_error(exc, path_term, "read_records/2", arg=1, path=path)
     if unify(records, text_result(result), trail):
         yield None
 
 
 def _write_file_2(path, rows, trail, k):
     """write_file/2: serialize rows and write to CSV file."""
-    path, rows = require_text(deref(path), "write_file/2", 1), deref(rows)
-    if path is None:
-        return
+    path_term = deref(path)
+    path, rows = require_text(path_term, "write_file/2", 1), deref(rows)
     if not expect_type(rows, list, "write_file/2", arg=2):
         return
     # Rows are checked and converted BEFORE the file is opened, so a bad
@@ -244,8 +242,8 @@ def _write_file_2(path, rows, trail, k):
     try:
         with open(path, "w", encoding="utf-8", newline="") as f:
             _csv.writer(f).writerows(lines)
-    except OSError:
-        return
+    except OSError as exc:
+        raise_os_error(exc, path_term, "write_file/2", arg=1, path=path)
     yield None
 
 

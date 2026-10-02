@@ -27,8 +27,8 @@ from __future__ import annotations
 
 from clausal.modules.py import (
     text_result,   # stage 1: a str result is the chars carrier
-    _import_stdlib, ModulePredicate, simple_to_trampoline, text_or_str,
-    to_text,
+    _import_stdlib, ModulePredicate, raise_os_error, simple_to_trampoline,
+    text_or_str, to_text,
 )
 
 _pylogging = _import_stdlib("logging")
@@ -231,7 +231,14 @@ def _stream_handler_2(stream_name, handler_out, trail, k):
 def _file_handler_2(path, handler_out, trail, k):
     """file_handler/2: create a file_handler for the given path."""
     path = deref(path)
-    h = _pylogging.FileHandler(text_or_str(path))
+    path_text = text_or_str(path)
+    try:
+        h = _pylogging.FileHandler(path_text)
+    except OSError as exc:
+        # RULED 2026-10-02: the log file cannot be opened for appending --
+        # existence_error(source_sink, P) for a missing directory,
+        # permission_error(open, source_sink, P) otherwise.
+        raise_os_error(exc, path, "file_handler/2", arg=1, path=path_text)
     if unify(handler_out, h, trail):
         yield None
 

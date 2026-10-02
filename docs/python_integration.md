@@ -708,13 +708,52 @@ print(repr(my_module.bar))            # 'bar'
     variable is `instantiation_error`. `set_seed/1` with an unbound seed is
     `instantiation_error`.
 
-    What still fails is a legitimate "no": a network failure or an HTTP
-    error status, a file-system failure (a missing file, a permission
-    refusal), `integer_between(5, 1, X)`, `sample/3` asking for more
-    elements than the list has. Before this ruling a rejected value failed
+    What still fails is a legitimate "no": `integer_between(5, 1, X)`,
+    `sample/3` asking for more elements than the list has. Before this ruling a rejected value failed
     the goal and left a diagnostic note in the `clausal.testing` failure
     report; the error term now carries what the note said, and the note
     machinery is gone.
+
+- **File-system and network failures raise** (ruled 2026-10-02) in
+  `py.files`, `py.os`, `py.csv`, `py.json`, `py.process`, `py.tcp`,
+  `py.http`, `py.logging`, `py.sqlite` and `reified_file_item/2`. The model
+  is ISO `open/4` (8.11.5.3): a path that does not exist is
+  `existence_error(source_sink, Path)`; one that exists but may not be used
+  -- no permission, a directory where a file is needed or the reverse, a
+  name already taken, a directory not empty -- is
+  `permission_error(Action, source_sink, Path)`, `Action` being `open`
+  (read, write, list), `modify` (delete, rename) or `create`. ISO has no
+  network error: a host that does not resolve is
+  `existence_error(source_sink, Host)` (Scryer's `socket_client_open/3`),
+  other network failures `system_error(connection_refused)`,
+  `system_error(connection_reset)`, `system_error(host_unreachable)`, ...,
+  a timeout `resource_error(timeout)`. A body-only HTTP predicate (`get`,
+  `post`, `json_get`, `json_post`) raises on an error status: 404/410 is
+  `existence_error(source_sink, Url)`, 401/403/407
+  `permission_error(open, source_sink, Url)`, anything else
+  `system_error(http_status(S))`. A program that cannot be started is
+  `existence_error(source_sink, Program)` or
+  `permission_error(create, process, Program)`.
+
+    | Call | Error |
+    |---|---|
+    | `read_file_to_string("/no/such", C)` | `existence_error(source_sink, "/no/such")` |
+    | `write_string_to_file("/etc/x", "hi")` (not writable) | `permission_error(open, source_sink, "/etc/x")` |
+    | `read_file("/tmp", T)` (`py.json`, a directory) | `permission_error(open, source_sink, "/tmp")` |
+    | `delete_directory(D)` (not empty) | `permission_error(modify, source_sink, D)` |
+    | `make_directory(D)` (already there) | `permission_error(create, source_sink, D)` |
+    | `connect("127.0.0.1", 1, S)` (nothing listening) | `system_error(connection_refused)` |
+    | `get("http://h/missing", B)` (404) | `existence_error(source_sink, "http://h/missing")` |
+    | `process_create("no_such_prog", [], R)` | `existence_error(source_sink, "no_such_prog")` |
+
+    What stays an answer: the TESTS -- `file_exists/1`,
+    `directory_exists/1`, `path_exists/1` -- whose failure means "no";
+    an exit status (`shell/2`, `process_create/3,4`'s `exit_code`, which is
+    the atom `timeout` when a `process_create/4` timeout kills the
+    process, as Scryer's `process_wait/3` answers); `shell/1` and
+    `shell_output/2,3`, which answer no status and fail on a nonzero one;
+    `request/3`'s HTTP status; `receive/2,3` at end of stream; an
+    environment variable that is not set.
 
   An output argument is unchanged: leave it unbound. Wrap a call in
   `catch/3` where a caller wants the old failure:

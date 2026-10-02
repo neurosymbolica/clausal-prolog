@@ -53,7 +53,7 @@ from clausal.logic.cells import chars as _chars  # stage 1: the chars carrier
 from clausal.logic.builtins._helpers import _functor_name
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.logic.exceptions import (
-    LogicException, existence_error, instantiation_error, type_error)
+    LogicException, instantiation_error, type_error)
 from clausal.logic.trampoline import DONE
 from clausal.logic.variables import deref, is_var, unify
 from clausal.modules.py import ModulePredicate, simple_to_trampoline, to_text
@@ -182,12 +182,16 @@ def _reified_file_item_2(this_generator, _proceed, _fail, _catcher,
     if is_var(path_term):
         raise LogicException(instantiation_error("reified_file_item/2"))
     path = _source_text(path_term, "reified_file_item/2")
-    if not os.path.exists(path):
-        # ISO: a source/sink that does not exist is existence_error
-        # (open/3, 8.11.5.3 h) -- it used to fail, reading as "no items".
-        raise LogicException(existence_error(
-            "source_sink", path_term, "reified_file_item/2"))
-    candidates = _items_from_file(path, os.path.getmtime(path))
+    # ISO open/4 (8.11.5.3 j, k): a source/sink that does not exist is
+    # existence_error(source_sink, P) -- it used to fail, reading as "no
+    # items" -- and one that exists but cannot be opened (a directory, no
+    # read permission) permission_error(open, source_sink, P), RULED
+    # 2026-10-02 (it escaped as a raw Python error).
+    from clausal.modules.py import raise_os_error
+    try:
+        candidates = _items_from_file(path, os.path.getmtime(path))
+    except OSError as exc:
+        raise_os_error(exc, path_term, "reified_file_item/2", path=path)
     yield from _yield_matches(candidates, item, _proceed, _fail, trail)
 
 

@@ -87,8 +87,36 @@ def _sqlite_connect_2(path, alias, trail, k):
     # after the lock is released, like the fresh-connection path always did.
     with _LOCK:
         if alias_str not in _CONNECTIONS:
-            _CONNECTIONS[alias_str] = _sqlite3.connect(path_str)
+            try:
+                _CONNECTIONS[alias_str] = _sqlite3.connect(path_str)
+            except _sqlite3.OperationalError as exc:
+                _raise_open_error(exc, path, path_str, "connect/2")
     yield None
+
+
+def _raise_open_error(exc, path_term, path_str, pred):
+    """sqlite3 reports every failure to open a database file as the one
+    ``OperationalError("unable to open database file")``; RULED 2026-10-02,
+    a file-system failure raises the ISO term, so the cause is read off the
+    file system: a missing directory -> ``existence_error(source_sink, P)``,
+    a directory or a place that may not be opened ->
+    ``permission_error(open, source_sink, P)``.  Anything else is sqlite's
+    own error and propagates as itself."""
+    import errno as _errno  # noqa: PLC0415
+    import os as _os  # noqa: PLC0415
+    from clausal.modules.py import raise_os_error  # noqa: PLC0415
+    parent = _os.path.dirname(_os.path.abspath(path_str))
+    if not _os.path.isdir(parent):
+        cause = FileNotFoundError(_errno.ENOENT, "no such directory", path_str)
+    elif _os.path.isdir(path_str):
+        cause = IsADirectoryError(_errno.EISDIR, "is a directory", path_str)
+    elif (not _os.access(parent, _os.W_OK | _os.X_OK)
+          or (_os.path.exists(path_str)
+              and not _os.access(path_str, _os.R_OK))):
+        cause = PermissionError(_errno.EACCES, "permission denied", path_str)
+    else:
+        raise exc
+    raise_os_error(cause, path_term, pred, arg=1, path=path_str)
 
 
 def _sqlite_disconnect_1(alias, trail, k):

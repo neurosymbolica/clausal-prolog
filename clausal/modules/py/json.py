@@ -39,6 +39,7 @@ from clausal.modules.py import (
     _import_stdlib,
     expect_type,
     raise_domain_error,
+    raise_os_error,
     require_text,
     simple_to_trampoline,
 )
@@ -370,8 +371,9 @@ def _read_file_2(path, term, trail, k):
     try:
         with open(path, "r", encoding="utf-8") as f:
             obj = _json.load(f)
-    except OSError:
-        return                         # file-system failure: see the CHANGELOG
+    except OSError as exc:
+        # RULED 2026-10-02: a file-system failure raises the ISO term.
+        raise_os_error(exc, path_term, "read_file/2", arg=1, path=path)
     except ValueError:
         # The file is there and readable but is not JSON (or not UTF-8).
         raise_domain_error("json_file", path_term, "read_file/2", arg=1)
@@ -382,7 +384,8 @@ def _read_file_2(path, term, trail, k):
 
 def _write_file_2(path, term, trail, k):
     """write_file/2: serialize and write a JSON file."""
-    path, term = require_text(deref(path), "write_file/2", 1), deref(term)
+    path_term = deref(path)
+    path, term = require_text(path_term, "write_file/2", 1), deref(term)
     if is_var(term):
         raise LogicException(instantiation_error("write_file/2: argument 2"))
     # Converted BEFORE the file is opened: an unserialisable term raises
@@ -391,8 +394,8 @@ def _write_file_2(path, term, trail, k):
     try:
         with open(path, "w", encoding="utf-8") as f:
             f.write(_dumps(obj, ensure_ascii=False, indent=2))
-    except OSError:
-        return
+    except OSError as exc:
+        raise_os_error(exc, path_term, "write_file/2", arg=1, path=path)
     yield None
 
 

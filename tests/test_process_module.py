@@ -181,12 +181,12 @@ class TestProcessCreate3:
         assert r.data[mint("exit_code")] == 0
         assert "hello" in chars_text(r.data[mint("stdout")])
 
-    def test_nonexistent_program_fails(self):
-        # nv
-        sols, _ = simple_solutions(
-            _process_create_3, chars("/nonexistent_program_xyz"), [], Var()
-        )
-        assert len(sols) == 0
+    def test_nonexistent_program_raises_existence_error(self):
+        # RULED 2026-10-02: a program that cannot be started raises (it failed).
+        p = chars("/nonexistent_program_xyz")
+        term = raised(_process_create_3, p, [], Var())
+        assert term == ('error', ('existence_error', 'source_sink', p),
+                        ('/', 'process_create', 3))
 
     def test_unbound_program_raises(self):
         # nv
@@ -231,8 +231,10 @@ class TestProcessCreate4:
         sols, _ = simple_solutions(
             _process_create_4, chars("sleep"), [chars("10")], opts, result
         )
-        # Should fail due to timeout
-        assert len(sols) == 0
+        # RULED 2026-10-02: the timeout is a VALUE, as Scryer's
+        # process_wait/3 status ``timeout`` (it failed).
+        assert len(sols) == 1
+        assert deref(result).data[mint("exit_code")] == "timeout"
 
     def test_with_input(self):
         # nv

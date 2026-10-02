@@ -209,10 +209,12 @@ class TestChangeDirectory:
         finally:
             os.chdir(original)
 
-    def test_nonexistent_fails(self):
-        # nv
-        sols, _ = simple_solutions(_change_directory_1, chars("/nonexistent_dir_xyz"))
-        assert len(sols) == 0
+    def test_nonexistent_raises_existence_error(self):
+        # RULED 2026-10-02: a file-system failure raises (it failed).
+        d = chars("/nonexistent_dir_xyz")
+        term = raised(_change_directory_1, d)
+        assert term == ('error', ('existence_error', 'source_sink', d),
+                        ('/', 'change_directory', 1))
 
     def test_unbound_raises(self):
         # nv

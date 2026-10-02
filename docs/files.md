@@ -33,6 +33,25 @@ hands back — file names, joined paths, file contents, extensions — is a
 
 ---
 
+## Errors
+
+A file-system failure in an action **raises** an ISO error (ruled
+2026-10-02; these predicates used to fail):
+
+| Failure | Error |
+|---|---|
+| the path does not exist (or goes through a file: `a.txt/b`) | `existence_error(source_sink, Path)` |
+| no permission; a directory where a file is needed, or a file where a directory is needed; the name is already taken; the directory is not empty | `permission_error(Action, source_sink, Path)` |
+| too many open files; no space left | `resource_error(file_descriptors)`; `resource_error(disk_space)` |
+
+`Action` is `open` for reading, writing and listing (ISO `open/4`), `modify`
+for `delete_file`, `delete_directory`, `rename_file`, and `create` for
+`make_directory`, `make_directory_path`, `temp_file`, `temp_directory`.
+`Path` is the argument as written; for `rename_file` and `copy_file` it is
+the argument the failure is about. The three **tests** below
+(`file_exists`, `directory_exists`, `path_exists`) never raise: their
+failure is the answer, also for a path the process may not look at.
+
 ## Predicates
 
 ### Existence Checks
@@ -91,11 +110,11 @@ All destructive predicates require ground path arguments.
 
 #### delete_file/1
 
-`delete_file(Path)` — delete a file. Fails if the file does not exist.
+`delete_file(Path)` — delete a file. A missing file is `existence_error(source_sink, Path)`; a directory is `permission_error(modify, source_sink, Path)`.
 
 #### delete_directory/1
 
-`delete_directory(Path)` — delete an empty directory. Fails if not empty or not found.
+`delete_directory(Path)` — delete an empty directory. A missing one is `existence_error(source_sink, Path)`; a non-empty one, or a file, `permission_error(modify, source_sink, Path)`.
 
 #### rename_file/2
 
@@ -109,7 +128,7 @@ All destructive predicates require ground path arguments.
 
 #### make_directory/1
 
-`make_directory(Path)` — create a directory. Fails if it already exists.
+`make_directory(Path)` — create a directory. A path that already exists is `permission_error(create, source_sink, Path)`; a missing parent `existence_error(source_sink, Path)`.
 
 #### make_directory_path/1
 
@@ -123,7 +142,7 @@ ensure_output_dir <- make_directory_path("output/reports/2024")
 
 #### read_file_to_string/2
 
-`read_file_to_string(Path, Contents)` — read an entire file as a UTF-8 string. Fails on missing files or binary content.
+`read_file_to_string(Path, Contents)` — read an entire file as a UTF-8 string. A missing file is `existence_error(source_sink, Path)`; content that is not UTF-8 fails.
 
 ```seam
 read_config(PATH, CONTENT) <- (file_exists(PATH), read_file_to_string(PATH, CONTENT))

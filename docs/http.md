@@ -45,7 +45,7 @@ Python), and a parsed JSON object is a `DictTerm` whose keys are **atoms**.
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `get(Url, Body)` | `+Url, -Body` | GET request, body as string. Fails on HTTP errors (4xx/5xx). |
+| `get(Url, Body)` | `+Url, -Body` | GET request, body as string. An HTTP error status (4xx/5xx) raises; see [Errors](#errors). |
 | `get(Url, Headers, Body)` | `+Url, +Headers, -Body` | GET with custom headers (DictTerm). |
 | `post(Url, Data, Body)` | `+Url, +Data, -Body` | POST string data, response as string. |
 | `post(Url, Data, Headers, Body)` | `+Url, +Data, +Headers, -Body` | POST with custom headers. |
@@ -73,8 +73,30 @@ Python), and a parsed JSON object is a `DictTerm` whose keys are **atoms**.
 The keys are names: write them bare (declared) or single-quoted (`'url'`);
 a double-quoted `"url"` is matched by its text too.
 
-Unlike `get` and `post`, `request` does **not** fail on 4xx/5xx — it returns
-the status code so you can handle errors explicitly.
+Unlike `get` and `post`, `request` does **not** raise on 4xx/5xx — it
+returns the status code as a value so you can handle it explicitly (as
+Scryer's `http_open/3` does). A network failure raises in `request` too.
+
+### Errors
+
+A network failure or an HTTP error status **raises** (ruled 2026-10-02; it
+used to fail). ISO has no network error; where Scryer has a term it is
+used, otherwise the engine's `system_error(Code)` / `resource_error(R)`:
+
+| Failure | Error |
+|---|---|
+| the host does not resolve | `existence_error(source_sink, Url)` |
+| a DNS failure that is not "no such host" | `system_error(host_lookup_failed)` |
+| connection refused / reset | `system_error(connection_refused)` / `system_error(connection_reset)` |
+| host or network unreachable | `system_error(host_unreachable)` / `system_error(network_unreachable)` |
+| the timeout passed | `resource_error(timeout)` |
+| a TLS failure; a malformed response | `system_error(tls_failure)`; `system_error(http_protocol_error)` |
+| status 404, 410 (`get`, `post`, `json_get`, `json_post`) | `existence_error(source_sink, Url)` |
+| status 401, 403, 407 | `permission_error(open, source_sink, Url)` |
+| any other status >= 400 | `system_error(http_status(Status))` |
+
+Wrap a call in `catch/3` for the old failure:
+`catch(get(U, B), error(existence_error(source_sink, _), _), fail)`.
 
 ```seam
 --8<-- "tests/fixtures/docs/http_sigs.txt:general_request_example"

@@ -214,15 +214,19 @@ def test_http_unusable_url_raises_domain_error(url):
     assert raised(_get_2, u, Var()) == _err(("domain_error", "url", u), "get", 2)
 
 
-def test_http_network_failure_still_fails(monkeypatch):
-    # A refused connection is the network's answer, not the caller's value.
+def test_http_network_failure_raises_system_error(monkeypatch):
+    # RULED 2026-10-02 (the file-system / network ruling): a refused
+    # connection raises -- it used to fail.
+    import errno
     import urllib.error
     import clausal.modules.py.http as http
 
     def refuse(*a, **k):
-        raise urllib.error.URLError(ConnectionRefusedError(111, "refused"))
+        raise urllib.error.URLError(
+            ConnectionRefusedError(errno.ECONNREFUSED, "refused"))
     monkeypatch.setattr(http, "_urlopen", refuse)
-    assert list(http._get_2(chars("http://x.test/"), Var(), Trail(), None)) == []
+    assert raised(http._get_2, chars("http://x.test/"), Var()) == _err(
+        ("system_error", "connection_refused"), "get", 2)
 
 
 # ── csv ──────────────────────────────────────────────────────────────────

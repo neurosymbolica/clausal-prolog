@@ -71,6 +71,14 @@ python_answer(OUT, CODE) <- (
 )
 ```
 
+A program that cannot be started raises (ruled 2026-10-02; it used to
+fail): a program that does not exist is `existence_error(source_sink,
+Program)`, one that may not be executed (no execute permission, a
+directory) is `permission_error(create, process, Program)` -- Scryer's
+`process_create/3` term -- and a `cwd` option naming a missing directory is
+`existence_error(source_sink, Cwd)`. A nonzero exit status is a value, not
+an error: `exit_code` holds it.
+
 ### process_create/4
 
 `process_create(Program, Args, Options, Result)` — like process_create/3 with an options [`DictTerm`](dicts_sets.md). Supported options:
@@ -78,7 +86,7 @@ python_answer(OUT, CODE) <- (
 | Key | Type | Description |
 |---|---|---|
 | `cwd` | string | Working directory for the subprocess |
-| `timeout` | number | Timeout in seconds (fails on expiry) |
+| `timeout` | number | Timeout in seconds; on expiry the process is killed and `exit_code` is the atom `timeout` |
 | `input` | string | String to send to stdin |
 | `env` | DictTerm | Extra environment variables (merged with current env) |
 

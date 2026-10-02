@@ -157,10 +157,12 @@ class TestDirectoryFiles:
         assert chars("a.txt") in result
         assert chars("b.txt") in result
 
-    def test_nonexistent_dir_fails(self):
-        # nv
-        sols, _ = simple_solutions(_directory_files_2, chars("/nonexistent_dir"), Var())
-        assert len(sols) == 0
+    def test_nonexistent_dir_raises_existence_error(self):
+        # RULED 2026-10-02: a file-system failure raises (it failed).
+        d = chars("/nonexistent_dir")
+        term = raised(_directory_files_2, d, Var())
+        assert term == ('error', ('existence_error', 'source_sink', d),
+                        ('/', 'directory_files', 2))
 
     def test_unbound_dir_raises(self):
         # nv
@@ -223,10 +225,11 @@ class TestFileSize:
         assert isinstance(result, int)
         assert result == len("hello world")
 
-    def test_nonexistent_fails(self):
-        # nv
-        sols, _ = simple_solutions(_file_size_2, chars("/nonexistent_xyz"), Var())
-        assert len(sols) == 0
+    def test_nonexistent_raises_existence_error(self):
+        p = chars("/nonexistent_xyz")
+        term = raised(_file_size_2, p, Var())
+        assert term == ('error', ('existence_error', 'source_sink', p),
+                        ('/', 'file_size', 2))
 
 
 # ── file_modification_time/2 ───────────────────────────────────────────
@@ -244,12 +247,11 @@ class TestFileModificationTime:
         assert isinstance(result, float)
         assert result > 0
 
-    def test_nonexistent_fails(self):
-        # nv
-        sols, _ = simple_solutions(
-            _file_modification_time_2, chars("/nonexistent_xyz"), Var()
-        )
-        assert len(sols) == 0
+    def test_nonexistent_raises_existence_error(self):
+        p = chars("/nonexistent_xyz")
+        term = raised(_file_modification_time_2, p, Var())
+        assert term == ('error', ('existence_error', 'source_sink', p),
+                        ('/', 'file_modification_time', 2))
 
 
 # ── delete_file/1 ─────────────────────────────────────────────────────
@@ -265,10 +267,11 @@ class TestDeleteFile:
         assert len(sols) == 1
         assert not f.exists()
 
-    def test_nonexistent_fails(self):
-        # nv
-        sols, _ = simple_solutions(_delete_file_1, chars("/nonexistent_xyz"))
-        assert len(sols) == 0
+    def test_nonexistent_raises_existence_error(self):
+        p = chars("/nonexistent_xyz")
+        term = raised(_delete_file_1, p)
+        assert term == ('error', ('existence_error', 'source_sink', p),
+                        ('/', 'delete_file', 1))
 
     def test_unbound_raises(self):
         # nv
@@ -289,13 +292,15 @@ class TestDeleteDirectory:
         assert len(sols) == 1
         assert not d.exists()
 
-    def test_nonempty_fails(self, tmp_path):
-        # nv
+    def test_nonempty_raises_permission_error(self, tmp_path):
+        # ENOTEMPTY: the directory exists, removing it is not permitted.
         d = tmp_path / "subdir"
         d.mkdir()
         (d / "file.txt").write_text("x")
-        sols, _ = simple_solutions(_delete_directory_1, chars(str(d)))
-        assert len(sols) == 0
+        p = chars(str(d))
+        term = raised(_delete_directory_1, p)
+        assert term == ('error', ('permission_error', 'modify', 'source_sink', p),
+                        ('/', 'delete_directory', 1))
 
 
 # ── rename_file/2 ─────────────────────────────────────────────────────
@@ -313,12 +318,11 @@ class TestRenameFile:
         assert new.exists()
         assert new.read_text() == "content"
 
-    def test_nonexistent_fails(self, tmp_path):
-        # nv
-        sols, _ = simple_solutions(
-            _rename_file_2, chars("/nonexistent_xyz"), chars(str(tmp_path / "new.txt"))
-        )
-        assert len(sols) == 0
+    def test_nonexistent_raises_existence_error(self, tmp_path):
+        p = chars("/nonexistent_xyz")
+        term = raised(_rename_file_2, p, chars(str(tmp_path / "new.txt")))
+        assert term == ('error', ('existence_error', 'source_sink', p),
+                        ('/', 'rename_file', 2))
 
 
 # ── copy_file/2 ───────────────────────────────────────────────────────
@@ -336,12 +340,11 @@ class TestCopyFile:
         assert dst.exists()
         assert dst.read_text() == "hello"
 
-    def test_nonexistent_source_fails(self, tmp_path):
-        # nv
-        sols, _ = simple_solutions(
-            _copy_file_2, chars("/nonexistent_xyz"), chars(str(tmp_path / "dst.txt"))
-        )
-        assert len(sols) == 0
+    def test_nonexistent_source_raises_existence_error(self, tmp_path):
+        p = chars("/nonexistent_xyz")
+        term = raised(_copy_file_2, p, chars(str(tmp_path / "dst.txt")))
+        assert term == ('error', ('existence_error', 'source_sink', p),
+                        ('/', 'copy_file', 2))
 
 
 # ── make_directory/1 ─────────────────────────────────────────────────
@@ -356,10 +359,11 @@ class TestMakeDirectory:
         assert len(sols) == 1
         assert d.is_dir()
 
-    def test_already_exists_fails(self, tmp_path):
-        # nv
-        sols, _ = simple_solutions(_make_directory_1, chars(str(tmp_path)))
-        assert len(sols) == 0
+    def test_already_exists_raises_permission_error(self, tmp_path):
+        p = chars(str(tmp_path))
+        term = raised(_make_directory_1, p)
+        assert term == ('error', ('permission_error', 'create', 'source_sink', p),
+                        ('/', 'make_directory', 1))
 
 
 # ── make_directory_path/1 ─────────────────────────────────────────────
@@ -393,12 +397,11 @@ class TestReadFileToString:
         assert len(sols) == 1
         assert deref(contents) == chars("hello world")
 
-    def test_nonexistent_fails(self):
-        # nv
-        sols, _ = simple_solutions(
-            _read_file_to_string_2, chars("/nonexistent_xyz"), Var()
-        )
-        assert len(sols) == 0
+    def test_nonexistent_raises_existence_error(self):
+        p = chars("/nonexistent_xyz")
+        term = raised(_read_file_to_string_2, p, Var())
+        assert term == ('error', ('existence_error', 'source_sink', p),
+                        ('/', 'read_file_to_string', 2))
 
     def test_unbound_path_raises(self):
         # nv

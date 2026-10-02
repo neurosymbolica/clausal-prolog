@@ -465,6 +465,172 @@ def raise_domain_error(domain, culprit, pred, *, arg=None):
     raise LogicException(domain_error(domain, culprit, context)) from None
 
 
+# ── File-system and network failures (RULED 2026-10-02) ────────────────────
+#
+# A file-system or network failure in an adapter RAISES an ISO error term
+# instead of failing the goal.  ISO 13211-1 8.11.5.3 (open/4) is the model
+# for a path: j) a source/sink that does not exist is
+# ``existence_error(source_sink, S)``; k) one that exists but cannot be
+# opened is ``permission_error(open, source_sink, S)``.  A predicate whose
+# MEANING is a test (``file_exists/1``) does not come here: its failure is
+# the answer.
+
+import errno as _errno
+
+#: errno -> the ``system_error`` code for a network condition ISO has no
+#: term for.  Scryer's ``socket_client_open/3`` and ``http_open/3`` FAIL on
+#: all of these (only NotFound and PermissionDenied get a term there), so
+#: the codes are this engine's own, in the ``system_error(units_mismatch)``
+#: convention (exceptions.system_error).
+_NETWORK_CODES = {
+    _errno.ECONNREFUSED: "connection_refused",
+    _errno.ECONNRESET: "connection_reset",
+    _errno.ECONNABORTED: "connection_aborted",
+    _errno.EPIPE: "broken_pipe",
+    _errno.EHOSTUNREACH: "host_unreachable",
+    _errno.ENETUNREACH: "network_unreachable",
+    _errno.ENETDOWN: "network_unreachable",
+    _errno.EADDRINUSE: "address_in_use",
+    _errno.EADDRNOTAVAIL: "address_not_available",
+}
+
+#: errno -> ``resource_error(R)``.  ``file_descriptors`` is Scryer's term for
+#: an exhausted descriptor table (``open/4``'s fallback branch).
+_RESOURCE_CODES = {
+    _errno.EMFILE: "file_descriptors",
+    _errno.ENFILE: "file_descriptors",
+    _errno.ENOSPC: "disk_space",
+    _errno.EDQUOT: "disk_space",
+    _errno.ENOMEM: "memory",
+}
+
+#: errno values that mean "this object exists but the operation is not
+#: permitted on it" -> ``permission_error(Action, source_sink, Culprit)``.
+_PERMISSION_ERRNOS = frozenset({
+    _errno.EACCES, _errno.EPERM, _errno.EROFS,
+    _errno.EISDIR,        # a directory where a file is needed
+    _errno.EEXIST,        # creating what is already there
+    _errno.ENOTEMPTY,     # removing a directory that is not empty
+    _errno.ETXTBSY,
+})
+
+
+def os_error_term(exc, culprit, pred, *, action="open", arg=None,
+                  path=None):
+    """The ISO error term for an ``OSError`` raised by an adapter's
+    file-system or network call (RULED 2026-10-02).
+
+    *culprit* is the TERM the caller wrote (the path, URL or host), *pred*
+    the predicate indicator text (``"read_file/2"``), *action* the ISO
+    permission action that fits the operation (``open`` to read, write or
+    list; ``modify`` to delete or rename; ``create`` to make a directory or
+    a process), and *path* the ``str`` the culprit denotes, used only to
+    tell the two meanings of ENOTDIR apart.
+
+    - ENOENT (``FileNotFoundError``) and a DNS "no such host"
+      -> ``existence_error(source_sink, Culprit)`` (ISO 8.11.5.3 j);
+    - ENOTDIR: a path that goes THROUGH a file does not exist ->
+      ``existence_error``; a path that names an existing non-directory
+      where a directory is needed is there but cannot be used ->
+      ``permission_error``;
+    - EACCES/EPERM/EROFS, EISDIR, EEXIST, ENOTEMPTY ->
+      ``permission_error(Action, source_sink, Culprit)`` (ISO 8.11.5.3 k:
+      the object exists, the operation is not permitted on it);
+    - a timeout -> ``resource_error(timeout)``;
+    - EMFILE/ENFILE -> ``resource_error(file_descriptors)`` (Scryer),
+      ENOSPC -> ``resource_error(disk_space)``, ENOMEM ->
+      ``resource_error(memory)``;
+    - a network condition -> ``system_error(Code)``, Code one of
+      ``connection_refused``, ``connection_reset``, ``connection_aborted``,
+      ``broken_pipe``, ``host_unreachable``, ``network_unreachable``,
+      ``address_in_use``, ``address_not_available``, ``host_lookup_failed``
+      (a DNS failure other than "no such host"), ``tls_failure``;
+    - any other errno -> ``system_error(E)``, E the errno's symbolic name in
+      lower case (``eio``, ``exdev``); no errno -> ``system_error(io_error)``.
+
+    The OS message goes into the exception's prose, never into the term.
+    """
+    import socket as _socket_mod  # noqa: PLC0415
+    import ssl as _ssl_mod  # noqa: PLC0415
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        _error, existence_error, permission_error, system_error,
+    )
+    from clausal.logic.atoms import mint as _mint  # noqa: PLC0415
+    reason = getattr(exc, "strerror", None) or str(exc) or type(exc).__name__
+    context = f"{pred}: {reason}"
+    if arg is not None:
+        context = f"{pred}: argument {arg}: {reason}"
+
+    def resource(name):
+        return _error(("resource_error", _mint(name)), context)
+
+    if isinstance(exc, _socket_mod.gaierror):
+        if exc.errno in (_socket_mod.EAI_NONAME,
+                         getattr(_socket_mod, "EAI_NODATA", None)):
+            return existence_error("source_sink", culprit, context)
+        return system_error("host_lookup_failed", context)
+    if isinstance(exc, TimeoutError):          # socket.timeout, ETIMEDOUT
+        return resource("timeout")
+    if isinstance(exc, _ssl_mod.SSLError):     # errno is an SSL code, not errno
+        return system_error("tls_failure", context)
+    code = getattr(exc, "errno", None)
+    if code == _errno.ENOENT:
+        return existence_error("source_sink", culprit, context)
+    if code == _errno.ENOTDIR:
+        import os as _os_mod  # noqa: PLC0415
+        if path is not None and _os_mod.path.lexists(path):
+            return permission_error(action, "source_sink", culprit, context)
+        return existence_error("source_sink", culprit, context)
+    if code in _PERMISSION_ERRNOS:
+        return permission_error(action, "source_sink", culprit, context)
+    if code in _RESOURCE_CODES:
+        return resource(_RESOURCE_CODES[code])
+    if code in _NETWORK_CODES:
+        return system_error(_NETWORK_CODES[code], context)
+    if code == _errno.ETIMEDOUT:
+        return resource("timeout")
+    if isinstance(code, int) and code in _errno.errorcode:
+        return system_error(_errno.errorcode[code].lower(), context)
+    return system_error("io_error", context)
+
+
+def raise_os_error(exc, culprit, pred, *, action="open", arg=None, path=None):
+    """Raise :func:`os_error_term` for *exc* (RULED 2026-10-02)."""
+    from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+    raise LogicException(os_error_term(
+        exc, culprit, pred, action=action, arg=arg, path=path)) from exc
+
+
+def raise_http_status(status, culprit, pred, *, reason=None):
+    """Raise the ISO error for an HTTP error status (>= 400) answering a
+    request for the URL *culprit* (RULED 2026-10-02).
+
+    - 404 Not Found, 410 Gone -> ``existence_error(source_sink, Url)``: the
+      resource does not exist (ISO 8.11.5.3 j, as for a missing file);
+    - 401 Unauthorized, 403 Forbidden, 407 Proxy Authentication Required ->
+      ``permission_error(open, source_sink, Url)``: it exists and may not be
+      opened (8.11.5.3 k);
+    - any other status S -> ``system_error(http_status(S))``.
+
+    Scryer's ``http_open/3`` has no term to match: it reports every status
+    as a VALUE (the ``status_code(S)`` option), which is what this engine's
+    ``request/3`` does too; only the predicates that answer a body alone
+    (``get``, ``post``, ``json_get``, ``json_post``) come here.
+    """
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, existence_error, permission_error, system_error,
+    )
+    from clausal.logic.atoms import mint as _mint  # noqa: PLC0415
+    context = f"{pred}: HTTP {status}" + (f" {reason}" if reason else "")
+    if status in (404, 410):
+        term = existence_error("source_sink", culprit, context)
+    elif status in (401, 403, 407):
+        term = permission_error("open", "source_sink", culprit, context)
+    else:
+        term = system_error((_mint("http_status"), status), context)
+    raise LogicException(term) from None
+
+
 
 # ── Stdlib import helper ─────────────────────────────────────────────────────
 

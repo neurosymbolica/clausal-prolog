@@ -20,6 +20,63 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **A file-system or network failure in a library adapter raises an ISO
+  error** (ruled 2026-10-02) instead of failing the goal. The model is ISO
+  `open/4` (8.11.5.3 j, k): a path that does not exist (or goes through a
+  file) is `error(existence_error(source_sink, Path), Name/Arity)`; a path
+  that exists but may not be used -- no permission, a read-only file
+  system, a directory where a file is needed (EISDIR) or an existing file
+  where a directory is needed (ENOTDIR), a name already taken (EEXIST), a
+  directory not empty -- is `permission_error(Action, source_sink, Path)`,
+  `Action` being `open` to read, write or list, `modify` to delete or
+  rename, `create` to make a directory or temporary file. Too many open
+  files is `resource_error(file_descriptors)` (Scryer's term), a full disk
+  `resource_error(disk_space)`; any other errno `system_error(E)`, E its
+  lower-case symbolic name (`exdev`). Covered: `py.files` `directory_files/2`,
+  `directory_entries/2`, `file_size/2`, `file_modification_time/2`,
+  `delete_file/1`, `delete_directory/1`, `rename_file/2`, `copy_file/2`,
+  `make_directory/1` (an existing path: `permission_error(create, ...)`),
+  `make_directory_path/1`, `read_file_to_string/2`, `write_string_to_file/2`,
+  `append_string_to_file/2`, `temp_file/1`, `temp_directory/1`; `py.os`
+  `change_directory/1`; `py.csv` and `py.json` `read_file/2`,
+  `read_records/2`, `write_file/2`; `py.logging` `file_handler/2` and
+  `py.sqlite` `connect/2` (both escaped as a raw Python error);
+  `reified_file_item/2` on a directory or an unreadable file (a raw Python
+  error; a missing file was already `existence_error`). ISO has no network
+  error, and Scryer's `socket_client_open/3` and `http_open/3` fail on
+  everything but NotFound (`existence_error(source_sink, Host)`) and
+  PermissionDenied (`permission_error(open, source_sink, Host)`), so those
+  two terms are Scryer's and the rest the engine's own: in `py.tcp`
+  (`connect/3`, `listen/3`, `accept/2`, `send/2`, `receive/2,3`) and
+  `py.http` (`get/2,3`, `post/3,4`, `request/3`, `json_get/2`,
+  `json_post/3`) a host that does not resolve is
+  `existence_error(source_sink, Host)` (the URL in `py.http`), another DNS
+  failure `system_error(host_lookup_failed)`, a refused, reset or aborted
+  connection `system_error(connection_refused | connection_reset |
+  connection_aborted)`, `system_error(broken_pipe)`,
+  `system_error(host_unreachable | network_unreachable)`, a port in use
+  `system_error(address_in_use)`, a timeout `resource_error(timeout)`, a
+  TLS failure `system_error(tls_failure)`, a malformed HTTP response
+  `system_error(http_protocol_error)`. An HTTP error status raises in the
+  predicates that answer a body alone (`get`, `post`, `json_get`,
+  `json_post`): 404 and 410 are `existence_error(source_sink, Url)`, 401,
+  403 and 407 `permission_error(open, source_sink, Url)`, any other status
+  `system_error(http_status(S))`; `request/3` still answers the status as a
+  value, as Scryer's `http_open/3` does. In `py.process` a program that does
+  not exist is `existence_error(source_sink, Program)`, one that may not be
+  executed `permission_error(create, process, Program)` (Scryer's
+  `process_create/3` term), a missing `cwd` `existence_error(source_sink,
+  Cwd)`; an exit status stays a value (`shell/2`, `process_create/3,4`), and
+  `shell/1`, `shell_output/2,3` still fail on a nonzero one. A
+  `process_create/4` timeout now SUCCEEDS with `exit_code` the atom
+  `timeout` (Scryer's `process_wait/3` status) where it failed. Unchanged,
+  because their failure is the answer: `file_exists/1`,
+  `directory_exists/1`, `path_exists/1` (now `false` too for a path the
+  process may not look at, where an EACCES escaped as a raw Python error),
+  `environment_variable/2` for an unset name, `receive/2,3` at end of
+  stream, `close/1`. The shared mapping is `raise_os_error` /
+  `os_error_term` in `clausal.modules.py`. Wrap a call in `catch/3` where a
+  caller wants the old failure.
 - **A library adapter given a right-typed value it rejects raises
   `domain_error`** (ruled 2026-10-02) instead of failing the goal with a
   diagnostic note: `error(domain_error(Domain, Culprit), Name/Arity)`, the
@@ -84,10 +141,8 @@ since 0.4.0 finish three moves:
   `reflection` (`reified_item/2`, `reified_clause/2`,
   `reified_file_item/2`: `type_error(text, S)`; a missing file is
   `existence_error(source_sink, Path)`).
-  Still a plain failure, because it is a legitimate "no": a network failure
-  or HTTP error status, a file-system failure in `py.files`, `py.os`,
-  `py.csv`, `py.json`, `py.process`, `py.tcp`, an empty range, a sample
-  larger than its list, no path in a graph, an unknown currency code in
+  Still a plain failure, because it is a legitimate "no": an empty range,
+  a sample larger than its list, no path in a graph, an unknown currency code in
   `currency_code(-C, +Code)`. The diagnostic-note machinery
   (`note_mismatch`, `note_rejected_call`, `collect_type_mismatch_notes`,
   `value_is_ground` in `clausal.modules.py`) is removed: nothing fails

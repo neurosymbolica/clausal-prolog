@@ -54,7 +54,14 @@ main <- (
 --8<-- "tests/fixtures/docs/tcp_sigs.txt:connect_example"
 ```
 
-Fails if the connection is refused or the host is unreachable.
+A network failure raises (ruled 2026-10-02; it used to fail): a host that
+does not resolve is `existence_error(source_sink, Host)` (Scryer's
+`socket_client_open/3` term), a refused connection
+`system_error(connection_refused)`, an unreachable host
+`system_error(host_unreachable)`, a timeout `resource_error(timeout)`, a
+permission refusal `permission_error(open, source_sink, Host)`. `listen/3`
+on a port in use is `system_error(address_in_use)`; `send/2` on a broken
+connection `system_error(broken_pipe)` or `system_error(connection_reset)`.
 
 ---
 
@@ -93,7 +100,7 @@ decoding fails. Fails if the connection is closed (no data received).
 | Predicate | Mode | Description |
 |-----------|------|-------------|
 | `close(Socket)` | `+Socket` | close socket. Always succeeds (even on already-closed sockets). |
-| `set_timeout(Socket, Seconds)` | `+Socket, +Seconds` | Set socket timeout (float). Subsequent operations fail on timeout. |
+| `set_timeout(Socket, Seconds)` | `+Socket, +Seconds` | Set socket timeout (float). A later operation that times out raises `resource_error(timeout)`. |
 
 ```seam
 --8<-- "tests/fixtures/docs/tcp_sigs.txt:socket_management_example"

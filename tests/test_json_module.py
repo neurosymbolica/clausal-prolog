@@ -359,10 +359,12 @@ class TestFileIO:
         assert result.data[mint("hello")] == chars("world")
         assert result.data[mint("n")] == 42
 
-    def test_read_nonexistent_fails(self):
-        # nv
-        sols, _ = simple_solutions(_read_file_2, chars("/nonexistent/file.json"), Var())
-        assert len(sols) == 0
+    def test_read_nonexistent_raises_existence_error(self):
+        # RULED 2026-10-02: a file-system failure raises (it failed).
+        p = chars("/nonexistent/file.json")
+        term = raised(_read_file_2, p, Var())
+        assert term == ('error', ('existence_error', 'source_sink', p),
+                        ('/', 'read_file', 2))
 
     def test_write_unbound_term_raises(self):
         # nv

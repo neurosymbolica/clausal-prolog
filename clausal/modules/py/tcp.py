@@ -16,6 +16,7 @@ from clausal.modules.py import (
     _import_stdlib,
     NUMBER_TYPES,
     expect_type,
+    raise_os_error,
     require_text,
     simple_to_trampoline,
     to_bytes,
@@ -26,6 +27,16 @@ from clausal.logic.variables import deref, is_var, unify
 
 
 # ── Internal helpers ─────────────────────────────────────────────────────
+#
+# RULED 2026-10-02: a network failure RAISES (``raise_os_error``).  A host
+# that does not resolve is ``existence_error(source_sink, Host)`` -- the
+# term Scryer's ``socket_client_open/3`` gives for NotFound, with its
+# culprit, the host; a refused, reset or unreachable connection is
+# ``system_error(connection_refused | connection_reset | ...)``; a timeout
+# (``set_timeout/2``) ``resource_error(timeout)``; a permission refusal
+# ``permission_error(open, source_sink, Host)`` (Scryer's
+# ``open_permission_error``).  End of stream is NOT a failure of the
+# network: ``receive/2,3`` on a closed connection still fails.
 
 
 # ── Predicate implementations ────────────────────────────────────────────
@@ -33,36 +44,39 @@ from clausal.logic.variables import deref, is_var, unify
 
 def _connect_3(host, port, sock_out, trail, k):
     """connect/3: connect(Host, Port, Socket) — connect to TCP server."""
-    host_d = require_text(deref(host), "connect/3")
+    host_term = deref(host)
+    host_d = require_text(host_term, "connect/3")
     port_d = deref(port)
-    if host_d is None:
-        return
     if not expect_type(port_d, int, "connect/3", arg=2):
         return
+    s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
     try:
-        s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
         s.connect((host_d, port_d))
-    except (OSError, _socket.error):
-        return
+    except OSError as exc:
+        s.close()
+        raise_os_error(exc, host_term, "connect/3")
     if unify(sock_out, s, trail):
         yield None
 
 
 def _listen_3(host, port, server_out, trail, k):
     """listen/3: listen(Host, Port, ServerSocket) — create listening socket."""
-    host_d = require_text(deref(host), "listen/3")
+    host_term = deref(host)
+    host_d = require_text(host_term, "listen/3")
     port_d = deref(port)
-    if host_d is None:
-        return
     if not expect_type(port_d, int, "listen/3", arg=2):
         return
+    s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
     try:
-        s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
         s.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)
         s.bind((host_d, port_d))
         s.listen(5)
-    except (OSError, _socket.error):
-        return
+    except OSError as exc:
+        s.close()
+        # A privileged port is permission_error(open, source_sink, Host),
+        # Scryer's socket_server_open/2 term; a port in use is
+        # system_error(address_in_use).
+        raise_os_error(exc, host_term, "listen/3")
     if unify(server_out, s, trail):
         yield None
 
@@ -74,8 +88,8 @@ def _accept_2(server_sock, client_out, trail, k):
         return
     try:
         client, addr = server_d.accept()
-    except (OSError, _socket.error):
-        return
+    except OSError as exc:
+        raise_os_error(exc, server_d, "accept/2")
     if unify(client_out, client, trail):
         yield None
 
@@ -96,12 +110,12 @@ def _send_2(sock, data, trail, k):
         expect_type(data_d, (str, bytes), "send/2", arg=2)   # raises
     try:
         sock_d.sendall(data_bytes)
-    except (OSError, _socket.error):
-        return
+    except OSError as exc:
+        raise_os_error(exc, sock_d, "send/2")
     yield None
 
 
-def _receive_3(sock, bufsize, data_out, trail, k):
+def _receive_3(sock, bufsize, data_out, trail, k, pred="receive/3"):
     """receive/3: receive(Socket, BufferSize, Data) — receive with custom buffer."""
     sock_d = deref(sock)
     bufsize_d = deref(bufsize)
@@ -111,10 +125,10 @@ def _receive_3(sock, bufsize, data_out, trail, k):
         return
     try:
         raw = sock_d.recv(bufsize_d)
-    except (OSError, _socket.error):
-        return
+    except OSError as exc:
+        raise_os_error(exc, sock_d, pred)
     if not raw:
-        return  # connection closed
+        return  # connection closed: end of stream is an answer, not an error
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
@@ -127,7 +141,7 @@ def _receive_3(sock, bufsize, data_out, trail, k):
 
 def _receive_2(sock, data_out, trail, k):
     """receive/2: receive(Socket, Data) — receive up to 4096 bytes."""
-    yield from _receive_3(sock, 4096, data_out, trail, k)
+    yield from _receive_3(sock, 4096, data_out, trail, k, pred="receive/2")
 
 
 def _close_1(sock, trail, k):

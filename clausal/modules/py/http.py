@@ -17,6 +17,8 @@ from clausal.modules.py import (
     expect_type,
     option,
     raise_domain_error,
+    raise_http_status,
+    raise_os_error,
     require_text,
     simple_to_trampoline,
     text_or_str,
@@ -57,13 +59,20 @@ def _dict_term_to_headers(dt):
 
 def _do_request(url, method="GET", headers=None, data=None, timeout=30, *,
                 pred="request/3", url_term=None):
-    """Perform an HTTP request, return (status, body_str) or None on error.
+    """Perform an HTTP request; return (status, body_str), or None when
+    the response body is not UTF-8 text.
 
     A URL ``urllib`` cannot use at all -- no scheme, an unknown scheme, a
     malformed host -- is the caller's value, not the network's answer, so it
     raises ``domain_error(url, Url)`` for *pred* (RULED 2026-10-02);
-    *url_term* is the term the caller wrote.  A network failure (refused,
-    unreachable, timed out) still answers None and the predicate fails.
+    *url_term* is the term the caller wrote.  A network failure RAISES too
+    (RULED 2026-10-02, ``raise_os_error``): a host that does not resolve is
+    ``existence_error(source_sink, Url)``, a refused or reset connection
+    ``system_error(connection_refused | connection_reset | ...)``, a timeout
+    ``resource_error(timeout)``, a TLS failure ``system_error(tls_failure)``,
+    a malformed response ``system_error(http_protocol_error)``.  An HTTP
+    error STATUS is returned with its body: ``request/3`` answers it as a
+    value, the body-only predicates raise it (``raise_http_status``).
     """
     culprit = url if url_term is None else url_term
     if headers is None:
@@ -92,7 +101,10 @@ def _do_request(url, method="GET", headers=None, data=None, timeout=30, *,
     except _urllib_error.URLError as e:
         if _is_url_rejection(e):
             raise_domain_error("url", culprit, pred, arg=1)
-        return None
+        reason = e.reason
+        if not isinstance(reason, OSError):
+            reason = OSError(str(reason))      # no errno: system_error(io_error)
+        raise_os_error(reason, culprit, pred)
     except ValueError as e:
         # A malformed authority: a non-numeric port (http.client.InvalidURL)
         # or "Invalid IPv6 URL".  Any other ValueError (a header value with
@@ -101,8 +113,16 @@ def _do_request(url, method="GET", headers=None, data=None, timeout=30, *,
                 or "IPv6" in str(e)):
             raise_domain_error("url", culprit, pred, arg=1)
         raise
-    except OSError:
-        return None
+    except _http_client.HTTPException as e:
+        if isinstance(e, _http_client.InvalidURL):
+            raise_domain_error("url", culprit, pred, arg=1)   # the caller's URL
+        if isinstance(e, OSError):             # RemoteDisconnected: a reset
+            raise_os_error(e, culprit, pred)
+        from clausal.logic.exceptions import system_error  # noqa: PLC0415
+        raise LogicException(system_error(
+            "http_protocol_error", f"{pred}: {type(e).__name__}: {e}")) from e
+    except OSError as e:                       # a timeout while reading, ...
+        raise_os_error(e, culprit, pred)
     try:
         return status, raw.decode("utf-8")
     except UnicodeDecodeError:
@@ -131,7 +151,7 @@ def _get_2(url, body, trail, k):
         return
     status, body_str = result
     if status >= 400:
-        return  # fail on HTTP errors
+        raise_http_status(status, deref(url), "get/2")
     if unify(body, text_result(body_str), trail):
         yield None
 
@@ -152,7 +172,7 @@ def _get_3(url, headers, body, trail, k):
         return
     status, body_str = result
     if status >= 400:
-        return
+        raise_http_status(status, deref(url), "get/3")
     if unify(body, text_result(body_str), trail):
         yield None
 
@@ -173,7 +193,7 @@ def _post_3(url, data, body, trail, k):
         return
     status, body_str = result
     if status >= 400:
-        return
+        raise_http_status(status, deref(url), "post/3")
     if unify(body, text_result(body_str), trail):
         yield None
 
@@ -197,7 +217,7 @@ def _post_4(url, data, headers, body, trail, k):
         return
     status, body_str = result
     if status >= 400:
-        return
+        raise_http_status(status, deref(url), "post/4")
     if unify(body, text_result(body_str), trail):
         yield None
 
@@ -266,7 +286,7 @@ def _json_get_2(url, term_out, trail, k):
         return
     status, body_str = result
     if status >= 400:
-        return
+        raise_http_status(status, deref(url), "json_get/2")
     try:
         parsed = _json_mod.loads(body_str)
     except (ValueError, TypeError):
@@ -294,7 +314,7 @@ def _json_post_3(url, term_in, term_out, trail, k):
         return
     status, body_str = result
     if status >= 400:
-        return
+        raise_http_status(status, deref(url), "json_post/3")
     try:
         parsed = _json_mod.loads(body_str)
     except (ValueError, TypeError):

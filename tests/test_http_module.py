@@ -80,13 +80,14 @@ class TestHttpGet:
         assert deref(body) == chars("hello")
 
     @patch("clausal.modules.py.http._urlopen")
-    def test_get_404_fails(self, mock_urlopen):
-        # nv
+    def test_get_404_raises_existence_error(self, mock_urlopen):
+        # RULED 2026-10-02: an HTTP error status raises (it failed).
         from urllib.error import HTTPError
         mock_urlopen.side_effect = HTTPError(None, 404, "Not Found", {}, None)
-        body = Var()
-        sols, _ = simple_solutions(_get_2, chars("http://example.com"), body)
-        assert len(sols) == 0
+        u = chars("http://example.com")
+        term = raised(_get_2, u, Var())
+        assert term == ('error', ('existence_error', 'source_sink', u),
+                        ('/', 'get', 2))
 
     def test_unbound_url_raises(self):
         # nv

@@ -17,6 +17,7 @@ from clausal.modules.py import (
     text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
+    raise_os_error,
     require_text,
     simple_to_trampoline,
 )
@@ -86,14 +87,17 @@ def _working_directory_1(path, trail, k):
 
 
 def _change_directory_1(path, trail, k):
-    """change_directory/1: change the current working directory."""
-    path = require_text(deref(path), "change_directory/1", 1)
-    if path is None:
-        return
+    """change_directory/1: change the current working directory.
+
+    RULED 2026-10-02: a missing directory raises
+    ``existence_error(source_sink, Dir)``; a file, or a directory that may
+    not be entered, ``permission_error(open, source_sink, Dir)``."""
+    path_term = deref(path)
+    path = require_text(path_term, "change_directory/1", 1)
     try:
         _os.chdir(path)
-    except OSError:
-        return
+    except OSError as exc:
+        raise_os_error(exc, path_term, "change_directory/1", path=path)
     yield None
 
 

@@ -137,12 +137,12 @@ class TestConnect:
         assert isinstance(s, socket.socket)
         s.close()
 
-    def test_connection_refused_fails(self):
-        """connect to a port that's definitely not listening."""
-        # nv
-        sock = Var()
-        sols, _ = simple_solutions(_connect_3, chars("127.0.0.1"), 1, sock)
-        assert len(sols) == 0
+    def test_connection_refused_raises_system_error(self):
+        """connect to a port that's definitely not listening: RULED
+        2026-10-02, a network failure raises (it failed)."""
+        term = raised(_connect_3, chars("127.0.0.1"), 1, Var())
+        assert term == ('error', ('system_error', 'connection_refused'),
+                        ('/', 'connect', 3))
 
     def test_unbound_host_raises(self):
         # nv

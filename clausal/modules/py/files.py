@@ -19,6 +19,7 @@ from clausal.modules.py import (
     text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
+    raise_os_error,
     require_text,
     simple_to_trampoline,
 )
@@ -28,21 +29,31 @@ _tempfile = _import_stdlib("tempfile")
 
 import pathlib
 
-from clausal.logic.variables import Var, is_var, unify
+from clausal.logic.variables import Var, deref, is_var, unify
 
 
 # ── Helper ──────────────────────────────────────────────────────────────
+#
+# RULED 2026-10-02: a file-system failure in an ACTION raises the ISO term
+# (``raise_os_error``): a missing path is existence_error(source_sink, P), a
+# path that exists but may not be used permission_error(Action,
+# source_sink, P).  The three TESTS (file_exists/1, directory_exists/1,
+# path_exists/1) still fail: their failure is the answer.
 
 
 # ── Existence predicates ────────────────────────────────────────────────
 
 
 def _file_exists_1(path, trail, k):
-    """file_exists/1: succeeds if Path is a regular file."""
+    """file_exists/1: succeeds if Path is a regular file.
+
+    A TEST: its failure is the answer, including for a path the process may
+    not look at (``os.path.isfile`` answers False on any OSError, as Scryer's
+    ``file_exists/1`` does; ``pathlib``'s ``is_file`` raised on EACCES)."""
     path = require_text(path, "file_exists/1", 1)
     if path is None:
         return
-    if pathlib.Path(path).is_file():
+    if _os.path.isfile(path):
         yield None
 
 
@@ -51,7 +62,7 @@ def _directory_exists_1(path, trail, k):
     path = require_text(path, "directory_exists/1", 1)
     if path is None:
         return
-    if pathlib.Path(path).is_dir():
+    if _os.path.isdir(path):
         yield None
 
 
@@ -60,41 +71,37 @@ def _path_exists_1(path, trail, k):
     path = require_text(path, "path_exists/1", 1)
     if path is None:
         return
-    if pathlib.Path(path).exists():
+    if _os.path.exists(path):
         yield None
 
 
 # ── Directory listing ───────────────────────────────────────────────────
 
 
+def _list_directory(dir_path, dir_term, pred):
+    """The sorted entry names of *dir_path*; raises the ISO error when it
+    cannot be listed (missing -> existence_error, a file or unreadable ->
+    permission_error(open, source_sink, Dir))."""
+    try:
+        return sorted(e.name for e in pathlib.Path(dir_path).iterdir())
+    except OSError as exc:
+        raise_os_error(exc, dir_term, pred, path=dir_path)
+
+
 def _directory_files_2(dir_path, files, trail, k):
     """directory_files/2: unify Files with list of filenames in Dir."""
+    dir_term = deref(dir_path)
     dir_path = require_text(dir_path, "directory_files/2", 1)
-    if dir_path is None:
-        return
-    p = pathlib.Path(dir_path)
-    if not p.is_dir():
-        return
-    try:
-        entries = sorted(e.name for e in p.iterdir())
-    except OSError:
-        return
+    entries = _list_directory(dir_path, dir_term, "directory_files/2")
     if unify(files, text_result(entries), trail):
         yield None
 
 
 def _directory_entries_2(dir_path, entry, trail, k):
     """directory_entries/2: enumerate directory entries via backtracking."""
+    dir_term = deref(dir_path)
     dir_path = require_text(dir_path, "directory_entries/2", 1)
-    if dir_path is None:
-        return
-    p = pathlib.Path(dir_path)
-    if not p.is_dir():
-        return
-    try:
-        entries = sorted(e.name for e in p.iterdir())
-    except OSError:
-        return
+    entries = _list_directory(dir_path, dir_term, "directory_entries/2")
     for name in entries:
         mark = trail.mark()
         if unify(entry, text_result(name), trail):
@@ -107,26 +114,24 @@ def _directory_entries_2(dir_path, entry, trail, k):
 
 def _file_size_2(path, size, trail, k):
     """file_size/2: unify Size with file size in bytes."""
+    path_term = deref(path)
     path = require_text(path, "file_size/2", 1)
-    if path is None:
-        return
     try:
         st = pathlib.Path(path).stat()
-    except OSError:
-        return
+    except OSError as exc:
+        raise_os_error(exc, path_term, "file_size/2", action="open", path=path)
     if unify(size, st.st_size, trail):
         yield None
 
 
 def _file_modification_time_2(path, time, trail, k):
     """file_modification_time/2: unify Time with modification timestamp."""
+    path_term = deref(path)
     path = require_text(path, "file_modification_time/2", 1)
-    if path is None:
-        return
     try:
         st = pathlib.Path(path).stat()
-    except OSError:
-        return
+    except OSError as exc:
+        raise_os_error(exc, path_term, "file_modification_time/2", action="open", path=path)
     if unify(time, st.st_mtime, trail):
         yield None
 
@@ -136,51 +141,90 @@ def _file_modification_time_2(path, time, trail, k):
 
 def _delete_file_1(path, trail, k):
     """delete_file/1: delete a file."""
+    path_term = deref(path)
     path = require_text(path, "delete_file/1", 1)
-    if path is None:
-        return
     try:
         pathlib.Path(path).unlink()
-    except OSError:
-        return
+    except OSError as exc:
+        raise_os_error(exc, path_term, "delete_file/1", action="modify", path=path)
     yield None
 
 
 def _delete_directory_1(path, trail, k):
     """delete_directory/1: delete an empty directory."""
+    path_term = deref(path)
     path = require_text(path, "delete_directory/1", 1)
-    if path is None:
-        return
     try:
         pathlib.Path(path).rmdir()
-    except OSError:
-        return
+    except OSError as exc:
+        raise_os_error(exc, path_term, "delete_directory/1", action="modify", path=path)
     yield None
 
 
+def _culprit_for(exc, *candidates):
+    """The (term, text) pair among *candidates* that the OS error names:
+    the one whose text is ``exc.filename`` (or ``filename2``), else the
+    first."""
+    named = {getattr(exc, "filename", None), getattr(exc, "filename2", None)}
+    for term, text in candidates:
+        if text in named:
+            return term, text
+    return candidates[0]
+
+
 def _rename_file_2(old, new, trail, k):
-    """rename_file/2: rename/move a file or directory."""
+    """rename_file/2: rename/move a file or directory.
+
+    A missing Old is ``existence_error(source_sink, Old)``; a missing
+    directory on New's side ``existence_error(source_sink, New)``; a New
+    the OS refuses to replace (a directory, a non-empty directory) or a
+    place that may not be written ``permission_error(modify, source_sink,
+    _)``.  ``os.rename`` names both paths in every error, so the culprit is
+    decided by looking: Old when Old is not there or may not be moved, New
+    otherwise."""
+    old_term, new_term = deref(old), deref(new)
     old = require_text(old, "rename_file/2", 1)
     new = require_text(new, "rename_file/2", 2)
-    if old is None or new is None:
-        return
     try:
         pathlib.Path(old).rename(new)
-    except OSError:
-        return
+    except OSError as exc:
+        import errno as _errno  # noqa: PLC0415
+        old_dir = _os.path.dirname(_os.path.abspath(old))
+        if not _os.path.lexists(old) or (
+                exc.errno in (_errno.EACCES, _errno.EPERM)
+                and not _os.access(old_dir, _os.W_OK | _os.X_OK)):
+            raise_os_error(exc, old_term, "rename_file/2", action="modify",
+                           arg=1, path=old)
+        raise_os_error(exc, new_term, "rename_file/2", action="modify",
+                       arg=2, path=new)
     yield None
 
 
 def _copy_file_2(source, destination, trail, k):
-    """copy_file/2: copy a file (not directory)."""
+    """copy_file/2: copy a file (not directory).
+
+    The culprit is the path the OS error names: Source when it is missing,
+    a directory or unreadable (``open``), Destination when its directory is
+    missing or it may not be written."""
+    src_term, dst_term = deref(source), deref(destination)
     source = require_text(source, "copy_file/2", 1)
     destination = require_text(destination, "copy_file/2", 2)
-    if source is None or destination is None:
-        return
     try:
         _shutil.copy2(source, destination)
-    except OSError:
-        return
+    except _shutil.SameFileError as exc:
+        # Copying a file onto itself: the destination cannot be opened for
+        # output while it is the source.
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            LogicException, permission_error,
+        )
+        raise LogicException(permission_error(
+            "open", "source_sink", dst_term,
+            f"copy_file/2: argument 2: {exc}")) from exc
+    except OSError as exc:
+        term, text = _culprit_for(exc, (src_term, source),
+                                  (dst_term, destination))
+        raise_os_error(exc, term, "copy_file/2",
+                       arg=1 if term is src_term else 2, path=text)
     yield None
 
 
@@ -188,26 +232,28 @@ def _copy_file_2(source, destination, trail, k):
 
 
 def _make_directory_1(path, trail, k):
-    """make_directory/1: create a directory. Fails if it already exists."""
+    """make_directory/1: create a directory.
+
+    A path that already exists raises ``permission_error(create,
+    source_sink, P)`` (it failed before 2026-10-02); a missing parent
+    ``existence_error(source_sink, P)``."""
+    path_term = deref(path)
     path = require_text(path, "make_directory/1", 1)
-    if path is None:
-        return
     try:
         pathlib.Path(path).mkdir()
-    except OSError:
-        return
+    except OSError as exc:
+        raise_os_error(exc, path_term, "make_directory/1", action="create", path=path)
     yield None
 
 
 def _make_directory_path_1(path, trail, k):
     """make_directory_path/1: create a directory and all parents (mkdir -p)."""
+    path_term = deref(path)
     path = require_text(path, "make_directory_path/1", 1)
-    if path is None:
-        return
     try:
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
-    except OSError:
-        return
+    except OSError as exc:
+        raise_os_error(exc, path_term, "make_directory_path/1", action="create", path=path)
     yield None
 
 
@@ -216,45 +262,41 @@ def _make_directory_path_1(path, trail, k):
 
 def _read_file_to_string_2(path, contents, trail, k):
     """read_file_to_string/2: read entire file as a string."""
+    path_term = deref(path)
     path = require_text(path, "read_file_to_string/2", 1)
-    if path is None:
-        return
     try:
         text = pathlib.Path(path).read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return
+    except UnicodeDecodeError:
+        return          # not UTF-8 text: unchanged by the file-system ruling
+    except OSError as exc:
+        raise_os_error(exc, path_term, "read_file_to_string/2", arg=1,
+                       path=path)
     if unify(contents, text_result(text), trail):
         yield None
 
 
 def _write_string_to_file_2(path, contents, trail, k):
     """write_string_to_file/2: write a string to a file (overwrite)."""
+    path_term = deref(path)
     path = require_text(path, "write_string_to_file/2", 1)
-    if path is None:
-        return
     contents = require_text(contents, "write_string_to_file/2", 2)
-    if contents is None:
-        return
     try:
         pathlib.Path(path).write_text(contents, encoding="utf-8")
-    except OSError:
-        return
+    except OSError as exc:
+        raise_os_error(exc, path_term, "write_string_to_file/2", arg=1, path=path)
     yield None
 
 
 def _append_string_to_file_2(path, contents, trail, k):
     """append_string_to_file/2: append a string to a file."""
+    path_term = deref(path)
     path = require_text(path, "append_string_to_file/2", 1)
-    if path is None:
-        return
     contents = require_text(contents, "append_string_to_file/2", 2)
-    if contents is None:
-        return
     try:
         with open(path, "a", encoding="utf-8") as f:
             f.write(contents)
-    except OSError:
-        return
+    except OSError as exc:
+        raise_os_error(exc, path_term, "append_string_to_file/2", arg=1, path=path)
     yield None
 
 
@@ -307,13 +349,26 @@ def _file_extension_2(path, extension, trail, k):
 # ── Temporary files ────────────────────────────────────────────────────
 
 
+def _raise_temp_error(exc, pred):
+    """A temporary file or directory could not be created: the culprit is
+    the path the OS names, else the temporary directory itself."""
+    where = getattr(exc, "filename", None)
+    if where is None:
+        try:
+            where = _tempfile.gettempdir()
+        except OSError:            # no usable temporary directory at all
+            where = _tempfile.tempdir or _os.environ.get("TMPDIR") or "/tmp"
+    raise_os_error(exc, text_result(str(where)), pred, action="create",
+                   path=str(where))
+
+
 def _temp_file_1(path, trail, k):
     """temp_file/1: create a temporary file and unify Path with its path."""
     try:
         fd, tmp_path = _tempfile.mkstemp()
         _os.close(fd)
-    except OSError:
-        return
+    except OSError as exc:
+        _raise_temp_error(exc, "temp_file/1")
     if unify(path, text_result(tmp_path), trail):
         yield None
 
@@ -322,8 +377,8 @@ def _temp_directory_1(path, trail, k):
     """temp_directory/1: create a temporary directory and unify Path with its path."""
     try:
         tmp_path = _tempfile.mkdtemp()
-    except OSError:
-        return
+    except OSError as exc:
+        _raise_temp_error(exc, "temp_directory/1")
     if unify(path, text_result(tmp_path), trail):
         yield None
 

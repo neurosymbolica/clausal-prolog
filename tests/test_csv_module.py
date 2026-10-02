@@ -270,10 +270,12 @@ class TestFileIO:
         assert data[0] == [chars("name"), chars("age")]
         assert data[1] == [chars("alice"), chars("30")]
 
-    def test_read_nonexistent_fails(self):
-        # nv
-        sols, _ = simple_solutions(_read_file_2, chars("/nonexistent/file.csv"), Var())
-        assert len(sols) == 0
+    def test_read_nonexistent_raises_existence_error(self):
+        # RULED 2026-10-02: a file-system failure raises (it failed).
+        p = chars("/nonexistent/file.csv")
+        term = raised(_read_file_2, p, Var())
+        assert term == ('error', ('existence_error', 'source_sink', p),
+                        ('/', 'read_file', 2))
 
     def test_read_unbound_path_raises(self):
         # nv
@@ -305,10 +307,11 @@ class TestReadRecords:
         assert recs[0].data[mint("name")] == chars("alice")
         assert recs[1].data[mint("age")] == chars("25")
 
-    def test_nonexistent_fails(self):
-        # nv
-        sols, _ = simple_solutions(_read_records_2, chars("/nonexistent/file.csv"), Var())
-        assert len(sols) == 0
+    def test_nonexistent_raises_existence_error(self):
+        p = chars("/nonexistent/file.csv")
+        term = raised(_read_records_2, p, Var())
+        assert term == ('error', ('existence_error', 'source_sink', p),
+                        ('/', 'read_records', 2))
 
 
 # ── Task 12c: header cells are ATOMS on the way out (§6.8, §9.2) ────────
