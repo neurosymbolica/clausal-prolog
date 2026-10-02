@@ -58,7 +58,7 @@ from clausal.modules.py import (
     text_result,   # stage 1: a str result is the chars carrier
     ModulePredicate,
     _import_stdlib,
-    expect_type,
+    expect_type as _expect_type,
     note_mismatch,
     note_rejected_call,
     simple_to_trampoline,
@@ -69,9 +69,11 @@ _dt = _import_stdlib("datetime")
 from typing import Any
 
 from clausal.logic.variables import (  # noqa: F401
-    Var, deref as _deref, is_var, unify as _unify,
+    Var, deref as _deref, is_var, unify as _unify, walk as _walk,
 )
-from clausal.logic.exceptions import LogicException, domain_error, type_error
+from clausal.logic.builtins._helpers import _is_ground
+from clausal.logic.exceptions import (
+    LogicException, domain_error, instantiation_error, type_error)
 from clausal.logic.trampoline import DONE
 
 
@@ -128,9 +130,64 @@ def _term_to_dt(value):
     if rebuild is None:
         return value
     try:
-        return rebuild(value)
+        # WALK the components, not just the outer term.  A cell built while a
+        # component was still unbound -- ``Y = 2025, ordinal(date(Y, 3, 1), N)``
+        # builds ``('date', Y, 3, 1)`` and binds Y afterwards -- arrives here
+        # holding the BOUND Var, which ``datetime.date`` rejects with a
+        # TypeError.  Without the walk that rejection read as "not a date"
+        # and every predicate below failed the goal silently.
+        return rebuild(_walk(value))
     except (TypeError, ValueError, OverflowError):
-        return value
+        return value                   # the ORIGINAL: ``is not`` discriminates
+
+
+def _is_dt_term(value) -> bool:
+    """A cell whose functor is one of the date family's (``date/3``, ...)."""
+    return (type(value) is tuple and len(value) > 1
+            and type(value[0]) is str and value[0] in _DATE_FUNCTORS)
+
+
+def _is_open(value) -> bool:
+    """An argument an OUTPUT may still be unified into: an unbound variable,
+    or a date-family term with an unbound component (``date(Y, M, D)``)."""
+    return is_var(value) or (_is_dt_term(value) and not _is_ground(value))
+
+
+def _reject_dt_term(value, pred) -> None:
+    """Raise for a date-family TERM that did not convert to its value.
+
+    Such a term names a date (the caller wrote the functor) but is not one, so
+    failing the goal would be a silent wrong answer.  Unbound component ->
+    ``instantiation_error``; a component of the wrong type ->
+    ``type_error(integer, Term)`` (``number`` for ``timedelta``); right types
+    but no such value -> ``domain_error(<functor>, Term)`` -- the same terms
+    ``date/3`` raises when it is constructed from bad components.  A term that
+    DID convert, and anything else, returns: the caller's ordinary type guard
+    decides.
+    """
+    if not _is_dt_term(value):
+        return
+    if not _is_ground(value):
+        raise LogicException(instantiation_error(pred))
+    try:
+        _pt.FROM_TERM[value[0]](_walk(value))
+    except TypeError:
+        raise LogicException(type_error(
+            "number" if value[0] == "timedelta" else "integer",
+            _walk(value), pred)) from None
+    except (ValueError, OverflowError):
+        raise LogicException(
+            domain_error(value[0], _walk(value), pred)) from None
+
+
+def expect_type(value, types, pred, *, expected=None, arg=None) -> bool:  # noqa: F811
+    """The shared py-interop guard, plus :func:`_reject_dt_term`: a value of
+    the wrong class still FAILS the goal with a diagnostic note (the module
+    convention), but a date-family term that is not a date RAISES."""
+    if isinstance(value, types):
+        return True
+    _reject_dt_term(value, pred)
+    return _expect_type(value, types, pred, expected=expected, arg=arg)
 
 
 def date_term_to_python(value):
@@ -264,7 +321,7 @@ def _time_4(hour, minute, second, t, trail, k):
     If TimeObj is a datetime.time: decompose → H, M, S.
     """
     hour, minute, second, t = deref(hour), deref(minute), deref(second), deref(t)
-    if is_var(t):
+    if _is_open(t):
         # construct mode — pass components through unchanged so datetime.time
         # rejects floats with a TypeError instead of int()-truncating 10.9 to
         # 10 (F015, same treatment as date/4).
@@ -274,6 +331,10 @@ def _time_4(hour, minute, second, t, trail, k):
             # Fully-bound rejections only — see date/4.
             if not (is_var(hour) or is_var(minute) or is_var(second)):
                 note_rejected_call("time/4", exc)
+            elif not is_var(t):
+                # A partial time term and unbound components: neither mode
+                # can run, and failing would read as "no such time".
+                raise LogicException(instantiation_error("time/4")) from None
             return
         if unify(t, tm, trail):
             yield None
@@ -300,7 +361,7 @@ def _datetime_7(year, month, day, hour, minute, second, dt, trail, k):
     """
     year, month, day = deref(year), deref(month), deref(day)
     hour, minute, second, dt = deref(hour), deref(minute), deref(second), deref(dt)
-    if is_var(dt):
+    if _is_open(dt):
         # construct mode — pass components through unchanged so
         # datetime.datetime rejects floats with a TypeError instead of
         # int()-truncating them (F015, same treatment as date/4).
@@ -311,6 +372,9 @@ def _datetime_7(year, month, day, hour, minute, second, dt, trail, k):
             if not any(is_var(c) for c in
                        (year, month, day, hour, minute, second)):
                 note_rejected_call("datetime/7", exc)
+            elif not is_var(dt):
+                raise LogicException(
+                    instantiation_error("datetime/7")) from None
             return
         if unify(dt, obj, trail):
             yield None
@@ -339,7 +403,7 @@ def _timedelta_3(days, seconds, td, trail, k):
     If TdObj is a datetime.timedelta: decompose → Days, Seconds.
     """
     days, seconds, td = deref(days), deref(seconds), deref(td)
-    if is_var(td):
+    if _is_open(td):
         # construct mode — pass components through unchanged (F015). Unlike
         # date/time/datetime, stdlib timedelta legitimately accepts floats
         # and converts them exactly (1.5 days → 1 day 12 h), so floats are
@@ -352,6 +416,9 @@ def _timedelta_3(days, seconds, td, trail, k):
             # substituted when unbound, so only days can be a probe Var).
             if not is_var(days):
                 note_rejected_call("timedelta/3", exc)
+            elif not is_var(td):
+                raise LogicException(
+                    instantiation_error("timedelta/3")) from None
             return
         if unify(td, obj, trail):
             yield None
@@ -466,7 +533,7 @@ def _datetime_string_3(dt_obj, s, fmt, trail, k):
             return
         if unify(s, text_result(out), trail):   # stage 1
             yield None
-    elif is_var(dt_obj) and (s_text := to_text(s)) is not None:
+    elif _is_open(dt_obj) and (s_text := to_text(s)) is not None:
         s = s_text
         try:
             out = _dt.datetime.strptime(s, fmt)
@@ -506,7 +573,7 @@ def _date_of_2(dt_obj, d, trail, k):
         if unify(d, dt_obj.date(), trail):
             yield None
         return
-    if not is_var(dt_obj):
+    if not _is_open(dt_obj):
         expect_type(dt_obj, _dt.datetime, "date_of/2", arg=1)
         return
     if isinstance(d, _dt.date):
@@ -518,6 +585,9 @@ def _date_of_2(dt_obj, d, trail, k):
             yield None
     elif not is_var(d):
         expect_type(d, _dt.date, "date_of/2", arg=2)
+    elif not is_var(dt_obj):
+        # A partial datetime term and no Date: nothing to compute from.
+        raise LogicException(instantiation_error("date_of/2"))
 
 
 # ── days_between/3 — integer day count ────────────────────────────────────
@@ -615,7 +685,7 @@ def _ordinal_2(d, n, trail, k):
         if unify(n, d.toordinal(), trail):
             yield None
         return
-    if not is_var(d):
+    if not _is_open(d):
         expect_type(d, _dt.date, "ordinal/2", expected="date or datetime", arg=1)
         return
     if isinstance(n, int) and not isinstance(n, bool):
@@ -628,6 +698,9 @@ def _ordinal_2(d, n, trail, k):
             yield None
     elif not is_var(n):
         expect_type(n, int, "ordinal/2", arg=2)
+    elif not is_var(d):
+        # A partial date term (``date(Y, 3, 1)`` with Y unbound) and no N.
+        raise LogicException(instantiation_error("ordinal/2"))
 
 
 # ── weekday/2 — weekday ─────────────────────────────────────────────────
@@ -707,7 +780,7 @@ def _timestamp_2(dt_obj, stamp, trail, k):
             return
         if unify(stamp, out, trail):
             yield None
-    elif is_var(dt_obj) and isinstance(stamp, (int, float)) and not isinstance(stamp, bool):
+    elif _is_open(dt_obj) and isinstance(stamp, (int, float)) and not isinstance(stamp, bool):
         try:
             out = _dt.datetime.fromtimestamp(stamp)
         except (OverflowError, OSError, ValueError, TypeError) as exc:
@@ -742,7 +815,7 @@ def _datetime_string_iso_2(dt_obj, s, trail, k):
     if isinstance(dt_obj, _dt.datetime):
         if unify(s, text_result(dt_obj.isoformat()), trail):   # stage 1
             yield None
-    elif is_var(dt_obj) and (s_text := to_text(s)) is not None:
+    elif _is_open(dt_obj) and (s_text := to_text(s)) is not None:
         s = s_text
         try:
             out = _dt.datetime.fromisoformat(s)
@@ -768,7 +841,7 @@ def _date_string_iso_2(d_obj, s, trail, k):
     if isinstance(d_obj, _dt.date) and not isinstance(d_obj, _dt.datetime):
         if unify(s, text_result(d_obj.isoformat()), trail):   # stage 1
             yield None
-    elif is_var(d_obj) and (s_text := to_text(s)) is not None:
+    elif _is_open(d_obj) and (s_text := to_text(s)) is not None:
         s = s_text
         try:
             out = _dt.date.fromisoformat(s)

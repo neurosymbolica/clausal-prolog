@@ -911,6 +911,23 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **The date predicates see a date term whose component was bound in the
+  body.** `Y = 2025, ordinal(date(Y, 3, 1), N)` answered nothing, with no
+  error, in `.pl` (both front ends) and in the seam when the term was built
+  before `Y` was bound; a literal date or a head-bound `Y` worked. The
+  module's input conversion dereferenced only the outer term, so a
+  component that was a bound variable made the term look like a non-date.
+  It now walks the term. Every predicate of `py.datetime` /
+  `library(datetime)` is affected (`ordinal/2`, `date_add/3`,
+  `days_between/3`, `weekday/2`, ...). A date-family term that is still not
+  a date where one is required now RAISES instead of failing:
+  `instantiation_error` for an unbound component (`ordinal(date(_, 3, 1),
+  N)`), `type_error(integer, date(foo, 3, 1))` for an ill-typed one and
+  `domain_error(date, date(2025, 2, 30))` for an impossible one, as
+  `date/3` already did. A partial term is an output target where the
+  predicate can compute the date: `ordinal(date(Y, M, D), 739311)` binds
+  `Y = 2025, M = 3, D = 1`. A value of another type (`date_add(90, TD,
+  R)`) still fails with a diagnostic note, as before.
 - **`phrase/2,3` with an unbound grammar body raise
   `instantiation_error`**, as ISO and Scryer do: `phrase(_, L)`,
   `phrase(_, L, [])`, and so a variable grammar body (`v(B) --> B.`)
