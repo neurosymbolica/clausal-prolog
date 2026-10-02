@@ -16,7 +16,7 @@ Layers
    is_alpha/1, is_stop/1
 5. **NER** — entity/2,3, entity_list/2
 6. **Sentences** — sentence/2, sentence_list/2
-7. **similarity** — similarity/4
+7. **Similarity** — similarity/4
 8. **Noun chunks** — noun_chunk/2
 """
 

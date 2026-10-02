@@ -155,7 +155,7 @@ all_names = _AllNamesPredicate()
 #
 # Initialized eagerly at first import of this module.  scipy.constants is a
 # pure-Python file (just a dict lookup) so loading it is negligible.
-# unit predicate objects from py.units are used as dimension keys, matching
+# Unit predicate objects from py.units are used as dimension keys, matching
 # the convention in py.units itself.
 
 def _init_quantities():
