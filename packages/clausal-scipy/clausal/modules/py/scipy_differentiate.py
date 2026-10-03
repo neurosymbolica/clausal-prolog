@@ -78,6 +78,11 @@ def _diff():
 
 # ── Result conversion ──────────────────────────────────────────────────────
 
+def _np_generic():
+    import numpy  # noqa: PLC0415 -- scipy's own dependency
+    return numpy.generic
+
+
 def _rich_result_to_dict(r, output_key: str) -> dict:
     """Convert a scipy _RichResult to a plain dict with all available fields."""
     # The set of available fields varies by function (derivative has 'x' and
@@ -91,8 +96,9 @@ def _rich_result_to_dict(r, output_key: str) -> dict:
             continue
         # A scalar call gives NumPy scalars (np.True_, np.int32(...)): hand
         # them back as the Python bool/int/float they stand for, so a goal
-        # like ``OK == True`` compares them.  Arrays are left alone.
-        if hasattr(value, "item") and getattr(value, "ndim", None) == 0:
+        # like ``OK == True`` compares them.  Only bool/int/float NumPy
+        # SCALARS (np.generic); arrays, 0-d ones included, are left alone.
+        if isinstance(value, _np_generic()) and value.dtype.kind in "biuf":
             value = value.item()
         result[field] = value
     return result

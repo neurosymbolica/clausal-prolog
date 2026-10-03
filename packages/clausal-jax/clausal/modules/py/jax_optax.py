@@ -107,6 +107,7 @@ other key-consumers.
 
 from __future__ import annotations
 
+import functools as _functools
 import threading as _threading
 
 from clausal.modules.py._helpers import _pred as _base_pred, _pure
@@ -157,6 +158,7 @@ def _needs_optax(name, arity, dispatch):
     the check cannot live there."""
     context = f"{name}/{arity}"
 
+    @_functools.wraps(dispatch)
     def run(this_generator, _proceed, _fail, _catcher, *args):
         _ensure_optax(context)
         yield from dispatch(this_generator, _proceed, _fail, _catcher, *args)
@@ -165,7 +167,9 @@ def _needs_optax(name, arity, dispatch):
 
 def _pred(name, *arity_fns):
     """``_pred`` for an optax-backed predicate: every arity checks that
-    optax is importable before it runs."""
+    optax is importable before it runs.  Register every predicate of this
+    module through it (not ``_base_pred``), or a missing optax reads as
+    "no solutions" again."""
     return _base_pred(name, *((arity, _needs_optax(name, arity, fn))
                               for arity, fn in arity_fns))
 

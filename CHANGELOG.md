@@ -1034,8 +1034,8 @@ since 0.4.0 finish three moves:
 - **Package suites green again (`python -m pytest packages`).** The 201
   failures were triaged per package (`todo/package-suite-triage-*-2026-10-04.md`)
   and fixed against current engine semantics:
-  `py.jax` / `py.torch` fall back to JAX / PyTorch for a public name they do
-  not define, so `-import_module(jax)` + `++(jax.numpy.sum(X))` and
+  `py.jax` / `py.torch` fall back to a JAX / PyTorch submodule or class
+  they do not define (not a function), so `-import_module(jax)` + `++(jax.numpy.sum(X))` and
   `torch.nn.Linear(10, 5)` work under the bare-name alias; a `_property_2`
   adapter's check mode accepts the TEXT its query mode binds (`device(A, D),
   device(A, D)` holds); clausal-scipy's `derivative/jacobian/hessian` hand

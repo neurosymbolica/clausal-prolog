@@ -70,6 +70,9 @@ test("device_platform is cpu on CI") <- (
 
 # A Python str a predicate hands back is TEXT (the chars list), so a
 # platform or axis name is checked against the atom with atom_chars/2.
+# Whether such NAMES should cross as atoms instead is an open question
+# (todo/package-suite-triage-clausal-jax-2026-10-04.md); these checks
+# change with it.
 
 # --- device_of on a freshly-made array ---
 

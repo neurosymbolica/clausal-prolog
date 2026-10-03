@@ -780,3 +780,16 @@ class TestTorchModuleForwardsToTorch:
         import clausal.modules.py.torch as pt
         with pytest.raises(AttributeError):
             pt.no_such_attribute_anywhere
+
+    def test_functions_are_not_forwarded(self):
+        import clausal.modules.py.torch as pt
+        with pytest.raises(AttributeError):
+            pt.randn_like
+
+    def test_missing_torch_is_a_missing_attribute(self, monkeypatch):
+        import clausal.modules.py.torch as pt
+
+        def absent():
+            raise ModuleNotFoundError("No module named 'torch'", name="torch")
+        monkeypatch.setattr(pt, "_th", absent)
+        assert getattr(pt, "nn", "default") == "default"

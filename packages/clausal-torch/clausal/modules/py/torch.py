@@ -214,6 +214,7 @@ Pure tensor linear algebra via torch.linalg.
 from __future__ import annotations
 
 import threading as _threading
+import types as _types
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
@@ -1101,15 +1102,21 @@ def __getattr__(name):
         _DTYPE_CACHE = _export_dtypes()
     if name in _DTYPE_CACHE:
         return _DTYPE_CACHE[name]
-    # Anything else public is PyTorch's own attribute.  ``torch`` in a
-    # source file's imports names THIS module (the bare ``torch`` ->
-    # ``py.torch`` alias), so ``-import_module(torch)`` followed by
-    # ``MODEL is torch.nn.Linear(10, 5)`` reaches PyTorch through here.
+    # A public SUBMODULE or CLASS of PyTorch.  ``torch`` in a source
+    # file's imports names THIS module (the bare ``torch`` -> ``py.torch``
+    # alias), so ``-import_module(torch)`` followed by ``MODEL is
+    # torch.nn.Linear(10, 5)`` reaches PyTorch through here.  Functions
+    # are NOT forwarded (``-import_from(torch, [randn_like])`` must stay an
+    # unknown name), and a missing PyTorch is a missing attribute here,
+    # never an ImportError out of ``hasattr``.
     if not name.startswith("_"):
         try:
-            return getattr(_th(), name)
-        except AttributeError:
-            pass
+            th = _th()
+        except ImportError:
+            th = None
+        value = getattr(th, name, None) if th is not None else None
+        if isinstance(value, (_types.ModuleType, type)):
+            return value
     raise AttributeError(f"module 'clausal.modules.py.torch' has no attribute {name!r}")
 
 

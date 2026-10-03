@@ -289,6 +289,7 @@ starts. See https://docs.jax.dev/en/latest/notebooks/Common_Gotchas_in_JAX.html#
 from __future__ import annotations
 
 import threading as _threading
+import types as _types
 
 from clausal.modules.py._helpers import (
     _pred, _pure, _property_2, _bidir_2, _bidir_3_mid, _bidir_3_split,
@@ -1327,16 +1328,21 @@ def __getattr__(name):
     if name in _CONST_ALIASES:
         _ensure_jax()
         return getattr(_jnp, _CONST_ALIASES[name])
-    # Anything else public is JAX's own attribute.  ``jax`` in a source
-    # file's imports names THIS module (the bare ``jax`` -> ``py.jax``
-    # alias), so ``-import_module(jax)`` followed by ``++(jax.numpy.sum(X))``
-    # or ``++(jax.nn.initializers.constant(0.5))`` reaches JAX through here.
+    # A public SUBMODULE or CLASS of JAX.  ``jax`` in a source file's
+    # imports names THIS module (the bare ``jax`` -> ``py.jax`` alias), so
+    # ``-import_module(jax)`` followed by ``++(jax.numpy.sum(X))``,
+    # ``jax.nn.initializers.constant(0.5)`` or ``jax.ShapeDtypeStruct(...)``
+    # reaches JAX through here.  Functions (``jax.grad``) are NOT forwarded:
+    # ``-import_from(jax, [grad])`` must stay an unknown name, not bind a
+    # Python function where a predicate was meant.  A missing JAX is a
+    # missing attribute here, never an ImportError out of ``hasattr``.
     if not name.startswith("_"):
-        _ensure_jax()
         try:
-            return getattr(_jax, name)
-        except AttributeError:
-            pass
+            value = getattr(_jx(), name, None)
+        except ImportError:
+            value = None
+        if isinstance(value, (_types.ModuleType, type)):
+            return value
     raise AttributeError(f"module 'clausal.modules.py.jax' has no attribute {name!r}")
 
 

@@ -1364,3 +1364,21 @@ class TestJaxModuleForwardsToJax:
             pj._no_such_private
         with pytest.raises(AttributeError):
             pj.no_such_attribute_anywhere
+
+    def test_functions_are_not_forwarded(self):
+        # -import_from(jax, [grad]) must stay an unknown name, not bind
+        # JAX's grad FUNCTION where a predicate was meant.
+        import clausal.modules.py.jax as pj
+        with pytest.raises(AttributeError):
+            pj.grad
+        with pytest.raises(AttributeError):
+            pj.vmap
+
+    def test_missing_jax_is_a_missing_attribute(self, monkeypatch):
+        import clausal.modules.py.jax as pj
+
+        def absent():
+            raise ModuleNotFoundError("No module named 'jax'", name="jax")
+        monkeypatch.setattr(pj, "_jx", absent)
+        assert not hasattr(pj, "numpy_like_name_not_defined_here")
+        assert getattr(pj, "nn", "default") == "default"
