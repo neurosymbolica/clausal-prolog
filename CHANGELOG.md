@@ -1031,6 +1031,18 @@ since 0.4.0 finish three moves:
 
 ### Changed
 
+- **`module_signatures` lists a `ModulePredicate` subclass that overrides
+  `_get_dispatch`.** Such an adapter dispatches without its `_dispatch_fns`
+  table, so an empty table no longer hides it: it is listed with the arity
+  its dispatch function's parameters give, or an EMPTY set ("a predicate,
+  arities unknown") when that takes `*args`. Only an adapter keeping the
+  base `_get_dispatch` with nothing registered (a unit or currency
+  constant) is still left out. `has_predicate` / `defines_predicate` now
+  answer True for these adapters, a native `use_module(py/M, [name/N])`
+  accepts them at any arity, and a BARE `name` entry for one is a bare
+  predicate atom that imports nothing (it was imported as a value). The
+  `_get_dispatch` protocol is unchanged.
+
 - **A gate reads the names Python modules REGISTER as predicates.**
   `tests/test_python_predicate_name_gate.py` imports every module under
   `clausal/modules/` and `packages/*/clausal/modules/` from source (in a

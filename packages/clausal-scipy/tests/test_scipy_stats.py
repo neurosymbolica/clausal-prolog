@@ -998,3 +998,21 @@ class TestScipyStatsFixture:
     def test_fixture(self, name):
         # nv
         assert _succeeds("test", name, module=self.mod), f"Test({name!r}) failed"
+
+
+# ── module_signatures lists the dispatch-overriding adapters ──────────────
+
+def test_module_signatures_lists_the_dispatch_overriding_adapters():
+    # These adapters override _get_dispatch and register no arity in
+    # _dispatch_fns; they dispatch on *args, so they are listed with an
+    # EMPTY arity set ("a predicate, arities unknown"), never left out.
+    import clausal.modules.py.scipy_interpolate as interp
+    import clausal.modules.py.scipy_stats as stats
+    from clausal.logic.solve import module_signatures
+
+    sig = module_signatures(stats)
+    for name in ("stats_dist", "stats_freeze_dist", "stats_frozen_pdf",
+                 "stats_frozen_cdf", "stats_frozen_rvs", "stats_frozen_stats",
+                 "stats_frozen_free"):
+        assert sig.get(name) == frozenset(), name
+    assert module_signatures(interp).get("free") == frozenset()

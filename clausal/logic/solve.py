@@ -1223,9 +1223,11 @@ def module_signatures(module: Any) -> dict:
       - a PYTHON-BACKED module (``clausal.modules.*``, ``py.*`` and any Python
         module whose public attributes are predicate adapters, i.e. objects
         carrying ``_get_dispatch``): each public attribute that registers at
-        least one arity.  An adapter keeping a ``_dispatch_fns`` table
-        (``ModulePredicate`` and its subclasses) answers from that table's
-        keys; one that does not answers from the parameter list of the
+        least one arity.  An adapter keeping a non-empty ``_dispatch_fns``
+        table (``ModulePredicate`` and its subclasses) answers from that
+        table's keys; one that does not -- including a ``ModulePredicate``
+        subclass that overrides ``_get_dispatch`` and leaves the table
+        empty -- answers from the parameter list of the
         function its ``_get_dispatch()`` returns
         (``this_generator, _proceed, _fail, _catcher, *args, trail``).  An
         adapter whose dispatch takes ``*args`` has no discoverable arity: it
@@ -1288,7 +1290,17 @@ def _adapter_arities(value: Any) -> "set | None":
     table = getattr(value, "_dispatch_fns", None)
     if isinstance(table, dict):
         arities = {a for a in table if type(a) is int and a >= 0}
-        return arities or None
+        if arities:
+            return arities
+        # An EMPTY table says "no predicate" only when the table is what
+        # dispatch reads, i.e. the adapter keeps ModulePredicate's own
+        # ``_get_dispatch`` (a unit or currency constant).  A subclass that
+        # overrides ``_get_dispatch`` dispatches without the table, so it
+        # is a predicate: read its arity off the function it returns.
+        from clausal.modules.py import ModulePredicate  # noqa: PLC0415
+        if (getattr(type(value), "_get_dispatch", None)
+                is ModulePredicate._get_dispatch):
+            return None
     import inspect  # noqa: PLC0415
     try:
         params = list(inspect.signature(get_dispatch()).parameters.values())

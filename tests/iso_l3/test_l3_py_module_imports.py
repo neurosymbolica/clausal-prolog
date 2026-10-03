@@ -120,6 +120,38 @@ def test_an_adapter_without_a_table_answers_from_its_dispatch():
         "fixed": frozenset({2}), "varargs": frozenset()}
 
 
+def test_a_module_predicate_overriding_get_dispatch_is_listed():
+    # A ModulePredicate subclass that overrides _get_dispatch and never
+    # registers an arity (the table stays EMPTY) is still a predicate: its
+    # dispatch does not read the table.  Only an adapter keeping the base
+    # _get_dispatch with an empty table (a unit/currency constant) is not.
+    import types
+    from clausal.logic.solve import defines_predicate, has_predicate
+    from clausal.modules.py import ModulePredicate
+
+    class Varargs(ModulePredicate):
+        def _get_dispatch(self):
+            return self._run
+
+        def _run(self, this_generator, _proceed, _fail, _catcher, *args):
+            yield from ()
+
+    class Fixed(ModulePredicate):
+        def _get_dispatch(self):
+            def run(this_generator, _proceed, _fail, _catcher, a, b, c, trail):
+                yield from ()
+            return run
+
+    m = types.ModuleType("d28_mp_override")
+    m.anyarity, m.three = Varargs("anyarity"), Fixed("three")
+    m.constant = ModulePredicate("constant")     # base dispatch, no arity
+    assert clausal.module_signatures(m) == {
+        "anyarity": frozenset(), "three": frozenset({3})}
+    assert has_predicate(m, "anyarity", 4) and defines_predicate(m, "anyarity")
+    assert has_predicate(m, "three", 3) and not has_predicate(m, "three", 2)
+    assert not has_predicate(m, "constant")
+
+
 def test_an_unknown_module_name_is_an_existence_error():
     with pytest.raises(LogicException) as ei:
         clausal.module_signatures("no_such_module_d28")
