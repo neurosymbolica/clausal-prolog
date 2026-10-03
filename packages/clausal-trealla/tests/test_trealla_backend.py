@@ -437,14 +437,16 @@ class TestTreallaDialectFeatures:
         prolog = clausal_source_to_prolog(src, dialect=_TREALLA)
         assert "member" in prolog
 
-    def test_trealla_cut(self):
-        """Cut is preserved through roundtrip."""
+    def test_trealla_cut_is_refused(self):
+        """Cut is refused by design (Clausal is cut-free): translating a
+        clause with ``!`` raises, naming the cut -- it is not dropped or
+        silently rewritten."""
         # nv
-        from clausal.tools.prolog_to_clausal import prolog_to_clausal
+        from clausal.tools.prolog_to_clausal import (
+            PrologTranslationError, prolog_to_clausal)
         src = "foo(X) :- X > 0, !."
-        clausal = prolog_to_clausal(src, dialect=_TREALLA)
-        prolog2 = clausal_source_to_prolog(clausal, dialect=_TREALLA)
-        assert "!" in prolog2 or "cut" in prolog2
+        with pytest.raises(PrologTranslationError, match=r"Cut \(!/0\)"):
+            prolog_to_clausal(src, dialect=_TREALLA)
 
 
 # ═══════════════════════════════════════════════════════════════════════
