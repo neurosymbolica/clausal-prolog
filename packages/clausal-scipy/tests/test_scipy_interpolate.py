@@ -563,7 +563,7 @@ class TestSplineUnits:
         # Evaluate at x=1.0 second
         result = _drive(eval_spline, handle, Quantity(1.0, {second: 1}))
         assert isinstance(result, Quantity), f"Expected Quantity, got {type(result)}"
-        assert dict(result.dims) == {metre: 1}
+        assert dict(result.dims) == {"metre": 1}
         assert float(result.value) == pytest.approx(1.0, abs=0.1)
         _drive(free, handle)
 
@@ -589,7 +589,7 @@ class TestSplineUnits:
                           Quantity(0.0, {second: 1}), Quantity(2.0, {second: 1}))
         assert isinstance(integral, Quantity), f"Expected Quantity, got {type(integral)}"
         # integral of (m/s) over (s) = m
-        assert dict(integral.dims) == {metre: 1}
+        assert dict(integral.dims) == {"metre": 1}
         assert float(integral.value) == pytest.approx(2.0, abs=0.1)
         _drive(free, handle)
 
@@ -605,7 +605,7 @@ class TestSplineUnits:
         # Evaluate derivative: dy/dx has dims metre/second
         result = _drive(eval_spline, deriv_handle, Quantity(1.0, {second: 1}))
         assert isinstance(result, Quantity), f"Expected Quantity, got {type(result)}"
-        assert dict(result.dims) == {metre: 1, second: -1}
+        assert dict(result.dims) == {"metre": 1, "second": -1}
         _drive(free, handle)
         _drive(free, deriv_handle)
 
@@ -618,7 +618,7 @@ class TestSplineUnits:
         assert handle is not None
         result = _drive(eval_spline, handle, Quantity(1.0, {second: 1}), 1)
         assert isinstance(result, Quantity)
-        assert dict(result.dims) == {metre: 1, second: -1}
+        assert dict(result.dims) == {"metre": 1, "second": -1}
         _drive(free, handle)
 
     def test_make_cubic_with_units(self):
@@ -630,6 +630,6 @@ class TestSplineUnits:
         assert handle is not None
         result = _drive(eval_spline, handle, Quantity(1.5, {second: 1}))
         assert isinstance(result, Quantity)
-        assert dict(result.dims) == {metre: 1}
+        assert dict(result.dims) == {"metre": 1}
         assert float(result.value) == pytest.approx(3.0, abs=0.1)
         _drive(free, handle)

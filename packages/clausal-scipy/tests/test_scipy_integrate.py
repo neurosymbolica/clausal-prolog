@@ -563,7 +563,7 @@ class TestTrapezoidUnits:
         assert result is not None
         assert isinstance(result, Quantity), f"Expected Quantity, got {type(result)}"
         assert result.value == pytest.approx(20.0)
-        assert dict(result.dims) == {metre: 1}
+        assert dict(result.dims) == {"metre": 1}
 
     def test_trapezoid_plain_fast_path(self):
         """Plain arrays → plain result, unchanged."""
@@ -581,7 +581,7 @@ class TestTrapezoidUnits:
         result = _drive(simpson, y, x)
         assert result is not None
         assert isinstance(result, Quantity)
-        assert dict(result.dims) == {newton: 1, metre: 1}
+        assert dict(result.dims) == {"newton": 1, "metre": 1}
 
     def test_cumulative_trapezoid_with_units(self):
         """cumulative_trapezoid with Quantity y and x."""
@@ -591,7 +591,7 @@ class TestTrapezoidUnits:
         result = _drive(cumulative_trapezoid, y, x)
         assert result is not None
         assert isinstance(result, Quantity)
-        assert dict(result.dims) == {metre: 1}
+        assert dict(result.dims) == {"metre": 1}
         np.testing.assert_allclose(result.value, [5.0, 20.0])
 
     def test_trapezoid_y_only_with_units(self):
@@ -601,7 +601,7 @@ class TestTrapezoidUnits:
         result = _drive(trapezoid, y)
         assert result is not None
         assert isinstance(result, Quantity)
-        assert dict(result.dims) == {newton: 1}
+        assert dict(result.dims) == {"newton": 1}
 
 
 class TestQuadUnits:
@@ -621,7 +621,7 @@ class TestQuadUnits:
         # Actually f(x) = x * k. x is Quantity(val, {M:1}), k is Quantity(9.8, {N:1,M:-1})
         # f(x) = Quantity(val*9.8, {N:1}). So f_dims = {N:1}.
         # out_dims = f_dims + x_dims = {N:1, M:1}
-        assert dict(v.dims) == {newton: 1, metre: 1}
+        assert dict(v.dims) == {"newton": 1, "metre": 1}
 
     def test_quad_plain_function(self):
         """f returns plain float → result value is plain."""
@@ -651,4 +651,4 @@ class TestQuadUnits:
         assert result is not None
         err = result['error']
         assert isinstance(err, Quantity)
-        assert dict(err.dims) == {newton: 1, metre: 1}
+        assert dict(err.dims) == {"newton": 1, "metre": 1}

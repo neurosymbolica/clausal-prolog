@@ -60,7 +60,7 @@ class TestSpeedOfLight:
     def test_value(self):             assert _val(SpeedOfLight) == pytest.approx(299792458.0)
     def test_dims(self):
         # nv
-        assert _dims(SpeedOfLight) == {_u.metre: 1, _u.second: -1}
+        assert _dims(SpeedOfLight) == {"metre": 1, "second": -1}
 
 
 class TestPlanckConstant:
@@ -70,7 +70,7 @@ class TestPlanckConstant:
     def test_value(self):             assert _val(PlanckConstant) == pytest.approx(6.62607015e-34)
     def test_dims(self):
         # nv
-        assert _dims(PlanckConstant) == {_u.kilogram: 1, _u.metre: 2, _u.second: -1}
+        assert _dims(PlanckConstant) == {"kilogram": 1, "metre": 2, "second": -1}
 
 
 class TestReducedPlanckConstant:
@@ -91,7 +91,7 @@ class TestGravitationalConstant:
     def test_value(self):             assert _val(GravitationalConstant) == pytest.approx(6.6743e-11)
     def test_dims(self):
         # nv
-        assert _dims(GravitationalConstant) == {_u.metre: 3, _u.kilogram: -1, _u.second: -2}
+        assert _dims(GravitationalConstant) == {"metre": 3, "kilogram": -1, "second": -2}
 
 
 class TestAvogadroConstant:
@@ -101,7 +101,7 @@ class TestAvogadroConstant:
     def test_value(self):             assert _val(AvogadroConstant) == pytest.approx(6.02214076e23)
     def test_dims(self):
         # nv
-        assert _dims(AvogadroConstant) == {_u.mole: -1}
+        assert _dims(AvogadroConstant) == {"mole": -1}
 
 
 class TestBoltzmannConstant:
@@ -112,7 +112,7 @@ class TestBoltzmannConstant:
     def test_dims(self):
         # nv
         assert _dims(BoltzmannConstant) == {
-            _u.kilogram: 1, _u.metre: 2, _u.second: -2, _u.kelvin: -1}
+            "kilogram": 1, "metre": 2, "second": -2, "kelvin": -1}
 
 
 class TestElementaryCharge:
@@ -122,7 +122,7 @@ class TestElementaryCharge:
     def test_value(self):             assert _val(ElementaryCharge) == pytest.approx(1.602176634e-19)
     def test_dims(self):
         # nv
-        assert _dims(ElementaryCharge) == {_u.ampere: 1, _u.second: 1}
+        assert _dims(ElementaryCharge) == {"ampere": 1, "second": 1}
 
 
 class TestElectronMass:
@@ -132,7 +132,7 @@ class TestElectronMass:
     def test_value(self):             assert _val(ElectronMass) == pytest.approx(9.1093837139e-31)
     def test_dims(self):
         # nv
-        assert _dims(ElectronMass) == {_u.kilogram: 1}
+        assert _dims(ElectronMass) == {"kilogram": 1}
 
 
 class TestProtonMass:
@@ -142,7 +142,7 @@ class TestProtonMass:
     def test_value(self):             assert _val(ProtonMass) == pytest.approx(1.67262192595e-27)
     def test_dims(self):
         # nv
-        assert _dims(ProtonMass) == {_u.kilogram: 1}
+        assert _dims(ProtonMass) == {"kilogram": 1}
     def test_heavier_than_electron(self):
         # nv
         assert _val(ProtonMass) > _val(ElectronMass)
@@ -155,7 +155,7 @@ class TestElectronVolt:
     def test_value(self):             assert _val(ElectronVolt) == pytest.approx(1.602176634e-19)
     def test_dims_are_energy(self):
         # nv
-        assert _dims(ElectronVolt) == {_u.kilogram: 1, _u.metre: 2, _u.second: -2}
+        assert _dims(ElectronVolt) == {"kilogram": 1, "metre": 2, "second": -2}
     def test_matches_elementary_charge_value(self):
         # nv
         assert _val(ElectronVolt) == pytest.approx(_val(ElementaryCharge))
@@ -168,7 +168,7 @@ class TestStandardAtmosphere:
     def test_value(self):             assert _val(StandardAtmosphere) == pytest.approx(101325.0)
     def test_dims_are_pressure(self):
         # nv
-        assert _dims(StandardAtmosphere) == {_u.kilogram: 1, _u.metre: -1, _u.second: -2}
+        assert _dims(StandardAtmosphere) == {"kilogram": 1, "metre": -1, "second": -2}
 
 
 # ── SI prefix factors ─────────────────────────────────────────────────────

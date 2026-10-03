@@ -636,11 +636,15 @@ class TestStatsNormalPdf:
         expected = float(scipy_stats.norm.pdf(1.0, loc=1.0, scale=1.0))
         assert abs(r - expected) < 1e-9
 
-    def test_wrong_arity_returns_none(self):
-        # 2-arity loc+scale call expects 4-arg form; wrong arity should fail
+    def test_wrong_arity_raises(self):
+        # Arity 3 is not registered (2 and 4 are): existence_error, not a
+        # silent failure.
         # nv
-        r = _drive(stats_normal_pdf, 0.0, 1.0)  # arity 3 — not registered
-        assert r is None
+        from clausal.logic.exceptions import LogicException
+        with pytest.raises(LogicException) as info:
+            _drive(stats_normal_pdf, 0.0, 1.0)
+        assert info.value.term[1] == ("existence_error", "procedure",
+                                      ("/", "stats_normal_pdf", 3))
 
 
 # ── TestStatsNormalCdf ──────────────────────────────────────────────────────

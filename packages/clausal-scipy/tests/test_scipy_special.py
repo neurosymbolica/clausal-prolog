@@ -603,15 +603,19 @@ class TestPredicateMeta:
         # nv
         assert callable(factorial._get_dispatch())
 
-    def test_unknown_arity_fails(self):
-        """Calling factorial with 4 positional args (arity 4, unregistered) fails."""
+    def test_unknown_arity_raises(self):
+        """Calling factorial at an unregistered arity (4) raises
+        existence_error(procedure, factorial/4); it is not a silent failure."""
         # nv
+        from clausal.logic.exceptions import LogicException
         trail = Trail()
         result = Var()
         dispatch = factorial._get_dispatch()
         gen = dispatch(None, None, None, None, 5, True, "extra", result, trail)
-        items = list(gen)
-        assert any(s[1] is DONE for s in items)
+        with pytest.raises(LogicException) as info:
+            list(gen)
+        assert info.value.term[1] == ("existence_error", "procedure",
+                                      ("/", "factorial", 4))
 
 
 # ── Fixture integration ─────────────────────────────────────────────────────
