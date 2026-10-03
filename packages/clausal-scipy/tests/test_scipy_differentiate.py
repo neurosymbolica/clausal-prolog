@@ -361,7 +361,7 @@ class TestDerivativeUnits:
         x = result["x"]
         assert isinstance(x, Quantity), f"Expected Quantity, got {type(x)}"
         assert x.value == pytest.approx(3.0)
-        assert dict(x.dims) == {metre: 1}
+        assert dict(x.dims) == {"metre": 1}
 
     def test_derivative_error_has_df_units(self):
         """Error estimate has same units as df."""
@@ -453,3 +453,13 @@ class TestHessianUnits:
         result = _drive(hessian, lambda x: x[0]**2 + x[1]**2, np.array([1.0, 2.0]))
         assert result is not None
         assert not isinstance(result["ddf"], Quantity)
+
+
+def test_scalar_result_fields_are_python_scalars():
+    # scipy's result object subclasses dict and holds NumPy scalars; the
+    # result dict hands back Python bool/int, so `OK == True` compares.
+    # nv
+    result = _drive(derivative, lambda x: x, 1.0)
+    assert type(result) is dict
+    assert result["success"] is True
+    assert type(result["nfev"]) is int

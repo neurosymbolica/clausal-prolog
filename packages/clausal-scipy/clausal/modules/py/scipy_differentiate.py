@@ -86,9 +86,15 @@ def _rich_result_to_dict(r, output_key: str) -> dict:
     result = {}
     for field in candidate_fields:
         try:
-            result[field] = getattr(r, field)
+            value = getattr(r, field)
         except AttributeError:
-            pass
+            continue
+        # A scalar call gives NumPy scalars (np.True_, np.int32(...)): hand
+        # them back as the Python bool/int/float they stand for, so a goal
+        # like ``OK == True`` compares them.  Arrays are left alone.
+        if hasattr(value, "item") and getattr(value, "ndim", None) == 0:
+            value = value.item()
+        result[field] = value
     return result
 
 
@@ -243,11 +249,10 @@ def _dispatch_fn_quantity(call: Callable, output_key: str) -> Callable:
         inputs = [deref(x) for x in args[:-2]]
         try:
             out = call(*inputs)
-            if isinstance(out, dict):
-                # Quantity-aware call returned a dict directly
-                pass
-            else:
-                # Plain scipy result object — convert to dict
+            if type(out) is not dict:
+                # Plain scipy result object -- convert to dict.  (scipy's
+                # _RichResult SUBCLASSES dict, so isinstance would wrongly
+                # pass it through unconverted, NumPy scalars and all.)
                 out = _rich_result_to_dict(out, output_key)
         except UnitsMismatch:
             raise
