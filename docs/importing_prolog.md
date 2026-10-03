@@ -132,13 +132,69 @@ cut: such a `use_module` is refused at load with
 Clausal Prolog, or wrap it in a `.seam` module, and import that. When a
 `.seam` or Clausal Prolog file sits beside the `.pl` of the same name, the
 finders pick it and the import is allowed. Seam modules may still import
-`.pl` modules (the rest of this page). Clausal Prolog has no file
-extension of its own until the extension flip, when it takes over
-`.clausal`; until then nothing is refused.
+`.pl` modules (the rest of this page): `.seam` is the Python boundary and
+the rule does not bind it. Since the extension flip Clausal Prolog is
+`.clausal`.
+
+### No run-time route either
+
+The rule is not only about `use_module`. A Clausal Prolog clause may not
+reach a `.pl` module at run time by any route; each raises the same ISO
+error, which `catch/3` can match:
+
+```prolog
+error(permission_error(access, prolog_module, M), Context)
+```
+
+| route (from a `.clausal` clause) | example |
+|---|---|
+| a qualified goal written in the clause | `q(X) :- legacy:p(X).` |
+| `call/N` of a qualified goal or closure built at run time | `G = legacy:p(X), call(G)`, `call(legacy:p, X)`, `maplist(legacy:p, L)` |
+| assert/retract into the module | `assertz(legacy:f(a))`, `retract(legacy:f(_))`, `retractall(legacy:f(_))` |
+| reading its clauses | `clause(legacy:f(X), B)` |
+| a nonterminal | `phrase(legacy:greeting, L)` |
+
+The module that ANSWERS decides: in `m1:m2:G` that is `m2`, as in ISO. A
+Python module named the same way (`json:dumps(...)`) is refused with
+`permission_error(access, python_module, M)`: Clausal Prolog reaches Python
+only through a `.seam` module. A seam or `.pl` caller never pays for the
+check, and Python code calling `solve()` is not checked (Python is the
+programmer's responsibility).
+
+**Closures from `.pl` (the one place the rule bites the allowed
+direction).** A `.pl` module may call a Clausal Prolog meta-predicate, but a
+`-meta_predicate` argument is qualified with the CALLER's module, so the
+closure arrives as `pl_module:G`. Running it from the Clausal Prolog frame
+is a call into `.pl`, and is refused (ruled: strict for closures too):
+
+```prolog
+% kit.clausal
+:- module(kit, [app/1, hello/0]).
+:- meta_predicate(app(0)).
+app(G) :- call(G).
+hello.
+:- end_module(kit).
+```
+
+```prolog
+% legacy.pl
+:- module(legacy, [mine/0, theirs/0]).
+:- use_module(kit, [app/1]).
+own.
+mine :- app(own).            % permission_error(access, prolog_module, legacy)
+theirs :- app(kit:hello).    % fine: the closure names Clausal Prolog code
+```
+
+Pass the `.pl` code a closure into Clausal Prolog (or `.seam`) code
+instead, or convert the predicate the closure names.
 
 ---
 
 ## Importing data names from a `.pl` module
+
+This section is about SEAM (`.seam`) importers and `.pl` importers. A
+Clausal Prolog (`.clausal`) module may not import a `.pl` module at all
+([above](#which-way-imports-may-go)).
 
 A `.pl` module's export list holds only `name/arity` predicates, and data
 needs no declaration. So a seam `-import_from` of a name that the `.pl`
@@ -291,6 +347,10 @@ SWI load `m` and import nothing. Write `use_module(m)` or
 predicate `m` exports, in Clausal, Scryer and Trealla alike.
 
 ### Unexported predicates in Clausal code
+
+"Clausal code" here is a seam (`.seam`) or `.pl` importer: a Clausal
+Prolog (`.clausal`) module may not import a `.pl` module at all, exported
+predicate or not ([above](#which-way-imports-may-go)).
 
 In Clausal code, importing a predicate that a `.pl` module defines but does
 not list in its `module/2` export list is a load-time `ImportError` carrying
@@ -469,6 +529,9 @@ became a comment and the import vanished, and a quoted one failed with
 When two modules export the same name, import them without a list (or
 without that name) and call each one **module-qualified**, as in ISO and
 Scryer: `m:p(X)` crosses as Clausal's qualified call `m.p(X)`.
+In a Clausal Prolog (`.clausal`) file, `m` may not be a `.pl` module: the
+call raises `permission_error(access, prolog_module, m)` when it runs
+([above](#no-run-time-route-either)).
 
 ```prolog
 :- use_module(small_sizes).

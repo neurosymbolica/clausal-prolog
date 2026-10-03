@@ -77,6 +77,8 @@ import sys
 from typing import Any
 
 from clausal.logic.variables import deref, is_var
+from clausal.logic.dialect_edge import (
+    _CACHE as _DIALECT_CACHE, refuse_edge as _refuse_dialect_edge)
 
 __all__ = [
     "FUNCTOR_SIGNATURES_KEY",
@@ -497,7 +499,7 @@ MAX_QUALIFICATION_DEPTH = 64
 def resolve_qualified_goal_cell(
     cell: Any, context: str, calling_module: Any = None,
     *, call_extra: "int | None" = None, qualified_culprit: bool = False,
-    phrase_args: "tuple | None" = None,
+    phrase_args: "tuple | None" = None, dialect_gate: bool = True,
 ) -> tuple:
     """Resolve the module-qualified goal cell ``(":", M, G)`` to ``(module, G)``.
 
@@ -585,6 +587,17 @@ def resolve_qualified_goal_cell(
     layer of a chain counts (``nosuchmod:7:foo`` is the type error too); a
     clause lookup or an assert into ``M:`` (no *call_extra*) is unchanged.
     *phrase_args* (phrase/2,3): the S0/S pair, for Scryer's phrase culprit.
+
+    THE ONE-WAY DEPENDENCY EDGE (operator ruling 2026-10-01; routes 2-4 of
+    the dialect gate): when *calling_module* was loaded from Clausal Prolog
+    and the module that ANSWERS (the innermost) is a ``.pl`` or Python
+    module, the resolution raises ``permission_error(access, prolog_module,
+    M)`` (``python_module`` for Python) -- see :mod:`clausal.logic.
+    dialect_edge`.  Every run-time builtin that resolves ``M:X`` for a
+    clause body (call/N, assert/retract, clause/2, phrase/2,3) passes its
+    own database's module here, so this one site gates them all.
+    *dialect_gate* False is for Python-side ``solve()`` (route 5: Python is
+    the programmer's responsibility by ruling).
     """
     from clausal.logic.solve import resolve_module  # noqa: PLC0415 -- see the
     from clausal.logic.variables import deref       # note in
@@ -594,6 +607,7 @@ def resolve_qualified_goal_cell(
 
     module = None
     goal = cell
+    caller = calling_module if dialect_gate else None
     for _ in range(MAX_QUALIFICATION_DEPTH + 1):
         ok, functor = compound_cell_shape(goal)
         if not (ok and functor == QUALIFIED_GOAL_FUNCTOR and len(goal) == 3):
@@ -645,6 +659,13 @@ def resolve_qualified_goal_cell(
             f"{MAX_QUALIFICATION_DEPTH} deep, or is cyclic — there is no "
             f"innermost goal to run and so no module that answers",
         ))
+    if (caller is not None and module is not None
+            and getattr(caller, _DIALECT_CACHE, None) is not False):
+        # Clausal Prolog may never resolve into a .pl (or Python) module --
+        # innermost wins, so ``pl:cp:G`` naming a Clausal Prolog module last
+        # is allowed and ``cp:pl:G`` is not.  A .seam/.pl caller pays one
+        # cached attribute read (the getattr above), not a call.
+        _refuse_dialect_edge(caller, module, context)
     # THE FLIP (spec §6.4): the ``str`` → ``(str,)`` wrap that used to sit
     # here is gone — a ``str`` inner goal is a STRING, which is not callable,
     # and the caller (``_resolve_named_goal`` / ``_term_to_goal``) is where

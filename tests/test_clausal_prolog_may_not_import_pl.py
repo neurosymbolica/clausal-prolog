@@ -181,12 +181,14 @@ def test_ensure_loaded_is_not_a_directive(flip, tree):
     assert "unknown directive ensure_loaded/1" in _refused(tree, "cpn_elimp")
 
 
-def test_a_qualified_call_into_a_loaded_pl_module_still_runs(flip, tree):
-    """TODAY'S BEHAVIOUR, CLOSED BY ROUTE 2 (the dialect gate; ruled
-    strict).  The native front end resolves ``M:G`` at run time, never at
-    load, so a Clausal Prolog clause calling ``cpn_q:p(X)`` loads, and the
-    call runs once other code has loaded the ``.pl`` module.  When route 2
-    lands this test fails: replace it with the refusal."""
+def test_a_qualified_call_into_a_loaded_pl_module_is_refused(flip, tree):
+    """Route 2 of the dialect gate (ruled strict; formerly the positive pin
+    ``test_a_qualified_call_into_a_loaded_pl_module_still_runs``).  The
+    native front end resolves ``M:G`` at run time, never at load, so a
+    Clausal Prolog clause calling ``cpn_q:p(X)`` still LOADS; once other
+    code has loaded the ``.pl`` module the CALL raises route 1's term.
+    Every run-time route is pinned in ``tests/test_dialect_gate_routes.py``."""
+    from clausal.logic.exceptions import LogicException
     tree.write("cpn_q.pl", _PL_LIB.format(m="cpn_q", v=1))
     tree.write("cpn_qimp.clausal",
                ":- module(cpn_qimp, [q/1]).\nq(X) :- cpn_q:p(X).\n"
@@ -196,7 +198,10 @@ def test_a_qualified_call_into_a_loaded_pl_module_still_runs(flip, tree):
     pl = tree.load("cpn_q")         # loaded by someone else
     assert pl.__file__.endswith("cpn_q.pl")
     assert type(pl.__loader__) is ih._prolog_loader_class_for(pl.__file__)
-    assert _q(mod) == [1]           # route 2 makes this a prolog_module refusal
+    with pytest.raises(LogicException) as ei:
+        _q(mod)
+    assert ei.value.term[1] == (
+        "permission_error", "access", "prolog_module", "cpn_q")
 
 
 # ── YES: a Clausal Prolog module importing what it may ──

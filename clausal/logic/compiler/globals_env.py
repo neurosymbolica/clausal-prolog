@@ -1074,6 +1074,44 @@ def _is_injected_runtime_attr(owner, name: str, value) -> bool:
     return injected is not None and injected.get(name, _MISSING) is value
 
 
+def _clausal_prolog_db(db) -> bool:
+    """True when *db* (the compiling module's) is Clausal Prolog."""
+    from clausal.logic.dialect_edge import is_clausal_prolog_caller  # noqa: PLC0415
+    return db is not None and is_clausal_prolog_caller(db)
+
+
+def _dotted_base(parts: list, globals_) -> Any:
+    """The module object the qualifier of a dotted call ``a.b.name`` names:
+    walked from this module's own binding of ``a``, else ``sys.modules``.
+    None when it is not loaded (or the qualifier binds an atom)."""
+    base = globals_.get(parts[0]) if globals_ else None
+    if _term_is_atom(base):
+        base = None
+    for part in parts[1:-1]:
+        if base is None:
+            break
+        base = getattr(base, part, None)
+    if base is None:
+        base = _sys.modules.get(".".join(parts[:-1]))
+    return base
+
+
+def _edge_kind(base) -> "str | None":
+    if base is None:
+        return None
+    from clausal.logic.dialect_edge import forbidden_kind  # noqa: PLC0415
+    return forbidden_kind(base)
+
+
+def _refused_edge_dispatch(kind: str, base, dotted: str, arity: int):
+    """A dispatch that raises the dialect gate's refusal when called --
+    at run time, so ``catch/3`` sees it, as for an unknown procedure."""
+    def dispatch(*_args):
+        from clausal.logic.dialect_edge import edge_error  # noqa: PLC0415
+        raise edge_error(kind, base, f"{dotted.rsplit('.', 1)[-1]}/{arity}")
+    return dispatch
+
+
 def _unresolved_qualified_dispatch(dotted: str, arity: int, globals_, db):
     """The dispatch for a module-qualified call ``m.name(...)`` at *arity*
     that resolved to nothing when the clause set was compiled.
@@ -1099,22 +1137,22 @@ def _unresolved_qualified_dispatch(dotted: str, arity: int, globals_, db):
     base_path, name = ".".join(parts[:-1]), parts[-1]
 
     def resolve_base():
-        base = globals_.get(parts[0]) if globals_ else None
-        if _term_is_atom(base):
-            # An ATOM binding of the qualifier is data (the atom pool binds
-            # a module name the file also writes as a term, e.g. inside
-            # ``call(m:G)``): it names the module, it is not the module.
-            base = None
-        for part in parts[1:-1]:
-            if base is None:
-                break
-            base = getattr(base, part, None)
-        if base is None:
-            base = _sys.modules.get(base_path)
-        return base
+        # An ATOM binding of the qualifier is data (the atom pool binds a
+        # module name the file also writes as a term, e.g. inside
+        # ``call(m:G)``): it names the module, it is not the module.
+        return _dotted_base(parts, globals_)
 
     def dispatch(*args):
         base = resolve_base()
+        # Asked per call (cached on the db after the first definite answer),
+        # never frozen at compile time: a db whose ``__file__`` was not yet
+        # known then must not compile the gate away.
+        if _clausal_prolog_db(db):
+            # The dialect gate (route 2) for a base that loaded after this
+            # clause set compiled: Clausal Prolog never calls into .pl.
+            kind = _edge_kind(base)
+            if kind is not None:
+                return _refused_edge_dispatch(kind, base, dotted, arity)(*args)
         module_name = _clausal_module_name_of(base)
         if module_name is not None:
             from clausal.logic.atoms import mangle  # noqa: PLC0415
@@ -1335,6 +1373,20 @@ def _inject_resolved_targets(
                     base_globals[target_name] = own
                     continue
             parts = target_name.split(".")
+            if target_arity >= 0 and _clausal_prolog_db(db):
+                # Route 2 of the dialect gate (operator ruling 2026-10-01):
+                # a Clausal Prolog clause's written ``m:p(...)`` (lowered to
+                # the dotted call) whose module is a LOADED .pl or Python
+                # module is refused when the call runs.  A module not yet
+                # loaded takes ``_unresolved_qualified_dispatch``, which asks
+                # the same question when it resolves the base.
+                _base = _dotted_base(parts, globals_)
+                _kind = _edge_kind(_base)
+                if _kind is not None:
+                    base_globals[_disp_key(target_name, target_arity)] = (
+                        _refused_edge_dispatch(_kind, _base, target_name,
+                                               target_arity))
+                    continue
             obj = globals_.get(parts[0]) if globals_ else None
             if target_arity >= 0 and _term_is_atom(obj):
                 # A call qualified by a name bound to an ATOM (data -- the
