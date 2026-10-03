@@ -109,7 +109,7 @@ from __future__ import annotations
 
 import threading as _threading
 
-from clausal.modules.py._helpers import _pred, _pure
+from clausal.modules.py._helpers import _pred as _base_pred, _pure
 from clausal.modules.py.jax import _ensure_jax  # noqa: F401 — surfaces JAX dep
 
 
@@ -121,7 +121,11 @@ _optax = None
 _optax_lock = _threading.Lock()
 
 
-def _ensure_optax():
+def _ensure_optax(context=""):
+    """Import optax once.  When it is not installed, raise the ISO
+    ``existence_error(module, optax)`` -- never a silent failure.  An
+    optax that is installed but fails to import (one of ITS dependencies is
+    missing) is not reported as absent: that error propagates as it is."""
     global _optax
     if _optax is not None:
         return
@@ -129,12 +133,41 @@ def _ensure_optax():
         if _optax is not None:
             return
         from clausal.modules.py import _import_stdlib
-        _optax = _import_stdlib("optax")
+        try:
+            _optax = _import_stdlib("optax")
+        except ModuleNotFoundError as exc:
+            if exc.name != "optax":
+                raise
+            from clausal.logic.exceptions import (  # noqa: PLC0415
+                LogicException, existence_error)
+            raise LogicException(existence_error(
+                "module", "optax",
+                f"{context}: optax is not installed" if context
+                else "optax is not installed")) from None
 
 
 def _ox():
     _ensure_optax()
     return _optax
+
+
+def _needs_optax(name, arity, dispatch):
+    """*dispatch* behind an optax presence check made OUTSIDE it: the
+    ``_pure`` wrapper turns any exception in its function into failure, so
+    the check cannot live there."""
+    context = f"{name}/{arity}"
+
+    def run(this_generator, _proceed, _fail, _catcher, *args):
+        _ensure_optax(context)
+        yield from dispatch(this_generator, _proceed, _fail, _catcher, *args)
+    return run
+
+
+def _pred(name, *arity_fns):
+    """``_pred`` for an optax-backed predicate: every arity checks that
+    optax is importable before it runs."""
+    return _base_pred(name, *((arity, _needs_optax(name, arity, fn))
+                              for arity, fn in arity_fns))
 
 
 # ═══════════════════════════════════════════════════════════════════════════

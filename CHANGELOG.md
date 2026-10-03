@@ -1031,6 +1031,12 @@ since 0.4.0 finish three moves:
 
 ### Changed
 
+- **clausal-jax: `py.jax_optax` raises when optax is not installed.**
+  Every predicate of the module checks that optax imports before it runs
+  and raises `error(existence_error(module, optax), Name/Arity)`; it used
+  to fail, so a query answered "no solutions". An optax that is installed
+  but cannot import one of its own dependencies is not reported as absent.
+
 - **`module_signatures` lists a `ModulePredicate` subclass that overrides
   `_get_dispatch`.** Such an adapter dispatches without its `_dispatch_fns`
   table, so an empty table no longer hides it: it is listed with the arity
