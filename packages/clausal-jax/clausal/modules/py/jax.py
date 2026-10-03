@@ -1327,6 +1327,16 @@ def __getattr__(name):
     if name in _CONST_ALIASES:
         _ensure_jax()
         return getattr(_jnp, _CONST_ALIASES[name])
+    # Anything else public is JAX's own attribute.  ``jax`` in a source
+    # file's imports names THIS module (the bare ``jax`` -> ``py.jax``
+    # alias), so ``-import_module(jax)`` followed by ``++(jax.numpy.sum(X))``
+    # or ``++(jax.nn.initializers.constant(0.5))`` reaches JAX through here.
+    if not name.startswith("_"):
+        _ensure_jax()
+        try:
+            return getattr(_jax, name)
+        except AttributeError:
+            pass
     raise AttributeError(f"module 'clausal.modules.py.jax' has no attribute {name!r}")
 
 

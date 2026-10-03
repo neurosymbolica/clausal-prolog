@@ -1345,3 +1345,22 @@ class TestJaxFlaxInfrastructure:
         assert 5 in impl.apply_with_rngs._dispatch_fns
         # max_pool: /3 and /4
         assert {3, 4} <= set(impl.max_pool._dispatch_fns.keys())
+
+
+class TestJaxModuleForwardsToJax:
+    """``jax`` in a source file's imports names py.jax (the bare-name
+    alias), so ``++(jax.numpy...)`` reaches JAX through py.jax."""
+
+    def test_unknown_public_attribute_is_jax_own(self):
+        import jax as real_jax
+        import clausal.modules.py.jax as pj
+        assert pj.numpy is real_jax.numpy
+        assert pj.nn is real_jax.nn
+        assert pj.ShapeDtypeStruct is real_jax.ShapeDtypeStruct
+
+    def test_private_and_missing_names_still_raise(self):
+        import clausal.modules.py.jax as pj
+        with pytest.raises(AttributeError):
+            pj._no_such_private
+        with pytest.raises(AttributeError):
+            pj.no_such_attribute_anywhere

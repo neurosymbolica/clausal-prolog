@@ -1101,6 +1101,15 @@ def __getattr__(name):
         _DTYPE_CACHE = _export_dtypes()
     if name in _DTYPE_CACHE:
         return _DTYPE_CACHE[name]
+    # Anything else public is PyTorch's own attribute.  ``torch`` in a
+    # source file's imports names THIS module (the bare ``torch`` ->
+    # ``py.torch`` alias), so ``-import_module(torch)`` followed by
+    # ``MODEL is torch.nn.Linear(10, 5)`` reaches PyTorch through here.
+    if not name.startswith("_"):
+        try:
+            return getattr(_th(), name)
+        except AttributeError:
+            pass
     raise AttributeError(f"module 'clausal.modules.py.torch' has no attribute {name!r}")
 
 

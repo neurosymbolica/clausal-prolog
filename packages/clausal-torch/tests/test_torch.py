@@ -763,3 +763,20 @@ class TestTorchInfra:
         # squeeze should have arity 2 and 3
         assert 2 in impl.squeeze._dispatch_fns
         assert 3 in impl.squeeze._dispatch_fns
+
+
+class TestTorchModuleForwardsToTorch:
+    """``torch`` in a source file's imports names py.torch (the bare-name
+    alias), so ``torch.nn.Linear(10, 5)`` reaches PyTorch through py.torch."""
+
+    def test_unknown_public_attribute_is_torch_own(self):
+        import torch as real_torch
+        import clausal.modules.py.torch as pt
+        assert pt.nn is real_torch.nn
+        # The adapter's own predicates are not shadowed.
+        assert pt.tensor is not real_torch.tensor
+
+    def test_missing_name_still_raises(self):
+        import clausal.modules.py.torch as pt
+        with pytest.raises(AttributeError):
+            pt.no_such_attribute_anywhere
