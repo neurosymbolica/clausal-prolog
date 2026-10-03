@@ -90,7 +90,11 @@ def _property_2(getter):
             if unify(value_var, text_result(actual), trail):
                 yield (_proceed, None)
         else:
-            if actual == v:
+            # Check mode accepts what query mode binds (a str property is
+            # TEXT, so ``p(X, V), p(X, V)`` holds) as well as the bare str
+            # spelling (the atom) it has always accepted.
+            if actual == v or (type(actual) is str
+                               and text_result(actual) == v):
                 yield (_proceed, None)
         yield (_fail, DONE)
     return dispatch

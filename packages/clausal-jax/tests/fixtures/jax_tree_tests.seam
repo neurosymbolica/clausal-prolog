@@ -194,12 +194,12 @@ test("tree_reduce counts leaves") <- (
 
 test("keystr renders dict + index path") <- (
     keystr((("key", "a"), ("index", 0)), S),
-    S == "['a'][0]"
+    atom_chars('[\'a\'][0]', S)
 )  # nv
 
 test("keystr on empty path") <- (
     keystr((), S),
-    S == ""
+    atom_chars('', S)
 )  # nv
 
 # --- showcase: findall pattern over pytree ---

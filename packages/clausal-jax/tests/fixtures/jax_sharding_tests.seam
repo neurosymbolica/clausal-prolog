@@ -52,7 +52,8 @@ test("device_id forward") <- (
 
 test("device_id reverse") <- (
     device_id(D, 0),
-    device_platform(D, "cpu")
+    device_platform(D, P),
+    atom_chars('cpu', P)
 )  # nv
 
 test("device_id enumerates all pairs when unbound") <- (
@@ -64,8 +65,11 @@ test("device_id enumerates all pairs when unbound") <- (
 test("device_platform is cpu on CI") <- (
     jax_device(D),
     device_platform(D, P),
-    P == "cpu"
+    atom_chars('cpu', P)
 )  # nv
+
+# A Python str a predicate hands back is TEXT (the chars list), so a
+# platform or axis name is checked against the atom with atom_chars/2.
 
 # --- device_of on a freshly-made array ---
 
@@ -109,21 +113,23 @@ test("mesh_devices has length matching mesh size") <- (
 test("mesh_devices list pattern match") <- (
     make_mesh([1], ["x"], MESH),
     mesh_devices(MESH, [D, *_REST_UNUSED]),
-    device_platform(D, "cpu")
+    device_platform(D, P),
+    atom_chars('cpu', P)
 )  # nv
 
 # --- PartitionSpec and sharding construction ---
 
 test("partition_spec single axis") <- (
     partition_spec(["x"], P),
-    partition_spec(AXES, P),
-    AXES == ["x"]
+    partition_spec([X1], P),
+    atom_chars('x', X1)
 )  # nv
 
 test("partition_spec with None unsharded") <- (
     partition_spec(["x", null], P),
-    partition_spec(AXES, P),
-    AXES == ["x", null]
+    partition_spec([X1, NONE], P),
+    atom_chars('x', X1),
+    NONE == null
 )  # nv
 
 test("named_sharding construction succeeds") <- (
