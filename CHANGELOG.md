@@ -1031,6 +1031,19 @@ since 0.4.0 finish three moves:
 
 ### Changed
 
+- **Package suites green again (`python -m pytest packages`).** The 201
+  failures were triaged per package (`todo/package-suite-triage-*-2026-10-04.md`)
+  and fixed against current engine semantics:
+  `py.jax` / `py.torch` fall back to JAX / PyTorch for a public name they do
+  not define, so `-import_module(jax)` + `++(jax.numpy.sum(X))` and
+  `torch.nn.Linear(10, 5)` work under the bare-name alias; a `_property_2`
+  adapter's check mode accepts the TEXT its query mode binds (`device(A, D),
+  device(A, D)` holds); clausal-scipy's `derivative/jacobian/hessian` hand
+  back a plain dict of Python scalars instead of scipy's raw result object;
+  clausal-sympy compares symbolic results with `sym_equal/2` (`==` is
+  arithmetic and raises on a SymPy expression); tests updated for unit-atom
+  dims keys, the F005 wrong-arity error and the cut refusal.
+
 - **clausal-jax: `py.jax_optax` raises when optax is not installed.**
   Every predicate of the module checks that optax imports before it runs
   and raises `error(existence_error(module, optax), Name/Arity)`; it used
