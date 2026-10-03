@@ -13,36 +13,36 @@ test("simplify cancellation") <- simplify(X**2 + 2*X + 1 - (X + 1)**2, 0)  # nv
 
 test("simplify fraction") <- (
     simplify((X**2 - 1) / (X - 1), R),
-    R == X + 1
+    sym_equal(R, X + 1)
 )  # nv
 
 # ── expand/2 ─────────────────────────────────────────────────────────────────
 
 test("expand square") <- (
     expand((X + 1)**2, R),
-    R == X**2 + 2*X + 1
+    sym_equal(R, X**2 + 2*X + 1)
 )  # nv
 
 test("expand product") <- (
     expand((X + 1) * (X - 1), R),
-    R == X**2 - 1
+    sym_equal(R, X**2 - 1)
 )  # nv
 
 test("expand cube") <- (
     expand((X + 1)**3, R),
-    R == X**3 + 3*X**2 + 3*X + 1
+    sym_equal(R, X**3 + 3*X**2 + 3*X + 1)
 )  # nv
 
 # ── factor/2 ─────────────────────────────────────────────────────────────────
 
 test("factor diff of squares") <- (
     factor(X**2 - 1, R),
-    R == (X - 1) * (X + 1)
+    sym_equal(R, (X - 1) * (X + 1))
 )  # nv
 
 test("factor quadratic") <- (
     factor(X**2 + 5*X + 6, R),
-    R == (X + 2) * (X + 3)
+    sym_equal(R, (X + 2) * (X + 3))
 )  # nv
 
 # ── solve/3: nondeterministic ────────────────────────────────────────────────
@@ -80,7 +80,7 @@ test("solve all cubic") <- (
 
 test("diff power rule") <- (
     diff(X**3, X, R),
-    R == 3*X**2
+    sym_equal(R, 3*X**2)
 )  # nv
 
 test("diff constant") <- (
@@ -90,24 +90,24 @@ test("diff constant") <- (
 
 test("diff sum") <- (
     diff(X**2 + 3*X + 1, X, R),
-    R == 2*X + 3
+    sym_equal(R, 2*X + 3)
 )  # nv
 
 test("diff partial") <- (
     diff(X*Y + X**2, X, R),
-    R == Y + 2*X
+    sym_equal(R, Y + 2*X)
 )  # nv
 
 # ── integrate/2,3 ────────────────────────────────────────────────────────────
 
 test("integrate power") <- (
     integrate(X**2, X, R),
-    R == X**3 / 3
+    sym_equal(R, X**3 / 3)
 )  # nv
 
 test("integrate sum") <- (
     integrate(3*X**2 + 2*X, X, R),
-    R == X**3 + X**2
+    sym_equal(R, X**3 + X**2)
 )  # nv
 
 # ── limit/4 ──────────────────────────────────────────────────────────────────
@@ -126,7 +126,7 @@ test("limit 1/x at inf") <- (
 
 test("series 1/(1-x) to 4") <- (
     series(1/(1-X), X, 4, R),
-    R == 1 + X + X**2 + X**3
+    sym_equal(R, 1 + X + X**2 + X**3)
 )  # nv
 
 # ── sym_equal/2 still works for explicit use ─────────────────────────────────
@@ -148,7 +148,7 @@ test("sym_equal nontrivial") <- (
 
 test("== reorder") <- (
     expand(X*Y, R),
-    R == Y*X
+    sym_equal(R, Y*X)
 )  # nv
 
 # ── sym_str/2 — readable string output ───────────────────────────────────────
@@ -168,13 +168,13 @@ test("sym_str expression") <- (
 test("expand then factor roundtrip") <- (
     expand((X + 2) * (X + 3), EXP),
     factor(EXP, F),
-    F == (X + 2) * (X + 3)
+    sym_equal(F, (X + 2) * (X + 3))
 )  # nv
 
 test("diff then integrate roundtrip") <- (
     diff(X**4, X, D),
     integrate(D, X, I),
-    I == X**4
+    sym_equal(I, X**4)
 )  # nv
 
 test("solve then verify") <- (
@@ -187,7 +187,7 @@ test("solve then verify") <- (
 
 test("expand multivar") <- (
     expand((X + Y)**2, R),
-    R == X**2 + 2*X*Y + Y**2
+    sym_equal(R, X**2 + 2*X*Y + Y**2)
 )  # nv
 
 # ── sym/2 still works when you want named symbols ──────────────────────────

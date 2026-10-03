@@ -6,48 +6,48 @@
 
 test("collect by x") <- (
     collect(X**2 + 2*X + X*Y, X, R),
-    R == X**2 + X*(Y + 2)
+    sym_equal(R, X**2 + X*(Y + 2))
 )  # nv
 
 test("collect constant") <- (
     collect(3*X + 2*X, X, R),
-    R == 5*X
+    sym_equal(R, 5*X)
 )  # nv
 
 # ── cancel/2 ─────────────────────────────────────────────────────────────────
 
 test("cancel common factor") <- (
     cancel((X**2 - 1) / (X - 1), R),
-    R == X + 1
+    sym_equal(R, X + 1)
 )  # nv
 
 test("cancel already simple") <- (
     cancel(X + 1, R),
-    R == X + 1
+    sym_equal(R, X + 1)
 )  # nv
 
 # ── apart/2,3 ────────────────────────────────────────────────────────────────
 
 test("apart simple") <- (
     apart(1 / (X**2 - 1), R),
-    R == 1/(2*(X - 1)) - 1/(2*(X + 1))
+    sym_equal(R, 1/(2*(X - 1)) - 1/(2*(X + 1)))
 )  # nv
 
 test("apart explicit var") <- (
     apart(1 / (X**2 - 1), X, R),
-    R == 1/(2*(X - 1)) - 1/(2*(X + 1))
+    sym_equal(R, 1/(2*(X - 1)) - 1/(2*(X + 1)))
 )  # nv
 
 # ── together/2 ───────────────────────────────────────────────────────────────
 
 test("together fractions") <- (
     together(1/X + 1/Y, R),
-    R == (X + Y) / (X * Y)
+    sym_equal(R, (X + Y) / (X * Y))
 )  # nv
 
 test("together single") <- (
     together(1/X, R),
-    R == 1/X
+    sym_equal(R, 1/X)
 )  # nv
 
 # ── degree/2,3 ───────────────────────────────────────────────────────────────

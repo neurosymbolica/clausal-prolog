@@ -17,7 +17,7 @@
 
 test("symbolic equality via ==") <- (
     diff(X**3, X, R),
-    R == 3*X**2
+    sym_equal(R, 3*X**2)
 )  # nv
 
 # ── Chaining ────────────────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ test("symbolic equality via ==") <- (
 test("chaining diff integrate") <- (
     diff(X**4, X, D),
     integrate(D, X, I),
-    I == X**4
+    sym_equal(I, X**4)
 )  # nv
 
 # ── simplify/2 ──────────────────────────────────────────────────────────────
@@ -34,31 +34,31 @@ test("simplify cancellation") <- simplify(X**2 + 2*X + 1 - (X + 1)**2, 0)  # nv
 
 test("simplify fraction") <- (
     simplify((X**2 - 1) / (X - 1), R),
-    R == X + 1
+    sym_equal(R, X + 1)
 )  # nv
 
 # ── expand/2 ────────────────────────────────────────────────────────────────
 
 test("expand square") <- (
     expand((X + 1)**2, R),
-    R == X**2 + 2*X + 1
+    sym_equal(R, X**2 + 2*X + 1)
 )  # nv
 
 test("expand multivar") <- (
     expand((X + Y)**2, R),
-    R == X**2 + 2*X*Y + Y**2
+    sym_equal(R, X**2 + 2*X*Y + Y**2)
 )  # nv
 
 # ── factor/2 ────────────────────────────────────────────────────────────────
 
 test("factor diff of squares") <- (
     factor(X**2 - 1, R),
-    R == (X - 1) * (X + 1)
+    sym_equal(R, (X - 1) * (X + 1))
 )  # nv
 
 test("factor quadratic") <- (
     factor(X**2 + 5*X + 6, R),
-    R == (X + 2) * (X + 3)
+    sym_equal(R, (X + 2) * (X + 3))
 )  # nv
 
 # ── solve/3 ─────────────────────────────────────────────────────────────────
@@ -85,7 +85,7 @@ test("solve all quadratic") <- (
 
 test("diff power rule") <- (
     diff(X**3, X, R),
-    R == 3*X**2
+    sym_equal(R, 3*X**2)
 )  # nv
 
 test("diff sin") <- (
@@ -95,14 +95,14 @@ test("diff sin") <- (
 
 test("diff partial") <- (
     diff(X*Y + X**2, X, R),
-    R == Y + 2*X
+    sym_equal(R, Y + 2*X)
 )  # nv
 
 # ── integrate/2,3 ───────────────────────────────────────────────────────────
 
 test("integrate power") <- (
     integrate(X**2, X, R),
-    R == X**3 / 3
+    sym_equal(R, X**3 / 3)
 )  # nv
 
 test("integrate cos") <- (
@@ -131,35 +131,35 @@ test("limit sinx/x at 0") <- (
 
 test("series 1/(1-x) to 4") <- (
     series(1/(1-X), X, 4, R),
-    R == 1 + X + X**2 + X**3
+    sym_equal(R, 1 + X + X**2 + X**3)
 )  # nv
 
 # ── collect/3 ───────────────────────────────────────────────────────────────
 
 test("collect by x") <- (
     collect(X**2 + 2*X + X*Y, X, R),
-    R == X**2 + X*(Y + 2)
+    sym_equal(R, X**2 + X*(Y + 2))
 )  # nv
 
 # ── cancel/2 ────────────────────────────────────────────────────────────────
 
 test("cancel common factor") <- (
     cancel((X**2 - 1) / (X - 1), R),
-    R == X + 1
+    sym_equal(R, X + 1)
 )  # nv
 
 # ── apart/2 ─────────────────────────────────────────────────────────────────
 
 test("apart simple") <- (
     apart(1 / (X**2 - 1), R),
-    R == 1/(2*(X - 1)) - 1/(2*(X + 1))
+    sym_equal(R, 1/(2*(X - 1)) - 1/(2*(X + 1)))
 )  # nv
 
 # ── together/2 ──────────────────────────────────────────────────────────────
 
 test("together fractions") <- (
     together(1/X + 1/Y, R),
-    R == (X + Y) / (X * Y)
+    sym_equal(R, (X + Y) / (X * Y))
 )  # nv
 
 # ── degree/3 ────────────────────────────────────────────────────────────────
@@ -202,7 +202,7 @@ test("trig simp double angle") <- (
 
 test("expand trig sum") <- (
     expand_trig(sin(X + Y), R),
-    R == sin(X)*cos(Y) + sin(Y)*cos(X)
+    sym_equal(R, sin(X)*cos(Y) + sin(Y)*cos(X))
 )  # nv
 
 # ── is_prime/1 ───────────────────────────────────────────────────────────────
@@ -240,7 +240,7 @@ test("gcd integers") <- (
 
 test("gcd polynomials") <- (
     gcd(X**2 - 1, X - 1, R),
-    R == X - 1
+    sym_equal(R, X - 1)
 )  # nv
 
 test("lcm integers") <- (
@@ -252,7 +252,7 @@ test("lcm integers") <- (
 
 test("sum of i from 1 to N") <- (
     sum_(I, I, 1, N, R),
-    R == N*(N + 1)/2
+    sym_equal(R, N*(N + 1)/2)
 )  # nv
 
 test("sum of i^2 from 1 to 5") <- (
@@ -276,7 +276,7 @@ test("binomial 5 choose 2") <- (
 
 test("binomial symbolic") <- (
     binomial(N, 2, R),
-    R == N*(N - 1)/2
+    sym_equal(R, N*(N - 1)/2)
 )  # nv
 
 # ── latex/2 ─────────────────────────────────────────────────────────────────
@@ -338,7 +338,7 @@ test("diff sin cos") <- (
 
 test("simplify exp log") <- (
     simplify(exp(log(X)), R),
-    R == X
+    sym_equal(R, X)
 )  # nv
 
 # ── Constants ───────────────────────────────────────────────────────────────

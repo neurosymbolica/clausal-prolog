@@ -18,17 +18,17 @@ test("trig simp double angle") <- (
 
 test("expand trig sum") <- (
     expand_trig(sin(X + Y), R),
-    R == sin(X)*cos(Y) + sin(Y)*cos(X)
+    sym_equal(R, sin(X)*cos(Y) + sin(Y)*cos(X))
 )  # nv
 
 test("expand trig double") <- (
     expand_trig(cos(2*X), R),
-    R == 2*cos(X)**2 - 1
+    sym_equal(R, 2*cos(X)**2 - 1)
 )  # nv
 
 # ── Mixed: trig + calculus ───────────────────────────────────────────────────
 
 test("simplify exp log") <- (
     simplify(exp(log(X)), R),
-    R == X
+    sym_equal(R, X)
 )  # nv

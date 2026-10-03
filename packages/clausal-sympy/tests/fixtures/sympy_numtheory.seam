@@ -1,6 +1,6 @@
 -double_quotes(atom)
 -import_from(sympy, [is_prime, next_prime, factor_int, divisors,
-                             gcd, lcm])
+                             gcd, lcm, sym_equal])
 
 # ── is_prime/1 ────────────────────────────────────────────────────────────────
 
@@ -64,7 +64,7 @@ test("gcd integers") <- (
 
 test("gcd polynomials") <- (
     gcd(X**2 - 1, X - 1, R),
-    R == X - 1
+    sym_equal(R, X - 1)
 )  # nv
 
 # ── lcm/3 ─────────────────────────────────────────────────────────────────
@@ -76,5 +76,5 @@ test("lcm integers") <- (
 
 test("lcm polynomials") <- (
     lcm(X - 1, X + 1, R),
-    R == X**2 - 1
+    sym_equal(R, X**2 - 1)
 )  # nv

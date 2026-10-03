@@ -5,7 +5,7 @@
 
 test("sum of i from 1 to N") <- (
     sum_(I, I, 1, N, R),
-    R == N*(N + 1)/2
+    sym_equal(R, N*(N + 1)/2)
 )  # nv
 
 test("sum of i^2 from 1 to 5") <- (
@@ -15,7 +15,7 @@ test("sum of i^2 from 1 to 5") <- (
 
 test("sum of constants") <- (
     sum_(3, I_UNUSED, 1, N, R),
-    R == 3*N
+    sym_equal(R, 3*N)
 )  # nv
 
 # ── product/5 ─────────────────────────────────────────────────────────────
@@ -50,5 +50,5 @@ test("binomial 10 choose 10") <- (
 
 test("binomial symbolic") <- (
     binomial(N, 2, R),
-    R == N*(N - 1)/2
+    sym_equal(R, N*(N - 1)/2)
 )  # nv

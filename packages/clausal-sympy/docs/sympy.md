@@ -7,7 +7,7 @@ The `sympy` standard library module provides symbolic mathematics predicates bac
 
 test("diff sin") <- (
     diff(sin(X), X, R),
-    R == cos(X)
+    sym_equal(R, cos(X))
 )
 
 test("solve quadratic") <- (
@@ -53,9 +53,10 @@ Variables are auto-named alphabetically in discovery order: first Var → `x`, s
 
 when the same Var appears in multiple arguments to a predicate, it maps to the same Symbol.
 
-### Symbolic equality via `==`
+### Symbolic equality: `sym_equal/2`
 
-Predicate results are wrapped in `SymExpr`, which overrides `__eq__` to do symbolic comparison. This means Clausal's native `==` works for comparing symbolic results:
+Predicate results are SymPy expressions. Compare one with an expected
+expression with `sym_equal/2`:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:symbolic_equality"
@@ -63,7 +64,7 @@ Predicate results are wrapped in `SymExpr`, which overrides `__eq__` to do symbo
 
 This handles term reordering (SymPy may internally reorder `x + 1` to `1 + x`) and alpha-equivalence (different variable names between the result and the expected value).
 
-Numeric results (integers, floats) are collapsed to plain Python values, so `simplify(X - X, R), R == 0` works with ordinary equality.
+`==` is arithmetic comparison and does not compare symbolic expressions: `R == 3*X**2` with `R` bound to a SymPy result raises `domain_error(clpz_expression, ...)`. Numeric results (integers, floats) are collapsed to plain Python values, so `simplify(X - X, R), R == 0` still works with `==`.
 
 ### Chaining
 
@@ -73,7 +74,7 @@ Results from one predicate can be fed directly into another:
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:chaining"
 ```
 
-The `==` operator also preserves symbolic equality through chains:
+`sym_equal/2` also compares through chains:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:chaining_ex2"
@@ -358,7 +359,7 @@ Note: binding dicts with logic variable keys must be wrapped in `++()` so the Va
 
 #### sym_equal/2
 
-`sym_equal(A, B)` — explicit symbolic equality (usually `==` suffices, but `sym_equal` is available for cases where both sides are raw Clausal terms):
+`sym_equal(A, B)` — symbolic equality (`==` is arithmetic and does not compare symbolic expressions):
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:sym_equal_2"

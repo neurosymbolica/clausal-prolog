@@ -2,34 +2,34 @@
 
 --8<-- [start:symbolic_equality]
 diff(X**3, X, R),
-R == 3*X**2             # symbolic comparison, not structural
+sym_equal(R, 3*X**2)             # symbolic comparison, not structural
 --8<-- [end:symbolic_equality]
 
 --8<-- [start:chaining]
 diff(X**4, X, D),
 integrate(D, X, I),
-I == X**4
+sym_equal(I, X**4)
 --8<-- [end:chaining]
 
 --8<-- [start:chaining_ex2]
 diff(X**3, X, D),
-R == D + 1,
-R == 3*X**2 + 1
+sym_equal(R, D + 1),
+sym_equal(R, 3*X**2 + 1)
 --8<-- [end:chaining_ex2]
 
 --8<-- [start:simplify_2]
 simplify(X**2 + 2*X + 1 - (X + 1)**2, 0)
-simplify((X**2 - 1) / (X - 1), R),  R == X + 1
+simplify((X**2 - 1) / (X - 1), R),  sym_equal(R, X + 1)
 --8<-- [end:simplify_2]
 
 --8<-- [start:expand_2]
-expand((X + 1)**2, R),  R == X**2 + 2*X + 1
-expand((X + Y)**2, R),  R == X**2 + 2*X*Y + Y**2
+expand((X + 1)**2, R),  sym_equal(R, X**2 + 2*X + 1)
+expand((X + Y)**2, R),  sym_equal(R, X**2 + 2*X*Y + Y**2)
 --8<-- [end:expand_2]
 
 --8<-- [start:factor_2]
-factor(X**2 - 1, R),      R == (X - 1) * (X + 1)
-factor(X**2 + 5*X + 6, R), R == (X + 2) * (X + 3)
+factor(X**2 - 1, R),      sym_equal(R, (X - 1) * (X + 1))
+factor(X**2 + 5*X + 6, R), sym_equal(R, (X + 2) * (X + 3))
 --8<-- [end:factor_2]
 
 --8<-- [start:solve_3]
@@ -45,14 +45,14 @@ S == [-3, 3]
 --8<-- [end:solve_all_3]
 
 --8<-- [start:diff_2_3]
-diff(X**3, X, R),          R == 3*X**2
-diff(sin(X), X, R),        R == cos(X)
-diff(X*Y + X**2, X, R),    R == Y + 2*X    # partial derivative
+diff(X**3, X, R),          sym_equal(R, 3*X**2)
+diff(sin(X), X, R),        sym_equal(R, cos(X))
+diff(X*Y + X**2, X, R),    sym_equal(R, Y + 2*X)    # partial derivative
 --8<-- [end:diff_2_3]
 
 --8<-- [start:integrate_2_3]
-integrate(X**2, X, R),     R == X**3 / 3
-integrate(cos(X), X, R),   R == sin(X)
+integrate(X**2, X, R),     sym_equal(R, X**3 / 3)
+integrate(cos(X), X, R),   sym_equal(R, sin(X))
 --8<-- [end:integrate_2_3]
 
 --8<-- [start:limit_4]
@@ -63,25 +63,25 @@ limit(sin(X)/X, X, 0, R),  R == 1
 
 --8<-- [start:series_4_5]
 series(1/(1-X), X, 4, R),
-R == 1 + X + X**2 + X**3
+sym_equal(R, 1 + X + X**2 + X**3)
 --8<-- [end:series_4_5]
 
 --8<-- [start:collect_3]
 collect(X**2 + 2*X + X*Y, X, R),
-R == X**2 + X*(Y + 2)
+sym_equal(R, X**2 + X*(Y + 2))
 --8<-- [end:collect_3]
 
 --8<-- [start:cancel_2]
-cancel((X**2 - 1) / (X - 1), R),  R == X + 1
+cancel((X**2 - 1) / (X - 1), R),  sym_equal(R, X + 1)
 --8<-- [end:cancel_2]
 
 --8<-- [start:apart_2_3]
 apart(1 / (X**2 - 1), R),
-R == 1/(2*(X - 1)) - 1/(2*(X + 1))
+sym_equal(R, 1/(2*(X - 1)) - 1/(2*(X + 1)))
 --8<-- [end:apart_2_3]
 
 --8<-- [start:together_2]
-together(1/X + 1/Y, R),  R == (X + Y) / (X * Y)
+together(1/X + 1/Y, R),  sym_equal(R, (X + Y) / (X * Y))
 --8<-- [end:together_2]
 
 --8<-- [start:degree_2_3]
@@ -102,12 +102,12 @@ MULT == 2
 
 --8<-- [start:trig_simp_2]
 trig_simp(sin(X)**2 + cos(X)**2, R),  R == 1
-trig_simp(2 * sin(X) * cos(X), R),    R == sin(2*X)
+trig_simp(2 * sin(X) * cos(X), R),    sym_equal(R, sin(2*X))
 --8<-- [end:trig_simp_2]
 
 --8<-- [start:expand_trig_2]
 expand_trig(sin(X + Y), R),
-R == sin(X)*cos(Y) + sin(Y)*cos(X)
+sym_equal(R, sin(X)*cos(Y) + sin(Y)*cos(X))
 --8<-- [end:expand_trig_2]
 
 --8<-- [start:is_prime_1]
@@ -129,12 +129,12 @@ divisors(12, D),  D == [1, 2, 3, 4, 6, 12]
 
 --8<-- [start:gcd_lcm_3]
 gcd(12, 8, R),          R == 4
-gcd(X**2 - 1, X - 1, R), R == X - 1
+gcd(X**2 - 1, X - 1, R), sym_equal(R, X - 1)
 lcm(4, 6, R),            R == 12
 --8<-- [end:gcd_lcm_3]
 
 --8<-- [start:sum_5]
-sum_(I, I, 1, N, R),      R == N*(N + 1)/2
+sum_(I, I, 1, N, R),      sym_equal(R, N*(N + 1)/2)
 sum_(I**2, I, 1, 5, R),   R == 55
 --8<-- [end:sum_5]
 
@@ -144,7 +144,7 @@ product(I, I, 1, 5, R),  R == 120
 
 --8<-- [start:binomial_3]
 binomial(5, 2, R),   R == 10
-binomial(N, 2, R),   R == N*(N - 1)/2
+binomial(N, 2, R),   sym_equal(R, N*(N - 1)/2)
 --8<-- [end:binomial_3]
 
 --8<-- [start:latex_2]
@@ -182,8 +182,8 @@ S == "x**2 + 1"
 --8<-- [start:math_functions_usage]
 -import_from(sympy, [diff, sin, cos, exp, log, sqrt])
 
-diff(sin(X), X, R),  R == cos(X)
-simplify(exp(log(X)), R),  R == X
+diff(sin(X), X, R),  sym_equal(R, cos(X))
+simplify(exp(log(X)), R),  sym_equal(R, X)
 --8<-- [end:math_functions_usage]
 
 --8<-- [start:constants_usage]
