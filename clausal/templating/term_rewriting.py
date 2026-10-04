@@ -808,6 +808,27 @@ TITLECASE_IDENTIFIER_SEVERITY = "error"
 #: warning on it would name a rename the language itself does not perform.
 _TITLECASE_EXEMPT_NAMES = frozenset({"Undefined"})
 
+
+# ── the external-reference record (clausal.python_bridges) ─────────────────
+#
+# While a module is lowered, every resolution the COMPILER performs outside
+# the module -- each name an ``-import_from`` binds, each ``-import_module``,
+# each qualified-name chain it emits as a ``LoadAttr`` -- and every Python
+# route it lowers (a ``++`` escape, a Python f-string slot, a hosted
+# statement) is appended to the list in this context variable.  The bridge
+# gate decides Python-freedom from THIS record, the compiler's own output,
+# rather than from a second reading of the source.
+import contextvars as _contextvars
+
+_EXTERNAL_REFS: "_contextvars.ContextVar[list | None]" = (
+    _contextvars.ContextVar("clausal_external_refs", default=None))
+
+
+def _record_external(*ref) -> None:
+    sink = _EXTERNAL_REFS.get()
+    if sink is not None:
+        sink.append(ref)
+
 # ─── Keyword-argument lint ────────────────────────────────────────────────────
 #
 # A term is built POSITIONALLY.  ``point(x=1, y=2)`` is Python's keyword-call
@@ -3788,6 +3809,16 @@ class TermTransformer(NodeTransformer):
         parts = []
         node = attr_node
         while isinstance(node, Attribute):
+            # A qualified name is ``module.name``: an underscore-led part
+            # (``__class__``, ``__globals__``, ``_private``) names a Python
+            # object's own attribute, never a module's export, and walking
+            # one is how a "Python-free" module reaches arbitrary Python.
+            if node.attr.startswith("_"):
+                raise SyntaxError(
+                    f"`.{node.attr}` (line {attr_node.lineno}): an "
+                    f"underscore-led attribute is no qualified name -- a "
+                    f"qualified name is module.name.  Reach Python "
+                    f"attributes with a ++ escape")
             # A qualified name's attribute is a NAME component, never a
             # term -- ``mod.Pred`` is this docstring's own example of the
             # supported form, and ``prolog.TruncDiv``/``prolog.Rem`` are how
@@ -3817,10 +3848,25 @@ class TermTransformer(NodeTransformer):
                 f"Logic variable '{node.id}' cannot appear as the base "
                 f"of a qualified name (line {attr_node.lineno})"
             )
+        if node.id.startswith("_"):
+            raise SyntaxError(
+                f"`{node.id}` (line {attr_node.lineno}): an underscore-led "
+                f"name is no module -- a qualified name is module.name")
+        outermost = not getattr(transformer, "_in_qualified_chain", False)
+        if outermost:
+            _record_external("attr", node.id,
+                             transformer._import_remap.get(node.id),
+                             tuple(reversed(parts)),
+                             getattr(attr_node, "lineno", 0))
+        transformer._in_qualified_chain = True
+        try:
+            obj = transformer.visit(attr_node.value)
+        finally:
+            transformer._in_qualified_chain = not outermost
         return node_ast(
             "LoadAttr",
             attr_node,
-            object=transformer.visit(attr_node.value),
+            object=obj,
             attr=replace(Constant(value=attr_node.attr), attr_node),
         )
 
@@ -3858,6 +3904,9 @@ class TermTransformer(NodeTransformer):
         The compiler maps these Vars through ``var_context`` and emits
         ``thunk.fn(deref(_v0), deref(_v1), ...)``.
         """
+        from clausal.python_bridges import _inert_fstring  # noqa: PLC0415
+        if not _inert_fstring(node):
+            _record_external("python", "fstring", getattr(node, "lineno", 0))
         # Collect logic variable names from f-string interpolation values only.
         #
         # ``include_titlecase=False`` for the same reason as a ``++`` operand,
@@ -3994,6 +4043,8 @@ class TermTransformer(NodeTransformer):
         # question -- see ``_double_prefix_operand``.
         escaped = _python_escape_operand(unary_op)
         if escaped is not None:
+            _record_external("python", "escape",
+                             getattr(unary_op, "lineno", 0))
             expression = escaped
             var_names = _collect_logic_var_names(
                 expression, transformer._python_scope_exclusions())
@@ -8156,7 +8207,27 @@ class EmbedTransformer(NodeTransformer):
         transformer._expand_currency_tables(module)
         transformer._titlecase_prepass(module)
         _mark_arith_position_names(module)
-        result = transformer.generic_visit(module)
+        # The external-reference record (see ``_EXTERNAL_REFS``): a module
+        # statement that is not an expression is hosted Python.
+        refs: list = []
+        token = _EXTERNAL_REFS.set(refs)
+        try:
+            for stmt in getattr(module, "body", ()):
+                if isinstance(stmt, (Import, ImportFrom)):
+                    kind = "python_import"
+                elif isinstance(stmt, (FunctionDef, AsyncFunctionDef)):
+                    kind = "python_def"
+                elif isinstance(stmt, ClassDef):
+                    kind = "python_class"
+                elif not isinstance(stmt, Expr):
+                    kind = "python_statement"
+                else:
+                    continue
+                _record_external("python", kind, getattr(stmt, "lineno", 0))
+            result = transformer.generic_visit(module)
+        finally:
+            _EXTERNAL_REFS.reset(token)
+        transformer._external_refs = tuple(refs)
         transformer._lint_seam_text_compare(result, transformer._seam_exports[0])
         transformer._check_var_shaped_predicate_names()
         transformer._check_constant_name_is_free()
@@ -8582,6 +8653,7 @@ class EmbedTransformer(NodeTransformer):
         # their own copy, one of them without the test at all.
         expression = _double_prefix_operand(unary_op, USub)
         if expression is not None:
+            _record_external("python", "seam", getattr(unary_op, "lineno", 0))
             # THE SEAM: ``--term`` yields the runtime TERM, built at
             # the point of execution in the host module's namespace
             # (clausal.logic.seam.seam_term), never a rewriter node.
@@ -8811,6 +8883,8 @@ class EmbedTransformer(NodeTransformer):
                     # position as the arrow rule above.
                     transformer._lint_titlecase(lhs, root_is_functor=True)
                 else:
+                    _record_external("python", "python_statement",
+                                     getattr(expr_stmt, "lineno", 0))
                     return transformer.generic_visit(expr_stmt)
 
                 src = expr_stmt.value
@@ -8908,6 +8982,8 @@ class EmbedTransformer(NodeTransformer):
                     # call.
                     transformer._lint_titlecase(left, root_is_functor=True)
                 else:
+                    _record_external("python", "python_statement",
+                                     getattr(expr_stmt, "lineno", 0))
                     return transformer.generic_visit(expr_stmt)
 
                 _warn_cons_bar_head(orig_pos_args, orig_kw_args, expr_stmt,
@@ -9046,6 +9122,8 @@ class EmbedTransformer(NodeTransformer):
                         expr_stmt,
                     )
                 # Undeclared: guard so an undefined functor yields a comma hint.
+                _record_external("python", "python_statement",
+                                 getattr(expr_stmt, "lineno", 0))
                 return transformer._guard_bare_call(functor_name, expr_stmt)
             case Name(id=functor_name) if (
                 transformer._scope_depth == 0
@@ -9077,7 +9155,12 @@ class EmbedTransformer(NodeTransformer):
                     return transformer._build_zero_arity_fact_statements(
                         functor_name, expr_stmt.value, expr_stmt,
                     )
+                _record_external("python", "python_statement",
+                                 getattr(expr_stmt, "lineno", 0))
                 return transformer._guard_bare_call(functor_name, expr_stmt)
+        if transformer._scope_depth == 0:
+            _record_external("python", "python_statement",
+                             getattr(expr_stmt, "lineno", 0))
         return transformer.generic_visit(expr_stmt)
 
     def _handle_directive(transformer, name, args, expr_stmt):
@@ -10576,6 +10659,10 @@ class EmbedTransformer(NodeTransformer):
         # Aliases handle name collisions with Python's stdlib (e.g.
         # ``uuid`` → ``clausal.modules.uuid_mod``).
         resolved = _resolve_import_path(module_path)
+        for a in aliases:
+            _record_external("import_from", resolved, a.name,
+                             a.asname or a.name,
+                             getattr(expr_stmt, "lineno", 0))
         stmt = replace(
             ImportFrom(module=resolved, names=aliases, level=0),
             expr_stmt,
@@ -10645,6 +10732,10 @@ class EmbedTransformer(NodeTransformer):
         )
         transformer._import_module_bases.add(module_path)
         resolved = _resolve_import_path(module_path)
+        _record_external("import_module", resolved,
+                         module_path if resolved != module_path
+                         else module_path.split(".")[0],
+                         getattr(expr_stmt, "lineno", 0))
         if resolved != module_path:
             # Aliased module: ``import clausal.modules.uuid_mod as uuid``
             stmt = replace(
