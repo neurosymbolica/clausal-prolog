@@ -44,7 +44,8 @@ from typing import Any
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.logic.exceptions import LogicException, instantiation_error, type_error
-from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline
+from clausal.logic.cells import chars_text, is_chars
+from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline, to_text
 
 _sp = _import_stdlib("sympy")
 from clausal.terms import (
@@ -275,6 +276,12 @@ def _to_sympy_ctx(term: Any, ctx: _ConversionContext) -> _sp.Expr:
     # Free variable -> Symbol
     if is_var(term):
         return ctx.var_to_symbol(term)
+
+    # A string names a Symbol as an atom does.  Checked before the compound
+    # branch below, which would read the carrier ('$chars', 'x') as the
+    # function call '$chars'(x).
+    if is_chars(term):
+        return _sp.Symbol(chars_text(term))
 
     # Python numeric -> SymPy numeric
     if isinstance(term, bool):
@@ -621,8 +628,8 @@ def _convert_multi(*terms):
 
 def _sym_2(name, result, trail, k):
     """sym/2: sym(name, Result) -- create a SymPy Symbol from a string name."""
-    name = deref(name)
-    if not isinstance(name, str):
+    name = to_text(name)          # an atom or a string
+    if name is None:
         return
     sym = _sp.Symbol(name)
     if unify(result, sym, trail):

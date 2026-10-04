@@ -1272,6 +1272,11 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **clausal-sympy: a string names a symbol.** `sym("x", X)` failed (the
+  name had to be an atom), and a string inside an expression --
+  `expand(("y" + 1) * 2, E)` under `-double_quotes(chars)` -- became the
+  unknown function `'$chars'(y)`. Both now read the string as the symbol
+  name, as the atom spelling always did.
 - **clausal-scipy: a name argument may be a string.** The scipy adapters
   dereferenced their arguments one level and passed them on, so a string
   -- the chars carrier `('$chars', s)` -- reached scipy as a tuple or as
