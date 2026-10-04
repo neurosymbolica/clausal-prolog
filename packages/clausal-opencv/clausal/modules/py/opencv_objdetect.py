@@ -40,6 +40,7 @@ Cascade:
     detect_multi_scale(HANDLE, IMG, SCALE_FACTOR, MIN_NEIGHBORS, RECTS)
     detect_multi_scale(HANDLE, IMG, SCALE_FACTOR, MIN_NEIGHBORS, MIN_SIZE, RECTS)
     haar_cascade_path(NAME, PATH)        Registry of bundled cascades
+                                         (NAME an atom, PATH a string)
 
 HOG:
     make_hog(HANDLE)
@@ -60,6 +61,7 @@ from clausal.logic.trampoline import DONE
 from clausal.modules.py._helpers import _pred, _pure, _fact_table_2, _deep_deref
 from clausal.modules.py.opencv import _cv
 from clausal.modules.py._opencv_handles import alloc, lookup
+from clausal.modules.py import text_result
 
 
 # ── Cascade classifier ───────────────────────────────────────────────────
@@ -137,8 +139,10 @@ def _haar_facts():
         ("lower_body",    "haarcascade_lowerbody.xml"),
         ("license_plate", "haarcascade_russian_plate_number.xml"),
     ]
-    # Drop entries whose XML isn't shipped in this opencv build.
-    return [(name, _os.path.join(base, fname))
+    # Drop entries whose XML isn't shipped in this opencv build.  The NAME
+    # is a key and stays an atom; the PATH is free-form text, a string
+    # ('$chars', p) (ruled 2026-10-04).
+    return [(name, text_result(_os.path.join(base, fname)))
             for name, fname in entries
             if _os.path.exists(_os.path.join(base, fname))]
 

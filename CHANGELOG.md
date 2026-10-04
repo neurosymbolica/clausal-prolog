@@ -20,6 +20,13 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **clausal-opencv: `haar_cascade_path/2` answers the PATH as a STRING**
+  (ruled 2026-10-04: a path is free-form adapter text, a string
+  `('$chars', p)`). Changed: `haar_cascade_path/2`'s PATH. Unchanged: the
+  NAME is a key -- given, an atom or a string; enumerated, an atom; and
+  `make_cascade_classifier/2` takes the string path as it took the atom.
+  Migration: compare a path with a string, or pass it straight on.
+
 - **clausal-scipy: units and messages are STRINGS; constant names stay
   atoms** (ruled 2026-10-04: free-form adapter text is a string
   `('$chars', s)`; a CODATA name is the key `lookup/4` takes). Changed:

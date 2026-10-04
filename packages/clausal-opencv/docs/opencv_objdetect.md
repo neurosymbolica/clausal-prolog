@@ -42,7 +42,9 @@ rectangle(IMG, [X, Y], [X+W, Y+H], [0, 255, 0], OUT)
 
 `opencv-python` bundles a set of pre-trained Haar XMLs at
 `cv2.data.haarcascades`. The registry exposes the most-used ones
-by short name:
+by short name. A NAME is a key: given, it may be an atom or a string
+(`face` or `"face"`); enumerated, it comes back as an atom. The PATH is
+free-form text and comes back as a **string**, not an atom:
 
 | Name | Cascade |
 |---|---|
