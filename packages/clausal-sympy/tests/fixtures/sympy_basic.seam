@@ -5,7 +5,8 @@
                              sym, sympy_term])
 
 # SymPy integration — native Clausal terms. No sym(), no ++() for math.
-# Results use == for symbolic comparison (SymExpr.__eq__ handles it).
+# Compare symbolic results with sym_equal/2: == in a goal is arithmetic and
+# raises domain_error(clpz_expression, _) on a SymPy result.
 
 # ── simplify/2 ───────────────────────────────────────────────────────────────
 

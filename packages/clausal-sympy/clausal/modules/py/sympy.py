@@ -22,12 +22,15 @@ Unbound Vars are auto-named alphabetically in discovery order:
 first Var -> ``x``, second -> ``y``, etc.  This gives readable ``str()``
 output without requiring explicit ``sym("x", X)`` calls.
 
-Results are wrapped in ``SymExpr``, which overrides ``__eq__`` to do
-symbolic comparison.  This means Clausal's native ``==`` works::
+Results are wrapped in ``SymExpr``, whose Python ``__eq__`` does
+symbolic comparison.  In a goal, compare with ``sym_equal/2``::
 
-    diff(X**3, X, R), R == 3*X**2
+    diff(X**3, X, R), sym_equal(R, 3*X**2)
 
-Numeric results (Integer, Float) are collapsed to plain Python values.
+``==`` in a goal is arithmetic (CLP), not ``SymExpr.__eq__``: ``R ==
+3*X**2`` with ``R`` a SymPy result raises ``domain_error(clpz_expression,
+_)``.  Numeric results (Integer, Float) are collapsed to plain Python
+values, so ``R == 0`` on one still works.
 
 Math functions (``sin``, ``cos``, ``exp``, ``log``, ``sqrt``, etc.) and
 constants (``inf``, ``pi``, ``E``) are importable as term constructors.
@@ -480,14 +483,12 @@ def _from_sympy_ctx(expr: _sp.Expr, ctx: _ConversionContext) -> Any:
 class SymExpr:
     """Thin wrapper around a SymPy expression.
 
-    Overrides ``__eq__`` so that Clausal's native ``==`` operator does
-    symbolic comparison instead of structural comparison.  This means::
-
-        diff(X**3, X, R) and R == 3*X**2
-
-    just works -- the ``==`` triggers ``SymExpr.__eq__`` which converts
-    ``3*X**2`` (a Clausal ``Mult`` term) to SymPy and checks
+    Its Python ``__eq__`` is symbolic: it converts the other side (a
+    Clausal ``Mult`` term such as ``3*X**2``) to SymPy and checks
     ``simplify(a - b) == 0``, with alpha-equivalence for variable names.
+    From a goal, reach it through ``sym_equal/2``; a goal's ``==`` is
+    arithmetic and raises ``domain_error(clpz_expression, _)`` on a
+    SymExpr operand.
     """
 
     __slots__ = ("_expr",)

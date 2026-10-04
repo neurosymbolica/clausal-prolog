@@ -1044,6 +1044,14 @@ since 0.4.0 finish three moves:
   arithmetic and raises on a SymPy expression); tests updated for unit-atom
   dims keys, the F005 wrong-arity error and the cut refusal.
 
+- **clausal-sympy: `==` on a SymPy result is arithmetic, pinned by a
+  test.** Ruled 2026-10-04: no engine change. `R == <expr>` with `R` a
+  SymPy result raises `error(domain_error(clpz_expression, _), _)`;
+  `sym_equal/2` is the symbolic comparison; a numeric result still
+  compares with `==`. `test_sympy_equality_is_arithmetic.py` pins all
+  three, and the module docstrings that still promised `SymExpr.__eq__`
+  behind a goal's `==` now say this.
+
 - **clausal-jax: `py.jax_optax` raises when optax is not installed.**
   Every predicate of the module checks that optax imports before it runs
   and raises `error(existence_error(module, optax), Name/Arity)`; it used
