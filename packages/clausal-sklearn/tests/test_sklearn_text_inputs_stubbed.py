@@ -98,14 +98,14 @@ def test_make_est_reads_text_algorithm_and_keys(fake):
             DictTerm({chars("kernel"): chars("rbf")}), e)
     assert fake["class_for"] == "svc"
     tag, algo, params = deref(e)
-    assert (tag, algo) == ("Est", "svc")
+    assert (tag, algo) == ("est", "svc")
     # The key is its text; the VALUE handed back is the term as given.
     assert params["kernel"] == chars("rbf")
 
 
 def test_fit_hands_sklearn_plain_strings(fake):
-    est = sk.Est(chars("svc"), DictTerm({chars("kernel"): chars("rbf")}))
-    data = sk.Dataset([[0.0], [1.0]], [chars("no"), chars("yes")])
+    est = sk.est(chars("svc"), DictTerm({chars("kernel"): chars("rbf")}))
+    data = sk.dataset([[0.0], [1.0]], [chars("no"), chars("yes")])
     _simple(sk._fit_3, est, data, Var())
     [model] = _Model.made
     assert model.kw == {"kernel": "rbf"}
@@ -128,7 +128,7 @@ def test_normalize_norm_may_be_a_string(fake):
 
 def test_save_and_load_fitted_take_a_text_path(fake):
     handle = sk._register_model(_Model())
-    fitted = sk.Fitted(sk.Est("svc", {}), handle)
+    fitted = sk.fitted(sk.est("svc", {}), handle)
     _simple(sk._save_fitted_2, fitted, chars("/tmp/m.joblib"))
     _simple(sk._load_fitted_2, chars("/tmp/m.joblib"), Var())
     assert fake["dump"] == "/tmp/m.joblib" and fake["load"] == "/tmp/m.joblib"
@@ -142,18 +142,18 @@ def test_a_compound_path_is_a_type_error(fake):
 
 def test_a_pipeline_with_string_names_and_params_builds(fake, monkeypatch):
     # The steps cross to_python with the rest of the params: a data tuple
-    # (name, Est(...)) stays a 2-tuple and Est keeps its ("Est", ...) shape,
+    # (name, est(...)) stays a 2-tuple and est keeps its ("est", ...) shape,
     # so _build_pipeline and _unpack_est read them; the strings inside are
     # plain strs by the time sklearn sees them.
     from clausal.logic.cells import TUPLE_TAG
     monkeypatch.setattr(sk, "_sk_pipeline", types.SimpleNamespace(
         Pipeline=lambda steps: ("Pipeline", steps)))
-    step = lambda name, algo, params: (TUPLE_TAG, name, sk.Est(algo, params))
-    est = sk.Est("pipeline", DictTerm({"steps": [
+    step = lambda name, algo, params: (TUPLE_TAG, name, sk.est(algo, params))
+    est = sk.est("pipeline", DictTerm({"steps": [
         step(chars("scale"), chars("standard_scaler"), DictTerm({})),
         step("clf", "svc", DictTerm({chars("kernel"): chars("rbf")})),
     ]}))
-    data = sk.Dataset([[0.0], [1.0]], [0, 1])
+    data = sk.dataset([[0.0], [1.0]], [0, 1])
     monkeypatch.setattr(sk, "_register_model", lambda model: 1)
     built = []
     real = sk._build_pipeline

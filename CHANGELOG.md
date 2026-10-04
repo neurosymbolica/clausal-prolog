@@ -20,6 +20,20 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **clausal-sklearn: the term constructors are `est`, `dataset`, `fitted`,
+  `split`** (no aliases). `Est`, `Dataset`, `Fitted`, `Split` were
+  TitleCase, which has no role in Clausal positions. The tags of the terms
+  change with them: `("Est", Algo, Params)` is now `("est", Algo, Params)`
+  -- the term `est(Algo, Params)` -- and likewise `dataset/2`, `fitted/2`,
+  `split/2`; every predicate that builds or reads one (`load_dataset/2`,
+  `make_dataset/3`, `load_csv/3`, `split_data/3,4`, `k_fold_split/3`,
+  `stratified_split/3`, `fit/3,4`, `fit_transform/4`, `pipeline/2`,
+  `pipeline_step/3`, `grid_search/5,6`, `random_search/6`, `make_est/3`,
+  `param/3`, `load_fitted/2`, and the rest) uses the new tags. Migration:
+  import and write the lowercase names; match `("dataset", X, Y)` (or
+  `dataset(X, Y)`) instead of `("Dataset", X, Y)`. See
+  `packages/clausal-sklearn/docs/RENAMES.md`.
+
 - **clausal-spacy: document text is a STRING; labels stay atoms** (ruled
   2026-10-04: free-form adapter text is a string `('$chars', s)`; `lemma`
   is ruled an atom). Changed: the `text` and `head_text` of a token dict

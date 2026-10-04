@@ -2,15 +2,15 @@
 
 ## Overview
 
-The `sklearn` module provides predicates for machine learning via [scikit-learn](https://scikit-learn.org/). Data flows through tagged tuples — `Est`, `Dataset`, `Fitted`, `Split` — that unify naturally with Clausal's logic variables.
+The `sklearn` module provides predicates for machine learning via [scikit-learn](https://scikit-learn.org/). Data flows through tagged tuples — `est`, `dataset`, `fitted`, `split` — that unify naturally with Clausal's logic variables.
 
 ```clausal
--import_from(sklearn, [Est, Dataset, Fitted, load_dataset, fit, predict, score])
+-import_from(sklearn, [est, dataset, fitted, load_dataset, fit, predict, score])
 
 train_and_predict(ALGO, DATASET, PREDS) <- (
     load_dataset(DATASET, D),
-    fit(Est(ALGO, {}), D, F),
-    D is ("Dataset", X, Y),
+    fit(est(ALGO, {}), D, F),
+    D is ("dataset", X, Y),
     predict(F, X, PREDS)
 )
 ```
@@ -22,7 +22,7 @@ Or via [module import](import.md):
 
 main <- (
     sklearn.load_dataset("iris", D),
-    sklearn.fit(sklearn.Est("random_forest", {"n_estimators": 10}), D, F),
+    sklearn.fit(sklearn.est("random_forest", {"n_estimators": 10}), D, F),
     sklearn.score(F, D, S),
     ++print(f"Accuracy: {S}")
 )
@@ -34,7 +34,7 @@ main <- (
 
 ```clausal
 -import_from(sklearn, [
-    Est, Dataset, Fitted, Split,
+    est, dataset, fitted, split,
     algorithm, default_params, param_key, make_est, param,
     load_dataset, make_dataset, split_data, k_fold_split, stratified_split,
     fit, predict, transform, fit_transform, predict_proba, decision_function,
@@ -56,10 +56,10 @@ The module uses tagged tuples as its term language. These are plain Python tuple
 
 | Constructor | Shape | Description |
 |-------------|-------|-------------|
-| `Est(algo, params)` | `("Est", algo, params_dict)` | Unfitted estimator description |
-| `Dataset(X, Y)` | `("Dataset", X, Y)` | Feature matrix + optional target |
-| `Fitted(est, handle)` | `("Fitted", est, handle)` | Fitted estimator (opaque handle) |
-| `Split(train, test)` | `("Split", train_dataset, test_dataset)` | Train/test partition |
+| `est(algo, params)` | `("est", algo, params_dict)` | Unfitted estimator description |
+| `dataset(X, Y)` | `("dataset", X, Y)` | Feature matrix + optional target |
+| `fitted(est, handle)` | `("fitted", est, handle)` | Fitted estimator (opaque handle) |
+| `split(train, test)` | `("split", train_dataset, test_dataset)` | Train/test partition |
 
 ```clausal
 --8<-- "tests/fixtures/docs/sklearn_sigs.txt:term_constructors"
@@ -76,7 +76,7 @@ The module ships with a registry of named algorithms. Use `algorithm/2` to enume
 | `algorithm(Algo, Role)` | `?Algo, ?Role` | Enumerate or check algorithm/role pairs |
 | `default_params(Algo, Params)` | `+Algo, -Params` | Default hyperparameters for an algorithm |
 | `param_key(Algo, Key, Domain)` | `+Algo, -Key, -Domain` | Enumerate valid parameter keys |
-| `make_est(Algo, Params, Est)` | `+Algo, +Params, -Est` | Construct `Est` term, filling defaults |
+| `make_est(Algo, Params, Est)` | `+Algo, +Params, -Est` | Construct an `est` term, filling defaults |
 | `param(EstOrFitted, Key, Value)` | `+EstOrFitted, +Key, -Value` | Read a hyperparameter value |
 
 ??? example "Supported algorithms"
@@ -157,10 +157,10 @@ Available metric names: `"accuracy"`, `"f1"`, `"f1_weighted"`, `"f1_macro"`, `"p
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
-| `pipeline(Steps, PipeEst)` | `+Steps, -PipeEst` | Build a pipeline `Est` from named steps |
+| `pipeline(Steps, PipeEst)` | `+Steps, -PipeEst` | Build a pipeline `est` term from named steps |
 | `pipeline_step(Fitted, StepName, StepFitted)` | `+Fitted, +StepName, -StepFitted` | Extract a fitted step from a fitted pipeline |
 
-Steps are a list of `(name, Est(...))` tuples:
+Steps are a list of `(name, est(...))` tuples:
 
 ```clausal
 --8<-- "tests/fixtures/docs/sklearn_sigs.txt:pipeline_example"

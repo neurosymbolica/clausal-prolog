@@ -3,17 +3,17 @@
 Provides predicates for machine learning via scikit-learn::
 
     -import_from(sklearn, [fit, predict, score, load_dataset, algorithm,
-                           Est, Dataset, Fitted, Split])
+                           est, dataset, fitted, split])
 
 Term constructors (tagged tuples for deep unification):
-    Est(algorithm, params)     — unfitted estimator description
-    Dataset(x, y)              — supervised/unsupervised dataset
-    Fitted(est, handle)        — fitted estimator with opaque handle
-    Split(train, test)         — train/test partition
+    est(algorithm, params)     — unfitted estimator description
+    dataset(x, y)              — supervised/unsupervised dataset
+    fitted(est, handle)        — fitted estimator with opaque handle
+    split(train, test)         — train/test partition
 
 Layers
 ------
-1. **Term constructors & algorithm registry** — Est, Dataset, Fitted, Split,
+1. **Term constructors & algorithm registry** — est, dataset, fitted, split,
    algorithm/2, default_params/2, param_key/3
 2. **Data loading & splitting** — load_dataset/2, make_dataset/3, load_csv/3,
    split_data/3,4, k_fold_split/3, stratified_split/3
@@ -124,24 +124,24 @@ def _get_model(handle: int):
 
 # ── Term constructors (tagged tuples) ─────────────────────────────────────
 
-def Est(algorithm, params=None):
-    """Unfitted estimator term: ("Est", algorithm, params_dict)."""
-    return ("Est", algorithm, params if params is not None else {})
+def est(algorithm, params=None):
+    """Unfitted estimator term: ("est", algorithm, params_dict)."""
+    return ("est", algorithm, params if params is not None else {})
 
 
-def Dataset(x, y=None):
-    """Dataset term: ("Dataset", x, y)."""
-    return ("Dataset", x, y)
+def dataset(x, y=None):
+    """dataset term: ("dataset", x, y)."""
+    return ("dataset", x, y)
 
 
-def Fitted(est, handle):
-    """Fitted estimator term: ("Fitted", est, handle)."""
-    return ("Fitted", est, handle)
+def fitted(est, handle):
+    """fitted estimator term: ("fitted", est, handle)."""
+    return ("fitted", est, handle)
 
 
-def Split(train, test):
-    """Train/test split term: ("Split", train, test)."""
-    return ("Split", train, test)
+def split(train, test):
+    """Train/test split term: ("split", train, test)."""
+    return ("split", train, test)
 
 
 # ── CV term constructors ──────────────────────────────────────────────────
@@ -306,7 +306,7 @@ def _metric_to_scoring(name: str) -> str:
     return s
 
 
-# ── Dataset registry ─────────────────────────────────────────────────────
+# ── dataset registry ─────────────────────────────────────────────────────
 
 _DATASET_LOADERS = {
     "iris":               "load_iris",
@@ -358,45 +358,45 @@ def _make_cv(cv_term):
 # ── Helper: extract X, Y from dataset term ───────────────────────────────
 
 def _unpack_dataset(d):
-    """Extract (X, Y) from a Dataset tuple. Y may be None."""
+    """Extract (X, Y) from a dataset tuple. Y may be None."""
     d = deref(d)
-    if isinstance(d, tuple) and len(d) == 3 and d[0] == "Dataset":
+    if isinstance(d, tuple) and len(d) == 3 and d[0] == "dataset":
         x = to_python(d[1])           # strings in the data -> their str
         y = to_python(d[2])
         if y is None or (isinstance(y, str) and y == "nil"):
             y = None
         return x, y
-    raise ValueError(f"Expected Dataset(X, Y), got {d!r}")
+    raise ValueError(f"Expected dataset(X, Y), got {d!r}")
 
 
 def _unpack_est(e):
-    """Extract (algorithm, params) from an Est tuple."""
+    """Extract (algorithm, params) from an est tuple."""
     e = deref(e)
-    if isinstance(e, tuple) and len(e) == 3 and e[0] == "Est":
+    if isinstance(e, tuple) and len(e) == 3 and e[0] == "est":
         return text_or_str(e[1]), deref(e[2])
-    raise ValueError(f"Expected Est(algorithm, params), got {e!r}")
+    raise ValueError(f"Expected est(algorithm, params), got {e!r}")
 
 
 def _unpack_fitted(f):
-    """Extract (est_tuple, handle) from a Fitted tuple."""
+    """Extract (est_tuple, handle) from a fitted tuple."""
     f = deref(f)
-    if isinstance(f, tuple) and len(f) == 3 and f[0] == "Fitted":
+    if isinstance(f, tuple) and len(f) == 3 and f[0] == "fitted":
         return deref(f[1]), int(deref(f[2]))
-    raise ValueError(f"Expected Fitted(est, handle), got {f!r}")
+    raise ValueError(f"Expected fitted(est, handle), got {f!r}")
 
 
 def _unpack_split(s):
-    """Extract (train_dataset, test_dataset) from a Split tuple."""
+    """Extract (train_dataset, test_dataset) from a split tuple."""
     s = deref(s)
-    if isinstance(s, tuple) and len(s) == 3 and s[0] == "Split":
+    if isinstance(s, tuple) and len(s) == 3 and s[0] == "split":
         return deref(s[1]), deref(s[2])
-    raise ValueError(f"Expected Split(train, test), got {s!r}")
+    raise ValueError(f"Expected split(train, test), got {s!r}")
 
 
 # ── Helper: build pipeline from steps ─────────────────────────────────────
 
 def _build_pipeline(steps):
-    """Build a sklearn pipeline from a list of (name, Est(...)) tuples."""
+    """Build a sklearn pipeline from a list of (name, est(...)) tuples."""
     _ensure_sklearn()
     SkPipeline = _sk_pipeline.Pipeline
     sk_steps = []
@@ -405,7 +405,7 @@ def _build_pipeline(steps):
         if isinstance(step, tuple) and len(step) == 2:
             name, est = text_or_str(step[0]), deref(step[1])
         else:
-            raise ValueError(f"Pipeline step must be (name, Est(...)): {step!r}")
+            raise ValueError(f"Pipeline step must be (name, est(...)): {step!r}")
         algo, params = _unpack_est(est)
         sk_steps.append((name, _instantiate_estimator(algo, params)))
     return SkPipeline(sk_steps)
@@ -419,7 +419,7 @@ def _deref_params(params, *, raw=False):
     Keys are the text an atom or string key denotes; values go through
     ``to_python`` (a string is its ``str``, at any depth).  *raw* keeps
     the values as terms (dereferenced only), for a params dict that is
-    handed back inside an ``Est`` term rather than passed to sklearn.
+    handed back inside an ``est`` term rather than passed to sklearn.
     """
     params = deref(params)
     if isinstance(params, DictTerm):     # a dict written in source
@@ -499,7 +499,7 @@ def _load_dataset_2(name, dataset_var, trail, k):
         raise ValueError(f"Unknown built-in dataset: {name!r}")
     loader_fn = getattr(skd, loader_name)
     bunch = loader_fn()
-    result = Dataset(bunch.data, bunch.target)
+    result = dataset(bunch.data, bunch.target)
     if unify(dataset_var, result, trail):
         yield None
 
@@ -515,13 +515,13 @@ def _make_dataset_3(kind, options, dataset_var, trail, k):
         raise ValueError(f"Unknown dataset kind: {kind!r}")
     gen_fn = getattr(skd, gen_name)
     X, y = gen_fn(**options)
-    result = Dataset(X, y)
+    result = dataset(X, y)
     if unify(dataset_var, result, trail):
         yield None
 
 
 def _load_csv_3(path, options, dataset_var, trail, k):
-    """load_csv/3: load CSV into a Dataset term."""
+    """load_csv/3: load CSV into a dataset term."""
     import pandas as pd
     path = require_text(path, "load_csv/3", arg=1)
     options = _deref_params(options)
@@ -551,32 +551,32 @@ def _load_csv_3(path, options, dataset_var, trail, k):
         X = df.values
         y = None
 
-    result = Dataset(X, y)
+    result = dataset(X, y)
     if unify(dataset_var, result, trail):
         yield None
 
 
-def _split_data_3(dataset, test_size, split_var, trail, k):
+def _split_data_3(data, test_size, split_var, trail, k):
     """split_data/3: single train/test split."""
     _ensure_sklearn()
     train_test_split = _sk_model_selection.train_test_split
-    X, y = _unpack_dataset(dataset)
+    X, y = _unpack_dataset(data)
     test_size = float(deref(test_size))
     if y is not None:
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size)
     else:
         X_train, X_test = train_test_split(X, test_size=test_size)
         y_train = y_test = None
-    result = Split(Dataset(X_train, y_train), Dataset(X_test, y_test))
+    result = split(dataset(X_train, y_train), dataset(X_test, y_test))
     if unify(split_var, result, trail):
         yield None
 
 
-def _split_data_4(dataset, test_size, seed, split_var, trail, k):
+def _split_data_4(data, test_size, seed, split_var, trail, k):
     """split_data/4: train/test split with random seed."""
     _ensure_sklearn()
     train_test_split = _sk_model_selection.train_test_split
-    X, y = _unpack_dataset(dataset)
+    X, y = _unpack_dataset(data)
     test_size = float(deref(test_size))
     seed = int(deref(seed))
     if y is not None:
@@ -586,16 +586,16 @@ def _split_data_4(dataset, test_size, seed, split_var, trail, k):
     else:
         X_train, X_test = train_test_split(X, test_size=test_size, random_state=seed)
         y_train = y_test = None
-    result = Split(Dataset(X_train, y_train), Dataset(X_test, y_test))
+    result = split(dataset(X_train, y_train), dataset(X_test, y_test))
     if unify(split_var, result, trail):
         yield None
 
 
-def _kfold_split_3(this_generator, _proceed, _fail, _catcher, dataset, k_val, split_var, trail):
+def _kfold_split_3(this_generator, _proceed, _fail, _catcher, data, k_val, split_var, trail):
     """k_fold_split/3: K-fold splits via backtracking."""
     _ensure_sklearn()
     KFold = _sk_model_selection.KFold
-    X, y = _unpack_dataset(dataset)
+    X, y = _unpack_dataset(data)
     k_val = int(deref(k_val))
     kf = KFold(n_splits=k_val)
     splitter = kf.split(X, y) if y is not None else kf.split(X)
@@ -604,25 +604,25 @@ def _kfold_split_3(this_generator, _proceed, _fail, _catcher, dataset, k_val, sp
         X_train, X_test = X[train_idx], X[test_idx]
         y_train = y[train_idx] if y is not None else None
         y_test = y[test_idx] if y is not None else None
-        result = Split(Dataset(X_train, y_train), Dataset(X_test, y_test))
+        result = split(dataset(X_train, y_train), dataset(X_test, y_test))
         if unify(split_var, result, trail):
             yield (_proceed, None)
         trail.undo(mark)
     yield (_fail, DONE)
 
 
-def _stratified_split_3(this_generator, _proceed, _fail, _catcher, dataset, k_val, split_var, trail):
+def _stratified_split_3(this_generator, _proceed, _fail, _catcher, data, k_val, split_var, trail):
     """stratified_split/3: stratified K-fold via backtracking."""
     _ensure_sklearn()
     StratifiedKFold = _sk_model_selection.StratifiedKFold
-    X, y = _unpack_dataset(dataset)
+    X, y = _unpack_dataset(data)
     k_val = int(deref(k_val))
     skf = StratifiedKFold(n_splits=k_val)
     for train_idx, test_idx in skf.split(X, y):
         mark = trail.mark()
         X_train, X_test = X[train_idx], X[test_idx]
         y_train, y_test = y[train_idx], y[test_idx]
-        result = Split(Dataset(X_train, y_train), Dataset(X_test, y_test))
+        result = split(dataset(X_train, y_train), dataset(X_test, y_test))
         if unify(split_var, result, trail):
             yield (_proceed, None)
         trail.undo(mark)
@@ -634,7 +634,7 @@ def _stratified_split_3(this_generator, _proceed, _fail, _catcher, dataset, k_va
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _fit_3(est_term, dataset, fitted_var, trail, k):
-    """fit/3: fit an estimator on a Dataset term."""
+    """fit/3: fit an estimator on a dataset term."""
     _ensure_sklearn()
     algo, params = _unpack_est(est_term)
     X, y = _unpack_dataset(dataset)
@@ -649,7 +649,7 @@ def _fit_3(est_term, dataset, fitted_var, trail, k):
     model.fit(X, y)
     handle = _register_model(model)
     est_term_d = deref(est_term)
-    result = Fitted(est_term_d, handle)
+    result = fitted(est_term_d, handle)
     if unify(fitted_var, result, trail):
         yield None
 
@@ -671,7 +671,7 @@ def _fit_4(est_term, x, y, fitted_var, trail, k):
     model.fit(x, y)
     handle = _register_model(model)
     est_term_d = deref(est_term)
-    result = Fitted(est_term_d, handle)
+    result = fitted(est_term_d, handle)
     if unify(fitted_var, result, trail):
         yield None
 
@@ -712,7 +712,7 @@ def _fit_transform_4(est_term, dataset, transformed_var, fitted_var, trail, k):
     transformed = model.fit_transform(X, y)
     handle = _register_model(model)
     est_term_d = deref(est_term)
-    fitted_result = Fitted(est_term_d, handle)
+    fitted_result = fitted(est_term_d, handle)
     if unify(transformed_var, transformed, trail) and unify(fitted_var, fitted_result, trail):
         yield None
 
@@ -897,9 +897,9 @@ def _classification_report_4(y_true, y_pred, classes, report_var, trail, k):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _pipeline_2(steps, est_var, trail, k):
-    """pipeline/2: construct a pipeline Est term."""
+    """pipeline/2: construct a pipeline est term."""
     steps = deref(steps)
-    result = Est("pipeline", {"steps": steps})
+    result = est("pipeline", {"steps": steps})
     if unify(est_var, result, trail):
         yield None
 
@@ -911,9 +911,9 @@ def _pipeline_step_3(fitted_pipeline, name, step_fitted_var, trail, k):
     name = require_text(name, "pipeline_step/3", arg=2)
     step_model = model.named_steps[name]
     step_handle = _register_model(step_model)
-    # Create a minimal Est for the step
+    # Create a minimal est for the step
     step_algo = type(step_model).__name__.lower()
-    step_fitted = Fitted(Est(step_algo, {}), step_handle)
+    step_fitted = fitted(est(step_algo, {}), step_handle)
     if unify(step_fitted_var, step_fitted, trail):
         yield None
 
@@ -938,7 +938,7 @@ def _grid_search_5(est_term, param_grid, dataset, cv_term, best_fitted_var, trai
     gs.fit(X, y)
     handle = _register_model(gs)
     est_term_d = deref(est_term)
-    result = Fitted(est_term_d, handle)
+    result = fitted(est_term_d, handle)
     if unify(best_fitted_var, result, trail):
         yield None
 
@@ -964,7 +964,7 @@ def _grid_search_6(est_term, param_grid, dataset, cv_term, metric, best_fitted_v
     gs.fit(X, y)
     handle = _register_model(gs)
     est_term_d = deref(est_term)
-    result = Fitted(est_term_d, handle)
+    result = fitted(est_term_d, handle)
     if unify(best_fitted_var, result, trail):
         yield None
 
@@ -990,7 +990,7 @@ def _random_search_6(est_term, param_dists, dataset, cv_term, n_iter, best_fitte
     rs.fit(X, y)
     handle = _register_model(rs)
     est_term_d = deref(est_term)
-    result = Fitted(est_term_d, handle)
+    result = fitted(est_term_d, handle)
     if unify(best_fitted_var, result, trail):
         yield None
 
@@ -1050,11 +1050,11 @@ def _learned_3(fitted, attr, value_var, trail, k):
 
 
 def _param_3(est_or_fitted, key, value_var, trail, k):
-    """param/3: read a hyperparameter from an Est or Fitted term."""
+    """param/3: read a hyperparameter from an est or fitted term."""
     term = deref(est_or_fitted)
     if isinstance(term, tuple) and len(term) == 3:
         tag = term[0]
-        if tag == "Fitted":
+        if tag == "fitted":
             _est_inner, handle = deref(term[1]), int(deref(term[2]))
             model = _get_model(handle)
             key_str = text_or_str(key)
@@ -1063,7 +1063,7 @@ def _param_3(est_or_fitted, key, value_var, trail, k):
                 if unify(value_var, params[key_str], trail):
                     yield None
             return
-        elif tag == "Est":
+        elif tag == "est":
             _algo, params = text_or_str(term[1]), deref(term[2])
             key_str = text_or_str(key)
             if isinstance(params, (dict, DictTerm)) and key_str in params:
@@ -1074,20 +1074,20 @@ def _param_3(est_or_fitted, key, value_var, trail, k):
 
 
 def _make_est_3(algo, params, est_var, trail, k):
-    """make_est/3: construct an Est term, filling defaults."""
+    """make_est/3: construct an est term, filling defaults."""
     _ensure_sklearn()
     algo = require_text(algo, "make_est/3", arg=1)
     algo = _resolve_algorithm(algo)
-    user_params = _deref_params(params, raw=True)   # handed back in the Est
+    user_params = _deref_params(params, raw=True)   # handed back in the est
 
     if algo == "pipeline":
-        result = Est("pipeline", user_params)
+        result = est("pipeline", user_params)
     else:
         cls = _get_sklearn_class(algo)
         instance = cls()
         defaults = instance.get_params()
         defaults.update(user_params)
-        result = Est(algo, defaults)
+        result = est(algo, defaults)
 
     if unify(est_var, result, trail):
         yield None
@@ -1155,10 +1155,10 @@ def _load_fitted_2(path, fitted_var, trail, k):
     path = require_text(path, "load_fitted/2", arg=1)
     model = joblib.load(path)
     handle = _register_model(model)
-    # Create a minimal Est term from the loaded model
+    # Create a minimal est term from the loaded model
     algo = type(model).__name__.lower()
     params = model.get_params() if hasattr(model, "get_params") else {}
-    result = Fitted(Est(algo, params), handle)
+    result = fitted(est(algo, params), handle)
     if unify(fitted_var, result, trail):
         yield None
 

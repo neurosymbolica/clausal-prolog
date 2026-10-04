@@ -46,3 +46,18 @@ Acronyms collapse to one lowercase word (e.g. `FFT` -> `fft`,
 | `SplitData` | `split_data` |
 | `StratifiedSplit` | `stratified_split` |
 | `Transform` | `transform` |
+
+# Term constructor renames (2026-10-04)
+
+Breaking: the term constructors were TitleCase too. They are plain Python
+helpers (not predicates) that build tagged tuples, and both the helper
+names and the TAGS are now lower_snake_case, with no aliases -- so the
+term `est(svc, {})` written in a clause is the very term the adapter
+builds and reads.
+
+| Old | New | Term |
+|---|---|---|
+| `Est(Algo, Params)` | `est(Algo, Params)` | `("Est", ...)` -> `("est", ...)` |
+| `Dataset(X, Y)` | `dataset(X, Y)` | `("Dataset", ...)` -> `("dataset", ...)` |
+| `Fitted(Est, Handle)` | `fitted(Est, Handle)` | `("Fitted", ...)` -> `("fitted", ...)` |
+| `Split(Train, Test)` | `split(Train, Test)` | `("Split", ...)` -> `("split", ...)` |

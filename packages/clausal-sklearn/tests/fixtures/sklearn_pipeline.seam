@@ -1,12 +1,12 @@
 -double_quotes(atom)
--import_from(sklearn, [Est, Dataset, Fitted, load_dataset, fit, predict,
+-import_from(sklearn, [est, dataset, fitted, load_dataset, fit, predict,
                        score, pipeline, pipeline_step, learned, split_data])
 
 # ── pipeline construction and fitting ────────────────────────────────
 
 test("pipeline scaler + logistic regression") <- (
-    pipeline([("scaler", Est("standard_scaler", {})),
-              ("clf", Est("logistic_regression", {"max_iter": 200}))],
+    pipeline([("scaler", est("standard_scaler", {})),
+              ("clf", est("logistic_regression", {"max_iter": 200}))],
              PIPE),
     load_dataset("iris", DATASET),
     fit(PIPE, DATASET, FITTED),
@@ -17,11 +17,11 @@ test("pipeline scaler + logistic regression") <- (
 # ── pipeline predict ─────────────────────────────────────────────────
 
 test("pipeline predict") <- (
-    pipeline([("scaler", Est("standard_scaler", {})),
-              ("clf", Est("logistic_regression", {"max_iter": 200}))],
+    pipeline([("scaler", est("standard_scaler", {})),
+              ("clf", est("logistic_regression", {"max_iter": 200}))],
              PIPE),
     load_dataset("iris", DATASET),
-    DATASET is ("Dataset", X, Y_UNUSED),
+    DATASET is ("dataset", X, Y_UNUSED),
     fit(PIPE, DATASET, FITTED),
     predict(FITTED, X, PREDS_UNUSED)
 )  # nv
@@ -29,8 +29,8 @@ test("pipeline predict") <- (
 # ── pipeline_step ─────────────────────────────────────────────────────
 
 test("pipeline step extraction") <- (
-    pipeline([("scaler", Est("standard_scaler", {})),
-              ("clf", Est("logistic_regression", {"max_iter": 200}))],
+    pipeline([("scaler", est("standard_scaler", {})),
+              ("clf", est("logistic_regression", {"max_iter": 200}))],
              PIPE),
     load_dataset("iris", DATASET),
     fit(PIPE, DATASET, FITTED),
@@ -41,8 +41,8 @@ test("pipeline step extraction") <- (
 # ── pipeline with PCA ────────────────────────────────────────────────
 
 test("pipeline pca + classifier") <- (
-    pipeline([("pca", Est("pca", {"n_components": 2})),
-              ("clf", Est("random_forest", {"n_estimators": 10}))],
+    pipeline([("pca", est("pca", {"n_components": 2})),
+              ("clf", est("random_forest", {"n_estimators": 10}))],
              PIPE),
     load_dataset("iris", DATASET),
     fit(PIPE, DATASET, FITTED),
@@ -53,12 +53,12 @@ test("pipeline pca + classifier") <- (
 # ── pipeline with train/test split ───────────────────────────────────
 
 test("pipeline with split") <- (
-    pipeline([("scaler", Est("standard_scaler", {})),
-              ("clf", Est("logistic_regression", {"max_iter": 200}))],
+    pipeline([("scaler", est("standard_scaler", {})),
+              ("clf", est("logistic_regression", {"max_iter": 200}))],
              PIPE),
     load_dataset("iris", DATASET),
     split_data(DATASET, 0.2, 42, SPLIT),
-    SPLIT is ("Split", TRAIN, TEST),
+    SPLIT is ("split", TRAIN, TEST),
     fit(PIPE, TRAIN, FITTED),
     score(FITTED, TEST, SCORE),
     SCORE > 0.5

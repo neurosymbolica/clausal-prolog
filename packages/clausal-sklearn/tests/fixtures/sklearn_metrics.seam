@@ -1,5 +1,5 @@
 -double_quotes(atom)
--import_from(sklearn, [Est, Dataset, Fitted, load_dataset, fit, predict,
+-import_from(sklearn, [est, dataset, fitted, load_dataset, fit, predict,
                        score, metric, cross_val_score, cross_validate,
                        confusion_matrix, predict_proba, split_data, kfold])
 
@@ -7,8 +7,8 @@
 
 test("accuracy metric") <- (
     load_dataset("iris", DATASET),
-    fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), DATASET, FITTED),
-    DATASET is ("Dataset", X, Y),
+    fit(est("random_forest", {"n_estimators": 10, "random_state": 42}), DATASET, FITTED),
+    DATASET is ("dataset", X, Y),
     predict(FITTED, X, PREDS),
     metric("accuracy", Y, PREDS, SCORE),
     SCORE > 0.8
@@ -18,7 +18,7 @@ test("accuracy metric") <- (
 
 test("score with accuracy metric") <- (
     load_dataset("iris", DATASET),
-    fit(Est("logistic_regression", {"max_iter": 200}), DATASET, FITTED),
+    fit(est("logistic_regression", {"max_iter": 200}), DATASET, FITTED),
     score(FITTED, DATASET, "accuracy", SCORE),
     SCORE > 0.5
 )  # nv
@@ -27,16 +27,16 @@ test("score with accuracy metric") <- (
 
 test("r2 metric on diabetes") <- (
     load_dataset("diabetes", DATASET),
-    fit(Est("ridge", {}), DATASET, FITTED),
-    DATASET is ("Dataset", X, Y),
+    fit(est("ridge", {}), DATASET, FITTED),
+    DATASET is ("dataset", X, Y),
     predict(FITTED, X, PREDS),
     metric("r2", Y, PREDS, SCORE_UNUSED)
 )  # nv
 
 test("mse metric on diabetes") <- (
     load_dataset("diabetes", DATASET),
-    fit(Est("ridge", {}), DATASET, FITTED),
-    DATASET is ("Dataset", X, Y),
+    fit(est("ridge", {}), DATASET, FITTED),
+    DATASET is ("dataset", X, Y),
     predict(FITTED, X, PREDS),
     metric("mse", Y, PREDS, SCORE),
     SCORE > 0.0
@@ -46,13 +46,13 @@ test("mse metric on diabetes") <- (
 
 test("cross val score on iris") <- (
     load_dataset("iris", DATASET),
-    cross_val_score(Est("logistic_regression", {"max_iter": 200}),
+    cross_val_score(est("logistic_regression", {"max_iter": 200}),
                   DATASET, kfold(3), SCORES_UNUSED)
 )  # nv
 
 test("cross val score with metric") <- (
     load_dataset("iris", DATASET),
-    cross_val_score(Est("logistic_regression", {"max_iter": 200}),
+    cross_val_score(est("logistic_regression", {"max_iter": 200}),
                   DATASET, kfold(3), "accuracy", SCORES_UNUSED)
 )  # nv
 
@@ -60,7 +60,7 @@ test("cross val score with metric") <- (
 
 test("cross validate multiple metrics") <- (
     load_dataset("iris", DATASET),
-    cross_validate(Est("logistic_regression", {"max_iter": 200}),
+    cross_validate(est("logistic_regression", {"max_iter": 200}),
                   DATASET, kfold(3), ["accuracy", "f1_weighted"], RESULTS_UNUSED)
 )  # nv
 
@@ -68,8 +68,8 @@ test("cross validate multiple metrics") <- (
 
 test("confusion matrix on iris") <- (
     load_dataset("iris", DATASET),
-    fit(Est("random_forest", {"n_estimators": 10, "random_state": 42}), DATASET, FITTED),
-    DATASET is ("Dataset", X, Y),
+    fit(est("random_forest", {"n_estimators": 10, "random_state": 42}), DATASET, FITTED),
+    DATASET is ("dataset", X, Y),
     predict(FITTED, X, PREDS),
     confusion_matrix(Y, PREDS, MATRIX_UNUSED)
 )  # nv
