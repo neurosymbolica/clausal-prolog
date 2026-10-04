@@ -110,6 +110,7 @@ from .terms_to_goalop import (BareGoalVariableError, BareGoalUndefinedError,
 from .globals_env import (
     _GlobalsDb, _DbDispatchAdapter, _set_of_dedup, _set_of_sort_dedup,
     _undeclared_functor, _undeclared_functor_in, _constructor_in,
+    _adapter_not_evaluable,
     _findall_copy_row, _throw_ball, _check_bag, _findall_tail, _disp_key,
     _bag_witness, _bag_peel, _bagof_groups, _bagof_bind,
     _merge_builtin, _inject_resolved_targets,
@@ -458,6 +459,9 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # ``construction_context``) -- so the ISO term fits the position.
     "$undeclared_functor_in": _undeclared_functor_in,
     "$constructor_in": _constructor_in,
+    # ``X is mod.pred(...)`` with ``mod.pred`` a predicate ADAPTER, not a
+    # Python callable: type_error(evaluable, 'mod.pred'/N) (ruled 2026-10-04).
+    "$adapter_not_evaluable": _adapter_not_evaluable,
     "$ast": ast,
     # The cells module itself, so a head pattern can name the tuple-DATA tag
     # as the dotted value pattern ``$cells.TUPLE_TAG`` -- a bare name in a

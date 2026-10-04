@@ -20,6 +20,20 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **`X is mod.pred(Args)` with `mod.pred` a predicate adapter raises
+  `type_error(evaluable, Name/N)`** (ruled 2026-10-04). A qualified name in
+  `X is T` that names a `ModulePredicate` (or another non-callable
+  `_get_dispatch` adapter) used to bind the compound `('mod.pred', Args)`
+  silently, so `T is torch.tensor([1, 2])` bound a term, not a tensor. It
+  now raises `error(type_error(evaluable, Name/N), (is)/2)`, on either side
+  of `is` and when the `is` goal is built as a term and run by `call/1`;
+  Name is the functor the cell would have carried, as `eval_` and `'is'`
+  (which already raised) name it. Unchanged: a qualified Python callable
+  (`X is math.sqrt(16)`, a class), a qualified program predicate or data
+  functor, and the bare imported spelling that builds a goal cell (`G is
+  match(P, S)`). Migration: call the predicate as a goal (`tensor([1, 2],
+  T)`).
+
 - **Clausal Prolog may not reach a `.pl` module at run time either**
   (the dialect gate, routes 2-7 of the 2026-10-01 one-way ruling; route 1,
   the import, landed earlier). From a `.clausal` clause, a qualified goal

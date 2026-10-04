@@ -55,6 +55,7 @@ from clausal.logic.compiler.terms_to_ast import (
     arith_to_ast_expr,
     runtime_eval_wrapper,
     term_to_ast_expr,
+    _adapter_side_expr,
 )
 from clausal.logic.atoms import is_atom as _term_is_atom
 from clausal.logic.predicate import field_names_for
@@ -406,8 +407,8 @@ def _lower_shared_body(
             l = _hoist_lambdas_in_term(ctx, l, lambda_defs)
             r = _hoist_lambdas_in_term(ctx, r, lambda_defs)
             mark = ctx.fresh(_MARK_PREFIX)
-            l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
-            r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+            l_expr = _adapter_side_expr(l, var_context)
+            r_expr = _adapter_side_expr(r, var_context)
             return lambda_defs + [
                 _assign_mark(mark, trail_name),
                 _if(_call(_name("$unify"), l_expr, r_expr, _name(trail_name)), k_stmts),
