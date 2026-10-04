@@ -22,15 +22,16 @@ Unbound Vars are auto-named alphabetically in discovery order:
 first Var -> ``x``, second -> ``y``, etc.  This gives readable ``str()``
 output without requiring explicit ``sym("x", X)`` calls.
 
-Results are wrapped in ``SymExpr``, whose Python ``__eq__`` does
-symbolic comparison.  In a goal, compare with ``sym_equal/2``::
+Results are wrapped in ``SymExpr``, whose ``__eq__`` does symbolic
+comparison for PYTHON callers.  Clausal's ``==`` goal is arithmetic and does
+NOT use it: ``diff(X**3, X, R), R == 3*X**2`` raises
+``domain_error(clpz_expression, ...)``.  Compare symbolically with
+``sym_equal/2``::
 
     diff(X**3, X, R), sym_equal(R, 3*X**2)
 
-``==`` in a goal is arithmetic (CLP), not ``SymExpr.__eq__``: ``R ==
-3*X**2`` with ``R`` a SymPy result raises ``domain_error(clpz_expression,
-_)``.  Numeric results (Integer, Float) are collapsed to plain Python
-values, so ``R == 0`` on one still works.
+Numeric results (Integer, Float) are collapsed to plain Python values, so
+``R == 0`` on one still works.
 
 Math functions (``sin``, ``cos``, ``exp``, ``log``, ``sqrt``, etc.) and
 constants (``inf``, ``pi``, ``E``) are importable as term constructors.
@@ -477,18 +478,19 @@ def _from_sympy_ctx(expr: _sp.Expr, ctx: _ConversionContext) -> Any:
     return str(expr)
 
 
-# -- SymExpr wrapper -- makes == do symbolic comparison -----------------------
+# -- SymExpr wrapper -- symbolic __eq__ for Python callers --------------------
 
 
 class SymExpr:
     """Thin wrapper around a SymPy expression.
 
-    Its Python ``__eq__`` is symbolic: it converts the other side (a
-    Clausal ``Mult`` term such as ``3*X**2``) to SymPy and checks
+    Overrides ``__eq__`` for PYTHON-side comparison: it converts the other
+    operand (e.g. a Clausal ``3*X**2`` term) to SymPy and checks
     ``simplify(a - b) == 0``, with alpha-equivalence for variable names.
-    From a goal, reach it through ``sym_equal/2``; a goal's ``==`` is
-    arithmetic and raises ``domain_error(clpz_expression, _)`` on a
-    SymExpr operand.
+
+    Clausal's ``==`` goal does NOT reach this method: ``==`` is arithmetic
+    and raises ``domain_error(clpz_expression, ...)`` on a SymPy result.
+    Clausal code compares symbolically with ``sym_equal/2``.
     """
 
     __slots__ = ("_expr",)
@@ -543,7 +545,7 @@ class SymExpr:
     # -- Arithmetic -- delegates to SymPy, re-wraps result -------------------
 
     def _wrap(self, result):
-        """Re-wrap SymPy result so == keeps working through chains."""
+        """Re-wrap a SymPy result so chained arithmetic stays symbolic."""
         if isinstance(result, _sp.Basic):
             return _to_pyval(result)
         return result
