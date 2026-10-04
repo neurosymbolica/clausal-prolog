@@ -7,7 +7,21 @@ crossed as TEXT. The same census (static read of every adapter + a dynamic
 `text_result` trace over the package suites) found these, which the ruling
 does not settle and which were NOT changed:
 
-## Free-form strings that cross as ATOMS (the opposite mismatch)
+## Free-form strings that cross as ATOMS (the opposite mismatch) -- DONE
+
+**Done on feat/adapter-free-form-strings-2026-10-04** (ruled 2026-10-04,
+D12: Reading A -- an adapter is its own entry point; free-form outputs are
+strings, identifiers/keys/names stay atoms; the `++` escape is unchanged).
+One Breaking commit per package: sympy (printers + the `str(expr)`
+fallback), yaml (scalar VALUES and written documents; keys stay atoms),
+scipy (`unit/2`, `lookup/4` unit, integrate/optimize `message`; constant
+names stay atoms), opencv (`haar_cascade_path/2` path), spacy (token /
+entity / chunk text, `head_text`, sentences; `lemma` and labels stay
+atoms). torch `named_*` paths were ruled atoms: unchanged. Still open:
+spacy `shape` (not covered by the ruling) -- see
+todo/adapter-free-form-outputs-as-strings-needs-ruling-2026-10-04.md.
+
+The census as it stood:
 
 Adapters that unify a plain `str` without `text_result`:
 
@@ -29,7 +43,14 @@ not conflict with the Python-boundary spec. It does read two ways, so it is
 not built: see
 todo/adapter-free-form-outputs-as-strings-needs-ruling-2026-10-04.md.
 
-## Inputs that reject text (violate "text in")
+## Inputs that reject text (violate "text in") -- FIXED by U2(a)
+
+All of these were fixed on feat/package-triage-rulings-2026-10-04 (U2 a,
+one commit per package, each with a regression test): the shared
+`_helpers._text_arg` / fact table, torch, scipy, sympy, yaml, spacy,
+sklearn, opencv. Inputs accept an atom or a string.
+
+The list as it stood:
 
 - `str(deref(x))` on an argument turns text into the repr
   `"('$chars', 'x')"`: clausal-spacy (process/3 text, entity/3 label,
@@ -55,8 +76,9 @@ accepts an atom or a string) rather than ruling questions; each wants a
 - jax/torch `device/2` (`cpu:0`, `TFRT_CPU_0`, `cuda:0`): a device name.
 - opencv `fourcc/2` backward (`MJPG`): a codec tag.
 - py.sqlite `current_connection/1`: an alias, like an ISO stream alias.
-- py.logging `get_level/2`: atom in Python's own spelling, `'WARNING'`
-  (not lowercased to the input spelling `warning`).
+- py.logging `get_level/2`: a LOWERCASE atom, `warning` -- the spelling
+  `set_level/2` takes (U3, ruled 2026-10-04; it was `'WARNING'`); custom
+  level names lowercase too, and a bound level is read in either case.
 
 Kept as TEXT: py.sqlite `column/4` type ("VARCHAR(20)"), table and column
 names (rows ruling R15); py.url `parse/2` scheme (spec §9.4 comment).

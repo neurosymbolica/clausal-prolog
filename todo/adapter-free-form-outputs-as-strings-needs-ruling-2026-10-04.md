@@ -1,5 +1,18 @@
 # Adapter free-form outputs as strings (U2 b): needs a ruling (2026-10-04)
 
+**RULED 2026-10-04 (D12) and BUILT** on feat/adapter-free-form-strings-2026-10-04:
+Reading A. Ambiguous rows: spacy `lemma` atom / token `text` string; yaml
+keys atoms / scalar values strings; scipy constant names atoms; torch
+`named_*` atoms. Q3 (check mode accepting the atom spelling of a
+free-form result) was not answered separately; the build follows the
+existing text adapters (py.files ...): a bound result is compared as a
+term, so the atom spelling fails. The `++` escape is unchanged.
+
+Left open (not covered by the ruling, not built):
+- spacy `shape/2` and a token's `shape` (`Xxxxx`, `dd`, `X.X.`): a
+  derived orthographic class, neither prose nor a vocabulary label --
+  stays an atom until ruled.
+
 The 2026-10-04 ruling (D11, U2 b) asked for one Breaking commit per package to
 make free-form adapter OUTPUTS strings `('$chars', s)`. It came with a
 condition: check first for a conflict with the 2026-09-21 Python-boundary spec
@@ -93,3 +106,15 @@ every `sym_str(E, 'x + 1')`).
    of a symbol today?
 
 Blocks: U2 (b) only. U2 (a), U1, U3 and U4 do not depend on it.
+
+Found while building (not in the census table):
+- BUILT, same field as the ruled integrate row: scipy_optimize
+  `result_get(R, 'message', M)` answers a string (a list of strings for
+  basin_hopping).
+- NOT built: scipy_optimize `root_scalar` `flag` (`'converged'`, or a
+  sentence on failure -- a status word or prose); the `infodict` of
+  scipy_integrate `quad/4` and `ode_integrate` (SciPy's own dict, its
+  `message` passed through as a Python str, i.e. an atom).
+- Input gap (U2 a style), not built: torch_nn `named_parameter/3`,
+  `named_module/3`, `named_child/3` with a bound STRING name
+  (`named_parameter(M, "0.weight", P)`) fail; only the atom matches.
