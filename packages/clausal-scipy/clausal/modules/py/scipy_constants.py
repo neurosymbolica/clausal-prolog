@@ -19,11 +19,16 @@ Numeric values come from the installed scipy CODATA release.
 
 CODATA database access (plain floats / strings):
     value(NAME, RESULT)                     — value (float) by CODATA name
-    unit(NAME, RESULT)                      — SI unit string
+    unit(NAME, RESULT)                      — SI unit, a STRING ("m s^-1")
     precision(NAME, RESULT)                 — relative uncertainty
     lookup(NAME, VALUE, UNIT, UNCERTAINTY)  — all three in one call
     find(SUBSTRING, NAMES)                  — search names by substring
     all_names(NAMES)                         — all CODATA constant names
+
+A constant NAME is an atom ('speed of light in vacuum'): it is the key
+value/2, lookup/4 and the rest take, and find/2 and all_names/1 answer
+atoms.  A unit is free-form text and comes back as a string (ruled
+2026-10-04).  A NAME or SUBSTRING argument may be an atom or a string.
 """
 
 from __future__ import annotations
@@ -34,7 +39,7 @@ from typing import Callable
 from clausal.logic.variables import deref, unify
 from clausal.modules.py._helpers import _text_arg
 from clausal.logic.trampoline import DONE
-from clausal.modules.py import ModulePredicate
+from clausal.modules.py import ModulePredicate, text_result
 
 
 # ── Lazy scipy.constants import ────────────────────────────────────────────
@@ -59,7 +64,9 @@ def _sc():
     return _scipy_constants
 
 
-def _lookup_fn(call: Callable) -> Callable:
+def _lookup_fn(call: Callable, text: bool = False) -> Callable:
+    """*text*: the result is free-form text (a unit string), answered as a
+    string ``('$chars', s)``; otherwise it is unified as it comes."""
     def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
@@ -69,6 +76,8 @@ def _lookup_fn(call: Callable) -> Callable:
         except Exception:
             yield (_fail, DONE)
             return
+        if text:
+            out = text_result(out)
         if bool(unify(result_var, out, trail)):
             yield (_proceed, None)
         yield (_fail, DONE)
@@ -89,7 +98,7 @@ value = _pred("value",
 )
 
 unit = _pred("unit",
-    (2, _lookup_fn(lambda name: _sc().unit(name))),
+    (2, _lookup_fn(lambda name: _sc().unit(name), text=True)),
 )
 
 precision = _pred("precision",
@@ -105,7 +114,7 @@ def _lookup_dispatch(this_generator, _proceed, _fail, _catcher, name, value_var,
         yield (_fail, DONE)
         return
     if (bool(unify(value_var, val, trail))
-            and bool(unify(unit_var, unit_str, trail))
+            and bool(unify(unit_var, text_result(unit_str), trail))
             and bool(unify(uncertainty_var, uncertainty, trail))):
         yield (_proceed, None)
     yield (_fail, DONE)

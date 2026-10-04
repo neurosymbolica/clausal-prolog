@@ -32,7 +32,7 @@ from typing import Callable
 from clausal.logic.variables import deref, unify
 from clausal.modules.py._helpers import _text_arg
 from clausal.logic.trampoline import DONE
-from clausal.modules.py import ModulePredicate
+from clausal.modules.py import ModulePredicate, text_result
 
 
 # ── Lazy scipy.optimize import ────────────────────────────────────────────
@@ -259,8 +259,10 @@ class _ResultGetPredicate:
     """result_get(RESULT, FIELD, VALUE) — extract RESULT[FIELD] → VALUE.
 
     RESULT must be a dict (or dict-like, e.g. OptimizeResult).
-    FIELD must be a ground string key.
-    VALUE is unified with the retrieved value.
+    FIELD must be a ground key, an atom or a string.
+    VALUE is unified with the retrieved value.  The ``message`` field is
+    free-form text, so it answers a string ``('$chars', s)`` (a list of
+    them for ``basin_hopping``), not an atom (ruled 2026-10-04).
     """
 
     def _get_dispatch(self) -> Callable:
@@ -277,6 +279,8 @@ class _ResultGetPredicate:
         except (KeyError, TypeError):
             yield (_fail, DONE)
             return
+        if field == "message" and isinstance(val, (str, list)):
+            val = text_result(val)
         try:
             ok = bool(unify(value, val, trail))
         except (ValueError, TypeError):

@@ -26,6 +26,7 @@ from clausal.modules.py.scipy_constants import (
     value, unit, precision, lookup, find, all_names,
 )
 from clausal._suffixes import SEAM_SUFFIX
+from clausal.logic.cells import chars
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -202,7 +203,7 @@ class TestUnitPredicate:
     def test_speed_of_light_unit(self):
         # nv
         u = _drive_pred(unit, "speed of light in vacuum")
-        assert isinstance(u, str) and "m" in u
+        assert u == chars("m s^-1")   # a unit is free-form text: a STRING
 
 
 class TestPrecisionPredicate:
@@ -224,7 +225,7 @@ class TestLookupPredicate:
         for parent, sentinel in gen:
             if sentinel is None:
                 assert deref(v) == pytest.approx(9.1093837139e-31)
-                assert isinstance(deref(u_str), str)
+                assert deref(u_str) == chars("kg")   # the unit: a STRING
                 assert deref(unc) >= 0
                 break
 

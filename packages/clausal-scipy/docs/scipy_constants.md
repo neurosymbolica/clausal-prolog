@@ -26,7 +26,7 @@ Or via the canonical `py.*` path:
 
 ## Tier
 
-All predicates are **Tier 1 — pure**: they perform direct attribute lookups or CODATA database queries, with no stateful objects. There is no handle or result record; the RESULT argument receives a plain Python float or string.
+All predicates are **Tier 1 — pure**: they perform direct attribute lookups or CODATA database queries, with no stateful objects. There is no handle or result record; the RESULT argument receives a plain Python float, a unit as a **string** (`"m s^-1"`), or constant names as **atoms**. A constant name is the key every predicate here looks up, so `find/2` and `all_names/1` answer atoms (`'speed of light in vacuum'`); a unit is free-form text, so `unit/2` and `lookup/4` answer a string (ruled 2026-10-04). A `NAME` or `SUBSTRING` argument may be an atom or a string.
 
 ---
 
@@ -85,7 +85,7 @@ Fails if `NAME` is not a recognised CODATA name.
 Access all three CODATA fields for a constant in a single call.
 
 - `VALUE`: float, the physical quantity value in SI units
-- `UNIT`: string, the SI unit
+- `UNIT`: a string, the SI unit (`"kg"`)
 - `UNCERTAINTY`: float, absolute uncertainty (not relative — use `precision` for relative)
 
 ```clausal
@@ -101,7 +101,7 @@ Fails if `NAME` is not recognised, or if any output argument fails to unify.
 Search the CODATA database by substring; returns all matching constant names.
 
 - `SUBSTRING`: string to search for (case-sensitive, uses `scipy.constants.find`)
-- `NAMES`: list of matching name strings; empty list if no match
+- `NAMES`: list of matching names, as atoms; empty list if no match
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:codata_lookup_ex3"
@@ -113,7 +113,7 @@ Search the CODATA database by substring; returns all matching constant names.
 
 Return all CODATA constant names as a list.
 
-- `NAMES`: list of all name strings in `scipy.constants.physical_constants`
+- `NAMES`: list of all names in `scipy.constants.physical_constants`, as atoms
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:codata_lookup_ex4"
@@ -123,9 +123,9 @@ Return all CODATA constant names as a list.
 
 #### `unit(NAME, RESULT)`
 
-Return the SI unit string for a named CODATA constant.
+Return the SI unit of a named CODATA constant.
 
-- `RESULT`: a string such as `'m s^-1'` or `'J s'`
+- `RESULT`: a string such as `"m s^-1"` or `"J s"` (not an atom)
 
 ```clausal
 --8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:codata_lookup_ex5"

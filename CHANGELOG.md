@@ -20,6 +20,19 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **clausal-scipy: units and messages are STRINGS; constant names stay
+  atoms** (ruled 2026-10-04: free-form adapter text is a string
+  `('$chars', s)`; a CODATA name is the key `lookup/4` takes). Changed:
+  `scipy_constants` `unit/2` and the UNIT of `lookup/4` (`"m s^-1"`;
+  `""` for a dimensionless constant); `scipy_integrate` `quad_vec/4` and
+  `solve_initial_value_problem/4,5,6`, whose result dict's `message` is a
+  string (so is `result_get(R, 'message', M)`); `scipy_optimize`
+  `result_get/3` on the `message` field (a string, a list of strings for
+  `basin_hopping`). Unchanged: `find/2` and `all_names/1` answer the names
+  as atoms; `value/2`, `precision/2` and every numeric field; the
+  `infodict` of `quad/4` and `ode_integrate` (SciPy's own dict, passed
+  through as it comes). Migration: compare a unit or message with a string.
+
 - **clausal-yaml: string VALUES and written documents are STRINGS; keys
   stay atoms** (ruled 2026-10-04: free-form adapter text is a string
   `('$chars', s)`, strings spec 9.4; a mapping key is a name). Changed:

@@ -142,6 +142,9 @@ Common fields by predicate:
 | `solve_initial_value_problem` | `'t'`, `'y'`, `'success'`, `'message'`, `'nfev'`, `'status'` |
 | `ode_integrate` | `'y'` |
 
+`'message'` is free-form text and comes back as a **string**
+(`"The algorithm converged to the desired accuracy."`), not an atom.
+
 ---
 
 ## Complete examples

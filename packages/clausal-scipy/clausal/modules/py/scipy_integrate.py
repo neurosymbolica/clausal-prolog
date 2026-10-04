@@ -33,6 +33,7 @@ from typing import Callable
 
 from clausal.logic.variables import deref, unify
 from clausal.modules.py._helpers import _text_arg
+from clausal.modules.py import text_result
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate
 from clausal.terms import Quantity, UnitsMismatch
@@ -223,7 +224,7 @@ def _quad_vec_result(func, a, b):
         y, err, info = _integrate().quad_vec(func, a, b, full_output=True)
         return {
             'y': y, 'err': err, 'status': info.status,
-            'success': info.success, 'message': info.message, 'neval': info.neval,
+            'success': info.success, 'message': text_result(info.message), 'neval': info.neval,
         }
     x_dims = quantity_dims(a) or quantity_dims(b) or {}
     a_q = a if isinstance(a, Quantity) else Quantity(a, x_dims)
@@ -233,7 +234,7 @@ def _quad_vec_result(func, a, b):
         f_for_scipy, strip_quantity(a), strip_quantity(b), full_output=True)
     result = {
         'y': y, 'err': err, 'status': info.status,
-        'success': info.success, 'message': info.message, 'neval': info.neval,
+        'success': info.success, 'message': text_result(info.message), 'neval': info.neval,
     }
     if f_dims is not None:
         out_dims = merge_dims(f_dims, x_dims, +1)
@@ -262,7 +263,7 @@ def _solve_ivp_result(fun, t_span, y0, **kwargs):
         'njev': sol.njev,
         'nlu': sol.nlu,
         'status': sol.status,
-        'message': sol.message,
+        'message': text_result(sol.message),   # free-form text: a string
         'success': sol.success,
     }
 

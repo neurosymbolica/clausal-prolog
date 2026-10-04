@@ -33,7 +33,7 @@ all_names(NAMES),
 --8<-- [end:codata_lookup_ex4]
 
 --8<-- [start:codata_lookup_ex5]
-unit('speed of light in vacuum', U)  % U = 'm s^-1'
+unit('speed of light in vacuum', U)  % U = "m s^-1" (a string)
 --8<-- [end:codata_lookup_ex5]
 
 --8<-- [start:codata_lookup_ex6]

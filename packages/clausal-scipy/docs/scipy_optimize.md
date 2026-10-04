@@ -206,6 +206,9 @@ Common fields by predicate:
 | `root` | `'x'`, `'fun'`, `'success'` |
 | `linear_program`, `mixed_integer_linear_program` | `'x'`, `'fun'`, `'success'`, `'message'` |
 
+`result_get(R, 'message', M)` answers a **string** (a list of strings for
+`basin_hopping`): the message is free-form text, not an atom.
+
 ---
 
 ## Complete example — Rosenbrock with gradient descent
