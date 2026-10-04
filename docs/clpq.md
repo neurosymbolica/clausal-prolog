@@ -242,7 +242,12 @@ half(Q)   :- {2 * Q = 3 * constant(one_euro)}.      % Q = 3/2 euro
 ```
 
 ```seam
+-import_from(european_union, [euro])
+-constant_number_units(one_euro, 1, euro)
+
 price(Q) <- clpq.rational(Q == 100 * constant(one_euro))
+
+test("price is 100 euro") <- (price(Q), Q == 100 * constant(one_euro))
 ```
 
 The tableau never sees a unit. Every post goes through the same units side

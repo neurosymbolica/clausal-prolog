@@ -133,7 +133,12 @@ def _sqlite_disconnect_1(alias, trail, k):
 
 
 def _sqlite_current_connection_1(this_generator, _proceed, _fail, _catcher, alias, trail):
-    """current_connection/1: enumerate open connection aliases."""
+    """current_connection/1: enumerate open connection aliases.
+
+    An unbound Alias enumerates every open alias as an ATOM (a symbolic name:
+    atom out, text in). A bound Alias may be an atom or text; it checks that
+    the alias is open.
+    """
     alias = deref(alias)
     if not is_var(alias):
         # Check if this specific alias exists

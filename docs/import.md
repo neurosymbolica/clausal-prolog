@@ -271,7 +271,8 @@ meta-callers (`call(lib.p(X))`). In DATA position it is the plain term:
 `T is lib.p(1)` binds `T` to `p(1)`, so `T is lib.p(X), call(T)` runs `p`
 in the calling module. This holds for program modules; when `lib.p` is a
 Python predicate ADAPTER (a `py.*` or package module), `T is lib.p(...)`
-raises `type_error(evaluable, p/N)` instead of building a term.
+raises `type_error(evaluable, 'lib.p'/N)` instead of building a term: the
+QUALIFIED name, with `N` the arity of the call as written.
 
 To build a qualified goal as a term, write ISO's `:`/2 with the quoted
 functor. It needs no declaration:

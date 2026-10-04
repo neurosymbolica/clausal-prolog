@@ -37,11 +37,11 @@ _KNOWN_UNCOMPILABLE = {
     #
     # These are keyed by fence line, so prose inserted ABOVE them shifts every
     # one; the numbers below match docs/import.md after the adapter-`is` note (2026-10-04).
-    ("import.md", 458),
-    ("import.md", 500),
+    ("import.md", 459),
+    ("import.md", 501),
     # import.md: one more `# caller.clausal` block that `-import_from(lib, …)`
     # a fictional library. Not standalone-compilable.
-    ("import.md", 565),
+    ("import.md", 566),
 }
 
 
