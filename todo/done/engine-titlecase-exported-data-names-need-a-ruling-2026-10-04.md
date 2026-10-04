@@ -23,3 +23,17 @@ Question: rename (to what? `si_force`, ... and `trunc_div`, `trunc_mod`, `rem`
 -- `rem` would meet the ISO evaluable `rem/2`), with or without the warned-alias
 mechanism the units module already has, or rule them exempt.
 Blocks nothing; when ruled, edit the list in the gate test.
+
+## Ruled and done 2026-10-04 (D16-X2)
+
+- `prolog.TruncDiv/TruncMod/Rem` -> private `_trunc_div`, `_trunc_mod`,
+  `_rem`, NO aliases. Nothing emitted them any more (both `.pl` front ends
+  write the quoted ISO evaluables since 2f8c12b6); the exporter's reverse
+  mapping and the translator's `-import_module(prolog)` preamble went with
+  them.
+- `units.SI_*` -> `units.si_*` (snake_case), the old names warned aliases
+  in `_DEPRECATED_UNIT_NAMES`; added to
+  `todo/remove-deprecated-TitleCase-unit-names-after-migration-2026-09-09.md`.
+- The gate's `_ENGINE_DATA_PENDING_RULING` list was emptied and then
+  DELETED: an engine TitleCase data name now fails like any other
+  (`test_control_an_engine_titlecase_data_name_fails`).

@@ -1190,9 +1190,10 @@ since 0.4.0 finish three moves:
   (`tests/_predicate_name_census.py`) now reads those names on the loaded
   module and statically (assignments, and writes onto
   `sys.modules[__name__]`, `setattr`, `globals()`), with a recall check,
-  floors and positive controls; none may be TitleCase. 22 engine names
-  (`prolog.TruncDiv/TruncMod/Rem`, `units.SI_*`) are held for a ruling in
-  an exact list.
+  floors and positive controls; none may be TitleCase, engine names
+  included (the 22 engine names first held for a ruling --
+  `prolog.TruncDiv/TruncMod/Rem`, `units.SI_*` -- were ruled on 2026-10-04,
+  and the list that held them is gone).
 
 - **Adapter check mode stays STRICT** (ruled 2026-10-04). A bound result
   of a free-form text output is compared as a term, so the atom of the
