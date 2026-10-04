@@ -46,6 +46,54 @@ from clausal.logic.builtins import (  # noqa: F401
     BuiltinPredicate,
     _BUILTIN_CLASSES,
 )
+#: The Python builtins generated clause code may use -- the names the
+#: code builders emit (isinstance checks, list/str/bytes/tuple/frozenset
+#: tests, len/range in head matching, the exception classes the control
+#: constructs catch).  ``__builtins__`` of every compiled clause is THIS
+#: dict, so a name the call-target step misses raises NameError rather than
+#: resolving to a real builtin.
+CLAUSE_BUILTINS: dict = {
+    name: getattr(__import__("builtins"), name) for name in (
+        "isinstance", "len", "range", "list", "tuple", "str", "bytes",
+        "int", "float", "bool", "dict", "set", "frozenset", "iter", "next",
+        "object", "BaseException", "Exception", "GeneratorExit",
+        "SystemExit", "KeyboardInterrupt", "StopIteration", "TypeError",
+        "ValueError", "KeyError", "IndexError", "AttributeError",
+        "NameError", "RecursionError", "ZeroDivisionError",
+        "ArithmeticError", "OverflowError", "RuntimeError",
+        "NotImplementedError", "AssertionError", "LookupError",
+        "None", "True", "False", "NotImplemented", "Ellipsis")
+    if hasattr(__import__("builtins"), name)
+}
+
+
+#: The imports the engine's C helpers perform through a clause frame's
+#: builtins, as (module, fromlist) -- measured over the test sample: the
+#: C list-unify helper's re-import of its Python twin.  CPython's
+#: ``PyImport_Import`` reads the module from ``sys.modules`` itself after
+#: calling ``__import__``, so the shim never needs to hand one back.
+_CLAUSE_IMPORTS = frozenset({("clausal.logic.runtime.list_unify", ())})
+
+
+def _engine_only_import(name, globals=None, locals=None, fromlist=(),
+                        level=0):
+    """``__import__`` for compiled clause code.  Accepts EXACTLY the
+    (module, fromlist) pairs in :data:`_CLAUSE_IMPORTS`, for a module that
+    is already loaded, and returns an empty namespace -- never a module
+    object, which would lead back to the real builtins and to every module
+    it imported.  Anything else is ImportError."""
+    import sys as _sys  # noqa: PLC0415
+    import types as _types  # noqa: PLC0415
+    key = (name, tuple(fromlist or ()))
+    if level == 0 and key in _CLAUSE_IMPORTS and name in _sys.modules:
+        return _types.SimpleNamespace()
+    raise ImportError(f"compiled clause code may not import {name!r}"
+                      f"{f' (fromlist {list(fromlist)})' if fromlist else ''}")
+
+
+CLAUSE_BUILTINS["__import__"] = _engine_only_import
+
+
 # Runtime helpers referenced by base_globals of compiled predicates.
 # They live in clausal.logic.runtime; see clausal/logic/compiler/README.md
 # §7 (runtime/compile-time boundary).  Importing them here binds them as
@@ -1189,6 +1237,10 @@ def _compile_predicate_trampoline_impl(
     base_globals.update(_py_thunks)
     if globals_:
         base_globals.update(globals_)
+    # Clause code runs on the engine's own builtins only: a name the
+    # call-target step does not resolve raises NameError instead of
+    # reaching Python's (``open``, ``eval``, ``getattr``, ...).
+    base_globals["__builtins__"] = CLAUSE_BUILTINS
     # Phase 6+7: resolve targets and capture locked dispatch functions.
     _inject_resolved_targets(_call_targets, base_globals, db, globals_)
     # Slice F2: Phase 1 exit gate — README §10 invariant 2.  Lock in
@@ -1748,7 +1800,8 @@ def compile_predicate_trampoline_ast(
 def _compile_always_fail_trampoline(functor: str, arity: int) -> Callable:
     """Trampoline variant: generator that immediately yields (_tramp_parent, DONE)."""
     func_def = _empty_predicate_funcdef(functor, arity, None, TrampolineStrategy())
-    return functiondef_to_function(func_def, globals_={"$DONE": DONE})
+    return functiondef_to_function(
+        func_def, globals_={"$DONE": DONE, "__builtins__": CLAUSE_BUILTINS})
 
 
 # ── head_to_match_pattern et al (moved to .head_match) ───────────────────────
@@ -2061,6 +2114,10 @@ def _compile_predicate_shallow_impl(
     base_globals.update(_py_thunks)
     if globals_:
         base_globals.update(globals_)
+    # Clause code runs on the engine's own builtins only: a name the
+    # call-target step does not resolve raises NameError instead of
+    # reaching Python's (``open``, ``eval``, ``getattr``, ...).
+    base_globals["__builtins__"] = CLAUSE_BUILTINS
     # Phase 6+7: resolve targets and capture locked dispatch functions.
     _inject_resolved_targets(_call_targets, base_globals, db, globals_)
     # Slice F2: Phase 1 exit gate — README §10 invariant 2.  Lock in

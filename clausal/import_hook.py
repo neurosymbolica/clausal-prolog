@@ -236,6 +236,16 @@ def _make_intern_atom(module_dict, module_items, module_name):
     return _intern_atom
 
 
+#: The ``$`` names ``_run_v2_pipeline`` binds per module (beside
+#: ``runtime_builtins``): together they are every engine name generated code
+#: may reference (``clausal.seam_audit`` allows exactly these).
+PER_MODULE_RUNTIME_NAMES = frozenset({
+    "$module", "$define_predicate", "$assert_fact", "$check_constant_ground",
+    "$check_currency_unit", "$decimal_value", "$constant_functor_term",
+    "$register_module_constant", "$register_constant_units", "$intern_atom",
+})
+
+
 def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items_fn):
     """Shared V2 pipeline: exec bytecode, collect predicate_nodes, compile.
 
@@ -276,6 +286,11 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
     module_dict["$register_module_constant"] = register_module_constant
     module_dict["$register_constant_units"] = register_constant_units
     code = loader.get_code(module.__name__)
+    assert {"$module", "$define_predicate", "$assert_fact",
+            "$check_constant_ground", "$check_currency_unit",
+            "$decimal_value", "$constant_functor_term",
+            "$register_module_constant", "$register_constant_units",
+            } <= PER_MODULE_RUNTIME_NAMES
 
     # _last_transformer is set by source_to_code.  If the code came
     # from .pyc cache, source_to_code didn't run, so use the recovery fn.
@@ -874,12 +889,12 @@ class _ClausalSourceLoader(SourceLoader):
                 raise
 
 
-def _parse_clausal_source(source, filename, prolog_singletons=False):
-    """Parse + EmbedTransformer a .clausal source string.
+def transform_seam_source(source, filename, prolog_singletons=False):
+    """Parse + EmbedTransformer a seam source string, executing nothing.
 
-    Returns ``(code_object, transformer)`` — the transformer carries
-    ``_module_items`` needed by the V2 pipeline.  *prolog_singletons* is the
-    ``.pl`` path's (D19): a ``_Name`` variable is no singleton there.
+    Returns ``(tree, transformer)``: *tree* is the FINAL generated Python
+    module the import hook compiles to bytecode (``clausal.seam_audit``
+    audits exactly this tree), the transformer carries ``_module_items``.
     """
     # A malformed clause surfaces here as CPython's stock one-liner, whose
     # reported line is where the parse gave up rather than where the mistake
@@ -898,8 +913,26 @@ def _parse_clausal_source(source, filename, prolog_singletons=False):
             prolog_singletons=prolog_singletons)
         tree = transformer.visit(tree)
         ast.fix_missing_locations(tree)
+        return tree, transformer
+
+
+def _parse_clausal_source(source, filename, prolog_singletons=False):
+    """Parse + EmbedTransformer a .clausal source string.
+
+    Returns ``(code_object, transformer)`` — the transformer carries
+    ``_module_items`` needed by the V2 pipeline.  *prolog_singletons* is the
+    ``.pl`` path's (D19): a ``_Name`` variable is no singleton there.
+    """
+    tree, transformer = transform_seam_source(source, filename,
+                                              prolog_singletons)
+    with warnings.catch_warnings(), \
+            clausal_syntax_diagnostics(source, filename):
+        warnings.filterwarnings(
+            "ignore", message="'str' object is not callable",
+            category=SyntaxWarning,
+        )
         code = compile(tree, filename=filename, mode="exec")
-        return code, transformer
+    return code, transformer
 
 
 def _extract_module_items(source, filename, prolog_singletons=False):
