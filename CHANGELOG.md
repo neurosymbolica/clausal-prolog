@@ -58,6 +58,15 @@ since 0.4.0 finish three moves:
   still matched by identity.
   Migration: compare a path with a string, or pass it straight on.
 
+- **clausal-scipy: `root_scalar`'s `flag` is a STRING** (ruled
+  2026-10-04: SciPy's status message is free-form text, like an
+  optimizer's `message`). The result dict of `root_scalar/2,3,4,5` holds
+  `flag` as `('$chars', s)` (`"converged"`), so `result_get(R, 'flag', F)`
+  and `++R["flag"]` both answer the string. Unchanged: `root`,
+  `iterations`, `function_calls` and the boolean `converged`. Migration:
+  compare the flag with a string (`F == "converged"`), or test
+  `converged`.
+
 - **clausal-scipy: units and messages are STRINGS; constant names stay
   atoms** (ruled 2026-10-04: free-form adapter text is a string
   `('$chars', s)`; a CODATA name is the key `lookup/4` takes). Changed:

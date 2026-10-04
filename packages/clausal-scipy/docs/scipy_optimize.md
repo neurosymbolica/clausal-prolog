@@ -202,7 +202,7 @@ Common fields by predicate:
 | `basin_hopping` | `'x'`, `'fun'`, `'message'` |
 | `nonlinear_least_squares` | `'x'`, `'cost'`, `'fun'`, `'success'` |
 | `curve_fit` | `'popt'`, `'pcov'` |
-| `root_scalar` | `'root'`, `'converged'`, `'iterations'` |
+| `root_scalar` | `'root'`, `'converged'`, `'iterations'`, `'flag'` |
 | `root` | `'x'`, `'fun'`, `'success'` |
 | `linear_program`, `mixed_integer_linear_program` | `'x'`, `'fun'`, `'success'`, `'message'` |
 
@@ -211,6 +211,12 @@ Common fields by predicate:
 conversion happens in `result_get/3`: the result itself is SciPy's
 `OptimizeResult`, so reading it through the `++` escape
 (`++R["message"]`) still gives SciPy's str, an atom.
+
+`root_scalar`'s `'flag'` (SciPy's status message, `"converged"` on
+success) is free-form text too, a **string**. Its result is a plain dict
+the adapter builds, so the flag is a string however it is read:
+`result_get(R, 'flag', F)` and `++R["flag"]` alike. Test success with
+`'converged'` (a boolean); compare the flag with a string.
 
 ---
 

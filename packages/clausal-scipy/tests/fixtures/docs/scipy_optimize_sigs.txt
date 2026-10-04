@@ -98,6 +98,7 @@ curve_fit(F, XDATA, YDATA, P0, RESULT)
 root_scalar(F, RESULT)
     find a root of a scalar function.
     RESULT: dict {root, iterations, function_calls, converged, flag}
+            (flag: a string, e.g. "converged")
 
 root_scalar(F, METHOD, RESULT)
     METHOD: 'bisect', 'brentq', 'brenth', 'ridder', 'toms748',

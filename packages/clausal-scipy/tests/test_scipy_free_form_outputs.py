@@ -74,3 +74,13 @@ def test_optimizer_message_is_a_string():
     assert is_chars(_drive(so.result_get, r, "message"))
     # other fields are unchanged
     assert _drive(so.result_get, r, "x") == pytest.approx(2.0)
+
+
+def test_root_scalar_flag_is_a_string():
+    # ruled 2026-10-04: the flag is SciPy's free-form status message
+    # ("converged"), a string like an optimizer's message
+    r = _drive(so.root_scalar, lambda x: x * x - 4.0, "brentq", [0.0, 3.0])
+    assert r["flag"] == chars("converged") and is_chars(r["flag"])
+    assert _drive(so.result_get, r, "flag") == chars("converged")
+    # the other fields are unchanged
+    assert r["root"] == pytest.approx(2.0) and r["converged"] is True
