@@ -859,3 +859,24 @@ def test_no_non_export_attribute_of_any_engine_adapter_is_reachable(
                     dotted, name, text, routes)
     print(f"covered {covered} non-export attributes")
     assert covered > 100
+
+
+
+@pytest.mark.parametrize("dunder", ["__dict__", "__spec__", "__loader__",
+                                    "__builtins__"])
+def test_an_export_list_cannot_vouch_for_a_module_attribute(proj, dunder):
+    """job 336: a Clausal module's export list is its author's text; a
+    dunder in it names the module object's own Python attribute, which no
+    declaration binds, so it is no export -- by import or by chain."""
+    proj.seam("lib", f"-module(@lib, [p/1, {dunder}])\np(1),\n")
+    for text, line in (
+            (f"-import_module(@lib)\nv(X) <- (X is @lib.{dunder})\n", 3),
+            (f"-import_from(@lib, [alias({dunder}, d)])\n"
+             f"v(X) <- (X is d)\n", 2)):
+        path = proj.seam("user", "-module(@user, [v/1])\n" + text)
+        routes = file_python_routes(str(path))
+        assert ("non_export", line) in routes, routes
+    proj.clausal("main", ":- use_module(@user, [v/1]).\n",
+                 "t(X) :- v(X).\n")
+    msg = _refused(proj, "main")
+    assert REFUSAL.format(m=proj.n("user")) in msg, msg

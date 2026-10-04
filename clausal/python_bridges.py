@@ -520,7 +520,16 @@ def _exports(dotted: str, origin: str) -> frozenset:
             from clausal.tools.iso_l3_directives import (  # noqa: PLC0415
                 _declared_exports)
             exports = _declared_exports(origin)[1]
-            names = frozenset(n for n, _a in exports or ())
+            # The list is the (untrusted) module author's text, so only a
+            # name the declaration itself BINDS counts: a lowercase name
+            # (the module/2 rewrite binds it as an atom, a predicate handle
+            # or a constructor).  An underscore-led name (``__dict__``,
+            # ``__loader__``) is the module object's own Python attribute,
+            # which no declaration binds; a non-identifier is refused too.
+            names = frozenset(
+                n for n, _a in exports or ()
+                if type(n) is str and n.isidentifier()
+                and not n.startswith("_") and not n[:1].isupper())
         elif is_engine_shipped(dotted, origin):
             import importlib  # noqa: PLC0415
             from clausal.library import is_value  # noqa: PLC0415
