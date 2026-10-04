@@ -1467,3 +1467,69 @@ def test_clause_code_runs_on_the_engine_builtins_only(proj):
     code = compile("open('/etc/hostname')", "<t>", "eval")
     with pytest.raises(NameError):
         eval(code, dict(fn.__globals__))
+
+
+#: Item 4: each lowering path not yet reviewed, with an attempt to reach
+#: non-allowlisted Python through it.
+PATH_EXPLOITS = {
+    "comprehension_iter": "v(M) <- (M is [x for x in open('/etc/hostname')])",
+    "comprehension_elt": "v(M) <- (M is [getattr(x, 'a') for x in [1]])",
+    "comprehension_if": "v(M) <- (M is [x for x in [1] if eval('1')])",
+    "comprehension_module": "v(M) <- (M is [units.os for x in [1]])",
+    "fstring_call": "v(S) <- (S is f\"{len([1])}\")",
+    "fstring_attr": "v(S) <- (S is f\"{S.__class__}\")",
+    "fstring_spec": "v(S) <- (S is f\"{S:{len([1])}}\")",
+    "lambda_goal": "v(F) <- (F is ((X) <- (open(X))))",
+    "lambda_module": "v(F) <- (F is ((X) <- (X is units.os)))",
+    "lambda_nested": "v(F) <- (F is ((X) <- (call((Y) <- (eval(Y)), X))))",
+}
+
+
+@pytest.mark.parametrize("name", sorted(PATH_EXPLOITS))
+def test_unreviewed_lowering_paths_are_refused_by_the_audit_alone(
+        tmp_path, name, monkeypatch):
+    from clausal import python_bridges as pb
+    monkeypatch.setattr(pb, "_DIAGNOSTICS", False)
+    f = tmp_path / "e.seam"
+    f.write_text("-module(e, [v/1])\n-private([x])\n-import_module(units)\n"
+                 + PATH_EXPLOITS[name] + "\n")
+    assert file_python_routes(str(f)), name
+
+
+def test_the_same_paths_used_cleanly_pass(tmp_path):
+    from clausal import python_bridges as pb
+    f = tmp_path / "e.seam"
+    f.write_text("-module(e, [v/1, w/1, u/1])\n-private([x])\n"
+                 "v(M) <- (M is [x * x for x in [1, 2]])\n"
+                 "w(S) <- (S is f\"{S!r:>8}\")\n"
+                 "u(F) <- (F is ((X) <- (X > 1)))\n")
+    assert pb.audit_routes(str(f))[0] == []
+
+
+def test_mark_directives_carry_only_constants():
+    """``$module.db.mark_<x>(...)`` is accepted only with data arguments:
+    a directive names predicates, it cannot carry a call."""
+    import ast as _ast
+    from clausal.seam_audit import generated_tree
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        tree = generated_tree("-module(m, [p/1])\n-dynamic(getattr/2)\n"
+                              "-table(p/1)\np(1),\n", "m.seam")
+    assert _audit(tree) == []
+    for attr in ("mark_dynamic", "mark_tabled"):
+        bad = _mutate(tree, lambda n, a=attr: isinstance(n, _ast.Call)
+                      and isinstance(n.func, _ast.Attribute)
+                      and n.func.attr == a,
+                      lambda n: _ast.Call(func=n.func, args=[
+                          _call("exec", _ast.Constant("print(1)"))],
+                          keywords=[]))
+        assert _audit(bad), attr
+        other = _mutate(tree, lambda n, a=attr: isinstance(n, _ast.Attribute)
+                        and n.attr == a,
+                        lambda n: _ast.Attribute(
+                            value=_ast.Attribute(value=n.value,
+                                                 attr="rows",
+                                                 ctx=_ast.Load()),
+                            attr="clear", ctx=_ast.Load()))
+        assert _audit(other), attr
