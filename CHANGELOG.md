@@ -20,6 +20,24 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **Clausal Prolog may import a `.seam` module that runs Python only when
+  its project allowlists it** (operator ruling 2026-10-04). A `.seam` module
+  with `++`, `--`, hosted Python statements, imports, `def`/`class`, Python
+  in f-string slots, or `py.` adapter calls/imports is a Python bridge; a
+  `.clausal` file's `use_module` of one is refused at load with
+  `permission_error(import, python_bridge, M)` unless the nearest
+  `pyproject.toml` above the IMPORTING file lists it in `[tool.clausal]
+  python_bridges` (a dotted name or a path, optionally
+  `{ module = ..., sha256 = ... }`). A Python-free `.seam` module is still
+  importable, and is checked transitively; engine-shipped modules
+  (`library(...)` facades, the stdlib) are unaffected, as are `.seam` and
+  `.pl` importers. A qualified call `M:G` from Clausal Prolog into a bridge
+  loaded elsewhere raises the same error at run time. Migration: add each
+  of your own Python-hosting `.seam` modules that `.clausal` files import to
+  `python_bridges`, or move its Python out. The detector is public:
+  `clausal.python_bridges.python_routes`. See docs/importing_prolog.md,
+  "Python bridges".
+
 - **clausal-sklearn: the term constructors are `est`, `dataset`, `fitted`,
   `split`** (no aliases). `Est`, `Dataset`, `Fitted`, `Split` were
   TitleCase, which has no role in Clausal positions. The tags of the terms

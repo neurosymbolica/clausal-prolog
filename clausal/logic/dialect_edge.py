@@ -124,6 +124,12 @@ def edge_error(kind: str, target: Any, context: str):
     from clausal._suffixes import (  # noqa: PLC0415
         CLAUSAL_PROLOG_SUFFIXES, PROLOG_SUFFIX, SEAM_SUFFIX, suffix_list)
     name = _module_name(target)
+    if kind == "python_bridge":
+        refusal = _BRIDGE_REFUSALS.get(_file_of(target))
+        why = refusal.message if refusal is not None else (
+            f"{name} runs Python and is not an allowlisted Python bridge")
+        return LogicException(permission_error(
+            "import", kind, name, f"{context}: {why}"))
     if kind == "prolog_module":
         cp = suffix_list(CLAUSAL_PROLOG_SUFFIXES) or "Clausal Prolog"
         why = (f"Clausal Prolog may not call ISO Prolog ({PROLOG_SUFFIX}), "
@@ -147,3 +153,61 @@ def refuse_edge(caller: Any, target: Any, context: str, *,
     kind = forbidden_kind(target)
     if kind is not None and (python or kind == "prolog_module"):
         raise edge_error(kind, target, context)
+    if python and kind is None:
+        kind = bridge_kind(caller, target)
+        if kind is not None:
+            raise edge_error(kind, target, context)
+
+
+def caller_forbidden_kind(caller: Any, target: Any) -> "str | None":
+    """:func:`forbidden_kind`, then -- for a Clausal Prolog *caller* --
+    ``"python_bridge"`` when *target* is a ``.seam`` module that runs Python
+    and the caller's project does not allowlist (:func:`bridge_kind`)."""
+    kind = forbidden_kind(target)
+    if kind is None:
+        kind = bridge_kind(caller, target)
+    return kind
+
+
+#: (caller file, target file) -> BridgeRefusal or None.  A loaded module's
+#: code does not change, so one answer per pair holds for the process.
+_BRIDGE_DECISIONS: dict = {}
+#: target file -> the last BridgeRefusal for it (the error message).
+_BRIDGE_REFUSALS: dict = {}
+
+
+def _file_of(obj: Any) -> "str | None":
+    md = _namespace(obj)
+    path = md.get("__file__") if md is not None else None
+    return path if isinstance(path, str) and path else None
+
+
+def bridge_kind(caller: Any, target: Any) -> "str | None":
+    """``"python_bridge"`` when the Clausal Prolog *caller* may not reach
+    the ``.seam`` module *target* (operator ruling 2026-10-04,
+    :mod:`clausal.python_bridges`): the run-time half of the load-time
+    import check, for ``M:G`` into a module someone else loaded."""
+    if target is None:
+        return None
+    target_file = _file_of(target)
+    if target_file is None:
+        return None
+    from clausal._suffixes import CLAUSAL_SUFFIXES  # noqa: PLC0415
+    if not target_file.endswith(CLAUSAL_SUFFIXES):
+        return None
+    caller_file = _file_of(caller)
+    key = (caller_file, target_file)
+    try:
+        refusal = _BRIDGE_DECISIONS[key]
+    except KeyError:
+        from clausal.python_bridges import bridge_refusal  # noqa: PLC0415
+        md = _namespace(target)
+        dotted = md.get("__name__") if md is not None else None
+        if not isinstance(dotted, str):
+            dotted = _module_name(target)
+        refusal = bridge_refusal(caller_file, dotted, target_file)
+        _BRIDGE_DECISIONS[key] = refusal
+    if refusal is None:
+        return None
+    _BRIDGE_REFUSALS[target_file] = refusal
+    return "python_bridge"

@@ -880,6 +880,18 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
         # finders picked, so a name with a .seam or Clausal Prolog twin
         # (which win over .pl) is never refused here.
         raise _refused(_prolog_import_refusal(what, dotted, found), span)
+    if ctx.surface == _SURFACE_CLAUSAL_PROLOG:
+        # Operator ruling 2026-10-04: a .seam module that runs Python is
+        # importable from Clausal Prolog only when engine-shipped or listed
+        # in the importer's project allowlist (clausal.python_bridges).
+        # Asked on every load -- the cache-hit path re-lowers the
+        # directives -- and from the FILE, so a module some .seam importer
+        # loaded first is judged the same.
+        from clausal.python_bridges import bridge_refusal  # noqa: PLC0415
+        refusal = bridge_refusal(ctx.source_path, dotted, found)
+        if refusal is not None:
+            raise _refused(f"{what}: {refusal.term_text} -- "
+                           f"{refusal.message}", span)
     declared, exports, ops, sticky = _declared_exports(found)
     if _is_python_module(found):
         mod = _import_python_module(dotted, target, span, what)

@@ -1117,11 +1117,11 @@ def _dotted_base(parts: list, globals_) -> Any:
     return base
 
 
-def _edge_kind(base) -> "str | None":
+def _edge_kind(base, db=None) -> "str | None":
     if base is None:
         return None
-    from clausal.logic.dialect_edge import forbidden_kind  # noqa: PLC0415
-    return forbidden_kind(base)
+    from clausal.logic.dialect_edge import caller_forbidden_kind  # noqa: PLC0415
+    return caller_forbidden_kind(db, base)
 
 
 def _refused_edge_dispatch(kind: str, base, dotted: str, arity: int):
@@ -1171,7 +1171,7 @@ def _unresolved_qualified_dispatch(dotted: str, arity: int, globals_, db):
         if _clausal_prolog_db(db):
             # The dialect gate (route 2) for a base that loaded after this
             # clause set compiled: Clausal Prolog never calls into .pl.
-            kind = _edge_kind(base)
+            kind = _edge_kind(base, db)
             if kind is not None:
                 return _refused_edge_dispatch(kind, base, dotted, arity)(*args)
         module_name = _clausal_module_name_of(base)
@@ -1402,7 +1402,7 @@ def _inject_resolved_targets(
                 # loaded takes ``_unresolved_qualified_dispatch``, which asks
                 # the same question when it resolves the base.
                 _base = _dotted_base(parts, globals_)
-                _kind = _edge_kind(_base)
+                _kind = _edge_kind(_base, db)
                 if _kind is not None:
                     base_globals[_disp_key(target_name, target_arity)] = (
                         _refused_edge_dispatch(_kind, _base, target_name,
