@@ -411,11 +411,34 @@ def _check_axis_1(fn):
     return dispatch
 
 
+def _text_arg(val):
+    """*val* dereferenced, with a STRING read as the ``str`` it denotes.
+
+    The input-side shape for an adapter position that takes a name or other
+    text but is not routed through :func:`to_python`: an atom is already
+    its ``str``, and a string -- the chars carrier ``('$chars', s)`` --
+    becomes ``s``, so ``f(foo)`` and ``f("foo")`` reach the library alike
+    (spec §9.4).  Anything else (an unbound variable, a number, a list, a
+    compound) comes back dereferenced and otherwise untouched, so a
+    caller's mode test (``is_var``) and its non-text handling are unchanged.
+    """
+    from clausal.logic.cells import CHARS_TAG  # noqa: PLC0415
+    val = deref(val)
+    # Type-check the tag before comparing it: an argument may be a pair of
+    # arrays (an LU factorisation), whose ``==`` is elementwise.
+    if (type(val) is tuple and len(val) == 2 and type(val[0]) is str
+            and val[0] == CHARS_TAG and type(val[1]) is str):
+        return val[1]
+    return val
+
+
 def _fact_table_2(get_facts):
     """Nondeterministic fact table: enumerate (name, value) pairs.
 
     Supports modes: (+name, -value), (-name, +value), (-name, -value), (+name, +value).
-    get_facts() is called lazily to build the list on first use.
+    get_facts() is called lazily to build the list on first use.  A bound
+    name may be an atom or a string (:func:`_text_arg`); both match the
+    fact of that spelling.
     """
     cache = {}
 
@@ -425,7 +448,7 @@ def _fact_table_2(get_facts):
             cache["facts"] = facts
             cache["by_name"] = {n: v for n, v in facts}
             cache["by_value"] = {id(v): n for n, v in facts}
-        n = deref(name_var)
+        n = _text_arg(name_var)
         v = deref(value_var)
 
         if not is_var(n) and is_var(v):

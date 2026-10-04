@@ -1272,6 +1272,16 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **An adapter fact table accepts a string name.** The shared
+  name/value table behind the adapters' name predicates (activation,
+  initializer, optimizer, sampler, distribution and layer names in
+  clausal-jax and clausal-torch; colour-code, threshold, interpolation,
+  border, morphology, cascade and video-property names in clausal-opencv)
+  looked a bound name up as the term itself, so `"relu"` -- the chars
+  carrier `('$chars', 'relu')` -- matched nothing while `relu` answered.
+  A string name now matches the fact of its spelling, in lookup and in
+  check mode; an unbound name still enumerates the atoms, and a reverse
+  lookup still answers the atom.
 - **The date predicates see a date term whose component was bound in the
   body.** `Y = 2025, ordinal(date(Y, 3, 1), N)` answered nothing, with no
   error, in `.pl` (both front ends) and in the seam when the term was built
