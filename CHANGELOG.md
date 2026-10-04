@@ -1379,6 +1379,13 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 - **TitleCase unit names** (`Metre` for `metre`) **and the old
   physical-constant spellings.** They are warned aliases
   (`ClausalDeprecatedSpellingWarning`).
+- **The `SI_*` dimension vectors of `clausal.modules.units`** (ruled
+  2026-10-04): `SI_Force` is now `si_force`, `SI_Velocity` `si_velocity`,
+  `SI_MagneticFluxDensity` `si_magnetic_flux_density`, and so on for all
+  19. The old names are warned aliases through the same table as the unit
+  names: once per process per name from Python, once per file from an
+  `-import_from` list -- which now includes one from `clausal.library.units`,
+  the `library(units)` facade that re-exports the new names.
 - **`query()`.** Iterate `solve(...)` and read `Var.value`.
 
 ### Experimental

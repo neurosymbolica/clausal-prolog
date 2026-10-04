@@ -467,27 +467,27 @@ a  = atto    # 1e-18
 # ═════════════════════════════════════════════════════════════════════════════
 
 # Named derived SI units aliased to their Quantity unit vector
-SI_Frequency            = hertz(1)
-SI_Force                = newton(1)
-SI_Energy               = joule(1)
-SI_Power                = watt(1)
-SI_Pressure             = pascal(1)
-SI_Voltage              = volt(1)
-SI_Charge               = coulomb(1)
-SI_Capacitance          = farad(1)
-SI_Resistance           = ohm(1)
-SI_Conductance          = siemens(1)
-SI_MagneticFlux         = weber(1)
-SI_MagneticFluxDensity  = tesla(1)
-SI_Inductance           = henry(1)
-SI_LuminousFlux         = lumen(1)
-SI_Illuminance          = lux(1)
+si_frequency             = hertz(1)
+si_force                 = newton(1)
+si_energy                = joule(1)
+si_power                 = watt(1)
+si_pressure              = pascal(1)
+si_voltage               = volt(1)
+si_charge                = coulomb(1)
+si_capacitance           = farad(1)
+si_resistance            = ohm(1)
+si_conductance           = siemens(1)
+si_magnetic_flux         = weber(1)
+si_magnetic_flux_density = tesla(1)
+si_inductance            = henry(1)
+si_luminous_flux         = lumen(1)
+si_illuminance           = lux(1)
 
 # Unnamed compound SI dimensions
-SI_Area         = metre(1)**2
-SI_Volume       = metre(1)**3
-SI_Velocity     = metre(1) / second(1)
-SI_Acceleration = metre(1) / second(1)**2
+si_area                  = metre(1)**2
+si_volume                = metre(1)**3
+si_velocity              = metre(1) / second(1)
+si_acceleration          = metre(1) / second(1)**2
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -499,20 +499,20 @@ SI_Acceleration = metre(1) / second(1)**2
 #
 #     E is ++(kilogram(1) * speed_of_light ** 2)
 
-speed_of_light          = 299_792_458       * SI_Velocity
-planck_constant        = 6.62607015e-34    * SI_Energy * second(1)
-reduced_planck         = 1.054571817e-34   * SI_Energy * second(1)
-boltzmann_constant     = 1.380649e-23      * SI_Energy / kelvin(1)
+speed_of_light          = 299_792_458       * si_velocity
+planck_constant        = 6.62607015e-34    * si_energy * second(1)
+reduced_planck         = 1.054571817e-34   * si_energy * second(1)
+boltzmann_constant     = 1.380649e-23      * si_energy / kelvin(1)
 avogadro_constant      = 6.02214076e23     / mole(1)
-elementary_charge      = 1.602176634e-19   * SI_Charge
-standard_gravity       = 9.80665           * SI_Acceleration
+elementary_charge      = 1.602176634e-19   * si_charge
+standard_gravity       = 9.80665           * si_acceleration
 gravitational_constant = 6.67430e-11       * metre(1)**3 / kilogram(1) / second(1)**2
 atomic_mass_unit       = 1.66053906660e-27 * kilogram(1)
 electron_mass          = 9.1093837015e-31  * kilogram(1)
 proton_mass            = 1.67262192369e-27 * kilogram(1)
 vacuum_permeability    = 1.25663706212e-6  * kilogram(1) * metre(1) / second(1)**2 / ampere(1)**2
 vacuum_permittivity    = 8.8541878128e-12  * second(1)**4 / kilogram(1) / metre(1)**3 * ampere(1)**2
-stefan_boltzmann       = 5.670374419e-8    * SI_Power / metre(1)**2 / kelvin(1)**4
+stefan_boltzmann       = 5.670374419e-8    * si_power / metre(1)**2 / kelvin(1)**4
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -824,6 +824,26 @@ _DEPRECATED_UNIT_NAMES: dict[str, str] = {
     "ProtonMass": "proton_mass", "VacuumPermeability": "vacuum_permeability",
     "VacuumPermittivity": "vacuum_permittivity",
     "StefanBoltzmann": "stefan_boltzmann",
+    # SI dimension vectors (ruled 2026-10-04, D16-X2): snake_case
+    "SI_Frequency": "si_frequency",
+    "SI_Force": "si_force",
+    "SI_Energy": "si_energy",
+    "SI_Power": "si_power",
+    "SI_Pressure": "si_pressure",
+    "SI_Voltage": "si_voltage",
+    "SI_Charge": "si_charge",
+    "SI_Capacitance": "si_capacitance",
+    "SI_Resistance": "si_resistance",
+    "SI_Conductance": "si_conductance",
+    "SI_MagneticFlux": "si_magnetic_flux",
+    "SI_MagneticFluxDensity": "si_magnetic_flux_density",
+    "SI_Inductance": "si_inductance",
+    "SI_LuminousFlux": "si_luminous_flux",
+    "SI_Illuminance": "si_illuminance",
+    "SI_Area": "si_area",
+    "SI_Volume": "si_volume",
+    "SI_Velocity": "si_velocity",
+    "SI_Acceleration": "si_acceleration",
 }
 
 for _old, _new in _DEPRECATED_UNIT_NAMES.items():

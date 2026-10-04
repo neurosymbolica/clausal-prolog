@@ -438,9 +438,13 @@ TEST_DEPRECATED_NAME = "Test"
 # Its old names — TitleCase ``Metre``/``SpeedOfLight``, American
 # ``kilometer`` — are deprecated aliases of ``metre``/``speed_of_light``/
 # ``kilometre``; an ``-import_from`` naming one is rewritten to import the
-# current name under the old local name and linted once per file.
+# current name under the old local name and linted once per file.  The
+# generated ``library(units)`` facade (clausal/library/units.seam) is one of
+# them: it re-exports the module's values under their CURRENT names only, so
+# an old spelling imported through it needs the same rewrite.
 _UNITS_MODULE_PATHS = frozenset({
     "units", "py.units", "clausal.modules.units", "clausal.modules.py.units",
+    "clausal.library.units",
 })
 
 

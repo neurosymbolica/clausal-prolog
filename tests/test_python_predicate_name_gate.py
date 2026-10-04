@@ -67,20 +67,11 @@ _MIN_DATA_MODULES = 180
 _MIN_DATA_NAMES = 450
 
 #: TitleCase data names the ENGINE exports, held for an operator ruling
-#: (2026-10-04) rather than renamed: engine-side names are not this gate's
-#: to change.  (``prolog.Rem/TruncDiv/TruncMod`` were ruled 2026-10-04,
-#: D16-X2: made private.)  ``units.SI_*`` are the derived-unit
-#: dimension templates ``clausal/library/units`` imports.  EXACT: a name
-#: not listed fails, and so does a listed name that no longer exists.
-_ENGINE_DATA_PENDING_RULING = {
-    "clausal.modules.units": {
-        "SI_Acceleration", "SI_Area", "SI_Capacitance", "SI_Charge",
-        "SI_Conductance", "SI_Energy", "SI_Force", "SI_Frequency",
-        "SI_Illuminance", "SI_Inductance", "SI_LuminousFlux",
-        "SI_MagneticFlux", "SI_MagneticFluxDensity", "SI_Power",
-        "SI_Pressure", "SI_Resistance", "SI_Velocity", "SI_Voltage",
-        "SI_Volume"},
-}
+#: rather than renamed: engine-side names are not this gate's to change.
+#: EXACT: a name not listed fails, and so does a listed name that no longer
+#: exists.  Empty since the 2026-10-04 ruling (D16-X2): ``prolog.TruncDiv/
+#: TruncMod/Rem`` became private, ``units.SI_*`` became ``units.si_*``.
+_ENGINE_DATA_PENDING_RULING: dict[str, set] = {}
 
 
 def _run_census(*extra: pathlib.Path, only_extra: bool = False) -> dict:
@@ -384,11 +375,6 @@ def test_control_pending_ruling_list_is_exact(census):
     """A listed engine name that is no longer exported fails, so the list
     cannot outlive the names it holds."""
     stale = {m: set(n) for m, n in _ENGINE_DATA_PENDING_RULING.items()}
-    stale["clausal.modules.units"].add("SI_NoSuchName")
+    stale.setdefault("clausal.modules.units", set()).add("SI_Force")
     problems = _data_problems(census, pending=stale)
-    assert len(problems) == 1 and "SI_NoSuchName" in problems[0], problems
-    # and an engine name taken OFF the list fails
-    short = {m: set(n) for m, n in _ENGINE_DATA_PENDING_RULING.items()}
-    short["clausal.modules.units"].discard("SI_Force")
-    problems = _data_problems(census, pending=short)
-    assert len(problems) == 1 and "'SI_Force'" in problems[0], problems
+    assert len(problems) == 1 and "SI_Force" in problems[0], problems
