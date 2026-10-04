@@ -1272,6 +1272,16 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **clausal-yaml: `write/2`, `write_all/2` and `write_file/2` serialise a
+  string, and a dict written in source.** The data reached PyYAML
+  dereferenced one level only: a string -- the chars carrier -- nested in
+  the data was a Python tuple, which the safe dumper rejects
+  (`type_error(yaml_term, _)`), and a top-level `write("plain", S)` wrote
+  the list `- $chars` / `- plain`. A dict term written in source
+  (`{name: bob}`) was rejected the same way, whatever its keys. The data
+  now goes through the shared term-to-Python conversion, so strings are
+  their text and dict terms are mappings at every depth. What these
+  predicates hand back is unchanged.
 - **clausal-sympy: a string names a symbol.** `sym("x", X)` failed (the
   name had to be an atom), and a string inside an expression --
   `expand(("y" + 1) * 2, E)` under `-double_quotes(chars)` -- became the

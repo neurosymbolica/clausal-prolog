@@ -43,6 +43,7 @@ from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.cells import chars_text, is_chars
+from clausal.logic.to_python import to_python
 from clausal.logic.exceptions import LogicException, type_error
 
 
@@ -94,7 +95,7 @@ def _read_2(yaml_string, result, trail, k):
 
 def _write_2(data, result, trail, k):
     """write/2: serialize Python object → YAML string."""
-    data = deref(data)
+    data = to_python(data)    # a string -> its str, a dict term -> a dict, at every depth
     try:
         out = _yaml.safe_dump(data, default_flow_style=False)
         out = out.rstrip("\n")
@@ -125,7 +126,7 @@ def _read_all_2(yaml_string, result, trail, k):
 
 def _write_all_2(docs, result, trail, k):
     """write_all/2: serialize list of objects → multi-document YAML string."""
-    docs = deref(docs)
+    docs = to_python(docs)
     try:
         out = _yaml.safe_dump_all(docs, default_flow_style=False).rstrip("\n")
     except _yaml.YAMLError as exc:
@@ -164,7 +165,7 @@ def _read_file_2(path, result, trail, k):
 def _write_file_2(path, data, trail, k):
     """write_file/2: write Python object as YAML to file path."""
     path = deref(path)
-    data = deref(data)
+    data = to_python(data)
     name = require_text(path, "write_file/2", 1)
     # Serialised BEFORE the file is opened, as py.json's write_file/2 does:
     # a term YAML cannot represent raises and leaves no truncated file.
