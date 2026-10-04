@@ -325,6 +325,8 @@ def test_a_wrong_sha_pin_is_refused_with_both_hashes(proj):
     "[tool.clausal]\npython_bridges = [{ module = \"h\", sha256 = \"0\" }]\n",
     "[tool.clausal]\npython_bridges = [\"not a module\"]\n",
     "[tool.clausal\n",
+    "[tool]\nclausal = \"x\"\n",
+    "tool = 3\n",
 ])
 def test_a_malformed_allowlist_fails_closed(proj, raw):
     proj.seam("helper", BRIDGE)
@@ -389,10 +391,7 @@ def test_a_qualified_call_into_a_loaded_bridge_is_refused(proj, body):
     term = ei.value.term
     assert term[0] == "error" and term[1][:4] == (
         "permission_error", "import", "python_bridge", proj.n("helper")), term
-    # Allowlisted, the same call runs (a fresh process would ask afresh;
-    # here the run-time answer is per (caller, target) file pair).
-    from clausal.logic import dialect_edge
-    dialect_edge._BRIDGE_DECISIONS.clear()
+    # Allowlisted, the same call runs.
     proj.allow([f'"{proj.n("helper")}"'])
     assert _answers(proj.load("main")) == [os.getcwd()]
 
@@ -492,3 +491,43 @@ def test_bridge_refusal_api(proj):
     assert r.term_text == REFUSAL.format(m=proj.n("helper"))
     proj.allow([f'"{proj.n("helper")}"'])
     assert bridge_refusal(str(main), proj.n("helper"), str(path)) is None
+
+
+def test_a_run_time_call_follows_the_allowlist_without_a_reload(proj):
+    """``call/N`` resolves at run time: editing the allowlist changes the
+    answer for the module already loaded (no process-lifetime cache)."""
+    proj.seam("helper", BRIDGE)
+    proj.seam("loader", "-module(@loader, [])\n-import_from(@helper, [cwd])\n")
+    proj.load("loader")
+    proj.clausal("main", "", "t(D) :- G = @helper:cwd(D), call(G).\n")
+    mod = proj.load("main")
+    with pytest.raises(LogicException):
+        _answers(mod)
+    proj.allow([f'"{proj.n("helper")}"'])
+    assert _answers(mod) == [os.getcwd()]
+    proj.allow([])
+    with pytest.raises(LogicException):
+        _answers(mod)
+
+
+@pytest.mark.parametrize("init", [
+    "open({marker!r}, 'w').write('ran')\n",
+    "open({marker!r}, 'w').write('ran')\nraise RuntimeError('boom')\n",
+])
+def test_the_gate_imports_nothing_it_judges(proj, init):
+    """A pass-through naming a Python package: the package's ``__init__``
+    does not run while the gate decides (it is refused first), and an
+    ``__init__`` that would raise does not replace the refusal."""
+    marker = proj.root / "marker.txt"
+    pkg = proj.root / (proj.n("pkg"))
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text(init.format(marker=str(marker)))
+    (pkg / "sub.py").write_text("x = 1\n")
+    proj.names.append(proj.n("pkg"))
+    proj.seam("mid", "-module(@mid, [p/1])\n-import_from(@pkg.sub, [x])\n"
+                     "p(1),\n")
+    proj.clausal("main", ":- use_module(@mid, [p/1]).\n", "t(X) :- p(X).\n")
+    msg = _refused(proj, "main")
+    assert REFUSAL.format(m=proj.n("mid")) in msg, msg
+    assert "python_module at line 2" in msg, msg
+    assert not marker.exists()

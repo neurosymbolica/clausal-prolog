@@ -117,7 +117,7 @@ def _module_name(target: Any) -> str:
     return repr(target)
 
 
-def edge_error(kind: str, target: Any, context: str):
+def edge_error(kind: str, target: Any, context: str, caller: Any = None):
     """The LogicException refusing a Clausal Prolog -> *kind* edge."""
     from clausal.logic.exceptions import (  # noqa: PLC0415
         LogicException, permission_error)
@@ -125,7 +125,7 @@ def edge_error(kind: str, target: Any, context: str):
         CLAUSAL_PROLOG_SUFFIXES, PROLOG_SUFFIX, SEAM_SUFFIX, suffix_list)
     name = _module_name(target)
     if kind == "python_bridge":
-        refusal = _BRIDGE_REFUSALS.get(_file_of(target))
+        refusal = bridge_refusal_for(caller, target)
         why = refusal.message if refusal is not None else (
             f"{name} runs Python and is not an allowlisted Python bridge")
         return LogicException(permission_error(
@@ -156,7 +156,7 @@ def refuse_edge(caller: Any, target: Any, context: str, *,
     if python and kind is None:
         kind = bridge_kind(caller, target)
         if kind is not None:
-            raise edge_error(kind, target, context)
+            raise edge_error(kind, target, context, caller)
 
 
 def caller_forbidden_kind(caller: Any, target: Any) -> "str | None":
@@ -169,11 +169,10 @@ def caller_forbidden_kind(caller: Any, target: Any) -> "str | None":
     return kind
 
 
-#: (caller file, target file) -> BridgeRefusal or None.  A loaded module's
-#: code does not change, so one answer per pair holds for the process.
+#: (caller file, target file) -> (project file, its stamp, BridgeRefusal or
+#: None).  Reused while the project file is unchanged (one stat per ask);
+#: a loaded module's code does not change, so its own file is not re-read.
 _BRIDGE_DECISIONS: dict = {}
-#: target file -> the last BridgeRefusal for it (the error message).
-_BRIDGE_REFUSALS: dict = {}
 
 
 def _file_of(obj: Any) -> "str | None":
@@ -182,11 +181,9 @@ def _file_of(obj: Any) -> "str | None":
     return path if isinstance(path, str) and path else None
 
 
-def bridge_kind(caller: Any, target: Any) -> "str | None":
-    """``"python_bridge"`` when the Clausal Prolog *caller* may not reach
-    the ``.seam`` module *target* (operator ruling 2026-10-04,
-    :mod:`clausal.python_bridges`): the run-time half of the load-time
-    import check, for ``M:G`` into a module someone else loaded."""
+def bridge_refusal_for(caller: Any, target: Any):
+    """The :class:`clausal.python_bridges.BridgeRefusal` for a Clausal
+    Prolog *caller* reaching the ``.seam`` module *target*, or None."""
     if target is None:
         return None
     target_file = _file_of(target)
@@ -195,19 +192,26 @@ def bridge_kind(caller: Any, target: Any) -> "str | None":
     from clausal._suffixes import CLAUSAL_SUFFIXES  # noqa: PLC0415
     if not target_file.endswith(CLAUSAL_SUFFIXES):
         return None
+    from clausal import python_bridges as pb  # noqa: PLC0415
     caller_file = _file_of(caller)
     key = (caller_file, target_file)
-    try:
-        refusal = _BRIDGE_DECISIONS[key]
-    except KeyError:
-        from clausal.python_bridges import bridge_refusal  # noqa: PLC0415
-        md = _namespace(target)
-        dotted = md.get("__name__") if md is not None else None
-        if not isinstance(dotted, str):
-            dotted = _module_name(target)
-        refusal = bridge_refusal(caller_file, dotted, target_file)
-        _BRIDGE_DECISIONS[key] = refusal
-    if refusal is None:
-        return None
-    _BRIDGE_REFUSALS[target_file] = refusal
-    return "python_bridge"
+    hit = _BRIDGE_DECISIONS.get(key)
+    if hit is not None and pb.project_stamp(hit[0]) == hit[1]:
+        return hit[2]
+    md = _namespace(target)
+    dotted = md.get("__name__") if md is not None else None
+    if not isinstance(dotted, str):
+        dotted = _module_name(target)
+    project = pb.find_project_file(caller_file)
+    refusal = pb.bridge_refusal(caller_file, dotted, target_file)
+    _BRIDGE_DECISIONS[key] = (project, pb.project_stamp(project), refusal)
+    return refusal
+
+
+def bridge_kind(caller: Any, target: Any) -> "str | None":
+    """``"python_bridge"`` when the Clausal Prolog *caller* may not reach
+    the ``.seam`` module *target* (operator ruling 2026-10-04,
+    :mod:`clausal.python_bridges`): the run-time half of the load-time
+    import check, for ``M:G`` into a module someone else loaded."""
+    return ("python_bridge" if bridge_refusal_for(caller, target) is not None
+            else None)

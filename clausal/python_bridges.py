@@ -341,17 +341,74 @@ def _scan(path: str) -> _Scan:
     return scan
 
 
+#: What :func:`_find` answers for a name whose resolution RAISED: a finder
+#: (or a module object) misbehaved, so the reference is refused, never
+#: skipped (fail closed).
+_UNRESOLVABLE = "<unresolvable>"
+
+
 def _find(dotted: str) -> "str | None":
-    """The source file of the module *dotted* names, or None.  (As every
-    import does, this imports its parent packages.)"""
-    import importlib.util  # noqa: PLC0415
-    try:
-        spec = importlib.util.find_spec(dotted)
-    except (ImportError, ValueError, AttributeError):
+    """The source file of the module *dotted* names, or None (no such
+    module, or a namespace package, which runs nothing).
+
+    Resolved WITHOUT importing anything: each segment is looked up through
+    ``sys.meta_path`` with its parent's search path (from ``sys.modules``
+    when the parent is loaded), so a parent package's ``__init__`` never
+    runs while the gate is still deciding.  A lookup that raises answers
+    :data:`_UNRESOLVABLE`."""
+    parts = dotted.split(".")
+    path = None
+    spec = None
+    for i in range(len(parts)):
+        name = ".".join(parts[:i + 1])
+        mod = sys.modules.get(name)
+        try:
+            if mod is not None:
+                spec = getattr(mod, "__spec__", None)
+                origin = getattr(spec, "origin", None) or getattr(
+                    mod, "__file__", None)
+                locations = getattr(mod, "__path__", None)
+            else:
+                spec = None
+                for finder in sys.meta_path:
+                    find_spec = getattr(finder, "find_spec", None)
+                    if find_spec is None:
+                        continue
+                    spec = find_spec(name, path)
+                    if spec is not None:
+                        break
+                if spec is None:
+                    return None
+                origin = spec.origin
+                locations = spec.submodule_search_locations
+        except Exception:  # noqa: BLE001 -- fail closed, see _UNRESOLVABLE
+            return _UNRESOLVABLE
+        if i < len(parts) - 1:
+            if locations is None:
+                return None     # not a package: nothing below it
+            path = list(locations)
+    if not origin or origin == "<namespace>":
         return None
-    if spec is None or not spec.origin or spec.origin == "<namespace>":
-        return None     # nothing to load (a namespace package runs nothing)
-    return spec.origin  # a file, or "built-in"/"frozen" (Python all the same)
+    return origin       # a file, or "built-in"/"frozen" (Python all the same)
+
+
+def _classify(dotted: str) -> "tuple[str, str | None]":
+    """How a module reference counts: ``("python_module", origin)`` -- a
+    Python (non-Clausal) module the engine does not ship, or one that could
+    not be resolved safely; ``("seam", origin)`` -- a ``.seam`` module the
+    engine does not ship (walked); ``("ignored", origin)`` -- nothing,
+    engine-shipped, or a Clausal Prolog / ``.pl`` module (gated on its own
+    load, and by the dialect gate)."""
+    origin = _find(dotted)
+    if origin == _UNRESOLVABLE:
+        return "python_module", None
+    if origin is None or is_engine_shipped(dotted, origin):
+        return "ignored", origin
+    if not _is_source(origin):
+        return "python_module", origin
+    if _is_seam(origin):
+        return "seam", origin
+    return "ignored", origin
 
 
 def _is_source(origin: str) -> bool:
@@ -372,9 +429,7 @@ def file_python_routes(path: str) -> "list[tuple[str, int]]":
     scan = _scan(path)
     out = list(scan.routes)
     for dotted, line in scan.refs:
-        origin = _find(dotted)
-        if (origin is not None and not _is_source(origin)
-                and not is_engine_shipped(dotted, origin)):
+        if _classify(dotted)[0] == "python_module":
             out.append(("python_module", line))
     out.sort(key=lambda r: r[1])
     return out
@@ -461,7 +516,19 @@ class _Allowlist:
         return None
 
 
-#: pyproject path -> ((mtime_ns, size), _Allowlist)
+def project_stamp(project: "str | None"):
+    """What identifies the content of the project file *project* (None for
+    no file): a change to it changes the stamp."""
+    if project is None:
+        return None
+    try:
+        st = os.stat(project)
+    except OSError:
+        return "missing"
+    return (st.st_mtime_ns, st.st_ctime_ns, st.st_size, st.st_ino)
+
+
+#: pyproject path -> (stamp, _Allowlist)
 _ALLOWLISTS: dict[str, tuple] = {}
 
 _SHA = re.compile(r"[0-9a-fA-F]{64}")
@@ -470,11 +537,9 @@ _SHA = re.compile(r"[0-9a-fA-F]{64}")
 def _allowlist(project: "str | None") -> _Allowlist:
     if project is None:
         return _Allowlist(None)
-    try:
-        st = os.stat(project)
-    except OSError as e:
-        return _Allowlist(project, error=str(e))
-    stamp = (st.st_mtime_ns, st.st_ctime_ns, st.st_size, st.st_ino)
+    stamp = project_stamp(project)
+    if stamp == "missing":
+        return _Allowlist(project, error=f"{project} could not be read")
     hit = _ALLOWLISTS.get(project)
     if hit is not None and hit[0] == stamp:
         return hit[1]
@@ -490,8 +555,15 @@ def _read_allowlist(project: str) -> _Allowlist:
             data = tomllib.load(f)
     except (OSError, tomllib.TOMLDecodeError) as e:
         return _Allowlist(project, error=f"{project} could not be read: {e}")
-    raw = data.get("tool", {}).get("clausal", {}).get("python_bridges", [])
     where = f"{project} [tool.clausal] python_bridges"
+    raw = data
+    for key in ("tool", "clausal"):
+        raw = raw.get(key, {})
+        if not isinstance(raw, dict):
+            return _Allowlist(project, error=(
+                f"{project}: [{'tool' if key == 'tool' else 'tool.clausal'}]"
+                f" is not a table"))
+    raw = raw.get("python_bridges", [])
     if not isinstance(raw, list):
         return _Allowlist(project, error=f"{where} must be a list")
     base = os.path.dirname(os.path.abspath(project))
@@ -603,15 +675,11 @@ def _walk(dotted, origin, allow, chain, seen) -> "BridgeRefusal | None":
     routes = list(scan.routes)
     children = []
     for ref, line in scan.refs:
-        ref_origin = _find(ref)
-        if ref_origin is None or is_engine_shipped(ref, ref_origin):
-            continue
-        if not _is_source(ref_origin):
+        how, ref_origin = _classify(ref)
+        if how == "python_module":
             routes.append(("python_module", line))
-        elif _is_seam(ref_origin):
+        elif how == "seam":
             children.append((ref, ref_origin, line))
-        # A Clausal Prolog module is gated when IT loads; .pl is the
-        # dialect gate's.
     if routes:
         routes.sort(key=lambda r: r[1])
         return BridgeRefusal(dotted, origin, _refusal_text(
