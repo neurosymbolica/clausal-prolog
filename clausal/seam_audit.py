@@ -60,6 +60,60 @@ def _engine_names() -> frozenset:
     ) | import_hook.PER_MODULE_RUNTIME_NAMES
 
 
+#: Engine helper FUNCTIONS generated code may call (each takes terms or
+#: constants and acts on the module's own database or atom pool).
+_HELPER_CALLEES = frozenset({
+    "$declare_head", "$define_predicate", "$assert_fact", "$head",
+    "$intern_atom", "$keeps_predicate", "$mint", "$check_constant_ground",
+    "$constant_functor_term", "$register_module_constant",
+    "$register_constant_units", "$check_currency_unit", "$decimal_value",
+    "$unterminated_fact_error", "$in_",
+})
+
+#: The DATA node classes (clause terms the logic compiler interprets),
+#: by their place in the compiler's own node hierarchy.
+_DATA_NODE_NAMES = frozenset({
+    "Call", "Keyword", "IfExpr", "CompareChain", "DictLiteral", "FString",
+    "FormattedExpr", "StarUnpack", "Slice", "ForClause", "Lambda", "Params",
+    "LoadName", "LoadAttr", "LoadSubscript", "Predicate", "DictTerm",
+    "SetTerm", "PyThunk", "FStringThunk", "Quantity", "Var", "FrozenList",
+    "FrozenDict", "FrozenSet", "NoneLiteral", "EllipsisLiteral",
+})
+
+
+def _allowed_callees() -> frozenset:
+    """The ``$`` callees generated code may call: the helper functions
+    above, and the engine's DATA node classes -- the literal, operator,
+    pattern, comprehension and parameter families of the compiler's node
+    hierarchy plus the term nodes named above.  Never a node that stands
+    for a Python effect (a store, delete, assignment, return, yield,
+    await, a module or a loop), which the logic compiler would turn into
+    one."""
+    from clausal import import_hook  # noqa: PLC0415
+    from clausal.pythonic_ast import nodes  # noqa: PLC0415
+    families = tuple(getattr(nodes, n) for n in (
+        "Literal", "ElementsLiteral", "BinOp", "UnaryOp", "PatternList",
+        "ElemComp", "Param") if hasattr(nodes, n))
+    out = set(_HELPER_CALLEES & _engine_names())
+    for name, value in import_hook.runtime_builtins.items():
+        if not name.startswith("$"):
+            continue
+        bare = name[1:]
+        if bare in _DATA_NODE_NAMES or (
+                isinstance(value, type) and families
+                and issubclass(value, families)):
+            out.add(name)
+    return frozenset(out)
+
+
+def _runtime_bare_names() -> frozenset:
+    """The bare (non-``$``) names the loader injects into every module: the
+    module may not rebind them (a walrus or assignment target)."""
+    from clausal import import_hook  # noqa: PLC0415
+    return frozenset(n for n in import_hook.runtime_builtins
+                     if not n.startswith("$"))
+
+
 def generated_tree(source: str, filename: str) -> ast.Module:
     """The final Python tree the import hook compiles for this ``.seam``
     source (nothing executed)."""
@@ -177,6 +231,9 @@ class _Audit:
         self.routes: list = []
         self.children: list = []
         self.engine = _engine_names()
+        self.callees = _allowed_callees()
+        self.reserved = _runtime_bare_names()
+        self.imported_modules: set = set()
         self.check_module = check_module
         self.own: set = set()           # names this module binds
         self.imported: dict = {}        # local -> "module.orig"
@@ -221,6 +278,7 @@ class _Audit:
         elif isinstance(node, ast.Assign):
             for t in node.targets:
                 if not (isinstance(t, ast.Name)
+                        and t.id not in self.reserved
                         and (not t.id.startswith("_")
                              or t.id in _ENGINE_ASSIGNED)):
                     self.route("python_statement", node)
@@ -240,6 +298,13 @@ class _Audit:
         if kind == "import_guard":
             imp = node.body[0]
             self.import_from(imp)
+            self.imported_modules.add(imp.module)
+            names = {a.asname or a.name: a.name for a in imp.names}
+            # The guard binds the data names OF THIS import, nothing else.
+            for sub in ast.walk(node):
+                if isinstance(sub, ast.Dict) and _is_const_tree(sub):
+                    if ast.literal_eval(sub) != names:
+                        self.route("python_statement", node)
             for c in _import_constants(node):
                 if c not in _PLUMBING_MODULES[kind]:
                     self.route("python_module", node)
@@ -254,7 +319,11 @@ class _Audit:
                     self.route("python_module", node)
         elif kind == "import_signatures":
             for c in _import_constants(node):
-                self.check_module("module", c, None, node)
+                if c not in self.imported_modules:
+                    # it copies the registry of a module this file imports
+                    self.route("python_module", node)
+                else:
+                    self.check_module("module", c, None, node)
         else:
             allowed = _PLUMBING_MODULES[kind]
             for c in _import_constants(node):
@@ -264,6 +333,8 @@ class _Audit:
 
     # -- expressions ----------------------------------------------------
     def name_ok(self, name, scope) -> bool:
+        if name in self.module_names and name not in scope:
+            return False        # a module object as a value
         return (name in self.engine or name in scope or name in self.own)
 
     def expr(self, node, scope):
@@ -276,6 +347,8 @@ class _Audit:
                 self.route("python_name", node)
             return
         if isinstance(node, ast.NamedExpr):
+            if node.target.id in self.reserved:
+                self.route("python_statement", node)
             self.own.add(node.target.id)
             self.expr(node.value, scope)
             return
@@ -352,6 +425,9 @@ class _Audit:
     def call(self, node, scope):
         f = node.func
         if isinstance(f, ast.Name) and f.id in self.engine:
+            if f.id not in self.callees:
+                self.route("python_call", node)
+                return
             if f.id == "$LoadName":
                 self.load_name(node)
             elif f.id == "$LoadAttr":
@@ -378,7 +454,9 @@ class _Audit:
                 and all(_is_const_tree(a) for a in node.args)
                 and not node.keywords):
             return      # -translations registration, constant arguments
-        if isinstance(f, ast.Attribute) and self.dollar_rooted(f):
+        if (isinstance(f, ast.Attribute) and self.dollar_rooted(f)
+                and ast.unparse(f).startswith("$module.db.mark_")
+                and ast.unparse(f).count(".") == 2):
             for a in node.args:
                 self.expr(a, scope)
             for k in node.keywords:
@@ -409,6 +487,9 @@ class _Audit:
             self.route("non_export", node)
         elif len(parts) > 1:
             self.check_module("chain", name, None, node)
+        elif name in self.module_names:
+            # a bare -import_module binding: the MODULE OBJECT as a value
+            self.route("non_export", node)
 
     def load_attr(self, node) -> bool:
         """Check a whole $LoadAttr chain; False when it was refused for its

@@ -1130,6 +1130,11 @@ EXPLOITS = {
                    "v(X) <- (X is ++len([1, 2]))\n",
     "fstring_call": "-module(@helper, [v/1])\n"
                     "v(X) <- (X is f\"{len([1, 2])}\")\n",
+    # review 340: a bare -import_module binding is the module OBJECT
+    "r7_bare_module_value": "-module(@helper, [v/1])\n"
+                            "-import_module(units)\nv(D) <- (D is units)\n",
+    "r7_bare_py_value": "-module(@helper, [v/1])\n"
+                        "-import_module(py.datetime)\nv(D) <- (D is py)\n",
 }
 
 
@@ -1332,6 +1337,26 @@ def _mutations():
                     and n.arg == "position",
                     lambda n: _ast.keyword(arg="position",
                                            value=exec_call())),
+        # an engine data node -> an effect node (an attribute STORE)
+        "effect_node": (_is_call("$Var"), lambda n: _call("$StoreAttr")),
+        # $module.db.mark_X -> another attribute of the database
+        "dollar_attr_other": (lambda n: isinstance(n, _ast.Attribute)
+                              and n.attr == "mark_dynamic",
+                              lambda n: _ast.Attribute(value=n.value,
+                                                       attr="clear",
+                                                       ctx=_ast.Load())),
+        # a walrus target -> an injected runtime name
+        "walrus_reserved": (lambda n: isinstance(n, _ast.NamedExpr),
+                            lambda n: _ast.NamedExpr(
+                                target=_ast.Name(id="PyThunk",
+                                                 ctx=_ast.Store()),
+                                value=n.value)),
+        # the import guard -> binding names of ANOTHER import
+        "guard_names": (lambda n: isinstance(n, _ast.Dict)
+                        and n.keys and isinstance(n.keys[0], _ast.Constant)
+                        and n.keys[0].value == "metre",
+                        lambda n: _ast.Dict(keys=[_ast.Constant("os")],
+                                            values=[_ast.Constant("os")])),
         # a statement -> a def
         "statement": (lambda n: isinstance(n, _ast.Pass),
                       lambda n: _ast.parse("def f():\n    pass").body[0]),
