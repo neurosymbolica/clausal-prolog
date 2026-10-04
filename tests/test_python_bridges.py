@@ -78,11 +78,6 @@ def test_a_python_free_module_has_no_routes():
     ("fstring", 'p(S) <- (S is f"{len(S)}")\n', 1),
     ("fstring", 'p(S) <- (S is f"{S.upper()}")\n', 1),
     ("fstring", 'p(S, W) <- (S is f"{S:>{W + 1}}")\n', 1),
-    ("py_dotted", "p(D) <- (py.os.getcwd(D))\n", 1),
-    ("py_adapter", "-import_from(py.os, [getcwd])\n", 1),
-    ("py_adapter", "-import_module(py.os)\n", 1),
-    ("py_adapter", "-import_from(os_mod, [getcwd])\n", 1),
-    ("py_adapter", "-import_from(clausal.modules.py.os, [getcwd])\n", 1),
     ("python_import", "import os\n", 1),
     ("python_import", "from os import getcwd\n", 1),
     ("python_def", "def f():\n    return 1\n", 1),
@@ -142,7 +137,6 @@ def test_engine_shipped():
     lib = os.path.join(os.path.dirname(clausal.library.__file__),
                        "py_os.seam")
     assert is_engine_shipped("clausal.library.py_os", lib)
-    assert not is_engine_shipped("helper", lib)
     # A clausal.* NAME alone is not enough: the file must be in the package.
     assert not is_engine_shipped("clausal.library.fake", "/tmp/fake.seam")
 
@@ -250,9 +244,8 @@ ROUTE_SEAMS = {
     "escape": "-module(@helper, [cwd/1])\ncwd(D) <- (D is ++(1 + 1))\n",
     "seam": "-module(@helper, [cwd/1])\ncwd(D) <- (D is --{})\n",
     "fstring": '-module(@helper, [cwd/1])\ncwd(D) <- (D is f"{1 + 1}")\n',
-    "py_dotted": "-module(@helper, [cwd/1])\ncwd(D) <- (py.os.getcwd(D))\n",
     "py_adapter": "-module(@helper, [cwd/1])\n"
-                  "-import_from(py.os, [getcwd])\ncwd(D) <- (getcwd(D))\n",
+                  "-import_from(py.pbfake, [value])\ncwd(1),\n",
     "python_import": BRIDGE,
     "python_def": "-module(@helper, [cwd/1])\ndef f():\n    return 1\n"
                   "cwd(1),\n",
@@ -264,8 +257,23 @@ ROUTE_SEAMS = {
 }
 
 
+@pytest.fixture
+def spliced_adapter(tmp_path, monkeypatch):
+    """An adapter an optional package splices into clausal.modules.py
+    (as packages/clausal-* do): the same namespace, NOT the engine's file."""
+    import clausal.modules.py as pyns
+    d = tmp_path / "pkgsplice"
+    d.mkdir()
+    (d / "pbfake.py").write_text("value = 42\n")
+    monkeypatch.setattr(pyns, "__path__", [*pyns.__path__, str(d)])
+    yield "clausal.modules.py.pbfake"
+    sys.modules.pop("clausal.modules.py.pbfake", None)
+    sys.modules.pop("py.pbfake", None)
+
+
 @pytest.mark.parametrize("kind", sorted(ROUTE_SEAMS))
-def test_each_route_kind_is_refused_from_clausal_prolog(proj, kind):
+def test_each_route_kind_is_refused_from_clausal_prolog(
+        proj, kind, spliced_adapter):
     assert kind in ROUTE_KINDS
     proj.seam("helper", ROUTE_SEAMS[kind])
     proj.clausal("main", IMPORT_HELPER, CWD_BODY)
@@ -531,3 +539,50 @@ def test_the_gate_imports_nothing_it_judges(proj, init):
     assert REFUSAL.format(m=proj.n("mid")) in msg, msg
     assert "python_module at line 2" in msg, msg
     assert not marker.exists()
+
+
+@pytest.mark.parametrize("imports, body", [
+    ("-import_from(date_time, [date, days_between])\n",
+     "p(N) <- (days_between(date(2026, 1, 31), date(2026, 1, 1), N))\n"),
+    ("-import_from(py.datetime, [date, days_between])\n",
+     "p(N) <- (days_between(date(2026, 1, 31), date(2026, 1, 1), N))\n"),
+    ("-import_module(py.datetime)\n-import_from(date_time, [date])\n",
+     "p(N) <- (py.datetime.days_between(date(2026, 1, 31), "
+     "date(2026, 1, 1), N))\n"),
+    ("-import_from(clausal.library.datetime, [days_between])\n"
+     "-import_from(date_time, [date])\n",
+     "p(N) <- (days_between(date(2026, 1, 31), date(2026, 1, 1), N))\n"),
+])
+def test_engine_shipped_adapters_keep_a_seam_python_free(proj, imports,
+                                                          body):
+    """Ruling (1): the engine's own Python adapters are its whitelist.  A
+    .seam whose only Python contact is importing one (by py.X, a seam alias
+    such as date_time, or its library facade) is case (2)."""
+    path = proj.seam("clean", "-module(@clean, [p/1])\n" + imports + body)
+    assert file_python_routes(str(path)) == []
+    proj.clausal("main", ":- use_module(@clean, [p/1]).\n",
+                 "t(N) :- p(N).\n")
+    assert _answers(proj.load("main")) == [30]
+
+
+def test_a_spliced_package_adapter_needs_a_bridge(proj, spliced_adapter):
+    """An optional package's adapter shares the clausal.modules.py
+    namespace but is not engine-shipped (decided by path, not name)."""
+    path = proj.seam("helper", "-module(@helper, [v/1])\n"
+                               "-import_from(py.pbfake, [value])\n"
+                               "v(X) <- (X is value)\n")
+    assert file_python_routes(str(path)) == [("py_adapter", 2)]
+    proj.clausal("main", ":- use_module(@helper, [v/1]).\n",
+                 "t(X) :- v(X).\n")
+    msg = _refused(proj, "main")
+    assert REFUSAL.format(m=proj.n("helper")) in msg, msg
+    proj.allow([f'"{proj.n("helper")}"'])
+    assert _answers(proj.load("main")) == [42]
+
+
+def test_engine_shipped_is_decided_by_path():
+    import clausal.modules.py.datetime as engine_adapter
+    assert is_engine_shipped("clausal.modules.py.datetime",
+                             engine_adapter.__file__)
+    assert not is_engine_shipped("clausal.modules.py.pbfake",
+                                 "/elsewhere/clausal/modules/py/pbfake.py")

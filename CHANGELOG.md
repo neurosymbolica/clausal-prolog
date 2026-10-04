@@ -23,7 +23,9 @@ since 0.4.0 finish three moves:
 - **Clausal Prolog may import a `.seam` module that runs Python only when
   its project allowlists it** (operator ruling 2026-10-04). A `.seam` module
   with `++`, `--`, hosted Python statements, imports, `def`/`class`, Python
-  in f-string slots, or `py.` adapter calls/imports is a Python bridge; a
+  in f-string slots, or an import of a Python module or adapter the engine
+  does not ship is a Python bridge (the engine's own py adapters, e.g.
+  `date_time`, are trusted in this default mode); a
   `.clausal` file's `use_module` of one is refused at load with
   `permission_error(import, python_bridge, M)` unless the nearest
   `pyproject.toml` above the IMPORTING file lists it in `[tool.clausal]

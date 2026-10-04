@@ -505,15 +505,23 @@ section).
 ### Python bridges: which `.seam` modules Clausal Prolog may import
 
 A `.seam` module can host Python (`++` escapes, `--` seams, module-level
-`import`/`def`/`class`/statements, Python in f-string slots, `py.` adapter
-calls and imports). From a Clausal Prolog importer, Python is reachable
-**only** through:
+`import`/`def`/`class`/statements, Python in f-string slots, imports of
+Python modules the engine does not ship). From a Clausal Prolog importer,
+Python is reachable **only** through:
 
 1. **Engine-shipped modules**: the `library(...)` facades, the engine
-   stdlib, and every other module of the `clausal` package. "Engine-shipped"
-   means the module's dotted name is `clausal.*` AND its file lies in a
-   directory of its parent package's `__path__` -- the engine's own package
-   directory or an installed engine distribution spliced onto it.
+   stdlib, the engine's own py adapters (`py.datetime`, also spelled by its
+   seam alias `date_time`), and every other file of the engine.
+   "Engine-shipped" is decided by the resolved FILE: it lies under the
+   engine's own package directory (the directory of `clausal/__init__.py`).
+   Not by the name: an optional `clausal-*` package splices its adapters
+   into the same namespace (`clausal.modules.py.scipy_stats`), and those are
+   not the engine's -- a `.seam` importing one is a Python bridge. A `.seam`
+   module whose only Python contact is importing engine-shipped adapters is
+   Python-free (case 2). This is the default mode, which trusts every
+   engine-shipped adapter; a sandbox mode narrows the engine adapters to its
+   own allowlist. (A Clausal Prolog file's DIRECT `use_module(py/X)` stays
+   refused as above: it imports the facade.)
 2. **A `.seam` module with no Python in it**: Clausal code in seam syntax,
    checked at load. It is a pass-through: the modules it imports
    (`-import_from`, `-import_module`, the qualifier of a dotted call
@@ -578,13 +586,14 @@ The rules:
 
 The detector is `clausal.python_bridges.python_routes(tree, source)`, which
 returns `(kind, line)` pairs for a parsed seam module (kinds:
-`clausal.python_bridges.ROUTE_KINDS`); `file_python_routes(path)` adds
-`python_module` for imports of non-engine Python modules.
+`clausal.python_bridges.ROUTE_KINDS`); `file_python_routes(path)` adds the
+routes that need resolving: `py_adapter` (an import or dotted call of an
+adapter the engine does not ship) and `python_module` (any other Python
+module the engine does not ship).
 
-The Clausal Prolog surface has no file extension of its own until the
-extension flip (`clausal._suffixes.CLAUSAL_PROLOG_SUFFIXES` is empty), so
-the refusal is not active yet. A `.pl` file (the ISO surface) and a seam
-file are unaffected: a `.pl` may still import `py/datetime` directly, and
+The refusal applies to Clausal Prolog (`.clausal`, the surface
+`clausal._suffixes.CLAUSAL_PROLOG_SUFFIXES` names since the extension
+flip). A `.pl` file (the ISO surface) and a seam file are unaffected: a `.pl` may still import `py/datetime` directly, and
 may use the `library(...)` spelling too.
 
 ### Module paths

@@ -4,8 +4,12 @@ Operator ruling 2026-10-04 (applies always, not only in a sandbox mode).
 From a Clausal Prolog (``.clausal``) importer, Python is reachable ONLY
 through:
 
-1. ENGINE-SHIPPED files: the ``library(...)`` facades, the engine stdlib and
-   every other module of the ``clausal`` package (:func:`is_engine_shipped`).
+1. ENGINE-SHIPPED files: the ``library(...)`` facades, the engine stdlib,
+   the engine's own py adapters and every other file under the engine's
+   package directory (:func:`is_engine_shipped`).  A ``.seam`` module whose
+   only Python contact is importing those is Python-free (case 2).  A
+   sandbox mode narrows the engine adapters further; the default trusts
+   them all.
 2. A ``.seam`` module with NO Python in it (:func:`python_routes` finds
    none) -- Clausal code in seam syntax.  It is a pass-through: the modules
    IT imports are checked the same way, transitively.
@@ -57,8 +61,8 @@ ROUTE_KINDS: dict[str, str] = {
     "escape": "a ++ escape (a Python expression)",
     "seam": "a -- seam operator",
     "fstring": "an f-string slot that evaluates Python",
-    "py_dotted": "a py.<adapter> dotted reference",
-    "py_adapter": "an -import_from/-import_module of a py.* adapter",
+    "py_adapter": ("an import or dotted call of a py.* adapter the engine "
+                   "does not ship (an optional package's, or your own)"),
     "python_import": "a Python import statement",
     "python_def": "a Python def (or @{} template)",
     "python_class": "a Python class",
@@ -109,8 +113,6 @@ def python_routes(tree: ast.Module, source: "str | None" = None
         kind, name = _top_level_expr(stmt.value, heads, lines, _detect_arrow)
         if kind == "python":
             out.append(("python_statement", line))
-        elif kind == "directive":
-            out.extend(_directive_routes(stmt.value.operand, line))
         if name is not None:
             heads.add(name)
         out.extend(_expression_routes(stmt.value))
@@ -183,29 +185,16 @@ def _is_directive(value) -> bool:
             and value.col_offset == value.operand.col_offset - 1)
 
 
-def _directive_routes(operand, line) -> "list[tuple[str, int]]":
-    """``-import_from(py.X, ...)`` / ``-import_module(py.X)`` (or a seam
-    alias of one, ``os_mod``): a direct import of a py adapter."""
-    if not (isinstance(operand, ast.Call)
-            and operand.func.id in ("import_from", "import_module")
-            and operand.args):
-        return []
-    dotted = _dotted(operand.args[0])
-    if dotted is not None and _is_py_adapter_path(dotted):
-        return [("py_adapter", line)]
-    return []
-
-
-def _is_py_adapter_path(dotted: str) -> bool:
-    from clausal.templating.term_rewriting import (  # noqa: PLC0415
-        _resolve_import_path)
-    resolved = _resolve_import_path(dotted)
-    return (dotted == "py" or dotted.startswith("py.")
-            or resolved.startswith(_PY_ADAPTERS + "."))
-
-
 #: The package of the engine's Python adapters (``py.X`` in seam source).
 _PY_ADAPTERS = "clausal.modules.py"
+
+
+def _adapter_path(dotted: str) -> str:
+    """``py.X...`` -> ``clausal.modules.py.X...`` (the seam's redirect,
+    ``import_hook.ModulesFinder``); any other name unchanged."""
+    if dotted.startswith("py."):
+        return f"{_PY_ADAPTERS}.{dotted[3:]}"
+    return dotted
 
 
 def _dotted(node) -> "str | None":
@@ -219,7 +208,7 @@ def _dotted(node) -> "str | None":
 
 def _expression_routes(node) -> "list[tuple[str, int]]":
     """The routes inside one module-level expression: ``++``, ``--``,
-    Python-evaluating f-string slots, ``py.`` dotted references."""
+    Python-evaluating f-string slots, a Python ``lambda``."""
     from clausal.templating.term_rewriting import (  # noqa: PLC0415
         _double_prefix_operand)
     out: list[tuple[str, int]] = []
@@ -232,9 +221,6 @@ def _expression_routes(node) -> "list[tuple[str, int]]":
         elif isinstance(sub, ast.JoinedStr):
             if not _inert_fstring(sub):
                 out.append(("fstring", sub.lineno))
-        elif (isinstance(sub, ast.Attribute)
-              and isinstance(sub.value, ast.Name) and sub.value.id == "py"):
-            out.append(("py_dotted", sub.lineno))
         elif isinstance(sub, ast.Lambda):
             out.append(("python_def", sub.lineno))
     return out
@@ -282,9 +268,8 @@ def _module_references(tree: ast.Module) -> "list[tuple[str, int]]":
                     and isinstance(sub.func, ast.Attribute)):
                 continue
             dotted = _dotted(sub.func.value)
-            if (dotted is None or dotted.split(".")[0] == "py"
-                    or _is_logic_var_name(dotted.split(".")[0])):
-                continue        # py.X is its own route; X.k is dict sugar
+            if dotted is None or _is_logic_var_name(dotted.split(".")[0]):
+                continue        # X.k is dict sugar, no module
             refs.append((_resolve_import_path(dotted), sub.lineno))
     return refs
 
@@ -399,12 +384,15 @@ def _classify(dotted: str) -> "tuple[str, str | None]":
     engine does not ship (walked); ``("ignored", origin)`` -- nothing,
     engine-shipped, or a Clausal Prolog / ``.pl`` module (gated on its own
     load, and by the dialect gate)."""
+    dotted = _adapter_path(dotted)
     origin = _find(dotted)
     if origin == _UNRESOLVABLE:
         return "python_module", None
     if origin is None or is_engine_shipped(dotted, origin):
         return "ignored", origin
     if not _is_source(origin):
+        if dotted.startswith(_PY_ADAPTERS + "."):
+            return "py_adapter", origin
         return "python_module", origin
     if _is_seam(origin):
         return "seam", origin
@@ -429,8 +417,9 @@ def file_python_routes(path: str) -> "list[tuple[str, int]]":
     scan = _scan(path)
     out = list(scan.routes)
     for dotted, line in scan.refs:
-        if _classify(dotted)[0] == "python_module":
-            out.append(("python_module", line))
+        how = _classify(dotted)[0]
+        if how in ("python_module", "py_adapter"):
+            out.append((how, line))
     out.sort(key=lambda r: r[1])
     return out
 
@@ -438,31 +427,32 @@ def file_python_routes(path: str) -> "list[tuple[str, int]]":
 # ── engine-shipped ──────────────────────────────────────────────────────────
 
 
+def _engine_dir() -> str:
+    import clausal  # noqa: PLC0415
+    return os.path.realpath(os.path.dirname(clausal.__file__))
+
+
 def is_engine_shipped(dotted: str, origin: "str | None") -> bool:
     """True when the module *dotted* (loaded from *origin*) ships with the
-    engine: it is a module of the ``clausal`` package -- its dotted name is
-    ``clausal.*`` -- and its file lies in a directory of its parent
-    package's ``__path__`` (the engine's own package directory, or an
-    installed engine distribution spliced onto it, e.g. ``clausal.modules.
-    py.torch``).  The py adapters (``clausal.modules.py.*``) are engine
-    code too; a ``.clausal`` file reaches them through their
-    ``library(...)`` facades (route 7c of the dialect gate refuses the
-    direct import)."""
-    if not (dotted == "clausal" or dotted.startswith("clausal.")):
-        return False
+    engine: its file lies under the engine's OWN package directory (the
+    directory of ``clausal/__init__.py``).  Decided by the resolved PATH,
+    not by the name: the optional ``clausal-*`` packages splice their
+    adapters into the same namespaces (``clausal.modules.py.scipy_stats``),
+    and those are not the engine's.  So the engine's ``library(...)``
+    facades, its stdlib, its own py adapters (``py.datetime``, via any
+    spelling: ``py.datetime``, the alias ``date_time``) and its other
+    modules are trusted; an optional package's adapter, or any user
+    module, is not.  (Route 7c of the dialect gate still refuses a
+    ``.clausal`` file's DIRECT ``use_module(py/X)``; this is about what a
+    ``.seam`` module may import.)  *dotted* is accepted for the callers'
+    symmetry; only the path decides."""
     if origin is None or origin == "<namespace>":
-        return True
-    parent = dotted.rpartition(".")[0] or "clausal"
-    pkg = sys.modules.get(parent)
-    paths = list(getattr(pkg, "__path__", None) or ())
-    root = sys.modules.get("clausal")
-    paths += list(getattr(root, "__path__", None) or ())
+        return dotted == "clausal" or dotted.startswith("clausal.")
+    if origin in ("built-in", "frozen"):
+        return False
     real = os.path.realpath(origin)
-    for p in paths:
-        rp = os.path.realpath(p)
-        if real == rp or real.startswith(rp + os.sep):
-            return True
-    return False
+    root = _engine_dir()
+    return real.startswith(root + os.sep)
 
 
 # ── the project allowlist ───────────────────────────────────────────────────
@@ -676,8 +666,8 @@ def _walk(dotted, origin, allow, chain, seen) -> "BridgeRefusal | None":
     children = []
     for ref, line in scan.refs:
         how, ref_origin = _classify(ref)
-        if how == "python_module":
-            routes.append(("python_module", line))
+        if how in ("python_module", "py_adapter"):
+            routes.append((how, line))
         elif how == "seam":
             children.append((ref, ref_origin, line))
     if routes:
