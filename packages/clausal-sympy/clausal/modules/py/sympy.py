@@ -45,7 +45,9 @@ from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.logic.exceptions import LogicException, instantiation_error, type_error
 from clausal.logic.cells import chars_text, is_chars
-from clausal.modules.py import _import_stdlib, ModulePredicate, simple_to_trampoline, to_text
+from clausal.modules.py import (
+    _import_stdlib, ModulePredicate, simple_to_trampoline, text_result, to_text,
+)
 
 _sp = _import_stdlib("sympy")
 from clausal.terms import (
@@ -481,8 +483,10 @@ def _from_sympy_ctx(expr: _sp.Expr, ctx: _ConversionContext) -> Any:
         c_args = tuple(_from_sympy_ctx(a, ctx) for a in expr.args)
         return ("O", *c_args)
 
-    # Fallback: string representation
-    return str(expr)
+    # Fallback: the printed representation, as TEXT -- a string
+    # ('$chars', s), not an atom (free-form adapter output, spec 9.4).
+    # _to_sympy_ctx reads a string back as the Symbol an atom would name.
+    return text_result(str(expr))
 
 
 # -- SymExpr wrapper -- symbolic __eq__ for Python callers --------------------
@@ -1018,7 +1022,7 @@ def _sym_str_2(term, result, trail, k):
         s = str(expr)
     except (TypeError, ValueError):
         return
-    if unify(result, s, trail):
+    if unify(result, text_result(s), trail):
         yield None
 
 
@@ -1180,7 +1184,7 @@ def _latex_2(term, result, trail, k):
         s = _sp.latex(_to_sympy(term))
     except (TypeError, ValueError):
         return
-    if unify(result, s, trail):
+    if unify(result, text_result(s), trail):
         yield None
 
 
@@ -1191,7 +1195,7 @@ def _pretty_2(term, result, trail, k):
         s = _sp.pretty(_to_sympy(term), use_unicode=True)
     except (TypeError, ValueError):
         return
-    if unify(result, s, trail):
+    if unify(result, text_result(s), trail):
         yield None
 
 
@@ -1199,11 +1203,15 @@ def _mathml_2(term, result, trail, k):
     """math_ml/2: convert expression to math_ml string."""
     term = deref(term)
     try:
-        mathml = _sp.printing.mathml.mathml
+        # sympy.printing.mathml is the printer FUNCTION on the package (it
+        # shadows the submodule), so the attribute walk raised
+        # AttributeError; import the submodule by name.
+        import importlib  # noqa: PLC0415
+        mathml = importlib.import_module("sympy.printing.mathml").mathml
         s = mathml(_to_sympy(term))
     except (TypeError, ValueError, ImportError):
         return
-    if unify(result, s, trail):
+    if unify(result, text_result(s), trail):
         yield None
 
 

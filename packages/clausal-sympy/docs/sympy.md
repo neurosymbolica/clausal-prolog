@@ -307,6 +307,12 @@ Results from one predicate can be fed directly into another:
 
 ### Printing
 
+The printing predicates (and `sym_str/2`) answer a **string**, `"x + 1"`
+(the term `('$chars', 'x + 1')`), not an atom: a printed representation is
+free-form text. Compare with a string (`S == "42"`); the atom `'42'` is a
+different term. The `++` escape is unchanged -- `S is ++str(E)` still binds
+the atom.
+
 #### latex/2
 
 `latex(Expr, String)` — convert expression to LaTeX:
@@ -325,7 +331,7 @@ Results from one predicate can be fed directly into another:
 
 #### math_ml/2
 
-`math_ml(Expr, String)` — convert to math_ml.
+`math_ml(Expr, String)` — convert to MathML (content markup, `<cn>42</cn>`).
 
 ### Substitution and inspection
 
@@ -341,7 +347,7 @@ Note: binding dicts with logic variable keys must be wrapped in `++()` so the Va
 
 #### free_vars/2
 
-`free_vars(Expr, Names)` — sorted list of free symbol name strings:
+`free_vars(Expr, Names)` — sorted list of the free symbols' names, as atoms (`[x, y]`):
 
 ```clausal
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:free_vars_2"
@@ -383,7 +389,7 @@ Note: binding dicts with logic variable keys must be wrapped in `++()` so the Va
 - `Sympy` unbound, `Term` bound to anything other than a bare unbound variable (a number, an atom, a term that may itself contain variables, e.g. `X+1`) → `Sympy` is unified with the equivalent SymPy expression.
 - Both unbound → `instantiation_error`.
 - `Sympy` bound to something that is neither a SymPy expression nor unbound → `type_error(sympy_expression, Sympy)`.
-- A `Term` with no SymPy counterpart (TO-SYMPY direction) → `type_error(sympy_expression, Term)`. A SymPy expression with no Clausal-term counterpart (FROM-SYMPY direction) → `type_error(clausal_term, Sympy)` (this one is believed unreachable today: the converter always has a string fallback, but the predicate does not rely on that staying true).
+- A `Term` with no SymPy counterpart (TO-SYMPY direction) → `type_error(sympy_expression, Term)`. A SymPy expression with no Clausal-term counterpart (FROM-SYMPY direction) → `type_error(clausal_term, Sympy)` (this one is believed unreachable today: the converter always has a fallback -- a SymPy object with no term form comes back as its printed form, a **string** such as `"Eq(a, 1)"` -- but the predicate does not rely on that staying true).
 
 **Not a true bijection.** SymPy canonicalises on construction: `X+X` becomes `2*X`, `X*1` becomes `X`, and term order is not preserved. So `Term → Sympy → Term` returns an *equivalent* term, not necessarily the *same* one:
 

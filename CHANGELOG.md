@@ -20,6 +20,20 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **clausal-sympy: printed forms are STRINGS, not atoms** (ruled
+  2026-10-04: an adapter is its own entry point, and free-form text it hands
+  back is a string `('$chars', s)`, strings spec 9.4). Changed:
+  `sym_str/2`, `latex/2`, `pretty/2`, `math_ml/2`, and `sympy_term/2`'s
+  answer for a SymPy object with no term form (its printed form, e.g.
+  `"Eq(a, 1)"`). `sym_str(42, S)` binds `S = "42"`; a bound result is
+  compared as a term, so `sym_str(42, '42')` now fails. Unchanged: the
+  names `free_vars/2` lists and the constants `pi`/`e`/`inf` are atoms; the
+  `++` escape (`S is ++str(E)`) still answers an atom; `sym/2` and the
+  expression converter read a string as the Symbol an atom names, so a
+  printed fallback round-trips as before. Also fixed: `math_ml/2` raised
+  `AttributeError` (it reached the printer function, not its module).
+  Migration: compare with a string (`S == "42"`).
+
 - **Symbolic names an adapter hands back are ATOMS, not text** ("atom
   out, text in": the Python-boundary spec of 2026-09-21, ruled for adapter
   results 2026-10-04). Changed: `py.os` `platform/1` (`linux`),

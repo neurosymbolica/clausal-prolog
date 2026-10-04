@@ -1,4 +1,3 @@
--double_quotes(atom)
 -import_from(sympy, [simplify, expand, factor, solve, solve_all,
                              diff, integrate, limit, series, subs,
                              free_vars, sym_equal, sym_str, inf,
@@ -198,7 +197,7 @@ test("sym named") <- (
     sym("x", X),
     EXPR is ++(X**2 + 1),
     S is ++str(EXPR),
-    S == "x**2 + 1"
+    S == 'x**2 + 1'   # the ++ escape: a Python str is an ATOM
 )  # nv
 
 # ── free_vars/2 ───────────────────────────────────────────────────────────────

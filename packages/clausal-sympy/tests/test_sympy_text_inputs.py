@@ -16,6 +16,7 @@ pytest.importorskip("sympy", reason="sympy not installed")
 from clausal._suffixes import SEAM_SUFFIX
 from clausal.import_hook import _load_module
 from clausal.logic.solve import call, _deref_walk
+from clausal.logic.cells import chars
 from clausal.logic.variables import Var
 
 
@@ -40,14 +41,14 @@ def module(tmp_path_factory):
 def _answer(module, name):
     s = Var()
     got = [_deref_walk(s) for _ in call(name, s, module=module)]
-    return [str(g) for g in got]
+    return got
 
 
 @pytest.mark.parametrize("name", ["sym_text", "sym_atom"])
 def test_sym_takes_a_string_or_an_atom_name(module, name):
-    assert _answer(module, name) == ["x"]
+    assert _answer(module, name) == [chars("x")]   # sym_str/2 answers a STRING
 
 
 @pytest.mark.parametrize("name", ["expand_text", "expand_atom"])
 def test_a_string_in_an_expression_is_a_symbol(module, name):
-    assert _answer(module, name) == ["2*y + 2"]
+    assert _answer(module, name) == [chars("2*y + 2")]
