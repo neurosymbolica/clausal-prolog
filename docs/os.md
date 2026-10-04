@@ -92,7 +92,7 @@ get_args(ARGS) <- argv(ARGS)
 `platform(P)` — unify P with `sys.platform` as an atom (e.g. `linux`, `darwin`, `win32`); a bound P may be the atom or the string.
 
 ```seam
-is_linux <- platform("linux")
+is_linux <- platform('linux')
 ```
 
 ### cpu_count/1
