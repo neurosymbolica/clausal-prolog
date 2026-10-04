@@ -27,8 +27,8 @@ its VALUES (units, currencies, quantities and numeric constants, which a
 ``.pl`` imports by bare name: ``use_module(european_union, [euro])``).  A
 ``py/<lib>`` file that only star-imports the module of the same name one
 level up (``py/units.py``, ``py/imperial.py``) shares that module's
-facade.  A module offering neither (``prolog``: evaluation helpers for
-qualified seam calls; the ``countries`` package itself) gets none.
+facade.  A module offering neither (``prolog``: private ISO reference
+helpers only; the ``countries`` package itself) gets none.
 
 The facades are GENERATED and committed; a test checks that the committed
 files are exactly this script's output.  Regenerate after adding or

@@ -1386,7 +1386,10 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   19. The old names are warned aliases through the same table as the unit
   names: once per process per name from Python, once per file from an
   `-import_from` list -- which now includes one from `clausal.library.units`,
-  the `library(units)` facade that re-exports the new names.
+  the `library(units)` facade that re-exports the new names. The aliases
+  are a seam-surface and Python path only: a `.pl` file's
+  `use_module(library(units), ['SI_Force'])` (the quoted form, the only
+  one Prolog can write) is refused, since the facade offers `si_force`.
 - **`query()`.** Iterate `solve(...)` and read `Var.value`.
 
 ### Experimental

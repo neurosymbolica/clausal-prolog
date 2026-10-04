@@ -87,8 +87,8 @@ def test_committed_facades_are_the_generators_output():
     for f in want:
         assert have[f] == want[f], (
             f"{f} is stale: run python -m clausal.tools.gen_library_facades")
-    # Denominator: every module under clausal/modules but prolog (helpers
-    # for qualified seam calls: no predicate, no value) has a facade; the
+    # Denominator: every module under clausal/modules but prolog (private
+    # ISO reference helpers only: no predicate, no value) has a facade; the
     # py/ shims py/units and py/imperial share units' and imperial's.
     rows = gen.census()
     assert len(rows) >= 200 and len(want) == len(rows) - 1, len(want)
