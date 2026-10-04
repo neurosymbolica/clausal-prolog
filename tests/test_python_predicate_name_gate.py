@@ -28,6 +28,17 @@ It fails CLOSED:
   known, so it cannot quietly go blind;
 * the census must see a minimum number of modules and names;
 * the positive controls run the same child on synthetic packages.
+
+It also reads the DATA names each module offers to ``-import_from`` (which
+compiles to a Python ``from M import name``, so it offers every public
+attribute: a ``Quantity`` constant, a number, a term constructor).  None may
+be TitleCase -- the one spelling ``-import_from`` lets through silently,
+which is how ``scipy_constants`` exported ``SpeedOfLight`` & co. unseen.
+Read both on the loaded module and statically (with the same recall check,
+and a computed module-global write in an AST-checked module failing), with
+its own floors and controls.  The ENGINE's TitleCase data names awaiting a
+ruling are listed in ``_ENGINE_DATA_PENDING_RULING``, exactly: a new one
+fails, and so does a listed one that is gone.
 """
 from __future__ import annotations
 
@@ -49,6 +60,28 @@ _ROOT = pathlib.Path(__file__).resolve().parent.parent
 _MIN_MODULES = 250
 _MIN_NAMING_MODULES = 55
 _MIN_NAMES = 1000
+
+#: Data-name floors, measured 2026-10-04 at 209 modules offering 572 data
+#: names (engine + packages).
+_MIN_DATA_MODULES = 180
+_MIN_DATA_NAMES = 450
+
+#: TitleCase data names the ENGINE exports, held for an operator ruling
+#: (2026-10-04) rather than renamed: engine-side names are not this gate's
+#: to change.  ``prolog.Rem/TruncDiv/TruncMod`` are the qualified operator
+#: helpers the .pl translator emits; ``units.SI_*`` are the derived-unit
+#: dimension templates ``clausal/library/units`` imports.  EXACT: a name
+#: not listed fails, and so does a listed name that no longer exists.
+_ENGINE_DATA_PENDING_RULING = {
+    "clausal.modules.prolog": {"Rem", "TruncDiv", "TruncMod"},
+    "clausal.modules.units": {
+        "SI_Acceleration", "SI_Area", "SI_Capacitance", "SI_Charge",
+        "SI_Conductance", "SI_Energy", "SI_Force", "SI_Frequency",
+        "SI_Illuminance", "SI_Inductance", "SI_LuminousFlux",
+        "SI_MagneticFlux", "SI_MagneticFluxDensity", "SI_Power",
+        "SI_Pressure", "SI_Resistance", "SI_Velocity", "SI_Voltage",
+        "SI_Volume"},
+}
 
 
 def _run_census(*extra: pathlib.Path, only_extra: bool = False) -> dict:
@@ -94,6 +127,39 @@ def _problems(census: dict) -> list[str]:
     return out
 
 
+def _data_problems(census: dict, pending=None) -> list[str]:
+    """Everything that keeps the DATA-name census from being clean."""
+    pending = _ENGINE_DATA_PENDING_RULING if pending is None else pending
+    out = []
+    seen_pending: dict[str, set] = {}
+    for r in census["records"]:
+        where = f"{r['module']} ({r['file']})"
+        if r["mode"] == "failed":
+            continue                    # reported by _problems
+        held = pending.get(r["module"], set()) if r["origin"] == "engine" else set()
+        for name, why in r["data_bad"].items():
+            if name in held:
+                seen_pending.setdefault(r["module"], set()).add(name)
+                continue
+            out.append(f"{where}: exports the data name {name!r}: {why}")
+        if r["mode"] == "ast" and r["data_dynamic"]:
+            out.append(f"{where}: AST-checked, but writes computed module "
+                       f"globals at lines {r['data_dynamic']} the static "
+                       "read cannot see")
+        if r["mode"] == "import" and r["origin"] != "engine":
+            blind = sorted(set(r["data_names"]) - set(r["ast_data_names"]))
+            if blind:
+                out.append(f"{where}: the static data reading misses "
+                           f"{blind}; teach ast_data_names the shape")
+    for module, names in sorted(pending.items()):
+        gone = sorted(names - seen_pending.get(module, set()))
+        if gone:
+            out.append(f"{module}: {gone} listed in "
+                       "_ENGINE_DATA_PENDING_RULING but no longer exported "
+                       "TitleCase -- drop them from the list")
+    return out
+
+
 @pytest.fixture(scope="module")
 def census():
     return _run_census()
@@ -122,6 +188,31 @@ def test_the_census_saw_the_whole_tree(census):
                 for p in (_ROOT / "packages").glob("*/clausal/modules")}
     seen = {r["origin"] for r in records}
     assert expected and expected | {"engine"} == seen, (expected, seen)
+
+
+def test_every_exported_data_name_is_valid(census):
+    problems = _data_problems(census)
+    assert not problems, "\n".join(problems)
+
+
+def test_the_data_census_saw_the_whole_tree(census):
+    """Positive control on the DATA reading: an empty one proves nothing."""
+    records = census["records"]
+    offering = [r for r in records if r["data"]]
+    names = sum(len(r["data"]) for r in records)
+    titlecase = sum(len(r["data_bad"]) for r in records)
+    summary = (f"{len(offering)} modules offer {names} data names; "
+               f"{titlecase} TitleCase (held for a ruling: "
+               f"{sum(map(len, _ENGINE_DATA_PENDING_RULING.values()))})")
+    print(summary)
+    assert len(offering) >= _MIN_DATA_MODULES, summary
+    assert names >= _MIN_DATA_NAMES, summary
+    # Both readings were taken: some package module was read statically
+    # AND some by import, and the units module's own constants are seen.
+    by_module = {r["module"]: r for r in records}
+    assert {"metre", "kilo", "speed_of_light"} <= set(
+        by_module["clausal.modules.units"]["data"]), summary
+    assert any(r["mode"] == "ast" and r["data"] for r in records), summary
 
 
 # ── Positive controls: the same child on synthetic packages ──────────────────
@@ -227,3 +318,78 @@ def test_control_other_import_failures_fail(tmp_path, body, needle):
     pkg = _probe_package(tmp_path, [], {"nameprobe_broken": body})
     problems = _problems(_run_census(pkg, only_extra=True))
     assert len(problems) == 1 and needle in problems[0], problems
+
+
+# ── Positive controls: exported DATA names ───────────────────────────────────
+
+def test_control_titlecase_constant_fails(tmp_path):
+    """A module exporting ``BadConstant`` fails; its lowercase constant, a
+    TitleCase CLASS, a TitleCase IMPORT, a ``TypeVar``, an ALL-CAPS Python
+    constant and a private name do not."""
+    pkg = _probe_package(tmp_path, [], {
+        "nameprobe_const": (
+            "from typing import Callable, TypeVar\n"
+            "BadConstant = 3\n"
+            "good_constant = 4\n"
+            "PYTHON_SIDE = 5\n"
+            "_Private = 6\n"
+            "T = TypeVar('T')\n"
+            "class GoodClass:\n"
+            "    pass\n"),
+    })
+    census = _run_census(pkg, only_extra=True)
+    rec = _by_stem(census)["nameprobe_const"]
+    assert rec["mode"] == "import"
+    assert rec["data"] == ["BadConstant", "PYTHON_SIDE", "good_constant"]
+    assert _problems(census) == []
+    problems = _data_problems(census, pending={})
+    assert len(problems) == 1 and "'BadConstant'" in problems[0], problems
+
+
+def test_control_titlecase_constant_set_on_the_module_fails(tmp_path):
+    """The scipy_constants shape: a helper writes the constant onto
+    ``sys.modules[__name__]`` at import time.  Both readings see it."""
+    body = ("import sys\n"
+            "def _init():\n"
+            "    mod = sys.modules[__name__]\n"
+            "    mod.BadConstant = 1.0\n"
+            "    setattr(mod, 'good_constant', 2.0)\n"
+            "_init()\n")
+    pkg = _probe_package(tmp_path, ["nameprobe-absent-dep"], {
+        "nameprobe_setattr": body,
+        "nameprobe_setattr_ast": "import nameprobe_absent_dep\n" + body,
+    })
+    census = _run_census(pkg, only_extra=True)
+    recs = _by_stem(census)
+    assert recs["nameprobe_setattr"]["mode"] == "import"
+    assert recs["nameprobe_setattr_ast"]["mode"] == "ast"
+    for stem in ("nameprobe_setattr", "nameprobe_setattr_ast"):
+        assert {"BadConstant", "good_constant"} <= set(recs[stem]["data"])
+    problems = _data_problems(census, pending={})
+    assert len(problems) == 2, problems
+    assert all("'BadConstant'" in p for p in problems), problems
+
+
+def test_control_computed_module_global_in_an_ast_checked_module_fails(tmp_path):
+    pkg = _probe_package(tmp_path, ["nameprobe-absent-dep"], {
+        "nameprobe_dyn_data": (
+            "import nameprobe_absent_dep\n"
+            "for _n in ('a', 'b'):\n"
+            "    globals()[_n] = 1\n"),
+    })
+    problems = _data_problems(_run_census(pkg, only_extra=True), pending={})
+    assert len(problems) == 1 and "computed module globals" in problems[0], problems
+
+
+def test_control_pending_ruling_list_is_exact(census):
+    """A listed engine name that is no longer exported fails, so the list
+    cannot outlive the names it holds."""
+    stale = {m: set(n) for m, n in _ENGINE_DATA_PENDING_RULING.items()}
+    stale["clausal.modules.units"].add("SI_NoSuchName")
+    problems = _data_problems(census, pending=stale)
+    assert len(problems) == 1 and "SI_NoSuchName" in problems[0], problems
+    # and an engine name taken OFF the list fails
+    short = {m: set(n) for m, n in _ENGINE_DATA_PENDING_RULING.items()}
+    short["clausal.modules.prolog"].discard("Rem")
+    problems = _data_problems(census, pending=short)
+    assert len(problems) == 1 and "'Rem'" in problems[0], problems

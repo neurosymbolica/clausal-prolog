@@ -87,7 +87,7 @@ These pitfalls came up repeatedly and will affect all later phases:
 - Section names **cannot start with a digit**. `1_d_transforms` silently fails to resolve; rename to `fft_1d_transforms`. Check all generated names.
 
 **Constants modules vs predicate modules:**
-- Some modules export **values**, not predicates. `scipy_constants` exports `SpeedOfLight` as a `Quantity` value, not a callable predicate. Test with `nonvar(SpeedOfLight)`, not `SpeedOfLight(C)`.
+- Some modules export **values**, not predicates. `scipy_constants` exports `scipy_speed_of_light` as a `Quantity` value, not a callable predicate. Test with `nonvar(scipy_speed_of_light)`, not `scipy_speed_of_light(C)`.
 
 **SciPy predicate argument patterns:**
 - `MakeCSR` takes CSR components `(DATA, INDICES, INDPTR, HANDLE)`, not a dense matrix.

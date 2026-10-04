@@ -30,6 +30,8 @@ pretty_out(S) <- pretty(42, S)
 math_ml_out(S) <- math_ml(42, S)
 check_string() <- sym_str(42, "42")
 check_atom() <- sym_str(42, '42')
+check_latex_string() <- latex(42, "42")
+check_latex_atom() <- latex(42, '42')
 free_vars_out(V) <- (sym('a', A), sym('b', B), free_vars(A + B, V))
 pi_out(T) <- sympy_term(++__import__('sympy').pi, T)
 fallback_out(T) <- sympy_term(++__import__('sympy').Eq(__import__('sympy').Symbol('a'), 1), T)
@@ -63,11 +65,13 @@ def test_math_ml_is_a_string(module):
     assert is_chars(got) and got == chars("<cn>42</cn>")
 
 
-def test_check_mode_takes_the_string_not_the_atom(module):
+@pytest.mark.parametrize("stem", ["check", "check_latex"])
+def test_check_mode_takes_the_string_not_the_atom(module, stem):
     # as py.files and every other text-returning adapter: the result is the
     # string, and the atom of the same spelling is a different term
-    assert _holds(module, "check_string")
-    assert not _holds(module, "check_atom")
+    # Ruled 2026-10-04: check mode stays STRICT (sym_str(42, '42') fails).
+    assert _holds(module, f"{stem}_string")
+    assert not _holds(module, f"{stem}_atom")
 
 
 def test_term_fallback_is_a_string(module):

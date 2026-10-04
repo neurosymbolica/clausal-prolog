@@ -8,12 +8,14 @@ The `scipy_constants` module wraps [`scipy.constants`](https://docs.scipy.org/do
 
 ```clausal
 -import_from(scipy_constants, [value, unit, precision, lookup, find, all_names,
-                                SpeedOfLight, PlanckConstant,
-                                ReducedPlanckConstant, GravitationalConstant,
-                                AvogadroConstant, BoltzmannConstant,
-                                ElementaryCharge, ElectronMass, ProtonMass,
-                                ElectronVolt, StandardAtmosphere,
-                                Kilo, Mega, Giga])
+                               scipy_speed_of_light, scipy_planck_constant,
+                               scipy_reduced_planck_constant,
+                               scipy_gravitational_constant,
+                               scipy_avogadro_constant, scipy_boltzmann_constant,
+                               scipy_elementary_charge, scipy_electron_mass,
+                               scipy_proton_mass, scipy_electron_volt,
+                               scipy_standard_atmosphere, scipy_pi,
+                               scipy_kilo, scipy_mega, scipy_giga])
 ```
 
 Or via the canonical `py.*` path:
@@ -42,20 +44,28 @@ The `Const` prefix from the spec is dropped since these predicates live in the `
 | `constants.physical_constants[name]` | `lookup` |
 | `constants.find(sub)` | `find` |
 | `constants.physical_constants.keys()` | `all_names` |
-| `constants.c` | `SpeedOfLight` |
-| `constants.h` | `PlanckConstant` |
-| `constants.hbar` | `ReducedPlanckConstant` |
-| `constants.G` | `GravitationalConstant` |
-| `constants.N_A` | `AvogadroConstant` |
-| `constants.k` | `BoltzmannConstant` |
-| `constants.e` | `ElementaryCharge` |
-| `constants.m_e` | `ElectronMass` |
-| `constants.m_p` | `ProtonMass` |
-| `constants.eV` | `ElectronVolt` |
-| `constants.atm` | `StandardAtmosphere` |
-| `constants.kilo` | `Kilo` |
-| `constants.mega` | `Mega` |
-| `constants.giga` | `Giga` |
+| `constants.c` | `scipy_speed_of_light` |
+| `constants.h` | `scipy_planck_constant` |
+| `constants.hbar` | `scipy_reduced_planck_constant` |
+| `constants.G` | `scipy_gravitational_constant` |
+| `constants.N_A` | `scipy_avogadro_constant` |
+| `constants.k` | `scipy_boltzmann_constant` |
+| `constants.e` | `scipy_elementary_charge` |
+| `constants.m_e` | `scipy_electron_mass` |
+| `constants.m_p` | `scipy_proton_mass` |
+| `constants.eV` | `scipy_electron_volt` |
+| `constants.atm` | `scipy_standard_atmosphere` |
+| `constants.kilo` | `scipy_kilo` |
+| `constants.mega` | `scipy_mega` |
+| `constants.giga` | `scipy_giga` |
+| `constants.pi` | `scipy_pi` |
+
+The constants are lower_snake_case with a `scipy_` prefix. They were
+TitleCase (`SpeedOfLight`, `Kilo`, ...) and were renamed with no aliases
+(see [RENAMES.md](RENAMES.md)): TitleCase reads as a logic variable. The
+prefix keeps them apart from `py.units`' exact `speed_of_light`, `kilo`, ...
+and the arithmetic `pi` -- these are SciPy's float values, and a file may
+import both.
 
 ---
 
@@ -147,67 +157,34 @@ Return the relative uncertainty of a named CODATA constant.
 
 ### Physical constants
 
-All zero-input predicates return a single float in SI units.
+These are VALUES, not predicates: each is a `Quantity` in SI units (a float
+magnitude with its dimensions), and the SI prefixes and `scipy_pi` are plain
+floats. Use one where a value goes -- `C is scipy_speed_of_light`,
+`has_units(scipy_boltzmann_constant, joule / kelvin)`; calling one
+(`scipy_speed_of_light(C)`) is no goal.
 
-#### `SpeedOfLight(RESULT)`
+| Name | Value |
+|---|---|
+| `scipy_speed_of_light` | c = 299 792 458 m s⁻¹ (exact) |
+| `scipy_planck_constant` | h = 6.626 070 15 × 10⁻³⁴ J s (exact) |
+| `scipy_reduced_planck_constant` | ℏ = h / (2π) ≈ 1.054 572 × 10⁻³⁴ J s |
+| `scipy_gravitational_constant` | G = 6.674 3 × 10⁻¹¹ N m² kg⁻² |
+| `scipy_avogadro_constant` | Nₐ = 6.022 140 76 × 10²³ mol⁻¹ (exact) |
+| `scipy_boltzmann_constant` | k = 1.380 649 × 10⁻²³ J K⁻¹ (exact) |
+| `scipy_elementary_charge` | e = 1.602 176 634 × 10⁻¹⁹ C (exact) |
+| `scipy_electron_mass` | mₑ = 9.109 383 7139 × 10⁻³¹ kg |
+| `scipy_proton_mass` | mₚ = 1.672 621 925 95 × 10⁻²⁷ kg |
 
-Speed of light in vacuum: c = 299 792 458 m s⁻¹ (exact).
+### Unit conversion and SI prefix factors
 
-#### `PlanckConstant(RESULT)`
-
-Planck constant: h = 6.626 070 15 × 10⁻³⁴ J s (exact).
-
-#### `ReducedPlanckConstant(RESULT)`
-
-Reduced Planck constant: ℏ = h / (2π) ≈ 1.054 572 × 10⁻³⁴ J s.
-
-#### `GravitationalConstant(RESULT)`
-
-Newtonian constant of gravitation: G = 6.674 3 × 10⁻¹¹ N m² kg⁻².
-
-#### `AvogadroConstant(RESULT)`
-
-Avogadro constant: Nₐ = 6.022 140 76 × 10²³ mol⁻¹ (exact).
-
-#### `BoltzmannConstant(RESULT)`
-
-Boltzmann constant: k = 1.380 649 × 10⁻²³ J K⁻¹ (exact).
-
-#### `ElementaryCharge(RESULT)`
-
-Elementary charge: e = 1.602 176 634 × 10⁻¹⁹ C (exact).
-
-#### `ElectronMass(RESULT)`
-
-Electron rest mass: mₑ = 9.109 383 7139 × 10⁻³¹ kg.
-
-#### `ProtonMass(RESULT)`
-
-Proton rest mass: mₚ = 1.672 621 925 95 × 10⁻²⁷ kg.
-
----
-
-### unit conversion and SI prefix factors
-
-#### `ElectronVolt(RESULT)`
-
-One electron volt in joules: 1 eV = 1.602 176 634 × 10⁻¹⁹ J (numerically equal to the elementary charge).
-
-#### `StandardAtmosphere(RESULT)`
-
-One standard atmosphere in pascals: 1 atm = 101 325 Pa (exact).
-
-#### `Kilo(RESULT)`
-
-SI kilo prefix: 1 × 10³.
-
-#### `Mega(RESULT)`
-
-SI mega prefix: 1 × 10⁶.
-
-#### `Giga(RESULT)`
-
-SI giga prefix: 1 × 10⁹.
+| Name | Value |
+|---|---|
+| `scipy_electron_volt` | 1 eV = 1.602 176 634 × 10⁻¹⁹ J (numerically the elementary charge) |
+| `scipy_standard_atmosphere` | 1 atm = 101 325 Pa (exact) |
+| `scipy_pi` | π, a float |
+| `scipy_kilo` | 1 × 10³, a float |
+| `scipy_mega` | 1 × 10⁶, a float |
+| `scipy_giga` | 1 × 10⁹, a float |
 
 ---
 

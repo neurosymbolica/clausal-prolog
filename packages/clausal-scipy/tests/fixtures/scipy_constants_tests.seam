@@ -1,10 +1,10 @@
 -double_quotes(atom)
 -import_from(scipy_constants, [
-    SpeedOfLight, PlanckConstant, ReducedPlanckConstant,
-    GravitationalConstant, AvogadroConstant, BoltzmannConstant,
-    ElementaryCharge, ElectronMass, ProtonMass,
-    ElectronVolt, StandardAtmosphere,
-    Pi, Kilo, Mega, Giga])
+    scipy_speed_of_light, scipy_planck_constant, scipy_reduced_planck_constant,
+    scipy_gravitational_constant, scipy_avogadro_constant, scipy_boltzmann_constant,
+    scipy_elementary_charge, scipy_electron_mass, scipy_proton_mass,
+    scipy_electron_volt, scipy_standard_atmosphere,
+    scipy_pi, scipy_kilo, scipy_mega, scipy_giga])
 
 -import_from(py.units, [
     metre, kilogram, second, ampere, kelvin, mole,
@@ -12,109 +12,109 @@
 
 # ── Speed of light ────────────────────────────────────────────────────────
 
-test("speed of light exact value") <- (SpeedOfLight == 299792458(metre/second))  # nv
+test("speed of light exact value") <- (scipy_speed_of_light == 299792458(metre/second))  # nv
 
-test("speed of light units") <- has_units(SpeedOfLight, metre/second)  # nv
+test("speed of light units") <- has_units(scipy_speed_of_light, metre/second)  # nv
 
 # ── Planck constant ───────────────────────────────────────────────────────
 
-test("planck constant units") <- has_units(PlanckConstant, joule * second)  # nv
+test("planck constant units") <- has_units(scipy_planck_constant, joule * second)  # nv
 
 test("planck constant magnitude") <- (
-    PlanckConstant > 6.626e-34(joule * second),
-    PlanckConstant < 6.627e-34(joule * second)
+    scipy_planck_constant > 6.626e-34(joule * second),
+    scipy_planck_constant < 6.627e-34(joule * second)
 )  # nv
 
 # ── Reduced Planck constant ───────────────────────────────────────────────
 
-test("reduced planck constant units") <- has_units(ReducedPlanckConstant, joule * second)  # nv
+test("reduced planck constant units") <- has_units(scipy_reduced_planck_constant, joule * second)  # nv
 
 test("reduced planck constant magnitude") <- (
-    ReducedPlanckConstant > 1.054e-34(joule * second),
-    ReducedPlanckConstant < 1.055e-34(joule * second)
+    scipy_reduced_planck_constant > 1.054e-34(joule * second),
+    scipy_reduced_planck_constant < 1.055e-34(joule * second)
 )  # nv
 
 test("hbar equals h over two pi") <- (
-    eval_(PlanckConstant / (2 * Pi), HBAR_COMPUTED),
-    ReducedPlanckConstant == HBAR_COMPUTED
+    eval_(scipy_planck_constant / (2 * scipy_pi), HBAR_COMPUTED),
+    scipy_reduced_planck_constant == HBAR_COMPUTED
 )  # nv
 
 # ── Gravitational constant ────────────────────────────────────────────────
 
-test("gravitational constant units") <- (has_units(GravitationalConstant, newton * metre**2 / kilogram**2))  # nv
+test("gravitational constant units") <- (has_units(scipy_gravitational_constant, newton * metre**2 / kilogram**2))  # nv
 
 test("gravitational constant magnitude") <- (
-    GravitationalConstant > 6.674e-11(newton * metre**2 / kilogram**2),
-    GravitationalConstant < 6.675e-11(newton * metre**2 / kilogram**2)
+    scipy_gravitational_constant > 6.674e-11(newton * metre**2 / kilogram**2),
+    scipy_gravitational_constant < 6.675e-11(newton * metre**2 / kilogram**2)
 )  # nv
 
 # ── Avogadro constant ─────────────────────────────────────────────────────
 
-test("avogadro constant units") <- (has_units(AvogadroConstant, mole**-1))  # nv
+test("avogadro constant units") <- (has_units(scipy_avogadro_constant, mole**-1))  # nv
 
 test("avogadro constant magnitude") <- (
-    AvogadroConstant > 6.022e23(mole**-1),
-    AvogadroConstant < 6.023e23(mole**-1)
+    scipy_avogadro_constant > 6.022e23(mole**-1),
+    scipy_avogadro_constant < 6.023e23(mole**-1)
 )  # nv
 
 # ── Boltzmann constant ────────────────────────────────────────────────────
 
-test("boltzmann constant units") <- has_units(BoltzmannConstant, joule / kelvin)  # nv
+test("boltzmann constant units") <- has_units(scipy_boltzmann_constant, joule / kelvin)  # nv
 
 test("boltzmann constant magnitude") <- (
-    BoltzmannConstant > 1.380e-23(joule / kelvin),
-    BoltzmannConstant < 1.381e-23(joule / kelvin)
+    scipy_boltzmann_constant > 1.380e-23(joule / kelvin),
+    scipy_boltzmann_constant < 1.381e-23(joule / kelvin)
 )  # nv
 
 # ── Elementary charge ─────────────────────────────────────────────────────
 
-test("elementary charge units") <- has_units(ElementaryCharge, coulomb)  # nv
+test("elementary charge units") <- has_units(scipy_elementary_charge, coulomb)  # nv
 
 test("elementary charge magnitude") <- (
-    ElementaryCharge > 1.602e-19(coulomb),
-    ElementaryCharge < 1.603e-19(coulomb)
+    scipy_elementary_charge > 1.602e-19(coulomb),
+    scipy_elementary_charge < 1.603e-19(coulomb)
 )  # nv
 
 # ── Electron and proton masses ────────────────────────────────────────────
 
-test("electron mass units") <- has_units(ElectronMass, kilogram)  # nv
+test("electron mass units") <- has_units(scipy_electron_mass, kilogram)  # nv
 
 test("electron mass magnitude") <- (
-    ElectronMass > 9.109e-31(kilogram),
-    ElectronMass < 9.110e-31(kilogram)
+    scipy_electron_mass > 9.109e-31(kilogram),
+    scipy_electron_mass < 9.110e-31(kilogram)
 )  # nv
 
-test("proton mass units") <- has_units(ProtonMass, kilogram)  # nv
+test("proton mass units") <- has_units(scipy_proton_mass, kilogram)  # nv
 
 test("proton heavier than electron") <- (
-    eval_(ProtonMass / ElectronMass, RATIO),
+    eval_(scipy_proton_mass / scipy_electron_mass, RATIO),
     RATIO > 1836
 )  # nv
 
 # ── Electron volt ─────────────────────────────────────────────────────────
 
-test("electron volt units") <- has_units(ElectronVolt, joule)  # nv
+test("electron volt units") <- has_units(scipy_electron_volt, joule)  # nv
 
 test("electron volt magnitude") <- (
-    ElectronVolt > 1.602e-19(joule),
-    ElectronVolt < 1.603e-19(joule)
+    scipy_electron_volt > 1.602e-19(joule),
+    scipy_electron_volt < 1.603e-19(joule)
 )  # nv
 
 # ── Standard atmosphere ───────────────────────────────────────────────────
 
-test("standard atmosphere units") <- has_units(StandardAtmosphere, pascal)  # nv
+test("standard atmosphere units") <- has_units(scipy_standard_atmosphere, pascal)  # nv
 
-test("standard atmosphere exact value") <- (StandardAtmosphere == 101325(pascal))  # nv
+test("standard atmosphere exact value") <- (scipy_standard_atmosphere == 101325(pascal))  # nv
 
 # ── SI prefix factors (dimensionless) ─────────────────────────────────────
 
-test("si kilo") <- (Kilo == 1000.0)  # nv
+test("si kilo") <- (scipy_kilo == 1000.0)  # nv
 
-test("si mega") <- (Mega == 1000000.0)  # nv
+test("si mega") <- (scipy_mega == 1000000.0)  # nv
 
-test("si giga") <- (Giga == 1000000000.0)  # nv
+test("si giga") <- (scipy_giga == 1000000000.0)  # nv
 
 test("si prefixes consistent") <- (
-    GIGA is 1000 * Mega,
-    GIGA == Giga
+    GIGA is 1000 * scipy_mega,
+    GIGA == scipy_giga
 )  # nv

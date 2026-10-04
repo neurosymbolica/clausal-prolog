@@ -18,6 +18,7 @@ Tiers
     nonlinear_least_squares → dict {x, cost, fun, jac, ...}
     curve_fit           → dict {popt, pcov}
     root_scalar         → dict {root, iterations, function_calls, converged, flag}
+                          (flag: a STRING, e.g. "converged")
     root               → dict {x, fun, fjac, nfev, success, message}
 
 Helper:
@@ -182,12 +183,14 @@ curve_fit = _pred("curve_fit",
 # ── root_scalar ────────────────────────────────────────────────────────────
 
 def _root_scalar_result(r):
+    # ``flag`` is SciPy's free-form status message ("converged"), so it is a
+    # string ('$chars', s), like an optimizer's message (ruled 2026-10-04).
     return {
         'root': r.root,
         'iterations': r.iterations,
         'function_calls': r.function_calls,
         'converged': r.converged,
-        'flag': r.flag,
+        'flag': text_result(r.flag),
     }
 
 

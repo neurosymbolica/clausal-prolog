@@ -61,8 +61,9 @@ since 0.4.0 finish three moves:
   entity dict (`entity/2,3`, `entity_list/2`), the `text`, `root_text` and
   `root_head_text` of a noun-chunk dict (`noun_chunk/2`), `sentence/2` and
   `sentence_list/2`. Unchanged: `lemma/2`, `pos/2`, `tag/2`, `dep/2`,
-  `shape/2`, an entity `label`, a chunk `root_dep` and model aliases are
-  atoms; dict keys are atoms. Migration: compare text with a string
+  `shape/2` (`'Xxxxx'`, `'X.X.'`; ruled an atom the same day), an entity
+  `label`, a chunk `root_dep` and model aliases are atoms; dict keys are
+  atoms. Migration: compare text with a string
   (`token_text(TOK, "Apple")`) and labels with atoms (`pos(TOK, 'PROPN')`).
 
 - **clausal-opencv: `haar_cascade_path/2` answers the PATH as a STRING**
@@ -76,6 +77,28 @@ since 0.4.0 finish three moves:
   matches every TEXT fact value this way; class and function values are
   still matched by identity.
   Migration: compare a path with a string, or pass it straight on.
+
+- **clausal-scipy: the `scipy_constants` CONSTANTS are lower_snake_case,
+  prefixed `scipy_`** (no aliases). `SpeedOfLight`, `PlanckConstant`,
+  `ReducedPlanckConstant`, `GravitationalConstant`, `AvogadroConstant`,
+  `BoltzmannConstant`, `ElementaryCharge`, `ElectronMass`, `ProtonMass`,
+  `ElectronVolt`, `StandardAtmosphere`, `Pi`, `Kilo`, `Mega` and `Giga`
+  were TitleCase, which reads as a logic variable; `-import_from` exempts a
+  TitleCase name from its variable check, so nothing caught them. They are
+  now `scipy_speed_of_light`, ..., `scipy_pi`, `scipy_kilo`, `scipy_mega`,
+  `scipy_giga`. The prefix keeps them apart from the engine's exact
+  `py.units` constants (`speed_of_light`, `kilo`, ...) and the arithmetic
+  `pi`. Values are unchanged. Migration: import and write the new names
+  (`packages/clausal-scipy/docs/RENAMES.md` has the table).
+
+- **clausal-scipy: `root_scalar`'s `flag` is a STRING** (ruled
+  2026-10-04: SciPy's status message is free-form text, like an
+  optimizer's `message`). The result dict of `root_scalar/2,3,4,5` holds
+  `flag` as `('$chars', s)` (`"converged"`), so `result_get(R, 'flag', F)`
+  and `++R["flag"]` both answer the string. Unchanged: `root`,
+  `iterations`, `function_calls` and the boolean `converged`. Migration:
+  compare the flag with a string (`F == "converged"`), or test
+  `converged`.
 
 - **clausal-scipy: units and messages are STRINGS; constant names stay
   atoms** (ruled 2026-10-04: free-form adapter text is a string
@@ -1170,6 +1193,26 @@ since 0.4.0 finish three moves:
 
 ### Changed
 
+- **The registry name gate reads exported DATA names too.**
+  `tests/test_python_predicate_name_gate.py` checked the predicates every
+  engine and package module registers; `-import_from` also offers every
+  public data attribute (a `Quantity` constant, a number, a term
+  constructor), and lets a TitleCase one through silently -- which is how
+  `scipy_constants` exported `SpeedOfLight` & co. unseen. The census
+  (`tests/_predicate_name_census.py`) now reads those names on the loaded
+  module and statically (assignments, and writes onto
+  `sys.modules[__name__]`, `setattr`, `globals()`), with a recall check,
+  floors and positive controls; none may be TitleCase. 22 engine names
+  (`prolog.TruncDiv/TruncMod/Rem`, `units.SI_*`) are held for a ruling in
+  an exact list.
+
+- **Adapter check mode stays STRICT** (ruled 2026-10-04). A bound result
+  of a free-form text output is compared as a term, so the atom of the
+  same spelling fails: `sym_str(42, '42')`, `write({"k": "v"}, 'k: v')`
+  and `token_text(TOK, 'looking')` fail, their string forms hold (ISO: a
+  string is no atom). No behaviour change; the sympy, yaml and spacy
+  suites now pin it.
+
 - **Package suites green again (`python -m pytest packages`).** The 201
   failures were triaged per package (`todo/package-suite-triage-*-2026-10-04.md`)
   and fixed against current engine semantics:
@@ -1377,6 +1420,16 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   with -private([...]) or quote them`.
 
 ### Fixed
+
+- **clausal-torch: `named_parameter/3`, `named_module/3` and
+  `named_child/3` with the VALUE bound.** The value was compared with
+  `unify`, i.e. a tensor `==`, whose elementwise answer raised
+  `RuntimeError: Boolean value of Tensor with more than one value is
+  ambiguous` on the first parameter that was not the bound one. A bound
+  value is now matched by identity: `named_parameter(M, N, P)` with `P`
+  bound answers the name of that parameter, and a name paired with
+  another parameter fails. A number given as the NAME (`0`) is no name and
+  fails, as before (it is not the atom `'0'`).
 
 - **clausal-torch: `named_parameter/3`, `named_module/3` and
   `named_child/3` accept a string name.** A bound name was compared with
