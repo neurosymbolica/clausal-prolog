@@ -145,7 +145,8 @@ test("sym_equal nontrivial") <- (
     )
 )  # nv
 
-# ── == with SymExpr does symbolic comparison ────────────────────────────────
+# ── == is arithmetic: it raises domain_error(clpz_expression, _) on a SymPy
+#    result; sym_equal/2 compares symbolically ─────────────────────────────
 
 test("== reorder") <- (
     expand(X*Y, R),
