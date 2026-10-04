@@ -33,6 +33,8 @@ docs(S) <- write_all([{"a": 1}, {"b": 2}], S)
 get_value(V) <- (read("name: alice", D), get(D, 'name', V))
 check_string() <- read("hello", "hello")
 check_atom() <- read("hello", 'hello')
+check_write_string() <- write({"k": "v"}, "k: v")
+check_write_atom() <- write({"k": "v"}, 'k: v')
 escape_get(V) <- (D is ++__import__('yaml').safe_load('k: v'), get(D, 'k', V))
 """
 
@@ -84,9 +86,12 @@ def test_get_hands_back_the_string(module):
     assert _one(module, "get_value") == chars("alice")
 
 
-def test_check_mode_takes_the_string_not_the_atom(module):
-    assert _holds(module, "check_string")
-    assert not _holds(module, "check_atom")
+@pytest.mark.parametrize("stem", ["check", "check_write"])
+def test_check_mode_takes_the_string_not_the_atom(module, stem):
+    # Ruled 2026-10-04: check mode stays STRICT -- a bound result is
+    # compared as a term, and the atom of the same spelling is no string.
+    assert _holds(module, f"{stem}_string")
+    assert not _holds(module, f"{stem}_atom")
 
 
 def test_escape_data_keeps_atoms(module):

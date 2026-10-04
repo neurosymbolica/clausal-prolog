@@ -1150,6 +1150,13 @@ since 0.4.0 finish three moves:
 
 ### Changed
 
+- **Adapter check mode stays STRICT** (ruled 2026-10-04). A bound result
+  of a free-form text output is compared as a term, so the atom of the
+  same spelling fails: `sym_str(42, '42')`, `write({"k": "v"}, 'k: v')`
+  and `token_text(TOK, 'looking')` fail, their string forms hold (ISO: a
+  string is no atom). No behaviour change; the sympy, yaml and spacy
+  suites now pin it.
+
 - **Package suites green again (`python -m pytest packages`).** The 201
   failures were triaged per package (`todo/package-suite-triage-*-2026-10-04.md`)
   and fixed against current engine semantics:

@@ -182,3 +182,31 @@ def test_seam_fixtures_under_the_fake(fake_spacy, rel, name):
     mod_name = "spacy_ff_" + os.path.basename(rel)
     mod = _load_module(mod_name, os.path.join(_FIXTURES, rel + SEAM_SUFFIX))
     assert any(True for _ in call("test", chars(name), module=mod.__dict__["$module"])), name
+
+
+# ── Check mode is STRICT (ruled 2026-10-04) ──────────────────────────────────
+#
+# A bound result is compared as a TERM: the string "looking" is what
+# token_text/2 answers, and the atom 'looking' -- the same spelling -- is a
+# different term, so check mode with it FAILS (ISO: a string is no atom).
+# Pinned here so neither side can drift into a text-level comparison.
+
+_CHECK_SRC = """\
+-import_from(spacy, [load_model, process, token, token_text])
+
+doc_tok(TOK) <- (load_model("en_core_web_sm", "check") and process("check", "Apple is looking at buying U.K. startup for $1 billion.", DOC) and token(DOC, 2, TOK))
+check_string() <- (doc_tok(TOK) and token_text(TOK, "looking"))
+check_atom() <- (doc_tok(TOK) and token_text(TOK, 'looking'))
+"""
+
+
+@pytest.fixture
+def check_module(fake_spacy, tmp_path):
+    src = tmp_path / f"spacy_check_probe{SEAM_SUFFIX}"
+    src.write_text(_CHECK_SRC, encoding="utf-8")
+    return _load_module("spacy_check_probe", str(src)).__dict__["$module"]
+
+
+def test_check_mode_takes_the_string_not_the_atom(check_module):
+    assert any(True for _ in call("check_string", module=check_module))
+    assert not any(True for _ in call("check_atom", module=check_module))
