@@ -194,9 +194,9 @@ def test_seam_fixtures_under_the_fake(fake_spacy, rel, name):
 _CHECK_SRC = """\
 -import_from(spacy, [load_model, process, token, token_text])
 
-doc_tok(TOK) <- (load_model("en_core_web_sm", "check") and process("check", "Apple is looking at buying U.K. startup for $1 billion.", DOC) and token(DOC, 2, TOK))
-check_string() <- (doc_tok(TOK) and token_text(TOK, "looking"))
-check_atom() <- (doc_tok(TOK) and token_text(TOK, 'looking'))
+doc_tok(TOK) <- (load_model("en_core_web_sm", "check"), process("check", "Apple is looking at buying U.K. startup for $1 billion.", DOC), token(DOC, 2, TOK))
+check_string() <- (doc_tok(TOK), token_text(TOK, "looking"))
+check_atom() <- (doc_tok(TOK), token_text(TOK, 'looking'))
 """
 
 

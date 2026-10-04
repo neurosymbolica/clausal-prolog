@@ -425,10 +425,12 @@ def data_names(mod, source: str, filename: str) -> list[str]:
     import types  # noqa: PLC0415
     tree = ast.parse(source, filename)
     imported, star = import_bound_names(tree)
+    # (resolved against the module's PACKAGE, as Python resolves them; the
+    # caller records a failure here as the module's own)
     star_mods = []
     for src in star:
         star_mods.append(importlib.import_module(
-            src, package=mod.__name__ if src.startswith(".") else None))
+            src, package=mod.__package__ if src.startswith(".") else None))
     out = []
     for attr, value in list(vars(mod).items()):
         if attr.startswith("_") or attr in imported:
@@ -566,7 +568,12 @@ def census(root: pathlib.Path, extra: list[pathlib.Path], only_extra: bool) -> d
                 else:
                     rec["mode"] = "import"
                     rec.update(registry_names(mod))
-                    rec["data_names"] = data_names(mod, source, str(path))
+                    try:
+                        rec["data_names"] = data_names(mod, source, str(path))
+                    except BaseException as exc:  # noqa: BLE001
+                        rec["mode"] = "failed"
+                        rec["error"] = "reading its data names: " + "".join(
+                            traceback.format_exception_only(type(exc), exc)).strip()
             if rec["mode"] == "import":
                 names = (set(rec["offered"]) | set(rec["offered_gap"])
                          | set(rec["adapter_names"]))

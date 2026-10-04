@@ -13,6 +13,7 @@ constant and a sympy name).
 from __future__ import annotations
 
 import os
+import pathlib
 import re
 
 import pytest
@@ -112,7 +113,7 @@ def test_imported_by_the_new_names(probe):
 
 
 def _fixture_cases(rel):
-    src = open(os.path.join(_FIXTURES, rel + SEAM_SUFFIX), encoding="utf-8").read()
+    src = pathlib.Path(_FIXTURES, rel + SEAM_SUFFIX).read_text(encoding="utf-8")
     return re.findall(r'^test\("([^"]+)"\)', src, re.M)
 
 
@@ -124,8 +125,8 @@ def test_doc_sig_tests_fixture(name):
 
 
 def _example_block():
-    text = open(os.path.join(_FIXTURES, "docs", "scipy_constants_sigs.txt"),
-                encoding="utf-8").read()
+    text = pathlib.Path(_FIXTURES, "docs", "scipy_constants_sigs.txt").read_text(
+        encoding="utf-8")
     return re.search(r"--8<-- \[start:example\]\n(.*?)--8<-- \[end:example\]",
                      text, re.S).group(1)
 

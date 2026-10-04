@@ -137,9 +137,9 @@ def test_named_predicates_a_number_is_no_name(module, name):
     assert list(call(name, module=module)) == []
 
 
-# A string name with the VALUE already bound: the value is still unified,
-# so the same object holds and another one fails (no tensor comparison
-# error, no silent success).
+# A string name with the VALUE already bound: the bound value is matched by
+# identity, so the same object holds and another one fails (no tensor
+# comparison error, no silent success).
 @pytest.mark.parametrize("name,holds", [
     ("param_bound_same", True), ("param_bound_other", False),
     ("child_bound_same", True), ("child_bound_other", False),
