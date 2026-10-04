@@ -1417,6 +1417,9 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **clausal-torch docs: `named_module/3`'s root is named `''`**, the
+  empty atom, not `""` (a string): module names come out as atoms.
+
 - **clausal-torch: `named_parameter/3`, `named_module/3` and
   `named_child/3` with the VALUE bound.** The value was compared with
   `unify`, i.e. a tensor `==`, whose elementwise answer raised
