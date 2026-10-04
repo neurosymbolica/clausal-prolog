@@ -34,7 +34,11 @@ from typing import Any
 
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.py import ModulePredicate, simple_to_trampoline
+from clausal.logic.to_python import to_python
+from clausal.modules.py import (
+    ModulePredicate, require_text, simple_to_trampoline, text_or_str,
+)
+from clausal.modules.py._helpers import _text_arg
 from clausal.terms import DictTerm
 
 
@@ -328,7 +332,7 @@ def _make_cv(cv_term):
     """Convert a CV term to a sklearn cross-validation object or int."""
     _ensure_sklearn()
     ms = _sk_model_selection
-    cv_term = deref(cv_term)
+    cv_term = _text_arg(cv_term)      # a string strategy name reads as the atom
     if isinstance(cv_term, int):
         return cv_term
     # A CV strategy is a cell ``(name, *args)``, or the bare atom ``loo``.
@@ -357,8 +361,8 @@ def _unpack_dataset(d):
     """Extract (X, Y) from a Dataset tuple. Y may be None."""
     d = deref(d)
     if isinstance(d, tuple) and len(d) == 3 and d[0] == "Dataset":
-        x = deref(d[1])
-        y = deref(d[2])
+        x = to_python(d[1])           # strings in the data -> their str
+        y = to_python(d[2])
         if y is None or (isinstance(y, str) and y == "nil"):
             y = None
         return x, y
@@ -369,7 +373,7 @@ def _unpack_est(e):
     """Extract (algorithm, params) from an Est tuple."""
     e = deref(e)
     if isinstance(e, tuple) and len(e) == 3 and e[0] == "Est":
-        return str(deref(e[1])), deref(e[2])
+        return text_or_str(e[1]), deref(e[2])
     raise ValueError(f"Expected Est(algorithm, params), got {e!r}")
 
 
@@ -399,7 +403,7 @@ def _build_pipeline(steps):
     for step in steps:
         step = deref(step)
         if isinstance(step, tuple) and len(step) == 2:
-            name, est = str(deref(step[0])), deref(step[1])
+            name, est = text_or_str(step[0]), deref(step[1])
         else:
             raise ValueError(f"Pipeline step must be (name, Est(...)): {step!r}")
         algo, params = _unpack_est(est)
@@ -409,11 +413,21 @@ def _build_pipeline(steps):
 
 # ── Helper: convert param dict from clausal ───────────────────────────────
 
-def _deref_params(params):
-    """Deep-deref a params dict."""
+def _deref_params(params, *, raw=False):
+    """A params dict as the Python dict sklearn takes.
+
+    Keys are the text an atom or string key denotes; values go through
+    ``to_python`` (a string is its ``str``, at any depth).  *raw* keeps
+    the values as terms (dereferenced only), for a params dict that is
+    handed back inside an ``Est`` term rather than passed to sklearn.
+    """
     params = deref(params)
+    if isinstance(params, DictTerm):     # a dict written in source
+        params = params.data
     if isinstance(params, dict):
-        return {str(deref(k)): deref(v) for k, v in params.items()}
+        if raw:
+            return {text_or_str(k): deref(v) for k, v in params.items()}
+        return {text_or_str(k): to_python(v) for k, v in params.items()}
     return {}
 
 
@@ -423,11 +437,16 @@ def _deref_params(params):
 
 def _algorithm_2(this_generator, _proceed, _fail, _catcher, algo_var, role_var, trail):
     """algorithm/2: enumerate (algorithm, role) pairs."""
-    algo_v = deref(algo_var)
-    role_v = deref(role_var)
+    # A bound argument may be an atom or a string: it is compared as the
+    # text it denotes, so ``algorithm("svc", R)`` answers as
+    # ``algorithm(svc, R)`` does.  An unbound one is unified as before.
+    algo_v = _text_arg(algo_var)
+    role_v = _text_arg(role_var)
     for name, role in _ALGORITHM_FACTS:
         mark = trail.mark()
-        if unify(algo_var, name, trail) and unify(role_var, role, trail):
+        if ((name == algo_v if type(algo_v) is str else unify(algo_var, name, trail))
+                and (role == role_v if type(role_v) is str
+                     else unify(role_var, role, trail))):
             yield (_proceed, None)
         trail.undo(mark)
     yield (_fail, DONE)
@@ -435,7 +454,7 @@ def _algorithm_2(this_generator, _proceed, _fail, _catcher, algo_var, role_var, 
 
 def _default_params_2(algo, params_var, trail, k):
     """default_params/2: get default params for an algorithm."""
-    algo = str(deref(algo))
+    algo = require_text(algo, "default_params/2", arg=1)
     algo = _resolve_algorithm(algo)
     if algo == "pipeline":
         if unify(params_var, {}, trail):
@@ -450,7 +469,7 @@ def _default_params_2(algo, params_var, trail, k):
 
 def _param_key_3(this_generator, _proceed, _fail, _catcher, algo_var, key_var, domain_var, trail):
     """param_key/3: enumerate valid parameter keys for an algorithm."""
-    algo = str(deref(algo_var))
+    algo = require_text(algo_var, "param_key/3", arg=1)
     algo = _resolve_algorithm(algo)
     if algo == "pipeline":
         yield (_fail, DONE)
@@ -474,7 +493,7 @@ def _load_dataset_2(name, dataset_var, trail, k):
     """load_dataset/2: load a built-in sklearn dataset."""
     _ensure_sklearn()
     skd = _sk_datasets
-    name = str(deref(name))
+    name = require_text(name, "load_dataset/2", arg=1)
     loader_name = _DATASET_LOADERS.get(name)
     if loader_name is None:
         raise ValueError(f"Unknown built-in dataset: {name!r}")
@@ -489,7 +508,7 @@ def _make_dataset_3(kind, options, dataset_var, trail, k):
     """make_dataset/3: generate a synthetic dataset."""
     _ensure_sklearn()
     skd = _sk_datasets
-    kind = str(deref(kind))
+    kind = require_text(kind, "make_dataset/3", arg=1)
     options = _deref_params(options)
     gen_name = _DATASET_GENERATORS.get(kind)
     if gen_name is None:
@@ -504,7 +523,7 @@ def _make_dataset_3(kind, options, dataset_var, trail, k):
 def _load_csv_3(path, options, dataset_var, trail, k):
     """load_csv/3: load CSV into a Dataset term."""
     import pandas as pd
-    path = str(deref(path))
+    path = require_text(path, "load_csv/3", arg=1)
     options = _deref_params(options)
     df = pd.read_csv(path)
 
@@ -639,8 +658,8 @@ def _fit_4(est_term, x, y, fitted_var, trail, k):
     """fit/4: fit with raw X and Y."""
     _ensure_sklearn()
     algo, params = _unpack_est(est_term)
-    x = deref(x)
-    y = deref(y)
+    x = to_python(x)
+    y = to_python(y)
     params = _deref_params(params)
 
     if algo == "pipeline":
@@ -661,7 +680,7 @@ def _predict_3(fitted, x, pred_var, trail, k):
     """predict/3: predict using a fitted estimator."""
     _est, handle = _unpack_fitted(fitted)
     model = _get_model(handle)
-    x = deref(x)
+    x = to_python(x)
     predictions = model.predict(x)
     if unify(pred_var, predictions, trail):
         yield None
@@ -671,7 +690,7 @@ def _transform_3(fitted, x, result_var, trail, k):
     """transform/3: transform data using a fitted transformer."""
     _est, handle = _unpack_fitted(fitted)
     model = _get_model(handle)
-    x = deref(x)
+    x = to_python(x)
     transformed = model.transform(x)
     if unify(result_var, transformed, trail):
         yield None
@@ -702,7 +721,7 @@ def _predict_proba_3(fitted, x, proba_var, trail, k):
     """predict_proba/3: predict class probabilities."""
     _est, handle = _unpack_fitted(fitted)
     model = _get_model(handle)
-    x = deref(x)
+    x = to_python(x)
     proba = model.predict_proba(x)
     if unify(proba_var, proba, trail):
         yield None
@@ -712,7 +731,7 @@ def _decision_function_3(fitted, x, scores_var, trail, k):
     """decision_function/3: raw decision scores."""
     _est, handle = _unpack_fitted(fitted)
     model = _get_model(handle)
-    x = deref(x)
+    x = to_python(x)
     scores = model.decision_function(x)
     if unify(scores_var, scores, trail):
         yield None
@@ -737,7 +756,7 @@ def _score_4(fitted, dataset, metric, score_var, trail, k):
     _est, handle = _unpack_fitted(fitted)
     model = _get_model(handle)
     X, y = _unpack_dataset(dataset)
-    metric_name = str(deref(metric))
+    metric_name = require_text(metric, "score/4", arg=3)
 
     # For probability-based metrics, use predict_proba
     if metric_name in ("roc_auc", "log_loss"):
@@ -756,9 +775,9 @@ def _score_4(fitted, dataset, metric, score_var, trail, k):
 def _metric_4(metric_name, y_true, y_pred, score_var, trail, k):
     """metric/4: compute a metric from ground truth and predictions."""
     _ensure_sklearn()
-    metric_name = str(deref(metric_name))
-    y_true = deref(y_true)
-    y_pred = deref(y_pred)
+    metric_name = require_text(metric_name, "metric/4", arg=1)
+    y_true = to_python(y_true)
+    y_pred = to_python(y_pred)
     fn, extra_kw = _get_metric_fn(metric_name)
     score = fn(y_true, y_pred, **extra_kw)
     if unify(score_var, score, trail):
@@ -793,7 +812,7 @@ def _cross_val_score_5(est_term, dataset, cv_term, metric, scores_var, trail, k)
     X, y = _unpack_dataset(dataset)
     params = _deref_params(params)
     cv = _make_cv(cv_term)
-    scoring = _metric_to_scoring(str(deref(metric)))
+    scoring = _metric_to_scoring(require_text(metric, "cross_val_score/5", arg=4))
 
     if algo == "pipeline":
         steps = params.get("steps", [])
@@ -822,7 +841,7 @@ def _cross_validate_5(est_term, dataset, cv_term, metrics_list, results_var, tra
     scoring = {}
     neg_metrics = set()
     for m in metrics_list:
-        m_str = str(deref(m))
+        m_str = require_text(m, "cross_validate/5", arg=4)
         s = _metric_to_scoring(m_str)
         scoring[m_str] = s
         if s.startswith("neg_"):
@@ -851,8 +870,8 @@ def _confusion_matrix_3(y_true, y_pred, matrix_var, trail, k):
     """confusion_matrix/3: compute confusion matrix."""
     _ensure_sklearn()
     confusion_matrix = _sk_metrics.confusion_matrix
-    y_true = deref(y_true)
-    y_pred = deref(y_pred)
+    y_true = to_python(y_true)
+    y_pred = to_python(y_pred)
     matrix = confusion_matrix(y_true, y_pred)
     if unify(matrix_var, matrix, trail):
         yield None
@@ -862,8 +881,8 @@ def _classification_report_4(y_true, y_pred, classes, report_var, trail, k):
     """classification_report/4: per-class precision/recall/F1/support."""
     _ensure_sklearn()
     precision_recall_fscore_support = _sk_metrics.precision_recall_fscore_support
-    y_true = deref(y_true)
-    y_pred = deref(y_pred)
+    y_true = to_python(y_true)
+    y_pred = to_python(y_pred)
     classes = deref(classes)
     p, r, f1, sup = precision_recall_fscore_support(y_true, y_pred, labels=classes)
     report = []
@@ -889,7 +908,7 @@ def _pipeline_step_3(fitted_pipeline, name, step_fitted_var, trail, k):
     """pipeline_step/3: extract a named step from a fitted pipeline."""
     _est, handle = _unpack_fitted(fitted_pipeline)
     model = _get_model(handle)
-    name = str(deref(name))
+    name = require_text(name, "pipeline_step/3", arg=2)
     step_model = model.named_steps[name]
     step_handle = _register_model(step_model)
     # Create a minimal Est for the step
@@ -933,7 +952,7 @@ def _grid_search_6(est_term, param_grid, dataset, cv_term, metric, best_fitted_v
     params = _deref_params(params)
     cv = _make_cv(cv_term)
     param_grid = _deref_params(param_grid)
-    scoring = _metric_to_scoring(str(deref(metric)))
+    scoring = _metric_to_scoring(require_text(metric, "grid_search/6", arg=5))
 
     if algo == "pipeline":
         steps = params.get("steps", [])
@@ -1017,7 +1036,7 @@ def _learned_3(fitted, attr, value_var, trail, k):
     """learned/3: read a learned attribute from a fitted estimator."""
     _est, handle = _unpack_fitted(fitted)
     model = _get_model(handle)
-    attr = str(deref(attr))
+    attr = require_text(attr, "learned/3", arg=2)
     # Append underscore (sklearn convention)
     sk_attr = attr + "_"
     if hasattr(model, sk_attr):
@@ -1038,15 +1057,15 @@ def _param_3(est_or_fitted, key, value_var, trail, k):
         if tag == "Fitted":
             _est_inner, handle = deref(term[1]), int(deref(term[2]))
             model = _get_model(handle)
-            key_str = str(deref(key))
+            key_str = text_or_str(key)
             params = model.get_params()
             if key_str in params:
                 if unify(value_var, params[key_str], trail):
                     yield None
             return
         elif tag == "Est":
-            _algo, params = str(deref(term[1])), deref(term[2])
-            key_str = str(deref(key))
+            _algo, params = text_or_str(term[1]), deref(term[2])
+            key_str = text_or_str(key)
             if isinstance(params, (dict, DictTerm)) and key_str in params:
                 if unify(value_var, params[key_str], trail):
                     yield None
@@ -1057,9 +1076,9 @@ def _param_3(est_or_fitted, key, value_var, trail, k):
 def _make_est_3(algo, params, est_var, trail, k):
     """make_est/3: construct an Est term, filling defaults."""
     _ensure_sklearn()
-    algo = str(deref(algo))
+    algo = require_text(algo, "make_est/3", arg=1)
     algo = _resolve_algorithm(algo)
-    user_params = _deref_params(params)
+    user_params = _deref_params(params, raw=True)   # handed back in the Est
 
     if algo == "pipeline":
         result = Est("pipeline", user_params)
@@ -1078,7 +1097,7 @@ def _encode_labels_3(labels, encoded_var, mapping_var, trail, k):
     """encode_labels/3: encode symbolic labels to integers."""
     _ensure_sklearn()
     LabelEncoder = _sk_preprocessing.LabelEncoder
-    labels = deref(labels)
+    labels = to_python(labels)
     le = LabelEncoder()
     encoded = le.fit_transform(labels)
     mapping = {str(cls): int(i) for i, cls in enumerate(le.classes_)}
@@ -1090,7 +1109,7 @@ def _binarize_3(x, threshold, result_var, trail, k):
     """binarize/3: threshold a matrix to 0/1."""
     _ensure_sklearn()
     binarize = _sk_preprocessing.binarize
-    x = deref(x)
+    x = to_python(x)
     threshold = float(deref(threshold))
     result = binarize(x, threshold=threshold)
     if unify(result_var, result, trail):
@@ -1101,8 +1120,8 @@ def _normalize_3(x, norm, result_var, trail, k):
     """normalize/3: row-wise normalization."""
     _ensure_sklearn()
     normalize = _sk_preprocessing.normalize
-    x = deref(x)
-    norm = str(deref(norm))
+    x = to_python(x)
+    norm = require_text(norm, "normalize/3", arg=2)
     result = normalize(x, norm=norm)
     if unify(result_var, result, trail):
         yield None
@@ -1112,7 +1131,7 @@ def _polynomial_features_3(x, degree, result_var, trail, k):
     """polynomial_features/3: generate polynomial features."""
     _ensure_sklearn()
     SkPolyFeatures = _sk_preprocessing.PolynomialFeatures
-    x = deref(x)
+    x = to_python(x)
     degree = int(deref(degree))
     pf = SkPolyFeatures(degree=degree)
     result = pf.fit_transform(x)
@@ -1125,7 +1144,7 @@ def _save_fitted_2(fitted, path, trail, k):
     import joblib
     _est, handle = _unpack_fitted(fitted)
     model = _get_model(handle)
-    path = str(deref(path))
+    path = require_text(path, "save_fitted/2", arg=2)
     joblib.dump(model, path)
     yield None
 
@@ -1133,7 +1152,7 @@ def _save_fitted_2(fitted, path, trail, k):
 def _load_fitted_2(path, fitted_var, trail, k):
     """load_fitted/2: load a fitted estimator from disk."""
     import joblib
-    path = str(deref(path))
+    path = require_text(path, "load_fitted/2", arg=1)
     model = joblib.load(path)
     handle = _register_model(model)
     # Create a minimal Est term from the loaded model

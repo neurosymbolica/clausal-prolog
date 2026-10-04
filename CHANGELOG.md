@@ -1272,6 +1272,23 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **clausal-sklearn: names, paths, parameters and data accept a string.**
+  Algorithm, metric, dataset, dataset-kind, step, attribute, norm and
+  parameter-key arguments and the `save_fitted/2` / `load_fitted/2` /
+  `load_csv/3` paths were written through `str()`, so a string reached
+  scikit-learn, joblib or a registry lookup as the repr
+  `('$chars', 'svc')`; a string strategy name in a CV argument
+  (`"loo"`) was not recognised; `algorithm("svc", R)` answered nothing.
+  Parameter values, options and data (`X`, `Y`, labels, `y_true`/`y_pred`)
+  were passed dereferenced one level, so a string inside them was a
+  Python tuple (string class labels became two-element rows). All of
+  these now take the text an atom or a string denotes, and values and
+  data go through the shared term-to-Python conversion. A params dict
+  written in source (a dict term) was silently ignored -- every estimator
+  got its defaults -- and is now read. A name or path that is not text
+  raises `type_error(text, Culprit)` (`instantiation_error` when
+  unbound). The `Est` term `make_est/3` hands back keeps the values as
+  given.
 - **clausal-opencv: `imwrite/2,3` take a string path.** The path was
   written through `str()`, so `imwrite("/tmp/out.png", Img)` under
   `-double_quotes(chars)` asked OpenCV for a file named
