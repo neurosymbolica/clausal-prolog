@@ -47,6 +47,13 @@ child_atom(S) <- (net(M), named_child(M, '0', L), named_parameter(L, 'weight', P
 param_missing_text() <- (net(M), named_parameter(M, "0.nope", _))
 child_names(NS) <- (net(M), findall(N, named_child(M, N, _), NS))
 param_names(NS) <- (net(M), findall(N, named_parameter(M, N, _), NS))
+child_number() <- (net(M), named_child(M, 0, _))
+param_number() <- (net(M), named_parameter(M, 0, _))
+param_bound_same() <- (net(M), named_parameter(M, "0.weight", P), named_parameter(M, "0.weight", P))
+param_bound_other() <- (net(M), named_parameter(M, "0.bias", P), named_parameter(M, "0.weight", P))
+child_bound_same() <- (net(M), named_child(M, "1", L), named_child(M, "1", L))
+child_bound_other() <- (net(M), named_child(M, "0", L), named_child(M, "1", L))
+param_name_of(N) <- (net(M), named_parameter(M, "0.bias", P), named_parameter(M, N, P))
 """
 
 
@@ -121,3 +128,28 @@ def test_named_predicate_names_come_out_as_atoms(module, name, expected):
     # an atom IS its ``str``; a string would be the ``('$chars', s)`` carrier
     assert got is not None and got[0] == expected
     assert all(type(n) is str for n in got[0])
+
+
+# A NUMBER is no name: ``0`` is not the atom ``'0'`` (ISO term comparison),
+# so it does not select the child or parameter the path ``'0'`` names.
+@pytest.mark.parametrize("name", ["child_number", "param_number"])
+def test_named_predicates_a_number_is_no_name(module, name):
+    assert list(call(name, module=module)) == []
+
+
+# A string name with the VALUE already bound: the value is still unified,
+# so the same object holds and another one fails (no tensor comparison
+# error, no silent success).
+@pytest.mark.parametrize("name,holds", [
+    ("param_bound_same", True), ("param_bound_other", False),
+    ("child_bound_same", True), ("child_bound_other", False),
+])
+def test_named_predicates_string_name_with_a_bound_value(module, name, holds):
+    assert bool(list(call(name, module=module))) is holds
+
+
+def test_named_parameter_bound_value_answers_its_name(module):
+    # reverse lookup: the parameter is matched by identity, not by a tensor
+    # ``==`` (which raised on the first non-identical parameter)
+    n = Var()
+    assert [_deref_walk(n) for _ in call("param_name_of", n, module=module)] == ["0.bias"]

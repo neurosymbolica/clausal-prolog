@@ -1376,6 +1376,16 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 ### Fixed
 
 - **clausal-torch: `named_parameter/3`, `named_module/3` and
+  `named_child/3` with the VALUE bound.** The value was compared with
+  `unify`, i.e. a tensor `==`, whose elementwise answer raised
+  `RuntimeError: Boolean value of Tensor with more than one value is
+  ambiguous` on the first parameter that was not the bound one. A bound
+  value is now matched by identity: `named_parameter(M, N, P)` with `P`
+  bound answers the name of that parameter, and a name paired with
+  another parameter fails. A number given as the NAME (`0`) is no name and
+  fails, as before (it is not the atom `'0'`).
+
+- **clausal-torch: `named_parameter/3`, `named_module/3` and
   `named_child/3` accept a string name.** A bound name was compared with
   `unify`, so `named_parameter(M, "0.weight", P)` (a string, the default
   reading of `"…"`) never matched the parameter path `'0.weight'` and

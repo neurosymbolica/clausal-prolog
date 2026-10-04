@@ -74,6 +74,9 @@ def _enumerate_2(iter_fn):
     return dispatch
 
 
+_UNBOUND = object()
+
+
 def _enumerate_3(iter_fn):
     """Nondeterministic enumeration: yield (name, value) pairs from iter_fn(model).
 
@@ -84,6 +87,12 @@ def _enumerate_3(iter_fn):
     P)`` selects the same entry as ``named_parameter(M, '0.weight', P)``.
     Only a bound TEXT name is compared by its text; anything else (an
     unbound variable, a number, a compound) still goes through ``unify``.
+
+    A bound VALUE is matched by IDENTITY: a parameter or a submodule is an
+    object, and ``unify`` would compare two tensors with ``==``, whose
+    elementwise answer raises ("Boolean value of Tensor with more than one
+    value is ambiguous") instead of failing.  So ``named_parameter(M, N,
+    P)`` with ``P`` bound answers the name of that very parameter.
     """
     def dispatch(this_generator, _proceed, _fail, _catcher, model_var, name_var, value_var, trail):
         model = deref(model_var)
@@ -95,12 +104,18 @@ def _enumerate_3(iter_fn):
         want = _text_arg(name_var)
         if type(want) is not str:
             want = None
+        bound = deref(value_var)
+        if is_var(bound):
+            bound = _UNBOUND
         for name, value in items:
             if want is not None and name != want:
                 continue
+            if bound is not _UNBOUND and bound is not value:
+                continue
             mark = trail.mark()
             if ((want is not None or unify(name_var, name, trail))
-                    and unify(value_var, value, trail)):
+                    and (bound is not _UNBOUND
+                         or unify(value_var, value, trail))):
                 yield (_proceed, None)
             trail.undo(mark)
         yield (_fail, DONE)
