@@ -40,7 +40,7 @@ since 0.4.0 finish three moves:
   `clausal.python_bridges.python_routes`; the gate decides from the
   compiler's own record of the module (`compiler_record`). Also: an
   underscore-led part of a qualified name in Clausal code
-  (`SI_Area.__class__`) is now a load error in every seam module -- reach
+  (`si_area.__class__`) is now a load error in every seam module -- reach
   Python attributes with `++`. See docs/importing_prolog.md, "Python
   bridges".
 

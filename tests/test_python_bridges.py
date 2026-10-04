@@ -867,7 +867,9 @@ def test_a_titlecase_export_head_is_a_qualified_base(proj):
                                "-import_from(py.units, [SI_Area])\n"
                                "v(X) <- (X is SI_Area.dimension)\n")
     assert ("non_export", 3) in file_python_routes(str(path))
-    assert ("attr", "SI_Area", "py.units.SI_Area", ("dimension",), 3) in (
+    # Since the units rename, SI_Area is the deprecated spelling of si_area
+    # (imported as si_area under the local name SI_Area).
+    assert ("attr", "SI_Area", "py.units.si_area", ("dimension",), 3) in (
         __import__("clausal.python_bridges").python_bridges
         .compiler_record(str(path)))
 

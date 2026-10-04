@@ -562,7 +562,7 @@ Python is reachable **only** through:
    (`clausal.python_bridges.compiler_record(path)`) stays as diagnostics:
    it names the construct the author wrote, and its routes are only ever
    added. In the compiler itself, an underscore-led part of a qualified
-   name (`SI_Area.__class__`, `units._x`) is a load error in every seam
+   name (`si_area.__class__`, `units._x`) is a load error in every seam
    module: a qualified name is `module.name`, and a Python attribute is
    reached with a `++` escape.
 3. **A `.seam` module with Python that the importer's project allowlists**
