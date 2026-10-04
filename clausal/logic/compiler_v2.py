@@ -993,9 +993,21 @@ def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
                 module_dict[item.module] = mod
         elif isinstance(item, ImportModuleItem):
             mod = _resolve_module(item.module)
-            # Store the top-level name (e.g., "foo" for "foo.bar.baz").
+            # Store the top-level name (e.g., "foo" for "foo.bar.baz"),
+            # bound -- as Python's ``import foo.bar.baz`` binds it -- to the
+            # top-level PACKAGE, so ``foo.bar.baz.p`` walks to the leaf.  It
+            # used to bind the LEAF: ``-import_module(py.re)`` made ``py``
+            # the py.re module, so the term ``py.re.match`` (a closure handed
+            # to ``call/N``) raised AttributeError: module 'py.re' has no
+            # attribute 're'.
             top_name = item.module.split(".")[0]
-            module_dict[top_name] = mod
+            top = mod
+            if "." in item.module:
+                try:
+                    top = _resolve_module(top_name)
+                except ImportError:
+                    top = mod
+            module_dict[top_name] = top
 
 
 # The six spellings of the three truth values.  ``True``/``False`` are Python

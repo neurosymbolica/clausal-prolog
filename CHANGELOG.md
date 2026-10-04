@@ -1362,6 +1362,13 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   check mode; an unbound name still enumerates the atoms, and a reverse
   lookup still answers the atom.
 
+- **`-import_module(a.b)` binds `a` to the top-level package**, as Python's
+  `import a.b` does. It bound `a` to the leaf module `a.b`, so a dotted
+  term walked from the wrong object: after `-import_module(py.re)`, the
+  closure `py.re.match` handed to `call/N` or `maplist/N` raised
+  `AttributeError: module 'clausal.modules.py.re' has no attribute 're'`.
+  Body calls were unaffected.
+
 - **A qualified predicate-adapter goal built as a term runs under a
   meta-call.** `call(torch.tensor([1], X))` raised
   `existence_error(procedure, 'torch.tensor'/2)` although the clause body
