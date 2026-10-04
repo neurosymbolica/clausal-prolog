@@ -73,6 +73,8 @@ ROUTE_KINDS: dict[str, str] = {
                    "only qualified form)"),
     "unresolved_reference": "a module reference that resolves to no module",
     "uncompilable": "the module does not compile (refused, fail closed)",
+    "python_call": "generated code calls something not on the allow-list",
+    "python_name": "generated code names something the module does not bind",
 }
 
 
@@ -650,18 +652,84 @@ def _check_refs(refs) -> "tuple[list, list]":
             routes.append(("non_export", line))
             continue
         chain = tuple(module_names.get(base, base).split(".")) + tuple(parts)
-        for i in range(len(chain) - 1, 0, -1):
-            dotted = _module_path(".".join(chain[:i]))
-            if _find(dotted) is None:
-                continue
-            ok, origin = module_ok(dotted, line)
-            if ok and (len(chain) - i != 1
-                       or chain[-1] not in _exports(dotted, origin)):
-                routes.append(("non_export", line))
-            break
-        else:
-            routes.append(("unresolved_reference", line))
+        _chain_ok(chain, line, module_ok, routes)
     return routes, children
+
+
+def _chain_ok(chain, line, module_ok, routes) -> bool:
+    """Whether the dotted *chain* is exactly ``module.export``: its longest
+    prefix that resolves to a module, then ONE more part, an export."""
+    for i in range(len(chain) - 1, 0, -1):
+        dotted = _module_path(".".join(chain[:i]))
+        if _find(dotted) is None:
+            continue
+        ok, origin = module_ok(dotted, line)
+        if ok and (len(chain) - i != 1
+                   or chain[-1] not in _exports(dotted, origin)):
+            routes.append(("non_export", line))
+            return False
+        return ok
+    routes.append(("unresolved_reference", line))
+    return False
+
+
+def _module_checker(routes, children):
+    """``module_ok(dotted, line)``: may module *dotted* be imported by a
+    Python-free module (a Clausal module or an engine-shipped one); records
+    the routes it finds and the ``.seam`` modules to walk."""
+    seen: set = set()
+
+    def module_ok(dotted, line) -> "tuple[bool, str | None]":
+        how, origin = _classify(dotted)
+        if how in ("python_module", "py_adapter"):
+            routes.append((how, line))
+            return False, origin
+        if origin is None:
+            routes.append(("unresolved_reference", line))
+            return False, None
+        if how == "seam" and dotted not in seen:
+            seen.add(dotted)
+            children.append((dotted, origin, line))
+        return True, origin
+
+    return module_ok
+
+
+def audit_checker(routes: list, children: list):
+    """The *check_module* :func:`clausal.seam_audit.audit_tree` asks: the
+    allow-list's module questions, recording routes and the ``.seam``
+    modules to walk into *routes* / *children*."""
+    module_ok = _module_checker(routes, children)
+
+    def check_module(kind, a, b, node) -> bool:
+        line = getattr(node, "lineno", 0) or 0
+        if kind == "module":
+            return module_ok(_module_path(a), line)[0]
+        if kind == "name":
+            dotted = _module_path(a)
+            ok, origin = module_ok(dotted, line)
+            if ok and b not in _exports(dotted, origin):
+                routes.append(("non_export", line))
+                return False
+            return ok
+        return _chain_ok(tuple(a.split(".")), line, module_ok, routes)
+
+    return check_module
+
+
+def audit_routes(path: str) -> "tuple[list, list]":
+    """THE DECIDER: ``(routes, seam children)`` of the audit of the FINAL
+    generated Python of the ``.seam`` file at *path*
+    (:mod:`clausal.seam_audit`), its module questions answered by the
+    allow-list rules here.  No routes = Python-free."""
+    from clausal import seam_audit  # noqa: PLC0415
+    routes: list = []
+    children: list = []
+    check_module = audit_checker(routes, children)
+    with open(path, encoding="utf-8", errors="replace") as f:
+        source = f.read()
+    found, _ = seam_audit.audit_source(source, path, check_module)
+    return routes + found, children
 
 
 #: realpath -> (sha256, record or None)
@@ -700,33 +768,52 @@ def compiler_record(path: str) -> "tuple | None":
     return record
 
 
+#: A switch for tests that prove the audit ALONE refuses: with it False the
+#: record and the static pre-scan add nothing.
+_DIAGNOSTICS = True
+
+
 def _routes_and_children(path: str) -> "tuple[list, list]":
     """Everything that makes the file at *path* a Python bridge, and the
-    ``.seam`` modules it passes through.  The compiler record decides; the
-    static scan is a pre-check whose routes are ADDED, never a reason to
-    allow.  No record (the file does not compile) is a route."""
-    scan = _scan(path)
-    routes = list(scan.routes)
-    record = compiler_record(path)
-    if record is None:
-        routes.append(("uncompilable", 0))
-        record = ()
-    r1, c1 = _check_refs(record)
-    r2, c2 = _check_refs(_static_refs(scan.refs))
+    ``.seam`` modules it passes through.
+
+    THE DECIDER is :func:`audit_routes`, the allow-list audit of the final
+    generated Python: a module is Python-free only when it finds nothing.
+    The compiler record runs as DIAGNOSTICS (it names the route the author
+    wrote); its routes are ADDED, never a reason to allow."""
+    routes, children = audit_routes(path)
+    if _DIAGNOSTICS:
+        # The compiler record names the construct the author wrote (an
+        # escape, a seam, a hosted statement).  The static pre-scan is NOT
+        # consulted here: it only approximates the compiler (its comma-less
+        # fact rule refused facts the compiler accepts), and the audit
+        # covers everything it could find; it stays for the differential
+        # test that keeps it honest.
+        record = compiler_record(path)
+        if record is None:
+            routes.append(("uncompilable", 0))
+            record = ()
+        r1, c1 = _check_refs(record)
+        routes += r1
+        children += c1
+        # The ruling's "no --": a ``--`` in a clause lowers to no Python
+        # (double negation), so neither the audit nor the record sees it;
+        # the policy refusal comes from the pre-scan's exact adjacency rule.
+        routes += [r for r in _scan(path).routes if r[0] == "seam"]
     seen = set()
-    children = []
-    for c in c1 + c2:
+    unique = []
+    for c in children:
         if c[0] not in seen:
             seen.add(c[0])
-            children.append(c)
-    routes = sorted(set(routes + r1 + r2), key=lambda r: (r[1], r[0]))
-    return routes, children
+            unique.append(c)
+    routes = sorted(set(routes), key=lambda r: (r[1], r[0]))
+    return routes, unique
 
 
 def file_python_routes(path: str) -> "list[tuple[str, int]]":
-    """:func:`python_routes` of the ``.seam`` file at *path*, plus the
-    routes its references make (:func:`_check_refs`, on the COMPILER record and the static pre-scan): ``py_adapter``,
-    ``python_module``, ``non_export``, ``unresolved_reference``."""
+    """Every route of the ``.seam`` file at *path*: the final-AST audit's
+    (the decider), plus the compiler record's and the static pre-scan's
+    (diagnostics) -- see :func:`_routes_and_children`."""
     return _routes_and_children(path)[0]
 
 

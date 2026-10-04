@@ -545,18 +545,26 @@ Python is reachable **only** through:
    `py.datetime`'s `date/3` is no export: declare the term instead
    (`-private([date(y, m, d)])`).
 
-   The check reads the **compiler's own record**, not a second reading of
-   the source: lowering a `.seam` module records every name an
-   `-import_from` binds, every `-import_module`, every qualified chain it
-   emits, and every Python route it lowers (`clausal.python_bridges.
-   compiler_record(path)`); the gate checks that record against the rules
-   above. Nothing is executed to get it, and a module that does not compile
-   is refused. A static pre-scan runs as well and can only ADD refusals; a
-   test keeps the two in agreement on every `.seam` file in the repository.
-   In the compiler itself, an underscore-led part of a qualified name
-   (`SI_Area.__class__`, `units._x`) is a load error in every seam module: a
-   qualified name is `module.name`, and a Python attribute is reached with
-   a `++` escape.
+   **The decider is an audit of the module's final generated Python**
+   (`clausal.seam_audit`): the exact tree the import hook compiles, produced
+   by the same function (`import_hook.transform_seam_source`), nothing
+   executed. Every node must be on an allow-list: literals and containers;
+   the engine's own `$` names (from the compiler's tables,
+   `import_hook.runtime_builtins` and `PER_MODULE_RUNTIME_NAMES`; their
+   arguments are audited too); names the module itself binds; imports of a
+   Clausal or engine-shipped module, each name a declared export; clause
+   references that are exactly `module.export`; and the compiler's fixed
+   plumbing statements, matched by the shape its own builders emit.
+   Anything else -- a call of anything but an engine helper, an attribute
+   not rooted at an engine name, an underscore-led attribute, a name the
+   module does not bind (`exec`, `open`, `__import__`), a def, class or
+   comprehension -- is a route. The compiler's record of what it resolved
+   (`clausal.python_bridges.compiler_record(path)`) stays as diagnostics:
+   it names the construct the author wrote, and its routes are only ever
+   added. In the compiler itself, an underscore-led part of a qualified
+   name (`SI_Area.__class__`, `units._x`) is a load error in every seam
+   module: a qualified name is `module.name`, and a Python attribute is
+   reached with a `++` escape.
 3. **A `.seam` module with Python that the importer's project allowlists**
    in its `pyproject.toml`:
 

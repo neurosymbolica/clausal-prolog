@@ -571,7 +571,7 @@ def test_a_spliced_package_adapter_needs_a_bridge(proj, spliced_adapter):
     path = proj.seam("helper", "-module(@helper, [v/1])\n"
                                "-import_from(py.pbfake, [value])\n"
                                "v(X) <- (X is value)\n")
-    assert file_python_routes(str(path)) == [("py_adapter", 2)]
+    assert ("py_adapter", 2) in file_python_routes(str(path))
     proj.clausal("main", ":- use_module(@helper, [v/1]).\n",
                  "t(X) :- v(X).\n")
     msg = _refused(proj, "main")
@@ -785,7 +785,8 @@ def test_an_attribute_of_an_imported_export_is_a_route(proj):
     path = proj.seam("helper", "-module(@helper, [v/1])\n"
                                "-import_from(py.datetime, [days_between])\n"
                                "v(X) <- (X is days_between.__class__)\n")
-    assert ("non_export", 3) in file_python_routes(str(path))
+    # Since bd0a6ed6 an underscore-led attribute is a compile error.
+    assert ("uncompilable", 0) in file_python_routes(str(path))
 
 
 def test_a_name_a_clausal_module_does_not_export_is_a_route(proj):
@@ -836,7 +837,8 @@ def test_an_export_list_cannot_vouch_for_a_module_attribute(proj, dunder):
              f"v(X) <- (X is d)\n", 2)):
         path = proj.seam("user", "-module(@user, [v/1])\n" + text)
         routes = file_python_routes(str(path))
-        assert ("non_export", line) in routes, routes
+        assert (("non_export", line) in routes
+                or ("uncompilable", 0) in routes), routes
     proj.clausal("main", ":- use_module(@user, [v/1]).\n",
                  "t(X) :- v(X).\n")
     msg = _refused(proj, "main")
@@ -1067,3 +1069,305 @@ def test_constant_number_units_goal_is_python_free(proj):
                              "v(N) <- (constant_number_units(fee, N, _))\n")
     from clausal.python_bridges import compiler_record
     assert not any(r[0] == "python" for r in compiler_record(str(path)))
+
+
+# ── THE DECIDER: the audit of the final generated Python ────────────────────
+
+
+#: Every exploit the security reviews found (rounds 1-5), as a .seam module
+#: that a .clausal importer must not reach -- plus the original gap.
+EXPLOITS = {
+    "original_gap": "import os\n-module(@helper, [v/1])\n"
+                    "v(D) <- (D is ++os.getcwd())\n",
+    "r2_data_position": "-module(@helper, [v/1])\n"
+                        "-import_module(py.datetime)\n"
+                        "v(X) <- (X is py.pbfake.value)\n",
+    "r2_unresolved_py": "-module(@helper, [v/1])\n"
+                        "-import_from(py.pbnosuch, [value])\nv(1),\n",
+    "r3_py_csv_io": "-module(@helper, [v/1])\n-import_module(py.csv)\n"
+                    "v(X) <- (X is py.csv.io.open('/etc/hostname'))\n",
+    "r3_py_files_pathlib": "-module(@helper, [v/1])\n"
+                           "-import_module(py.files)\n"
+                           "v(X) <- (X is py.files.pathlib.Path.cwd())\n",
+    "r3_units_os": "-module(@helper, [v/1])\n-import_module(units)\n"
+                   "v(X) <- (X is units.os.getcwd())\n",
+    "r4_alias_pathlib": "-module(@helper, [v/1])\n"
+                        "-import_from(py.files, [alias(pathlib, zz)])\n"
+                        "v(X) <- (X is zz.Path.cwd())\n",
+    "r4_alias_io": "-module(@helper, [v/1])\n"
+                   "-import_from(py.csv, [alias(io, yy)])\n"
+                   "v(X) <- (X is yy.open('/etc/hostname'))\n",
+    "r5_titlecase_head": "-module(@helper, [v/1])\n"
+                         "-import_from(py.units, [SI_Area])\n"
+                         "v(X) <- (X is SI_Area.dimension)\n",
+    "r5_titlecase_dunder": "-module(@helper, [v/1])\n"
+                           "-import_from(py.units, [SI_Area])\n"
+                           "v(X) <- (X is SI_Area.__class__.__init__)\n",
+    "r5_alias_globals": "-module(@helper, [v/1])\n"
+                        "-import_from(date_time, [alias(days_between, db)])\n"
+                        "v(X) <- (X is db.__globals__)\n",
+    "r5_alias_attr": "-module(@helper, [v/1])\n"
+                     "-import_from(date_time, [alias(days_between, db)])\n"
+                     "v(X) <- (X is db.dispatch)\n",
+    "r6_unit_exec": "-module(@helper, [v/1])\n-import_from(units, [metre])\n"
+                    "v(X) <- (X is (exec(\"print(1)\"))(metre))\n",
+    "r6_unit_list_exec": "-module(@helper, [v/1])\n"
+                         "-import_from(units, [metre])\n"
+                         "v(X) <- (X is [exec(\"print(1)\")](metre))\n",
+    "r6_has_units_dunder": "-module(@helper, [v/1])\n"
+                           "-import_from(units, [metre])\n"
+                           "v(X) <- (has_units(X, Undefined.__class__ * "
+                           "metre))\n",
+    "r6_constant_units_dunder": "-module(@helper, [v/1])\n"
+                                "-constant_number_units(c, 5, "
+                                "Undefined.__class__.__init__)\nv(c),\n",
+    "hosted_call": "-module(@helper, [v/1])\nprint('x')\nv(1),\n",
+    "hosted_def": "-module(@helper, [v/1])\ndef f():\n    return 1\nv(1),\n",
+    "hosted_class": "-module(@helper, [v/1])\nclass C:\n    pass\nv(1),\n",
+    "python_module": "-module(@helper, [v/1])\n-import_from(os, [getcwd])\n"
+                     "v(1),\n",
+    "escape_call": "-module(@helper, [v/1])\n"
+                   "v(X) <- (X is ++len([1, 2]))\n",
+    "fstring_call": "-module(@helper, [v/1])\n"
+                    "v(X) <- (X is f\"{len([1, 2])}\")\n",
+}
+
+
+@pytest.mark.parametrize("name", sorted(EXPLOITS))
+def test_every_exploit_is_refused_by_the_audit_alone(proj, name,
+                                                     spliced_adapter,
+                                                     monkeypatch):
+    """(a) With the record and the pre-scan switched off, the audit of the
+    final generated Python refuses every exploit of every review round."""
+    from clausal import python_bridges as pb
+    monkeypatch.setattr(pb, "_DIAGNOSTICS", False)
+    lib = ("-module(@lib, [p/1, __dict__])\np(1),\n")
+    proj.seam("lib", lib)
+    path = proj.seam("helper", EXPLOITS[name])
+    routes = file_python_routes(str(path))
+    assert routes, (name, routes)
+    proj.clausal("main", ":- use_module(@helper, [v/1]).\n",
+                 "t(X) :- v(X).\n")
+    assert REFUSAL.format(m=proj.n("helper")) in _refused(proj, "main")
+
+
+def test_the_audit_and_the_record_gate_agree_on_every_fixture():
+    """(b) Over every .seam in the repository that the compiler record
+    finds Python-free, the audit ALLOWS exactly what the record-based gate
+    allows -- except the files listed here, each a real route the audit
+    finds and the record did not."""
+    import subprocess
+    from clausal import python_bridges as pb
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    files = subprocess.run(
+        ["git", "-c", "safe.directory=*", "ls-files", "*.seam"],
+        capture_output=True, text=True, cwd=root).stdout.split()
+    if not files:
+        pytest.skip("not a git checkout")
+    real_routes = {
+        # ``5.0(Metre)``: a name the module never binds, read inside a
+        # thunk -- Python resolves it through builtins.
+        "tests/fixtures/titlecase_unit_spelling_witness.seam",
+    }
+    compared = allowed = 0
+    disagree = []
+    for rel in files:
+        path = os.path.join(root, rel)
+        record = pb.compiler_record(path)
+        if record is None or any(r[0] == "python" for r in record):
+            continue
+        compared += 1
+        audit = bool(pb.audit_routes(path)[0])
+        old = bool(pb._check_refs(record)[0])
+        allowed += not audit
+        if audit != old and rel not in real_routes:
+            disagree.append((rel, audit, old))
+    print(f"compared {compared}, audit allows {allowed}")
+    assert compared > 500
+    assert not disagree, disagree
+
+
+def _clean_generated_tree():
+    """A generated tree exercising every allowed node kind."""
+    import ast as _ast
+    from clausal.seam_audit import generated_tree
+    src = (
+        "-module(m, [p/1, q/2, k, atomx])\n"
+        "-dynamic(r/1)\n"
+        "-import_from(units, [metre])\n"
+        "-import_module(py.datetime)\n"
+        "-constant_value(k, [1, 2])\n"
+        "p(1),\n"
+        "q(X, Y) <- (p(X), Y is (2 + 3)(metre), Z is X + 1, "
+        "S is f\"{X}\", py.datetime.days_between(a, b, Y), Z > 0)\n")
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        tree = generated_tree(src, "m.seam")
+    return tree
+
+
+def _audit(tree):
+    from clausal import python_bridges as pb
+    from clausal.seam_audit import audit_tree
+    routes, children = [], []
+    found, _ = audit_tree(tree, pb.audit_checker(routes, children))
+    return routes + found
+
+
+def _mutate(tree, match, replace):
+    """A copy of *tree* with the FIRST node *match* accepts replaced by
+    *replace(node)*; asserts one was found."""
+    import ast as _ast
+    import copy
+    tree = copy.deepcopy(tree)
+    done = []
+
+    class _M(_ast.NodeTransformer):
+        def generic_visit(self, node):
+            if not done and match(node):
+                done.append(node)
+                return replace(node)
+            return super().generic_visit(node)
+
+    tree = _M().visit(tree)
+    assert done, "no node to mutate"
+    _ast.fix_missing_locations(tree)
+    return tree
+
+
+def _call(name, *args):
+    import ast as _ast
+    return _ast.Call(func=_ast.Name(id=name, ctx=_ast.Load()),
+                     args=list(args), keywords=[])
+
+
+def _is_call(name):
+    import ast as _ast
+    return lambda n: (isinstance(n, _ast.Call)
+                      and isinstance(n.func, _ast.Name) and n.func.id == name)
+
+
+def _kw(name, value):
+    import ast as _ast
+
+    def rep(node):
+        for k in node.keywords:
+            if k.arg == name:
+                k.value = value
+        return node
+    return rep
+
+
+def _mutations():
+    import ast as _ast
+    C = _ast.Constant
+    exec_call = lambda *_: _call("exec", C("print(1)"))  # noqa: E731
+    return {
+        # literal -> a call
+        "constant": (lambda n: isinstance(n, _ast.Constant)
+                     and n.value == "atomx", exec_call),
+        # engine helper -> a helper not in the engine's tables / a builtin
+        "helper_unknown": (_is_call("$Var"),
+                           lambda n: _call("$no_such_helper")),
+        "helper_builtin": (_is_call("$Var"), lambda n: _call("open",
+                                                             C("/x"))),
+        # a name the module binds -> one it does not
+        "own_name": (lambda n: isinstance(n, _ast.Name)
+                     and n.id == "metre", lambda n: _ast.Name(
+                         id="open", ctx=_ast.Load())),
+        # thunk body -> a call
+        "lambda_body": (lambda n: isinstance(n, _ast.Lambda),
+                        lambda n: _ast.Lambda(args=n.args,
+                                              body=exec_call())),
+        # walrus value -> a call
+        "walrus": (lambda n: isinstance(n, _ast.NamedExpr),
+                   lambda n: _ast.NamedExpr(target=n.target,
+                                            value=exec_call())),
+        # $LoadName -> a dotted Python path / a dunder
+        "load_name_dotted": (_is_call("$LoadName"), _kw("name",
+                                                        C("os.system"))),
+        "load_name_dunder": (_is_call("$LoadName"), _kw("name",
+                                                        C("__import__"))),
+        # $LoadAttr -> a non-export / an underscore attribute / deeper
+        "load_attr_nonexport": (_is_call("$LoadAttr"),
+                                _kw("attr", C("os"))),
+        "load_attr_dunder": (_is_call("$LoadAttr"),
+                             _kw("attr", C("__class__"))),
+        # import -> a non-export name / a Python module
+        "import_nonexport": (lambda n: isinstance(n, _ast.ImportFrom)
+                             and n.module.endswith("units"),
+                             lambda n: _ast.ImportFrom(
+                                 module=n.module, level=0,
+                                 names=[_ast.alias(name="os")])),
+        "import_python": (lambda n: isinstance(n, _ast.Import),
+                          lambda n: _ast.Import(
+                              names=[_ast.alias(name="os")])),
+        # plumbing -> another module in its __import__
+        "plumbing_module": (lambda n: isinstance(n, _ast.Constant)
+                            and n.value == "clausal.pl_data_imports",
+                            lambda n: C("os")),
+        # $-rooted attribute -> an underscore attribute
+        "dollar_attr": (lambda n: isinstance(n, _ast.Attribute)
+                        and n.attr == "mark_dynamic",
+                        lambda n: _ast.Attribute(value=n.value,
+                                                 attr="__class__",
+                                                 ctx=_ast.Load())),
+        # assignment target -> a dunder
+        "assign": (lambda n: isinstance(n, _ast.Assign),
+                   lambda n: _ast.Assign(targets=[_ast.Name(
+                       id="__builtins__", ctx=_ast.Store())],
+                       value=n.value)),
+        # f-string slot -> a call
+        "fstring_slot": (lambda n: isinstance(n, _ast.FormattedValue),
+                         lambda n: _ast.FormattedValue(
+                             value=exec_call(), conversion=-1,
+                             format_spec=None)),
+        # arithmetic operand -> a call
+        "binop": (lambda n: isinstance(n, _ast.BinOp),
+                  lambda n: _ast.BinOp(left=exec_call(), op=n.op,
+                                       right=n.right)),
+        # a keyword argument -> a call
+        "keyword": (lambda n: isinstance(n, _ast.keyword)
+                    and n.arg == "position",
+                    lambda n: _ast.keyword(arg="position",
+                                           value=exec_call())),
+        # a statement -> a def
+        "statement": (lambda n: isinstance(n, _ast.Pass),
+                      lambda n: _ast.parse("def f():\n    pass").body[0]),
+    }
+
+
+def test_the_clean_generated_tree_passes_the_audit():
+    assert _audit(_clean_generated_tree()) == []
+
+
+@pytest.mark.parametrize("kind", sorted(_mutations()))
+def test_a_minimally_altered_dangerous_variant_is_refused(kind):
+    """(c) MUTATION: for each node kind the audit allows, the smallest
+    dangerous change to it is refused."""
+    match, replace = _mutations()[kind]
+    base = _clean_generated_tree()
+    assert _audit(base) == []
+    try:
+        mutated = _mutate(base, match, replace)
+    except AssertionError:
+        if kind == "statement":
+            import ast as _ast
+            mutated = _clean_generated_tree()
+            mutated.body.append(_ast.parse("def f():\n    pass").body[0])
+        else:
+            raise
+    assert _audit(mutated), kind
+
+
+def test_the_engine_name_tables_cover_every_injected_name(proj):
+    """The audit's engine names are the compiler's own tables: every ``$``
+    name a loaded module's namespace holds is in them."""
+    from clausal import import_hook
+    proj.seam("clean", CLEAN_LIB)
+    mod = proj.load("clean")
+    dollar = {n for n in vars(mod) if n.startswith("$")}
+    allowed = ({n for n in import_hook.runtime_builtins if n.startswith("$")}
+               | import_hook.PER_MODULE_RUNTIME_NAMES)
+    assert dollar - allowed == set(), dollar - allowed
