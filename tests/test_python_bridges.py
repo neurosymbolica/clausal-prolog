@@ -1450,3 +1450,20 @@ def test_a_translations_directive_still_passes_the_audit(tmp_path):
     f.write_text("-module(tr, [v/1, ok])\n-translations(th, {v: ok})\n"
                  "v(1),\n")
     assert audit_routes(str(f))[0] == []
+
+
+def test_clause_code_runs_on_the_engine_builtins_only(proj):
+    """task 342 (defensive): a compiled clause's ``__builtins__`` is the
+    engine's minimal table, so a bare name the call-target step missed
+    raises NameError instead of reaching ``open``/``eval``/``getattr``."""
+    from clausal.logic.compiler.predicate import CLAUSE_BUILTINS
+    proj.seam("clean", CLEAN_LIB)
+    mod = proj.load("clean")
+    fn = vars(mod)["$module"].db.get_dispatch("p", 1)
+    assert fn.__globals__["__builtins__"] is CLAUSE_BUILTINS
+    for name in ("open", "eval", "exec", "getattr", "__import__",
+                 "globals", "compile", "setattr", "vars", "type"):
+        assert name not in CLAUSE_BUILTINS, name
+    code = compile("open('/etc/hostname')", "<t>", "eval")
+    with pytest.raises(NameError):
+        eval(code, dict(fn.__globals__))
