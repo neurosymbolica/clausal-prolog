@@ -20,12 +20,11 @@ Needs a ruling (not done):
   returns (a device platform such as `cpu`, a mesh/partition axis name)
   crosses as an ATOM; the sharding fixture compares atoms again. Leftovers
   of the census: todo/adapter-text-boundary-census-leftovers-2026-10-04.md.
-- The `__getattr__` fallback forwards submodules and classes only, so
-  `-import_from(jax, [grad])` still fails as an unknown name (review
-  finding). The cost: a function-valued escape such as `++jax.vmap(...)`
-  does not reach JAX through the alias; the flax/equinox fixtures use it
-  and will fail when those libraries are installed (`jax.numpy.vectorize`
-  or a ruling on how a seam file names the REAL `jax` would settle it).
-- `py.jax_flax` / `py.jax_equinox` likely fail silently the same way
-  optax did when their library is absent (not checked; both are skipped
-  here because flax/equinox are not installed).
+- RULED 2026-10-04, DONE on feat/package-triage-rulings-2026-10-04: no
+  wider forwarding. A seam file reaches the REAL `jax` with a hosted Python
+  `import jax as pyjax` (an existing spelling; `++pyjax.vmap(...)` works);
+  the flax/equinox fixtures and docs use it. Documented in
+  docs/python_integration.md ("Reaching a Python library directly").
+- `py.jax_flax` / `py.jax_equinox` DID fail silently when their library is
+  absent; fixed as optax was (existence_error(module, flax|equinox), checked
+  outside the `_pure` wrapper).

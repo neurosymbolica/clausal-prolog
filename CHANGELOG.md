@@ -1084,6 +1084,17 @@ since 0.4.0 finish three moves:
   three, and the module docstrings that still promised `SymExpr.__eq__`
   behind a goal's `==` now say this.
 
+- **clausal-jax: `py.jax_flax` and `py.jax_equinox` raise when their
+  library is not installed** (`error(existence_error(module, flax), Name/Arity)`,
+  likewise `equinox`), checked outside the `_pure` wrapper as for optax;
+  they used to fail, so a query answered "no solutions".
+- **Reaching a Python library itself from a seam file: a hosted `import`.**
+  Ruled 2026-10-04 instead of widening the `py.jax`/`py.torch` forwarding:
+  `import jax as pyjax` at module level binds the real module, which `++`
+  escapes and qualified calls see (`++pyjax.vmap(F)`). Documented in
+  docs/python_integration.md; the clausal-jax flax/equinox fixtures and
+  docs use it.
+
 - **clausal-jax: `py.jax_optax` raises when optax is not installed.**
   Every predicate of the module checks that optax imports before it runs
   and raises `error(existence_error(module, optax), Name/Arity)`; it used

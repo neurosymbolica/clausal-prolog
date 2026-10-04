@@ -16,7 +16,7 @@ partitioning.
 ## Import
 
 ```clausal
--import_module(jax)
+import jax as pyjax
 -import_module(equinox)
 -import_from(py.jax_random, [key, split_key])
 -import_from(py.jax_tree, [apply_updates])
@@ -94,7 +94,7 @@ application visually consistent with Phase 10's `relu_apply` etc:
 
 ```clausal
 linear(4, 8, K, M),
-X is ++(jax.numpy.ones(4)),
+X is ++(pyjax.numpy.ones(4)),
 apply_module(M, X, Y)
 ```
 
@@ -157,15 +157,15 @@ afterthought.
 ### BatchNorm needs `vmap` for training mode
 
 BatchNorm's `axis_name` is a *named batch axis* that only exists
-under `jax.vmap` or `jax.shard_map`. Calling a training-mode
+under `pyjax.vmap` or `pyjax.shard_map`. Calling a training-mode
 BatchNorm on a raw input errors with "Found an unbound axis name".
 Wrap it yourself and pass the vmapped module to
 `apply_stateful_module`:
 
 ```clausal
 batch_norm(3, "batch", {"mode": "batch"}, BN, STATE),
-X is ++(jax.numpy.ones((4, 3))),
-VMAPPED is ++(jax.vmap(BN, axis_name="batch",
+X is ++(pyjax.numpy.ones((4, 3))),
+VMAPPED is ++(pyjax.vmap(BN, axis_name="batch",
                        in_axes=(0, None), out_axes=(0, None))),
 apply_stateful_module(VMAPPED, X, STATE, Y, NEW_STATE)
 ```
@@ -344,9 +344,9 @@ test("MLP one optax SGD step changes the model") <- (
     key(0, K0),
     split_key(K0, 2, [K_INIT, _]),
     mlp(2, 1, 4, 1, K_INIT, MODEL),
-    LOSS_FN is ++(lambda m: jax.numpy.mean(
-        (jax.vmap(m)(jax.numpy.array([[1.0, 2.0], [3.0, 4.0]]))
-         - jax.numpy.array([[5.0], [6.0]])) ** 2)),
+    LOSS_FN is ++(lambda m: pyjax.numpy.mean(
+        (pyjax.vmap(m)(pyjax.numpy.array([[1.0, 2.0], [3.0, 4.0]]))
+         - pyjax.numpy.array([[5.0], [6.0]])) ** 2)),
     filter_value_and_grad(LOSS_FN, MODEL, VG),
     VG is (_LOSS, GRADS),
     sgd(0.01, OPT),
@@ -413,3 +413,12 @@ Both work and produce the same result. Use `apply_module/3` when
 `X` is structured Clausal-side (lists/tuples with Vars to deref).
 Use `++(M(X))` when you've already got a JAX value in hand and
 want to skip the predicate dispatch.
+
+---
+
+## Reaching JAX itself
+
+`import jax as pyjax` is a hosted Python import: it binds the REAL `jax`
+module, which the `++` escapes below use (`pyjax.vmap`, `pyjax.numpy`). In
+a seam file a bare `jax` in `-import_module`/`-import_from` names the
+`py.jax` adapter, which does not forward JAX's functions.

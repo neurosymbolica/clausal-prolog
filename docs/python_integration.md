@@ -220,6 +220,32 @@ All logic variables in the expression are dereferenced before evaluation:
 add_len(A, B, R) <- (R is ++(len(A) + len(B)))
 ```
 
+### Reaching a Python library directly: a hosted `import`
+
+A seam file is Python, so a module-level `import` statement binds a Python
+module under the name it gives, and every `++` escape (and a qualified call
+such as `X is np.arange(3)`) sees it:
+
+```seam
+import uuid as pyuuid
+-import_module(uuid)
+
+fresh_hex(H) <- (H is ++pyuuid.uuid4().hex)
+```
+
+With the JAX package, `import jax as pyjax` makes `++pyjax.vmap(F)` reach
+JAX's own `vmap`.
+
+Use it when you need the library ITSELF. A bare library name in
+`-import_module`/`-import_from` may name its Clausal **adapter** instead
+(`uuid` is `py.uuid`, `jax` is `py.jax`, `torch` is `py.torch`, ...), whose predicates are what
+`-import_from(jax, [array])` imports; an adapter forwards the library's
+submodules and classes (`jax.numpy`, `torch.nn`) but not its functions, so
+`-import_from(jax, [grad])` stays an unknown name rather than binding JAX's
+`grad` where a predicate was meant. Give the hosted import its own name
+(`pyuuid`, `pyjax`) so it does not shadow the adapter. Clausal Prolog (`.clausal`)
+files have no Python route.
+
 ### Per-Solution Evaluation
 
 `PyThunk` values are evaluated fresh for each solution during backtracking:
@@ -652,7 +678,11 @@ print(repr(my_module.bar))            # 'bar'
   `str`, so `read_file('/tmp/x', T)` and `read_file("/tmp/x", T)` reach the
   library identically.
 - **Text results** (a file line, an environment value, a regex group, a
-  header value, a JSON string value) are **strings**.
+  header value, a JSON string value) are **strings**. A **symbolic name** a
+  wrapper hands back (the OS platform, a log level, a connection alias, a
+  device or platform name in the JAX/PyTorch packages) is an **atom**, and a
+  bound argument in its position may be the atom or the string ("atom out,
+  text in", ruled 2026-10-04).
 - **Result dicts** built by a wrapper — `py.process`'s
   `exit_code`/`stdout`/`stderr`, `py.url.parse/2`'s
   `scheme`/`host`/`port`/`path`, `py.csv`'s header cells, `py.json.parse/2`'s
