@@ -544,6 +544,19 @@ Python is reachable **only** through:
    anything that does not resolve (fail closed). A term constructor such as
    `py.datetime`'s `date/3` is no export: declare the term instead
    (`-private([date(y, m, d)])`).
+
+   The check reads the **compiler's own record**, not a second reading of
+   the source: lowering a `.seam` module records every name an
+   `-import_from` binds, every `-import_module`, every qualified chain it
+   emits, and every Python route it lowers (`clausal.python_bridges.
+   compiler_record(path)`); the gate checks that record against the rules
+   above. Nothing is executed to get it, and a module that does not compile
+   is refused. A static pre-scan runs as well and can only ADD refusals; a
+   test keeps the two in agreement on every `.seam` file in the repository.
+   In the compiler itself, an underscore-led part of a qualified name
+   (`SI_Area.__class__`, `units._x`) is a load error in every seam module: a
+   qualified name is `module.name`, and a Python attribute is reached with
+   a `++` escape.
 3. **A `.seam` module with Python that the importer's project allowlists**
    in its `pyproject.toml`:
 

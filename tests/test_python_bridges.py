@@ -822,45 +822,6 @@ def _engine_adapter_modules():
     return out
 
 
-def test_no_non_export_attribute_of_any_engine_adapter_is_reachable(
-        tmp_path):
-    """PROPERTY: for EVERY engine adapter module, every public module-level
-    attribute that is no declared export (not in module_signatures, and no
-    facade value) is a route when imported plain, imported aliased, or
-    reached by a dotted chain -- the whole class, not instances."""
-    import keyword
-    from clausal.python_bridges import _exports, _find
-    from clausal.templating.term_rewriting import _is_logic_var_name
-    covered = 0
-    for dotted in _engine_adapter_modules():
-        try:
-            mod = importlib.import_module(dotted)
-        except Exception:  # noqa: BLE001 -- an optional dependency
-            continue
-        exports = _exports(dotted, _find(dotted))
-        for name in sorted(vars(mod)):
-            if (name.startswith("_") or name in exports
-                    or keyword.iskeyword(name) or not name.isidentifier()
-                    or _is_logic_var_name(name)):
-                continue
-            covered += 1
-            f = tmp_path / "prop.seam"
-            for text, line in (
-                    (f"-import_from({dotted}, [{name}])\n", 2),
-                    (f"-import_from({dotted}, [alias({name}, zz)])\n", 2),
-                    (f"-import_module({dotted})\n"
-                     f"p(X) <- (X is {dotted}.{name})\n", 3),
-                    (f"-import_module({dotted})\n"
-                     f"p(X) <- ({dotted}.{name}(X))\n", 3)):
-                f.write_text("-module(prop, [p/1])\n" + text)
-                os.utime(f, ns=(1, covered * 10 + line))
-                routes = file_python_routes(str(f))
-                assert any(ln == line for _k, ln in routes), (
-                    dotted, name, text, routes)
-    print(f"covered {covered} non-export attributes")
-    assert covered > 100
-
-
 
 @pytest.mark.parametrize("dunder", ["__dict__", "__spec__", "__loader__",
                                     "__builtins__"])
@@ -880,3 +841,167 @@ def test_an_export_list_cannot_vouch_for_a_module_attribute(proj, dunder):
                  "t(X) :- v(X).\n")
     msg = _refused(proj, "main")
     assert REFUSAL.format(m=proj.n("user")) in msg, msg
+
+
+# ── the compiler record decides (job 337) ───────────────────────────────────
+
+
+def test_a_titlecase_export_head_is_a_qualified_base(proj):
+    """job 337: an imported TitleCase name is no logic variable to the
+    compiler, so ``SI_Area.x`` is a real attribute chain on the imported
+    value.  The reviewer's exploit dies at COMPILE time (an underscore-led
+    attribute is no qualified name), and any other attribute of an imported
+    value is a route in the compiler's record."""
+    exploit = ("-module(@helper, [v/1])\n-import_from(py.units, [SI_Area])\n"
+               "v(X) <- (X is SI_Area.__class__.__init__.__globals__)\n")
+    path = proj.seam("helper", exploit)
+    assert ("uncompilable", 0) in file_python_routes(str(path))
+    with pytest.raises(SyntaxError, match="underscore-led attribute"):
+        proj.load("helper")
+    proj.clausal("main", ":- use_module(@helper, [v/1]).\n",
+                 "t(X) :- v(X).\n")
+    assert REFUSAL.format(m=proj.n("helper")) in _refused(proj, "main")
+    path = proj.seam("helper", "-module(@helper, [v/1])\n"
+                               "-import_from(py.units, [SI_Area])\n"
+                               "v(X) <- (X is SI_Area.dimension)\n")
+    assert ("non_export", 3) in file_python_routes(str(path))
+    assert ("attr", "SI_Area", "py.units.SI_Area", ("dimension",), 3) in (
+        __import__("clausal.python_bridges").python_bridges
+        .compiler_record(str(path)))
+
+
+@pytest.mark.parametrize("value, kind", [
+    ("db.__globals__", "uncompilable"),
+    ("db.__call__", "uncompilable"),
+    ("db.dispatch", "non_export"),
+])
+def test_an_aliased_export_cannot_be_walked(proj, value, kind):
+    path = proj.seam("helper", "-module(@helper, [v/1])\n"
+                               "-import_from(date_time, "
+                               "[alias(days_between, db)])\n"
+                               f"v(X) <- (X is {value})\n")
+    routes = file_python_routes(str(path))
+    assert any(k == kind for k, _ln in routes), routes
+    proj.clausal("main", ":- use_module(@helper, [v/1]).\n",
+                 "t(X) :- v(X).\n")
+    assert REFUSAL.format(m=proj.n("helper")) in _refused(proj, "main")
+
+
+def test_an_underscore_led_qualified_name_is_a_compile_error(tmp_path):
+    from clausal.python_bridges import compiler_record
+    # (``__builtins__.open`` is dict sugar on a VARIABLE -- a subscript,
+    # no attribute walk -- in the compiler and in the pre-scan alike.)
+    for value in ("units.__dict__", "units._x", "Undefined.__class__"):
+        f = tmp_path / "u.seam"
+        f.write_text(f"-module(u, [v/1])\nv(X) <- (X is {value})\n")
+        assert compiler_record(str(f)) is None, value
+
+
+def _routes_per_line(tmp_path, header, lines):
+    """Write *header* + one line per entry of *lines*; -> (routes,
+    uncompilable)."""
+    f = tmp_path / "prop.seam"
+    f.write_text("-module(prop, [p/1])\n" + header + "".join(lines))
+    routes = file_python_routes(str(f))
+    return routes, ("uncompilable", 0) in routes
+
+
+def test_no_non_export_attribute_of_any_engine_adapter_is_reachable(
+        tmp_path):
+    """PROPERTY: for EVERY engine adapter module, every public module-level
+    attribute that is no declared export is a route by EVERY spelling that
+    reaches it: the module path (as a value and as a call), a plain import,
+    a lowercase alias, a TitleCase alias, an attribute of a TitleCase or
+    lowercase EXPORT (which the compiler reads as a qualified base, not a
+    dict-sugar variable), and the exempt injected name ``Undefined``.  The
+    whole class, not instances.  Where a whole file does not compile (a
+    TitleCase alias is a load-time lint error), each attribute is retried
+    alone and must be refused alone."""
+    import keyword
+    from clausal.python_bridges import _exports, _find
+    from clausal.templating.term_rewriting import _is_logic_var_name
+    covered = spellings = 0
+    for dotted in _engine_adapter_modules():
+        try:
+            mod = importlib.import_module(dotted)
+        except Exception:  # noqa: BLE001 -- an optional dependency
+            continue
+        exports = sorted(_exports(dotted, _find(dotted)))
+        attrs = [n for n in sorted(vars(mod))
+                 if not (n.startswith("_") or n in exports
+                         or keyword.iskeyword(n) or not n.isidentifier()
+                         or _is_logic_var_name(n))]
+        if not attrs:
+            continue
+        covered += len(attrs)
+        heads = [e for e in exports if e[:1].isupper()][:1] + [
+            e for e in exports if e[:1].islower()][:1]
+        variants = [
+            ("", lambda i, a: f"-import_from({dotted}, [{a}])\n"),
+            ("", lambda i, a: f"-import_from({dotted}, [alias({a}, zz{i})])\n"),
+            ("", lambda i, a: f"-import_from({dotted}, [alias({a}, Zz{i})])\n"),
+            (f"-import_module({dotted})\n",
+             lambda i, a: f"p(X) <- (X is {dotted}.{a})\n"),
+            (f"-import_module({dotted})\n",
+             lambda i, a: f"p(X) <- ({dotted}.{a}(X))\n"),
+            ("", lambda i, a: f"p(X) <- (X is Undefined.{a})\n"),
+        ] + [(f"-import_from({dotted}, [{h}])\n",
+              lambda i, a, h=h: f"p(X) <- (X is {h}.{a})\n") for h in heads]
+        for header, line_of in variants:
+            first = 2 + header.count("\n")
+            lines = [line_of(i, a) for i, a in enumerate(attrs)]
+            routes, broken = _routes_per_line(tmp_path, header, lines)
+            if broken:
+                for i, a in enumerate(attrs):
+                    r, _b = _routes_per_line(tmp_path, header,
+                                             [line_of(i, a)])
+                    assert r, (dotted, a, header, line_of(i, a))
+            else:
+                hit = {ln for _k, ln in routes}
+                for i, a in enumerate(attrs):
+                    assert first + i in hit, (dotted, a, line_of(i, a),
+                                              routes)
+            spellings += len(attrs)
+    print(f"covered {covered} non-export attributes, {spellings} spellings")
+    assert covered > 100
+
+
+def test_the_compiler_record_and_the_scanner_agree_on_every_fixture():
+    """DIFFERENTIAL: for every .seam file in the repository that the
+    compiler finds Python-free, the static pre-scan and the compiler record
+    name the same external references (imports, -import_module, qualified
+    chains).  The gate decides from the record; a divergence here means
+    the pre-scan has stopped describing what the compiler does."""
+    import subprocess
+    from clausal import python_bridges as pb
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    files = subprocess.run(
+        ["git", "-c", "safe.directory=*", "ls-files", "*.seam"],
+        capture_output=True, text=True, cwd=root).stdout.split()
+    if not files:
+        pytest.skip("not a git checkout")
+
+    def norm(refs):
+        out = set()
+        for r in refs:
+            if r[0] == "import_from":
+                out.add(("from", r[1], r[2]))
+            elif r[0] == "import_module":
+                out.add(("module", r[1]))
+            elif r[0] == "attr":
+                out.add(("attr", r[1], *r[3]))
+        return out
+
+    compared, diverged = 0, []
+    for rel in files:
+        path = os.path.join(root, rel)
+        record = pb.compiler_record(path)
+        if record is None or any(r[0] == "python" for r in record):
+            continue
+        compared += 1
+        static = norm(pb._static_refs(pb._scan(path).refs))
+        if static != norm(record):
+            diverged.append((rel, sorted(static - norm(record))[:3],
+                             sorted(norm(record) - static)[:3]))
+    assert compared > 100
+    assert not diverged, diverged

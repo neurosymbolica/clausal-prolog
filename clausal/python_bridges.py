@@ -72,6 +72,7 @@ ROUTE_KINDS: dict[str, str] = {
                    "declared export of its module (module.export is the "
                    "only qualified form)"),
     "unresolved_reference": "a module reference that resolves to no module",
+    "uncompilable": "the module does not compile (refused, fail closed)",
 }
 
 
@@ -263,8 +264,22 @@ def _module_references(tree: ast.Module) -> list:
       Clausal position (a call, a value, a goal handed to ``call/N``), its
       head not a logic variable (``X.k`` is dict sugar).
     """
+    from clausal.templating.desugar import is_dict_attr_access  # noqa: PLC0415
     from clausal.templating.term_rewriting import (  # noqa: PLC0415
-        _is_logic_var_name)
+        _TITLECASE_EXEMPT_NAMES, _is_titlecase_identifier)
+    # A head the COMPILER does not read as a variable is a qualified base:
+    # the file's TitleCase -import_from names and the exempt injected names
+    # (``term_rewriting._clause_scope_exclusions``).
+    excluded = set(_TITLECASE_EXEMPT_NAMES)
+    for stmt in tree.body:
+        v = getattr(stmt, "value", None)
+        if (isinstance(stmt, ast.Expr) and _is_directive(v)
+                and isinstance(v.operand, ast.Call)
+                and v.operand.func.id == "import_from"
+                and len(v.operand.args) > 1):
+            for _orig, local in _import_entries(v.operand.args[1]) or ():
+                if _is_titlecase_identifier(local):
+                    excluded.add(local)
     refs: list = []
     for stmt in tree.body:
         if not isinstance(stmt, ast.Expr):
@@ -284,9 +299,17 @@ def _module_references(tree: ast.Module) -> list:
                            if len(call.args) > 1 else None)
                 refs.append(("import_from", dotted, entries, stmt.lineno))
             continue
+        inner: set = set()
         for sub in _clausal_nodes(value):
-            if not isinstance(sub, ast.Attribute):
+            if not isinstance(sub, ast.Attribute) or id(sub) in inner:
                 continue
+            # Only the OUTERMOST node of THIS chain is the reference (``a.b``
+            # inside ``a.b.c`` is the same one) -- decided per node, as the
+            # compiler's visit does, not by comparing spellings.
+            node = sub.value
+            while isinstance(node, ast.Attribute):
+                inner.add(id(node))
+                node = node.value
             dotted = _dotted(sub)
             if dotted is None:
                 # A chain whose head is no name (``f(x).a``): nothing a
@@ -294,21 +317,10 @@ def _module_references(tree: ast.Module) -> list:
                 refs.append(("chain", None, sub.lineno))
                 continue
             parts = tuple(dotted.split("."))
-            if _is_logic_var_name(parts[0]):
-                continue
+            if is_dict_attr_access(sub, frozenset(excluded)):
+                continue    # VAR.k: dict sugar, the compiler's own test
             refs.append(("chain", parts, sub.lineno))
-    # Only the OUTERMOST node of a chain is a chain (``a.b`` inside
-    # ``a.b.c`` is the same reference).
-    out = []
-    chains = {r[1] for r in refs if r[0] == "chain" and r[1]}
-    for r in refs:
-        if (r[0] == "chain" and r[1]
-                and any(len(c) > len(r[1]) and c[:len(r[1])] == r[1]
-                        for c in chains)):
-            continue
-        if r not in out:
-            out.append(r)
-    return out
+    return refs
 
 
 def _import_entries(node) -> "list | None":
@@ -545,36 +557,64 @@ def _exports(dotted: str, origin: str) -> frozenset:
     return names
 
 
-def _module_kind(dotted: str) -> "tuple[str | None, str | None]":
-    """``(route kind or None, origin)`` for the module *dotted* names (as
-    :func:`_classify`), with ``"seam"`` for a walked non-engine .seam."""
-    how, origin = _classify(dotted)
-    return how, origin
+def _static_refs(raw) -> list:
+    """The scanner's references in the compiler record's shape (see
+    ``term_rewriting._EXTERNAL_REFS``)."""
+    from clausal.templating.term_rewriting import (  # noqa: PLC0415
+        _resolve_import_path)
+    out: list = []
+    locals_: dict = {}
+    for ref in raw:
+        if ref[0] == "import_from":
+            _k, written, entries, line = ref
+            resolved = _resolve_import_path(written)
+            if entries is None:
+                out.append(("python", "non_export", line))
+                continue
+            for orig, local in entries:
+                out.append(("import_from", resolved, orig, local, line))
+                locals_[local] = f"{resolved}.{orig}"
+        elif ref[0] == "import_module":
+            _k, written, line = ref
+            resolved = _resolve_import_path(written)
+            out.append(("import_module", resolved,
+                        written if resolved != written
+                        else written.split(".")[0], line))
+    for ref in raw:
+        if ref[0] == "chain":
+            _k, parts, line = ref
+            if parts is None:
+                out.append(("python", "non_export", line))
+                continue
+            out.append(("attr", parts[0], locals_.get(parts[0]),
+                        tuple(parts[1:]), line))
+    return out
 
 
-def _resolved_routes(scan) -> "tuple[list, list]":
-    """``(routes, seam children)`` of a scanned file's references, by the
-    ALLOW-LIST rule: an external name is Python-free only when it resolves
-    POSITIVELY to a declared export.
+def _check_refs(refs) -> "tuple[list, list]":
+    """``(routes, seam children)`` of a module's external references (the
+    compiler record's shape), by the ALLOW-LIST rule: an external name is
+    Python-free only when it resolves POSITIVELY to a declared export.
 
+    * ``("python", kind, line)``: a Python route, as it is.
     * ``-import_from(M, Names)``: M must be a Clausal module or an
       engine-shipped one, and every imported name (aliased or not) one of
       its exports (:func:`_exports`).
     * ``-import_module(M)``: M must be a Clausal module or an engine-shipped
       one.
-    * a dotted chain must be exactly ``<module>.<export>``: its longest
+    * a qualified chain must be exactly ``<module>.<export>``: its longest
       prefix that is a module, then ONE more segment, an export.  A chain
-      headed by a name this file imported with ``-import_from`` (a value)
-      may not go on at all.
+      on a name this file imported with ``-import_from`` (a value) may not
+      go on at all.
 
     Anything not positively resolved is a route (fail closed)."""
     routes: list = []
     children: list = []
     seen_children: set = set()
-    bound: dict = {}            # local -import_from name -> (M, orig)
+    module_names: dict = {}     # -import_module binding -> module path
 
     def module_ok(dotted, line) -> "tuple[bool, str | None]":
-        how, origin = _module_kind(dotted)
+        how, origin = _classify(dotted)
         if how in ("python_module", "py_adapter"):
             routes.append((how, line))
             return False, origin
@@ -586,56 +626,108 @@ def _resolved_routes(scan) -> "tuple[list, list]":
             children.append((dotted, origin, line))
         return True, origin
 
-    for ref in scan.refs:
+    for ref in refs:
         kind = ref[0]
-        if kind == "import_from":
-            _k, written, entries, line = ref
-            dotted = _module_path(written)
+        if kind == "python":
+            routes.append((ref[1], ref[2]))
+        elif kind == "import_from":
+            _k, resolved, orig, _local, line = ref
+            dotted = _module_path(resolved)
             ok, origin = module_ok(dotted, line)
-            if not ok:
-                continue
-            if entries is None:
+            if ok and orig not in _exports(dotted, origin):
                 routes.append(("non_export", line))
-                continue
-            exports = _exports(dotted, origin)
-            for orig, local in entries:
-                if orig not in exports:
-                    routes.append(("non_export", line))
-                    break
-                bound[local] = (dotted, orig)
         elif kind == "import_module":
-            _k, written, line = ref
-            module_ok(_module_path(written), line)
-        else:
-            _k, parts, line = ref
-            if parts is None or parts[0] in bound:
-                # an attribute of a VALUE (an imported name, a term)
-                routes.append(("non_export", line))
+            _k, resolved, name, line = ref
+            module_ok(_module_path(resolved), line)
+            if name != resolved.split(".")[0]:
+                module_names[name] = resolved
+    for ref in refs:
+        if ref[0] != "attr":
+            continue
+        _k, base, remap, parts, line = ref
+        if remap is not None or base.startswith("_"):
+            # an attribute of an imported VALUE, or of no module at all
+            routes.append(("non_export", line))
+            continue
+        chain = tuple(module_names.get(base, base).split(".")) + tuple(parts)
+        for i in range(len(chain) - 1, 0, -1):
+            dotted = _module_path(".".join(chain[:i]))
+            if _find(dotted) is None:
                 continue
-            for i in range(len(parts) - 1, 0, -1):
-                dotted = _module_path(".".join(parts[:i]))
-                origin = _find(dotted)
-                if origin is None:
-                    continue
-                ok, origin = module_ok(dotted, line)
-                if ok and (len(parts) - i != 1
-                           or parts[-1] not in _exports(dotted, origin)):
-                    routes.append(("non_export", line))
-                break
-            else:
-                routes.append(("unresolved_reference", line))
+            ok, origin = module_ok(dotted, line)
+            if ok and (len(chain) - i != 1
+                       or chain[-1] not in _exports(dotted, origin)):
+                routes.append(("non_export", line))
+            break
+        else:
+            routes.append(("unresolved_reference", line))
+    return routes, children
+
+
+#: realpath -> (sha256, record or None)
+_RECORDS: dict = {}
+
+
+def compiler_record(path: str) -> "tuple | None":
+    """The COMPILER's record of the ``.seam`` file at *path*: every
+    external resolution and Python route its lowering performs
+    (``term_rewriting._EXTERNAL_REFS``), from the same parse and
+    transformer the import hook runs -- nothing is executed.  None when the
+    file does not compile (it cannot load either)."""
+    import warnings  # noqa: PLC0415
+    real = os.path.realpath(path)
+    with open(real, "rb") as f:
+        data = f.read()
+    sha = hashlib.sha256(data).hexdigest()
+    hit = _RECORDS.get(real)
+    if hit is not None and hit[0] == sha:
+        return hit[1]
+    from clausal.templating.term_rewriting import (  # noqa: PLC0415
+        EmbedTransformer)
+    text = data.decode("utf-8", errors="replace")
+    record = None
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            tree = ast.parse(text, filename=path)
+            transformer = EmbedTransformer(
+                source_lines=text.splitlines(keepends=True), filename=path)
+            transformer.visit(tree)
+        record = getattr(transformer, "_external_refs", None)
+    except Exception:  # noqa: BLE001 -- does not compile: fail closed
+        record = None
+    _RECORDS[real] = (sha, record)
+    return record
+
+
+def _routes_and_children(path: str) -> "tuple[list, list]":
+    """Everything that makes the file at *path* a Python bridge, and the
+    ``.seam`` modules it passes through.  The compiler record decides; the
+    static scan is a pre-check whose routes are ADDED, never a reason to
+    allow.  No record (the file does not compile) is a route."""
+    scan = _scan(path)
+    routes = list(scan.routes)
+    record = compiler_record(path)
+    if record is None:
+        routes.append(("uncompilable", 0))
+        record = ()
+    r1, c1 = _check_refs(record)
+    r2, c2 = _check_refs(_static_refs(scan.refs))
+    seen = set()
+    children = []
+    for c in c1 + c2:
+        if c[0] not in seen:
+            seen.add(c[0])
+            children.append(c)
+    routes = sorted(set(routes + r1 + r2), key=lambda r: (r[1], r[0]))
     return routes, children
 
 
 def file_python_routes(path: str) -> "list[tuple[str, int]]":
     """:func:`python_routes` of the ``.seam`` file at *path*, plus the
-    routes its references make (:func:`_resolved_routes`): ``py_adapter``,
+    routes its references make (:func:`_check_refs`, on the COMPILER record and the static pre-scan): ``py_adapter``,
     ``python_module``, ``non_export``, ``unresolved_reference``."""
-    scan = _scan(path)
-    routes, _children = _resolved_routes(scan)
-    out = list(scan.routes) + routes
-    out.sort(key=lambda r: r[1])
-    return out
+    return _routes_and_children(path)[0]
 
 
 # ── engine-shipped ──────────────────────────────────────────────────────────
@@ -945,8 +1037,7 @@ def _walk(dotted, origin, allow, chain, seen) -> "BridgeRefusal | None":
                 f"{scan.sha256}: it changed since it was pinned; review it "
                 f"and update the pin"))
         return None     # a trusted bridge: its own imports are its business
-    resolved, children = _resolved_routes(scan)
-    routes = list(scan.routes) + resolved
+    routes, children = _routes_and_children(origin)
     if routes:
         routes.sort(key=lambda r: r[1])
         return BridgeRefusal(dotted, origin, _refusal_text(

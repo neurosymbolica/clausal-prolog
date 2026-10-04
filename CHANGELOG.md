@@ -37,8 +37,12 @@ since 0.4.0 finish three moves:
   loaded elsewhere raises the same error at run time. Migration: add each
   of your own Python-hosting `.seam` modules that `.clausal` files import to
   `python_bridges`, or move its Python out. The detector is public:
-  `clausal.python_bridges.python_routes`. See docs/importing_prolog.md,
-  "Python bridges".
+  `clausal.python_bridges.python_routes`; the gate decides from the
+  compiler's own record of the module (`compiler_record`). Also: an
+  underscore-led part of a qualified name in Clausal code
+  (`SI_Area.__class__`) is now a load error in every seam module -- reach
+  Python attributes with `++`. See docs/importing_prolog.md, "Python
+  bridges".
 
 - **clausal-sklearn: the term constructors are `est`, `dataset`, `fitted`,
   `split`** (no aliases). `Est`, `Dataset`, `Fitted`, `Split` were
