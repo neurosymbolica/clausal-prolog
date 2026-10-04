@@ -1173,6 +1173,19 @@ since 0.4.0 finish three moves:
 
 ### Changed
 
+- **The registry name gate reads exported DATA names too.**
+  `tests/test_python_predicate_name_gate.py` checked the predicates every
+  engine and package module registers; `-import_from` also offers every
+  public data attribute (a `Quantity` constant, a number, a term
+  constructor), and lets a TitleCase one through silently -- which is how
+  `scipy_constants` exported `SpeedOfLight` & co. unseen. The census
+  (`tests/_predicate_name_census.py`) now reads those names on the loaded
+  module and statically (assignments, and writes onto
+  `sys.modules[__name__]`, `setattr`, `globals()`), with a recall check,
+  floors and positive controls; none may be TitleCase. 22 engine names
+  (`prolog.TruncDiv/TruncMod/Rem`, `units.SI_*`) are held for a ruling in
+  an exact list.
+
 - **Adapter check mode stays STRICT** (ruled 2026-10-04). A bound result
   of a free-form text output is compared as a term, so the atom of the
   same spelling fails: `sym_str(42, '42')`, `write({"k": "v"}, 'k: v')`

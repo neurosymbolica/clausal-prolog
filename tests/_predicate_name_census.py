@@ -40,10 +40,31 @@ receivers.  Every other import failure is a FAILURE: an engine module that
 does not import, a ``clausal.*`` import that does not resolve, a missing
 module the package never declared, or any other exception.
 
+Which DATA names: ``-import_from`` compiles to a Python ``from M import
+name``, so it offers every public attribute of the module, not only its
+predicates -- a ``Quantity`` constant, a number, a term constructor (a plain
+function).  The census also reads those, both ways:
+
+* on a LOADED module, every public attribute that is no predicate adapter,
+  no module and no class, and that the module did not itself IMPORT (an
+  ``import`` binding or a ``from ... import *`` source is the other
+  module's name, censused there);
+* statically, every public name the module's own import-time code binds
+  (assignments, ``for`` and ``with`` targets, ``def``), plus attributes it
+  writes onto its own module object from anywhere -- ``mod.X = ...`` where
+  ``mod = sys.modules[__name__]``, ``setattr(mod, "X", ...)``,
+  ``globals()["X"] = ...``.  A computed one (``setattr(mod, name, ...)``,
+  ``globals().update(...)``) is reported, as for registrations.
+
+A warned alias served by a module ``__getattr__`` (the units module's
+retired TitleCase spellings) is no attribute and is not counted: it is the
+ruled deprecation mechanism, linted where it is imported.
+
 Validity is the engine's rule, ``term_rewriting._is_logic_var_name``: a
 predicate name must be an identifier the variable rule does not claim
 (TitleCase ``Foo``, ALL-CAPS ``FOO`` and underscore-led ``_foo`` all
-read as logic variables in a bare functor position).
+read as logic variables in a bare functor position).  An exported DATA name
+must not be TitleCase (see :func:`data_name_problem`).
 """
 from __future__ import annotations
 
@@ -181,6 +202,150 @@ def ast_registrations(source: str, filename: str) -> dict:
     return {"names": sorted(names), "dynamic": dynamic}
 
 
+def _bound_names(target: ast.AST):
+    """The plain names an assignment/for/with target binds."""
+    if isinstance(target, ast.Name):
+        yield target.id
+    elif isinstance(target, (ast.Tuple, ast.List)):
+        for elt in target.elts:
+            yield from _bound_names(elt)
+    elif isinstance(target, ast.Starred):
+        yield from _bound_names(target.value)
+
+
+def _is_own_module_expr(node: ast.AST) -> bool:
+    """``sys.modules[__name__]`` (or ``sys.modules.get(__name__)``)."""
+    if isinstance(node, ast.Subscript):
+        base, key = node.value, node.slice
+    elif (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+          and node.func.attr == "get" and node.args):
+        base, key = node.func.value, node.args[0]
+    else:
+        return False
+    return (isinstance(base, ast.Attribute) and base.attr == "modules"
+            and isinstance(base.value, ast.Name) and base.value.id == "sys"
+            and isinstance(key, ast.Name) and key.id == "__name__")
+
+
+_TYPE_FACTORIES = {"TypeVar", "ParamSpec", "TypeVarTuple", "NewType"}
+
+
+def _is_type_alias_expr(value: ast.AST, classes: set[str]) -> bool:
+    """``T = TypeVar("T")``, ``Conj = frozenset``, ``Alias = SomeClass``:
+    the static twin of :func:`_is_type_like` (a type is no constant)."""
+    import builtins  # noqa: PLC0415
+    if isinstance(value, ast.Call):
+        return _callee_name(value.func) in _TYPE_FACTORIES
+    if isinstance(value, ast.Name):
+        return value.id in classes or isinstance(
+            getattr(builtins, value.id, None), type)
+    return False
+
+
+def _is_globals_call(node: ast.AST) -> bool:
+    return (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+            and node.func.id == "globals" and not node.args)
+
+
+def import_bound_names(tree: ast.Module) -> tuple[set[str], list[str]]:
+    """Names the module's import-time code binds by IMPORTING them, and the
+    sources of its ``from M import *`` statements."""
+    bound: set[str] = set()
+    star: list[str] = []
+    for node in _module_level_nodes(tree):
+        if isinstance(node, ast.Import):
+            bound.update(a.asname or a.name.split(".")[0] for a in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            for a in node.names:
+                if a.name == "*":
+                    star.append("." * node.level + (node.module or ""))
+                else:
+                    bound.add(a.asname or a.name)
+    return bound, star
+
+
+def ast_data_names(source: str, filename: str) -> dict:
+    """The data names a module's source binds as module attributes, read
+    statically (see the module docstring).
+
+    ``names``: public names bound at import time other than by an import,
+    plus constant attribute names written onto the module object from
+    anywhere.  ``dynamic``: line numbers of module-object writes whose
+    attribute name is computed.
+    """
+    tree = ast.parse(source, filename)
+    names: set[str] = set()
+    dynamic: list[int] = []
+    classes = {n.name for n in ast.walk(tree) if isinstance(n, ast.ClassDef)}
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            names.add(node.name)
+    for node in _module_level_nodes(tree):
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                names.add(child.name)
+        if isinstance(node, ast.Assign):
+            if _is_type_alias_expr(node.value, classes):
+                continue
+            for t in node.targets:
+                names.update(_bound_names(t))
+        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+            names.update(_bound_names(node.target))
+        elif isinstance(node, (ast.For, ast.AsyncFor)):
+            names.update(_bound_names(node.target))
+        elif isinstance(node, (ast.With, ast.AsyncWith)):
+            for item in node.items:
+                if item.optional_vars is not None:
+                    names.update(_bound_names(item.optional_vars))
+        elif isinstance(node, ast.NamedExpr):
+            names.update(_bound_names(node.target))
+    # Writes onto the module object, from ANY scope (a helper that fills
+    # the module's globals when it runs at import time).
+    own: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and _is_own_module_expr(node.value):
+            for t in node.targets:
+                own.update(_bound_names(t))
+
+    def _is_own(expr) -> bool:
+        return ((isinstance(expr, ast.Name) and expr.id in own)
+                or _is_own_module_expr(expr))
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
+            targets = (node.targets if isinstance(node, ast.Assign)
+                       else [node.target])
+            for t in targets:
+                for sub in ast.walk(t):
+                    if isinstance(sub, ast.Attribute) and _is_own(sub.value):
+                        names.add(sub.attr)
+                    elif (isinstance(sub, ast.Subscript)
+                          and _is_globals_call(sub.value)):
+                        key = sub.slice
+                        if isinstance(key, ast.Constant) and isinstance(
+                                key.value, str):
+                            names.add(key.value)
+                        else:
+                            dynamic.append(node.lineno)
+        elif isinstance(node, ast.Call):
+            func = node.func
+            if (isinstance(func, ast.Name) and func.id == "setattr"
+                    and len(node.args) >= 2 and _is_own(node.args[0])):
+                key = node.args[1]
+                if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                    names.add(key.value)
+                else:
+                    dynamic.append(node.lineno)
+            elif (isinstance(func, ast.Attribute) and func.attr == "update"
+                  and (_is_globals_call(func.value)
+                       or (isinstance(func.value, ast.Attribute)
+                           and func.value.attr == "__dict__"
+                           and _is_own(func.value.value)))):
+                dynamic.append(node.lineno)
+    return {"names": sorted(n for n in names if not n.startswith("_")),
+            "dynamic": sorted(dynamic)}
+
+
 def name_problem(name: str) -> str | None:
     """Why *name* is no valid Clausal predicate name, or ``None``."""
     from clausal.templating.term_rewriting import (  # noqa: PLC0415
@@ -191,6 +356,23 @@ def name_problem(name: str) -> str | None:
         if _is_titlecase_identifier(name):
             return "TitleCase (reads as a logic variable)"
         return "logic-variable spelling"
+    return None
+
+
+def data_name_problem(name: str) -> str | None:
+    """Why *name* is no valid exported DATA name, or ``None``.
+
+    Only TitleCase: that is the spelling ``-import_from`` lets through
+    silently (it exempts a TitleCase name from its variable check, so the
+    import binds and the name is then read as the module's value).  An
+    ALL-CAPS ``FOO`` or ``_foo`` is refused by the directive itself with a
+    load-time error naming an ``alias(...)``, and is the ordinary spelling
+    of a Python-side module constant (``NUMBER_TYPES``), so it is no silent
+    hole and not this gate's business."""
+    from clausal.templating.term_rewriting import (  # noqa: PLC0415
+        _is_titlecase_identifier)
+    if _is_titlecase_identifier(name):
+        return "TitleCase (reads as a logic variable)"
     return None
 
 
@@ -235,6 +417,43 @@ def registry_names(mod) -> dict:
             adapter_names.add(own)
     return {"offered": sorted(offered), "offered_gap": sorted(gap),
             "adapter_names": sorted(adapter_names)}
+
+
+def data_names(mod, source: str, filename: str) -> list[str]:
+    """Public DATA names read off a LOADED module: what ``-import_from``
+    offers besides its predicates (see the module docstring)."""
+    import types  # noqa: PLC0415
+    tree = ast.parse(source, filename)
+    imported, star = import_bound_names(tree)
+    star_mods = []
+    for src in star:
+        star_mods.append(importlib.import_module(
+            src, package=mod.__name__ if src.startswith(".") else None))
+    out = []
+    for attr, value in list(vars(mod).items()):
+        if attr.startswith("_") or attr in imported:
+            continue
+        if (_is_predicate_adapter(value) or _is_type_like(value)
+                or isinstance(value, types.ModuleType)):
+            continue
+        if any(getattr(m, attr, _MISSING) is value for m in star_mods):
+            continue
+        out.append(attr)
+    return sorted(out)
+
+
+_MISSING = object()
+
+
+def _is_type_like(value) -> bool:
+    """A class, or a typing construct standing for one (a ``TypeVar``, a
+    ``list[int]`` alias): a TYPE, named by Python's convention, which no
+    Clausal program spells as a constant."""
+    import types  # noqa: PLC0415
+    import typing  # noqa: PLC0415
+    return isinstance(value, (type, typing.TypeVar, typing.ParamSpec,
+                              typing.TypeVarTuple, types.GenericAlias,
+                              types.UnionType)) or type(value).__module__ == "typing"
 
 
 def _declared_imports(pkg_dir: pathlib.Path) -> list[str]:
@@ -304,6 +523,9 @@ def census(root: pathlib.Path, extra: list[pathlib.Path], only_extra: bool) -> d
             static = ast_registrations(source, str(path))
             rec["ast_names"] = static["names"]
             rec["dynamic"] = static["dynamic"]
+            static_data = ast_data_names(source, str(path))
+            rec["ast_data_names"] = static_data["names"]
+            rec["data_dynamic"] = static_data["dynamic"]
             try:
                 mod = importlib.import_module(dotted)
             except ModuleNotFoundError as exc:
@@ -344,6 +566,7 @@ def census(root: pathlib.Path, extra: list[pathlib.Path], only_extra: bool) -> d
                 else:
                     rec["mode"] = "import"
                     rec.update(registry_names(mod))
+                    rec["data_names"] = data_names(mod, source, str(path))
             if rec["mode"] == "import":
                 names = (set(rec["offered"]) | set(rec["offered_gap"])
                          | set(rec["adapter_names"]))
@@ -354,6 +577,18 @@ def census(root: pathlib.Path, extra: list[pathlib.Path], only_extra: bool) -> d
             rec["names"] = sorted(names)
             rec["bad"] = {n: why for n in sorted(names)
                           if (why := name_problem(n))}
+            if rec["mode"] == "import":
+                data = set(rec["data_names"])
+            elif rec["mode"] == "ast":
+                # Statically every bound public name counts, predicates
+                # included: the static reading cannot tell them apart, and
+                # a predicate name is held to the same rule anyway.
+                data = set(rec["ast_data_names"])
+            else:
+                data = set()
+            rec["data"] = sorted(data)
+            rec["data_bad"] = {n: why for n in sorted(data)
+                               if (why := data_name_problem(n))}
             records.append(rec)
     return {"engine_file": clausal.__file__, "records": records}
 
