@@ -58,6 +58,19 @@ since 0.4.0 finish three moves:
   still matched by identity.
   Migration: compare a path with a string, or pass it straight on.
 
+- **clausal-scipy: the `scipy_constants` CONSTANTS are lower_snake_case,
+  prefixed `scipy_`** (no aliases). `SpeedOfLight`, `PlanckConstant`,
+  `ReducedPlanckConstant`, `GravitationalConstant`, `AvogadroConstant`,
+  `BoltzmannConstant`, `ElementaryCharge`, `ElectronMass`, `ProtonMass`,
+  `ElectronVolt`, `StandardAtmosphere`, `Pi`, `Kilo`, `Mega` and `Giga`
+  were TitleCase, which reads as a logic variable; `-import_from` exempts a
+  TitleCase name from its variable check, so nothing caught them. They are
+  now `scipy_speed_of_light`, ..., `scipy_pi`, `scipy_kilo`, `scipy_mega`,
+  `scipy_giga`. The prefix keeps them apart from the engine's exact
+  `py.units` constants (`speed_of_light`, `kilo`, ...) and the arithmetic
+  `pi`. Values are unchanged. Migration: import and write the new names
+  (`packages/clausal-scipy/docs/RENAMES.md` has the table).
+
 - **clausal-scipy: `root_scalar`'s `flag` is a STRING** (ruled
   2026-10-04: SciPy's status message is free-form text, like an
   optimizer's `message`). The result dict of `root_scalar/2,3,4,5` holds

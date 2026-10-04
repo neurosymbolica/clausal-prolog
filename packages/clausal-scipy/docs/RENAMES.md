@@ -248,3 +248,33 @@ predicate names themselves (`bounds`, `linear_constraint`) are renamed.
 | `XLog1pY` | `x_log1p_y` |
 | `XLogY` | `x_log_y` |
 | `Zoom` | `zoom` |
+
+
+# Constant renames (2026-10-04)
+
+Breaking: `scipy_constants` exported its CONSTANTS -- `Quantity` values
+and plain floats, not predicates -- under TitleCase names, which read as
+logic variables. (`-import_from` exempts a TitleCase name from its variable
+check, so nothing caught them.) They are renamed to lower_snake_case with
+NO aliases. Every name takes a `scipy_` prefix: the plain snake_case
+spellings would collide with the engine's own `py.units` constants
+(`speed_of_light`, `planck_constant`, ..., `kilo`, `mega`, `giga`, which
+are exact values) and with `pi` (an arithmetic constant, and a sympy name).
+
+| Old (TitleCase) | New (lower_snake_case) |
+|---|---|
+| `SpeedOfLight` | `scipy_speed_of_light` |
+| `PlanckConstant` | `scipy_planck_constant` |
+| `ReducedPlanckConstant` | `scipy_reduced_planck_constant` |
+| `GravitationalConstant` | `scipy_gravitational_constant` |
+| `AvogadroConstant` | `scipy_avogadro_constant` |
+| `BoltzmannConstant` | `scipy_boltzmann_constant` |
+| `ElementaryCharge` | `scipy_elementary_charge` |
+| `ElectronMass` | `scipy_electron_mass` |
+| `ProtonMass` | `scipy_proton_mass` |
+| `ElectronVolt` | `scipy_electron_volt` |
+| `StandardAtmosphere` | `scipy_standard_atmosphere` |
+| `Pi` | `scipy_pi` |
+| `Kilo` | `scipy_kilo` |
+| `Mega` | `scipy_mega` |
+| `Giga` | `scipy_giga` |

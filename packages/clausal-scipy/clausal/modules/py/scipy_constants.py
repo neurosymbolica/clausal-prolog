@@ -1,19 +1,29 @@
 """clausal.modules.py.scipy_constants — physical constants from scipy.constants.
 
-Named constants are plain ``Quantity`` values importable directly::
+Named constants are plain ``Quantity`` values (the SI prefixes and ``pi``
+plain floats), importable directly::
 
-    -import_from(scipy_constants, [SpeedOfLight, PlanckConstant,
-                                    ReducedPlanckConstant, GravitationalConstant,
-                                    AvogadroConstant, BoltzmannConstant,
-                                    ElementaryCharge, ElectronMass, ProtonMass,
-                                    ElectronVolt, StandardAtmosphere,
-                                    Kilo, Mega, Giga])
+    -import_from(scipy_constants, [scipy_speed_of_light, scipy_planck_constant,
+                                   scipy_reduced_planck_constant,
+                                   scipy_gravitational_constant,
+                                   scipy_avogadro_constant,
+                                   scipy_boltzmann_constant,
+                                   scipy_elementary_charge, scipy_electron_mass,
+                                   scipy_proton_mass, scipy_electron_volt,
+                                   scipy_standard_atmosphere, scipy_pi,
+                                   scipy_kilo, scipy_mega, scipy_giga])
 
-Use them in expressions exactly like the constants from ``py.units``::
+Use them in expressions like the constants from ``py.units``::
 
-    C is SpeedOfLight
-    E is ++(ElectronMass * SpeedOfLight ** 2)
-    has_units(BoltzmannConstant, joule / kelvin)
+    C is scipy_speed_of_light
+    E is ++(scipy_electron_mass * scipy_speed_of_light ** 2)
+    has_units(scipy_boltzmann_constant, joule / kelvin)
+
+The names are lower_snake_case with a ``scipy_`` prefix (renamed from
+TitleCase ``SpeedOfLight``, ... with no aliases; see docs/RENAMES.md).  The
+prefix keeps them apart from ``py.units``' exact ``speed_of_light``,
+``kilo``, ... and the arithmetic ``pi``: these are SciPy's float values, and
+a file may import both.
 
 Numeric values come from the installed scipy CODATA release.
 
@@ -180,23 +190,23 @@ def _init_quantities():
     def q(attr, unit):
         return Quantity(float(getattr(sc, attr)), unit)
 
-    mod.SpeedOfLight          = q("c",    u.metre / u.second)
-    mod.PlanckConstant        = q("h",    u.joule * u.second)
-    mod.ReducedPlanckConstant = q("hbar", u.joule * u.second)
-    mod.GravitationalConstant = q("G",    u.metre**3 / u.kilogram / u.second**2)
-    mod.AvogadroConstant      = q("N_A",  u.mole**-1)
-    mod.BoltzmannConstant     = q("k",    u.joule / u.kelvin)
-    mod.ElementaryCharge      = q("e",    u.coulomb)
-    mod.ElectronMass          = q("m_e",  u.kilogram)
-    mod.ProtonMass            = q("m_p",  u.kilogram)
-    mod.ElectronVolt          = q("eV",   u.joule)
-    mod.StandardAtmosphere    = q("atm",  u.pascal)
+    mod.scipy_speed_of_light          = q("c",    u.metre / u.second)
+    mod.scipy_planck_constant         = q("h",    u.joule * u.second)
+    mod.scipy_reduced_planck_constant = q("hbar", u.joule * u.second)
+    mod.scipy_gravitational_constant  = q("G",    u.metre**3 / u.kilogram / u.second**2)
+    mod.scipy_avogadro_constant       = q("N_A",  u.mole**-1)
+    mod.scipy_boltzmann_constant      = q("k",    u.joule / u.kelvin)
+    mod.scipy_elementary_charge       = q("e",    u.coulomb)
+    mod.scipy_electron_mass           = q("m_e",  u.kilogram)
+    mod.scipy_proton_mass             = q("m_p",  u.kilogram)
+    mod.scipy_electron_volt           = q("eV",   u.joule)
+    mod.scipy_standard_atmosphere     = q("atm",  u.pascal)
 
-    mod.Pi = float(sc.pi)
+    mod.scipy_pi                      = float(sc.pi)
 
-    mod.Kilo = float(sc.kilo)
-    mod.Mega = float(sc.mega)
-    mod.Giga = float(sc.giga)
+    mod.scipy_kilo                    = float(sc.kilo)
+    mod.scipy_mega                    = float(sc.mega)
+    mod.scipy_giga                    = float(sc.giga)
 
 
 _init_quantities()

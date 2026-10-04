@@ -45,22 +45,19 @@ precision('speed of light in vacuum', P)           % P = 0.0 (exact since 2019)
 # === Example ===
 
 --8<-- [start:example]
--import_from(scipy_constants, [SpeedOfLight, BoltzmannConstant,
-                                AvogadroConstant, value, unit])
+-import_from(scipy_constants, [scipy_speed_of_light, scipy_boltzmann_constant,
+                               value, unit])
+-import_from(py.units, [kelvin])
 
 # Thermal energy at room temperature (kT at 300 K)
-ThermalEnergy(KT) <-
-    BoltzmannConstant(K),
-    KT is K * 300.
+thermal_energy(KT) <- (KT is ++(scipy_boltzmann_constant * kelvin(300)))
 
-# Check that c agrees with CODATA lookup
-CheckC <-
-    SpeedOfLight(C_DIRECT),
+# Check that c agrees with the CODATA lookup
+check_c() <- (
     value('speed of light in vacuum', C_LOOKUP),
-    C_DIRECT == C_LOOKUP.
+    C is ++scipy_speed_of_light.value,
+    C == C_LOOKUP)
 
-# Print the unit of Planck's constant
-PlanckUnit <-
-    unit('Planck constant', U),
-    writeln(U).
+# The unit of Planck's constant, a string
+planck_unit(U) <- unit('Planck constant', U)
 --8<-- [end:example]
