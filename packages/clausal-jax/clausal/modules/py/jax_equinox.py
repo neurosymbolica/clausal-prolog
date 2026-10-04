@@ -130,10 +130,11 @@ and ``eqx.apply_updates`` are thin wrappers around the same
 
 from __future__ import annotations
 
+import functools as _functools
 import threading as _threading
 
 from clausal.modules.py._helpers import (
-    _pred, _pure, _check_1, _check_2, _fact_table_2,
+    _pred as _base_pred, _pure, _check_1, _check_2, _fact_table_2,
 )
 from clausal.modules.py.jax import _ensure_jax  # noqa: F401 — surfaces JAX dep
 
@@ -146,7 +147,13 @@ _equinox = None
 _equinox_lock = _threading.Lock()
 
 
-def _ensure_equinox():
+def _ensure_equinox(context=""):
+    """Import equinox once.  When it is not installed, raise the ISO
+    ``existence_error(module, equinox)`` -- never a silent failure (every
+    predicate here is a ``_pure``-style wrapper, which turns an exception
+    into "no solutions").  A equinox that is installed but fails to import
+    one of ITS dependencies is not reported as absent: that error
+    propagates as it is."""
     global _equinox
     if _equinox is not None:
         return
@@ -154,7 +161,39 @@ def _ensure_equinox():
         if _equinox is not None:
             return
         from clausal.modules.py import _import_stdlib
-        _equinox = _import_stdlib("equinox")
+        try:
+            _equinox = _import_stdlib("equinox")
+        except ModuleNotFoundError as exc:
+            if exc.name != "equinox":
+                raise
+            from clausal.logic.exceptions import (  # noqa: PLC0415
+                LogicException, existence_error)
+            raise LogicException(existence_error(
+                "module", "equinox",
+                f"{context}: equinox is not installed" if context
+                else "equinox is not installed")) from None
+
+
+def _needs_equinox(name, arity, dispatch):
+    """*dispatch* behind a equinox presence check made OUTSIDE it: the
+    ``_pure`` wrapper turns any exception in its function into failure, so
+    the check cannot live there."""
+    context = f"{name}/{arity}"
+
+    @_functools.wraps(dispatch)
+    def run(this_generator, _proceed, _fail, _catcher, *args):
+        _ensure_equinox(context)
+        yield from dispatch(this_generator, _proceed, _fail, _catcher, *args)
+    return run
+
+
+def _pred(name, *arity_fns):
+    """``_pred`` for a equinox-backed predicate: every arity checks that
+    equinox is importable before it runs.  Register every predicate of this
+    module through it (not ``_base_pred``), or a missing equinox reads as
+    "no solutions" again."""
+    return _base_pred(name, *((arity, _needs_equinox(name, arity, fn))
+                              for arity, fn in arity_fns))
 
 
 def _eqx():

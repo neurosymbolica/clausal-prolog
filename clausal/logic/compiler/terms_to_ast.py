@@ -45,6 +45,7 @@ from clausal.pythonic_ast.nodes import (
     StarUnpack, TupleLiteral, DictLiteral, SetLiteral,
     Lambda, literal_value,
     SetLiteral as _SetLiteral_t,
+    Unify as _UnifyNode,
 )
 from clausal.logic.meta_predicate import MetaArg as _MetaArg
 from clausal.logic.predicate import (
@@ -311,6 +312,48 @@ def _goal_cell_functor(fname: str, arity: int, namespace) -> "str | None":
             return leaf
         return fname
     return None
+
+
+def qualified_adapter_call(term, namespace) -> "tuple[str, int] | None":
+    """``(functor, n)`` when *term* is a QUALIFIED call ``mod.pred(A1 ...
+    An)`` -- written with a dot in the source, a ``LoadAttr`` -- whose
+    ``mod.pred`` is a predicate ADAPTER: a non-callable ``_get_dispatch``
+    object (``ModulePredicate`` and the out-of-tree adapters) that no
+    declaration makes a predicate of this program.  None otherwise.
+
+    The Unify lowering asks it of each side of ``X is T``: there a qualified
+    Python CALLABLE computes a value (``X is math.sqrt(16)``, ``M is
+    torch.nn.Linear(10, 5)``), so a qualified adapter is almost always meant
+    as one too, and building its compound silently was a wrong answer
+    (ruled 2026-10-04: ``type_error(evaluable, 'mod.pred'/n)``).  A bare or
+    ``-import_from``-imported name (``G is match(P, S)``) is a ``LoadName``
+    and keeps building its goal cell (``_goal_cell_functor``)."""
+    if (namespace is None or not isinstance(term, Call)
+            or not isinstance(term.func, LoadAttr) or term.kwargs):
+        return None
+    fname = _dotted_name_from_loadattr(term.func)
+    resolved = _resolve_functor_binding(fname, namespace)
+    binding = resolved[0] if resolved else None
+    if (binding is None or type(binding) is str
+            or not hasattr(binding, "_get_dispatch") or callable(binding)
+            or is_declared_predicate_name(binding,
+                                          db=namespace_db(namespace))):
+        return None
+    # The functor the cell would have carried -- what ``eval_`` and ``'is'``
+    # name in the same error (the bare leaf when the module also imports it).
+    return (_goal_cell_functor(fname, len(term.args), namespace) or fname,
+            len(term.args))
+
+
+def _adapter_side_expr(term, var_context: dict, eval_arith: bool = False):
+    """One side of an ``is`` (a ``Unify``): ``$adapter_not_evaluable(...)``
+    for a qualified predicate-adapter call (:func:`qualified_adapter_call`),
+    else the side as :func:`term_to_ast_expr` builds it."""
+    hit = qualified_adapter_call(term, lowering_globals())
+    if hit is not None:
+        return _call(_name("$adapter_not_evaluable"),
+                     ast.Constant(value=hit[0]), ast.Constant(value=hit[1]))
+    return term_to_ast_expr(term, var_context, eval_arith=eval_arith)
 
 
 def _resolve_functor_binding(
@@ -1687,13 +1730,21 @@ def term_to_ast_expr(
         # produce a class carrying ``_clausal_new`` (see the note in
         # solve.py's _deref_walk_py), so the gate never matched and the
         # keyword emission below was the only path actually taken.
+        # ``X is mod.pred(...)`` built as a goal TERM (``G is (X is
+        # torch.tensor(L))``, then ``call(G)``): the same refusal as the
+        # Unify goal's own lowering (``qualified_adapter_call``), raised
+        # where the term is built.
+        _adapter_sides = (("left", "right") if cls is _UnifyNode else ())
         return ast.Call(
             func=_name(cls_name),
             args=[],
             keywords=[
                 ast.keyword(
                     arg=name,
-                    value=term_to_ast_expr(
+                    value=_adapter_side_expr(
+                        getattr(term, name), var_context, eval_arith)
+                    if name in _adapter_sides else
+                    term_to_ast_expr(
                         getattr(term, name), var_context, eval_arith=eval_arith,
                     ),
                 )

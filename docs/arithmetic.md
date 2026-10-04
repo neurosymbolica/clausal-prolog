@@ -92,6 +92,18 @@ Choosing an arithmetic idiom:
 | Structural unification (no evaluation) | `X is TERM` |
 | Arbitrary Python expression | `X is ++(PYEXPR)` |
 
+`X is TERM` builds TERM without evaluating it, but a qualified **Python
+call** in it is made (`X is math.sqrt(16)` binds 4.0, `M is
+torch.nn.Linear(10, 5)` a module). A qualified **predicate adapter** is not a
+Python call: `X is torch.tensor([1, 2])`, where `torch.tensor` is the
+adapter's `tensor/2` predicate, raises `type_error(evaluable,
+'torch.tensor'/1)` -- the term `eval_` gives for it -- instead of binding the
+compound `'torch.tensor'([1, 2])`. Only a side that IS the qualified call is
+checked: one nested inside a larger term (`X is [torch.tensor(L)]`) still
+builds its compound. Call the predicate as a goal
+(`tensor([1, 2], X)`). The bare imported spelling, `G is match(P, S)` after
+`-import_from(py.re, [match])`, still builds a goal for `call/1`.
+
 ### Arithmetic terms built at runtime — the evaluable table
 
 Arithmetic written in source (`1 + 2`) and arithmetic built as a term at

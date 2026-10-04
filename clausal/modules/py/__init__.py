@@ -217,16 +217,88 @@ def to_text(val):
 _OPTION_MISSING = object()
 
 
+class _Symbol(str):
+    """A symbolic NAME a py-module hands back (see :func:`symbol`).  Only
+    :func:`text_result` reads the tag: it turns the value into the ATOM, a
+    plain interned ``str``.  No term ever holds one (the leak rule)."""
+    __slots__ = ()
+
+
+def symbol(name: str) -> str:
+    """Tag *name* as a SYMBOLIC identifier for :func:`text_result`: the result
+    crosses as an ATOM, not text -- "atom out, text in" (Python-boundary
+    spec 2026-09-21; ruled 2026-10-04 for adapter results).  For an
+    enum-like name a library hands back: a device platform (``cpu``), a mesh
+    axis name, a log level.  Free-form strings (contents, paths, printed
+    representations, user data) stay untagged and cross as text.
+
+    Only the RESULT is tagged: an adapter's inputs keep accepting text and
+    atoms (``to_text``), and a check-mode result (:func:`unify_result`)
+    accepts the text spelling of a symbolic name too."""
+    return _Symbol(name)
+
+
+def has_symbol(v) -> bool:
+    """True if *v*, or a list/dict/DictTerm value inside it (the containers
+    :func:`text_result` converts), is a :func:`symbol`.  Not a tuple: a
+    tuple is a cell and is never converted."""
+    if type(v) is _Symbol:
+        return True
+    if type(v) is list:
+        return any(has_symbol(e) for e in v)
+    if type(v) is dict:
+        return any(has_symbol(e) for e in v.values())
+    from clausal.terms import DictTerm  # noqa: PLC0415
+    if isinstance(v, DictTerm):
+        return any(has_symbol(e) for e in v.data.values())
+    return False
+
+
+def symbols_as_text(v):
+    """*v* with every :func:`symbol` in it as TEXT -- the spelling a caller
+    may hand in for it (text in)."""
+    if type(v) is _Symbol:
+        from clausal.logic.cells import chars  # noqa: PLC0415
+        return chars(str.__str__(v))
+    if type(v) is list:
+        return [symbols_as_text(e) for e in v]
+    if type(v) is dict:
+        return {k: symbols_as_text(e) for k, e in v.items()}
+    from clausal.terms import DictTerm  # noqa: PLC0415
+    if isinstance(v, DictTerm):
+        return DictTerm({k: symbols_as_text(e) for k, e in v.data.items()})
+    return text_result(v)
+
+
+def unify_result(term, v, trail) -> bool:
+    """Unify *term* with the py-module result *v* as :func:`text_result`
+    makes it.  When *v* holds a :func:`symbol` and that fails, *term* may
+    still be its TEXT spelling (``device_platform(D, "cpu")`` as well as
+    ``device_platform(D, cpu)``): text in, atom out."""
+    from clausal.logic.variables import unify  # noqa: PLC0415
+    if not has_symbol(v):
+        return unify(term, text_result(v), trail)
+    mark = trail.mark()
+    if unify(term, text_result(v), trail):
+        return True
+    trail.undo(mark)
+    return unify(term, symbols_as_text(v), trail)
+
+
 def text_result(v):
     """A py-module RESULT as a term (stage 1 of the atoms-as-str flip, spec
     2026-09-18): a Python str is TEXT, and text is the chars carrier
-    ``('$chars', s)``; a list, dict or DictTerm converts its VALUES (dict
-    keys stay what the module made them); everything else is itself.  A
-    tuple is left alone -- in term-land a tuple is a cell, whose functor is
-    a str that must not be touched."""
+    ``('$chars', s)``; a :func:`symbol` is the ATOM (a plain interned
+    ``str``); a list, dict or DictTerm converts its VALUES (dict keys stay
+    what the module made them); everything else is itself.  A tuple is left
+    alone -- in term-land a tuple is a cell, whose functor is a str that
+    must not be touched."""
     if type(v) is str:
         from clausal.logic.cells import chars  # noqa: PLC0415
         return chars(v)
+    if type(v) is _Symbol:
+        import sys  # noqa: PLC0415
+        return sys.intern(str.__str__(v))
     if type(v) is list:
         return [text_result(e) for e in v]
     if type(v) is dict:

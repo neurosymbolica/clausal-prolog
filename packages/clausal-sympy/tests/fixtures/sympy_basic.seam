@@ -5,7 +5,8 @@
                              sym, sympy_term])
 
 # SymPy integration — native Clausal terms. No sym(), no ++() for math.
-# Results use == for symbolic comparison (SymExpr.__eq__ handles it).
+# Compare symbolic results with sym_equal/2: == in a goal is arithmetic and
+# raises domain_error(clpz_expression, _) on a SymPy result.
 
 # ── simplify/2 ───────────────────────────────────────────────────────────────
 
@@ -144,7 +145,8 @@ test("sym_equal nontrivial") <- (
     )
 )  # nv
 
-# ── == with SymExpr does symbolic comparison ────────────────────────────────
+# ── == is arithmetic: it raises domain_error(clpz_expression, _) on a SymPy
+#    result; sym_equal/2 compares symbolically ─────────────────────────────
 
 test("== reorder") <- (
     expand(X*Y, R),

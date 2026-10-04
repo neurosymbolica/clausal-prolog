@@ -1,5 +1,5 @@
 -double_quotes(atom)
--import_module(jax)
+import jax as pyjax
 -import_module(equinox)
 -import_from(jax, [array, array_list, ones, zeros, arange, shape, allclose, int32])
 -import_from(jax_random, [key, split_key])
@@ -146,7 +146,7 @@ test("filter_grad_value over a Linear loss") <- (
     key(0, K),
     linear(4, 1, K, MODEL),
     ones(4, XS_UNUSED),
-    LOSS_FN is ++(lambda m: jax.numpy.sum(m(jax.numpy.ones(4)) ** 2)),
+    LOSS_FN is ++(lambda m: pyjax.numpy.sum(m(pyjax.numpy.ones(4)) ** 2)),
     filter_grad_value(LOSS_FN, MODEL, GRADS),
     # Grads should match the model's pytree structure (linear weight + bias)
     not tree_equal(GRADS, MODEL)
@@ -155,7 +155,7 @@ test("filter_grad_value over a Linear loss") <- (
 test("filter_value_and_grad tuple decomposition") <- (
     key(0, K),
     linear(2, 1, K, MODEL),
-    LOSS_FN is ++(lambda m: jax.numpy.sum(m(jax.numpy.ones(2)) ** 2)),
+    LOSS_FN is ++(lambda m: pyjax.numpy.sum(m(pyjax.numpy.ones(2)) ** 2)),
     filter_value_and_grad(LOSS_FN, MODEL, RESULT),
     RESULT is (V, G),
     array_list(V, FV),
@@ -166,7 +166,7 @@ test("filter_value_and_grad tuple decomposition") <- (
 test("filter_jit_compile produces equivalent callable") <- (
     key(0, K),
     linear(3, 2, K, MODEL),
-    F is ++(lambda m: jax.numpy.sum(m(jax.numpy.ones(3)))),
+    F is ++(lambda m: pyjax.numpy.sum(m(pyjax.numpy.ones(3)))),
     filter_jit_compile(F, F_JIT),
     Y_RAW is ++F(MODEL),
     Y_JIT is ++F_JIT(MODEL),
@@ -265,9 +265,9 @@ test("MLP one optax SGD step changes the model") <- (
     mlp(2, 1, 4, 1, K_INIT, MODEL),
     array([[1.0, 2.0], [3.0, 4.0]], XS_UNUSED),
     array([[5.0], [6.0]], YS_UNUSED),
-    LOSS_FN is ++(lambda m: jax.numpy.mean(
-        (jax.vmap(m)(jax.numpy.array([[1.0, 2.0], [3.0, 4.0]]))
-         - jax.numpy.array([[5.0], [6.0]])) ** 2)),
+    LOSS_FN is ++(lambda m: pyjax.numpy.mean(
+        (pyjax.vmap(m)(pyjax.numpy.array([[1.0, 2.0], [3.0, 4.0]]))
+         - pyjax.numpy.array([[5.0], [6.0]])) ** 2)),
     filter_value_and_grad(LOSS_FN, MODEL, VG),
     VG is (_LOSS_UNUSED, GRADS),
     sgd(0.01, OPT),
@@ -303,7 +303,7 @@ test("apply_stateful_module in inference mode preserves shape") <- (
 test("apply_stateful_module under vmap preserves batch shape") <- (
     batch_norm(3, "batch", {"mode": "batch"}, BN, STATE),
     ones([4, 3], X),
-    VMAPPED is ++jax.vmap(BN, axis_name="batch",
+    VMAPPED is ++pyjax.vmap(BN, axis_name="batch",
                           in_axes=(0, None), out_axes=(0, None)),
     apply_stateful_module(VMAPPED, X, STATE, Y, _NEW_STATE_UNUSED),
     shape(Y, [4, 3])

@@ -32,6 +32,7 @@ from typing import Any
 
 from clausal.logic.to_python import to_python
 from clausal.modules.py import ModulePredicate, simple_to_trampoline, to_text, text_result
+from clausal.modules.py import symbol as _symbol
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE
 
@@ -145,7 +146,9 @@ def _sqlite_current_connection_1(this_generator, _proceed, _fail, _catcher, alia
         aliases = list(_CONNECTIONS.keys())
     for a in aliases:
         mark = trail.mark()
-        if unify(alias, text_result(a), trail):
+        # An alias is a symbolic NAME (like an ISO stream alias): an ATOM,
+        # "atom out, text in" (ruled 2026-10-04).
+        if unify(alias, text_result(_symbol(a)), trail):
             yield (_proceed, None)
         trail.undo(mark)
     yield (_fail, DONE)

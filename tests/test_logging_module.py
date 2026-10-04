@@ -104,7 +104,7 @@ class TestSetGetLevel:
         logger = pylogging.getLogger("test.unit.setlvl1")
         _run_simple(_set_level_2, logger, chars("debug"))
         result = _run_simple_var(_get_level_2, logger)
-        assert result == chars("DEBUG")
+        assert result == "DEBUG"   # a level name is an ATOM
 
     def test_set_warning(self):
         # nv
@@ -112,42 +112,42 @@ class TestSetGetLevel:
         logger = pylogging.getLogger("test.unit.setlvl2")
         _run_simple(_set_level_2, logger, chars("warning"))
         result = _run_simple_var(_get_level_2, logger)
-        assert result == chars("WARNING")
+        assert result == "WARNING"   # a level name is an ATOM
 
     def test_set_error(self):
         # nv
         logger = pylogging.getLogger("test.unit.setlvl3")
         _run_simple(_set_level_2, logger, chars("error"))
         result = _run_simple_var(_get_level_2, logger)
-        assert result == chars("ERROR")
+        assert result == "ERROR"   # a level name is an ATOM
 
     def test_set_critical(self):
         # nv
         logger = pylogging.getLogger("test.unit.setlvl4")
         _run_simple(_set_level_2, logger, chars("critical"))
         result = _run_simple_var(_get_level_2, logger)
-        assert result == chars("CRITICAL")
+        assert result == "CRITICAL"   # a level name is an ATOM
 
     def test_set_info(self):
         # nv
         logger = pylogging.getLogger("test.unit.setlvl5")
         _run_simple(_set_level_2, logger, chars("info"))
         result = _run_simple_var(_get_level_2, logger)
-        assert result == chars("INFO")
+        assert result == "INFO"   # a level name is an ATOM
 
     def test_fatal_alias(self):
         # nv
         logger = pylogging.getLogger("test.unit.setlvl6")
         _run_simple(_set_level_2, logger, chars("fatal"))
         result = _run_simple_var(_get_level_2, logger)
-        assert result == chars("CRITICAL")
+        assert result == "CRITICAL"   # a level name is an ATOM
 
     def test_warn_alias(self):
         # nv
         logger = pylogging.getLogger("test.unit.setlvl7")
         _run_simple(_set_level_2, logger, chars("warn"))
         result = _run_simple_var(_get_level_2, logger)
-        assert result == chars("WARNING")
+        assert result == "WARNING"   # a level name is an ATOM
 
 
 class TestIsEnabledFor:

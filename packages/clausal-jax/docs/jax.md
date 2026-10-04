@@ -401,8 +401,8 @@ zeros([2], A), dtype(A, float32)  # succeeds on default config
 device(A, D)
 ```
 
-`D` is a string like `"cpu:0"` or `"gpu:0"`. Strings — not `Device`
-objects — so unification and pattern matching work naturally.
+`D` is the device name (cpu:0, gpu:0) as an ATOM, a symbolic name; a bound `D`
+may be the atom or the string. Not a `Device` object, so unification works.
 
 ### dim, element_count
 

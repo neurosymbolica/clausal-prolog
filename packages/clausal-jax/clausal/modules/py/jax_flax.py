@@ -106,9 +106,10 @@ Dropout's per-call randomness comes via ``apply_with_rngs/5``::
 
 from __future__ import annotations
 
+import functools as _functools
 import threading as _threading
 
-from clausal.modules.py._helpers import _pred, _pure, _fact_table_2
+from clausal.modules.py._helpers import _pred as _base_pred, _pure, _fact_table_2
 from clausal.modules.py.jax import _ensure_jax  # noqa: F401 — surfaces JAX dep
 
 
@@ -120,7 +121,13 @@ _flax = None
 _flax_lock = _threading.Lock()
 
 
-def _ensure_flax():
+def _ensure_flax(context=""):
+    """Import flax once.  When it is not installed, raise the ISO
+    ``existence_error(module, flax)`` -- never a silent failure (every
+    predicate here is a ``_pure``-style wrapper, which turns an exception
+    into "no solutions").  A flax that is installed but fails to import
+    one of ITS dependencies is not reported as absent: that error
+    propagates as it is."""
     global _flax
     if _flax is not None:
         return
@@ -128,7 +135,39 @@ def _ensure_flax():
         if _flax is not None:
             return
         from clausal.modules.py import _import_stdlib
-        _flax = _import_stdlib("flax")
+        try:
+            _flax = _import_stdlib("flax")
+        except ModuleNotFoundError as exc:
+            if exc.name != "flax":
+                raise
+            from clausal.logic.exceptions import (  # noqa: PLC0415
+                LogicException, existence_error)
+            raise LogicException(existence_error(
+                "module", "flax",
+                f"{context}: flax is not installed" if context
+                else "flax is not installed")) from None
+
+
+def _needs_flax(name, arity, dispatch):
+    """*dispatch* behind a flax presence check made OUTSIDE it: the
+    ``_pure`` wrapper turns any exception in its function into failure, so
+    the check cannot live there."""
+    context = f"{name}/{arity}"
+
+    @_functools.wraps(dispatch)
+    def run(this_generator, _proceed, _fail, _catcher, *args):
+        _ensure_flax(context)
+        yield from dispatch(this_generator, _proceed, _fail, _catcher, *args)
+    return run
+
+
+def _pred(name, *arity_fns):
+    """``_pred`` for a flax-backed predicate: every arity checks that
+    flax is importable before it runs.  Register every predicate of this
+    module through it (not ``_base_pred``), or a missing flax reads as
+    "no solutions" again."""
+    return _base_pred(name, *((arity, _needs_flax(name, arity, fn))
+                              for arity, fn in arity_fns))
 
 
 def _fnn():

@@ -30,7 +30,8 @@ NOT use it: ``diff(X**3, X, R), R == 3*X**2`` raises
 
     diff(X**3, X, R), sym_equal(R, 3*X**2)
 
-Numeric results (Integer, Float) are collapsed to plain Python values.
+Numeric results (Integer, Float) are collapsed to plain Python values, so
+``R == 0`` on one still works.
 
 Math functions (``sin``, ``cos``, ``exp``, ``log``, ``sqrt``, etc.) and
 constants (``inf``, ``pi``, ``E``) are importable as term constructors.

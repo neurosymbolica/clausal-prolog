@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from clausal.modules.py import (
     text_result,   # stage 1: a str result is the chars carrier
+    symbol as _symbol, unify_result as _unify_result,   # symbolic names: atoms
     ModulePredicate,
     _import_stdlib,
     raise_os_error,
@@ -114,8 +115,10 @@ def _argv_1(args, trail, k):
 
 
 def _platform_1(p, trail, k):
-    """platform/1: unify P with sys.platform."""
-    if unify(p, text_result(_sys.platform), trail):
+    """platform/1: unify P with sys.platform, an ATOM (a symbolic name:
+    "atom out, text in", ruled 2026-10-04); a bound P may be the atom or
+    the text."""
+    if _unify_result(p, _symbol(_sys.platform), trail):
         yield None
 
 

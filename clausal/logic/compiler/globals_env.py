@@ -490,6 +490,22 @@ def _undeclared_functor_in(kind: str, context: "str | None", functor: str,
     raise undeclared_functor_error(functor, arity, kind, context)
 
 
+def _adapter_not_evaluable(functor: str, arity: int):
+    """``$adapter_not_evaluable``: what ``X is mod.pred(A1 ... An)`` compiles
+    to when ``mod.pred`` -- written QUALIFIED in the source -- names a
+    predicate ADAPTER (a non-callable ``_get_dispatch`` object such as a
+    ``ModulePredicate``), not a Python callable.  A Python call computes a
+    value there (``X is math.sqrt(16)``); a predicate computes none, and
+    the construction used to bind the compound ``('mod.pred', A1 ...)``
+    silently (ruled 2026-10-04: raise).  The ISO term is the one ``eval_``
+    and ``'is'`` give for the same cell: ``type_error(evaluable,
+    'mod.pred'/n)``.  Raised at run time, so a clause that never runs still
+    loads."""
+    from clausal.logic.exceptions import type_error  # noqa: PLC0415
+    raise _LogicException(type_error("evaluable", ("/", functor, arity),
+                                     "(is)/2"))
+
+
 def _constructor_in(obj: Any, kind: str, context: "str | None",
                     functor: str, arity: int) -> Any:
     """``$constructor_in``: the callee of a construction ``f(...)`` whose

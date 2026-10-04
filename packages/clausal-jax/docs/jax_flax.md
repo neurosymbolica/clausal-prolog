@@ -14,7 +14,7 @@ Issue 1.
 ## Import
 
 ```clausal
--import_module(jax)
+import jax as pyjax
 -import_module(flax)
 -import_from(py.jax_random, [key, split_key])
 -import_from(py.jax_tree, [apply_updates, leaf])
@@ -41,9 +41,9 @@ model carries no state.
 test("Dense init+apply round-trip") <- (
     dense(8, MODEL),
     key(0, K),
-    EXAMPLE is ++(jax.numpy.ones(4)),
+    EXAMPLE is ++(pyjax.numpy.ones(4)),
     init(MODEL, K, EXAMPLE, VARS),
-    X is ++(jax.numpy.ones(4)),
+    X is ++(pyjax.numpy.ones(4)),
     apply(MODEL, VARS, X, Y),
     shape(Y, [8])
 )
@@ -194,7 +194,7 @@ Flax exposes pooling as **functions**, not Modules. They don't go
 through `init`/`apply`:
 
 ```clausal
-X is ++(jax.numpy.ones((1, 8, 8, 3))),
+X is ++(pyjax.numpy.ones((1, 8, 8, 3))),
 max_pool(X, [2, 2], {"strides": [2, 2]}, R)   % halves spatial dims
 avg_pool(X, [2, 2], R)                         % stride defaults to 1
 ```
@@ -217,12 +217,12 @@ test("MLP one optax SGD step changes the variables") <- (
     sequential([FC1, FC2], MODEL),
     key(0, K0),
     split_key(K0, 2, [K_INIT, _]),
-    EXAMPLE is ++(jax.numpy.ones(2)),
+    EXAMPLE is ++(pyjax.numpy.ones(2)),
     init(MODEL, K_INIT, EXAMPLE, VARS),
-    XS is ++(jax.numpy.array([[1.0, 2.0], [3.0, 4.0]])),
-    YS is ++(jax.numpy.array([[5.0], [6.0]])),
-    LOSS_FN is ++(lambda v: jax.numpy.mean(
-        (jax.vmap(MODEL.apply, in_axes=(None, 0))(v, XS) - YS) ** 2)),
+    XS is ++(pyjax.numpy.array([[1.0, 2.0], [3.0, 4.0]])),
+    YS is ++(pyjax.numpy.array([[5.0], [6.0]])),
+    LOSS_FN is ++(lambda v: pyjax.numpy.mean(
+        (pyjax.vmap(MODEL.apply, in_axes=(None, 0))(v, XS) - YS) ** 2)),
     value_and_grad(LOSS_FN, VARS, VG),
     VG is (_LOSS, GRADS),
     sgd(0.01, OPT),
@@ -321,3 +321,12 @@ The gradients pytree from `value_and_grad(loss_fn, vars)` matches
 `vars`'s structure, and `py.jax_tree.apply_updates` adds them leaf
 by leaf. The Equinox-driven None-handling fix to `apply_updates`
 carries over with no extra work.
+
+---
+
+## Reaching JAX itself
+
+`import jax as pyjax` is a hosted Python import: it binds the REAL `jax`
+module, which the `++` escapes below use (`pyjax.vmap`, `pyjax.numpy`). In
+a seam file a bare `jax` in `-import_module`/`-import_from` names the
+`py.jax` adapter, which does not forward JAX's functions.

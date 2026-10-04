@@ -20,6 +20,39 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **Symbolic names an adapter hands back are ATOMS, not text** ("atom
+  out, text in": the Python-boundary spec of 2026-09-21, ruled for adapter
+  results 2026-10-04). Changed: `py.os` `platform/1` (`linux`),
+  `py.logging` `get_level/2` (`'WARNING'`, Python's spelling, custom
+  level names too; an unnamed `"Level 15"` stays text), `py.sqlite` `current_connection/1` aliases;
+  clausal-jax `device_platform/2` (`cpu`), `device/2`, `mesh_axis_names/2`
+  (now a LIST of atoms -- it was JAX's tuple, i.e. the cell `x(y)` or the
+  reserved `('x',)`), `partition_spec/2` backward (axis names as atoms, a
+  multi-axis entry as a list); clausal-torch `device/2`; clausal-opencv
+  `fourcc/2` backward. A bound argument in check mode still accepts the
+  text spelling, and inputs accept text and atoms as before. Free-form
+  strings (paths, contents, printed representations such as `keystr/2`)
+  stay text. Adapters tag such a result with `clausal.modules.py.symbol`;
+  `text_result` turns the tag into the plain interned `str` and
+  `unify_result` accepts the text spelling too. Migration: compare with
+  the atom (`P == cpu`, `LEVEL == 'DEBUG'`) instead of a string or an
+  `atom_chars/2` workaround.
+
+- **`X is mod.pred(Args)` with `mod.pred` a predicate adapter raises
+  `type_error(evaluable, Name/N)`** (ruled 2026-10-04). A qualified name in
+  `X is T` that names a `ModulePredicate` (or another non-callable
+  `_get_dispatch` adapter) used to bind the compound `('mod.pred', Args)`
+  silently, so `T is torch.tensor([1, 2])` bound a term, not a tensor. It
+  now raises `error(type_error(evaluable, Name/N), (is)/2)` when the call
+  IS one side of `is` (either side; also when the `is` goal is built as a
+  term and run by `call/1`; a call nested deeper in a side is not checked);
+  Name is the functor the cell would have carried, as `eval_` and `'is'`
+  (which already raised) name it. Unchanged: a qualified Python callable
+  (`X is math.sqrt(16)`, a class), a qualified program predicate or data
+  functor, and the bare imported spelling that builds a goal cell (`G is
+  match(P, S)`). Migration: call the predicate as a goal (`tensor([1, 2],
+  T)`).
+
 - **Clausal Prolog may not reach a `.pl` module at run time either**
   (the dialect gate, routes 2-7 of the 2026-10-01 one-way ruling; route 1,
   the import, landed earlier). From a `.clausal` clause, a qualified goal
@@ -1043,6 +1076,25 @@ since 0.4.0 finish three moves:
   clausal-sympy compares symbolic results with `sym_equal/2` (`==` is
   arithmetic and raises on a SymPy expression); tests updated for unit-atom
   dims keys, the F005 wrong-arity error and the cut refusal.
+
+- **clausal-sympy: `==` on a SymPy result is arithmetic, pinned by a
+  test.** Ruled 2026-10-04: no engine change. `R == <expr>` with `R` a
+  SymPy result raises `error(domain_error(clpz_expression, _), _)`;
+  `sym_equal/2` is the symbolic comparison; a numeric result still
+  compares with `==`. `test_sympy_equality_is_arithmetic.py` pins all
+  three, and the module docstrings that still promised `SymExpr.__eq__`
+  behind a goal's `==` now say this.
+
+- **clausal-jax: `py.jax_flax` and `py.jax_equinox` raise when their
+  library is not installed** (`error(existence_error(module, flax), Name/Arity)`,
+  likewise `equinox`), checked outside the `_pure` wrapper as for optax;
+  they used to fail, so a query answered "no solutions".
+- **Reaching a Python library itself from a seam file: a hosted `import`.**
+  Ruled 2026-10-04 instead of widening the `py.jax`/`py.torch` forwarding:
+  `import jax as pyjax` at module level binds the real module, which `++`
+  escapes and qualified calls see (`++pyjax.vmap(F)`). Documented in
+  docs/python_integration.md; the clausal-jax flax/equinox fixtures and
+  docs use it.
 
 - **clausal-jax: `py.jax_optax` raises when optax is not installed.**
   Every predicate of the module checks that optax imports before it runs

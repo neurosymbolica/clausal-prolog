@@ -81,6 +81,7 @@ import threading as _threading
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
+from clausal.modules.py import symbol as _symbol
 from clausal.modules.py._helpers import _pred, _pure, _bidir_2, _check_1, _deep_deref
 from clausal.modules.py.jax import _ensure_jax, _jx
 from clausal.terms import DictTerm
@@ -184,8 +185,11 @@ def _device_id_2(this_generator, _proceed, _fail, _catcher, dev_var, id_var, tra
 device_id = _pred("device_id", (2, _device_id_2))
 
 
+# A platform (``cpu``, ``gpu``, ``tpu``) is a symbolic NAME: it crosses as an
+# ATOM ("atom out, text in", ruled 2026-10-04); check mode accepts the atom
+# or the text.
 device_platform = _pred("device_platform",
-    (2, _pure(lambda d: d.platform)),
+    (2, _pure(lambda d: _symbol(d.platform))),
 )
 
 
@@ -218,8 +222,11 @@ mesh_shape = _pred("mesh_shape",
     (2, _pure(lambda m: DictTerm(dict(m.shape)))),
 )
 
+# Axis names are symbolic NAMES: a LIST of atoms (``[x]``).  JAX's tuple
+# used to cross as a tuple -- the cell ``x(y)`` for two axes, the reserved
+# ``('x',)`` for one.
 mesh_axis_names = _pred("mesh_axis_names",
-    (2, _pure(lambda m: m.axis_names)),
+    (2, _pure(lambda m: [_symbol(a) for a in m.axis_names])),
 )
 
 # `mesh.devices` is a numpy ndarray of Device objects. Flatten and cast
@@ -243,11 +250,27 @@ mesh_devices = _pred("mesh_devices",
 # recovers the axes list via list(p). PartitionSpec is tuple-like so
 # list(p) yields [axis_or_None, ...] in order — enough for a structural
 # check against the original axes list.
+def _spec_axes(p):
+    """A PartitionSpec's entries as terms: an axis name is an ATOM, a
+    multi-axis entry a LIST of atoms, ``None`` stays ``None``."""
+    def entry(e):
+        if isinstance(e, str):
+            return _symbol(e)
+        if isinstance(e, (tuple, list)):
+            return [_symbol(a) if isinstance(a, str) else a for a in e]
+        return e
+    return [entry(e) for e in p]
+
+
+def _spec_of(axes):
+    """``PartitionSpec(*axes)``; a list entry (several mesh axes for one
+    dimension) is JAX's tuple."""
+    return _jsh().PartitionSpec(
+        *(tuple(e) if isinstance(e, list) else e for e in axes))
+
+
 partition_spec = _pred("partition_spec",
-    (2, _bidir_2(
-        lambda axes: _jsh().PartitionSpec(*axes),
-        lambda p: list(p),
-    )),
+    (2, _bidir_2(_spec_of, _spec_axes)),
 )
 
 named_sharding = _pred("named_sharding",

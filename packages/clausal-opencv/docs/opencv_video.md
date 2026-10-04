@@ -116,8 +116,9 @@ linking.
 | Backward | `(-chars, +code)` | `fourcc(CHARS, CODE)` |
 
 The forward call goes through `cv2.VideoWriter_fourcc(*chars)`. The
-backward call reconstructs the 4-character string from the integer's
-byte pattern. Round-trip is exact.
+backward call reconstructs the 4-character code from the integer's
+byte pattern, as an ATOM (a codec tag is a symbolic name). Round-trip is
+exact.
 
 ```clausal
 fourcc("MJPG", CODE),

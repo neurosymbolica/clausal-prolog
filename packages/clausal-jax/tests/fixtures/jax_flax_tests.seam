@@ -1,5 +1,5 @@
 -double_quotes(atom)
--import_module(jax)
+import jax as pyjax
 -import_module(flax)
 -import_from(jax, [array, array_list, ones, arange, shape, allclose])
 -import_from(jax_random, [key, split_key])
@@ -163,8 +163,8 @@ test("MLP one optax SGD step changes the variables") <- (
     init(MODEL, K_INIT, EXAMPLE, VARS),
     array([[1.0, 2.0], [3.0, 4.0]], XS),
     array([[5.0], [6.0]], YS),
-    LOSS_FN is ++(lambda v: jax.numpy.mean(
-        (jax.vmap(MODEL.apply, in_axes=(None, 0))(v, XS) - YS) ** 2)),
+    LOSS_FN is ++(lambda v: pyjax.numpy.mean(
+        (pyjax.vmap(MODEL.apply, in_axes=(None, 0))(v, XS) - YS) ** 2)),
     value_and_grad(LOSS_FN, VARS, VG),
     VG is (_LOSS_UNUSED, GRADS),
     sgd(0.01, OPT),

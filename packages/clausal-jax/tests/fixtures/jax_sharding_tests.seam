@@ -52,8 +52,7 @@ test("device_id forward") <- (
 
 test("device_id reverse") <- (
     device_id(D, 0),
-    device_platform(D, P),
-    atom_chars('cpu', P)
+    device_platform(D, "cpu")
 )  # nv
 
 test("device_id enumerates all pairs when unbound") <- (
@@ -65,14 +64,11 @@ test("device_id enumerates all pairs when unbound") <- (
 test("device_platform is cpu on CI") <- (
     jax_device(D),
     device_platform(D, P),
-    atom_chars('cpu', P)
+    P == "cpu"
 )  # nv
 
-# A Python str a predicate hands back is TEXT (the chars list), so a
-# platform or axis name is checked against the atom with atom_chars/2.
-# Whether such NAMES should cross as atoms instead is an open question
-# (todo/package-suite-triage-clausal-jax-2026-10-04.md); these checks
-# change with it.
+# A platform or a mesh axis name is a symbolic NAME and crosses as an ATOM
+# ("atom out, text in", ruled 2026-10-04), so the checks compare atoms.
 
 # --- device_of on a freshly-made array ---
 
@@ -87,7 +83,7 @@ test("device_of returns a Device") <- (
 test("make_mesh creates 1x mesh") <- (
     make_mesh([1], ["x"], MESH),
     mesh_axis_names(MESH, NAMES),
-    NAMES == ("x",)
+    NAMES == ["x"]
 )  # nv
 
 test("mesh_shape check mode with dict literal") <- (
@@ -116,23 +112,21 @@ test("mesh_devices has length matching mesh size") <- (
 test("mesh_devices list pattern match") <- (
     make_mesh([1], ["x"], MESH),
     mesh_devices(MESH, [D, *_REST_UNUSED]),
-    device_platform(D, P),
-    atom_chars('cpu', P)
+    device_platform(D, "cpu")
 )  # nv
 
 # --- PartitionSpec and sharding construction ---
 
 test("partition_spec single axis") <- (
     partition_spec(["x"], P),
-    partition_spec([X1], P),
-    atom_chars('x', X1)
+    partition_spec(AXES, P),
+    AXES == ["x"]
 )  # nv
 
 test("partition_spec with None unsharded") <- (
     partition_spec(["x", null], P),
-    partition_spec([X1, NONE], P),
-    atom_chars('x', X1),
-    NONE == null
+    partition_spec(AXES, P),
+    AXES == ["x", null]
 )  # nv
 
 test("named_sharding construction succeeds") <- (
