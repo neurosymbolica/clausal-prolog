@@ -522,12 +522,7 @@ Python is reachable **only** through:
    into the same namespace (`clausal.modules.py.scipy_stats`), and those are
    not the engine's -- a `.seam` importing one is a Python bridge. A `.seam`
    module whose only Python contact is importing engine-shipped adapters is
-   Python-free (case 2). Every dotted chain in a Clausal position counts as
-   a reference, a value (`X is py.datetime.v`) as much as a call; a
-   qualified name is `module.name`, so a chain that walks on INTO a
-   module's namespace (`py.csv.io.open(...)`, the `io` the adapter
-   imported) is a route, and so is a `py.X` the engine's adapters do not
-   resolve (fail closed). This is the default mode, which trusts every
+   Python-free (case 2). This is the default mode, which trusts every
    engine-shipped adapter; a sandbox mode narrows the engine adapters to its
    own allowlist. (A Clausal Prolog file's DIRECT `use_module(py/X)` stays
    refused as above: it imports the facade.)
@@ -536,6 +531,19 @@ Python is reachable **only** through:
    (`-import_from`, `-import_module`, the qualifier of a dotted call
    `m.p(...)`) are checked the same way, transitively, and must themselves
    be Python-free, engine-shipped, or allowlisted.
+   "Python-free" is an ALLOW-LIST: every name the module reaches outside
+   itself must resolve positively to a DECLARED EXPORT. Each name of an
+   `-import_from(M, [...])`, aliased or not, must be in M's export list
+   (a Clausal module's `module/2` list; for an engine Python module, its
+   predicates as `clausal.module_signatures` lists them plus its values --
+   units, currencies, numbers -- exactly what its `library(...)` facade
+   re-exports). A dotted chain must be exactly `module.export` or
+   `module.export(...)`; anything deeper (`py.csv.io.open(...)`), an
+   attribute that is no export (`py.files.pathlib`), or any attribute of an
+   imported name (`zz.Path` after `alias(pathlib, zz)`) is a route, and so is
+   anything that does not resolve (fail closed). A term constructor such as
+   `py.datetime`'s `date/3` is no export: declare the term instead
+   (`-private([date(y, m, d)])`).
 3. **A `.seam` module with Python that the importer's project allowlists**
    in its `pyproject.toml`:
 

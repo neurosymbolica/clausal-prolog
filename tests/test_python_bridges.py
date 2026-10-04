@@ -127,7 +127,7 @@ def test_spaced_plus_plus_is_arithmetic_not_an_escape():
 def test_file_routes_include_python_module_imports(tmp_path):
     f = tmp_path / "pm.seam"
     f.write_text("-module(pm, [p/1])\n-import_from(os, [getcwd])\n"
-                 "-import_from(units, [meter])\np(1),\n")
+                 "-import_from(units, [metre])\np(1),\n")
     # os is Python and not the engine's; units is the engine's own module.
     assert file_python_routes(str(f)) == [("python_module", 2)]
 
@@ -542,15 +542,14 @@ def test_the_gate_imports_nothing_it_judges(proj, init):
 
 
 @pytest.mark.parametrize("imports, body", [
-    ("-import_from(date_time, [date, days_between])\n",
+    ("-import_from(date_time, [days_between])\n",
      "p(N) <- (days_between(date(2026, 1, 31), date(2026, 1, 1), N))\n"),
-    ("-import_from(py.datetime, [date, days_between])\n",
+    ("-import_from(py.datetime, [days_between])\n",
      "p(N) <- (days_between(date(2026, 1, 31), date(2026, 1, 1), N))\n"),
-    ("-import_module(py.datetime)\n-import_from(date_time, [date])\n",
+    ("-import_module(py.datetime)\n",
      "p(N) <- (py.datetime.days_between(date(2026, 1, 31), "
      "date(2026, 1, 1), N))\n"),
-    ("-import_from(clausal.library.datetime, [days_between])\n"
-     "-import_from(date_time, [date])\n",
+    ("-import_from(clausal.library.datetime, [days_between])\n",
      "p(N) <- (days_between(date(2026, 1, 31), date(2026, 1, 1), N))\n"),
 ])
 def test_engine_shipped_adapters_keep_a_seam_python_free(proj, imports,
@@ -558,7 +557,8 @@ def test_engine_shipped_adapters_keep_a_seam_python_free(proj, imports,
     """Ruling (1): the engine's own Python adapters are its whitelist.  A
     .seam whose only Python contact is importing one (by py.X, a seam alias
     such as date_time, or its library facade) is case (2)."""
-    path = proj.seam("clean", "-module(@clean, [p/1])\n" + imports + body)
+    path = proj.seam("clean", "-module(@clean, [p/1])\n"
+                     "-private([date(y, m, d)])\n" + imports + body)
     assert file_python_routes(str(path)) == []
     proj.clausal("main", ":- use_module(@clean, [p/1]).\n",
                  "t(N) :- p(N).\n")
@@ -628,7 +628,7 @@ def test_an_unresolvable_py_reference_fails_closed(proj):
     path = proj.seam("helper", "-module(@helper, [v/1])\n"
                                "-import_module(py.datetime)\n"
                                "v(X) <- (X is py.pbnosuch.value)\n")
-    assert ("python_module", 3) in file_python_routes(str(path))
+    assert ("non_export", 3) in file_python_routes(str(path))
     path = proj.seam("helper", "-module(@helper, [v/1])\n"
                                "-import_from(py.pbnosuch, [value])\n"
                                "v(1),\n")
@@ -716,7 +716,7 @@ def test_a_chain_into_a_module_s_namespace_is_a_route(proj, imports, value):
     arbitrary Python.  A qualified name is ``module.name``, never deeper."""
     path = proj.seam("helper", "-module(@helper, [v/1])\n" + imports
                      + f"v(X) <- (X is {value})\n")
-    assert ("python_module", 3) in file_python_routes(str(path))
+    assert ("non_export", 3) in file_python_routes(str(path))
     proj.clausal("main", ":- use_module(@helper, [v/1]).\n",
                  "t(X) :- v(X).\n")
     msg = _refused(proj, "main")
@@ -725,8 +725,8 @@ def test_a_chain_into_a_module_s_namespace_is_a_route(proj, imports, value):
 
 def test_a_module_dot_name_is_still_fine(proj):
     path = proj.seam("clean", "-module(@clean, [p/1])\n"
+                              "-private([date(y, m, d)])\n"
                               "-import_module(py.datetime)\n"
-                              "-import_from(date_time, [date])\n"
                               "p(N) <- (py.datetime.days_between("
                               "date(2026, 1, 31), date(2026, 1, 1), N))\n")
     assert file_python_routes(str(path)) == []
@@ -759,3 +759,103 @@ def test_a_planted_record_cannot_vouch_for_files(engine_rule, monkeypatch,
                         lambda: _FakeDist(base, record))
     assert not (pb._engine_rule()[0] == "record"
                 and is_engine_shipped("clausal.library.datetime", target))
+
+
+# ── allow-list: every external name is a declared export (job 335) ──────────
+
+
+@pytest.mark.parametrize("imports, value", [
+    ("-import_from(py.files, [alias(pathlib, zz)])\n", "zz.Path.cwd()"),
+    ("-import_from(py.csv, [alias(io, yy)])\n", "yy.open('/etc/hostname')"),
+])
+def test_an_aliased_import_of_a_non_export_is_a_route(proj, imports, value):
+    """The reviewer's exploits: an adapter's own imports (pathlib, io) are
+    no exports, aliased or not."""
+    path = proj.seam("helper", "-module(@helper, [v/1])\n" + imports
+                     + f"v(X) <- (X is {value})\n")
+    routes = file_python_routes(str(path))
+    assert ("non_export", 2) in routes, routes
+    proj.clausal("main", ":- use_module(@helper, [v/1]).\n",
+                 "t(X) :- v(X).\n")
+    msg = _refused(proj, "main")
+    assert REFUSAL.format(m=proj.n("helper")) in msg, msg
+
+
+def test_an_attribute_of_an_imported_export_is_a_route(proj):
+    path = proj.seam("helper", "-module(@helper, [v/1])\n"
+                               "-import_from(py.datetime, [days_between])\n"
+                               "v(X) <- (X is days_between.__class__)\n")
+    assert ("non_export", 3) in file_python_routes(str(path))
+
+
+def test_a_name_a_clausal_module_does_not_export_is_a_route(proj):
+    proj.seam("lib", "-module(@lib, [p/1])\np(1),\nq(2),\n")
+    path = proj.seam("user", "-module(@user, [v/1])\n"
+                             "-import_from(@lib, [q])\nv(X) <- (q(X))\n")
+    assert ("non_export", 2) in file_python_routes(str(path))
+    path = proj.seam("user", "-module(@user, [v/1])\n"
+                             "-import_from(@lib, [p])\nv(X) <- (p(X))\n")
+    assert file_python_routes(str(path)) == []
+
+
+def test_a_dotted_chain_must_name_an_export(proj):
+    proj.seam("lib", "-module(@lib, [p/1])\np(1),\nq(2),\n")
+    path = proj.seam("user", "-module(@user, [v/1])\n"
+                             "-import_module(@lib)\nv(X) <- (@lib.q(X))\n")
+    assert ("non_export", 3) in file_python_routes(str(path))
+    path = proj.seam("user", "-module(@user, [v/1])\n"
+                             "-import_module(@lib)\nv(X) <- (@lib.p(X))\n")
+    assert file_python_routes(str(path)) == []
+
+
+def _engine_adapter_modules():
+    """Every engine Python module a .seam can import: clausal/modules/*.py
+    and clausal/modules/py/*.py (the engine's own, by file)."""
+    import clausal.modules as mods
+    root = os.path.dirname(mods.__file__)
+    out = []
+    for sub, pkg in (("", "clausal.modules"), ("py", "clausal.modules.py")):
+        d = os.path.join(root, sub)
+        for f in sorted(os.listdir(d)):
+            if f.endswith(".py") and not f.startswith("_"):
+                out.append(f"{pkg}.{f[:-3]}")
+    return out
+
+
+def test_no_non_export_attribute_of_any_engine_adapter_is_reachable(
+        tmp_path):
+    """PROPERTY: for EVERY engine adapter module, every public module-level
+    attribute that is no declared export (not in module_signatures, and no
+    facade value) is a route when imported plain, imported aliased, or
+    reached by a dotted chain -- the whole class, not instances."""
+    import keyword
+    from clausal.python_bridges import _exports, _find
+    from clausal.templating.term_rewriting import _is_logic_var_name
+    covered = 0
+    for dotted in _engine_adapter_modules():
+        try:
+            mod = importlib.import_module(dotted)
+        except Exception:  # noqa: BLE001 -- an optional dependency
+            continue
+        exports = _exports(dotted, _find(dotted))
+        for name in sorted(vars(mod)):
+            if (name.startswith("_") or name in exports
+                    or keyword.iskeyword(name) or not name.isidentifier()
+                    or _is_logic_var_name(name)):
+                continue
+            covered += 1
+            f = tmp_path / "prop.seam"
+            for text, line in (
+                    (f"-import_from({dotted}, [{name}])\n", 2),
+                    (f"-import_from({dotted}, [alias({name}, zz)])\n", 2),
+                    (f"-import_module({dotted})\n"
+                     f"p(X) <- (X is {dotted}.{name})\n", 3),
+                    (f"-import_module({dotted})\n"
+                     f"p(X) <- ({dotted}.{name}(X))\n", 3)):
+                f.write_text("-module(prop, [p/1])\n" + text)
+                os.utime(f, ns=(1, covered * 10 + line))
+                routes = file_python_routes(str(f))
+                assert any(ln == line for _k, ln in routes), (
+                    dotted, name, text, routes)
+    print(f"covered {covered} non-export attributes")
+    assert covered > 100
