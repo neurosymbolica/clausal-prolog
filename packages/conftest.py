@@ -17,7 +17,9 @@ process-wide; keep it out of the engine's ``tests/`` run)::
 A package whose REQUIRED third-party dependency (``[project] dependencies``
 in its ``pyproject.toml``) is not importable here is SKIPPED, every test
 module of it, with the missing distribution named in the reason -- it is
-neither failed nor silently passed.  An optional dependency
+neither failed nor silently passed -- except a test module named
+``*_stubbed.py``, which stands in for the dependency itself and always
+runs.  An optional dependency
 (``optional-dependencies``) is the package's own tests' business; a test
 module whose import raises ``ModuleNotFoundError`` for one is skipped the
 same way.
@@ -152,12 +154,25 @@ class _OptionalDependencyModule(pytest.Module):
             raise
 
 
+#: A test module whose name ends in this suffix supplies its own stand-in
+#: for the package's third-party dependencies (a stub module in
+#: ``sys.modules``, a fake installed on the adapter), so it runs whether or
+#: not they are installed: the adapter-side code it pins is the package's
+#: own Python, which imports the dependency lazily.
+_STUBBED_SUFFIX = "_stubbed.py"
+
+
+def _runs_without_dependencies(path: pathlib.Path) -> bool:
+    return path.name.endswith(_STUBBED_SUFFIX)
+
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_pycollect_makemodule(module_path, parent):
     pkg = _package_of(pathlib.Path(module_path))
     if pkg is None:
         return None
-    if _missing_required(pkg):
+    if _missing_required(pkg) and not _runs_without_dependencies(
+            pathlib.Path(module_path)):
         return _MissingDependencyModule.from_parent(parent, path=module_path)
     return _OptionalDependencyModule.from_parent(parent, path=module_path)
 
@@ -169,7 +184,8 @@ def pytest_runtest_setup(item):
     required dependency is absent.  (A ``skip`` MARK would need a line
     number from the item's ``reportinfo``, which a ``.seam`` item lacks.)"""
     pkg = _package_of(pathlib.Path(str(item.path)))
-    if pkg is not None and _missing_required(pkg):
+    if (pkg is not None and _missing_required(pkg)
+            and not _runs_without_dependencies(pathlib.Path(str(item.path)))):
         pytest.skip(f"{pkg.name}: required dependency not installed in this "
                     f"interpreter: {', '.join(_missing_required(pkg))}")
 
@@ -223,6 +239,8 @@ def pytest_runtest_makereport(item, call):
     pkg = _package_of(pathlib.Path(str(item.path)))
     if pkg is None or not report.failed or call.excinfo is None:
         return report
+    if _runs_without_dependencies(pathlib.Path(str(item.path))):
+        return report     # its stub missed an import: that is a failure
     missing = _absent_declared(pkg, call.excinfo.value)
     if missing:
         report.outcome = "skipped"
