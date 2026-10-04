@@ -90,48 +90,8 @@ def _enumerate_3(iter_fn):
     return dispatch
 
 
-def _fact_table_2(get_facts):
-    """Nondeterministic fact table: enumerate (name, value) pairs.
-
-    Supports modes: (+name, -value), (-name, +value), (-name, -value), (+name, +value).
-    get_facts() is called lazily to build the list on first use.
-    """
-    cache = {}
-
-    def dispatch(this_generator, _proceed, _fail, _catcher, name_var, value_var, trail):
-        if not cache:
-            facts = get_facts()
-            cache["facts"] = facts
-            cache["by_name"] = {n: v for n, v in facts}
-            cache["by_value"] = {id(v): n for n, v in facts}
-        facts = cache["facts"]
-        n = deref(name_var)
-        v = deref(value_var)
-
-        if not is_var(n) and is_var(v):
-            # Lookup by name
-            cls = cache["by_name"].get(n)
-            if cls is not None and unify(value_var, cls, trail):
-                yield (_proceed, None)
-        elif is_var(n) and not is_var(v):
-            # Reverse lookup by value
-            key = cache["by_value"].get(id(v))
-            if key is not None and unify(name_var, key, trail):
-                yield (_proceed, None)
-        elif is_var(n) and is_var(v):
-            # Enumerate all
-            for name, value in facts:
-                mark = trail.mark()
-                if unify(name_var, name, trail) and unify(value_var, value, trail):
-                    yield (_proceed, None)
-                trail.undo(mark)
-        else:
-            # Both ground: check
-            cls = cache["by_name"].get(n)
-            if cls is not None and cls is v:
-                yield (_proceed, None)
-        yield (_fail, DONE)
-    return dispatch
+# ``_fact_table_2`` is the engine's (imported above); it reads a string
+# name as its text, so ``"Linear"`` and ``Linear`` both match.
 
 
 # ── Registry builders ────────────────────────────────────────────────────

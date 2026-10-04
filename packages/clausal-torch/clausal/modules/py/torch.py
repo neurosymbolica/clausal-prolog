@@ -219,9 +219,10 @@ import types as _types
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import symbol as _symbol
+from clausal.modules.py import require_text
 from clausal.modules.py._helpers import (
     _pred, _deep_deref, _pure, _property_2, _bidir_2, _bidir_3_mid,
-    _check_1, _check_2, _check_axis_1,
+    _check_1, _check_2, _check_axis_1, _text_arg,
 )
 
 
@@ -515,7 +516,7 @@ def _dtype_properties(dt):
 
 def _dtype_info_3(this_generator, _proceed, _fail, _catcher, dtype_var, key_var, value_var, trail):
     dt = deref(dtype_var)
-    k = deref(key_var)
+    k = _text_arg(key_var)        # an atom or a string key
     v = deref(value_var)
 
     if is_var(dt):
@@ -555,7 +556,7 @@ dtype_info = _pred("dtype_info",
 
 def _save_2(this_generator, _proceed, _fail, _catcher, obj_var, path_var, trail):
     obj = deref(obj_var)
-    path = str(deref(path_var))
+    path = require_text(path_var, "save/2", arg=2)
     try:
         _th().save(obj, path)
     except Exception:
@@ -566,7 +567,7 @@ def _save_2(this_generator, _proceed, _fail, _catcher, obj_var, path_var, trail)
 
 
 def _load_2(this_generator, _proceed, _fail, _catcher, path_var, result_var, trail):
-    path = str(deref(path_var))
+    path = require_text(path_var, "load/2", arg=1)
     try:
         obj = _th().load(path, weights_only=True)
     except Exception:

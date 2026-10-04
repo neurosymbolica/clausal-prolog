@@ -1272,6 +1272,18 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **clausal-torch: `save/2`, `load/2`, `dtype_info/3` and the `torch_nn`
+  name tables accept a string.** `save(T, "/tmp/t.pt")` under
+  `-double_quotes(chars)` wrote a file literally named
+  `('$chars', '/tmp/t.pt')`, and `load/2` read that name; both now take
+  the path an atom or a string denotes, and a path that is not text raises
+  `type_error(text, Culprit)` (`instantiation_error` when unbound) instead
+  of being written through `str()`. `dtype_info(float32, "bits", B)`
+  answered nothing (only the atom key matched); it now answers. The
+  `torch_nn` tables (`layer/2`, `activation/2`, `loss_fn/2`,
+  `optimizer_type/2`, `scheduler_type/2`) used a private copy of the
+  shared name table that read a string name as the tuple; they now use the
+  shared table, which accepts both.
 - **An adapter fact table accepts a string name.** The shared
   name/value table behind the adapters' name predicates (activation,
   initializer, optimizer, sampler, distribution and layer names in
