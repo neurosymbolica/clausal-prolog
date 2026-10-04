@@ -151,6 +151,7 @@ from typing import Callable
 import numpy as _np
 
 from clausal.logic.variables import deref, unify
+from clausal.modules.py._helpers import _text_arg
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate
 
@@ -227,7 +228,7 @@ def _pure(fn: Callable) -> Callable:
     def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
-        inputs = [deref(x) for x in args[:-2]]
+        inputs = [_text_arg(x) for x in args[:-2]]
         try:
             out = fn(*inputs)
         except Exception:
@@ -246,7 +247,7 @@ def _make(constructor: Callable) -> Callable:
     def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
-        inputs = [deref(x) for x in args[:-2]]
+        inputs = [_text_arg(x) for x in args[:-2]]
         try:
             obj = constructor(*inputs)
             handle = _alloc_handle(obj)
@@ -264,7 +265,7 @@ def _query(evaluator: Callable) -> Callable:
     def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
-        raw = [deref(x) for x in args[:-2]]
+        raw = [_text_arg(x) for x in args[:-2]]
         try:
             obj = _lookup_handle(raw[0])
             out = evaluator(obj, *raw[1:])
@@ -443,7 +444,8 @@ _ROTATION_CONSTRUCTORS = {
     "matrix": lambda data: _transform().Rotation.from_matrix(data),
     "rotvec": lambda data: _transform().Rotation.from_rotvec(data),
     "mrp":    lambda data: _transform().Rotation.from_mrp(data),
-    "euler":  lambda data: _transform().Rotation.from_euler(data[0], data[1]),
+    "euler":  lambda data: _transform().Rotation.from_euler(
+        _text_arg(data[0]), deref(data[1])),
 }
 
 def _make_rotation(method, data):
@@ -456,7 +458,7 @@ def _make_rotation(method, data):
 def _make_rotation_dispatch(this_generator, _proceed, _fail, _catcher, *args):
     trail = args[-1]
     result_var = args[-2]
-    method = deref(args[0])
+    method = _text_arg(args[0])
     data = deref(args[1])
     try:
         rot = _make_rotation(method, data)

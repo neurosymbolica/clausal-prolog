@@ -45,6 +45,7 @@ import threading as _threading
 from typing import Callable
 
 from clausal.logic.variables import deref, unify
+from clausal.modules.py._helpers import _text_arg
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate
 from clausal.terms import Quantity, UnitsMismatch
@@ -111,7 +112,7 @@ def _dispatch_fn(call: Callable, output_key: str) -> Callable:
     def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
-        inputs = [deref(x) for x in args[:-2]]
+        inputs = [_text_arg(x) for x in args[:-2]]
         try:
             raw = call(*inputs)
             out = _rich_result_to_dict(raw, output_key)
@@ -252,7 +253,7 @@ def _dispatch_fn_quantity(call: Callable, output_key: str) -> Callable:
     def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
-        inputs = [deref(x) for x in args[:-2]]
+        inputs = [_text_arg(x) for x in args[:-2]]
         try:
             out = call(*inputs)
             if type(out) is not dict:
@@ -298,7 +299,7 @@ hessian = _pred("hessian",
 
 def _result_get_dispatch(this_generator, _proceed, _fail, _catcher, result, field, value, trail):
     result = deref(result)
-    field = deref(field)
+    field = _text_arg(field)
     value_var = value
     try:
         out = result[field]

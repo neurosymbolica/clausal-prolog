@@ -135,6 +135,7 @@ import threading as _threading
 from typing import Callable
 
 from clausal.logic.variables import deref, unify
+from clausal.modules.py._helpers import _text_arg
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate
 
@@ -204,7 +205,7 @@ def _make(constructor: Callable) -> Callable:
     def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
-        inputs = [deref(x) for x in args[:-2]]
+        inputs = [_text_arg(x) for x in args[:-2]]
         try:
             obj = constructor(*inputs)
             handle = _alloc_handle(obj)
@@ -222,7 +223,7 @@ def _query(evaluator: Callable) -> Callable:
     def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
-        raw = [deref(x) for x in args[:-2]]
+        raw = [_text_arg(x) for x in args[:-2]]
         try:
             obj = _lookup_handle(raw[0])
             out = evaluator(obj, *raw[1:])
@@ -240,7 +241,7 @@ def _linalg_op(evaluator: Callable) -> Callable:
     def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
-        raw = [deref(x) for x in args[:-2]]
+        raw = [_text_arg(x) for x in args[:-2]]
         try:
             sparse_mat = _lookup_handle(raw[0])
             out = evaluator(sparse_mat, *raw[1:])
@@ -258,7 +259,7 @@ def _pure(fn: Callable) -> Callable:
     def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
-        inputs = [deref(x) for x in args[:-2]]
+        inputs = [_text_arg(x) for x in args[:-2]]
         try:
             out = fn(*inputs)
         except Exception:

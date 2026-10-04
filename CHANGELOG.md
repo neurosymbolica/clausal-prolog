@@ -1272,6 +1272,18 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **clausal-scipy: a name argument may be a string.** The scipy adapters
+  dereferenced their arguments one level and passed them on, so a string
+  -- the chars carrier `('$chars', s)` -- reached scipy as a tuple or as
+  its repr: `make_rotation("euler", ["z", A], R)`, `rotation_as(R,
+  "quat", Q)`, `from_dense(D, "csc", H)`, `to_dense(H, "C", A)`,
+  `lookup("speed of light in vacuum", V, U, E)`, `find("Planck", Ns)`,
+  `result_get(R, "statistic", S)` (and the other modules' `*_get`
+  accessors), `stats_freeze_dist("norm", P, H)`, `make_linear1d/4` kind,
+  and every other scipy argument that takes a name or method. Each failed
+  or answered nothing; the atom spelling worked. Every argument a scipy
+  dispatcher reads now passes a string on as its `str`; atoms and
+  non-text values are unchanged.
 - **clausal-torch: `save/2`, `load/2`, `dtype_info/3` and the `torch_nn`
   name tables accept a string.** `save(T, "/tmp/t.pt")` under
   `-double_quotes(chars)` wrote a file literally named

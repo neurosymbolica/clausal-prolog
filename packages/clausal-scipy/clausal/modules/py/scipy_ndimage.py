@@ -51,6 +51,7 @@ import threading as _threading
 from typing import Callable
 
 from clausal.logic.variables import deref, unify
+from clausal.modules.py._helpers import _text_arg
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate
 
@@ -85,7 +86,7 @@ def _dispatch_fn(call: Callable) -> Callable:
         # args: (input_0, ..., input_{n-1}, result, trail)
         trail = args[-1]
         result_var = args[-2]
-        inputs = [deref(x) for x in args[:-2]]
+        inputs = [_text_arg(x) for x in args[:-2]]
         try:
             out = call(*inputs)
         except Exception:

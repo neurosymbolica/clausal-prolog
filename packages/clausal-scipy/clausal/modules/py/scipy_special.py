@@ -77,6 +77,7 @@ import threading as _threading
 from typing import Any, Callable
 
 from clausal.logic.variables import deref, is_var, unify
+from clausal.modules.py._helpers import _text_arg
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate
 from clausal.modules.py._scipy_relations import _bidir_dispatch
@@ -117,7 +118,7 @@ def _dispatch_fn(call: Callable) -> Callable:
         # args layout: (input_0, ..., input_{n-1}, result_var, trail)
         trail = args[-1]
         result_var = args[-2]
-        inputs = [deref(x) for x in args[:-2]]
+        inputs = [_text_arg(x) for x in args[:-2]]
         out = call(*inputs)
         if unify(result_var, out, trail):
             yield (_proceed, None)

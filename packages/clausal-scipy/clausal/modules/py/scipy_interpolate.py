@@ -93,6 +93,7 @@ import threading as _threading
 from typing import Callable
 
 from clausal.logic.variables import deref, is_var, unify
+from clausal.modules.py._helpers import _text_arg
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate
 from clausal.terms import Quantity, UnitsMismatch
@@ -154,7 +155,7 @@ def _make_dispatch(constructor: Callable) -> Callable:
     def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
-        inputs = [deref(x) for x in args[:-2]]
+        inputs = [_text_arg(x) for x in args[:-2]]
         try:
             obj = constructor(*inputs)
             handle = _alloc_handle(obj)
@@ -178,7 +179,7 @@ def _make_dispatch_units(constructor: Callable) -> Callable:
     def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
-        inputs = [deref(x) for x in args[:-2]]
+        inputs = [_text_arg(x) for x in args[:-2]]
         x_dims = quantity_dims(inputs[0]) if len(inputs) > 0 else None
         y_dims = quantity_dims(inputs[1]) if len(inputs) > 1 else None
         stripped = [strip_quantity(v) for v in inputs]
@@ -208,7 +209,7 @@ def _eval_dispatch(evaluator: Callable) -> Callable:
     def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
-        raw_inputs = [deref(x) for x in args[:-2]]
+        raw_inputs = [_text_arg(x) for x in args[:-2]]
         handle_val = raw_inputs[0]
         try:
             obj, x_dims, y_dims = _lookup_handle(int(handle_val))
@@ -315,7 +316,7 @@ def _make_linear1d_arity3(this_generator, _proceed, _fail, _catcher, *args):
 def _make_linear1d_arity4(this_generator, _proceed, _fail, _catcher, *args):
     trail = args[-1]
     result_var = args[-2]
-    x, y, kind = deref(args[0]), deref(args[1]), deref(args[2])
+    x, y, kind = deref(args[0]), deref(args[1]), _text_arg(args[2])
     x_dims = quantity_dims(x)
     y_dims = quantity_dims(y)
     try:

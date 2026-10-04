@@ -32,6 +32,7 @@ import threading as _threading
 from typing import Callable
 
 from clausal.logic.variables import deref, unify
+from clausal.modules.py._helpers import _text_arg
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate
 
@@ -62,7 +63,7 @@ def _lookup_fn(call: Callable) -> Callable:
     def dispatch(this_generator, _proceed, _fail, _catcher, *args):
         trail = args[-1]
         result_var = args[-2]
-        inputs = [deref(x) for x in args[:-2]]
+        inputs = [_text_arg(x) for x in args[:-2]]
         try:
             out = call(*inputs)
         except Exception:
@@ -97,7 +98,7 @@ precision = _pred("precision",
 
 
 def _lookup_dispatch(this_generator, _proceed, _fail, _catcher, name, value_var, unit_var, uncertainty_var, trail):
-    name = deref(name)
+    name = _text_arg(name)
     try:
         val, unit_str, uncertainty = _sc().physical_constants[name]
     except KeyError:
@@ -119,7 +120,7 @@ lookup = _LookupPredicate()
 
 def _find_dispatch(this_generator, _proceed, _fail, _catcher, substring, names_var, trail):
     try:
-        names = _sc().find(deref(substring), disp=False)
+        names = _sc().find(_text_arg(substring), disp=False)
     except Exception:
         yield (_fail, DONE)
         return

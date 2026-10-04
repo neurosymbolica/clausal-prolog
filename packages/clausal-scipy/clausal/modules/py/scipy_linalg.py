@@ -72,6 +72,7 @@ from typing import Callable
 import numpy as _np
 
 from clausal.logic.variables import deref, is_var, unify
+from clausal.modules.py._helpers import _text_arg
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate
 from clausal.modules.py._scipy_relations import _bidir_dispatch
@@ -112,7 +113,7 @@ def _dispatch_fn(call: Callable) -> Callable:
         # args: (input_0, ..., input_{n-1}, result, trail)
         trail = args[-1]
         result_var = args[-2]
-        inputs = [deref(x) for x in args[:-2]]
+        inputs = [_text_arg(x) for x in args[:-2]]
         out = call(*inputs)
         try:
             ok = bool(unify(result_var, out, trail))
@@ -444,7 +445,7 @@ class _ResultGetPredicate:
 
     def _dispatch(self, this_generator, _proceed, _fail, _catcher, result, field, value, trail):
         result = deref(result)
-        field = deref(field)
+        field = _text_arg(field)
         if not isinstance(result, dict) or not isinstance(field, str):
             yield (_fail, DONE)
             return
