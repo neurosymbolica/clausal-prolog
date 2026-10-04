@@ -1005,3 +1005,65 @@ def test_the_compiler_record_and_the_scanner_agree_on_every_fixture():
                              sorted(norm(record) - static)[:3]))
     assert compared > 100
     assert not diverged, diverged
+
+
+
+# ── every thunk is in the record (job 338) ──────────────────────────────────
+
+
+@pytest.mark.parametrize("body", [
+    "v(X) <- (X is (exec(\"open('{marker}', 'w')\"))(metre))\n",
+    "v(X) <- (X is [exec(\"open('{marker}', 'w')\")](metre))\n",
+    "v(X) <- (X is (len([1]) + 1)(metre))\n",
+])
+def test_unit_sugar_over_python_is_a_route(proj, tmp_path, body):
+    """job 338: ``<expr>(Unit)`` lowers *expr* as raw Python inside a
+    thunk.  Every thunk the lowering builds is in the compiler's record, so
+    a magnitude that calls anything is a ``python_thunk`` route."""
+    marker = tmp_path / "pwned"
+    path = proj.seam("helper", "-module(@helper, [v/1])\n"
+                               "-import_from(units, [metre])\n"
+                               + body.format(marker=marker))
+    from clausal.python_bridges import compiler_record
+    assert ("python", "python_thunk", 3) in compiler_record(str(path))
+    assert ("python_thunk", 3) in file_python_routes(str(path))
+    proj.clausal("main", ":- use_module(@helper, [v/1]).\n",
+                 "t(X) :- v(X).\n")
+    assert REFUSAL.format(m=proj.n("helper")) in _refused(proj, "main")
+    assert not marker.exists()
+
+
+def test_inert_unit_sugar_stays_python_free(proj):
+    path = proj.seam("clean", "-module(@clean, [v/1])\n"
+                              "-import_from(units, [metre, second])\n"
+                              "v(X) <- (X is 5(metre))\n"
+                              "v(X) <- (X is (2 + 3)(metre / second ** 2))\n"
+                              "v(X) <- (has_units(X, metre / second))\n")
+    assert file_python_routes(str(path)) == []
+
+
+@pytest.mark.parametrize("text", [
+    "v(X) <- (has_units(X, Undefined.__class__.__init__ * metre))\n",
+    "-constant_number_units(c, 5, Undefined.__class__.__init__.__globals__)\n"
+    "v(c),\n",
+    "v(X) <- (X is 5(Undefined.__class__))\n",
+])
+def test_an_underscore_led_unit_expression_is_refused(proj, text):
+    path = proj.seam("helper", "-module(@helper, [v/1])\n"
+                               "-import_from(units, [metre])\n" + text)
+    routes = file_python_routes(str(path))
+    assert routes, routes
+    proj.clausal("main", ":- use_module(@helper, [v/1]).\n",
+                 "t(X) :- v(X).\n")
+    assert REFUSAL.format(m=proj.n("helper")) in _refused(proj, "main")
+
+
+def test_constant_number_units_goal_is_python_free(proj):
+    """The engine's own thunk (the owner's module read) is no route."""
+    proj.seam("lib", "-module(@lib, [fee])\n"
+                     "-constant_number_units(fee, 5, euro)\n")
+    path = proj.seam("user", "-module(@user, [v/1])\n"
+                             "-import_from(@lib, [fee])\n"
+                             "v(N) <- (constant_number_units(fee, N, _))\n")
+    from clausal.python_bridges import compiler_record
+    assert not any(r[0] == "python" for r in compiler_record(str(path)))

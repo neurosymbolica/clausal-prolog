@@ -1744,9 +1744,12 @@ def _is_unit_expr(node) -> bool:
     ``metre**2``, ``metre/second``, ``kilogram*metre/second**2``.
     """
     if isinstance(node, Name):
-        return True
+        return not node.id.startswith("_")
     if isinstance(node, Attribute):
-        return _is_unit_expr(node.value)
+        # A unit is a name in a module (``currency.euro``), never a Python
+        # object's own attribute (``x.__class__``): lowered as raw Python,
+        # an underscore-led part would walk into arbitrary objects.
+        return not node.attr.startswith("_") and _is_unit_expr(node.value)
     if isinstance(node, Constant) and isinstance(node.value, (int, float)):
         return True
     if isinstance(node, UnaryOp) and isinstance(node.op, USub):
@@ -2162,7 +2165,67 @@ def _warn_cons_bar_head(pos_args, kw_args, node, source_lines) -> None:
     )
 
 
-def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyThunk"):
+_INERT_BINOPS = (Add, Sub, Mult, Div, FloorDiv, Mod, Pow)
+
+
+def _inert_python(node) -> bool:
+    """True when the raw Python *node* only READS: constants, names,
+    qualified names with no underscore-led part, arithmetic, containers,
+    and calls of the engine's own ``$`` helpers over such.  Anything else
+    (a call of any other callable, a subscript, a comprehension ...) runs
+    Python."""
+    if isinstance(node, (Constant, Name)):
+        return True
+    if isinstance(node, Attribute):
+        return (not node.attr.startswith("_")
+                and isinstance(node.value, (Name, Attribute))
+                and _inert_python(node.value))
+    if isinstance(node, BinOp):
+        return (isinstance(node.op, _INERT_BINOPS)
+                and _inert_python(node.left) and _inert_python(node.right))
+    if isinstance(node, UnaryOp):
+        return (isinstance(node.op, (USub, UAdd))
+                and _inert_python(node.operand))
+    if isinstance(node, (List, Tuple, Set)):
+        return all(_inert_python(e) for e in node.elts)
+    if isinstance(node, Dict):
+        return all(k is not None and _inert_python(k) for k in node.keys) \
+            and all(_inert_python(v) for v in node.values)
+    if isinstance(node, Call):
+        return (isinstance(node.func, Name) and node.func.id.startswith("$")
+                and all(_inert_python(a) for a in node.args)
+                and all(_inert_python(k.value) for k in node.keywords))
+    return False
+
+
+def _record_python_body(transformer, expression, line) -> None:
+    """Record raw Python the lowering embeds (a thunk body, a unit
+    expression): every qualified chain it reads, as the qualified-name
+    record does, and a ``python_thunk`` route unless it is inert
+    (:func:`_inert_python`)."""
+    if _EXTERNAL_REFS.get() is None:
+        return
+    remap = getattr(transformer, "_import_remap", {}) or {}
+    inner: set = set()
+    for sub in walk(expression):
+        if not isinstance(sub, Attribute) or id(sub) in inner:
+            continue
+        parts = []
+        node = sub
+        while isinstance(node, Attribute):
+            parts.append(node.attr)
+            if node is not sub:
+                inner.add(id(node))
+            node = node.value
+        if isinstance(node, Name) and not node.id.startswith("$"):
+            _record_external("attr", node.id, remap.get(node.id),
+                             tuple(reversed(parts)), line)
+    if not _inert_python(expression):
+        _record_external("python", "python_thunk", line)
+
+
+def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyThunk",
+                        *, engine_generated=False):
     """Build a ``PyThunk(lambda V1, ...: expr, [V1_var, ...])`` AST node.
 
     Shared by ``visit_JoinedStr`` (f-strings) and ``visit_UnaryOp`` (``++()``).
@@ -2178,6 +2241,12 @@ def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyT
     # NameError when the clause runs, not as a load-time SyntaxError.  That
     # is the cost of spelling a constant like an atom, and it is the same
     # deal every other name in a ``++`` escape already had.
+    # The record (``_EXTERNAL_REFS``): EVERY thunk lands in it, whatever
+    # lowering built it.  An f-string decides its own (``visit_JoinedStr``:
+    # a bare-name slot only interpolates).
+    if thunk_cls != "FStringThunk" and not engine_generated:
+        _record_python_body(transformer, expression,
+                            getattr(node, "lineno", 0))
     # An f-string / ``++()`` use is an occurrence for the singleton lint —
     # these names never pass through visit_Name, so bump the counter here.
     # Exact multiplicity within one thunk body is not needed; one bump per
@@ -2827,7 +2896,11 @@ class TermTransformer(NodeTransformer):
             # module expression fails as `__import__/2 is not in scope as a
             # term class`. The failure is the symptom; the level confusion is
             # the reason. Build at the level you are at.
-            module_term = _build_py_thunk_ast(transformer, call, mod_expr, [])
+            # Engine-generated (the owner's module read): not the author's
+            # Python, so not recorded as a route; the owner's -import_from
+            # is.
+            module_term = _build_py_thunk_ast(transformer, call, mod_expr, [],
+                                              engine_generated=True)
             if named:
                 # The SPELLING, as a Python string, not the name re-visited.
                 # In the importing module the imported name resolves to the
@@ -9998,6 +10071,8 @@ class EmbedTransformer(NodeTransformer):
                     f"{spelling}: `{unparse(unit_node)}` is not a unit "
                     f"expression — a unit is a name, or names combined with "
                     f"`*`, `/` and `**`: {example}")
+            _record_python_body(transformer, unit_node,
+                                getattr(expr_stmt, "lineno", 0))
             gated = unit_node
             if currency:
                 gated = replace(
