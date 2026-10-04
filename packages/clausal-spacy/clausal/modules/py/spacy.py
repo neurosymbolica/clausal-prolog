@@ -26,8 +26,8 @@ token's ``head_text``, a chunk's ``root_text`` / ``root_head_text``, a
 sentence -- is free-form, so it comes back as a STRING ``('$chars', s)``.
 Linguistic labels are names and stay ATOMS: ``lemma``, ``pos``, ``tag``,
 ``dep``, an entity ``label``, a chunk ``root_dep``, a model alias.  The
-dict keys (``text``, ``lemma``, ...) are atoms.  ``shape`` (``Xxxxx``) is
-unchanged, an atom, pending a ruling.
+dict keys (``text``, ``lemma``, ...) are atoms.  A token's ``shape``
+(``Xxxxx``, ``X.X.``) is a label too, an ATOM (ruled 2026-10-04).
 """
 
 from __future__ import annotations

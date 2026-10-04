@@ -228,7 +228,7 @@ Surface form of the syntactic head token, a string.
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:shape_sig"
 ```
 
-Orthographic shape, an atom: `'Xxxxx'` for `"Apple"`, `dd` for `"42"`, etc.
+Orthographic shape, an atom -- a label, like `pos/2` (ruled 2026-10-04): `'Xxxxx'` for `"Apple"`, `'X.X.'` for `"U.K."`, `dd` for `"42"`, etc. Check it against an atom: `shape(TOK, 'Xxxxx')`; the string `"Xxxxx"` does not match.
 
 ### `is_alpha/1`
 

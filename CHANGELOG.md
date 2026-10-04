@@ -41,8 +41,9 @@ since 0.4.0 finish three moves:
   entity dict (`entity/2,3`, `entity_list/2`), the `text`, `root_text` and
   `root_head_text` of a noun-chunk dict (`noun_chunk/2`), `sentence/2` and
   `sentence_list/2`. Unchanged: `lemma/2`, `pos/2`, `tag/2`, `dep/2`,
-  `shape/2`, an entity `label`, a chunk `root_dep` and model aliases are
-  atoms; dict keys are atoms. Migration: compare text with a string
+  `shape/2` (`'Xxxxx'`, `'X.X.'`; ruled an atom the same day), an entity
+  `label`, a chunk `root_dep` and model aliases are atoms; dict keys are
+  atoms. Migration: compare text with a string
   (`token_text(TOK, "Apple")`) and labels with atoms (`pos(TOK, 'PROPN')`).
 
 - **clausal-opencv: `haar_cascade_path/2` answers the PATH as a STRING**

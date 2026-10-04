@@ -5,8 +5,8 @@ token ``text`` and ``head_text``, entity and chunk ``text``, a chunk's
 ``root_text`` / ``root_head_text``, ``token_text/2``, ``head/2``,
 ``sentence/2`` and ``sentence_list/2`` are free-form text, the string
 ``('$chars', s)``.  ``lemma`` (ruled an atom), ``pos``, ``tag``, ``dep``,
-an entity ``label`` and a chunk ``root_dep`` stay atoms (plain ``str``);
-``shape`` is unchanged.
+an entity ``label``, a chunk ``root_dep`` and a token's ``shape`` (ruled
+an atom the same day) stay atoms (plain ``str``).
 
 Runs WITHOUT spaCy (``*_stubbed.py``, see packages/conftest.py): a fake
 ``spacy`` module (``_get_spacy``) whose ``load`` returns a pipeline that
@@ -210,3 +210,16 @@ def check_module(fake_spacy, tmp_path):
 def test_check_mode_takes_the_string_not_the_atom(check_module):
     assert any(True for _ in call("check_string", module=check_module))
     assert not any(True for _ in call("check_atom", module=check_module))
+
+
+# ── shape is an ATOM (ruled 2026-10-04) ──────────────────────────────────────
+
+@pytest.mark.parametrize("i, want", [(0, "Xxxxx"), (5, "X.X."), (9, "d")])
+def test_shape_is_an_atom(doc, i, want):
+    tok = pyspacy._token_to_dict(doc[i])
+    assert type(tok["shape"]) is str and tok["shape"] == want
+    got = _simple(pyspacy._shape_2, tok)
+    assert type(got) is str and not is_chars(got) and got == want
+    # check mode: the atom holds, the string of the same spelling does not
+    assert len(list(pyspacy._shape_2(tok, want, Trail(), None))) == 1
+    assert list(pyspacy._shape_2(tok, chars(want), Trail(), None)) == []
