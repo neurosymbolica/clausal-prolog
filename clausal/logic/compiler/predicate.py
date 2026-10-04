@@ -67,6 +67,26 @@ CLAUSE_BUILTINS: dict = {
 }
 
 
+def _engine_only_import(name, globals=None, locals=None, fromlist=(),
+                        level=0):
+    """``__import__`` for compiled clause code: the engine's C helpers
+    (``_list_unify``, ...) import their Python twins through the CALLING
+    frame's builtins, so clause code needs an ``__import__`` -- but only an
+    absolute import of an engine module (or of a module already loaded,
+    which runs no new code), never anything else."""
+    import sys as _sys  # noqa: PLC0415
+    if level == 0 and (name == "clausal" or name.startswith("clausal.")
+                       or name in _sys.modules):
+        # An engine module, or one already loaded (a C helper's lazy import
+        # of a stdlib module it uses): no new code runs.
+        return __import__(name, None, None, fromlist, 0)
+    raise ImportError(f"compiled clause code may import only engine "
+                      f"modules, not {name!r}")
+
+
+CLAUSE_BUILTINS["__import__"] = _engine_only_import
+
+
 # Runtime helpers referenced by base_globals of compiled predicates.
 # They live in clausal.logic.runtime; see clausal/logic/compiler/README.md
 # §7 (runtime/compile-time boundary).  Importing them here binds them as

@@ -1461,9 +1461,17 @@ def test_clause_code_runs_on_the_engine_builtins_only(proj):
     mod = proj.load("clean")
     fn = vars(mod)["$module"].db.get_dispatch("p", 1)
     assert fn.__globals__["__builtins__"] is CLAUSE_BUILTINS
-    for name in ("open", "eval", "exec", "getattr", "__import__",
+    for name in ("open", "eval", "exec", "getattr",
                  "globals", "compile", "setattr", "vars", "type"):
         assert name not in CLAUSE_BUILTINS, name
+    # The engine's C helpers import their Python twins through the calling
+    # frame's builtins: only an engine module.
+    imp = CLAUSE_BUILTINS["__import__"]
+    assert imp("clausal.logic.runtime.list_unify").__name__ == "clausal"
+    with pytest.raises(ImportError):
+        imp("pb_surely_not_loaded_module")
+    with pytest.raises(ImportError):
+        imp("list_unify", None, None, (), 1)
     code = compile("open('/etc/hostname')", "<t>", "eval")
     with pytest.raises(NameError):
         eval(code, dict(fn.__globals__))
