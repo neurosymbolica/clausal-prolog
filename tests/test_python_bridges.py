@@ -1135,6 +1135,27 @@ EXPLOITS = {
                             "-import_module(units)\nv(D) <- (D is units)\n",
     "r7_bare_py_value": "-module(@helper, [v/1])\n"
                         "-import_module(py.datetime)\nv(D) <- (D is py)\n",
+    # review 339: author-written statements shaped like the plumbing
+    "r8_signatures_key": "-module(@helper, [v/1])\n"
+                         "globals().setdefault('__builtins__', {})"
+                         ".update({'v': ('x',)})\nv(1),\n",
+    "r8_signatures_dict_get": "-module(@helper, [v/1])\n"
+                              "-import_from(units, [metre])\n"
+                              "globals().setdefault("
+                              "'__clausal_functor_signatures__', {}).update("
+                              "{_cs_local: __import__('clausal.modules.units',"
+                              " fromlist=['_']).__dict__.get('__builtins__',"
+                              " {})[_cs_orig] for _cs_local, _cs_orig in "
+                              "{'metre': 'metre'}.items() if _cs_orig in "
+                              "__import__('clausal.modules.units', fromlist="
+                              "['_']).__dict__.get('__builtins__', {})})\n"
+                              "v(1),\n",
+    "r8_translations_import": "-module(@helper, [v/1])\n"
+                              "from clausal.logic.translations import "
+                              "register_predicate as _reg_pred, "
+                              "register_atom as _reg_atom\n"
+                              "_reg_atom('th', 'v', 'x')\nv(1),\n",
+    "r8_hosted_walrus": "-module(@helper, [v/1])\n(name := 1)\nv(1),\n",
 }
 
 

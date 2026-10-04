@@ -125,13 +125,16 @@ def audit_source(source: str, filename: str, check_module=None):
     """:func:`audit_tree` of the generated tree for *source*; a source that
     does not compile is ``[("uncompilable", 0)]``."""
     import warnings  # noqa: PLC0415
+    from clausal.import_hook import transform_seam_source  # noqa: PLC0415
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            tree = generated_tree(source, filename)
+            tree, transformer = transform_seam_source(source, filename)
     except Exception:  # noqa: BLE001 -- does not compile: fail closed
         return [("uncompilable", 0)], []
-    return audit_tree(tree, check_module)
+    translations = any(type(i).__name__ == "TranslationsDirective"
+                       for i in getattr(transformer, "_module_items", ()))
+    return audit_tree(tree, check_module, translations=translations)
 
 
 # ── plumbing shapes (the compiler's own builders, canonicalised) ───────────
@@ -158,8 +161,8 @@ def _shape(node) -> str:
         def generic_visit(self, n):
             if isinstance(n, ast.expr) and _is_const_tree(n):
                 return ast.Constant(value="<C>")
-            if isinstance(n, (ast.ImportFrom, ast.Import)):
-                return ast.Pass()
+            if isinstance(n, ast.ImportFrom):
+                return ast.ImportFrom(module="<M>", names=[], level=n.level)
             return super().generic_visit(n)
 
     return ast.dump(_Canon().visit(copy.deepcopy(node)),
@@ -177,6 +180,8 @@ def _plumbing_shapes() -> dict:
     from clausal.templating import term_rewriting as tr  # noqa: PLC0415
     anchor = ast.parse("x").body[0]
     imp = ast.parse("from m import a").body[0]
+    # _shape erases an ImportFrom's module and names, never its kind: only
+    # the import guard's one ImportFrom position takes one.
     shapes = {
         _shape(tr._wrap_import_for_pl_data(imp, "m", {"a": "a"}, ["a"],
                                            anchor)): "import_guard",
@@ -233,7 +238,8 @@ class _Audit:
         self.engine = _engine_names()
         self.callees = _allowed_callees()
         self.reserved = _runtime_bare_names()
-        self.imported_modules: set = set()
+        self.imported_modules: dict = {}    # guarded import -> names
+        self.translations = False           # set by the caller
         self.check_module = check_module
         self.own: set = set()           # names this module binds
         self.imported: dict = {}        # local -> "module.orig"
@@ -268,9 +274,9 @@ class _Audit:
             self.expr(node.value, frozenset())
         elif isinstance(node, ast.Pass):
             pass
-        elif isinstance(node, ast.ImportFrom) and _is_translations_import(
-                node):
-            self.translations = True
+        elif (isinstance(node, ast.ImportFrom)
+              and _is_translations_import(node) and self.translations):
+            pass    # the -translations directive's own import
         elif isinstance(node, ast.ImportFrom):
             self.import_from(node)
         elif isinstance(node, ast.Import):
@@ -292,43 +298,59 @@ class _Audit:
             self.route("python_statement", node)
 
     def plumbing(self, node) -> bool:
+        """A compiler plumbing statement: its SHAPE picks the builder, and
+        the statement must then be EXACTLY what that builder emits for the
+        constants it carries (rebuilt and compared), those constants
+        checked against this file's own imports and declarations."""
         kind = _plumbing_shapes().get(_shape(node))
         if kind is None:
             return False
-        if kind == "import_guard":
-            imp = node.body[0]
-            self.import_from(imp)
-            self.imported_modules.add(imp.module)
-            names = {a.asname or a.name: a.name for a in imp.names}
-            # The guard binds the data names OF THIS import, nothing else.
-            for sub in ast.walk(node):
-                if isinstance(sub, ast.Dict) and _is_const_tree(sub):
-                    if ast.literal_eval(sub) != names:
-                        self.route("python_statement", node)
-            for c in _import_constants(node):
-                if c not in _PLUMBING_MODULES[kind]:
-                    self.route("python_module", node)
-            # bind_data_names / record_bound_data_names name the module the
-            # guarded import imports: it must be that one.
-            for sub in ast.walk(node):
-                if (isinstance(sub, ast.Call)
-                        and isinstance(sub.func, ast.Attribute)
-                        and len(sub.args) > 1
-                        and isinstance(sub.args[1], ast.Constant)
-                        and sub.args[1].value != imp.module):
-                    self.route("python_module", node)
-        elif kind == "import_signatures":
-            for c in _import_constants(node):
-                if c not in self.imported_modules:
-                    # it copies the registry of a module this file imports
-                    self.route("python_module", node)
-                else:
-                    self.check_module("module", c, None, node)
-        else:
-            allowed = _PLUMBING_MODULES[kind]
-            for c in _import_constants(node):
-                if c not in allowed:
-                    self.route("python_module", node)
+        from clausal.templating import term_rewriting as tr  # noqa: PLC0415
+        anchor = node
+        try:
+            if kind == "import_guard":
+                imp = node.body[0]
+                if not isinstance(imp, ast.ImportFrom) or imp.level:
+                    raise ValueError
+                call = node.handlers[0].body[0].test.operand
+                pairs = ast.literal_eval(call.args[2])
+                eligible = ast.literal_eval(call.args[3])
+                names = {a.asname or a.name: a.name for a in imp.names}
+                if pairs != names or not set(eligible) <= set(names):
+                    raise ValueError
+                expected = tr._wrap_import_for_pl_data(
+                    imp, imp.module, pairs, list(eligible), anchor)
+                self.import_from(imp)
+                self.imported_modules.setdefault(imp.module, set()).update(
+                    a.name for a in imp.names)
+            elif kind == "import_signatures":
+                gen = node.value.args[0].generators[0]
+                pairs = ast.literal_eval(gen.iter.func.value)
+                module = _import_constants(node)[0]
+                imported = self.imported_modules.get(module)
+                if imported is None or not set(pairs.values()) <= imported:
+                    raise ValueError
+                expected = tr._make_import_signatures_update_ast(
+                    module, list(pairs.items()), anchor)
+            elif kind == "import_arities":
+                selected = ast.literal_eval(node.value.args[1])
+                if not set(selected) <= self.own:
+                    raise ValueError
+                expected = tr._make_import_arities_record_ast(
+                    {k: (None if v is None else set(v))
+                     for k, v in selected.items()}, anchor)
+            else:   # functor_signatures
+                entries = ast.literal_eval(node.value.args[0])
+                if not all(isinstance(k, str) and k.isidentifier()
+                           and not k.startswith("_") for k in entries):
+                    raise ValueError
+                expected = tr._make_functor_signatures_update_ast(
+                    list(entries.items()), anchor)
+        except Exception:  # noqa: BLE001 -- not the builder's own output
+            self.route("python_statement", node)
+            return True
+        if (expected is None or ast.dump(expected) != ast.dump(node)):
+            self.route("python_statement", node)
         return True
 
     # -- expressions ----------------------------------------------------
@@ -347,7 +369,13 @@ class _Audit:
                 self.route("python_name", node)
             return
         if isinstance(node, ast.NamedExpr):
-            if node.target.id in self.reserved:
+            # The lowering's only walrus binds a fresh logic variable.
+            if (node.target.id in self.reserved
+                    or not (isinstance(node.value, ast.Call)
+                            and isinstance(node.value.func, ast.Name)
+                            and node.value.func.id == "$Var"
+                            and not node.value.args
+                            and not node.value.keywords)):
                 self.route("python_statement", node)
             self.own.add(node.target.id)
             self.expr(node.value, scope)
@@ -527,13 +555,17 @@ class _Audit:
         return True
 
 
-def audit_tree(tree: ast.Module, check_module) -> "tuple[list, list]":
+def audit_tree(tree: ast.Module, check_module, *,
+               translations: bool = False) -> "tuple[list, list]":
     """``(routes, [])`` of the generated module *tree*: every node that is
     not on the allow-list is a route.  *check_module(kind, a, b, node)*
     answers the module questions (``"module"``: may module *a* be imported;
     ``"name"``: is *b* an export of *a*; ``"chain"``: is the dotted *a*
     exactly ``module.export``), adding its own routes; it returns a bool."""
     audit = _Audit(check_module)
+    # Only a module whose lowering recorded a -translations directive may
+    # carry the translations import and calls.
+    audit.translations = translations
     # Pass 1: what the module binds (so a reference before its binding --
     # a predicate used above its clauses -- is still its own).
     for sub in ast.walk(tree):
@@ -541,7 +573,10 @@ def audit_tree(tree: ast.Module, check_module) -> "tuple[list, list]":
                 and sub.func.id == "$declare_head" and sub.args
                 and isinstance(sub.args[0], ast.Constant)):
             audit.own.add(sub.args[0].value)
-        elif isinstance(sub, ast.NamedExpr):
+        elif (isinstance(sub, ast.NamedExpr)
+              and isinstance(sub.value, ast.Call)
+              and isinstance(sub.value.func, ast.Name)
+              and sub.value.func.id == "$Var"):
             audit.own.add(sub.target.id)
         elif isinstance(sub, ast.Assign):
             for t in sub.targets:
