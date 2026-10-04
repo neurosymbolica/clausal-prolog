@@ -38,6 +38,7 @@ as diagnostics; they can only ADD routes.  This audit is what ALLOWS.
 from __future__ import annotations
 
 import ast
+import collections
 
 __all__ = ["audit_tree", "audit_source", "generated_tree"]
 
@@ -106,6 +107,36 @@ def _allowed_callees() -> frozenset:
     return frozenset(out)
 
 
+_ENGINE_MEANING: "frozenset | None" = None
+
+
+def _engine_meaning_names() -> frozenset:
+    """Names the engine itself gives a meaning, from its own tables: the
+    registered builtin predicates and goal classes, the special forms and
+    zero-arity control constructs, the arithmetic evaluables, and the ISO
+    error formals."""
+    global _ENGINE_MEANING
+    if _ENGINE_MEANING is None:
+        from clausal.logic.builtins import _BUILTIN_CLASSES  # noqa: PLC0415
+        from clausal.logic.builtins._registry import _BUILTINS  # noqa: PLC0415
+        from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
+            SPECIAL_FORMS, _ZERO_ARITY_CONTROL)
+        from clausal.templating.term_rewriting import (  # noqa: PLC0415
+            _ERROR_FORMAL_DESCRIPTORS)
+        from clausal.tools.iso_l3_directives import (  # noqa: PLC0415
+            _evaluable_names)
+        _ENGINE_MEANING = (
+            frozenset(_BUILTIN_CLASSES)
+            | frozenset(n for n, _a in _BUILTINS)
+            | frozenset(n for n, _a in SPECIAL_FORMS)
+            | frozenset(_ZERO_ARITY_CONTROL)
+            | frozenset(_evaluable_names())
+            | frozenset(_ERROR_FORMAL_DESCRIPTORS)
+            | frozenset({"error", "system_error", "instantiation_error",
+                         "uninstantiation_error"}))
+    return _ENGINE_MEANING
+
+
 def _runtime_bare_names() -> frozenset:
     """The bare (non-``$``) names the loader injects into every module: the
     module may not rebind them (a walrus or assignment target)."""
@@ -132,9 +163,10 @@ def audit_source(source: str, filename: str, check_module=None):
             tree, transformer = transform_seam_source(source, filename)
     except Exception:  # noqa: BLE001 -- does not compile: fail closed
         return [("uncompilable", 0)], []
-    translations = any(type(i).__name__ == "TranslationsDirective"
-                       for i in getattr(transformer, "_module_items", ()))
-    return audit_tree(tree, check_module, translations=translations)
+    return audit_tree(
+        tree, check_module,
+        translations=getattr(transformer, "_emitted_translations", ()) or (),
+        module_items=getattr(transformer, "_module_items", ()) or ())
 
 
 # ── plumbing shapes (the compiler's own builders, canonicalised) ───────────
@@ -207,19 +239,6 @@ def _import_constants(node) -> "list[str]":
     return out
 
 
-#: ``-translations``: the compiler imports these two registration functions
-#: under these local names and calls them with constant arguments.
-_TRANSLATIONS = ("clausal.logic.translations",
-                 {"register_predicate": "_reg_pred",
-                  "register_atom": "_reg_atom"})
-
-
-def _is_translations_import(node) -> bool:
-    return (isinstance(node, ast.ImportFrom) and node.level == 0
-            and node.module == _TRANSLATIONS[0]
-            and {a.name: a.asname for a in node.names} == _TRANSLATIONS[1])
-
-
 #: The engine plumbing modules a plumbing shape may import by name.
 _PLUMBING_MODULES = {
     "import_guard": {"clausal.pl_data_imports"},
@@ -239,7 +258,7 @@ class _Audit:
         self.callees = _allowed_callees()
         self.reserved = _runtime_bare_names()
         self.imported_modules: dict = {}    # guarded import -> names
-        self.translations = False           # set by the caller
+        self.implicit_functors = False      # set from the tree
         self.check_module = check_module
         self.own: set = set()           # names this module binds
         self.imported: dict = {}        # local -> "module.orig"
@@ -256,6 +275,8 @@ class _Audit:
         ok = self.check_module("module", node.module, None, node)
         for a in node.names:
             local = a.asname or a.name
+            if local.startswith("_") or local in self.reserved:
+                self.route("python_import", node)
             self.own.add(local)
             self.imported[local] = f"{node.module}.{a.name}"
             if ok:
@@ -265,6 +286,8 @@ class _Audit:
         for a in node.names:
             self.check_module("module", a.name, None, node)
             bound = a.asname or a.name.split(".")[0]
+            if bound.startswith("_") or bound in self.reserved:
+                self.route("python_import", node)
             self.own.add(bound)
             self.module_names[bound] = a.name if a.asname else bound
 
@@ -274,9 +297,6 @@ class _Audit:
             self.expr(node.value, frozenset())
         elif isinstance(node, ast.Pass):
             pass
-        elif (isinstance(node, ast.ImportFrom)
-              and _is_translations_import(node) and self.translations):
-            pass    # the -translations directive's own import
         elif isinstance(node, ast.ImportFrom):
             self.import_from(node)
         elif isinstance(node, ast.Import):
@@ -477,11 +497,6 @@ class _Audit:
             for k in node.keywords:
                 self.expr(k.value, scope)
             return
-        if (isinstance(f, ast.Name) and getattr(self, "translations", False)
-                and f.id in _TRANSLATIONS[1].values()
-                and all(_is_const_tree(a) for a in node.args)
-                and not node.keywords):
-            return      # -translations registration, constant arguments
         if (isinstance(f, ast.Attribute) and self.dollar_rooted(f)
                 and ast.unparse(f).startswith("$module.db.mark_")
                 and ast.unparse(f).count(".") == 2):
@@ -518,6 +533,34 @@ class _Audit:
         elif name in self.module_names:
             # a bare -import_module binding: the MODULE OBJECT as a value
             self.route("non_export", node)
+        elif not self.bare_name_ok(name):
+            self.route("python_name", node)
+
+    def bare_name_ok(self, name) -> bool:
+        """The ALLOW-LIST for a bare clause-data name (what the logic
+        compiler resolves): a name this module binds or imports, a name the
+        engine gives a meaning of its own (a builtin predicate, a special
+        form or control construct, an arithmetic evaluable, an ISO error
+        formal, ``Undefined``), or a logic-variable spelling that is no
+        injected runtime name.  Under ``-implicit_functors`` an undeclared
+        functor is data, so any lowercase name the loader does not inject
+        and Python's builtins do not bind is too."""
+        if name in self.own or name in self.imported:
+            return True
+        if name in _engine_meaning_names():
+            return True
+        from clausal.templating.term_rewriting import (  # noqa: PLC0415
+            _TITLECASE_EXEMPT_NAMES, _is_logic_var_name)
+        if name in _TITLECASE_EXEMPT_NAMES:
+            return True
+        if name in self.reserved:
+            return False
+        if _is_logic_var_name(name):
+            return True
+        if self.implicit_functors:
+            import builtins  # noqa: PLC0415
+            return not hasattr(builtins, name)
+        return False
 
     def load_attr(self, node) -> bool:
         """Check a whole $LoadAttr chain; False when it was refused for its
@@ -555,17 +598,20 @@ class _Audit:
         return True
 
 
-def audit_tree(tree: ast.Module, check_module, *,
-               translations: bool = False) -> "tuple[list, list]":
+def audit_tree(tree: ast.Module, check_module, *, translations=(),
+               module_items=()) -> "tuple[list, list]":
     """``(routes, [])`` of the generated module *tree*: every node that is
     not on the allow-list is a route.  *check_module(kind, a, b, node)*
     answers the module questions (``"module"``: may module *a* be imported;
     ``"name"``: is *b* an export of *a*; ``"chain"``: is the dotted *a*
     exactly ``module.export``), adding its own routes; it returns a bool."""
     audit = _Audit(check_module)
-    # Only a module whose lowering recorded a -translations directive may
-    # carry the translations import and calls.
-    audit.translations = translations
+    # *translations*: the dumps of the statements the -translations lowering
+    # emitted (``EmbedTransformer._emitted_translations``); each matches one
+    # top-level statement exactly, and nothing else is accepted for them.
+    for item in module_items:
+        if type(item).__name__ == "SpecializeDirective" and item.new_name:
+            audit.own.add(item.new_name)
     # Pass 1: what the module binds (so a reference before its binding --
     # a predicate used above its clauses -- is still its own).
     for sub in ast.walk(tree):
@@ -582,7 +628,17 @@ def audit_tree(tree: ast.Module, check_module, *,
             for t in sub.targets:
                 if isinstance(t, ast.Name):
                     audit.own.add(t.id)
+                    if (t.id == "__clausal_implicit_functors__"
+                            and isinstance(sub.value, ast.Constant)
+                            and sub.value.value is True):
+                        audit.implicit_functors = True
+    pending = collections.Counter(translations or ())
     for stmt in tree.body:
+        key = ast.dump(stmt)
+        if pending[key] > 0:
+            # one of the statements the -translations lowering emitted
+            pending[key] -= 1
+            continue
         if isinstance(stmt, (ast.Try, ast.Expr)) and audit.plumbing(stmt):
             continue
         audit.stmt(stmt, top=True)

@@ -1156,6 +1156,23 @@ EXPLOITS = {
                               "register_atom as _reg_atom\n"
                               "_reg_atom('th', 'v', 'x')\nv(1),\n",
     "r8_hosted_walrus": "-module(@helper, [v/1])\n(name := 1)\nv(1),\n",
+    # job 341: the translations names re-bound to an adapter export
+    "r9_reg_atom_rebound": "-module(@helper, [v/1, ok])\n"
+                           "-translations(th, {v: ok})\n"
+                           "from clausal.modules.units import metre as "
+                           "_reg_atom\ny = _reg_atom(1)\nv(1),\n",
+    "r9_extra_registration": "-module(@helper, [v/1, ok])\n"
+                             "-translations(th, {v: ok})\n"
+                             "y = _reg_atom('th', 'other', 'x')\n"
+                             "v(1),\n",
+    # task 342: a bare clause-data name the module does not bind
+    "r9_bare_open": "-module(@helper, [v/1])\nv(X) <- (X is open)\n",
+    "r9_bare_getattr_goal": "-module(@helper, [v/1])\n"
+                            "v(X) <- (getattr(X, a, 1))\n",
+    "r9_bare_eval_goal": "-module(@helper, [v/1])\nv(X) <- (eval(X))\n",
+    "r9_bare_globals": "-module(@helper, [v/1])\nv(X) <- (X is globals)\n",
+    "r9_reserved_var_name": "-module(@helper, [v/1])\n"
+                            "v(X) <- (X is PyThunk)\n",
 }
 
 
@@ -1194,6 +1211,13 @@ def test_the_audit_and_the_record_gate_agree_on_every_fixture():
         # ``5.0(Metre)``: a name the module never binds, read inside a
         # thunk -- Python resolves it through builtins.
         "tests/fixtures/titlecase_unit_spelling_witness.seam",
+        # Bare clause names nothing binds (the allow-list for bare names):
+        # each fixture exists to show that name failing when it runs --
+        # ``point/2`` never declared, an unknown functor without
+        # -implicit_functors, ``citation`` called unqualified.
+        "tests/clausal_modules/undeclared_compound_head.seam",
+        "tests/fixtures/implicit_functors_unknown_plain.seam",
+        "tests/fixtures/prednf_impmod_use.seam",
     }
     compared = allowed = 0
     disagree = []
@@ -1219,6 +1243,7 @@ def _clean_generated_tree():
     from clausal.seam_audit import generated_tree
     src = (
         "-module(m, [p/1, q/2, k, atomx])\n"
+        "-private([a, b])\n"
         "-dynamic(r/1)\n"
         "-import_from(units, [metre])\n"
         "-import_module(py.datetime)\n"
@@ -1417,3 +1442,11 @@ def test_the_engine_name_tables_cover_every_injected_name(proj):
     allowed = ({n for n in import_hook.runtime_builtins if n.startswith("$")}
                | import_hook.PER_MODULE_RUNTIME_NAMES)
     assert dollar - allowed == set(), dollar - allowed
+
+
+def test_a_translations_directive_still_passes_the_audit(tmp_path):
+    from clausal.python_bridges import audit_routes
+    f = tmp_path / "tr.seam"
+    f.write_text("-module(tr, [v/1, ok])\n-translations(th, {v: ok})\n"
+                 "v(1),\n")
+    assert audit_routes(str(f))[0] == []

@@ -11211,6 +11211,13 @@ class EmbedTransformer(NodeTransformer):
             )
         )
 
+        # The exact statements emitted, for clausal.seam_audit: a module's
+        # translations plumbing is accepted only as THESE statements.
+        emitted = getattr(transformer, "_emitted_translations", None)
+        if emitted is None:
+            emitted = transformer._emitted_translations = []
+        emitted.extend(_ast_module.dump(st) for st in stmts)
+
         # Return statement(s) — the visit_Expr caller handles lists.
         if len(stmts) == 1:
             return stmts[0]
