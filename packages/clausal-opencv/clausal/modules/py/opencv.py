@@ -77,6 +77,7 @@ import numpy as _np
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
+from clausal.modules.py import require_text
 from clausal.modules.py._helpers import (
     _pred, _pure, _bidir_3_mid, _check_1, _deep_deref, _values_equal,
 )
@@ -383,10 +384,10 @@ imread = _pred("imread",
 
 def _imwrite_dispatch_2(this_generator, _proceed, _fail, _catcher,
                         path_var, img_var, trail):
-    path = deref(path_var)
+    path = require_text(path_var, "imwrite/2", arg=1)
     img = _deep_deref(img_var)
     try:
-        ok = _cv().imwrite(str(path), img)
+        ok = _cv().imwrite(path, img)
     except Exception:
         yield (_fail, DONE)
         return
@@ -397,11 +398,11 @@ def _imwrite_dispatch_2(this_generator, _proceed, _fail, _catcher,
 
 def _imwrite_dispatch_3(this_generator, _proceed, _fail, _catcher,
                         path_var, img_var, params_var, trail):
-    path = deref(path_var)
+    path = require_text(path_var, "imwrite/3", arg=1)
     img = _deep_deref(img_var)
     params = _deep_deref(params_var)
     try:
-        ok = _cv().imwrite(str(path), img, [int(p) for p in params])
+        ok = _cv().imwrite(path, img, [int(p) for p in params])
     except Exception:
         yield (_fail, DONE)
         return

@@ -1272,6 +1272,13 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **clausal-opencv: `imwrite/2,3` take a string path.** The path was
+  written through `str()`, so `imwrite("/tmp/out.png", Img)` under
+  `-double_quotes(chars)` asked OpenCV for a file named
+  `('$chars', '/tmp/out.png')` (which it refuses: the goal failed). The
+  path is now the text an atom or a string denotes; a path that is not
+  text raises `type_error(text, Culprit)` (`instantiation_error` when
+  unbound).
 - **clausal-spacy: text arguments accept a string.** `process/3`,
   `similarity/4`, the `entity/3` label and the model name and alias of
   `load_model/1,2`, `unload_model/1`, `current_model/1` and every
