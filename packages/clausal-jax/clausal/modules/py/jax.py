@@ -291,6 +291,7 @@ from __future__ import annotations
 import threading as _threading
 import types as _types
 
+from clausal.modules.py import symbol as _symbol
 from clausal.modules.py._helpers import (
     _pred, _pure, _property_2, _bidir_2, _bidir_3_mid, _bidir_3_split,
     _bidir_4_mid2,
@@ -400,8 +401,9 @@ dtype = _pred("dtype",
     (2, _property_2(lambda a: a.dtype)),
 )
 
+# A device name (``cpu:0``, ``TFRT_CPU_0``) is a symbolic NAME: an ATOM.
 device = _pred("device",
-    (2, _property_2(lambda a: str(a.device))),
+    (2, _property_2(lambda a: _symbol(str(a.device)))),
 )
 
 dim = _pred("dim",

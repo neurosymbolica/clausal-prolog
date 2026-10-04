@@ -56,6 +56,7 @@ from __future__ import annotations
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
+from clausal.modules.py import symbol as _symbol
 from clausal.modules.py._helpers import (
     _pred, _pure, _check_1, _bidir_2, _fact_table_2, _deep_deref,
 )
@@ -283,7 +284,7 @@ def _fourcc_forward(chars):
 def _fourcc_backward(code):
     n = int(code)
     chars = "".join(chr((n >> (8 * i)) & 0xff) for i in range(4))
-    return chars
+    return _symbol(chars)       # a codec tag is a symbolic NAME: an ATOM
 
 
 fourcc = _pred("fourcc",

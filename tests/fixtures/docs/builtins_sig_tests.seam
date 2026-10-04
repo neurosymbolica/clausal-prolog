@@ -549,7 +549,7 @@ test("log: set_level/get_level exist") <- (
     get_logger("builtins_sig_level", L),
     set_level(L, "warning"),
     get_level(L, LVL),
-    LVL == "WARNING"
+    LVL == 'WARNING'
 )  # nv
 
 # ── Date & Time (date_time module) ───────────────────────────────────────────

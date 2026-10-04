@@ -73,7 +73,7 @@ Close the connection and unregister `Alias`. **Fails** if `Alias` is not connect
 --8<-- "tests/fixtures/docs/sqlite_sigs.txt:current_connection_sig"
 ```
 
-when `Alias` is unbound, **nondeterministically enumerates** all open connection aliases. when `Alias` is ground, succeeds if that alias is currently connected.
+when `Alias` is unbound, **nondeterministically enumerates** all open connection aliases, as atoms (an alias is a name; a bound `Alias` may be an atom or a string). when `Alias` is ground, succeeds if that alias is currently connected.
 
 ```seam
 list_dbs <- (

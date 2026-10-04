@@ -15,10 +15,11 @@ Remaining failures: none.
 
 Needs a ruling (not done):
 
-- Should a symbolic NAME an adapter returns (a device platform such as
-  `cpu`, a mesh/partition axis name) cross as an ATOM rather than text?
-  Today `partition_spec(["x"], P), partition_spec(AXES, P)` gives back
-  text where an atom went in.
+- RULED 2026-10-04 (atom out, text in), DONE on
+  feat/package-triage-rulings-2026-10-04: a symbolic NAME an adapter
+  returns (a device platform such as `cpu`, a mesh/partition axis name)
+  crosses as an ATOM; the sharding fixture compares atoms again. Leftovers
+  of the census: todo/adapter-text-boundary-census-leftovers-2026-10-04.md.
 - The `__getattr__` fallback forwards submodules and classes only, so
   `-import_from(jax, [grad])` still fails as an unknown name (review
   finding). The cost: a function-valued escape such as `++jax.vmap(...)`

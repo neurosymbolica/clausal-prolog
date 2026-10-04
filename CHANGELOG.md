@@ -20,6 +20,24 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **Symbolic names an adapter hands back are ATOMS, not text** ("atom
+  out, text in": the Python-boundary spec of 2026-09-21, ruled for adapter
+  results 2026-10-04). Changed: `py.os` `platform/1` (`linux`),
+  `py.logging` `get_level/2` (`'WARNING'`, Python's spelling; an unnamed
+  `"Level 15"` stays text), `py.sqlite` `current_connection/1` aliases;
+  clausal-jax `device_platform/2` (`cpu`), `device/2`, `mesh_axis_names/2`
+  (now a LIST of atoms -- it was JAX's tuple, i.e. the cell `x(y)` or the
+  reserved `('x',)`), `partition_spec/2` backward (axis names as atoms, a
+  multi-axis entry as a list); clausal-torch `device/2`; clausal-opencv
+  `fourcc/2` backward. A bound argument in check mode still accepts the
+  text spelling, and inputs accept text and atoms as before. Free-form
+  strings (paths, contents, printed representations such as `keystr/2`)
+  stay text. Adapters tag such a result with `clausal.modules.py.symbol`;
+  `text_result` turns the tag into the plain interned `str` and
+  `unify_result` accepts the text spelling too. Migration: compare with
+  the atom (`P == cpu`, `LEVEL == 'DEBUG'`) instead of a string or an
+  `atom_chars/2` workaround.
+
 - **`X is mod.pred(Args)` with `mod.pred` a predicate adapter raises
   `type_error(evaluable, Name/N)`** (ruled 2026-10-04). A qualified name in
   `X is T` that names a `ModulePredicate` (or another non-callable

@@ -23,9 +23,10 @@ Or via [module import](import.md):
 
 ---
 
-Names and values may be passed as strings or atoms; every text the module
-hands back (a variable's value, the working directory, the platform, each
-`argv` entry) is a **string**, so `platform("linux")` matches.
+Names and values may be passed as strings or atoms. Free-form text the module
+hands back (a variable's value, the working directory, each `argv` entry) is
+a **string**; the platform is a symbolic name and comes back as an **atom**
+(`linux`), and `platform("linux")` matches it too ("atom out, text in").
 
 ---
 
@@ -88,7 +89,7 @@ get_args(ARGS) <- argv(ARGS)
 
 ### platform/1
 
-`platform(P)` — unify P with `sys.platform` (e.g. `"linux"`, `"darwin"`, `"win32"`).
+`platform(P)` — unify P with `sys.platform` as an atom (e.g. `linux`, `darwin`, `win32`); a bound P may be the atom or the string.
 
 ```seam
 is_linux <- platform("linux")

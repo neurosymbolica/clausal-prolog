@@ -218,6 +218,7 @@ import types as _types
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
+from clausal.modules.py import symbol as _symbol
 from clausal.modules.py._helpers import (
     _pred, _deep_deref, _pure, _property_2, _bidir_2, _bidir_3_mid,
     _check_1, _check_2, _check_axis_1,
@@ -308,8 +309,9 @@ dtype = _pred("dtype",
     (2, _property_2(lambda t: t.dtype)),
 )
 
+# A device (``cpu``, ``cuda:0``) is a symbolic NAME: an ATOM.
 device = _pred("device",
-    (2, _property_2(lambda t: str(t.device))),
+    (2, _property_2(lambda t: _symbol(str(t.device)))),
 )
 
 dim = _pred("dim",

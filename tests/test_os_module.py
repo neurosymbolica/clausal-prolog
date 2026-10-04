@@ -279,14 +279,14 @@ class TestPlatform:
         sols, trail = simple_solutions(_platform_1, v)
         assert len(sols) == 1
         result = deref(v)
-        assert result == chars(sys.platform)
+        assert result == sys.platform   # an ATOM (a symbolic name)
 
     def test_trampoline(self):
         # nv
         v = Var()
         sols, trail = trampoline_solutions(platform, v)
         assert len(sols) == 1
-        assert deref(v) == chars(sys.platform)
+        assert deref(v) == sys.platform
 
 
 # ── cpu_count/1 ─────────────────────────────────────────────────────────

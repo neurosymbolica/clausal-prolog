@@ -17,7 +17,7 @@ from typing import Callable
 from clausal.logic.to_python import to_python
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.py import ModulePredicate, text_result
+from clausal.modules.py import ModulePredicate, text_result, unify_result
 
 
 # ── Core helpers ────────────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ def _pure(fn: Callable) -> Callable:
         except Exception:
             yield (_fail, DONE)
             return
-        if unify(result_var, text_result(out), trail):
+        if unify_result(result_var, out, trail):
             yield (_proceed, None)
         yield (_fail, DONE)
     return dispatch
@@ -93,11 +93,17 @@ def _property_2(getter):
             # Check mode accepts what query mode binds (a str property is
             # TEXT, so ``p(X, V), p(X, V)`` holds) as well as the bare str
             # spelling (the atom) it has always accepted.
-            if actual == v or (type(actual) is str
-                               and text_result(actual) == v):
+            if actual == v or (isinstance(actual, str)
+                               and _as_text(actual) == v):
                 yield (_proceed, None)
         yield (_fail, DONE)
     return dispatch
+
+
+def _as_text(s: str):
+    """*s* (a plain str or a ``symbol``) as TEXT, the chars carrier."""
+    from clausal.logic.cells import chars  # noqa: PLC0415
+    return chars(str.__str__(s))
 
 
 def _values_equal(a, b):
@@ -154,7 +160,7 @@ def _bidir_2(forward, backward):
             except Exception:
                 yield (_fail, DONE)
                 return
-            if unify(y_raw, text_result(out), trail):
+            if unify_result(y_raw, out, trail):
                 yield (_proceed, None)
 
         elif _any_unbound(x) and not _any_unbound(y):
@@ -163,7 +169,7 @@ def _bidir_2(forward, backward):
             except Exception:
                 yield (_fail, DONE)
                 return
-            if unify(x_raw, text_result(out), trail):
+            if unify_result(x_raw, out, trail):
                 yield (_proceed, None)
 
         elif not _any_unbound(x) and not _any_unbound(y):
@@ -203,7 +209,7 @@ def _bidir_3_mid(forward, backward):
             except Exception:
                 yield (_fail, DONE)
                 return
-            if unify(y_raw, text_result(out), trail):
+            if unify_result(y_raw, out, trail):
                 yield (_proceed, None)
 
         elif _any_unbound(x) and not _any_unbound(y):
@@ -212,7 +218,7 @@ def _bidir_3_mid(forward, backward):
             except Exception:
                 yield (_fail, DONE)
                 return
-            if unify(x_raw, text_result(out), trail):
+            if unify_result(x_raw, out, trail):
                 yield (_proceed, None)
 
         elif not _any_unbound(x) and not _any_unbound(y):
@@ -312,7 +318,7 @@ def _bidir_4_mid2(forward, backward):
             except Exception:
                 yield (_fail, DONE)
                 return
-            if unify(y_raw, text_result(out), trail):
+            if unify_result(y_raw, out, trail):
                 yield (_proceed, None)
 
         elif _any_unbound(x) and not _any_unbound(y):
@@ -321,7 +327,7 @@ def _bidir_4_mid2(forward, backward):
             except Exception:
                 yield (_fail, DONE)
                 return
-            if unify(x_raw, text_result(out), trail):
+            if unify_result(x_raw, out, trail):
                 yield (_proceed, None)
 
         elif not _any_unbound(x) and not _any_unbound(y):

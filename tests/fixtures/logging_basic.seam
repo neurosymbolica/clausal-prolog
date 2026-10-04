@@ -24,31 +24,31 @@ test("set_level debug") <- (
     get_logger("test.fixture.lvl1", LOGGER),
     set_level(LOGGER, "debug"),
     get_level(LOGGER, LEVEL),
-    LEVEL == "DEBUG"
+    LEVEL == 'DEBUG'
 )  # nv
 test("set_level warning") <- (
     get_logger("test.fixture.lvl2", LOGGER),
     set_level(LOGGER, "warning"),
     get_level(LOGGER, LEVEL),
-    LEVEL == "WARNING"
+    LEVEL == 'WARNING'
 )  # nv
 test("set_level error") <- (
     get_logger("test.fixture.lvl3", LOGGER),
     set_level(LOGGER, "error"),
     get_level(LOGGER, LEVEL),
-    LEVEL == "ERROR"
+    LEVEL == 'ERROR'
 )  # nv
 test("set_level critical") <- (
     get_logger("test.fixture.lvl4", LOGGER),
     set_level(LOGGER, "critical"),
     get_level(LOGGER, LEVEL),
-    LEVEL == "CRITICAL"
+    LEVEL == 'CRITICAL'
 )  # nv
 test("set_level info") <- (
     get_logger("test.fixture.lvl5", LOGGER),
     set_level(LOGGER, "info"),
     get_level(LOGGER, LEVEL),
-    LEVEL == "INFO"
+    LEVEL == 'INFO'
 )  # nv
 
 # ── is_enabled_for ─────────────────────────────────────────────────────────────

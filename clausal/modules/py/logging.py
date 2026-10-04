@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from clausal.modules.py import (
     text_result,   # stage 1: a str result is the chars carrier
+    symbol as _symbol, unify_result as _unify_result,   # symbolic names: atoms
     _import_stdlib, ModulePredicate, raise_os_error, simple_to_trampoline,
     text_or_str, to_text,
 )
@@ -117,10 +118,17 @@ def _set_level_2(logger, level, trail, k):
 
 
 def _get_level_2(logger, level_out, trail, k):
-    """get_level/2: unify Level with the logger's effective level name."""
+    """get_level/2: unify Level with the logger's effective level name.
+
+    A named level is a symbolic NAME and crosses as an ATOM in Python's own
+    spelling (``'DEBUG'``, ``'WARNING'``): "atom out, text in", ruled
+    2026-10-04; a bound Level may be the atom or the text.  An unnamed
+    numeric level's ``"Level 15"`` is not a name and stays text."""
     lg = _resolve_logger(logger)
     name = _pylogging.getLevelName(lg.getEffectiveLevel())
-    if unify(level_out, text_result(name), trail):
+    if name.lower() in _LEVEL_MAP:
+        name = _symbol(name)
+    if _unify_result(level_out, name, trail):
         yield None
 
 

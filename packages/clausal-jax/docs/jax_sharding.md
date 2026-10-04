@@ -62,7 +62,9 @@ test("count matches enumeration") <- (
 ### `device_id(D, ID)`, `device_platform(D, P)`
 
 `device_id/2` is bidirectional — query an id from a device, or find a
-device by id. `device_platform/2` returns `"cpu"`, `"gpu"`, or `"tpu"`.
+device by id. `device_platform/2` returns the atom `cpu`, `gpu`, or `tpu`
+(a symbolic name: "atom out, text in"; a bound platform may be the atom
+or the string).
 
 ```clausal
 test("device by id") <- (
@@ -74,7 +76,7 @@ test("device by id") <- (
 ### `device_of(A, D)`
 
 Return the device hosting a **single-device** array. Contrast with
-Phase 1's `device/2` which returns a string — `device_of` returns the
+Phase 1's `device/2` which returns a device name (an atom) — `device_of` returns the
 full `Device` object for use with `device_put`, `device_id`, etc.
 
 On a multi-device sharded array, JAX's underlying `arr.device` raises
@@ -93,7 +95,7 @@ tuple and a tuple of axis names:
 ```clausal
 test("make_mesh") <- (
     make_mesh([1], ["x"], MESH),
-    mesh_axis_names(MESH, ("x",))
+    mesh_axis_names(MESH, ["x"])
 )
 ```
 
@@ -103,7 +105,7 @@ least `shape-product` devices. Multi-device meshes need a real
 multi-GPU or multi-TPU host.
 
 Inspect mesh shape, axes, and backing devices with
-`mesh_shape/2`, `mesh_axis_names/2`, `mesh_devices/2`. `mesh_shape/2`
+`mesh_shape/2`, `mesh_axis_names/2` (a list of atoms), `mesh_devices/2`. `mesh_shape/2`
 returns an `OrderedDict` mapping axis names to sizes:
 
 ```clausal
@@ -122,7 +124,9 @@ test("mesh_shape") <- (
 ### `partition_spec(AXES, P)`
 
 Build a `PartitionSpec(*axes)`. Each axis entry is either a mesh axis
-name (string) or `None` for "unsharded over this tensor dim":
+name (an atom or a string) or `None` for "unsharded over this tensor dim";
+a list of names shards one dim over several mesh axes. Backward,
+`partition_spec(AXES, P)` gives the names back as atoms:
 
 ```clausal
 test("partition_spec") <- (

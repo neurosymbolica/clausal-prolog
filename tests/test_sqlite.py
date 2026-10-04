@@ -193,7 +193,7 @@ class TestSQLiteCurrentConnection:
                 results.append(deref(v))
             elif gen is parent:
                 break
-        assert set(results) >= {chars("cc1"), chars("cc2")}
+        assert set(results) >= {"cc1", "cc2"}   # an alias is an ATOM
 
     def test_check_specific(self):
         # nv
