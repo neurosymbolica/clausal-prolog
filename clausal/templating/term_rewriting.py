@@ -3882,16 +3882,6 @@ class TermTransformer(NodeTransformer):
         parts = []
         node = attr_node
         while isinstance(node, Attribute):
-            # A qualified name is ``module.name``: an underscore-led part
-            # (``__class__``, ``__globals__``, ``_private``) names a Python
-            # object's own attribute, never a module's export, and walking
-            # one is how a "Python-free" module reaches arbitrary Python.
-            if node.attr.startswith("_"):
-                raise SyntaxError(
-                    f"`.{node.attr}` (line {attr_node.lineno}): an "
-                    f"underscore-led attribute is no qualified name -- a "
-                    f"qualified name is module.name.  Reach Python "
-                    f"attributes with a ++ escape")
             # A qualified name's attribute is a NAME component, never a
             # term -- ``mod.Pred`` is this docstring's own example of the
             # supported form, and ``prolog.TruncDiv``/``prolog.Rem`` are how
@@ -3902,6 +3892,16 @@ class TermTransformer(NodeTransformer):
                     f"Logic variable '{node.attr}' cannot appear in a "
                     f"qualified name (line {attr_node.lineno})"
                 )
+            # A qualified name is ``module.name``: an underscore-led part
+            # (``__class__``, ``__globals__``, ``_private``) names a Python
+            # object's own attribute, never a module's export, and walking
+            # one is how a "Python-free" module reaches arbitrary Python.
+            if node.attr.startswith("_"):
+                raise SyntaxError(
+                    f"`.{node.attr}` (line {attr_node.lineno}): an "
+                    f"underscore-led attribute is no qualified name -- a "
+                    f"qualified name is module.name.  Reach Python "
+                    f"attributes with a ++ escape")
             parts.append(node.attr)
             node = node.value
         if not isinstance(node, Name):
