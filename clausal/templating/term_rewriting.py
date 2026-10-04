@@ -438,9 +438,13 @@ TEST_DEPRECATED_NAME = "Test"
 # Its old names — TitleCase ``Metre``/``SpeedOfLight``, American
 # ``kilometer`` — are deprecated aliases of ``metre``/``speed_of_light``/
 # ``kilometre``; an ``-import_from`` naming one is rewritten to import the
-# current name under the old local name and linted once per file.
+# current name under the old local name and linted once per file.  The
+# generated ``library(units)`` facade (clausal/library/units.seam) is one of
+# them: it re-exports the module's values under their CURRENT names only, so
+# an old spelling imported through it needs the same rewrite.
 _UNITS_MODULE_PATHS = frozenset({
     "units", "py.units", "clausal.modules.units", "clausal.modules.py.units",
+    "clausal.library.units",
 })
 
 
@@ -1115,7 +1119,7 @@ def _is_var_in_name_position(identifier: str) -> bool:
     * the CALLABLE of a call, because a variable there is not ``call/N`` in
       this language — it is the UNIT-ANNOTATION sugar, and ``X(newton)``
       builds a Quantity rather than calling ``X``;
-    * a component of a QUALIFIED NAME (``mod.Pred``, ``prolog.TruncDiv``),
+    * a component of a QUALIFIED NAME (``mod.Pred``),
       which is a predicate's name spelled in two parts.  The TitleCase lint
       has never read attribute names for exactly this reason.
 
@@ -3884,9 +3888,8 @@ class TermTransformer(NodeTransformer):
         while isinstance(node, Attribute):
             # A qualified name's attribute is a NAME component, never a
             # term -- ``mod.Pred`` is this docstring's own example of the
-            # supported form, and ``prolog.TruncDiv``/``prolog.Rem`` are how
-            # the Prolog bridge spells the ISO operators.  So TitleCase here
-            # is a name, matching the lint, which has never read attributes.
+            # supported form.  So TitleCase here is a name, matching the
+            # lint, which has never read attributes.
             if _is_var_in_name_position(node.attr):
                 raise SyntaxError(
                     f"Logic variable '{node.attr}' cannot appear in a "

@@ -72,7 +72,7 @@ class TestLowercaseNames:
         titlecase = {
             n for n, v in vars(units).items()
             if isinstance(v, (units._UnitsPredicate, Quantity))
-            and n[:1].isupper() and not n.startswith("SI_")
+            and n[:1].isupper()
         }
         assert titlecase == set()
 
@@ -307,6 +307,7 @@ class TestTitleCaseAliases:
 
     @pytest.mark.parametrize("module_path", [
         "units", "py.units", "clausal.modules.units", "clausal.modules.py.units",
+        "clausal.library.units",
     ])
     def test_warns_once_per_file_under_every_module_path(self, tmp_path,
                                                           module_path):
@@ -355,8 +356,8 @@ class TestPhysicalConstants:
     def test_snake_case_names(self):
         """# nv"""
         assert units.speed_of_light.value == 299_792_458
-        assert units.speed_of_light.dims == units.SI_Velocity.dims
-        assert units.planck_constant.dims == (units.SI_Energy * units.second(1)).dims
+        assert units.speed_of_light.dims == units.si_velocity.dims
+        assert units.planck_constant.dims == (units.si_energy * units.second(1)).dims
         for name in ("reduced_planck", "boltzmann_constant", "avogadro_constant",
                      "elementary_charge", "standard_gravity",
                      "gravitational_constant", "atomic_mass_unit",
@@ -398,6 +399,111 @@ class TestPhysicalConstants:
         assert "`StandardGravity` -> `standard_gravity`" in msg
         assert _one(mod, "q") == units.speed_of_light
         assert _one(mod, "g") == units.standard_gravity
+
+
+# ── SI dimension vectors: snake_case (ruled 2026-10-04, D16-X2) ──────────────
+
+_SI_RENAMES = {
+    "SI_Frequency": "si_frequency", "SI_Force": "si_force",
+    "SI_Energy": "si_energy", "SI_Power": "si_power",
+    "SI_Pressure": "si_pressure", "SI_Voltage": "si_voltage",
+    "SI_Charge": "si_charge", "SI_Capacitance": "si_capacitance",
+    "SI_Resistance": "si_resistance", "SI_Conductance": "si_conductance",
+    "SI_MagneticFlux": "si_magnetic_flux",
+    "SI_MagneticFluxDensity": "si_magnetic_flux_density",
+    "SI_Inductance": "si_inductance", "SI_LuminousFlux": "si_luminous_flux",
+    "SI_Illuminance": "si_illuminance", "SI_Area": "si_area",
+    "SI_Volume": "si_volume", "SI_Velocity": "si_velocity",
+    "SI_Acceleration": "si_acceleration",
+}
+
+
+class TestSIDimensionVectors:
+    def test_lowercase_names_are_the_vectors(self):
+        """# nv"""
+        assert len(_SI_RENAMES) == 19
+        assert units.si_force == units.newton(1)
+        assert units.si_velocity == units.metre(1) / units.second(1)
+        assert units.si_area == units.metre(1) ** 2
+        assert units.si_magnetic_flux_density == units.tesla(1)
+        for new in _SI_RENAMES.values():
+            assert isinstance(vars(units)[new], Quantity), new
+
+    def test_old_names_are_aliases_not_attributes(self):
+        """Served by ``__getattr__`` through the one alias table, like the
+        retired unit spellings -- so not module attributes (and so not
+        offered by a star import or counted by the name gate)."""
+        # nv
+        for old, new in _SI_RENAMES.items():
+            assert units._DEPRECATED_UNIT_NAMES[old] == new
+            assert old not in vars(units), old
+
+    def test_python_alias_works_and_warns_once(self, fresh_python_warnings):
+        """# nv"""
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            got = {old: getattr(units, old) for old in _SI_RENAMES}
+            again = units.SI_Force
+        for old, new in _SI_RENAMES.items():
+            assert got[old] is vars(units)[new], old
+        assert again is units.si_force
+        hits = [w for w in caught
+                if issubclass(w.category, ClausalDeprecatedSpellingWarning)]
+        assert len(hits) == 19
+        assert any("`SI_Force` -> `si_force`" in str(w.message) for w in hits)
+
+    def test_python_from_import_via_py_units(self, fresh_python_warnings):
+        """# nv"""
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            from clausal.modules.py.units import SI_Velocity  # noqa: PLC0415
+        assert SI_Velocity is units.si_velocity
+        assert any(issubclass(w.category, ClausalDeprecatedSpellingWarning)
+                   for w in caught)
+
+    def test_clausal_import_new_name(self, tmp_path):
+        """# nv"""
+        mod, warned = _load_recording("si_new", (
+            "-import_from(py.units, [si_force, si_velocity])\n"
+            "q(V) <- (V is ++(si_force))\n"
+            "v(V) <- (V is ++(3 * si_velocity))\n"), tmp_path)
+        assert warned == []
+        assert _one(mod, "q") == units.newton(1)
+        assert _one(mod, "v") == 3 * units.si_velocity
+
+    @pytest.mark.parametrize("module_path", [
+        "py.units", "clausal.modules.units", "clausal.library.units",
+    ])
+    def test_clausal_import_old_name_works_and_warns_once(self, tmp_path,
+                                                          module_path):
+        """# nv"""
+        name = "si_old_" + module_path.replace(".", "_")
+        mod, warned = _load_recording(name, (
+            f"-import_from({module_path}, [SI_Force, SI_Acceleration])\n"
+            "q(V) <- (V is ++(SI_Force))\n"
+            "g(A) <- (A is ++(SI_Acceleration))\n"), tmp_path)
+        assert len(warned) == 1, module_path
+        msg = str(warned[0].message)
+        assert "`SI_Force` -> `si_force`" in msg
+        assert "`SI_Acceleration` -> `si_acceleration`" in msg
+        assert _one(mod, "q") == units.newton(1)
+        assert _one(mod, "g") == units.si_acceleration
+
+    def test_library_units_facade_exports_the_vectors(self):
+        """``library(units)`` offers the same values, under the new names;
+        everything else it exports is unchanged."""
+        # nv
+        import pathlib  # noqa: PLC0415
+        import clausal  # noqa: PLC0415
+        facade = (pathlib.Path(clausal.__file__).parent / "library"
+                  / "units.seam").read_text()
+        for old, new in _SI_RENAMES.items():
+            assert f"    {new},\n" in facade, new
+            assert old not in facade, old
+        from clausal.library import units as lib  # noqa: PLC0415
+        for new in _SI_RENAMES.values():
+            assert vars(lib)[new] is vars(units)[new], new
+        assert vars(lib)["speed_of_light"] is units.speed_of_light
 
 
 # ── The length family is spelled like metre ──────────────────────────────────

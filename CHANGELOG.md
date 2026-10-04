@@ -1197,6 +1197,14 @@ since 0.4.0 finish three moves:
 
 ### Changed
 
+- **`clausal.modules.prolog`'s ISO arithmetic helpers are private**
+  (ruled 2026-10-04): `TruncDiv`, `TruncMod`, `Rem` are now `_trunc_div`,
+  `_trunc_mod`, `_rem`, with no aliases. Nothing emits them any more: both
+  `.pl` front ends write the quoted ISO evaluables `'//'`, `'mod'`, `'rem'`.
+  The exporter's mapping of `prolog.TruncDiv`/`TruncMod`/`Rem` calls back
+  to `//`/`mod`/`rem`, and the `.pl` translator's `-import_module(prolog)`
+  preamble, are removed with them.
+
 - **The registry name gate reads exported DATA names too.**
   `tests/test_python_predicate_name_gate.py` checked the predicates every
   engine and package module registers; `-import_from` also offers every
@@ -1206,9 +1214,10 @@ since 0.4.0 finish three moves:
   (`tests/_predicate_name_census.py`) now reads those names on the loaded
   module and statically (assignments, and writes onto
   `sys.modules[__name__]`, `setattr`, `globals()`), with a recall check,
-  floors and positive controls; none may be TitleCase. 22 engine names
-  (`prolog.TruncDiv/TruncMod/Rem`, `units.SI_*`) are held for a ruling in
-  an exact list.
+  floors and positive controls; none may be TitleCase, engine names
+  included (the 22 engine names first held for a ruling --
+  `prolog.TruncDiv/TruncMod/Rem`, `units.SI_*` -- were ruled on 2026-10-04,
+  and the list that held them is gone).
 
 - **Adapter check mode stays STRICT** (ruled 2026-10-04). A bound result
   of a free-form text output is compared as a term, so the atom of the
@@ -1395,6 +1404,16 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 - **TitleCase unit names** (`Metre` for `metre`) **and the old
   physical-constant spellings.** They are warned aliases
   (`ClausalDeprecatedSpellingWarning`).
+- **The `SI_*` dimension vectors of `clausal.modules.units`** (ruled
+  2026-10-04): `SI_Force` is now `si_force`, `SI_Velocity` `si_velocity`,
+  `SI_MagneticFluxDensity` `si_magnetic_flux_density`, and so on for all
+  19. The old names are warned aliases through the same table as the unit
+  names: once per process per name from Python, once per file from an
+  `-import_from` list -- which now includes one from `clausal.library.units`,
+  the `library(units)` facade that re-exports the new names. The aliases
+  are a seam-surface and Python path only: a `.pl` file's
+  `use_module(library(units), ['SI_Force'])` (the quoted form, the only
+  one Prolog can write) is refused, since the facade offers `si_force`.
 - **`query()`.** Iterate `solve(...)` and read `Var.value`.
 
 ### Experimental
@@ -1424,6 +1443,9 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   with -private([...]) or quote them`.
 
 ### Fixed
+
+- **clausal-torch docs: `named_module/3`'s root is named `''`**, the
+  empty atom, not `""` (a string): module names come out as atoms.
 
 - **clausal-torch: `named_parameter/3`, `named_module/3` and
   `named_child/3` with the VALUE bound.** The value was compared with

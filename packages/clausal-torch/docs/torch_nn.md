@@ -56,7 +56,7 @@ Enumerate all submodules recursively, including `MODEL` itself.
 ```
 
 Enumerate `(name, submodule)` pairs recursively. The root module has
-name `""`.
+name `''` (the empty atom: names come out as atoms).
 
 ```clausal
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:named_module_ex2"

@@ -2817,16 +2817,6 @@ class _ClausalToProlog:
         # Atoms: lowercase or PascalCase predicate name
         return PAtom(resolve_name(name, self.dialect))
 
-    # Reverse mapping from clausal qualified names (e.g. prolog.TruncDiv)
-    # back to Prolog infix operators.  These are the operators that
-    # prolog_to_clausal emits as ``prolog.<Name>(X, Y)`` because their
-    # ISO semantics differ from Python's.
-    _QUALIFIED_OP_REVERSE: dict[tuple[str, str], str] = {
-        ("prolog", "TruncDiv"): "//",
-        ("prolog", "TruncMod"): "mod",
-        ("prolog", "Rem"):      "rem",
-    }
-
     # CLP(FD) constraint names. Written as canonical forms in Clausal source
     # (`'#='(A, B)`) because Python has no `#=` operator, but they have no ISO
     # Prolog meaning and must not be lowered to arithmetic look-alikes.
@@ -2990,11 +2980,6 @@ class _ClausalToProlog:
                     f"CLP(FD) constraint has no ISO form: {functor}")
                 functor = "???"
         elif isinstance(node.func, python_ast.Attribute):
-            # Check for qualified operator calls (e.g. prolog.TruncDiv)
-            # that should be emitted as infix operators.
-            op = self._try_qualified_op(node.func, node.args)
-            if op is not None:
-                return op
             # Qualified call: mod.pred(...)
             functor = self._qualified_name(node.func)
         else:
@@ -3007,21 +2992,6 @@ class _ClausalToProlog:
             args.append(self._convert_expr(kw.value))
         args = tuple(args)
         return PCompound(functor, args)
-
-    def _try_qualified_op(
-        self, attr: python_ast.Attribute, args: list,
-    ) -> PTerm | None:
-        """If *attr* is a qualified operator (e.g. ``prolog.TruncDiv``),
-        return the corresponding Prolog infix ``PCompound``; else ``None``."""
-        if not isinstance(attr.value, python_ast.Name) or len(args) != 2:
-            return None
-        key = (attr.value.id, attr.attr)
-        op_str = self._QUALIFIED_OP_REVERSE.get(key)
-        if op_str is None:
-            return None
-        left = self._convert_expr(args[0])
-        right = self._convert_expr(args[1])
-        return PCompound(op_str, (left, right))
 
     def _qualified_name(self, attr: python_ast.Attribute) -> str:
         """Get a qualified name from an Attribute node."""
@@ -3204,8 +3174,8 @@ class _ClausalToProlog:
             python_ast.Div: "/",
             # Clausal/Python // is floored; Prolog // truncates toward zero, so
             # emit SWI/Scryer `div` (floored) to preserve semantics (F031). The
-            # forward direction routes Prolog // through prolog.TruncDiv for the
-            # same reason. Python % and Prolog mod are both floored — mod is OK.
+            # forward direction emits ISO '//' (truncating) for Prolog //, so
+            # each side keeps its own meaning. Python % and Prolog mod are both floored — mod is OK.
             python_ast.FloorDiv: "div",
             python_ast.Mod: "mod",
             # A bare ``**`` is Python's power (``2 ** 3`` is the integer 8;

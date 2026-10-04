@@ -1003,8 +1003,6 @@ class _PrologToClausal:
         # governs the literals below it.
         if self._emitted_string:
             preamble_parts.append("-double_quotes(chars)")
-        if "prolog." in body:
-            preamble_parts.append("-import_module(prolog)")
         if "math." in body:
             preamble_parts.append("-import_module(math)")
         private = sorted(self._data_atoms)

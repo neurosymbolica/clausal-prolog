@@ -504,18 +504,18 @@ def test_F019_guard_hash_sha256_matches_hashlib():
 
 
 def test_F020_mod_is_floored():
-    # A11-F020 (fixed): TruncMod is floored ISO mod (sign follows divisor).
-    from clausal.modules.prolog import TruncMod
-    assert TruncMod(-7, 3) == 2      # ISO: -7 mod 3 =:= 2
-    assert TruncMod(7, -3) == -2     # sign follows divisor
+    # A11-F020 (fixed): _trunc_mod is floored ISO mod (sign follows divisor).
+    from clausal.modules.prolog import _trunc_mod
+    assert _trunc_mod(-7, 3) == 2      # ISO: -7 mod 3 =:= 2
+    assert _trunc_mod(7, -3) == -2     # sign follows divisor
 
 
 def test_F021_truncdiv_bignum_exact():
-    # A11-F021 (fixed): TruncDiv uses exact integer arithmetic.
-    from clausal.modules.prolog import TruncDiv
+    # A11-F021 (fixed): _trunc_div uses exact integer arithmetic.
+    from clausal.modules.prolog import _trunc_div
     n = 10 ** 18 + 1
-    assert TruncDiv(n, 1) == n
-    assert TruncDiv(-(10 ** 19) - 3, 10) == -(10 ** 18)  # trunc toward zero
+    assert _trunc_div(n, 1) == n
+    assert _trunc_div(-(10 ** 19) - 3, 10) == -(10 ** 18)  # trunc toward zero
 
 
 # ═════════════════════════════════════════════════════════════════════════════

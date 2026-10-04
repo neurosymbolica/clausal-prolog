@@ -1,8 +1,9 @@
 """Tests for ISO Prolog-compatible operators and quoted atom translation.
 
 Tests that:
-  - The ``prolog`` module provides ISO-compatible trunc_div, TruncMod, Rem
-  - The translator emits prolog.TruncDiv() for Prolog's ``//``
+  - The ``prolog`` module keeps private ISO helpers (_trunc_div, _trunc_mod,
+    _rem); its old TitleCase names are gone
+  - The translator emits the quoted ISO evaluables for ``//``, ``mod``, ``rem``
   - The translator quotes Prolog atoms as Python string literals
   - End-to-end: .pl files with ``//``, ``mod``, atoms import and execute
 """
@@ -27,46 +28,44 @@ from clausal.tools.prolog_dialect import Dialect
 
 
 class TestPrologModule:
-    """clausal.modules.prolog provides ISO-compatible arithmetic."""
+    """clausal.modules.prolog keeps PRIVATE ISO reference helpers
+    (operator ruling D16-X2, 2026-10-04): ``_trunc_div``, ``_trunc_mod``,
+    ``_rem``.  The TitleCase ``TruncDiv``/``TruncMod``/``Rem`` are gone,
+    with no aliases."""
 
-    def test_trunc_div_positive(self):
+    def test_trunc_div(self):
         # nv
-        from clausal.modules.prolog import TruncDiv
-        assert TruncDiv(7, 2) == 3
-
-    def test_trunc_div_negative_dividend(self):
-        # nv
-        from clausal.modules.prolog import TruncDiv
+        from clausal.modules.prolog import _trunc_div
+        assert _trunc_div(7, 2) == 3
         # ISO: truncate toward zero -> -3, Python //: floor -> -4
-        assert TruncDiv(-7, 2) == -3
+        assert _trunc_div(-7, 2) == -3
+        assert _trunc_div(7, -2) == -3
 
-    def test_trunc_div_negative_divisor(self):
+    def test_trunc_mod(self):
         # nv
-        from clausal.modules.prolog import TruncDiv
-        assert TruncDiv(7, -2) == -3
-
-    def test_trunc_mod_positive(self):
-        # nv
-        from clausal.modules.prolog import TruncMod
-        assert TruncMod(7, 3) == 1
-
-    def test_trunc_mod_negative_dividend(self):
-        # nv
-        from clausal.modules.prolog import TruncMod
+        from clausal.modules.prolog import _trunc_mod
+        assert _trunc_mod(7, 3) == 1
         # ISO mod: sign follows the DIVISOR (floored, like Python %). A11-F020
         # corrected this from the earlier rem semantics.
-        assert TruncMod(-7, 3) == 2
-        assert TruncMod(7, -3) == -2
+        assert _trunc_mod(-7, 3) == 2
+        assert _trunc_mod(7, -3) == -2
 
-    def test_rem_positive(self):
+    def test_rem(self):
         # nv
-        from clausal.modules.prolog import Rem
-        assert Rem(7, 3) == 1
+        from clausal.modules.prolog import _rem
+        assert _rem(7, 3) == 1
+        assert _rem(-7, 3) == -1
+        assert _rem(7, -3) == 1
 
-    def test_rem_negative(self):
+    def test_titlecase_names_are_gone_without_aliases(self):
         # nv
-        from clausal.modules.prolog import Rem
-        assert Rem(-7, 3) == -1
+        import clausal.modules.prolog as prolog
+        for old in ("TruncDiv", "TruncMod", "Rem"):
+            assert not hasattr(prolog, old), old
+            with pytest.raises(ImportError):
+                exec(f"from clausal.modules.prolog import {old}", {})
+        # nothing public is left for ``-import_from`` to offer
+        assert [n for n in vars(prolog) if not n.startswith("_")] == []
 
 
 # ── Translator: ISO operators ─────────────────────────────────────────────
@@ -75,7 +74,7 @@ class TestPrologModule:
 class TestTranslatorISOOperators:
     """Prolog ``//``, ``mod``, ``rem`` are emitted as the quoted ISO
     evaluables the engine's evaluable table has (2026-09-29; they were
-    ``prolog.TruncDiv`` etc. from a helper module before)."""
+    qualified calls into a helper module before)."""
 
     def test_integer_division_emits_iso_evaluable(self):
         # nv
@@ -96,10 +95,13 @@ class TestTranslatorISOOperators:
         assert "eval_('rem'(7, 3), X)" in result
 
     def test_no_helper_module_import(self):
+        """Nothing the translator writes (and so nothing it caches) names
+        the helper module: its old TitleCase names are gone (D16-X2)."""
         # nv
-        src = "test :- X is 7 // 2."
+        src = "test :- X is 7 // 2, Y is 7 mod 2, Z is 7 rem 2."
         result = prolog_to_clausal(src)
         assert "-import_module(prolog)" not in result
+        assert "prolog." not in result
 
     def test_no_prolog_import_when_not_needed(self):
         # nv
@@ -219,6 +221,20 @@ class TestEndToEnd:
         # ISO/SWI: -7 mod 3 = 2 (sign follows the divisor; A11-F020)
         results = [deref(r) for _ in call("my_mod", -7, 3, r, module=lm)]
         assert results == [2]
+
+    def test_iso_rem(self, tmp_path):
+        """Prolog rem: the sign follows the dividend."""
+        # nv
+        path = _write_pl(tmp_path, "_plop_rem", """\
+            my_rem(X, Y, R) :- R is X rem Y.
+        """)
+        mod = _load_prolog_module("_plop_rem", path)
+        lm = mod.__clausal_module__
+        r = Var()
+        results = [deref(r) for _ in call("my_rem", -7, 3, r, module=lm)]
+        assert results == [-1]
+        results = [deref(r) for _ in call("my_rem", 7, -3, r, module=lm)]
+        assert results == [1]
 
     def test_mixed_atoms_and_arithmetic(self, tmp_path):
         """A .pl file that uses both atoms and arithmetic."""
