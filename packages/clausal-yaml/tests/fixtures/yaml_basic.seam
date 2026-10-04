@@ -1,4 +1,3 @@
--double_quotes(atom)
 -import_from(yaml, [read, write, get])
 
 # ── Basic parsing ────────────────────────────────────────────────────

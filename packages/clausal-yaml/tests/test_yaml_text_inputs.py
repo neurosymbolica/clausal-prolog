@@ -6,7 +6,8 @@ a string -- the chars carrier ``('$chars', s)`` -- nested in a mapping or
 a list reached PyYAML as a Python tuple, which the safe dumper cannot
 represent (``type_error(yaml_term, _)``).  The probe is written under
 ``-double_quotes(chars)`` so ``"..."`` IS a string.  Only the INPUT
-changes: what ``write/2`` hands back is untouched.
+changes here; what ``write/2`` hands back (a string since 2026-10-04) is
+pinned in test_yaml_free_form_outputs.py.
 """
 
 from __future__ import annotations
@@ -68,4 +69,5 @@ def test_write_file_nested_strings(module, tmp_path):
 def test_write_then_read(module):
     d = Var()
     [got] = [_deref_walk(d) for _ in call("roundtrip", d, module=module)]
-    assert dict(got) == {"name": "bob"}
+    # the value read back is a STRING; the key stays an atom
+    assert dict(got) == {"name": chars("bob")}

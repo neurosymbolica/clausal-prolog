@@ -20,6 +20,19 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **clausal-yaml: string VALUES and written documents are STRINGS; keys
+  stay atoms** (ruled 2026-10-04: free-form adapter text is a string
+  `('$chars', s)`, strings spec 9.4; a mapping key is a name). Changed:
+  `read/2`, `read_all/2`, `read_file/2` (every string scalar VALUE, at any
+  depth: `name: alice` reads as a dict with the atom key `name` and the
+  string value `"alice"`), `write/2` and `write_all/2` (the YAML document).
+  A bound result is compared as a term: `read("hello", hello)` now fails,
+  `read("hello", "hello")` holds. Unchanged: mapping keys are atoms;
+  `get/3` hands back what the data holds (so a value of data read by
+  `read/2` is a string, and a dict built with `++` keeps its atoms); the
+  `++` escape. Migration: compare values with strings
+  (`get(D, "name", "alice")`).
+
 - **clausal-sympy: printed forms are STRINGS, not atoms** (ruled
   2026-10-04: an adapter is its own entry point, and free-form text it hands
   back is a string `('$chars', s)`, strings spec 9.4). Changed:

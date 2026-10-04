@@ -15,15 +15,17 @@ Data representation
 -------------------
 YAML data is represented as **native Python objects**:
 
-- Mappings  → ``dict``
+- Mappings  → ``dict`` (its KEYS stay as loaded: a ``str`` key is an ATOM)
 - Sequences → ``list``
-- Strings   → ``str``
+- Strings   → a STRING ``('$chars', s)`` -- a scalar string VALUE is
+  free-form text (ruled 2026-10-04); mapping keys are names and stay atoms
 - Numbers   → ``int`` / ``float``
 - Booleans  → ``True`` / ``False``
 - Null      → ``None``
 
-These are the objects returned by ``yaml.safe_load``.  Any Python method
-can be called on them via ``++()`` interop.
+These are the objects ``yaml.safe_load`` returns, with each string value
+converted by ``text_result`` (at every depth).  ``write/2`` and
+``write_all/2`` answer the YAML document as a string too.
 
 Security
 --------
@@ -35,7 +37,7 @@ from __future__ import annotations
 
 from clausal.modules.py import (
     _import_stdlib, ModulePredicate, simple_to_trampoline,
-    raise_os_error, raise_syntax_error, require_text,
+    raise_os_error, raise_syntax_error, require_text, text_result,
 )
 _yaml = _import_stdlib("yaml")
 
@@ -86,7 +88,7 @@ def _read_2(yaml_string, result, trail, k):
         data = _yaml.safe_load(text)
     except _yaml.YAMLError as exc:
         _raise_yaml_syntax(exc, "read/2")
-    if unify(result, data, trail):
+    if unify(result, text_result(data), trail):
         yield None
 
 
@@ -103,7 +105,7 @@ def _write_2(data, result, trail, k):
             out = out[:-4].rstrip("\n")
     except _yaml.YAMLError as exc:
         _raise_unrepresentable(exc, data, "write/2")
-    if unify(result, out, trail):
+    if unify(result, text_result(out), trail):
         yield None
 
 
@@ -117,7 +119,7 @@ def _read_all_2(yaml_string, result, trail, k):
         docs = list(_yaml.safe_load_all(text))
     except _yaml.YAMLError as exc:
         _raise_yaml_syntax(exc, "read_all/2")
-    if unify(result, docs, trail):
+    if unify(result, text_result(docs), trail):
         yield None
 
 
@@ -131,7 +133,7 @@ def _write_all_2(docs, result, trail, k):
         out = _yaml.safe_dump_all(docs, default_flow_style=False).rstrip("\n")
     except _yaml.YAMLError as exc:
         _raise_unrepresentable(exc, docs, "write_all/2")
-    if unify(result, out, trail):
+    if unify(result, text_result(out), trail):
         yield None
 
 
@@ -155,7 +157,7 @@ def _read_file_2(path, result, trail, k):
                            f"the file is not UTF-8 text: {exc}", cause=exc)
     except _yaml.YAMLError as exc:
         _raise_yaml_syntax(exc, "read_file/2")
-    if unify(result, data, trail):
+    if unify(result, text_result(data), trail):
         yield None
 
 

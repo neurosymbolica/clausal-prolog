@@ -1,5 +1,4 @@
 # Companion tests for docs/yaml.md display snippets.
--double_quotes(atom)
 
 -import_from(yaml, [read, write, read_all, write_all, get])
 

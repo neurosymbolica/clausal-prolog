@@ -12,6 +12,7 @@ from clausal.logic.solve import call, query
 from clausal.logic.variables import Var, deref, Trail
 from clausal.import_hook import _load_module
 from clausal._suffixes import SEAM_SUFFIX
+from clausal.logic.cells import chars, chars_text, is_chars
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -46,6 +47,13 @@ def _first(functor, *args, module, out_index=-1):
     return None
 
 
+def _doc(v):
+    """A YAML document write/2 or write_all/2 answered: a STRING (ruled
+    2026-10-04), as its text."""
+    assert is_chars(v), v
+    return chars_text(v)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # read/2 — parse YAML string to Python object
 # ══════════════════════════════════════════════════════════════════════════════
@@ -72,7 +80,7 @@ read_float(S, N) <- read(S, N)
         mod = _load("yr3", """
 read_str(S, R) <- read(S, R)
 """, tmp_path)
-        assert _first("read_str", "hello world", module=mod) == "hello world"
+        assert _first("read_str", "hello world", module=mod) == chars("hello world")
 
     def test_parse_mapping(self, tmp_path):
         # nv
@@ -80,7 +88,7 @@ read_str(S, R) <- read(S, R)
 read_map(S, R) <- read(S, R)
 """, tmp_path)
         result = _first("read_map", "name: alice\nage: 30", module=mod)
-        assert result == {"name": "alice", "age": 30}
+        assert result == {"name": chars("alice"), "age": 30}
 
     def test_parse_sequence(self, tmp_path):
         # nv
@@ -97,7 +105,7 @@ read_nested(S, R) <- read(S, R)
 """, tmp_path)
         yaml_str = "server:\n  host: localhost\n  port: 8080"
         result = _first("read_nested", yaml_str, module=mod)
-        assert result == {"server": {"host": "localhost", "port": 8080}}
+        assert result == {"server": {"host": chars("localhost"), "port": 8080}}
 
     def test_parse_bool_true(self, tmp_path):
         # nv
@@ -146,7 +154,7 @@ read_val(S, R) <- read(S, R)
 """, tmp_path)
         yaml_str = "text: |\n  line one\n  line two\n"
         result = _first("read_val", yaml_str, module=mod)
-        assert result == {"text": "line one\nline two\n"}
+        assert result == {"text": chars("line one\nline two\n")}
 
     def test_parse_list_of_mappings(self, tmp_path):
         # nv
@@ -156,8 +164,8 @@ read_val(S, R) <- read(S, R)
         yaml_str = "- name: alice\n  age: 30\n- name: bob\n  age: 25"
         result = _first("read_val", yaml_str, module=mod)
         assert result == [
-            {"name": "alice", "age": 30},
-            {"name": "bob", "age": 25},
+            {"name": chars("alice"), "age": 30},
+            {"name": chars("bob"), "age": 25},
         ]
 
     def test_invalid_yaml_raises(self):
@@ -183,7 +191,7 @@ class TestWrite:
         mod = _load("yw1", """
 write_val(D, S) <- write(D, S)
 """, tmp_path)
-        result = _first("write_val", {"x": 1}, module=mod)
+        result = _doc(_first("write_val", {"x": 1}, module=mod))
         assert "x: 1" in result
 
     def test_write_list(self, tmp_path):
@@ -191,7 +199,7 @@ write_val(D, S) <- write(D, S)
         mod = _load("yw2", """
 write_val(D, S) <- write(D, S)
 """, tmp_path)
-        result = _first("write_val", [1, 2, 3], module=mod)
+        result = _doc(_first("write_val", [1, 2, 3], module=mod))
         assert "- 1" in result
         assert "- 2" in result
         assert "- 3" in result
@@ -201,7 +209,7 @@ write_val(D, S) <- write(D, S)
         mod = _load("yw3", """
 write_val(D, S) <- write(D, S)
 """, tmp_path)
-        result = _first("write_val", 42, module=mod)
+        result = _doc(_first("write_val", 42, module=mod))
         assert result.strip() == "42"
 
     def test_write_nested(self, tmp_path):
@@ -210,7 +218,7 @@ write_val(D, S) <- write(D, S)
 write_val(D, S) <- write(D, S)
 """, tmp_path)
         data = {"server": {"host": "localhost", "port": 8080}}
-        result = _first("write_val", data, module=mod)
+        result = _doc(_first("write_val", data, module=mod))
         assert "server:" in result
         assert "host: localhost" in result
 
@@ -219,7 +227,7 @@ write_val(D, S) <- write(D, S)
         mod = _load("yw5", """
 write_val(D, S) <- write(D, S)
 """, tmp_path)
-        result = _first("write_val", {"flag": True, "val": None}, module=mod)
+        result = _doc(_first("write_val", {"flag": True, "val": None}, module=mod))
         assert "flag: true" in result
         assert "val: null" in result
 
@@ -229,7 +237,7 @@ write_val(D, S) <- write(D, S)
 round_trip(S, R) <- (read(S, D) and write(D, R))
 """, tmp_path)
         yaml_in = "a: 1\nb: 2"
-        result = _first("round_trip", yaml_in, module=mod)
+        result = _doc(_first("round_trip", yaml_in, module=mod))
         # Parse the result again to verify equivalence
         import yaml
         assert yaml.safe_load(result) == yaml.safe_load(yaml_in)
@@ -281,7 +289,7 @@ class TestWriteAll:
 do_write_all(D, S) <- write_all(D, S)
 """, tmp_path)
         docs = [{"a": 1}, {"b": 2}]
-        result = _first("do_write_all", docs, module=mod)
+        result = _doc(_first("do_write_all", docs, module=mod))
         assert "---" in result
         assert "a: 1" in result
         assert "b: 2" in result
@@ -292,7 +300,7 @@ do_write_all(D, S) <- write_all(D, S)
 round_trip_all(S, R) <- (read_all(S, D) and write_all(D, R))
 """, tmp_path)
         yaml_in = "x: 1\n---\ny: 2"
-        result = _first("round_trip_all", yaml_in, module=mod)
+        result = _doc(_first("round_trip_all", yaml_in, module=mod))
         import yaml
         assert list(yaml.safe_load_all(result)) == [{"x": 1}, {"y": 2}]
 
@@ -312,7 +320,7 @@ class TestFileIO:
 do_read_file(P, R) <- read_file(P, R)
 """, tmp_path)
         result = _first("do_read_file", str(yaml_file), module=mod)
-        assert result == {"name": "alice", "age": 30}
+        assert result == {"name": chars("alice"), "age": 30}
 
     def test_read_nonexistent_file_raises(self, tmp_path):
         # RULED 2026-10-02: a missing file raises
@@ -336,7 +344,7 @@ read_back(P, V) <- (read_file(P, D) and get(D, "greeting", V))
         import yaml
         with open(yaml_file, "w") as f:
             yaml.safe_dump({"greeting": "hello", "count": 3}, f)
-        assert _first("read_back", str(yaml_file), module=mod) == "hello"
+        assert _first("read_back", str(yaml_file), module=mod) == chars("hello")
 
     def test_write_file(self, tmp_path):
         """write data to file via write_file, read back via Python."""
@@ -365,7 +373,7 @@ class TestGet:
         mod = _load("yg1", """
 get_val(S, K, V) <- (read(S, D) and get(D, K, V))
 """, tmp_path)
-        assert _first("get_val", "name: alice", "name", module=mod) == "alice"
+        assert _first("get_val", "name: alice", "name", module=mod) == chars("alice")
 
     def test_nested_keys(self, tmp_path):
         # nv
@@ -388,7 +396,7 @@ get_idx(S, V) <- (read(S, D) and get(D, [0], V))
 get_mixed(S, V) <- (read(S, D) and get(D, ["items", 1, "name"], V))
 """, tmp_path)
         yaml_str = "items:\n  - name: first\n  - name: second"
-        assert _first("get_mixed", yaml_str, module=mod) == "second"
+        assert _first("get_mixed", yaml_str, module=mod) == chars("second")
 
     def test_missing_key_fails(self, tmp_path):
         # nv
@@ -423,7 +431,8 @@ class TestFixture:
         self.module = mod.__dict__["$module"]
 
     def _run_test(self, name):
-        assert _succeeds("test", name, module=self.module), \
+        # test names are strings: the fixture no longer sets -double_quotes(atom)
+        assert _succeeds("test", chars(name), module=self.module), \
             f"Test({name!r}) failed — no solutions"
 
     def test_parse_scalar_int(self):

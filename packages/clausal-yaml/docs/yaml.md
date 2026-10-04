@@ -40,19 +40,28 @@ The module is `py.yaml`; `-import_from(yaml, ...)` is rewritten to it. The predi
 
 ## Data representation
 
-YAML data maps directly to Python types:
+YAML data maps to Python containers holding terms:
 
-| YAML construct | Python type |
+| YAML construct | Term |
 |----------------|-------------|
-| Mapping (`key: value`) | `dict` |
+| Mapping (`key: value`) | `dict`; a string KEY is an **atom** (`name`) |
 | sequence (`- item`) | `list` |
-| String | `str` |
+| String scalar (a value) | a **string**, `"alice"` (the term `('$chars', 'alice')`) |
 | Integer | `int` |
 | Float | `float` |
 | Boolean (`true`/`false`) | `bool` |
 | Null (`null`, `~`) | `None` |
 
-These are the exact objects produced by `yaml.safe_load`. Any Python method can be called on them via [`++()`](python_integration.md) interop — e.g., `KEYS is ++(D.keys())` or `LEN is ++len(ITEMS)`.
+A scalar string value is free-form text, so it comes back as a string;
+mapping keys are names, so they stay atoms (ruled 2026-10-04). Compare a
+value with a string: `get(D, "name", "alice")`. A key may be written either
+way in `get/3` (`'name'` or `"name"`). `write/2` and `write_all/2` answer the
+YAML document as a string too.
+
+These are the objects `yaml.safe_load` produces, with each string VALUE
+converted to a string at every depth. Python methods can be called on the
+containers via [`++()`](python_integration.md) interop — e.g., `KEYS is
+++(D.keys())` or `LEN is ++len(ITEMS)`.
 
 ---
 
@@ -121,7 +130,7 @@ load_config(PATH, CFG) <- read_file(PATH, CFG)
 --8<-- "tests/fixtures/docs/yaml_sigs.txt:write_sig"
 ```
 
-Serialize a Python object to a YAML string. Uses block style (`default_flow_style=False`) for human-readable output.
+Serialize a Python object to a YAML document, answered as a string. Uses block style (`default_flow_style=False`) for human-readable output.
 
 ```clausal
 -import_from(yaml, [read, write, get])
@@ -141,7 +150,7 @@ test("serialize") <- (
 --8<-- "tests/fixtures/docs/yaml_sigs.txt:write_all_sig"
 ```
 
-Serialize a list of Python objects to a multi-document YAML string with `---` separators.
+Serialize a list of Python objects to a multi-document YAML document (a string) with `---` separators.
 
 ### `write_file/2`
 
