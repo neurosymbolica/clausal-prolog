@@ -1468,10 +1468,13 @@ def test_clause_code_runs_on_the_engine_builtins_only(proj):
     # frame's builtins: only an engine module.
     imp = CLAUSE_BUILTINS["__import__"]
     assert imp("clausal.logic.runtime.list_unify").__name__ == "clausal"
-    with pytest.raises(ImportError):
-        imp("pb_surely_not_loaded_module")
-    with pytest.raises(ImportError):
-        imp("list_unify", None, None, (), 1)
+    for bad, kw in (("pb_surely_not_loaded_module", {}),
+                    ("list_unify", {"level": 1}),
+                    ("builtins", {}), ("os", {}), ("importlib", {}),
+                    # a loaded engine package, a submodule not yet loaded
+                    ("clausal", {"fromlist": ["pb_no_such_submodule"]})):
+        with pytest.raises(ImportError):
+            imp(bad, None, None, kw.get("fromlist", ()), kw.get("level", 0))
     code = compile("open('/etc/hostname')", "<t>", "eval")
     with pytest.raises(NameError):
         eval(code, dict(fn.__globals__))
