@@ -24,6 +24,11 @@ Adapters that unify a plain `str` without `text_result`:
 Question for a ruling: should these become text (a Breaking change per
 package), or is "free-form stays text" only a rule for NEW adapters?
 
+Ruled 2026-10-04 (D11, U2 b): yes, as strings -- on condition that it does
+not conflict with the Python-boundary spec. It does read two ways, so it is
+not built: see
+todo/adapter-free-form-outputs-as-strings-needs-ruling-2026-10-04.md.
+
 ## Inputs that reject text (violate "text in")
 
 - `str(deref(x))` on an argument turns text into the repr
