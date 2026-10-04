@@ -14,6 +14,7 @@ packages/conftest.py): the adapter's cached submodules are fakes.
 from __future__ import annotations
 
 import os
+import pathlib
 import re
 import types
 
@@ -29,7 +30,7 @@ _DOC = os.path.join(os.path.dirname(__file__), os.pardir, "docs", "sklearn.md")
 
 
 def _quickstart_block():
-    text = open(_DOC, encoding="utf-8").read()
+    text = pathlib.Path(_DOC).read_text(encoding="utf-8")
     blocks = re.findall(r"```clausal\n(.*?)```", text, re.S)
     block = next(b for b in blocks if "train_and_predict" in b)
     # no -double_quotes directive: a "..." in it is a string (the default)
