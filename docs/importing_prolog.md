@@ -498,12 +498,102 @@ A module **name** that the seam resolves through its aliases
 (`european_union`, `units`, `date_time`) is no Python path: in Clausal
 Prolog it imports that module's facade, so
 `:- use_module(european_union, [euro]).` keeps working. A Python module that
-has no facade (one of your own) needs a `.seam` wrapper written for it.
+has no facade (one of your own) needs a `.seam` wrapper written for it, and
+that wrapper is a **Python bridge** your project must allowlist (next
+section).
 
-The Clausal Prolog surface has no file extension of its own until the
-extension flip (`clausal._suffixes.CLAUSAL_PROLOG_SUFFIXES` is empty), so
-the refusal is not active yet. A `.pl` file (the ISO surface) and a seam
-file are unaffected: a `.pl` may still import `py/datetime` directly, and
+### Python bridges: which `.seam` modules Clausal Prolog may import
+
+A `.seam` module can host Python (`++` escapes, `--` seams, module-level
+`import`/`def`/`class`/statements, Python in f-string slots, imports of
+Python modules the engine does not ship). From a Clausal Prolog importer,
+Python is reachable **only** through:
+
+1. **Engine-shipped modules**: the `library(...)` facades, the engine
+   stdlib, the engine's own py adapters (`py.datetime`, also spelled by its
+   seam alias `date_time`), and every other file of the engine.
+   "Engine-shipped" is decided by the resolved FILE: it lies under the
+   engine's own package directory (the directory of `clausal/__init__.py`).
+   Not by the name: an optional `clausal-*` package splices its adapters
+   into the same namespace (`clausal.modules.py.scipy_stats`), and those are
+   not the engine's -- a `.seam` importing one is a Python bridge. A `.seam`
+   module whose only Python contact is importing engine-shipped adapters is
+   Python-free (case 2). This is the default mode, which trusts every
+   engine-shipped adapter; a sandbox mode narrows the engine adapters to its
+   own allowlist. (A Clausal Prolog file's DIRECT `use_module(py/X)` stays
+   refused as above: it imports the facade.)
+2. **A `.seam` module with no Python in it**: Clausal code in seam syntax,
+   checked at load. It is a pass-through: the modules it imports
+   (`-import_from`, `-import_module`, the qualifier of a dotted call
+   `m.p(...)`) are checked the same way, transitively, and must themselves
+   be Python-free, engine-shipped, or allowlisted.
+3. **A `.seam` module with Python that the importer's project allowlists**
+   in its `pyproject.toml`:
+
+```toml
+[tool.clausal]
+python_bridges = [
+    "myapp.bridges.osinfo",                       # a dotted module name
+    "bridges/net.seam",                           # a path, relative to this file
+    { module = "myapp.bridges.db", sha256 = "9f2c...64 hex digits" },
+    { path = "bridges/fs.seam", sha256 = "..." },
+]
+```
+
+Anything else is refused at load time:
+
+```text
+use_module(helper, [...]): permission_error(import, python_bridge, helper)
+-- helper (/proj/helper.seam) runs Python (python_import at line 1, escape
+at line 3); Clausal Prolog reaches Python only through the engine's
+library(...) facades, a .seam module with no Python in it, or a Python
+bridge its project allowlists. To trust it, list it in /proj/pyproject.toml:
+    [tool.clausal]
+    python_bridges = ["helper"]
+  or pin its content: { module = "helper", sha256 = "a7f4..." }
+```
+
+The rules:
+
+- **Which `pyproject.toml`**: the nearest one walking up from the
+  **importing** `.clausal` file (the first found is the project, with or
+  without a `[tool.clausal]` table). The importer's project decides what it
+  trusts; the imported module never vouches for itself, and the working
+  directory and `sys.argv` play no part -- a program that loads another
+  repository's `.clausal` files gets THAT repository's allowlist.
+- **Entries**: a string containing `/` or ending in `.seam` is a path
+  (relative to the `pyproject.toml`); any other string is the dotted module
+  name the import resolves to. A table takes exactly one of `module` or
+  `path`, and optionally `sha256` (of the file's bytes).
+- **A sha pin that does not match** is refused, naming both hashes:
+  `... is allowlisted in /proj/pyproject.toml pinned to sha256 <pinned>, but
+  the file's sha256 is <actual>: it changed since it was pinned`.
+- **A malformed allowlist** (not a list, an unknown key, a bad sha, TOML
+  that does not parse) refuses every bridge it was asked about, saying why.
+- **Transitivity**: an allowlisted bridge is trusted Python; its own
+  imports are its business and are not walked. A Python-free module is a
+  pass-through, so the Python module behind it must be allowlisted (the
+  refusal names it and the chain that reached it).
+- **Load order does not matter**: the decision is made from the FILE on
+  every load of the importer (including a bytecode-cache hit), so a bridge
+  some `.seam` importer loaded first is refused just the same. A qualified
+  call `helper:cwd(D)` (or `call/N` of one) from Clausal Prolog into a
+  bridge some other code loaded raises the same error term at run time,
+  `error(permission_error(import, python_bridge, helper), _)`, which
+  `catch/3` can match.
+- `.seam` and `.pl` importers are not affected: `.seam` is the Python
+  boundary and the programmer's responsibility.
+
+The detector is `clausal.python_bridges.python_routes(tree, source)`, which
+returns `(kind, line)` pairs for a parsed seam module (kinds:
+`clausal.python_bridges.ROUTE_KINDS`); `file_python_routes(path)` adds the
+routes that need resolving: `py_adapter` (an import or dotted call of an
+adapter the engine does not ship) and `python_module` (any other Python
+module the engine does not ship).
+
+The refusal applies to Clausal Prolog (`.clausal`, the surface
+`clausal._suffixes.CLAUSAL_PROLOG_SUFFIXES` names since the extension
+flip). A `.pl` file (the ISO surface) and a seam file are unaffected: a `.pl` may still import `py/datetime` directly, and
 may use the `library(...)` spelling too.
 
 ### Module paths

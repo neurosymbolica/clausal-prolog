@@ -244,7 +244,14 @@ submodules and classes (`jax.numpy`, `torch.nn`) but not its functions, so
 `-import_from(jax, [grad])` stays an unknown name rather than binding JAX's
 `grad` where a predicate was meant. Give the hosted import its own name
 (`pyuuid`, `pyjax`) so it does not shadow the adapter. Clausal Prolog (`.clausal`)
-files have no Python route.
+files have no Python route of their own: they reach Python through the
+engine's `library(...)` facades, or by importing a `.seam` module. A `.seam`
+module that hosts Python (an escape, a seam, a hosted `import`, ...) is a
+**Python bridge**, which a Clausal Prolog file may import only when its
+project lists it in `[tool.clausal] python_bridges` of the nearest
+`pyproject.toml` (optionally sha256-pinned); see "Python bridges" in
+[importing_prolog.md](importing_prolog.md). Importing a bridge from another
+`.seam` file needs no listing.
 
 ### Per-Solution Evaluation
 
