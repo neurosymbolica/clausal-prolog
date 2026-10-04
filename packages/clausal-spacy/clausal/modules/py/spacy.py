@@ -18,6 +18,16 @@ Layers
 6. **Sentences** — sentence/2, sentence_list/2
 7. **Similarity** — similarity/4
 8. **Noun chunks** — noun_chunk/2
+
+Text and names (ruled 2026-10-04)
+---------------------------------
+Text a document holds -- a token's, entity's or chunk's ``text``, a
+token's ``head_text``, a chunk's ``root_text`` / ``root_head_text``, a
+sentence -- is free-form, so it comes back as a STRING ``('$chars', s)``.
+Linguistic labels are names and stay ATOMS: ``lemma``, ``pos``, ``tag``,
+``dep``, an entity ``label``, a chunk ``root_dep``, a model alias.  The
+dict keys (``text``, ``lemma``, ...) are atoms.  ``shape`` (``Xxxxx``) is
+unchanged, an atom, pending a ruling.
 """
 
 from __future__ import annotations
@@ -27,7 +37,7 @@ from typing import Any, Callable
 
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.py import require_text, text_or_str
+from clausal.modules.py import require_text, text_or_str, text_result
 
 
 def _get_spacy():
@@ -108,12 +118,12 @@ def _simple_to_trampoline(simple_fn):
 def _token_to_dict(tok) -> dict:
     """Convert a spaCy token to a plain dict."""
     return {
-        "text": tok.text,
-        "lemma": tok.lemma_,
+        "text": text_result(tok.text),          # free-form: a string
+        "lemma": tok.lemma_,                     # a name: an atom (ruled)
         "pos": tok.pos_,
         "tag": tok.tag_,
         "dep": tok.dep_,
-        "head_text": tok.head.text,
+        "head_text": text_result(tok.head.text),
         "head_i": tok.head.i,
         "i": tok.i,
         "is_alpha": tok.is_alpha,
@@ -125,7 +135,7 @@ def _token_to_dict(tok) -> dict:
 def _ent_to_dict(ent) -> dict:
     """Convert a spaCy span (entity) to a plain dict."""
     return {
-        "text": ent.text,
+        "text": text_result(ent.text),
         "label": ent.label_,
         "start": ent.start,
         "end": ent.end,
@@ -137,10 +147,10 @@ def _ent_to_dict(ent) -> dict:
 def _chunk_to_dict(chunk) -> dict:
     """Convert a spaCy noun chunk span to a plain dict."""
     return {
-        "text": chunk.text,
-        "root_text": chunk.root.text,
+        "text": text_result(chunk.text),
+        "root_text": text_result(chunk.root.text),
         "root_dep": chunk.root.dep_,
-        "root_head_text": chunk.root.head.text,
+        "root_head_text": text_result(chunk.root.head.text),
     }
 
 
@@ -363,7 +373,7 @@ def _sentence_2(this_generator, _proceed, _fail, _catcher, doc, sent_var, trail)
     doc = deref(doc)
     for sent in doc.sents:
         mark = trail.mark()
-        if unify(sent_var, sent.text, trail):
+        if unify(sent_var, text_result(sent.text), trail):
             yield (_proceed, None)
         trail.undo(mark)
     yield (_fail, DONE)
@@ -372,7 +382,7 @@ def _sentence_2(this_generator, _proceed, _fail, _catcher, doc, sent_var, trail)
 def _sentence_list_2(doc, sents_var, trail, k):
     """sentence_list/2: all sentences as a list of strings."""
     doc = deref(doc)
-    sents = [sent.text for sent in doc.sents]
+    sents = [text_result(sent.text) for sent in doc.sents]
     if unify(sents_var, sents, trail):
         yield None
 

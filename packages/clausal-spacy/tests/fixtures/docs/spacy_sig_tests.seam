@@ -1,5 +1,4 @@
 # Companion tests for docs/spacy.md display snippets.
--double_quotes(atom)
 
 -import_from(spacy, [load_model, unload_model, current_model, process,
                      token, token_text, token_list,
@@ -39,17 +38,17 @@ test("token list") <- (setup(DOC), token_list(DOC, TOKS), FIRST is ++TOKS[0], T 
 
 # ── Layer 4 — Annotations ──────────────────────────────────────────────────
 
-test("pos") <- (setup(DOC), token(DOC, 0, TOK), pos(TOK, "PROPN"))  # nv
+test("pos") <- (setup(DOC), token(DOC, 0, TOK), pos(TOK, 'PROPN'))  # nv
 
 test("tag") <- (setup(DOC), token(DOC, 0, TOK), tag(TOK, _))  # nv
 
-test("lemma") <- (setup(DOC), token(DOC, 2, TOK), lemma(TOK, "look"))  # nv
+test("lemma") <- (setup(DOC), token(DOC, 2, TOK), lemma(TOK, 'look'))  # nv
 
-test("dep") <- (setup(DOC), token(DOC, 0, TOK), dep(TOK, "nsubj"))  # nv
+test("dep") <- (setup(DOC), token(DOC, 0, TOK), dep(TOK, 'nsubj'))  # nv
 
 test("head") <- (setup(DOC), token(DOC, 0, TOK), head(TOK, _))  # nv
 
-test("shape") <- (setup(DOC), token(DOC, 0, TOK), shape(TOK, "Xxxxx"))  # nv
+test("shape") <- (setup(DOC), token(DOC, 0, TOK), shape(TOK, 'Xxxxx'))  # nv
 
 test("is alpha") <- (setup(DOC), token(DOC, 0, TOK), is_alpha(TOK))  # nv
 
@@ -67,7 +66,7 @@ test("entity list") <- (setup(DOC), entity_list(DOC, ENTS), FIRST is ++ENTS[0], 
 
 test("sentence") <- (setup(DOC), sentence(DOC, _))  # nv
 
-test("sentence list") <- (setup(DOC), sentence_list(DOC, SENTS), FIRST is ++SENTS[0], FIRST == "Apple is looking at buying U.K. startup for $1 billion.")  # nv
+test("sentence list") <- (setup(DOC), sentence_list(DOC, [FIRST, *_]), FIRST == "Apple is looking at buying U.K. startup for $1 billion.")  # nv
 
 # ── Layer 7 — similarity ───────────────────────────────────────────────────
 

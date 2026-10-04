@@ -1,4 +1,3 @@
--double_quotes(atom)
 -import_from(spacy, [load_model, unload_model, current_model, process, token, token_text, token_list, pos, tag, lemma, dep, head, shape, is_alpha, is_stop, entity, entity_list, sentence, sentence_list, similarity, noun_chunk])
 
 # spaCy predicates — basic tests
@@ -23,13 +22,13 @@ test("token list") <- (setup(DOC) and token_list(DOC, TOKS) and FIRST is ++TOKS[
 
 # ── Annotations ─────────────────────────────────────────────────────────────
 
-test("pos tag") <- (setup(DOC) and token(DOC, 0, TOK) and pos(TOK, P) and P == "PROPN")  # nv
+test("pos tag") <- (setup(DOC) and token(DOC, 0, TOK) and pos(TOK, P) and P == 'PROPN')  # nv
 
-test("lemma") <- (setup(DOC) and token(DOC, 2, TOK) and lemma(TOK, L) and L == "look")  # nv
+test("lemma") <- (setup(DOC) and token(DOC, 2, TOK) and lemma(TOK, L) and L == 'look')  # nv
 
-test("dep label") <- (setup(DOC) and token(DOC, 0, TOK) and dep(TOK, D) and D == "nsubj")  # nv
+test("dep label") <- (setup(DOC) and token(DOC, 0, TOK) and dep(TOK, D) and D == 'nsubj')  # nv
 
-test("shape") <- (setup(DOC) and token(DOC, 0, TOK) and shape(TOK, S) and S == "Xxxxx")  # nv
+test("shape") <- (setup(DOC) and token(DOC, 0, TOK) and shape(TOK, S) and S == 'Xxxxx')  # nv
 
 test("is alpha") <- (setup(DOC) and token(DOC, 0, TOK) and is_alpha(TOK))  # nv
 
@@ -45,7 +44,7 @@ test("entity list") <- (setup(DOC) and entity_list(DOC, ENTS) and FIRST is ++ENT
 
 test("sentence iteration") <- (setup(DOC) and sentence(DOC, S) and S == "Apple is looking at buying U.K. startup for $1 billion.")  # nv
 
-test("sentence list") <- (setup(DOC) and sentence_list(DOC, SENTS) and FIRST is ++SENTS[0] and FIRST == "Apple is looking at buying U.K. startup for $1 billion.")  # nv
+test("sentence list") <- (setup(DOC) and sentence_list(DOC, [FIRST, *_]) and FIRST == "Apple is looking at buying U.K. startup for $1 billion.")  # nv
 
 # ── Noun chunks ─────────────────────────────────────────────────────────────
 

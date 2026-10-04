@@ -105,21 +105,24 @@ setup(DOC) <- (
 
 ## Layer 3 — Tokens
 
-A token is represented as a plain Python dict with keys:
+A token is represented as a plain Python dict with (atom) keys. Text the
+document holds is free-form and comes back as a **string**
+(`"Apple"`, the term `('$chars', 'Apple')`); linguistic labels are names
+and come back as **atoms** (`'PROPN'`, `look`) -- ruled 2026-10-04:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `text` | str | Surface form |
-| `lemma` | str | Lemmatised form |
-| `pos` | str | Coarse POS tag (Universal Dependencies) |
-| `tag` | str | Fine-grained POS tag |
-| `dep` | str | Dependency label |
-| `head_text` | str | Surface form of the syntactic head |
+| `text` | string | Surface form |
+| `lemma` | atom | Lemmatised form |
+| `pos` | atom | Coarse POS tag (Universal Dependencies) |
+| `tag` | atom | Fine-grained POS tag |
+| `dep` | atom | Dependency label |
+| `head_text` | string | Surface form of the syntactic head |
 | `head_i` | int | Index of the syntactic head token |
 | `i` | int | token index within the document |
 | `is_alpha` | bool | True if the token consists of alphabetic characters |
 | `is_stop` | bool | True if the token is a stop word |
-| `shape` | str | Orthographic shape (e.g. `"Xxxxx"`, `"dd"`) |
+| `shape` | atom | Orthographic shape (e.g. `'Xxxxx'`, `dd`) |
 
 ### `token/2`
 
@@ -152,7 +155,7 @@ indexed_tokens(DOC, I, TOK) <- token(DOC, I, TOK)
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:token_text_sig"
 ```
 
-Unify `Text` with the surface form of a token dict. equivalent to `T is ++Tok["text"]` but more readable.
+Unify `Text` with the surface form of a token dict, a string. Equivalent to `T is ++Tok["text"]` but more readable.
 
 ```clausal
 is_apple(TOK) <- token_text(TOK, "Apple")
@@ -182,7 +185,7 @@ All annotation predicates take a token dict as their first argument and unify th
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:pos_sig"
 ```
 
-Coarse-grained Universal Dependencies POS tag: `"NOUN"`, `"VERB"`, `"PROPN"`, `"ADJ"`, etc.
+Coarse-grained Universal Dependencies POS tag, an atom: `'NOUN'`, `'VERB'`, `'PROPN'`, `'ADJ'`, etc.
 
 !!! note "Why `pos` not `POS`?"
     `POS` is all-uppercase, which the term transformer would interpret as a logic variable. The predicate is therefore named `pos`.
@@ -193,7 +196,7 @@ Coarse-grained Universal Dependencies POS tag: `"NOUN"`, `"VERB"`, `"PROPN"`, `"
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:tag_sig"
 ```
 
-Fine-grained POS tag specific to the language model (e.g. `"NNS"`, `"VBZ"` for English Penn Treebank).
+Fine-grained POS tag specific to the language model, an atom (e.g. `'NNS'`, `'VBZ'` for English Penn Treebank).
 
 ### `lemma/2`
 
@@ -201,7 +204,7 @@ Fine-grained POS tag specific to the language model (e.g. `"NNS"`, `"VBZ"` for E
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:lemma_sig"
 ```
 
-Lemmatised form of the token (e.g. `"run"` for `"running"`).
+Lemmatised form of the token, an atom (e.g. `run` for `"running"`): `lemma(TOK, 'run')`.
 
 ### `dep/2`
 
@@ -209,7 +212,7 @@ Lemmatised form of the token (e.g. `"run"` for `"running"`).
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:dep_sig"
 ```
 
-Dependency relation to the syntactic head: `"nsubj"`, `"dobj"`, `"ROOT"`, etc.
+Dependency relation to the syntactic head, an atom: `nsubj`, `dobj`, `'ROOT'`, etc.
 
 ### `head/2`
 
@@ -217,7 +220,7 @@ Dependency relation to the syntactic head: `"nsubj"`, `"dobj"`, `"ROOT"`, etc.
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:head_sig"
 ```
 
-Surface form of the syntactic head token.
+Surface form of the syntactic head token, a string.
 
 ### `shape/2`
 
@@ -225,7 +228,7 @@ Surface form of the syntactic head token.
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:shape_sig"
 ```
 
-Orthographic shape string: `"Xxxxx"` for `"Apple"`, `"dd"` for `"42"`, etc.
+Orthographic shape, an atom: `'Xxxxx'` for `"Apple"`, `dd` for `"42"`, etc.
 
 ### `is_alpha/1`
 
@@ -247,7 +250,7 @@ Orthographic shape string: `"Xxxxx"` for `"Apple"`, `"dd"` for `"42"`, etc.
 
 ## Layer 5 — Named entity recognition
 
-An entity is a dict with keys: `text`, `label`, `start`, `end`, `start_char`, `end_char`.
+An entity is a dict with keys: `text` (a string), `label` (an atom, `'ORG'`), `start`, `end`, `start_char`, `end_char`.
 
 ### `entity/2`
 
@@ -258,7 +261,7 @@ An entity is a dict with keys: `text`, `label`, `start`, `end`, `start_char`, `e
 **Nondeterministic.** Yields one solution per entity in the document.
 
 ```clausal
-orgs(DOC, ENT) <- (entity(DOC, ENT), T is ++ENT["label"], T == "ORG")
+orgs(DOC, ENT) <- (entity(DOC, ENT), T is ++ENT["label"], T == 'ORG')
 ```
 
 ### `entity/3`
@@ -286,7 +289,7 @@ Unify `Ents` with a list of all entity dicts. Deterministic.
 
 ## Layer 6 — Sentences
 
-Sentences are plain strings (the `.text` of each spaCy `span`).
+Sentences are strings (the `.text` of each spaCy `span`, as the term `('$chars', s)`).
 
 ### `sentence/2`
 
@@ -333,7 +336,7 @@ close(T1, T2) <- (
 
 ## Layer 8 — Noun chunks
 
-A noun chunk is a dict with keys: `text`, `root_text`, `root_dep`, `root_head_text`.
+A noun chunk is a dict with keys: `text`, `root_text`, `root_head_text` (strings) and `root_dep` (an atom).
 
 ### `noun_chunk/2`
 
@@ -347,7 +350,7 @@ A noun chunk is a dict with keys: `text`, `root_text`, `root_dep`, `root_head_te
 subjects(DOC, CHUNK) <- (
     noun_chunk(DOC, CHUNK),
     D is ++CHUNK["root_dep"],
-    D == "nsubj"
+    D == 'nsubj'
 )
 ```
 
@@ -363,8 +366,8 @@ noun_subjects(TEXT, LEMMA) <- (
     load_model("en_core_web_sm", "nlp"),
     process("nlp", TEXT, DOC),
     token(DOC, TOK),
-    pos(TOK, "NOUN"),
-    dep(TOK, "nsubj"),
+    pos(TOK, 'NOUN'),
+    dep(TOK, 'nsubj'),
     lemma(TOK, LEMMA)
 )
 

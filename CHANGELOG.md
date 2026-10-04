@@ -20,6 +20,17 @@ since 0.4.0 finish three moves:
 
 ### Breaking
 
+- **clausal-spacy: document text is a STRING; labels stay atoms** (ruled
+  2026-10-04: free-form adapter text is a string `('$chars', s)`; `lemma`
+  is ruled an atom). Changed: the `text` and `head_text` of a token dict
+  (`token/2,3`, `token_list/2`), `token_text/2`, `head/2`, the `text` of an
+  entity dict (`entity/2,3`, `entity_list/2`), the `text`, `root_text` and
+  `root_head_text` of a noun-chunk dict (`noun_chunk/2`), `sentence/2` and
+  `sentence_list/2`. Unchanged: `lemma/2`, `pos/2`, `tag/2`, `dep/2`,
+  `shape/2`, an entity `label`, a chunk `root_dep` and model aliases are
+  atoms; dict keys are atoms. Migration: compare text with a string
+  (`token_text(TOK, "Apple")`) and labels with atoms (`pos(TOK, 'PROPN')`).
+
 - **clausal-opencv: `haar_cascade_path/2` answers the PATH as a STRING**
   (ruled 2026-10-04: a path is free-form adapter text, a string
   `('$chars', p)`). Changed: `haar_cascade_path/2`'s PATH. Unchanged: the

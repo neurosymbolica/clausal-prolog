@@ -69,6 +69,7 @@ from clausal.modules.py.spacy import (
     noun_chunk,
 )
 from clausal._suffixes import SEAM_SUFFIX
+from clausal.logic.cells import chars
 
 
 # ── Shared test sentence ──────────────────────────────────────────────────────
@@ -138,7 +139,7 @@ class TestTokenToDict:
     def test_apple_text(self, doc):
         # nv
         d = _token_to_dict(doc[0])
-        assert d["text"] == "Apple"
+        assert d["text"] == chars("Apple")
 
     def test_index(self, doc):
         # nv
@@ -167,7 +168,7 @@ class TestEntToDict:
     def test_apple_org(self, doc):
         # nv
         org_ents = [_ent_to_dict(e) for e in doc.ents if e.label_ == "ORG"]
-        assert any(e["text"] == "Apple" for e in org_ents)
+        assert any(e["text"] == chars("Apple") for e in org_ents)
 
 
 class TestChunkToDict:
@@ -181,7 +182,7 @@ class TestChunkToDict:
     def test_apple_chunk(self, doc):
         # nv
         chunks = [_chunk_to_dict(c) for c in doc.noun_chunks]
-        assert any(c["text"] == "Apple" for c in chunks)
+        assert any(c["text"] == chars("Apple") for c in chunks)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -353,7 +354,7 @@ class TestTokenPredicates:
             first = deref(tok_var)
             break
         assert first is not None
-        assert first["text"] == "Apple"
+        assert first["text"] == chars("Apple")
 
     def test_token_3_by_index(self, doc, trail):
         # nv
@@ -368,7 +369,7 @@ class TestTokenPredicates:
             result = deref(tok_var)
             break
         assert result is not None
-        assert result["text"] == "Apple"
+        assert result["text"] == chars("Apple")
 
     def test_token_3_out_of_range(self, doc, trail):
         # nv
@@ -397,7 +398,7 @@ class TestTokenPredicates:
             pairs.append((deref(idx_var), deref(tok_var)["text"]))
             trail.undo(trail.mark())
         assert len(pairs) == len(doc)
-        assert pairs[0] == (0, "Apple")
+        assert pairs[0] == (0, chars("Apple"))
 
     def test_token_text(self, doc, trail):
         # nv
@@ -406,7 +407,7 @@ class TestTokenPredicates:
         result = Var()
         results = list(_token_text_2(tok, result, trail, None))
         assert len(results) == 1
-        assert deref(result) == "Apple"
+        assert deref(result) == chars("Apple")   # token text: a STRING
 
     def test_token_list(self, doc, trail):
         # nv
@@ -417,7 +418,7 @@ class TestTokenPredicates:
         lst = deref(result)
         assert isinstance(lst, list)
         assert len(lst) == len(doc)
-        assert lst[0]["text"] == "Apple"
+        assert lst[0]["text"] == chars("Apple")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -524,7 +525,7 @@ class TestNERPredicates:
                 break
             entities.append(deref(ent_var))
         assert len(entities) == len(doc.ents)
-        assert any(e["text"] == "Apple" for e in entities)
+        assert any(e["text"] == chars("Apple") for e in entities)
 
     def test_entity_3_filter_by_label(self, doc, trail):
         # nv
@@ -537,7 +538,7 @@ class TestNERPredicates:
             if val is DONE:
                 break
             org_ents.append(deref(ent_var))
-        assert any(e["text"] == "Apple" for e in org_ents)
+        assert any(e["text"] == chars("Apple") for e in org_ents)
         assert all(e["label"] == "ORG" for e in org_ents)
 
     def test_entity_3_unknown_label_empty(self, doc, trail):
@@ -561,7 +562,7 @@ class TestNERPredicates:
         assert len(results) == 1
         lst = deref(result)
         assert isinstance(lst, list)
-        assert any(e["text"] == "Apple" for e in lst)
+        assert any(e["text"] == chars("Apple") for e in lst)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -582,7 +583,7 @@ class TestSentencePredicates:
                 break
             sents.append(deref(sent_var))
         assert len(sents) > 0
-        assert sents[0] == _TEXT
+        assert sents[0] == chars(_TEXT)   # a sentence: a STRING
 
     def test_sentence_list(self, doc, trail):
         # nv
@@ -592,7 +593,7 @@ class TestSentencePredicates:
         assert len(results) == 1
         lst = deref(result)
         assert isinstance(lst, list)
-        assert lst[0] == _TEXT
+        assert lst[0] == chars(_TEXT)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -640,7 +641,7 @@ class TestNounChunks:
                 break
             chunks.append(deref(chunk_var))
         assert len(chunks) == len(list(doc.noun_chunks))
-        assert any(c["text"] == "Apple" for c in chunks)
+        assert any(c["text"] == chars("Apple") for c in chunks)
 
     def test_noun_chunk_has_keys(self, doc, trail):
         # nv
@@ -736,4 +737,4 @@ class TestSpacyBasicFixture:
     ])
     def test_fixture(self, name):
         # nv
-        assert _succeeds("test", name, module=self.mod)
+        assert _succeeds("test", chars(name), module=self.mod)   # test names are strings
