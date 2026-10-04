@@ -207,7 +207,10 @@ Common fields by predicate:
 | `linear_program`, `mixed_integer_linear_program` | `'x'`, `'fun'`, `'success'`, `'message'` |
 
 `result_get(R, 'message', M)` answers a **string** (a list of strings for
-`basin_hopping`): the message is free-form text, not an atom.
+`basin_hopping`): the message is free-form text, not an atom. The
+conversion happens in `result_get/3`: the result itself is SciPy's
+`OptimizeResult`, so reading it through the `++` escape
+(`++R["message"]`) still gives SciPy's str, an atom.
 
 ---
 

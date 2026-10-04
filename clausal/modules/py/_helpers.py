@@ -438,9 +438,23 @@ def _fact_table_2(get_facts):
     Supports modes: (+name, -value), (-name, +value), (-name, -value), (+name, +value).
     get_facts() is called lazily to build the list on first use.  A bound
     name may be an atom or a string (:func:`_text_arg`); both match the
-    fact of that spelling.
+    fact of that spelling.  A bound VALUE matches an opaque fact value (a
+    class, a function) by identity; a TEXT fact value (a string, as a
+    path registry holds) matches by its text, so a bound atom or string of
+    the same spelling finds it.  ``dispatch.cache`` is the lazily filled
+    cache (tests reset it).
     """
     cache = {}
+
+    def _text_of(val):
+        t = _text_arg(val)
+        return t if type(t) is str else None
+
+    def _value_matches(fact_value, v):
+        if fact_value is v:
+            return True
+        ft = _text_of(fact_value)
+        return ft is not None and ft == _text_of(v)
 
     def dispatch(this_generator, _proceed, _fail, _catcher, name_var, value_var, trail):
         if not cache:
@@ -457,6 +471,9 @@ def _fact_table_2(get_facts):
                 yield (_proceed, None)
         elif is_var(n) and not is_var(v):
             key = cache["by_value"].get(id(v))
+            if key is None and _text_of(v) is not None:
+                key = next((name for name, value in cache["facts"]
+                            if _value_matches(value, v)), None)
             if key is not None and unify(name_var, key, trail):
                 yield (_proceed, None)
         elif is_var(n) and is_var(v):
@@ -467,7 +484,8 @@ def _fact_table_2(get_facts):
                 trail.undo(mark)
         else:
             cls = cache["by_name"].get(n)
-            if cls is not None and cls is v:
+            if cls is not None and _value_matches(cls, v):
                 yield (_proceed, None)
         yield (_fail, DONE)
+    dispatch.cache = cache
     return dispatch

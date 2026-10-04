@@ -6,7 +6,9 @@ cascade name is a key and stays an atom (a plain ``str``).
 
 Runs WITHOUT OpenCV (``*_stubbed.py``, see packages/conftest.py): a fake
 module in ``opencv._cv2`` supplies ``data.haarcascades``, and the
-registry's lazily built fact cache is reset around each test.
+registry's lazily built fact cache is reset around each test.  A bound
+path -- a string or an atom written elsewhere, not the object the registry
+handed out -- is matched by its text (check mode and reverse lookup).
 """
 
 from __future__ import annotations
@@ -22,10 +24,7 @@ from clausal.modules.py import opencv_objdetect as od
 
 
 def _fact_cache():
-    fn = od.haar_cascade_path._dispatch_fns[2]
-    [cache] = [c.cell_contents for c in fn.__closure__
-               if isinstance(c.cell_contents, dict)]
-    return cache
+    return od.haar_cascade_path._dispatch_fns[2].cache
 
 
 @pytest.fixture
@@ -41,6 +40,7 @@ def cascades(monkeypatch, tmp_path):
 
 
 def _solutions(name, path):
+    """(name, path) for each answer; *path* may be bound."""
     proceed, fail = object(), object()
     fn = od.haar_cascade_path._dispatch_fns[2]
     out = []
@@ -67,3 +67,17 @@ def test_enumerated_names_stay_atoms_paths_are_strings(cascades):
     assert sorted(n for n, _ in got) == ["eye", "face"]
     assert all(type(n) is str for n, _ in got)
     assert all(is_chars(p) for _, p in got)
+
+
+@pytest.mark.parametrize("spell", [chars, str], ids=["string", "atom"])
+def test_check_mode_matches_a_path_by_its_text(cascades, spell):
+    path = spell(cascades + "haarcascade_eye.xml")
+    assert len(_solutions("eye", path)) == 1
+    assert _solutions("face", path) == []
+
+
+@pytest.mark.parametrize("spell", [chars, str], ids=["string", "atom"])
+def test_reverse_lookup_by_a_path_written_elsewhere(cascades, spell):
+    path = spell(cascades + "haarcascade_frontalface_default.xml")
+    [(n, _)] = _solutions(Var(), path)
+    assert n == "face"

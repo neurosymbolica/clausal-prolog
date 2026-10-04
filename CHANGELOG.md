@@ -50,6 +50,11 @@ since 0.4.0 finish three moves:
   `('$chars', p)`). Changed: `haar_cascade_path/2`'s PATH. Unchanged: the
   NAME is a key -- given, an atom or a string; enumerated, an atom; and
   `make_cascade_classifier/2` takes the string path as it took the atom.
+  A bound PATH (check mode, or looking the name up by path) now matches
+  by its text, an atom or a string; it matched only the very object the
+  registry had handed out. The shared fact table (`_helpers._fact_table_2`)
+  matches every TEXT fact value this way; class and function values are
+  still matched by identity.
   Migration: compare a path with a string, or pass it straight on.
 
 - **clausal-scipy: units and messages are STRINGS; constant names stay
@@ -60,7 +65,8 @@ since 0.4.0 finish three moves:
   `solve_initial_value_problem/4,5,6`, whose result dict's `message` is a
   string (so is `result_get(R, 'message', M)`); `scipy_optimize`
   `result_get/3` on the `message` field (a string, a list of strings for
-  `basin_hopping`). Unchanged: `find/2` and `all_names/1` answer the names
+  `basin_hopping`; the `OptimizeResult` itself is SciPy's, so
+  `++R["message"]` still answers an atom). Unchanged: `find/2` and `all_names/1` answer the names
   as atoms; `value/2`, `precision/2` and every numeric field; the
   `infodict` of `quad/4` and `ode_integrate` (SciPy's own dict, passed
   through as it comes). Migration: compare a unit or message with a string.

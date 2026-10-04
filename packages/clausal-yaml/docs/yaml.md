@@ -59,7 +59,8 @@ way in `get/3` (`'name'` or `"name"`). `write/2` and `write_all/2` answer the
 YAML document as a string too.
 
 These are the objects `yaml.safe_load` produces, with each string VALUE
-converted to a string at every depth. Python methods can be called on the
+converted to a string at every depth of its lists and mappings (the
+members of a `!!set`, a Python `set`, are left as loaded: atoms). Python methods can be called on the
 containers via [`++()`](python_integration.md) interop — e.g., `KEYS is
 ++(D.keys())` or `LEN is ++len(ITEMS)`.
 
