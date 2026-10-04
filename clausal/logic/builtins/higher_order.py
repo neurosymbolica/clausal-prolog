@@ -371,6 +371,12 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
                 if isinstance(_module_dict, dict) else None)
     if dispatch is not None:
         return dispatch, call_args
+    # A DOTTED functor naming a goal object through its module
+    # (``call(torch.tensor([1], X))``, whose cell is ``("torch.tensor", [1],
+    # X)``): walked the way the compiled body walks ``torch.tensor([1], X)``.
+    dispatch = _dotted_goal_object_dispatch(db, functor, arity, context)
+    if dispatch is not None:
+        return dispatch, call_args
     dispatch = db.get_dispatch(functor, arity)
     if dispatch is None:
         dispatch = _namespace_dispatch(db, functor, arity)
@@ -527,6 +533,58 @@ def _goal_object_dispatch(db, binding, arity):
             or is_declared_predicate_name(binding, db=db)):
         return None
     return _dispatch_at(binding, arity, db)
+
+
+def dotted_goal_object(module_dict, functor, db=None):
+    """``(base, binding)`` when *functor* is a DOTTED name ``m.p`` (``a.b.p``)
+    whose ``m`` resolves -- this namespace's binding of the first segment,
+    else ``sys.modules``, as the compiled dotted call resolves it
+    (``globals_env._dotted_base``) -- and whose ``p`` there is a NON-predicate
+    goal object: a ``ModulePredicate`` or another non-callable
+    ``_get_dispatch`` implementor (a predicate ADAPTER).  Else None.
+
+    A qualified adapter call written as a TERM (``call(torch.tensor([1],
+    X))``, ``findall(X, G, L)`` with ``G`` such a term) is the cell
+    ``("torch.tensor", [1], X)``: the compiler names the cell after the
+    source spelling (``_goal_cell_functor``), and no namespace key, db row or
+    builtin carries a dotted name, so the meta-call raised
+    ``existence_error(procedure, 'torch.tensor'/2)`` for a goal the clause
+    body runs.  A qualified PREDICATE (class or handle) is not answered here:
+    its cell carries the predicate's module-qualified handle, which the
+    handle route resolves."""
+    if (type(functor) is not str or "." not in functor
+            or not isinstance(module_dict, dict)):
+        return None
+    parts = functor.split(".")
+    if not all(parts):
+        return None
+    from clausal.logic.compiler.globals_env import _dotted_base  # noqa: PLC0415
+    base = _dotted_base(parts, module_dict)
+    if base is None or type(base) is str:
+        return None
+    obj = getattr(base, parts[-1], None)
+    if (obj is None or type(obj) is str or callable(obj)
+            or not hasattr(obj, "_get_dispatch")
+            or is_declared_predicate_name(obj, db=db)):
+        return None
+    return base, obj
+
+
+def _dotted_goal_object_dispatch(db, functor, arity, context):
+    """The dispatch for a dotted adapter goal (:func:`dotted_goal_object`)
+    run by a meta-call in *db*'s module, else None.
+
+    The dialect gate applies as it does to the compiled call (route 2): a
+    Clausal Prolog frame reaches Python only through a ``.seam`` module, so
+    there the goal raises ``permission_error(access, python_module, M)``
+    instead of running -- whichever module built the term."""
+    hit = dotted_goal_object(getattr(db, "module_dict", None), functor, db)
+    if hit is None:
+        return None
+    base, obj = hit
+    from clausal.logic.dialect_edge import refuse_edge  # noqa: PLC0415
+    refuse_edge(db, base, context)
+    return _dispatch_at(obj, arity, db)
 
 
 def _make_call_goal_factory(extra_n: int):

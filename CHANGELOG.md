@@ -1353,6 +1353,22 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   A string name now matches the fact of its spelling, in lookup and in
   check mode; an unbound name still enumerates the atoms, and a reverse
   lookup still answers the atom.
+
+- **A qualified predicate-adapter goal built as a term runs under a
+  meta-call.** `call(torch.tensor([1], X))` raised
+  `existence_error(procedure, 'torch.tensor'/2)` although the clause body
+  `torch.tensor([1], X)` runs; so did `call(m.p(A), B)`, `maplist(m.p(A),
+  L)`, `findall(X, G, L)` and any `call(G)` whose `G` holds such a term.
+  The goal cell is named after the source spelling (`'torch.tensor'`) and
+  the meta-call looked a functor up only as a plain name. It now walks a
+  dotted functor the way the compiled call does (the module's binding of the
+  first segment, else the loaded module) and runs the adapter it names;
+  Python's `solve.call("py.re.match", ...)` does too. A qualified program
+  predicate was unaffected (its cell carries the predicate's handle). In a
+  Clausal Prolog (`.clausal`) frame the dialect gate applies: such a goal
+  raises `permission_error(access, python_module, M)`, whichever module
+  built the term.
+
 - **The date predicates see a date term whose component was bound in the
   body.** `Y = 2025, ordinal(date(Y, 3, 1), N)` answered nothing, with no
   error, in `.pl` (both front ends) and in the seam when the term was built

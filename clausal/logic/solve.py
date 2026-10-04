@@ -1753,6 +1753,16 @@ def call(
                 obj = getattr(obj, part, None)
             if obj is not None and is_declared_predicate_name(obj, db=module.db):
                 dispatch_fn = _dispatch_at(obj, arity, module.db)
+            else:
+                # A dotted predicate ADAPTER (``call("py.re.match", P, S)``):
+                # the goal object the compiled ``py.re.match(P, S)`` calls.
+                # Python is outside the dialect gate (route 5).
+                from clausal.logic.builtins.higher_order import (  # noqa: PLC0415
+                    dotted_goal_object,
+                )
+                hit = dotted_goal_object(module.module_dict, functor, module.db)
+                if hit is not None:
+                    dispatch_fn = _dispatch_at(hit[1], arity, module.db)
         # W4b-3: after the flip the binding is a module-qualified HANDLE,
         # which has no ``_get_dispatch``; skipping this phase then hands the
         # call to a same-named BUILTIN in Phase 6.  ``_dispatch_at`` resolves
