@@ -700,3 +700,62 @@ def test_an_undecidable_engine_fails_closed(engine_rule, monkeypatch,
     assert pb._engine_rule() == ("none", None)
     assert not is_engine_shipped("clausal.library.x",
                                  str(fake / "library" / "x.seam"))
+
+
+# ── security review (job 334) ───────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("imports, value", [
+    ("-import_module(py.csv)\n", "py.csv.io.open('/etc/hostname')"),
+    ("-import_module(py.files)\n", "py.files.pathlib.Path.cwd()"),
+    ("-import_module(units)\n", "units.os.getcwd()"),
+])
+def test_a_chain_into_a_module_s_namespace_is_a_route(proj, imports, value):
+    """A trusted engine adapter's NAMESPACE is not trusted: ``py.csv.io``
+    is the stdlib ``io`` the adapter imported, and walking on from it is
+    arbitrary Python.  A qualified name is ``module.name``, never deeper."""
+    path = proj.seam("helper", "-module(@helper, [v/1])\n" + imports
+                     + f"v(X) <- (X is {value})\n")
+    assert ("python_module", 3) in file_python_routes(str(path))
+    proj.clausal("main", ":- use_module(@helper, [v/1]).\n",
+                 "t(X) :- v(X).\n")
+    msg = _refused(proj, "main")
+    assert REFUSAL.format(m=proj.n("helper")) in msg, msg
+
+
+def test_a_module_dot_name_is_still_fine(proj):
+    path = proj.seam("clean", "-module(@clean, [p/1])\n"
+                              "-import_module(py.datetime)\n"
+                              "-import_from(date_time, [date])\n"
+                              "p(N) <- (py.datetime.days_between("
+                              "date(2026, 1, 31), date(2026, 1, 1), N))\n")
+    assert file_python_routes(str(path)) == []
+
+
+@pytest.mark.parametrize("where, entry", [
+    ("elsewhere", "clausal/library/datetime.seam"),   # dist-info not beside
+    ("beside", "ABS"),                                 # absolute entry
+    ("beside", "../{site}/clausal/library/datetime.seam"),  # a .. entry
+])
+def test_a_planted_record_cannot_vouch_for_files(engine_rule, monkeypatch,
+                                                 tmp_path, where, entry):
+    import clausal
+    pb = engine_rule
+    root = os.path.dirname(os.path.realpath(clausal.__file__))
+    site = os.path.dirname(root)
+    target = os.path.join(root, "library", "datetime.seam")
+    if entry == "ABS":
+        entry = target
+    entry = entry.format(site=os.path.basename(site))
+    base = str(tmp_path) if where == "elsewhere" else site
+    record = ["clausal/__init__.py", entry]
+    if where == "elsewhere":
+        # A dist-info planted elsewhere on sys.path, whose RECORD points
+        # (by relative paths) at the real engine __init__ and at the file
+        # it wants trusted.
+        record = [os.path.relpath(os.path.realpath(clausal.__file__), base),
+                  os.path.relpath(target, base)]
+    monkeypatch.setattr(pb, "_engine_distribution",
+                        lambda: _FakeDist(base, record))
+    assert not (pb._engine_rule()[0] == "record"
+                and is_engine_shipped("clausal.library.datetime", target))

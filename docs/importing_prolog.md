@@ -523,8 +523,11 @@ Python is reachable **only** through:
    not the engine's -- a `.seam` importing one is a Python bridge. A `.seam`
    module whose only Python contact is importing engine-shipped adapters is
    Python-free (case 2). Every dotted chain in a Clausal position counts as
-   a reference, a value (`X is py.datetime.v`) as much as a call, and a
-   `py.X` the engine's adapters do not resolve is a route (fail closed). This is the default mode, which trusts every
+   a reference, a value (`X is py.datetime.v`) as much as a call; a
+   qualified name is `module.name`, so a chain that walks on INTO a
+   module's namespace (`py.csv.io.open(...)`, the `io` the adapter
+   imported) is a route, and so is a `py.X` the engine's adapters do not
+   resolve (fail closed). This is the default mode, which trusts every
    engine-shipped adapter; a sandbox mode narrows the engine adapters to its
    own allowlist. (A Clausal Prolog file's DIRECT `use_module(py/X)` stays
    refused as above: it imports the facade.)

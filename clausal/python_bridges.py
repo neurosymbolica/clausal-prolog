@@ -251,7 +251,7 @@ def _inert_fstring(joined: ast.JoinedStr) -> bool:
 def _module_references(tree: ast.Module) -> "list[tuple[str, int]]":
     """``(dotted, line)`` for every module the file names: its
     ``-import_from`` / ``-import_module`` paths (resolved through the seam's
-    import aliases) and the qualifiers (:func:`_qualifiers`) of EVERY
+    import aliases) and every proper prefix (:func:`_qualifiers`) of EVERY
     dotted chain in a Clausal position -- a call ``m.p(...)``, a goal
     handed to ``call/N``, a value ``X is m.v`` -- whatever the head binds
     (``-import_module(py.datetime)`` binds ``py``, through which
@@ -276,8 +276,12 @@ def _module_references(tree: ast.Module) -> "list[tuple[str, int]]":
             dotted = _dotted(sub)
             if dotted is None or _is_logic_var_name(dotted.split(".")[0]):
                 continue        # X.k is dict sugar, no module
-            for qualifier in _qualifiers(dotted):
-                refs.append((_resolve_import_path(qualifier), sub.lineno))
+            head, _, rest = dotted.partition(".")
+            # The seam's import aliases name the chain's HEAD module
+            # (``units`` is ``clausal.modules.units``).
+            head = _resolve_import_path(head)
+            for qualifier in _qualifiers(f"{head}.{rest}" if rest else head):
+                refs.append((qualifier, sub.lineno))
     out, seen = [], set()
     for ref in refs:
         if ref not in seen:
@@ -287,15 +291,12 @@ def _module_references(tree: ast.Module) -> "list[tuple[str, int]]":
 
 
 def _qualifiers(dotted: str) -> "list[str]":
-    """The module names a dotted chain ``a.b.c`` may reach, in a call
-    (``a.b.c(X)``) or a DATA position (``X is a.b.c``) alike: for a
-    ``py.X...`` chain the adapter ``py.X`` (the only name the seam's
-    ``py`` redirect resolves); for any other chain every proper prefix
-    (``a``, ``a.b``), since the compiled chain walks attributes from its
-    head."""
+    """Every proper prefix of the dotted chain ``a.b.c`` (``a``, ``a.b``),
+    in a call (``a.b.c(X)``) or a DATA position (``X is a.b.c``) alike:
+    the compiled chain walks attributes from its head, so each prefix is
+    something it reaches (:func:`_classify` refuses a prefix that walks
+    INTO a module's namespace, ``py.csv.io``)."""
     parts = dotted.split(".")
-    if parts[0] == "py":
-        return [".".join(parts[:2])] if len(parts) > 1 else []
     return [".".join(parts[:i]) for i in range(1, len(parts))]
 
 
@@ -413,6 +414,14 @@ def _classify(dotted: str) -> "tuple[str, str | None]":
     origin = _find(dotted)
     if origin == _UNRESOLVABLE:
         return "python_module", None
+    if origin is None and "." in dotted:
+        parent = _find(dotted.rpartition(".")[0])
+        if parent is not None:
+            # ``m.a.b`` with ``m`` a module and ``m.a`` none: the chain walks
+            # an attribute OF m's namespace (an object the module imported,
+            # ``py.csv.io``) and then goes on into it -- arbitrary Python.
+            # A qualified name is ``m.name``, never deeper.
+            return "python_module", None
     if origin is None and dotted.startswith(_PY_ADAPTERS + "."):
         # Fail closed: a py.X the engine's adapters do not resolve may fall
         # through at run time to some other ``py`` package on sys.path.
@@ -500,8 +509,22 @@ def _engine_rule() -> tuple:
     files = None
     if dist is not None:
         try:
-            files = [os.path.realpath(dist.locate_file(f))
-                     for f in (dist.files or ())]
+            # Only the distribution installed BESIDE the imported package
+            # (its dist-info in the same directory), and only its relative,
+            # ``..``-free entries that resolve under the package directory:
+            # a dist-info planted earlier on sys.path cannot vouch for files
+            # of its choosing.
+            site = os.path.dirname(root)
+            if os.path.realpath(dist.locate_file("")) == site:
+                files = []
+                for f in dist.files or ():
+                    rel = str(f)
+                    if os.path.isabs(rel) or ".." in rel.replace(
+                            "\\", "/").split("/"):
+                        continue
+                    real = os.path.realpath(dist.locate_file(f))
+                    if real.startswith(root + os.sep):
+                        files.append(real)
         except Exception:  # noqa: BLE001 -- unreadable RECORD: not "record"
             files = None
     if files and init in files:
