@@ -239,13 +239,18 @@ def symbol(name: str) -> str:
 
 
 def has_symbol(v) -> bool:
-    """True if *v*, or a list/dict value inside it, is a :func:`symbol`."""
+    """True if *v*, or a list/dict/DictTerm value inside it (the containers
+    :func:`text_result` converts), is a :func:`symbol`.  Not a tuple: a
+    tuple is a cell and is never converted."""
     if type(v) is _Symbol:
         return True
     if type(v) is list:
         return any(has_symbol(e) for e in v)
     if type(v) is dict:
         return any(has_symbol(e) for e in v.values())
+    from clausal.terms import DictTerm  # noqa: PLC0415
+    if isinstance(v, DictTerm):
+        return any(has_symbol(e) for e in v.data.values())
     return False
 
 
@@ -259,6 +264,9 @@ def symbols_as_text(v):
         return [symbols_as_text(e) for e in v]
     if type(v) is dict:
         return {k: symbols_as_text(e) for k, e in v.items()}
+    from clausal.terms import DictTerm  # noqa: PLC0415
+    if isinstance(v, DictTerm):
+        return DictTerm({k: symbols_as_text(e) for k, e in v.data.items()})
     return text_result(v)
 
 

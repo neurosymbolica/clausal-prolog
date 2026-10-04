@@ -115,6 +115,25 @@ def test_a_log_level_is_an_atom_in_pythons_spelling(module):
     assert _holds(module, "level_text")
 
 
+def test_a_custom_level_name_is_an_atom_and_an_unnamed_one_text():
+    import logging
+    from clausal.modules.py.logging import _get_level_2
+    logging.addLevelName(5, "TRACE")
+    lg = logging.getLogger("t.symbolic.custom")
+    for level, want in ((5, "TRACE"), (15, chars("Level 15"))):
+        lg.setLevel(level)
+        v = Var()
+        assert list(_get_level_2(lg, v, Trail(), None))
+        assert deref(v) == want
+
+
+def test_a_symbol_inside_a_dictterm_accepts_text_too():
+    from clausal.terms import DictTerm
+    out = DictTerm({"p": symbol("cpu")})
+    assert unify_result(DictTerm({"p": "cpu"}), out, Trail())
+    assert unify_result(DictTerm({"p": chars("cpu")}), out, Trail())
+
+
 def test_a_connection_alias_is_an_atom(module):
     a = _one(module, "alias")
     assert a == "symbolic_alias_1" and type(a) is str

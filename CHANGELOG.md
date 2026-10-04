@@ -23,8 +23,8 @@ since 0.4.0 finish three moves:
 - **Symbolic names an adapter hands back are ATOMS, not text** ("atom
   out, text in": the Python-boundary spec of 2026-09-21, ruled for adapter
   results 2026-10-04). Changed: `py.os` `platform/1` (`linux`),
-  `py.logging` `get_level/2` (`'WARNING'`, Python's spelling; an unnamed
-  `"Level 15"` stays text), `py.sqlite` `current_connection/1` aliases;
+  `py.logging` `get_level/2` (`'WARNING'`, Python's spelling, custom
+  level names too; an unnamed `"Level 15"` stays text), `py.sqlite` `current_connection/1` aliases;
   clausal-jax `device_platform/2` (`cpu`), `device/2`, `mesh_axis_names/2`
   (now a LIST of atoms -- it was JAX's tuple, i.e. the cell `x(y)` or the
   reserved `('x',)`), `partition_spec/2` backward (axis names as atoms, a
@@ -43,8 +43,9 @@ since 0.4.0 finish three moves:
   `X is T` that names a `ModulePredicate` (or another non-callable
   `_get_dispatch` adapter) used to bind the compound `('mod.pred', Args)`
   silently, so `T is torch.tensor([1, 2])` bound a term, not a tensor. It
-  now raises `error(type_error(evaluable, Name/N), (is)/2)`, on either side
-  of `is` and when the `is` goal is built as a term and run by `call/1`;
+  now raises `error(type_error(evaluable, Name/N), (is)/2)` when the call
+  IS one side of `is` (either side; also when the `is` goal is built as a
+  term and run by `call/1`; a call nested deeper in a side is not checked);
   Name is the functor the cell would have carried, as `eval_` and `'is'`
   (which already raised) name it. Unchanged: a qualified Python callable
   (`X is math.sqrt(16)`, a class), a qualified program predicate or data

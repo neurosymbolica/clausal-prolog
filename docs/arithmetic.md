@@ -98,7 +98,9 @@ torch.nn.Linear(10, 5)` a module). A qualified **predicate adapter** is not a
 Python call: `X is torch.tensor([1, 2])`, where `torch.tensor` is the
 adapter's `tensor/2` predicate, raises `type_error(evaluable,
 'torch.tensor'/1)` -- the term `eval_` gives for it -- instead of binding the
-compound `'torch.tensor'([1, 2])`. Call the predicate as a goal
+compound `'torch.tensor'([1, 2])`. Only a side that IS the qualified call is
+checked: one nested inside a larger term (`X is [torch.tensor(L)]`) still
+builds its compound. Call the predicate as a goal
 (`tensor([1, 2], X)`). The bare imported spelling, `G is match(P, S)` after
 `-import_from(py.re, [match])`, still builds a goal for `call/1`.
 

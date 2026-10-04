@@ -109,4 +109,11 @@ def test_a_broken_install_is_not_reported_absent(monkeypatch, lib, mod,
     dispatch = p._get_dispatch()
     with pytest.raises(Exception) as info:
         list(dispatch(None, None, None, None, *args, Var(), Trail()))
-    assert getattr(info.value, "term", None) != _err(lib, pred, len(args) + 1)
+    # The real import error surfaces -- raw, or transliterated by the
+    # dispatch layer as ('ModuleNotFoundError', Message) -- naming chex.
+    err = info.value
+    if isinstance(err, LogicException):
+        assert err.term[0] == "ModuleNotFoundError", err.term
+        assert "chex" in str(err.term)
+    else:
+        assert isinstance(err, ModuleNotFoundError) and err.name == "chex"
