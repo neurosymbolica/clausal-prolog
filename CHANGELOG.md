@@ -1272,6 +1272,14 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **clausal-spacy: text arguments accept a string.** `process/3`,
+  `similarity/4`, the `entity/3` label and the model name and alias of
+  `load_model/1,2`, `unload_model/1`, `current_model/1` and every
+  `Alias` argument were written through `str()`, so a string handed spaCy
+  the repr `('$chars', 'Ada Lovelace')` (or looked up no model). They now
+  take the text an atom or a string denotes. A text, label or model name
+  that is not text raises `type_error(text, Culprit)`
+  (`instantiation_error` when unbound) instead of being `str()`-ed.
 - **clausal-yaml: `write/2`, `write_all/2` and `write_file/2` serialise a
   string, and a dict written in source.** The data reached PyYAML
   dereferenced one level only: a string -- the chars carrier -- nested in

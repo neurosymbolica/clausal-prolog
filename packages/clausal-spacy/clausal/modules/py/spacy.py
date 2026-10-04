@@ -27,6 +27,7 @@ from typing import Any, Callable
 
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.trampoline import DONE
+from clausal.modules.py import require_text, text_or_str
 
 
 def _get_spacy():
@@ -49,7 +50,7 @@ _LOCK = _threading.Lock()
 
 def _get_model(alias: str) -> spacy.language.Language:
     """Look up a loaded model by alias; raise if not found."""
-    alias = str(alias)
+    alias = text_or_str(alias)    # an atom or a string alias
     nlp = _MODELS.get(alias)
     if nlp is None:
         raise ValueError(f"No spaCy model with alias {alias!r}")
@@ -147,8 +148,7 @@ def _chunk_to_dict(chunk) -> dict:
 
 def _load_model_1(name, trail, k):
     """load_model/1: load a spaCy model, alias defaults to name."""
-    name = deref(name)
-    name_str = str(name)
+    name_str = require_text(name, "load_model/1", arg=1)
     with _LOCK:
         if name_str not in _MODELS:
             nlp = _get_spacy().load(name_str)
@@ -158,10 +158,8 @@ def _load_model_1(name, trail, k):
 
 def _load_model_2(name, alias, trail, k):
     """load_model/2: load a spaCy model under a given alias."""
-    name = deref(name)
-    alias = deref(alias)
-    name_str = str(name)
-    alias_str = str(alias)
+    name_str = require_text(name, "load_model/2", arg=1)
+    alias_str = require_text(alias, "load_model/2", arg=2)
     with _LOCK:
         if alias_str not in _MODELS:
             nlp = _get_spacy().load(name_str)
@@ -171,8 +169,7 @@ def _load_model_2(name, alias, trail, k):
 
 def _unload_model_1(alias, trail, k):
     """unload_model/1: remove a model from the registry."""
-    alias = deref(alias)
-    alias_str = str(alias)
+    alias_str = text_or_str(alias)
     with _LOCK:
         nlp = _MODELS.pop(alias_str, None)
     if nlp is None:
@@ -184,7 +181,7 @@ def _current_model_1(this_generator, _proceed, _fail, _catcher, alias, trail):
     """current_model/1: enumerate registered model aliases."""
     alias = deref(alias)
     if not is_var(alias):
-        if str(alias) in _MODELS:
+        if text_or_str(alias) in _MODELS:
             yield (_proceed, None)
         yield (_fail, DONE)
         return
@@ -203,9 +200,9 @@ def _current_model_1(this_generator, _proceed, _fail, _catcher, alias, trail):
 def _process_3(alias, text, doc_var, trail, k):
     """process/3: run text through a model, unify result Doc."""
     alias = deref(alias)
-    text = deref(text)
+    text = require_text(text, "process/3", arg=2)
     nlp = _get_model(alias)
-    doc = nlp(str(text))
+    doc = nlp(text)
     if unify(doc_var, doc, trail):
         yield None
 
@@ -340,8 +337,7 @@ def _entity_2(this_generator, _proceed, _fail, _catcher, doc, ent_var, trail):
 def _entity_3(this_generator, _proceed, _fail, _catcher, doc, label, ent_var, trail):
     """entity/3: backtrack over entities filtered by label."""
     doc = deref(doc)
-    label = deref(label)
-    label_str = str(label)
+    label_str = require_text(label, "entity/3", arg=2)
     for ent in doc.ents:
         if ent.label_ == label_str:
             mark = trail.mark()
@@ -386,11 +382,11 @@ def _sentence_list_2(doc, sents_var, trail, k):
 def _similarity_4(alias, text1, text2, score_var, trail, k):
     """similarity/4: compute similarity between two texts."""
     alias = deref(alias)
-    text1 = deref(text1)
-    text2 = deref(text2)
+    text1 = require_text(text1, "similarity/4", arg=2)
+    text2 = require_text(text2, "similarity/4", arg=3)
     nlp = _get_model(alias)
-    doc1 = nlp(str(text1))
-    doc2 = nlp(str(text2))
+    doc1 = nlp(text1)
+    doc2 = nlp(text2)
     score = doc1.similarity(doc2)
     if unify(score_var, score, trail):
         yield None
