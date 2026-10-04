@@ -191,7 +191,10 @@ _PY_ADAPTERS = "clausal.modules.py"
 
 def _adapter_path(dotted: str) -> str:
     """``py.X...`` -> ``clausal.modules.py.X...`` (the seam's redirect,
-    ``import_hook.ModulesFinder``); any other name unchanged."""
+    ``import_hook.ModulesFinder``), ``py`` -> ``clausal.modules.py``; any
+    other name unchanged."""
+    if dotted == "py":
+        return _PY_ADAPTERS
     if dotted.startswith("py."):
         return f"{_PY_ADAPTERS}.{dotted[3:]}"
     return dotted
@@ -248,7 +251,11 @@ def _inert_fstring(joined: ast.JoinedStr) -> bool:
 def _module_references(tree: ast.Module) -> "list[tuple[str, int]]":
     """``(dotted, line)`` for every module the file names: its
     ``-import_from`` / ``-import_module`` paths (resolved through the seam's
-    import aliases) and the qualifier of every dotted call ``m.p(...)``."""
+    import aliases) and the qualifiers (:func:`_qualifiers`) of EVERY
+    dotted chain in a Clausal position -- a call ``m.p(...)``, a goal
+    handed to ``call/N``, a value ``X is m.v`` -- whatever the head binds
+    (``-import_module(py.datetime)`` binds ``py``, through which
+    ``py.other.v`` reaches another adapter)."""
     from clausal.templating.term_rewriting import (  # noqa: PLC0415
         _is_logic_var_name, _resolve_import_path)
     refs: list[tuple[str, int]] = []
@@ -264,14 +271,32 @@ def _module_references(tree: ast.Module) -> "list[tuple[str, int]]":
                 refs.append((_resolve_import_path(dotted), stmt.lineno))
             continue
         for sub in _clausal_nodes(value):
-            if not (isinstance(sub, ast.Call)
-                    and isinstance(sub.func, ast.Attribute)):
+            if not isinstance(sub, ast.Attribute):
                 continue
-            dotted = _dotted(sub.func.value)
+            dotted = _dotted(sub)
             if dotted is None or _is_logic_var_name(dotted.split(".")[0]):
                 continue        # X.k is dict sugar, no module
-            refs.append((_resolve_import_path(dotted), sub.lineno))
-    return refs
+            for qualifier in _qualifiers(dotted):
+                refs.append((_resolve_import_path(qualifier), sub.lineno))
+    out, seen = [], set()
+    for ref in refs:
+        if ref not in seen:
+            seen.add(ref)
+            out.append(ref)
+    return out
+
+
+def _qualifiers(dotted: str) -> "list[str]":
+    """The module names a dotted chain ``a.b.c`` may reach, in a call
+    (``a.b.c(X)``) or a DATA position (``X is a.b.c``) alike: for a
+    ``py.X...`` chain the adapter ``py.X`` (the only name the seam's
+    ``py`` redirect resolves); for any other chain every proper prefix
+    (``a``, ``a.b``), since the compiled chain walks attributes from its
+    head."""
+    parts = dotted.split(".")
+    if parts[0] == "py":
+        return [".".join(parts[:2])] if len(parts) > 1 else []
+    return [".".join(parts[:i]) for i in range(1, len(parts))]
 
 
 def _clausal_nodes(node):
@@ -388,6 +413,10 @@ def _classify(dotted: str) -> "tuple[str, str | None]":
     origin = _find(dotted)
     if origin == _UNRESOLVABLE:
         return "python_module", None
+    if origin is None and dotted.startswith(_PY_ADAPTERS + "."):
+        # Fail closed: a py.X the engine's adapters do not resolve may fall
+        # through at run time to some other ``py`` package on sys.path.
+        return "python_module", None
     if origin is None or is_engine_shipped(dotted, origin):
         return "ignored", origin
     if not _is_source(origin):
@@ -427,32 +456,87 @@ def file_python_routes(path: str) -> "list[tuple[str, int]]":
 # ── engine-shipped ──────────────────────────────────────────────────────────
 
 
-def _engine_dir() -> str:
+def _engine_distribution():
+    """The installed ``clausal`` distribution, or None.  (A hook, so a test
+    can hand in a simulated RECORD.)"""
+    import importlib.metadata  # noqa: PLC0415
+    try:
+        return importlib.metadata.distribution("clausal")
+    except importlib.metadata.PackageNotFoundError:
+        return None
+
+
+_SITE_DIRS = frozenset({"site-packages", "dist-packages"})
+
+#: (rule, data): ``("record", frozenset of realpaths)``, ``("dir", engine
+#: package directory)`` or ``("none", None)``.  Computed once per process.
+_ENGINE_RULE: "tuple | None" = None
+
+
+def _engine_rule() -> tuple:
+    """How :func:`is_engine_shipped` decides, established once:
+
+    * ``record`` -- the engine is INSTALLED (its distribution's RECORD lists
+      the very ``clausal/__init__.py`` that is imported): engine-shipped is
+      exactly the files that RECORD lists.  Optional ``clausal-*``
+      distributions install into the same ``site-packages/clausal`` tree,
+      so a directory test could not tell them apart.
+    * ``dir`` -- an editable install or a source checkout (no RECORD lists
+      the imported ``__init__``) whose package directory is not inside a
+      ``site-packages``/``dist-packages`` tree: there the optional packages
+      live in their own directories (``packages/clausal-*/clausal``), so
+      "under the engine's package directory" is exact.
+    * ``none`` -- neither could be established: nothing is engine-shipped
+      (fail closed).
+    """
+    global _ENGINE_RULE
+    if _ENGINE_RULE is not None:
+        return _ENGINE_RULE
     import clausal  # noqa: PLC0415
-    return os.path.realpath(os.path.dirname(clausal.__file__))
+    init = os.path.realpath(clausal.__file__)
+    root = os.path.dirname(init)
+    rule: tuple = ("none", None)
+    dist = _engine_distribution()
+    files = None
+    if dist is not None:
+        try:
+            files = [os.path.realpath(dist.locate_file(f))
+                     for f in (dist.files or ())]
+        except Exception:  # noqa: BLE001 -- unreadable RECORD: not "record"
+            files = None
+    if files and init in files:
+        rule = ("record", frozenset(files))
+    elif not (_SITE_DIRS & set(root.split(os.sep))):
+        rule = ("dir", root)
+    _ENGINE_RULE = rule
+    return rule
 
 
 def is_engine_shipped(dotted: str, origin: "str | None") -> bool:
     """True when the module *dotted* (loaded from *origin*) ships with the
-    engine: its file lies under the engine's OWN package directory (the
-    directory of ``clausal/__init__.py``).  Decided by the resolved PATH,
-    not by the name: the optional ``clausal-*`` packages splice their
-    adapters into the same namespaces (``clausal.modules.py.scipy_stats``),
-    and those are not the engine's.  So the engine's ``library(...)``
-    facades, its stdlib, its own py adapters (``py.datetime``, via any
-    spelling: ``py.datetime``, the alias ``date_time``) and its other
-    modules are trusted; an optional package's adapter, or any user
-    module, is not.  (Route 7c of the dialect gate still refuses a
-    ``.clausal`` file's DIRECT ``use_module(py/X)``; this is about what a
-    ``.seam`` module may import.)  *dotted* is accepted for the callers'
-    symmetry; only the path decides."""
+    engine, decided by the resolved FILE (:func:`_engine_rule`): listed in
+    the installed engine distribution's RECORD, or -- in an editable or
+    source checkout -- under the engine's own package directory.  Not by
+    the name: the optional ``clausal-*`` packages splice their adapters
+    into the same namespaces (``clausal.modules.py.scipy_stats``), and
+    those are not the engine's.  So the engine's ``library(...)`` facades,
+    its stdlib, its own py adapters (``py.datetime``, via any spelling:
+    ``py.datetime``, the alias ``date_time``) and its other modules are
+    trusted; an optional package's adapter, or any user module, is not.
+    (Route 7c of the dialect gate still refuses a ``.clausal`` file's
+    DIRECT ``use_module(py/X)``; this is about what a ``.seam`` module may
+    import.)"""
     if origin is None or origin == "<namespace>":
         return dotted == "clausal" or dotted.startswith("clausal.")
     if origin in ("built-in", "frozen"):
         return False
     real = os.path.realpath(origin)
-    root = _engine_dir()
-    return real.startswith(root + os.sep)
+    kind, data = _engine_rule()
+    if kind == "record":
+        return real in data
+    if kind == "dir":
+        return real.startswith(data + os.sep)
+    return False
 
 
 # ── the project allowlist ───────────────────────────────────────────────────

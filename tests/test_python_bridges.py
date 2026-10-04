@@ -586,3 +586,117 @@ def test_engine_shipped_is_decided_by_path():
                              engine_adapter.__file__)
     assert not is_engine_shipped("clausal.modules.py.pbfake",
                                  "/elsewhere/clausal/modules/py/pbfake.py")
+
+
+# ── security review (job 333) ───────────────────────────────────────────────
+
+
+def test_a_spliced_adapter_in_a_data_position_is_a_route(proj,
+                                                          spliced_adapter):
+    """The reviewer's case: a trusted ``-import_module(py.datetime)`` binds
+    ``py``, through which ``py.pbfake.value`` -- a VALUE, no call --
+    reaches an adapter an optional package spliced in.  Every dotted chain
+    is a reference, not only a callee."""
+    path = proj.seam("helper", "-module(@helper, [v/1])\n"
+                               "-import_module(py.datetime)\n"
+                               "v(X) <- (X is py.pbfake.value)\n")
+    assert ("py_adapter", 3) in file_python_routes(str(path))
+    proj.clausal("main", ":- use_module(@helper, [v/1]).\n",
+                 "t(X) :- v(X).\n")
+    msg = _refused(proj, "main")
+    assert REFUSAL.format(m=proj.n("helper")) in msg, msg
+    assert "clausal.modules.py.pbfake" not in sys.modules
+    proj.allow([f'"{proj.n("helper")}"'])
+    assert _answers(proj.load("main")) == [42]
+
+
+@pytest.mark.parametrize("body", [
+    "v(X) <- (call(py.pbfake.p, X))\n",
+    "v(X) <- (X is [py.pbfake.value])\n",
+    "v(X) <- (X is py.pbfake.value.real)\n",
+    "v(X) <- (findall(Y, py.pbfake.p(Y), X))\n",
+])
+def test_every_dotted_chain_is_a_reference(proj, spliced_adapter, body):
+    path = proj.seam("helper", "-module(@helper, [v/1])\n"
+                               "-import_module(py.datetime)\n" + body)
+    assert ("py_adapter", 3) in file_python_routes(str(path))
+
+
+def test_an_unresolvable_py_reference_fails_closed(proj):
+    """``py.X`` that the engine's adapters do not resolve could fall through
+    to some other ``py`` package at run time: it is a route."""
+    path = proj.seam("helper", "-module(@helper, [v/1])\n"
+                               "-import_module(py.datetime)\n"
+                               "v(X) <- (X is py.pbnosuch.value)\n")
+    assert ("python_module", 3) in file_python_routes(str(path))
+    path = proj.seam("helper", "-module(@helper, [v/1])\n"
+                               "-import_from(py.pbnosuch, [value])\n"
+                               "v(1),\n")
+    assert ("python_module", 2) in file_python_routes(str(path))
+
+
+class _FakeDist:
+    def __init__(self, base, files):
+        self.base = base
+        self.files = files
+
+    def locate_file(self, f):
+        return os.path.join(self.base, f)
+
+
+@pytest.fixture
+def engine_rule(monkeypatch):
+    from clausal import python_bridges as pb
+    monkeypatch.setattr(pb, "_ENGINE_RULE", None)
+    yield pb
+    pb._ENGINE_RULE = None
+
+
+def test_an_installed_engine_is_decided_by_its_record(engine_rule,
+                                                      monkeypatch):
+    """Non-editable install: the optional distributions share the
+    site-packages/clausal tree, so only the engine's RECORD decides."""
+    import clausal
+    pb = engine_rule
+    root = os.path.dirname(os.path.realpath(clausal.__file__))
+    site = os.path.dirname(root)
+    record = ["clausal/__init__.py", "clausal/library/py_os.seam"]
+    monkeypatch.setattr(pb, "_engine_distribution",
+                        lambda: _FakeDist(site, record))
+    assert pb._engine_rule()[0] == "record"
+    assert is_engine_shipped("clausal.library.py_os",
+                             os.path.join(root, "library", "py_os.seam"))
+    # In the same tree, but not in the engine's RECORD: another
+    # distribution's file.
+    assert not is_engine_shipped(
+        "clausal.library.datetime",
+        os.path.join(root, "library", "datetime.seam"))
+
+
+def test_an_editable_checkout_uses_the_directory(engine_rule, monkeypatch):
+    import clausal
+    pb = engine_rule
+    monkeypatch.setattr(pb, "_engine_distribution",
+                        lambda: _FakeDist("/nowhere", ["clausal/_x.pth"]))
+    root = os.path.dirname(os.path.realpath(clausal.__file__))
+    if {"site-packages", "dist-packages"} & set(root.split(os.sep)):
+        pytest.skip("the engine itself is installed here")
+    assert pb._engine_rule() == ("dir", root)
+    assert is_engine_shipped("clausal.library.datetime",
+                             os.path.join(root, "library", "datetime.seam"))
+
+
+def test_an_undecidable_engine_fails_closed(engine_rule, monkeypatch,
+                                            tmp_path):
+    """No RECORD lists the imported __init__, and the package sits in a
+    site-packages tree: nothing counts as engine-shipped."""
+    import clausal
+    pb = engine_rule
+    fake = tmp_path / "lib" / "site-packages" / "clausal"
+    fake.mkdir(parents=True)
+    (fake / "__init__.py").write_text("")
+    monkeypatch.setattr(clausal, "__file__", str(fake / "__init__.py"))
+    monkeypatch.setattr(pb, "_engine_distribution", lambda: None)
+    assert pb._engine_rule() == ("none", None)
+    assert not is_engine_shipped("clausal.library.x",
+                                 str(fake / "library" / "x.seam"))

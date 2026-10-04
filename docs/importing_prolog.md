@@ -512,13 +512,19 @@ Python is reachable **only** through:
 1. **Engine-shipped modules**: the `library(...)` facades, the engine
    stdlib, the engine's own py adapters (`py.datetime`, also spelled by its
    seam alias `date_time`), and every other file of the engine.
-   "Engine-shipped" is decided by the resolved FILE: it lies under the
-   engine's own package directory (the directory of `clausal/__init__.py`).
+   "Engine-shipped" is decided by the resolved FILE: for an installed
+   engine, the file is listed in the `clausal` distribution's own RECORD;
+   for an editable install or a source checkout, it lies under the engine's
+   package directory (the directory of `clausal/__init__.py`, when that is
+   not inside a `site-packages` tree). When neither can be established,
+   nothing counts as engine-shipped (fail closed).
    Not by the name: an optional `clausal-*` package splices its adapters
    into the same namespace (`clausal.modules.py.scipy_stats`), and those are
    not the engine's -- a `.seam` importing one is a Python bridge. A `.seam`
    module whose only Python contact is importing engine-shipped adapters is
-   Python-free (case 2). This is the default mode, which trusts every
+   Python-free (case 2). Every dotted chain in a Clausal position counts as
+   a reference, a value (`X is py.datetime.v`) as much as a call, and a
+   `py.X` the engine's adapters do not resolve is a route (fail closed). This is the default mode, which trusts every
    engine-shipped adapter; a sandbox mode narrows the engine adapters to its
    own allowlist. (A Clausal Prolog file's DIRECT `use_module(py/X)` stays
    refused as above: it imports the facade.)
