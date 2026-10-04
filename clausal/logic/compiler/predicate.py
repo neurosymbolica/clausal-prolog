@@ -67,24 +67,28 @@ CLAUSE_BUILTINS: dict = {
 }
 
 
+#: The imports the engine's C helpers perform through a clause frame's
+#: builtins, as (module, fromlist) -- measured over the test sample: the
+#: C list-unify helper's re-import of its Python twin.  CPython's
+#: ``PyImport_Import`` reads the module from ``sys.modules`` itself after
+#: calling ``__import__``, so the shim never needs to hand one back.
+_CLAUSE_IMPORTS = frozenset({("clausal.logic.runtime.list_unify", ())})
+
+
 def _engine_only_import(name, globals=None, locals=None, fromlist=(),
                         level=0):
-    """``__import__`` for compiled clause code: the engine's C helpers
-    (``_list_unify``, ...) import their Python twins through the CALLING
-    frame's builtins, so clause code needs an ``__import__`` -- but only
-    one that hands back an ENGINE module that is ALREADY LOADED, with any
-    *fromlist* names already present on it: nothing new is imported and no
-    code runs.  Anything else, and any relative import, is ImportError."""
+    """``__import__`` for compiled clause code.  Accepts EXACTLY the
+    (module, fromlist) pairs in :data:`_CLAUSE_IMPORTS`, for a module that
+    is already loaded, and returns an empty namespace -- never a module
+    object, which would lead back to the real builtins and to every module
+    it imported.  Anything else is ImportError."""
     import sys as _sys  # noqa: PLC0415
-    mod = _sys.modules.get(name) if level == 0 else None
-    if (mod is not None
-            and (name == "clausal" or name.startswith("clausal."))
-            and all(hasattr(mod, f) for f in (fromlist or ()))):
-        if fromlist:
-            return mod
-        return _sys.modules[name.partition(".")[0]]
-    raise ImportError(f"compiled clause code may only re-import a loaded "
-                      f"engine module, not {name!r}")
+    import types as _types  # noqa: PLC0415
+    key = (name, tuple(fromlist or ()))
+    if level == 0 and key in _CLAUSE_IMPORTS and name in _sys.modules:
+        return _types.SimpleNamespace()
+    raise ImportError(f"compiled clause code may not import {name!r}"
+                      f"{f' (fromlist {list(fromlist)})' if fromlist else ''}")
 
 
 CLAUSE_BUILTINS["__import__"] = _engine_only_import
