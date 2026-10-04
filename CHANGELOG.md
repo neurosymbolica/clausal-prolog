@@ -23,8 +23,10 @@ since 0.4.0 finish three moves:
 - **Symbolic names an adapter hands back are ATOMS, not text** ("atom
   out, text in": the Python-boundary spec of 2026-09-21, ruled for adapter
   results 2026-10-04). Changed: `py.os` `platform/1` (`linux`),
-  `py.logging` `get_level/2` (`'WARNING'`, Python's spelling, custom
-  level names too; an unnamed `"Level 15"` stays text), `py.sqlite` `current_connection/1` aliases;
+  `py.logging` `get_level/2` (`warning`: LOWERCASE, the spelling
+  `set_level/2` takes, custom level names too -- `trace` for Python's
+  `TRACE`; a bound level is read in either case; an unnamed `"Level 15"`
+  stays text), `py.sqlite` `current_connection/1` aliases;
   clausal-jax `device_platform/2` (`cpu`), `device/2`, `mesh_axis_names/2`
   (now a LIST of atoms -- it was JAX's tuple, i.e. the cell `x(y)` or the
   reserved `('x',)`), `partition_spec/2` backward (axis names as atoms, a
@@ -35,7 +37,7 @@ since 0.4.0 finish three moves:
   stay text. Adapters tag such a result with `clausal.modules.py.symbol`;
   `text_result` turns the tag into the plain interned `str` and
   `unify_result` accepts the text spelling too. Migration: compare with
-  the atom (`P == cpu`, `LEVEL == 'DEBUG'`) instead of a string or an
+  the atom (`P == cpu`, `LEVEL == debug`) instead of a string or an
   `atom_chars/2` workaround.
 
 - **`X is mod.pred(Args)` with `mod.pred` a predicate adapter raises

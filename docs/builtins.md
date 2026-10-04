@@ -2782,7 +2782,7 @@ Set the logger's effective level.
 ```seam
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:getlevel_2"
 ```
-Unify `Level` with the logger's effective level name as an atom (e.g. `'DEBUG'`); a bound `Level` may be the atom or text.
+Unify `Level` with the logger's effective level name as a lowercase atom (e.g. `debug`); a bound `Level` may be the atom or text, in either case.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/modules/py/logging.py`

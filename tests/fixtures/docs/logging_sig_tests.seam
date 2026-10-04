@@ -18,7 +18,7 @@ test("set and get level") <- (
     get_logger("test.doc.level", L),
     set_level(L, "debug"),
     get_level(L, LEVEL),
-    LEVEL == 'DEBUG'
+    LEVEL == 'debug'
 )  # nv
 
 test("is enabled for") <- (

@@ -121,15 +121,27 @@ def _get_level_2(logger, level_out, trail, k):
     """get_level/2: unify Level with the logger's effective level name.
 
     A named level -- a stock one or one registered with
-    ``logging.addLevelName`` -- is a symbolic NAME and crosses as an ATOM in
-    Python's own spelling (``'DEBUG'``, ``'TRACE'``): "atom out, text in",
-    ruled 2026-10-04; a bound Level may be the atom or the text.  An
-    unnamed numeric level's ``"Level 15"`` is not a name and stays text."""
+    ``logging.addLevelName`` -- is a symbolic NAME and crosses as a
+    LOWERCASE atom (``debug``, ``warning``, a custom ``trace``): "atom out,
+    text in", ruled 2026-10-04, lowercase ruled the same day -- the spelling
+    ``set_level/2`` and ``log/3`` take.  A bound Level is input and is read
+    as they read it: the atom or the text, in either case (``'WARNING'``,
+    ``"warning"``).  An unnamed numeric level's ``"Level 15"`` is not a name
+    and stays text."""
     lg = _resolve_logger(logger)
     name = _pylogging.getLevelName(lg.getEffectiveLevel())
-    if not name.startswith("Level "):
-        name = _symbol(name)
-    if _unify_result(level_out, name, trail):
+    if name.startswith("Level "):
+        if _unify_result(level_out, name, trail):
+            yield None
+        return
+    name = name.lower()
+    bound = deref(level_out)
+    if not is_var(bound):
+        text = to_text(bound)
+        if text is not None and text.lower() == name:
+            yield None
+        return
+    if _unify_result(level_out, _symbol(name), trail):
         yield None
 
 

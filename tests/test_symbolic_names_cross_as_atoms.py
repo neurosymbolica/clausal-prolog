@@ -39,6 +39,12 @@ level_atom() <- (get_logger("t.symbolic.lvl", G), set_level(G, "warning"),
                  get_level(G, 'WARNING'))
 level_text() <- (get_logger("t.symbolic.lvl", G), set_level(G, "warning"),
                  get_level(G, "WARNING"))
+level_lower_atom() <- (get_logger("t.symbolic.lvl", G), set_level(G, "WARNING"),
+                       get_level(G, 'warning'))
+level_lower_text() <- (get_logger("t.symbolic.lvl", G), set_level(G, 'WARNING'),
+                       get_level(G, "warning"))
+level_other() <- (get_logger("t.symbolic.lvl", G), set_level(G, "warning"),
+                  get_level(G, 'error'))
 
 alias(A) <- (connect(":memory:", "symbolic_alias_1"),
              current_connection(A), A == 'symbolic_alias_1',
@@ -109,18 +115,25 @@ def test_working_directory_stays_text(module):
     assert _one(module, "cwd") == chars(__import__("os").getcwd())
 
 
-def test_a_log_level_is_an_atom_in_pythons_spelling(module):
-    assert _one(module, "level") == "WARNING"
+def test_a_log_level_is_a_lowercase_atom(module):
+    # Ruled 2026-10-04 (D11): lowercase, the spelling set_level/2 takes.
+    assert _one(module, "level") == "warning"
+
+
+def test_a_bound_level_is_read_in_either_case(module):
     assert _holds(module, "level_atom")
     assert _holds(module, "level_text")
+    assert _holds(module, "level_lower_atom")
+    assert _holds(module, "level_lower_text")
+    assert not _holds(module, "level_other")
 
 
-def test_a_custom_level_name_is_an_atom_and_an_unnamed_one_text():
+def test_a_custom_level_name_is_a_lowercase_atom_and_an_unnamed_one_text():
     import logging
     from clausal.modules.py.logging import _get_level_2
     logging.addLevelName(5, "TRACE")
     lg = logging.getLogger("t.symbolic.custom")
-    for level, want in ((5, "TRACE"), (15, chars("Level 15"))):
+    for level, want in ((5, "trace"), (15, chars("Level 15"))):
         lg.setLevel(level)
         v = Var()
         assert list(_get_level_2(lg, v, Trail(), None))

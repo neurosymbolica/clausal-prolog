@@ -152,7 +152,7 @@ Set the logger's level. Messages below this level will be discarded (but the log
 --8<-- "tests/fixtures/docs/logging_sigs.txt:get_level_sig"
 ```
 
-Unify `Level` with the logger's effective level name, an atom in Python's spelling (e.g. `'DEBUG'`, `'WARNING'`); a bound `Level` may be the atom or the string. A custom level name (`logging.addLevelName`) is an atom too; an unnamed numeric level (`"Level 15"`) comes back as a string.
+Unify `Level` with the logger's effective level name, a lowercase atom (e.g. `debug`, `warning`) -- the spelling `set_level/2` takes. A bound `Level` may be the atom or the string, in either case (`'WARNING'`, `"warning"`). A custom level name (`logging.addLevelName(5, "TRACE")`) is a lowercase atom too (`trace`); an unnamed numeric level (`"Level 15"`) comes back as a string.
 
 ### `is_enabled_for/2`
 
