@@ -54,3 +54,42 @@ def test_a_dotted_closure_runs(loaded):
 
 def test_the_body_call_is_unchanged(loaded):
     assert len(list(call("body", module=loaded.__dict__["$module"]))) == 1
+
+
+# ── a dotted .seam module, and the leaf fallback ──
+
+def test_a_dotted_seam_module_binds_its_package(tmp_path, monkeypatch):
+    import importlib
+    import sys
+    pkg = tmp_path / "imp_top_pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / f"lib{SEAM_SUFFIX}").write_text("p(1),\np(2)\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+    src = tmp_path / f"imp_top_user{SEAM_SUFFIX}"
+    src.write_text(
+        "-import_module(imp_top_pkg.lib)\n"
+        "body(X) <- imp_top_pkg.lib.p(X)\n"
+        "closure(X) <- call(imp_top_pkg.lib.p, X)\n", encoding="utf-8")
+    try:
+        loaded = _load_module("imp_top_user", str(src))
+        assert loaded.__dict__["imp_top_pkg"] is sys.modules["imp_top_pkg"]
+        m = loaded.__dict__["$module"]
+        for name in ("body", "closure"):
+            x = Var()
+            assert [_deref_walk(x) for _ in call(name, x, module=m)] == [1, 2]
+    finally:
+        for k in ("imp_top_pkg", "imp_top_pkg.lib", "imp_top_user"):
+            sys.modules.pop(k, None)
+
+
+def test_a_leaf_whose_name_does_not_walk_keeps_the_old_binding():
+    import types
+    from clausal.logic.compiler_v2 import _top_package_of
+    leaf = types.ModuleType("nowhere_pkg_xyz.leaf")       # parent not loaded
+    assert _top_package_of(leaf, ["a", "leaf"]) is leaf
+    assert _top_package_of(leaf, ["leaf"]) is leaf
+    import clausal.modules.py as pkg
+    import clausal.modules.py.re as re_mod
+    assert _top_package_of(re_mod, ["py", "re"]) is pkg

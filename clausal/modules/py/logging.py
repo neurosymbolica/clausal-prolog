@@ -76,7 +76,13 @@ def _resolve_level(level: Any) -> int:
     if isinstance(level, int):
         return level
     name = text_or_str(level).lower()
-    return _LEVEL_MAP.get(name, _pylogging.NOTSET)
+    lv = _LEVEL_MAP.get(name)
+    if lv is None:
+        # A custom name registered with logging.addLevelName, in either
+        # case: the lowercase atom get_level/2 hands back sets it again.
+        lv = next((v for k, v in _pylogging.getLevelNamesMapping().items()
+                   if k.lower() == name), _pylogging.NOTSET)
+    return lv
 
 
 def _resolve_logger(logger_val: Any) -> _pylogging.Logger:

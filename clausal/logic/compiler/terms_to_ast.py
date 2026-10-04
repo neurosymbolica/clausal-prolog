@@ -368,7 +368,8 @@ def arithmetic_adapter_call(term, namespace) -> "tuple[str, int] | None":
     elif (isinstance(term, Call) and isinstance(term.func, LoadName)
             and not term.kwargs
             and (term.func.name, len(term.args)) in EVALUABLE
-            and not any(isinstance(a, StarUnpack) for a in term.args)):
+            and not any(isinstance(a, StarUnpack) for a in term.args)
+            and not _names_a_predicate(term.func.name, namespace)):
         subs = term.args
     else:
         return None
@@ -377,6 +378,20 @@ def arithmetic_adapter_call(term, namespace) -> "tuple[str, int] | None":
         if hit is not None:
             return hit
     return None
+
+
+def _names_a_predicate(name: str, namespace) -> bool:
+    """True when *name* is bound in *namespace* to a declared predicate:
+    ``max(A, m.p())`` is then a goal/data term of the program's own
+    ``max/2``, not the evaluable function, and its arguments are not
+    arithmetic positions."""
+    if namespace is None:
+        return False
+    resolved = _resolve_functor_binding(name, namespace)
+    binding = resolved[0] if resolved else None
+    # A predicate binding is a class or (after the flip) its HANDLE, a str.
+    return binding is not None and is_declared_predicate_name(
+        binding, db=namespace_db(namespace))
 
 
 def _adapter_side_expr(term, var_context: dict, eval_arith: bool = False,

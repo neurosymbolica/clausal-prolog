@@ -1336,9 +1336,11 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   `result_get(R, "statistic", S)` (and the other modules' `*_get`
   accessors), `stats_freeze_dist("norm", P, H)`, `make_linear1d/4` kind,
   and every other scipy argument that takes a name or method. Each failed
-  or answered nothing; the atom spelling worked. Every argument a scipy
-  dispatcher reads now passes a string on as its `str`; atoms and
-  non-text values are unchanged.
+  or answered nothing; the atom spelling worked. A string ARGUMENT a
+  scipy dispatcher reads now passes on as its `str` (the euler sequence
+  inside `make_rotation/3`'s data too); atoms and non-text values are
+  unchanged. A string nested inside a list or dict argument is not
+  converted.
 - **clausal-torch: `save/2`, `load/2`, `dtype_info/3` and the `torch_nn`
   name tables accept a string.** `save(T, "/tmp/t.pt")` under
   `-double_quotes(chars)` wrote a file literally named

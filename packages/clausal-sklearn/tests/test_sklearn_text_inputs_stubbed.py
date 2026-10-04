@@ -138,3 +138,29 @@ def test_a_compound_path_is_a_type_error(fake):
     with pytest.raises(LogicException) as info:
         _simple(sk._load_fitted_2, ("f", 1), Var())
     assert info.value.term[1][:2] == ("type_error", "text")
+
+
+def test_a_pipeline_with_string_names_and_params_builds(fake, monkeypatch):
+    # The steps cross to_python with the rest of the params: a data tuple
+    # (name, Est(...)) stays a 2-tuple and Est keeps its ("Est", ...) shape,
+    # so _build_pipeline and _unpack_est read them; the strings inside are
+    # plain strs by the time sklearn sees them.
+    from clausal.logic.cells import TUPLE_TAG
+    monkeypatch.setattr(sk, "_sk_pipeline", types.SimpleNamespace(
+        Pipeline=lambda steps: ("Pipeline", steps)))
+    step = lambda name, algo, params: (TUPLE_TAG, name, sk.Est(algo, params))
+    est = sk.Est("pipeline", DictTerm({"steps": [
+        step(chars("scale"), chars("standard_scaler"), DictTerm({})),
+        step("clf", "svc", DictTerm({chars("kernel"): chars("rbf")})),
+    ]}))
+    data = sk.Dataset([[0.0], [1.0]], [0, 1])
+    monkeypatch.setattr(sk, "_register_model", lambda model: 1)
+    built = []
+    real = sk._build_pipeline
+    monkeypatch.setattr(sk, "_build_pipeline",
+                        lambda steps: built.append(real(steps)) or _Model())
+    _simple(sk._fit_3, est, data, Var())
+    [(tag, steps)] = built
+    assert tag == "Pipeline"
+    assert [name for name, _ in steps] == ["scale", "clf"]
+    assert steps[1][1].kw == {"kernel": "rbf"}

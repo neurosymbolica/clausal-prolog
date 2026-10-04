@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import sys
 import warnings
 from typing import Any
 
@@ -670,6 +671,29 @@ def _resolve_module(module_path: str):
         return importlib.import_module(module_path)
 
 
+def _top_package_of(mod, parts: list):
+    """The object ``-import_module(a.b.c)`` binds ``a`` to: the package
+    whose attribute chain ``.b.c`` reaches *mod* (the resolved leaf), as
+    Python's ``import a.b.c`` binds ``a``.
+
+    Derived from the leaf's own dotted name rather than by resolving ``a``
+    again, so an aliased path (``py.re`` is ``clausal.modules.py.re``) gets
+    the package it actually lives in (``clausal.modules.py``), and the walk
+    is checked.  A one-segment import, or a leaf whose name and attribute
+    chain do not line up (a module object registered under another name),
+    keeps the leaf -- what every import bound before."""
+    if len(parts) < 2:
+        return mod
+    name = getattr(mod, "__name__", None)
+    if type(name) is not str or name.count(".") < len(parts) - 1:
+        return mod
+    top = sys.modules.get(name.rsplit(".", len(parts) - 1)[0])
+    obj = top
+    for part in parts[1:]:
+        obj = getattr(obj, part, None) if obj is not None else None
+    return top if obj is mod else mod
+
+
 def _imported_reference(mod, orig_name: str, value):
     """What the importer's DOTTED key for *orig_name* should hold.
 
@@ -1000,14 +1024,9 @@ def _process_imports(module_items: list, module_dict: dict, db=None) -> None:
             # the py.re module, so the term ``py.re.match`` (a closure handed
             # to ``call/N``) raised AttributeError: module 'py.re' has no
             # attribute 're'.
-            top_name = item.module.split(".")[0]
-            top = mod
-            if "." in item.module:
-                try:
-                    top = _resolve_module(top_name)
-                except ImportError:
-                    top = mod
-            module_dict[top_name] = top
+            parts = item.module.split(".")
+            top_name = parts[0]
+            module_dict[top_name] = _top_package_of(mod, parts)
 
 
 # The six spellings of the three truth values.  ``True``/``False`` are Python

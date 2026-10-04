@@ -140,6 +140,20 @@ def test_a_custom_level_name_is_a_lowercase_atom_and_an_unnamed_one_text():
         assert deref(v) == want
 
 
+def test_a_custom_level_round_trips_through_set_level():
+    import logging
+    from clausal.modules.py.logging import _get_level_2, _set_level_2
+    logging.addLevelName(7, "MyLevel")
+    lg = logging.getLogger("t.symbolic.custom.roundtrip")
+    lg.setLevel(7)
+    v = Var()
+    assert list(_get_level_2(lg, v, Trail(), None))
+    assert deref(v) == "mylevel"
+    lg.setLevel(logging.ERROR)
+    assert list(_set_level_2(lg, deref(v), Trail(), None))
+    assert lg.level == 7
+
+
 def test_a_symbol_inside_a_dictterm_accepts_text_too():
     from clausal.terms import DictTerm
     out = DictTerm({"p": symbol("cpu")})

@@ -205,3 +205,18 @@ def test_clausal_prolog_is_unchanged(tmp_path):
         with pytest.raises(LogicException) as info:
             list(call(name, *args, module=mod))
         assert info.value.term[1] == ("type_error", "evaluable", ("/", ":", 2))
+
+
+def test_a_programs_own_predicate_named_like_an_evaluable_is_data(tmp_path):
+    # With max/2 a predicate of this program, max(1, m.p()) is a term of
+    # it, not the evaluable function: its arguments are not arithmetic.
+    src = tmp_path / f"is_nested_own_max{SEAM_SUFFIX}"
+    src.write_text(
+        "-import_module(py.re)\n"
+        "max(A_UNUSED, B_UNUSED) <- True\n"
+        "own_max(X) <- (X is max(1, py.re.match(\"a\", \"abc\")))\n",
+        encoding="utf-8")
+    mod = _load_module("is_nested_own_max", str(src)).__dict__["$module"]
+    x = Var()
+    assert [_deref_walk(x) for _ in call("own_max", x, module=mod)] == [
+        ("max", 1, _CELL)]
