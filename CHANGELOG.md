@@ -1173,6 +1173,14 @@ since 0.4.0 finish three moves:
 
 ### Changed
 
+- **`clausal.modules.prolog`'s ISO arithmetic helpers are private**
+  (ruled 2026-10-04): `TruncDiv`, `TruncMod`, `Rem` are now `_trunc_div`,
+  `_trunc_mod`, `_rem`, with no aliases. Nothing emits them any more: both
+  `.pl` front ends write the quoted ISO evaluables `'//'`, `'mod'`, `'rem'`.
+  The exporter's mapping of `prolog.TruncDiv`/`TruncMod`/`Rem` calls back
+  to `//`/`mod`/`rem`, and the `.pl` translator's `-import_module(prolog)`
+  preamble, are removed with them.
+
 - **The registry name gate reads exported DATA names too.**
   `tests/test_python_predicate_name_gate.py` checked the predicates every
   engine and package module registers; `-import_from` also offers every

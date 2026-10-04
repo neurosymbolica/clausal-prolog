@@ -68,12 +68,11 @@ _MIN_DATA_NAMES = 450
 
 #: TitleCase data names the ENGINE exports, held for an operator ruling
 #: (2026-10-04) rather than renamed: engine-side names are not this gate's
-#: to change.  ``prolog.Rem/TruncDiv/TruncMod`` are the qualified operator
-#: helpers the .pl translator emits; ``units.SI_*`` are the derived-unit
+#: to change.  (``prolog.Rem/TruncDiv/TruncMod`` were ruled 2026-10-04,
+#: D16-X2: made private.)  ``units.SI_*`` are the derived-unit
 #: dimension templates ``clausal/library/units`` imports.  EXACT: a name
 #: not listed fails, and so does a listed name that no longer exists.
 _ENGINE_DATA_PENDING_RULING = {
-    "clausal.modules.prolog": {"Rem", "TruncDiv", "TruncMod"},
     "clausal.modules.units": {
         "SI_Acceleration", "SI_Area", "SI_Capacitance", "SI_Charge",
         "SI_Conductance", "SI_Energy", "SI_Force", "SI_Frequency",
@@ -390,6 +389,6 @@ def test_control_pending_ruling_list_is_exact(census):
     assert len(problems) == 1 and "SI_NoSuchName" in problems[0], problems
     # and an engine name taken OFF the list fails
     short = {m: set(n) for m, n in _ENGINE_DATA_PENDING_RULING.items()}
-    short["clausal.modules.prolog"].discard("Rem")
+    short["clausal.modules.units"].discard("SI_Force")
     problems = _data_problems(census, pending=short)
-    assert len(problems) == 1 and "'Rem'" in problems[0], problems
+    assert len(problems) == 1 and "'SI_Force'" in problems[0], problems
