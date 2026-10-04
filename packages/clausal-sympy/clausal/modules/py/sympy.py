@@ -22,10 +22,13 @@ Unbound Vars are auto-named alphabetically in discovery order:
 first Var -> ``x``, second -> ``y``, etc.  This gives readable ``str()``
 output without requiring explicit ``sym("x", X)`` calls.
 
-Results are wrapped in ``SymExpr``, which overrides ``__eq__`` to do
-symbolic comparison.  This means Clausal's native ``==`` works::
+Results are wrapped in ``SymExpr``, whose ``__eq__`` does symbolic
+comparison for PYTHON callers.  Clausal's ``==`` goal is arithmetic and does
+NOT use it: ``diff(X**3, X, R), R == 3*X**2`` raises
+``domain_error(clpz_expression, ...)``.  Compare symbolically with
+``sym_equal/2``::
 
-    diff(X**3, X, R), R == 3*X**2
+    diff(X**3, X, R), sym_equal(R, 3*X**2)
 
 Numeric results (Integer, Float) are collapsed to plain Python values.
 
@@ -474,20 +477,19 @@ def _from_sympy_ctx(expr: _sp.Expr, ctx: _ConversionContext) -> Any:
     return str(expr)
 
 
-# -- SymExpr wrapper -- makes == do symbolic comparison -----------------------
+# -- SymExpr wrapper -- symbolic __eq__ for Python callers --------------------
 
 
 class SymExpr:
     """Thin wrapper around a SymPy expression.
 
-    Overrides ``__eq__`` so that Clausal's native ``==`` operator does
-    symbolic comparison instead of structural comparison.  This means::
-
-        diff(X**3, X, R) and R == 3*X**2
-
-    just works -- the ``==`` triggers ``SymExpr.__eq__`` which converts
-    ``3*X**2`` (a Clausal ``Mult`` term) to SymPy and checks
+    Overrides ``__eq__`` for PYTHON-side comparison: it converts the other
+    operand (e.g. a Clausal ``3*X**2`` term) to SymPy and checks
     ``simplify(a - b) == 0``, with alpha-equivalence for variable names.
+
+    Clausal's ``==`` goal does NOT reach this method: ``==`` is arithmetic
+    and raises ``domain_error(clpz_expression, ...)`` on a SymPy result.
+    Clausal code compares symbolically with ``sym_equal/2``.
     """
 
     __slots__ = ("_expr",)
@@ -542,7 +544,7 @@ class SymExpr:
     # -- Arithmetic -- delegates to SymPy, re-wraps result -------------------
 
     def _wrap(self, result):
-        """Re-wrap SymPy result so == keeps working through chains."""
+        """Re-wrap a SymPy result so chained arithmetic stays symbolic."""
         if isinstance(result, _sp.Basic):
             return _to_pyval(result)
         return result
