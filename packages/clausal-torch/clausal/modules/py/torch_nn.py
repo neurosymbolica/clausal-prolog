@@ -47,7 +47,9 @@ import threading as _threading
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
-from clausal.modules.py._helpers import _pred, _deep_deref, _pure, _fact_table_2
+from clausal.modules.py._helpers import (
+    _pred, _deep_deref, _pure, _fact_table_2, _text_arg,
+)
 from clausal.modules.py.torch import _ensure_torch, _th
 
 
@@ -73,7 +75,16 @@ def _enumerate_2(iter_fn):
 
 
 def _enumerate_3(iter_fn):
-    """Nondeterministic enumeration: yield (name, value) pairs from iter_fn(model)."""
+    """Nondeterministic enumeration: yield (name, value) pairs from iter_fn(model).
+
+    A NAME is an atom on the way out (a module path such as ``'0.weight'``
+    is a symbolic name), but a bound name may be given as an atom OR a
+    string (spec §9.4, "text in"): :func:`_text_arg` reads the chars
+    carrier ``('$chars', s)`` as ``s``, so ``named_parameter(M, "0.weight",
+    P)`` selects the same entry as ``named_parameter(M, '0.weight', P)``.
+    Only a bound TEXT name is compared by its text; anything else (an
+    unbound variable, a number, a compound) still goes through ``unify``.
+    """
     def dispatch(this_generator, _proceed, _fail, _catcher, model_var, name_var, value_var, trail):
         model = deref(model_var)
         try:
@@ -81,9 +92,15 @@ def _enumerate_3(iter_fn):
         except Exception:
             yield (_fail, DONE)
             return
+        want = _text_arg(name_var)
+        if type(want) is not str:
+            want = None
         for name, value in items:
+            if want is not None and name != want:
+                continue
             mark = trail.mark()
-            if unify(name_var, name, trail) and unify(value_var, value, trail):
+            if ((want is not None or unify(name_var, name, trail))
+                    and unify(value_var, value, trail)):
                 yield (_proceed, None)
             trail.undo(mark)
         yield (_fail, DONE)

@@ -10,7 +10,7 @@ The `sklearn` module provides predicates for machine learning via [scikit-learn]
 train_and_predict(ALGO, DATASET, PREDS) <- (
     load_dataset(DATASET, D),
     fit(est(ALGO, {}), D, F),
-    D is ("dataset", X, Y),
+    D is ('dataset', X, Y),
     predict(F, X, PREDS)
 )
 ```
@@ -56,10 +56,10 @@ The module uses tagged tuples as its term language. These are plain Python tuple
 
 | Constructor | Shape | Description |
 |-------------|-------|-------------|
-| `est(algo, params)` | `("est", algo, params_dict)` | Unfitted estimator description |
-| `dataset(X, Y)` | `("dataset", X, Y)` | Feature matrix + optional target |
-| `fitted(est, handle)` | `("fitted", est, handle)` | Fitted estimator (opaque handle) |
-| `split(train, test)` | `("split", train_dataset, test_dataset)` | Train/test partition |
+| `est(algo, params)` | `('est', algo, params_dict)` | Unfitted estimator description |
+| `dataset(X, Y)` | `('dataset', X, Y)` | Feature matrix + optional target |
+| `fitted(est, handle)` | `('fitted', est, handle)` | Fitted estimator (opaque handle) |
+| `split(train, test)` | `('split', train_dataset, test_dataset)` | Train/test partition |
 
 ```clausal
 --8<-- "tests/fixtures/docs/sklearn_sigs.txt:term_constructors"

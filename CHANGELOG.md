@@ -23,15 +23,15 @@ since 0.4.0 finish three moves:
 - **clausal-sklearn: the term constructors are `est`, `dataset`, `fitted`,
   `split`** (no aliases). `Est`, `Dataset`, `Fitted`, `Split` were
   TitleCase, which has no role in Clausal positions. The tags of the terms
-  change with them: `("Est", Algo, Params)` is now `("est", Algo, Params)`
+  change with them: `('Est', Algo, Params)` is now `('est', Algo, Params)`
   -- the term `est(Algo, Params)` -- and likewise `dataset/2`, `fitted/2`,
   `split/2`; every predicate that builds or reads one (`load_dataset/2`,
   `make_dataset/3`, `load_csv/3`, `split_data/3,4`, `k_fold_split/3`,
   `stratified_split/3`, `fit/3,4`, `fit_transform/4`, `pipeline/2`,
   `pipeline_step/3`, `grid_search/5,6`, `random_search/6`, `make_est/3`,
   `param/3`, `load_fitted/2`, and the rest) uses the new tags. Migration:
-  import and write the lowercase names; match `("dataset", X, Y)` (or
-  `dataset(X, Y)`) instead of `("Dataset", X, Y)`. See
+  import and write the lowercase names; match `('dataset', X, Y)` (or
+  `dataset(X, Y)`) instead of `('Dataset', X, Y)`. See
   `packages/clausal-sklearn/docs/RENAMES.md`.
 
 - **clausal-spacy: document text is a STRING; labels stay atoms** (ruled
@@ -1357,6 +1357,18 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
   with -private([...]) or quote them`.
 
 ### Fixed
+
+- **clausal-torch: `named_parameter/3`, `named_module/3` and
+  `named_child/3` accept a string name.** A bound name was compared with
+  `unify`, so `named_parameter(M, "0.weight", P)` (a string, the default
+  reading of `"…"`) never matched the parameter path `'0.weight'` and
+  failed silently. A bound name is now compared by the text an atom or a
+  string denotes. Names that come out are still atoms.
+- **clausal-sklearn docs: the quick-start matches the dataset tag.** It
+  wrote `D is ("dataset", X, Y)`, which is a string tag unless the module
+  declares `-double_quotes(atom)`, so the `is` failed and the example
+  answered nothing. The docs and the migration note now write the quoted
+  atom, `('dataset', X, Y)`, which is the term `dataset(X, Y)` builds.
 
 - **clausal-sklearn: names, paths, parameters and data accept a string.**
   Algorithm, metric, dataset, dataset-kind, step, attribute, norm and

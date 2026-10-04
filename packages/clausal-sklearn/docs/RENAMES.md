@@ -57,7 +57,7 @@ builds and reads.
 
 | Old | New | Term |
 |---|---|---|
-| `Est(Algo, Params)` | `est(Algo, Params)` | `("Est", ...)` -> `("est", ...)` |
-| `Dataset(X, Y)` | `dataset(X, Y)` | `("Dataset", ...)` -> `("dataset", ...)` |
-| `Fitted(Est, Handle)` | `fitted(Est, Handle)` | `("Fitted", ...)` -> `("fitted", ...)` |
-| `Split(Train, Test)` | `split(Train, Test)` | `("Split", ...)` -> `("split", ...)` |
+| `Est(Algo, Params)` | `est(Algo, Params)` | `('Est', ...)` -> `('est', ...)` |
+| `Dataset(X, Y)` | `dataset(X, Y)` | `('Dataset', ...)` -> `('dataset', ...)` |
+| `Fitted(Est, Handle)` | `fitted(Est, Handle)` | `('Fitted', ...)` -> `('fitted', ...)` |
+| `Split(Train, Test)` | `split(Train, Test)` | `('Split', ...)` -> `('split', ...)` |

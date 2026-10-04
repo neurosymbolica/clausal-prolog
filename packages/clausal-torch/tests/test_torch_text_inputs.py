@@ -24,7 +24,9 @@ from clausal.logic.variables import Var
 SRC = """\
 -double_quotes(chars)
 -import_from(torch, [zeros, save, load, shape, dtype_info, float32])
--import_from(torch_nn, [layer, activation, optimizer_type])
+-import_from(torch_nn, [layer, activation, optimizer_type,
+                        named_parameter, named_module, named_child])
+-import_module(torch)
 
 roundtrip(P, S) <- (zeros([2, 3], T), save(T, P), load(P, T2), shape(T2, S))
 load_only(P, T) <- load(P, T)
@@ -34,6 +36,17 @@ layer_text() <- layer("Linear", _)
 layer_atom() <- layer('Linear', _)
 activation_text() <- activation("ReLU", _)
 optimizer_text() <- optimizer_type("Adam", _)
+net(M) <- (M is torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU()))
+param_text(S) <- (net(M), named_parameter(M, "0.weight", P), shape(P, S))
+param_atom(S) <- (net(M), named_parameter(M, '0.weight', P), shape(P, S))
+module_text(S) <- (net(M), named_module(M, "0", L), named_parameter(L, "bias", P), shape(P, S))
+module_atom(S) <- (net(M), named_module(M, '0', L), named_parameter(L, 'bias', P), shape(P, S))
+root_text(S) <- (net(M), named_module(M, "", R), named_child(R, "0", L), named_parameter(L, "weight", P), shape(P, S))
+child_text(S) <- (net(M), named_child(M, "0", L), named_parameter(L, "weight", P), shape(P, S))
+child_atom(S) <- (net(M), named_child(M, '0', L), named_parameter(L, 'weight', P), shape(P, S))
+param_missing_text() <- (net(M), named_parameter(M, "0.nope", _))
+child_names(NS) <- (net(M), findall(N, named_child(M, N, _), NS))
+param_names(NS) <- (net(M), findall(N, named_parameter(M, N, _), NS))
 """
 
 
@@ -77,3 +90,34 @@ def test_dtype_info_key_may_be_text(module, name):
                                   "activation_text", "optimizer_text"])
 def test_torch_nn_name_tables_accept_text(module, name):
     assert len(list(call(name, module=module))) == 1
+
+
+# ``named_parameter/3``, ``named_module/3`` and ``named_child/3`` compared
+# a bound NAME with ``unify``, so a string name (the chars carrier) never
+# equalled the module path's atom and the goal failed silently.
+
+
+@pytest.mark.parametrize("name,expected", [
+    ("param_text", [2, 2]), ("param_atom", [2, 2]),
+    ("module_text", [2]), ("module_atom", [2]),
+    ("root_text", [2, 2]),
+    ("child_text", [2, 2]), ("child_atom", [2, 2]),
+])
+def test_named_predicates_accept_a_text_name(module, name, expected):
+    got = _first(module, name, Var())
+    assert got is not None and list(got[0]) == expected
+
+
+def test_named_parameter_text_name_still_selects(module):
+    assert list(call("param_missing_text", module=module)) == []
+
+
+@pytest.mark.parametrize("name,expected", [
+    ("child_names", ["0", "1"]),
+    ("param_names", ["0.weight", "0.bias"]),
+])
+def test_named_predicate_names_come_out_as_atoms(module, name, expected):
+    got = _first(module, name, Var())
+    # an atom IS its ``str``; a string would be the ``('$chars', s)`` carrier
+    assert got is not None and got[0] == expected
+    assert all(type(n) is str for n in got[0])
