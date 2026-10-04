@@ -47,7 +47,13 @@ since 0.4.0 finish three moves:
   silently, so `T is torch.tensor([1, 2])` bound a term, not a tensor. It
   now raises `error(type_error(evaluable, Name/N), (is)/2)` when the call
   IS one side of `is` (either side; also when the `is` goal is built as a
-  term and run by `call/1`; a call nested deeper in a side is not checked);
+  term and run by `call/1`), or stands in an ARITHMETIC position of a side
+  -- an operand of `+ - * / // % **` or unary `-`, an argument of an
+  evaluable function such as `abs/1`, at any depth (`X is 1 +
+  torch.tensor_sum(L)`); the comparisons `== != < <= > >=` and the test of
+  `if_/3` check their sides the same way, with their own indicator as the
+  context (`(<)/2`). A call in a list, tuple or data/goal term (`X is
+  [torch.tensor(L)]`, `G is f(m.p(A))`) still builds its term;
   Name is the functor the cell would have carried, as `eval_` and `'is'`
   (which already raised) name it. Unchanged: a qualified Python callable
   (`X is math.sqrt(16)`, a class), a qualified program predicate or data

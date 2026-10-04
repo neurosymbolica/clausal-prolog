@@ -45,7 +45,6 @@ from clausal.pythonic_ast.nodes import (
     StarUnpack, TupleLiteral, DictLiteral, SetLiteral,
     Lambda, literal_value,
     SetLiteral as _SetLiteral_t,
-    Unify as _UnifyNode,
 )
 from clausal.logic.meta_predicate import MetaArg as _MetaArg
 from clausal.logic.predicate import (
@@ -345,15 +344,70 @@ def qualified_adapter_call(term, namespace) -> "tuple[str, int] | None":
             len(term.args))
 
 
-def _adapter_side_expr(term, var_context: dict, eval_arith: bool = False):
-    """One side of an ``is`` (a ``Unify``): ``$adapter_not_evaluable(...)``
-    for a qualified predicate-adapter call (:func:`qualified_adapter_call`),
-    else the side as :func:`term_to_ast_expr` builds it."""
-    hit = qualified_adapter_call(term, lowering_globals())
+def arithmetic_adapter_call(term, namespace) -> "tuple[str, int] | None":
+    """:func:`qualified_adapter_call` asked of every ARITHMETIC position of
+    *term*: *term* itself, and -- recursively -- the operands of an
+    evaluable operator node (``+ - * / // % **``, unary ``-``, the ``Iso*``
+    nodes: :func:`exact_arith.node_keys`) and the arguments of an
+    unqualified call to an ISO evaluable function (``abs/1``, ``max/2``,
+    ``sqrt/1`` ...: :data:`exact_arith.EVALUABLE`).  The first hit, else
+    None.
+
+    Ruled 2026-10-04 (D11): ``X is 1 + torch.tensor_sum(L)`` raises like
+    ``X is torch.tensor_sum(L)``.  The walk STOPS at anything else -- a list,
+    a tuple, a dict, a data or goal compound ``f(...)``, a qualified Python
+    call, a ``++`` escape -- so ``X is [torch.tensor(L)]`` and ``G is
+    f(m.p(A))`` keep building their terms."""
+    hit = qualified_adapter_call(term, namespace)
+    if hit is not None:
+        return hit
+    from clausal.logic.exact_arith import EVALUABLE, node_keys  # noqa: PLC0415
+    key = node_keys().get(type(term))
+    if key is not None:
+        subs = (term.operand,) if key[1] == 1 else (term.left, term.right)
+    elif (isinstance(term, Call) and isinstance(term.func, LoadName)
+            and not term.kwargs
+            and (term.func.name, len(term.args)) in EVALUABLE
+            and not any(isinstance(a, StarUnpack) for a in term.args)):
+        subs = term.args
+    else:
+        return None
+    for sub in subs:
+        hit = arithmetic_adapter_call(sub, namespace)
+        if hit is not None:
+            return hit
+    return None
+
+
+def _adapter_side_expr(term, var_context: dict, eval_arith: bool = False,
+                       context: str = "(is)/2"):
+    """One side of an ``is`` (a ``Unify``) or of an arithmetic comparison:
+    ``$adapter_not_evaluable(...)`` when a qualified predicate-adapter call
+    stands in an arithmetic position of it (:func:`arithmetic_adapter_call`),
+    else the side as :func:`term_to_ast_expr` builds it.  *context* is the
+    goal's indicator, ``(is)/2`` or the comparison's (``(<)/2`` ...)."""
+    hit = arithmetic_adapter_call(term, lowering_globals())
     if hit is not None:
         return _call(_name("$adapter_not_evaluable"),
-                     ast.Constant(value=hit[0]), ast.Constant(value=hit[1]))
+                     ast.Constant(value=hit[0]), ast.Constant(value=hit[1]),
+                     ast.Constant(value=context))
     return term_to_ast_expr(term, var_context, eval_arith=eval_arith)
+
+
+#: The goal nodes whose two sides are checked by :func:`_adapter_side_expr`
+#: where the goal is BUILT as a term (``G is (X < 1 + m.p(A))``), with the
+#: context each one's refusal names.  Filled lazily (the node classes).
+_ADAPTER_CHECKED_GOALS: dict = {}
+
+
+def _adapter_checked_context(cls) -> "str | None":
+    if not _ADAPTER_CHECKED_GOALS:
+        from clausal.pythonic_ast import nodes as _n  # noqa: PLC0415
+        _ADAPTER_CHECKED_GOALS.update({
+            _n.Unify: "(is)/2", _n.ArithEq: "(==)/2", _n.ArithNeq: "(!=)/2",
+            _n.Lt: "(<)/2", _n.LtE: "(<=)/2", _n.Gt: "(>)/2",
+            _n.GtE: "(>=)/2"})
+    return _ADAPTER_CHECKED_GOALS.get(cls)
 
 
 def _resolve_functor_binding(
@@ -1734,7 +1788,11 @@ def term_to_ast_expr(
         # torch.tensor(L))``, then ``call(G)``): the same refusal as the
         # Unify goal's own lowering (``qualified_adapter_call``), raised
         # where the term is built.
-        _adapter_sides = (("left", "right") if cls is _UnifyNode else ())
+        # The arithmetic comparisons the same (``G is (X < 1 + m.p(A))``):
+        # their sides are evaluated when the goal runs.
+        _adapter_ctx = _adapter_checked_context(cls)
+        _adapter_sides = (("left", "right") if _adapter_ctx is not None
+                          else ())
         return ast.Call(
             func=_name(cls_name),
             args=[],
@@ -1742,7 +1800,8 @@ def term_to_ast_expr(
                 ast.keyword(
                     arg=name,
                     value=_adapter_side_expr(
-                        getattr(term, name), var_context, eval_arith)
+                        getattr(term, name), var_context, eval_arith,
+                        _adapter_ctx)
                     if name in _adapter_sides else
                     term_to_ast_expr(
                         getattr(term, name), var_context, eval_arith=eval_arith,

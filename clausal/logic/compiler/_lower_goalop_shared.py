@@ -455,11 +455,14 @@ def _lower_shared_body(
         case FDCompare(op=op, l=l, r=r):
             # Both sides are arithmetic: an UNDECLARED functor built here is
             # type_error(evaluable, F/N), in the constraint's own context.
+            # A qualified predicate ADAPTER in an arithmetic position of a
+            # side raises type_error(evaluable, 'm.p'/N) there (ruled
+            # 2026-10-04, D11), as it does in ``is``.
             from .terms_to_ast import construction_context  # noqa: PLC0415
-            with construction_context(
-                    "evaluable", f"({_FD_SPELLING.get(op, op)})/2"):
-                l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
-                r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+            _ctx = f"({_FD_SPELLING.get(op, op)})/2"
+            with construction_context("evaluable", _ctx):
+                l_expr = _adapter_side_expr(l, var_context, False, _ctx)
+                r_expr = _adapter_side_expr(r, var_context, False, _ctx)
             return [
                 _if(
                     _call(_name(_FD_RUNTIME[op]), l_expr, r_expr, _name(trail_name)),
@@ -661,8 +664,22 @@ def _lower_reified_branch(
     reif_var = ctx.fresh("_reif")
     l = test_op.l
     r = test_op.r
-    l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
-    r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+    # The test's sides are checked as the plain goal's are (ruled
+    # 2026-10-04, D11): a qualified predicate adapter in an arithmetic
+    # position of ``is`` or of a comparison raises.  ``is not`` (dif) is
+    # structural and is not checked, as in its plain lowering.
+    if kind == "unify":
+        _ctx = "(is)/2"
+    elif kind in _FD_REIFY:
+        _ctx = f"({_FD_SPELLING[_FD_REIFY[kind][0]]})/2"
+    else:
+        _ctx = None
+    if _ctx is None:
+        l_expr = term_to_ast_expr(l, var_context, eval_arith=False)
+        r_expr = term_to_ast_expr(r, var_context, eval_arith=False)
+    else:
+        l_expr = _adapter_side_expr(l, var_context, False, _ctx)
+        r_expr = _adapter_side_expr(r, var_context, False, _ctx)
 
     then_stmts = recurse(then_op, ctx, k_stmts)
     else_stmts = recurse(else_op, ctx, k_stmts)

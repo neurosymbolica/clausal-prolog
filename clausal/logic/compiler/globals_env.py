@@ -490,7 +490,7 @@ def _undeclared_functor_in(kind: str, context: "str | None", functor: str,
     raise undeclared_functor_error(functor, arity, kind, context)
 
 
-def _adapter_not_evaluable(functor: str, arity: int):
+def _adapter_not_evaluable(functor: str, arity: int, context: str = "(is)/2"):
     """``$adapter_not_evaluable``: what ``X is mod.pred(A1 ... An)`` compiles
     to when ``mod.pred`` -- written QUALIFIED in the source -- names a
     predicate ADAPTER (a non-callable ``_get_dispatch`` object such as a
@@ -500,10 +500,15 @@ def _adapter_not_evaluable(functor: str, arity: int):
     silently (ruled 2026-10-04: raise).  The ISO term is the one ``eval_``
     and ``'is'`` give for the same cell: ``type_error(evaluable,
     'mod.pred'/n)``.  Raised at run time, so a clause that never runs still
-    loads."""
+    loads.
+
+    Also for such a call NESTED in an arithmetic position of the side
+    (``X is 1 + mod.pred(...)``) and for the sides of an arithmetic
+    comparison (``X < 1 + mod.pred(...)``), whose indicator is *context*
+    (ruled 2026-10-04, D11; ``terms_to_ast.arithmetic_adapter_call``)."""
     from clausal.logic.exceptions import type_error  # noqa: PLC0415
     raise _LogicException(type_error("evaluable", ("/", functor, arity),
-                                     "(is)/2"))
+                                     context))
 
 
 def _constructor_in(obj: Any, kind: str, context: "str | None",

@@ -98,9 +98,18 @@ torch.nn.Linear(10, 5)` a module). A qualified **predicate adapter** is not a
 Python call: `X is torch.tensor([1, 2])`, where `torch.tensor` is the
 adapter's `tensor/2` predicate, raises `type_error(evaluable,
 'torch.tensor'/1)` -- the term `eval_` gives for it -- instead of binding the
-compound `'torch.tensor'([1, 2])`. Only a side that IS the qualified call is
-checked: one nested inside a larger term (`X is [torch.tensor(L)]`) still
-builds its compound. Call the predicate as a goal
+compound `'torch.tensor'([1, 2])`. The same holds for an adapter call in an
+ARITHMETIC position of a side -- an operand of `+ - * / // % **` or unary
+`-`, or an argument of an evaluable function such as `abs/1` or `max/2`,
+at any depth: `X is 1 + torch.tensor_sum(L)` raises too. Anywhere else it
+still builds its compound: in a list (`X is [torch.tensor(L)]`), a tuple,
+or a data or goal term (`G is f(m.p(A))`). The comparisons `==`, `!=`,
+`<`, `<=`, `>`, `>=` check their sides the same way and name themselves in
+the error (`1 < 1 + torch.tensor_sum(L)` raises `type_error(evaluable,
+'torch.tensor_sum'/1)` with context `(<)/2`); so does the test of `if_/3`,
+and an `is` or comparison built as a goal term (`G is (X < m.p(A))`)
+raises where it is built. `eval_/2`, the quoted ISO forms (`'is'`, `'<'`
+...) and `{...}` raised already. Call the predicate as a goal
 (`tensor([1, 2], X)`). The bare imported spelling, `G is match(P, S)` after
 `-import_from(py.re, [match])`, still builds a goal for `call/1`.
 
