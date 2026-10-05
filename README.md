@@ -4,7 +4,7 @@ Logic programming embedded in Python. **Clausal Prolog** is a cut-free
 Prolog that aims for ISO Prolog conformity. Write relational programs in
 `.clausal` files and import them with Python's standard import system. The
 engine includes constraint solving, tabling, DCGs and a large standard
-library. It also loads ISO Prolog `.pl` files. A Python-syntax surface, the
+library. Regular ISO Prolog lives in `.pl` files. A Python-syntax surface, the
 **seam** (`.seam`), is kept only as the boundary for code that has to call
 Python.
 
@@ -15,7 +15,7 @@ The package is `clausal`: `pip install clausal`, `import clausal`.
 | Extension | Surface | Syntax | Use it for |
 |---|---|---|---|
 | `.clausal` | **Clausal Prolog** | ISO Prolog, without cut | Your logic programs. The default choice. |
-| `.pl` | **ISO Prolog** | ISO Prolog | Existing Prolog code (cut-free; experimental) |
+| `.pl` | **ISO Prolog** | Regular ISO Prolog, cut included | External Prolog code, for Prolog systems such as Scryer or Trealla |
 | `.seam` | **Seam** | Python syntax | The boundary with Python: `++` escapes, hosted Python, adapters |
 
 All three are importable modules once `clausal` is imported. In one
@@ -41,7 +41,8 @@ directory, `name.seam` beats `name.clausal`, which beats `name.pl`.
 - **SLG tabling** and **well-founded semantics** for negation over tabled
   predicates
 - **DCGs**: `-->` grammar rules with `phrase/2,3`
-- **ISO Prolog import**: load `.pl` files directly (experimental)
+- **Regular ISO Prolog alongside**: `.pl` files, run in the Scryer or
+  Trealla embeddings, or imported directly (experimental)
 - **Python interop through the seam**: `library(...)` facades over the
   engine's Python modules (`library(json)`, `library(datetime)`, …),
   Python-free `.seam` modules, and allowlisted Python bridges
@@ -175,13 +176,17 @@ import clausal
 import my_prolog_module   # loads my_prolog_module.pl
 ```
 
-`.pl` import is **experimental** and outside the 1.0 compatibility promise.
-Clausal is cut-free on every surface, so a `.pl` file that uses `!` or `->`
-is refused here too. `CLAUSAL_PL_FRONTEND=native` selects the native ISO
-reader that Clausal Prolog always uses. The default is `translator`. To run
-unrestricted ISO Prolog alongside Clausal, use the
+A `.pl` file is regular, external ISO Prolog: it is not restricted to the
+cut-free subset, and that is why a `.clausal` module may not import one.
+To run full ISO Prolog, cut included, alongside Clausal Prolog, use the
 [Scryer](packages/clausal-scryer/docs/scryer.md) or
 [Trealla](packages/clausal-trealla/docs/trealla.md) embeddings.
+
+Importing a `.pl` file straight into the engine, as above, is
+**experimental** and outside the 1.0 compatibility promise. That in-process
+loader does not run cut yet: a `.pl` file that uses `!` or `->` fails to
+load there. `CLAUSAL_PL_FRONTEND` selects its front end (`translator` by
+default, or `native`, the ISO reader that `.clausal` files always use).
 
 ## The seam: `.seam` files
 

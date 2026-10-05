@@ -11,7 +11,7 @@ The engine reads three source surfaces:
 | Extension | Surface | Syntax | Read by |
 |---|---|---|---|
 | `.clausal` | **Clausal Prolog** | ISO Prolog, cut-free | the native ISO front end, always |
-| `.pl` | **ISO Prolog** | ISO Prolog | `CLAUSAL_PL_FRONTEND` (`translator` by default, or `native`); experimental |
+| `.pl` | **ISO Prolog** | Regular ISO Prolog, cut included | external Prolog systems (the Scryer and Trealla embeddings); experimental in-process import via `CLAUSAL_PL_FRONTEND` |
 | `.seam` | **the seam** | Python syntax | `PredicateLoader` |
 
 The seam is the boundary with Python. It is where the `++expr` escape,
@@ -138,8 +138,8 @@ choice, by design (ruling): !, -> and *-> are refused
 Use the pure alternatives instead. These are `dif/2`, `if_/3` and the
 reified predicates from `library(reif)` (see
 [If-Then-Else](reified_ite.md)), constraints, `once/1`, and first-argument
-indexing (see [Purity](purity.md)). The same rule applies to `.pl` files
-and to `{!}` in a grammar body.
+indexing (see [Purity](purity.md)). The same rule applies to `{!}` in a
+grammar body.
 
 ### Modules end with `end_module/1`
 
