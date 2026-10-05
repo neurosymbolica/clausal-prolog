@@ -1,9 +1,9 @@
-# Clausal Prolog - Neurosymbolic platform
+# Clausal Prolog - The Neurosymbolic platform
 
-The best of neural AI (Python) with the best of Symbolic AI (Prolog). Same
-process, same memory management, call back and forth, no friction. You can
-have neural networks calling symbolic core logic that in turn calls neural
-predicates. Imagine the possibilities.
+The best of neural network AI (Python) with the best of Symbolic AI (Prolog). 
+Same process, same memory management, nest Python -> Prolog -> Python -> etc. 
+no friction. You can have neural networks calling symbolic core logic that in 
+turn calls neural predicates. Imagine the possibilities.
 
 Clausal Prolog is a cut-free Prolog that aims for ISO Prolog conformity,
 with three syntaxes: restricted cut-free, no committed choice (to realise
