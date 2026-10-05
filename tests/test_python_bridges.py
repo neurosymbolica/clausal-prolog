@@ -653,24 +653,49 @@ def engine_rule(monkeypatch):
 
 
 def test_an_installed_engine_is_decided_by_its_record(engine_rule,
-                                                      monkeypatch):
+                                                      monkeypatch, tmp_path):
     """Non-editable install: the optional distributions share the
     site-packages/clausal tree, so only the engine's RECORD decides."""
     import clausal
     pb = engine_rule
-    root = os.path.dirname(os.path.realpath(clausal.__file__))
-    site = os.path.dirname(root)
+    site = tmp_path / "lib" / "site-packages"
+    root = site / "clausal"
+    (root / "library").mkdir(parents=True)
+    (root / "__init__.py").write_text("")
+    monkeypatch.setattr(clausal, "__file__", str(root / "__init__.py"))
     record = ["clausal/__init__.py", "clausal/library/py_os.seam"]
     monkeypatch.setattr(pb, "_engine_distribution",
-                        lambda: _FakeDist(site, record))
+                        lambda: _FakeDist(str(site), record))
     assert pb._engine_rule()[0] == "record"
     assert is_engine_shipped("clausal.library.py_os",
-                             os.path.join(root, "library", "py_os.seam"))
+                             str(root / "library" / "py_os.seam"))
     # In the same tree, but not in the engine's RECORD: another
     # distribution's file.
-    assert not is_engine_shipped(
-        "clausal.library.datetime",
-        os.path.join(root, "library", "datetime.seam"))
+    assert not is_engine_shipped("clausal.library.datetime",
+                                 str(root / "library" / "datetime.seam"))
+
+
+def test_an_egg_info_in_a_source_checkout_does_not_decide(engine_rule,
+                                                          monkeypatch):
+    """REGRESSION (2026-10-05): a stale ``clausal.egg-info`` in the source
+    checkout (an editable install or a build leaves one) is found by
+    importlib.metadata BESIDE the package, and its file list predates newer
+    files -- the engine's own facades (``library/countries/*``) were
+    refused.  Outside site-packages the directory decides."""
+    import clausal
+    pb = engine_rule
+    root = os.path.dirname(os.path.realpath(clausal.__file__))
+    if {"site-packages", "dist-packages"} & set(root.split(os.sep)):
+        pytest.skip("the engine itself is installed here")
+    site = os.path.dirname(root)
+    stale = ["clausal/__init__.py"]           # lists the __init__ only
+    monkeypatch.setattr(pb, "_engine_distribution",
+                        lambda: _FakeDist(site, stale))
+    assert pb._engine_rule() == ("dir", root)
+    facade = os.path.join(root, "library", "countries", "european_union.seam")
+    assert os.path.exists(facade)
+    assert is_engine_shipped("clausal.library.countries.european_union",
+                             facade)
 
 
 def test_an_editable_checkout_uses_the_directory(engine_rule, monkeypatch):

@@ -882,9 +882,16 @@ def _engine_rule() -> tuple:
                         files.append(real)
         except Exception:  # noqa: BLE001 -- unreadable RECORD: not "record"
             files = None
-    if files and init in files:
+    installed = bool(_SITE_DIRS & set(root.split(os.sep)))
+    # A RECORD vouches only for a real INSTALL (the package inside a
+    # site-packages/dist-packages tree).  In a source checkout,
+    # importlib.metadata also finds a ``clausal.egg-info`` left in the tree
+    # by an editable install or a build; its file list is whatever existed
+    # when it was written, so files added since would count as NOT the
+    # engine's and the engine's own facades would be refused.
+    if installed and files and init in files:
         rule = ("record", frozenset(files))
-    elif not (_SITE_DIRS & set(root.split(os.sep))):
+    elif not installed:
         rule = ("dir", root)
     _ENGINE_RULE = rule
     return rule
