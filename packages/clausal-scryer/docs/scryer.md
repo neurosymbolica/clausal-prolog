@@ -149,7 +149,7 @@ s.query_one("fib(10, R).")
 s.consult_file("my_library.pl")
 ```
 
-`consult_file` picks by file extension: a `.clausal` path is run through the seam translator; any other file (`.pl`, and currently `.seam` too) is loaded as raw Prolog. Module declarations (`:- module(...)`) in translated files are stripped so predicates land in the `user` module.
+`consult_file` picks by file extension. A seam (`.seam`) file is run through the seam translator, and its module declaration (`:- module(...)`) is stripped so predicates land in the `user` module. A Clausal Prolog (`.clausal`) file is already Prolog: it is consulted as written, except that `:- end_module(...)`, which Scryer refuses, is commented out. Any other file (`.pl`) is consulted as written.
 
 ---
 

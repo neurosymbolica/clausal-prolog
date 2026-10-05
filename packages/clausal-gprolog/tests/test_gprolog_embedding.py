@@ -1,6 +1,6 @@
 """Test the embedded GNU Prolog engine via the Python GnuProlog API.
 
-These tests verify the full pipeline: .clausal source is translated to Prolog
+These tests verify the full pipeline: seam (.seam) source is translated to Prolog
 by the existing clausal_to_prolog machinery, loaded into an in-process GNU
 Prolog engine, queried, and results converted back to Python values.
 
@@ -198,7 +198,7 @@ class TestGnuPrologFD:
 
 @needs_gprolog
 class TestGnuPrologClausal:
-    """Loading .clausal source through the translation pipeline."""
+    """Loading seam (.seam) source through the translation pipeline."""
 
     def test_consult_clausal_fact(self, g):
         # nv

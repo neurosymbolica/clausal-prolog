@@ -1,6 +1,6 @@
 """Test the embedded Scryer Prolog engine via the Python Scryer API.
 
-These tests verify the full pipeline: .clausal source is translated to Prolog
+These tests verify the full pipeline: seam (.seam) source is translated to Prolog
 by the existing clausal_to_prolog machinery, loaded into an in-process Scryer
 machine, queried, and results converted back to Python values.
 
@@ -174,11 +174,23 @@ class TestClausalTranslation:
             sol = s.query_one("my_append([1,2], [3,4], R).")
             assert sol["R"] == [1, 2, 3, 4]
 
-    def test_consult_file_clausal(self, tmp_path):
-        """consult_file auto-detects .clausal extension."""
+    def test_consult_file_seam(self, tmp_path):
+        """consult_file translates a seam (.seam) file to Prolog."""
+        # nv
+        f = tmp_path / "facts.seam"
+        f.write_text("color(red),\ncolor(blue),\n")
+        from clausal.scryer import Scryer
+        with Scryer() as s:
+            s.consult_file(str(f))
+            results = s.query_all("color(X).")
+            assert len(results) == 2
+
+    def test_consult_file_clausal_prolog(self, tmp_path):
+        """consult_file loads a Clausal Prolog (.clausal) file as the Prolog
+        it is, not through the seam translator."""
         # nv
         f = tmp_path / "facts.clausal"
-        f.write_text("color(red),\ncolor(blue),\n")
+        f.write_text("color(red).\ncolor(blue).\n")
         from clausal.scryer import Scryer
         with Scryer() as s:
             s.consult_file(str(f))
@@ -202,9 +214,9 @@ class TestClausalTranslation:
 
 @needs_scryer
 class TestScryerExamples:
-    """Load actual .clausal example files from the repo."""
+    """Load the repo's seam (.seam) example files."""
 
-    EXAMPLES = Path(__file__).parent.parent / "clausal" / "examples"
+    EXAMPLES = Path(__file__).resolve().parents[3] / "clausal" / "examples"
 
     def test_fibonacci(self):
         # nv

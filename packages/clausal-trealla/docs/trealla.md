@@ -145,7 +145,7 @@ t.query_one("fib(10, R).")
 t.consult_file("my_library.pl")
 ```
 
-`consult_file` picks by file extension: a `.clausal` path is run through the seam translator; any other file (`.pl`, and currently `.seam` too) is loaded as raw Prolog.
+`consult_file` picks by file extension. A seam (`.seam`) file is run through the seam translator. A Clausal Prolog (`.clausal`) file is already Prolog: it is consulted as written, except that `:- end_module(...)` is commented out. Any other file (`.pl`) is consulted by Trealla itself.
 
 ---
 
