@@ -2,7 +2,7 @@
 
 Higher-order predicates take a goal (predicate or lambda) as an argument and
 apply it to [list](lists.md) elements. Combined with [lambdas](lambdas.md), they give
-Clausal a functional programming feel.
+Clausal Prolog a functional programming feel.
 
 ---
 

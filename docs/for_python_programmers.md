@@ -1,4 +1,4 @@
-# Clausal for Python Programmers
+# Clausal Prolog for Python Programmers
 
 You know Python. You know functions, loops, classes, list comprehensions. This
 page bridges that knowledge to logic programming — what's different, what maps
@@ -9,7 +9,7 @@ to what, and why you'd want to use it.
 ## The thirty-second version
 
 In Python, you write **functions** that compute results from inputs. In
-Clausal, you write **[relations](thinking_relationally.md)** that describe when something is true about
+Clausal Prolog, you write **[relations](thinking_relationally.md)** that describe when something is true about
 their arguments. A relation has no fixed inputs or outputs — the same
 definition can compute, verify, generate, and enumerate.
 
@@ -29,9 +29,12 @@ completions from partial information. No separate functions needed.
 
 ## What stays the same
 
-**The syntax is Python.** Every `.clausal` file is valid Python syntax — no
-new parser, no foreign notation. Your editor's syntax highlighting, linting,
-and autocompletion work out of the box.
+**The seam's syntax is Python.** Logic code that lives next to Python is
+written in the seam (`.seam`), and every `.seam` file is valid Python syntax —
+no new parser, no foreign notation. Your editor's syntax highlighting, linting,
+and autocompletion work out of the box. The examples on this page use the seam.
+The main language, [Clausal Prolog](clausal_prolog.md) (`.clausal`), is
+written in ISO Prolog syntax instead.
 
 **Data types are mostly Python.** Numbers are Python numbers. [Lists](lists.md) are Python
 lists. An atom (a symbolic constant) **is** a Python `str` — no wrapper class.
@@ -41,8 +44,8 @@ atom of the same spelling — see
 [Atoms are symbolic constants](#atoms-are-symbolic-constants) below and
 [Terms are tuples](terms-are-tuples.md).
 
-**The runtime is Python.** Clausal runs on the Python VM. You can call any
-Python library from within a logic predicate using `++()`, and ask a
+**The runtime is Python.** Clausal Prolog runs on the Python VM. You can call any
+Python library from within a seam predicate using `++()`, and ask a
 question from Python by writing the goal after `--` in a `.seam` file:
 
 ```python
@@ -59,7 +62,7 @@ against the module that defines it. See
 [Python Integration](python_integration.md#querying-from-python).
 
 **Import works as expected.** `import my_module` loads
-`my_module.clausal` through Python's [import system](import.md). Bytecode is [cached](caching.md) in
+`my_module.seam` (or `my_module.clausal`, `my_module.pl`) through Python's [import system](import.md). Bytecode is [cached](caching.md) in
 `__pycache__` like any other Python module. The module's attribute for a
 predicate is that predicate's handle, used to name it — not a function to
 call.
@@ -77,7 +80,7 @@ x = 5       # x is now 5
 x = x + 1   # x is now 6
 ```
 
-In Clausal, a logic variable is an **unknown** — it starts unbound and gets
+In Clausal Prolog, a logic variable is an **unknown** — it starts unbound and gets
 bound through unification. once bound, it cannot be reassigned (within that
 branch of search). Logic variables are written in ALLCAPS:
 
@@ -91,7 +94,7 @@ for some value, and the system finds what that value must be.
 
 ### No return values — relations hold or don't
 
-A Python function returns a value. A Clausal predicate either **holds** (is
+A Python function returns a value. A Clausal Prolog predicate either **holds** (is
 true for the given arguments) or **doesn't hold**. Instead of returning
 results, you add an argument:
 
@@ -108,7 +111,7 @@ square(N, SQ) <- (SQ == N * N)
 
 ### Multiple answers via backtracking
 
-A Python function produces one result. A Clausal predicate can produce
+A Python function produces one result. A Clausal Prolog predicate can produce
 **multiple answers** by having multiple clauses or through nondeterministic
 search:
 
@@ -134,7 +137,7 @@ searches, you describe what you're looking for and let the system search.
 ### Pattern matching is bidirectional unification
 
 Python 3.10+ has `match` statements, but they are one-directional: you match a
-value against patterns. Clausal's unification is bidirectional — variables on
+value against patterns. Clausal Prolog's unification is bidirectional — variables on
 **both sides** can be bound:
 
 ```seam
@@ -176,7 +179,7 @@ spelling(red)        # 'red'
 
 **Every Python `str` is an atom** — there is no wrapper to opt in to.
 `is_atom("ok")` is `True` for any Python `str`, declared or not; a Python `str`
-crossing into Clausal (a `to_term` argument, a `++` result, a dict key) is
+crossing into the engine (a `to_term` argument, a `++` result, a dict key) is
 always read as the atom of that spelling. `mint` interns and hands back that
 same value:
 
@@ -190,9 +193,9 @@ ok == "ok"             # True — the same value
 ```
 
 A 0-arity **predicate** — a procedure, a different thing from an atom — is
-defined in a `.clausal` module (`ok,` or `ok <- ...`) and is a row in that
+defined in a `.seam` module (`ok,` or `ok <- ...`) and is a row in that
 module's database; the module binds its name to a predicate handle. A
-predicate is never a Python class: define it in a `.clausal` module, or, for
+predicate is never a Python class: define it in a `.seam` or `.clausal` module, or, for
 a predicate implemented in Python, give a plain object a `_get_dispatch()`
 method (see [Public API](public-api.md)).
 
@@ -215,7 +218,7 @@ constants (colours, states, tags); use strings for text data.
 
 ---
 
-## Mapping Python patterns to Clausal
+## Mapping Python patterns to Clausal Prolog
 
 ### For-loops become recursive relations
 
@@ -296,7 +299,7 @@ capital('germany', 'berlin'),
 capital('japan', 'tokyo'),
 ```
 
-The Clausal version can be queried both ways: "What is the capital of France?"
+The relational version can be queried both ways: "What is the capital of France?"
 and "Which country has Paris as its capital?"
 
 ---
@@ -307,7 +310,7 @@ and "Which country has Paris as its capital?"
 
 Need to solve a Sudoku, schedule a timetable, or find valid configurations?
 In Python, you'd reach for a solver library or write custom search. In
-Clausal, you describe the constraints and let CLP(ℤ) search:
+Clausal Prolog, you describe the constraints and let CLP(ℤ) search:
 
 ```seam
 send_more_money([S, E, N, D, M, O, R, Y]) <- (
@@ -340,7 +343,7 @@ name >> (['clausal'])
 ### Transparent integration with Python
 
 You never leave the Python ecosystem. Call pandas, numpy, scikit-learn, or
-any Python library from within your logic predicates:
+any Python library from within your logic predicates (in seam files):
 
 ```seam
 dataframe_mean(DF, COL, MEAN) <- (
@@ -362,7 +365,7 @@ dataframe_mean(DF, COL, MEAN) <- (
 
 ---
 
-*See also: [Tutorial](tutorial.md) — learn Clausal step by step.*
+*See also: [Tutorial](tutorial.md) — learn Clausal Prolog step by step.*
 
 *See also: [Python Integration](python_integration.md) — the `--` and `++`
 seams and the query API.*

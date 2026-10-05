@@ -1,6 +1,6 @@
 # Exception Handling
 
-Clausal provides structured exception handling via `throw/1`, `catch/3`, `catch_error/2`, `catch_recover/3`, `halt/0`, and `halt/1`. Error terms are ISO's `error(Formal, Context)`, with the context filled the way [Scryer](https://github.com/mthom/scryer-prolog) fills it (ISO first; where ISO is silent, Scryer — never SWI). Exceptions are implemented via Python's native exception mechanism.
+Clausal Prolog provides structured exception handling via `throw/1`, `catch/3`, `catch_error/2`, `catch_recover/3`, `halt/0`, and `halt/1`. Error terms are ISO's `error(Formal, Context)`, with the context filled the way [Scryer](https://github.com/mthom/scryer-prolog) fills it (ISO first; where ISO is silent, Scryer — never SWI). Exceptions are implemented via Python's native exception mechanism.
 
 The implementation lives in `clausal/logic/exceptions.py`.
 
@@ -114,7 +114,7 @@ guarded_msg(M) <- catch(risky(_B), ++ValueError(M), true)
 - A `++` catcher never matches a logic `throw/1` ball, so it stays selective
   in both directions.
 
-Prefer `++` catchers when writing for portability: Clausal's ALL_CAPS
+Prefer `++` catchers when writing for portability: the seam's ALL_CAPS
 variable rule means a bare `ValueError(M)` catcher is a *functor* here but
 reads as a **variable** under ISO's initial-capital rule, silently widening a
 specific catcher to a catch-all if the code is ever translated outward. The
@@ -140,7 +140,7 @@ done_with_code <- halt(1)
 ## Unified Exception Representation
 
 Both logic `throw/1` terms and Python exceptions are represented as plain
-Clausal terms during catch. Python exceptions become the term
+terms during catch. Python exceptions become the term
 `ClassName(Message)` (the cell `('ClassName', message)` in Python) — the same
 structural shape as any predicate term — so there is
 no distinction between catching a logic throw and catching a Python exception:
@@ -163,7 +163,7 @@ test("a logic throw and a Python exception are caught alike") <- (
 
 ## Structured Error Terms
 
-Clausal follows the [ISO Prolog](iso_prolog_compatibility_report.md) convention of wrapping errors in `error(ErrorTerm, Context)` compounds. Helper functions in `clausal.logic.exceptions` build these:
+Clausal Prolog follows the [ISO Prolog](iso_prolog_compatibility_report.md) convention of wrapping errors in `error(ErrorTerm, Context)` compounds. Helper functions in `clausal.logic.exceptions` build these:
 
 | Helper | Error term |
 |---|---|
@@ -230,11 +230,11 @@ it is the offending term itself, and may be a string.
 
 An error term is a plain **cell**: a tuple whose first element is the functor.
 `clausal.cell_functor` and `clausal.cell_args` read it, and `clausal.make_cell`
-builds one. In a `.clausal` (or `.seam`) file, a goal in goal position raises
+builds one. In a `.seam` file, a goal in goal position raises
 the uncaught error straight into the Python around it:
 
 ```seam
-# errs.clausal
+# errs.seam
 from clausal import LogicException, cell_args, cell_functor
 
 bad(N) <- atom_length(1, N)
@@ -303,7 +303,7 @@ Python-side exception reaches.
 
 No special primitive is needed: `throw/1` **already** does this, and an exception thrown
 inside a `findall` body propagates out of it rather than being swallowed as a logical
-failure. Write the guard as an ordinary Clausal clause that `throw`s when the input is
+failure. Write the guard as an ordinary clause that `throw`s when the input is
 malformed. Declare the error functor in `-private([...])` so it constructs a term under
 the [strict-atoms default](strict-atoms-migration.md) instead of tripping the
 undeclared-atom guard:
@@ -457,7 +457,7 @@ An uncaught `throw/1` surfaces as `LogicException` in Python code; `str(e)` is
     - **Python exceptions**: `UnitsMismatch` caught via `catch_error/2` as `UnitsMismatch(Msg)`, message bound, transparent when no error, unmatched exception re-raised via `catch/3`
     - **Halt**: exit code 0, exit code N, raises SystemExit
     - **Structured errors**: type_error, instantiation_error, existence_error, permission_error, evaluation_error
-    - **Import integration**: `.clausal` file with catch/throw patterns
+    - **Import integration**: `.seam` file with catch/throw patterns
 
 ---
 

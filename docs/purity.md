@@ -2,16 +2,18 @@
 
 This page explains *why* certain patterns in logic programming are preferred
 over others, and what concrete properties you gain by staying within the
-**pure monotonic core** of Clausal.
+**pure monotonic core** of Clausal Prolog.
 
 If [Thinking Relationally](thinking_relationally.md) is about the mindset,
 this page is about the discipline that makes the mindset pay off.
 
-!!! note "Clausal vs Prolog syntax"
+!!! note "Seam vs Prolog syntax"
 
-    Clausal and Prolog syntax may slightly differ — for example, variables are
-    `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style. Keep
-    this in mind when comparing with Prolog resources.
+    Examples on this page use seam syntax (`.seam`), which differs slightly from
+    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead of
+    `:-`, and lists are Python-style. Keep this in mind when comparing with
+    Prolog resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
+    Prolog syntax.
 
 ---
 
@@ -33,14 +35,14 @@ Pure predicates:
 - Can be **reasoned about** declaratively — each clause can be read and
   understood in isolation
 
-Clausal has a pure monotonic core, and you automatically get all of these
+Clausal Prolog has a pure monotonic core, and you automatically get all of these
 desirable properties as long as you stay within it.
 
 ---
 
 ## The four key properties
 
-The pure monotonic core of Clausal guarantees four properties that make
+The pure monotonic core of Clausal Prolog guarantees four properties that make
 declarative reasoning possible.
 
 ### 1. Monotonicity
@@ -95,7 +97,7 @@ Clauses and predicates can be read and reasoned about **in isolation**. You
 do not need to read the entire program to understand a single clause.
 
 This property is what makes large logic programs manageable. It is also what
-makes Clausal's [import system](import.md) meaningful — a predicate imported from another
+makes Clausal Prolog's [import system](import.md) meaningful — a predicate imported from another
 module can be understood from its definition alone.
 
 ---
@@ -180,9 +182,9 @@ configuration), and be aware that they move you outside the pure core.
 
 ---
 
-## Monotonic alternatives in Clausal
+## Monotonic alternatives in Clausal Prolog
 
-Many common impure patterns have pure counterparts in Clausal:
+Many common impure patterns have pure counterparts in Clausal Prolog:
 
 | Impure pattern | Pure alternative | Why better |
 |---|---|---|

@@ -1,6 +1,6 @@
 # Database Operations
 
-Clausal supports runtime modification of the predicate database — adding and
+Clausal Prolog supports runtime modification of the predicate database — adding and
 removing clauses while a program is running. This enables dynamic state,
 memoization, and self-modifying programs.
 
@@ -46,7 +46,7 @@ See [Directives](directives.md) for the other directives.
 A `Module` built from Python has no directives, so declare its dynamic
 predicates with `Module.declare_dynamic(name, arity)`, the same declaration
 as `-dynamic(name/arity)`. It also works on the `Module` of a loaded
-`.clausal` file (`mod.__clausal_module__`).
+`.seam` or `.clausal` file (`mod.__clausal_module__`).
 
 ```python
 from clausal import Module, Var, solve

@@ -1,8 +1,10 @@
-# Clausal for AI Agents
+# Clausal Prolog for AI Agents
 
 This page is for large language models, AI coding assistants, and autonomous
-agents. It explains why generating Clausal code is often a better strategy than
-generating imperative Python — and how to do it well.
+agents. It explains why generating Clausal Prolog code is often a better strategy than
+generating imperative Python — and how to do it well. Examples on this page use
+seam syntax (`.seam`), the Python-syntax surface; see
+[Clausal Prolog](clausal_prolog.md) for the ISO-syntax `.clausal` surface.
 
 ---
 
@@ -20,7 +22,7 @@ Less translation means fewer bugs.
 
 ### Correctness is easier to verify
 
-A Clausal predicate is a set of logical statements. Each clause says: "this
+A Clausal Prolog predicate is a set of logical statements. Each clause says: "this
 relation holds when these conditions hold." This makes it straightforward to
 verify:
 
@@ -48,7 +50,7 @@ test("three") <- list_length([1, 2, 3], 3)
 ### Fewer ways to be wrong
 
 Imperative code has many failure modes: off-by-one errors, forgotten edge
-cases, incorrect state mutation, resource leaks, race conditions. Pure Clausal
+cases, incorrect state mutation, resource leaks, race conditions. Pure Clausal Prolog
 code eliminates most of these:
 
 - **No mutable state.** Variables are bound once through unification, never
@@ -62,7 +64,7 @@ code eliminates most of these:
 
 ### Compositionality
 
-Clausal predicates compose naturally. A predicate that describes one relation
+Clausal Prolog predicates compose naturally. A predicate that describes one relation
 can be used as a condition in another predicate's body. There is no need to
 manage state, threading, or data flow between components:
 
@@ -78,9 +80,9 @@ independently.
 
 ---
 
-## when to generate Clausal instead of Python
+## when to generate Clausal Prolog instead of Python
 
-### Good candidates for Clausal
+### Good candidates for Clausal Prolog
 
 - **Rule-based logic**: business rules, access control policies, validation,
   eligibility checks — anything expressible as "X holds when Y and Z hold"
@@ -97,18 +99,18 @@ independently.
 ### when to stay in Python
 
 - **Numerical computation**: numpy, scipy, pandas — use Python for heavy
-  numerics, call from Clausal with `++()`
+  numerics, call them from seam code with `++()`
 - **I/O-heavy workflows**: file processing, network requests, database queries
-  — use Python for side effects, Clausal for the logic
+  — use Python for side effects, Clausal Prolog for the logic
 - **Performance-critical inner loops**: Python with C extensions will be faster
   for raw computation
 
-The sweet spot is **hybrid**: use Clausal for the logic and rules, Python for
+The sweet spot is **hybrid**: use Clausal Prolog for the logic and rules, Python for
 the computation and I/O.
 
 ---
 
-## How to write good Clausal code
+## How to write good Clausal Prolog code
 
 ### Think relationally
 
@@ -253,7 +255,7 @@ test("most common word") <- (
 
 ### Pattern: querying from Python
 
-Put the Python that asks questions in a `.clausal` or `.seam` file, and write
+Put the Python that asks questions in a `.seam` file, and write
 the goal in goal position with `--`. Answers come back as the engine's own
 terms: an atom is a `str`, a compound term is a tuple (`('node', 'leaf',
 'leaf')`), a string is `('$chars', text)`; `clausal.to_python` converts one
@@ -277,6 +279,9 @@ available, use `solve(("high_earner", NAME := Var()), module=staff)`. See
 [Python Integration](python_integration.md#goal-position-if-goal-for-in-goal).
 
 ### Rules that are easy to get wrong
+
+These are for seam (`.seam`) source; in Clausal Prolog (`.clausal`) the
+syntax is ISO (`is` evaluates, `=` unifies).
 
 - `"text"` is a **string** (a character list), not an atom; write `'text'`
   for an atom. See [Atoms vs strings](syntax.md#atoms-vs-strings).
@@ -322,4 +327,4 @@ model.*
 *See also: [Predicate Index](builtins.md) — available builtins.*
 
 *See also: [Python Integration](python_integration.md) — calling Python from
-Clausal and vice versa.*
+Clausal Prolog and vice versa.*

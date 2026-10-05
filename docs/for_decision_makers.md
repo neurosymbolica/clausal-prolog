@@ -1,22 +1,22 @@
-# Clausal for Decision Makers
+# Clausal Prolog for Decision Makers
 
 This page is for non-technical stakeholders — project managers, CTOs, product
-owners, compliance officers — who need to understand what Clausal is and why it
+owners, compliance officers — who need to understand what Clausal Prolog is and why it
 matters for their organisation.
 
 No code. Just the business case.
 
 ---
 
-## What is Clausal?
+## What is Clausal Prolog?
 
-Clausal is a logic programming system embedded in Python. It lets developers
+Clausal Prolog is a logic programming system embedded in Python. It lets developers
 write **rules** — formal statements about what is true under what conditions —
 and have the computer automatically reason about them: finding solutions,
 checking validity, and exploring possibilities.
 
 It is not a replacement for Python. It is a complement: Python handles
-computation, data, and I/O; Clausal handles reasoning, rules, and constraints.
+computation, data, and I/O; Clausal Prolog handles reasoning, rules, and constraints.
 They run together in the same process, on the same runtime.
 
 ---
@@ -29,7 +29,7 @@ when a traditional program makes a decision, the "why" is buried in layers of
 imperative code — loops, conditionals, state mutations. Extracting the
 reasoning requires a developer to trace through the execution manually.
 
-In Clausal, the rules **are** the explanation. Each rule reads as a sentence:
+In Clausal Prolog, the rules **are** the explanation. Each rule reads as a sentence:
 "A customer is eligible for a discount if they have been a member for more than
 two years and their annual spend exceeds $10,000." The gap between the business
 rule and the code is near zero.
@@ -68,7 +68,7 @@ traditional system, changing a rule means modifying imperative code, testing
 it, reviewing it, and deploying it. The rule is entangled with the code that
 implements it.
 
-In Clausal, rules are separate from the engine that executes them. Changing a
+In Clausal Prolog, rules are separate from the engine that executes them. Changing a
 rule means changing a logical statement. The impact is bounded and predictable.
 Testing is cheap — a test is just a question: "Does this hold?"
 
@@ -83,7 +83,7 @@ employee scheduling, resource allocation, configuration management, route
 optimisation, capacity planning.
 
 In a traditional approach, these require custom algorithms — expensive to
-develop, hard to maintain, and brittle when requirements change. Clausal
+develop, hard to maintain, and brittle when requirements change. Clausal Prolog
 includes built-in constraint solvers ([CLP(ℤ)](constraints.md), [CLP(B)](clpb.md), [CLP(ℝ)](clpr.md)) that let
 developers describe the constraints and have the system find solutions
 automatically.
@@ -110,7 +110,7 @@ The most powerful systems combine both:
 | Prediction | Decision rules and compliance |
 | Recommendation scoring | Eligibility and constraint checking |
 
-Clausal runs natively in Python — the lingua franca of ML — making this
+Clausal Prolog runs natively in Python — the lingua franca of ML — making this
 combination natural. No separate systems, no network hop, no serialisation
 format between them.
 
@@ -136,29 +136,31 @@ document and the executable system.
 
 ### Low risk, incremental adoption
 
-Clausal is not an all-or-nothing proposition. It embeds in existing Python
+Clausal Prolog is not an all-or-nothing proposition. It embeds in existing Python
 projects:
 
 1. **Start with one rule set.** Pick a domain where business rules are
    complex and change frequently — eligibility, pricing, compliance. Encode
-   those rules in Clausal.
+   those rules in Clausal Prolog.
 2. **Keep the rest in Python.** The data pipeline, the API, the UI — all
-   stay the same. Clausal handles just the reasoning layer.
+   stay the same. Clausal Prolog handles just the reasoning layer.
 3. **Expand as value proves out.** As the team gains confidence, move more
-   rule-heavy logic into Clausal.
+   rule-heavy logic into Clausal Prolog.
 
 ### Developer availability
 
-Clausal uses Python syntax. Any Python developer can learn it. The learning
-curve is steeper than a new library but shallower than a new language, because
-the syntax, tooling, and runtime are all familiar.
+Clausal Prolog rules are written in standard ISO Prolog syntax; code that
+mixes rules with Python uses the seam, a Python-syntax surface. Any Python
+developer can learn it. The learning curve is steeper than a new library but
+shallower than a new language, because the runtime and packaging are
+Python's.
 
 For organisations with Prolog expertise, the transition is even faster — the
-concepts are identical, only the surface syntax differs.
+syntax and concepts are standard Prolog's (Clausal Prolog leaves out the cut).
 
 ### No new infrastructure
 
-Clausal is a Python package. It runs wherever Python runs: local machines,
+Clausal Prolog is a Python package. It runs wherever Python runs: local machines,
 Docker containers, cloud functions, CI pipelines. No new servers, no new
 databases, no new deployment processes.
 
@@ -168,7 +170,7 @@ databases, no new deployment processes.
   1.0 covers, what is internal, and what is still experimental (importing
   Prolog `.pl` files is experimental in 1.0).
 - **Standard semantics.** Where the ISO Prolog standard (ISO/IEC 13211-1)
-  speaks, Clausal follows it; where it is silent, Clausal follows Scryer
+  speaks, Clausal Prolog follows it; where it is silent, it follows Scryer
   Prolog. Error reports use the standard's error terms, so rules and their
   failure modes behave as Prolog practitioners expect.
 
@@ -176,7 +178,7 @@ databases, no new deployment processes.
 
 ## The bottom line
 
-| Concern | Traditional approach | With Clausal |
+| Concern | Traditional approach | With Clausal Prolog |
 |---|---|---|
 | **Explainability** | Trace through imperative code | Read the rules directly |
 | **Rule changes** | Modify, test, review, deploy code | Change a logical statement |

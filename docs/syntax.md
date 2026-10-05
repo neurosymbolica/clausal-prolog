@@ -1,8 +1,10 @@
-# Clausal — Syntax Design
+# Clausal Prolog — Seam Syntax Design
 
-Clausal uses Python's parser, and so it conforms to Python's grammar. Like Prolog, it describes Horn Clauses - simple constructs that facilitate the representation of facts and rules, backed by strong mathematical formalisms, to facilitate high-level reasoning with useful guarantees.
+This page documents the seam (`.seam`): Clausal Prolog's Python-syntax surface. See [Clausal Prolog](clausal_prolog.md) for the ISO-syntax `.clausal` surface.
 
-Clausal uses 'grammatical holes' which are and must remain syntactically valid, but have no semantic purpose in Python, and are therefore never used in practice. Clausal uses a very small set of these 'holes' to allow the free mixing of logic code with Python code. Python and logic programming code in the same file means better code cohesion, easing development.
+The seam uses Python's parser, and so it conforms to Python's grammar. Like Prolog, it describes Horn Clauses - simple constructs that facilitate the representation of facts and rules, backed by strong mathematical formalisms, to facilitate high-level reasoning with useful guarantees.
+
+The seam uses 'grammatical holes' which are and must remain syntactically valid, but have no semantic purpose in Python, and are therefore never used in practice. The seam uses a very small set of these 'holes' to allow the free mixing of logic code with Python code. Python and logic programming code in the same file means better code cohesion, easing development.
 
 > **Quick navigation:** [Variables](#logic-variables) · [Constants](#constants) · [Escape operators](#escape-operators) · [Unification](#unification) · [Clauses](#horn-clauses) · [Lists](#lists) · [Arithmetic](#arithmetic-binding) · [Constraints](#comparison-operators-clpℤ) · [DCGs](#definite-clause-grammars--) · [Lambdas](#lambdas) · [Meta-predicates](#meta-predicates) · [Cheatsheet](#syntax-cheat-sheet)
 
@@ -25,7 +27,7 @@ Three double-prefix operators demarcate the boundary between Python and logic co
 | `--term` | In Python code: build a logic **term** (a cell) — and, in goal position (`if --g:`, `for X in --g:`), run it as a query. See [Python integration](python_integration.md) |
 | `++expr` | In logic code: a **Python value** — the expression is evaluated and passed in unconverted (in a clause body, at search time) |
 | `~~expr` | Capture the expression as a Python `ast` node without running it (works anywhere) |
-| `--X` *inside a thunk* | The Clausal variable `X` — see [Marking a variable inside a thunk](#marking-a-variable-inside-a-thunk) |
+| `--X` *inside a thunk* | The logic variable `X` — see [Marking a variable inside a thunk](#marking-a-variable-inside-a-thunk) |
 
 `--` was chosen because:
 - it doesn't introduce a new keyword or clobber any identifier
@@ -80,7 +82,7 @@ p(X) <- (bar(Fraction(1, 3))) # SyntaxError: reach the class as ++Fraction
 ```
 
 The reason is that a variable in functor position does not mean `call/N` in
-Clausal — it is the [unit-literal sugar](#unit-literal-sugar--nunit), so
+the seam — it is the [unit-literal sugar](#unit-literal-sugar--nunit), so
 `X(newton)` builds a quantity rather than calling `X`. If TitleCase were a
 variable there too, a bare Python class in a clause body would stop being a
 clear load error and quietly become a units expression that fails much later.
@@ -111,7 +113,7 @@ A declaration list takes the quoted spelling too, which is how such a
 predicate is exported — `-module(m, ['Foo'(X)])`, or the ISO arity form
 `-module(m, ['Foo'/1])` — and `-private` reads it the same way.
 
-One Clausal limit applies to anything that *names* a predicate — a head or a
+One seam limit applies to anything that *names* a predicate — a head or a
 declaration entry — and not to goals: the name must spell a plain,
 non-keyword name. `'foo bar'(X)` and
 `'not'(X)` may be *called*; they may not be *defined* or *declared*.
@@ -125,7 +127,7 @@ leading-underscore variable like `_x`, and the rule is exactly two clauses with 
 
 Logic variables are not declared; they come into existence by appearing in logical context. They work differently from Python variables: they can be unbound, and their bindings are undone on backtracking. This difference warrants a clear visual marker.
 
-Clausal originally departed from Prolog here, reserving TitleCase for atoms
+The seam originally departed from Prolog here, reserving TitleCase for atoms
 and functors on the grounds that in `Foo(Bar)` it would be ambiguous whether
 `Bar` was an atom or a variable. That worked example is now resolved the
 other way, and the ambiguity it feared does not arise: **position** decides,
@@ -138,7 +140,7 @@ Why the extra style is worth having:
   without transliterating every variable. See
   [Prolog Translation](prolog_translation.md) for the full mapping.
 - ALL-CAPS remains available and is still the preferred style for new
-  Clausal code: single letters like `X`, `Y`, `N` are universally understood
+  seam code: single letters like `X`, `Y`, `N` are universally understood
   as logic variables from mathematics, and ALL-CAPS marks the variable role
   unmistakably to a reader who also writes Python.
 - Leading underscore (`_x`) is available when a lowercase-looking variable
@@ -152,7 +154,7 @@ becoming a silent error: the position where a class name would actually be
 ### Singleton variables and `_UNUSED`
 
 A named variable that occurs exactly once in its clause binds nothing — almost always a typo
-(a dropped letter, a copy-paste that missed one occurrence). Clausal warns on this by default,
+(a dropped letter, a copy-paste that missed one occurrence). The seam loader warns on this by default,
 in **both** variable styles:
 
 ```python
@@ -163,7 +165,7 @@ test("bug: wrong var name") <- (
 ```
 
 ```text
-ClausalSingletonWarning: m.clausal:1: singleton variable `N1` — a variable occurring once
+ClausalSingletonWarning: m.seam:1: singleton variable `N1` — a variable occurring once
 binds nothing. Misspelling? Rename to `N1_UNUSED` (or `_`) if deliberate, or add
 -allow_singletons to the file
 ```
@@ -187,7 +189,7 @@ The check runs **per clause**, so `_UNUSED` on a genuinely-reused name is a real
 catches too — this is the inverse lint, modeled on SWI-Prolog's `_X` warning:
 
 ```text
-ClausalSingletonWarning: m.clausal:1: variable `N1_UNUSED` is marked _UNUSED but occurs more
+ClausalSingletonWarning: m.seam:1: variable `N1_UNUSED` is marked _UNUSED but occurs more
 than once in its clause
 ```
 
@@ -301,7 +303,7 @@ accepts:
 
 ### Structured constants
 
-A structured RHS builds a **real Clausal term** — the same term the identical literal would
+A structured RHS builds a **real logic term** — the same term the identical literal would
 build in a clause body, with the same unification semantics — not a Python value:
 
 ```seam
@@ -522,7 +524,7 @@ test("quoted = unifies too") <- ('='(X, 'a'), X is 'a')
 
 Why `is` rather than `=`?
 - `=` is Python's assignment operator and cannot appear in a clause body (the quoted `'='(A, B)` is ISO unification)
-- `is` expresses the same concept in English — two things being the same — and Python programmers understand it. Clausal generalises this concept; in 'X is Y', if we don't know X or Y, we are describing that they must be same whatever they are, and when either become known, they both become known.
+- `is` expresses the same concept in English — two things being the same — and Python programmers understand it. The seam generalises this concept; in 'X is Y', if we don't know X or Y, we are describing that they must be same whatever they are, and when either become known, they both become known.
 
 Conversely, `X is not Y` posts a disequality constraint (`dif/2`): X and Y must end up with different values. This is lazily checked — the constraint is re-evaluated each time either variable gets bound. If they become equal, the constraint fails and the search backtracks. If they remain different, the constraint is satisfied and dropped. See [constraints.md](constraints.md) for details.
 
@@ -532,7 +534,7 @@ The corresponding AST node is `Unify(left, right)`. Disequality is `DoesNotUnify
 
 ### Inline naming with `is`-chains
 
-Python's comparison chaining gives Clausal unification chains: `A is B is C`
+Python's comparison chaining gives the seam unification chains: `A is B is C`
 unifies pairwise, and the shared middle operand is evaluated **once**. This
 names a term and uses it in the same goal — where Python code would reach for
 the walrus operator:
@@ -720,7 +722,7 @@ Partial lists (Prolog `[H|T]` where `T` is a variable) use Python's `*` spread s
 
 ## Dicts
 
-Python dict literals in `.clausal` files create `DictTerm` objects — unification-aware dictionaries. Keys must be ground; values may be logic variables.
+Python dict literals in seam (`.seam`) files create `DictTerm` objects — unification-aware dictionaries. Keys must be ground; values may be logic variables.
 
 ```seam
 # Ground dict fact
@@ -744,7 +746,7 @@ See [Dicts & Sets](dicts_sets.md) for the full design.
 
 ## Sets
 
-Python set literals in `.clausal` files create `SetTerm` objects — unification-aware sets. Elements must be ground (hashable).
+Python set literals in seam (`.seam`) files create `SetTerm` objects — unification-aware sets. Elements must be ground (hashable).
 
 ```seam
 colors({1, 2, 3}),
@@ -797,7 +799,7 @@ denotes.
 
 ## Atoms vs strings
 
-Clausal keeps two disjoint kinds, exactly as ISO Prolog does:
+Clausal Prolog keeps two disjoint kinds, exactly as ISO Prolog does:
 
 | | **Atom (a symbol)** | **String (text / data)** |
 |---|---|---|
@@ -841,7 +843,7 @@ external system, say — use `atom_chars/2` on the text, or Python's
 
 ## F-strings
 
-Python f-strings work naturally in `.clausal` files. Logic variables are auto-dereferenced at search time — bound variables interpolate their value, unbound variables show `_N`.
+Python f-strings work naturally in seam (`.seam`) files. Logic variables are auto-dereferenced at search time — bound variables interpolate their value, unbound variables show `_N`.
 
 ```seam
 greet(NAME) <- writeln_text(f"Hello, {NAME}!")
@@ -852,7 +854,7 @@ show_pair(X, Y) <- writeln_text(f"{X} and {Y}")
 show_price(ITEM, PRICE) <- writeln_text(f"{ITEM}: ${PRICE:.2f}")
 ```
 
-Under the hood, f-strings in `.clausal` files are compiled to deferred `PyThunk` lambdas during AST transformation. Logic variable names become lambda parameters; the compiler emits calls with `deref()`'d values at search time.
+Under the hood, f-strings in `.seam` files are compiled to deferred `PyThunk` lambdas during AST transformation. Logic variable names become lambda parameters; the compiler emits calls with `deref()`'d values at search time.
 
 Simple variable references like `f"{X}"` and `f"{NAME}"` work correctly. Format specs (`:.2f`, `:>10`, etc.) and conversions (`!r`, `!s`) are fully supported. Python expressions inside f-strings (like `f"{len(L)}"` or `f"{S.upper()}"`) also work — the entire f-string is wrapped in a lambda that receives dereferenced values.
 
@@ -867,7 +869,7 @@ clause uses as a variable elsewhere is captured, and any other name resolves
 in the module namespace when the thunk runs.
 
 `--X` states it instead. Inside an f-string slot or a `++` operand, `--X`
-means **the Clausal variable `X`**:
+means **the logic variable `X`**:
 
 ```seam
 label(S) <- (tree(Node), S is f"{--Node}")
@@ -892,7 +894,7 @@ know:
   is hosted Python again and `--expr` is already the seam itself, nesting to
   any depth, so the marker would be a second meaning for one spelling. The
   `with --{}` *block* form is not a seam operand — its statements are
-  Clausal terms — and markers do work there.
+  logic terms — and markers do work there.
 - **Not in a format spec.** A format spec is a STRING, not a term position —
   it describes how to render a value, it does not name one. So neither
   spelling captures a clause variable there, and that is deliberate rather
@@ -1376,7 +1378,7 @@ These predicates take a goal closure and apply it across a list. All use committ
 
 ## [Constraint logic programming](constraints.md)
 
-Clausal supports [CLP(ℤ)](constraints.md) (integer constraints) and [CLP(B)](clpb.md) (Boolean constraints). Constraint operators are used directly in clause bodies — no special escape or domain wrapper is needed.
+Clausal Prolog supports [CLP(ℤ)](constraints.md) (integer constraints) and [CLP(B)](clpb.md) (Boolean constraints). Constraint operators are used directly in clause bodies — no special escape or domain wrapper is needed.
 
 ```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:constraint_logic_programming"
@@ -1412,7 +1414,7 @@ The escape mechanisms (`--`, `++`) cover all cases where interop is genuinely ne
 
 ## When the syntax is wrong
 
-`.clausal` is Python surface syntax, so a malformed clause is reported by
+`.seam` is Python surface syntax, so a malformed clause is reported by
 CPython's parser — and a parser reports where it *gave up*, not where the
 mistake is. For a rule body that is almost always the closing `)`, one or more
 lines below the defect. The loader therefore prints the source itself
@@ -1420,7 +1422,7 @@ lines below the defect. The loader therefore prints the source itself
 `clausal/import_hook.py`):
 
 ```text
-invalid syntax (m.clausal, line 6)
+invalid syntax (m.seam, line 6)
     3 | f(X) <- (
     4 |     X > 1,
     5 |     Y is
@@ -1450,4 +1452,4 @@ touched — their errors are Python's to report.
 
 ---
 
-*See also: [Tutorial](tutorial.md) — hands-on introduction to Clausal · [Predicates & Rules](predicates.md) — clause forms, dispatch, and guards · [Builtins](builtins.md) — full predicate reference.*
+*See also: [Tutorial](tutorial.md) — hands-on introduction to Clausal Prolog · [Predicates & Rules](predicates.md) — clause forms, dispatch, and guards · [Builtins](builtins.md) — full predicate reference.*

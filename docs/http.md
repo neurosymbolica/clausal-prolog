@@ -1,4 +1,4 @@
-# Clausal — HTTP & URL Modules (`http`, `url`)
+# Clausal Prolog — HTTP & URL Modules (`http`, `url`)
 
 ## Overview
 

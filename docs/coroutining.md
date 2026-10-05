@@ -1,6 +1,6 @@
 # Coroutining & Resource Control
 
-Clausal provides coroutining primitives for delayed goal execution and deterministic resource management. These predicates enable:
+Clausal Prolog provides coroutining primitives for delayed goal execution and deterministic resource management. These predicates enable:
 
 - **Delayed goals** — postpone execution until a variable is bound (`freeze/2`, `when/2`)
 - **Resource cleanup** — guarantee cleanup runs regardless of success, failure, or exceptions (`setup_call_cleanup/3`, `call_cleanup/2`)

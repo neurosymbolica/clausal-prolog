@@ -1,6 +1,6 @@
 # Tutorial: Parallel Queries from Python
 
-This tutorial shows how to run Clausal queries in parallel from Python
+This tutorial shows how to run Clausal Prolog queries in parallel from Python
 using threads. It covers the rules you need to follow, common patterns,
 and pitfalls.
 
@@ -16,7 +16,7 @@ and pitfalls.
 > **Each thread gets its own Trail and its own query variables.**
 
 A `Trail` records bindings so they can be undone on backtracking. It is
-not thread-safe — it's a mutable array with no internal locking. Clausal
+not thread-safe — it's a mutable array with no internal locking. The engine
 enforces this at runtime: using a Trail from a thread other than the one
 that created it raises `RuntimeError`.
 
@@ -44,7 +44,7 @@ for t in threads:
 The simplest pattern. Multiple threads query the same compiled database
 concurrently; they share only the (read-only) clause database.
 
-Write the query in a `.clausal` or `.seam` file, in
+Write the query in a `.seam` file, in
 [goal position](python_integration.md#goal-position-if-goal-for-in-goal).
 Every run of a `--` goal makes its own variables and its own Trail, so
 the function is safe to call from any thread. With `graph.seam`:

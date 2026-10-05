@@ -1,4 +1,4 @@
-# Clausal Predicate Index
+# Clausal Prolog Predicate Index
 
 Complete index of all built-in and standard-library predicates. Predicates are listed as `Name/arity`.
 
@@ -99,7 +99,7 @@ These are **compiler special forms** — transformed at compile time, not dispat
 Commit to the first solution of `Goal`; succeeds at most once even if `Goal` has multiple solutions.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/once_member.seam`
+    **Seam tests:** `tests/fixtures/once_member.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -112,7 +112,7 @@ Negation as failure (NAF). Succeeds if `Goal` has no solutions. Written as the P
 For tabled predicates, uses well-founded semantics (delayed negation); see [WFS](wfs.md).
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/wfs_win.seam`, `tests/fixtures/wfs_win_asym.seam`
+    **Seam tests:** `tests/fixtures/wfs_win.seam`, `tests/fixtures/wfs_win_asym.seam`
     **Python tests:** `tests/test_compiled_programs.py`, `tests/test_wfs.py`
 
 ---
@@ -121,10 +121,10 @@ For tabled predicates, uses well-founded semantics (delayed negation); see [WFS]
 ```seam
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:if_3"
 ```
-The reified if-then-else, library(reif)'s `if_/3` (see [Reified if-then-else](reified_ite.md)); Clausal has no cut and no `->`. `Cond` must be **reifiable**: a reified comparison (`X is 1`, `X is not Y`, `==`, `!=`, `<`, `<=`, `>`, `>=`), a conjunction or disjunction of them, or a closure called with the truth value appended (`memberd_t(E, Es)` runs `memberd_t(E, Es, T)`). With `X` unbound, `if_(X is 1, ...)` explores both branches, the `Else` branch under `dif(X, 1)`; a closure's every answer is explored. A plain goal (`if_(in_(Y, [1, 2]), ...)`, `if_(atom(X), ...)`) is refused at load time -- it used to run as a soft cut, which is not monotone (ruling 2026-10-01).
+The reified if-then-else, library(reif)'s `if_/3` (see [Reified if-then-else](reified_ite.md)); Clausal Prolog has no cut and no `->`. `Cond` must be **reifiable**: a reified comparison (`X is 1`, `X is not Y`, `==`, `!=`, `<`, `<=`, `>`, `>=`), a conjunction or disjunction of them, or a closure called with the truth value appended (`memberd_t(E, Es)` runs `memberd_t(E, Es, T)`). With `X` unbound, `if_(X is 1, ...)` explores both branches, the `Else` branch under `dif(X, 1)`; a closure's every answer is explored. A plain goal (`if_(in_(Y, [1, 2]), ...)`, `if_(atom(X), ...)`) is refused at load time -- it used to run as a soft cut, which is not monotone (ruling 2026-10-01).
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/reified_memberd.seam`, `tests/fixtures/tabled_ite.seam`, `tests/fixtures/reified_max.seam`
+    **Seam tests:** `tests/fixtures/reified_memberd.seam`, `tests/fixtures/tabled_ite.seam`, `tests/fixtures/reified_max.seam`
     **Python tests:** `tests/test_reified_ite.py`, `tests/iso_l3/test_seam_if_requires_reifiable.py`
 
 ---
@@ -137,7 +137,7 @@ Raise a logic-level exception carrying `Term`. The exception propagates through 
 
 ??? info "Implementation & tests"
     **Exception class:** `clausal/logic/exceptions.py` (`LogicException`)
-    **Clausal tests:** `tests/clausal_modules/exceptions.seam`
+    **Seam tests:** `tests/clausal_modules/exceptions.seam`
     **Python tests:** `tests/test_exceptions.py`
 
 ---
@@ -161,7 +161,7 @@ Execute `Goal`. If `Goal` throws, unify the thrown term with `Catcher`. If unifi
 An ISO error arrives in Scryer's form, `error(Formal, Culprit)`, where `Culprit` is the predicate indicator (`catch(atom_length(1, _), E, true)` binds `E = error(type_error(atom, 1), atom_length/2)`); see [Exceptions](exceptions.md). A Python exception raised inside `Goal` (for example from `++expr`) is caught as the cell `(ClassName, Message)`: `catch(++int("x"), E, true)` binds `E` to `('ValueError', "invalid literal for int() with base 10: 'x'")`. Bindings made by the failing goal are undone before recovery runs.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/clausal_modules/exceptions.seam`
+    **Seam tests:** `tests/clausal_modules/exceptions.seam`
     **Python tests:** `tests/test_exceptions.py`
 
 ---
@@ -187,7 +187,7 @@ Deterministic resource management (`try/finally` for logic). Setup runs once (fi
 
 ??? info "Implementation & tests"
     **Python tests:** `tests/test_coroutining.py::TestSetupCallCleanup`
-    **Clausal tests:** `tests/fixtures/coroutining.seam`
+    **Seam tests:** `tests/fixtures/coroutining.seam`
 
 ---
 
@@ -199,7 +199,7 @@ Sugar for `setup_call_cleanup(true, Call, Cleanup)` — no setup step, just guar
 
 ??? info "Implementation & tests"
     **Python tests:** `tests/test_coroutining.py::TestCallCleanup`
-    **Clausal tests:** `tests/fixtures/coroutining.seam`
+    **Seam tests:** `tests/fixtures/coroutining.seam`
 
 ---
 
@@ -217,7 +217,7 @@ Delay `Goal` until `X` is bound. If `X` is already bound, runs `Goal` immediatel
 
 ??? info "Implementation & tests"
     **Python tests:** `tests/test_coroutining.py::TestFreeze`
-    **Clausal tests:** `tests/fixtures/coroutining.seam`
+    **Seam tests:** `tests/fixtures/coroutining.seam`
 
 ---
 
@@ -229,7 +229,7 @@ Generalized coroutining: delay `Goal` until `Condition` is satisfied. Supported 
 
 ??? info "Implementation & tests"
     **Python tests:** `tests/test_coroutining.py::TestWhen`
-    **Clausal tests:** `tests/fixtures/coroutining.seam`
+    **Seam tests:** `tests/fixtures/coroutining.seam`
 
 ---
 
@@ -244,7 +244,7 @@ These are **compiler special forms** recognized by name in `compile_goal`/`compi
 Collect all bindings of `Template` produced by `Goal` into `Bag` (a list). Succeeds with `[]` if `Goal` has no solutions.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/meta_test.seam`
+    **Seam tests:** `tests/fixtures/meta_test.seam`
     **Python tests:** `tests/test_meta.py`
 
 ---
@@ -272,7 +272,7 @@ bindings (ISO 8.10.2). A bag preserves duplicate solutions. See
 [Meta-Predicates](meta_predicates.md#bagof3).
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/meta_test.seam`
+    **Seam tests:** `tests/fixtures/meta_test.seam`
     **Python tests:** `tests/test_meta.py`
 
 ---
@@ -285,7 +285,7 @@ Like `bagof/3` (one set per binding of the free variables, `^` for
 existential ones) but removes duplicates and sorts each set.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/meta_test.seam`
+    **Seam tests:** `tests/fixtures/meta_test.seam`
     **Python tests:** `tests/test_meta.py`
 
 ---
@@ -297,7 +297,7 @@ existential ones) but removes duplicates and sorts each set.
 Universal quantification: succeeds if `Action` succeeds for every solution of `Cond`. Desugars to `not(Cond and not(Action))`.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/meta_test.seam`
+    **Seam tests:** `tests/fixtures/meta_test.seam`
     **Python tests:** `tests/test_meta.py`
 
 ---
@@ -310,7 +310,7 @@ Call `Goal` and succeed only on the **Nth solution** (1-indexed). Skips the firs
 
 ??? info "Implementation & tests"
     **Python tests:** `tests/test_coroutining.py::TestCallNth`
-    **Clausal tests:** `tests/fixtures/coroutining.seam`
+    **Seam tests:** `tests/fixtures/coroutining.seam`
 
 ---
 
@@ -322,7 +322,7 @@ Count the number of solutions of `Goal` without collecting them. Unifies `Count`
 
 ??? info "Implementation & tests"
     **Python tests:** `tests/test_coroutining.py::TestCountAll`
-    **Clausal tests:** `tests/fixtures/coroutining.seam`
+    **Seam tests:** `tests/fixtures/coroutining.seam`
 
 ---
 
@@ -359,7 +359,7 @@ Query runtime statistics. With Key bound, looks up a specific stat. With Key unb
 Call `Goal` (a lambda or dispatch function) with 0–7 extra arguments appended. Aliases for `call_goal/1..8`.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_call.seam`
+    **Seam tests:** `tests/fixtures/builtins_call.seam`
     **Python tests:** `tests/test_meta.py`, `tests/test_higher_order.py`
 
 ---
@@ -371,7 +371,7 @@ Call `Goal` (a lambda or dispatch function) with 0–7 extra arguments appended.
 Core implementation of higher-order call. `Goal` must be a callable (lambda or `_get_dispatch()` object). `call_goal/4..8` are generated via `_make_call_goal_n`.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_call.seam`
+    **Seam tests:** `tests/fixtures/builtins_call.seam`
     **Python tests:** `tests/test_meta.py`, `tests/test_higher_order.py`
 
 ---
@@ -442,7 +442,7 @@ Decompose a term into its functor name and arity, or construct a term from a nam
 The `'.'/2` reading is a **view**: decomposition answers virtually (`arg(2, "hello", T)` gives the string `"ello"`), and construction through the name position builds the engine's real list shapes, never a `(".", H, T)` cell. See `write_canonical/1` for the same view in the writer.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_inspect.seam`
+    **Seam tests:** `tests/fixtures/builtins_inspect.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -456,7 +456,7 @@ be bound: an unbound `N` is `instantiation_error` (ISO 8.5.2.3, as Scryer; it
 used to enumerate the `(N, arg)` pairs, an SWI extension).
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_inspect.seam`
+    **Seam tests:** `tests/fixtures/builtins_inspect.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -483,7 +483,7 @@ Decompose a term to a `[functor | args]` list, or construct a term from such a l
 Constructed compounds are **cells** (plain tuples) — Python code tests a constructed term's shape with `clausal.cell_functor` / `clausal.cell_args`.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_inspect.seam`
+    **Seam tests:** `tests/fixtures/builtins_inspect.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -495,7 +495,7 @@ Constructed compounds are **cells** (plain tuples) — Python code tests a const
 Unify `Copy` with a deep copy of `Original` where every unbound `Var` is replaced by a fresh one. Structural sharing is preserved: if the same `Var` appears in multiple positions in `Original`, the same fresh `Var` appears in all corresponding positions of `Copy`. Already-bound variables are followed and their values are copied rather than replaced.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/clausal_modules/term_inspection.seam`
+    **Seam tests:** `tests/clausal_modules/term_inspection.seam`
     **Python tests:** `tests/test_term_inspection.py`
 
 ---
@@ -507,7 +507,7 @@ Unify `Copy` with a deep copy of `Original` where every unbound `Var` is replace
 Unify `Vars` with a list of all unbound `Var`s in `Term`, collected left-to-right with duplicates removed (same `Var` appearing multiple times in `Term` appears only once in `Vars`). Bound variables are followed and not collected.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/clausal_modules/term_inspection.seam`
+    **Seam tests:** `tests/clausal_modules/term_inspection.seam`
     **Python tests:** `tests/test_term_inspection.py`
 
 ---
@@ -519,7 +519,7 @@ Unify `Vars` with a list of all unbound `Var`s in `Term`, collected left-to-righ
 Number all unbound `Var`s in `Term` left-to-right, binding each to the cell `("$VAR", N)` where `N` starts at `Start` and increments. `End` is unified with the next unused number after all variables are numbered. Useful for pretty-printing terms with named variables. `Start` must be a bound integer.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/clausal_modules/term_inspection.seam`
+    **Seam tests:** `tests/clausal_modules/term_inspection.seam`
     **Python tests:** `tests/test_term_inspection.py`
 
 ---
@@ -568,7 +568,7 @@ constant_value(Name, Value)
 The constant *Name* names. `Name` is an **atom**; `Value` is its frozen ground value.
 
 This is Markus Triska's name for the cross-implementation convention (2026-09-10), so the
-spelling and arity are not Clausal's to vary: an exported `.pl` and any expansion prelude must
+spelling and arity are not Clausal Prolog's to vary: an exported `.pl` and any expansion prelude must
 use exactly this.
 
 ```seam
@@ -579,10 +579,10 @@ retry_limit(N) <- constant_value(max_retries, N)
 ```
 
 !!! warning "Scope: program-wide, not module-implicit"
-    In a Prolog system there is one program, so `constant_value/2` is a fact about it. Clausal
+    In a Prolog system there is one program, so `constant_value/2` is a fact about it. Clausal Prolog
     has modules, and the module-implicit reading would need the **calling** module — which a
     builtin does not get: the registry hands dispatch functions their arguments and a trail,
-    and nothing else. So this enumerates every loaded Clausal module's own declarations,
+    and nothing else. So this enumerates every loaded logic module's own declarations,
     exactly as `module_constant(-Module, +Name, ?Value)` does. Two modules declaring the same
     constant name both answer. Use [`module_constant/3`](#module_constant3) when the module
     matters.
@@ -694,11 +694,11 @@ resolves against; `Name` is the constant's declaration spelling as an **atom**
 constant's frozen value — the identical object the declaring module's own clause bodies embed.
 
 ```text
-# m.clausal
+# m.seam
 -module(m, [])
 -constant_value(max_retries, 3)
 
-# caller.clausal
+# caller.seam
 -import_module(m)
 retry_limit(N) <- module_constant(m, max_retries, N)
 ```
@@ -710,10 +710,10 @@ Four modes, following directly from which of `Module`/`Name` are bound:
 - **`(+Module, -Name, ?Value)` — enumerate a module's constants.** One solution per
   `(Name, Value)` pair `Module` declares.
 - **`(-Module, +Name, ?Value)` — find the declaring module(s).** Searches every *loaded*
-  Clausal module (a snapshot of `sys.modules`) for one that declares a constant named `Name`;
+  logic module (a snapshot of `sys.modules`) for one that declares a constant named `Name`;
   `Module` need not be imported into the querying file.
 - **`(-Module, -Name, ?Value)` — enumerate everything.** One solution per
-  `(Module, Name, Value)` triple across every loaded Clausal module.
+  `(Module, Name, Value)` triple across every loaded logic module.
 
 **Only a module's own declarations are reflected** — a constant reached via `-import_from` or
 `-import_module` is *not* re-registered on the importer, so `module_constant/3` never sees it
@@ -739,7 +739,7 @@ These work only on a predicate declared [`-dynamic`](database_ops.md#declare-fir
 Add the fact `Clause` at the **end** of its predicate's clause list. Only facts can be asserted: a rule raises `permission_error(assert, rule, Head)`. The predicate must be declared `-dynamic`: a static one, or one nothing declares (static by default, ISO 7.5.2), raises `error(permission_error(modify, static_procedure, Name/Arity), assertz/1)`; an unbound `Clause` raises `instantiation_error`.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_db.seam`
+    **Seam tests:** `tests/fixtures/builtins_db.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -751,7 +751,7 @@ Add the fact `Clause` at the **end** of its predicate's clause list. Only facts 
 Add `Clause` at the **front** of its predicate's clause list.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_db.seam`
+    **Seam tests:** `tests/fixtures/builtins_db.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -763,7 +763,7 @@ Add `Clause` at the **front** of its predicate's clause list.
 Remove the **first** clause whose head unifies with `Term`. Not backtrackable — removes exactly one clause per call. As in ISO (8.9.3) and Scryer: it fails when nothing matches, including for a name nothing declares (there is no clause to remove); a static predicate, a declared data functor or a builtin raises `error(permission_error(modify, static_procedure, Name/Arity), retract/1)`; an unbound `Term` raises `instantiation_error`. (`retractall/1` and `abolish/1` are not provided.)
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_db.seam`
+    **Seam tests:** `tests/fixtures/builtins_db.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -802,7 +802,7 @@ test("rule body is a term") <- (clause(path(A, B), BODY), BODY is edge(A, B))
 Remove all cached answers for the named tabled predicate, forcing re-computation on the next call.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** none
+    **Seam tests:** none
     **Python tests:** `tests/test_tabling.py`
 
 ---
@@ -814,7 +814,7 @@ Remove all cached answers for the named tabled predicate, forcing re-computation
 Remove all cached tabling answers for every predicate in the current database.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** none
+    **Seam tests:** none
     **Python tests:** `tests/test_tabling.py`
 
 ---
@@ -866,7 +866,7 @@ These predicates address a term's fields by name; the names come from the functo
 Produce a copy of `Term` with field values replaced by `Overrides` (a Python `dict`). Works on declared functor cells.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_keywords.seam`
+    **Seam tests:** `tests/fixtures/builtins_keywords.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -878,7 +878,7 @@ Produce a copy of `Term` with field values replaced by `Overrides` (a Python `di
 Unify `Keys` with a list of field names whose values are unbound `Var`s in `Term`.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_keywords.seam`
+    **Seam tests:** `tests/fixtures/builtins_keywords.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -890,7 +890,7 @@ Unify `Keys` with a list of field names whose values are unbound `Var`s in `Term
 Reflect the registered parameter name list for the predicate `FunctorName/Arity`. Fails if no signature is registered.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_keywords.seam`
+    **Seam tests:** `tests/fixtures/builtins_keywords.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -966,7 +966,7 @@ Collect all attributed variables occurring in `Term` into a list. Traverses comp
 Disequality constraint. Succeeds if `X` and `Y` can remain different (posts a constraint if either is unbound). Implemented via attributed variables; propagates through unification.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_dif.seam`
+    **Seam tests:** `tests/fixtures/builtins_dif.seam`
     **Python tests:** `tests/test_dif.py`
 
 ---
@@ -978,7 +978,7 @@ Disequality constraint. Succeeds if `X` and `Y` can remain different (posts a co
 Reified equality. `T` is unified with `True` if `X = Y`, `False` if `dif(X, Y)`. Suspends if neither is determined yet.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/reif_eq_test.seam`, `tests/fixtures/builtins_dif.seam`
+    **Seam tests:** `tests/fixtures/reif_eq_test.seam`, `tests/fixtures/builtins_dif.seam`
     **Python tests:** `tests/test_reif_builtins.py`
 
 ---
@@ -990,7 +990,7 @@ Reified equality. `T` is unified with `True` if `X = Y`, `False` if `dif(X, Y)`.
 Reified disequality. `T` is `True` if `dif(X, Y)`, `False` if `X = Y`.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_dif.seam`
+    **Seam tests:** `tests/fixtures/builtins_dif.seam`
     **Python tests:** `tests/test_reif_builtins.py`
 
 ---
@@ -1021,7 +1021,7 @@ CLP(ℤ) operates over **all integers** — variables default to the entire inte
 Post the integer domain `[Lo, Hi]` on a logic variable or a list of logic variables. Required before `label/1` can enumerate values.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/clpfd_queens.seam`, `tests/fixtures/clpfd_sendmore.seam`
+    **Seam tests:** `tests/fixtures/clpfd_queens.seam`, `tests/fixtures/clpfd_sendmore.seam`
     **Python tests:** `tests/test_clpfd.py`
 
 ---
@@ -1033,7 +1033,7 @@ Post the integer domain `[Lo, Hi]` on a logic variable or a list of logic variab
 Enumerate concrete values for a list of constrained variables, backtracking over all consistent assignments. Variables must have finite domains (via `in_domain/3` or comparison constraints) — raises `ValueError` on unbounded domains.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/clpfd_queens.seam`, `tests/fixtures/clpfd_sendmore.seam`
+    **Seam tests:** `tests/fixtures/clpfd_queens.seam`, `tests/fixtures/clpfd_sendmore.seam`
     **Python tests:** `tests/test_clpfd.py`
 
 ---
@@ -1045,7 +1045,7 @@ Enumerate concrete values for a list of constrained variables, backtracking over
 Post an all-different constraint on a list of integer-constrained variables. Propagates bounds and eliminates assigned values from other domains.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/clpfd_queens.seam`, `tests/fixtures/clpfd_sendmore.seam`
+    **Seam tests:** `tests/fixtures/clpfd_queens.seam`, `tests/fixtures/clpfd_sendmore.seam`
     **Python tests:** `tests/test_clpfd.py`
 
 ---
@@ -1129,7 +1129,7 @@ Post a Boolean constraint. The expression must evaluate to true. Fails if unsati
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/constraints.py` → `clausal/logic/clpb.py`
-    **Clausal tests:** `tests/fixtures/clpb_circuit.seam`
+    **Seam tests:** `tests/fixtures/clpb_circuit.seam`
     **Python tests:** `tests/test_clpb.py`
 
 ---
@@ -1142,7 +1142,7 @@ Tautology check. Unify `T` with 1 if `Expr` is always true, 0 if always false. F
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/constraints.py` → `clausal/logic/clpb.py`
-    **Clausal tests:** none
+    **Seam tests:** none
     **Python tests:** `tests/test_clpb.py`
 
 ---
@@ -1155,7 +1155,7 @@ Count the number of satisfying assignments for `Expr`. Unify `N` with the count.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/constraints.py` → `clausal/logic/clpb.py`
-    **Clausal tests:** none
+    **Seam tests:** none
     **Python tests:** `tests/test_clpb.py`
 
 ---
@@ -1168,7 +1168,7 @@ Enumerate 0/1 assignments for a list of Boolean variables. Backtracks over all s
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/constraints.py` → `clausal/logic/clpb.py`
-    **Clausal tests:** `tests/fixtures/clpb_circuit.seam`
+    **Seam tests:** `tests/fixtures/clpb_circuit.seam`
     **Python tests:** `tests/test_clpb.py`
 
 ---
@@ -1182,7 +1182,7 @@ Enumerate 0/1 assignments for a list of Boolean variables. Backtracks over all s
 Succeeds if `X` is an unbound logic variable.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_types.seam`
+    **Seam tests:** `tests/fixtures/builtins_types.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1194,7 +1194,7 @@ Succeeds if `X` is an unbound logic variable.
 Succeeds if `X` is bound (not an unbound `Var`).
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_types.seam`
+    **Seam tests:** `tests/fixtures/builtins_types.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1235,7 +1235,7 @@ Succeeds if `X` is an atomic constant: an **atom**, a number, a bool, or another
     **Python tests:** `tests/test_builtins.py`
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_types.seam`
+    **Seam tests:** `tests/fixtures/builtins_types.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1247,7 +1247,7 @@ Succeeds if `X` is an atomic constant: an **atom**, a number, a bool, or another
 Succeeds if `X` is an `int` or `float` (excludes `bool`).
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_types.seam`
+    **Seam tests:** `tests/fixtures/builtins_types.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1259,7 +1259,7 @@ Succeeds if `X` is an `int` or `float` (excludes `bool`).
 Succeeds if `X` is an `int` (excludes `bool`).
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_types.seam`
+    **Seam tests:** `tests/fixtures/builtins_types.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1271,7 +1271,7 @@ Succeeds if `X` is an `int` (excludes `bool`).
 Succeeds if `X` is a Python `float`.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_types.seam`
+    **Seam tests:** `tests/fixtures/builtins_types.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1283,7 +1283,7 @@ Succeeds if `X` is a Python `float`.
 Succeeds if `X` is a compound term with arity > 0: a cell `('f', …)`, or a non-empty list or string (the `'.'/2` structure, as in ISO). An **atom** is arity 0, so `compound/1` rejects it, and so is `[]` (= `""`).
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_types.seam`
+    **Seam tests:** `tests/fixtures/builtins_types.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1295,7 +1295,7 @@ Succeeds if `X` is a compound term with arity > 0: a cell `('f', …)`, or a non
 Succeeds if `X` is an **atom** or a compound term — something that could appear as a goal. As in ISO, a non-empty string is a `'.'/2` compound and so is callable: `call("foo")` raises `existence_error(procedure, '.'/2)`, not a type error.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_types.seam`
+    **Seam tests:** `tests/fixtures/builtins_types.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1307,7 +1307,7 @@ Succeeds if `X` is an **atom** or a compound term — something that could appea
 Succeeds if `X` is list-shaped: a Python `list`, or a **string**, which *is* the list of its character atoms. Use `is_str/1` when you need to tell a character sequence (string) apart from a plain list — a bare atom (`str`) satisfies neither.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_types.seam`
+    **Seam tests:** `tests/fixtures/builtins_types.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1319,7 +1319,7 @@ Succeeds if `X` is list-shaped: a Python `list`, or a **string**, which *is* the
 Succeeds if `X` contains no unbound `Var`s (is fully instantiated).
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_types.seam`
+    **Seam tests:** `tests/fixtures/builtins_types.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1572,7 +1572,7 @@ Arithmetic uses `==` to post CLP(ℤ) constraints (e.g., `Y == X * 2`). The pred
 Check or enumerate integers in `[Low, High]` inclusive. In check mode (X bound) succeeds iff `Low ≤ X ≤ High`. In generate mode (X unbound) backtracks over each integer.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_arith.seam`
+    **Seam tests:** `tests/fixtures/builtins_arith.seam`
     **Python tests:** `tests/test_builtins.py`, `tests/test_search.py`
 
 ---
@@ -1584,7 +1584,7 @@ Check or enumerate integers in `[Low, High]` inclusive. In check mode (X bound) 
 Bidirectional successor: if `X` is bound, `Y = X + 1`; if `Y` is bound, `X = Y - 1`. Both must be non-negative integers.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_arith.seam`
+    **Seam tests:** `tests/fixtures/builtins_arith.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1596,7 +1596,7 @@ Bidirectional successor: if `X` is bound, `Y = X + 1`; if `Y` is bound, `X = Y -
 Relational addition: any two of `X`, `Y`, `Z` determine the third.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_arith.seam`
+    **Seam tests:** `tests/fixtures/builtins_arith.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1608,7 +1608,7 @@ Relational addition: any two of `X`, `Y`, `Z` determine the third.
 Absolute value.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_arith.seam`
+    **Seam tests:** `tests/fixtures/builtins_arith.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1618,7 +1618,7 @@ Absolute value.
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:max__3"
 ```
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_arith.seam`
+    **Seam tests:** `tests/fixtures/builtins_arith.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1628,7 +1628,7 @@ Absolute value.
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:min__3"
 ```
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_arith.seam`
+    **Seam tests:** `tests/fixtures/builtins_arith.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1719,7 +1719,7 @@ Least significant bit position. X must be a positive integer. `lsb(12, B)` gives
 Enumerate or check membership. Backtracks over all elements.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/meta_test.seam`, `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/meta_test.seam`, `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`, `tests/test_search.py`
 
 ---
@@ -1731,7 +1731,7 @@ Enumerate or check membership. Backtracks over all elements.
 Deterministic membership check. Succeeds at most once; no backtracking.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1743,7 +1743,7 @@ Deterministic membership check. Succeeds at most once; no backtracking.
 List concatenation. Works in all modes: given any two, determines the third. Backtracks over splits when `L3` is bound and `L1`/`L2` are unbound.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`, `tests/test_search.py`
 
 ---
@@ -1755,7 +1755,7 @@ List concatenation. Works in all modes: given any two, determines the third. Bac
 List length in both directions.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1767,7 +1767,7 @@ List length in both directions.
 Unify `Elem` with the last element of `List`.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`, `tests/test_search.py`
 
 ---
@@ -1777,7 +1777,7 @@ Unify `Elem` with the last element of `List`.
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:reverse_2"
 ```
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`, `tests/test_search.py`
 
 ---
@@ -1789,7 +1789,7 @@ Unify `Elem` with the last element of `List`.
 Get the element at 0-based index `N`.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1801,7 +1801,7 @@ Get the element at 0-based index `N`.
 Recursively flatten a nested list structure.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1813,7 +1813,7 @@ Recursively flatten a nested list structure.
 sort `List` preserving duplicate elements (stable sort).
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1825,7 +1825,7 @@ sort `List` preserving duplicate elements (stable sort).
 sort `List` removing duplicate elements.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1837,7 +1837,7 @@ sort `List` removing duplicate elements.
 Enumerate all permutations of `List` via backtracking.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`, `tests/test_search.py`
 
 ---
@@ -1849,7 +1849,7 @@ Enumerate all permutations of `List` via backtracking.
 select `Elem` from `List`, unifying `Rest` with the remaining elements. Backtracks over all positions where `Elem` appears.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1861,7 +1861,7 @@ select `Elem` from `List`, unifying `Rest` with the remaining elements. Backtrac
 List difference: elements in `Set1` not in `Set2`.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1873,7 +1873,7 @@ List difference: elements in `Set1` not in `Set2`.
 Elements present in both `Set1` and `Set2`.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1885,7 +1885,7 @@ Elements present in both `Set1` and `Set2`.
 Elements in `Set1` or `Set2`, with duplicates removed.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1897,7 +1897,7 @@ Elements in `Set1` or `Set2`, with duplicates removed.
 Remove duplicates from `List` preserving the first-occurrence order.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1909,7 +1909,7 @@ Remove duplicates from `List` preserving the first-occurrence order.
 sum_ all numeric elements of `List`.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1921,7 +1921,7 @@ sum_ all numeric elements of `List`.
 Maximum element of a non-empty numeric list.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1933,7 +1933,7 @@ Maximum element of a non-empty numeric list.
 Minimum element of a non-empty numeric list.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -1946,7 +1946,7 @@ First `N` elements of `List`. If `N > len(List)`, returns the whole list. If `N 
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/lists.py` (`_take__3`)
-    **Clausal tests:** `tests/fixtures/list_util.seam`
+    **Seam tests:** `tests/fixtures/list_util.seam`
     **Python tests:** `tests/test_list_util.py`
 
 ---
@@ -1959,7 +1959,7 @@ First `N` elements of `List`. If `N > len(List)`, returns the whole list. If `N 
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/lists.py` (`_drop__3`)
-    **Clausal tests:** `tests/fixtures/list_util.seam`
+    **Seam tests:** `tests/fixtures/list_util.seam`
     **Python tests:** `tests/test_list_util.py`
 
 ---
@@ -1972,7 +1972,7 @@ Split `List` at index `N` into `Left` (first N elements) and `Right` (rest). Cla
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/lists.py` (`_split_at__4`)
-    **Clausal tests:** `tests/fixtures/list_util.seam`
+    **Seam tests:** `tests/fixtures/list_util.seam`
     **Python tests:** `tests/test_list_util.py`
 
 ---
@@ -1985,7 +1985,7 @@ Pair up elements from two lists into `X-Y` pairs (the `'-'(X, Y)` cell). Truncat
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/lists.py` (`_zip__3`)
-    **Clausal tests:** `tests/fixtures/list_util.seam`
+    **Seam tests:** `tests/fixtures/list_util.seam`
     **Python tests:** `tests/test_list_util.py`
 
 ---
@@ -1998,7 +1998,7 @@ Pair up elements from two lists into `X-Y` pairs (the `'-'(X, Y)` cell). Truncat
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/lists.py` (`_replicate__3`)
-    **Clausal tests:** `tests/fixtures/list_util.seam`
+    **Seam tests:** `tests/fixtures/list_util.seam`
     **Python tests:** `tests/test_list_util.py`
 
 ---
@@ -2011,7 +2011,7 @@ Split `List` by separator `Sep` into sublists (`Parts`). In join mode, interleav
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/lists.py` (`_split_with__3`)
-    **Clausal tests:** `tests/fixtures/list_util.seam`
+    **Seam tests:** `tests/fixtures/list_util.seam`
     **Python tests:** `tests/test_list_util.py`
 
 ---
@@ -2023,7 +2023,7 @@ Split `List` by separator `Sep` into sublists (`Parts`). In join mode, interleav
 Relate a list of `Key-Value` pairs to separate `Keys` and `Values` lists, as in Scryer's `library(pairs)`. Works in every direction; a pair it builds is the cell `'-'(K, V)`. A non-list, or an element that is not a pair, fails (no error). See [Pairs](pairs.md).
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -2035,7 +2035,7 @@ Relate a list of `Key-Value` pairs to separate `Keys` and `Values` lists, as in 
 The keys of a list of `Key-Value` pairs: `pairs_keys_values(Pairs, Keys, _)`.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -2047,7 +2047,7 @@ The keys of a list of `Key-Value` pairs: `pairs_keys_values(Pairs, Keys, _)`.
 The values of a list of `Key-Value` pairs: `pairs_keys_values(Pairs, _, Values)`.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_lists.seam`
+    **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`
 
 ---
@@ -2127,7 +2127,7 @@ These predicates accept a **goal argument** (a lambda or named predicate). The g
 Verify that `Goal(Elem)` succeeds for every element of `List`. Fails if any element fails.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_higher_order.seam`
+    **Seam tests:** `tests/fixtures/builtins_higher_order.seam`
     **Python tests:** `tests/test_higher_order.py`
 
 ---
@@ -2139,7 +2139,7 @@ Verify that `Goal(Elem)` succeeds for every element of `List`. Fails if any elem
 Map `Goal(X, Y)` over `Xs` to produce `Ys`. Takes the first solution of `Goal` per element.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_higher_order.seam`
+    **Seam tests:** `tests/fixtures/builtins_higher_order.seam`
     **Python tests:** `tests/test_higher_order.py`
 
 ---
@@ -2164,7 +2164,7 @@ solution of every call is an answer on backtracking. `maplist/9` runs on
 include `List` keeping only elements for which `Goal(Elem)` succeeds.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_higher_order.seam`
+    **Seam tests:** `tests/fixtures/builtins_higher_order.seam`
     **Python tests:** `tests/test_higher_order.py`
 
 ---
@@ -2176,7 +2176,7 @@ include `List` keeping only elements for which `Goal(Elem)` succeeds.
 include `List` keeping only elements for which `Goal(Elem)` **fails**.
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_higher_order.seam`
+    **Seam tests:** `tests/fixtures/builtins_higher_order.seam`
     **Python tests:** `tests/test_higher_order.py`
 
 ---
@@ -2226,7 +2226,7 @@ Reified partition. Calls `Goal(Elem, T)` for each element. Elements where T=True
 Left fold. Calls `Goal(Elem, Acc0, Acc1)` for each element, threading the accumulator. `V0` is the initial value; `V` is the final result. `foldl/5` and `foldl/6` fold over two and three lists (`Goal(X, Y, Acc0, Acc1)`, ...), as Scryer's `library(lists)`. Every solution of each call is an answer on backtracking, and an open list enumerates (see [Higher-Order](higher_order.md#foldl4-foldl5-foldl6)).
 
 ??? info "Implementation & tests"
-    **Clausal tests:** `tests/fixtures/builtins_higher_order.seam`
+    **Seam tests:** `tests/fixtures/builtins_higher_order.seam`
     **Python tests:** `tests/test_higher_order.py`
 
 ---
@@ -2239,7 +2239,7 @@ Longest prefix of `List` where `Goal(Elem)` succeeds for each element.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/higher_order.py` (`_take_while__3`)
-    **Clausal tests:** `tests/fixtures/list_util.seam`
+    **Seam tests:** `tests/fixtures/list_util.seam`
     **Python tests:** `tests/test_list_util.py`
 
 ---
@@ -2252,7 +2252,7 @@ Suffix of `List` after dropping the longest prefix where `Goal(Elem)` succeeds.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/higher_order.py` (`_drop_while__3`)
-    **Clausal tests:** `tests/fixtures/list_util.seam`
+    **Seam tests:** `tests/fixtures/list_util.seam`
     **Python tests:** `tests/test_list_util.py`
 
 ---
@@ -2265,7 +2265,7 @@ Suffix of `List` after dropping the longest prefix where `Goal(Elem)` succeeds.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/higher_order.py` (`_span__4`)
-    **Clausal tests:** `tests/fixtures/list_util.seam`
+    **Seam tests:** `tests/fixtures/list_util.seam`
     **Python tests:** `tests/test_list_util.py`
 
 ---
@@ -2278,7 +2278,7 @@ Group consecutive elements by key projected via `Goal(Elem, Key)`. Elements with
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/higher_order.py` (`_group_by__3`)
-    **Clausal tests:** `tests/fixtures/list_util.seam`
+    **Seam tests:** `tests/fixtures/list_util.seam`
     **Python tests:** `tests/test_list_util.py`
 
 ---
@@ -2291,7 +2291,7 @@ sort `List` by key projected via `Goal(Elem, Key)`. Stable sort (preserves order
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/higher_order.py` (`_sort_by__3`)
-    **Clausal tests:** `tests/fixtures/list_util.seam`
+    **Seam tests:** `tests/fixtures/list_util.seam`
     **Python tests:** `tests/test_list_util.py`
 
 ---
@@ -2304,7 +2304,7 @@ element of `List` with the largest key projected via `Goal(Elem, Key)`. Fails on
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/higher_order.py` (`_max_by__3`)
-    **Clausal tests:** `tests/fixtures/list_util.seam`
+    **Seam tests:** `tests/fixtures/list_util.seam`
     **Python tests:** `tests/test_list_util.py`
 
 ---
@@ -2317,7 +2317,7 @@ element of `List` with the smallest key projected via `Goal(Elem, Key)`. Fails o
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/higher_order.py` (`_min_by__3`)
-    **Clausal tests:** `tests/fixtures/list_util.seam`
+    **Seam tests:** `tests/fixtures/list_util.seam`
     **Python tests:** `tests/test_list_util.py`
 
 ---
@@ -2330,7 +2330,7 @@ Map + filter in one pass. Calls `Goal(Elem, Out)` for each element; keeps `Out` 
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/higher_order.py` (`_filter_map__3`)
-    **Clausal tests:** `tests/fixtures/list_util.seam`
+    **Seam tests:** `tests/fixtures/list_util.seam`
     **Python tests:** `tests/test_list_util.py`
 
 ---
@@ -2496,7 +2496,7 @@ For human text — and for f-strings — use `write_text/1` / `writeln_text/1`, 
 ```
 Print `Term` to stdout **quoted**, without a trailing newline — ISO 8.14.2's `write_term(Term, [quoted(true), numbervars(true)])`. An atom is quoted when its spelling is not a bare token (`'foo bar'`); a STRING is the list of its characters, as in `write/1`, so `writeq("abc")` prints `[a,b,c]` and `writeq(f(a, "b"))` prints `f(a,[b])`. List syntax is kept, unlike `write_canonical/1`, and so is the ISO comma spacing — none.
 
-`print_term/1` and `term_to_string/2` are the Clausal *display* form — `write_term(Term, [quoted(true), double_quotes(true)])` — which prints `"abc"`; reach for those when you need to tell an atom from a string at a glance.
+`print_term/1` and `term_to_string/2` are the Clausal Prolog *display* form — `write_term(Term, [quoted(true), double_quotes(true)])` — which prints `"abc"`; reach for those when you need to tell an atom from a string at a glance.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/io.py` (`writeq/1`)
@@ -2572,7 +2572,7 @@ Like `write/1` (ISO, unquoted) but appends a newline. Not an ISO name; `writeln_
 ```
 Print `Term` to stdout as **text**, without a trailing newline. A STRING prints as its characters and a char list as the text it spells (`write_text("abc")` → `abc`, `write_text([a, b])` → `ab`); an atom prints its bare spelling; every other term prints exactly as `write/1` prints it. `""` / `[]` print `[]`.
 
-This is Clausal's `~s`, and it is where f-strings go: `write_text(f"X is {X}")`. `write/1` is the ISO writer and spells a string out as `[a,b,c]`.
+This is Clausal Prolog's `~s`, and it is where f-strings go: `write_text(f"X is {X}")`. `write/1` is the ISO writer and spells a string out as `[a,b,c]`.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/io.py` (`write_text/1`)
@@ -2596,7 +2596,7 @@ Like `write_text/1` but appends a newline. `writeln_text(f"X is {X}")` is the id
 ```seam
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:print_term_1"
 ```
-Print the Clausal **display** representation of `Term` — an atom quoted where it needs it, a string in double quotes (the spelling `write_term(Term, [quoted(true), double_quotes(true)])` gives), compounds as functor/args, and the display `", "` after a comma that the ISO family drops — followed by a newline. Useful for debugging, because it distinguishes an atom from a string.
+Print the Clausal Prolog **display** representation of `Term` — an atom quoted where it needs it, a string in double quotes (the spelling `write_term(Term, [quoted(true), double_quotes(true)])` gives), compounds as functor/args, and the display `", "` after a comma that the ISO family drops — followed by a newline. Useful for debugging, because it distinguishes an atom from a string.
 
 ??? info "Implementation & tests"
     **Python tests:** `tests/test_io.py`
@@ -2652,7 +2652,7 @@ Unify `String` with the **text** (`write_text/1`) rendering of `Term`, as a stri
 ```seam
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:term_to_string_2"
 ```
-Unify `String` with the Clausal **display** rendering of `Term`, as a string — the `write_term(Term, [quoted(true), double_quotes(true)])` spelling plus the display `", "` after a comma. Does not print anything.
+Unify `String` with the Clausal Prolog **display** rendering of `Term`, as a string — the `write_term(Term, [quoted(true), double_quotes(true)])` spelling plus the display `", "` after a comma. Does not print anything.
 
 ??? info "Implementation & tests"
     **Python tests:** `tests/test_io.py`
@@ -2663,7 +2663,7 @@ Unify `String` with the Clausal **display** rendering of `Term`, as a string —
 ```seam
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:listing_1"
 ```
-Print all clauses of a predicate to stdout in readable Clausal syntax. Follows Scryer Prolog's contract (operator ruling 2026-09-25): the argument is a predicate indicator, `Name/Arity` or `Name//Arity` (the latter names `Name/(Arity+2)`); an unbound argument, or an indicator naming no predicate or one with no clauses, FAILS; any other term (a bare atom, a compound, a string, a number) raises `type_error(predicate_indicator, PI)`; a malformed operand raises `functor/3`'s error (`instantiation_error`, `type_error(integer, A)`, `domain_error(not_less_than_zero, A)`, `type_error(atomic, N)` for a string name, `type_error(atom, N)` for a number name). A user-written `foo/2` / `foo // 2` compiles to a runtime `Div` / `FloorDiv` node (`/` and `//` are arithmetic operators); the cells `('/', Name, Arity)` / `('//', Name, Arity)` are also accepted. Prints a header comment with clause count, followed by each clause formatted as `head.` (fact) or `head <- (body).` (rule). An indicator naming an IMPORTED predicate resolves to the exporter's predicate, so `listing(qq/1)` from a module that `-import_from`s `qq` prints what the exporter's `listing(qq/1)` prints. From Python it also takes a predicate HANDLE (each arity it is defined at is listed) or a builtin predicate (`"% name/arity — builtin"`).
+Print all clauses of a predicate to stdout in readable seam syntax. Follows Scryer Prolog's contract (operator ruling 2026-09-25): the argument is a predicate indicator, `Name/Arity` or `Name//Arity` (the latter names `Name/(Arity+2)`); an unbound argument, or an indicator naming no predicate or one with no clauses, FAILS; any other term (a bare atom, a compound, a string, a number) raises `type_error(predicate_indicator, PI)`; a malformed operand raises `functor/3`'s error (`instantiation_error`, `type_error(integer, A)`, `domain_error(not_less_than_zero, A)`, `type_error(atomic, N)` for a string name, `type_error(atom, N)` for a number name). A user-written `foo/2` / `foo // 2` compiles to a runtime `Div` / `FloorDiv` node (`/` and `//` are arithmetic operators); the cells `('/', Name, Arity)` / `('//', Name, Arity)` are also accepted. Prints a header comment with clause count, followed by each clause formatted as `head.` (fact) or `head <- (body).` (rule). An indicator naming an IMPORTED predicate resolves to the exporter's predicate, so `listing(qq/1)` from a module that `-import_from`s `qq` prints what the exporter's `listing(qq/1)` prints. From Python it also takes a predicate HANDLE (each arity it is defined at is listed) or a builtin predicate (`"% name/arity — builtin"`).
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/io.py` (`listing/1`)

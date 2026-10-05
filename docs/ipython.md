@@ -1,9 +1,9 @@
 # IPython / Jupyter REPL
 
-Clausal has first-class IPython integration that turns an IPython session into a
+Clausal Prolog has first-class IPython integration that turns an IPython session into a
 Prolog-style REPL.  Queries use a `*(goals)` syntax, uppercase names are
 automatically treated as [logic variables](syntax.md), and solutions are presented
-interactively one at a time — separated by `or`, just as Clausal's disjunction
+interactively one at a time — separated by `or`, just as the seam's disjunction
 operator reads. For notebook-specific rendering, see [Jupyter Notebooks](jupyter.md).
 
 ---
@@ -30,7 +30,7 @@ import clausal.examples.sudoku as sudoku
 IPython parses each cell *before* executing any code in it, so the AST
 transformer that rewrites `-import_from(...)` and `*(...)` queries has to
 be registered **before your first cell runs**.  The cleanest way is an
-IPython startup file that imports Clausal once at session start.
+IPython startup file that imports `clausal` once at session start.
 
 ### Recommended — install command
 
@@ -94,8 +94,8 @@ export CLAUSAL_IPYTHON=1
 ## Query syntax
 
 There are two ways to query in IPython. (The goal-position seam, `for X in
---goal:` / `if --goal:`, which is how Python hosted in a `.clausal`/`.seam` file
-queries, is **not** available here: it needs a host Clausal module, and the
+--goal:` / `if --goal:`, which is how Python hosted in a `.seam` file
+queries, is **not** available here: it needs a host seam module, and the
 REPL has none. It raises a `NameError` that says so. Put such code in a
 `.seam` file and import it — see [Python Integration](python_integration.md).)
 
@@ -123,9 +123,9 @@ uppercase variables and displays solutions interactively.  It is rewritten at
 the text level into a valid Python call before compilation (for compatibility
 with Python 3.13+).
 
-The entire expression inside `*(...)` is treated as a **clause body**, not
+The entire expression inside `*(...)` is treated as a seam **clause body**, not
 ordinary Python.  Operators that have special meaning in Python are rewritten
-into Clausal goals:
+into goals:
 
 | Inside `*(...)` | Goal constructed |
 |----------------|-----------------|
@@ -181,7 +181,7 @@ you need to share a variable across multiple cells, declare it explicitly with
 ## Interactive solution browsing
 
 Solutions are presented one at a time with an `or` separator between them,
-matching Clausal's disjunction syntax:
+matching the seam's disjunction syntax:
 
 ```
 ROWS is [[1, 5, 6, ...], ...]

@@ -1,6 +1,6 @@
 # Jupyter Notebooks
 
-Clausal integrates with Jupyter notebooks — query logic programs interactively
+Clausal Prolog integrates with Jupyter notebooks — query logic programs interactively
 from notebook cells and see results rendered with syntax colouring.  The
 [`*(goals)` query syntax](ipython.md) and automatic variable declaration work the same as in
 terminal IPython; the difference is that solutions are rendered as styled HTML
@@ -28,7 +28,7 @@ export CLAUSAL_IPYTHON=1
 
 ## Your first query
 
-Import a Clausal module and query it with the `*(goals)` syntax:
+Import a module and query it with the `*(goals)` syntax:
 
 ```python
 import clausal.examples.fibonacci as fib
@@ -37,7 +37,7 @@ import clausal.examples.fibonacci as fib
 ```
 
 This displays `N is 21` with syntax colouring. (The goal-position seam,
-`for N in --fib.fib(8, N):`, is for Python hosted in a `.clausal`/`.seam` file
+`for N in --fib.fib(8, N):`, is for Python hosted in a `.seam` file
 and does not work in a notebook cell; see [IPython](ipython.md#query-syntax).)  Uppercase names like `N` are
 automatically allocated as fresh logic variables.
 
@@ -93,7 +93,7 @@ Solutions.DEFAULT_JUPYTER_LIMIT = 50
 
 ## Worked examples
 
-The following examples are written in Clausal's `.clausal` syntax.  Each block
+The following examples are written in seam syntax (`.seam`).  Each block
 is automatically tested by the documentation test runner.
 
 ### Family tree

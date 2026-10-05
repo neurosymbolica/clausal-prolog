@@ -1,6 +1,6 @@
 # Bytes as Lists of Codes
 
-In Clausal, a Python `bytes` value behaves as a **list of byte codes** — integers
+In Clausal Prolog, a Python `bytes` value behaves as a **list of byte codes** — integers
 in the range `[0, 255]` — at the logic level. This is the classical Prolog
 *codes* representation, and it makes byte sequences participate in unification,
 term inspection, and DCGs the way character strings do under
@@ -17,7 +17,7 @@ byte streams with `phrase//`.
 
 ## The codes model: a byte is an int
 
-A string and a `bytes` look alike but are different kinds, and Clausal keeps
+A string and a `bytes` look alike but are different kinds, and Clausal Prolog keeps
 them distinct:
 
 | | string (chars model) | `bytes` (codes model) |
@@ -59,14 +59,14 @@ threaded through unification and recursion stays `bytes`, so you can still call
 
 Prolog has always had two string representations: **`chars`** (a list of
 one-character atoms) and **`codes`** (a list of integer character codes).
-Clausal's [strings as lists](strings_as_lists.md) is the `chars` model;
+Clausal Prolog's [strings as lists](strings_as_lists.md) is the `chars` model;
 **bytes-as-lists is the `codes` model.**
 
 The `codes` representation is what the Triska / DCG tradition uses for byte and
 binary work — ISO's `get_byte/2`, code-list `phrase/2`, and so on. Integer
 terminals are exactly what binary-protocol grammars want.
 
-| Feature | Prolog `codes` | Clausal `bytes` |
+| Feature | Prolog `codes` | Clausal Prolog `bytes` |
 |---------|----------------|-----------------|
 | Representation | List of integer codes | Python `bytes` |
 | Element type | `int` code | `int` in `[0, 255]` |
@@ -74,7 +74,7 @@ terminals are exactly what binary-protocol grammars want.
 | Underlying storage | Cons cells | Compact `bytes` object |
 | Python interop | Requires conversion | Native `bytes` (a goal-position seam hands back the `bytes` itself) |
 
-As with strings, Clausal takes the pragmatic middle path: a `bytes` *behaves
+As with strings, Clausal Prolog takes the pragmatic middle path: a `bytes` *behaves
 as* a list of codes at the logic level but remains a compact, interoperable
 Python `bytes` object underneath.
 
