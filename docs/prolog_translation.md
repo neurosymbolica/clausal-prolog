@@ -415,7 +415,7 @@ Options:
 
 | Flag | Description |
 |---|---|
-| `--to clausal\|iso\|swi\|scryer` | Target format; auto-detected from extension if omitted. `clausal` means seam text (Prolog → seam); it does not produce a `.clausal` Clausal Prolog file |
+| `--to clausal\|iso\|swi\|scryer` | Target format; auto-detected from extension if omitted. `clausal` means seam text (Prolog → seam); it does not produce a `.clausal` Clausal Prolog file. A `--to` that contradicts the input file's extension (`--to swi` on a `.clausal` or `.pl` file, `--to clausal` on a `.seam` file) is a usage error (exit 2) |
 | `--dialect iso\|swi\|scryer` | Prolog dialect (default: iso for seam→prolog, Scryer's operator table for prolog→seam) |
 | `-o FILE` | Output file (stdout if omitted) |
 | `--roundtrip` | Translate there and back; exit 0 if output matches input |
