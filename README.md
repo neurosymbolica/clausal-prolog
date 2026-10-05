@@ -1,11 +1,14 @@
-# clausal
+# Clausal Prolog
 
-Logic programming embedded in Python. Write relational programs in
-**Clausal Prolog**, a cut-free, ISO-like Prolog, and import them with
-Python's standard import system. The engine includes constraint solving,
-tabling, DCGs and a large standard library. Clausal also loads ISO Prolog
-`.pl` files, and keeps a Python-syntax surface, the **seam**, for code that
-has to call Python.
+Logic programming embedded in Python. **Clausal Prolog** is a cut-free
+Prolog that aims for ISO Prolog conformity. Write relational programs in
+`.clausal` files and import them with Python's standard import system. The
+engine includes constraint solving, tabling, DCGs and a large standard
+library. It also loads ISO Prolog `.pl` files. A Python-syntax surface, the
+**seam** (`.seam`), is kept only as the boundary for code that has to call
+Python.
+
+The package is `clausal`: `pip install clausal`, `import clausal`.
 
 ## Three source surfaces
 
@@ -42,6 +45,8 @@ directory, `name.seam` beats `name.clausal`, which beats `name.pl`.
 - **Python interop through the seam**: `library(...)` facades over the
   engine's Python modules (`library(json)`, `library(datetime)`, …),
   Python-free `.seam` modules, and allowlisted Python bridges
+- **ISO direction**: ISO builtin names, ISO error terms and ISO modules;
+  where ISO is silent, Scryer Prolog's behaviour
 - **C extensions**: logic variables, trail-based backtracking and a
   trampoline, with no WAM
 
@@ -180,56 +185,24 @@ unrestricted ISO Prolog alongside Clausal, use the
 
 ## The seam: `.seam` files
 
-The seam is Clausal's Python-syntax surface. Facts end with a comma, rules
-use `<-`, and variables are ALL_CAPS. Atoms must be declared, in the
-`-module` export list or with `-private`. In the seam, `==` evaluates
-arithmetic and `is` unifies, which is the reverse of ISO.
-
-```seam
-# demo.seam
--module(demo, [fib(N, F), grandparent(X, Z)])
--private([tom, bob, liz, ann, pat])
-
-parent(tom, bob),
-parent(tom, liz),
-parent(bob, ann),
-parent(bob, pat),
-
-grandparent(X, Z) <- (parent(X, Y), parent(Y, Z))
-
-fib(0, 0),
-fib(1, 1),
-fib(N, F) <- (
-    N > 1,
-    N1 == N - 1,
-    N2 == N - 2,
-    fib(N1, F1),
-    fib(N2, F2),
-    F == F1 + F2
-)
-
-test("fib(10) = 55") <- fib(10, 55)
-test("grandchildren") <- (grandparent(tom, ann), grandparent(tom, pat))
-```
-
-Use `.seam` where code must touch Python: the `++expr` escape, hosted Python
-statements, or wrapping a Python library. Everything else belongs in
-`.clausal`. `clausal-fmt` and `clausal-rewrite` work on `.seam` files and
-refuse Prolog-syntax ones. The [docs](docs/index.md) cover the seam syntax
-in depth.
+Code that must call Python lives in `.seam` files. These use the older
+Python-syntax surface, with the `++expr` escape, hosted Python statements
+and adapters over Python libraries. A `.clausal` module imports a `.seam`
+module like any other (subject to the
+[Python-bridge rules](#what-clausal-prolog-restricts)). Keep `.seam`
+modules small and write your logic in Clausal Prolog. `clausal-fmt` and
+`clausal-rewrite` work on `.seam` files only. See
+[docs/clausal_prolog.md](docs/clausal_prolog.md) for how the two surfaces
+differ.
 
 ## Testing
 
-Any of the three surfaces can carry inline tests as `test/1` clauses, or
-as `test/2` with the option `fail` for a goal that must have no solution:
+A module carries its tests inline as `test/1` clauses, or as `test/2`
+with the option `fail` for a goal that must have no solution:
 
 ```prolog
-test("fib(5) = 5") :- fib(5, 5).                 % .clausal / .pl
+test("fib(5) = 5") :- fib(5, 5).
 test("no grandparent", fail) :- grandparent(_, tom).
-```
-
-```seam
-test("fib(5) = 5") <- fib(5, 5)                  # .seam
 ```
 
 **Standalone runner:**

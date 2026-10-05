@@ -1,5 +1,5 @@
-site_name: Clausal
-site_description: Logic programming embedded in Python
+site_name: Clausal Prolog
+site_description: Cut-free, ISO-directed Prolog embedded in Python
 
 theme:
   name: material
@@ -46,6 +46,7 @@ nav:
     - For Decision Makers: for_decision_makers.md
   - Getting Started:
     - Project Goals: goals.md
+    - Clausal Prolog: clausal_prolog.md
     - Tutorial: tutorial.md
     - Syntax: syntax.md
     - Style & Formatting: style.md

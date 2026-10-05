@@ -1,49 +1,36 @@
-# Clausal
+# Clausal Prolog
 
 !!! warning "Beta"
-    Clausal is in **beta** on the way to 1.0. From 1.0.0, the surface listed in [Public API](public-api.md) follows semantic versioning; everything else may still change. The developer experience has not been widely tested beyond the author's own use. Expect rough edges — bug reports and feedback are very welcome.
+    Clausal Prolog is in **beta** on the way to 1.0. From 1.0.0, the surface listed in [Public API](public-api.md) follows semantic versioning; everything else may still change. The developer experience has not been widely tested beyond the author's own use. Expect rough edges — bug reports and feedback are very welcome.
 
 **Logic programming embedded in Python.**
 
-Clausal brings Prolog-style logic programming to Python — not as a front-end to an external engine, but as a genuine part of the Python runtime. Python code and logic code call into each other freely, share the same objects, and run on the same VM, and the same garbage collector. No boilerplate, no latency, no memory leaks, no friction.
+Clausal Prolog is a cut-free Prolog, aiming for ISO Prolog conformity, that runs inside the Python runtime. It is not a front end to an external engine. Logic code and Python code call into each other, share the same objects, and run on the same VM and garbage collector.
 
-```seam
-# fibonacci.seam
+```prolog
+% fibonacci.clausal
+:- module(fibonacci, [fib/2]).
 
--table(fib/2)
-
-fib(0, 0),
-fib(1, 1),
-fib(N, F) <- (
+:- table(fib/2).
+fib(0, 0).
+fib(1, 1).
+fib(N, F) :-
     N > 1,
-    N1 == N - 1,
-    N2 == N - 2,
-    fib(N1, F1),
-    fib(N2, F2),
-    F == F1 + F2
-)
+    N1 is N - 1, N2 is N - 2,
+    fib(N1, F1), fib(N2, F2),
+    F is F1 + F2.
+
+test("fib(10) = 55") :- fib(10, 55).
+
+:- end_module(fibonacci).
 ```
 
-Ask it a question from a `.seam` file — Python that also speaks Clausal
-terms, with the goal after `--`:
+Query it from Python:
 
 ```python
-# report.seam
--import_from(fibonacci, [fib])
-
-for F in --fib(10, F):
-    print(F)  # 55
-```
-
-```bash
-python -c "import clausal, report"
-```
-
-From a plain `.py` file, the same query goes through `solve`:
-
-```python
+import clausal                      # installs the import hook
 from clausal import Var, solve
-import fibonacci
+import fibonacci                    # loads fibonacci.clausal
 
 for trail in solve(("fib", 10, F := Var()), module=fibonacci):
     print(F.value)  # 55
@@ -53,19 +40,34 @@ Answers come back as the engine's own terms, which are plain Python values:
 an atom is a `str`, a compound term is a tuple `('point', 1, 2)`, a string is
 the carrier `('$chars', 'text')`. See [Python Integration](python_integration.md).
 
+## Three source surfaces
+
+| Extension | Surface | Use it for |
+|---|---|---|
+| `.clausal` | [Clausal Prolog](clausal_prolog.md): ISO syntax, cut-free | Your logic programs |
+| `.pl` | [ISO Prolog](importing_prolog.md) (experimental) | Existing Prolog code |
+| `.seam` | The seam: Python syntax | The boundary with Python: `++expr`, hosted Python, adapters |
+
+Many language pages in these docs still show their examples in seam syntax.
+Each one says so, and the semantics carry over to Clausal Prolog.
+[Clausal Prolog](clausal_prolog.md) gives the spelling differences and the
+rules the surface enforces.
+
 ---
 
-## Why Clausal?
+## Why Clausal Prolog?
 
-- **Python syntax and semantics** — Clausal code uses Python's parser. No separate parser, no foreign operators to learn.
-- **Deep integration** — `--goal` runs a query from Python and `++expr` calls Python from a clause; terms are Python tuples and atoms are Python strings; backtracking uses Python generators.
-- **Heading for ISO Prolog** — ISO builtin names and ISO error terms; where ISO is silent, Clausal follows [Scryer Prolog](https://www.scryer.pl/). See [Operators](operators.md) and [Public API](public-api.md).
+- **Heading for ISO Prolog** — ISO syntax, ISO builtin names and ISO error terms; where ISO is silent, Clausal Prolog follows [Scryer Prolog](https://www.scryer.pl/). See [Operators](operators.md) and [Public API](public-api.md).
+- **Pure by design** — no cut and no committed choice: [`dif/2`](constraints.md), [reified if-then-else](reified_ite.md), constraints and [tabling](tabling.md) keep programs monotonic. See [Purity](purity.md).
+- **Deep integration** — terms are Python tuples and atoms are Python strings, backtracking uses Python generators, and Python libraries are reached through `library(...)` facades and `.seam` modules.
 - **Full-featured** — [tabling](tabling.md), [CLP(ℤ)](constraints.md), [DCGs](dcg.md), EDCGs, [modules](import.md), [term expansion](term_expansion.md), goal expansion, [reified if-then-else](reified_ite.md).
 - **Fast** — C extension for unification/trails, [first-argument indexing](indexing.md), groundness-keyed dispatch, [tail recursion optimization](compiler.md#tail-recursion-optimization-tro), [bytecode caching](caching.md).
 
 ---
 
 ## Interactive example — Sudoku in IPython
+
+The IPython integration uses seam syntax, since it runs inside Python.
 
 Start IPython with the integration enabled:
 
@@ -124,7 +126,8 @@ for the full feature set.
 | **Getting Started** | |
 | [Syntax](syntax.md) | The trailing-comma convention, escape operators, logic variables, clause syntax |
 | [Style & Formatting](style.md) | One goal per line, clause separation, `clausal-fmt` |
-| [Predicates](predicates.md) | How to define predicates in .clausal files |
+| [Clausal Prolog](clausal_prolog.md) | The `.clausal` surface: ISO syntax, cut-free, its rules and how it differs from the seam |
+| [Predicates](predicates.md) | How to define predicates |
 | [Builtins](builtins.md) | Complete index of built-in predicates |
 | [Dicts & Sets](dicts_sets.md) | DictTerm, SetTerm, `__unify__` protocol |
 | [Constraints](constraints.md) | dif/2, CLP(ℤ) integer constraints, and CLP(ℝ) real-domain constraints |
@@ -133,14 +136,14 @@ for the full feature set.
 | [Tabling](tabling.md) | SLG resolution and well-founded semantics |
 | [Lambdas](lambdas.md) | Goal closures for higher-order logic programming |
 | [If-Then-Else](reified_ite.md) | Reified branching (no cut, no committed choice) |
-| [Import System](import.md) | `.clausal` file loading, module directives, qualified calls |
+| [Import System](import.md) | Module loading, module directives, qualified calls |
 | [Importing Prolog](importing_prolog.md) | Import `.pl` files directly — on-the-fly translation and caching (experimental in 1.0) |
 | [Architecture](architecture.md) | Layer stack, execution model, why not a WAM |
 | [Python Integration](python_integration.md) | Querying with `--goal`, the `++()` escape, `solve()`, converters |
 | [Operators](operators.md) | What each operator means bare (Python) and quoted (Scryer/ISO) |
 | [Arithmetic](arithmetic.md) | Evaluation, exact rationals, the evaluable functors |
 | [Public API](public-api.md) | What the 1.0 semantic-versioning promise covers |
-| [Reflection](reflection.md) | Reify `.clausal` source as matchable terms — linters and matchers in Clausal |
+| [Reflection](reflection.md) | Reify `.seam` source as matchable terms — linters and matchers written as logic programs |
 | [IPython / Jupyter REPL](ipython.md) | Interactive queries, `*(goals)` syntax, solution browsing |
 | **Standard Library Modules** | |
 | [Physical Units](units.md) | `n(Unit)` sugar, dimensional arithmetic, AttVar constraints |
@@ -179,7 +182,7 @@ for the full feature set.
 | [CLP(B)](clpb.md) | Boolean constraint programming |
 | [Z3 SMT Solver](z3.md) | Multi-theory constraints via Z3 — integers, reals, booleans, bitvectors, arrays, strings, optimization, unsat cores |
 | [Meta-Interpreter Specialization](specialization.md) | Partial deduction — specialize MIs to remove interpretation overhead |
-| [Prolog Translation](prolog_translation.md) | Bidirectional clausal ↔ Prolog translation |
+| [Prolog Translation](prolog_translation.md) | Bidirectional seam ↔ Prolog translation |
 | [Trealla Prolog Embedding](trealla.md) | In-process Trealla Prolog engine via ctypes — fast, lightweight, instant startup |
 | [Scryer Prolog Embedding](scryer.md) | In-process Scryer Prolog engine via PyO3 — lazy queries, tabling support |
 | [Examples](examples.md) | Example programs: Fibonacci, N-Queens, Sudoku, meta-interpreters |
@@ -194,5 +197,5 @@ for the full feature set.
 | [Compiler](compiler.md) | Compilation pipeline: head patterns, body goals, trampoline, TRO |
 | [Jupyter Notebooks](jupyter.md) | Notebook integration with HTML rendering |
 | [Free Threading](free_threading.md) | Free-threaded Python (PEP 703) support, C extension safety |
-| [Parallel Predicates](tutorial_parallel_clausal.md) | Writing thread-safe Clausal predicates |
+| [Parallel Predicates](tutorial_parallel_clausal.md) | Writing thread-safe predicates |
 | [Parallel Queries](tutorial_parallel_python.md) | Running parallel queries from Python |
