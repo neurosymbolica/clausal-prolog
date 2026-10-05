@@ -126,8 +126,7 @@ for N in --fib(N, 55):
 python -c "import clausal, app"     # import clausal installs the import hook
 ```
 
-The goal's variables become ordinary Python locals, bound to each answer
-in turn. Atoms used in a `.seam` file are declared, here with `-private`.
+See [Python Integration](docs/python_integration.md) for more ways to query.
 
 ### Constraints, DCGs and reified conditions
 
@@ -185,20 +184,14 @@ See [docs/importing_prolog.md](docs/importing_prolog.md) for the full rules.
 
 ## ISO Prolog `.pl` files
 
-Put a `.pl` file on `sys.path` and import it:
-
-```python
-import clausal
-import my_prolog_module   # loads my_prolog_module.pl
-```
-
 A `.pl` file is regular, external ISO Prolog: it is not restricted to the
 cut-free subset, and that is why a `.clausal` module may not import one.
 To run full ISO Prolog, cut included, alongside Clausal Prolog, use the
 [Scryer](packages/clausal-scryer/docs/scryer.md) or
 [Trealla](packages/clausal-trealla/docs/trealla.md) embeddings.
 
-Importing a `.pl` file straight into the engine, as above, is
+Importing a `.pl` file straight into the engine (put it on `sys.path` and
+`import` it) is
 **experimental** and outside the 1.0 compatibility promise. That in-process
 loader does not run cut yet: a `.pl` file that uses `!` or `->` fails to
 load there. `CLAUSAL_PL_FRONTEND` selects its front end (`translator` by
@@ -239,41 +232,6 @@ collected automatically.
 
 ```bash
 python -m pytest tests/ clausal/examples/ -q
-```
-
-## Logic variables and backtracking
-
-The C extension `clausal.logic.variables` provides Prolog-style logic
-variables and trail-based backtracking without a Warren Abstract Machine.
-
-```python
-from clausal.logic.variables import Var, Trail, unify, is_var
-
-trail = Trail()
-X = Var()
-Y = Var()
-
-unify(X, 42, trail)
-assert X.value == 42
-
-mark = trail.mark()
-unify(Y, "temporary", trail)
-trail.undo(mark)
-assert is_var(Y)   # Y is unbound again
-```
-
-### Constraints
-
-```python
-from clausal.logic.variables import Var, Trail, unify
-from clausal.logic.constraints import dif
-
-trail = Trail()
-X, Y = Var(), Var()
-
-dif(X, Y, trail)      # post: X ≠ Y
-unify(X, 1, trail)    # ok — still satisfiable
-unify(Y, 2, trail)    # ok — satisfied (1 ≠ 2)
 ```
 
 ## Requirements
