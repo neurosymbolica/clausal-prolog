@@ -40,7 +40,7 @@ REPO = Path(__file__).resolve().parents[2]
 CODE_EXT = (".py", ".c", ".h", ".md", ".clausal")
 SRC_EXT = (".py", ".c", ".h", ".clausal")  # warning pass ignores .md
 ROOTS = ("clausal/", "tests/", "docs/", "todo/", "scripts/",
-         "packages/", "prolog_backends/", "benchmarks/")
+         "packages/", "benchmarks/")
 # audit-output roots: created by the sessions, not required to exist now
 SKIP_PREFIXES = (
     "tests/audit_2026_07_05/",

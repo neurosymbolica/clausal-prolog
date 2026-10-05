@@ -11,7 +11,7 @@ Usage::
 
 To build the Scryer embedding::
 
-    cd prolog_backends/scryer
+    cd packages/clausal-scryer
     maturin develop --release
 
 Requires: Rust toolchain, scryer-prolog source at ../../scryer-prolog
@@ -27,7 +27,7 @@ except ImportError:
 def _not_available(*args, **kwargs):
     raise ImportError(
         "clausal.scryer requires the _scryer_ext extension.\n"
-        "Build it with: cd prolog_backends/scryer && maturin develop --release"
+        "Build it with: cd packages/clausal-scryer && maturin develop --release"
     )
 
 
