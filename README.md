@@ -5,11 +5,11 @@ Same process, same memory management, nest Python -> Prolog -> Python -> etc.
 no friction. You can have neural networks calling symbolic core logic that in 
 turn calls neural predicates. Imagine the possibilities.
 
-Clausal Prolog is a cut-free Prolog that aims for ISO Prolog conformity,
-with three syntaxes: restricted cut-free, no committed choice (to realise
-the true power of Prolog by guaranteed properties of the language), full ISO
-Prolog (for compatibility), and a Pythonic 'Seam' syntax that is used to
-write adaptors that allow controlled access\* to the entire Python
+Clausal Prolog is a Prolog written in Python that aims for ISO Prolog conformity,
+with three syntaxes: restricted cut-free, no committed choice 
+(to truly realise The Power of Prolog\* by guaranteeing properties of the language), 
+full ISO Prolog (for compatibility), and a Pythonic 'Seam' syntax that is used to
+write adaptors that allow controlled access\*\* to the entire Python
 ecosystem. Everything you can do in Python, you can now do in Prolog, and
 vice versa. The ultimate neurosymbolic platform.
 
@@ -19,7 +19,8 @@ tabling, DCGs and a large standard library. Regular ISO Prolog lives in
 `.pl` files. A Python-syntax surface, the seam (`.seam`), is kept only as the
 boundary for code that has to call Python. Import rules preserve guarantees.
 
-\*Python seam adaptors assume the Python programmer takes full
+\*[The Power of Prolog](https://www.metalevel.at/prolog)
+\*\*Python seam adaptors assume the Python programmer takes full
 responsibility for correctness (in the Pythonic way).
 
 The package is `clausal`: `pip install clausal`, `import clausal`.
