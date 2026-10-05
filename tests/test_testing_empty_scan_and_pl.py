@@ -183,7 +183,8 @@ def test_cli_honours_the_no_collect_marker(capsys, tmp_path):
 # ── D10: .pl is a test file ──────────────────────────────────────────────────
 
 
-def test_pl_file_runs_its_test_clauses(capsys, tmp_path):
+def test_pl_file_runs_its_test_clauses(capsys, tmp_path, monkeypatch):
+    monkeypatch.delenv("CLAUSAL_PL_FRONTEND", raising=False)   # translator
     p = tmp_path / "arith.pl"
     p.write_text(ARITH_PL)
     rc, out, _ = _run(capsys, ["-v", str(p)])
@@ -194,7 +195,59 @@ def test_pl_file_runs_its_test_clauses(capsys, tmp_path):
     # No source map: the report must not claim a line of the .pl file.
     assert not re.search(r"arith\.pl:\d+", out), out
     assert "arith.pl :: double of two is five" in out
-    assert "Clausal translation" in out
+    assert "translated to seam source before it ran" in out
+
+
+# ── the native front end keeps source lines ──────────────────────────────────
+# Only the translator rewrites a file before it runs.  The native ISO front end
+# (always for Clausal Prolog, and for .pl under CLAUSAL_PL_FRONTEND=native)
+# lowers clauses straight from the source, so a failure names its real line
+# and carries no translation note.
+
+CLAUSAL_PROLOG_FAILING = textwrap.dedent("""\
+    :- module(arith, []).
+
+    double(X, Y) :- Y is X * 2.
+
+    test("double of two is four") :- double(2, 4).
+    test("double of two is five") :-
+        double(2, Y),
+        Y =:= 5.
+
+    :- end_module(arith).
+""")
+
+
+def test_native_pl_failure_names_its_source_line(capsys, tmp_path,
+                                                 monkeypatch):
+    monkeypatch.setenv("CLAUSAL_PL_FRONTEND", "native")
+    p = tmp_path / "arith.pl"
+    p.write_text(ARITH_PL)
+    rc, out, _ = _run(capsys, [str(p)])
+    assert rc == EXIT_TESTS_FAILED
+    assert "arith.pl:5 :: double of two is five" in out, out
+    assert "translated" not in out, out
+
+
+def test_clausal_prolog_failure_names_its_source_line(capsys, tmp_path,
+                                                      monkeypatch):
+    # Clausal Prolog is native whatever CLAUSAL_PL_FRONTEND says.
+    monkeypatch.delenv("CLAUSAL_PL_FRONTEND", raising=False)
+    p = tmp_path / "arith.clausal"
+    p.write_text(CLAUSAL_PROLOG_FAILING)
+    rc, out, _ = _run(capsys, [str(p)])
+    assert rc == EXIT_TESTS_FAILED
+    assert "arith.clausal:6 :: double of two is five" in out, out
+    assert "translated" not in out, out
+
+
+def test_clausal_prolog_unknown_test_option_names_its_line(capsys, tmp_path):
+    p = tmp_path / "opt.clausal"
+    p.write_text(':- module(opt, []).\n\ntest("x", foo) :- true.\n'
+                 ':- end_module(opt).\n')
+    rc, out, _ = _run(capsys, [str(p)])
+    assert rc == EXIT_TESTS_FAILED
+    assert "opt.clausal: line 3: test('x', foo): unknown test option" in out, out
 
 
 def test_passing_pl_file_is_green(capsys, tmp_path):

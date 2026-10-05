@@ -1,18 +1,19 @@
-"""clausal.testing — test runner for .clausal predicate modules.
+"""clausal.testing — test runner for predicate modules.
 
-Discovers test/1 clauses in .clausal files (and their ``.seam`` alias), and
-in Prolog ``.pl`` files loaded through the experimental Prolog importer, and
-runs them. Each test clause is a rule of the form:
+Discovers test/1 clauses in seam (``.seam``) files, in Clausal Prolog
+(``.clausal``) files, and in ISO Prolog ``.pl`` files loaded through the
+experimental Prolog importer, and runs them. Each test clause is a rule of
+the form:
 
-    test("description") <- goal1, goal2, ...        % .clausal / .seam
-    test('description') :- Goal1, Goal2, ...        % .pl
+    test("description") <- goal1, goal2, ...        # .seam
+    test("description") :- Goal1, Goal2, ...        % .clausal / .pl
 
 A test passes if its body succeeds (produces at least one solution).
 
 A NEGATIVE test is plunit's ``test/2`` with the option ``fail``:
 
-    test("description", fail) <- goal1, goal2, ...  % .clausal / .seam
-    test('description', fail) :- Goal1, Goal2, ...  % .pl
+    test("description", fail) <- goal1, goal2, ...  # .seam
+    test("description", fail) :- Goal1, Goal2, ...  % .clausal / .pl
 
 It passes iff its body has NO solution; a solution fails it, and an
 exception is an error as for ``test/1``.  Any other option is a collection
@@ -32,7 +33,8 @@ to turn "no tests collected" into exit 0.
 Pytest integration
 ------------------
 The conftest.py plugin (see conftest.py at project root) uses this module
-to collect and run .clausal tests as individual pytest items.
+to collect and run the tests in .seam, .clausal and .pl files as individual
+pytest items.
 
 Failure diagnostics
 -------------------
@@ -140,7 +142,7 @@ class _DiagBudgetExceeded(BaseException):
 
 
 class _Unrenderable(Exception):
-    """A computed value has no faithful ``.clausal`` surface form."""
+    """A computed value has no faithful seam (``.seam``) surface form."""
 
 
 #: Never absorbed by the diagnostic's catch-alls — the operator asked to stop.
@@ -251,11 +253,14 @@ class FileResults:
 
 
 def load_clausal_module(path: str | Path) -> object:
-    """Load a .clausal (or .seam, or Prolog .pl) file as a module and return it.
+    """Load a seam (``.seam``), Clausal Prolog (``.clausal``) or ISO Prolog
+    (``.pl``) file as a module and return it.
 
-    A ``.pl`` file goes through the experimental Prolog importer — the same
-    ``PrologLoader`` a ``-import_from`` of a ``.pl`` file uses — so a file the
-    translator rejects raises ``SyntaxError`` carrying the translator error.
+    A ``.clausal`` file goes through the native ISO front end
+    (``NativePrologLoader``), always.  A ``.pl`` file goes through the
+    experimental Prolog importer that ``CLAUSAL_PL_FRONTEND`` selects -- the
+    same loader an import of a ``.pl`` file uses -- so a file the front end
+    rejects raises ``SyntaxError`` carrying its error.
 
     Every call compiles the file **afresh**, under a private
     ``_clausal_test_<basename>`` name, so each test gets an independent
@@ -497,8 +502,7 @@ def _check_test_option(mod, clause, name: str) -> None:
     if value == TEST_OPTION_FAIL:
         return
     where = getattr(mod, "__file__", None) or getattr(mod, "__name__", "<module>")
-    if clause.position and not is_prolog_source(where):
-        # A .pl file's positions are lines of its translation (no source map).
+    if clause.position and not _positions_are_translated(mod, where):
         where = f"{where}: line {clause.position[0]}"
     raise TestCollectionError(
         f"{where}: test({name!r}, {text}): unknown test option `{text}`; "
@@ -652,16 +656,38 @@ def run_test(
         result.diagnostic = diagnose_failure(mod, description, path=path,
                                              error=result.error)
         result.line = result.diagnostic.line
-        if path is not None and is_prolog_source(path):
+        if _positions_are_translated(mod, path):
             # The translator keeps no source map: positions are lines of the
-            # generated Clausal text, not of the .pl file.  Reporting one as
+            # generated seam text, not of the .pl file.  Reporting one as
             # ``file.pl:N`` would point at the wrong clause.
             result.line = None
             result.diagnostic.notes.append(
-                "a .pl file is translated before it runs: goals above are "
-                "shown in their Clausal translation, and any line numbers "
-                "are lines of that translation, not of the .pl source")
+                "this .pl file was translated to seam source before it ran "
+                "(CLAUSAL_PL_FRONTEND=translator): goals above are shown in "
+                "that translation, and its line numbers are not lines of the "
+                ".pl source, so none are reported")
     return result
+
+
+def _positions_are_translated(mod, path) -> bool:
+    """True when *mod*'s clause positions are lines of a TRANSLATION rather
+    than of the source file at *path*.
+
+    Only a ``.pl`` file loaded by the translator front end
+    (``PrologLoader``, ``CLAUSAL_PL_FRONTEND=translator``) is translated: it
+    becomes seam text first, with no source map.  The native ISO front end
+    (``NativePrologLoader``), which always reads Clausal Prolog (``.clausal``)
+    and reads ``.pl`` under ``CLAUSAL_PL_FRONTEND=native``, lowers clauses
+    straight from the source, so its positions are real source lines.  The
+    module's own loader is asked, not the environment variable, which may
+    have changed since the module loaded."""
+    if path is None or not is_prolog_source(path):
+        return False
+    from clausal.import_hook import NativePrologLoader
+    loader = getattr(mod, "__loader__", None)
+    if loader is None:
+        loader = getattr(getattr(mod, "__spec__", None), "loader", None)
+    return not isinstance(loader, NativePrologLoader)
 
 
 def run_file(path: str | Path) -> FileResults:
@@ -916,9 +942,9 @@ def _reified_clause(path, clause):
     if path is None or not clause.position:
         return None
     if is_prolog_source(path):
-        # A .pl file is Prolog: reifying it as Clausal source can only fail
-        # (re-read and re-parsed per failing test) or, worse, succeed on the
-        # wrong language.  Its clause positions are lines of the translation.
+        # Reflection reifies SEAM source.  A .pl or .clausal file is Prolog:
+        # reifying it as seam can only fail (re-read and re-parsed per
+        # failing test) or, worse, succeed on the wrong language.
         return None
     try:
         from clausal.reflection import Clause as ReifiedClause, reify_file, is_v, vfield
@@ -1667,7 +1693,7 @@ def _render_nearest(goal, reified_goal, kind, index, value,
 
     Preferred form splices the computed value into the *reified* goal and hands
     the result to ``clausal.reflection.render_source``, so the output is real
-    ``.clausal`` surface syntax.  Without a reified twin we fall back to naming
+    seam (``.seam``) surface syntax.  Without a reified twin we fall back to naming
     the argument and its value.
     """
     from clausal.reflection import Goal, render_source, is_v, vfield
@@ -1812,7 +1838,7 @@ def _atomize_declared_atoms(reified, path):
 
 
 def _render_value(value, path=None) -> str:
-    """A computed runtime value as ``.clausal`` surface text."""
+    """A computed runtime value as seam (``.seam``) surface text."""
     try:
         from clausal.reflection import render_source, is_v, vfield
 
@@ -2409,7 +2435,7 @@ def _resolve_predicate(goal, logic_module, caller_path):
     what a module-dict binding looks like (F1 row 4: it used to read a
     ``PredicateMeta`` class's ``_row``/``__module__``, which after the
     retirement flip would resolve nothing and silently drop the descent
-    section from every failing ``.clausal`` test).
+    section from every failing seam test).
 
     Resolution order: the caller's own database under the exact (possibly
     dotted) name -- local predicates and ``-import_from`` adopted rows both
