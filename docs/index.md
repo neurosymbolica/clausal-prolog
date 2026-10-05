@@ -26,10 +26,23 @@ test("fib(10) = 55") :- fib(10, 55).
 :- end_module(fibonacci).
 ```
 
-Query it from Python:
+Ask it a question from a `.seam` file, with the goal after `--`:
 
 ```python
-import clausal                      # installs the import hook
+# report.seam
+-import_from(fibonacci, [fib])
+
+for F in --fib(10, F):
+    print(F)  # 55
+```
+
+```bash
+python -c "import clausal, report"
+```
+
+From a plain `.py` file, the same query goes through `solve`:
+
+```python
 from clausal import Var, solve
 import fibonacci                    # loads fibonacci.clausal
 

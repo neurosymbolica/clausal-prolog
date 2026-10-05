@@ -106,15 +106,28 @@ A Clausal Prolog module file must end with `:- end_module(Name).`.
 
 ### Querying it from Python
 
-```python
-import clausal                      # installs the import hook
-import family                       # loads family.clausal
-from clausal import call, deref, Var
+Python asks the questions from a `.seam` file, with a goal in `for`
+position after `--`:
 
-GRANDCHILD = Var()
-print([deref(GRANDCHILD) for _ in call("grandparent", "tom", GRANDCHILD, module=family)])
-# ['ann', 'pat']
+```python
+# app.seam
+-import_from(family, [grandparent, fib])
+-private([tom])
+
+for GRANDCHILD in --grandparent(tom, GRANDCHILD):
+    print(GRANDCHILD)               # ann, then pat
+
+for N in --fib(N, 55):
+    print(N)                        # 10
+    break
 ```
+
+```bash
+python -c "import clausal, app"     # import clausal installs the import hook
+```
+
+The goal's variables become ordinary Python locals, bound to each answer
+in turn. Atoms used in a `.seam` file are declared, here with `-private`.
 
 ### Constraints, DCGs and reified conditions
 

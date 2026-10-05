@@ -70,17 +70,30 @@ test("tom has no grandparent", fail) :- grandparent(_, tom).
 :- end_module(family).
 ```
 
-Import it from Python like any module:
+Query it from Python:
+
+Python asks the questions from a `.seam` file, with a goal in `for`
+position after `--`:
 
 ```python
-import clausal                      # installs the import hook
-import family                       # loads family.clausal
-from clausal import call, deref, Var
+# app.seam
+-import_from(family, [grandparent, fib])
+-private([tom])
 
-GRANDCHILD = Var()
-print([deref(GRANDCHILD) for _ in call("grandparent", "tom", GRANDCHILD, module=family)])
-# ['ann', 'pat']
+for GRANDCHILD in --grandparent(tom, GRANDCHILD):
+    print(GRANDCHILD)               # ann, then pat
+
+for N in --fib(N, 55):
+    print(N)                        # 10
+    break
 ```
+
+```bash
+python -c "import clausal, app"     # import clausal installs the import hook
+```
+
+The goal's variables become ordinary Python locals, bound to each answer
+in turn. Atoms used in a `.seam` file are declared, here with `-private`.
 
 Run its tests with `python -m clausal.testing family.clausal`, or let
 pytest collect them (see [Testing](testing.md)).
