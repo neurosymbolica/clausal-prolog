@@ -1,5 +1,7 @@
 # Phase 3 surface idea: clause bodies inside `(...)` or possibly `[...]`
 
+**Status: REJECTED 2026-10-05 (operator).** Not pursued. The `.clausal` surface shipped as Clausal Prolog, ISO syntax, where `h :- (a, b, c).` already reads; the `head <- (...)` shape this built on is the seam's.
+
 **From the user, 2026-09-04, while reviewing the toklex formalism design.** Explicitly
 a LANGUAGE question, not a formalism question — parked here so it reaches the Phase 3
 surface-syntax discussion (which is user-owned parser territory; see

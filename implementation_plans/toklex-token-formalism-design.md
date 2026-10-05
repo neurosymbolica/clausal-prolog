@@ -476,7 +476,7 @@ tables is the only effect of a spec edit. This replaces the 487-line hand-writte
    optional commas at module level; see the §9 bullet for the consequences. Still
    open within this: `#` vs `%` comments, and the ruling interacts with the parked
    bracketed-clause-bodies idea,
-   `todo/phase3-surface-bracketed-clause-bodies-2026-09-04.md`.)*
+   `todo/rejected/phase3-surface-bracketed-clause-bodies-2026-09-04.md`, rejected 2026-10-05.)*
 4. **Sharing:** this document + the two spec files are written to be shareable with
    Markus Triska as the proposal; say the word and nothing Clausal-internal blocks it
    (§9 would travel as "an embedder's dialect deltas" example). *(Answered 2026-09-04:

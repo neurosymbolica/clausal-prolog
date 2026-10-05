@@ -51,7 +51,7 @@ Should the precise diagnostic be generalised to the AST-node layer?
   twice) would all be rewritten.
 * **(b) No — accept the coarser refusal.** Two copies in one process is
   documented as unsupported
-  (`todo/term-identity-cannot-cross-two-package-copies.md`), and P2 has
+  (in `todo/term-identity-cannot-cross-two-package-copies.md`, deleted 2026-10-05: `PredicateMeta`, whose nominal identity it was about, is gone), and P2 has
   already removed one of its two failure modes. Re-point the test at the
   node-layer refusal and assert the `dollar_ref` warning is what names the
   cause.
