@@ -66,6 +66,30 @@ def _detect_direction(path: str | None, to_flag: str | None) -> str:
     return "clausal_to_prolog"
 
 
+def _contradiction(path: str | None, to_flag: str | None) -> str | None:
+    """Why *to_flag* cannot apply to the file at *path*, or None.
+
+    ``--to`` names the direction; a file's extension names its surface.
+    When both are given and disagree, the translator would read the file in
+    the wrong language and fail with a parse error about its own syntax, so
+    the disagreement is refused up front.  Stdin (no *path*) and an
+    extension that names no surface keep trusting ``--to``."""
+    if not path or to_flag is None:
+        return None
+    ext = Path(path).suffix.lower()
+    if ext in prolog_suffixes() and to_flag in _DIALECT_FACTORIES:
+        return (f"{path} is Prolog ({ext}), but --to {to_flag} translates "
+                f"seam source ({seam_suffixes_text()}) to Prolog; use "
+                f"--to clausal, or omit --to, to translate it to seam source")
+    if ext in CLAUSAL_SUFFIXES and to_flag == "clausal":
+        dialects = "|".join(_DIALECT_FACTORIES)
+        return (f"{path} is seam source ({ext}), but --to clausal "
+                f"translates Prolog ({suffix_list(prolog_suffixes())}) to "
+                f"seam source; use --to {dialects}, or omit --to, to "
+                f"translate it to Prolog")
+    return None
+
+
 def translate(source: str, *, direction: str, dialect: Dialect) -> str:
     """Translate *source* in the given *direction* using *dialect*."""
     if direction == "clausal_to_prolog":
@@ -130,6 +154,9 @@ def main(argv: list[str] | None = None) -> int:
     """Entry point.  Returns exit code (0 = success)."""
     parser = _build_parser()
     args = parser.parse_args(argv)
+    refusal = _contradiction(args.input, args.to)
+    if refusal:
+        parser.error(refusal)          # exit 2: a usage error
 
     # --- Read input --------------------------------------------------------
     if args.input is None:
