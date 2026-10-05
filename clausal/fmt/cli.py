@@ -1,12 +1,12 @@
 """``clausal-fmt`` -- format SEAM source files in place, or check them.
 
-Seam source is a file with one of ``_suffixes.CLAUSAL_SUFFIXES`` (``.clausal``
-or ``.seam`` today); a directory walk picks up those.  A file named on the
-command line is formatted whatever its name -- unless its extension says it
-is PROLOG syntax (``.pl``, or the Clausal Prolog surface, which ``.clausal``
-becomes at the extension flip): that file is refused, not mangled.
+Seam source is a file with one of ``_suffixes.CLAUSAL_SUFFIXES`` (``.seam``
+since the extension flip); a directory walk picks up those.  A file named on
+the command line is formatted whatever its name -- unless its extension says
+it is PROLOG syntax (``.pl``, or the Clausal Prolog surface ``.clausal``):
+that file is refused, not mangled.
 
-    clausal-fmt src/                 rewrite every .clausal/.seam file under src/
+    clausal-fmt src/                 rewrite every .seam file under src/
     clausal-fmt --check src/         exit 1 if any file would change
     clausal-fmt --diff  src/         print what would change, write nothing
 

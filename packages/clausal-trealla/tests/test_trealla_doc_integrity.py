@@ -54,7 +54,7 @@ def test_no_skip_blocks():
 def test_no_raw_untested_blocks():
     violations = check_no_raw_untested_blocks(_DOCS_DIR)
     assert not violations, (
-        f"Found {len(violations)} ```clausal block(s) that fail to compile "
+        f"Found {len(violations)} ```seam block(s) that fail to compile "
         f"and have no Test clause or --8<-- reference:\n"
         + "\n".join(violations)
     )

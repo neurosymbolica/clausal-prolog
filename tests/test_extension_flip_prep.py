@@ -290,20 +290,24 @@ def test_after_the_flip_a_pl_importer_of_a_twin_still_gets_the_seam_module(
     assert sys.modules["helperlib"].__file__.endswith("helperlib.seam")
 
 
-# ── docs: ```seam is the seam fence, ```clausal its alias for now ──
+# ── docs: ```seam is the seam fence; ```clausal is no longer its alias ──
+# Every doc was re-fenced ```seam after the extension flip, then ```clausal
+# left SEAM_FENCE_LANGS: a ```clausal block is Clausal Prolog, like ```prolog,
+# and is neither counted nor compiled as seam.
 
 
-def test_the_doc_checker_sees_both_seam_fences(tmp_path):
+def test_the_doc_checker_sees_only_the_seam_fence(tmp_path):
     from clausal.tools.doc_snippet_check import (
-        SEAM_FENCE_RE, check_no_raw_untested_blocks)
+        SEAM_FENCE_LANGS, SEAM_FENCE_RE, check_no_raw_untested_blocks)
+    assert SEAM_FENCE_LANGS == ("seam",)
     page = tmp_path / "page.md"
-    page.write_text("```seam\np(1),\n```\n\n```clausal\nq(1),\n```\n\n"
+    page.write_text("```seam\np(1),\n```\n\n```clausal\nq(1).\n```\n\n"
                     "```seam\nthis is not ( seam\n```\n\n"
-                    "```clausal\nnor ( is this\n```\n\n"
+                    "```clausal\n:- module(m, []).\n```\n\n"
                     "```prolog\np(1).\n```\n")
-    assert len(SEAM_FENCE_RE.findall(page.read_text())) == 4
+    assert len(SEAM_FENCE_RE.findall(page.read_text())) == 2
     bad = check_no_raw_untested_blocks(tmp_path)
-    assert [v.split()[0] for v in bad] == ["page.md:9", "page.md:13"], bad
+    assert [v.split()[0] for v in bad] == ["page.md:9"], bad
 
 
 # ── the private-procedure ImportError names the importer's own directive ──

@@ -28,11 +28,11 @@ _SNIPPET_REF_RE = re.compile(r'--8<--\s+"([^"]+)"')
 _SECTION_START_RE = re.compile(r"--8<--\s*\[start:([^\]]+)\]")
 _SECTION_END_RE = re.compile(r"--8<--\s*\[end:([^\]]+)\]")
 
-#: The fence languages of a SEAM code block: ```seam, and ```clausal, kept
-#: as an alias for now so no block goes untested while docs still carry it.
-#: (At the extension flip ```clausal becomes Clausal Prolog and leaves this
-#: tuple.)
-SEAM_FENCE_LANGS: tuple[str, ...] = ("seam", "clausal")
+#: The fence languages of a SEAM code block.  ```clausal was an alias until
+#: every doc was re-fenced ```seam after the extension flip; it left this
+#: tuple then, so a ```clausal fence is no longer read as seam (it names the
+#: Clausal Prolog surface, like ```prolog, and is not compiled as seam).
+SEAM_FENCE_LANGS: tuple[str, ...] = ("seam",)
 
 #: Code-fence pattern for a seam block; group 1 is its content.
 SEAM_FENCE_RE = re.compile(
@@ -162,7 +162,7 @@ def check_no_raw_untested_blocks(
     *,
     known_uncompilable: set[tuple[str, int]] | None = None,
 ) -> list[str]:
-    """Every seam block (```seam, or its alias ```clausal) must be a --8<-- ref,
+    """Every seam block (```seam) must be a --8<-- ref,
     contain a test/1 clause, or compile.
 
     ``known_uncompilable`` is an allowlist of ``(filename, line_number)`` pairs

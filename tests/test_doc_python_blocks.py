@@ -1,6 +1,6 @@
 """Execute the ```python doc blocks that teach the Python query API.
 
-``test_doc_snippet_coverage`` compiles ```clausal blocks; nothing ran the
+``test_doc_snippet_coverage`` compiles ```seam blocks; nothing ran the
 ```python ones, so an API change could leave them teaching a form that no
 longer works (the predicate-handle flip did exactly that: ``pred(X := Var())``
 became a TypeError, and iterating a builtin's cell walked the tuple).
@@ -9,7 +9,7 @@ Each case names a block by a substring unique among the page's ```python
 blocks, runs it VERBATIM in a fresh interpreter (a doc block imports modules
 by name, so in-process runs would share ``sys.modules``), and checks what it
 prints. ``modules`` builds the ``.clausal`` files the block imports -- taken
-from the page's own ```clausal blocks where the page defines them, else from
+from the page's own ```seam blocks where the page defines them, else from
 ``clausal/examples``. ``post`` is appended to make a block that only builds a
 value show it: a block whose last statement is a bare expression (a
 ``Solutions(...)`` display) has that value bound to ``_doc_value`` -- the
@@ -39,7 +39,6 @@ _FENCE = re.compile(r"^([ \t]*)```(\w*)[^\n]*\n(.*?)^\1```", re.M | re.S)
 
 def _blocks(page: str, lang: str) -> list[str]:
     text = (_DOCS / page).read_text()
-    # ```clausal is the seam fence's alias while docs still carry it.
     langs = SEAM_FENCE_LANGS if lang in SEAM_FENCE_LANGS else (lang,)
     out = []
     for m in _FENCE.finditer(text):
@@ -222,8 +221,8 @@ def test_doc_python_block_prints_what_it_says(tmp_path, page, anchor, modules):
     assert _run_block(tmp_path, modules, block) == claims
 
 
-# The seam's hosted-Python example is a ```clausal block (the Python lives in
-# a .clausal file).  Every top-level line with a trailing ``# value`` comment
+# The seam's hosted-Python example is a ```seam block (the Python lives in
+# a .seam file).  Every top-level line with a trailing ``# value`` comment
 # is a claim: ``NAME = --...  # value`` says what the module attribute is,
 # ``expr  # value`` what the expression evaluates to in that module.  Both are
 # checked against the loaded module, so the example cannot drift from the
