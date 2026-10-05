@@ -144,7 +144,8 @@ file and line.
 
 ### Cut-free
 
-`!`, `->` (if-then, and if-then-else) and `*->` (soft cut) are refused:
+`!` and `->` (if-then, and if-then-else) are refused. `*->` (soft cut) is
+not an operator in Clausal Prolog, so writing it is a syntax error:
 
 ```text
 c.clausal:2: `!` (cut) is refused: Clausal is cut-free with no committed

@@ -164,7 +164,8 @@ test("dif") :- dif(X, a), X = b.
 Clausal Prolog is ISO Prolog with a few deliberate rules. Each one is
 enforced when the file loads:
 
-- **Cut-free.** `!`, `->` and `*->` are refused. Use `dif/2`, `if_/3`,
+- **Cut-free.** `!` and `->` are refused, and `*->` is not an operator.
+  Use `dif/2`, `if_/3`,
   `once/1`, constraints or first-argument indexing.
 - **Modules close.** A module file must end with `:- end_module(Name).`.
   A file can opt out with `:- set_prolog_flag(require_end_module, false).`.
