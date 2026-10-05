@@ -62,7 +62,7 @@ make install
 
 # Build the extension
 export GPROLOG_HOME=/opt/gprolog-embed/gprolog-1.5.0
-cd prolog_backends/gprolog
+cd packages/clausal-gprolog
 pip install -e .
 ```
 

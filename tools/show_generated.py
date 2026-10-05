@@ -1,10 +1,9 @@
-"""Show clausal source alongside generated trampoline Python code.
+"""Show seam source alongside generated trampoline Python code.
 
-Run from the clausal-opt directory after building the C extensions:
+Run from the repository root after building the C extensions:
 
-    cd clausal-opt
     pip install -e .          # builds _variables and _trampoline C extensions
-    python show_generated.py
+    python tools/show_generated.py
 
 If pip install fails due to a missing compiler, install build tools first:
     macOS:   xcode-select --install

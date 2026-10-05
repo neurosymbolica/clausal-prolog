@@ -1,7 +1,0 @@
-_gprolog_ext.c
-pyproject.toml
-setup.py
-clausal_gprolog.egg-info/PKG-INFO
-clausal_gprolog.egg-info/SOURCES.txt
-clausal_gprolog.egg-info/dependency_links.txt
-clausal_gprolog.egg-info/top_level.txt

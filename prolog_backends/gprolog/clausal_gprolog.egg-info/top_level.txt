@@ -1,1 +1,0 @@
-_gprolog_ext

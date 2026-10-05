@@ -1,4 +1,4 @@
-"""Smoke test for ``show_generated.py``, the dev/audit script that prints
+"""Smoke test for ``tools/show_generated.py``, the dev/audit script that prints
 generated trampoline code.
 
 It stopped running once (it imported the deleted ``PredicateMeta`` and set
@@ -18,10 +18,10 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = ROOT / "show_generated.py"
+SCRIPT = ROOT / "tools" / "show_generated.py"
 
 
-@pytest.mark.skipif(not SCRIPT.exists(), reason="show_generated.py not in this tree")
+@pytest.mark.skipif(not SCRIPT.exists(), reason="tools/show_generated.py not in this tree")
 def test_show_generated_runs_and_prints_the_phase_10_bucket_reference():
     env = dict(os.environ)
     env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
