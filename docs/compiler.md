@@ -1,4 +1,4 @@
-# Clausal — Predicate Compiler
+# Clausal Prolog — Predicate Compiler
 
 ## Overview
 
@@ -150,7 +150,7 @@ _gen = StepGenerator($disp_foo_2, this_generator, arg0, arg1, trail)
 
 `$disp_foo_2` is a reference to a pre-captured dispatch function in the compiled function's `__globals__` — the binding-to-row resolution is eliminated on every call site.
 
-**when dispatch caching fires:** Locking happens *after* initial module compilation, so intra-module calls within the same `.clausal` file are compiled before their callees are locked. Dispatch caching fires for cross-module calls (where the imported module is already locked), for explicit recompilations after locking, and for predicates compiled via `compile_predicate` / `compile_predicate_trampoline` after the callee's `_lock()` has been called.
+**when dispatch caching fires:** Locking happens *after* initial module compilation, so intra-module calls within the same source file are compiled before their callees are locked. Dispatch caching fires for cross-module calls (where the imported module is already locked), for explicit recompilations after locking, and for predicates compiled via `compile_predicate` / `compile_predicate_trampoline` after the callee's `_lock()` has been called.
 
 **Safety:** On lazy recompile (triggered by `assertz`/`retract`), the whole compilation reruns with the updated clause list, so any cached dispatch functions are refreshed. Dynamic predicates (`row.locked` is `False`) never get cached; they always go through `$dispatch_at`.
 
@@ -514,7 +514,7 @@ class _DbDispatchAdapter:
 ```
 
 **Phase A** (AST transform time):
-- `EmbedTransformer` transforms `.clausal` source into Python AST
+- `EmbedTransformer` transforms seam (`.seam`) source into Python AST
 - Accumulates `_module_items`: `DirectiveItem`, `ImportFromItem`, `ImportModuleItem`, `ModuleDeclItem`, `PrivateDeclItem`
 - Bytecode is cached in `__pycache__/` via `SourceLoader`
 

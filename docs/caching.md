@@ -1,8 +1,8 @@
-# Clausal — Bytecode Caching
+# Clausal Prolog — Bytecode Caching
 
 ## Overview
 
-when a `.clausal` file is imported, two expensive operations occur:
+when a seam (`.seam`) file is imported, two expensive operations occur (a `.clausal` or `.pl` file goes through a Prolog loader built on the same `SourceLoader` base, and is cached the same way):
 
 1. **Parsing and AST transformation** — the source is parsed into a Python AST and rewritten by `EmbedTransformer` (converting `head <- body` syntax, trailing-comma facts, logic variables, and functor declarations into valid Python code).
 
@@ -54,7 +54,7 @@ emitted code: the compiler (`templating/`, `pythonic_ast/`,
 and the `.pl` translator with its token spec (`tools/prolog_*.py`,
 `tools/toklex/`); see `_COMPILATION_ROOTS`/`_COMPILATION_FILES` in
 `clausal/import_hook.py`. Upgrading or editing the engine therefore invalidates
-every cached `.clausal` bytecode automatically; there is nothing to clear by
+every cached predicate-module bytecode automatically; there is nothing to clear by
 hand.
 4. Returns the cached code object.
 
@@ -126,7 +126,7 @@ from my_predicates import foo  # works, but no .pyc written
 
 ## Per-module loader instances
 
-Each `.clausal` file gets its own `PredicateLoader(fullname, path)` instance, created by `PredicateFinder.find_spec()`. There is no shared global loader singleton. This ensures each module's path and caching state are independent.
+Each `.seam` file gets its own `PredicateLoader(fullname, path)` instance (a `.clausal` or `.pl` file its own Prolog loader), created by `PredicateFinder.find_spec()`. There is no shared global loader singleton. This ensures each module's path and caching state are independent.
 
 For programmatic loading of a file by path, use `clausal.testing.load_clausal_module(path)`.
 

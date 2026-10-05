@@ -1,8 +1,8 @@
-# Clausal — Module System and Import Hook
+# Clausal Prolog — Module System and Import Hook
 
 ## Overview
 
-Clausal predicate files use the `.clausal` extension. `.seam` is an accepted alias: a `.seam` file carries exactly the same syntax and is found, loaded and cached the same way (where both `name.clausal` and `name.seam` exist in one directory, `.clausal` wins). Importing one with a normal Python `import` statement is enough to load and compile all predicates in that file. The `clausal.import_hook` module installs a `sys.meta_path` finder that intercepts these imports before Python's standard machinery runs.
+Predicate modules have three source surfaces: `.seam` (the seam, Python syntax), `.clausal` ([Clausal Prolog](clausal_prolog.md), cut-free ISO-like Prolog) and `.pl` (regular ISO Prolog; its in-process import is experimental). In one directory `name.seam` beats `name.clausal`, which beats `name.pl`. The examples and loader internals on this page are the seam's (`PredicateLoader`, `EmbedTransformer`). Importing one with a normal Python `import` statement is enough to load and compile all predicates in that file. The `clausal.import_hook` module installs a `sys.meta_path` finder that intercepts these imports before Python's standard machinery runs.
 
 ```python
 import clausal  # installs the import hook as a side effect
@@ -14,9 +14,9 @@ for trail in solve(("fib", 7, F := Var()), module=fibonacci):
     print(F.value)  # 13
 ```
 
-A `.clausal`/`.seam` file imports another the same way, with a directive, and
+A `.seam` file imports another the same way, with a directive, and
 can then query it in [goal position](python_integration.md#goal-position-if-goal-for-in-goal)
-— the usual way to drive Clausal from Python code:
+— the usual way to drive Clausal Prolog from Python code:
 
 ```seam
 # report.seam
@@ -28,13 +28,13 @@ def fib_of(n):
 ```
 
 `python -c "import clausal, report; print(report.fib_of(7))"` prints `13`.
-(`import clausal` must come first: it installs the hook that finds `.seam` and
-`.clausal` files.)
+(`import clausal` must come first: it installs the hook that finds `.seam`,
+`.clausal` and `.pl` files.)
 
 After the import:
 - `fibonacci.fib` is the predicate's **handle** — a `str` naming the owning module and the predicate. Its clauses are compiled and its dispatch installed on its row in the module's `Database`; the handle names it, it is not called
 - From Python, a goal is a cell — the predicate's name and its arguments — run against the module: `solve(("fib", 7, F), module=fibonacci)`
-- `-import_from(fibonacci, [fib])` in another `.clausal` file binds the same handle, so both files reach the one predicate — no separate wiring step needed
+- `-import_from(fibonacci, [fib])` in another `.seam` file binds the same handle, so both files reach the one predicate — no separate wiring step needed
 
 On the first import, the source is parsed, AST-transformed, and compiled to Python bytecode. The bytecode is cached in `__pycache__/` as a `.pyc` file. Subsequent imports of the same file load the cached bytecode directly, skipping parsing and transformation entirely. See [caching.md](caching.md) for details.
 
@@ -42,7 +42,7 @@ On the first import, the source is parsed, AST-transformed, and compiled to Pyth
 
 ## The two module objects
 
-Every `.clausal` file has **two** associated objects, both stored in the module's globals dict:
+Every `.seam` file has **two** associated objects, both stored in the module's globals dict:
 
 | Name | Type | Role |
 |---|---|---|
@@ -66,11 +66,11 @@ The `Module` also holds `module_dict: dict | None` — a reference to the Python
 
 ### PredicateFinder
 
-`PredicateFinder.find_spec` searches for `<name>.clausal` files in `sys.path` (or the package's `__path__` for sub-packages). On a match it creates a per-file `PredicateLoader(fullname, path)` instance and returns a `ModuleSpec` pointing to it.
+`PredicateFinder.find_spec` searches for `<name>.seam`, `<name>.clausal` and `<name>.pl` files in `sys.path` (or the package's `__path__` for sub-packages). On a `.seam` match it creates a per-file `PredicateLoader(fullname, path)` instance (a `.clausal` or `.pl` match gets a Prolog loader; see [Finder priority](#finder-priority)) and returns a `ModuleSpec` pointing to it.
 
 ### PredicateLoader (SourceLoader subclass)
 
-`PredicateLoader` extends `importlib.abc.SourceLoader`, which provides automatic `.pyc` caching via the `get_code()` method. The key override is `source_to_code(data, path)`, which performs the AST transformation step — parsing the `.clausal` source and running `EmbedTransformer`. The resulting bytecode is what gets cached.
+`PredicateLoader` extends `importlib.abc.SourceLoader`, which provides automatic `.pyc` caching via the `get_code()` method. The key override is `source_to_code(data, path)`, which performs the AST transformation step — parsing the `.seam` source and running `EmbedTransformer`. The resulting bytecode is what gets cached.
 
 ### PredicateLoader.exec_module
 
@@ -123,9 +123,9 @@ This is safe because no predicate of the file is queried during its own load. (A
 
 ---
 
-## Importing predicates between `.clausal` files
+## Importing predicates between `.seam` files
 
-`.clausal` files can import predicates from other `.clausal` files (or from Python modules that bind a plain object with a `_get_dispatch()` method) using two directives: `-import_from` and `-import_module`.
+`.seam` files can import predicates from other `.seam` files (or from Python modules that bind a plain object with a `_get_dispatch()` method) using two directives: `-import_from` and `-import_module`.
 
 ### `-import_from` — selective import
 
@@ -202,7 +202,7 @@ is fine.
 
 #### Name isolation
 
-Behind the scenes, imported predicates are stored under a fully-qualified dotted key in compiled function globals — e.g., `"myapp.graphs.utils.reachable"` rather than bare `"reachable"`. This means Python code in the `.clausal` file cannot accidentally shadow an imported predicate by assigning to the same name. The dotted key is invisible to the user; clause bodies use the short local name as written.
+Behind the scenes, imported predicates are stored under a fully-qualified dotted key in compiled function globals — e.g., `"myapp.graphs.utils.reachable"` rather than bare `"reachable"`. This means Python code in the `.seam` file cannot accidentally shadow an imported predicate by assigning to the same name. The dotted key is invisible to the user; clause bodies use the short local name as written.
 
 #### Importing constants
 
@@ -312,14 +312,14 @@ From Python, import the module and run a goal cell against it:
 
 1. `import fibonacci` loads it; `fibonacci.fib` is the predicate's handle — a name, not a callable.
 2. `solve(("fib", 7, F), module=fibonacci)` resolves `fib` in that module's dict to the handle and dispatches through the owner's row.
-3. A `.clausal` module that `-import_from`s `fib` binds the same handle, and its compiled call sites reach the same row.
-4. Python hosted in a `.clausal`/`.seam` file skips the cell-building: after `-import_module(fibonacci)`, `for F in --fibonacci.fib(7, F):` runs the goal in place.
+3. A `.seam` module that `-import_from`s `fib` binds the same handle, and its compiled call sites reach the same row.
+4. Python hosted in a `.seam` file skips the cell-building: after `-import_module(fibonacci)`, `for F in --fibonacci.fib(7, F):` runs the goal in place.
 
 ### Why not Prolog-style modules
 
-Prolog's module system is widely regarded as one of the language's weakest points. Clausal avoids every major pitfall:
+Prolog's module system is widely regarded as one of the language's weakest points. Clausal Prolog avoids every major pitfall:
 
-| Prolog pain point | Clausal's approach |
+| Prolog pain point | Clausal Prolog's approach |
 |---|---|
 | **Meta-predicate "context module" confusion** — the #1 complaint | A predicate binding is its owner's handle, which names the defining module. A goal argument is resolved in the caller only where the callee declares it with [`-meta_predicate`](directives.md#-meta_predicate), as in Scryer. |
 | **Flat namespace** | Python packages give hierarchical dotted paths for free. |
@@ -346,7 +346,7 @@ loader knows what `M` declares, it appends it (`clausal/import_diagnostics.py`,
 called from the module-exec seam in `clausal/import_hook.py`):
 
 ```text
-ImportError: cannot import name 'under_budget' from 'shop.catalog' (/…/shop/catalog.clausal)
+ImportError: cannot import name 'under_budget' from 'shop.catalog' (/…/shop/catalog.seam)
   catalog exports: price/2, in_stock/1, apple, pear, over_budget
   did you mean: over_budget ?
   -> either add `under_budget` to that -module(...) list and define it there,
@@ -359,9 +359,9 @@ need different repairs:
 
 | situation | what you get |
 |---|---|
-| module exists, is Clausal, lacks the name | the `-module(...)` export list, plus a near-miss suggestion |
+| module exists, is a predicate module, lacks the name | the `-module(...)` export list, plus a near-miss suggestion |
 | module does not exist at all | "names a module that does not exist … no export list to show" — never an empty list, which would read as "exports nothing" |
-| module exists but is not a Clausal module | Python's own message, untouched — a Clausal file importing `re` or `numpy` gets Python's diagnosis, not a Clausal one |
+| module exists but is not a predicate module | Python's own message, untouched — a seam file importing `re` or `numpy` gets Python's diagnosis, not a Clausal Prolog one |
 | a segment's directory is on disk but misnamed | the directory, the identifier rule, and the rename — see below |
 
 A module with no `-module(...)` list is told so, and then shown the names it
@@ -375,7 +375,7 @@ Every segment of a dotted import is a **valid Python identifier**, and a package
 directory is importable only under its own name. So `shop/order-rules/` can never be
 the `order_rules` of `-import_from(shop.order_rules.pricing, …)`: `order-rules` is not an
 identifier, and `order_rules` is a different segment, not a spelling of it. The
-same goes for a file — `order-rules.clausal` is not the module `order_rules`.
+same goes for a file — `order-rules.seam` is not the module `order_rules`.
 
 Reported as "no module named 'shop.order_rules'" this reads as a missing file, and
 sends you looking for a typo (or creating a second copy of a package you already
@@ -385,7 +385,7 @@ sitting on the search path, the message names it:
 ```text
 ModuleNotFoundError: No module named 'shop.order_rules'
   -import_from(shop.order_rules.pricing, [discount])
-    in app.clausal
+    in app.seam
   the segment 'order_rules' did not resolve, so neither can
     'shop.order_rules.pricing'.
   /…/shop/order-rules
@@ -411,7 +411,7 @@ be an invention.
 ## Name resolution is lexical (Pythonic), not dynamic (Prolog)
 
 This is the single most important scoping rule to internalise, and it is where
-Clausal deliberately departs from Prolog. **It follows Python, not Prolog.**
+Clausal Prolog deliberately departs from Prolog. **It follows Python, not Prolog.**
 
 **The rule.** A predicate resolves the names it calls against **its own
 defining module's namespace** — the module the clause was *written in* — fixed
@@ -420,7 +420,7 @@ of whoever *calls* it. This is exactly how a Python function behaves: a function
 defined in module `lib` looks its free names up in `lib`'s globals, never in the
 globals of the module that happens to call it.
 
-**Prolog is split on this — and neither half works like Clausal.** Standard ISO
+**Prolog is split on this — and neither half works like Clausal Prolog.** Standard ISO
 Prolog (ISO/IEC 13211-1) defines *no* module system at all, so a classic
 "consult everything into one database" program has a single flat global
 namespace: there is only one `requirement/4`, and any library predicate that
@@ -433,13 +433,13 @@ per-implementation (SWI, SICStus, …); the ISO *Modules* standard, ISO/IEC
 13211-2, was essentially never adopted. And here is the subtlety: in those module
 systems an *ordinary* call like `requirement(...)` inside a library module
 **does** resolve to that library's own `requirement/4` — lexically, just like
-Clausal. The genuinely caller-relative behaviour is reserved for
+Clausal Prolog. The genuinely caller-relative behaviour is reserved for
 **meta-predicates**: when a library declares `:- meta_predicate assess(…, :, …)`,
 Prolog makes that argument module-sensitive and *implicitly* threads the caller's
 module into goals passed there (the "context module"). That implicit threading is
 the part Prolog programmers reliably trip over.
 
-Clausal collapses both cases into one rule: names are always resolved lexically
+Clausal Prolog collapses both cases into one rule: names are always resolved lexically
 against the defining module, and when a predicate needs to call something the
 caller owns, the caller **passes it in explicitly** as a goal. There is no flat
 global database and no implicit context module — the wiring a `meta_predicate`
@@ -452,12 +452,12 @@ the importer defined. The name isn't in the library's namespace, so the call
 raises at runtime:
 
 ```seam
-# lib.clausal — the library knows nothing about hook
+# lib.seam — the library knows nothing about hook
 run_check(X) <- (hook(X))
 ```
 
 ```seam
-# caller.clausal
+# caller.seam
 -import_from(lib, [run_check])
 
 hook(42),                          # defined HERE, in the caller
@@ -473,9 +473,9 @@ Querying `test_dynamic(X)` raises `Predicate hook/1 not found` (a
 the namespace it searched and list what `lib` *does* define — which is the
 point: the list is `run_check/1`, and `hook` is not on it.
 `run_check` was compiled in `lib`'s namespace, where `hook` does not exist — and
-Clausal never consults the caller's namespace to find it. A Prolog programmer
+Clausal Prolog never consults the caller's namespace to find it. A Prolog programmer
 coming from the flat, module-less style expects this to find the caller's
-`hook/1`; in Clausal — as in a properly modularised SWI/SICStus program — it does
+`hook/1`; in Clausal Prolog — as in a properly modularised SWI/SICStus program — it does
 not.
 
 ### The idiom: pass the predicate as a goal
@@ -492,14 +492,14 @@ declaration. An integer (or `':'`) position is qualified with the **caller's**
 module at the call site; `'+'`, `'-'` and `'?'` positions are left alone:
 
 ```seam
-# lib.clausal — the hook is a parameter, not a free name
+# lib.seam — the hook is a parameter, not a free name
 -meta_predicate(run_check(1, '?'))
 
 run_check(HOOK, X) <- (call_goal(HOOK, X))
 ```
 
 ```seam
-# caller.clausal
+# caller.seam
 -import_from(lib, [run_check])
 
 hook(42),
@@ -525,9 +525,9 @@ assess(SUBJECT, REQ_IDS, PROFILE, REQUIREMENT, LABELS, RESULT) <- (
 )
 ```
 
-### Why Clausal chose this
+### Why Clausal Prolog chose this
 
-Clausal is a logic-programming layer for Python programmers, many of whom do not
+Clausal Prolog is a logic-programming layer for Python programmers, many of whom do not
 know Prolog. The guiding principle is **least surprise for a Python programmer**:
 imports, modules, and name scoping should behave the way they already do in
 Python — lexical resolution against the defining module, predicates as
@@ -557,14 +557,14 @@ create a module-local variant of it. Two modules that each declare the same
 atom hold the exact same value.
 
 ```seam
-# lib.clausal — declares its own `approved`
+# lib.seam — declares its own `approved`
 -module(lib, [approved, check(X)])
 
 check(approved),
 ```
 
 ```seam
-# caller.clausal — separately declares the SAME spelling `approved`
+# caller.seam — separately declares the SAME spelling `approved`
 -import_from(lib, [check])
 -private([approved])
 
@@ -578,7 +578,7 @@ re-import for agreement's sake. (Importing it anyway, `-import_from(lib,
 [check, approved])`, still works and is a reasonable style choice — it just
 is not REQUIRED the way it used to be.)
 
-**This used to be the sharpest edge in Clausal's scoping model** — atoms
+**This used to be the sharpest edge in Clausal Prolog's scoping model** — atoms
 previously carried per-module identity (a distinct class per declaring
 module), so the SAME example above silently failed instead of succeeding, a
 trap easy to misdiagnose as a legitimately-unsatisfiable query. That design
@@ -641,8 +641,8 @@ ext defines a clause for colour/1, which it -import_from's from exp.
   module that can reach it. Clausal has no -multifile: a predicate has exactly
   one defining module.
   those 2 clauses are exp's own
-    /path/to/exp.clausal
-  colour is declared at /path/to/exp.clausal:1
+    /path/to/exp.seam
+  colour is declared at /path/to/exp.seam:1
   -> move this clause into exp, which supplies colour's clauses — that is the
      only module whose clauses for it are compiled together;
      or, if it is meant to be a predicate of this module, drop colour from the
@@ -685,14 +685,14 @@ The following names are injected into every predicate module's namespace by the 
 **Hidden globals** (inaccessible as normal identifiers):
 - `$module` — the `LogicModule` for this file
 - `$define_predicate` — per-module closure for clauses (rules and facts)
-- `$assert_fact` — legacy per-module closure for fact statements (no longer emitted for `.clausal` source)
+- `$assert_fact` — legacy per-module closure for fact statements (no longer emitted for `.seam` source)
 - `$ast` — the Python `ast` standard library module
 
 ---
 
 ## IPython integration
 
-`clausal.import_hook.enable_ipython(globals())` installs the `EmbedTransformer` as an [IPython](ipython.md) AST transformer and injects the same builtin set into the IPython namespace. This lets you write `.clausal` syntax in IPython cells interactively. Per-module LogicModules are not used in IPython; the session shares a single namespace.
+`clausal.import_hook.enable_ipython(globals())` installs the `EmbedTransformer` as an [IPython](ipython.md) AST transformer and injects the same builtin set into the IPython namespace. This lets you write seam syntax in IPython cells interactively. Per-module LogicModules are not used in IPython; the session shares a single namespace.
 
 ---
 
@@ -704,7 +704,7 @@ The following names are injected into every predicate module's namespace by the 
     seam syntax: cut and if-then-else are refused, and it is not an ISO
     Prolog consult.
 
-Clausal can import Prolog `.pl` files without a manual translation step. Placing a `.pl` file on `sys.path` makes it importable:
+Clausal Prolog can import Prolog `.pl` files without a manual translation step. Placing a `.pl` file on `sys.path` makes it importable:
 
 ```python
 import clausal            # installs the import hook
@@ -714,7 +714,7 @@ import my_prolog_module   # finds and translates my_prolog_module.pl
 The translation pipeline runs on the fly:
 
 ```
-.pl source → prolog_to_clausal() → .clausal text → EmbedTransformer → bytecode
+.pl source → prolog_to_clausal() → seam text → EmbedTransformer → bytecode
 ```
 
 The resulting bytecode is cached as a `.pyc` file, so subsequent imports skip translation entirely.
@@ -723,23 +723,23 @@ The resulting bytecode is cached as a `.pyc` file, so subsequent imports skip tr
 
 The import hook registers two finders in `sys.meta_path`, ahead of Python's own:
 
-1. **PredicateFinder** — searches for `.clausal`, `.seam` and `.pl` files
+1. **PredicateFinder** — searches for `.seam`, `.clausal` and `.pl` files
 2. **ModulesFinder** — redirects `py.X` names to `clausal.modules.py.*`
 
 `PredicateFinder` resolves per `sys.path` entry, in path order: the first entry
 that holds the module wins, whatever its extension. Only within one entry does
-the extension decide (`.clausal`, then `.seam`, then `.pl`), so if both
-`foo.clausal` and `foo.pl` exist in the same directory the `.clausal` file wins,
-but a `foo.pl` in an earlier entry beats a `foo.clausal` in a later one. See
+the extension decide (`.seam`, then `.clausal`, then `.pl`), so if both
+`foo.seam` and `foo.pl` exist in the same directory the `.seam` file wins,
+but a `foo.pl` in an earlier entry beats a `foo.seam` in a later one. See
 [Finder priority](importing_prolog.md#finder-priority) for the full order.
 
 ### Recursive imports
 
-when a `.pl` file contains `:- use_module(bar, [helper/1]).`, the translator emits `-import_from(bar, [helper])` in the `.clausal` text. At compile time, `importlib.import_module("bar")` triggers the import hook again, which finds and translates `bar.pl`. Python's `sys.modules` sentinel handles circular imports.
+when a `.pl` file contains `:- use_module(bar, [helper/1]).`, the translator emits `-import_from(bar, [helper])` in the seam text. At compile time, `importlib.import_module("bar")` triggers the import hook again, which finds and translates `bar.pl`. Python's `sys.modules` sentinel handles circular imports.
 
-Library imports are mapped to Clausal built-in modules:
+Library imports are mapped to built-in modules:
 
-| Prolog | Clausal |
+| Prolog | Seam |
 |---|---|
 | `:- use_module(library(clpfd), [...])` | `-import_from(clausal.logic.clpfd, [...])` |
 | `:- use_module(library(clpz), [...])` | `-import_from(clausal.logic.clpfd, [...])` |
@@ -758,9 +758,9 @@ SyntaxError: Cannot import foo.pl: Cut (!/0) cannot be translated to Clausal.
 ### Caveats
 
 - **Bare Prolog atoms** (lowercase identifiers like `red`, `foo`) are declared for you: the translator emits a `-private([red, ...])` line, so they load under the strict-atoms default.
-- **The `.pl` extension is also used by Perl.** If a Perl script ends up on `sys.path`, the import hook will attempt to parse it as Prolog and raise a `SyntaxError` — even when a `.clausal` or `.seam` module of the same name sits in a later `sys.path` entry, since the earlier entry wins. `sys.path[0]` is the script directory or the current directory, so a stray `foo.pl` there shadows an installed `foo.clausal`. Avoid placing Perl scripts in directories on `sys.path`.
+- **The `.pl` extension is also used by Perl.** If a Perl script ends up on `sys.path`, the import hook will attempt to parse it as Prolog and raise a `SyntaxError` — even when a `.seam` or `.clausal` module of the same name sits in a later `sys.path` entry, since the earlier entry wins. `sys.path[0]` is the script directory or the current directory, so a stray `foo.pl` there shadows an installed `foo.seam`. Avoid placing Perl scripts in directories on `sys.path`.
 - **Encoding:** All `.pl` files must be UTF-8 encoded. Non-UTF-8 files will raise `UnicodeDecodeError`.
-- **Stdlib shadowing:** The Clausal finders (`.clausal`, `.pl`) run *before* Python's `PathFinder` on `sys.meta_path`. A file like `os.clausal` or `re.pl` on `sys.path` named after a standard-library module is almost always an accident, so Clausal does **not** shadow it: the finder emits a `ClausalLintWarning` and defers to the standard library (the stdlib module is imported). Rename the file to avoid the warning. Avoid naming `.clausal`/`.pl` files after standard Python or Clausal modules.
+- **Stdlib shadowing:** The Clausal Prolog finders (`.seam`, `.clausal`, `.pl`) run *before* Python's `PathFinder` on `sys.meta_path`. A file like `os.seam` or `re.pl` on `sys.path` named after a standard-library module is almost always an accident, so the finder does **not** shadow it: the finder emits a `ClausalLintWarning` and defers to the standard library (the stdlib module is imported). Rename the file to avoid the warning. Avoid naming `.seam`/`.clausal`/`.pl` files after standard Python or engine modules.
 
 ### Loading `.pl` files programmatically
 
@@ -775,7 +775,7 @@ logic_module = mod.__clausal_module__
 
 ## File discovery
 
-`PredicateFinder` searches for `<modulename>.clausal`, `.seam` and `.pl` (and the `<modulename>/__init__` package forms), entry by entry, in:
+`PredicateFinder` searches for `<modulename>.seam`, `.clausal` and `.pl` (and the `<modulename>/__init__` package forms), entry by entry, in:
 - `sys.path` for top-level module names
 - the parent package's `__path__` for sub-modules
 
@@ -783,20 +783,20 @@ Standard `.py` files are unaffected — Python's built-in finders handle them in
 
 ---
 
-## Loading `.clausal` files programmatically
+## Loading predicate files programmatically
 
-For tests and external callers, `clausal.testing.load_clausal_module(path)` loads a `.clausal` file from its path, without relying on `sys.path` discovery; each call compiles it afresh, with its own database:
+For tests and external callers, `clausal.testing.load_clausal_module(path)` loads a `.seam`, `.clausal` or `.pl` file from its path, without relying on `sys.path` discovery; each call compiles it afresh, with its own database:
 
 ```python
 from clausal import Var, solve
 from clausal.testing import load_clausal_module
 
-mod = load_clausal_module("/path/to/my_predicates.clausal")
+mod = load_clausal_module("/path/to/my_predicates.seam")
 for _ in solve(("my_pred", X := Var()), module=mod):
     print(X.value)
 ```
 
-Underneath it is `clausal.import_hook._load_module(fullname, path)` (private), which creates a fresh `PredicateLoader` and module instance and evicts any previously cached `sys.modules` entry for the name first; the engine's own test helpers use it directly.
+Underneath it is `clausal.import_hook._load_module(fullname, path)` (private), which creates a fresh `PredicateLoader` (for a seam file) and module instance and evicts any previously cached `sys.modules` entry for the name first; the engine's own test helpers use it directly.
 
 ---
 

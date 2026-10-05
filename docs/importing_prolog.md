@@ -3,14 +3,14 @@
 !!! warning "Experimental in 1.0"
     `.pl` import is **experimental** and outside the 1.0 compatibility
     promise (see [Public API](public-api.md)). It translates Prolog source
-    into Clausal's own syntax with an older translator; it is not an ISO
-    Prolog system. Programs that use cut or if-then-else are refused (see
-    [Known limitations](#known-limitations)).
-    For running real ISO Prolog alongside Clausal, use the
+    into seam syntax with an older translator; it is not an ISO
+    Prolog system. This loader does not run cut or if-then-else yet: programs
+    that use them are refused (see [Known limitations](#known-limitations)).
+    For running real ISO Prolog alongside Clausal Prolog, use the
     [Scryer](scryer.md) or [Trealla](trealla.md) embeddings.
 
-Clausal can import `.pl` (Prolog) files directly. drop a `.pl` file on
-`sys.path` and `import` it — Clausal translates, compiles, and caches it
+Clausal Prolog can import `.pl` (Prolog) files directly. drop a `.pl` file on
+`sys.path` and `import` it — the engine translates, compiles, and caches it
 automatically.
 
 ```python
@@ -19,9 +19,9 @@ import clausal              # installs the import hook
 import my_prolog_module     # translates my_prolog_module.pl on the fly
 ```
 
-The result is a normal Clausal module: each predicate is bound to its handle,
+The result is a normal predicate module: each predicate is bound to its handle,
 dispatch is compiled, and everything works exactly as if you had written the
-code in `.clausal` syntax — including querying it from Python with a goal cell
+code in seam (`.seam`) syntax — including querying it from Python with a goal cell
 and `module=`.
 
 ---
@@ -39,7 +39,7 @@ path(X, Y) :- edge(X, Y).
 path(X, Z) :- edge(X, Y), path(Y, Z).
 ```
 
-Import and query it from a `.seam` file like any Clausal module:
+Import and query it from a `.seam` file like any predicate module:
 
 ```python
 # app.seam
@@ -85,8 +85,8 @@ The translation pipeline runs inside Python's import machinery:
 
 ```
 .pl source
-  → prolog_to_clausal()    # Prolog text → Clausal text
-  → EmbedTransformer       # Clausal text → Python AST
+  → prolog_to_clausal()    # Prolog text → seam text
+  → EmbedTransformer       # seam text → Python AST
   → compile()              # Python AST → bytecode
   → .pyc cache             # bytecode cached in __pycache__/
 ```
@@ -98,26 +98,26 @@ On the first import, the full pipeline runs. On subsequent imports, the cached
 
 ## Finder priority
 
-Clausal registers two import finders ahead of Python's own, checked in this
+Clausal Prolog registers two import finders ahead of Python's own, checked in this
 order:
 
 | Priority | Finder | Extensions | Loader |
 |---|---|---|---|
-| 1 | `PredicateFinder` | `.clausal`, `.seam`, then `.pl` | `PredicateLoader`; `.pl` via `PrologLoader` or `NativePrologLoader` (`CLAUSAL_PL_FRONTEND`) |
+| 1 | `PredicateFinder` | `.seam`, then `.clausal`, then `.pl` | `.seam` via `PredicateLoader`; `.clausal` always via `NativePrologLoader`; `.pl` via `PrologLoader` or `NativePrologLoader` (`CLAUSAL_PL_FRONTEND`) |
 | 2 | `ModulesFinder` | *(`py.X` names)* | redirects to `clausal.modules.py.*` |
 
 `PredicateFinder` resolves per `sys.path` entry, in path order, as Python
 does: the first entry that holds the module wins, whatever its extension.
-Only within one entry does the extension decide: a flat `foo.clausal`, then
-`foo.seam`, then a `foo/__init__.seam` or `foo/__init__.seam` package,
-then a flat `foo.pl`, then a `foo/__init__.pl` package. So if both
+Only within one entry does the extension decide: a flat `foo.seam`, then a
+`foo/__init__.seam` package, then a flat `foo.clausal`, then a flat `foo.pl`,
+then a `foo/__init__.clausal` or `foo/__init__.pl` package. So if both
 `foo.clausal` and `foo.pl` exist in the same directory, the `.clausal` file
-wins -- you can keep the original `.pl` alongside a hand-optimized
-`.clausal` version and the right one is always loaded -- but a `foo.pl` in an
-earlier `sys.path` entry beats a `foo.clausal` in a later one.
+wins -- you can keep the original `.pl` alongside a hand-converted
+`.clausal` (or `.seam`) version and the right one is always loaded -- but a
+`foo.pl` in an earlier `sys.path` entry beats a `foo.clausal` in a later one.
 
 A plain Python module is found by Python's `PathFinder`, which runs after
-these finders: a `.clausal`, `.seam` or `.pl` module anywhere on `sys.path`
+these finders: a `.seam`, `.clausal` or `.pl` module anywhere on `sys.path`
 still wins over a `.py` module of the same name in an earlier entry.
 
 ---
@@ -133,8 +133,7 @@ Clausal Prolog, or wrap it in a `.seam` module, and import that. When a
 `.seam` or Clausal Prolog file sits beside the `.pl` of the same name, the
 finders pick it and the import is allowed. Seam modules may still import
 `.pl` modules (the rest of this page): `.seam` is the Python boundary and
-the rule does not bind it. Since the extension flip Clausal Prolog is
-`.clausal`.
+the rule does not bind it.
 
 ### No run-time route either
 
@@ -240,7 +239,7 @@ the `.pl` rulebase writes in `cite(art1)`: the term built from it
 - A typo can no longer fail the import, so a name within a small edit
   distance of one of the module's predicates (`citaton` for `citation`)
   warns once, with `ClausalImportedDataNameWarning`, naming the predicate.
-- Only `.pl` targets: a `.clausal`/`.seam` module exports its data in its
+- Only `.pl` targets: a `.seam` module exports its data in its
   `-module(...)` list, and a name missing there is still an `ImportError`.
 
 ### Reading a data name as an attribute
@@ -272,11 +271,11 @@ citations.citation                 # the predicate's handle, as before
   unbound atom-shaped name imports its atom too (ruled 2026-10-01: in
   Python code, Python semantics apply). That includes a name that is not a
   submodule of a `.pl` package: `from pkg import nosuchsub` gives the atom
-  `'nosuchsub'`. In Clausal code the same name goes through the seam
+  `'nosuchsub'`. In seam code the same name goes through the seam
   `-import_from` rules above.
 - A near miss of a predicate (`citations.citaton`) warns once per module
   and name, with `ClausalImportedDataNameWarning`.
-- `.clausal`/`.seam` and Python modules are unchanged.
+- `.seam` and Python modules are unchanged.
 
 **`getattr`/`hasattr` on a `.pl` module no longer signals absence; use
 `clausal.has_predicate` / `clausal.defines_predicate` /
@@ -316,7 +315,7 @@ but does not export are load-time errors (see
 
 ## Importing between `.pl` files
 
-Prolog's `:- use_module` directive is translated to Clausal's import system.
+Prolog's `:- use_module` directive is translated to the seam's import system.
 when one `.pl` file imports another, the import hook handles both files:
 
 ```prolog
@@ -329,14 +328,14 @@ quad(X, Y) :- double(X, T), double(T, Y).
 ```
 
 The `use_module` with an explicit import list is the recommended form — it
-maps directly to Clausal's `-import_from` directive, which injects the
+maps directly to the seam's `-import_from` directive, which injects the
 imported predicates into the calling module's namespace. The list keeps its
 indicators, so `[double/2]` imports `double/2` only, as in Scryer; a
 `library(...)` list is imported by bare name (a library may be a Python
 module, which has no arities). `use_module/1`
 imports every predicate the `.pl` module's `module/2` directive exports
-(`-import_module` plus an `-import_from` of that list); for a `.clausal` or
-`.seam` module it is `-import_module`, whose predicates are reached
+(`-import_module` plus an `-import_from` of that list); for a `.seam` module
+it is `-import_module`, whose predicates are reached
 qualified.
 
 An EMPTY import list, `:- use_module(m, []).`, is a translation error naming
@@ -344,7 +343,7 @@ the line: Scryer reads it as `remove_module/2` (it drops `m`'s imports and
 does not load `m`, so `m:p(X)` is an `existence_error`), while Trealla and
 SWI load `m` and import nothing. Write `use_module(m)` or
 `use_module(m, [p/1])` instead; after either, `m:p(X)` reaches every
-predicate `m` exports, in Clausal, Scryer and Trealla alike.
+predicate `m` exports, in Clausal Prolog, Scryer and Trealla alike.
 
 ### Unexported predicates in Clausal code
 
@@ -385,7 +384,7 @@ helper(5).
   name still imports its atom (above).
 - Scryer accepts `use_module(m, [helper/1])` for an unexported `helper/1`
   silently and imports nothing, so the later call raises
-  `existence_error(procedure, helper/1)`; Clausal refuses at load time
+  `existence_error(procedure, helper/1)`; Clausal Prolog refuses at load time
   instead. The error term is provisional.
 - Python code is not affected (see
   [Unexported predicates from Python](#unexported-predicates-from-python)).
@@ -400,7 +399,7 @@ A `.pl` module file may end with the ISO 13211-2 directive
 
 Anything else is a load-time `SyntaxError` naming the line and carrying the
 ISO error term (the ISO 13211-2 text is not in this repository; the terms
-are Clausal's, in Scryer's `error(E, Context)` shape):
+are Clausal Prolog's, in Scryer's `error(E, Context)` shape):
 
 | The file | The error |
 |---|---|
@@ -421,10 +420,10 @@ and the module. Most specific first:
    None)` from Python, or `set_prolog_flag(require_end_module, V)` run as a
    goal (`V` is `true`, `false` or `default`); `current_prolog_flag/2` reads
    it;
-3. the surface's default: `.pl` does not require it; the Clausal Prolog
-   surface will (it has no file extension of its own yet).
+3. the surface's default: `.pl` does not require it; Clausal Prolog
+   (`.clausal`) does.
 
-A seam file (`.seam`, and `.clausal` today) is never affected, and has no
+A seam (`.seam`) file is never affected, and has no
 `end_module`.
 
 Scryer does not accept `end_module/1` (`domain_error(directive,
@@ -480,7 +479,7 @@ changes only its import line. A library the front end already knows
 takes the name of one of Scryer's own libraries: the six adapters whose
 names Scryer already uses (`os`, `files`, `random`, `uuid`, `csv`,
 `process`) are `library(py_<lib>)`, so `library(os)` still means Scryer's
-library, which Clausal does not provide (an error, as before). The list of
+library, which Clausal Prolog does not provide (an error, as before). The list of
 facades is `clausal._py_facades.PY_FACADE_LIBS`, readable without importing
 the engine; `python -m clausal.tools.gen_library_facades` regenerates the
 facades (`--census` prints the module -> facade table).
@@ -526,7 +525,7 @@ Python is reachable **only** through:
    engine-shipped adapter; a sandbox mode narrows the engine adapters to its
    own allowlist. (A Clausal Prolog file's DIRECT `use_module(py/X)` stays
    refused as above: it imports the facade.)
-2. **A `.seam` module with no Python in it**: Clausal code in seam syntax,
+2. **A `.seam` module with no Python in it**: logic code in seam syntax,
    checked at load. It is a pass-through: the modules it imports
    (`-import_from`, `-import_module`, the qualifier of a dotted call
    `m.p(...)`) are checked the same way, transitively, and must themselves
@@ -534,7 +533,7 @@ Python is reachable **only** through:
    "Python-free" is an ALLOW-LIST: every name the module reaches outside
    itself must resolve positively to a DECLARED EXPORT. Each name of an
    `-import_from(M, [...])`, aliased or not, must be in M's export list
-   (a Clausal module's `module/2` list; for an engine Python module, its
+   (a Clausal Prolog module's `module/2` list; for an engine Python module, its
    predicates as `clausal.module_signatures` lists them plus its values --
    units, currencies, numbers -- exactly what its `library(...)` facade
    re-exports). A dotted chain must be exactly `module.export` or
@@ -552,7 +551,7 @@ Python is reachable **only** through:
    the engine's own `$` names (from the compiler's tables,
    `import_hook.runtime_builtins` and `PER_MODULE_RUNTIME_NAMES`; their
    arguments are audited too); names the module itself binds; imports of a
-   Clausal or engine-shipped module, each name a declared export; clause
+   Clausal Prolog or engine-shipped module, each name a declared export; clause
    references that are exactly `module.export`; and the compiler's fixed
    plumbing statements, matched by the shape its own builders emit.
    Anything else -- a call of anything but an engine helper, an attribute
@@ -656,7 +655,7 @@ became a comment and the import vanished, and a quoted one failed with
 
 When two modules export the same name, import them without a list (or
 without that name) and call each one **module-qualified**, as in ISO and
-Scryer: `m:p(X)` crosses as Clausal's qualified call `m.p(X)`.
+Scryer: `m:p(X)` crosses as the seam's qualified call `m.p(X)`.
 In a Clausal Prolog (`.clausal`) file, `m` may not be a `.pl` module: the
 call raises `permission_error(access, prolog_module, m)` when it runs
 ([above](#no-run-time-route-either)).
@@ -670,14 +669,14 @@ both(A, B) :- small_sizes:size(x, A), big_sizes:size(x, B).
 
 Renaming an import with `as` (`use_module(m, [p/2 as q])`) is not
 accepted: neither ISO nor Scryer has it, and the reader refuses the
-directive. (A `.clausal`/`.seam` file has its own rename,
+directive. (A `.seam` file has its own rename,
 [`alias(p, q)`](import.md#aliases).)
 
 ### Library imports
 
-Standard Prolog library imports are mapped to Clausal built-in modules:
+Standard Prolog library imports are mapped to built-in modules:
 
-| Prolog | Clausal equivalent |
+| Prolog | Seam equivalent |
 |---|---|
 | `:- use_module(library(clpfd), [...])` | `-import_from(clausal.logic.clpfd, [...])` |
 | `:- use_module(library(clpz), [...])` | `-import_from(clausal.logic.clpfd, [...])` |
@@ -774,7 +773,7 @@ look(X), [X] --> [X].                  % pushback: X is left in the input
   `:- use_module(m, [greeting//0])`); `name/(N+2)` names the same
   predicate, as in Scryer.
 * `!` and `->` are refused in a grammar body exactly as in a clause body
-  (Clausal is cut-free), and so is `{!}`: in a rule it is the cut
+  (this loader does not run cut), and so is `{!}`: in a rule it is the cut
   `!, S0 = S` of the rule's own clause. Only a WHOLE `phrase/2,3` body
   `!` or `{!}` is local to the call, and answers `S0 = S`.
 * `\+` in a grammar body is refused, as Scryer refuses it
@@ -825,18 +824,18 @@ The translator **rejects** programs containing:
   if-then-else, separate clauses with `dif/2` guards, or constraints.
 
 These are rejected rather than silently mistranslated, because their semantics
-cannot be faithfully represented in Clausal's pure core.
+cannot be faithfully represented in the engine's cut-free core.
 
 A **query in program text** (`?- Goal.`) is refused too: it is not run on
 load, and until 2026-09-29 it was silently turned into a comment. An
 `:- op/3` directive is applied by the reader to the terms below it (its
-effect on the program's text); Clausal has no run-time operator table, so
+effect on the program's text); Clausal Prolog has no run-time operator table, so
 the directive itself is kept as a comment.
 
 ### Atoms and strings
 
 The translator preserves the ISO distinction: a Prolog **atom** loads as a
-Clausal atom, and a Prolog **double-quoted string** loads as a Clausal string.
+Clausal Prolog atom, and a Prolog **double-quoted string** loads as a Clausal Prolog string.
 
 ```prolog
 p("ab").          % a STRING -- the list ['a','b']
@@ -873,7 +872,7 @@ r('hello world'),
 - `true`, `false` and `fail` map to Python `True`/`False` (`a :- true.`
   becomes `a() <- (True)`).
 - The atom `undefined` is emitted quoted (`'undefined'`): bare `undefined`
-  is Clausal's truth value `Undefined`, which `-private` cannot declare
+  is Clausal Prolog's truth value `Undefined`, which `-private` cannot declare
   (until 2026-09-29 a file holding the atom failed to load).
 
 The ISO directive `:- set_prolog_flag(double_quotes, Mode)` (or the short
@@ -882,7 +881,7 @@ translator applies it at each literal: under `chars` (the default) `"ab"` is
 the string `"ab"` (the chars `[a, b]`), under `codes` it is the list
 `[97, 98]`, and under `atom` it is the atom `'ab'`. The module's own mode
 follows for `chars` and `atom` (`-double_quotes(atom)`), so
-`current_prolog_flag(double_quotes, M)` reports it; Clausal has no `codes`
+`current_prolog_flag(double_quotes, M)` reports it; Clausal Prolog has no `codes`
 module mode, so that directive becomes a comment while its literals are
 still emitted as codes. Any other value is refused, naming the line (Scryer:
 `domain_error(flag_value, double_quotes+Value)`). Until 2026-09-29 `codes`
@@ -901,7 +900,7 @@ the imported code gets ISO's assert (7.5.2(2)): `assertz(counter(0))` creates
 `counter/1` as a dynamic procedure the first time, with no `:- dynamic`
 declaration. A static predicate, a builtin and a declared data functor are
 still refused with `permission_error(modify, static_procedure, PI)`.
-`.clausal` and `.seam` modules keep the declare-first default (`false`).
+`.seam` modules keep the declare-first default (`false`).
 
 The default is set by the loader, not written into the translation. A
 `:- set_prolog_flag(assert_creates_dynamic, false).` in the file turns it
@@ -913,7 +912,7 @@ A `.pl` file follows the Prolog convention (ISO, Scryer): a variable whose
 name starts with `_` (`_Y` in `g(L) :- setof(X, p(X, _Y), L).`) is used
 once on purpose, so the load does not warn about it. Any other variable
 used once still gets `ClausalSingletonWarning`. This is the `.pl` loader's
-rule only: in `.clausal` and `.seam` source every named variable used once
+rule (and the `.clausal` loader's): in `.seam` source every named variable used once
 warns, whatever its spelling (see
 [singleton variables](syntax.md#singleton-variables-and-_unused)).
 
@@ -954,7 +953,7 @@ it with `:- op/3`, which the reader applies as it goes, or pass
 
 ## Running a `.pl` file's tests
 
-`test/1` clauses in a `.pl` file are tests, as in a `.clausal` file: the
+`test/1` clauses in a `.pl` file are tests, as in a `.seam` file: the
 translator keeps the `test` name, so `test('name') :- Body.` is the runner's
 `test/1`. Both runners collect `.pl` files:
 
@@ -996,7 +995,7 @@ A translation error names the `.pl` line it comes from
 ## Bytecode caching
 
 Translated `.pl` files are cached as `.pyc` bytecode in `__pycache__/`, just
-like `.clausal` files. Cache invalidation is automatic — if you modify the
+like `.seam` files. Cache invalidation is automatic — if you modify the
 `.pl` file, the next import re-translates and recompiles.
 
 The `.pyc` is keyed on the `.pl` file's mtime and size, and on a
@@ -1012,12 +1011,12 @@ fingerprint of the engine, including the translator itself (see
 
 ## Translation reference
 
-For the full mapping between Prolog and Clausal syntax, see
+For the full mapping between Prolog and seam syntax, see
 [Prolog Translation](prolog_translation.md).
 
 The key operator mappings:
 
-| Prolog | Clausal |
+| Prolog | Seam |
 |---|---|
 | `:-` | `<-` |
 | `=` | `is` |
@@ -1035,24 +1034,24 @@ The key operator mappings:
 | `max(X, Y)`, `abs(X)`, `sqrt(X)`, ... (any ISO evaluable) | the same name |
 
 Predicate names cross unchanged: `foo_bar/2` stays `foo_bar/2`. A few
-library predicates that Clausal spells differently are renamed to the
-Clausal predicate that answers the same (`memberchk/2` → `in_check/2`,
+library predicates that the engine spells differently are renamed to the
+engine predicate that answers the same (`memberchk/2` → `in_check/2`,
 `nth0/3` → `list_item/3`, `time/1` → `time_goal/1`, `all_distinct/1` →
 `all_different/1`, ...), but never a name the program defines, declares or
 imports from its own modules — a file's own `time/1` stays `time/1` — and
 never a name the engine already has (`atomic/1`). Until 2026-09-29
-`profile_get/3` was renamed to Clausal's `get/3` and `atomic/1` to an
+`profile_get/3` was renamed to the engine's `get/3` and `atomic/1` to an
 `is_atomic/1` that does not exist; both now cross unchanged. A name
 that collides with a Python keyword gets a trailing underscore (`not/1`
 becomes `not_/1`), and a quoted functor whose name is not a plain lowercase
 name is refused rather than translated — `'Foo'`, `'FOO'` and `'_foo'` would
-each be emitted as a name Clausal reads as something other than a predicate
+each be emitted as a name the seam reads as something other than a predicate
 (a TitleCase identifier is a load-time error; the other two are logic
 variables).
 
 Variables keep their Prolog names — all of them, not just single letters.
 `X` stays `X`, `Head` stays `Head`, `_Ignored` stays `_Ignored`: a
-capital-initial identifier is a logic variable in Clausal exactly as it is in
+capital-initial identifier is a logic variable in the seam exactly as it is in
 ISO Prolog. Until 2026-09-10 a multi-letter variable was lowercased and given
 a leading underscore (`Head` became `_head`), which was not injective —
 `Head` and `HEAD` both became `_head` — so a clause using both silently
@@ -1063,7 +1062,7 @@ One spelling does not survive, and is refused rather than translated:
 class. It is a legal ISO variable; the refusal names the Prolog variable and
 suggests a spelling that works.
 
-`_PI_` was a second such case until 2026-09-11, when Clausal read one leading
+`_PI_` was a second such case until 2026-09-11, when the seam read one leading
 and one trailing underscore as a [module constant](syntax.md#constants)
 rather than a variable. Constants are spelled like atoms now, so `_PI_` is an
 ordinary variable and crosses untouched. (Before 2026-09-10 it was silently
@@ -1086,7 +1085,7 @@ renamed to `_pi`.)
   else declares raises the ISO error term
   `error(existence_error(procedure, f/1), f/1)` when it is built (a
   `catch/3` sees it; from Python it is also a `NameError`).
-- **Arithmetic.** `+ - * /` cross as Clausal's operators (`Y is X / 2`
+- **Arithmetic.** `+ - * /` cross as the seam's operators (`Y is X / 2`
   becomes `eval_(X / 2, Y)`), and `=:=` becomes the constraint `==` (see
   [Operators](operators.md)). The ISO operators Python spells differently
   (`//`, `mod`, `rem`, `div`, `^`, `**`, the bit operators) cross as the
@@ -1101,7 +1100,7 @@ renamed to `_pi`.)
   ...) apply wherever the name appears as a functor, because a meta-call's
   goal argument is emitted as a term; `X = memberchk(a, L)` builds
   `in_check(a, L)`.
-- **`use_module/1` of a `.clausal`/`.seam` module** gives qualified access
+- **`use_module/1` of a `.seam` module** gives qualified access
   only (`-import_module`); name the predicates with `use_module/2`.
 - **No cut, no if-then-else** (above), and no streams or `op/3`. The ISO
   flags are there ([Prolog Flags](flags.md)), but `unknown` can only be
@@ -1111,15 +1110,15 @@ renamed to `_pi`.)
 
 - **The `.pl` extension is also used by Perl.** If a Perl script ends up
   on `sys.path`, the import hook will attempt to parse it as Prolog and
-  raise a `SyntaxError` -- even when a `.clausal` or `.seam` module of the
+  raise a `SyntaxError` -- even when a `.seam` or `.clausal` module of the
   same name sits in a later `sys.path` entry, since the earlier entry wins.
   `sys.path[0]` is the script directory or the current directory, so a
-  stray `foo.pl` there shadows an installed `foo.clausal`.
+  stray `foo.pl` there shadows an installed `foo.seam`.
 - **All `.pl` files must be UTF-8 encoded.** Non-UTF-8 files raise a
   `SyntaxError` at import time.
 - **Avoid naming `.pl` files after standard modules.** A file like `json.pl`
   on `sys.path` could shadow `clausal.modules.json`, and in the other
-  direction `-import_from(graphs, [...])` in a Clausal module finds the
+  direction `-import_from(graphs, [...])` in a seam module finds the
   standard `graphs` module before a `graphs.pl` of yours.
 
 ---
@@ -1130,7 +1129,7 @@ mapping and conceptual guide for Prolog users.*
 *See also: [Prolog Translation](prolog_translation.md) — CLI tools and
 full translation reference.*
 
-*See also: [Module System](import.md) — Clausal's import directives and
+*See also: [Module System](import.md) — the import directives and
 cross-module calls.*
 
 *See also: [Trealla Prolog Embedding](trealla.md) — fast, lightweight in-process Prolog via C · [Scryer Prolog Embedding](scryer.md) — strict ISO conformance with tabling support. Both run Prolog on actual ISO engines alongside the native engine.*

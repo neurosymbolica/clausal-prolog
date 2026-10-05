@@ -1,19 +1,19 @@
 # Prolog Translation
 
-Clausal includes a bidirectional translator between `.clausal` and `.pl` (Prolog) source files. This enables exporting clausal programs for use in Scryer, Trealla or SWI-Prolog, and importing existing Prolog code into clausal — either via the CLI tools or directly at import time (see [Importing Prolog Code](importing_prolog.md)).
+Clausal Prolog includes a bidirectional translator between seam (`.seam`) and Prolog source (`.pl`, or a `.clausal` [Clausal Prolog](clausal_prolog.md) file read as Prolog). This enables exporting seam programs for use in Scryer, Trealla or SWI-Prolog, and importing existing Prolog code as seam source — either via the CLI tools or directly at import time (see [Importing Prolog Code](importing_prolog.md)).
 
 !!! warning "Experimental in 1.0"
-    The Prolog → Clausal direction, and `.pl` import built on it, is
+    The Prolog → seam direction, and `.pl` import built on it, is
     **experimental** in 1.0 (see [Public API](public-api.md) and the known
     limitations in [Importing Prolog Code](importing_prolog.md#known-limitations)).
-    Where the two languages differ, Clausal follows ISO first and Scryer where
+    Where the two languages differ, Clausal Prolog follows ISO first and Scryer where
     ISO is silent; SWI is a supported export dialect, not a reference.
 
 ---
 
-## Clausal → Prolog
+## Seam → Prolog
 
-Translate a `.clausal` source string to Prolog text:
+Translate a seam (`.seam`) source string to Prolog text:
 
 ```python
 from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
@@ -98,7 +98,7 @@ for item in pmodule.items:
 
 ### Naming conventions
 
-| Clausal | Prolog | Rule |
+| Seam | Prolog | Rule |
 |---|---|---|
 | `all_different` | `all_different` | names cross unchanged |
 | `dcg_rule` | `dcg_rule` | names cross unchanged |
@@ -110,7 +110,7 @@ for item in pmodule.items:
 
 Variable names cross unchanged, in both directions.
 
-| Clausal | Prolog | Rule |
+| Seam | Prolog | Rule |
 |---|---|---|
 | `_x` | `_x` | names cross unchanged |
 | `Foo` | `Foo` | names cross unchanged |
@@ -119,7 +119,7 @@ Variable names cross unchanged, in both directions.
 | `X` | `X` | names cross unchanged |
 | `_` | `_` | Anonymous stays anonymous |
 
-A capital-initial identifier names a logic variable in Clausal exactly as it
+A capital-initial identifier names a logic variable in the seam exactly as it
 does in ISO Prolog, and `_x` is a variable on both sides too, so a round trip
 returns the spelling you wrote.
 
@@ -133,7 +133,7 @@ carry a disambiguating numeric suffix to lose it.
 
 Two consequences worth knowing:
 
-- One legal ISO variable spelling has no Clausal variable spelling and is
+- One legal ISO variable spelling has no seam variable spelling and is
   **refused** by the importer rather than translated: `__Foo`, a dunder,
   excluded from the variable class. Refusing is not renaming, so injectivity
   is unaffected; the message names the Prolog variable and offers a spelling
@@ -142,15 +142,15 @@ Two consequences worth knowing:
   crosses like any other variable.
 - The singleton post-pass still runs, so a variable occurring exactly once in
   an exported clause is emitted with a leading underscore (`RESULT` →
-  `_RESULT`) to silence the ISO singleton warning. A Clausal `_x`-style name
+  `_RESULT`) to silence the ISO singleton warning. A seam `_x`-style name
   already has one and is left alone.
 
 ### Operators
 
-What the exporter emits (Scryer dialect shown; `==` is Clausal's arithmetic
+What the exporter emits (Scryer dialect shown; `==` is the seam's arithmetic
 constraint, see [Operators](operators.md)):
 
-| Clausal | Prolog | Notes |
+| Seam | Prolog | Notes |
 |---|---|---|
 | `X is Y` | `X = Y` | Unification |
 | `X is not Y` | `dif(X, Y)` | Disequality ([dif/2](constraints.md)) |
@@ -166,7 +166,7 @@ constraint, see [Operators](operators.md)):
 | `A or B` | `(A ; B)` | Disjunction |
 
 !!! note "`!=` stays a constraint"
-    In Clausal `X != Y` is a disequality **constraint**: it waits for its
+    In the seam `X != Y` is a disequality **constraint**: it waits for its
     arguments rather than testing them now, so it is never exported as the
     plain tests `\==` or `=\=`, which differ from it whenever an argument is
     unbound. The exporter decides "numeric" from the source alone, on the
@@ -180,13 +180,13 @@ constraint, see [Operators](operators.md)):
     does not propagate over a finite domain. The decision looks only at the
     two operands: `X != Y` between two variables is `dif/2` even when both
     are CLP(ℤ) variables elsewhere in the clause (the answers are the same;
-    only the pruning is weaker). Write `'\\=='(X, Y)` in Clausal
+    only the pruning is weaker). Write `'\\=='(X, Y)` in the seam
     when you mean the structural test -- which is what Prolog `\==` imports
     as.
 
 ### Lists
 
-| Clausal | Prolog |
+| Seam | Prolog |
 |---|---|
 | `[]` | `[]` |
 | `[1, 2, 3]` | `[1, 2, 3]` |
@@ -194,7 +194,7 @@ constraint, see [Operators](operators.md)):
 
 ### Directives
 
-| Clausal | Prolog |
+| Seam | Prolog |
 |---|---|
 | `-module(name, [foo(X)])` | `:- module(name, [foo/1]).` |
 | `-module(name, [foo(X), foo/1])` | `:- module(name, [foo/1]).` (each `Name/Arity` once) |
@@ -254,9 +254,9 @@ The emitter uses the operator table to decide when to parenthesize subexpression
 
 ---
 
-## Prolog → Clausal
+## Prolog → Seam
 
-Translate a `.pl` (Prolog) source string to clausal text:
+Translate a `.pl` (Prolog) source string to seam text:
 
 ```python
 from clausal.tools.prolog_to_clausal import prolog_to_clausal
@@ -319,7 +319,7 @@ The parser is a Pratt (top-down operator-precedence) parser that:
 - Correctly resolves all Prolog associativity specifiers (`xfx`, `xfy`, `yfx`, `fx`, `fy`, `xf`, `yf`)
 - Parses lists, curly braces, parenthesized terms, negative numbers, and quoted atoms
 
-### Emitting clausal from Prolog AST
+### Emitting seam text from Prolog AST
 
 ```python
 from clausal.tools.prolog_to_clausal import prolog_ast_to_clausal, emit_clausal_item
@@ -329,14 +329,14 @@ clausal_text = prolog_ast_to_clausal(pmodule)
 
 ### reverse translation rules
 
-| Prolog | Clausal | Rule |
+| Prolog | Seam | Rule |
 |---|---|---|
 | `foo_bar(X)` | `foo_bar(X)` | names cross unchanged |
 | `findall(...)` | `findall(...)` | reverse builtin name map |
 | `X = Y` | `X is Y` | Unification |
 | `X \= Y` | `'\\='(X, Y)` | ISO "not unifiable": a test, not the delayed `dif/2` |
 | `Y is X * 2` | `eval_(X * 2, Y)` | Eager arithmetic evaluation |
-| `Y =:= X * 2` | `Y == X * 2` | Arithmetic equality (a constraint in Clausal) |
+| `Y =:= X * 2` | `Y == X * 2` | Arithmetic equality (a constraint in the seam) |
 | `X =\= Y` | `X != Y` | Arithmetic disequality |
 | `X == Y` | `'=='(X, Y)` | Structural identity |
 | `X \== Y` | `'\\=='(X, Y)` | Structural non-identity: a test, not the CLP `!=` |
@@ -391,23 +391,23 @@ python -m clausal.tools.prolog_to_clausal input.pl --operator-map ops.json
 The recommended entry point for all translation tasks:
 
 ```bash
-# Clausal → Prolog (auto-detected from .clausal extension)
-python -m clausal.tools.translate input.clausal -o output.pl
+# Seam → Prolog (auto-detected from the .seam extension)
+python -m clausal.tools.translate input.seam -o output.pl
 
-# Prolog → Clausal (auto-detected from .pl extension)
-python -m clausal.tools.translate input.pl -o output.clausal
+# Prolog → seam (auto-detected from the .pl or .clausal extension)
+python -m clausal.tools.translate input.pl -o output.seam
 
 # Explicit target format
-python -m clausal.tools.translate input.clausal --to swi -o output.pl
-python -m clausal.tools.translate input.clausal --to scryer -o output.pl
-python -m clausal.tools.translate input.pl --to clausal -o output.clausal
+python -m clausal.tools.translate input.seam --to swi -o output.pl
+python -m clausal.tools.translate input.seam --to scryer -o output.pl
+python -m clausal.tools.translate input.pl --to clausal -o output.seam
 
 # Pipe mode (stdin/stdout)
 echo 'foo(1, 2),' | python -m clausal.tools.translate --to scryer
 echo 'foo(1, 2).' | python -m clausal.tools.translate --to clausal
 
 # Roundtrip check (exit 0 if roundtrip reproduces the original)
-python -m clausal.tools.translate --roundtrip input.clausal --dialect swi
+python -m clausal.tools.translate --roundtrip input.seam --dialect swi
 python -m clausal.tools.translate --roundtrip input.pl --dialect swi
 ```
 
@@ -415,8 +415,8 @@ Options:
 
 | Flag | Description |
 |---|---|
-| `--to clausal\|iso\|swi\|scryer` | Target format; auto-detected from extension if omitted |
-| `--dialect iso\|swi\|scryer` | Prolog dialect (default: iso for clausal→prolog, Scryer's operator table for prolog→clausal) |
+| `--to clausal\|iso\|swi\|scryer` | Target format; auto-detected from extension if omitted. `clausal` means seam text (Prolog → seam); it does not produce a `.clausal` Clausal Prolog file |
+| `--dialect iso\|swi\|scryer` | Prolog dialect (default: iso for seam→prolog, Scryer's operator table for prolog→seam) |
 | `-o FILE` | Output file (stdout if omitted) |
 | `--roundtrip` | Translate there and back; exit 0 if output matches input |
 
@@ -425,8 +425,8 @@ Options:
 The individual tools are still available:
 
 ```bash
-python -m clausal.tools.clausal_to_prolog input.clausal -o output.pl --dialect swi
-python -m clausal.tools.prolog_to_clausal input.pl -o output.clausal --dialect swi
+python -m clausal.tools.clausal_to_prolog input.seam -o output.pl --dialect swi
+python -m clausal.tools.prolog_to_clausal input.pl -o output.seam --dialect swi
 ```
 
 ### Python API
@@ -466,11 +466,11 @@ The translator **rejects** Prolog programs containing cut or if-then-else with a
 - **If-then-else (`(C -> T ; E)`)** — defined in terms of cut in ISO. Use reified if-then-else (`THEN if COND else ELSE`), separate clauses with `dif/2` guards, or constraints.
 - **Bare if-then (`(C -> T)`)** — same as above.
 
-In the reverse direction (Clausal → Prolog), Clausal's reified if-then-else (`THEN if COND else ELSE`) is also rejected because its monotonic three-valued semantics cannot be faithfully represented by Prolog's committed-choice `(C -> T ; E)`.
+In the reverse direction (seam → Prolog), the seam's reified if-then-else (`THEN if COND else ELSE`) is also rejected because its monotonic three-valued semantics cannot be faithfully represented by Prolog's committed-choice `(C -> T ; E)`.
 
 ### Known roundtrip limitations
 
-- **DCG rules**: Prolog `-->` ↔ clausal `>>` roundtrip can produce syntax that doesn't re-parse in the second leg (comma-in-pushback-list edge cases).
+- **DCG rules**: Prolog `-->` ↔ seam `>>` roundtrip can produce syntax that doesn't re-parse in the second leg (comma-in-pushback-list edge cases).
 - **Arity-indicator directives**: `:- dynamic(foo/2).` → `-dynamic(foo/2)` (the bare prefix form `:- dynamic foo/2.` needs `Dialect.swi()`: it is not an operator in Scryer's table); check the return leg with `--roundtrip` before relying on it.
 - **Whitespace/formatting**: Exact text match is not guaranteed; structural equivalence is.
 
@@ -482,24 +482,24 @@ Golden snapshot files live in `tests/fixtures/prolog_golden/`:
 
 | Direction | Files | Purpose |
 |---|---|---|
-| Clausal → Prolog | `*.pl` (11 files) | Checked-in expected Prolog output |
-| Prolog → Clausal | `*.clausal` (11 files) | Checked-in expected clausal output |
+| Seam → Prolog | `*.pl` (11 files) | Checked-in expected Prolog output |
+| Prolog → seam | `*.seam` (11 files) | Checked-in expected seam output |
 
 To regenerate golden files after changing translation logic:
 
 ```bash
-# Clausal → Prolog
-python -m clausal.tools.clausal_to_prolog SOURCE.clausal -o tests/fixtures/prolog_golden/NAME.pl
+# Seam → Prolog
+python -m clausal.tools.clausal_to_prolog SOURCE.seam -o tests/fixtures/prolog_golden/NAME.pl
 
-# Prolog → Clausal
-python -m clausal.tools.prolog_to_clausal SOURCE.pl -o tests/fixtures/prolog_golden/NAME.clausal
+# Prolog → seam
+python -m clausal.tools.prolog_to_clausal SOURCE.pl -o tests/fixtures/prolog_golden/NAME.seam
 ```
 
 ---
 
 ## Tier 3: Scryer Prolog embedding
 
-The translation pipeline feeds directly into the [Scryer Prolog embedding](scryer.md) — an in-process Scryer engine accessible from Python via PyO3, shipped as the optional `clausal-scryer` package (`packages/clausal-scryer`; not part of the core install, so this example is not run by the core test suite). `.clausal` files are translated to Prolog with `Dialect.scryer()` and loaded into the embedded machine:
+The translation pipeline feeds directly into the [Scryer Prolog embedding](scryer.md) — an in-process Scryer engine accessible from Python via PyO3, shipped as the optional `clausal-scryer` package (`packages/clausal-scryer`; not part of the core install, so this example is not run by the core test suite). `.seam` files are translated to Prolog with `Dialect.scryer()` and loaded into the embedded machine:
 
 ```python
 from clausal.scryer import Scryer
@@ -517,10 +517,10 @@ See the [Scryer Prolog Embedding](scryer.md) documentation for the full API.
 ## Roadmap
 
 - **Phase 1.1** (done): Prolog AST nodes, operator table, dialect config
-- **Phase 1.2** (done): Clausal → Prolog text emission
+- **Phase 1.2** (done): seam → Prolog text emission
 - **Phase 2** (done): Dialect-specific emission, golden tests, CLI
-- **Phase 3** (done): Prolog → Clausal (tokenizer, Pratt parser, Prolog AST → `.clausal` text)
-- **Phase 4** (done): Roundtrip validation, golden Prolog→Clausal files, unified CLI
+- **Phase 3** (done): Prolog → seam (tokenizer, Pratt parser, Prolog AST → seam text)
+- **Phase 4** (done): Roundtrip validation, golden Prolog→seam files, unified CLI
 - **Phase 5** (done, experimental in 1.0): Import-time `.pl` translation — `PrologFinder`/`PrologLoader` in the import hook translate `.pl` files on the fly, with `.pyc` caching and recursive `use_module` support (see [Importing Prolog Code](importing_prolog.md))
-- **Phase 6** (stretch, not started): Self-hosted DCG translator — rewrite the Prolog parser as a clausal DCG operating on a token stream, using the state-threading DCG pattern for dynamic `op/3` handling
+- **Phase 6** (stretch, not started): Self-hosted DCG translator — rewrite the Prolog parser as a seam DCG operating on a token stream, using the state-threading DCG pattern for dynamic `op/3` handling
 - **Phase 7** (stretch, not started): Additional dialects — GNU Prolog (`fd_*` constraints), ECLiPSe (`lib(ic)`, `do/2`), XSB Prolog (HiLog, tabling differences), Tau Prolog (JavaScript-hosted); each as a `Dialect` subclass

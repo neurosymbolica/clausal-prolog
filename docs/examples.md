@@ -1,12 +1,13 @@
 # Examples
 
-Clausal ships with example programs in `clausal/examples/`. Each is a self-contained `.clausal` module demonstrating different language features.
+Clausal Prolog ships with example programs in `clausal/examples/`. Each is a self-contained seam (`.seam`) module demonstrating different language features.
 
-!!! note "Clausal vs Prolog syntax"
+!!! note "Seam vs Prolog syntax"
 
-    Clausal and Prolog syntax may slightly differ — for example, variables are
+    Seam and Prolog syntax may slightly differ — for example, variables are
     `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style. Keep
     this in mind when comparing with Prolog resources.
+    [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO Prolog syntax instead.
     You can also [import Prolog `.pl` files directly](importing_prolog.md) without rewriting them.
 
 ---
@@ -208,7 +209,7 @@ Add test predicates to any example file, then run with pytest:
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:fib_test"
 ```
 
-Or query from [Python](python_integration.md). In a `.clausal` or `.seam`
+Or query from [Python](python_integration.md). In a `.seam`
 file, write the goal in [goal position](python_integration.md#goal-position-if-goal-for-in-goal):
 
 ```python

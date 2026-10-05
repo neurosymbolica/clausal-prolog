@@ -1,6 +1,6 @@
 # Public API (1.0)
 
-From 1.0.0, Clausal follows [semantic versioning](https://semver.org/). A
+From 1.0.0, Clausal Prolog follows [semantic versioning](https://semver.org/). A
 change that breaks anything in the **covered** surface below needs a major
 release (2.0). Anything **internal** may change in any minor release.
 
@@ -18,13 +18,23 @@ They are removed in 2.0.
 
 ### 1.1 The surface language
 
-- The `.clausal` file format and its alias `.seam`: the same syntax,
-  found, loaded and cached the same way. Where both `name.clausal` and
-  `name.seam` exist, `.clausal` wins. See [Syntax](syntax.md).
-- The clause forms: facts (`head,`), rules (`head <- body`), and test
+- Three source surfaces, told apart by extension (see
+  [Clausal Prolog](clausal_prolog.md)):
+    - `.clausal`: **Clausal Prolog**, cut-free ISO-like Prolog, always read
+      by the native ISO front end. `!`, `->` and `*->` are refused, a module
+      file must end with `:- end_module(Name).`, and it may not import a
+      `.pl` module (`permission_error(access, prolog_module, M)`).
+    - `.seam`: **the seam**, the Python-syntax surface (the clause forms and
+      directives below). See [Syntax](syntax.md).
+    - `.pl`: regular ISO Prolog. Its in-process import is **experimental**
+      (see [Experimental in 1.0](#experimental-in-10)).
+    - In one directory `name.seam` beats `name.clausal`, which beats
+      `name.pl`. Before the extension flip `.clausal` was the seam's
+      extension; a seam file still named `.clausal` now fails to load.
+- The seam's clause forms: facts (`head,`), rules (`head <- body`), and test
   clauses (`test("description") <- body`, the `test/1` predicate). See
   [Testing](testing.md).
-- The directives documented in [Directives](directives.md): `-module`
+- The seam directives documented in [Directives](directives.md): `-module`
   (including `-private` and `-hide`), `-import_from`, `-import_module`,
   `-strict_atoms`, `-implicit_functors`, `-dynamic`,
   `-table`, `-discontiguous`, `-meta_predicate`, `-shallow`,
@@ -41,8 +51,8 @@ They are removed in 2.0.
   predicate raises `permission_error(modify, static_procedure, Name/Arity)`.
   The module flag `assert_creates_dynamic` (below) selects ISO 7.5.2(2)
   instead: an assert into a procedure that does not exist creates it as
-  dynamic. It is `false` in a `.clausal`/`.seam` module and `true` in an
-  imported `.pl` module.
+  dynamic. It is `false` in a `.seam` module and `true` in a
+  `.clausal` or imported `.pl` module.
 - Literal semantics:
     - `'x'` and bare `x` are the **atom** `x`.
     - `"…"` is a **string**, which is a char list, by default (as in
@@ -80,10 +90,10 @@ They are removed in 2.0.
   `max_arity`, `unknown`, `double_quotes`, and `assert_creates_dynamic`.
   Which flags are module-scoped is covered too. The set of values a flag
   can be SET to may grow (`unknown` = `fail`, say) in a minor release.
-- The builtin predicates in the Clausal standard library, by name and
+- The builtin predicates in the Clausal Prolog standard library, by name and
   arity, as documented under [Builtins](builtins.md) and the library pages.
-  They are covered as **predicates**, called from `.clausal` source or as a
-  goal cell. The Python objects `clausal` exports under the same names are
+  They are covered as **predicates**, called from `.seam` or `.clausal` source
+  or as a goal cell. The Python objects `clausal` exports under the same names are
   not (see 3).
 - **Error terms are Scryer's.** An error is the plain cell
   `error(Formal, Culprit)`: `Formal` is the ISO formal term
@@ -126,9 +136,9 @@ from clausal import (
 | `Solutions` | `Solutions(goal, module=...)` | The interactive (REPL/notebook) solution iterator and display. |
 | `declared_atoms` | `declared_atoms(module_or_package) -> frozenset[str]` | The atoms the module's own files declare in their `-module`/`-private` lists; for a package, also its **loaded** submodules: the package's atom vocabulary, NOT the attributes bound on the package root (an atom declared only in a submodule is listed although the root does not bind it, so `getattr(pkg, name)` can be missing; read the root module's own names for that). Excludes `-import_from`ed atoms and does not depend on import order. Takes a module, a `Module` or a dotted name (lookup-only, like `module=`). See [Python integration](python_integration.md#listing-the-atoms-a-module-declares-declared_atoms). |
 | `imported_atoms` | `imported_atoms(module_or_package) -> dict[str, str]` | `{atom: exporter module name}` for the atoms the module's own files (for a package, also its **loaded** submodules) bring in via `-import_from` without re-declaring them. Counts a name only when the exporter's own file declares it as an atom (one level, as the import edge resolves it; for a package exporter, its `__init__` only), so imported predicates are excluded (a `name/N` entry always names a predicate and is never counted). Disjoint from `declared_atoms`. On a clash the later directive in a file that names the atom wins (an `alias(x, y)` names `x`), and the package's `__init__` wins over its submodules. Same argument forms and errors as `declared_atoms`. See [Python integration](python_integration.md#listing-the-atoms-a-module-imports-imported_atoms). |
-| `module_signatures` | `module_signatures(module) -> dict[str, frozenset[int]]` | `{name: arities}` for the predicates a module offers to `-import_from`, keys sorted. For a Clausal module: the predicates its own database holds (clauses, `-dynamic`, a bare `name/N` export entry, which is how an imported predicate is re-exported), not what it merely imports, not a fielded data declaration. For a Python-backed module (`py.datetime`, `currency`, `units`, ...): each public predicate adapter with at least one registered arity; a unit or currency constant and a plain function (such as `date/3`) are not predicates. An adapter whose arity cannot be read (its dispatch takes `*args`) is listed with an empty `frozenset`. Takes a module, a `Module`, or a name spelled as `-import_from` spells it (`py.datetime`, `date_time`, `currency`), resolved the same way and **imported if not loaded** (unlike `declared_atoms`). A name that resolves to no module raises `LogicException(existence_error(module, Name))`. A package answers for its `__init__` only. |
-| `has_predicate` | `has_predicate(module, name, arity=None) -> bool` | True iff calling `name/arity` through the module resolves to a predicate (any arity when `arity` is `None`), whether the module defines it or imports it (from `.pl`, `.clausal`/`.seam`, or by a Python-level import in a facade `__init__`). False for a data atom and for a name only the `.pl` attribute fallback answers. The replacement for `getattr(mod, name, None) is not None` as a predicate probe. |
-| `defines_predicate` | `defines_predicate(module, name, arity=None) -> bool` | True iff the module defines, or imports and exports, the predicate `name/arity` (any arity when `arity` is `None`): the population of `module_signatures`, with its argument forms. An imported predicate counts only when a `name/N` entry in the module's export list re-exports it. Works for `.clausal`/`.seam`, `.pl` (both front ends) and package roots. It answers "does the module itself define it"; to ask whether a predicate can be called through the module, use `has_predicate`. |
+| `module_signatures` | `module_signatures(module) -> dict[str, frozenset[int]]` | `{name: arities}` for the predicates a module offers to `-import_from`, keys sorted. For a predicate module (`.seam`, `.clausal`, `.pl`): the predicates its own database holds (clauses, `-dynamic`, a bare `name/N` export entry, which is how an imported predicate is re-exported), not what it merely imports, not a fielded data declaration. For a Python-backed module (`py.datetime`, `currency`, `units`, ...): each public predicate adapter with at least one registered arity; a unit or currency constant and a plain function (such as `date/3`) are not predicates. An adapter whose arity cannot be read (its dispatch takes `*args`) is listed with an empty `frozenset`. Takes a module, a `Module`, or a name spelled as `-import_from` spells it (`py.datetime`, `date_time`, `currency`), resolved the same way and **imported if not loaded** (unlike `declared_atoms`). A name that resolves to no module raises `LogicException(existence_error(module, Name))`. A package answers for its `__init__` only. |
+| `has_predicate` | `has_predicate(module, name, arity=None) -> bool` | True iff calling `name/arity` through the module resolves to a predicate (any arity when `arity` is `None`), whether the module defines it or imports it (from `.pl`, `.clausal`, `.seam`, or by a Python-level import in a facade `__init__`). False for a data atom and for a name only the `.pl` attribute fallback answers. The replacement for `getattr(mod, name, None) is not None` as a predicate probe. |
+| `defines_predicate` | `defines_predicate(module, name, arity=None) -> bool` | True iff the module defines, or imports and exports, the predicate `name/arity` (any arity when `arity` is `None`): the population of `module_signatures`, with its argument forms. An imported predicate counts only when a `name/N` entry in the module's export list re-exports it. Works for `.seam`, `.clausal`, `.pl` (both front ends) and package roots. It answers "does the module itself define it"; to ask whether a predicate can be called through the module, use `has_predicate`. |
 | `module_binds` | `module_binds(module, name) -> bool` | True iff `name` is a real attribute of the module: in its `__dict__`, where a definition, an import, a declaration or a native `.pl` auto-declaration binds it. Takes a module, a `Module` or a dotted name (lookup-only: a module that is not loaded binds nothing). |
 | `cell_functor`, `cell_args`, `make_cell` | `cell_functor(c)`, `cell_args(c) -> tuple`, `make_cell(functor, *args) -> tuple` | Read and build a compound term (a cell). |
 | `to_python` | `to_python(val)` | Deep conversion out. |
@@ -136,7 +146,7 @@ from clausal import (
 | `term_key` | `term_key(term) -> tuple` | The standard order of terms, as a sort key. |
 | `Var` | `Var()` | `.value`, and `int()` / `float()` / `bool()` / `str()` / f-string coercion. |
 | `Trail` | `Trail()` | Pass one explicitly to keep a residual constraint store. |
-| `Module` | `Module(name)` | A logic module. `module=` also accepts an imported `.clausal` module or a dotted name. |
+| `Module` | `Module(name)` | A logic module. `module=` also accepts an imported predicate module (`.seam`, `.clausal`, `.pl`) or a dotted name. |
 | `Module.declare_dynamic` | `m.declare_dynamic(name, arity) -> None` | Declares `name/arity` dynamic, as `-dynamic(name/arity)` does. Idempotent; ISO `dynamic/1` errors. See [Database Operations](database_ops.md). |
 | `deref`, `unify` | `deref(term)`, `unify(a, b, trail) -> bool` | |
 | `LogicException` | `.term` is the thrown term; `.message` is the prose or `None` | Every `throw/1` and ISO error that reaches Python. |
@@ -153,7 +163,7 @@ on a `.pl` module, where an unbound atom-shaped name reads as its atom):
 - "is `n` a real attribute of `m` (predicate or data)": `module_binds(m, n)`.
   It is True for a data atom too, so it is no predicate probe.
 
-`module=` accepts a `Module`, an imported `.clausal` module, or the module's
+`module=` accepts a `Module`, an imported predicate module, or the module's
 dotted name as a string. An unqualified cell with no module raises ISO
 `existence_error(module, …)`.
 
@@ -251,7 +261,8 @@ which loaded before is refused, needs a major release.
 ### 1.7 The import hook
 
 - `import clausal` installs the import hook. After that, a plain `import`
-  loads a `.clausal` or `.seam` file on `sys.path` as a Python module.
+  loads a `.seam` or `.clausal` file (and, experimentally, a `.pl` file)
+  on `sys.path` as a Python module.
 - Each predicate is bound to its handle, and `$module` holds the logic
   `Module`.
 - Bytecode is cached in `__pycache__/`. The cache **format** is internal
@@ -285,7 +296,7 @@ Two known gaps in the atom-class deprecation:
   and the trampoline and drive-loop internals, apart from the protocol in 1.5.
 - The spelling of a mangled predicate handle. It is opaque.
 - The C extension ABI.
-- Cache formats, including the `.clausal` bytecode cache.
+- Cache formats, including the predicate-module bytecode cache.
 - The Prolog exporter (`clausal.tools.clausal_to_prolog`,
   `clausal.tools.prolog_dialect`), `clausal-fmt` and `clausal-rewrite`.
 - Everything under `clausal.tools`, `clausal.reflection`, and any name that
@@ -338,17 +349,17 @@ These are attributes of the `clausal` module but are not in
 A builtin whose name is not a Python identifier (`'#='`, `'=..'`, `'@<'`, …)
 and the dotted solver predicates (`z3.*`, `ortools.*`, `pysat.*`, `clpq.*`,
 `clpr.*`) are not in `clausal.__all__`. They are still attributes of the
-`clausal` module (`getattr(clausal, '#=')`) and are callable from `.clausal`
-source as before.
+`clausal` module (`getattr(clausal, '#=')`) and are callable from `.seam`
+and `.clausal` source as before.
 
 ### The packages under `packages/`
 
 The packages under `packages/` are versioned independently. Some of them use
 internal helpers (`clausal.modules.py.ModulePredicate`,
 `simple_to_trampoline`, `clausal.logic.builtins._helpers`, the exporter), so
-at the 1.0 release each one pins an exact **minor** release of Clausal: a
+at the 1.0 release each one pins an exact **minor** release of Clausal Prolog: a
 package built for 1.0 requires `clausal>=1.0,<1.1`, and is re-released for
-each Clausal minor.
+each Clausal Prolog minor.
 
 ### Not part of 1.0
 
@@ -358,5 +369,5 @@ These were removed before 1.0 (see `CHANGELOG.md` in the repository):
   `list_to_cons`, `cons_to_list` and the builtin `extend/3`. A compound term
   is the plain cell `(functor, *args)`.
 - **`make_predicate`** and **`MakePredicateRetiredError`**. A predicate is
-  a row in its module's database. Write it in a `.clausal` module, or
+  a row in its module's database. Write it in a `.seam` or `.clausal` module, or
   implement `_get_dispatch` (1.5).

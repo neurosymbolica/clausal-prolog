@@ -1,4 +1,4 @@
-# Clausal — Architecture
+# Clausal Prolog — Architecture
 
 ## Layer stack
 
@@ -6,7 +6,7 @@
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:architecture_diagram"
 ```
 
-The import hook handles both `.clausal` and `.pl` (Prolog) files — see [Importing Prolog](importing_prolog.md). Each layer builds on the one below. Python code and logic code can interact at any layer.
+The import hook handles seam (`.seam`), [Clausal Prolog](clausal_prolog.md) (`.clausal`) and `.pl` (Prolog) files — see [Importing Prolog](importing_prolog.md). Each layer builds on the one below. Python code and logic code can interact at any layer.
 
 The optional `clausal.trealla` and `clausal.scryer` layers provide embedded Prolog engines. [Trealla](trealla.md) is a fast C-based engine via ctypes (instant startup, ~5MB). [Scryer](scryer.md) is a Rust-based engine via PyO3 (~200ms startup, ~100MB, with tabling support). Both use the existing Prolog translation pipeline and execute programs in-process.
 
@@ -14,7 +14,7 @@ The optional `clausal.trealla` and `clausal.scryer` layers provide embedded Prol
 
 ## Why not a WAM
 
-The Warren Abstract Machine is the standard execution substrate for Prolog. For clausal it is the wrong choice, for several interlocking reasons.
+The Warren Abstract Machine is the standard execution substrate for Prolog. For Clausal Prolog it is the wrong choice, for several interlocking reasons.
 
 **The memory model conflict is fundamental.** The WAM uses a global heap of tagged machine words with specific pointer arithmetic (REF/STR/CON/LIS tags packed into word-sized cells). Python objects live on the Python GC heap, reference-counted, with a completely different layout. To pass a term from the WAM heap to a Python function, you must marshal it. To pass a Python object into a WAM term, you must wrap it. Every boundary crossing pays this cost, and in an embedded system that is the common case, not the exception. SWI-Prolog, which bridges to Python this way, is a good illustration of how awkward the result is.
 
@@ -26,10 +26,10 @@ The Warren Abstract Machine is the standard execution substrate for Prolog. For 
 - gets the CPython JIT for free in future Python versions
 - is debuggable with standard Python tools
 - allows Python calls without FFI
-- leverages the AST infrastructure clausal already has
+- leverages the AST infrastructure Clausal Prolog already has
 - is exactly what `clausal.logic.trampoline` and `clausal.logic.continuation_search` are already built toward
 
-For programs that genuinely need a WAM — ISO-conformant constraint solving, rich library ecosystems, or cross-validation against a standards-compliant engine — the [Trealla](trealla.md) and [Scryer](scryer.md) Prolog embeddings provide one in-process, without replacing clausal's native execution model.
+For programs that genuinely need a WAM — ISO-conformant constraint solving, rich library ecosystems, or cross-validation against a standards-compliant engine — the [Trealla](trealla.md) and [Scryer](scryer.md) Prolog embeddings provide one in-process, without replacing Clausal Prolog's native execution model.
 
 ---
 
@@ -97,7 +97,7 @@ while _st is not DONE:
     _st = yield (_gen, None)
 ```
 
-The compiler (`clausal.logic.compiler`) generates this from predicate definitions written in clausal syntax. See [compiler.md](compiler.md) for full details.
+The compiler (`clausal.logic.compiler`) generates this from predicate definitions, whatever their source surface. See [compiler.md](compiler.md) for full details.
 
 ---
 
@@ -129,7 +129,7 @@ WFS is implemented directly in `clausal.logic.tabling`, extending the existing S
 
 The compiler detects `not P(args)` where `P` is tabled and emits a call to `_naf_tabled` (a plain function, not a generator) instead of the inline NAF generator pattern. This is transparent — programs with recursion through negation "just work". See [tabling.md](tabling.md) for full details.
 
-**Note on Python interop and WFS:** calling Python code with side effects from within a tabled or WFS predicate during an incomplete subgoal evaluation requires care — the Python code may observe intermediate (undefined) state. This is a known constraint, not a fundamental obstacle. Clausal documents it rather than prohibiting it.
+**Note on Python interop and WFS:** calling Python code with side effects from within a tabled or WFS predicate during an incomplete subgoal evaluation requires care — the Python code may observe intermediate (undefined) state. This is a known constraint, not a fundamental obstacle. Clausal Prolog documents it rather than prohibiting it.
 
 ---
 
@@ -137,7 +137,7 @@ The compiler detects `not P(args)` where `P` is tabled and emits a call to `_naf
 
 The import hook (`clausal.import_hook`) intercepts module imports and transforms ASTs before compilation. This gives clausal two kinds of homoiconicity:
 
-**Logic terms as data.** In a `.seam` (or `.clausal`) file, an expression marked with `--` is a logic term rather than Python: `--point(1, 2)` builds the cell `('point', 1, 2)`, an atom is a plain `str`, a string is the `('$chars', text)` carrier. In goal position (`if --g:`, `for X in --g:`) the term is *run* instead. Terms are just Python objects — tuples, `str`s, numbers, lists.
+**Logic terms as data.** In a `.seam` file, an expression marked with `--` is a logic term rather than Python: `--point(1, 2)` builds the cell `('point', 1, 2)`, an atom is a plain `str`, a string is the `('$chars', text)` carrier. In goal position (`if --g:`, `for X in --g:`) the term is *run* instead. Terms are just Python objects — tuples, `str`s, numbers, lists.
 
 **Python code as data.** Expressions or statement blocks can be captured as AST nodes without being executed. This allows the logic system to reason about Python programs — useful for [meta-interpreters](metainterpreters.md), program analysis, and code generation.
 

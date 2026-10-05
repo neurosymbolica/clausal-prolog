@@ -1,16 +1,16 @@
 # Testing
 
-Clausal has two kinds of tests: Python-level pytest tests in `tests/`, and inline `test/1` clauses in `.clausal` files (and in Prolog `.pl` files, through the [Prolog importer](importing_prolog.md)).
+Clausal Prolog has two kinds of tests: Python-level pytest tests in `tests/`, and inline `test/1` clauses in source files: seam (`.seam`), [Clausal Prolog](clausal_prolog.md) (`.clausal`), and Prolog `.pl` files (through the [Prolog importer](importing_prolog.md)).
 
 ## Inline `test/1` clauses
 
-Any `.clausal` file (see [Syntax](syntax.md)) can include test clauses of the form:
+Any seam (`.seam`) file (see [Syntax](syntax.md)) can include test clauses of the form:
 
 ```seam
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:test_syntax"
 ```
 
-A test passes if its body succeeds (produces at least one solution); a body that raises fails the test and reports the error. The head is `test/1`, lowercase like every predicate name: the old `Test/1` spelling is now a load-time error (TitleCase names have no role in Clausal), and the runner names the rename. Tests live alongside the predicates they exercise:
+A test passes if its body succeeds (produces at least one solution); a body that raises fails the test and reports the error. The head is `test/1`, lowercase like every predicate name: the old `Test/1` spelling is now a load-time error (TitleCase names have no role in Clausal Prolog), and the runner names the rename. Tests live alongside the predicates they exercise:
 
 ```seam
 fib(0, 0),
@@ -40,12 +40,12 @@ test("bob is not tom's parent", fail) <- parent("bob", "tom")
 
 and a `.pl` file writes it as plunit does: `test(no_cycle, fail) :- parent(bob, tom).` `fail` is the only option supported. Any other option -- `true(Cond)`, `throws(Error)`, `nondet`, `blocked(Reason)`, `setup(Goal)` and the rest of plunit's list, or a list of options -- is a collection error naming the option: the file is one failing `<collect>` item (`<collect>` in the CLI report too), never a silently skipped test.
 
-## Running `.clausal` tests standalone
+## Running `test/1` tests standalone
 
 Use `clausal.testing` as a command-line tool:
 
 ```bash
-# Run all .clausal, .seam and .pl files under a directory
+# Run all .seam, .clausal and .pl files under a directory
 python -m clausal.testing clausal/examples/
 
 # Run a single file
@@ -61,7 +61,7 @@ Exit codes:
 |---|---|
 | 0 | every collected test passed |
 | 1 | a test failed, or a file failed to load (for a `.pl` file, to translate) |
-| 2 | usage error: a path does not exist, or names a file that is not `.clausal`, `.seam` or `.pl` |
+| 2 | usage error: a path does not exist, or names a file that is not `.seam`, `.clausal` or `.pl` |
 | 5 | no tests collected (the same number as pytest's "no tests collected") |
 
 A file that fails to load is reported as one failing `<load>` item, with the load error and its source line.
@@ -88,11 +88,11 @@ test('double of two is four') :- double(2, 4).
 test('append works') :- append([1], [2], [1, 2]).
 ```
 
-A `.pl` file the translator rejects (a syntax error, or a construct it cannot translate, such as a cut) is a failing `<load>` item carrying the translator error -- never a skipped file. The translator keeps no source map, so a failing `.pl` test is reported without a line number, and its goals are shown in their Clausal translation.
+A `.pl` file the translator rejects (a syntax error, or a construct it cannot translate, such as a cut) is a failing `<load>` item carrying the translator error -- never a skipped file. The translator keeps no source map, so a failing `.pl` test is reported without a line number, and its goals are shown in their seam translation.
 
-## Running `.clausal` tests via pytest
+## Running `test/1` tests via pytest
 
-The `conftest.py` at the project root registers a pytest plugin that automatically collects `.clausal` files (and their `.seam` alias), Prolog `.pl` files (through the Prolog importer; a file that does not translate is one failing `<load>` item), and also every ```` ```seam ```` block (or its older alias ```` ```clausal ````) in `docs/*.md` that contains a `test/1` clause. The [import hook](import.md) handles loading and compilation. Each `test/1` clause appears as an individual pytest item:
+The `conftest.py` at the project root registers a pytest plugin that automatically collects `.seam` files, `.clausal` files, Prolog `.pl` files (through the Prolog importer; a file that does not translate is one failing `<load>` item), and also every ```` ```seam ```` block (or its older alias ```` ```clausal ````) in `docs/*.md` that contains a `test/1` clause. The [import hook](import.md) handles loading and compilation. Each `test/1` clause appears as an individual pytest item:
 
 ```bash
 python -m pytest clausal/examples/fibonacci.seam -v
@@ -104,7 +104,7 @@ Output looks like:
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:test_output"
 ```
 
-This means `.clausal` tests and Python tests can run together in one `pytest` invocation. A test-data file that is *meant* not to be collected (a fixture that fails to load on purpose, Prolog source that is data rather than tests) carries the line `# clausal: no-collect` within its first 30 lines -- `% clausal: no-collect` in a `.pl` file. Both runners honour it: the plugin does not collect the file, and `python -m clausal.testing` reports it as skipped. Prolog `.pl` files with `test/1` clauses are collected and run like `.clausal` files -- the spelling is preserved across the translation (a Prolog `test/1` clause stays `test/1`, as every predicate name does), so nothing about the imported file is deprecated. See [Importing Prolog](importing_prolog.md).
+This means `test/1` tests and Python tests can run together in one `pytest` invocation. A test-data file that is *meant* not to be collected (a fixture that fails to load on purpose, Prolog source that is data rather than tests) carries the line `# clausal: no-collect` within its first 30 lines -- `% clausal: no-collect` in a `.pl` or `.clausal` file. Both runners honour it: the plugin does not collect the file, and `python -m clausal.testing` reports it as skipped. Prolog `.pl` files with `test/1` clauses are collected and run like `.seam` files -- the spelling is preserved across the translation (a Prolog `test/1` clause stays `test/1`, as every predicate name does), so nothing about the imported file is deprecated. See [Importing Prolog](importing_prolog.md).
 
 ## Running Python tests
 
