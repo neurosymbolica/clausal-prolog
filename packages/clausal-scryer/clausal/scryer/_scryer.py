@@ -9,7 +9,7 @@ import _scryer_ext
 def _strip_module_directive(prolog_source: str) -> str:
     """Remove :- module(...). directives so predicates land in user module.
 
-    Translated .clausal files may contain :- module(name, [exports]).
+    Translated seam (.seam) files may contain :- module(name, [exports]).
     when loading into the embedded Scryer session we want everything in
     the default 'user' module so queries work without module prefixes.
     """
@@ -97,26 +97,36 @@ class Scryer:
         self._machine.load_module_string(module, source)
 
     def consult_file(self, path: str, module: str = "user") -> None:
-        """Load a file into the machine.
+        """Load a file into the machine, by its surface (its extension):
 
-        If the path ends with .clausal, the source is automatically
-        translated to Prolog via clausal_source_to_prolog with Scryer
-        dialect before loading.  The :- module(...) directive is stripped
-        so predicates land in the target module (default: user).
+        * seam (``.seam``): translated to Prolog via
+          clausal_source_to_prolog with the Scryer dialect, and its
+          ``:- module(...)`` directive stripped so predicates land in the
+          target module (default: user);
+        * Clausal Prolog (``.clausal``): already Prolog, consulted as
+          written except that ``:- end_module(...)``, which Scryer refuses,
+          is commented out;
+        * anything else (``.pl``): consulted as written.
         """
         self._check_open()
         from pathlib import Path
+        from clausal.end_module import (
+            SURFACE_CLAUSAL_PROLOG, SURFACE_SEAM, strip_end_module,
+            surface_of)
         p = Path(path)
         source = p.read_text(encoding="utf-8")
-        if p.suffix == ".clausal":
+        surface = surface_of(p)
+        if surface == SURFACE_SEAM:
             from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
             from clausal.tools.prolog_dialect import Dialect
             source = clausal_source_to_prolog(source, dialect=Dialect.scryer())
             source = _strip_module_directive(source)
+        elif surface == SURFACE_CLAUSAL_PROLOG:
+            source = strip_end_module(source)
         self.consult_string(source, module)
 
     def consult_clausal(self, source: str, module: str = "user") -> None:
-        """Translate .clausal source to Prolog and consult it."""
+        """Translate seam (``.seam``) source text to Prolog and consult it."""
         self._check_open()
         from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
         from clausal.tools.prolog_dialect import Dialect

@@ -10,7 +10,7 @@ def _strip_module_directive(prolog_source: str) -> str:
     """Remove :- module(...). directives.
 
     GNU Prolog has no module system, so these must be stripped.
-    Translated .clausal files may contain them from the translation
+    Translated seam (.seam) files may contain them from the translation
     pipeline when using a non-gprolog dialect.
     """
     return re.sub(
@@ -98,28 +98,37 @@ class GnuProlog:
         self._machine.consult_string(source)
 
     def consult_file(self, path: str) -> None:
-        """Load a Prolog file into the engine.
+        """Load a file into the engine, by its surface (its extension):
 
-        If the path ends with .clausal, the source is automatically
-        translated to Prolog via clausal_source_to_prolog with GNU
-        Prolog dialect before loading.  Module directives are stripped
-        since GNU Prolog has no module system.
+        * seam (``.seam``): translated to Prolog via
+          clausal_source_to_prolog with the GNU Prolog dialect, its module
+          directives stripped since GNU Prolog has no module system;
+        * Clausal Prolog (``.clausal``): already Prolog, consulted as
+          written except that ``:- end_module(...)`` is commented out;
+        * anything else (``.pl``): GNU Prolog consults the file itself.
         """
         self._check_open()
         from pathlib import Path
+        from clausal.end_module import (
+            SURFACE_CLAUSAL_PROLOG, SURFACE_SEAM, strip_end_module,
+            surface_of)
         p = Path(path)
-        if p.suffix == ".clausal":
+        surface = surface_of(p)
+        if surface == SURFACE_SEAM:
             source = p.read_text(encoding="utf-8")
             from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
             from clausal.tools.prolog_dialect import Dialect
             prolog = clausal_source_to_prolog(source, dialect=Dialect.gprolog())
             prolog = _strip_module_directive(prolog)
             self._machine.consult_string(prolog)
+        elif surface == SURFACE_CLAUSAL_PROLOG:
+            self._machine.consult_string(
+                strip_end_module(p.read_text(encoding="utf-8")))
         else:
             self._machine.consult_file(str(p))
 
     def consult_clausal(self, source: str) -> None:
-        """Translate .clausal source to Prolog and consult it."""
+        """Translate seam (``.seam``) source text to Prolog and consult it."""
         self._check_open()
         from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
         from clausal.tools.prolog_dialect import Dialect

@@ -219,31 +219,40 @@ class Trealla:
         self.consult_string(source, module)
 
     def consult_file(self, path: str, module: str = "user") -> None:
-        """Load a file into the machine.
+        """Load a file into the machine, by its surface (its extension):
 
-        If the path ends with .clausal, the source is automatically
-        translated to Prolog via clausal_source_to_prolog with Trealla
-        dialect before loading.
+        * seam (``.seam``): translated to Prolog via
+          clausal_source_to_prolog with the Trealla dialect, its
+          ``:- module(...)`` directive stripped;
+        * Clausal Prolog (``.clausal``): already Prolog, consulted as
+          written except that ``:- end_module(...)`` is commented out;
+        * anything else (``.pl``): Trealla consults the file itself.
 
         The *module* parameter is accepted for API compatibility with
         :class:`clausal.scryer.Scryer` but is ignored.
         """
         self._check_open()
         from pathlib import Path
+        from clausal.end_module import (
+            SURFACE_CLAUSAL_PROLOG, SURFACE_SEAM, strip_end_module,
+            surface_of)
         p = Path(path)
-        if p.suffix == ".clausal":
+        surface = surface_of(p)
+        if surface == SURFACE_SEAM:
             source = p.read_text(encoding="utf-8")
             from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
             from clausal.tools.prolog_dialect import Dialect
             prolog = clausal_source_to_prolog(source, dialect=Dialect.trealla())
             prolog = _strip_module_directive(prolog)
             self.consult_string(prolog)
+        elif surface == SURFACE_CLAUSAL_PROLOG:
+            self.consult_string(strip_end_module(p.read_text(encoding="utf-8")))
         else:
             if not self._machine.consult_file(str(p)):
                 raise RuntimeError(f"Failed to consult file: {path}")
 
     def consult_clausal(self, source: str, module: str = "user") -> None:
-        """Translate .clausal source to Prolog and consult it.
+        """Translate seam (``.seam``) source text to Prolog and consult it.
 
         The *module* parameter is accepted for API compatibility with
         :class:`clausal.scryer.Scryer` but is ignored.
