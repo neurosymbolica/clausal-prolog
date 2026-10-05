@@ -1,7 +1,7 @@
 # jax — JAX Array Operations
 
 Provides pure array operations from [JAX](https://docs.jax.dev) as
-[importable](import.md) clausal predicates. Phase 1 covers array
+[importable](import.md) Clausal Prolog predicates. Phase 1 covers array
 creation, properties, math, shape operations, and bijective conversions.
 
 All Phase 1 predicates are **pure** — arrays in, arrays out, no hidden
@@ -9,7 +9,7 @@ state. JAX itself is functional, so the wrapper is a thin shim.
 
 ## Import
 
-```clausal
+```seam
 -import_from(py.jax, [
     array, zeros, ones, full, arange, linspace, eye,
     shape, dtype, device, dim, element_count,
@@ -64,7 +64,7 @@ escape needed.
 
 JAX disables 64-bit floats unless you ask for them. With stock config:
 
-```clausal
+```seam
 zeros([2, 3], {"dtype": float64}, A),
 dtype(A, float64)   # FAILS — A was silently downcast to float32
 ```
@@ -103,7 +103,7 @@ correct `Y` will *fail* the check.
 
 Use `allclose/2` or `allclose/4` when you want a tolerant check:
 
-```clausal
+```seam
 # Instead of relying on check mode —
 array(0.5, ANGLE), sine(ANGLE, 0.479426)   # FAILS: last-ULP drift
 
@@ -142,7 +142,7 @@ these names keep the Python builtin.
 
 ### Where the trap bites
 
-```clausal
+```seam
 -import_from(py.jax, [sum])
 
 test("fragile") <- (
@@ -180,7 +180,7 @@ a Python list but ends up in JAX.
 
 ### array
 
-```clausal
+```seam
 array(DATA, A)
 array(DATA, OPTS, A)
 ```
@@ -188,14 +188,14 @@ array(DATA, OPTS, A)
 Create an array from a Python list or nested list. `OPTS` is a dict for
 `dtype` kwargs.
 
-```clausal
+```seam
 array([1.0, 2.0, 3.0], A)                    # 1-D
 array([[1.0, 2.0], [3.0, 4.0]], A)           # 2-D
 ```
 
 ### zeros, ones
 
-```clausal
+```seam
 zeros(SHAPE, A)
 zeros(SHAPE, OPTS, A)
 ones(SHAPE, A)
@@ -204,14 +204,14 @@ ones(SHAPE, OPTS, A)
 
 Create zero/one-filled arrays. Pass `{"dtype": int32}` etc. via `OPTS`.
 
-```clausal
+```seam
 zeros([3, 4], A)
 zeros([2, 3], {"dtype": int32}, A)
 ```
 
 ### full
 
-```clausal
+```seam
 full(SHAPE, VALUE, A)
 full(SHAPE, VALUE, OPTS, A)
 ```
@@ -220,7 +220,7 @@ Create an array filled with a scalar value.
 
 ### arange
 
-```clausal
+```seam
 arange(END, A)
 arange(START, END, A)
 arange(START, END, STEP, A)
@@ -231,7 +231,7 @@ Integer-range array, like Python's `range`.
 
 ### linspace
 
-```clausal
+```seam
 linspace(START, END, STEPS, A)
 linspace(START, END, STEPS, OPTS, A)
 ```
@@ -240,7 +240,7 @@ linspace(START, END, STEPS, OPTS, A)
 
 ### eye
 
-```clausal
+```seam
 eye(N, A)
 eye(N, M, A)
 eye(N, M, OPTS, A)
@@ -250,7 +250,7 @@ Identity matrix, square (`N` × `N`) or rectangular (`N` × `M`).
 
 ### zeros_like, ones_like, full_like
 
-```clausal
+```seam
 zeros_like(A, R)
 zeros_like(A, OPTS, R)
 ones_like(A, R)
@@ -264,7 +264,7 @@ takes a scalar fill value. The `OPTS` arity passes kwargs through to
 `jnp.*_like` — use `{"dtype": …}` to keep `A`'s shape but override the
 dtype, or `{"shape": …}` to keep `A`'s dtype with a different shape.
 
-```clausal
+```seam
 ones([3, 4], A), zeros_like(A, Z)        # Z has shape [3, 4], dtype float32
 ones([2], {"dtype": int32}, A),
   zeros_like(A, Z), dtype(Z, int32)      # dtype is preserved
@@ -275,7 +275,7 @@ ones([2], A),
 
 ### empty
 
-```clausal
+```seam
 empty(SHAPE, A)
 empty(SHAPE, OPTS, A)
 ```
@@ -287,7 +287,7 @@ predicate exists for API symmetry with NumPy and PyTorch — prefer
 
 ### logspace, geomspace
 
-```clausal
+```seam
 logspace(START, END, STEPS, A)
 logspace(START, END, STEPS, OPTS, A)
 geomspace(START, END, STEPS, A)
@@ -298,7 +298,7 @@ geomspace(START, END, STEPS, OPTS, A)
 `base**START` and `base**END` (default base = 10). `geomspace` returns
 `STEPS` values in a **geometric progression** from `START` to `END`.
 
-```clausal
+```seam
 logspace(0.0, 2.0, 3, A)                 # [1.0, 10.0, 100.0]
 logspace(0.0, 3.0, 4, {"base": 2.0}, A)  # [1.0, 2.0, 4.0, 8.0]
 geomspace(1.0, 1000.0, 4, A)             # [1.0, 10.0, 100.0, 1000.0]
@@ -306,7 +306,7 @@ geomspace(1.0, 1000.0, 4, A)             # [1.0, 10.0, 100.0, 1000.0]
 
 ### meshgrid
 
-```clausal
+```seam
 meshgrid(ARRS, MESH)
 meshgrid(ARRS, OPTS, MESH)
 ```
@@ -316,7 +316,7 @@ input arrays, `MESH` is a list of output coordinate arrays (one per
 input). Pass `{"indexing": "ij"}` for matrix-layout axes (default is
 `"xy"`).
 
-```clausal
+```seam
 array([1.0, 2.0, 3.0], X),
 array([4.0, 5.0], Y),
 meshgrid([X, Y], [XX, YY]),
@@ -328,7 +328,7 @@ shape(XX, [3, 2])                        # ij: X broadcast first
 
 ### diag
 
-```clausal
+```seam
 diag(A, R)
 diag(A, K, R)
 ```
@@ -343,7 +343,7 @@ sub-diagonal). You bind the input; the output direction follows the
 input's dimensionality. Use `array_list` in tests rather than trying
 to round-trip through a bound output.
 
-```clausal
+```seam
 array([1, 2, 3], V), diag(V, M), shape(M, [3, 3])   # create
 array([[1, 2], [3, 4]], M), diag(M, V)              # extract → [1, 4]
 array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], M),
@@ -352,7 +352,7 @@ array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], M),
 
 ### identity
 
-```clausal
+```seam
 identity(N, A)
 identity(N, OPTS, A)
 ```
@@ -371,13 +371,13 @@ These support two modes:
 
 ### shape
 
-```clausal
+```seam
 shape(A, SHAPE)
 ```
 
 Shape is a Python list of ints.
 
-```clausal
+```seam
 zeros([3, 4], A), shape(A, S)           # S = [3, 4]
 zeros([3, 4], A), shape(A, [3, 4])      # succeeds
 zeros([3, 4], A), not shape(A, [5, 6])  # check mode fails
@@ -385,19 +385,19 @@ zeros([3, 4], A), not shape(A, [5, 6])  # check mode fails
 
 ### dtype
 
-```clausal
+```seam
 dtype(A, D)
 ```
 
 Compare against exported dtype constants (`float32`, `int32`, etc.):
 
-```clausal
+```seam
 zeros([2], A), dtype(A, float32)  # succeeds on default config
 ```
 
 ### device
 
-```clausal
+```seam
 device(A, D)
 ```
 
@@ -406,7 +406,7 @@ may be the atom or the string. Not a `Device` object, so unification works.
 
 ### dim, element_count
 
-```clausal
+```seam
 dim(A, N)             # number of axes (ndim)
 element_count(A, N)   # total number of elements (size)
 ```
@@ -434,7 +434,7 @@ element_count(A, N)   # total number of elements (size)
 | `clip(A, MIN, MAX, A2)` | Clamp to `[MIN, MAX]` |
 | `abs(A, A2)` | Absolute value |
 
-```clausal
+```seam
 array([[1.0, 2.0], [3.0, 4.0]], T),
 sum(T, 0, S)                        # S = [4.0, 6.0]
 ```
@@ -458,7 +458,7 @@ sum(T, 0, S)                        # S = [4.0, 6.0]
 
 `squeeze` and `expand_dims` are inverses at a given axis:
 
-```clausal
+```seam
 zeros([3, 1, 4], A),
 squeeze(A, 1, A2), shape(A2, [3, 4]),
 expand_dims(A2, 1, A3), shape(A3, [3, 1, 4])
@@ -493,7 +493,7 @@ directly).
 bidirectional noun predicate. Forward mode splits, backward mode
 concatenates:
 
-```clausal
+```seam
 test("partition forward") <- (
     arange(0, 6, A),
     partition(A, 3, [P0, P1, P2]),          # LS bound by forward
@@ -515,7 +515,7 @@ only covers the narrower case where LS is a valid split of A.
 "A is LS stacked along AXIS" and runs in either direction depending on
 which side is bound:
 
-```clausal
+```seam
 test("stacked forward") <- (
     zeros([3], Z), ones([3], O),
     stacked([Z, O], 0, A),             # A has shape [2, 3]
@@ -539,7 +539,7 @@ predicate) when `A`'s length along the axis doesn't divide evenly by
 `N`. `array_split` accepts uneven divisions — earlier pieces get one
 extra element:
 
-```clausal
+```seam
 test("array_split uneven") <- (
     arange(0, 7, A),
     array_split(A, 3, LS),
@@ -549,7 +549,7 @@ test("array_split uneven") <- (
 
 Both forms also accept a list of indices in place of `N`:
 
-```clausal
+```seam
 test("partition by indices") <- (
     arange(0, 10, A),
     partition(A, [3, 7], [P0, P1, P2])  # [0..2], [3..6], [7..9]
@@ -559,10 +559,10 @@ test("partition by indices") <- (
 ### `flip` and `roll` axis arguments
 
 `flip` and `roll` accept either a single int axis or a tuple of axes.
-A plain Clausal list works too — `_deep_deref` passes it through to JAX,
+A plain list works too — `_deep_deref` passes it through to JAX,
 which treats it as an iterable of axes:
 
-```clausal
+```seam
 test("flip with tuple axes") <- (
     array([[1, 2], [3, 4]], A),
     flip(A, (0, 1), R)                  # reverse both rows and columns
@@ -573,7 +573,7 @@ test("flip with tuple axes") <- (
 be bound. `flip/2` (no axis) reverses **every** axis; same shorthand
 as passing a tuple of all axes:
 
-```clausal
+```seam
 test("flip/2 bidirectional") <- (
     array([[1, 2, 3], [4, 5, 6]], A),
     flip(A, R),                         # forward: R = [[6,5,4], [3,2,1]]
@@ -586,7 +586,7 @@ rolls the flat sequence, then reshapes back. This is `jnp.roll`'s own
 behaviour, not an artefact of the wrapper. Use `roll/4` with an
 explicit axis when you want per-axis rolling:
 
-```clausal
+```seam
 test("roll/3 vs roll/4 on 2d") <- (
     array([[0, 1, 2], [3, 4, 5]], A),
     roll(A, 1, R),                      # R = [[5,0,1], [2,3,4]] — flat
@@ -601,7 +601,7 @@ axis flattens first — a different operation that would need its own
 predicate. In practice, compose with `reshape/3` or `ravel` when you
 want that:
 
-```clausal
+```seam
 test("flatten-then-repeat via reshape") <- (
     array([[1, 2], [3, 4]], A),
     reshape(A, [4], A1),                # [1, 2, 3, 4]
@@ -624,7 +624,7 @@ bound. The forward direction (`jnp.stack`) works on any modern JAX.
 `"mean"`, `"median"`. `PAD_WIDTH` may be an int, a `(before, after)`
 pair, or a per-axis list/tuple of pairs:
 
-```clausal
+```seam
 test("pad modes") <- (
     array([1, 2, 3], A),
     pad(A, [1, 2], R),                  # [0,1,2,3,0,0] (constant is default)
@@ -638,11 +638,11 @@ test("pad modes") <- (
 ## Functional Updates (`.at`)
 
 JAX's `.at[idx].<op>(val)` idiom returns a **new array** — the original
-is untouched. That purity is exactly what Clausal backtracking needs:
+is untouched. That purity is exactly what Clausal Prolog backtracking needs:
 the PyTorch equivalent (`tensor[idx] = val`) mutates in place and so
 can't survive a backtrack. Every `at_*` predicate below is Tier 1 pure.
 
-```clausal
+```seam
 arange(0, 6, A),
 at_set(A, 2, 99, A2)      # A2 = [0, 1, 99, 3, 4, 5], A is unchanged
 ```
@@ -664,12 +664,12 @@ at_set(A, 2, 99, A2)      # A2 = [0, 1, 99, 3, 4, 5], A is unchanged
   targets a whole row (`a[0]`-style broadcast).
 - **A tuple of integers** — multi-dim scalar indexing:
   `at_set(M, (1, 2), 99, M2)` addresses the single cell at row 1,
-  column 2. Tuple literals in `.clausal` compile to Python tuples.
-  Tuple elements may be bound Clausal variables — `_deep_deref` walks
+  column 2. Tuple literals in seam (`.seam`) source compile to Python tuples.
+  Tuple elements may be bound logic variables — `_deep_deref` walks
   into tuples to resolve them.
 - **A JAX array of indices** — fancy indexing. Build it with `array/2`:
 
-  ```clausal
+  ```seam
   array([10, 20, 30, 40, 50], A),
   array([0, 2, 4], IDX),
   at_set(A, IDX, 0, A2)           # A2 = [0, 20, 0, 40, 0]
@@ -679,12 +679,12 @@ at_set(A, 2, 99, A2)      # A2 = [0, 1, 99, 3, 4, 5], A is unchanged
 `TypeError` on `arr.at[[0, 2, 4]]` and tells you to wrap in
 `jnp.array`. The `at_*` predicates surface this as predicate failure:
 
-```clausal
+```seam
 array([10, 20, 30], A),
 not at_set(A, [0, 2], 0, _A2)     # succeeds — list index is rejected
 ```
 
-Slice indices (`a.at[1:3]`) aren't expressible as Clausal terms today —
+Slice indices (`a.at[1:3]`) aren't expressible as Clausal Prolog terms today —
 use `lax.dynamic_update_slice` via `++()` if you need them.
 
 ### Out-of-bounds indices are silently clipped
@@ -714,7 +714,7 @@ the known side as the bound argument:
 
 ### jax_numpy
 
-```clausal
+```seam
 jax_numpy(JAX_ARR, NUMPY_ARR)
 ```
 
@@ -723,14 +723,14 @@ jax_numpy(JAX_ARR, NUMPY_ARR)
 
 ### array_list
 
-```clausal
+```seam
 array_list(A, L)
 ```
 
 - `(+A, -L)` — nested Python list via `.tolist()`.
 - `(-A, +L)` — build a `jax.Array` from a nested list.
 
-```clausal
+```seam
 array_list(A, [[1.0, 2.0], [3.0, 4.0]]),
 shape(A, [2, 2])
 ```
@@ -741,9 +741,9 @@ shape(A, [2, 2])
 
 All from `jax.numpy.linalg`, exposed as pure predicates. Decompositions
 that return a `NamedTuple` in JAX (`svd`, `qr`, `eigh`, `slogdet`, …)
-are returned as plain tuples so they decompose in Clausal with `is`:
+are returned as plain tuples so they decompose in seam code with `is`:
 
-```clausal
+```seam
 svd(A, RESULT),
 RESULT is (U, S, VH)
 ```
@@ -776,7 +776,7 @@ RESULT is (U, S, VH)
 
 ### Norm
 
-```clausal
+```seam
 norm(A, N)
 norm(A, ORD, N)
 ```
@@ -787,7 +787,7 @@ infinity norms. No arg = Frobenius for matrices, 2-norm for vectors.
 
 ### Example
 
-```clausal
+```seam
 test("solve diagonal system") <- (
     array([[2.0, 0.0], [0.0, 4.0]], A),
     array([6.0, 8.0], B),
@@ -809,7 +809,7 @@ test("solve diagonal system") <- (
   output against real expected values, pull out the real part in a
   `++()` escape:
 
-  ```clausal
+  ```seam
   eigvals(A, E),
   E_REAL is ++(E.real),
   at_get(E_REAL, 0, E0), array_list(E0, V0)
@@ -834,7 +834,7 @@ for the predicate catalogue and design notes.
 **one multi-mode predicate**: bind the signal to run the forward
 transform, bind the frequencies to run the inverse.
 
-```clausal
+```seam
 fft_transform(T, F)                 # if T bound, F = fft(T)
                                     # if F bound, T = ifft(F)
 ```
@@ -849,7 +849,7 @@ fft_transform(T, F)                 # if T bound, F = fft(T)
 | `fft_transform_nd/2,/3` | `fftn` | `ifftn` | `/3` takes an `axes` list; default = all axes |
 | `fft_shift/2,/3` | `fftshift` | `ifftshift` | `/3` takes an `axes` list; self-inverse for even N |
 
-Axes for the `/3` forms are a Clausal list of ints, e.g.
+Axes for the `/3` forms are a list of ints, e.g.
 `fft_shift(T, [1], S)` shifts only axis 1.
 
 ### Non-bijective helpers
@@ -861,7 +861,7 @@ Axes for the `/3` forms are a Clausal list of ints, e.g.
 
 ### Example
 
-```clausal
+```seam
 test("roundtrip") <- (
     array([1.0, 2.0, 3.0, 4.0], T),
     fft_transform(T, F),            # forward
@@ -881,7 +881,7 @@ test("frequencies of length-4 signal") <- (
   via `ifft` preserves complex dtype — the recovered signal has tiny
   imaginary parts due to float noise. Compare values via `.real`:
 
-  ```clausal
+  ```seam
   at_get(T2, 0, V), array_list(V, C), V_REAL is ++(C.real)
   ```
 
@@ -917,7 +917,7 @@ Tier 1 pure.
 | `ge(A, B, C)` | `jnp.greater_equal` | bool array |
 | `le(A, B, C)` | `jnp.less_equal` | bool array |
 
-```clausal
+```seam
 array([1, 2, 3], A),
 array([1, 5, 3], B),
 eq(A, B, C),
@@ -939,7 +939,7 @@ These succeed iff the reduction is true; failure under `not(...)`.
 | `any(A)` / `any(A, AXIS)` | Any element truthy (optionally reduced over `AXIS`) |
 | `all(A)` / `all(A, AXIS)` | All elements truthy |
 
-```clausal
+```seam
 test("allclose within tolerance") <- (
     array([1.0, 2.0], A),
     array([1.0000001, 2.0], B),
@@ -965,7 +965,7 @@ test("allclose within tolerance") <- (
 | `take(A, INDICES, AXIS, R)` | Gather along `AXIS` — `jnp.take(a, indices, axis=AXIS)` |
 | `put_along_axis(A, IDX, VAL, AXIS, R)` | Scatter `VAL` into `A` at `IDX` along `AXIS` (returns a new array) |
 
-```clausal
+```seam
 test("where selects") <- (
     array([True, False, True], COND),
     array([10, 20, 30], X),
@@ -1013,14 +1013,14 @@ non-bijective math. All Tier 1 pure.
 
 ### einsum
 
-```clausal
+```seam
 einsum(EQUATION, ARRAYS, R)
 ```
 
-`ARRAYS` is a Clausal list of arrays. The equation is standard NumPy
+`ARRAYS` is a list of arrays. The equation is standard NumPy
 einsum syntax.
 
-```clausal
+```seam
 einsum("ij,jk->ik", [A, B], R)   # matmul
 einsum("ii->",      [A],    R)   # trace
 einsum("ii->i",     [A],    R)   # diagonal extract
@@ -1045,7 +1045,7 @@ Values outside the backward-mode domain return `NaN` — the JAX
 functions don't raise. Guard with `allclose/4` or a range check if you
 need strictness.
 
-```clausal
+```seam
 test("logarithm forward") <- (
     array(1.0, X),
     logarithm(X, Y),
@@ -1083,7 +1083,7 @@ a principal-branch angle. Round-tripping `sin` then `arcsin` on
 `logsumexp` lives in `jax.scipy.special`. The wrapper imports lazily
 and the user doesn't see the submodule split.
 
-```clausal
+```seam
 test("softmax sums to 1 along axis") <- (
     array([1.0, 2.0, 3.0, 4.0], A),
     softmax(A, 0, R),
@@ -1136,7 +1136,7 @@ pure.
 | `cov(A, R)` | Covariance matrix (rows as variables) |
 | `corrcoef(A, R)` | Correlation coefficient matrix |
 
-```clausal
+```seam
 array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], T),
 median(T, 1, M)                              # M = [2.0, 5.0]
 percentile(T, 25.0, 1, P)                    # P = [1.5, 4.5]
@@ -1155,17 +1155,17 @@ percentile(T, 25.0, 1, P)                    # P = [1.5, 4.5]
 | `unique(A, R)` | Sorted unique values |
 | `argpartition(A, KTH, R)` | Indices such that `A[R[KTH]]` sits at its sorted position |
 
-```clausal
+```seam
 array([3.0, 1.0, 4.0, 1.0, 5.0], A),
 sort(A, SORTED),                             # SORTED = [1,1,3,4,5]
 argsort(A, IDX),                             # IDX = [1,3,0,2,4]
 take(A, IDX, 0, VIA_IDX)                     # VIA_IDX == SORTED
 ```
 
-`topk` packs its output into a tuple so Clausal's `RES is (VS, IS)`
+`topk` packs its output into a tuple so the seam's `RES is (VS, IS)`
 pattern extracts both values and indices:
 
-```clausal
+```seam
 topk(A, 2, RES),
 RES is (VS, IS)                              # VS = top-2 values, IS = their indices
 ```

@@ -10,25 +10,39 @@ Clausal Prolog is a cut-free Prolog, aiming for ISO Prolog conformity, that runs
 ```prolog
 % fibonacci.clausal
 :- module(fibonacci, [fib/2]).
+:- use_module(library(clpz)).
 
 :- table(fib/2).
 fib(0, 0).
 fib(1, 1).
 fib(N, F) :-
-    N > 1,
-    N1 is N - 1, N2 is N - 2,
+    N #> 1,
+    N1 #= N - 1, N2 #= N - 2,
     fib(N1, F1), fib(N2, F2),
-    F is F1 + F2.
+    F #= F1 + F2.
 
 test("fib(10) = 55") :- fib(10, 55).
 
 :- end_module(fibonacci).
 ```
 
-Query it from Python:
+Ask it a question from a `.seam` file, with the goal after `--`:
 
 ```python
-import clausal                      # installs the import hook
+# report.seam
+-import_from(fibonacci, [fib])
+
+for F in --fib(10, F):
+    print(F)  # 55
+```
+
+```bash
+python -c "import clausal, report"
+```
+
+From a plain `.py` file, the same query goes through `solve`:
+
+```python
 from clausal import Var, solve
 import fibonacci                    # loads fibonacci.clausal
 

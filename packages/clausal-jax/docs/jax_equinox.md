@@ -15,7 +15,7 @@ partitioning.
 
 ## Import
 
-```clausal
+```seam
 import jax as pyjax
 -import_module(equinox)
 -import_from(py.jax_random, [key, split_key])
@@ -40,7 +40,7 @@ name. Required positional args first; an optional `OPTS` dict last
 for the rest of the constructor's keyword arguments. Layers that
 need a PRNG key take it as the very last positional arg.
 
-```clausal
+```seam
 key(0, K0),
 split_key(K0, 3, [K1, K2, K3]),
 
@@ -79,7 +79,7 @@ If you genuinely want to enumerate available layer types
 the side channel for that — it returns the actual `eqx.nn` class by
 TitleCase name, not the wrapper predicate:
 
-```clausal
+```seam
 findall(N, layer_class(N, _), NS)
 ```
 
@@ -92,7 +92,7 @@ unchanged. `apply_module/3` is sugar that adds deep-deref over `X`
 (useful when `X` is a list/tuple containing Vars) and makes the
 application visually consistent with Phase 10's `relu_apply` etc:
 
-```clausal
+```seam
 linear(4, 8, K, M),
 X is ++(pyjax.numpy.ones(4)),
 apply_module(M, X, Y)
@@ -101,7 +101,7 @@ apply_module(M, X, Y)
 For modules taking extra kwargs (e.g. training-mode `Dropout` with
 a per-call key — see Phase 17b below), use the `/4` form:
 
-```clausal
+```seam
 apply_module(MODEL, X, {"key": K}, Y)
 ```
 
@@ -119,7 +119,7 @@ both require a distinct contract from the stateless layers above.
 `batch_norm/4,/5` returns the model **and** its state as two output
 slots (mirroring `partition/4`):
 
-```clausal
+```seam
 batch_norm(3, "batch", BN, STATE),
 batch_norm(3, "batch", {"mode": "batch"}, BN, STATE)
 ```
@@ -132,7 +132,7 @@ recommendation for new code; the `/4` arity falls back to
 Other stateful layers go through the generic `make_with_state/4`,
 which takes a class value and a kwargs dict:
 
-```clausal
+```seam
 BN_CLS is ++(equinox.nn.BatchNorm),
 make_with_state(BN_CLS, {"input_size": 3, "axis_name": "batch",
                          "mode": "batch"}, BN, STATE)
@@ -146,7 +146,7 @@ stateful variants of `SpectralNorm`.
 `apply_stateful_module/5` calls `m(x, state)` and unifies `Y` with
 the output, `NEW_STATE` with the updated state:
 
-```clausal
+```seam
 apply_stateful_module(M, X, STATE, Y, NEW_STATE)
 apply_stateful_module(M, X, {"key": K}, STATE, Y, NEW_STATE)
 ```
@@ -162,7 +162,7 @@ BatchNorm on a raw input errors with "Found an unbound axis name".
 Wrap it yourself and pass the vmapped module to
 `apply_stateful_module`:
 
-```clausal
+```seam
 batch_norm(3, "batch", {"mode": "batch"}, BN, STATE),
 X is ++(pyjax.numpy.ones((4, 3))),
 VMAPPED is ++(pyjax.vmap(BN, axis_name="batch",
@@ -179,7 +179,7 @@ Inference mode skips the reduction and applies to unbatched inputs
 `.inference` field to the target value. Use it to swap a trained
 model for evaluation:
 
-```clausal
+```seam
 inference_mode(MODEL, EVAL_MODEL),         % value=True default
 inference_mode(EVAL_MODEL, False, TRAIN_MODEL) % explicit switch back
 ```
@@ -193,7 +193,7 @@ swap direction.
 has no `State` pytree (dropout is stochastic, not stateful) but
 consumes a per-call PRNG key — applied via `apply_module/4`:
 
-```clausal
+```seam
 dropout_train(0.5, D),
 apply_module(D, X, {"key": K}, Y)
 ```
@@ -207,7 +207,7 @@ opts dict.
 
 Mirrors `is_array`:
 
-```clausal
+```seam
 batch_norm(3, "batch", BN, _STATE),
 is_stateful(BN),        % succeeds
 
@@ -221,7 +221,7 @@ not is_stateful(LIN)    % succeeds (Linear is stateless)
 `eqx.nn.State` is a registered pytree; Phase 9's `leaf/2`,
 `tree_flatten/3` work on it unchanged:
 
-```clausal
+```seam
 batch_norm(3, "batch", _BN, STATE),
 findall(L, leaf(STATE, L), LEAVES)
 ```
@@ -260,7 +260,7 @@ JAX users want plain `grad_value`; Equinox users want
 Sometimes you want explicit control over the differentiable / static
 split — e.g. to freeze part of a model.
 
-```clausal
+```seam
 partition(MODEL, ++(equinox.is_array), DIFF, STATIC),
 % ... train DIFF, leave STATIC alone ...
 combine(NEW_DIFF, STATIC, NEW_MODEL)
@@ -285,13 +285,13 @@ non-uniformity is justified.
 leaves of a model identified by a callable `WHERE` returning the
 leaf(s) to update:
 
-```clausal
+```seam
 tree_at_set(++(lambda m: m.bias), MODEL, NEW_BIAS, NEW_MODEL),
 
 tree_at_apply(++(lambda m: m.bias), MODEL, ++(lambda b: b * 0), ZEROED)
 ```
 
-The natural Clausal-side `WHERE` is a Python lambda capturing
+The natural seam-side `WHERE` is a Python lambda capturing
 attribute access — `++(lambda m: m.weight)` for a single leaf,
 `++(lambda m: (m.layers[0].weight, m.layers[1].bias))` for
 multiple.
@@ -317,7 +317,7 @@ Parallel to Phase 6's `has_nan` / `has_inf` / `all_finite`:
 reads them back, given a "like" tree to provide structure and
 dtypes:
 
-```clausal
+```seam
 % Train and save
 linear(3, 5, K, MODEL),
 serialise(MODEL, "/tmp/model.eqx"),
@@ -339,7 +339,7 @@ search.
 The full loop combining Phase 16 (optax) + Phase 17 (equinox) +
 Phase 12 (filter transforms):
 
-```clausal
+```seam
 test("MLP one optax SGD step changes the model") <- (
     key(0, K0),
     split_key(K0, 2, [K_INIT, _]),
@@ -382,7 +382,7 @@ Equinox's pooling layers default `stride=1` (different from
 PyTorch's default of stride=kernel_size). Pass `{"stride": K}` in
 opts to get the PyTorch-equivalent behaviour:
 
-```clausal
+```seam
 max_pool2d(2, {"stride": 2}, M)   % halves spatial dims
 max_pool2d(2, M)                   % stride 1 — output is 7x7 from 8x8
 ```
@@ -390,7 +390,7 @@ max_pool2d(2, M)                   % stride 1 — output is 7x7 from 8x8
 ### `tree_equal` returns a JAX array, not bool
 
 `eqx.tree_equal` returns `Array(True, dtype=bool)`. The wrapper
-coerces with `bool(...)` so `tree_equal/2` works as a normal Clausal
+coerces with `bool(...)` so `tree_equal/2` works as a normal Clausal Prolog
 check predicate. If you want the underlying array (e.g. to feed it
 into another JAX op), reach for `++(equinox.tree_equal(A, B))`.
 
@@ -410,7 +410,7 @@ instead.
 ### `apply_module/3` vs `++(M(X))`
 
 Both work and produce the same result. Use `apply_module/3` when
-`X` is structured Clausal-side (lists/tuples with Vars to deref).
+`X` is a structured logic term (lists/tuples with Vars to deref).
 Use `++(M(X))` when you've already got a JAX value in hand and
 want to skip the predicate dispatch.
 

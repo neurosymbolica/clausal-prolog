@@ -1,10 +1,10 @@
-# Clausal — YAML (`yaml` module)
+# Clausal Prolog — YAML (`yaml` module)
 
 ## Overview
 
 The `yaml` module provides predicates for parsing and generating YAML, backed by Python's PyYAML library (`yaml.safe_load` / `yaml.safe_dump`). Data is represented as native Python objects — no custom term types. For JSON data, see the [JSON](json.md) module.
 
-```clausal
+```seam
 -import_from(yaml, [read, write, get])
 
 parse_config(PATH, HOST, PORT) <- (
@@ -16,7 +16,7 @@ parse_config(PATH, HOST, PORT) <- (
 
 Or via [module import](import.md):
 
-```clausal
+```seam
 -import_module(yaml)
 
 parse_config(PATH, HOST) <- (
@@ -29,7 +29,7 @@ parse_config(PATH, HOST) <- (
 
 ## Import
 
-```clausal
+```seam
 -import_from(yaml, [read, write, read_all, write_all,
                             read_file, write_file, get])
 ```
@@ -76,13 +76,13 @@ Only `yaml.safe_load` is used — no arbitrary Python object construction from Y
 
 ### `read/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/yaml_sigs.txt:read_sig"
 ```
 
 Parse a YAML string into a Python object. Text that is not YAML raises `syntax_error(invalid_yaml)` (see [Errors](#errors)).
 
-```clausal
+```seam
 -import_from(yaml, [read, get])
 
 test("parse mapping") <- (
@@ -93,13 +93,13 @@ test("parse mapping") <- (
 
 ### `read_all/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/yaml_sigs.txt:read_all_sig"
 ```
 
 Parse a multi-document YAML string (documents separated by `---`) into a list of Python objects.
 
-```clausal
+```seam
 -import_from(yaml, [read_all])
 
 test("multi-doc") <- (
@@ -111,13 +111,13 @@ test("multi-doc") <- (
 
 ### `read_file/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/yaml_sigs.txt:read_file_sig"
 ```
 
 Read and parse a YAML file from disk. A missing file raises `existence_error(source_sink, Path)`, a file that is not YAML `syntax_error(invalid_yaml)` (see [Errors](#errors)).
 
-```clausal
+```seam
 load_config(PATH, CFG) <- read_file(PATH, CFG)
 ```
 
@@ -127,13 +127,13 @@ load_config(PATH, CFG) <- read_file(PATH, CFG)
 
 ### `write/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/yaml_sigs.txt:write_sig"
 ```
 
 Serialize a Python object to a YAML document, answered as a string. Uses block style (`default_flow_style=False`) for human-readable output.
 
-```clausal
+```seam
 -import_from(yaml, [read, write, get])
 
 test("serialize") <- (
@@ -147,7 +147,7 @@ test("serialize") <- (
 
 ### `write_all/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/yaml_sigs.txt:write_all_sig"
 ```
 
@@ -155,7 +155,7 @@ Serialize a list of Python objects to a multi-document YAML document (a string) 
 
 ### `write_file/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/yaml_sigs.txt:write_file_sig"
 ```
 
@@ -185,7 +185,7 @@ Every predicate except `get/3` **raises** where it used to fail (ruled 2026-10-0
 
 ### `get/3`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/yaml_sigs.txt:get_sig"
 ```
 
@@ -197,7 +197,7 @@ Navigate a nested dict/list structure by key path. `Path` can be:
 
 Fails if any key is missing or index is out of range.
 
-```clausal
+```seam
 -import_from(yaml, [read, get])
 
 test("nested access") <- (
@@ -212,25 +212,25 @@ test("nested access") <- (
 
     ### Parse a config file
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/yaml_sigs.txt:parse_config"
     ```
 
     ### Round-trip
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/yaml_sigs.txt:round_trip"
     ```
 
     ### Multi-document Kubernetes manifests
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/yaml_sigs.txt:k8s_manifests"
     ```
 
     ### Python interop for complex access
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/yaml_sigs.txt:python_interop"
     ```
 

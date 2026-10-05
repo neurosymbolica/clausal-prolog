@@ -1,7 +1,7 @@
 # Optional Packages
 
 `pip install clausal` ships only the core: the DSL, import hooks, unifier,
-indexer, the standard `.clausal` library, and Python-stdlib-only modules.
+indexer, the standard `.seam` library, and Python-stdlib-only modules.
 Wrappers for external Python libraries and bridges to external Prolog
 engines live in their own distributions and are installed separately.
 

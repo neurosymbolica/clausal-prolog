@@ -1,6 +1,6 @@
 # Trealla Prolog Embedding
 
-Clausal includes an embedded [Trealla Prolog](https://github.com/trealla-prolog/trealla) engine via ctypes. This gives you an in-process, ISO-conformant Prolog engine that you can load `.clausal` or `.pl` programs into and query from Python.
+Clausal Prolog includes an embedded [Trealla Prolog](https://github.com/trealla-prolog/trealla) engine via ctypes. This gives you an in-process, ISO-conformant Prolog engine that you can load seam source or `.pl` programs into and query from Python.
 
 ## About Trealla Prolog
 
@@ -12,7 +12,7 @@ Clausal includes an embedded [Trealla Prolog](https://github.com/trealla-prolog/
 - **CLP(Z)** — Markus Triska's CLP(Z) constraint library is built in
 - **Rich standard library** — lists, assoc, DCGs, dif, format, ordsets, and more
 
-By embedding Trealla in-process, clausal gives you access to a fast, lightweight Prolog engine alongside the native Python-integrated engine.
+By embedding Trealla in-process, Clausal Prolog gives you access to a fast, lightweight Prolog engine alongside the native Python-integrated engine.
 
 ---
 
@@ -118,7 +118,7 @@ t.consult_string("parent(tom, bob). parent(bob, ann).")
 
 `consult_string` and `load_string` both load Prolog source. Standard Prolog semantics apply: consulting the same predicate again **replaces** earlier clauses.
 
-### Clausal source
+### Seam source
 
 ```python
 t.consult_clausal("""
@@ -133,7 +133,7 @@ t.query_all("reach(1, X).")
 # [{'X': 2}, {'X': 3}, {'X': 4}]
 ```
 
-`consult_clausal` translates the `.clausal` source to Prolog via `clausal_source_to_prolog` with the Trealla dialect, then loads it. All the usual translation rules apply: predicate names cross unchanged, `eval_/2` becomes `is`, `<=` becomes `=<`, etc.
+`consult_clausal` translates seam (`.seam`) source text to Prolog via `clausal_source_to_prolog` with the Trealla dialect, then loads it. All the usual translation rules apply: predicate names cross unchanged, `eval_/2` becomes `is`, `<=` becomes `=<`, etc.
 
 ### Files
 
@@ -145,7 +145,7 @@ t.query_one("fib(10, R).")
 t.consult_file("my_library.pl")
 ```
 
-`consult_file` auto-detects the file extension: `.clausal` files are translated; `.pl` files are loaded as raw Prolog.
+`consult_file` picks by file extension: a `.clausal` path is run through the seam translator; any other file (`.pl`, and currently `.seam` too) is loaded as raw Prolog.
 
 ---
 
@@ -239,10 +239,10 @@ Common Trealla libraries:
 
 ## Relationship to the Prolog translation pipeline
 
-The Trealla embedding sits on top of Clausal's existing [Prolog translation](prolog_translation.md) infrastructure:
+The Trealla embedding sits on top of Clausal Prolog's existing [Prolog translation](prolog_translation.md) infrastructure:
 
 ```
-.clausal source -> clausal_source_to_prolog(dialect=Trealla) -> Prolog text -> Trealla machine
+seam source -> clausal_source_to_prolog(dialect=Trealla) -> Prolog text -> Trealla machine
 ```
 
 All translation features work: naming conventions, operator mapping, library remapping (e.g. `clausal.logic.clpfd` -> `library(clpz)`). The `Dialect.trealla()` configuration handles Trealla-specific differences automatically.

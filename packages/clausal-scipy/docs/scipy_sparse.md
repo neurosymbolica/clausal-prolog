@@ -1,17 +1,17 @@
 # scipy.sparse — Sparse Matrices and Sparse Linear Algebra
 
 Provides sparse matrix construction, conversion, inspection, and linear algebra
-from `scipy.sparse` and `scipy.sparse.linalg` as [importable](import.md) clausal predicates.
+from `scipy.sparse` and `scipy.sparse.linalg` as [importable](import.md) Clausal Prolog predicates.
 
 ## Import
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:import"
 ```
 
 or via the canonical `py.*` path:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:import_ex2"
 ```
 
@@ -36,7 +36,7 @@ HANDLE.  Pass the HANDLE to conversion, inspection, or linalg predicates.
 
 ### make_csr
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:makecsr"
 ```
 
@@ -50,13 +50,13 @@ Wraps `scipy.sparse.csr_matrix((data, indices, indptr), shape=SHAPE, dtype=DTYPE
 - `DTYPE`: NumPy dtype string, e.g. `'float64'` (optional)
 - `RESULT`: integer HANDLE
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:makecsr_ex2"
 ```
 
 ### make_csc
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:makecsc"
 ```
 
@@ -67,7 +67,7 @@ pointers.
 
 ### make_coo
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:makecoo"
 ```
 
@@ -79,13 +79,13 @@ Wraps `scipy.sparse.coo_matrix((data, (row, col)), shape=SHAPE)`.
 - `SHAPE`: `(rows, cols)` tuple (optional)
 - `RESULT`: integer HANDLE
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:makecoo_ex2"
 ```
 
 ### make_diagonals
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:makediagonals"
 ```
 
@@ -98,13 +98,13 @@ Wraps `scipy.sparse.diags(diagonals, offsets=OFFSETS, shape=SHAPE)`.
 - `SHAPE`: `(rows, cols)` tuple (optional)
 - `RESULT`: integer HANDLE
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:makediagonals_ex2"
 ```
 
 ### make_eye
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:makeeye"
 ```
 
@@ -116,7 +116,7 @@ Wraps `scipy.sparse.eye(N, M=M, k=K)`.
 - `K`: diagonal offset (0 = main diagonal, default = 0)
 - `RESULT`: integer HANDLE
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:makeeye_ex2"
 ```
 
@@ -126,7 +126,7 @@ Wraps `scipy.sparse.eye(N, M=M, k=K)`.
 
 ### to_dense
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:todense"
 ```
 
@@ -139,7 +139,7 @@ Wraps `handle.toarray(order=ORDER)`.
 
 ### from_dense
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:fromdense"
 ```
 
@@ -150,7 +150,7 @@ Convert a dense array to a sparse matrix handle.
   Default (arity 2) is `'csr'`.
 - `RESULT`: integer HANDLE
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:fromdense_ex2"
 ```
 
@@ -160,19 +160,19 @@ Convert a dense array to a sparse matrix handle.
 
 ### shape
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:shape"
 ```
 
 Return the shape of the sparse matrix as a `(rows, cols)` tuple.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:shape_ex2"
 ```
 
 ### nonzero_count
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:nonzerocount"
 ```
 
@@ -184,7 +184,7 @@ Return the number of stored (non-zero) elements (`handle.nnz`).
 
 ### solve
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:solve"
 ```
 
@@ -198,13 +198,13 @@ Wraps `scipy.sparse.linalg.spsolve(a, b, permc_spec=..., use_umfpack=...)`.
 - `USE_UMFPACK`: boolean, use UMFPACK if available (default `True`)
 - `RESULT`: dense solution array X
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:solve_ex2"
 ```
 
 ### eigen_decompose_hermitian
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:eigendecomposehermitian"
 ```
 
@@ -216,13 +216,13 @@ sparse matrix.  Wraps `scipy.sparse.linalg.eigsh(a, k=K)`.
 - `RESULT`: dict with keys `'eigenvalues'` (1-D array) and
   `'eigenvectors'` (n × K array)
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:eigendecomposehermitian_ex2"
 ```
 
 ### singular_value_decompose
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:singularvaluedecompose"
 ```
 
@@ -234,7 +234,7 @@ Wraps `scipy.sparse.linalg.svds(a, k=K)`.
 - `RESULT`: dict with keys `'u'` (left singular vectors, n × K),
   `'s'` (singular values, length K), `'vt'` (right singular vectors, K × m)
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:singularvaluedecompose_ex2"
 ```
 
@@ -244,7 +244,7 @@ Wraps `scipy.sparse.linalg.svds(a, k=K)`.
 
 ### free
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_sparse_sigs.txt:free"
 ```
 
@@ -255,7 +255,7 @@ Call `free` when the handle is no longer needed to avoid memory leaks.
 
 ## Usage example
 
-```clausal
+```seam
 -import_from(scipy_sparse, [make_csr, solve, nonzero_count, free])
 
 solve_sparse(DATA, IDX, PTR, SHAPE, B, X) <- (

@@ -1,18 +1,18 @@
 # scipy.stats — statistics
 
-The `scipy_stats` module wraps [`scipy.stats`](https://docs.scipy.org/doc/scipy/reference/stats.html) as Clausal predicates. It covers descriptive statistics, correlation and regression, parametric and nonparametric hypothesis tests, distribution evaluation, and frozen distribution handles.
+The `scipy_stats` module wraps [`scipy.stats`](https://docs.scipy.org/doc/scipy/reference/stats.html) as Clausal Prolog predicates. It covers descriptive statistics, correlation and regression, parametric and nonparametric hypothesis tests, distribution evaluation, and frozen distribution handles.
 
 ---
 
 ## Import
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_stats_sigs.txt:import"
 ```
 
 Or via the canonical `py.*` path:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_stats_sigs.txt:import_ex2"
 ```
 
@@ -31,7 +31,7 @@ Or via the canonical `py.*` path:
 
 Predicate names use full English words; scipy's abbreviations are expanded:
 
-| scipy function | Clausal predicate |
+| scipy function | Clausal Prolog predicate |
 |---|---|
 | `describe` | `stats_describe` |
 | `tmean` | `stats_mean` |
@@ -71,13 +71,13 @@ Predicate names use full English words; scipy's abbreviations are expanded:
 
 ### Descriptive statistics (Tier 1)
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_stats_sigs.txt:descriptive_statistics"
 ```
 
 Example:
 
-```clausal
+```seam
 -import_from(scipy_stats, [stats_mean, stats_describe, result_get])
 
 summarise(DATA, MEAN) <- (
@@ -92,13 +92,13 @@ summarise(DATA, MEAN) <- (
 
 ### Correlation and regression (Tier 2)
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_stats_sigs.txt:correlation_and_regression"
 ```
 
 Example:
 
-```clausal
+```seam
 -import_from(scipy_stats, [stats_linear_regression, result_get])
 
 linear_fit(X, Y, SLOPE, INTERCEPT) <- (
@@ -112,13 +112,13 @@ linear_fit(X, Y, SLOPE, INTERCEPT) <- (
 
 ### Parametric hypothesis tests (Tier 2)
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_stats_sigs.txt:parametric_hypothesis_tests"
 ```
 
 Example:
 
-```clausal
+```seam
 -import_from(scipy_stats, [stats_t_test_independent, result_get])
 
 two_group_test(GROUP_A, GROUP_B, PVAL) <- (
@@ -131,13 +131,13 @@ two_group_test(GROUP_A, GROUP_B, PVAL) <- (
 
 ### Nonparametric tests (Tier 2)
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_stats_sigs.txt:nonparametric_tests"
 ```
 
 Example:
 
-```clausal
+```seam
 -import_from(scipy_stats, [stats_kruskal, result_get])
 
 group_difference(GROUPS, PVAL) <- (
@@ -150,13 +150,13 @@ group_difference(GROUPS, PVAL) <- (
 
 ### Distribution evaluation (Tier 1 functional)
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_stats_sigs.txt:distribution_evaluation"
 ```
 
 Example:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_stats_sigs.txt:distribution_evaluation_ex2"
 ```
 
@@ -166,13 +166,13 @@ Example:
 
 freeze a distribution with fixed parameters, then evaluate it repeatedly without re-creating the distribution object each time.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_stats_sigs.txt:frozen_distribution_handles"
 ```
 
 Example — reuse a frozen beta distribution:
 
-```clausal
+```seam
 -import_from(scipy_stats, [stats_freeze_dist, stats_frozen_pdf, stats_frozen_cdf,
                             stats_frozen_stats, stats_frozen_free])
 
@@ -188,7 +188,7 @@ beta_analysis(HANDLE) <- (
 
 Example — bidirectional `stats_frozen_cdf` as CDF and quantile function:
 
-```clausal
+```seam
 -import_from(scipy_stats, [stats_freeze_dist, stats_frozen_cdf, stats_frozen_free])
 
 # Forward: P = CDF(0.3) for Beta(2, 5)
@@ -210,7 +210,7 @@ beta_median(X) <- (
 
 ### result_get
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_stats_sigs.txt:resultget"
 ```
 

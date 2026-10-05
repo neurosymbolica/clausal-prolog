@@ -1,12 +1,12 @@
 # scipy.differentiate — Numerical Differentiation
 
-The `scipy_differentiate` module wraps [`scipy.differentiate`](https://docs.scipy.org/doc/scipy/reference/differentiate.html) as Clausal predicates. It provides high-accuracy numerical derivatives, Jacobians, and Hessians using Richardson extrapolation.
+The `scipy_differentiate` module wraps [`scipy.differentiate`](https://docs.scipy.org/doc/scipy/reference/differentiate.html) as Clausal Prolog predicates. It provides high-accuracy numerical derivatives, Jacobians, and Hessians using Richardson extrapolation.
 
 ---
 
 ## Import
 
-```clausal
+```seam
 -import_from(scipy_differentiate, [derivative, jacobian, hessian, result_get])
 ```
 
@@ -22,7 +22,7 @@ All predicates are **Tier 2 — result record**: they return a dict with named f
 
 The `Diff` prefix from the spec is dropped since these predicates live in the `scipy_differentiate` module. No abbreviations are used.
 
-| scipy function | Clausal predicate |
+| scipy function | Clausal Prolog predicate |
 |---|---|
 | `differentiate.derivative` | `derivative` |
 | `differentiate.jacobian` | `jacobian` |
@@ -42,7 +42,7 @@ Compute the scalar derivative of `F` at point `X` using Richardson extrapolation
 - `ARGS`: optional list of extra positional arguments to pass to `F`
 - `RESULT`: result dict — see fields below
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_differentiate_sigs.txt:derivative"
 ```
 
@@ -68,7 +68,7 @@ Compute the jacobian matrix of a vector-valued function `F` at point `X`.
 - `X`: 1-D NumPy array of shape `(n,)`
 - `RESULT`: result dict — see fields below
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_differentiate_sigs.txt:jacobian"
 ```
 
@@ -92,7 +92,7 @@ Compute the hessian matrix of a scalar-valued function `F` at point `X`.
 - `X`: 1-D NumPy array of shape `(n,)`
 - `RESULT`: result dict — see fields below
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_differentiate_sigs.txt:hessian"
 ```
 
@@ -117,7 +117,7 @@ Extract a named field from a differentiation result dict.
 
 Fails if `FIELD` is not present in `RESULT`.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_differentiate_sigs.txt:resultget"
 ```
 
@@ -125,7 +125,7 @@ Fails if `FIELD` is not present in `RESULT`.
 
 ## Example
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_differentiate_sigs.txt:example"
 ```
 

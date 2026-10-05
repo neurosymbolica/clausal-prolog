@@ -1,4 +1,4 @@
-# Clausal — TCP Module (`tcp`)
+# Clausal Prolog — TCP Module (`tcp`)
 
 ## Overview
 

@@ -1,6 +1,6 @@
 # Arithmetic
 
-Clausal supports Python's arithmetic operators directly in clause bodies, plus
+Clausal Prolog supports Python's arithmetic operators directly in clause bodies, plus
 relational arithmetic predicates that work in multiple directions.
 
 ---

@@ -1,18 +1,18 @@
 # scipy.ndimage — N-dimensional Image Processing
 
-The `scipy_ndimage` module wraps [`scipy.ndimage`](https://docs.scipy.org/doc/scipy/reference/ndimage.html) as Clausal predicates. It covers smoothing filters, convolution, morphological operations, connected-component labelling, geometric transforms, and measurement functions.
+The `scipy_ndimage` module wraps [`scipy.ndimage`](https://docs.scipy.org/doc/scipy/reference/ndimage.html) as Clausal Prolog predicates. It covers smoothing filters, convolution, morphological operations, connected-component labelling, geometric transforms, and measurement functions.
 
 ---
 
 ## Import
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_ndimage_sigs.txt:import"
 ```
 
 Or via the canonical `py.*` path:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_ndimage_sigs.txt:import_ex2"
 ```
 
@@ -28,7 +28,7 @@ All predicates are **Tier 1 — pure functions**: NumPy array in, result directl
 
 Predicates are imported from `scipy_ndimage`, so there is no module prefix in the name — each predicate is just the operation name in `TitleCase`.
 
-| scipy function | Clausal predicate |
+| scipy function | Clausal Prolog predicate |
 |---|---|
 | `gaussian_filter` | `gaussian_filter` |
 | `uniform_filter` | `uniform_filter` |
@@ -51,13 +51,13 @@ Predicates are imported from `scipy_ndimage`, so there is no module prefix in th
 
 ### Smoothing filters
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_ndimage_sigs.txt:smoothing_filters"
 ```
 
 Example — smooth a noisy 1-D signal:
 
-```clausal
+```seam
 -import_from(scipy_ndimage, [gaussian_filter])
 
 smooth_signal(NOISY, SMOOTHED) <- (
@@ -69,13 +69,13 @@ smooth_signal(NOISY, SMOOTHED) <- (
 
 ### Convolution
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_ndimage_sigs.txt:convolution"
 ```
 
 Example — edge detection with a simple difference kernel:
 
-```clausal
+```seam
 -import_from(scipy_ndimage, [convolve])
 
 edge_detect(SIGNAL, EDGES) <- (
@@ -88,13 +88,13 @@ edge_detect(SIGNAL, EDGES) <- (
 
 ### Connected-component labelling
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_ndimage_sigs.txt:connected_component_labelling"
 ```
 
 Example — count blobs in a binary image:
 
-```clausal
+```seam
 -import_from(scipy_ndimage, [label])
 
 count_blobs(IMAGE, COUNT) <- (
@@ -110,13 +110,13 @@ count_blobs(IMAGE, COUNT) <- (
 All four predicates operate on boolean (or 0/1 integer) arrays and use the
 default 3×3 (or 3-point in 1-D) structuring element.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_ndimage_sigs.txt:morphological_operations"
 ```
 
 Example — remove noise then fill gaps in a binary mask:
 
-```clausal
+```seam
 -import_from(scipy_ndimage, [binary_opening, binary_closing])
 
 clean_mask(RAW_MASK, CLEAN) <- (
@@ -129,13 +129,13 @@ clean_mask(RAW_MASK, CLEAN) <- (
 
 ### Geometric transforms
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_ndimage_sigs.txt:geometric_transforms"
 ```
 
 Example — centre-crop after zoom:
 
-```clausal
+```seam
 -import_from(scipy_ndimage, [zoom])
 
 zoom_image(IMAGE, FACTOR, ZOOMED) <- (
@@ -147,13 +147,13 @@ zoom_image(IMAGE, FACTOR, ZOOMED) <- (
 
 ### Measurement
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_ndimage_sigs.txt:measurement"
 ```
 
 Example — find the centroid of a blob:
 
-```clausal
+```seam
 -import_from(scipy_ndimage, [label, center_of_mass])
 
 blob_centroid(BINARY_IMAGE, CENTROID) <- (
@@ -168,7 +168,7 @@ blob_centroid(BINARY_IMAGE, CENTROID) <- (
 
 ### Gaussian smoothing and edge detection
 
-```clausal
+```seam
 -import_from(scipy_ndimage, [gaussian_filter, convolve])
 
 process_signal(NOISY, SMOOTHED, EDGES) <- (
@@ -180,7 +180,7 @@ process_signal(NOISY, SMOOTHED, EDGES) <- (
 
 ### label and count connected components
 
-```clausal
+```seam
 -import_from(scipy_ndimage, [label, find_objects])
 
 label_and_locate(BINARY, COUNT, REGIONS) <- (
@@ -192,7 +192,7 @@ label_and_locate(BINARY, COUNT, REGIONS) <- (
 
 ### Remove small noise blobs with morphological opening
 
-```clausal
+```seam
 -import_from(scipy_ndimage, [binary_opening])
 
 remove_noise(RAW, CLEAN) <- (

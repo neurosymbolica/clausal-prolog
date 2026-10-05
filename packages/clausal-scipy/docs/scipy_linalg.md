@@ -1,18 +1,18 @@
 # scipy.linalg — Linear Algebra
 
-The `scipy_linalg` module wraps [`scipy.linalg`](https://docs.scipy.org/doc/scipy/reference/linalg.html) as Clausal predicates. Inputs and outputs are NumPy arrays (or Python scalars where appropriate).
+The `scipy_linalg` module wraps [`scipy.linalg`](https://docs.scipy.org/doc/scipy/reference/linalg.html) as Clausal Prolog predicates. Inputs and outputs are NumPy arrays (or Python scalars where appropriate).
 
 ---
 
 ## Import
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_linalg_sigs.txt:import"
 ```
 
 Or via the canonical `py.*` path:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_linalg_sigs.txt:import_ex2"
 ```
 
@@ -26,7 +26,7 @@ Predicates fall into two tiers depending on whether the result is a single array
 
 **Tier 2 — result dict**: RESULT is unified with a Python dict. Use `result_get(RESULT, FIELD, VALUE)` to extract individual fields by name.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_linalg_sigs.txt:tiers"
 ```
 
@@ -36,7 +36,7 @@ Predicates fall into two tiers depending on whether the result is a single array
 
 Predicate names use full English words; scipy's terse abbreviations are expanded:
 
-| scipy function | Clausal predicate |
+| scipy function | Clausal Prolog predicate |
 |---|---|
 | `scipy.linalg.solve` | `solve` |
 | `scipy.linalg.lstsq` | `least_squares` |
@@ -69,13 +69,13 @@ LU and QR are kept as-is — they are the standard letter names for the matrix f
 
 ### Linear system solvers
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_linalg_sigs.txt:linear_system_solvers"
 ```
 
 Example:
 
-```clausal
+```seam
 solve_system(A, B, X) <- (
     solve(A, B, X),
     ++print(f"Solution: {X}")
@@ -88,13 +88,13 @@ solve_system(A, B, X) <- (
 
 All decomposition predicates are **bidirectional**: the forward direction decomposes `A` into factor dict `R`; the backward direction recomposes `A` from `R` using plain numpy.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_linalg_sigs.txt:matrix_decompositions"
 ```
 
 Example — extract singular values:
 
-```clausal
+```seam
 largest_singular_value(A, S1) <- (
     singular_value_decompose(A, DECOMP),
     result_get(DECOMP, 's', S),
@@ -106,13 +106,13 @@ largest_singular_value(A, S1) <- (
 
 ### Matrix functions
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_linalg_sigs.txt:matrix_functions"
 ```
 
 Example — check positive definiteness via eigenvalues:
 
-```clausal
+```seam
 is_positive_definite(A) <- (
     eigen_decompose_hermitian(A, D),
     result_get(D, 'eigenvalues', VALS),
@@ -126,13 +126,13 @@ is_positive_definite(A) <- (
 
 when solving multiple systems with the same matrix, factorising once and reusing is more efficient than calling `solve` repeatedly.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_linalg_sigs.txt:two_step_factorisations"
 ```
 
 Example — solve multiple right-hand sides efficiently:
 
-```clausal
+```seam
 solve_multiple(A, RHS_LIST, SOLUTIONS) <- (
     lu_factor(A, LU),
     maplist([B]>>(lu_solve(LU, B, X), X), RHS_LIST, SOLUTIONS)
@@ -143,7 +143,7 @@ solve_multiple(A, RHS_LIST, SOLUTIONS) <- (
 
 ### result_get
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_linalg_sigs.txt:resultget"
 ```
 
@@ -151,7 +151,7 @@ solve_multiple(A, RHS_LIST, SOLUTIONS) <- (
 
 ## Complete example — principal component analysis
 
-```clausal
+```seam
 -import_from(scipy_linalg, [singular_value_decompose, result_get])
 
 # Compute the top-K principal components of a data matrix X

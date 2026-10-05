@@ -23,7 +23,7 @@ Or via [module import](import.md):
 
 ## Type Mapping
 
-| JSON | Clausal |
+| JSON | Clausal Prolog |
 |---|---|
 | `{}` object | [`DictTerm`](dicts_sets.md) with **atom** keys |
 | `[]` array | Python `list` |
@@ -52,7 +52,7 @@ the `atoms` vocabulary reaches every nested string value.
 
 ### parse/2
 
-`parse(String, Term)` — parse a JSON string into Clausal terms. Text that is not JSON raises `syntax_error(invalid_json)` (ruled 2026-10-02; it was `domain_error(json_text, S)`); an unbound String raises `instantiation_error`.
+`parse(String, Term)` — parse a JSON string into Clausal Prolog terms. Text that is not JSON raises `syntax_error(invalid_json)` (ruled 2026-10-02; it was `domain_error(json_text, S)`); an unbound String raises `instantiation_error`.
 
 ```seam
 parse_config(S, CONFIG) <- parse(S, CONFIG)
@@ -75,7 +75,7 @@ text. Everything not listed stays a string.
 
 ### generate/2
 
-`generate(Term, String)` — serialize a Clausal term to a compact JSON string. Fails if the term contains unbound [variables](syntax.md). An atom serialises as the JSON string of its spelling; a compound cell raises `type_error(json_term, Cell)`.
+`generate(Term, String)` — serialize a Clausal Prolog term to a compact JSON string. Fails if the term contains unbound [variables](syntax.md). An atom serialises as the JSON string of its spelling; a compound cell raises `type_error(json_term, Cell)`.
 
 ```seam
 to_json(DATA, JSON) <- generate(DATA, JSON)

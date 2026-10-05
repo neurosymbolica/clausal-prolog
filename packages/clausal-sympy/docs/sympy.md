@@ -1,8 +1,8 @@
 # Symbolic Math (`sympy`)
 
-The `sympy` standard library module provides symbolic mathematics predicates backed by [SymPy](https://www.sympy.org/). It accepts **native Clausal terms** directly — logic variables and arithmetic operators are converted to SymPy expressions automatically.
+The `sympy` standard library module provides symbolic mathematics predicates backed by [SymPy](https://www.sympy.org/). It accepts **native Clausal Prolog terms** directly — logic variables and arithmetic operators are converted to SymPy expressions automatically.
 
-```clausal
+```seam
 -import_from(sympy, [diff, solve, simplify, sin, cos, inf])
 
 test("diff sin") <- (
@@ -22,14 +22,14 @@ The implementation lives in `clausal/modules/sympy.py`.
 
 ## Import
 
-```clausal
+```seam
 -import_from(sympy, [simplify, expand, factor, solve, diff, integrate,
                              sin, cos, exp, log, sqrt, inf, pi])
 ```
 
 Or via [module import](import.md):
 
-```clausal
+```seam
 -import_module(sympy)
 # then use sympy.diff(...), sympy.sin(...), etc.
 ```
@@ -40,9 +40,9 @@ Or via [module import](import.md):
 
 ### Term conversion
 
-Clausal [arithmetic](arithmetic.md) terms (`X**2 + 3*X + 1`) are trees of `Add`, `Mult`, `Pow` nodes containing logic variables (`Var`). The module converts these to SymPy expression trees automatically:
+Clausal Prolog [arithmetic](arithmetic.md) terms (`X**2 + 3*X + 1`) are trees of `Add`, `Mult`, `Pow` nodes containing logic variables (`Var`). The module converts these to SymPy expression trees automatically:
 
-| Clausal | SymPy |
+| Clausal Prolog | SymPy |
 |---|---|
 | `X` (unbound Var) | `Symbol('x')` |
 | `X**2 + 1` | `Symbol('x')**2 + 1` |
@@ -58,7 +58,7 @@ when the same Var appears in multiple arguments to a predicate, it maps to the s
 Predicate results are SymPy expressions. Compare one with an expected
 expression with `sym_equal/2`:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:symbolic_equality"
 ```
 
@@ -70,13 +70,13 @@ This handles term reordering (SymPy may internally reorder `x + 1` to `1 + x`) a
 
 Results from one predicate can be fed directly into another:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:chaining"
 ```
 
 `sym_equal/2` also compares through chains:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:chaining_ex2"
 ```
 
@@ -90,7 +90,7 @@ Results from one predicate can be fed directly into another:
 
 `simplify(Expr, Result)` — simplify an expression:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:simplify_2"
 ```
 
@@ -98,7 +98,7 @@ Results from one predicate can be fed directly into another:
 
 `expand(Expr, Result)` — algebraic expansion:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:expand_2"
 ```
 
@@ -106,7 +106,7 @@ Results from one predicate can be fed directly into another:
 
 `factor(Expr, Result)` — factorization:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:factor_2"
 ```
 
@@ -114,7 +114,7 @@ Results from one predicate can be fed directly into another:
 
 `solve(Equation, Var, Solution)` — solve equation = 0 for Var. **Nondeterministic** — yields one solution per answer on backtracking:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:solve_3"
 ```
 
@@ -122,7 +122,7 @@ Results from one predicate can be fed directly into another:
 
 `solve_all(Equation, Var, Solutions)` — deterministic, unifies Solutions with a list:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:solve_all_3"
 ```
 
@@ -131,7 +131,7 @@ Results from one predicate can be fed directly into another:
 `diff(Expr, Result)` — differentiate w.r.t. the single free variable.
 `diff(Expr, Var, Result)` — differentiate w.r.t. specified variable:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:diff_2_3"
 ```
 
@@ -140,7 +140,7 @@ Results from one predicate can be fed directly into another:
 `integrate(Expr, Result)` — indefinite integral w.r.t. the single free variable.
 `integrate(Expr, Var, Result)` — w.r.t. specified variable:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:integrate_2_3"
 ```
 
@@ -148,7 +148,7 @@ Results from one predicate can be fed directly into another:
 
 `limit(Expr, Var, Point, Result)` — limit as Var approaches Point:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:limit_4"
 ```
 
@@ -157,7 +157,7 @@ Results from one predicate can be fed directly into another:
 `series(Expr, Var, N, Result)` — Taylor series around Var=0 to N terms.
 `series(Expr, Var, Point, N, Result)` — around a specified point:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:series_4_5"
 ```
 
@@ -167,7 +167,7 @@ Results from one predicate can be fed directly into another:
 
 `collect(Expr, Var, Result)` — collect terms by powers of Var:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:collect_3"
 ```
 
@@ -175,7 +175,7 @@ Results from one predicate can be fed directly into another:
 
 `cancel(Expr, Result)` — cancel common factors in a rational expression:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:cancel_2"
 ```
 
@@ -183,7 +183,7 @@ Results from one predicate can be fed directly into another:
 
 `apart(Expr, Result)` — partial fraction decomposition:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:apart_2_3"
 ```
 
@@ -191,7 +191,7 @@ Results from one predicate can be fed directly into another:
 
 `together(Expr, Result)` — combine fractions over a common denominator:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:together_2"
 ```
 
@@ -199,7 +199,7 @@ Results from one predicate can be fed directly into another:
 
 `degree(Expr, Result)` / `degree(Expr, Var, Result)` — polynomial degree:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:degree_2_3"
 ```
 
@@ -207,7 +207,7 @@ Results from one predicate can be fed directly into another:
 
 `coeffs(Expr, Var, Result)` — polynomial coefficients (highest degree first):
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:coeffs_3"
 ```
 
@@ -215,7 +215,7 @@ Results from one predicate can be fed directly into another:
 
 `roots(Equation, Var, Pair)` — **nondeterministic**, yields `(root, multiplicity)` tuples:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:roots_3"
 ```
 
@@ -225,7 +225,7 @@ Results from one predicate can be fed directly into another:
 
 `trig_simp(Expr, Result)` — simplify trigonometric expressions:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:trig_simp_2"
 ```
 
@@ -233,7 +233,7 @@ Results from one predicate can be fed directly into another:
 
 `expand_trig(Expr, Result)` — expand trig identities:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:expand_trig_2"
 ```
 
@@ -243,7 +243,7 @@ Results from one predicate can be fed directly into another:
 
 `is_prime(N)` — succeeds if N is prime:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:is_prime_1"
 ```
 
@@ -251,7 +251,7 @@ Results from one predicate can be fed directly into another:
 
 `next_prime(N, Result)` — smallest prime greater than N:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:next_prime_2"
 ```
 
@@ -259,7 +259,7 @@ Results from one predicate can be fed directly into another:
 
 `factor_int(N, Result)` — prime factorization as `{prime: exponent}` dict:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:factor_int_2"
 ```
 
@@ -267,7 +267,7 @@ Results from one predicate can be fed directly into another:
 
 `divisors(N, Result)` — sorted list of positive divisors:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:divisors_2"
 ```
 
@@ -275,7 +275,7 @@ Results from one predicate can be fed directly into another:
 
 `gcd(A, B, Result)` / `lcm(A, B, Result)` — symbolic GCD/LCM (works on both integers and polynomials):
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:gcd_lcm_3"
 ```
 
@@ -285,7 +285,7 @@ Results from one predicate can be fed directly into another:
 
 `sum_(Expr, Var, Low, High, Result)` — symbolic summation:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:sum_5"
 ```
 
@@ -293,7 +293,7 @@ Results from one predicate can be fed directly into another:
 
 `product(Expr, Var, Low, High, Result)` — symbolic product:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:product_5"
 ```
 
@@ -301,7 +301,7 @@ Results from one predicate can be fed directly into another:
 
 `binomial(N, K, Result)` — binomial coefficient:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:binomial_3"
 ```
 
@@ -317,7 +317,7 @@ the atom.
 
 `latex(Expr, String)` — convert expression to LaTeX:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:latex_2"
 ```
 
@@ -325,7 +325,7 @@ the atom.
 
 `pretty(Expr, String)` — Unicode pretty-print:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:pretty_2"
 ```
 
@@ -339,7 +339,7 @@ the atom.
 
 `subs(Expr, Bindings, Result)` — substitute values. Bindings is a dict or list of pairs:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:subs_3"
 ```
 
@@ -349,7 +349,7 @@ Note: binding dicts with logic variable keys must be wrapped in `++()` so the Va
 
 `free_vars(Expr, Names)` — sorted list of the free symbols' names, as atoms (`[x, y]`):
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:free_vars_2"
 ```
 
@@ -359,7 +359,7 @@ Note: binding dicts with logic variable keys must be wrapped in `++()` so the Va
 
 `sym_str(Expr, String)` — convert expression to a readable string via SymPy:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:sym_str_2"
 ```
 
@@ -367,7 +367,7 @@ Note: binding dicts with logic variable keys must be wrapped in `++()` so the Va
 
 `sym_equal(A, B)` — symbolic equality (`==` is arithmetic and does not compare symbolic expressions):
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:sym_equal_2"
 ```
 
@@ -377,19 +377,19 @@ Note: binding dicts with logic variable keys must be wrapped in `++()` so the Va
 
 `sym(Name, Symbol)` — create a named SymPy Symbol. Rarely needed since predicates auto-convert Vars, but useful when you want a specific display name:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:sym_2"
 ```
 
 #### sympy_term/2
 
-`sympy_term(Sympy, Term)` — explicit bidirectional conversion between a SymPy expression and a Clausal term. Rarely needed (predicates auto-convert), but useful for inspecting or constructing a raw SymPy expression. Mode-switches like ISO `atom_codes/2`:
+`sympy_term(Sympy, Term)` — explicit bidirectional conversion between a SymPy expression and a Clausal Prolog term. Rarely needed (predicates auto-convert), but useful for inspecting or constructing a raw SymPy expression. Mode-switches like ISO `atom_codes/2`:
 
-- `Sympy` already a SymPy expression → `Term` is unified with the equivalent Clausal term.
+- `Sympy` already a SymPy expression → `Term` is unified with the equivalent Clausal Prolog term.
 - `Sympy` unbound, `Term` bound to anything other than a bare unbound variable (a number, an atom, a term that may itself contain variables, e.g. `X+1`) → `Sympy` is unified with the equivalent SymPy expression.
 - Both unbound → `instantiation_error`.
 - `Sympy` bound to something that is neither a SymPy expression nor unbound → `type_error(sympy_expression, Sympy)`.
-- A `Term` with no SymPy counterpart (TO-SYMPY direction) → `type_error(sympy_expression, Term)`. A SymPy expression with no Clausal-term counterpart (FROM-SYMPY direction) → `type_error(clausal_term, Sympy)` (this one is believed unreachable today: the converter always has a fallback -- a SymPy object with no term form comes back as its printed form, a **string** such as `"Eq(a, 1)"` -- but the predicate does not rely on that staying true).
+- A `Term` with no SymPy counterpart (TO-SYMPY direction) → `type_error(sympy_expression, Term)`. A SymPy expression with no Clausal Prolog term counterpart (FROM-SYMPY direction) → `type_error(clausal_term, Sympy)` (this one is believed unreachable today: the converter always has a fallback -- a SymPy object with no term form comes back as its printed form, a **string** such as `"Eq(a, 1)"` -- but the predicate does not rely on that staying true).
 
 **Not a true bijection.** SymPy canonicalises on construction: `X+X` becomes `2*X`, `X*1` becomes `X`, and term order is not preserved. So `Term → Sympy → Term` returns an *equivalent* term, not necessarily the *same* one:
 
@@ -418,7 +418,7 @@ Importable callables that produce compound terms (cells). These are converted to
 
 Usage:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:math_functions_usage"
 ```
 
@@ -434,7 +434,7 @@ Usage:
 
 Usage:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sympy_sigs.txt:constants_usage"
 ```
 
@@ -447,11 +447,11 @@ Function and constant names follow SymPy's conventions where possible:
 - **Math functions**: lowercase (`sin`, `cos`, `exp`, `log`, `sqrt`, `factorial`) — matches SymPy exactly
 - **`abs_`**: capitalized — matches SymPy (they capitalized it because `abs` is a Python builtin)
 - **`inf`**: instead of SymPy's `oo` — readability
-- **`e`**: instead of SymPy's `E` — `E` is ALLCAPS so Clausal treats it as a logic variable
+- **`e`**: instead of SymPy's `E` — `E` is ALLCAPS so seam source treats it as a logic variable
 - **Predicates**: capitalized (`simplify`, `diff`, `solve`) — these are Python
-  objects reached through the `-import_from(sympy, [...])` list, not Clausal
+  objects reached through the `-import_from(sympy, [...])` list, not Clausal Prolog
   predicates; a name that arrives through an import list keeps its Python
-  spelling. Clausal's own predicates are lowercase.
+  spelling. Clausal Prolog's own predicates are lowercase.
 
 ---
 
@@ -469,4 +469,4 @@ Function and constant names follow SymPy's conventions where possible:
 
 ---
 
-*See also: [Arithmetic](arithmetic.md) — Clausal's built-in arithmetic · [Python Interop](python_integration.md) — `++()` escape for additional SymPy operations.*
+*See also: [Arithmetic](arithmetic.md) — Clausal Prolog's built-in arithmetic · [Python Interop](python_integration.md) — `++()` escape for additional SymPy operations.*

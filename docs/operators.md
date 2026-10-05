@@ -1,32 +1,32 @@
 # Operators: Python meaning vs Prolog meaning
 
-Many operator spellings exist in both worlds Clausal joins: Python and ISO
-Prolog. Clausal decides which meaning applies by **how the operator is
-written**, not by where it appears:
+Many operator spellings exist in both worlds Clausal Prolog joins: Python and
+ISO Prolog. Which meaning applies depends on the surface and on **how the
+operator is written**:
 
-- **Bare** (`-7 // 2`, `2 ** 3`): today's source syntax, the Python-shaped
-  syntax of `.clausal` and `.seam` files, clause bodies and `--` expressions
-  alike. A bare arithmetic operator keeps **Python's** meaning.
+- **Bare, in seam syntax** (`-7 // 2`, `2 ** 3`): the Python-shaped syntax
+  of `.seam` files, clause bodies and `--` expressions alike. A bare
+  arithmetic operator keeps **Python's** meaning.
 - **Quoted, or built as a cell** (`'//'(-7, 2)`, `'**'(2, 3)`, or a term
   built at runtime with `unpack(T, ['//', -7, 2])`): the operator follows
   **Scryer Prolog**, and through it ISO 13211-1.
-- **Future Clausal Prolog syntax** (planned, not built yet): the bare
-  operator will follow Scryer, and Python's meaning will be reachable only
-  inside `++(...)`.
+- **Bare, in [Clausal Prolog](clausal_prolog.md)** (`.clausal` files): the
+  operator follows Scryer, as a quoted one does. Clausal Prolog has no
+  `++`, so Python's meaning is reachable only through a `.seam` module.
 
 The rule, in the operator's words: *operators in seam syntax follow Python
 semantics unless quoted; quoted ones follow Scryer's.*
 
 ## Arithmetic
 
-| Spelling | Bare, today's syntax: Python meaning | Quoted / cell: Scryer meaning | Future Clausal Prolog syntax |
+| Spelling | Bare, seam syntax: Python meaning | Quoted / cell: Scryer meaning | Bare, Clausal Prolog (`.clausal`) |
 |---|---|---|---|
 | `+` `-` `*` | exact addition, subtraction, multiplication (a `Decimal` keeps its scale) | the same | the same |
 | `/` | in evaluation (`eval_`, `'is'`, the ISO comparisons): Python true division — `7 / 2` is 3.5, `6 / 2` is **3.0**; a `Fraction` or `Decimal` operand stays exact as in Python. **Inside a constraint** (`==`, `<`, ...): exact rational, `X == 7 / 2` gives 7/2 and `X == 6 / 2` gives 3 (CLP(ℚ), like Scryer's `{X = 7/2}`) | Scryer's division, always a float: `'/'(7, 2)` is 3.5, `'/'(6, 2)` is 3.0; inside a constraint, rational as the bare one | Scryer: a float in evaluation; rational inside `{...}` |
 | `rdiv` | (no bare spelling) | the **exact** rational division: `rdiv(7, 2)` is 7/2, `rdiv(6, 2)` is 3, everywhere | the same |
 | `//` | Python floor division: `-7 // 2` is **-4** | ISO integer division, **truncating** toward zero: `'//'(-7, 2)` is **-3**; integers only | Scryer: truncates |
 | `div` | (no bare spelling) | ISO floored division: `div(-7, 2)` is -4; integers only | the same |
-| `%` | Python modulo, sign of the divisor: `-7 % 2` is 1 | (no quoted `%`; write `mod`) | Python's `%` only inside `++` |
+| `%` | Python modulo, sign of the divisor: `-7 % 2` is 1 | (no quoted `%`; write `mod`) | `%` starts a comment; write `mod` (Python's `%` only in the seam) |
 | `mod` | (no bare spelling) | ISO modulo, sign of the divisor: `mod(-7, 2)` is 1; integers only | the same |
 | `rem` | (none) | ISO remainder, the sign of the dividend: `rem(-7, 2)` is -1; integers only | the same |
 | `**` | Python power: `2 ** 3` is the **integer 8**; `2 ** -1` is 0.5 | ISO power, always a **float**: `'**'(2, 3)` is **8.0** | Scryer: a float |
@@ -52,16 +52,20 @@ exceptions included.
 
 ## Comparison and unification
 
-These spellings already differ from Python in today's syntax: a clause body
+These spellings already differ from Python in seam syntax: a clause body
 is logic, not Python.
 
-| Spelling | Bare, today's syntax | Quoted: ISO / Scryer meaning |
+| Spelling | Bare, seam syntax | Quoted: ISO / Scryer meaning |
 |---|---|---|
 | `==` | arithmetic equality posted as a constraint ([CLP(ℤ)](constraints.md), CLP(ℚ), CLP(ℝ)): Prolog's `#=` | `'=='(A, B)`: structural identity in the standard order of terms |
 | `!=` | arithmetic disequality constraint: `#\=` | (ISO spells it `'=\\='` for arithmetic, `'\\=='` structurally) |
 | `<` `>` `<=` `>=` | arithmetic ordering constraints: `#<` `#>` `#=<` `#>=`; ground dates, times and strings order too | `'<'`, `'>'`, `'=<'`, `'>='`: ISO arithmetic comparison, both sides evaluated (ISO spells `=<`, never `<=`) |
 | `is` | **unification**, no evaluation: `X is 1 + 2` binds X to the term `1 + 2` | `'is'(X, E)`: ISO `is/2`, evaluates E |
 | `=` | not a goal (Python assignment is a syntax error in a clause body) | `'='(A, B)`: unification |
+
+In Clausal Prolog the bare spellings have the ISO meaning of the right-hand
+column: `==` is structural identity, `is` evaluates, `=` unifies, and the
+CLP(ℤ) constraints are `#=`, `#<`, ... from `library(clpz)`.
 
 A non-arithmetic term in an arithmetic constraint raises Scryer's clpz error
 `domain_error(clpz_expression, T)`: `X == foo(1)` raises

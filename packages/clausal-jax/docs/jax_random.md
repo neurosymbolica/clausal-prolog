@@ -3,7 +3,7 @@
 JAX refuses to hide randomness in a global. Every sample takes an
 explicit `PRNGKey`; splitting a key produces new keys; a key that has
 been used has no lingering effect on the one it was split from. That
-is *exactly* the discipline Clausal expects from stateful operations —
+is *exactly* the discipline Clausal Prolog expects from stateful operations —
 state-threaded, backtracking-safe, no hidden side effects.
 
 If backtracking abandons a sample, the subkey that produced it is
@@ -11,7 +11,7 @@ abandoned too — the pre-split key is still valid and can be re-used.
 
 ## Import
 
-```clausal
+```seam
 -import_from(py.jax_random, [
     key, split_key, fold_in, key_bytes,
     normal, uniform, bernoulli, categorical,
@@ -28,20 +28,20 @@ abandoned too — the pre-split key is still valid and can be re-used.
 
 ### key
 
-```clausal
+```seam
 key(SEED, K)
 ```
 
 Create a typed PRNG key from an integer seed. Uses `jax.random.key`
 (the modern typed-key API — *not* the deprecated `PRNGKey`).
 
-```clausal
+```seam
 key(42, K)
 ```
 
 ### split_key
 
-```clausal
+```seam
 split_key(K, KEYS)          # KEYS is a 2-element list
 split_key(K, N, KEYS)       # KEYS is an N-element list
 ```
@@ -49,14 +49,14 @@ split_key(K, N, KEYS)       # KEYS is an N-element list
 Split a key. `split_key/2` produces a Python list of two subkeys —
 pattern-match them directly:
 
-```clausal
+```seam
 key(0, K0),
 split_key(K0, [K1, K2])
 ```
 
 For N subkeys:
 
-```clausal
+```seam
 key(0, K0),
 split_key(K0, 3, KS),
 length(KS, 3)
@@ -64,7 +64,7 @@ length(KS, 3)
 
 ### fold_in
 
-```clausal
+```seam
 fold_in(K, DATA, K2)
 ```
 
@@ -73,7 +73,7 @@ per-example subkeys inside a loop without repeated splitting.
 
 ### key_bytes
 
-```clausal
+```seam
 key_bytes(K, BYTES)
 ```
 
@@ -112,12 +112,12 @@ split once, pass each subkey to one consumer.
 | `randint` | `(K, SHAPE, MIN, MAX, A)` — integers in `[MIN, MAX)` |
 | `truncated_normal` | `(K, LOWER, UPPER, SHAPE, A)` |
 
-```clausal
+```seam
 key(0, K),
 uniform(K, [1000], 0.0, 10.0, A)
 ```
 
-```clausal
+```seam
 key(0, K),
 bernoulli(K, 0.5, [100], A),
 dtype(A, bool_)
@@ -127,7 +127,7 @@ dtype(A, bool_)
 
 ## Sampler registry
 
-```clausal
+```seam
 sampler(NAME, FN)
 ```
 
@@ -137,7 +137,7 @@ Fact table over `jax.random` samplers. Modes:
 - `(-NAME, -FN)` — enumerate every available sampler
 - `(-NAME, +FN)` — reverse lookup
 
-```clausal
+```seam
 # Enumerate every sampler JAX exposes
 findall(N, sampler(N, _), NAMES)
 ```
@@ -152,7 +152,7 @@ internals like `PRNGKey` or `key_data`.
 A parameter-initialisation helper that splits one key into two and
 draws independent weight matrices:
 
-```clausal
+```seam
 init_two_layers(SEED, W1, W2) <- (
     key(SEED, K0),
     split_key(K0, 2, [K1, K2]),

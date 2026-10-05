@@ -144,7 +144,7 @@ Goal expansion runs after term expansion and before compilation:
 The compiler pipeline orchestrates both expansions in sequence:
 
 ```
-.clausal source
+.seam source
     → parse (TermTransformer)
     → term expansion (run_term_expansion)
     → goal expansion (run_goal_expansion)

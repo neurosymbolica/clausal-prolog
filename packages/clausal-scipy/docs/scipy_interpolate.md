@@ -1,18 +1,18 @@
 # scipy.interpolate — Interpolation
 
-The `scipy_interpolate` module wraps [`scipy.interpolate`](https://docs.scipy.org/doc/scipy/reference/interpolate.html) as Clausal predicates. It provides 1-D and N-D interpolators (splines, monotone cubics, radial basis functions, regular grids) via a **handle-based (Tier 3)** interface: construct an interpolator, use it, then release it.
+The `scipy_interpolate` module wraps [`scipy.interpolate`](https://docs.scipy.org/doc/scipy/reference/interpolate.html) as Clausal Prolog predicates. It provides 1-D and N-D interpolators (splines, monotone cubics, radial basis functions, regular grids) via a **handle-based (Tier 3)** interface: construct an interpolator, use it, then release it.
 
 ---
 
 ## Import
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:import"
 ```
 
 Or via the canonical `py.*` path:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:import_ex2"
 ```
 
@@ -32,7 +32,7 @@ Handles are opaque integers. They are valid until `free` is called.
 
 ## Pipeline pattern
 
-```clausal
+```seam
 -import_from(scipy_interpolate, [make_spline, eval_spline,
     spline_integral, spline_derivative, free])
 
@@ -50,7 +50,7 @@ spline_workflow(XS, YS, QUERY_XS, VALUES, AREA) <- (
 
 Predicate names use full English words where scipy uses abbreviations:
 
-| scipy name | Clausal predicate |
+| scipy name | Clausal Prolog predicate |
 |---|---|
 | `make_interp_spline` | `make_spline` |
 | `CubicSpline` | `make_cubic` |
@@ -70,43 +70,43 @@ Predicate names use full English words where scipy uses abbreviations:
 
 #### `make_spline` — recommended 1-D spline
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:constructors"
 ```
 
 #### `make_cubic` — cubic spline with configurable boundary conditions
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:constructors_ex2"
 ```
 
 #### `make_pchip` — monotone cubic (good for noisy data)
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:constructors_ex3"
 ```
 
 #### `make_akima` — Akima 1-D interpolator
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:constructors_ex4"
 ```
 
 #### `make_linear1d` — legacy piecewise interpolation
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:constructors_ex5"
 ```
 
 #### `make_regular_grid` — N-D interpolation on a regular grid
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:constructors_ex6"
 ```
 
 #### `make_radial_basis` — radial basis function interpolation
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:constructors_ex7"
 ```
 
@@ -119,7 +119,7 @@ Predicate names use full English words where scipy uses abbreviations:
 Works with handles from `make_spline`, `make_cubic`,
 `make_pchip`, `make_akima`, and `make_linear1d`.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:evaluators"
 ```
 
@@ -127,7 +127,7 @@ Works with handles from `make_spline`, `make_cubic`,
 
 Example — invert a spline to find the input that gives a target output:
 
-```clausal
+```seam
 -import_from(scipy_interpolate, [make_pchip, eval_spline, free])
 
 # Forward: evaluate the interpolator at x=2.5
@@ -147,13 +147,13 @@ spline_invert(XS, YS, TARGET, X) <- (
 
 #### `eval_regular_grid` — evaluate an N-D regular-grid interpolator
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:evaluators_ex2"
 ```
 
 #### `eval_radial_basis` — evaluate an RBF interpolator
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:evaluators_ex3"
 ```
 
@@ -166,19 +166,19 @@ These predicates operate on handles from any of the 1-D spline constructors
 
 #### `spline_integral` — definite integral
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:spline_utilities"
 ```
 
 #### `spline_derivative` — derivative spline
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:spline_utilities_ex2"
 ```
 
 #### `spline_roots` — zero-crossings
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:spline_utilities_ex3"
 ```
 
@@ -186,7 +186,7 @@ These predicates operate on handles from any of the 1-D spline constructors
 
 ### Lifecycle: `free`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:lifecycle_free"
 ```
 
@@ -198,13 +198,13 @@ Good practice: call `free` when the interpolator is no longer needed to prevent 
 
 ### 1-D spline fitting and evaluation
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_interpolate_sigs.txt:spline_1d_fitting_and_evaluation"
 ```
 
 ### Spline integration and derivative
 
-```clausal
+```seam
 -import_from(scipy_interpolate, [make_cubic, spline_integral,
     spline_derivative, eval_spline, free])
 
@@ -221,7 +221,7 @@ spline_analysis(XS, YS, AREA, DERIV_AT_2) <- (
 
 ### N-D interpolation on a regular grid
 
-```clausal
+```seam
 -import_from(scipy_interpolate, [make_regular_grid, eval_regular_grid, free])
 
 grid_interp(POINTS, VALUES, QUERY, RESULT) <- (
@@ -233,7 +233,7 @@ grid_interp(POINTS, VALUES, QUERY, RESULT) <- (
 
 ### Radial basis function interpolation
 
-```clausal
+```seam
 -import_from(scipy_interpolate, [make_radial_basis, eval_radial_basis, free])
 
 rbf_interp(SAMPLE_PTS, SAMPLE_VALS, QUERY_PTS, RESULT) <- (
@@ -295,7 +295,7 @@ Test("spline with units") <- (
 
 - **Array inputs**: pass NumPy arrays or Python lists via [`++()`](python_integration.md).
 - **Callables are not needed**: unlike optimize/integrate, interpolate predicates do not accept user-defined functions — all fitting is done from data arrays.
-- **Handles are integers**: store a handle in a Clausal variable; it unifies like any other term.
+- **Handles are integers**: store a handle in a logic variable; it unifies like any other term.
 - **Multiple handles**: each `Make*` call allocates a fresh handle; handles from `spline_derivative` are also independent and must be freed separately.
 - **Thread safety**: the handle registry is protected by a lock; predicates are safe to call concurrently. See [free Threading](free_threading.md) for details.
 - **interp1d deprecation**: `make_linear1d` wraps `scipy.interpolate.interp1d`, which is deprecated since SciPy 1.14. It fails gracefully if not available. Use `make_spline` with `K=1` for linear interpolation in new code.

@@ -1,4 +1,4 @@
-# Clausal — UUIDs (`uuid` module)
+# Clausal Prolog — UUIDs (`uuid` module)
 
 ## Overview
 
@@ -42,7 +42,7 @@ main <- (
 ])
 ```
 
-The module name is `uuid` in Clausal (internally mapped to `uuid_mod` to avoid shadowing Python's stdlib).
+The module name is `uuid` in the seam (internally mapped to `uuid_mod` to avoid shadowing Python's stdlib).
 
 ---
 

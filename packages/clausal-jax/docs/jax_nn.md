@@ -6,7 +6,7 @@ wraps `torch.nn.Module` subclasses, JAX's neural-net world lives inside
 library code like Flax or Equinox, leaving the core `jax.nn` surface
 purely functional.
 
-The Clausal wrapper follows that shape: two **registries** (activations
+The Clausal Prolog wrapper follows that shape: two **registries** (activations
 and initializers), plus convenience `_apply` predicates for the
 activations users reach for most often, plus `init_array` for invoking
 an initializer against a PRNG key and shape.
@@ -15,7 +15,7 @@ All predicates are Tier 1 pure.
 
 ## Import
 
-```clausal
+```seam
 -import_from(py.jax_nn, [
     activation, initializer, init_array,
     relu_apply, sigmoid_apply, tanh_apply,
@@ -41,7 +41,7 @@ Nondeterministic fact table keyed on JAX's own activation names.
 | `(-NAME, -FN)` | Enumerate every activation |
 | `(+NAME, +FN)` | Check |
 
-```clausal
+```seam
 test("activation lookup by name") <- (
     activation("relu", FN),
     FN != ++(None)
@@ -74,7 +74,7 @@ predicate).
 | `softplus_apply(A, R)` | |
 | `silu_apply(A, R)` | Also known as swish |
 
-```clausal
+```seam
 test("relu zeroes negatives") <- (
     array([-1.0, 0.0, 1.0, 2.0], A),
     relu_apply(A, R),
@@ -90,7 +90,7 @@ stay inside one import block when working with neural-net code.
 
 Index-array-to-one-hot encoding:
 
-```clausal
+```seam
 test("one_hot basic") <- (
     array([0, 2, 1], X),
     one_hot(X, 3, R),
@@ -113,10 +113,10 @@ defaults will get a different numeric result.
 | `relu_apply(A, R)` | — | — | Same |
 | `sigmoid_apply(A, R)` | — | — | Same |
 | `tanh_apply(A, R)` | — | — | Same |
-| `softmax_apply(A, AXIS, R)` | axis is required | `dim=None` (warns, infers) | Clausal requires the axis explicitly — no silent default |
+| `softmax_apply(A, AXIS, R)` | axis is required | `dim=None` (warns, infers) | Clausal Prolog requires the axis explicitly — no silent default |
 | `log_softmax_apply(A, AXIS, R)` | axis is required | `dim=None` (warns, infers) | Same story |
 | **`gelu_apply(A, R)`** | **`approximate=True` (tanh form)** | **`approximate='none'` (exact)** | Different numerics. Pass `gelu_apply(A, 0, R)` to force the exact form. |
-| `gelu_apply(A, APPROX, R)` | bool; `0` → exact, `1` → tanh | string `'none'` / `'tanh'` | Type of the flag differs — Clausal uses a truthy int/bool, PyTorch a string |
+| `gelu_apply(A, APPROX, R)` | bool; `0` → exact, `1` → tanh | string `'none'` / `'tanh'` | Type of the flag differs — Clausal Prolog uses a truthy int/bool, PyTorch a string |
 | `elu_apply(A, R)` | `alpha=1.0` | `alpha=1.0` | Same. No arity with `alpha` — wrap via `++()` to override |
 | `leaky_relu_apply(A, R)` | `negative_slope=0.01` | `negative_slope=0.01` | Same |
 | `leaky_relu_apply(A, NEG_SLOPE, R)` | explicit | explicit | Same numeric meaning |
@@ -131,7 +131,7 @@ right default if you're writing JAX-native code, and the wrong one if
 you're porting a PyTorch model. For ports, make the approximation
 explicit:
 
-```clausal
+```seam
 gelu_apply(A, 0, R)    # exact — matches torch.nn.functional.gelu(x)
 gelu_apply(A, 1, R)    # tanh — matches jax.nn.gelu(x) default
 ```
@@ -163,7 +163,7 @@ the distinction.
 
 Invoke an initializer:
 
-```clausal
+```seam
 test("init_array with glorot_uniform") <- (
     initializer("glorot_uniform", F),
     key(0, K),
@@ -181,7 +181,7 @@ test("init_array with zeros (direct initializer)") <- (
 
 `init_array` is deterministic given the same key:
 
-```clausal
+```seam
 test("same key → same sample") <- (
     initializer("glorot_uniform", F),
     key(7, K),
@@ -200,7 +200,7 @@ from the bare registry entry; construct them via `++()` and pass the
 result straight into `init_array`. With `-import_module(jax)` at the
 top of the file, the Python-side access path stays clean:
 
-```clausal
+```seam
 test("constant 0.5 initializer") <- (
     F is ++(jax.nn.initializers.constant(0.5)),
     key(0, K),
@@ -220,7 +220,7 @@ Some initializers constrain the shape. `glorot_*`, `xavier_*`,
 compute fan-in / fan-out). A 1-D call fails with a `ValueError` from
 JAX, which surfaces as predicate failure:
 
-```clausal
+```seam
 test("1-D glorot fails") <- (
     initializer("glorot_uniform", F),
     key(0, K),
@@ -238,7 +238,7 @@ layer name to shape, `tree_map_n` (or a Python-side helper) builds the
 parameter tree. This keeps the random-key splitting explicit and
 backtracking-safe:
 
-```clausal
+```seam
 -import_from(py.jax_random, [key, split_key])
 -import_from(py.jax_nn, [initializer, init_array])
 
@@ -264,5 +264,5 @@ dropped cleanly — `K` remains valid for a re-split.
   predicate is not provided — JAX itself doesn't register
   initializers, they're just functions.
 - **Flax / Equinox module wrappers.** Those live in their own libraries
-  and would get their own Clausal wrapper — Phase 10 covers only the
+  and would get their own Clausal Prolog wrapper — Phase 10 covers only the
   `jax.nn` surface.

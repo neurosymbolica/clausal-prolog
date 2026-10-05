@@ -6,7 +6,7 @@ that don't require constructing `nn.Module` objects.
 
 ## Import
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_functional_sigs.txt:import"
 ```
 
@@ -36,11 +36,11 @@ available:
 | `hardswish` | `/2` | Hard Swish |
 | `hardsigmoid` | `/2` | Hard Sigmoid |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_functional_sigs.txt:activations"
 ```
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_functional_sigs.txt:activations_ex2"
 ```
 
@@ -57,11 +57,11 @@ available:
 The 3-arity form takes `(+input, +weight, -output)`. The 4-arity form
 adds an opts dict for `bias`, `stride`, `padding`, `dilation`, `groups`.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_functional_sigs.txt:convolutions"
 ```
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_functional_sigs.txt:convolutions_ex2"
 ```
 
@@ -83,11 +83,11 @@ form adds an opts dict for `stride`, `padding`, etc.
 
 Adaptive pooling takes a target output size instead of a kernel size.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_functional_sigs.txt:pooling"
 ```
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_functional_sigs.txt:pooling_ex2"
 ```
 
@@ -101,11 +101,11 @@ Adaptive pooling takes a target output size instead of a kernel size.
 | `layer_norm` | `/3, /4` | Layer normalization |
 | `normalize` | `/2, /3` | Lp normalization |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_functional_sigs.txt:normalization"
 ```
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_functional_sigs.txt:normalization_ex2"
 ```
 
@@ -123,11 +123,11 @@ Adaptive pooling takes a target output size instead of a kernel size.
 
 The 4-arity forms accept an opts dict (e.g. `{"reduction": "none"}`).
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_functional_sigs.txt:loss_functions"
 ```
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_functional_sigs.txt:loss_functions_ex2"
 ```
 
@@ -142,6 +142,6 @@ The 4-arity forms accept an opts dict (e.g. `{"reduction": "none"}`).
 The 2-arity form runs in eval mode (no dropout applied). The 3-arity
 form accepts an opts dict for `p` (drop probability) and `training`.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_functional_sigs.txt:dropout"
 ```

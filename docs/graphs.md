@@ -1,4 +1,4 @@
-# Clausal — Graphs (`graphs` module)
+# Clausal Prolog — Graphs (`graphs` module)
 
 ## Overview
 

@@ -1,17 +1,20 @@
 # Tutorial
 
-Welcome to Clausal — logic programming embedded in Python. This tutorial
-introduces the core concepts: defining relations, querying them, and
+Welcome to Clausal Prolog — logic programming embedded in Python. This
+tutorial introduces the core concepts: defining relations, querying them, and
 understanding how unification connects goals to clauses. No Prolog experience
 required.
 
-!!! note "Clausal vs Prolog syntax"
+!!! note "Clausal Prolog and other Prologs"
 
     This tutorial is based on material from [The Power of Prolog](https://www.metalevel.at/prolog).
-    Clausal and Prolog syntax may slightly differ — for example, Clausal uses
-    `ALLCAPS` variables, `<-` instead of `:-`, and Python-style lists. If you are
-    comparing with Prolog resources, keep these differences in mind.
-    If you have existing `.pl` files, you can [import them directly](importing_prolog.md).
+    Clausal Prolog (`.clausal` files) uses ISO Prolog syntax, so most examples
+    there read the same here. The main difference: Clausal Prolog is
+    **cut-free** — `!`, `->` and `*->` are refused; use `dif/2`, `if_/3` and
+    constraints instead (see [Clausal Prolog](clausal_prolog.md)). A module
+    file must end with `:- end_module(Name).`.
+    If you have existing ISO Prolog `.pl` files, see
+    [Importing Prolog](importing_prolog.md).
 
 ---
 
@@ -19,25 +22,35 @@ required.
 
 Create a file called `hello.clausal`:
 
-```seam
-greeting('hello'),
-greeting('hi'),
-greeting('hey there'),
+```prolog
+:- module(hello, [greeting/1]).
+
+greeting(hello).
+greeting(hi).
+greeting('hey there').
+
+:- end_module(hello).
 ```
 
-Each line is a **fact** — an unconditional statement that something is true.
-The trailing comma is the separator between clauses (think of the file as one big
-expression).
+Each `greeting(...)` line is a **fact** — an unconditional statement that
+something is true. Every clause ends with a full stop. The first line declares
+a module named `hello` that exports `greeting/1` (the predicate `greeting`
+with one argument); the last line closes it.
 
-Query it from Python. Next to `hello.clausal`, create `ask.seam`: a `.seam`
-file is Python that can also speak Clausal terms (`.clausal` and `.seam` are
-the same format under two names).
+`hello`, `hi` and `'hey there'` are **atoms**, symbolic constants. An atom
+that starts with a lower-case letter needs no quotes; any other spelling is
+quoted with `'...'`.
+
+Query it from Python. Next to `hello.clausal`, create `ask.seam`. A `.seam`
+file is Python source that can also ask goals — the **seam**, the boundary
+between Python and Clausal Prolog:
 
 ```python
 # ask.seam
 -import_from(hello, [greeting])
+-private([hello])
 
-if --greeting('hello'):
+if --greeting(hello):
     print("yes")
 
 for X in --greeting(X):
@@ -53,14 +66,19 @@ python -c "import clausal, ask"
 (`import clausal` installs the import hook that loads `.clausal` and `.seam`
 files as Python modules.)
 
-`--` marks a Clausal goal inside Python. After `if`, the goal is asked once:
-`greeting('hello')` holds, so this prints `yes`. After `for ... in`, every
-solution is produced in turn, and the ALL-CAPS name `X` comes back as an
-ordinary Python variable: `hello`, `hi`, `hey there`.
+`-import_from` imports `greeting/1` from `hello.clausal`. The seam is Python
+syntax, so an atom used bare in it must be declared: `-private([hello])` does
+that for `hello`. In the seam, variables are written in ALL-CAPS.
+
+`--` marks a goal inside Python. After `if`, the goal is asked once:
+`greeting(hello)` holds, so this prints `yes`. After `for ... in`, every
+solution is produced in turn, and `X` comes back as an ordinary Python
+variable: `hello`, `hi`, `hey there`.
 
 From a plain `.py` file, where `--` is not available, the same questions go
 through `solve`: a goal is a **cell** — a tuple of the predicate's name
-followed by its arguments — run against the module you pass:
+followed by its arguments (a Python `str` is the atom of that spelling) — run
+against the module you pass:
 
 ```python
 from clausal import Var, solve
@@ -73,15 +91,17 @@ for trail in solve(("greeting", X := Var()), module=hello):
     print(X.value)
 ```
 
-The rest of this tutorial uses the `--` form; see
-[Python Integration](python_integration.md#querying-from-python) for both.
+Read `X.value` inside the loop — the binding is undone before the next
+solution. See
+[Python Integration](python_integration.md#querying-from-python) for both
+forms.
 
 ??? tip "Thinking relationally"
 
-    In Clausal, every predicate defines a **relation** — it describes when
-    something is true about its arguments. This is different from functions,
-    which map inputs to outputs. A single relation can often be used in
-    multiple directions: to compute, to verify, to generate. See
+    In Clausal Prolog, every predicate defines a **relation** — it describes
+    when something is true about its arguments. This is different from
+    functions, which map inputs to outputs. A single relation can often be used
+    in multiple directions: to compute, to verify, to generate. See
     [Thinking Relationally](thinking_relationally.md) for a deeper exploration
     of this idea.
 
@@ -89,122 +109,140 @@ The rest of this tutorial uses the `--` form; see
 
 ## Facts and rules
 
-Let's model a small family tree. Create `family.seam`:
+Let's model a small family tree. Create `family.clausal`:
 
-```seam
-parent('alice', 'bob'),
-parent('alice', 'carol'),
-parent('bob', 'dave'),
-parent('bob', 'eve'),
+```prolog
+:- module(family, [parent/2, grandparent/2]).
 
-grandparent(GRANDPARENT, GRANDCHILD) <- (
-    parent(GRANDPARENT, MIDDLE),
-    parent(MIDDLE, GRANDCHILD)
-)
+parent(alice, bob).
+parent(alice, carol).
+parent(bob, dave).
+parent(bob, eve).
+
+grandparent(Grandparent, Grandchild) :-
+    parent(Grandparent, Middle),
+    parent(Middle, Grandchild).
+
+:- end_module(family).
 ```
 
-The first four lines are **facts**: `parent('alice', 'bob')` means "alice is a parent
-of bob".
+The four `parent` clauses are **facts**: `parent(alice, bob)` means "alice is
+a parent of bob".
 
-The last block is a **rule**. Read it as: "GRANDPARENT is a grandparent of GRANDCHILD
-if there exists some MIDDLE such that GRANDPARENT is a parent of MIDDLE and MIDDLE is
-a parent of GRANDCHILD."
+The `grandparent` clause is a **rule**. Read it as: "Grandparent is a
+grandparent of Grandchild if there exists some Middle such that Grandparent is
+a parent of Middle and Middle is a parent of Grandchild."
 
-The `<-` arrow means "is true if". Goals in the body are separated by **commas** and
-the body is wrapped in parentheses.
+`:-` means "is true if". Goals in the body are separated by **commas**, which
+read as "and".
 
-Query it from a `.seam` file:
+Query it from Python:
 
 ```python
+# app.seam
 -import_from(family, [grandparent])
+-private([alice])
 
-for X in --grandparent('alice', X):
-    print(X)
+for GRANDCHILD in --grandparent(alice, GRANDCHILD):
+    print(GRANDCHILD)
 ```
 
 Result: `dave` then `eve` — both of alice's grandchildren.
 
 ### Multiple solutions and backtracking
 
-Clausal finds all clauses whose heads unify with the goal — these represent
-logical alternatives. If a condition in the body does not hold, Clausal
-explores the remaining alternatives.
+Clausal Prolog finds all clauses whose heads unify with the goal — these
+represent logical alternatives. If a condition in the body does not hold, the
+engine explores the remaining alternatives.
 
 `for X in --goal:` iterates every solution; `if --goal:` takes just the first
-one, and its variables stay bound after the `if`. The lower-level
+one, and its variables stay bound after the `if`. The plain-`.py`
 equivalents are `solve(goal, module=…)` and `once(goal, module=…)`.
 
 ---
 
 ## Logic variables
 
-Variables in `.clausal` files are written in **ALLCAPS**: `X`, `PARENT`, `CHILD`,
-`RESULT`, `HEAD`, `TAIL`. This makes them easy to spot in a rule.
+Variables start with an **upper-case letter** or an underscore: `X`, `Parent`,
+`Child`, `Result`, `Head`, `Tail`. Anything starting with a lower-case letter
+is an atom.
 
-```seam
-sibling(A, B) <- (
-    parent(PARENT, A),
-    parent(PARENT, B)
-)
+```prolog
+sibling(A, B) :-
+    parent(Parent, A),
+    parent(Parent, B),
+    dif(A, B).
 ```
 
-`A` and `B` are logic variables — they stand for any term at all. when Clausal
-searches for clauses whose heads unify with a goal, variables are bound to make
-the terms identical: if `A` is unbound and unifies with `'bob'`, then `A`
-becomes `'bob'` for the rest of that branch.
+`A` and `B` are logic variables — they stand for any term at all. When the
+engine searches for clauses whose heads unify with a goal, variables are bound
+to make the terms identical: if `A` is unbound and unifies with `bob`, then
+`A` becomes `bob` for the rest of that branch. `dif(A, B)` states that `A`
+and `B` are different, so nobody is their own sibling.
 
 The **anonymous variable** `_` unifies with anything and is never reported in
 results:
 
-```seam
-has_child(PERSON) <- parent(PERSON, _)
+```prolog
+has_child(Person) :- parent(Person, _).
 ```
 
-"PERSON has a child" — we don't care what the child's name is.
+"Person has a child" — we don't care what the child's name is.
+
+Added to `family.clausal` (and exported), these can be checked with tests —
+see [Testing your code](#testing-your-code):
+
+```prolog
+test("dave and eve are siblings") :- sibling(dave, eve).
+test("nobody is their own sibling", fail) :- sibling(dave, dave).
+test("bob has a child") :- has_child(bob).
+test("dave has no child", fail) :- has_child(dave).
+```
 
 ### How unification works
 
 Unification finds the most general way to make two terms identical. Both terms
 can contain variables, and variables on **either side** can be bound. This
-bidirectionality is what makes relations work in all directions.
+bidirectionality is what makes relations work in all directions. The goal
+`X = Y` unifies `X` and `Y`.
 
-when you query `parent('alice', CHILD)`, Clausal searches for clauses whose
-heads unify with the goal. The clause `parent('alice', 'bob')` unifies when
-CHILD is bound to `'bob'`. No assignment, no mutation — each branch of the
+When you query `parent(alice, Child)`, the engine searches for clauses whose
+heads unify with the goal. The clause `parent(alice, bob)` unifies when
+`Child` is bound to `bob`. No assignment, no mutation — each branch of the
 search has its own consistent set of bindings.
 
 ---
 
 ## [Lists](lists.md)
 
-Lists are written with square brackets: `[]` (empty), `[1, 2, 3]`, `['a', 'b']`.
-(`'a'` is an atom, a symbolic constant; `"a"` is a string, text.)
-The head/tail pattern uses a star:
+Lists are written with square brackets: `[]` (empty), `[1, 2, 3]`, `[a, b]`.
+(`a` is an atom, a symbolic constant; `"a"` is a string, text.)
+The head/tail pattern uses a bar:
 
-```seam
-first(HEAD, [HEAD, *_]),
+```prolog
+first(Head, [Head|_]).
 
-rest(TAIL, [_, *TAIL]),
+rest(Tail, [_|Tail]).
 ```
 
-`[HEAD, *TAIL]` unifies with any non-empty list, binding `HEAD` to the first
-element and `TAIL` to the remaining elements.
+`[Head|Tail]` unifies with any non-empty list, binding `Head` to the first
+element and `Tail` to the list of remaining elements.
 
-### in_/2 and append/3
+### member/2 and append/3
 
-These are built-in predicates. `in_(X, LIST)` describes the membership relation
-— it holds for each element of `LIST` in turn:
+These are built-in predicates. `member(X, List)` describes the membership
+relation — it holds for each element of `List` in turn:
 
-```seam
-contains_three(LIST) <- in_(3, LIST)
+```prolog
+contains_three(List) :- member(3, List).
 ```
 
-`append(PREFIX, SUFFIX, WHOLE)` relates three lists such that `PREFIX` concatenated
-with `SUFFIX` gives `WHOLE`. You can use it forwards (split a list) or backwards
-(build one):
+`append(Prefix, Suffix, Whole)` relates three lists such that `Prefix`
+concatenated with `Suffix` gives `Whole`. You can use it forwards (build a
+list) or backwards (split one):
 
-```seam
-last(ELEMENT, LIST) <- append(_, [ELEMENT], LIST)
+```prolog
+last_element(Element, List) :- append(_, [Element], List).
 ```
 
 ### Describing list relations in clause heads
@@ -212,86 +250,121 @@ last(ELEMENT, LIST) <- append(_, [ELEMENT], LIST)
 Clause heads can describe the structure of list arguments directly, which is
 often cleaner than stating the structure as a separate condition in the body:
 
-```seam
-sum_list([], 0),
-sum_list([HEAD, *TAIL], TOTAL) <- (
-    sum_list(TAIL, SUBTOTAL),
-    TOTAL == SUBTOTAL + HEAD
-)
+```prolog
+list_sum([], 0).
+list_sum([Head|Tail], Total) :-
+    list_sum(Tail, Subtotal),
+    Total #= Subtotal + Head.
 ```
 
 The first clause states that the sum of the empty list is 0. The second states
-that the sum of [HEAD, *TAIL] is TOTAL when the sum of TAIL is SUBTOTAL and
-TOTAL is SUBTOTAL + HEAD.
+that the sum of `[Head|Tail]` is `Total` when the sum of `Tail` is `Subtotal`
+and `Total` equals `Subtotal + Head`.
 
-```seam
-double_list([], []),
-double_list([HEAD, *TAIL], [DOUBLED, *REST]) <- (
-    DOUBLED == HEAD * 2,
-    double_list(TAIL, REST)
-)
+```prolog
+double_list([], []).
+double_list([Head|Tail], [Doubled|Rest]) :-
+    Doubled #= Head * 2,
+    double_list(Tail, Rest).
 ```
 
 Each clause describes a different case in which the relation holds. Clauses are
-logical alternatives — Clausal searches for those whose heads unify with the
-goal.
+logical alternatives — the engine searches for those whose heads unify with
+the goal.
+
+`#=` is an arithmetic constraint from `library(clpz)`, so a module that uses
+these predicates starts with `:- use_module(library(clpz)).` — more on this
+in the next section.
 
 ---
 
 ## [Arithmetic](arithmetic.md)
 
-Use `==` to post an arithmetic constraint between a variable and an expression:
+Write integer arithmetic with [CLP(ℤ)](constraints.md) constraints from
+`library(clpz)`. `#=` states that two expressions are equal:
 
-```seam
-square(N, SQ) <- (SQ == N * N)
+```prolog
+:- module(arith, [square/2, factorial/2]).
+:- use_module(library(clpz)).
 
-factorial(0, 1),
-factorial(N, F) <- (
-    N > 0,
-    N1 == N - 1,
-    factorial(N1, F1),
-    F == N * F1
-)
+square(N, Sq) :- Sq #= N * N.
+
+factorial(0, 1).
+factorial(N, F) :-
+    N #> 0,
+    N1 #= N - 1,
+    F #= N * F1,
+    factorial(N1, F1).
+
+test("square") :- square(7, 49).
+test("factorial(5)") :- factorial(5, 120).
+
+:- end_module(arith).
 ```
 
-Supported operators: `+`, `-`, `*`, `/`, `//`, `%` and `**`. Written bare,
-as here, an operator keeps its Python meaning (`-7 // 2` is -4); inside a `==` constraint `/` is exact (`X == 7 / 2`
-gives 7/2). [Operators](operators.md) has the full table, including the
-quoted Prolog spellings.
+Supported operators include `+`, `-`, `*`, `//`, `mod`, `rem` and `^`.
+[Operators](operators.md) has the full table.
 
-`==` posts a [CLP(ℤ)](constraints.md) constraint that works in all directions — even when
-variables are unbound. `is` is **unification**, not evaluation: `X is 1 + 2`
-binds `X` to the term `1 + 2`. To evaluate eagerly, use `eval_(1 + 2, X)` or
-a Python escape, `X is ++(1 + 2)`.
+A constraint works in all directions — even when variables are unbound:
+
+```prolog
+:- module(succ, [successor/2]).
+:- use_module(library(clpz)).
+
+successor(N, M) :- M #= N + 1.
+
+test("forwards") :- successor(3, M), M == 4.
+test("backwards") :- successor(N, 4), N == 3.
+
+:- end_module(succ).
+```
+
+`=` is **unification**, not arithmetic: `X = 1 + 2` binds `X` to the term
+`1 + 2`, while `X #= 1 + 2` binds it to `3`. ISO Prolog's `is/2` is also
+available: `X is 1 + 2` evaluates the right-hand side, which must already be
+known, so `successor(N, 4)` written with `is` would raise an instantiation
+error instead of answering. For rationals and reals, see CLP(ℚ) and CLP(ℝ)
+in the [constraints guide](constraints.md).
 
 ### Comparisons
 
 The standard comparison operators work directly as goals:
 
-```seam
-positive(N) <- (N > 0)
-in_range(LOW, HIGH, N) <- (
-    N >= LOW,
-    N <= HIGH
-)
+```prolog
+positive(N) :- N #> 0.
+
+in_range(Low, High, N) :-
+    N #>= Low,
+    N #=< High.
 ```
 
-Comparison operators `<`, `>`, `>=`, `<=` work directly as goals. Use `==` and
-`!=` for arithmetic equality and inequality.
+The CLP(ℤ) comparisons are `#<`, `#>`, `#>=`, `#=<`, and `#=` and `#\=` for
+equality and inequality. (The ISO comparisons `<`, `>`, `>=`, `=<`, `=:=` and
+`=\=` also work, but need both sides known.)
 
 ### A worked example: fizzbuzz
 
-```seam
-fizzbuzz(N, 'fizzbuzz') <- (N % 15 == 0)
-fizzbuzz(N, 'fizz') <- (N % 3 == 0, N % 5 != 0)
-fizzbuzz(N, 'buzz') <- (N % 5 == 0, N % 3 != 0)
-fizzbuzz(N, N) <- (N % 3 != 0, N % 5 != 0)
+```prolog
+:- module(fizzbuzz, [fizzbuzz/2]).
+:- use_module(library(clpz)).
+
+fizzbuzz(N, fizzbuzz) :- N mod 15 #= 0.
+fizzbuzz(N, fizz) :- N mod 3 #= 0, N mod 5 #\= 0.
+fizzbuzz(N, buzz) :- N mod 5 #= 0, N mod 3 #\= 0.
+fizzbuzz(N, N) :- N mod 3 #\= 0, N mod 5 #\= 0.
+
+test("15 is fizzbuzz") :- fizzbuzz(15, fizzbuzz).
+test("9 is fizz") :- fizzbuzz(9, fizz).
+test("9 is only fizz", fail) :- fizzbuzz(9, 9).
+
+:- end_module(fizzbuzz).
 ```
 
 Each clause states exactly when it holds, so every number has one label.
 Query it from a `.seam` file, passing each Python `n` in with `++`:
 
 ```python
+# labels.seam
 -import_from(fizzbuzz, [fizzbuzz])
 
 def labels(upto):
@@ -304,52 +377,57 @@ def labels(upto):
 
 `labels(15)` is `[1, 2, 'fizz', 4, 'buzz', 'fizz', 7, 8, 'fizz', 'buzz', 11, 'fizz', 13, 14, 'fizzbuzz']`.
 
+`++expr` evaluates a Python expression and passes its value into the goal. It
+exists only in the seam: Clausal Prolog itself does not run Python. See
+[Python Integration](python_integration.md) for the seam.
+
 ---
 
 ## Negation
 
-`not goal` is **negation as failure**: it succeeds if `goal` has no solutions.
+`\+ Goal` is **negation as failure**: it succeeds if `Goal` has no solutions.
 
-```seam
-safe_to_delete(FILE) <- (not important(FILE))
+```prolog
+safe_to_delete(File) :- \+ important(File).
 ```
 
-### when to use it
+### When to use it
 
 Negation as failure is appropriate when you want to express "there is no evidence
 that...". It works correctly when all the relevant facts are already known — the
 classic **closed-world assumption**.
 
-```seam
-bachelor(PERSON) <- (
-    male(PERSON),
-    not married(PERSON)
-)
+```prolog
+bachelor(Person) :-
+    male(Person),
+    \+ married(Person).
 ```
 
-If `married('alice')` is not in the database, `not married('alice')` succeeds.
+If `married(bob)` is not in the database, `\+ married(bob)` succeeds.
 
-### when not to use it
+### When not to use it
 
-Avoid `not goal` when the variables inside `goal` are unbound. This query:
+Avoid `\+ Goal` when the variables inside `Goal` are unbound. This query:
 
 ```text
-5 not in LIST
+?- \+ member(5, List).
 ```
 
-will almost always fail, because Clausal can instantiate `LIST` to something that
-contains 5. Instead, make sure any variables in the negated goal are already bound
-before the check:
+fails, because `member(5, List)` succeeds by instantiating `List` to a list
+that contains 5. Instead, make sure any variables in the negated goal are
+already bound before the check:
 
-```seam
-no_fives(LIST) <- (5 not in LIST)
+```prolog
+no_fives(List) :- \+ member(5, List).
 ```
 
-is fine when `LIST` is passed in fully instantiated; it is not a generator of lists
-that avoid 5.
+is fine when `List` is passed in fully instantiated; it is not a generator of
+lists that avoid 5.
 
-For constraint-based "not equal" on partially-instantiated terms, use `dif/2`
-(`is not`) from the constraints module (see the [constraints guide](constraints.md)).
+For a "not equal" that stays correct on partially-instantiated terms, use
+`dif/2` (see the [constraints guide](constraints.md)); for a condition that
+chooses between two branches, use `if_/3` from `library(reif)` (see
+[If-Then-Else](reified_ite.md)).
 
 !!! note "Monotonicity"
 
@@ -362,34 +440,42 @@ For constraint-based "not equal" on partially-instantiated terms, use `dif/2`
 
 ## Testing your code
 
-Clausal has a lightweight convention for inline tests. Define `test/1` predicates:
+Clausal Prolog has a lightweight convention for inline tests: `test/1` clauses
+whose goal must succeed, and `test/2` with the option `fail` for a goal that
+must have no solution. Create `mymodule.clausal`:
 
-```seam
-sum_list([], 0),
-sum_list([HEAD, *TAIL], TOTAL) <- (
-    sum_list(TAIL, SUBTOTAL),
-    TOTAL == SUBTOTAL + HEAD
-)
+```prolog
+:- module(mymodule, [list_sum/2]).
+:- use_module(library(clpz)).
 
-test("sum [1,2,3,4] = 10") <- (
-    sum_list([1, 2, 3, 4], TOTAL),
-    TOTAL == 10
-)
+list_sum([], 0).
+list_sum([Head|Tail], Total) :-
+    list_sum(Tail, Subtotal),
+    Total #= Subtotal + Head.
 
-test("sum [] = 0") <- (
-    sum_list([], TOTAL),
-    TOTAL == 0
-)
+test("sum [1,2,3,4] = 10") :-
+    list_sum([1, 2, 3, 4], Total),
+    Total == 10.
+
+test("sum [] = 0") :-
+    list_sum([], 0).
+
+test("[1,2] does not sum to 4", fail) :-
+    list_sum([1, 2], 4).
+
+:- end_module(mymodule).
 ```
 
-Run the whole test suite with:
+Run one file's tests with the standalone runner, or the whole suite with
+pytest:
 
 ```bash
+python -m clausal.testing -v mymodule.clausal
 python -m pytest
 ```
 
-Clausal's [import hook](import.md) picks up `.clausal` files automatically. The test runner
-collects any Python test files that import and exercise your predicates.
+The pytest plugin collects the `test` clauses of `.seam`, `.clausal` and `.pl`
+files automatically.
 
 A Python test can also run one `test/1` clause by its description. The
 description `"sum [1,2,3,4] = 10"` is a **string**, so from a `.py` file build
@@ -418,33 +504,40 @@ and parametrize.
 ## A complete example: graph reachability
 
 Let's put it all together with a classic logic programming problem — finding reachable
-nodes in a directed graph.
+nodes in a directed graph. Create `graph.clausal`:
 
-```seam
-edge('a', 'b'),
-edge('b', 'c'),
-edge('c', 'd'),
-edge('b', 'd'),
+```prolog
+:- module(graph, [reachable/2]).
 
-reachable(SOURCE, DEST) <- edge(SOURCE, DEST)
+edge(a, b).
+edge(b, c).
+edge(c, d).
+edge(b, d).
 
-reachable(SOURCE, DEST) <- (
-    edge(SOURCE, MID),
-    reachable(MID, DEST)
-)
+reachable(Source, Dest) :- edge(Source, Dest).
+reachable(Source, Dest) :-
+    edge(Source, Mid),
+    reachable(Mid, Dest).
+
+test("a reaches d") :- reachable(a, d).
+test("d reaches nothing", fail) :- reachable(d, _).
+
+:- end_module(graph).
 ```
 
-The first clause states that SOURCE and DEST are reachable if there is a direct
+The first clause states that Source and Dest are reachable if there is a direct
 edge between them. The second states that they are reachable if there is an edge
-from SOURCE to some MID, and MID and DEST are reachable. These two clauses are
+from Source to some Mid, and Mid and Dest are reachable. These two clauses are
 logical alternatives — together they define the complete reachability relation.
 
 Query it from a `.seam` file:
 
 ```python
+# reach.seam
 -import_from(graph, [reachable])
+-private([a])
 
-print(sorted({DEST for DEST in --reachable('a', DEST)}))
+print(sorted({DEST for DEST in --reachable(a, DEST)}))
 # ['b', 'c', 'd']
 ```
 
@@ -461,21 +554,29 @@ print(sorted(results))
 # ['b', 'c', 'd']
 ```
 
-For large graphs with cycles, use the `-table` directive to enable tabling (memoised
-search) — see [Tabling](tabling.md).
+(`b → d` and `b → c → d` both reach `d`, so `d` is found twice; the set keeps
+one.)
+
+For graphs with cycles this search would not terminate. Add the directive
+`:- table(reachable/2).` to enable tabling (memoised search) — see
+[Tabling](tabling.md).
 
 ---
 
 ## Where to go next
 
+- **[Clausal Prolog](clausal_prolog.md)** — the `.clausal` surface and its
+  rules
 - **[Thinking Relationally](thinking_relationally.md)** — the most important
   idea in logic programming: predicates as relations, not functions
 - **[Purity and Monotonicity](purity.md)** — why pure code has better
   properties and how to write it
-- **[Syntax reference](syntax.md)** — full grammar, all operators, clause forms
 - **[Constraints](constraints.md)** — `dif/2` for structural inequality; CLP(ℤ) for
   integer constraint solving (N-queens, Sudoku, SEND+MORE=MONEY)
-- **[DCGs](dcg.md)** — Definite Clause Grammars for parsing and string generation
+- **[DCGs](dcg.md)** — Definite Clause Grammars (`-->`) for parsing and string
+  generation
+- **[Python Integration](python_integration.md)** — querying from Python and
+  the seam
 - **[Examples](examples.md)** — worked examples: map colouring, Sudoku, graph
   algorithms, and more
 - **[Predicate index](builtins.md)** — every built-in predicate with examples

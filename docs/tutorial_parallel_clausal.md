@@ -1,6 +1,6 @@
-# Tutorial: Writing Thread-Safe Clausal Predicates
+# Tutorial: Writing Thread-Safe Seam Predicates
 
-This tutorial explains how to write `.clausal` predicates that are safe
+This tutorial explains how to write seam (`.seam`) predicates that are safe
 for concurrent use from multiple Python threads. It covers which predicates
 are naturally safe, which need care, and the design patterns that work well
 with parallelism.
@@ -122,7 +122,7 @@ Dynamic predicates modify the clause database at runtime; only a
 predicate declared `-dynamic` accepts `assertz`/`retract`. Concurrent
 `assertz` and `retract` from multiple threads is **not yet safe**
 (Phase 2 will add copy-on-write locking). However, asserting facts
-before launching threads and then only reading is fine. In `counters.clausal`:
+before launching threads and then only reading is fine. In `counters.seam`:
 
 ```seam
 -module(counters, [counter(N)])
@@ -228,7 +228,7 @@ print(sorted(results))  # [30, 31, 32, 33, 34, 35, 36, 37]
 
 Sharing one unbound `Var` between threads (a module-level `total = Var()`
 used by every worker) races on its binding. A goal-position `--` query in a
-`.clausal` or `.seam` file makes fresh variables on every run, so it cannot
+`.seam` file makes fresh variables on every run, so it cannot
 share one by accident; see
 [Parallel Queries from Python](tutorial_parallel_python.md).
 
@@ -236,13 +236,13 @@ share one by accident; see
 
 ## Testing thread safety
 
-You can write `.clausal` tests that exercise predicate logic, and then
-test concurrent execution from Python. The [`.clausal` test format](testing.md)
+You can write `.seam` tests that exercise predicate logic, and then
+test concurrent execution from Python. The [`.seam` test format](testing.md)
 (`test("name") <- goal`) runs sequentially in the test runner, which is
 the right place to test correctness. Thread-safety stress tests belong
 in Python test files (`tests/test_free_threading.py`).
 
-### `.clausal` tests for correctness
+### `.seam` tests for correctness
 
 ```seam
 list_concat([], YS, YS),

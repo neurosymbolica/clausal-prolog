@@ -1,8 +1,8 @@
-# Clausal — scikit-learn (`sklearn` module)
+# Clausal Prolog — scikit-learn (`sklearn` module)
 
 ## Overview
 
-The `sklearn` module provides predicates for machine learning via [scikit-learn](https://scikit-learn.org/). Data flows through tagged tuples — `est`, `dataset`, `fitted`, `split` — that unify naturally with Clausal's logic variables.
+The `sklearn` module provides predicates for machine learning via [scikit-learn](https://scikit-learn.org/). Data flows through tagged tuples — `est`, `dataset`, `fitted`, `split` — that unify naturally with Clausal Prolog's logic variables.
 
 ```clausal
 -import_from(sklearn, [est, dataset, fitted, load_dataset, fit, predict, score])

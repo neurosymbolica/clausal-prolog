@@ -1,14 +1,15 @@
 # Meta-Interpreters
 
-A *meta-interpreter* is an interpreter written in the same language it interprets. In logic programming, this means a Prolog (or Clausal) program that evaluates another logic program represented as data. Meta-interpreters are a classical demonstration of logic programming's homoiconicity: programs and data share the same representation.
+A *meta-interpreter* is an interpreter written in the same language it interprets. In logic programming, this means a Prolog (or seam) program that evaluates another logic program represented as data. Meta-interpreters are a classical demonstration of logic programming's homoiconicity: programs and data share the same representation.
 
-This page follows the structure of Markus Triska's [A Couple of Meta-Interpreters in Prolog](https://www.metalevel.at/acomip/), adapting the examples to Clausal syntax.
+This page follows the structure of Markus Triska's [A Couple of Meta-Interpreters in Prolog](https://www.metalevel.at/acomip/), adapting the examples to seam syntax (`.seam`).
 
-!!! note "Clausal vs Prolog syntax"
+!!! note "Seam vs Prolog syntax"
 
-    Clausal and Prolog syntax may slightly differ — for example, variables are
+    Seam and Prolog syntax may slightly differ — for example, variables are
     `ALLCAPS`, rules use `<-` instead of `:-`, and [lists](lists.md) are Python-style. Keep
-    this in mind when comparing with Prolog resources.
+    this in mind when comparing with Prolog resources. [Clausal Prolog](clausal_prolog.md)
+    (`.clausal`) uses Prolog syntax.
 
 The full source is in `clausal/examples/metainterpreters.seam`.
 
@@ -18,7 +19,7 @@ The full source is in `clausal/examples/metainterpreters.seam`.
 
 The key idea is to represent an *object-level* program — the program being interpreted — as a list of clauses, where each clause is a pair `[Head, Body]`. `Head` is a term, `Body` is a list of goals (also terms).
 
-In Clausal, object-level terms are ordinary compound terms — cells such as `('natnum', ('succ', 0))`. We declare the object-level functors with `-private` so they are treated purely as data, not called directly:
+In Clausal Prolog, object-level terms are ordinary compound terms — cells such as `('natnum', ('succ', 0))`. We declare the object-level functors with `-private` so they are treated purely as data, not called directly:
 
 ```seam
 -private([natnum(VALUE), succ(INNER), edge(FROM, TO), path(FROM, TO)])
@@ -247,7 +248,7 @@ path('a', 'c')
    └─ edge('b', 'c')       ← leaf (fact)
 ```
 
-In Clausal list notation:
+In seam list notation:
 
 ```seam
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:metainterp_graph_test"

@@ -1,6 +1,6 @@
 # Strings as Lists of Characters
 
-In Clausal a string **is** the list of its one-character atoms — the ISO
+In Clausal Prolog a string **is** the list of its one-character atoms — the ISO
 Prolog *chars* model, as in Scryer. You can use list predicates, pattern
 matching, and DCGs on strings directly; no conversion needed, because there is
 nothing to convert.
@@ -24,7 +24,7 @@ split, join, reverse, search, filter, iterate. Maintaining two parallel sets of
 predicates — one for lists, one for strings — doubles the API surface and forces
 users to constantly ask "am I working with a string or a list right now?"
 
-Clausal answers that by making the string *be* the list. Under the hood a
+Clausal Prolog answers that by making the string *be* the list. Under the hood a
 string stays a compact value carrying its text (fast, and never expanded
 into a chain of cons cells) — a bare Python `str` is an atom now, not a
 string, so this isn't literally a `str`; see [Atoms vs
@@ -274,7 +274,7 @@ The logic layer makes the string *be* its char list in four places:
 
 ## Code-point vs grapheme semantics
 
-Clausal's strings-as-lists contract operates at **code-point granularity**,
+Clausal Prolog's strings-as-lists contract operates at **code-point granularity**,
 not grapheme granularity. This means:
 
 - A multi-codepoint emoji like `"👍🏽"` (thumbs-up + skin-tone modifier)
@@ -303,25 +303,25 @@ This rule applies uniformly across:
 If your application needs grapheme-aware processing (e.g. cursor
 movement in a text editor), use the standard Python library
 `unicodedata` or the third-party `regex`/`grapheme` packages
-**before** handing the string to Clausal — Clausal sees code points.
+**before** handing the string to the engine — it sees code points.
 
 ---
 
 ## Comparison with Prolog
 
-Clausal follows [Scryer Prolog](https://github.com/mthom/scryer-prolog) here: a string **is** the list of
+Clausal Prolog follows [Scryer Prolog](https://github.com/mthom/scryer-prolog) here: a string **is** the list of
 its character atoms, the two never unify with an atom, and the `atom_*` family
 raises `type_error(atom, …)` on a string. Scryer likewise keeps a compact
-internal representation rather than materialising cons cells; Clausal's wraps
+internal representation rather than materialising cons cells; Clausal Prolog's wraps
 a Python `str`.
 
 This doc covers the **`chars`** model (a string is the list of its
-one-character atoms). Clausal also has the Prolog **`codes`** model for byte
+one-character atoms). Clausal Prolog also has the Prolog **`codes`** model for byte
 sequences: a Python `bytes` behaves as a list of integer codes in `[0, 255]`,
 written `b"…"`. See [Bytes as Lists of Codes](bytes_as_lists.md) for
 byte-stream unification and binary-protocol DCGs.
 
-| Feature | Traditional Prolog | Clausal |
+| Feature | Traditional Prolog | Clausal Prolog |
 |---------|-------------------|---------|
 | String representation | List of character atoms | wraps a Python `str` — the same *term* as the char list, a compact representation |
 | `"abc" = [a, b, c]` | True | True |

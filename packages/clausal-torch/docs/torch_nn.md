@@ -6,7 +6,7 @@ LR schedulers, plus gradient utility predicates.
 
 ## Import
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:import"
 ```
 
@@ -19,31 +19,31 @@ results into a list.
 
 ### parameter
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:parameter"
 ```
 
 Enumerate all parameter tensors in `MODEL`.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:parameter_ex2"
 ```
 
 ### named_parameter
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:named_parameter"
 ```
 
 Enumerate `(name, tensor)` pairs for all parameters.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:named_parameter_ex2"
 ```
 
 ### module
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:module"
 ```
 
@@ -51,20 +51,20 @@ Enumerate all submodules recursively, including `MODEL` itself.
 
 ### named_module
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:named_module"
 ```
 
 Enumerate `(name, submodule)` pairs recursively. The root module has
 name `''` (the empty atom: names come out as atoms).
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:named_module_ex2"
 ```
 
 ### child
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:child"
 ```
 
@@ -72,13 +72,13 @@ Enumerate direct children only (not recursive).
 
 ### named_child
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:named_child"
 ```
 
 Enumerate `(name, child)` pairs for direct children only.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:named_child_ex2"
 ```
 
@@ -92,20 +92,20 @@ Names use the original PyTorch class names (e.g. `"Linear"`, `"ReLU"`,
 
 ### layer
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:layer"
 ```
 
 Enumerate all `nn.Module` subclasses. Built by introspecting `torch.nn`
 at import time, so it stays current across PyTorch versions.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:layer_ex2"
 ```
 
 ### activation
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:activation"
 ```
 
@@ -113,7 +113,7 @@ Enumerate activation modules (`ReLU`, `Sigmoid`, `Tanh`, `Softmax`, etc.).
 
 ### loss_fn
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:loss_fn"
 ```
 
@@ -121,19 +121,19 @@ Enumerate loss functions (`CrossEntropyLoss`, `MSELoss`, `BCELoss`, etc.).
 
 ### optimizer_type
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:optimizer_type"
 ```
 
 Enumerate optimizer types (`Adam`, `SGD`, `AdamW`, `RMSprop`, etc.).
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:optimizer_type_ex2"
 ```
 
 ### scheduler_type
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:scheduler_type"
 ```
 
@@ -141,7 +141,7 @@ Enumerate LR scheduler types (`StepLR`, `CosineAnnealingLR`,
 `ExponentialLR`, `ReduceLROnPlateau`, etc.). Built by introspecting
 `torch.optim.lr_scheduler`.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:scheduler_type_ex2"
 ```
 
@@ -151,7 +151,7 @@ Enumerate LR scheduler types (`StepLR`, `CosineAnnealingLR`,
 
 ### current_lr
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:current_lr"
 ```
 
@@ -168,7 +168,7 @@ as impure. They are commonly needed at the boundary of training loops.
 
 ### clip_grad_norm
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:clip_grad_norm"
 ```
 
@@ -177,7 +177,7 @@ Clip gradient norms in-place. Returns the total norm before clipping.
 
 ### clip_grad_value
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_nn_sigs.txt:clip_grad_value"
 ```
 

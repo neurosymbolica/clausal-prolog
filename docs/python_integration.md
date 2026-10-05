@@ -1,11 +1,12 @@
 # Python Integration
 
-Clausal and Python meet at two seams, one for each direction:
+Clausal Prolog and Python meet at two seams, one for each direction. Both
+are written in seam (`.seam`) files, the Python-syntax surface:
 
-- **`--term`** — Python speaks terms. In Python code hosted by a `.clausal`
-  or `.seam` file, `--goal` in goal position (`if`, `for`, `while`) **runs**
+- **`--term`** — Python speaks terms. In Python code hosted by a `.seam`
+  file, `--goal` in goal position (`if`, `for`, `while`) **runs**
   the goal and hands back its answers; anywhere else it builds the term.
-- **`++expr`** — Clausal calls Python. Inside a clause (or inside a `--`
+- **`++expr`** — logic calls Python. Inside a clause (or inside a `--`
   term), `++expr` evaluates a Python expression and passes its value in.
 
 Nothing is converted at either seam unless you ask: an answer is the engine's
@@ -19,9 +20,8 @@ available, build a goal cell and run it with [`solve()`](#from-a-plain-py-file-s
 
 ### In a `.seam` file: `--goal`
 
-Write the Python that asks questions in a `.seam` file (`.clausal` is the
-same format; the two suffixes are aliases). It is ordinary Python plus
-Clausal terms, and a term in goal position is a query:
+Write the Python that asks questions in a `.seam` file. It is ordinary
+Python plus logic terms, and a term in goal position is a query:
 
 ```seam
 # report.seam
@@ -43,7 +43,7 @@ print(report.fib_of(10))      # 55
 print(report.fib_table(4))    # [(0, 0), (1, 1), (2, 1), (3, 2), (4, 3)]
 ```
 
-Inside `--` the grammar is Clausal's: an ALL-CAPS name is a logic variable,
+Inside `--` the grammar is the seam's clause grammar: an ALL-CAPS name is a logic variable,
 a bare name is an atom or a predicate, `++n` passes the Python value of `n`
 in. `if --g:` runs `g` for its first answer, `for X in --g:` iterates every
 answer, and the goal's variables come back as ordinary Python locals. A
@@ -86,7 +86,7 @@ for trail in solve(("fib", 10, F := Var()), module=fibonacci):
     print(F.value)  # 55
 ```
 
-`module=` takes the imported `.clausal` module (as here), a `Module` object, or
+`module=` takes the imported module (as here), a `Module` object, or
 the module's dotted name as a string. A cell does not carry a module of its
 own, so `solve` without `module=` refuses an unqualified cell with an ISO
 `existence_error(module, …)` rather than guessing where the predicate lives.
@@ -237,7 +237,7 @@ With the JAX package, `import jax as pyjax` makes `++pyjax.vmap(F)` reach
 JAX's own `vmap`.
 
 Use it when you need the library ITSELF. A bare library name in
-`-import_module`/`-import_from` may name its Clausal **adapter** instead
+`-import_module`/`-import_from` may name its Clausal Prolog **adapter** instead
 (`uuid` is `py.uuid`, `jax` is `py.jax`, `torch` is `py.torch`, ...), whose predicates are what
 `-import_from(jax, [array])` imports; an adapter forwards the library's
 submodules and classes (`jax.numpy`, `torch.nn`) but not its functions, so
@@ -265,8 +265,8 @@ project lists it in `[tool.clausal] python_bridges` of the nearest
 
 ## `--` — The Seam: Python Speaks Terms
 
-`++()` escapes from Clausal to Python. `--` is the escape in the other direction:
-inside Python code hosted by a `.clausal` or `.seam` file (a function body, a
+`++()` escapes from a clause to Python. `--` is the escape in the other direction:
+inside Python code hosted by a `.seam` file (a function body, a
 module-level assignment), `--term` yields the runtime **term** — the same tuple
 the engine builds for that source in a clause — at the point of execution. In
 [goal position](#goal-position-if-goal-for-in-goal) it runs the term as a goal
@@ -291,7 +291,7 @@ inside `--` is a **string** (`"…"` is a string by default), so the expected
 value spells the id `'a1'` (an atom in every mode) to compare equal with what
 `expected` builds from Python text.
 
-Inside `--` the grammar is Clausal's, under the host module's own rules:
+Inside `--` the grammar is the seam's clause grammar, under the host module's own rules:
 
 - a **bare name** is the atom the module declares or imports (`permitted` →
   `'permitted'`, a plain `str`); an undeclared one is the usual strict-atoms error;
@@ -331,7 +331,7 @@ itself. It covers only those explicit forms: `%s`, `.format`, `print`,
 explicitly, or better, lift the text side to a term with `mint()` and compare
 terms.
 
-Two cautions. The rewrite fires **only** in Python hosted by a `.clausal`
+Two cautions. The rewrite fires **only** in Python hosted by a `.seam`
 file; a plain `.py` module never gets it, so verify it from a host or you
 will measure the wrong thing. And it is for display and serialization, not
 for a checker's comparison: `str(atom) == str(text)` is `True` for a rulebase
@@ -609,7 +609,7 @@ test("text crosses back as an atom, not a string") <- (
 ```
 
 A program that needs a string back **makes one**: `atom_chars(Y, Text)` in
-Clausal, or hands the carrier itself back — a goal-position answer that is a
+Clausal Prolog, or hands the carrier itself back — a goal-position answer that is a
 string comes out as the carrier, and `++` passes it in unchanged, so
 `for T in --txt(T): ... if --txt(++T)` is the identity round trip. (The
 2026-09-21 design that tagged atoms on the way out and read a plain `str` as
@@ -855,10 +855,10 @@ export list and `-private([...])` list. It returns a `frozenset` of `str`.
 ```python
 import clausal
 import shapes                          # a package: shapes/__init__.seam,
-import shapes.colours, shapes.forms    # shapes/colours.clausal, shapes/forms.clausal
+import shapes.colours, shapes.forms    # shapes/colours.seam, shapes/forms.seam
 
 clausal.declared_atoms("shapes")       # frozenset({'red', 'green', 'circle', ...})
-clausal.declared_atoms(shapes.forms)   # just forms.clausal's declarations
+clausal.declared_atoms(shapes.forms)   # just forms.seam's declarations
 ```
 
 - **An imported atom is not included.** An atom a file gets through
@@ -928,7 +928,7 @@ clausal.imported_atoms("shop")   # {'open_kind': 'shop.vocabulary', ...}
 ## Using `Module` Directly
 
 For tests or programmatic use without the [import hook](import.md), load a
-`.clausal` file from its path — each call compiles it afresh, with its own
+source file (`.seam`, `.clausal` or `.pl`) from its path — each call compiles it afresh, with its own
 database — and query it exactly as above:
 
 ```python
@@ -940,7 +940,7 @@ for trail in solve(("fib", 10, F := Var()), module=fibonacci):
     print(F.value)  # 55
 ```
 
-To add clauses at runtime, declare the predicate `-dynamic` in a `.clausal`
+To add clauses at runtime, declare the predicate `-dynamic` in a `.seam`
 file and run `assertz`/`retract` as goals (see
 [assertz/retract from Python](#assertzretract-from-python)); an undeclared or
 static predicate is refused.
@@ -973,7 +973,7 @@ for trail in solve(("edge", X := Var(), Y := Var()), module=graph):
 ```
 
 A rule's body is a list of compiled goal nodes, not cells — write rules in a
-`.clausal` file and load it as above.
+`.seam` or `.clausal` file and load it as above.
 
 ---
 
@@ -1095,4 +1095,4 @@ A rule's body is a list of compiled goal nodes, not cells — write rules in a
 ---
 
 *See also: [I/O](io.md) — write, writeln, f-strings for formatted output.*
-*See also: [Predicates](predicates.md) — defining predicates in `.clausal` files.*
+*See also: [Predicates](predicates.md) — defining predicates in `.seam` files.*

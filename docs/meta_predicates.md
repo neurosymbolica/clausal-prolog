@@ -1,6 +1,6 @@
 # Meta-Predicates & Higher-Order
 
-Clausal provides meta-predicates for collecting solutions and higher-order list predicates for functional-style list processing. Meta-predicates are compiler special forms (compiled inline); higher-order list predicates are builtins that take goal closures.
+Clausal Prolog provides meta-predicates for collecting solutions and higher-order list predicates for functional-style list processing. Meta-predicates are compiler special forms (compiled inline); higher-order list predicates are builtins that take goal closures.
 
 
 ---
@@ -299,7 +299,7 @@ sort_by_abs(XS, SS) <- sort_by(((X, K) <- abs_(X, K)), XS, SS)
 
 ??? info "Test coverage"
 
-    - `tests/test_meta.py`: findall, bagof, setof, forall, call/N, `.clausal` integration
+    - `tests/test_meta.py`: findall, bagof, setof, forall, call/N, `.seam` integration
     - `tests/test_higher_order.py` (34 tests): maplist/2,3, include/3, exclude/3, foldl/4, builtin predicates as arguments
     - `tests/fixtures/builtin_as_arg.seam` (5 tests): include/maplist with builtin predicates (number, integer, succ)
 

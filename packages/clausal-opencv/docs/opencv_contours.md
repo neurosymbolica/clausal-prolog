@@ -12,7 +12,7 @@ A small registry — `threshold_type/2` — also lives here for
 symmetry with the Phase 3 registries; threshold predicates themselves
 are in [`opencv_imgproc`](opencv_imgproc.md).
 
-```clausal
+```seam
 -import_from(opencv, [
     imread_grayscale, thresh_binary, thresh_otsu,
     retr_external, retr_tree, chain_approx_simple,
@@ -98,7 +98,7 @@ OpenCV result terms are tuples — match them by **passing the pattern
 directly** to the predicate rather than via a separate `==` after the
 fact:
 
-```clausal
+```seam
 % Recommended — direct unification through the predicate result-var
 bounding_rect(C, ("rect", X, Y, W, H))
 
@@ -121,7 +121,7 @@ Each example below is an exact copy of an integration test in
 
 ### Extract a single rectangle's outline
 
-```clausal
+```seam
 imread("/tmp/clausal_opencv_shapes.png", imread_grayscale, IMG),
 threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
 find_contours(BIN, retr_external, chain_approx_simple, CS, _),
@@ -130,7 +130,7 @@ length(CS, 1)
 
 ### Enumerate contours via backtracking
 
-```clausal
+```seam
 threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
 find_contours(BIN, retr_external, chain_approx_simple, CS, _),
 findall(C, contour(CS, C), ALL),
@@ -139,7 +139,7 @@ length(ALL, 1)
 
 ### Read the bounding rectangle as `rect/4`
 
-```clausal
+```seam
 threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
 find_contours(BIN, retr_external, chain_approx_simple, CS, _),
 contour(CS, C),
@@ -149,7 +149,7 @@ R == ("rect", 10, 8, 12, 16)   % concrete check
 
 ### Use moments_field to read m00 and compare to contour area
 
-```clausal
+```seam
 find_contours(BIN, retr_external, chain_approx_simple, CS, _),
 contour(CS, C),
 moments(C, M),
@@ -160,7 +160,7 @@ A - M00 < 0.001
 
 ### point_polygon_test inside/outside
 
-```clausal
+```seam
 % Inside the white rectangle (10..22 × 8..24): distance is positive.
 point_polygon_test(C, [16, 16], True, D),
 D > 0.0
@@ -172,14 +172,14 @@ D < 0.0
 
 ### Look up threshold type by name
 
-```clausal
+```seam
 threshold_type("otsu", T),
 T == thresh_otsu
 ```
 
 ### Enumerate all threshold types
 
-```clausal
+```seam
 findall(N, threshold_type(N, _), NAMES),
 length(NAMES, 7)
 ```

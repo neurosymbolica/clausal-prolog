@@ -8,7 +8,7 @@
 
 ## What changed
 
-Clausal used to **auto-mint** any bare atom you referenced: writing `pending`
+The seam (`.seam`, then named `.clausal`) used to **auto-mint** any bare atom you referenced: writing `pending`
 in a clause silently created a process-wide global atom on first use. That made
 a typo (`peding`) a silent wrong answer rather than an error.
 

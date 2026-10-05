@@ -10,7 +10,7 @@ string-name (`cvt_color_named/3`) forms, plus a bidirectional name ↔
 code registry (`color_code/2`) and a single `channels/2` predicate
 that collapses `cv2.split` / `cv2.merge`.
 
-```clausal
+```seam
 -import_from(opencv, [color_bgr2gray, color_bgr2hsv, color_hsv2bgr])
 -import_from(opencv_color, [cvt_color, cvt_color_named, color_code, channels])
 ```
@@ -35,7 +35,7 @@ constants with the `COLOR_` prefix stripped:
 | `cv2.COLOR_BGR2HSV` | `"bgr2hsv"` |
 | `cv2.COLOR_BAYER_BG2BGR` | `"bayer_bg2bgr"` |
 
-The same lowercase form is reachable as a top-level Clausal constant
+The same lowercase form is reachable as a top-level Clausal Prolog constant
 prefixed with `color_`:
 
 | cv2 constant | clausal constant |
@@ -60,12 +60,12 @@ through `color_code/2`.
 
 ## Worked examples
 
-The examples below are exact copies of the `.clausal` integration
+The examples below are exact copies of the `.seam` integration
 tests under `tests/fixtures/opencv_phase2_color.seam`.
 
 ### BGR → grayscale by code
 
-```clausal
+```seam
 imread("photo.png", imread_color, BGR),
 cvt_color(BGR, color_bgr2gray, GRAY),
 is_grayscale(GRAY)
@@ -73,7 +73,7 @@ is_grayscale(GRAY)
 
 ### BGR → grayscale by name
 
-```clausal
+```seam
 imread("photo.png", imread_color, BGR),
 cvt_color_named(BGR, "bgr2gray", GRAY),
 is_grayscale(GRAY)
@@ -81,21 +81,21 @@ is_grayscale(GRAY)
 
 ### Registry lookup name → code
 
-```clausal
+```seam
 color_code("bgr2gray", CODE),
 CODE == color_bgr2gray
 ```
 
 ### Registry reverse lookup code → name
 
-```clausal
+```seam
 color_code(NAME, color_bgr2hsv),
 NAME == "bgr2hsv"
 ```
 
 ### Enumerate all available color codes
 
-```clausal
+```seam
 findall(N, color_code(N, _), NAMES),
 length(NAMES, K),
 K >= 100
@@ -103,7 +103,7 @@ K >= 100
 
 ### Split a BGR image into channels
 
-```clausal
+```seam
 imread("photo.png", imread_color, BGR),
 channels(BGR, [B, G, R]),
 shape(B, [_, _])  % each channel is a 2-D array
@@ -111,7 +111,7 @@ shape(B, [_, _])  % each channel is a 2-D array
 
 ### Merge channels back into a multi-channel image
 
-```clausal
+```seam
 % Backward mode: given a channel list, produce a multi-channel image
 channels(MERGED, [B, G, R]),
 channels_count(MERGED, 3)
@@ -119,7 +119,7 @@ channels_count(MERGED, 3)
 
 ### gray → BGR replicates a single channel
 
-```clausal
+```seam
 imread("photo.png", imread_grayscale, GRAY),
 cvt_color(GRAY, color_gray2bgr, BGR),
 channels(BGR, [B, G, R]),
@@ -129,7 +129,7 @@ min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 
 ### HSV roundtrip is approximately identity
 
-```clausal
+```seam
 imread("photo.png", imread_color, BGR),
 cvt_color(BGR, color_bgr2hsv, HSV),
 cvt_color(HSV, color_hsv2bgr, BGR2),

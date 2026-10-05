@@ -1,6 +1,6 @@
 # Free-Threaded Python Support
 
-Clausal's core C extensions (`_variables`, `_trampoline` and `_tabling_core`)
+Clausal Prolog's core C extensions (`_variables`, `_trampoline` and `_tabling_core`)
 are compatible with free-threaded Python (PEP 703 / PEP 779, `python3.14t`+). Under a
 free-threaded build, the GIL is disabled and multiple threads execute Python
 bytecode in parallel. This page documents the threading contract: what is

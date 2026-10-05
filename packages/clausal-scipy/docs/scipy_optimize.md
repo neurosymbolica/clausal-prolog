@@ -1,18 +1,18 @@
 # scipy.optimize — Optimisation
 
-The `scipy_optimize` module wraps [`scipy.optimize`](https://docs.scipy.org/doc/scipy/reference/optimize.html) as Clausal predicates. It covers scalar and multivariate minimisation, global optimisation, least-squares fitting, curve fitting, root finding, and linear/mixed-integer programming.
+The `scipy_optimize` module wraps [`scipy.optimize`](https://docs.scipy.org/doc/scipy/reference/optimize.html) as Clausal Prolog predicates. It covers scalar and multivariate minimisation, global optimisation, least-squares fitting, curve fitting, root finding, and linear/mixed-integer programming.
 
 ---
 
 ## Import
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_optimize_sigs.txt:import"
 ```
 
 Or via the canonical `py.*` path:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_optimize_sigs.txt:import_ex2"
 ```
 
@@ -22,7 +22,7 @@ Or via the canonical `py.*` path:
 
 All optimisation predicates are **Tier 2**: RESULT is unified with a Python dict. Use `result_get(RESULT, FIELD, VALUE)` to extract individual fields.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_optimize_sigs.txt:tiers"
 ```
 
@@ -34,7 +34,7 @@ All optimisation predicates are **Tier 2**: RESULT is unified with a Python dict
 
 Predicate names use full English words; scipy's abbreviations are expanded:
 
-| scipy function | Clausal predicate |
+| scipy function | Clausal Prolog predicate |
 |---|---|
 | `minimize_scalar` | `minimize_scalar` |
 | `minimize` | `minimize` |
@@ -60,13 +60,13 @@ Predicate names use full English words; scipy's abbreviations are expanded:
 
 ### Scalar minimisation
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_optimize_sigs.txt:scalar_minimisation"
 ```
 
 Example:
 
-```clausal
+```seam
 minimize_quadratic(RESULT) <- (
     minimize_scalar(++(lambda x: (x - 3.0)**2), RESULT),
     result_get(RESULT, 'x', X),
@@ -78,13 +78,13 @@ minimize_quadratic(RESULT) <- (
 
 ### Multivariate minimisation
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_optimize_sigs.txt:multivariate_minimisation"
 ```
 
 Example:
 
-```clausal
+```seam
 -import_from(scipy_optimize, [minimize, result_get])
 
 rosenbrock_minimum(X) <- (
@@ -100,13 +100,13 @@ rosenbrock_minimum(X) <- (
 
 These methods search for a global minimum and do not require a gradient.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_optimize_sigs.txt:global_optimisation"
 ```
 
 Example — find global minimum of a multi-modal function:
 
-```clausal
+```seam
 global_min(X) <- (
     differential_evolution(
         ++(lambda x: x[0]**2 * __import__('math').sin(4*x[0])),
@@ -121,13 +121,13 @@ global_min(X) <- (
 
 ### Least-squares and curve fitting
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_optimize_sigs.txt:least_squares_and_curve_fitting"
 ```
 
 Example — fit an exponential decay:
 
-```clausal
+```seam
 -import_from(scipy_optimize, [curve_fit, result_get])
 
 fit_decay(XDATA, YDATA, PARAMS) <- (
@@ -141,13 +141,13 @@ fit_decay(XDATA, YDATA, PARAMS) <- (
 
 ### root finding
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_optimize_sigs.txt:root_finding"
 ```
 
 Example:
 
-```clausal
+```seam
 -import_from(scipy_optimize, [root_scalar, result_get])
 
 square_root(N, ROOT) <- (
@@ -162,19 +162,19 @@ square_root(N, ROOT) <- (
 
 ### Linear and mixed-integer programming
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_optimize_sigs.txt:linear_and_mixed_integer_programming"
 ```
 
 Example — two-variable LP:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_optimize_sigs.txt:linear_and_mixed_integer_programming_ex2"
 ```
 
 Example — MILP with integrality constraints:
 
-```clausal
+```seam
 -import_from(scipy_optimize, [mixed_integer_linear_program, linear_constraint, bounds, result_get])
 
 integer_plan(X) <- (
@@ -189,7 +189,7 @@ integer_plan(X) <- (
 
 ### result_get
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_optimize_sigs.txt:resultget"
 ```
 
@@ -222,7 +222,7 @@ the adapter builds, so the flag is a string however it is read:
 
 ## Complete example — Rosenbrock with gradient descent
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_optimize_sigs.txt:complete_example"
 ```
 

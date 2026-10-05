@@ -1,18 +1,18 @@
 # scipy.fft — Fast Fourier Transforms
 
-The `scipy_fft` module wraps [`scipy.fft`](https://docs.scipy.org/doc/scipy/reference/fft.html) as Clausal predicates. It covers 1-D, 2-D, and N-D forward and inverse DFTs, real-input transforms, discrete cosine transforms, and frequency/shift utilities.
+The `scipy_fft` module wraps [`scipy.fft`](https://docs.scipy.org/doc/scipy/reference/fft.html) as Clausal Prolog predicates. It covers 1-D, 2-D, and N-D forward and inverse DFTs, real-input transforms, discrete cosine transforms, and frequency/shift utilities.
 
 ---
 
 ## Import
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:import"
 ```
 
 Or via the canonical `py.*` path:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:import_ex2"
 ```
 
@@ -36,7 +36,7 @@ The core transform predicates are **bidirectional relations**: they dispatch on 
 | `discrete_sine_transform(X, Y)` | `dst(x)` | `idst(y)` |
 | `fft_shift(X, Y)` | `fftshift(x)` | `ifftshift(y)` |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:bidirectionality"
 ```
 
@@ -46,7 +46,7 @@ The core transform predicates are **bidirectional relations**: they dispatch on 
 
 Abbreviations that are the universal name are kept as-is; others are spelled out:
 
-| scipy function | Clausal predicate |
+| scipy function | Clausal Prolog predicate |
 |---|---|
 | `fft` | `fft_transform` forward |
 | `ifft` | `fft_transform` backward |
@@ -77,13 +77,13 @@ All other predicates in this module (`real_fft`, `fft_shift`, `fft_frequencies`,
 
 ### 1-D transforms
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:fft_1d_transforms"
 ```
 
 Example — frequency analysis of a sine wave:
 
-```clausal
+```seam
 -import_from(scipy_fft, [fft_transform, fft_frequencies])
 
 frequency_spectrum(SIGNAL, FREQS, SPECTRUM) <- (
@@ -97,13 +97,13 @@ frequency_spectrum(SIGNAL, FREQS, SPECTRUM) <- (
 
 ### 2-D transforms
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:fft_2d_transforms"
 ```
 
 Example — round-trip:
 
-```clausal
+```seam
 -import_from(scipy_fft, [fft_transform2d])
 
 round_trip2_d(IMAGE, RECOVERED) <- (
@@ -116,7 +116,7 @@ round_trip2_d(IMAGE, RECOVERED) <- (
 
 ### N-D transforms
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:fft_nd_transforms"
 ```
 
@@ -126,13 +126,13 @@ round_trip2_d(IMAGE, RECOVERED) <- (
 
 `real_fft` exploits conjugate symmetry to halve storage for real signals. The output of `real_fft` has length `N//2 + 1`.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:real_input_transforms"
 ```
 
 Example — filter a 1-D signal in the frequency domain:
 
-```clausal
+```seam
 -import_from(scipy_fft, [real_fft])
 
 low_pass_filter(SIGNAL, CUTOFF_BIN, FILTERED) <- (
@@ -148,7 +148,7 @@ low_pass_filter(SIGNAL, CUTOFF_BIN, FILTERED) <- (
 
 ### Cosine and sine transforms
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:cosine_and_sine_transforms"
 ```
 
@@ -165,13 +165,13 @@ DCT types:
 
 ### Utility
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:utility"
 ```
 
 Example — plot-ready spectrum:
 
-```clausal
+```seam
 -import_from(scipy_fft, [fft_transform, fft_frequencies, fft_shift])
 
 centred_spectrum(SIGNAL, FREQS_CENTRED, SPECTRUM_CENTRED) <- (
@@ -189,19 +189,19 @@ centred_spectrum(SIGNAL, FREQS_CENTRED, SPECTRUM_CENTRED) <- (
 
 ### Round-trip: 1-D signal
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:round_trip_1_d_signal"
 ```
 
 ### Convolution via FFT
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_fft_sigs.txt:convolution_via_fft"
 ```
 
 ### Image spectrum (2-D)
 
-```clausal
+```seam
 -import_from(scipy_fft, [fft_transform2d, fft_shift])
 
 image_spectrum(IMAGE, CENTRED_SPECTRUM) <- (

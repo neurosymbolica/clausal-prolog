@@ -5,7 +5,7 @@ The opencv module exposes the central image data type (a NumPy
 arithmetic, bitwise operations, reductions, and whole-image
 transforms.
 
-```clausal
+```seam
 -import_from(opencv, [
     imread, shape, channels_count, is_color, IMG_COLOR  # see Conventions
 ])
@@ -33,7 +33,7 @@ orders, matching the upstream library:
 
 Constants from `cv2` are exported under **lowercase** aliases —
 `imread_color`, `norm_l2`, `cv_8u` — *not* the upstream all-caps
-form. This is forced: Clausal treats every all-caps identifier as a
+form. This is forced: seam source treats every all-caps identifier as a
 logic variable, so `IMREAD_COLOR` in a goal body would be parsed as
 a fresh `Var`, not a constant lookup. The lowercase alias resolves
 unambiguously and preserves the cv2 mapping (`imread_color` ↔
@@ -64,7 +64,7 @@ input.
 - `(+IMG, +EXT, -BUF)` — encode IMG as bytes in format EXT (`.png`, `.jpg`, ...)
 - `(-IMG, +EXT, +BUF)` — decode BUF back into an image
 
-```clausal
+```seam
 test("encode a PNG and decode it back") <- (
     imread("photo.png", imread_color, IMG),
     image_encoded(IMG, ".png", BUF),
@@ -78,7 +78,7 @@ test("encode a PNG and decode it back") <- (
 file is missing or unreadable. This makes file-existence checks fall
 out of the predicate naturally:
 
-```clausal
+```seam
 load_or_warn(PATH, IMG) <- (
     imread(PATH, imread_color, IMG)
 )
@@ -107,7 +107,7 @@ unbound, check when it's bound.
 Partial-pattern check is supported: `shape(IMG, [_, _, 3])` succeeds
 iff IMG has 3 channels regardless of H and W.
 
-```clausal
+```seam
 # Match images that are at least 100x100
 big_enough(IMG) <- (
     shape(IMG, [H, W, _]),
@@ -154,7 +154,7 @@ function saturates. Pass two arrays of matching shape.
 images, `split` (Phase 2) into individual channels first, or use
 `mean` for an aggregate.
 
-```clausal
+```seam
 # How dark is the darkest pixel?
 darkest(GRAY_IMG, MIN_V) <- (
     is_grayscale(GRAY_IMG),
@@ -208,12 +208,12 @@ name is given in parentheses.
 
 ## Worked examples
 
-The examples below are exact copies of the `.clausal` integration
+The examples below are exact copies of the `.seam` integration
 tests under `tests/fixtures/opencv_phase1_core.seam`.
 
 ### Read a color image and check structure
 
-```clausal
+```seam
 imread("photo.png", imread_color, IMG),
 shape(IMG, [_, _, 3]),
 is_color(IMG)
@@ -221,7 +221,7 @@ is_color(IMG)
 
 ### Roundtrip through an in-memory PNG buffer
 
-```clausal
+```seam
 imread("photo.png", imread_color, IMG),
 image_encoded(IMG, ".png", BUF),
 image_encoded(IMG2, ".png", BUF),
@@ -231,7 +231,7 @@ shape(IMG2, S)
 
 ### Verify an image is its own absdiff-zero
 
-```clausal
+```seam
 imread("photo.png", imread_grayscale, IMG),
 absdiff(IMG, IMG, D),
 min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
@@ -239,7 +239,7 @@ min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 
 ### Verify `bitwise_not` is involutive (grayscale)
 
-```clausal
+```seam
 imread("photo.png", imread_grayscale, IMG),
 bitwise_not(IMG, INV),
 bitwise_not(INV, INV2),
@@ -249,7 +249,7 @@ min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 
 ### Vertical flip is its own inverse
 
-```clausal
+```seam
 imread("photo.png", imread_grayscale, IMG),
 flip(IMG, 0, F),
 flip(F, 0, F2),
@@ -259,7 +259,7 @@ min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 
 ### Convert OpenCV size to NumPy shape (and back)
 
-```clausal
+```seam
 imread("photo.png", imread_color, IMG),
 shape(IMG, [H, W, _]),
 size(IMG, [W, H])

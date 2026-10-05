@@ -11,7 +11,7 @@ The engine reads three source surfaces:
 | Extension | Surface | Syntax | Read by |
 |---|---|---|---|
 | `.clausal` | **Clausal Prolog** | ISO Prolog, cut-free | the native ISO front end, always |
-| `.pl` | **ISO Prolog** | ISO Prolog | `CLAUSAL_PL_FRONTEND` (`translator` by default, or `native`); experimental |
+| `.pl` | **ISO Prolog** | Regular ISO Prolog, cut included | external Prolog systems (the Scryer and Trealla embeddings); experimental in-process import via `CLAUSAL_PL_FRONTEND` |
 | `.seam` | **the seam** | Python syntax | `PredicateLoader` |
 
 The seam is the boundary with Python. It is where the `++expr` escape,
@@ -36,6 +36,7 @@ modules) are shared by all three surfaces.
 ```prolog
 % family.clausal
 :- module(family, [grandparent/2, fib/2, path/2]).
+:- use_module(library(clpz)).
 
 parent(tom, bob).
 parent(tom, liz).
@@ -44,13 +45,14 @@ parent(bob, pat).
 
 grandparent(X, Z) :- parent(X, Y), parent(Y, Z).
 
+% CLP(Z) arithmetic: fib/2 runs in both directions.
 fib(0, 0).
 fib(1, 1).
 fib(N, F) :-
-    N > 1,
-    N1 is N - 1, N2 is N - 2,
-    fib(N1, F1), fib(N2, F2),
-    F is F1 + F2.
+    N #> 1,
+    N1 #= N - 1, N2 #= N - 2,
+    F #>= N1, F #= F1 + F2,
+    fib(N1, F1), fib(N2, F2).
 
 :- table(path/2).
 edge(1, 2).
@@ -61,23 +63,37 @@ path(X, Y) :- edge(X, Z), path(Z, Y).
 
 test("tom's grandchildren") :- grandparent(tom, ann), grandparent(tom, pat).
 test("fib(10) = 55") :- fib(10, 55).
+test("which fib is 55?") :- once(fib(N, 55)), N == 10.
 test("path reaches the whole cycle") :- findall(Y, path(1, Y), Ys), msort(Ys, [1, 2, 3]).
 test("tom has no grandparent", fail) :- grandparent(_, tom).
 
 :- end_module(family).
 ```
 
-Import it from Python like any module:
+Query it from Python:
+
+Python asks the questions from a `.seam` file, with a goal in `for`
+position after `--`:
 
 ```python
-import clausal                      # installs the import hook
-import family                       # loads family.clausal
-from clausal import call, deref, Var
+# app.seam
+-import_from(family, [grandparent, fib])
+-private([tom])
 
-GRANDCHILD = Var()
-print([deref(GRANDCHILD) for _ in call("grandparent", "tom", GRANDCHILD, module=family)])
-# ['ann', 'pat']
+for GRANDCHILD in --grandparent(tom, GRANDCHILD):
+    print(GRANDCHILD)               # ann, then pat
+
+for N in --fib(N, 55):
+    print(N)                        # 10
+    break
 ```
+
+```bash
+python -c "import clausal, app"     # import clausal installs the import hook
+```
+
+The goal's variables become ordinary Python locals, bound to each answer
+in turn. Atoms used in a `.seam` file are declared, here with `-private`.
 
 Run its tests with `python -m clausal.testing family.clausal`, or let
 pytest collect them (see [Testing](testing.md)).
@@ -128,7 +144,8 @@ file and line.
 
 ### Cut-free
 
-`!`, `->` (if-then, and if-then-else) and `*->` (soft cut) are refused:
+`!` and `->` (if-then, and if-then-else) are refused. `*->` (soft cut) is
+not an operator in Clausal Prolog, so writing it is a syntax error:
 
 ```text
 c.clausal:2: `!` (cut) is refused: Clausal is cut-free with no committed
@@ -138,8 +155,8 @@ choice, by design (ruling): !, -> and *-> are refused
 Use the pure alternatives instead. These are `dif/2`, `if_/3` and the
 reified predicates from `library(reif)` (see
 [If-Then-Else](reified_ite.md)), constraints, `once/1`, and first-argument
-indexing (see [Purity](purity.md)). The same rule applies to `.pl` files
-and to `{!}` in a grammar body.
+indexing (see [Purity](purity.md)). The same rule applies to `{!}` in a
+grammar body.
 
 ### Modules end with `end_module/1`
 
@@ -202,7 +219,7 @@ the spellings that change:
 | Fact | `parent(tom, bob),` | `parent(tom, bob).` |
 | Rule | `p(X) <- (q(X), r(X))` | `p(X) :- q(X), r(X).` |
 | Variables | `ALL_CAPS` | ISO: `X`, `Rest`, `_` |
-| Evaluate arithmetic | `N1 == N - 1` | `N1 is N - 1` |
+| Arithmetic | `N1 == N - 1` | `N1 #= N - 1` (CLP(Z), preferred; works in both directions), or ISO `N1 is N - 1` |
 | Unify | `X is Y` | `X = Y` |
 | Module | `-module(m, [p(X)])` | `:- module(m, [p/1]).` … `:- end_module(m).` |
 | Import | `-import_from(lib, [p])` | `:- use_module(lib, [p/1]).` |

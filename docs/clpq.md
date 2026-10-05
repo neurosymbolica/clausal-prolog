@@ -73,7 +73,7 @@ Write the set when you mean rational arithmetic.
 
 ## Unified syntax
 
-Clausal's comparison operators are shared across CLP(Z), CLP(R), and CLP(Q). The domain is determined at runtime by what types are involved:
+Clausal Prolog's comparison operators are shared across CLP(Z), CLP(R), and CLP(Q). The domain is determined at runtime by what types are involved:
 
 | Operator | CLP(Z) | CLP(R) | CLP(Q) |
 |---|---|---|---|
@@ -222,7 +222,7 @@ Projects the constraint store onto a list of variables, eliminating all internal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:dump_q_2"
 ```
 
-This is the feature that SWI-Prolog's CLP(Q) gets wrong — internal variables leak into answers. Clausal eliminates them correctly via Fourier-Motzkin.
+This is the feature that SWI-Prolog's CLP(Q) gets wrong — internal variables leak into answers. Clausal Prolog eliminates them correctly via Fourier-Motzkin.
 
 ## Units
 
@@ -504,7 +504,7 @@ All reduced costs are non-positive — no non-basic variable can improve the obj
 
 ## How it works: linearization
 
-Before a constraint reaches the Gaussian elimination or simplex, the expression tree (built from Clausal's `Add`, `Sub`, `Mult`, `Div`, `Negate` nodes) must be flattened to a linear form `{var_id: coefficient, ...} + constant`.
+Before a constraint reaches the Gaussian elimination or simplex, the expression tree (built from Clausal Prolog's `Add`, `Sub`, `Mult`, `Div`, `Negate` nodes) must be flattened to a linear form `{var_id: coefficient, ...} + constant`.
 
 The `_linearize` function walks the expression tree:
 
@@ -658,7 +658,7 @@ This is exactly the trade-off SICStus Prolog documents: "you may be out of space
 
 ## Comparison with other systems
 
-| Feature | SICStus CLP(Q) | SWI CLP(Q) | ECLiPSe | **Clausal CLP(Q)** |
+| Feature | SICStus CLP(Q) | SWI CLP(Q) | ECLiPSe | **Clausal Prolog CLP(Q)** |
 |---|---|---|---|---|
 | Correctness | Reference impl | Orphaned, bugs | No CLP(Q) | **Clean-room from papers** |
 | Algorithm | Holzbaur Gaussian+simplex | Port of SICStus | — | **Holzbaur Gaussian+simplex** |
@@ -838,7 +838,7 @@ A variable can have **both** FD and Q attributes simultaneously, just like FD an
     - **Coefficient growth**: Newton sqrt(2) to 12-digit fractions, large coefficient constraints
     - **Float type safety**: `TypeError` raised when Q-variable unified with float
     - **Snapshot dedup**: multi-step operation undoable as single unit
-    - **End-to-end Clausal**: all doc examples compiled and run through full pipeline (7 integration tests)
+    - **End-to-end seam**: all doc examples compiled and run through full pipeline (7 integration tests)
 
 ---
 

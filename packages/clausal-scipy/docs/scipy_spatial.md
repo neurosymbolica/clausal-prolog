@@ -1,17 +1,17 @@
 # scipy.spatial — Spatial Algorithms
 
 Provides spatial distance functions and spatial data-structure predicates from
-`scipy.spatial` as [importable](import.md) clausal predicates.
+`scipy.spatial` as [importable](import.md) Clausal Prolog predicates.
 
 ## Import
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:import"
 ```
 
 or via the canonical `py.*` path:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:import_ex2"
 ```
 
@@ -34,7 +34,7 @@ or via the canonical `py.*` path:
 
 ### cross_distance
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:crossdistance"
 ```
 
@@ -46,13 +46,13 @@ Wraps `scipy.spatial.distance.cdist`.
 - `KWARGS`: Python dict of extra metric-specific keyword arguments, or `None`
 - `RESULT`: `(m × n)` distance matrix
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:crossdistance_ex2"
 ```
 
 ### pairwise_distance
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:pairwisedistance"
 ```
 
@@ -62,26 +62,26 @@ Wraps `scipy.spatial.distance.pdist`.
 - `X`: array of shape `(n, d)`
 - `RESULT`: condensed distance vector of length `n*(n-1)/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:pairwisedistance_ex2"
 ```
 
 ### square_form
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:squareform"
 ```
 
 Convert between a condensed distance vector and a square distance matrix.
 Wraps `scipy.spatial.distance.squareform`.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:squareform_ex2"
 ```
 
 ### point_distance
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:pointdistance"
 ```
 
@@ -92,7 +92,7 @@ metric.
 - `X`, `Y`: 1-D arrays or lists
 - `RESULT`: float scalar
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:pointdistance_ex2"
 ```
 
@@ -102,7 +102,7 @@ metric.
 
 ### make_kd_tree
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:makekdtree"
 ```
 
@@ -115,7 +115,7 @@ Wraps `scipy.spatial.KDTree`.
 
 ### kd_tree_query
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:kdtreequery"
 ```
 
@@ -125,13 +125,13 @@ Query the KD-tree for the `K` nearest neighbours of each point in `X`.
 - `K`: number of neighbours (default 1)
 - `RESULT`: dict with keys `'distances'` and `'indices'`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:kdtreequery_ex2"
 ```
 
 ### kd_tree_query_ball
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:kdtreequeryball"
 ```
 
@@ -141,7 +141,7 @@ find all points within `RADIUS` of each query point.
 
 ### kd_tree_query_pairs
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:kdtreequerypairs"
 ```
 
@@ -155,7 +155,7 @@ find all pairs of points in the tree within `RADIUS` of each other.
 
 ### make_convex_hull
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:makeconvexhull"
 ```
 
@@ -167,7 +167,7 @@ Wraps `scipy.spatial.ConvexHull`.
 
 ### convex_hull_attr
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:convexhullattr"
 ```
 
@@ -183,7 +183,7 @@ Retrieve an attribute of the `ConvexHull` object.
 | `'neighbors'` | int array | Neighbour facet indices |
 | `'coplanar'` | int array | Coplanar points not on hull |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:convexhullattr_ex2"
 ```
 
@@ -193,7 +193,7 @@ Retrieve an attribute of the `ConvexHull` object.
 
 ### make_delaunay
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:makedelaunay"
 ```
 
@@ -204,7 +204,7 @@ Wraps `scipy.spatial.Delaunay`.
 
 ### delaunay_find_simplex
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:delaunayfindsimplex"
 ```
 
@@ -214,7 +214,7 @@ find the simplex containing each point in `XI`.
 - `BRUTEFORCE`: if `True`, bypass spatial index (default `False`)
 - `RESULT`: int array; `-1` for points outside the triangulation
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:delaunayfindsimplex_ex2"
 ```
 
@@ -226,7 +226,7 @@ Wraps `scipy.spatial.transform.Rotation`.
 
 ### make_rotation
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:makerotation"
 ```
 
@@ -244,7 +244,7 @@ Construct a rotation from a given representation.
 
 ### rotation_apply
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:rotationapply"
 ```
 
@@ -255,7 +255,7 @@ Apply the rotation to an array of 3-D vectors.
 
 ### rotation_as
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:rotationas"
 ```
 
@@ -266,7 +266,7 @@ Export the rotation to a different representation.
 
 ### rotation_compose
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:rotationcompose"
 ```
 
@@ -275,7 +275,7 @@ Returns a new handle.
 
 ### rotation_inverse
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:rotationinverse"
 ```
 
@@ -285,7 +285,7 @@ Return the inverse of the rotation as a new handle.
 
 ## Lifecycle — free
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:lifecycle"
 ```
 
@@ -296,7 +296,7 @@ handle is unknown or already freed.
 
 ## Complete Example
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_spatial_sigs.txt:complete_example"
 ```
 

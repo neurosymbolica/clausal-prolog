@@ -9,7 +9,7 @@ All predicates are **Tier 1 (pure)**. Each takes one or more NumPy
 arrays and returns a fresh array; backtracking simply abandons the
 output.
 
-```clausal
+```seam
 -import_from(opencv_imgproc, [
     gaussian_blur, median_blur, sobel, canny,
     get_structuring_element, morphology_ex,
@@ -107,7 +107,7 @@ Examples below are exact copies of the integration tests under
 
 ### Gaussian blur with explicit sigma
 
-```clausal
+```seam
 imread("photo.png", imread_grayscale, IMG),
 gaussian_blur(IMG, [3, 3], 1.0, OUT),
 shape(IMG, S),
@@ -116,7 +116,7 @@ shape(OUT, S)
 
 ### filter_2d with identity kernel is identity
 
-```clausal
+```seam
 imread("photo.png", imread_grayscale, IMG),
 K_IDENT is ++(numpy.array([[0,0,0],[0,1,0],[0,0,0]], dtype=numpy.float32)),
 filter_2d(IMG, cv_8u, K_IDENT, OUT),
@@ -126,7 +126,7 @@ min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 
 ### Sobel on grayscale with signed output
 
-```clausal
+```seam
 imread("photo.png", imread_grayscale, IMG),
 sobel(IMG, cv_16s, 1, 0, OUT),
 shape(IMG, S),
@@ -135,7 +135,7 @@ shape(OUT, S)
 
 ### Canny edges
 
-```clausal
+```seam
 imread("photo.png", imread_grayscale, IMG),
 canny(IMG, 50.0, 150.0, EDGES),
 is_grayscale(EDGES)
@@ -143,7 +143,7 @@ is_grayscale(EDGES)
 
 ### `morphology_ex open` equals erode-then-dilate
 
-```clausal
+```seam
 imread("photo.png", imread_grayscale, IMG),
 get_structuring_element(morph_rect, [3, 3], K),
 erode(IMG, K, ER),
@@ -155,7 +155,7 @@ min_max_loc(D, ("min_max", 0.0, 0.0, _, _))
 
 ### Image pyramids
 
-```clausal
+```seam
 imread("photo.png", imread_color, IMG),
 pyr_down(IMG, DOWN),
 pyr_up(DOWN, REBUILT),
@@ -165,14 +165,14 @@ shape(REBUILT, S)
 
 ### Look up an interpolation flag by name
 
-```clausal
+```seam
 interpolation("cubic", C),
 C == inter_cubic
 ```
 
 ### Enumerate all border types
 
-```clausal
+```seam
 findall(N, border_type(N, _), NAMES),
 length(NAMES, 6)
 ```
@@ -192,29 +192,29 @@ applied** by cv2 — which equals `THRESH` for plain modes like
 `thresh_triangle` is used. Pass `_` for `USED` when you don't care.
 
 `thresh_otsu` and `thresh_triangle` are normally OR-ed with another
-mode in C++ (`THRESH_BINARY | THRESH_OTSU`). In Clausal, **pass them
-alone or precompute the OR'd value as an int literal** — Clausal
+mode in C++ (`THRESH_BINARY | THRESH_OTSU`). In Clausal Prolog, **pass them
+alone or precompute the OR'd value as an int literal** — the engine
 doesn't evaluate `thresh_binary + thresh_otsu` in goal-arg position
 (see Phase 4 Issues). `thresh_otsu` alone already implies
 `thresh_binary`, so it's the recommended form for the common case.
 
 ### Thresholding examples
 
-```clausal
+```seam
 imread("photo.png", imread_grayscale, IMG),
 threshold(IMG, 128.0, 255.0, thresh_binary, USED, OUT),
 USED == 128.0,
 is_grayscale(OUT)
 ```
 
-```clausal
+```seam
 imread("photo.png", imread_grayscale, IMG),
 threshold(IMG, 0.0, 255.0, thresh_otsu, USED, OUT),
 USED >= 0.0,
 USED <= 255.0
 ```
 
-```clausal
+```seam
 imread("photo.png", imread_grayscale, IMG),
 adaptive_threshold(IMG, 255.0, adaptive_thresh_mean_c, thresh_binary,
                    3, 0.0, OUT)
@@ -261,14 +261,14 @@ The wrapper takes a 2-element list `[W, H]` and coerces to a tuple
 internally. The `size/2` query predicate in `opencv` already returns
 `[W, H]`, so chaining works:
 
-```clausal
+```seam
 shape(IMG, [H, W, _]),       % numpy order
 resize(IMG, [W // 2, H // 2], SMALL)
 ```
 
 ### `affine_inverse/2` is bidirectional
 
-```clausal
+```seam
 get_rotation_matrix_2d([16.0, 16.0], 30.0, 1.0, M),
 affine_inverse(M, M_INV),    % forward: M -> M_INV
 affine_inverse(M2, M_INV)    % backward: M2 = invert(M_INV) = M
@@ -280,7 +280,7 @@ backward implementations are the same function — supplied to
 
 ### `rotate/3` for the three lossless rotations
 
-```clausal
+```seam
 rotate(IMG, rotate_90_clockwise, R1),
 rotate(R1, rotate_90_counterclockwise, R2),
 absdiff(IMG, R2, D),
@@ -292,14 +292,14 @@ and apply with `warp_affine`.
 
 ### `remap` and `copy_make_border` examples
 
-```clausal
+```seam
 % Identity remap with float32 coordinate grids
 MAP_X is ++(numpy.tile(numpy.arange(32, dtype=numpy.float32), (32, 1))),
 MAP_Y is ++(numpy.tile(numpy.arange(32, dtype=numpy.float32).reshape(-1, 1), (1, 32))),
 remap(IMG, MAP_X, MAP_Y, inter_nearest, OUT)
 ```
 
-```clausal
+```seam
 % 2-pixel replicate border
 copy_make_border(IMG, 2, 2, 2, 2, border_replicate, PADDED)
 ```

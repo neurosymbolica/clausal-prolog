@@ -4,7 +4,7 @@ Logic programming embedded in Python. **Clausal Prolog** is a cut-free
 Prolog that aims for ISO Prolog conformity. Write relational programs in
 `.clausal` files and import them with Python's standard import system. The
 engine includes constraint solving, tabling, DCGs and a large standard
-library. It also loads ISO Prolog `.pl` files. A Python-syntax surface, the
+library. Regular ISO Prolog lives in `.pl` files. A Python-syntax surface, the
 **seam** (`.seam`), is kept only as the boundary for code that has to call
 Python.
 
@@ -15,7 +15,7 @@ The package is `clausal`: `pip install clausal`, `import clausal`.
 | Extension | Surface | Syntax | Use it for |
 |---|---|---|---|
 | `.clausal` | **Clausal Prolog** | ISO Prolog, without cut | Your logic programs. The default choice. |
-| `.pl` | **ISO Prolog** | ISO Prolog | Existing Prolog code (cut-free; experimental) |
+| `.pl` | **ISO Prolog** | Regular ISO Prolog, cut included | External Prolog code, for Prolog systems such as Scryer or Trealla |
 | `.seam` | **Seam** | Python syntax | The boundary with Python: `++` escapes, hosted Python, adapters |
 
 All three are importable modules once `clausal` is imported. In one
@@ -41,7 +41,8 @@ directory, `name.seam` beats `name.clausal`, which beats `name.pl`.
 - **SLG tabling** and **well-founded semantics** for negation over tabled
   predicates
 - **DCGs**: `-->` grammar rules with `phrase/2,3`
-- **ISO Prolog import**: load `.pl` files directly (experimental)
+- **Regular ISO Prolog alongside**: `.pl` files, run in the Scryer or
+  Trealla embeddings, or imported directly (experimental)
 - **Python interop through the seam**: `library(...)` facades over the
   engine's Python modules (`library(json)`, `library(datetime)`, …),
   Python-free `.seam` modules, and allowlisted Python bridges
@@ -66,6 +67,7 @@ building from source).
 ```prolog
 % family.clausal
 :- module(family, [grandparent/2, fib/2, path/2]).
+:- use_module(library(clpz)).
 
 parent(tom, bob).
 parent(tom, liz).
@@ -74,13 +76,14 @@ parent(bob, pat).
 
 grandparent(X, Z) :- parent(X, Y), parent(Y, Z).
 
+% CLP(Z) arithmetic: fib/2 runs in both directions.
 fib(0, 0).
 fib(1, 1).
 fib(N, F) :-
-    N > 1,
-    N1 is N - 1, N2 is N - 2,
-    fib(N1, F1), fib(N2, F2),
-    F is F1 + F2.
+    N #> 1,
+    N1 #= N - 1, N2 #= N - 2,
+    F #>= N1, F #= F1 + F2,
+    fib(N1, F1), fib(N2, F2).
 
 % Tabling terminates on the cycle.
 :- table(path/2).
@@ -92,6 +95,7 @@ path(X, Y) :- edge(X, Z), path(Z, Y).
 
 test("tom's grandchildren") :- grandparent(tom, ann), grandparent(tom, pat).
 test("fib(10) = 55") :- fib(10, 55).
+test("which fib is 55?") :- once(fib(N, 55)), N == 10.
 test("path reaches the whole cycle") :- findall(Y, path(1, Y), Ys), msort(Ys, [1, 2, 3]).
 test("tom has no grandparent", fail) :- grandparent(_, tom).
 
@@ -102,15 +106,27 @@ A Clausal Prolog module file must end with `:- end_module(Name).`.
 
 ### Querying it from Python
 
-```python
-import clausal                      # installs the import hook
-import family                       # loads family.clausal
-from clausal import call, deref, Var
+Python asks the questions from a `.seam` file, with a goal in `for`
+position after `--`:
 
-GRANDCHILD = Var()
-print([deref(GRANDCHILD) for _ in call("grandparent", "tom", GRANDCHILD, module=family)])
-# ['ann', 'pat']
+```python
+# app.seam
+-import_from(family, [grandparent, fib])
+-private([tom])
+
+for GRANDCHILD in --grandparent(tom, GRANDCHILD):
+    print(GRANDCHILD)               # ann, then pat
+
+for N in --fib(N, 55):
+    print(N)                        # 10
+    break
 ```
+
+```bash
+python -c "import clausal, app"     # import clausal installs the import hook
+```
+
+See [Python Integration](docs/python_integration.md) for more ways to query.
 
 ### Constraints, DCGs and reified conditions
 
@@ -148,7 +164,8 @@ test("dif") :- dif(X, a), X = b.
 Clausal Prolog is ISO Prolog with a few deliberate rules. Each one is
 enforced when the file loads:
 
-- **Cut-free.** `!`, `->` and `*->` are refused. Use `dif/2`, `if_/3`,
+- **Cut-free.** `!` and `->` are refused, and `*->` is not an operator.
+  Use `dif/2`, `if_/3`,
   `once/1`, constraints or first-argument indexing.
 - **Modules close.** A module file must end with `:- end_module(Name).`.
   A file can opt out with `:- set_prolog_flag(require_end_module, false).`.
@@ -168,20 +185,18 @@ See [docs/importing_prolog.md](docs/importing_prolog.md) for the full rules.
 
 ## ISO Prolog `.pl` files
 
-Put a `.pl` file on `sys.path` and import it:
-
-```python
-import clausal
-import my_prolog_module   # loads my_prolog_module.pl
-```
-
-`.pl` import is **experimental** and outside the 1.0 compatibility promise.
-Clausal is cut-free on every surface, so a `.pl` file that uses `!` or `->`
-is refused here too. `CLAUSAL_PL_FRONTEND=native` selects the native ISO
-reader that Clausal Prolog always uses. The default is `translator`. To run
-unrestricted ISO Prolog alongside Clausal, use the
+A `.pl` file is regular, external ISO Prolog: it is not restricted to the
+cut-free subset, and that is why a `.clausal` module may not import one.
+To run full ISO Prolog, cut included, alongside Clausal Prolog, use the
 [Scryer](packages/clausal-scryer/docs/scryer.md) or
 [Trealla](packages/clausal-trealla/docs/trealla.md) embeddings.
+
+Importing a `.pl` file straight into the engine (put it on `sys.path` and
+`import` it) is
+**experimental** and outside the 1.0 compatibility promise. That in-process
+loader does not run cut yet: a `.pl` file that uses `!` or `->` fails to
+load there. `CLAUSAL_PL_FRONTEND` selects its front end (`translator` by
+default, or `native`, the ISO reader that `.clausal` files always use).
 
 ## The seam: `.seam` files
 
@@ -218,41 +233,6 @@ collected automatically.
 
 ```bash
 python -m pytest tests/ clausal/examples/ -q
-```
-
-## Logic variables and backtracking
-
-The C extension `clausal.logic.variables` provides Prolog-style logic
-variables and trail-based backtracking without a Warren Abstract Machine.
-
-```python
-from clausal.logic.variables import Var, Trail, unify, is_var
-
-trail = Trail()
-X = Var()
-Y = Var()
-
-unify(X, 42, trail)
-assert X.value == 42
-
-mark = trail.mark()
-unify(Y, "temporary", trail)
-trail.undo(mark)
-assert is_var(Y)   # Y is unbound again
-```
-
-### Constraints
-
-```python
-from clausal.logic.variables import Var, Trail, unify
-from clausal.logic.constraints import dif
-
-trail = Trail()
-X, Y = Var(), Var()
-
-dif(X, Y, trail)      # post: X ≠ Y
-unify(X, 1, trail)    # ok — still satisfiable
-unify(Y, 2, trail)    # ok — satisfied (1 ≠ 2)
 ```
 
 ## Requirements

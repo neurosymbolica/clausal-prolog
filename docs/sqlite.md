@@ -1,8 +1,8 @@
-# Clausal — SQLite Database (`sqlite` module)
+# Clausal Prolog — SQLite Database (`sqlite` module)
 
 ## Overview
 
-The `sqlite` module provides SQLite database predicates backed by Python's `sqlite3` stdlib module. It exposes connection management, parameterized SQL queries, DML execution, and schema introspection as Clausal predicates.
+The `sqlite` module provides SQLite database predicates backed by Python's `sqlite3` stdlib module. It exposes connection management, parameterized SQL queries, DML execution, and schema introspection as Clausal Prolog predicates.
 
 Since Python's `sqlite3` module is the backend, all SQLite features are available — in-memory databases, WAL mode, JSON1 extension, full-text search, etc.
 
@@ -243,7 +243,7 @@ show_schema(COL, TYPE) <- (
 
 ??? abstract "Design decisions"
 
-    1. **Named connection aliases** — connections are identified by string aliases, not opaque handles. This makes them easy to reference across predicates in `.clausal` files where values must be ground or logic variables.
+    1. **Named connection aliases** — connections are identified by string aliases, not opaque handles. This makes them easy to reference across predicates in `.seam` files where values must be ground or logic variables.
     2. **Idempotent connect** — `connect` with an existing alias succeeds silently. This simplifies predicates that call a shared `setup` predicate from multiple entry points.
     3. **Auto-commit on exec** — `exec` commits after each statement. For multi-statement atomicity, use Python's transaction support via [`++()`](python_integration.md) interop.
     4. **Single-column unwrap** — `query` unwraps single-column rows to bare values (not 1-tuples), making common patterns like `SELECT name FROM ...` cleaner.
@@ -252,4 +252,4 @@ show_schema(COL, TYPE) <- (
 
 ---
 
-*See also: [Database Ops](database_ops.md) — Clausal's assert/retract for in-memory facts · [Python Interop](python_integration.md) — direct SQL via `++()` escape.*
+*See also: [Database Ops](database_ops.md) — Clausal Prolog's assert/retract for in-memory facts · [Python Interop](python_integration.md) — direct SQL via `++()` escape.*

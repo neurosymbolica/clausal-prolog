@@ -1,6 +1,6 @@
 # Directives
 
-Directives are module-level declarations in `.clausal` files that control predicate properties, imports, and compilation behavior. They are prefixed with `-` and placed at the top of the file.
+Directives are module-level declarations in seam (`.seam`) files that control predicate properties, imports, and compilation behavior. They are prefixed with `-` and placed at the top of the file. [Clausal Prolog](clausal_prolog.md) (`.clausal`) files use ISO `:-` directives instead.
 
 ---
 
@@ -92,7 +92,7 @@ The list may also contain bare atoms:
 ```
 
 !!! warning "`-private` is a marker, not a barrier"
-    **`-private` means "not part of my documented surface" — Python's leading underscore, not C++ `private`.** It does *not* make a name unreachable. `-import_from(owner, [draft])` reaches a `-private` atom or predicate just as readily as an exported one, and binds the **owner's** predicate handle (for an atom there is nothing to bind — it is the same global atom either way). Clausal has no access control at all: `-import_from` lowers to a Python `from M import name` and consults nothing about `M`'s declarations — not its `-private` list, not its `-module` export list (see [Why not Prolog-style modules](import.md#why-not-prolog-style-modules) — "No export lists. Everything is public").
+    **`-private` means "not part of my documented surface" — Python's leading underscore, not C++ `private`.** It does *not* make a name unreachable. `-import_from(owner, [draft])` reaches a `-private` atom or predicate just as readily as an exported one, and binds the **owner's** predicate handle (for an atom there is nothing to bind — it is the same global atom either way). The seam has no access control at all: `-import_from` lowers to a Python `from M import name` and consults nothing about `M`'s declarations — not its `-private` list, not its `-module` export list (see [Why not Prolog-style modules](import.md#why-not-prolog-style-modules) — "No export lists. Everything is public").
 
     This is deliberate and [pinned by a test](https://gitlab.com/MikeAmy/clausal/-/blob/main/tests/test_global_atoms_default.py). It is also load-bearing: under strict atoms, a fixture or generated module with no `-module(...)` export list has importing from its `-private` list as its identity-preserving route across a file boundary.
 
@@ -291,7 +291,7 @@ imported modules.
 
 **Requires a preceding `-module(...)`** in the same file: the renamed spelling embeds the owning module's name, so there is no principled identity to rename into without one. `-hide` before `-module` (or with no `-module` at all) is a compile error.
 
-**Mechanism — compiler rename, not encryption.** The compiler renames a hidden atom to `module⟨SEP⟩name`, where `⟨SEP⟩` is a reserved codepoint (US, 0x1F — R1-revised, user-ratified 2026-09-05; originally U+E000 under R1) the Clausal reader refuses inside any atom token, quoted or not — so the renamed spelling cannot be typed by hand in ordinary source. **The guarantee this provides is uniqueness and analysis soundness, not runtime security** — the same stance Ciao's `:- hide` and Python's `__name` mangling both take. Runtime construction of the renamed spelling piece-by-piece (`atom_chars/2` and similar) CAN forge it; this is documented out-of-warranty behavior, not blocked.
+**Mechanism — compiler rename, not encryption.** The compiler renames a hidden atom to `module⟨SEP⟩name`, where `⟨SEP⟩` is a reserved codepoint (US, 0x1F — R1-revised, user-ratified 2026-09-05; originally U+E000 under R1) the reader refuses inside any atom token, quoted or not — so the renamed spelling cannot be typed by hand in ordinary source. **The guarantee this provides is uniqueness and analysis soundness, not runtime security** — the same stance Ciao's `:- hide` and Python's `__name` mangling both take. Runtime construction of the renamed spelling piece-by-piece (`atom_chars/2` and similar) CAN forge it; this is documented out-of-warranty behavior, not blocked.
 
 **Printing renders the human form.** `write/1`, `term_str`, and the reified-term renderer all display a hidden atom as `module.name` (the dotted, human-readable form) rather than leaking the raw `⟨SEP⟩` codepoint. This is display-only — reading `module.name` back through the parser does NOT reconstruct the hidden atom; round-tripping a hidden atom through text is not a supported operation.
 
@@ -464,7 +464,7 @@ matters. See [Compiler](compiler.md) for details on the two compilation modes.
 **Problem**: A magic number like `3.14159` or `3` repeated across several clauses is a
 maintenance hazard — rename the meaning, and every occurrence has to be found and checked by
 hand. Prolog has no answer to this beyond a fact plus an extra goal (`is_pi(PI), area == PI *
-R**2`); Clausal gives constants their own lexical class instead.
+R**2`); the seam gives constants their own lexical class instead.
 
 ```seam
 -constant_value(pi, 3.14159)
@@ -547,7 +547,7 @@ a **structured literal** — a list, tuple, set, dict, or functor call, nested a
 unground right-hand side (one that computes to a value containing an unbound variable) raises
 `ConstantNotGroundError` before any clause compiles; a logic-variable-shaped name anywhere in a
 structured RHS is caught earlier still, as a located `SyntaxError` at compile time. A structured
-RHS builds the same real Clausal term the identical literal would build in a clause body — see
+RHS builds the same real term the identical literal would build in a clause body — see
 [Structured constants](syntax.md#structured-constants) for the full reference, including the
 declared-above ordering rule a functor call needs and the frozen/immutable-value guarantee.
 
@@ -582,7 +582,7 @@ error and the `_UNUSED`-suffix naming trap.
 
 ### -allow_singletons
 
-**Problem**: Clausal warns by default whenever a named variable occurs exactly once in its
+**Problem**: Clausal Prolog warns by default whenever a named variable occurs exactly once in its
 clause (`ClausalSingletonWarning`) — almost always a typo. A few files have a *legitimate*
 reason to be full of them: a fixture built to demonstrate the singleton pattern itself, or a
 page of "most general query" examples where an unbound variable is the whole point.

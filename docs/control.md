@@ -85,7 +85,7 @@ test("exactly one solution") <- once(
 
 - **`once` commits to the first solution** — it discards every remaining
   alternative of `Goal`, not just the next one. Side effects from the first
-  solution will have happened. (Clausal has no cut; `once/1` is the ISO
+  solution will have happened. (Clausal Prolog has no cut; `once/1` is the ISO
   construct for committing.)
 - **`time_goal/1` prints to stderr** — not stdout. It won't interfere with
   [write/writeln](io.md) output.

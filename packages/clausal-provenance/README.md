@@ -7,7 +7,7 @@
 > meta-interpreter over `clause/2`. Importing `clausal.modules.provenance`
 > raises `ImportError` until then.
 
-Provenance-tagged bottom-up Datalog for [Clausal](https://gitlab.com/MikeAmy/clausal).
+Provenance-tagged bottom-up Datalog for [Clausal Prolog](https://gitlab.com/MikeAmy/clausal).
 
 A peer evaluation strategy to SLG, with semirings ranging from plain Boolean
 Datalog through to PyTorch/JAX-differentiable probabilistic inference. The
@@ -29,7 +29,7 @@ pip install clausal-provenance[all]   # both frameworks
 
 ## Quick start
 
-```clausal
+```seam
 -import_from(provenance, [bottom_up_, solve, boolean])
 
 -module(reach, [Edge(A, B), Path(A, B)])

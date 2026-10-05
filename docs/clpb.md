@@ -204,7 +204,7 @@ when `sat()` is called with variables that already have constraints, all connect
 
 CLP(B) uses attribute key `"clpb"`, independent of [CLP(ℤ)](constraints.md) (`"fd"`), [CLP(ℝ)](clpr.md) (`"real"`), and dif/2 (`"dif"`). All hooks fire independently when a variable is bound.
 
-CLP(B) variables are constrained to `0`/`1` (integers), not Python booleans (`True`/`False`). Booleans are explicitly rejected by CLP(ℝ) and CLP(ℤ) — they are distinct types in Clausal's constraint system. If you need to bridge CLP(B) with numeric constraints, bind via `0`/`1`.
+CLP(B) variables are constrained to `0`/`1` (integers), not Python booleans (`True`/`False`). Booleans are explicitly rejected by CLP(ℝ) and CLP(ℤ) — they are distinct types in Clausal Prolog's constraint system. If you need to bridge CLP(B) with numeric constraints, bind via `0`/`1`.
 
 ---
 

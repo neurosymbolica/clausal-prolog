@@ -24,7 +24,7 @@ for the full purity analysis.
 The standard `free/1` predicate (Phase 1) releases any feature
 handle.
 
-```clausal
+```seam
 -import_from(opencv_features, [
     make_orb, make_sift, make_akaze, make_brisk, make_fast,
     detect, compute, detect_and_compute,
@@ -131,7 +131,7 @@ keypoint(KP, PT, SIZE, ANGLE, RESPONSE, OCTAVE, CLASS_ID)             % bidirect
 - When `KP` is unbound and all fields are bound, construct: build
   a new `cv2.KeyPoint` from the fields.
 
-```clausal
+```seam
 % Decompose
 detect(ORB, IMG, [KP, *_]),
 keypoint(KP, [X, Y], SIZE, _, RESP, _, _)
@@ -167,7 +167,7 @@ Each example below is an exact copy of an integration test in
 
 ### ORB detect-and-compute
 
-```clausal
+```seam
 make_orb({"n_features": 200}, ORB),
 imread("scene.png", imread_grayscale, IMG),
 detect_and_compute(ORB, IMG, KPS, DESCS),
@@ -177,7 +177,7 @@ shape(DESCS, [N, 32])     % ORB produces 32-byte descriptors
 
 ### Self-match with BF + Hamming
 
-```clausal
+```seam
 make_orb({"n_features": 50}, ORB),
 detect_and_compute(ORB, IMG, _, DESCS),
 make_bf_matcher(norm_hamming, BF),
@@ -193,14 +193,14 @@ length(NON_ZERO, 0)
 
 ### k-NN match
 
-```clausal
+```seam
 knn_match(BF, DESCS, DESCS, 2, [FIRST_GROUP, *_]),
 length(FIRST_GROUP, 2)
 ```
 
 ### FLANN with SIFT
 
-```clausal
+```seam
 make_sift({"n_features": 50}, SIFT),
 detect_and_compute(SIFT, IMG, _, DESCS),
 make_flann_matcher(FLANN),
@@ -209,7 +209,7 @@ match(FLANN, DESCS, DESCS, MATCHES)
 
 ### Build a `cv2.KeyPoint` from scratch
 
-```clausal
+```seam
 keypoint(KP, [10.0, 20.0], 5.0, 0.0, 0.5, 0, 0),
 keypoint(KP, [X, Y], SIZE, _, RESP, _, _),
 X == 10.0, Y == 20.0, SIZE == 5.0, RESP == 0.5
@@ -221,7 +221,7 @@ The canonical filter for `knn_match` k=2 results — keep only the
 first match if its distance is significantly shorter than the
 second:
 
-```clausal
+```seam
 good_match(MATCH_PAIR, GOOD) <- (
     MATCH_PAIR = [M1, M2],
     dmatch(M1, _, _, _, D1),
@@ -233,7 +233,7 @@ good_match(MATCH_PAIR, GOOD) <- (
 
 ### Free a handle
 
-```clausal
+```seam
 make_orb(H),
 free(H),
 not detect(H, _, _)     % subsequent use of H fails
@@ -241,7 +241,7 @@ not detect(H, _, _)     % subsequent use of H fails
 
 ### Overlay keypoints (uses Phase 6 `draw_keypoints`)
 
-```clausal
+```seam
 make_orb({"n_features": 20}, ORB),
 imread("scene.png", imread_color, IMG),
 cvt_color(IMG, color_bgr2gray, GRAY),
@@ -251,7 +251,7 @@ draw_keypoints(IMG, KPS, [0, 255, 0], OUT)
 
 ### Side-by-side match visualization (uses Phase 6 `draw_matches`)
 
-```clausal
+```seam
 detect_and_compute(ORB, GRAY, KPS, DESCS),
 make_bf_matcher(norm_hamming, BF),
 match(BF, DESCS, DESCS, MATCHES),

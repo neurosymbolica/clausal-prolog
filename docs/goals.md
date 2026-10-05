@@ -1,10 +1,10 @@
-# Clausal — Project Goals
+# Clausal Prolog — Project Goals
 
 ## Mission
 
-Clausal aims to provide logic programming in Python as tightly integrated as possible — not as a front-end to an external Prolog, but as a genuine part of the Python runtime. Python code and logic code call into each other freely, share the same objects, and run on the same VM. Existing Prolog programs can be [imported directly](importing_prolog.md) — translated, compiled, and cached on the fly.
+Clausal Prolog aims to provide logic programming in Python as tightly integrated as possible — not as a front-end to an external Prolog, but as a genuine part of the Python runtime. Python code and logic code call into each other freely, share the same objects, and run on the same VM. Existing Prolog programs can be [imported directly](importing_prolog.md) — translated, compiled, and cached on the fly.
 
-The inspiration is heavily drawn from existing Prologs, particularly the insights of Markus Triska (The Power of Prolog), Richard O'Keefe, and Ulrich Neumerkel. Clausal's surface syntax is Python's, not ISO Prolog's; its *semantics* follow ISO Prolog (ISO 13211-1) first, and Scryer Prolog where ISO is silent. In today's syntax a **bare** operator keeps its Python meaning (`-7 // 2` is -4) while the **quoted** ISO spelling follows Scryer (`'//'(-7, 2)` is -3) — see [Operators](operators.md). Clausal is cut-free by design: `once/1`, `if_/3` and negation cover committed choice.
+The inspiration is heavily drawn from existing Prologs, particularly the insights of Markus Triska (The Power of Prolog), Richard O'Keefe, and Ulrich Neumerkel. Clausal Prolog's main surface, [Clausal Prolog](clausal_prolog.md) (`.clausal`), is ISO Prolog syntax; the seam (`.seam`) is a Python-syntax surface for the boundary with Python. Its *semantics* follow ISO Prolog (ISO 13211-1) first, and Scryer Prolog where ISO is silent. In seam syntax a **bare** operator keeps its Python meaning (`-7 // 2` is -4) while the **quoted** ISO spelling follows Scryer (`'//'(-7, 2)` is -3) — see [Operators](operators.md). Clausal Prolog is cut-free by design: `once/1`, `if_/3` and negation cover committed choice.
 
 ## Why logic programming + Python?
 
@@ -31,7 +31,7 @@ Marrying these in Python — the lingua franca of machine learning — is the go
 
     **Genuine integration, not interop.** The logic system runs on the Python VM. Logic predicates and Python functions call into each other with no subprocess overhead, no re-entrancy issues, no marshalling across a process boundary.
 
-    **Python syntax throughout.** All syntax is valid Python syntax, acceptable to the Python parser. No new parser is required. This means logic code can be syntax-highlighted, linted, and processed by standard Python tooling.
+    **Python syntax at the seam.** Seam (`.seam`) source is valid Python syntax, acceptable to the Python parser, so seam code can be syntax-highlighted, linted, and processed by standard Python tooling. Clausal Prolog (`.clausal`) source is ISO Prolog syntax, read by the engine's native ISO front end.
 
     **Pythonic, not puristic.** Python culture allows breaking rules. Calling Python from within logic code is supported without apology. Side effects, I/O, and mutable state can coexist with backtracking — the programmer understands what they are doing.
 
@@ -39,11 +39,11 @@ Marrying these in Python — the lingua franca of machine learning — is the go
 
     **Compile once.** The AST transformation overhead is paid once, at import time. Transformed bytecode is cached by Python's standard import machinery.
 
-## What clausal provides
+## What Clausal Prolog provides
 
 - **`clausal.logic.variables`** — C extension for logic variables and trail-based backtracking. Foundation for all unification.
 - **Terms are plain Python values** — an atom is a `str`, a compound is a cell tuple `('f', 1, 2)`, a list is a Python list, a string is the `('$chars', s)` carrier. `clausal.cell_functor`, `cell_args` and `make_cell` read and build cells.
-- **`clausal.import_hook`** — transparent [import](import.md) of `.clausal`/`.seam` modules; [IPython](ipython.md) integration.
+- **`clausal.import_hook`** — transparent [import](import.md) of `.seam`, `.clausal` and `.pl` modules; [IPython](ipython.md) integration.
 - **`clausal.logic.compiler`** — compiles clauses to Python generators run on a stack-safe trampoline (`clausal.logic.trampoline`).
 - **The goal-position seam** — in a `.seam` file, Python calls logic with `for X in --pred(X):` / `if --pred(a):`, and logic calls Python with `++expr` (see [Python integration](python_integration.md)).
 

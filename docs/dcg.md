@@ -1,17 +1,17 @@
 # Definite Clause Grammars (DCGs)
 
-DCGs are a notation for defining grammars and other [list](lists.md)-processing tasks. Clausal uses `>>` syntax for grammar rules, which are rewritten to ordinary `<-` clauses with two hidden difference-list arguments at compile time.
+DCGs are a notation for defining grammars and other [list](lists.md)-processing tasks. The seam uses `>>` syntax for grammar rules, which are rewritten to ordinary `<-` clauses with two hidden difference-list arguments at compile time.
 
 The implementation lives in `clausal/templating/term_rewriting.py` (source-level rewriting) and `clausal/logic/builtins/dcg.py` (`phrase/2,3`).
 
 *The `-table` directive is often used with DCGs to memoize recursive grammar rules. See [Directives](directives.md).*
 
-!!! note "Clausal vs Prolog syntax"
+!!! note "Seam vs Prolog syntax"
 
-    Clausal and Prolog syntax may slightly differ — for example, variables are
+    Seam and Prolog syntax may slightly differ — for example, variables are
     `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style. Keep
     this in mind when comparing with Prolog resources.
-    Prolog DCGs (`-->`) can be [imported directly](importing_prolog.md) — they translate to Clausal's `>>` syntax automatically.
+    Prolog DCGs (`-->`) can be [imported directly](importing_prolog.md) — they translate to the seam's `>>` syntax automatically. [Clausal Prolog](clausal_prolog.md) (`.clausal`) files write grammar rules with ISO `-->` directly.
 
 ---
 
@@ -63,7 +63,7 @@ digit(D) >> ([D], {D >= 0}, {D <= 9})
 
 ### Inline Goals
 
-Curly braces `{...}` embed arbitrary [Clausal goals](syntax.md) inside a grammar rule. They do not consume input:
+Curly braces `{...}` embed arbitrary [goals](syntax.md) inside a grammar rule. They do not consume input:
 
 ```seam
 digit(D) >> ([D], {D >= 0}, {D <= 9})

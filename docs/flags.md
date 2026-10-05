@@ -1,10 +1,10 @@
 # Prolog Flags
 
 `set_prolog_flag/2` and `current_prolog_flag/2` read and change the Prolog
-flags of ISO 13211-1 (7.11, 8.17), plus one flag of Clausal's own,
+flags of ISO 13211-1 (7.11, 8.17), plus one flag of Clausal Prolog's own,
 `assert_creates_dynamic`.
 
-Flag names and values are atoms. In `.clausal` source, write them quoted
+Flag names and values are atoms. In seam (`.seam`) source, write them quoted
 (`'unknown'`), or declare them with `-private([...])`, as with any atom. A
 truth value is `true` / `false`, which compile to Python's `True` / `False`.
 
@@ -23,7 +23,7 @@ truth value is `true` / `false`, which compile to Python's `True` / `False`.
 | `max_arity` | `unbounded` | no | process | `255` |
 | `unknown` | `error` | `error` only | process | `error` (settable) |
 | `double_quotes` | `chars` | by directive | module | `chars` |
-| `assert_creates_dynamic` | `false` (`true` in an imported `.pl` module) | yes | module | not a flag (ISO assert always creates) |
+| `assert_creates_dynamic` | `false` (`true` in a `.clausal` or imported `.pl` module) | yes | module | not a flag (ISO assert always creates) |
 | `require_end_module` | `default` | `true` / `false` / `default` | process (file-local as a `.pl` directive) | not a flag |
 
 - **Integers are unbounded** (Python `int`), so `bounded` is `false` and
@@ -137,11 +137,11 @@ test("not a value") <- catch(
 
 What `assertz/1` and `asserta/1` do with a procedure that does not exist yet.
 
-- **`false`** (the default in `.clausal` / `.seam` modules): the dynamic database
+- **`false`** (the default in `.seam` modules): the dynamic database
   is declare-first. Asserting into a procedure nothing declares raises
   `permission_error(modify, static_procedure, PI)`, because ISO makes an
   undeclared procedure static (7.5.2). Declare it with `-dynamic` first.
-- **`true`** (the default in an imported `.pl` module): ISO 7.5.2(2). Asserting
+- **`true`** (the default in a Clausal Prolog `.clausal` module and in an imported `.pl` module): ISO 7.5.2(2). Asserting
   into a procedure that does not exist **creates** it, as a dynamic procedure of
   the module.
 
@@ -167,7 +167,7 @@ test("assertz creates the procedure") <- (
 )
 ```
 
-An [imported Prolog module](importing_prolog.md) starts with
+A [Clausal Prolog](clausal_prolog.md) (`.clausal`) module or an [imported Prolog module](importing_prolog.md) starts with
 `assert_creates_dynamic` set to `true`. A
 `:- set_prolog_flag(assert_creates_dynamic, false).` in the file turns it off.
 

@@ -7,8 +7,8 @@ optimiser library for JAX. Its core abstraction is a
 pytree and turn `(grads, state) → (updates, new_state)`.
 
 Because optax is already functional and state-threaded, every
-operation maps cleanly onto Clausal's state-threading idiom. This
-module completes the "you can train a model end-to-end in Clausal"
+operation maps cleanly onto Clausal Prolog's state-threading idiom. This
+module completes the "you can train a model end-to-end in Clausal Prolog"
 story alongside Phase 9 (pytrees), Phase 10 (`jax_nn`), and Phase 12
 (function transforms).
 
@@ -17,7 +17,7 @@ All predicates are Tier 1 pure or Tier 3 state-threaded. None require
 
 ## Import
 
-```clausal
+```seam
 -import_module(jax)
 -import_from(py.jax_optax, [
     sgd, adam, adamw,
@@ -46,10 +46,10 @@ do not inspect it.
 ### `update_optimizer(TX, GRADS, STATE, RESULT)` — and `/5` with PARAMS
 
 The hot path. Returns a tuple `(UPDATES, NEW_STATE)`; decompose with
-Clausal's tuple syntax — the same convention used by `value_and_grad`,
+the seam's tuple syntax — the same convention used by `value_and_grad`,
 `svd`, and the rest of `py.jax*`.
 
-```clausal
+```seam
 update_optimizer(OPT, GRADS, STATE0, RESULT),
 RESULT is (UPDATES, STATE1)
 ```
@@ -73,7 +73,7 @@ pytrees.
 
 ### Minimal example
 
-```clausal
+```seam
 test("one SGD step on a flat array") <- (
     sgd(0.1, OPT),
     PARAMS is ++(jax.numpy.array([1.0, 2.0, 3.0])),
@@ -89,7 +89,7 @@ test("one SGD step on a flat array") <- (
 
 ### With `value_and_grad`
 
-```clausal
+```seam
 test("one Adam step on x^2") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
     PARAMS is ++(jax.numpy.array([3.0, 4.0])),
@@ -111,7 +111,7 @@ Each optimiser predicate has a `/2` form taking just the learning
 rate and a `/3` form accepting an opts dict for the rest of the
 hyperparameters.
 
-```clausal
+```seam
 sgd(0.1, OPT_SGD)
 sgd(0.1, {"momentum": 0.9, "nesterov": ++(True)}, OPT_NESTEROV)
 
@@ -127,7 +127,7 @@ The full list (`/2` and `/3` for each):
 
 Look up by name from the `optimizer/2` registry:
 
-```clausal
+```seam
 optimizer("sgd", CTOR),
 OPT is ++(CTOR(0.1))
 ```
@@ -140,7 +140,7 @@ Optax's true power is composition. `chain([TX1, TX2, ...], TX)`
 threads gradients through each transform in order — the canonical
 recipe is "clip first, then optimise":
 
-```clausal
+```seam
 clip_by_global_norm(1.0, CLIP),
 adam(0.001, ADAM),
 chain([CLIP, ADAM], OPT)
@@ -175,7 +175,7 @@ Schedules are pure functions `step → value`. Build one, then either
 evaluate it directly with `schedule_at/3` or wire it into an
 optimiser with `scale_by_schedule/2`.
 
-```clausal
+```seam
 cosine_decay_schedule(0.001, 1000, SCHED),
 schedule_at(SCHED, 0, LR_AT_START),     % ≈ 0.001
 schedule_at(SCHED, 500, LR_AT_MID),     % ≈ 0.0005
@@ -185,7 +185,7 @@ schedule_at(SCHED, 1000, LR_AT_END)     % ≈ 0.0
 Wired into an optimiser, the canonical pattern is `chain` with a
 unit-LR base and `scale_by_schedule`:
 
-```clausal
+```seam
 cosine_decay_schedule(0.001, 1000, SCHED),
 sgd(1.0, BASE),                          % unit LR
 scale_by_schedule(SCHED, SCALER),
@@ -240,7 +240,7 @@ Enumerate via `loss_function/2`.
 update every K steps; intermediate steps accumulate gradients into
 state. Defaults to mean-of-grads (`use_grad_mean=True`).
 
-```clausal
+```seam
 sgd(1.0, INNER),
 multi_steps(INNER, 4, OPT)
 ```
@@ -259,12 +259,12 @@ These are first-class JAX values that flow through arguments. The
 wrapper does not provide inspection predicates — thread them through
 your loop, never pattern-match on them. `_deep_deref` preserves the
 NamedTuple subclass so `tx.init` / `tx.update` attribute access
-survives a Clausal round-trip.
+survives a Clausal Prolog round-trip.
 
 If you need to log Adam's `mu` / `nu` for debugging, reach for
 Phase 9 pytree predicates on the `OptState`:
 
-```clausal
+```seam
 leaf(STATE, LEAF)
 ```
 
@@ -277,7 +277,7 @@ leaf(STATE, LEAF)
 parameters in `update`. If your chain contains any of these, use the
 `/5` arity:
 
-```clausal
+```seam
 update_optimizer(OPT, GRADS, STATE, PARAMS, RESULT)
 ```
 
@@ -289,7 +289,7 @@ either arity.
 Unlike the other transforms, `add_noise` consumes a `jax.random` key.
 Use Phase 2's `key/2` to construct one:
 
-```clausal
+```seam
 key(42, K),
 add_noise(0.01, 0.55, K, NOISE)
 ```
@@ -299,7 +299,7 @@ add_noise(0.01, 0.55, K, NOISE)
 Everything is float32 by default. Compare with `allclose/2,/4`, not
 `array_list/2`, when checking against literal floats:
 
-```clausal
+```seam
 % This will fail — bit-exact comparison.
 array_list(NEW_PARAMS, [0.9, 1.9, 2.9])
 
@@ -315,7 +315,7 @@ If you `-import_from(py.jax_optax, [chain])` and also call
 or refer to it as `++(itertools.chain(...))`. No other optax name
 collides with a Python stdlib symbol.
 
-### Custom Clausal-defined transforms
+### Custom transforms defined in Clausal Prolog
 
 Out of scope for this phase. The 30+ built-in optax transforms cover
 nearly every published optimiser; if you genuinely need a custom
@@ -335,7 +335,7 @@ For relational queries about what's available:
 | `schedule(NAME, CTOR)` | same | Schedule constructor by name |
 | `loss_function(NAME, FN)` | same | Loss function by name |
 
-```clausal
+```seam
 findall(N, optimizer(N, _), NAMES)
 ```
 
@@ -354,5 +354,5 @@ versions and reflects what's reachable from `py.jax_optax`.
 | Hot-path purity | Pure (no mutation) | `loss.backward()` mutates `.grad` |
 | Backtracking-safe | ✅ | ❌ training loop stays as `++()` |
 
-The functional shape is the whole reason the Clausal training story is
+The functional shape is the whole reason the Clausal Prolog training story is
 clean for JAX where it had to be carved out for PyTorch.

@@ -1,6 +1,6 @@
 # Style and Formatting
 
-Clausal source has one authoritative style, and one tool that produces it:
+Seam (`.seam`) source has one authoritative style, and one tool that produces it:
 `clausal-fmt`. The conventions below are not aspirational — they are exactly
 what the formatter emits, so a formatted tree never churns under it again
 (formatting is idempotent, comment-preserving, and AST-preserving).
@@ -48,7 +48,7 @@ shape for code generators and language models to produce correctly.
 ## The formatter
 
 ```
-clausal-fmt src/                 # rewrite every .clausal / .seam file under src/
+clausal-fmt src/                 # rewrite every .seam file under src/
 clausal-fmt --check src/         # exit 1 if any file would change (CI gate)
 clausal-fmt --diff  src/         # print what would change, write nothing
 ```

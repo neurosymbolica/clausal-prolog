@@ -5,7 +5,7 @@ log-probability, and property queries.
 
 ## Import
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:import"
 ```
 
@@ -25,7 +25,7 @@ log-probability, and property queries.
 
 ### distribution
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:distribution"
 ```
 
@@ -34,7 +34,7 @@ names (`"Normal"`, `"Bernoulli"`, `"Categorical"`, etc.).
 
 **Modes:** `(+name, -class)` lookup, `(-name, -class)` enumerate all.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:distribution_ex2"
 ```
 
@@ -44,18 +44,18 @@ names (`"Normal"`, `"Bernoulli"`, `"Categorical"`, etc.).
 
 ### make_distribution
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:make_distribution"
 ```
 
 Construct a distribution from a name string and a params dict. List
 values in the params dict are automatically converted to tensors.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:make_distribution_ex2"
 ```
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:make_distribution_ex3"
 ```
 
@@ -65,19 +65,19 @@ values in the params dict are automatically converted to tensors.
 
 ### mean, variance, stddev
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:mean_variance_stddev"
 ```
 
 Query distribution properties. Returns tensors.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:mean_variance_stddev_ex2"
 ```
 
 ### entropy
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:entropy"
 ```
 
@@ -89,7 +89,7 @@ Distribution entropy (scalar tensor).
 
 ### sample
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:sample"
 ```
 
@@ -97,7 +97,7 @@ Draw sample(s) from a distribution. Without a shape argument, draws a
 single sample matching the distribution's batch/event shape. With a
 shape list, draws that many samples.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:sample_ex2"
 ```
 
@@ -107,13 +107,13 @@ shape list, draws that many samples.
 
 ### log_prob
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:log_prob"
 ```
 
 Compute the log probability of a value under the distribution.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:log_prob_ex2"
 ```
 
@@ -123,7 +123,7 @@ Compute the log probability of a value under the distribution.
 
 ### cdf
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:cdf"
 ```
 
@@ -132,7 +132,7 @@ is less than or equal to `VALUE`.
 
 ### icdf
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:icdf"
 ```
 
@@ -141,6 +141,6 @@ Inverse CDF (quantile function) — the value at which the CDF equals
 
 `cdf` and `icdf` are inverses: `icdf(D, cdf(D, X)) ≈ X`.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_distributions_sigs.txt:cdf_icdf_roundtrip"
 ```

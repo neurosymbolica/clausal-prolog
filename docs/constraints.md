@@ -1,10 +1,10 @@
 # Constraints
 
-Clausal supports constraint logic programming through attributed variables. The C extension provides `AttVar` (attributed variable), `put_attr`/`get_attr`/`del_attr` (all trailed), `register_attr_hook`, and a wakeup queue in `do_unify_and_wake`. Constraint solvers register hooks that fire when a constrained variable is unified.
+Clausal Prolog supports constraint logic programming through attributed variables. The C extension provides `AttVar` (attributed variable), `put_attr`/`get_attr`/`del_attr` (all trailed), `register_attr_hook`, and a wakeup queue in `do_unify_and_wake`. Constraint solvers register hooks that fire when a constrained variable is unified.
 
-!!! note "Clausal vs Prolog syntax"
+!!! note "Seam vs Prolog syntax"
 
-    Clausal and Prolog syntax may slightly differ — for example, variables are
+    Seam and Prolog syntax may slightly differ — for example, variables are
     `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style. Keep
     this in mind when comparing with Prolog resources.
     Prolog constraint programs using `library(clpfd)` or `library(clpz)` can be [imported directly](importing_prolog.md).
@@ -22,7 +22,7 @@ Two constraint solvers are built in:
 
 ### Syntax
 
-In `.clausal` files, `is not` has dif semantics:
+In seam (`.seam`) files, `is not` has dif semantics:
 
 ```seam
 safe_assign(X, Y) <- (
@@ -46,7 +46,7 @@ constrained(X, Y) <- (
 
 ### Semantics
 
-| Clausal syntax | Semantics | Prolog equivalent |
+| Seam syntax | Semantics | Prolog equivalent |
 |---|---|---|
 | `X is not Y` | Constraint: must end up different | `dif(X, Y)` |
 | `not (X is Y)` | Immediate: don't unify right now | `\=(X, Y)` |
@@ -164,7 +164,7 @@ The `is not` operator uses `dif/2` constraint semantics rather than immediate `\
     - **Backtracking**: constraint undone on trail undo, binding failure doesn't corrupt trail
     - **Compiled integration**: `is not` with later binding (succeed/fail), ground terms, same var, `not (X is Y)` still works, multiple constraints
     - **Builtin `dif/2`**: callable from clausal code, with vars and ground terms
-    - **Import hook**: `.clausal` file with `is not` using proper dif semantics
+    - **Import hook**: `.seam` file with `is not` using proper dif semantics
 
     ---
 
@@ -345,7 +345,7 @@ sendmoney(S, E, N, D, M, O, R, Y) <- (
 
 The `==` constraint is posted *before* `label` so the solver propagates the equation across all eight domains before any labeling begins. See the gotcha below.
 
-**Querying from Python.** In a `.seam` file (or any `.clausal` file hosting Python), a goal in `for` position runs and hands back each answer; the goal's variables become ordinary locals:
+**Querying from Python.** In a `.seam` file, a goal in `for` position runs and hands back each answer; the goal's variables become ordinary locals:
 
 ```seam
 -module(puzzle, [])
@@ -488,7 +488,7 @@ Python's bitwise operators are used for Boolean expressions:
 | `BoolEq(X, Y)` | Equivalence (iff) |
 | `BoolImpl(X, Y)` | Implication (X→Y) |
 
-`BoolEq` and `BoolImpl` are term constructors (Python classes), so a `.clausal`
+`BoolEq` and `BoolImpl` are term constructors (Python classes), so a `.seam`
 file names them in its import list — `-import_from(clausal.logic.clpb, [BoolEq, BoolImpl])`
 — the one place a TitleCase name is declared; bare in a clause they would be
 rejected as TitleCase.
@@ -631,7 +631,7 @@ pigeon_hole() <- (
 
     CLP(B) uses the attribute key `"clpb"`, independent of CLP(ℤ) (`"fd"`), CLP(ℝ) (`"real"`), and dif/2 (`"dif"`). All hooks fire independently when a variable is bound. A variable can have CLP(B), CLP(ℤ), CLP(ℝ), and dif constraints simultaneously (though combining CLP(B) with numeric domains on the same variable is unusual).
 
-    **Important:** CLP(B) variables are constrained to `0`/`1` (integers), not Python booleans (`True`/`False`). Booleans are explicitly rejected by CLP(ℝ) and CLP(ℤ) — they are distinct types in Clausal's constraint system.
+    **Important:** CLP(B) variables are constrained to `0`/`1` (integers), not Python booleans (`True`/`False`). Booleans are explicitly rejected by CLP(ℝ) and CLP(ℤ) — they are distinct types in Clausal Prolog's constraint system.
 
 ??? info "Test coverage"
 
@@ -653,7 +653,7 @@ pigeon_hole() <- (
     - **Full adder**: 5 input combinations
     - **Pigeon-hole**: 3 pigeons 2 holes → unsatisfiable
     - **circuit equivalence**: De Morgan's law via taut, non-equivalence
-    - **Fixture integration**: HalfAdder, FullAdder, PigeonHole via `.clausal` file
+    - **Fixture integration**: HalfAdder, FullAdder, PigeonHole via `.seam` file
 
 ---
 

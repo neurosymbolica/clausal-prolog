@@ -18,7 +18,7 @@ currency adds.
 
 ## Quick start
 
-A `.seam` file (the same syntax as `.clausal`, hosting Python) declares the rules and
+A `.seam` file (the Python-syntax seam, hosting Python) declares the rules and
 queries them from Python with a goal-position `--`:
 
 ```seam
@@ -205,7 +205,7 @@ When the check fires, do one of three things (the error message says so):
 
 ### Float literals are exact to 15 significant digits
 
-There is no decimal literal syntax: `1550.00` in a `.clausal` file is a Python float before
+There is no decimal literal syntax: `1550.00` in a `.seam` file is a Python float before
 any currency code sees it. That is safe far further than it sounds, because the currency path
 coerces through `Decimal(str(f))` — never `Decimal(f)` — and **measured on this code path, a
 decimal with 15 or fewer significant digits always survives**. Past that it is a hazard, not
@@ -291,7 +291,7 @@ The second is the one to keep in mind: not a wrong number, a **reversed answer**
 `ClausalScaleInNameWarning`, once per (file, identifier):
 
 ```text
-margin.clausal:93: `minimum_margin_bps` names a scale but carries a bare
+margin.seam:93: `minimum_margin_bps` names a scale but carries a bare
 number — the scale exists only in the identifier, where nothing can check it. Declare
 the amount with -constant_number_currency (or -constant_number_units) and use it here,
 so the unit is a fact the engine holds.
@@ -849,8 +849,8 @@ currency_code(C, ++"EUR")   C = euro        a Python string
 currency_code(C, Code)      enumerates all 254
 ```
 
-**The code may be written as an atom or a string.** `"EUR"` written in a `.seam` or
-`.clausal` file is a *string* (the default `-double_quotes(chars)`), `eur` or `'EUR'` is an
+**The code may be written as an atom or a string.** `"EUR"` written in a `.seam`
+file is a *string* (the default `-double_quotes(chars)`), `eur` or `'EUR'` is an
 *atom*, and `++"EUR"` hands in a Python `str`, which is an atom too. All of them reach the
 same currency; `currency_code(euro, X)` answers the string.
 
@@ -957,9 +957,9 @@ catch. A dimensionless *quantity* — a ratio built by division, say — passes.
 
 ## Errors and `catch/3`
 
-Two catchable exceptions, and one warning.  Both exceptions are Python classes, so a `.clausal` file names
+Two catchable exceptions, and one warning.  Both exceptions are Python classes, so a `.seam` file names
 them in its import list and catches them with a `++` catcher (see
-[Clausal exceptions](exceptions.md)): the bare class `++CurrencyPrecisionError`
+[exceptions](exceptions.md)): the bare class `++CurrencyPrecisionError`
 matches by `isinstance`; the instance form `++UnitsMismatch(M)` also binds `M`
 to the message.
 

@@ -1,4 +1,4 @@
-# Clausal — Crypto Modules (`hash`, `hmac`, `pbkdf2`)
+# Clausal Prolog — Crypto Modules (`hash`, `hmac`, `pbkdf2`)
 
 ## Overview
 

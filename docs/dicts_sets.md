@@ -1,6 +1,6 @@
 # Dicts and Sets
 
-Clausal has first-class support for dictionaries and sets as logic terms. Unlike plain Python `dict` and `set`, `DictTerm` and `SetTerm` participate in unification — dict values can contain logic variables that bind during search, and sets unify by element equality.
+Clausal Prolog has first-class support for dictionaries and sets as logic terms. Unlike plain Python `dict` and `set`, `DictTerm` and `SetTerm` participate in unification — dict values can contain logic variables that bind during search, and sets unify by element equality.
 
 ---
 
@@ -17,7 +17,7 @@ Clausal has first-class support for dictionaries and sets as logic terms. Unlike
 
 ### Syntax
 
-In [`.clausal` files](syntax.md), Python dict literals `{k: v, ...}` are automatically wrapped as `DictTerm`:
+In [seam (`.seam`) files](syntax.md), Python dict literals `{k: v, ...}` are automatically wrapped as `DictTerm`:
 
 ```python
 # Fact with a ground dict
@@ -132,7 +132,7 @@ surface that mirrors Python's own dict API one-to-one. These are always
 available — no import required — and each maps onto the Python operation a
 reader already knows:
 
-| Operation | Clausal form | Python analogue | On an absent key |
+| Operation | Seam form | Python analogue | On an absent key |
 |---|---|---|---|
 | read (strict) | `V is P["k"]` | `d[k]` | **throws** `existence_error(dict_key, …)` |
 | read (strict, predicate form) | `get_strict(P, "k", V)` | `d[k]` | **throws** `existence_error(dict_key, …)` |
@@ -195,7 +195,7 @@ sequence; use `dict_size/2`.
 
 ### Syntax
 
-In `.clausal` files, Python set literals `{a, b, c}` produce `SetTerm` objects when the elements are ground constants:
+In seam (`.seam`) files, Python set literals `{a, b, c}` produce `SetTerm` objects when the elements are ground constants:
 
 ```python
 colors({1, 2, 3}),

@@ -4,13 +4,15 @@ This page introduces the most important idea in logic programming: **thinking
 in terms of relations**. If you absorb one thing from this documentation, let
 it be this.
 
-!!! note "Clausal vs Prolog syntax"
+!!! note "Seam vs Prolog syntax"
 
-    Clausal and Prolog syntax may slightly differ — for example, variables are
-    `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style. Keep
-    this in mind when comparing with Prolog resources.
+    Examples on this page use seam syntax (`.seam`), which differs slightly from
+    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead of
+    `:-`, and lists are Python-style. Keep this in mind when comparing with
+    Prolog resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
+    Prolog syntax.
 
-In Clausal, every predicate defines a relation between its arguments. A
+In Clausal Prolog, every predicate defines a relation between its arguments. A
 relation is not a function — it has no fixed inputs or outputs. A relation
 simply *holds* or *doesn't hold* for a given combination of arguments. This
 shift in perspective — from "what does the program do?" to "when does this
@@ -129,7 +131,7 @@ query**. It asks: for which arguments does the predicate hold at all?
 # The most general query for list_sum
 from itertools import islice
 from clausal import Var, solve
-import list_sum_example   # the .clausal file holding list_sum/2
+import list_sum_example   # the .seam file holding list_sum/2
 
 goal = ("list_sum", LIST := Var(), SUM := Var())
 for trail in islice(solve(goal, module=list_sum_example), 3):
@@ -142,15 +144,15 @@ there are infinitely many, so the loop takes the first three: `[] 0`, then a
 one-element list and a two-element list of unknowns, each with its sum still a
 [CLP(ℤ)](constraints.md) constraint rather than a number.
 
-The query above runs from a plain `.py` file with `solve`. In a `.clausal` or
-`.seam` file you would normally write the goal in
+The query above runs from a plain `.py` file with `solve`. In a `.seam` file
+you would normally write the goal in
 [goal position](python_integration.md#goal-position-if-goal-for-in-goal)
 (`for LIST, SUM in --list_sum_example.list_sum(LIST, SUM):`), but a
 goal-position loop hands back only answers: it raises `ResidualConstraints`
 on the second answer, whose unknowns are still constrained. Use `solve` to
 look at constrained answers.
 
-when working with Clausal programs, it is often a good idea to try the most
+when working with Clausal Prolog programs, it is often a good idea to try the most
 general query to see which solutions exist in general. It reveals whether a
 predicate is genuinely relational or secretly directional.
 
@@ -163,7 +165,7 @@ be made more general.
 ## Reading clauses declaratively
 
 Every clause can be read as a logical statement. This is called the
-**declarative reading**, and it is the primary way to understand Clausal code.
+**declarative reading**, and it is the primary way to understand Clausal Prolog code.
 
 ### Facts
 
@@ -261,7 +263,7 @@ test("sum of [] is 0") <- list_sum([], 0)
 
 ### Working with reasoning, not against it
 
-A decisive property of good Clausal code is that it can be reasoned about in
+A decisive property of good Clausal Prolog code is that it can be reasoned about in
 several ways: by posting queries, by writing test cases, by generalizing and
 specializing queries and programs to find out more and to locate mistakes. Code
 that undermines these properties — by using side effects, by depending on
@@ -340,7 +342,7 @@ arguments are and how they relate instead.
 
 **Trying to understand execution at a low level.** You do not need to know
 about choice points, stack frames, or tail call optimization to write excellent
-Clausal code. Elegant, general, efficient, easy-to-understand code comes from
+Clausal Prolog code. Elegant, general, efficient, easy-to-understand code comes from
 following a few basic principles — chief among them: think in terms of
 relations.
 
@@ -349,4 +351,4 @@ relations.
 *See also: [Purity and Monotonicity](purity.md) — why pure code has better
 properties and how to write it.*
 
-*See also: [Tutorial](tutorial.md) — learn Clausal by example.*
+*See also: [Tutorial](tutorial.md) — learn Clausal Prolog by example.*

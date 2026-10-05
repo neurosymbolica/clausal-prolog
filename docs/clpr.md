@@ -11,7 +11,7 @@ The implementation lives in `clausal/logic/clpr.py`.
 
 ## Unified syntax
 
-Clausal's [comparison operators](arithmetic.md) are shared between CLP(ℤ) and CLP(ℝ). The domain is determined by how variables are declared (or inferred from float literals), not by which operator is used:
+Clausal Prolog's [comparison operators](arithmetic.md) are shared between CLP(ℤ) and CLP(ℝ). The domain is determined by how variables are declared (or inferred from float literals), not by which operator is used:
 
 | Operator | CLP(ℤ) meaning | CLP(ℝ) meaning |
 |---|---|---|
@@ -58,7 +58,7 @@ Without an `Eps`, bisection continues until the midpoint equals an endpoint in I
 
 Each branch of the bisection is a separate solution. Use `label_real` after posting all constraints to enumerate solutions.
 
-`label_real` **narrows, it does not bind**: after it, each variable is still a (very narrow) interval, not a float. A goal-position query (`for X in --sqrt2(X)`) therefore refuses to hand `X` back and raises `ResidualConstraints`. Read the interval in Clausal with [`inf/2` and `sup/2`](#inf2-and-sup2) (`sqrt2(X), inf(X, L), sup(X, H)`), or from Python: run the goal with the lower-level `solve` and an explicit `Trail`, then read the `"real"` attribute:
+`label_real` **narrows, it does not bind**: after it, each variable is still a (very narrow) interval, not a float. A goal-position query (`for X in --sqrt2(X)`) therefore refuses to hand `X` back and raises `ResidualConstraints`. Read the interval in Clausal Prolog with [`inf/2` and `sup/2`](#inf2-and-sup2) (`sqrt2(X), inf(X, L), sup(X, H)`), or from Python: run the goal with the lower-level `solve` and an explicit `Trail`, then read the `"real"` attribute:
 
 ```python
 from clausal import solve, Var, Trail
@@ -177,7 +177,7 @@ The FD domain is automatically narrowed against the real interval (and vice vers
 
 ## Comparison with other systems
 
-| Feature | SWI CLP(ℝ) | CLP(BNR) | ECLiPSe IC | **Clausal CLP(ℝ)** |
+| Feature | SWI CLP(ℝ) | CLP(BNR) | ECLiPSe IC | **Clausal Prolog CLP(ℝ)** |
 |---|---|---|---|---|
 | Non-linear propagation | Deferred | Active | Active | **Active** |
 | Arithmetic engine | Simplex | Intervals | Intervals | **Intervals** |

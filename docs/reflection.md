@@ -1,8 +1,8 @@
-# Reflection — Matching Clausal Source with Clausal
+# Reflection — Matching Seam Source with Seam
 
-The `reflection` module reifies `.clausal` source into ordinary compound
+The `reflection` module reifies seam (`.seam`) source into ordinary compound
 terms — a homoiconic tree the language can inspect — so linters, call-graph
-analyses, style checkers, and construction matchers are written **in Clausal
+analyses, style checkers, and construction matchers are written **in the seam
 itself**, by unification against clause structure, instead of walking a
 Python AST imperatively.
 
@@ -75,7 +75,7 @@ as its argument.
 nodes (`Add`, `Gt`, `Unify`, `Not`, `Or`, `StarUnpack`, …) carry structural
 unification, so they pass through unwrapped with reified operands. A body
 goal `X > 0` reifies as `Gt(left=Variable('X'), right=0)` and is matched by
-writing `Gt(A, B)` — the constructor names are available in every `.clausal`
+writing `Gt(A, B)` — the constructor names are available in every `.seam`
 module. This keeps the operator subset matchable exactly as demonstrated by
 `clausal/examples/symbolic_diff.seam`, at the cost of coupling matchers
 to the `pythonic_ast` node names.
@@ -108,7 +108,7 @@ pattern or constructed argument.
 
 ### reified_item/2 — Enumerate All Items
 
-`reified_item(SOURCE, ITEM)` — `SOURCE` is `.clausal` source *text*; `ITEM`
+`reified_item(SOURCE, ITEM)` — `SOURCE` is `.seam` source *text*; `ITEM`
 enumerates every reified top-level item on backtracking. Reification is
 cached per source text.
 
@@ -162,7 +162,7 @@ escape_code(SRC, CODE) <- (
 ### clause_source/2 — Render Back to Source
 
 `clause_source(TERM, TEXT)` — the inverse direction: renders a reified term
-(a `Clause`, or any renderable subterm) back to `.clausal` source text, so a
+(a `Clause`, or any renderable subterm) back to `.seam` source text, so a
 matcher can *quote* the clause it is objecting to — including one it rebuilt
 with `replace_subterm/4` that never came from source text:
 
@@ -244,7 +244,7 @@ Boundaries:
 
 ---
 
-## A Call-Graph Lint in Clausal
+## A Call-Graph Lint in the Seam
 
 The motivating example — "a called predicate that is neither defined nor
 imported":
@@ -305,7 +305,7 @@ It is not covered by the 1.0 API promise (see [Public API](public-api.md)):
 ```python
 from clausal.reflection import reify_source, reify_file, reify_ast, Clause, Goal
 
-items = reify_source(open("rules.clausal").read())
+items = reify_source(open("rules.seam").read())
 clauses = [item for item in items if isinstance(item, Clause)]
 heads = [clause.head.name for clause in clauses]
 ```
@@ -314,7 +314,7 @@ heads = [clause.head.name for clause in clauses]
   top-level item, ordered by source position (directives, whose positions
   are not tracked, sort first).
 - `reify_file(path)` — the same over a file.
-- `reify_ast(node)` — reify a single parsed Python `ast` node of `.clausal`
+- `reify_ast(node)` — reify a single parsed Python `ast` node of `.seam`
   surface syntax; statements yield items, expressions yield terms.
 
 Positions are `(line, column, end_line, end_column)` tuples. Field access

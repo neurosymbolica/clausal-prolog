@@ -1,8 +1,8 @@
 # clausal-opencv
 
-OpenCV (`cv2`) predicates for [Clausal](https://gitlab.com/MikeAmy/clausal).
+OpenCV (`cv2`) predicates for [Clausal Prolog](https://gitlab.com/MikeAmy/clausal).
 
-Wraps the computer-vision functions of `opencv-python` as Clausal
+Wraps the computer-vision functions of `opencv-python` as Clausal Prolog
 predicates: image I/O, properties, arithmetic, color conversion,
 filtering, morphology, thresholding, contours, geometric
 transformations, non-mutating drawing, classical feature detection,
@@ -20,7 +20,7 @@ default.
 
 ## Use
 
-In a `.clausal` file:
+In a seam (`.seam`) file:
 
 ```
 -import_from(opencv, [imread, shape, IMREAD_COLOR])
