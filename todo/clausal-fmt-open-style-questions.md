@@ -1,7 +1,7 @@
 # `clausal fmt` — open style questions after the v1 landing
 
 **Status:** v1 shipped (`clausal/fmt/`, `clausal-fmt` CLI, `tests/fmt/`).  It is
-comment-conserving, idempotent, and AST-preserving over every `.clausal` file in
+comment-conserving, idempotent, and AST-preserving over every `.seam` file in
 the repo, and the whole test suite has the same failure set before and after
 formatting all 343 files it changes.  These are the calls v1 made by default or
 deferred, each cheap to revisit.
@@ -32,9 +32,9 @@ comment now describes an entry rather than the statement.  If §1 lands and such
 directives keep their per-entry lines, per-entry attachment becomes possible and
 this should be revisited with it.
 
-## 3. Generated `.clausal` snapshots must not be formatted
+## 3. Generated `.seam` snapshots must not be formatted
 
-`tests/fixtures/prolog_golden/*.clausal` are byte-compared against a
+`tests/fixtures/prolog_golden/*.seam` are byte-compared against a
 translator's output (`test_prolog_golden.py`).  Formatting them fails those
 tests, exactly as formatting any generated artifact would.  Two options:
 

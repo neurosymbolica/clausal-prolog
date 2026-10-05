@@ -8,7 +8,7 @@ measurements that were taken while discussing it, so nobody re-derives them.
 A directive under which every number in a module must carry units, with
 dimensionless values written explicitly:
 
-```clausal
+```seam
 -strict_units
 price(5000(euro)),
 count(3 ())            % dimensionless, said out loud

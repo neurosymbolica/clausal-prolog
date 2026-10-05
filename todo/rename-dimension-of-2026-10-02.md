@@ -22,7 +22,7 @@ say "quantity" or "dims".
   historical audit files under `docs/superpowers/audits/` (leave as is).
 - tests: `tests/test_units.py`, `tests/test_nonpy_adapters_raise.py`,
   `tests/test_units_lowercase_names.py` (pins the public name set),
-  `tests/fixtures/units_basic.clausal` -- 4 files, 17 occurrences.
+  `tests/fixtures/units_basic.seam` -- 4 files, 17 occurrences.
 - `packages/`: none.
 
 Downstream program trees were NOT censused (outside this repo); a rename

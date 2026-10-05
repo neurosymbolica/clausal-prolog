@@ -14,7 +14,7 @@ why.
 
 The consequence the decision accepts is that the two front ends can drift, and
 nothing currently detects drift. The unbuilt idea: a checker that parses the same
-`.clausal` file both ways and compares *shape* — clause count, per-clause head
+`.seam` file both ways and compares *shape* — clause count, per-clause head
 functor/arity, goal count and goal functors — failing on any divergence.
 
 Note what does **not** already cover this:

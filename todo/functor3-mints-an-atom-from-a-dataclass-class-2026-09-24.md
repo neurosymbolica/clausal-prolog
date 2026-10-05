@@ -34,7 +34,7 @@ own comment cites ISO 8.5.1.3(e) for refusing non-atomic culprits. Binding
 nobody chose.
 
 **Severity is low**: a dataclass class can only reach a goal from Python, not
-from `.clausal` source, so no conforming program can trigger it. It is a
+from `.seam` or `.clausal` source, so no conforming program can trigger it. It is a
 Python-boundary sharp edge, not a language bug.
 
 ## Not fixed here because

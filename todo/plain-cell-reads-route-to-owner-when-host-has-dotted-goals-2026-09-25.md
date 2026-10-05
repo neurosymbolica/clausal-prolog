@@ -12,7 +12,7 @@ host's module dict.
 ## Repro (both eras, main ae1a456d + the branch)
 
 ```
-# sa_tlib.clausal
+# sa_tlib.seam
 -module(sa_tlib, [dfact/1])
 -dynamic(dfact/1)
 dfact(0),

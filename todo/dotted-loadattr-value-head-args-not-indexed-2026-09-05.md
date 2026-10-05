@@ -10,7 +10,7 @@ fix's design review drove the actual fixtures and traced
 
 ## Corrected reading: indexing works for two of the three regression shapes
 
-- **Bare single-hop `-import_from`** (`tests/fixtures/atom_index_bare_importer.clausal`):
+- **Bare single-hop `-import_from`** (`tests/fixtures/atom_index_bare_importer.seam`):
   INDEXED. Traced live: `_build_arg_index(clauses, arity=2, pos=1, env=<base_globals>)`
   returns `{'buckets': {'aa': [...], 'bb': [...], 'cc': [...], 'dd': [...]}, 'n_distinct': 4}`.
   The compile-time `env` genuinely contains
@@ -20,7 +20,7 @@ fix's design review drove the actual fixtures and traced
   keys) populates it, not the `sys.modules`-getattr branch the first pass
   blamed.
 - **Atom re-exported through a package `__init__`, two import hops**
-  (`tests/fixtures/atom_index_pkg_reexport_importer.clausal`, the
+  (`tests/fixtures/atom_index_pkg_reexport_importer.seam`, the
   diagnosis's own `mini/` shape, §9 item 2): ALSO INDEXED. Same live trace,
   same 4-bucket result. See
   `TestPackageReexportedAtomHeadArg::test_the_two_hop_reference_is_genuinely_indexed`
@@ -36,7 +36,7 @@ negative, not evidence of a miss.)
 
 - **A literal dotted qualified reference written in source**
   (`-import_module` + `mod.attr` in the head, e.g.
-  `tests/fixtures/atom_index_dotted_importer.clausal`): this compiles to a
+  `tests/fixtures/atom_index_dotted_importer.seam`): this compiles to a
   real `LoadAttr` CHAIN (`LoadAttr(object=LoadName('mod'), attr='attr')`),
   not a single dotted `LoadName`. `globals_env.py::_collect_globals_info`'s
   `_walk_body` only records a dotted call target for (a) `Call(LoadName)`,
@@ -68,6 +68,6 @@ dispatch-closure work if still open, else its own small task.
 
 ## Acceptance
 
-`tests/fixtures/atom_index_dotted_importer.clausal`, compiled with
+`tests/fixtures/atom_index_dotted_importer.seam`, compiled with
 `_INDEX_THRESHOLD` clauses, shows a real bucket for position 1 (traced
 `_build_arg_index` call, or codegen evidence), not `None`/fallback scan.

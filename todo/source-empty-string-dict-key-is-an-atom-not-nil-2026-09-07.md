@@ -9,7 +9,7 @@ fixed). Belongs with `implementation_plans/dict-atom-keys-vs-predicates.md`.
 `DictTerm.__init__`/`as_dict_key` fold a `""` KEY onto `()`
 (`atoms.NIL_KEY`), and `d[""]`, `d[[]]`, `d[b""]` and `d[()]` are one key.
 
-But a `.clausal` source dict written `{"": 1}` does not produce a `""` key.
+But a `.seam` source dict written `{"": 1}` does not produce a `""` key.
 In `-double_quotes(atom)` mode (the default) the compiler's `visit_Constant`
 turns the literal into the ATOM cell `("",)` — an atom whose spelling is the
 empty string, which is a *different* atom from `'[]'`. So:

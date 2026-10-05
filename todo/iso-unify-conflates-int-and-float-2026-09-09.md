@@ -25,7 +25,7 @@ Measured 2026-09-09 — engine from the branch worktree, oracle
 ISO `=`/2 IS unification — there is no wrapper that makes `'='`/2 ISO-correct
 without narrowing `unify` itself, and `unify` has a very large number of
 existing callers throughout the engine: every clause-head match, every
-`is`-as-unification site in `.clausal` source, `'\='`/2's own trial-unify,
+`is`-as-unification site in `.seam` source, ISO `is`/2's result unification in `.clausal`/`.pl` (where `1 = 1.0` and `7.0 is 3 + 4` also succeed, checked 2026-10-05), `'\='`/2's own trial-unify,
 `dif`/2, tabling answer unification, the CLP posting paths. Narrowing its
 cross-type numeric behaviour is an engine-wide semantic change and is the
 operator's call, not a comparison-builtins branch's.

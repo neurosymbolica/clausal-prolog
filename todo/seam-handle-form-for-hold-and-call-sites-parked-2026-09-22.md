@@ -22,7 +22,7 @@ package NEW 0 / GONE 0, roborev 83 closed):
   the same in one spelling; goal position builds the goal through the seam
   builder so it runs in the handle's module, not the host's;
 * `seam.dotted()` read `.value` off a `LoadAttr` whose base field is
-  `.object` — `--m.pred(X)` in a hosted `.clausal` module crashed; FIXED on
+  `.object` — `--m.pred(X)` in a hosted `.seam` module crashed; FIXED on
   that branch (todo/seam-dotted-base-fails-in-a-hosted-module-2026-09-22.md
   stays open on main until something lands it — that fix is worth landing
   on its own if the rest stays parked);

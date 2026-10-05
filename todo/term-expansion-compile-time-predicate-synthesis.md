@@ -18,7 +18,7 @@ predicate. **Fix:** a primitive to intern a string as a functor — e.g. `atom_s
 
 ## Gap 2 — variable-bound one-to-many expansion doesn't materialize as clauses
 Even fixed-name generation loses the data:
-```clausal
+```seam
 -module(gen, [marker(K), TermExpansion(A,B,S,T)])
 TermExpansion(q(key(KEY)), [q(marker(KEY))], STATE, STATE) <- True
 key(stays),
@@ -41,7 +41,7 @@ accessor clauses (computed names), queryable after load — replacing the build-
 matched `KEY` flows into the quoted output and registers as real facts
 (`marker/1` yields stays/income). It had no regression pin, so one is added:
 `TestNestedVarSubstitution` in tests/test_term_expansion.py +
-`tests/fixtures/expansion_nested_var.clausal`. (Side note: the SOURCE
+`tests/fixtures/expansion_nested_var.seam`. (Side note: the SOURCE
 predicate `key/1` is left with zero clauses after full consumption and
 raises "no compiled dispatch" if called — arguably correct, noted here.)
 

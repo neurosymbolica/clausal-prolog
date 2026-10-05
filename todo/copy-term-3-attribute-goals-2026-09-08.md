@@ -16,5 +16,4 @@ syntax for residual goals; the residue arrives as a plain term. Scryer's
 
 Needs: an attribute-goal hook per attributed-variable kind (clpfd, dif, freeze,
 clpb/clpq/clpr) — `attribute_goals//1` in SWI/Scryer terms — and the builtin
-itself. Pair with a `.clausal` and a Scryer execution pin in the translator's
-witness suite.
+itself. Pair with a `.seam` and a Scryer execution pin in the translator's witness suite, and a `.clausal` (Clausal Prolog) test: copy_term/3 is missing there too.

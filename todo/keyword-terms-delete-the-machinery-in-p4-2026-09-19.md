@@ -51,7 +51,7 @@ which only a `KWTerm` can do.  It goes with `KWTerm`.
 `vary/3` and `unbound_keys/2` read a term's fields through
 `term_field_names`, so on the P2 branch they answer nothing for a term in
 BODY position, which is a cell now (measured at the Task 3 checkpoint
-`20b32550`: `tests/fixtures/builtins_keywords.clausal` and
-`tests/fixtures/docs/keyword_preds_examples.clausal` read 6 failed / 3 passed
+`20b32550`: `tests/fixtures/builtins_keywords.seam` and
+`tests/fixtures/docs/keyword_preds_examples.seam` read 6 failed / 3 passed
 before the disable and the identical 6 after it).  The sweep's fix for that
 file is the ordinary rewrite 2: `compound_cell_shape` + `db.signature_for`.

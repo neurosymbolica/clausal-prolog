@@ -18,7 +18,7 @@ if t.var_objects:
 So a goal-position seam whose `++` escape (or f-string) reads a variable the
 SAME seam binds —
 
-```clausal
+```seam
 if --(decide(++p, verdict(S, IDS)), N is ++len(IDS)):
 ```
 

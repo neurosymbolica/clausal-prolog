@@ -19,7 +19,7 @@ a truth value that silently half-works.
 The atom half was cheap because a bare undeclared atom already raises. A string
 literal does not:
 
-```clausal
+```seam
 -private([flag(X)])
 flag("true"),
 Test("string true") <- flag("true")

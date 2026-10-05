@@ -9,7 +9,7 @@ trail, op)`; one `strip_for_solver(l, r, ctx, trail)` call before
 `in_domain_units` treatment (its bounds are floats/ints; use a Z3 Real sort for
 money). `units_clp.py` deliberately imports nothing from clpfd at module level
 for this reason. Acceptance: the SI and money clauses of
-tests/fixtures/units_clp_side_channel.clausal re-spelled with z3 predicates,
+tests/fixtures/units_clp_side_channel.seam re-spelled with z3 predicates,
 skipped when z3-solver is not installed.
 
 Also on the safety net, not routed: `cumulative/2` (task tuples of

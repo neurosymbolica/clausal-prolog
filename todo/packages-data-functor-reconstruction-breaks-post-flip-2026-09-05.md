@@ -15,9 +15,9 @@ and code that assumes the former shape breaks when it runs.
 
 ## Where it lives
 
-`packages/clausal-provenance` is the concrete instance: 103 `.clausal`
+`packages/clausal-provenance` is the concrete instance: 103 `.seam`
 fixtures under `packages/` declare data functors the way
-`packages/clausal-provenance/tests/fixtures/provenance_reach.clausal` does
+`packages/clausal-provenance/tests/fixtures/provenance_reach.seam` does
 — `Edge(SRC, DST)` exported with no clauses of its own (an EDB relation
 supplied as data at query time, not a predicate), and
 `packages/clausal-provenance/clausal/modules/provenance/engine.py`
@@ -27,7 +27,7 @@ neighbours).
 
 ## Verified break (precise, reproducible mechanism)
 
-Read directly, not inferred: `provenance_reach.clausal` registers `Edge` for
+Read directly, not inferred: `provenance_reach.seam` registers `Edge` for
 bottom-up evaluation with `bottom_up_(Edge)` at module-load time. The
 registration goal
 (`packages/clausal-provenance/clausal/modules/provenance/_registration.py`,
@@ -64,7 +64,7 @@ so a cell tuple mostly just falls through their earlier
 registration break above fires first and harder, at load time, for every
 fixture that registers a pure-data EDB relation this way).
 
-The other five `.clausal` fixtures under `packages/clausal-provenance/tests/
+The other five `.seam` fixtures under `packages/clausal-provenance/tests/
 fixtures/` (`datalog_reach`, `mnist_sum`, `mutual_recursion`,
 `negation_aggregate`, `top_k_engine`) declare and register EDB relations the
 same way and are expected to hit the identical break; not individually
@@ -90,7 +90,7 @@ source reading, not by executing the failure.
   seam shape ships.
 - The break is confined to Python-side code that treats a declared data
   functor's name as a class (registration helpers, `cls(**kwargs)`
-  reconstruction). Pure `.clausal`-side construction and matching of the
+  reconstruction). Pure `.seam`-side construction and matching of the
   same functors (e.g. `Path(SRC, DST) <- Edge(SRC, DST)`,
   `solve(boolean, FACTS, Path("a", "b"), R)`) compiles through the ordinary
   cell-emission path and is unaffected — the compiler never "calls" the

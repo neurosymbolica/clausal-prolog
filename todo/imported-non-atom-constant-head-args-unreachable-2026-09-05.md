@@ -49,7 +49,7 @@ and the clause can never fire through THIS bucket.
 
 ### Reproduction (verified both post-fix and pre-fix, identical result)
 
-Direct low-level construction (bypasses `.clausal` source parsing/constant
+Direct low-level construction (bypasses `.seam` source parsing/constant
 folding entirely — `-constants` inlines to a literal at parse time and
 never reaches this branch, so it cannot be used to build a repro):
 
@@ -102,6 +102,6 @@ follows.
 ## Acceptance
 
 The reproduction above (or an equivalent driven through a real
-`.clausal` fixture using a `py.`-shim int constant nested in a data-functor
+`.seam` fixture using a `py.`-shim int constant nested in a data-functor
 head arg) returns 1 solution for the "other position forced unbound"
 query shape, not 0.

@@ -8,7 +8,7 @@ Since P2 Task 3 every TERM a `term_expansion` pattern compiles to is a CELL,
 while the clause-HEAD channel still carries INSTANCES until P4.  So a pattern
 naming a functor that HAS clauses matched nothing:
 
-```clausal
+```seam
 term_expansion(q(key(KEY)), [q(marker(KEY))], STATE, STATE) <- True
 key(stays),          # arrives as the instance key(X='stays')
                      # the pattern builds the cell ('key', KEY)
@@ -16,7 +16,7 @@ key(stays),          # arrives as the instance key(X='stays')
 
 `_try_te_match` now lowers the target with `_head_as_cell` on the HEAD-pattern
 retry (`wrap_head=True`), which is the path a bare-term pattern like
-`q(key(K))` takes.  `tests/fixtures/expansion_nested_var.clausal` is the gate.
+`q(key(K))` takes.  `tests/fixtures/expansion_nested_var.seam` is the gate.
 
 The WHOLE-ITEM path (`wrap_head=False`, the pattern binds the `Predicate` node
 itself) is NOT lowered.  Rebuilding the node with a lowered head hands the
@@ -27,7 +27,7 @@ return the very term they matched -- went red on it (measured: 3 tests).
 
 A pattern that quotes a RULE and names the head functor, e.g.
 
-```clausal
+```seam
 term_expansion(q(key(K) <- Body), ..., S, S) <- True
 ```
 

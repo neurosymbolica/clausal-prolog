@@ -16,7 +16,7 @@ The idea (user's reasoning, paraphrased):
 
 Notes for when this is taken up:
 
-- Today's `.clausal` surface already has `head <- (...)` shapes (the clausal-fmt work
+- Today's seam (`.seam`) surface already has `head <- (...)` shapes (the clausal-fmt work
   established `head <- (...),` is a Tuple statement under the Python-AST reading), so
   `()`-delimited bodies are close to the existing look.
 - `[...]` bodies would collide with list syntax unless position disambiguates
