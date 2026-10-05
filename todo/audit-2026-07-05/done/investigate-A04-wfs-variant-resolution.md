@@ -1,5 +1,7 @@
 # investigate(A04-F003): WFS resolution is mode/order-dependent; wrong results cached permanently [Opus]
 
+**Status: FIXED 2026-08-27 (commits 82267432, 7a16ca13).** Disjunctive condition-sets, spawn-always NAF, conditional-aware NAF and global resolution make WFS answers mode- and order-independent. Pinned in tests/audit_2026_07_05/test_04_runtime_tabling.py::TestF003WfsModeOrderDependence and ::TestF002NafTabledNoEntry.
+
 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/findings.md` A04-F003
 **Tests:** `tests/audit_2026_07_05/test_04_runtime_tabling.py::TestF003WfsModeOrderDependence` (2 xfail — flip to pass)
 **Related:** A04-F002 (`fix-A04-naf-tabled-no-entry.md`), A04-F001 (completion architecture — DONE), A04-D004 (parked)

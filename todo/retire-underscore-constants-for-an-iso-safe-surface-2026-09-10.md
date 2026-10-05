@@ -23,8 +23,8 @@ one sentence with no exceptions: underscore-led or capital-initial is a variable
 
 ## The cost of retiring: measured, and it is nearly nil
 
-    -constants directive, tracked .clausal        engine: 1 fixture
-    module_constant/3, tracked .clausal           engine: 0
+    -constants directive, tracked .seam        engine: 1 fixture
+    module_constant/3, tracked .seam           engine: 0
     -constants / module_constant/3 downstream     0 files in all four sibling repos
 
 So this is a deletion plus one fixture, not a migration. Re-measure before acting — that is a

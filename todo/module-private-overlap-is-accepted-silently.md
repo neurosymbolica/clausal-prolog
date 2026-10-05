@@ -41,7 +41,7 @@ purpose: `absent`, `assessment`, `attribute`, `item`, `labels`, `unknown`,
 
 Vendored into a second downstream repo as well, so two copies. Plus a second
 downstream helper module (`flip`) in both repos, and the in-repo fixture
-`tests/fixtures/functor_reexport_vocab.clausal` (`flip`). Five files total.
+`tests/fixtures/functor_reexport_vocab.seam` (`flip`). Five files total.
 
 ## The question
 

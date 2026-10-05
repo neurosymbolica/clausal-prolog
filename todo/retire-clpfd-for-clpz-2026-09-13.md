@@ -37,8 +37,8 @@ built `.so` files. **Renaming these is a C-source change**, which means:
 * box, which is x86_64 and clock-skewed, needs `--force` or the rebuild silently skips
 * the drift-gated forks (closed-side) if any gate names these modules
 
-**And no user sees any of it.** Measured: `clpfd` is NOT a user-facing spelling. A `.clausal` file
-does not write `py.clpfd`; the one fixture named `units_clpfd.clausal` is named after the
+**And no user sees any of it.** Measured: `clpfd` is NOT a user-facing spelling. A `.seam` file
+does not write `py.clpfd`; the one fixture named `units_clpfd.seam` is named after the
 implementation, not importing it. `clausal/modules/` mentions it only in two prose comments.
 
 So renaming the internals buys tidiness and costs a C rebuild across three trees plus a hazard

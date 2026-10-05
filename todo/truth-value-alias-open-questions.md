@@ -40,7 +40,7 @@ trade could go the other way.
 
 All six spellings (`True`/`False`/`Undefined` and the three aliases) are now
 refused in declaration lists, clause heads and directive targets. The in-tree
-corpus (1768 `.clausal` files) defines none of them, so nothing broke, but
+corpus (1768 `.seam` files, counted pre-flip as `.clausal`) defines none of them, so nothing broke, but
 there is no `-implicit_atoms`-style opt-out the way strict atoms have one.
 Probably fine; unverified against out-of-tree corpora.
 
@@ -60,7 +60,7 @@ hits are all prose in error messages). All ~22 out-of-tree implementors under
 
 The only theoretical loss is a pickle written before the rename whose reduce
 payload names `clausal.terms._get_unknown`. The value shipped 2026-07-17 and is
-used in two downstream `.clausal` files; no such pickle is known to exist. If
+used in two downstream `.seam` files; no such pickle is known to exist. If
 one turns up, `_get_unknown = _get_undefined` restores it in one line.
 
 ## 6. Pre-existing: bare-atom dict keys do not resolve injected builtins

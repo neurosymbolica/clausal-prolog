@@ -18,7 +18,7 @@ bare `Var(...)`, `Add`, `Node(...)` in a Clausal position no longer loads,
 and the message names `++Name`.  So from source the bare aliases are
 reachable only through a `++` escape, an f-string or hosted Python — the
 guard in item 2 and the distrust clauses in item 3 are unreachable from a
-`.clausal` file.  `tests/test_dollar_runtime_names.py` now asserts the
+`.seam` file.  `tests/test_dollar_runtime_names.py` now asserts the
 SyntaxError for a TitleCase user head spelled like a runtime class
 (`TestUserPredicateNamedLikeARuntimeClass`, `TestUserPredicateNamedPredicateMeta`,
 `TestMintingGuardOnlyForTwinnedHeads`); the pool-split tests in
@@ -73,7 +73,7 @@ that the lint fires first under the default.
 ## Loud failure mode after removal
 
 A bare `Var()` / `Compound(...)` / `Quantity(...)` in user code (a `++`
-escape, an f-string, a Python-hosted helper inside a `.clausal` file) raises
+escape, an f-string, a Python-hosted helper inside a `.seam` file) raises
 `NameError: name 'Var' is not defined` at solve time (escapes are lambdas) or
 at load time (module-level Python).  The TitleCase lint's message names the
 fix -- `++Var` -- and the strict-atoms diagnostic already lists the five

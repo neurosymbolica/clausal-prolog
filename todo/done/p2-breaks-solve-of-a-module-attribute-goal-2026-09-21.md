@@ -1,6 +1,8 @@
 # P2 breaks `solve(m.pred(X))` — every downstream caller, and the API contract
 
-**Status:** **OPEN, BLOCKING the P2 line.** Found 2026-09-21 by
+**Status: RESOLVED 2026-09-25 (commits d72f319d, b28e5c8e, 65f7920c).** Ruled not part of the supported surface: a predicate attribute is a str handle, so `m.pred(X)` raises TypeError (docs/terms-are-tuples.md says so); callers use `--m.pred(X)`, which resolves against the runtime module and works in comprehensions, or `solve(("pred", X), module=m)`. Pinned in tests/test_goal_position_seam.py::TestTheHarnessShapeEndToEnd.
+
+Originally: **OPEN, BLOCKING the P2 line.** Found 2026-09-21 by
 the downstream lane running the downstream answer-set answer-set checks against tip `3d17fdf8`.
 Reproduced engine-side here. **The branch is held.**
 

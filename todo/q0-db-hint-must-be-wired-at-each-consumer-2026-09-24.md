@@ -5,7 +5,7 @@
 The era-agnostic resolvers (`resolve_predicate_row`, `is_declared_predicate`,
 `is_declared_predicate_name`, `predicate_binding_name`,
 `predicate_arities_for`, all via `_resolve_mangled_owner`) take an optional
-`db=` — the CALLER's database — so a handle to a module the `.clausal` runner
+`db=` — the CALLER's database — so a handle to a module the test runner (`clausal.testing`)
 popped from `sys.modules` still resolves locally (ruling Q0). When it landed,
 NO production caller passed it; before the flip no predicate binding is a
 handle, so nothing needed it. Likewise `mint_predicate_handle(db, functor)`

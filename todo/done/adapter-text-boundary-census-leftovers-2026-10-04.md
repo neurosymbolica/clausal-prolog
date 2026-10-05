@@ -1,5 +1,7 @@
 # Adapter text boundary: census leftovers (2026-10-04)
 
+**Status: DONE 2026-10-04 (commits b0d33c54..e156e5f1, 50512517..502b5b86, 3b0bab17).** Free-form adapter outputs are strings, adapter inputs accept an atom or a string, and spacy `shape` is ruled an atom. The provenance `aggregate/4` input is moot while clausal-provenance is disabled (fd92cb9e). Pinned in packages/*/tests/test_*_free_form_outputs*.py and tests/test_adapter_bad_input_text_iso.py.
+
 The 2026-10-04 ruling ("atom out, text in": a SYMBOLIC name an adapter
 returns crosses as an atom, free-form strings stay text) was applied on
 feat/package-triage-rulings-2026-10-04 to every site where a symbolic name

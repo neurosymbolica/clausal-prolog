@@ -24,7 +24,7 @@ Two layers of masking, and the second is the interesting one:
    fewer failures than the checkout at the same sha, and why a worktree
    baseline UNDER-COUNTS by two. A skip is not a pass; `-rs` shows it.
 2. In the checkout they did run, and failed on a retired `Test(` spelling in
-   their own inline `.clausal` source (TitleCase has been a load error since
+   their own inline `.seam` source (TitleCase has been a load error since
    2026-09-10). That refusal happened at LOAD, before the date code ran, so
    the real defect never surfaced. Fixing the one-word spelling is what
    exposed it.

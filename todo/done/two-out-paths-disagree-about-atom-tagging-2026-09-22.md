@@ -1,5 +1,7 @@
 # Two Python out-paths disagree about what an atom looks like
 
+**Status: FIXED 2026-09-26 (commit ab323e8c).** The operator's "dumb seam" ruling superseded the tagged `--` boundary: `export()` hands back the engine's internal form (an atom is a plain `str`, a string the `('$chars', s)` carrier), the same as `solve` + `deref`, so one atom/string test works on both paths. Pinned in tests/test_dumb_seam_raw_out.py.
+
 Filed 2026-09-22 by engine-lane from the downstream lane's finding; behaviour
 is AS DESIGNED on each path, the question is whether the pair is.
 

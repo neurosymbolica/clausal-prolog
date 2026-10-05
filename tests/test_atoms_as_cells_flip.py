@@ -658,7 +658,6 @@ class TestTheNilAtomInAKeyPosition:
         # and so does the same literal in a CLAUSE: stage 2 closes the
         # divergence fix round 5 pinned here (the ``$dict_key`` wrap folded
         # ``""`` to ``()`` while the clause literal compiled to the atom).
-        # todo/source-empty-string-dict-key-is-an-atom-not-nil-2026-09-07.md
         Z = Var()
         (f,), = _answers(("c3", Z), mod, Z)
         assert list(f.keys()) == [""] and f[""] == 4 and [] not in f

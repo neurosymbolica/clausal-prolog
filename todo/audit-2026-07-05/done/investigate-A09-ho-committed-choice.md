@@ -1,5 +1,7 @@
 # investigate(A09-F004/D001): maplist/foldl committed choice loses solutions — for Opus
 
+**Status: FIXED 2026-09-28 (commits 8f85c27f, 94e7dada).** maplist/2,3 and foldl/4-6 now backtrack into every call (operator ruling R5/R6); include/exclude stay committed-choice, as docs/higher_order.md documents. Pinned in tests/test_foldl_open_lists_caret_goal.py::test_foldl4_backtracks_into_every_call and tests/audit_2026_07_05/test_09_builtins.py::test_F004_maplist_committed_choice (the foldl audit test's xfail marker is stale).
+
 **Finding:** docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/findings.md A09-F004
 **Tests:** tests/audit_2026_07_05/test_09_builtins.py::test_F004_* (xfail)
 **Design:** A09-D001 in DESIGN-DECISIONS.md (parked). Recommendation: restore backtracking.

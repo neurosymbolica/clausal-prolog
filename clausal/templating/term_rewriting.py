@@ -10380,13 +10380,10 @@ class EmbedTransformer(NodeTransformer):
         # meaning, exactly as ``visit_Constant`` decides it.  It says nothing
         # about the EMPTY string (fix round 5, item 2): ``{"": 1}`` does not
         # reach either branch above -- it falls to the ``$dict_key`` wrap
-        # below and folds to ``()`` at exec time like every other nil
-        # spelling, while a source-written ``{"": 1}`` in a CLAUSE compiles
-        # to the atom ``("",)``.  That divergence is the open design question
-        # in todo/source-empty-string-dict-key-is-an-atom-not-nil-2026-09-07.md
-        # (ISO has an empty-spelling atom `''` distinct from `[]`, so both
-        # readings are defensible); it needs the operator ruling `'[]'` got,
-        # and is not decided here.
+        # below.  Fix round 5 found that wrap folding ``""`` to ``()`` while
+        # the same literal in a CLAUSE compiled to the atom; atoms-as-str
+        # stage 2 (1d927057) closed that divergence, and
+        # tests/test_atoms_as_cells_flip.py pins both readings agreeing.
         if isinstance(key, List) and not key.elts:
             return replace(Tuple(elts=[], ctx=load), key)
         if isinstance(key, Constant) and key.value == NIL_SPELLING:

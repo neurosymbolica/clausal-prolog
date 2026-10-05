@@ -11,13 +11,13 @@ carries, `_warn_deprecated_test_spelling` in `term_rewriting.py` lints the first
 accepts both spellings, and `clausal/tools/prolog_dialect.py` maps `test` to itself so a
 translated `.pl` never says `Test(`.
 
-**State on 2026-09-10:** a `.clausal` file spelling `Test(` no longer loads — the TitleCase
+**State on 2026-09-10:** a `.seam` file spelling `Test(` no longer loads — the TitleCase
 lint raises before the union or the once-per-file lint is reached, so both are unreachable
 from source.  The engine-side witnesses now ASSERT that error:
-`tests/fixtures/titlecase_test_spelling_witness.clausal` (checked-in fixture) and the
+`tests/fixtures/titlecase_test_spelling_witness.seam` (checked-in fixture) and the
 `Test/1` section of `tests/test_testing_cli.py` (`run_file` reports the single `<load>`
 failure and the CLI exits 1).  The two fixtures that used to be kept on the old spelling
-(`tests/fixtures/tabled_fib.clausal`, `tests/fixtures/builtins_arith.clausal`) were renamed
+(`tests/fixtures/tabled_fib.seam`, `tests/fixtures/builtins_arith.seam`) were renamed
 in the same change.
 
 **2026-09-10, later the same day:** the `packages/*/tests/fixtures` files (103, the bulk of the

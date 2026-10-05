@@ -25,10 +25,10 @@ per file (`_warn_deprecated_unit_spelling`, `_UNITS_MODULE_PATHS`,
 
 **State on 2026-09-10:** a TitleCase identifier in a Clausal position is a load-time
 SyntaxError.  A TitleCase unit name used BARE no longer loads; the engine-side witness now
-ASSERTS that error — `tests/fixtures/titlecase_unit_spelling_witness.clausal`, checked by
+ASSERTS that error — `tests/fixtures/titlecase_unit_spelling_witness.seam`, checked by
 `TestTitleCaseAliases::test_bare_titlecase_unit_name_is_a_syntax_error` in
 `tests/test_units_lowercase_names.py`.  The fixture that used to be kept on the old
-spelling (`tests/fixtures/units_expr_sugar.clausal`) was renamed to the lowercase names.
+spelling (`tests/fixtures/units_expr_sugar.seam`) was renamed to the lowercase names.
 Names in an `-import_from(py.units, [...])` list are exempt from the lint, so the alias
 path (rewrite + once-per-file warning) is still the only way the old spelling reaches a
 file, and it is what downstream still uses.
@@ -36,7 +36,7 @@ file, and it is what downstream still uses.
 **Exit criterion (measurable):** all of the above and the alias-path tests in the
 `TestTitleCaseAliases` class (and the alias half of `TestSIDimensionVectors`) in
 `tests/test_units_lowercase_names.py` are removed in one
-change, when (a) no `.clausal` or `.py` in this repository spells a TitleCase unit name
+change, when (a) no `.seam` or `.py` in this repository spells a TitleCase unit name
 except the witness fixture and the single test that asserts the removal error, and (b) the
 downstream users of `py.units` have been migrated (their owners report zero
 `ClausalDeprecatedSpellingWarning`s naming a unit across their suites).

@@ -15,11 +15,11 @@ replacements) or convert.  The measured file list went to the owners in the
 handoff report for this flip; it is deliberately not in this repository.
 `tools/double_quotes_pin.py pin <paths>` does the ADD mechanically (one
 `-double_quotes(atom)` line after the leading comment block), and `pin-py`
-covers Clausal source embedded in Python test strings.
+covers seam source embedded in Python test strings.
 
 ## Docs pass
 
-About 1,100 lines inside ```clausal fences across `docs/*.md` still write
+About 1,100 lines inside ```seam fences across `docs/*.md` still write
 `"..."` where an atom is meant (builtins.md 237, regex.md 74, type_checking.md
 54, syntax.md 47, io.md 39, ...).  `docs/tutorial.md` is migrated; the other
 snippets that tests execute (metainterpreters.md) run against the migrated

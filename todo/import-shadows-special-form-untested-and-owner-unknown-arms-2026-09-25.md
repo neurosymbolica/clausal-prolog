@@ -24,7 +24,7 @@ of that name is not rewritten, so its body still lowers the SPECIAL FORM.
 
 ## 1. No test for a module's OWN predicate named like a special form
 
-`tests/fixtures/call_special_forms_owner.clausal` defines `once(G) <- (G is 5)`.
+`tests/fixtures/call_special_forms_owner.seam` defines `once(G) <- (G is 5)`.
 In that module the body `once(...)` is the special form, and so is `call/N`
 of the cell.  Measured on the branch after the merge of 0738b335:
 

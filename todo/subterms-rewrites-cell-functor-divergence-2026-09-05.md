@@ -38,7 +38,7 @@ gain the same functor-protection `_rewrites` got (making the two symmetric)
 or whether the existing asymmetry (mirroring the pre-existing `Compound` one)
 is acceptable as documented behavior.
 
-## Gap 2: reflection renderer fix lacks a `.clausal`-source integration fixture
+## Gap 2: reflection renderer fix lacks a `.seam`-source integration fixture
 
 Task 7 also fixed `clausal/reflection.py`'s `_ClauseRenderer.term` (the
 reified-source renderer used by `op_node/3`): a raw cell used to fall into the
@@ -52,9 +52,9 @@ before the generic tuple case.
 The fix is exercised by direct `render_source`/`render_ast` calls on raw
 cells (`TestRawCellRendering`), matching how `op_node/3`/`replace_subterm/4`
 can produce or consume them at the Python level — but there is no test that
-drives a full `.clausal`-source `op_node` construct-mode → `clause_source`
+drives a full `.seam`-source `op_node` construct-mode → `clause_source`
 pipeline end-to-end with a raw cell as the NEW argument. That would need a
-Clausal-source matcher fixture; the implementer judged it beyond what a
+seam-source matcher fixture; the implementer judged it beyond what a
 minimal additive fix warranted, and flagged it rather than skip it silently.
 
 **Disposition**: not fixed here — a genuine integration-test gap, worth
