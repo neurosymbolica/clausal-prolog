@@ -28,7 +28,7 @@ from pathlib import Path
 
 import pytest
 
-from clausal._suffixes import SEAM_SUFFIX
+from clausal._suffixes import CLAUSAL_PROLOG_SUFFIXES, SEAM_SUFFIX
 from clausal.tools.doc_snippet_check import SEAM_FENCE_LANGS
 from tests._suffix import seam_path
 
@@ -133,10 +133,12 @@ _CASES = [
      {"graph": None}, "", ["['b', 'c', 'd']"]),
 ]
 
-# A module whose source is ``None`` is the page's own ```clausal block that
-# defines it, found by this substring.
+# A module whose source is ``None`` is the page's own block that defines it,
+# found by this substring: a seam block (written as ``.seam``) by default, or
+# a ```prolog block (written as ``.clausal``, Clausal Prolog) when the anchor
+# is a ``("prolog", substring)`` pair.
 _PAGE_MODULE_ANCHORS = {
-    ("index.md", "fibonacci"): "-table(fib/2)",
+    ("index.md", "fibonacci"): ("prolog", ":- module(fibonacci,"),
     ("tutorial.md", "hello"): "greeting('hello'),",
     ("tutorial.md", "graph"): "edge('a', 'b'),",
 }
@@ -149,9 +151,16 @@ _PAGE_MODULE_ANCHORS = {
 def test_doc_python_block_runs(tmp_path, page, anchor, modules, post, expected):
     # nv
     for name, source in modules.items():
+        suffix = SEAM_SUFFIX
         if source is None:
-            source = _block(page, "seam", _PAGE_MODULE_ANCHORS[(page, name)])
-        (tmp_path / f"{name}{SEAM_SUFFIX}").write_text(source)
+            module_anchor = _PAGE_MODULE_ANCHORS[(page, name)]
+            if isinstance(module_anchor, tuple):
+                lang, module_anchor = module_anchor
+                suffix = CLAUSAL_PROLOG_SUFFIXES[0]
+            else:
+                lang = "seam"
+            source = _block(page, lang, module_anchor)
+        (tmp_path / f"{name}{suffix}").write_text(source)
     code = (
         f"import sys; sys.path[0:0] = [{str(_ROOT)!r}, '.']\n"
         "import clausal\n"
