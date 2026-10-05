@@ -1,6 +1,6 @@
-"""Prolog → Clausal translation (Phase 3.3).
+"""Prolog → seam translation (Phase 3.3).
 
-Pipeline: .pl source → tokens → Prolog AST → .clausal source text
+Pipeline: .pl source → tokens → Prolog AST → seam (``.seam``) source text
 
 Public API:
     prolog_to_clausal(source, *, dialect=None) -> str

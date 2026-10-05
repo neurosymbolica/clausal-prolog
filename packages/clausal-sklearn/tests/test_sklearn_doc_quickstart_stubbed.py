@@ -15,13 +15,13 @@ from __future__ import annotations
 
 import os
 import pathlib
-import re
 import types
 
 import pytest
 
 from clausal._suffixes import SEAM_SUFFIX
 from clausal.import_hook import _load_module
+from clausal.tools.doc_snippet_check import SEAM_FENCE_RE
 from clausal.logic.solve import call, _deref_walk
 from clausal.logic.variables import Var
 from clausal.modules.py import sklearn as sk
@@ -31,7 +31,7 @@ _DOC = os.path.join(os.path.dirname(__file__), os.pardir, "docs", "sklearn.md")
 
 def _quickstart_block():
     text = pathlib.Path(_DOC).read_text(encoding="utf-8")
-    blocks = re.findall(r"```clausal\n(.*?)```", text, re.S)
+    blocks = SEAM_FENCE_RE.findall(text)
     block = next(b for b in blocks if "train_and_predict" in b)
     # no -double_quotes directive: a "..." in it is a string (the default)
     assert "double_quotes" not in block

@@ -7,7 +7,7 @@ failing ``<load>`` item):
 
     clausal/examples/fibonacci.seam::fib(5) = 5
 
-Also collects ```clausal blocks in docs/*.md files and reports each
+Also collects ```seam blocks in docs/*.md files and reports each
 test/1 clause (or a compile-check for blocks without tests) as an item:
 
     docs/tutorial.md::L52: sum [1,2,3,4] = 10
@@ -56,8 +56,8 @@ collect_ignore_glob = [
     "clausal/tools/prolog_preludes/*.pl",
 ]
 
-# Fenced seam blocks in markdown: ```seam ... ```, or the ```clausal alias
-# (one pattern, shared with the doc-snippet coverage checks).
+# Fenced seam blocks in markdown: ```seam ... ``` (one pattern, shared with
+# the doc-snippet coverage checks).
 _CLAUSAL_FENCE_RE = SEAM_FENCE_RE
 
 # Session-scoped home for doc-block compile buffers.  The blocks used to be
@@ -215,8 +215,7 @@ def _spelled(name, result) -> str:
 
 
 def _extract_clausal_blocks(md_path: Path) -> list[tuple[int, str]]:
-    """Return (line_number, content) pairs for each seam block (```seam or
-    its alias ```clausal)."""
+    """Return (line_number, content) pairs for each seam block (```seam)."""
     text = md_path.read_text()
     results = []
     for m in _CLAUSAL_FENCE_RE.finditer(text):

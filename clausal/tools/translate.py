@@ -1,20 +1,25 @@
-"""Unified CLI for bidirectional clausal ↔ Prolog translation.
+"""Unified CLI for bidirectional seam ↔ Prolog translation.
+
+The seam side is seam (Python-syntax) source, ``.seam``.  The Prolog side is
+ISO Prolog text; a ``.pl`` or Clausal Prolog (``.clausal``) input is read as
+Prolog.  ``--to clausal`` writes SEAM text (the historical name of the
+direction), not a Clausal Prolog file.
 
 Usage
 -----
-# Clausal → Prolog
-python -m clausal.tools.translate input.clausal --to swi -o output.pl
-python -m clausal.tools.translate input.clausal --to scryer -o output.pl
+# Seam → Prolog
+python -m clausal.tools.translate input.seam --to swi -o output.pl
+python -m clausal.tools.translate input.seam --to scryer -o output.pl
 
-# Prolog → Clausal
-python -m clausal.tools.translate input.pl --to clausal -o output.clausal
+# Prolog → seam
+python -m clausal.tools.translate input.pl --to clausal -o output.seam
 
 # Auto-detect direction from file extension
-python -m clausal.tools.translate input.clausal          # → stdout as ISO Prolog
-python -m clausal.tools.translate input.pl               # → stdout as clausal
+python -m clausal.tools.translate input.seam             # → stdout as ISO Prolog
+python -m clausal.tools.translate input.pl               # → stdout as seam
 
 # Roundtrip check
-python -m clausal.tools.translate --roundtrip input.clausal --dialect swi
+python -m clausal.tools.translate --roundtrip input.seam --dialect swi
 python -m clausal.tools.translate --roundtrip input.pl --dialect swi
 """
 
@@ -103,8 +108,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "--to", dest="to", default=None,
         choices=["clausal", "iso", "swi", "scryer"],
         help=(
-            "Target format. 'clausal' translates Prolog→clausal; "
-            "'iso'/'swi'/'scryer' translate clausal→Prolog. "
+            "Target format. 'clausal' translates Prolog→seam source; "
+            "'iso'/'swi'/'scryer' translate seam source→Prolog. "
             "Auto-detected from file extension if omitted."
         ),
     )

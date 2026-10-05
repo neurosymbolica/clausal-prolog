@@ -167,7 +167,7 @@ def test_no_raw_untested_blocks():
         _DOCS_DIR, known_uncompilable=_KNOWN_UNCOMPILABLE
     )
     assert not violations, (
-        f"Found {len(violations)} ```clausal block(s) that fail to compile "
+        f"Found {len(violations)} ```seam block(s) that fail to compile "
         f"and have no Test clause or --8<-- reference:\n"
         + "\n".join(violations)
     )

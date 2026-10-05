@@ -4,7 +4,7 @@
 
 The `sklearn` module provides predicates for machine learning via [scikit-learn](https://scikit-learn.org/). Data flows through tagged tuples — `est`, `dataset`, `fitted`, `split` — that unify naturally with Clausal Prolog's logic variables.
 
-```clausal
+```seam
 -import_from(sklearn, [est, dataset, fitted, load_dataset, fit, predict, score])
 
 train_and_predict(ALGO, DATASET, PREDS) <- (
@@ -17,7 +17,7 @@ train_and_predict(ALGO, DATASET, PREDS) <- (
 
 Or via [module import](import.md):
 
-```clausal
+```seam
 -import_module(sklearn)
 
 main <- (
@@ -32,7 +32,7 @@ main <- (
 
 ## Import
 
-```clausal
+```seam
 -import_from(sklearn, [
     est, dataset, fitted, split,
     algorithm, default_params, param_key, make_est, param,
@@ -61,7 +61,7 @@ The module uses tagged tuples as its term language. These are plain Python tuple
 | `fitted(est, handle)` | `('fitted', est, handle)` | Fitted estimator (opaque handle) |
 | `split(train, test)` | `('split', train_dataset, test_dataset)` | Train/test partition |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sklearn_sigs.txt:term_constructors"
 ```
 
@@ -89,7 +89,7 @@ The module ships with a registry of named algorithms. Use `algorithm/2` to enume
 
     **Clusterers**: `kmeans`, `dbscan`, `agglomerative`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sklearn_sigs.txt:algorithm_examples"
 ```
 
@@ -106,7 +106,7 @@ The module ships with a registry of named algorithms. Use `algorithm/2` to enume
 | `k_fold_split(Dataset, K, Split)` | `+Dataset, +K, -Split` | K-fold splits via backtracking |
 | `stratified_split(Dataset, K, Split)` | `+Dataset, +K, -Split` | Stratified K-fold via backtracking |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sklearn_sigs.txt:data_loading_examples"
 ```
 
@@ -124,7 +124,7 @@ The module ships with a registry of named algorithms. Use `algorithm/2` to enume
 | `predict_proba(Fitted, X, Proba)` | `+Fitted, +X, -Proba` | Class probability matrix |
 | `decision_function(Fitted, X, Scores)` | `+Fitted, +X, -Scores` | Decision function scores |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sklearn_sigs.txt:fit_predict_examples"
 ```
 
@@ -145,7 +145,7 @@ The module ships with a registry of named algorithms. Use `algorithm/2` to enume
 
 Available metric names: `"accuracy"`, `"f1"`, `"f1_weighted"`, `"f1_macro"`, `"precision"`, `"recall"`, `"roc_auc"`, `"r2"`, `"mse"`, `"mae"`, `"rmse"`.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sklearn_sigs.txt:scoring_examples"
 ```
 
@@ -162,7 +162,7 @@ Available metric names: `"accuracy"`, `"f1"`, `"f1_weighted"`, `"f1_macro"`, `"p
 
 Steps are a list of `(name, est(...))` tuples:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sklearn_sigs.txt:pipeline_example"
 ```
 
@@ -179,7 +179,7 @@ Steps are a list of `(name, est(...))` tuples:
 | `best_score(BestFitted, score)` | `+BestFitted, -score` | Best CV score from search |
 | `search_results(BestFitted, Results)` | `+BestFitted, -Results` | Full CV results dict |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sklearn_sigs.txt:grid_search_example"
 ```
 
@@ -191,7 +191,7 @@ Steps are a list of `(name, est(...))` tuples:
 |-----------|------|-------------|
 | `learned(Fitted, Attr, Value)` | `+Fitted, +Attr, -Value` | Read a learned attribute (e.g. `"feature_importances"`, `"coef"`, `"n_features_in"`, `"mean"`) |
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/sklearn_sigs.txt:learned_example"
 ```
 
@@ -219,13 +219,13 @@ Steps are a list of `(name, est(...))` tuples:
 
 ??? example "Complete workflow example"
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/sklearn_sigs.txt:complete_workflow"
     ```
 
 ??? example "pipeline with grid search"
 
-    ```clausal
+    ```seam
     --8<-- "tests/fixtures/docs/sklearn_sigs.txt:pipeline_grid_search"
     ```
 

@@ -1,9 +1,9 @@
 """A failing docs code block must report the same goal-level diagnosis as a
-failing ``.clausal`` file test.
+failing ``.seam`` file test.
 
 ``ClausalItem.runtest`` runs failures through ``diagnose_failure`` (see
 ``test_pytest_plugin_diagnostics.py``); ``DocItem`` — the collector for
-```` ```clausal ```` blocks in ``docs/*.md`` — still raised a bare
+```` ```seam ```` blocks in ``docs/*.md`` — still raised a bare
 ``test(...) has no solutions``, the same missing signal on the collector that
 fires whenever a tutorial example rots.  The block's compile buffer used to be
 unlinked before any item ran, which is why the diagnosis had no source to
@@ -65,7 +65,7 @@ def run_doc_plugin(tmp_path: Path, md_source: str) -> str:
 FAILING_MD = """
 # Sample tutorial
 
-```clausal
+```seam
 -double_quotes(atom)
 prc("alpha", 10),
 prc("beta", 20),
@@ -80,7 +80,7 @@ test("later goal fails after a binding") <- (
 PASSING_MD = """
 # Sample tutorial
 
-```clausal
+```seam
 -double_quotes(atom)
 prc("alpha", 10),
 
@@ -94,7 +94,7 @@ test("passes") <- (
 ERROR_MD = """
 # Sample tutorial
 
-```clausal
+```seam
 -double_quotes(atom)
 prc("alpha", 10),
 

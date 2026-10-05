@@ -1,13 +1,13 @@
 """Clausal → Prolog translation (Phase 1.2).
 
-Pipeline: .clausal source → Python AST → Prolog AST → .pl text
+Pipeline: seam (.seam) source → Python AST → Prolog AST → .pl text
 
 Public API:
     emit_term(pterm, op_table)          — Prolog AST term → text
     emit_item(pitem, op_table)          — Prolog AST clause/directive → text
     emit_module(pmodule, op_table)      — full PModule → text
-    clausal_source_to_prolog_ast(src)   — .clausal source → PModule
-    clausal_source_to_prolog(src, ...)  — .clausal source → .pl text
+    clausal_source_to_prolog_ast(src)   — seam source → PModule
+    clausal_source_to_prolog(src, ...)  — seam source → .pl text
 """
 
 from __future__ import annotations
@@ -981,7 +981,7 @@ _MODULE_SPECS = frozenset({"relative", "plain"})
 
 
 class _ClausalToProlog:
-    """Convert Python AST (from .clausal source) to Prolog AST.
+    """Convert Python AST (from seam source) to Prolog AST.
 
     Recognizes clausal DSL patterns: trailing-comma facts, <- rules,
     >> DCG rules, -directives.
@@ -4436,7 +4436,7 @@ def clausal_source_to_prolog_ast(source: str, *,
                                   meta_modes: MetaModeMap | None = None,
                                   module_specs: str = "relative",
                                   ) -> PModule:
-    """Parse .clausal source text and return a Prolog AST (PModule).
+    """Parse seam source text and return a Prolog AST (PModule).
 
     Uses Python's parser on the clausal source, then converts the
     Python AST patterns (trailing comma facts, <- rules, -directives)
@@ -4542,9 +4542,9 @@ def clausal_source_to_prolog(source: str, *,
                               meta_modes: MetaModeMap | None = None,
                               module_specs: str = "relative",
                               ) -> str:
-    """Translate .clausal source text to Prolog source text.
+    """Translate seam source text to Prolog source text.
 
-    Full pipeline: .clausal → Python AST → Prolog AST → .pl text.
+    Full pipeline: .seam → Python AST → Prolog AST → .pl text.
 
     When *strict* is True, any construct with no ISO Prolog equivalent
     raises :class:`UntranslatableConstructError` instead of emitting a
@@ -4569,8 +4569,8 @@ def _main() -> None:
     """Command-line interface for clausal → Prolog translation.
 
     Usage:
-        python -m clausal.tools.clausal_to_prolog input.clausal [-o output.pl] [--dialect swi|scryer|gprolog|iso]
-        cat input.clausal | python -m clausal.tools.clausal_to_prolog [--dialect swi]
+        python -m clausal.tools.clausal_to_prolog input.seam [-o output.pl] [--dialect swi|scryer|gprolog|iso]
+        cat input.seam | python -m clausal.tools.clausal_to_prolog [--dialect swi]
     """
     import argparse
     import sys
