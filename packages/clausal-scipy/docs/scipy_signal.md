@@ -1,18 +1,18 @@
 # scipy.signal — Signal Processing
 
-The `scipy_signal` module wraps [`scipy.signal`](https://docs.scipy.org/doc/scipy/reference/signal.html) as Clausal predicates. It covers IIR filter design, causal and zero-phase filtering, convolution, correlation, and spectral analysis.
+The `scipy_signal` module wraps [`scipy.signal`](https://docs.scipy.org/doc/scipy/reference/signal.html) as Clausal Prolog predicates. It covers IIR filter design, causal and zero-phase filtering, convolution, correlation, and spectral analysis.
 
 ---
 
 ## Import
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:import"
 ```
 
 Or via the canonical `py.*` path:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:import_ex2"
 ```
 
@@ -29,7 +29,7 @@ Or via the canonical `py.*` path:
 
 ## Naming conventions
 
-| scipy function | Clausal predicate |
+| scipy function | Clausal Prolog predicate |
 |---|---|
 | `butter` | `butterworth` |
 | `bessel` | `bessel` |
@@ -66,43 +66,43 @@ include design predicates return a result dict keyed by the `OUTPUT` format:
 
 Use `result_get` to extract fields:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:include_design"
 ```
 
 ### butterworth
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:butterworth"
 ```
 
 ### bessel
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:bessel"
 ```
 
 ### chebyshev_type1
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:chebyshevtype1"
 ```
 
 ### chebyshev_type2
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:chebyshevtype2"
 ```
 
 ### elliptic
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:elliptic"
 ```
 
 ### frequency_response
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:frequencyresponse"
 ```
 
@@ -114,7 +114,7 @@ Use `result_get` to extract fields:
 
 Causal IIR filter using direct-form II transposed implementation.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:linearfilter"
 ```
 
@@ -122,7 +122,7 @@ Causal IIR filter using direct-form II transposed implementation.
 
 Numerically more stable than `linear_filter` for higher-order filters. Use when `OUTPUT='sos'` in filter design.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:sosfilter"
 ```
 
@@ -130,7 +130,7 @@ Numerically more stable than `linear_filter` for higher-order filters. Use when 
 
 Zero-phase filtering: applies the filter twice (forward then backward), eliminating phase distortion. Signal length must be longer than the filter's padding requirements.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:forwardbackwardfilter"
 ```
 
@@ -138,7 +138,7 @@ Zero-phase filtering: applies the filter twice (forward then backward), eliminat
 
 SOS form of `forward_backward_filter`. Preferred for high-order filters.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:sosforwardbackwardfilter"
 ```
 
@@ -146,7 +146,7 @@ SOS form of `forward_backward_filter`. Preferred for high-order filters.
 
 Low-pass filter then downsample by integer factor `Q`.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:decimate"
 ```
 
@@ -154,7 +154,7 @@ Low-pass filter then downsample by integer factor `Q`.
 
 resample to exactly `NUM` samples using Fourier method. Suitable for arbitrary rational resampling ratios.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:resample"
 ```
 
@@ -164,13 +164,13 @@ resample to exactly `NUM` samples using Fourier method. Suitable for arbitrary r
 
 ### convolve
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:convolve"
 ```
 
 ### correlate
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:correlate"
 ```
 
@@ -178,7 +178,7 @@ resample to exactly `NUM` samples using Fourier method. Suitable for arbitrary r
 
 Convolution via FFT — efficient for large arrays or long filters.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:fftconvolve"
 ```
 
@@ -190,7 +190,7 @@ Convolution via FFT — efficient for large arrays or long filters.
 
 Non-averaged power spectral density estimate.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:periodogram"
 ```
 
@@ -198,7 +198,7 @@ Non-averaged power spectral density estimate.
 
 Averaged power spectral density estimate using welch's method. Lower variance than `periodogram` at the cost of frequency resolution.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:welch"
 ```
 
@@ -206,7 +206,7 @@ Averaged power spectral density estimate using welch's method. Lower variance th
 
 Short-time Fourier transform power spectral density: time-frequency representation.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:spectrogram"
 ```
 
@@ -214,7 +214,7 @@ Short-time Fourier transform power spectral density: time-frequency representati
 
 ## result_get
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:resultget"
 ```
 
@@ -224,25 +224,25 @@ Short-time Fourier transform power spectral density: time-frequency representati
 
 ### Low-pass filter a signal
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:low_pass_filter_a_signal"
 ```
 
 ### Inspect frequency response
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:inspect_frequency_response"
 ```
 
 ### Power spectral density with welch's method
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:power_spectral_density_with_welch_s_method"
 ```
 
 ### convolve two signals
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_signal_sigs.txt:convolve_two_signals"
 ```
 

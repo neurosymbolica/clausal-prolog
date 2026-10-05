@@ -1,6 +1,6 @@
 # Type Checking
 
-Clausal provides predicates for testing the type of a term at runtime. These
+Clausal Prolog provides predicates for testing the type of a term at runtime. These
 succeed or fail — they never bind variables.
 
 ---
@@ -273,7 +273,7 @@ safe_print(X) <- (ground(X), writeln_text(X))
 
 ### Type-dispatched processing
 
-Clausal has no cut, so **every** clause whose guard holds answers: keep the
+Clausal Prolog has no cut, so **every** clause whose guard holds answers: keep the
 guards mutually exclusive. A string is a list, so the list clause must exclude
 character sequences with `not is_str(X)` — and because `is_str/1` is the term
 test, `[]` and every character list land in the text clause too:
@@ -314,7 +314,7 @@ safe_add(X, Y, Z) <- (
 - **`is_list` accepts strings** — a string *is* the list of its char atoms, so
   `is_list("hello")` succeeds. `is_str/1` narrows it to *character* lists, not
   to a particular representation: `is_str([])` and `is_str(['h','i'])` succeed
-  too. (Neither recognises `'.'/2` cons-cell chains: Clausal stores lists as
+  too. (Neither recognises `'.'/2` cons-cell chains: the engine stores lists as
   native Python lists and strings as a compact carrier, and only ever *shows*
   the cons form, through `write_canonical/1`, `functor/3` and `=..`.)
 - **A string is not atomic, an atom is not compound** — `atomic("bar")` fails

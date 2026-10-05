@@ -7,7 +7,7 @@ transforms are **pure functions of functions**. `jax.grad(f)` is
 a function you can `jit`, `vmap`, or pass around; the transform
 itself has no state.
 
-That purity makes transforms natural Clausal predicates: take a
+That purity makes transforms natural Clausal Prolog predicates: take a
 Python callable, take inputs, produce the transformed output,
 unify.
 
@@ -15,7 +15,7 @@ All predicates are Tier 1 pure.
 
 ## Import
 
-```clausal
+```seam
 -import_module(jax)
 -import_from(py.jax_transforms, [
     grad_value, value_and_grad,
@@ -39,12 +39,12 @@ for x in xs:
     print(g(x))
 ```
 
-In Clausal that pattern is awkward: you'd hold a Python callable in
-a variable and call it via `++()` each time. Instead, the Clausal
+In Clausal Prolog that pattern is awkward: you'd hold a Python callable in
+a variable and call it via `++()` each time. Instead, the
 predicates are **one-shot** — they take the function *and* the input
 and produce the output directly:
 
-```clausal
+```seam
 test("one-shot grad") <- (
     F is ++(lambda x: x ** 2),
     X is ++(jax.numpy.array(3.0)),
@@ -66,7 +66,7 @@ via `++()`.
 Gradient of `F` at `X`. `F` must return a scalar; for vector-valued
 `F`, reach for `jacobian/3`.
 
-```clausal
+```seam
 test("grad of x^2 at 3") <- (
     F is ++(lambda x: x ** 2),
     X is ++(jax.numpy.array(3.0)),
@@ -77,10 +77,10 @@ test("grad of x^2 at 3") <- (
 
 ### `value_and_grad(F, X, RESULT)`
 
-Returns a tuple `(value, gradient)` — decompose with Clausal's tuple
+Returns a tuple `(value, gradient)` — decompose with the seam's tuple
 syntax, consistent with Phase 4's `svd`, `qr`, `eig`.
 
-```clausal
+```seam
 test("value_and_grad of x^3 at 2") <- (
     F is ++(lambda x: x ** 3),
     X is ++(jax.numpy.array(2.0)),
@@ -97,7 +97,7 @@ Jacobian-vector product in the forward direction. `PRIMALS` and
 `TANGENTS` are lists matching the signature of `F` (one entry per
 positional arg). `RESULT` is a tuple `(primal_out, tangent_out)`.
 
-```clausal
+```seam
 test("jvp of x^2 at 3 with tangent 1") <- (
     F is ++(lambda x: x ** 2),
     P is ++(jax.numpy.array(3.0)),
@@ -114,7 +114,7 @@ test("jvp of x^2 at 3 with tangent 1") <- (
 Reverse-mode analogue. Returns `(value, vjp_fn)` — where `vjp_fn` is a
 Python callable that maps cotangents to gradients. Invoke it via `++()`:
 
-```clausal
+```seam
 test("vjp_fn gives gradient") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
     X is ++(jax.numpy.array([1.0, 2.0, 3.0])),
@@ -132,7 +132,7 @@ test("vjp_fn gives gradient") <- (
 Jacobian via reverse-mode by default; `jacfwd` for forward-mode,
 `jacrev` for explicit reverse-mode (same as `jacobian`).
 
-```clausal
+```seam
 test("jacobian of elementwise square") <- (
     F is ++(lambda x: x ** 2),
     X is ++(jax.numpy.array([1.0, 2.0, 3.0])),
@@ -146,7 +146,7 @@ test("jacobian of elementwise square") <- (
 
 The Hessian matrix — second derivatives:
 
-```clausal
+```seam
 test("hessian of sum(x^2) is 2I") <- (
     F is ++(lambda x: jax.numpy.sum(x ** 2)),
     X is ++(jax.numpy.array([1.0, 2.0])),
@@ -159,9 +159,9 @@ test("hessian of sum(x^2) is 2I") <- (
 ### Pytree inputs
 
 `jax.grad` accepts pytree inputs (dicts, lists, tuples of arrays).
-The wrapper passes the Clausal-side pytree through to JAX unchanged:
+The wrapper passes the pytree term through to JAX unchanged:
 
-```clausal
+```seam
 test("grad with dict params") <- (
     F is ++(lambda p: (p["a"] ** 2) + (p["b"] ** 2)),
     PARAMS is ++({"a": jax.numpy.array(3.0), "b": jax.numpy.array(4.0)}),
@@ -182,7 +182,7 @@ and so on.
 `grad_value` requires `F` to return a scalar. Calling it with a
 vector-valued `F` fails cleanly:
 
-```clausal
+```seam
 test("grad of vector fails") <- (
     F is ++(lambda x: x ** 2),
     X is ++(jax.numpy.array([1.0, 2.0, 3.0])),
@@ -201,7 +201,7 @@ For the vector case, use `jacobian/3` instead.
 Apply `jax.vmap(F)` to `X`. The 4-arity form takes a dict of keyword
 options — `in_axes`, `out_axes`, etc.
 
-```clausal
+```seam
 test("vmap doubles each element") <- (
     F is ++(lambda x: x * 2),
     X is ++(jax.numpy.arange(5)),
@@ -217,7 +217,7 @@ test("vmap with in_axes=0") <- (
 )
 ```
 
-### `vmap` vs Clausal's own enumeration
+### `vmap` vs Clausal Prolog's own enumeration
 
 `vmap` and `findall/3` both "apply a function many times", but with
 different semantics:
@@ -225,7 +225,7 @@ different semantics:
 - `vmap` is **numerical batching** — one vectorised kernel call on the
   full batch, no Python-level loop. Best for numerical workloads.
 - `findall(L, (leaf(TREE, L2), F(L2, L)), LS)` is **relational
-  enumeration** — each solution is a Clausal choice point, with
+  enumeration** — each solution is a choice point, with
   backtracking and unification.
 
 Use `vmap_apply` when the work is pure array math; use `findall` +
@@ -240,7 +240,7 @@ predicate iteration when you need backtracking.
 Returns a JIT-compiled callable. This is the one predicate that *does*
 return a function (the whole point of JIT is the compiled artifact):
 
-```clausal
+```seam
 test("jit_compile") <- (
     F is ++(lambda x: x * x),
     jit_compile(F, F_JIT),
@@ -276,7 +276,7 @@ Returns the symbolic trace of `F` at `X` — a JAX `Jaxpr` object
 describing the computation graph. Useful for debugging or for printing
 the traced form.
 
-```clausal
+```seam
 test("make_jaxpr captures computation") <- (
     F is ++(lambda x: x ** 2),
     X is ++(jax.numpy.array(3.0)),
@@ -292,7 +292,7 @@ what the output would look like, without actually computing it.
 Cheap; works even for inputs that would need terabytes if
 materialised.
 
-```clausal
+```seam
 test("eval_shape doesn't allocate") <- (
     F is ++(lambda x: x + 1),
     X is ++(jax.ShapeDtypeStruct((1000000, 1000000), jax.numpy.float32)),
@@ -312,7 +312,7 @@ memory.
 - **Custom `pjit` / `shard_map`.** These are sharding-aware compilation
   primitives — scheduled for Phase 13 alongside `device_put` / `mesh`.
 - **`checkpoint` / `remat`.** Gradient-checkpointing for memory-vs-recompute
-  trade-offs. Useful in training loops; not Clausal-native enough to
+  trade-offs. Useful in training loops; not native enough to Clausal Prolog to
   justify right now.
 - **Stateful transforms via `linen.apply` (Flax) or Equinox.** Those
   libraries wrap the functional transforms inside a module system. A

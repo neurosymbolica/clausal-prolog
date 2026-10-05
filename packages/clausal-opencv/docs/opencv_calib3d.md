@@ -8,7 +8,7 @@ pure-math half of OpenCV's computer-vision toolkit.
 All predicates are **Tier 1 (pure)**. Inputs are NumPy ndarrays and
 scalars; outputs are fresh ndarrays or tagged tuples.
 
-```clausal
+```seam
 -import_from(opencv_calib3d, [
     find_homography, find_homography_mask,
     find_fundamental_mat, find_essential_mat,
@@ -35,7 +35,7 @@ pattern directly to the producing predicate** rather than splitting
 into "bind result, then `==` against pattern" — `==` is strict
 equality and does not unify into `_` placeholders inside structures.
 
-```clausal
+```seam
 % Recommended
 solve_pnp_ransac(OBJ, IMG, K, DIST, ("pnp_ransac", RVEC, TVEC, INLIERS))
 
@@ -53,7 +53,7 @@ R == ("pnp_ransac", RVEC0, TVEC0, INLIERS0)   % only if RVEC0 etc are bound firs
 | `find_homography_mask(SRC, DST, METHOD, H, MASK)` | /5 | Both `H` and inlier mask |
 | `find_homography_mask(SRC, DST, METHOD, THRESH, H, MASK)` | /6 | With explicit RANSAC reprojection threshold |
 
-```clausal
+```seam
 find_homography(SRC, DST, H)
 find_homography_mask(SRC, DST, ransac, H, MASK)
 ```
@@ -100,7 +100,7 @@ generate reproducible random points.
 under-determined and cv2 will raise an internal assertion. Pass
 matching-length `OBJ_LIST` and `IMG_LIST`.
 
-```clausal
+```seam
 calibrate_camera([OBJP, OBJP], [IMGP1, IMGP2], [640, 480],
                    ("calib", RMS, K, DIST, RVECS, TVECS))
 ```
@@ -132,7 +132,7 @@ rodrigues(RVEC, RMAT)
 - `(+RVEC, -RMAT)`: forward — compute rotation matrix.
 - `(-RVEC, +RMAT)`: backward — compute rotation vector.
 
-```clausal
+```seam
 RVEC is ++(numpy.array([[0.1], [0.2], [0.3]], dtype=numpy.float64)),
 rodrigues(RVEC, RMAT),
 rodrigues(RVEC2, RMAT),         % backward — RVEC2 should be RVEC
@@ -160,7 +160,7 @@ dft(IMG, FLAGS, SPEC)
 
 `dft/3` is forward-only with user-supplied flags.
 
-```clausal
+```seam
 F is ++(GRAY_U8.astype(numpy.float32)),
 dft(F, SPEC),
 dft(F2, SPEC),                    % backward
@@ -174,7 +174,7 @@ The examples below are exact copies of the integration tests in
 
 ### Homography from 4 corner correspondences
 
-```clausal
+```seam
 SRC is ++(numpy.array([[0,0],[100,0],[100,100],[0,100]], dtype=numpy.float32)),
 DST is ++(numpy.array([[10,10],[110,10],[110,110],[10,110]], dtype=numpy.float32)),
 find_homography(SRC, DST, H),
@@ -183,7 +183,7 @@ shape(H, [3, 3])
 
 ### Homography with RANSAC inlier mask
 
-```clausal
+```seam
 find_homography_mask(SRC, DST, ransac, H, MASK),
 shape(H, [3, 3]),
 shape(MASK, [5, 1])
@@ -191,7 +191,7 @@ shape(MASK, [5, 1])
 
 ### PnP from 6 coplanar object points
 
-```clausal
+```seam
 OBJ is ++(numpy.array(
     [[0,0,0],[1,0,0],[2,0,0],[0,1,0],[1,1,0],[2,1,0]],
     dtype=numpy.float32)),
@@ -206,7 +206,7 @@ shape(RVEC, [3, 1]), shape(TVEC, [3, 1])
 
 ### Rodrigues self-inverse
 
-```clausal
+```seam
 RVEC is ++(numpy.array([[0.1], [0.2], [0.3]], dtype=numpy.float64)),
 rodrigues(RVEC, RMAT),
 rodrigues(RVEC2, RMAT),
@@ -215,7 +215,7 @@ rodrigues(RVEC2, RMAT),
 
 ### DFT forward then inverse round-trips
 
-```clausal
+```seam
 F is ++(GRAY_U8.astype(numpy.float32)),
 dft(F, SPEC),
 dft(F2, SPEC),

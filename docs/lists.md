@@ -1,7 +1,9 @@
 # Lists
 
-Lists are the fundamental data structure in logic programming. Clausal uses
-Python's native list syntax — no cons cells, no special notation.
+Lists are the fundamental data structure in logic programming. In seam (`.seam`)
+source they use Python's native list syntax — no cons cells, no special notation.
+Examples on this page use seam syntax; [Clausal Prolog](clausal_prolog.md)
+(`.clausal`) writes ISO lists, `[H|T]`.
 
 !!! tip "Strings work too"
 

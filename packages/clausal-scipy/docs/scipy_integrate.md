@@ -1,18 +1,18 @@
 # scipy.integrate — Numerical Integration
 
-The `scipy_integrate` module wraps [`scipy.integrate`](https://docs.scipy.org/doc/scipy/reference/integrate.html) as Clausal predicates. It covers adaptive quadrature (scalar and multi-dimensional), ODE solvers, and sampled-data integration methods.
+The `scipy_integrate` module wraps [`scipy.integrate`](https://docs.scipy.org/doc/scipy/reference/integrate.html) as Clausal Prolog predicates. It covers adaptive quadrature (scalar and multi-dimensional), ODE solvers, and sampled-data integration methods.
 
 ---
 
 ## Import
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_integrate_sigs.txt:import"
 ```
 
 Or via the canonical `py.*` path:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_integrate_sigs.txt:import_ex2"
 ```
 
@@ -24,7 +24,7 @@ Or via the canonical `py.*` path:
 
 `cumulative_trapezoid`, `trapezoid`, and `simpson` return a NumPy array or scalar directly in `RESULT`.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_integrate_sigs.txt:tier_1"
 ```
 
@@ -32,7 +32,7 @@ Or via the canonical `py.*` path:
 
 Quadrature and ODE predicates (`quad`, `double_quad`, `triple_quad`, `n_quad`, `quad_vec`, `solve_initial_value_problem`, `ode_integrate`) return a Python dict in `RESULT`. Use `result_get(RESULT, FIELD, VALUE)` to extract individual fields.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_integrate_sigs.txt:tier_2"
 ```
 
@@ -42,7 +42,7 @@ Quadrature and ODE predicates (`quad`, `double_quad`, `triple_quad`, `n_quad`, `
 
 Predicate names use full English words; scipy abbreviations are expanded:
 
-| scipy function | Clausal predicate |
+| scipy function | Clausal Prolog predicate |
 |---|---|
 | `quad` | `quad` |
 | `dblquad` | `double_quad` |
@@ -61,13 +61,13 @@ Predicate names use full English words; scipy abbreviations are expanded:
 
 ### Scalar quadrature
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_integrate_sigs.txt:scalar_quadrature"
 ```
 
 Example:
 
-```clausal
+```seam
 -import_from(scipy_integrate, [quad, result_get])
 
 integrate_sin(V) <- (
@@ -80,7 +80,7 @@ integrate_sin(V) <- (
 
 ### Multi-dimensional quadrature
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_integrate_sigs.txt:multi_dimensional_quadrature"
 ```
 
@@ -88,13 +88,13 @@ integrate_sin(V) <- (
 
 ### ODE solvers
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_integrate_sigs.txt:ode_solvers"
 ```
 
 Example — exponential decay:
 
-```clausal
+```seam
 -import_from(scipy_integrate, [solve_initial_value_problem, result_get])
 
 exponential_decay(T_FINAL, Y_FINAL) <- (
@@ -115,13 +115,13 @@ exponential_decay(T_FINAL, Y_FINAL) <- (
 
 These predicates operate on arrays of sample values.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_integrate_sigs.txt:sampled_data_integration"
 ```
 
 Example:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_integrate_sigs.txt:sampled_data_integration_ex2"
 ```
 
@@ -129,7 +129,7 @@ Example:
 
 ### result_get
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_integrate_sigs.txt:resultget"
 ```
 
@@ -151,7 +151,7 @@ Common fields by predicate:
 
 ### Quadrature: integrate sin over [0, π]
 
-```clausal
+```seam
 -import_from(scipy_integrate, [quad, result_get])
 
 sin_integral(VALUE) <- (
@@ -165,13 +165,13 @@ sin_integral(VALUE) <- (
 
 ### ODE: logistic growth
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_integrate_sigs.txt:ode_logistic_growth"
 ```
 
 ### Sampled integration
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_integrate_sigs.txt:sampled_integration"
 ```
 

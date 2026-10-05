@@ -33,7 +33,7 @@ So the wrapper is honest about what it can and can't do:
 
 - `read_frame/2` and `video_frame/3` advance the cursor **and commit
   the read** to the underlying stream. Backtracking abandons the
-  Clausal-side binding of `FRAME` but the cursor stays advanced.
+  logic-variable binding of `FRAME` but the cursor stays advanced.
 - `video_property_set/4` returns the *same* handle as a state-
   threading nod, but the underlying object is mutated in place. The
   signature acknowledges *something happened*; it doesn't actually
@@ -44,7 +44,7 @@ So the wrapper is honest about what it can and can't do:
 This is the same honesty as Prolog's `read/1` from a stream — once
 read, gone.
 
-```clausal
+```seam
 -import_from(opencv_video, [
     make_video_capture, is_open, read_frame, video_frame,
     video_property, video_property_set, video_prop_name,
@@ -120,7 +120,7 @@ backward call reconstructs the 4-character code from the integer's
 byte pattern, as an ATOM (a codec tag is a symbolic name). Round-trip is
 exact.
 
-```clausal
+```seam
 fourcc("MJPG", CODE),
 fourcc(CHARS, CODE),
 CHARS == "MJPG"
@@ -144,7 +144,7 @@ Each example below is an exact copy of an integration test in
 
 ### Read the first frame of a video
 
-```clausal
+```seam
 make_video_capture("/tmp/clip.mp4", CAP),
 read_frame(CAP, FRAME),
 shape(FRAME, [_, _, 3]),
@@ -153,7 +153,7 @@ release(CAP)
 
 ### Iterate every frame
 
-```clausal
+```seam
 make_video_capture("/tmp/clip.mp4", CAP),
 findall(I, video_frame(CAP, I, _), INDICES),
 INDICES == [0, 1, 2, 3, 4],
@@ -162,7 +162,7 @@ release(CAP)
 
 ### Query metadata
 
-```clausal
+```seam
 make_video_capture("/tmp/clip.mp4", CAP),
 video_property(CAP, "frame_count", N),
 video_property(CAP, "fps", FPS),
@@ -173,7 +173,7 @@ release(CAP)
 
 ### Explicit rewind to re-read
 
-```clausal
+```seam
 make_video_capture("/tmp/clip.mp4", CAP),
 findall(I, video_frame(CAP, I, _), _),         % exhausts stream
 video_property_set(CAP, "pos_frames", 0, _),   % rewind
@@ -183,7 +183,7 @@ release(CAP)
 
 ### Write a 2-frame video and read it back
 
-```clausal
+```seam
 fourcc("mp4v", FOURCC),
 make_video_writer("/tmp/out.mp4", FOURCC, 30.0, [120, 90], WRITER),
 FRAME is ++(numpy.zeros((90, 120, 3), dtype=numpy.uint8)),
@@ -198,7 +198,7 @@ release(CAP)
 
 ### Per-frame processing pipeline (cross-phase)
 
-```clausal
+```seam
 make_video_capture("/tmp/clip.mp4", CAP),
 findall(GRAY, (
     video_frame(CAP, _, FRAME),

@@ -7,7 +7,7 @@ as classical baselines.
 This is the first phase that uses **state-threaded handles** — see
 `hog_set_svm_detector/3` below.
 
-```clausal
+```seam
 -import_from(opencv_objdetect, [
     make_cascade_classifier, detect_multi_scale, haar_cascade_path,
     make_hog, hog_compute, hog_detect,
@@ -32,7 +32,7 @@ loaded, the cascade does not change. Tier 3 handle, no copying.
 Detections are returned as tagged `rect` terms (the same constructor
 used by Phase 4's `bounding_rect/2`), so they can be drawn directly:
 
-```clausal
+```seam
 detect_multi_scale(CASCADE, IMG, RECTS),
 in_(("rect", X, Y, W, H), RECTS),
 rectangle(IMG, [X, Y], [X+W, Y+H], [0, 255, 0], OUT)
@@ -61,7 +61,7 @@ The registry filters out names whose XML isn't actually present in
 your opencv install — if your build ships only a subset, only those
 appear in `findall(N, haar_cascade_path(N, _), NAMES)`.
 
-```clausal
+```seam
 haar_cascade_path("face", PATH),
 make_cascade_classifier(PATH, CASCADE)
 ```
@@ -126,7 +126,7 @@ After the call:
   still exists until explicitly freed (which is harmless if no
   outer goal references it).
 
-```clausal
+```seam
 make_hog(HOG0),
 hog_default_people_detector(SVM),
 hog_set_svm_detector(HOG0, SVM, HOG1),
@@ -155,7 +155,7 @@ The HOG handle must have an SVM installed (via
 
 ### Face detection from the bundled cascade
 
-```clausal
+```seam
 haar_cascade_path("face", PATH),
 make_cascade_classifier(PATH, CASCADE),
 imread("photo.jpg", imread_grayscale, IMG),
@@ -164,7 +164,7 @@ detect_multi_scale(CASCADE, IMG, 1.1, 3, RECTS)
 
 ### Enumerate every bundled cascade name
 
-```clausal
+```seam
 findall(N, haar_cascade_path(N, _), NAMES),
 length(NAMES, K),
 K >= 5
@@ -172,7 +172,7 @@ K >= 5
 
 ### People detection with HOG + the default pedestrian SVM
 
-```clausal
+```seam
 make_hog(HOG0),
 hog_default_people_detector(SVM),
 hog_set_svm_detector(HOG0, SVM, HOG),
@@ -182,7 +182,7 @@ hog_detect(HOG, IMG, {"win_stride": [8, 8], "scale": 1.05}, RECTS)
 
 ### HOG compute on a fixed-size window
 
-```clausal
+```seam
 make_hog(HOG),                          % default 64x128 window
 imread("clip.png", imread_grayscale, IMG),
 resize(IMG, [64, 128], RESIZED),
@@ -192,7 +192,7 @@ shape(DESC, [3780])                     % 9 bins * 4 cells/block * 105 blocks
 
 ### Free a handle
 
-```clausal
+```seam
 haar_cascade_path("face", PATH),
 make_cascade_classifier(PATH, H),
 free(H),

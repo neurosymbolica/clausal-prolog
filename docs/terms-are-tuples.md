@@ -6,7 +6,7 @@ A compound term is a **cell**: the functor-first tuple `(name, *args)`.
 An atom is a Python `str`, and a string is the carrier `('$chars', text)`
 (see [An atom is a string](atoms-are-strings.md)).
 
-| Clausal source | Python value |
+| Clausal Prolog source | Python value |
 |---|---|
 | `point(1, 2)` | `('point', 1, 2)` |
 | `edge(a, b)` | `('edge', 'a', 'b')` |

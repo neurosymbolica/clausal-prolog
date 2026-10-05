@@ -1,12 +1,12 @@
 # scipy.cluster — Clustering
 
-The `scipy_cluster` module wraps [`scipy.cluster.hierarchy`](https://docs.scipy.org/doc/scipy/reference/cluster.hierarchy.html) and [`scipy.cluster.vq`](https://docs.scipy.org/doc/scipy/reference/cluster.vq.html) as Clausal predicates. It covers hierarchical clustering (linkage, flat cluster assignment, dendrogram, cophenetic analysis) and vector quantisation (k-means).
+The `scipy_cluster` module wraps [`scipy.cluster.hierarchy`](https://docs.scipy.org/doc/scipy/reference/cluster.hierarchy.html) and [`scipy.cluster.vq`](https://docs.scipy.org/doc/scipy/reference/cluster.vq.html) as Clausal Prolog predicates. It covers hierarchical clustering (linkage, flat cluster assignment, dendrogram, cophenetic analysis) and vector quantisation (k-means).
 
 ---
 
 ## Import
 
-```clausal
+```seam
 -import_from(scipy_cluster, [linkage, flat_cluster, dendrogram,
                               cophenet, inconsistent,
                               k_means2, k_means, vector_quantize, whiten,
@@ -15,7 +15,7 @@ The `scipy_cluster` module wraps [`scipy.cluster.hierarchy`](https://docs.scipy.
 
 Or via the canonical `py.*` path:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_cluster_sigs.txt:import"
 ```
 
@@ -31,7 +31,7 @@ All predicates are **Tier 2** — they return result dicts or NumPy arrays. Use 
 
 The `Cluster` prefix is dropped since these predicates live in the cluster [module](import.md). Abbreviations that are not the universal name are expanded:
 
-| scipy function | Clausal predicate |
+| scipy function | Clausal Prolog predicate |
 |---|---|
 | `hierarchy.linkage` | `linkage` |
 | `hierarchy.fcluster` | `flat_cluster` |
@@ -61,7 +61,7 @@ Compute a hierarchical clustering linkage matrix from observation matrix or cond
 - `OPTIMAL_ORDERING`: reorder leaves to minimise distance (default `False`)
 - `RESULT`: ndarray of shape `(n-1, 4)` — the linkage matrix `Z`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_cluster_sigs.txt:hierarchical_clustering"
 ```
 
@@ -78,7 +78,7 @@ Form flat clusters from a hierarchical clustering linkage matrix `Z`.
 - `DEPTH`: depth for inconsistency calculation (default `2`)
 - `RESULT`: ndarray of shape `(n,)` — integer cluster assignment for each observation
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_cluster_sigs.txt:hierarchical_clustering_ex2"
 ```
 
@@ -92,7 +92,7 @@ Compute dendrogram layout data from linkage matrix `Z`. Always uses `no_plot=Tru
 - `TRUNCATE_MODE`: `None`, `'lastp'`, or `'level'`
 - `RESULT`: dict with keys `icoord`, `dcoord`, `ivl`, `leaves`, `color_list`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_cluster_sigs.txt:hierarchical_clustering_ex3"
 ```
 
@@ -106,7 +106,7 @@ Compute cophenetic distances from linkage matrix `Z`.
 - Without `Y`: `RESULT` is the condensed cophenetic distance array (ndarray of length `n*(n-1)/2`)
 - With `Y` (condensed pairwise distances): `RESULT` is `dict {'c': float, 'd': ndarray}` where `c` is the cophenetic correlation coefficient and `d` is the cophenetic distance array
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_cluster_sigs.txt:hierarchical_clustering_ex4"
 ```
 
@@ -120,7 +120,7 @@ Compute inconsistency statistics for each non-singleton cluster in linkage matri
 - `DEPTH`: number of levels to consider (default `2`)
 - `RESULT`: ndarray of shape `(n-1, 4)` — each row is `[mean, std, count, inconsistency_coefficient]`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_cluster_sigs.txt:hierarchical_clustering_ex5"
 ```
 
@@ -139,7 +139,7 @@ k-means clustering with explicit re-initialisation (`scipy.cluster.vq.kmeans2`).
 - `SEED`: random seed for reproducibility
 - `RESULT`: dict `{'centroid': ndarray shape (K, D), 'label': ndarray shape (N,)}`
 
-```clausal
+```seam
 k_means2(DATA, 3, RESULT),
 result_get(RESULT, 'centroid', CENTROIDS),
 result_get(RESULT, 'label', LABELS),
@@ -156,7 +156,7 @@ Classic k-means (`scipy.cluster.vq.kmeans`). Runs until convergence or the itera
 - `ITERATIONS`: maximum iterations (default `10`)
 - `RESULT`: dict `{'codebook': ndarray shape (K, D), 'distortion': float}`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_cluster_sigs.txt:vector_quantisation"
 ```
 
@@ -172,7 +172,7 @@ Assign each observation in `OBS` to the nearest code in `CODE_BOOK`.
   - `code[i]` — index of nearest centroid for observation `i`
   - `dist[i]` — Euclidean distance to that centroid
 
-```clausal
+```seam
 k_means(DATA, 2, KR),
 result_get(KR, 'codebook', CODEBOOK),
 vector_quantize(DATA, CODEBOOK, VQR),
@@ -188,7 +188,7 @@ Normalise observations by dividing each feature by its standard deviation.
 - `OBS`: ndarray of shape `(N, D)`
 - `RESULT`: ndarray of shape `(N, D)` with each column standardised to unit variance
 
-```clausal
+```seam
 whiten(RAW_DATA, NORMALISED),
 k_means2(NORMALISED, 3, RESULT),
 ```
@@ -205,7 +205,7 @@ Extract a named field from a Tier 2 result dict.
 - `FIELD`: string key
 - `VALUE`: unified with `RESULT[FIELD]`
 
-```clausal
+```seam
 k_means(DATA, 2, R),
 result_get(R, 'codebook', CODEBOOK),
 result_get(R, 'distortion', D),
@@ -215,7 +215,7 @@ result_get(R, 'distortion', D),
 
 ## Typical pipeline
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_cluster_sigs.txt:typical_pipeline"
 ```
 

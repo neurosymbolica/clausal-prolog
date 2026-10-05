@@ -31,7 +31,7 @@ that happen to compare equal:
 | false | `False` | `false` |
 | third | `Undefined` | `undefined` |
 
-The canonical spellings are Python's, because Clausal borrows Python's parser.
+The canonical spellings are Python's, because the seam (`.seam`) borrows Python's parser.
 The aliases are Prolog's: ISO writes `true`/`false`, and XSB and SWI write
 `undefined` for the well-founded third value. Aliases are resolved at parse
 time, so the two spellings are indistinguishable everywhere downstream — they
@@ -40,7 +40,7 @@ unify with each other, key the same dict entry, and emit the same Prolog atom.
 Two consequences worth knowing:
 
 - `true` and `false` work in goal position, as ISO `true/0` and `fail/0` do.
-  `undefined` does **not**: unlike XSB/SWI, Clausal has no `undefined/0` goal.
+  `undefined` does **not**: unlike XSB/SWI, Clausal Prolog has no `undefined/0` goal.
   A goal either succeeds or fails, and an unfounded tabled answer carries its
   `Undefined` truth value on the *answer* rather than on the call. Writing
   `undefined` as a goal is a compile-time error that says so.
@@ -98,7 +98,7 @@ def main(this_module):
 
 - `True` — the answer is definitely true
 - `Undefined` — the answer is neither provably true nor provably false.  This is the
-  same `Undefined` singleton `.clausal` code writes, so it can be compared with
+  same `Undefined` singleton `.seam` code writes, so it can be compared with
   `is Undefined` and fed straight into Kleene-aware code.  Note `bool(Undefined)`
   raises `TypeError` by design — test it explicitly rather than with `if`.
 

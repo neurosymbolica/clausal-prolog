@@ -8,19 +8,19 @@ summarised under [History](#history).*
 *For practical instructions on importing and running Prolog programs, see
 [Importing Prolog Code](importing_prolog.md).*
 
-Clausal is not an ISO Prolog system, and it does not try to become one by
+Clausal Prolog is not an ISO Prolog system, and it does not try to become one by
 adding cut. What it aims for is that every ISO builtin it **does** offer
 behaves as ISO 13211-1 specifies, and, where ISO is silent, as
 [Scryer Prolog](https://www.scryer.pl) does. SWI-Prolog is not a reference.
 This page lists what already conforms, and the known gaps, honestly.
 
-There are three ways to bring Prolog to Clausal:
+There are three ways to bring Prolog to Clausal Prolog:
 
 | Route | Status in 1.0 | What you get |
 |---|---|---|
-| Write Clausal, using the **quoted ISO spellings** (`'is'(X, E)`, `'=='(A, B)`, `'@<'(A, B)`, `'='(A, B)`) where Clausal's bare operators mean something else | supported | ISO meaning for the builtins listed below; see [Operators](operators.md) |
-| Import a `.pl` file | **experimental** ([Public API](public-api.md)) | a translation into Clausal syntax; no cut, no if-then-else, and the gaps in [Importing Prolog Code](importing_prolog.md#known-limitations) |
-| Embed Scryer or Trealla (optional packages) | separate packages | a real ISO engine running alongside Clausal |
+| Write seam source, using the **quoted ISO spellings** (`'is'(X, E)`, `'=='(A, B)`, `'@<'(A, B)`, `'='(A, B)`) where the seam's bare operators mean something else | supported | ISO meaning for the builtins listed below; see [Operators](operators.md) |
+| Import a `.pl` file | **experimental** ([Public API](public-api.md)) | a translation into seam syntax; no cut, no if-then-else, and the gaps in [Importing Prolog Code](importing_prolog.md#known-limitations) |
+| Embed Scryer or Trealla (optional packages) | separate packages | a real ISO engine running alongside Clausal Prolog |
 
 ---
 
@@ -53,7 +53,7 @@ culprit is the predicate indicator (or an unbound variable when there is no
 single culprit). The explanatory prose, when there is any, is
 `LogicException.message`. See [Exceptions](exceptions.md).
 
-| Goal | Clausal raises |
+| Goal | Clausal Prolog raises |
 |---|---|
 | `atom_length(1, X)` | `error(type_error(atom, 1), atom_length/2)` |
 | `atom_length(X, 3)` | `error(instantiation_error, atom_length/2)` |
@@ -162,11 +162,11 @@ fields are declared may be declared at several arities
 
 ISO 13211-1 has no module system, so here Scryer is the reference:
 
-- `use_module(m, [p/1])` imports one arity of `p` (Clausal:
+- `use_module(m, [p/1])` imports one arity of `p` (seam:
   `-import_from(m, [p/1])`), and a bare name imports every arity;
 - a name clash between two modules is resolved with a module-qualified
-  call, `m:p(X)` (Clausal: `m.p(X)`). Renaming an import with `as` is not
-  supported, because neither ISO nor Scryer has it. (A `.clausal` file's
+  call, `m:p(X)` (seam: `m.p(X)`). Renaming an import with `as` is not
+  supported, because neither ISO nor Scryer has it. (A `.seam` file's
   own `alias(p, q)` renames an import; it has no Prolog counterpart.)
 
 ---
@@ -186,10 +186,10 @@ names `is/2`. The relational predicates `abs_/2`, `sign/2`, `max_/3`,
 
 ### Builtins that fail silently where ISO or Scryer raise
 
-Each of these **fails** in Clausal. The right-hand column is the error ISO
+Each of these **fails** in Clausal Prolog. The right-hand column is the error ISO
 13211-1 specifies or Scryer reports.
 
-| Goal | Clausal | ISO / Scryer |
+| Goal | Clausal Prolog | ISO / Scryer |
 |---|---|---|
 | `sort(a, L)` | fails | `type_error(list, a)` |
 | `msort(a, L)` | fails | `type_error(list, a)` |
@@ -226,7 +226,7 @@ flag and ISO's error terms ([Prolog Flags](flags.md)). The limits:
   `max_arity` is `unbounded`.
 
 Scryer reports a read-only flag and a bad `unknown` value as
-`domain_error(prolog_flag, F)`; Clausal follows ISO 8.17.1.3 here
+`domain_error(prolog_flag, F)`; Clausal Prolog follows ISO 8.17.1.3 here
 (`permission_error(modify, flag, F)` and `domain_error(flag_value, F+V)`).
 `assert_creates_dynamic` (implementation-defined) selects ISO 7.5.2(2)'s
 assert, and is on in an imported `.pl` module.
@@ -250,7 +250,7 @@ Not provided (calling one raises `existence_error(procedure, PI)`):
 ### Other differences
 
 - **List syntax.** Today's syntax writes a partial list `[H, *T]`; in a
-  `.seam`/`.clausal` clause, `[H|T]` is a list holding one bitwise-or term.
+  `.seam` clause, `[H|T]` is a list holding one bitwise-or term.
   The `.pl` importer translates `[H|T]` for you.
 - **`write_canonical/1`** prints a list with the `'.'` functor
   (`'.'(s,[])`), not in list notation.
@@ -267,7 +267,7 @@ with Markus Triska. Their outcome:
 | Cut and if-then-else | Out of scope; reject on import | Unchanged, and ruled permanent (no committed choice either) |
 | Strings | Lists of characters | Done: `"…"` is a string by default |
 | Atoms | A distinct type | Done; the representation has changed twice and is now the plain `str` (the zero-field class it once was is retired) |
-| Modules | `use_module` for Prolog, `-import_from` for Clausal | `.pl` import works for plain programs and is experimental |
+| Modules | `use_module` for Prolog, `-import_from` for the seam | `.pl` import works for plain programs and is experimental |
 | Operators and arithmetic | Translation layer only | Superseded: the engine itself now offers the quoted ISO spellings, with Scryer's meaning |
 | Names | Rename between conventions | Superseded: predicate and variable names cross unchanged in both directions |
 | Missing builtins | Add incrementally, `compare/3` first | `compare/3`, `@</2` and the standard order are done; the rest is listed above |

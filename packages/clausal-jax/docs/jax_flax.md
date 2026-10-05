@@ -13,7 +13,7 @@ Issue 1.
 
 ## Import
 
-```clausal
+```seam
 import jax as pyjax
 -import_module(flax)
 -import_from(py.jax_random, [key, split_key])
@@ -37,7 +37,7 @@ PRNG key + example input to get a variables pytree, then call
 `apply` with `(variables, input)` for every forward pass. The
 model carries no state.
 
-```clausal
+```seam
 test("Dense init+apply round-trip") <- (
     dense(8, MODEL),
     key(0, K),
@@ -77,7 +77,7 @@ Each `nn.Module` subclass in `flax.linen` has its own predicate.
 Construction takes the layer's required hyperparameters as
 positional args, plus an optional `OPTS` dict for the rest:
 
-```clausal
+```seam
 dense(8, FC1)                        % Dense(features=8)
 dense(8, {"use_bias": False}, FC2)   % Dense(features=8, use_bias=False)
 conv(16, [3, 3], CONV)               % Conv(features=16, kernel_size=(3,3))
@@ -116,7 +116,7 @@ For relational discovery of available layer types, the
 `layer_class/2` registry returns the actual `flax.linen` class by
 TitleCase name — same shape as Equinox's:
 
-```clausal
+```seam
 findall(N, layer_class(N, _), NS)
 ```
 
@@ -134,7 +134,7 @@ findall(N, layer_class(N, _), NS)
 
 Phase 9 pytree predicates work on `VARS` directly:
 
-```clausal
+```seam
 init(MODEL, K, EXAMPLE, VARS),
 findall(L, leaf(VARS, L), LEAVES),
 length(LEAVES, N)
@@ -151,7 +151,7 @@ transform the variables exactly as they would any other pytree.
 collection. Plain `apply/4` will fail because that collection isn't
 mutable in the default apply call:
 
-```clausal
+```seam
 batch_norm({"use_running_average": False}, BN),
 init(BN, K, EXAMPLE, VARS),
 apply_mutable(BN, VARS, X, ["batch_stats"], RESULT),
@@ -174,7 +174,7 @@ behave as in plain `apply/4`.
 Flax's convention is a `{name: key}` dict mapping each stochastic
 collection to its key:
 
-```clausal
+```seam
 dropout(0.5, {"deterministic": False}, DROP),
 key(0, K0),
 split_key(K0, 2, [K_INIT, K_DROP]),
@@ -193,13 +193,13 @@ needed.
 Flax exposes pooling as **functions**, not Modules. They don't go
 through `init`/`apply`:
 
-```clausal
+```seam
 X is ++(pyjax.numpy.ones((1, 8, 8, 3))),
 max_pool(X, [2, 2], {"strides": [2, 2]}, R)   % halves spatial dims
 avg_pool(X, [2, 2], R)                         % stride defaults to 1
 ```
 
-`window_shape` and `strides` accept either a list (Clausal-friendly)
+`window_shape` and `strides` accept either a list (the natural Clausal Prolog form)
 or a tuple — the wrapper coerces lists to tuples for known shape
 opts. The same is true of `padding` when not a string.
 
@@ -210,7 +210,7 @@ opts. The same is true of `padding` when not a string.
 Combining Phase 12 (`value_and_grad`) + Phase 16 (optax) + Phase 18
 (this module). Variables flow through every step:
 
-```clausal
+```seam
 test("MLP one optax SGD step changes the variables") <- (
     dense(4, FC1),
     dense(1, FC2),
@@ -287,7 +287,7 @@ The heart of Flax is `class MyModel(nn.Module): @nn.compact def
 __call__(self, x): ...`. We don't wrap module *definition* — only
 the ~28 pre-built layers. For custom architectures:
 
-```clausal
+```seam
 MODEL is ++(define_my_model())
 init(MODEL, K, X, VARS)
 ```

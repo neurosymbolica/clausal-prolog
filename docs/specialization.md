@@ -10,7 +10,7 @@ The implementation lives in `clausal.logic.specialization`.
 
 ## The meta-interpreters
 
-Clausal ships five MIs ported from Triska's [acomip](https://www.metalevel.at/acomip/), all available via:
+Clausal Prolog ships five MIs ported from Triska's [acomip](https://www.metalevel.at/acomip/), all available via:
 
 ```seam
 -import_from(clausal.examples.metainterpreters, [solve, solve_count, solve_limit, solve_tree])
@@ -243,7 +243,7 @@ Pre-registration at Step 1c registers the specialized predicate's empty row and 
     - **Phase 3**: Residual goal dispatch for builtins and external calls
     - **Phase 4**: Deep unfolding with termination control
     - **Phase 5**: Conjunctive partial deduction / deforestation
-    - **Pipeline**: End-to-end `.clausal` fixtures for all specialization modes
+    - **Pipeline**: End-to-end `.seam` fixtures for all specialization modes
     - **Equivalence**: Specialized predicates produce identical results to unspecialized MIs
 
     Fixtures: `specialize_natnum.seam`, `specialize_graph.seam`,

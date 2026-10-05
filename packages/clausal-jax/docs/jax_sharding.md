@@ -12,7 +12,7 @@ All predicates are Tier 1 pure.
 
 ## Import
 
-```clausal
+```seam
 -import_module(jax)
 -import_from(py.jax_sharding, [
     jax_device, local_device,
@@ -34,7 +34,7 @@ All predicates are Tier 1 pure.
 Nondeterministic — each globally-visible (or locally-addressable)
 device is a solution.
 
-```clausal
+```seam
 test("jax_device enumerates devices") <- (
     findall(D, jax_device(D), DS),
     length(DS, N),
@@ -50,7 +50,7 @@ directly.
 
 Deterministic totals:
 
-```clausal
+```seam
 test("count matches enumeration") <- (
     findall(D, jax_device(D), DS),
     length(DS, N),
@@ -66,7 +66,7 @@ device by id. `device_platform/2` returns the atom `cpu`, `gpu`, or `tpu`
 (a symbolic name: "atom out, text in"; a bound platform may be the atom
 or the string).
 
-```clausal
+```seam
 test("device by id") <- (
     device_id(D, 0),
     device_platform(D, "cpu")
@@ -83,7 +83,7 @@ On a multi-device sharded array, JAX's underlying `arr.device` raises
 or returns a set; the wrapper surfaces that as predicate failure. For
 sharded arrays, query `sharding/2` instead and iterate the
 sharding's own `.device_set` / `.mesh` via `++()` until a
-Clausal-native multi-device helper lands.
+native multi-device predicate lands.
 
 ---
 
@@ -92,7 +92,7 @@ Clausal-native multi-device helper lands.
 A **mesh** is a named grid of devices. `make_mesh/3` takes a shape
 tuple and a tuple of axis names:
 
-```clausal
+```seam
 test("make_mesh") <- (
     make_mesh([1], ["x"], MESH),
     mesh_axis_names(MESH, ["x"])
@@ -108,7 +108,7 @@ Inspect mesh shape, axes, and backing devices with
 `mesh_shape/2`, `mesh_axis_names/2` (a list of atoms), `mesh_devices/2`. `mesh_shape/2`
 returns an `OrderedDict` mapping axis names to sizes:
 
-```clausal
+```seam
 test("mesh_shape") <- (
     make_mesh([1], ["x"], MESH),
     mesh_shape(MESH, SHAPE),
@@ -128,7 +128,7 @@ name (an atom or a string) or `None` for "unsharded over this tensor dim";
 a list of names shards one dim over several mesh axes. Backward,
 `partition_spec(AXES, P)` gives the names back as atoms:
 
-```clausal
+```seam
 test("partition_spec") <- (
     partition_spec(["x"], P),
     S is ++(str(P)),
@@ -146,7 +146,7 @@ test("partition_spec with unsharded dim") <- (
 
 Combine a mesh with a `PartitionSpec` into a `NamedSharding`:
 
-```clausal
+```seam
 test("named_sharding") <- (
     make_mesh([1], ["x"], MESH),
     partition_spec(["x"], P),
@@ -158,7 +158,7 @@ test("named_sharding") <- (
 Two `NamedSharding`s built from equal meshes and equal specs compare
 equal with `==`:
 
-```clausal
+```seam
 test("named_sharding equality") <- (
     make_mesh([1], ["x"], M1),
     make_mesh([1], ["x"], M2),
@@ -185,7 +185,7 @@ Produce a new array placed on the given device or matching the given
 sharding. The second argument is a `Device` object or a `Sharding`
 object — **not a numeric index**:
 
-```clausal
+```seam
 test("resolve id to Device before placement") <- (
     # Correct — resolve id to a Device first
     array([1.0], A),
@@ -200,7 +200,7 @@ test("numeric index fails") <- (
 )
 ```
 
-```clausal
+```seam
 test("device_put to device") <- (
     array([1.0, 2.0, 3.0], A),
     jax_device(D),
@@ -220,7 +220,7 @@ test("device_put with named sharding") <- (
 ```
 
 `device_put` returns a new array; the original is untouched, which is
-what Clausal backtracking expects.
+what Clausal Prolog backtracking expects.
 
 ### `sharding(A, S)`
 
@@ -228,7 +228,7 @@ Query or check an array's sharding. Query mode binds `S` to the
 sharding object; check mode accepts either direct `==` or `repr`
 equality as a fallback:
 
-```clausal
+```seam
 test("sharding query") <- (
     array([1.0, 2.0, 3.0], A),
     sharding(A, S),
@@ -244,12 +244,12 @@ test("sharding query") <- (
 |---|---|
 | `is_committed(A)` | Succeeds iff `A.committed` is true (has been placed explicitly) |
 | `is_fully_addressable(A)` | Succeeds iff all shards live on locally-addressable devices |
-| `is_deleted(A)` | Succeeds iff the buffer has been freed (rare in Clausal since we don't call `.delete()`) |
+| `is_deleted(A)` | Succeeds iff the buffer has been freed (rare in Clausal Prolog since we don't call `.delete()`) |
 
 `is_deleted` is a **method** in JAX, not a property — the wrapper
 calls it for you, so you just write `is_deleted(A)`.
 
-```clausal
+```seam
 test("fresh array is not deleted") <- (
     array([1.0, 2.0, 3.0], A),
     not is_deleted(A)
@@ -260,11 +260,11 @@ test("fresh array is not deleted") <- (
 
 ## Relational pattern — find a sharding with constraints
 
-The Clausal-friendly style: treat shardings as values and query
+The Clausal Prolog style: treat shardings as values and query
 relationally. For example, "given a mesh and some candidate
 `PartitionSpec`s, find one where the first axis is named `'data'`":
 
-```clausal
+```seam
 candidate_pspec(["data"]).
 candidate_pspec(["data", ++(None)]).
 candidate_pspec([++(None), "data"]).

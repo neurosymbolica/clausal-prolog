@@ -12,7 +12,7 @@ All predicates are Tier 1 pure.
 
 ## Import
 
-```clausal
+```seam
 -import_from(py.jax_scipy, [
     gamma_fn, gammaln, digamma,
     erf, erfc, erfinv,
@@ -57,7 +57,7 @@ element-wise to a `jax.Array`.
 | `multigammaln(A, D, R)` | log of multivariate gamma |
 | `spence(X, R)` | Spence's (dilogarithm) |
 
-```clausal
+```seam
 test("erf at 0 is 0") <- (
     array([0.0], X),
     erf(X, R),
@@ -75,7 +75,7 @@ test("expit + logit round-trip") <- (
 
 ### Name clashes: `gamma_fn` / `beta_fn`
 
-JAX has **three** namespaces that would all produce a Clausal-level
+JAX has **three** namespaces that would all produce a predicate named
 `gamma` or `beta`:
 
 | Namespace | Meaning | Module |
@@ -103,7 +103,7 @@ Enumerated names: `norm`, `uniform`, `bernoulli`, `beta`, `binom`,
 `multinomial`, `multivariate_normal`, `nbinom`, `pareto`, `poisson`,
 `t`, `truncnorm`, `vonmises`, `wrapcauchy`, `gennorm`, `geom`.
 
-```clausal
+```seam
 test("distribution lookup") <- (
     distribution("norm", M),
     M != ++(None)
@@ -132,7 +132,7 @@ dict of parameters matching the distribution's keyword arguments.
 | `pmf(DIST, X, PARAMS, R)` | discrete | Probability mass |
 | `logpmf(DIST, X, PARAMS, R)` | discrete | Log mass |
 
-```clausal
+```seam
 test("normal pdf at mean") <- (
     pdf("norm", 0.0, {"loc": 0.0, "scale": 1.0}, P),
     array(0.3989423, EXPECTED),
@@ -155,7 +155,7 @@ discrete, so it has `pmf`/`logpmf` but no `pdf`; `t` ships with
 missing for the named distribution, `_pure`'s exception handler turns
 the resulting `AttributeError` into predicate failure:
 
-```clausal
+```seam
 test("bernoulli has no pdf") <- (
     not pdf("bernoulli", 1, {"p": 0.5}, _P)
 )

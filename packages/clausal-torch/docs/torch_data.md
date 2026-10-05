@@ -6,7 +6,7 @@ Dataset *definition* and item access are relational. Iteration
 
 ## Import
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_data_sigs.txt:import"
 ```
 
@@ -26,14 +26,14 @@ Dataset *definition* and item access are relational. Iteration
 
 ### tensor_dataset
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_data_sigs.txt:tensor_dataset"
 ```
 
 Create a `TensorDataset` from a list of tensors. All tensors must have
 the same first dimension (number of samples).
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_data_sigs.txt:tensor_dataset_ex2"
 ```
 
@@ -43,14 +43,14 @@ the same first dimension (number of samples).
 
 ### dataset_length
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_data_sigs.txt:dataset_length"
 ```
 
 Number of items in the dataset. Supports query `(+ds, -n)` and check
 `(+ds, +n)` modes.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_data_sigs.txt:dataset_length_ex2"
 ```
 
@@ -60,14 +60,14 @@ Number of items in the dataset. Supports query `(+ds, -n)` and check
 
 ### dataset_item
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_data_sigs.txt:dataset_item"
 ```
 
 Get a single item by index. Returns a tuple of tensors (one per tensor
 in the dataset). Access tuple elements via `++()`:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_data_sigs.txt:dataset_item_ex2"
 ```
 
@@ -79,13 +79,13 @@ Fails gracefully on out-of-bounds indices.
 
 ### dataset_element
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_data_sigs.txt:dataset_element"
 ```
 
 Enumerate items via backtracking. The 2-arity version yields each item;
 the 3-arity version yields `(index, item)` pairs.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/torch_data_sigs.txt:dataset_element_ex2"
 ```

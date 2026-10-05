@@ -1,10 +1,10 @@
 # spaCy NLP Module
 
-The `spacy` module exposes spaCy's NLP pipeline as Clausal predicates. It provides model management, tokenisation, linguistic annotations, named-entity recognition, sentence segmentation, noun chunks, and vector similarity — all accessible from `.clausal` files via a relational interface.
+The `spacy` module exposes spaCy's NLP pipeline as Clausal Prolog predicates. It provides model management, tokenisation, linguistic annotations, named-entity recognition, sentence segmentation, noun chunks, and vector similarity — all accessible from seam (`.seam`) files via a relational interface.
 
 **Requires:** `pip install spacy` and at least one downloaded spaCy model (e.g. `python -m spacy download en_core_web_sm`).
 
-```clausal
+```seam
 -import_from(spacy, [load_model, process, token, lemma, entity])
 
 nouns(DOC, TOK) <- (
@@ -19,7 +19,7 @@ nouns(DOC, TOK) <- (
 
 ## Import
 
-```clausal
+```seam
 -import_from(spacy, [
     load_model, unload_model, current_model,
     process,
@@ -40,31 +40,31 @@ Models are loaded once and kept in a module-level registry under string aliases.
 
 ### `load_model/1`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:load_model_1_sig"
 ```
 
 Load a spaCy model by name; the model name is used as the alias. Idempotent — if the alias is already loaded, succeeds immediately.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:load_model_1_ex"
 ```
 
 ### `load_model/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:load_model_2_sig"
 ```
 
 Load `Name` under a custom `Alias`. Useful for loading the same model under multiple names or for shorter identifiers.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:load_model_2_ex"
 ```
 
 ### `unload_model/1`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:unload_model_sig"
 ```
 
@@ -72,13 +72,13 @@ Remove the model from the registry. **Fails** if the alias is not registered.
 
 ### `current_model/1`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:current_model_sig"
 ```
 
 when `Alias` is unbound, **nondeterministically enumerates** all registered aliases. when ground, succeeds if that alias is currently loaded.
 
-```clausal
+```seam
 list_models(A) <- current_model(A)
 ```
 
@@ -88,13 +88,13 @@ list_models(A) <- current_model(A)
 
 ### `process/3`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:process_sig"
 ```
 
 Run `Text` through the model registered as `Alias` and unify `Doc` with the resulting spaCy `Doc` object. The Doc object is an opaque handle passed to all downstream predicates.
 
-```clausal
+```seam
 setup(DOC) <- (
     load_model("en_core_web_sm", "nlp"),
     process("nlp", "The quick brown fox jumps.", DOC)
@@ -126,50 +126,50 @@ and come back as **atoms** (`'PROPN'`, `look`) -- ruled 2026-10-04:
 
 ### `token/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:token_2_sig"
 ```
 
 **Nondeterministic.** Yields one solution per token in `Doc`, binding `Tok` to the token dict.
 
-```clausal
+```seam
 all_tokens(DOC, TOK) <- token(DOC, TOK)
 ```
 
 ### `token/3`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:token_3_sig"
 ```
 
 when `Index` is ground, retrieves the token at that position (fails if out of range). when `Index` is unbound, iterates all tokens and binds `Index` to each token's position.
 
-```clausal
+```seam
 first_token(DOC, TOK) <- token(DOC, 0, TOK)
 indexed_tokens(DOC, I, TOK) <- token(DOC, I, TOK)
 ```
 
 ### `token_text/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:token_text_sig"
 ```
 
 Unify `Text` with the surface form of a token dict, a string. Equivalent to `T is ++Tok["text"]` but more readable.
 
-```clausal
+```seam
 is_apple(TOK) <- token_text(TOK, "Apple")
 ```
 
 ### `token_list/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:token_list_sig"
 ```
 
 Unify `Tokens` with a list of all token dicts in the document. Deterministic.
 
-```clausal
+```seam
 toks(DOC, TOKENS) <- token_list(DOC, TOKENS)
 ```
 
@@ -181,7 +181,7 @@ All annotation predicates take a token dict as their first argument and unify th
 
 ### `pos/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:pos_sig"
 ```
 
@@ -192,7 +192,7 @@ Coarse-grained Universal Dependencies POS tag, an atom: `'NOUN'`, `'VERB'`, `'PR
 
 ### `tag/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:tag_sig"
 ```
 
@@ -200,7 +200,7 @@ Fine-grained POS tag specific to the language model, an atom (e.g. `'NNS'`, `'VB
 
 ### `lemma/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:lemma_sig"
 ```
 
@@ -208,7 +208,7 @@ Lemmatised form of the token, an atom (e.g. `run` for `"running"`): `lemma(TOK, 
 
 ### `dep/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:dep_sig"
 ```
 
@@ -216,7 +216,7 @@ Dependency relation to the syntactic head, an atom: `nsubj`, `dobj`, `'ROOT'`, e
 
 ### `head/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:head_sig"
 ```
 
@@ -224,7 +224,7 @@ Surface form of the syntactic head token, a string.
 
 ### `shape/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:shape_sig"
 ```
 
@@ -232,7 +232,7 @@ Orthographic shape, an atom -- a label, like `pos/2` (ruled 2026-10-04): `'Xxxxx
 
 ### `is_alpha/1`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:is_alpha_sig"
 ```
 
@@ -240,7 +240,7 @@ Orthographic shape, an atom -- a label, like `pos/2` (ruled 2026-10-04): `'Xxxxx
 
 ### `is_stop/1`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:is_stop_sig"
 ```
 
@@ -254,32 +254,32 @@ An entity is a dict with keys: `text` (a string), `label` (an atom, `'ORG'`), `s
 
 ### `entity/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:entity_2_sig"
 ```
 
 **Nondeterministic.** Yields one solution per entity in the document.
 
-```clausal
+```seam
 orgs(DOC, ENT) <- (entity(DOC, ENT), T is ++ENT["label"], T == 'ORG')
 ```
 
 ### `entity/3`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:entity_3_sig"
 ```
 
 Filtered iteration — only yields entities whose label matches `label`.
 
-```clausal
+```seam
 people(DOC, ENT) <- entity(DOC, "PERSON", ENT)
 orgs(DOC, ENT) <- entity(DOC, "ORG", ENT)
 ```
 
 ### `entity_list/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:entity_list_sig"
 ```
 
@@ -293,7 +293,7 @@ Sentences are strings (the `.text` of each spaCy `span`, as the term `('$chars',
 
 ### `sentence/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:sentence_sig"
 ```
 
@@ -301,7 +301,7 @@ Sentences are strings (the `.text` of each spaCy `span`, as the term `('$chars',
 
 ### `sentence_list/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:sentence_list_sig"
 ```
 
@@ -316,13 +316,13 @@ Unify `Sents` with a list of all sentence strings. Deterministic.
 
 ### `similarity/4`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:similarity_sig"
 ```
 
 process both texts through the model and unify `Score` with their cosine similarity as a float in `[0.0, 1.0]`.
 
-```clausal
+```seam
 close(T1, T2) <- (
     similarity("en", T1, T2, S),
     S > 0.8
@@ -340,13 +340,13 @@ A noun chunk is a dict with keys: `text`, `root_text`, `root_head_text` (strings
 
 ### `noun_chunk/2`
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/spacy_sigs.txt:noun_chunk_sig"
 ```
 
 **Nondeterministic.** Yields one solution per noun chunk.
 
-```clausal
+```seam
 subjects(DOC, CHUNK) <- (
     noun_chunk(DOC, CHUNK),
     D is ++CHUNK["root_dep"],
@@ -358,7 +358,7 @@ subjects(DOC, CHUNK) <- (
 
 ## Working example
 
-```clausal
+```seam
 -import_from(spacy, [load_model, process, token, pos, lemma, entity, dep])
 
 # Find all noun subjects in a sentence
@@ -425,7 +425,7 @@ noun_lemmas(TEXT, LEMMAS) <- (
     3. **Filtered iteration** — `entity/3` and similar predicates filter at iteration time rather than via a separate filter predicate, following the pattern of `query/4` with SQL `WHERE` clauses.
     4. **Model aliases** — models are referenced by string aliases throughout, making predicates composable without carrying model references. The same pattern is used in the SQLite module.
     5. **`pos` not `POS`** — `POS` is all-uppercase and would be treated as a logic variable by the term transformer. `pos` (title-case) avoids the collision.
-    6. **Lazy spaCy import** — `import spacy` is deferred to first use so that `.clausal` files importing this module compile correctly even when spaCy is not installed. Errors are reported at predicate call time with a clear message.
+    6. **Lazy spaCy import** — `import spacy` is deferred to first use so that `.seam` files importing this module compile correctly even when spaCy is not installed. Errors are reported at predicate call time with a clear message.
 
 ---
 

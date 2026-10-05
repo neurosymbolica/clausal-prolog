@@ -1,4 +1,4 @@
-# Clausal — Provenance (`provenance` module)
+# Clausal Prolog — Provenance (`provenance` module)
 
 ## Overview
 
@@ -10,7 +10,7 @@ inference, top-k DNF lineage, and PyTorch / JAX-differentiable variants of
 all of the above — gradients flow from a query's answer probabilities back
 into a perception model's parameters.
 
-```clausal
+```seam
 -import_from(provenance, [bottom_up_, solve, boolean, add_mult_prob])
 
 -module(reach, [edge(A, B), path(A, B)])
@@ -58,15 +58,15 @@ semiring tags.
 
 A program has three pieces:
 
-1. **Rules** — ordinary Clausal `<-` rules whose head predicates are
+1. **Rules** — ordinary seam `<-` rules whose head predicates are
    declared bottom-up. Variables in the head must be bound by the body.
 2. **Tagged facts** — a list of `(ground_term, tag)` pairs supplied at
-   solve time, either inline in `.clausal` source (typically tests) or
+   solve time, either inline in `.seam` source (typically tests) or
    from Python (typically training data).
 3. **Semiring** — a value, not a class, passed per call. The semiring
    chooses what tags mean (`bool`, `float`, `Tensor`, DNF formula, …).
 
-```clausal
+```seam
 -import_from(provenance, [bottom_up_, solve, boolean, add_mult_prob])
 
 -module(mnist_sum, [digit(IMG, V), sum_digits(A, B, T)])
@@ -96,7 +96,7 @@ Three things to notice:
 - **`bottom_up_(digit)`** registers `digit/2` for bottom-up evaluation.
   The same fact base must consistently be tagged: either every `digit`
   fact carries a tag, or none do.
-- **`==` (not `is`)** binds `TOTAL`. Clausal's `is` is *structural unify*,
+- **`==` (not `is`)** binds `TOTAL`. The seam's `is` is *structural unify*,
   not arithmetic eval — it would fail here. `==` is `ArithEq`.
 - **No `,` after `bottom_up_(digit)`** — a trailing comma at top level
   turns the directive into a clause-with-empty-body and fails. Keep each
@@ -126,7 +126,7 @@ call:
 `not P(x)` records nothing instead of recording an entry for the head
 with tag `False`.
 
-```clausal
+```seam
 FACTS is [(edge("a", "b"), True), (edge("b", "c"), True)],
 solve(boolean, FACTS, path("a", "c"), [(_, True)])
 ```
@@ -140,7 +140,7 @@ identical answer set.
 `⊕ = clip(a + b − a·b, 0, 1)`, `⊗ = a · b`. Tags are floats in `[0, 1]`.
 Treats alternative derivations as independent events:
 
-```clausal
+```seam
 test("add_mult_prob: confident pair multiplies cleanly") <- (
     FACTS is [
         (digit(0, 3), 0.7),
@@ -249,7 +249,7 @@ bodies must be **pure, monotonic, and deterministic** — see
 [`docs/purity.md`](../../../docs/purity.md). Two registration goals
 declare the engine's view of your predicates:
 
-```clausal
+```seam
 -import_from(provenance, [bottom_up_, pure_])
 
 bottom_up_(sum_digits)       # sum_digits/3 is evaluated bottom-up
@@ -259,7 +259,7 @@ pure_(SafeColor)            # SafeColor/2 may be called from a -bottom_up body
 `bottom_up_(P)` and `pure_(P)` are not directives — they're **module-load
 goals**: the parser turns the line into a Python call executed at module
 load time, which sets a flag on the predicate's `PredicateMeta` class.
-The trailing underscore matches existing Clausal naming for "registration
+The trailing underscore matches existing Clausal Prolog naming for "registration
 predicate that doubles as a directive."
 
 A future small core hook would let us promote these to true `-bottom_up`
@@ -290,7 +290,7 @@ discipline rejects them at registration time.
 
 ### `solve/4` — the in-source builtin
 
-```clausal
+```seam
 solve(+Semiring, +Facts, +Goal, -Result)
 ```
 
@@ -299,7 +299,7 @@ pairs. `Goal` is an ordinary goal whose head predicate is `-bottom_up`.
 `Result` unifies with the list of `(GroundFact, Tag)` answers — same shape
 across semirings, only the tag type changes.
 
-```clausal
+```seam
 solve(boolean, FACTS, path("a", DST), R)
 ```
 
@@ -309,7 +309,7 @@ hidden dependency on prior `assertz` calls.
 
 ### `aggregate/4` — semiring-aware aggregation
 
-```clausal
+```seam
 aggregate(+Semiring, +Op, +TaggedList, -Result)
 ```
 
@@ -322,7 +322,7 @@ aggregate(+Semiring, +Op, +TaggedList, -Result)
 | `diff_add_mult_prob` | tensor `Σ p_i` | tensor `Σ v_i · p_i` | `(v*, t*)` — argmax detached, tag's gradient preserved |
 | `top_k_proofs(k)` | `Σ recover_fn(t_i)` (I-E per term) | `Σ v_i · recover_fn(t_i)` | `(v*, t*)` |
 
-```clausal
+```seam
 test("aggregate count under add_mult_prob = expected count") <- (
     aggregate(add_mult_prob, "count", [0.3, 0.5, 0.2], EXPECTED),
     EXPECTED < 1.0000000001,
@@ -332,7 +332,7 @@ test("aggregate count under add_mult_prob = expected count") <- (
 
 ### `recover/3` — apply `recover_fn` explicitly
 
-```clausal
+```seam
 recover(+Semiring, +InternalTag, -OutputTag)
 ```
 
@@ -350,7 +350,7 @@ answers = query(goal, facts=facts, semiring=...)
 ```
 
 This is the primary entry point for neurosymbolic workloads: facts come
-from a perception model's output (a tensor), and the `.clausal` source
+from a perception model's output (a tensor), and the `.seam` source
 holds only the rules and signatures. `query()` accepts an optional
 `module=` kwarg if the goal's predicate class doesn't carry an inferable
 home module.
@@ -364,7 +364,7 @@ no SCC contains both a positive and a negative edge. The engine builds
 the graph at registration time and rejects cyclic negation with a clear
 error message naming the offending predicates.
 
-```clausal
+```seam
 -module(network, [edge(A, B), block(N), reachable(N), allowed(N)])
 
 bottom_up_(edge)
@@ -401,7 +401,7 @@ The canonical neurosymbolic benchmark. Two MNIST images go in; the
 predicted sum (0..18) comes out; loss is computed against the true
 sum; gradients train a CNN that has never seen image-level digit labels.
 
-```clausal
+```seam
 # packages/clausal-provenance/tests/fixtures/mnist_sum.seam
 -import_from(provenance, [bottom_up_, solve, boolean, add_mult_prob])
 
@@ -454,10 +454,10 @@ for image_a, image_b, true_sum in train_loader:
 
 Three things this exercises end-to-end:
 
-1. **Clausal terms throughout.** No string-passing, no parallel AST.
+1. **Clausal Prolog terms throughout.** No string-passing, no parallel AST.
 2. **Tag = tensor.** No marshalling at any boundary; PyTorch autograd
    traces straight through `add` and `mult`.
-3. **Default-pure builtins.** `==` (the rule's only callback into Clausal)
+3. **Default-pure builtins.** `==` (the rule's only callback into Clausal Prolog)
    is on the engine's whitelist, so no `pure_/1` annotation is needed.
 
 For tighter probabilities — when several digit-pair combinations sum to

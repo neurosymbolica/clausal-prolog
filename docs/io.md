@@ -1,6 +1,6 @@
 # I/O Builtins
 
-Clausal provides built-in predicates for formatted output, term-to-string conversion, and f-string interpolation. Whether you need to print debug output, format a table, or build strings from logic variables, the I/O builtins have you covered. For calling Python functions directly, see [Python Integration](python_integration.md).
+Clausal Prolog provides built-in predicates for formatted output and term-to-string conversion, and the seam (`.seam`) adds f-string interpolation. Whether you need to print debug output, format a table, or build strings from logic variables, the I/O builtins have you covered. For calling Python functions directly, see [Python Integration](python_integration.md).
 
 ---
 
@@ -27,19 +27,19 @@ out below.
 
 ### Three families of writer
 
-Clausal has **three** groups of writing predicates. Which one you want depends
+Clausal Prolog has **three** groups of writing predicates. Which one you want depends
 on whether you are producing human text, spelling out a term the ISO way, or
 showing a term so a reader can tell an atom from a string.
 
 | Family | Predicates | A string prints as | After a comma |
 |---|---|---|---|
 | **ISO** | `write/1`, `writeq/1`, `write_canonical/1`, `write_term/2` (and `writeln/1`, `write_to_string/2`, which are `write/1`'s semantics under non-ISO names) | the LIST of its characters — `[a,b,c]` | nothing |
-| **Clausal text** | `write_text/1`, `writeln_text/1`, `write_text_to_string/2` | its text — `abc` | a space |
-| **Clausal display** | `print_term/1`, `term_to_string/2` | the double-quoted form — `"abc"` | a space |
+| **Text** | `write_text/1`, `writeln_text/1`, `write_text_to_string/2` | its text — `abc` | a space |
+| **Display** | `print_term/1`, `term_to_string/2` | the double-quoted form — `"abc"` | a space |
 
 The ISO family prints **no whitespace after a comma** — `[a,b,c]`, `f(a,b)`,
-`{k:v}` — so its output is byte-comparable with other ISO systems. The two
-Clausal families keep the engine's `", "` display spacing.
+`{k:v}` — so its output is byte-comparable with other ISO systems. The text and
+display families keep the engine's `", "` display spacing.
 
 #### The ISO writers: `write/1`, `writeq/1`, `write_canonical/1`
 
@@ -82,7 +82,7 @@ writer only *shows* the cons structure.
 
 These print a string as its **text** and a char list as the text it spells; an
 atom prints its bare spelling, and every other term prints exactly as `write/1`
-prints it. This is Clausal's `~s`, and it is where f-strings go:
+prints it. This is the engine's `~s`, and it is where f-strings go:
 
 | Term | `write_text` |
 |---|---|
@@ -147,8 +147,8 @@ scope, so there is no `write_term/3`, and `max_depth(N)` is not supported.
 | Builtin | Family | Newline? |
 |---|---|---|
 | `write/1`, `writeln/1`, `write_to_string/2` | ISO (`write`) | `writeln` only |
-| `write_text/1`, `writeln_text/1`, `write_text_to_string/2` | Clausal text | `writeln_text` only |
-| `print_term/1`, `term_to_string/2` | Clausal display | `print_term` only |
+| `write_text/1`, `writeln_text/1`, `write_text_to_string/2` | Text | `writeln_text` only |
+| `print_term/1`, `term_to_string/2` | Display | `print_term` only |
 | `writeq/1` | ISO, quoted | no |
 | `write_canonical/1` | canonical | no |
 
@@ -226,7 +226,7 @@ test("write to string is ISO") <- (
 
 ### term_to_string/2
 
-`term_to_string(Term, String)` — unify String with the Clausal *display*
+`term_to_string(Term, String)` — unify String with the *display*
 rendering of Term (`write_term(Term, [quoted(true), double_quotes(true)])`):
 quoted, so an atom is distinguishable from a string.
 
@@ -258,7 +258,7 @@ back.
 
 ## F-String Support
 
-In `.clausal` files, f-strings build text with logic variable interpolation. Variables are automatically dereferenced before the f-string is evaluated, and a string interpolates as its text.
+In seam (`.seam`) files, f-strings build text with logic variable interpolation. Variables are automatically dereferenced before the f-string is evaluated, and a string interpolates as its text.
 
 An f-string is a **string**: the same term a `"..."` literal is under the
 module's `-double_quotes` mode — the chars string by default, and an atom
@@ -440,7 +440,7 @@ or `Name//Arity`:
 The indicator has several representations: the cells `('/', Name, Arity)` /
 `('//', Name, Arity)` (reachable from Python/engine callers that already hold the name and arity as
 data), and -- what a user-written `foo/2` or `foo // 2` actually compiles to
-in `.clausal` source -- a runtime `Div` / `FloorDiv` node, since `/` and `//`
+in `.seam` source -- a runtime `Div` / `FloorDiv` node, since `/` and `//`
 are arithmetic operators and a structural (non-`is`) use stays a reified
 operator term rather than data. It prints a header with clause count, then
 each clause in `head <- (body).` format.
@@ -464,7 +464,7 @@ Logic variables have `__str__` and `__format__` methods (in the C extension) tha
 - **Bound var**: displays the bound value
 - **Unbound var**: displays `_N` (unique numeric ID)
 
-This means `f"{X}"` and `write_text(X)` show the value if bound, or a placeholder if unbound. This works in both `.clausal` files and Python code:
+This means `f"{X}"` and `write_text(X)` show the value if bound, or a placeholder if unbound. This works in both `.seam` files and Python code:
 
 ```python
 from clausal.logic.variables import Var, Trail, unify

@@ -1,12 +1,12 @@
 # scipy.constants — Physical Constants
 
-The `scipy_constants` module wraps [`scipy.constants`](https://docs.scipy.org/doc/scipy/reference/constants.html) as Clausal predicates. It provides CODATA physical constants, physical constant values by name, and SI prefix multipliers.
+The `scipy_constants` module wraps [`scipy.constants`](https://docs.scipy.org/doc/scipy/reference/constants.html) as Clausal Prolog predicates. It provides CODATA physical constants, physical constant values by name, and SI prefix multipliers.
 
 ---
 
 ## Import
 
-```clausal
+```seam
 -import_from(scipy_constants, [value, unit, precision, lookup, find, all_names,
                                scipy_speed_of_light, scipy_planck_constant,
                                scipy_reduced_planck_constant,
@@ -20,7 +20,7 @@ The `scipy_constants` module wraps [`scipy.constants`](https://docs.scipy.org/do
 
 Or via the canonical `py.*` path:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:import"
 ```
 
@@ -36,7 +36,7 @@ All predicates are **Tier 1 — pure**: they perform direct attribute lookups or
 
 The `Const` prefix from the spec is dropped since these predicates live in the `scipy_constants` module. Abbreviations that are not the universal name are expanded:
 
-| scipy attribute / function | Clausal predicate |
+| scipy attribute / function | Clausal Prolog predicate |
 |---|---|
 | `constants.value(name)` | `value` |
 | `constants.unit(name)` | `unit` |
@@ -82,7 +82,7 @@ Look up a CODATA physical constant value by its full name string.
 - `NAME`: CODATA name string, e.g. `'speed of light in vacuum'`, `'Planck constant'`, `'Boltzmann constant'`
 - `RESULT`: float value in SI units
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:codata_lookup"
 ```
 
@@ -98,7 +98,7 @@ Access all three CODATA fields for a constant in a single call.
 - `UNIT`: a string, the SI unit (`"kg"`)
 - `UNCERTAINTY`: float, absolute uncertainty (not relative — use `precision` for relative)
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:codata_lookup_ex2"
 ```
 
@@ -113,7 +113,7 @@ Search the CODATA database by substring; returns all matching constant names.
 - `SUBSTRING`: string to search for (case-sensitive, uses `scipy.constants.find`)
 - `NAMES`: list of matching names, as atoms; empty list if no match
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:codata_lookup_ex3"
 ```
 
@@ -125,7 +125,7 @@ Return all CODATA constant names as a list.
 
 - `NAMES`: list of all names in `scipy.constants.physical_constants`, as atoms
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:codata_lookup_ex4"
 ```
 
@@ -137,7 +137,7 @@ Return the SI unit of a named CODATA constant.
 
 - `RESULT`: a string such as `"m s^-1"` or `"J s"` (not an atom)
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:codata_lookup_ex5"
 ```
 
@@ -149,7 +149,7 @@ Return the relative uncertainty of a named CODATA constant.
 
 - `RESULT`: float, e.g. `0.0` for exact definitions, `2.2e-5` for G
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:codata_lookup_ex6"
 ```
 
@@ -190,7 +190,7 @@ floats. Use one where a value goes -- `C is scipy_speed_of_light`,
 
 ## Example
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_constants_sigs.txt:example"
 ```
 
@@ -204,4 +204,4 @@ floats. Use one where a value goes -- `C is scipy_speed_of_light`,
 
 ---
 
-*See also: [Python Interop](python_integration.md) — `++()` escape for direct `scipy.constants` access · [Arithmetic](arithmetic.md) — numeric operations in Clausal.*
+*See also: [Python Interop](python_integration.md) — `++()` escape for direct `scipy.constants` access · [Arithmetic](arithmetic.md) — numeric operations in Clausal Prolog.*

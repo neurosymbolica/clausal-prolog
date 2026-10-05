@@ -2,7 +2,7 @@
 
 OpenCV's drawing primitives (`cv2.line`, `cv2.rectangle`,
 `cv2.putText`, …) **mutate the destination image in place** and
-return it. That breaks Clausal's relational guarantees: a backtrack
+return it. That breaks Clausal Prolog's relational guarantees: a backtrack
 point above a draw call would leave the canvas corrupted, and any
 bound term pointing at that array would silently change underfoot.
 
@@ -23,7 +23,7 @@ drawing applied to a copy of the source. The source array is never
 touched, so backtracking past a draw call is safe — the predicate
 behaves exactly like the pure predicates in earlier phases.
 
-```clausal
+```seam
 -import_from(opencv_draw, [
     line, arrowed_line, rectangle, circle, ellipse,
     polylines, fill_poly, put_text, marker,
@@ -103,42 +103,42 @@ Each example below is an exact copy of an integration test in
 
 ### A green diagonal line on a color image
 
-```clausal
+```seam
 imread("photo.png", imread_color, IMG),
 line(IMG, [0, 0], [3, 3], [0, 255, 0], OUT)
 ```
 
 ### Filled rectangle (grayscale)
 
-```clausal
+```seam
 imread("photo.png", imread_grayscale, IMG),
 rectangle(IMG, [0, 0], [3, 3], [128], filled, OUT)
 ```
 
 ### Antialiased text
 
-```clausal
+```seam
 imread("photo.png", imread_grayscale, IMG),
 put_text(IMG, "hi", [2, 16], font_hershey_simplex, 0.5, [255], 1, line_aa, OUT)
 ```
 
 ### A closed quadrilateral outline
 
-```clausal
+```seam
 imread("photo.png", imread_color, IMG),
 polylines(IMG, [[[0,0],[3,0],[3,3],[0,3]]], True, [0, 255, 0], OUT)
 ```
 
 ### Star markers
 
-```clausal
+```seam
 imread("photo.png", imread_color, IMG),
 marker(IMG, [2, 2], [255, 0, 0], marker_star, OUT)
 ```
 
 ### Verify the no-mutation invariant
 
-```clausal
+```seam
 imread("photo.png", imread_grayscale, IMG),
 copy_image(IMG, SNAP),
 line(IMG, [0, 0], [3, 3], [255], _),     % the underscore swallows the canvas
@@ -148,7 +148,7 @@ min_max_loc(D, ("min_max", 0.0, 0.0, _, _))   % IMG unchanged
 
 ### Overlay contours from Phase 4
 
-```clausal
+```seam
 imread("shapes.png", imread_grayscale, IMG),
 threshold(IMG, 128.0, 255.0, thresh_binary, _, BIN),
 find_contours(BIN, retr_external, chain_approx_simple, CS, _),

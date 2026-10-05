@@ -1,6 +1,6 @@
 # Scryer Prolog Embedding
 
-Clausal includes an embedded [Scryer Prolog](https://github.com/mthom/scryer-prolog) engine via a PyO3/Rust extension. This gives you an in-process, ISO-conformant Prolog engine that you can load `.clausal` or `.pl` programs into and query with lazy iteration.
+Clausal Prolog includes an embedded [Scryer Prolog](https://github.com/mthom/scryer-prolog) engine via a PyO3/Rust extension. This gives you an in-process, ISO-conformant Prolog engine that you can load seam source or `.pl` programs into and query with lazy iteration.
 
 ## About Scryer Prolog
 
@@ -8,13 +8,13 @@ Clausal includes an embedded [Scryer Prolog](https://github.com/mthom/scryer-pro
 
 Scryer is built on a proper WAM (Warren Abstract Machine) with a focus on getting the foundations right: sound unification, correct arithmetic, first-class constraints (CLP(Z), CLP(B)), tabling, and a clean library ecosystem. It supports features like rational trees, attributed variables, and well-founded semantics out of the box.
 
-By embedding Scryer in-process, clausal gives you access to a production-quality ISO Prolog engine alongside the native Python-integrated engine — the best of both worlds.
+By embedding Scryer in-process, Clausal Prolog gives you access to a production-quality ISO Prolog engine alongside the native Python-integrated engine — the best of both worlds.
 
 ---
 
 ## when to use Scryer vs the native engine
 
-Clausal's **native engine** is tightly integrated with Python: predicates are Python classes, variables are Python objects, unification and backtracking use Python's own runtime. This is the right choice for most programs.
+Clausal Prolog's **native engine** is tightly integrated with Python: predicates are Python classes, variables are Python objects, unification and backtracking use Python's own runtime. This is the right choice for most programs.
 
 The **Scryer embedding** is for when you need:
 
@@ -23,13 +23,13 @@ The **Scryer embedding** is for when you need:
 - **Scryer's library ecosystem** — tabling, DCGs, `library(lists)`, `library(between)`, `library(assoc)`, and more
 - **Validation** — run the same program on both engines to cross-check results
 
-The two engines are separate worlds connected by Clausal's translation pipeline. You cannot unify a native Clausal `Var` with a Scryer variable directly.
+The two engines are separate worlds connected by Clausal Prolog's translation pipeline. You cannot unify a native `Var` with a Scryer variable directly.
 
 !!! note "Scryer embedding vs `.pl` import"
 
-    Clausal offers two ways to run Prolog code:
+    Clausal Prolog offers two ways to run Prolog code:
 
-    - **[Importing `.pl` files](importing_prolog.md)** translates Prolog to Clausal syntax and runs it on the native engine. Its predicates become rows in the module's Database, bound to predicate handles and called like any other Clausal predicate (from Python, with `solve(goal, module=m)`). Best for most programs.
+    - **[Importing `.pl` files](importing_prolog.md)** translates Prolog to seam source and runs it on the native engine. Its predicates become rows in the module's Database, bound to predicate handles and called like any other predicate (from Python, with `solve(goal, module=m)`). Best for most programs.
     - **Scryer embedding** (this page) runs Prolog on an actual ISO Prolog engine in-process. Best when you need Scryer's native constraint solvers, its library ecosystem, or strict ISO conformance.
     - **[Trealla embedding](trealla.md)** is a lighter-weight alternative — faster startup, smaller footprint, but no tabling.
 
@@ -122,7 +122,7 @@ s.query_all("likes(X, Y).")
 # [{'X': 'alice', 'Y': 'bob'}, {'X': 'bob', 'Y': 'carol'}]
 ```
 
-### Clausal source
+### Seam source
 
 ```python
 s.consult_clausal("""
@@ -137,7 +137,7 @@ s.query_all("reach(1, X).")
 # [{'X': 2}, {'X': 3}, {'X': 4}]
 ```
 
-`consult_clausal` translates the `.clausal` source to Prolog via `clausal_source_to_prolog` with the Scryer dialect, then loads it. All the usual translation rules apply: predicate names cross unchanged, `eval_/2` becomes `is`, `<=` becomes `=<`, etc.
+`consult_clausal` translates seam (`.seam`) source text to Prolog via `clausal_source_to_prolog` with the Scryer dialect, then loads it. All the usual translation rules apply: predicate names cross unchanged, `eval_/2` becomes `is`, `<=` becomes `=<`, etc.
 
 ### Files
 
@@ -149,7 +149,7 @@ s.query_one("fib(10, R).")
 s.consult_file("my_library.pl")
 ```
 
-`consult_file` auto-detects the file extension: `.clausal` files are translated; `.pl` files are loaded as raw Prolog. Module declarations (`:- module(...)`) in translated `.clausal` files are stripped so predicates land in the `user` module.
+`consult_file` picks by file extension: a `.clausal` path is run through the seam translator; any other file (`.pl`, and currently `.seam` too) is loaded as raw Prolog. Module declarations (`:- module(...)`) in translated files are stripped so predicates land in the `user` module.
 
 ---
 
@@ -273,10 +273,10 @@ except _scryer_ext.ScryerError as e:
 
 ## Relationship to the Prolog translation pipeline
 
-The Scryer embedding sits on top of Clausal's existing [Prolog translation](prolog_translation.md) infrastructure:
+The Scryer embedding sits on top of Clausal Prolog's existing [Prolog translation](prolog_translation.md) infrastructure:
 
 ```
-.clausal source → clausal_source_to_prolog(dialect=Scryer) → Prolog text → Scryer machine
+seam source → clausal_source_to_prolog(dialect=Scryer) → Prolog text → Scryer machine
 ```
 
 All translation features work: naming conventions, operator mapping, library remapping (e.g. `clausal.logic.clpfd` → `library(clpz)`), tabling directives. The `Dialect.scryer()` configuration handles Scryer-specific differences automatically.
@@ -340,6 +340,6 @@ Choose **Scryer** for session isolation, tabling, rational numbers, and strict I
 
 - **Machine is not thread-safe.** Scryer's `Machine` uses `Rc<>` internally and must stay on one thread. Under Python's free-threading mode (3.13+), do not share a `Scryer` session across threads.
 - **One query at a time.** While iterating over solutions, no other operations on the session are possible. Close or exhaust the iterator first.
-- **No live state bridge.** You cannot share logic variables between the native Clausal engine and Scryer. They are separate runtimes.
+- **No live state bridge.** You cannot share logic variables between the native Clausal Prolog engine and Scryer. They are separate runtimes.
 - **Bootstrap cost.** Each `Scryer()` takes ~200ms to create. Reuse sessions rather than creating per-query.
 - **`consult` replaces clauses.** Both `consult_string` and `load_string` replace earlier clauses for the same predicate. Use `:- dynamic` and `assertz/1` for accumulation.

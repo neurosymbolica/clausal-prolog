@@ -2,7 +2,7 @@
 
 Breaking: these predicate names were TitleCase (Python class-style),
 which the engine's TitleCase lint rejects in functor position --
-Clausal code could not call them by name. They are renamed to
+Clausal Prolog code could not call them by name. They are renamed to
 lower_snake_case, matching clausal-jax / clausal-torch convention.
 Acronyms collapse to one lowercase word (e.g. `FFT` -> `fft`,
 `KMeans` -> `k_means`). Two names keep a manual spelling because the

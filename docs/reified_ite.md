@@ -1,16 +1,17 @@
-# Clausal — Reified If-Then-Else
+# Clausal Prolog — Reified If-Then-Else
 
 ## Overview
 
-Clausal provides a **reified if-then-else** based on Neumerkel & Kral's `if_/3` ([arXiv:1607.01590](https://arxiv.org/abs/1607.01590)). Unlike Prolog's committed-choice `(->)/2`, reified ITE is **monotonic**: adding constraints can only restrict, never lose solutions. This is the same philosophy behind Clausal's use of [`dif/2`](constraints.md) instead of `\=`, and [CLP(ℤ)](constraints.md#clp-integer-constraints) (`==`) instead of ISO `'is'/2` arithmetic (see [Arithmetic](arithmetic.md)).
+Clausal Prolog provides a **reified if-then-else** based on Neumerkel & Kral's `if_/3` ([arXiv:1607.01590](https://arxiv.org/abs/1607.01590)). Unlike Prolog's committed-choice `(->)/2`, reified ITE is **monotonic**: adding constraints can only restrict, never lose solutions. This is the same philosophy behind the use of [`dif/2`](constraints.md) instead of `\=`, and, in the seam, [CLP(ℤ)](constraints.md#clp-integer-constraints) (`==`) instead of ISO `'is'/2` arithmetic (see [Arithmetic](arithmetic.md)).
 
-Clausal has no `!/0` (cut), no `(->)/2` (committed choice), and no `(*->)/2` (soft cut). The reified ITE is the only branching construct.
+Clausal Prolog has no `!/0` (cut), no `(->)/2` (committed choice), and no `(*->)/2` (soft cut). The reified ITE is the only branching construct.
 
 ---
 
 ## Syntax
 
-In `.clausal` files, use the `if_` function call:
+In seam (`.seam`) files, use the `if_` function call (in [Clausal Prolog](clausal_prolog.md),
+load `library(reif)` and write `if_(X = a, Then, Else)`):
 
 ```seam
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:if_signature"
@@ -79,7 +80,7 @@ as in Scryer. The seam's `if_` has the same meaning (see above): a .pl
 ### The old spelling, `If/3`
 
 `if_` was once spelled `If`.  That spelling is TitleCase, which has no role in
-Clausal code, so a file carrying it no longer loads: the TitleCase lint raises
+seam code, so a file carrying it no longer loads: the TitleCase lint raises
 a located `SyntaxError` at the first `If(...)` naming the rewrite
 (`If` -> `if_`).  Nothing in the library emits it: the
 [reifier](reflection.md)'s renderer writes `if_`, so a round-trip through
@@ -273,10 +274,10 @@ memberchk(X, [1,2]), X = 2.   % fails! memberchk commits to X=1 (Prolog)
 
 Goal reordering changes answers — a fundamental soundness problem. Even "soft cut" `(*->)/2` has the same issues.
 
-Clausal avoids this entirely:
+Clausal Prolog avoids this entirely:
 
 - **`if_` requires a reifiable condition**: ground cases are deterministic (no choicepoints), undetermined cases explore both branches with proper constraints, and a closure's every answer is explored.
-- **A plain goal is not a condition**: it is refused at load time rather than run as a soft cut.
+- **A plain goal is not a condition**: the seam refuses it at load time rather than run it as a soft cut; Clausal Prolog's `if_/3` calls it with one more argument (the truth value), as library(reif) does.
 - **Users who want first-solution commitment** use `once()` explicitly.
 
 The result is a system where goal reordering is always safe and adding constraints never loses solutions.
@@ -321,9 +322,9 @@ Key properties:
     - **Non-reifiable conditions** : refused at load time (`tests/iso_l3/test_seam_if_requires_reifiable.py`)
     - **Control flow** (6): no-else (conjunction), nested ITE, binding preservation, conjunction body
     - **dif interaction** (2): pre-existing dif constraint, undetermined with compatible dif
-    - **Import integration** (5): `.clausal` file with ITE, memberd ground/absent/unbound/no-duplicates
-    - **`once()` tests** (12): first solution only, failing goal, continuation backtracking, binding preservation, once-inside-if_, `.clausal` file integration — simple + trampoline modes
-    - **`once()` .clausal integration** (1): `once_member.seam` fixture
+    - **Import integration** (5): `.seam` file with ITE, memberd ground/absent/unbound/no-duplicates
+    - **`once()` tests** (12): first solution only, failing goal, continuation backtracking, binding preservation, once-inside-if_, `.seam` file integration — simple + trampoline modes
+    - **`once()` `.seam` integration** (1): `once_member.seam` fixture
 
 ---
 

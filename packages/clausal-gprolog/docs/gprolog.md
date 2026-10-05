@@ -1,6 +1,6 @@
 # GNU Prolog Embedding
 
-Clausal includes an embedded [GNU Prolog](http://www.gprolog.org) engine via a Python C extension linked directly against `libgprolog`. This gives you an in-process Prolog engine with native-code compilation and built-in finite domain constraint solving.
+Clausal Prolog includes an embedded [GNU Prolog](http://www.gprolog.org) engine via a Python C extension linked directly against `libgprolog`. This gives you an in-process Prolog engine with native-code compilation and built-in finite domain constraint solving.
 
 ## About GNU Prolog
 
@@ -13,13 +13,13 @@ GNU Prolog is notable for:
 - **ISO conformance** — strong adherence to the ISO Prolog standard
 - **Lightweight** — fast startup, small memory footprint
 
-By embedding GNU Prolog in-process, clausal gives you access to a fast, constraint-capable Prolog engine alongside the native Python-integrated engine and the [Scryer embedding](scryer.md).
+By embedding GNU Prolog in-process, Clausal Prolog gives you access to a fast, constraint-capable Prolog engine alongside the native Python-integrated engine and the [Scryer embedding](scryer.md).
 
 ---
 
 ## When to use GNU Prolog vs other engines
 
-Clausal's **native engine** is tightly integrated with Python. This is the right choice for most programs.
+Clausal Prolog's **native engine** is tightly integrated with Python. This is the right choice for most programs.
 
 The **GNU Prolog embedding** is for when you need:
 
@@ -37,9 +37,9 @@ The **[Scryer embedding](scryer.md)** is better when you need:
 
 !!! note "GNU Prolog embedding vs `.pl` import"
 
-    Clausal offers three ways to run Prolog code:
+    Clausal Prolog offers three ways to run Prolog code:
 
-    - **[Importing `.pl` files](importing_prolog.md)** translates Prolog to Clausal syntax and runs it on the native engine.
+    - **[Importing `.pl` files](importing_prolog.md)** translates Prolog to seam source and runs it on the native engine.
     - **[Scryer embedding](scryer.md)** runs Prolog on an ISO Prolog engine in-process.
     - **GNU Prolog embedding** (this page) runs Prolog on a native-code Prolog engine with built-in FD constraints.
 
@@ -142,7 +142,7 @@ g.query_all("likes(X, Y).")
 # [{'X': 'alice', 'Y': 'bob'}, {'X': 'bob', 'Y': 'carol'}]
 ```
 
-### Clausal source
+### Seam source
 
 ```python
 g.consult_clausal("""
@@ -157,7 +157,7 @@ g.query_all("reach(1, X).")
 # [{'X': 2}, {'X': 3}, {'X': 4}]
 ```
 
-`consult_clausal` translates the `.clausal` source to Prolog via `clausal_source_to_prolog` with the GNU Prolog dialect, then loads it. Module directives are automatically stripped since GNU Prolog has no module system.
+`consult_clausal` translates seam (`.seam`) source text to Prolog via `clausal_source_to_prolog` with the GNU Prolog dialect, then loads it. Module directives are automatically stripped since GNU Prolog has no module system.
 
 ### Files
 
@@ -169,7 +169,7 @@ g.query_one("fib(10, R).")
 g.consult_file("my_library.pl")
 ```
 
-`consult_file` auto-detects the file extension: `.clausal` files are translated using `Dialect.gprolog()`; `.pl` files are loaded as raw Prolog.
+`consult_file` picks by file extension: a `.clausal` path is run through the seam translator with `Dialect.gprolog()`; any other file (`.pl`, and currently `.seam` too) is loaded as raw Prolog.
 
 ---
 
@@ -265,11 +265,11 @@ with GnuProlog() as g:
 | `fd_sup(X, Max)` | Get maximum of X's domain |
 | `fd_size(X, Size)` | Get domain size |
 
-### Constraint mapping from Clausal
+### Constraint mapping from seam source
 
-When using `consult_clausal()`, the translation pipeline maps Clausal constraint names to GNU Prolog equivalents:
+When using `consult_clausal()`, the translation pipeline maps seam constraint names to GNU Prolog equivalents:
 
-| Clausal | GNU Prolog |
+| Seam | GNU Prolog |
 |---|---|
 | `AllDifferent(...)` | `fd_all_different(...)` |
 | `Label(...)` | `fd_labeling(...)` |
@@ -313,10 +313,10 @@ except _gprolog_ext.GnuPrologError as e:
 
 ## Relationship to the Prolog translation pipeline
 
-The GNU Prolog embedding sits on top of Clausal's existing [Prolog translation](prolog_translation.md) infrastructure:
+The GNU Prolog embedding sits on top of Clausal Prolog's existing [Prolog translation](prolog_translation.md) infrastructure:
 
 ```
-.clausal source → clausal_source_to_prolog(dialect=gprolog) → Prolog text → GNU Prolog engine
+seam source → clausal_source_to_prolog(dialect=gprolog) → Prolog text → GNU Prolog engine
 ```
 
 The `Dialect.gprolog()` configuration handles GNU Prolog-specific differences:
@@ -335,7 +335,7 @@ The `Dialect.gprolog()` configuration handles GNU Prolog-specific differences:
 - **No tabling.** GNU Prolog does not support tabling/memoization. Recursive predicates that need tabling should use the Scryer embedding.
 - **No CLP(B).** Boolean constraint solving is not available. Use Scryer for CLP(B).
 - **One query at a time.** While iterating over solutions, no other operations on the session are possible.
-- **No live state bridge.** You cannot share logic variables between the native Clausal engine and GNU Prolog.
+- **No live state bridge.** You cannot share logic variables between the native Clausal Prolog engine and GNU Prolog.
 - **`consult_string` uses temp files.** Since GNU Prolog only consults from files, string sources are written to temporary files.
 - **Must compile GNU Prolog with `--disable-regs` and `-fPIC`.** Standard installs use hardware register mapping which crashes when loaded as a shared library inside Python.
 - **`pl2wam` must be on PATH.** GNU Prolog's `consult/1` compiles Prolog source to native code at runtime, requiring the `pl2wam` compiler.

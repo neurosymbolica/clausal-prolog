@@ -1,18 +1,18 @@
 # scipy.special — Mathematical Special Functions
 
-The `scipy_special` module wraps [`scipy.special`](https://docs.scipy.org/doc/scipy/reference/special.html) as Clausal predicates. Most predicates are **pure functions** (Tier 1): they accept scalars or NumPy arrays, broadcast automatically, and unify the last argument with the result. Several predicates are **bidirectional relations** that dispatch on argument [groundness](indexing.md), supporting both forward evaluation and backward inversion.
+The `scipy_special` module wraps [`scipy.special`](https://docs.scipy.org/doc/scipy/reference/special.html) as Clausal Prolog predicates. Most predicates are **pure functions** (Tier 1): they accept scalars or NumPy arrays, broadcast automatically, and unify the last argument with the result. Several predicates are **bidirectional relations** that dispatch on argument [groundness](indexing.md), supporting both forward evaluation and backward inversion.
 
 ---
 
 ## Import
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:import"
 ```
 
 Or via the canonical `py.*` path:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:import_ex2"
 ```
 
@@ -20,9 +20,9 @@ Or via the canonical `py.*` path:
 
 ## Naming conventions
 
-Predicate names follow Clausal conventions (TitleCase, readable), not scipy's terse abbreviation style:
+Predicate names follow Clausal Prolog conventions (TitleCase, readable), not scipy's terse abbreviation style:
 
-| Module name | Clausal name |
+| Module name | Clausal Prolog name |
 |---|---|
 | `scipy.special.gamma` | `gamma` |
 | `scipy.special.gammaln` | `gamma_log` |
@@ -62,13 +62,13 @@ Predicate names follow Clausal conventions (TitleCase, readable), not scipy's te
 
 ### gamma and related
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:gamma_and_related"
 ```
 
 Example:
 
-```clausal
+```seam
 compute_coefficients(N, K, COEFF) <- (
     comb(N, K, COEFF),
     ++print(f"C({N},{K}) = {COEFF}")
@@ -81,13 +81,13 @@ compute_coefficients(N, K, COEFF) <- (
 
 These predicates are **bidirectional relations**: they dispatch on argument groundness, running forward or backward depending on which arguments are bound.
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:error_functions"
 ```
 
 Example — bidirectional normal_cdf acts as both CDF and quantile function:
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:error_functions_ex2"
 ```
 
@@ -95,13 +95,13 @@ Example — bidirectional normal_cdf acts as both CDF and quantile function:
 
 ### Incomplete gamma, beta, and Box-Cox (bidirectional)
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:incomplete_gamma_beta_and_box_cox"
 ```
 
 Example — round-trip through Box-Cox transform:
 
-```clausal
+```seam
 boxcox_round_trip(LAM, X) <- (
     boxcox(LAM, X, Y),
     boxcox(LAM, X2, Y),
@@ -114,7 +114,7 @@ boxcox_round_trip(LAM, X) <- (
 
 ### bessel functions
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:bessel_functions"
 ```
 
@@ -122,7 +122,7 @@ boxcox_round_trip(LAM, X) <- (
 
 ### elliptic integrals
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:elliptic_integrals"
 ```
 
@@ -130,7 +130,7 @@ boxcox_round_trip(LAM, X) <- (
 
 ### Hypergeometric functions
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:hypergeometric_functions"
 ```
 
@@ -138,13 +138,13 @@ boxcox_round_trip(LAM, X) <- (
 
 ### Information theory
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:information_theory"
 ```
 
 Example — stable log-sum using `log_sum_exp`:
 
-```clausal
+```seam
 stable_log_prob(LOGITS, LP) <- (
     log_sum_exp(LOGITS, Z),
     LP is ++(LOGITS - float(Z))
@@ -155,7 +155,7 @@ stable_log_prob(LOGITS, LP) <- (
 
 ### Orthogonal polynomials
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:orthogonal_polynomials"
 ```
 
@@ -163,7 +163,7 @@ stable_log_prob(LOGITS, LP) <- (
 
 ### Convenience / misc
 
-```clausal
+```seam
 --8<-- "tests/fixtures/docs/scipy_special_sigs.txt:convenience_misc"
 ```
 
@@ -171,7 +171,7 @@ stable_log_prob(LOGITS, LP) <- (
 
 ## Complete example — Gaussian process kernel
 
-```clausal
+```seam
 -import_from(scipy_special, [gamma, bessel_k, bessel_j_zeros])
 
 # Matérn 5/2 covariance function value at distance D
@@ -201,4 +201,4 @@ first_antinode(ZERO) <- (
 
 ---
 
-*See also: [scipy.stats](scipy_stats.md) — statistical distributions using special functions · [Arithmetic](arithmetic.md) — Clausal built-in arithmetic.*
+*See also: [scipy.stats](scipy_stats.md) — statistical distributions using special functions · [Arithmetic](arithmetic.md) — Clausal Prolog built-in arithmetic.*

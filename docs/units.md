@@ -250,7 +250,7 @@ Used with `n(Unit)` sugar.
 | —     | `kelvin`   | `{kelvin: 1}`    | K *(clash)* |
 
 `A` and `K` are omitted as aliases — single uppercase letters are logic
-variables in Clausal.
+variables in Clausal Prolog.
 
 **Digital information base unit** (IEC 80000-13):
 
@@ -422,7 +422,7 @@ binary(X) <- (X is ++(100 * kibi * bit(1)))     # 100 Kib
 | `exbi` | 2⁶⁰    | Ei         |
 
 The IEC symbol abbreviations (`Ki`, `Mi`, `Gi`, …) start with an uppercase
-letter and are not provided as aliases — in Clausal an identifier starting with
+letter and are not provided as aliases — in Clausal Prolog an identifier starting with
 an uppercase letter is a logic variable.
 
 ---
@@ -619,7 +619,7 @@ exception but the ISO error term `error(system_error(units_mismatch), (>)/2)`.
 ## Program verification with `has_units`
 
 `has_units` goals are runtime assertions about dimensional types.  They compose
-freely with all Clausal constructs: [negation-as-failure](control.md), [`catch/3`](exceptions.md),
+freely with all Clausal Prolog constructs: [negation-as-failure](control.md), [`catch/3`](exceptions.md),
 backtracking, [constraint solving](constraints.md).
 
 The intended workflow:
@@ -669,7 +669,7 @@ See each module's documentation for details.
 - **Dimension keys are predicate objects**: the seven SI base unit predicates
   are the keys in `dims`.
 - **`A` and `K` aliases omitted**: single uppercase letters are logic
-  variables in Clausal.
+  variables in Clausal Prolog.
 - **SI prefixes are plain numbers**: `kilo = 1e3`, `milli = 1e-3`, etc.
   They cannot appear inside `n(Unit)` parentheses; use multiplication in
   a `++()` escape instead.
@@ -684,4 +684,4 @@ See each module's documentation for details.
 
 ---
 
-*See also: [Currency](currency.md) — exact-decimal money built on this units machinery · [Arithmetic](arithmetic.md) — numeric operations in Clausal · [Python Interop](python_integration.md) — `++()` escape for direct Pint operations.*
+*See also: [Currency](currency.md) — exact-decimal money built on this units machinery · [Arithmetic](arithmetic.md) — numeric operations in Clausal Prolog · [Python Interop](python_integration.md) — `++()` escape for direct Pint operations.*

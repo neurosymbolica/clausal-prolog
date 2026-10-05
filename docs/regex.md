@@ -1,6 +1,6 @@
 # Regex Module
 
-The `regex` standard library module provides regular expression predicates for `.clausal` files. It wraps Python's `re` module with a relational interface, including auto-binding of named capture groups to logic variables.
+The `regex` standard library module provides regular expression predicates for seam (`.seam`) files. It wraps Python's `re` module with a relational interface, including auto-binding of named capture groups to logic variables.
 
 Everything on this page is **text**: a pattern is text, a subject is text, and
 a captured group comes back as a **string** — never an atom. A `"…"`
@@ -173,7 +173,7 @@ test("findall single group is a string") <- (
 
 ## Auto-Binding
 
-Named groups whose names are spelled like clause [variables](syntax.md) — capital-initial (`YEAR`, `Year`) or leading-underscore (`_rest`) — are automatically bound to the same-named variable at compile time (via [goal expansion](term_expansion.md)). This is the key feature that makes regex feel native in Clausal. A lowercase group name is an atom spelling, so it stays regex-only and binds nothing.
+Named groups whose names are spelled like clause [variables](syntax.md) — capital-initial (`YEAR`, `Year`) or leading-underscore (`_rest`) — are automatically bound to the same-named variable at compile time (via [goal expansion](term_expansion.md)). This is the key feature that makes regex feel native in seam source. A lowercase group name is an atom spelling, so it stays regex-only and binds nothing.
 
 ### Capital-Initial Groups
 

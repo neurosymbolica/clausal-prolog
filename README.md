@@ -67,6 +67,7 @@ building from source).
 ```prolog
 % family.clausal
 :- module(family, [grandparent/2, fib/2, path/2]).
+:- use_module(library(clpz)).
 
 parent(tom, bob).
 parent(tom, liz).
@@ -75,13 +76,14 @@ parent(bob, pat).
 
 grandparent(X, Z) :- parent(X, Y), parent(Y, Z).
 
+% CLP(Z) arithmetic: fib/2 runs in both directions.
 fib(0, 0).
 fib(1, 1).
 fib(N, F) :-
-    N > 1,
-    N1 is N - 1, N2 is N - 2,
-    fib(N1, F1), fib(N2, F2),
-    F is F1 + F2.
+    N #> 1,
+    N1 #= N - 1, N2 #= N - 2,
+    F #>= N1, F #= F1 + F2,
+    fib(N1, F1), fib(N2, F2).
 
 % Tabling terminates on the cycle.
 :- table(path/2).
@@ -93,6 +95,7 @@ path(X, Y) :- edge(X, Z), path(Z, Y).
 
 test("tom's grandchildren") :- grandparent(tom, ann), grandparent(tom, pat).
 test("fib(10) = 55") :- fib(10, 55).
+test("which fib is 55?") :- once(fib(N, 55)), N == 10.
 test("path reaches the whole cycle") :- findall(Y, path(1, Y), Ys), msort(Ys, [1, 2, 3]).
 test("tom has no grandparent", fail) :- grandparent(_, tom).
 

@@ -1,6 +1,6 @@
 # Predicates & Rules
 
-Predicates are the core building block of Clausal programs. A predicate defines a **relation** between its arguments — it describes when something is true. Each predicate is defined by one or more **clauses**: either facts (unconditionally true) or rules (true when certain conditions hold). See [Thinking Relationally](thinking_relationally.md) for a deeper treatment of this idea.
+Predicates are the core building block of Clausal Prolog programs. A predicate defines a **relation** between its arguments — it describes when something is true. Each predicate is defined by one or more **clauses**: either facts (unconditionally true) or rules (true when certain conditions hold). See [Thinking Relationally](thinking_relationally.md) for a deeper treatment of this idea.
 
 ---
 
@@ -47,7 +47,7 @@ color('green', 'cool'),
 
 Facts define the base data of your program. Think of them as rows in a database table.
 
-Multiple facts for the same predicate are logical alternatives. Clausal searches for those that unify with the goal, in source order. `color(X, 'cool')` unifies with `color('blue', 'cool')` first, then `color('green', 'cool')`.
+Multiple facts for the same predicate are logical alternatives. The engine searches for those that unify with the goal, in source order. `color(X, 'cool')` unifies with `color('blue', 'cool')` first, then `color('green', 'cool')`.
 
 A quoted `'red'` is an atom anywhere. A bare `red` must be declared first
 (`-private([red, warm])`, or listed in `-module`) — see
@@ -78,13 +78,13 @@ friend_of_friend(A, C) <- (
 )
 ```
 
-The conditions in the body must all hold for the head to hold. If a condition does not hold, Clausal explores the remaining clause alternatives.
+The conditions in the body must all hold for the head to hold. If a condition does not hold, the engine explores the remaining clause alternatives.
 
 ---
 
 ## Clause Alternatives
 
-A predicate can have multiple clauses — facts and rules mixed freely. These are logical alternatives; Clausal searches for those whose heads unify with the goal, in source order:
+A predicate can have multiple clauses — facts and rules mixed freely. These are logical alternatives; the engine searches for those whose heads unify with the goal, in source order:
 
 ```seam
 factorial(0, 1),
@@ -112,7 +112,7 @@ The condition `N > 0` ensures the first clause only holds for positive numbers. 
 
 ### Clause Ordering
 
-when multiple clause heads unify with the goal, Clausal explores them in source order:
+when multiple clause heads unify with the goal, the engine explores them in source order:
 
 ```seam
 maximum(X, Y, X) <- (X >= Y)
@@ -122,7 +122,7 @@ test("max 3 5") <- (maximum(3, 5, R), R == 5)
 test("max 7 2") <- (maximum(7, 2, R), R == 7)
 ```
 
-For `maximum(3, 5, R)`: the first clause's condition `3 >= 5` does not hold, so Clausal explores the second clause, which holds with `R = 5`.
+For `maximum(3, 5, R)`: the first clause's condition `3 >= 5` does not hold, so the engine explores the second clause, which holds with `R = 5`.
 
 ---
 
@@ -163,7 +163,7 @@ ancestor(X, Y, N) <- (
 
 `ancestor('alice', 'dave', N)` yields `N = 3`.
 
-This pattern — base case as a fact, recursive case as a rule — is the fundamental building block of Clausal programs.
+This pattern — base case as a fact, recursive case as a rule — is the fundamental building block of Clausal Prolog programs.
 
 ---
 
@@ -182,7 +182,7 @@ test("length 0") <- length([], 0)
 test("length 3") <- (length([1, 2, 3], N), N == 3)
 ```
 
-For [list](lists.md) relations, the base clause typically holds for the empty list `[]`, and the recursive clause relates a non-empty list `[HEAD, *TAIL]` to its parts (Clausal uses `*` for the tail, like Python).
+For [list](lists.md) relations, the base clause typically holds for the empty list `[]`, and the recursive clause relates a non-empty list `[HEAD, *TAIL]` to its parts (the seam uses `*` for the tail, like Python).
 
 ---
 
@@ -206,7 +206,7 @@ helper(X, Y) <- (Y == X + 1)
 Use `-private` when a predicate is an implementation detail that other modules should not depend on.
 
 !!! warning "`-private` is advisory, not enforced"
-    A `-private` predicate is **still importable**. `-import_from(this_module, [helper])` succeeds and binds this module's `helper` predicate (its handle). Clausal has no access control — the marker discourages coupling, it does not prevent it, exactly like a leading underscore in Python. See [Directives § `-private`](directives.md#-private) for the full meaning of the directive.
+    A `-private` predicate is **still importable**. `-import_from(this_module, [helper])` succeeds and binds this module's `helper` predicate (its handle). Clausal Prolog has no access control — the marker discourages coupling, it does not prevent it, exactly like a leading underscore in Python. See [Directives § `-private`](directives.md#-private) for the full meaning of the directive.
 
 ---
 
@@ -274,7 +274,7 @@ as one:
 
 ```
 citation takes 3 arguments, but this call passes 2
-  citation/3 is defined at citations.clausal:14.
+  citation/3 is defined at citations.seam:14.
   -> pass 3 arguments to citation, or define citation/2: a citation clause
      head with 2 arguments is a procedure of its own, unrelated to citation/3
      (as in ISO).
@@ -291,9 +291,10 @@ and the message lists what is reachable — see [Importing](import.md).
 
 ---
 
-## Defining Predicates in `.clausal` Files
+## Defining Predicates in `.seam` Files
 
-Clausal files use [Python syntax](syntax.md) with logic programming semantics:
+Seam files use [Python syntax](syntax.md) with logic programming semantics
+(for the ISO-syntax `.clausal` surface, see [Clausal Prolog](clausal_prolog.md)):
 
 ```seam
 # Comments start with #
@@ -312,13 +313,13 @@ nice_color(C) <- (
 )
 ```
 
-Files are loaded via Python's [import system](import.md). `import my_module` loads `my_module.clausal` (or `my_module.seam`) and compiles all predicates.
+Files are loaded via Python's [import system](import.md). `import my_module` loads `my_module.seam` and compiles all predicates (a `my_module.clausal` or `my_module.pl` loads the same way; in one directory `.seam` beats `.clausal`, which beats `.pl`).
 
 ---
 
 ## Python API (advanced)
 
-> For most use cases, define predicates in `.clausal`/`.seam` files and query them with the goal-position seam (`for X in --pred(X):`) from Python hosted in a `.seam` file. This section covers the lower-level API for a plain `.py` file, which cannot use `--`, and for goals built at runtime. The 1.0 surface is listed in [Public API](public-api.md).
+> For most use cases, define predicates in `.seam` files and query them with the goal-position seam (`for X in --pred(X):`) from Python hosted in a `.seam` file. This section covers the lower-level API for a plain `.py` file, which cannot use `--`, and for goals built at runtime. The 1.0 surface is listed in [Public API](public-api.md).
 
 ### Predicates from Python
 

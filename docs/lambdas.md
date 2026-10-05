@@ -1,6 +1,6 @@
 # Lambdas (Goal Closures)
 
-Lambdas are anonymous clauses that can be passed as arguments to [higher-order predicates](higher_order.md). They use the same `head <- body` arrow syntax as clause definitions. Variables from the enclosing clause are captured implicitly — no special declarations are needed. Lambdas are the primary mechanism for higher-order logic programming in clausal.
+Lambdas are anonymous clauses that can be passed as arguments to [higher-order predicates](higher_order.md). They use the same `head <- body` arrow syntax as clause definitions. Variables from the enclosing clause are captured implicitly — no special declarations are needed. Lambdas are the primary mechanism for higher-order logic programming in seam source.
 
 The implementation lives in `clausal/logic/compiler/` (codegen), `clausal/templating/term_rewriting.py` (term transformation), and `clausal/logic/builtins/` (`call_goal` builtins).
 
@@ -46,7 +46,7 @@ double(X, Y) <- (Y == X + X)
 apply_double(V, R) <- call_goal((X <- (double(X, R))), V)
 ```
 
-Python's `lambda` syntax is not supported in `.clausal` files.
+Python's `lambda` syntax is not supported in `.seam` files.
 
 ---
 
@@ -247,7 +247,7 @@ All higher-order list predicates use **committed choice** — they take the firs
 
 ??? example "Python API"
 
-    Lambdas are a `.clausal`/`.seam` file feature — they are compiled from source by the term transformer and compiler. From pure Python you can construct the equivalent AST tree manually (internal API, not part of [the 1.0 surface](public-api.md)):
+    Lambdas are a `.seam` file feature — they are compiled from source by the term transformer and compiler. From pure Python you can construct the equivalent AST tree manually (internal API, not part of [the 1.0 surface](public-api.md)):
 
     ```python
     from clausal.pythonic_ast import nodes as sa
@@ -261,7 +261,7 @@ All higher-order list predicates use **committed choice** — they take the firs
     )
     ```
 
-    In practice, lambdas are most naturally written in `.clausal` files where the term transformer handles the translation automatically.
+    In practice, lambdas are most naturally written in `.seam` files where the term transformer handles the translation automatically.
 
     ---
 
@@ -273,7 +273,7 @@ All higher-order list predicates use **committed choice** — they take the firs
     - **Compiler**: produces FunctionDef, params as function args, captured vars as closure refs, conjunction flattening
     - **Runtime**: `call_goal/1..8` and `call/1..8` with zero to seven extra-arg closures, failing closure, multi-solution closure
     - **Compiled execution**: lambda with arithmetic body, captured var, unification body, failing body, conjunction body
-    - **Import integration**: `.clausal` file with unification, captured head var, conjunction, zero-arg, predicate calls, multi-solution, `==` arithmetic
+    - **Import integration**: `.seam` file with unification, captured head var, conjunction, zero-arg, predicate calls, multi-solution, `==` arithmetic
     - **Higher-order builtins**: maplist/2 (all succeed, one fails, empty list, non-list, non-callable), maplist/3 (double, empty, fail mid-list), include/3 (filter positive, all/none match, empty), exclude/3 (mirror of include), foldl/4 (sum, product, empty, fail mid-fold)
 
 ---

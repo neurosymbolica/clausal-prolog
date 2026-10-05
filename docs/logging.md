@@ -1,8 +1,8 @@
-# Clausal — Structured Logging (`log` module)
+# Clausal Prolog — Structured Logging (`log` module)
 
 ## Overview
 
-The `log` module provides structured logging predicates backed by Python's `logging` module. It exposes logger creation, leveled log output, handler/formatter configuration, and level management as Clausal predicates.
+The `log` module provides structured logging predicates backed by Python's `logging` module. It exposes logger creation, leveled log output, handler/formatter configuration, and level management as Clausal Prolog predicates.
 
 Since Python's `logging` module is the backend, all of Python's handler ecosystem is available — file rotation, syslog, SMTP, JSON formatters, etc.
 
@@ -116,7 +116,7 @@ log at an arbitrary level. `Level` is a string (`"debug"`, `"info"`, etc.) or an
 
 ### Messages and f-strings
 
-A message is a string or an atom (an f-string is a string, like `"..."`). Clausal's [f-string support](io.md) means interpolation works naturally:
+A message is a string or an atom (an f-string is a string, like `"..."`). The seam's [f-string support](io.md) means interpolation works naturally:
 
 ```seam
 --8<-- "tests/fixtures/docs/logging_sigs.txt:fstring_example"
@@ -257,10 +257,10 @@ Call `logging.basicConfig()` with a dict of options (`{level: "info"}`, keys dec
 ??? abstract "Design decisions"
 
     1. **Logger objects are opaque Python values** — passed around via unification, not inspectable as terms.
-    2. **Logging predicates always succeed** — they are side effects. Level filtering happens inside Python's logging; the Clausal predicate succeeds regardless.
+    2. **Logging predicates always succeed** — they are side effects. Level filtering happens inside Python's logging; the predicate succeeds regardless.
     3. **`is_enabled_for/2` is the exception** — it succeeds or fails based on level, useful for guarding expensive message construction.
     4. **Level names are strings** — maps to Python constants internally. Both `"warn"`/`"warning"` and `"fatal"`/`"critical"` are accepted.
-    5. **f-string messages** — no special formatting needed; Clausal's f-string support handles interpolation with auto-deref of logic variables.
+    5. **f-string messages** — no special formatting needed; the seam's f-string support handles interpolation with auto-deref of logic variables.
     6. **Module name is `log`** — avoids shadowing Python's `logging` stdlib module in the import machinery.
 
 ---

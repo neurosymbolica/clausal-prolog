@@ -1,4 +1,4 @@
-# Clausal — Predicate Indexing
+# Clausal Prolog — Predicate Indexing
 
 ## Problem
 
@@ -169,7 +169,7 @@ Querying `color('blue', X)` without indexing tries all 203 match blocks. With fi
 
     ### Bucket head lifting
 
-    The `.clausal` term rewriter normalises every clause head to all-Var arguments, moving ground values into body `Unify` goals. A fact `color('red', 'warm')` is stored as:
+    The `.seam` term rewriter normalises every clause head to all-Var arguments, moving ground values into body `Unify` goals. A fact `color('red', 'warm')` is stored as:
 
     ```
     head = ('color', Var(_5), Var(_6))

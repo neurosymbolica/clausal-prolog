@@ -8,14 +8,14 @@ the natural data shape for model parameters, optimiser state, and
 batched examples.
 
 This module is the relational counterpart. Leaf enumeration via
-`findall`, bijective flatten, path-based queries — every Clausal idiom
+`findall`, bijective flatten, path-based queries — every Clausal Prolog idiom
 that reads nicely against a tree of arrays.
 
 All predicates are Tier 1 pure.
 
 ## Import
 
-```clausal
+```seam
 -import_from(py.jax_tree, [
     leaf, leaf_with_path,
     tree_flatten, tree_structure, tree_leaves_list,
@@ -34,7 +34,7 @@ All predicates are Tier 1 pure.
 Nondeterministic — each leaf of `TREE`, in JAX's traversal order, is a
 solution. Combine with `findall` to collect them:
 
-```clausal
+```seam
 test("leaf enumerates flat list") <- (
     TREE is ++([1.0, 2.0, 3.0]),
     findall(L, leaf(TREE, L), LS),
@@ -45,7 +45,7 @@ test("leaf enumerates flat list") <- (
 Scalars are pytrees of depth zero — they produce a single leaf. Empty
 containers produce no leaves:
 
-```clausal
+```seam
 test("leaf on empty dict") <- (
     TREE is ++({}),
     findall(L, leaf(TREE, L), LS),
@@ -67,7 +67,7 @@ Each solution binds both the leaf and its **key-path** — a tuple of
 
 Pattern-match the path directly:
 
-```clausal
+```seam
 test("leaf_with_path exposes dict key") <- (
     TREE is ++({"a": 1.0}),
     leaf_with_path(TREE, (("key", "a"),), 1.0)
@@ -81,10 +81,10 @@ test("nested dict + list index") <- (
 
 ### `keystr(PATH, STR)`
 
-Render a Clausal-side path tuple as the same string JAX itself produces
+Render a path tuple as the same string JAX itself produces
 (`['a'][0]`, `.bias`, etc.). Useful for error messages and debug logs:
 
-```clausal
+```seam
 test("keystr dict + index") <- (
     keystr((("key", "a"), ("index", 0)), S),
     S == "['a'][0]"
@@ -102,7 +102,7 @@ token plus a flat list of leaves.
 
 **Backward** `(-TREE, +TREEDEF, +LEAVES)` — rebuilds the tree.
 
-```clausal
+```seam
 test("tree_flatten roundtrip") <- (
     TREE is ++({"a": [1.0, 2.0], "b": 3.0}),
     tree_flatten(TREE, TREEDEF, LEAVES),
@@ -115,7 +115,7 @@ The `TREEDEF` is an opaque JAX value — store it, pass it, compare it
 with `==`. The backward direction is the standard way to rebuild a
 pytree with modified leaves:
 
-```clausal
+```seam
 test("modify leaves via flatten/unflatten") <- (
     TREE is ++({"a": [1.0, 2.0], "b": 3.0}),
     tree_flatten(TREE, TREEDEF, LEAVES),
@@ -140,7 +140,7 @@ when you want one side without the other.
 Succeeds iff `LEAVES` is a flat list — i.e. nothing inside is itself a
 pytree container. Fails quietly if any element is a list/dict/tuple:
 
-```clausal
+```seam
 test("all_leaves rejects nested list") <- (
     not all_leaves([[1.0], 2.0])
 )
@@ -160,7 +160,7 @@ for guarding recursive patterns that should terminate at scalars.
 Apply the Python callable `F` to every leaf. The structure is
 preserved:
 
-```clausal
+```seam
 test("tree_map doubles leaves") <- (
     TREE is ++({"a": 1.0, "b": 2.0}),
     F is ++(lambda x: x * 2),
@@ -175,7 +175,7 @@ test("tree_map doubles leaves") <- (
 `TREES` is a **list** of trees, all sharing the same pytree structure.
 `F` is called with one argument per tree:
 
-```clausal
+```seam
 test("add matching leaves of two trees") <- (
     T1 is ++({"a": 1.0, "b": 2.0}),
     T2 is ++({"a": 10.0, "b": 20.0}),
@@ -190,7 +190,7 @@ test("add matching leaves of two trees") <- (
 
 Left-fold over leaves with accumulator `INIT`:
 
-```clausal
+```seam
 test("tree_reduce sums leaves") <- (
     TREE is ++({"a": 1.0, "b": 2.0, "c": 3.0}),
     F is ++(lambda acc, x: acc + x),
@@ -207,7 +207,7 @@ around the same `tree_map`, so the canonical predicate lives here —
 not behind any optimiser library. `py.jax_optax.apply_updates` is
 re-exported for backwards compatibility.
 
-```clausal
+```seam
 test("apply_updates on a dict pytree") <- (
     PARAMS is ++({"w": jax.numpy.array([1.0, 2.0]), "b": jax.numpy.array(0.5)}),
     UPDATES is ++({"w": jax.numpy.array([-0.1, -0.2]), "b": jax.numpy.array(-0.05)}),
@@ -223,10 +223,10 @@ behaviour.
 
 ## Idiom — `findall` over pytree leaves
 
-The Clausal sweet spot. Collect the leaves that satisfy a predicate
+The Clausal Prolog sweet spot. Collect the leaves that satisfy a predicate
 without having to flatten + filter procedurally:
 
-```clausal
+```seam
 test("leaves greater than 2") <- (
     TREE is ++({"a": 1.0, "b": [2.0, 3.0, 4.0]}),
     findall(L, (leaf(TREE, L), L > 2.0), BIG),
@@ -237,7 +237,7 @@ test("leaves greater than 2") <- (
 Combine with `element_count/2` from `py.jax` to filter by size, e.g.
 "find every parameter array larger than 1000":
 
-```clausal
+```seam
 -import_from(py.jax, [element_count])
 
 large_params(PARAMS, BIG) <- (
@@ -252,7 +252,7 @@ large_params(PARAMS, BIG) <- (
 `tree_map`, `tree_map_n`, `tree_reduce` take Python callables — build
 them inline with the standard `++()` idiom:
 
-```clausal
+```seam
 test("callable via ++()") <- (
     TREE is ++({"a": 1.0}),
     F is ++(lambda x: x * 2),
@@ -261,8 +261,8 @@ test("callable via ++()") <- (
 )
 ```
 
-Same pattern as `scipy` wrappers that take a callback. Clausal doesn't
-have first-class lambdas, so we borrow from Python.
+Same pattern as `scipy` wrappers that take a callback. Clausal Prolog doesn't
+have first-class lambdas, so seam code borrows from Python.
 
 ---
 
