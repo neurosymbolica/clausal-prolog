@@ -139,8 +139,8 @@ _CASES = [
 # is a ``("prolog", substring)`` pair.
 _PAGE_MODULE_ANCHORS = {
     ("index.md", "fibonacci"): ("prolog", ":- module(fibonacci,"),
-    ("tutorial.md", "hello"): "greeting('hello'),",
-    ("tutorial.md", "graph"): "edge('a', 'b'),",
+    ("tutorial.md", "hello"): ("prolog", ":- module(hello,"),
+    ("tutorial.md", "graph"): ("prolog", ":- module(graph,"),
 }
 
 
