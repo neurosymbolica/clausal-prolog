@@ -1,5 +1,7 @@
 # A test guard `ast.parse`s the gitignored `__transformed__` cache and fails
 
+**Status: FIXED 2026-09-19 (commit 6090d1d6).** `_class_test_offenders` skips any path under `__transformed__/` before `ast.parse`, so a populated gitignored dump cache no longer fails the guard. Pinned by tests/test_atoms_as_cells_flip.py::test_the_class_test_pin_actually_bites.
+
 **Filed 2026-09-13 by engine-lane.** Found while verifying a landing on canonical, NOT by looking
 for it. Pre-existing; nothing to do with the landing that surfaced it.
 

@@ -1,5 +1,7 @@
 # fix(A06-F009): boolean handling — C hook accepts, Python hook rejects, docs say reject
 
+**Status: FIXED 2026-09-30 (commit 4bb6a79e).** A truth value is an atom (D47), so the C hook, the ground fd_* paths and in_domain no longer treat True/False as 1/0; the hook and in_domain raise type_error(integer, true). Pinned in tests/audit_2026_07_05/test_06_clpfd.py::TestBooleanHandling (the xfail on test_ground_bool_comparison_rejected now XPASSes and can be dropped).
+
 > **DEFERRED (2026-07-07):** intentionally not implemented — direction-sensitive
 > and gated on the parked design decisions A06-D005 / A01-D001 (bool-int
 > conflation policy), which per standing mandate are the USER's call and go to a

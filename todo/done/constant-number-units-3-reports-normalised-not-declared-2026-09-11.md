@@ -1,5 +1,7 @@
 # `constant_number_units/3` reports the NORMALISED pair, not what was declared
 
+**Status: FIXED 2026-09-11 (commit 6e00bc75).** `constant_number_units/3` reports the declared pair (`30`, `day`) while `constant_value/2` remains the normalised value view; both are documented at docs/builtins.md#constant_number_units3. Pinned in tests/test_constants.py::test_constant_number_units_3_reports_the_DECLARED_pair.
+
 **Found by a downstream user 2026-09-11, hours after the predicate landed (`c4c7d6c9`).**
 Reproduced here before filing.
 

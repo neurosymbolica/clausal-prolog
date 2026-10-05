@@ -16,13 +16,13 @@ finding was culled as a false positive, no regression guard broke.
 
 ## Status (2026-07-30)
 
-**160 of 185 closed; 25 open.** The Status column below was regenerated from
+**165 of 185 closed; 20 open** (2026-10-05, counted from `done/`: four more verified done and moved to `done/` -- `fix-A06-bool-hook-divergence`, `investigate-A04-wfs-variant-resolution`, `investigate-A09-ho-committed-choice`, `investigate-A10-parked-design-decisions`; each carries its fixing commits and pinning tests; the earlier count missed `investigate-A10-imported-head-clobber`, closed 2026-08-25). Before that: **160 of 185 closed; 25 open.** The Status column below was regenerated from
 `done/` on 2026-07-30 — until then every row still read `queued`/`parked`,
 including 159 whose files had already moved, so the table read as though nothing
 had been fixed. One row was missing entirely (`fix-A06-alldiff-int64-sentinel.md`,
 added by the 2026-07-10 fix-review) and has been added.
 
-The 25 open items are 6 `fix-*` and 19 `investigate-*`. Almost all are open *by
+The 20 open items are 5 `fix-*` and 15 `investigate-*` (before 2026-10-05 the count read 25 = 6 + 19). Almost all are open *by
 decision*, not by neglect: the `fix-*` ones are gated on parked design questions
 (A06-D002/D005, A08-D001/D003), and the `investigate-*` ones are either the
 parked questions themselves or Opus-tagged design work. One exception worth
@@ -121,7 +121,7 @@ to delete; the clusters above are the collapse points.
 | `fix-A05-has-units-error-path.md` | fix | error-path | A05-F005 | A05 constraints-core | done |
 | `fix-A05-structural-eq-asymmetry-consistency.md` | fix | correctness | A05-F003 | A05 constraints-core | done |
 | `fix-A05-term-attvars-container-blindness.md` | fix | correctness | A05-F004 | A05 constraints-core | done |
-| `fix-A06-bool-hook-divergence.md` | fix | correctness | A06-F009 | A06 clpfd | queued |
+| `fix-A06-bool-hook-divergence.md` | fix | correctness | A06-F009 | A06 clpfd | done |
 | `fix-A06-capi-fdvar-duck-typing.md` | fix | memory (C) | A06-F016 | A06 clpfd | done |
 | `fix-A06-crosscutting-doc-drift.md` | fix | doc-drift | A06-F017 | A06 clpfd | done |
 | `fix-A06-element-unbounded-index.md` | fix | correctness (error-path) | A06-F005 | A06 clpfd | done |
@@ -247,7 +247,7 @@ to delete; the clusters above are the collapse points.
 | `fix-A12-eq-nonnumeric-operand.md` | fix | correctness | A12-F002 | A12 seams | done |
 | `investigate-A04-parked-design-decisions.md` | investigate (Opus) | design | A04-F011 | A04 runtime-tabling | queued |
 | `investigate-A04-slg-completion-architecture.md` | investigate (Opus) | correctness | A04-F001 | A04 runtime-tabling | done |
-| `investigate-A04-wfs-variant-resolution.md` | investigate (Opus) | correctness | A04-F003 | A04 runtime-tabling | queued |
+| `investigate-A04-wfs-variant-resolution.md` | investigate (Opus) | correctness | A04-F003 | A04 runtime-tabling | done |
 | `investigate-A05-parked-design-decisions.md` | investigate (USER) | design | A05-D001 / A05-D002 | A05 constraints-core | parked by user preference |
 | `investigate-A06-parked-design-decisions.md` | investigate (Opus) | design | A06-F018 | A06 clpfd | queued |
 | `investigate-A07-parked-design-decisions.md` | investigate (Opus) | correctness (design-gated) | A07-F003 / A07-F004 | A07 clpb-sat | queued |
@@ -257,10 +257,10 @@ to delete; the clusters above are the collapse points.
 | `investigate-A08-parked-design-decisions.md` | investigate (Opus) | design (unconfirmed impact) | A08-F018 | A08 clpqr-z3 | queued |
 | `investigate-A08-solver-store-sync-hooks.md` | investigate (Opus) | correctness | A08-F013 | A08 clpqr-z3 | queued |
 | `investigate-A09-copy-term-attrs.md` | investigate (Opus) | correctness (design-gated) | A09-F010 | A09 builtins | queued |
-| `investigate-A09-ho-committed-choice.md` | investigate (Opus) | correctness (design-gated) | A09-F004 | A09 builtins | queued |
+| `investigate-A09-ho-committed-choice.md` | investigate (Opus) | correctness (design-gated) | A09-F004 | A09 builtins | done |
 | `investigate-A09-parked-design-decisions.md` | investigate (USER) | design | A09-D001..D005 (+F022) | A09 builtins | parked by user preference |
 | `investigate-A09-runtimeerror-swallow.md` | investigate (Opus) | correctness (design-gated) | A09-F007 | A09 builtins | done |
 | `done/investigate-A10-imported-head-clobber.md` | investigate (Opus) | correctness (design-gated) | A10-F004 | A10 rewriting-import | **DONE 2026-08-25** — A10-D003 answered (load-time error); `fix/imported-functor-clause-list-2026-08-25` |
-| `investigate-A10-parked-design-decisions.md` | investigate (USER) | design | A10-D001..D004 | A10 rewriting-import | parked by user preference |
+| `investigate-A10-parked-design-decisions.md` | investigate (USER) | design | A10-D001..D004 | A10 rewriting-import | done |
 | `investigate-A11-parked-design-decisions.md` | investigate (USER) | design | A11-D001..D011 | A11 modules-interop | done |
 | `investigate-A12-tabling-answer-constraints.md` | investigate (Opus) | correctness | A12-F001 | A12 seams | queued |

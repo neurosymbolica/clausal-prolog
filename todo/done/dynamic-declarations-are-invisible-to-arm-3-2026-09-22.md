@@ -1,5 +1,7 @@
 # `-dynamic`/arity-only declarations are invisible to `field_names_for` arm 3
 
+**Status: FIXED 2026-09-23 (commit 926b51fa).** `field_names_for` is now documented as a field-names reader; declaredness is `db.declared_kind(functor, arity)`, which answers `"predicate"` for both `-dynamic(f/N)` and a bare `f/N` export entry. Pinned in tests/test_field_names_for.py::test_dynamic_only_declaration_has_no_field_names_but_IS_declared and tests/predmeta_p2/test_declaration_registry.py.
+
 **Found by:** the W4b-1 completeness census (`tools/w4b1_census`, deleted
 2026-09-26 with the PredicateMeta class it measured; in the git history at
 8b8135f0^), fix round 1,

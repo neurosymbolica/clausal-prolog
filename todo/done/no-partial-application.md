@@ -1,5 +1,7 @@
 # Clausal cannot express partial application
 
+**Status: FIXED 2026-09-25 (commit 0868c0e4).** A compound in callable position is a closure, as in Scryer: `call(add_z(10), 1, Y)` and `maplist(add_z(10), [1, 2], YS)` append the remaining arguments (YS = [11, 12]) instead of failing silently. Pinned in tests/test_call_runs_body_terms.py::test_a_runtime_cell_goal_folds_like_call_n.
+
 **Filed:** 2026-08-15, re-scoped from the silent-failure framing at the
 operator's direction: the deficiency is the MISSING CAPABILITY, not (only) how
 its absence fails. **Status: OPEN — language design.**

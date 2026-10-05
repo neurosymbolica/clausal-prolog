@@ -1,5 +1,7 @@
 # investigate(A10) [Opus]: parked design decisions — rewriting/templating/import
 
+**Status: FIXED 2026-08-25 (commits 956672fe, 4555be9a, a4269463, eb566ffb).** All four parked A10 decisions were taken as recommended and shipped: embedded-Python names are Python names, stdlib shadowing warns and defers, an imported-head clause is a load-time error, and TermExpansion q(head) patterns match item.head. Pinned in tests/audit_2026_07_05/test_10_rewriting_import.py.
+
 Per the standing user preference, these were parked rather than asked
 interactively. Full option analyses in
 `docs/superpowers/audits/2026-07-05-fable-partition/10-rewriting-import/design-questions.md`.

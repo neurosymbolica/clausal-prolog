@@ -1,5 +1,7 @@
 # clausal-scipy: package-suite failures triaged (2026-10-04)
 
+**Status: FIXED 2026-10-04 (commit dfca3ca5).** The clausal-scipy suite runs with 0 failures (1565 passed with real scipy): dims keys are unit atoms, wrong-arity calls raise F005, and `derivative/3` returns a plain dict of Python scalars.
+
 Box run on 1c5ee5a0: **26 failed**. After feat/package-followups-2026-10-04:
 **0 failed**.
 

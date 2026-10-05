@@ -1,5 +1,7 @@
 # W2 cannot "point callers at `db.row(functor, arity)`" — the detached row has no such key
 
+**Status: FIXED 2026-09-22 (commit 8124c7d4).** All seven facades are retired; sites read `db.row(f, n)`. The detached-row mode itself was later deleted with `PredicateMeta` (5d9fc36f, 2026-09-26). (The CLOSED note's `9028f9b3` is not in this history; 8124c7d4 is the landed equivalent.)
+
 Raised 2026-09-22 by engine-lane while scoping W2 of the P4 retirement
 (`implementation_plans/p4-predicatemeta-retirement-scope-2026-09-21.md`).
 **W2 should not start until this is ruled.** Measured on

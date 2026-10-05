@@ -2426,7 +2426,7 @@ def field_names_for(value, *, arity=None, db=None, namespace=None):
     """Field names for a declared functor, or None.
 
     A FIELD-NAMES reader, not a declaredness one (revised 2026-09-23,
-    todo/dynamic-declarations-are-invisible-to-arm-3-2026-09-22.md -- the
+    todo/done/dynamic-declarations-are-invisible-to-arm-3-2026-09-22.md -- the
     previous wording here claimed the opposite and was wrong for an
     arity-only declaration; see below).  ``None`` means no field names are
     known for *value* -- either because nothing is declared, OR because it

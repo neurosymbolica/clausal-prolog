@@ -1,5 +1,7 @@
 # clausal-jax: package-suite failures triaged (2026-10-04)
 
+**Status: FIXED 2026-10-04 (commits ddea7b16, dfca3ca5, 94815dbd, 90e3d6d2).** clausal-jax runs with 0 failures (1139 passed; only the flax and equinox suites skip when those libraries are absent). Both rulings landed: symbolic names cross as atoms, and the real jax is reached with a hosted `import jax as pyjax`.
+
 `python -m pytest packages` from the repo root (packages/conftest.py), box
 run on 1c5ee5a0: **94 failed** in clausal-jax. After
 feat/package-followups-2026-10-04: **0 failed** (the optax cases SKIP when

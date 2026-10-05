@@ -1,5 +1,7 @@
 # clausal-scryer: package-suite failures triaged (2026-10-04)
 
+**Status: FIXED 2026-10-04 (commit 12c7cc07).** The cut round-trip test now asserts the translator's refusal (Clausal is cut-free). Pinned in packages/clausal-scryer/tests/test_scryer_backend.py::TestScryerDialectFeatures::test_scryer_cut_is_refused.
+
 Box run on 1c5ee5a0: **1 failed**. After feat/package-followups-2026-10-04:
 **0 failed**.
 

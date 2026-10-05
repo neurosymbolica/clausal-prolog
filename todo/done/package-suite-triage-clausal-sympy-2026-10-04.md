@@ -1,5 +1,7 @@
 # clausal-sympy: package-suite failures triaged (2026-10-04)
 
+**Status: FIXED 2026-10-04 (commit d9980c58).** Fixtures and docs use `sym_equal/2`; ruled the same day with no engine change: `==` on a SymPy result is arithmetic and raises `domain_error(clpz_expression, _)`. Pinned in packages/clausal-sympy/tests/test_sympy_equality_is_arithmetic.py (the package suite: 228 passed).
+
 Box run on 1c5ee5a0: **52 failed**. After feat/package-followups-2026-10-04:
 **0 failed**.
 

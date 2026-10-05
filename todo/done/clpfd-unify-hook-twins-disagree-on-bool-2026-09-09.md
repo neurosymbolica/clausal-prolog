@@ -1,5 +1,7 @@
 # CLP(FD) unify hook: the Python and C twins disagree about `True`
 
+**Status: FIXED 2026-09-30 (commit 4bb6a79e).** Both CLP(FD) unify-hook twins now reject a bool as an FD integer: the C hook checks PyBool before the Fraction denominator probe, and both twins raise clpz's type_error(integer, true) through clpfd._fd_reject_truth_atom. Pinned in tests/iso_l3/test_l3_truth_atoms_review.py::test_clpfd_twins_refuse_a_truth_atom_as_an_integer (C and python).
+
 Found while tracing integral-Fraction bindings (fix/normalise-integral-rationals-2026-09-09).
 
 `clausal/logic/clpfd.py::_fd_hook` ("Accept int or integer-valued Fraction"):
