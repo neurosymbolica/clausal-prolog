@@ -15,10 +15,10 @@ seam code imports them as `-import_from(yaml, [...])` (rewritten to `py.yaml`).
 | Package | Modules | Required third-party deps |
 |---|---|---|
 | `clausal-scipy` | `scipy_<sub>.py` (linalg, optimize, stats, fft, sparse, spatial, ...) + `_scipy_units.py`, `_scipy_relations.py` | numpy, scipy |
-| `clausal-jax` | `jax.py`, `jax_<sub>.py` (nn, random, transforms, tree, sharding, scipy, optax, flax, equinox) | jax, jaxlib |
+| `clausal-jax` | `jax.py`, `jax_<sub>.py` (nn, random, transforms, tree, sharding, scipy, optax, flax, equinox) | jax, jaxlib, numpy (extras: optax, equinox, flax) |
 | `clausal-torch` | `torch.py`, `torch_{nn,functional,data,distributions}.py` | torch |
-| `clausal-sklearn` | `sklearn.py` | scikit-learn |
-| `clausal-opencv` | `opencv.py`, `opencv_<sub>.py`, `_opencv_handles.py` | numpy, opencv-python |
+| `clausal-sklearn` | `sklearn.py` | scikit-learn (extra `csv`: pandas, for `load_csv/3`) |
+| `clausal-opencv` | `opencv.py`, `opencv_<sub>.py`, `_opencv_handles.py` | numpy, opencv-python<5 (OpenCV 5 moved KAZE/AKAZE/BRISK, HOG, cascades to contrib) |
 | `clausal-spacy` | `spacy.py` | spacy |
 | `clausal-sympy` | `sympy.py` | sympy |
 | `clausal-yaml` | `yaml.py` | pyyaml |
@@ -90,10 +90,14 @@ trusted publishing. Run it by hand to build and test without publishing.
 
 ## Gotchas
 
-- In an interpreter without numpy, `clausal-opencv`'s two `*_stubbed.py`
-  tests error at collection (`clausal/modules/py/opencv.py` imports numpy at
-  module level), and that interrupts the WHOLE `pytest packages` run. Use
-  `--ignore=packages/clausal-opencv` or `--continue-on-collection-errors`.
+- A `*_stubbed.py` test runs without the package's dependencies, so the
+  adapter must import them lazily (inside the function), never at module
+  level -- one module-level import makes the stubbed tests error at
+  collection and stops the whole `pytest packages` run.
+- With every library installed (2026-10-06: numpy 2.5, scipy 1.18,
+  scikit-learn 1.9, jax 0.11, torch 2.14, spaCy 3.8 + `en_core_web_sm`,
+  OpenCV 4.14, pandas) the suite is 4809 passed; the skips left are the
+  Scryer/Trealla/GNU Prolog backends, which need their native builds.
 - The engine suite reads these sources too: `tests/test_python_predicate_name_gate.py`
   (via `tests/_predicate_name_census.py`) imports every
   `packages/*/clausal/modules/` module in a child process and rejects
