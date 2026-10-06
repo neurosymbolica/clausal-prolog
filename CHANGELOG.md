@@ -1466,6 +1466,23 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **A dataclass with its own `__init__` crosses into Python.** `to_python`
+  rebuilt every dataclass term as `type(**fields)`, which only the
+  generated `__init__` accepts, so an Equinox module (`eqx.nn.Linear`
+  stores `weight`/`bias` but is built from `in_features`/`out_features`)
+  raised `TypeError` in every `clausal-jax` equinox predicate. A dataclass
+  whose fields all convert to themselves now crosses as itself; one whose
+  constructor refuses its fields is copied and the converted fields set on
+  the copy. Pinned by `tests/test_to_python_custom_init_dataclass.py`.
+
+- **clausal-opencv requires OpenCV 4** (`opencv-python<5`): OpenCV 5 moved
+  KAZE, AKAZE, BRISK, `HOGDescriptor` and `CascadeClassifier` to
+  opencv-contrib, failing 26 of the package's tests. numpy is now imported
+  lazily, so the `*_stubbed.py` tests run without it, as they are meant to.
+
+- **clausal-spacy: `test_head`** expected `head/2` to answer a Python
+  `str`; it answers a string (the chars carrier), as documented.
+
 - **`clausal.logic.clportools` imports without OR-Tools.** A module-level
   class subclassed `CpSolverSolutionCallback`, a name bound only when
   `ortools` imported, so the import raised `NameError` instead of leaving

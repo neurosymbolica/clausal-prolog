@@ -16,6 +16,7 @@ dependencies = [
     "clausal>=1.0",
     "jax",
     "jaxlib",
+    "numpy",   # jax_numpy/2 imports it directly
 ]
 
 [project.optional-dependencies]
