@@ -83,7 +83,7 @@ py_domain_from_range(PyObject *self, PyObject *args)
     /* Parse lo */
     if (PyFloat_Check(lo_obj)) {
         double v = PyFloat_AS_DOUBLE(lo_obj);
-        if (v == -HUGE_VAL || v == -(1.0/0.0))
+        if (v == -HUGE_VAL)
             lo = INT64_MIN;
         else {
             PyErr_SetString(PyExc_TypeError, "lo must be int or -inf");
@@ -97,7 +97,7 @@ py_domain_from_range(PyObject *self, PyObject *args)
     /* Parse hi */
     if (PyFloat_Check(hi_obj)) {
         double v = PyFloat_AS_DOUBLE(hi_obj);
-        if (v == HUGE_VAL || v == (1.0/0.0))
+        if (v == HUGE_VAL)
             hi = INT64_MAX;
         else {
             PyErr_SetString(PyExc_TypeError, "hi must be int or +inf");
@@ -459,11 +459,11 @@ py_domain_remove_above(PyObject *self, PyObject *args)
     int64_t lim;
     if (PyFloat_Check(limit_obj)) {
         double v = PyFloat_AS_DOUBLE(limit_obj);
-        if (v == HUGE_VAL || v == (1.0/0.0)) {
+        if (v == HUGE_VAL) {
             /* remove_above(+inf) is a no-op — return domain unchanged */
             Py_INCREF(domain);
             return domain;
-        } else if (v == -HUGE_VAL || v == -(1.0/0.0)) {
+        } else if (v == -HUGE_VAL) {
             lim = INT64_MIN;
         } else {
             lim = (int64_t)v;
@@ -525,11 +525,11 @@ py_domain_remove_below(PyObject *self, PyObject *args)
     int64_t lim;
     if (PyFloat_Check(limit_obj)) {
         double v = PyFloat_AS_DOUBLE(limit_obj);
-        if (v == -HUGE_VAL || v == -(1.0/0.0)) {
+        if (v == -HUGE_VAL) {
             /* remove_below(-inf) is a no-op — return domain unchanged */
             Py_INCREF(domain);
             return domain;
-        } else if (v == HUGE_VAL || v == (1.0/0.0)) {
+        } else if (v == HUGE_VAL) {
             lim = INT64_MAX;
         } else {
             lim = (int64_t)v;
