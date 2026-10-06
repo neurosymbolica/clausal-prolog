@@ -221,14 +221,14 @@ design work (see `SCIPY_UNITS_PLAN.md` Phase 4c).
 -import_from(py.units, [metre, second, newton, has_units])
 
 % Velocity (m/s) integrated over time (s) gives displacement (m)
-Test("trapezoid velocity times time") <- (
+test("trapezoid velocity times time") <- (
     trapezoid(++(numpy.array([0.0(metre/second), 10.0(metre/second), 20.0(metre/second)])),
               ++(numpy.array([0.0(second), 1.0(second), 2.0(second)])),
               R),
     has_units(R, metre))
 
 % quad with quantity-aware function
-Test("quad with units") <- (
+test("quad with units") <- (
     quad(++(lambda x: x * 1.0(newton/metre)),
          0.0(metre), 1.0(metre), RESULT),
     result_get(RESULT, 'value', V),

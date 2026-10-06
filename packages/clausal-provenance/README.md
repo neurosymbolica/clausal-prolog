@@ -40,7 +40,7 @@ bottom_up_(Path)
 Path(A, B) <- Edge(A, B)
 Path(A, C) <- (Edge(A, B), Path(B, C))
 
-Test("transitive closure under boolean") <- (
+test("transitive closure under boolean") <- (
     FACTS is [(Edge("a", "b"), True), (Edge("b", "c"), True)],
     solve(boolean, FACTS, Path("a", "c"), [(_, True)])
 )

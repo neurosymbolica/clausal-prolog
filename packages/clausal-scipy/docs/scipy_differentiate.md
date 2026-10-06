@@ -186,7 +186,7 @@ directly with **zero additional overhead**.
 -import_from(py.units, [metre, newton, has_units])
 
 % f: metre -> newton (linear), so df/dx has units newton/metre
-Test("derivative units") <- (
+test("derivative units") <- (
     K is ++(
         __import__('clausal.terms', fromlist=['Quantity']).Quantity(
             9.8,

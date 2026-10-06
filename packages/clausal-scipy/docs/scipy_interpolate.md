@@ -278,7 +278,7 @@ the dims.  when no `Quantity` inputs are present, `x_dims` and `y_dims` are
 -import_from(py.units, [metre, second, has_units])
 
 % Position (m) as a function of time (s)
-Test("spline with units") <- (
+test("spline with units") <- (
     make_spline(++(numpy.array([0.0(second), 1.0(second), 2.0(second)])),
                ++(numpy.array([0.0(metre), 5.0(metre), 20.0(metre)])),
                H),
