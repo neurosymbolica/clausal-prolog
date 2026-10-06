@@ -32,10 +32,6 @@ Python process, on the same objects and the same garbage collector, so Prolog
 and Python call each other freely. A neural model can call a logic program,
 and that logic can call back into the model, with no serialisation in between.
 
-```bash
-pip install clausal
-```
-
 ## Start here
 
 <div class="grid cards" markdown>
@@ -83,6 +79,12 @@ The rest of this page is a quick tour. [Command line](cli.md) and
 [Examples](examples.md) are good next stops after the tutorial.
 
 ## Running Prolog
+
+Install the package from PyPI. It also installs the `clausal` command:
+
+```bash
+pip install clausal
+```
 
 Write ordinary Prolog in a `.clausal` file. Tests live next to the code:
 
