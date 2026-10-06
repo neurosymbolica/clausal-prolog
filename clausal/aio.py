@@ -176,11 +176,29 @@ class _Query:
     nobody can resume must not hold its tables forever.
     """
 
-    __slots__ = ("gen", "state", "child", "_live", "agen")
+    __slots__ = ("gen", "state", "child", "_live", "agen", "created",
+                 "__weakref__")
 
     def __init__(self, gen):
         self.gen, self.state = gen, _fresh_state(self)
         self.child, self._live, self.agen = None, True, None
+        self.created = []       # (entry, store, key) of tables it created
+
+    def _died(self):
+        """The async generator driving this query is gone, unclosed.
+
+        Its own close may still run later (asyncio's finaliser) or never (the
+        loop is gone).  Either way nobody can resume it, so the tables it
+        left half-built leave the store now: another query then builds them
+        afresh instead of meeting a dead query's partial evaluation (rounds
+        5 and 6 of the review, 2026-10-06, each found a path that did).
+        Identity-guarded, so a table someone has rebuilt since is left alone.
+        """
+        for entry, store, key in self.created:
+            if (entry.status == "evaluating" and entry.owner is self
+                    and store.get(key) is entry):
+                del store[key]
+        self.created = []
 
     @property
     def live(self):
@@ -252,7 +270,13 @@ def adrive(gen):
     """
     query = _Query(gen)
     answers = _adrive(query)
-    query.agen = weakref.ref(answers)
+    alive = weakref.ref(query)
+
+    def gone(_ref):
+        q = alive()
+        if q is not None and q._live:
+            q._died()
+    query.agen = weakref.ref(answers, gone)
     return answers
 
 
@@ -277,6 +301,7 @@ async def _adrive(query):
         finally:
             query._live = False
             query.gen = None
+            query.created = []
 
 
 def asolve(goal, module=None, trail=None):

@@ -252,6 +252,12 @@ def _record_created_entry(entry, table_store, store_key) -> None:
         # The lead token too: the repair below may only touch the entry while
         # it is still OUR lead (see TableEntry.lead).
         episodes[-1].append((entry, table_store, store_key, entry.lead))
+    # A clausal.aio query also keeps its own list, so that when it dies
+    # without being closed its abandoned tables leave the store at once
+    # (clausal.aio._Query._died) instead of waiting for asyncio's finaliser.
+    created = getattr(_drive_ctx.owner, "created", None)
+    if created is not None:
+        created.append((entry, table_store, store_key))
 
 
 def end_drive_episode() -> None:
@@ -339,9 +345,14 @@ def _complete_scc(root: TableEntry, table_store) -> None:
     fixpoint under *root* and completes as a group.
     """
     root.status = "complete"
+    # Only entries THIS drive owns (sixth review, 2026-10-06): a dead
+    # clausal.aio query's abandoned entry is not foreign (not live) but is
+    # not ours either -- completing it froze its partial answers for good.
+    # It is rebuilt fresh when next led.  (Owner None is None: the
+    # synchronous world is unchanged.)
     members = [e for e in table_store.values()
                if e.status == "evaluating" and not _on_leader_stack(e)
-               and e.scc_deps and not _foreign(e)]
+               and e.scc_deps and e.owner is _drive_ctx.owner]
     if not members:
         return
     member_ids = {id(e) for e in members}
@@ -1036,9 +1047,11 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
     # part of the same SLG cycle.
     for (f, a, _k), e in table_store.items():
         if f == functor and a == arity and e.status == "evaluating":
-            if _foreign(e):
-                # Another query's unfinished table cannot be in a cycle of
-                # ours; a positive call that really needs it is refused there.
+            if e.owner is not _drive_ctx.owner:
+                # Another query's unfinished table -- live, or a dead one's
+                # abandoned evaluation -- cannot be in a cycle of ours; a
+                # positive call that needs it is refused (live) or rebuilds it
+                # fresh (dead).
                 continue
             _delay_negation(functor, arity, key, args, trail, store=table_store)
             return True  # conditionally succeed

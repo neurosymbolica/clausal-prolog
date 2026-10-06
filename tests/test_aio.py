@@ -620,6 +620,88 @@ def test_a_dropped_querys_scc_is_rebuilt_not_resumed(tmp_path, second):
     assert _engine_state_clean()
 
 
+_SWEEP_PROGRAM = (
+    "-module(sweep, [path/2, other/1, np/0])\n"
+    "-table(path/2)\n"
+    "-table(other/1)\n"
+    "edge(1, 2),\n"
+    "edge(2, 3),\n"
+    "edge(3, 4),\n"
+    "path(X, Y) <- (path(X, Z), edge(Z, Y))\n"
+    "path(X, Y) <- edge(X, Y)\n"
+    "other(1),\n"
+    "other(X) <- (other(Y), X == Y + 1, X < 3)\n"
+    "np <- (not path(1, _))\n")
+
+
+@pytest.mark.parametrize("second", ["sync", "async"])
+def test_an_unrelated_scc_sweep_leaves_a_dropped_querys_table_alone(
+        tmp_path, second):
+    # Sixth review 2026-10-06: any later leader exit swept the store for
+    # dormant SCC members and completed a dropped query's self-recursive
+    # path(1, _) with its one partial answer -- [2] instead of [2, 3, 4],
+    # for good.
+    import gc
+    src = tmp_path / "sweep.seam"
+    src.write_text(_SWEEP_PROGRAM)
+    mod = load_clausal_module(src)
+
+    async def main():
+        dropped = asolve(("path", 1, Var()), mod)
+        await dropped.__anext__()
+        del dropped                           # never closed; close pending
+        gc.collect()
+        x = Var()
+        if second == "sync":
+            list(solve(("other", x), mod))   # an unrelated tabled query
+        else:
+            [_ async for _ in asolve(("other", x), mod)]
+        y = Var()
+        return sorted(deref(y) for _ in solve(("path", 1, y), mod))
+    assert run(main()) == [2, 3, 4]
+    y = Var()
+    assert sorted(deref(y) for _ in solve(("path", 1, y), mod)) == [2, 3, 4]
+    assert _engine_state_clean()
+
+
+def test_a_dropped_query_leaves_no_half_built_table_behind(tmp_path):
+    # The general fix behind the round 5 and 6 findings: once the iterator
+    # of an unclosed query is gone, its evaluating tables leave the store at
+    # once, before any finaliser runs.
+    import gc
+    src = tmp_path / "sweep_gone.seam"
+    src.write_text(_SWEEP_PROGRAM.replace("sweep,", "sweep_gone,"))
+    mod = load_clausal_module(src)
+    store = mod.__dict__["$module"].db.table_store
+
+    async def main():
+        dropped = asolve(("path", 1, Var()), mod)
+        await dropped.__anext__()
+        assert any(e.status == "evaluating" for e in store.values())
+        del dropped
+        gc.collect()
+        return [e.status for e in store.values()]
+    assert "evaluating" not in run(main())
+
+
+def test_negation_is_not_delayed_on_a_dropped_querys_table(tmp_path):
+    # Sixth review 2026-10-06: `not path(1, _)` delayed on the dead query's
+    # evaluating entry and came out undefined instead of true.
+    import gc
+    from clausal.logic.solve import query_wfs
+    src = tmp_path / "sweep_np.seam"
+    src.write_text(_SWEEP_PROGRAM.replace("sweep,", "sweep_np,"))
+    mod = load_clausal_module(src)
+
+    async def main():
+        dropped = asolve(("path", 1, Var()), mod)
+        await dropped.__anext__()
+        del dropped
+        gc.collect()
+        return [r["_truth"] for r in query_wfs("np", {}, mod)]
+    assert run(main()) == [True]
+
+
 def test_abandoning_a_query_closes_it(demo):
     async def main():
         x = Var()
