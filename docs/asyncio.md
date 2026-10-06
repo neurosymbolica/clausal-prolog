@@ -142,3 +142,42 @@ the result.
 Every engine frame in between stays suspended, unchanged. That is why no part
 of the engine had to learn about waiting. A query that never waits pays
 nothing; a wait costs a few microseconds.
+
+## Other Prologs
+
+Few Prologs have async I/O, and nearly all of them run in a JavaScript host,
+where the browser leaves no choice. The table helps translate a program
+between them. It was checked against each system's own sources and manuals
+in October 2026.
+
+| Clausal | SWI-Prolog (WebAssembly) | Tau Prolog | Trealla (trealla-js) |
+|---|---|---|---|
+| Async query from the host: `asolve`, `aonce` (Python) | `Prolog.forEach(goal, ...)` (JS) | `session.query`, then `session.answer(callback)`; `promiseAnswers()` (JS) | `pl.query(goal)` is an async generator; `pl.queryOnce` (JS) |
+| `await_value(Awaitable, Value)` | `await(Promise, Result)` | `await(Future, Result)` (on a future, not a JS promise) | `js_eval_json/2` returning a Promise |
+| `await_each(AsyncIterable, Item)` | none | none | a JS predicate written as an `async function*` (each `yield` is a choice point) |
+| `sleep(Seconds)` (`library(asyncio)`) | `sleep(Seconds)` (yields under `forEach`) | `sleep(Milliseconds)`, an integer (`library(os)`) | none |
+| `async_predicate(name, fn, arity)` | none (call JS from Prolog, then `await/2`) | none | `new Predicate(...)` with an async function, then `pl.register` |
+| HTTP: an adapter over aiohttp/httpx | `fetch(URL, Type, Data)` | `ajax(Method, URL, Response)` (`library(js)`) | `http_fetch(URL, Options, Content)` |
+| Run goals concurrently: `asyncio.gather` of `aonce` calls | several `forEach` calls with `{engine: true}` (cooperative threads) | `future(Template, Goal, F)`, `future_all/2`, `future_any/2` (`library(concurrent)`) | several queries on one interpreter |
+| Refused outside an async query: `permission_error(await, synchronous_query, _)` | `is_async/0` tells you whether `await/2` may be called | always async | always async |
+
+Differences worth knowing when porting:
+
+- **The same program, sync or async.** In Clausal, whether a predicate waits
+  asynchronously depends on how the query is driven, so one program runs
+  under the CLI (blocking) and under `asolve`. SWI's `await/2` likewise works
+  only in a query started by `Prolog.forEach`. Tau and Trealla are async
+  throughout.
+- **Futures.** Tau's `future/3` runs a goal concurrently and returns a
+  handle; its `await/2` waits on that handle. Clausal has no handle
+  predicate yet. Start concurrent queries from Python with
+  `asyncio.gather`.
+- **Nondeterministic waits.** Only Clausal (`await_each/2`) and trealla-js
+  (async-generator predicates) let backtracking pull the next item from an
+  asynchronous source.
+- **Native Prologs.** SWI-Prolog (native), XSB, Logtalk's `threaded_call/1`
+  and `threaded_exit/1` give concurrency through OS threads
+  rather than an event loop, with blocking I/O inside each thread. A program
+  that uses threads only to overlap waiting translates to concurrent
+  `aonce` calls. CPU parallelism is a different matter: see
+  [Free-Threaded Python](free_threading.md).
