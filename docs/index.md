@@ -59,7 +59,7 @@ pip install clausal
 
     From functions and loops to relations and search.
 
--   :material-code-parentheses:{ .lg .middle } **[For Prolog Programmers](for_prolog_programmers.md)**
+-   :clausal-neck:{ .lg .middle } **[For Prolog Programmers](for_prolog_programmers.md)**
 
     ---
 
