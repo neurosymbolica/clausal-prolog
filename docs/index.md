@@ -9,7 +9,7 @@
 Neural networks are good at perception, language and pattern-matching, but are
 slow, resource-hungry, unreliable and need to be constrained. Symbolic AI is
 good at rules, reasoning and guarantees but can't deal with the real world.
-Neurosymbolic AI combines the two, so each does the part it is good at:
+Neurosymbolic AI combines the two, giving you the best of both worlds:
 
 - **Capable**: neural networks do what hand-written rules can't. They read
   images, understand and generate language, and learn patterns from data.
