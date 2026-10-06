@@ -416,6 +416,43 @@ class Solutions:
             + f'<div class="clausal-output">{body}{footer}</div>'
         )
 
+    # ------------------------------------------------------------------
+    # asyncio (clausal.aio)
+    # ------------------------------------------------------------------
+
+    def __aiter__(self):
+        """``async for bindings in Solutions(...)``: answers on the event loop.
+
+        A predicate that waits (``library(asyncio)``, an async adapter) frees
+        the loop instead of refusing to block it.
+        """
+        from clausal.aio import adrive  # noqa: PLC0415
+        return adrive(self._iter)
+
+    def __await__(self):
+        """``await Solutions(...)``: fetch the answers to show on the event
+        loop, then display as usual.  This is the form for a Jupyter cell,
+        whose kernel always has a loop running: a plain ``Solutions(...)``
+        cannot wait there."""
+        return self._prefetch().__await__()
+
+    async def _prefetch(self):
+        from clausal.aio import adrive  # noqa: PLC0415
+        limit = (self._limit if self._limit is not None
+                 else self.DEFAULT_JUPYTER_LIMIT)
+        fetched = []
+        answers = adrive(self._iter)
+        try:
+            # One past the limit, so the display can still say "more".
+            async for bindings in answers:
+                fetched.append(bindings)
+                if len(fetched) > limit:
+                    break
+        finally:
+            await answers.aclose()
+        self._iter = iter(fetched)
+        return self
+
     def __repr__(self):
         """Fallback for non-IPython contexts (plain Python, repr())."""
         self._run()

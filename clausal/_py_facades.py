@@ -13,6 +13,7 @@ without importing the engine.
 #: Each name is what ``:- use_module(library(<name>), [...]).`` spells;
 #: the facade is ``clausal/library/<name>.seam``.
 PY_FACADE_LIBS: tuple[str, ...] = (
+    "asyncio",
     "countries/afghanistan",
     "countries/albania",
     "countries/algeria",

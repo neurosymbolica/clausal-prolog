@@ -1,0 +1,7 @@
+% Fixture for tests/test_aio.py: library(asyncio) from Clausal Prolog.
+:- module(aio_naps, [nap/2]).
+:- use_module(library(asyncio), [sleep/1]).
+
+nap(Name, done(Name)) :- sleep(0.1).
+
+:- end_module(aio_naps).

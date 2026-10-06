@@ -2228,6 +2228,15 @@ def _record_python_body(transformer, expression, line) -> None:
         _record_external("python", "python_thunk", line)
 
 
+class _AwaitToAwaitOnly(NodeTransformer):
+    """``await X`` -> ``$await_only(X)`` inside a ``++``/f-string escape."""
+
+    def visit_Await(self, node):
+        call = Call(func=Name(id="$await_only", ctx=Load()),
+                    args=[self.visit(node.value)], keywords=[])
+        return fix_missing_locations(copy_location(call, node))
+
+
 def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyThunk",
                         *, engine_generated=False):
     """Build a ``PyThunk(lambda V1, ...: expr, [V1_var, ...])`` AST node.
@@ -2257,6 +2266,11 @@ def _build_py_thunk_ast(transformer, node, expression, var_names, thunk_cls="PyT
     # captured name is enough to take it out of "singleton" territory.
     for name in var_names:
         transformer.var_occurrences[name] += 1
+    # ``++await f()``: an escape runs inside the query, never inside an
+    # ``async def``, so ``await`` there means "wait on this awaitable from
+    # the query" -- ``clausal.aio.await_only``, which suspends only this
+    # query under ``asolve`` and blocks under plain ``solve``.
+    expression = _AwaitToAwaitOnly().visit(expression)
     lambda_params = [
         arg(arg=name, annotation=None,
             lineno=node.lineno, col_offset=node.col_offset,
@@ -5972,6 +5986,13 @@ class EmbedTransformer(NodeTransformer):
                  filename=None, interactive=False, reify=False,
                  prolog_singletons=False):
         transformer._scope_depth = 0
+        # One flag per enclosing function scope: is it an ``async def``?
+        # A goal-position ``--goal`` there is driven by clausal.aio (the
+        # ``$a...`` twins) so a predicate that waits frees the event loop.
+        # Decided by the INNERMOST function, as Python decides where
+        # ``await`` is legal: a plain ``def`` or class inside an async def
+        # is synchronous again.
+        transformer._async_scope = [False]
         # D19: the ``.pl`` import path (``import_hook.PrologLoader``) only.
         # Prolog's convention (ISO, Scryer): a variable named ``_Name`` is
         # deliberately used once, so it is no singleton.  ``.clausal`` and
@@ -7246,6 +7267,21 @@ class EmbedTransformer(NodeTransformer):
             out.extend(r if isinstance(r, list) else [r])
         return out
 
+    def _in_async_def(transformer) -> bool:
+        return transformer._async_scope[-1]
+
+    def _once_bind_call(transformer, goal_ast, anchor):
+        """``$once_bind(goal, globals())``, or ``await $aonce_bind(...)``
+        when the innermost enclosing function is an ``async def``."""
+        if transformer._in_async_def():
+            call = replace(Call(func=Name(id="$aonce_bind", ctx=Load()),
+                                args=[goal_ast, transformer._globals_call(anchor)],
+                                keywords=[]), anchor)
+            return replace(Await(value=call), anchor)
+        return replace(Call(func=Name(id="$once_bind", ctx=Load()),
+                            args=[goal_ast, transformer._globals_call(anchor)],
+                            keywords=[]), anchor)
+
     def visit_If(transformer, node):
         found = transformer._goal_operand(node.test)
         if found is None:
@@ -7253,9 +7289,7 @@ class EmbedTransformer(NodeTransformer):
         expression, negated = found
         transformer._lint_titlecase(expression)
         pre, goal_ast, fresh = transformer._goal_seam(expression, node.test)
-        test = replace(Call(func=Name(id="$once_bind", ctx=Load()),
-                            args=[goal_ast, transformer._globals_call(node.test)],
-                            keywords=[]), node.test)
+        test = transformer._once_bind_call(goal_ast, node.test)
         if negated:
             test = replace(UnaryOp(op=Not(), operand=test), node.test)
             # In negated case, emit exports in unreachable ``if False:`` block
@@ -7310,13 +7344,24 @@ class EmbedTransformer(NodeTransformer):
         var_refs = replace(Tuple(
             elts=[replace(Name(id=f"$v_{t}", ctx=Load()), node.iter) for t in targets],
             ctx=Load()), node.iter)
-        node.iter = replace(Call(func=Name(id="$each", ctx=Load()),
-                                 args=[goal_ast, var_refs, transformer._globals_call(node.iter)],
-                                 keywords=[]), node.iter)
+        is_async = isinstance(node, AsyncFor) or transformer._in_async_def()
+        node.iter = replace(Call(
+            func=Name(id="$aeach" if is_async else "$each", ctx=Load()),
+            args=[goal_ast, var_refs, transformer._globals_call(node.iter)],
+            keywords=[]), node.iter)
         node.body = transformer._visit_stmts(node.body)
         node.orelse = transformer._visit_stmts(node.orelse)
+        if is_async and not isinstance(node, AsyncFor):
+            # A plain ``for`` over a goal in an ``async def`` iterates it
+            # asynchronously: a waiting predicate inside would otherwise
+            # refuse to block the running loop.
+            node = copy_location(AsyncFor(
+                target=node.target, iter=node.iter, body=node.body,
+                orelse=node.orelse, type_comment=None), node)
         fix_missing_locations(node)
         return pre + [declare, node]
+
+    visit_AsyncFor = visit_For
 
     def _visit_comprehension(transformer, node):
         """Lower a goal seam in the FIRST generator's iterable.
@@ -7415,10 +7460,22 @@ class EmbedTransformer(NodeTransformer):
                         ctx=Load()), generator.iter),
                 ], ctx=Load()), generator.iter),
             ), generator.iter)
+            is_async = bool(generator.is_async) or transformer._in_async_def()
+            if (is_async and not generator.is_async
+                    and isinstance(node, GeneratorExp)):
+                raise SyntaxError(
+                    f"{transformer._filename}:{node.lineno}: a generator "
+                    f"expression over a `--goal` in an `async def` must say "
+                    f"`async for` (it is then an async generator), or be a "
+                    f"list comprehension; a plain one would silently change "
+                    f"type from a generator to an async generator.")
             new_iter = replace(Call(
-                func=Name(id="$each_fresh", ctx=Load()),
+                func=Name(id="$aeach_fresh" if is_async else "$each_fresh",
+                          ctx=Load()),
                 args=[maker, transformer._globals_call(generator.iter)],
                 keywords=[]), generator.iter)
+            if is_async:
+                generator.is_async = 1
             fix_missing_locations(new_iter)
             generator.iter = new_iter
             # Everything EXCEPT the lowered iterable still needs visiting —
@@ -7450,9 +7507,7 @@ class EmbedTransformer(NodeTransformer):
         # emitted INSIDE the loop test (as a bind-then-call tuple index)
         # rather than once before the loop.
         _pre, goal_ast, fresh = transformer._goal_seam(expression, node.test)
-        call = replace(Call(func=Name(id="$once_bind", ctx=Load()),
-                            args=[goal_ast, transformer._globals_call(node.test)],
-                            keywords=[]), node.test)
+        call = transformer._once_bind_call(goal_ast, node.test)
         if fresh:
             binds = [replace(NamedExpr(
                 target=replace(Name(id=f"$v_{n}", ctx=Store()), node.test),
@@ -8479,10 +8534,12 @@ class EmbedTransformer(NodeTransformer):
         transformer._python_locals.append(
             transformer._author_bound_locals(node))
         transformer._seam_exports.append({})
+        transformer._async_scope.append(isinstance(node, AsyncFunctionDef))
         try:
             result = transformer.generic_visit(node)
             transformer._lint_seam_text_compare(result, transformer._seam_exports[-1])
         finally:
+            transformer._async_scope.pop()
             transformer._seam_exports.pop()
             transformer._python_locals.pop()
             transformer._scope_depth -= 1
@@ -8712,9 +8769,12 @@ class EmbedTransformer(NodeTransformer):
 
     def visit_ClassDef(transformer, node):
         transformer._scope_depth += 1
-        result = transformer.generic_visit(node)
-        transformer._scope_depth -= 1
-        return result
+        transformer._async_scope.append(False)
+        try:
+            return transformer.generic_visit(node)
+        finally:
+            transformer._async_scope.pop()
+            transformer._scope_depth -= 1
 
     def visit_UnaryOp(transformer, unary_op):
         if isinstance(unary_op.op, Not):

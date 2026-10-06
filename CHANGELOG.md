@@ -5,6 +5,35 @@ All notable changes to Clausal are recorded here. The format follows
 the project follows [semantic versioning](https://semver.org/) over the
 surface described in [docs/public-api.md](docs/public-api.md).
 
+## Unreleased
+
+### Experimental
+
+- **Asyncio.** `clausal.aio.asolve` / `aonce` run a query on an asyncio
+  event loop: a predicate that waits (`clausal.aio.await_only`) suspends the
+  query and frees the loop for other tasks, so concurrent queries overlap
+  their I/O. The same predicate blocks under plain `solve`, so programs need
+  no async syntax. New `library(asyncio)` (`py.asyncio`): `await_value/2`,
+  `await_each/2` (one solution per item of an async iterator), `sleep/1`.
+  `clausal.aio.async_predicate` builds an adapter from an `async def`.
+  `asolve` runs the query in a greenlet, so `greenlet` becomes Clausal's one
+  runtime dependency (operator ruling 2026-10-06: async should be built in,
+  not an extra). Also `acall`, `adrive`, and `Solutions` supporting `await`
+  (the Jupyter form) and `async for`. Tables: a query may wait anywhere,
+  inside tabled evaluation included; another query that reaches a table a
+  suspended query has not finished raises `permission_error(access,
+  tabled_evaluation, P/N)` instead of seeing a partial answer set. Calling
+  plain `solve` on a waiting predicate from inside a running loop raises
+  `permission_error(await, synchronous_query, _)`.
+- **Seam goal positions in `async def`.** In a `.seam` file, `if`/`elif`/
+  `while --g`, `not --g`, `for`/`async for X in --g` and comprehensions over
+  `--g` inside an `async def` run on the event loop (`await`ed / async
+  iteration); a plain `def` is unchanged. A plain generator expression over
+  `--g` in an `async def` is refused (it would silently become an async
+  generator). In clause bodies, `++await f()` and `await` in an f-string slot
+  wait on the awaitable from within the query. See
+  [docs/asyncio.md](docs/asyncio.md).
+
 ## 1.0.0 (2026-10-06)
 
 This is the first release with a public-API promise. Most of the changes

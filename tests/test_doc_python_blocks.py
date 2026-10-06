@@ -83,6 +83,8 @@ def _example(name: str) -> str:
 
 # (id, page, anchor, {module file: source}, post, expected lines in stdout)
 _CASES = [
+    ("asyncio-gather", "asyncio.md", "asyncio.gather(", {"naps": None}, "",
+     ["[('done', 'a'), ('done', 'b'), ('done', 'c')]"]),
     ("pi-solve", "python_integration.md",
      'import fibonacci\n\nfor trail in solve(("fib", 10',
      {"fibonacci": _example("fibonacci")}, "", ["55"]),
@@ -144,6 +146,7 @@ _PAGE_MODULE_ANCHORS = {
     ("index.md", "report"): ("python", "# report.seam"),
     ("tutorial.md", "hello"): ("prolog", ":- module(hello,"),
     ("tutorial.md", "graph"): ("prolog", ":- module(graph,"),
+    ("asyncio.md", "naps"): ("prolog", ":- module(naps,"),
 }
 
 

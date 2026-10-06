@@ -374,6 +374,10 @@ from clausal.logic.seam import (
     once_bind as _once_bind,
     each as _each,
     each_fresh as _each_fresh,
+    aonce_bind as _aonce_bind,
+    aeach as _aeach,
+    aeach_fresh as _aeach_fresh,
+    await_only as _await_only,
     with_bases as _with_bases,
     export as _export,
 )
@@ -482,6 +486,10 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # The RE-ENTRANT each: mints the goal's variables per evaluation, for a
     # comprehension iterable, which has no statement to hoist them to.
     "$each_fresh": _each_fresh,
+    "$aonce_bind": _aonce_bind,
+    "$aeach": _aeach,
+    "$aeach_fresh": _aeach_fresh,
+    "$await_only": _await_only,
     # The DOTTED RUNTIME MODULE form: resolves ``--m.pred(X)`` against the
     # live value of ``m`` before the goal reaches ``solve`` (seam.with_bases).
     "$with_bases": _with_bases,

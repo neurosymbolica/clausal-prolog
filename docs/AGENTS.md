@@ -37,7 +37,7 @@ Up: [../AGENTS.md](../AGENTS.md)
 - **Standard Library**: `random`, `json`, `csv`, `os`, `files`, `process`,
   `regex`, `date_time`, `sqlite`, `uuid`, `crypto`, `http`, `tcp`, `graphs`, `units`.
 - **Advanced**: `import` (module system), `term_expansion`, `reflection`,
-  `python_integration`, `public-api`, `tabling`, `wfs`, `metainterpreters`.
+  `python_integration`, `asyncio`, `public-api`, `tabling`, `wfs`, `metainterpreters`.
 - **Parallelism**: `free_threading`, `tutorial_parallel_python`, `tutorial_parallel_clausal`.
 - **Internals**: `architecture`, `compiler`, `indexing`, `caching`, `specialization`.
 - **Prolog**: `importing_prolog`, `prolog_translation`. Also `packages`, `ipython`, `jupyter`, `examples`.

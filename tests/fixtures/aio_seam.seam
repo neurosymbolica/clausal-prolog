@@ -1,0 +1,63 @@
+# Fixture for tests/test_aio.py: goal-position `--goal` inside `async def`
+# (driven by clausal.aio) and `++await` in clause bodies.
+-module(aio_seam, [got/1, fstr/1])
+-import_from(py.asyncio, [sleep])
+import asyncio
+
+nap(X) <- (sleep(0.05), X == 1)
+nap(X) <- (sleep(0.05), X == 2)
+below(N, M) <- (sleep(0.01), N < 3, M == N + 1)
+
+async def fetch(n):
+    await asyncio.sleep(0.05)
+    return n * 10
+
+got(X) <- (X is ++await fetch(4))
+fstr(S) <- (S is f"{await fetch(2)}")
+
+async def iterate():
+    out = []
+    async for X in --nap(X):
+        out.append(X)
+    return out
+
+async def plain_for():
+    out = []
+    for X in --nap(X):
+        out.append(X)
+    return out
+
+async def first():
+    if --nap(X):
+        return X
+
+async def missing():
+    if not --nap(3):
+        return "none"
+
+async def count_up():
+    cur, seen = 0, []
+    while --below(++cur, N):
+        cur = N
+        seen.append(N)
+    return seen
+
+async def listed():
+    return [X for X in --nap(X)]
+
+async def as_set():
+    return {X async for X in --nap(X)}
+
+async def stream():
+    async for X in --nap(X):
+        yield X
+
+def sync_first():
+    if --nap(X):
+        return X
+
+async def sync_inside():
+    def inner():
+        if --nap(X):
+            return X
+    return inner
