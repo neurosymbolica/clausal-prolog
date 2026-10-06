@@ -67,9 +67,8 @@ mkdocs build                           # the docs site (pip install mkdocs-mater
 
 - Expect failures in a bare environment: tests for z3, OR-Tools and pysat, and
   the `tests/iso/*_scryer.py` oracles (they need the Scryer binary). Compare
-  against a baseline run by test name, not by count. For `packages`, a
-  missing numpy is a collection error that stops the run: add
-  `--continue-on-collection-errors`. See [tests/AGENTS.md](tests/AGENTS.md).
+  against a baseline run by test name, not by count. See
+  [tests/AGENTS.md](tests/AGENTS.md) and [packages/AGENTS.md](packages/AGENTS.md).
 - If `pytest-timeout` is installed, `pyproject.toml`'s `timeout = 10` uses the
   thread method and one slow test kills the whole run: add
   `--timeout-method=signal`.

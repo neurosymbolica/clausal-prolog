@@ -14,7 +14,9 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "clausal>=1.0",
-    "opencv-python",
+    # OpenCV 5 moved KAZE/AKAZE/BRISK, HOGDescriptor and CascadeClassifier
+    # out of the main package (to opencv-contrib); this adapter uses them.
+    "opencv-python<5",
     "numpy",
 ]
 

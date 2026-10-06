@@ -17,9 +17,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-torch = ["torch>=2.0"]
-jax = ["jax>=0.4", "jaxlib>=0.4"]
-all = ["torch>=2.0", "jax>=0.4", "jaxlib>=0.4"]
+# The bridges move arrays through numpy; torch does not require it.
+torch = ["torch>=2.0", "numpy"]
+jax = ["jax>=0.4", "jaxlib>=0.4", "numpy"]
+all = ["torch>=2.0", "jax>=0.4", "jaxlib>=0.4", "numpy"]
 
 [project.urls]
 Repository = "https://gitlab.com/MikeAmy/clausal"
