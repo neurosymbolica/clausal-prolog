@@ -1004,6 +1004,63 @@ def each_fresh(make, module_globals: dict):
     yield from each(goal, variables, module_globals)
 
 
+def await_only(awaitable: Any) -> Any:
+    """``++await f()`` in a clause body: ``clausal.aio.await_only``."""
+    from clausal.aio import await_only as _await_only  # noqa: PLC0415
+    return _await_only(awaitable)
+
+
+# ── goal position inside ``async def`` (clausal.aio) ─────────────────────
+#
+# The rewriter lowers a goal-position ``--goal`` in an ``async def`` to these
+# instead of ``once_bind``/``each``/``each_fresh``: the same answers and the
+# same exports, driven by ``clausal.aio.adrive`` so a predicate that waits
+# suspends only this query and the event loop keeps running.
+
+
+async def aonce_bind(goal: Any, module_globals: dict) -> bool:
+    """``once_bind`` for an ``async def``: ``if --g:`` there awaits this."""
+    from clausal.aio import adrive  # noqa: PLC0415
+    answers = adrive(_definite_answers(goal, _module_of(module_globals),
+                                       module_globals))
+    try:
+        async for _ in answers:
+            return True
+        return False
+    finally:
+        # As in once_bind: closing does not undo the private trail, so the
+        # ``$export`` lines after the await still see the bindings.
+        await answers.aclose()
+
+
+async def aeach(goal: Any, variables: tuple, module_globals: dict):
+    """``each`` for an ``async def``: ``async for X in --g`` iterates this."""
+    from clausal.aio import adrive  # noqa: PLC0415
+    single = len(variables) == 1
+    answers = adrive(_definite_answers(goal, _module_of(module_globals),
+                                       module_globals))
+    try:
+        async for _ in answers:
+            if single:
+                yield export(variables[0])
+            else:
+                yield tuple(export(v) for v in variables)
+    finally:
+        await answers.aclose()
+
+
+async def aeach_fresh(make, module_globals: dict):
+    """``each_fresh`` for an ``async def`` (comprehensions)."""
+    arity = make.__code__.co_argcount
+    goal, variables = make(*(Var() for _ in range(arity)))
+    answers = aeach(goal, variables, module_globals)
+    try:
+        async for value in answers:
+            yield value
+    finally:
+        await answers.aclose()
+
+
 def with_bases(goal: Any, bases: dict) -> Any:
     """Resolve a goal written ``--m.pred(A, B)`` against the RUNTIME value of
     *m*, returning the module-qualified goal ``(":", m, pred(A, B))``.

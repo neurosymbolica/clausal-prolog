@@ -123,6 +123,74 @@ def test_clausal_prolog_through_library_asyncio():
     assert elapsed < 0.35          # four 0.1 s naps, overlapped
 
 
+# ── seam: `--goal` in an `async def`, `++await` in a clause ─────────────
+
+SEAM_FIXTURE = os.path.join(os.path.dirname(__file__), "fixtures", "aio_seam.seam")
+
+
+@pytest.fixture
+def aseam():
+    return load_clausal_module(SEAM_FIXTURE)
+
+
+def test_goal_positions_in_async_def_wait_concurrently(aseam):
+    async def main():
+        t0 = time.perf_counter()
+        got = await asyncio.gather(
+            aseam.iterate(), aseam.plain_for(), aseam.first(),
+            aseam.missing(), aseam.listed(), aseam.as_set(), aseam.count_up())
+        return got, time.perf_counter() - t0
+    got, elapsed = run(main())
+    assert got == [[1, 2], [1, 2], 1, "none", [1, 2], {1, 2}, [1, 2, 3]]
+    assert elapsed < 0.3            # each alone takes ~0.1 s; they overlap
+
+
+def test_an_async_generator_streams_answers(aseam):
+    async def main():
+        return [x async for x in aseam.stream()]
+    assert run(main()) == [1, 2]
+
+
+def test_a_plain_def_stays_synchronous(aseam):
+    assert aseam.sync_first() == 1            # no loop: blocks, works
+
+    async def main():
+        inner = await aseam.sync_inside()
+        with pytest.raises(LogicException) as info:
+            inner()                           # sync def, running loop
+        return info.value
+    formal = _error_formal(run(main()))
+    assert formal[:3] == ("permission_error", "await", "synchronous_query")
+
+
+def test_plain_generator_expression_over_a_goal_is_refused(tmp_path):
+    src = tmp_path / "genexp_goal.seam"
+    src.write_text(
+        "-module(genexp_goal, [])\n"
+        "-import_from(py.asyncio, [sleep])\n"
+        "nap(X) <- (sleep(0), X == 1)\n"
+        "async def f():\n"
+        "    return (X for X in --nap(X))\n")
+    with pytest.raises(SyntaxError, match="async for"):
+        load_clausal_module(src)
+
+
+def test_await_in_a_clause_escape(aseam):
+    x = Var()
+    assert once(("got", x), aseam) is not None and deref(x) == 40
+
+    async def main():
+        xs = [Var() for _ in range(3)]
+        t0 = time.perf_counter()
+        await asyncio.gather(*(aonce(("got", v), aseam) for v in xs))
+        s = Var()
+        await aonce(("fstr", s), aseam)
+        return [deref(v) for v in xs], deref(s), time.perf_counter() - t0
+    values, text, elapsed = run(main())
+    assert values == [40, 40, 40] and elapsed < 0.2
+    assert text == ("$chars", "20")
+
+
 # ── synchronous drivers ──────────────────────────────────────────────────
 
 def test_sync_query_blocks_on_a_private_loop(demo):

@@ -58,7 +58,7 @@ from clausal.logic.exceptions import LogicException, permission_error
 from clausal.logic.solve import solve
 from clausal.logic.variables import deref, unify
 
-__all__ = ["asolve", "aonce", "await_only", "async_predicate"]
+__all__ = ["asolve", "aonce", "adrive", "await_only", "async_predicate"]
 
 
 class _QueryGreenlet(_greenlet.greenlet):
@@ -210,13 +210,14 @@ class _Query:
         return ("end", None)
 
 
-async def asolve(goal, module=None, trail=None):
-    """``async for trail in asolve(goal, module)``: solve on the event loop.
+async def adrive(gen):
+    """Drive any synchronous answer generator on the event loop.
 
-    Takes the same arguments as ``solve``.  The query yields to the event loop
-    at every ``await_only``; between awaits it runs synchronously.
+    *gen* yields once per answer (``solve``, or the seam's own answer
+    generator); each answer is yielded on, and the generator runs in a query
+    greenlet, so a wait inside it suspends only this query.
     """
-    query = _Query(solve(goal, module, trail))
+    query = _Query(gen)
     try:
         while True:
             kind, value = await query.step(query.next_solution)
@@ -224,13 +225,22 @@ async def asolve(goal, module=None, trail=None):
                 return
             yield value
     finally:
-        # Close inside the query's greenlet and engine state, so the solve
+        # Close inside the query's greenlet and engine state, so the
         # generator's own cleanup (tabling episode repair, cleanup handlers)
         # runs where it would have run synchronously.
         try:
             await query.step(query.close)
         finally:
             query.live = False
+
+
+def asolve(goal, module=None, trail=None):
+    """``async for trail in asolve(goal, module)``: solve on the event loop.
+
+    Takes the same arguments as ``solve``.  The query yields to the event loop
+    at every ``await_only``; between awaits it runs synchronously.
+    """
+    return adrive(solve(goal, module, trail))
 
 
 async def aonce(goal, module=None, trail=None):
