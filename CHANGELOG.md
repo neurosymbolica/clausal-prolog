@@ -5,7 +5,7 @@ All notable changes to Clausal are recorded here. The format follows
 the project follows [semantic versioning](https://semver.org/) over the
 surface described in [docs/public-api.md](docs/public-api.md).
 
-## Unreleased (1.0.0)
+## 1.0.0 (2026-10-06)
 
 This is the first release with a public-API promise. Most of the changes
 since 0.4.0 finish three moves:
