@@ -73,8 +73,6 @@ from __future__ import annotations
 import threading as _threading
 from typing import Callable
 
-import numpy as _np
-
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import require_text
@@ -428,10 +426,11 @@ def _decode(buf, ext):
     # ``ext`` is unused by the decoder itself (cv2 sniffs the format)
     # but is required as input so the predicate stays symmetric.
     del ext
+    import numpy as np  # noqa: PLC0415 -- lazily, as cv2 (packages/conftest.py)
     if isinstance(buf, (bytes, bytearray, memoryview)):
-        arr = _np.frombuffer(buf, dtype=_np.uint8)
+        arr = np.frombuffer(buf, dtype=np.uint8)
     else:
-        arr = _np.asarray(buf, dtype=_np.uint8)
+        arr = np.asarray(buf, dtype=np.uint8)
     img = _cv().imdecode(arr, _cv().IMREAD_UNCHANGED)
     if img is None:
         raise ValueError("imdecode failed")
@@ -477,7 +476,7 @@ is_color = _pred("is_color",
 )
 
 is_uint8 = _pred("is_uint8",
-    (1, _check_1(lambda img: img.dtype == _np.uint8)),
+    (1, _check_1(lambda img: img.dtype == "uint8")),  # numpy dtype == name
 )
 
 
