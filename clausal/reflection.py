@@ -1,8 +1,8 @@
-"""clausal.reflection — reify ``.clausal`` source into Clausal compound terms.
+"""clausal.reflection — reify ``.seam`` source into Clausal compound terms.
 
 Phase 1 of ``implementation_plans/clausal-ast-reflection-and-structural-matching.md``.
 
-``.clausal`` source is Python surface syntax: ``ast.parse`` +
+``.seam`` source is Python surface syntax: ``ast.parse`` +
 ``EmbedTransformer`` turn each clause into *constructor code* — a Python AST
 expression that would, at import time, build a ``simple_ast.Predicate`` node
 and pass it to ``$define_predicate``.  This module evaluates those
@@ -93,11 +93,11 @@ __all__ = [
 
 
 class ReifyError(SyntaxError):
-    """Raised when ``.clausal`` source cannot be reified."""
+    """Raised when ``.seam`` source cannot be reified."""
 
 
 class RenderError(Exception):
-    """Raised when a reified term cannot be rendered back to ``.clausal`` source."""
+    """Raised when a reified term cannot be rendered back to ``.seam`` source."""
 
 
 # ── Reified vocabulary ───────────────────────────────────────────────────────
@@ -816,9 +816,9 @@ def _raw_source(text: str) -> ast.Name:
     ``ast.unparse`` writes a ``Name``'s ``id`` through untouched and never
     validates it -- the property ``_name_ast``'s own refusal exists to
     protect.  Used here deliberately, for the two literal forms whose QUOTE
-    CHARACTER carries meaning in ``.clausal`` source (``'atom'`` vs
+    CHARACTER carries meaning in ``.seam`` source (``'atom'`` vs
     ``"string"``) and which ``ast.Constant`` therefore cannot express: the
-    unparser picks quotes by content, and the ``.clausal`` reader reads them
+    unparser picks quotes by content, and the seam reader reads them
     as different terms.
     """
     return ast.Name(id=text, ctx=ast.Load())
@@ -1516,7 +1516,7 @@ def _is_directive_stmt(stmt):
 
 
 def reify_source(text, filename="<reflected>", double_quotes=None):
-    """Parse ``.clausal`` source text and reify every top-level item.
+    """Parse ``.seam`` source text and reify every top-level item.
 
     Pure: no directive execution, no imports of the target's dependencies,
     no predicate compilation, and no evaluation of embedded Python or ``++``
@@ -1549,7 +1549,7 @@ def reify_source(text, filename="<reflected>", double_quotes=None):
                 transformer._double_quotes_explicit = True
             transformed = transformer.visit(tree)
     except SyntaxError as exc:
-        # Same treatment as the loader gives a broken .clausal file: the source
+        # Same treatment as the loader gives a broken seam file: the source
         # line and a caret, because the reported line is where the parse gave
         # up rather than where the mistake is.  ``reify_file`` passes a real
         # path, so this fires there; a bare string keeps CPython's one-liner.
@@ -1610,7 +1610,7 @@ def reify_file(path):
 
 
 def _unparse_clause(node):
-    """Unparse a ``.clausal`` statement, restoring the ``<-`` arrow.
+    """Unparse a ``.seam`` statement, restoring the ``<-`` arrow.
 
     ``ast.unparse`` renders the clause arrow ``HEAD <- BODY`` as ``HEAD < -BODY``
     (a ``Compare`` with a single ``Lt`` and a ``USub`` comparator at the
@@ -1711,7 +1711,7 @@ def _tighten_nested_arrows(text):
 
 
 def reify_ast(node, source=None, double_quotes=None):
-    """Reify a single parsed Python AST node of ``.clausal`` surface syntax.
+    """Reify a single parsed Python AST node of ``.seam`` surface syntax.
 
     Statements round-trip through ``ast.unparse`` + :func:`reify_source`
     (``unparse`` renders the ``<-`` arrow as ``< -``, which is repaired);
@@ -1751,7 +1751,7 @@ def render_ast(term):
 
 
 def render_source(term):
-    """Render a reified term to ``.clausal`` source text — :func:`render_ast`
+    """Render a reified term to ``.seam`` source text — :func:`render_ast`
     followed by ``ast.unparse`` with the ``<-`` arrow repair.
 
     The renderer writes each text literal with the quote character its TERM

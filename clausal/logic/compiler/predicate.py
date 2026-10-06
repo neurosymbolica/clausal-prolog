@@ -218,7 +218,7 @@ from .goal_trampoline import (
 #
 # History: these were previously bulk-copied out of ``_monolith`` via
 # ``for _n in dir(_m): globals().setdefault(_n, getattr(_m, _n))``.  Slice B1a
-# of the migration (see ``implementation_plans/SLICE_B_PROGRESS.md``) inlined
+# of the migration (see ``implementation_plans/compiler/SLICE_B_PROGRESS.md``) inlined
 # them here so the bulk-copy hack could be retired.
 
 from fractions import Fraction  # noqa: F401 — referenced as _Fraction

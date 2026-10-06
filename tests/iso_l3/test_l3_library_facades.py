@@ -15,11 +15,11 @@ and imports a facade as ``use_module(library(<lib>), [...])``).
 * Under the ``clausal_prolog`` SURFACE an import whose target is a Python
   module by PATH (``py/<lib>``, ``clausal/modules/units``, any other
   ``.py``) is refused, naming the facade; a module NAME a seam alias
-  resolves (``european_union``, ``units``) imports its facade.  That
-  surface has no file extension until the extension flip
-  (``_suffixes.CLAUSAL_PROLOG_SUFFIXES`` is empty), so these tests force it
-  by putting ``.pl`` in that tuple; ``.pl`` and seam files are otherwise
-  unchanged, and a ``.pl`` may still import ``py/<lib>`` directly.
+  resolves (``european_union``, ``units``) imports its facade.  These
+  tests predate the extension flip, which gave that surface its ``.clausal``
+  suffix, so they force it onto ``.pl`` files by putting ``.pl`` in
+  ``_suffixes.CLAUSAL_PROLOG_SUFFIXES``; ``.pl`` and seam files are
+  otherwise unchanged, and a ``.pl`` may still import ``py/<lib>`` directly.
 """
 from __future__ import annotations
 

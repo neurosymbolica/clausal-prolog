@@ -104,7 +104,7 @@ def _unwind_to_catcher(failed_gen: Any, exc: Exception) -> tuple:
 #   yield (proceed, FINAL)  — here's a solution AND I'm retiring;
 #                             don't pull again.
 #
-# See ``implementation_plans/CONTINUATION_TCO_PLAN.md`` §4.1 / Phase 4
+# See ``implementation_plans/compiler/CONTINUATION_TCO_PLAN.md`` §4.1 / Phase 4
 # (historically called the ``commit`` variant in design docs).
 # Phase 4a (this commit) lands the sentinel and root-driver handling
 # only; no producer emits ``FINAL`` yet, so the new branches are cold
@@ -130,7 +130,7 @@ class StepGenerator:
     For normal (non-TCO) call sites the caller passes the same frame for
     all three; continuation-level TCO later sets ``proceed`` to the
     caller's own ``proceed`` while keeping ``fail`` / ``catcher`` pointed
-    at the caller.  See ``implementation_plans/CONTINUATION_TCO_PLAN.md``.
+    at the caller.  See ``implementation_plans/compiler/CONTINUATION_TCO_PLAN.md``.
 
     The generator body receives the three continuation slots as its
     first three parameters after ``this_generator``:

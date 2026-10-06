@@ -1,4 +1,4 @@
-"""``clausal-fmt`` -- a comment-preserving formatter for ``.clausal`` source.
+"""``clausal-fmt`` -- a comment-preserving formatter for seam (``.seam``) source.
 
 Three layers share one comment side-table:
 

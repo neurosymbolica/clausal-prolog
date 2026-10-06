@@ -2,7 +2,7 @@
 
 A rewrite rule is an ordinary Clausal predicate, ``rewrite_clause(IN, OUT)``,
 matching the reified vocabulary of :mod:`clausal.reflection`.  Rules live in
-``rules/*.clausal`` and are written the way any other Clausal predicate is
+``rules/*.seam`` and are written the way any other Clausal predicate is
 written: patterns over ``Clause`` / ``Goal`` / ``Variable`` / ``Atom`` terms,
 with refusal spelled as ordinary failure.
 

@@ -1,6 +1,6 @@
-"""clausal.tools.dump_transformed — dump the transformed AST of .clausal files as Python.
+"""clausal.tools.dump_transformed — dump the transformed AST of seam files as Python.
 
-Reads a ``.clausal`` file, runs ``EmbedTransformer`` on it, unparses the
+Reads a seam (``.seam``) file, runs ``EmbedTransformer`` on it, unparses the
 resulting AST back to Python source, and writes the output to a
 ``__transformed__/`` directory next to the source file.
 
@@ -18,7 +18,7 @@ CLI usage
     python -m clausal.tools.dump_transformed FILE [FILE ...]
     python -m clausal.tools.dump_transformed tests/clausal_modules/
 
-If given a directory, all ``.clausal`` (and ``.seam``) files in it
+If given a directory, all seam files in it
 (non-recursive) are dumped.
 """
 
@@ -33,7 +33,7 @@ from clausal._suffixes import CLAUSAL_SUFFIXES, seam_suffixes_text
 
 
 def dump_source(path: str) -> str:
-    """Return the transformed Python source for a ``.clausal`` file."""
+    """Return the transformed Python source for a seam file."""
     from clausal.templating.term_rewriting import EmbedTransformer
 
     source = open(path).read()
