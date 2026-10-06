@@ -45,3 +45,19 @@ def _episode_depth():
 
 
 episode_depth = async_predicate("episode_depth", _episode_depth, 1)
+
+
+CLOSED = []
+
+
+async def _closing_ticks():
+    try:
+        for i in range(10):
+            await asyncio.sleep(0)
+            yield i
+    finally:
+        CLOSED.append("closed")
+
+
+def closing_ticks():
+    return _closing_ticks()

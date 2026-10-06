@@ -186,8 +186,36 @@ def _on_leader_stack(entry: TableEntry) -> bool:
 class _DriveContext(threading.local):
     def __init__(self):
         self.episodes: list[list] = []
+        # The clausal.aio query this drive belongs to, or None for an
+        # ordinary synchronous query.  clausal.aio installs a per-query copy
+        # of this context while each query runs (queries interleave on one
+        # thread), so the owner says whose table a new entry is.
+        self.owner = None
 
 _drive_ctx = _DriveContext()
+
+
+def _foreign(entry: "TableEntry") -> bool:
+    """True if *entry* is being evaluated by ANOTHER live clausal.aio query.
+
+    Async queries interleave on one thread, so a table one query is still
+    building (status "evaluating") is visible to another while the first is
+    suspended -- at an await, or at a solution it streamed to the event loop.
+    The other query must neither consume the partial answers nor re-lead or
+    complete the entry: SLG assumes one search per table.
+    """
+    owner = entry.owner
+    return (owner is not None and owner is not _drive_ctx.owner
+            and getattr(owner, "live", False))
+
+
+def _refuse_foreign(functor, arity) -> None:
+    from clausal.logic.exceptions import LogicException, permission_error
+    raise LogicException(permission_error(
+        "access", "tabled_evaluation", ("/", functor, arity),
+        f"{functor}/{arity}: another asyncio query is still evaluating this "
+        "table (it is suspended at a wait or between answers); complete it "
+        "first, e.g. with findall/3, or run the queries one after another"))
 
 
 def begin_drive_episode() -> None:
@@ -280,7 +308,7 @@ def _complete_scc(root: TableEntry, table_store) -> None:
     root.status = "complete"
     members = [e for e in table_store.values()
                if e.status == "evaluating" and not _on_leader_stack(e)
-               and e.scc_deps]
+               and e.scc_deps and not _foreign(e)]
     if not members:
         return
     member_ids = {id(e) for e in members}
@@ -326,10 +354,13 @@ class TableEntry:
     """Stores status, answers, and suspended consumers for one subgoal."""
     __slots__ = ("status", "answers", "answer_set", "_answer_index",
                  "suspended", "conditions", "_current_delays", "scc_deps",
-                 "_sources")
+                 "_sources", "owner")
 
     def __init__(self):
         self.status: str = "evaluating"       # "evaluating" | "complete"
+        # The clausal.aio query evaluating this table (None when synchronous);
+        # see _foreign.
+        self.owner = _drive_ctx.owner
         self.answers: list[tuple] = []
         self.answer_set: set = set()   # canonical answer keys (A04-F005/F006)
         self._answer_index: dict = {}  # canonical key → index into answers
@@ -873,6 +904,8 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
     key = make_subgoal_key(args, trail)
     store_key = (functor, arity, key)
     entry = table_store.get(store_key)
+    if entry is not None and entry.status == "evaluating" and _foreign(entry):
+        _refuse_foreign(functor, arity)
 
     if entry is not None and entry.status == "complete":
         # Standard NAF on complete table: an unconditional answer fails the
@@ -1121,6 +1154,9 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
         key = make_subgoal_key(args, trail)
         store_key = (functor, arity, key)
         entry = table_store.get(store_key)
+        if (entry is not None and entry.status == "evaluating"
+                and _foreign(entry)):
+            _refuse_foreign(functor, arity)
 
         # ── COMPLETE: cache hit ──
         if entry is not None and entry.status == "complete":
@@ -1224,6 +1260,9 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
         key = make_subgoal_key(args, trail)
         store_key = (functor, arity, key)
         entry = table_store.get(store_key)
+        if (entry is not None and entry.status == "evaluating"
+                and _foreign(entry)):
+            _refuse_foreign(functor, arity)
 
         # ── COMPLETE: yield cached answers ──
         if entry is not None and entry.status == "complete":
@@ -1293,6 +1332,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             _record_created_entry(entry, table_store, store_key)  # A04-F007
             replay_count = 0
         else:
+            entry.owner = _drive_ctx.owner     # we lead it now (see _foreign)
             # A04-F001 (re-lead replay): this caller has seen NONE of the
             # already-tabled answers, but the fixpoint loop below streams only
             # NEW answers (add_answer dedups the old ones away). Replay the

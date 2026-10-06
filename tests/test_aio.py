@@ -171,11 +171,57 @@ def test_each_query_sees_only_its_own_drive_episode(demo):
     assert _engine_state_clean()
 
 
-def test_awaiting_inside_tabled_evaluation_is_refused(demo):
-    with pytest.raises(LogicException) as info:
-        run(aonce(("tabled_nap", Var()), demo))
-    formal = _error_formal(info.value)
-    assert formal[:3] == ("permission_error", "await", "tabled_evaluation")
+def test_waiting_inside_tabled_evaluation(demo):
+    x = Var()
+    assert run(aonce(("tabled_nap", x), demo)) is not None and deref(x) == 1
+    assert _engine_state_clean()
+
+
+def test_waiting_after_a_streaming_tabled_call(demo):
+    async def main():
+        y = Var()
+        return sorted([deref(y) async for _ in asolve(("reach_then_nap", y), demo)])
+    assert run(main()) == ["a", "b", "c"]
+
+
+def _table_refusal(exc):
+    formal = _error_formal(exc)
+    return formal[:3] == ("permission_error", "access", "tabled_evaluation")
+
+
+def test_a_table_another_query_is_building_is_refused_not_partial(demo):
+    # Both queries reach tabled_nap/1's table; the second finds it still
+    # being evaluated by the first (suspended in sleep/1) and must not see a
+    # partial answer set (review 2026-10-06: it used to get no solution).
+    async def main():
+        xs = [Var(), Var()]
+        return await asyncio.gather(
+            *(aonce(("tabled_nap", x), demo) for x in xs), return_exceptions=True)
+    first, second = run(main())
+    assert first is not None and not isinstance(first, BaseException)
+    assert isinstance(second, LogicException) and _table_refusal(second)
+    x = Var()
+    assert once(("tabled_nap", x), demo) is not None and deref(x) == 1
+    assert _engine_state_clean()
+
+
+def test_a_table_still_streaming_answers_is_exclusive(demo):
+    # Query 1 has taken reach('a', Y)'s first answer; its table is still
+    # evaluating.  Another query over the same table is refused, and query 1
+    # still gets every answer (it used to lose two, silently).
+    async def main():
+        y = Var()
+        agen = asolve(("reach", "a", y), demo)
+        first = [deref(y) for _ in [await agen.__anext__()]]
+        with pytest.raises(LogicException) as info:
+            await aonce(("reach_count", Var()), demo)
+        rest = [deref(y) async for _ in agen]
+        return sorted(first + rest), info.value
+    answers, refusal = run(main())
+    assert answers == ["a", "b", "c"]
+    assert _table_refusal(refusal)
+    n = Var()
+    assert once(("reach_count", n), demo) is not None and deref(n) == 3
     assert _engine_state_clean()
 
 
@@ -220,6 +266,53 @@ def test_racing_queries_keeps_the_first_and_cancels_the_rest(demo):
         return quick in done, slow.cancelled()
     assert run(main()) == (True, True)
     assert _engine_state_clean()
+
+
+@pytest.mark.parametrize("exc_type", [KeyboardInterrupt, SystemExit])
+def test_a_base_exception_at_a_wait_unwinds_the_query(demo, exc_type):
+    # Review 2026-10-06: these used to surface as "generator already
+    # executing" and leave the query's greenlet suspended.
+    import gc
+    import greenlet
+
+    async def raiser():
+        await asyncio.sleep(0)
+        raise exc_type()
+
+    async def main():
+        await aonce(("await_value", raiser(), Var()), demo)
+    with pytest.raises(exc_type):
+        run(main())
+    gc.collect()
+    from clausal.aio import _QueryGreenlet
+    assert not [g for g in gc.get_objects()
+                if isinstance(g, _QueryGreenlet) and not g.dead]
+    assert _engine_state_clean()
+
+
+def test_await_each_closes_its_iterator_when_backtracking_stops(demo):
+    from tests.fixtures import aio_helpers
+    aio_helpers.CLOSED.clear()
+    x = Var()
+    assert run(aonce(("ticked_once", x), demo)) is not None and deref(x) == 0
+    assert aio_helpers.CLOSED == ["closed"]
+
+
+def test_the_private_loop_closes_with_its_thread(demo):
+    import gc
+    import threading
+    import clausal.aio as aio
+    seen = []
+
+    def worker():
+        once(("napped", Var()), demo)
+        seen.append(aio._sync.loop)
+    t = threading.Thread(target=worker)
+    t.start()
+    t.join()
+    del t
+    gc.collect()
+    assert seen and seen[0].is_closed()
 
 
 def test_abandoning_a_query_closes_it(demo):

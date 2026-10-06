@@ -21,7 +21,7 @@ An awaitable that raises surfaces as an error term, catchable with
 
 from __future__ import annotations
 
-from clausal.aio import await_only
+from clausal.aio import _in_query_greenlet, await_only
 from clausal.modules.py import (
     NUMBER_TYPES,
     ModulePredicate,
@@ -50,15 +50,46 @@ def _await_each_2(iterable, item, trail, k):
     if not hasattr(source, "__aiter__"):
         expect_type(source, (), "await_each/2", type_name="async_iterable", arg=1)
     iterator = source.__aiter__()
-    while True:
-        try:
-            value = await_only(iterator.__anext__())
-        except StopAsyncIteration:
-            return
-        mark = trail.mark()
-        if unify(item, value, trail):
-            yield None
-        trail.undo(mark)
+    exhausted = False
+    try:
+        while True:
+            try:
+                value = await_only(iterator.__anext__())
+            except StopAsyncIteration:
+                exhausted = True
+                return
+            mark = trail.mark()
+            if unify(item, value, trail):
+                yield None
+            trail.undo(mark)
+    finally:
+        if not exhausted:
+            _close_iterator(iterator)
+
+
+def _close_iterator(iterator):
+    """Release an async iterator backtracking stopped pulling from early.
+
+    In a query that can wait, wait for ``aclose()``, so a cursor or socket is
+    released before the query moves on.  This can also run when an abandoned
+    query's frames are finalised outside any query, on a running loop that
+    must not block: leave the iterator to asyncio's own async-generator
+    finaliser then, which closes it on that loop.
+    """
+    aclose = getattr(iterator, "aclose", None)
+    if aclose is None:
+        return
+    try:
+        if not _in_query_greenlet():
+            try:
+                _asyncio.get_running_loop()
+            except RuntimeError:
+                pass
+            else:
+                return
+        await_only(aclose())
+    except Exception:  # noqa: BLE001 - best effort, as in a finaliser
+        pass
 
 
 def _sleep_1(seconds, trail, k):

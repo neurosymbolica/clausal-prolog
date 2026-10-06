@@ -38,16 +38,19 @@ Semantics:
 - An awaitable that raises surfaces as an ordinary error term, catchable with
   ``catch/3``.  Cancelling the task raises ``CancelledError`` inside the
   query, which unwinds it (``setup_call_cleanup`` cleanups run).
-- Tabled evaluation may not await under ``asolve`` (``permission_error(await,
-  tabled_evaluation, _)``): SLG completion assumes one search at a time, and an
-  incomplete table seen by an interleaved query would be wrong.  Per-query
-  tabling state (leader stack, drive episodes) is kept apart regardless.
+- Tables: a query may wait anywhere, inside tabled evaluation included.
+  While it is suspended -- at a wait, or between answers of a tabled goal it
+  is still streaming -- its incomplete tables belong to it.  Another query
+  that calls one raises ``permission_error(access, tabled_evaluation, P/N)``
+  rather than see a partial answer set (SLG assumes one search per table).
+  Per-query tabling state (leader stack, drive episodes) is kept apart.
 """
 from __future__ import annotations
 
 import asyncio
 import inspect
 import threading
+import weakref
 
 import greenlet as _greenlet
 
@@ -70,15 +73,18 @@ def _in_query_greenlet():
 #
 # Tabling keeps its leader stack, drive episodes and spawn depth in
 # thread-locals.  Interleaved queries share a thread, so each query carries
-# its own copy and installs it while it runs.
+# its own copy and installs it while it runs.  The drive context also names
+# the query (``owner``), which tags the tables it creates (tabling._foreign).
 
 def _engine_locals():
     from clausal.logic import tabling
     return (tabling._leader_ctx, tabling._drive_ctx, tabling._spawn_ctx)
 
 
-def _fresh_state():
-    return [dict(type(local)().__dict__) for local in _engine_locals()]
+def _fresh_state(owner):
+    state = [dict(type(local)().__dict__) for local in _engine_locals()]
+    state[1]["owner"] = owner
+    return state
 
 
 def _install(state):
@@ -91,15 +97,18 @@ def _install(state):
     return previous
 
 
-def _in_tabled_evaluation():
-    from clausal.logic import tabling
-    return bool(tabling._leader_ctx.stack or tabling._leader_ctx.detached
-                or tabling._spawn_ctx.depth)
-
-
 # ── await_only ───────────────────────────────────────────────────────────
 
 _sync = threading.local()
+
+
+def _close_loop(loop):
+    if loop.is_closed() or loop.is_running():
+        return
+    try:
+        loop.run_until_complete(loop.shutdown_asyncgens())
+    finally:
+        loop.close()
 
 
 def _sync_loop():
@@ -107,11 +116,13 @@ def _sync_loop():
 
     Kept for the thread's life rather than one ``asyncio.run`` per await:
     ``asyncio.run`` finalises every async generator it touched, which would
-    end an ``await_each`` iterator after its first item.
+    end an ``await_each`` iterator after its first item.  Closed when the
+    thread object goes away, or at interpreter exit for the main thread.
     """
     loop = getattr(_sync, "loop", None)
     if loop is None or loop.is_closed():
         loop = _sync.loop = asyncio.new_event_loop()
+        weakref.finalize(threading.current_thread(), _close_loop, loop)
     return loop
 
 
@@ -132,39 +143,30 @@ def await_only(awaitable):
     whatever the awaitable raises.
     """
     if _in_query_greenlet():
-        if _in_tabled_evaluation():
-            _discard(awaitable)
-            raise LogicException(permission_error(
-                "await", "tabled_evaluation", awaitable, "await_only/1"))
-        current = _greenlet.getcurrent()
-        kind, value = current.parent.switch(("await", awaitable))
-        if kind == "err":
-            raise value
-        return value
+        return _greenlet.getcurrent().parent.switch(("await", awaitable))
     try:
         asyncio.get_running_loop()
     except RuntimeError:
         return _sync_loop().run_until_complete(_as_coroutine(awaitable))
+    culprit = type(awaitable).__name__
     _discard(awaitable)
     raise LogicException(permission_error(
-        "await", "synchronous_query", awaitable, "await_only/1"))
+        "await", "synchronous_query", culprit,
+        "await_only/1: a synchronous query (solve, once, ...) is waiting "
+        "inside a running event loop, which it would block; drive it with "
+        "clausal.aio.asolve or aonce instead"))
 
 
 # ── asolve / aonce ───────────────────────────────────────────────────────
 
 class _Query:
-    """One query: its solve generator, engine state and current greenlet."""
+    """One query: its solve generator, engine state and query greenlet."""
 
-    __slots__ = ("gen", "state")
+    __slots__ = ("gen", "state", "child", "live")
 
     def __init__(self, gen):
-        self.gen, self.state = gen, _fresh_state()
-
-    def _run(self, fn, first):
-        """Run *fn* in a query greenlet until it finishes or awaits."""
-        child = _QueryGreenlet(fn)
-        child.gr_context = _greenlet.getcurrent().gr_context
-        return child, self._switch(child.switch, first)
+        self.gen, self.state = gen, _fresh_state(self)
+        self.child, self.live = None, True
 
     def _switch(self, how, *args):
         saved = _install(self.state)
@@ -174,19 +176,27 @@ class _Query:
             self.state = _install(saved)
 
     async def step(self, fn):
-        """Run *fn* to completion in a greenlet, awaiting what it asks for."""
-        child, msg = self._run(fn, None)
-        while msg[0] == "await":
-            try:
-                result = await msg[1]
-            except asyncio.CancelledError as exc:
-                msg = self._switch(child.throw, exc)
-                continue
-            except Exception as exc:  # noqa: BLE001 - delivered to the query
-                msg = self._switch(child.switch, ("err", exc))
-            else:
-                msg = self._switch(child.switch, ("ok", result))
-        return msg
+        """Run *fn* to completion in a query greenlet, awaiting what it asks.
+
+        Whatever the awaited object raises -- an error, ``CancelledError``, or
+        a ``BaseException`` such as ``GeneratorExit`` or ``SystemExit`` -- is
+        thrown into the query at its ``await_only``, so the query unwinds (or
+        a ``catch/3`` handles an ordinary error) before it reaches the caller.
+        """
+        child = self.child = _QueryGreenlet(fn)
+        child.gr_context = _greenlet.getcurrent().gr_context
+        try:
+            msg = self._switch(child.switch, None)
+            while not child.dead:
+                try:
+                    result = await msg[1]
+                except BaseException as exc:  # noqa: BLE001 - delivered
+                    msg = self._switch(child.throw, exc)
+                else:
+                    msg = self._switch(child.switch, result)
+            return msg
+        finally:
+            self.child = None
 
     def next_solution(self, _):
         try:
@@ -195,7 +205,8 @@ class _Query:
             return ("end", None)
 
     def close(self, _):
-        self.gen.close()
+        if not self.gen.gi_running:
+            self.gen.close()
         return ("end", None)
 
 
@@ -216,7 +227,10 @@ async def asolve(goal, module=None, trail=None):
         # Close inside the query's greenlet and engine state, so the solve
         # generator's own cleanup (tabling episode repair, cleanup handlers)
         # runs where it would have run synchronously.
-        await query.step(query.close)
+        try:
+            await query.step(query.close)
+        finally:
+            query.live = False
 
 
 async def aonce(goal, module=None, trail=None):
