@@ -715,6 +715,16 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **`clausal-laya`**, a new optional package wrapping
+  [laya](https://pypi.org/project/laya/), a calibrated "System 1" decision
+  engine: `choice/4,5`, `noul/3`, `score/4,5` and `predict/3,4` make its
+  answers about a text relations whose solutions carry probabilities
+  (`choice/5` and `score/5` enumerate the options, most probable first).
+  Imported as `-import_from(py.laya, [...])`, which works with clausal
+  1.0.0; the bare name `laya` now maps to `py.laya` too (both import-alias
+  tables), as `yaml` or `torch` do. Docs:
+  `packages/clausal-laya/docs/laya.md`.
+
 - **Packaging for PyPI.** The wheel now carries the data files the engine
   reads at run time (the `.seam` library and stdlib modules, the toklex
   specs and Prolog preludes) and the sdist the C headers; neither did

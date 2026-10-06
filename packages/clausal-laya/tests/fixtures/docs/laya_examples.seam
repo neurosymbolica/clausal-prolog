@@ -1,0 +1,76 @@
+# Executable examples for docs/laya.md (the real model: skipped by
+# tests/conftest.py when the checkpoint cannot be downloaded).
+
+-import_from(py.laya, [choice, noul, score, predict])
+
+# --8<-- [start:route]
+-private([billing, technical, other])
+
+teams(TEAMS) <- (
+    TEAMS is {billing: "invoices, payments, refunds",
+              technical: "bugs, outages, system errors",
+              other: "everything else"}
+)
+
+# The model's answer: the most probable team.
+team(TICKET, TEAM) <- (
+    teams(TEAMS),
+    choice(TICKET, "Which department should handle this?", TEAMS, TEAM)
+)
+
+# Logic over its probabilities: every team at least 20% likely.
+plausible_teams(TICKET, PLAUSIBLE) <- (
+    teams(TEAMS),
+    findall(TEAM, (choice(TICKET, "Which department should handle this?",
+                          TEAMS, TEAM, P),
+                   P >= 0.2),
+            PLAUSIBLE)
+)
+
+test("route a ticket") <- (
+    team("We were billed twice for March, please refund one.", billing)
+)  # nv
+
+test("billing is a plausible team") <- (
+    plausible_teams("We were billed twice for March, please refund one.", TS),
+    in_(billing, TS)
+)  # nv
+# --8<-- [end:route]
+
+# --8<-- [start:escalate]
+escalate(TICKET) <- (
+    noul(TICKET, "Does the user threaten to cancel or leave?", P),
+    P > 0.5
+)
+
+test("a cancellation threat escalates") <- (
+    escalate("Refund the duplicate charge today or we will cancel our plan.")
+)  # nv
+# --8<-- [end:escalate]
+
+# --8<-- [start:urgency]
+test("urgency is an expected level") <- (
+    score("The whole site is down and no customer can log in.",
+          "How urgent is this?", ["not urgent", "soon", "blocking"], S),
+    S >= 0,
+    S <= 2
+)  # nv
+# --8<-- [end:urgency]
+
+# --8<-- [start:predict]
+test("several questions, one forward pass") <- (
+    predict("We were billed twice for March. Fix it or we leave.",
+            {'department': {'type': 'choice',
+                            'instructions': "Which department should handle this?",
+                            'criteria': ['billing', 'technical', 'other']},
+             'churn': {'type': 'noul',
+                       'instructions': "Does the user threaten to cancel or leave?"}},
+            {'max_len': 1024},
+            ANSWERS),
+    dict_get('department', ANSWERS, DEPARTMENT),
+    dict_get('choice', DEPARTMENT, 'billing'),
+    dict_get('churn', ANSWERS, CHURN),
+    dict_get('noul', CHURN, P),
+    P > 0.5
+)  # nv
+# --8<-- [end:predict]

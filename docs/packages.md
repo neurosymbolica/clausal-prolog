@@ -14,6 +14,7 @@ package lives at `packages/clausal-<name>/` in the main repository.
 | Package | Install | Description | Docs |
 |---|---|---|---|
 | **clausal-jax** | `pip install clausal-jax` | JAX predicates: array, PRNG, transforms, sharding, `jax.scipy`, optax, equinox, flax | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-jax/docs/jax.md) |
+| **clausal-laya** | `pip install clausal-laya` | laya decision predicates: calibrated choice, yes/no and score answers about a text, as relations with probabilities | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-laya/docs/laya.md) |
 | **clausal-opencv** | `pip install clausal-opencv` | OpenCV (`cv2`) predicates: image I/O, color, imgproc, contours, drawing, features, calib3d, objdetect, video | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-opencv/docs/opencv.md) |
 | **clausal-provenance** | `pip install clausal-provenance` | **Disabled pending redesign** (2026-09-25). Provenance-tagged bottom-up Datalog; PyTorch / JAX-differentiable semirings for neurosymbolic AI | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-provenance/docs/provenance.md) |
 | **clausal-scipy** | `pip install clausal-scipy` | SciPy wrappers: `linalg`, `optimize`, `stats`, `integrate`, `interpolate`, `fft`, `ndimage`, `spatial`, `signal`, `sparse`, `cluster`, `special`, `constants`, `differentiate` | [docs](https://github.com/neurosymbolica/clausal-prolog/tree/main/packages/clausal-scipy/docs/) |

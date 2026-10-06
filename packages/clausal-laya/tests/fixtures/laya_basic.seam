@@ -1,0 +1,62 @@
+# laya predicates against the REAL model (skipped by tests/conftest.py when
+# the checkpoint cannot be downloaded).  Assertions are ones any sane
+# checkpoint meets, and laya's own README example (billing, churn).
+
+-import_from(py.laya, [choice, noul, score, predict])
+
+complaint(T) <- (
+    T is "Hi, we were billed twice for March. Please refund the duplicate today or we will cancel our plan."
+)
+
+test("the README complaint goes to billing") <- (
+    complaint(T),
+    choice(T, "Which department should handle this?",
+           ['billing', 'technical', 'other'], L),
+    L == 'billing'
+)  # nv
+
+test("choice/5 probabilities sum to one") <- (
+    complaint(T),
+    findall(P, choice(T, "Which department should handle this?",
+                      ['billing', 'technical', 'other'], _, P), PS),
+    length(PS, 3),
+    sum_list(PS, S),
+    S > 0.99,
+    S < 1.01
+)  # nv
+
+test("choice/5 answers the most probable label first") <- (
+    complaint(T),
+    findall(L, choice(T, "Which department should handle this?",
+                      ['billing', 'technical', 'other'], L, _), [FIRST, *_]),
+    choice(T, "Which department should handle this?",
+           ['billing', 'technical', 'other'], FIRST)
+)  # nv
+
+test("a threat to cancel is likely churn") <- (
+    complaint(T),
+    noul(T, "Does the user threaten to cancel or leave?", P),
+    P > 0.5
+)  # nv
+
+test("score/4 lies within the levels") <- (
+    complaint(T),
+    score(T, "How urgent is this?", ["not urgent", "soon", "blocking"], S),
+    S >= 0,
+    S <= 2
+)  # nv
+
+test("predict/3 answers every question") <- (
+    complaint(T),
+    predict(T, {'department': {'type': 'choice',
+                               'instructions': "Which department should handle this?",
+                               'criteria': ['billing', 'technical', 'other']},
+                'churn': {'type': 'noul',
+                          'instructions': "Does the user threaten to cancel or leave?"}},
+            A),
+    dict_get('department', A, D),
+    dict_get('choice', D, 'billing'),
+    dict_get('churn', A, C),
+    dict_get('noul', C, P),
+    P > 0.5
+)  # nv

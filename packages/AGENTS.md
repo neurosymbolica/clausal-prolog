@@ -22,6 +22,7 @@ seam code imports them as `-import_from(yaml, [...])` (rewritten to `py.yaml`).
 | `clausal-spacy` | `spacy.py` | spacy |
 | `clausal-sympy` | `sympy.py` | sympy |
 | `clausal-yaml` | `yaml.py` | pyyaml |
+| `clausal-laya` | `laya.py` | laya (brings torch, transformers); model tests need the Hugging Face Hub |
 
 Prolog backends. Each adds a package `clausal.<name>` (outside `modules/`) that
 embeds a real ISO Prolog; they have no Python deps but need a native build:

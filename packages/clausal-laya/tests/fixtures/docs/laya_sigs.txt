@@ -1,0 +1,24 @@
+# Display snippets for docs/laya.md
+
+--8<-- [start:import]
+-import_from(py.laya, [choice, noul, score, predict])
+--8<-- [end:import]
+
+--8<-- [start:choice_sig]
+choice(+Text, +Instructions, +Labels, ?Label)
+choice(+Text, +Instructions, +Labels, ?Label, ?P)
+--8<-- [end:choice_sig]
+
+--8<-- [start:noul_sig]
+noul(+Text, +Instructions, ?P)
+--8<-- [end:noul_sig]
+
+--8<-- [start:score_sig]
+score(+Text, +Instructions, +Levels, ?Score)
+score(+Text, +Instructions, +Levels, ?Level, ?P)
+--8<-- [end:score_sig]
+
+--8<-- [start:predict_sig]
+predict(+Text, +Questions, ?Answers)
+predict(+Text, +Questions, +Options, ?Answers)
+--8<-- [end:predict_sig]
