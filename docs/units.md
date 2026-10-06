@@ -638,7 +638,7 @@ passed, units are stripped before calling SciPy, and the result is re-wrapped
 with correctly propagated dimensions.  when plain inputs are passed, SciPy is
 called directly with zero overhead.
 
-Each SciPy predicate falls into one of four categories (see individual module docs for details: [scipy.linalg](scipy_linalg.md), [scipy.special](scipy_special.md), [scipy.fft](scipy_fft.md), [scipy.differentiate](scipy_differentiate.md), [scipy.integrate](scipy_integrate.md), [scipy.interpolate](scipy_interpolate.md)):
+Each SciPy predicate falls into one of four categories (see individual module docs for details: [scipy.linalg](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_linalg.md), [scipy.special](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_special.md), [scipy.fft](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_fft.md), [scipy.differentiate](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_differentiate.md), [scipy.integrate](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_integrate.md), [scipy.interpolate](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_interpolate.md)):
 
 | Category | Behaviour | Examples |
 |---|---|---|

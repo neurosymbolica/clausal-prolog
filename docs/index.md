@@ -229,8 +229,8 @@ for the full feature set.
 | [Physical Units](units.md) | `n(Unit)` sugar, dimensional arithmetic, AttVar constraints |
 | [Currency](currency.md) | Exact-decimal money as units base dimensions; rounding/display; precision checks |
 | [Regex](regex.md) | Pattern matching, group extraction, auto-binding |
-| [Symbolic Math](sympy.md) | SymPy integration — calculus, algebra, number theory |
-| [YAML](yaml.md) | YAML parsing and generation |
+| [Symbolic Math](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-sympy/docs/sympy.md) | SymPy integration — calculus, algebra, number theory |
+| [YAML](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-yaml/docs/yaml.md) | YAML parsing and generation |
 | [Date/Time](date_time.md) | Date, time, and datetime predicates |
 | [Logging](logging.md) | Structured logging predicates |
 | [UUID](uuid.md) | UUID generation and inspection |
@@ -242,16 +242,16 @@ for the full feature set.
 | [Files](files.md) | File/directory existence, listing, metadata, CRUD, path manipulation |
 | [Process](process.md) | Shell commands, subprocess execution, sleep |
 | [SQLite](sqlite.md) | SQLite database predicates |
-| [spaCy NLP](spacy.md) | NLP pipeline — tokenisation, NER, POS, similarity |
-| [scipy.special](scipy_special.md) | Special mathematical functions — gamma, Bessel, elliptic, hypergeometric, orthogonal polynomials |
-| [scipy.linalg](scipy_linalg.md) | Linear algebra — solvers, decompositions, matrix functions, factorisations |
-| [scipy.optimize](scipy_optimize.md) | Optimisation — minimisation, root finding, curve fitting, linear programming |
-| [scipy.integrate](scipy_integrate.md) | Numerical integration — quadrature, ODE solvers, sampled-data methods |
-| [scipy.interpolate](scipy_interpolate.md) | Interpolation — splines, PCHIP, Akima, regular grids, radial basis functions |
-| [scipy.stats](scipy_stats.md) | statistics — descriptive stats, hypothesis tests, distributions |
-| [scipy.fft](scipy_fft.md) | Discrete Fourier transforms — FFT, inverse FFT, helper functions |
-| [scipy.ndimage](scipy_ndimage.md) | N-dimensional image processing — filters, morphology, transforms, measurements |
-| [scipy.spatial](scipy_spatial.md) | Spatial algorithms — distance functions, KD-tree, ConvexHull, Delaunay, Rotation |
+| [spaCy NLP](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-spacy/docs/spacy.md) | NLP pipeline — tokenisation, NER, POS, similarity |
+| [scipy.special](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_special.md) | Special mathematical functions — gamma, Bessel, elliptic, hypergeometric, orthogonal polynomials |
+| [scipy.linalg](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_linalg.md) | Linear algebra — solvers, decompositions, matrix functions, factorisations |
+| [scipy.optimize](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_optimize.md) | Optimisation — minimisation, root finding, curve fitting, linear programming |
+| [scipy.integrate](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_integrate.md) | Numerical integration — quadrature, ODE solvers, sampled-data methods |
+| [scipy.interpolate](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_interpolate.md) | Interpolation — splines, PCHIP, Akima, regular grids, radial basis functions |
+| [scipy.stats](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_stats.md) | statistics — descriptive stats, hypothesis tests, distributions |
+| [scipy.fft](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_fft.md) | Discrete Fourier transforms — FFT, inverse FFT, helper functions |
+| [scipy.ndimage](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_ndimage.md) | N-dimensional image processing — filters, morphology, transforms, measurements |
+| [scipy.spatial](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_spatial.md) | Spatial algorithms — distance functions, KD-tree, ConvexHull, Delaunay, Rotation |
 | [Crypto](crypto.md) | Cryptographic hashing, HMAC signing, PBKDF2 key derivation |
 | [HTTP & URL](http.md) | HTTP requests (GET, POST, JSON), URL encoding and parsing |
 | [TCP](tcp.md) | TCP client/server sockets — connect, listen, send, receive |
@@ -263,16 +263,16 @@ for the full feature set.
 | [Z3 SMT Solver](z3.md) | Multi-theory constraints via Z3 — integers, reals, booleans, bitvectors, arrays, strings, optimization, unsat cores |
 | [Meta-Interpreter Specialization](specialization.md) | Partial deduction — specialize MIs to remove interpretation overhead |
 | [Prolog Translation](prolog_translation.md) | Bidirectional seam ↔ Prolog translation |
-| [Trealla Prolog Embedding](trealla.md) | In-process Trealla Prolog engine via ctypes — fast, lightweight, instant startup |
-| [Scryer Prolog Embedding](scryer.md) | In-process Scryer Prolog engine via PyO3 — lazy queries, tabling support |
+| [Trealla Prolog Embedding](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-trealla/docs/trealla.md) | In-process Trealla Prolog engine via ctypes — fast, lightweight, instant startup |
+| [Scryer Prolog Embedding](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scryer/docs/scryer.md) | In-process Scryer Prolog engine via PyO3 — lazy queries, tabling support |
 | [Examples](examples.md) | Example programs: Fibonacci, N-Queens, Sudoku, meta-interpreters |
 | **Scientific Computing** | |
-| [scikit-learn](sklearn.md) | Machine learning: estimators, pipelines, cross-validation |
-| [scipy.cluster](scipy_cluster.md) | Hierarchical clustering, k-means, vector quantisation |
-| [scipy.constants](scipy_constants.md) | CODATA physical constants, SI prefixes |
-| [scipy.differentiate](scipy_differentiate.md) | Numerical differentiation: Derivative, Jacobian, Hessian |
-| [scipy.signal](scipy_signal.md) | Signal processing: filter design, filtering, spectral analysis |
-| [scipy.sparse](scipy_sparse.md) | Sparse matrices and sparse linear algebra |
+| [scikit-learn](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-sklearn/docs/sklearn.md) | Machine learning: estimators, pipelines, cross-validation |
+| [scipy.cluster](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_cluster.md) | Hierarchical clustering, k-means, vector quantisation |
+| [scipy.constants](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_constants.md) | CODATA physical constants, SI prefixes |
+| [scipy.differentiate](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_differentiate.md) | Numerical differentiation: Derivative, Jacobian, Hessian |
+| [scipy.signal](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_signal.md) | Signal processing: filter design, filtering, spectral analysis |
+| [scipy.sparse](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scipy/docs/scipy_sparse.md) | Sparse matrices and sparse linear algebra |
 | **Infrastructure** | |
 | [Compiler](compiler.md) | Compilation pipeline: head patterns, body goals, trampoline, TRO |
 | [Jupyter Notebooks](jupyter.md) | Notebook integration with HTML rendering |

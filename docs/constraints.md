@@ -690,4 +690,4 @@ The same comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) route to CLP(�
 
 ---
 
-*See also: [CLP(B)](clpb.md) — Boolean constraint solving · [CLP(ℝ)](clpr.md) — real-domain interval arithmetic · [Tabling](tabling.md) — memoised search, required for Well-Founded Semantics · [Trealla Prolog Embedding](trealla.md) — fast CLP(Z) via embedded Trealla · [Scryer Prolog Embedding](scryer.md) — CLP(Z) with tabling and strict ISO conformance.*
+*See also: [CLP(B)](clpb.md) — Boolean constraint solving · [CLP(ℝ)](clpr.md) — real-domain interval arithmetic · [Tabling](tabling.md) — memoised search, required for Well-Founded Semantics · [Trealla Prolog Embedding](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-trealla/docs/trealla.md) — fast CLP(Z) via embedded Trealla · [Scryer Prolog Embedding](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scryer/docs/scryer.md) — CLP(Z) with tabling and strict ISO conformance.*

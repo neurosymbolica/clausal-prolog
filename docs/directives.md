@@ -732,7 +732,7 @@ a term of it is the tuple `("point", 1, 2)`. See
 ## Backend Directive (planned)
 
 !!! note "Not yet implemented"
-    `-backend(scryer)` and `-backend(trealla)` are planned for a future release. Currently, programs are loaded from Python via the `Scryer` or `Trealla` classes. See [Scryer Prolog Embedding](scryer.md) and [Trealla Prolog Embedding](trealla.md). The sketch below does **not** load today.
+    `-backend(scryer)` and `-backend(trealla)` are planned for a future release. Currently, programs are loaded from Python via the `Scryer` or `Trealla` classes. See [Scryer Prolog Embedding](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scryer/docs/scryer.md) and [Trealla Prolog Embedding](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-trealla/docs/trealla.md). The sketch below does **not** load today.
 
 ```text
 -backend(scryer)  # or -backend(trealla)

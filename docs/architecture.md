@@ -8,7 +8,7 @@
 
 The import hook handles seam (`.seam`), [Clausal Prolog](clausal_prolog.md) (`.clausal`) and `.pl` (Prolog) files — see [Importing Prolog](importing_prolog.md). Each layer builds on the one below. Python code and logic code can interact at any layer.
 
-The optional `clausal.trealla` and `clausal.scryer` layers provide embedded Prolog engines. [Trealla](trealla.md) is a fast C-based engine via ctypes (instant startup, ~5MB). [Scryer](scryer.md) is a Rust-based engine via PyO3 (~200ms startup, ~100MB, with tabling support). Both use the existing Prolog translation pipeline and execute programs in-process.
+The optional `clausal.trealla` and `clausal.scryer` layers provide embedded Prolog engines. [Trealla](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-trealla/docs/trealla.md) is a fast C-based engine via ctypes (instant startup, ~5MB). [Scryer](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scryer/docs/scryer.md) is a Rust-based engine via PyO3 (~200ms startup, ~100MB, with tabling support). Both use the existing Prolog translation pipeline and execute programs in-process.
 
 ---
 
@@ -29,7 +29,7 @@ The Warren Abstract Machine is the standard execution substrate for Prolog. For 
 - leverages the AST infrastructure Clausal Prolog already has
 - is exactly what `clausal.logic.trampoline` and `clausal.logic.continuation_search` are already built toward
 
-For programs that genuinely need a WAM — ISO-conformant constraint solving, rich library ecosystems, or cross-validation against a standards-compliant engine — the [Trealla](trealla.md) and [Scryer](scryer.md) Prolog embeddings provide one in-process, without replacing Clausal Prolog's native execution model.
+For programs that genuinely need a WAM — ISO-conformant constraint solving, rich library ecosystems, or cross-validation against a standards-compliant engine — the [Trealla](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-trealla/docs/trealla.md) and [Scryer](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scryer/docs/scryer.md) Prolog embeddings provide one in-process, without replacing Clausal Prolog's native execution model.
 
 ---
 

@@ -237,4 +237,4 @@ the spellings that change:
 - `clausal-fmt` and `clausal-rewrite` work on `.seam` files only, and
   refuse Prolog-syntax files.
 - To run unrestricted ISO Prolog (with cut) alongside Clausal Prolog, use
-  the [Scryer](scryer.md) or [Trealla](trealla.md) embeddings.
+  the [Scryer](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scryer/docs/scryer.md) or [Trealla](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-trealla/docs/trealla.md) embeddings.
