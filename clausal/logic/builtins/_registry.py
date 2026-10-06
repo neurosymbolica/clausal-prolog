@@ -120,8 +120,9 @@ def _trampoline_builtin(functor: str, arity: int, *, fields: tuple[str, ...] | N
     Use for builtins that operate on lists or call sub-goals, so they
     participate directly in the trampoline without an extra wrapper layer.
 
-    signature: ``fn(this_generator, parent, arg0, …, argN-1, trail)``
-    Must yield ``(parent, None)`` per solution and ``(parent, DONE)`` at end.
+    signature: ``fn(this_generator, _proceed, _fail, _catcher, arg0, …,
+    argN-1, trail)``.  Must yield ``(_proceed, None)`` per solution and
+    ``(_fail, DONE)`` at the end (see ``dict_set._dict_size__2``).
     """
     def decorator(fn: Callable) -> Callable:
         _BUILTINS[(functor, arity)] = fn

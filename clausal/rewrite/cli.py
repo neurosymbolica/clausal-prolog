@@ -1,6 +1,6 @@
 """``clausal-rewrite`` -- apply Clausal rewrite rules, then format.
 
-    clausal-rewrite src/                    rewrite every .clausal/.seam file under src/
+    clausal-rewrite src/                    rewrite every seam (.seam) file under src/
     clausal-rewrite --check src/            exit 1 if any file would change
     clausal-rewrite --diff src/             print what would change, write nothing
     clausal-rewrite --rules head_fold f     apply only the named rule classes
@@ -53,10 +53,9 @@ def default_rule_names() -> list[str]:
 def rule_path(name: str) -> Path | None:
     """The file behind rule class *name*, or ``None`` if there is none.
 
-    The one place a rule name becomes a path.  ``.clausal`` and ``.seam`` are
-    aliases, so both spellings are tried, in ``CLAUSAL_SUFFIXES`` order — the
-    finder's own priority, so a directory holding both twins resolves the way
-    an import of the same stem would.
+    The one place a rule name becomes a path.  Each seam suffix is tried, in
+    ``CLAUSAL_SUFFIXES`` order — the finder's own priority, so the rule
+    resolves the way an import of the same stem would.
     """
     # A rule name is a bare stem, never a path.  `load_rules` EXECUTES what
     # this returns, so a name carrying separators (`../../tmp/evil`) would

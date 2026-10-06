@@ -1461,6 +1461,13 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Fixed
 
+- **`clausal.logic.clportools` imports without OR-Tools.** A module-level
+  class subclassed `CpSolverSolutionCallback`, a name bound only when
+  `ortools` imported, so the import raised `NameError` instead of leaving
+  the backend's own "requires the ortools package" error for first use.
+  The OR-Tools and pysat test modules now skip without their package, as
+  the z3 ones do, rather than failing test by test.
+
 - **clausal-torch docs: `named_module/3`'s root is named `''`**, the
   empty atom, not `""` (a string): module names come out as atoms.
 

@@ -6,7 +6,7 @@ private submodules (e.g. ``clausal.logic.compiler.arg_index``) do so at
 their own risk and should expect the surface to change.
 
 The module layout is documented in
-``implementation_plans/COMPILER_MODULE_SPLIT.md``; key submodules:
+``implementation_plans/compiler/COMPILER_MODULE_SPLIT.md``; key submodules:
 
 - ``predicate``         — top-level ``compile_predicate_*`` entrypoints
 - ``goal_shallow``      — ``compile_goal`` / ``compile_body`` (shallow)
@@ -22,7 +22,7 @@ The module layout is documented in
 The ``_monolith`` re-export hub and ``__getattr__`` delegation that
 previously fronted private names were retired in slice B6; the
 remaining private re-exports were removed in slice H of the compiler
-refactor (see ``implementation_plans/COMPILER_MIGRATION_PLAN.md``).
+refactor (see ``implementation_plans/compiler/COMPILER_MIGRATION_PLAN.md``).
 """
 
 from clausal.logic.trampoline import DONE

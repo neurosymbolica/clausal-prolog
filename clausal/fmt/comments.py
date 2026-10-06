@@ -1,6 +1,6 @@
 """Comment capture for the Clausal formatter.
 
-``.clausal`` source parses under Python's own :mod:`ast` -- the ``<-`` arrow
+Seam (``.seam``) source parses under Python's own :mod:`ast` -- the ``<-`` arrow
 rides as ``<`` plus unary minus, directives as unary-minus calls -- so the
 formatter gets a real tree for free.  What ``ast`` throws away is comments, and
 comments are most of what a formatter must not lose.

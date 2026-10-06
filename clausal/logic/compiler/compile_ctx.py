@@ -65,7 +65,7 @@ Public entrypoints (``compile_goal``, ``compile_body``,
 backward compatibility with external callers (tests, ``solve.py``,
 ``compiler_v2.py``).  Internal helpers switch to accepting ``ctx``
 one sub-slice at a time — see
-``implementation_plans/SLICE_B_PROGRESS.md``.
+``implementation_plans/compiler/SLICE_B_PROGRESS.md``.
 """
 
 from __future__ import annotations
@@ -159,7 +159,7 @@ class CompilationContext:
     # Populated by ``compile_predicate_shallow`` / ``compile_predicate_trampoline``
     # before any clause compiles.  Shared helpers read ``ctx.strategy``
     # instead of taking per-hook kwargs — see ``compiler/strategy.py`` and
-    # ``implementation_plans/COMPILER_MIGRATION_PLAN.md`` §5.
+    # ``implementation_plans/compiler/COMPILER_MIGRATION_PLAN.md`` §5.
     #
     # ``None`` means "not yet chosen" — legitimate during the brief window
     # between CompilationContext construction and strategy assignment, but

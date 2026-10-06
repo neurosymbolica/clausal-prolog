@@ -10,7 +10,7 @@ The census walks source roots, counts each construct's GOAL-position sites
 per file with the loaders' own counters, and compares them with a committed
 baseline (``transition_census_baseline.json`` beside this file):
 
-* a seam file (``.seam`` / ``.clausal``) -- each ``head <- body`` clause
+* a seam file (``.seam``) -- each ``head <- body`` clause
   statement, its body counted by
   :func:`clausal.logic.compiler.terms_to_goalop.count_transition_constructs`
   (the seam loader's counter; here without a module database, so a goal it

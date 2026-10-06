@@ -179,6 +179,13 @@ more detail. Listed roughly in the order the pipeline touches them.
 | `destructive_reuse.py`    | `_find_destructive_reuse_goals` + `_apply_destructive_reuse` — trampoline-only preprocess. |
 | `tro.py`                  | Tail-recursion optimisation: detection + `_compile_tro_tail` / `_compile_tro_body`. Trampoline-only. |
 | `predicate.py`            | The three top-level entrypoints (`compile_predicate_trampoline/shallow/ast` + variants), `_build_predicate_{trampoline_,}funcdef`, `_install`. Owns Phase 3 + 7 and orchestrates the others. |
+| `strategy.py`             | `Strategy` — every shallow-vs-trampoline decision (leaf yield, sub-call, clause preprocess, function parameters) in one object. |
+| `ir.py`                   | `GoalOp`, the target- and strategy-agnostic body IR (pure type definitions + `walk_goal_ops`). |
+| `terms_to_goalop.py`      | Clause body (terms / AST nodes) → `GoalOp` tree. |
+| `lower_python_shallow.py` / `lower_python_trampoline.py` | `GoalOp` tree → `ast.stmt` list, per strategy. |
+| `_lower_goalop_shared.py` | `GoalOp` lowering that is identical under both strategies; the two lowerings delegate here. |
+| `optimisations/`          | Optimisations as passes over the `GoalOp` IR (`analyse(ir) -> Plan`, `apply(ir, plan) -> ir`): `call_site`, `continuation_tco`, `destructive_reuse`, `tro`. |
+| `invariants.py`           | Runtime assertions of the phase-boundary invariants (§10), run on every compile. |
 | `__init__.py`             | Public API re-exports. Every exposed name has an explicit import from its canonical owner (no ``__getattr__``; ``_monolith`` retired in slice B6). |
 
 ---
@@ -505,7 +512,7 @@ clause-tree and output AST.
 
 All compile-time state lives on `CompilationContext` (retired from
 a thread-local in slice B2c; see
-`implementation_plans/SLICE_B_PROGRESS.md`).
+`implementation_plans/compiler/SLICE_B_PROGRESS.md`).
 
 ---
 
@@ -628,7 +635,7 @@ Things a new contributor would otherwise have to reverse-engineer.
   `_monolith.py` and reached `predicate.py` via
   `for _n in dir(_m): globals().setdefault(_n, getattr(_m, _n))` —
   a bulk-copy hack that slice B1a retired (see
-  `implementation_plans/SLICE_B_PROGRESS.md`).
+  `implementation_plans/compiler/SLICE_B_PROGRESS.md`).
 
 - **`forall/2` rewrites to `not (Cond, not Action)` and lowers via
   the shallow IR pipeline even in trampoline mode.** (In Prolog
@@ -699,23 +706,23 @@ private re-exports were removed in slice H.
 
 ## 13. Further reading
 
-- `implementation_plans/COMPILER_MODULE_SPLIT.md` — the history of
+- `implementation_plans/compiler/COMPILER_MODULE_SPLIT.md` — the history of
   how this package came to be split from a single 8725-line file.
   Contains the audit findings and deferred-refactor list.
-- `implementation_plans/COMPILER_OPTIMIZATION.md` — design notes
+- `implementation_plans/compiler/COMPILER_OPTIMIZATION.md` — design notes
   for the indexing and dispatch optimisations (partially stale;
   path references predate the module split, symbol names are current).
-- `implementation_plans/COMPILER_REFACTOR.md` — notes on the
+- `implementation_plans/compiler/COMPILER_REFACTOR.md` — notes on the
   earlier pipeline split (module loading: `EmbedTransformer` →
   `compile_module`), separate from this work.
 
 ### Pending / speculative
 
-Open design questions tracked in `todo/`:
+Open design questions tracked in `implementation_plans/compiler/todo/`:
 
-- `todo/jit_indexing.md` — profile and tune indexing thresholds,
+- `implementation_plans/compiler/todo/jit_indexing.md` — profile and tune indexing thresholds,
   add a user directive for explicit indexing control, and eventually
   a JIT recompilation path for hot predicates.
-- `todo/inline_body_in_dispatch.md` — inline single-clause bucket
+- `implementation_plans/compiler/todo/inline_body_in_dispatch.md` — inline single-clause bucket
   bodies directly into the dispatch wrapper, eliminating a generator
   frame per call.

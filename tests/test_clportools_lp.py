@@ -12,6 +12,8 @@ These Python tests cover infrastructure that can't be tested from .clausal:
 
 import pytest
 
+pytest.importorskip("ortools")
+
 from clausal.logic.variables import Var, Trail, deref
 
 from clausal.pythonic_ast.nodes import GtE, LtE

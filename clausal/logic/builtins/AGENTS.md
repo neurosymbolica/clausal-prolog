@@ -54,7 +54,7 @@ Pick the family file, then one of three decorators from `_registry.py`:
   `mark = trail.mark(); if unify(x, v, trail): yield None; trail.undo(mark)`.
   Fields (keyword names) come from the parameter names minus the last two.
 - `@_trampoline_builtin("name", arity)` — native trampoline protocol, for
-  builtins that enumerate lists or call sub-goals. Actual signature (see
+  builtins that enumerate lists or call sub-goals. Signature (see
   `lists.py`): `fn(this_generator, _proceed, _fail, _catcher, *args, trail)`;
   yield `(_proceed, None)` per solution and `(_fail, DONE)` at the end.
 - `@_db_builtin("name", arity, fields=(...))` — needs the caller's database

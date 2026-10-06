@@ -11,8 +11,8 @@ This module (Slice D1) defines the IR — pure type definitions plus a
 ``walk_goal_ops`` traversal helper.  Nothing consumes these types yet;
 ``terms_to_goalop`` (D2), the lowering passes (D3), and the
 parallel-implementation harness (D4) land as follow-up sub-slices.  See
-``implementation_plans/COMPILER_MIGRATION_PLAN.md`` §6 and
-``implementation_plans/COMPILER_TARGET_ARCHITECTURE.md`` §4 (``GoalOp``
+``implementation_plans/compiler/COMPILER_MIGRATION_PLAN.md`` §6 and
+``implementation_plans/compiler/COMPILER_TARGET_ARCHITECTURE.md`` §4 (``GoalOp``
 — the body IR) for the design commitments.
 
 Design choices baked into this file:
@@ -293,7 +293,7 @@ class SubCall(GoalOp):
       / ``catcher`` routed through us (completion and exceptions still
       wake our frame).  Mutually exclusive with ``tail_recursive``
       (TRO wins and is a richer special case — arg reassignment + loop
-      continue).  See ``implementation_plans/CONTINUATION_TCO_PLAN.md``.
+      continue).  See ``implementation_plans/compiler/CONTINUATION_TCO_PLAN.md``.
     """
     fname: str
     arity: int

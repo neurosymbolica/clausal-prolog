@@ -9,7 +9,7 @@ slot — solutions bypass the caller's frame while ``fail`` and
 trail.undo(_mark)``) and backtracking (next clause / next ``for``
 iteration / enclosing choice point) run correctly on exhaustion.
 
-See ``implementation_plans/CONTINUATION_TCO_PLAN.md`` §5.1 for the
+See ``implementation_plans/compiler/CONTINUATION_TCO_PLAN.md`` §5.1 for the
 precise recursion.  Mutually exclusive with TRO
 (``tail_recursive=True``); TRO wins and is a richer special case —
 the pass skips any :class:`SubCall` TRO has already marked.

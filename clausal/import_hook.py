@@ -1,7 +1,7 @@
-"""import_hook.py — Import hook for ``.clausal`` predicate modules.
+"""import_hook.py — Import hook for Clausal source modules.
 
-Files with the ``.clausal`` extension (or its alias ``.seam``, which carries
-exactly the same syntax) are intercepted by this hook, which:
+Seam files (``.seam``, the ``CLAUSAL_SUFFIXES``) are intercepted by this hook,
+which:
 
   1. Injects predicate builtins (all simple_ast names, Var, unify,
      deref, Trail, walk) plus the hidden globals ``$module``,
@@ -24,6 +24,10 @@ exactly the same syntax) are intercepted by this hook, which:
 ``$module`` (the value of the ``$module`` name in the module namespace) is a
 ``clausal.logic.database.Module`` instance, not the Python module object.
 The Python module object is the standard ``sys.modules[name]`` entry.
+
+Prolog-syntax files -- Clausal Prolog (``.clausal``) and ISO Prolog (``.pl``)
+-- are found by the same finder and compiled by the Prolog loaders
+(``NativePrologLoader``, ``PrologLoader``); see ``_prolog_loader_class_for``.
 """
 
 from importlib.abc import MetaPathFinder, SourceLoader
@@ -261,8 +265,8 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
         Source file path.
     recover_module_items_fn : callable(path: str) -> list
         Called on .pyc cache hit to recover module_items from source.
-        For .clausal files: re-parse the .clausal source.
-        For .pl files: re-translate .pl → .clausal, then parse.
+        For seam files: re-parse the seam source.
+        For .pl files: re-translate .pl → seam, then parse.
     """
     from clausal.logic.compiler_v2 import (
         compile_module, mark_import_placeholder)
@@ -490,7 +494,7 @@ predicate_builtins: dict = {}
 def _preseed_py_submodules(module_items) -> None:
     """Ensure ``sys.modules["py.X"]`` entries exist for any ``py.*`` imports.
 
-    when a .clausal file uses ``-import_from(py.re, …)``, the generated
+    when a seam file uses ``-import_from(py.re, …)``, the generated
     bytecode contains ``from py.re import …``.  Python's import machinery
     checks ``sys.modules["py"].__path__`` before invoking meta-path finders,
     so if pytest's single-file ``py.py`` is already cached in sys.modules the
@@ -536,7 +540,7 @@ def _preseed_py_submodules(module_items) -> None:
 # default source-loader invalidates only on (mtime, size) + CPython magic — so
 # upgrading clausal (new transformer semantics) leaves stale transformed
 # bytecode live until the source file itself changes. Fold this tag into the
-# reported mtime so a clausal upgrade invalidates every cached .clausal/.pl
+# reported mtime so a clausal upgrade invalidates every cached seam/Prolog
 # .pyc. BUMP THIS whenever EmbedTransformer / the codegen output changes.
 #
 # 7 -> 8 (P3-2 Task 2, THE FLIP): the transformer's output changed three ways
@@ -621,8 +625,8 @@ _FINGERPRINT_CACHE: "int | None" = None
 def _compilation_fingerprint() -> int:
     """A digest of the engine sources that decide emitted code.
 
-    Computed LAZILY and memoised: it is only needed when a ``.clausal`` or
-    ``.pl`` file is actually compiled, so a process that imports ``clausal``
+    Computed LAZILY and memoised: it is only needed when a seam or Prolog
+    file is actually compiled, so a process that imports ``clausal``
     without loading Clausal source pays nothing, and one that loads a thousand
     pays once.
 
@@ -722,12 +726,13 @@ def _suffix_salt(path) -> int:
     """The source's part of the bytecode cache key, keyed on its SURFACE
     (:func:`clausal.end_module.surface_of`) and its suffix.
 
-    0 only for SEAM source spelled ``.clausal`` (the key existing caches
-    were written under); any other seam or ``.pl`` suffix is a NONZERO
-    digest of the suffix alone (unchanged, so their caches stay valid); a
+    0 only for SEAM source spelled ``.clausal`` (the key caches written
+    before the extension flip used); any other seam or ``.pl`` suffix is a
+    NONZERO digest of the suffix alone (unchanged, so their caches stay
+    valid); a
     Clausal Prolog file is a NONZERO digest of the surface AND the suffix.
-    So two same-stem sources in one directory never share a key, and when
-    the extension flip moves ``.clausal`` to the Clausal Prolog surface, a
+    So two same-stem sources in one directory never share a key, and since
+    the extension flip moved ``.clausal`` to the Clausal Prolog surface, a
     seam ``.pyc`` written under 0 is never served for a Prolog file."""
     suffix = os.path.splitext(os.fspath(path))[1]
     surface = surface_of(path)
@@ -772,8 +777,8 @@ def _native_frontend_salt() -> int:
 # ── One source file → one compilation ────────────────────────────────────────
 #
 # Maps a resolved source path to the dotted name it was first imported under.
-# A .clausal file is reachable under more than one dotted name whenever both a
-# package directory and its parent sit on sys.path (``pkg/soledom.clausal`` is
+# A source file is reachable under more than one dotted name whenever both a
+# package directory and its parent sit on sys.path (``pkg/soledom.seam`` is
 # then both ``soledom`` and ``pkg.soledom``), and CPython's per-name module
 # cache would compile it once per name.  For a predicate module that is not
 # merely wasteful: each compilation mints its *own* PredicateMeta class for
@@ -799,7 +804,7 @@ def _canonical_source_key(path):
 
 
 class _ClausalSourceLoader(SourceLoader):
-    """Common file I/O for .clausal and .pl loaders.
+    """Common file I/O for the seam and Prolog loaders.
 
     Extends ``importlib.abc.SourceLoader`` to get automatic ``.pyc`` caching.
     Subclasses must implement ``source_to_code``, ``exec_module``, and
@@ -841,7 +846,7 @@ class _ClausalSourceLoader(SourceLoader):
         # deterministic int is valid; masking keeps the value in range and the
         # tag XOR still participates, so a tag bump still invalidates old caches.
         # The source SUFFIX is part of the key too: a same-directory
-        # ``twin.pl`` and ``twin.clausal`` share ``__pycache__/twin.*.pyc``,
+        # ``twin.pl`` and ``twin.seam`` share ``__pycache__/twin.*.pyc``,
         # and with equal size and mtime_ns each would be served the other's
         # bytecode.
         return {"mtime": (st.st_mtime_ns ^ _effective_bytecode_tag()
@@ -917,7 +922,7 @@ def transform_seam_source(source, filename, prolog_singletons=False):
 
 
 def _parse_clausal_source(source, filename, prolog_singletons=False):
-    """Parse + EmbedTransformer a .clausal source string.
+    """Parse + EmbedTransformer a seam source string.
 
     Returns ``(code_object, transformer)`` — the transformer carries
     ``_module_items`` needed by the V2 pipeline.  *prolog_singletons* is the
@@ -936,7 +941,7 @@ def _parse_clausal_source(source, filename, prolog_singletons=False):
 
 
 def _extract_module_items(source, filename, prolog_singletons=False):
-    """Re-parse .clausal source text just to recover module_items (cache-hit path)."""
+    """Re-parse seam source text just to recover module_items (cache-hit path)."""
     with warnings.catch_warnings(), \
             clausal_syntax_diagnostics(source, filename):
         warnings.filterwarnings(
@@ -953,7 +958,7 @@ def _extract_module_items(source, filename, prolog_singletons=False):
 
 
 class PredicateLoader(_ClausalSourceLoader):
-    """SourceLoader for .clausal predicate modules.
+    """SourceLoader for seam predicate modules.
 
     ``source_to_code`` performs the EmbedTransformer rewrite; the resulting
     bytecode is cached in ``__pycache__/`` so subsequent imports skip parsing
@@ -990,7 +995,7 @@ class PredicateLoader(_ClausalSourceLoader):
                          self._recover_module_items)
 
     def _recover_module_items(self, path):
-        """Cache-hit path: re-parse .clausal source to recover module_items."""
+        """Cache-hit path: re-parse seam source to recover module_items."""
         source = self.get_data(path).decode("utf-8")
         return _extract_module_items(source, path)
 
@@ -1009,9 +1014,9 @@ def _prolog_default_items() -> list:
 
 
 class PrologLoader(_ClausalSourceLoader):
-    """SourceLoader for .pl Prolog modules — translates to clausal on-the-fly.
+    """SourceLoader for .pl Prolog modules — translates to the seam on-the-fly.
 
-    Pipeline: .pl source → prolog_to_clausal() → .clausal text →
+    Pipeline: .pl source → prolog_to_clausal() → seam text →
               ast.parse → EmbedTransformer → bytecode (cached as .pyc)
 
     The module's items start with :func:`_prolog_default_items` (the
@@ -1026,7 +1031,7 @@ class PrologLoader(_ClausalSourceLoader):
         self._dialect = dialect
 
     def _translate(self, pl_source):
-        """Translate .pl source text to .clausal source text."""
+        """Translate .pl source text to seam source text."""
         from clausal.tools.prolog_to_clausal import prolog_to_clausal
         from clausal.tools.prolog_dialect import Dialect
         dialect = self._dialect or Dialect.scryer_reader()
@@ -1205,8 +1210,7 @@ def _prolog_loader_class_for(path):
     """The loader class for the Prolog-syntax file *path*: always the NATIVE
     front end for a Clausal Prolog file (the translator is end-of-life for
     that surface, so ``CLAUSAL_PL_FRONTEND`` is not consulted), else the
-    ``.pl`` loader ``CLAUSAL_PL_FRONTEND`` selects.  Inert until the
-    extension flip gives the Clausal Prolog surface a suffix."""
+    ``.pl`` loader ``CLAUSAL_PL_FRONTEND`` selects."""
     if surface_of(path) == SURFACE_CLAUSAL_PROLOG:
         return NativePrologLoader
     return _pl_loader_class()
@@ -1223,7 +1227,7 @@ _predicate_loader = None
 
 
 def _load_module(fullname, path):
-    """Load a .clausal file as a Python module and return it.
+    """Load a source file (seam or Prolog) as a Python module and return it.
 
     This is the recommended helper for tests and external callers.
     Each call creates a fresh loader and module instance: a PredicateLoader,
@@ -1355,9 +1359,9 @@ class _ExtensionFinder(MetaPathFinder):
         pkg_dir = os.path.join(dir_entry, tail)
         pkg_dir_exists = None  # stat the directory at most once per entry
         for suffixes, get_loader_cls in groups:
-            # Flat-file form: ``dir_entry/tail.clausal`` → module ``tail``.
-            # The first suffix with a file behind it wins, so ``tail.clausal``
-            # beats ``tail.seam`` in the same directory.  A flat file takes
+            # Flat-file form: ``dir_entry/tail.seam`` → module ``tail``.
+            # The group's first suffix with a file behind it wins (the Prolog
+            # group lists ``.clausal`` before ``.pl``).  A flat file takes
             # priority over a same-named package directory of its own group.
             flat = self._first_file(
                 os.path.join(dir_entry, tail + s) for s in suffixes)
@@ -1365,7 +1369,7 @@ class _ExtensionFinder(MetaPathFinder):
                 return flat, None, get_loader_cls
             # Package form: ``dir_entry/tail/__init__.seam`` → package
             # ``tail``.  Reuses Python's __init__ package mechanism so
-            # submodule files (``tail/sub.clausal``) then resolve as
+            # submodule files (``tail/sub.seam``) then resolve as
             # ``fullname.sub``.  A bare directory *without* an __init__ is left
             # to PathFinder as a PEP-420 namespace package (return nothing
             # here), so this must not fire.
@@ -1392,7 +1396,7 @@ class _ExtensionFinder(MetaPathFinder):
                 continue
             source, pkg_dir, get_loader_cls = found
 
-            # A10-F010 / A10-D002(a): a .clausal/.pl file (or package dir) named
+            # A10-F010 / A10-D002(a): a seam or Prolog file (or package dir) named
             # after a standard-library module is almost always an accident.
             # These finders run before PathFinder, so shadowing would be silent —
             # defer to the stdlib (return None) and warn loudly instead.
@@ -1451,12 +1455,12 @@ class PredicateFinder(_ExtensionFinder):
 
 class PrologFinder(_ExtensionFinder):
     """Find Prolog-syntax files only -- ``.pl`` via the
-    ``CLAUSAL_PL_FRONTEND`` loader, and a Clausal Prolog file (none until
-    the extension flip) via the native one.
+    ``CLAUSAL_PL_FRONTEND`` loader, and a Clausal Prolog file via the
+    native one.
 
     Not installed on ``sys.meta_path``: :class:`PredicateFinder` covers .pl
     in the same per-entry scan (a separate finder scanning the whole path
-    after it would let a later entry's .clausal beat an earlier entry's .pl).
+    after it would let a later entry's .seam beat an earlier entry's .pl).
     Kept for callers that want a .pl-only finder.
     """
     # Informational snapshot (import time); lookups read _suffixes() below.

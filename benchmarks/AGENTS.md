@@ -27,14 +27,8 @@ and `microbench.py` run directly (`python benchmarks/microbench.py`).
 
 ## Gotchas
 
-- **`workloads.py` is half-broken since the extension flip (2026-10-02).**
-  Verified 2026-10-06: `bench_tabling`, `bench_struct_tabling`,
-  `bench_struct_tabling_tagged` and `bench_naf_ite` open fixtures under their
-  pre-flip names (`tests/fixtures/tabled_fib.clausal`, `struct_tabling.clausal`,
-  `struct_tabling_tagged.clausal`, `bench_naf_ite.clausal`) and raise
-  `FileNotFoundError` — the files are now `.seam`. `bench_thunk_atoms` writes
-  seam source to a temp file with suffix `.clausal`, which is now read as ISO
-  Clausal Prolog and fails with a `SyntaxError`. fib/nqueens/qsort/graph work.
-  Known, unfixed; `run_cprofile.py` hits the tabling one.
+- The workloads load SEAM fixtures (`tests/fixtures/*.seam`); a temp file of
+  seam source must take the seam suffix (`_suffixes.CLAUSAL_SUFFIXES`), since
+  a `.clausal` file is read as Clausal Prolog.
 - `tests/test_clpz.py` imports `bench_nqueens` from here, so changing its
   signature or default can break the engine suite.

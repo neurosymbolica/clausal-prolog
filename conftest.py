@@ -54,6 +54,12 @@ _docs_dir = Path(__file__).parent / "docs"
 collect_ignore_glob = [
     "clausal/tools/toklex/specs/*.pl",
     "clausal/tools/prolog_preludes/*.pl",
+    # Dated history, not tests: plans and specs whose seam blocks predate
+    # today's syntax, and translator probe files.  A bare ``pytest`` from the
+    # repository root would otherwise collect them and report failures.
+    "implementation_plans/*",
+    "docs/superpowers/*",
+    "docs/design-records/*",
 ]
 
 # Fenced seam blocks in markdown: ```seam ... ``` (one pattern, shared with

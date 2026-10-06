@@ -84,7 +84,6 @@ Console scripts are declared in `../pyproject.toml` `[project.scripts]`.
 - `examples/metainterpreters.seam` is imported by test fixtures
   (`tests/fixtures/specialize_*.seam`, `tests/test_spec_target_is_data.py`). It
   is not just a demo, so keep its exports.
-- The extension flip (2026-10-02) made `.clausal` mean Clausal Prolog. Many
-  docstrings here still say `.clausal` for seam source (for example the headers
-  of `import_hook.py`, `reflection.py`, `fmt/__init__.py`, `rewrite/__init__.py`).
-  Trust `_suffixes.py`, not the prose.
+- The extension flip (2026-10-02) made `.clausal` mean Clausal Prolog. Older
+  comments may still say `.clausal` for seam source. Trust `_suffixes.py`, not
+  the prose.

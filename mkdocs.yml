@@ -106,7 +106,6 @@ nav:
   - Optional Packages: packages.md
   - Advanced:
     - Module System: import.md
-    - Regex: regex.md
     - Term & Goal Expansion: term_expansion.md
     - Reflection: reflection.md
     - Python Interop: python_integration.md
