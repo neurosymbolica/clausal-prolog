@@ -118,6 +118,16 @@ test("tom has no grandparent", fail) :- grandparent(_, tom).
 
 A Clausal Prolog module file must end with `:- end_module(Name).`.
 
+### Running it
+
+```bash
+clausal family.clausal -g "grandparent(tom, X)"   # X = ann.  X = pat.
+clausal --test family.clausal                      # runs the test clauses
+```
+
+`clausal FILE` on its own runs the program's `main/0`. See
+[docs/cli.md](docs/cli.md).
+
 ### Querying it from Python
 
 Python asks the questions from a `.seam` file, with a goal in `for`

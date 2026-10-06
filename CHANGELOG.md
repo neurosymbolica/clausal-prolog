@@ -715,6 +715,13 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **Packaging for PyPI.** The wheel now carries the data files the engine
+  reads at run time (the `.seam` library and stdlib modules, the toklex
+  specs and Prolog preludes) and the sdist the C headers; neither did
+  before, so an installed copy could not read Prolog. A release workflow
+  builds CPython 3.13/3.14 wheels for Linux, macOS and Windows, tests each
+  with `tools/wheel_smoke.py`, and publishes to PyPI on a GitHub release.
+
 - **The `clausal` command** runs a Clausal Prolog (`.clausal`) or ISO
   Prolog (`.pl`) program: `clausal FILE` runs its `main/0` (or, with none,
   only loads it); `-g GOAL` (repeatable) runs goals and prints their answers
