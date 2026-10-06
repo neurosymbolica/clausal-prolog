@@ -1,0 +1,100 @@
+# docs/ — the MkDocs user site (clausal.pl)
+
+The user-facing documentation, built by MkDocs (Material theme) from
+[`../mkdocs.yml`](../mkdocs.yml) at the repo root. Published on push to `main`
+to GitHub Pages ([`../.github/workflows/docs.yml`](../.github/workflows/docs.yml))
+and GitLab Pages (the `pages` job in `../.gitlab-ci.yml`); the domain is
+`clausal.pl` (`../CNAME`). Code blocks in the top-level pages are **tested**
+(see below), so a docs edit can fail the test suite.
+
+Up: [../AGENTS.md](../AGENTS.md)
+
+## Key entry points
+
+| Page | What it is |
+|---|---|
+| [index.md](index.md) | Home page: what Clausal Prolog is, first example |
+| [clausal_prolog.md](clausal_prolog.md) | The `.clausal` surface (ISO syntax, cut-free) — start here for the language |
+| [cli.md](cli.md) | The `clausal` command (`-g`, `--once`, `--test`) |
+| [public-api.md](public-api.md) | The 1.0 semver surface: what is covered vs internal |
+| [importing_prolog.md](importing_prolog.md) | `.pl` import (experimental; refuses cut) |
+| [syntax.md](syntax.md) | The seam (`.seam`) syntax — the Python-syntax surface |
+| [python_integration.md](python_integration.md) | Calling between Python and Prolog; atoms/strings at the boundary |
+| [builtins.md](builtins.md) | Predicate index (links to the per-topic builtin pages) |
+| [architecture.md](architecture.md), [compiler.md](compiler.md) | Internals overview |
+| [for_ai_agents.md](for_ai_agents.md) | Audience page for LLM agents writing Clausal code |
+
+## Page groups (as in the `nav:` of mkdocs.yml)
+
+- **Foundations / Start Here**: `thinking_relationally`, `purity`, `for_*` audience pages.
+- **Getting Started**: `goals`, `clausal_prolog`, `tutorial`, `cli`, `syntax`, `style`, `testing`.
+- **Language**: `predicates`, `lambdas`, `reified_ite`, `dcg`, `strings_as_lists`,
+  `bytes_as_lists`, `dicts_sets`, `exceptions`, `coroutining`, `directives`.
+- **Builtins**: `builtins` (index), `type_checking`, `arithmetic`, `operators`,
+  `lists`, `pairs`, `higher_order`, `meta_predicates`, `term_inspection`,
+  `database_ops`, `flags`, `control`, `io`, `logging`.
+- **Constraints**: `constraints` (dif + CLP(Z)), `clpb`, `clpq`, `clpr`.
+- **Standard Library**: `random`, `json`, `csv`, `os`, `files`, `process`,
+  `regex`, `date_time`, `sqlite`, `uuid`, `crypto`, `http`, `tcp`, `graphs`, `units`.
+- **Advanced**: `import` (module system), `term_expansion`, `reflection`,
+  `python_integration`, `public-api`, `tabling`, `wfs`, `metainterpreters`.
+- **Parallelism**: `free_threading`, `tutorial_parallel_python`, `tutorial_parallel_clausal`.
+- **Internals**: `architecture`, `compiler`, `indexing`, `caching`, `specialization`.
+- **Prolog**: `importing_prolog`, `prolog_translation`. Also `packages`, `ipython`, `jupyter`, `examples`.
+- **Not in the nav** (reachable only by link): `atoms-are-strings.md`,
+  `terms-are-tuples.md` (Python-side term representation notes),
+  `strict-atoms-migration.md`, `currency.md`, `z3.md`,
+  `iso_prolog_compatibility_report.md`.
+
+Many Language/Builtins pages show examples in **seam syntax** (```` ```seam ````),
+not ISO Clausal Prolog — check the fence before copying an example into a
+`.clausal` file. Optional packages keep their own docs under
+`../packages/clausal-*/docs/`.
+
+## Tested code blocks
+
+| Mechanism | Where |
+|---|---|
+| Every ```` ```seam ```` block in `docs/*.md` is collected by the root [`../conftest.py`](../conftest.py) (`DocMdFile`): its `test/1` clauses run as pytest items, otherwise it is compile-checked (`docs/x.md::L52 [compile]`) | `python -m pytest docs` |
+| No `# skip` blocks (ratchet at 0); a seam block must compile, contain a test, or be a `--8<--` reference | [`../tests/test_doc_snippet_coverage.py`](../tests/test_doc_snippet_coverage.py) |
+| Every snippet reference (scissors line + quoted `file:section`) resolves; referenced `.seam` fixtures contain tests | [`../tests/test_doc_snippet_integrity.py`](../tests/test_doc_snippet_integrity.py) |
+| Selected ```` ```python ```` blocks run verbatim in a subprocess (some build modules from ```` ```prolog ```` blocks) | [`../tests/test_doc_python_blocks.py`](../tests/test_doc_python_blocks.py) |
+| A failing doc block reports a goal-level diagnosis | [`../tests/test_doc_block_diagnostics.py`](../tests/test_doc_block_diagnostics.py) |
+
+Shared check logic: [`../clausal/tools/doc_snippet_check.py`](../clausal/tools/doc_snippet_check.py).
+Snippets (`pymdownx.snippets`) live in `../tests/fixtures/docs/`:
+`<page>_sigs.txt` (display-only signatures), `<page>_sig_tests.seam` (their
+companion tests), `<page>_examples.seam` (executable examples with `test/1`).
+A fixture marks a section with scissors comments (`# --8<--` plus
+`[start:name]` ... `[end:name]`); a page includes it with a block whose only
+line is the scissors marker followed by the quoted path
+`"tests/fixtures/docs/<file>:<name>"` (copy one from `lists.md`). Do not write
+that include line literally anywhere else in `docs/*.md` (this file included):
+the integrity test and `mkdocs build` (`check_paths: true`) would try to resolve
+it. Pattern write-up:
+[`../implementation_plans/docs/DOC_SNIPPET_TESTING.md`](../implementation_plans/docs/DOC_SNIPPET_TESTING.md).
+
+## History, not current truth
+
+- `superpowers/` — dated `specs/`, `plans/` and `audits/` (e.g. the
+  2026-07-05 fable-partition audit, whose `DESIGN-DECISIONS.md` the
+  `../todo/audit-2026-07-05/` todos cite). Design rationale; often stale.
+- `design-records/` — long-form HTML records ([README](design-records/README.md)
+  says how to republish them); a summary, not an authority.
+
+## Gotchas
+
+- The ```` ```seam ```` fence is the only one compiled. ```` ```prolog ```` is
+  Clausal Prolog and is NOT compile-checked (only the few blocks named in
+  `test_doc_python_blocks.py` run). ```` ```clausal ```` is no longer an alias.
+- `test_doc_snippet_coverage.py` allowlists three `import.md` blocks **by fence
+  line number** (`_KNOWN_UNCOMPILABLE`): inserting prose above them in
+  `import.md` breaks the test — shift the pins.
+- The snippet checks scan only top-level `docs/*.md`, but `pytest docs`
+  recurses: it collects seam blocks under `superpowers/`, and 7 of them fail to
+  compile (stale history). Run `pytest docs/*.md` for the live pages.
+- Pre-flip text may say `.clausal` meaning seam source (e.g. the `_HOWTO`
+  message in `test_doc_snippet_coverage.py` still says `_examples.clausal`;
+  the fixtures are `.seam`).
+- `regex.md` appears twice in the nav (Standard Library and Advanced).
+- Local preview: `python docs/serve-docs.py` (rebuilds, serves on :8080).
