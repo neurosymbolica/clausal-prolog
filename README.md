@@ -273,8 +273,7 @@ python -m pytest tests/ clausal/examples/ -q
 
 ## Requirements
 
-- Python ≥ 3.13
-- [greenlet](https://pypi.org/project/greenlet/)
+- Python ≥ 3.13 (no other runtime dependencies)
 - C compiler (for building from source)
 
 YAML support is the optional package `clausal-yaml` (`pip install clausal[yaml]`).

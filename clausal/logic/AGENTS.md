@@ -28,7 +28,6 @@ repo-root `tests/`. Up: [../AGENTS.md](../AGENTS.md)
 | `trampoline.py` | Step protocol (`(target, value)` tuples, `DONE`, `StepGenerator`); re-exports C `runtime/_trampoline.c`, else `_trampoline_py.py`. |
 | `runtime/` | Helpers called *by generated code* via `base_globals`: `list_unify.py` (+ `_list_unify.c`), `body_star_unify.py`, `tramp_call.py` (simple->trampoline bridge), `const_set.py`, `dict_ops.py`, `_seg_helpers.py`. |
 | `seam.py` | The `--term` seam: builds a runtime term from Python-hosted code. |
-| `continuation_search.py` | Greenlet `Search`; no production callers (only `tests/test_continuation_search.py`). |
 
 **Compiling**
 

@@ -25,7 +25,7 @@ In a seam (`.seam`) file:
 ```
 -import_from(opencv, [imread, shape, IMREAD_COLOR])
 
-Test("read an image and query its shape") <- (
+test("read an image and query its shape") <- (
     imread("photo.jpg", IMREAD_COLOR, IMG),
     shape(IMG, [H, W, 3]),
     H > 0,

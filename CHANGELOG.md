@@ -1441,6 +1441,11 @@ These keep working, with a warning, through 1.x. They are removed in 2.0.
 
 ### Removed
 
+- **The `greenlet` dependency**, with `clausal.logic.continuation_search`
+  (a greenlet-based `Search` iterator, never wired into the engine; the
+  trampoline replaced its design) and `clausal.pythonic_terms` (a
+  re-export of `clausal.pythonic_ast.nodes` that nothing imported).
+  `clausal` now has no runtime dependencies.
 - `PredicateMeta`, `make_predicate` and `MakePredicateRetiredError`.
 - `clausal.terms.Compound` and `clausal.terms.KWTerm`, with
   `compound_as_cell`, `list_to_cons`, `cons_to_list` and the builtin

@@ -112,8 +112,6 @@ This means `test/1` tests and Python tests can run together in one `pytest` invo
 python -m pytest tests/ -q
 ```
 
-Note: `tests/test_continuation_search.py` requires `greenlet` and is skipped if not installed.
-
 ## Writing good `test/1` clauses
 
 - Each test should be a single rule with a descriptive string as the argument.

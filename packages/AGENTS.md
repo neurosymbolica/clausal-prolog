@@ -85,5 +85,3 @@ python -m pytest packages/clausal-yaml                                   # one p
   and sympy.
 - `clausal-opencv/tests/conftest.py` copies its PNG fixtures into `/tmp` for
   the session; its `.seam` fixtures use those absolute paths.
-- Package `pyproject.toml`s for jax, scipy, sklearn, spacy, sympy, torch and
-  yaml declare `readme = "README.md"`, but those packages have no README.md.
