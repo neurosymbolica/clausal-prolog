@@ -6,10 +6,24 @@
 [GitLab](https://gitlab.com/MikeAmy/clausal) ·
 [PyPI](https://pypi.org/project/clausal/)
 
-Clausal Prolog is a cut-free Prolog that aims for ISO Prolog conformity. It is
-not a wrapper around an external engine: it runs in the Python process, on the
-same objects and the same garbage collector, so Prolog and Python call each
-other freely.
+Neural networks are good at perception, language and pattern-matching.
+Symbolic logic is good at rules, reasoning and guarantees. Neurosymbolic AI
+combines the two, so each does the part it is good at:
+
+- **Explainable**: conclusions come from rules you can read and a derivation
+  you can trace, not only from weights.
+- **Reliable**: hard constraints such as regulations, safety rules and
+  business policy hold exactly, every time, rather than approximately.
+- **Data-efficient**: knowledge you can state as a rule doesn't have to be
+  learned from examples.
+- **Correctable**: change a rule and the behaviour changes, with no
+  retraining.
+
+Clausal Prolog is a Prolog implemented in Python that aims for ISO Prolog
+conformity. It is not a wrapper around an external engine: it runs in the
+Python process, on the same objects and the same garbage collector, so Prolog
+and Python call each other freely. A neural model can call a logic program,
+and that logic can call back into the model, with no serialisation in between.
 
 ```bash
 pip install clausal
