@@ -26,9 +26,7 @@ authors = [
     {name = "Mike Amy", email = "mikeamycoder@gmail.com"},
 ]
 requires-python = ">=3.13"
-dependencies = [
-    "greenlet",
-]
+dependencies = []
 
 [project.urls]
 Homepage = "https://clausal.pl"

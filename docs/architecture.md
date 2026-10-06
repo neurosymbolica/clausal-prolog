@@ -27,7 +27,7 @@ The Warren Abstract Machine is the standard execution substrate for Prolog. For 
 - is debuggable with standard Python tools
 - allows Python calls without FFI
 - leverages the AST infrastructure Clausal Prolog already has
-- is exactly what `clausal.logic.trampoline` and `clausal.logic.continuation_search` are already built toward
+- is exactly what `clausal.logic.trampoline` is built on
 
 For programs that genuinely need a WAM — ISO-conformant constraint solving, rich library ecosystems, or cross-validation against a standards-compliant engine — the [Trealla](trealla.md) and [Scryer](scryer.md) Prolog embeddings provide one in-process, without replacing Clausal Prolog's native execution model.
 
@@ -189,7 +189,6 @@ The deep layering — Python → logic → Python → logic — is explicitly su
 |---|---|
 | `clausal.logic.variables` | Done — C extension, 88 tests |
 | `clausal.logic.trampoline` | Done — C twin plus pure-Python fallback |
-| `clausal.logic.continuation_search` | Done |
 | `clausal.pythonic_ast` | Done — goal/term node types |
 | `clausal.templating.term_rewriting` | Done |
 | `clausal.import_hook` | Done — `.pyc` caching, deferred compilation |

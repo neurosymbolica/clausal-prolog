@@ -43,12 +43,12 @@ folded into the A04-F001 completion re-architecture if it happens.
   module's compiled query. Unconfirmed (could not force id reuse).
   Cheap fix: key on a per-Module monotonic token, or hold a weakref that
   invalidates entries on module death.
-- **Dead code candidates**: `continuation_search.py` (greenlet Search —
-  no production callers, only its own test; also the only greenlet
-  dependency in the logic core); `make_tabled_wrapper_simple` +
+- **Dead code candidates**: `make_tabled_wrapper_simple` +
   `_trampoline_to_simple_adapter` (`tabling.py:345-593`) — referenced
   only by tests. Decide: delete, or mark explicitly as
-  reference/teaching implementations.
+  reference/teaching implementations. (The other candidate,
+  `continuation_search.py`, the greenlet `Search`, was deleted on
+  2026-10-06 with the `greenlet` dependency.)
 - **`_naf_tabled` perf**: any-variant fallback scans the whole
   `table_store` per NAF call (`tabling.py:267`); index by
   (functor, arity) if NAF-heavy workloads matter. Moot if

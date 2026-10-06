@@ -367,9 +367,8 @@ Two safety gates keep it correct:
    `k_stmts` is genuinely a bare leaf yield — nothing runs after the child —
    so no post-call work is dropped.
 
-Greenlets are **not** used in the main search path. A
-``continuation_search.py`` module exists but isn't wired into the
-trampoline — it's dead code at time of writing. The solution-surfacing
+Greenlets are **not** used (an unused greenlet ``continuation_search.py``
+was deleted on 2026-10-06). The solution-surfacing
 path from a compiled predicate back to a Python ``for``-loop caller
 goes through ``trampoline()`` / ``solutions()`` (in
 ``clausal.logic.trampoline``), which is a plain C loop driving the
