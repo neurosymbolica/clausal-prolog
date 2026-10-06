@@ -1,6 +1,10 @@
 site_name: Clausal Prolog
 site_description: Cut-free, ISO-directed Prolog embedded in Python
 
+# docs/AGENTS.md is the folder map for AI agents, not a site page.
+exclude_docs: |
+  AGENTS.md
+
 theme:
   name: material
   palette:
