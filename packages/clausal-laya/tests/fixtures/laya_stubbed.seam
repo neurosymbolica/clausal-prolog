@@ -4,7 +4,7 @@
 # P(yes) is 0.8, score level 1 is the most probable).  Run by that test,
 # never collected on its own: with the real model the numbers differ.
 
--import_from(py.laya, [choice, noul, score, predict])
+-import_from(py.laya, [choice, noul, score, predict, predict_batch])
 
 test("choice/4 answers a label the caller wrote") <- (
     choice("We were billed twice", "Which team?", ['technical', 'billing'], L),
@@ -46,6 +46,17 @@ test("predict/3 answers several questions in one pass") <- (
     dict_get('department', ANSWERS, D),
     dict_get('choice', D, 'technical'),
     dict_get('churn', ANSWERS, C),
+    dict_get('noul', C, P),
+    P > 0.5
+)  # nv
+
+test("predict_batch answers every text, in order") <- (
+    predict_batch(["first", "second"],
+                  {'churn': {'type': 'noul', 'instructions': "Leaving?"}},
+                  RESULTS),
+    length(RESULTS, 2),
+    RESULTS is [FIRST, _],
+    dict_get('churn', FIRST, C),
     dict_get('noul', C, P),
     P > 0.5
 )  # nv

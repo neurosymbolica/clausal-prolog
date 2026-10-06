@@ -15,9 +15,9 @@ With this engine release or later, the bare name works too:
 `-import_from(laya, [...])`. (A bare `laya` is otherwise the Python library
 itself.)
 
-laya downloads its checkpoint from the Hugging Face Hub on first use and keeps
-it in one process-wide router, which picks the English or multilingual
-checkpoint for each text.
+The predicates run on a swappable [backend](#backends): the open laya model
+in this process (the default), a `laya-serve` server, or TypeSafe's hosted
+Jev model, which answers the same typed questions.
 
 ---
 
@@ -115,6 +115,97 @@ with `dict_get/3`.
 
 ---
 
+## `predict_batch/3`, `predict_batch/4`
+
+```
+--8<-- "tests/fixtures/docs/laya_sigs.txt:predict_batch_sig"
+```
+
+The same `Questions` over a list of texts, answered together: the local
+backend groups them into shared forward passes (laya's `predict_batch`), and
+`laya_serve` sends one request. `AnswersList` holds one `Answers` dict per
+text, in order. Prefer it to `findall` over `predict/3` when there are many
+texts.
+
+```seam
+--8<-- "tests/fixtures/docs/laya_examples.seam:predict_batch"
+```
+
+---
+
+## Backends
+
+```
+--8<-- "tests/fixtures/docs/laya_sigs.txt:backend_sig"
+```
+
+| Name | Answers with | Options |
+|------|--------------|---------|
+| `laya` (default) | the open model in this process, through `laya.Router.predict_batch`; the checkpoint downloads from the Hugging Face Hub on first use | the call options below |
+| `laya_serve` | a `laya-serve` HTTP server (`/v1/systemone/batch`) | `url` (required), `api_key`, `timeout`, and the call options |
+| `typesafe` | TypeSafe's hosted Jev model, through `typesafe-sdk` (`pip install "clausal-laya[typesafe]"`, `TYPESAFE_API_KEY`) | `api_key`, `base_url`, `timeout`, `model` |
+
+The call options -- `model`, `lang`, `max_len`, `head_max_len`,
+`min_confidence` -- given to `use_backend/2` become the defaults for every
+call; a `predict/4` or `predict_batch/4` call's own options override them.
+`typesafe` takes `model` only. `backend/1` names the backend in use. The
+backend is process-wide state: choose it once, when the program starts.
+
+```seam
+-private([laya_serve])
+
+use_server(URL) <- use_backend(laya_serve, {"url": URL, "model": "multilingual"})
+```
+
+---
+
+## Fine-tuning
+
+```
+--8<-- "tests/fixtures/docs/laya_sigs.txt:finetune_sig"
+```
+
+`finetune/5` runs laya's own fine-tuning (`laya.train.finetune`): it trains
+`Base` (a built-in name such as `english`, a Hub repo id, or a checkpoint
+directory) on `Data`, fits the calibration temperatures, and saves the
+checkpoint to `OutputDir`. `Data` is a list of rows -- dicts with `state`,
+`questions` and `expected` (question id -> the right answer) -- or the path of
+a JSONL or CSV file in laya-train's formats. `Options` takes laya's
+`TrainConfig` fields (`epochs`, `micro_batch`, `encoder_lr`, ...) and `device`.
+`Summary` is a dict: `train_items`, `calibration_items`, `epoch_loss`,
+`temperature`, `output_dir`.
+
+`register_model/2` serves a checkpoint under a name, beside the built-ins, so
+`{"model": Name}` selects it. Training labels can come from the program's own
+facts: symbolic knowledge supervising the neural predicate.
+
+```seam
+-private([billing, technical, other])
+
+labelled(TEXT, TEAM) <- (in_([TEXT, TEAM], [["Charged twice", billing],
+                                             ["The site is down", technical]]))
+
+row(ROW) <- (
+    labelled(TEXT, TEAM),
+    ROW is {"state": TEXT,
+            "questions": {"team": {"type": "choice",
+                                   "instructions": "Which team handles this?",
+                                   "criteria": [billing, technical, other]}},
+            "expected": {"team": TEAM}}
+)
+
+retrain(DIR) <- (
+    findall(ROW, row(ROW), ROWS),
+    finetune(ROWS, "english", DIR, {"epochs": 2}, _),
+    register_model("tickets", DIR)
+)
+```
+
+Fine-tuning needs the local `laya` backend's dependencies (torch) and a
+checkpoint to start from; `register_model/2` works on the `laya` backend only.
+
+---
+
 ## Errors
 
 The predicates raise ISO errors rather than fail:
@@ -127,7 +218,12 @@ The predicates raise ISO errors rather than fail:
 | an empty `Labels`/`Levels` | `domain_error(non_empty_list, [])` |
 | a label that is not an atom, string or number | `type_error(laya_label, Culprit)` |
 | `Questions` or `Options` not a dict | `type_error(dict, Culprit)` |
-| a question laya refuses (a repeated label, an unknown type) | `domain_error(laya_question, Culprit)` |
+| a question the backend refuses (a repeated label, an unknown type) | `domain_error(laya_question, Culprit)` |
+| an unknown backend | `domain_error(laya_backend, Name)` |
+| an option the backend does not take, or `laya_serve` without a `url` | `domain_error(laya_option, Name)` |
+| `register_model/2` off the local backend | `permission_error(modify, laya_model, Name)` |
+| a training option laya refuses | `domain_error(laya_train_config, Options)` |
+| training data laya cannot use | `domain_error(laya_training_data, Data)` |
 
 A checkpoint that cannot be downloaded raises the Python error laya raises,
 catchable with `catch/3`.
@@ -136,6 +232,9 @@ catchable with `catch/3`.
 
 ## Purity
 
-For a fixed checkpoint, inference is a function of its inputs, so every
-predicate is pure and safe to backtrack over: `choice/5` and `score/5`
-enumerate on backtracking, and nothing is mutated.
+For a fixed checkpoint, inference is a function of its inputs, so the
+decision predicates (`choice`, `noul`, `score`, `predict`, `predict_batch`)
+are pure and safe to backtrack over: `choice/5` and `score/5` enumerate on
+backtracking, and nothing is mutated. `use_backend/1,2`, `register_model/2`
+and `finetune/5` change process state or write files; call them at the
+program's boundary, not under backtracking.

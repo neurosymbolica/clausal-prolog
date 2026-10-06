@@ -53,14 +53,10 @@ TileLang backends, LangChain/LlamaIndex/CrewAI integrations, fine-tuning
 decisions; reachable with `++` where needed.
 
 **Deferred:**
-- `predict_batch` (many texts, one question set) — a throughput path;
-  `findall` over `predict/3` is correct but slower.
 - `predict_tournament` for `choice` questions with more labels than the
   option budget (16).
 - `predict_long` and the shortlist API.
 - Schema-driven `decide` (JSON schema / pydantic models).
-- `Router.register` (custom checkpoints) as a predicate; today `model` in
-  `predict/4` options can name one registered from Python.
 - A `library(laya)` facade for Clausal Prolog: no extension package ships
   facades yet (`todo/package-adapters-need-library-facades-2026-10-01.md`);
   `.clausal` code reaches laya through a `python_bridges` `.seam` module.
@@ -122,8 +118,59 @@ a churn threat, several questions in one pass) — the examples in
   checkpoint cannot load.
 - `tests/test_laya_doc_integrity.py` — the docs' snippet references.
 
+## Phase 2 (2026-10-06): backends, batching, fine-tuning
+
+**Which API layer.** laya's layers, top down: `Router.predict` /
+`Router.predict_batch` (language routing, checkpoint load/evict) ->
+`Agent.system_one` / `Agent.predict_batch` (tokenising, option rendering,
+temperature and histogram calibration -- ~2,000 lines of `agent.py`) ->
+`DecisionModel` (the torch `nn.Module`, raw logits).  laya's own
+integrations (LangChain, LlamaIndex, CrewAI, MCP) all end at
+`runner.predict(state, questions)` or a POST to `laya-serve`
+(`laya/integrations/_controls.py`); none goes to torch.  Calling
+`DecisionModel` directly would mean re-implementing the calibration the
+probabilities rest on.  The adapter therefore uses `Router.predict_batch` for
+everything: it groups requests by checkpoint and question set and runs
+`Agent.predict_batch`, sharing forward passes -- the most efficient public
+layer, and a stable one (documented, used by laya-serve itself).  A single
+question is a batch of one.
+
+**Backends.** The protocol -- state + typed questions (`choice`, `score`,
+`noul`) -> answers with probabilities -- is TypeSafe's "System One"; laya is
+an open model of it, and TypeSafe's hosted Jev serves it through
+`typesafe-sdk` (`TypeSafeClient.system_one`, answer models with the same
+fields; `NoulAnswer` carries no confidence).  So the predicates run on a
+process-wide backend, `use_backend/1,2`: `laya` (in-process
+`Router.predict_batch`), `laya_serve` (`/v1/systemone/batch`, one POST per
+question set), `typesafe` (one `system_one` call per text; `model` is its
+only control).  A backend's options become per-call defaults.
+
+**Batching.** `predict_batch/3,4` exposes the batch path: the same questions
+over many texts.
+
+**Fine-tuning.** `finetune/5` wraps `laya.train.finetune` (train, fit
+temperatures, save): rows (`{state, questions, expected}`, the
+laya-train JSONL schema) or a JSONL/CSV path; `TrainConfig` fields as
+options; the base resolved by `resolve_checkpoint_dir` (built-in names, Hub
+ids, directories).  `register_model/2` is `Router.register`, so the result
+answers under `{"model": Name}`.  Rows can be built from facts: symbolic
+labels supervising the neural predicate.  Tier 4 (IO), like `use_backend`.
+
+**Tests.** The stubbed tests now drive the real `_LayaBackend` with a fake
+`Router.predict_batch`; `laya_serve` against a real local HTTP server;
+`typesafe` through the real SDK over an `httpx2.MockTransport` (skipped
+without the SDK); `finetune` against a stand-in `laya.train` (training needs a
+real checkpoint).
+
 ## Issues
 
+- **Jev not run against the real service either**: no `TYPESAFE_API_KEY`
+  here.  The SDK round trip is tested over a mocked transport, with the
+  response shape from the SDK's own models (`ChoiceAnswer`, `NoulAnswer`,
+  `ScoreAnswer`).
+- **`finetune/5` not run end to end**: it needs a downloadable base
+  checkpoint and real training time.  Its argument handling (rows to JSONL,
+  `TrainConfig`, device, the summary) is tested against a stand-in.
 - **Not run against the real model here.** The development sandbox could not
   reach huggingface.co, so the real-model fixtures were verified only against
   fake routers: one in laya's payload shape (everything but the two

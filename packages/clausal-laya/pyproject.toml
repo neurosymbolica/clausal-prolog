@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "clausal-laya"
 version = "0.1.0"
-description = "laya decision predicates for Clausal (calibrated System 1 decisions as relations)"
+description = "laya / Jev System One decision predicates for Clausal (calibrated decisions as relations)"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
@@ -16,6 +16,9 @@ dependencies = [
     "clausal>=1.0",
     "laya>=0.3.28",   # brings torch, transformers and huggingface_hub
 ]
+
+[project.optional-dependencies]
+typesafe = ["typesafe-sdk>=0.7"]   # the `typesafe` backend (TypeSafe's Jev)
 
 [project.urls]
 Homepage = "https://clausal.pl"

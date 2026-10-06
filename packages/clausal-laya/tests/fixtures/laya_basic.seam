@@ -2,7 +2,7 @@
 # the checkpoint cannot be downloaded).  Assertions are ones any sane
 # checkpoint meets, and laya's own README example (billing, churn).
 
--import_from(py.laya, [choice, noul, score, predict])
+-import_from(py.laya, [choice, noul, score, predict, predict_batch])
 
 complaint(T) <- (
     T is "Hi, we were billed twice for March. Please refund the duplicate today or we will cancel our plan."
@@ -59,4 +59,17 @@ test("predict/3 answers every question") <- (
     dict_get('churn', A, C),
     dict_get('noul', C, P),
     P > 0.5
+)  # nv
+
+test("predict_batch agrees with predict") <- (
+    complaint(T),
+    QS is {'churn': {'type': 'noul',
+                     'instructions': "Does the user threaten to cancel or leave?"}},
+    predict_batch([T, "Thanks, everything works now."], QS, [A1, A2]),
+    predict(T, QS, A),
+    dict_get('churn', A1, C1), dict_get('noul', C1, P1),
+    dict_get('churn', A, C), dict_get('noul', C, P),
+    P1 > P - 0.01, P1 < P + 0.01,
+    dict_get('churn', A2, C2), dict_get('noul', C2, P2),
+    P2 < P1
 )  # nv

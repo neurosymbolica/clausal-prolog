@@ -1,7 +1,7 @@
 # Executable examples for docs/laya.md (the real model: skipped by
 # tests/conftest.py when the checkpoint cannot be downloaded).
 
--import_from(py.laya, [choice, noul, score, predict])
+-import_from(py.laya, [choice, noul, score, predict, predict_batch])
 
 # --8<-- [start:route]
 -private([billing, technical, other])
@@ -74,3 +74,18 @@ test("several questions, one forward pass") <- (
     P > 0.5
 )  # nv
 # --8<-- [end:predict]
+
+# --8<-- [start:predict_batch]
+test("many tickets, shared forward passes") <- (
+    predict_batch(["We were billed twice for March.",
+                   "The app crashes when I open settings."],
+                  {'department': {'type': 'choice',
+                                  'instructions': "Which department should handle this?",
+                                  'criteria': ['billing', 'technical', 'other']}},
+                  [FIRST, SECOND]),
+    dict_get('department', FIRST, D1),
+    dict_get('choice', D1, 'billing'),
+    dict_get('department', SECOND, D2),
+    dict_get('choice', D2, 'technical')
+)  # nv
+# --8<-- [end:predict_batch]

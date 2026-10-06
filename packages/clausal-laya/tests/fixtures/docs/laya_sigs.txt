@@ -1,7 +1,8 @@
 # Display snippets for docs/laya.md
 
 --8<-- [start:import]
--import_from(py.laya, [choice, noul, score, predict])
+-import_from(py.laya, [choice, noul, score, predict, predict_batch,
+                        use_backend, backend, register_model, finetune])
 --8<-- [end:import]
 
 --8<-- [start:choice_sig]
@@ -22,3 +23,19 @@ score(+Text, +Instructions, +Levels, ?Level, ?P)
 predict(+Text, +Questions, ?Answers)
 predict(+Text, +Questions, +Options, ?Answers)
 --8<-- [end:predict_sig]
+
+--8<-- [start:predict_batch_sig]
+predict_batch(+Texts, +Questions, ?AnswersList)
+predict_batch(+Texts, +Questions, +Options, ?AnswersList)
+--8<-- [end:predict_batch_sig]
+
+--8<-- [start:backend_sig]
+use_backend(+Name)
+use_backend(+Name, +Options)
+backend(?Name)
+--8<-- [end:backend_sig]
+
+--8<-- [start:finetune_sig]
+finetune(+Data, +Base, +OutputDir, +Options, ?Summary)
+register_model(+Name, +Source)
+--8<-- [end:finetune_sig]

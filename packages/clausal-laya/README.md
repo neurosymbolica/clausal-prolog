@@ -12,6 +12,11 @@ rank and combine:
 - `noul/3` — the probability that a yes/no answer is yes
 - `score/4,5` — a level on a scale; or every level with its probability
 - `predict/3,4` — several questions in one forward pass
+- `predict_batch/3,4` — the same questions over many texts, sharing forward passes
+- `use_backend/1,2` — the open laya model in-process (default), a `laya-serve`
+  server, or TypeSafe's hosted Jev model, which answers the same questions
+- `finetune/5`, `register_model/2` — fine-tune a checkpoint (on rows your
+  program's own facts can label) and serve it by name
 
 ## Install
 
@@ -21,7 +26,8 @@ pip install clausal-laya
 
 laya (with torch and transformers) is pulled in as a dependency. Requires
 Python 3.13 or later. laya downloads its checkpoint from the Hugging Face Hub
-on first use.
+on first use. For the `typesafe` backend:
+`pip install "clausal-laya[typesafe]"` and set `TYPESAFE_API_KEY`.
 
 ## Use
 
