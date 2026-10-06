@@ -24,8 +24,8 @@ How: the query runs in a greenlet (SQLAlchemy's ``greenlet_spawn`` /
 asyncio task, which awaits and switches back with the result.  Any depth of
 synchronous engine code sits between the two unchanged — nested drive loops,
 ``findall``, negation, the C trampoline — which is why no engine path had to
-learn about awaiting.  ``greenlet`` is needed only by ``asolve``
-(``pip install clausal[async]``).
+learn about awaiting.  ``greenlet`` is a core dependency (operator ruling
+2026-10-06: async is built in, not an optional extra).
 
 Semantics:
 
@@ -49,6 +49,8 @@ import asyncio
 import inspect
 import threading
 
+import greenlet as _greenlet
+
 from clausal.logic.exceptions import LogicException, permission_error
 from clausal.logic.solve import solve
 from clausal.logic.variables import deref, unify
@@ -56,28 +58,12 @@ from clausal.logic.variables import deref, unify
 __all__ = ["asolve", "aonce", "await_only", "async_predicate"]
 
 
-# ── greenlet (optional) ──────────────────────────────────────────────────
-
-try:
-    import greenlet as _greenlet
-except ImportError:  # pragma: no cover - simulated in tests/test_aio.py
-    _greenlet = None
-    _QueryGreenlet = None
-else:
-    class _QueryGreenlet(_greenlet.greenlet):
-        """The greenlet a query runs in: ``await_only`` may switch out."""
-
-
-def _require_greenlet():
-    if _greenlet is None:
-        raise ImportError(
-            "clausal.aio.asolve needs the greenlet package: "
-            "pip install 'clausal[async]'")
+class _QueryGreenlet(_greenlet.greenlet):
+    """The greenlet a query runs in: ``await_only`` may switch out."""
 
 
 def _in_query_greenlet():
-    return (_QueryGreenlet is not None
-            and type(_greenlet.getcurrent()) is _QueryGreenlet)
+    return type(_greenlet.getcurrent()) is _QueryGreenlet
 
 
 # ── per-query engine state ───────────────────────────────────────────────
@@ -219,7 +205,6 @@ async def asolve(goal, module=None, trail=None):
     Takes the same arguments as ``solve``.  The query yields to the event loop
     at every ``await_only``; between awaits it runs synchronously.
     """
-    _require_greenlet()
     query = _Query(solve(goal, module, trail))
     try:
         while True:

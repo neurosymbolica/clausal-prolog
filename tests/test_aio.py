@@ -11,8 +11,6 @@ import time
 
 import pytest
 
-pytest.importorskip("greenlet")
-
 from clausal.aio import aonce, asolve, await_only
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import once, solve
@@ -234,20 +232,3 @@ def test_abandoning_a_query_closes_it(demo):
         return deref(x)
     assert run(main()) == 0
     assert _engine_state_clean()
-
-
-# ── without greenlet ─────────────────────────────────────────────────────
-
-def test_without_greenlet_asolve_explains_and_sync_still_works(demo, monkeypatch):
-    import clausal.aio as aio
-    monkeypatch.setattr(aio, "_greenlet", None)
-    monkeypatch.setattr(aio, "_QueryGreenlet", None)
-
-    async def main():
-        async for _ in asolve(("ticked", Var()), demo):
-            pass
-    with pytest.raises(ImportError, match="clausal\\[async\\]"):
-        run(main())
-    r = Var()
-    assert once(("job", "plain", r), demo) is not None
-    assert deref(r) == "plain-done"

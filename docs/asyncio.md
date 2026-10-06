@@ -13,8 +13,8 @@ rather than a second concurrency system to learn.
 
 !!! note "Experimental"
     `clausal.aio` and `library(asyncio)` are new and not yet part of the 1.0
-    [public API](public-api.md). `asolve` needs the `greenlet` package:
-    `pip install 'clausal[async]'`.
+    [public API](public-api.md). It is built in: `pip install clausal` brings
+    `greenlet`, the one runtime dependency, which `asolve` uses.
 
 ## The idea in one paragraph
 

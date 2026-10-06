@@ -279,7 +279,8 @@ python -m pytest tests/ clausal/examples/ -q
 
 ## Requirements
 
-- Python ≥ 3.13 (no other runtime dependencies)
+- Python ≥ 3.13 and [greenlet](https://pypi.org/project/greenlet/) (the only
+  runtime dependency; it lets queries run on `asyncio`)
 - C compiler (for building from source)
 
 Optional packages (YAML, spaCy, SciPy, PyTorch, the Scryer and Trealla

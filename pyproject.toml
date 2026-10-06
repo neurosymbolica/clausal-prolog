@@ -28,7 +28,7 @@ authors = [
     {name = "Mike Amy", email = "mikeamycoder@gmail.com"},
 ]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = ["greenlet>=3.0"]
 
 [project.urls]
 Homepage = "https://clausal.pl"
@@ -40,7 +40,6 @@ Changelog = "https://github.com/neurosymbolica/clausal-prolog/blob/main/CHANGELO
 [project.optional-dependencies]
 ptpython = ["ptpython>=3.0"]
 repl = ["ptpython>=3.0"]
-async = ["greenlet>=3.0"]
 
 [project.scripts]
 clausal = "clausal.cli:main"

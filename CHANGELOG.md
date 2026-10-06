@@ -16,8 +16,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
   no async syntax. New `library(asyncio)` (`py.asyncio`): `await_value/2`,
   `await_each/2` (one solution per item of an async iterator), `sleep/1`.
   `clausal.aio.async_predicate` builds an adapter from an `async def`.
-  `asolve` runs the query in a greenlet (`pip install 'clausal[async]'`); no
-  engine path changed. Awaiting inside tabled evaluation under `asolve`
+  `asolve` runs the query in a greenlet, so `greenlet` becomes Clausal's one
+  runtime dependency (operator ruling 2026-10-06: async should be built in,
+  not an extra); no engine path changed. Awaiting inside tabled evaluation under `asolve`
   raises `permission_error(await, tabled_evaluation, _)`; calling plain
   `solve` on a waiting predicate from inside a running loop raises
   `permission_error(await, synchronous_query, _)`. See
