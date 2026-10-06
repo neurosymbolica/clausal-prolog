@@ -13,6 +13,12 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <math.h>
+
+/* M_PI is POSIX, not ISO C: MSVC's math.h only defines it under
+ * _USE_MATH_DEFINES. */
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 #include <float.h>
 
 /* ── Outward rounding helpers ─────────────────────────────────────── */
