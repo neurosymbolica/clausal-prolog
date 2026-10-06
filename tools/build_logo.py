@@ -1,4 +1,6 @@
-"""Generate the Clausal Prolog logo SVGs in docs/assets/logo/ (and PNGs, if Chromium and ImageMagick are available).
+"""Generate the Clausal Prolog logo SVGs in docs/assets/logo/ (and PNGs, if
+Chromium and ImageMagick are available), plus the :clausal-neck: docs icon in
+docs/assets/icons/.
 
     python tools/build_logo.py
 
@@ -76,6 +78,18 @@ def _svg(w, h, body, view=None):
         ' role="img" aria-label="Clausal Prolog">'
         f"<title>Clausal Prolog</title>{_gradient()}{body}</svg>\n"
     )
+
+
+def neck_icon():
+    """The ':-' alone on a 24px grid, in currentColor, for docs card icons."""
+    k, x0, y0 = 0.26, 2.1, 5  # scale the logo's ':-' (x 88-164, y 94-148) to fit
+    rects = [(88, 94, 20, 20), (88, 128, 20, 20), (122, 113, 42, 16)]
+    body = "".join(
+        f'<rect x="{x0 + (x - 88) * k:.2f}" y="{y0 + (y - 94) * k:.2f}"'
+        f' width="{w * k:.2f}" height="{h * k:.2f}"/>'
+        for x, y, w, h in rects
+    )
+    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">{body}</svg>\n'
 
 
 def mark(neck_colour):
@@ -172,4 +186,9 @@ if __name__ == "__main__":
     for name, svg in SVGS.items():
         (OUT / name).write_text(svg)
         print("wrote", name)
+    # Custom icon set for mkdocs (pymdownx.emoji custom_icons): :clausal-neck:
+    icons = OUT.parent / "icons" / "clausal"
+    icons.mkdir(parents=True, exist_ok=True)
+    (icons / "neck.svg").write_text(neck_icon())
+    print("wrote icons/clausal/neck.svg")
     render_pngs()
