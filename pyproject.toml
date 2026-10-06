@@ -4,12 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clausal"
-version = "1.0.0rc2"
-description = "Clausal Prolog: a cut-free, ISO-directed Prolog that runs inside Python"
-keywords = ["prolog", "logic programming", "constraint programming", "clp", "neurosymbolic"]
+version = "1.0.0"
+description = "Prolog in Python for neurosymbolic AI: an ISO-directed, cut-free Prolog that runs inside the Python process"
+keywords = ["prolog", "logic programming", "constraint programming", "clp", "neurosymbolic", "symbolic ai"]
 classifiers = [
+    "Development Status :: 5 - Production/Stable",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: C",
     "Programming Language :: Prolog",
@@ -36,8 +38,6 @@ GitHub = "https://github.com/neurosymbolica/clausal-prolog"
 Changelog = "https://github.com/neurosymbolica/clausal-prolog/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-yaml = ["clausal-yaml>=0.1.0"]
-spacy = ["clausal-spacy>=0.1.0"]
 ptpython = ["ptpython>=3.0"]
 repl = ["ptpython>=3.0"]
 

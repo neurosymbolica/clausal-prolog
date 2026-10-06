@@ -54,7 +54,7 @@ directory, `name.seam` beats `name.clausal`, which beats `name.pl`.
 > Prolog syntax error. To migrate, run `git mv name.clausal name.seam` for
 > each one. Move it rather than copying it: a `name.clausal` left beside
 > `name.seam` is a different module, written in Prolog. See
-> [CHANGELOG.md](CHANGELOG.md).
+> [CHANGELOG.md](https://github.com/neurosymbolica/clausal-prolog/blob/main/CHANGELOG.md).
 
 ## Features
 
@@ -139,7 +139,7 @@ clausal --test family.clausal                      # runs the test clauses
 ```
 
 `clausal FILE` on its own runs the program's `main/0`. See
-[docs/cli.md](docs/cli.md).
+[docs/cli.md](https://clausal.pl/cli/).
 
 ### Querying it from Python
 
@@ -163,7 +163,7 @@ for N in --fib(N, 55):
 python -c "import clausal, app"     # import clausal installs the import hook
 ```
 
-See [Python Integration](docs/python_integration.md) for more ways to query.
+See [Python Integration](https://clausal.pl/python_integration/) for more ways to query.
 
 ### Constraints, DCGs and reified conditions
 
@@ -218,15 +218,15 @@ enforced when the file loads:
   `pyproject.toml`. Anything else is refused with
   `permission_error(import, python_bridge, M)`.
 
-See [docs/importing_prolog.md](docs/importing_prolog.md) for the full rules.
+See [docs/importing_prolog.md](https://clausal.pl/importing_prolog/) for the full rules.
 
 ## ISO Prolog `.pl` files
 
 A `.pl` file is regular, external ISO Prolog: it is not restricted to the
 cut-free subset, and that is why a `.clausal` module may not import one.
 To run full ISO Prolog, cut included, alongside Clausal Prolog, use the
-[Scryer](packages/clausal-scryer/docs/scryer.md) or
-[Trealla](packages/clausal-trealla/docs/trealla.md) embeddings.
+[Scryer](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scryer/docs/scryer.md) or
+[Trealla](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-trealla/docs/trealla.md) embeddings.
 
 Importing a `.pl` file straight into the engine (put it on `sys.path` and
 `import` it) is
@@ -244,7 +244,7 @@ module like any other (subject to the
 [Python-bridge rules](#what-clausal-prolog-restricts)). Keep `.seam`
 modules small and write your logic in Clausal Prolog. `clausal-fmt` and
 `clausal-rewrite` work on `.seam` files only. See
-[docs/clausal_prolog.md](docs/clausal_prolog.md) for how the two surfaces
+[docs/clausal_prolog.md](https://clausal.pl/clausal_prolog/) for how the two surfaces
 differ.
 
 ## Testing
@@ -277,7 +277,13 @@ python -m pytest tests/ clausal/examples/ -q
 - Python ≥ 3.13 (no other runtime dependencies)
 - C compiler (for building from source)
 
-YAML support is the optional package `clausal-yaml` (`pip install clausal[yaml]`).
+Optional packages (YAML, spaCy, SciPy, PyTorch, the Scryer and Trealla
+embeddings, and more) live in [`packages/`](https://clausal.pl/packages/) and
+are not on PyPI yet. Install one from the repository, for example:
+
+```bash
+pip install "clausal-yaml @ git+https://github.com/neurosymbolica/clausal-prolog#subdirectory=packages/clausal-yaml"
+```
 
 ## License
 
