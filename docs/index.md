@@ -19,6 +19,13 @@ combines the two, so each does the part it is good at:
 - **Correctable**: change a rule and the behaviour changes, with no
   retraining.
 
+Each side already has a leading platform. Python is the de facto home of
+neural networks: PyTorch, JAX and the rest of the deep-learning ecosystem are
+built for it. Prolog is the leading language of symbolic AI. It has more than
+50 years of maturity behind it, and it is still chosen for demanding systems,
+IBM Watson's question analysis among them, for its robustness and expressive
+power. Neurosymbolic AI needs the two working together.
+
 Clausal Prolog is a Prolog implemented in Python that aims for ISO Prolog
 conformity. It is not a wrapper around an external engine: it runs in the
 Python process, on the same objects and the same garbage collector, so Prolog
