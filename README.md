@@ -5,12 +5,13 @@
 **Documentation: [clausal.pl](https://clausal.pl)** · start with the
 [Tutorial](https://clausal.pl/tutorial/).
 
-Neural networks are good at perception, language and pattern-matching.
-Symbolic logic is good at rules, reasoning and guarantees. Clausal Prolog puts
-both in one Python process: a neural network can call symbolic logic that in
-turn calls neural predicates, nested as deeply as you like, with no
-serialisation, IPC or second runtime in between. Combining the two gives
-systems that are:
+Neural networks are good at perception, language and pattern-matching, but are
+slow, resource-hungry, unreliable and need to be constrained. Symbolic AI is
+good at rules, reasoning and guarantees but can't deal with the real world.
+Clausal Prolog puts both in one Python process: a neural network can call
+symbolic logic that in turn calls neural predicates, nested as deeply as you
+like, with no serialisation, IPC or second runtime in between. Combining the
+two gives systems that are:
 
 - **Explainable**: conclusions come from rules you can read and a derivation
   you can trace, not only from weights.
