@@ -577,6 +577,49 @@ def test_a_dropped_querys_late_repair_leaves_a_re_led_table_alone(tmp_path):
     assert _engine_state_clean()
 
 
+@pytest.mark.parametrize("second", ["sync", "async"])
+def test_a_dropped_querys_scc_is_rebuilt_not_resumed(tmp_path, second):
+    # Fifth review 2026-10-06: a query that re-led an SCC member another
+    # (dropped, not yet closed) query had left evaluating inherited its
+    # scc_deps; p and q then each waited on the other forever and
+    # `not r(2)` came out undefined instead of true.
+    import gc
+    from clausal.logic.solve import query_wfs
+    src = tmp_path / "scc_drop.seam"
+    src.write_text(
+        "-module(scc_drop, [p/1, q/1, r/1, nr/0])\n"
+        "-table(p/1)\n"
+        "-table(q/1)\n"
+        "-table(r/1)\n"
+        "p(X) <- (q(X), not r(X))\n"
+        "p(1),\n"
+        "q(2),\n"
+        "q(X) <- p(X)\n"
+        "r(Y) <- (p(Z), Z == Y + 1)\n"
+        "nr <- (not r(2))\n")
+    mod = load_clausal_module(src)
+    store = mod.__dict__["$module"].db.table_store
+
+    async def main():
+        dropped = asolve(("p", Var()), mod)
+        await dropped.__anext__()
+        del dropped                           # never closed; close pending
+        gc.collect()
+        z = Var()
+        if second == "sync":
+            got = sorted(deref(z) for _ in solve(("q", z), mod))
+        else:
+            got = sorted([deref(z) async for _ in asolve(("q", z), mod)])
+        for _ in range(6):
+            await asyncio.sleep(0)
+        gc.collect()
+        return got
+    assert run(main()) == [1, 2]
+    assert all(e.status == "complete" for e in store.values())
+    assert [r["_truth"] for r in query_wfs("nr", {}, mod)] == [True]
+    assert _engine_state_clean()
+
+
 def test_abandoning_a_query_closes_it(demo):
     async def main():
         x = Var()

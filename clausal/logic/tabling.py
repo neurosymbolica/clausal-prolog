@@ -1372,6 +1372,21 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
 
         # ── LEADER (fresh table) or RE-LEAD (a dormant "evaluating" SCC member
         # whose leader deferred completion — A04-F001): drive to fixpoint. ──
+        if entry is not None and entry.owner is not _drive_ctx.owner:
+            # Left "evaluating" by ANOTHER query: a clausal.aio query dropped
+            # without closing (dead, or its close not run yet -- a live one is
+            # refused above, by _foreign).  Its partial answers, conditions and
+            # scc_deps describe that query's search, not ours: resuming them
+            # made two SCC members each wait on the other forever (fifth
+            # review, 2026-10-06).  Start over.  In-drive dormant members, and
+            # every synchronous re-lead (owner None both times), still resume.
+            for sc in entry.suspended:
+                try:
+                    sc.generator.close()
+                except BaseException:
+                    pass
+            entry.suspended.clear()
+            entry = None
         if entry is None:
             entry = TableEntry()
             lead = entry.lead = object()
