@@ -277,7 +277,13 @@ python -m pytest tests/ clausal/examples/ -q
 - Python ≥ 3.13 (no other runtime dependencies)
 - C compiler (for building from source)
 
-YAML support is the optional package `clausal-yaml` (`pip install clausal[yaml]`).
+Optional packages (YAML, spaCy, SciPy, PyTorch, the Scryer and Trealla
+embeddings, and more) live in [`packages/`](https://clausal.pl/packages/) and
+are not on PyPI yet. Install one from the repository, for example:
+
+```bash
+pip install "clausal-yaml @ git+https://github.com/neurosymbolica/clausal-prolog#subdirectory=packages/clausal-yaml"
+```
 
 ## License
 
