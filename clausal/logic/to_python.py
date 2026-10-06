@@ -168,7 +168,22 @@ def to_python(val):
         # data, and its ``++`` values already passed through wrap_text.
         if isinstance(val, _Node):
             return val
-        return t(**{n: to_python(getattr(val, n)) for n in term_field_names(val)})
+        # Rebuild only when a field CHANGED: a dataclass whose fields all
+        # convert to themselves crosses as itself.  ``t(**fields)`` needs the
+        # generated ``__init__``; a dataclass with its own (an Equinox module:
+        # ``Linear(in_features, out_features, key=...)``) refuses its fields,
+        # so it is copied and the converted fields set on the copy.
+        old = {n: getattr(val, n) for n in term_field_names(val)}
+        new = {n: to_python(v) for n, v in old.items()}
+        if all(new[n] is old[n] for n in old):
+            return val
+        try:
+            return t(**new)
+        except TypeError:
+            rebuilt = copy.copy(val)
+            for n, v in new.items():
+                object.__setattr__(rebuilt, n, v)   # frozen dataclasses too
+            return rebuilt
     return val
 
 
