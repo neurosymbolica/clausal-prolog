@@ -40,7 +40,7 @@ unpack_interval(PyObject *pair, int64_t *lo, int64_t *hi)
     /* Handle float('-inf') and float('inf') */
     if (PyFloat_Check(lo_obj)) {
         double v = PyFloat_AS_DOUBLE(lo_obj);
-        if (v == -HUGE_VAL || v == -(1.0/0.0))
+        if (v == -HUGE_VAL)
             *lo = INT64_MIN;
         else {
             PyErr_SetString(PyExc_TypeError,
@@ -54,7 +54,7 @@ unpack_interval(PyObject *pair, int64_t *lo, int64_t *hi)
 
     if (PyFloat_Check(hi_obj)) {
         double v = PyFloat_AS_DOUBLE(hi_obj);
-        if (v == HUGE_VAL || v == (1.0/0.0))
+        if (v == HUGE_VAL)
             *hi = INT64_MAX;
         else {
             PyErr_SetString(PyExc_TypeError,
@@ -185,7 +185,7 @@ domain_from_range_c(PyObject *lo_obj, PyObject *hi_obj)
 
     if (PyFloat_Check(lo_obj)) {
         double v = PyFloat_AS_DOUBLE(lo_obj);
-        if (v == -HUGE_VAL || v == -(1.0/0.0))
+        if (v == -HUGE_VAL)
             lo = INT64_MIN;
         else {
             PyErr_SetString(PyExc_TypeError, "lo must be int or -inf");
@@ -198,7 +198,7 @@ domain_from_range_c(PyObject *lo_obj, PyObject *hi_obj)
 
     if (PyFloat_Check(hi_obj)) {
         double v = PyFloat_AS_DOUBLE(hi_obj);
-        if (v == HUGE_VAL || v == (1.0/0.0))
+        if (v == HUGE_VAL)
             hi = INT64_MAX;
         else {
             PyErr_SetString(PyExc_TypeError, "hi must be int or +inf");
@@ -510,10 +510,10 @@ parse_bound(PyObject *obj, int64_t *out)
 {
     if (PyFloat_Check(obj)) {
         double v = PyFloat_AS_DOUBLE(obj);
-        if (v == -HUGE_VAL || v == -(1.0/0.0)) {
+        if (v == -HUGE_VAL) {
             *out = INT64_MIN;
             return 0;
-        } else if (v == HUGE_VAL || v == (1.0/0.0)) {
+        } else if (v == HUGE_VAL) {
             *out = INT64_MAX;
             return 0;
         } else {

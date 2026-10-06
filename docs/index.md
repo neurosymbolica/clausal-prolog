@@ -10,6 +10,11 @@ Neural networks are good at perception, language and pattern-matching.
 Symbolic logic is good at rules, reasoning and guarantees. Neurosymbolic AI
 combines the two, so each does the part it is good at:
 
+- **Capable, within bounds**: neural networks do what hand-written rules
+  can't. They read images, understand and generate language, and learn
+  patterns from data. But they are statistical: they can be confidently
+  wrong, and nothing in the weights guarantees a rule is followed. Logic
+  supplies the constraints that keep their output within what must hold.
 - **Explainable**: conclusions come from rules you can read and a derivation
   you can trace, not only from weights.
 - **Reliable**: hard constraints such as regulations, safety rules and
