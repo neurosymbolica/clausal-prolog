@@ -13,6 +13,7 @@ Up: [../AGENTS.md](../AGENTS.md)
 |---|---|
 | `wheel_smoke.py` | Smoke-tests an INSTALLED clausal (C extensions, `clausal` CLI, a `library(...)` facade, a `.pl` program). Run by cibuildwheel in `../.github/workflows/release.yml`; run it from outside the source tree |
 | `show_generated.py` | Prints seam source beside the generated trampoline Python. Pinned by `../tests/test_show_generated_smoke.py` |
+| `build_logo.py` | Generates the logo SVGs, PNGs and favicons in `../docs/assets/logo/` (PNGs need Chromium and ImageMagick) |
 | `new-worktree` | Bash: create a git worktree that shares Claude memory with the source repo |
 
 ## Migration censuses and helpers (historical)

@@ -1,3 +1,5 @@
+<p align="center"><img src="https://raw.githubusercontent.com/neurosymbolica/clausal-prolog/main/docs/assets/logo/clausal-banner.png" alt="Clausal Prolog" width="460"></p>
+
 # Clausal Prolog - The Neurosymbolic platform
 
 The best of neural network AI (Python) with the best of Symbolic AI (Prolog). 

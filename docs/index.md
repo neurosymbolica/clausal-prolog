@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/logo/clausal-banner.png" alt="Clausal Prolog" width="460"></p>
+
 # Clausal Prolog
 
 **Prolog that runs inside Python.**

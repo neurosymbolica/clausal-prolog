@@ -35,6 +35,8 @@ theme:
   font:
     text: Inter
     code: JetBrains Mono
+  logo: assets/logo/clausal-icon.svg
+  favicon: assets/logo/favicon.ico
   icon:
     repo: fontawesome/brands/gitlab
 
