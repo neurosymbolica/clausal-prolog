@@ -232,6 +232,25 @@ def test_solutions_has_one_async_driver(demo):
     assert s.__aiter__() is s.__aiter__()
 
 
+def test_solutions_aclose_and_no_sync_display_mid_async(demo):
+    import contextlib
+    from clausal.repl import Solutions
+    y = Var()
+
+    async def main():
+        s = Solutions(("reach", "a", y), _varnames={"Y": y}, module=demo)
+        async with contextlib.aclosing(s):
+            async for _ in s:
+                with pytest.raises(RuntimeError, match="asynchronously"):
+                    s._repr_html_()
+                break
+        n = Var()
+        await aonce(("reach_count", n), demo)   # table released by aclose
+        return deref(n)
+    assert run(main()) == 3
+    assert _engine_state_clean()
+
+
 def test_solutions_awaited_twice_and_over_a_plain_iterator(demo):
     from clausal.repl import Solutions
     x = Var()
@@ -508,6 +527,54 @@ def test_a_lambda_in_an_async_def_stays_synchronous(tmp_path):
         "    return f()\n")
     mod = load_clausal_module(src)
     assert run(mod.lam()) == [1, 2]
+
+
+def test_a_dropped_querys_late_repair_leaves_a_re_led_table_alone(tmp_path):
+    # Fourth review 2026-10-06: a dropped query's parked leader frame,
+    # finalised by GC while another query re-led the same table entry,
+    # deleted that live table and popped its leader; the delayed negation
+    # was lost and an undefined answer came out True.
+    import gc
+    from clausal.aio import adrive
+    from clausal.logic import tabling
+    src = tmp_path / "wfs_relead.seam"
+    src.write_text(
+        "-module(wfs_relead, [t3/1])\n"
+        "-table(t3/1)\n"
+        "-table(w/1)\n"
+        "move(1, 2),\n"
+        "move(2, 1),\n"
+        "w(X) <- (move(X, Y), not w(Y))\n"
+        "t3('first'),\n"
+        "t3(R) <- (not w(1), R is 'yes')\n")
+    mod = load_clausal_module(src)
+    store = mod.__dict__["$module"].db.table_store
+
+    def t3_entries():
+        return [e for k, e in store.items() if k[0] == "t3"]
+
+    async def main():
+        old = asolve(("t3", Var()), mod)
+        await old.__anext__()
+        del old                               # dropped, never closed
+        gc.collect()
+        z = Var()
+
+        def answers():
+            for _ in solve(("t3", z), mod):
+                yield deref(z)
+                for _ in range(5):
+                    await_only(asyncio.sleep(0))
+                gc.collect()                  # finalise the dropped frames
+        got = [v async for v in adrive(answers())]
+        return got, t3_entries()
+    got, entries = run(main())
+    assert sorted(got) == ["first", "yes"]
+    [entry] = entries                         # still in the store
+    truth = dict(zip((a[0] for a in entry.answers), entry.conditions))
+    assert truth["first"] is tabling._UNCONDITIONAL
+    assert truth["yes"] is not tabling._UNCONDITIONAL      # undefined, kept
+    assert _engine_state_clean()
 
 
 def test_abandoning_a_query_closes_it(demo):

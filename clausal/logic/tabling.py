@@ -249,7 +249,9 @@ def begin_drive_episode() -> None:
 def _record_created_entry(entry, table_store, store_key) -> None:
     episodes = _drive_ctx.episodes
     if episodes:
-        episodes[-1].append((entry, table_store, store_key))
+        # The lead token too: the repair below may only touch the entry while
+        # it is still OUR lead (see TableEntry.lead).
+        episodes[-1].append((entry, table_store, store_key, entry.lead))
 
 
 def end_drive_episode() -> None:
@@ -271,16 +273,19 @@ def end_drive_episode() -> None:
     created = episodes.pop()
     if not created:
         return
-    created_ids = {id(entry) for entry, _, _ in created}
+    created_ids = {id(entry) for entry, _, _, _ in created}
     if any(id(e) in created_ids for e in _leader_ctx.stack):
         # Abandoned mid-fixpoint — repair.
-        for entry, store, key in created:
+        for entry, store, key, lead in created:
             if entry.status != "evaluating":
                 continue
-            if entry.owner is not None and entry.owner is not _drive_ctx.owner:
-                # Another clausal.aio query re-led this entry after ours was
-                # dropped (its close runs late, on asyncio's finaliser): the
-                # entry is theirs now, mid-evaluation.  Leave it.
+            if entry.lead is not lead and entry.owner is not _drive_ctx.owner:
+                # Re-led since by ANOTHER query -- a clausal.aio one, or a
+                # synchronous one (owner None) -- after ours was dropped and
+                # its close deferred to asyncio's finaliser.  Theirs now;
+                # leave it.  (A re-lead of a dormant SCC member within this
+                # same drive also changes the token, but keeps the owner, and
+                # is still ours to repair.)
                 continue
             if store.get(key) is entry:
                 del store[key]
@@ -310,7 +315,7 @@ def end_drive_episode() -> None:
     # no leader is active.
     if not _leader_ctx.stack:
         seen = set()
-        for _entry, store, _key in created:
+        for _entry, store, _key, _lead in created:
             if id(store) not in seen:
                 seen.add(id(store))
                 _resolve_all_conditions(store)
@@ -382,13 +387,20 @@ class TableEntry:
     """Stores status, answers, and suspended consumers for one subgoal."""
     __slots__ = ("status", "answers", "answer_set", "_answer_index",
                  "suspended", "conditions", "_current_delays", "scc_deps",
-                 "_sources", "owner")
+                 "_sources", "owner", "lead")
 
     def __init__(self):
         self.status: str = "evaluating"       # "evaluating" | "complete"
         # The clausal.aio query evaluating this table (None when synchronous);
         # see _foreign.
         self.owner = _drive_ctx.owner
+        # A fresh token per lead (a creation or a re-lead).  A leader frame
+        # keeps the token it set; its abnormal-exit repair and leader pop act
+        # only while the entry is still its lead.  Async queries let a
+        # dropped query's parked frame be finalised (by GC) long after
+        # another query re-led the same entry object (fourth review,
+        # 2026-10-06: it deleted the live table and popped the live leader).
+        self.lead = None
         self.answers: list[tuple] = []
         self.answer_set: set = set()   # canonical answer keys (A04-F005/F006)
         self._answer_index: dict = {}  # canonical key → index into answers
@@ -1217,6 +1229,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
 
         # ── LEADER: fixpoint loop ──
         entry = TableEntry()
+        lead = entry.lead = object()
         table_store[store_key] = entry
         _note_driven_store(table_store)
         push_leader(entry)
@@ -1253,11 +1266,12 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
             # returning the partial set. Simple mode has no suspended consumers.
             # Identity-guarded against out-of-order GC finalisation replacing
             # a fresh entry installed under the same key by a later query.
-            if table_store.get(store_key) is entry:
+            if entry.lead is lead and table_store.get(store_key) is entry:
                 del table_store[store_key]
             raise
         finally:
-            pop_leader(entry)
+            if entry.lead is lead:
+                pop_leader(entry)
 
         entry.status = "complete"
         if not _leader_ctx.stack:
@@ -1360,11 +1374,13 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
         # whose leader deferred completion — A04-F001): drive to fixpoint. ──
         if entry is None:
             entry = TableEntry()
+            lead = entry.lead = object()
             table_store[store_key] = entry
             _record_created_entry(entry, table_store, store_key)  # A04-F007
             replay_count = 0
         else:
             entry.owner = _drive_ctx.owner     # we lead it now (see _foreign)
+            lead = entry.lead = object()
             # A04-F001 (re-lead replay): this caller has seen NONE of the
             # already-tabled answers, but the fixpoint loop below streams only
             # NEW answers (add_answer dedups the old ones away). Replay the
@@ -1494,17 +1510,21 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             # frame long after end_drive_episode() already repaired the store
             # and a LATER query installed a fresh entry under the same key —
             # a blind pop would destroy that innocent entry (A04-F007).
-            if table_store.get(store_key) is entry:
-                del table_store[store_key]
-            for sc in entry.suspended:
-                try:
-                    sc.generator.close()
-                except BaseException:
-                    pass
-            entry.suspended.clear()
+            # Lead-guarded too: a re-lead (another query's, after ours was
+            # dropped) reuses the entry OBJECT, so identity is not enough.
+            if entry.lead is lead:
+                if table_store.get(store_key) is entry:
+                    del table_store[store_key]
+                for sc in entry.suspended:
+                    try:
+                        sc.generator.close()
+                    except BaseException:
+                        pass
+                entry.suspended.clear()
             raise
         finally:
-            pop_leader(entry)
+            if entry.lead is lead:
+                pop_leader(entry)
 
         # A04-F001 SCC completion: a table that consumed an ANCESTOR still
         # evaluating (mutual recursion) is an SCC member — leave it dormant for
