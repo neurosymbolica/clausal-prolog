@@ -465,7 +465,9 @@ class TestAnnotationPredicates:
         result = Var()
         results = list(_head_2(apple_tok, result, trail, None))
         assert len(results) == 1
-        assert isinstance(deref(result), str)
+        # Free-form text is a STRING (the chars carrier), not an atom: see
+        # test_spacy_free_form_outputs_stubbed.py.  "Apple" heads to "looking".
+        assert deref(result) == chars("looking")
 
     def test_shape(self, apple_tok, trail):
         # nv

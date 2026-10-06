@@ -14,9 +14,10 @@ classical object detection, camera calibration, and video I/O.
 pip install clausal-opencv
 ```
 
-`opencv-python` is pulled in as a dependency. For headless
-environments, install `opencv-python-headless` first to override the
-default.
+`opencv-python` (OpenCV 4; OpenCV 5 moved KAZE, AKAZE, BRISK, HOG and
+the cascade classifier out of the main package) is pulled in as a
+dependency. For headless environments, install
+`opencv-python-headless<5` first to override the default.
 
 ## Use
 
