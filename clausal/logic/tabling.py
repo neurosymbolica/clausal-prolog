@@ -195,6 +195,25 @@ class _DriveContext(threading.local):
 _drive_ctx = _DriveContext()
 
 
+class _OuterContext(threading.local):
+    def __init__(self):
+        # Leader contexts (``_leader_ctx.__dict__`` copies) swapped OUT while
+        # a clausal.aio query runs on this thread, innermost last.  A
+        # synchronous query parked between answers keeps its leaders there.
+        self.leaders: list[dict] = []
+
+_outer_ctx = _OuterContext()
+
+
+def _on_outer_stack(entry: "TableEntry") -> bool:
+    for ctx in _outer_ctx.leaders:
+        if any(e is entry for e in ctx.get("stack", ())):
+            return True
+        if any(e is entry for seg in ctx.get("detached", ()) for e in seg):
+            return True
+    return False
+
+
 def _foreign(entry: "TableEntry") -> bool:
     """True if *entry* is being evaluated by ANOTHER live clausal.aio query.
 
@@ -205,8 +224,12 @@ def _foreign(entry: "TableEntry") -> bool:
     complete the entry: SLG assumes one search per table.
     """
     owner = entry.owner
-    return (owner is not None and owner is not _drive_ctx.owner
-            and getattr(owner, "live", False))
+    if (owner is not None and owner is not _drive_ctx.owner
+            and getattr(owner, "live", False)):
+        return True
+    # A synchronous leader (owner None) parked mid-fixpoint outside the
+    # running async query: still being built, by someone else.
+    return bool(_outer_ctx.leaders) and _on_outer_stack(entry)
 
 
 def _refuse_foreign(functor, arity) -> None:
@@ -996,6 +1019,9 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
     # part of the same SLG cycle.
     for (f, a, _k), e in table_store.items():
         if f == functor and a == arity and e.status == "evaluating":
+            if _foreign(e):
+                # Another query's unfinished table, not a cycle in ours.
+                _refuse_foreign(functor, arity)
             _delay_negation(functor, arity, key, args, trail, store=table_store)
             return True  # conditionally succeed
 

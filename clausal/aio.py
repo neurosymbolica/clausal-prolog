@@ -66,7 +66,10 @@ class _QueryGreenlet(_greenlet.greenlet):
 
 
 def _in_query_greenlet():
-    return type(_greenlet.getcurrent()) is _QueryGreenlet
+    current = _greenlet.getcurrent()
+    # A query greenlet being finalised (GC of an abandoned query) can no
+    # longer switch to its parent: treat it as outside any query.
+    return type(current) is _QueryGreenlet and not current.dead
 
 
 # ── per-query engine state ───────────────────────────────────────────────
@@ -161,19 +164,37 @@ def await_only(awaitable):
 # ── asolve / aonce ───────────────────────────────────────────────────────
 
 class _Query:
-    """One query: its solve generator, engine state and query greenlet."""
+    """One query: its answer generator, engine state and query greenlet.
 
-    __slots__ = ("gen", "state", "child", "live")
+    ``live`` says whether the query may still resume, which is what makes its
+    unfinished tables its own (``tabling._foreign``).  It goes false when the
+    query is closed, and also when the async generator driving it is gone
+    without having been closed (dropped after its loop shut down): a query
+    nobody can resume must not hold its tables forever.
+    """
+
+    __slots__ = ("gen", "state", "child", "_live", "agen")
 
     def __init__(self, gen):
         self.gen, self.state = gen, _fresh_state(self)
-        self.child, self.live = None, True
+        self.child, self._live, self.agen = None, True, None
+
+    @property
+    def live(self):
+        return self._live and (self.agen is None or self.agen() is not None)
 
     def _switch(self, how, *args):
+        from clausal.logic.tabling import _outer_ctx
         saved = _install(self.state)
+        # The context we just swapped out may be a synchronous query parked
+        # mid-fixpoint (this async query runs inside its consumer): its
+        # leaders are no longer on the installed stack, but their tables are
+        # still being built.  Let tabling see them (tabling._foreign).
+        _outer_ctx.leaders.append(saved[0])
         try:
             return how(*args)
         finally:
+            _outer_ctx.leaders.pop()
             self.state = _install(saved)
 
     async def step(self, fn):
@@ -206,19 +227,30 @@ class _Query:
             return ("end", None)
 
     def close(self, _):
-        if not self.gen.gi_running:
-            self.gen.close()
+        close = getattr(self.gen, "close", None)
+        if close is not None and not getattr(self.gen, "gi_running", False):
+            close()
         return ("end", None)
 
 
-async def adrive(gen):
-    """Drive any synchronous answer generator on the event loop.
+def adrive(gen):
+    """Drive any synchronous answer iterator on the event loop.
 
     *gen* yields once per answer (``solve``, or the seam's own answer
     generator); each answer is yielded on, and the generator runs in a query
     greenlet, so a wait inside it suspends only this query.
+
+    Close the result (``aclose()``, or ``contextlib.aclosing``) when you stop
+    early -- after a ``break`` out of ``async for`` -- or the tables it is
+    still building stay reserved until asyncio finalises it.
     """
     query = _Query(gen)
+    answers = _adrive(query)
+    query.agen = weakref.ref(answers)
+    return answers
+
+
+async def _adrive(query):
     try:
         while True:
             kind, value = await query.step(query.next_solution)
@@ -231,8 +263,14 @@ async def adrive(gen):
         # runs where it would have run synchronously.
         try:
             await query.step(query.close)
+        except RuntimeError as exc:
+            # Finalised by the garbage collector from inside a dying query
+            # greenlet: nothing can switch any more, so nothing to close in.
+            if "greenlet is being finalized" not in str(exc):
+                raise
         finally:
-            query.live = False
+            query._live = False
+            query.gen = None
 
 
 def asolve(goal, module=None, trail=None):

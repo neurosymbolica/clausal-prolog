@@ -175,6 +175,11 @@ def test_plain_generator_expression_over_a_goal_is_refused(tmp_path):
         load_clausal_module(src)
 
 
+def test_break_out_of_an_async_for_releases_the_table(aseam):
+    first, every = run(aseam.first_then_all())
+    assert first == "b" and sorted(every) == ["a", "b", "c"]
+
+
 def test_await_in_a_clause_escape(aseam):
     x = Var()
     assert once(("got", x), aseam) is not None and deref(x) == 40
@@ -218,6 +223,18 @@ def test_solutions_awaited_and_async_iterated_inside_a_loop(demo):
     html, rows = run(main())
     assert "No more solutions" in html and html.count('class="clausal-or"') == 2
     assert [r["Y"] for r in rows] == [0, 1, 2]
+
+
+def test_solutions_awaited_twice_and_over_a_plain_iterator(demo):
+    from clausal.repl import Solutions
+    x = Var()
+
+    async def main():
+        shown = await Solutions(("ticked", x), _varnames={"X": x}, module=demo)
+        again = await shown                      # used to raise AttributeError
+        plain = [b async for b in Solutions(iter([{"X": 1}, {"X": 2}]))]
+        return again is shown, plain
+    assert run(main()) == (True, [{"X": 1}, {"X": 2}])
 
 
 # ── synchronous drivers ──────────────────────────────────────────────────
@@ -410,6 +427,41 @@ def test_the_private_loop_closes_with_its_thread(demo):
     del t
     gc.collect()
     assert seen and seen[0].is_closed()
+
+
+def test_a_query_dropped_after_its_loop_closed_does_not_hold_its_table(demo):
+    # Second review 2026-10-06: the async generator was freed without its
+    # `finally` (the loop was gone), the query stayed "live", and every later
+    # query on the table was refused for the life of the process.
+    import gc
+    kept = {}
+
+    async def start():
+        answers = asolve(("reach", "a", Var()), demo)
+        await answers.__anext__()
+        kept["answers"] = answers
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(start())
+    loop.close()                 # a user-managed loop: no shutdown_asyncgens
+    del kept["answers"]
+    gc.collect()
+    n = Var()
+    assert once(("reach_count", n), demo) is not None and deref(n) == 3
+
+
+def test_an_async_query_inside_a_streaming_sync_query_is_refused(demo):
+    # Second review 2026-10-06: the async query re-led the table the
+    # synchronous query was still building, and the synchronous one then
+    # lost two of its three answers.
+    y, out = Var(), []
+    for _ in solve(("reach", "a", y), demo):
+        out.append(deref(y))
+        if len(out) == 1:
+            with pytest.raises(LogicException) as info:
+                run(aonce(("reach_count", Var()), demo))
+            assert _table_refusal(info.value)
+    assert sorted(out) == ["a", "b", "c"]
+    assert _engine_state_clean()
 
 
 def test_abandoning_a_query_closes_it(demo):

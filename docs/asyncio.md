@@ -292,6 +292,15 @@ fetched(X) <- (X is ++await fetch(4))
   a partial answer set, because SLG resolution builds each table in one
   search. To share a table between concurrent queries, complete it first
   (for example with `findall/3`), or run the queries one after another.
+- **Stopping early from Python.** After a `break` out of `async for` over
+  `asolve`, `acall` or `Solutions`, close the iterator with `await
+  answers.aclose()` or `contextlib.aclosing(...)`. Python doesn't close an
+  async generator on `break`; asyncio does it a loop tick or two later.
+  Until then the query still owns any table it was building, and another
+  query on that table is refused. In seam you don't need to: a `for` over
+  `--goal` in an `async def` closes its iterator itself. A query abandoned
+  without closing, after its loop has gone, releases its tables once it is
+  garbage-collected.
 - **Closing a query early.** When you stop asking for answers, cleanups of
   `setup_call_cleanup/3` still pending run when Python's garbage collector
   frees the query's frames, which happens with plain `solve` too. A cleanup

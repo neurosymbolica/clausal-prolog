@@ -1,6 +1,7 @@
 # Fixture for tests/test_aio.py: goal-position `--goal` inside `async def`
 # (driven by clausal.aio) and `++await` in clause bodies.
--module(aio_seam, [got/1, fstr/1])
+-module(aio_seam, [got/1, fstr/1, reach/2])
+-table(reach/2)
 -import_from(py.asyncio, [sleep])
 import asyncio
 
@@ -61,3 +62,17 @@ async def sync_inside():
         if --nap(X):
             return X
     return inner
+
+edge('a', 'b'),
+edge('b', 'c'),
+edge('c', 'a'),
+reach(X, Y) <- edge(X, Y)
+reach(X, Y) <- (reach(X, Z), edge(Z, Y))
+
+# `break` out of a loop over a tabled goal, then the same table again at
+# once (second review 2026-10-06: it used to be refused until asyncio
+# finalised the abandoned iterator).
+async def first_then_all():
+    for Y in --reach('a', Y):
+        break
+    return Y, [Z for Z in --reach('a', Z)]
