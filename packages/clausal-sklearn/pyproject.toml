@@ -14,9 +14,11 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "clausal>=1.0",
-    "scikit-learn",
-    "clausal-scipy>=0.1.0",
+    "scikit-learn",   # brings numpy, scipy and joblib (save_fitted/load_fitted)
 ]
+
+[project.optional-dependencies]
+csv = ["pandas"]      # load_csv/3
 
 [project.urls]
 Homepage = "https://clausal.pl"

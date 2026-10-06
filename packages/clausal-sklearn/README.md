@@ -12,7 +12,8 @@ tagged tuples (`est`, `dataset`, `fitted`, `split`).
 pip install clausal-sklearn
 ```
 
-`scikit-learn` is pulled in as a dependency. Requires Python 3.13 or later.
+`scikit-learn` is pulled in as a dependency. `load_csv/3` also needs
+pandas: `pip install "clausal-sklearn[csv]"`. Requires Python 3.13 or later.
 
 ## Use
 
