@@ -48,7 +48,8 @@ never spell a suffix elsewhere.
 | `docs/` | The MkDocs site (clausal.pl) | [docs/AGENTS.md](docs/AGENTS.md) |
 | `todo/` | Open problems; `done/`, `rejected/` | [todo/AGENTS.md](todo/AGENTS.md) |
 | `implementation_plans/` | Dated plans, specs, session handoffs (history) | [implementation_plans/AGENTS.md](implementation_plans/AGENTS.md) |
-| `tools/`, `scripts/`, `benchmarks/` | Dev tools, one-off scripts, benchmarks | see the folders |
+| `tools/`, `scripts/` | Dev tools (`wheel_smoke.py` for releases) and one-off scripts | [tools/AGENTS.md](tools/AGENTS.md) |
+| `benchmarks/` | Benchmark workloads and profilers | [benchmarks/AGENTS.md](benchmarks/AGENTS.md) |
 | `pyproject.toml`, `setup.py`, `MANIFEST.in` | Packaging; `setup.py` lists the C extensions | |
 | `CHANGELOG.md` | Every behaviour change and ruling since 0.4.0, under "Unreleased" | |
 | `.github/workflows/` | `docs.yml` (GitHub Pages), `release.yml` (wheels → PyPI on a release) | |
@@ -66,7 +67,9 @@ mkdocs build                           # the docs site (pip install mkdocs-mater
 
 - Expect failures in a bare environment: tests for z3, OR-Tools and pysat, and
   the `tests/iso/*_scryer.py` oracles (they need the Scryer binary). Compare
-  against a baseline run by test name, not by count.
+  against a baseline run by test name, not by count. Without OR-Tools (and,
+  for `packages`, numpy) a collection error stops the run: add
+  `--continue-on-collection-errors`. See [tests/AGENTS.md](tests/AGENTS.md).
 - If `pytest-timeout` is installed, `pyproject.toml`'s `timeout = 10` uses the
   thread method and one slow test kills the whole run: add
   `--timeout-method=signal`.
