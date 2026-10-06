@@ -9,7 +9,7 @@ queries. The source surface does not matter here: all three arrive as
 
 **Read [README.md](README.md) first**: the full architecture guide (pipeline,
 data structures, the two strategies, invariants §10, gotchas §11, public API
-§12). This file only maps it and notes where it has drifted.
+§12). This file only maps it.
 
 ## Two strategies
 
@@ -47,11 +47,9 @@ Runtime helpers that generated code calls (list unification, star lists,
 
 ## Gotchas
 
-- README §3 "Module map" predates the IR: it omits `ir.py`,
-  `terms_to_goalop.py`, `lower_python_*.py`, `_lower_goalop_shared.py`,
-  `strategy.py`, `invariants.py`, `optimisations/`.
-- README §13 paths are stale: the plans moved to
-  `implementation_plans/compiler/` (and its `todo/`).
+- The compiler's plans and open design todos live in
+  `implementation_plans/compiler/` (and its `todo/`), not the top-level
+  `todo/`.
 - Cycles are broken with function-local imports (README §11).
 - `compiler/predicate.py` (compilation) is not `../predicate.py` (the
   predicate-row / handle model).

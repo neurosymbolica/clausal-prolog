@@ -90,11 +90,8 @@ it. Pattern write-up:
 - `test_doc_snippet_coverage.py` allowlists three `import.md` blocks **by fence
   line number** (`_KNOWN_UNCOMPILABLE`): inserting prose above them in
   `import.md` breaks the test — shift the pins.
-- The snippet checks scan only top-level `docs/*.md`, but `pytest docs`
-  recurses: it collects seam blocks under `superpowers/`, and 7 of them fail to
-  compile (stale history). Run `pytest docs/*.md` for the live pages.
-- Pre-flip text may say `.clausal` meaning seam source (e.g. the `_HOWTO`
-  message in `test_doc_snippet_coverage.py` still says `_examples.clausal`;
-  the fixtures are `.seam`).
-- `regex.md` appears twice in the nav (Standard Library and Advanced).
+- The snippet checks scan only top-level `docs/*.md`; the root `conftest.py`
+  keeps `pytest` off `superpowers/` and `design-records/` (history whose seam
+  blocks predate today's syntax).
+- Pre-flip text may say `.clausal` meaning seam source; the fixtures are `.seam`.
 - Local preview: `python docs/serve-docs.py` (rebuilds, serves on :8080).

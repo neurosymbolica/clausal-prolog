@@ -87,16 +87,14 @@ Support modules (imported by tests, not tests themselves):
   makes `test_python_bridges.py::test_engine_shipped` fail; run from a checkout
   on `PYTHONPATH` instead.
 - **Optional deps**: z3, OR-Tools and python-sat are not dependencies.
-  Without them these items FAIL rather than skip: `fixtures/z3_*.seam`,
-  `ortools_*.seam`, `pysat_boolean.seam`, the z3 tests in
-  `first_class_constraints.seam`, and most of `test_clpsat.py`. Other Python
-  tests skip (`importorskip("z3")`, `needs_ortools`, `needs_pysat`).
-  `test_clportools.py` errors at collection (`clausal/logic/clportools.py`
-  raises `NameError: _CpSolverSolutionCallback` on import without ortools),
-  and that error INTERRUPTS the whole run: pass
-  `--continue-on-collection-errors` (or `--ignore=tests/test_clportools.py`).
-- **Bare-environment baseline** (2026-10-06, no z3/ortools/pysat/Scryer):
-  225 failed, 122 errors, 22,657 passed. Most are the items above and `iso/`.
+  Without them these `.seam` items FAIL rather than skip: `fixtures/z3_*.seam`,
+  `ortools_*.seam`, `pysat_boolean.seam`, and the z3 tests in
+  `first_class_constraints.seam`. Python test modules skip
+  (`importorskip("z3")` / `("ortools")` / `("pysat")`, `needs_ortools`,
+  `needs_pysat`).
+- **Bare-environment baseline** (2026-10-06, no z3/ortools/pysat/Scryer,
+  before the OR-Tools/pysat test modules skipped): 225 failed, 122 errors,
+  22,657 passed. Most are the items above and `iso/`.
 - **Scryer binary**: default path in `_oracles.py`; `tests/iso/` fails without
   it (see above), most other `*_scryer.py` tests skip.
 - **Line-number pins**: `test_funnel_lint.py`'s `ALLOWLIST` holds line ranges in
