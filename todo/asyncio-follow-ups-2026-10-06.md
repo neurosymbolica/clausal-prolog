@@ -4,24 +4,27 @@ Filed 2026-10-06 with the first `clausal.aio` (docs/asyncio.md). The shipped
 driver runs `solve` in a greenlet; these are the parts it deliberately left
 out.
 
-## 1. Waiting inside tabled evaluation
+## 1. Sharing a table that another query is still building
 
-Under `asolve`, `await_only` refuses while the query has a table under
-evaluation (`permission_error(await, tabled_evaluation, _)`). Without that
-guard, two concurrent queries calling the same tabled predicate whose body
-waits give the second query **no solution** (measured: `['found', 'NO
-SOLUTION']`). It finds the entry `evaluating`, treats itself as a consumer
-of an SCC it does not lead, and suspends with no answers.
+**Status: PARTLY RESOLVED 2026-10-06.** The first version refused any wait
+inside tabled evaluation. The Fable review found that this was not enough:
+a query streaming a tabled goal's answers is suspended between answers
+with the table still `evaluating`, and another query then silently lost
+answers. Table entries now carry their owning query
+(`TableEntry.owner`, `tabling._foreign`). Waiting is allowed anywhere, and
+a query that reaches another live query's unfinished table raises
+`permission_error(access, tabled_evaluation, P/N)`. Pinned by
+`tests/test_aio.py::test_a_table_another_query_is_building_is_refused_not_partial`
+and `::test_a_table_still_streaming_answers_is_exclusive`.
 
-Options:
+What remains is to wait instead of refusing:
 - **Per-table wait.** A query that meets a table another query is evaluating
   awaits that table's completion. Like XSB's shared completed tables, this
-  needs deadlock handling when two queries' SCCs depend on each other.
+  needs deadlock handling when two queries' SCCs depend on each other, and
+  a query cannot wait for a table it is itself streaming (the refusal stays
+  for that case).
 - **Private tables per query** while one is under evaluation, merged on
   completion.
-- Keep the refusal (current).
-
-Pinned by `tests/test_aio.py::test_awaiting_inside_tabled_evaluation_is_refused`.
 
 ## 2. Concurrent independent subgoals
 

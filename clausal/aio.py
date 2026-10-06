@@ -58,7 +58,7 @@ from clausal.logic.exceptions import LogicException, permission_error
 from clausal.logic.solve import solve
 from clausal.logic.variables import deref, unify
 
-__all__ = ["asolve", "aonce", "adrive", "await_only", "async_predicate"]
+__all__ = ["asolve", "aonce", "acall", "adrive", "await_only", "async_predicate"]
 
 
 class _QueryGreenlet(_greenlet.greenlet):
@@ -154,7 +154,8 @@ def await_only(awaitable):
         "await", "synchronous_query", culprit,
         "await_only/1: a synchronous query (solve, once, ...) is waiting "
         "inside a running event loop, which it would block; drive it with "
-        "clausal.aio.asolve or aonce instead"))
+        "clausal.aio.asolve or aonce instead (in Jupyter, "
+        "`await Solutions(...)`; in seam, put the `--goal` in an async def)"))
 
 
 # ── asolve / aonce ───────────────────────────────────────────────────────
@@ -241,6 +242,12 @@ def asolve(goal, module=None, trail=None):
     at every ``await_only``; between awaits it runs synchronously.
     """
     return adrive(solve(goal, module, trail))
+
+
+def acall(functor, *args, module=None, trail=None):
+    """The async twin of ``clausal.call``: ``async for trail in acall(...)``."""
+    from clausal.logic.solve import call  # noqa: PLC0415
+    return adrive(call(functor, *args, module=module, trail=trail))
 
 
 async def aonce(goal, module=None, trail=None):

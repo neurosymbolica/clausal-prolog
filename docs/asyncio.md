@@ -180,6 +180,17 @@ asyncio.run(main())
 
 The three naps overlap: the whole run takes about 0.1 s, not 0.3 s.
 
+The other entry points have async forms too:
+
+- `acall(functor, *args, module=...)` is the async twin of `clausal.call`.
+- `async for bindings in Solutions(goal, ...)` streams binding dicts.
+- `await Solutions(goal, ...)` fetches the answers to show, then displays
+  them as usual. **In Jupyter, use this form.** The kernel always has an event
+  loop running, so a plain `Solutions(...)` can't wait there and a waiting
+  predicate raises `permission_error(await, synchronous_query, _)`.
+- `adrive(generator)` runs any synchronous answer generator on the loop; the
+  others are built on it.
+
 ### Writing an async adapter
 
 `async_predicate(name, fn, arity)` turns an `async def` into a predicate. The
@@ -204,6 +215,57 @@ convert it with `to_text`. Lower-level code can call
 `clausal.aio.await_only(awaitable)` from any synchronous predicate body; that
 is what `async_predicate` and `library(asyncio)` do.
 
+## From seam
+
+In a `.seam` file, a goal-position `--goal` inside an `async def` runs on the
+event loop. The enclosing function decides, as Python decides where `await`
+is legal:
+
+```seam
+-module(waits, [])
+-import_from(py.asyncio, [sleep])
+import asyncio
+
+nap(X) <- (sleep(0.05), X == 1)
+nap(X) <- (sleep(0.05), X == 2)
+
+async def first():
+    if --nap(X):                     # awaited: the first answer
+        return X
+
+async def every():
+    return [X for X in --nap(X)]     # an async comprehension
+
+async def stream():
+    async for X in --nap(X):         # an async generator of answers
+        yield X
+
+async def fetch(n):
+    await asyncio.sleep(0.05)
+    return n * 10
+
+fetched(X) <- (X is ++await fetch(4))
+```
+
+- In an `async def`:
+  - `if`, `elif` and `while --goal`, and `not --goal`, are awaited.
+  - `for X in --goal` and `async for X in --goal` iterate asynchronously. A
+    plain `for` is made async, because a waiting predicate inside it couldn't
+    block the running loop.
+  - List, set and dict comprehensions over `--goal` become async
+    comprehensions.
+  - A plain generator expression over `--goal` is refused at load. It would
+    silently become an async generator; write `async for` to say so.
+- A plain `def`, or a class, stays synchronous, even when it is nested inside
+  an `async def`.
+- Exported variables behave exactly as in a plain `def`. See
+  [goal position](python_integration.md#goal-position-if-goal-for-in-goal).
+- In a clause body, `++await f()`, or `await` inside an f-string slot, waits on
+  the awaitable from within the query. It's the same as
+  `await_value(++f(), X)`, and works under `asolve` and plain `solve` alike.
+  Without `await`, `++f()` for an `async def f` gives you the coroutine
+  object, not its result.
+
 ## Semantics
 
 - **Interleaving.** Each query has its own trail. Queries interleave only
@@ -216,17 +278,33 @@ is what `async_predicate` and `library(asyncio)` do.
 - **Errors.** An awaitable that raises surfaces as an error term, catchable
   with `catch/3` (a `ValueError("bad")` arrives as `'ValueError'(bad)`).
 - **Cancellation.** Cancelling the task raises `CancelledError` inside the
-  query. The query unwinds, and `setup_call_cleanup/3` cleanups run.
-- **Tabling.** A tabled predicate may not wait while it is being evaluated
-  under `asolve`. It raises `permission_error(await, tabled_evaluation, _)`.
-  SLG resolution completes a table assuming one search at a time; another
-  query that saw a half-built table would get wrong answers. Waiting
-  *before* calling a tabled predicate is fine, and so is waiting inside one
-  under plain `solve`.
+  query. The query unwinds, and `setup_call_cleanup/3` cleanups run, even
+  ones that wait. `catch/3` doesn't catch `CancelledError`, by design, so a
+  catch-all handler can't swallow a cancellation. A second `cancel()` while a
+  cleanup is waiting aborts that cleanup, as it would in plain asyncio. An
+  `ExceptionGroup` from a `TaskGroup` arrives as one error term,
+  `'ExceptionGroup'(Message)`; its sub-exceptions aren't turned into terms.
+- **Tabling.** A query may wait anywhere, including inside a tabled
+  predicate or between the answers of a tabled goal it is still
+  enumerating. While a query is suspended, the tables it hasn't finished
+  belong to it. Another query that calls one of them raises
+  `permission_error(access, tabled_evaluation, Name/Arity)` rather than see
+  a partial answer set, because SLG resolution builds each table in one
+  search. To share a table between concurrent queries, complete it first
+  (for example with `findall/3`), or run the queries one after another.
+- **Closing a query early.** When you stop asking for answers, cleanups of
+  `setup_call_cleanup/3` still pending run when Python's garbage collector
+  frees the query's frames, which happens with plain `solve` too. A cleanup
+  that waits can't wait at that point. See
+  `todo/closing-a-query-leaves-cleanup-to-the-garbage-collector-2026-10-06.md`.
 - **A synchronous query inside a coroutine.** Calling plain `solve` on a
   predicate that waits, from code already running on an event loop, raises
   `permission_error(await, synchronous_query, _)`. Blocking there would stop
-  the loop, so use `asolve`.
+  the loop, so use `asolve`. This includes a coroutine that a query is
+  itself awaiting, and a Jupyter cell (use `await Solutions(...)`).
+- **Other event loops.** In a synchronous query, a wait runs on a private
+  loop, one per thread, closed with its thread. A future or task that belongs
+  to another loop and is still pending can't be awaited there.
 
 ## How it works
 
@@ -240,7 +318,13 @@ the result.
 
 Every engine frame in between stays suspended, unchanged. That is why no part
 of the engine had to learn about waiting. A query that never waits pays
-nothing; a wait costs a few microseconds.
+nothing; a wait costs on the order of 10 µs more than the same wait in a
+synchronous query.
+
+Use `clausal.aio.await_only` rather than SQLAlchemy's function of the same
+name. SQLAlchemy's version checks for its own greenlet type and refuses to
+run inside a Clausal query. SQLAlchemy's async API works fine through
+`await_value/2` or `async_predicate`.
 
 ## Other Prologs
 

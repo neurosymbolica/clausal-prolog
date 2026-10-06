@@ -27,7 +27,7 @@ repo-root `tests/`. Up: [../AGENTS.md](../AGENTS.md)
 | `solve.py` | Public query API: `solve`, `query`, `once`, `call`, `query_wfs`, module resolution. Start here for "how does a query run". |
 | `trampoline.py` | Step protocol (`(target, value)` tuples, `DONE`, `StepGenerator`); re-exports C `runtime/_trampoline.c`, else `_trampoline_py.py`. |
 | `runtime/` | Helpers called *by generated code* via `base_globals`: `list_unify.py` (+ `_list_unify.c`), `body_star_unify.py`, `tramp_call.py` (simple->trampoline bridge), `const_set.py`, `dict_ops.py`, `_seg_helpers.py`. |
-| `seam.py` | The `--term` seam: builds a runtime term from Python-hosted code. |
+| `seam.py` | The `--term` seam: builds a runtime term from Python-hosted code, and runs goal-position `--goal` (`once_bind`, `each`; the `a...` twins for an `async def`, driven by `clausal/aio.py`). |
 
 **Compiling**
 

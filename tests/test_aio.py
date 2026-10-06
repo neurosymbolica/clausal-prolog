@@ -11,7 +11,7 @@ import time
 
 import pytest
 
-from clausal.aio import aonce, asolve, await_only
+from clausal.aio import acall, aonce, asolve, await_only
 from clausal.logic.exceptions import LogicException
 from clausal.logic.solve import once, solve
 from clausal.logic.variables import Var, deref
@@ -189,6 +189,35 @@ def test_await_in_a_clause_escape(aseam):
     values, text, elapsed = run(main())
     assert values == [40, 40, 40] and elapsed < 0.2
     assert text == ("$chars", "20")
+
+
+# ── Python API: acall, Solutions ─────────────────────────────────────────
+
+def test_acall(demo):
+    async def main():
+        x, out = Var(), []
+        async for _ in acall("ticked", x, module=demo):
+            out.append(deref(x))
+        return out
+    assert run(main()) == [0, 1, 2]
+
+
+def test_solutions_awaited_and_async_iterated_inside_a_loop(demo):
+    # A Jupyter kernel always runs a loop; a plain Solutions display there
+    # cannot wait, `await Solutions(...)` can.
+    from clausal.repl import Solutions
+    x = Var()
+
+    async def main():
+        shown = await Solutions(("ticked", x), _varnames={"X": x}, module=demo)
+        html = shown._repr_html_()
+        y = Var()
+        rows = [b async for b in Solutions(("ticked", y), _varnames={"Y": y},
+                                          module=demo)]
+        return html, rows
+    html, rows = run(main())
+    assert "No more solutions" in html and html.count('class="clausal-or"') == 2
+    assert [r["Y"] for r in rows] == [0, 1, 2]
 
 
 # ── synchronous drivers ──────────────────────────────────────────────────
