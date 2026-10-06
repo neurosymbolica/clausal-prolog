@@ -277,6 +277,11 @@ def end_drive_episode() -> None:
         for entry, store, key in created:
             if entry.status != "evaluating":
                 continue
+            if entry.owner is not None and entry.owner is not _drive_ctx.owner:
+                # Another clausal.aio query re-led this entry after ours was
+                # dropped (its close runs late, on asyncio's finaliser): the
+                # entry is theirs now, mid-evaluation.  Leave it.
+                continue
             if store.get(key) is entry:
                 del store[key]
             for sc in entry.suspended:
@@ -1020,8 +1025,9 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
     for (f, a, _k), e in table_store.items():
         if f == functor and a == arity and e.status == "evaluating":
             if _foreign(e):
-                # Another query's unfinished table, not a cycle in ours.
-                _refuse_foreign(functor, arity)
+                # Another query's unfinished table cannot be in a cycle of
+                # ours; a positive call that really needs it is refused there.
+                continue
             _delay_negation(functor, arity, key, args, trail, store=table_store)
             return True  # conditionally succeed
 

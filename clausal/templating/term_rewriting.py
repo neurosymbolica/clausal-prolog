@@ -8785,6 +8785,15 @@ class EmbedTransformer(NodeTransformer):
             node.test, "a conditional expression's test (`x if --g else y`)")
         return transformer.generic_visit(node)
 
+    def visit_Lambda(transformer, node):
+        # A lambda is a synchronous function even inside an ``async def``:
+        # a goal-position comprehension in its body stays synchronous.
+        transformer._async_scope.append(False)
+        try:
+            return transformer.generic_visit(node)
+        finally:
+            transformer._async_scope.pop()
+
     def visit_ClassDef(transformer, node):
         transformer._scope_depth += 1
         transformer._async_scope.append(False)

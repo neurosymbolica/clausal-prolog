@@ -225,6 +225,13 @@ def test_solutions_awaited_and_async_iterated_inside_a_loop(demo):
     assert [r["Y"] for r in rows] == [0, 1, 2]
 
 
+def test_solutions_has_one_async_driver(demo):
+    from clausal.repl import Solutions
+    x = Var()
+    s = Solutions(("ticked", x), _varnames={"X": x}, module=demo)
+    assert s.__aiter__() is s.__aiter__()
+
+
 def test_solutions_awaited_twice_and_over_a_plain_iterator(demo):
     from clausal.repl import Solutions
     x = Var()
@@ -462,6 +469,45 @@ def test_an_async_query_inside_a_streaming_sync_query_is_refused(demo):
             assert _table_refusal(info.value)
     assert sorted(out) == ["a", "b", "c"]
     assert _engine_state_clean()
+
+
+def test_nonground_negation_skips_another_querys_table(tmp_path):
+    # Third review 2026-10-06: `not reach(_, zz)` was refused while another
+    # query was parked on reach('a', _), though it shares nothing with it.
+    # (Written here, not as a fixture: the repo ratchets `not` in .seam.)
+    src = tmp_path / "naf_foreign.seam"
+    src.write_text(
+        "-module(naf_foreign, [reach/2, no_zz/0])\n"
+        "-table(reach/2)\n"
+        "edge('a', 'b'),\n"
+        "edge('b', 'a'),\n"
+        "reach(X, Y) <- edge(X, Y)\n"
+        "reach(X, Y) <- (reach(X, Z), edge(Z, Y))\n"
+        "no_zz <- (not reach(_, 'zz'))\n")
+    mod = load_clausal_module(src)
+
+    async def main():
+        answers = asolve(("reach", "a", Var()), mod)
+        await answers.__anext__()             # parked, table unfinished
+        try:
+            return await aonce("no_zz", mod) is not None
+        finally:
+            await answers.aclose()
+    assert run(main()) is True
+    assert _engine_state_clean()
+
+
+def test_a_lambda_in_an_async_def_stays_synchronous(tmp_path):
+    src = tmp_path / "lam.seam"
+    src.write_text(
+        "-module(lam, [])\n"
+        "num(1),\n"
+        "num(2),\n"
+        "async def lam():\n"
+        "    f = lambda: [X for X in --num(X)]\n"
+        "    return f()\n")
+    mod = load_clausal_module(src)
+    assert run(mod.lam()) == [1, 2]
 
 
 def test_abandoning_a_query_closes_it(demo):

@@ -66,7 +66,10 @@ class _QueryGreenlet(_greenlet.greenlet):
 
 
 def _in_query_greenlet():
-    current = _greenlet.getcurrent()
+    try:
+        current = _greenlet.getcurrent()
+    except RuntimeError:          # called while a greenlet is being finalised
+        return False
     # A query greenlet being finalised (GC of an abandoned query) can no
     # longer switch to its parent: treat it as outside any query.
     return type(current) is _QueryGreenlet and not current.dead
@@ -241,8 +244,11 @@ def adrive(gen):
     greenlet, so a wait inside it suspends only this query.
 
     Close the result (``aclose()``, or ``contextlib.aclosing``) when you stop
-    early -- after a ``break`` out of ``async for`` -- or the tables it is
-    still building stay reserved until asyncio finalises it.
+    early -- after a ``break`` out of ``async for``.  While something still
+    references an unclosed result, the tables its query is building stay
+    reserved (another query on them is refused).  Once nothing does, they are
+    released at once, and the query's own close runs a loop tick or two later
+    on asyncio's finaliser.
     """
     query = _Query(gen)
     answers = _adrive(query)

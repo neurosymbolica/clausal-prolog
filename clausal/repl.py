@@ -426,8 +426,17 @@ class Solutions:
         A predicate that waits (``library(asyncio)``, an async adapter) frees
         the loop instead of refusing to block it.
         """
+        return self._driver()
+
+    def _driver(self):
+        """The one async driver of this Solutions' answers: a second driver
+        over the same synchronous generator would resume its parked frames
+        under another query's engine state."""
         from clausal.aio import adrive  # noqa: PLC0415
-        return adrive(self._iter)
+        driver = getattr(self, "_async_driver", None)
+        if driver is None or driver[0] is not self._iter:
+            driver = self._async_driver = (self._iter, adrive(self._iter))
+        return driver[1]
 
     def __await__(self):
         """``await Solutions(...)``: fetch the answers to show on the event
@@ -437,11 +446,10 @@ class Solutions:
         return self._prefetch().__await__()
 
     async def _prefetch(self):
-        from clausal.aio import adrive  # noqa: PLC0415
         limit = (self._limit if self._limit is not None
                  else self.DEFAULT_JUPYTER_LIMIT)
         fetched = []
-        answers = adrive(self._iter)
+        answers = self._driver()
         try:
             # One past the limit, so the display can still say "more".
             async for bindings in answers:

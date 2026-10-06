@@ -236,8 +236,8 @@ async def first():
 async def every():
     return [X for X in --nap(X)]     # an async comprehension
 
-async def stream():
-    async for X in --nap(X):         # an async generator of answers
+async def stream():                  # consume it fully, or close it:
+    async for X in --nap(X):         # see "Stopping early" below
         yield X
 
 async def fetch(n):
@@ -292,15 +292,21 @@ fetched(X) <- (X is ++await fetch(4))
   a partial answer set, because SLG resolution builds each table in one
   search. To share a table between concurrent queries, complete it first
   (for example with `findall/3`), or run the queries one after another.
-- **Stopping early from Python.** After a `break` out of `async for` over
-  `asolve`, `acall` or `Solutions`, close the iterator with `await
-  answers.aclose()` or `contextlib.aclosing(...)`. Python doesn't close an
-  async generator on `break`; asyncio does it a loop tick or two later.
-  Until then the query still owns any table it was building, and another
-  query on that table is refused. In seam you don't need to: a `for` over
-  `--goal` in an `async def` closes its iterator itself. A query abandoned
-  without closing, after its loop has gone, releases its tables once it is
-  garbage-collected.
+- **Stopping early.** After a `break` out of `async for` over `asolve`,
+  `acall`, `Solutions`, or a seam async generator such as `stream()` above,
+  close the iterator: `await answers.aclose()`, or iterate inside `async with
+  contextlib.aclosing(...)`. Python doesn't close an async generator on
+  `break`; asyncio does, a loop tick or two later. Meanwhile:
+  - while something still references the unclosed iterator (a variable, the
+    generator's own frame), the tables its query was building stay reserved,
+    and another query on them is refused;
+  - once nothing references it, the tables are released at once. The query's
+    own clean-up runs later, and never touches a table another query has
+    taken over since.
+
+  A seam `for` over `--goal` in an `async def` closes its own iterator, so
+  `break` there needs nothing. A seam async generator is the exception: its
+  `finally` can only run once the generator itself is closed.
 - **Closing a query early.** When you stop asking for answers, cleanups of
   `setup_call_cleanup/3` still pending run when Python's garbage collector
   frees the query's frames, which happens with plain `solve` too. A cleanup
