@@ -38,11 +38,18 @@ test("fib(10) = 55") :- fib(10, 55).
 :- end_module(fibonacci).
 ```
 
-Run its tests:
+Run it with the `clausal` command. `-g` runs a goal and prints its answers,
+the way a Prolog toplevel does; `--test` runs the module's tests:
 
 ```bash
-python -m clausal.testing fibonacci.clausal
+$ clausal fibonacci.clausal -g "fib(10, F)"
+F = 55.
+$ clausal --test fibonacci.clausal
+1 tests: 1 passed, 0 failed [PASSED]
 ```
+
+A program that defines `main/0` runs it when given just the file:
+`clausal program.clausal`. See [Command line](cli.md).
 
 Existing ISO Prolog lives in `.pl` files; see [Importing Prolog](importing_prolog.md).
 

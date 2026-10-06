@@ -48,6 +48,7 @@ nav:
     - Project Goals: goals.md
     - Clausal Prolog: clausal_prolog.md
     - Tutorial: tutorial.md
+    - Command line: cli.md
     - Syntax: syntax.md
     - Style & Formatting: style.md
     - Testing: testing.md

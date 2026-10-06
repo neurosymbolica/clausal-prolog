@@ -26,6 +26,7 @@ ptpython = ["ptpython>=3.0"]
 repl = ["ptpython>=3.0"]
 
 [project.scripts]
+clausal = "clausal.cli:main"
 clausal-repl = "clausal.python_repl:main"
 clausal-install-ipython = "clausal._install_ipython:main"
 clausal-fmt = "clausal.fmt.cli:main"
