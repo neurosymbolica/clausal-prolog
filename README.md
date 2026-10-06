@@ -1,6 +1,9 @@
 <p align="center"><img src="https://raw.githubusercontent.com/neurosymbolica/clausal-prolog/main/docs/assets/logo/clausal-banner.png" alt="Clausal Prolog" width="460"></p>
 
-# Clausal Prolog - The Neurosymbolic platform
+# Prolog in Python for Neurosymbolic AI
+
+**Documentation: [clausal.pl](https://clausal.pl)** · start with the
+[Tutorial](https://clausal.pl/tutorial/).
 
 The best of neural network AI (Python) with the best of Symbolic AI (Prolog). 
 Same process, same memory management, nest Python -> Prolog -> Python -> etc. 

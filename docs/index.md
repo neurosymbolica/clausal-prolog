@@ -1,8 +1,6 @@
 <p align="center"><img src="assets/logo/clausal-banner.png" alt="Clausal Prolog" width="460"></p>
 
-# Clausal Prolog
-
-**Prolog that runs inside Python.**
+# Prolog in Python for Neurosymbolic AI
 
 [GitHub](https://github.com/neurosymbolica/clausal-prolog) ·
 [GitLab](https://gitlab.com/MikeAmy/clausal) ·
@@ -17,7 +15,53 @@ other freely.
 pip install clausal
 ```
 
-## You can run Prolog programs
+## Start here
+
+<div class="grid cards" markdown>
+
+-   :material-school:{ .lg .middle } **[Tutorial](tutorial.md)**
+
+    ---
+
+    Relations, queries and unification, from first principles. No Prolog
+    experience needed.
+
+-   :material-head-lightbulb:{ .lg .middle } **[Thinking Relationally](thinking_relationally.md)**
+
+    ---
+
+    The one idea to absorb first: predicates are relations, not functions.
+
+-   :material-language-python:{ .lg .middle } **[For Python Programmers](for_python_programmers.md)**
+
+    ---
+
+    From functions and loops to relations and search.
+
+-   :material-code-parentheses:{ .lg .middle } **[For Prolog Programmers](for_prolog_programmers.md)**
+
+    ---
+
+    What's the same as ISO Prolog, what's different, and where Python comes in.
+
+-   :material-robot:{ .lg .middle } **[For AI Agents](for_ai_agents.md)**
+
+    ---
+
+    Why LLMs should generate logic programs, and how to do it well.
+
+-   :material-briefcase:{ .lg .middle } **[For Decision Makers](for_decision_makers.md)**
+
+    ---
+
+    The business case: explainability, reliability, rules as code.
+
+</div>
+
+The rest of this page is a quick tour. [Command line](cli.md) and
+[Examples](examples.md) are good next stops after the tutorial.
+
+## Running Prolog
 
 Write ordinary Prolog in a `.clausal` file. Tests live next to the code:
 
@@ -55,7 +99,7 @@ A program that defines `main/0` runs it when given just the file:
 
 Existing ISO Prolog lives in `.pl` files; see [Importing Prolog](importing_prolog.md).
 
-## You can run it from Python
+## Running from Python
 
 Import the module like any Python module and ask it questions. In a `.seam`
 file, a goal after `--` is a query, and its variables become Python
