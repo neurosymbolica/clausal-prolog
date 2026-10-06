@@ -1,7 +1,13 @@
+import sys
 import sysconfig
 from setuptools import setup, Extension
 
-extra_compile_args = ["-O2", "-Wall", "-Wextra"]
+if sys.platform == "win32":
+    # MSVC takes its own flag syntax and rejects -Wextra; setuptools already
+    # passes /O2 /W3, its equivalents of the flags below.
+    extra_compile_args = []
+else:
+    extra_compile_args = ["-O2", "-Wall", "-Wextra"]
 
 # Free-threaded Python builds need the Py_GIL_DISABLED define
 # so our #ifdef guards activate. setuptools sets it automatically
