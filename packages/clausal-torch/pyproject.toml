@@ -13,12 +13,15 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "clausal>=0.3.1",
+    "clausal>=1.0",
     "torch",
 ]
 
 [project.urls]
+Homepage = "https://clausal.pl"
+Documentation = "https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-torch/README.md"
 Repository = "https://gitlab.com/MikeAmy/clausal"
+GitHub = "https://github.com/neurosymbolica/clausal-prolog/tree/main/packages/clausal-torch"
 
 [tool.setuptools.packages.find]
 where = ["."]

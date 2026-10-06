@@ -52,7 +52,7 @@ never spell a suffix elsewhere.
 | `benchmarks/` | Benchmark workloads and profilers | [benchmarks/AGENTS.md](benchmarks/AGENTS.md) |
 | `pyproject.toml`, `setup.py`, `MANIFEST.in` | Packaging; `setup.py` lists the C extensions | |
 | `CHANGELOG.md` | Every behaviour change and ruling since 0.4.0, under "Unreleased" | |
-| `.github/workflows/` | `docs.yml` (GitHub Pages), `release.yml` (wheels → PyPI on a release) | |
+| `.github/workflows/` | `docs.yml` (GitHub Pages), `release.yml` (wheels → PyPI on a release), `packages-release.yml` (one optional package → PyPI per `clausal-<name>-v*` tag) | |
 | `.gitlab-ci.yml` | GitLab Pages copy of the docs (the repo has both remotes) | |
 
 ## Build, run, test

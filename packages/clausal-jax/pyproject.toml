@@ -13,7 +13,7 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "clausal>=0.3.1",
+    "clausal>=1.0",
     "jax",
     "jaxlib",
 ]
@@ -24,7 +24,10 @@ equinox = ["equinox"]
 flax = ["flax"]
 
 [project.urls]
+Homepage = "https://clausal.pl"
+Documentation = "https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-jax/README.md"
 Repository = "https://gitlab.com/MikeAmy/clausal"
+GitHub = "https://github.com/neurosymbolica/clausal-prolog/tree/main/packages/clausal-jax"
 
 [tool.setuptools.packages.find]
 where = ["."]

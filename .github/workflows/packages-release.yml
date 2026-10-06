@@ -1,0 +1,109 @@
+# Build, test and publish one optional package (packages/clausal-<name>/) to
+# PyPI when a tag named after it is pushed:
+#
+#     git tag clausal-yaml-v0.1.0 && git push origin clausal-yaml-v0.1.0
+#
+# The tag's version must match the package's pyproject version.  Run it by
+# hand (Actions -> packages-release -> Run workflow, naming the package) to
+# build and test without publishing.
+#
+# Only the pure-Python library wrappers are published from here (PUBLISHABLE
+# below).  Not yet: clausal-gprolog (C) and clausal-scryer (Rust), which need
+# per-platform wheels; clausal-trealla, which needs a Trealla library built
+# from source; and clausal-provenance, which is disabled.
+#
+# The package's tests run against the engine built from this same commit,
+# with the package installed from its wheel (not the source tree).
+#
+# Publishing uses PyPI trusted publishing -- no API token.  Before a
+# package's first release, add a *pending* trusted publisher on pypi.org
+# (Account -> Publishing) for that project name, with owner "neurosymbolica",
+# repository "clausal-prolog", workflow "packages-release.yml" and
+# environment "pypi".
+name: packages-release
+
+on:
+  push:
+    tags: ["clausal-*-v*"]
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Package to build and test, e.g. clausal-yaml"
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  PUBLISHABLE: "clausal-jax clausal-opencv clausal-scipy clausal-sklearn clausal-spacy clausal-sympy clausal-torch clausal-yaml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      name: ${{ steps.pkg.outputs.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Which package
+        id: pkg
+        env:
+          INPUT_PACKAGE: ${{ inputs.package }}
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            name="${GITHUB_REF_NAME%-v*}"      # clausal-yaml-v0.1.0 -> clausal-yaml
+            tag_version="${GITHUB_REF_NAME##*-v}"  #                 -> 0.1.0
+          else
+            name="${INPUT_PACKAGE}"
+            tag_version=""
+          fi
+          case " ${PUBLISHABLE} " in
+            *" ${name} "*) ;;
+            *) echo "${name} is not published from this workflow (publishable: ${PUBLISHABLE})"; exit 1 ;;
+          esac
+          dir="packages/${name}"
+          version=$(python -c "import tomllib; print(tomllib.load(open('${dir}/pyproject.toml', 'rb'))['project']['version'])")
+          if [ -n "${tag_version}" ] && [ "${tag_version}" != "${version}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match ${dir}/pyproject.toml version ${version}"
+            exit 1
+          fi
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+          echo "dir=${dir}" >> "$GITHUB_OUTPUT"
+      - run: pip install build
+      - run: python -m build --outdir dist "${{ steps.pkg.outputs.dir }}"
+      - name: The wheel is pure Python
+        run: ls dist/*-py3-none-any.whl
+      - name: Test the wheel against this commit's engine
+        run: |
+          pip install . dist/*.whl pytest
+          if [ "${{ steps.pkg.outputs.name }}" = "clausal-spacy" ]; then
+            python -m spacy download en_core_web_sm
+          fi
+          # Run the tests from a copy without the package's sources, so they
+          # import the installed wheel; docs/ stays, as some tests read it.
+          cp -r "${{ steps.pkg.outputs.dir }}" "$RUNNER_TEMP/pkg"
+          rm -rf "$RUNNER_TEMP/pkg/clausal"
+          cd "$RUNNER_TEMP/pkg"
+          python -m pytest tests -p no:cacheprovider --import-mode=importlib -c /dev/null --rootdir=.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+
+  publish:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/${{ needs.build.outputs.name }}/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1

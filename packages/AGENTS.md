@@ -71,6 +71,23 @@ python -m pytest packages/clausal-yaml                                   # one p
   `tests/test_<pkg>_doc_integrity.py` (checks `docs/` with
   `clausal/tools/doc_snippet_check.py`).
 
+## Releasing to PyPI
+
+[`../.github/workflows/packages-release.yml`](../.github/workflows/packages-release.yml)
+publishes one package per tag: bump `version` in its `pyproject.toml`, merge,
+then push a tag `clausal-<name>-v<version>` (e.g. `clausal-yaml-v0.1.0`). It
+builds the wheel, runs the package's tests against the engine from the same
+commit with the package installed from that wheel, and publishes via PyPI
+trusted publishing. Run it by hand to build and test without publishing.
+
+- Only the pure-Python library wrappers are publishable (the workflow's
+  `PUBLISHABLE` list). gprolog and scryer need native wheels, trealla needs
+  `libtpl` built from source, and provenance is disabled.
+- Before a package's first release, its project name needs a pending trusted
+  publisher on pypi.org (workflow `packages-release.yml`, environment `pypi`).
+- Once a package is on PyPI it can become an extra of `clausal` again
+  (`[project.optional-dependencies]` in the root `pyproject.toml`).
+
 ## Gotchas
 
 - In an interpreter without numpy, `clausal-opencv`'s two `*_stubbed.py`

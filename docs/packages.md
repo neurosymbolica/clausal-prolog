@@ -33,9 +33,16 @@ package lives at `packages/clausal-<name>/` in the main repository.
 
 ## Status
 
-Today these packages live in the main repository under `packages/` and are
-installed from the source tree. Once published to PyPI, the `pip install`
-commands above will pull from there directly. The `docs` links currently
+These packages live in the main repository under `packages/`. The library
+wrappers (jax, opencv, scipy, sklearn, spacy, sympy, torch, yaml) are
+published to PyPI one at a time as each is released; until a package is
+there, install it from the repository:
+
+```bash
+pip install "clausal-yaml @ git+https://github.com/neurosymbolica/clausal-prolog#subdirectory=packages/clausal-yaml"
+```
+
+The Prolog backends and `clausal-provenance` are not published yet. The `docs` links currently
 point at the package sources on GitHub; they'll switch to per-package documentation sites
 when each package gains its own published site (see
 [`implementation_plans/package_extraction/docs_migration.md`](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/package_extraction/docs_migration.md)
