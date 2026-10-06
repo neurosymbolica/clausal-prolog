@@ -248,7 +248,7 @@ def _head_has_deferred_pattern(head) -> bool:
     it's what binds the caller's output-position vars — and it must run
     on our side of each solution.  Continuation-TCO routes solutions
     past us, so it's unsafe in these clauses.  See
-    ``implementation_plans/CONTINUATION_TCO_PLAN.md``.
+    ``implementation_plans/compiler/CONTINUATION_TCO_PLAN.md``.
 
     Star-free ground lists defer exactly like star-lists (the caller arg
     may still be an unbound Var at match time), so ANY list head field
@@ -373,7 +373,7 @@ def _compile_body_impl(
             # must run on our side of each solution.  TCO would route
             # solutions past us before the guard fires.  Skip TCO for
             # such clauses.  See
-            # ``implementation_plans/CONTINUATION_TCO_PLAN.md``.
+            # ``implementation_plans/compiler/CONTINUATION_TCO_PLAN.md``.
             from .optimisations import continuation_tco as _ctco
             ir = _ctco.apply(ir, _ctco.analyse(ir))
 

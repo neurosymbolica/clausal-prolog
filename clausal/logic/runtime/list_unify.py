@@ -7,7 +7,7 @@ extended block comment below.
 
 The Python implementations (``_head_list_unify_input_py`` /
 ``_head_list_unify_output_py``) are the reference.  When the
-``clausal.logic._list_unify`` C extension is available, the
+``clausal.logic.runtime._list_unify`` C extension is available, the
 unsuffixed names (``_head_list_unify_input`` / ``_output``) are
 replaced with the C-accelerated versions; otherwise the Python
 fallbacks are used.

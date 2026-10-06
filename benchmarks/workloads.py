@@ -130,7 +130,7 @@ def bench_tabling(n: int = 5000, reps: int = 10) -> object:
     from clausal.logic.solve import call
     from clausal.logic.variables import Var, Trail, deref
 
-    fixture = os.path.join(_FIXTURES, "tabled_fib.clausal")
+    fixture = os.path.join(_FIXTURES, "tabled_fib.seam")
     result = None
     for _ in range(reps):
         mod = load_clausal_module(fixture)
@@ -195,7 +195,7 @@ def bench_struct_tabling(n: int = 1500, reps: int = 3) -> int:
     want to measure -- it wants the full per-answer freeze/copy work every
     repetition).
 
-    struct_tabling.clausal's ``nats/2`` builds ``cons(N, cons(N-1, ...))``
+    struct_tabling.seam's ``nats/2`` builds ``cons(N, cons(N-1, ...))``
     down to the 0-arity atom ``nil`` -- an O(K)-deep compound chain for
     subgoal ``nats(K, _)``. Tabling normalizes/copies each stored answer via
     ``freeze_args`` -> ``do_deref_walk`` (the C-exposed entry point for the
@@ -227,7 +227,7 @@ def bench_struct_tabling(n: int = 1500, reps: int = 3) -> int:
     from clausal.logic.solve import call
     from clausal.logic.variables import Var, Trail, deref
 
-    fixture = os.path.join(_FIXTURES, "struct_tabling.clausal")
+    fixture = os.path.join(_FIXTURES, "struct_tabling.seam")
     length = 0
     for _ in range(reps):
         mod = load_clausal_module(fixture)
@@ -288,7 +288,7 @@ def bench_struct_tabling_tagged(n: int = 1500, reps: int = 3, intern: bool = Fal
         set_intern_enabled,
     )
 
-    fixture = os.path.join(_FIXTURES, "struct_tabling_tagged.clausal")
+    fixture = os.path.join(_FIXTURES, "struct_tabling_tagged.seam")
     clear_intern_table()
     set_intern_enabled(intern)
     try:
@@ -315,13 +315,13 @@ def bench_naf_ite(n: int = 3000) -> str:
     2026-10-01.)
 
     Each sub-loop recurses *n* times; every iteration drives one NAF or ITE
-    mini-trampoline.  See tests/fixtures/bench_naf_ite.clausal for the four
+    mini-trampoline.  See tests/fixtures/bench_naf_ite.seam for the four
     shapes.  Expected wall time: 0.2–1.0 s total (tune *n* to land there).
     """
     from clausal.testing import load_clausal_module
     from clausal.logic.solve import call
 
-    fixture = os.path.join(_FIXTURES, "bench_naf_ite.clausal")
+    fixture = os.path.join(_FIXTURES, "bench_naf_ite.seam")
     mod = load_clausal_module(fixture)
     for name in ("naf_fact_loop", "naf_chain_loop", "ite_det_loop", "ite_multi_loop"):
         pred = getattr(mod, name)
@@ -379,8 +379,10 @@ def bench_thunk_atoms(n: int = 100_000) -> int:
         "\n"
         "thunk_atoms(N, S) <- (thunk_loop(N, [a, b, c, d, e], 0, S)),\n"
     )
+    from clausal._suffixes import CLAUSAL_SUFFIXES  # the seam suffix
+
     with tempfile.NamedTemporaryFile(
-        suffix=".clausal", mode="w", delete=False
+        suffix=CLAUSAL_SUFFIXES[0], mode="w", delete=False
     ) as f:
         f.write(source)
         path = f.name

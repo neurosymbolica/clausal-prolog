@@ -236,7 +236,7 @@ _K_PARAM_NAME = "k"            # shallow-strategy continuation parameter
 _DISP_PREFIX = "$disp_"        # locked-dispatch globals-key prefix
 # Phase 2: split-continuation protocol — the old single ``_tramp_parent``
 # parameter is replaced by three named slots.  See
-# ``implementation_plans/CONTINUATION_TCO_PLAN.md`` §3.
+# ``implementation_plans/compiler/CONTINUATION_TCO_PLAN.md`` §3.
 _PROCEED_PARAM_NAME = "_proceed"       # trampoline: solution target
 _FAIL_PARAM_NAME    = "_fail"          # trampoline: exhaustion target
 _CATCHER_PARAM_NAME = "_catcher"       # trampoline: exception handler chain

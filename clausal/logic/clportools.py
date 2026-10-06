@@ -61,6 +61,9 @@ try:
     _HAS_ORTOOLS = True
 except ImportError:  # pragma: no cover
     _HAS_ORTOOLS = False
+    # _SolutionCounter subclasses this at import time; any use goes through
+    # get_cpsat_state, which calls _require_ortools first.
+    _CpSolverSolutionCallback = object
 
 
 def _require_ortools() -> None:

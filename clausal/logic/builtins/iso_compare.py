@@ -1,8 +1,9 @@
 """ISO comparison, unification and arithmetic builtins under their ISO names.
 
-Reachable from `.clausal` ONLY through the quoted canonical form —
+Reachable from the seam (`.seam`) ONLY through the quoted canonical form —
 `'=:='(A, B)` — because Python has no infix syntax for these; natively in
-`.pl`. Spec: docs/superpowers/specs/2026-09-08-iso-canonical-form-operators-design.md
+Clausal Prolog (`.clausal`) and `.pl`.
+Spec: docs/superpowers/specs/2026-09-08-iso-canonical-form-operators-design.md
 """
 import operator as _o
 from decimal import Decimal as _Decimal
@@ -72,7 +73,7 @@ def _evaluable_culprit(leaf):
     `foo/0`.
 
     Previously this tested for the (since retired) `Compound` class, which
-    was DEAD for a compound reaching here from `.clausal` source. Measured
+    was DEAD for a compound reaching here from seam source. Measured
     2026-09-09: `'=:='(1, foo(bar))` hands this function the cell tuple
     `('foo', ('bar',))`, not a class instance, so the branch never
     fired and the raw term leaked out as the culprit —

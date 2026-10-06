@@ -19,10 +19,10 @@ from clausal.tools.doc_snippet_check import (
 _DOCS_DIR = Path(__file__).resolve().parent.parent / "docs"
 
 _HOWTO = (
-    "See implementation_plans/DOC_SNIPPET_TESTING.md for the pattern: "
+    "See implementation_plans/docs/DOC_SNIPPET_TESTING.md for the pattern: "
     "create a section in tests/fixtures/docs/<page>_sigs.txt (display) "
-    "or tests/fixtures/docs/<page>_examples.clausal (executable), "
-    "add companion tests in tests/fixtures/docs/<page>_sig_tests.clausal, "
+    "or tests/fixtures/docs/<page>_examples.seam (executable), "
+    "add companion tests in tests/fixtures/docs/<page>_sig_tests.seam, "
     'then reference via --8<-- "tests/fixtures/docs/<file>:<section>" '
     "in the markdown."
 )
@@ -31,7 +31,7 @@ _HOWTO = (
 # examples / pseudo-code in guide pages. Allowlist, not aspiration: do not
 # grow this set. New blocks should compile or be moved to fixtures.
 _KNOWN_UNCOMPILABLE = {
-    # import.md: two `# caller.clausal` blocks that `-import_from(lib, …)` a
+    # import.md: two `# caller.seam` blocks that `-import_from(lib, …)` a
     # fictional library and illustrate cross-module name scoping; the first
     # deliberately documents a runtime failure. Neither is standalone-compilable.
     #
@@ -39,7 +39,7 @@ _KNOWN_UNCOMPILABLE = {
     # one; the numbers below match docs/import.md after the adapter-`is` note (2026-10-04).
     ("import.md", 459),
     ("import.md", 501),
-    # import.md: one more `# caller.clausal` block that `-import_from(lib, …)`
+    # import.md: one more `# caller.seam` block that `-import_from(lib, …)`
     # a fictional library. Not standalone-compilable.
     ("import.md", 566),
 }

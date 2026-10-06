@@ -1,7 +1,7 @@
 """Explicit compilation strategy — shallow vs trampoline.
 
-See ``implementation_plans/COMPILER_TARGET_ARCHITECTURE.md`` §9 and
-``implementation_plans/COMPILER_MIGRATION_PLAN.md`` §5.
+See ``implementation_plans/compiler/COMPILER_TARGET_ARCHITECTURE.md`` §9 and
+``implementation_plans/compiler/COMPILER_MIGRATION_PLAN.md`` §5.
 
 A :class:`Strategy` carries every decision that used to be implicit
 in "am I in shallow mode or trampoline mode?":
@@ -151,7 +151,7 @@ class TrampolineStrategy:
         # (``_proceed``) instead of back through us.  ``fail`` and
         # ``catcher`` stay pointed at ``this_generator`` so we still
         # wake for cleanup / next clause / next loop iteration / thrown
-        # exceptions.  See ``implementation_plans/CONTINUATION_TCO_PLAN.md``.
+        # exceptions.  See ``implementation_plans/compiler/CONTINUATION_TCO_PLAN.md``.
         call_expr = _dispatch_call_trampoline(
             ctx, fname, arity, arg_exprs,
             direct_bucket_ref=direct_bucket_ref,

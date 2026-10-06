@@ -18,6 +18,8 @@ import gc
 
 import pytest
 
+pytest.importorskip("ortools")
+
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
 
 from clausal.logic.clportools import (
