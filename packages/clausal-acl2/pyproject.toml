@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clausal-acl2"
+version = "0.1.0"
+description = "ACL2 theorem prover predicates for Clausal, through the ACL2 Bridge"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Mike Amy", email = "mikeamycoder@gmail.com"},
+]
+requires-python = ">=3.13"
+# No Python dependencies: ACL2 itself (with the books, for the ACL2 Bridge
+# in books/centaur/bridge) is an external program, found as `acl2` on PATH
+# or named with use_acl2/1.
+dependencies = [
+    "clausal>=1.0",
+]
+
+[project.urls]
+Homepage = "https://clausal.pl"
+Documentation = "https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-acl2/README.md"
+Repository = "https://gitlab.com/MikeAmy/clausal"
+GitHub = "https://github.com/neurosymbolica/clausal-prolog/tree/main/packages/clausal-acl2"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["clausal*"]
+
+# Namespace packages: no __init__.py at clausal/, clausal/modules/,
+# clausal/modules/py/ — these are owned by the core distribution.

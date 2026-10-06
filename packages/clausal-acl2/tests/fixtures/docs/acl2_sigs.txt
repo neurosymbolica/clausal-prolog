@@ -1,0 +1,26 @@
+# Display snippets for docs/acl2.md
+
+--8<-- [start:import]
+-import_from(py.acl2, [acl2, acl2_mv, acl2_text, event, thm, use_acl2])
+--8<-- [end:import]
+
+--8<-- [start:acl2_sig]
+acl2(+Form, ?Value)
+acl2(+Form, ?Value, ?Output)
+acl2_mv(+Form, ?Values)
+--8<-- [end:acl2_sig]
+
+--8<-- [start:event_sig]
+event(+Form)
+event(+Form, ?Output)
+thm(+Term)
+thm(+Term, ?Output)
+--8<-- [end:event_sig]
+
+--8<-- [start:use_sig]
+use_acl2(+Options)
+--8<-- [end:use_sig]
+
+--8<-- [start:text_sig]
+acl2_text(?Term, ?Text)
+--8<-- [end:text_sig]

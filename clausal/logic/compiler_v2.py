@@ -627,6 +627,7 @@ _MODULE_ALIASES: dict[str, str] = {
     "jax_optax": "py.jax_optax",
     "jax_equinox": "py.jax_equinox",
     "jax_flax": "py.jax_flax",
+    "acl2": "py.acl2",
     "opencv": "py.opencv",
     "opencv_calib3d": "py.opencv_calib3d",
     "opencv_color": "py.opencv_color",

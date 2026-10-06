@@ -715,6 +715,18 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **`clausal-acl2`**, a new optional package: the ACL2 theorem prover from
+  Clausal through its ACL2 Bridge (`books/centaur/bridge`), as another
+  process. `acl2/2,3` and `acl2_mv/2` evaluate forms, `event/1,2` submits
+  events, `thm/1,2` proves terms, `acl2_text/2` parses and prints ACL2 text,
+  `use_acl2/1` names a running bridge or the ACL2 to start (`acl2` on PATH by
+  default). ACL2 objects cross as canonical Clausal terms -- `(f a b)` is the
+  compound `f(a, b)`, other lists `'()'(...)`, dotted pairs `'$cons'(A, B)` --
+  so an ACL2 term is a Prolog compound. The bare name `acl2` maps to
+  `py.acl2` in both import-alias tables. Docs:
+  `packages/clausal-acl2/docs/acl2.md`; design notes:
+  `implementation_plans/acl2/overview.md`.
+
 - **Packaging for PyPI.** The wheel now carries the data files the engine
   reads at run time (the `.seam` library and stdlib modules, the toklex
   specs and Prolog preludes) and the sdist the C headers; neither did

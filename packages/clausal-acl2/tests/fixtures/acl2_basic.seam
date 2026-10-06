@@ -1,0 +1,40 @@
+# clausal-acl2 against a REAL ACL2 (skipped by tests/conftest.py when no
+# bridge is available).  Events persist in that ACL2 session.
+
+-import_from(py.acl2, [acl2, acl2_mv, event, thm])
+-private([append(_, _), quote(_), defun(_, _, _), equal(_, _), x(_),
+          sq(_, _), spin(_, _), a(_, _)])
+
+test("evaluate a form") <- (
+    acl2('+'(1, '*'(2, 3)), V),
+    V == 7
+)  # nv
+
+test("rationals cross exactly") <- (
+    acl2('/'(1, 3), V),
+    V > 0.333,
+    V < 0.334
+)  # nv
+
+test("lists come back as terms") <- (
+    acl2(append(quote(['a', 'b']), quote(['c'])), R),
+    R is 'a'('b', 'c')
+)  # nv
+
+test("ACL2 proves associativity of append by induction") <- (
+    thm(equal(append(append('x', 'y'), 'z'), append('x', append('y', 'z'))))
+)  # nv
+
+test("a non-theorem is not proved") <- (
+    not(thm(equal('x', 1)))
+)  # nv
+
+test("an admitted definition can be run") <- (
+    event(defun(sq, x('y'), '*'('x', 'y'))),
+    acl2(sq(6, 7), V),
+    V == 42
+)  # nv
+
+test("a non-terminating definition is rejected") <- (
+    not(event(defun(spin, x('y'), spin('x', 'y'))))
+)  # nv
