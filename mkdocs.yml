@@ -48,6 +48,7 @@ nav:
     - Project Goals: goals.md
     - Clausal Prolog: clausal_prolog.md
     - Tutorial: tutorial.md
+    - Command line: cli.md
     - Syntax: syntax.md
     - Style & Formatting: style.md
     - Testing: testing.md
@@ -155,3 +156,7 @@ extra:
   social:
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/clausal/
+    - icon: fontawesome/brands/github
+      link: https://github.com/neurosymbolica/clausal-prolog
+    - icon: fontawesome/brands/gitlab
+      link: https://gitlab.com/MikeAmy/clausal

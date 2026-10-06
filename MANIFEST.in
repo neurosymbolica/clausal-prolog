@@ -1,4 +1,6 @@
-include clausal/logic/variables/_variables.c
-include clausal/logic/runtime/_trampoline.c
-include LICENSE
-include README.md
+# The source distribution: everything a build from it needs (the C
+# extensions' sources and headers) and everything the installed package
+# reads at run time (.seam library and stdlib modules, the toklex specs and
+# Prolog preludes, the census baseline).
+include LICENSE README.md CHANGELOG.md
+recursive-include clausal *.c *.h *.seam *.pl *.json *.md

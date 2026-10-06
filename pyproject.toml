@@ -1,13 +1,27 @@
 [build-system]
-requires = ["setuptools>=61", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "clausal"
-version = "0.4.0"
-description = "A Prolog-style logic programming DSL embedded in Python"
+version = "1.0.0rc1"
+description = "Clausal Prolog: a cut-free, ISO-directed Prolog that runs inside Python"
+keywords = ["prolog", "logic programming", "constraint programming", "clp", "neurosymbolic"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: C",
+    "Programming Language :: Prolog",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Software Development :: Interpreters",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     {name = "Mike Amy", email = "mikeamycoder@gmail.com"},
 ]
@@ -17,7 +31,11 @@ dependencies = [
 ]
 
 [project.urls]
+Homepage = "https://clausal.pl"
+Documentation = "https://clausal.pl"
 Repository = "https://gitlab.com/MikeAmy/clausal"
+GitHub = "https://github.com/neurosymbolica/clausal-prolog"
+Changelog = "https://github.com/neurosymbolica/clausal-prolog/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 yaml = ["clausal-yaml>=0.1.0"]
@@ -26,6 +44,7 @@ ptpython = ["ptpython>=3.0"]
 repl = ["ptpython>=3.0"]
 
 [project.scripts]
+clausal = "clausal.cli:main"
 clausal-repl = "clausal.python_repl:main"
 clausal-install-ipython = "clausal._install_ipython:main"
 clausal-fmt = "clausal.fmt.cli:main"
@@ -34,6 +53,13 @@ clausal-rewrite = "clausal.rewrite.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["clausal*"]
+
+# Files the installed package reads at run time.  Several live in
+# directories that are not Python packages (clausal/examples,
+# clausal/rewrite/rules, clausal/tools/toklex/specs, ...), hence the
+# recursive globs from the top package.
+[tool.setuptools.package-data]
+clausal = ["**/*.seam", "**/*.pl", "**/*.json"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

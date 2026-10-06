@@ -1,11 +1,23 @@
 # Clausal Prolog
 
-!!! warning "Beta"
-    Clausal Prolog is in **beta** on the way to 1.0. From 1.0.0, the surface listed in [Public API](public-api.md) follows semantic versioning; everything else may still change. The developer experience has not been widely tested beyond the author's own use. Expect rough edges — bug reports and feedback are very welcome.
+**Prolog that runs inside Python.**
 
-**Logic programming embedded in Python.**
+[GitHub](https://github.com/neurosymbolica/clausal-prolog) ·
+[GitLab](https://gitlab.com/MikeAmy/clausal) ·
+[PyPI](https://pypi.org/project/clausal/)
 
-Clausal Prolog is a cut-free Prolog, aiming for ISO Prolog conformity, that runs inside the Python runtime. It is not a front end to an external engine. Logic code and Python code call into each other, share the same objects, and run on the same VM and garbage collector.
+Clausal Prolog is a cut-free Prolog that aims for ISO Prolog conformity. It is
+not a wrapper around an external engine: it runs in the Python process, on the
+same objects and the same garbage collector, so Prolog and Python call each
+other freely.
+
+```bash
+pip install clausal
+```
+
+## You can run Prolog programs
+
+Write ordinary Prolog in a `.clausal` file. Tests live next to the code:
 
 ```prolog
 % fibonacci.clausal
@@ -26,7 +38,26 @@ test("fib(10) = 55") :- fib(10, 55).
 :- end_module(fibonacci).
 ```
 
-Ask it a question from a `.seam` file, with the goal after `--`:
+Run it with the `clausal` command. `-g` runs a goal and prints its answers,
+the way a Prolog toplevel does; `--test` runs the module's tests:
+
+```bash
+$ clausal fibonacci.clausal -g "fib(10, F)"
+F = 55.
+$ clausal --test fibonacci.clausal
+1 tests: 1 passed, 0 failed [PASSED]
+```
+
+A program that defines `main/0` runs it when given just the file:
+`clausal program.clausal`. See [Command line](cli.md).
+
+Existing ISO Prolog lives in `.pl` files; see [Importing Prolog](importing_prolog.md).
+
+## You can run it from Python
+
+Import the module like any Python module and ask it questions. In a `.seam`
+file, a goal after `--` is a query, and its variables become Python
+variables:
 
 ```python
 # report.seam
@@ -40,19 +71,8 @@ for F in --fib(10, F):
 python -c "import clausal, report"
 ```
 
-From a plain `.py` file, the same query goes through `solve`:
-
-```python
-from clausal import Var, solve
-import fibonacci                    # loads fibonacci.clausal
-
-for trail in solve(("fib", 10, F := Var()), module=fibonacci):
-    print(F.value)  # 55
-```
-
-Answers come back as the engine's own terms, which are plain Python values:
-an atom is a `str`, a compound term is a tuple `('point', 1, 2)`, a string is
-the carrier `('$chars', 'text')`. See [Python Integration](python_integration.md).
+Answers are plain Python values: an atom is a `str`, a compound term is a
+tuple such as `('point', 1, 2)`. See [Python Integration](python_integration.md).
 
 ## Three source surfaces
 

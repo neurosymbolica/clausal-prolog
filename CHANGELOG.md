@@ -715,6 +715,23 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **Packaging for PyPI.** The wheel now carries the data files the engine
+  reads at run time (the `.seam` library and stdlib modules, the toklex
+  specs and Prolog preludes) and the sdist the C headers; neither did
+  before, so an installed copy could not read Prolog. A release workflow
+  builds CPython 3.13/3.14 wheels for Linux, macOS and Windows, tests each
+  with `tools/wheel_smoke.py`, and publishes to PyPI on a GitHub release.
+
+- **The `clausal` command** runs a Clausal Prolog (`.clausal`) or ISO
+  Prolog (`.pl`) program: `clausal FILE` runs its `main/0` (or, with none,
+  only loads it); `-g GOAL` (repeatable) runs goals and prints their answers
+  toplevel-style (`F = 55.`, `true.`, `false.`), `--once` only the first;
+  `--test` runs its test clauses; arguments after `--` are the new
+  read-only `argv` flag (`current_prolog_flag(argv, Args)`, a list of
+  atoms). Exit status 0 / 1 (failed, raised or did not load) / 2 (usage).
+  Without FILE it starts the REPL, as `python -m clausal` did, which is now
+  the same command. See docs/cli.md.
+
 - **DCG grammar rules in the native `.pl` front end** (and so in Clausal
   Prolog). A `-->` rule used to be refused at load ("DCG is out of
   scope"). It is now translated to the clause ISO 7.14 / Scryer's

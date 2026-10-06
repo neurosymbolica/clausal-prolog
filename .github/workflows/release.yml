@@ -1,0 +1,92 @@
+# Build the source distribution and platform wheels; publish them to PyPI
+# when a GitHub release is published.
+#
+# clausal has C extensions, so a wheel is per platform and Python version:
+# cibuildwheel builds CPython 3.13 and 3.14 for Linux (x86_64, aarch64),
+# macOS (arm64, x86_64) and Windows (AMD64), and tests each
+# wheel by installing it and running tools/wheel_smoke.py.
+#
+# Run it by hand (Actions -> release -> Run workflow) to build and test
+# without publishing; the wheels are kept as workflow artifacts.
+#
+# Publishing uses PyPI trusted publishing -- no API token.  One-time setup on
+# pypi.org: add a trusted publisher for project "clausal" with owner
+# "neurosymbolica", repository "clausal-prolog", workflow "release.yml" and
+# environment "pypi".  The release's tag must be the pyproject version with a
+# leading "v" (v1.0.0rc1 for version 1.0.0rc1).
+name: release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: The release tag names the pyproject version
+        if: github.event_name == 'release'
+        run: |
+          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match pyproject version ${version} (expected v${version})"
+            exit 1
+          fi
+      - run: pip install build
+      - run: python -m build --sdist --outdir dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  wheels:
+    name: wheels (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install cibuildwheel
+      - run: cibuildwheel --output-dir wheelhouse
+        env:
+          # CPython 3.13 and 3.14, 64-bit, standard (GIL) builds.  Not yet:
+          # free-threaded (cp3??t), 32-bit Windows, musllinux, and newer
+          # CPythons cibuildwheel offers before their final release.
+          CIBW_BUILD: "cp313-* cp314-*"
+          CIBW_SKIP: "*-musllinux_* *-win32 cp3??t-*"
+          CIBW_ARCHS_LINUX: "native"   # x86_64 or aarch64, per runner; no i686
+          CIBW_ARCHS_MACOS: "arm64 x86_64"
+          CIBW_TEST_COMMAND: "python {project}/tools/wheel_smoke.py"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  publish:
+    if: github.event_name == 'release'
+    needs: [sdist, wheels]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/clausal/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1

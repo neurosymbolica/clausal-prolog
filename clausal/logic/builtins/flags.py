@@ -17,6 +17,7 @@ unknown                    error         error only  process
 double_quotes              chars         directive   module
 assert_creates_dynamic     false         yes         module
 require_end_module         default       yes         process (goal)
+argv                       []            no          process
 =========================  ============  ==========  =================
 
 ``require_end_module`` (implementation-defined) is the process-wide
@@ -28,6 +29,11 @@ Its value lives in ``clausal.end_module`` -- the same setting
 it governs the module files loaded AFTER it is set.  As a directive in a
 ``.pl`` file it is FILE-LOCAL (that file's front end reads it); a seam
 file cannot set it.
+
+``argv`` (implementation-defined, as in Scryer and SWI) is the list of the
+program's command-line arguments, as atoms: what follows ``--`` on the
+``clausal`` command line (``clausal.cli``), set from Python with
+:func:`set_argv`.  It is ``[]`` otherwise, and read-only to a program.
 
 Integers are unbounded, so ``bounded`` is ``false`` and ``max_integer`` /
 ``min_integer`` have no value: ``current_prolog_flag(max_integer, X)``
@@ -122,6 +128,7 @@ FLAGS: dict[str, _Flag] = {f.name: f for f in (
     _Flag("require_end_module", "default",
           lambda v: v in ("true", "false", "default"),
           supported=("true", "false", "default"), scope="end_module"),
+    _Flag("argv", [], lambda v: type(v) is list),
 )}
 
 #: Process-wide values of the settable process flags.
@@ -238,6 +245,13 @@ def flag_value(db, name: str):
                 return v
         return spec.default
     return _PROCESS.get(name, spec.default)
+
+
+def set_argv(args) -> None:
+    """Set the read-only ``argv`` flag: the program's command-line
+    arguments, each an atom (a ``str``).  ``clausal.cli`` calls this with
+    what follows ``--``."""
+    _PROCESS["argv"] = [str(a) for a in args]
 
 
 def assert_creates_dynamic(db) -> bool:
