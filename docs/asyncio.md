@@ -5,6 +5,12 @@ I/O (an HTTP request, a database round trip, a timer) gives the loop to other
 tasks until the result is ready, so many queries can wait at once in a single
 thread.
 
+Clausal has no scheduler of its own. Queries run on Python's standard
+`asyncio` loop, the same one aiohttp, httpx, asyncpg and the LLM SDKs run on.
+So a proof can await any of those libraries directly. Timeouts, cancellation,
+racing and task groups are `asyncio`'s own, mature and already familiar,
+rather than a second concurrency system to learn.
+
 !!! note "Experimental"
     `clausal.aio` and `library(asyncio)` are new and not yet part of the 1.0
     [public API](public-api.md). `asolve` needs the `greenlet` package:

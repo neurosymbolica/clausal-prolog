@@ -172,6 +172,9 @@ extra:
   # The "What's new?" list under the home page's table of contents
   # (overrides/partials/toc.html). Newest first.
   whats_new:
+    - title: "Asyncio: queries on Python's own event loop"
+      date: 2026-10-06
+      link: asyncio/
     - title: Clausal Prolog 1.0.0 released
       date: 2026-10-06
       link: https://github.com/neurosymbolica/clausal-prolog/releases/tag/v1.0.0

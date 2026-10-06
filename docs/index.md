@@ -166,6 +166,7 @@ rules the surface enforces.
 - **Heading for ISO Prolog** — ISO syntax, ISO builtin names and ISO error terms; where ISO is silent, Clausal Prolog follows [Scryer Prolog](https://www.scryer.pl/). See [Operators](operators.md) and [Public API](public-api.md).
 - **Pure by design** — no cut and no committed choice: [`dif/2`](constraints.md), [reified if-then-else](reified_ite.md), constraints and [tabling](tabling.md) keep programs monotonic. See [Purity](purity.md).
 - **Deep integration** — terms are Python tuples and atoms are Python strings, backtracking uses Python generators, and Python libraries are reached through `library(...)` facades and `.seam` modules.
+- **Asyncio, not a home-grown scheduler** — queries run on Python's own mature [`asyncio`](asyncio.md) event loop rather than a scheduler of our own. A proof can wait on a model, a database, a person or an event stream while other queries run, and timeouts, cancellation and racing come straight from `asyncio`. Backtracking still works across waits (experimental).
 - **Full-featured** — [tabling](tabling.md), [CLP(ℤ)](constraints.md), [DCGs](dcg.md), EDCGs, [modules](import.md), [term expansion](term_expansion.md), goal expansion, [reified if-then-else](reified_ite.md).
 - **Fast** — C extension for unification/trails, [first-argument indexing](indexing.md), groundness-keyed dispatch, [tail recursion optimization](compiler.md#tail-recursion-optimization-tro), [bytecode caching](caching.md).
 
@@ -246,6 +247,7 @@ for the full feature set.
 | [Importing Prolog](importing_prolog.md) | Import `.pl` files directly — on-the-fly translation and caching (experimental in 1.0) |
 | [Architecture](architecture.md) | Layer stack, execution model, why not a WAM |
 | [Python Integration](python_integration.md) | Querying with `--goal`, the `++()` escape, `solve()`, converters |
+| [Asyncio](asyncio.md) | Queries on Python's `asyncio` loop: waiting on models, data, people and streams mid-search |
 | [Operators](operators.md) | What each operator means bare (Python) and quoted (Scryer/ISO) |
 | [Arithmetic](arithmetic.md) | Evaluation, exact rationals, the evaluable functors |
 | [Public API](public-api.md) | What the 1.0 semantic-versioning promise covers |
