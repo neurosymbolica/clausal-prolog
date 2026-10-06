@@ -24,6 +24,99 @@ So a Clausal Prolog program needs no async syntax. It calls `sleep/1`, or a
 predicate a Python adapter built with `async_predicate`, like any other
 predicate.
 
+## What it is for
+
+Prolog is a solver more than an I/O language, so it's fair to ask why it
+should wait on anything. The answer: async here is not about making I/O
+fast. It lets a solver **wait on the world in the middle of a search**,
+without that costing a thread. Real-world, neurosymbolic problems are full of
+such waits: a model to consult, a database to query, a person to ask, an
+event that hasn't happened yet. Without async, every one of them is a
+temporal problem the program has to manage. With it, waiting is just
+another call in a proof.
+
+Eagerly running independent subgoals in parallel is one use. The more
+interesting ones are *lazy*, where the search decides what to fetch and
+when, and *suspended*, where a proof sits waiting for the world.
+
+### Expensive oracles inside the search
+
+An LLM call, a theorem prover, an SMT check, a neural model on a GPU, or a
+simulation can each be a predicate. The solver calls one only when the proof
+needs it, and many branches or queries can have calls in flight at once.
+
+The sharper version: `await_each/2` over a model's sampled answers turns
+sampling into choice points. Backtracking draws the next candidate only when
+logic rejects the current one. That's lazy generate-and-test: a model
+generates, logic tests, and the model is asked for no more candidates than
+the proof needs.
+
+### Fact bases that live elsewhere
+
+A predicate can stand for a remote relation: a SQL table, a REST or SPARQL
+endpoint, a knowledge graph. Top-down search is already demand-driven query
+planning. It fetches only the rows the proof touches, in the order the proof
+needs them. With async, hundreds of such queries can share one process while
+each waits on its own round trips.
+
+### Askable predicates and long-running proofs
+
+Classic expert systems had `ask/2`: in the middle of a proof, ask the user.
+With async, a query can suspend while it waits for a form submission, a
+chat reply or an approval, without a thread per user, so thousands of
+half-finished proofs can wait at once. Configuration wizards, diagnosis,
+eligibility and compliance rules are all proofs that need answers from a
+person.
+
+A suspended query lives in memory: it can't be saved to disk and resumed
+in another process. So this works for waits of seconds to hours, not for
+workflows that run for days.
+
+### Event streams as relations
+
+`await_each/2` over a websocket, a message queue or a sensor feed makes the
+stream a nondeterministic predicate. A rule can then join live events with
+the database and with constraints. That's complex event processing and
+reactive rules: Clausal as the rules engine on a live feed.
+
+### Agents that act, then sense
+
+Planners and agents (Golog-style, BDI-style) alternate between choosing an
+action, carrying it out, and waiting to observe the result. Many such agents
+can run as concurrent queries in one process. Queries interleave only where
+they wait, so they share the database without locks.
+
+### Search control
+
+These come from asyncio itself, with no new predicates:
+
+- **Timeouts:** wrap a query in `asyncio.timeout(...)`.
+- **Racing:** run several formulations or orderings of the same problem, take
+  the first answer, and cancel the rest. Cancellation unwinds a query
+  cleanly, cleanups included.
+- **Bounded fan-out:** an `asyncio.Semaphore` inside an adapter limits how
+  many oracle calls are in flight.
+
+All of these take effect only at a wait. A purely CPU-bound search never
+yields to the loop; for CPU parallelism see
+[Free-Threaded Python](free_threading.md).
+
+### Simulation
+
+Drive queries with an event loop that has a virtual clock, and `sleep/1`
+becomes simulated time. Each query is then a process in a discrete-event
+simulation: protocols, queues, schedules, tested in milliseconds.
+
+### Why Clausal in particular
+
+- The Python async ecosystem (LLM SDKs, database drivers, HTTP clients) is
+  async-first, and Clausal shares its objects and its event loop.
+- A suspended query costs memory and a few microseconds per switch, not a
+  thread.
+- Backtracking still works across waits. Among the systems compared
+  [below](#other-prologs), only trealla-js also lets backtracking pull the next
+  item from an asynchronous source.
+
 ## From Clausal Prolog
 
 `library(asyncio)` provides:

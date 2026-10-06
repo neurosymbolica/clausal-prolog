@@ -200,6 +200,30 @@ def test_cancelling_unwinds_the_query_and_runs_cleanup(demo):
     assert _engine_state_clean()
 
 
+def test_asyncio_timeout_bounds_a_query(demo):
+    # docs/asyncio.md "Search control": a timeout is asyncio's, no predicate.
+    async def main():
+        with pytest.raises(TimeoutError):
+            async with asyncio.timeout(0.1):
+                await aonce(("guarded", Var()), demo)
+    run(main())
+    assert once("cleaned", demo) is not None
+
+
+def test_racing_queries_keeps_the_first_and_cancels_the_rest(demo):
+    async def main():
+        slow = asyncio.ensure_future(aonce(("job", "slow", Var()), demo))
+        quick = asyncio.ensure_future(aonce(("napped", Var()), demo))
+        done, pending = await asyncio.wait(
+            {slow, quick}, return_when=asyncio.FIRST_COMPLETED)
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+        return quick in done, slow.cancelled()
+    assert run(main()) == (True, True)
+    assert _engine_state_clean()
+
+
 def test_abandoning_a_query_closes_it(demo):
     async def main():
         x = Var()
