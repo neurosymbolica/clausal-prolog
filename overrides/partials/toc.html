@@ -1,0 +1,41 @@
+{#- Material's partials/toc.html, plus a "What's new?" list on the home page,
+    read from extra.whats_new in mkdocs.yml. -#}
+{% set title = lang.t("toc") %}
+{% if config.mdx_configs.toc and config.mdx_configs.toc.title %}
+  {% set title = config.mdx_configs.toc.title %}
+{% endif %}
+<nav class="md-nav md-nav--secondary" aria-label="{{ title | e }}">
+  {% set toc = page.toc %}
+  {% set first = toc | first %}
+  {% if first and first.level == 1 %}
+    {% set toc = first.children %}
+  {% endif %}
+  {% if toc %}
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      {{ title }}
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      {% for toc_item in toc %}
+        {% include "partials/toc-item.html" %}
+      {% endfor %}
+    </ul>
+  {% endif %}
+</nav>
+{% if page.is_homepage and config.extra.whats_new %}
+  <nav class="md-nav md-nav--secondary" aria-label="What's new?" style="margin-top: 1.2rem">
+    <label class="md-nav__title">What's new?</label>
+    <ul class="md-nav__list">
+      {% for item in config.extra.whats_new %}
+        <li class="md-nav__item">
+          <a href="{{ item.link | url }}" class="md-nav__link">
+            <span class="md-ellipsis">
+              {{ item.title }}
+              {% if item.date %}<br><small>{{ item.date }}</small>{% endif %}
+            </span>
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  </nav>
+{% endif %}

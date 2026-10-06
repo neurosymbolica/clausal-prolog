@@ -7,6 +7,7 @@ exclude_docs: |
 
 theme:
   name: material
+  custom_dir: overrides
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -164,6 +165,19 @@ plugins:
   - search
 
 extra:
+  # The "What's new?" list under the home page's table of contents
+  # (overrides/partials/toc.html). Newest first.
+  whats_new:
+    - title: Clausal Prolog 1.0.0 released
+      date: 2026-10-06
+      link: https://github.com/neurosymbolica/clausal-prolog/releases/tag/v1.0.0
+    - title: Wheels for Linux, macOS and Windows on PyPI
+      date: 2026-10-06
+      link: https://pypi.org/project/clausal/
+    - title: The 1.0 public API promise
+      link: public-api/
+    - title: Full changelog
+      link: https://github.com/neurosymbolica/clausal-prolog/blob/main/CHANGELOG.md
   social:
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/clausal/
