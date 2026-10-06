@@ -499,7 +499,7 @@ python -m clausal.tools.prolog_to_clausal SOURCE.pl -o tests/fixtures/prolog_gol
 
 ## Tier 3: Scryer Prolog embedding
 
-The translation pipeline feeds directly into the [Scryer Prolog embedding](scryer.md) — an in-process Scryer engine accessible from Python via PyO3, shipped as the optional `clausal-scryer` package (`packages/clausal-scryer`; not part of the core install, so this example is not run by the core test suite). `.seam` files are translated to Prolog with `Dialect.scryer()` and loaded into the embedded machine:
+The translation pipeline feeds directly into the [Scryer Prolog embedding](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scryer/docs/scryer.md) — an in-process Scryer engine accessible from Python via PyO3, shipped as the optional `clausal-scryer` package (`packages/clausal-scryer`; not part of the core install, so this example is not run by the core test suite). `.seam` files are translated to Prolog with `Dialect.scryer()` and loaded into the embedded machine:
 
 ```python
 from clausal.scryer import Scryer
@@ -510,7 +510,7 @@ with Scryer() as s:
     # {'R': 55}
 ```
 
-See the [Scryer Prolog Embedding](scryer.md) documentation for the full API.
+See the [Scryer Prolog Embedding](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scryer/docs/scryer.md) documentation for the full API.
 
 ---
 

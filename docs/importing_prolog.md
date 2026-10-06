@@ -7,7 +7,7 @@
     Prolog system. This loader does not run cut or if-then-else yet: programs
     that use them are refused (see [Known limitations](#known-limitations)).
     For running real ISO Prolog alongside Clausal Prolog, use the
-    [Scryer](scryer.md) or [Trealla](trealla.md) embeddings.
+    [Scryer](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scryer/docs/scryer.md) or [Trealla](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-trealla/docs/trealla.md) embeddings.
 
 Clausal Prolog can import `.pl` (Prolog) files directly. drop a `.pl` file on
 `sys.path` and `import` it — the engine translates, compiles, and caches it
@@ -1132,4 +1132,4 @@ full translation reference.*
 *See also: [Module System](import.md) — the import directives and
 cross-module calls.*
 
-*See also: [Trealla Prolog Embedding](trealla.md) — fast, lightweight in-process Prolog via C · [Scryer Prolog Embedding](scryer.md) — strict ISO conformance with tabling support. Both run Prolog on actual ISO engines alongside the native engine.*
+*See also: [Trealla Prolog Embedding](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-trealla/docs/trealla.md) — fast, lightweight in-process Prolog via C · [Scryer Prolog Embedding](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scryer/docs/scryer.md) — strict ISO conformance with tabling support. Both run Prolog on actual ISO engines alongside the native engine.*

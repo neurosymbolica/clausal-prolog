@@ -1,6 +1,6 @@
 # Files Module
 
-The `py.files` standard library module provides relational predicates for file and directory operations: existence checks, listing, metadata, CRUD, path manipulation, and temporary files. For higher-level file formats, see the [JSON](json.md), [CSV](csv.md), and [YAML](yaml.md) modules.
+The `py.files` standard library module provides relational predicates for file and directory operations: existence checks, listing, metadata, CRUD, path manipulation, and temporary files. For higher-level file formats, see the [JSON](json.md), [CSV](csv.md), and [YAML](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-yaml/docs/yaml.md) modules.
 
 The implementation lives in `clausal/modules/py/files.py`.
 

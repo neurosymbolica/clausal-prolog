@@ -1,25 +1,35 @@
 <p align="center"><img src="https://raw.githubusercontent.com/neurosymbolica/clausal-prolog/main/docs/assets/logo/clausal-banner.png" alt="Clausal Prolog" width="460"></p>
 
-# Clausal Prolog - The Neurosymbolic platform
+# Prolog in Python for Neurosymbolic AI
 
-The best of neural network AI (Python) with the best of Symbolic AI (Prolog). 
-Same process, same memory management, nest Python -> Prolog -> Python -> etc. 
-no friction. You can have neural networks calling symbolic core logic that in 
-turn calls neural predicates. Imagine the possibilities.
+**Documentation: [clausal.pl](https://clausal.pl)** · start with the
+[Tutorial](https://clausal.pl/tutorial/).
 
-Clausal Prolog is a Prolog written in Python that aims for ISO Prolog conformity,
-with three syntaxes: restricted cut-free, no committed choice 
-(to truly realise [The Power of Prolog](https://www.metalevel.at/prolog) by guaranteeing properties of the language), 
-full ISO Prolog (for compatibility), and a Pythonic 'Seam' syntax that is used to
-write adaptors that allow controlled access\* to the entire Python
-ecosystem. Everything you can do in Python, you can now do in Prolog, and
-vice versa. The ultimate neurosymbolic platform.
+Neural networks are good at perception, language and pattern-matching.
+Symbolic logic is good at rules, reasoning and guarantees. Clausal Prolog puts
+both in one Python process: a neural network can call symbolic logic that in
+turn calls neural predicates, nested as deeply as you like, with no
+serialisation, IPC or second runtime in between. Combining the two gives
+systems that are:
 
-You can write logic programs in `.clausal` files and import them with
-Python's standard import system. The engine includes constraint solving,
-tabling, DCGs and a large standard library. Regular ISO Prolog lives in
-`.pl` files. A Python-syntax surface, the seam (`.seam`), is kept only as the
-boundary for code that has to call Python. Import rules preserve guarantees.
+- **Explainable**: conclusions come from rules you can read and a derivation
+  you can trace, not only from weights.
+- **Reliable**: hard constraints such as regulations, safety rules and
+  business policy hold exactly, every time, rather than approximately.
+- **Data-efficient**: knowledge you can state as a rule doesn't have to be
+  learned from examples.
+- **Correctable**: change a rule and the behaviour changes, with no
+  retraining.
+
+Clausal Prolog is a Prolog implemented in Python that aims for ISO Prolog
+conformity. Logic programs go in `.clausal` files, written in Clausal Prolog:
+ISO syntax without cut or committed choice, which guarantees properties of
+programs that let you realise [The Power of Prolog](https://www.metalevel.at/prolog).
+Existing ISO Prolog goes in `.pl` files. The seam (`.seam`) is a Python-syntax
+surface for the adapters that give controlled access\* to the whole Python
+ecosystem. All three import with Python's standard import system, and the
+import rules preserve each surface's guarantees. The engine includes
+constraint solving, tabling, DCGs and a large standard library.
 
 \*Python seam adaptors assume the Python programmer takes full
 responsibility for correctness (in the Pythonic way).

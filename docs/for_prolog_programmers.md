@@ -346,7 +346,7 @@ time. There is no WAM and no interpreter loop:
 A `.pl` file is regular ISO Prolog, cut included. You have two ways to run
 it.
 
-**On a real ISO engine.** The [Scryer](scryer.md) and [Trealla](trealla.md)
+**On a real ISO engine.** The [Scryer](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scryer/docs/scryer.md) and [Trealla](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-trealla/docs/trealla.md)
 embeddings run unrestricted ISO Prolog in-process, cut and all, and you
 query them from Python with lazy iteration.
 
@@ -438,7 +438,7 @@ side-by-side reference and [Syntax](syntax.md) for the seam grammar.
 *See also: [Prolog Translation](prolog_translation.md) — translation
 between seam and Prolog syntax.*
 
-*See also: [Scryer Prolog Embedding](scryer.md) — an in-process ISO Prolog
+*See also: [Scryer Prolog Embedding](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scryer/docs/scryer.md) — an in-process ISO Prolog
 engine for programs that need cut.*
 
 *See also: [Thinking Relationally](thinking_relationally.md) — the mindset
