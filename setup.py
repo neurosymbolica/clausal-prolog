@@ -86,7 +86,7 @@ ext_clpr_core = Extension(
     "clausal.logic._clpr_core",
     sources=["clausal/logic/_clpr_core.c"],
     extra_compile_args=extra_compile_args,
-    libraries=["m"],
+    libraries=[] if sys.platform == "win32" else ["m"],  # MSVC: libm is in the CRT
 )
 
 ext_clpb_core = Extension(
