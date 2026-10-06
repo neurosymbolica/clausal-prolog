@@ -5,6 +5,24 @@ All notable changes to Clausal are recorded here. The format follows
 the project follows [semantic versioning](https://semver.org/) over the
 surface described in [docs/public-api.md](docs/public-api.md).
 
+## Unreleased
+
+### Experimental
+
+- **Asyncio.** `clausal.aio.asolve` / `aonce` run a query on an asyncio
+  event loop: a predicate that waits (`clausal.aio.await_only`) suspends the
+  query and frees the loop for other tasks, so concurrent queries overlap
+  their I/O. The same predicate blocks under plain `solve`, so programs need
+  no async syntax. New `library(asyncio)` (`py.asyncio`): `await_value/2`,
+  `await_each/2` (one solution per item of an async iterator), `sleep/1`.
+  `clausal.aio.async_predicate` builds an adapter from an `async def`.
+  `asolve` runs the query in a greenlet (`pip install 'clausal[async]'`); no
+  engine path changed. Awaiting inside tabled evaluation under `asolve`
+  raises `permission_error(await, tabled_evaluation, _)`; calling plain
+  `solve` on a waiting predicate from inside a running loop raises
+  `permission_error(await, synchronous_query, _)`. See
+  [docs/asyncio.md](docs/asyncio.md).
+
 ## 1.0.0 (2026-10-06)
 
 This is the first release with a public-API promise. Most of the changes

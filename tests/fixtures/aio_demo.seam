@@ -1,0 +1,28 @@
+# Fixture for tests/test_aio.py: predicates that await, through
+# library(asyncio) and through async_predicate adapters (tests.fixtures.aio_helpers.py).
+-module(aio_demo, [job/2, ticked/1, all_ticks/1, safe/1, napped/1, reach/2, reach_after_nap/2,
+                   tabled_nap/1, guarded/1, cleaned/0, depth_seen/1])
+-import_from(py.asyncio, [await_value, await_each, sleep])
+-import_from(tests.fixtures.aio_helpers, [fetch, ticks, boom, episode_depth])
+-dynamic(cleaned/0)
+-table(reach/2)
+-table(tabled_nap/1)
+
+job(NAME, R) <- fetch(NAME, 0.2, R)
+ticked(X) <- await_each(++ticks(3, 0.05), X)
+all_ticks(XS) <- findall(X, ticked(X), XS)
+safe(R) <- catch(boom("bad", _), E, R is E)
+napped(X) <- (sleep(0.1), X is 'done')
+
+edge('a', 'b'),
+edge('b', 'c'),
+edge('c', 'a'),
+reach(X, Y) <- edge(X, Y)
+reach(X, Y) <- (reach(X, Z), edge(Z, Y))
+reach_after_nap(X, YS) <- (sleep(0.05), findall(Y, reach(X, Y), YS))
+
+tabled_nap(X) <- (sleep(0.01), X is 1)
+
+guarded(R) <- setup_call_cleanup(R is 'set', sleep(10), assertz(cleaned))
+
+depth_seen(D) <- (sleep(0.02), episode_depth(D))
