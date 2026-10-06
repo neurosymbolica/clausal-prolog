@@ -124,8 +124,10 @@ _CASES = [
       "[7, 8, 9, _, 5, _, _, _, _], [_, _, _, _, _, 6, 2, _, 3], "
       "[8, _, 1, _, _, _, 7, _, _], [_, _, _, 1, 2, 3, _, 8, _], "
       "[2, _, 5, _, _, _, _, _, 9]]"]),
-    ("index", "index.md", 'solve(("fib"',
-     {"fibonacci": None}, "", ["55"]),
+    # The home page's query is a .seam file in a ```python fence: no Python
+    # block runs; the case imports it.
+    ("index", "index.md", None,
+     {"fibonacci": None, "report": None}, "import report", ["55"]),
     ("tutorial-greeting", "tutorial.md", 'solve(("greeting", "hello")',
      {"hello": None}, "", ["yes"]),
     ("tutorial-reachable", "tutorial.md", 'solve(("reachable"',
@@ -135,9 +137,11 @@ _CASES = [
 # A module whose source is ``None`` is the page's own block that defines it,
 # found by this substring: a seam block (written as ``.seam``) by default, or
 # a ```prolog block (written as ``.clausal``, Clausal Prolog) when the anchor
-# is a ``("prolog", substring)`` pair.
+# is a ``("prolog", substring)`` pair, or a ```python block holding seam source
+# (written as ``.seam``) for a ``("python", substring)`` pair.
 _PAGE_MODULE_ANCHORS = {
     ("index.md", "fibonacci"): ("prolog", ":- module(fibonacci,"),
+    ("index.md", "report"): ("python", "# report.seam"),
     ("tutorial.md", "hello"): ("prolog", ":- module(hello,"),
     ("tutorial.md", "graph"): ("prolog", ":- module(graph,"),
 }
@@ -155,7 +159,10 @@ def test_doc_python_block_runs(tmp_path, page, anchor, modules, post, expected):
             module_anchor = _PAGE_MODULE_ANCHORS[(page, name)]
             if isinstance(module_anchor, tuple):
                 lang, module_anchor = module_anchor
-                suffix = CLAUSAL_PROLOG_SUFFIXES[0]
+                # ```prolog is Clausal Prolog; a ```python block named
+                # ``# x.seam`` is seam source shown in a python fence.
+                if lang == "prolog":
+                    suffix = CLAUSAL_PROLOG_SUFFIXES[0]
             else:
                 lang = "seam"
             source = _block(page, lang, module_anchor)
@@ -165,7 +172,8 @@ def test_doc_python_block_runs(tmp_path, page, anchor, modules, post, expected):
         "import clausal\n"
         f"assert clausal.__file__.startswith({str(_ROOT)!r}), clausal.__file__\n"
         + _SHOW
-        + _capture_last_expression(_block(page, "python", anchor)) + "\n"
+        + (_capture_last_expression(_block(page, "python", anchor))
+           if anchor is not None else "") + "\n"
         + post + "\n"
     )
     # Blocks that name a repo path (``clausal/examples/...``) run from the root.

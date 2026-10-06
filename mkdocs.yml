@@ -155,3 +155,7 @@ extra:
   social:
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/clausal/
+    - icon: fontawesome/brands/github
+      link: https://github.com/neurosymbolica/clausal-prolog
+    - icon: fontawesome/brands/gitlab
+      link: https://gitlab.com/MikeAmy/clausal
