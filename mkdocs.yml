@@ -164,6 +164,9 @@ markdown_extensions:
 plugins:
   - search
 
+extra_css:
+  - stylesheets/extra.css
+
 extra:
   # The "What's new?" list under the home page's table of contents
   # (overrides/partials/toc.html). Newest first.

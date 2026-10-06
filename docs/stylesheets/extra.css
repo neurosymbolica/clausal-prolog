@@ -1,0 +1,36 @@
+/* "What's new?" under the home page's table of contents
+   (overrides/partials/toc.html): a soft card in the logo's blue, with a
+   blue-to-yellow bar down its left edge like the snake. */
+.clausal-whats-new {
+  --clausal-blue: #3776ab;
+  --clausal-tint: rgba(55, 118, 171, 0.07);
+  position: relative;
+  margin-top: 1.2rem;
+  padding: 0.5rem 0.6rem 0.6rem 0.9rem;
+  border-radius: 0.3rem;
+  background: var(--clausal-tint);
+}
+[data-md-color-scheme="slate"] .clausal-whats-new {
+  --clausal-blue: #8db8e0;
+  --clausal-tint: rgba(141, 184, 224, 0.08);
+}
+.clausal-whats-new::before {
+  content: "";
+  position: absolute;
+  inset: 0.4rem auto 0.4rem 0;
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(#3776ab, #ffd43b);
+}
+.clausal-whats-new .md-nav__title {
+  color: var(--clausal-blue);
+  font-weight: 700;
+  background: none;
+  box-shadow: none;
+}
+.clausal-whats-new .md-nav__link:hover {
+  color: var(--clausal-blue);
+}
+.clausal-whats-new small {
+  color: var(--md-default-fg-color--light);
+}
