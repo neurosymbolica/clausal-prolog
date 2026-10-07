@@ -768,6 +768,21 @@ since 0.4.0 finish three moves:
   `py.acl2` in both import-alias tables. Docs:
   `packages/clausal-acl2/docs/acl2.md`; design notes:
   `implementation_plans/acl2/overview.md`.
+- **`clausal-laya`**, a new optional package wrapping
+  [laya](https://pypi.org/project/laya/), a calibrated "System 1" decision
+  engine: `choice/4,5`, `noul/3`, `score/4,5` and `predict/3,4` make its
+  answers about a text relations whose solutions carry probabilities
+  (`choice/5` and `score/5` enumerate the options, most probable first);
+  `predict_batch/3,4` shares forward passes over many texts. The predicates
+  run on a swappable backend (`use_backend/1,2`): laya in-process through
+  `Router.predict_batch` (the default), a `laya-serve` server, or TypeSafe's
+  hosted Jev model (`typesafe-sdk`, extra `typesafe`), which answers the same
+  typed questions. `finetune/5` runs laya's fine-tuning on rows a program can
+  build from its own facts, and `register_model/2` serves the result.
+  Imported as `-import_from(py.laya, [...])`, which works with clausal
+  1.0.0; the bare name `laya` now maps to `py.laya` too (both import-alias
+  tables), as `yaml` or `torch` do. Docs:
+  `packages/clausal-laya/docs/laya.md`.
 
 - **Packaging for PyPI.** The wheel now carries the data files the engine
   reads at run time (the `.seam` library and stdlib modules, the toklex

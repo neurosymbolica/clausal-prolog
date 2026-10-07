@@ -23,6 +23,7 @@ seam code imports them as `-import_from(yaml, [...])` (rewritten to `py.yaml`).
 | `clausal-sympy` | `sympy.py` | sympy |
 | `clausal-yaml` | `yaml.py` | pyyaml |
 | `clausal-acl2` | `acl2.py` (ACL2 Bridge client; ACL2 forms <-> canonical terms) | none in Python; real tests need `acl2` on PATH (books, certified `centaur/bridge`) or `CLAUSAL_ACL2_SOCKET` |
+| `clausal-laya` | `laya.py` (backends: laya in-process, laya-serve, TypeSafe Jev) | laya (brings torch, transformers); extra `typesafe`: typesafe-sdk; model tests need the Hugging Face Hub |
 
 Prolog backends. Each adds a package `clausal.<name>` (outside `modules/`) that
 embeds a real ISO Prolog; they have no Python deps but need a native build:

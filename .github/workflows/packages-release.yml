@@ -35,7 +35,7 @@ permissions:
   contents: read
 
 env:
-  PUBLISHABLE: "clausal-acl2 clausal-jax clausal-opencv clausal-scipy clausal-sklearn clausal-spacy clausal-sympy clausal-torch clausal-yaml"
+  PUBLISHABLE: "clausal-acl2 clausal-jax clausal-laya clausal-opencv clausal-scipy clausal-sklearn clausal-spacy clausal-sympy clausal-torch clausal-yaml"
 
 jobs:
   build:
