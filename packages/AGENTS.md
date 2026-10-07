@@ -89,8 +89,9 @@ trusted publishing. Run it by hand to build and test without publishing.
 - A package whose full test suite needs optional libraries lists them in a
   `test` extra (torch: numpy; jax: optax, equinox, flax; sklearn: pandas);
   the workflow installs the wheel as `<wheel>[test]`.
-- Once a package is on PyPI it can become an extra of `clausal` again
-  (`[project.optional-dependencies]` in the root `pyproject.toml`).
+- Every published package is also an extra of `clausal`
+  (`[project.optional-dependencies]` in the root `pyproject.toml`); add one
+  there when a new package reaches PyPI.
 
 ## Gotchas
 
