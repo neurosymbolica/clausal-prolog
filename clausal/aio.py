@@ -176,12 +176,12 @@ class _Query:
     nobody can resume must not hold its tables forever.
     """
 
-    __slots__ = ("gen", "state", "child", "_live", "agen", "created",
+    __slots__ = ("gen", "state", "child", "_live", "agen", "loop", "created",
                  "__weakref__")
 
     def __init__(self, gen):
         self.gen, self.state = gen, _fresh_state(self)
-        self.child, self._live, self.agen = None, True, None
+        self.child, self._live, self.agen, self.loop = None, True, None, None
         self.created = []       # (entry, store, key) of tables it created
 
     def _died(self):
@@ -196,15 +196,37 @@ class _Query:
         """
         if not self._live:
             return                      # closed normally in the meantime
+        self._live = False              # first: _died must not re-enter
         for entry, store, key in self.created:
             if (entry.status == "evaluating" and entry.owner is self
                     and store.get(key) is entry):
                 del store[key]
         self.created = []
+        # Finish the query's answer generator here, under its OWN engine
+        # state.  Left to the cyclic GC, it was finalised at an arbitrary
+        # moment inside whatever query was running, and its drive episode's
+        # cleanup then repaired away THAT query's tables (eighth review,
+        # 2026-10-06).  A generator still running inside a parked greenlet
+        # cannot be closed; it is unreachable from any query's state.
+        gen, self.gen = self.gen, None
+        if gen is not None and not getattr(gen, "gi_running", False):
+            saved = _install(self.state)
+            try:
+                gen.close()
+            except BaseException:  # noqa: BLE001 - nobody to report it to
+                pass
+            finally:
+                self.state = _install(saved)
 
     @property
     def live(self):
-        return self._live and (self.agen is None or self.agen() is not None)
+        """True while the query could still be resumed: not closed, its
+        async generator still exists, and its event loop is not closed.  A
+        query parked at a wait when its loop closes can never resume, even
+        though nothing ever frees it (eighth review, 2026-10-06)."""
+        return (self._live
+                and (self.agen is None or self.agen() is not None)
+                and (self.loop is None or not self.loop.is_closed()))
 
     def _switch(self, how, *args):
         from clausal.logic.tabling import _outer_ctx, _pending_dead, _reap_dead
@@ -230,6 +252,8 @@ class _Query:
         thrown into the query at its ``await_only``, so the query unwinds (or
         a ``catch/3`` handles an ordinary error) before it reaches the caller.
         """
+        if self.loop is None:
+            self.loop = asyncio.get_running_loop()
         child = self.child = _QueryGreenlet(fn)
         child.gr_context = _greenlet.getcurrent().gr_context
         try:

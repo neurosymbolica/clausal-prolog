@@ -734,6 +734,104 @@ def test_a_query_dying_during_a_store_scan_does_not_break_it(
     assert sorted(deref(y) for _ in solve(("path", 1, y), mod)) == [2, 3, 4]
 
 
+_DEAD_PROGRAM = (
+    "-module(dead, [path/2, other/1, caller/1, nap_path/2])\n"
+    "-import_from(py.asyncio, [sleep])\n"
+    "-table(path/2)\n"
+    "-table(other/1)\n"
+    "-table(caller/1)\n"
+    "-table(nap_path/2)\n"
+    "edge(1, 2),\n"
+    "edge(2, 3),\n"
+    "edge(3, 4),\n"
+    "path(X, Y) <- (path(X, Z), edge(Z, Y))\n"
+    "path(X, Y) <- edge(X, Y)\n"
+    "nap_path(X, Y) <- (nap_path(X, Z), edge(Z, Y))\n"
+    "nap_path(X, Y) <- (edge(X, Y), sleep(0.01))\n"
+    "other(1),\n"
+    "other(X) <- (other(Y), X == Y + 1, X < 3)\n"
+    "caller(X) <- (other(X), path(X, _))\n")
+
+
+def _park_until_loop_closes(goal, mod, *, between_answers):
+    """A query parked when its loop closes: only the cyclic GC can free it
+    (Task <-> Future cycle), or nothing can (parked inside a wait)."""
+    loop = asyncio.new_event_loop()
+
+    async def park():
+        answers = asolve(goal, mod)
+        await answers.__anext__()
+        if between_answers:
+            await asyncio.sleep(10)
+    task = loop.create_task(park())
+    loop.run_until_complete(asyncio.sleep(0.005 if not between_answers else 0.01))
+    loop.close()
+    del task, loop
+
+
+def test_a_dead_querys_generator_is_not_finalised_inside_another_query(
+        tmp_path, monkeypatch):
+    # Eighth review 2026-10-06: after the reap, the dead query's solve()
+    # generator was left to the cyclic GC, which finalised it at an
+    # arbitrary allocation inside whatever query was running; its drive
+    # episode's clean-up then repaired away the RUNNING query's tables.
+    # The reap now closes the generator itself, under its own state.
+    import gc
+    from clausal.logic import tabling
+    src = tmp_path / "dead.seam"
+    src.write_text(_DEAD_PROGRAM)
+    mod = load_clausal_module(src)
+    store = mod.__dict__["$module"].db.table_store
+    gc.collect()
+    gc.disable()
+    try:
+        _park_until_loop_closes(("path", 1, Var()), mod, between_answers=True)
+        [query] = {e.owner for e in store.values() if e.owner is not None}
+        gen = query.gen
+        gc.collect()                    # frees its iterator: queued as dead
+        tabling._reap_dead()
+        # Reaped means finished: nothing left for the GC to finalise later,
+        # in the middle of some other query.
+        assert gen.gi_frame is None
+        del query, gen
+        original = tabling._foreign
+
+        def collecting(entry):
+            tabling._reap_dead()
+            gc.collect()            # whatever is collectable, mid-drive
+            return original(entry)
+        monkeypatch.setattr(tabling, "_foreign", collecting)
+        x = Var()
+        got = sorted(deref(x) for _ in solve(("caller", x), mod))
+    finally:
+        gc.enable()
+    assert got == [1, 2]
+    assert all(e.status == "complete" for e in store.values())
+    assert _engine_state_clean()
+
+
+def test_a_query_parked_in_a_wait_when_its_loop_closes_releases_its_table(
+        tmp_path):
+    # Eighth review 2026-10-06: parked inside the tabled evaluation (in
+    # sleep/1) when the loop closed, the query could never be freed or
+    # resumed, yet stayed "live": its table was refused to every later
+    # query, forever.  A query whose loop is closed is no longer live.
+    import gc
+    src = tmp_path / "dead_parked.seam"
+    src.write_text(_DEAD_PROGRAM.replace("dead,", "dead_parked,"))
+    mod = load_clausal_module(src)
+    _park_until_loop_closes(("nap_path", 1, Var()), mod,
+                            between_answers=False)
+    gc.collect()
+    y = Var()
+    assert sorted(deref(y) for _ in solve(("nap_path", 1, y), mod)) == [2, 3, 4]
+
+    async def again():
+        z = Var()
+        return sorted([deref(z) async for _ in asolve(("nap_path", 1, z), mod)])
+    assert run(again()) == [2, 3, 4]
+
+
 def test_negation_is_not_delayed_on_a_dropped_querys_table(tmp_path):
     # Sixth review 2026-10-06: `not path(1, _)` delayed on the dead query's
     # evaluating entry and came out undefined instead of true.

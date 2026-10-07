@@ -248,7 +248,10 @@ def _reap_dead() -> None:
             query = _pending_dead.pop()
         except IndexError:
             return
-        query._died()
+        try:
+            query._died()
+        except Exception:  # noqa: BLE001 - never into an unrelated query
+            pass
 
 
 def _refuse_foreign(functor, arity) -> None:
