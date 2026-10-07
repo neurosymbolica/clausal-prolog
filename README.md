@@ -73,6 +73,11 @@ directory, `name.seam` beats `name.clausal`, which beats `name.pl`.
 - **Python interop through the seam**: `library(...)` facades over the
   engine's Python modules (`library(json)`, `library(datetime)`, …),
   Python-free `.seam` modules, and allowlisted Python bridges
+- **Asyncio, not a home-grown scheduler** (experimental): queries run on
+  Python's own `asyncio` event loop, so they wait on models, databases,
+  people and event streams alongside any async Python library, with
+  timeouts, cancellation and racing straight from `asyncio`. Backtracking
+  still works across waits. See [docs/asyncio.md](docs/asyncio.md)
 - **ISO direction**: ISO builtin names, ISO error terms and ISO modules;
   where ISO is silent, Scryer Prolog's behaviour
 - **C extensions**: logic variables, trail-based backtracking and a
@@ -274,7 +279,8 @@ python -m pytest tests/ clausal/examples/ -q
 
 ## Requirements
 
-- Python ≥ 3.13 (no other runtime dependencies)
+- Python ≥ 3.13 and [greenlet](https://pypi.org/project/greenlet/) (the only
+  runtime dependency; it lets queries run on `asyncio`)
 - C compiler (for building from source)
 
 Optional packages (YAML, spaCy, SciPy, PyTorch, the Scryer and Trealla

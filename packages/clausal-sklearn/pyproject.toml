@@ -18,6 +18,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+test = ["pandas"]   # what the full test suite needs
 csv = ["pandas"]      # load_csv/3
 
 [project.urls]

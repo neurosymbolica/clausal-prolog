@@ -379,6 +379,10 @@ def count_up():
 `orders.first(large)` is `('closed', ['a1'])`, `orders.every(large)` is
 `[('closed', ['a1']), ('closed', ['a2'])]`, and `count_up()` is `[1, 2, 3]`.
 
+Inside an `async def` the same positions run on the event loop: `if --g` is
+awaited and `for X in --g` iterates asynchronously, so a predicate that
+waits frees the loop. See [Asyncio: from seam](asyncio.md#from-seam).
+
 Exported names are ordinary locals: on success they survive the block; on
 failure nothing is assigned (a later read is an `UnboundLocalError`). A
 `for` exports exactly its target names, which must be variables of the goal.

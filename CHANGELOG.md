@@ -5,6 +5,40 @@ All notable changes to Clausal are recorded here. The format follows
 the project follows [semantic versioning](https://semver.org/) over the
 surface described in [docs/public-api.md](docs/public-api.md).
 
+## Unreleased
+
+### Experimental
+
+- **Asyncio.** `clausal.aio.asolve` / `aonce` run a query on an asyncio
+  event loop: a predicate that waits (`clausal.aio.await_only`) suspends the
+  query and frees the loop for other tasks, so concurrent queries overlap
+  their I/O. The same predicate blocks under plain `solve`, so programs need
+  no async syntax. New `library(asyncio)` (`py.asyncio`): `await_value/2`,
+  `await_each/2` (one solution per item of an async iterator), `sleep/1`.
+  `clausal.aio.async_predicate` builds an adapter from an `async def`.
+  `asolve` runs the query in a greenlet, so `greenlet` becomes Clausal's one
+  runtime dependency (operator ruling 2026-10-06: async should be built in,
+  not an extra). Also `acall`, `adrive`, and `Solutions` supporting `await`
+  (the Jupyter form) and `async for`. Tables: a query may wait anywhere,
+  inside tabled evaluation included; another query that reaches a table a
+  suspended query has not finished raises `permission_error(access,
+  tabled_evaluation, P/N)` instead of seeing a partial answer set. Calling
+  plain `solve` on a waiting predicate from inside a running loop raises
+  `permission_error(await, synchronous_query, _)`. A table a synchronous
+  query is still building while an async query runs inside its consumer
+  is refused to that async query too. A wait made by code the garbage
+  collector runs inside a query (an abandoned query's cleanup) raises
+  `permission_error(await, finalisation, _)` rather than suspending that
+  query.
+- **Seam goal positions in `async def`.** In a `.seam` file, `if`/`elif`/
+  `while --g`, `not --g`, `for`/`async for X in --g` and comprehensions over
+  `--g` inside an `async def` run on the event loop (`await`ed / async
+  iteration); a plain `def` is unchanged. A plain generator expression over
+  `--g` in an `async def` is refused (it would silently become an async
+  generator). In clause bodies, `++await f()` and `await` in an f-string slot
+  wait on the awaitable from within the query. See
+  [docs/asyncio.md](docs/asyncio.md).
+
 ## 1.0.0 (2026-10-06)
 
 This is the first release with a public-API promise. Most of the changes
@@ -715,6 +749,17 @@ since 0.4.0 finish three moves:
 
 ### Added
 
+- **`clausal-acl2`**, a new optional package: the ACL2 theorem prover from
+  Clausal through its ACL2 Bridge (`books/centaur/bridge`), as another
+  process. `acl2/2,3` and `acl2_mv/2` evaluate forms, `event/1,2` submits
+  events, `thm/1,2` proves terms, `acl2_text/2` parses and prints ACL2 text,
+  `use_acl2/1` names a running bridge or the ACL2 to start (`acl2` on PATH by
+  default). ACL2 objects cross as canonical Clausal terms -- `(f a b)` is the
+  compound `f(a, b)`, other lists `'()'(...)`, dotted pairs `'$cons'(A, B)` --
+  so an ACL2 term is a Prolog compound. The bare name `acl2` maps to
+  `py.acl2` in both import-alias tables. Docs:
+  `packages/clausal-acl2/docs/acl2.md`; design notes:
+  `implementation_plans/acl2/overview.md`.
 - **`clausal-laya`**, a new optional package wrapping
   [laya](https://pypi.org/project/laya/), a calibrated "System 1" decision
   engine: `choice/4,5`, `noul/3`, `score/4,5` and `predict/3,4` make its

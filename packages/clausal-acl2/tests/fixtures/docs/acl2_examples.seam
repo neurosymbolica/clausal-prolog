@@ -1,0 +1,21 @@
+# Executable examples for docs/acl2.md (a REAL ACL2: skipped by
+# tests/conftest.py when no bridge is available).
+
+-import_from(py.acl2, [acl2, acl2_text, event, thm])
+# ACL2 function names used as data are declared, as any seam functor is.
+-private([append(_, _), quote(_), equal(_, _), app(_, _), a(_, _, _)])
+
+# --8<-- [start:evaluate]
+test("evaluate a form") <- (
+    acl2(append(quote(['a', 'b']), quote(['c', 'd'])), R),
+    R is 'a'('b', 'c', 'd')
+)  # nv
+# --8<-- [end:evaluate]
+
+# --8<-- [start:prove]
+test("define a function, then prove a theorem about it") <- (
+    acl2_text(DEFUN, "(defun app (x y) (if (endp x) y (cons (car x) (app (cdr x) y))))"),
+    event(DEFUN),
+    thm(equal(app(app('x', 'y'), 'z'), app('x', app('y', 'z'))))
+)  # nv
+# --8<-- [end:prove]

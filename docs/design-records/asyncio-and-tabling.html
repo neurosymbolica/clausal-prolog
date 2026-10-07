@@ -1,0 +1,398 @@
+<title>Asyncio and Tabling</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap">
+<style>
+:root{
+  --ground:#EEF1F4;
+  --surface:#F7F9FA;
+  --surface-2:#E4E9EE;
+  --ink:#16202B;
+  --ink-soft:#42525F;
+  --slate:#6B7C8C;
+  --rule:#CFD8E0;
+  --rule-soft:#DFE5EB;
+  --teal:#0E6B68;
+  --teal-bg:#DCEBEA;
+  --ochre:#9A5C16;
+  --ochre-bg:#F2E6D4;
+  --crimson:#8F2A38;
+  --crimson-bg:#F1DEE1;
+  --accent:var(--teal);
+
+  --f-display:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono","SFMono-Regular",Consolas,monospace;
+
+  --measure:68ch;
+  --pad:clamp(1.15rem,4vw,2.75rem);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E151C;
+    --surface:#151F28;
+    --surface-2:#1D2933;
+    --ink:#DCE4EC;
+    --ink-soft:#A3B1BE;
+    --slate:#7F90A0;
+    --rule:#2A3742;
+    --rule-soft:#222E38;
+    --teal:#54B3AD;
+    --teal-bg:#15302F;
+    --ochre:#D39A55;
+    --ochre-bg:#322616;
+    --crimson:#D8707F;
+    --crimson-bg:#331A1F;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E151C;
+  --surface:#151F28;
+  --surface-2:#1D2933;
+  --ink:#DCE4EC;
+  --ink-soft:#A3B1BE;
+  --slate:#7F90A0;
+  --rule:#2A3742;
+  --rule-soft:#222E38;
+  --teal:#54B3AD;
+  --teal-bg:#15302F;
+  --ochre:#D39A55;
+  --ochre-bg:#322616;
+  --crimson:#D8707F;
+  --crimson-bg:#331A1F;
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--ground);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  margin:0;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:calc(var(--measure) + 15rem);margin:0 auto;padding:0 var(--pad) 6rem}
+
+/* ---------- masthead ---------- */
+.mast{
+  border-bottom:2px solid var(--ink);
+  padding:clamp(2.5rem,7vw,4.5rem) 0 1.5rem;
+  display:flex;flex-direction:column;gap:1.4rem;
+}
+.eyebrow{
+  font-family:var(--f-mono);font-size:.7rem;font-weight:500;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--slate);
+  display:flex;flex-wrap:wrap;gap:.45rem 1.4rem;
+}
+h1{
+  font-family:var(--f-display);font-weight:700;
+  font-size:clamp(2.4rem,7vw,4rem);line-height:1.02;
+  letter-spacing:-.035em;margin:0;text-wrap:balance;
+}
+.standfirst{
+  font-size:clamp(1.05rem,2.2vw,1.28rem);line-height:1.5;
+  color:var(--ink-soft);max-width:54ch;margin:0;font-style:italic;
+}
+.statusbar{
+  display:flex;flex-wrap:wrap;gap:0 2.2rem;
+  font-family:var(--f-mono);font-size:.76rem;color:var(--slate);
+  border-top:1px solid var(--rule-soft);padding-top:1rem;
+}
+.statusbar b{color:var(--ink);font-weight:500}
+
+/* ---------- provenance chips: the page's structural device ---------- */
+.chip{
+  display:inline-flex;align-items:center;gap:.4em;
+  font-family:var(--f-mono);font-size:.63rem;font-weight:600;
+  letter-spacing:.11em;text-transform:uppercase;
+  padding:.24em .6em;border-radius:2px;white-space:nowrap;
+  vertical-align:.12em;
+}
+.chip::before{content:"";width:.42em;height:.42em;border-radius:50%;background:currentColor}
+.c-measured{color:var(--teal);background:var(--teal-bg)}
+.c-ruled{color:var(--ink);background:var(--surface-2)}
+.c-open{color:var(--ochre);background:var(--ochre-bg)}
+.c-retracted{color:var(--crimson);background:var(--crimson-bg)}
+
+/* ---------- sections ---------- */
+section{padding-top:3.4rem}
+.shead{display:flex;align-items:baseline;gap:.9rem;flex-wrap:wrap;margin-bottom:.4rem}
+.snum{
+  font-family:var(--f-mono);font-size:.78rem;font-weight:600;color:var(--accent);
+  letter-spacing:.08em;
+}
+h2{
+  font-family:var(--f-display);font-weight:600;
+  font-size:clamp(1.5rem,3.4vw,2rem);line-height:1.14;
+  letter-spacing:-.022em;margin:0;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-display);font-weight:600;font-size:1.03rem;
+  letter-spacing:-.008em;margin:2.2rem 0 .5rem;
+}
+p{max-width:var(--measure);margin:0 0 1.05rem}
+.lede{color:var(--ink-soft)}
+strong{font-weight:600}
+em{font-style:italic}
+code{
+  font-family:var(--f-mono);font-size:.855em;
+  background:var(--surface-2);padding:.1em .34em;border-radius:2px;
+  overflow-wrap:break-word;
+}
+a{color:var(--accent);text-underline-offset:.18em}
+
+/* ---------- evidence block: mono, breaks the measure ---------- */
+.evidence{
+  background:var(--surface);
+  border:1px solid var(--rule);
+  border-left:3px solid var(--accent);
+  margin:1.5rem 0;
+}
+.evidence > figcaption{
+  font-family:var(--f-mono);font-size:.68rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--slate);
+  padding:.7rem 1rem .1rem;
+  display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;
+}
+.evidence pre{
+  font-family:var(--f-mono);font-size:.795rem;line-height:1.72;
+  margin:0;padding:.55rem 1rem 1.05rem;
+  overflow-x:auto;color:var(--ink);
+}
+.ok{color:var(--teal);font-weight:600}
+.no{color:var(--crimson);font-weight:600}
+.dim{color:var(--slate)}
+
+/* ---------- matrix table ---------- */
+.tablewrap{overflow-x:auto;margin:1.5rem 0;border:1px solid var(--rule);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-family:var(--f-mono);font-size:.775rem;min-width:36rem}
+caption{
+  font-family:var(--f-mono);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--slate);text-align:left;padding:.75rem 1rem .5rem;
+}
+th,td{padding:.5rem .85rem;text-align:left;border-top:1px solid var(--rule-soft)}
+thead th{
+  font-weight:600;color:var(--slate);font-size:.68rem;
+  letter-spacing:.08em;text-transform:uppercase;border-top:none;
+  border-bottom:1px solid var(--rule);
+}
+tbody th{font-weight:500;color:var(--ink);white-space:nowrap}
+td{font-variant-numeric:tabular-nums;color:var(--ink-soft)}
+
+/* ---------- decision blocks ---------- */
+.decisions{display:flex;flex-direction:column;gap:1px;background:var(--rule);border:1px solid var(--rule);margin:1.6rem 0}
+.decision{background:var(--surface);padding:1.15rem 1.25rem}
+.decision .dhead{display:flex;align-items:baseline;gap:.7rem;flex-wrap:wrap;margin-bottom:.35rem}
+.decision .dq{font-family:var(--f-mono);font-size:.76rem;font-weight:600;color:var(--accent)}
+.decision .dt{font-family:var(--f-display);font-weight:600;font-size:1rem;letter-spacing:-.01em}
+.decision p{margin:0;font-size:.93rem;color:var(--ink-soft);max-width:66ch}
+.decision p + p{margin-top:.55rem}
+
+/* ---------- next steps: a real sequence ---------- */
+ol.steps{list-style:none;counter-reset:s;padding:0;margin:1.5rem 0 0;display:flex;flex-direction:column;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+ol.steps li{counter-increment:s;background:var(--surface);padding:1.1rem 1.25rem 1.1rem 3.4rem;position:relative}
+ol.steps li::before{
+  content:counter(s);position:absolute;left:1.25rem;top:1.05rem;
+  font-family:var(--f-mono);font-size:.82rem;font-weight:600;color:var(--accent);
+}
+ol.steps .stitle{font-family:var(--f-display);font-weight:600;font-size:1rem;letter-spacing:-.01em;display:block;margin-bottom:.25rem}
+ol.steps p{margin:0;font-size:.93rem;color:var(--ink-soft);max-width:64ch}
+ol.steps .gate{
+  display:block;margin-top:.5rem;font-family:var(--f-mono);font-size:.72rem;
+  color:var(--slate);
+}
+ol.steps .gate b{color:var(--ink-soft);font-weight:500}
+
+ul.plain{max-width:var(--measure);padding-left:1.15rem;margin:0 0 1.05rem}
+ul.plain li{margin-bottom:.4rem}
+
+.pull{
+  border-left:3px solid var(--ochre);
+  background:var(--ochre-bg);
+  padding:1rem 1.2rem;margin:1.6rem 0;max-width:var(--measure);
+}
+.pull p{margin:0;font-size:.97rem}
+.pull p + p{margin-top:.6rem}
+
+footer{
+  margin-top:4.5rem;padding-top:1.3rem;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:.72rem;color:var(--slate);
+  display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;
+}
+@media (prefers-reduced-motion:no-preference){
+  a{transition:opacity .15s ease}
+}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+</style>
+<div class="wrap">
+
+<header class="mast">
+  <div class="eyebrow">
+    <span>Clausal · engine lane</span>
+    <span>Design record</span>
+    <span>2026-10-07</span>
+  </div>
+  <h1>Asyncio and Tabling</h1>
+  <p class="standfirst">Running Prolog queries on Python's asyncio event loop, and the rules that keep SLG tables sound when queries interleave, get abandoned, and die.</p>
+  <div class="statusbar">
+    <span>branch <b>claude/sweet-lamport-p1cfxe-async</b></span>
+    <span>merged <b>#26</b></span>
+    <span>open <b>#27</b></span>
+    <span>review rounds <b>11, last clean</b></span>
+    <span>tests <b>57 in test_aio.py</b></span>
+  </div>
+</header>
+
+<section>
+  <div class="shead"><span class="snum">01</span><h2>The model</h2></div>
+  <p class="lede">A query waits on the outside world without the program saying anything about it. <strong>How the query is driven decides what a wait does.</strong></p>
+  <p>A predicate that needs to wait (a timer, a network call, a model, a person) calls <code>await_only(awaitable)</code> from ordinary synchronous code. The library predicates <code>sleep/1</code>, <code>await_value/2</code> and <code>await_each/2</code>, and any adapter built with <code>async_predicate</code>, do exactly that. What happens next depends only on the driver:</p>
+  <div class="tablewrap">
+    <table>
+      <caption>One program, three drivers</caption>
+      <thead><tr><th scope="col">Driver</th><th scope="col">What a wait does</th></tr></thead>
+      <tbody>
+        <tr><th scope="row"><code>asolve</code>, <code>aonce</code>, <code>acall</code></th><td>Suspends this query; the event loop runs other tasks and queries meanwhile.</td></tr>
+        <tr><th scope="row"><code>solve</code>, the CLI, the REPL</th><td>Blocks on a private per-thread loop. The program runs unchanged.</td></tr>
+        <tr><th scope="row"><code>solve</code> inside a running loop</th><td>Refused: <code>permission_error(await, synchronous_query, _)</code>, instead of freezing the loop.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>So asynchrony does not spread up the call chain the way <code>async def</code> does in Python. Nothing in a Clausal Prolog program is marked async, and backtracking works across waits: <code>await_each/2</code> turns an async iterator into one solution per item, pulled only when backtracking asks for the next.</p>
+  <p>There is no scheduler of our own. The loop is Python's standard <code>asyncio</code> loop, so timeouts, cancellation, racing and task groups are asyncio's, and a proof can wait on any async Python library directly.</p>
+  <figure class="evidence">
+    <figcaption><span>Concurrency, measured</span><span class="chip c-measured">Measured</span></figcaption>
+<pre>3 queries, each waiting 0.2 s, under asyncio.gather      0.20 s total
+4 nap/2 calls (sleep(0.1)) from a .clausal file           0.10 s total
+wait overhead, shallow stack, asolve vs solve            ~10 µs per wait
+query that never waits                                   no measurable cost</pre>
+  </figure>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">02</span><h2>How it runs</h2></div>
+  <p>Clausal's engine is a generator trampoline: compiled predicates are Python generators driven by a flat loop, partly in C. The flat loop alone would make a native await easy, because a predicate could yield an "await this" request to the root driver. But several constructs run their <em>own</em> nested synchronous drive loops: <code>findall/3</code>'s inner goal, negation, <code>once/1</code>, lambda bodies, tabling's spawns. A request yielded inside one of them never reaches the root. We prototyped the native route: it worked at the top level and hung inside <code>findall</code>.</p>
+  <p>So <code>asolve</code> runs the ordinary synchronous engine inside a <a href="https://greenlet.readthedocs.io/">greenlet</a>, the technique behind SQLAlchemy's asyncio support. <code>await_only</code> switches from the query's greenlet to the greenlet running the asyncio task; that one awaits and switches back with the result. Every frame between the two, Python or C, stays suspended as it is, so no engine path had to learn about waiting.</p>
+  <p>A greenlet runs on its thread's own stack and copies its slice to the heap when it switches out, so recursion depth is the same as in plain code. Switching costs time in proportion to the stack depth at the wait:</p>
+  <figure class="evidence">
+    <figcaption><span>Switch cost against stack depth</span><span class="chip c-measured">Measured</span></figcaption>
+<pre>Python frames below the wait      cost per wait
+                         0               11 µs
+                     1,000               25 µs
+                    10,000              266 µs
+                    50,000            1,523 µs
+
+recursion depth reached, plain vs in a query greenlet   400,000 both (limit not reached)</pre>
+  </figure>
+  <p>The trampoline keeps ordinary recursion off the Python stack, so a wait is usually shallow. Depth comes from nesting the trampoline cannot flatten: <code>findall</code> inside negation inside <code>once</code>, deep <code>++</code> escapes, recursive Python adapters.</p>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">03</span><h2>The contract</h2></div>
+  <ul class="plain">
+    <li><strong>Interleaving.</strong> Each query has its own trail and its own tabling bookkeeping (leader stack, drive episodes, spawn depth: thread-locals that are swapped in per query). Queries interleave only where one waits.</li>
+    <li><strong>Shared database.</strong> An <code>assertz</code> by one query is visible to another after the first one's next wait.</li>
+    <li><strong>Errors.</strong> An awaitable that raises surfaces as an error term, catchable with <code>catch/3</code>.</li>
+    <li><strong>Cancellation.</strong> Cancelling the task raises <code>CancelledError</code> inside the query at its wait; the query unwinds and <code>setup_call_cleanup/3</code> cleanups run, including ones that wait. <code>catch/3</code> cannot swallow a cancellation.</li>
+    <li><strong>Stopping early.</strong> A <code>break</code> out of <code>async for</code> does not close an async generator; call <code>aclose()</code>. The seam compiler does this itself for a <code>for</code> over <code>--goal</code> in an <code>async def</code>.</li>
+    <li><strong>Waits that may not happen.</strong> A synchronous query inside a running loop, and code the garbage collector runs inside a query (an abandoned query's cleanup), are refused with <code>permission_error(await, synchronous_query | finalisation, _)</code>.</li>
+  </ul>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">04</span><h2>Tables shared by interleaved queries</h2></div>
+  <p class="lede">SLG resolution assumes one search builds each table. Interleaving breaks that assumption in five distinct ways, and each needed its own rule.</p>
+  <p>A synchronous query runs to completion before the next starts, so a table under evaluation belongs to whoever is running. An async query can be suspended at a wait, or between answers it is still streaming, with tables half-built and visible to every other query. It can also be abandoned without being closed, or die (its event loop closed, its driver garbage-collected) without finishing them. These are the rules, as implemented in the "Ownership" section of <code>clausal/logic/tabling.py</code>:</p>
+
+  <div class="decisions">
+    <div class="decision">
+      <div class="dhead"><span class="dq">Rule 1</span><span class="dt">Every table records its owner</span></div>
+      <p>An entry records the query leading it; synchronous queries have owner <code>None</code>, so in the synchronous world every rule below is a no-op.</p>
+    </div>
+    <div class="decision">
+      <div class="dhead"><span class="dq">Rule 2</span><span class="dt">A foreign table is never touched</span></div>
+      <p>Foreign: owned by another query that can still resume, or on a synchronous leader stack that the running async query swapped out (an async query run from inside a synchronous one's consumer). It is never consumed, re-led or completed; reaching one raises <code>permission_error(access, tabled_evaluation, P/N)</code>. Consuming a partial answer set silently loses answers, which is the bug this rule closed.</p>
+    </div>
+    <div class="decision">
+      <div class="dhead"><span class="dq">Rule 3</span><span class="dt">An abandoned table is rebuilt, never resumed</span></div>
+      <p>Abandoned: still evaluating, not ours and not foreign, because its query is dead. Its partial answers, conditions and SCC dependencies describe a search that no longer exists. A new lead starts from a fresh entry. Store-wide passes (SCC completion, the negation variant scan) leave it alone; completing it would freeze its partial answers for good.</p>
+    </div>
+    <div class="decision">
+      <div class="dhead"><span class="dq">Rule 4</span><span class="dt">Lead tokens guard every repair</span></div>
+      <p>Every lead and re-lead sets a fresh token on the entry. A leader frame's abnormal-exit repair (drop the half-built entry, release its consumers) and its leader-stack pop act only while the entry is still its lead. A re-lead reuses the entry <em>object</em>, and a dead query's frames can be finalised by the garbage collector long afterwards, so identity alone is not enough.</p>
+    </div>
+    <div class="decision">
+      <div class="dhead"><span class="dq">Rule 5</span><span class="dt">Death is noticed anywhere, acted on at safe points</span></div>
+      <p>A query is live while it can resume: not closed, its driving async generator still exists, its event loop not closed. When the driver is freed unclosed, a weakref callback only queues the query, because the cyclic GC may run that callback in the middle of another query's loop over a table store, or in another thread. At the next safe point (the start of a tabled call or tabled negation, or an async query switching in) the dead query's half-built tables leave the store and its generator is finished under its own engine state.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">05</span><h2>What the review rounds found</h2></div>
+  <p>The work was reviewed adversarially in rounds, each by a fresh reviewer told where the previous bugs had been, until a round found nothing. Every finding was reproduced before it was fixed, and every fix has a regression test that fails when the fix is reverted.</p>
+  <div class="tablewrap">
+    <table>
+      <caption>Eleven rounds, by severity of the worst finding</caption>
+      <thead><tr><th scope="col">Round</th><th scope="col">Worst</th><th scope="col">Finding</th><th scope="col">Led to</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">1</th><td class="no">blocker</td><td>A query streaming a tabled goal's answers is suspended with the table evaluating; another query consumed it and both lost answers.</td><td>Rule 2</td></tr>
+        <tr><th scope="row">2</th><td class="no">blocker</td><td>A <code>break</code> left a table reserved; a query dropped after its loop closed reserved its tables forever; a synchronous leader parked around an async query was re-led under it.</td><td>Rules 2, 5</td></tr>
+        <tr><th scope="row">3</th><td>should-fix</td><td>Docs claimed the wrong lifetime for unclosed iterators; a late repair could hit a re-led entry.</td><td>Rule 4 (first form)</td></tr>
+        <tr><th scope="row">4</th><td class="no">blocker</td><td>A dead query's parked frame, finalised by GC, repaired an entry another query had re-led. A WFS undefined answer came out true.</td><td>Rule 4</td></tr>
+        <tr><th scope="row">5</th><td class="no">blocker</td><td>A re-leader resumed a dead query's SCC with stale dependencies; two members waited on each other forever.</td><td>Rule 3</td></tr>
+        <tr><th scope="row">6</th><td class="no">blocker</td><td>An unrelated query's SCC sweep completed a dead query's partial table permanently.</td><td>Rules 3, 5</td></tr>
+        <tr><th scope="row">7</th><td>should-fix</td><td>Removing a dead query's tables inside a weakref callback mutated a store mid-iteration.</td><td>Rule 5 (safe points)</td></tr>
+        <tr><th scope="row">8</th><td class="no">blocker</td><td>The reaped query's generator was finalised by GC inside another query and repaired that query's tables. A query parked when its loop closed stayed live forever.</td><td>Rule 5 (finish the generator; a closed loop ends a query)</td></tr>
+        <tr><th scope="row">9</th><td>should-fix</td><td>A GC-run cleanup that waited hijacked a running query's greenlet and swallowed its cancellation.</td><td>The <code>finalisation</code> refusal</td></tr>
+        <tr><th scope="row">10</th><td>should-fix</td><td>Peripheral: the private loop's finaliser; sync <code>await_each</code> registration; an async def's defaults.</td><td>Local fixes</td></tr>
+        <tr><th scope="row">11</th><td class="ok">clean</td><td>Compared the compiled output of 2,037 seam units before and after; only intended differences.</td><td>End of the loop</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="pull">
+    <p><span class="chip c-open">Lesson</span></p>
+    <p>Five of the seven blockers had the same shape: some code path met a table that another, now dead, query had left half-built. Patching paths one at a time found the next path each round. What ended it was giving death a single, explicit handling point (rule 5), with the per-path guards kept as a second line.</p>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">06</span><h2>On a WAM</h2></div>
+  <p>Notes for an implementation in a WAM-based Prolog such as Scryer. They are our reading, not a measurement of any other system.</p>
+  <div class="decisions">
+    <div class="decision">
+      <div class="dhead"><span class="dq">Different</span><span class="dt">The engine side is easier</span></div>
+      <p>Greenlets were needed only because a wait can happen under host-language frames (nested Python drive loops, C). A WAM keeps a query's continuation in its own registers and stacks, so a builtin can stop the run loop at a wait and the host can resume it later. There is nothing to copy and no switch cost that grows with depth.</p>
+    </div>
+    <div class="decision">
+      <div class="dhead"><span class="dq">Carries over</span><span class="dt">The semantics</span></div>
+      <p>The driver decides what a wait does; the program never marks anything async; backtracking works across waits; a synchronous query inside a running loop is refused rather than allowed to block it.</p>
+    </div>
+    <div class="decision">
+      <div class="dhead"><span class="dq">Carries over</span><span class="dt">The tabling rules</span></div>
+      <p>Any system that lets queries interleave over shared SLG tables meets the five problems of section 04, whatever the engine: a half-built table seen by another query, abandoned evaluations, repairs racing re-leads, store-wide passes over other queries' tables, and deciding when a query is dead. The fixes are engine-independent.</p>
+    </div>
+    <div class="decision">
+      <div class="dhead"><span class="dq">Carries over</span><span class="dt">Cleanup ordering</span></div>
+      <p>Most of our late bugs came from clean-up running at the wrong moment, under the wrong query's state: garbage-collector finalisation of abandoned frames. A system with explicit, eager cleanup of abandoned queries avoids that whole class.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><span class="snum">07</span><h2>Open edges</h2></div>
+  <ul class="plain">
+    <li><span class="chip c-open">Open</span> Waiting for a shared table instead of refusing (per-table completion waits, with SCC deadlock handling). <code>todo/asyncio-follow-ups-2026-10-06.md</code></li>
+    <li><span class="chip c-open">Open</span> A <code>concurrent_all/1</code> predicate, and a native await step that would drop greenlet. Same file.</li>
+    <li><span class="chip c-open">Open</span> Closing a query part-way leaves <code>setup_call_cleanup/3</code> cleanups to the garbage collector. Engine-wide; the root of several async symptoms. <code>todo/closing-a-query-leaves-cleanup-to-the-garbage-collector-2026-10-06.md</code></li>
+    <li><span class="chip c-open">Open</span> A ground WFS truth value depends on what is already in the table store. Synchronous, found during the reviews. <code>todo/ground-wfs-truth-depends-on-table-store-history-2026-10-07.md</code></li>
+  </ul>
+</section>
+
+<footer>
+  <span>Source: clausal/aio.py · clausal/logic/tabling.py (Ownership) · docs/asyncio.md</span>
+  <span>Tests: tests/test_aio.py</span>
+</footer>
+
+</div>
