@@ -830,6 +830,28 @@ def _engine_distribution():
         return None
 
 
+def _is_wheel_install(dist) -> bool:
+    """True when *dist* is a real (non-editable) wheel install: its metadata
+    directory is a ``*.dist-info`` holding a RECORD, and its
+    ``direct_url.json`` (PEP 610) does not mark it editable.  An
+    ``*.egg-info`` never qualifies."""
+    import json  # noqa: PLC0415
+    try:
+        path = getattr(dist, "_path", None)
+        if path is None or not str(path).endswith(".dist-info"):
+            return False
+        if not dist.read_text("RECORD"):
+            return False
+        direct = dist.read_text("direct_url.json")
+        if direct:
+            info = json.loads(direct).get("dir_info") or {}
+            if info.get("editable"):
+                return False
+        return True
+    except Exception:  # noqa: BLE001 -- unreadable metadata: not a wheel
+        return False
+
+
 _SITE_DIRS = frozenset({"site-packages", "dist-packages"})
 
 #: (rule, data): ``("record", frozenset of realpaths)``, ``("dir", engine
@@ -882,16 +904,18 @@ def _engine_rule() -> tuple:
                         files.append(real)
         except Exception:  # noqa: BLE001 -- unreadable RECORD: not "record"
             files = None
-    installed = bool(_SITE_DIRS & set(root.split(os.sep)))
-    # A RECORD vouches only for a real INSTALL (the package inside a
-    # site-packages/dist-packages tree).  In a source checkout,
-    # importlib.metadata also finds a ``clausal.egg-info`` left in the tree
-    # by an editable install or a build; its file list is whatever existed
-    # when it was written, so files added since would count as NOT the
-    # engine's and the engine's own facades would be refused.
-    if installed and files and init in files:
+    # A RECORD vouches only for a real WHEEL install: a ``*.dist-info``
+    # with a RECORD that is not an editable install.  A source checkout's
+    # ``clausal.egg-info`` (left by an editable install or a build) or an
+    # editable install's dist-info lists whatever existed when it was
+    # written, so files added since would count as NOT the engine's -- the
+    # engine's own facades were refused (2026-10-05).  The test is the
+    # metadata's TYPE, not the folder name: ``pip install --target``,
+    # Lambda layers and pex caches are real installs with no
+    # site-packages in their path.
+    if files and init in files and _is_wheel_install(dist):
         rule = ("record", frozenset(files))
-    elif not installed:
+    elif not (_SITE_DIRS & set(root.split(os.sep))):
         rule = ("dir", root)
     _ENGINE_RULE = rule
     return rule
