@@ -8552,9 +8552,18 @@ class EmbedTransformer(NodeTransformer):
         transformer._python_locals.append(
             transformer._author_bound_locals(node))
         transformer._seam_exports.append({})
+        # Decorators, defaults and the return annotation are evaluated in
+        # the ENCLOSING scope: visit them before this function's own flag.
+        node.decorator_list = [transformer.visit(d) for d in node.decorator_list]
+        node.args = transformer.visit(node.args)
+        if node.returns is not None:
+            node.returns = transformer.visit(node.returns)
+        node.type_params = [transformer.visit(t)
+                            for t in getattr(node, "type_params", [])]
         transformer._async_scope.append(isinstance(node, AsyncFunctionDef))
         try:
-            result = transformer.generic_visit(node)
+            node.body = transformer._visit_stmts(node.body)
+            result = node
             transformer._lint_seam_text_compare(result, transformer._seam_exports[-1])
         finally:
             transformer._async_scope.pop()

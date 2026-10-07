@@ -310,7 +310,10 @@ fetched(X) <- (X is ++await fetch(4))
 - **Closing a query early.** When you stop asking for answers, cleanups of
   `setup_call_cleanup/3` still pending run when Python's garbage collector
   frees the query's frames, which happens with plain `solve` too. A cleanup
-  that waits can't wait at that point. See
+  that waits can't wait at that point: inside another query it raises
+  `permission_error(await, finalisation, _)` (reported as "Exception
+  ignored") rather than suspend that query. So close queries you stop
+  early. See
   `todo/closing-a-query-leaves-cleanup-to-the-garbage-collector-2026-10-06.md`.
 - **A synchronous query inside a coroutine.** Calling plain `solve` on a
   predicate that waits, from code already running on an event loop, raises
@@ -318,7 +321,7 @@ fetched(X) <- (X is ++await fetch(4))
   the loop, so use `asolve`. This includes a coroutine that a query is
   itself awaiting, and a Jupyter cell (use `await Solutions(...)`).
 - **Other event loops.** In a synchronous query, a wait runs on a private
-  loop, one per thread, closed with its thread. A future or task that belongs
+  loop, one per thread, closed when its thread object is garbage-collected. A future or task that belongs
   to another loop and is still pending can't be awaited there.
 
 ## How it works

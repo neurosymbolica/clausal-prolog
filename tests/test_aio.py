@@ -897,6 +897,63 @@ def test_negation_is_not_delayed_on_a_dropped_querys_table(tmp_path):
     assert run(main()) == [True]
 
 
+def test_a_thread_loop_closed_from_inside_a_running_loop(demo):
+    # Tenth review 2026-10-07: the private loop's finaliser runs on the
+    # thread that drops the Thread object; inside a running loop,
+    # shutdown_asyncgens could not run and the finaliser raised.
+    import gc
+    import threading
+    import clausal.aio as aio
+    seen = []
+
+    def worker():
+        once(("napped", Var()), demo)
+        seen.append(aio._sync.loop)
+
+    async def main():
+        t = threading.Thread(target=worker)
+        t.start()
+        t.join()
+        del t
+        gc.collect()               # finaliser runs here, loop running
+    errors = []
+    old_hook = threading.excepthook
+    import sys
+    old_unraisable = sys.unraisablehook
+    sys.unraisablehook = lambda u: errors.append(u.exc_value)
+    try:
+        run(main())
+    finally:
+        sys.unraisablehook = old_unraisable
+    assert seen and seen[0].is_closed() and not errors
+
+
+def test_await_each_in_a_sync_query_registers_with_the_private_loop(demo):
+    # Tenth review 2026-10-07: the iterator's awaitables were created before
+    # the private loop ran, so the async generator was never registered
+    # with it (no shutdown_asyncgens, raw finalisation without a loop).
+    import gc
+    import clausal.aio as aio
+    from tests.fixtures import aio_helpers
+    aio_helpers.CLOSED.clear()
+    x = Var()
+    assert once(("ticked_once", x), demo) is not None and deref(x) == 0
+    assert len(aio._sync.loop._asyncgens) == 1      # registered, still open
+    gc.collect()                    # the abandoned frame closes it (todo)
+    assert aio_helpers.CLOSED == ["closed"]
+    assert len(aio._sync.loop._asyncgens) == 0
+
+
+def test_a_comprehension_in_an_async_defs_default_stays_synchronous(tmp_path):
+    src = tmp_path / "defaults.seam"
+    src.write_text(
+        "-module(defaults, [])\n"
+        "async def f(xs=[X for X in --between(1, 2, X)]):\n"
+        "    return xs\n")
+    mod = load_clausal_module(src)
+    assert run(mod.f()) == [1, 2]
+
+
 def test_abandoning_a_query_closes_it(demo):
     async def main():
         x = Var()

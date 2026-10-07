@@ -126,7 +126,13 @@ def _close_loop(loop):
     if loop.is_closed() or loop.is_running():
         return
     try:
-        loop.run_until_complete(loop.shutdown_asyncgens())
+        # The finaliser runs on whichever thread drops the Thread object --
+        # possibly one inside a running loop, where run_until_complete is
+        # refused (tenth review, 2026-10-07).  Then just close.
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            loop.run_until_complete(loop.shutdown_asyncgens())
     finally:
         loop.close()
 
