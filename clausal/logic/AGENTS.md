@@ -83,6 +83,17 @@ files sit next to the sources and are not tracked).
 | `clausal.logic.builtins._chars_core` | `builtins/_chars_core.c` | `builtins/chars.py` |
 | `clausal.logic._clpr_core`, `._clpb_core` | `_clpr_core.c`, `_clpb_core.c` | `clpr.py`, `clpb.py` |
 
+**Keep the C portable to MSVC.** Release wheels are built for Windows too
+(`../../.github/workflows/release.yml`), and GCC/Clang accept things MSVC
+rejects. Each of these broke the Windows wheel once (2026-10-06):
+- no GCC-only compiler flags: `setup.py` picks flags per platform;
+- no constant `1.0/0.0` for infinity (C2124): use `HUGE_VAL` / `INFINITY`;
+- `M_PI` and the other `M_*` constants are POSIX, not ISO C: define a
+  fallback after `#include <math.h>` (see `_clpr_core.c`);
+- no `libraries=["m"]` on Windows: libm lives in its C runtime.
+A manual run of `release.yml` (Actions -> release -> Run workflow) builds and
+tests every platform's wheels without publishing; use it after touching C.
+
 ## Gotchas
 
 - Every extension except `_variables` is optional: the Python module does
