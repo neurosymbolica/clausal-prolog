@@ -708,7 +708,13 @@ def pl_frontend() -> str:
     """The ``.pl`` front end ``CLAUSAL_PL_FRONTEND`` selects, read at each
     lookup.  Unset or empty is ``translator``; an unknown value is an
     ``ImportError``, never a silent default (a typo would otherwise run the
-    front end its author did not ask for)."""
+    front end its author did not ask for).
+
+    In the sandbox (:mod:`clausal.sandbox`) it is always ``native``
+    (operator ruling S1): the translator lowers float evaluables to
+    Python's ``math``, which the sandbox's audit refuses."""
+    if _sandbox_state.ACTIVE:
+        return "native"
     value = os.environ.get(PL_FRONTEND_ENV, "").strip()
     if not value:
         return "translator"
@@ -803,6 +809,9 @@ def _canonical_source_key(path):
     return os.path.normcase(os.path.realpath(path))
 
 
+from clausal import _sandbox_state  # noqa: E402 -- dependency-free
+
+
 class _ClausalSourceLoader(SourceLoader):
     """Common file I/O for the seam and Prolog loaders.
 
@@ -827,6 +836,17 @@ class _ClausalSourceLoader(SourceLoader):
 
     def get_filename(self, fullname):
         return self._path
+
+    def get_code(self, fullname):
+        # The sandbox (clausal.sandbox): a module of the user's is compiled
+        # from its source, read once, and its final generated tree audited
+        # before it runs -- never from the bytecode cache.
+        if _sandbox_state.ACTIVE:
+            from clausal.sandbox import sandboxed_code  # noqa: PLC0415
+            code = sandboxed_code(self, fullname)
+            if code is not None:
+                return code
+        return super().get_code(fullname)
 
     def get_data(self, path):
         with open(path, "rb") as f:

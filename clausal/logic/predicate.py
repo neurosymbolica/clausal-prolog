@@ -25,6 +25,7 @@ import textwrap
 from typing import Any, Callable
 
 from clausal.logic.cells import is_chars, chars_text  # stage 1: the chars carrier
+from clausal import _sandbox_state
 from clausal._suffixes import CLAUSAL_SUFFIXES, SEAM_SUFFIX
 
 
@@ -1021,6 +1022,12 @@ def _dispatch_at(obj: Any, arity: int, db: Any = None) -> Callable:
     and the goal emitters reference that name directly, so only unlocked
     (``-dynamic``) callees and the runtime meta-call funnels arrive here.
     """
+    if _sandbox_state.ACTIVE and hasattr(obj, "_get_dispatch") \
+            and type(obj) is not str:
+        # The sandbox (clausal.sandbox): a Python goal object answers only
+        # when it is the engine's own machinery or an allowed adapter.
+        from clausal.sandbox import check_goal_object  # noqa: PLC0415
+        check_goal_object(obj, f"{getattr(obj, '_name', 'call')}/{arity}")
     if type(obj) is _UnqualifiedName:
         # Operator ruling 2026-09-24: a meta-call goal that arrived as an
         # unqualified name resolves under THAT name in the calling module.

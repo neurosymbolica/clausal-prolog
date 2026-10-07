@@ -79,6 +79,7 @@ from typing import Any
 from clausal.logic.variables import deref, is_var
 from clausal.logic.dialect_edge import (
     _CACHE as _DIALECT_CACHE, refuse_edge as _refuse_dialect_edge)
+from clausal import _sandbox_state
 
 __all__ = [
     "FUNCTOR_SIGNATURES_KEY",
@@ -620,6 +621,8 @@ def resolve_qualified_goal_cell(
             try:
                 module = resolve_module(designator, calling_module, context)
             except LogicException as exc:
+                if getattr(exc, "sandbox_refusal", False):
+                    raise       # the sandbox's refusal, never a lookup miss
                 _raise_if_bad_module_argument(
                     cell, call_extra, exc, phrase=qualified_culprit,
                     phrase_args=phrase_args)
@@ -629,6 +632,8 @@ def resolve_qualified_goal_cell(
             try:
                 module = resolve_module(designator, calling_module, context)
             except LogicException as exc:
+                if getattr(exc, "sandbox_refusal", False):
+                    raise       # the sandbox's refusal, never a lookup miss
                 _raise_if_bad_module_argument(
                     cell, call_extra, exc, phrase=qualified_culprit,
                     phrase_args=phrase_args)
@@ -660,7 +665,8 @@ def resolve_qualified_goal_cell(
             f"innermost goal to run and so no module that answers",
         ))
     if (caller is not None and module is not None
-            and getattr(caller, _DIALECT_CACHE, None) is not False):
+            and (_sandbox_state.ACTIVE
+                 or getattr(caller, _DIALECT_CACHE, None) is not False)):
         # Clausal Prolog may never resolve into a .pl (or Python) module --
         # innermost wins, so ``pl:cp:G`` naming a Clausal Prolog module last
         # is allowed and ``cp:pl:G`` is not.  A .seam/.pl caller pays one

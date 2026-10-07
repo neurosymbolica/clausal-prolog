@@ -526,4 +526,11 @@ def loaded_clausal_py_modules() -> list:
         if mod is not None and id(mod) not in seen:
             seen.add(id(mod))
             mods.append(mod)
+    from clausal import _sandbox_state  # noqa: PLC0415
+    if _sandbox_state.ACTIVE:
+        # The sandbox: a reflection builtin reads only the modules a dotted
+        # name may walk into -- a caller's ``getattr`` on anything else could
+        # run its ``__getattr__`` (clausal.sandbox.walkable).
+        from clausal.sandbox import walkable  # noqa: PLC0415
+        mods = [m for m in mods if walkable(m)]
     return mods

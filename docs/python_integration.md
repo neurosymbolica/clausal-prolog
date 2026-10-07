@@ -14,6 +14,11 @@ own term, and [`to_python`](#the-converters-to_python-to_clausal-term_key)
 turns it into Python values. From a plain `.py` file, where `--` is not
 available, build a goal cell and run it with [`solve()`](#from-a-plain-py-file-solve-once-call).
 
+Running goals built from untrusted data (an LLM's JSON, a web request)? Turn
+on [sandbox mode](sandbox.md) first: `clausal.sandbox.enable()` (or
+`CLAUSAL_SANDBOX=1`) makes the process refuse every route from a loaded
+module or a goal into Python except a fixed set of pure engine adapters.
+
 ---
 
 ## Querying from Python

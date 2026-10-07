@@ -730,6 +730,11 @@ def describe_missing_predicate(functor, arity, db=None, module_globals=None):
     message, not replace one failure with a different one.
     """
     head = f"Predicate {functor}/{arity} not found"
+    from clausal import _sandbox_state  # noqa: PLC0415
+    if _sandbox_state.ACTIVE:
+        # The sandbox: a query's error names no file and scans no
+        # directory (it would tell the asker what else is on disk).
+        return head
     try:
         return "\n".join(_describe(head, functor, arity, db, module_globals))
     except Exception:  # noqa: BLE001 - see docstring
@@ -880,6 +885,9 @@ def _exporting_sibling(name, path, modname):
     manufacture a message to carry it.  Recorded in
     ``todo/done/nameerror-does-not-name-the-sibling-that-exports-it.md``.
     """
+    from clausal import _sandbox_state  # noqa: PLC0415
+    if _sandbox_state.ACTIVE:
+        return None         # the sandbox scans no directory (see above)
     siblings, _total = _sibling_source_files(path)
     for sibling in siblings:
         rendered = _declared_export_entry(sibling, name)

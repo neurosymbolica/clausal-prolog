@@ -3,6 +3,7 @@ get_attrs/2, put_attrs/2, attvar/1, term_attvars/2."""
 
 from __future__ import annotations
 
+from clausal import _sandbox_state
 from clausal.logic.variables import deref, is_var, unify, put_attr, get_attr, del_attr
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.terms import (
@@ -85,6 +86,14 @@ def _storage_key(key, context):
     return None
 
 
+def _sandbox_key(key, context):
+    """In the sandbox the engine's own attribute keys (freeze, the
+    solvers') are refused (:func:`clausal.sandbox.check_attr_key`)."""
+    if _sandbox_state.ACTIVE:
+        from clausal.sandbox import check_attr_key  # noqa: PLC0415
+        check_attr_key(key, context)
+
+
 # ── Per-key operations ─────────────────────────────────────────────────────
 
 
@@ -101,6 +110,7 @@ def _put_attr__3(var, key, value, trail, k):
     key_d = _storage_key(deref(key), "put_attr/3")
     if key_d is None:
         return
+    _sandbox_key(key_d, "put_attr/3")
     put_attr(var_d, key_d, deref(value), trail)
     yield None
 
@@ -118,6 +128,7 @@ def _get_attr__3(var, key, value, trail, k):
     key_d = _storage_key(deref(key), "get_attr/3")
     if key_d is None:
         return
+    _sandbox_key(key_d, "get_attr/3")
     attr = get_attr(var_d, key_d)
     if attr is None:
         return
@@ -138,6 +149,7 @@ def _del_attr__2(var, key, trail, k):
     key_d = _storage_key(deref(key), "del_attr/2")
     if key_d is None:
         return
+    _sandbox_key(key_d, "del_attr/2")
     del_attr(var_d, key_d, trail)
     yield None
 
@@ -158,6 +170,10 @@ def _get_attrs__2(var, attrs, trail, k):
     if not is_var(var_d):
         return
     raw = var_d.attrs if hasattr(var_d, 'attrs') and var_d.attrs else {}
+    if _sandbox_state.ACTIVE:
+        # The sandbox: the engine's own attributes are not the program's.
+        from clausal.sandbox import engine_attr_key  # noqa: PLC0415
+        raw = {k: v for k, v in raw.items() if not engine_attr_key(k)}
     # ``key_of``, not ``mint``: an attribute stored under the spelling
     # ``[]`` is the atom ``'[]'``, whose ``mint`` answer is the
     # unhashable empty LIST (fix round 2, item 2).
@@ -186,6 +202,7 @@ def _put_attrs__2(var, attrs, trail, k):
         key_d = _storage_key(deref(key), "put_attrs/2")
         if key_d is None:
             return
+        _sandbox_key(key_d, "put_attrs/2")
         put_attr(var_d, key_d, deref(value), trail)
     yield None
 

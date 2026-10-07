@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import ast
 import sys as _sys
+
+from clausal import _sandbox_state
 from typing import Any
 
 from clausal.logic.generated_names import dollar_ref
@@ -1104,7 +1106,12 @@ def _clausal_prolog_db(db) -> bool:
 def _dotted_base(parts: list, globals_) -> Any:
     """The module object the qualifier of a dotted call ``a.b.name`` names:
     walked from this module's own binding of ``a``, else ``sys.modules``.
-    None when it is not loaded (or the qualifier binds an atom)."""
+    None when it is not loaded (or the qualifier binds an atom).
+
+    In the sandbox an underscore-led segment names nothing (a qualified
+    name is ``module.name``; the walk never reaches a Python attribute)."""
+    if _sandbox_state.ACTIVE:
+        return _sandboxed_dotted_base(parts, globals_)
     base = globals_.get(parts[0]) if globals_ else None
     if _term_is_atom(base):
         base = None
@@ -1112,6 +1119,27 @@ def _dotted_base(parts: list, globals_) -> Any:
         if base is None:
             break
         base = getattr(base, part, None)
+    if base is None:
+        base = _sys.modules.get(".".join(parts[:-1]))
+    return base
+
+
+def _sandboxed_dotted_base(parts: list, globals_) -> Any:
+    """:func:`_dotted_base` in the sandbox: the walk reads an attribute only
+    of a Clausal module or an allowed adapter module
+    (:func:`clausal.sandbox.walkable`), and no segment is underscore-led.
+    The base it answers may be a module it would not walk INTO (a denied
+    adapter): the caller refuses it, and reads no attribute of it."""
+    from clausal.sandbox import read_attr, walk_ok, walkable  # noqa: PLC0415
+    if not walk_ok(parts):
+        return None
+    base = globals_.get(parts[0]) if globals_ else None
+    if _term_is_atom(base):
+        base = None
+    for part in parts[1:-1]:
+        if base is None:
+            break
+        base = read_attr(base, part) if walkable(base) else None
     if base is None:
         base = _sys.modules.get(".".join(parts[:-1]))
     return base
@@ -1167,6 +1195,9 @@ def _unresolved_qualified_dispatch(dotted: str, arity: int, globals_, db):
 
     def dispatch(*args):
         base = resolve_base()
+        if _sandbox_state.ACTIVE:
+            from clausal.sandbox import refuse_unwalkable  # noqa: PLC0415
+            refuse_unwalkable(base, f"{name}/{arity}")
         # Asked per call (cached on the db after the first definite answer),
         # never frozen at compile time: a db whose ``__file__`` was not yet
         # known then must not compile the gate away.
@@ -1396,6 +1427,13 @@ def _inject_resolved_targets(
                     base_globals[target_name] = own
                     continue
             parts = target_name.split(".")
+            if _sandbox_state.ACTIVE:
+                from clausal.sandbox import walk_ok  # noqa: PLC0415
+                if not walk_ok(parts):
+                    # The sandbox: an underscore-led segment is no
+                    # qualified name; never walk it (the call is an
+                    # unknown procedure).
+                    parts = ["_sandbox_unresolved"]
             if target_arity >= 0 and _clausal_prolog_db(db):
                 # Route 2 of the dialect gate (operator ruling 2026-10-01):
                 # a Clausal Prolog clause's written ``m:p(...)`` (lowered to
@@ -1419,9 +1457,21 @@ def _inject_resolved_targets(
                 # qualifier as a module path below instead.
                 obj = None
             parent = None
+            if _sandbox_state.ACTIVE:
+                from clausal.sandbox import walkable as _walkable  # noqa: PLC0415
             for part in parts[1:]:
                 if obj is None:
                     break
+                if _sandbox_state.ACTIVE:
+                    # The sandbox: read attributes only of a Clausal or an
+                    # allowed adapter module, from its namespace.
+                    from clausal.sandbox import read_attr  # noqa: PLC0415
+                    if not _walkable(obj):
+                        obj = None
+                        break
+                    parent = obj
+                    obj = read_attr(obj, part)
+                    continue
                 parent = obj
                 obj = getattr(obj, part, None)
             if (target_arity >= 0 and parent is not None and obj is not None
@@ -1448,8 +1498,16 @@ def _inject_resolved_targets(
             mod_path = ".".join(parts[:-1])
             attr_name = parts[-1]
             mod_obj = _sys.modules.get(mod_path)
+            if _sandbox_state.ACTIVE and mod_obj is not None:
+                from clausal.sandbox import walkable as _walkable  # noqa: PLC0415
+                if not _walkable(mod_obj):
+                    mod_obj = None
             if mod_obj is not None:
-                resolved = getattr(mod_obj, attr_name, None)
+                if _sandbox_state.ACTIVE:
+                    from clausal.sandbox import read_attr  # noqa: PLC0415
+                    resolved = read_attr(mod_obj, attr_name)
+                else:
+                    resolved = getattr(mod_obj, attr_name, None)
                 if (target_arity >= 0 and resolved is not None
                         and (is_pool_seeded_atom(
                             getattr(mod_obj, "__dict__", None), attr_name)

@@ -94,9 +94,18 @@ def test_signatures_of_a_clausal_module(native):
 
 
 def test_a_clausal_module_does_not_list_what_it_imports(native):
-    native.load("d28_imp", "-import_from(py.datetime, [date_add])\n"
+    native.load("d28_imp", "-module(d28_imp, [r/1])\n"
+                           "-import_from(py.datetime, [date_add])\n"
                            "r(X) <- date_add(X, X, X)\n", suffix=".seam")
     assert clausal.module_signatures("d28_imp") == {"r": frozenset({1})}
+
+
+def test_a_listless_seam_that_is_no_package_offers_its_own(native):
+    """Operator ruling M3 applies to a listless PACKAGE __init__ only: a
+    plain listless .seam still does not offer what it imports."""
+    native.load("d28_imp2", "-import_from(py.datetime, [date_add])\n"
+                            "r(X) <- date_add(X, X, X)\n", suffix=".seam")
+    assert clausal.module_signatures("d28_imp2") == {"r": frozenset({1})}
 
 
 def test_an_adapter_without_a_table_answers_from_its_dispatch():

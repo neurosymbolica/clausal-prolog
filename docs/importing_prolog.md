@@ -522,8 +522,8 @@ Python is reachable **only** through:
    not the engine's -- a `.seam` importing one is a Python bridge. A `.seam`
    module whose only Python contact is importing engine-shipped adapters is
    Python-free (case 2). This is the default mode, which trusts every
-   engine-shipped adapter; a sandbox mode narrows the engine adapters to its
-   own allowlist. (A Clausal Prolog file's DIRECT `use_module(py/X)` stays
+   engine-shipped adapter; [sandbox mode](sandbox.md) narrows the engine
+   adapters to its own allowlist. (A Clausal Prolog file's DIRECT `use_module(py/X)` stays
    refused as above: it imports the facade.)
 2. **A `.seam` module with no Python in it**: logic code in seam syntax,
    checked at load. It is a pass-through: the modules it imports
@@ -597,7 +597,9 @@ The rules:
   without a `[tool.clausal]` table). The importer's project decides what it
   trusts; the imported module never vouches for itself, and the working
   directory and `sys.argv` play no part -- a program that loads another
-  repository's `.clausal` files gets THAT repository's allowlist.
+  repository's `.clausal` files gets THAT repository's allowlist. A
+  `.clausal` source compiled from memory, with no file, has **no** project:
+  no bridge is allowlisted for it (fail closed).
 - **Entries**: a string containing `/` or ending in `.seam` is a path
   (relative to the `pyproject.toml`); any other string is the dotted module
   name the import resolves to. A table takes exactly one of `module` or
@@ -620,6 +622,14 @@ The rules:
   `catch/3` can match.
 - `.seam` and `.pl` importers are not affected: `.seam` is the Python
   boundary and the programmer's responsibility.
+- **A known gap: a `.pl` behind a Python-free `.seam`.** The pass-through
+  walk follows `.seam` modules only, not `.pl` (operator ruling Y1). So a
+  `.clausal` file can import a Python-free `.seam` that imports a `.pl`
+  module, and that `.pl` can do `use_module(py/X)` directly. The chain
+  then reaches Python with no bridge. Python in a `.seam`/`.pl` chain is
+  the Python programmer's responsibility. To rule it out, run the process
+  in [sandbox mode](sandbox.md): the sandbox audits the `.pl` module's
+  own load and refuses it.
 
 The detector is `clausal.python_bridges.python_routes(tree, source)`, which
 returns `(kind, line)` pairs for a parsed seam module (kinds:

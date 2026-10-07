@@ -44,6 +44,7 @@ from fractions import Fraction as _Fraction
 from typing import Callable
 
 from clausal.logic.trampoline import DONE
+from clausal import _sandbox_state
 
 
 # ── Shared base adapter ─────────────────────────────────────────────────────
@@ -88,6 +89,12 @@ class ModulePredicate:
         return wrapper
 
     def _multi_dispatch(self, this_generator, _proceed, _fail, _catcher, *args):
+        if _sandbox_state.ACTIVE:
+            # The sandbox (clausal.sandbox): checked when the adapter RUNS,
+            # so no route that reached it -- compiled, cached, meta-called,
+            # through a facade -- runs one outside the allowlist.
+            from clausal.sandbox import check_adapter  # noqa: PLC0415
+            check_adapter(self, f"{self._name}/{len(args) - 1}")
         arity = len(args) - 1  # exclude trail
         fn = self._dispatch_fns.get(arity)
         if fn is None:

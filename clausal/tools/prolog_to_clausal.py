@@ -646,16 +646,27 @@ def _python_backed_module(dotted: str):
     candidates = [dotted]
     if dotted.startswith("py.") and "." not in dotted[3:]:
         candidates.insert(0, f"clausal.modules.{dotted}")
+    from clausal import _sandbox_state  # noqa: PLC0415
     for cand in candidates:
-        try:
-            spec = importlib.util.find_spec(cand)
-        except (ImportError, ValueError):
-            continue
-        if spec is None:
-            continue
-        origin = spec.origin or ""
+        if _sandbox_state.ACTIVE:
+            # Nothing is imported to find it: a parent package's __init__
+            # would run before the gate could refuse it (clausal.sandbox).
+            from clausal.sandbox import find_origin  # noqa: PLC0415
+            origin = find_origin(cand)
+            if origin is None:
+                continue
+        else:
+            try:
+                spec = importlib.util.find_spec(cand)
+            except (ImportError, ValueError):
+                continue
+            if spec is None:
+                continue
+            origin = spec.origin or ""
         if not origin.endswith(".py") or origin.endswith(SOURCE_SUFFIXES):
             return None
+        from clausal.sandbox import guard_python_import  # noqa: PLC0415
+        guard_python_import(cand, f"use_module({dotted})")
         try:
             mod = importlib.import_module(cand)
         except Exception as e:  # noqa: BLE001

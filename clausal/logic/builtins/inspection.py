@@ -879,7 +879,15 @@ def _module_constants_dict(py_module):
     directive itself — so only a module's OWN declarations appear here, never
     a constant it merely imported (see docs/import.md).
     """
-    logic_module = getattr(py_module, "__clausal_module__", None)
+    from clausal import _sandbox_state  # noqa: PLC0415
+    if _sandbox_state.ACTIVE:
+        # The sandbox: read from the namespace, never getattr (no module
+        # ``__getattr__`` runs; clausal.sandbox.read_attr).
+        from clausal.sandbox import read_attr, walkable  # noqa: PLC0415
+        logic_module = (read_attr(py_module, "__clausal_module__")
+                        if walkable(py_module) else None)
+    else:
+        logic_module = getattr(py_module, "__clausal_module__", None)
     if logic_module is None:
         return None
     return logic_module.constants
@@ -1092,6 +1100,16 @@ def _module_constant__3(m, name, value, trail, k):
     # STRING there names no constant.
     name_key = spelling(name_val) if _term_is_atom(name_val) else None
 
+    from clausal import _sandbox_state  # noqa: PLC0415
+    sandboxed = _sandbox_state.ACTIVE
+    if m_bound and sandboxed and type(m_val) is str:
+        # The sandbox names a module by its ATOM (the module object is no
+        # term); only a loaded Clausal module is read.
+        import sys as _sys  # noqa: PLC0415
+        from clausal.sandbox import walkable  # noqa: PLC0415
+        m_val = _sys.modules.get(m_val)
+        if m_val is None or not walkable(m_val):
+            return
     if m_bound:
         cdict = _module_constants_dict(m_val)
         if cdict is None:
@@ -1121,6 +1139,12 @@ def _module_constant__3(m, name, value, trail, k):
         cdict = _module_constants_dict(py_module)
         if not cdict:
             continue
+        if sandboxed:
+            # The sandbox: the module comes back as its NAME, an atom --
+            # never the Python module object (no Python object in a term).
+            py_module = vars(py_module).get("__name__")
+            if type(py_module) is not str:
+                continue
         if name_bound:
             if name_key is None or name_key not in cdict:
                 continue

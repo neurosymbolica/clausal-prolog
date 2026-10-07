@@ -82,6 +82,32 @@ from clausal.terms import (
 )
 from clausal.terms import PyThunk as _PyThunk
 from clausal.pythonic_ast.nodes import Lambda as _Lambda, Node as _GoalNode
+from clausal import _sandbox_state
+
+
+def _sandbox_query_edge(target: Any, context: str) -> None:
+    """In the sandbox a Python-side query is a Clausal Prolog frame: its
+    ``M:G`` may not resolve into a ``.pl`` or (non-allowlisted) Python
+    module (:mod:`clausal.sandbox`)."""
+    if _sandbox_state.ACTIVE and target is not None:
+        from clausal.logic.dialect_edge import refuse_edge  # noqa: PLC0415
+        from clausal.sandbox import QUERY_FRAME  # noqa: PLC0415
+        refuse_edge(QUERY_FRAME, target, context)
+
+
+def _sandbox_entry(goal: Any, context: str) -> None:
+    """In the sandbox: refuse a Python-built goal holding anything but data
+    (:func:`clausal.sandbox.check_term`)."""
+    if _sandbox_state.ACTIVE:
+        from clausal.sandbox import check_term  # noqa: PLC0415
+        check_term(goal, context)
+
+
+def _sandbox_module(module: Any, context: str) -> None:
+    """In the sandbox a query never runs in a ``.pl`` or Python module."""
+    if _sandbox_state.ACTIVE and module is not None:
+        from clausal.sandbox import check_query_module  # noqa: PLC0415
+        check_query_module(module, context)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -291,6 +317,7 @@ def _term_to_goal(term: Any, db: Any = None) -> Any:
         if functor == QUALIFIED_GOAL_FUNCTOR and len(term) == 3:
             _module, inner = resolve_qualified_goal_cell(
                 term, "solve/1", call_extra=0, dialect_gate=False)
+            _sandbox_query_edge(_module, "solve/1")
             return _term_to_goal(inner, getattr(_module, "db", None))
         refuse_control_construct_cell(term, functor, "solve/1")
         return AstCall(
@@ -985,11 +1012,20 @@ def resolve_module(designator: Any, calling_module: Any = None,
     # term), and under today's representation a str atom's spelling is itself.
     if _term_is_atom(target):
         target = _spelling(target)
-    if isinstance(target, str):
+    named = isinstance(target, str)
+    if named:
         found = sys.modules.get(target)
         if found is None:
             _no_such_module(culprit, calling_module, context)
         target = found
+    if _sandbox_state.ACTIVE and (named
+                                  or isinstance(target, _types.ModuleType)):
+        # The sandbox: a module named by a TERM -- by its name, or as an
+        # object a term came to hold -- is read only when it is a Clausal
+        # or an allowed adapter module; coercing any other would read its
+        # attributes (and run its ``__getattr__``).
+        from clausal.sandbox import refuse_unwalkable  # noqa: PLC0415
+        refuse_unwalkable(target, context)
     try:
         return _coerce_module(target)
     except TypeError as exc:
@@ -1217,9 +1253,17 @@ def module_signatures(module: Any) -> dict:
       - a CLAUSAL module (``.clausal``/``.seam``/``.pl``): every predicate its
         own database is the home of -- clauses, ``-dynamic`` declarations,
         compiled dispatch -- plus a bare ``name/N`` entry of its ``-module``
-        list.  A predicate it merely imports is not its own and is left out,
-        and so is a fielded DATA declaration (a constructor, not a
-        predicate).  Compiler-internal ``$`` names are left out.
+        list.  A predicate it merely imports is not its own and is left out
+        -- EXCEPT in a ``.seam`` with NO ``-module`` export list (a package
+        ``__init__`` re-importing from its submodules, operator ruling M3):
+        there each name it ``-import_from``s is offered, at the arities it
+        was imported at, when it is an export of its source (recursively)
+        by the one export rule the Python-bridge gate and the sandbox use
+        (``clausal.python_bridges._exports``: lowercase, not
+        underscore-led, no ``-import_module`` binding, no submodule).  A
+        fielded DATA declaration (a constructor, not a predicate) is left
+        out, and so is any name the module holds as a MODULE object.
+        Compiler-internal ``$`` names are left out.
       - a PYTHON-BACKED module (``clausal.modules.*``, ``py.*`` and any Python
         module whose public attributes are predicate adapters, i.e. objects
         carrying ``_get_dispatch``): each public attribute that registers at
@@ -1269,6 +1313,15 @@ def module_signatures(module: Any) -> dict:
         for name, arity in db.offered_keys():
             if type(name) is str and not name.startswith("$"):
                 found.setdefault(name, set()).add(arity)
+        for name, arities in _listless_reexports(ns, db).items():
+            if name not in found and arities:
+                found[name] = set(arities)
+        # A name the module object holds as a MODULE (an -import_module
+        # binding, or a submodule an import set) is no predicate it
+        # offers, whatever its clauses say (operator ruling M3).
+        for name in [n for n in found
+                     if isinstance(ns.get(n), _types.ModuleType)]:
+            del found[name]
     else:
         for name, value in list(ns.items()):
             if name.startswith("_") or isinstance(value, type):
@@ -1277,6 +1330,56 @@ def module_signatures(module: Any) -> dict:
             if arities is not None:
                 found[name] = arities
     return {name: frozenset(found[name]) for name in sorted(found)}
+
+
+def _listless_reexports(ns: dict, db: Any) -> dict:
+    """The predicates a listless package ``__init__.seam`` offers by
+    re-import (operator rulings E1/M3): ``{name: arities}`` from the ONE
+    export rule, :func:`clausal.python_bridges.listless_exports` (also
+    ``_declared_exports``', the bridge gate's and the sandbox's), less a
+    name that is now a submodule (``python_bridges._exports``), each
+    checked against what the module BINDS: an imported Clausal predicate
+    at the arities it was imported at, or an engine adapter at its
+    registered arities.  An atom, a unit, a Python object or a module is
+    never a predicate offered here."""
+    path = ns.get("__file__")
+    dotted = ns.get("__name__")
+    if not (isinstance(path, str) and isinstance(dotted, str)):
+        return {}
+    from clausal.python_bridges import (  # noqa: PLC0415
+        _exports, is_listless_package_init, listless_exports)
+    if not is_listless_package_init(path):
+        return {}
+    allowed = _exports(dotted, path)
+    from clausal.logic.predicate import _binding_owner_db  # noqa: PLC0415
+    out: dict = {}
+    for name, arity in listless_exports(path):
+        if arity is None or name not in allowed:
+            continue
+        binding = ns.get(name)
+        if binding is None or isinstance(binding, (type, _types.ModuleType)):
+            continue
+        if is_declared_predicate_name(binding, db=db):
+            owner = _binding_owner_db(binding, db)
+            if owner is None or owner is db:
+                continue
+            if not binding_grants_arity(binding, arity, db, name):
+                continue
+        else:
+            have = _adapter_arities(binding)
+            if not have or arity not in have:
+                continue
+        out.setdefault(name, set()).add(arity)
+    return out
+
+
+def _canonical_name(binding: Any) -> str:
+    """The owner's own name of the predicate handle *binding*."""
+    from clausal.logic.atoms import demangle  # noqa: PLC0415
+    try:
+        return demangle(binding)[1]
+    except Exception:  # noqa: BLE001 -- not a mangled handle
+        return binding if type(binding) is str else ""
 
 
 def _adapter_arities(value: Any) -> "set | None":
@@ -1591,6 +1694,7 @@ def _strip_module_qualification(goal, module):
     target, inner = resolve_qualified_goal_cell(
         goal, "solve/1", module, call_extra=0,
         dialect_gate=False)   # route 5: Python is outside the edge rule
+    _sandbox_query_edge(target, "solve/1")
     return inner, target
 
 
@@ -1703,6 +1807,14 @@ def call(
     # "module is required"/"not defined in module" KeyErrors, which stay
     # exactly as they were for a functor that was never a handle.
     _handle_module_name = _handle_name = None
+    _sb_ctx = f"{functor if type(functor) is str else 'call'}/{len(args)}"
+    if _sandbox_state.ACTIVE:
+        # The functor names a predicate: an atom.  A goal OBJECT handed in
+        # from Python is no data (clausal.sandbox).
+        if type(functor) is not str:
+            _sandbox_entry(functor, _sb_ctx)
+        _sandbox_entry(args, _sb_ctx)
+        _sandbox_module(module, _sb_ctx)
     if type(functor) is str:
         if is_mangled(functor):
             _handle_module_name, _handle_name = demangle(functor)
@@ -1717,9 +1829,14 @@ def call(
         if _q is not functor:
             module = resolve_module(_q[1], module, "call/N")
             functor = _q[2]
+            _sandbox_query_edge(module, _sb_ctx)
     # Fast path: predicate class passed directly — no module lookup needed.
     args = _python_entry(args)
     if hasattr(functor, '_get_dispatch'):
+        if _sandbox_state.ACTIVE:
+            from clausal.sandbox import check_goal_object  # noqa: PLC0415
+            check_goal_object(
+                functor, f"{getattr(functor, '_name', 'call')}/{len(args)}")
         dispatch_fn = functor._get_dispatch()
         if trail is None:
             trail = Trail()
@@ -1746,10 +1863,27 @@ def call(
             # ("'alow.numlist'/2 is not defined in module ...") where the
             # compiled call answered (name-arity residual Low 1).
             head, *rest = functor.split(".")
+            if _sandbox_state.ACTIVE:
+                from clausal.logic.compiler.globals_env import (  # noqa: PLC0415
+                    _dotted_base)
+                _sandbox_query_edge(
+                    _dotted_base(functor.split("."), module.module_dict),
+                    _sb_ctx)
             obj = module.module_dict.get(head)
+            if _sandbox_state.ACTIVE and any(
+                    p.startswith("_") for p in functor.split(".")):
+                obj = None      # the sandbox: no walk into a Python attribute
             for part in rest:
                 if obj is None:
                     break
+                if _sandbox_state.ACTIVE:
+                    from clausal.sandbox import walkable  # noqa: PLC0415
+                    if not walkable(obj):
+                        obj = None      # read only a Clausal/adapter module
+                        break
+                    from clausal.sandbox import read_attr  # noqa: PLC0415
+                    obj = read_attr(obj, part)
+                    continue
                 obj = getattr(obj, part, None)
             if obj is not None and is_declared_predicate_name(obj, db=module.db):
                 dispatch_fn = _dispatch_at(obj, arity, module.db)
@@ -1760,7 +1894,8 @@ def call(
                 from clausal.logic.builtins.higher_order import (  # noqa: PLC0415
                     dotted_goal_object,
                 )
-                hit = dotted_goal_object(module.module_dict, functor, module.db)
+                hit = dotted_goal_object(module.module_dict, functor, module.db,
+                                         _sb_ctx)
                 if hit is not None:
                     dispatch_fn = _dispatch_at(hit[1], arity, module.db)
         # W4b-3: after the flip the binding is a module-qualified HANDLE,
@@ -1927,8 +2062,10 @@ def solve(
     ------
     Trail after each solution (bindings are live on the trail).
     """
+    _sandbox_entry(goal, "solve/2")
     goal, module = _resolved_goal_and_module(goal, module, "solve/2")
     goal = _python_entry(goal)
+    _sandbox_module(module, "solve/2")
     if trail is None:
         trail = Trail()
 
@@ -2057,7 +2194,9 @@ def query_wfs(
     # both let them disagree: the entry lookup does not accept a str
     # designator, and it bails outright on ``module=None``, which silently
     # turned every Undefined answer of a qualified goal into True.
+    _sandbox_entry(goal, "query_wfs/3")
     goal, module = _resolved_goal_and_module(goal, module, "query_wfs/3")
+    _sandbox_module(module, "query_wfs/3")
 
     # The judgement is the seam's ``judged_answers`` (a throwaway tabling
     # leader for the whole solve, 2026-09-08): EVERY goal shape is judged by

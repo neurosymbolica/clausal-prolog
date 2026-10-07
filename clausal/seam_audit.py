@@ -250,6 +250,22 @@ _PLUMBING_MODULES = {
 # ── the audit ───────────────────────────────────────────────────────────────
 
 
+def node_line(node) -> int:
+    """The SOURCE line a generated node stands for: a clause-data node's
+    ``position=(line, col, ...)`` when it carries one (the statement holding
+    a clause has the line of its head, or of the module directive in the
+    native lowering), else the node's own ``lineno``."""
+    if isinstance(node, ast.Call):
+        for k in node.keywords:
+            if (k.arg == "position" and isinstance(k.value, ast.Tuple)
+                    and k.value.elts
+                    and isinstance(k.value.elts[0], ast.Constant)
+                    and isinstance(k.value.elts[0].value, int)):
+                return k.value.elts[0].value
+    return getattr(node, "lineno", 0) or 0
+
+
+
 class _Audit:
     def __init__(self, check_module):
         self.routes: list = []
@@ -265,7 +281,7 @@ class _Audit:
         self.module_names: dict = {}    # import binding -> module path
 
     def route(self, kind, node):
-        self.routes.append((kind, getattr(node, "lineno", 0) or 0))
+        self.routes.append((kind, node_line(node)))
 
     # -- imports --------------------------------------------------------
     def import_from(self, node):
@@ -299,6 +315,11 @@ class _Audit:
             pass
         elif isinstance(node, ast.ImportFrom):
             self.import_from(node)
+            if not node.level:
+                # The native (Prolog-syntax) lowering emits the import bare,
+                # without the seam's guard: its signature plumbing names it.
+                self.imported_modules.setdefault(node.module, set()).update(
+                    a.name for a in node.names)
         elif isinstance(node, ast.Import):
             self.import_(node)
         elif isinstance(node, ast.Assign):
@@ -599,13 +620,20 @@ class _Audit:
 
 
 def audit_tree(tree: ast.Module, check_module, *, translations=(),
-               module_items=()) -> "tuple[list, list]":
+               module_items=(), prolog_surface=False) -> "tuple[list, list]":
     """``(routes, [])`` of the generated module *tree*: every node that is
     not on the allow-list is a route.  *check_module(kind, a, b, node)*
     answers the module questions (``"module"``: may module *a* be imported;
     ``"name"``: is *b* an export of *a*; ``"chain"``: is the dotted *a*
-    exactly ``module.export``), adding its own routes; it returns a bool."""
+    exactly ``module.export``), adding its own routes; it returns a bool.
+
+    *prolog_surface*: the tree is a Prolog-syntax module's (``.pl``,
+    ``.clausal``), where a bare name is always a functor (a predicate
+    defined elsewhere, or asserted later): read as under
+    ``-implicit_functors`` -- any name the loader does not inject and
+    Python's builtins do not bind."""
     audit = _Audit(check_module)
+    audit.implicit_functors = bool(prolog_surface)
     # *translations*: the dumps of the statements the -translations lowering
     # emitted (``EmbedTransformer._emitted_translations``); each matches one
     # top-level statement exactly, and nothing else is accepted for them.

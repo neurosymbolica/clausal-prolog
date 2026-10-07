@@ -136,6 +136,11 @@ def _conj(*goals, _varnames=None):
     from clausal.logic.variables import Trail, Var
     from clausal.logic.variables import walk as _walk
     from clausal.logic.solve import _drive_trampoline
+    from clausal import _sandbox_state  # noqa: PLC0415
+    if _sandbox_state.ACTIVE:
+        # The sandbox: term instances are Python objects, not data.
+        from clausal.sandbox import check_term  # noqa: PLC0415
+        check_term(goals, "Solutions")
 
     trail = Trail()
     id_to_name = {id(v): n for n, v in (_varnames or {}).items()}
@@ -246,6 +251,13 @@ def _iter_from_goal(goal_or_iter, _varnames=None, module=None):
     ``AttributeError`` at the dispatch call instead of at this guard.
     """
     from clausal.logic.predicate import is_term_instance, term_field_names, term_field_values
+    from clausal import _sandbox_state  # noqa: PLC0415
+    if _sandbox_state.ACTIVE and (is_term_instance(goal_or_iter)
+                                  or _is_goal_value(goal_or_iter)):
+        # The sandbox: the goal is data, as solve() checks it -- a term
+        # INSTANCE (a Python object driven through its own class) is not.
+        from clausal.sandbox import check_term  # noqa: PLC0415
+        check_term(goal_or_iter, "Solutions")
     if not is_term_instance(goal_or_iter):
         if module is not None and not _is_goal_value(goal_or_iter):
             # roborev Low on slice 3: ``module=`` used to be dropped here

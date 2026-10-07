@@ -16,6 +16,7 @@ from clausal.logic.predicate import (
 )
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.terms import DictTerm, SetTerm
+from clausal import _sandbox_state
 
 
 # ── Simple → trampoline adapter ──────────────────────────────────────────────
@@ -150,6 +151,10 @@ def _ensure_trampoline_dispatch(goal_val, arity: int | None = None, db=None):
     """
     if hasattr(goal_val, '_get_dispatch'):
         if arity is None:
+            if _sandbox_state.ACTIVE and type(goal_val) is not str:
+                from clausal.sandbox import check_goal_object  # noqa: PLC0415
+                check_goal_object(
+                    goal_val, f"{getattr(goal_val, '_name', 'call')}/1")
             return goal_val._get_dispatch()
         return _dispatch_at(goal_val, arity, db)
     if is_declared_predicate_name(goal_val, db=db):
@@ -199,6 +204,11 @@ def _ensure_trampoline_dispatch(goal_val, arity: int | None = None, db=None):
     if info is not None:
         return _lambda_to_trampoline(goal_val, info)
     # Assume simple-mode callable
+    if _sandbox_state.ACTIVE:
+        # The sandbox: a plain Python callable runs as a goal only when it
+        # is the engine's own (clausal.sandbox).
+        from clausal.sandbox import check_callable  # noqa: PLC0415
+        check_callable(goal_val, "call/1")
     return _simple_to_trampoline(goal_val)
 
 

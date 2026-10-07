@@ -800,10 +800,24 @@ def _refuse_missing_indicators(item, mod, orig_name: str, selected,
             f"not a Clausal module, so its names have no predicate arities to "
             f"select; list the bare name `{orig_name}` instead")
     have = exporter_db.declared_arities_for(orig_name)
+    if not have:
+        # A listless package __init__.seam offers what it re-imports
+        # (operator ruling M3): module_signatures answers it.
+        from clausal.logic.solve import module_signatures  # noqa: PLC0415
+        have = module_signatures(mod).get(orig_name, frozenset())
     missing = sorted(a for a in selected if a not in have)
     if not missing:
         return
     first = f"{orig_name}/{missing[0]}"
+    from clausal.python_bridges import _find  # noqa: PLC0415
+    if not have and _find(f"{item.module}.{orig_name}") is not None:
+        # Operator ruling M3: a re-export sharing a submodule's name is no
+        # export (the package attribute IS the submodule object there).
+        raise ImportError(
+            f"{at}: -import_from({item.module}, [{wanted}]): "
+            f"existence_error(procedure, {first}) -- {orig_name} is also the "
+            f"submodule {item.module}.{orig_name}; import it from the "
+            f"submodule", name=orig_name, path=getattr(mod, "__file__", None))
     if have:
         found = ", ".join(f"{orig_name}/{a}" for a in sorted(have))
         offer = f"{item.module} has {orig_name} as {found}"

@@ -112,3 +112,11 @@ __all__ = [
     *(_n for _n in _builtin_names
       if _n.isidentifier() and not _keyword.iskeyword(_n)),
 ]
+
+
+# CLAUSAL_SANDBOX=1 -- the process-wide sandbox (clausal.sandbox), read once
+# here, at engine import, before any module of the user's can load.
+if _os.environ.get("CLAUSAL_SANDBOX", "").strip():
+    from clausal import sandbox as _sandbox
+    _sandbox._enable_from_env()
+    del _sandbox

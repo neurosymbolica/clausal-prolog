@@ -535,7 +535,7 @@ def _goal_object_dispatch(db, binding, arity):
     return _dispatch_at(binding, arity, db)
 
 
-def dotted_goal_object(module_dict, functor, db=None):
+def dotted_goal_object(module_dict, functor, db=None, context="call/1"):
     """``(base, binding)`` when *functor* is a DOTTED name ``m.p`` (``a.b.p``)
     whose ``m`` resolves -- this namespace's binding of the first segment,
     else ``sys.modules``, as the compiled dotted call resolves it
@@ -562,7 +562,16 @@ def dotted_goal_object(module_dict, functor, db=None):
     base = _dotted_base(parts, module_dict)
     if base is None or type(base) is str:
         return None
-    obj = getattr(base, parts[-1], None)
+    from clausal import _sandbox_state  # noqa: PLC0415
+    if _sandbox_state.ACTIVE:
+        # The sandbox: read an attribute only of a Clausal module or an
+        # allowed adapter module; any other module is refused, loudly.
+        from clausal.sandbox import refuse_unwalkable  # noqa: PLC0415
+        refuse_unwalkable(base, context)
+        from clausal.sandbox import read_attr  # noqa: PLC0415
+        obj = read_attr(base, parts[-1])
+    else:
+        obj = getattr(base, parts[-1], None)
     if (obj is None or type(obj) is str or callable(obj)
             or not hasattr(obj, "_get_dispatch")
             or is_declared_predicate_name(obj, db=db)):
@@ -578,7 +587,8 @@ def _dotted_goal_object_dispatch(db, functor, arity, context):
     Clausal Prolog frame reaches Python only through a ``.seam`` module, so
     there the goal raises ``permission_error(access, python_module, M)``
     instead of running -- whichever module built the term."""
-    hit = dotted_goal_object(getattr(db, "module_dict", None), functor, db)
+    hit = dotted_goal_object(getattr(db, "module_dict", None), functor, db,
+                             context)
     if hit is None:
         return None
     base, obj = hit

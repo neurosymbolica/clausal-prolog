@@ -888,7 +888,7 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
         # directives -- and from the FILE, so a module some .seam importer
         # loaded first is judged the same.
         from clausal.python_bridges import bridge_refusal  # noqa: PLC0415
-        refusal = bridge_refusal(ctx.source_path, dotted, found)
+        refusal = bridge_refusal(ctx.source_path, dotted, found, record=True)
         if refusal is not None:
             raise _refused(f"{what}: {refusal.term_text} -- "
                            f"{refusal.message}", span)
@@ -899,6 +899,7 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
         # bare name that is one of its VALUES imports that value, exactly as
         # the seam's ``-import_from`` does; a bare predicate name stays D11
         # (see _python_bare).
+        _refuse_old_unit_spellings(bare, span, what)
         values = _python_bare(ctx, mod, bare)
         from clausal.logic.predicate import namespace_db  # noqa: PLC0415
         if namespace_db(vars(mod)) is None:
@@ -909,6 +910,7 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
     elif dotted.startswith(_FACADE_PACKAGE + "."):
         # A facade re-exports its Python module's VALUES too: a bare name
         # imports one exactly as it does from the module itself.
+        _refuse_old_unit_spellings(bare, span, what)
         values = _facade_bare(ctx, _import_python_module(dotted, target, span,
                                                          what), bare)
         if values:
@@ -1025,6 +1027,24 @@ def _facade_for(target: str) -> "str | None":
     return None if lib is None else _library_facade(lib)
 
 
+def _refuse_old_unit_spellings(bare, span, what) -> None:
+    """A bare import entry spelled as a RENAMED unit (``'SI_Force'``, now
+    ``si_force``) is refused, naming the new spelling: a Prolog import list
+    is not aliased (ruling Z1) -- through a Python module it used to import
+    the value under the old name, through a facade it imported nothing."""
+    if not bare:
+        return
+    from clausal.modules.units import _DEPRECATED_UNIT_NAMES  # noqa: PLC0415
+    old = [(n, _DEPRECATED_UNIT_NAMES[n]) for n, _line in bare
+           if n in _DEPRECATED_UNIT_NAMES]
+    if old:
+        renamed = ", ".join(f"'{o}' is now spelled {n}" for o, n in old)
+        raise _refused(
+            f"{what}: {renamed}; a Prolog import list takes the unit's "
+            f"current spelling (the old one is not aliased): import "
+            f"{', '.join(n for _o, n in old)}", span)
+
+
 def _facade_bare(ctx, facade, bare) -> list:
     """The bare names of an import list that name a VALUE the *facade*
     re-exports (a unit, a currency, a number): imported, as from the Python
@@ -1103,6 +1123,8 @@ def _import_python_module(dotted, target, span, what):
     """Import the module *dotted* names; *target* is the path it resolved
     to (the ``py.X`` redirect, or a seam import alias)."""
     import importlib  # noqa: PLC0415
+    from clausal.sandbox import guard_python_import  # noqa: PLC0415
+    guard_python_import(target, what)
     try:
         return importlib.import_module(target)
     except ImportError as e:
@@ -1832,7 +1854,15 @@ def _sibling_dotted(ctx, path: str, span, what) -> "str | None":
 
 def _module_source(dotted: str) -> "str | None":
     """The source file of the module *dotted* names (its parent packages are
-    imported to find it, as any import does), or None."""
+    imported to find it, as any import does), or None.
+
+    In the sandbox nothing is imported to find it
+    (:func:`clausal.sandbox.find_origin`): a parent package's ``__init__``
+    would run before the gate could refuse it."""
+    from clausal import _sandbox_state  # noqa: PLC0415
+    if _sandbox_state.ACTIVE:
+        from clausal.sandbox import find_origin  # noqa: PLC0415
+        return find_origin(dotted)
     import importlib.util  # noqa: PLC0415
     try:
         spec = importlib.util.find_spec(dotted)
@@ -1877,7 +1907,16 @@ def _declared_exports(path: str):
     if is_prolog_source(path):
         return _pl_exports(path)
     if surface_of(path) == SURFACE_SEAM:
-        return _seam_exports(path) + ([],)
+        out = _seam_exports(path) + ([],)
+        if out[1] is None:
+            # A listless package __init__.seam exports what it re-imports
+            # (operator rulings E1/M3: clausal.python_bridges.
+            # listless_exports, the one rule).
+            from clausal.python_bridges import (  # noqa: PLC0415
+                is_listless_package_init, listless_exports)
+            if is_listless_package_init(path):
+                return out[0], listless_exports(path), out[2], out[3]
+        return out
     return None, None, [], []
 
 
@@ -1996,6 +2035,8 @@ def _engine_goal(name: str) -> bool:
 
 def _module_has(module: str, name: str) -> bool:
     import importlib  # noqa: PLC0415
+    from clausal.sandbox import guard_python_import  # noqa: PLC0415
+    guard_python_import(module, f"library module {module}")
     try:
         return hasattr(importlib.import_module(module), name)
     except ImportError:

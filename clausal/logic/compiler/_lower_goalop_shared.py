@@ -763,6 +763,14 @@ def _lower_meta_call(
         return _compile_throw(ctx, margs["term"])
     if kind == "halt":
         code_arg = margs["code"]
+        from clausal import _sandbox_state  # noqa: PLC0415
+        if _sandbox_state.ACTIVE:
+            # The sandbox: halt/0,1 is a private procedure -- the ball, not
+            # SystemExit (clausal.sandbox).
+            from clausal.sandbox import halt_refusal_term  # noqa: PLC0415
+            from .control_constructs import _compile_throw  # noqa: PLC0415
+            return _compile_throw(
+                ctx, halt_refusal_term(0 if code_arg is None else 1))
         if code_arg is None:
             return [ast.Raise(exc=_call(_name("SystemExit"), ast.Constant(0)))]
         code_expr = term_to_ast_expr(code_arg, ctx.var_context, eval_arith=True)

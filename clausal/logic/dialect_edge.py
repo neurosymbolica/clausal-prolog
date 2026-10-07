@@ -30,6 +30,8 @@ from __future__ import annotations
 import types
 from typing import Any
 
+from clausal import _sandbox_state
+
 #: Cache attribute on a Module / Database: True when its source is Clausal
 #: Prolog.  Only a definite answer (a ``__file__`` was there) is cached.
 _CACHE = "_dialect_is_clausal_prolog"
@@ -38,6 +40,11 @@ _CACHE = "_dialect_is_clausal_prolog"
 def _namespace(obj: Any) -> "dict | None":
     if isinstance(obj, types.ModuleType):
         return vars(obj)
+    if (_sandbox_state.ACTIVE and not isinstance(obj, dict)
+            and not (type(obj).__module__ or "").startswith("clausal.")):
+        # The sandbox: no attribute of a foreign object is read (its
+        # __getattr__ or a property would run).
+        return None
     md = getattr(obj, "module_dict", None)
     if isinstance(md, dict):
         return md
@@ -49,9 +56,16 @@ def _namespace(obj: Any) -> "dict | None":
 
 def is_clausal_prolog_caller(obj: Any) -> bool:
     """True when *obj* -- a :class:`Module`, a ``Database`` or a module
-    namespace -- was loaded from a Clausal Prolog source file."""
+    namespace -- was loaded from a Clausal Prolog source file.
+
+    In the sandbox (:mod:`clausal.sandbox`) every frame is held to the gate
+    except a ``.pl`` module's and an allowed bridge's
+    (:func:`clausal.sandbox.gated_caller`)."""
     if obj is None:
         return False
+    if _sandbox_state.ACTIVE:
+        from clausal.sandbox import gated_caller  # noqa: PLC0415
+        return gated_caller(obj)
     cached = getattr(obj, _CACHE, None)
     if cached is not None:
         return cached
@@ -102,7 +116,10 @@ _KIND_BY_PATH: "dict[str, str | None]" = {}
 
 
 def _module_name(target: Any) -> str:
-    name = getattr(target, "name", None)
+    # A module object is read through its namespace only: ``getattr`` of a
+    # name it lacks would run the module's ``__getattr__``.
+    name = (None if isinstance(target, types.ModuleType)
+            else getattr(target, "name", None))
     if type(name) is str:
         return name
     md = _namespace(target)
@@ -150,7 +167,7 @@ def refuse_edge(caller: Any, target: Any, context: str, *,
     attribute read)."""
     if not is_clausal_prolog_caller(caller):
         return
-    kind = forbidden_kind(target)
+    kind = _sandbox_filter(forbidden_kind(target), target)
     if kind is not None and (python or kind == "prolog_module"):
         raise edge_error(kind, target, context)
     if python and kind is None:
@@ -163,9 +180,20 @@ def caller_forbidden_kind(caller: Any, target: Any) -> "str | None":
     """:func:`forbidden_kind`, then -- for a Clausal Prolog *caller* --
     ``"python_bridge"`` when *target* is a ``.seam`` module that runs Python
     and the caller's project does not allowlist (:func:`bridge_kind`)."""
-    kind = forbidden_kind(target)
+    kind = _sandbox_filter(forbidden_kind(target), target)
     if kind is None:
         kind = bridge_kind(caller, target)
+    return kind
+
+
+def _sandbox_filter(kind: "str | None", target: Any) -> "str | None":
+    """In the sandbox a gated frame may reach an ALLOWED engine adapter
+    module (each of its predicates is then checked when it runs); every
+    other Python module stays refused."""
+    if kind == "python_module" and _sandbox_state.ACTIVE:
+        from clausal.sandbox import permits_python_target  # noqa: PLC0415
+        if permits_python_target(target):
+            return None
     return kind
 
 
@@ -202,7 +230,8 @@ def bridge_refusal_for(caller: Any, target: Any):
     dotted = md.get("__name__") if md is not None else None
     if not isinstance(dotted, str):
         dotted = _module_name(target)
-    project = pb.find_project_file(caller_file)
+    # No file, no project (ruling Y4): never the working directory's.
+    project = pb.find_project_file(caller_file) if caller_file else None
     refusal = pb.bridge_refusal(caller_file, dotted, target_file)
     _BRIDGE_DECISIONS[key] = (project, pb.project_stamp(project), refusal)
     return refusal

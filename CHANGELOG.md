@@ -803,6 +803,32 @@ since 0.4.0 finish three moves:
   Without FILE it starts the REPL, as `python -m clausal` did, which is now
   the same command. See docs/cli.md.
 
+- **Sandbox mode** (`clausal.sandbox`, operator ruling D14): a process-wide,
+  irreversible mode for a worker that solves goals built from untrusted
+  data. `clausal.sandbox.enable(allow_adapters=None, allow_bridges=())`, or
+  `CLAUSAL_SANDBOX=1` at engine import, turns it on; nothing turns it off,
+  and `enable()` fails closed when a Clausal module of yours is already
+  loaded. Every module loaded afterwards (`.seam`, `.clausal`, `.pl`) is
+  compiled from its source and its final generated Python audited first: a
+  Python route is `error(permission_error(load, python_escape, File),
+  load/1)`, unless the module is a bridge both named in `allow_bridges` and
+  allowlisted by its `.clausal` importer's project `python_bridges`
+  (nothing is read from the working directory). At run time every Python entry
+  point (`solve`, `call`, `once`, `query`, `query_wfs`, `Solutions`)
+  refuses a goal holding anything but data (`permission_error(access,
+  python_object, Type)`), a query is a Clausal Prolog frame (`M:G`,
+  `call/N`, `assert`, `clause` into a `.pl` or Python module are refused),
+  a Python adapter outside the allowlist is refused where it is resolved
+  and again when it runs (`permission_error(access, python_module, M)`),
+  and builtins with I/O or process-wide effects (`halt`,
+  `set_prolog_flag`, the stdout writers, the clock) are
+  `permission_error(access, private_procedure, Name/Arity)`. The default
+  adapter allowlist is a fixed classification of every engine adapter by
+  its side effects (datetime without its clock readers, json and csv
+  without their file predicates, re, hash, hmac, pbkdf2, url, uuid without
+  v1/v4, units, imperial, currency, countries, graphs);
+  `allow_adapters` can only narrow it. See [docs/sandbox.md](docs/sandbox.md).
+
 - **DCG grammar rules in the native `.pl` front end** (and so in Clausal
   Prolog). A `-->` rule used to be refused at load ("DCG is out of
   scope"). It is now translated to the clause ISO 7.14 / Scryer's
@@ -1284,6 +1310,19 @@ since 0.4.0 finish three moves:
     - The test runner descends into a failing goal's clauses.
 
 ### Changed
+
+- **A listless package `__init__.seam` exports what it re-imports**
+  (operator rulings E1/M3). A package `__init__.seam` with no `-module`
+  export list -- one that only re-imports from its submodules -- now exports
+  the names it `-import_from`s (predicates at the arities imported, atoms,
+  constructors and units by name) when each is an export of its source, plus
+  its own predicates. One rule (`clausal.python_bridges.listless_exports`)
+  serves `use_module/1,2` (`use_module(nsb/x)` no longer refuses "declares
+  no module/2 export list"), `clausal.module_signatures`, the Python-bridge
+  gate and the sandbox. Never an underscore-led name, a module an
+  `-import_module` binds, a Python object, or a name that is also a
+  submodule -- that one is refused with "<name> is also the submodule
+  <pkg>.<name>; import it from the submodule".
 
 - **`clausal.modules.prolog`'s ISO arithmetic helpers are private**
   (ruled 2026-10-04): `TruncDiv`, `TruncMod`, `Rem` are now `_trunc_div`,
