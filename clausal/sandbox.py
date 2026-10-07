@@ -138,6 +138,10 @@ ADAPTERS: "dict[str, Adapter]" = {a.module: a for a in (
     Adapter("clausal.modules.units", True,
             "unit algebra and quantities; units register at import only"),
     Adapter("clausal.modules.imperial", True, "constant quantities"),
+    Adapter("clausal.modules.pure_random", True,
+            "state-threaded: every draw is a function of the rng(Seed, N) "
+            "term (a fresh random.Random over a SHA-256 digest); no clock, "
+            "OS entropy or global generator"),
     Adapter("clausal.modules.currency", True,
             "currency tables and money arithmetic over built-in data"),
     Adapter("clausal.modules.countries", True,

@@ -257,6 +257,7 @@ missing.
 | `clausal.modules.py.uuid` | `py_uuid` | allow | `uuid_v1/1`, `uuid_v4/1` | v3/v5 and the converters are pure; v1 reads the clock and MAC, v4 is random |
 | `clausal.modules.units` (and its shim `py.units`) | `units` | allow | | unit algebra; units register at import only |
 | `clausal.modules.imperial` (and its shim `py.imperial`) | `imperial` | allow | | constant quantities |
+| `clausal.modules.pure_random` | `pure_random` | allow | | every draw is a function of the `rng(Seed, N)` state term; no clock, OS entropy or global generator |
 | `clausal.modules.currency` | `currency` | allow | | currency tables and money arithmetic |
 | `clausal.modules.countries.*` | `countries/*` | allow | | currency constants |
 | `clausal.modules.graphs` | `graphs` | allow | | graph algorithms over the given terms |

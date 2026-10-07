@@ -20,3 +20,11 @@ So the sandbox should classify all six predicates as ALLOW: `rng_seed/2`,
 The deprecated `py.random` (`library(py_random)`) is the opposite case: it
 keeps a process-global generator, and `set_seed/1` changes it for every
 other caller. It should NOT be allowed by default.
+
+## DONE 2026-10-07
+
+Classified ALLOW in `clausal.sandbox.ADAPTERS` and the `docs/sandbox.md`
+table when the library was restacked onto the landed sandbox. Checked
+against the code: the only randomness is `random.Random(<SHA-256 digest>)`,
+a fresh local generator per draw; the stdlib modules are bound under
+underscore names, which no export rule offers. `py.random` stays deny.
