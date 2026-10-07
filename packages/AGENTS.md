@@ -86,8 +86,16 @@ trusted publishing. Run it by hand to build and test without publishing.
   `PUBLISHABLE` list). gprolog and scryer need native wheels, trealla needs
   `libtpl` built from source, and provenance is disabled.
 - Before a package's first release, its project name needs a pending trusted
-  publisher on pypi.org (workflow `packages-release.yml`, environment
-  `pypi-<package>`, e.g. `pypi-clausal-yaml`).
+  publisher on pypi.org (Account -> Publishing, not a project's settings;
+  workflow `packages-release.yml`, environment `pypi-<package>`, e.g.
+  `pypi-clausal-yaml`). PyPI allows only 3 pending publishers per account at a
+  time, and one owner/repo/workflow/environment for only one pending project,
+  hence the per-package environment. After the first publish the entry
+  becomes a normal publisher and later releases need nothing on pypi.org.
+- Push the tag to the GitHub remote, created from GitHub's `main` (see
+  "Releasing" in [../AGENTS.md](../AGENTS.md)).
+- Published (0.1.0, 2026-10-07): acl2, decide, jax, opencv, scipy, sklearn,
+  spacy, sympy, torch, yaml.
 - A package whose full test suite needs optional libraries lists them in a
   `test` extra (torch: numpy; jax: optax, equinox, flax; sklearn: pandas);
   the workflow installs the wheel as `<wheel>[test]`.

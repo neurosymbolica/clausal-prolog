@@ -76,6 +76,24 @@ mkdocs build                           # the docs site (pip install mkdocs-mater
   the allowlist in `tests/test_doc_snippet_coverage.py`); moving code can break
   them — shift the pin and say why.
 
+## Releasing
+
+- **`clausal` itself:** bump `version` in `pyproject.toml`, merge, then publish
+  a GitHub release tagged `v<version>` targeting `main`
+  (`.github/workflows/release.yml` checks the tag matches, builds sdist +
+  wheels for Linux/macOS/Windows on CPython 3.13 and 3.14, smoke-tests each
+  with `tools/wheel_smoke.py`, and publishes via PyPI trusted publishing,
+  environment `pypi`). A pre-release (`1.0.0rc2`) is published but pip skips
+  it without `--pre`, and PyPI's project page keeps showing the last final
+  release. Run the workflow by hand first to build and test without
+  publishing.
+- **Optional packages:** one tag each, see
+  [packages/AGENTS.md](packages/AGENTS.md#releasing-to-pypi).
+- **Two remotes:** GitHub runs the release workflows; GitLab only hosts a
+  docs copy. In a local clone `origin` may be GitLab, so push release tags to
+  the GitHub remote, and create them from the GitHub `main`
+  (`git fetch github && git tag <tag> github/main`), not a stale local one.
+
 ## Where the truth is
 
 - **Code and tests** are the truth. Run things; don't trust prose.
