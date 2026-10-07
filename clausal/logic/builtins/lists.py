@@ -69,6 +69,8 @@ def _as_items(val):
     """
     if isinstance(val, list):
         return val
+    if isinstance(val, tuple) and not val:
+        return []                      # the nil cell () is [] (atoms.is_nil)
     if is_chars(val):
         val = chars_text(val)          # the carrier walks to its text, below
     elif type(val) is str:

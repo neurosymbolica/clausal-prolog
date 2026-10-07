@@ -394,6 +394,8 @@ def _is_list__1(x, trail, k):
     update in ``tests/test_string_list_builtins.py``.
     """
     x_val = deref(x)
+    if isinstance(x_val, tuple) and not x_val:
+        x_val = []                         # the nil cell () is [] (atoms.is_nil)
     from clausal.logic.cells import is_chars  # noqa: PLC0415
     if isinstance(x_val, (list, bytes)) or is_chars(x_val):   # STAGE 2: a str is an ATOM; the carrier is the list
         yield None
@@ -413,6 +415,8 @@ def _is_chars__1(x, trail, k):
     ``SegBytes`` walks to bytes and is rejected (codes model).
     """
     x_val = walk_seg(deref(x))
+    if isinstance(x_val, tuple) and not x_val:
+        x_val = []                         # the nil cell () is [] (atoms.is_nil)
     if isinstance(x_val, list) or is_chars(x_val):
         yield None
 
@@ -426,6 +430,8 @@ def _is_codes__1(x, trail, k):
     A ``str`` / char-list is the *chars* model and is rejected here (use
     ``is_chars/1``)."""
     x_val = deref(x)
+    if isinstance(x_val, tuple) and not x_val:
+        x_val = []                         # the nil cell () is [] (atoms.is_nil)
     if isinstance(x_val, bytes):
         yield None
     elif isinstance(x_val, list):
