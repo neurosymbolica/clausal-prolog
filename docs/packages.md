@@ -13,6 +13,7 @@ package lives at `packages/clausal-<name>/` in the main repository.
 
 | Package | Install | Description | Docs |
 |---|---|---|---|
+| **clausal-acl2** | `pip install clausal-acl2` | The ACL2 theorem prover through its ACL2 Bridge: evaluate forms, submit events, prove theorems; ACL2 terms are Clausal terms | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-acl2/docs/acl2.md) |
 | **clausal-jax** | `pip install clausal-jax` | JAX predicates: array, PRNG, transforms, sharding, `jax.scipy`, optax, equinox, flax | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-jax/docs/jax.md) |
 | **clausal-opencv** | `pip install clausal-opencv` | OpenCV (`cv2`) predicates: image I/O, color, imgproc, contours, drawing, features, calib3d, objdetect, video | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-opencv/docs/opencv.md) |
 | **clausal-provenance** | `pip install clausal-provenance` | **Disabled pending redesign** (2026-09-25). Provenance-tagged bottom-up Datalog; PyTorch / JAX-differentiable semirings for neurosymbolic AI | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-provenance/docs/provenance.md) |
