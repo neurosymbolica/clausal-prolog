@@ -1642,6 +1642,130 @@ def test_a_submodule_created_later_is_still_no_export(tmp_path, monkeypatch):
 
 
 
+def _same_named_layout(sbx):
+    """Packages whose ``__init__`` re-exports a name FROM the submodule of
+    the same name: ``nsa/pkx`` (Clausal Prolog, ``pkx/2`` from
+    ``nsa/pkx/pkx``) and ``nsa/pky`` (seam, ``pky`` from ``nsa.pky.pky``)."""
+    sbx.write("nsa/pkx/pkx.clausal", ":- module(pkx, [pkx/2]).\n"
+              "pkx(a, 1).\npkx(b, 2).\n:- end_module(pkx).\n")
+    sbx.write("nsa/pkx/__init__.clausal", ":- module(pkx, [pkx/2]).\n"
+              ":- use_module(nsa/pkx/pkx, [pkx/2]).\n:- end_module(pkx).\n")
+    sbx.write("nsa/pky/pky.seam", "-module(pky, [pky/1])\npky(7),\n")
+    sbx.write("nsa/pky/__init__.seam",
+              "-module(pky, [pky/1])\n-import_from(nsa.pky.pky, [pky])\n")
+    sbx.write("cind.clausal", ":- module(cind, [q/1]).\n"
+              ":- use_module(nsa/pkx, [pkx/2]).\n"
+              "q(V) :- pkx(b, V).\n:- end_module(cind).\n")
+    sbx.write("cseam.seam", "-module(cseam, [t/2])\n"
+              "-import_from(nsa.pkx, [pkx])\nt(K, V) <- pkx(K, V)\n")
+    sbx.write("cyind.clausal", ":- module(cyind, [q/1]).\n"
+              ":- use_module(nsa/pky, [pky/1]).\n"
+              "q(V) :- pky(V).\n:- end_module(cyind).\n")
+    sbx.write("cyseam.seam", "-module(cyseam, [t/1])\n"
+              "-import_from(nsa.pky, [pky])\nt(V) <- pky(V)\n")
+
+
+@pytest.mark.parametrize("first", ["package", "submodule"])
+def test_a_reexport_of_the_same_named_submodule_is_an_export(sbx, first):
+    """A package ``__init__`` with an export list that re-exports ``n``
+    FROM its submodule ``pkg.n`` (the usual generated layout) is imported
+    by indicator (``.clausal``) and by name (``.seam``), in default mode
+    and in the sandbox: the init loads ``pkg.n`` before it binds ``n``, so
+    the package holds the predicate -- also when an importer loaded the
+    submodule first."""
+    _same_named_layout(sbx)
+    body = """
+        from clausal import Var
+        from clausal.python_bridges import _exports, _find
+        if FIRST == "submodule":
+            load("nsa.pkx.pkx"); load("nsa.pky.pky")
+        X = Var()
+        for m in ("cind", "cseam", "cyind", "cyseam"):
+            g = (("q", X) if m.endswith("ind") else
+                 ("t", Var(), X) if m == "cseam" else ("t", X))
+            probe(m, lambda m=m, g=g: answers(g, load(m), X))
+        probe("attrs", lambda: [type(load(p).__dict__[n]).__name__
+                                for p, n in (("nsa.pkx", "pkx"),
+                                             ("nsa.pky", "pky"))])
+        probe("exports", lambda: [sorted(_exports(p, _find(p)))
+                                  for p in ("nsa.pkx", "nsa.pky")])
+    """.replace("FIRST", repr(first))
+    for pre in ("import clausal\n",
+                "import clausal.sandbox as sb\nsb.enable()\n"):
+        res = sbx.run(pre + textwrap.dedent(body))
+        assert ok(res, "cind") == "[2]", (pre, res["cind"])
+        assert ok(res, "cseam") == "[1, 2]", (pre, res["cseam"])
+        assert ok(res, "cyind") == "[7]", (pre, res["cyind"])
+        assert ok(res, "cyseam") == "[7]", (pre, res["cyseam"])
+        assert ok(res, "attrs") == "['str', 'str']", (pre, res["attrs"])
+        assert ok(res, "exports") == "[['pkx'], ['pky']]", (pre, res)
+
+
+def test_a_defined_name_beside_its_submodule_is_still_no_export(sbx):
+    """The exception is the re-export FROM ``pkg.n`` only: an ``__init__``
+    that DEFINES ``n`` and imports other names from ``pkg.n`` ends up
+    holding the submodule under ``n`` (the submodule's first load writes
+    the attribute after the definition), so ``n`` stays no export."""
+    sbx.write("nsa/pkz/pkz.clausal", ":- module(pkz, [m/1]).\nm(1).\n"
+              ":- end_module(pkz).\n")
+    sbx.write("nsa/pkz/__init__.clausal", ":- module(pkz, [pkz/1, m/1]).\n"
+              ":- use_module(nsa/pkz/pkz, [m/1]).\npkz(1).\n"
+              ":- end_module(pkz).\n")
+    sbx.write("dind.clausal", ":- module(dind, [q/1]).\n"
+              ":- use_module(nsa/pkz, [pkz/1]).\n"
+              "q(V) :- pkz(V).\n:- end_module(dind).\n")
+    sbx.write("dseam.seam", "-module(dseam, [t/1])\n"
+              "-import_from(nsa.pkz, [pkz])\nt(V) <- (V is pkz)\n")
+    body = """
+        from clausal.python_bridges import _exports, _find
+        probe("pkg", lambda: load("nsa.pkz") and True)
+        probe("exports", lambda: sorted(_exports("nsa.pkz", _find("nsa.pkz"))))
+        for m in ("dind", "dseam"):
+            probe(m, lambda m=m: load(m) and True)
+    """
+    res = sbx.run("import clausal\n" + textwrap.dedent(body))
+    # Sandbox off, the clobber shows: the package's own pkz is the module.
+    assert "'module' object is not callable" in res["pkg"]["msg"], res
+    assert ok(res, "exports") == "['m']", res["exports"]
+    res = sbx.run("import clausal.sandbox as sb\nsb.enable()\n"
+                  + textwrap.dedent(body))
+    assert ok(res, "exports") == "['m']", res["exports"]
+    for m in ("dind", "dseam"):
+        r = refused(res, m, LOAD, import_error=True)
+        assert "submodule_name" in r["msg"], r
+
+
+def test_a_reexport_read_inside_its_init_is_no_export(sbx):
+    """The window of the exception: between the submodule's first load
+    and the ``__init__``'s binding the package attribute is the module.  A
+    module the ``__init__`` loads first that loads the submodule and then
+    imports the name from the still-initialising package would hold the
+    module object; the re-export counts only once the package has
+    finished initialising (or before it starts)."""
+    sbx.write("nsc/pkc/pkc.seam", "-module(pkc, [pkc/1, m/1])\n"
+              "pkc(1),\nm(2),\n")
+    sbx.write("nsc/pkc/other.seam", "-module(other, [o/1])\n"
+              "-import_from(nsc.pkc.pkc, [m])\n"
+              "-import_from(nsc.pkc, [pkc])\no(V) <- (V is pkc)\n")
+    sbx.write("nsc/pkc/__init__.seam", "-module(pkc, [pkc/1, o/1])\n"
+              "-import_from(nsc.pkc.other, [o])\n"
+              "-import_from(nsc.pkc.pkc, [pkc])\n")
+    body = """
+        import sys
+        probe("pkg", lambda: load("nsc.pkc") and True)
+        probe("other", lambda: type(
+            sys.modules["nsc.pkc.other"].__dict__.get("pkc")).__name__)
+    """
+    res = sbx.run("import clausal\n" + textwrap.dedent(body))
+    assert ok(res, "other") == "'module'", res      # the window, sandbox off
+    res = sbx.run("import clausal.sandbox as sb\nsb.enable()\n"
+                  + textwrap.dedent(body))
+    r = refused(res, "pkg", LOAD, import_error=True)
+    assert "submodule_name" in r["msg"], r
+    assert not res["other"]["ok"], res["other"]   # never loaded
+
+
+
 def test_await_escapes_and_async_goals_are_refused_at_load(sbx):
     """1.0.0's ``++await`` in a clause and ``--goal`` inside ``async def``
     are escapes / hosted Python: the audit refuses the module."""

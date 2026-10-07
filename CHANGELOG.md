@@ -1322,7 +1322,13 @@ since 0.4.0 finish three moves:
   gate and the sandbox. Never an underscore-led name, a module an
   `-import_module` binds, a Python object, or a name that is also a
   submodule -- that one is refused with "<name> is also the submodule
-  <pkg>.<name>; import it from the submodule".
+  <pkg>.<name>; import it from the submodule". The exception, for any
+  package `__init__` (`.seam`, `.clausal`, `.pl`, with or without an export
+  list): a name the `__init__` itself imports from exactly its submodule
+  `<pkg>.<name>` (`:- use_module(ns/pkg/pkg, [pkg/2])` in
+  `ns/pkg/__init__.clausal`) is an export -- the submodule's one write of
+  the package attribute comes before that binding -- except while the
+  package is still initialising.
 
 - **`clausal.modules.prolog`'s ISO arithmetic helpers are private**
   (ruled 2026-10-04): `TruncDiv`, `TruncMod`, `Rem` are now `_trunc_div`,

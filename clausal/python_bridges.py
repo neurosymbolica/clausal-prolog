@@ -565,12 +565,172 @@ def _exports(dotted: str, origin: str, _seen: "frozenset" = frozenset()
              ) -> frozenset:
     """:func:`_cached_exports`, less every name that is a SUBMODULE of
     *dotted* now (importing ``pkg.n`` sets ``pkg.n`` to the module object):
-    asked on every call, since it depends on other files than *origin*."""
+    asked on every call, since it depends on other files than *origin*.
+
+    The one exception (:func:`_reexported_submodule_names`): a name the
+    package's own source imports BY NAME from exactly its submodule
+    ``pkg.n``.  Python sets ``pkg.n`` to the submodule only on the
+    submodule's FIRST load; that load is the import statement itself (or
+    precedes it), and the statement binds ``n`` after it, so the package
+    holds the imported name, never the module -- and no later import of
+    ``pkg.n`` loads it again.  Between that first load and the binding,
+    though, the package attribute IS the module (and CPython's
+    ``from pkg import n`` falls back to ``sys.modules['pkg.n']`` while the
+    submodule itself runs), so the exception also asks the package's live
+    state (:func:`_reexport_settled`)."""
     names = _cached_exports(dotted, origin, _seen)
     if names and _is_source(origin):
-        names = frozenset(n for n in names
-                          if _find(f"{dotted}.{n}") is None)
+        subs = frozenset(n for n in names
+                         if _find(f"{dotted}.{n}") is not None)
+        if subs:
+            kept = subs & _reexported_submodule_names(dotted, origin)
+            names = (names - subs) | frozenset(
+                n for n in kept if _reexport_settled(dotted, n))
     return names
+
+
+def _reexport_settled(dotted: str, name: str) -> bool:
+    """Whether package *dotted*'s re-export *name* of its submodule
+    ``dotted.name`` can be imported now without ever reading the module
+    object.  Asked where an importer is checked, just before it runs:
+
+    * the package not loaded: importing it runs its ``__init__`` to the
+      end (the re-export bound) before any ``from dotted import name``
+      reads the attribute -- an importer checked now runs before, not
+      inside, that ``__init__``;
+    * the package still INITIALISING: no (an importer loaded from inside
+      the ``__init__``, a re-import cycle, can read the window);
+    * loaded: only when the submodule is loaded too (its one attribute
+      write is behind it) and the attribute is not a module."""
+    import types  # noqa: PLC0415
+    pkg = sys.modules.get(dotted)
+    if pkg is None:
+        return True
+    if getattr(getattr(pkg, "__spec__", None), "_initializing", True):
+        return False
+    return (f"{dotted}.{name}" in sys.modules
+            and not isinstance(getattr(pkg, name, None), types.ModuleType))
+
+
+def _reexported_submodule_names(dotted: str, origin: str) -> frozenset:
+    """The names the package *dotted* (source at *origin*) binds by an
+    UNCONDITIONAL top-level import of that very name from exactly its
+    submodule ``dotted.<name>``, read as its loader reads it, nothing
+    imported:
+
+    * a ``.seam``: the FINAL generated tree (:func:`clausal.seam_audit.
+      generated_tree`), a module-body ``from dotted.n import ... as n`` --
+      bare, or as the body of the compiler's ``-import_from`` guard;
+    * a Prolog-syntax source (``.clausal``, ``.pl``): its directives, read
+      by the reader the loader uses (op/3 and exported ops applied in
+      order), a ``use_module(Path, [n/A, ...])`` whose ``Path`` resolves
+      as the lowering resolves it (beside the file first, then on
+      ``sys.path``) to ``dotted.n`` -- Clausal Prolog has no conditional
+      directive and no ``as`` import, so each such entry binds ``n``.
+
+    Anything else, or anything unreadable: none (the submodule exclusion
+    stands)."""
+    try:
+        if _is_seam(origin):
+            return _seam_submodule_reexports(dotted, origin)
+        from clausal import _suffixes as sfx  # noqa: PLC0415
+        if sfx.is_prolog_source(origin):
+            return _prolog_submodule_reexports(dotted, origin)
+    except Exception:  # noqa: BLE001 -- unreadable: fail closed
+        pass
+    return frozenset()
+
+
+def _seam_submodule_reexports(dotted: str, origin: str) -> frozenset:
+    import warnings  # noqa: PLC0415
+    from clausal.seam_audit import generated_tree  # noqa: PLC0415
+    with open(origin, encoding="utf-8", errors="replace") as f:
+        text = f.read()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        tree = generated_tree(text, origin)
+    out: set = set()
+    for stmt in tree.body:
+        imp = stmt
+        if (isinstance(stmt, ast.Try) and stmt.body
+                and isinstance(stmt.body[0], ast.ImportFrom)):
+            # The -import_from guard: its handler re-raises unless the
+            # module LOADED (a .pl module's data names), so a bound name
+            # still comes after the submodule's first load.
+            imp = stmt.body[0]
+        if not isinstance(imp, ast.ImportFrom) or imp.level or not imp.module:
+            continue
+        if not imp.module.startswith(dotted + "."):
+            continue
+        sub = imp.module[len(dotted) + 1:]
+        for a in imp.names:
+            if (a.asname or a.name) == sub:
+                out.add(sub)
+    return frozenset(out)
+
+
+def _prolog_submodule_reexports(dotted: str, origin: str) -> frozenset:
+    from clausal.tools import iso_l3  # noqa: PLC0415
+    from clausal.tools.iso_l3_directives import (  # noqa: PLC0415
+        _indicator, _slash_path)
+    from clausal.tools.prolog_reader import (  # noqa: PLC0415
+        EOF, NEED_MORE, PrologReader)
+    from clausal.tools.prolog_to_clausal import (  # noqa: PLC0415
+        dotted_for_file, package_root, sibling_module_file)
+    from clausal.tools.prolog_tokenizer import (  # noqa: PLC0415
+        PL_SOURCE_NESTED_COMMENTS)
+    with open(origin, encoding="utf-8") as f:
+        text = f.read()
+    reader = PrologReader(op_table=iso_l3.reader_op_table(),
+                          nested_comments=PL_SOURCE_NESTED_COMMENTS)
+    reader.feed(text)
+    reader.close()
+
+    def define(ops):
+        for op in ops:
+            if type(op) is tuple and len(op) == 3:
+                for n in (op[2] if type(op[2]) is list else [op[2]]):
+                    reader.op_table.define(op[0], op[1], n)
+
+    def resolve(path: str) -> "str | None":
+        if path.endswith(".pl"):
+            path = path[:-3]
+        parts = path.split("/")
+        if not all(p.isidentifier() for p in parts):
+            return None
+        cand = sibling_module_file(path, origin)
+        if cand is not None:
+            return dotted_for_file(cand, package_root(origin, dotted))
+        found = ".".join(parts)
+        # The lowering redirects py.X and the seam's import aliases: a
+        # name either would rewrite is not read as the plain module here.
+        return found if _module_path(found) == found else None
+
+    out: set = set()
+    while True:
+        it = reader.read_term()
+        if it is EOF or it is NEED_MORE:
+            break
+        if type(it).__name__ != "Directive":
+            continue
+        t = it.term
+        if type(t) is not tuple:
+            continue
+        if t[0] == "module" and len(t) == 3 and type(t[2]) is list:
+            define([e[1:] for e in t[2]
+                    if type(e) is tuple and len(e) == 4 and e[0] == "op"])
+        elif t[0] == "op" and len(t) == 4:
+            define([t[1:]])
+        elif (t[0] == "use_module" and len(t) == 3
+              and type(t[2]) is list):
+            path = _slash_path(t[1])
+            source = resolve(path) if path is not None else None
+            if source is None or not source.startswith(dotted + "."):
+                continue
+            sub = source[len(dotted) + 1:]
+            if any((_indicator(e) or ("",))[0] == sub for e in t[2]):
+                out.add(sub)
+    return frozenset(out)
 
 
 def _cached_exports(dotted: str, origin: str,
