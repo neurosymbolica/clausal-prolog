@@ -1,4 +1,4 @@
-"""Doc-snippet integrity + coverage checks for clausal-laya's own docs/.
+"""Doc-snippet integrity + coverage checks for clausal-decide's own docs/.
 
 Mirrors core's tests/test_doc_snippet_*.py against this package's docs.
 Shared check logic lives in clausal/tools/doc_snippet_check.py (in core).

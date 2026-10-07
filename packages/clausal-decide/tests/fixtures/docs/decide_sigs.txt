@@ -1,7 +1,7 @@
-# Display snippets for docs/laya.md
+# Display snippets for docs/decide.md
 
 --8<-- [start:import]
--import_from(py.laya, [choice, noul, score, predict, predict_batch,
+-import_from(py.decide, [choice, noul, score, predict, predict_batch,
                         use_backend, backend, register_model, finetune])
 --8<-- [end:import]
 

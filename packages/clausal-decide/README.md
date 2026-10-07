@@ -1,10 +1,12 @@
-# clausal-laya
+# clausal-decide
 
-[laya](https://pypi.org/project/laya/) decision predicates for [Clausal Prolog](https://github.com/neurosymbolica/clausal-prolog).
+Calibrated decisions as relations, for [Clausal Prolog](https://github.com/neurosymbolica/clausal-prolog).
 
-laya is a non-autoregressive "System 1" decision engine: one forward pass
-answers a set of typed questions about a text with calibrated probabilities,
-in 100+ languages. This package makes those answers relations — neural
+A "System 1" decision model answers a set of typed questions about a text
+(pick a label, yes or no, a level on a scale) in one forward pass, with
+calibrated probabilities. This package runs such a model, either the open
+[laya](https://pypi.org/project/laya/) model or TypeSafe's hosted Jev, and
+makes its answers relations — neural
 predicates whose solutions carry probabilities, for symbolic logic to filter,
 rank and combine:
 
@@ -21,13 +23,13 @@ rank and combine:
 ## Install
 
 ```
-pip install clausal-laya
+pip install clausal-decide
 ```
 
 laya (with torch and transformers) is pulled in as a dependency. Requires
 Python 3.13 or later. laya downloads its checkpoint from the Hugging Face Hub
 on first use. For the `typesafe` backend:
-`pip install "clausal-laya[typesafe]"` and set `TYPESAFE_API_KEY`.
+`pip install "clausal-decide[typesafe]"` and set `TYPESAFE_API_KEY`.
 
 ## Use
 
@@ -37,11 +39,11 @@ the seam: put the imports in a `.seam` module and list it under
 `[tool.clausal] python_bridges` in your project's `pyproject.toml` (see
 [Importing Prolog](https://github.com/neurosymbolica/clausal-prolog/blob/main/docs/importing_prolog.md)).
 
-This example, from [`tests/fixtures/docs/laya_examples.seam`](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-laya/tests/fixtures/docs/laya_examples.seam),
+This example, from [`tests/fixtures/docs/decide_examples.seam`](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-decide/tests/fixtures/docs/decide_examples.seam),
 escalates a ticket when the model thinks the customer is leaving:
 
 ```seam
--import_from(py.laya, [noul])
+-import_from(py.decide, [noul])
 
 escalate(TICKET) <- (
     noul(TICKET, "Does the user threaten to cancel or leave?", P),
@@ -55,7 +57,7 @@ test("a cancellation threat escalates") <- (
 
 ## Documentation
 
-- [laya — calibrated decisions as relations](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-laya/docs/laya.md)
+- [decide — calibrated decisions as relations](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-decide/docs/decide.md)
 
 ## License
 

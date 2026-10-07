@@ -1,10 +1,10 @@
 # clausal: no-collect
-# Seam-level tests of the laya adapter against the FAKE router in
-# tests/test_laya_adapter_stubbed.py (the last label is the most probable,
+# Seam-level tests of the decide adapter against the FAKE router in
+# tests/test_decide_adapter_stubbed.py (the last label is the most probable,
 # P(yes) is 0.8, score level 1 is the most probable).  Run by that test,
 # never collected on its own: with the real model the numbers differ.
 
--import_from(py.laya, [choice, noul, score, predict, predict_batch])
+-import_from(py.decide, [choice, noul, score, predict, predict_batch])
 
 test("choice/4 answers a label the caller wrote") <- (
     choice("We were billed twice", "Which team?", ['technical', 'billing'], L),

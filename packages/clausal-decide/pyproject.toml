@@ -3,9 +3,9 @@ requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "clausal-laya"
+name = "clausal-decide"
 version = "0.1.0"
-description = "laya / Jev System One decision predicates for Clausal (calibrated decisions as relations)"
+description = "Calibrated decisions as relations for Clausal: choice, yes/no and score answers about a text, from laya or TypeSafe's Jev"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
@@ -22,9 +22,9 @@ typesafe = ["typesafe-sdk>=0.7"]   # the `typesafe` backend (TypeSafe's Jev)
 
 [project.urls]
 Homepage = "https://clausal.pl"
-Documentation = "https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-laya/README.md"
+Documentation = "https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-decide/README.md"
 Repository = "https://gitlab.com/MikeAmy/clausal"
-GitHub = "https://github.com/neurosymbolica/clausal-prolog/tree/main/packages/clausal-laya"
+GitHub = "https://github.com/neurosymbolica/clausal-prolog/tree/main/packages/clausal-decide"
 
 [tool.setuptools.packages.find]
 where = ["."]
