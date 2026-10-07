@@ -1316,6 +1316,32 @@ def test_a_refusal_names_the_source_lines_and_every_site(sbx):
     assert "more" not in msg
 
 
+def test_a_bare_import_names_the_denied_predicates_it_brings_in(sbx):
+    """Ruling D26: a bare import of an allowed adapter that has denied
+    predicates stays refused at load, and the refusal names the library,
+    every denied predicate the import brought in, and how to list the
+    predicates needed instead (it read as if the adapter were not
+    allowed)."""
+    sbx.write("bare.clausal", ":- use_module(library(datetime)).\n"
+              "go(X) :- date_add(date(2020, 1, 1), 1, X).\n")
+    sbx.write("listed.clausal",
+              ":- use_module(library(datetime), [date_add/3]).\n"
+              "go(X) :- date_add(date(2020, 1, 1), 1, X).\n")
+    res = sbx.run("""
+        import clausal.sandbox as sb
+        sb.enable()
+        probe("bare", lambda: load("bare"))
+        probe("listed", lambda: load("listed"))
+    """)
+    msg = refused(res, "bare", LOAD)["msg"]
+    assert "sandbox_adapter at line 1" in msg, msg
+    assert ("library(datetime) brings in denied now/1, now_utc/1, "
+            "timestamp/2, today/1") in msg, msg
+    assert ("list the predicates you need, e.g. "
+            "use_module(library(datetime), [date_add/3])") in msg, msg
+    assert res["listed"]["ok"], res["listed"]
+
+
 def test_the_sandbox_forces_the_native_pl_front_end(sbx):
     """Ruling S1: a .pl loads through the native front end in the sandbox,
     whatever CLAUSAL_PL_FRONTEND says.  The translator lowers a float

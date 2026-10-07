@@ -633,8 +633,8 @@ def _access_error(kind: str, culprit, why: str, context: str = "call/1"):
 
 
 _ROUTE_TEXT = {
-    "sandbox_adapter": ("an engine adapter, or a predicate of one, outside "
-                        "the sandbox's allowlist"),
+    "sandbox_adapter": ("an engine adapter outside the sandbox's allowlist, "
+                        "or a denied predicate of an allowed one"),
     "sandbox_engine_module": ("an engine module the sandbox does not let a "
                               "program import"),
 }
@@ -725,7 +725,58 @@ def _dotted_builtin(dotted: str) -> bool:
         k[0] == dotted for k in _DB_BUILTINS)
 
 
-def _sandbox_checker(routes: list, children: list):
+def _denied_name(dotted: str, name: "str | None") -> "str | None":
+    """The adapter module when *name* is a DENIED predicate of the ALLOWED
+    adapter *dotted* names (directly or through its ``library(...)``
+    facade), else None."""
+    if name is None:
+        return None
+    adapter = _facade_adapter(dotted) if dotted.startswith(_FACADES) \
+        else dotted
+    row = adapter_row(adapter) if adapter else None
+    if (row is None or _canonical(adapter) not in _STATE.adapters
+            or name not in row.denied):
+        return None
+    return adapter
+
+
+def _denied_hint(denied) -> str:
+    """Ruling D26: what a refusal over denied predicates says -- per
+    module, the denied predicates the import brought in, and how to list
+    the needed ones instead."""
+    import importlib  # noqa: PLC0415
+    from clausal.logic.solve import module_signatures  # noqa: PLC0415
+    by: dict = {}
+    for dotted, adapter, name in denied:
+        by.setdefault(dotted, (adapter, set()))[1].add(name)
+    parts = []
+    for dotted, (adapter, names) in sorted(by.items()):
+        try:
+            sigs = module_signatures(importlib.import_module(dotted))
+        except Exception:  # noqa: BLE001 -- unreadable: names only
+            sigs = {}
+        row = adapter_row(adapter)
+
+        def ind(n, sigs=sigs):
+            return ", ".join(f"{n}/{a}" for a in sorted(sigs.get(n, ()))) \
+                or n
+        listed = ", ".join(ind(n) for n in sorted(names))
+        if dotted.startswith(_FACADES):
+            label = f"library({dotted[len(_FACADES):]})"
+            ok = sorted(n for n in sigs
+                        if n not in row.denied and not n.startswith("_"))
+            how = (f"e.g. use_module({label}, [{ind(ok[0]).split(', ')[0]}])"
+                   if ok else f"in the use_module({label}, [...]) list")
+        else:
+            label = dotted
+            how = "in the import list"
+        parts.append(f"{label} brings in denied {listed}: the sandbox "
+                     f"refuses them, so list the predicates you need, {how}")
+    return "; ".join(parts)
+
+
+def _sandbox_checker(routes: list, children: list,
+                     denied: "list | None" = None):
     """:func:`clausal.python_bridges.audit_checker`, narrowed: an
     engine-shipped module a sandboxed module references must be an allowed
     adapter (or its facade, or the stdlib).  Two engine shapes the bridge
@@ -745,6 +796,9 @@ def _sandbox_checker(routes: list, children: list):
         kind = _engine_reference_ok(dotted, name)
         if kind is not None:
             routes.append((kind, line))
+            adapter = _denied_name(dotted, name)
+            if adapter is not None and denied is not None:
+                denied.append((dotted, adapter, name))
             return False
         return True
 
@@ -959,8 +1013,9 @@ def _sandboxed_code(loader, fullname: str):
         extra = _diagnostic_routes(text, path)
     routes: list = []
     children: list = []
+    denied: list = []
     found, _ = seam_audit.audit_tree(
-        tree, _sandbox_checker(routes, children),
+        tree, _sandbox_checker(routes, children, denied),
         translations=translations or (), module_items=items or (),
         prolog_surface=isinstance(loader, ih.PrologLoader))
     routes = routes + found + extra
@@ -970,7 +1025,9 @@ def _sandboxed_code(loader, fullname: str):
         else:
             raise load_error(path, (
                 f"the sandbox refuses {fullname} ({os.path.abspath(path)}): "
-                f"it reaches Python -- {_describe(routes)}.  In a sandbox "
+                f"it reaches Python -- {_describe(routes)}"
+                f"{'.  ' + _denied_hint(denied) if denied else ''}"
+                f".  In a sandbox "
                 f"Python is reachable only through the allowed engine "
                 f"adapters and the bridges enable(allow_bridges=...) "
                 f"names"))

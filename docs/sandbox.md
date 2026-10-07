@@ -234,6 +234,10 @@ pure computation:
 - no reflection into the program.
 
 **Denied predicates** are refused even though their module is allowed.
+A bare import of such a module, `:- use_module(library(datetime)).`,
+brings its denied predicates in too, so it is refused at load. The
+refusal names them. List only the predicates you need:
+`:- use_module(library(datetime), [date_add/3]).` loads.
 Any adapter that is not engine-shipped is refused, including an optional
 `clausal-*` package's adapter, even one spliced into
 `clausal.modules.py`. A new engine adapter is refused until it gets a row
