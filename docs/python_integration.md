@@ -522,28 +522,20 @@ tuple; a look-alike whose components do not rebuild stays a cell). A
 spelling become **one** Python key. A non-ground `Seg*` crosses raw (there is
 no text yet). This is what every `py.*` wrapper argument gets.
 
-**`to_python_text(term)` — char lists as text, by request.**
-The engine builds one char list in two shapes: the chars carrier (a string
-under `-double_quotes(chars)`, a DCG output, an open tail bound later, a
-recursion-built list) and a plain list (`[a, b]` as a literal, from
-`atom_chars/2`, a closed `append/3`, `reverse/2`, `maplist/3`…). `to_python`
-hands each over in the shape it was built: the carrier as `'ab'`, the plain
-list as `['a', 'b']`. `to_python_text` is `to_python` with every ground,
-non-empty list of one-char atoms as text, whatever built it, at every depth:
+**A char list has two Python shapes, and only here.** The engine builds one
+char list as the chars carrier (a string under `-double_quotes(chars)`, a DCG
+output, an open tail bound later) or as a plain list (`[a, b]` as a literal,
+from `atom_chars/2`, `append/3`, `reverse/2`…). Inside the engine these are one
+term: they unify and are `==`. `to_python` gives the carrier as `'ab'` and a
+plain list as `['a', 'b']`, because a list of one-char atoms is often a list
+of symbols (`[x, y]` as two axis names). Which shape a given builtin builds is
+**not** guaranteed and may change as the engine compacts more char lists, so
+do not rely on it. A predicate whose answer is *text* should return an atom,
+which crosses as a `str` whatever built it:
 
-```python
-from clausal import to_python, to_python_text
-
-to_python(["a", "b"])                     # ['a', 'b']
-to_python_text(["a", "b"])                # 'ab'
-to_python_text(("f", ["a", "b"], []))     # ('f', 'ab', [])
-to_python_text(["a", "bc"])               # ['a', 'bc']  not a char list
+```prolog
+name_of(A) :- phrase(greeting, L), atom_chars(A, L).   % A crosses as 'ab'
 ```
-
-`[]` is nil, not a char list, and stays `[]`; a mixed list stays a list; a
-list with an unbound tail crosses raw. The caveat: a one-char atom used as a
-*symbol* is a char too, so `[x, y]` as coordinates becomes `'xy'` and
-`[[x, y]]` becomes `['xy']`. That is why the `py.*` wrappers use `to_python`.
 
 **`to_clausal(obj)` — deep IN.** `python_terms.to_term(strict=True)`: a `str`
 is the atom (text is written `chars("…")`), a `Var` or engine term is left

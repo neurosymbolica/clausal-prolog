@@ -26,7 +26,7 @@ from clausal.logic.builtins import (
 )
 from clausal.logic.exceptions import LogicException
 from clausal.logic.cells import cell_args, cell_functor, make_cell
-from clausal.logic.to_python import to_python, to_python_text
+from clausal.logic.to_python import to_python
 from clausal.logic.python_terms import to_clausal
 from clausal.logic.builtins._helpers import term_key
 from clausal.repl import Solutions
@@ -98,7 +98,6 @@ __all__ = [
     # The Python boundary converters (dumb-seam step (b), 2026-09-26):
     # deep OUT, deep IN, and the standard-order sort key.
     "to_python",
-    "to_python_text",
     "to_clausal",
     "term_key",
     "Solutions",

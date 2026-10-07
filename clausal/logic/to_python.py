@@ -45,7 +45,7 @@ from clausal.terms import (
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.pythonic_ast.nodes import Node as _Node
 
-__all__ = ["to_python", "to_python_text", "unwrap_atom", "strip_atom_tags", "has_atom_tag",
+__all__ = ["to_python", "unwrap_atom", "strip_atom_tags", "has_atom_tag",
            "term_children", "map_term", "TERM_CONTAINER_TYPES"]
 
 
@@ -97,10 +97,6 @@ def to_python(val):
     values all the way down calls this function by name; code that wants the
     engine's rendering asks for it with ``term_to_string(D, S)`` (or
     ``print_term/1``) and interpolates ``S``.
-
-    A plain list of one-char atoms (``[a, b]`` from a literal, ``atom_chars``,
-    ``append``...) crosses as a LIST here; :func:`to_python_text` is the
-    explicit conversion that hands every char list over as text.
     """
     # A str is an ATOM whose Python form is itself, and it can never be a
     # bound Var, so it needs neither the deref nor the atom branch.  It is
@@ -483,88 +479,3 @@ def unwrap_atom(val):
             return [chars_text(e) if is_chars(e) else e for e in (deref(x) for x in val)]
         return val
     return _crossing_value(val) if _term_is_atom(val) else val   # a truth atom crosses as its OBJECT (D35)
-
-
-def to_python_text(val):
-    """:func:`to_python`, with every CHAR LIST handed over as text: the
-    explicit char-list-as-text conversion (D27, B as an explicit opt-in,
-    ruled 2026-10-07).
-
-    The engine builds one char list in two shapes: the chars carrier
-    (``"ab"`` under ``-double_quotes(chars)``, a DCG output, an open tail
-    bound later, a recursion-built list), which ``to_python`` makes
-    ``'ab'``, and a plain list (``[a, b]`` as a literal, from ``atom_chars``,
-    a closed ``append``, ``reverse``, ``maplist``...), which ``to_python``
-    keeps as ``['a', 'b']``.  Here EVERY ground, non-empty list whose
-    elements are all one-char atoms is text, whatever built it, at every
-    depth (inside a list, a cell, a dict value); everything else converts
-    exactly as :func:`to_python` converts it.
-
-    ``[]`` is nil, not a char list, and stays ``[]`` everywhere.  A mixed
-    list (``[a, bc]``, ``[a, 1]``, a list of one-char STRINGS) stays a list;
-    a list with an unbound tail crosses raw.  The caveat: a one-char atom
-    used as a SYMBOL is a char too, so ``[x, y]`` as coordinates becomes
-    ``'xy'`` and ``[[x, y]]`` becomes ``['xy']`` -- which is why the
-    ``py.*`` wrappers use :func:`to_python`.
-    """
-    return to_python(_carriers(val))
-
-
-def _char_list_text(val):
-    """The text of the list *val* when it is a CHAR LIST -- non-empty, every
-    element dereferencing to a one-char atom -- else ``None``.  A one-char
-    STRING (the carrier ``('$chars', 'a')``) is not an atom, so a list of
-    strings is not a char list; ``[]`` is nil, not a char list."""
-    if not val:
-        return None
-    parts = []
-    for x in val:
-        x = deref(x)
-        if type(x) is not str or len(x) != 1:
-            return None
-        parts.append(x)
-    return "".join(parts)
-
-
-def _carriers(val):
-    """*val* with every ground, non-empty char list -- a plain list, or a
-    ``SegList`` whose holes are all bound -- replaced by the chars carrier,
-    at every depth: :func:`to_python_text`'s pre-pass.  The carrier then
-    converts to text in :func:`to_python` like any string, so a registered
-    functor's rebuild sees the same converted arguments either way.
-    Everything else is rebuilt only where a child changed (``map_term``):
-    ``[]``, a mixed list, a non-ground ``Seg*`` and a pythonic_ast Node are
-    left as they are."""
-    if type(val) is str:
-        return val
-    val = deref(val)
-    t = type(val)
-    if t in _SCALAR_TYPES or is_chars(val):
-        return val
-    if isinstance(val, _SEG_TYPES):
-        walked = walk(val)
-        if is_chars(walked) or isinstance(walked, _SEG_TYPES):
-            return val                 # text already, or not ground: as before
-        val = walked
-        t = type(val)
-    if isinstance(val, list):
-        text = _char_list_text(val)
-        if text is not None:
-            return chars(text)
-    if isinstance(val, _Node):
-        return val                     # code, not data: crosses as itself
-    if is_term_instance(val) and not isinstance(val, TERM_CONTAINER_TYPES):
-        # map_term rebuilds with ``t(**fields)``; a dataclass with its own
-        # __init__ refuses that, so mirror _to_python's copy fallback.
-        names = term_field_names(val)
-        new = {n: _carriers(getattr(val, n)) for n in names}
-        if all(new[n] is getattr(val, n) for n in names):
-            return val
-        try:
-            return t(**new)
-        except TypeError:
-            rebuilt = copy.copy(val)
-            for n, v in new.items():
-                object.__setattr__(rebuilt, n, v)
-            return rebuilt
-    return map_term(val, _carriers)

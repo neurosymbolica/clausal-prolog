@@ -237,8 +237,8 @@ text — not a bare `str` itself, since a bare `str` is now an atom (see
 sees depends on the crossing: a goal-position seam (`for S in --p(S):`)
 hands back the engine's own term, the carrier `('$chars', 'hello')`, and
 `clausal.to_python(S)` gives the `str` `'hello'` (a char list built as a plain
-list, e.g. by `atom_chars/2`, gives `['h', 'e', …]` unless you ask for
-`to_python_text(S)`); an argument passed to a
+list may give `['h', 'e', …]`, and which builtins build which shape is not
+guaranteed; return an atom when the answer is text); an argument passed to a
 Python callee from a clause body (`Y is ++f(S)`) arrives as a plain `str`.
 See [Python integration](python_integration.md).
 **The representation is never materialised into cons cells** — a proper
