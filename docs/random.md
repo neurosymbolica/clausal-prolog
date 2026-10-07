@@ -1,5 +1,15 @@
 # Random Module
 
+!!! warning "Deprecated"
+    `py.random` is deprecated (2026-10-07). It draws from one global generator
+    seeded from OS entropy, so its answers are not reproducible and do not
+    follow backtracking. Use [Pure Random](pure_random.md)
+    (`library(pure_random)`) instead: the generator state is a term, every
+    draw is a relation `S0 -> S`, and the same seed always gives the same
+    answers. The first call of a `py.random` predicate warns once per process
+    (`ClausalPyRandomDeprecationWarning`). The module keeps working until it
+    is removed.
+
 The `py.random` standard library module provides relational predicates for random number generation, random selection, and seeding. Uses a module-local PRNG instance to avoid polluting global state.
 
 > **Purity warning:** random predicates are inherently impure — they produce different results on each call and do not behave consistently under backtracking. A goal like `float_0_to_1(X)` will bind `X` to a *new* random value each time it is re-entered, which breaks the referential transparency that pure logic programs rely on. Use these predicates at the boundaries of your program (e.g. to generate test data or make stochastic choices) rather than deep inside relational code. For reproducible results, seed the PRNG with `set_seed/1` before use.

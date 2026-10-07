@@ -205,6 +205,7 @@ PY_FACADE_LIBS: tuple[str, ...] = (
     "json",
     "logging",
     "pbkdf2",
+    "pure_random",
     "py_csv",
     "py_files",
     "py_os",

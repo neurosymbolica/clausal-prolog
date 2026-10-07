@@ -14,6 +14,25 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `clausal-scipy`, `clausal-sklearn`, `clausal-spacy`, `clausal-sympy`,
   `clausal-torch` and `clausal-yaml` (0.1.0 each). Each is also an extra of `clausal`, e.g.
   `pip install "clausal[scipy]"`.
+- **`library(pure_random)`: pure, state-threaded random numbers** (operator
+  ruling 2026-10-07). The generator state is the term `rng(Seed, N)` (the
+  seed and a draw counter); every predicate is a relation `S0 -> S`:
+  `rng_seed/2`, `random/3` (float in `[0, 1)`), `random_between/5`
+  (inclusive), `random_member/4`, `random_permutation/4`, `random_sample/5`.
+  No global generator: the same seed gives the same answers in every
+  process, backtracking restores the state, and the last two arguments are
+  the DCG pair, so `phrase(G, S0, S)` threads it. The N-th draw is
+  `random.Random(<SHA-256 of the seed's text and N>).random()`, which Python
+  keeps stable across versions; the engine's own mappings (rejection
+  sampling over 53-bit draws, Fisher-Yates) give integers, members,
+  permutations and samples. Golden-value tests pin fixed seeds to fixed
+  outputs. Every bad call raises an ISO error, never a failure: an unbound
+  state is `instantiation_error`, a malformed one `type_error(rng_state,
+  S)`, `random_between(L, H, ...)` with `L > H` is
+  `domain_error(not_less_than(L), H)`, `random_member/4` on `[]` is
+  `domain_error(non_empty_list, [])`. Seam: `-import_from(pure_random,
+  [...])`. Named `pure_random` because a facade never takes a Scryer
+  library name (`library(random)`). See [docs/pure_random.md](docs/pure_random.md).
 
 ### Changed (docs)
 
@@ -36,6 +55,16 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `.clausal` file and on the native `.pl` front end (importing nothing,
   leaving `m` unloaded), and is still a translation error on the default
   `.pl` importer.
+
+### Deprecated
+
+- **`py.random` (`library(py_random)`)** (operator ruling 2026-10-07). It
+  draws from a process-global, OS-seeded generator, so its answers are not
+  reproducible and do not follow backtracking. The first call of any of its
+  predicates warns once per process with
+  `clausal.lint_warnings.ClausalPyRandomDeprecationWarning` (a
+  `ClausalLintWarning`, visible by default). It keeps working; use
+  `library(pure_random)`.
 
 ### Experimental
 

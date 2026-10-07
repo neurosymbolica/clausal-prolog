@@ -34,7 +34,7 @@ Up: [../AGENTS.md](../AGENTS.md)
   `lists`, `pairs`, `higher_order`, `meta_predicates`, `term_inspection`,
   `database_ops`, `flags`, `control`, `io`, `logging`.
 - **Constraints**: `constraints` (dif + CLP(Z)), `clpb`, `clpq`, `clpr`.
-- **Standard Library**: `random`, `json`, `csv`, `os`, `files`, `process`,
+- **Standard Library**: `pure_random`, `random` (deprecated), `json`, `csv`, `os`, `files`, `process`,
   `regex`, `date_time`, `sqlite`, `uuid`, `crypto`, `http`, `tcp`, `graphs`, `units`.
 - **Advanced**: `import` (module system), `term_expansion`, `reflection`,
   `python_integration`, `asyncio`, `public-api`, `tabling`, `wfs`, `metainterpreters`.

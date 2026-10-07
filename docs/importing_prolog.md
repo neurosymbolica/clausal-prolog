@@ -477,7 +477,7 @@ imports as a system library, the Scryer way:
 |---|---|
 | `clausal/modules/py/<lib>.py` (`py/datetime`, `py/json`, `py/re`, ...) | `library(<lib>)` |
 | `py/os`, `py/files`, `py/random`, `py/uuid`, `py/csv`, `py/process` | `library(py_<lib>)` (`library(py_os)`, ...) |
-| `clausal/modules/<m>.py` (`units`, `imperial`, `currency`, `graphs`, `reflection`) | `library(<m>)` |
+| `clausal/modules/<m>.py` (`units`, `imperial`, `currency`, `graphs`, `pure_random`, `reflection`) | `library(<m>)` |
 | `clausal/modules/countries/<j>.py` (`european_union`, ...) | `library(countries/<j>)` |
 
 A facade (`clausal/library/<path>.seam`) is a pure re-export: the module's

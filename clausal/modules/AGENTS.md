@@ -21,6 +21,7 @@ Up: [../AGENTS.md](../AGENTS.md)
 | `_unit_registry.py`, `_ratio_data.py` | Data-only unit tables. Must never import `units.py` (see gotchas). | none |
 | `currency.py` | Money constructors, rounding, formatting, currency metadata accessors. | `library(currency)` |
 | `countries/` | One module per jurisdiction defining its currencies (`thailand.baht`, `european_union.euro`), `_currency.py` (the currency-as-units-base-dimension factory) and `_data.py` (ISO 4217 table). | `library(countries/<j>)` |
+| `pure_random.py` | The pure, state-threaded random library: state `rng(Seed, N)`, every draw a relation `S0 -> S` (`rng_seed/2`, `random/3`, `random_between/5`, `random_member/4`, `random_permutation/4`, `random_sample/5`). Reproducibility guarantee and golden values: its docstring and `tests/test_pure_random.py`. Supersedes the deprecated `py/random.py`. | `library(pure_random)` |
 | `graphs.py` | Graph predicates over edge lists (paths, cycles, connectivity, MST, ...), `_GraphPredicate` adapters. | `library(graphs)` |
 | `reflection.py` | Match reified Clausal source from Clausal (`reified_clause`, `clause_body`, `goal_functor`, ...). | `library(reflection)` |
 | `prolog.py` | Private reference implementations of ISO `//`, `mod`, `rem`. No public predicates. | none |

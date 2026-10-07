@@ -16,7 +16,7 @@ Up: [../AGENTS.md](../AGENTS.md)
 |---|---|
 | `__init__.py` | The adapter base and shared conventions: `ModulePredicate`, `simple_to_trampoline`, text helpers (`to_text`, `require_text`, `text_or_str`, `text_result`, `unify_result`, `symbol`), option lookup (`option`), error raisers (`expect_type`, `raise_domain_error`, `raise_os_error`, `raise_http_status`, `raise_syntax_error`), `_import_stdlib`. |
 | `_helpers.py` | Dispatch builders shared by wrappers (many used by the extension packages): `_pred(name, (arity, fn), ...)`, `_pure`, `_bidir_2`/`_bidir_3_*`, `_check_*`, `_property_2`, `_fact_table_2`; re-exports `to_python` (alias `_deep_deref`). |
-| `csv.py`, `datetime.py`, `files.py`, `json.py`, `logging.py`, `os.py`, `process.py`, `random.py`, `re.py`, `sqlite.py`, `uuid.py` | Stdlib wrappers; each docstring lists its predicates and type mapping. |
+| `csv.py`, `datetime.py`, `files.py`, `json.py`, `logging.py`, `os.py`, `process.py`, `random.py`, `re.py`, `sqlite.py`, `uuid.py` | Stdlib wrappers; each docstring lists its predicates and type mapping. `random.py` is DEPRECATED (2026-10-07; warns once per process): use `../pure_random.py`. |
 | `hash.py`, `hmac.py`, `pbkdf2.py` | hashlib / hmac wrappers (doc: `docs/crypto.md`). Smallest complete examples of the pattern below. |
 | `asyncio.py` | `await_value/2`, `await_each/2`, `sleep/1` over `clausal.aio.await_only` (`library(asyncio)`). |
 | `http.py`, `tcp.py`, `url.py` | urllib.request, socket, urllib.parse wrappers. |

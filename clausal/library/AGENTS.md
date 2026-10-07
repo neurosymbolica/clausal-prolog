@@ -16,7 +16,7 @@ Up: [../AGENTS.md](../AGENTS.md)
 |---|---|---|
 | `<name>.seam` (`asyncio`, `datetime`, `json`, `re`, `hash`, `hmac`, `http`, `logging`, `pbkdf2`, `sqlite`, `tcp`, `url`) | `clausal.modules.py.<name>` | `py/` level dropped |
 | `py_<name>.seam` (`py_csv`, `py_files`, `py_os`, `py_process`, `py_random`, `py_uuid`) | `clausal.modules.py.<name>` | prefixed because Scryer has a `library(<name>)` of its own |
-| `units.seam`, `imperial.seam`, `currency.seam`, `graphs.seam`, `reflection.seam` | `clausal.modules.<name>` | |
+| `units.seam`, `imperial.seam`, `currency.seam`, `graphs.seam`, `pure_random.seam`, `reflection.seam` | `clausal.modules.<name>` | |
 | `countries/<jurisdiction>.seam` (181) | `clausal.modules.countries.<j>` | values only (currencies, minor units) |
 | `__init__.py` | — | **Hand-written.** `SCRYER_LIBRARIES` (names a facade must not take), `facade_path()` (`os` -> `py_os`), `is_value()` (what counts as a re-exported value). |
 | `countries/__init__.py` | — | Hand-written package marker. |

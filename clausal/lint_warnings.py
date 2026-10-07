@@ -333,3 +333,21 @@ class ClausalImportedDataNameWarning(ClausalLintWarning):
     binds it; data needs no declaration) while ``name`` sits within a small
     edit distance of a predicate M does define -- a likely misspelled
     predicate import.  Emitted once per (importer, M, name)."""
+
+
+class ClausalPyRandomDeprecationWarning(ClausalLintWarning):
+    """A predicate of ``py.random`` (``library(py_random)``) was called.
+    Deprecated 2026-10-07 (operator ruling): it draws from a process-global
+    generator seeded from OS entropy, so its answers are not reproducible
+    and do not follow backtracking.  Use the pure, state-threaded
+    ``pure_random`` library (``library(pure_random)``) instead: the
+    generator state is the term ``rng(Seed, N)`` and every draw is a
+    relation ``S0 -> S``.  ``py.random`` keeps working until it is removed.
+
+    VISIBLE BY DEFAULT, like ``ClausalAtomClassDeprecationWarning`` and for
+    the same reason (a ``DeprecationWarning`` is silenced outside
+    ``__main__``).  Emitted ONCE PER PROCESS, on the first call of any
+    ``py.random`` predicate, guarded in ``clausal.modules.py.random`` rather
+    than by the warnings registry.  Suppress it with
+    ``warnings.filterwarnings`` on this class.
+    """

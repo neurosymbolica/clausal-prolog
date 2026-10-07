@@ -91,7 +91,8 @@ nav:
     - CLP(Q): clpq.md
     - CLP(R): clpr.md
   - Standard Library:
-    - Random: random.md
+    - Pure Random: pure_random.md
+    - Random (deprecated): random.md
     - JSON: json.md
     - CSV: csv.md
     - OS: os.md
@@ -172,6 +173,9 @@ extra:
   # The "What's new?" list under the home page's table of contents
   # (overrides/partials/toc.html). Newest first.
   whats_new:
+    - title: "Pure random numbers: reproducible and backtrack-safe"
+      date: 2026-10-07
+      link: pure_random/
     - title: Optional packages on PyPI (SciPy, PyTorch, JAX, spaCy, ACL2, ...)
       date: 2026-10-07
       link: packages/

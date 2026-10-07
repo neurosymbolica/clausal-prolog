@@ -263,7 +263,8 @@ for the full feature set.
 | [Logging](logging.md) | Structured logging predicates |
 | [UUID](uuid.md) | UUID generation and inspection |
 | [Graphs](graphs.md) | Graph traversal, pathfinding, connectivity, MST |
-| [Random](random.md) | Random number generation, selection, seeding |
+| [Pure Random](pure_random.md) | Reproducible, backtrack-safe random numbers: the generator state is a term |
+| [Random](random.md) | Deprecated global-generator random numbers (use Pure Random) |
 | [JSON](json.md) | JSON parsing, generation, DictTerm integration |
 | [CSV](csv.md) | CSV parsing, generation, DictTerm records |
 | [OS](os.md) | Environment variables, working directory, process info, platform |

@@ -1,5 +1,13 @@
 """clausal.modules.py.random — random number predicates for Clausal.
 
+DEPRECATED (operator ruling 2026-10-07): this adapter draws from one
+process-global generator seeded from OS entropy, so its answers are neither
+reproducible nor restored on backtracking.  Use the pure, state-threaded
+library ``clausal.modules.pure_random`` (``library(pure_random)``) instead.
+The first call of any predicate here warns once per process
+(``clausal.lint_warnings.ClausalPyRandomDeprecationWarning``); the
+predicates keep working until the adapter is removed.
+
 Provides relational predicates for random number generation, random
 selection, and seeding.  Import via::
 
@@ -149,29 +157,64 @@ def _maybe_1(p, trail, k):
         yield None
 
 
+# ── Deprecation (operator ruling 2026-10-07) ───────────────────────────
+
+_warned = False
+
+
+def _warn_deprecated():
+    """Warn, once per process, that py.random is deprecated."""
+    global _warned
+    if _warned:
+        return
+    _warned = True
+    import warnings  # noqa: PLC0415
+    from clausal.lint_warnings import (  # noqa: PLC0415
+        ClausalPyRandomDeprecationWarning,
+    )
+    warnings.warn(
+        "py.random (library(py_random)) is deprecated: it draws from a "
+        "global, OS-seeded generator, so answers are not reproducible and "
+        "do not follow backtracking. Use the pure, state-threaded library "
+        "pure_random (library(pure_random)): rng_seed/2, random/3, "
+        "random_between/5, random_member/4, random_permutation/4, "
+        "random_sample/5.",
+        ClausalPyRandomDeprecationWarning, stacklevel=2)
+
+
+def _deprecated(simple_fn):
+    """*simple_fn* behind the once-per-process deprecation warning."""
+    def fn(*args):
+        _warn_deprecated()
+        return simple_fn(*args)
+    fn.__name__ = simple_fn.__name__
+    fn.__doc__ = simple_fn.__doc__
+    return fn
+
+
 # ── Build and export predicate objects ──────────────────────────────────
 
 float_0_to_1 = ModulePredicate("float_0_to_1")
-float_0_to_1._register(1, simple_to_trampoline(_random_1))
+float_0_to_1._register(1, simple_to_trampoline(_deprecated(_random_1)))
 
 float_between = ModulePredicate("float_between")
-float_between._register(3, simple_to_trampoline(_random_float_3))
+float_between._register(3, simple_to_trampoline(_deprecated(_random_float_3)))
 
 integer_between = ModulePredicate("integer_between")
-integer_between._register(3, simple_to_trampoline(_random_integer_3))
+integer_between._register(3, simple_to_trampoline(_deprecated(_random_integer_3)))
 
 choice = ModulePredicate("choice")
-choice._register(2, simple_to_trampoline(_random_member_2))
+choice._register(2, simple_to_trampoline(_deprecated(_random_member_2)))
 
 permutation = ModulePredicate("permutation")
-permutation._register(2, simple_to_trampoline(_random_permutation_2))
+permutation._register(2, simple_to_trampoline(_deprecated(_random_permutation_2)))
 
 sample = ModulePredicate("sample")
-sample._register(3, simple_to_trampoline(_random_sample_3))
+sample._register(3, simple_to_trampoline(_deprecated(_random_sample_3)))
 
 set_seed = ModulePredicate("set_seed")
-set_seed._register(1, simple_to_trampoline(_random_seed_1))
+set_seed._register(1, simple_to_trampoline(_deprecated(_random_seed_1)))
 
 maybe = ModulePredicate("maybe")
-maybe._register(0, simple_to_trampoline(_maybe_0))
-maybe._register(1, simple_to_trampoline(_maybe_1))
+maybe._register(0, simple_to_trampoline(_deprecated(_maybe_0)))
+maybe._register(1, simple_to_trampoline(_deprecated(_maybe_1)))

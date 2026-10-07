@@ -252,7 +252,8 @@ is a `UserWarning` through `ClausalLintWarning`, so they show by default:
 `ClausalShadowedVariableWarning`, `ClausalBooleanSeamWarning`,
 `ClausalAtomExportDefinedAsPredicateWarning`,
 `ClausalExportArityMismatchWarning`, `ClausalRetiredQuasiQuoteWarning`, `ClausalAtomClassDeprecationWarning`,
-`ClausalSeamTextCompareWarning`, `ClausalStringInCatchPatternWarning`.
+`ClausalSeamTextCompareWarning`, `ClausalStringInCatchPatternWarning`,
+`ClausalPyRandomDeprecationWarning`.
 
 **The lint rule for 1.x:** a minor release may add a new lint, but a new
 lint may only **warn**. Turning a lint into a load-time error, so that code
