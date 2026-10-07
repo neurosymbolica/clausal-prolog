@@ -96,7 +96,7 @@ These are **compiler special forms** — transformed at compile time, not dispat
 ```seam
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:once_1"
 ```
-Commit to the first solution of `Goal`; succeeds at most once even if `Goal` has multiple solutions.
+Commit to the first solution of `Goal`; succeeds at most once even if `Goal` has multiple solutions. A transition construct, **supported but discouraged** (it gives up monotonicity and is being phased out): prefer a deterministic predicate, or [`if_/3`](reified_ite.md) with a reifiable condition.
 
 ??? info "Implementation & tests"
     **Seam tests:** `tests/fixtures/once_member.seam`
@@ -108,7 +108,7 @@ Commit to the first solution of `Goal`; succeeds at most once even if `Goal` has
 ```seam
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:not_1"
 ```
-Negation as failure (NAF). Succeeds if `Goal` has no solutions. Written as the Python keyword, `not goal`, in a clause body; `Not` (TitleCase) is a load-time `SyntaxError` like every TitleCase name.
+Negation as failure (NAF). Succeeds if `Goal` has no solutions. Supported but discouraged, like `once/1` and `forall/2`: a transition construct, not monotone, being phased out; prefer `dif/2` or `if_/3`. Written as the Python keyword, `not goal`, in a clause body; `Not` (TitleCase) is a load-time `SyntaxError` like every TitleCase name.
 For tabled predicates, uses well-founded semantics (delayed negation); see [WFS](wfs.md).
 
 ??? info "Implementation & tests"
@@ -294,7 +294,7 @@ existential ones) but removes duplicates and sorts each set.
 ```seam
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:forall_2"
 ```
-Universal quantification: succeeds if `Action` succeeds for every solution of `Cond`. Desugars to `not(Cond and not(Action))`.
+Universal quantification: succeeds if `Action` succeeds for every solution of `Cond`. Desugars to `not(Cond and not(Action))`, so it is negation as failure underneath: supported but discouraged (a transition construct, like `once/1` and `not`, being phased out).
 
 ??? info "Implementation & tests"
     **Seam tests:** `tests/fixtures/meta_test.seam`

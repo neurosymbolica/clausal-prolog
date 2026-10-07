@@ -111,7 +111,7 @@ test("findall empty ok") <- (
 
 ### forall/2
 
-`forall(Condition, Action)` — succeeds if for every solution of Condition, Action also succeeds. equivalent to `not (Condition, not Action)`.
+`forall(Condition, Action)` — succeeds if for every solution of Condition, Action also succeeds. equivalent to `not (Condition, not Action)`. Like `once/1` and `not`, it is a transition construct: **supported but discouraged**, because it is negation as failure underneath and so not monotone. It works, and is being phased out.
 
 ```seam
 all_positive(XS) <- forall(in_(X, XS), X > 0)

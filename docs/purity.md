@@ -316,7 +316,8 @@ to search. This decoupling makes the approach flexible and versatile.
    constraint; negation-of-unification is a point-in-time check.
 
 3. **Use reified if-then-else instead of negation as failure for conditional
-   logic.** See [If-Then-Else](reified_ite.md).
+   logic.** See [If-Then-Else](reified_ite.md). `not`, `once/1` and `forall/2`
+   are supported but discouraged transition constructs, being phased out.
 
 4. **Name predicates relationally.** Describe what the arguments are and how
    they relate. See [Thinking Relationally](thinking_relationally.md).

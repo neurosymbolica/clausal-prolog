@@ -61,11 +61,12 @@ edge(3, 1).
 path(X, Y) :- edge(X, Y).
 path(X, Y) :- edge(X, Z), path(Z, Y).
 
-test("tom's grandchildren") :- grandparent(tom, ann), grandparent(tom, pat).
-test("fib(10) = 55") :- fib(10, 55).
-test("which fib is 55?") :- once(fib(N, 55)), N == 10.
-test("path reaches the whole cycle") :- findall(Y, path(1, Y), Ys), msort(Ys, [1, 2, 3]).
-test("tom has no grandparent", fail) :- grandparent(_, tom).
+test(tom_s_grandchildren) :- grandparent(tom, ann), grandparent(tom, pat).
+test(fib_10_55) :- fib(10, 55).
+% A finite domain makes the search terminate, so no once/1 is needed.
+test(which_fib_is_55) :- N in 0..20, fib(N, 55), N == 10.
+test(path_reaches_the_whole_cycle) :- findall(Y, path(1, Y), Ys), msort(Ys, [1, 2, 3]).
+test(tom_has_no_grandparent, fail) :- grandparent(_, tom).
 
 :- end_module(family).
 ```
@@ -125,11 +126,11 @@ send_more([S,E,N,D,M,O,R,Y]) :-
 
 classify(X, R) :- if_(X = a, R = yes, R = no).
 
-test("dcg") :- phrase(greeting, [hello, prolog]).
-test("send more money") :- send_more([9,5,6,7,1,0,8,2]).
-test("if_") :- classify(a, yes), classify(b, no).
-test("dif") :- dif(X, a), X = b.
-test("double quotes are strings") :- X = "abc", string(X).
+test(dcg) :- phrase(greeting, [hello, prolog]).
+test(send_more_money) :- send_more([9,5,6,7,1,0,8,2]).
+test(reified_if) :- classify(a, yes), classify(b, no).
+test(dif) :- dif(X, a), X = b.
+test(double_quotes_are_strings) :- X = "abc", string(X).
 
 :- end_module(puzzles).
 ```
@@ -154,9 +155,35 @@ choice, by design (ruling): !, -> and *-> are refused
 
 Use the pure alternatives instead. These are `dif/2`, `if_/3` and the
 reified predicates from `library(reif)` (see
-[If-Then-Else](reified_ite.md)), constraints, `once/1`, and first-argument
-indexing (see [Purity](purity.md)). The same rule applies to `{!}` in a
-grammar body.
+[If-Then-Else](reified_ite.md)), constraints, and first-argument
+indexing (see [Purity](purity.md)); or write the predicate so it is
+deterministic in the first place. The condition of `if_/3` must be
+**reifiable**: a closure that answers `true` or `false` as its last argument,
+such as `memberd_t(X, Xs)` or `X = Y`, never a plain goal. The same rule
+applies to `{!}` in a grammar body.
+
+`once/1`, `\+/1` and `forall/2` are still supported, but they are
+**transition constructs, supported but discouraged**: each commits to a
+first solution (or tests by failure), which gives up monotonicity, and they
+are being phased out like a ratchet. Reach for the forms above first:
+
+```prolog
+% pure.clausal
+:- module(pure, [first_member/2, listed/3]).
+:- use_module(library(reif)).
+
+% member(X, Xs), !   becomes a predicate that is deterministic by construction.
+first_member(X, [X|_]).
+
+% ( memberchk(X, Xs) -> R = yes ; R = no )   becomes if_/3 with a reified test.
+listed(X, Xs, R) :- if_(memberd_t(X, Xs), R = yes, R = no).
+
+test(first_member) :- first_member(X, [a, b]), X == a.
+test(listed) :- listed(b, [a, b], yes), listed(c, [a, b], no).
+test(listed_most_general) :- findall(R, listed(_, [a, b], R), [yes, yes, no]).
+
+:- end_module(pure).
+```
 
 ### Modules end with `end_module/1`
 
@@ -225,7 +252,7 @@ the spellings that change:
 | Import | `-import_from(lib, [p])` | `:- use_module(lib, [p/1]).` |
 | Table | `-table(path/2)` | `:- table(path/2).` |
 | Grammar rule | `s >> (np, vp)` | `s --> np, vp.` |
-| Test | `test("t") <- goal` | `test("t") :- goal.` |
+| Test | `test("t") <- goal` | `test(t) :- goal.` (a string name, `test("t")`, also works) |
 | Python | `++expr`, hosted Python | not available: go through a `.seam` module |
 
 ---

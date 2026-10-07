@@ -193,10 +193,10 @@ Added to `family.clausal` (and exported), these can be checked with tests —
 see [Testing your code](#testing-your-code):
 
 ```prolog
-test("dave and eve are siblings") :- sibling(dave, eve).
-test("nobody is their own sibling", fail) :- sibling(dave, dave).
-test("bob has a child") :- has_child(bob).
-test("dave has no child", fail) :- has_child(dave).
+test(dave_and_eve_are_siblings) :- sibling(dave, eve).
+test(nobody_is_their_own_sibling, fail) :- sibling(dave, dave).
+test(bob_has_a_child) :- has_child(bob).
+test(dave_has_no_child, fail) :- has_child(dave).
 ```
 
 ### How unification works
@@ -296,8 +296,8 @@ factorial(N, F) :-
     F #= N * F1,
     factorial(N1, F1).
 
-test("square") :- square(7, 49).
-test("factorial(5)") :- factorial(5, 120).
+test(square) :- square(7, 49).
+test(factorial_5) :- factorial(5, 120).
 
 :- end_module(arith).
 ```
@@ -313,8 +313,8 @@ A constraint works in all directions — even when variables are unbound:
 
 successor(N, M) :- M #= N + 1.
 
-test("forwards") :- successor(3, M), M == 4.
-test("backwards") :- successor(N, 4), N == 3.
+test(forwards) :- successor(3, M), M == 4.
+test(backwards) :- successor(N, 4), N == 3.
 
 :- end_module(succ).
 ```
@@ -353,9 +353,9 @@ fizzbuzz(N, fizz) :- N mod 3 #= 0, N mod 5 #\= 0.
 fizzbuzz(N, buzz) :- N mod 5 #= 0, N mod 3 #\= 0.
 fizzbuzz(N, N) :- N mod 3 #\= 0, N mod 5 #\= 0.
 
-test("15 is fizzbuzz") :- fizzbuzz(15, fizzbuzz).
-test("9 is fizz") :- fizzbuzz(9, fizz).
-test("9 is only fizz", fail) :- fizzbuzz(9, 9).
+test(t_15_is_fizzbuzz) :- fizzbuzz(15, fizzbuzz).
+test(t_9_is_fizz) :- fizzbuzz(9, fizz).
+test(t_9_is_only_fizz, fail) :- fizzbuzz(9, 9).
 
 :- end_module(fizzbuzz).
 ```
@@ -386,6 +386,12 @@ exists only in the seam: Clausal Prolog itself does not run Python. See
 ## Negation
 
 `\+ Goal` is **negation as failure**: it succeeds if `Goal` has no solutions.
+
+`\+/1` is supported but **discouraged**: it is a transition construct, like
+`once/1` and `forall/2`, and is being phased out. It is not monotone, so it
+can answer differently when you reorder goals or add constraints. This
+section shows what it does; the pure alternatives are `dif/2` and `if_/3`
+with a reifiable condition (below).
 
 ```prolog
 safe_to_delete(File) :- \+ important(File).
@@ -453,14 +459,14 @@ list_sum([Head|Tail], Total) :-
     list_sum(Tail, Subtotal),
     Total #= Subtotal + Head.
 
-test("sum [1,2,3,4] = 10") :-
+test(sum_1_2_3_4_10) :-
     list_sum([1, 2, 3, 4], Total),
     Total == 10.
 
-test("sum [] = 0") :-
+test(sum_0) :-
     list_sum([], 0).
 
-test("[1,2] does not sum to 4", fail) :-
+test(t_1_2_does_not_sum_to_4, fail) :-
     list_sum([1, 2], 4).
 
 :- end_module(mymodule).
@@ -519,8 +525,8 @@ reachable(Source, Dest) :-
     edge(Source, Mid),
     reachable(Mid, Dest).
 
-test("a reaches d") :- reachable(a, d).
-test("d reaches nothing", fail) :- reachable(d, _).
+test(a_reaches_d) :- reachable(a, d).
+test(d_reaches_nothing, fail) :- reachable(d, _).
 
 :- end_module(graph).
 ```

@@ -59,7 +59,8 @@ directory, `name.seam` beats `name.clausal`, which beats `name.pl`.
 ## Features
 
 - **Clausal Prolog**: ISO syntax, ISO builtin names and error terms, `"…"`
-  as a string, and modules with `module/2`, `use_module/1,2` and
+  as a string that is also a list of characters (`double_quotes` is
+  `chars`), and modules with `module/2`, `use_module/1,2` and
   `end_module/1`
 - **Purity by design**: no cut, `->` or `*->`; use `dif/2`, `if_/3` from
   `library(reif)`, constraints and first-argument indexing instead
@@ -125,11 +126,12 @@ edge(3, 1).
 path(X, Y) :- edge(X, Y).
 path(X, Y) :- edge(X, Z), path(Z, Y).
 
-test("tom's grandchildren") :- grandparent(tom, ann), grandparent(tom, pat).
-test("fib(10) = 55") :- fib(10, 55).
-test("which fib is 55?") :- once(fib(N, 55)), N == 10.
-test("path reaches the whole cycle") :- findall(Y, path(1, Y), Ys), msort(Ys, [1, 2, 3]).
-test("tom has no grandparent", fail) :- grandparent(_, tom).
+test(toms_grandchildren) :- grandparent(tom, ann), grandparent(tom, pat).
+test(fib_10_is_55) :- fib(10, 55).
+% A finite domain makes the search terminate, so no once/1 is needed.
+test(which_fib_is_55) :- N in 0..20, fib(N, 55), N == 10.
+test(path_reaches_the_whole_cycle) :- findall(Y, path(1, Y), Ys), msort(Ys, [1, 2, 3]).
+test(tom_has_no_grandparent, fail) :- grandparent(_, tom).
 
 :- end_module(family).
 ```
@@ -193,10 +195,10 @@ send_more([S,E,N,D,M,O,R,Y]) :-
 % if_/3 instead of (Cond -> Then ; Else): it stays correct when X is unbound.
 classify(X, R) :- if_(X = a, R = yes, R = no).
 
-test("dcg") :- phrase(greeting, [hello, prolog]).
-test("send more money") :- send_more([9,5,6,7,1,0,8,2]).
-test("if_") :- classify(a, yes), classify(b, no).
-test("dif") :- dif(X, a), X = b.
+test(dcg) :- phrase(greeting, [hello, prolog]).
+test(send_more_money) :- send_more([9,5,6,7,1,0,8,2]).
+test(reified_if) :- classify(a, yes), classify(b, no).
+test(dif) :- dif(X, a), X = b.
 
 :- end_module(puzzles).
 ```
@@ -207,10 +209,17 @@ Clausal Prolog is ISO Prolog with a few deliberate rules. Each one is
 enforced when the file loads:
 
 - **Cut-free.** `!` and `->` are refused, and `*->` is not an operator.
-  Use `dif/2`, `if_/3`,
-  `once/1`, constraints or first-argument indexing.
-- **Modules close.** A module file must end with `:- end_module(Name).`.
-  A file can opt out with `:- set_prolog_flag(require_end_module, false).`.
+  Use `dif/2`, `if_/3` (its condition must be a reifiable `_t` closure such
+  as `memberd_t(X, Xs)` or `X = Y`), constraints or first-argument indexing,
+  or write the predicate so it is deterministic. `once/1`, `\+` and
+  `forall/2` are still supported, but as transition constructs: they commit
+  to a first solution or test by failure, which gives up monotonicity, and
+  they are being phased out. Prefer the forms above.
+- **Modules close.** By default a `.clausal` module file that does not end
+  with `:- end_module(Name).` is refused at load time. The `require_end_module`
+  flag is the opt-out: `:- set_prolog_flag(require_end_module, false).` in
+  one file, or the same flag (or `CLAUSAL_REQUIRE_END_MODULE=0`) for the
+  whole process.
 - **One-way dependency on ISO Prolog.** A `.clausal` module may not import
   a `.pl` module, which may use cut. It is refused with
   `permission_error(access, prolog_module, M)`. A `.pl` module may import a
@@ -258,8 +267,8 @@ A module carries its tests inline as `test/1` clauses, or as `test/2`
 with the option `fail` for a goal that must have no solution:
 
 ```prolog
-test("fib(5) = 5") :- fib(5, 5).
-test("no grandparent", fail) :- grandparent(_, tom).
+test(fib_5_5) :- fib(5, 5).
+test(no_grandparent, fail) :- grandparent(_, tom).
 ```
 
 **Standalone runner:**

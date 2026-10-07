@@ -15,6 +15,28 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `clausal-torch` and `clausal-yaml` (0.1.0 each). Each is also an extra of `clausal`, e.g.
   `pip install "clausal[scipy]"`.
 
+### Changed (docs)
+
+- **`once/1`, `\+` and `forall/2` are documented as supported but
+  discouraged** (ruling 2026-10-07): they are transition constructs being
+  phased out, like a ratchet. The docs no longer recommend them as the pure
+  alternative to cut; they show `if_/3` with a reifiable condition
+  (`memberd_t`, `X = Y`) and predicates written to be deterministic instead.
+  The README, `docs/clausal_prolog.md`, `docs/for_prolog_programmers.md`,
+  `docs/control.md`, `docs/reified_ite.md`, `docs/builtins.md` and others
+  changed; the examples were run on the engine.
+- **`"..."` in Clausal Prolog** is documented consistently: a string that is
+  also a list of characters (`double_quotes` is `chars`), so `"abc" = [a,b,c]`
+  and `string("abc")` both hold.
+- **Test names** in Clausal Prolog examples are lowercase atoms,
+  `test(name)`; the string form still loads.
+- **`require_end_module`** is documented as the opt-out of a default that
+  refuses a `.clausal` file without `end_module/1`.
+- **`use_module(m, [])`** is documented as it behaves: it loads in a
+  `.clausal` file and on the native `.pl` front end (importing nothing,
+  leaving `m` unloaded), and is still a translation error on the default
+  `.pl` importer.
+
 ### Experimental
 
 - **Asyncio.** `clausal.aio.asolve` / `aonce` run a query on an asyncio

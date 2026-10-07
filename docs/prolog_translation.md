@@ -345,7 +345,7 @@ clausal_text = prolog_ast_to_clausal(pmodule)
 | `(A , B)` | `(A, B)` | Conjunction |
 | `(A ; B)` | `(A or B)` | Disjunction |
 | `(C -> T ; E)` | **Rejected** | Not supported — use [reified ITE](reified_ite.md) or [dif/2](constraints.md) guards |
-| `!` (cut) | **Rejected** | Not supported — use [once/1](control.md), dif/2, [indexing](indexing.md) |
+| `!` (cut) | **Rejected** | Not supported — use dif/2, [indexing](indexing.md), [reified ITE](reified_ite.md) or a deterministic predicate (`once/1` still works but is discouraged: see [control](control.md)) |
 | `[H\|T]` | `[H, *T]` | List cons |
 | `member(X, L)` | `X in L` | Membership |
 | `foo(X) :- body.` | `foo(X) <- (body)` | Rules |
@@ -462,7 +462,7 @@ The roundtrip validation (Phase 4) verifies these properties when translating th
 
 The translator **rejects** Prolog programs containing cut or if-then-else with a `PrologTranslationError`, rather than producing semantically incorrect output:
 
-- **Cut (`!/0`)** — breaks declarative semantics. Use `once/1`, `dif/2`, indexing, or constraints.
+- **Cut (`!/0`)** — breaks declarative semantics. Use `dif/2`, indexing, constraints, `if_/3` with a reifiable condition, or a deterministic predicate. `once/1` is supported but discouraged.
 - **If-then-else (`(C -> T ; E)`)** — defined in terms of cut in ISO. Use reified if-then-else (`THEN if COND else ELSE`), separate clauses with `dif/2` guards, or constraints.
 - **Bare if-then (`(C -> T)`)** — same as above.
 

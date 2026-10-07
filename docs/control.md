@@ -13,6 +13,15 @@ performance, and controlling search. For delayed execution, see
 `once(Goal)` — call `Goal` and commit to the first solution. Prevents
 backtracking into the goal.
 
+!!! warning "Supported but discouraged"
+
+    `once/1` is a **transition construct**, like `\+` and `forall/2`: it works
+    and will keep working while it is phased out, but it commits to a first
+    solution, which gives up monotonicity (adding a constraint can lose the
+    answer you wanted). Prefer a predicate that is deterministic by
+    construction, or [`if_/3`](reified_ite.md) with a reifiable condition.
+    Both are shown below.
+
 ```seam
 test("first only") <- (
     once(in_(X, [1, 2, 3])),
@@ -20,13 +29,33 @@ test("first only") <- (
 )
 ```
 
-`once` is useful when you know a predicate has multiple solutions but you only
-want the first:
+`once` is what you reach for when you know a predicate has multiple solutions
+but you only want the first:
 
 ```seam
 any_member(ELEM, LIST) <- once(in_(ELEM, LIST))
 
 test("any") <- (any_member(X, [10, 20, 30]), X == 10)
+```
+
+The cut-free alternative is to write the predicate so it has only the one
+solution you want:
+
+```seam
+first_member(X, [X, *_]),
+
+test("first") <- (first_member(X, [10, 20, 30]), X == 10)
+```
+
+and, where `once` stood in for a condition (`( Cond -> Then ; Else )`),
+`if_/3` with a reified condition such as `memberd_t`:
+
+```seam
+-import_from(clausal.stdlib.reif, [memberd_t])
+-private([yes, no])
+listed(X, XS, R) <- if_(memberd_t(X, XS), R is yes, R is no)
+
+test("listed") <- (listed(2, [1, 2, 3], yes), listed(9, [1, 2, 3], no))
 ```
 
 ---
@@ -69,14 +98,14 @@ wall-clock time in seconds (as a float). Useful for programmatic benchmarking.
 --8<-- "tests/fixtures/docs/control_sigs.txt:benchmark_recipe"
 ```
 
-### Guard with once
+### Guard a test
 
-Prevent a test predicate from generating multiple successes:
+A test passes when its body has a solution, so there is nothing to guard:
+call the predicate with its inputs and its expected output, and no `once` is
+needed.
 
 ```seam
-test("exactly one solution") <- once(
-    permutation([1, 2, 3], [3, 2, 1])
-)
+test("a permutation") <- permutation([1, 2, 3], [3, 2, 1])
 ```
 
 ---
@@ -85,8 +114,9 @@ test("exactly one solution") <- once(
 
 - **`once` commits to the first solution** — it discards every remaining
   alternative of `Goal`, not just the next one. Side effects from the first
-  solution will have happened. (Clausal Prolog has no cut; `once/1` is the ISO
-  construct for committing.)
+  solution will have happened. Clausal Prolog has no cut, and `once/1` is a
+  supported but discouraged transition construct (it is ISO's committing
+  construct, and is being phased out here); see the alternatives above.
 - **`time_goal/1` prints to stderr** — not stdout. It won't interfere with
   [write/writeln](io.md) output.
 - **`time_goal/2` measures wall time** — on a loaded system, wall time may be

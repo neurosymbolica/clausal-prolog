@@ -105,7 +105,7 @@ fib(N, F) :-
     fib(N1, F1), fib(N2, F2),
     F #= F1 + F2.
 
-test("fib(10) = 55") :- fib(10, 55).
+test(fib_10_55) :- fib(10, 55).
 
 :- end_module(fibonacci).
 ```

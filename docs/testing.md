@@ -10,6 +10,8 @@ Any seam (`.seam`) file (see [Syntax](syntax.md)) can include test clauses of th
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:test_syntax"
 ```
 
+In a Clausal Prolog (`.clausal`) or `.pl` file the name is a lowercase atom, `test(fib_5) :- fib(5, 5).`, which is the primary spelling. A string name, `test("fib(5) = 5") :- ...`, also loads and is accepted. In a seam file the name is a string, as below.
+
 A test passes if its body succeeds (produces at least one solution); a body that raises fails the test and reports the error. The head is `test/1`, lowercase like every predicate name: the old `Test/1` spelling is now a load-time error (TitleCase names have no role in Clausal Prolog), and the runner names the rename. Tests live alongside the predicates they exercise:
 
 ```seam

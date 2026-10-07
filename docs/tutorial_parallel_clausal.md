@@ -107,7 +107,7 @@ no_attack(Q, [Q1, *QS], D) <- (
     no_attack(Q, QS, D1)
 )
 
-test("6 queens") <- once(n_queens(6, [2, 4, 6, 1, 3, 5]))
+test("6 queens") <- n_queens(6, [2, 4, 6, 1, 3, 5])
 ```
 
 Multiple threads can solve N-Queens for different N values concurrently.

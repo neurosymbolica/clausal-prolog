@@ -30,7 +30,7 @@ These are settled and not gaps:
 
 - **No cut, no if-then-else, no committed choice.** `!/0`, `(C -> T ; E)`,
   `(C -> T)` and `*->` do not exist. The `.pl` importer refuses them with a
-  `SyntaxError` that lists the pure alternatives: `dif/2`, `once/1`,
+  `SyntaxError` that lists the pure alternatives: `dif/2`,
   first-argument [indexing](indexing.md), [reified if-then-else](reified_ite.md).
 - **Strings are lists of characters**, as in ISO with
   `double_quotes(chars)` and in Scryer and Trealla: `"…"` is a string by
@@ -39,7 +39,7 @@ These are settled and not gaps:
   setting. See [Atoms vs strings](syntax.md#atoms-vs-strings).
 - **Atoms are a distinct type:** an atom IS the Python `str` (`'red'`); a
   compound term is a cell tuple (`('f', 1, 2)`); `('x',)` is reserved.
-- **Negation** is `not Goal`, ISO `\+/1` exactly; for [tabled](tabling.md)
+- **Negation** is `not Goal`, ISO `\+/1` exactly (supported but discouraged, like `once/1` and `forall/2`: transition constructs being phased out); for [tabled](tabling.md)
   predicates, [Well-Founded Semantics](wfs.md) extends it.
 
 ---

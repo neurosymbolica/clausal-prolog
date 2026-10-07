@@ -278,7 +278,7 @@ Clausal Prolog avoids this entirely:
 
 - **`if_` requires a reifiable condition**: ground cases are deterministic (no choicepoints), undetermined cases explore both branches with proper constraints, and a closure's every answer is explored.
 - **A plain goal is not a condition**: the seam refuses it at load time rather than run it as a soft cut; Clausal Prolog's `if_/3` calls it with one more argument (the truth value), as library(reif) does.
-- **Users who want first-solution commitment** use `once()` explicitly.
+- **Users who still want first-solution commitment** can use `once()`, which is supported but discouraged (see below): prefer `if_/3` with a reifiable condition, or a predicate written to be deterministic.
 
 The result is a system where goal reordering is always safe and adding constraints never loses solutions.
 
@@ -306,7 +306,7 @@ Key properties:
 - **Failing goal = no solutions**: if the inner goal has no solutions, the continuation is never reached.
 - **Works in both simple and trampoline modes**: inner goal always compiles in simple mode (sub-generator pattern).
 
-`once()` is the explicit escape hatch for users who want first-solution commitment. It is ISO's `once/1`. It is not an `if_` condition (it is a plain goal); commit inside a reified closure instead. See also [Control](control.md) for other control-flow predicates.
+`once()` is a **transition construct, supported but discouraged**, like `not` and `forall/2`: it is ISO's `once/1`, it keeps working while it is phased out, and it gives up monotonicity, so new code should prefer `if_/3` with a reifiable condition or a deterministic predicate. It is not an `if_` condition (it is a plain goal); commit inside a reified closure instead. See also [Control](control.md) for other control-flow predicates.
 
 ---
 

@@ -338,12 +338,21 @@ imports every predicate the `.pl` module's `module/2` directive exports
 it is `-import_module`, whose predicates are reached
 qualified.
 
-An EMPTY import list, `:- use_module(m, []).`, is a translation error naming
-the line: Scryer reads it as `remove_module/2` (it drops `m`'s imports and
-does not load `m`, so `m:p(X)` is an `existence_error`), while Trealla and
-SWI load `m` and import nothing. Write `use_module(m)` or
-`use_module(m, [p/1])` instead; after either, `m:p(X)` reaches every
-predicate `m` exports, in Clausal Prolog, Scryer and Trealla alike.
+An EMPTY import list, `:- use_module(m, []).`, has no portable meaning:
+Scryer reads it as `remove_module/2` (it drops `m`'s imports and does not
+load `m`, so `m:p(X)` is an `existence_error`), while Trealla and SWI load
+`m` and import nothing. What Clausal does depends on the path:
+
+- A Clausal Prolog (`.clausal`) module, and a `.pl` file on the native front
+  end (`CLAUSAL_PL_FRONTEND=native`), **load** with the empty list. It
+  imports nothing and, as in Scryer, leaves `m` unloaded: `m:p(X)` is
+  `error(existence_error(procedure, p/1), p/1)`.
+- The default `.pl` importer (the translator described on this page) still
+  refuses it, with a `SyntaxError` naming the line.
+
+Write `use_module(m)` or `use_module(m, [p/1])` to get `m` loaded; after
+either, `m:p(X)` reaches every predicate `m` exports, in Clausal Prolog,
+Scryer and Trealla alike.
 
 ### Unexported predicates in Clausal code
 
@@ -828,8 +837,9 @@ Most standard Prolog translates cleanly:
 
 The translator **rejects** programs containing:
 
-- **Cut (`!/0`)** — raises `SyntaxError`. Use `once/1`, `dif/2`, first-argument
-  indexing, or constraints instead.
+- **Cut (`!/0`)** — raises `SyntaxError`. Use `dif/2`, first-argument
+  indexing, constraints, `if_/3` with a reifiable condition, or a
+  deterministic predicate instead. `once/1` is supported but discouraged.
 - **If-then-else (`(C -> T ; E)`)** — raises `SyntaxError`. Use reified
   if-then-else, separate clauses with `dif/2` guards, or constraints.
 

@@ -64,7 +64,7 @@ edge(3, 1).
 path(X, Y) :- path(X, Z), edge(Z, Y).   % left recursion: fine when tabled
 path(X, Y) :- edge(X, Y).
 
-test("path terminates on the cycle") :-
+test(path_terminates_on_the_cycle) :-
     findall(Y, path(1, Y), Ys), msort(Ys, [1, 2, 3]).
 
 :- end_module(graph).
@@ -104,13 +104,14 @@ safe_queens([Q|Qs], Q0, D0) :-
     D1 #= D0 + 1,
     safe_queens(Qs, Q0, D1).
 
-test("the first 8-queens placement") :-
-    once(n_queens(8, Qs)), Qs = [1, 5, 8, 6, 3, 7, 2, 4].
+test(the_first_8_queens_placement) :-
+    n_queens(8, Qs), Qs = [1, 5, 8, 6, 3, 7, 2, 4].
 
 :- end_module(queens).
 ```
 
-This is the program from "The Power of Prolog", unchanged. See
+The test needs no `once/1`: the search is finite, so it simply enumerates the
+placements and checks that the first is the expected one. This is the program from "The Power of Prolog", unchanged. See
 [Constraints](constraints.md).
 
 ### DCGs and strings
@@ -123,17 +124,19 @@ greeting --> "hello ", name.
 name --> "world".
 name --> "prolog".
 
-test("parse") :- phrase(greeting, "hello prolog").
-test("generate") :-
+test(parse) :- phrase(greeting, "hello prolog").
+test(generate) :-
     findall(S, phrase(greeting, S), Ss),
     Ss = ["hello world", "hello prolog"].
-test("a string is a list of characters") :- "ab" = [a, b].
+test(a_string_is_a_list_of_characters) :- "ab" = [a, b].
 
 :- end_module(greet).
 ```
 
-`"..."` is a list of characters (`double_quotes` is `chars`, the default in
-Scryer and Trealla), so a string literal is a DCG terminal. See
+`"..."` is a string that is also a list of characters (`double_quotes` is
+`chars`, the default in Scryer and Trealla): `"abc" = [a, b, c]` and
+`string("abc")` both hold, and `atom("abc")` does not. So a string literal is
+a DCG terminal. See
 [DCGs](dcg.md) and [Atoms vs strings](syntax.md#atoms-vs-strings).
 
 ### Errors and the database
@@ -144,15 +147,15 @@ Scryer and Trealla), so a string literal is a DCG terminal. See
 
 colour(red).
 
-test("ISO error terms, in Scryer's form") :-
+test(iso_error_terms_in_scryer_s_form) :-
     catch(atom_length(1, _), error(E, C), true),
     E == type_error(atom, 1), C == atom_length/2.
-test("assertz creates a dynamic procedure") :-
+test(assertz_creates_a_dynamic_procedure) :-
     assertz(seen(x)), seen(x).
-test("a static procedure cannot be modified") :-
+test(a_static_procedure_cannot_be_modified) :-
     catch(assertz(colour(blue)), error(E, _), true),
     E == permission_error(modify, static_procedure, colour/1).
-test("integer division truncates toward zero") :- X is -7 // 2, X == -3.
+test(integer_division_truncates_toward_zero) :- X is -7 // 2, X == -3.
 
 :- end_module(errs).
 ```
@@ -164,8 +167,10 @@ An uncaught error prints the term first, as Scryer does:
 
 ### [Meta-predicates](meta_predicates.md)
 
-[`findall/3`, `bagof/3`, `setof/3`](meta_predicates.md), `forall/2`,
-`\+/1`, `once/1` and [`call/1..8`](higher_order.md) are builtins.
+[`findall/3`, `bagof/3`, `setof/3`](meta_predicates.md) and
+[`call/1..8`](higher_order.md) are builtins. So are `forall/2`, `\+/1` and
+`once/1`, which are supported but discouraged: they are transition
+constructs, being phased out (see [No cut, by design](#no-cut-by-design) below).
 
 ### [Modules](import.md)
 
@@ -225,13 +230,18 @@ Where you would use a cut or `->`, Clausal Prolog offers:
   predicates of `library(reif)` (`=/3`, `memberd_t/3`, `tfilter/3`, …)
 - **[CLP(ℤ) and dif/2](constraints.md)** — replace cut-based pruning with
   constraints
-- **`once/1`** — when you want the first solution and say so
+- **A deterministic predicate** — write the clauses so only one can match
 - **[First-argument indexing](indexing.md)** — automatic, so the green cuts
   that only removed a choice point are unnecessary
 
+`once/1`, `\+/1` and `forall/2` still work, but they are transition
+constructs and are **supported but discouraged**: they commit to a first
+solution or test by failure, so they are not monotone, and they are being
+phased out. Prefer the forms above.
+
 ```prolog
 % pure.clausal
-:- module(pure, [max_of/3, sign/2, first_member/2]).
+:- module(pure, [max_of/3, sign/2, first_member/2, listed/3]).
 :- use_module(library(clpz)).
 :- use_module(library(reif)).
 
@@ -242,12 +252,19 @@ max_of(X, Y, Z) :- Z #= max(X, Y).
 sign(X, S) :- if_(X = 0, S = zero, ( dif(X, 0), S = nonzero )).
 
 % first_member(X, Xs) :- member(X, Xs), !.
-first_member(X, Xs) :- once(member(X, Xs)).
+% Written to be deterministic: no once/1 and no cut.
+first_member(X, [X|_]).
 
-test("max_of") :- max_of(3, 7, 7), max_of(7, 3, 7).
-test("sign") :- sign(0, zero), sign(4, nonzero).
-test("sign general") :- findall(X-S, sign(X, S), [0-zero, _-nonzero]).
-test("first_member") :- first_member(X, [a, b]), X == a.
+% listed(X, Xs, R) :- ( memberchk(X, Xs) -> R = yes ; R = no ).
+% memberd_t/3 is reif's reified membership test, so if_/3 can use it.
+listed(X, Xs, R) :- if_(memberd_t(X, Xs), R = yes, R = no).
+
+test(max_of) :- max_of(3, 7, 7), max_of(7, 3, 7).
+test(sign) :- sign(0, zero), sign(4, nonzero).
+test(sign_general) :- findall(X-S, sign(X, S), [0-zero, _-nonzero]).
+test(first_member) :- first_member(X, [a, b]), X == a.
+test(listed) :- listed(b, [a, b], yes), listed(c, [a, b], no).
+test(listed_most_general) :- findall(R, listed(_, [a, b], R), [yes, yes, no]).
 
 :- end_module(pure).
 ```
@@ -260,8 +277,11 @@ The `if_/3` version of `sign/2` answers the most general query
 A module file must end with `:- end_module(Name).`, as every example on
 this page does. Only comments and layout may follow it. A missing directive
 is the ISO error `error(existence_error(directive, end_module(Name)), load/1)`.
-The flag `require_end_module` turns the requirement off for one file
-(`:- set_prolog_flag(require_end_module, false).`) or for the process. See
+The default for a `.clausal` file is to refuse it when `end_module/1` is
+missing. The flag `require_end_module` is the opt-out, for one file
+(`:- set_prolog_flag(require_end_module, false).`), for the process
+(`set_prolog_flag(require_end_module, false)` run as a goal, or
+`CLAUSAL_REQUIRE_END_MODULE=0`). See
 [`end_module`](importing_prolog.md#end_module-closing-a-module).
 
 Scryer does not accept `end_module/1`: a file meant for Scryer as well
