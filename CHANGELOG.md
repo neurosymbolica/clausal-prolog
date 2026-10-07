@@ -33,6 +33,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `domain_error(non_empty_list, [])`. Seam: `-import_from(pure_random,
   [...])`. Named `pure_random` because a facade never takes a Scryer
   library name (`library(random)`). See [docs/pure_random.md](docs/pure_random.md).
+- **Explicit char-list-as-text conversion: `clausal.to_python_text(T)`**
+  (ruling D27, B as an explicit opt-in, 2026-10-07). The engine builds one
+  char list in two shapes, so `to_python` hands `"ab"` or a DCG output over
+  as `'ab'` but `[a, b]` from a literal, `atom_chars/2`, `append/3`,
+  `reverse/2` or `maplist/3` as `['a', 'b']`. `to_python_text` is
+  `to_python` with every ground, non-empty list whose elements are all
+  one-char atoms as a `str`, whatever built it, at every depth (inside a
+  list, a compound, a dict value). `[]` stays `[]`; a mixed list (`[a, bc]`,
+  `[a, 1]`, a list of one-char strings) stays a list; a list with an
+  unbound tail crosses raw. Caveat: one-char atoms used as symbols are chars
+  too, so `[x, y]` as coordinates becomes `'xy'`. `to_python` itself is
+  unchanged, and it is what every `py.*` wrapper argument gets.
 
 ### Changed (docs)
 

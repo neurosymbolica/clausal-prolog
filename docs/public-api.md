@@ -142,6 +142,7 @@ from clausal import (
 | `module_binds` | `module_binds(module, name) -> bool` | True iff `name` is a real attribute of the module: in its `__dict__`, where a definition, an import, a declaration or a native `.pl` auto-declaration binds it. Takes a module, a `Module` or a dotted name (lookup-only: a module that is not loaded binds nothing). |
 | `cell_functor`, `cell_args`, `make_cell` | `cell_functor(c)`, `cell_args(c) -> tuple`, `make_cell(functor, *args) -> tuple` | Read and build a compound term (a cell). |
 | `to_python` | `to_python(val)` | Deep conversion out. |
+| `to_python_text` | `to_python_text(val)` | `to_python`, with every ground, non-empty list of one-char atoms handed over as a `str`, whatever built it (see [Python integration](python_integration.md)). |
 | `to_clausal` | `to_clausal(value) -> Any` | Deep conversion in. Raises `TypeError` for an unregistered class. |
 | `term_key` | `term_key(term) -> tuple` | The standard order of terms, as a sort key. |
 | `Var` | `Var()` | `.value`, and `int()` / `float()` / `bool()` / `str()` / f-string coercion. |
