@@ -2073,8 +2073,79 @@ def _ensure_text_list_imports() -> None:
     _LIST_SPELLINGS = (list, SegList)
 
 
+def _seq_view(x):
+    """*x* as a sequence of its elements when it is one of the spellings of a
+    proper LIST -- a ``list``, the chars carrier (its text: iterating it gives
+    the 1-char atoms), ``bytes`` (a code list: iterating gives the ints), the
+    nil cell ``()``, or a ground ``Seg*`` -- else ``None`` (a scalar, a cell,
+    a dict, an unbound variable, a partial list)."""
+    from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
+    if not _TEXT_SPELLINGS:
+        _ensure_text_list_imports()
+    x = deref(x)
+    t = type(x)
+    if t is list or t is bytes:
+        return x
+    if t is tuple:
+        if not x:
+            return x                     # () is nil
+        return chars_text(x) if is_chars(x) else None
+    if hasattr(t, "__walk__"):
+        w = x.__walk__()
+        if hasattr(type(w), "__walk__"):
+            return None                  # still partial: the unifier decides
+        return _seq_view(w)
+    return None
+
+
+def _ground_shape_eq(a, b) -> bool:
+    """Python equality with every LIST compared as a list, whatever spelling
+    holds it (see ``_seq_view``), at every depth -- inside lists, cells and
+    dict values.  Leaves keep Python equality (``1 == 1.0`` stays arithmetic
+    truth), so the only answers that change are pairs that are ONE term in
+    two spellings: ``b"ab" == [97, 98]``, ``f("ab") == f([a, b])``."""
+    a, b = deref(a), deref(b)
+    if a is b:
+        return True
+    va, vb = _seq_view(a), _seq_view(b)
+    if va is not None or vb is not None:
+        if va is None or vb is None:
+            return False
+        if len(va) != len(vb):
+            return False
+        if type(va) is type(vb) and type(va) in (str, bytes):
+            return va == vb
+        if type(va) is list and type(vb) is list and va == vb:
+            return True                  # Python says equal: so do spellings
+        return all(_ground_shape_eq(x, y) for x, y in zip(va, vb))
+    if type(a) is tuple and type(b) is tuple:
+        return len(a) == len(b) and all(_ground_shape_eq(x, y) for x, y in zip(a, b))
+    da, db = _dict_view(a), _dict_view(b)
+    if da is not None and db is not None and type(a) is type(b):
+        if da.keys() != db.keys():
+            return a == b
+        return all(_ground_shape_eq(da[k], db[k]) for k in da)
+    return a == b
+
+
+def _dict_view(x):
+    """The key -> value mapping of a ``dict`` or an engine ``DictTerm``,
+    else ``None``."""
+    if isinstance(x, dict):
+        return x
+    if type(x).__name__ == "DictTerm":
+        return x._data
+    return None
+
+
 def _text_list_eq(l, r):
     """Chars-model equality for the two spellings of ONE text term.
+
+    Since 2026-10-08 a pair of LIST spellings (``list``, chars carrier,
+    ``bytes`` code list, ``()``, ground ``Seg*``) on both sides, or a pair of
+    cells or dicts, is decided by ``_ground_shape_eq`` at every depth: the
+    earlier rule below saw only a text against a list at the TOP, so
+    ``b"ab" == [97, 98]`` and ``f("ab") == f([a, b])`` failed.
 
     Under ``-double_quotes(chars)`` a ``str`` IS the list of its 1-char atoms:
     ``"ab"`` and ``[('a',), ('b',)]`` are the same term, and ground
@@ -2096,6 +2167,12 @@ def _text_list_eq(l, r):
     from clausal.logic.cells import chars, is_chars, chars_text  # noqa: PLC0415
     if not _TEXT_SPELLINGS:
         _ensure_text_list_imports()
+    if _both_ground(l, r):
+        if _seq_view(l) is not None and _seq_view(r) is not None:
+            return _ground_shape_eq(l, r)
+        if ((type(l) is tuple and type(r) is tuple)
+                or (_dict_view(l) is not None and _dict_view(r) is not None)):
+            return _ground_shape_eq(l, r)
     l_text = is_chars(l) or isinstance(l, _TEXT_SPELLINGS)
     r_text = is_chars(r) or isinstance(r, _TEXT_SPELLINGS)
     if is_chars(l):
