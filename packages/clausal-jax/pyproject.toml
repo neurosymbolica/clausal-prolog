@@ -20,6 +20,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+test = ["optax", "equinox", "flax"]   # what the full test suite needs
 optax = ["optax"]
 equinox = ["equinox"]
 flax = ["flax"]
