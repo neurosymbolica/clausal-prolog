@@ -1,7 +1,7 @@
 # clausal-acl2 against a REAL ACL2 (skipped by tests/conftest.py when no
 # bridge is available).  Events persist in that ACL2 session.
 
--import_from(py.acl2, [acl2, acl2_mv, event, thm])
+-import_from(py.acl2, [acl2, acl2_mv, acl2_text, event, thm])
 -private([append(_, _), quote(_), defun(_, _, _), equal(_, _), x(_),
           sq(_, _), spin(_, _), a(_, _)])
 
@@ -37,4 +37,19 @@ test("an admitted definition can be run") <- (
 
 test("a non-terminating definition is rejected") <- (
     not(event(defun(spin, x('y'), spin('x', 'y'))))
+)  # nv
+
+test("a malformed definition is rejected") <- (
+    acl2_text(BAD, "(defun bad)"),
+    not(event(BAD))
+)  # nv
+
+test("an unprovable defthm is rejected") <- (
+    acl2_text(NOPE, "(defthm nope (equal x 1))"),
+    not(event(NOPE))
+)  # nv
+
+test("a true theorem is proved, with its proof as output") <- (
+    thm(equal('y', 'y'), OUT),
+    not(OUT == "")
 )  # nv

@@ -98,6 +98,29 @@ surface described in [docs/public-api.md](docs/public-api.md).
   wait on the awaitable from within the query. See
   [docs/asyncio.md](docs/asyncio.md).
 
+### Fixed
+
+- **`clausal-acl2`: `thm/1,2` and `event/1,2` no longer succeed on every
+  input.** ACL2 8.7's `ld` (with `:ld-error-action :return!`) answers
+  `(NIL :EOF state)` when the event is accepted and `(NIL (:STOP-LD n)
+  state)` when it is rejected -- the error flag is NIL both ways -- so the
+  old test of the flag alone accepted a false `thm`, a non-terminating
+  `defun`, a malformed `(defun bad)` and an unprovable `defthm`. They now
+  fail, as the docs say. The other `clausal-acl2` fixes:
+  `acl2_text/2` raises `syntax_error(acl2_text)` with a message for any text
+  that is not exactly one ACL2 object (`")"`, `"(a) (b)"`, `"(a . )"`, an
+  unclosed string or `|name|`, an unknown `#` syntax), where it used to
+  answer a wrong term or leak a Python index error; a bridge that dies
+  mid-session raises `existence_error(acl2_bridge, Where)`, and the next
+  call connects again (starting a new ACL2 if the package had started the
+  one that died) instead of failing forever; `timeout` bounds connecting
+  only, as documented, instead of every read (a slow form used to raise a
+  raw `TimeoutError` and leave the connection unusable); an ACL2 the
+  package started is stopped with its whole process group, and its socket
+  folder removed, when the interpreter exits; `use_acl2/1` refuses an
+  unknown option (`domain_error(acl2_option, Name)`) and a value of the
+  wrong kind.
+
 ## 1.0.0 (2026-10-06)
 
 This is the first release with a public-API promise. Most of the changes
