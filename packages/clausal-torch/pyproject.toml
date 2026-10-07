@@ -17,6 +17,10 @@ dependencies = [
     "torch",
 ]
 
+[project.optional-dependencies]
+numpy = ["numpy"]   # tensor <-> numpy array conversion
+test = ["numpy"]    # what the full test suite needs
+
 [project.urls]
 Homepage = "https://clausal.pl"
 Documentation = "https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-torch/README.md"

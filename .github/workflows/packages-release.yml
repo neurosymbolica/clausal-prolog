@@ -77,7 +77,9 @@ jobs:
         run: ls dist/*-py3-none-any.whl
       - name: Test the wheel against this commit's engine
         run: |
-          pip install . dist/*.whl pytest
+          # [test]: the optional libraries the package's full suite needs, if it
+          # declares any (e.g. numpy for torch, flax/optax/equinox for jax).
+          pip install . "$(ls dist/*.whl)[test]" pytest
           if [ "${{ steps.pkg.outputs.name }}" = "clausal-spacy" ]; then
             python -m spacy download en_core_web_sm
           fi
