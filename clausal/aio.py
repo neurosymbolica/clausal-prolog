@@ -194,6 +194,8 @@ class _Query:
         5 and 6 of the review, 2026-10-06, each found a path that did).
         Identity-guarded, so a table someone has rebuilt since is left alone.
         """
+        if not self._live:
+            return                      # closed normally in the meantime
         for entry, store, key in self.created:
             if (entry.status == "evaluating" and entry.owner is self
                     and store.get(key) is entry):
@@ -205,7 +207,9 @@ class _Query:
         return self._live and (self.agen is None or self.agen() is not None)
 
     def _switch(self, how, *args):
-        from clausal.logic.tabling import _outer_ctx
+        from clausal.logic.tabling import _outer_ctx, _pending_dead, _reap_dead
+        if _pending_dead:
+            _reap_dead()
         saved = _install(self.state)
         # The context we just swapped out may be a synchronous query parked
         # mid-fixpoint (this async query runs inside its consumer): its
@@ -273,9 +277,13 @@ def adrive(gen):
     alive = weakref.ref(query)
 
     def gone(_ref):
+        # Only queue it: this can run inside the cyclic GC, in the middle of
+        # another query's loop over a table store, or in another thread.
+        # tabling._reap_dead removes the tables at a safe point.
         q = alive()
         if q is not None and q._live:
-            q._died()
+            from clausal.logic.tabling import _pending_dead
+            _pending_dead.append(q)
     query.agen = weakref.ref(answers, gone)
     return answers
 

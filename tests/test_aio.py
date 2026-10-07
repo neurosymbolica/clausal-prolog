@@ -667,7 +667,8 @@ def test_an_unrelated_scc_sweep_leaves_a_dropped_querys_table_alone(
 def test_a_dropped_query_leaves_no_half_built_table_behind(tmp_path):
     # The general fix behind the round 5 and 6 findings: once the iterator
     # of an unclosed query is gone, its evaluating tables leave the store at
-    # once, before any finaliser runs.
+    # the next safe point (here: the next tabled call), before any
+    # finaliser runs.
     import gc
     src = tmp_path / "sweep_gone.seam"
     src.write_text(_SWEEP_PROGRAM.replace("sweep,", "sweep_gone,"))
@@ -680,8 +681,57 @@ def test_a_dropped_query_leaves_no_half_built_table_behind(tmp_path):
         assert any(e.status == "evaluating" for e in store.values())
         del dropped
         gc.collect()
+        list(solve(("other", Var()), mod))   # a safe point
         return [e.status for e in store.values()]
     assert "evaluating" not in run(main())
+
+
+def test_a_query_dying_during_a_store_scan_does_not_break_it(
+        tmp_path, monkeypatch):
+    # Seventh review 2026-10-06: the dead query's tables were removed from
+    # inside the weakref callback, which the cyclic GC can run in the middle
+    # of another query's loop over the same store ("dictionary changed size
+    # during iteration").  Now the callback only queues the query.
+    import gc
+    import sys
+    from clausal.logic import tabling
+    src = tmp_path / "sweep_scan.seam"
+    src.write_text(_SWEEP_PROGRAM.replace("sweep,", "sweep_scan,"))
+    mod = load_clausal_module(src)
+    store = mod.__dict__["$module"].db.table_store
+    gc.collect()
+    gc.disable()
+    try:
+        # A query parked at a wait when its loop closes is held only by a
+        # Task <-> Future cycle: only the cyclic GC can reclaim it.
+        loop = asyncio.new_event_loop()
+
+        async def park():
+            answers = asolve(("path", 1, Var()), mod)
+            await answers.__anext__()
+            await asyncio.sleep(10)
+        task = loop.create_task(park())
+        loop.run_until_complete(asyncio.sleep(0.01))
+        loop.close()
+        del task, loop
+        original, fired = tabling._on_leader_stack, []
+
+        def collecting(entry):
+            # Run the cyclic GC from inside _complete_scc's store scan.
+            if not fired and sys._getframe(1).f_code.co_name == "_complete_scc":
+                fired.append(gc.collect())
+            return original(entry)
+        monkeypatch.setattr(tabling, "_on_leader_stack", collecting)
+        y = Var()
+        answers = sorted(deref(y) for _ in solve(("path", 7, y), mod))
+    finally:
+        gc.enable()
+    assert fired and answers == []
+    list(solve(("other", Var()), mod))       # a safe point: reaped now
+    assert all(e.owner is None for e in store.values()
+               if e.status == "evaluating")
+    y = Var()
+    assert sorted(deref(y) for _ in solve(("path", 1, y), mod)) == [2, 3, 4]
 
 
 def test_negation_is_not_delayed_on_a_dropped_querys_table(tmp_path):
