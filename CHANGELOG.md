@@ -7,6 +7,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Added
+
+- **Optional packages on PyPI.** The eight library wrappers are published:
+  `clausal-jax`, `clausal-opencv`, `clausal-scipy`, `clausal-sklearn`,
+  `clausal-spacy`, `clausal-sympy`, `clausal-torch` and `clausal-yaml`
+  (0.1.0 each). Each is also an extra of `clausal`, e.g.
+  `pip install "clausal[scipy]"`.
+
 ### Experimental
 
 - **Asyncio.** `clausal.aio.asolve` / `aonce` run a query on an asyncio
@@ -748,6 +756,35 @@ since 0.4.0 finish three moves:
   is now the default and changes nothing. See [docs/testing.md](docs/testing.md).
 
 ### Added
+
+- **`clausal-acl2`**, a new optional package: the ACL2 theorem prover from
+  Clausal through its ACL2 Bridge (`books/centaur/bridge`), as another
+  process. `acl2/2,3` and `acl2_mv/2` evaluate forms, `event/1,2` submits
+  events, `thm/1,2` proves terms, `acl2_text/2` parses and prints ACL2 text,
+  `use_acl2/1` names a running bridge or the ACL2 to start (`acl2` on PATH by
+  default). ACL2 objects cross as canonical Clausal terms -- `(f a b)` is the
+  compound `f(a, b)`, other lists `'()'(...)`, dotted pairs `'$cons'(A, B)` --
+  so an ACL2 term is a Prolog compound. The bare name `acl2` maps to
+  `py.acl2` in both import-alias tables. Docs:
+  `packages/clausal-acl2/docs/acl2.md`; design notes:
+  `implementation_plans/acl2/overview.md`.
+- **`clausal-decide`**, a new optional package for calibrated "System 1"
+  decision models, such as [laya](https://pypi.org/project/laya/) or
+  TypeSafe's Jev: `choice/4,5`, `noul/3`, `score/4,5` and `predict/3,4` make its
+  answers about a text relations whose solutions carry probabilities
+  (`choice/5` and `score/5` enumerate the options, most probable first);
+  `predict_batch/3,4` shares forward passes over many texts. The predicates
+  run on a swappable backend (`use_backend/1,2`): laya in-process through
+  `Router.predict_batch` (the default), a `laya-serve` server, or TypeSafe's
+  hosted Jev model (`typesafe-sdk`, extra `typesafe`), which answers the same
+  typed questions. `finetune/5` runs laya's fine-tuning on rows a program can
+  build from its own facts, and `register_model/2` serves the result.
+  Imported as `-import_from(py.decide, [...])`, which works with clausal
+  1.0.0; the bare name `decide` now maps to `py.decide` too (both
+  import-alias tables), as `yaml` or `torch` do. Named for what it does
+  rather than for one backend (operator ruling 2026-10-07; it was merged as
+  `clausal-laya` and renamed before its first release). Docs:
+  `packages/clausal-decide/docs/decide.md`.
 
 - **Packaging for PyPI.** The wheel now carries the data files the engine
   reads at run time (the `.seam` library and stdlib modules, the toklex

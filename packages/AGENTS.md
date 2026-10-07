@@ -22,6 +22,8 @@ seam code imports them as `-import_from(yaml, [...])` (rewritten to `py.yaml`).
 | `clausal-spacy` | `spacy.py` | spacy |
 | `clausal-sympy` | `sympy.py` | sympy |
 | `clausal-yaml` | `yaml.py` | pyyaml |
+| `clausal-acl2` | `acl2.py` (ACL2 Bridge client; ACL2 forms <-> canonical terms) | none in Python; real tests need `acl2` on PATH (books, certified `centaur/bridge`) or `CLAUSAL_ACL2_SOCKET` |
+| `clausal-decide` | `decide.py` (backends: laya in-process, laya-serve, TypeSafe Jev) | laya (brings torch, transformers); extra `typesafe`: typesafe-sdk; model tests need the Hugging Face Hub |
 
 Prolog backends. Each adds a package `clausal.<name>` (outside `modules/`) that
 embeds a real ISO Prolog; they have no Python deps but need a native build:
@@ -84,9 +86,14 @@ trusted publishing. Run it by hand to build and test without publishing.
   `PUBLISHABLE` list). gprolog and scryer need native wheels, trealla needs
   `libtpl` built from source, and provenance is disabled.
 - Before a package's first release, its project name needs a pending trusted
-  publisher on pypi.org (workflow `packages-release.yml`, environment `pypi`).
-- Once a package is on PyPI it can become an extra of `clausal` again
-  (`[project.optional-dependencies]` in the root `pyproject.toml`).
+  publisher on pypi.org (workflow `packages-release.yml`, environment
+  `pypi-<package>`, e.g. `pypi-clausal-yaml`).
+- A package whose full test suite needs optional libraries lists them in a
+  `test` extra (torch: numpy; jax: optax, equinox, flax; sklearn: pandas);
+  the workflow installs the wheel as `<wheel>[test]`.
+- Every published package is also an extra of `clausal`
+  (`[project.optional-dependencies]` in the root `pyproject.toml`); add one
+  there when a new package reaches PyPI.
 
 ## Gotchas
 

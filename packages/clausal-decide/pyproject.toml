@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clausal-decide"
+version = "0.1.0"
+description = "Calibrated decisions as relations for Clausal: choice, yes/no and score answers about a text, from laya or TypeSafe's Jev"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Mike Amy", email = "mikeamycoder@gmail.com"},
+]
+requires-python = ">=3.13"
+dependencies = [
+    "clausal>=1.0",
+    "laya>=0.3.28",   # brings torch, transformers and huggingface_hub
+]
+
+[project.optional-dependencies]
+typesafe = ["typesafe-sdk>=0.7"]   # the `typesafe` backend (TypeSafe's Jev)
+
+[project.urls]
+Homepage = "https://clausal.pl"
+Documentation = "https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-decide/README.md"
+Repository = "https://gitlab.com/MikeAmy/clausal"
+GitHub = "https://github.com/neurosymbolica/clausal-prolog/tree/main/packages/clausal-decide"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["clausal*"]
+
+# Namespace packages: no __init__.py at clausal/, clausal/modules/,
+# clausal/modules/py/ — these are owned by the core distribution.
+# setuptools discovers them as implicit namespace packages (PEP 420).

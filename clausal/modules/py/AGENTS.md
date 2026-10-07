@@ -4,7 +4,7 @@ One module per wrapped Python library: `py.<name>` in seam
 (`-import_from(py.json, [parse])`), `py/<name>` in a `.pl`
 (`:- use_module(py/json, [parse/2])`), and `library(<name>)` or
 `library(py_<name>)` in Clausal Prolog via the generated facades. Third-party
-wrappers (torch, sympy, jax, opencv, scipy, sklearn, spacy, yaml) live in
+wrappers (torch, sympy, jax, opencv, scipy, sklearn, spacy, yaml, acl2, decide) live in
 `packages/clausal-*/clausal/modules/py/` and join this package's `__path__`
 (site-packages and editable installs; see `__init__.py`).
 

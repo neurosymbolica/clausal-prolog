@@ -1,0 +1,25 @@
+# clausal: no-collect
+# Seam-level tests against the FAKE bridge in tests/test_acl2_bridge_stubbed.py;
+# run by that test, never collected on its own.
+
+-import_from(py.acl2, [acl2, acl2_mv, thm])
+# ACL2 function names used as DATA are declared, as any seam functor is.
+-private([append(_, _), quote(_), equal(_, _), rev(_), a(_, _)])
+
+test("an ACL2 form is a Prolog compound") <- (
+    acl2('+'(1, 2), V),
+    V == 3
+)  # nv
+
+test("results come back as terms") <- (
+    acl2(append(quote(['a', 'b']), quote(['c'])), R),
+    R is 'a'('b', 'c')
+)  # nv
+
+test("thm proves, by unification of the goal term") <- (
+    thm(equal(rev(rev('x')), 'x'))
+)  # nv
+
+test("thm fails on a non-theorem") <- (
+    not(thm(equal('x', 1)))
+)  # nv

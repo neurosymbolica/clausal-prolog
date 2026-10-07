@@ -1,0 +1,62 @@
+# clausal: no-collect
+# Seam-level tests of the decide adapter against the FAKE router in
+# tests/test_decide_adapter_stubbed.py (the last label is the most probable,
+# P(yes) is 0.8, score level 1 is the most probable).  Run by that test,
+# never collected on its own: with the real model the numbers differ.
+
+-import_from(py.decide, [choice, noul, score, predict, predict_batch])
+
+test("choice/4 answers a label the caller wrote") <- (
+    choice("We were billed twice", "Which team?", ['technical', 'billing'], L),
+    L == 'billing'
+)  # nv
+
+test("choice/5 enumerates labels by probability") <- (
+    findall(L, choice("t", "Which team?", ['a', 'b', 'c'], L, _), LS),
+    LS == ['c', 'a', 'b']
+)  # nv
+
+test("choice/5 gives one label's probability") <- (
+    choice("t", "Which team?", ['a', 'b'], 'a', P),
+    P > 0.05,
+    P < 0.15
+)  # nv
+
+test("a label dict carries descriptions") <- (
+    choice("t", "Which team?", {'billing': "invoices, refunds", 'technical': "bugs"}, L),
+    L == 'technical'
+)  # nv
+
+test("noul/3 is the probability of yes") <- (
+    noul("I will cancel", "Does the user threaten to leave?", P),
+    P > 0.5
+)  # nv
+
+test("score/5 enumerates levels by probability") <- (
+    findall(LV, score("t", "How urgent?", ["not urgent", "soon", "blocking"], LV, _), LVS),
+    LVS == [1, 0, 2]
+)  # nv
+
+test("predict/3 answers several questions in one pass") <- (
+    predict("We were billed twice",
+            {'department': {'type': 'choice', 'instructions': "Which team?",
+                            'criteria': ['billing', 'technical']},
+             'churn': {'type': 'noul', 'instructions': "Leaving?"}},
+            ANSWERS),
+    dict_get('department', ANSWERS, D),
+    dict_get('choice', D, 'technical'),
+    dict_get('churn', ANSWERS, C),
+    dict_get('noul', C, P),
+    P > 0.5
+)  # nv
+
+test("predict_batch answers every text, in order") <- (
+    predict_batch(["first", "second"],
+                  {'churn': {'type': 'noul', 'instructions': "Leaving?"}},
+                  RESULTS),
+    length(RESULTS, 2),
+    RESULTS is [FIRST, _],
+    dict_get('churn', FIRST, C),
+    dict_get('noul', C, P),
+    P > 0.5
+)  # nv
