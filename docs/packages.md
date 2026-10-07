@@ -35,17 +35,10 @@ package lives at `packages/clausal-<name>/` in the main repository.
 
 ## Status
 
-The library wrappers (jax, opencv, scipy, sklearn, spacy, sympy, torch, yaml)
-are on PyPI. Each can also be installed as an extra of `clausal`, e.g.
+The library wrappers (acl2, decide, jax, opencv, scipy, sklearn, spacy, sympy,
+torch, yaml) are on PyPI. Each can also be installed as an extra of `clausal`, e.g.
 `pip install "clausal[scipy]"`. Their sources live in the main repository
 under `packages/`.
-
-`clausal-acl2` and `clausal-decide` are new and not on PyPI yet; until they are,
-install one from the repository:
-
-```bash
-pip install "clausal-decide @ git+https://github.com/neurosymbolica/clausal-prolog#subdirectory=packages/clausal-decide"
-```
 
 The Prolog backends and `clausal-provenance` are not published yet. The `docs` links currently
 point at the package sources on GitHub; they'll switch to per-package documentation sites

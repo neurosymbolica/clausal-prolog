@@ -39,6 +39,8 @@ Changelog = "https://github.com/neurosymbolica/clausal-prolog/blob/main/CHANGELO
 
 [project.optional-dependencies]
 # The optional library packages, as extras: pip install "clausal[scipy]".
+acl2 = ["clausal-acl2>=0.1.0"]
+decide = ["clausal-decide>=0.1.0"]
 jax = ["clausal-jax>=0.1.0"]
 opencv = ["clausal-opencv>=0.1.0"]
 scipy = ["clausal-scipy>=0.1.0"]
