@@ -954,6 +954,21 @@ def test_a_comprehension_in_an_async_defs_default_stays_synchronous(tmp_path):
     assert run(mod.f()) == [1, 2]
 
 
+def test_a_lambdas_default_in_an_async_def_is_lowered_async(tmp_path):
+    # Eleventh review 2026-10-07: a lambda's defaults are evaluated in the
+    # enclosing async def, so a waiting goal there must be awaited.
+    src = tmp_path / "lam_default.seam"
+    src.write_text(
+        "-module(lam_default, [])\n"
+        "-import_from(py.asyncio, [sleep])\n"
+        "nap(X) <- (sleep(0.001), X is 1)\n"
+        "async def lam():\n"
+        "    g = lambda xs=[X for X in --nap(X)]: xs\n"
+        "    return g()\n")
+    mod = load_clausal_module(src)
+    assert run(mod.lam()) == [1]
+
+
 def test_abandoning_a_query_closes_it(demo):
     async def main():
         x = Var()

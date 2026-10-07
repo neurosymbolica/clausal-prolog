@@ -8796,10 +8796,13 @@ class EmbedTransformer(NodeTransformer):
 
     def visit_Lambda(transformer, node):
         # A lambda is a synchronous function even inside an ``async def``:
-        # a goal-position comprehension in its body stays synchronous.
+        # a goal-position comprehension in its body stays synchronous.  Its
+        # defaults are evaluated in the enclosing scope, so they come first.
+        node.args = transformer.visit(node.args)
         transformer._async_scope.append(False)
         try:
-            return transformer.generic_visit(node)
+            node.body = transformer.visit(node.body)
+            return node
         finally:
             transformer._async_scope.pop()
 
