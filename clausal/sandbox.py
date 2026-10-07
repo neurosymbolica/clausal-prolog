@@ -1287,18 +1287,22 @@ def _data_leaf_types() -> tuple:
 
 _LEAVES = None
 _QUANTITY = None
+_DICT_TERM = None
+_SET_TERM = None
 _VAR_MODULES = ("clausal.", "_variables")
 
 
 def check_term(term, context: str = "solve/1") -> None:
     """Refuse a goal or argument built by Python that carries anything but
     data: atoms, numbers, strings, logic variables (as bound), lists, cells
-    (tuples), dicts, quantities, and an allowed adapter object (a unit).
+    (tuples), dicts (a plain dict or the engine's DictTerm), the engine's
+    SetTerm, quantities, and an allowed adapter object (a unit).
     Iterative and cycle-safe."""
-    global _LEAVES, _QUANTITY
+    global _LEAVES, _QUANTITY, _DICT_TERM, _SET_TERM
     if _LEAVES is None:
-        from clausal.terms import Quantity  # noqa: PLC0415
+        from clausal.terms import DictTerm, Quantity, SetTerm  # noqa: PLC0415
         _QUANTITY = Quantity
+        _DICT_TERM, _SET_TERM = DictTerm, SetTerm
         _LEAVES = _data_leaf_types()
     from clausal.logic.variables import Var, deref  # noqa: PLC0415
     leaves = _LEAVES
@@ -1337,6 +1341,19 @@ def check_term(term, context: str = "solve/1") -> None:
             seen.add(id(t))
             stack.extend(t.keys())
             stack.extend(t.values())
+            continue
+        if tt is _DICT_TERM or tt is _SET_TERM:
+            # The engine's own dict and set terms (EXACT types: a subclass
+            # could carry code): walked like a dict, through their slots,
+            # so no method of theirs runs.
+            if id(t) in seen:
+                continue
+            seen.add(id(t))
+            if tt is _DICT_TERM:
+                stack.extend(t._data.keys())
+                stack.extend(t._data.values())
+            else:
+                stack.extend(t._elements)
             continue
         if isinstance(t, leaves) and tt.__module__ in ("decimal",
                                                        "fractions"):

@@ -1945,3 +1945,46 @@ def test_the_exporter_lists_a_package_reexport(tmp_path, monkeypatch):
                                        module_specs="plain")
     line = [ln for ln in out.splitlines() if "use_module" in ln]
     assert line and "p/1" in line[0] and "q/1" in line[0], out
+
+
+# ── engine container terms in a goal (a user report) ────────────────────────
+
+
+def test_a_goal_may_hold_the_engines_dict_and_set_terms():
+    """``docs/sandbox.md`` allows dicts of data in a goal; the engine's own
+    DictTerm and SetTerm were refused as Python objects although a plain
+    dict passed.  They are walked like a dict: every key, value and
+    element must itself be data."""
+    from clausal.logic.variables import Var
+    from clausal.sandbox import check_term
+    from clausal.terms import DictTerm, SetTerm
+    check_term(DictTerm({"k": 1, "n": [1, ("f", "a")]}))
+    check_term(SetTerm({1, "a", ("f", 2)}))
+    check_term(("p", DictTerm({"k": SetTerm({"a"})}), Var()))
+
+
+@pytest.mark.parametrize("shape", [
+    "dict_value", "dict_key", "set_element", "nested", "subclass_dict",
+    "subclass_set"])
+def test_python_inside_a_dict_or_set_term_is_refused(shape):
+    from clausal.logic.exceptions import LogicException
+    from clausal.sandbox import check_term
+    from clausal.terms import DictTerm, SetTerm
+
+    class D(DictTerm):
+        pass
+
+    class S(SetTerm):
+        pass
+
+    term = {
+        "dict_value": lambda: DictTerm({"k": os}),
+        "dict_key": lambda: DictTerm({os: 1}),
+        "set_element": lambda: SetTerm({os}),
+        "nested": lambda: ("p", [DictTerm({"k": SetTerm({object()})})]),
+        "subclass_dict": lambda: D({"k": 1}),
+        "subclass_set": lambda: S({1}),
+    }[shape]()
+    with pytest.raises(LogicException) as e:
+        check_term(term)
+    assert "python_object" in str(e.value)

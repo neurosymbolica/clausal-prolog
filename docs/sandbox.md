@@ -152,7 +152,8 @@ and the async twins in `clausal.aio`: `asolve`, `aonce`, `acall`,
   engine's other scalars (`bytes`, `complex`, `None`);
 - strings (`('$chars', text)`);
 - logic variables, checked through to what they are bound to;
-- lists, tuples (cells) and dicts of the above;
+- lists, tuples (cells) and dicts of the above (a plain `dict` or the
+  engine's `DictTerm`), and the engine's `SetTerm` of the above;
 - quantities (`clausal.Quantity`), checked to their magnitude and units.
 
 Anything else is refused with
