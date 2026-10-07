@@ -264,7 +264,8 @@ def as_dict_key(key):
     """*key* in its canonical DICT-KEY form.
 
     The empty list in any spelling — ``[]``, ``""``, ``b""``, ``()`` — is the
-    one atom ``'[]'``, so all four must be ONE key.  Only ``()`` is both
+    one atom ``'[]'``, so all four must be ONE key.  A non-empty char list
+    keys as the chars carrier, its hashable spelling.  Only ``()`` is both
     hashable and unambiguous (a ``str`` key ``""`` would otherwise be a
     different key from ``b""``), so every nil spelling normalises to it.
     Everything else passes through untouched.
@@ -274,6 +275,17 @@ def as_dict_key(key):
     """
     if is_nil(key):
         return NIL_KEY
+    if isinstance(key, list) and key:
+        # A list is unhashable, but a CHAR list has a hashable spelling that
+        # is the same term: the chars carrier.  So ``D[[a, b]]`` reads the key
+        # ``"ab"`` stored, and ``{[a, b]: 1}`` builds.  A list of ints is NOT
+        # folded to its bytes spelling: the key is handed back (dict_pairs,
+        # to Python), and an int-list key [1, 2] coming back as b'\x01\x02'
+        # would surprise far more than it helps; it stays type_error(dict_key).
+        from clausal.logic.variables import deref  # noqa: PLC0415
+        elems = [deref(e) for e in key]
+        if all(type(e) is str and len(e) == 1 for e in elems):
+            return (CHARS_TAG, "".join(elems))
     return key
 
 

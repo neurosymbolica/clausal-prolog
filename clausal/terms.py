@@ -3611,7 +3611,11 @@ def term_canonical(t: Any) -> str:
     if isinstance(t, str):
         return _quoted_atom_spelling(t)   # STAGE 2: a str is an ATOM
     if isinstance(t, bytes):
-        return repr(t)
+        # A CODE LIST: the cons structure of its codes, as for ``[97, 98]``
+        out = "[]"
+        for c in reversed(t):
+            out = "'.'(" + repr(c) + "," + out + ")"
+        return out
     if isinstance(t, list):
         out = "[]"
         for e in reversed(t):

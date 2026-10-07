@@ -3319,6 +3319,16 @@ class TermTransformer(NodeTransformer):
             # (``atoms.NIL_KEY``); ``DictTerm`` normalises every other nil
             # spelling onto it, so nothing downstream can tell them apart.
             return replace(Tuple(elts=[], ctx=load), key)
+        if isinstance(visited, List):
+            # A non-empty LIST key is unhashable as written; a char or code
+            # list has a hashable key spelling (``atoms.as_dict_key``), so
+            # ``$dict_key`` builds it at run time -- ``{[a, b]: 1}`` keys as
+            # ``"ab"`` -- and any other list is ``type_error(dict_key)``.
+            return replace(
+                Call(func=replace(Name(id="$dict_key", ctx=load), key),
+                     args=[visited], keywords=[]),
+                key,
+            )
         return visited
 
     def visit_Dict(transformer, dict_expr):

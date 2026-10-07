@@ -124,4 +124,11 @@ def _dict_key(key: Any) -> Any:
     # KEY form (fix round 3, item 1): ``mint("[]")`` is the empty LIST,
     # which is unhashable, so ``{K: V}`` with ``K = []`` built nothing but a
     # raw ``TypeError``.
-    return DictTerm.normalised_key(key)
+    key = DictTerm.normalised_key(key)
+    try:
+        hash(key)
+    except TypeError:
+        # An unhashable key (a list that is not a char or code list, a
+        # compound holding one): a wrong-typed key, as for a subscript read.
+        raise LogicException(type_error("dict_key", key, _DICT_KEY_CTX)) from None
+    return key
