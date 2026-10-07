@@ -84,7 +84,8 @@ trusted publishing. Run it by hand to build and test without publishing.
   `PUBLISHABLE` list). gprolog and scryer need native wheels, trealla needs
   `libtpl` built from source, and provenance is disabled.
 - Before a package's first release, its project name needs a pending trusted
-  publisher on pypi.org (workflow `packages-release.yml`, environment `pypi`).
+  publisher on pypi.org (workflow `packages-release.yml`, environment
+  `pypi-<package>`, e.g. `pypi-clausal-yaml`).
 - Once a package is on PyPI it can become an extra of `clausal` again
   (`[project.optional-dependencies]` in the root `pyproject.toml`).
 

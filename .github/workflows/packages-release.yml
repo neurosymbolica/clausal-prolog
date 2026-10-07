@@ -19,7 +19,7 @@
 # package's first release, add a *pending* trusted publisher on pypi.org
 # (Account -> Publishing) for that project name, with owner "neurosymbolica",
 # repository "clausal-prolog", workflow "packages-release.yml" and
-# environment "pypi".
+# environment "pypi-<package>" (e.g. "pypi-clausal-yaml").
 name: packages-release
 
 on:
@@ -96,8 +96,11 @@ jobs:
     if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
+    # One environment per package (pypi-clausal-yaml, ...): PyPI lets a given
+    # owner/repo/workflow/environment be the pending publisher of only one new
+    # project at a time, so each package needs its own environment name.
     environment:
-      name: pypi
+      name: pypi-${{ needs.build.outputs.name }}
       url: https://pypi.org/project/${{ needs.build.outputs.name }}/
     permissions:
       id-token: write
