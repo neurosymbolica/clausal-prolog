@@ -65,8 +65,18 @@ def _append(target: str, value):
 def _extend(target: str, value):
     return _expr_stmt(_call(_attr(_name(target), "extend"), [value]))
 
+def _builtin(name: str):
+    """``_builtins.<name>``: a Python builtin as the compiled template reaches
+    it.  ``_builtins`` is a LOCAL of the template function (``_import_ast``),
+    so no module binding -- a ``.seam`` module's ``list = ...`` or its atom
+    ``list`` -- can shadow the builtin the generated checks rely on.  An
+    attribute of a local import rather than a ``$`` name, because templates
+    are also compiled to plain Python (``transform_module``), which a ``$``
+    name is not."""
+    return _attr(_name("_builtins"), name)
+
 def _isinstance_check(x, cls):
-    return _call(_name("isinstance"), [x, cls])
+    return _call(_builtin("isinstance"), [x, cls])
 
 def _ast_attr(attr: str):
     return _attr(_name("_ast"), attr)
@@ -80,14 +90,15 @@ def _loc(node, lineno: int):
     return node
 
 def _import_ast():
-    return ast.Import(names=[ast.alias(name="ast", asname="_ast")])
+    return ast.Import(names=[ast.alias(name="ast", asname="_ast"),
+                             ast.alias(name="builtins", asname="_builtins")])
 
 def _type_error(prefix: str, value_var: str):
     return ast.Raise(
-        exc=_call(_name("TypeError"), [ast.JoinedStr(values=[
+        exc=_call(_builtin("TypeError"), [ast.JoinedStr(values=[
             _const(prefix),
             ast.FormattedValue(
-                value=_attr(_call(_name("type"), [_name(value_var)]),
+                value=_attr(_call(_builtin("type"), [_name(value_var)]),
                             "__name__"),
                 conversion=-1),
         ])]),
@@ -119,7 +130,8 @@ class _StringCallableRewriter(ast.NodeTransformer):
             else:
                 node.func = ast.copy_location(
                     ast.Subscript(
-                        value=ast.copy_location(_call(_name("globals")), loc),
+                        value=ast.copy_location(
+                            _call(_builtin("globals")), loc),
                         slice=ast.copy_location(ast.Constant(value=name), loc),
                         ctx=ast.Load(),
                     ), loc)
@@ -171,13 +183,13 @@ def _normalize_args(raw_var: str, result_var: str) -> list[ast.stmt]:
             body=[ast.Assign(targets=[copy.deepcopy(res)],
                              value=_empty_args(_list([raw])))],
             orelse=[ast.If(
-                test=_isinstance_check(raw, _name("list")),
+                test=_isinstance_check(raw, _builtin("list")),
                 body=[ast.Assign(targets=[copy.deepcopy(res)],
                                  value=_empty_args(raw))],
                 orelse=[ast.If(
-                    test=_isinstance_check(raw, _name("tuple")),
+                    test=_isinstance_check(raw, _builtin("tuple")),
                     body=[ast.Assign(targets=[copy.deepcopy(res)],
-                                     value=_empty_args(_call(_name("list"), [raw])))],
+                                     value=_empty_args(_call(_builtin("list"), [raw])))],
                     orelse=[_type_error("__args__: expected arguments/arg/list/tuple, got ",
                                        raw_var)],
                 )],
@@ -190,12 +202,12 @@ def _normalize_bases(raw_var: str, result_var: str) -> list[ast.stmt]:
     """if/elif chain: raw → list[ast.expr]."""
     raw, res = _name(raw_var), _store(result_var)
     return [ast.If(
-        test=_isinstance_check(raw, _name("list")),
+        test=_isinstance_check(raw, _builtin("list")),
         body=[ast.Assign(targets=[copy.deepcopy(res)], value=raw)],
         orelse=[ast.If(
-            test=_isinstance_check(raw, _name("tuple")),
+            test=_isinstance_check(raw, _builtin("tuple")),
             body=[ast.Assign(targets=[copy.deepcopy(res)],
-                             value=_call(_name("list"), [raw]))],
+                             value=_call(_builtin("list"), [raw]))],
             orelse=[ast.If(
                 test=_isinstance_check(raw, _ast_attr("AST")),
                 body=[ast.Assign(targets=[copy.deepcopy(res)],
@@ -250,7 +262,7 @@ class ASTBuilder:
 
     def _splice_check(self, tmp: str, target: str) -> list[ast.stmt]:
         return [ast.If(
-            test=_isinstance_check(_name(tmp), _name("list")),
+            test=_isinstance_check(_name(tmp), _builtin("list")),
             body=[_extend(target, _name(tmp))],
             orelse=[ast.If(
                 test=_isinstance_check(_name(tmp), _ast_attr("AST")),

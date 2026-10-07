@@ -217,7 +217,7 @@ def _compile_call_nth(ctx: CompilationContext, inner, n_arg, k_stmts):
             values=[
                 ast.UnaryOp(
                     op=ast.Not(),
-                    operand=_call(_name("isinstance"), _name(n_var), _name("int")),
+                    operand=_call(_name("$isinstance"), _name(n_var), _name("$int")),
                 ),
                 ast.Compare(
                     left=_name(n_var),
@@ -388,7 +388,7 @@ def _compile_setup_call_cleanup(ctx: CompilationContext, setup, call, cleanup, k
     )
 
     handler = ast.ExceptHandler(
-        type=_name("Exception"),
+        type=_name("$Exception"),
         name=exc_e,
         body=[_assign(exc_var, _name(exc_e))],
     )
@@ -468,7 +468,7 @@ def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts):
         goals_var,
         ast.IfExp(
             test=_name(old_var),
-            body=_call(_name("list"), _name(old_var)),
+            body=_call(_name("$list"), _name(old_var)),
             orelse=ast.List(elts=[], ctx=ast.Load()),
         ),
     )
@@ -493,7 +493,7 @@ def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts):
     check = ast.If(
         test=ast.UnaryOp(
             op=ast.Not(),
-            operand=_call(_name("is_var"), _name(x_var)),
+            operand=_call(_name("$is_var"), _name(x_var)),
         ),
         body=bound_stmts or [ast.Pass()],
         orelse=[
@@ -967,7 +967,7 @@ def _compile_catch_impl(
     term_extract = _assign(
         term_name,
         ast.IfExp(
-            test=_call(_name("isinstance"), _name(exc_name), _name("$LogicException")),
+            test=_call(_name("$isinstance"), _name(exc_name), _name("$LogicException")),
             body=ast.Attribute(value=_name(exc_name), attr="term", ctx=ast.Load()),
             orelse=_call(_name("$python_error_term"), _name(exc_name)),
         ),
@@ -997,7 +997,7 @@ def _compile_catch_impl(
     ]
 
     handler = ast.ExceptHandler(
-        type=_name("Exception"),
+        type=_name("$Exception"),
         name=exc_name,
         body=except_body,
     )

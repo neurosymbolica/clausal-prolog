@@ -58,6 +58,10 @@ def embed_exec(src: str) -> dict:
     ns['$ast'] = ast   # required by ~~ and with-the_following generated code
     from clausal.logic.seam import seam_term
     ns['$seam'] = seam_term   # required by -- (THE SEAM)
+    # ... and the ``$globals()`` it hands the seam (module-level builtins are
+    # ``$``-only in generated code)
+    from clausal.logic.generated_names import MODULE_CODE_BUILTINS
+    ns.update(MODULE_CODE_BUILTINS)
     exec(compile(transformed, '<test>', 'exec'), ns)
     return ns
 

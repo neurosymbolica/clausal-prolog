@@ -193,7 +193,7 @@ def test_dispatch_call_trampoline_reads_direct_bucket_ref_hint():
     )
     assert isinstance(call_expr, _ast.Call)
     assert isinstance(call_expr.func, _ast.Name)
-    assert call_expr.func.id == "StepGenerator"
+    assert call_expr.func.id == "$StepGenerator"
     # First arg to StepGenerator is the bucket-function Name reference.
     first = call_expr.args[0]
     assert isinstance(first, _ast.Name)

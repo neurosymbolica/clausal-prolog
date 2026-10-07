@@ -358,7 +358,7 @@ class _ClauseLowering:
             elif t is not None and name in t._import_remap:
                 owner = t._import_remap[name].rsplit(".", 1)[0]
                 mod_expr = ast.Call(
-                    func=_name("__import__"), args=[_const(owner)],
+                    func=_name("$__import__"), args=[_const(owner)],
                     keywords=[ast.keyword(arg="fromlist", value=ast.List(
                         elts=[_const("_")], ctx=ast.Load()))])
             else:

@@ -539,7 +539,7 @@ class DirectiveContext:
                 # The module STAYS loaded (Scryer: m:G still reaches it): the
                 # import runs, binding no name here.
                 keep = ast.Expr(value=ast.Call(
-                    func=ast.Name(id="__import__", ctx=ast.Load()),
+                    func=ast.Name(id="$__import__", ctx=ast.Load()),
                     args=[ast.Constant(value=s.module)], keywords=[]))
                 ast.copy_location(keep, s)
                 self.load_only[id(s)] = keep
@@ -570,7 +570,7 @@ class DirectiveContext:
             repl: ast.stmt = (
                 ast.ImportFrom(module=cur.module, names=kept, level=cur.level)
                 if kept else ast.Expr(value=ast.Call(
-                    func=ast.Name(id="__import__", ctx=ast.Load()),
+                    func=ast.Name(id="$__import__", ctx=ast.Load()),
                     args=[ast.Constant(value=cur.module)], keywords=[])))
             ast.copy_location(repl, s)
             self.load_only[id(s)] = repl

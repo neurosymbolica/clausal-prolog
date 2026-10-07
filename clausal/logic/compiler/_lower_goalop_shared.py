@@ -772,12 +772,12 @@ def _lower_meta_call(
             return _compile_throw(
                 ctx, halt_refusal_term(0 if code_arg is None else 1))
         if code_arg is None:
-            return [ast.Raise(exc=_call(_name("SystemExit"), ast.Constant(0)))]
+            return [ast.Raise(exc=_call(_name("$SystemExit"), ast.Constant(0)))]
         code_expr = term_to_ast_expr(code_arg, ctx.var_context, eval_arith=True)
         # The code's VALUE, not the Var holding it: ``halt(X)`` with X bound
         # exited with the Var object as its status (SystemExit(AttVar)).
         code_expr = _call(_name("$deref_walk"), code_expr)
-        return [ast.Raise(exc=_call(_name("SystemExit"), code_expr))]
+        return [ast.Raise(exc=_call(_name("$SystemExit"), code_expr))]
     if kind == "once":
         return _compile_once(ctx, margs["inner"], k_stmts)
     if kind == "call_nth":

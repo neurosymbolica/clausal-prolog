@@ -54,7 +54,9 @@ TestDeepIndexBehavioral
 
 TestDeepIndexStructural
   • _has_isinstance_check(func_def, "list") walks the AST for isinstance(x, list)
-    calls.  If Phase 5 uses a helper function (e.g. _is_list_term) instead of
+    calls -- emitted through the ``$``-only spellings ``$isinstance``/``$list``
+    (a module's own atom ``list`` must not shadow them), which the helpers
+    match.  If Phase 5 uses a helper function (e.g. _is_list_term) instead of
     a raw isinstance call, these checks need updating to match the helper name.
   • Structural test fixtures use Var() for all non-list argument positions to
     avoid MatchValue patterns that would break the test.  Raw Compound heads
@@ -97,8 +99,10 @@ def _isinstance_check_matches(type_arg: ast.expr, type_name: str) -> bool:
     """Check if an isinstance type argument mentions *type_name*.
 
     Handles both ``isinstance(x, list)`` (Name node) and
-    ``isinstance(x, (list, str))`` (Tuple of Names).
+    ``isinstance(x, (list, str))`` (Tuple of Names), each name in the ``$``
+    spelling generated code uses for a builtin.
     """
+    type_name = "$" + type_name
     if isinstance(type_arg, ast.Name) and type_arg.id == type_name:
         return True
     if isinstance(type_arg, ast.Tuple):
@@ -115,7 +119,7 @@ def _has_isinstance_check(tree: ast.AST, type_name: str) -> bool:
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Name)
-            and node.func.id == "isinstance"
+            and node.func.id == "$isinstance"
             and len(node.args) == 2
             and _isinstance_check_matches(node.args[1], type_name)
         ):
@@ -130,7 +134,7 @@ def _has_is_var_guard(tree: ast.AST) -> bool:
             isinstance(node, ast.If)
             and isinstance(node.test, ast.Call)
             and isinstance(node.test.func, ast.Name)
-            and node.test.func.id == "is_var"
+            and node.test.func.id == "$is_var"
         ):
             return True
     return False
@@ -153,7 +157,7 @@ def _count_isinstance_checks(tree: ast.AST, type_name: str) -> int:
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Name)
-            and node.func.id == "isinstance"
+            and node.func.id == "$isinstance"
             and len(node.args) == 2
             and _isinstance_check_matches(node.args[1], type_name)
         ):
@@ -464,7 +468,7 @@ class TestDeepIndexStructural:
             if (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Name)
-                and node.func.id == "isinstance"
+                and node.func.id == "$isinstance"
                 and len(node.args) == 2
                 and _isinstance_check_matches(node.args[1], "list")
             ):
@@ -498,7 +502,7 @@ class TestDeepIndexStructural:
                 isinstance(node, ast.If)
                 and isinstance(node.test, ast.Call)
                 and isinstance(node.test.func, ast.Name)
-                and node.test.func.id == "is_var"
+                and node.test.func.id == "$is_var"
             ):
                 args = node.test.args
                 assert len(args) == 1, "is_var() takes exactly one argument"

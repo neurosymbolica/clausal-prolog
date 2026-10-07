@@ -1310,7 +1310,7 @@ def _compile_multi_star_guard(
 
         current = [ast.For(
             target=_name(sp_names[i], ast.Store()),
-            iter=_call(_name("range"), upper_expr),
+            iter=_call(_name("$range"), upper_expr),
             body=current,
             orelse=[],
         )]
@@ -1324,14 +1324,14 @@ def _compile_multi_star_guard(
     guarded = [ast.If(test=len_check, body=current, orelse=[])]
 
     # _n = len(_d)
-    len_assign = _assign(n_name, _call(_name("len"), _name(d_name)))
+    len_assign = _assign(n_name, _call(_name("$len"), _name(d_name)))
 
     # isinstance check — accept list, str (chars), and bytes (codes). Native
     # indexing/slicing handles all three: str[i] is a 1-char str, bytes[i] is
     # an int code, and slicing preserves the container type.
     isinstance_check = _call(
-        _name("isinstance"), _name(d_name),
-        ast.Tuple(elts=[_name("list"), _name("str"), _name("bytes")], ctx=ast.Load()),
+        _name("$isinstance"), _name(d_name),
+        ast.Tuple(elts=[_name("$list"), _name("$str"), _name("$bytes")], ctx=ast.Load()),
     )
 
     # Build segments list AST for _build_multi_star_list (used in unbound Var case)
@@ -1357,7 +1357,7 @@ def _compile_multi_star_guard(
 
     # if is_var(_d): build SegList and bind target once
     var_check = ast.If(
-        test=_call(_name("is_var"), _name(d_name)),
+        test=_call(_name("$is_var"), _name(d_name)),
         body=[
             _assign_mark(var_build_mark, trail_name),
             _assign(var_sl_name, _call(_name("$build_multi_star_list"), segments_ast)),
@@ -1386,7 +1386,7 @@ def _compile_multi_star_guard(
     # a SegList and the list branch simply doesn't fire (no solutions for now —
     # SegList-vs-SegList unification is Phase 6).
     seglist_normalise = ast.If(
-        test=_call(_name("isinstance"), _name(d_name), _name("SegList")),
+        test=_call(_name("$isinstance"), _name(d_name), _name("$SegList")),
         body=[
             _assign(
                 d_name,
@@ -1406,7 +1406,7 @@ def _compile_multi_star_guard(
     # star head guard accepts ground SegStrings (which walk to plain str and
     # route through the (list, str) isinstance arm below).
     segstring_normalise = ast.If(
-        test=_call(_name("isinstance"), _name(d_name), _name("SegString")),
+        test=_call(_name("$isinstance"), _name(d_name), _name("$SegString")),
         body=[
             _assign(
                 d_name,
@@ -1426,7 +1426,7 @@ def _compile_multi_star_guard(
     # head guard accepts ground SegBytes (which walk to plain bytes and route
     # through the (list, str, bytes) isinstance arm below).
     segbytes_normalise = ast.If(
-        test=_call(_name("isinstance"), _name(d_name), _name("SegBytes")),
+        test=_call(_name("$isinstance"), _name(d_name), _name("$SegBytes")),
         body=[
             _assign(
                 d_name,
@@ -1449,7 +1449,7 @@ def _compile_multi_star_guard(
     # body_stmts run inside the for-loop so each alignment yields a
     # solution.
     segstring_branch = ast.If(
-        test=_call(_name("isinstance"), _name(d_name), _name("SegString")),
+        test=_call(_name("$isinstance"), _name(d_name), _name("$SegString")),
         body=[
             ast.For(
                 target=ast.Name(id=f"_ssms{cap_name}", ctx=ast.Store()),
@@ -1471,7 +1471,7 @@ def _compile_multi_star_guard(
     # pattern via ``_segbytes_align`` (one True per valid alignment). Mirror of
     # ``segstring_branch``.
     segbytes_branch = ast.If(
-        test=_call(_name("isinstance"), _name(d_name), _name("SegBytes")),
+        test=_call(_name("$isinstance"), _name(d_name), _name("$SegBytes")),
         body=[
             ast.For(
                 target=ast.Name(id=f"_sbms{cap_name}", ctx=ast.Store()),
@@ -1929,7 +1929,7 @@ def compile_head_to_match_case(
     try_finally = ast.Try(
         body=inner,
         handlers=[ast.ExceptHandler(
-            type=_name("GeneratorExit"),
+            type=_name("$GeneratorExit"),
             name=None,
             body=[_assign(closing_name, ast.Constant(value=True)),
                   ast.Raise(exc=None, cause=None)],

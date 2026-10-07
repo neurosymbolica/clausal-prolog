@@ -14,7 +14,7 @@ def depth__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                         yield (_proceed, None)
                     trail.undo(_m1)
                 trail.undo(_m0)
-            except GeneratorExit:
+            except $GeneratorExit:
                 _mark_cl = True
                 raise
             finally:
@@ -30,14 +30,14 @@ def depth__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _v6 = $Var()
                 _m2 = trail.mark()
                 if $unify(_v2, ('point', _v4, _v5), trail):
-                    _gen0 = StepGenerator($dispatch_at(depth, 2), this_generator, this_generator, this_generator, _v5, _v6, trail)
+                    _gen0 = $StepGenerator($dispatch_at(depth, 2), this_generator, this_generator, this_generator, _v5, _v6, trail)
                     _st0 = (yield (_gen0, None))
                     while _st0 is not $DONE:
                         if $fd_eq(_v3, $Add(left=_v6, right=1), trail):
                             yield (_proceed, None)
                         _st0 = (yield (_gen0, None))
                 trail.undo(_m2)
-            except GeneratorExit:
+            except $GeneratorExit:
                 _mark_cl = True
                 raise
             finally:
@@ -64,7 +64,7 @@ def kind__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                         yield (_proceed, None)
                     trail.undo(_m4)
                 trail.undo(_m3)
-            except GeneratorExit:
+            except $GeneratorExit:
                 _mark_cl = True
                 raise
             finally:
@@ -84,7 +84,7 @@ def kind__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                         yield (_proceed, None)
                     trail.undo(_m6)
                 trail.undo(_m5)
-            except GeneratorExit:
+            except $GeneratorExit:
                 _mark_cl = True
                 raise
             finally:
@@ -105,7 +105,7 @@ def kind__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                         yield (_proceed, None)
                     trail.undo(_m8)
                 trail.undo(_m7)
-            except GeneratorExit:
+            except $GeneratorExit:
                 _mark_cl = True
                 raise
             finally:
@@ -123,7 +123,7 @@ def kind__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                         yield (_proceed, None)
                     trail.undo(_m10)
                 trail.undo(_m9)
-            except GeneratorExit:
+            except $GeneratorExit:
                 _mark_cl = True
                 raise
             finally:
@@ -141,7 +141,7 @@ def kind__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                         yield (_proceed, None)
                     trail.undo(_m12)
                 trail.undo(_m11)
-            except GeneratorExit:
+            except $GeneratorExit:
                 _mark_cl = True
                 raise
             finally:
@@ -159,7 +159,7 @@ def kind__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                         yield (_proceed, None)
                     trail.undo(_m14)
                 trail.undo(_m13)
-            except GeneratorExit:
+            except $GeneratorExit:
                 _mark_cl = True
                 raise
             finally:
@@ -355,7 +355,7 @@ def mk__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                         yield (_proceed, None)
                     trail.undo(_m1)
                 trail.undo(_m0)
-            except GeneratorExit:
+            except $GeneratorExit:
                 _mark_cl = True
                 raise
             finally:
@@ -372,12 +372,12 @@ def mk__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 if $unify(_v29, ('point', _v28, _v30), trail):
                     if $fd_gt(_v28, 0, trail):
                         if $fd_eq(_v31, $Sub(left=_v28, right=1), trail):
-                            _gen0 = StepGenerator($dispatch_at(mk, 2), _proceed, this_generator, this_generator, _v31, _v30, trail)
+                            _gen0 = $StepGenerator($dispatch_at(mk, 2), _proceed, this_generator, this_generator, _v31, _v30, trail)
                             _st0 = (yield (_gen0, None))
                             while _st0 is not $DONE:
                                 _st0 = (yield (_gen0, None))
                 trail.undo(_m2)
-            except GeneratorExit:
+            except $GeneratorExit:
                 _mark_cl = True
                 raise
             finally:
@@ -400,7 +400,7 @@ def pair_up__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trai
                 if $unify(_v34, ('seg', _v32, _v33, 'nil'), trail):
                     yield (_proceed, None)
                 trail.undo(_m27)
-            except GeneratorExit:
+            except $GeneratorExit:
                 _mark_cl = True
                 raise
             finally:

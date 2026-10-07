@@ -2883,7 +2883,7 @@ class TermTransformer(NodeTransformer):
                 elif ident in transformer._import_remap:
                     owner = transformer._import_remap[ident].rsplit(".", 1)[0]
                     mod_expr = replace(
-                        Call(func=replace(Name(id="__import__", ctx=load), name_node),
+                        Call(func=replace(Name(id="$__import__", ctx=load), name_node),
                              args=[replace(Constant(value=owner), name_node)],
                              keywords=[keyword(
                                  arg="fromlist",
@@ -4713,6 +4713,25 @@ def _swap_placeholder(block, placeholder, runtime_name):
     return block
 
 
+#: The builtins the text-built plumbing below (``parse(...)`` of engine
+#: text) calls; each is re-spelled to its ``$``-only binding after parsing
+#: (``generated_names.MODULE_CODE_BUILTINS``), so a module's own atom or
+#: binding ``globals`` cannot become the plumbing's ``globals``.
+_PLUMBING_BUILTINS = frozenset({"globals", "__import__", "ImportError"})
+
+
+def _dollar_plumbing_builtins(block):
+    """Re-spell every builtin of :data:`_PLUMBING_BUILTINS` that *block* --
+    engine text, parsed -- reads as its ``$`` name.  The text carries no
+    user names (module and functor names arrive as constants), so every
+    such ``Name`` is the engine's own."""
+    for node in walk(block):
+        if (isinstance(node, Name) and isinstance(node.ctx, Load)
+                and node.id in _PLUMBING_BUILTINS):
+            node.id = "$" + node.id
+    return block
+
+
 def _head_ctor_ast(head_ast):
     """A clause HEAD is constructed like any other term: ``<cls>(...)``.
 
@@ -4897,7 +4916,7 @@ def _make_functor_signatures_update_ast(entries, source):
         f".update({{{dict_text}}})",
     ]
     tree = parse("\n".join(lines))
-    block = tree.body[0]
+    block = _dollar_plumbing_builtins(tree.body[0])
     for node in walk(block):
         copy_location(node, source)
     return block
@@ -4927,7 +4946,7 @@ def _wrap_import_for_pl_data(import_stmt, resolved_module, pairs, eligible,
         f".record_bound_data_names(globals(), {resolved_module!r}, "
         f"{pairs!r}, {tuple(eligible)!r})\n"
     )
-    block = parse(text).body[0]
+    block = _dollar_plumbing_builtins(parse(text).body[0])
     block.body = [import_stmt]
     for node in walk(block):
         copy_location(node, source)
@@ -4974,7 +4993,7 @@ def _make_import_signatures_update_ast(resolved_module, name_pairs, source):
         f"__dict__.get({FUNCTOR_SIGNATURES_KEY!r}, {{}})}})",
     ]
     tree = parse("\n".join(lines))
-    block = tree.body[0]
+    block = _dollar_plumbing_builtins(tree.body[0])
     for node in walk(block):
         copy_location(node, source)
     return block
@@ -5000,7 +5019,7 @@ def _make_import_arities_record_ast(selected, source):
                        for local, found in sorted(selected.items())})
     text = ("__import__('clausal.logic.predicate', fromlist=['_'])."
             f"record_import_arities(globals(), {pairs_text})")
-    block = parse(text).body[0]
+    block = _dollar_plumbing_builtins(parse(text).body[0])
     for node in walk(block):
         copy_location(node, source)
     return block
@@ -6980,7 +6999,7 @@ class EmbedTransformer(NodeTransformer):
                    if transformer._implicit_atoms_default else [])
         return replace(
             Call(func=Name(id="$seam", ctx=Load()),
-                 args=[term_ast, Call(func=Name(id="globals", ctx=Load()), args=[], keywords=[])],
+                 args=[term_ast, Call(func=Name(id="$globals", ctx=Load()), args=[], keywords=[])],
                  keywords=seam_kw),
             anchor,
         )
@@ -7241,7 +7260,7 @@ class EmbedTransformer(NodeTransformer):
         return out
 
     def _globals_call(transformer, anchor):
-        return replace(Call(func=Name(id="globals", ctx=Load()), args=[], keywords=[]), anchor)
+        return replace(Call(func=Name(id="$globals", ctx=Load()), args=[], keywords=[]), anchor)
 
     def _declare_locals(transformer, names, anchor):
         """An unreachable ``if False:`` block whose body exports *names* --
@@ -7751,7 +7770,7 @@ class EmbedTransformer(NodeTransformer):
             body=[Expr(value=Name(id=functor_name, ctx=load))],
             handlers=[
                 ExceptHandler(
-                    type=Name(id="NameError", ctx=load),
+                    type=Name(id="$NameError", ctx=load),
                     name=None,
                     body=[
                         Expr(value=Call(
@@ -10430,7 +10449,7 @@ class EmbedTransformer(NodeTransformer):
                                  values=[kw.value for kw in kw_args]),
                             node),
                         replace(
-                            Call(func=replace(Name(id="globals", ctx=load),
+                            Call(func=replace(Name(id="$globals", ctx=load),
                                               node),
                                  args=[], keywords=[]),
                             node),

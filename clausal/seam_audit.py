@@ -55,9 +55,19 @@ _ENGINE_ASSIGNED = frozenset({"__clausal_implicit_functors__"})
 
 
 def _engine_names() -> frozenset:
+    """The ``$`` names that are engine plumbing.  NOT the ``$``-only
+    spellings of Python builtins (``$isinstance``, ``$globals``,
+    ``$__import__``, ...): generated code reaches a builtin through one so
+    a module cannot shadow it, but a builtin is not engine plumbing, and
+    allowing ``$__import__``/``$globals`` here would let an attribute walk
+    from one through the audit.  The plumbing that does call them is
+    recognised by its exact shape (``plumbing``), never by name."""
     from clausal import import_hook  # noqa: PLC0415
-    return frozenset(
+    from clausal.logic.generated_names import (  # noqa: PLC0415
+        GENERATED_CODE_BUILTINS, MODULE_CODE_BUILTINS)
+    return (frozenset(
         n for n in import_hook.runtime_builtins if n.startswith("$")
+    ) - frozenset(GENERATED_CODE_BUILTINS) - frozenset(MODULE_CODE_BUILTINS)
     ) | import_hook.PER_MODULE_RUNTIME_NAMES
 
 
@@ -229,11 +239,12 @@ def _plumbing_shapes() -> dict:
 
 
 def _import_constants(node) -> "list[str]":
-    """The module-name constants of every ``__import__(C, ...)`` in *node*."""
+    """The module-name constants of every ``$__import__(C, ...)`` in *node*
+    (the plumbing's ``$``-only spelling of ``__import__``)."""
     out = []
     for sub in ast.walk(node):
         if (isinstance(sub, ast.Call) and isinstance(sub.func, ast.Name)
-                and sub.func.id == "__import__" and sub.args
+                and sub.func.id == "$__import__" and sub.args
                 and isinstance(sub.args[0], ast.Constant)):
             out.append(sub.args[0].value)
     return out
@@ -511,9 +522,9 @@ class _Audit:
                 return
             for a in node.args:
                 if (isinstance(a, ast.Call) and isinstance(a.func, ast.Name)
-                        and a.func.id == "globals" and not a.args
+                        and a.func.id == "$globals" and not a.args
                         and not a.keywords):
-                    continue    # $helper(..., globals()): the engine's own
+                    continue    # $helper(..., $globals()): the engine's own
                 self.expr(a, scope)
             for k in node.keywords:
                 self.expr(k.value, scope)

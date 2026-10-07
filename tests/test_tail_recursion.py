@@ -521,14 +521,17 @@ def _patch_sg(counting_cls, *pred_classes):
         # dispatch may be a plain function or a wrapper; chase __wrapped__.
         fn = getattr(dispatch, '__wrapped__', dispatch)
         g = getattr(fn, '__globals__', None)
-        assert g is not None and "StepGenerator" in g, (
-            f"{pcls!r}: dispatch globals carry no StepGenerator to patch")
-        g["StepGenerator"] = counting_cls
+        # Generated code names it ``$StepGenerator`` (a module binding of
+        # ``StepGenerator`` must not shadow the engine's).
+        assert g is not None and "$StepGenerator" in g, (
+            f"{pcls!r}: dispatch globals carry no $StepGenerator to patch")
+        g["$StepGenerator"] = counting_cls
         patched.append(g)
 
     def _restore():
-        for d in patched:
-            d["StepGenerator"] = _real
+        _solve_mod.StepGenerator = _real
+        for d in patched[1:]:
+            d["$StepGenerator"] = _real
     return _restore
 
 

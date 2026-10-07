@@ -452,6 +452,12 @@ runtime_builtins = with_dollar_twins(
 from clausal.logic.compiler.predicate import INJECTED_RUNTIME_BUILTINS
 runtime_builtins.update(INJECTED_RUNTIME_BUILTINS)  # already twinned
 runtime_builtins["$unterminated_fact_error"] = _unterminated_fact_error
+# The builtins MODULE-LEVEL generated code reaches (``$globals()``,
+# ``$__import__(...)``, ``except $ImportError``), ``$``-only for the reason
+# ``generated_names.GENERATED_CODE_BUILTINS`` gives: a module's own atom
+# ``globals`` must not become the registry plumbing's ``globals``.
+from clausal.logic.generated_names import MODULE_CODE_BUILTINS  # noqa: E402
+runtime_builtins.update(MODULE_CODE_BUILTINS)
 
 # Task 8 fix round 1 (RULING, reviewer-caught): the strictness check's
 # "already resolved" test must distrust ANY ``runtime_builtins`` entry, not
@@ -1759,7 +1765,7 @@ class _StarQueryTransformer(ast.NodeTransformer):
                 args=[
                     goal_ast,
                     varnames_ast,
-                    ast.Call(func=ast.Name(id='globals', ctx=ast.Load()),
+                    ast.Call(func=ast.Name(id='$globals', ctx=ast.Load()),
                              args=[], keywords=[]),
                 ],
                 keywords=[],

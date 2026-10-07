@@ -648,7 +648,7 @@ def _compile_tro_tail(
     # Runtime ground-check: if any checked arg is a Var, fall back to StepGenerator.
     # The commit test goes LAST: it mutates the trail when it succeeds.
     checks = [
-        ast.UnaryOp(op=ast.Not(), operand=_call(_name("is_var"), _name(f"_tro_arg{i}")))
+        ast.UnaryOp(op=ast.Not(), operand=_call(_name("$is_var"), _name(f"_tro_arg{i}")))
         for i in sorted(check_indices or ())
     ]
     checks.append(commit_cond)

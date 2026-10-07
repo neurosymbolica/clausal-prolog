@@ -1523,7 +1523,7 @@ def term_to_ast_expr(
         # codegen, same as the SetTerm branch above.
         _rec = lambda t: term_to_ast_expr(t, var_context, eval_arith=eval_arith)
         elts = [_rec(e) for e in sorted(term, key=repr)]
-        ctor = "$FrozenSet" if isinstance(term, _FrozenSet) else "frozenset"
+        ctor = "$FrozenSet" if isinstance(term, _FrozenSet) else "$frozenset"
         return _call(_name(ctor), ast.List(elts=elts, ctx=ast.Load()))
 
     # SetLiteral (AST node from visit_Set): emit SetTerm([elem, ...]) constructor

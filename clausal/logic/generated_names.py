@@ -143,6 +143,38 @@ def dollar_ref(cls: Any) -> str:
     return name
 
 
+#: The Python builtins generated CLAUSE code calls or tests against, bound
+#: ``$``-ONLY (no bare alias, no deprecation window): ``$isinstance``,
+#: ``$list``, ...  A clause's globals are layered over its module's dict,
+#: and that dict binds the module's own atoms and functors -- a functor
+#: ``list`` bound ``list`` to the atom, so an emitted bare
+#: ``isinstance(_d, (list, str, bytes))`` loaded a ``str`` and raised.  A
+#: ``$`` name cannot be spelled by a user, so nothing a module binds can
+#: reach these.  Seeded through ``INJECTED_RUNTIME_BUILTINS``, which every
+#: clause namespace, the module-exec namespace (``import_hook.
+#: runtime_builtins``) and the interactive namespaces all spread in.
+GENERATED_CODE_BUILTINS: dict[str, Any] = {
+    "$" + _n: getattr(__import__("builtins"), _n) for _n in (
+        "isinstance", "list", "str", "bytes", "tuple", "frozenset", "int",
+        "len", "range", "Exception", "GeneratorExit", "SystemExit",
+    )
+}
+
+#: The builtins only MODULE-LEVEL generated code reaches (the import and
+#: registry plumbing ``term_rewriting``/``iso_l3`` emit, the ``++``-escape
+#: thunks that look a constant up in its owner, the interactive query
+#: wrapper).  Same ``$``-only rule.  Seeded into ``import_hook.
+#: runtime_builtins`` (every module namespace) and deliberately NOT into
+#: ``INJECTED_RUNTIME_BUILTINS``: no clause code emits these, so the table a
+#: clause gets on its own (the bare-query path) adds no real ``__import__``
+#: or ``globals`` beside the restricted ``CLAUSE_BUILTINS``.
+MODULE_CODE_BUILTINS: dict[str, Any] = {
+    "$" + _n: getattr(__import__("builtins"), _n) for _n in (
+        "globals", "__import__", "NameError", "ImportError",
+    )
+}
+
+
 def has_twin(name: str) -> bool:
     """Whether the bare *name* is one the seeding namespaces bind under a
     ``$`` twin -- what the class-minting template asks before it emits the
@@ -163,5 +195,6 @@ def bare_name_of(name: str) -> str:
 __all__ = [
     "BARE_ONLY", "INJECTED_TITLECASE_NAMES", "dollar_name",
     "with_dollar_twins", "register_generated_names", "dollar_ref",
-    "has_twin", "bare_name_of",
+    "has_twin", "bare_name_of", "GENERATED_CODE_BUILTINS",
+    "MODULE_CODE_BUILTINS",
 ]

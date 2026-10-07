@@ -582,7 +582,7 @@ def _build_list_dispatch_guard(
 
     # elif is_var(_d_pos): <all>  else: <all-clauses fallback>
     is_var_branch = ast.If(
-        test=_call(_name("is_var"), _name(deref_name)),
+        test=_call(_name("$is_var"), _name(deref_name)),
         body=var_body,
         orelse=other_body,
     )
@@ -591,11 +591,11 @@ def _build_list_dispatch_guard(
     # elif is_var: <all>  else: <all-clauses fallback>
     # Strings/bytes are treated as lists (of chars / codes) for head matching.
     _list_str_bytes = ast.Tuple(
-        elts=[_name("list"), _name("str"), _name("bytes")], ctx=ast.Load(),
+        elts=[_name("$list"), _name("$str"), _name("$bytes")], ctx=ast.Load(),
     )
     return [
         ast.If(
-            test=_call(_name("isinstance"), _name(deref_name), _list_str_bytes),
+            test=_call(_name("$isinstance"), _name(deref_name), _list_str_bytes),
             body=[nil_vs_cons],
             orelse=[is_var_branch],
         )

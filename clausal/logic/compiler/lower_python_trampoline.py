@@ -108,7 +108,7 @@ def _lower_body(
             )
             naf_mark = ctx.fresh(_MARK_PREFIX)
             sg_create = _assign(naf_sg,
-                _call(_name("StepGenerator"), _name(naf_gen_fn),
+                _call(_name("$StepGenerator"), _name(naf_gen_fn),
                       ast.Constant(None), ast.Constant(None), ast.Constant(None),
                       _name(trail_name)))
             # The drive loop lives in $naf_has_solution, not here.  Emitted

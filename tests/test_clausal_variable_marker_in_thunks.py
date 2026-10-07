@@ -263,7 +263,7 @@ def test_a_seams_plus_plus_operand_keeps_the_seam_reading_of_dash_dash():
     # The inner ``--Inner`` is still lowered to a seam CALL inside the ``++``
     # thunk.  Under a marker reading the ``--`` would have been stripped and
     # the operand would read the bare name instead.
-    assert "$seam(Inner, globals())" in rendered, rendered
+    assert "$seam(Inner, $globals())" in rendered, rendered
 
 
 # ── The marker sees the whole clause, like the bare name does ──────────────

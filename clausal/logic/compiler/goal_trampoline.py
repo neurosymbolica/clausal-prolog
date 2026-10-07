@@ -432,7 +432,7 @@ def _dispatch_call_trampoline(
 
     def _sg(dispatch_expr: ast.expr) -> ast.Call:
         return ast.Call(
-            func=_name("StepGenerator"),
+            func=_name("$StepGenerator"),
             args=[dispatch_expr, proceed_expr, fail_expr, catcher_expr]
                 + arg_exprs + [_name(trail_name)],
             keywords=[],

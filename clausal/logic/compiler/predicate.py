@@ -46,12 +46,13 @@ from clausal.logic.builtins import (  # noqa: F401
     BuiltinPredicate,
     _BUILTIN_CLASSES,
 )
-#: The Python builtins generated clause code may use -- the names the
-#: code builders emit (isinstance checks, list/str/bytes/tuple/frozenset
-#: tests, len/range in head matching, the exception classes the control
-#: constructs catch).  ``__builtins__`` of every compiled clause is THIS
-#: dict, so a name the call-target step misses raises NameError rather than
-#: resolving to a real builtin.
+#: The Python builtins a compiled clause's frame falls back to.  The code
+#: builders themselves reach builtins through ``$`` names
+#: (``generated_names.GENERATED_CODE_BUILTINS``: a bare name could be shadowed
+#: by a module's own atom); this is what an UNRESOLVED bare name meets.
+#: ``__builtins__`` of every compiled clause is THIS dict, so a name the
+#: call-target step misses raises NameError rather than resolving to a real
+#: builtin.
 CLAUSE_BUILTINS: dict = {
     name: getattr(__import__("builtins"), name) for name in (
         "isinstance", "len", "range", "list", "tuple", "str", "bytes",
@@ -390,6 +391,7 @@ from clausal.logic.meta_predicate import (  # noqa: E402
 )
 from clausal.logic.generated_names import (
     register_generated_names as _register_generated_names,
+    GENERATED_CODE_BUILTINS as _GENERATED_CODE_BUILTINS,
 )
 
 
@@ -529,6 +531,18 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # it -- so ``head_match``'s "emitted only when that entry is actually
     # present" guard now degrades to the wildcard on strictly fewer paths.
     _CELLS_NAMESPACE_KEY: _cells_module,
+    # The Python builtins clause code reaches (``$isinstance``, ``$list``,
+    # ``$Exception``, ...), ``$``-ONLY -- see
+    # ``generated_names.GENERATED_CODE_BUILTINS`` for why a bare name is
+    # not safe in a namespace layered over a module's atoms.
+    **_GENERATED_CODE_BUILTINS,
+    # The engine names clause code reaches that a module could also bind
+    # (a user predicate ``is_var/1``, a seam ``SegList = ...``): same rule.
+    "$is_var": is_var,
+    "$StepGenerator": StepGenerator,
+    "$SegList": SegList,
+    "$SegString": SegString,
+    "$SegBytes": SegBytes,
 }
 # 2026-09-09 ruling: generated code reaches every bare TitleCase entry above
 # through its ``$`` twin (``$Var``, ``$Quantity``, ...); the bare aliases
@@ -1205,11 +1219,8 @@ def _compile_predicate_trampoline_impl(
         "$CSET_TYPES": _CONST_SET_TYPES,
         "$cset_atom": _cset_atom,
         "$ATOM_SET": _AtomSpellings,
-        # ``$``-prefixed bindings of the two builtins the inlined atom-shape
-        # test in ``_lower_goalop_shared._is_atom_inline`` compares against,
-        # so a user predicate named ``tuple`` or ``str`` cannot shadow them.
-        "$tuple": tuple,
-        "$str": str,
+        # (``$tuple``/``$str``, which ``_lower_goalop_shared._is_atom_inline``
+        # compares against, come from INJECTED_RUNTIME_BUILTINS above.)
         "$subscript": _subscript,
         "$splat_data": _splat_data,
         "$dict_key": _dict_key,
@@ -2083,11 +2094,8 @@ def _compile_predicate_shallow_impl(
         "$CSET_TYPES": _CONST_SET_TYPES,
         "$cset_atom": _cset_atom,
         "$ATOM_SET": _AtomSpellings,
-        # ``$``-prefixed bindings of the two builtins the inlined atom-shape
-        # test in ``_lower_goalop_shared._is_atom_inline`` compares against,
-        # so a user predicate named ``tuple`` or ``str`` cannot shadow them.
-        "$tuple": tuple,
-        "$str": str,
+        # (``$tuple``/``$str``, which ``_lower_goalop_shared._is_atom_inline``
+        # compares against, come from INJECTED_RUNTIME_BUILTINS above.)
         "$subscript": _subscript,
         "$splat_data": _splat_data,
         "$dict_key": _dict_key,
