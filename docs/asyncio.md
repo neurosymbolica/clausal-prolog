@@ -339,6 +339,18 @@ of the engine had to learn about waiting. A query that never waits pays
 nothing; a wait costs on the order of 10 µs more than the same wait in a
 synchronous query.
 
+A greenlet has no stack of its own: it runs on its thread's stack and copies
+its slice to the heap when it switches out, so a query can recurse as deep in
+a greenlet as anywhere else. A switch costs time in proportion to the stack
+depth at the wait: about 11 µs with nothing below it, 25 µs at 1,000 Python
+frames, 0.27 ms at 10,000. The trampoline keeps ordinary recursion off the
+Python stack, so waits are usually shallow; depth comes from nesting it cannot
+flatten (`findall` inside negation inside `once`, deep `++` escapes).
+
+The design, the rules that keep tables sound when queries interleave or are
+abandoned, and what eleven rounds of review found are in the design record
+`docs/design-records/asyncio-and-tabling.html`.
+
 Use `clausal.aio.await_only` rather than SQLAlchemy's function of the same
 name. SQLAlchemy's version checks for its own greenlet type and refuses to
 run inside a Clausal query. SQLAlchemy's async API works fine through
