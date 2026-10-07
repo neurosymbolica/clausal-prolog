@@ -195,6 +195,43 @@ class _DriveContext(threading.local):
 _drive_ctx = _DriveContext()
 
 
+# ── Ownership: tables shared by interleaved clausal.aio queries ──────────
+#
+# Synchronous queries run one at a time, so SLG can assume one search per
+# table.  clausal.aio queries interleave on one thread: a query suspended at
+# a wait (or between answers it streamed to the event loop) leaves the tables
+# it is building visible to every other query, and it may be abandoned or die
+# without ever finishing them.  These rules keep each table to one search.
+# In the synchronous world every owner is None, so none of them changes
+# anything there.
+#
+# 1. Owner.  An entry records the query leading it (``owner``; None when
+#    synchronous).  ``_mine(entry)``: led by the drive now running.
+# 2. Foreign.  Owned by another query that can still resume, or on a
+#    synchronous leader stack the running async query has swapped out
+#    (``_outer_ctx``).  A foreign entry is never consumed, re-led or
+#    completed: reaching one raises permission_error(access,
+#    tabled_evaluation, P/N) (``_refuse_if_foreign``).
+# 3. Abandoned.  Evaluating, not mine and not foreign: its query is dead.  It
+#    is never resumed -- a new lead starts over -- and the store-wide passes
+#    (SCC completion, the negation scan) leave it alone.
+# 4. Lead tokens.  Every lead and re-lead sets a fresh ``entry.lead``; a
+#    leader frame's abnormal-exit repair and leader pop act only while the
+#    entry is still its lead, because a re-lead reuses the entry OBJECT and a
+#    dead query's frames may be finalised long after (``_new_lead``,
+#    ``_repair_lead``).
+# 5. Death and reaping.  When an unclosed query's async generator is freed, a
+#    weakref callback queues it (``_pending_dead``); at the next safe point
+#    -- the start of a tabled call or tabled negation, or an async query
+#    switching in -- ``_reap_dead`` removes its abandoned tables and finishes
+#    its generator.  The callback itself may run inside the cyclic GC, in the
+#    middle of a loop over a table store or in another thread, so it never
+#    touches a store.
+#
+# Each rule closes a bug an adversarial review round found (2026-10-06/07);
+# tests/test_aio.py pins every one.
+
+
 class _OuterContext(threading.local):
     def __init__(self):
         # Leader contexts (``_leader_ctx.__dict__`` copies) swapped OUT while
@@ -203,6 +240,11 @@ class _OuterContext(threading.local):
         self.leaders: list[dict] = []
 
 _outer_ctx = _OuterContext()
+
+
+def _mine(entry: "TableEntry") -> bool:
+    """Led by the drive now running (rule 1)."""
+    return entry.owner is _drive_ctx.owner
 
 
 def _on_outer_stack(entry: "TableEntry") -> bool:
@@ -215,30 +257,57 @@ def _on_outer_stack(entry: "TableEntry") -> bool:
 
 
 def _foreign(entry: "TableEntry") -> bool:
-    """True if *entry* is being evaluated by ANOTHER live clausal.aio query.
-
-    Async queries interleave on one thread, so a table one query is still
-    building (status "evaluating") is visible to another while the first is
-    suspended -- at an await, or at a solution it streamed to the event loop.
-    The other query must neither consume the partial answers nor re-lead or
-    complete the entry: SLG assumes one search per table.
-    """
+    """Being built by a search other than this one that can still resume
+    (rule 2): another live clausal.aio query, or a synchronous leader parked
+    outside the running async query."""
     owner = entry.owner
-    if (owner is not None and owner is not _drive_ctx.owner
-            and getattr(owner, "live", False)):
+    if owner is not None and not _mine(entry) and getattr(owner, "live", False):
         return True
-    # A synchronous leader (owner None) parked mid-fixpoint outside the
-    # running async query: still being built, by someone else.
     return bool(_outer_ctx.leaders) and _on_outer_stack(entry)
 
 
-# clausal.aio queries that died unclosed, waiting to have their half-built
-# tables removed (aio._Query._died).  Their death is noticed by a weakref
-# callback, which the cyclic GC may run in the middle of a loop over a table
-# store -- or in another thread -- so the callback only queues the query and
-# the removal happens here, at safe points: the start of a tabled call and of
-# a tabled negation, and whenever an async query switches in (seventh
-# review, 2026-10-06).  list.append/pop are atomic.
+def _refuse_if_foreign(entry, functor, arity) -> None:
+    """Raise if *entry* (or None) is a foreign table still being built."""
+    if entry is None or entry.status != "evaluating" or not _foreign(entry):
+        return
+    from clausal.logic.exceptions import LogicException, permission_error
+    raise LogicException(permission_error(
+        "access", "tabled_evaluation", ("/", functor, arity),
+        f"{functor}/{arity}: another asyncio query is still evaluating this "
+        "table (it is suspended at a wait or between answers); complete it "
+        "first, e.g. with findall/3, or run the queries one after another"))
+
+
+def _new_lead(entry: "TableEntry") -> object:
+    """Start a lead of *entry* (rule 4); the leader frame keeps the token."""
+    entry.lead = token = object()
+    return token
+
+
+def _close_suspended(entry: "TableEntry") -> None:
+    """Finish the parked generators of *entry*'s suspended consumers."""
+    for sc in entry.suspended:
+        try:
+            sc.generator.close()
+        except BaseException:
+            pass
+    entry.suspended.clear()
+
+
+def _repair_lead(entry: "TableEntry", lead, table_store, store_key) -> None:
+    """A04-F007 repair on a leader frame's abnormal exit: drop the half-built
+    entry so a later query recomputes it, and release its consumers -- only
+    while the entry is still this frame's lead (rule 4), and identity-guarded
+    against a fresh entry installed since under the same key."""
+    if entry.lead is not lead:
+        return
+    if table_store.get(store_key) is entry:
+        del table_store[store_key]
+    _close_suspended(entry)
+
+
+# Rule 5: queries that died unclosed, waiting to be reaped.  list.append and
+# list.pop are atomic, so the GC (or another thread) may queue at any time.
 _pending_dead: list = []
 
 
@@ -252,15 +321,6 @@ def _reap_dead() -> None:
             query._died()
         except Exception:  # noqa: BLE001 - never into an unrelated query
             pass
-
-
-def _refuse_foreign(functor, arity) -> None:
-    from clausal.logic.exceptions import LogicException, permission_error
-    raise LogicException(permission_error(
-        "access", "tabled_evaluation", ("/", functor, arity),
-        f"{functor}/{arity}: another asyncio query is still evaluating this "
-        "table (it is suspended at a wait or between answers); complete it "
-        "first, e.g. with findall/3, or run the queries one after another"))
 
 
 def begin_drive_episode() -> None:
@@ -307,22 +367,15 @@ def end_drive_episode() -> None:
         for entry, store, key, lead in created:
             if entry.status != "evaluating":
                 continue
-            if entry.lead is not lead and entry.owner is not _drive_ctx.owner:
-                # Re-led since by ANOTHER query -- a clausal.aio one, or a
-                # synchronous one (owner None) -- after ours was dropped and
-                # its close deferred to asyncio's finaliser.  Theirs now;
-                # leave it.  (A re-lead of a dormant SCC member within this
-                # same drive also changes the token, but keeps the owner, and
-                # is still ours to repair.)
+            if entry.lead is not lead and not _mine(entry):
+                # Re-led since by ANOTHER query (rule 4) after ours was
+                # dropped and its close deferred: theirs now.  (A re-lead of a
+                # dormant SCC member within this same drive changes the token
+                # but keeps the owner, and is still ours to repair.)
                 continue
             if store.get(key) is entry:
                 del store[key]
-            for sc in entry.suspended:
-                try:
-                    sc.generator.close()
-                except BaseException:
-                    pass
-            entry.suspended.clear()
+            _close_suspended(entry)
             pop_leader(entry)
     if episodes:
         # Nested episode (a NAF spawn, a ++-escape): hand every created
@@ -367,14 +420,11 @@ def _complete_scc(root: TableEntry, table_store) -> None:
     fixpoint under *root* and completes as a group.
     """
     root.status = "complete"
-    # Only entries THIS drive owns (sixth review, 2026-10-06): a dead
-    # clausal.aio query's abandoned entry is not foreign (not live) but is
-    # not ours either -- completing it froze its partial answers for good.
-    # It is rebuilt fresh when next led.  (Owner None is None: the
-    # synchronous world is unchanged.)
+    # Only entries this drive owns: completing another query's abandoned
+    # entry would freeze its partial answers for good (rule 3).
     members = [e for e in table_store.values()
                if e.status == "evaluating" and not _on_leader_stack(e)
-               and e.scc_deps and e.owner is _drive_ctx.owner]
+               and e.scc_deps and _mine(e)]
     if not members:
         return
     member_ids = {id(e) for e in members}
@@ -424,15 +474,9 @@ class TableEntry:
 
     def __init__(self):
         self.status: str = "evaluating"       # "evaluating" | "complete"
-        # The clausal.aio query evaluating this table (None when synchronous);
-        # see _foreign.
+        # The clausal.aio query leading this table (None when synchronous)
+        # and the token of its current lead: see "Ownership" above.
         self.owner = _drive_ctx.owner
-        # A fresh token per lead (a creation or a re-lead).  A leader frame
-        # keeps the token it set; its abnormal-exit repair and leader pop act
-        # only while the entry is still its lead.  Async queries let a
-        # dropped query's parked frame be finalised (by GC) long after
-        # another query re-led the same entry object (fourth review,
-        # 2026-10-06: it deleted the live table and popped the live leader).
         self.lead = None
         self.answers: list[tuple] = []
         self.answer_set: set = set()   # canonical answer keys (A04-F005/F006)
@@ -933,12 +977,6 @@ def _drive_dispatch_to_completion(dispatch, args) -> None:
 
 
 def _naf_tabled(functor, arity, args, trail, table_store, db=None):
-    if _pending_dead:
-        _reap_dead()
-    return _naf_tabled_impl(functor, arity, args, trail, table_store, db)
-
-
-def _naf_tabled_impl(functor, arity, args, trail, table_store, db=None):
     """Check negation-as-failure for a tabled predicate (WFS-aware).
 
     Returns True if negation succeeds (conditionally or unconditionally),
@@ -983,8 +1021,7 @@ def _naf_tabled_impl(functor, arity, args, trail, table_store, db=None):
     key = make_subgoal_key(args, trail)
     store_key = (functor, arity, key)
     entry = table_store.get(store_key)
-    if entry is not None and entry.status == "evaluating" and _foreign(entry):
-        _refuse_foreign(functor, arity)
+    _refuse_if_foreign(entry, functor, arity)
 
     if entry is not None and entry.status == "complete":
         # Standard NAF on complete table: an unconditional answer fails the
@@ -1075,11 +1112,9 @@ def _naf_tabled_impl(functor, arity, args, trail, table_store, db=None):
     # part of the same SLG cycle.
     for (f, a, _k), e in table_store.items():
         if f == functor and a == arity and e.status == "evaluating":
-            if e.owner is not _drive_ctx.owner:
-                # Another query's unfinished table -- live, or a dead one's
-                # abandoned evaluation -- cannot be in a cycle of ours; a
-                # positive call that needs it is refused (live) or rebuilds it
-                # fresh (dead).
+            if not _mine(e):
+                # Another query's table (live or abandoned) is not in a cycle
+                # of ours; a positive call that needs it is refused or rebuilds.
                 continue
             _delay_negation(functor, arity, key, args, trail, store=table_store)
             return True  # conditionally succeed
@@ -1233,7 +1268,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
     """
 
     def tabled_dispatch(*args_trail_k):
-        if _pending_dead:
+        if _pending_dead:            # a safe point (Ownership, rule 5)
             _reap_dead()
         args = args_trail_k[:arity]
         trail = args_trail_k[arity]
@@ -1241,9 +1276,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
         key = make_subgoal_key(args, trail)
         store_key = (functor, arity, key)
         entry = table_store.get(store_key)
-        if (entry is not None and entry.status == "evaluating"
-                and _foreign(entry)):
-            _refuse_foreign(functor, arity)
+        _refuse_if_foreign(entry, functor, arity)
 
         # ── COMPLETE: cache hit ──
         if entry is not None and entry.status == "complete":
@@ -1272,7 +1305,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
 
         # ── LEADER: fixpoint loop ──
         entry = TableEntry()
-        lead = entry.lead = object()
+        lead = _new_lead(entry)
         table_store[store_key] = entry
         _note_driven_store(table_store)
         push_leader(entry)
@@ -1309,8 +1342,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
             # returning the partial set. Simple mode has no suspended consumers.
             # Identity-guarded against out-of-order GC finalisation replacing
             # a fresh entry installed under the same key by a later query.
-            if entry.lead is lead and table_store.get(store_key) is entry:
-                del table_store[store_key]
+            _repair_lead(entry, lead, table_store, store_key)
             raise
         finally:
             if entry.lead is lead:
@@ -1343,7 +1375,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
     from clausal.logic.trampoline import StepGenerator, DONE
 
     def tabled_dispatch(this_generator, _proceed, _fail, _catcher, *args_trail):
-        if _pending_dead:
+        if _pending_dead:            # a safe point (Ownership, rule 5)
             _reap_dead()
         args = args_trail[:arity]
         trail = args_trail[arity]
@@ -1351,9 +1383,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
         key = make_subgoal_key(args, trail)
         store_key = (functor, arity, key)
         entry = table_store.get(store_key)
-        if (entry is not None and entry.status == "evaluating"
-                and _foreign(entry)):
-            _refuse_foreign(functor, arity)
+        _refuse_if_foreign(entry, functor, arity)
 
         # ── COMPLETE: yield cached answers ──
         if entry is not None and entry.status == "complete":
@@ -1417,30 +1447,20 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
 
         # ── LEADER (fresh table) or RE-LEAD (a dormant "evaluating" SCC member
         # whose leader deferred completion — A04-F001): drive to fixpoint. ──
-        if entry is not None and entry.owner is not _drive_ctx.owner:
-            # Left "evaluating" by ANOTHER query: a clausal.aio query dropped
-            # without closing (dead, or its close not run yet -- a live one is
-            # refused above, by _foreign).  Its partial answers, conditions and
-            # scc_deps describe that query's search, not ours: resuming them
-            # made two SCC members each wait on the other forever (fifth
-            # review, 2026-10-06).  Start over.  In-drive dormant members, and
-            # every synchronous re-lead (owner None both times), still resume.
-            for sc in entry.suspended:
-                try:
-                    sc.generator.close()
-                except BaseException:
-                    pass
-            entry.suspended.clear()
+        if entry is not None and not _mine(entry):
+            # Abandoned by another query (rule 3; a live one was refused
+            # above): its partial answers, conditions and scc_deps describe
+            # that query's search, not ours.  Start over.
+            _close_suspended(entry)
             entry = None
         if entry is None:
             entry = TableEntry()
-            lead = entry.lead = object()
+            lead = _new_lead(entry)
             table_store[store_key] = entry
             _record_created_entry(entry, table_store, store_key)  # A04-F007
             replay_count = 0
         else:
-            entry.owner = _drive_ctx.owner     # we lead it now (see _foreign)
-            lead = entry.lead = object()
+            lead = _new_lead(entry)    # a dormant member of our own drive
             # A04-F001 (re-lead replay): this caller has seen NONE of the
             # already-tabled answers, but the fixpoint loop below streams only
             # NEW answers (add_answer dedups the old ones away). Replay the
@@ -1549,12 +1569,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                 entry._current_delays.clear()
                 # Consumers that suspended during this pass are re-derived by the
                 # next pass; finish their parked generators cleanly.
-                for sc in entry.suspended:
-                    try:
-                        sc.generator.close()
-                    except BaseException:
-                        pass
-                entry.suspended.clear()
+                _close_suspended(entry)
 
             _resolve_conditions(entry, table_store)
         except BaseException:
@@ -1570,17 +1585,8 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             # frame long after end_drive_episode() already repaired the store
             # and a LATER query installed a fresh entry under the same key —
             # a blind pop would destroy that innocent entry (A04-F007).
-            # Lead-guarded too: a re-lead (another query's, after ours was
-            # dropped) reuses the entry OBJECT, so identity is not enough.
-            if entry.lead is lead:
-                if table_store.get(store_key) is entry:
-                    del table_store[store_key]
-                for sc in entry.suspended:
-                    try:
-                        sc.generator.close()
-                    except BaseException:
-                        pass
-                entry.suspended.clear()
+            # Lead-guarded too: a re-lead reuses the entry OBJECT (rule 4).
+            _repair_lead(entry, lead, table_store, store_key)
             raise
         finally:
             if entry.lead is lead:

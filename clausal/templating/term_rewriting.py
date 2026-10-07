@@ -7352,32 +7352,41 @@ class EmbedTransformer(NodeTransformer):
         node.body = transformer._visit_stmts(node.body)
         node.orelse = transformer._visit_stmts(node.orelse)
         if is_async:
-            # A plain ``for`` over a goal in an ``async def`` iterates it
-            # asynchronously (a waiting predicate inside would otherwise
-            # refuse to block the running loop), and the iterator is closed
-            # in a ``finally``.  ``break``ing out of ``async for`` does not
-            # close an async generator -- asyncio finalises it only a loop
-            # tick or two later -- and until then the query still owns any
-            # table it was building, so the next goal on that table would be
-            # refused (second review, 2026-10-06).
-            transformer._aiter_count = getattr(transformer, "_aiter_count", 0) + 1
-            it_name = f"$aiter_{transformer._aiter_count}"
-            assign = copy_location(Assign(
-                targets=[Name(id=it_name, ctx=Store())], value=node.iter), node)
-            loop = copy_location(AsyncFor(
-                target=node.target, iter=Name(id=it_name, ctx=Load()),
-                body=node.body, orelse=node.orelse, type_comment=None), node)
-            close = copy_location(Expr(value=Await(value=Call(
-                func=Attribute(value=Name(id=it_name, ctx=Load()),
-                               attr="aclose", ctx=Load()),
-                args=[], keywords=[]))), node)
-            node = copy_location(Try(body=[loop], handlers=[], orelse=[],
-                                     finalbody=[close]), node)
-            fix_missing_locations(assign)
-            fix_missing_locations(node)
-            return pre + [declare, assign, node]
+            return pre + [declare, *transformer._closing_async_for(node)]
         fix_missing_locations(node)
         return pre + [declare, node]
+
+    def _closing_async_for(transformer, node):
+        """``for``/``async for`` over a goal in an ``async def``, lowered to
+
+            $aiter_N = <node.iter>
+            try:
+                async for <target> in $aiter_N: <body> [else: <orelse>]
+            finally:
+                await $aiter_N.aclose()
+
+        A plain ``for`` becomes ``async for``: a waiting predicate inside a
+        synchronous loop would refuse to block the running event loop.  The
+        ``finally`` matters because ``break`` does not close an async
+        generator -- asyncio does it a loop tick or two later -- and until
+        then the query still owns the tables it was building, so the next
+        goal on one of them would be refused.
+        """
+        transformer._aiter_count = getattr(transformer, "_aiter_count", 0) + 1
+        it_name = f"$aiter_{transformer._aiter_count}"
+
+        def name(ctx):
+            return Name(id=it_name, ctx=ctx)
+        assign = Assign(targets=[name(Store())], value=node.iter)
+        loop = AsyncFor(target=node.target, iter=name(Load()), body=node.body,
+                        orelse=node.orelse, type_comment=None)
+        close = Expr(value=Await(value=Call(
+            func=Attribute(value=name(Load()), attr="aclose", ctx=Load()),
+            args=[], keywords=[])))
+        guarded = Try(body=[copy_location(loop, node)], handlers=[], orelse=[],
+                      finalbody=[copy_location(close, node)])
+        return [fix_missing_locations(copy_location(assign, node)),
+                fix_missing_locations(copy_location(guarded, node))]
 
     visit_AsyncFor = visit_For
 

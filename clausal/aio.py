@@ -39,10 +39,11 @@ Semantics:
   ``catch/3``.  Cancelling the task raises ``CancelledError`` inside the
   query, which unwinds it (``setup_call_cleanup`` cleanups run).
 - Tables: a query may wait anywhere, inside tabled evaluation included.
-  While it is suspended -- at a wait, or between answers of a tabled goal it
-  is still streaming -- its incomplete tables belong to it.  Another query
-  that calls one raises ``permission_error(access, tabled_evaluation, P/N)``
-  rather than see a partial answer set (SLG assumes one search per table).
+  While it can still resume, the tables it has not finished are its own:
+  another query that calls one raises ``permission_error(access,
+  tabled_evaluation, P/N)`` rather than see a partial answer set.  A query
+  that dies unclosed gives them up; they are rebuilt by whoever next needs
+  them.  The rules are under "Ownership" in clausal/logic/tabling.py.
   Per-query tabling state (leader stack, drive episodes) is kept apart.
 """
 from __future__ import annotations
@@ -104,6 +105,41 @@ def _install(state):
     return previous
 
 
+# ── the private loop of synchronous queries ──────────────────────────────
+
+_sync = threading.local()
+
+
+def _sync_loop():
+    """The private loop a synchronous query awaits on (one per thread).
+
+    Kept for the thread's life rather than one ``asyncio.run`` per await:
+    ``asyncio.run`` finalises every async generator it touched, which would
+    end an ``await_each`` iterator after its first item.  Closed when the
+    thread object is collected, or at interpreter exit for the main thread.
+    """
+    loop = getattr(_sync, "loop", None)
+    if loop is None or loop.is_closed():
+        loop = _sync.loop = asyncio.new_event_loop()
+        weakref.finalize(threading.current_thread(), _close_loop, loop)
+    return loop
+
+
+def _close_loop(loop):
+    if loop.is_closed() or loop.is_running():
+        return
+    try:
+        # The finaliser runs on whichever thread drops the Thread object --
+        # possibly one inside a running loop, where run_until_complete is
+        # refused.  Then just close.
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            loop.run_until_complete(loop.shutdown_asyncgens())
+    finally:
+        loop.close()
+
+
 # ── await_only ───────────────────────────────────────────────────────────
 
 # True (per thread) while the cyclic garbage collector is running.  Code it
@@ -119,46 +155,19 @@ def _note_gc_phase(phase, info):
 
 gc.callbacks.append(_note_gc_phase)
 
-_sync = threading.local()
-
-
-def _close_loop(loop):
-    if loop.is_closed() or loop.is_running():
-        return
-    try:
-        # The finaliser runs on whichever thread drops the Thread object --
-        # possibly one inside a running loop, where run_until_complete is
-        # refused (tenth review, 2026-10-07).  Then just close.
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            loop.run_until_complete(loop.shutdown_asyncgens())
-    finally:
-        loop.close()
-
-
-def _sync_loop():
-    """The private loop a synchronous query awaits on (one per thread).
-
-    Kept for the thread's life rather than one ``asyncio.run`` per await:
-    ``asyncio.run`` finalises every async generator it touched, which would
-    end an ``await_each`` iterator after its first item.  Closed when the
-    thread object goes away, or at interpreter exit for the main thread.
-    """
-    loop = getattr(_sync, "loop", None)
-    if loop is None or loop.is_closed():
-        loop = _sync.loop = asyncio.new_event_loop()
-        weakref.finalize(threading.current_thread(), _close_loop, loop)
-    return loop
-
 
 async def _as_coroutine(awaitable):
     return await awaitable
 
 
-def _discard(awaitable):
+def _refuse_wait(awaitable, where, why):
+    """Raise permission_error(await, *where*, Culprit) for a wait that may not
+    happen here, closing the awaitable so it is not reported unawaited."""
+    culprit = type(awaitable).__name__
     if inspect.iscoroutine(awaitable):
         awaitable.close()
+    raise LogicException(permission_error(
+        "await", where, culprit, f"await_only/1: {why}"))
 
 
 def await_only(awaitable):
@@ -170,42 +179,34 @@ def await_only(awaitable):
     """
     if _in_query_greenlet():
         if getattr(_collecting, "now", False):
-            # A finaliser run by the GC inside some query's greenlet: waiting
-            # here would suspend THAT query on the finaliser's behalf, and a
-            # cancellation or timeout aimed at it would be delivered into the
-            # finaliser and lost (ninth review, 2026-10-07).
-            culprit = type(awaitable).__name__
-            _discard(awaitable)
-            raise LogicException(permission_error(
-                "await", "finalisation", culprit,
-                "await_only/1: a goal run by the garbage collector (an "
-                "abandoned query's cleanup) cannot wait; close queries you "
-                "stop early (aclose) so their cleanups run in place"))
+            # Waiting would suspend the query whose greenlet the GC happens
+            # to be running in, on a finaliser's behalf -- and a cancellation
+            # aimed at that query would land in the finaliser and be lost.
+            _refuse_wait(awaitable, "finalisation",
+                         "a goal run by the garbage collector (an abandoned "
+                         "query's cleanup) cannot wait; close queries you stop "
+                         "early (aclose) so their cleanups run in place")
         return _greenlet.getcurrent().parent.switch(("await", awaitable))
     try:
         asyncio.get_running_loop()
     except RuntimeError:
         return _sync_loop().run_until_complete(_as_coroutine(awaitable))
-    culprit = type(awaitable).__name__
-    _discard(awaitable)
-    raise LogicException(permission_error(
-        "await", "synchronous_query", culprit,
-        "await_only/1: a synchronous query (solve, once, ...) is waiting "
-        "inside a running event loop, which it would block; drive it with "
-        "clausal.aio.asolve or aonce instead (in Jupyter, "
-        "`await Solutions(...)`; in seam, put the `--goal` in an async def)"))
+    _refuse_wait(awaitable, "synchronous_query",
+                 "a synchronous query (solve, once, ...) is waiting inside a "
+                 "running event loop, which it would block; drive it with "
+                 "clausal.aio.asolve or aonce instead (in Jupyter, `await "
+                 "Solutions(...)`; in seam, put the `--goal` in an async def)")
 
 
-# ── asolve / aonce ───────────────────────────────────────────────────────
+# ── queries on the event loop ────────────────────────────────────────────
 
 class _Query:
     """One query: its answer generator, engine state and query greenlet.
 
-    ``live`` says whether the query may still resume, which is what makes its
-    unfinished tables its own (``tabling._foreign``).  It goes false when the
-    query is closed, and also when the async generator driving it is gone
-    without having been closed (dropped after its loop shut down): a query
-    nobody can resume must not hold its tables forever.
+    Lifecycle: created by ``adrive``; stepped on the event loop (``step``);
+    closed by ``_adrive``'s ``finally`` -- or, if its async generator is freed
+    unclosed, queued by a weakref callback and reaped at a tabling safe point
+    (``_died``; see "Ownership" in clausal/logic/tabling.py).
     """
 
     __slots__ = ("gen", "state", "child", "_live", "agen", "loop", "created",
@@ -213,65 +214,31 @@ class _Query:
 
     def __init__(self, gen):
         self.gen, self.state = gen, _fresh_state(self)
-        self.child, self._live, self.agen, self.loop = None, True, None, None
+        self.child = None
+        self._live = True
+        self.agen = None        # weakref to the async generator driving it
+        self.loop = None        # the event loop it first ran on
         self.created = []       # (entry, store, key) of tables it created
-
-    def _died(self):
-        """The async generator driving this query is gone, unclosed.
-
-        Its own close may still run later (asyncio's finaliser) or never (the
-        loop is gone).  Either way nobody can resume it, so the tables it
-        left half-built leave the store now: another query then builds them
-        afresh instead of meeting a dead query's partial evaluation (rounds
-        5 and 6 of the review, 2026-10-06, each found a path that did).
-        Identity-guarded, so a table someone has rebuilt since is left alone.
-        """
-        if not self._live:
-            return                      # closed normally in the meantime
-        self._live = False              # first: _died must not re-enter
-        for entry, store, key in self.created:
-            if (entry.status == "evaluating" and entry.owner is self
-                    and store.get(key) is entry):
-                del store[key]
-        self.created = []
-        # Finish the query's answer generator here, under its OWN engine
-        # state, so its drive episode's tabling repair runs now.  Left to the
-        # cyclic GC, it was finalised at an arbitrary moment inside whatever
-        # query was running, and that repair then hit THAT query's tables
-        # (eighth review, 2026-10-06).  (setup_call_cleanup cleanups of the
-        # dead query are not run here: they sit in frames closing does not
-        # reach -- see todo/closing-a-query-leaves-cleanup-to-the-garbage-
-        # collector-2026-10-06.md.)  A generator still running inside a
-        # parked greenlet cannot be closed; nothing can resume it.
-        gen, self.gen = self.gen, None
-        if gen is not None and not getattr(gen, "gi_running", False):
-            saved = _install(self.state)
-            try:
-                gen.close()
-            except BaseException:  # noqa: BLE001 - nobody to report it to
-                pass
-            finally:
-                self.state = _install(saved)
 
     @property
     def live(self):
-        """True while the query could still be resumed: not closed, its
-        async generator still exists, and its event loop is not closed.  A
-        query parked at a wait when its loop closes can never resume, even
-        though nothing ever frees it (eighth review, 2026-10-06)."""
+        """True while the query could still be resumed: not closed, its async
+        generator still exists, and its event loop is not closed.  While live
+        its unfinished tables are its own (tabling._foreign)."""
         return (self._live
                 and (self.agen is None or self.agen() is not None)
                 and (self.loop is None or not self.loop.is_closed()))
 
     def _switch(self, how, *args):
+        """Run ``how(*args)`` -- a switch into the query's greenlet -- with
+        the query's engine state installed, restoring the caller's after."""
         from clausal.logic.tabling import _outer_ctx, _pending_dead, _reap_dead
-        if _pending_dead:
+        if _pending_dead:            # a safe point (tabling Ownership, rule 5)
             _reap_dead()
         saved = _install(self.state)
-        # The context we just swapped out may be a synchronous query parked
-        # mid-fixpoint (this async query runs inside its consumer): its
-        # leaders are no longer on the installed stack, but their tables are
-        # still being built.  Let tabling see them (tabling._foreign).
+        # The context swapped out may be a synchronous query parked
+        # mid-fixpoint (this async query runs inside its consumer): its tables
+        # are still being built, though no longer on the installed stack.
         _outer_ctx.leaders.append(saved[0])
         try:
             return how(*args)
@@ -316,6 +283,42 @@ class _Query:
             close()
         return ("end", None)
 
+    def _retire(self):
+        """No longer live; drop what it holds."""
+        self._live = False
+        self.gen = None
+        self.created = []
+
+    def _died(self):
+        """Reap a query whose async generator was freed unclosed (rule 5).
+
+        Nobody can resume it, so the tables it left half-built leave the store
+        (identity-guarded: a table rebuilt since is left alone), and its
+        answer generator is finished here, under its OWN engine state, so its
+        drive episode's tabling repair runs now rather than whenever the GC
+        finalises it -- inside some other query.  (setup_call_cleanup
+        cleanups are not reached by closing; see todo/closing-a-query-leaves-
+        cleanup-to-the-garbage-collector-2026-10-06.md.)  A generator still
+        running inside a parked greenlet cannot be closed; nothing can resume
+        it either.
+        """
+        if not self._live:
+            return                      # closed normally in the meantime
+        created, gen = self.created, self.gen
+        self._retire()                  # first: no re-entry
+        for entry, store, key in created:
+            if (entry.status == "evaluating" and entry.owner is self
+                    and store.get(key) is entry):
+                del store[key]
+        if gen is not None and not getattr(gen, "gi_running", False):
+            saved = _install(self.state)
+            try:
+                gen.close()
+            except BaseException:  # noqa: BLE001 - nobody to report it to
+                pass
+            finally:
+                self.state = _install(saved)
+
 
 def adrive(gen):
     """Drive any synchronous answer iterator on the event loop.
@@ -328,8 +331,8 @@ def adrive(gen):
     early -- after a ``break`` out of ``async for``.  While something still
     references an unclosed result, the tables its query is building stay
     reserved (another query on them is refused).  Once nothing does, they are
-    released at once, and the query's own close runs a loop tick or two later
-    on asyncio's finaliser.
+    released at the next safe point, and the query's own close runs later on
+    asyncio's finaliser.
     """
     query = _Query(gen)
     answers = _adrive(query)
@@ -338,7 +341,6 @@ def adrive(gen):
     def gone(_ref):
         # Only queue it: this can run inside the cyclic GC, in the middle of
         # another query's loop over a table store, or in another thread.
-        # tabling._reap_dead removes the tables at a safe point.
         q = alive()
         if q is not None and q._live:
             from clausal.logic.tabling import _pending_dead
@@ -366,9 +368,7 @@ async def _adrive(query):
             if "greenlet is being finalized" not in str(exc):
                 raise
         finally:
-            query._live = False
-            query.gen = None
-            query.created = []
+            query._retire()
 
 
 def asolve(goal, module=None, trail=None):
