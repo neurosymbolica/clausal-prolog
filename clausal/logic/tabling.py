@@ -39,8 +39,8 @@ from typing import Any, Callable
 
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.predicate import is_term_instance, tabled_home_of, term_field_names
-from clausal.terms import Undefined
-from clausal.logic.cells import is_cell, intern_cell, is_intern_enabled
+from clausal.terms import ConcreteSeg, SegBytes, SegList, SegString, Undefined, VarSeg
+from clausal.logic.cells import CHARS_TAG, is_cell, intern_cell, is_intern_enabled
 
 # ── Sentinels ──────────────────────────────────────────────────────────────
 
@@ -631,10 +631,19 @@ def _normalize_for_key_py(term):
         return "true" if term else "false"
     if isinstance(term, (float, complex)):
         return (type(term), term)          # A04-F006
-    if isinstance(term, (str, bytes)):
+    if isinstance(term, str):
         return term
+    if isinstance(term, bytes):
+        # A code list: b"ab" and [97, 98] are one term, so one key.
+        return term if term else _NIL_KEY
     if isinstance(term, list):
-        return ("__list__",) + tuple(_normalize_for_key_py(e) for e in term)
+        elems = tuple(_normalize_for_key_py(e) for e in term)
+        return _seq_key(elems) or ("__list__",) + elems
+    if type(term) is tuple and not term:
+        return _NIL_KEY                 # () is nil: the key [] has
+    if type(term) is tuple and len(term) == 2 and term[0] == CHARS_TAG and type(term[1]) is str:
+        # A char list: the carrier and [a, b] are one term, so one key.
+        return ("__chars__", term[1]) if term[1] else _NIL_KEY
     if isinstance(term, tuple):
         return ("__tuple__",) + tuple(_normalize_for_key_py(e) for e in term)
     if isinstance(term, dict):
@@ -643,13 +652,62 @@ def _normalize_for_key_py(term):
             for k, v in term.items()))
     if isinstance(term, (set, frozenset)):
         return ("__set__", frozenset(_normalize_for_key_py(e) for e in term))
+    if isinstance(term, _SEG_TYPES):
+        return _seg_key(term)
     if is_term_instance(term):
         return (type(term).__name__,) + tuple(
             _normalize_for_key_py(getattr(term, f)) for f in term_field_names(term)
         )
     return term
 
+_NIL_KEY = ("__list__",)
+
+
+def _seq_key(elems):
+    """The key of a NON-EMPTY list whose normalized elements are all one-char
+    atoms (a char list: ``("__chars__", text)``, the carrier's key) or all
+    exact ints in 0..255 (a code list: the ``bytes``, the ``b"..."`` key);
+    else ``None``.  A bool never reaches here as an int (it keys as its atom
+    spelling), and a float keys as ``(float, v)``."""
+    if not elems:
+        return None
+    e0 = type(elems[0])
+    if e0 is str:
+        if all(type(e) is str and len(e) == 1 for e in elems):
+            return ("__chars__", "".join(elems))
+    elif e0 is int:
+        if all(type(e) is int and 0 <= e < 256 for e in elems):
+            return bytes(elems)
+    return None
+
+
 _normalize_for_key = _normalize_for_key_py
+
+_SEG_TYPES = (SegList, SegString, SegBytes)
+_HOLE = ("__hole__",)
+
+
+def _seg_key(term):
+    """The key of a ``SegList``/``SegString``/``SegBytes``.  A ground one
+    walks to its list, carrier or bytes and keys as that.  A partial one keys
+    as ``("__partial__", e0, e1, ..., _HOLE, ...)``: its known elements in
+    order (a string segment as its chars, a bytes segment as its codes, so
+    ``"a"||T`` and ``[a|T]`` key alike) with a ``_HOLE`` per open tail.  The
+    C twin calls this function (registered below), so both produce it."""
+    w = term.__walk__()
+    if not isinstance(w, _SEG_TYPES):
+        return _normalize_for_key(w)
+    elems = []
+    for seg in w._segments:
+        if isinstance(seg, VarSeg):
+            elems.append(_HOLE)
+        elif isinstance(seg, ConcreteSeg):
+            elems.extend(_normalize_for_key(e) for e in seg.elements)
+        elif isinstance(seg, (str, bytes)):
+            elems.extend(seg)            # chars, or codes
+        else:
+            elems.append(_normalize_for_key(seg))
+    return ("__partial__",) + tuple(elems)
 
 
 def _make_subgoal_key_py(args, trail):
@@ -693,6 +751,8 @@ try:
         _register_var_sentinel,
     )
     _register_var_sentinel(_VAR)
+    from clausal.logic._tabling_core import _register_seg_key  # noqa: PLC0415
+    _register_seg_key(_SEG_TYPES, _seg_key)
     _normalize_for_key = _normalize_for_key_c
     make_subgoal_key = _make_subgoal_key_c
     freeze_args = _freeze_args_c

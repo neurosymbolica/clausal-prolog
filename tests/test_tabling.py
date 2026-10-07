@@ -259,8 +259,10 @@ class TestKeyComputation:
 
     def test_list(self):
         # nv
-        result = _normalize_for_key([1, 2, 3])
-        assert result == ("__list__", 1, 2, 3)
+        result = _normalize_for_key([1, 2, 300])
+        assert result == ("__list__", 1, 2, 300)
+        # [1, 2, 3] is a code list -- the term b"\x01\x02\x03" -- so it keys
+        # as those bytes (test_tabling_char_and_code_list_key.py).
 
     def test_compound(self):
         # nv

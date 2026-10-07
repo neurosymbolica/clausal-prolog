@@ -34,6 +34,12 @@ static PyObject *str___list__ = NULL;
 static PyObject *str___tuple__ = NULL;   /* A04-F005 */
 static PyObject *str___dict__ = NULL;    /* A04-F005 */
 static PyObject *str___set__ = NULL;     /* A04-F005 */
+static PyObject *str___chars__ = NULL;   /* char-list key */
+static PyObject *str_chars_tag = NULL;   /* "$chars", the carrier's tag */
+static PyObject *nil_key = NULL;         /* ("__list__",), the key of [] */
+/* Seg* classes and tabling._seg_key -- set by _register_seg_key() */
+static PyObject *seg_types = NULL;
+static PyObject *seg_key_fn = NULL;
 /* _VAR sentinel — set by _register_var_sentinel() from tabling.py */
 static PyObject *VAR_sentinel = NULL;
 
@@ -97,24 +103,137 @@ do_normalize(PyObject *term, int depth)
     if (PyFloat_Check(term) || PyComplex_Check(term)) {
         return PyTuple_Pack(2, (PyObject *)Py_TYPE(term), term);
     }
+    /* A code list: b"ab" and [97, 98] are one term, so one key (the bytes;
+     * b"" keys as []).  Lock-step with _normalize_for_key_py. */
+    if (PyBytes_Check(term) && PyBytes_GET_SIZE(term) == 0) {
+        Py_INCREF(nil_key);
+        return nil_key;
+    }
     if (PyLong_Check(term) || PyUnicode_Check(term) || PyBytes_Check(term)) {
         Py_INCREF(term);
         return term;
     }
 
-    /* List → ("__list__", elem0, elem1, ...) */
+    /* List → ("__list__", elem0, elem1, ...); a char list keys as the
+     * carrier, ("__chars__", text), and a code list as its bytes (_seq_key in
+     * tabling.py). */
     if (PyList_Check(term)) {
         Py_ssize_t n = PyList_GET_SIZE(term);
+        /* Fast path: a char list or a code list keys straight from its
+         * (dereferenced) elements, without the ("__list__", ...) tuple the
+         * general path builds and then discards.  Same keys as below. */
+        if (n > 0) {
+            PyObject *e0 = VarAPI->deref(PyList_GET_ITEM(term, 0));
+            if (PyLong_CheckExact(e0)) {
+                PyObject *b = PyBytes_FromStringAndSize(NULL, n);
+                if (!b) return NULL;
+                char *buf = PyBytes_AS_STRING(b);
+                Py_ssize_t i = 0;
+                for (; i < n; i++) {
+                    PyObject *e = VarAPI->deref(PyList_GET_ITEM(term, i));
+                    if (!PyLong_CheckExact(e)) break;
+                    int overflow = 0;
+                    long v = PyLong_AsLongAndOverflow(e, &overflow);
+                    if (overflow || v < 0 || v > 255) break;
+                    buf[i] = (char)v;
+                }
+                if (i == n) return b;
+                Py_DECREF(b);
+            } else if (PyUnicode_CheckExact(e0) && PyUnicode_GET_LENGTH(e0) == 1) {
+                Py_UCS4 maxc = 0;
+                Py_ssize_t i = 0;
+                for (; i < n; i++) {
+                    PyObject *e = VarAPI->deref(PyList_GET_ITEM(term, i));
+                    if (!(PyUnicode_CheckExact(e) && PyUnicode_GET_LENGTH(e) == 1)) break;
+                    Py_UCS4 c = PyUnicode_READ_CHAR(e, 0);
+                    if (c > maxc) maxc = c;
+                }
+                if (i == n) {
+                    PyObject *text = PyUnicode_New(n, maxc);
+                    if (!text) return NULL;
+                    int kind = PyUnicode_KIND(text);
+                    void *data = PyUnicode_DATA(text);
+                    for (i = 0; i < n; i++) {
+                        PyObject *e = VarAPI->deref(PyList_GET_ITEM(term, i));
+                        PyUnicode_WRITE(kind, data, i, PyUnicode_READ_CHAR(e, 0));
+                    }
+                    PyObject *key = PyTuple_Pack(2, str___chars__, text);
+                    Py_DECREF(text);
+                    return key;
+                }
+            }
+        }
         PyObject *result = PyTuple_New(n + 1);
         if (!result) return NULL;
         Py_INCREF(str___list__);
         PyTuple_SET_ITEM(result, 0, str___list__);
+        int all_chars = n > 0, all_codes = n > 0;
         for (Py_ssize_t i = 0; i < n; i++) {
             PyObject *elem = do_normalize(PyList_GET_ITEM(term, i), depth + 1);
             if (!elem) { Py_DECREF(result); return NULL; }
             PyTuple_SET_ITEM(result, i + 1, elem);
+            if (all_chars && !(PyUnicode_CheckExact(elem)
+                               && PyUnicode_GET_LENGTH(elem) == 1))
+                all_chars = 0;
+            if (all_codes) {
+                if (!PyLong_CheckExact(elem)) {
+                    all_codes = 0;
+                } else {
+                    long v = PyLong_AsLong(elem);
+                    if (v == -1 && PyErr_Occurred()) {
+                        PyErr_Clear();
+                        all_codes = 0;
+                    } else if (v < 0 || v > 255) {
+                        all_codes = 0;
+                    }
+                }
+            }
+        }
+        if (all_chars) {
+            PyObject *empty = PyUnicode_New(0, 0);
+            if (!empty) { Py_DECREF(result); return NULL; }
+            PyObject *items = PyTuple_GetSlice(result, 1, n + 1);
+            if (!items) { Py_DECREF(empty); Py_DECREF(result); return NULL; }
+            PyObject *text = PyUnicode_Join(empty, items);
+            Py_DECREF(empty); Py_DECREF(items); Py_DECREF(result);
+            if (!text) return NULL;
+            PyObject *key = PyTuple_Pack(2, str___chars__, text);
+            Py_DECREF(text);
+            return key;
+        }
+        if (all_codes) {
+            PyObject *b = PyBytes_FromStringAndSize(NULL, n);
+            if (!b) { Py_DECREF(result); return NULL; }
+            char *buf = PyBytes_AS_STRING(b);
+            for (Py_ssize_t i = 0; i < n; i++)
+                buf[i] = (char)PyLong_AsLong(PyTuple_GET_ITEM(result, i + 1));
+            Py_DECREF(result);
+            return b;
         }
         return result;
+    }
+
+    /* A char list: the carrier ('$chars', s) keys as ("__chars__", s), and
+     * ('$chars', '') as [] -- the key [a, b] has.  Before the tuple branch. */
+    if (PyTuple_CheckExact(term) && PyTuple_GET_SIZE(term) == 2
+            && PyUnicode_CheckExact(PyTuple_GET_ITEM(term, 1))) {
+        int is_tag = PyUnicode_Check(PyTuple_GET_ITEM(term, 0))
+            ? PyUnicode_Compare(PyTuple_GET_ITEM(term, 0), str_chars_tag) : 1;
+        if (is_tag == -1 && PyErr_Occurred()) return NULL;
+        if (is_tag == 0) {
+            PyObject *text = PyTuple_GET_ITEM(term, 1);
+            if (PyUnicode_GET_LENGTH(text) == 0) {
+                Py_INCREF(nil_key);
+                return nil_key;
+            }
+            return PyTuple_Pack(2, str___chars__, text);
+        }
+    }
+
+    /* () is nil: the key [] has.  Lock-step with _normalize_for_key_py. */
+    if (PyTuple_CheckExact(term) && PyTuple_GET_SIZE(term) == 0) {
+        Py_INCREF(nil_key);
+        return nil_key;
     }
 
     /* A04-F005: tuple → ("__tuple__", elem0, ...) */
@@ -182,6 +301,14 @@ do_normalize(PyObject *term, int depth)
         PyObject *result = PyTuple_Pack(2, str___set__, frozen);
         Py_DECREF(frozen);
         return result;
+    }
+
+    /* A partial list/string (SegList/SegString/SegBytes): tabling._seg_key
+     * builds the key in Python, so the two twins share one definition. */
+    if (seg_types && seg_key_fn) {
+        int is_seg = PyObject_IsInstance(term, seg_types);
+        if (is_seg < 0) return NULL;
+        if (is_seg) return PyObject_CallOneArg(seg_key_fn, term);
     }
 
     /* Term instance (a @dataclass instance) → (class_name, field0, ...) */
@@ -552,6 +679,23 @@ py_unify_answer(PyObject *Py_UNUSED(module), PyObject *args)
  * ================================================================ */
 
 static PyObject *
+py_register_seg_key(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *types, *fn;
+    if (!PyArg_ParseTuple(args, "O!O:_register_seg_key", &PyTuple_Type, &types, &fn))
+        return NULL;
+    if (!PyCallable_Check(fn)) {
+        PyErr_SetString(PyExc_TypeError, "_register_seg_key: fn must be callable");
+        return NULL;
+    }
+    Py_INCREF(types);
+    Py_INCREF(fn);
+    Py_XSETREF(seg_types, types);
+    Py_XSETREF(seg_key_fn, fn);
+    Py_RETURN_NONE;
+}
+
+static PyObject *
 py_register_var_sentinel(PyObject *Py_UNUSED(module), PyObject *sentinel)
 {
     Py_XDECREF(VAR_sentinel);
@@ -575,6 +719,8 @@ static PyMethodDef module_methods[] = {
      "Capture a ground snapshot of current arg bindings."},
     {"_unify_answer", (PyCFunction)py_unify_answer, METH_VARARGS,
      "Unify each arg with the corresponding stored value."},
+    {"_register_seg_key", py_register_seg_key, METH_VARARGS,
+     "Register the Seg* classes and the Python key function for them."},
     {"_register_var_sentinel", py_register_var_sentinel, METH_O,
      "Register the _VAR sentinel object from tabling.py."},
     {NULL, NULL, 0, NULL}
@@ -611,8 +757,12 @@ PyInit__tabling_core(void)
     str___tuple__ = PyUnicode_InternFromString("__tuple__");
     str___dict__ = PyUnicode_InternFromString("__dict__");
     str___set__ = PyUnicode_InternFromString("__set__");
+    str___chars__ = PyUnicode_InternFromString("__chars__");
+    str_chars_tag = PyUnicode_InternFromString("$chars");
+    nil_key = str___list__ ? PyTuple_Pack(1, str___list__) : NULL;
     if (!str___name__ || !str___list__ ||
-        !str___tuple__ || !str___dict__ || !str___set__) {
+        !str___tuple__ || !str___dict__ || !str___set__ ||
+        !str___chars__ || !str_chars_tag || !nil_key) {
         Py_DECREF(m);
         return NULL;
     }
