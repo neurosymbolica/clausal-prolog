@@ -116,7 +116,10 @@ def test_an_unbound_flag_enumerates_every_flag_with_a_value(plain):
     assert set(got) == {"bounded", "integer_rounding_function",
                         "char_conversion", "debug", "max_arity", "unknown",
                         "double_quotes", "assert_creates_dynamic",
-                        "require_end_module"}
+                        "require_end_module", "argv"}
+    # argv (Scryer, SWI): the program arguments, a list of atoms -- set by
+    # the `clausal` command, the empty list otherwise.
+    assert isinstance(got["argv"], list)
 
 
 # ── the ISO errors (8.17.1.3, 8.17.2.3) ──────────────────────────────────────
