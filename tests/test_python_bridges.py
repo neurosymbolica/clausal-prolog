@@ -636,12 +636,28 @@ def test_an_unresolvable_py_reference_fails_closed(proj):
 
 
 class _FakeDist:
-    def __init__(self, base, files):
+    """A distribution's metadata: *kind* ``wheel`` (a dist-info with a
+    RECORD), ``editable`` (a dist-info whose direct_url.json says
+    editable) or ``egg`` (an egg-info)."""
+
+    def __init__(self, base, files, kind="wheel"):
         self.base = base
         self.files = files
+        self.kind = kind
+        suffix = ".egg-info" if kind == "egg" else ".dist-info"
+        self._path = os.path.join(base, "clausal-0.4.0" + suffix)
 
     def locate_file(self, f):
         return os.path.join(self.base, f)
+
+    def read_text(self, name):
+        if self.kind == "egg":
+            return None
+        if name == "RECORD":
+            return "\n".join(str(f) for f in self.files)
+        if name == "direct_url.json" and self.kind == "editable":
+            return '{"url": "file:///src", "dir_info": {"editable": true}}'
+        return None
 
 
 @pytest.fixture
@@ -653,24 +669,74 @@ def engine_rule(monkeypatch):
 
 
 def test_an_installed_engine_is_decided_by_its_record(engine_rule,
-                                                      monkeypatch):
+                                                      monkeypatch, tmp_path):
     """Non-editable install: the optional distributions share the
     site-packages/clausal tree, so only the engine's RECORD decides."""
     import clausal
     pb = engine_rule
-    root = os.path.dirname(os.path.realpath(clausal.__file__))
-    site = os.path.dirname(root)
+    site = tmp_path / "lib" / "site-packages"
+    root = site / "clausal"
+    (root / "library").mkdir(parents=True)
+    (root / "__init__.py").write_text("")
+    monkeypatch.setattr(clausal, "__file__", str(root / "__init__.py"))
     record = ["clausal/__init__.py", "clausal/library/py_os.seam"]
     monkeypatch.setattr(pb, "_engine_distribution",
-                        lambda: _FakeDist(site, record))
+                        lambda: _FakeDist(str(site), record))
     assert pb._engine_rule()[0] == "record"
     assert is_engine_shipped("clausal.library.py_os",
-                             os.path.join(root, "library", "py_os.seam"))
+                             str(root / "library" / "py_os.seam"))
     # In the same tree, but not in the engine's RECORD: another
     # distribution's file.
-    assert not is_engine_shipped(
-        "clausal.library.datetime",
-        os.path.join(root, "library", "datetime.seam"))
+    assert not is_engine_shipped("clausal.library.datetime",
+                                 str(root / "library" / "datetime.seam"))
+
+
+def test_an_egg_info_in_a_source_checkout_does_not_decide(engine_rule,
+                                                          monkeypatch):
+    """REGRESSION (2026-10-05): a stale ``clausal.egg-info`` in the source
+    checkout (an editable install or a build leaves one) is found by
+    importlib.metadata BESIDE the package, and its file list predates newer
+    files -- the engine's own facades (``library/countries/*``) were
+    refused.  It is not a wheel RECORD, so the directory decides."""
+    import clausal
+    pb = engine_rule
+    root = os.path.dirname(os.path.realpath(clausal.__file__))
+    if {"site-packages", "dist-packages"} & set(root.split(os.sep)):
+        pytest.skip("the engine itself is installed here")
+    site = os.path.dirname(root)
+    for kind in ("egg", "editable"):
+        pb._ENGINE_RULE = None
+        stale = ["clausal/__init__.py"]           # lists the __init__ only
+        monkeypatch.setattr(pb, "_engine_distribution",
+                            lambda k=kind: _FakeDist(site, stale, k))
+        assert pb._engine_rule() == ("dir", root), kind
+        facade = os.path.join(root, "library", "countries",
+                              "european_union.seam")
+        assert os.path.exists(facade)
+        assert is_engine_shipped("clausal.library.countries.european_union",
+                                 facade), kind
+
+
+def test_a_target_install_without_site_packages_uses_its_record(
+        engine_rule, monkeypatch, tmp_path):
+    """``pip install --target`` / Lambda / pex: a real wheel install whose
+    path has no site-packages.  The RECORD still decides, so an optional
+    distribution's adapter merged into the same tree is NOT the engine's."""
+    import clausal
+    pb = engine_rule
+    vendor = tmp_path / "opt" / "app"
+    root = vendor / "clausal"
+    (root / "modules" / "py").mkdir(parents=True)
+    (root / "__init__.py").write_text("")
+    monkeypatch.setattr(clausal, "__file__", str(root / "__init__.py"))
+    record = ["clausal/__init__.py", "clausal/modules/py/datetime.py"]
+    monkeypatch.setattr(pb, "_engine_distribution",
+                        lambda: _FakeDist(str(vendor), record))
+    assert pb._engine_rule()[0] == "record"
+    assert is_engine_shipped("clausal.modules.py.datetime",
+                             str(root / "modules" / "py" / "datetime.py"))
+    assert not is_engine_shipped("clausal.modules.py.torch",
+                                 str(root / "modules" / "py" / "torch.py"))
 
 
 def test_an_editable_checkout_uses_the_directory(engine_rule, monkeypatch):
