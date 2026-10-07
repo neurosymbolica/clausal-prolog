@@ -7,6 +7,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Added
+
+- **Optional packages on PyPI.** The eight library wrappers are published:
+  `clausal-jax`, `clausal-opencv`, `clausal-scipy`, `clausal-sklearn`,
+  `clausal-spacy`, `clausal-sympy`, `clausal-torch` and `clausal-yaml`
+  (0.1.0 each). Each is also an extra of `clausal`, e.g.
+  `pip install "clausal[scipy]"`.
+
 ### Experimental
 
 - **Asyncio.** `clausal.aio.asolve` / `aonce` run a query on an asyncio

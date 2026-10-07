@@ -16,7 +16,7 @@ package lives at `packages/clausal-<name>/` in the main repository.
 | **clausal-acl2** | `pip install clausal-acl2` | The ACL2 theorem prover through its ACL2 Bridge: evaluate forms, submit events, prove theorems; ACL2 terms are Clausal terms | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-acl2/docs/acl2.md) |
 | **clausal-jax** | `pip install clausal-jax` | JAX predicates: array, PRNG, transforms, sharding, `jax.scipy`, optax, equinox, flax | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-jax/docs/jax.md) |
 | **clausal-opencv** | `pip install clausal-opencv` | OpenCV (`cv2`) predicates: image I/O, color, imgproc, contours, drawing, features, calib3d, objdetect, video | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-opencv/docs/opencv.md) |
-| **clausal-provenance** | `pip install clausal-provenance` | **Disabled pending redesign** (2026-09-25). Provenance-tagged bottom-up Datalog; PyTorch / JAX-differentiable semirings for neurosymbolic AI | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-provenance/docs/provenance.md) |
+| **clausal-provenance** | not published | **Disabled pending redesign** (2026-09-25). Provenance-tagged bottom-up Datalog; PyTorch / JAX-differentiable semirings for neurosymbolic AI | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-provenance/docs/provenance.md) |
 | **clausal-scipy** | `pip install clausal-scipy` | SciPy wrappers: `linalg`, `optimize`, `stats`, `integrate`, `interpolate`, `fft`, `ndimage`, `spatial`, `signal`, `sparse`, `cluster`, `special`, `constants`, `differentiate` | [docs](https://github.com/neurosymbolica/clausal-prolog/tree/main/packages/clausal-scipy/docs/) |
 | **clausal-sklearn** | `pip install clausal-sklearn` | scikit-learn predicates (estimators, preprocessing, metrics) | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-sklearn/docs/sklearn.md) |
 | **clausal-spacy** | `pip install clausal-spacy` | spaCy NLP predicates (tokens, POS, lemmas, entities) | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-spacy/docs/spacy.md) |
@@ -34,14 +34,10 @@ package lives at `packages/clausal-<name>/` in the main repository.
 
 ## Status
 
-These packages live in the main repository under `packages/`. The library
-wrappers (jax, opencv, scipy, sklearn, spacy, sympy, torch, yaml) are
-published to PyPI one at a time as each is released; until a package is
-there, install it from the repository:
-
-```bash
-pip install "clausal-yaml @ git+https://github.com/neurosymbolica/clausal-prolog#subdirectory=packages/clausal-yaml"
-```
+The library wrappers (jax, opencv, scipy, sklearn, spacy, sympy, torch, yaml)
+are on PyPI. Each can also be installed as an extra of `clausal`, e.g.
+`pip install "clausal[scipy]"`. Their sources live in the main repository
+under `packages/`.
 
 The Prolog backends and `clausal-provenance` are not published yet. The `docs` links currently
 point at the package sources on GitHub; they'll switch to per-package documentation sites

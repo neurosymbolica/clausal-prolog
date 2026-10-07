@@ -38,6 +38,15 @@ GitHub = "https://github.com/neurosymbolica/clausal-prolog"
 Changelog = "https://github.com/neurosymbolica/clausal-prolog/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
+# The optional library packages, as extras: pip install "clausal[scipy]".
+jax = ["clausal-jax>=0.1.0"]
+opencv = ["clausal-opencv>=0.1.0"]
+scipy = ["clausal-scipy>=0.1.0"]
+sklearn = ["clausal-sklearn>=0.1.0"]
+spacy = ["clausal-spacy>=0.1.0"]
+sympy = ["clausal-sympy>=0.1.0"]
+torch = ["clausal-torch>=0.1.0"]
+yaml = ["clausal-yaml>=0.1.0"]
 ptpython = ["ptpython>=3.0"]
 repl = ["ptpython>=3.0"]
 

@@ -283,13 +283,27 @@ python -m pytest tests/ clausal/examples/ -q
   runtime dependency; it lets queries run on `asyncio`)
 - C compiler (for building from source)
 
-Optional packages (YAML, spaCy, SciPy, PyTorch, the Scryer and Trealla
-embeddings, and more) live in [`packages/`](https://clausal.pl/packages/) and
-are not on PyPI yet. Install one from the repository, for example:
+Optional packages wrap Python libraries for use from Clausal Prolog. Each is
+on PyPI and is also available as an extra of `clausal`:
 
 ```bash
-pip install "clausal-yaml @ git+https://github.com/neurosymbolica/clausal-prolog#subdirectory=packages/clausal-yaml"
+pip install clausal-scipy        # or: pip install "clausal[scipy]"
 ```
+
+| Package | Wraps |
+|---|---|
+| [`clausal-jax`](https://pypi.org/project/clausal-jax/) | JAX (plus optax, equinox, flax as extras) |
+| [`clausal-opencv`](https://pypi.org/project/clausal-opencv/) | OpenCV |
+| [`clausal-scipy`](https://pypi.org/project/clausal-scipy/) | SciPy |
+| [`clausal-sklearn`](https://pypi.org/project/clausal-sklearn/) | scikit-learn |
+| [`clausal-spacy`](https://pypi.org/project/clausal-spacy/) | spaCy |
+| [`clausal-sympy`](https://pypi.org/project/clausal-sympy/) | SymPy |
+| [`clausal-torch`](https://pypi.org/project/clausal-torch/) | PyTorch |
+| [`clausal-yaml`](https://pypi.org/project/clausal-yaml/) | PyYAML |
+
+The Scryer, Trealla and GNU Prolog embeddings live in
+[`packages/`](https://clausal.pl/packages/) too, but need native builds and
+are not on PyPI yet.
 
 ## License
 
