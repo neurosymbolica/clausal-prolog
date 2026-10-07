@@ -7351,15 +7351,42 @@ class EmbedTransformer(NodeTransformer):
             keywords=[]), node.iter)
         node.body = transformer._visit_stmts(node.body)
         node.orelse = transformer._visit_stmts(node.orelse)
-        if is_async and not isinstance(node, AsyncFor):
-            # A plain ``for`` over a goal in an ``async def`` iterates it
-            # asynchronously: a waiting predicate inside would otherwise
-            # refuse to block the running loop.
-            node = copy_location(AsyncFor(
-                target=node.target, iter=node.iter, body=node.body,
-                orelse=node.orelse, type_comment=None), node)
+        if is_async:
+            return pre + [declare, *transformer._closing_async_for(node)]
         fix_missing_locations(node)
         return pre + [declare, node]
+
+    def _closing_async_for(transformer, node):
+        """``for``/``async for`` over a goal in an ``async def``, lowered to
+
+            $aiter_N = <node.iter>
+            try:
+                async for <target> in $aiter_N: <body> [else: <orelse>]
+            finally:
+                await $aiter_N.aclose()
+
+        A plain ``for`` becomes ``async for``: a waiting predicate inside a
+        synchronous loop would refuse to block the running event loop.  The
+        ``finally`` matters because ``break`` does not close an async
+        generator -- asyncio does it a loop tick or two later -- and until
+        then the query still owns the tables it was building, so the next
+        goal on one of them would be refused.
+        """
+        transformer._aiter_count = getattr(transformer, "_aiter_count", 0) + 1
+        it_name = f"$aiter_{transformer._aiter_count}"
+
+        def name(ctx):
+            return Name(id=it_name, ctx=ctx)
+        assign = Assign(targets=[name(Store())], value=node.iter)
+        loop = AsyncFor(target=node.target, iter=name(Load()), body=node.body,
+                        orelse=node.orelse, type_comment=None)
+        close = Expr(value=Await(value=Call(
+            func=Attribute(value=name(Load()), attr="aclose", ctx=Load()),
+            args=[], keywords=[])))
+        guarded = Try(body=[copy_location(loop, node)], handlers=[], orelse=[],
+                      finalbody=[copy_location(close, node)])
+        return [fix_missing_locations(copy_location(assign, node)),
+                fix_missing_locations(copy_location(guarded, node))]
 
     visit_AsyncFor = visit_For
 
@@ -8534,9 +8561,18 @@ class EmbedTransformer(NodeTransformer):
         transformer._python_locals.append(
             transformer._author_bound_locals(node))
         transformer._seam_exports.append({})
+        # Decorators, defaults and the return annotation are evaluated in
+        # the ENCLOSING scope: visit them before this function's own flag.
+        node.decorator_list = [transformer.visit(d) for d in node.decorator_list]
+        node.args = transformer.visit(node.args)
+        if node.returns is not None:
+            node.returns = transformer.visit(node.returns)
+        node.type_params = [transformer.visit(t)
+                            for t in getattr(node, "type_params", [])]
         transformer._async_scope.append(isinstance(node, AsyncFunctionDef))
         try:
-            result = transformer.generic_visit(node)
+            node.body = transformer._visit_stmts(node.body)
+            result = node
             transformer._lint_seam_text_compare(result, transformer._seam_exports[-1])
         finally:
             transformer._async_scope.pop()
@@ -8766,6 +8802,18 @@ class EmbedTransformer(NodeTransformer):
         transformer._lint_boolean_seam(
             node.test, "a conditional expression's test (`x if --g else y`)")
         return transformer.generic_visit(node)
+
+    def visit_Lambda(transformer, node):
+        # A lambda is a synchronous function even inside an ``async def``:
+        # a goal-position comprehension in its body stays synchronous.  Its
+        # defaults are evaluated in the enclosing scope, so they come first.
+        node.args = transformer.visit(node.args)
+        transformer._async_scope.append(False)
+        try:
+            node.body = transformer.visit(node.body)
+            return node
+        finally:
+            transformer._async_scope.pop()
 
     def visit_ClassDef(transformer, node):
         transformer._scope_depth += 1

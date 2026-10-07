@@ -35,6 +35,19 @@ _asyncio = _import_stdlib("asyncio")
 _inspect = _import_stdlib("inspect")
 
 
+# The iterator's awaitables are created INSIDE a coroutine, so on the
+# running loop: CPython registers an async generator with a loop (for
+# shutdown_asyncgens and finalisation) when its first awaitable is created,
+# and a synchronous query's private loop only runs inside await_only (tenth
+# review, 2026-10-07).
+async def _anext(iterator):
+    return await iterator.__anext__()
+
+
+async def _aclose(iterator):
+    await iterator.aclose()
+
+
 def _await_value_2(awaitable, value, trail, k):
     """await_value/2: await_value(Awaitable, Value)."""
     aw = deref(awaitable)
@@ -54,7 +67,7 @@ def _await_each_2(iterable, item, trail, k):
     try:
         while True:
             try:
-                value = await_only(iterator.__anext__())
+                value = await_only(_anext(iterator))
             except StopAsyncIteration:
                 exhausted = True
                 return
@@ -87,7 +100,7 @@ def _close_iterator(iterator):
                 pass
             else:
                 return
-        await_only(aclose())
+        await_only(_aclose(iterator))
     except Exception:  # noqa: BLE001 - best effort, as in a finaliser
         pass
 

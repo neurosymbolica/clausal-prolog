@@ -236,8 +236,8 @@ async def first():
 async def every():
     return [X for X in --nap(X)]     # an async comprehension
 
-async def stream():
-    async for X in --nap(X):         # an async generator of answers
+async def stream():                  # consume it fully, or close it:
+    async for X in --nap(X):         # see "Stopping early" below
         yield X
 
 async def fetch(n):
@@ -292,10 +292,28 @@ fetched(X) <- (X is ++await fetch(4))
   a partial answer set, because SLG resolution builds each table in one
   search. To share a table between concurrent queries, complete it first
   (for example with `findall/3`), or run the queries one after another.
+- **Stopping early.** After a `break` out of `async for` over `asolve`,
+  `acall`, `Solutions`, or a seam async generator such as `stream()` above,
+  close the iterator: `await answers.aclose()`, or iterate inside `async with
+  contextlib.aclosing(...)`. Python doesn't close an async generator on
+  `break`; asyncio does, a loop tick or two later. Meanwhile:
+  - while something still references the unclosed iterator (a variable, the
+    generator's own frame), the tables its query was building stay reserved,
+    and another query on them is refused;
+  - once nothing references it, the tables are released at once. The query's
+    own clean-up runs later, and never touches a table another query has
+    taken over since.
+
+  A seam `for` over `--goal` in an `async def` closes its own iterator, so
+  `break` there needs nothing. A seam async generator is the exception: its
+  `finally` can only run once the generator itself is closed.
 - **Closing a query early.** When you stop asking for answers, cleanups of
   `setup_call_cleanup/3` still pending run when Python's garbage collector
   frees the query's frames, which happens with plain `solve` too. A cleanup
-  that waits can't wait at that point. See
+  that waits can't wait at that point: inside another query it raises
+  `permission_error(await, finalisation, _)` (reported as "Exception
+  ignored") rather than suspend that query. So close queries you stop
+  early. See
   `todo/closing-a-query-leaves-cleanup-to-the-garbage-collector-2026-10-06.md`.
 - **A synchronous query inside a coroutine.** Calling plain `solve` on a
   predicate that waits, from code already running on an event loop, raises
@@ -303,7 +321,7 @@ fetched(X) <- (X is ++await fetch(4))
   the loop, so use `asolve`. This includes a coroutine that a query is
   itself awaiting, and a Jupyter cell (use `await Solutions(...)`).
 - **Other event loops.** In a synchronous query, a wait runs on a private
-  loop, one per thread, closed with its thread. A future or task that belongs
+  loop, one per thread, closed when its thread object is garbage-collected. A future or task that belongs
   to another loop and is still pending can't be awaited there.
 
 ## How it works
@@ -320,6 +338,18 @@ Every engine frame in between stays suspended, unchanged. That is why no part
 of the engine had to learn about waiting. A query that never waits pays
 nothing; a wait costs on the order of 10 µs more than the same wait in a
 synchronous query.
+
+A greenlet has no stack of its own: it runs on its thread's stack and copies
+its slice to the heap when it switches out, so a query can recurse as deep in
+a greenlet as anywhere else. A switch costs time in proportion to the stack
+depth at the wait: about 11 µs with nothing below it, 25 µs at 1,000 Python
+frames, 0.27 ms at 10,000. The trampoline keeps ordinary recursion off the
+Python stack, so waits are usually shallow; depth comes from nesting it cannot
+flatten (`findall` inside negation inside `once`, deep `++` escapes).
+
+The design, the rules that keep tables sound when queries interleave or are
+abandoned, and what eleven rounds of review found are in the design record
+`docs/design-records/asyncio-and-tabling.html`.
 
 Use `clausal.aio.await_only` rather than SQLAlchemy's function of the same
 name. SQLAlchemy's version checks for its own greenlet type and refuses to

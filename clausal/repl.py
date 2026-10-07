@@ -379,6 +379,7 @@ class Solutions:
         """Rich HTML rendering for Jupyter notebooks."""
         from clausal.terms import JUPYTER_CSS
 
+        self._refuse_if_driven_async()
         limit = (self._limit if self._limit is not None
                  else self.DEFAULT_JUPYTER_LIMIT)
 
@@ -426,8 +427,38 @@ class Solutions:
         A predicate that waits (``library(asyncio)``, an async adapter) frees
         the loop instead of refusing to block it.
         """
+        return self._driver()
+
+    def _driver(self):
+        """The one async driver of this Solutions' answers: a second driver
+        over the same synchronous generator would resume its parked frames
+        under another query's engine state."""
         from clausal.aio import adrive  # noqa: PLC0415
-        return adrive(self._iter)
+        driver = getattr(self, "_async_driver", None)
+        if driver is None or driver[0] is not self._iter:
+            driver = self._async_driver = (self._iter, adrive(self._iter))
+        return driver[1]
+
+    async def aclose(self):
+        """Close the async driver, if any (after a ``break`` out of
+        ``async for``), so the query's tables are released at once."""
+        driver = getattr(self, "_async_driver", None)
+        if driver is not None:
+            await driver[1].aclose()
+
+    def _refuse_if_driven_async(self):
+        """A synchronous display may not take over answers an async driver
+        is part-way through: it would resume the query's parked frames
+        outside the query."""
+        import inspect  # noqa: PLC0415
+        driver = getattr(self, "_async_driver", None)
+        if (driver is not None and driver[0] is self._iter
+                and inspect.getasyncgenstate(driver[1])
+                in (inspect.AGEN_SUSPENDED, inspect.AGEN_RUNNING)):
+            raise RuntimeError(
+                "this Solutions is being read asynchronously (async for); "
+                "finish it or `await solutions.aclose()` before displaying "
+                "it synchronously, or display it with `await solutions`")
 
     def __await__(self):
         """``await Solutions(...)``: fetch the answers to show on the event
@@ -437,11 +468,10 @@ class Solutions:
         return self._prefetch().__await__()
 
     async def _prefetch(self):
-        from clausal.aio import adrive  # noqa: PLC0415
         limit = (self._limit if self._limit is not None
                  else self.DEFAULT_JUPYTER_LIMIT)
         fetched = []
-        answers = adrive(self._iter)
+        answers = self._driver()
         try:
             # One past the limit, so the display can still say "more".
             async for bindings in answers:
@@ -463,6 +493,7 @@ class Solutions:
     # ------------------------------------------------------------------
 
     def _run(self):
+        self._refuse_if_driven_async()
         first_solution = True
         pending = None  # buffered solution fetched for look-ahead
 

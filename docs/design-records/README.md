@@ -7,6 +7,13 @@ Long-form design records, kept as HTML because they are read outside a terminal.
                             Published at
                             https://claude.ai/code/artifact/deb7779b-2aa8-467c-8d92-3c72284ef111
 
+    asyncio-and-tabling.html
+                            Queries on Python's asyncio loop: the model, the greenlet
+                            driver, the five rules that keep SLG tables sound when
+                            queries interleave or die, and what the review rounds found.
+                            Published at
+                            https://claude.ai/artifact/TuWicpbxhA8mcJeKTbMsLg
+
 **The file is the source; the URL is a rendering of it.** Edit the file, then republish to
 the SAME url to keep the link stable — publishing without it creates a second artifact and
 the link someone has bookmarked goes stale in place, which is worse than a dead one.

@@ -1049,16 +1049,12 @@ async def aeach(goal: Any, variables: tuple, module_globals: dict):
         await answers.aclose()
 
 
-async def aeach_fresh(make, module_globals: dict):
-    """``each_fresh`` for an ``async def`` (comprehensions)."""
+def aeach_fresh(make, module_globals: dict):
+    """``each_fresh`` for an ``async def`` (comprehensions): fresh variables
+    per evaluation of the comprehension's iterable, then ``aeach``."""
     arity = make.__code__.co_argcount
     goal, variables = make(*(Var() for _ in range(arity)))
-    answers = aeach(goal, variables, module_globals)
-    try:
-        async for value in answers:
-            yield value
-    finally:
-        await answers.aclose()
+    return aeach(goal, variables, module_globals)
 
 
 def with_bases(goal: Any, bases: dict) -> Any:

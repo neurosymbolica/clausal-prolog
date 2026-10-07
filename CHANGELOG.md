@@ -24,7 +24,12 @@ surface described in [docs/public-api.md](docs/public-api.md).
   suspended query has not finished raises `permission_error(access,
   tabled_evaluation, P/N)` instead of seeing a partial answer set. Calling
   plain `solve` on a waiting predicate from inside a running loop raises
-  `permission_error(await, synchronous_query, _)`.
+  `permission_error(await, synchronous_query, _)`. A table a synchronous
+  query is still building while an async query runs inside its consumer
+  is refused to that async query too. A wait made by code the garbage
+  collector runs inside a query (an abandoned query's cleanup) raises
+  `permission_error(await, finalisation, _)` rather than suspending that
+  query.
 - **Seam goal positions in `async def`.** In a `.seam` file, `if`/`elif`/
   `while --g`, `not --g`, `for`/`async for X in --g` and comprehensions over
   `--g` inside an `async def` run on the event loop (`await`ed / async
