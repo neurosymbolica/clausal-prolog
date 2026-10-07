@@ -1,11 +1,12 @@
-"""clausal.modules.py.laya — System One decision predicates for Clausal.
+"""clausal.modules.py.decide — System One decision predicates for Clausal.
 
-`laya <https://pypi.org/project/laya/>`_ is a non-autoregressive "System 1"
-decision engine: given a text and a set of typed questions, one forward pass
-answers all of them with calibrated probabilities.  This module makes those
+A "System 1" decision model -- the open `laya <https://pypi.org/project/laya/>`_
+model, or TypeSafe's hosted Jev -- is given a text and a set of typed
+questions, and one forward pass answers all of them with calibrated
+probabilities.  This module makes those
 answers relations -- a neural predicate whose solutions carry probabilities::
 
-    -import_from(py.laya, [choice, noul, score, predict, predict_batch])
+    -import_from(py.decide, [choice, noul, score, predict, predict_batch])
 
 The same protocol -- a state plus typed questions (``choice``, ``score``,
 ``noul``) answered with probabilities -- is served three ways, so the
@@ -19,7 +20,7 @@ predicates run on a swappable BACKEND (``use_backend/1,2``):
   the Hugging Face Hub on first use.
 - ``laya_serve``: a ``laya-serve`` HTTP server (``/v1/systemone/batch``).
 - ``typesafe``: TypeSafe's hosted Jev model through ``typesafe-sdk``
-  (``pip install "clausal-laya[typesafe]"``; ``TYPESAFE_API_KEY``).
+  (``pip install "clausal-decide[typesafe]"``; ``TYPESAFE_API_KEY``).
 
 Predicates
 ----------
@@ -65,11 +66,11 @@ call them at the program's boundary, not under backtracking.
 
 Errors (RULED 2026-10-02: raise, never fail)
 --------------------------------------------
-``instantiation_error``; ``type_error(text|list|dict|laya_label, C)``;
-``domain_error(non_empty_list, [])``; ``domain_error(laya_question, C)`` for
-a question the backend refuses; ``domain_error(laya_backend, Name)`` for an
-unknown backend; ``domain_error(laya_option, Name)`` for an option the
-backend does not take; ``permission_error(modify, laya_model, Name)`` for
+``instantiation_error``; ``type_error(text|list|dict|decide_label, C)``;
+``domain_error(non_empty_list, [])``; ``domain_error(decide_question, C)`` for
+a question the backend refuses; ``domain_error(decide_backend, Name)`` for an
+unknown backend; ``domain_error(decide_option, Name)`` for an option the
+backend does not take; ``permission_error(modify, decide_model, Name)`` for
 ``register_model`` off the local backend; ``domain_error(laya_train_config,
 C)`` for a training option laya refuses.
 """
@@ -246,7 +247,7 @@ def _label_key(label, pred, arg=3):
         return text
     if isinstance(label, (int, float)) and not isinstance(label, bool):
         return label
-    raise LogicException(type_error("laya_label", label, f"{pred}: argument {arg}"))
+    raise LogicException(type_error("decide_label", label, f"{pred}: argument {arg}"))
 
 
 def _labels(labels, pred):
@@ -322,7 +323,7 @@ def _questions(questions, pred, arg=2):
         qdef = deref(qdef)
         if not _is_dict(qdef):
             raise LogicException(domain_error(
-                "laya_question", qdef, f"{pred}: a question is a dict"))
+                "decide_question", qdef, f"{pred}: a question is a dict"))
         definition = {}
         for key, value in qdef.items():
             key = deref(key)
@@ -342,13 +343,13 @@ def _ask(requests, pred, culprit, call_options=None):
     for name in controls:
         if name not in backend.controls:
             raise LogicException(domain_error(
-                "laya_option", name, f"{pred}: the {backend.name} backend "
+                "decide_option", name, f"{pred}: the {backend.name} backend "
                 f"takes {', '.join(backend.controls)}"))
     try:
         return backend.answer([dict(controls, **r) for r in requests])
     except (ValueError, TypeError) as exc:
         raise LogicException(domain_error(
-            "laya_question", culprit, f"{pred}: {exc}")) from exc
+            "decide_question", culprit, f"{pred}: {exc}")) from exc
 
 
 def _one(text, instructions, qtype, criteria, pred):
@@ -487,7 +488,7 @@ def _make_backend(name, options, pred):
         conn = _options(options, pred, 2, ("url", "api_key", "timeout"))
         if "url" not in conn:
             raise LogicException(domain_error(
-                "laya_option", "url", f"{pred}: laya_serve needs a url"))
+                "decide_option", "url", f"{pred}: laya_serve needs a url"))
         return _ServeBackend(conn["url"], conn.get("api_key"),
                              float(conn.get("timeout", 60.0)))
     conn = _options(options, pred, 2, ("api_key", "base_url", "timeout"))
@@ -499,7 +500,7 @@ def _use_backend_n(name, options, pred):
     text = require_text(name_term, pred, arg=1)
     if text not in _BACKENDS:
         raise LogicException(domain_error(
-            "laya_backend", name_term, f"{pred}: one of {', '.join(_BACKENDS)}"))
+            "decide_backend", name_term, f"{pred}: one of {', '.join(_BACKENDS)}"))
     if options is None:
         options = {}
     backend = _make_backend(text, options, pred)
@@ -530,7 +531,7 @@ def _register_model_2(name, source, trail, k):
     backend = _backend
     if not isinstance(backend, _LayaBackend):
         raise LogicException(permission_error(
-            "modify", "laya_model", deref(name),
+            "modify", "decide_model", deref(name),
             f"{pred}: only the local laya backend serves registered checkpoints"))
     backend.router().register(name_text, source_text)
     yield None
@@ -560,7 +561,7 @@ def _finetune_5(data, base, output_dir, options, summary, trail, k):
         # Rows: [{state, questions, expected}] -- laya-train's JSONL rows.
         expect_type(data_term, list, pred, arg=1)
         rows = [to_python(row) for row in data_term]
-        fd, tmp = _tempfile.mkstemp(suffix=".jsonl", prefix="clausal_laya_")
+        fd, tmp = _tempfile.mkstemp(suffix=".jsonl", prefix="clausal_decide_")
         with _os.fdopen(fd, "w", encoding="utf-8") as fh:
             for row in rows:
                 fh.write(_json.dumps(row) + "\n")

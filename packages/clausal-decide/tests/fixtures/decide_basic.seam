@@ -1,8 +1,8 @@
-# laya predicates against the REAL model (skipped by tests/conftest.py when
+# decide predicates against the REAL laya model (skipped by tests/conftest.py when
 # the checkpoint cannot be downloaded).  Assertions are ones any sane
 # checkpoint meets, and laya's own README example (billing, churn).
 
--import_from(py.laya, [choice, noul, score, predict, predict_batch])
+-import_from(py.decide, [choice, noul, score, predict, predict_batch])
 
 complaint(T) <- (
     T is "Hi, we were billed twice for March. Please refund the duplicate today or we will cancel our plan."

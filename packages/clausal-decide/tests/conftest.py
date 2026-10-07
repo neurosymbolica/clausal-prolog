@@ -20,8 +20,8 @@ _MODEL_ERROR: list = []          # [] untried, [None] loaded, [reason] failed
 def _model_unavailable() -> str | None:
     if not _MODEL_ERROR:
         try:
-            from clausal.modules.py import laya as pylaya  # noqa: PLC0415
-            pylaya._LayaBackend().router().load("english")
+            from clausal.modules.py import decide as pydecide  # noqa: PLC0415
+            pydecide._LayaBackend().router().load("english")
             _MODEL_ERROR.append(None)
         except Exception as exc:  # noqa: BLE001 -- any failure means no model
             _MODEL_ERROR.append(f"{type(exc).__name__}: {exc}"[:300])

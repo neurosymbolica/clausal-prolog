@@ -1,19 +1,19 @@
-# laya — calibrated decisions as relations
+# decide — calibrated decisions as relations
 
-[laya](https://pypi.org/project/laya/) is a non-autoregressive "System 1"
-decision engine. Given a text and a set of typed questions, one forward pass
-answers all of them with calibrated probabilities, in 100+ languages. The
-`laya` module makes those answers **relations**: a neural predicate whose
+A "System 1" decision model, such as the open
+[laya](https://pypi.org/project/laya/) model or TypeSafe's hosted Jev, is
+given a text and a set of typed questions, and one forward pass answers all of
+them with calibrated probabilities, in 100+ languages. The `decide` module
+makes those answers **relations**: a neural predicate whose
 solutions carry probabilities, which ordinary logic can then filter, rank and
 combine.
 
 ```seam
---8<-- "tests/fixtures/docs/laya_sigs.txt:import"
+--8<-- "tests/fixtures/docs/decide_sigs.txt:import"
 ```
 
 With this engine release or later, the bare name works too:
-`-import_from(laya, [...])`. (A bare `laya` is otherwise the Python library
-itself.)
+`-import_from(decide, [...])`.
 
 The predicates run on a swappable [backend](#backends): the open laya model
 in this process (the default), a `laya-serve` server, or TypeSafe's hosted
@@ -40,7 +40,7 @@ it unifies with your own atoms.
 ## `choice/4`, `choice/5`
 
 ```
---8<-- "tests/fixtures/docs/laya_sigs.txt:choice_sig"
+--8<-- "tests/fixtures/docs/decide_sigs.txt:choice_sig"
 ```
 
 `Labels` is a non-empty list of labels, or a dict from label to a description
@@ -49,7 +49,7 @@ enumerates every label with its probability, most probable first; with
 `Label` bound it gives that label's probability.
 
 ```seam
---8<-- "tests/fixtures/docs/laya_examples.seam:route"
+--8<-- "tests/fixtures/docs/decide_examples.seam:route"
 ```
 
 ---
@@ -57,13 +57,13 @@ enumerates every label with its probability, most probable first; with
 ## `noul/3`
 
 ```
---8<-- "tests/fixtures/docs/laya_sigs.txt:noul_sig"
+--8<-- "tests/fixtures/docs/decide_sigs.txt:noul_sig"
 ```
 
 `P` is the probability that the answer to the yes/no question is yes.
 
 ```seam
---8<-- "tests/fixtures/docs/laya_examples.seam:escalate"
+--8<-- "tests/fixtures/docs/decide_examples.seam:escalate"
 ```
 
 ---
@@ -71,7 +71,7 @@ enumerates every label with its probability, most probable first; with
 ## `score/4`, `score/5`
 
 ```
---8<-- "tests/fixtures/docs/laya_sigs.txt:score_sig"
+--8<-- "tests/fixtures/docs/decide_sigs.txt:score_sig"
 ```
 
 `Levels` is a non-empty list of level descriptions, lowest first. `score/4`
@@ -79,7 +79,7 @@ answers the expected level, a float from `0` to `len(Levels) - 1`. `score/5`
 enumerates every 0-based level with its probability, most probable first.
 
 ```seam
---8<-- "tests/fixtures/docs/laya_examples.seam:urgency"
+--8<-- "tests/fixtures/docs/decide_examples.seam:urgency"
 ```
 
 ---
@@ -87,7 +87,7 @@ enumerates every 0-based level with its probability, most probable first.
 ## `predict/3`, `predict/4`
 
 ```
---8<-- "tests/fixtures/docs/laya_sigs.txt:predict_sig"
+--8<-- "tests/fixtures/docs/decide_sigs.txt:predict_sig"
 ```
 
 Several questions in **one** forward pass. `Questions` is a dict from a
@@ -110,7 +110,7 @@ documents with the multilingual checkpoint) and `min_confidence`. Read answers
 with `dict_get/3`.
 
 ```seam
---8<-- "tests/fixtures/docs/laya_examples.seam:predict"
+--8<-- "tests/fixtures/docs/decide_examples.seam:predict"
 ```
 
 ---
@@ -118,7 +118,7 @@ with `dict_get/3`.
 ## `predict_batch/3`, `predict_batch/4`
 
 ```
---8<-- "tests/fixtures/docs/laya_sigs.txt:predict_batch_sig"
+--8<-- "tests/fixtures/docs/decide_sigs.txt:predict_batch_sig"
 ```
 
 The same `Questions` over a list of texts, answered together: the local
@@ -128,7 +128,7 @@ text, in order. Prefer it to `findall` over `predict/3` when there are many
 texts.
 
 ```seam
---8<-- "tests/fixtures/docs/laya_examples.seam:predict_batch"
+--8<-- "tests/fixtures/docs/decide_examples.seam:predict_batch"
 ```
 
 ---
@@ -136,14 +136,14 @@ texts.
 ## Backends
 
 ```
---8<-- "tests/fixtures/docs/laya_sigs.txt:backend_sig"
+--8<-- "tests/fixtures/docs/decide_sigs.txt:backend_sig"
 ```
 
 | Name | Answers with | Options |
 |------|--------------|---------|
 | `laya` (default) | the open model in this process, through `laya.Router.predict_batch`; the checkpoint downloads from the Hugging Face Hub on first use | the call options below |
 | `laya_serve` | a `laya-serve` HTTP server (`/v1/systemone/batch`) | `url` (required), `api_key`, `timeout`, and the call options |
-| `typesafe` | TypeSafe's hosted Jev model, through `typesafe-sdk` (`pip install "clausal-laya[typesafe]"`, `TYPESAFE_API_KEY`) | `api_key`, `base_url`, `timeout`, `model` |
+| `typesafe` | TypeSafe's hosted Jev model, through `typesafe-sdk` (`pip install "clausal-decide[typesafe]"`, `TYPESAFE_API_KEY`) | `api_key`, `base_url`, `timeout`, `model` |
 
 The call options -- `model`, `lang`, `max_len`, `head_max_len`,
 `min_confidence` -- given to `use_backend/2` become the defaults for every
@@ -162,7 +162,7 @@ use_server(URL) <- use_backend(laya_serve, {"url": URL, "model": "multilingual"}
 ## Fine-tuning
 
 ```
---8<-- "tests/fixtures/docs/laya_sigs.txt:finetune_sig"
+--8<-- "tests/fixtures/docs/decide_sigs.txt:finetune_sig"
 ```
 
 `finetune/5` runs laya's own fine-tuning (`laya.train.finetune`): it trains
@@ -216,12 +216,12 @@ The predicates raise ISO errors rather than fail:
 | `Text` or `Instructions` not text | `type_error(text, Culprit)` |
 | `Labels`/`Levels` not a list (or dict) | `type_error(list, Culprit)` |
 | an empty `Labels`/`Levels` | `domain_error(non_empty_list, [])` |
-| a label that is not an atom, string or number | `type_error(laya_label, Culprit)` |
+| a label that is not an atom, string or number | `type_error(decide_label, Culprit)` |
 | `Questions` or `Options` not a dict | `type_error(dict, Culprit)` |
-| a question the backend refuses (a repeated label, an unknown type) | `domain_error(laya_question, Culprit)` |
-| an unknown backend | `domain_error(laya_backend, Name)` |
-| an option the backend does not take, or `laya_serve` without a `url` | `domain_error(laya_option, Name)` |
-| `register_model/2` off the local backend | `permission_error(modify, laya_model, Name)` |
+| a question the backend refuses (a repeated label, an unknown type) | `domain_error(decide_question, Culprit)` |
+| an unknown backend | `domain_error(decide_backend, Name)` |
+| an option the backend does not take, or `laya_serve` without a `url` | `domain_error(decide_option, Name)` |
+| `register_model/2` off the local backend | `permission_error(modify, decide_model, Name)` |
 | a training option laya refuses | `domain_error(laya_train_config, Options)` |
 | training data laya cannot use | `domain_error(laya_training_data, Data)` |
 

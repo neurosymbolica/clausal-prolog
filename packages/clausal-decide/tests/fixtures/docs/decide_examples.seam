@@ -1,7 +1,7 @@
-# Executable examples for docs/laya.md (the real model: skipped by
+# Executable examples for docs/decide.md (the real model: skipped by
 # tests/conftest.py when the checkpoint cannot be downloaded).
 
--import_from(py.laya, [choice, noul, score, predict, predict_batch])
+-import_from(py.decide, [choice, noul, score, predict, predict_batch])
 
 # --8<-- [start:route]
 -private([billing, technical, other])

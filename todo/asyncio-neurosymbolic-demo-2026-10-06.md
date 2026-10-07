@@ -27,7 +27,7 @@ event loop staying responsive.
 
 The model must be replaceable by a deterministic fake (a scripted async
 generator), so the demo runs in CI with no network, API key or GPU. With
-`clausal-laya` installed, the real model is a drop-in.
+`clausal-decide` installed, the real model is a drop-in.
 
 ## Where it goes
 

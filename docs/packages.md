@@ -15,7 +15,7 @@ package lives at `packages/clausal-<name>/` in the main repository.
 |---|---|---|---|
 | **clausal-acl2** | `pip install clausal-acl2` | The ACL2 theorem prover through its ACL2 Bridge: evaluate forms, submit events, prove theorems; ACL2 terms are Clausal terms | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-acl2/docs/acl2.md) |
 | **clausal-jax** | `pip install clausal-jax` | JAX predicates: array, PRNG, transforms, sharding, `jax.scipy`, optax, equinox, flax | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-jax/docs/jax.md) |
-| **clausal-laya** | `pip install clausal-laya` | laya decision predicates: calibrated choice, yes/no and score answers about a text, as relations with probabilities | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-laya/docs/laya.md) |
+| **clausal-decide** | `pip install clausal-decide` | Calibrated decisions about a text (choice, yes/no, score) as relations with probabilities, from the laya model or TypeSafe's Jev | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-decide/docs/decide.md) |
 | **clausal-opencv** | `pip install clausal-opencv` | OpenCV (`cv2`) predicates: image I/O, color, imgproc, contours, drawing, features, calib3d, objdetect, video | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-opencv/docs/opencv.md) |
 | **clausal-provenance** | not published | **Disabled pending redesign** (2026-09-25). Provenance-tagged bottom-up Datalog; PyTorch / JAX-differentiable semirings for neurosymbolic AI | [docs](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-provenance/docs/provenance.md) |
 | **clausal-scipy** | `pip install clausal-scipy` | SciPy wrappers: `linalg`, `optimize`, `stats`, `integrate`, `interpolate`, `fft`, `ndimage`, `spatial`, `signal`, `sparse`, `cluster`, `special`, `constants`, `differentiate` | [docs](https://github.com/neurosymbolica/clausal-prolog/tree/main/packages/clausal-scipy/docs/) |
@@ -39,6 +39,13 @@ The library wrappers (jax, opencv, scipy, sklearn, spacy, sympy, torch, yaml)
 are on PyPI. Each can also be installed as an extra of `clausal`, e.g.
 `pip install "clausal[scipy]"`. Their sources live in the main repository
 under `packages/`.
+
+`clausal-acl2` and `clausal-decide` are new and not on PyPI yet; until they are,
+install one from the repository:
+
+```bash
+pip install "clausal-decide @ git+https://github.com/neurosymbolica/clausal-prolog#subdirectory=packages/clausal-decide"
+```
 
 The Prolog backends and `clausal-provenance` are not published yet. The `docs` links currently
 point at the package sources on GitHub; they'll switch to per-package documentation sites
