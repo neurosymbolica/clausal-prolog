@@ -9,10 +9,10 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Added
 
-- **Optional packages on PyPI.** The eight library wrappers are published:
-  `clausal-jax`, `clausal-opencv`, `clausal-scipy`, `clausal-sklearn`,
-  `clausal-spacy`, `clausal-sympy`, `clausal-torch` and `clausal-yaml`
-  (0.1.0 each). Each is also an extra of `clausal`, e.g.
+- **Optional packages on PyPI.** Ten library wrappers are published:
+  `clausal-acl2`, `clausal-decide`, `clausal-jax`, `clausal-opencv`,
+  `clausal-scipy`, `clausal-sklearn`, `clausal-spacy`, `clausal-sympy`,
+  `clausal-torch` and `clausal-yaml` (0.1.0 each). Each is also an extra of `clausal`, e.g.
   `pip install "clausal[scipy]"`.
 
 ### Experimental

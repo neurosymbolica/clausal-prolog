@@ -292,6 +292,8 @@ pip install clausal-scipy        # or: pip install "clausal[scipy]"
 
 | Package | Wraps |
 |---|---|
+| [`clausal-acl2`](https://pypi.org/project/clausal-acl2/) | the ACL2 theorem prover |
+| [`clausal-decide`](https://pypi.org/project/clausal-decide/) | calibrated decision models (laya, TypeSafe's Jev) |
 | [`clausal-jax`](https://pypi.org/project/clausal-jax/) | JAX (plus optax, equinox, flax as extras) |
 | [`clausal-opencv`](https://pypi.org/project/clausal-opencv/) | OpenCV |
 | [`clausal-scipy`](https://pypi.org/project/clausal-scipy/) | SciPy |

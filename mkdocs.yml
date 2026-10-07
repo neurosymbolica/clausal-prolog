@@ -172,7 +172,7 @@ extra:
   # The "What's new?" list under the home page's table of contents
   # (overrides/partials/toc.html). Newest first.
   whats_new:
-    - title: Optional packages on PyPI (SciPy, PyTorch, JAX, spaCy, ...)
+    - title: Optional packages on PyPI (SciPy, PyTorch, JAX, spaCy, ACL2, ...)
       date: 2026-10-07
       link: packages/
     - title: "Asyncio: queries on Python's own event loop"
