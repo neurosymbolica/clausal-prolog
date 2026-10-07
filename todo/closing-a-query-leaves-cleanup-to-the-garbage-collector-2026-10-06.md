@@ -26,9 +26,24 @@ When the cleanup finally runs, it is outside the query that owned it. Under
 `clausal.aio.asolve`, a cleanup that waits (`sleep/1`, an async adapter) then
 cannot wait. With a loop running it raises
 `permission_error(await, synchronous_query, _)`, printed as "Exception
-ignored"; with none, it blocks on the private loop. Cancellation is fine:
-the exception unwinds through the frames, so cleanups run in place (pinned
-by `tests/test_aio.py::test_cancelling_unwinds_the_query_and_runs_cleanup`).
+ignored"; with none, it blocks on the private loop. Cancelling the query
+that owns the cleanup is fine: the exception unwinds through the frames, so
+cleanups run in place (pinned by
+`tests/test_aio.py::test_cancelling_unwinds_the_query_and_runs_cleanup`).
+
+A stray cleanup that the cyclic GC runs inside ANOTHER async query's
+greenlet used to suspend that query on the cleanup's behalf; a cancellation
+or timeout aimed at it was then delivered into the cleanup and lost (ninth
+review, 2026-10-07: a 0.05 s timeout ignored, the query ran 1.59 s).
+`clausal.aio` now refuses a wait while the GC is collecting
+(`permission_error(await, finalisation, _)`), so the stray cleanup aborts
+instead. Pinned by
+`tests/test_aio.py::test_a_gc_run_cleanup_cannot_wait_inside_another_query`.
+
+A query parked at a wait when its event loop closes is never freed at all:
+suspended greenlets are not collectable, so its task, trail and table
+entries stay for the thread's life. It no longer holds its tables (a query
+whose loop is closed is not live), but nothing reclaims the memory.
 
 ## Options
 

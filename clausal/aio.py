@@ -48,6 +48,7 @@ Semantics:
 from __future__ import annotations
 
 import asyncio
+import gc
 import inspect
 import threading
 import weakref
@@ -105,6 +106,19 @@ def _install(state):
 
 # ── await_only ───────────────────────────────────────────────────────────
 
+# True (per thread) while the cyclic garbage collector is running.  Code it
+# runs then -- finalisers, e.g. an abandoned query's setup_call_cleanup
+# cleanup -- belongs to no running query, even when the collection happens
+# to start inside one query's greenlet.
+_collecting = threading.local()
+
+
+def _note_gc_phase(phase, info):
+    _collecting.now = phase == "start"
+
+
+gc.callbacks.append(_note_gc_phase)
+
 _sync = threading.local()
 
 
@@ -149,6 +163,18 @@ def await_only(awaitable):
     whatever the awaitable raises.
     """
     if _in_query_greenlet():
+        if getattr(_collecting, "now", False):
+            # A finaliser run by the GC inside some query's greenlet: waiting
+            # here would suspend THAT query on the finaliser's behalf, and a
+            # cancellation or timeout aimed at it would be delivered into the
+            # finaliser and lost (ninth review, 2026-10-07).
+            culprit = type(awaitable).__name__
+            _discard(awaitable)
+            raise LogicException(permission_error(
+                "await", "finalisation", culprit,
+                "await_only/1: a goal run by the garbage collector (an "
+                "abandoned query's cleanup) cannot wait; close queries you "
+                "stop early (aclose) so their cleanups run in place"))
         return _greenlet.getcurrent().parent.switch(("await", awaitable))
     try:
         asyncio.get_running_loop()
@@ -203,11 +229,14 @@ class _Query:
                 del store[key]
         self.created = []
         # Finish the query's answer generator here, under its OWN engine
-        # state.  Left to the cyclic GC, it was finalised at an arbitrary
-        # moment inside whatever query was running, and its drive episode's
-        # cleanup then repaired away THAT query's tables (eighth review,
-        # 2026-10-06).  A generator still running inside a parked greenlet
-        # cannot be closed; it is unreachable from any query's state.
+        # state, so its drive episode's tabling repair runs now.  Left to the
+        # cyclic GC, it was finalised at an arbitrary moment inside whatever
+        # query was running, and that repair then hit THAT query's tables
+        # (eighth review, 2026-10-06).  (setup_call_cleanup cleanups of the
+        # dead query are not run here: they sit in frames closing does not
+        # reach -- see todo/closing-a-query-leaves-cleanup-to-the-garbage-
+        # collector-2026-10-06.md.)  A generator still running inside a
+        # parked greenlet cannot be closed; nothing can resume it.
         gen, self.gen = self.gen, None
         if gen is not None and not getattr(gen, "gi_running", False):
             saved = _install(self.state)
@@ -321,8 +350,8 @@ async def _adrive(query):
             yield value
     finally:
         # Close inside the query's greenlet and engine state, so the
-        # generator's own cleanup (tabling episode repair, cleanup handlers)
-        # runs where it would have run synchronously.
+        # generator's own clean-up (the tabling episode repair) runs where it
+        # would have run synchronously.
         try:
             await query.step(query.close)
         except RuntimeError as exc:

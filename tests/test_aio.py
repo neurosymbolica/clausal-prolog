@@ -832,6 +832,53 @@ def test_a_query_parked_in_a_wait_when_its_loop_closes_releases_its_table(
     assert run(again()) == [2, 3, 4]
 
 
+@pytest.mark.filterwarnings(
+    "ignore::pytest.PytestUnraisableExceptionWarning")   # the refused cleanup
+def test_a_gc_run_cleanup_cannot_wait_inside_another_query(
+        tmp_path, monkeypatch):
+    # Ninth review 2026-10-07: a closed query's setup_call_cleanup cleanup
+    # is left to the cyclic GC (todo); run by the GC inside ANOTHER async
+    # query's greenlet, its sleep/1 suspended that query on the cleanup's
+    # behalf, and cancelling the query delivered the CancelledError into
+    # the cleanup: the cancellation was lost and the query ran on.
+    import gc
+    from clausal.aio import _in_query_greenlet
+    from clausal.logic import tabling
+    src = tmp_path / "gc_cleanup.seam"
+    src.write_text(
+        _DEAD_PROGRAM.replace("dead, [", "gc_cleanup, [guard/1, slow/1, ")
+        + "guard(Y) <- setup_call_cleanup(true, path(1, Y), sleep(0.5))\n"
+        + "slow(X) <- (caller(X), sleep(1))\n")
+    mod = load_clausal_module(src)
+    gc.collect()
+    gc.disable()
+    try:
+        async def main():
+            await aonce(("guard", Var()), mod)   # its cleanup is left to GC
+            original, fired = tabling._foreign, []
+
+            def collecting(entry):
+                if not fired and _in_query_greenlet():
+                    fired.append(gc.collect())   # runs the stray cleanup
+                return original(entry)
+            monkeypatch.setattr(tabling, "_foreign", collecting)
+
+            async def query_b():
+                x = Var()
+                return [deref(x) async for _ in asolve(("slow", x), mod)]
+            task = asyncio.ensure_future(query_b())
+            await asyncio.sleep(0.05)
+            t0 = time.perf_counter()
+            task.cancel()                        # must reach B's own wait
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert time.perf_counter() - t0 < 0.3
+            return fired
+        assert run(main())
+    finally:
+        gc.enable()
+
+
 def test_negation_is_not_delayed_on_a_dropped_querys_table(tmp_path):
     # Sixth review 2026-10-06: `not path(1, _)` delayed on the dead query's
     # evaluating entry and came out undefined instead of true.
