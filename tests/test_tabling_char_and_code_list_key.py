@@ -184,3 +184,61 @@ def test_a_tabled_call_with_a_partial_list_argument_answers(partial_mod):
     assert len(got) == 2, got                                    # "b" and []
     assert any(unify(g, ["b"], Trail()) for g in got), got
     assert any(unify(g, [], Trail()) for g in got), got
+
+
+# ── hostile and deep terms: an error, never a crash ──────────────────────────
+# Run in a child process: the failure these pin was a segfault.
+
+def _child(src):
+    import subprocess, sys, os
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join(sys.path))
+    r = subprocess.run([sys.executable, "-c", src], capture_output=True,
+                       text=True, timeout=300, env=env)
+    return r.returncode, r.stdout.strip()
+
+
+_DEEP = """
+from clausal.logic import tabling
+from clausal.logic.variables import Var
+from clausal.terms import SegList, ConcreteSeg, VarSeg
+t = 0
+for _ in range(2):
+    for _ in range(30000):
+        t = [t, 1000]
+    t = SegList([ConcreteSeg([t]), VarSeg(Var())])
+try:
+    tabling._normalize_for_key(t)
+    print("ok")
+except RecursionError:
+    print("RecursionError")
+"""
+
+
+def test_a_partial_list_nested_deep_is_a_recursion_error_not_a_crash():
+    """The depth counter restarted inside each partial list, so two layers
+    of 30000 overflowed the C stack."""
+    rc, out = _child(_DEEP)
+    assert (rc, out) == (0, "RecursionError")
+
+
+_HOSTILE = """
+from clausal.logic import tabling
+lst = []
+class Evil:
+    @property
+    def __class__(self):
+        lst.clear()
+        return Evil
+lst.extend([Evil(), 1000, 2000])
+try:
+    tabling._normalize_for_key(lst)
+except Exception:
+    pass
+print("survived")
+"""
+
+
+def test_an_element_that_mutates_the_list_does_not_crash():
+    """The Seg* test used isinstance, which runs a hostile ``__class__``."""
+    rc, out = _child(_HOSTILE)
+    assert (rc, out) == (0, "survived")

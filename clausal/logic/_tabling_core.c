@@ -45,6 +45,18 @@ static PyObject *VAR_sentinel = NULL;
 
 #define MAX_DEPTH 50000
 
+/* The depth reached when do_normalize hands a Seg* to tabling._seg_key,
+ * which re-enters _normalize_for_key for its elements.  The re-entry
+ * resumes counting from here, so MAX_DEPTH bounds the WHOLE term and not
+ * each partial-list layer.  Per thread: the callback runs Python code. */
+static _Thread_local int seg_depth_base = 0;
+
+/* _seg_key walks its Seg* (the engine's own deep C walk) before keying it.
+ * Started under thousands of do_normalize frames, that walk overflowed the
+ * C stack, so a Seg* is keyed only this near the top of the term; deeper
+ * is RecursionError (a Seg* key was a TypeError before it had one). */
+#define SEG_MAX_DEPTH 1000
+
 /* ================================================================
  * Inline helpers using the C API capsule
  * ================================================================ */
@@ -169,7 +181,18 @@ do_normalize(PyObject *term, int depth)
         PyTuple_SET_ITEM(result, 0, str___list__);
         int all_chars = n > 0, all_codes = n > 0;
         for (Py_ssize_t i = 0; i < n; i++) {
-            PyObject *elem = do_normalize(PyList_GET_ITEM(term, i), depth + 1);
+            /* an element's key may run Python code (a Seg* key, a dataclass
+             * field) that mutates the list: hold the element, re-check size */
+            if (PyList_GET_SIZE(term) != n) {
+                Py_DECREF(result);
+                PyErr_SetString(PyExc_RuntimeError,
+                                "_normalize_for_key: list changed size");
+                return NULL;
+            }
+            PyObject *item = PyList_GET_ITEM(term, i);
+            Py_INCREF(item);
+            PyObject *elem = do_normalize(item, depth + 1);
+            Py_DECREF(item);
             if (!elem) { Py_DECREF(result); return NULL; }
             PyTuple_SET_ITEM(result, i + 1, elem);
             if (all_chars && !(PyUnicode_CheckExact(elem)
@@ -306,9 +329,28 @@ do_normalize(PyObject *term, int depth)
     /* A partial list/string (SegList/SegString/SegBytes): tabling._seg_key
      * builds the key in Python, so the two twins share one definition. */
     if (seg_types && seg_key_fn) {
-        int is_seg = PyObject_IsInstance(term, seg_types);
-        if (is_seg < 0) return NULL;
-        if (is_seg) return PyObject_CallOneArg(seg_key_fn, term);
+        /* an exact type test: PyObject_IsInstance would consult a hostile
+         * object's __class__ and run Python code mid-scan */
+        int is_seg = 0;
+        for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(seg_types); i++) {
+            if (PyObject_TypeCheck(term,
+                    (PyTypeObject *)PyTuple_GET_ITEM(seg_types, i))) {
+                is_seg = 1;
+                break;
+            }
+        }
+        if (is_seg) {
+            if (depth > SEG_MAX_DEPTH) {
+                PyErr_SetString(PyExc_RecursionError,
+                                "_normalize_for_key: partial list nested too deep");
+                return NULL;
+            }
+            int saved = seg_depth_base;
+            seg_depth_base = depth + 1;
+            PyObject *key = PyObject_CallOneArg(seg_key_fn, term);
+            seg_depth_base = saved;
+            return key;
+        }
     }
 
     /* Term instance (a @dataclass instance) → (class_name, field0, ...) */
@@ -367,7 +409,7 @@ py_normalize_for_key(PyObject *Py_UNUSED(module), PyObject *term)
                         "_normalize_for_key: _VAR sentinel not registered");
         return NULL;
     }
-    return do_normalize(term, 0);
+    return do_normalize(term, seg_depth_base);
 }
 
 /* ================================================================
@@ -687,6 +729,12 @@ py_register_seg_key(PyObject *Py_UNUSED(module), PyObject *args)
     if (!PyCallable_Check(fn)) {
         PyErr_SetString(PyExc_TypeError, "_register_seg_key: fn must be callable");
         return NULL;
+    }
+    for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(types); i++) {
+        if (!PyType_Check(PyTuple_GET_ITEM(types, i))) {
+            PyErr_SetString(PyExc_TypeError, "_register_seg_key: types must be classes");
+            return NULL;
+        }
     }
     Py_INCREF(types);
     Py_INCREF(fn);
