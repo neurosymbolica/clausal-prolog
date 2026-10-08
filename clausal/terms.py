@@ -33,7 +33,8 @@ from .logic.atoms import (
     as_dict_key as _as_dict_key, char_atom, demangle_for_display,
     is_char_atom, is_mangled, is_nil as _is_nil, spelling,
 )
-from .logic.cells import TUPLE_TAG, CHARS_TAG, chars, is_chars, chars_text, refuse_reserved_1tuple
+from .logic.cells import (TUPLE_TAG, CHARS_TAG, chars, is_chars, chars_text, chars_payload,
+                          refuse_reserved_1tuple, _Text, text_slice)
 from .logic.variables import Var, deref
 # Operator table for ``term_writeq``; this module imports nothing from clausal.
 from clausal.tools.prolog_operators import OperatorTable as _OperatorTable
@@ -226,7 +227,12 @@ def _seg_unify_cache_key(other, trail):
     generator paused on it is unreachable too.
     """
     if is_chars(other):
-        other = chars_text(other)      # stage 1: same key as the bare text
+        other = chars_payload(other)   # stage 1: the text (a str or a view), not the carrier
+    if type(other) is _Text:
+        # By position, never by hashing the text: a DCG step's target is a
+        # view of the input, and hashing it would copy the rest each step.
+        # The view holds its base, so the id stays the base's while cached.
+        return (("$view", id(other.base), other.lo, other.hi), id(trail))
     if isinstance(other, str):
         return (other, id(trail))
     if isinstance(other, bytes):
@@ -284,7 +290,11 @@ def _seg_split_gen(segments, target_len, concrete_len):
 def _seg_slice_out(sl):
     """A slice of a split target as the term a hole binds to: a str target's
     slice is the chars CARRIER (stage 1); a list's slice is itself."""
-    return chars(sl) if type(sl) is str else sl
+    if type(sl) is str:
+        return chars(sl)
+    if type(sl) is _Text:
+        return (CHARS_TAG, sl)          # a view of the target: the carrier of its text
+    return sl
 
 
 def _apply_seglist_split(seglist, target_list, split, trail):
@@ -294,13 +304,18 @@ def _apply_seglist_split(seglist, target_list, split, trail):
     from .logic.variables import unify
     # A ``str`` target is a char list: its ELEMENTS are chars, its SLICES
     # stay str (R-S2). Twin of ``_seg_helpers.seq_getitem``.
-    target_is_str = type(target_list) is str
+    target_is_str = type(target_list) is str or type(target_list) is _Text
     pos = 0
     si = 0
     for seg in seglist.segments:
         if isinstance(seg, VarSeg):
             sz = split[si]; si += 1
-            if not unify(seg.var, _seg_slice_out(target_list[pos:pos + sz]), trail):
+            # A long slice of text is a view of it, not a copy (a view slices
+            # to a view): a DCG step binds the rest of its input without
+            # copying it, and the choice points do not each hold a copy.
+            piece = (text_slice(target_list, pos, pos + sz) if type(target_list) is str
+                     else target_list[pos:pos + sz])
+            if not unify(seg.var, _seg_slice_out(piece), trail):
                 return False
             pos += sz
         else:
@@ -819,7 +834,7 @@ class SegList:
             other = []
         other_text = False
         if is_chars(other):
-            other = chars_text(other)      # stage 1: the carrier is the str it holds here
+            other = chars_payload(other)   # stage 1: the carrier is the text it holds here (a str, or a view read by position)
             other_text = True              # STAGE 2: only the carrier is text -- a bare str is an ATOM
         if isinstance(other, bytes):
             # Codes-model symmetry (A01-F007): the C layer unifies plain

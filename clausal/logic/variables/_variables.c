@@ -252,6 +252,14 @@ Var_get_value(VarObject *self, void *closure)
 {
     (void)closure;
     PyObject *root = var_deref((PyObject *)self);
+    /* ``.value`` is how Python reads an answer: a text VIEW carrier comes out
+     * as the str carrier of its text, at the depth ``.value`` resolves (the
+     * deep walk flattens nested ones).  Views stay inside a parse. */
+    if (is_chars_carrier(root) && carrier_is_view(root)) {
+        PyObject *text = carrier_text(root);
+        if (!text) return NULL;
+        return make_chars_carrier(text);
+    }
     Py_INCREF(root);
     return root;
 }
@@ -1122,8 +1130,11 @@ static inline int is_nil_spelling(PyObject *t)
     /* STAGE 2: a bare str is an ATOM -- '' is not nil; the empty CARRIER below is */
     if (PyBytes_Check(t))   return PyBytes_GET_SIZE(t) == 0;
     /* the EMPTY chars carrier ('$chars', "") is nil too (stage 1; review 2026-09-18) */
-    if (is_chars_carrier(t))
-        return PyUnicode_GET_LENGTH(carrier_text(t)) == 0;
+    if (is_chars_carrier(t)) {
+        Py_ssize_t len = carrier_len(t);
+        if (len < 0) { PyErr_Clear(); return 0; }   /* no error channel here; a view's len cannot fail */
+        return len == 0;
+    }
     if (PyTuple_Check(t))   return PyTuple_GET_SIZE(t) == 0;
     return 0;
 }
@@ -1143,6 +1154,9 @@ static PyObject *unify_census_sites = NULL;   /* {"int/float": n, ...}, unordere
  * Unwrapped to its str right before the str<->list arms, and only there --
  * a Var must bind to the carrier itself, never to the bare str.
  * is_chars_carrier / carrier_text / unwrap_chars: _chars_carrier.h. */
+
+static int walk_types_ready(void);           /* defined with the walkers below */
+static inline int is_seg_object(PyObject *o);
 
 static int
 do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
@@ -1272,6 +1286,22 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
      * CELL (or tuple-data) and is unaffected. */
     if (is_nil_spelling(t1) && is_nil_spelling(t2)) return 1;
 
+    /* (Before the tuple branch: two carriers are two 2-tuples.)
+     * A text and a text, or a text and a proper list, of different lengths
+     * never unify: answer from the lengths, before reading either text (a
+     * view's text is not flattened for a mismatch, e.g. the "rest is empty"
+     * check of every DCG step). */
+    if (is_chars_carrier(t1) || is_chars_carrier(t2)) {
+        PyObject *c = is_chars_carrier(t1) ? t1 : t2, *o = (c == t1) ? t2 : t1;
+        Py_ssize_t ol = is_chars_carrier(o) ? carrier_len(o)
+                      : PyList_Check(o) ? PyList_GET_SIZE(o) : -2;
+        if (ol != -2) {
+            Py_ssize_t cl = carrier_len(c);
+            if (cl < 0 || ol == -1) return -1;
+            if (cl != ol) return 0;
+        }
+    }
+
     if (PyTuple_Check(t1) && PyTuple_Check(t2)) {
         Py_ssize_t n = PyTuple_GET_SIZE(t1);
         if (n != PyTuple_GET_SIZE(t2)) return 0;
@@ -1293,8 +1323,19 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
      * never to a list and never to the carrier of the same text. */
     int t1_text = 0, t2_text = 0;
     PyObject *t1_term = t1, *t2_term = t2;   /* the carrier itself, for the __unify__ hooks below */
-    if (is_chars_carrier(t1)) { t1 = unwrap_chars(t1); t1_text = 1; }
-    if (is_chars_carrier(t2)) { t2 = unwrap_chars(t2); t2_text = 1; }
+    /* A VIEW carrier facing a partial list (a Seg*) goes to the Seg*'s
+     * __unify__ hook below as the carrier, unflattened: the hook reads the
+     * view by position (a DCG terminal step).  Unwrapping it here would copy
+     * the rest of the text at every step. */
+    if ((is_chars_carrier(t1) && carrier_is_view(t1))
+            || (is_chars_carrier(t2) && carrier_is_view(t2))) {
+        int ready = walk_types_ready();
+        if (ready < 0) return -1;
+        if (ready && (is_seg_object(t1) || is_seg_object(t2)))
+            goto hooks;
+    }
+    if (is_chars_carrier(t1)) { t1 = unwrap_chars(t1); if (!t1) return -1; t1_text = 1; }
+    if (is_chars_carrier(t2)) { t2 = unwrap_chars(t2); if (!t2) return -1; t2_text = 1; }
     if (t1_text && t2_text)
         return PyUnicode_Compare(t1, t2) == 0;
     if ((t1_text && PyUnicode_Check(t2)) || (t2_text && PyUnicode_Check(t1)))
@@ -1486,6 +1527,7 @@ do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
         return 1;
     }
 
+hooks:
     /* __unify__ protocol: delegate to Python method if present.
      * Allows custom term types (DictTerm, SetTerm, SegList, etc.) to define
      * their own unification behaviour without hardcoding each type in C.
@@ -2634,7 +2676,9 @@ py_functor_name(PyObject *Py_UNUSED(module), PyObject *term)
      * wrapper in builtins/_helpers.py.  The empty string keeps the ISO
      * nil-atom spelling "[]", as the empty list does. */
     if (is_chars_carrier(term)) {   /* STAGE 2: the carrier is the STRING -- cons-cell reading */
-        if (PyUnicode_GET_LENGTH(unwrap_chars(term)) == 0)
+        Py_ssize_t len = carrier_len(term);
+        if (len < 0) return NULL;
+        if (len == 0)
             return PyUnicode_FromString("[]");
         return PyUnicode_FromString(".");
     }
@@ -2700,7 +2744,9 @@ py_arity(PyObject *Py_UNUSED(module), PyObject *term)
      * so calling this accessor directly agrees with the funnel wrapper in
      * builtins/_helpers.py. */
     if (is_chars_carrier(term)) {   /* STAGE 2: the carrier is the STRING -- cons-cell reading */
-        return PyLong_FromLong(PyUnicode_GET_LENGTH(unwrap_chars(term)) == 0 ? 0 : 2);
+        Py_ssize_t len = carrier_len(term);
+        if (len < 0) return NULL;
+        return PyLong_FromLong(len == 0 ? 0 : 2);
     }
     if (PyUnicode_Check(term)) {    /* STAGE 2: a str IS the atom, arity 0 */
         return PyLong_FromLong(0);

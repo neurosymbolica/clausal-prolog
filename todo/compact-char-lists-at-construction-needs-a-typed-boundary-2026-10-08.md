@@ -142,6 +142,26 @@ refcount problem above.
 
 ## DCG parsing holds quadratic memory (measured 2026-10-08)
 
+**Read-only views DONE (the commit that adds this line):** the rest of a text after a matched prefix is a
+view (`cells._Text`, slot 1 of the carrier) -- produced by the partial-list split (DCG terminals) and by
+`seq_slice` (a clause head `[C|Cs]` against text). 64,000-char parse: DCG 2378 -> 436 MB, hand-written
+head parser 2103 -> 155 MB; peak memory now grows linearly. The growable (append-side) half of `_Text`
+below is still open. Views stay inside a parse: the answer boundary (`Var.value`, `_deref_walk`
+and its C twin), the clause compiler and the query-cache key hand out the str carrier of a view's text.
+Known Lows from the views review: a stored term (a tabled answer's NESTED args, a findall row before
+it is walked) may hold a view, which keeps the view's whole base str alive -- a trade: rows from one
+input share one base, where the copying engine kept a copy of each rest. And `carrier_text` returns a
+BORROWED str owned by the view's cache: safe for an untampered view, but a monkeypatched `_Text.flat`
+(or a write to `_flat`) can hand C a str another object owns and frees mid-loop; the full fix is a new
+reference from `carrier_text`.
+
+OPEN (2026-10-08): `Var.value` flattens a view only at the TOP level (it stays an O(1) one-step deref,
+and the engine reads it internally). An answer like `f(R)` with `R` a view still hands a view to Python
+code that derefs the subterm itself during the solution (measured: `f(R, [R], g-R)` -> a view at all
+three positions; `_deref_walk` and `to_python` give str at any depth). The fix that reaches such callers
+is ONE deep flatten per answer at the `solve()` answer boundary, before the yield -- not per `.value`.
+No exposure measured today (no views are created by the measured downstream test files).
+
 Building text through a DCG is fixed (the SegList chain reads back iteratively; the commit that
 adds this section). PARSING text with a DCG is not:
 

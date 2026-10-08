@@ -36,7 +36,7 @@ from clausal.logic.predicate import (
     is_term_instance, term_field_names, term_field_names_of_class,
     is_declared_predicate_name, namespace_db,
 )
-from clausal.logic.cells import TUPLE_TAG, CELLS_NAMESPACE_KEY, _cell_shape, is_chars
+from clausal.logic.cells import TUPLE_TAG, CELLS_NAMESPACE_KEY, _cell_shape, is_chars, flat_carrier
 from clausal.logic.atoms import is_atom as _term_is_atom
 from clausal.logic.generated_names import dollar_ref
 
@@ -473,7 +473,7 @@ def head_to_match_pattern(
         # bare-str spellings of the same term.  ``unify`` reads all three.
         cap_name = f"_scap{len(list_guards) if list_guards is not None else 0}"
         if list_guards is not None:
-            list_guards.append(("str", cap_name, term))
+            list_guards.append(("str", cap_name, flat_carrier(term)))   # a view is embedded as its text
         return ast.MatchAs(pattern=None, name=cap_name)
 
     # Python bytes literal → wildcard capture + runtime unify guard, mirroring
@@ -919,7 +919,7 @@ def head_to_match_pattern(
         if isinstance(resolved, str) or is_chars(resolved):   # stage 1: carrier too
             cap_name = f"_scap{len(list_guards) if list_guards is not None else 0}"
             if list_guards is not None:
-                list_guards.append(("str", cap_name, resolved))
+                list_guards.append(("str", cap_name, flat_carrier(resolved)))
             return ast.MatchAs(pattern=None, name=cap_name)
 
     # Functor term instance → MatchClass with field patterns

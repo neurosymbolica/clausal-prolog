@@ -244,16 +244,18 @@ do_normalize(PyObject *term, int depth)
 
     /* A char list: the carrier ('$chars', s) keys as ("__chars__", s), and
      * ('$chars', '') as [] -- the key [a, b] has.  Before the tuple branch.
-     * Stricter than is_chars_carrier on purpose: slot 1 must be an EXACT str,
-     * as in the Python twin (``cells.is_chars``), since the two must key
-     * alike. */
+     * Stricter than is_chars_carrier on purpose: slot 1 must be an EXACT str
+     * or a view (keyed as its text), as in the Python twin (``cells.is_chars``),
+     * since the two must key alike. */
     if (PyTuple_CheckExact(term) && PyTuple_GET_SIZE(term) == 2
-            && PyUnicode_CheckExact(PyTuple_GET_ITEM(term, 1))) {
+            && (PyUnicode_CheckExact(PyTuple_GET_ITEM(term, 1))
+                || is_text_view(PyTuple_GET_ITEM(term, 1)))) {
         int is_tag = PyUnicode_Check(PyTuple_GET_ITEM(term, 0))
             ? PyUnicode_Compare(PyTuple_GET_ITEM(term, 0), str_chars_tag) : 1;
         if (is_tag == -1 && PyErr_Occurred()) return NULL;
         if (is_tag == 0) {
             PyObject *text = carrier_text(term);
+            if (!text) return NULL;
             if (PyUnicode_GET_LENGTH(text) == 0) {
                 Py_INCREF(nil_key);
                 return nil_key;
@@ -502,6 +504,16 @@ do_deref_walk(PyObject *term, int depth)
             PyList_SET_ITEM(result, i, elem);
         }
         return result;
+    }
+
+    /* A text VIEW carrier walks to the str carrier of its text: a walked
+     * term is an ANSWER, handed to Python (and kept), where a view would not
+     * be a str and would pin the whole parse input.  Views stay inside a
+     * parse. */
+    if (is_chars_carrier(term) && carrier_is_view(term)) {
+        PyObject *text = carrier_text(term);
+        if (!text) return NULL;
+        return make_chars_carrier(text);
     }
 
     /* Tuple → (deref_walk(e) for e in term) — A01-F008: was blind, so tuple

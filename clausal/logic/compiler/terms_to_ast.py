@@ -62,7 +62,7 @@ from clausal.logic.atoms import (
 from clausal.logic.constants import _FrozenList, _FrozenDict, _FrozenSet
 from clausal.logic.cells import (
     FUNCTOR_SIGNATURES_KEY, IMPLICIT_FUNCTORS_FLAG, QUALIFIED_GOAL_FUNCTOR,
-    registry_signatures,
+    registry_signatures, flat_carrier,
 )
 
 from clausal.logic.generated_names import dollar_ref
@@ -1191,7 +1191,7 @@ def term_to_ast_expr(
     Supports: Var, Python scalars, list, cells, functor dataclasses.
     """
     raw = term
-    term = deref(term)
+    term = flat_carrier(deref(term))    # a text VIEW is compiled as its text
 
     if type(term) is _MetaArg and term.module is not None:
         # A dotted ``lib.p(...)`` / ``lib.p`` in a qualifying meta position:

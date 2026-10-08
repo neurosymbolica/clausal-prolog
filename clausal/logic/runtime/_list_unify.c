@@ -120,7 +120,11 @@ char_spelling_obj(PyObject *e)
 static inline PyObject *
 seq_getitem(PyObject *seq, Py_ssize_t i)
 {
-    seq = unwrap_chars(seq);
+    if (is_chars_carrier(seq)) {
+        seq = PyTuple_GET_ITEM(seq, 1);
+        if (!PyUnicode_Check(seq))
+            return PySequence_GetItem(seq, i);   /* a view: its char, no copy */
+    }
     if (PyList_Check(seq)) {
         PyObject *item = PyList_GET_ITEM(seq, i);
         Py_INCREF(item);
@@ -185,7 +189,8 @@ join_char_spellings(PyObject *chars)
 static inline PyObject *
 seq_slice(PyObject *seq, Py_ssize_t start, Py_ssize_t end)
 {
-    seq = unwrap_chars(seq);
+    if (is_chars_carrier(seq))
+        return carrier_slice(seq, start, end);   /* a long tail is a view, not a copy */
     PyObject *s = PySequence_GetSlice(seq, start, end);
     if (s && PyUnicode_Check(s)) {
         PyObject *c = make_chars_carrier(s);
@@ -210,7 +215,8 @@ is_cons_cell(PyObject *t)
 static inline Py_ssize_t
 seq_length(PyObject *seq)
 {
-    seq = unwrap_chars(seq);
+    if (is_chars_carrier(seq))
+        return carrier_len(seq);
     if (PyList_Check(seq))
         return PyList_GET_SIZE(seq);
     if (PyUnicode_Check(seq))
@@ -508,6 +514,7 @@ carrier_star_concat(PyObject *var_vals, PyObject *s, PyObject *after_vals)
     Py_ssize_t nb = PyList_GET_SIZE(var_vals);
     Py_ssize_t na = PyList_GET_SIZE(after_vals);
     PyObject *text = carrier_text(s);
+    if (!text) return NULL;
     /* an empty result stays the empty list, as maybe_promote_to_str leaves it */
     if (nb + na == 0 && PyUnicode_GET_LENGTH(text) == 0)
         Py_RETURN_NONE;
@@ -617,6 +624,7 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
              * is what makes the text arm below reachable -- a bare str star
              * is an ATOM element and takes the else arm (STAGE 2) */
             PyObject *inner = carrier_text(s);
+            if (!inner) { Py_DECREF(s); goto error; }
             Py_INCREF(inner);
             Py_DECREF(s);
             s = inner;
@@ -721,6 +729,7 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
                 Py_RETURN_FALSE;
             } else if (is_chars_carrier(walked)) {
                 PyObject *inner = carrier_text(walked);
+                if (!inner) { Py_DECREF(walked); goto error; }
                 Py_INCREF(inner);
                 Py_DECREF(walked);
                 walked = inner;

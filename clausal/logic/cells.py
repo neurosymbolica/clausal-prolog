@@ -188,17 +188,140 @@ def chars(text: str) -> tuple:
     return (CHARS_TAG, text)
 
 
+class _Text:
+    """A read-only view ``base[lo:hi]`` of a str, held in slot 1 of a chars
+    carrier in place of a str.
+
+    Taking the rest of a text after a matched prefix -- a DCG terminal, a head
+    ``[C|Cs]`` against text -- binds a view of the same str instead of a copy
+    of the rest, so parsing n chars holds the input once rather than about
+    n^2/2 chars in the slices its choice points keep alive.  Slicing a view is
+    another view of the same base.
+
+    A view IS its text: equal to the str (and to any view) that spells it,
+    ordered like it, hashed like it -- so a view carrier and a str carrier of
+    the same text are one term, one dict key, one tabling key.  The text is
+    read by position for len, one char and slices; anything that needs the
+    whole str (``flat``, ``chars_text``) builds it once and keeps it.  The
+    chars ``[lo, hi)`` never change, so the hash (cached in a tuple by CPython
+    3.14) never goes stale."""
+    __slots__ = ("base", "lo", "hi", "_flat")
+
+    def __init__(self, base: str, lo: int, hi: int):
+        self.base, self.lo, self.hi, self._flat = base, lo, hi, None
+
+    @property
+    def flat(self) -> str:
+        """The text as a str, built once."""
+        if self._flat is None:
+            self._flat = self.base[self.lo:self.hi]
+        return self._flat
+
+    def __len__(self):
+        return self.hi - self.lo
+
+    def __getitem__(self, i):
+        if isinstance(i, slice):
+            a, b, step = i.indices(self.hi - self.lo)
+            if step != 1:
+                return self.flat[i]
+            return text_slice(self.base, self.lo + a, self.lo + max(a, b))
+        n = self.hi - self.lo
+        if i < 0:
+            i += n
+        if not 0 <= i < n:
+            raise IndexError("text view index out of range")
+        return self.base[self.lo + i]
+
+    def __iter__(self):
+        return iter(self.flat)
+
+    def _other_text(self, other):
+        if type(other) is _Text:
+            return other.flat
+        if isinstance(other, str):
+            return other
+        return None
+
+    def __eq__(self, other):
+        if type(other) is _Text or isinstance(other, str):
+            if len(other) != self.hi - self.lo:
+                return False            # a mismatch never builds the text
+            return self.flat == self._other_text(other)
+        return NotImplemented
+
+    def __ne__(self, other):
+        r = self.__eq__(other)
+        return r if r is NotImplemented else not r
+
+    def __lt__(self, other):
+        o = self._other_text(other)
+        return NotImplemented if o is None else self.flat < o
+
+    def __le__(self, other):
+        o = self._other_text(other)
+        return NotImplemented if o is None else self.flat <= o
+
+    def __gt__(self, other):
+        o = self._other_text(other)
+        return NotImplemented if o is None else self.flat > o
+
+    def __ge__(self, other):
+        o = self._other_text(other)
+        return NotImplemented if o is None else self.flat >= o
+
+    def __hash__(self):
+        return hash(self.flat)
+
+    def __str__(self):
+        return self.flat
+
+    def __repr__(self):
+        return repr(self.flat)
+
+
+# A slice shorter than this is copied, as before; a longer one is a view.
+# The same number as CHARS_VIEW_MIN in variables/_chars_carrier.h.
+VIEW_MIN = 64
+
+
+def text_slice(base: str, lo: int, hi: int):
+    """``base[lo:hi]`` of the str *base*: a view when long, a str when short."""
+    if hi - lo >= VIEW_MIN:
+        return _Text(base, lo, hi)
+    return base[lo:hi]
+
+
 def is_chars(x) -> bool:
-    """True if *x* is a well-formed chars carrier ``('$chars', str)``."""
+    """True if *x* is a well-formed chars carrier ``('$chars', text)``, text a
+    str or a view (``_Text``)."""
     # isinstance before ``==``: slot 0 of an arbitrary tuple may be an array,
     # whose ``==`` is elementwise and has no truth value (a pair of NumPy
     # arrays made this raise ValueError, and to_python with it).
     return (type(x) is tuple and len(x) == 2 and isinstance(x[0], str)
-            and x[0] == CHARS_TAG and type(x[1]) is str)
+            and x[0] == CHARS_TAG and (type(x[1]) is str or type(x[1]) is _Text))
 
 
 def chars_text(x) -> str:
-    """The Python str a chars carrier holds (caller checked ``is_chars``)."""
+    """The Python str a chars carrier holds (caller checked ``is_chars``); a
+    view is built into its str once."""
+    t = x[1]
+    return t if type(t) is str else t.flat
+
+
+def flat_carrier(term):
+    """*term*, with a VIEW carrier replaced by the str carrier of its text;
+    anything else unchanged.  For copy points that outlive a parse -- the
+    clause compiler embedding a literal, an asserted clause -- which must not
+    keep a view's whole base str alive (and cannot embed a view in code)."""
+    if type(term) is tuple and len(term) == 2 and type(term[1]) is _Text and term[0] == CHARS_TAG:
+        return (CHARS_TAG, term[1].flat)
+    return term
+
+
+def chars_payload(x):
+    """The carrier's slot 1 as a SEQUENCE: the str, or the view without
+    flattening it (len, [i], [a:b] all O(1))."""
     return x[1]
 
 

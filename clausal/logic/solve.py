@@ -64,7 +64,7 @@ from clausal.logic.predicate import (
 )
 from clausal.logic.trampoline import StepGenerator, DONE, _drive_until_yield
 from clausal.logic.cells import (
-    is_chars, chars_text,   # stage 1: the chars carrier
+    is_chars, chars_text, flat_carrier,   # stage 1: the chars carrier
     CELL_GOAL_CONTROL_FUNCTORS,
     QUALIFIED_GOAL_FUNCTOR,
     compound_cell_shape,
@@ -126,6 +126,8 @@ def _deref_walk_py(term: Any) -> Any:
     if isinstance(term, list):
         return [_deref_walk_py(e) for e in term]
     if isinstance(term, tuple):
+        if is_chars(term):
+            return flat_carrier(term)   # an answer: a text view leaves as its text (C twin: do_deref_walk)
         return tuple(_deref_walk_py(e) for e in term)  # A01-F008: was blind
     if isinstance(term, dict):
         # A04-F005: rebuild plain-dict values so a frozen answer holding a dict
@@ -375,7 +377,7 @@ def _structural_key(term: Any, var_index: dict, thunks: list | None = None) -> t
     *thunks*, when a list is passed, receives every ``PyThunk`` leaf in
     traversal order — see ``_goal_cache_key``.
     """
-    t = deref(term)
+    t = flat_carrier(deref(term))   # a text VIEW keys as its text (before the tuple branch: a carrier is a tuple)
     if is_var(t):
         idx = var_index.get(id(t))
         if idx is None:
