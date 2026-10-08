@@ -56,6 +56,11 @@ static _Thread_local int seg_depth_base = 0;
  * C stack, so a Seg* is keyed only this near the top of the term; deeper
  * is RecursionError (a Seg* key was a TypeError before it had one). */
 #define SEG_MAX_DEPTH 1000
+/* Each partial-list layer costs this much depth: its round trip through
+ * Python (_seg_key, a generator, the eval loop) uses far more C stack than
+ * one do_normalize frame, so ~20 nested layers fit under SEG_MAX_DEPTH and
+ * a tail under them still gets the rest of MAX_DEPTH. */
+#define SEG_LAYER_COST 50
 
 /* ================================================================
  * Inline helpers using the C API capsule
@@ -277,22 +282,27 @@ do_normalize(PyObject *term, int depth)
     /* A04-F005: dict → ("__dict__", frozenset{(nk, nv), ...}) — order-free so
      * a rebuilt answer dict keys identically regardless of insertion order. */
     if (PyDict_Check(term)) {
+        /* iterate an owned snapshot: keying an entry may run Python code
+         * (a field, a Seg* key) that mutates the dict under PyDict_Next's
+         * borrowed references */
+        PyObject *items = PyDict_Items(term);
+        if (!items) return NULL;
         PyObject *pairs = PySet_New(NULL);
-        if (!pairs) return NULL;
-        PyObject *k, *v;
-        Py_ssize_t pos = 0;
-        while (PyDict_Next(term, &pos, &k, &v)) {
-            PyObject *nk = do_normalize(k, depth + 1);
-            if (!nk) { Py_DECREF(pairs); return NULL; }
-            PyObject *nv = do_normalize(v, depth + 1);
-            if (!nv) { Py_DECREF(nk); Py_DECREF(pairs); return NULL; }
+        if (!pairs) { Py_DECREF(items); return NULL; }
+        for (Py_ssize_t i = 0; i < PyList_GET_SIZE(items); i++) {
+            PyObject *kv = PyList_GET_ITEM(items, i);   /* items owns it */
+            PyObject *nk = do_normalize(PyTuple_GET_ITEM(kv, 0), depth + 1);
+            if (!nk) { Py_DECREF(pairs); Py_DECREF(items); return NULL; }
+            PyObject *nv = do_normalize(PyTuple_GET_ITEM(kv, 1), depth + 1);
+            if (!nv) { Py_DECREF(nk); Py_DECREF(pairs); Py_DECREF(items); return NULL; }
             PyObject *pair = PyTuple_Pack(2, nk, nv);
             Py_DECREF(nk); Py_DECREF(nv);
-            if (!pair) { Py_DECREF(pairs); return NULL; }
+            if (!pair) { Py_DECREF(pairs); Py_DECREF(items); return NULL; }
             int rc = PySet_Add(pairs, pair);
             Py_DECREF(pair);
-            if (rc < 0) { Py_DECREF(pairs); return NULL; }
+            if (rc < 0) { Py_DECREF(pairs); Py_DECREF(items); return NULL; }
         }
+        Py_DECREF(items);
         PyObject *frozen = PyFrozenSet_New(pairs);
         Py_DECREF(pairs);
         if (!frozen) return NULL;
@@ -346,7 +356,7 @@ do_normalize(PyObject *term, int depth)
                 return NULL;
             }
             int saved = seg_depth_base;
-            seg_depth_base = depth + 1;
+            seg_depth_base = depth + SEG_LAYER_COST;
             PyObject *key = PyObject_CallOneArg(seg_key_fn, term);
             seg_depth_base = saved;
             return key;
@@ -429,24 +439,22 @@ py_make_subgoal_key(PyObject *Py_UNUSED(module), PyObject *args)
         return NULL;
     }
 
-    Py_ssize_t n;
-    int is_tuple = PyTuple_Check(py_args);
-    if (is_tuple)
-        n = PyTuple_GET_SIZE(py_args);
-    else
-        n = PyList_GET_SIZE(py_args);
+    /* an owned tuple snapshot: keying an argument may run Python code that
+     * mutates a list of arguments under a borrowed reference */
+    PyObject *snap = PyTuple_Check(py_args) ? Py_NewRef(py_args)
+                                            : PyList_AsTuple(py_args);
+    if (!snap) return NULL;
+    Py_ssize_t n = PyTuple_GET_SIZE(snap);
 
     PyObject *result = PyTuple_New(n);
-    if (!result) return NULL;
+    if (!result) { Py_DECREF(snap); return NULL; }
 
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *item = is_tuple
-            ? PyTuple_GET_ITEM(py_args, i)
-            : PyList_GET_ITEM(py_args, i);
-        PyObject *normed = do_normalize(item, 0);
-        if (!normed) { Py_DECREF(result); return NULL; }
+        PyObject *normed = do_normalize(PyTuple_GET_ITEM(snap, i), seg_depth_base);
+        if (!normed) { Py_DECREF(result); Py_DECREF(snap); return NULL; }
         PyTuple_SET_ITEM(result, i, normed);
     }
+    Py_DECREF(snap);
     return result;
 }
 

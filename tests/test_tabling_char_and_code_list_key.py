@@ -242,3 +242,79 @@ def test_an_element_that_mutates_the_list_does_not_crash():
     """The Seg* test used isinstance, which runs a hostile ``__class__``."""
     rc, out = _child(_HOSTILE)
     assert (rc, out) == (0, "survived")
+
+
+_MANY_LAYERS = """
+from clausal.logic import tabling
+from clausal.logic.variables import Var
+from clausal.terms import SegList, ConcreteSeg, VarSeg
+t = 0
+for _ in range(48500):
+    t = [t, 1000]
+for _ in range(480):
+    t = [SegList([ConcreteSeg([t]), VarSeg(Var())]), 1000]
+try:
+    tabling._normalize_for_key(t)
+    print("ok")
+except RecursionError:
+    print("RecursionError")
+"""
+
+
+def test_many_partial_list_layers_are_a_recursion_error_not_a_crash():
+    """Each layer's round trip through Python costs far more C stack than one
+    level of nesting, so many shallow layers over a deep tail overflowed.
+    Keying it or refusing it are both fine; a crash is not."""
+    rc, out = _child(_MANY_LAYERS)
+    assert rc == 0 and out in ("ok", "RecursionError"), (rc, out)
+
+
+_HOSTILE_DICT = """
+from clausal.logic import tabling
+d = {}
+class Meta(type):
+    def __getattr__(cls, name):
+        if d:
+            d.clear()
+            junk = [[i, str(i) * 3] for i in range(20000)]
+        raise AttributeError(name)
+class Evil(metaclass=Meta):
+    pass
+d[Evil()] = [[1, 2, "x"], ("y", 3.0), list(range(50))]
+try:
+    tabling._normalize_for_key(d)
+except Exception:
+    pass
+print("survived")
+"""
+
+_HOSTILE_ARGS = """
+from clausal.logic import tabling
+from clausal.logic._tabling_core import make_subgoal_key
+from clausal.logic.variables import Trail
+args = []
+class Meta(type):
+    def __getattr__(cls, name):
+        if args:
+            args.clear()
+            junk = [[i, str(i) * 3] for i in range(20000)]
+        raise AttributeError(name)
+class Evil(metaclass=Meta):
+    pass
+args.extend([Evil(), [[1, 2, "x"]], ("y", 3.0), [list(range(50))]])
+try:
+    make_subgoal_key(args, Trail())
+except Exception:
+    pass
+print("survived")
+"""
+
+
+@pytest.mark.parametrize("src", [_HOSTILE_DICT, _HOSTILE_ARGS], ids=["dict", "call-args"])
+def test_a_key_that_mutates_its_container_does_not_crash(src):
+    """Keying an entry can run Python code; the dict and call-argument
+    branches iterated borrowed references the code could free."""
+    if "make_subgoal_key" in src and len(_KEYS) < 2:
+        pytest.skip("C twin not built")
+    rc, out = _child(src)
+    assert (rc, out) == (0, "survived")
