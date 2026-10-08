@@ -99,7 +99,8 @@ class TestF001OccursCheckBlindness:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# A01-F005 — Seg* _unify_gens retention pins dead Trails (memory)
+# A01-F005 — Seg* _unify_gens retention pinned dead Trails (memory).  The
+# cache is gone (2026-10-08): a term keeps no state between unifications.
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestF005UnifyGensRetention:
@@ -109,76 +110,28 @@ class TestF005UnifyGensRetention:
         for _ in range(20):
             t = Trail()
             m = t.mark()
-            unify(sl, [1, 2, 3], t)   # first split only — generator suspended
+            unify(sl, [1, 2, 3], t)
             t.undo(m)
             refs.append(weakref.ref(t))
             del t
         gc.collect()
         alive = sum(1 for r in refs if r() is not None)
-        assert alive == 0, f"{alive}/20 dead trails pinned by _unify_gens"
-        # Bounded LRU (A01-F005 follow-up): never more than the LRU capacity.
-        assert len(sl._unify_gens) <= 8
+        assert alive == 0, f"{alive}/20 dead trails pinned"
+        assert not hasattr(sl, "_unify_gens")
 
-    def test_control_exhausted_generator_is_dropped(self):
-        sl = SegList([VarSeg(Var())])
-        t = Trail()
-        m = t.mark()
-        n = 0
-        while unify(sl, [1], t):
-            n += 1
-            t.undo(m)
-            assert n < 10
-        assert n == 1
-        assert len(sl._unify_gens) == 0
-
-    def test_interleaved_drives_do_not_evict_each_other(self):
-        # A01-F005 follow-up: the clear-all eviction meant two interleaved
-        # drives of the same Seg* term against different targets evicted each
-        # other — every resume restarted from split 1 and the outer drive
-        # never exhausted (livelock).  With the LRU both drives stay live.
+    def test_interleaved_drives_each_bind_their_own_target(self):
         A, B = Var(), Var()
         sl = SegList([VarSeg(A), VarSeg(B)])
         t1, t2 = Trail(), Trail()
-        m1 = t1.mark()
-        outer_splits = []
-        inner_splits = []
-        n = 0
-        while unify(sl, [1, 2], t1):
-            n += 1
-            assert n <= 3, (
-                "outer drive livelocked: splits repeat forever because the "
-                "interleaved drive evicted its generator")
-            outer_splits.append((deref(A), deref(B)))
+        for _ in range(3):
+            m1 = t1.mark()
+            assert unify(sl, [1, 2], t1)
+            assert (deref(A), deref(B)) == ([], [1, 2])
             t1.undo(m1)
-            # Interleave one step of a drive against a DIFFERENT target.
             m2 = t2.mark()
-            if unify(sl, [7, 8, 9], t2):
-                inner_splits.append((deref(A), deref(B)))
-                t2.undo(m2)
-        assert outer_splits == [([], [1, 2]), ([1], [2]), ([1, 2], [])]
-        # Finish the interleaved drive: it must resume where it left off and
-        # enumerate the remaining splits of [7, 8, 9].
-        m2 = t2.mark()
-        k = 0
-        while unify(sl, [7, 8, 9], t2):
-            k += 1
-            assert k <= 4, "inner drive livelocked after outer exhausted"
-            inner_splits.append((deref(A), deref(B)))
+            assert unify(sl, [7, 8, 9], t2)
+            assert (deref(A), deref(B)) == ([], [7, 8, 9])
             t2.undo(m2)
-        assert inner_splits == [
-            ([], [7, 8, 9]), ([7], [8, 9]), ([7, 8], [9]), ([7, 8, 9], []),
-        ]
-
-    def test_lru_eviction_bounds_cache_and_closes_generators(self):
-        # Drive many distinct (target, trail) pairs one step each: the cache
-        # must stay bounded at the LRU capacity (evicted generators closed).
-        sl = SegList([VarSeg(Var()), VarSeg(Var())])
-        t = Trail()
-        for i in range(30):
-            m = t.mark()
-            assert unify(sl, [i, i + 1, i + 2], t)
-            t.undo(m)
-        assert len(sl._unify_gens) <= 8
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -355,17 +308,18 @@ class TestF011AllExports:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestPriorArtAndCharacterization:
-    def test_f015_drive_pattern_enumerates_all_splits(self):
-        """Prior art F015: mark/unify/undo drive yields every split."""
+    def test_f015_drive_pattern_binds_the_first_split_each_time(self):
+        """Prior art F015 enumerated splits by calling unify again on the same
+        trail; that protocol lost answers (member/2 over equal lists) and is
+        gone.  Each call binds the first split."""
         A, B = Var(), Var()
         sl = SegList([VarSeg(A), VarSeg(B)])
         t = Trail()
         m = t.mark()
-        splits = []
-        while unify(sl, [1, 2, 3], t):
-            splits.append((deref(A), deref(B)))
+        for _ in range(3):
+            assert unify(sl, [1, 2, 3], t)
+            assert (deref(A), deref(B)) == ([], [1, 2, 3])
             t.undo(m)
-        assert splits == [([], [1, 2, 3]), ([1], [2, 3]), ([1, 2], [3]), ([1, 2, 3], [])]
 
     def test_f030_seg_vs_seg_nonground(self, trail):
         """Prior art F030: non-ground Seg* vs Seg* unification.  Two open
