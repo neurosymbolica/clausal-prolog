@@ -40,7 +40,7 @@ from typing import Any, Callable
 from clausal.logic.variables import deref, is_var, unify
 from clausal.logic.predicate import is_term_instance, tabled_home_of, term_field_names
 from clausal.terms import ConcreteSeg, SegBytes, SegList, SegString, Undefined, VarSeg
-from clausal.logic.cells import CHARS_TAG, is_cell, intern_cell, is_intern_enabled
+from clausal.logic.cells import is_cell, intern_cell, is_intern_enabled, is_chars, chars_text
 
 # ── Sentinels ──────────────────────────────────────────────────────────────
 
@@ -641,9 +641,10 @@ def _normalize_for_key_py(term):
         return _seq_key(elems) or ("__list__",) + elems
     if type(term) is tuple and not term:
         return _NIL_KEY                 # () is nil: the key [] has
-    if type(term) is tuple and len(term) == 2 and term[0] == CHARS_TAG and type(term[1]) is str:
+    if is_chars(term):
         # A char list: the carrier and [a, b] are one term, so one key.
-        return ("__chars__", term[1]) if term[1] else _NIL_KEY
+        text = chars_text(term)
+        return ("__chars__", text) if text else _NIL_KEY
     if isinstance(term, tuple):
         return ("__tuple__",) + tuple(_normalize_for_key_py(e) for e in term)
     if isinstance(term, dict):

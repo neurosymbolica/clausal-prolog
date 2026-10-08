@@ -113,7 +113,7 @@ def to_python(val):
         return val
     if t is tuple:
         if is_chars(val):
-            return val[1]              # stage 1: a chars string crosses out as its text
+            return chars_text(val)     # stage 1: a chars string crosses out as its text
         items = tuple([to_python(x) for x in val])
         if items and type(items[0]) is str:
             # THE ONE REGISTRY: a registered functor rebuilds its Python

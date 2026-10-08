@@ -51,6 +51,7 @@ typedef struct TrailObject  TrailObject;
  * struct references VarObject, AttVarObject, TrailObject. */
 #define VARIABLES_CAPI_PROVIDER
 #include "_variables_capi.h"
+#include "_chars_carrier.h"
 
 static PyTypeObject VarType;
 static PyTypeObject AttVarType;
@@ -1121,11 +1122,8 @@ static inline int is_nil_spelling(PyObject *t)
     /* STAGE 2: a bare str is an ATOM -- '' is not nil; the empty CARRIER below is */
     if (PyBytes_Check(t))   return PyBytes_GET_SIZE(t) == 0;
     /* the EMPTY chars carrier ('$chars', "") is nil too (stage 1; review 2026-09-18) */
-    if (PyTuple_CheckExact(t) && PyTuple_GET_SIZE(t) == 2
-        && PyUnicode_Check(PyTuple_GET_ITEM(t, 0))
-        && PyUnicode_CompareWithASCIIString(PyTuple_GET_ITEM(t, 0), "$chars") == 0
-        && PyUnicode_Check(PyTuple_GET_ITEM(t, 1)))
-        return PyUnicode_GET_LENGTH(PyTuple_GET_ITEM(t, 1)) == 0;
+    if (is_chars_carrier(t))
+        return PyUnicode_GET_LENGTH(carrier_text(t)) == 0;
     if (PyTuple_Check(t))   return PyTuple_GET_SIZE(t) == 0;
     return 0;
 }
@@ -1143,21 +1141,8 @@ static PyObject *unify_census_sites = NULL;   /* {"int/float": n, ...}, unordere
 /* THE CHARS CARRIER (stage 1 of the atoms-as-str flip, spec 2026-09-18):
  * ('$chars', "abc") is the compact form of the char list and EQUAL to it.
  * Unwrapped to its str right before the str<->list arms, and only there --
- * a Var must bind to the carrier itself, never to the bare str. */
-static inline int
-is_chars_carrier(PyObject *t)
-{
-    return PyTuple_CheckExact(t) && PyTuple_GET_SIZE(t) == 2
-        && PyUnicode_Check(PyTuple_GET_ITEM(t, 0))
-        && PyUnicode_CompareWithASCIIString(PyTuple_GET_ITEM(t, 0), "$chars") == 0
-        && PyUnicode_Check(PyTuple_GET_ITEM(t, 1));
-}
-
-static inline PyObject *
-unwrap_chars(PyObject *t)
-{
-    return is_chars_carrier(t) ? PyTuple_GET_ITEM(t, 1) : t;
-}
+ * a Var must bind to the carrier itself, never to the bare str.
+ * is_chars_carrier / carrier_text / unwrap_chars: _chars_carrier.h. */
 
 static int
 do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)

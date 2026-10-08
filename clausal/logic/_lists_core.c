@@ -21,6 +21,7 @@
 /* Import the C API from _variables */
 #define VARIABLES_CAPI_CONSUMER
 #include "variables/_variables_capi.h"
+#include "variables/_chars_carrier.h"
 
 /* ================================================================
  * Cached references (set during module init)
@@ -108,10 +109,8 @@ seq_join_chars(PyObject *items)
      * the chars CARRIER ('$chars', text), never a bare str -- every caller
      * of this join (append/3 splits, select/3 remainders, permutation/2)
      * is handing a term out. */
-    PyObject *tag = PyUnicode_FromString("$chars");
-    if (!tag) { Py_DECREF(joined); return NULL; }
-    PyObject *carrier = PyTuple_Pack(2, tag, joined);
-    Py_DECREF(tag); Py_DECREF(joined);
+    PyObject *carrier = make_chars_carrier(joined);
+    Py_DECREF(joined);
     return carrier;
 }
 

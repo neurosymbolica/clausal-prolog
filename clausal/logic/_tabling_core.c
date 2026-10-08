@@ -23,6 +23,7 @@
  * is_term_instance, term_field_names, unify, etc. as direct C calls. */
 #define VARIABLES_CAPI_CONSUMER
 #include "variables/_variables_capi.h"
+#include "variables/_chars_carrier.h"
 
 /* ================================================================
  * Forward declarations and cached references
@@ -242,14 +243,17 @@ do_normalize(PyObject *term, int depth)
     }
 
     /* A char list: the carrier ('$chars', s) keys as ("__chars__", s), and
-     * ('$chars', '') as [] -- the key [a, b] has.  Before the tuple branch. */
+     * ('$chars', '') as [] -- the key [a, b] has.  Before the tuple branch.
+     * Stricter than is_chars_carrier on purpose: slot 1 must be an EXACT str,
+     * as in the Python twin (``cells.is_chars``), since the two must key
+     * alike. */
     if (PyTuple_CheckExact(term) && PyTuple_GET_SIZE(term) == 2
             && PyUnicode_CheckExact(PyTuple_GET_ITEM(term, 1))) {
         int is_tag = PyUnicode_Check(PyTuple_GET_ITEM(term, 0))
             ? PyUnicode_Compare(PyTuple_GET_ITEM(term, 0), str_chars_tag) : 1;
         if (is_tag == -1 && PyErr_Occurred()) return NULL;
         if (is_tag == 0) {
-            PyObject *text = PyTuple_GET_ITEM(term, 1);
+            PyObject *text = carrier_text(term);
             if (PyUnicode_GET_LENGTH(text) == 0) {
                 Py_INCREF(nil_key);
                 return nil_key;

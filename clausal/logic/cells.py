@@ -190,8 +190,11 @@ def chars(text: str) -> tuple:
 
 def is_chars(x) -> bool:
     """True if *x* is a well-formed chars carrier ``('$chars', str)``."""
-    return (type(x) is tuple and len(x) == 2 and x[0] == CHARS_TAG
-            and type(x[1]) is str)
+    # isinstance before ``==``: slot 0 of an arbitrary tuple may be an array,
+    # whose ``==`` is elementwise and has no truth value (a pair of NumPy
+    # arrays made this raise ValueError, and to_python with it).
+    return (type(x) is tuple and len(x) == 2 and isinstance(x[0], str)
+            and x[0] == CHARS_TAG and type(x[1]) is str)
 
 
 def chars_text(x) -> str:

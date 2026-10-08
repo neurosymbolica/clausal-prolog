@@ -422,13 +422,12 @@ def _text_arg(val):
     compound) comes back dereferenced and otherwise untouched, so a
     caller's mode test (``is_var``) and its non-text handling are unchanged.
     """
-    from clausal.logic.cells import CHARS_TAG  # noqa: PLC0415
+    from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
     val = deref(val)
-    # Type-check the tag before comparing it: an argument may be a pair of
-    # arrays (an LU factorisation), whose ``==`` is elementwise.
-    if (type(val) is tuple and len(val) == 2 and type(val[0]) is str
-            and val[0] == CHARS_TAG and type(val[1]) is str):
-        return val[1]
+    # is_chars type-checks the tag before comparing it: an argument may be a
+    # pair of arrays (an LU factorisation), whose ``==`` is elementwise.
+    if is_chars(val):
+        return chars_text(val)
     return val
 
 

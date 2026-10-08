@@ -11,6 +11,7 @@
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+#include "../variables/_chars_carrier.h"
 
 /* ================================================================
  * Cached references (set during module init)
@@ -113,22 +114,8 @@ char_spelling_obj(PyObject *e)
  * For bytes: the int code (codes model — never a char).
  */
 
-/* the chars carrier ('$chars', "abc") reads as its text in every sequence
- * helper (stage 1 of the atoms-as-str flip, spec 2026-09-18) */
-static inline int
-is_chars_carrier(PyObject *t)
-{
-    return PyTuple_CheckExact(t) && PyTuple_GET_SIZE(t) == 2
-        && PyUnicode_Check(PyTuple_GET_ITEM(t, 0))
-        && PyUnicode_CompareWithASCIIString(PyTuple_GET_ITEM(t, 0), "$chars") == 0
-        && PyUnicode_Check(PyTuple_GET_ITEM(t, 1));
-}
-
-static inline PyObject *
-unwrap_chars(PyObject *t)
-{
-    return is_chars_carrier(t) ? PyTuple_GET_ITEM(t, 1) : t;
-}
+/* the chars carrier reads as its text in every sequence helper: is_chars_carrier,
+ * carrier_text, unwrap_chars and make_chars_carrier come from _chars_carrier.h */
 
 static inline PyObject *
 seq_getitem(PyObject *seq, Py_ssize_t i)
@@ -191,17 +178,6 @@ join_char_spellings(PyObject *chars)
     return joined;
 }
 
-/* ('$chars', text) for the str *text* -- a new reference (stage 1 of the
- * atoms-as-str flip, spec 2026-09-18). */
-static PyObject *
-make_chars_carrier(PyObject *text)
-{
-    PyObject *tag = PyUnicode_FromString("$chars");
-    if (!tag) return NULL;
-    PyObject *carrier = PyTuple_Pack(2, tag, text);
-    Py_DECREF(tag);
-    return carrier;
-}
 
 /* Slice seq[start:end] — returns new ref.  The carrier slices as its text,
  * and a str slice (a text target's star tail) is handed out as the CARRIER
@@ -281,10 +257,8 @@ maybe_promote_to_str(PyObject *result)
     PyObject *joined = join_char_spellings(result);
     if (!joined) return NULL;
     /* stage 1: a promoted text result is the CARRIER, never a bare str */
-    PyObject *tag = PyUnicode_FromString("$chars");
-    if (!tag) { Py_DECREF(joined); return NULL; }
-    PyObject *carrier = PyTuple_Pack(2, tag, joined);
-    Py_DECREF(tag); Py_DECREF(joined);
+    PyObject *carrier = make_chars_carrier(joined);
+    Py_DECREF(joined);
     return carrier;
 }
 
@@ -533,7 +507,7 @@ carrier_star_concat(PyObject *var_vals, PyObject *s, PyObject *after_vals)
 {
     Py_ssize_t nb = PyList_GET_SIZE(var_vals);
     Py_ssize_t na = PyList_GET_SIZE(after_vals);
-    PyObject *text = PyTuple_GET_ITEM(s, 1);
+    PyObject *text = carrier_text(s);
     /* an empty result stays the empty list, as maybe_promote_to_str leaves it */
     if (nb + na == 0 && PyUnicode_GET_LENGTH(text) == 0)
         Py_RETURN_NONE;
@@ -642,7 +616,7 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
             /* the carrier splats as its text (owned reference swap); the flag
              * is what makes the text arm below reachable -- a bare str star
              * is an ATOM element and takes the else arm (STAGE 2) */
-            PyObject *inner = PyTuple_GET_ITEM(s, 1);
+            PyObject *inner = carrier_text(s);
             Py_INCREF(inner);
             Py_DECREF(s);
             s = inner;
@@ -746,7 +720,7 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
                 if (ok) Py_RETURN_TRUE;
                 Py_RETURN_FALSE;
             } else if (is_chars_carrier(walked)) {
-                PyObject *inner = PyTuple_GET_ITEM(walked, 1);
+                PyObject *inner = carrier_text(walked);
                 Py_INCREF(inner);
                 Py_DECREF(walked);
                 walked = inner;

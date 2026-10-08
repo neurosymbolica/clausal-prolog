@@ -651,7 +651,7 @@ def _validated_expansion(term, wrap_head, slot=None):
     from clausal.logic.exceptions import (  # noqa: PLC0415
         LogicException, instantiation_error, type_error,
     )
-    from clausal.logic.cells import is_chars, compound_cell_shape  # noqa: PLC0415
+    from clausal.logic.cells import is_chars, chars_text, compound_cell_shape  # noqa: PLC0415
     from clausal.logic.atoms import is_atom  # noqa: PLC0415
     from clausal.logic.predicate import is_term_instance  # noqa: PLC0415
     from clausal.logic.variables import is_var  # noqa: PLC0415
@@ -684,7 +684,7 @@ def _validated_expansion(term, wrap_head, slot=None):
         return PredicateItem(head=term, body=True)
     hint = ""
     if is_chars(term) and not slot:
-        hint = (f' -- "{term[1]}" is a STRING under -double_quotes(chars); '
+        hint = (f' -- "{chars_text(term)}" is a STRING under -double_quotes(chars); '
                 f"the suppression sentinel is the ATOM none: write none or "
                 f"'none'")
     raise LogicException(type_error(
