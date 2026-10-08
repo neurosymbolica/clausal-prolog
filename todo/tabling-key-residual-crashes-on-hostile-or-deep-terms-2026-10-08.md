@@ -55,3 +55,13 @@ Each case needs a subprocess test (a crash must fail the test, not the run), in 
 - The C and Python twins of the head-list helpers disagree on str SUBCLASSES: C tests
   `PyUnicode_Check`, Python `type(x) is str`, so `[S("a")|"cd"]` builds a carrier in C and a list in
   Python. Pick one (exact `str`, as `is_char_atom` says) and align the C side.
+
+## The variable walkers read borrowed list items across Python calls (Low)
+
+`c_is_ground`, `c_copy_term` and `c_collect_vars` (`logic/variables/_variables.c`) loop over a
+list with a cached size and `PyList_GET_ITEM` (borrowed), and each step can run Python: a dataclass
+field getter, and since the partial-list chain fix a chain link's `__walk__`, which walks every element
+and so calls any foreign object's `__walk__`. A hostile object that clears the list mid-loop is a
+segfault, on the old code through a field getter and now also through `__walk__`. Not reachable from
+a program without such an object. Fix as in the tabling key: iterate a snapshot (`PyList_AsTuple`)
+or hold a reference to each item across the call.
