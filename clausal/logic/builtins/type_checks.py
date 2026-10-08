@@ -14,7 +14,7 @@ from clausal.logic.atoms import (
     spelling as _spelling,
 )
 from clausal.terms import (
-    Quantity, SegList, SegString, SegBytes)
+    Quantity, SegList, SegString, SegBytes, seg_closed)
 
 from clausal.logic.builtins._registry import _builtin, _db_builtin
 from clausal.logic.builtins._helpers import (
@@ -399,8 +399,8 @@ def _is_list__1(x, trail, k):
     from clausal.logic.cells import is_chars  # noqa: PLC0415
     if isinstance(x_val, (list, bytes)) or is_chars(x_val):   # STAGE 2: a str is an ATOM; the carrier is the list
         yield None
-    elif isinstance(x_val, (SegList, SegString, SegBytes)) and _is_ground(x_val):
-        yield None
+    elif isinstance(x_val, (SegList, SegString, SegBytes)) and seg_closed(x_val) is not None:
+        yield None                         # every hole filled; elements may be unbound
 
 
 @_builtin("is_chars", 1)
@@ -492,7 +492,7 @@ def _check_type(type_name: str, term) -> bool:
         # one. Rejecting them here contradicted is_list("abc") succeeding.
         if isinstance(term, (list, bytes)) or is_chars(term):   # STAGE 2: a str is an ATOM; the carrier is the list
             return True
-        return isinstance(term, (SegList, SegString, SegBytes)) and _is_ground(term)
+        return isinstance(term, (SegList, SegString, SegBytes)) and seg_closed(term) is not None
     elif type_name in ("boolean", "bool"):
         return isinstance(term, bool)
     elif type_name == "callable":

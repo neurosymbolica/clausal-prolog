@@ -7,6 +7,12 @@ tens of thousands deep. They are recorded so the next pass on `do_normalize` sta
 
 ## 1. `SegList.__walk__` overflows the C stack on very deep nesting
 
+PARTLY FIXED (the commit that adds this note): a CHAIN of SegLists (a hole bound to the next
+SegList, what a DCG builds) is now walked iteratively in Python and collapsed before the C walkers
+read it. Still recursive: a SegList nested as an ELEMENT tens of thousands deep (the original
+49,000 x 2 case), and `SegString._walk_raw` / SegBytes' walk on chains of their own type (no program
+found that builds a long one yet: string-terminal DCGs build SegLists).
+
 A partial list nested ~49,000 x 2 deep segfaults inside `SegList.__walk__`, before the key is
 reached. `SEG_MAX_DEPTH` stops the key's own recursion; the walk has no bound of its own.
 Fix: give the walk an explicit stack (or a depth check that raises `RecursionError`).

@@ -616,6 +616,9 @@ def _unify_open_seglists(a, b, trail):
     return NotImplemented
 
 
+_WALK_END = object()   # end of a segment iterator in SegList._walk_raw
+
+
 class SegList:
     """A first-class term representing a list with variable-length holes.
 
@@ -660,85 +663,63 @@ class SegList:
         equal to, and unifiable with, its own elements.  Reading the elements
         directly is exact in both stages.
         """
-        from .logic.variables import walk
-        new_segs: list = []
-        for seg in self._segments:
+        # Iterative, with one flat accumulator: a partial list built forward
+        # through its open tail (a DCG, ``Hole = [a|Hole1]`` in a loop) is a
+        # chain of SegLists, one link per step, and walking it recursively
+        # overflowed the C stack at a few thousand links while copying the
+        # accumulated elements at every level (quadratic).  Each segment
+        # rule is the one the recursive walk applied.
+        from .logic.variables import walk, deref, is_var
+        segs: list = []          # finished segments: ConcreteSeg / VarSeg
+        run: list = []           # the concrete elements since the last hole
+        stack = [(iter(self._segments), id(self))]
+        open_ids = {id(self)}    # SegLists being walked, to stop on a cycle
+        while stack:
+            seg = next(stack[-1][0], _WALK_END)
+            if seg is _WALK_END:
+                open_ids.discard(stack.pop()[1])
+                continue
             if isinstance(seg, ConcreteSeg):
-                walked_elems = [walk(e) for e in seg.elements]
-                if new_segs and isinstance(new_segs[-1], ConcreteSeg):
-                    new_segs[-1] = ConcreteSeg(new_segs[-1].elements + walked_elems)
-                else:
-                    new_segs.append(ConcreteSeg(walked_elems))
-            else:  # VarSeg
-                v = walk(seg.var)
-                if is_chars(v):
-                    v = chars_text(v)          # stage 1: a hole bound to the carrier is a str-bound hole
-                if isinstance(v, str):
-                    # VarSeg bound to a substring — expand to CHARS for SegList
-                    char_elems = [char_atom(c) for c in v]
-                    if new_segs and isinstance(new_segs[-1], ConcreteSeg):
-                        new_segs[-1] = ConcreteSeg(new_segs[-1].elements + char_elems)
-                    else:
-                        if char_elems:
-                            new_segs.append(ConcreteSeg(char_elems))
-                elif isinstance(v, list):
-                    # Inline the concrete list into previous ConcreteSeg or new one
-                    if new_segs and isinstance(new_segs[-1], ConcreteSeg):
-                        new_segs[-1] = ConcreteSeg(new_segs[-1].elements + v)
-                    else:
-                        if v:
-                            new_segs.append(ConcreteSeg(v))
-                elif isinstance(v, SegList):
-                    # Inline nested SegList's segments. ``_walk_raw`` (not
-                    # ``__walk__``): a nested ground SegList of char_elems would
-                    # otherwise arrive PROMOTED to a str and fall into the
-                    # ``._segments`` branch below, which a str does not have.
-                    walked_inner = v._walk_raw()
-                    if isinstance(walked_inner, list):
-                        if new_segs and isinstance(new_segs[-1], ConcreteSeg):
-                            new_segs[-1] = ConcreteSeg(new_segs[-1].elements + walked_inner)
-                        else:
-                            if walked_inner:
-                                new_segs.append(ConcreteSeg(walked_inner))
-                    else:
-                        # Inline the inner SegList's segments one by one
-                        for inner_seg in walked_inner._segments:
-                            if isinstance(inner_seg, ConcreteSeg):
-                                if new_segs and isinstance(new_segs[-1], ConcreteSeg):
-                                    new_segs[-1] = ConcreteSeg(
-                                        new_segs[-1].elements + inner_seg.elements
-                                    )
-                                else:
-                                    new_segs.append(ConcreteSeg(inner_seg.elements[:]))
-                            else:
-                                new_segs.append(inner_seg)
-                else:
-                    # Either still an unbound Var (keep the hole) or bound to
-                    # an out-of-contract scalar. The latter left the term in
-                    # silent limbo — non-ground forever, every unify quietly
-                    # failing (A01-F009, mirroring the F024 char-list guard).
-                    from .logic.variables import is_var
-                    if not is_var(v):
-                        raise PartialTermError(
-                            f"SegList VarSeg bound to non-sequence value: "
-                            f"{type(v).__name__} ({v!r}); VarSegs of a SegList "
-                            f"must bind to list/str."
-                        )
-                    new_segs.append(VarSeg(v))
-
+                run.extend(walk(e) for e in seg.elements)
+                continue
+            # One step, not ``walk``: a hole bound to the next link of the
+            # chain is walked HERE, on the stack.  ``walk`` would resolve it
+            # through that link's ``__walk__``, which is the recursion.
+            v = deref(seg.var)
+            if not isinstance(v, SegList):
+                v = walk(v)
+            if is_chars(v):
+                v = chars_text(v)          # stage 1: a hole bound to the carrier is a str-bound hole
+            if isinstance(v, str):
+                run.extend(char_atom(c) for c in v)   # a substring: its CHARS
+            elif isinstance(v, list):
+                run.extend(v)
+            elif isinstance(v, SegList):
+                if id(v) in open_ids:
+                    raise RecursionError("cyclic partial list")
+                stack.append((iter(v._segments), id(v)))
+                open_ids.add(id(v))
+            else:
+                # Either still an unbound Var (keep the hole) or bound to an
+                # out-of-contract scalar. The latter left the term in silent
+                # limbo — non-ground forever, every unify quietly failing
+                # (A01-F009, mirroring the F024 char-list guard).
+                if not is_var(v):
+                    raise PartialTermError(
+                        f"SegList VarSeg bound to non-sequence value: "
+                        f"{type(v).__name__} ({v!r}); VarSegs of a SegList "
+                        f"must bind to list/str."
+                    )
+                if run:
+                    segs.append(ConcreteSeg(run))
+                    run = []
+                segs.append(VarSeg(v))
         # If no VarSegs remain, return a plain Python list of the elements.
-        if all(isinstance(s, ConcreteSeg) for s in new_segs):
-            result = []
-            for s in new_segs:
-                result.extend(s.elements)
-            return result
-
-        # Clean up empty ConcreteSegs
-        new_segs = [s for s in new_segs
-                    if not (isinstance(s, ConcreteSeg) and not s.elements)]
-        if not new_segs:
-            return []
-        return SegList(new_segs)
+        if not segs:
+            return run
+        if run:
+            segs.append(ConcreteSeg(run))
+        return SegList(segs)
 
     def __walk__(self):
         """Called by C do_walk. Normalise: collapse bound VarSegs, merge
@@ -4398,3 +4379,16 @@ __all__ = [
     # Predicate clause term
     "Predicate",
 ]
+
+
+def seg_closed(term):
+    """The sequence a ``SegList`` / ``SegString`` / ``SegBytes`` walks to when
+    every hole is filled -- a list, chars carrier or bytes -- else None.
+
+    This, not groundness, is what makes a partial list a PROPER list: the
+    elements may still be unbound.  ``[V, *T]`` with ``T`` bound to ``[]`` is
+    the one-element list ``[V]`` (a DCG over ``[_]`` builds exactly that), yet
+    it is not ground.  Testing ``is_ground`` here made length/2, is_list/1 and
+    every list builtin treat it as an open list."""
+    w = term.__walk__()
+    return None if isinstance(w, (SegList, SegString, SegBytes)) else w

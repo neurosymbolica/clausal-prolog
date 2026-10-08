@@ -2349,6 +2349,10 @@ static PyObject *walk_segstring_type = NULL;
 static PyObject *walk_segbytes_type  = NULL;
 static PyObject *walk_dictterm_type  = NULL;
 static PyObject *walk_segments_name  = NULL;   /* "_segments" */
+static PyObject *walk_walk_name      = NULL;   /* "__walk__" */
+static PyObject *walk_partial_error  = NULL;   /* clausal.terms.PartialTermError */
+static PyObject *walk_varseg_type    = NULL;   /* clausal.terms.VarSeg */
+static PyObject *walk_var_name       = NULL;   /* "var" */
 static PyObject *walk_data_name      = NULL;   /* "_data" */
 
 /* 1 when the types are cached, 0 when clausal.terms is not (fully) loaded
@@ -2365,12 +2369,14 @@ walk_types_ready(void)
     PyObject *sl = PyObject_GetAttrString(mod, "SegList");
     PyObject *ss = sl ? PyObject_GetAttrString(mod, "SegString") : NULL;
     PyObject *sb = ss ? PyObject_GetAttrString(mod, "SegBytes") : NULL;
-    PyObject *dt = sb ? PyObject_GetAttrString(mod, "DictTerm") : NULL;
+    PyObject *pe = sb ? PyObject_GetAttrString(mod, "PartialTermError") : NULL;
+    PyObject *vs = pe ? PyObject_GetAttrString(mod, "VarSeg") : NULL;
+    PyObject *dt = vs ? PyObject_GetAttrString(mod, "DictTerm") : NULL;
     Py_DECREF(mod);
     if (!dt) {
         /* Partially initialised (a circular import in progress): nothing
          * of these types can have been built yet either. */
-        Py_XDECREF(sl); Py_XDECREF(ss); Py_XDECREF(sb);
+        Py_XDECREF(sl); Py_XDECREF(ss); Py_XDECREF(sb); Py_XDECREF(pe); Py_XDECREF(vs);
         if (PyErr_ExceptionMatches(PyExc_AttributeError)) {
             PyErr_Clear();
             return 0;
@@ -2379,10 +2385,15 @@ walk_types_ready(void)
     }
     walk_segments_name = PyUnicode_InternFromString("_segments");
     walk_data_name = PyUnicode_InternFromString("_data");
-    if (!walk_segments_name || !walk_data_name) {
-        Py_DECREF(sl); Py_DECREF(ss); Py_DECREF(sb); Py_DECREF(dt);
+    walk_walk_name = PyUnicode_InternFromString("__walk__");
+    walk_var_name = PyUnicode_InternFromString("var");
+    if (!walk_segments_name || !walk_data_name || !walk_walk_name || !walk_var_name) {
+        Py_DECREF(sl); Py_DECREF(ss); Py_DECREF(sb); Py_DECREF(pe); Py_DECREF(vs);
+        Py_DECREF(dt);
         return -1;
     }
+    walk_partial_error = pe;
+    walk_varseg_type = vs;
     walk_seglist_type = sl;
     walk_segstring_type = ss;
     walk_segbytes_type = sb;
@@ -2430,6 +2441,69 @@ walk_container_payload(PyObject *term, int kind)
         return vals;
     }
     return PyDict_Values(term);
+}
+
+static inline int
+is_seg_object(PyObject *o)
+{
+    PyObject *tp = (PyObject *)Py_TYPE(o);
+    return tp == walk_seglist_type || tp == walk_segstring_type
+        || tp == walk_segbytes_type;
+}
+
+/* 1 when a VarSeg hole of the Seg* *term* is bound to another Seg* -- the
+ * term is a link of a CHAIN (see seg_flattened) -- 0 when not, -1 on error. */
+static int
+seg_is_chain_link(PyObject *term)
+{
+    PyObject *segs = PyObject_GetAttr(term, walk_segments_name);
+    if (!segs) return -1;
+    if (!PyList_Check(segs)) { Py_DECREF(segs); return 0; }
+    PyObject *snap = PyList_AsTuple(segs);
+    Py_DECREF(segs);
+    if (!snap) return -1;
+    int found = 0;
+    for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(snap) && !found; i++) {
+        PyObject *seg = PyTuple_GET_ITEM(snap, i);
+        if ((PyObject *)Py_TYPE(seg) != walk_varseg_type) continue;
+        PyObject *v = PyObject_GetAttr(seg, walk_var_name);
+        if (!v) { Py_DECREF(snap); return -1; }
+        PyObject *d = var_deref(v);     /* borrowed from v's binding chain */
+        Py_INCREF(d);
+        Py_DECREF(v);
+        found = is_seg_object(d);
+        Py_DECREF(d);
+    }
+    Py_DECREF(snap);
+    return found;
+}
+
+/* The Seg* *term* collapsed to ONE flat term by its own ``__walk__`` when it
+ * is a link of a CHAIN: a partial list built forward through its open tail
+ * (a DCG result, ``Hole = [a|Hole1]`` in a loop) is a Seg* whose hole is
+ * bound to the next Seg*, one link per step.  The walkers below read the
+ * links one recursion level apart (list -> VarSeg -> Seg*, three levels a
+ * link), so a chain of ~16,000 links hit MAX_DEPTH.  ``__walk__`` follows
+ * the chain iteratively and gives a plain list, chars carrier or bytes when
+ * ground, else ONE Seg* whose holes are all unbound: the same elements and
+ * unbound holes in the same order, so the walkers' answers do not change.
+ * Any other Seg* -- not a chain link, or outside the contract (a hole bound
+ * to a non-sequence: PartialTermError) -- is handed back as is, for the
+ * segment-by-segment reading the walkers always did.  New reference, or
+ * NULL on error. */
+static PyObject *
+seg_flattened(PyObject *term)
+{
+    int link = seg_is_chain_link(term);
+    if (link < 0) return NULL;
+    if (!link) return Py_NewRef(term);
+    PyObject *w = PyObject_CallMethodNoArgs(term, walk_walk_name);
+    if (w) return w;
+    if (PyErr_ExceptionMatches(walk_partial_error)) {
+        PyErr_Clear();
+        return Py_NewRef(term);
+    }
+    return NULL;
 }
 
 /*
@@ -2492,10 +2566,22 @@ c_is_ground(PyObject *term, int depth)
         int kind = walk_container_kind(term);
         if (kind < 0) return -1;
         if (kind) {
+            PyObject *flat = NULL;
+            if (kind == WALK_SEG) {
+                flat = seg_flattened(term);
+                if (!flat) return -1;
+                if (!is_seg_object(flat)) {
+                    int r = c_is_ground(flat, depth + 1);
+                    Py_DECREF(flat);
+                    return r;
+                }
+                term = flat;
+            }
             PyObject *items = walk_container_payload(term, kind);
-            if (!items) return -1;
+            if (!items) { Py_XDECREF(flat); return -1; }
             int r = c_is_ground(items, depth + 1);
             Py_DECREF(items);
+            Py_XDECREF(flat);
             return r;
         }
     }
@@ -2971,13 +3057,21 @@ c_copy_term(PyObject *term, PyObject *var_map, int depth, PyObject *attvars)
         int kind = walk_container_kind(term);
         if (kind < 0) return NULL;
         if (kind == WALK_SEG) {
-            PyObject *segs = walk_container_payload(term, kind);
-            if (!segs) return NULL;
+            PyObject *flat = seg_flattened(term);
+            if (!flat) return NULL;
+            if (!is_seg_object(flat)) {
+                PyObject *r = c_copy_term(flat, var_map, depth + 1, attvars);
+                Py_DECREF(flat);
+                return r;
+            }
+            PyObject *segs = walk_container_payload(flat, kind);
+            if (!segs) { Py_DECREF(flat); return NULL; }
             PyObject *copied = c_copy_term(segs, var_map, depth + 1, attvars);
             Py_DECREF(segs);
-            if (!copied) return NULL;
-            PyObject *result = PyObject_CallOneArg((PyObject *)Py_TYPE(term), copied);
+            if (!copied) { Py_DECREF(flat); return NULL; }
+            PyObject *result = PyObject_CallOneArg((PyObject *)Py_TYPE(flat), copied);
             Py_DECREF(copied);
+            Py_DECREF(flat);
             return result;
         }
         if (kind) {
@@ -3231,10 +3325,22 @@ c_collect_vars(PyObject *term, UIntSet *seen, PyObject *result, int depth)
         int kind = walk_container_kind(term);
         if (kind < 0) return -1;
         if (kind) {
+            PyObject *flat = NULL;
+            if (kind == WALK_SEG) {
+                flat = seg_flattened(term);
+                if (!flat) return -1;
+                if (!is_seg_object(flat)) {
+                    int r = c_collect_vars(flat, seen, result, depth + 1);
+                    Py_DECREF(flat);
+                    return r;
+                }
+                term = flat;
+            }
             PyObject *items = walk_container_payload(term, kind);
-            if (!items) return -1;
+            if (!items) { Py_XDECREF(flat); return -1; }
             int r = c_collect_vars(items, seen, result, depth + 1);
             Py_DECREF(items);
+            Py_XDECREF(flat);
             return r;
         }
     }

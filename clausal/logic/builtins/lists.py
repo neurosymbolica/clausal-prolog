@@ -83,8 +83,10 @@ def _as_items(val):
     # Late import to avoid an import cycle (clausal.terms → clausal.logic
     # via Seg*.__walk__).
     from clausal.terms import SegList, SegString, SegBytes
-    if isinstance(val, (SegList, SegString, SegBytes)) and val.is_ground():
-        return _as_items(val.__walk__())
+    if isinstance(val, (SegList, SegString, SegBytes)):
+        from clausal.terms import seg_closed
+        closed = seg_closed(val)       # every hole filled; elements may be unbound
+        return None if closed is None else _as_items(closed)
     return None
 
 

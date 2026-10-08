@@ -140,6 +140,24 @@ variable that is dead after the call and the preceding goals are deterministic, 
 `append("a", T, L)` the source (first argument) is a literal. A carrier variant would meet the
 refcount problem above.
 
+## DCG parsing holds quadratic memory (measured 2026-10-08)
+
+Building text through a DCG is fixed (the SegList chain reads back iteratively; the commit that
+adds this section). PARSING text with a DCG is not:
+
+```prolog
+acc(N, N) --> [].
+acc(N0, N) --> [a], { N1 is N0 + 1 }, acc(N1, N).
+```
+
+    phrase(acc(0, N), Text)   4k: 116 ms / 74 MB     16k: 427 ms / 260 MB     32k: 1202 ms / 722 MB
+
+Each `[a|S1]` matched against text binds `S1` to a fresh str slice (`_apply_seglist_split`,
+`target_list[pos:pos + sz]`; a CPython str slice is a copy), and the base clause's choice point keeps
+every slice alive: ~n^2/2 bytes. Scryer's tail of a string is a pointer into the same string, O(1).
+This is the strongest case for views, and it needs only the READ-ONLY half: a suffix view
+`(text, offset)` in the carrier, no growable buffer. It still needs step 2a first.
+
 ## Step 2: the carrier is the indirection
 
 Every reader of a string already goes through the carrier, so its second slot can hold something
