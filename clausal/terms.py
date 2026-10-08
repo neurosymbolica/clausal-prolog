@@ -267,8 +267,13 @@ def _apply_seglist_split(seglist, target_list, split, trail):
             # A long slice of text is a view of it, not a copy (a view slices
             # to a view): a DCG step binds the rest of its input without
             # copying it, and the choice points do not each hold a copy.
-            piece = (text_slice(target_list, pos, pos + sz) if type(target_list) is str
-                     else target_list[pos:pos + sz])
+            # Likewise a long rest of a list is a view of it.
+            if type(target_list) is str:
+                piece = text_slice(target_list, pos, pos + sz)
+            elif type(target_list) is list or type(target_list) is SegListView:
+                piece = list_rest(target_list, pos, pos + sz)
+            else:
+                piece = target_list[pos:pos + sz]
             if not unify(seg.var, _seg_slice_out(piece), trail):
                 return False
             pos += sz
@@ -618,6 +623,8 @@ class SegList:
             # chain is walked HERE, on the stack.  ``walk`` would resolve it
             # through that link's ``__walk__``, which is the recursion.
             v = deref(seg.var)
+            if type(v) is SegListView:
+                v = v.elements()           # its elements, walked below as a list's
             if not isinstance(v, SegList):
                 v = walk(v)
             if is_chars(v):
@@ -738,7 +745,9 @@ class SegList:
             # SegList of codes must accept a bytes target too. Convert to the
             # code list (list(b"GET") == [71, 69, 84]) and reuse the list path.
             return self.__unify__(list(other), trail)
-        if isinstance(other, list) or other_text:
+        if isinstance(other, list) or other_text or type(other) is SegListView:
+            # (A view is read in place, as the list it is: indexed and
+            # sliced, never walked.)
             walked = self._walk_raw()
             if isinstance(walked, list):
                 # No unbound *VarSeg* remains, but ConcreteSeg *element* Vars
@@ -926,6 +935,8 @@ class SegList:
         if is_chars(other):
             other = chars_text(other)      # stage 1: the carrier is the str it holds here
             other_text = True              # STAGE 2: only the carrier is text -- a bare str is an ATOM
+        if type(other) is SegListView:
+            return other == self        # compared by elements (SegListView.__eq__)
         if isinstance(other, SegList):
             return self._segments == other._segments
         if isinstance(other, list):
@@ -977,6 +988,165 @@ class SegList:
             else:
                 parts.append(f"*{seg.var!r}")
         return f"[{', '.join(parts)}]"
+
+
+# ── The rest of a list, as a window of it ─────────────────────────────────────
+#
+# Matching ``[H|T]`` against a list bound ``T`` to a fresh copy of the rest,
+# and the choice points of a parse kept every copy alive: walking a list of n
+# tokens -- a DCG over a token list, a clause head ``[a|T]`` recursing down it
+# -- copied about n^2/2 elements and held them.  A long rest of a list is now
+# a VIEW of the same list (the twin of the text view, ``cells._Text``):
+# ``SegListView(base, lo, hi)`` reads ``base[lo:hi]``, and taking its rest
+# again makes another view of the same base.
+#
+# A view holds the same element objects a slice would (a slice is shallow:
+# a Var in it is the same Var), so it is the same term as the copy.  And it
+# IS a ``SegList`` -- a partial list whose holes are all filled -- so every
+# reader that does not know it reads it as one: its ``_segments`` is built on
+# demand as ``[ConcreteSeg(base[lo:hi])]``, and the C walkers (ground/1,
+# copy_term/2, term_variables/2) read that.  Only the head-match fast paths
+# (``list_unify`` and its C twin), ``__unify__`` and the walk read the window
+# itself.
+
+LIST_VIEW_MIN = 64      # a shorter rest is copied, as before (twin: LIST_VIEW_MIN in C)
+
+
+def list_rest(d, lo, hi):
+    """``d[lo:hi]`` for a list or a :class:`SegListView` *d*, as the term a
+    hole binds to: a view of the same base when it is long, else a fresh
+    list.  The caller checked ``0 <= lo <= hi <= len(d)``."""
+    if type(d) is SegListView:
+        if hi - lo >= LIST_VIEW_MIN:
+            return SegListView(d._base, d._lo + lo, d._lo + hi)
+        return d._base[d._lo + lo:d._lo + hi]
+    if hi - lo >= LIST_VIEW_MIN:
+        return SegListView(d, lo, hi)
+    return d[lo:hi]
+
+
+class SegListView(SegList):
+    """The elements ``base[lo:hi]`` of a list, read in place.  See "The rest
+    of a list, as a window of it" above.  Equal to, and unifies as, the list
+    of its elements; walks to that list (a fresh copy).  Its window is
+    read-only."""
+
+    __slots__ = ("_base", "_lo", "_hi", "_mat")
+
+    def __new__(cls, *args):
+        # ``type(t)(segments)`` is how a copier rebuilds a Seg* from its
+        # copied segments (copy_term/2's C walker among them): for a view
+        # that is a plain SegList of the copied elements.
+        if len(args) == 1:
+            return SegList(args[0])
+        return object.__new__(cls)
+
+    def __init__(self, base, lo, hi):
+        if type(base) is not list or not 0 <= lo <= hi <= len(base):
+            raise TypeError("SegListView needs a list and 0 <= lo <= hi <= len")
+        self._base = base
+        self._lo = lo
+        self._hi = hi
+        self._mat = None
+
+    base = property(lambda self: self._base)
+    lo = property(lambda self: self._lo)
+    hi = property(lambda self: self._hi)
+
+    def __reduce__(self):
+        # A copy or a pickle holds the window's elements, not the base.
+        return (list, (self.elements(),))
+
+    @property
+    def _segments(self):
+        # Every reader that does not know a view reads a filled partial
+        # list: ONE ConcreteSeg of a plain list, built once.
+        m = self._mat
+        if m is None:
+            m = self._mat = [ConcreteSeg(self.elements())]
+        return m
+
+    @property
+    def segments(self) -> list:
+        return list(self._segments)
+
+    def elements(self) -> list:
+        """The elements, as a fresh list."""
+        if self._hi > len(self._base):
+            raise PartialTermError("the list under a SegListView shrank")
+        return self._base[self._lo:self._hi]
+
+    def _walk_raw(self):
+        from .logic.variables import walk
+        return walk(self.elements())
+
+    def __walk__(self):
+        # A list, as the rest of a list always walked: no F018 promotion
+        # (walking a plain list does not promote it to text).
+        from .logic.variables import walk
+        return walk(self.elements())
+
+    def __len__(self) -> int:
+        return self._hi - self._lo
+
+    def __iter__(self):
+        return iter(self.elements())
+
+    def __getitem__(self, index):
+        n = self._hi - self._lo
+        if self._hi > len(self._base):
+            raise PartialTermError("the list under a SegListView shrank")
+        if isinstance(index, slice):
+            lo, hi, step = index.indices(n)
+            if step == 1:
+                return list_rest(self, lo, max(lo, hi))
+            return self.elements()[index]
+        if index < 0:
+            index += n
+        if not 0 <= index < n:
+            raise IndexError("SegListView index out of range")
+        return self._base[self._lo + index]
+
+    def _same_window(self, other):
+        return (other._base is self._base and other._lo == self._lo
+                and other._hi == self._hi)
+
+    def __eq__(self, other):
+        if type(other) is SegListView:
+            return self._same_window(other) or (
+                len(other) == len(self) and other.elements() == self.elements())
+        if type(other) is list:
+            return len(other) == len(self) and other == self.elements()
+        if isinstance(other, SegList):
+            # A partial list spelled with other segments: compare elements.
+            return self._walk_raw() == other._walk_raw()
+        return SegList.__eq__(self, other)
+
+    __hash__ = SegList.__hash__
+
+    def __unify__(self, other, trail):
+        from .logic.variables import unify
+        if type(other) is SegListView:
+            if self._same_window(other):
+                return True
+            if len(other) != len(self):
+                return False
+            return unify(self.elements(), other.elements(), trail)
+        if type(other) is list:
+            if len(other) != len(self):
+                return False
+            return unify(self.elements(), other, trail)
+        if _is_nil(other):
+            return False            # a view is never empty (LIST_VIEW_MIN)
+        if type(other) is SegList:
+            # A partial list against a view: the pattern takes the view as
+            # its list target, read in place (``SegList.__unify__``), rather
+            # than both being walked here.
+            return other.__unify__(self, trail)
+        return SegList.__unify__(self, other, trail)
+
+    def __repr__(self) -> str:
+        return repr(self.elements())
 
 
 def _seglist_unify_gen(seglist, target_list, trail):
@@ -4235,6 +4405,7 @@ __all__ = [
     "DictTerm",
     "SetTerm",
     "SegList",
+    "SegListView",
     "SegString",
     "SegBytes",
     "ConcreteSeg",

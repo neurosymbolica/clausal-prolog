@@ -27,7 +27,7 @@ from clausal.logic.variables import Var, is_var, deref, unify  # noqa: F401
 from clausal.terms import (
     Call, LoadName, LoadAttr,
     DictTerm, SetTerm,
-    SegList, VarSeg,  # noqa: F401
+    SegList, SegListView, VarSeg,  # noqa: F401
 )
 from clausal.pythonic_ast.nodes import (
     StarUnpack, TupleLiteral, SetLiteral, literal_value,
@@ -394,6 +394,8 @@ def head_to_match_pattern(
     other                  → ``MatchAs(name=None)``  (wildcard ``_``)
     """
     term = deref(term)
+    if type(term) is SegListView:
+        term = term.elements()      # a list view is compiled as its elements: the clause must not hold its base
 
     # Unbound Var → MatchAs to capture the incoming argument
     # Repeated Var (already in var_context) → fresh dup name + unification guard

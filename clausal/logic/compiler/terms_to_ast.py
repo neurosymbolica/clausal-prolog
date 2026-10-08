@@ -35,6 +35,7 @@ from typing import Any
 
 from clausal.logic.variables import Var, is_var, deref, present_number
 from clausal.terms import (
+    SegListView,
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
     Negate,
     Call, LoadName, LoadAttr, LoadSubscript,
@@ -1192,6 +1193,8 @@ def term_to_ast_expr(
     """
     raw = term
     term = flat_carrier(deref(term))    # a text VIEW is compiled as its text
+    if type(term) is SegListView:
+        term = term.elements()          # and a list view as its elements: the clause must not hold its base
 
     if type(term) is _MetaArg and term.module is not None:
         # A dotted ``lib.p(...)`` / ``lib.p`` in a qualifying meta position:

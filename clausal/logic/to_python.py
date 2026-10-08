@@ -41,7 +41,7 @@ from clausal.logic.cells import chars, is_chars, chars_text, TUPLE_TAG  # stage 
 from clausal.logic.python_terms import FROM_TERM as _FROM_TERM  # the ONE registry (no cycle: python_terms never imports this module)
 from clausal.logic.variables import deref, walk
 from clausal.terms import (
-    DictTerm, SegBytes, SegList, SegString, SetTerm)
+    DictTerm, SegBytes, SegList, SegListView, SegString, SetTerm)
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.pythonic_ast.nodes import Node as _Node
 
@@ -469,6 +469,8 @@ def unwrap_atom(val):
     val = deref(val)
     if is_chars(val):
         return chars_text(val)         # stage 1: a TOP-LEVEL chars string crosses out as its text
+    if type(val) is SegListView:
+        val = val.elements()           # the view of a list crosses as the list it is (a copy)
     if type(val) is list:
         # one level down too: a list of chars strings is what ", ".join(W)
         # and every other str-consuming call over a list expects (stage 1;

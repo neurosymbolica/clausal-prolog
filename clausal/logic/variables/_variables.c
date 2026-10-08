@@ -247,6 +247,9 @@ Var_get_is_bound(VarObject *self, void *closure)
     return PyBool_FromLong(FT_ATOMIC_LOAD_PTR(self->binding) != NULL);
 }
 
+static int walk_types_ready(void);
+static PyObject *walk_seglistview_type;     /* defined with the walk types below */
+
 static PyObject *
 Var_get_value(VarObject *self, void *closure)
 {
@@ -260,6 +263,12 @@ Var_get_value(VarObject *self, void *closure)
         if (!text) return NULL;
         return make_chars_carrier(text);
     }
+    /* Likewise the view of a list (terms.SegListView) comes out as the list
+     * of its elements: the list a copy of the rest would have been. */
+    int ready = walk_types_ready();
+    if (ready < 0) return NULL;
+    if (ready && (PyObject *)Py_TYPE(root) == walk_seglistview_type)
+        return PyObject_CallMethod(root, "elements", NULL);
     Py_INCREF(root);
     return root;
 }
@@ -2372,6 +2381,7 @@ py_term_field_names(PyObject *Py_UNUSED(module), PyObject *obj)
  * ================================================================ */
 
 static PyObject *walk_seglist_type   = NULL;
+static PyObject *walk_seglistview_type = NULL;   /* terms.SegListView, a SegList */
 static PyObject *walk_segstring_type = NULL;
 static PyObject *walk_segbytes_type  = NULL;
 static PyObject *walk_dictterm_type  = NULL;
@@ -2398,12 +2408,14 @@ walk_types_ready(void)
     PyObject *sb = ss ? PyObject_GetAttrString(mod, "SegBytes") : NULL;
     PyObject *pe = sb ? PyObject_GetAttrString(mod, "PartialTermError") : NULL;
     PyObject *vs = pe ? PyObject_GetAttrString(mod, "VarSeg") : NULL;
-    PyObject *dt = vs ? PyObject_GetAttrString(mod, "DictTerm") : NULL;
+    PyObject *lv = vs ? PyObject_GetAttrString(mod, "SegListView") : NULL;
+    PyObject *dt = lv ? PyObject_GetAttrString(mod, "DictTerm") : NULL;
     Py_DECREF(mod);
     if (!dt) {
         /* Partially initialised (a circular import in progress): nothing
          * of these types can have been built yet either. */
         Py_XDECREF(sl); Py_XDECREF(ss); Py_XDECREF(sb); Py_XDECREF(pe); Py_XDECREF(vs);
+        Py_XDECREF(lv);
         if (PyErr_ExceptionMatches(PyExc_AttributeError)) {
             PyErr_Clear();
             return 0;
@@ -2416,12 +2428,13 @@ walk_types_ready(void)
     walk_var_name = PyUnicode_InternFromString("var");
     if (!walk_segments_name || !walk_data_name || !walk_walk_name || !walk_var_name) {
         Py_DECREF(sl); Py_DECREF(ss); Py_DECREF(sb); Py_DECREF(pe); Py_DECREF(vs);
-        Py_DECREF(dt);
+        Py_DECREF(lv); Py_DECREF(dt);
         return -1;
     }
     walk_partial_error = pe;
     walk_varseg_type = vs;
     walk_seglist_type = sl;
+    walk_seglistview_type = lv;
     walk_segstring_type = ss;
     walk_segbytes_type = sb;
     walk_dictterm_type = dt;   /* set last: it is the "ready" flag */
@@ -2439,8 +2452,10 @@ walk_container_kind(PyObject *term)
     int r = walk_types_ready();
     if (r <= 0) return r;
     PyObject *tp = (PyObject *)Py_TYPE(term);
+    /* A SegListView (the rest of a list, read in place) is a SegList: its
+     * _segments is one ConcreteSeg of its elements, read as any other. */
     if (tp == walk_seglist_type || tp == walk_segstring_type
-            || tp == walk_segbytes_type)
+            || tp == walk_segbytes_type || tp == walk_seglistview_type)
         return WALK_SEG;
     if (tp == walk_dictterm_type) return WALK_DICTTERM;
     return WALK_NONE;
@@ -2475,7 +2490,7 @@ is_seg_object(PyObject *o)
 {
     PyObject *tp = (PyObject *)Py_TYPE(o);
     return tp == walk_seglist_type || tp == walk_segstring_type
-        || tp == walk_segbytes_type;
+        || tp == walk_segbytes_type || tp == walk_seglistview_type;
 }
 
 /* 1 when a VarSeg hole of the Seg* *term* is bound to another Seg* -- the

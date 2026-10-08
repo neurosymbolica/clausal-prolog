@@ -34,6 +34,7 @@ static PyTypeObject *SegStringType   = NULL;
 static PyTypeObject *SegBytesType    = NULL;
 static PyTypeObject *ConcreteSegType = NULL;
 static PyTypeObject *VarSegType      = NULL;
+static PyTypeObject *SegListViewType = NULL;   /* clausal.terms.SegListView */
 
 /* ================================================================
  * Helpers
@@ -126,9 +127,13 @@ seq_getitem(PyObject *seq, Py_ssize_t i)
             return PySequence_GetItem(seq, i);   /* a view: its char, no copy */
     }
     if (PyList_Check(seq)) {
-        PyObject *item = PyList_GET_ITEM(seq, i);
-        Py_INCREF(item);
-        return item;
+        /* Bounds re-checked: callers unify between reads, which can run
+         * Python that shrinks the list. */
+        if (i < 0 || i >= PyList_GET_SIZE(seq)) {
+            PyErr_SetString(PyExc_ValueError, "a list shrank while it was being matched");
+            return NULL;
+        }
+        return Py_NewRef(PyList_GET_ITEM(seq, i));
     }
     if (PyUnicode_Check(seq)) {
         PyObject *ch = PySequence_GetItem(seq, i);
@@ -183,6 +188,8 @@ join_char_spellings(PyObject *chars)
 }
 
 
+static PyObject *list_window(PyObject *base, Py_ssize_t lo, Py_ssize_t hi);
+
 /* Slice seq[start:end] — returns new ref.  The carrier slices as its text,
  * and a str slice (a text target's star tail) is handed out as the CARRIER
  * (stage 1): what a Var binds to is never a bare str. */
@@ -191,6 +198,8 @@ seq_slice(PyObject *seq, Py_ssize_t start, Py_ssize_t end)
 {
     if (is_chars_carrier(seq))
         return carrier_slice(seq, start, end);   /* a long tail is a view, not a copy */
+    if (PyList_CheckExact(seq) && SegListViewType)
+        return list_window(seq, start, end);     /* so is a long rest of a list */
     PyObject *s = PySequence_GetSlice(seq, start, end);
     if (s && PyUnicode_Check(s)) {
         PyObject *c = make_chars_carrier(s);
@@ -198,6 +207,63 @@ seq_slice(PyObject *seq, Py_ssize_t start, Py_ssize_t end)
         return c;
     }
     return s;
+}
+
+/* ── The rest of a list, as a window of it ──
+ * Twin of ``list_rest`` in clausal/terms.py (see "The rest of a list, as a
+ * window of it" there): a long rest of a list is a SegListView of the same
+ * list, not a copy. */
+
+#define LIST_VIEW_MIN 64        /* = terms.LIST_VIEW_MIN */
+
+/* The base list and window of the SegListView *v*: *base* a NEW reference
+ * to an exact list, and 0 <= *lo* <= *hi* <= len(base) checked NOW (the
+ * base is a Python list someone could have shrunk).  0, or -1 with an
+ * exception. */
+static int
+view_parts(PyObject *v, PyObject **base, Py_ssize_t *lo, Py_ssize_t *hi)
+{
+    PyObject *b = PyObject_GetAttrString(v, "base");
+    if (!b) return -1;
+    PyObject *l = PyObject_GetAttrString(v, "lo");
+    PyObject *h = l ? PyObject_GetAttrString(v, "hi") : NULL;
+    Py_ssize_t vl = l ? PyLong_AsSsize_t(l) : -1;
+    Py_ssize_t vh = h ? PyLong_AsSsize_t(h) : -1;
+    Py_XDECREF(l);
+    Py_XDECREF(h);
+    if (PyErr_Occurred()) { Py_DECREF(b); return -1; }
+    if (!PyList_CheckExact(b) || vl < 0 || vl > vh || vh > PyList_GET_SIZE(b)) {
+        Py_DECREF(b);
+        PyErr_SetString(PyExc_ValueError,
+                        "a SegListView's window is not inside its list");
+        return -1;
+    }
+    *base = b; *lo = vl; *hi = vh;
+    return 0;
+}
+
+/* Element *i* of the window [lo, hi) of *base* -- a NEW reference, the
+ * bound re-checked against the list as it is now. */
+static PyObject *
+window_item(PyObject *base, Py_ssize_t lo, Py_ssize_t i)
+{
+    if (lo + i >= PyList_GET_SIZE(base)) {
+        PyErr_SetString(PyExc_ValueError, "the list under a SegListView shrank");
+        return NULL;
+    }
+    return Py_NewRef(PyList_GET_ITEM(base, lo + i));
+}
+
+/* base[lo:hi] (the caller checked 0 <= lo <= hi <= len(base), *base* an
+ * exact list) as the term a hole binds to: a SegListView when long, else a
+ * fresh list.  New reference. */
+static PyObject *
+list_window(PyObject *base, Py_ssize_t lo, Py_ssize_t hi)
+{
+    if (hi - lo >= LIST_VIEW_MIN)
+        return PyObject_CallFunction((PyObject *)SegListViewType, "Onn",
+                                     base, lo, hi);
+    return PyList_GetSlice(base, lo, hi);
 }
 
 /* The ISO cons cell ('.', H, T) -- the term an improper list such as
@@ -330,6 +396,39 @@ py_head_list_unify_input(PyObject *Py_UNUSED(module), PyObject *args)
     int has_star = (star_val != Py_None);
     Py_ssize_t n_after = PyList_GET_SIZE(after_vals);
 
+    /* ── Fast path: [H, *T] on the view of a list: the rest is a view of
+     * the same list (see list_window), so walking a list down its tail
+     * copies nothing. ── */
+    if (SegListViewType && Py_TYPE(d) == SegListViewType && has_star && n_after == 0) {
+        PyObject *base;
+        Py_ssize_t lo, hi;
+        if (view_parts(d, &base, &lo, &hi) < 0) { Py_DECREF(d); return NULL; }
+        Py_DECREF(d);
+        if (hi - lo < n_before) { Py_DECREF(base); Py_RETURN_FALSE; }
+        for (Py_ssize_t i = 0; i < n_before; i++) {
+            PyObject *elem = window_item(base, lo, i);
+            if (!elem) { Py_DECREF(base); return NULL; }
+            int ok = call_unify(PyList_GET_ITEM(var_vals, i), elem, trail);
+            Py_DECREF(elem);
+            if (ok < 0) { Py_DECREF(base); return NULL; }
+            if (!ok) { Py_DECREF(base); Py_RETURN_FALSE; }
+        }
+        /* The unifications above can run Python: re-check the window. */
+        if (hi > PyList_GET_SIZE(base)) {
+            Py_DECREF(base);
+            PyErr_SetString(PyExc_ValueError, "the list under a SegListView shrank");
+            return NULL;
+        }
+        PyObject *tail = list_window(base, lo + n_before, hi);
+        Py_DECREF(base);
+        if (!tail) return NULL;
+        int ok = call_unify(star_val, tail, trail);
+        Py_DECREF(tail);
+        if (ok < 0) return NULL;
+        if (ok) Py_RETURN_TRUE;
+        Py_RETURN_FALSE;
+    }
+
     /* ── Fast path: [H, *T] on a plain list ── */
     if (PyList_Check(d) && has_star && n_after == 0) {
         Py_ssize_t dlen = PyList_GET_SIZE(d);
@@ -339,12 +438,22 @@ py_head_list_unify_input(PyObject *Py_UNUSED(module), PyObject *args)
         }
         for (Py_ssize_t i = 0; i < n_before; i++) {
             PyObject *v = PyList_GET_ITEM(var_vals, i);
-            PyObject *elem = PyList_GET_ITEM(d, i);
+            /* A new reference, the bound re-checked: each unify can run
+             * Python (a hook) that shrinks the list. */
+            PyObject *elem = seq_getitem(d, i);
+            if (!elem) { Py_DECREF(d); return NULL; }
             int ok = call_unify(v, elem, trail);
+            Py_DECREF(elem);
             if (ok < 0) { Py_DECREF(d); return NULL; }
             if (!ok) { Py_DECREF(d); Py_RETURN_FALSE; }
         }
-        PyObject *tail = PyList_GetSlice(d, n_before, dlen);
+        if (PyList_GET_SIZE(d) != dlen) {
+            Py_DECREF(d);
+            PyErr_SetString(PyExc_ValueError, "a list shrank while it was being matched");
+            return NULL;
+        }
+        PyObject *tail = PyList_CheckExact(d) ? list_window(d, n_before, dlen)
+                                              : PyList_GetSlice(d, n_before, dlen);
         if (!tail) { Py_DECREF(d); return NULL; }
         int ok = call_unify(star_val, tail, trail);
         Py_DECREF(tail);
@@ -440,6 +549,11 @@ py_head_list_unify_input(PyObject *Py_UNUSED(module), PyObject *args)
         /* Unify star element */
         if (has_star) {
             Py_ssize_t star_end = n_after ? (dlen - n_after) : dlen;
+            if (seq_length(d) != dlen) {       /* resized by a hook in the loop above */
+                Py_DECREF(d);
+                PyErr_SetString(PyExc_ValueError, "a list shrank while it was being matched");
+                return NULL;
+            }
             PyObject *star_slice = seq_slice(d, n_before, star_end);
             if (!star_slice) { Py_DECREF(d); return NULL; }
             int ok = call_unify(star_val, star_slice, trail);
@@ -1012,9 +1126,11 @@ PyInit__list_unify(void)
     PyObject *sb = PyObject_GetAttrString(terms_mod, "SegBytes");
     PyObject *cs = PyObject_GetAttrString(terms_mod, "ConcreteSeg");
     PyObject *vs = PyObject_GetAttrString(terms_mod, "VarSeg");
+    PyObject *lv = PyObject_GetAttrString(terms_mod, "SegListView");
     Py_DECREF(terms_mod);
 
-    if (!sl || !ss || !sb || !cs || !vs) return NULL;
+    if (!sl || !ss || !sb || !cs || !vs || !lv) return NULL;
+    SegListViewType = (PyTypeObject *)lv;
     SegListType     = (PyTypeObject *)sl;
     SegStringType   = (PyTypeObject *)ss;
     SegBytesType    = (PyTypeObject *)sb;

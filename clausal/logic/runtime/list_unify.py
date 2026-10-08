@@ -81,7 +81,7 @@ from __future__ import annotations
 from clausal.logic.cells import chars, is_chars, chars_text  # stage 1: the chars carrier
 from clausal.logic.variables import is_var, deref, unify
 from clausal.terms import (
-    SegList, ConcreteSeg, VarSeg,
+    SegList, SegListView, ConcreteSeg, VarSeg, list_rest,
     SegString, SegBytes, _is_cons_cell, _unify_seglist_cons,
 )
 from ._seg_helpers import (
@@ -150,15 +150,18 @@ def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
     elif type(d) is str:
         return False                   # STAGE 2: a bare str is an ATOM, not a sequence
 
-    # ── fast path: [H, *T] on a plain list ──
-    if type(d) is list and star_val is not None and not after_vals:
+    # ── fast path: [H, *T] on a plain list, or on the view of one ──
+    # A long var-free rest is a view of the same list, not a copy
+    # (``terms.list_rest``): walking a list down its tail copies nothing.
+    if (type(d) is list or type(d) is SegListView) and star_val is not None \
+            and not after_vals:
         n = len(var_vals)
         if len(d) < n:
             return False
         for i in range(n):
             if not unify(var_vals[i], d[i], trail):
                 return False
-        return unify(star_val, d[n:], trail)
+        return unify(star_val, list_rest(d, n, len(d)), trail)
     # ── end fast path ──
 
     # Normalise SegList / SegString: walk it; if ground it becomes a plain
@@ -204,7 +207,8 @@ def _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail):
                 return False
         if star_val is not None:
             star_end = len(d) - n_after if n_after else len(d)
-            star_slice = d[n_before:star_end]
+            star_slice = (list_rest(d, n_before, star_end) if type(d) is list
+                          else d[n_before:star_end])
             if type(star_slice) is str:
                 star_slice = chars(star_slice)   # stage 1: a str tail is the carrier
             if not unify(star_val, star_slice, trail):
