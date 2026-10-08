@@ -40,3 +40,12 @@ of `[]` (`atoms.is_nil`), so these should key like `[]`, and a non-empty bytes t
 
 Each case needs a subprocess test (a crash must fail the test, not the run), in the style of
 `_child(src)` in `tests/test_tabling_char_and_code_list_key.py`.
+
+## Also pre-existing, found reviewing the text fast paths (2026-10-08), both Low
+
+- `_head_list_unify_output` (C) reads `var_vals` / `after_vals` with `PyList_GET_SIZE` and no type
+  check: called directly with a tuple it segfaults. Compiled code always passes lists, so it is
+  unreachable from a program; a `PyList_Check` at entry would make it a TypeError.
+- The C and Python twins of the head-list helpers disagree on str SUBCLASSES: C tests
+  `PyUnicode_Check`, Python `type(x) is str`, so `[S("a")|"cd"]` builds a carrier in C and a list in
+  Python. Pick one (exact `str`, as `is_char_atom` says) and align the C side.

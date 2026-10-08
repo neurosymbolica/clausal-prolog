@@ -363,9 +363,6 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
     l2_val = deref(l2)
     l3_val = deref(l3)
 
-    l1_items = _as_items(l1_val)
-    l2_items = _as_items(l2_val)
-    l3_items = _as_items(l3_val)
     # Track the result container type. str output when a str is present and no
     # list/bytes; bytes output (codes model) when a bytes is present and no
     # list/str. A list anywhere keeps a list (input-type-wins).
@@ -375,6 +372,33 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
     _any_list = isinstance(l1_val, list) or isinstance(l2_val, list) or isinstance(l3_val, list)
     _out_str = _any_str and not _any_list and not _any_bytes
     _out_bytes = _any_bytes and not _any_list and not _any_str
+
+    # Text with text: concatenate or strip the prefix as str, where the
+    # general path below splits every carrier into one list entry per char
+    # and joins the result again.  Building text by ``append("a", T, L)`` in
+    # a loop made that per-char work quadratic.  The answers are the ones the
+    # general path gives: _out_str holds, so it would build the same carrier.
+    if _out_str and is_chars(l1_val):
+        if is_chars(l2_val):
+            mark = trail.mark()
+            if unify(l3, chars(chars_text(l1_val) + chars_text(l2_val)), trail):
+                yield (_proceed, None)
+            trail.undo(mark)
+            yield (_fail, DONE)
+            return
+        if is_chars(l3_val) and _as_items(l2_val) is None:
+            t1, t3 = chars_text(l1_val), chars_text(l3_val)
+            if t3.startswith(t1):
+                mark = trail.mark()
+                if unify(l2, chars(t3[len(t1):]), trail):
+                    yield (_proceed, None)
+                trail.undo(mark)
+            yield (_fail, DONE)
+            return
+
+    l1_items = _as_items(l1_val)
+    l2_items = _as_items(l2_val)
+    l3_items = _as_items(l3_val)
 
     if l1_items is not None and l2_items is not None:
         # Both known: concatenate

@@ -519,6 +519,50 @@ py_head_list_unify_input(PyObject *Py_UNUSED(module), PyObject *args)
  * _head_list_unify_output
  * ================================================================ */
 
+/* [C1, ..., *S, ..., Cn] where S is bound to a chars carrier and every Ci is
+ * a char: the result is the carrier of the joined text, which is what the
+ * general path below builds after splitting S into one list entry per char
+ * and joining them again.  A clause that builds text cell by cell, like
+ * ``rec(N, [a|T]) <- ..., rec(M, T)``, reaches here once per char with a
+ * longer S each time, so the general path's per-char work made it
+ * quadratic in Python objects; one join copies the text at memcpy speed.
+ * Returns a new carrier, Py_None (new reference) when the fast path does
+ * not apply, or NULL on error. */
+static PyObject *
+carrier_star_concat(PyObject *var_vals, PyObject *s, PyObject *after_vals)
+{
+    Py_ssize_t nb = PyList_GET_SIZE(var_vals);
+    Py_ssize_t na = PyList_GET_SIZE(after_vals);
+    PyObject *text = PyTuple_GET_ITEM(s, 1);
+    /* an empty result stays the empty list, as maybe_promote_to_str leaves it */
+    if (nb + na == 0 && PyUnicode_GET_LENGTH(text) == 0)
+        Py_RETURN_NONE;
+    PyObject *parts = PyList_New(nb + 1 + na);
+    if (!parts) return NULL;
+    for (Py_ssize_t i = 0; i < nb + na; i++) {
+        PyObject *v = i < nb ? PyList_GET_ITEM(var_vals, i)
+                             : PyList_GET_ITEM(after_vals, i - nb);
+        PyObject *dv = call_deref(v);
+        if (!dv) { Py_DECREF(parts); return NULL; }
+        if (!is_char_atom_obj(dv)) {
+            Py_DECREF(dv);
+            Py_DECREF(parts);
+            Py_RETURN_NONE;
+        }
+        PyList_SET_ITEM(parts, i < nb ? i : i + 1, dv);   /* steals dv */
+    }
+    PyList_SET_ITEM(parts, nb, Py_NewRef(text));
+    PyObject *empty = PyUnicode_FromStringAndSize("", 0);
+    if (!empty) { Py_DECREF(parts); return NULL; }
+    PyObject *joined = PyUnicode_Join(empty, parts);
+    Py_DECREF(empty);
+    Py_DECREF(parts);
+    if (!joined) return NULL;
+    PyObject *carrier = make_chars_carrier(joined);
+    Py_DECREF(joined);
+    return carrier;
+}
+
 static PyObject *
 py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
 {
@@ -541,6 +585,24 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
             /* delegate to input — reuse our C version */
             return py_head_list_unify_input(NULL, args);
         }
+    }
+
+    if (star_val != Py_None) {
+        PyObject *s0 = call_deref(star_val);
+        if (!s0) { Py_DECREF(d); return NULL; }
+        PyObject *fast = is_chars_carrier(s0)
+            ? carrier_star_concat(var_vals, s0, after_vals) : Py_NewRef(Py_None);
+        Py_DECREF(s0);
+        if (!fast) { Py_DECREF(d); return NULL; }
+        if (fast != Py_None) {
+            int ok = call_unify(d, fast, trail);
+            Py_DECREF(fast);
+            Py_DECREF(d);
+            if (ok < 0) return NULL;
+            if (ok) Py_RETURN_TRUE;
+            Py_RETURN_FALSE;
+        }
+        Py_DECREF(fast);
     }
 
     /* Build result list from [deref(v) for v in var_vals] */

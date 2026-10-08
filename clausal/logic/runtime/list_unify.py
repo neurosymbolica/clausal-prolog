@@ -86,6 +86,7 @@ from clausal.terms import (
 )
 from ._seg_helpers import (
     maybe_promote_to_str, maybe_promote_to_bytes, seq_getitem, str_chars,
+    is_char_atom,
 )
 
 
@@ -232,6 +233,22 @@ def _head_multi_star_error():
     )
 
 
+def _carrier_star_concat(before, s, after_vals):
+    """``[C1, ..., *S, ..., Cn]`` with *S* a chars carrier and every Ci a
+    char: the carrier of the joined text, built by one join rather than one
+    list entry per char (the C twin's ``carrier_star_concat`` says why).
+    None when that does not apply, and the general path runs."""
+    if not is_chars(s):
+        return None
+    after = [deref(v) for v in after_vals]
+    text = chars_text(s)
+    if not (before or after or text):
+        return None
+    if not all(is_char_atom(e) for e in before) or not all(is_char_atom(e) for e in after):
+        return None
+    return chars("".join(before) + text + "".join(after))
+
+
 def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
     """Output-mode list pattern unification: construct list from bound vars.
 
@@ -242,6 +259,10 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
         # Already bound (e.g., by body) — switch to input mode
         return _head_list_unify_input_py(target, var_vals, star_val, after_vals, trail)
     result = [deref(v) for v in var_vals]
+    if star_val is not None:
+        fast = _carrier_star_concat(result, deref(star_val), after_vals)
+        if fast is not None:
+            return unify(d, fast, trail)
     # THE FLIP (atoms-as-cells/strings §6.2) DELETED the ``star_was_str``
     # gate that used to stand here (and its C twin in ``_list_unify.c``).
     # It guarded a hazard that no longer exists: under P3-1 an atom was a
