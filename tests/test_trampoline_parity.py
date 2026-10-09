@@ -568,7 +568,7 @@ def test_a_solution_step_is_answered_once_per_answer_of_its_goals(impl):
     log = []
     out, trail = _steps(impl, 2, [_answers(2, log), _answers(3, log)])
     assert out == ["sol"] * 5 + ["done"]
-    assert trail.defer is True and trail.pending is None
+    assert trail.pending is None
 
 
 def test_a_solution_step_whose_goals_fail_is_skipped(impl):
@@ -593,3 +593,53 @@ def test_an_error_in_a_queued_goal_propagates(impl):
     sg = impl.StepGenerator(fn, marker, marker, marker, trail)
     with pytest.raises(ValueError, match="boom"):
         sg.send(None)
+
+
+@pytest.mark.parametrize("act", ["send", "close", "throw"])
+def test_re_entering_a_generator_while_it_runs_its_goals_is_an_error(impl, act):
+    """Review H1: a queued goal that sends to, closes or throws into the
+    generator whose solution step is running it got a clean error in
+    neither twin (C freed the running drain: a segfault)."""
+    from clausal.logic.variables import Trail
+    trail = Trail()
+    marker = object()
+    box, seen = {}, []
+
+    def goal():
+        sg = box["sg"]
+        try:
+            if act == "send":
+                sg.send(None)
+            elif act == "close":
+                sg.close()
+            else:
+                sg.throw(ValueError("x"))
+        except RuntimeError as e:
+            seen.append(str(e))
+        yield None
+        yield None
+
+    def fn(this, proceed, fail, catcher, trail):
+        trail.push_pending(goal)
+        yield (proceed, None)
+        yield (fail, impl.DONE)
+    sg = box["sg"] = impl.StepGenerator(fn, marker, marker, marker, trail)
+    assert sg.send(None) == (marker, None)
+    assert sg.send(None) == (marker, None)          # the goal's second answer
+    assert sg.send(None)[1] is impl.DONE
+    assert seen and "re-entered while running its pending goals" in seen[0]
+
+
+def test_a_driver_defers_woken_goals_only_while_it_runs(impl):
+    """Review M2: the flag used to stay set after a trail was driven once, so a
+    later bare unify queued a woken goal nothing would run."""
+    from clausal.logic.variables import Trail
+    trail = Trail()
+    during = []
+
+    def fn(this, proceed, fail, catcher, trail):
+        during.append(trail.defer)
+        yield (proceed, 1)
+        yield (fail, impl.DONE)
+    assert impl.solutions(impl.StepGenerator(fn, None, None, None, trail)) == [1]
+    assert during == [True] and trail.defer is False

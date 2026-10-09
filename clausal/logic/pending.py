@@ -34,24 +34,28 @@ def drain(trail):
     """Run every goal queued on *trail*, as a conjunction; yield per answer.
 
     Goals a running goal queues in turn are run after the conjunction (each
-    goal's own goal boundaries run the ones it wakes itself first).
+    goal's own goal boundaries run the ones it wakes itself first).  The
+    conjunction is driven with an explicit stack, so a thousand goals woken
+    by one unification nest no Python frames.
     """
     goals = trail.take_pending()
     if goals is None:
         yield None
         return
-    yield from _conj(goals, 0, trail)
-
-
-def _conj(goals, i, trail):
-    if i == len(goals):
-        if trail.pending is None:
+    n = len(goals)
+    its = [iter(goals[0]())]
+    while its:
+        try:
+            next(its[-1])
+        except StopIteration:
+            its.pop()
+            continue
+        if len(its) < n:
+            its.append(iter(goals[len(its)]()))
+        elif trail.pending is None:
             yield None
         else:
             yield from drain(trail)
-        return
-    for _ in goals[i]():
-        yield from _conj(goals, i + 1, trail)
 
 
 def run_first(trail) -> bool:

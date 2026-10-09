@@ -126,7 +126,32 @@ typedef struct {
     PyObject *trail;        /* the Trail passed as the last argument, or NULL */
     PyObject *drain;        /* running pending-goal drain, or NULL */
     PyObject *drain_step;   /* the solution step being re-answered by it */
+    int       draining;     /* 1 while the drain runs (Python goal code):
+                             * re-entering this generator then is an error */
 } StepGenObject;
+
+static int
+stepgen_refuse_while_draining(StepGenObject *self)
+{
+    if (!self->draining)
+        return 0;
+    PyErr_SetString(PyExc_RuntimeError,
+                    "StepGenerator re-entered while running its pending goals");
+    return -1;
+}
+
+/* Advance *drain* by one answer, guarded against re-entry; the caller holds
+ * its own references.  Returns the PyIter_Send result. */
+static PySendResult
+stepgen_drain_next(StepGenObject *self, PyObject *drain)
+{
+    PyObject *res = NULL;
+    self->draining = 1;
+    PySendResult sr = PyIter_Send(drain, Py_None, &res);
+    self->draining = 0;
+    Py_XDECREF(res);
+    return sr;
+}
 
 static PyTypeObject *StepGenType = NULL;   /* heap type, set at module init */
 
@@ -195,18 +220,18 @@ StepGen_init(StepGenObject *self, PyObject *args, PyObject *kwds)
     Py_DECREF(call_args);
     if (!gen) return -1;
 
+    if (stepgen_refuse_while_draining(self) < 0) {
+        Py_DECREF(gen);
+        return -1;
+    }
     /* Compiled predicates and builtins take the trail last. */
     Py_CLEAR(self->trail);
     Py_CLEAR(self->drain);
     Py_CLEAR(self->drain_step);
     if (n_rest > 0) {
         PyObject *last = PyTuple_GET_ITEM(args, nargs - 1);
-        if (Trail_Check(last)) {
+        if (Trail_Check(last))
             self->trail = Py_NewRef(last);
-            /* A trail a trampoline drives defers woken goals: they run at
-             * the next goal boundary, every answer (clausal/logic/pending.py). */
-            Trail_CAST(last)->defer = 1;
-        }
     }
 
     Py_XDECREF(self->gen);
@@ -312,19 +337,24 @@ StepGen_send(StepGenObject *self, PyObject *value)
     PyObject *result;
     PySendResult sr;
 
+    if (stepgen_refuse_while_draining(self) < 0)
+        return NULL;
+
     /* Re-answering a solution step while its pending goals have answers:
-     * resume the drain; when it is exhausted, resume the generator. */
+     * resume the drain; when it is exhausted, resume the generator.  The
+     * drain runs Python code, so hold our own references across it. */
     if (self->drain) {
-        sr = PyIter_Send(self->drain, Py_None, &result);
-        if (sr == PYGEN_NEXT) {
-            Py_DECREF(result);
-            return Py_NewRef(self->drain_step);
-        }
+        PyObject *drain = Py_NewRef(self->drain);
+        PyObject *step  = Py_NewRef(self->drain_step);
+        sr = stepgen_drain_next(self, drain);
+        Py_DECREF(drain);
+        if (sr == PYGEN_NEXT)
+            return step;
+        Py_DECREF(step);
         Py_CLEAR(self->drain);
         Py_CLEAR(self->drain_step);
         if (sr == PYGEN_ERROR)
             return NULL;
-        Py_DECREF(result);   /* PYGEN_RETURN: drained */
     }
 
     for (;;) {
@@ -345,19 +375,16 @@ StepGen_send(StepGenObject *self, PyObject *value)
                 Py_DECREF(result);
                 return NULL;
             }
-            PyObject *dres;
-            PySendResult dsr = PyIter_Send(drain, Py_None, &dres);
+            PySendResult dsr = stepgen_drain_next(self, drain);
             if (dsr == PYGEN_NEXT) {
-                Py_DECREF(dres);
-                self->drain = drain;
-                self->drain_step = result;      /* owned */
-                return Py_NewRef(result);
+                Py_XSETREF(self->drain, drain);          /* owned */
+                Py_XSETREF(self->drain_step, Py_NewRef(result));
+                return result;
             }
             Py_DECREF(drain);
             Py_DECREF(result);
             if (dsr == PYGEN_ERROR)
                 return NULL;
-            Py_DECREF(dres);
             /* No answer: this solution fails; ask for the next one. */
             send_val = Py_None;
             continue;
@@ -400,6 +427,8 @@ StepGen_throw(StepGenObject *self, PyObject *args)
                         "StepGenerator has no inner generator");
         return NULL;
     }
+    if (stepgen_refuse_while_draining(self) < 0)
+        return NULL;
     /* An exception thrown in ends any drain of the last solution step. */
     Py_CLEAR(self->drain);
     Py_CLEAR(self->drain_step);
@@ -416,6 +445,8 @@ StepGen_throw(StepGenObject *self, PyObject *args)
 static PyObject *
 StepGen_close(StepGenObject *self, PyObject *Py_UNUSED(ignored))
 {
+    if (stepgen_refuse_while_draining(self) < 0)
+        return NULL;
     Py_CLEAR(self->drain);
     Py_CLEAR(self->drain_step);
     if (self->gen) {
@@ -672,8 +703,37 @@ set_engine_protocol_error(const char *msg)
 }
 
 static inline drive_result
+drive_to_root_yield_core(PyObject *root, int stopiteration_is_exhaustion,
+                         const char *who, PyObject **out_value);
+
+/* While a driver runs, the root's trail defers woken goals: they are queued
+ * and run at the next goal boundary with every answer
+ * (clausal/logic/pending.py).  The flag is restored on every exit, so a
+ * bare unify on the trail between drives runs them in place, as before. */
+static inline drive_result
 drive_to_root_yield(PyObject *root, int stopiteration_is_exhaustion,
                     const char *who, PyObject **out_value)
+{
+    PyObject *t = StepGen_CAST(root)->trail;
+    TrailObject *trail = NULL;
+    int saved = 0;
+    if (t && Trail_CAST(t)->owner_thread_id == PyThread_get_thread_ident()) {
+        trail = Trail_CAST(Py_NewRef(t));
+        saved = trail->defer;
+        trail->defer = 1;
+    }
+    drive_result r = drive_to_root_yield_core(root, stopiteration_is_exhaustion,
+                                              who, out_value);
+    if (trail) {
+        trail->defer = saved;
+        Py_DECREF(trail);
+    }
+    return r;
+}
+
+static inline drive_result
+drive_to_root_yield_core(PyObject *root, int stopiteration_is_exhaustion,
+                         const char *who, PyObject **out_value)
 {
     /* Retirement (policy Q3) lives here, once: a retired root answers
      * without being resumed; each wrapper maps DRIVE_RETIRED to its own

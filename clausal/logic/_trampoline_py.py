@@ -143,7 +143,7 @@ class StepGenerator:
     ``inner_gen.send(value)``.
     """
     __slots__ = ('_gen', '_started', 'proceed', 'fail', 'catcher', 'retired',
-                 '_trail', '_drain', '_drain_step')
+                 '_trail', '_drain', '_drain_step', '_draining')
 
     def __init__(
         self,
@@ -168,22 +168,39 @@ class StepGenerator:
         # Compiled predicates and builtins take the trail last; its pending
         # goals run on a solution step (C≡Py: StepGen_send).
         self._trail = args[-1] if args and type(args[-1]) is Trail else None
-        if self._trail is not None:
-            self._trail.defer = True
         self._drain = None
         self._drain_step = None
+        self._draining = False
+
+    def _refuse_while_draining(self):
+        if getattr(self, "_draining", False):
+            raise RuntimeError(
+                "StepGenerator re-entered while running its pending goals")
+
+    def _drain_next(self, drain) -> bool:
+        """One answer of *drain*, guarded against re-entry (C≡Py:
+        stepgen_drain_next)."""
+        self._draining = True
+        try:
+            next(drain)
+            return True
+        except StopIteration:
+            return False
+        finally:
+            self._draining = False
 
     def send(self, value: Any) -> tuple:
+        self._refuse_while_draining()
         # Re-answering a solution step while its pending goals have answers.
         if self._drain is not None:
+            drain, step = self._drain, self._drain_step
             try:
-                next(self._drain)
-                return self._drain_step
-            except StopIteration:
-                self._drain = self._drain_step = None
+                if self._drain_next(drain):
+                    return step
             except BaseException:
                 self._drain = self._drain_step = None
                 raise
+            self._drain = self._drain_step = None
         try:
             while True:
                 if self._started:
@@ -196,9 +213,10 @@ class StepGenerator:
                         and type(step) is tuple and len(step) == 2
                         and step[0] is self.proceed and step[1] is None):
                     drain = pending_or_once(trail)
-                    try:
-                        next(drain)
-                    except StopIteration:
+                    if not isinstance(drain, Generator):
+                        raise RuntimeError(
+                            "pending_or_once() did not return a generator")
+                    if not self._drain_next(drain):
                         value = None        # no answer: ask for the next one
                         continue
                     self._drain, self._drain_step = drain, step
@@ -215,10 +233,12 @@ class StepGenerator:
             raise err
 
     def throw(self, *args: Any) -> tuple:
+        self._refuse_while_draining()
         self._drain = self._drain_step = None
         return self._gen.throw(*args)
 
     def close(self) -> None:
+        self._refuse_while_draining()
         self._drain = self._drain_step = None
         self._gen.close()
 
@@ -264,6 +284,22 @@ def _engine_protocol_error(msg):
 
 
 def _drive_to_root_yield(root, *, stopiteration_is_exhaustion, who):
+    # While a driver runs, the root's trail defers woken goals (C≡Py:
+    # drive_to_root_yield); restored on every exit.
+    trail = getattr(root, "_trail", None)
+    if trail is None:
+        return _drive_to_root_yield_core(
+            root, stopiteration_is_exhaustion=stopiteration_is_exhaustion, who=who)
+    saved = trail.defer
+    trail.defer = True
+    try:
+        return _drive_to_root_yield_core(
+            root, stopiteration_is_exhaustion=stopiteration_is_exhaustion, who=who)
+    finally:
+        trail.defer = saved
+
+
+def _drive_to_root_yield_core(root, *, stopiteration_is_exhaustion, who):
     from clausal.logic.tabling import _TABLING_SUSPEND
 
     def _is_pep479(exc):

@@ -157,3 +157,16 @@ def test_under_a_driver_a_hook_queues_its_goal():
     _freeze_var(x, _goal, t)
     assert unify(x, "go", t)
     assert t.pending == (_goal,)
+
+
+def test_many_goals_woken_at_once(tmp_path):
+    """Review M1: the drain nested a frame per queued goal, so about a
+    thousand goals woken by one unification raised RecursionError."""
+    n = 3000
+    src = (f"many(R) :- length(Xs, {n}), maplist(fz, Xs), "
+           f"length(Ys, {n}), maplist(=(go), Ys), Xs = Ys, R = ok.\n"
+           "fz(X) :- freeze(X, true).\n")
+    p = tmp_path / "many.clausal"
+    p.write_text(src)
+    m = load_clausal_module(p)
+    assert _answers(m, "many") == ["ok"]
