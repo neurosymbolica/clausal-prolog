@@ -162,6 +162,13 @@ three positions; `_deref_walk` and `to_python` give str at any depth). The fix t
 is ONE deep flatten per answer at the `solve()` answer boundary, before the yield -- not per `.value`.
 No exposure measured today (no views are created by the measured downstream test files).
 
+The same holds for LIST views (2026-10-09, `SegListView` in `clausal/terms.py`: the rest of a list of
+64 or more elements matched by a partial list is a window onto the same list). A raw `deref` of the
+answer variable, or of a nested subterm, can return a `SegListView`. It is not a `list` subclass, so
+`isinstance(x, list)` is False and `json.dumps` raises. `Var.value`, `_deref_walk`, `to_python`, `++`,
+`assertz` and the clause compiler all hand out a plain list. The one deep flatten at `solve()` should
+cover both view types. No exposure measured today either.
+
 Building text through a DCG is fixed (the SegList chain reads back iteratively; the commit that
 adds this section). PARSING text with a DCG is not:
 
