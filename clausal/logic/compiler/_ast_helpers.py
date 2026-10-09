@@ -298,6 +298,50 @@ class FreshNames:
 # ── Misc AST-building helpers ──────────────────────────────────────────────────
 
 
+def _drained(k_stmts: list[ast.stmt], trail_name: str) -> list[ast.stmt]:
+    """*k_stmts* behind a goal boundary: ``for _ in $pending(trail): k``.
+
+    A unification may wake goals (``freeze/2``, ``when/2``) that queue on the
+    trail; the rest of the clause must see their bindings, once per answer.
+    With nothing queued ``$pending`` is ``(None,)`` and *k* runs once.
+    """
+    if not k_stmts or _is_trampoline_leaf(k_stmts):
+        return k_stmts
+    return [ast.For(
+        target=_name("_", ast.Store()),
+        iter=_call(_name("$pending"), _name(trail_name)),
+        body=k_stmts,           # the same list: compiled once, never copied
+        orelse=[],
+    )]
+
+
+def _is_trampoline_leaf(k_stmts: list[ast.stmt]) -> bool:
+    """``[yield (_proceed, None)]``: a trampoline solution step, whose own
+    goal boundary (``StepGenerator.send``) runs the queued goals."""
+    if len(k_stmts) != 1:
+        return False
+    s = k_stmts[0]
+    if not (isinstance(s, ast.Expr) and isinstance(s.value, ast.Yield)):
+        return False
+    v = s.value.value
+    return (isinstance(v, ast.Tuple) and len(v.elts) == 2
+            and isinstance(v.elts[0], ast.Name) and v.elts[0].id == "_proceed"
+            and isinstance(v.elts[1], ast.Constant) and v.elts[1].value is None)
+
+
+def _unify_drained(l_expr: ast.expr, r_expr: ast.expr, trail_name: str,
+                   k_stmts: list[ast.stmt]) -> ast.stmt:
+    """``for _ in $unify_iter(l, r, trail): k`` -- unify, then *k* behind a
+    goal boundary: not at all on failure, once per answer of the goals the
+    unification woke, once when it woke none.  One call."""
+    return ast.For(
+        target=_name("_", ast.Store()),
+        iter=_call(_name("$unify_iter"), l_expr, r_expr, _name(trail_name)),
+        body=k_stmts or [ast.Pass()],
+        orelse=[],
+    )
+
+
 def _yield_none_stmt() -> ast.stmt:
     return _locate(
         ast.Expr(value=_locate(ast.Yield(value=_locate(ast.Constant(value=None)))))

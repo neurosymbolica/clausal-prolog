@@ -16,7 +16,7 @@ import ast
 from typing import Any
 
 from ._ast_helpers import (
-    _name, _call, _assign_mark, _undo_stmt, _if,
+    _name, _call, _assign_mark, _undo_stmt, _if, _drained,
     _MARK_PREFIX,
 )
 from .terms_to_ast import term_to_ast_expr, _parse_star_segments, _count_stars
@@ -83,7 +83,7 @@ def _compile_single_star_is(
                 ast.List(elts=after_exprs, ctx=ast.Load()),
                 _name(trail_name),
             ),
-            k_stmts,
+            _drained(k_stmts, trail_name),
         ),
         _undo_stmt(mark, trail_name),
     ]
@@ -127,7 +127,7 @@ def _compile_multi_star_is(
                 segments_expr,
                 _name(trail_name),
             ),
-            body=k_stmts or [ast.Pass()],
+            body=_drained(k_stmts, trail_name) or [ast.Pass()],
             orelse=[],
         ),
     ]

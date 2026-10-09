@@ -1135,18 +1135,10 @@ class TestF010WhenDisjunctionFiredFlag:
 
 
 class TestF011FreezeFirstSolutionOnly:
-    @pytest.mark.xfail(strict=False, reason="A04-F011: frozen goal is semidet — "
-                       "choice points of the frozen goal are discarded "
-                       "(SWI freeze/2 backtracks); design question parked")
+    # A04-F011, fixed 2026-10-09: a woken goal runs at the next goal boundary
+    # with every answer (clausal/logic/pending.py), as Scryer's does.
     def test_frozen_goal_backtracks(self, load):
         m = load("f011", FREEZE_SRC)
         X, Y = Var(), Var()
         got = answers(call("f9", X, Y, module=m), X, Y)
         assert got == [(1, 10), (1, 20)]
-
-    def test_frozen_goal_first_solution_binding_guard(self, load):
-        # current behaviour: first solution's bindings stick (regression guard)
-        m = load("f011b", FREEZE_SRC.replace("f9", "f9b"))
-        X, Y = Var(), Var()
-        got = answers(call("f9b", X, Y, module=m), X, Y)
-        assert got == [(1, 10)]

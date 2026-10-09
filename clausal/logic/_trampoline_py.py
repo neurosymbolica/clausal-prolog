@@ -15,6 +15,8 @@ instead, since Task 7).
 from __future__ import annotations
 from typing import Any, Callable, Generator
 
+from clausal.logic.variables import Trail, pending_or_once
+
 # ── Which exceptions the drive loops route to catch/3 ────────────────────────
 #
 # A trampoline-compiled predicate does not *call* its callees: it yields
@@ -140,7 +142,8 @@ class StepGenerator:
     first call does ``next(inner_gen)``; subsequent calls delegate to
     ``inner_gen.send(value)``.
     """
-    __slots__ = ('_gen', '_started', 'proceed', 'fail', 'catcher', 'retired')
+    __slots__ = ('_gen', '_started', 'proceed', 'fail', 'catcher', 'retired',
+                 '_trail', '_drain', '_drain_step')
 
     def __init__(
         self,
@@ -162,13 +165,44 @@ class StepGenerator:
         # (this_generator, _proceed, _fail, _catcher, *args, trail).
         self._gen: Generator = func(self, proceed, fail, catcher, *args)
         self._started: bool = False
+        # Compiled predicates and builtins take the trail last; its pending
+        # goals run on a solution step (C≡Py: StepGen_send).
+        self._trail = args[-1] if args and type(args[-1]) is Trail else None
+        if self._trail is not None:
+            self._trail.defer = True
+        self._drain = None
+        self._drain_step = None
 
     def send(self, value: Any) -> tuple:
+        # Re-answering a solution step while its pending goals have answers.
+        if self._drain is not None:
+            try:
+                next(self._drain)
+                return self._drain_step
+            except StopIteration:
+                self._drain = self._drain_step = None
+            except BaseException:
+                self._drain = self._drain_step = None
+                raise
         try:
-            if self._started:
-                return self._gen.send(value)
-            self._started = True
-            return next(self._gen)
+            while True:
+                if self._started:
+                    step = self._gen.send(value)
+                else:
+                    self._started = True
+                    step = next(self._gen)
+                trail = self._trail
+                if (trail is not None and trail.pending is not None
+                        and type(step) is tuple and len(step) == 2
+                        and step[0] is self.proceed and step[1] is None):
+                    drain = pending_or_once(trail)
+                    try:
+                        next(drain)
+                    except StopIteration:
+                        value = None        # no answer: ask for the next one
+                        continue
+                    self._drain, self._drain_step = drain, step
+                return step
         except StopIteration:
             # C≡Py: StepGen_send converts a returning inner generator
             # (PYGEN_RETURN) into the marked engine-protocol error; a
@@ -181,9 +215,11 @@ class StepGenerator:
             raise err
 
     def throw(self, *args: Any) -> tuple:
+        self._drain = self._drain_step = None
         return self._gen.throw(*args)
 
     def close(self) -> None:
+        self._drain = self._drain_step = None
         self._gen.close()
 
 # ── The drive core ───────────────────────────────────────────────────────────

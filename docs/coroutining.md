@@ -19,7 +19,16 @@ All predicates in this module are **compiler special forms** — they are compil
 Delay `Goal` until variable `X` is bound.
 
 - If `X` is already bound at the time `freeze` is executed, `Goal` runs **immediately**.
-- If `X` is unbound, `Goal` is stored as an attributed variable attribute. when `X` is later unified with a value, the frozen goal fires **synchronously** — if the goal succeeds, the unification succeeds; if the goal fails, the unification **fails** (is rejected).
+- If `X` is unbound, `Goal` is stored as an attributed variable attribute. When `X` is later unified with a value, the frozen goal is **woken**: it runs right after that unification, before the next goal, with **every** answer. If it fails, execution backtracks as if the unification had failed.
+
+A woken goal backtracks like any other goal, as in Scryer:
+
+```prolog
+f(Y) :- freeze(X, member(Y, [1, 2, 3])), X = go.     % Y = 1 ; Y = 2 ; Y = 3
+g(Y) :- freeze(X, member(Y, [1, 2, 3])), X = go, Y > 1.   % Y = 2 ; Y = 3
+```
+
+Goals woken inside a test run inside it: `X \= go` and `\+ X = go` succeed when the goals `X = go` wakes have no answer, and `memberchk/2` (`once(member(...))`) passes over an element whose woken goals fail and keeps the first answer of the rest.
 
 Multiple freezes on the same variable accumulate. All fire when the variable is bound. Backtracking undoes the attribute (the freeze is removed if the trail is unwound).
 
@@ -32,9 +41,11 @@ Multiple freezes on the same variable accumulate. All fire when the variable is 
 ```
 
 ??? info "Implementation"
-    freeze uses the attributed variable hook infrastructure (the same mechanism used by [`dif/2`](constraints.md), [CLP(ℤ)](constraints.md), and [CLP(B)](clpb.md)). The frozen goal is compiled as a closure (zero-arg generator factory) and stored under the `"freeze"` attribute key. The hook drives the generator synchronously — no wakeup queue is needed.
+    freeze uses the attributed variable hook infrastructure (the same mechanism used by [`dif/2`](constraints.md), [CLP(ℤ)](constraints.md), and [CLP(B)](clpb.md)). The frozen goal is compiled as a closure (zero-arg generator factory) and stored under the `"freeze"` attribute key. When the variable is bound, the hook queues the goal on the trail (`trail.push_pending`); the engine runs the queue at the next goal boundary — after an inline unification, at the start of a clause body whose head unified, and at every answer of a called predicate or builtin — once per answer. The queue and every change to it are trailed, so backtracking restores it.
 
-    **Implementation:** `clausal/logic/compiler.py` (`_compile_freeze`), `clausal/logic/coroutining.py` (`_freeze_hook`)
+    A bare `unify(...)` called from Python with no driver owning the trail (`trail.defer` false) runs a woken goal in place, to its first answer, as before.
+
+    **Implementation:** `clausal/logic/compiler/control_constructs.py` (`_compile_freeze`), `clausal/logic/coroutining.py` (`_freeze_hook`), `clausal/logic/pending.py` (the queue's drain)
 
 ---
 
@@ -65,6 +76,7 @@ Generalized coroutining: delay `Goal` until `Condition` is satisfied.
 - `when((C1, C2), Goal)` decomposes to `when(C1, when(C2, Goal))` — the inner when is installed when C1 is satisfied.
 - `when(ground(X), Goal)` freezes on every unbound variable in X. when any is bound, groundness is re-checked. The goal fires when X is fully ground.
 - `when((C1 ; C2), Goal)` attaches to variables in both conditions. Whichever fires first runs the goal (at most once).
+- A goal whose condition already holds runs at once, with every answer, like a woken `freeze` goal; if it has none, `when/2` fails.
 
 ??? info "Implementation"
     Compile-time dispatch handles `nonvar` and conjunction. Runtime helpers in `clausal/logic/coroutining.py` handle `ground` and disjunction.

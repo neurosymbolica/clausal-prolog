@@ -82,11 +82,15 @@ class ShallowStrategy:
         # or continuation-TCO; the hints are accepted for uniform
         # plumbing and ignored.
         iter_expr = _dispatch_call_iter(ctx, fname, arity, arg_exprs)
+        # Each answer is a goal boundary: run what the callee's last
+        # unifications woke before the rest of the clause (a trampoline
+        # callee's solution step already did; a shallow one's did not).
+        from ._ast_helpers import _drained
         return [
             ast.For(
                 target=_name("_", ast.Store()),
                 iter=iter_expr,
-                body=k_stmts or [ast.Pass()],
+                body=_drained(k_stmts, ctx.trail_name) or [ast.Pass()],
                 orelse=[],
             )
         ]

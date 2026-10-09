@@ -523,3 +523,73 @@ def test_malformed_step_after_catcher_resume_names_the_entry_point(impl):
             TypeError,
             match="_drive_until_yield: generator must yield 2-tuples"):
         impl._drive_until_yield(root(impl, bad_handler))
+
+
+# ── pending goals on a solution step ─────────────────────────────────────────
+#
+# A frame whose last argument is a Trail answers a solution step -- a yield
+# of (proceed, None) -- once per answer of the goals queued on the trail,
+# and skips it when they have none (clausal/logic/pending.py).
+
+def _queued(trail, *goals):
+    for g in goals:
+        trail.push_pending(g)
+
+
+def _answers(n, log):
+    def goal():
+        for i in range(n):
+            log.append(i)
+            yield None
+    return goal
+
+
+def _steps(impl, k, goals):
+    from clausal.logic.variables import Trail
+    trail = Trail()
+    marker = object()
+    done = impl.DONE
+
+    def fn(this, proceed, fail, catcher, trail):
+        for i in range(k):
+            _queued(trail, goals[i])
+            yield (proceed, None)
+        yield (fail, done)
+    sg = impl.StepGenerator(fn, marker, marker, marker, trail)
+    out = []
+    while True:
+        step = sg.send(None)
+        out.append("sol" if step[1] is None else "done")
+        if step[1] is done:
+            return out, trail
+
+
+def test_a_solution_step_is_answered_once_per_answer_of_its_goals(impl):
+    log = []
+    out, trail = _steps(impl, 2, [_answers(2, log), _answers(3, log)])
+    assert out == ["sol"] * 5 + ["done"]
+    assert trail.defer is True and trail.pending is None
+
+
+def test_a_solution_step_whose_goals_fail_is_skipped(impl):
+    log = []
+    out, _ = _steps(impl, 3, [_answers(1, log), _answers(0, log), _answers(1, log)])
+    assert out == ["sol", "sol", "done"]
+
+
+def test_an_error_in_a_queued_goal_propagates(impl):
+    from clausal.logic.variables import Trail
+
+    def bad():
+        raise ValueError("boom")
+        yield None
+    trail = Trail()
+    marker = object()
+
+    def fn(this, proceed, fail, catcher, trail):
+        trail.push_pending(bad)
+        yield (proceed, None)
+        yield (fail, impl.DONE)
+    sg = impl.StepGenerator(fn, marker, marker, marker, trail)
+    with pytest.raises(ValueError, match="boom"):
+        sg.send(None)

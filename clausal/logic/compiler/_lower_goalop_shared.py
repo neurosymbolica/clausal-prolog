@@ -45,7 +45,9 @@ from clausal.logic.compiler._ast_helpers import (
     _assign,
     _assign_mark,
     _call,
+    _drained,
     _if,
+    _unify_drained,
     _in_iter_expr,
     _locate,
     _name,
@@ -411,7 +413,7 @@ def _lower_shared_body(
             r_expr = _adapter_side_expr(r, var_context)
             return lambda_defs + [
                 _assign_mark(mark, trail_name),
-                _if(_call(_name("$unify"), l_expr, r_expr, _name(trail_name)), k_stmts),
+                _unify_drained(l_expr, r_expr, trail_name, k_stmts),
                 _undo_stmt(mark, trail_name),
             ]
 
@@ -431,7 +433,7 @@ def _lower_shared_body(
             r_expr = _call(_name("$present"), r_expr)
             return [
                 _assign_mark(mark, trail_name),
-                _if(_call(_name("$unify"), l_expr, r_expr, _name(trail_name)), k_stmts),
+                _unify_drained(l_expr, r_expr, trail_name, k_stmts),
                 _undo_stmt(mark, trail_name),
             ]
 
@@ -582,10 +584,7 @@ def _lower_shared_body(
                     iter=iter_expr,
                     body=[
                         _assign_mark(mark, trail_name),
-                        _if(
-                            _call(_name("$unify"), elem_expr, _name(loop_var), _name(trail_name)),
-                            k_stmts,
-                        ),
+                        _unify_drained(elem_expr, _name(loop_var), trail_name, k_stmts),
                         _undo_stmt(mark, trail_name),
                     ],
                     orelse=[],
@@ -607,7 +606,12 @@ def _lower_shared_body(
                     body=[
                         _assign_mark(mark, trail_name),
                         ast.If(
-                            test=_call(_name("$unify"), elem_expr, _name(loop_var), _name(trail_name)),
+                            # \+ (E in L): the goals a unification wakes
+                            # run inside the negation, to a first answer.
+                            test=ast.BoolOp(op=ast.And(), values=[
+                                _call(_name("$unify"), elem_expr, _name(loop_var), _name(trail_name)),
+                                _call(_name("$run_first"), _name(trail_name)),
+                            ]),
                             body=[
                                 _assign(found_flag, ast.Constant(value=True)),
                                 _undo_stmt(mark, trail_name),
@@ -692,7 +696,7 @@ def _lower_reified_branch(
         mark = ctx.fresh(_MARK_PREFIX)
         undetermined = [
             _assign_mark(mark, trail_name),
-            _if(_call(_name("$unify"), l_expr, r_expr, _name(trail_name)), true_stmts),
+            _unify_drained(l_expr, r_expr, trail_name, true_stmts),
             _undo_stmt(mark, trail_name),
             _if(_call(_name("$dif"), l_expr, r_expr, _name(trail_name)), false_stmts),
         ]

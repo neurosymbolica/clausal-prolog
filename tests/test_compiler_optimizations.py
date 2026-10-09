@@ -322,11 +322,11 @@ class TestITENoDuplication:
         else_ = Is(left=y, right=88881)
         stmts = self._compile_ite(test, then, else_)
         true_branch = self._true_branch(stmts)
-        # undetermined[1] is If(unify, body=unify_branch)
+        # undetermined[1] is For(_ in $unify_iter(...), body=unify_branch)
         undetermined = self._undetermined_block(stmts)
-        unify_if = undetermined[1]
-        assert isinstance(unify_if, ast.If)
-        assert true_branch is unify_if.body, (
+        unify_loop = undetermined[1]
+        assert isinstance(unify_loop, ast.For)
+        assert true_branch is unify_loop.body, (
             "then_stmts and unify_branch should be the same list object "
             "(compiled once, reused)"
         )

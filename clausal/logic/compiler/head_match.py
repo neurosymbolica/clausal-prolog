@@ -41,7 +41,7 @@ from clausal.logic.atoms import is_atom as _term_is_atom
 from clausal.logic.generated_names import dollar_ref
 
 from ._ast_helpers import (
-    _name, _attr, _call, _assign, _assign_mark, _undo_stmt, _if,
+    _name, _attr, _call, _assign, _assign_mark, _undo_stmt, _if, _drained,
     _MARK_PREFIX, _TRAIL_PARAM_NAME,
 )
 from ._vars import _var_python_name, _collect_vars
@@ -1528,6 +1528,17 @@ def _same_type_eq(cap: ast.expr, lit: ast.expr) -> ast.expr:
         ],
     )
 
+def _is_bare_solution(stmts: list[ast.stmt]) -> bool:
+    """True when *stmts* is one solution yield, bare or behind one ``if``
+    (an output-mode head guard)."""
+    if len(stmts) != 1:
+        return False
+    s = stmts[0]
+    if isinstance(s, ast.If) and not s.orelse and len(s.body) == 1:
+        s = s.body[0]
+    return isinstance(s, ast.Expr) and isinstance(s.value, ast.Yield)
+
+
 def compile_head_to_match_case(
     head: Any,
     body_stmts: list[ast.stmt],
@@ -1585,6 +1596,14 @@ def compile_head_to_match_case(
     # trail.undo(_mark)
     undo_stmt = ast.Expr(value=_call(_attr(trail_name, "undo"), _name(mark_name)))
 
+    # The head's unifications may wake goals (freeze/2, when/2): the body
+    # starts behind a goal boundary.  A body that is only the solution
+    # yield needs none -- the answer's own goal boundary (the trampoline's
+    # solution step, or a shallow caller's) runs them.
+    boundary = None
+    if body_stmts and not _is_bare_solution(body_stmts):
+        body_stmts = _drained(body_stmts, trail_name)
+        boundary = body_stmts[0] if len(body_stmts) == 1 else None
     # Wrap body_stmts with dup-var unification guards (innermost first)
     inner = body_stmts if body_stmts else [ast.Pass()]
     for orig_name, dup_name in reversed(dup_guards):
@@ -1904,6 +1923,11 @@ def compile_head_to_match_case(
             )
 
         inner = list_var_allocs + inner
+
+    # A head that unifies nothing wakes nothing: when no guard wrapped the
+    # body's goal boundary, drop it.
+    if boundary is not None and any(st is boundary for st in inner):
+        inner = [x for st in inner for x in (st.body if st is boundary else [st])]
 
     # If the head captured no variables and there are no guards that unify
     # (dup_guards, list_guards), the clause cannot modify the trail —

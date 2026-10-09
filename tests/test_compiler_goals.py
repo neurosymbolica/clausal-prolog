@@ -277,10 +277,10 @@ class TestCompileGoalStructure:
         v = Var()
         vc = {v._id: "_vX"}
         stmts = compile_goal(Is(left=v, right=42), self._db(), vc, "trail", [ast.Pass()])
-        # Should have: assign_mark, If(unify(...)), undo
+        # Should have: assign_mark, for _ in unify_iter(...), undo
         assert len(stmts) == 3
         assert isinstance(stmts[0], ast.Assign)     # _mN = trail.mark()
-        assert isinstance(stmts[1], ast.If)          # if unify(...):
+        assert isinstance(stmts[1], ast.For)         # for _ in $unify_iter(...):
         assert isinstance(stmts[2], ast.Expr)        # trail.undo(_mN)
 
     def test_and_chains_goals(self):
@@ -295,7 +295,9 @@ class TestCompileGoalStructure:
         # Left goal wraps right goal as continuation: mark, if, undo
         assert len(stmts) == 3
         assert isinstance(stmts[0], ast.Assign)  # _m for left Is
-        # The If body contains the right goal stmts (mark, if, undo)
+        # The left unification's loop body is the right goal's stmts
+        # (mark, unify loop, undo)
+        assert isinstance(stmts[1], ast.For)             # for _ in $unify_iter(...)
         assert isinstance(stmts[1].body[0], ast.Assign)  # _m for right Is
 
     def test_or_gives_two_branches(self):
@@ -369,13 +371,15 @@ class TestCompileBody:
         v = Var()
         vc = {v._id: "_vX"}
         stmts = compile_body([Is(left=v, right=1)], self._db(), vc, "trail")
-        # Should have: mark, If(unify ...: yield None), undo
+        # Should have: mark, for _ in $unify_iter(...): yield None, undo
         assert len(stmts) == 3
         assert isinstance(stmts[0], ast.Assign)  # _mN = trail.mark()
-        assert isinstance(stmts[1], ast.If)       # if unify(...):
-        # The If body should contain yield None
-        if_body = stmts[1].body
-        assert any(isinstance(s, ast.Expr) and isinstance(s.value, ast.Yield) for s in if_body)
+        # The unification and its goal boundary: the body runs once per
+        # answer of the goals it woke (once when none), never on failure.
+        boundary = stmts[1]
+        assert isinstance(boundary, ast.For)
+        assert ast.unparse(boundary.iter).startswith("$unify_iter(")
+        assert any(isinstance(s, ast.Expr) and isinstance(s.value, ast.Yield) for s in boundary.body)
 
     def test_two_goals_chains_correctly(self):
         # nv

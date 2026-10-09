@@ -21,6 +21,10 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
+/* The Trail layout, for the pending-goal check on a solution step. */
+#define VARIABLES_CAPI_CONSUMER
+#include "_variables_capi.h"
+
 /* ── DONE / FINAL sentinels ─────────────────────────────────────────────── */
 
 static PyObject *g_DONE = NULL;    /* module-level singleton */
@@ -119,6 +123,9 @@ typedef struct {
     int       retired;      /* 1 = a pull-driver saw this root yield FINAL
                              * ("solution AND retiring"): later pulls answer
                              * exhaustion without resuming the generator. */
+    PyObject *trail;        /* the Trail passed as the last argument, or NULL */
+    PyObject *drain;        /* running pending-goal drain, or NULL */
+    PyObject *drain_step;   /* the solution step being re-answered by it */
 } StepGenObject;
 
 static PyTypeObject *StepGenType = NULL;   /* heap type, set at module init */
@@ -188,6 +195,20 @@ StepGen_init(StepGenObject *self, PyObject *args, PyObject *kwds)
     Py_DECREF(call_args);
     if (!gen) return -1;
 
+    /* Compiled predicates and builtins take the trail last. */
+    Py_CLEAR(self->trail);
+    Py_CLEAR(self->drain);
+    Py_CLEAR(self->drain_step);
+    if (n_rest > 0) {
+        PyObject *last = PyTuple_GET_ITEM(args, nargs - 1);
+        if (Trail_Check(last)) {
+            self->trail = Py_NewRef(last);
+            /* A trail a trampoline drives defers woken goals: they run at
+             * the next goal boundary, every answer (clausal/logic/pending.py). */
+            Trail_CAST(last)->defer = 1;
+        }
+    }
+
     Py_XDECREF(self->gen);
     self->gen = gen;
     self->started = 0;
@@ -203,6 +224,9 @@ StepGen_dealloc(StepGenObject *self)
     Py_XDECREF(self->proceed);
     Py_XDECREF(self->fail);
     Py_XDECREF(self->catcher);
+    Py_XDECREF(self->trail);
+    Py_XDECREF(self->drain);
+    Py_XDECREF(self->drain_step);
     Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
@@ -213,6 +237,9 @@ StepGen_traverse(StepGenObject *self, visitproc visit, void *arg)
     Py_VISIT(self->proceed);
     Py_VISIT(self->fail);
     Py_VISIT(self->catcher);
+    Py_VISIT(self->trail);
+    Py_VISIT(self->drain);
+    Py_VISIT(self->drain_step);
     return 0;
 }
 
@@ -223,7 +250,38 @@ StepGen_clear(StepGenObject *self)
     Py_CLEAR(self->proceed);
     Py_CLEAR(self->fail);
     Py_CLEAR(self->catcher);
+    Py_CLEAR(self->trail);
+    Py_CLEAR(self->drain);
+    Py_CLEAR(self->drain_step);
     return 0;
+}
+
+
+/* ── pending goals on a solution step ──────────────────────────────────────
+ *
+ * clausal.logic.variables.pending_or_once(trail): the drain generator for
+ * the goals queued on *trail* (see clausal/logic/pending.py). */
+static PyObject *g_pending_or_once = NULL;
+
+static PyObject *
+pending_drain_for(PyObject *trail)
+{
+    if (!g_pending_or_once) {
+        PyObject *mod = PyImport_ImportModule("clausal.logic.variables");
+        if (!mod) return NULL;
+        g_pending_or_once = PyObject_GetAttrString(mod, "pending_or_once");
+        Py_DECREF(mod);
+        if (!g_pending_or_once) return NULL;
+    }
+    PyObject *it = PyObject_CallOneArg(g_pending_or_once, trail);
+    if (!it) return NULL;
+    if (!PyGen_Check(it)) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "pending_or_once() did not return a generator");
+        Py_DECREF(it);
+        return NULL;
+    }
+    return it;
 }
 
 
@@ -252,9 +310,58 @@ StepGen_send(StepGenObject *self, PyObject *value)
     }
 
     PyObject *result;
-    PySendResult sr = PyIter_Send(self->gen, send_val, &result);
+    PySendResult sr;
 
-    if (sr == PYGEN_NEXT) {
+    /* Re-answering a solution step while its pending goals have answers:
+     * resume the drain; when it is exhausted, resume the generator. */
+    if (self->drain) {
+        sr = PyIter_Send(self->drain, Py_None, &result);
+        if (sr == PYGEN_NEXT) {
+            Py_DECREF(result);
+            return Py_NewRef(self->drain_step);
+        }
+        Py_CLEAR(self->drain);
+        Py_CLEAR(self->drain_step);
+        if (sr == PYGEN_ERROR)
+            return NULL;
+        Py_DECREF(result);   /* PYGEN_RETURN: drained */
+    }
+
+    for (;;) {
+        sr = PyIter_Send(self->gen, send_val, &result);
+        if (sr != PYGEN_NEXT)
+            break;
+        /* A solution step -- (proceed, None) -- with goals queued on the
+         * trail: the goals run here, before the answer reaches anyone, and
+         * the step is answered once per answer of theirs. */
+        if (self->trail
+                && Trail_CAST(self->trail)->pending != NULL
+                && PyTuple_CheckExact(result)
+                && PyTuple_GET_SIZE(result) == 2
+                && PyTuple_GET_ITEM(result, 0) == self->proceed
+                && PyTuple_GET_ITEM(result, 1) == Py_None) {
+            PyObject *drain = pending_drain_for(self->trail);
+            if (!drain) {
+                Py_DECREF(result);
+                return NULL;
+            }
+            PyObject *dres;
+            PySendResult dsr = PyIter_Send(drain, Py_None, &dres);
+            if (dsr == PYGEN_NEXT) {
+                Py_DECREF(dres);
+                self->drain = drain;
+                self->drain_step = result;      /* owned */
+                return Py_NewRef(result);
+            }
+            Py_DECREF(drain);
+            Py_DECREF(result);
+            if (dsr == PYGEN_ERROR)
+                return NULL;
+            Py_DECREF(dres);
+            /* No answer: this solution fails; ask for the next one. */
+            send_val = Py_None;
+            continue;
+        }
         return result;   /* yielded value — a (target, value) tuple */
     }
 
@@ -293,6 +400,9 @@ StepGen_throw(StepGenObject *self, PyObject *args)
                         "StepGenerator has no inner generator");
         return NULL;
     }
+    /* An exception thrown in ends any drain of the last solution step. */
+    Py_CLEAR(self->drain);
+    Py_CLEAR(self->drain_step);
     PyObject *meth = PyObject_GetAttrString(self->gen, "throw");
     if (!meth) return NULL;
     PyObject *result = PyObject_Call(meth, args, NULL);
@@ -306,6 +416,8 @@ StepGen_throw(StepGenObject *self, PyObject *args)
 static PyObject *
 StepGen_close(StepGenObject *self, PyObject *Py_UNUSED(ignored))
 {
+    Py_CLEAR(self->drain);
+    Py_CLEAR(self->drain_step);
     if (self->gen) {
         PyObject *meth = PyObject_GetAttrString(self->gen, "close");
         if (!meth) return NULL;
@@ -937,6 +1049,8 @@ PyInit__trampoline(void)
     if (!g_DONE) return NULL;
     g_FINAL = PyObject_CallNoArgs((PyObject *)&PyBaseObject_Type);
     if (!g_FINAL) return NULL;
+
+    if (import_variables_capi() < 0) return NULL;
 
     /* Create StepGenerator as a heap type (mutable — allows __init__ override) */
     StepGenType = (PyTypeObject *)PyType_FromSpec(&StepGen_spec);

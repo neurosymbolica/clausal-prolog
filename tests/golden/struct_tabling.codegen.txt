@@ -8,9 +8,9 @@ def nats__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             _mark_cl = False
             try:
                 _m0 = trail.mark()
-                if $unify(_v0, 0, trail):
+                for _ in $unify_iter(_v0, 0, trail):
                     _m1 = trail.mark()
-                    if $unify(_v1, 'nil', trail):
+                    for _ in $unify_iter(_v1, 'nil', trail):
                         yield (_proceed, None)
                     trail.undo(_m1)
                 trail.undo(_m0)
@@ -28,7 +28,7 @@ def nats__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _v4 = $Var()
                 _v5 = $Var()
                 _m2 = trail.mark()
-                if $unify(_v3, ('cons', _v2, _v4), trail):
+                for _ in $unify_iter(_v3, ('cons', _v2, _v4), trail):
                     if $fd_gt(_v2, 0, trail):
                         if $fd_eq(_v5, $Sub(left=_v2, right=1), trail):
                             _gen0 = $StepGenerator($dispatch_at(nats, 2), _proceed, this_generator, this_generator, _v5, _v4, trail)

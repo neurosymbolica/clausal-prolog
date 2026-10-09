@@ -8,9 +8,9 @@ def edge__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             _mark_cl = False
             try:
                 _m0 = trail.mark()
-                if $unify(_v0, 1, trail):
+                for _ in $unify_iter(_v0, 1, trail):
                     _m1 = trail.mark()
-                    if $unify(_v1, 2, trail):
+                    for _ in $unify_iter(_v1, 2, trail):
                         yield (_proceed, None)
                     trail.undo(_m1)
                 trail.undo(_m0)
@@ -26,9 +26,9 @@ def edge__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             _mark_cl = False
             try:
                 _m2 = trail.mark()
-                if $unify(_v2, 2, trail):
+                for _ in $unify_iter(_v2, 2, trail):
                     _m3 = trail.mark()
-                    if $unify(_v3, 3, trail):
+                    for _ in $unify_iter(_v3, 3, trail):
                         yield (_proceed, None)
                     trail.undo(_m3)
                 trail.undo(_m2)
@@ -44,9 +44,9 @@ def edge__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             _mark_cl = False
             try:
                 _m4 = trail.mark()
-                if $unify(_v4, 1, trail):
+                for _ in $unify_iter(_v4, 1, trail):
                     _m5 = trail.mark()
-                    if $unify(_v5, 3, trail):
+                    for _ in $unify_iter(_v5, 3, trail):
                         yield (_proceed, None)
                     trail.undo(_m5)
                 trail.undo(_m4)
@@ -110,10 +110,11 @@ def test__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             _mark_cl = False
             try:
                 if _scap0 == ('$chars', 'edge 1 2') or $unify(_scap0, ('$chars', 'edge 1 2'), trail):
-                    _gen1 = $StepGenerator($dispatch_at(edge, 2), _proceed, this_generator, this_generator, 1, 2, trail)
-                    _st1 = (yield (_gen1, None))
-                    while _st1 is not $DONE:
+                    for _ in $pending(trail):
+                        _gen1 = $StepGenerator($dispatch_at(edge, 2), _proceed, this_generator, this_generator, 1, 2, trail)
                         _st1 = (yield (_gen1, None))
+                        while _st1 is not $DONE:
+                            _st1 = (yield (_gen1, None))
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -126,10 +127,11 @@ def test__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             _mark_cl = False
             try:
                 if _scap0 == ('$chars', 'edge 2 3') or $unify(_scap0, ('$chars', 'edge 2 3'), trail):
-                    _gen3 = $StepGenerator($dispatch_at(edge, 2), _proceed, this_generator, this_generator, 2, 3, trail)
-                    _st3 = (yield (_gen3, None))
-                    while _st3 is not $DONE:
+                    for _ in $pending(trail):
+                        _gen3 = $StepGenerator($dispatch_at(edge, 2), _proceed, this_generator, this_generator, 2, 3, trail)
                         _st3 = (yield (_gen3, None))
+                        while _st3 is not $DONE:
+                            _st3 = (yield (_gen3, None))
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -142,10 +144,11 @@ def test__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             _mark_cl = False
             try:
                 if _scap0 == ('$chars', 'reach 1 2') or $unify(_scap0, ('$chars', 'reach 1 2'), trail):
-                    _gen4 = $StepGenerator($dispatch_at(reach, 2), _proceed, this_generator, this_generator, 1, 2, trail)
-                    _st4 = (yield (_gen4, None))
-                    while _st4 is not $DONE:
+                    for _ in $pending(trail):
+                        _gen4 = $StepGenerator($dispatch_at(reach, 2), _proceed, this_generator, this_generator, 1, 2, trail)
                         _st4 = (yield (_gen4, None))
+                        while _st4 is not $DONE:
+                            _st4 = (yield (_gen4, None))
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -158,10 +161,11 @@ def test__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             _mark_cl = False
             try:
                 if _scap0 == ('$chars', 'reach 1 3') or $unify(_scap0, ('$chars', 'reach 1 3'), trail):
-                    _gen5 = $StepGenerator($dispatch_at(reach, 2), _proceed, this_generator, this_generator, 1, 3, trail)
-                    _st5 = (yield (_gen5, None))
-                    while _st5 is not $DONE:
+                    for _ in $pending(trail):
+                        _gen5 = $StepGenerator($dispatch_at(reach, 2), _proceed, this_generator, this_generator, 1, 3, trail)
                         _st5 = (yield (_gen5, None))
+                        while _st5 is not $DONE:
+                            _st5 = (yield (_gen5, None))
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -174,10 +178,11 @@ def test__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             _mark_cl = False
             try:
                 if _scap0 == ('$chars', 'reach 2 3') or $unify(_scap0, ('$chars', 'reach 2 3'), trail):
-                    _gen6 = $StepGenerator($dispatch_at(reach, 2), _proceed, this_generator, this_generator, 2, 3, trail)
-                    _st6 = (yield (_gen6, None))
-                    while _st6 is not $DONE:
+                    for _ in $pending(trail):
+                        _gen6 = $StepGenerator($dispatch_at(reach, 2), _proceed, this_generator, this_generator, 2, 3, trail)
                         _st6 = (yield (_gen6, None))
+                        while _st6 is not $DONE:
+                            _st6 = (yield (_gen6, None))
             except $GeneratorExit:
                 _mark_cl = True
                 raise

@@ -50,7 +50,8 @@ typedef struct AttVarObject {
     PyObject  *attrs;    /* PyDict or NULL */
 } AttVarObject;
 
-typedef enum { TRAIL_BINDING = 0, TRAIL_ATTR = 1, TRAIL_CALLBACK = 2 } TrailEntryKind;
+typedef enum { TRAIL_BINDING = 0, TRAIL_ATTR = 1, TRAIL_CALLBACK = 2,
+               TRAIL_PENDING = 3 } TrailEntryKind;
 
 typedef struct {
     TrailEntryKind kind;
@@ -69,6 +70,8 @@ typedef struct TrailObject {
     PyObject   *wakeup_list;
     unsigned long owner_thread_id;
     PyObject   *weakrefs;
+    PyObject   *pending;     /* NULL or a tuple of queued goals */
+    int         defer;
 } TrailObject;
 
 #endif  /* !VARIABLES_CAPI_PROVIDER */

@@ -5,6 +5,15 @@ Parked per user preference (A01 precedent): decide unhurried, not mid-audit.
 
 ## D001 — freeze/2 frozen-goal nondeterminism (A04-F011)
 
+**RESOLVED 2026-10-09 (option 2, ruled "A" on the pending-goal channel):**
+a woken goal is queued on the trail (`trail.push_pending`) and run at the
+next goal boundary with every answer (`clausal/logic/pending.py`), as
+Scryer runs woken goals. The boolean hook contract is unchanged: the
+freeze hook queues and returns True; dif/CLP hooks still propagate in
+place. `TestF011FreezeFirstSolutionOnly::test_frozen_goal_backtracks`
+passes; `tests/test_woken_goals_keep_every_answer.py` pins the rest.
+The text below is the original question.
+
 `_freeze_hook` (`coroutining.py:28-46`) drives each frozen goal to its
 FIRST solution and breaks; the attr-hook protocol is boolean
 (success/fail), so the frozen goal's choice points are discarded:

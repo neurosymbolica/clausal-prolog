@@ -24,6 +24,7 @@ ext_variables = Extension(
 ext_trampoline = Extension(
     "clausal.logic.runtime._trampoline",
     sources=["clausal/logic/runtime/_trampoline.c"],
+    include_dirs=["clausal/logic/variables"],
     extra_compile_args=extra_compile_args,
 )
 

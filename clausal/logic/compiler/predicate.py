@@ -19,6 +19,8 @@ import functools
 import warnings
 from typing import Any, Callable
 
+from clausal.logic.variables import pending_or_once, unify_iter
+from clausal.logic.pending import run_first as _pending_run_first
 from clausal.logic.variables import Var, is_var, deref, unify  # noqa: F401
 from clausal.logic.trampoline import Step, DONE, StepGenerator, _drive_until_yield
 from clausal.logic import cells as _cells_module
@@ -507,6 +509,14 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # (Task 15 fix round 4, item 4).
     "$dict_key": _dict_key,
     "$unify": unify,
+    # A goal boundary after an inline unification: the rest of the clause
+    # runs once per answer of the goals the unification woke (``(None,)``
+    # when it woke none; clausal/logic/pending.py).
+    "$pending": pending_or_once,
+    "$unify_iter": unify_iter,
+    # A test that only asks whether a unification succeeds (``not in``) runs
+    # the goals it woke to a first answer (clausal/logic/pending.py).
+    "$run_first": _pending_run_first,
     # A construction whose functor NAME is bound to an ATOM (terms_to_ast's
     # fallback): raises the undeclared-functor NameError instead of calling
     # the str.  The name can be an atom without this module declaring it --

@@ -257,8 +257,10 @@ def _iso_unify(a, b, trail, k):
 
 @_builtin("\\=", 2)
 def _iso_not_unifiable(a, b, trail, k):
+    from clausal.logic.pending import run_first  # noqa: PLC0415
     mark = trail.mark()
-    ok = _unify(a, b, trail)
+    # \+ A = B: the goals the unification wakes run inside the negation.
+    ok = _unify(a, b, trail) and run_first(trail)
     trail.undo(mark)
     if not ok:
         yield None

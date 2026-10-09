@@ -468,7 +468,11 @@ static PyTypeObject AttVarType = {
  * each get their own wakeup slice.
  * ================================================================ */
 
-typedef enum { TRAIL_BINDING = 0, TRAIL_ATTR = 1, TRAIL_CALLBACK = 2 } TrailEntryKind;
+/* TRAIL_PENDING — a change of the pending-goal queue (push_pending /
+ * take_pending).  Stores the queue as it was in u.callback.fn (owned, NULL =
+ * empty); undo puts it back.  See "Pending goals" below. */
+typedef enum { TRAIL_BINDING = 0, TRAIL_ATTR = 1, TRAIL_CALLBACK = 2,
+               TRAIL_PENDING = 3 } TrailEntryKind;
 
 typedef struct {
     TrailEntryKind kind;
@@ -502,6 +506,13 @@ struct TrailObject {
     unsigned long owner_thread_id;
     /* Weak-reference support (tp_weaklistoffset). */
     PyObject   *weakrefs;
+    /* Pending goals: NULL, or a tuple of zero-argument generator factories
+     * queued by an attribute hook for the engine to run at the next goal
+     * boundary.  Every change is trailed (TRAIL_PENDING). */
+    PyObject   *pending;
+    /* Nonzero while a driver that runs pending goals owns this trail; a
+     * hook queues its goals only then, and runs them in place otherwise. */
+    int         defer;
 };
 
 /*
@@ -537,6 +548,8 @@ Trail_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         self->wakeup_list     = NULL;
         self->owner_thread_id = PyThread_get_thread_ident();
         self->weakrefs        = NULL;
+        self->pending         = NULL;
+        self->defer           = 0;
     }
     PyObject_GC_Track(self);
     return (PyObject *)self;
@@ -565,12 +578,13 @@ Trail_dealloc(TrailObject *self)
             Py_DECREF(e->u.attr.key);
             Py_XDECREF(e->u.attr.old_attr);
         } else {
-            /* TRAIL_CALLBACK */
-            Py_DECREF(e->u.callback.fn);
+            /* TRAIL_CALLBACK; TRAIL_PENDING (fn may be NULL) */
+            Py_XDECREF(e->u.callback.fn);
         }
     }
     PyMem_Free(self->entries);
     Py_XDECREF(self->wakeup_list);
+    Py_XDECREF(self->pending);
     Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
@@ -587,11 +601,12 @@ Trail_traverse(TrailObject *self, visitproc visit, void *arg)
             Py_VISIT(e->u.attr.key);
             Py_VISIT(e->u.attr.old_attr);
         } else {
-            /* TRAIL_CALLBACK */
+            /* TRAIL_CALLBACK; TRAIL_PENDING (fn may be NULL) */
             Py_VISIT(e->u.callback.fn);
         }
     }
     Py_VISIT(self->wakeup_list);
+    Py_VISIT(self->pending);
     return 0;
 }
 
@@ -610,11 +625,12 @@ Trail_clear(TrailObject *self)
             Py_DECREF(e->u.attr.key);
             Py_XDECREF(e->u.attr.old_attr);
         } else {
-            /* TRAIL_CALLBACK */
-            Py_DECREF(e->u.callback.fn);
+            /* TRAIL_CALLBACK; TRAIL_PENDING (fn may be NULL) */
+            Py_XDECREF(e->u.callback.fn);
         }
     }
     Py_CLEAR(self->wakeup_list);
+    Py_CLEAR(self->pending);
     return 0;
 }
 
@@ -715,6 +731,31 @@ trail_push_callback(TrailObject *trail, PyObject *fn)
 }
 
 /*
+ * Pending goals.
+ *
+ * An attribute hook (freeze/2, when/2) that wakes a goal does not run it
+ * inside the unification: it queues it with push_pending, and the engine
+ * runs the queue at the next goal boundary, as a conjunction, with every
+ * answer (Scryer runs woken goals the same way, after the unification).
+ * The queue is a tuple, replaced on every change, and every change is
+ * trailed, so backtracking past a push or a take restores it exactly.
+ */
+static int
+trail_set_pending(TrailObject *trail, PyObject *new_pending)
+{
+    /* new_pending: a new reference or NULL; stolen. */
+    if (trail_check_owner(trail) < 0 || trail_grow(trail) < 0) {
+        Py_XDECREF(new_pending);
+        return -1;
+    }
+    TrailEntry *e = &trail->entries[trail->length++];
+    e->kind = TRAIL_PENDING;
+    e->u.callback.fn = trail->pending;      /* ownership: queue -> entry */
+    trail->pending = new_pending;
+    return 0;
+}
+
+/*
  * trail_enqueue_wakeup — append (attvar, bound_to) to trail->wakeup_list.
  *
  * Does nothing if wakeup_list is NULL (i.e. we are not inside py_unify).
@@ -773,6 +814,11 @@ trail_undo_to(TrailObject *trail, Py_ssize_t mark)
             Py_DECREF(e->u.attr.attvar);
             Py_DECREF(key);
             Py_XDECREF(old);    /* release trail's owned ref */
+        } else if (e->kind == TRAIL_PENDING) {
+            /* Put the queue back as it was (ownership: trail -> trail). */
+            PyObject *cur = trail->pending;
+            trail->pending = e->u.callback.fn;
+            Py_XDECREF(cur);
         } else {
             /* TRAIL_CALLBACK — call fn() to perform undo */
             PyObject *fn  = e->u.callback.fn;
@@ -908,7 +954,8 @@ Trail_commit_fresh(TrailObject *self, PyObject *const *args, Py_ssize_t nargs)
         else if (e->kind == TRAIL_ATTR)
             id = ((VarObject *)e->u.attr.attvar)->var_id;
         else
-            Py_RETURN_FALSE;    /* TRAIL_CALLBACK: effect unknown */
+            Py_RETURN_FALSE;    /* TRAIL_CALLBACK: effect unknown;
+                                 * TRAIL_PENDING: goals still to run */
         if (id < (uint64_t)floor)
             Py_RETURN_FALSE;
     }
@@ -940,7 +987,92 @@ Trail_sq_len(TrailObject *self)
     return self->length;
 }
 
+static PyObject *
+Trail_push_pending(TrailObject *self, PyObject *goal)
+{
+    if (!PyCallable_Check(goal)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "trail.push_pending() argument must be callable");
+        return NULL;
+    }
+    Py_ssize_t n = self->pending ? PyTuple_GET_SIZE(self->pending) : 0;
+    PyObject *q = PyTuple_New(n + 1);
+    if (!q) return NULL;
+    for (Py_ssize_t i = 0; i < n; i++) {
+        PyObject *g = PyTuple_GET_ITEM(self->pending, i);
+        Py_INCREF(g);
+        PyTuple_SET_ITEM(q, i, g);
+    }
+    Py_INCREF(goal);
+    PyTuple_SET_ITEM(q, n, goal);
+    if (trail_set_pending(self, q) < 0)
+        return NULL;
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+Trail_take_pending(TrailObject *self, PyObject *Py_UNUSED(args))
+{
+    if (!self->pending)
+        Py_RETURN_NONE;
+    PyObject *q = self->pending;
+    Py_INCREF(q);
+    if (trail_set_pending(self, NULL) < 0) {
+        Py_DECREF(q);
+        return NULL;
+    }
+    return q;
+}
+
+static PyObject *
+Trail_get_pending(TrailObject *self, void *Py_UNUSED(closure))
+{
+    if (!self->pending)
+        Py_RETURN_NONE;
+    return Py_NewRef(self->pending);
+}
+
+static PyObject *
+Trail_get_defer(TrailObject *self, void *Py_UNUSED(closure))
+{
+    return PyBool_FromLong(self->defer);
+}
+
+static int
+Trail_set_defer(TrailObject *self, PyObject *value, void *Py_UNUSED(closure))
+{
+    if (value == NULL) {
+        PyErr_SetString(PyExc_AttributeError, "cannot delete defer");
+        return -1;
+    }
+    int t = PyObject_IsTrue(value);
+    if (t < 0) return -1;
+    if (trail_check_owner(self) < 0) return -1;
+    self->defer = t;
+    return 0;
+}
+
+static PyGetSetDef Trail_getset[] = {
+    {"pending", (getter)Trail_get_pending, NULL,
+     "The goals queued for the next goal boundary (a tuple), or None.", NULL},
+    {"defer", (getter)Trail_get_defer, (setter)Trail_set_defer,
+     "True while a driver that runs pending goals owns this trail: an\n"
+     "attribute hook then queues the goals it wakes instead of running them.",
+     NULL},
+    {NULL, NULL, NULL, NULL, NULL}
+};
+
 static PyMethodDef Trail_methods[] = {
+    {"push_pending", (PyCFunction)Trail_push_pending, METH_O,
+     "push_pending(goal)\n"
+     "\n"
+     "Queue *goal* (a zero-argument generator factory) to run at the next\n"
+     "goal boundary.  Trailed: backtracking past the push removes it."},
+    {"take_pending", (PyCFunction)Trail_take_pending, METH_NOARGS,
+     "take_pending() -> tuple | None\n"
+     "\n"
+     "Empty the queue and return what it held (None when it was empty).\n"
+     "Trailed: backtracking past the take puts the goals back."},
     {"mark",  (PyCFunction)Trail_mark,  METH_NOARGS,
      "mark() -> int\n"
      "\n"
@@ -1007,6 +1139,7 @@ static PyTypeObject TrailType = {
     .tp_clear           = (inquiry)Trail_clear,
     .tp_repr            = (reprfunc)Trail_repr,
     .tp_methods         = Trail_methods,
+    .tp_getset          = Trail_getset,
     .tp_as_sequence     = &Trail_as_sequence,
     .tp_weaklistoffset  = offsetof(TrailObject, weakrefs),
 };
@@ -3751,7 +3884,81 @@ py_unify_census(PyObject *self, PyObject *Py_UNUSED(ignored))
     return d;
 }
 
+/* ── pending_or_once(trail): the iterable a goal boundary loops over ─────
+ *
+ * Compiled code continues after a goal with ``for _ in pending_or_once(trail):
+ * <rest>``.  With no goal queued (the usual case) this is a shared 1-tuple,
+ * so the rest runs once at the cost of a call and a tuple iteration; with
+ * goals queued it is the drain generator registered by
+ * clausal.logic.pending, which runs them and yields once per answer. */
+static PyObject *g_once_tuple = NULL;     /* (None,) */
+static PyObject *g_drain_factory = NULL;  /* set by _set_pending_drain */
+
+static PyObject *
+py_pending_or_once(PyObject *Py_UNUSED(mod), PyObject *trail)
+{
+    if (Py_TYPE(trail) == &TrailType && ((TrailObject *)trail)->pending == NULL)
+        return Py_NewRef(g_once_tuple);
+    if (Py_TYPE(trail) != &TrailType) {
+        PyErr_SetString(PyExc_TypeError, "pending_or_once() expects a Trail");
+        return NULL;
+    }
+    if (!g_drain_factory) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "pending goals queued but no drain is registered");
+        return NULL;
+    }
+    return PyObject_CallOneArg(g_drain_factory, trail);
+}
+
+static PyObject *g_empty_tuple = NULL;    /* () */
+
+/* unify_iter(t1, t2, trail): unify, as the iterable a goal boundary loops
+ * over -- () on failure, (None,) on success with no goal woken, the drain
+ * generator when the unification woke goals.  Compiled code writes
+ * ``for _ in unify_iter(a, b, trail): <rest>`` (one call, not two). */
+static PyObject *
+py_unify_iter(PyObject *Py_UNUSED(mod), PyObject *const *args, Py_ssize_t nargs)
+{
+    if (nargs != 3) {
+        PyErr_SetString(PyExc_TypeError, "unify_iter() takes exactly 3 arguments");
+        return NULL;
+    }
+    if (Py_TYPE(args[2]) != &TrailType) {
+        PyErr_SetString(PyExc_TypeError, "unify_iter() third argument must be a Trail");
+        return NULL;
+    }
+    TrailObject *trail = (TrailObject *)args[2];
+    PyObject *r = do_unify_and_wake(args[0], args[1], trail, 0);
+    if (!r) return NULL;
+    int ok = (r == Py_True);
+    Py_DECREF(r);
+    if (!ok)
+        return Py_NewRef(g_empty_tuple);
+    return py_pending_or_once(NULL, (PyObject *)trail);
+}
+
+static PyObject *
+py_set_pending_drain(PyObject *Py_UNUSED(mod), PyObject *fn)
+{
+    if (!PyCallable_Check(fn)) {
+        PyErr_SetString(PyExc_TypeError, "drain must be callable");
+        return NULL;
+    }
+    Py_XSETREF(g_drain_factory, Py_NewRef(fn));
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef module_methods[] = {
+    {"pending_or_once", py_pending_or_once, METH_O,
+     "pending_or_once(trail) -> iterable\n\n"
+     "(None,) when no goal is queued on *trail*; otherwise a generator that\n"
+     "runs the queued goals and yields once per answer."},
+    {"unify_iter", (PyCFunction)(void (*)(void))py_unify_iter, METH_FASTCALL,
+     "unify_iter(t1, t2, trail) -> iterable\n\n"
+     "Unify; () on failure, else pending_or_once(trail)."},
+    {"_set_pending_drain", py_set_pending_drain, METH_O,
+     "_set_pending_drain(fn) -> None\n\nRegister fn(trail) -> generator."},
     {"unify_census_start", py_unify_census_start, METH_NOARGS,
      "unify_census_start() -> None\n\n"
      "Begin counting unifications that succeed ONLY because two numbers of\n"
@@ -3901,6 +4108,14 @@ static struct PyModuleDef moduledef = {
 PyMODINIT_FUNC
 PyInit__variables(void)
 {
+    if (!g_once_tuple) {
+        g_once_tuple = PyTuple_Pack(1, Py_None);
+        if (!g_once_tuple) return NULL;
+    }
+    if (!g_empty_tuple) {
+        g_empty_tuple = PyTuple_New(0);
+        if (!g_empty_tuple) return NULL;
+    }
     /* AttVarType must inherit from VarType.  Set tp_base before PyType_Ready
      * since static initialisers cannot reference other static objects. */
     AttVarType.tp_base = &VarType;

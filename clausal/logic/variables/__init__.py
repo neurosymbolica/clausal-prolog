@@ -41,6 +41,9 @@ from ._variables import (
     del_attr,
     register_attr_hook,
     UnboundVarCoercionError,
+    pending_or_once,
+    unify_iter,
+    _set_pending_drain,
 )
 
 # All logic variables are AttVars so constraints (dif, etc.) can be attached.
@@ -144,4 +147,9 @@ __all__ = [
     "register_attr_hook",
     "unregister_attr_hook",
     "UnboundVarCoercionError",
+    "pending_or_once",
+    "unify_iter",
 ]
+
+# Registers the drain that pending_or_once hands out (clausal.logic.pending).
+from clausal.logic import pending as _pending  # noqa: E402,F401

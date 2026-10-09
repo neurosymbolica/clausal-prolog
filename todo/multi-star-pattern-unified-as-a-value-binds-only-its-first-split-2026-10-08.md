@@ -61,3 +61,13 @@ continues. That covers:
 - **ISO/Scryer reference:** Scryer wakes attributed-variable goals as a
   conjunction run after the unification, nondeterministically. Prefer that
   shape.
+
+## 2026-10-09: the channel exists
+
+Ruled: build it, in two candidates. Candidate 1 adds the channel and moves
+`freeze/2` and `when/2` onto it (`clausal/logic/pending.py`; the trail's
+`push_pending`/`take_pending`; `$unify_iter` and `$pending` in compiled
+code; `StepGenerator.send` on a solution step). Candidate 2 queues the
+split goal here: unify checks that one split fits, leaves the holes
+unbound, and pushes a goal that enumerates the splits in append/3 order.
+Under a driver only (`trail.defer`); a bare unify keeps the first split.

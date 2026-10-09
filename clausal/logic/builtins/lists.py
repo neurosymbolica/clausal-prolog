@@ -287,15 +287,24 @@ def _memberchk__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
     if items is None:
         items = _as_membership_items(lst_val)
     if items is not None:
-        if _c_memberchk_find is not None:
+        rescan = _c_memberchk_find is None
+        if not rescan:
+            mark = trail.mark()
             if _c_memberchk_find(items, elem, trail):
-                yield (_proceed, None)
-                yield (_fail, DONE)
-                return
-        else:
+                if trail.pending is None:
+                    yield (_proceed, None)
+                    yield (_fail, DONE)
+                    return
+                # It woke goals.  memberchk is once(member) and the woken
+                # goals run inside the once, so an element whose goals fail
+                # is passed over: scan again, running them at each element.
+                trail.undo(mark)
+                rescan = True
+        if rescan:
+            from clausal.logic.pending import run_first  # noqa: PLC0415
             for item in items:
                 mark = trail.mark()
-                if unify(elem, item, trail):
+                if unify(elem, item, trail) and run_first(trail):
                     yield (_proceed, None)
                     yield (_fail, DONE)
                     return
@@ -307,16 +316,17 @@ def _memberchk__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
         skel = _open_skeleton(lst_val)
         if skel is not None:
             prefix, tail = skel
+            from clausal.logic.pending import run_first  # noqa: PLC0415
             for item in prefix:
                 mark = trail.mark()
-                if unify(elem, item, trail):
+                if unify(elem, item, trail) and run_first(trail):
                     yield (_proceed, None)
                     trail.undo(mark)
                     yield (_fail, DONE)
                     return
                 trail.undo(mark)
             mark = trail.mark()
-            if unify(tail, _partial([elem], Var()), trail):
+            if unify(tail, _partial([elem], Var()), trail) and run_first(trail):
                 yield (_proceed, None)
             trail.undo(mark)
     yield (_fail, DONE)

@@ -338,9 +338,11 @@ class TestCellEmission:
         and not the reserved 1-tuple cell ``('nil',)``.  Inverts the pre-pivot
         pin that atoms "stay class atoms"."""
         src = capture_predicate_codegen(_TAGGED, ["kind"])
-        assert "$unify(_v13, 'nil', trail)" in src
-        assert "$unify(_v13, nil, trail)" not in src
-        assert "$unify(_v13, ('nil',), trail)" not in src
+        # (a body unification is emitted as ``$unify_iter``, its goal boundary)
+        assert "$unify_iter(_v13, 'nil', trail)" in src
+        for f in ("$unify", "$unify_iter"):
+            assert f"{f}(_v13, nil, trail)" not in src
+            assert f"{f}(_v13, ('nil',), trail)" not in src
 
     def test_a_keyword_construction_is_refused_at_load(self):
         """The keyword SPELLING is retired (2026-09-19): a term is built

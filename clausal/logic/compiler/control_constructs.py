@@ -40,7 +40,7 @@ from clausal.logic.meta_predicate import MetaArg as _MetaArg
 
 from ._ast_helpers import (
     _name, _attr, _call, _assign, _assign_mark, _undo_stmt, _if,
-    _yield_none_stmt, _in_iter_expr,
+    _yield_none_stmt, _in_iter_expr, _drained,
     _MARK_PREFIX, _TRAIL_PARAM_NAME, _K_PARAM_NAME,
     _THIS_GEN_NAME,
     _EXTRA_FUNCDEF,
@@ -313,7 +313,7 @@ def _compile_count_all(ctx: CompilationContext, inner, count_arg, k_stmts):
 
     unify_check = ast.If(
         test=_call(_name("$unify"), count_expr, _name(n_var), _name(trail_name)),
-        body=k_stmts or [ast.Pass()],
+        body=_drained(k_stmts, trail_name) or [ast.Pass()],
         orelse=[],
     )
 
@@ -555,33 +555,33 @@ def _compile_when(ctx: CompilationContext, cond, goal, k_stmts):
             and isinstance(cond.func, AstLoadName)
             and cond.func.name == "ground"
             and len(cond.args) == 1):
-        install_call = ast.Expr(value=_call(
+        install_call = _call(
             _name("$install_when_ground"),
             term_to_ast_expr(cond.args[0], var_context, eval_arith=False),
             _name(thunk_name),
             _name(trail_name),
-        ))
-        return [thunk_fn, install_call] + (k_stmts or [])
+        )
+        return [thunk_fn, _if(install_call, _drained(k_stmts, trail_name) or [ast.Pass()])]
 
     if isinstance(cond, Or):
         c1_expr = term_to_ast_expr(cond.left, var_context, eval_arith=False)
         c2_expr = term_to_ast_expr(cond.right, var_context, eval_arith=False)
-        install_call = ast.Expr(value=_call(
+        install_call = _call(
             _name("$install_when_disjunction"),
             c1_expr,
             c2_expr,
             _name(thunk_name),
             _name(trail_name),
-        ))
-        return [thunk_fn, install_call] + (k_stmts or [])
+        )
+        return [thunk_fn, _if(install_call, _drained(k_stmts, trail_name) or [ast.Pass()])]
 
-    install_call = ast.Expr(value=_call(
+    install_call = _call(
         _name("$install_when_condition"),
         cond_expr,
         _name(thunk_name),
         _name(trail_name),
-    ))
-    return [thunk_fn, install_call] + (k_stmts or [])
+    )
+    return [thunk_fn, _if(install_call, _drained(k_stmts, trail_name) or [ast.Pass()])]
 
 
 def _compile_find_all_core(
@@ -677,7 +677,7 @@ def _compile_find_all_core(
         _assign_mark(unify_mark, trail_name),
         ast.If(
             test=_call(_name("$unify"), _name(bag_tmp), collected, _name(trail_name)),
-            body=k_stmts or [ast.Pass()],
+            body=_drained(k_stmts, trail_name) or [ast.Pass()],
             orelse=[],
         ),
         _undo_stmt(unify_mark, trail_name),
@@ -846,7 +846,7 @@ def _compile_bag_of(
                 test=_call(_name("$bagof_bind"), _name(wit_var), _name(grp_ws),
                            _name(bag_tmp), _name(grp_ts),
                            ast.Constant(value=dedup), _name(trail_name)),
-                body=k_stmts or [ast.Pass()],
+                body=_drained(k_stmts, trail_name) or [ast.Pass()],
                 orelse=[],
             ),
             _undo_stmt(unify_mark, trail_name),
@@ -990,7 +990,7 @@ def _compile_catch_impl(
                 _name("$catch_match"), catcher_expr, _name(term_name),
                 _name(exc_name), _name(trail_name),
             ),
-            body=recovery_body_stmts or [ast.Pass()],
+            body=_drained(recovery_body_stmts, trail_name) or [ast.Pass()],
             orelse=orelse_stmts or [ast.Pass()],
         ),
         _undo_stmt(unify_mark, trail_name),
