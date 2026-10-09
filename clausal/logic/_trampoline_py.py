@@ -153,6 +153,8 @@ class StepGenerator:
         catcher: Any,
         *args: Any,
     ) -> None:
+        # Before any state changes (C≡Py: StepGen_init).
+        self._refuse_while_draining()
         self.proceed = proceed
         self.fail = fail
         self.catcher = catcher
@@ -174,7 +176,8 @@ class StepGenerator:
 
     def _refuse_while_draining(self):
         if getattr(self, "_draining", False):
-            raise RuntimeError(
+            # Marked so catch/3 never sees it (C≡Py: set_protocol_error).
+            raise _engine_protocol_error(
                 "StepGenerator re-entered while running its pending goals")
 
     def _drain_next(self, drain) -> bool:

@@ -130,13 +130,25 @@ typedef struct {
                              * re-entering this generator then is an error */
 } StepGenObject;
 
+/* An engine-protocol RuntimeError: marked so catch/3 never sees it
+ * (is_routable_exception), as StepGen_send's "returned unexpectedly". */
+static void
+set_protocol_error(const char *msg)
+{
+    PyObject *perr = PyObject_CallFunction(PyExc_RuntimeError, "s", msg);
+    if (!perr) return;
+    if (PyObject_SetAttrString(perr, "__clausal_engine_protocol__", Py_True) < 0)
+        PyErr_Clear();      /* best-effort marker; the error still raises */
+    PyErr_SetObject(PyExc_RuntimeError, perr);
+    Py_DECREF(perr);
+}
+
 static int
 stepgen_refuse_while_draining(StepGenObject *self)
 {
     if (!self->draining)
         return 0;
-    PyErr_SetString(PyExc_RuntimeError,
-                    "StepGenerator re-entered while running its pending goals");
+    set_protocol_error("StepGenerator re-entered while running its pending goals");
     return -1;
 }
 
@@ -169,6 +181,10 @@ static PyTypeObject *StepGenType = NULL;   /* heap type, set at module init */
 static int
 StepGen_init(StepGenObject *self, PyObject *args, PyObject *kwds)
 {
+    /* Before any state changes: a drain running this generator's goals
+     * must find it as it left it. */
+    if (stepgen_refuse_while_draining(self) < 0)
+        return -1;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     if (nargs < 4) {
         PyErr_SetString(PyExc_TypeError,
@@ -220,10 +236,6 @@ StepGen_init(StepGenObject *self, PyObject *args, PyObject *kwds)
     Py_DECREF(call_args);
     if (!gen) return -1;
 
-    if (stepgen_refuse_while_draining(self) < 0) {
-        Py_DECREF(gen);
-        return -1;
-    }
     /* Compiled predicates and builtins take the trail last. */
     Py_CLEAR(self->trail);
     Py_CLEAR(self->drain);
@@ -717,7 +729,14 @@ drive_to_root_yield(PyObject *root, int stopiteration_is_exhaustion,
     PyObject *t = StepGen_CAST(root)->trail;
     TrailObject *trail = NULL;
     int saved = 0;
-    if (t && Trail_CAST(t)->owner_thread_id == PyThread_get_thread_ident()) {
+    if (t) {
+        if (Trail_CAST(t)->owner_thread_id != PyThread_get_thread_ident()) {
+            /* As the trail's own mutators (and the Python twin) answer. */
+            PyErr_SetString(PyExc_RuntimeError,
+                "Trail accessed from a different thread than it was created in. "
+                "Each thread must use its own Trail object.");
+            return DRIVE_ERROR;
+        }
         trail = Trail_CAST(Py_NewRef(t));
         saved = trail->defer;
         trail->defer = 1;

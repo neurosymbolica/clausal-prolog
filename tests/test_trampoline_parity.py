@@ -595,7 +595,7 @@ def test_an_error_in_a_queued_goal_propagates(impl):
         sg.send(None)
 
 
-@pytest.mark.parametrize("act", ["send", "close", "throw"])
+@pytest.mark.parametrize("act", ["send", "close", "throw", "init"])
 def test_re_entering_a_generator_while_it_runs_its_goals_is_an_error(impl, act):
     """Review H1: a queued goal that sends to, closes or throws into the
     generator whose solution step is running it got a clean error in
@@ -612,9 +612,13 @@ def test_re_entering_a_generator_while_it_runs_its_goals_is_an_error(impl, act):
                 sg.send(None)
             elif act == "close":
                 sg.close()
+            elif act == "init":
+                sg.__init__(fn, object(), object(), object(), trail)
             else:
                 sg.throw(ValueError("x"))
         except RuntimeError as e:
+            # an engine-protocol error: never handed to catch/3
+            assert getattr(e, "__clausal_engine_protocol__", False)
             seen.append(str(e))
         yield None
         yield None
