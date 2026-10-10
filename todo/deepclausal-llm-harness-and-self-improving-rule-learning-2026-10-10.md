@@ -1,7 +1,7 @@
-# An LLM harness on Clausal, and what to build with it
+# DeepClausal: an LLM harness on Clausal, and what to build with it
 
-Written to be broken out into separate todos. Nothing here is ruled or
-started. Sections H1-H3 are the harness itself; U1-U6 are uses of it; S1
+Name (2026-10-10): **DeepClausal**. Written to be broken out into separate
+todos. Nothing here is ruled or started. Sections H1-H3 are the harness itself; U1-U6 are uses of it; S1
 is the self-improving loop.
 
 ## Background: DeepClause
