@@ -71,3 +71,23 @@ code; `StepGenerator.send` on a solution step). Candidate 2 queues the
 split goal here: unify checks that one split fits, leaves the holes
 unbound, and pushes a goal that enumerates the splits in append/3 order.
 Under a driver only (`trail.defer`); a bare unify keeps the first split.
+
+## 2026-10-10: done (candidate 2)
+
+`_drive_seg_unify` (clausal/terms.py), the one driver behind
+`SegList`/`SegString`/`SegBytes.__unify__`: under `trail.defer`, when a split
+fits and another candidate remains, it undoes the split, leaves the holes
+unbound and pushes a pending goal that binds each split in `append/3` order.
+When the first fit is the last candidate it binds it (no choice point). A
+bare `unify` keeps the first split. F015/F016 are ordinary tests now;
+`tests/test_value_pattern_keeps_every_split.py` covers `member/2`, equal
+targets, `findall`, `call/N`, `not (P is T)`, `'\\='/2`, `dif/2`, `'='/3`,
+`freeze/2`, text and bytes.
+
+`dif/2` and `'='/3` needed no change: the pending push is a trail entry, so
+the structural probe sees trail growth and suspends (`dif`) or answers
+`true` per split and then `false` with the constraint (`'='/3`).
+
+Not covered: two OPEN patterns unified with each other
+(`[*A, *B] = [*C, *D]`, `_unify_open_seglists`) still bind one solution;
+that has infinitely many answers in general.

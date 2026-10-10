@@ -214,9 +214,11 @@ class VarSeg:
 # ``unify`` is deterministic: one call, one answer.  A partial list with ONE
 # hole (``[1|T]``, ``[*A, x]``) has at most one split against a list of known
 # length, so ``__unify__`` is exact for it.  With TWO OR MORE holes
-# (``[*A, *B]``) unify commits to the first split that fits; every split
-# comes back only where the compiler enumerates them (a clause head, an
-# ``is`` goal).
+# (``[*A, *B]``) there can be several splits.  Where the compiler sees the
+# pattern (a clause head, an ``is`` goal) it enumerates them itself.  Where
+# the pattern reaches ``unify`` as a value, ``_drive_seg_unify`` queues a
+# pending goal that binds each split in turn, under a driver
+# (``trail.defer``); a bare ``unify`` from Python binds the first split.
 #
 # ``__unify__`` used to cache a suspended split enumerator per term, keyed by
 # the target's CONTENT and the trail, so that calling it again resumed at the
@@ -330,12 +332,38 @@ def _apply_segbytes_split(segbytes, target_bytes, split, trail):
 
 
 def _drive_seg_unify(walked, other, trail, concrete_len, apply_fn):
-    """Bind *walked* against *other* at the first split that fits; True on
-    success (bindings left on *trail*), False with the trail as it was.  One
-    hole: at most one split, tried once."""
-    for split in _seg_split_gen(walked.segments, len(other), concrete_len):
+    """Unify *walked* against *other*; True on success, False with the trail
+    as it was.
+
+    One hole has at most one split, bound here.  With two or more holes
+    there can be several: ``[*A, *B] = [1, 2]`` has three answers, in the
+    order ``append/3`` gives them.  Under a driver (``trail.defer``) this
+    checks that one split fits, leaves the holes unbound and queues a pending
+    goal that binds each split in turn, so the next goal boundary backtracks
+    into every one (``clausal.logic.pending``).  When the first split that
+    fits is the last candidate there is nothing to enumerate, and it is
+    bound here.  Outside a driver (a bare ``unify`` from Python) the first
+    split that fits is bound, as before."""
+    splits = _seg_split_gen(walked.segments, len(other), concrete_len)
+    for split in splits:
         mark = trail.mark()
         if apply_fn(walked, other, split, trail):
+            if not trail.defer:
+                return True
+            rest = next(splits, None)
+            if rest is None:
+                return True        # the only candidate left: deterministic
+            trail.undo(mark)
+
+            def goal():
+                for each in _seg_split_gen(walked.segments, len(other),
+                                           concrete_len):
+                    m = trail.mark()
+                    if apply_fn(walked, other, each, trail):
+                        yield None
+                    trail.undo(m)
+
+            trail.push_pending(goal)
             return True
         trail.undo(mark)
     return False
@@ -715,10 +743,10 @@ class SegList:
         return False
 
     def __unify__(self, other, trail):
-        """Called by C do_unify.  Against a list or text, binds the holes at
-        the first split that fits (see "Seg* __unify__ against a list or
-        text" above :func:`_seg_split_gen`): exact for one hole, the first
-        of several splits for two or more."""
+        """Called by C do_unify.  Against a list or text, unifies the holes
+        through :func:`_drive_seg_unify` (see "Seg* __unify__ against a list
+        or text" above :func:`_seg_split_gen`): exact for one hole; every
+        split, as a pending goal, for two or more."""
         from .logic.variables import unify, walk
         # An EMPTY Seg IS the empty list, in every spelling (fix round 4,
         # item 5).  See ``_EMPTY_SEG_IS_NIL`` above this class for why this
@@ -762,7 +790,7 @@ class SegList:
                 if other_text:
                     other = [char_atom(c) for c in other]
                 return unify(walked, other, trail)
-            # Non-ground: bind the holes at the first split that fits.
+            # Non-ground: every split that fits (_drive_seg_unify).
             # String targets pass through directly (list/str slicing both
             # yield the right shape).
             concrete_len = sum(len(s.elements) for s in walked.segments
@@ -1417,8 +1445,8 @@ class SegString:
     def __unify__(self, other, trail):
         """Called by C do_unify.
 
-        Against text: binds the holes at the first split that fits (mirror
-        of :meth:`SegList.__unify__`).
+        Against text: unifies the holes through :func:`_drive_seg_unify`
+        (mirror of :meth:`SegList.__unify__`).
         Against ``list``: convert string segments to char elements and
         delegate.
         """
@@ -1445,7 +1473,7 @@ class SegString:
             walked = self._walk_raw()
             if isinstance(walked, str):
                 return walked == other
-            # Non-ground: bind the holes at the first split that fits.
+            # Non-ground: every split that fits (_drive_seg_unify).
             concrete_len = sum(len(s) for s in walked.segments
                                if isinstance(s, str))
             return _drive_seg_unify(walked, other, trail,
@@ -1833,7 +1861,7 @@ class SegBytes:
             walked = self.__walk__()
             if isinstance(walked, bytes):
                 return walked == other
-            # Non-ground: bind the holes at the first split that fits.
+            # Non-ground: every split that fits (_drive_seg_unify).
             concrete_len = sum(len(s) for s in walked.segments
                                if isinstance(s, bytes))
             return _drive_seg_unify(walked, other, trail,

@@ -215,14 +215,11 @@ class TestSameLengthBytes:
         assert sum(1 for _ in call("same_length", b"abc", [1, 2, 3], module=_M)) == 1
 
     def test_same_length_bytes_var_binds_shape(self):
-        # nv  — same_length(b"abc", V) binds V to a 3-element bytes-shaped placeholder
+        # nv  — same_length(b"abc", V) binds V to three fresh variables (a
+        # list: a SegBytes of holes meant three SUBSTRINGS, 2026-10-10)
         got = _first(call("same_length", b"abc", (V := Var()), module=_M),
                      lambda: deref(V))
-        assert got is not None
-        # placeholder has three element-slots (bytes-shaped, mirroring str's SegString)
-        from clausal.terms import SegBytes
-        assert isinstance(got, SegBytes)
-        assert len(got.segments) == 3
+        assert isinstance(got, list) and len(got) == 3
 
 
 class TestSegBytesThroughBuiltins:

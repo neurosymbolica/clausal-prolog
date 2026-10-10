@@ -28,3 +28,13 @@ Then `L = "xy"` fails on length and `L = "xyz"` binds each char. Check what F053
 
 Also check the `.value` of an unfilled `SegString` after a successful unify: the holes stay
 unbound in the printed answer, which looks like a second bug in how the split is bound or read back.
+
+## 2026-10-10: done (with candidate 2)
+
+`_fresh_same_shape` returns a list of N fresh variables for every sibling,
+text and bytes included (Scryer: `[_, _, _]`). It had to ship with the split
+pending goal: on that candidate the old holes gave 6, 15 and 10 answers for
+`s`, `t` and `u` above. The two tests that pinned the hole shape (C09 F053,
+`test_same_length_bytes_var_binds_shape`) now pin the list. A filled answer
+reads back as the char list `['x', 'y', 'z']`, not text: a char list's two
+shapes are a seam matter (2026-10-08).

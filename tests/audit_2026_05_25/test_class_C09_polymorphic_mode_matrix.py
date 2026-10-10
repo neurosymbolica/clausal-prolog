@@ -265,11 +265,11 @@ def test_F053_output_mode_builders_respect_str_type_hint():
       - ``replicate(5, 'a', R)``: every element is a 1-char str; the
         natural / lossless representation is ``'aaaaa'`` (str),
         not ``['a','a','a','a','a']``.
-      - ``same_length("abc", X)``: the sibling arg is str, so the
-        result shape should be str.
+      - ``same_length("abc", X)``: a list of three fresh variables
+        (2026-10-10; text has no shape with an unbound char in it).
     """
     from clausal.logic.solve import call
-    from clausal.logic.variables import Var, deref
+    from clausal.logic.variables import Var, deref, is_var
     from tests.audit_2026_05_25._helpers import load_inline_clausal
 
     mod = load_inline_clausal(
@@ -297,36 +297,19 @@ def test_F053_output_mode_builders_respect_str_type_hint():
         f"and unconditionally allocates a list."
     )
 
-    # same_length("abc", X) — sibling arg is str, X should be str-shaped.
-    # Under option A (input-type wins) the str-shaped fresh placeholder
-    # is either a concrete ``str`` (if all elements are already bound)
-    # or a ``SegString`` of fresh ``VarSeg`` holes (the natural
-    # variable-bearing str shape — walks to a ``str`` once bound).
-    from clausal.terms import SegString
+    # same_length("abc", X) gives a list of three fresh variables
+    # (2026-10-10).  There is no text shape with an unbound char in it: the
+    # SegString of VarSeg holes this used to pin meant three SUBSTRINGS, so
+    # every text unified with it.  Scryer also gives [_, _, _].
     X = Var()
     same_results = []
     for _ in call("same_length", chars("abc"), X, module=mod):
         same_results.append(deref(X))
         break
-    assert len(same_results) == 1, (
-        f"precondition: same_length('abc', X) should produce one "
-        f"solution; got {len(same_results)}."
-    )
+    assert len(same_results) == 1
     same = same_results[0]
-    assert is_chars(same) or isinstance(same, SegString), (
-        f"same_length('abc', X) returned X = {same!r} of type "
-        f"{type(same).__name__}; expected a str-shaped value (a str "
-        f"or a SegString of fresh VarSeg holes) since the sibling "
-        f"argument is str. The output-mode builder at "
-        f"lists.py:756-783 should pick the str shape per option A "
-        f"(input-type wins)."
-    )
-    if isinstance(same, SegString):
-        assert len(same.segments) == 3, (
-            f"same_length('abc', X) returned a SegString with "
-            f"{len(same.segments)} segments; expected 3 (one VarSeg per "
-            f"sibling-str character)."
-        )
+    assert isinstance(same, list) and len(same) == 3
+    assert all(is_var(deref(e)) for e in same)
 
 
 # F054 — _seq_result symmetry across 8 input shapes. Parametrised.

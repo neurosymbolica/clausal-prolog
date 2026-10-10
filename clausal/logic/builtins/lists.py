@@ -1623,25 +1623,17 @@ def _numlist__2(high, lst, trail, k):
 
 
 def _fresh_same_shape(seq_val):
-    """Return a fresh sequence of N elements matching ``seq_val``'s shape.
+    """Return a list of N fresh variables, N the length of ``seq_val``.
 
-    F053 (C9 audit, option A — input-type wins): when the sibling value
-    is a ``str`` (or a ground ``SegString``), build a fresh
-    ``SegString`` of N ``VarSeg`` holes so the generated placeholder is
-    *str-shaped* rather than a Python list. Otherwise generate the
-    classic list of fresh ``Var`` objects.
+    A text or bytes sibling also gets a list: there is no text shape with
+    an unbound char in it.  A ``SegString``/``SegBytes`` of N ``VarSeg``
+    holes (F053 option A, until 2026-10-10) meant N SUBSTRINGS, so every
+    text of any length unified with it, and with the split pending goal
+    every way of cutting it was an answer.  Scryer gives ``[_, _, _]`` for
+    ``same_length("abc", L)`` too.
     """
-    from clausal.terms import SegString, SegBytes, VarSeg
     if is_chars(seq_val):
-        seq_val = chars_text(seq_val)  # stage 1: str-shaped
-    if isinstance(seq_val, str):
-        return SegString([VarSeg(Var()) for _ in seq_val])
-    if isinstance(seq_val, SegString) and seq_val.is_ground():
-        return SegString([VarSeg(Var()) for _ in seq_val.__walk__()])
-    if isinstance(seq_val, bytes):
-        return SegBytes([VarSeg(Var()) for _ in seq_val])
-    if isinstance(seq_val, SegBytes) and seq_val.is_ground():
-        return SegBytes([VarSeg(Var()) for _ in seq_val.__walk__()])
+        seq_val = chars_text(seq_val)
     return [Var() for _ in seq_val]
 
 
@@ -1649,13 +1641,10 @@ def _fresh_same_shape(seq_val):
 def _same_length__2(l1, l2, trail, k):
     """same_length(L1, L2) — true if L1 and L2 have the same length.
 
-    F053 (C9 audit, option A — input-type wins): if one side is a
-    ``str`` (or ground ``SegString``) and the other is unbound, the
-    generated placeholder is a ``SegString`` of fresh ``VarSeg`` holes
-    (str-shaped); a ``bytes`` (or ground ``SegBytes``) sibling yields a
-    ``SegBytes`` of fresh holes (bytes-shaped, codes model); for a
-    ``list`` sibling the placeholder is the classic list of fresh
-    ``Var`` objects.
+    When one side is a sequence (a list, a text, a bytes, or a ground
+    Seg* walking to one) and the other is unbound, the unbound side
+    becomes a list of fresh variables of that length
+    (:func:`_fresh_same_shape`).
     """
     from clausal.logic.runtime._seg_helpers import normalize_seg_input
     # F019: walk ground SegList / SegString / SegBytes to their concrete

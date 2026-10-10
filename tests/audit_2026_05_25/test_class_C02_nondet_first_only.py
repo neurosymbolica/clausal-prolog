@@ -9,11 +9,13 @@ Findings tested here:
 
 Where the compiler sees the pattern (a clause head, an ``is`` goal) it
 enumerates the splits itself.  Where the pattern reaches ``unify`` as a
-value, unify is deterministic and binds the first split.  The fix of
-2026-05-25 exposed the other splits by calling unify again on the same
-trail, keyed by the target's content; that lost answers (``member/2`` over
-equal lists) and was removed on 2026-10-08.  The value case waits on a
-nondeterministic pending-goal channel.
+value, unify checks that one split fits, leaves the holes unbound and
+queues a pending goal that binds each split in turn (2026-10-10,
+``_drive_seg_unify`` in clausal/terms.py); the next goal boundary
+backtracks into every one.  The fix of 2026-05-25 exposed the other splits
+by calling unify again on the same trail, keyed by the target's content;
+that lost answers (``member/2`` over equal lists) and was removed on
+2026-10-08.
 """
 
 import pytest
@@ -63,13 +65,9 @@ def test_F016_segstring_compiled_pattern_enumerates_all_splits(mod, goal):
     assert _walked(_splits(mod, goal, chars("abc"))) == _TEXT_SPLITS
 
 
-@pytest.mark.xfail(strict=True, reason="ledger F015: a pattern unified as a "
-                   "value binds its first split; needs a pending-goal channel")
 def test_F015_seglist_value_pattern_enumerates_all_splits(mod):
     assert _walked(_splits(mod, "via_value", list(_LIST))) == _LIST_SPLITS
 
 
-@pytest.mark.xfail(strict=True, reason="ledger F016: a pattern unified as a "
-                   "value binds its first split; needs a pending-goal channel")
 def test_F016_segstring_value_pattern_enumerates_all_splits(mod):
     assert _walked(_splits(mod, "via_value", chars("abc"))) == _TEXT_SPLITS
