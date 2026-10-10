@@ -11,3 +11,10 @@ A partial list is not yet known not to be a list, so ISO (and Scryer's `library(
 `clausal/logic/builtins/type_checks.py`, which now asks `seg_closed` for a Seg* term; an open
 Seg* (or an unbound tail) should raise the instantiation error instead of the type error. Check
 `is_list/1` stays a plain failure (it is a type test, not a check).
+
+## 2026-10-10: done
+
+`_open_list` in `type_checks.py`: an unfilled Seg* raises
+`instantiation_error` from `must_be(list, _)`, and `can_be(list, _)`
+accepts it (it raised `type_error` too). Both checked against Scryer;
+`tests/test_must_be_list_on_a_partial_list.py`.

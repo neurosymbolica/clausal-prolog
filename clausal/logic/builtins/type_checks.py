@@ -530,6 +530,15 @@ def _check_type(type_name: str, term) -> bool:
     return False
 
 
+def _open_list(term) -> bool:
+    """A Seg* with an unfilled hole: a partial list (``[a|_]``, ``[*A, x]``).
+    It is not yet a list, but may become one: ``must_be(list, _)`` raises
+    instantiation_error for it (ISO, Scryer's library(error)) and
+    ``can_be(list, _)`` accepts it."""
+    return (isinstance(term, (SegList, SegString, SegBytes))
+            and seg_closed(term) is None)
+
+
 @_builtin("must_be", 2)
 def _must_be__2(type_name, term, trail, k):
     """must_be(Type, Term) — assert that Term is of the given type.
@@ -562,6 +571,8 @@ def _must_be__2(type_name, term, trail, k):
         raise LogicException(instantiation_error("must_be/2"))
     if _check_type(type_val, term_val):
         yield None
+    elif type_val == "list" and _open_list(term_val):
+        raise LogicException(instantiation_error("must_be/2"))
     else:
         raise LogicException(type_error(type_val, term_val, "must_be/2"))
 
@@ -592,6 +603,8 @@ def _can_be__2(type_name, term, trail, k):
         # Unbound — could become anything
         yield None
     elif _check_type(type_val, term_val):
+        yield None
+    elif type_val == "list" and _open_list(term_val):
         yield None
     else:
         raise LogicException(type_error(type_val, term_val, "can_be/2"))

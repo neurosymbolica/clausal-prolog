@@ -592,6 +592,18 @@ big_num(_n) <- (setup() and query("db2", "SELECT v FROM nums WHERE v > ?", [15],
         nums = _all("big_num", module=mod)
         assert nums == [20, 30]
 
+    def test_a_text_param_is_one_parameter(self, tmp_path):
+        # A text is a tuple carrier; it used to be split into two
+        # parameters, '$chars' and the text.
+        mod = _load("sq2t", """
+setup <- (connect(":memory:", 'db2t') and exec('db2t', 'CREATE TABLE kv (k TEXT, v INTEGER)') and exec('db2t', 'INSERT INTO kv VALUES (?, ?)', ["apple", 3]))
+
+by_key(_v) <- (setup() and query('db2t', 'SELECT v FROM kv WHERE k = ?', "apple", _v))
+count_where(_n) <- (exec('db2t', 'DELETE FROM kv WHERE k = ?', "apple") and query('db2t', 'SELECT count(*) FROM kv', _n))
+""", tmp_path)
+        assert _all("by_key", module=mod) == [3]
+        assert _all("count_where", module=mod) == [0]     # exec/3 too
+
     def test_table_introspection(self, tmp_path):
         # nv
         mod = _load("sq3", """

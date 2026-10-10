@@ -187,16 +187,23 @@ def _sqlite_query_3(this_generator, _proceed, _fail, _catcher, alias, sql, row_v
     yield (_fail, DONE)
 
 
+def _param_seq(params):
+    """The ``?`` values: each element of a list, none for ``[]``, and any
+    other value (a number, a text) as the one parameter.  A text is a tuple
+    carrier, so testing ``(list, tuple)`` here split it into ``'$chars'`` and
+    the text: two parameters for one."""
+    if isinstance(params, list):
+        return tuple(to_python(p) for p in params)
+    if type(params) is tuple and not params:
+        return ()                       # () is the nil, []
+    return (to_python(params),)
+
+
 def _sqlite_query_4(this_generator, _proceed, _fail, _catcher, alias, sql, params, row_var, trail):
     """query/4: parameterized query with ? placeholders."""
     alias = deref(alias)
     sql = deref(sql)
-    params = deref(params)
-    # Accept list or tuple of params
-    if isinstance(params, (list, tuple)):
-        param_seq = tuple(to_python(p) for p in params)
-    else:
-        param_seq = (to_python(params),)
+    param_seq = _param_seq(deref(params))
     conn = _get_connection(alias)
     cur = conn.execute(_text(sql, "sql"), param_seq)
     for row in cur:
@@ -221,11 +228,7 @@ def _sqlite_exec_3(alias, sql, params, trail, k):
     """exec/3: parameterized DDL/DML with ? placeholders."""
     alias = deref(alias)
     sql = deref(sql)
-    params = deref(params)
-    if isinstance(params, (list, tuple)):
-        param_seq = tuple(to_python(p) for p in params)
-    else:
-        param_seq = (to_python(params),)
+    param_seq = _param_seq(deref(params))
     conn = _get_connection(alias)
     conn.execute(_text(sql, "sql"), param_seq)
     conn.commit()

@@ -44,6 +44,8 @@ None is "same".
 Already a bug today, independent of compaction: sqlite Params given as a
 single string (`query(Db, Sql, "hello", R)`) binds two parameters,
 `'$chars'` and `'hello'`, because the carrier passes the `(list, tuple)` test.
+FIXED 2026-10-10 (`_param_seq` in clausal/modules/py/sqlite.py): a text is one
+parameter.
 
 Text positions are unaffected: every adapter position that takes TEXT goes
 through `to_text` / `text_or_str` / `require_text` / `to_bytes`, which already
