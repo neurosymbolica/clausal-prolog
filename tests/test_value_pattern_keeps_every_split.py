@@ -29,6 +29,13 @@ reified(T, A, B, R) <- (P is [*A, *B], '='(P, T, R))
 frozen(T, A, B) <- (freeze(A, A is [1, *_]), P is [*A, *B], P is T)
 middle(T, A, B) <- (P is [*A, 2, *B], P is T)
 via_call(T, A, B) <- call('=', [*A, *B], T)
+oc_splits(R) <- findall(A-B, (P is [*A, *B], unify_with_occurs_check(P, [1, 2])), R)
+oc_cyclic(A, B) <- (P is [*A, *B], unify_with_occurs_check(P, [A]))
+oc_none(R) <- (P is [*A, *B], findall(1, unify_with_occurs_check(P, [X, P]), R))
+subsumed_by_list(R) <- (P is [*A, *B], findall(1, subsumes_term([1, 2], P), R))
+subsumes_a_list(R) <- (P is [*A, *B], findall(1, subsumes_term(P, [1, 2]), R))
+subsumes_cyclic(R) <- (P is [*A, *B], findall(1, subsumes_term(P, [A]), R))
+oc_only_last(R) <- (P is [*A, *B, *B], findall(1, (unify_with_occurs_check(P, [A]), not acyclic_term(A)), R))
 """
 
 
@@ -132,3 +139,41 @@ def pl(tmp_path_factory):
 ])
 def test_same_length_of_a_text_keeps_its_length(pl, name, answers):
     assert _answers(pl, name, nvars=1) == answers
+
+
+# The queued split goal binds with plain unification, outside the caller's
+# checks: occurs-check unify and subsumes_term run it themselves and check
+# every answer (security review, 2026-10-10).
+def test_occurs_check_unify_gives_every_split(mod):
+    [(r,)] = _answers(mod, "oc_splits", nvars=1)
+    assert len(r) == 3
+
+
+def test_occurs_check_unify_drops_a_cyclic_split(mod):
+    # The second split binds A to [A]: a cycle, so not an answer.
+    assert _answers(mod, "oc_cyclic", nvars=2) == [([], [[]])]
+
+
+def test_occurs_check_unify_with_no_acyclic_split(mod):
+    # Every split of P against [X, P] contains P: none is an answer (the
+    # first split was never occurs-checked before either).
+    assert _answers(mod, "oc_none", nvars=1) == [([],)]
+
+
+def test_subsumes_term_rejects_a_split_pattern_as_specific(mod):
+    # Every split binds a hole of Specific, so nothing subsumes it.
+    assert _answers(mod, "subsumed_by_list", nvars=1) == [([],)]
+    assert _answers(mod, "subsumes_a_list", nvars=1) == [([1],)]
+
+
+def test_subsumes_term_skips_a_cyclic_split(mod):
+    # The split A = [A] is a cycle: rejected before its variables are
+    # collected (collecting them overflowed).
+    assert _answers(mod, "subsumes_cyclic", nvars=1) == [([],)]
+
+
+def test_occurs_check_unify_when_only_the_last_split_fits(mod):
+    # With a repeated hole the earlier splits fail and the last one binds
+    # A to a cycle; it is queued like any other, so it is checked (it got
+    # through unchecked on 1b717269 too).
+    assert _answers(mod, "oc_only_last", nvars=1) == [([],)]

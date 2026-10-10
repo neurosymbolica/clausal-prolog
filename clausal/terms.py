@@ -340,19 +340,19 @@ def _drive_seg_unify(walked, other, trail, concrete_len, apply_fn):
     order ``append/3`` gives them.  Under a driver (``trail.defer``) this
     checks that one split fits, leaves the holes unbound and queues a pending
     goal that binds each split in turn, so the next goal boundary backtracks
-    into every one (``clausal.logic.pending``).  When the first split that
-    fits is the last candidate there is nothing to enumerate, and it is
-    bound here.  Outside a driver (a bare ``unify`` from Python) the first
+    into every one (``clausal.logic.pending``).  One hole is bound here.
+    Outside a driver (a bare ``unify`` from Python) the first
     split that fits is bound, as before."""
-    splits = _seg_split_gen(walked.segments, len(other), concrete_len)
-    for split in splits:
+    for split in _seg_split_gen(walked.segments, len(other), concrete_len):
         mark = trail.mark()
         if apply_fn(walked, other, split, trail):
-            if not trail.defer:
+            if not trail.defer or sum(
+                    isinstance(s, VarSeg) for s in walked.segments) < 2:
                 return True
-            rest = next(splits, None)
-            if rest is None:
-                return True        # the only candidate left: deterministic
+            # Two or more holes always go through the queue, even when this
+            # fit turns out to be the only one: the occurs-checked builtins
+            # (unify_with_occurs_check/2, subsumes_term/2) check a split's
+            # bindings exactly when one was queued.
             trail.undo(mark)
 
             def goal():

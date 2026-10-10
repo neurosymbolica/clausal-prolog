@@ -1171,11 +1171,25 @@ def _module_constant__3(m, name, value, trail, k):
 def _unify_with_occurs_check__2(a, b, trail, k):
     """unify_with_occurs_check(X, Y) -- ISO 8.2.2: unification that fails
     rather than build a cyclic term (``unify_with_occurs_check(X, f(X))``
-    fails)."""
+    fails).
+
+    A pattern with two or more holes (``[*A, *B]``) unifies through a queued
+    goal that binds each split with plain unification
+    (``_drive_seg_unify``), and a split's binding was never occurs-checked,
+    even the first.  So the queued goals run here, and only an answer whose
+    terms are acyclic is one: plain unification that ends acyclic is the
+    occurs-checked unifier.  With nothing queued the occurs check above
+    already decided, and the acyclicity walk is skipped."""
     from clausal.logic.constraints import _structural_unify_oc  # noqa: PLC0415
+    from clausal.logic.pending import drain  # noqa: PLC0415
     mark = trail.mark()
     if _structural_unify_oc(a, b, trail):
-        yield None
+        if trail.pending is None:          # no split queued: already checked
+            yield None
+        else:
+            for _ in drain(trail):
+                if _is_acyclic(a) and _is_acyclic(b):
+                    yield None
     trail.undo(mark)
 
 
@@ -1189,17 +1203,30 @@ def _subsumes_term__2(general, specific, trail, k):
 
         \\+ \\+ (term_variables(S, V1), unify_with_occurs_check(G, S),
                term_variables(V1, V2), V1 == V2)
+
+    The queued goals of a split pattern run here, per answer (see
+    :func:`_unify_with_occurs_check__2`): unqueued, a Specific with holes
+    looked unbound and subsumed anything.
     """
     from clausal.logic.constraints import _structural_unify_oc  # noqa: PLC0415
+    from clausal.logic.pending import drain  # noqa: PLC0415
     v1: list = []
     _collect_vars_impl(deref(specific), v1)
     mark = trail.mark()
-    ok = _structural_unify_oc(general, specific, trail)
-    if ok:
-        v2: list = []
-        _collect_vars_impl(list(v1), v2)
-        ok = len(v1) == len(v2) and all(
-            deref(x) is deref(y) for x, y in zip(v1, v2))
+    ok = False
+    if _structural_unify_oc(general, specific, trail):
+        queued = trail.pending is not None
+        for _ in drain(trail):
+            # Acyclic FIRST: a split may bind a variable to a term holding
+            # it, and collecting the variables of a cycle overflows.
+            if queued and not (_is_acyclic(general) and _is_acyclic(specific)):
+                continue
+            v2: list = []
+            _collect_vars_impl(list(v1), v2)
+            if len(v1) == len(v2) and all(
+                    deref(x) is deref(y) for x, y in zip(v1, v2)):
+                ok = True
+                break
     trail.undo(mark)
     if ok:
         yield None
@@ -1210,11 +1237,12 @@ def _acyclic_children(t):
     if type(t) in (tuple, list):
         return t
     if isinstance(t, SegList):
-        raw = t._walk_raw()
-        if isinstance(raw, list):
-            return raw
+        # Its own segments, NOT ``_walk_raw()``: that walks the element
+        # values recursively, so on a cycle (a split bound ``A`` to ``[A]``)
+        # it overflowed before the search below could see the cycle.  A
+        # filled hole is followed by the search, as any variable is.
         out = []
-        for seg in raw.segments:
+        for seg in t._segments:
             if isinstance(seg, VarSeg):
                 out.append(seg.var)
             else:
