@@ -95,6 +95,7 @@ Names with no 1.3.3 atom of their own.  They are not in `rename_map.tsv`.
 | `STATUS_OPTIMUM`, `STATUS_APPLIED`, `STATUS_UNLIMITED`, `OPTIMUM`, `APPLIED` | `bounded_simplex.py` | the step statuses `optimum`, `applied`, `unlimited(Indep, DepT)` |
 | `BELOW_LOWER_BOUND`, `ABOVE_UPPER_BOUND` | `bounded_simplex.py` | the kinds of the violated-bound terms `below_lower_bound(L)`, `above_upper_bound(U)` |
 | `PIVOT_EXCHANGE`, `PIVOT_OR_BOUND_SWAP` | `bounded_simplex.py` | the action terms `pivot_exchange(...)`, `pivot_or_bound_swap(...)` that `decrease_evaluate/2` builds |
+| `inequality_more_variables_slack` | `inequalities.py` | `inequality_more_variables/2` (`ineq_more/2`; `inequality_more_variables` is `/4`) |
 | `ord_add_element` | `bounded_simplex.py` | library(ordsets) `ord_add_element/3`, which `bv.pl` imports; it keeps its name |
 
 ## Table
