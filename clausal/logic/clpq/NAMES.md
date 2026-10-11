@@ -97,6 +97,14 @@ Names with no 1.3.3 atom of their own.  They are not in `rename_map.tsv`.
 | `PIVOT_EXCHANGE`, `PIVOT_OR_BOUND_SWAP` | `bounded_simplex.py` | the action terms `pivot_exchange(...)`, `pivot_or_bound_swap(...)` that `decrease_evaluate/2` builds |
 | `inequality_more_variables_slack` | `inequalities.py` | `inequality_more_variables/2` (`ineq_more/2`; `inequality_more_variables` is `/4`) |
 | `ord_add_element` | `bounded_simplex.py` | library(ordsets) `ord_add_element/3`, which `bv.pl` imports; it keeps its name |
+| `Monomial`, `NonlinearBase` | `normal_form.py` | `nf.pl`'s `monomial(K, Powers)` (`v/2`), and a non-linear base, the skeleton `abs(Nf)`, `sin(Nf)`, ..., `exp(Nf, Nf)`, `Nf/Nf` |
+| `WaitLinearRetry` | `normal_form.py` | the argument of the delayed goal `wait_linear_retry(Nf, Res, Goal)` |
+| `post_constraint` | `normal_form.py` | `{}/1` |
+| `submit_equal_terms`, `submit_less_than_terms`, `submit_less_or_equal_terms` | `normal_form.py` | `submit_equal/2`, `submit_less_than/2`, `submit_less_or_equal/2` (the `/1` keep the names) |
+| `is_normal_form_number` | `normal_form.py` | `normal_form_number/1` (`normal_form_number` is `/2`) |
+| `compare_power_products`, `compare_bases`, `compare_normal_forms` | `normal_form.py` | `compare/3`, the standard order, on power products, bases and normal forms (DEVIATIONS.md D11) |
+| `SOLVER_MODULE` | `normal_form.py` | the atom `clpq` of the `clpq:G` goals `translate_goal//1` builds |
+| `exponential_power`, `power`, `absolute`, `minimum`, `maximum`, `exponential`, `logarithm`, `sine`, `cosine`, `tangent`, `arc_sine`, `arc_cosine`, `arc_tangent` | `arithmetic.py` | `expq/6`, `powq/7`, `abs` of a rational, `minq`, `maxq`, `expq/4`, `logq`, `sinq`, `cosq`, `tanq`, `asinq`, `acosq`, `atanq` with the `_rational` suffix dropped (DEVIATIONS.md D1); `expq/6` gets its own name beside `expq/4` |
 
 ## Table
 

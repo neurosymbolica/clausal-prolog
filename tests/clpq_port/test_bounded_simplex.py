@@ -1,14 +1,13 @@
 # tests/clpq_port/test_bounded_simplex.py
 """Task 8: bv.pl (bounded_simplex.py), the simplex with bounded variables.
 
-Until normal_form.py (Task 10) exists, the store is built the way ineq.pl
-builds it, with bv.pl's own predicates (_slack), and normal forms are lists
-of _Monomial records.
+Most tests build the store the way ineq.pl builds it, with bv.pl's own
+predicates (_slack), and write normal forms as lists of _Monomial records,
+the shape nf.pl's (normal_form.py) monomials have; the tests through nf.pl
+post with normal_form.post_constraint.
 """
-import importlib.util
 import random
 import sys
-import types
 from fractions import Fraction
 
 import pytest
@@ -24,16 +23,6 @@ from clausal.logic.clpq.components import (
     COMPONENT_KEY, component_all_variables, list_elements)
 from clausal.logic.clpq.linear_forms import LinearForm
 from clausal.logic.variables import Trail, Var, deref, get_attr, is_var
-
-def _normal_form_module_posts():
-    if importlib.util.find_spec("clausal.logic.clpq.normal_form") is None:
-        return False
-    module = importlib.import_module("clausal.logic.clpq.normal_form")
-    return hasattr(module, "post_constraint")
-
-
-_has_normal_form = _normal_form_module_posts()
-
 
 def q(numerator, denominator=1):
     return make_rational(numerator, denominator)
@@ -62,21 +51,10 @@ def _normal_form(constant, *terms):
     return result
 
 
-def _split(normal_form):
-    """nf.pl split/3."""
-    if normal_form and not normal_form[0].powers:
-        return normal_form[1:], normal_form[0].coefficient
-    return normal_form, ZERO
-
-
 @pytest.fixture
-def normal_form_split(monkeypatch):
-    """bv.pl's dereference/2 calls nf.pl's split/3 (Task 10).  Until that
-    module exists, a stand-in module provides split."""
-    if importlib.util.find_spec("clausal.logic.clpq.normal_form") is None:
-        stub = types.ModuleType("clausal.logic.clpq.normal_form")
-        stub.split = _split
-        monkeypatch.setitem(sys.modules, "clausal.logic.clpq.normal_form", stub)
+def normal_form_split():
+    """Tests written before nf.pl was ported ask for this; nf.pl's split/3
+    is normal_form.split now, so it provides nothing."""
 
 
 def _bounded(trail, bounds, strict=0):
@@ -159,13 +137,8 @@ def _assign_directly(xs, ys, trail):
     return True
 
 
-# ---------------------------------------------------------------- the brief's three tests (need Task 10)
+# ---------------------------------------------------------------- the brief's three tests, through nf.pl
 
-needs_normal_form = pytest.mark.skipif(not _has_normal_form,
-                                       reason="needs Task 10")
-
-
-@needs_normal_form
 def test_inf_and_sup_leave_the_store_as_it_was():
     from clausal.logic.clpq.normal_form import post_constraint
     from clausal.pythonic_ast.nodes import LtE
@@ -174,29 +147,28 @@ def test_inf_and_sup_leave_the_store_as_it_was():
     # same_solution_sets needs dump/3 (Task 12).
     trail = Trail()
     x, y = Var(), Var()
-    assert post_constraint(LtE(0, x), trail)
-    assert post_constraint(LtE(x, 2), trail)
-    assert post_constraint(LtE(0, y), trail)
-    assert post_constraint(LtE(y, 3), trail)
-    assert post_constraint(LtE(Add(x, Mult(2, y)), 6), trail)
+    assert post_constraint(LtE(left=0, right=x), trail)
+    assert post_constraint(LtE(left=x, right=2), trail)
+    assert post_constraint(LtE(left=0, right=y), trail)
+    assert post_constraint(LtE(left=y, right=3), trail)
+    assert post_constraint(LtE(left=Add(left=x, right=Mult(left=2, right=y)), right=6), trail)
     before = _snapshot([x, y])
     infimum, supremum = Var(), Var()
-    assert bv.inf(Add(x, Mult(3, y)), infimum, trail)
-    assert bv.sup(Add(x, Mult(3, y)), supremum, trail)
+    assert bv.inf(Add(left=x, right=Mult(left=3, right=y)), infimum, trail)
+    assert bv.sup(Add(left=x, right=Mult(left=3, right=y)), supremum, trail)
     assert deref(infimum) == 0 and deref(supremum) == 9
     assert _same_snapshot(before, [x, y])
 
 
-@needs_normal_form
 def test_review_focus_1_a_strict_bound_comes_back_strict_after_backtracking():
     # {X < 3}, ({X =< 2}, fail ; true), sup(X, S) gives S = 3.
     from clausal.logic.clpq.normal_form import post_constraint
     from clausal.pythonic_ast.nodes import Lt, LtE
     trail = Trail()
     x = Var()
-    assert post_constraint(Lt(x, 3), trail)
+    assert post_constraint(Lt(left=x, right=3), trail)
     mark = trail.mark()
-    assert post_constraint(LtE(x, 2), trail)
+    assert post_constraint(LtE(left=x, right=2), trail)
     trail.undo(mark)
     supremum = Var()
     assert bv.sup(x, supremum, trail)
@@ -204,17 +176,18 @@ def test_review_focus_1_a_strict_bound_comes_back_strict_after_backtracking():
     assert state_of(x).upper_strict is True
 
 
-@needs_normal_form
+@pytest.mark.skip(reason="needs Task 11: minimize_linear ends in {Dep =:= Inf}, "
+                         "which binds Dep; itf3.pl's hook carries it to X and Y")
 def test_the_box_lp_maximum_is_9_at_0_3():
     from clausal.logic.clpq.normal_form import post_constraint
     from clausal.pythonic_ast.nodes import LtE
     from clausal.terms import Add, Mult
     trail = Trail()
     x, y = Var(), Var()
-    for constraint in (LtE(0, x), LtE(x, 2), LtE(0, y), LtE(y, 3),
-                       LtE(Add(x, Mult(2, y)), 6)):
+    for constraint in (LtE(left=0, right=x), LtE(left=x, right=2), LtE(left=0, right=y), LtE(left=y, right=3),
+                       LtE(left=Add(left=x, right=Mult(left=2, right=y)), right=6)):
         assert post_constraint(constraint, trail)
-    assert bv.maximize(Add(x, Mult(3, y)), trail)
+    assert bv.maximize(Add(left=x, right=Mult(left=3, right=y)), trail)
     assert deref(x) == 0 and deref(y) == 3
 
 

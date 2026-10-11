@@ -105,3 +105,59 @@ class _IntSubclass(int):
 def test_from_number_rejects_inexact_input(value):
     with pytest.raises(TypeError, match="not an exact number"):
         a.from_number(value)
+
+
+# ---------------------------------------------------------------- arith.pl runtime (Task 10, for nf.pl)
+
+def test_float_to_rational_gives_the_short_convergent():
+    assert a.float_to_rational(0.1) == a.make_rational(1, 10)
+    assert a.float_to_rational(-2.5) == a.make_rational(-5, 2)
+    assert a.float_to_rational(3.0) == a.make_rational(3, 1)
+    pi = a.float_to_rational(3.141592653589793)
+    assert pi[0] / pi[1] == 3.141592653589793
+
+
+def test_rational_to_float_of_a_huge_rational_is_finite():
+    assert a.rational_to_float(a.make_rational(10**400 + 1, 3 * 10**399)) == pytest.approx(10 / 3)
+
+
+def test_exponential_power_is_exact_for_integer_exponents():
+    assert a.exponential_power(a.make_rational(2, 3), a.make_rational(5, 1)) == a.make_rational(32, 243)
+    assert a.exponential_power(a.make_rational(-2, 3), a.make_rational(-3, 1)) == a.make_rational(-27, 8)
+    assert a.exponential_power(a.make_rational(9, 1), a.make_rational(1, 2)) == a.make_rational(3, 1)
+    with pytest.raises(ZeroDivisionError):
+        a.exponential_power(a.ZERO, a.make_rational(-1, 1))
+
+
+def test_arithmetic_normalize_of_a_float():
+    assert a.arithmetic_normalize(0.75) == a.make_rational(3, 4)
+    assert a.arithmetic_normalize((2, 4)) == a.make_rational(1, 2)
+    assert a.arithmetic_normalize(7) == a.make_rational(7, 1)
+
+
+def test_power_minimum_maximum_absolute():
+    assert a.power(10, a.make_rational(3, 2), a.ONE) == a.make_rational(3**10, 2**10)
+    assert a.power(0, a.make_rational(3, 2), a.make_rational(5, 1)) == a.make_rational(5, 1)
+    assert a.minimum(a.make_rational(1, 2), a.make_rational(1, 3)) == a.make_rational(1, 3)
+    assert a.maximum(a.make_rational(1, 2), a.make_rational(1, 3)) == a.make_rational(1, 2)
+    assert a.absolute(a.make_rational(-7, 2)) == a.make_rational(7, 2)
+
+
+def test_functions_through_a_float():
+    import math
+    for function, reference, x in [
+            (a.sine, math.sin, 0.5), (a.cosine, math.cos, 0.5),
+            (a.tangent, math.tan, 0.5), (a.arc_sine, math.asin, 0.5),
+            (a.arc_cosine, math.acos, 0.5), (a.arc_tangent, math.atan, 0.5),
+            (a.exponential, math.exp, 0.5), (a.logarithm, math.log, 0.5)]:
+        result = function(a.make_rational(1, 2))
+        assert result[0] / result[1] == reference(x)
+
+
+def test_limit_encoding_length_keeps_small_rationals():
+    assert a.limit_encoding_length(3, 7, 1023) == (3, 7)
+    # The shift is at most the smaller msb, so the denominator never
+    # reaches 0 (arith.pl: min(max(...)-Bits, min(msb(N), msb(D)))).
+    assert a.limit_encoding_length(10**400, 3, 1023) == (5 * 10**399, 1)
+    numerator, denominator = a.limit_encoding_length(10**400, 10**399 + 1, 1023)
+    assert numerator.bit_length() <= 1024 and denominator > 0

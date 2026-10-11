@@ -107,7 +107,7 @@ def verify_delayed(state, other, trail, later):
 
 
 def project_nonlinear(target_variables, constrained_variables, trail,
-                      translate_goal):
+                      translate_goal=None):
     """geler.pl, project_nonlinear/3: collect the goals not yet run on
     *constrained_variables* (marking them run), translated by
     *translate_goal* (see translate), and return the variables the
@@ -119,7 +119,7 @@ def project_nonlinear(target_variables, constrained_variables, trail,
     return _term_variables(goals)
 
 
-def collect_nonlinear(variables, trail, translate_goal):
+def collect_nonlinear(variables, trail, translate_goal=None):
     """geler.pl, collect_nonlinear//1: the translated goals not yet run on
     *variables*; each goal is marked run (translate//1)."""
     result = []
@@ -131,7 +131,7 @@ def collect_nonlinear(variables, trail, translate_goal):
     return result
 
 
-def translate(goals, trail, translate_goal):
+def translate(goals, trail, translate_goal=None):
     """geler.pl, translate//1 and translate_goal//1.
 
     The hook point for nfq.pl.  geler/2 is a meta-predicate, so 1.3.3's
@@ -144,7 +144,14 @@ def translate(goals, trail, translate_goal):
     `translate_goal(procedure, argument) -> list of goal terms`, in order.
     Task 10 writes it with nfq.pl; dump.pl's nonlinear_strip/3 (Task 12)
     reads its output.  A port goal is never a conjunction, so the
-    conjunction clause has nothing to do (DEVIATIONS.md D7)."""
+    conjunction clause has nothing to do (DEVIATIONS.md D7).
+
+    Without a *translate_goal*, the one nfq.pl exports is used
+    (normal_form.translate_goal; test_translate_is_plugged_into_delayed_goals).
+    """
+    if translate_goal is None:
+        from clausal.logic.clpq.normal_form import (  # cyclic: nfq.pl
+            translate_goal)
     result = []
     for goal in goals:
         if is_var(deref(goal.mutex)):

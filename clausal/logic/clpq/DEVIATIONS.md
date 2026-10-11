@@ -34,8 +34,23 @@ module drops the `_rational` suffix):
 | (none) | `to_number` | The way out: an `int` when the denominator is 1, otherwise a `Fraction`, as `present_number` does. |
 | (none) | `negate`, `is_zero`, `ZERO`, `ONE` | 1.3.3 writes these inline (`N is -Na`, `N =:= 0`, `0, 1`). |
 
-`minq`, `maxq` and the float-valued functions (`expq`, `sinq`, ...) are not
-in this module.  `Fraction` is used only in `from_number` (to accept one) and `to_number`, the
+The runtime functions `nf.pl` evaluates besides `+ - * /` came with Task 10,
+in `arith.pl`'s file order:
+
+| 1.3.3 | Port | Difference |
+|---|---|---|
+| `limit_encoding_length/5` | `limit_encoding_length` | Returns the pair. |
+| `expq/4`, `logq/4`, `sinq/4`, `cosq/4`, `tanq/4`, `asinq/4`, `acosq/4`, `atanq/4` | `exponential`, `logarithm`, `sine`, `cosine`, `tangent`, `arc_sine`, `arc_cosine`, `arc_tangent` | Through a float, as 1.3.3's are.  Outside a function's domain (`asin(2)`, `log(0)`) Python's `math` raises `ValueError`; what SICStus does there is not checked. |
+| `expq/6` | `exponential_power` | Exact for an integer exponent, through a float otherwise.  For `0^-N` 1.3.3 builds `rat(1, 0)`, which `arithmetic_normalize/2` then refuses, so `nf.pl`'s caller fails; the port raises `ZeroDivisionError`, and `normal_form.evaluate_nonlinear` fails before calling it (`test_integer_powers_expand_binomially`). |
+| `powq/7` | `power` | The recursion is a loop. |
+| `minq/6`, `maxq/6` | `minimum`, `maximum` | Return the rational. |
+| `abs(rat(N, D))` (`specialize_rational_function//2`) | `absolute` | |
+| `rat_float/3` | `rational_to_float` | |
+| `float_rat/3,9` | `float_to_rational` | The recursion is a loop; a float that is not finite raises `ValueError`. |
+| `arith_normalize/2` (`arith_q.pl`) | `arithmetic_normalize` | Takes an engine number or a rational pair.  A float goes through `float_to_rational`, as `get_rational/3` reads one, so `{X = 0.1}` gives `X = 1/10` (`test_numbers_are_exact_and_a_float_is_its_short_convergent`); Scryer's own `library(clpq)` gives the float's exact binary value instead. |
+| `integerp/2` (`arith_q.pl`) | `rational_integer` | Returns the int, or None. |
+
+`Fraction` is used only in `from_number` (to accept one) and `to_number`, the
 conversion edges; the solver core never sees it.
 
 ## D2: `compenv.pl` is not ported
@@ -163,8 +178,23 @@ a `DelayedGoal(mutex, procedure, argument)` and runs
 1.3.3's `geler/2`).  So:
 
 - A delayed goal is deterministic: it has one answer or none.  The goals
-  `nf.pl` delays (`resubmit_*`, `wait_linear_retry`) are Task 10's to port
-  in that shape; Task 10 confirms each is deterministic in 1.3.3.
+  `nf.pl` delays are `resubmit_equal`, `resubmit_less_than`,
+  `resubmit_less_or_equal`, `resubmit_not_equal` (argument: the normal
+  form) and `wait_linear_retry` (argument: a `WaitLinearRetry` record of
+  Nf, Res, the procedure and its argument).  Each is deterministic in
+  1.3.3: `repair/2` and the `submit_*` predicates commit with a cut or an
+  if-then-else in every clause that can match more than one way
+  (`submit_equal_single_term/1` b2, b3; `submit_equal_several_terms/3`;
+  `submit_equal_constant_first/3` c11, whose `(P = 1, ! ; P = -1, !)` cuts,
+  c12, c13; `submit_less_than_single_term/2`,
+  `submit_less_than_several_terms/3` and the `=<` twins), `linear/1` and
+  `linear_power_products/1` are indexed on their first argument, and
+  `repair_power/5`'s two clauses test `var/1` and `nonvar/1`, so its
+  leftover choice point fails at once.  What they call (bv.pl `solve/1`,
+  `'solve_<'/1`, ineq.pl `inequality_one_variable/4`, ...) is already
+  deterministic (Tasks 8, 9).  `wait_linear_retry`'s Goal is bv.pl's
+  `minimize_linear/1` or `infimum_linear/4`, both deterministic, or bb.pl's
+  `branch_and_bound_infimum_internal/5`, which Task 13 must check.
 - Translation.  `geler/2` is a meta-predicate (`geler.pl`, `compenv.pl`
   `nfq:geler(?,:)`), so 1.3.3 stores `nfq:G`, and `translate_goal//1`'s
   `M:G` clause calls nfq.pl's exported `translate_goal//1` (the `transg` of
@@ -174,18 +204,31 @@ a `DelayedGoal(mutex, procedure, argument)` and runs
   `collect_nonlinear` and `project_nonlinear` take that nfq.pl predicate as
   the parameter `translate_goal(procedure, argument) -> list of goal terms`
   (`test_translate_hands_each_goal_to_translate_goal_in_order`).
-  **Not done yet:** nfq.pl's `translate_goal//1` itself (Task 10, with
-  `normal_form_to_term/2`), and the `clpq:` module tag its output carries,
-  which `nonlinear_strip/3` tests (Task 10 and Task 12 agree the term
-  shape).  The conjunction clause of `translate_goal//1` has nothing to do,
-  because a port goal is never a conjunction.
+  nfq.pl's `translate_goal//1` is `normal_form.translate_goal`, the
+  default of that parameter (`test_translate_is_plugged_into_delayed_goals`).
+  Its goals are compound cells: `M:G` is `(":", M, G)` with M the atom
+  `"clpq"` (`normal_form.SOLVER_MODULE`), which `nonlinear_strip/3` compares
+  with `M == Solver`; `{C}` is `("{}", C)`; C is `(Rel, Term, Z)` with Term
+  from `normal_form_to_term/2` (cells such as `("+", A, B)`, numbers as
+  engine numbers) and Z = 0.  `wait_linear_retry`'s Goal is
+  `(":", "clpq", (Name, Res, Arguments...))`, Name being the port
+  procedure's name (`minimize_linear`, `infimum_linear`); 1.3.3's Goal is
+  qualified `clpq:` by `wait_linear/3`'s meta-argument, bv.pl being part of
+  module clpq (`test_translate_goal_of_resubmit_goals`,
+  `test_translate_goal_of_wait_linear_retry_reaches_res_and_the_goal`).
+  1.3.3 binds Res to the normal form before calling Goal; in the port Res
+  is a variable of the record that nothing binds, and the procedure gets
+  the normal form as its first argument.  The conjunction clause of
+  `translate_goal//1` has nothing to do, because a port goal is never a
+  conjunction.
 - `project_nonlinear/3`'s reachable variables are the variables of the
   TRANSLATED goals, as in 1.3.3 (`term_variables_set/2` on them), so they
-  include `wait_linear_retry`'s `Res` and every variable of its `Goal` once
-  Task 10's translate_goal emits them
-  (`test_project_nonlinear_reaches_what_translate_goal_emits`).  The walk
-  covers tuples, lists and `__slots__` records; Task 10's argument records
-  must be one of those.
+  include `wait_linear_retry`'s `Res` and every variable of its `Goal`
+  (`test_project_nonlinear_reaches_what_translate_goal_emits`,
+  `test_translate_goal_of_wait_linear_retry_reaches_res_and_the_goal`).  The
+  walk covers tuples, lists and `__slots__` records; nf.pl's argument
+  records (`Monomial`, `NonlinearBase`, `WaitLinearRetry`) are `__slots__`
+  records.
 - `project_nonlinear/3` also sorts the collected goals and puts them on a
   fresh variable as `all_nonlinear/1`, which `attribute_goal/2`'s second
   clause reads.  The variable is local to `project_nonlinear/3`, so no
@@ -253,3 +296,34 @@ The port returns the unlimited status whatever its position
 predicates are dead code in 1.3.3: the one call, in `iterate_decrease/2`, is
 commented out.
 
+## D11: the standard order of two variables in a power product is creation order
+
+nf.pl keeps a normal form sorted by `compare/3` on its power products
+(`normal_form_add/4`, `normal_form_add_two/3`) and a power product sorted by
+`compare/3` on its bases (`merge_power_products/4`): the standard order of
+terms.  The port writes that order out for the terms that occur
+(`compare_power_products`, `compare_bases`, `compare_normal_forms`): a power
+`X^P` is the compound `^/2`, a power product a list (`[]` before any
+non-empty list), a monomial `v/2`, a coefficient `rat/2`, a skeleton
+compared by arity, then name, then arguments
+(`test_power_products_follow_the_standard_order`).  Two unbound variables
+are in creation order (`Var._id`), as in D4; SICStus orders them by age,
+which can differ.  The order decides the order of monomials in a normal
+form, which `normal_form_to_term/2` shows in a delayed goal's residual
+(Task 12's oracle tests check it), and which monomial comes first in the
+`submit_*` cases; a linear normal form reaches bv.pl through
+`dereference/2`, which re-sorts it by `compare_variable_order` (D4), so
+linear answers do not depend on it.
+
+## D12: `{C1 ; C2}` gives the first answer only
+
+nf.pl's `{R ; Rs}` (`{}/1` clause 3, "for entailment checking") is a choice
+point: on backtracking `{C1 ; C2}` gives the answers of C2 after those of C1.
+The port's `post_constraint` returns a bool, as every port goal does (D7):
+it tries the branches in order, undoing to the latest choice when a later
+part of the same `{}` fails, and keeps the first way the whole constraint
+succeeds (`test_a_disjunction_is_retried_when_a_later_constraint_fails`).
+For `entailed/1`, which needs only whether `{Cn}` has an answer, that is the
+same (`test_entailed_leaves_the_store_as_it_was`).  A program that
+backtracks into a posted `{C1 ; C2}` for its second answer gets none from
+the port; Task 14's adapter is where a nondeterministic `{}` would go.

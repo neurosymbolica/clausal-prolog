@@ -1,22 +1,21 @@
 # tests/clpq_port/test_inequalities.py
 """Task 9: ineq.pl (inequalities.py), posting inequalities.
 
-Until normal_form.py (Task 10) exists, normal forms are lists of _Monomial
-records and nf.pl's split/3 is a stand-in (the normal_form_split fixture),
-as in test_bounded_simplex.py.  An inequality `Lin < 0` / `Lin =< 0` is
-posted the way bv.pl's 'solve_<'/1 and 'solve_=<'/1 post it:
+Normal forms are written as lists of _Monomial records, the shape nf.pl's
+(normal_form.py) monomials have, as in test_bounded_simplex.py.  An
+inequality `Lin < 0` / `Lin =< 0` is posted the way bv.pl's 'solve_<'/1 and
+'solve_=<'/1 post it:
 inequalities.inequality(Homogeneous, Constant, NormalForm, Strict, Trail).
 """
-import importlib.util
 import pathlib
 import sys
-import types
 from fractions import Fraction
 
 import pytest
 
 from clausal.logic.clpq import bounded_simplex as bv
 from clausal.logic.clpq import inequalities as ineq
+from clausal.logic.clpq.normal_form import split
 from clausal.logic.clpq.arithmetic import ONE, ZERO, make_rational, to_number
 from clausal.logic.clpq.attributes import (
     BOUNDS_LOWER, BOUNDS_LOWER_ACTIVE, BOUNDS_LOWER_ACTIVE_UPPER,
@@ -31,15 +30,9 @@ def q(numerator, denominator=1):
     return make_rational(numerator, denominator)
 
 
-def _normal_form_module_posts():
-    if importlib.util.find_spec("clausal.logic.clpq.normal_form") is None:
-        return False
-    module = importlib.import_module("clausal.logic.clpq.normal_form")
-    return hasattr(module, "post_constraint")
-
-
-needs_normal_form = pytest.mark.skipif(not _normal_form_module_posts(),
-                                       reason="needs Task 10")
+# clausal_answers(solver="holzbaur") runs the CLI, where the switch to the
+# port is wired in Task 14; until then it would run the legacy solver.
+needs_the_switch = pytest.mark.skip(reason="needs Task 14")
 
 
 # ---------------------------------------------------------------- helpers
@@ -62,25 +55,16 @@ def _normal_form(constant, *terms):
     return result
 
 
-def _split(normal_form):
-    """nf.pl split/3."""
-    if normal_form and not normal_form[0].powers:
-        return normal_form[1:], normal_form[0].coefficient
-    return normal_form, ZERO
-
-
 @pytest.fixture
-def normal_form_split(monkeypatch):
-    if importlib.util.find_spec("clausal.logic.clpq.normal_form") is None:
-        stub = types.ModuleType("clausal.logic.clpq.normal_form")
-        stub.split = _split
-        monkeypatch.setitem(sys.modules, "clausal.logic.clpq.normal_form", stub)
+def normal_form_split():
+    """Tests written before nf.pl was ported ask for this; nf.pl's split/3
+    is normal_form.split now, so it provides nothing."""
 
 
 def _post(trail, strict, constant, *terms):
     """constant + sum K*X  < 0 (strict) or =< 0, through inequality/4."""
     normal_form = _normal_form(constant, *terms)
-    homogeneous, inhomogeneous = _split(normal_form)
+    homogeneous, inhomogeneous = split(normal_form)
     return ineq.inequality(homogeneous, inhomogeneous, normal_form, strict, trail)
 
 
@@ -693,7 +677,7 @@ range(S, I) :- {X0 >= 0, X0 =< 1}, chain(X0, X60, 60), sup(X60, S), inf(X60, I).
 """
 
 
-@needs_normal_form
+@needs_the_switch
 @pytest.mark.parametrize("goal, variables, expected", [
     ("fixed(X)", ["X"], {"X": _chain_value(1)}),
     ("range(S, I)", ["S", "I"], {"S": _chain_value(1), "I": _chain_value(0)}),
@@ -718,7 +702,7 @@ def test_a_strict_bound_met_by_a_non_strict_one_fails(normal_form_split):
     assert _upper(trail, x, 0, False) is False
 
 
-@needs_normal_form
+@needs_the_switch
 def test_a_strict_bound_met_by_a_non_strict_one_fails_end_to_end():
     # The same on the oracle and through nf.pl.
     from tests.clpq_oracle import clausal_answers, oracle_answers

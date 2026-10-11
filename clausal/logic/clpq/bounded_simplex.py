@@ -290,7 +290,7 @@ def solve_less_or_equal(normal_form, trail):
 def maximize(term, trail):
     """bv.pl, maximize/1."""
     from clausal.terms import Negate
-    return minimize(Negate(term), trail)
+    return minimize(Negate(operand=term), trail)
 
 
 def minimize(term, trail):
@@ -323,13 +323,14 @@ def _post_equal(left, right, trail):
     from clausal.pythonic_ast.nodes import ArithEq
     if type(right) is tuple:                    # a rational
         right = to_number(right)
-    return post_constraint(ArithEq(left, right), trail)
+    return post_constraint(ArithEq(left=left, right=right), trail)
 
 
 def sup(expression, supremum, trail, vector=(), vertex=()):
     """bv.pl, sup/2 and sup/4: inf(-Expression, -Sup, Vector, Vertex)."""
     from clausal.terms import Negate
-    return inf(Negate(expression), Negate(supremum), trail, vector, vertex)
+    return inf(Negate(operand=expression), Negate(operand=supremum), trail,
+               vector, vertex)
 
 
 def inf(expression, infimum, trail, vector=(), vertex=()):
