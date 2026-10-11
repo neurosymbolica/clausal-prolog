@@ -78,6 +78,11 @@ false.
   are stored, over internal variables named `_Q1`, `_Q2`, …: still the
   whole answer, just not simplified.
 
+  A strict bound that passes through a variable the answer does not show
+  is printed as non-strict (`{X < Y, Y =< 3}` shows X as `{X =< 3}`), and
+  a value that the constraints force is shown as constraints, not as a
+  binding.
+
   Other constraints (`clpz`, `freeze/2`, `dif/2`) are not printed yet.
 - A goal can use the operators the program has: its own `op/3` directives
   and those of the libraries it imports, such as `#=` after

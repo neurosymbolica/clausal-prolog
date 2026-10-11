@@ -1129,6 +1129,12 @@ class _PrologToClausal:
             return "{" + ", ".join(
                 self._emit_clpq_constraint(c)
                 for c in self._flatten_conjunction(goal.body)) + "}"
+        # A conjunction in goal position (inside `;` or `\\+`) is goals, not a
+        # tuple term: `( {X = Y}, fail ; true )` emitted `{X is Y}`, a
+        # SetGoalElementError at load.
+        if isinstance(goal, PCompound) and goal.functor == "," and len(goal.args) == 2:
+            return "(" + ", ".join(
+                self._emit_goal(g) for g in self._flatten_conjunction(goal)) + ")"
         # Disjunction: (A ; B) → (A or B)
         if isinstance(goal, PCompound) and goal.functor == ";":
             return self._emit_disjunction(goal)

@@ -114,3 +114,17 @@ def test_library_clpq_without_a_list_is_built_in(native, ans):
         t(X, Y) :- {X + Y = 3, X - Y =:= 1}.
         """), frontend="translator")
     assert ans(mod, "t", 2) == [(2, 1)]
+
+
+def test_a_conjunction_inside_a_disjunction_is_goals(native, ans):
+    """A conjunction in goal position (here inside `;`) emitted its parts
+    as terms, so ``{X = Y}`` came out as ``{X is Y}``: a load error
+    (third review, 2026-10-11)."""
+    out = prolog_to_clausal(":- use_module(library(clpq)).\n"
+                            "t(X) :- ( {X = 1}, fail ; {X = 2} ).\n")
+    assert "({X == 1}, False)" in out, out
+    mod = native.load("unk_clpq_disj", textwrap.dedent("""\
+        :- use_module(library(clpq)).
+        t(X) :- ( {X = 1}, fail ; {X = 2} ).
+        """), frontend="translator")
+    assert ans(mod, "t", 1) == [2]

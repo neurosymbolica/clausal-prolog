@@ -17,6 +17,8 @@ each modification.  On backtrack the snapshot is restored automatically.
 
 from __future__ import annotations
 
+import functools
+import inspect
 import weakref
 from decimal import Decimal
 from fractions import Fraction
@@ -352,7 +354,9 @@ class Tableau:
         # i.e., they reduce to a constant)
         self._propagate_determined()
 
-        return True
+        # A var fixed here can complete a disequality (the strict half of
+        # X < Y): X < Y, Y =< 3, X = 3 bound Y = 3 and succeeded.
+        return self._check_diseqs()
 
     def _propagate_determined(self) -> None:
         """Mark variables whose value is now forced as fixed (lo == hi).
@@ -401,8 +405,12 @@ class Tableau:
         if rel == '>=':
             return self.add_inequality(
                 {v: -c for v, c in coeffs.items()}, -constant, '<=')
+        return self._add_le(coeffs, constant) and (
+            not self.diseqs or self._check_diseqs())
 
-        # rel == '<='
+    def _add_le(self, coeffs: dict[int, Fraction],
+                constant: Fraction) -> bool:
+        """``add_inequality`` for ``<=``, without the disequality check."""
         coeffs, constant = self._substitute_parametric(coeffs, constant)
         coeffs, constant = self._substitute_basic(coeffs, constant)
 
@@ -759,9 +767,11 @@ class Tableau:
         """Fail if any disequality is violated.
 
         Disequalities are stored as ``('linear', coeffs, constant)``
-        meaning ``Σ coeffs[v]*v != constant``.  We check this when all
-        variables in the disequality are determined (fixed to a point).
+        meaning ``Σ coeffs[v]*v != constant``.  One fails when the store
+        forces its expression to the constant: every variable fixed, or the
+        expression's minimum and maximum both the constant.
         """
+        work = None
         for entry in self.diseqs:
             tag, coeffs, constant = entry
             # Check if all variables are determined
@@ -783,8 +793,20 @@ class Tableau:
                 else:
                     all_fixed = False
                     break
-            if all_fixed and val == constant:
-                return False  # disequality violated
+            if all_fixed:
+                if val == constant:
+                    return False  # disequality violated
+                continue
+            # Not every variable is fixed, but the store can still force
+            # the expression to the value: X < Y, Y =< 3, X = 3 leaves Y
+            # only in [3, 3] through a row, not its own bounds.
+            if work is None:
+                work = self.copy()
+            hi = work.optimize(dict(coeffs), 'max')
+            if hi is not None and hi == constant:
+                lo = work.optimize(dict(coeffs), 'min')
+                if lo is not None and lo == constant:
+                    return False
         return True
 
     # ── Implied bindings ─────────────────────────────────────────────────
@@ -833,15 +855,44 @@ def _get_tableau(trail: Trail) -> Tableau:
     return tab
 
 
+#: Trails inside a public CLP(Q) call: id(trail) → a snapshot was taken.
+_posting: dict[int, bool] = {}
+
+
+def _one_snapshot(fn):
+    """Let one public call take one snapshot, however many internal steps
+    ask for one (``q_eq`` → ``add_equality`` → ``check_implied_bindings``
+    → ``unify`` → ``_q_hook``).  No choice point can be taken inside a
+    call, so its first snapshot restores everything it changed."""
+    idx = list(inspect.signature(fn).parameters).index('trail')
+
+    @functools.wraps(fn)
+    def call(*args, **kwargs):
+        tid = id(kwargs['trail'] if 'trail' in kwargs else args[idx])
+        if tid in _posting:
+            return fn(*args, **kwargs)
+        _posting[tid] = False
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            del _posting[tid]
+    return call
+
+
 def _snapshot_tableau(trail: Trail) -> None:
     """Save a snapshot so ``trail.undo()`` restores the tableau.
 
-    Every change to the store takes one.  It used to be skipped when the
-    trail had not grown since the last snapshot, but a choice point can be
-    taken at that very length: the change after it then had nothing to
-    undo it, and ``{X =< 3}, ({X >= 1}, fail ; true), X = 0`` failed.
+    Every public call that changes the store takes one (see
+    :func:`_one_snapshot`).  It used to be skipped whenever the trail had
+    not grown since the last one, but a choice point can be taken at that
+    very length: the change after it then had nothing to undo it, and
+    ``{X =< 3}, ({X >= 1}, fail ; true), X = 0`` failed.
     """
     tid = id(trail)
+    if _posting.get(tid):
+        return  # this call already took one
+    if tid in _posting:
+        _posting[tid] = True
     old = _tableaux[tid].copy()
     _last_snapshot[tid] = len(trail) + 1  # +1 because record() adds an entry
     trail.record(lambda: (_tableaux.__setitem__(tid, old),
@@ -874,6 +925,7 @@ def _is_ground_q(x: Any) -> bool:
 
 
 
+@_one_snapshot
 def _promote_fd_to_q(var: Var, trail: Trail) -> None:
     """Add Q bounds [fd_min, fd_max] alongside the existing FD attribute.
 
@@ -1006,6 +1058,7 @@ def _linearize(expr: Any, trail: Trail,
 # ── Domain posting ───────────────────────────────────────────────────────────
 
 
+@_one_snapshot
 def _post_q_domain(target: Any, lo: Fraction | None,
                    hi: Fraction | None, trail: Trail) -> bool:
     """Post rational domain on a single target."""
@@ -1056,6 +1109,7 @@ def _post_q_domain(target: Any, lo: Fraction | None,
 # ── Attribute hook ───────────────────────────────────────────────────────────
 
 
+@_one_snapshot
 def _q_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
     """Called when a Q-constrained variable is unified."""
     state: QVar = attr_value
@@ -1270,6 +1324,7 @@ def _units_result(value, dims):
     return _reattach(value, dims)
 
 
+@_one_snapshot
 def q_eq(l: Any, r: Any, trail: Trail) -> bool:
     """Post l == r as a rational equality constraint."""
     l, r = deref(l), deref(r)
@@ -1306,6 +1361,7 @@ def q_eq(l: Any, r: Any, trail: Trail) -> bool:
     return tableau.check_implied_bindings(trail)
 
 
+@_one_snapshot
 def q_ne(l: Any, r: Any, trail: Trail) -> bool:
     """Post l != r as a passive disequality.
 
@@ -1343,6 +1399,7 @@ def q_ne(l: Any, r: Any, trail: Trail) -> bool:
     return tableau._check_diseqs()
 
 
+@_one_snapshot
 def q_le(l: Any, r: Any, trail: Trail) -> bool:
     """Post l <= r as a rational inequality constraint."""
     l, r = deref(l), deref(r)
@@ -1543,6 +1600,7 @@ def _bind_optimal(tableau: Tableau, trail: Trail) -> bool:
     return True
 
 
+@_one_snapshot
 def maximize(expr: Any, result_var: Any, trail: Trail) -> bool:
     """Maximize *expr* subject to current constraints.
 
@@ -1567,6 +1625,7 @@ def maximize(expr: Any, result_var: Any, trail: Trail) -> bool:
     return unify(result_var, _units_result(opt + const, dims), trail)
 
 
+@_one_snapshot
 def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
     """Minimize *expr* subject to current constraints.
 
@@ -1870,6 +1929,7 @@ def _format_constraints(constraints: list[tuple[dict[int, Fraction], str, Fracti
 # ── Public API: mixed-integer optimization ───────────────────────────────────
 
 
+@_one_snapshot
 def bb_inf(int_vars: list, expr: Any, result_var: Any,
            trail: Trail) -> bool:
     """Branch-and-bound mixed-integer optimization.

@@ -17,10 +17,10 @@ from fractions import Fraction as F
 import pytest
 
 from clausal.logic.clpq import (
-    in_q, q_eq, q_ge, q_le, sup, inf, maximize, minimize, _tableaux, _last_snapshot,
+    in_q, q_eq, q_ge, q_le, q_lt, sup, inf, maximize, minimize, _tableaux, _last_snapshot,
 )
 from clausal.logic.solve import solve
-from clausal.logic.variables import Trail, Var, deref
+from clausal.logic.variables import Trail, Var, deref, unify
 from clausal.terms import Add, Mult, Sub
 from clausal.testing import load_clausal_module
 
@@ -186,3 +186,20 @@ def test_an_eliminated_variable_keeps_its_bounds():
     r = Var()
     assert inf(y, r, t) and deref(r) == 0
     assert not q_eq(y, -10, t)
+
+
+@pytest.mark.parametrize("order", ["bind_last", "bind_first", "bound_last"])
+def test_a_strict_inequality_the_store_closes_fails(order):
+    # X < Y with Y =< 3 and X = 3 leaves Y only in [3, 3] through a row,
+    # not its own bounds, and the disequality was checked only once every
+    # variable was fixed: X = 3 succeeded with Y = 3 (third review).
+    t, x, y = Trail(), Var(), Var()
+    steps = {
+        "bind_last": [lambda: q_lt(x, y, t), lambda: q_le(y, 3, t),
+                      lambda: unify(x, 3, t)],
+        "bind_first": [lambda: unify(x, 3, t), lambda: q_lt(x, y, t),
+                       lambda: q_le(y, 3, t)],
+        "bound_last": [lambda: q_lt(x, y, t), lambda: q_ge(x, 3, t),
+                       lambda: q_le(y, 3, t)],
+    }[order]
+    assert not all(step() for step in steps)
