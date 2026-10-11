@@ -66,6 +66,17 @@ copy gives the same example results as the original.
 Quoted atoms (`'solve_='`, `'divq_-11'`), comments and commented-out code
 are not renamed.
 
+## Names the port adds
+
+Names with no 1.3.3 atom of their own.  They are not in `rename_map.tsv`.
+
+| Port name | Module | What it stands for |
+|---|---|---|
+| `LinearForm` | `linear_forms.py` | the list `[Inhomogeneous, Rest \| Terms]`; fields `constant`, `rest`, `terms` |
+| `MINUS_ONE` | `linear_forms.py` | the rational -1 (1.3.3 writes `-1` inline) |
+| `compare_order_values` | `variable_ordering.py` | the `compare(Rel, Oa, Ob)` step of `nf_ordering/3` (`compare_variable_order`), on two order values; `nf_coeff_hom/3` and `nf_rhs_x/4` call it directly, as 1.3.3 calls `compare/3` |
+| `add_edges`, `add_vertices`, `graph_union`, `top_sort` | `variable_ordering.py` | SICStus `library(ugraphs)`, which `ordering.pl` imports; they keep their names |
+
 ## Table
 
 | Old | New | File |

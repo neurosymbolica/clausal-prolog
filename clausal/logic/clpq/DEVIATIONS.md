@@ -53,3 +53,58 @@ that reads X's attributes or tests `var(X)` expecting X still unbound is
 listed here with what the port does instead.
 
 Sites: to be filled in by Task 11.
+
+## D4: the order of variables is creation order
+
+1.3.3 gives each constrained variable the attribute `order(_)` (bv.pl
+`variable_intern`), a fresh variable, and compares two of them with
+`compare/3` (itf3.pl's `nf_ordering/3` expansion; store.pl `nf_coeff_hom/3`).
+project.pl's `order/3` later binds some of them to integers 1, 2, ... in the
+order `arrangement/2` (ordering.pl) gives.  The standard order of two distinct
+unbound variables is implementation-defined; in SICStus it follows their
+addresses.  ordering.pl also sorts its graphs (`keysort/2`, `sort/2`,
+library(ugraphs)) by the standard order of the constrained variables
+themselves.
+
+The port keeps the representation: `variable_order` holds a fresh `Var`,
+which projection may bind to an int.  It fixes the order of two unbound
+values as creation order, `Var._id` (the engine's monotonic creation
+counter), not the engine's own `compare/3`, which orders variables by
+`id()` (a memory address, which varies from run to run).  An unbound value
+sorts before any int, and ints by value, as in standard order.
+`variable_ordering.py` sorts graph vertices the same way, so `top_sort` is
+deterministic.
+
+What 1.3.3 needs from the order, and the tests that show the port has it:
+
+- identity: equal only for the same variable
+  (`test_variable_order_follows_creation_and_is_an_identity`);
+- stability for the life of the variable, across backtracking and garbage
+  collection (`test_variable_order_is_stable_across_backtracking_and_collection`);
+- consistency with `ordering/1`: values bound by projection sort after all
+  unbound ones and among themselves by number, and `renormalize` re-sorts a
+  form under the new order
+  (`test_order_values_bound_by_projection_sort_after_unbound_ones_by_number`,
+  `test_renormalize_follows_an_imposed_order`).
+
+Why the difference cannot change an answer: the order only decides where a
+term sits in a form's sorted list and which of two variables is taken first.
+Every store.pl operation gives the same rational coefficient for each
+variable whatever the order (`test_scaled_addition_agrees_with_fraction_dicts`
+and the other `*_agrees_with_fraction_dicts` tests compare against
+order-free dicts; `test_renormalize_follows_an_imposed_order` shows the same
+pairs under two orders).  The solution set of a store therefore does not
+depend on it.  What can depend on it is which variable a residual answer
+solves for (`X = Y + 1` against `Y = X - 1`) when SICStus's address order and
+creation order disagree; Task 12's oracle comparison judges residuals by
+solution set (ruling R9), not by text.
+
+## D5: renormalize of a form with no variables raises
+
+store.pl `renormalize/2` calls `renormalize_log(Len, ...)` with the length of
+the homogeneous part.  For length 0 no clause of the first two matches and
+the third splits 0 into 0 and 0 and calls itself again, without end; SICStus
+would run out of stack.  The port raises `ValueError` at once
+(`test_renormalize_of_an_empty_homogeneous_part_raises`).  1.3.3 gives no
+answer in this case either, so no answer changes.  Whether a caller can
+reach it (project.pl `renorm_all`) is for Task 12 to show.
