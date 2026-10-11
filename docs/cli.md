@@ -73,6 +73,11 @@ false.
   {X > 1}, {X < 3}.
   ```
 
+  When projecting would take too long (many constraints linking many
+  variables the answer does not show), the constraints are printed as they
+  are stored, over internal variables named `_Q1`, `_Q2`, …: still the
+  whole answer, just not simplified.
+
   Other constraints (`clpz`, `freeze/2`, `dif/2`) are not printed yet.
 - A goal can use the operators the program has: its own `op/3` directives
   and those of the libraries it imports, such as `#=` after

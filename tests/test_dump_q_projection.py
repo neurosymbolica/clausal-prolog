@@ -5,7 +5,12 @@ Fixed 2026-10-11: projecting ``X + Y = 3`` onto ``X`` answered ``X = 3``
 strict bound or a disequality was not shown at all.
 """
 
-from clausal.logic.clpq import dump_q, q_eq, q_lt, q_gt, q_ne, q_le
+from fractions import Fraction
+
+import pytest
+
+from clausal.logic.clpq import dump_q, inf, q_eq, q_lt, q_gt, q_ne, q_le, sup
+from clausal.logic.variables import deref
 from clausal.logic.variables import Trail, Var
 from clausal.terms import Add, Mult
 
@@ -50,4 +55,68 @@ def test_a_disequality_over_an_eliminated_variable_is_not_shown():
     t, x, y = Trail(), Var(), Var()
     assert q_ne(Add(left=x, right=y), 2, t)
     assert q_le(x, 5, t)
+    assert _dump([x], t) == ["{X =< 5}"]
+
+
+# Pruned projection (security review, 2026-10-11): every answer printed by
+# `clausal -g` projects the store, and unpruned Fourier-Motzkin grew
+# exponentially (22 constraints over 11 variables ran for minutes).
+
+def _random_system(seed, n_vars, n_cons):
+    import random
+    rng = random.Random(seed)
+    t = Trail()
+    vs = [Var() for _ in range(n_vars)]
+    for _ in range(n_cons):
+        picked = rng.sample(vs, 3)
+        e = None
+        for v in picked:
+            term = Mult(left=rng.choice([-3, -2, -1, 1, 2, 3]), right=v)
+            e = term if e is None else Add(left=e, right=term)
+        assert q_le(e, rng.randint(1, 9), t)
+    return t, vs
+
+
+def _bounds(lines):
+    lo = hi = None
+    for s in lines:
+        body = s[1:-1]
+        lhs, rel, rhs = body.rsplit(" ", 2)
+        assert lhs in ("X", "-X") or "*X" in lhs, s       # only X survives
+        k = Fraction(rhs)
+        c = Fraction(1) if lhs == "X" else Fraction(-1) if lhs == "-X" \
+            else Fraction(lhs.split("*")[0])
+        bound = k / c
+        if (rel == "=<") == (c > 0):
+            hi = bound if hi is None else min(hi, bound)
+        else:
+            lo = bound if lo is None else max(lo, bound)
+    return lo, hi
+
+
+@pytest.mark.parametrize("seed", range(40))
+def test_a_pruned_projection_gives_the_tight_bounds(seed):
+    # Pruning drops only redundant constraints: what is left bounds X
+    # exactly as inf/2 and sup/2 do.
+    t, vs = _random_system(seed, 7, 22)
+    x = vs[0]
+    lines = _dump([x], t)
+    if any("_Q" in s for s in lines):
+        pytest.skip("too large to project: shown unprojected")
+    s, i = Var(), Var()
+    hi = deref(s) if sup(x, s, t) else None
+    lo = deref(i) if inf(x, i, t) else None
+    assert _bounds(lines) == (lo, hi)
+
+
+def test_a_projection_too_large_to_finish_is_shown_unprojected():
+    t, vs = _random_system(0, 7, 22)
+    lines = _dump([vs[0]], t)
+    assert any("_Q" in s for s in lines)
+    assert any("X" in s.replace("_Q", "") for s in lines)
+
+
+def test_constraints_not_linked_to_the_targets_are_left_out():
+    t, x, y, z = Trail(), Var(), Var(), Var()
+    assert q_le(x, 5, t) and q_le(Add(left=y, right=z), 3, t)
     assert _dump([x], t) == ["{X =< 5}"]

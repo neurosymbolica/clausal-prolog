@@ -326,14 +326,26 @@ class Tableau:
             val += c * self.assign.get(v, ZERO)
         self.assign[pivot] = val
 
-        # Note: we do NOT check bounds on the pivot variable here.
-        # The pivot is now parametric — its value is determined by other
-        # variables. Bounds will be enforced when those variables are fixed
-        # or when the simplex checks feasibility.
-
         # Remove pivot from rows if it was basic
         self.rows.pop(pivot, None)
         self.rhs.pop(pivot, None)
+
+        # The pivot's value moved, so the basic vars that used it must be
+        # recomputed; and its bounds now constrain the expression it was
+        # replaced by.  Dropping them let {1 =< X, X =< 5, X = Y + 1} take
+        # Y = -10 (X = -9).
+        for bv in self.rows:
+            v = self.rhs[bv]
+            for rv, rc in self.rows[bv].items():
+                v += rc * self.assign.get(rv, ZERO)
+            self.assign[bv] = v
+        plo, phi = self.lo.get(pivot), self.hi.get(pivot)
+        if not self._restore_feasibility():
+            return False
+        if phi is not None and not self.add_inequality({pivot: ONE}, phi, '<='):
+            return False
+        if plo is not None and not self.add_inequality({pivot: ONE}, plo, '>='):
+            return False
 
         # Check if any parametric variables are now fully determined
         # (all their dependencies are also parametric with no free vars,
@@ -343,40 +355,35 @@ class Tableau:
         return True
 
     def _propagate_determined(self) -> None:
-        """Mark parametric variables as determined if all their deps are resolved.
+        """Mark variables whose value is now forced as fixed (lo == hi).
 
-        When a parametric var's equation has no remaining non-basic variables
-        (all its coefficients reference other parametric vars), compute its
-        actual value and update bounds to make check_implied_bindings fire.
+        A parametric var is forced when every var in its equation is; so is
+        a basic var whose row mentions only forced vars (an empty row is a
+        constant).  ``check_implied_bindings`` then binds them.  Basic vars
+        count since an eliminated var's bounds are kept as rows: a user var
+        can be basic when the last equality fixes it (X + Y + Z = 6,
+        X - Y = 2, Y - Z = 1 left Y basic with the row 5/3).
         """
+        def fixed(dep_vid):
+            dep_lo = self.lo.get(dep_vid)
+            if dep_lo is not None and dep_lo == self.hi.get(dep_vid):
+                return dep_lo
+            return None
+
         changed = True
         while changed:
             changed = False
-            for vid in list(self.parametric):
-                pc, pk = self.parametric[vid]
-                # Check if all variables in pc are themselves determined
-                # (either parametric with empty coeffs, or already fixed via bounds)
-                all_determined = True
+            defs = [(vid, pc, pk) for vid, (pc, pk) in self.parametric.items()]
+            defs += [(bv, row, self.rhs[bv]) for bv, row in self.rows.items()]
+            for vid, pc, pk in defs:
                 val = pk
                 for dep_vid, dep_coeff in pc.items():
-                    dep_lo = self.lo.get(dep_vid)
-                    dep_hi = self.hi.get(dep_vid)
-                    if dep_lo is not None and dep_hi is not None and dep_lo == dep_hi:
-                        val += dep_coeff * dep_lo
-                    elif dep_vid in self.parametric:
-                        dep_pc, dep_pk = self.parametric[dep_vid]
-                        if not dep_pc:
-                            val += dep_coeff * dep_pk
-                        else:
-                            all_determined = False
-                            break
-                    else:
-                        all_determined = False
+                    dep_val = fixed(dep_vid)
+                    if dep_val is None:
                         break
-                if all_determined:
-                    old_lo = self.lo.get(vid)
-                    old_hi = self.hi.get(vid)
-                    if old_lo != val or old_hi != val:
+                    val += dep_coeff * dep_val
+                else:
+                    if fixed(vid) != val:
                         self.lo[vid] = val
                         self.hi[vid] = val
                         self.assign[vid] = val
@@ -506,23 +513,18 @@ class Tableau:
            (lowest index).
         5. Pivot, setting the leaving var to its violated bound.
         """
-        max_iters = 2 * (len(self.rows) + len(self.lo)) + 100
+        max_iters = 50 * (len(self.rows) + len(self.lo)) + 1000
         for _ in range(max_iters):
-            # Find most infeasible basic variable
+            # Bland's rule: the lowest-numbered infeasible basic var leaves
+            # (picking the most infeasible one can cycle).
             leaving = None
-            worst = ZERO
-            for bv in self.rows:
+            for bv in sorted(self.rows):
                 val = self.assign.get(bv, ZERO)
                 blo = self.lo.get(bv)
                 bhi = self.hi.get(bv)
-                if blo is not None and val < blo:
-                    viol = blo - val
-                    if viol > worst:
-                        worst, leaving = viol, bv
-                elif bhi is not None and val > bhi:
-                    viol = val - bhi
-                    if viol > worst:
-                        worst, leaving = viol, bv
+                if (blo is not None and val < blo) or (bhi is not None and val > bhi):
+                    leaving = bv
+                    break
 
             if leaving is None:
                 return True  # all feasible
@@ -533,54 +535,31 @@ class Tableau:
             hi = self.hi.get(leaving)
 
             below = lo is not None and val < lo
-            # above = hi is not None and val > hi
 
-            # Row convention: B = rhs + Σ row[v]*v.
-            # Change in B when non-basic v changes by delta: row[v]*delta.
-            #
-            # To INCREASE leaving (below lower bound):
-            #   Need row[v]*delta > 0.
-            #   If v at lower bound (can increase, delta > 0): need row[v] > 0.
-            #   If v at upper bound (can decrease, delta < 0): need row[v] < 0.
-            #
-            # To DECREASE leaving (above upper bound):
-            #   Need row[v]*delta < 0.
-            #   If v at lower bound (delta > 0): need row[v] < 0.
-            #   If v at upper bound (delta < 0): need row[v] > 0.
-
+            # Row convention: B = rhs + Σ row[v]*v, so moving non-basic v by
+            # delta moves B by row[v]*delta.  B must rise when below its
+            # lower bound and fall when above its upper bound; v can enter if
+            # it has room to move the needed way.  A var need not sit at a
+            # bound: a free one (no bounds) can move either way, which the
+            # old test ("at its lower bound") missed, so {X + Y >= 2} over
+            # free X, Y was rejected.
             entering = None
             for v in sorted(row.keys()):  # Bland's rule: sorted
                 c = row[v]
                 if c == ZERO:
                     continue
-                v_lo = self.lo.get(v)
-                v_hi = self.hi.get(v)
                 v_val = self.assign.get(v, ZERO)
-
-                if below:
-                    # Need to increase leaving
-                    if c > ZERO and v_lo is not None and v_val <= v_lo:
-                        # v at lower bound, positive coeff → increase v → increase leaving
-                        if v_hi is None or v_val < v_hi:
-                            entering = v
-                            break
-                    elif c < ZERO and v_hi is not None and v_val >= v_hi:
-                        # v at upper bound, negative coeff → decrease v → increase leaving
-                        if v_lo is None or v_val > v_lo:
-                            entering = v
-                            break
+                rise = (c > ZERO) == below          # v must increase?
+                if rise:
+                    v_hi = self.hi.get(v)
+                    if v_hi is None or v_val < v_hi:
+                        entering = v
+                        break
                 else:
-                    # Need to decrease leaving
-                    if c < ZERO and v_lo is not None and v_val <= v_lo:
-                        # v at lower bound, negative coeff → increase v → decrease leaving
-                        if v_hi is None or v_val < v_hi:
-                            entering = v
-                            break
-                    elif c > ZERO and v_hi is not None and v_val >= v_hi:
-                        # v at upper bound, positive coeff → decrease v → decrease leaving
-                        if v_lo is None or v_val > v_lo:
-                            entering = v
-                            break
+                    v_lo = self.lo.get(v)
+                    if v_lo is None or v_val > v_lo:
+                        entering = v
+                        break
 
             if entering is None:
                 return False  # infeasible — no valid pivot
@@ -589,7 +568,7 @@ class Tableau:
             leaving_bound = lo if below else hi
             self._pivot(leaving, entering, leaving_bound=leaving_bound)
 
-        return False
+        raise RuntimeError("clpq: simplex did not terminate")
 
     # ── Optimization (Phase II simplex) ──────────────────────────────────
 
@@ -671,7 +650,8 @@ class Tableau:
                         ratio = (bhi - bval) / coeff
                 if ratio is None:
                     continue
-                if min_ratio is None or ratio < min_ratio:
+                if min_ratio is None or ratio < min_ratio or (
+                        ratio == min_ratio and bv < leaving):
                     min_ratio = ratio
                     leaving = bv
 
@@ -719,7 +699,7 @@ class Tableau:
 
             self._pivot(leaving, entering, leaving_bound=lv_bound)
 
-        return None
+        raise RuntimeError("clpq: simplex did not terminate")
 
     # ── Fix variable (substitute ground value) ───────────────────────────
 
@@ -1648,14 +1628,14 @@ def dump_q(target_vars: list, trail: Trail, name_of=None, *,
             target_ids.add(s._id)
             id_to_name[s._id] = str(v) if name_of is None else name_of(v)
 
-    constraints = _collect_constraints(tableau, target_ids)
-
-    # Fourier-Motzkin elimination of non-target variables
-    all_var_ids: set[int] = set()
-    for coeffs, _, _ in constraints:
-        all_var_ids.update(coeffs.keys())
-    for elim_vid in sorted(all_var_ids - target_ids):
-        constraints = _fm_eliminate(constraints, elim_vid)
+    constraints = _connected(_collect_constraints(tableau, target_ids),
+                             target_ids)
+    projected = _project(constraints, target_ids)
+    if projected is None:
+        # Too large to project: show the constraints as they are, over
+        # their internal variables.  Complete and true, just not simplified.
+        projected = constraints
+    constraints = projected
 
     # Disequalities (q_ne, and the strict half of q_lt) over targets only.
     # A bound on the same expression and value makes the pair one strict
@@ -1728,60 +1708,135 @@ def _collect_constraints(tableau: Tableau, target_ids: set[int],
     return constraints
 
 
-def _fm_eliminate(constraints: list[tuple[dict[int, Fraction], str, Fraction]],
-                  elim_vid: int,
-                  ) -> list[tuple[dict[int, Fraction], str, Fraction]]:
-    """Eliminate *elim_vid* from all constraints via Fourier-Motzkin."""
-    # Prefer equality substitution if available
-    for i, (coeffs, rel, rhs) in enumerate(constraints):
-        if rel == '=' and elim_vid in coeffs:
-            c = coeffs[elim_vid]
-            result: list[tuple[dict[int, Fraction], str, Fraction]] = []
-            for j, (coeffs2, rel2, rhs2) in enumerate(constraints):
-                if j == i:
-                    # The equality defines elim_vid and is used up by the
-                    # substitution: X + Y = 3 projected onto X is no
-                    # constraint, not X = 3.
-                    continue
-                c2 = coeffs2.get(elim_vid, ZERO)
-                if c2 == ZERO:
-                    result.append((coeffs2, rel2, rhs2))
-                    continue
-                new_c = {v: coeff for v, coeff in coeffs2.items() if v != elim_vid}
-                for v, oc in coeffs.items():
-                    if v != elim_vid:
-                        new_c[v] = new_c.get(v, ZERO) - c2 * oc / c
-                new_rhs = rhs2 - c2 * rhs / c
-                new_c = {v: coeff for v, coeff in new_c.items() if coeff != ZERO}
-                if new_c:
-                    result.append((new_c, rel2, new_rhs))
-            return result
+def _connected(constraints, target_ids):
+    """The constraints linked to *target_ids* through shared variables.
 
-    # No equality — Fourier-Motzkin on inequalities
-    upper: list[tuple[dict[int, Fraction], Fraction]] = []
-    lower: list[tuple[dict[int, Fraction], Fraction]] = []
-    keep: list[tuple[dict[int, Fraction], str, Fraction]] = []
+    The rest cannot narrow the targets (the store is feasible), and
+    projecting them away is wasted work."""
+    reach = set(target_ids)
+    todo = list(constraints)
+    keep = []
+    changed = True
+    while changed:
+        changed = False
+        rest = []
+        for con in todo:
+            if reach.intersection(con[0]):
+                keep.append(con)
+                reach.update(con[0])
+                changed = True
+            else:
+                rest.append(con)
+        todo = rest
+    return keep
 
-    for coeffs, rel, rhs in constraints:
-        c = coeffs.get(elim_vid, ZERO)
-        if c == ZERO:
-            keep.append((coeffs, rel, rhs))
-            continue
-        rest = {v: coeff for v, coeff in coeffs.items() if v != elim_vid}
-        if c > ZERO:
-            upper.append(({v: -coeff / c for v, coeff in rest.items()}, rhs / c))
+
+#: Fourier-Motzkin gives up past this many constraints, or this many pairs
+#: to combine in one step (see :func:`_project`).
+_FM_LIMIT = 2000
+_FM_PAIRS = 20000
+
+
+def _project(constraints, target_ids):
+    """Eliminate every non-target variable; None when it grows past
+    ``_FM_LIMIT``.
+
+    Equalities are substituted first.  Inequalities are combined pairwise
+    (Fourier-Motzkin), cheapest variable first, keeping each derived
+    constraint's set of source inequalities: after eliminating *k*
+    variables one built from more than *k* + 1 sources is redundant
+    (Chernikov), and duplicates keep only their tightest bound.  Without
+    this pruning the count grew exponentially, and an answer printed by
+    ``clausal -g`` could hang.
+    """
+    cons = [(c, r, k, frozenset() if r == '=' else frozenset([i]))
+            for i, (c, r, k) in enumerate(constraints)]
+    elim = set()
+    for c, _, _, _ in cons:
+        elim.update(c)
+    elim -= target_ids
+    eliminated = 0
+    while elim:
+        eq = next(((v, i) for i, (c, r, _, _) in enumerate(cons) if r == '='
+                   for v in sorted(c) if v in elim), None)
+        if eq is not None:
+            v, i = eq
+            cons = _fm_substitute(cons, i, v)
+            eliminated += 1
         else:
-            lower.append(({v: -coeff / c for v, coeff in rest.items()}, rhs / c))
+            def cost(v):
+                pos = sum(1 for c, _, _, _ in cons if c.get(v, ZERO) > ZERO)
+                neg = sum(1 for c, _, _, _ in cons if c.get(v, ZERO) < ZERO)
+                return (pos * neg - pos - neg, v)
+            v = min(elim, key=cost)
+            eliminated += 1
+            # Counting substituted variables too only keeps more (sound).
+            cons = _fm_combine(cons, v, eliminated + 1)
+            if cons is None:
+                return None
+        elim.discard(v)
+    return [(c, r, k) for c, r, k, _ in cons]
 
-    for lo_c, lo_r in lower:
-        for hi_c, hi_r in upper:
+
+def _fm_substitute(cons, i, v):
+    """Use equality *i* to eliminate *v* from every other constraint."""
+    coeffs, _, rhs, _ = cons[i]
+    c = coeffs[v]
+    out = []
+    for j, (c2, rel2, rhs2, h2) in enumerate(cons):
+        if j == i:
+            # The equality defines v and is used up by the substitution:
+            # X + Y = 3 projected onto X is no constraint, not X = 3.
+            continue
+        f = c2.get(v, ZERO)
+        if f == ZERO:
+            out.append((c2, rel2, rhs2, h2))
+            continue
+        new_c = {u: k for u, k in c2.items() if u != v}
+        for u, k in coeffs.items():
+            if u != v:
+                new_c[u] = new_c.get(u, ZERO) - f * k / c
+        new_c = {u: k for u, k in new_c.items() if k != ZERO}
+        if new_c:
+            out.append((new_c, rel2, rhs2 - f * rhs / c, h2))
+    return out
+
+
+def _fm_combine(cons, v, max_sources):
+    """Fourier-Motzkin step on *v*; None past ``_FM_LIMIT``."""
+    upper, lower, keep = [], [], []
+    for coeffs, rel, rhs, h in cons:
+        c = coeffs.get(v, ZERO)
+        if c == ZERO:
+            keep.append((coeffs, rel, rhs, h))
+            continue
+        rest = {u: -k / c for u, k in coeffs.items() if u != v}
+        (upper if c > ZERO else lower).append((rest, rhs / c, h))
+    if len(upper) * len(lower) > _FM_PAIRS:
+        return None
+    best: dict = {}
+    for lo_c, lo_r, lo_h in lower:
+        for hi_c, hi_r, hi_h in upper:
+            h = lo_h | hi_h
+            if len(h) > max_sources:
+                continue                     # Chernikov: redundant
             combined = dict(lo_c)
-            for v, c in hi_c.items():
-                combined[v] = combined.get(v, ZERO) - c
-            combined = {v: c for v, c in combined.items() if c != ZERO}
-            if combined:
-                keep.append((combined, '=<', hi_r - lo_r))
-
+            for u, k in hi_c.items():
+                combined[u] = combined.get(u, ZERO) - k
+            combined = {u: k for u, k in combined.items() if k != ZERO}
+            if not combined:
+                continue
+            # Scale so the first coefficient is ±1, to spot duplicates.
+            first = combined[min(combined)]
+            scale = abs(first)
+            key = tuple(sorted((u, k / scale) for u, k in combined.items()))
+            rhs = (hi_r - lo_r) / scale
+            if key not in best or rhs < best[key][0]:
+                best[key] = (rhs, h)
+    for key, (rhs, h) in best.items():
+        keep.append((dict(key), '=<', rhs, h))
+    if len(keep) > _FM_LIMIT:
+        return None
     return keep
 
 
@@ -1794,16 +1849,20 @@ def _format_constraints(constraints: list[tuple[dict[int, Fraction], str, Fracti
                         toplevel: bool = False) -> list[str]:
     """Format constraint triples as human-readable strings."""
     result: list[str] = []
+    id_to_name = dict(id_to_name)
     for coeffs, rel, rhs in constraints:
         if not coeffs:
             continue
+        for vid in sorted(coeffs):
+            if vid not in id_to_name:
+                id_to_name[vid] = f'_Q{len(id_to_name) + 1}'
         if toplevel and all(c < ZERO for c in coeffs.values()):
             coeffs = {v: -c for v, c in coeffs.items()}
             rel, rhs = _FLIPPED[rel], -rhs
         terms = []
         for vid in sorted(coeffs.keys()):
             c = coeffs[vid]
-            name = id_to_name.get(vid, f'_{vid}')
+            name = id_to_name[vid]
             if c == ONE:
                 terms.append(name)
             elif c == -ONE:

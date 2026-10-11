@@ -1,10 +1,13 @@
-"""sup/inf/maximize/minimize reach the optimum when variables are box-bounded.
+"""The CLP(Q) simplex: optima on box-bounded LPs, free variables, and
+bounds on a variable an equality eliminates.
 
 The simplex parked a variable at its upper bound and dropped its objective
 coefficient, and never let a variable at its upper bound fall again.  So
 ``X in [0, 2], Y in [0, 3], X + 2*Y =< 6`` maximised ``X + 3*Y`` at (2, 2) = 8
 instead of (0, 3) = 9 (reported 2026-10-11).  The sweep checks random small
-LPs against every vertex, worked out by brute force.
+LPs, some with an equality, against every vertex, worked out by brute force.
+The review of that fix found two older faults in the same solver, pinned at
+the end.
 """
 
 import itertools
@@ -14,11 +17,11 @@ from fractions import Fraction as F
 import pytest
 
 from clausal.logic.clpq import (
-    in_q, q_le, sup, inf, maximize, minimize, _tableaux, _last_snapshot,
+    in_q, q_eq, q_ge, q_le, sup, inf, maximize, minimize, _tableaux, _last_snapshot,
 )
 from clausal.logic.solve import solve
 from clausal.logic.variables import Trail, Var, deref
-from clausal.terms import Add, Mult
+from clausal.terms import Add, Mult, Sub
 from clausal.testing import load_clausal_module
 
 
@@ -110,17 +113,25 @@ def _random_lp(rng):
         a = [rng.randint(-3, 3) for _ in range(n)]
         if any(a):
             extra.append((a, rng.randint(-2, 8)))
+    eqs = []
+    if rng.random() < .4:
+        a = [rng.randint(-2, 2) for _ in range(n)]
+        if any(a):
+            eqs.append((a, rng.randint(-3, 3)))
     obj = [rng.randint(-3, 3) for _ in range(n)]
     if not any(obj):
         obj[0] = 1
-    return n, boxes, extra, obj
+    return n, boxes, extra, eqs, obj
 
 
-def _post(n, boxes, extra):
+def _post(n, boxes, extra, eqs):
     t = Trail()
     xs = [Var() for _ in range(n)]
     for x, (lo, hi) in zip(xs, boxes):
         if not in_q(x, lo, hi, t):
+            return None
+    for a, b in eqs:
+        if not q_eq(_expr(a, xs), b, t):
             return None
     for a, b in extra:
         if not q_le(_expr(a, xs), b, t):
@@ -130,21 +141,24 @@ def _post(n, boxes, extra):
 
 @pytest.mark.parametrize("seed", range(300))
 def test_random_box_bounded_lp_matches_the_vertices(seed):
-    n, boxes, extra, obj = _random_lp(random.Random(seed))
+    n, boxes, extra, eqs, obj = _random_lp(random.Random(seed))
     cons = list(extra)
+    for a, b in eqs:
+        cons.append((a, b))
+        cons.append(([-u for u in a], -b))
     for i, (lo, hi) in enumerate(boxes):
         unit = [0] * n
         unit[i] = 1
         cons.append((unit, hi))
         cons.append(([-u for u in unit], -lo))
     expected = _vertex_range(n, cons, obj)
-    posted = _post(n, boxes, extra)
+    posted = _post(n, boxes, extra, eqs)
     if expected is None:
         assert posted is None
         return
     lo_v, hi_v = expected
     for op, want in [(sup, hi_v), (inf, lo_v), (maximize, hi_v), (minimize, lo_v)]:
-        t, xs = _post(n, boxes, extra)
+        t, xs = _post(n, boxes, extra, eqs)
         r = Var()
         assert op(_expr(obj, xs), r, t), op.__name__
         assert deref(r) == want, (op.__name__, n, boxes, extra, obj)
@@ -152,3 +166,23 @@ def test_random_box_bounded_lp_matches_the_vertices(seed):
             point = [F(deref(x)) for x in xs]
             assert all(sum(F(ai) * xi for ai, xi in zip(a, point)) <= b
                        for a, b in cons)
+
+
+def test_a_store_over_free_variables_is_feasible():
+    # Restoring feasibility only let a variable sitting at a bound enter,
+    # so a free one never could: {X + Y >= 2} failed.
+    for rel, k in [(q_ge, 2), (q_le, -2)]:
+        t, x, y = Trail(), Var(), Var()
+        assert rel(Add(left=x, right=y), k, t)
+    t, x, y = Trail(), Var(), Var()
+    assert q_le(Sub(left=x, right=y), -2, t)
+
+
+def test_an_eliminated_variable_keeps_its_bounds():
+    # X = Y + 1 made X parametric and forgot 1 =< X =< 5, so Y = -10 passed.
+    t, x, y = Trail(), Var(), Var()
+    assert q_le(1, x, t) and q_le(x, 5, t)
+    assert q_eq(x, Add(left=y, right=1), t)
+    r = Var()
+    assert inf(y, r, t) and deref(r) == 0
+    assert not q_eq(y, -10, t)
