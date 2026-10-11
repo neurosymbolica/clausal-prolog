@@ -25,6 +25,13 @@ copy gives the same example results as the original.
 - `order` (the attribute) is `variable_order`, because `ordering/1` is the
   exported predicate.
 - `v(K, Ps)` (a monomial in a normal form) is `monomial`.
+- In a bound type (`t_l`, `t_L`, ...) a capital letter marks the ACTIVE
+  bound (`bv.pl`: "t_l has a lower bound (not active yet)", "t_L has an
+  active lower bound"), so `t_L` is `bounds_lower_active` and `t_lU` is
+  `bounds_lower_upper_active`.  Strictness is not part of the bound type;
+  it is the separate `strictness` attribute (bits 0b10 lower, 0b01 upper).
+  `red_t_L`/`red_t_U`, the profiling markers `redundant/3` in `redund.pl`
+  reaches after dropping a redundant active bound, follow the same reading.
 
 ## Rows that keep their name
 
@@ -298,7 +305,7 @@ are not renamed.
 | `inf_lin` | `infimum_linear` | bv.pl |
 | `instantiation_error` | (same) | Scryer copy only |
 | `integer` | (same) | arith.pl, nf.pl |
-| `integerp` | `integer_value` | arith_q.pl, nf.pl |
+| `integerp` | `rational_integer` | arith_q.pl, nf.pl |
 | `intro_at` | `introduce_at` | bv.pl, redund.pl |
 | `invertible` | (same) | comments only |
 | `is` | (same) | arith.pl, bv.pl, fourmotz.pl, ineq.pl, nf.pl, project.pl, redund.pl, store.pl |
@@ -473,8 +480,8 @@ are not renamed.
 | `reconsider` | (same) | bv.pl, ineq.pl |
 | `reconsider_lower` | (same) | ineq.pl |
 | `reconsider_upper` | (same) | ineq.pl |
-| `red_t_L` | `redundant_bounds_strict_lower` | redund.pl |
-| `red_t_U` | `redundant_bounds_strict_upper` | redund.pl |
+| `red_t_L` | `redundant_bounds_lower_active` | redund.pl |
+| `red_t_U` | `redundant_bounds_upper_active` | redund.pl |
 | `red_t_l` | `redundant_bounds_lower` | redund.pl |
 | `red_t_u` | `redundant_bounds_upper` | redund.pl |
 | `redund` | (same) | compenv.pl |
@@ -552,11 +559,11 @@ are not renamed.
 | `system` | (same) | ordering.pl |
 | `system_error` | (same) | Scryer copy only |
 | `systems` | (same) | project.pl, redund.pl |
-| `t_L` | `bounds_strict_lower` | bv.pl, fourmotz.pl, ineq.pl, itf3.pl, redund.pl |
-| `t_Lu` | `bounds_strict_lower_upper` | bv.pl, fourmotz.pl, ineq.pl, itf3.pl, redund.pl |
-| `t_U` | `bounds_strict_upper` | bv.pl, fourmotz.pl, ineq.pl, itf3.pl, redund.pl |
+| `t_L` | `bounds_lower_active` | bv.pl, fourmotz.pl, ineq.pl, itf3.pl, redund.pl |
+| `t_Lu` | `bounds_lower_active_upper` | bv.pl, fourmotz.pl, ineq.pl, itf3.pl, redund.pl |
+| `t_U` | `bounds_upper_active` | bv.pl, fourmotz.pl, ineq.pl, itf3.pl, redund.pl |
 | `t_l` | `bounds_lower` | bv.pl, fourmotz.pl, ineq.pl, itf3.pl, redund.pl |
-| `t_lU` | `bounds_lower_strict_upper` | bv.pl, fourmotz.pl, ineq.pl, itf3.pl, redund.pl |
+| `t_lU` | `bounds_lower_upper_active` | bv.pl, fourmotz.pl, ineq.pl, itf3.pl, redund.pl |
 | `t_lu` | `bounds_lower_upper` | bv.pl, fourmotz.pl, ineq.pl, itf3.pl, redund.pl |
 | `t_none` | `bounds_none` | bv.pl, ineq.pl, itf3.pl, project.pl, redund.pl |
 | `t_u` | `bounds_upper` | bv.pl, fourmotz.pl, ineq.pl, itf3.pl, redund.pl |

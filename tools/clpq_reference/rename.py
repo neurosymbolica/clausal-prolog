@@ -7,9 +7,11 @@ Rewrites unquoted atoms only, leaving variables, numbers, quoted atoms,
 strings and comments as they are.  Before writing anything it checks the
 map against the atoms of SRC and of every OTHER_SOURCE:
 
+- every new atom is an unquoted atom, `[a-z][A-Za-z0-9_]*`;
 - no two old atoms map to the same new atom;
-- no new atom is an atom already in the sources (or already a key of the
-  map), unless it is that atom's own identity row.
+- no new atom is an atom already in the sources (unquoted, or the text of
+  a quoted atom) or already a key of the map, unless it is that atom's own
+  identity row.
 
 Either failure exits with status 2 and a message naming the atoms.
 """
@@ -28,6 +30,8 @@ TOKEN = re.compile(
     r"|(.)", re.S)
 
 ATOM_GROUP = 8
+QUOTED_GROUP = 3
+UNQUOTED_ATOM = re.compile(r"[a-z][A-Za-z0-9_]*")
 
 
 class MapError(Exception):
@@ -56,10 +60,25 @@ def atoms_in(text):
             if m.group(ATOM_GROUP) is not None}
 
 
+def existing_atoms(text):
+    """The unquoted atoms of *text* plus the text of its quoted atoms."""
+    found = set()
+    for m in TOKEN.finditer(text):
+        if m.group(ATOM_GROUP) is not None:
+            found.add(m.group(ATOM_GROUP))
+        elif m.group(QUOTED_GROUP) is not None:
+            body = m.group(QUOTED_GROUP)[1:-1].replace("''", "'")
+            found.add(re.sub(r"\\(.)", r"\1", body))
+    return found
+
+
 def check_map(pairs, source_atoms):
     """Raise MapError unless *pairs* is injective and renames onto no
     atom that already exists (in *source_atoms* or as a key of *pairs*)."""
     problems = []
+    for old, new in sorted(pairs.items()):
+        if not UNQUOTED_ATOM.fullmatch(new):
+            problems.append(f"{old!r} -> {new!r}: {new!r} is not an unquoted atom")
     owner = {}
     for old, new in sorted(pairs.items()):
         if new in owner:
@@ -90,10 +109,10 @@ def main(argv):
     pairs = load_map(map_path)
     with open(source) as handle:
         text = handle.read()
-    atoms = atoms_in(text)
+    atoms = existing_atoms(text)
     for other in others:
         with open(other) as handle:
-            atoms |= atoms_in(handle.read())
+            atoms |= existing_atoms(handle.read())
     check_map(pairs, atoms)
     with open(destination, "w") as handle:
         handle.write(rename(text, pairs))

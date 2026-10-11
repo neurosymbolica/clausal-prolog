@@ -71,7 +71,8 @@ attributes, renamed:
 | Holzbaur | Field | Meaning |
 |---|---|---|
 | `lin` | `linear_form` | a dependent variable's solved form over independent variables, plus a constant |
-| `type` + `strictness` | `lower_bound`, `upper_bound`, `lower_strict`, `upper_strict` | bounds; strictness is part of the bound |
+| `type` | `bounds` | the bound type, which includes which bound is active (a capital letter in `t_L`, `t_U`, `t_Lu`, `t_lU` marks the active bound, `bv.pl`), plus the bound values |
+| `strictness` | `lower_strict`, `upper_strict` | the strictness bits (0b10 lower, 0b01 upper); separate from the bound type |
 | `class` | `component` | the connected component: a hidden attributed variable holding its member and basis lists |
 | `order` | `ordering` | stable order, for deterministic answers |
 | `nonzero` | `nonzero` | `=\=` against zero |

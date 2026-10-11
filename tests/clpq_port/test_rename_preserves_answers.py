@@ -49,16 +49,35 @@ def test_a_map_onto_an_atom_already_in_the_sources_is_refused():
         rename.check_map({"order": "ordering"}, {"order", "ordering"})
 
 
+def test_a_map_onto_the_text_of_a_quoted_atom_is_refused():
+    existing = rename.existing_atoms("p :- 'solve_='(X), 'it''s'.\n")
+    assert {"p", "solve_=", "it's"} <= existing
+    with pytest.raises(rename.MapError, match="'solve_=' is already an atom"):
+        rename.check_map({"p": "solve_="}, existing)
+
+
+def test_a_map_value_that_is_not_an_unquoted_atom_is_refused():
+    for bad in ("Linear", "_linear", "linear-form", "linear form", "9linear"):
+        with pytest.raises(rename.MapError, match="not an unquoted atom"):
+            rename.check_map({"lin": bad}, {"lin"})
+
+
+SICSTUS_SOURCES = [
+    pathlib.Path("/workspace/sicstus/lib/sicstus-4.10.1/library/clpq") / name
+    for name in (
+        "arith.pl", "arith_q.pl", "bb.pl", "bv.pl", "class.pl", "compenv.pl",
+        "dump.pl", "fourmotz.pl", "geler.pl", "ineq.pl", "itf3.pl", "nf.pl",
+        "nfq.pl", "ordering.pl", "project.pl", "redund.pl", "store.pl")]
+
+
 def test_the_committed_map_is_injective_over_both_sources():
-    sources = sorted(pathlib.Path(
-        "/workspace/sicstus/lib/sicstus-4.10.1/library/clpq").glob("*.pl"))
-    sources.append(ORIGINAL)
-    present = [p for p in sources if p.exists()]
-    if not present:
-        pytest.skip("needs the 1.3.3 sources")
+    sources = [*SICSTUS_SOURCES, ORIGINAL]
+    missing = [str(p) for p in sources if not p.exists()]
+    if missing:
+        pytest.skip(f"needs all 18 sources; missing {missing}")
     atoms = set()
-    for path in present:
-        atoms |= rename.atoms_in(path.read_text())
+    for path in sources:
+        atoms |= rename.existing_atoms(path.read_text())
     rename.check_map(rename.load_map(MAP), atoms)
 
 
