@@ -24,3 +24,13 @@ Cost notes from the same review, for the strict-bound entailment check
   variables (2,299 LPs) and 114 s for 40.
 - Binding a basic or parametric variable runs the check twice: once
   inside `add_equality` and again in `fix_variable`.
+
+**Done 2026-10-11.** `_q_hook` now gives the unconstrained variable a
+column of its own, with the same bounds, linked by an equality, so every
+tableau id is again a variable's own id.  Test:
+tests/test_clpq_undo_on_backtracking.py
+(test_unifying_with_an_unconstrained_variable_keeps_one_column).  On a
+z3 undo fuzz with var-var unifications, every wrong accept left is now
+the strict-bounds gap (todo/clpq-strict-bounds-closed-by-inequalities).
+On 9bb5a6d3, 17 of 35 had no other explanation.  The cost notes above
+still stand.

@@ -12,7 +12,7 @@ import pytest
 
 from clausal.logic.clpq import q_eq, q_le, sup, inf, _tableaux, _last_snapshot
 from clausal.logic.solve import solve
-from clausal.logic.variables import Trail, Var, deref
+from clausal.logic.variables import Trail, Var, deref, unify
 from clausal.terms import Add, Mult
 from clausal.testing import load_clausal_module
 
@@ -121,3 +121,16 @@ def test_a_trial_unify_inside_a_post_leaves_no_binding(tmp_path):
     p.write_text(_DIF)
     z = Var()
     assert [deref(z) for _ in solve(("p", z), load_clausal_module(p))] == [4]
+
+
+@pytest.mark.parametrize("both_ways", [False, True])
+def test_unifying_with_an_unconstrained_variable_keeps_one_column(both_ways):
+    # The unconstrained side took a copy of the other's attribute, tab_id
+    # and all, but constraints on it were keyed by its own id: a fresh,
+    # unlinked column.  So this infeasible store was accepted.
+    t, y0, y1 = Trail(), Var(), Var()
+    assert q_le(Mult(left=2, right=y1), -1, t)
+    assert unify(y1, y0, t)
+    if both_ways:
+        assert unify(y0, y1, t)
+    assert not q_le(Mult(left=-1, right=y0), 0, t)

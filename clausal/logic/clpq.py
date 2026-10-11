@@ -1148,8 +1148,20 @@ def _q_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
                 _promote_fd_to_q(bound_to, trail)
                 other = get_attr(bound_to, Q_KEY)
             if other is None:
-                put_attr(bound_to, Q_KEY, state, trail)
-                return True
+                # bound_to gets a column of its own, linked by an
+                # equality.  Copying the attribute gave it the bound
+                # variable's tab_id, but _linearize keys a variable by its
+                # own id: later constraints landed on a fresh, unlinked
+                # column, so {2*Y1 =< -1}, Y1 = Y0, {-Y0 =< 0} succeeded.
+                tableau = _get_tableau(trail)
+                _snapshot_tableau(trail)
+                tab_id = tableau.register_var(bound_to, state.lo, state.hi)
+                put_attr(bound_to, Q_KEY, QVar(state.lo, state.hi, tab_id),
+                         trail)
+                if not tableau.add_equality({state.tab_id: ONE, tab_id: -ONE},
+                                            ZERO):
+                    return False
+                return tableau.check_implied_bindings(trail)
         # Both Q-constrained: merge bounds, add equality
         new_lo = _max_none(state.lo, other.lo)
         new_hi = _min_none(state.hi, other.hi)
@@ -1925,7 +1937,9 @@ def _format_constraints(constraints: list[tuple[dict[int, Fraction], str, Fracti
             else:
                 terms.append(f'{c}*{name}')
         lhs = ' + '.join(terms).replace('+ -', '- ')
-        result.append(f'{{{lhs} {rel} {rhs}}}')
+        text = f'{{{lhs} {rel} {rhs}}}'
+        if text not in result:      # the same bound can reach the answer
+            result.append(text)     # twice, through linked columns
     return result
 
 

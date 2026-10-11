@@ -10,8 +10,7 @@ from fractions import Fraction
 import pytest
 
 from clausal.logic.clpq import dump_q, inf, q_eq, q_ge, q_lt, q_gt, q_ne, q_le, sup
-from clausal.logic.variables import deref
-from clausal.logic.variables import Trail, Var
+from clausal.logic.variables import Trail, Var, deref, unify
 from clausal.terms import Add, Mult
 
 
@@ -136,3 +135,12 @@ def test_a_bound_reaches_the_answer_through_an_eliminated_variable():
     assert q_ge(y, 2, t)
     assert q_le(Add(left=Mult(left=3, right=x), right=y), 1, t)
     assert _dump([x], t) == ["{X =< -1/3}"]
+
+
+def test_a_bound_reached_twice_is_shown_once():
+    # X = Y links two columns that both carry Y's bounds (2026-10-11).
+    t, x, y = Trail(), Var(), Var()
+    assert q_ge(y, 1, t) and q_le(y, 3, t)
+    assert unify(x, y, t)
+    lines = _dump([x], t, toplevel=True)
+    assert len(lines) == len(set(lines)) == 2
