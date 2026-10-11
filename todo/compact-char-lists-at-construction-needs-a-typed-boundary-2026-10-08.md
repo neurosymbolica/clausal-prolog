@@ -1,5 +1,13 @@
 # Compact char lists at construction; the Python boundary must be typed first
 
+**PARKED 2026-10-11 (operator ruling): the typed Python boundary and compaction both.** The census
+(`text-census-results-2026-10-08.md`) found plain char lists rare (519 values over the suite) and
+short (nearly all under 64 chars), so compaction saves little. It would cost a typed boundary across
+15 adapter argument positions and `graphs.py`, plus the ~400 `isinstance(..., list)` sites that are
+not boundary at all. Reopen when a measured program holds long plain char lists. Steps 2a/2b
+(the carrier as an indirection, for the DCG parsing quadratic) are separate and NOT parked by this
+ruling. The census instrument stays on branch `text-census-2026-10-08` (e33163a2), not on main.
+
 Opened 2026-10-08, after the withdrawal of `to_python_text` and a reading of Scryer's construction-time
 partial-string compaction (codeberg mthom/scryer-prolog PR 3476).
 
@@ -229,9 +237,11 @@ This replaces both the SegList tail-sharing idea and the separate `('$chars', bu
 ## Order (ruled 2026-10-08: this order)
 
 1. ~~Fix the two quadratics' constant factor~~ (done, step 1 above).
-2. A census: which programs build char lists incrementally, how long they get, and which `py.*`
-   adapters take a list of atoms (the step 1 census of the boundary section).
-3. The typed boundary, then compaction at copy points and one-step builtins.
+2. ~~A census: which programs build char lists incrementally, how long they get, and which `py.*`
+   adapters take a list of atoms (the step 1 census of the boundary section).~~ Done:
+   `text-census-results-2026-10-08.md`.
+3. ~~The typed boundary, then compaction at copy points and one-step builtins.~~ PARKED (ruled
+   2026-10-11, below).
 4. Step 2a (reader refactor), then 2b (`_Text`) if the census shows long incremental text matters.
 5. Refcount-driven mutation of text: parked. It is checkable: CPython's own `unicode_modifiable`
    rule extended to the tuple -- carrier and str uniquely referenced, carrier `ob_hash == -1` (3.14+,

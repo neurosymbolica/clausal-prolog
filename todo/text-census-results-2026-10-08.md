@@ -6,6 +6,9 @@ Python boundary become typed.  Two parts: a static census of the adapters
 that a compaction would break, and the measured census of what the engine
 builds while it runs the in-repo suites.
 
+**Outcome (ruled 2026-10-11): both (a) and (b) PARKED** on these numbers; see
+`compact-char-lists-at-construction-needs-a-typed-boundary-2026-10-08.md`.
+
 The instrument (NOT on main: branch `text-census-2026-10-08`, e33163a2) is `CLAUSAL_TEXT_CENSUS=<path>` (off by default;
 `clausal/logic/_text_census.py`, C side `clausal/logic/variables/_text_census.h`,
 reader `python -m clausal.tools.text_census <path>.*`).
