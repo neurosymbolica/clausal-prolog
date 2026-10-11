@@ -38,22 +38,42 @@ _VARIABLE = re.compile(r"^[A-Z_][A-Za-z0-9_]*$")
 _NEGATIVE = "__negative_literal_"
 _NEGATIVE_NAME = re.compile(rf"^{_NEGATIVE}(\d+)$")
 _PREFIX_POSITION = set("(,=<>*/+-^[{|\\")
+_MAX_EXPONENT = 10_000
 
 
 def _mark_negative_literals(text):
     """Each ``-`` that Prolog reads as the sign of a number becomes one token.
 
-    That is a ``-`` directly followed by a digit (ISO 6.3.4.1), in prefix
-    position (at the start, or after an operator or an opening bracket).
-    Python's ast cannot tell ``-2**2`` from ``-(2**2)``, so this is decided
-    on the text (test_a_negative_literal_is_read_from_the_source_text).
+    That is a ``-`` in prefix position (at the start, or after an operator
+    or an opening bracket), then optional layout, then an integer: Scryer
+    and Trealla read ``- 2`` as the integer -2 (``integer(- 1)`` succeeds,
+    ``- 2^2`` is 4), while ``X - 2`` is infix subtraction and ``- (2)`` a
+    compound.  Python's ast cannot tell ``-2**2`` from ``-(2**2)``, so this
+    is decided on the text (test_a_negative_literal_is_read_from_the_source_text,
+    test_a_sign_then_blanks_then_a_number_is_the_number).
+
+    The digits must end the token: ``-1_000``, ``-0x10``, ``-1e3`` and
+    ``-2j`` are not marked, so the later checks refuse them instead of the
+    marker becoming an internal variable that is existentially closed away
+    (test_a_malformed_negative_number_is_refused_not_dropped).
     """
     def mark(found):
         before = text[:found.start()].rstrip()
         if before and before[-1] not in _PREFIX_POSITION:
             return found.group(0)
         return _NEGATIVE + found.group(1)
-    return re.sub(r"-(\d+)(?![\d.])", mark, text)
+    return re.sub(r"-\s*(\d+)(?![\w.])", mark, text)
+
+
+def _marked_negative(identifier):
+    """The int a marker token stands for; ValueError for a name that only
+    starts with the marker prefix; None for any other name."""
+    if not identifier.startswith(_NEGATIVE):
+        return None
+    negative = _NEGATIVE_NAME.match(identifier)
+    if not negative:
+        raise ValueError(f"not a negative literal: {identifier!r}")
+    return -int(negative.group(1))
 
 
 def _normal(text):
@@ -66,7 +86,7 @@ def _normal(text):
     """
     text = re.sub(r"\s+rdiv\s+", "/", text)
     text = _mark_negative_literals(text).replace("^", "**")
-    if re.search(r"(?<!\w)\d[\d_]*_", text):
+    if re.search(r"(?<!\w)\d[\d_]*_", text) or re.search(r"(?<!\w)0[xob']", text):
         raise ValueError(f"not a Prolog number in {text!r}")
     if re.search(r"[\w.]\s+[\w.]", text):
         raise ValueError(f"blanks between two words in {text!r}")
@@ -99,21 +119,23 @@ def _integer(node):
     if _is_int(node):
         return node.value
     if isinstance(node, ast.Name):
-        negative = _NEGATIVE_NAME.match(node.id)
-        if negative:
-            return -int(negative.group(1))
+        return _marked_negative(node.id)
     return None
 
 
 def _exponent(node):
     """An exponent: a constant expression with an integer value.  Python's
     ``**`` is right-associative like ISO's ``^`` (200 xfy), so ``X^2^2`` is
-    X^(2^2) (test_a_power_is_right_associative)."""
+    X^(2^2) (test_a_power_is_right_associative).  An exponent beyond
+    ±_MAX_EXPONENT is refused before it is raised to, so ``X^9^9^9`` fails
+    fast (test_a_huge_exponent_is_refused)."""
     def variable(identifier):
         raise ValueError(f"exponent is not an integer: {ast.unparse(node)}")
     value = _arithmetic(node, variable, Fraction, Fraction)
     if value.denominator != 1:
         raise ValueError(f"exponent is not an integer: {ast.unparse(node)}")
+    if abs(value) > _MAX_EXPONENT:
+        raise ValueError(f"exponent is too large: {ast.unparse(node)}")
     return int(value)
 
 
@@ -125,9 +147,9 @@ def _arithmetic(node, name, number, rational):
             raise ValueError(f"constant is not an integer: {node.value!r}")
         return number(node.value)
     if isinstance(node, ast.Name):
-        negative = _NEGATIVE_NAME.match(node.id)
-        if negative:
-            return number(-int(negative.group(1)))
+        negative = _marked_negative(node.id)
+        if negative is not None:
+            return number(negative)
         return name(node.id)
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
         value = _arithmetic(node.operand, name, number, rational)
@@ -315,14 +337,19 @@ def _rational_literal(node):
 def _literal(node):
     """*node* as a Fraction when it is a number as Prolog prints one: an int
     literal (``-3`` included), a rational ``N/D`` in lowest terms, or a
-    negated rational ``-(N/D)``; else None.  Nothing else is evaluated, so
-    ``1+1``, ``4/2`` and ``- (1)`` stay text (test_a_binding_is_not_evaluated,
-    test_a_binding_rational_is_printed_in_lowest_terms)."""
+    negated rational ``-(N/D)`` with N a positive int; else None.  Nothing
+    else is evaluated, so ``1+1``, ``4/2``, ``- (1)`` and ``-(-1/2)`` stay
+    text (test_a_binding_is_not_evaluated,
+    test_a_binding_rational_is_printed_in_lowest_terms,
+    test_a_negated_rational_literal_needs_a_positive_numerator)."""
     integer = _integer(node)
     if integer is not None:
         return Fraction(integer)
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
-        value = _rational_literal(node.operand)
+        operand = node.operand
+        if isinstance(operand, ast.BinOp) and not _is_int(operand.left):
+            return None
+        value = _rational_literal(operand)
         return None if value is None else -value
     return _rational_literal(node)
 

@@ -256,13 +256,67 @@ def test_a_binding_rational_is_printed_in_lowest_terms():
 
 
 def test_text_is_normalised_once():
-    # `- 2^2` has a blank after the sign, so it is -(2^2); normalising twice
-    # would close the blank and re-read it as the literal -2.
-    assert _equal("Y= - 2^2", "Y=-4")
-    assert not _equal("Y= - 2^2", "Y=4")
+    # _sides splits the printed text and leaves each side as it was; _parse
+    # normalises a side exactly once.  (Round 3 read `- 2^2` as -(2^2); the
+    # engines read the sign and the number as one literal, so it is 4.)
+    assert _sides("Y = - 2 ^ 2") == ("Y", "=", "- 2 ^ 2")
+    assert _equal("Y= - 2^2", "Y=4")
 
 
 def test_python_only_number_syntax_is_refused():
     assert _value("1_000") == "1_000"
     with pytest.raises(ValueError):
         _equal("X>=1_000", "X>=1000")
+
+
+# ---- fix round 4 -------------------------------------------------------------
+
+from tests.clpq_oracle import _constant, _mark_negative_literals, _sides  # noqa: E402
+
+
+def test_a_malformed_negative_number_is_refused_not_dropped():
+    # A `-` before text that is not a Prolog integer is left unmarked, so the
+    # existing refusals see it; it must never become an existential variable.
+    for text in ["X>= -1_000", "X>= -0x10", "X>= -1e3", "X>= -2j"]:
+        with pytest.raises(ValueError):
+            _equal(text, "X>=5")
+        with pytest.raises(ValueError):
+            same_solution_sets([Answer({}, [text])], [Answer({}, [])])
+    assert _mark_negative_literals("X>= -1_000") == "X>= -1_000"
+    for text in ["-1_000", "-0x10", "-1e3", "-2j"]:
+        assert _value(text) == text
+    # A name that only looks like a marker is refused too.
+    with pytest.raises(ValueError):
+        _equal("X>=__negative_literal_1_000", "X>=5")
+
+
+def test_a_sign_then_blanks_then_a_number_is_the_number():
+    # Scryer and Trealla read `- 2` as the integer -2 (integer(- 1) succeeds;
+    # V = - 2^2, U is V gives 4), unless the `-` is infix.
+    assert _equal("Y= - 2^2", "Y=4")
+    assert not _equal("Y= - 2^2", "Y=-4")
+    assert _equal("Y=X* - 2^2", "Y=4*X")
+    assert _equal("Y=-(2^2)", "Y=-4")
+    assert _equal("Y= - (2^2)", "Y=-4")
+    assert _equal("Y=X - 2", "Y=X+(-2)")
+    assert _equal("Y=X - 2^2", "Y=X-4")
+    assert _equal("X>= - 1 rdiv 3", "X>= -1/3")
+    assert _value("- 2") == Fraction(-2)
+
+
+def test_a_negated_rational_literal_needs_a_positive_numerator():
+    assert _value("-(1/2)") == Fraction(-1, 2)
+    assert _value("-(-1/2)") == "-(-1/2)"
+    assert _value("- (-1/2)") == "- (-1/2)"
+    assert _value("-(-1 rdiv 2)") == "-(-1 rdiv 2)"
+    assert not same_solution_sets(_binding("-(-1/2)"), _binding("1/2"))[0]
+
+
+def test_a_huge_exponent_is_refused():
+    with pytest.raises(ValueError):
+        _equal("Y=X^9^9^9", "Y=X")
+    with pytest.raises(ValueError):
+        _equal("Y=X^10001", "Y=X")
+    with pytest.raises(ValueError):
+        _equal("Y=X^ -10001", "Y=X")
+    assert _constant("2^14") == 16384
