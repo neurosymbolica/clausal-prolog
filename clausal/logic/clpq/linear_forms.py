@@ -15,8 +15,8 @@ the form itself coming back for a factor of 1).
 A predicate that can fail returns None where it fails.
 """
 from clausal.logic.clpq.arithmetic import (
-    ONE, ZERO, add, compare, divide, from_number, is_zero, make_rational,
-    multiply, negate, sign)
+    ONE, ZERO, add, arithmetic_normalize, compare, divide, is_zero,
+    make_rational, multiply, negate, sign)
 from clausal.logic.clpq.attributes import state_of
 from clausal.logic.clpq.variable_ordering import (
     compare_order_values, compare_variable_order)
@@ -91,7 +91,10 @@ def renormalize_balanced_one(term):
     variable = deref(term[0])
     if is_var(variable):
         return LinearForm(ZERO, ZERO, [(variable, term[1])])
-    return normalize_scalar(multiply(from_number(variable), term[1]))
+    # A bound variable is any engine number: arithmetic_normalize reads a
+    # float as 1.3.3's get_rational/3 does
+    # (test_renormalize_folds_a_variable_bound_to_a_float).
+    return normalize_scalar(multiply(arithmetic_normalize(variable), term[1]))
 
 
 # ----------------------------------------------------------- sparse vector stuff

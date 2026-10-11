@@ -489,6 +489,16 @@ def test_renormalize_folds_bound_variables_into_the_constant():
     assert nxt == 2 and lin.constant == (12, 1) and lin.terms == [(x, (2, 1))]
 
 
+def test_renormalize_folds_a_variable_bound_to_a_float():
+    trail = Trail()
+    x, y = _constrained(2, trail)
+    form = LinearForm(ZERO, ZERO, [(x, (2, 1)), (y, (3, 1))])
+    assert unify(y, 0.5, trail)
+    one = renormalize_balanced_one(form.terms[1])
+    assert (one.constant, one.terms) == ((3, 2), [])
+    assert renormalize(form).constant == (3, 2)
+
+
 def test_renormalize_merges_aliased_variables():
     trail = Trail()
     x, y = _constrained(2, trail)
