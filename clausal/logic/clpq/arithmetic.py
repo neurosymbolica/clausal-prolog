@@ -66,9 +66,9 @@ def from_number(x):
         return (x, 1)
     if type(x) is Fraction:
         return (x.numerator, x.denominator)
-    if type(x) is Decimal:
-        exact = Fraction(x)
-        return (exact.numerator, exact.denominator)
+    if type(x) is Decimal and x.is_finite():
+        numerator, denominator = x.as_integer_ratio()
+        return (numerator, denominator)
     raise TypeError(f"not an exact number: {x!r}")
 
 

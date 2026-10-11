@@ -15,6 +15,15 @@ copy gives the same example results as the original.
 
 - A `q` suffix (`addq`, `getq`) is `_rational`; `Q`/`Qn`/`R` in the compiler
   names are `rational`, `rational_normalized`, `real`.
+  Exception: the port's rational arithmetic is the module
+  `clausal/logic/clpq/arithmetic.py` (deviation D1), and there the module name
+  carries "rational", so the functions drop the suffix: `addq`, `subq`,
+  `mulq`, `divq`, `comq`, `signumq`, `getq` and `putq` are
+  `arithmetic.add`, `subtract`, `multiply`, `divide`, `compare`, `sign`,
+  `from_number` and `make_rational`.  Their rows below give both names.  The
+  reading copy (`rename_map.tsv`) keeps the `_rational` names: it has no
+  module qualification, and `compare` (the built-in), `multiply` and `sign`
+  are already atoms in the 1.3.3 sources.
 - A `_log` suffix (`nf_mul_log`, `log_deref`) is the balanced
   divide-and-conquer form and becomes `_balanced`; `log` alone stays the
   logarithm.
@@ -73,7 +82,7 @@ are not renamed.
 | `add_linear_ff` | `add_linear_forms_scaled` | bv.pl, ineq.pl, store.pl |
 | `add_linear_ffh` | `add_homogeneous_parts_scaled` | store.pl |
 | `add_vertices` | (same) | ordering.pl |
-| `addq` | `add_rational` | arith.pl, arith_q.pl |
+| `addq` | `add_rational` (port: `arithmetic.add`) | arith.pl, arith_q.pl |
 | `all_attribute_goals` | (same) | dump.pl |
 | `all_nonlin` | `all_nonlinear` | geler.pl |
 | `allvars` | `all_variables` | bv.pl, fourmotz.pl |
@@ -171,7 +180,7 @@ are not renamed.
 | `compiler_dump_nz` | `compiler_dump_disequation` | itf3.pl |
 | `compiler_dump_var` | `compiler_dump_variable` | itf3.pl |
 | `compound` | (same) | nf.pl |
-| `comq` | `compare_rational` | arith.pl, arith_q.pl |
+| `comq` | `compare_rational` (port: `arithmetic.compare`) | arith.pl, arith_q.pl |
 | `constraint` | (same) | nf.pl |
 | `cos` | (same) | arith.pl, nf.pl |
 | `cosq` | `cosine_rational` | arith.pl, arith_q.pl |
@@ -199,7 +208,7 @@ are not renamed.
 | `determine_active_dec` | `determine_active_decrease` | bb.pl, bv.pl, ineq.pl |
 | `determine_active_inc` | `determine_active_increase` | bv.pl, ineq.pl |
 | `discontiguous` | (same) | Scryer copy only |
-| `divq` | `divide_rational` | arith.pl, arith_q.pl |
+| `divq` | `divide_rational` (port: `arithmetic.divide`) | arith.pl, arith_q.pl |
 | `divq_11` | `divide_rational_one_by` | arith.pl, arith_q.pl |
 | `done` | (same) | geler.pl |
 | `drop_dep` | `drop_dependent` | fourmotz.pl, project.pl |
@@ -263,7 +272,7 @@ are not renamed.
 | `gen_edges` | `generate_edges` | ordering.pl |
 | `get_atts` | (same) | bv.pl, class.pl, dump.pl, fourmotz.pl, geler.pl, ineq.pl, itf3.pl, project.pl, redund.pl, store.pl |
 | `get_or_add_class` | `get_or_add_component` | bv.pl, class.pl, ineq.pl |
-| `getq` | `get_rational` | arith.pl, arith_q.pl |
+| `getq` | `get_rational` (port: `arithmetic.from_number`) | arith.pl, arith_q.pl |
 | `goal_expansion` | (same) | arith_q.pl, itf3.pl |
 | `goals` | (same) | geler.pl |
 | `graph_union` | (same) | ordering.pl |
@@ -364,7 +373,7 @@ are not renamed.
 | `msb` | (same) | arith.pl |
 | `msb_val` | `most_significant_bit` | Scryer copy only |
 | `msb_val_` | `most_significant_bit_loop` | Scryer copy only |
-| `mulq` | `multiply_rational` | arith.pl, arith_q.pl |
+| `mulq` | `multiply_rational` (port: `arithmetic.multiply`) | arith.pl, arith_q.pl |
 | `mult` | `multiply_monomials` | nf.pl |
 | `mult_exp` | `multiply_exponents` | nf.pl |
 | `mult_hom` | `multiply_homogeneous_part` | bv.pl, store.pl |
@@ -465,7 +474,7 @@ are not renamed.
 | `public` | (same) | bv.pl, project.pl |
 | `put_assoc` | (same) | dump.pl |
 | `put_atts` | (same) | bv.pl, class.pl, fourmotz.pl, geler.pl, ineq.pl, itf3.pl, project.pl, redund.pl |
-| `putq` | `put_rational` | arith.pl, arith_q.pl |
+| `putq` | `put_rational` (port: `arithmetic.make_rational`) | arith.pl, arith_q.pl |
 | `rat` | (same) | arith.pl, arith_q.pl, nf.pl |
 | `rat_float` | `rational_to_float` | arith.pl, arith_q.pl |
 | `rational` | (same) | itf3.pl |
@@ -521,7 +530,7 @@ are not renamed.
 | `select_nth` | (same) | fourmotz.pl |
 | `sign` | (same) | Scryer copy only |
 | `signum` | (same) | arith.pl |
-| `signumq` | `signum_rational` | arith.pl, arith_q.pl |
+| `signumq` | `signum_rational` (port: `arithmetic.sign`) | arith.pl, arith_q.pl |
 | `sin` | (same) | arith.pl, nf.pl |
 | `sinq` | `sine_rational` | arith.pl, arith_q.pl |
 | `solve` | (same) | bv.pl, ineq.pl, itf3.pl, nf.pl, nfq.pl |
@@ -553,7 +562,7 @@ are not renamed.
 | `submit_lt_b` | `submit_less_than_single_term` | nf.pl |
 | `submit_lt_c` | `submit_less_than_several_terms` | nf.pl |
 | `submit_ne` | `submit_not_equal` | nf.pl |
-| `subq` | `subtract_rational` | arith.pl, arith_q.pl |
+| `subq` | `subtract_rational` (port: `arithmetic.subtract`) | arith.pl, arith_q.pl |
 | `sum_powers` | (same) | nf.pl |
 | `sup` | (same) | bb.pl, bv.pl |
 | `system` | (same) | ordering.pl |
