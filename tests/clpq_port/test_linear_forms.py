@@ -276,6 +276,24 @@ def test_arrangement_needs_a_component():
         arrangement(None)
 
 
+
+def test_a_cyclic_ordering_raises_the_system_error(monkeypatch):
+    # DEVIATIONS.md D6 (ruling R13): 1.3.3's intent, system(unsatisfiable_
+    # ordering), not the type_error(callable, 0) SICStus 4.10.1 raises.
+    # class.pl's priority (Task 7) is stood in for by a stub module.
+    import sys
+    import types
+    from clausal.logic.exceptions import LogicException
+    a, b = Var(), Var()
+    stub = types.ModuleType("clausal.logic.clpq.components")
+    stub.component_get_priority = lambda component: add_edges([], [(a, b), (b, a)])
+    monkeypatch.setitem(sys.modules, "clausal.logic.clpq.components", stub)
+    with pytest.raises(LogicException) as raised:
+        arrangement(Var())
+    assert raised.value.term[1] == ("system_error", "unsatisfiable_ordering")
+    stub.component_get_priority = lambda component: add_edges([], [(a, b)])
+    assert arrangement(Var()) == [a, b]
+
 # ---------------------------------------------------------------- store.pl units
 
 def _forms(seed, count=6):

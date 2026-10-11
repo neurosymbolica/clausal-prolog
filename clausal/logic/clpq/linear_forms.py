@@ -8,15 +8,15 @@
 sorted by the variables' order (variable_ordering.compare_variable_order),
 is the record `LinearForm(constant, rest, terms)`; `terms` is a list of
 `(variable, coefficient)` pairs in the same order.  Coefficients and
-constants are rationals (arithmetic.py).  A list or form is never edited in
-place once built; a function may hand back a list it was given, as 1.3.3
-shares list tails.
+constants are rationals (arithmetic.py).  A function may hand back a list
+it was given, as 1.3.3 shares list tails (test_multiply_linear_factor shows
+the form itself coming back for a factor of 1).
 
 A predicate that can fail returns None where it fails.
 """
 from clausal.logic.clpq.arithmetic import (
     ONE, ZERO, add, compare, divide, from_number, is_zero, make_rational,
-    multiply, negate)
+    multiply, negate, sign)
 from clausal.logic.clpq.attributes import state_of
 from clausal.logic.clpq.variable_ordering import (
     compare_order_values, compare_variable_order)
@@ -275,7 +275,7 @@ def delete_factor(variable, form):
 def delete_factor_homogeneous(variable, terms):
     """store.pl, delete_factor_hom/4: the live version, which compares the
     variables themselves and continues on both (<) and (>), so it finds
-    *variable* by identity.  Returns (terms without it, its coefficient), or
+    *variable* by identity (test_delete_factor_removes_one_variable).  Returns (terms without it, its coefficient), or
     None."""
     variable = deref(variable)
     for i in range(len(terms)):
@@ -363,7 +363,7 @@ def homogeneous_to_sum(terms, so_far):
             so_far = ("+", so_far, variable)
         elif compare(coefficient, MINUS_ONE) == 0:
             so_far = ("-", so_far, variable)
-        elif coefficient[0] < 0:
+        elif sign(coefficient) < 0:
             so_far = ("-", so_far, ("*", negate(coefficient), variable))
         else:
             so_far = ("+", so_far, ("*", coefficient, variable))

@@ -61,8 +61,7 @@ Sites: to be filled in by Task 11.
 `compare/3` (itf3.pl's `nf_ordering/3` expansion; store.pl `nf_coeff_hom/3`).
 project.pl's `order/3` later binds some of them to integers 1, 2, ... in the
 order `arrangement/2` (ordering.pl) gives.  The standard order of two distinct
-unbound variables is implementation-defined; in SICStus it follows their
-addresses.  ordering.pl also sorts its graphs (`keysort/2`, `sort/2`,
+unbound variables is implementation-defined (ISO 7.2.1).  ordering.pl also sorts its graphs (`keysort/2`, `sort/2`,
 library(ugraphs)) by the standard order of the constrained variables
 themselves.
 
@@ -87,17 +86,23 @@ What 1.3.3 needs from the order, and the tests that show the port has it:
   (`test_order_values_bound_by_projection_sort_after_unbound_ones_by_number`,
   `test_renormalize_follows_an_imposed_order`).
 
-Why the difference cannot change an answer: the order only decides where a
-term sits in a form's sorted list and which of two variables is taken first.
-Every store.pl operation gives the same rational coefficient for each
-variable whatever the order (`test_scaled_addition_agrees_with_fraction_dicts`
-and the other `*_agrees_with_fraction_dicts` tests compare against
-order-free dicts; `test_renormalize_follows_an_imposed_order` shows the same
-pairs under two orders).  The solution set of a store therefore does not
-depend on it.  What can depend on it is which variable a residual answer
-solves for (`X = Y + 1` against `Y = X - 1`) when SICStus's address order and
-creation order disagree; Task 12's oracle comparison judges residuals by
-solution set (ruling R9), not by text.
+What the order decides, and what checks it:
+
+- Coefficients do not depend on it.  Every store.pl operation gives the same
+  rational coefficient for each variable whatever the order
+  (`test_scaled_addition_agrees_with_fraction_dicts` and the other
+  `*_agrees_with_fraction_dicts` tests compare against order-free dicts;
+  `test_renormalize_follows_an_imposed_order` shows the same pairs under two
+  orders).
+- It decides where a term sits in a form, and so which variable comes first.
+  project.pl's `arrange_pivot/1` (project.pl:136-145) pivots X with the
+  first variable Y of its form when `nf_ordering(Y, X, <)`, so the order
+  decides which variables a residual answer solves for.  Through pivoting it
+  also decides which optimal Vertex `bb_inf/5` returns when there are several
+  optima.  Where SICStus's order of two unbound variables differs from
+  creation order, the port can give a different residual or a different
+  optimal vertex.  The check for those is the oracle tests of Task 12
+  (residuals) and Task 13 (`bb_inf`), not this task's tests.
 
 ## D5: renormalize of a form with no variables raises
 
@@ -108,3 +113,15 @@ would run out of stack.  The port raises `ValueError` at once
 (`test_renormalize_of_an_empty_homogeneous_part_raises`).  1.3.3 gives no
 answer in this case either, so no answer changes.  Whether a caller can
 reach it (project.pl `renorm_all`) is for Task 12 to show.
+
+## D6: an unsatisfiable ordering raises the system error 1.3.3 intends
+
+ordering.pl `arrangement/2` calls `illarg(system(unsatisfiable_ordering), 0,
+0)` when `top_sort/2` fails (a cycle).  In SICStus 4.10.1 this misuses
+`illarg/3`: `0` is not callable, so `normalize_culprit/4` fails and the
+second clause's `must_be(Goal, callable, ...)` raises
+`type_error(callable, 0)` (library/types.pl:194-201, 228-232).  The port
+raises what 1.3.3 evidently means, `error(system_error(unsatisfiable_ordering),
+arrangement/2)` (ruling R13; `test_a_cyclic_ordering_raises_the_system_error`).
+A program that catches the SICStus `type_error` would not catch the port's
+error.

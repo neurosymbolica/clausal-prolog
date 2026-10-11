@@ -268,7 +268,8 @@ def ordering(term, trail):
 
 
 def _component_priority(component):
-    """class.pl component_get_priority/2, or None where it fails.  A
+    """class.pl class_get_prio/2 (component_get_priority), or None where it
+    fails.  A
     join_component that met no variable leaves Class a fresh variable, and
     get_atts on it fails."""
     if component is None:
@@ -278,14 +279,15 @@ def _component_priority(component):
 
 
 def _put_component_priority(component, priority, trail):
-    """class.pl component_put_priority/2."""
+    """class.pl class_put_prio/2 (component_put_priority)."""
     from clausal.logic.clpq.components import component_put_priority
     component_put_priority(component, priority, trail)
 
 
 def arrangement(component):
     """ordering.pl, arrangement/2.  Returns the variables in priority order;
-    raises system_error(unsatisfiable_ordering) where 1.3.3 calls illarg."""
+    raises system_error(unsatisfiable_ordering) where 1.3.3 calls illarg
+    (DEVIATIONS.md D6, test_a_cyclic_ordering_raises_the_system_error)."""
     priority = _component_priority(component)
     if priority is not None:
         result = top_sort(normalize(priority))
@@ -295,7 +297,7 @@ def arrangement(component):
 
 
 def join_component(terms, trail):
-    """ordering.pl, join_component/2.  Every variable in *terms* joins one
+    """ordering.pl, join_class/2.  Every variable in *terms* joins one
     component; returns it, or None when *terms* holds no variable (1.3.3
     leaves Class unbound).  Joining two components is the unification of
     their Class variables, which class.pl's hook merges."""
