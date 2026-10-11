@@ -124,6 +124,15 @@ What the order decides, and what checks it:
   optimal vertex.  The check for those is the oracle tests of Task 12
   (residuals) and Task 13 (`bb_inf`), not this task's tests.
 
+Component variables are ordered the same way.  bv.pl `select_dependent/7`
+collects the components of a new equation's old variables with
+`ord_add_element/3`, an ordered set in the standard order of the component
+variables; the port orders them by `Var._id`
+(`test_select_dependent_orders_components_by_creation`).  The first of them
+is the one `equate/2` unifies the others with, so with D8 this order decides
+which component variable is bound and so the order of the merged member
+list.  The check is again Task 12's oracle tests.
+
 ## D5: renormalize of a form with no variables raises
 
 store.pl `renormalize/2` calls `renormalize_log(Len, ...)` with the length of
@@ -218,3 +227,14 @@ the port keeps it apart from `SolverState`, under
   1.3.3; the port returns the list itself.  `component_basis_drop/2`'s
   `Basis0 \== Basis` then becomes `is not`
   (`test_delete_first_of_an_absent_element_gives_the_list_itself`).
+
+## D9: dereference of a monomial that is not `K*X^1` raises
+
+bv.pl `dereference_balanced/4` (`log_deref/4`) reads one or two monomials
+through its clause heads `[monomial(K,[X^1])|Vs]`.  For any other monomial
+those heads fail, and the last clause splits a count of 1 into 0 and 1 and
+calls itself on 1 again, without end.  nf.pl calls it only on linear normal
+forms, so 1.3.3 never gets there.  The port raises `ValueError` at once
+(`test_dereference_of_a_non_linear_monomial_raises`), as D5 does for
+`renormalize`.  1.3.3 gives no answer in this case either, so no answer
+changes.

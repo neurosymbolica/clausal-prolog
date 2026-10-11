@@ -13,7 +13,9 @@ from functools import cmp_to_key
 import pytest
 
 from clausal.logic.clpq.arithmetic import ONE, ZERO, make_rational
-from clausal.logic.clpq.attributes import SolverState, put_state
+from clausal.logic.clpq.attributes import (
+    SolverState, bounds_none, put_state, state_of)
+from clausal.logic.clpq.bounded_simplex import variable_intern
 from clausal.logic.clpq.linear_forms import (
     LinearForm, add_homogeneous_parts, add_homogeneous_parts_first_scaled,
     add_homogeneous_parts_scaled, add_linear_forms,
@@ -29,7 +31,7 @@ from clausal.logic.clpq.variable_ordering import (
     compare_variable_order, generate_edges, graph_union, group,
     join_component, normalize, normalize_vertex, normalize_vertices,
     ordering, strip_nonvariable, top_sort)
-from clausal.logic.variables import Trail, Var, unify
+from clausal.logic.variables import Trail, Var, deref, unify
 
 
 # ---------------------------------------------------------------- helpers
@@ -294,6 +296,33 @@ def test_a_cyclic_ordering_raises_the_system_error():
     assert raised.value.term[1] == ("system_error", "unsatisfiable_ordering")
     component_put_priority(component, add_edges([], [(a, b)]), trail)
     assert arrangement(component) == [a, b]
+
+
+# ---------------------------------------------------------------- ordering/1 through variable_intern/2
+
+def test_ordering_of_two_variables_goes_through_variable_intern():
+    trail = Trail()
+    a, b = Var(), Var()
+    assert ordering(("<", b, a), trail)
+    component = state_of(a).component
+    assert deref(state_of(b).component) is deref(component)
+    assert state_of(a).bounds == bounds_none()
+    assert arrangement(component) == [b, a]
+
+
+def test_ordering_of_a_list_and_arrangement_of_an_interned_variable():
+    trail = Trail()
+    a, b, c = Var(), Var(), Var()
+    assert ordering([c, a, b], trail)
+    assert arrangement(variable_intern(a, trail)) == [c, a, b]
+    mark = trail.mark()
+    assert ordering(("<", b, c), trail)
+    from clausal.logic.exceptions import LogicException
+    with pytest.raises(LogicException):
+        arrangement(state_of(a).component)
+    trail.undo(mark)
+    assert arrangement(state_of(a).component) == [c, a, b]
+
 
 # ---------------------------------------------------------------- store.pl units
 

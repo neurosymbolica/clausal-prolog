@@ -81,6 +81,21 @@ Names with no 1.3.3 atom of their own.  They are not in `rename_map.tsv`.
 | `DelayedGoal`, `DONE` | `delayed_goals.py` | `geler.pl`'s `run(Mutex, Goal)` term, and the atom `done` |
 | `RunGoals` | `delayed_goals.py` | one entry of `geler.pl`'s Later list |
 | `verify_delayed` | `delayed_goals.py` | `geler.pl`'s `verify_attributes/3` |
+| `Bounds`, `BOUNDS_NONE` ... `BOUNDS_LOWER_UPPER_ACTIVE` | `attributes.py` | the `type/1` attribute: a record of the kind (an int) and the bound values; the constructors keep the table's names `bounds_none`, `bounds_lower`, ... |
+| `strictness`, `strictness_fields` | `attributes.py` | read and write the `strictness/1` bits (0b10 lower, 0b01 upper) through the fields `lower_strict`, `upper_strict` |
+| `solve_equal`, `solve_not_equal`, `solve_less`, `solve_less_or_equal` | `bounded_simplex.py` | the quoted atoms `'solve_='`, `'solve_=\\='`, `'solve_<'`, `'solve_=<'` |
+| `export_bindings` | `bounded_simplex.py` | `export_binding/1` (`export_binding` is `/2`) |
+| `variable_intern_with_bounds` | `bounded_simplex.py` | `variable_intern/3` (`variable_intern` is `/2`, the interface `ordering.pl` calls) |
+| `upper_bound_tightest`, `lower_bound_tightest` | `bounded_simplex.py` | `upper_bound/4`, `lower_bound/4` (`upper_bound`, `lower_bound` are `/2`) |
+| `solve_homogeneous`, `solve_step` | `bounded_simplex.py` | `solve/5` (`solve` is `/1`); `solve_step` is `solve/5` up to its last goal |
+| `solve_for_variable_homogeneous` | `bounded_simplex.py` | `solve_for_variable/6` |
+| `undetermined_active_type` | `bounded_simplex.py` | `undetermined_active/2` (`undetermined_active` is `/1`) |
+| `determine_active_type` | `bounded_simplex.py` | `determine_active/4` (`determine_active` is `/2`) |
+| `pivot_ignoring_bounds` | `bounded_simplex.py` | `pivot/2`, "Pivot ignoring rhs and active states" (`pivot` is `/3`) |
+| `STATUS_OPTIMUM`, `STATUS_APPLIED`, `STATUS_UNLIMITED`, `OPTIMUM`, `APPLIED` | `bounded_simplex.py` | the step statuses `optimum`, `applied`, `unlimited(Indep, DepT)` |
+| `BELOW_LOWER_BOUND`, `ABOVE_UPPER_BOUND` | `bounded_simplex.py` | the kinds of the violated-bound terms `below_lower_bound(L)`, `above_upper_bound(U)` |
+| `PIVOT_EXCHANGE`, `PIVOT_OR_BOUND_SWAP` | `bounded_simplex.py` | the action terms `pivot_exchange(...)`, `pivot_or_bound_swap(...)` that `decrease_evaluate/2` builds |
+| `ord_add_element` | `bounded_simplex.py` | library(ordsets) `ord_add_element/3`, which `bv.pl` imports; it keeps its name |
 
 ## Table
 

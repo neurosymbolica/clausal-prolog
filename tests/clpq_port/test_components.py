@@ -1,7 +1,6 @@
 # tests/clpq_port/test_components.py
 """Task 7: class.pl (components.py) and geler.pl (delayed_goals.py)."""
 import sys
-import types
 
 import pytest
 
@@ -310,27 +309,10 @@ def test_verify_component_as_a_function():
 
 
 # ---------------------------------------------------------------- ordering.pl through real components
+#
+# join_component calls bv.pl's variable_intern/2 (bounded_simplex, Task 8).
 
-def _stub_variable_intern(monkeypatch):
-    """bv.pl variable_intern/2 is Task 8's.  This stand-in does what its
-    get_or_add_component part does, on the real components module."""
-    def variable_intern(variable, trail):
-        state = state_of(variable)
-        if state is not None and state.component is not None:
-            return state.component
-        component = Var()
-        head, tail = open_list([variable])
-        put_state(variable, SolverState(component=component,
-                                        variable_order=Var()), trail)
-        assert component_new(component, head, tail, None, trail)
-        return component
-    stub = types.ModuleType("clausal.logic.clpq.bounded_simplex")
-    stub.variable_intern = variable_intern
-    monkeypatch.setitem(sys.modules, "clausal.logic.clpq.bounded_simplex", stub)
-
-
-def test_join_component_merges_every_variable_into_one(monkeypatch):
-    _stub_variable_intern(monkeypatch)
+def test_join_component_merges_every_variable_into_one():
     trail = Trail()
     a, b, c = Var(), Var(), Var()
     component = join_component([a, 5, b, c], trail)
@@ -340,13 +322,11 @@ def test_join_component_merges_every_variable_into_one(monkeypatch):
     assert sorted(_members(component), key=lambda v: v._id) == [a, b, c]
 
 
-def test_join_component_without_variables_is_none(monkeypatch):
-    _stub_variable_intern(monkeypatch)
+def test_join_component_without_variables_is_none():
     assert join_component([1, 2], Trail()) is None
 
 
-def test_join_component_is_undone_to_separate_components(monkeypatch):
-    _stub_variable_intern(monkeypatch)
+def test_join_component_is_undone_to_separate_components():
     trail = Trail()
     a, b = Var(), Var()
     join_component([a], trail)
