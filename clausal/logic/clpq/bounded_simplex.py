@@ -227,11 +227,12 @@ def variable_intern(variable, trail):
 
 def export_bindings(bindings, trail):
     """bv.pl, export_binding/1: bind each X to its value; bindings are
-    (X, Value) pairs.  The only place the linear solver binds variables."""
-    for variable, value in bindings:
-        if not export_binding(value, variable, trail):
-            return False
-    return True
+    (X, Value) pairs, Value a rational.  Each binding is checked by itf3.pl's
+    verify_attributes/3 as it is made, through attribute_hooks.bind_all's
+    work list, so a cascade of implied bindings does not nest
+    (test_a_chain_of_ten_thousand_implied_bindings_needs_no_recursion)."""
+    from clausal.logic.clpq.attribute_hooks import bind_all   # cyclic: itf3.pl
+    return bind_all(bindings, trail)
 
 
 def export_binding(first, second, trail):
@@ -1727,3 +1728,9 @@ def dump_disequation(variable, homogeneous, constant):
     total = normal_form_to_sum(multiply_homogeneous_part(homogeneous, reciprocal),
                                ZERO)
     return [("=\\=", total, value)]
+
+
+# itf3.pl's hook for CLPQ_KEY, registered at import (ruling R1).  Every
+# module of the port imports this one, so the hook is in place before any
+# variable gets a state.
+from clausal.logic.clpq import attribute_hooks  # noqa: E402,F401  cyclic: itf3.pl

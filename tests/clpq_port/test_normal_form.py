@@ -1,9 +1,8 @@
 # tests/clpq_port/test_normal_form.py
 """Task 10: nf.pl and nfq.pl (normal_form.py), the normal form and {}/1.
 
-Until Task 11 registers the unification hook, binding a constrained
-variable does not wake anything; tests that need a wake run the delayed
-goals themselves (_bind), as geler.pl's hook would.
+A binding is the engine's unify; the CLPQ_KEY hook (Task 11) runs the
+delayed goals and takes the variable out of the store.
 """
 import pathlib
 import random
@@ -17,7 +16,7 @@ from clausal.logic.clpq import normal_form as nf
 from clausal.logic.clpq.arithmetic import ONE, ZERO, make_rational
 from clausal.logic.clpq.attributes import state_of
 from clausal.logic.clpq.delayed_goals import (
-    attribute_goal, collect_nonlinear, project_nonlinear, run)
+    attribute_goal, collect_nonlinear, project_nonlinear)
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Trail, Var, deref, is_var, unify
 from clausal.pythonic_ast.nodes import (
@@ -50,16 +49,9 @@ def _inf(x, trail):
 
 
 def _bind(variable, value, trail):
-    """Bind *variable* and run its delayed goals, as geler.pl's hook would
-    (Task 11 wires the hook)."""
-    state = state_of(variable)
-    goals = () if state is None or state.delayed_goals is None \
-        else state.delayed_goals
-    assert unify(variable, value, trail)
-    for goal in goals:
-        if not run(goal, trail):
-            return False
-    return True
+    """Bind *variable* through the engine; the CLPQ_KEY hook runs its
+    delayed goals."""
+    return unify(variable, value, trail)
 
 
 def _depth():
@@ -521,8 +513,8 @@ def test_not_equal():
     assert nf.post_constraint(ArithNeq(left=3, right=3), trail) is False
     x = Var()
     assert nf.post_constraint(ArithNeq(left=x, right=3), trail)
-    with pytest.raises(LogicException):         # needs Task 11's hook (D13)
-        nf.post_constraint(ArithEq(left=x, right=3), trail)
+    assert nf.post_constraint(ArithEq(left=x, right=3), trail) is False
+    assert nf.post_constraint(ArithEq(left=x, right=4), trail)
     y = Var()
     assert nf.post_constraint(ArithNeq(left=Mult(left=y, right=y), right=4), trail)
     assert attribute_goal(y)[0][0] is nf.resubmit_not_equal
@@ -581,8 +573,8 @@ def test_entailed_leaves_the_store_as_it_was():
     assert nf.entailed((",", (">=", x, 1), ("=<", y, 2)), trail)
     assert not nf.entailed((",", (">=", x, 1), ("=<", y, 1)), trail)
     assert nf.entailed((";", (">=", x, 5), ("=<", y, 2)), trail)
-    with pytest.raises(LogicException):         # {X = 1}: needs Task 11 (D13)
-        nf.entailed(ArithNeq(left=x, right=1), trail)
+    assert not nf.entailed(ArithNeq(left=x, right=1), trail)
+    assert nf.entailed(ArithNeq(left=x, right=0), trail)
     assert (state_of(x), state_of(y)) == before
 
 
@@ -660,8 +652,7 @@ def test_wait_linear_redelays_while_still_non_linear():
 
 def test_maximize_waits_for_a_linear_objective():
     # The goal runs once the objective is linear.  It ends in {Dep =:= Inf},
-    # which binds Dep; carrying that to X is itf3.pl's hook (Task 11,
-    # test_against_oracle.py test_a_binding_goes_through_the_hook).
+    # which binds Dep; itf3.pl's hook carries that to X.
     trail = Trail()
     x, y = Var(), Var()
     assert nf.post_constraint((LtE(left=0, right=x), LtE(left=x, right=2)), trail)
@@ -669,10 +660,8 @@ def test_maximize_waits_for_a_linear_objective():
     (pending,) = attribute_goal(x)
     assert pending[0] is nf.wait_linear_retry
     assert pending[1].procedure is bv.minimize_linear
-    # It ends in {Dep =:= Inf} on the interned Dep: D13's interim error.
-    with pytest.raises(LogicException) as caught:
-        _bind(y, 1, trail)
-    assert "clpq_binding_needs_hook" in str(caught.value.term)
+    assert _bind(y, 1, trail)
+    assert deref(x) == 2
 
 
 # ---------------------------------------------------------------- nfq.pl translate_goal//1
@@ -724,26 +713,25 @@ def test_translate_goal_refuses_a_goal_nf_does_not_delay():
 
 # ---------------------------------------------------------------- fix round 1
 
-def test_binding_a_variable_the_store_holds_raises():
-    # Until Task 11's hook, {X = 1} on a variable in the store raises the
-    # interim error (D13) instead of leaving the store on a number.
+def test_binding_a_variable_the_store_holds_goes_through_the_hook():
+    # nf.pl's own bindings (c11, b3) of a stored variable: D13's interim
+    # error is gone, the hook takes the variable out of the store.
     trail = Trail()
     x, y = Var(), Var()
     assert nf.post_constraint(LtE(left=Add(left=x, right=y), right=3), trail)
-    with pytest.raises(LogicException) as caught:
-        nf.post_constraint(ArithEq(left=x, right=1), trail)
-    assert "system_error" in str(caught.value.term)
-    assert "clpq_binding_needs_hook" in str(caught.value.term)
-    assert is_var(deref(x))
-    assert _sup(y, trail) is None                           # still sound
+    assert nf.post_constraint(ArithEq(left=x, right=1), trail)
+    assert deref(x) == 1
+    assert _sup(y, trail) == 2 and _inf(y, trail) is None
     a, b = Var(), Var()
     assert nf.post_constraint(ArithEq(left=Mult(left=a, right=b), right=6), trail)
-    with pytest.raises(LogicException):                     # a pending goal
-        nf.post_constraint(ArithEq(left=a, right=2), trail)
-    with pytest.raises(LogicException):                     # b3 on a bound
-        c = Var()
-        assert nf.post_constraint(GtE(left=c, right=0), trail)
-        nf.post_constraint(ArithEq(left=Mult(left=c, right=c), right=0), trail)
+    assert nf.post_constraint(ArithEq(left=a, right=2), trail)  # a pending goal
+    assert deref(b) == 3
+    c = Var()
+    assert nf.post_constraint(GtE(left=c, right=1), trail)
+    assert nf.post_constraint(ArithEq(left=Mult(left=c, right=c), right=0),
+                              trail) is False                  # b3 on a bound
+    assert nf.post_constraint(GtE(left=c, right=-1), trail)
+    assert is_var(deref(c))
 
 
 @pytest.mark.parametrize("constraint, kind", [

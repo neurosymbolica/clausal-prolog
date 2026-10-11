@@ -11,11 +11,8 @@ mark and undo for `;`.  An answer is compared on the bindings of the shown
 variables and, for each, its inf and sup (`none` where unbounded): the
 residual constraints come with dump/3 in Task 12.
 
-Until Task 11 registers the unification hook, binding a constrained
-variable does not reach the store, so the driver posts a binding `V = k`
-as `{V >= k, V =< k}`, which reaches the same store through ineq.pl's
-bounds.  The binding path itself is test_a_binding_goes_through_the_hook,
-skipped until Task 11.
+A binding `A = B` is the engine's unify, so it reaches the store through
+the CLPQ_KEY hook (itf3.pl's verify_attributes/3, Task 11).
 """
 from fractions import Fraction
 
@@ -83,50 +80,49 @@ class _Query:
         return result[0] if len(result) == 1 else tuple(result)
 
 
-def _solve(query, goals, trail, found, unify_bindings=False):
+def _term(query, term):
+    """A reader term as an engine term: variables become the query's Vars,
+    a compound a tuple cell."""
+    if type(term) is VarRef:
+        return query.variables[term.i]
+    if type(term) is tuple:
+        return (term[0],) + tuple(_term(query, argument) for argument in term[1:])
+    return term
+
+
+def _solve(query, goals, trail, found):
     """Run the goal list depth first, calling *found* at each answer.  A
-    binding `V = k` is posted as bounds, or with *unify_bindings* made with
-    the engine's unify (which needs Task 11's hook to reach the store)."""
-    if unify_bindings:
-        return _solve_with(query, goals, trail, found, True)
-    return _solve_with(query, goals, trail, found, False)
-
-
-def _solve_with(query, goals, trail, found, unify_bindings):
+    binding `A = B` is the engine's unify, through the CLPQ_KEY hook."""
     if not goals:
         found()
         return
     goal, rest = goals[0], goals[1:]
     if goal == "true":
-        _solve_with(query, rest, trail, found, unify_bindings)
+        _solve(query, rest, trail, found)
         return
     if goal == "fail":
         return
     functor = goal[0]
     mark = trail.mark()
     if functor == ",":
-        _solve_with(query, [goal[1], goal[2]] + rest, trail, found, unify_bindings)
+        _solve(query, [goal[1], goal[2]] + rest, trail, found)
     elif functor == ";":
-        _solve_with(query, [goal[1]] + rest, trail, found, unify_bindings)
+        _solve(query, [goal[1]] + rest, trail, found)
         trail.undo(mark)
-        _solve_with(query, [goal[2]] + rest, trail, found, unify_bindings)
+        _solve(query, [goal[2]] + rest, trail, found)
     elif functor == "{}":
         if post_constraint(query.constraints(goal[1]), trail):
-            _solve_with(query, rest, trail, found, unify_bindings)
+            _solve(query, rest, trail, found)
     elif functor == "=":
-        variable, value = query.expression(goal[1]), query.expression(goal[2])
-        bounds = (nodes.GtE(left=variable, right=value),
-                  nodes.LtE(left=variable, right=value))
-        if unify(variable, value, trail) if unify_bindings \
-                else post_constraint(bounds, trail):
-            _solve_with(query, rest, trail, found, unify_bindings)
+        if unify(_term(query, goal[1]), _term(query, goal[2]), trail):
+            _solve(query, rest, trail, found)
     elif functor == "maximize":
         if bv.maximize(query.expression(goal[1]), trail):
-            _solve_with(query, rest, trail, found, unify_bindings)
+            _solve(query, rest, trail, found)
     elif functor in ("sup", "inf"):
         optimum = bv.sup if functor == "sup" else bv.inf
         if optimum(query.expression(goal[1]), query.expression(goal[2]), trail):
-            _solve_with(query, rest, trail, found, unify_bindings)
+            _solve(query, rest, trail, found)
     else:
         raise ValueError(f"the driver does not run {goal!r}")
     trail.undo(mark)
@@ -148,7 +144,7 @@ def _bounds(variable, trail):
     return values
 
 
-def port_answers(text, shown, unify_bindings=False):
+def port_answers(text, shown):
     """Every answer of the query *text* on the port, as Answers over the
     *shown* variables and their `_inf`/`_sup` companions."""
     query = _Query(text)
@@ -167,7 +163,7 @@ def port_answers(text, shown, unify_bindings=False):
             bindings[name + "_sup"] = high
         answers.append(Answer(bindings, []))
 
-    _solve(query, [query.body], trail, found, unify_bindings)
+    _solve(query, [query.body], trail, found)
     return answers
 
 
@@ -204,6 +200,38 @@ CASES = [
     ("X = 2, {X * Y = 6}", ["X", "Y"], 1),
     # Review Focus 1: strict after backtracking
     ("{X < 3}, ({X =< 2}, fail ; true)", ["X"], 1),
+    # Task 11: bindings through itf3.pl's hook
+    ("{X >= 1}, {Y =< 0}, X = Y", ["X", "Y"], 0),
+    ("{X >= 1}, {Y =< 5}, (X = Y, fail ; true)", ["X", "Y"], 1),
+    ("{X >= 1}, {Y =< 5}, X = Y", ["X", "Y"], 1),
+    ("{X + Y = 4}, X = Y", ["X", "Y"], 1),
+    ("{X + Y =< 3}, {X = 1}", ["X", "Y"], 1),
+    ("{X + Y =< 3}, X = 1", ["X", "Y"], 1),
+    ("{X >= 1}, {X * X = 0}", ["X"], 0),
+    ("{X < 3}, X = 3", ["X"], 0),
+    ("{X >= 1, X =< 5}, X = 3", ["X"], 1),
+    ("{X >= 1, X =< 5}, X = 7", ["X"], 0),
+    ("{X =\\= 2}, {X + W = 3}, {W = 1}", ["X", "W"], 0),
+    ("{X =\\= 2}, {X + W = 3}, {W = 2}", ["X", "W"], 1),
+    ("{P * Q = 6}, {P + R = 3}, {R = 1}", ["P", "Q", "R"], 1),
+    ("{Y = X + Z, X >= 1}, X = Y", ["X", "Y", "Z"], 1),
+    ("{Y = X + Z, X >= 1}, Y = X", ["X", "Y", "Z"], 1),
+    # Z, Y, X created in that order: X - Y has no X (itf3.pl's "deep shit")
+    ("{0*Z + Y = X + Z, X >= 1}, X = Y", ["X", "Y", "Z"], 1),
+    ("{X >= 1, X < 4}, X = Y", ["X", "Y"], 1),
+    ("{X0 >= 0}, {X1 = X0 + 1, X2 = X1 + 1, X3 = X2 + 1}, X0 = 2",
+     ["X0", "X1", "X2", "X3"], 1),
+    ("{X0 >= 0}, {X1 = X0 + 1, X2 = X1 + 1, X3 = X2 + 1}, X3 = 2",
+     ["X0", "X1", "X2", "X3"], 0),
+    ("{X >= 1, X + Z =< 5}, X = 2", ["X", "Z"], 1),
+    ("{X >= 1, X + Z =< 5}, {Y =< 3}, X = Y", ["X", "Y", "Z"], 1),
+    ("{Y =< 3}, {X >= 1, X + Z =< 5}, X = Y", ["X", "Y", "Z"], 1),
+    ("{X > 1, X + Z < 5}, {Y < 3}, X = Y", ["X", "Y", "Z"], 1),
+    ("{X >= 1, X + Z =< 5, Z >= 2}, {Y >= 3}, X = Y", ["X", "Y", "Z"], 1),
+    ("{X >= 1, X + Z =< 5, Z >= 2}, {Y >= 4}, X = Y", ["X", "Y", "Z"], 0),
+    ("{X + Y + Z = 6, X - Y >= 0}, Z = 2, X = Y", ["X", "Y", "Z"], 1),
+    ("{X =\\= 3}, {Y >= 3, Y =< 3}, X = Y", ["X", "Y"], 0),
+    ("{X =\\= 3}, {Y >= 3, Y =< 4}, X = Y", ["X", "Y"], 1),
     # two answers through a disjunction
     ("({X >= 1} ; {X =< -1}), {X =< 4}", ["X"], 2),
 ]
@@ -250,8 +278,6 @@ def test_strict_bounds_after_backtracking_stay_strict():
     assert seen == [True]
 
 
-@pytest.mark.skip(reason="needs Task 11: binding a constrained variable "
-                         "goes through itf3.pl's verify_attributes/3")
 @pytest.mark.parametrize("text, shown", [
     ("{1 =< X, X =< 5, X = Y + 1}, Y = -10", ["X", "Y"]),
     ("{X < Y, Y =< 3}, X = 3", ["X", "Y"]),
@@ -261,6 +287,39 @@ def test_strict_bounds_after_backtracking_stay_strict():
 ])
 def test_a_binding_goes_through_the_hook(text, shown):
     want = scryer_answers(text, shown)
-    got = port_answers(text, shown, unify_bindings=True)
+    got = port_answers(text, shown)
     ok, why = same_solution_sets(got, want)
     assert ok, f"{why}\nport:   {got}\noracle: {want}"
+
+
+def _random_binding_query(seed):
+    """A random store over X, Y, Z, W, then one binding: a variable to a
+    small integer, or two variables to each other.  Returns the query and
+    the variables it mentions.  (The oracle side answers [] or raises for a
+    query variable named A; these names avoid it.)"""
+    import random
+    rng = random.Random(seed)
+    names = ["X", "Y", "Z", "W"]
+    constraints = []
+    for _ in range(rng.randint(2, 5)):
+        chosen = rng.sample(names, rng.randint(1, 3))
+        terms = " + ".join(f"{rng.choice([-3, -2, -1, 1, 2, 3])}*{n}"
+                           for n in chosen)
+        relation = rng.choice(["=<", ">=", "<", ">", "=", "=<", ">="])
+        constraints.append(f"{terms} {relation} {rng.randint(-5, 5)}")
+    first, second = rng.sample(names, 2)
+    if rng.random() < 0.5:
+        binding = f"{first} = {rng.randint(-3, 3)}"
+    else:
+        binding = f"{first} = {second}"
+    text = "{" + ", ".join(constraints) + "}, " + binding
+    return text, [name for name in names if name in text]
+
+
+@pytest.mark.parametrize("seed", range(40))
+def test_random_stores_bound_through_the_hook_against_the_oracle(seed):
+    text, shown = _random_binding_query(seed)
+    want = scryer_answers(text, shown)
+    got = port_answers(text, shown)
+    ok, why = same_solution_sets(got, want)
+    assert ok, f"{text}\n{why}\nport:   {got}\noracle: {want}"

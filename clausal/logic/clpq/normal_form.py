@@ -54,7 +54,7 @@ from clausal.logic.clpq.arithmetic import negate as negate_rational
 from clausal.logic.clpq.bounded_simplex import (
     dereference_balanced, export_binding, solve, solve_less,
     solve_less_or_equal, solve_not_equal)
-from clausal.logic.clpq.delayed_goals import delay_goal, nonexhausted
+from clausal.logic.clpq.delayed_goals import delay_goal
 from clausal.logic.clpq.inequalities import (
     inequality_one_variable,
     inequality_one_variable_nonstrict_negative_zero,
@@ -63,9 +63,8 @@ from clausal.logic.clpq.inequalities import (
     inequality_one_variable_strict_positive_zero)
 from clausal.logic.clpq.linear_forms import (
     MINUS_ONE, add_linear_forms, normalize_scalar)
-from clausal.logic.clpq.attributes import state_of
 from clausal.logic.exceptions import (
-    LogicException, instantiation_error, system_error, type_error)
+    LogicException, instantiation_error, type_error)
 from clausal.logic.variables import Var, deref, is_var
 from clausal.pythonic_ast import nodes as _nodes
 
@@ -393,26 +392,6 @@ def submit_equal_terms(rest, first, trail):
     return submit_equal_several_terms(first, rest[0], rest[1:], trail)
 
 
-def _export_binding_before_hook(variable, value, trail):
-    """bv.pl's export_binding/2 as nf.pl calls it, X = Value, outside
-    solve/5.  In 1.3.3 the binding wakes itf3.pl's verify_attributes/3,
-    which takes X out of the store.  Until Task 11 registers that hook, a
-    variable the store holds (a linear form, a component, delayed goals)
-    cannot be bound here without leaving the store pointing at a number,
-    so the port raises system_error(clpq_binding_needs_hook) instead.
-    Delayed goals that have all run (the goal now resubmitting) do not
-    count (DEVIATIONS.md D13,
-    test_binding_a_variable_the_store_holds_raises)."""
-    state = state_of(variable)
-    if state is not None and (
-            state.linear_form is not None or state.component is not None
-            or (state.delayed_goals is not None
-                and nonexhausted(state.delayed_goals))):
-        raise LogicException(system_error("clpq_binding_needs_hook",
-                                          "{}/1"))
-    return export_binding(variable, value, trail)
-
-
 def _single_power(monomial):
     """(base, exponent) of a monomial `K*X^P` with one power, else None."""
     powers = monomial.powers
@@ -430,7 +409,7 @@ def submit_equal_single_term(monomial, trail):
     if single is not None:
         base, exponent = single
         if is_var(base) and exponent > 0:                   # b2,b3: n*x^p=0 -> x=0
-            return _export_binding_before_hook(base, ZERO, trail)
+            return export_binding(base, ZERO, trail)
         if not is_var(base) and exponent == 1:              # b2
             found = nonlinear_invertible(base, ZERO)
             if found is not None:
@@ -475,10 +454,10 @@ def submit_equal_constant_first(rest, second, constant, trail):
         coefficient = second.coefficient
         if is_var(base):                                    # c11
             if exponent == 1:
-                return _export_binding_before_hook(
+                return export_binding(
                     base, divide(negate_rational(constant), coefficient), trail)
             if exponent == -1:
-                return _export_binding_before_hook(
+                return export_binding(
                     base, divide(negate_rational(coefficient), constant), trail)
         else:                                               # c12
             value = None

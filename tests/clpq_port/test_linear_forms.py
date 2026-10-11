@@ -490,10 +490,20 @@ def test_renormalize_folds_bound_variables_into_the_constant():
 
 
 def test_renormalize_folds_a_variable_bound_to_a_float():
+    # Through the CLPQ_KEY hook a float is refused (itf3.pl numbers_only/2,
+    # test_numbers_only); renormalize's own reading is shown with the hook
+    # off for the one binding.
+    from clausal.logic.clpq.attribute_hooks import holzbaur_hook
+    from clausal.logic.clpq.attributes import CLPQ_KEY
+    from clausal.logic.variables import register_attr_hook
     trail = Trail()
     x, y = _constrained(2, trail)
     form = LinearForm(ZERO, ZERO, [(x, (2, 1)), (y, (3, 1))])
-    assert unify(y, 0.5, trail)
+    register_attr_hook(CLPQ_KEY, None)
+    try:
+        assert unify(y, 0.5, trail)
+    finally:
+        register_attr_hook(CLPQ_KEY, holzbaur_hook)
     one = renormalize_balanced_one(form.terms[1])
     assert (one.constant, one.terms) == ((3, 2), [])
     assert renormalize(form).constant == (3, 2)

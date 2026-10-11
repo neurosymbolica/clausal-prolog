@@ -176,9 +176,9 @@ def test_review_focus_1_a_strict_bound_comes_back_strict_after_backtracking():
     assert state_of(x).upper_strict is True
 
 
-@pytest.mark.skip(reason="needs Task 11: minimize_linear ends in {Dep =:= Inf}, "
-                         "which binds Dep; itf3.pl's hook carries it to X and Y")
 def test_the_box_lp_maximum_is_9_at_0_3():
+    # minimize_linear ends in {Dep =:= Inf}, which binds Dep; itf3.pl's hook
+    # carries that to X and Y (Task 11).
     from clausal.logic.clpq.normal_form import post_constraint
     from clausal.pythonic_ast.nodes import LtE
     from clausal.terms import Add, Mult

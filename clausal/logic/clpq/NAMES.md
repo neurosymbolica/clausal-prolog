@@ -105,6 +105,13 @@ Names with no 1.3.3 atom of their own.  They are not in `rename_map.tsv`.
 | `is_normal_form_number` | `normal_form.py` | `normal_form_number/1` (`normal_form_number` is `/2`) |
 | `compare_power_products`, `compare_bases`, `compare_normal_forms` | `normal_form.py` | `compare/3`, the standard order, on power products, bases and normal forms (DEVIATIONS.md D11) |
 | `SOLVER_MODULE` | `normal_form.py` | the atom `clpq` of the `clpq:G` goals `translate_goal//1` builds |
+| `holzbaur_hook` | `attribute_hooks.py` | the CLPQ_KEY hook: `itf3.pl`'s `verify_attributes/3` with `geler.pl`'s, then the Later goals |
+| `verify_bound` | `attribute_hooks.py` | `verify_attributes/3` clause 3 after `put_atts(X, forward(Y))`, with `geler.pl`'s part |
+| `bind_queued`, `bind_all` | `attribute_hooks.py` | `export_binding/1` as the hook binds: each binding checked before it is made, from a work list (DEVIATIONS.md D3) |
+| `run_later`, `PendingLater`, `DrainMarker`, `DRAINING` | `attribute_hooks.py` | running the Later list: on the trail's pending queue, or drained by the outermost hook (DEVIATIONS.md D3) |
+| `PostBound` | `attribute_hooks.py` | one Later goal `{L =< V}` / `{L < V}` of `later_lower_bound//3` and `later_upper_bound//3` |
+| `SOLVER_TYPE` | `attribute_hooks.py` | the atom `rational` of `solver_type(clpq, rational)` |
+| `dump_disequation_in_context` | `attribute_hooks.py` | `itf3.pl`'s `dump_disequation//4` (bv.pl's `dump_disequation//3` keeps the name) |
 | `exponential_power`, `power`, `absolute`, `minimum`, `maximum`, `exponential`, `logarithm`, `sine`, `cosine`, `tangent`, `arc_sine`, `arc_cosine`, `arc_tangent` | `arithmetic.py` | `expq/6`, `powq/7`, `abs` of a rational, `minq`, `maxq`, `expq/4`, `logq`, `sinq`, `cosq`, `tanq`, `asinq`, `acosq`, `atanq` with the `_rational` suffix dropped (DEVIATIONS.md D1); `expq/6` gets its own name beside `expq/4`; `is_number` is `number/1` as nf.pl applies it |
 
 ## Table

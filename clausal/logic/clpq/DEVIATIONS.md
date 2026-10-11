@@ -106,11 +106,112 @@ So for the X the hook is handling, `state_of(X)`,
 `compare_variable_order(X, _)`, `normal_form_right_hand_side(Form, X)` and
 `normal_form_coefficient_of(Form, X)` all return None, and
 `delete_factor_homogeneous` finds X only by the identity of the bound
-object.  Task 11 must take X out of the rows with the state it is handed
-(`value`), before anything walks them.  Until then nf.pl's own bindings of
-a stored variable raise (D13).
+object.  `put_attr` on X raises when X is bound to a number, and when X is
+bound to another variable it writes THAT variable's attributes.
 
-Sites in `itf3.pl`: to be filled in by Task 11.
+What the port does (`attribute_hooks.py`, Task 11).  The hook takes X out
+of the store before anything walks it: it replaces X by a fresh unbound
+stand-in that carries X's state (the same `variable_order`, so every row
+stays sorted) in the component's member list, its basis and every row.
+The stand-in is X as 1.3.3's `verify_attributes/3` sees it, unbound, so
+itf3.pl's code then runs on it unchanged: `detach_bounds/1`,
+`back_substitute/2`, `normal_form_coefficient_of/3` and the rest need no
+variants that take the state (`test_a_binding_reaches_the_rows_of_the_other_variables`,
+`test_a_variable_whose_row_holds_the_other_one`).  Afterwards the
+stand-in is out of the component (`component_drop/2`) and, except in the
+case "A stand-in left in a row" below, out of every row
+(`solve_for_variable/2`).  So class.pl's
+`delete_first/3` (above) now gets the unbound stand-in from itf3.pl, not
+the bound X.
+
+Sites in `itf3.pl` (the `grep -n "verify_\|var("` list), with what the port
+does instead:
+
+- `verify_attributes/3` clause 1, `get_atts(X, [-component(_), ...,
+  -nonzero])`: reads the state handed in.  `strictness(0)` counts as
+  absent, because the port's two strictness fields cannot tell 0 from no
+  attribute; with no other attribute, clause 1 and clause 3 do the same.
+- Clause 2, `get_atts(X, forward(F))`: reads the state handed in.  The
+  engine never hands a state with `forward`: only `bind_queued` sets it, on
+  a variable it is about to bind (below), so the hook that binding wakes
+  takes clause 2.  geler.pl's part has run for that variable already, so
+  clause 2 does not run it again.
+- Clause 3, `numbers_only(Y, X)`: runs first, before the stand-ins are made.
+  The engine's undo after a hook raises clears the exception
+  (`trail_undo_to` calls `PyErr_Clear` after deleting an attribute key, so
+  `unify` returns NULL with no exception set); checking before any trailed
+  change keeps the `type_error` (`test_a_non_number_raises_a_type_error`).
+  Y is accepted when it is a variable or an exact number (an int, a
+  Fraction, a finite Decimal); a float raises `type_error(rational, Y)` as
+  1.3.3's `arith_normalize(Y, Y)` test does (Scryer's clpq accepts it).
+- Clause 3, `put_atts(X, forward(Y))`: never written on X.  It goes on the
+  stand-in, where nothing reads it, and on a variable `bind_queued` binds,
+  before the binding.
+- `forward_dereference/2`, `var(X)`, `get_atts(X, forward(F))`: X here is a
+  forward value, unbound, so nothing changes.  The recursion is a loop.
+- `verify_nonzero/2`, `get_atts(X, nonzero)`: the state handed in.
+  `var(Y)` and `put_atts(Y, nonzero)`: Y is unbound, nothing changes; a
+  PlainVar Y cannot take the attribute and the hook fails there.
+- `verify_type//2`, `get_atts(X, [type(Type), strictness(Strict)])`: the
+  state handed in.  `verify_type//3`'s `var(Y)`: Y is what X is bound to,
+  so nothing changes.
+- `verify_linear/2`, `get_atts(X, [component(Class), linear_form(LinX)])`,
+  `independent(LinX, X)`, `detach_bounds(X)`, `component_drop(Class, X)`,
+  `normal_form(X-Y, Lin)`, `normal_form_coefficient_of(Lind, X, _)`,
+  `solve_for_variable(Lind, X)`: all on the stand-in.  `solve/1` and
+  `solve_for_variable/2` end in `export_binding/1`; the hook calls bv.pl's
+  `solve/5` and `solve_for_variable/6` itself and hands their bindings to
+  `bind_queued` (below).  A PlainVar Y cannot become a linear variable; the
+  hook fails there.
+- geler.pl's `verify_attributes/3` (`verify_delayed`) reads the state
+  handed in, as Task 7 wrote it.
+
+Several variables bound in one unification.  The engine makes every
+binding of a unification first, then calls the hooks in turn, so when X's
+hook runs, another constrained variable W of the same unification can be
+bound with its hook still to come, and W is in rows X's hook walks.  The
+hook therefore makes a stand-in for every bound member of X's component and
+of Y's, and does each one's work; when W's own hook comes, W is no longer a
+member, and it returns at once
+(`test_one_unification_binding_two_constrained_variables`,
+`test_one_unification_agrees_with_binding_one_at_a_time`).  Scryer's clpq
+fails `{X + Y = 3}, f(X, Y) = f(1, 2)`; the port answers it.
+
+Implied bindings are queued, not nested.  bv.pl's `export_binding/1` binds
+each `X = Value` at once, and in 1.3.3 each binding runs X's
+`verify_attributes/3` inside the one before.  The port's `bind_queued`
+takes the bindings from a list: for each one it sets `forward` on X, runs
+clause 3 on X while X is still unbound (the order 1.3.3 has), appends the
+bindings that implies to the end of the list, and only then binds X; the
+hook that binding wakes takes clause 2 and returns
+(`test_implied_bindings_are_queued_not_nested`,
+`test_a_chain_of_ten_thousand_implied_bindings_needs_no_recursion`).
+`bounded_simplex.export_bindings` (bv.pl `export_binding/1`, from `solve/1`,
+`solve_for_variable/2` and ineq.pl's reconsider) goes through the same list
+(`attribute_hooks.bind_all`).  So the bindings are checked in breadth-first
+order, where 1.3.3 checks each one's implied bindings before the next of
+its own.
+
+Later goals.  1.3.3 runs X's Later goals right after X's binding, inside
+the binding that caused it.  The port runs them after all of the hook's
+bindings: on the trail's pending queue when a driver owns it
+(`trail.defer`), otherwise in the hook.  Outside a driver the outermost
+hook puts a marker (`DRAINING`) at the front of the pending queue while it
+drains; a hook woken by a Later goal finds the marker and queues its own
+Later work behind it, so a cascade of delayed goals runs in one loop
+(`test_a_cascade_of_delayed_goals_needs_no_recursion`).  itf3.pl's Later
+goals (the bounds `{L =< Y}`) run before geler.pl's (the delayed goals) for
+the same variable; SICStus's order between the two modules' hooks is not
+checked.
+
+A stand-in left in a row.  Where X is independent and Y's row holds X
+(`{Y = X + Z}, X = Y`), `X - Y` has no X and 1.3.3 calls `solve/1` instead
+of solving for X ("If X is indep and we do _not_ solve for it, we are in
+deep shit because the ordering is violated", itf3.pl); X stays in Y's row
+and is then bound to Y.  In the port the stand-in stays in the row,
+unbound, and nothing binds it, so the store holds `Y = stand-in` with Z = 0
+(`test_a_variable_whose_row_holds_the_other_one`, and the oracle cases
+`{Y = X + Z, X >= 1}, X = Y`).
 
 ## D4: the order of variables is creation order
 
@@ -364,7 +465,12 @@ backtracking calls `resume_constraint` with the same state until it
 returns False, as a generator over the engine's backtracking.  It must not
 call `post_constraint` for a constraint that holds `;`.
 
-## D13: an nf.pl binding of a stored variable raises until Task 11
+## D13: an nf.pl binding of a stored variable raised until Task 11 (resolved)
+
+Resolved by Task 11: the interim error is gone, and nf.pl's bindings go
+through the CLPQ_KEY hook (`test_binding_a_variable_the_store_holds_goes_through_the_hook`).
+The entry as Task 10 wrote it:
+
 
 nf.pl binds a variable outside bv.pl's `solve/5` in three places:
 `submit_equal_single_term/1` b3 (`n*X^P = 0`), `submit_equal_constant_first/3`
@@ -380,3 +486,23 @@ component, or a delayed goal not yet run, it raises
 has run (the one resubmitting now) does not count.  Cost until Task 11:
 `{X >= 0}, {X = 1}`, `entailed(X =\= 1)` on a stored X, and `maximize/1`
 raise where 1.3.3 answers.  Task 11 removes this check.
+
+## D14: itf3.pl's presentation half
+
+`attribute_goal/2`, `dump_linear//2` and `dump_nonzero//2` are ported in
+`attribute_hooks.py`; dump.pl (Task 12) calls the last two.
+
+- `presentation_context/2` keeps the context (`toplevel` or `compiler`) in
+  a dynamic predicate.  The port has no module-level state, so the context
+  is the parameter `context` of `attribute_goal`, `dump_linear` and
+  `dump_nonzero`, `toplevel` by default.
+- The `compiler` context calls `compiler_dump_variable//4` and
+  `compiler_dump_disequation//3`, which no 1.3.3 file defines.  The port
+  raises `ValueError` for that context.
+- `wrap/2` writes `clpq:{C}` unless the `typein_module` flag names clpq or a
+  module that imports `{}/1` from it.  Clausal has no typein module, so the
+  port always writes `{C}` (`test_list_to_wrapped_conjunction`).
+- `goal_expansion/5` and `linear_solver_module/1` are compile-time code:
+  `nf_ordering/3` is `variable_ordering.compare_variable_order` (Task 6),
+  and `decompose/4` is reading a `LinearForm`'s fields.
+

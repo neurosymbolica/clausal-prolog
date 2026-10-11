@@ -15,8 +15,9 @@ and dump.pl (Task 12) reads the translated goals.
 geler.pl's `goals/1` attribute is SolverState's `delayed_goals` field: a
 tuple of DelayedGoal, newest first (1.3.3's conjunction `(Goal, Gv)`), or
 None for no attribute.  verify_delayed is the part of the CLPQ_KEY hook
-(Task 11 wires it) that geler.pl's verify_attributes/3 does; its Later goals
-go on a LaterWork queue and run after the hook returns
+(attribute_hooks.verify_attributes calls it) that geler.pl's
+verify_attributes/3 does; its Later goals go on a LaterWork queue and run
+after the hook returns
 (test_verify_delayed_against_a_value_queues_the_goals).
 """
 from clausal.logic.clpq.attributes import (
