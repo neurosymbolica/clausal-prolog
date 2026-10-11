@@ -73,6 +73,13 @@ def from_number(x):
     raise TypeError(f"not an exact number: {x!r}")
 
 
+def is_number(value):
+    """An engine number nf.pl reads as a number (number/1): an int, a
+    Fraction, a Decimal or a float; not a bool."""
+    kind = type(value)
+    return kind is int or kind is Fraction or kind is Decimal or kind is float
+
+
 def to_number(x):
     return x[0] if x[1] == 1 else Fraction(x[0], x[1])
 
@@ -102,44 +109,70 @@ def limit_encoding_length(numerator, denominator, bits):
     return numerator, denominator
 
 
+def _evaluation_error(kind):
+    """ISO error(evaluation_error(Kind), _) for an arith.pl function
+    (ruling R19: no raw Python exception leaves the solver)."""
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, evaluation_error)
+    return LogicException(evaluation_error(kind, "is/2"))
+
+
+def _through_float(function, *arguments):
+    """*function* of the rationals as floats, back as a rational.  Outside
+    its domain Python's math raises ValueError, which is
+    evaluation_error(undefined); a result past the float range is
+    evaluation_error(float_overflow)
+    (test_functions_outside_their_domain_raise_evaluation_errors)."""
+    floats = []
+    for argument in arguments:
+        floats.append(rational_to_float(argument))
+    try:
+        result = function(*floats)
+    except ValueError:
+        raise _evaluation_error("undefined") from None
+    except OverflowError:
+        raise _evaluation_error("float_overflow") from None
+    return float_to_rational(result)
+
+
 def exponential(x):
     """arith.pl, exponential_rational/4 (expq/4): exp(X) through a float."""
-    return float_to_rational(_math.exp(rational_to_float(x)))
+    return _through_float(_math.exp, x)
 
 
 def logarithm(x):
     """arith.pl, logarithm_rational/4 (logq/4)."""
-    return float_to_rational(_math.log(rational_to_float(x)))
+    return _through_float(_math.log, x)
 
 
 def sine(x):
     """arith.pl, sine_rational/4 (sinq/4)."""
-    return float_to_rational(_math.sin(rational_to_float(x)))
+    return _through_float(_math.sin, x)
 
 
 def cosine(x):
     """arith.pl, cosine_rational/4 (cosq/4)."""
-    return float_to_rational(_math.cos(rational_to_float(x)))
+    return _through_float(_math.cos, x)
 
 
 def tangent(x):
     """arith.pl, tangent_rational/4 (tanq/4)."""
-    return float_to_rational(_math.tan(rational_to_float(x)))
+    return _through_float(_math.tan, x)
 
 
 def arc_sine(x):
     """arith.pl, arc_sine_rational/4 (asinq/4)."""
-    return float_to_rational(_math.asin(rational_to_float(x)))
+    return _through_float(_math.asin, x)
 
 
 def arc_cosine(x):
     """arith.pl, arc_cosine_rational/4 (acosq/4)."""
-    return float_to_rational(_math.acos(rational_to_float(x)))
+    return _through_float(_math.acos, x)
 
 
 def arc_tangent(x):
     """arith.pl, arc_tangent_rational/4 (atanq/4)."""
-    return float_to_rational(_math.atan(rational_to_float(x)))
+    return _through_float(_math.atan, x)
 
 
 def exponential_power(x, y):
@@ -153,8 +186,7 @@ def exponential_power(x, y):
             return power(y[0], x, ONE)
         result = power(-y[0], x, ONE)
         return make_rational(result[1], result[0])
-    return float_to_rational(_math.pow(rational_to_float(x),
-                                       rational_to_float(y)))
+    return _through_float(_math.pow, x, y)
 
 
 def power(exponent, x, so_far):
@@ -189,7 +221,10 @@ def absolute(x):
 def rational_to_float(x):
     """arith.pl, rational_to_float/3 (rat_float/3)."""
     numerator, denominator = limit_encoding_length(x[0], x[1], 1023)
-    return numerator / denominator
+    try:
+        return numerator / denominator
+    except OverflowError:
+        raise _evaluation_error("float_overflow") from None
 
 
 def float_to_rational(value):
@@ -197,8 +232,10 @@ def float_to_rational(value):
     of *value*, at most 100 steps, stopping at the first convergent equal to
     it as a float (test_float_to_rational_gives_the_short_convergent: 0.1 is
     1/10).  The recursion is a loop."""
-    if value != value or value in (_math.inf, -_math.inf):
-        raise ValueError(f"float_to_rational: {value!r} is not finite")
+    if value != value:
+        raise _evaluation_error("undefined")
+    if value in (_math.inf, -_math.inf):
+        raise _evaluation_error("float_overflow")
     steps = 100
     remaining = value
     numerator_a, numerator_b = 1, 0

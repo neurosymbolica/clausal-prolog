@@ -161,3 +161,30 @@ def test_limit_encoding_length_keeps_small_rationals():
     assert a.limit_encoding_length(10**400, 3, 1023) == (5 * 10**399, 1)
     numerator, denominator = a.limit_encoding_length(10**400, 10**399 + 1, 1023)
     assert numerator.bit_length() <= 1024 and denominator > 0
+
+
+@pytest.mark.parametrize("call, kind", [
+    (lambda: a.arc_sine(a.make_rational(2, 1)), "undefined"),
+    (lambda: a.logarithm(a.ZERO), "undefined"),
+    (lambda: a.exponential_power(a.ZERO, a.make_rational(-1, 2)), "undefined"),
+    (lambda: a.exponential_power(a.make_rational(-8, 1), a.make_rational(1, 3)), "undefined"),
+    (lambda: a.exponential_power(a.make_rational(2, 1), a.make_rational(10001, 2)), "float_overflow"),
+    (lambda: a.exponential(a.make_rational(10**6, 1)), "float_overflow"),
+    (lambda: a.rational_to_float(a.make_rational(10**400, 3)), "float_overflow"),
+    (lambda: a.float_to_rational(float("nan")), "undefined"),
+    (lambda: a.float_to_rational(float("inf")), "float_overflow"),
+])
+def test_functions_outside_their_domain_raise_evaluation_errors(call, kind):
+    # Ruling R19: an ISO evaluation_error, never a raw Python exception.
+    from clausal.logic.exceptions import (
+        LogicException, evaluation_error, evaluation_error_kind)
+    with pytest.raises(LogicException) as caught:
+        call()
+    # the kind is minted as the engine mints it (undefined is a truth value)
+    assert evaluation_error_kind(caught.value) == evaluation_error(kind)[1][1]
+
+
+def test_is_number():
+    assert a.is_number(1) and a.is_number(Fraction(1, 2)) and a.is_number(0.5)
+    assert a.is_number(Decimal("1.5"))
+    assert not a.is_number(True) and not a.is_number("1") and not a.is_number((1, 2))

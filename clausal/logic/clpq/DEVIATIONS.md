@@ -40,18 +40,20 @@ in `arith.pl`'s file order:
 | 1.3.3 | Port | Difference |
 |---|---|---|
 | `limit_encoding_length/5` | `limit_encoding_length` | Returns the pair. |
-| `expq/4`, `logq/4`, `sinq/4`, `cosq/4`, `tanq/4`, `asinq/4`, `acosq/4`, `atanq/4` | `exponential`, `logarithm`, `sine`, `cosine`, `tangent`, `arc_sine`, `arc_cosine`, `arc_tangent` | Through a float, as 1.3.3's are.  Outside a function's domain (`asin(2)`, `log(0)`) Python's `math` raises `ValueError`; what SICStus does there is not checked. |
+| `expq/4`, `logq/4`, `sinq/4`, `cosq/4`, `tanq/4`, `asinq/4`, `acosq/4`, `atanq/4` | `exponential`, `logarithm`, `sine`, `cosine`, `tangent`, `arc_sine`, `arc_cosine`, `arc_tangent` | Through a float, as 1.3.3's are.  Outside a function's domain (`asin(2)`, `log(0)`) they raise `evaluation_error(undefined)`, past the float range `evaluation_error(float_overflow)` (ruling R19, `test_functions_outside_their_domain_raise_evaluation_errors`); Scryer gives `evaluation_error(undefined)` for `{sin(X) = 2}` and `{X = 0^(-1/2)}`. |
 | `expq/6` | `exponential_power` | Exact for an integer exponent, through a float otherwise.  For `0^-N` 1.3.3 builds `rat(1, 0)`, which `arithmetic_normalize/2` then refuses, so `nf.pl`'s caller fails; the port raises `ZeroDivisionError`, and `normal_form.evaluate_nonlinear` fails before calling it (`test_integer_powers_expand_binomially`). |
 | `powq/7` | `power` | The recursion is a loop. |
 | `minq/6`, `maxq/6` | `minimum`, `maximum` | Return the rational. |
 | `abs(rat(N, D))` (`specialize_rational_function//2`) | `absolute` | |
-| `rat_float/3` | `rational_to_float` | |
-| `float_rat/3,9` | `float_to_rational` | The recursion is a loop; a float that is not finite raises `ValueError`. |
+| `rat_float/3` | `rational_to_float` | A result past the float range raises `evaluation_error(float_overflow)`.  bv.pl's `float(X)` in `decrease_evaluate/2` uses it too. |
+| `float_rat/3,9` | `float_to_rational` | The recursion is a loop; NaN raises `evaluation_error(undefined)` and an infinity `evaluation_error(float_overflow)`. |
 | `arith_normalize/2` (`arith_q.pl`) | `arithmetic_normalize` | Takes an engine number or a rational pair.  A float goes through `float_to_rational`, as `get_rational/3` reads one, so `{X = 0.1}` gives `X = 1/10` (`test_numbers_are_exact_and_a_float_is_its_short_convergent`); Scryer's own `library(clpq)` gives the float's exact binary value instead. |
 | `integerp/2` (`arith_q.pl`) | `rational_integer` | Returns the int, or None. |
+| `number/1` as nf.pl applies it | `is_number` | An int, Fraction, Decimal or float, not a bool. |
 
-`Fraction` is used only in `from_number` (to accept one) and `to_number`, the
-conversion edges; the solver core never sees it.
+`Fraction` and `Decimal` are used only in `from_number` (to accept one),
+`to_number` and `is_number` (to recognise one), the conversion edges, all in
+this module; the solver core never computes with them.
 
 ## D2: `compenv.pl` is not ported
 
