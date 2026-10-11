@@ -96,3 +96,87 @@ def test_no_answers_on_either_side():
     program = ":- use_module(library(clpq)).\np(X) :- {X >= 1, X =< 0}.\n"
     assert oracle_answers(program, "p(X)", ["X"]) == []
     assert clausal_answers(program, "p(X)", ["X"], solver="legacy") == []
+
+
+# ---- fix round 1 -------------------------------------------------------------
+
+from fractions import Fraction  # noqa: E402
+
+from tests.clpq_oracle import _parse_clausal_line, _value  # noqa: E402
+
+
+@needs_scryer
+def test_aliased_shown_variables_keep_their_answer():
+    program = ":- use_module(library(clpq)).\na(X, Y) :- X = Y, {X >= 1}.\n"
+    oracle = oracle_answers(program, "a(X, Y)", ["X", "Y"])
+    assert len(oracle) == 1
+    clausal = clausal_answers(program, "a(X, Y)", ["X", "Y"], solver="legacy")
+    ok, why = same_solution_sets(oracle, clausal)
+    assert ok, why
+
+
+@needs_scryer
+def test_a_failing_dump_raises_instead_of_dropping_the_answer(monkeypatch):
+    import tests.clpq_oracle as tool
+    broken = tool._SCRYER_HELPER.replace("dump(Free, FreeNames, Cs0)", "fail")
+    monkeypatch.setattr(tool, "_SCRYER_HELPER", broken)
+    program = ":- use_module(library(clpq)).\np(X) :- {X >= 1}.\n"
+    with pytest.raises(RuntimeError, match="dump_failed"):
+        oracle_answers(program, "p(X)", ["X"])
+
+
+def test_a_forced_value_in_the_residual_is_a_binding():
+    a = [Answer({"X": Fraction(3)}, ["Y>=X"])]
+    b = [Answer({}, ["X = 3", "Y >= 3"])]
+    ok, why = same_solution_sets(a, b)
+    assert ok, why
+
+
+def test_an_equality_of_shown_variables_is_one_canonical_form():
+    clausal = [_parse_clausal_line("Y = X, {X >= 1}.", ["X", "Y"])]
+    oracle = [Answer({}, ["X=Y", "X>=1"])]
+    ok, why = same_solution_sets(oracle, clausal)
+    assert ok, why
+
+
+def test_division_keeps_prolog_precedence():
+    assert not same_solution_sets([Answer({}, ["Y=X/2/3"])], [Answer({}, ["Y=3/2*X"])])[0]
+    assert same_solution_sets([Answer({}, ["Y=X/2/3"])], [Answer({}, ["Y=1/6*X"])])[0]
+
+
+def test_a_float_in_a_residual_is_refused():
+    with pytest.raises(ValueError):
+        same_solution_sets([Answer({}, ["X>=0.1"])], [Answer({}, ["X>=1/10"])])
+
+
+def test_only_arithmetic_is_evaluated():
+    with pytest.raises(ValueError):
+        same_solution_sets([Answer({}, ["X=X.__class__"])], [Answer({}, [])])
+
+
+def test_an_answer_item_that_is_not_a_binding_is_refused():
+    with pytest.raises(ValueError):
+        _parse_clausal_line("X*Y = 6, {X >= 1}.", ["X", "Y"])
+    with pytest.raises(ValueError):
+        _parse_clausal_line("dif(X, Y).", ["X", "Y"])
+    assert _parse_clausal_line("_A = 1, X = 2.", ["X"]).bindings == {"X": 2}
+
+
+def test_bindings_compare_by_kind_and_value():
+    assert not same_solution_sets([Answer({"X": 0.5}, [])],
+                                  [Answer({"X": Fraction(1, 2)}, [])])[0]
+    assert same_solution_sets([Answer({"X": 1}, [])], [Answer({"X": Fraction(1)}, [])])[0]
+
+
+def test_parenthesised_negative_rationals_parse():
+    assert _value("(-1)/2") == Fraction(-1, 2)
+    assert _value("-(1 rdiv 2)") == Fraction(-1, 2)
+    assert _value("f(Y)") == "f(Y)"
+
+
+def test_clausal_answers_do_not_need_scryer(monkeypatch):
+    import tests.clpq_oracle as tool
+    monkeypatch.setattr(tool, "SCRYER", "/nonexistent/scryer-prolog")
+    program = ":- use_module(library(clpq)).\np(X) :- {X >= 1}.\n"
+    assert tool.clausal_answers(program, "p(X)", ["X"], solver="legacy") == [
+        Answer({}, ["X >= 1"])]

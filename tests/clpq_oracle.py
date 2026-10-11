@@ -10,6 +10,7 @@ constraints left on them, as strings such as ``X+Y=<3`` (``N rdiv D`` and
 them equivalent over the shown variables; variables whose names start with
 ``_`` are internal and are existentially closed on each side.
 """
+import ast
 import os
 import pathlib
 import re
@@ -31,9 +32,7 @@ _RELATIONS = {"=<": lambda a, b: a <= b, ">=": lambda a, b: a >= b,
               "=": lambda a, b: a == b, "=:=": lambda a, b: a == b,
               "=\\=": lambda a, b: a != b}
 _SPLIT = re.compile(r"(=<|>=|=:=|=\\=|<|>|=)")
-_RATIONAL = re.compile(r"(?<![\w.])(\d+)\s*/\s*(\d+)")
-_NAME = re.compile(r"\b[A-Z_][A-Za-z0-9_]*\b")
-_MAKE_RATIONAL = "__rational__"
+_VARIABLE = re.compile(r"^[A-Z_][A-Za-z0-9_]*$")
 
 
 def _normal(text):
@@ -41,49 +40,128 @@ def _normal(text):
     return re.sub(r"\s+", "", text.replace(" rdiv ", "/").replace("^", "**"))
 
 
+# ---- arithmetic: an ast whitelist, never eval ------------------------------
+#
+# Python's + - * / ** have Prolog's precedence and associativity for the
+# operators a residual uses (*, / and rdiv are all 400 yfx; ^ binds tighter),
+# so `X/2/3` parses as (X/2)/3 on both (test_division_keeps_prolog_precedence).
+
+class _NotConstant(Exception):
+    pass
+
+
+def _parse(text):
+    try:
+        return ast.parse(_normal(text), mode="eval").body
+    except SyntaxError as error:
+        raise ValueError(f"not an arithmetic expression: {text!r}") from error
+
+
+def _is_int(node):
+    return (isinstance(node, ast.Constant) and type(node.value) is int)
+
+
+def _exponent(node):
+    if _is_int(node):
+        return node.value
+    if (isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub)
+            and _is_int(node.operand)):
+        return -node.operand.value
+    raise ValueError(f"exponent is not an integer: {ast.unparse(node)}")
+
+
+def _arithmetic(node, name, number, rational):
+    """Walk *node*: *name(id)* for a variable, *number(int)* for a constant,
+    *rational(n, d)* for an int/int division; anything else is refused."""
+    if isinstance(node, ast.Constant):
+        if type(node.value) is not int:
+            raise ValueError(f"constant is not an integer: {node.value!r}")
+        return number(node.value)
+    if isinstance(node, ast.Name):
+        return name(node.id)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+        value = _arithmetic(node.operand, name, number, rational)
+        return -value if isinstance(node.op, ast.USub) else value
+    if isinstance(node, ast.BinOp):
+        if isinstance(node.op, ast.Div) and _is_int(node.left) and _is_int(node.right):
+            return rational(node.left.value, node.right.value)
+        if isinstance(node.op, ast.Pow):
+            return _arithmetic(node.left, name, number, rational) ** _exponent(node.right)
+        left = _arithmetic(node.left, name, number, rational)
+        right = _arithmetic(node.right, name, number, rational)
+        if isinstance(node.op, ast.Add):
+            return left + right
+        if isinstance(node.op, ast.Sub):
+            return left - right
+        if isinstance(node.op, ast.Mult):
+            return left * right
+        if isinstance(node.op, ast.Div):
+            return left / right
+    raise ValueError(f"not allowed in a residual: {ast.unparse(node)}")
+
+
 def _expression(text, names):
-    """A residual side (``2*X + 1/3 - Y``) as a z3 term over *names*."""
-    text = _RATIONAL.sub(rf"({_MAKE_RATIONAL}(\1,\2))", _normal(text))
-    return eval(text, {_MAKE_RATIONAL: z3.Q, "__builtins__": {}}, names)  # noqa: S307
+    """A residual side (``2*X + 1/3 - Y``) as a z3 term; variables go in *names*."""
+    def variable(identifier):
+        if identifier not in names:
+            names[identifier] = z3.Real(identifier)
+        return names[identifier]
+    return _arithmetic(_parse(text), variable, z3.RealVal, z3.Q)
+
+
+def _constant(text):
+    """*text* as an exact Fraction; _NotConstant when it mentions a variable."""
+    def variable(identifier):
+        raise _NotConstant(identifier)
+    return _arithmetic(_parse(text), variable, Fraction, Fraction)
+
+
+def _sides(constraint):
+    constraint = constraint.strip()
+    if constraint.startswith("{") and constraint.endswith("}"):
+        constraint = constraint[1:-1]
+    left, relation, right = _SPLIT.split(_normal(constraint), maxsplit=1)
+    return left, relation, right
 
 
 def _formula(residual, names):
-    parts = []
+    """The conjunction of *residual*, and the variable names it mentions."""
+    parts, mentioned = [], {}
     for constraint in residual:
-        constraint = constraint.strip().strip("{}")
-        left, relation, right = _SPLIT.split(constraint, maxsplit=1)
-        parts.append(_RELATIONS[relation](_expression(left, names),
-                                          _expression(right, names)))
-    return z3.And(parts) if parts else z3.BoolVal(True)
-
-
-def _names(*residuals):
-    found = set()
-    for residual in residuals:
-        for constraint in residual:
-            found.update(_NAME.findall(constraint))
-    return {n: z3.Real(n) for n in found}
+        left, relation, right = _sides(constraint)
+        parts.append(_RELATIONS[relation](_expression(left, mentioned),
+                                          _expression(right, mentioned)))
+    for identifier, variable in mentioned.items():
+        names.setdefault(identifier, variable)
+    return (z3.And(parts) if parts else z3.BoolVal(True)), set(mentioned)
 
 
 def _closed(residual, names):
     """The residual's formula with its internal (``_``) variables existential."""
-    mentioned = set()
-    for constraint in residual:
-        mentioned.update(_NAME.findall(constraint))
+    body, mentioned = _formula(residual, names)
     inner = [names[n] for n in sorted(mentioned) if n.startswith("_")]
-    body = _formula(residual, names)
     return z3.Exists(inner, body) if inner else body
 
 
-def _equivalent(first, second):
-    """``(True, "")``, or ``(False, why)`` when z3 finds no proof of equivalence."""
+def _rename_internal(residual, side):
+    return [re.sub(r"\b(_[A-Za-z0-9_]*)", rf"\1__{side}", c) for c in residual]
+
+
+def _equivalent(first, second, bindings=None):
+    """``(True, "")``, or ``(False, why)`` when z3 finds no proof of equivalence.
+
+    *bindings* (the shown variables' values, equal on both sides) are
+    conjoined to both residuals, so ``Y >= X`` with ``X = 3`` is ``Y >= 3``.
+    """
     # Each side's internal names are renamed apart, so `_A` on the left and
     # `_A` on the right are different variables.
-    first = [re.sub(r"\b(_[A-Za-z0-9_]*)", r"\1__left", c) for c in first]
-    second = [re.sub(r"\b(_[A-Za-z0-9_]*)", r"\1__right", c) for c in second]
-    names = _names(first, second)
+    first = _rename_internal(first, "left")
+    second = _rename_internal(second, "right")
+    known = [f"{name}={value.numerator}/{value.denominator}"
+             for name, value in (bindings or {}).items() if _is_rational(value)]
+    names = {}
     solver = z3.Solver()
-    solver.add(z3.Not(_closed(first, names) == _closed(second, names)))
+    solver.add(z3.Not(_closed(first + known, names) == _closed(second + known, names)))
     verdict = solver.check()
     if verdict == z3.unsat:
         return True, ""
@@ -95,14 +173,73 @@ def _equivalent(first, second):
     return False, f"z3 could not decide ({solver.reason_unknown()})"
 
 
+# ---- normal form before comparing (ruling R9) ------------------------------
+
+def _is_rational(value):
+    return type(value) in (int, Fraction)
+
+
+def _binding_key(value):
+    """Bindings compare by kind and value: 1 == Fraction(1), but 0.5 != 1/2."""
+    if _is_rational(value):
+        return ("rational", Fraction(value))
+    return (type(value).__name__, value)
+
+
+def _shown(text):
+    return bool(_VARIABLE.match(text)) and not text.startswith("_")
+
+
+def _equality(first, second):
+    first, second = sorted((first, second))
+    return f"{first}={second}"
+
+
+def _normalised(answer):
+    """*answer* in one form for both systems.
+
+    A residual ``X = c`` (shown variable, constant) becomes the binding
+    ``X = c``; an equality of two shown variables, whether printed as a
+    binding (``Y = X``) or a constraint, becomes the one constraint
+    ``X=Y`` with the names sorted.
+    """
+    bindings, residual = {}, []
+    for name, value in answer.bindings.items():
+        if isinstance(value, str) and _shown(value.strip()):
+            residual.append(_equality(name, value.strip()))
+        else:
+            bindings[name] = value
+    for constraint in answer.residual:
+        left, relation, right = _sides(constraint)
+        if relation == "=" and _shown(left) and _shown(right):
+            residual.append(_equality(left, right))
+            continue
+        if relation == "=":
+            for variable, other in ((left, right), (right, left)):
+                if _shown(variable) and variable not in bindings:
+                    try:
+                        bindings[variable] = _constant(other)
+                        break
+                    except _NotConstant:
+                        pass
+            else:
+                residual.append(constraint)
+            continue
+        residual.append(constraint)
+    return Answer(bindings, residual)
+
+
 def same_solution_sets(left, right):
     """Compare two answer lists in order: ``(True, "")`` or ``(False, why)``."""
     if len(left) != len(right):
         return False, f"{len(left)} answers against {len(right)}"
     for i, (a, b) in enumerate(zip(left, right)):
-        if a.bindings != b.bindings:
+        a, b = _normalised(a), _normalised(b)
+        a_keys = {n: _binding_key(v) for n, v in a.bindings.items()}
+        b_keys = {n: _binding_key(v) for n, v in b.bindings.items()}
+        if a_keys != b_keys:
             return False, f"answer {i}: bindings {a.bindings} against {b.bindings}"
-        ok, why = _equivalent(a.residual, b.residual)
+        ok, why = _equivalent(a.residual, b.residual, a.bindings)
         if not ok:
             return False, f"answer {i}: residual {a.residual} against {b.residual}: {why}"
     return True, ""
@@ -110,17 +247,19 @@ def same_solution_sets(left, right):
 
 # ---- values ---------------------------------------------------------------
 
-_NUMBER = re.compile(r"^(-?)\(?(-?\d+)(?:/(\d+))?\)?$")
-
-
 def _value(text):
-    """A printed binding as a Fraction, or the text itself when it is not a number."""
-    found = _NUMBER.match(_normal(text))
-    if not found:
-        return text.strip()
-    sign, numerator, denominator = found.groups()
-    number = Fraction(int(numerator), int(denominator or 1))
-    return -number if sign else number
+    """A printed binding: a Fraction for an exact number, a float for a float
+    literal, otherwise the text itself."""
+    text = text.strip()
+    try:
+        return _constant(text)
+    except _NotConstant:
+        return text
+    except ValueError:
+        try:
+            return float(text)
+        except ValueError:
+            return text
 
 
 def _skip_without_scryer():
@@ -132,26 +271,44 @@ def _skip_without_scryer():
 
 #: Loaded after the program.  Prints each answer as ``answer``, then one
 #: ``binding<TAB>Name<TAB>Value`` line per bound shown variable and one
-#: ``constraint<TAB>C`` line per residual constraint, then ``end``.  dump/3
-#: refuses a bound variable, so it gets only the unbound ones; the internal
+#: ``constraint<TAB>C`` line per residual constraint, then ``end``.
+#:
+#: dump/3 raises on a bound variable and FAILS when two of its variables are
+#: the same variable (`a(X, Y) :- X = Y`), so it gets one representative of
+#: each group of unbound shown variables, and the others are printed as
+#: ``R=N`` equalities (test_aliased_shown_variables_keep_their_answer).  A
+#: dump that still fails throws, so an answer is never dropped
+#: (test_a_failing_dump_raises_instead_of_dropping_the_answer).  The internal
 #: variables left in its constraints are named `_I1`, `_I2`, ... .
 _SCRYER_HELPER = r"""
 :- use_module(library(clpq)).
 :- use_module(library(lists)).
 :- use_module(library(iso_ext)).
 
-'$clpq_oracle_split'([], [], [], [], []).
-'$clpq_oracle_split'([V|Vs], [N|Ns], Free, FreeNames, Bound) :-
-    (   var(V)
-    ->  Free = [V|Free1], FreeNames = [N|FreeNames1], Bound = Bound1
-    ;   Free = Free1, FreeNames = FreeNames1, Bound = [N-V|Bound1]
+'$clpq_oracle_split'([], [], _, [], [], [], []).
+'$clpq_oracle_split'([V|Vs], [N|Ns], Seen, Free, FreeNames, Bound, Aliases) :-
+    (   nonvar(V)
+    ->  Free = Free1, FreeNames = FreeNames1, Bound = [N-V|Bound1],
+        Aliases = Aliases1, Seen1 = Seen
+    ;   '$clpq_oracle_seen'(Seen, V, R)
+    ->  Free = Free1, FreeNames = FreeNames1, Bound = Bound1,
+        Aliases = [R=N|Aliases1], Seen1 = Seen
+    ;   Free = [V|Free1], FreeNames = [N|FreeNames1], Bound = Bound1,
+        Aliases = Aliases1, Seen1 = [V-N|Seen]
     ),
-    '$clpq_oracle_split'(Vs, Ns, Free1, FreeNames1, Bound1).
+    '$clpq_oracle_split'(Vs, Ns, Seen1, Free1, FreeNames1, Bound1, Aliases1).
+
+'$clpq_oracle_seen'([W-R|_], V, R) :- W == V, !.
+'$clpq_oracle_seen'([_|Seen], V, R) :- '$clpq_oracle_seen'(Seen, V, R).
 
 '$clpq_oracle_answer'(Vs, Ns, Copy-Cs) :-
-    '$clpq_oracle_split'(Vs, Ns, Free, FreeNames, Bound),
-    dump(Free, FreeNames, Cs0),
-    copy_term(Bound-Cs0, Copy-Cs, _),
+    '$clpq_oracle_split'(Vs, Ns, [], Free, FreeNames, Bound, Aliases),
+    (   dump(Free, FreeNames, Cs0)
+    ->  true
+    ;   throw(clpq_oracle(dump_failed, Ns))
+    ),
+    append(Aliases, Cs0, Cs1),
+    copy_term(Bound-Cs1, Copy-Cs, _),
     term_variables(Cs, Inner),
     '$clpq_oracle_name'(Inner, 1).
 
@@ -198,6 +355,8 @@ def _parse_oracle(stdout):
             current.residual.append(rest)
         elif kind == "end":
             ended = True
+    if "clpq_oracle(dump_failed" in stdout:
+        raise RuntimeError(f"Scryer's dump/3 failed (dump_failed):\n{stdout}")
     if not ended:
         raise RuntimeError(f"Scryer did not finish the query:\n{stdout}")
     return answers
@@ -254,10 +413,13 @@ def _parse_clausal_line(line, variables):
             answer.residual.extend(_top_level_items(item[1:-1]))
             continue
         name, equals, value = item.partition(" = ")
-        if not equals:
-            raise ValueError(f"unparsed answer item {item!r} in {line!r}")
-        if name.startswith("_") or name not in variables:
+        name = name.strip()
+        if not equals or not _VARIABLE.match(name):
+            raise ValueError(f"answer item {item!r} is not a binding, in {line!r}")
+        if name.startswith("_"):
             continue
+        if name not in variables:
+            raise ValueError(f"answer binds {name}, which is not among {variables}")
         answer.bindings[name] = _value(value)
     return answer
 
@@ -268,7 +430,6 @@ def clausal_argv(goal):
 
 def clausal_answers(program_text: str, goal: str, variables: list, solver: str) -> list:
     """Every answer of *goal* on Clausal with ``CLAUSAL_CLPQ=solver``, in order."""
-    _skip_without_scryer()
     environment = dict(os.environ, CLAUSAL_PL_FRONTEND="native", CLAUSAL_CLPQ=solver,
                        PYTHONPATH=str(_ROOT))
     with tempfile.TemporaryDirectory() as directory:
