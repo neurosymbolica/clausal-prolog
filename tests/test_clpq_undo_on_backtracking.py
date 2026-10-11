@@ -105,3 +105,19 @@ def test_undo_restores_the_store(seed):
     t2, xs2 = Trail(), [Var() for _ in range(n)]
     assert all(_post(t2, xs2, c) for c in base)
     assert got == _probe(t2, xs2, objs)
+
+
+_DIF = """\
+:- use_module(library(clpq)).
+p(Z) :- {Z >= 0, Z =< 10}, {X =< 3}, dif(X-Z, 3-5), {X >= 3}, Z = 4.
+"""
+
+
+def test_a_trial_unify_inside_a_post_leaves_no_binding(tmp_path):
+    # dif/2's hook marks the trail, tries a unification (which wakes the
+    # CLP(Q) hook) and undoes it, all inside one CLP(Q) post: one snapshot
+    # per post left Z fixed at 5 in the store (fourth review, 2026-10-11).
+    p = tmp_path / "dif_trial.clausal"
+    p.write_text(_DIF)
+    z = Var()
+    assert [deref(z) for _ in solve(("p", z), load_clausal_module(p))] == [4]

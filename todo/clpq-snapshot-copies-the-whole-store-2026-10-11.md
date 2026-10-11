@@ -5,13 +5,16 @@
 that backtracking can restore it.  A conjunction of n posts therefore costs
 O(n^2) time and memory.  The 2026-10-11 measurement used 2,000 posts:
 
-    chain  X_i = X_{i+1} + 1, then 0 =< X_i      21 s, 3.0 GB peak RSS
-    bounds 0 =< X_i =< i + 5                      2.5 s, 640 MB
+    chain  X_i = X_{i+1} + 1, then 0 =< X_i      21 s, 3.9 GB peak RSS
+    bounds 0 =< X_i =< i + 5                      2.4 s, 950 MB
 
 The copy used to be skipped when the trail had not grown since the last
 one.  That was unsound: a choice point can be taken at that very length,
-and the change after it was then never undone.  Each call now takes
-exactly one copy, which is about 2.5x the old memory on `chain`.
+and the change after it was then never undone.  Sharing one copy per
+public call is unsound too: `dif/2`'s hook marks the trail, tries a
+unification that wakes the CLP(Q) hook, and undoes it, all inside one
+post.  So every snapshot request copies: about 3x the old memory
+(1.2 GB on `chain`).
 
 The fix is incremental undo: record each change to rows, bounds,
 assignments and parametric definitions on the trail, and undo it entry by
