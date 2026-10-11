@@ -235,10 +235,14 @@ def export_bindings(bindings, trail):
 
 
 def export_binding(first, second, trail):
-    """bv.pl, export_binding/2: `first = second`, where the one that is not a
-    variable is a rational (test_export_binding)."""
-    if is_var(first):                                       # clause 1
-        return unify(first, to_number(second), trail)
+    """bv.pl, export_binding/2: `first = second`.  In clause 1 *second* is
+    whatever the caller passes: a variable, or a rational (nf.pl passes
+    one), which becomes an engine number
+    (test_export_binding, test_export_binding_of_two_variables_unifies_them)."""
+    if is_var(first):                                       # clause 1: Y = X
+        if type(second) is tuple:               # a rational
+            second = to_number(second)
+        return unify(first, second, trail)
     if is_zero(first):                                      # clause 2
         return unify(second, to_number(ZERO), trail)
     return unify(to_number(first), second, trail)
@@ -585,7 +589,10 @@ def _float_of(rational):
 def decrease_evaluate(terms):
     """bv.pl, decrease_evaluate/2 (dec_eval/2).  Returns a list of
     (Delta, Action) pairs, an unlimited status, or None where it fails.  An
-    Action is (PIVOT_EXCHANGE or PIVOT_OR_BOUND_SWAP, Vub, V, Vb, Wd)."""
+    Action is (PIVOT_EXCHANGE or PIVOT_OR_BOUND_SWAP, Vub, V, Vb, Wd).  An
+    unlimited term after a listed one returns the status outright; 1.3.3
+    leaves it as the tail of a partial list (DEVIATIONS.md D10,
+    test_decrease_evaluate_returns_unlimited_after_a_listed_term)."""
     result = []
     for variable, coefficient in terms:
         state = state_of(variable)

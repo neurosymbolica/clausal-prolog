@@ -238,3 +238,18 @@ forms, so 1.3.3 never gets there.  The port raises `ValueError` at once
 (`test_dereference_of_a_non_linear_monomial_raises`), as D5 does for
 `renormalize`.  1.3.3 gives no answer in this case either, so no answer
 changes.
+
+## D10: `decrease_evaluate` returns `unlimited` outright
+
+bv.pl `decrease_evaluate/2` (`dec_eval/2`) builds its result as
+`Res = [Delta-Action | Tail]` and recurses on `Tail`.  When a later term is
+unlimited, `Tail = unlimited(V, T)` closes the list with that term, giving
+the improper list `[Delta-Action | unlimited(V, T)]`.  `decrease_step_best/2`
+then matches `E = [_|_]` and calls `keysort/2` on it, which raises a type
+error.  Only an unlimited first term comes back as `unlimited(V, T)` itself.
+The port returns the unlimited status whatever its position
+(`test_decrease_evaluate_returns_unlimited_after_a_listed_term`), so
+`decrease_step_best` reports `unlimited` where 1.3.3 raises.  Both
+predicates are dead code in 1.3.3: the one call, in `iterate_decrease/2`, is
+commented out.
+

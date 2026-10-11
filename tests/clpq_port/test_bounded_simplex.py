@@ -789,3 +789,28 @@ def test_select_dependent_orders_components_by_creation():
     assert components[0]._id < components[1]._id
     assert new_variables == [c]
     assert chosen[:2] == (2, a)          # category 2 (old, t_none) beats 3 and 4
+
+
+def test_export_binding_of_two_variables_unifies_them():
+    # bv.pl export_binding/2 clause 1: var(Y), Y = X, whatever X is
+    trail = Trail()
+    x, y = Var(), Var()
+    assert bv.export_binding(x, y, trail)
+    assert deref(x) is deref(y)
+    z = Var()
+    assert bv.export_binding(z, ZERO, trail) and deref(z) == 0
+
+
+def test_decrease_evaluate_returns_unlimited_after_a_listed_term():
+    # DEVIATIONS.md D10: 1.3.3 gives [Delta-Action|unlimited(V, T)] here
+    trail = Trail()
+    x = _bounded(trail, bounds_upper_active(q(5)))
+    s = Var()
+    assert bv.variable_with_definition_intern(
+        bounds_lower(ZERO), s, LinearForm(q(5), ZERO, [(x, ONE)]), 0, trail)
+    assert bv.basis_add(s, trail) is not False
+    free = _bounded(trail, bounds_none())
+    evaluated = bv.decrease_evaluate([(x, ONE)])
+    assert type(evaluated) is list and len(evaluated) == 1
+    status = bv.decrease_evaluate([(x, ONE), (free, ONE)])
+    assert status == (bv.STATUS_UNLIMITED, free, bounds_none())
