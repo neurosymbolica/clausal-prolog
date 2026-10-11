@@ -521,9 +521,8 @@ def test_not_equal():
     assert nf.post_constraint(ArithNeq(left=3, right=3), trail) is False
     x = Var()
     assert nf.post_constraint(ArithNeq(left=x, right=3), trail)
-    mark = trail.mark()
-    assert nf.post_constraint(ArithEq(left=x, right=3), trail) is not None
-    trail.undo(mark)
+    with pytest.raises(LogicException):         # needs Task 11's hook (D13)
+        nf.post_constraint(ArithEq(left=x, right=3), trail)
     y = Var()
     assert nf.post_constraint(ArithNeq(left=Mult(left=y, right=y), right=4), trail)
     assert attribute_goal(y)[0][0] is nf.resubmit_not_equal
@@ -541,8 +540,9 @@ def test_compare_chain_and_cells():
     assert _inf(y, trail) == 0 and _sup(y, trail) == 2
     assert nf.post_constraint(("<=", y, 1), trail)
     assert _sup(y, trail) == 1
-    assert nf.post_constraint(("()", ("=:=", y, Fraction(1, 2)),), trail)
-    assert deref(y) == Fraction(1, 2)
+    z = Var()
+    assert nf.post_constraint(("()", ("=:=", z, Fraction(1, 2)),), trail)
+    assert deref(z) == Fraction(1, 2)
 
 
 def test_a_variable_or_a_non_constraint_raises():
@@ -581,7 +581,8 @@ def test_entailed_leaves_the_store_as_it_was():
     assert nf.entailed((",", (">=", x, 1), ("=<", y, 2)), trail)
     assert not nf.entailed((",", (">=", x, 1), ("=<", y, 1)), trail)
     assert nf.entailed((";", (">=", x, 5), ("=<", y, 2)), trail)
-    assert not nf.entailed(ArithNeq(left=x, right=1), trail)
+    with pytest.raises(LogicException):         # {X = 1}: needs Task 11 (D13)
+        nf.entailed(ArithNeq(left=x, right=1), trail)
     assert (state_of(x), state_of(y)) == before
 
 
@@ -668,8 +669,10 @@ def test_maximize_waits_for_a_linear_objective():
     (pending,) = attribute_goal(x)
     assert pending[0] is nf.wait_linear_retry
     assert pending[1].procedure is bv.minimize_linear
-    assert _bind(y, 1, trail)
-    assert attribute_goal(x) is None
+    # It ends in {Dep =:= Inf} on the interned Dep: D13's interim error.
+    with pytest.raises(LogicException) as caught:
+        _bind(y, 1, trail)
+    assert "clpq_binding_needs_hook" in str(caught.value.term)
 
 
 # ---------------------------------------------------------------- nfq.pl translate_goal//1
@@ -701,7 +704,7 @@ def test_translate_goal_of_wait_linear_retry_reaches_res_and_the_goal():
     record = pending[1]
     goals = nf.translate_goal(*pending)
     assert goals == [(":", "clpq", ("{}", ("=", ("*", y, x), record.result))),
-                     (":", "clpq", ("infimum_linear", record.result, infimum, (), ()))]
+                     (":", "clpq", ("infimum_linear", record.result, infimum, [], []))]
     reachable = project_nonlinear([], [x], trail, nf.translate_goal)
     assert reachable == sorted([x, y, record.result, infimum], key=lambda v: v._id)
 
@@ -717,6 +720,131 @@ def test_translate_is_plugged_into_delayed_goals():
 def test_translate_goal_refuses_a_goal_nf_does_not_delay():
     with pytest.raises(ValueError):
         nf.translate_goal(print, None)
+
+
+# ---------------------------------------------------------------- fix round 1
+
+def test_binding_a_variable_the_store_holds_raises():
+    # Until Task 11's hook, {X = 1} on a variable in the store raises the
+    # interim error (D13) instead of leaving the store on a number.
+    trail = Trail()
+    x, y = Var(), Var()
+    assert nf.post_constraint(LtE(left=Add(left=x, right=y), right=3), trail)
+    with pytest.raises(LogicException) as caught:
+        nf.post_constraint(ArithEq(left=x, right=1), trail)
+    assert "system_error" in str(caught.value.term)
+    assert "clpq_binding_needs_hook" in str(caught.value.term)
+    assert is_var(deref(x))
+    assert _sup(y, trail) is None                           # still sound
+    a, b = Var(), Var()
+    assert nf.post_constraint(ArithEq(left=Mult(left=a, right=b), right=6), trail)
+    with pytest.raises(LogicException):                     # a pending goal
+        nf.post_constraint(ArithEq(left=a, right=2), trail)
+    with pytest.raises(LogicException):                     # b3 on a bound
+        c = Var()
+        assert nf.post_constraint(GtE(left=c, right=0), trail)
+        nf.post_constraint(ArithEq(left=Mult(left=c, right=c), right=0), trail)
+
+
+@pytest.mark.parametrize("constraint, kind", [
+    (ArithEq(left=("sin", Var()), right=2), "undefined"),
+    (ArithEq(left=Var(), right=("^", 0, Fraction(-1, 2))), "undefined"),
+    (ArithEq(left=Var(), right=("^", 2, Fraction(10001, 2))), "float_overflow"),
+])
+def test_evaluation_errors_reach_the_caller_as_iso_errors(constraint, kind):
+    from clausal.logic.exceptions import evaluation_error, evaluation_error_kind
+    with pytest.raises(LogicException) as caught:
+        nf.post_constraint(constraint, Trail())
+    assert evaluation_error_kind(caught.value) == evaluation_error(kind)[1][1]
+
+
+def test_a_caller_resumes_a_posted_disjunction():
+    # {X =< 1 ; X >= 2}, then {X >= 3}: the second fails on the first
+    # branch; resuming takes the second branch, and {X >= 3} then holds.
+    trail = Trail()
+    x = Var()
+    state = nf.post_constraint_with_choices((";", ("=<", x, 1), (">=", x, 2)), trail)
+    assert state is not None and _sup(x, trail) == 1
+    mark = trail.mark()
+    assert nf.post_constraint(GtE(left=x, right=3), trail) is False
+    trail.undo(mark)
+    assert nf.resume_constraint(state, trail)
+    assert _inf(x, trail) == 2 and _sup(x, trail) is None
+    assert nf.post_constraint(GtE(left=x, right=3), trail)
+    assert _inf(x, trail) == 3
+    assert nf.resume_constraint(state, trail) is False      # no branch left
+    assert nf.post_constraint_with_choices(("<", 1, 0), trail) is None
+
+
+def test_resuming_keeps_the_choices_of_the_branch_taken():
+    trail = Trail()
+    x = Var()
+    state = nf.post_constraint_with_choices(
+        (";", ("=<", x, 1), (";", (">=", x, 5), (">=", x, 2))), trail)
+    assert _sup(x, trail) == 1
+    assert nf.resume_constraint(state, trail) and _inf(x, trail) == 5
+    assert nf.resume_constraint(state, trail) and _inf(x, trail) == 2
+    assert nf.resume_constraint(state, trail) is False
+
+
+_DEPTH = 3_000
+
+
+def _nested_sine(argument, depth):
+    term = argument
+    for _ in range(depth):
+        term = ("sin", term)
+    return term
+
+
+def _limited(function):
+    limit = sys.getrecursionlimit()
+    sys.setrecursionlimit(_depth() + 120)
+    try:
+        return function()
+    finally:
+        sys.setrecursionlimit(limit)
+
+
+def test_a_deeply_nested_invertible_equation_needs_no_recursion():
+    trail = Trail()
+    x = Var()
+    term = ArithEq(left=_nested_sine(Add(left=x, right=-1), _DEPTH), right=0)
+    assert _limited(lambda: nf.post_constraint(term, trail))
+    assert deref(x) == 1
+
+
+def test_deeply_nested_bases_compare_without_recursion():
+    x, y = Var(), Var()
+    first = nf.normal_form(_nested_sine(x, _DEPTH))[0].powers[0][0]
+    again = nf.normal_form(_nested_sine(x, _DEPTH))[0].powers[0][0]
+    other = nf.normal_form(_nested_sine(y, _DEPTH))[0].powers[0][0]
+    assert _limited(lambda: nf.compare_bases(first, again)) == 0
+    assert _limited(lambda: nf.compare_bases(first, other)) == -1
+    assert _limited(lambda: nf.compare_bases(other, first)) == 1
+    total = _limited(lambda: nf.normal_form(Add(left=_nested_sine(x, _DEPTH),
+                                                    right=_nested_sine(x, _DEPTH))))
+    assert len(total) == 1 and total[0].coefficient == q(2)
+
+
+def test_deeply_nested_bases_repair_without_recursion():
+    trail = Trail()
+    x, y = Var(), Var()
+    norm = nf.normal_form(Add(left=_nested_sine(x, _DEPTH), right=y))
+    assert unify(x, 0, trail)
+    repaired = _limited(lambda: nf.repair(norm))
+    assert _as_dict(repaired) == {((y._id, 1),): 1}
+
+
+def test_deeply_nested_bases_become_terms_without_recursion():
+    x = Var()
+    norm = nf.normal_form(_nested_sine(x, _DEPTH))
+    term = _limited(lambda: nf.normal_form_to_term(norm))
+    depth = 0
+    while type(term) is tuple:
+        assert term[0] == "sin"
+        term, depth = term[1], depth + 1
+    assert depth == _DEPTH and term is x
 
 
 def test_the_module_has_its_provenance_header():

@@ -89,6 +89,27 @@ Sites in `class.pl` and `geler.pl` (Task 7):
   on a `LaterWork` queue and run after the hook
   (`test_verify_delayed_against_a_value_queues_the_goals`).
 
+The engine's hook contract, which Task 11 builds on (checked 2026-10-12
+with a probe key, Task 10 fix round 1):
+
+- The engine binds the newer variable to the older, whichever argument
+  order `unify` is given.
+- It calls hooks only for the keys of the variable it binds, as
+  `hook(value, other, trail)`, after the binding: `value` is that
+  variable's attribute, `other` what it is now bound to.  Binding a
+  variable without attributes to an attributed one calls nothing.
+- `get_attr` dereferences: for a variable bound to another it reads the
+  other's attributes (not its own), and for one bound to a number it
+  returns None.
+
+So for the X the hook is handling, `state_of(X)`,
+`compare_variable_order(X, _)`, `normal_form_right_hand_side(Form, X)` and
+`normal_form_coefficient_of(Form, X)` all return None, and
+`delete_factor_homogeneous` finds X only by the identity of the bound
+object.  Task 11 must take X out of the rows with the state it is handed
+(`value`), before anything walks them.  Until then nf.pl's own bindings of
+a stored variable raise (D13).
+
 Sites in `itf3.pl`: to be filled in by Task 11.
 
 ## D4: the order of variables is creation order
@@ -317,15 +338,45 @@ form, which `normal_form_to_term/2` shows in a delayed goal's residual
 `dereference/2`, which re-sorts it by `compare_variable_order` (D4), so
 linear answers do not depend on it.
 
-## D12: `{C1 ; C2}` gives the first answer only
+## D12: a posted `{C1 ; C2}` hands its choice points to the caller
 
 nf.pl's `{R ; Rs}` (`{}/1` clause 3, "for entailment checking") is a choice
 point: on backtracking `{C1 ; C2}` gives the answers of C2 after those of C1.
-The port's `post_constraint` returns a bool, as every port goal does (D7):
-it tries the branches in order, undoing to the latest choice when a later
-part of the same `{}` fails, and keeps the first way the whole constraint
-succeeds (`test_a_disjunction_is_retried_when_a_later_constraint_fails`).
-For `entailed/1`, which needs only whether `{Cn}` has an answer, that is the
-same (`test_entailed_leaves_the_store_as_it_was`).  A program that
-backtracks into a posted `{C1 ; C2}` for its second answer gets none from
-the port; Task 14's adapter is where a nondeterministic `{}` would go.
+Port goals return a bool (D7), so the choice points are data:
+
+- Inside one `{}`, a later failure undoes to the latest choice point and
+  takes the other branch
+  (`test_a_disjunction_is_retried_when_a_later_constraint_fails`).
+- `post_constraint_with_choices` posts and returns a `ConstraintChoices`
+  (the stack of trail mark, other branch and the goals after it), or None
+  where it fails.  `resume_constraint(state, trail)` undoes to the newest
+  choice point, takes its other branch and the goals after it, and returns
+  True or, when no branch is left, False
+  (`test_a_caller_resumes_a_posted_disjunction`,
+  `test_resuming_keeps_the_choices_of_the_branch_taken`).
+- `post_constraint` drops the choice points; `entailed/1` needs only
+  whether `{Cn}` has an answer, so it uses that
+  (`test_entailed_leaves_the_store_as_it_was`).
+
+Ruling R18: the API must keep the choice point.  Task 14's adapter for
+`{}` posts with `post_constraint_with_choices`, yields one answer, and on
+backtracking calls `resume_constraint` with the same state until it
+returns False, as a generator over the engine's backtracking.  It must not
+call `post_constraint` for a constraint that holds `;`.
+
+## D13: an nf.pl binding of a stored variable raises until Task 11
+
+nf.pl binds a variable outside bv.pl's `solve/5` in three places:
+`submit_equal_single_term/1` b3 (`n*X^P = 0`), `submit_equal_constant_first/3`
+c11 (`K*X + I = 0`), and through c11 `minimize_linear/1`'s
+`{Dep =:= Inf}`.  In 1.3.3 that binding wakes itf3.pl's
+`verify_attributes/3`, which checks X's bounds and takes X out of the rows
+and the component.  Clausal has no hook for the port's key until Task 11, so
+the binding would leave the store holding a number where X was, and a later
+`inf/2` would crash.  The port fails closed: when X has a linear form, a
+component, or a delayed goal not yet run, it raises
+`system_error(clpq_binding_needs_hook)` instead of binding
+(`test_binding_a_variable_the_store_holds_raises`).  A delayed goal that
+has run (the one resubmitting now) does not count.  Cost until Task 11:
+`{X >= 0}, {X = 1}`, `entailed(X =\= 1)` on a stored X, and `maximize/1`
+raise where 1.3.3 answers.  Task 11 removes this check.

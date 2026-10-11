@@ -787,3 +787,34 @@ def test_decrease_evaluate_returns_unlimited_after_a_listed_term():
     assert type(evaluated) is list and len(evaluated) == 1
     status = bv.decrease_evaluate([(x, ONE), (free, ONE)])
     assert status == (bv.STATUS_UNLIMITED, free, bounds_none())
+
+
+def test_float_of_is_rational_to_float():
+    # bv.pl's float(X) in Q is arith.pl's rational_to_float/3, with its
+    # limit_encoding_length/5; the port's _float_of is that function.
+    from clausal.logic.clpq.arithmetic import rational_to_float
+    huge = (10**400 + 1, 3 * 10**399)
+    assert bv._float_of(huge) == rational_to_float(huge) == pytest.approx(10 / 3)
+    assert bv._float_of((-7, 2)) == -3.5
+
+
+def test_inf_2_passes_lists_for_vector_and_vertex():
+    # inf/2 is inf(Expression, Inf, [], []), as bv.pl's inf/2 calls inf/4.
+    from clausal.logic.clpq.normal_form import post_constraint
+    from clausal.pythonic_ast.nodes import LtE
+    seen = []
+    original = bv.infimum_linear
+
+    def spy(normal_form, argument, trail):
+        seen.append(argument[1:])
+        return original(normal_form, argument, trail)
+
+    trail = Trail()
+    x = Var()
+    assert post_constraint(LtE(left=1, right=x), trail)
+    bv.infimum_linear = spy
+    try:
+        assert bv.inf(x, Var(), trail)
+    finally:
+        bv.infimum_linear = original
+    assert seen == [([], [])]

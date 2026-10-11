@@ -44,20 +44,17 @@ Imports: nf.pl calls bv.pl and ineq.pl, and bv.pl calls nf.pl back
 call sites ("cyclic") and this module imports bounded_simplex and
 inequalities at the top.
 """
-from fractions import Fraction
-from decimal import Decimal
-
 from clausal.logic.cells import TUPLE_TAG, compound_cell_shape
 from clausal.logic.clpq.arithmetic import (
     ONE, ZERO, absolute, add, arc_cosine, arc_sine, arc_tangent,
     arithmetic_normalize, compare, cosine, divide, exponential_power,
-    is_zero, logarithm, maximum, minimum, multiply, rational_integer, sine,
+    is_number, is_zero, logarithm, maximum, minimum, multiply, rational_integer, sine,
     tangent, to_number)
 from clausal.logic.clpq.arithmetic import negate as negate_rational
 from clausal.logic.clpq.bounded_simplex import (
     dereference_balanced, export_binding, solve, solve_less,
     solve_less_or_equal, solve_not_equal)
-from clausal.logic.clpq.delayed_goals import delay_goal
+from clausal.logic.clpq.delayed_goals import delay_goal, nonexhausted
 from clausal.logic.clpq.inequalities import (
     inequality_one_variable,
     inequality_one_variable_nonstrict_negative_zero,
@@ -66,8 +63,9 @@ from clausal.logic.clpq.inequalities import (
     inequality_one_variable_strict_positive_zero)
 from clausal.logic.clpq.linear_forms import (
     MINUS_ONE, add_linear_forms, normalize_scalar)
+from clausal.logic.clpq.attributes import state_of
 from clausal.logic.exceptions import (
-    LogicException, instantiation_error, type_error)
+    LogicException, instantiation_error, system_error, type_error)
 from clausal.logic.variables import Var, deref, is_var
 from clausal.pythonic_ast import nodes as _nodes
 
@@ -162,25 +160,59 @@ def _conjunction_elements(term):
     return None
 
 
-def _is_engine_number(term):
-    kind = type(term)
-    return kind is int or kind is Fraction or kind is Decimal or kind is float
-
-
 # ---------------------------------------------------------------- {}/1
 
-def post_constraint(term, trail):
-    """nf.pl, {}/1: post the constraint *term*.
+class ConstraintChoices:
+    """The choice points `{R ; Rs}` (nf.pl `{}/1` clause 3) leaves: a stack
+    of (trail mark, the other branch, the goals after it), newest last.
+    resume_constraint takes the newest one; it is how a caller backtracks
+    into a posted `{}` (DEVIATIONS.md D12)."""
+    __slots__ = ("choices",)
 
-    `{R ; Rs}` is a choice in 1.3.3.  The port's goals are deterministic
-    (D7), so post_constraint returns the first way the whole constraint
-    succeeds: on a later failure it undoes back to the latest choice and
-    takes the other branch, and once everything has succeeded it keeps
-    that answer (DEVIATIONS.md D12,
-    test_a_disjunction_is_retried_when_a_later_constraint_fails).  The
-    conjunction and disjunction are a work list, not recursion."""
-    goals = (term, None)
+    def __init__(self, choices):
+        self.choices = choices
+
+
+def post_constraint(term, trail):
+    """nf.pl, {}/1: post the constraint *term*; True or False.
+
+    The choice points of `{R ; Rs}` are kept while the constraint is being
+    posted, so a later failure inside the same `{}` takes the other branch
+    (test_a_disjunction_is_retried_when_a_later_constraint_fails); this
+    function then drops them.  post_constraint_with_choices keeps them for
+    the caller.  The conjunction and disjunction are a work list, not
+    recursion."""
+    return _run_constraint_goals((term, None), [], trail)
+
+
+def post_constraint_with_choices(term, trail):
+    """nf.pl, {}/1 with its choice points handed back: a ConstraintChoices
+    to pass to resume_constraint after a later failure, or None where the
+    constraint fails (test_a_caller_resumes_a_posted_disjunction)."""
     choices = []
+    if not _run_constraint_goals((term, None), choices, trail):
+        return None
+    return ConstraintChoices(choices)
+
+
+def resume_constraint(state, trail):
+    """Backtrack into a constraint posted with post_constraint_with_choices:
+    undo to its newest choice point and take the other branch, then the
+    goals after it.  True when that succeeds (the state keeps any choice
+    points that are left), False when no branch is left."""
+    choices = state.choices
+    while choices:
+        mark, alternative, goals = choices.pop()
+        trail.undo(mark)
+        if _run_constraint_goals((alternative, goals), choices, trail):
+            return True
+    return False
+
+
+def _run_constraint_goals(goals, choices, trail):
+    """{}/1's clauses on the goal list *goals* (a cons list), pushing the
+    choice points of `;` onto *choices* and backtracking into them on
+    failure.  True when every goal has succeeded."""
     while True:
         if goals is None:
             return True
@@ -338,17 +370,47 @@ def negate(term):
 #              c3) nonlinear -> geler
 
 def submit_equal(norm, trail):
-    """nf.pl, submit_equal/1 (submit_eq/1)."""
-    if not norm:                                            # trivial success
-        return True
-    return submit_equal_terms(norm[1:], norm[0], trail)
+    """nf.pl, submit_equal/1 (submit_eq/1).
+
+    b2 and c12 end in the last call `submit_equal(New)`; those functions
+    hand New back as a list and this loop takes it, so an invertible
+    function nested any depth needs no recursion
+    (test_a_deeply_nested_invertible_equation_needs_no_recursion)."""
+    while True:
+        if not norm:                                        # trivial success
+            return True
+        result = submit_equal_terms(norm[1:], norm[0], trail)
+        if type(result) is not list:
+            return result
+        norm = result
 
 
 def submit_equal_terms(rest, first, trail):
-    """nf.pl, submit_equal/2 (submit_eq/2)."""
+    """nf.pl, submit_equal/2 (submit_eq/2).  A bool, or the normal form to
+    submit next (submit_equal's loop)."""
     if not rest:
         return submit_equal_single_term(first, trail)
     return submit_equal_several_terms(first, rest[0], rest[1:], trail)
+
+
+def _export_binding_before_hook(variable, value, trail):
+    """bv.pl's export_binding/2 as nf.pl calls it, X = Value, outside
+    solve/5.  In 1.3.3 the binding wakes itf3.pl's verify_attributes/3,
+    which takes X out of the store.  Until Task 11 registers that hook, a
+    variable the store holds (a linear form, a component, delayed goals)
+    cannot be bound here without leaving the store pointing at a number,
+    so the port raises system_error(clpq_binding_needs_hook) instead.
+    Delayed goals that have all run (the goal now resubmitting) do not
+    count (DEVIATIONS.md D13,
+    test_binding_a_variable_the_store_holds_raises)."""
+    state = state_of(variable)
+    if state is not None and (
+            state.linear_form is not None or state.component is not None
+            or (state.delayed_goals is not None
+                and nonexhausted(state.delayed_goals))):
+        raise LogicException(system_error("clpq_binding_needs_hook",
+                                          "{}/1"))
+    return export_binding(variable, value, trail)
 
 
 def _single_power(monomial):
@@ -360,21 +422,21 @@ def _single_power(monomial):
 
 
 def submit_equal_single_term(monomial, trail):
-    """nf.pl, submit_equal_single_term/1 (submit_eq_b/1)."""
+    """nf.pl, submit_equal_single_term/1 (submit_eq_b/1): a bool, or the
+    normal form to submit next."""
     if not monomial.powers:                                 # b1: trivial failure
         return False
     single = _single_power(monomial)
     if single is not None:
         base, exponent = single
         if is_var(base) and exponent > 0:                   # b2,b3: n*x^p=0 -> x=0
-            return export_binding(base, ZERO, trail)
+            return _export_binding_before_hook(base, ZERO, trail)
         if not is_var(base) and exponent == 1:              # b2
             found = nonlinear_invertible(base, ZERO)
             if found is not None:
                 argument, inverse = found
-                new = normal_form_add(argument,
-                                      normal_form_number(negate_rational(inverse)))
-                return submit_equal(new, trail)
+                return normal_form_add(        # submit_equal(New): the loop
+                    argument, normal_form_number(negate_rational(inverse)))
     return delay_goal(term_variables_set([monomial]), resubmit_equal,  # b4
                       [monomial], trail)
 
@@ -386,7 +448,8 @@ def _is_linear_variable_monomial(monomial):
 
 
 def submit_equal_several_terms(first, second, rest, trail):
-    """nf.pl, submit_equal_several_terms/3 (submit_eq_c/3)."""
+    """nf.pl, submit_equal_several_terms/3 (submit_eq_c/3): a bool, or the
+    normal form to submit next."""
     if not first.powers:
         return submit_equal_constant_first(rest, second, first.coefficient,
                                            trail)
@@ -404,17 +467,18 @@ def submit_equal_several_terms(first, second, rest, trail):
 
 
 def submit_equal_constant_first(rest, second, constant, trail):
-    """nf.pl, submit_equal_constant_first/3 (submit_eq_c1/3)."""
+    """nf.pl, submit_equal_constant_first/3 (submit_eq_c1/3): a bool, or
+    the normal form to submit next."""
     single = _single_power(second)
     if not rest and single is not None:
         base, exponent = single
         coefficient = second.coefficient
         if is_var(base):                                    # c11
             if exponent == 1:
-                return export_binding(
+                return _export_binding_before_hook(
                     base, divide(negate_rational(constant), coefficient), trail)
             if exponent == -1:
-                return export_binding(
+                return _export_binding_before_hook(
                     base, divide(negate_rational(coefficient), constant), trail)
         else:                                               # c12
             value = None
@@ -426,9 +490,8 @@ def submit_equal_constant_first(rest, second, constant, trail):
                 found = nonlinear_invertible(base, value)
                 if found is not None:
                     argument, inverse = found
-                    new = normal_form_add(
+                    return normal_form_add(    # submit_equal(New): the loop
                         argument, normal_form_number(negate_rational(inverse)))
-                    return submit_equal(new, trail)
     if _is_linear_variable_monomial(second) and linear(rest):   # c13
         # 'solve_='( [v(I,[]),B|Rest]).
         homogeneous = [second] + rest
@@ -789,7 +852,7 @@ def is_normal_form_number(term):
     first clause, number/1; a float as well, which arithmetic_normalize
     reads as 1.3.3's get_rational/3 does).  The second clause, rat(_,_),
     is normal_form's rat clause here."""
-    return _is_engine_number(term)
+    return is_number(term)
 
 
 def nonlinear_unary(functor, arity):
@@ -1162,14 +1225,60 @@ def sum_powers(exponent, norm, previous):
 
 def repair(norm):
     """nf.pl, repair/2: the normal form of *norm* after its variables were
-    bound, or None where it fails."""
-    result = repair_balanced(normal_form_length(norm), norm, 0)
+    bound, or None where it fails.
+
+    1.3.3's repair_power_base/2 repairs a skeleton's arguments by calling
+    repair/2 again, to the nesting depth of the skeletons.  The port
+    repairs every skeleton first, innermost first (_nested_bases), into a
+    table that repair_power_base reads, so the only recursion left halves
+    its count (test_deeply_nested_bases_repair_without_recursion)."""
+    table = {}
+    for base in _nested_bases(norm):
+        try:
+            table[id(base)] = (True, _repair_skeleton(base, table))
+        except LogicException as error:
+            # raised where 1.3.3 would raise it: when the skeleton is reached
+            table[id(base)] = (False, error)
+    return _repair_with(norm, table)
+
+
+def _repair_with(norm, table):
+    result = repair_balanced(normal_form_length(norm), norm, 0, table)
     if result is None:
         return None
     return result[0]
 
 
-def repair_balanced(count, norm, start):
+def _nested_bases(norm):
+    """Every skeleton reachable from *norm*, each once, the ones inside a
+    skeleton's arguments before it.  An explicit stack."""
+    order = []
+    expanded = set()
+    stack = []
+    _push_bases(norm, stack)
+    while stack:
+        base, arguments_done = stack.pop()
+        if arguments_done:
+            order.append(base)
+            continue
+        if id(base) in expanded:
+            continue
+        expanded.add(id(base))
+        stack.append((base, True))
+        for argument in base.arguments:
+            _push_bases(argument, stack)
+    return order
+
+
+def _push_bases(norm, stack):
+    for monomial in norm:
+        for base, _ in monomial.powers:
+            base = deref(base)
+            if type(base) is NonlinearBase:
+                stack.append((base, False))
+
+
+def repair_balanced(count, norm, start, table):
     """nf.pl, repair_balanced/4 (repair_log/4): (repaired, start + count)
     or None.  It halves *count*: depth log2(count)
     (test_long_products_and_repairs_recurse_only_to_log_depth)."""
@@ -1177,32 +1286,33 @@ def repair_balanced(count, norm, start):
         return [], start
     if count == 1:
         monomial = norm[start]
-        result = repair_term(monomial.coefficient, monomial.powers)
+        result = repair_term(monomial.coefficient, monomial.powers, table)
         if result is None:
             return None
         return result, start + 1
     if count == 2:
-        first = repair_term(norm[start].coefficient, norm[start].powers)
+        first = repair_term(norm[start].coefficient, norm[start].powers, table)
         if first is None:
             return None
         second = repair_term(norm[start + 1].coefficient,
-                             norm[start + 1].powers)
+                             norm[start + 1].powers, table)
         if second is None:
             return None
         return normal_form_add(first, second), start + 2
     half = count >> 1
-    left = repair_balanced(half, norm, start)
+    left = repair_balanced(half, norm, start, table)
     if left is None:
         return None
-    right = repair_balanced(count - half, norm, left[1])
+    right = repair_balanced(count - half, norm, left[1], table)
     if right is None:
         return None
     return normal_form_add(left[0], right[0]), right[1]
 
 
-def repair_term(coefficient, powers):
+def repair_term(coefficient, powers, table):
     """nf.pl, repair_term/3."""
-    result = repair_power_balanced(len(powers), powers, 0, [Monomial(ONE, [])])
+    result = repair_power_balanced(len(powers), powers, 0,
+                                   [Monomial(ONE, [])], table)
     if result is None:
         return None
     repaired_powers, _, factor = result
@@ -1210,7 +1320,7 @@ def repair_term(coefficient, powers):
                                        factor)
 
 
-def repair_power_balanced(count, powers, start, so_far):
+def repair_power_balanced(count, powers, start, so_far, table):
     """nf.pl, repair_power_balanced/6 (repair_p_log/6): (the powers whose
     bases are still variables, start + count, *so_far* times the normal
     forms of the others), or None.  It halves *count*, as 1.3.3 does."""
@@ -1218,39 +1328,40 @@ def repair_power_balanced(count, powers, start, so_far):
         return [], start, so_far
     if count == 1:
         base, exponent = powers[start]
-        result = repair_power(base, exponent, so_far)
+        result = repair_power(base, exponent, so_far, table)
         if result is None:
             return None
         return result[0], start + 1, result[1]
     if count == 2:
         base_x, exponent_x = powers[start]
         base_y, exponent_y = powers[start + 1]
-        result_x = repair_power(base_x, exponent_x, so_far)
+        result_x = repair_power(base_x, exponent_x, so_far, table)
         if result_x is None:
             return None
-        result_y = repair_power(base_y, exponent_y, result_x[1])
+        result_y = repair_power(base_y, exponent_y, result_x[1], table)
         if result_y is None:
             return None
         return (merge_power_products(result_x[0], result_y[0]), start + 2,
                 result_y[1])
     half = count >> 1
-    left = repair_power_balanced(half, powers, start, so_far)
+    left = repair_power_balanced(half, powers, start, so_far, table)
     if left is None:
         return None
-    right = repair_power_balanced(count - half, powers, left[1], left[2])
+    right = repair_power_balanced(count - half, powers, left[1], left[2],
+                                  table)
     if right is None:
         return None
     return merge_power_products(left[0], right[0]), right[1], right[2]
 
 
-def repair_power(term, exponent, so_far):
+def repair_power(term, exponent, so_far, table):
     """nf.pl, repair_power/5 (repair_p/5): ([Term^P], so_far) for a
     variable, else ([], so_far times Term's normal form to the P); None
     where that fails."""
     term = deref(term)
     if is_var(term):
         return [(term, exponent)], so_far
-    base = repair_power_base(term)
+    base = repair_power_base(term, table)
     if base is None:
         return None
     powered = normal_form_power(exponent, base)
@@ -1264,34 +1375,46 @@ def repair_power(term, exponent, so_far):
 # digested one by the fact that its arguments are
 # digested -> cuts after repair of args!
 #
-def repair_power_base(term):
+def repair_power_base(term, table):
     """nf.pl, repair_power_base/2 (repair_p_one/2).  A digested skeleton is
-    a NonlinearBase record; anything else a variable was bound to is an
-    expression for normal_form."""
+    a NonlinearBase record, already repaired in *table* (see repair);
+    anything else a variable was bound to is an expression for
+    normal_form."""
     if is_normal_form_number(term):                         # freq. shortcut
         return normal_form_number(term)
     if type(term) is NonlinearBase:
-        name = term.name
-        arguments = term.arguments
-        if name == "/":
-            numerator = repair(arguments[0])
-            divisor = repair(arguments[1]) if numerator is not None else None
-            if divisor is not None:
-                return normal_form_divide(divisor, numerator)
-        elif len(arguments) == 1:
-            argument = repair(arguments[0])
-            if argument is not None:
-                return normal_form_nonlinear_unary(name, argument)
-        else:
-            first = repair(arguments[0])
-            second = repair(arguments[1]) if first is not None else None
-            if second is not None:
-                return normal_form_nonlinear_binary(name, first, second)
-        # 1.3.3's last clause reads the skeleton as an expression and raises
-        # type_error(expression, ...) on its list argument
-        # (test_a_zero_divisor_inside_a_repaired_quotient_raises).
-        raise LogicException(type_error("expression", term, "normal_form/2"))
+        succeeded, result = table[id(term)]
+        if not succeeded:
+            raise result
+        return result
     return normal_form(term)
+
+
+def _repair_skeleton(term, table):
+    """repair_power_base/2's clauses 2 to 5 on a skeleton whose inner
+    skeletons are in *table*."""
+    name = term.name
+    arguments = term.arguments
+    if name == "/":
+        numerator = _repair_with(arguments[0], table)
+        divisor = (_repair_with(arguments[1], table)
+                   if numerator is not None else None)
+        if divisor is not None:
+            return normal_form_divide(divisor, numerator)
+    elif len(arguments) == 1:
+        argument = _repair_with(arguments[0], table)
+        if argument is not None:
+            return normal_form_nonlinear_unary(name, argument)
+    else:
+        first = _repair_with(arguments[0], table)
+        second = (_repair_with(arguments[1], table)
+                  if first is not None else None)
+        if second is not None:
+            return normal_form_nonlinear_binary(name, first, second)
+    # 1.3.3's last clause reads the skeleton as an expression and raises
+    # type_error(expression, ...) on its list argument
+    # (test_a_zero_divisor_inside_a_repaired_quotient_raises).
+    raise LogicException(type_error("expression", term, "normal_form/2"))
 
 
 def normal_form_length(norm):
@@ -1305,37 +1428,51 @@ def normal_form_length(norm):
 # engine numbers (to_number) for the rationals.
 
 def normal_form_to_term(norm):
-    """nf.pl, normal_form_to_term/2 (nf2term/2)."""
+    """nf.pl, normal_form_to_term/2 (nf2term/2).  1.3.3's
+    power_base_to_term/2 calls normal_form_to_term/2 on a skeleton's
+    arguments, to the nesting depth of the skeletons; the port builds the
+    skeletons' terms first, innermost first, into a table
+    (test_deeply_nested_bases_become_terms_without_recursion)."""
+    table = {}
+    for base in _nested_bases(norm):
+        table[id(base)] = (base.name,) + power_base_arguments_to_terms(
+            base.arguments, table)
+    return _normal_form_to_term_with(norm, table)
+
+
+def _normal_form_to_term_with(norm, table):
     if not norm:
         return to_number(ZERO)
-    return build_left_associative(norm, 1, first_monomial_to_term(norm[0]))
+    return build_left_associative(norm, 1,
+                                  first_monomial_to_term(norm[0], table),
+                                  table)
 
 
-def build_left_associative(norm, start, term):
+def build_left_associative(norm, start, term, table):
     """nf.pl, build_left_associative/3 (yfx/3); the recursion is a loop."""
     for index in range(start, len(norm)):
-        monomial_term, operator = next_monomial_to_term(norm[index])
+        monomial_term, operator = next_monomial_to_term(norm[index], table)
         term = (operator, term, monomial_term)
     return term
 
 
-def first_monomial_to_term(monomial):
+def first_monomial_to_term(monomial, table):
     """nf.pl, first_monomial_to_term/2 (f02t/2)."""
     coefficient = monomial.coefficient
     powers = monomial.powers
     if not powers:
         return to_number(coefficient)
     if compare(coefficient, ONE) == 0:
-        return power_product_to_term(powers)
+        return power_product_to_term(powers, table)
     if compare(coefficient, MINUS_ONE) == 0:
-        return ("-", power_product_to_term(powers))
-    return ("*", to_number(coefficient), power_product_to_term(powers))
+        return ("-", power_product_to_term(powers, table))
+    return ("*", to_number(coefficient), power_product_to_term(powers, table))
 
 
-def next_monomial_to_term(monomial):
+def next_monomial_to_term(monomial, table):
     """nf.pl, next_monomial_to_term/3 (fn2t/3): (term, operator)."""
     coefficient = monomial.coefficient
-    power_term = power_product_to_term(monomial.powers)
+    power_term = power_product_to_term(monomial.powers, table)
     if compare(coefficient, ONE) == 0:
         return power_term, "+"
     if compare(coefficient, MINUS_ONE) == 0:
@@ -1345,14 +1482,16 @@ def next_monomial_to_term(monomial):
     return ("*", to_number(coefficient), power_term), "+"
 
 
-def power_product_to_term(powers):
+def power_product_to_term(powers, table):
     """nf.pl, power_product_to_term/2 (p2term/2): `[X^P|Xs]` is
     `p2term(Xs) * X^P`; the recursion is a loop from the end."""
     last_base, last_exponent = powers[-1]
-    term = exponent_to_term(last_exponent, power_base_to_term(last_base))
+    term = exponent_to_term(last_exponent,
+                            power_base_to_term(last_base, table))
     for index in range(len(powers) - 2, -1, -1):
         base, exponent = powers[index]
-        term = ("*", term, exponent_to_term(exponent, power_base_to_term(base)))
+        term = ("*", term,
+                exponent_to_term(exponent, power_base_to_term(base, table)))
     return term
 
 
@@ -1366,21 +1505,20 @@ def exponent_to_term(exponent, term):
     return ("^", term, to_number(arithmetic_normalize(exponent)))
 
 
-def power_base_to_term(base):
-    """nf.pl, power_base_to_term/2 (pe2term/2).  The arguments of a
-    skeleton are normal forms; their depth is the nesting depth of the
-    non-linear functions in the constraint."""
+def power_base_to_term(base, table):
+    """nf.pl, power_base_to_term/2 (pe2term/2): a variable, or the term of
+    a skeleton, built already in *table* (see normal_form_to_term)."""
     base = deref(base)
     if is_var(base):
         return base
-    return (base.name,) + power_base_arguments_to_terms(base.arguments)
+    return table[id(base)]
 
 
-def power_base_arguments_to_terms(arguments):
+def power_base_arguments_to_terms(arguments, table):
     """nf.pl, power_base_arguments_to_terms/2 (pe2term_args/2)."""
     result = []
     for argument in arguments:
-        result.append(normal_form_to_term(argument))
+        result.append(_normal_form_to_term_with(argument, table))
     return tuple(result)
 
 
@@ -1394,75 +1532,95 @@ _ORDER_VARIABLE = 0
 _ORDER_NUMBER = 1
 _ORDER_COMPOUND = 4
 
+# The comparisons on compare/3's work stack.
+_POWER_PRODUCTS = 0
+_BASES = 1
+_NORMAL_FORMS = 2
+_INTEGERS = 3
+
 
 def compare_power_products(first, second):
     """compare/3 on two power products: -1, 0 or 1."""
-    for index in range(min(len(first), len(second))):
-        base_a, exponent_a = first[index]
-        base_b, exponent_b = second[index]
-        relation = compare_bases(base_a, base_b)
-        if relation != 0:
-            return relation
-        if exponent_a != exponent_b:
-            return -1 if exponent_a < exponent_b else 1
-    return (len(first) > len(second)) - (len(first) < len(second))
-
-
-def _order_class(term):
-    if is_var(term):
-        return _ORDER_VARIABLE
-    if _is_engine_number(term):
-        return _ORDER_NUMBER
-    if type(term) is NonlinearBase:
-        return _ORDER_COMPOUND
-    raise TypeError(f"normal form: a base bound to {term!r} before repair")
+    return _standard_order(_POWER_PRODUCTS, first, second)
 
 
 def compare_bases(first, second):
     """compare/3 on two bases.  Two unbound variables are in creation order
     (DEVIATIONS.md D11); a base bound to a number before repair compares as
     the number."""
-    first = deref(first)
-    second = deref(second)
-    if first is second:
-        return 0
-    class_a = _order_class(first)
-    class_b = _order_class(second)
-    if class_a != class_b:
-        return -1 if class_a < class_b else 1
-    if class_a == _ORDER_VARIABLE:
-        return (first._id > second._id) - (first._id < second._id)
-    if class_a == _ORDER_NUMBER:
-        return (first > second) - (first < second)
-    arity_a = len(first.arguments)
-    arity_b = len(second.arguments)
-    if arity_a != arity_b:
-        return -1 if arity_a < arity_b else 1
-    if first.name != second.name:
-        return -1 if first.name < second.name else 1
-    for index in range(arity_a):
-        relation = compare_normal_forms(first.arguments[index],
-                                        second.arguments[index])
-        if relation != 0:
-            return relation
-    return 0
+    return _standard_order(_BASES, first, second)
 
 
 def compare_normal_forms(first, second):
     """compare/3 on two normal forms (lists of v(rat(N, D), Powers))."""
-    for index in range(min(len(first), len(second))):
-        monomial_a = first[index]
-        monomial_b = second[index]
-        numerator_a, denominator_a = monomial_a.coefficient
-        numerator_b, denominator_b = monomial_b.coefficient
-        if numerator_a != numerator_b:
-            return -1 if numerator_a < numerator_b else 1
-        if denominator_a != denominator_b:
-            return -1 if denominator_a < denominator_b else 1
-        relation = compare_power_products(monomial_a.powers, monomial_b.powers)
-        if relation != 0:
-            return relation
-    return (len(first) > len(second)) - (len(first) < len(second))
+    return _standard_order(_NORMAL_FORMS, first, second)
+
+
+def _order_class(term):
+    if is_var(term):
+        return _ORDER_VARIABLE
+    if is_number(term):
+        return _ORDER_NUMBER
+    if type(term) is NonlinearBase:
+        return _ORDER_COMPOUND
+    raise TypeError(f"normal form: a base bound to {term!r} before repair")
+
+
+def _standard_order(kind, first, second):
+    """compare/3 on two terms of the kind given, left to right: a work
+    stack of the pairs still to compare, so bases nested any depth need no
+    recursion (test_deeply_nested_bases_compare_without_recursion).  A list
+    is compared element by element and then by length ([] before [_|_]); a
+    power X^P by X, then P; a monomial v(rat(N, D), P) by N, D, then P; a
+    skeleton by arity, name, then arguments."""
+    work = [(kind, first, second)]
+    while work:
+        kind, first, second = work.pop()
+        if kind == _INTEGERS:
+            if first != second:
+                return -1 if first < second else 1
+        elif kind == _POWER_PRODUCTS:
+            work.append((_INTEGERS, len(first), len(second)))
+            for index in range(min(len(first), len(second)) - 1, -1, -1):
+                work.append((_INTEGERS, first[index][1], second[index][1]))
+                work.append((_BASES, first[index][0], second[index][0]))
+        elif kind == _NORMAL_FORMS:
+            work.append((_INTEGERS, len(first), len(second)))
+            for index in range(min(len(first), len(second)) - 1, -1, -1):
+                monomial_a = first[index]
+                monomial_b = second[index]
+                work.append((_POWER_PRODUCTS, monomial_a.powers,
+                             monomial_b.powers))
+                work.append((_INTEGERS, monomial_a.coefficient[1],
+                             monomial_b.coefficient[1]))
+                work.append((_INTEGERS, monomial_a.coefficient[0],
+                             monomial_b.coefficient[0]))
+        else:
+            first = deref(first)
+            second = deref(second)
+            if first is second:
+                continue
+            class_a = _order_class(first)
+            class_b = _order_class(second)
+            if class_a != class_b:
+                return -1 if class_a < class_b else 1
+            if class_a == _ORDER_VARIABLE:
+                if first._id != second._id:
+                    return -1 if first._id < second._id else 1
+            elif class_a == _ORDER_NUMBER:
+                if first != second:
+                    return -1 if first < second else 1
+            else:
+                arity_a = len(first.arguments)
+                arity_b = len(second.arguments)
+                if arity_a != arity_b:
+                    return -1 if arity_a < arity_b else 1
+                if first.name != second.name:
+                    return -1 if first.name < second.name else 1
+                for index in range(arity_a - 1, -1, -1):
+                    work.append((_NORMAL_FORMS, first.arguments[index],
+                                 second.arguments[index]))
+    return 0
 
 
 def term_variables_set(term):

@@ -33,8 +33,8 @@ the call site, inside the function that needs them, because each of those
 modules imports this one.  Each such import is marked "cyclic".
 """
 from clausal.logic.clpq.arithmetic import (
-    ONE, ZERO, add, compare, divide, is_zero, multiply, negate, sign, subtract,
-    to_number)
+    ONE, ZERO, add, compare, divide, is_zero, multiply, negate,
+    rational_to_float, sign, subtract, to_number)
 from clausal.logic.clpq.attributes import (
     BOUNDS_LOWER, BOUNDS_LOWER_ACTIVE, BOUNDS_LOWER_ACTIVE_UPPER,
     BOUNDS_LOWER_UPPER, BOUNDS_LOWER_UPPER_ACTIVE, BOUNDS_NONE, BOUNDS_UPPER,
@@ -326,17 +326,23 @@ def _post_equal(left, right, trail):
     return post_constraint(ArithEq(left=left, right=right), trail)
 
 
-def sup(expression, supremum, trail, vector=(), vertex=()):
+def sup(expression, supremum, trail, vector=None, vertex=None):
     """bv.pl, sup/2 and sup/4: inf(-Expression, -Sup, Vector, Vertex)."""
     from clausal.terms import Negate
     return inf(Negate(operand=expression), Negate(operand=supremum), trail,
                vector, vertex)
 
 
-def inf(expression, infimum, trail, vector=(), vertex=()):
+def inf(expression, infimum, trail, vector=None, vertex=None):
     """bv.pl, inf/2 and inf/4: wait until *expression* is linear, then
-    infimum_linear."""
+    infimum_linear.  inf/2 is inf(Expression, Inf, [], []): Vector and
+    Vertex are lists, as a delayed goal shows them
+    (test_translate_goal_of_wait_linear_retry_reaches_res_and_the_goal)."""
     from clausal.logic.clpq.normal_form import wait_linear  # cyclic: nf.pl
+    if vector is None:
+        vector = []
+    if vertex is None:
+        vertex = []
     return wait_linear(expression, infimum_linear,
                        (infimum, vector, vertex), trail)
 
@@ -583,8 +589,10 @@ def _delta_key(entry):
 
 
 def _float_of(rational):
-    """evaluate_arithmetic(float(X)) in Q: rational_to_float/3."""
-    return rational[0] / rational[1]
+    """evaluate_arithmetic(float(X)) in Q: arithmetic.rational_to_float,
+    arith.pl's rational_to_float/3 with its limit_encoding_length/5
+    (test_float_of_is_rational_to_float)."""
+    return rational_to_float(rational)
 
 
 def decrease_evaluate(terms):
