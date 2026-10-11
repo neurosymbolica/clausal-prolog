@@ -1,4 +1,4 @@
-# Ported from clp(q,r) version 1.3.3, file class.pl
+# Ported from the clp(q,r) 1.3.3 distribution, file class.pl (banner: version 1.3.2)
 # (c) Copyright 1992,1993,1994,1995 Austrian Research Institute for
 # Artificial Intelligence (OFAI).  Author: Christian Holzbaur.
 # See clausal/logic/clpq/PROVENANCE.md.
@@ -107,10 +107,14 @@ def verify_component(record, other, trail):
     A Y with no attributes at all takes X's record: SICStus binds a plain
     variable to an attributed one without calling the hook, and this engine
     binds by age instead (test_component_new_puts_the_record_on_a_plain_variable).
+    A PlainVar Y cannot carry attributes, so the hook fails closed there
+    (DEVIATIONS.md D8).
     """
     other = deref(other)
     if not is_var(other):                       # var(Y), required
         return False
+    if type(other) is PlainVar:                 # cannot take the record
+        return False                            # (test_verify_component_fails_closed_on_a_plain_var)
     record_other = get_attr(other, COMPONENT_KEY)
     if record_other is None:
         if not other.attrs:

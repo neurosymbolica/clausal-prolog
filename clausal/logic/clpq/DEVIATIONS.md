@@ -58,6 +58,14 @@ Sites in `class.pl` and `geler.pl` (Task 7):
   hook, X is already bound in Clausal, so the port matches an element whose
   chain of bindings passes through X, which is what `==` sees before the
   binding (`test_delete_first_matches_a_variable_through_its_bindings`).
+  The match goes one way only: an element whose bindings lead to X.  When
+  X itself is bound to an element variable E, `X == E` holds after the
+  binding but the port does not match; before the binding X is unbound, so
+  `==` cannot see that direction either.  Every 1.3.3 caller passes X in
+  the before-the-binding state: `component_drop/2` from `itf3.pl`'s
+  `verify_attributes/3`, with X the variable being bound, and the bv.pl
+  basis predicates (`basis_drop/1`, `basis_pivot/2`) with a constrained
+  variable that is unbound, whose bindings lead to nothing.
 - `class.pl` `verify_attributes/3` tests `var(Y)` and reads Y's attributes;
   Y is the variable X was bound to, still unbound, so nothing changes.
 - `geler.pl` `verify_attributes/3` reads Y the same way; its Later goals go
@@ -142,21 +150,46 @@ error.
 
 `geler.pl` delays a Prolog goal and runs it with `call/1`.  The port delays
 a `DelayedGoal(mutex, procedure, argument)` and runs
-`procedure(argument, trail)`, which returns True or False.  So:
+`procedure(argument, trail)`, which returns True or False (`delay_goal`,
+1.3.3's `geler/2`).  So:
 
 - A delayed goal is deterministic: it has one answer or none.  The goals
   `nf.pl` delays (`resubmit_*`, `wait_linear_retry`) are Task 10's to port
   in that shape; Task 10 confirms each is deterministic in 1.3.3.
-- `translate_goal//1`'s clauses for a conjunction and for `M:G` have nothing
-  to do: a port goal is never either (`test_collect_nonlinear_marks_the_goals_done`).
-- `project_nonlinear/3` sorts the collected goals and puts them on a fresh
-  variable as `all_nonlinear/1`, which `attribute_goal/2`'s second clause
-  reads.  The variable is local to `project_nonlinear/3`, so no answer can
-  reach it; the port skips the sort and the attribute.  The reachable
-  variables are returned in creation order; 1.3.3's
+- Translation.  `geler/2` is a meta-predicate (`geler.pl`, `compenv.pl`
+  `nfq:geler(?,:)`), so 1.3.3 stores `nfq:G`, and `translate_goal//1`'s
+  `M:G` clause calls nfq.pl's exported `translate_goal//1` (the `transg` of
+  the original).  That turns `resubmit_*(Nf)` into `clpq:{Term Rel 0}` and
+  `wait_linear_retry(Nf, Res, Goal)` into `[clpq:{Term = Res}, Goal]`, the
+  shape dump.pl's `nonlinear_strip/3` reads.  The port's `translate`,
+  `collect_nonlinear` and `project_nonlinear` take that nfq.pl predicate as
+  the parameter `translate_goal(procedure, argument) -> list of goal terms`
+  (`test_translate_hands_each_goal_to_translate_goal_in_order`).
+  **Not done yet:** nfq.pl's `translate_goal//1` itself (Task 10, with
+  `normal_form_to_term/2`), and the `clpq:` module tag its output carries,
+  which `nonlinear_strip/3` tests (Task 10 and Task 12 agree the term
+  shape).  The conjunction clause of `translate_goal//1` has nothing to do,
+  because a port goal is never a conjunction.
+- `project_nonlinear/3`'s reachable variables are the variables of the
+  TRANSLATED goals, as in 1.3.3 (`term_variables_set/2` on them), so they
+  include `wait_linear_retry`'s `Res` and every variable of its `Goal` once
+  Task 10's translate_goal emits them
+  (`test_project_nonlinear_reaches_what_translate_goal_emits`).  The walk
+  covers tuples, lists and `__slots__` records; Task 10's argument records
+  must be one of those.
+- `project_nonlinear/3` also sorts the collected goals and puts them on a
+  fresh variable as `all_nonlinear/1`, which `attribute_goal/2`'s second
+  clause reads.  The variable is local to `project_nonlinear/3`, so no
+  answer can reach it; the port skips the sort and the attribute.  The
+  reachable variables are returned in creation order; 1.3.3's
   `term_variables_set/2` gives a set, and `project.pl` only marks each
   variable `target`, so the order does not matter
   (`test_project_nonlinear_gives_the_variables_the_goals_reach`).
+- A PlainVar (an engine variable that cannot carry attributes; 1.3.3 has no
+  such variable) cannot hold a delayed goal: `delay_goal` returns False for
+  one, attaching nothing, and `verify_delayed` returns False when X's goals
+  would move onto one (`test_delay_goal_on_a_plain_var_fails_closed`,
+  `test_verify_delayed_onto_a_plain_var_fails_closed`).
 
 ## D8: components are a separate attribute key; binding direction is by age
 
@@ -176,6 +209,11 @@ the port keeps it apart from `SolverState`, under
   the other, the merged member order differs, and the member order decides
   `project.pl`'s numbering of unordered variables.  Task 12's oracle tests
   are the check.
+- A PlainVar Y (an engine variable that cannot carry attributes; 1.3.3 has
+  none) cannot take the record, so `verify_component` fails there
+  (`test_verify_component_fails_closed_on_a_plain_var`).  1.3.3 would bind
+  the plain variable and succeed; the port refuses rather than lose the
+  component.
 - `delete_first/3`, finding nothing to delete, rebuilds an equal list in
   1.3.3; the port returns the list itself.  `component_basis_drop/2`'s
   `Basis0 \== Basis` then becomes `is not`

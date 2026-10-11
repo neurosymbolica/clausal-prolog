@@ -58,8 +58,7 @@ copy gives the same example results as the original.
   also predicate or attribute names and are renamed with them: `nf`, `class`
   (`use_module`/`ensure_loaded` of those files in the reading copy name
   `normal_form`/`component`, which are not file names there).
-- `geler` (French, "freeze") and `occurences` (sic) are words, not
-  abbreviations.
+- `occurences` (sic) is a word, not an abbreviation.
 - `imin` is declared public in `bv.pl` but never defined; its meaning is
   unknown, so it is not renamed.
 
@@ -283,7 +282,7 @@ Names with no 1.3.3 atom of their own.  They are not in `rename_map.tsv`.
 | `functor` | (same) | arith.pl |
 | `fwd_deref` | `forward_dereference` | itf3.pl |
 | `gcd` | (same) | arith.pl |
-| `geler` | (same) | compenv.pl, geler.pl, nf.pl |
+| `geler` | `delay_goal` (ruling R14; the reading copy and `rename_map.tsv` keep `geler`, which is also the file name `geler.pl`) | compenv.pl, geler.pl, nf.pl |
 | `geler_q` | (same) | compenv.pl, geler.pl |
 | `geler_r` | (same) | compenv.pl |
 | `gen_edges` | `generate_edges` | ordering.pl |

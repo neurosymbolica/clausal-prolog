@@ -8,8 +8,9 @@ The goal interface.  1.3.3 delays a Prolog goal (`resubmit_equal(Norm)` and
 the like, nf.pl) and runs it with call/1.  The port delays a pair
 (procedure, argument): running it is `procedure(argument, trail) -> bool`,
 True for success and False for failure, deterministic.  nf.pl's goals
-(Task 10) are module-level functions of that shape; dump.pl (Task 12) reads
-the pairs back through collect_nonlinear.
+(Task 10) are module-level functions of that shape.  collect_nonlinear
+hands each pair to nfq.pl's translate_goal (a parameter; see translate),
+and dump.pl (Task 12) reads the translated goals.
 
 geler.pl's `goals/1` attribute is SolverState's `delayed_goals` field: a
 tuple of DelayedGoal, newest first (1.3.3's conjunction `(Goal, Gv)`), or
@@ -20,7 +21,7 @@ go on a LaterWork queue and run after the hook returns
 """
 from clausal.logic.clpq.attributes import (
     SolverState, put_state, state_of, with_changes)
-from clausal.logic.variables import Var, deref, is_var, unify
+from clausal.logic.variables import PlainVar, Var, deref, is_var, unify
 
 DONE = "done"
 
@@ -81,13 +82,17 @@ def nonexhausted(goals):
 
 def verify_delayed(state, other, trail, later):
     """geler.pl, verify_attributes/3, for a variable X with *state* bound to
-    *other* (Y).  Pushes Later onto *later*; returns True (geler.pl's hook
-    does not fail)."""
+    *other* (Y).  Pushes Later onto *later*.  geler.pl's hook does not fail;
+    the port returns False only for a Y that cannot carry attributes (a
+    PlainVar): X's goals cannot move onto it, and dropping them would lose
+    the constraint (test_verify_delayed_onto_a_plain_var_fails_closed)."""
     if state is None or state.delayed_goals is None:            # clause 2
         return True
     goals = state.delayed_goals
     other = deref(other)
     if is_var(other):
+        if type(other) is PlainVar:
+            return False
         state_other = state_of(other)
         if state_other is not None and state_other.delayed_goals is not None:
             later.push(RunGoals(goals, trail))                  # Later = [Gx, Gy]
@@ -101,40 +106,50 @@ def verify_delayed(state, other, trail, later):
     return True
 
 
-def project_nonlinear(target_variables, constrained_variables, trail):
+def project_nonlinear(target_variables, constrained_variables, trail,
+                      translate_goal):
     """geler.pl, project_nonlinear/3: collect the goals not yet run on
-    *constrained_variables* (marking them run) and return the variables they
-    reach.  1.3.3 also sorts the goals and puts them on a fresh variable as
-    `all_nonlinear/1`; nothing reads that variable, and the port leaves both
-    out (DEVIATIONS.md D7).  The variables come in creation order; 1.3.3's
-    term_variables_set/2 gives a set, and project.pl only marks each one."""
-    goals = collect_nonlinear(constrained_variables, trail)
-    roots = []
-    for _, argument in goals:
-        roots.append(argument)
-    return _term_variables(roots)
+    *constrained_variables* (marking them run), translated by
+    *translate_goal* (see translate), and return the variables the
+    translated goals reach (term_variables_set/2).  1.3.3 also sorts the
+    goals and puts them on a fresh variable as `all_nonlinear/1`; nothing
+    reads that variable, and the port leaves both out (DEVIATIONS.md D7).
+    The variables come in creation order; project.pl only marks each one."""
+    goals = collect_nonlinear(constrained_variables, trail, translate_goal)
+    return _term_variables(goals)
 
 
-def collect_nonlinear(variables, trail):
-    """geler.pl, collect_nonlinear//1: the goals not yet run on *variables*,
-    as (procedure, argument) pairs; each is marked run (translate//1)."""
+def collect_nonlinear(variables, trail, translate_goal):
+    """geler.pl, collect_nonlinear//1: the translated goals not yet run on
+    *variables*; each goal is marked run (translate//1)."""
     result = []
     for variable in variables:
         state = state_of(variable)
         if state is not None and state.delayed_goals is not None:
-            result.extend(translate(state.delayed_goals, trail))
+            result.extend(translate(state.delayed_goals, trail,
+                                    translate_goal))
     return result
 
 
-def translate(goals, trail):
-    """geler.pl, translate//1 and translate_goal//1.  A port goal is one
-    (procedure, argument) pair, never a conjunction or a module-qualified
-    goal, so translate_goal//1's first two clauses have nothing to do."""
+def translate(goals, trail, translate_goal):
+    """geler.pl, translate//1 and translate_goal//1.
+
+    The hook point for nfq.pl.  geler/2 is a meta-predicate, so 1.3.3's
+    stored goal is `nfq:G`, and translate_goal//1's `M:G` clause hands G to
+    nfq.pl's exported translate_goal//1 (nfq.pl, the `transg` of the
+    original), which turns `resubmit_*(Nf)` into `[clpq:{Term Rel 0}]` and
+    `wait_linear_retry(Nf, Res, Goal)` into `[clpq:{Term = Res}, Goal]`.
+    The port's goal is a (procedure, argument) pair whose module is always
+    nfq, so *translate_goal* is that nfq.pl predicate:
+    `translate_goal(procedure, argument) -> list of goal terms`, in order.
+    Task 10 writes it with nfq.pl; dump.pl's nonlinear_strip/3 (Task 12)
+    reads its output.  A port goal is never a conjunction, so the
+    conjunction clause has nothing to do (DEVIATIONS.md D7)."""
     result = []
     for goal in goals:
         if is_var(deref(goal.mutex)):
             unify(goal.mutex, DONE, trail)
-            result.append((goal.procedure, goal.argument))
+            result.extend(translate_goal(goal.procedure, goal.argument))
     return result
 
 
@@ -146,14 +161,19 @@ def run(goal, trail):
     return goal.procedure(goal.argument, trail)
 
 
-def geler(variables, procedure, argument, trail):
+def delay_goal(variables, procedure, argument, trail):
     """geler.pl, geler/2: delay `procedure(argument, trail)` until one of
-    *variables* is bound."""
-    attach(variables, DelayedGoal(Var(), procedure, argument), trail)
+    *variables* is bound.  False where attach fails."""
+    return attach(variables, DelayedGoal(Var(), procedure, argument), trail)
 
 
 def attach(variables, goal, trail):
-    """geler.pl, attach/2."""
+    """geler.pl, attach/2.  Returns False for a PlainVar, which cannot carry
+    the goal (test_delay_goal_on_a_plain_var_fails_closed); 1.3.3 has no
+    such variable.  The check comes first, so a False attaches nothing."""
+    for variable in variables:
+        if type(deref(variable)) is PlainVar:
+            return False
     for variable in variables:
         state = state_of(variable) if is_var(deref(variable)) else None
         if state is not None and state.delayed_goals is not None:
@@ -161,6 +181,7 @@ def attach(variables, goal, trail):
                 state, delayed_goals=(goal,) + state.delayed_goals), trail)
         else:
             _put_goals(variable, state, (goal,), trail)
+    return True
 
 
 def _put_goals(variable, state, goals, trail):

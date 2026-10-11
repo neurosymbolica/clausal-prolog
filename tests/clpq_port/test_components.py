@@ -14,11 +14,11 @@ from clausal.logic.clpq.components import (
     component_new, component_put_priority, delete_first, list_elements,
     open_list, verify_component)
 from clausal.logic.clpq.delayed_goals import (
-    DelayedGoal, attach, attribute_goal, collect_nonlinear, geler,
+    DelayedGoal, attach, attribute_goal, collect_nonlinear, delay_goal,
     nonexhausted, project_nonlinear, run, translate, verify_delayed)
 from clausal.logic.clpq.variable_ordering import (
     add_edges, arrangement, join_component)
-from clausal.logic.variables import Trail, Var, deref, get_attr, unify
+from clausal.logic.variables import PlainVar, Trail, Var, deref, get_attr, unify
 
 
 # ---------------------------------------------------------------- helpers
@@ -371,11 +371,11 @@ def _recorder(log):
     return procedure
 
 
-def test_geler_attaches_one_goal_to_every_variable():
+def test_delay_goal_attaches_one_goal_to_every_variable():
     trail = Trail()
     x, y = Var(), Var()
     log = []
-    geler([x, y], _recorder(log), "g", trail)
+    delay_goal([x, y], _recorder(log), "g", trail)
     goals_x = state_of(x).delayed_goals
     goals_y = state_of(y).delayed_goals
     assert len(goals_x) == 1 and goals_x[0] is goals_y[0]
@@ -386,8 +386,8 @@ def test_attach_puts_the_new_goal_first():
     trail = Trail()
     x = Var()
     log = []
-    geler([x], _recorder(log), "first", trail)
-    geler([x], _recorder(log), "second", trail)
+    delay_goal([x], _recorder(log), "first", trail)
+    delay_goal([x], _recorder(log), "second", trail)
     goals = state_of(x).delayed_goals
     assert [goal.argument for goal in goals] == ["second", "first"]
 
@@ -396,7 +396,7 @@ def test_attach_keeps_the_other_fields():
     trail = Trail()
     x = Var()
     put_state(x, SolverState(nonzero=True), trail)
-    geler([x], _recorder([]), "g", trail)
+    delay_goal([x], _recorder([]), "g", trail)
     assert state_of(x).nonzero is True
 
 
@@ -404,7 +404,7 @@ def test_attach_is_undone():
     trail = Trail()
     x = Var()
     mark = trail.mark()
-    geler([x], _recorder([]), "g", trail)
+    delay_goal([x], _recorder([]), "g", trail)
     trail.undo(mark)
     assert state_of(x) is None
 
@@ -439,7 +439,7 @@ def test_verify_delayed_against_a_value_queues_the_goals():
     trail = Trail()
     x = Var()
     log = []
-    geler([x], _recorder(log), "g", trail)
+    delay_goal([x], _recorder(log), "g", trail)
     later = LaterWork()
     assert verify_delayed(state_of(x), 4, trail, later) is True
     assert log == []                     # queued, not nested
@@ -451,7 +451,7 @@ def test_verify_delayed_onto_a_plain_variable_moves_the_goals():
     trail = Trail()
     x, y = Var(), Var()
     log = []
-    geler([x], _recorder(log), "g", trail)
+    delay_goal([x], _recorder(log), "g", trail)
     later = LaterWork()
     assert verify_delayed(state_of(x), y, trail, later) is True
     assert not later.queue
@@ -462,8 +462,8 @@ def test_verify_delayed_onto_a_variable_with_goals_runs_both_and_clears_y():
     trail = Trail()
     x, y = Var(), Var()
     log = []
-    geler([x], _recorder(log), "x goal", trail)
-    geler([y], _recorder(log), "y goal", trail)
+    delay_goal([x], _recorder(log), "x goal", trail)
+    delay_goal([y], _recorder(log), "y goal", trail)
     put_state(y, with_changes(state_of(y), nonzero=True), trail)
     later = LaterWork()
     assert verify_delayed(state_of(x), y, trail, later) is True
@@ -484,7 +484,7 @@ def test_verify_delayed_without_goals_does_nothing():
 def test_a_failing_later_goal_fails_the_drain():
     trail = Trail()
     x = Var()
-    geler([x], _recorder([]), "fail", trail)
+    delay_goal([x], _recorder([]), "fail", trail)
     later = LaterWork()
     verify_delayed(state_of(x), 0, trail, later)
     assert later.drain() is False
@@ -494,7 +494,7 @@ def test_a_goal_on_two_variables_runs_once():
     trail = Trail()
     x, y = Var(), Var()
     log = []
-    geler([x, y], _recorder(log), "g", trail)
+    delay_goal([x, y], _recorder(log), "g", trail)
     later = LaterWork()
     verify_delayed(state_of(x), 1, trail, later)
     verify_delayed(state_of(y), 2, trail, later)
@@ -506,8 +506,8 @@ def test_nonexhausted_and_attribute_goal_skip_run_goals():
     trail = Trail()
     x = Var()
     log = []
-    geler([x], _recorder(log), "first", trail)
-    geler([x], _recorder(log), "second", trail)
+    delay_goal([x], _recorder(log), "first", trail)
+    delay_goal([x], _recorder(log), "second", trail)
     goals = state_of(x).delayed_goals
     run(goals[1], trail)
     assert [goal.argument for goal in nonexhausted(goals)] == ["second"]
@@ -517,16 +517,21 @@ def test_nonexhausted_and_attribute_goal_skip_run_goals():
     assert attribute_goal(Var()) is None
 
 
+def _as_pair(procedure, argument):
+    """A translate_goal that emits the goal as it is stored."""
+    return [(procedure, argument)]
+
+
 def test_collect_nonlinear_marks_the_goals_done():
     trail = Trail()
     x, y = Var(), Var()
     log = []
     procedure = _recorder(log)
-    geler([x, y], procedure, "shared", trail)
-    geler([y], procedure, "own", trail)
-    collected = collect_nonlinear([x, Var(), y], trail)
+    delay_goal([x, y], procedure, "shared", trail)
+    delay_goal([y], procedure, "own", trail)
+    collected = collect_nonlinear([x, Var(), y], trail, _as_pair)
     assert collected == [(procedure, "shared"), (procedure, "own")]
-    assert collect_nonlinear([x, y], trail) == []
+    assert collect_nonlinear([x, y], trail, _as_pair) == []
     later = LaterWork()
     verify_delayed(state_of(y), 1, trail, later)
     later.drain()
@@ -537,16 +542,16 @@ def test_translate_skips_finished_goals():
     trail = Trail()
     goal = DelayedGoal(Var(), _recorder([]), "g")
     run(goal, trail)
-    assert translate((goal,), trail) == []
+    assert translate((goal,), trail, _as_pair) == []
 
 
 def test_project_nonlinear_gives_the_variables_the_goals_reach():
     trail = Trail()
     x, y, z = Var(), Var(), Var()
-    geler([x], _recorder([]), ("argument", [y, 3, (z, y)]), trail)
-    reachable = project_nonlinear([], [x], trail)
+    delay_goal([x], _recorder([]), ("argument", [y, 3, (z, y)]), trail)
+    reachable = project_nonlinear([], [x], trail, _as_pair)
     assert sorted(reachable, key=lambda v: v._id) == [y, z]
-    assert project_nonlinear([], [x], trail) == []
+    assert project_nonlinear([], [x], trail, _as_pair) == []
 
 
 def test_project_nonlinear_walks_records_and_deep_arguments():
@@ -558,6 +563,62 @@ def test_project_nonlinear_walks_records_and_deep_arguments():
         deep = [deep]
     form = LinearForm((0, 1), (0, 1), [(x, (1, 1))])
     holder = Var()
-    geler([holder], _recorder([]), (form, deep), trail)
-    reachable = project_nonlinear([], [holder], trail)
+    delay_goal([holder], _recorder([]), (form, deep), trail)
+    reachable = project_nonlinear([], [holder], trail, _as_pair)
     assert sorted(reachable, key=lambda v: v._id) == [x, y]
+
+
+def test_translate_hands_each_goal_to_translate_goal_in_order():
+    # nfq.pl's translate_goal//1 (Task 10) turns wait_linear_retry(Nf, Res,
+    # Goal) into [clpq:{Term = Res}, Goal]; a stand-in of that shape.
+    trail = Trail()
+    x, result, user_goal_variable = Var(), Var(), Var()
+    log = []
+    retry = _recorder(log)
+
+    def translate_goal(procedure, argument):
+        normal_form, res, goal = argument
+        return [("clpq", ("=", normal_form, res)), goal]
+
+    delay_goal([x], retry, ("nf", result, ("user", user_goal_variable)), trail)
+    goals = collect_nonlinear([x], trail, translate_goal)
+    assert goals == [("clpq", ("=", "nf", result)), ("user", user_goal_variable)]
+
+
+def test_project_nonlinear_reaches_what_translate_goal_emits():
+    trail = Trail()
+    x, result, user_goal_variable = Var(), Var(), Var()
+
+    def translate_goal(procedure, argument):
+        normal_form, res, goal = argument
+        return [("clpq", ("=", normal_form, res)), goal]
+
+    delay_goal([x], _recorder([]), ("nf", result, ("user", user_goal_variable)),
+               trail)
+    reachable = project_nonlinear([], [x], trail, translate_goal)
+    assert reachable == [result, user_goal_variable]
+
+
+def test_verify_component_fails_closed_on_a_plain_var():
+    trail = Trail()
+    record = get_attr(_new(trail, Var()), COMPONENT_KEY)
+    assert verify_component(record, PlainVar(), trail) is False
+    plain = PlainVar()                     # older, so the component is bound
+    component = _new(trail, Var())
+    assert unify(component, plain, trail) is False
+
+
+def test_verify_delayed_onto_a_plain_var_fails_closed():
+    trail = Trail()
+    x = Var()
+    delay_goal([x], _recorder([]), "g", trail)
+    later = LaterWork()
+    assert verify_delayed(state_of(x), PlainVar(), trail, later) is False
+    assert not later.queue
+
+
+def test_delay_goal_on_a_plain_var_fails_closed():
+    trail = Trail()
+    x = Var()
+    assert delay_goal([x, PlainVar()], _recorder([]), "g", trail) is False
+    assert state_of(x) is None
