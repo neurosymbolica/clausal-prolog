@@ -9,7 +9,7 @@ from fractions import Fraction
 
 import pytest
 
-from clausal.logic.clpq import dump_q, inf, q_eq, q_lt, q_gt, q_ne, q_le, sup
+from clausal.logic.clpq import dump_q, inf, q_eq, q_ge, q_lt, q_gt, q_ne, q_le, sup
 from clausal.logic.variables import deref
 from clausal.logic.variables import Trail, Var
 from clausal.terms import Add, Mult
@@ -120,3 +120,19 @@ def test_constraints_not_linked_to_the_targets_are_left_out():
     t, x, y, z = Trail(), Var(), Var(), Var()
     assert q_le(x, 5, t) and q_le(Add(left=y, right=z), 3, t)
     assert _dump([x], t) == ["{X =< 5}"]
+
+
+# A basic row is an equation, not just bounds on its expression: a user
+# variable can be basic, and with free variables entering the basis it
+# often is (second review, 2026-10-11).
+def test_a_basic_user_variable_keeps_its_constraints():
+    t, x, y = Trail(), Var(), Var()
+    assert q_ge(Add(left=x, right=y), 2, t)
+    assert _dump([x, y], t, toplevel=True) == ["{X + Y >= 2}"]
+
+
+def test_a_bound_reaches_the_answer_through_an_eliminated_variable():
+    t, x, y = Trail(), Var(), Var()
+    assert q_ge(y, 2, t)
+    assert q_le(Add(left=Mult(left=3, right=x), right=y), 1, t)
+    assert _dump([x], t) == ["{X =< -1/3}"]

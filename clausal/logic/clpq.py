@@ -836,18 +836,14 @@ def _get_tableau(trail: Trail) -> Tableau:
 def _snapshot_tableau(trail: Trail) -> None:
     """Save a snapshot so ``trail.undo()`` restores the tableau.
 
-    Deduplicates: if a snapshot was already taken at this trail position
-    (i.e., no trail entries have been added since the last snapshot),
-    skip the copy.  This avoids redundant deep copies when a single
-    logical step triggers multiple internal operations (e.g., ``q_eq``
-    → ``add_equality`` → ``check_implied_bindings`` → ``_q_hook``).
+    Every change to the store takes one.  It used to be skipped when the
+    trail had not grown since the last snapshot, but a choice point can be
+    taken at that very length: the change after it then had nothing to
+    undo it, and ``{X =< 3}, ({X >= 1}, fail ; true), X = 0`` failed.
     """
     tid = id(trail)
-    trail_len = len(trail)
-    if _last_snapshot.get(tid) == trail_len:
-        return  # already snapshotted at this point
     old = _tableaux[tid].copy()
-    _last_snapshot[tid] = trail_len + 1  # +1 because record() adds an entry
+    _last_snapshot[tid] = len(trail) + 1  # +1 because record() adds an entry
     trail.record(lambda: (_tableaux.__setitem__(tid, old),
                           _last_snapshot.__setitem__(tid, 0)))
 
@@ -1678,28 +1674,23 @@ def _collect_constraints(tableau: Tableau, target_ids: set[int],
         if coeffs:
             constraints.append((coeffs, '=', pk))
 
-    # Row inequalities: bv = rhs + Σ row[v]*v, bv in [lo, hi]
+    # Rows: bv = rhs + Σ row[v]*v, written as the equation itself (a
+    # user variable can be basic, and a parametric definition can name a
+    # basic slack: bounds on the row alone lost both).
     for bv, row in tableau.rows.items():
-        blo = tableau.lo.get(bv)
-        bhi = tableau.hi.get(bv)
-        rhs = tableau.rhs[bv]
-        # bv >= blo → Σ (-row[v])*v =< rhs - blo
-        if blo is not None:
-            coeffs = {v: -c for v, c in row.items() if c != ZERO}
-            if coeffs:
-                constraints.append((coeffs, '=<', rhs - blo))
-        # bv <= bhi → Σ row[v]*v =< bhi - rhs
-        if bhi is not None:
-            coeffs = {v: c for v, c in row.items() if c != ZERO}
-            if coeffs:
-                constraints.append((coeffs, '=<', bhi - rhs))
+        coeffs = {bv: ONE}
+        for v, c in row.items():
+            coeffs[v] = coeffs.get(v, ZERO) - c
+        coeffs = {v: c for v, c in coeffs.items() if c != ZERO}
+        constraints.append((coeffs, '=', tableau.rhs[bv]))
 
-    # Explicit bounds on non-basic, non-parametric variables
-    for vid in sorted(tableau.lo.keys()):
-        if vid in tableau.rows or vid in tableau.parametric:
-            continue
+    # Bounds on every variable, basic or not.
+    for vid in sorted(tableau.lo.keys() | tableau.hi.keys()):
         lo = tableau.lo.get(vid)
         hi = tableau.hi.get(vid)
+        if lo is not None and lo == hi:
+            constraints.append(({vid: ONE}, '=', lo))
+            continue
         if lo is not None:
             constraints.append(({vid: -ONE}, '=<', -lo))
         if hi is not None:
