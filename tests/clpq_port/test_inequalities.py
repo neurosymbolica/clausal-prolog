@@ -506,6 +506,82 @@ def test_tightening_an_active_upper_bound_pivots(normal_form_split):
     assert deref(x) == -9 and deref(y) == 4
 
 
+def _spy_pivots(monkeypatch):
+    """Record the (dependent bounds, pivot bounds) of every pivot_exchange
+    that inequalities makes."""
+    calls = []
+    original = ineq.pivot_exchange
+
+    def spy(dependent, independent_variable, dependent_bounds, pivot_bounds, trail):
+        calls.append((dependent_bounds, pivot_bounds))
+        return original(dependent, independent_variable, dependent_bounds,
+                        pivot_bounds, trail)
+    monkeypatch.setattr(ineq, "pivot_exchange", spy)
+    return calls
+
+
+def _active_box(trail, lower, upper, active):
+    x = Var()
+    assert bv.variable_intern_with_bounds(bounds_lower_upper(q(lower), q(upper)),
+                                          x, 0, trail)
+    if active == "lower":
+        assert bv.introduce_at(x, q(lower), bounds_lower_active_upper(
+            q(lower), q(upper)), trail)
+    else:
+        assert bv.introduce_at(x, q(upper), bounds_lower_upper_active(
+            q(lower), q(upper)), trail)
+    return x
+
+
+@pytest.mark.parametrize("strict", [True, False])
+def test_tightening_an_active_lower_of_t_lu_pivots(normal_form_split, monkeypatch, strict):
+    # update_independent_lower_strict/5, t_Lu clause, pivot branch: X in
+    # [0, 10] active at 0, Y >= 0, X - Y =< 5; X > 6 passes the row's limit
+    # (6 >= Ub + L = 5), so X is pivoted with pivot_bounds t_lu(6, 10).
+    # Non-strict: update_independent_lower/5's t_Lu clause, the same branch.
+    monkeypatch.setattr(bv, "assign", _assign_directly)
+    trail = Trail()
+    x = _active_box(trail, 0, 10, "lower")
+    y = _make_independent(trail, BOUNDS_LOWER, 0)
+    assert _post(trail, False, q(-5), (x, ONE), (y, q(-1)))
+    assert state_of(x).bounds == bounds_lower_active_upper(ZERO, q(10))
+    calls = _spy_pivots(monkeypatch)
+    assert _lower(trail, x, 6, strict)
+    # X is pivoted with pivot_bounds bounds_lower_upper(q(6), q(10)); the reconsider after it moves
+    # X out of the basis again, with the bound at the far end active.
+    assert calls == [(bounds_upper_active(ZERO), bounds_lower_upper(q(6), q(10)))]
+    state = state_of(x)
+    assert state.bounds == bounds_lower_upper_active(q(6), q(10))
+    assert state.lower_strict is strict and state.upper_strict is False
+    assert _infimum(trail, ZERO, (x, ONE)) == 6
+    assert -_infimum(trail, ZERO, (x, q(-1))) == 10
+
+
+@pytest.mark.parametrize("strict", [True, False])
+def test_tightening_an_active_upper_of_t_lu_pivots(normal_form_split, monkeypatch, strict):
+    # The mirror: update_independent_upper_strict/5, t_lU clause, pivot
+    # branch: X in [-10, 0] active at 0, Y =< 0, X - Y >= -5; X < -6 gives
+    # [-10, -6) with pivot_bounds t_lu(-10, -6); non-strict X =< -6 goes
+    # through update_independent_upper/5's t_lU clause.
+    monkeypatch.setattr(bv, "assign", _assign_directly)
+    trail = Trail()
+    x = _active_box(trail, -10, 0, "upper")
+    y = Var()
+    assert bv.variable_intern_with_bounds(bounds_upper(ZERO), y, 0, trail)
+    assert _post(trail, False, q(-5), (x, q(-1)), (y, ONE))
+    assert state_of(x).bounds == bounds_lower_upper_active(q(-10), ZERO)
+    calls = _spy_pivots(monkeypatch)
+    assert _upper(trail, x, -6, strict)
+    # X is pivoted with pivot_bounds bounds_lower_upper(q(-10), q(-6)); the reconsider after it moves
+    # X out of the basis again, with the bound at the far end active.
+    assert calls == [(bounds_upper_active(ZERO), bounds_lower_upper(q(-10), q(-6)))]
+    state = state_of(x)
+    assert state.bounds == bounds_lower_active_upper(q(-10), q(-6))
+    assert state.upper_strict is strict and state.lower_strict is False
+    assert _infimum(trail, ZERO, (x, ONE)) == -10
+    assert -_infimum(trail, ZERO, (x, q(-1))) == -6
+
+
 def test_a_bound_on_a_dependent_variable_with_a_free_row_swaps_it_out(
         normal_form_split):
     # update_dependent_upper/5 clause 1 with an unconstrained variable in the
@@ -566,7 +642,9 @@ def test_reconsider_upper_at_the_bound_takes_a_step(normal_form_split):
 
 # ---------------------------------------------------------------- Review Focus 3
 
-_CHAIN_STEPS = 30
+# 60 steps, not 30: Review Focus 3 asks for numerators over 10**60, and 30
+# steps reach only about 10**33.
+_CHAIN_STEPS = 60
 _FACTOR = Fraction(7, 13)
 _ADD = Fraction(1, 3)
 
@@ -579,7 +657,7 @@ def _chain_value(start):
 
 
 def test_review_focus_3_the_chain_on_bv_and_ineq_alone(normal_form_split, monkeypatch):
-    # X_{i+1} = (7/13)*X_i + 1/3 for 30 steps, 0 =< X_0 =< 1: the infimum
+    # X_{i+1} = (7/13)*X_i + 1/3 for 60 steps, 0 =< X_0 =< 1: the infimum
     # and supremum of X_30 are exact rationals equal to Fraction arithmetic.
     monkeypatch.setattr(bv, "assign", _assign_directly)
     trail = Trail()
@@ -593,6 +671,7 @@ def test_review_focus_3_the_chain_on_bv_and_ineq_alone(normal_form_split, monkey
         equation = _normal_form(q(-1, 3), (following, ONE), (previous, q(-7, 13)))
         assert bv.solve_equal(equation, trail)
         previous = following
+    assert _chain_value(0).numerator > 10**60 and _chain_value(1).numerator > 10**60
     assert _infimum(trail, ZERO, (previous, ONE)) == _chain_value(0)
     assert -_infimum(trail, ZERO, (previous, q(-1))) == _chain_value(1)
     # Strict bounds on X_30 just inside and at its range.
@@ -609,8 +688,8 @@ _CHAIN_PROGRAM = """\
 :- use_module(library(clpq)).
 chain(X, X, 0).
 chain(X0, Xn, N) :- N > 0, {X1 = 7/13*X0 + 1/3}, N1 is N-1, chain(X1, Xn, N1).
-fixed(X30) :- {X0 = 1}, chain(X0, X30, 30).
-range(S, I) :- {X0 >= 0, X0 =< 1}, chain(X0, X30, 30), sup(X30, S), inf(X30, I).
+fixed(X60) :- {X0 = 1}, chain(X0, X60, 60).
+range(S, I) :- {X0 >= 0, X0 =< 1}, chain(X0, X60, 60), sup(X60, S), inf(X60, I).
 """
 
 

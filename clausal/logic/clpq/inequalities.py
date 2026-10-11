@@ -485,11 +485,10 @@ def update_independent(strict, variable, coefficient, bound, trail):
 #
 #	repair upper or lower (maybe just swap with an unconstrained var from Rhs)
 #
-# (ineq.pl's comments, kept.)  A dependent variable has no active bound, so
-# update_dependent_* have clauses for t_none, t_l, t_u and t_lu only; any
-# other type fails.
+# (ineq.pl's comments, kept.)  ineq.pl's update_dependent_* have clauses for
+# t_none, t_l, t_u and t_lu only; for any other type they fail.
 
-def _swap_with_unconstrained(variable, form, found, trail):
+def _swap_with_unconstrained(variable, found, trail):
     """The `unconstrained(Lin, Uc, Kuc, Rest) -> ...` branch of the t_none
     clauses of update_dependent_*: Uc := (X - Rest)/Kuc, so X becomes
     independent."""
@@ -509,7 +508,7 @@ def update_dependent_lower(bounds, variable, form, bound, old, trail):
         _put_type_and_strictness(variable, bounds_lower(bound), 0b00, trail)
         found = unconstrained(form)
         if found is not None:
-            return _swap_with_unconstrained(variable, form, found, trail)
+            return _swap_with_unconstrained(variable, found, trail)
         if basis_add(variable, trail) is False:
             return False
         if not determine_active_increase(form, trail):
@@ -551,7 +550,7 @@ def update_dependent_lower_strict(bounds, variable, form, bound, old, trail):
         _put_type_and_strictness(variable, bounds_lower(bound), 0b10, trail)
         found = unconstrained(form)
         if found is not None:
-            return _swap_with_unconstrained(variable, form, found, trail)
+            return _swap_with_unconstrained(variable, found, trail)
         if basis_add(variable, trail) is False:
             return False
         if not determine_active_increase(form, trail):
@@ -594,7 +593,7 @@ def update_dependent_upper(bounds, variable, form, bound, old, trail):
         _put_type_and_strictness(variable, bounds_upper(bound), 0b00, trail)
         found = unconstrained(form)
         if found is not None:
-            return _swap_with_unconstrained(variable, form, found, trail)
+            return _swap_with_unconstrained(variable, found, trail)
         if basis_add(variable, trail) is False:
             return False
         if not determine_active_decrease(form, trail):
@@ -636,7 +635,7 @@ def update_dependent_upper_strict(bounds, variable, form, bound, old, trail):
         _put_type_and_strictness(variable, bounds_upper(bound), 0b01, trail)
         found = unconstrained(form)
         if found is not None:
-            return _swap_with_unconstrained(variable, form, found, trail)
+            return _swap_with_unconstrained(variable, found, trail)
         if basis_add(variable, trail) is False:
             return False
         if not determine_active_decrease(form, trail):
