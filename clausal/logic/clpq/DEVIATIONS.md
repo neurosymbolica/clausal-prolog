@@ -52,7 +52,19 @@ Clausal's attribute hook runs after the binding.  Each site in `itf3.pl`
 that reads X's attributes or tests `var(X)` expecting X still unbound is
 listed here with what the port does instead.
 
-Sites: to be filled in by Task 11.
+Sites in `class.pl` and `geler.pl` (Task 7):
+
+- `class.pl` `delete_first/3` compares `X == Y`.  Called from `itf3.pl`'s
+  hook, X is already bound in Clausal, so the port matches an element whose
+  chain of bindings passes through X, which is what `==` sees before the
+  binding (`test_delete_first_matches_a_variable_through_its_bindings`).
+- `class.pl` `verify_attributes/3` tests `var(Y)` and reads Y's attributes;
+  Y is the variable X was bound to, still unbound, so nothing changes.
+- `geler.pl` `verify_attributes/3` reads Y the same way; its Later goals go
+  on a `LaterWork` queue and run after the hook
+  (`test_verify_delayed_against_a_value_queues_the_goals`).
+
+Sites in `itf3.pl`: to be filled in by Task 11.
 
 ## D4: the order of variables is creation order
 
@@ -125,3 +137,46 @@ raises what 1.3.3 evidently means, `error(system_error(unsatisfiable_ordering),
 arrangement/2)` (ruling R13; `test_a_cyclic_ordering_raises_the_system_error`).
 A program that catches the SICStus `type_error` would not catch the port's
 error.
+
+## D7: delayed goals are (procedure, argument) pairs; `all_nonlinear/1` is not kept
+
+`geler.pl` delays a Prolog goal and runs it with `call/1`.  The port delays
+a `DelayedGoal(mutex, procedure, argument)` and runs
+`procedure(argument, trail)`, which returns True or False.  So:
+
+- A delayed goal is deterministic: it has one answer or none.  The goals
+  `nf.pl` delays (`resubmit_*`, `wait_linear_retry`) are Task 10's to port
+  in that shape; Task 10 confirms each is deterministic in 1.3.3.
+- `translate_goal//1`'s clauses for a conjunction and for `M:G` have nothing
+  to do: a port goal is never either (`test_collect_nonlinear_marks_the_goals_done`).
+- `project_nonlinear/3` sorts the collected goals and puts them on a fresh
+  variable as `all_nonlinear/1`, which `attribute_goal/2`'s second clause
+  reads.  The variable is local to `project_nonlinear/3`, so no answer can
+  reach it; the port skips the sort and the attribute.  The reachable
+  variables are returned in creation order; 1.3.3's
+  `term_variables_set/2` gives a set, and `project.pl` only marks each
+  variable `target`, so the order does not matter
+  (`test_project_nonlinear_gives_the_variables_the_goals_reach`).
+
+## D8: components are a separate attribute key; binding direction is by age
+
+`class.pl`'s `component_attributes/4` is its own attribute module in 1.3.3;
+the port keeps it apart from `SolverState`, under
+`components.COMPONENT_KEY`, with its own hook `verify_component`.
+
+- SICStus binds a plain variable to an attributed one without calling
+  `verify_attributes/3`; `component_new/4`'s `Su = Class` relies on that.
+  This engine binds the newer variable to the older and calls the newer
+  one's hook, so `verify_component` moves X's record onto a Y with no
+  attributes (`test_component_new_puts_the_record_on_a_plain_variable`).
+- When two components merge, the member and basis lists of the component
+  bound (X) come before Y's.  The engine binds the newer component variable
+  to the older (`test_a_merge_through_verify_component_is_undone_to_two_components`).
+  Which of two attributed variables SICStus binds is not checked; if it is
+  the other, the merged member order differs, and the member order decides
+  `project.pl`'s numbering of unordered variables.  Task 12's oracle tests
+  are the check.
+- `delete_first/3`, finding nothing to delete, rebuilds an equal list in
+  1.3.3; the port returns the list itself.  `component_basis_drop/2`'s
+  `Basis0 \== Basis` then becomes `is not`
+  (`test_delete_first_of_an_absent_element_gives_the_list_itself`).

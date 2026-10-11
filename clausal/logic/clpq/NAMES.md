@@ -76,6 +76,12 @@ Names with no 1.3.3 atom of their own.  They are not in `rename_map.tsv`.
 | `MINUS_ONE` | `linear_forms.py` | the rational -1 (1.3.3 writes `-1` inline) |
 | `compare_order_values` | `variable_ordering.py` | the `compare(Rel, Oa, Ob)` step of `nf_ordering/3` (`compare_variable_order`), on two order values; `nf_coeff_hom/3` and `nf_rhs_x/4` call it directly, as 1.3.3 calls `compare/3` |
 | `add_edges`, `add_vertices`, `graph_union`, `top_sort` | `variable_ordering.py` | SICStus `library(ugraphs)`, which `ordering.pl` imports; they keep their names |
+| `COMPONENT_KEY`, `ComponentRecord` | `components.py` | the attribute `component_attributes/4` (the 1.3.3 attribute is renamed `component_attributes`; the record has fields `members`, `tail`, `basis`, `priority`) |
+| `ListCell`, `open_list`, `closed_list`, `list_elements` | `components.py` | a list cell `[H\|T]`, and building and reading open (`[X\|Tail]`) and closed lists |
+| `verify_component` | `components.py` | `class.pl`'s `verify_attributes/3` |
+| `DelayedGoal`, `DONE` | `delayed_goals.py` | `geler.pl`'s `run(Mutex, Goal)` term, and the atom `done` |
+| `RunGoals` | `delayed_goals.py` | one entry of `geler.pl`'s Later list |
+| `verify_delayed` | `delayed_goals.py` | `geler.pl`'s `verify_attributes/3` |
 
 ## Table
 

@@ -277,22 +277,23 @@ def test_arrangement_needs_a_component():
 
 
 
-def test_a_cyclic_ordering_raises_the_system_error(monkeypatch):
+def test_a_cyclic_ordering_raises_the_system_error():
     # DEVIATIONS.md D6 (ruling R13): 1.3.3's intent, system(unsatisfiable_
     # ordering), not the type_error(callable, 0) SICStus 4.10.1 raises.
-    # class.pl's priority (Task 7) is stood in for by a stub module.
-    import sys
-    import types
+    from clausal.logic.clpq.components import (
+        component_new, component_put_priority, open_list)
     from clausal.logic.exceptions import LogicException
+    trail = Trail()
     a, b = Var(), Var()
-    stub = types.ModuleType("clausal.logic.clpq.components")
-    stub.component_get_priority = lambda component: add_edges([], [(a, b), (b, a)])
-    monkeypatch.setitem(sys.modules, "clausal.logic.clpq.components", stub)
+    component = Var()
+    head, tail = open_list([a, b])
+    assert component_new(component, head, tail, None, trail)
+    component_put_priority(component, add_edges([], [(a, b), (b, a)]), trail)
     with pytest.raises(LogicException) as raised:
-        arrangement(Var())
+        arrangement(component)
     assert raised.value.term[1] == ("system_error", "unsatisfiable_ordering")
-    stub.component_get_priority = lambda component: add_edges([], [(a, b)])
-    assert arrangement(Var()) == [a, b]
+    component_put_priority(component, add_edges([], [(a, b)]), trail)
+    assert arrangement(component) == [a, b]
 
 # ---------------------------------------------------------------- store.pl units
 
