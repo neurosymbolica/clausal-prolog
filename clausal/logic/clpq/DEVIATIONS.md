@@ -141,6 +141,15 @@ does instead:
   (`trail_undo_to` calls `PyErr_Clear` after deleting an attribute key, so
   `unify` returns NULL with no exception set); checking before any trailed
   change keeps the `type_error` (`test_a_non_number_raises_a_type_error`).
+  This covers the first hook of a unification and every bound member a
+  stand-in is made for.  It does not cover a later hook of the same
+  unification after an earlier one has changed the trail:
+  `{X >= 0}, {Y >= 0}, f(X, Y) = f(1, a)` (X and Y in different components)
+  raises `SystemError` instead of `type_error(rational, a)`, and so does any
+  other exception that leaves the hook after a trailed change (an
+  evaluation error in a Later goal run in place).  X's hook cannot see Y,
+  so no port-side order helps; the fix is the engine's `trail_undo_to`
+  keeping the pending exception.
   Y is accepted when it is a variable or an exact number (an int, a
   Fraction, a finite Decimal); a float raises `type_error(rational, Y)` as
   1.3.3's `arith_normalize(Y, Y)` test does (Scryer's clpq accepts it).
@@ -167,15 +176,43 @@ does instead:
   handed in, as Task 7 wrote it.
 
 Several variables bound in one unification.  The engine makes every
-binding of a unification first, then calls the hooks in turn, so when X's
+binding of a unification first, then calls the hooks in turn.  So while X's
 hook runs, another constrained variable W of the same unification can be
-bound with its hook still to come, and W is in rows X's hook walks.  The
-hook therefore makes a stand-in for every bound member of X's component and
-of Y's, and does each one's work; when W's own hook comes, W is no longer a
-member, and it returns at once
-(`test_one_unification_binding_two_constrained_variables`,
-`test_one_unification_agrees_with_binding_one_at_a_time`).  Scryer's clpq
+bound with its hook still to come ("unhooked"), and W can be in rows and
+member lists the solver walks.  What the port guarantees (ruling R21):
+
+- Before X's hook reads a row, it makes a stand-in for every bound member
+  of X's component, of Y's, and of the component each such member's value
+  is in, transitively, and does each one's work
+  (`_stand_in_for_bound_members`).
+- Before each Later goal runs, outside a driver or in it, `catch_up` does
+  the same for the components of the variables the goal holds (and those
+  they reach).  A Later goal reaches the store only through those
+  variables: a constraint it posts dereferences them, a binding it makes
+  runs that variable's hook, which catches up its own components.
+- An unhooked W whose work was done this way is no longer a member; when
+  its own hook comes it finds that and returns at once.
+
+So no solver code of this module reads a row or member list that holds an
+unhooked binding.  Not covered: code that other keys' hooks run in place
+in the same unification (a `freeze/2` goal outside a driver that posts a
+constraint) can still meet one.  The checks:
+`test_one_unification_binding_two_constrained_variables`,
+`test_a_later_goal_reads_no_unhooked_binding` (and `_the_other_way`), and
+`test_one_unification_bare_one_at_a_time_and_under_a_driver_agree`: 2,000
+random stores of two components joined by a delayed goal, two or three
+members bound in one unification, bare, one at a time and under a driver,
+with 0 disagreements (20,000 seeds with `CLPQ_PORT_PROPERTY_SEEDS=20000`
+also gave 0; before the fix, 50 of 2,000 disagreed).  The cost: each Later
+goal scans the member lists of its variables' components.  Scryer's clpq
 fails `{X + Y = 3}, f(X, Y) = f(1, 2)`; the port answers it.
+
+Proposed engine alternative (needs the operator): when `trail.defer` is
+false, a bare `unify` runs `trail.pending` to its first answer after
+`fire_wakeups`, so Later goals always run after every hook of the
+unification.  The hook would then always push its Later work, and
+`DRAINING` and `catch_up` would go; the stand-ins for X's and Y's
+components would stay.
 
 Implied bindings are queued, not nested.  bv.pl's `export_binding/1` binds
 each `X = Value` at once, and in 1.3.3 each binding runs X's
@@ -185,7 +222,7 @@ clause 3 on X while X is still unbound (the order 1.3.3 has), appends the
 bindings that implies to the end of the list, and only then binds X; the
 hook that binding wakes takes clause 2 and returns
 (`test_implied_bindings_are_queued_not_nested`,
-`test_a_chain_of_ten_thousand_implied_bindings_needs_no_recursion`).
+`test_a_cascade_of_delayed_goals_needs_no_recursion`).
 `bounded_simplex.export_bindings` (bv.pl `export_binding/1`, from `solve/1`,
 `solve_for_variable/2` and ineq.pl's reconsider) goes through the same list
 (`attribute_hooks.bind_all`).  So the bindings are checked in breadth-first

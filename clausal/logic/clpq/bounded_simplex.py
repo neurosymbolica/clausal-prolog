@@ -230,7 +230,7 @@ def export_bindings(bindings, trail):
     (X, Value) pairs, Value a rational.  Each binding is checked by itf3.pl's
     verify_attributes/3 as it is made, through attribute_hooks.bind_all's
     work list, so a cascade of implied bindings does not nest
-    (test_a_chain_of_ten_thousand_implied_bindings_needs_no_recursion)."""
+    (test_implied_bindings_are_queued_not_nested)."""
     from clausal.logic.clpq.attribute_hooks import bind_all   # cyclic: itf3.pl
     return bind_all(bindings, trail)
 

@@ -564,3 +564,152 @@ def test_one_unification_agrees_with_binding_one_at_a_time(seed):
                     break
         outcomes.append(_outcome(variables, trail, ok))
     assert outcomes[0] == outcomes[1]
+
+
+# ---------------------------------------------------------------- fix round 1
+
+def test_a_later_goal_reads_no_unhooked_binding():
+    # One unification binds V3, V2, V0; V1*V3 >= V4 is a goal delayed across
+    # two components.  V0 + V1 = V2 then gives V1 = 0, so 0 >= V4 >= 4: no.
+    # Outside a driver the goal V3's hook wakes used to read V0's component
+    # while V0 was bound and its hook still to come, and succeeded.
+    def store():
+        trail = Trail()
+        v = [Var() for _ in range(5)]
+        assert _post(trail, ("=", ("+", v[0], v[1]), v[2]), (">=", v[3], 0),
+                     (">=", ("*", v[1], v[3]), v[4]), (">=", v[4], 4))
+        return trail, v
+    trail, v = store()
+    assert unify((v[3], v[2], v[0]), (3, 0, 0), trail) is False
+    trail, v = store()
+    assert (unify(v[3], 3, trail) and unify(v[2], 0, trail)
+            and unify(v[0], 0, trail)) is False
+
+
+def test_a_later_goal_reads_no_unhooked_binding_the_other_way():
+    # {Q = 3 - Z}, {X*Q = W}, f(X, Z) = f(2, 1): X = 2, Z = 1, Q = 2, W = 4,
+    # in every creation order and both argument orders; it used to fail.
+    import itertools
+    for creation in itertools.permutations("xwzq"):
+        for swap in (False, True):
+            trail = Trail()
+            made = {}
+            for name in creation:
+                made[name] = Var()
+            x, w, z, q = made["x"], made["w"], made["z"], made["q"]
+            assert _post(trail, ("=", q, ("-", 3, z)),
+                         ("=", ("*", x, q), w))
+            if swap:
+                assert unify(("f", z, x), ("f", 1, 2), trail)
+            else:
+                assert unify(("f", x, z), ("f", 2, 1), trail)
+            assert [deref(v) for v in (x, z, q, w)] == [2, 1, 2, 4]
+
+
+def _two_answer_choice(z, trail):
+    def choice():
+        mark = trail.mark()
+        for value in (1, 2):
+            if unify(z, value, trail):
+                yield None
+            trail.undo(mark)
+    return choice
+
+
+def test_later_work_survives_a_retry_under_a_driver():
+    # The engine's drain calls a queued goal's factory again when an earlier
+    # goal gives a second answer; the Later work must run again then.
+    from clausal.logic.pending import drain
+    trail = Trail()
+    y, x, z = Var(), Var(), Var()
+    assert _post(trail, (">=", x, 1))
+    trail.defer = True
+    try:
+        trail.push_pending(_two_answer_choice(z, trail))
+        assert unify(x, y, trail)
+        seen = [(deref(z), _inf(y, trail)) for _ in drain(trail)]
+    finally:
+        trail.defer = False
+    assert seen == [(1, 1), (2, 1)]
+
+
+def test_a_woken_non_linear_goal_survives_a_retry_under_a_driver():
+    from clausal.logic.pending import drain
+    trail = Trail()
+    x, y, p, z = Var(), Var(), Var(), Var()
+    assert _post(trail, ("=", p, ("*", x, y)), (">=", y, 0))
+    trail.defer = True
+    try:
+        trail.push_pending(_two_answer_choice(z, trail))
+        assert unify(x, 2, trail)
+        seen = [(deref(z), _sup(("-", p, ("*", 2, y)), trail),
+                 _inf(("-", p, ("*", 2, y)), trail)) for _ in drain(trail)]
+    finally:
+        trail.defer = False
+    assert seen == [(1, 0, 0), (2, 0, 0)]
+
+
+def _property_store(rng):
+    """Five variables in two components, V0 + V1 = V2 + k and bounds on V3
+    and V4, joined by a goal V_i * V3 (rel) V4 delayed across both."""
+    trail = Trail()
+    v = [Var() for _ in range(5)]
+    ok = _post(trail,
+               ("=", ("+", v[0], v[1]), ("+", v[2], rng.randint(0, 2))),
+               (rng.choice(("=<", ">=")), v[3], rng.randint(0, 3)),
+               (rng.choice(("=<", ">=", "=")),
+                ("*", v[rng.randint(0, 2)], v[3]), v[4]),
+               (rng.choice(("=<", ">=")), v[4], rng.randint(0, 6)))
+    return trail, v, ok
+
+
+def _property_outcome(variables, trail, ok):
+    if not ok:
+        return None
+    result = []
+    for variable in variables:
+        value = deref(variable)
+        result.append(Fraction(value) if not is_var(value)
+                      else (_inf(value, trail), _sup(value, trail)))
+    return tuple(result)
+
+
+def test_one_unification_bare_one_at_a_time_and_under_a_driver_agree():
+    # Ruling R21's property: 2,000 seeds by default
+    # (CLPQ_PORT_PROPERTY_SEEDS=N for more).
+    import os
+    import random
+    seeds = int(os.environ.get("CLPQ_PORT_PROPERTY_SEEDS", "2000"))
+    disagreements = []
+    for seed in range(seeds):
+        rng = random.Random(seed)
+        state = rng.getstate()
+        outcomes = []
+        for mode in ("bare", "one at a time", "driver"):
+            rng.setstate(state)
+            trail, v, ok = _property_store(rng)
+            if not ok:
+                break
+            count = rng.randint(2, 3)
+            chosen = rng.sample(range(5), count)
+            values = [rng.randint(0, 3) for _ in range(count)]
+            left = tuple(v[i] for i in chosen)
+            if mode == "bare":
+                result = unify(left, tuple(values), trail)
+            elif mode == "one at a time":
+                result = True
+                for variable, value in zip(left, values):
+                    if not unify(variable, value, trail):
+                        result = False
+                        break
+            else:
+                trail.defer = True
+                try:
+                    result = unify(left, tuple(values), trail) \
+                        and run_first(trail)
+                finally:
+                    trail.defer = False
+            outcomes.append(_property_outcome(v, trail, result))
+        if outcomes and not (outcomes[0] == outcomes[1] == outcomes[2]):
+            disagreements.append((seed, outcomes))
+    assert disagreements == []

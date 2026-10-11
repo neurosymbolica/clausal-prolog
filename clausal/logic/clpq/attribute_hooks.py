@@ -23,10 +23,15 @@ itself (DEVIATIONS.md D3).  So the hook:
   that one's attributes (test_the_state_on_the_bound_variable_is_left_alone);
 - binds what solve/5 implies one binding at a time from a work list, each
   checked before it is made, so a cascade does not nest
-  (test_a_chain_of_ten_thousand_implied_bindings_needs_no_recursion);
+  (test_implied_bindings_are_queued_not_nested);
 - runs the Later goals after all of that: on the trail's pending queue when
   a driver owns the trail, otherwise from a LaterWork queue it drains
-  itself (test_later_work_goes_on_the_pending_queue_under_a_driver).
+  itself, one loop for a whole cascade
+  (test_later_work_goes_on_the_pending_queue_under_a_driver,
+  test_a_cascade_of_delayed_goals_needs_no_recursion);
+- before each Later goal, does the work of any variable the same
+  unification bound whose hook has not run yet, in the components the goal
+  reaches (catch_up; test_a_later_goal_reads_no_unhooked_binding).
 
 bv.pl's export_binding/1 (bounded_simplex.export_bindings) binds through
 the same work list.
@@ -46,7 +51,7 @@ from clausal.logic.clpq.bounded_simplex import (
 from clausal.logic.clpq.components import (
     COMPONENT_KEY, ComponentRecord, ListCell, component_all_variables,
     component_drop, list_elements)
-from clausal.logic.clpq.delayed_goals import verify_delayed
+from clausal.logic.clpq.delayed_goals import _term_variables, verify_delayed
 from clausal.logic.clpq.linear_forms import (
     LinearForm, independent, normal_form_coefficient_of)
 from clausal.logic.exceptions import LogicException, type_error
@@ -75,16 +80,40 @@ register_attr_hook(CLPQ_KEY, holzbaur_hook)
 
 class PendingLater:
     """A LaterWork queue as a goal on the trail's pending queue: a
-    zero-argument factory with one answer or none."""
-    __slots__ = ("later",)
+    zero-argument factory with one answer or none.  It keeps the work as a
+    tuple and runs a fresh queue of it on every call, because the engine's
+    drain calls the factory again when an earlier queued goal gives another
+    answer (test_later_work_survives_a_retry_under_a_driver)."""
+    __slots__ = ("work", "trail")
 
-    def __init__(self, later):
-        self.later = later
+    def __init__(self, later, trail):
+        self.work = tuple(later.queue)
+        self.trail = trail
+
+    def fresh(self):
+        later = LaterWork()
+        later.queue.extend(self.work)
+        return later
 
     def __call__(self):
-        if self.later.drain():
+        if drain_later(self.fresh(), self.trail):
             return (None,)
         return ()
+
+
+def drain_later(later, trail):
+    """LaterWork.drain, with catch_up before each goal."""
+    queue = later.queue
+    try:
+        while queue:
+            work = queue.popleft()
+            if not catch_up(work, trail, later) or not work():
+                queue.clear()
+                return False
+    except BaseException:
+        queue.clear()
+        raise
+    return True
 
 
 class DrainMarker:
@@ -108,17 +137,17 @@ def run_later(later, trail):
     if not later.queue:
         return True
     if trail.defer:
-        trail.push_pending(PendingLater(later))
+        trail.push_pending(PendingLater(later, trail))
         return True
     pending = trail.pending
     if pending is not None:
         if pending[0] is DRAINING:
-            trail.push_pending(PendingLater(later))
+            trail.push_pending(PendingLater(later, trail))
             return True
-        return later.drain()        # goals of another kind wait there
+        return drain_later(later, trail)    # goals of another kind wait there
     trail.push_pending(DRAINING)
     try:
-        if not later.drain():
+        if not drain_later(later, trail):
             return False
         while True:
             goals = trail.take_pending()
@@ -150,22 +179,67 @@ def verify_attributes(state, other, trail, later):
     if _without_solver_attributes(state):                       # clause 1
         return verify_delayed(state, other, trail, later)
     numbers_only(other, None)                                   # clause 3
-    stand_ins = _stand_in_for_bound_members(state, other, trail)
-    if stand_ins is None:
-        return True             # an earlier hook of this unification did it
     bindings = []
-    if not stand_ins:           # X has no linear form in a component
+    if state.component is None or state.linear_form is None:
+        # X has no linear form in a component: nothing to stand in for.
         if not verify_bound(None, state, other, trail, later, bindings):
             return False
-    else:
-        for stand_in, member_state, member in stand_ins:
-            value = deref(member)
-            put_state(stand_in, with_changes(state_of(stand_in), forward=value),
-                      trail)                                    # put_atts(X, forward(Y))
-            if not verify_bound(stand_in, member_state, value, trail, later,
-                                bindings):
-                return False
+        return bind_queued(bindings, trail, later)
+    components = [deref(state.component)]
+    other_component = _component_of(other)
+    if other_component is not None:
+        components.append(other_component)
+    stand_ins = _stand_in_for_bound_members(components, state, trail)
+    if stand_ins is None:
+        return True             # an earlier hook of this unification did it
+    if not _verify_stand_ins(stand_ins, trail, later, bindings):
+        return False
     return bind_queued(bindings, trail, later)
+
+
+def _verify_stand_ins(stand_ins, trail, later, bindings):
+    """Clause 3 for each bound member, on its stand-in."""
+    for stand_in, member_state, member in stand_ins:
+        value = deref(member)
+        put_state(stand_in, with_changes(state_of(stand_in), forward=value),
+                  trail)                                        # put_atts(X, forward(Y))
+        if not verify_bound(stand_in, member_state, value, trail, later,
+                            bindings):
+            return False
+    return True
+
+
+def catch_up(work, trail, later):
+    """Before a Later goal *work* runs: do the work of every constrained
+    variable that this unification has bound but whose hook has not run
+    yet, in the components the goal's variables are in (and the components
+    those reach).  Its own hook then finds it done.  The goal then reads
+    no row that holds a bound variable (DEVIATIONS.md D3,
+    test_a_later_goal_reads_no_unhooked_binding)."""
+    components = []
+    for variable in _term_variables([work]):
+        component = _component_of(variable)
+        if component is not None:
+            components.append(component)
+    if not components:
+        return True
+    stand_ins = _stand_in_for_bound_members(components, None, trail)
+    if not stand_ins:
+        return True
+    bindings = []
+    if not _verify_stand_ins(stand_ins, trail, later, bindings):
+        return False
+    return bind_queued(bindings, trail, later)
+
+
+def _component_of(value):
+    """The component of *value*, dereferenced, or None."""
+    if type(value) is not AttVar or not is_var(value):
+        return None
+    value_state = state_of(value)
+    if value_state is None or value_state.component is None:
+        return None
+    return deref(value_state.component)
 
 
 def _without_solver_attributes(state):
@@ -199,7 +273,7 @@ def bind_queued(bindings, trail, later):
     """bv.pl, export_binding/1, for bindings solve/5 implied: each one is
     checked by verify_attributes/3's clause 3 before it is made, so its hook
     finds `forward` and takes clause 2.  Bindings the checks imply join the
-    end of the list (test_a_chain_of_ten_thousand_implied_bindings_needs_no_recursion)."""
+    end of the list (test_implied_bindings_are_queued_not_nested)."""
     i = 0
     while i < len(bindings):
         variable, value = bindings[i]
@@ -247,26 +321,26 @@ def _own_state(variable):
     return attributes.get(CLPQ_KEY)
 
 
-def _stand_in_for_bound_members(state, other, trail):
-    """Replace X and every other bound member of X's and Y's components by a
-    fresh unbound stand-in, in the member lists, the bases and the rows.
+def _stand_in_for_bound_members(components, state, trail):
+    """Replace every bound member of *components*, and of the components
+    their values are in (transitively), by a fresh unbound stand-in, in the
+    member lists, the bases and the rows.
 
-    Returns [(stand_in, its state, the bound variable)], X's first; [] where
-    X has no linear form in a component; None where X is not a member any
-    more, because the hook of another variable bound in the same
-    unification has done X's work already."""
-    if state.component is None or state.linear_form is None:
-        return []
-    components = [deref(state.component)]
-    if is_var(other) and type(other) is AttVar:
-        other_state = state_of(other)
-        if other_state is not None and other_state.component is not None:
-            component = deref(other_state.component)
-            if component is not components[0]:
-                components.append(component)
-    bound = []
-    found = False
+    Returns [(stand_in, its state, the bound variable)], the member whose
+    own state is *state* (X) first.  None where *state* is given and no
+    bound member carries it: X is not a member any more, because the work
+    of the hook of another variable bound in the same unification, or a
+    catch_up, has done X's work already."""
+    components = list(components)
+    seen = set()
     for component in components:
+        seen.add(id(component))
+    bound = []
+    found = state is None
+    i = 0
+    while i < len(components):
+        component = components[i]
+        i += 1
         for member in list_elements(component_all_variables(component)):
             if type(member) is not AttVar or not member.is_bound:
                 continue
@@ -278,8 +352,14 @@ def _stand_in_for_bound_members(state, other, trail):
                 bound.insert(0, (member, member_state))
             else:
                 bound.append((member, member_state))
+            reached = _component_of(deref(member))
+            if reached is not None and id(reached) not in seen:
+                seen.add(id(reached))
+                components.append(reached)
     if not found:
         return None
+    if not bound:
+        return []
     for member, _ in bound:
         # numbers_only/2 before the first trailed change: the engine's undo
         # after a hook raises clears the exception (DEVIATIONS.md D3,
