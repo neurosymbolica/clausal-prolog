@@ -205,3 +205,64 @@ def test_an_arithmetic_equality_with_a_constant_is_a_binding():
 def test_blanks_that_separate_two_words_are_refused():
     with pytest.raises(ValueError):
         same_solution_sets([Answer({}, ["Y=X mod 2"])], [Answer({}, ["Y=X mod 2"])])
+
+
+# ---- fix round 3 -------------------------------------------------------------
+
+def _equal(left, right):
+    return same_solution_sets([Answer({}, [left])], [Answer({}, [right])])[0]
+
+
+def test_a_negative_literal_is_read_from_the_source_text():
+    # Scryer: W = -(2^2), Y is W gives -4 and prints W as `- (2^2)`;
+    # V = -2^2, U is V gives 4.
+    assert _equal("Y=-(2^2)", "Y=-4")
+    assert not _equal("Y=-(2^2)", "Y=4")
+    assert _equal("Y= - (2^2)", "Y=-4")
+    assert not _equal("Y=X*(-(2^2))", "Y=4*X")
+    assert _equal("Y=-2^2", "Y=4")
+    assert not _equal("Y=-2^2", "Y=-4")
+    assert _equal("Y=X-2^2", "Y=X-4")
+    assert _equal("X>=2^ -1", "X>=1/2")
+
+
+def test_a_power_is_right_associative():
+    # ^ is 200 xfy in ISO and Scryer: X^2^2 is X^(2^2).
+    assert _equal("Y=X^2^2", "Y=X^4")
+    assert not _equal("Y=X^2^2", "Y=X^2*X^2*X^2")
+
+
+def _binding(text):
+    return [Answer({"X": _value(text)}, [])]
+
+
+def test_only_a_prolog_float_literal_is_a_float():
+    assert _value("1.5e3") == 1500.0
+    assert _value("inf") == "inf" and _value("nan") == "nan"
+    assert not same_solution_sets(_binding("inf"), _binding("infinity"))[0]
+    # Inf and Infinity are variable names: shown-variable equalities, not floats.
+    assert _value("Inf") == "Inf"
+    assert not same_solution_sets(_binding("Inf"), _binding("Infinity"))[0]
+
+
+def test_a_binding_rational_is_printed_in_lowest_terms():
+    assert not same_solution_sets(_binding("4/2"), _binding("2"))[0]
+    assert not same_solution_sets(_binding("1/2/3"), _binding("1 rdiv 6"))[0]
+    assert not same_solution_sets(_binding("- (1)"), _binding("-1"))[0]
+    for text, number in [("1/2", Fraction(1, 2)), ("-1/2", Fraction(-1, 2)),
+                         ("1 rdiv 2", Fraction(1, 2)), ("-1 rdiv 2", Fraction(-1, 2)),
+                         ("-3", Fraction(-3)), ("7", Fraction(7))]:
+        assert _value(text) == number, text
+
+
+def test_text_is_normalised_once():
+    # `- 2^2` has a blank after the sign, so it is -(2^2); normalising twice
+    # would close the blank and re-read it as the literal -2.
+    assert _equal("Y= - 2^2", "Y=-4")
+    assert not _equal("Y= - 2^2", "Y=4")
+
+
+def test_python_only_number_syntax_is_refused():
+    assert _value("1_000") == "1_000"
+    with pytest.raises(ValueError):
+        _equal("X>=1_000", "X>=1000")

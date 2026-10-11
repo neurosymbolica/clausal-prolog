@@ -35,14 +35,39 @@ _SPLIT = re.compile(r"(=<|>=|=:=|=\\=|<|>|=)")
 _VARIABLE = re.compile(r"^[A-Z_][A-Za-z0-9_]*$")
 
 
+_NEGATIVE = "__negative_literal_"
+_NEGATIVE_NAME = re.compile(rf"^{_NEGATIVE}(\d+)$")
+_PREFIX_POSITION = set("(,=<>*/+-^[{|\\")
+
+
+def _mark_negative_literals(text):
+    """Each ``-`` that Prolog reads as the sign of a number becomes one token.
+
+    That is a ``-`` directly followed by a digit (ISO 6.3.4.1), in prefix
+    position (at the start, or after an operator or an opening bracket).
+    Python's ast cannot tell ``-2**2`` from ``-(2**2)``, so this is decided
+    on the text (test_a_negative_literal_is_read_from_the_source_text).
+    """
+    def mark(found):
+        before = text[:found.start()].rstrip()
+        if before and before[-1] not in _PREFIX_POSITION:
+            return found.group(0)
+        return _NEGATIVE + found.group(1)
+    return re.sub(r"-(\d+)(?![\d.])", mark, text)
+
+
 def _normal(text):
-    """*text* with ``rdiv`` spelt ``/``, ``^`` spelt ``**`` and no blanks.
+    """*text* with ``rdiv`` spelt ``/``, ``^`` spelt ``**``, negative
+    literals marked, and no blanks.
 
     Blanks between two word characters (``X mod 2``) are refused: removing
     them would merge two tokens into one name
     (test_blanks_that_separate_two_words_are_refused).
     """
-    text = re.sub(r"\s+rdiv\s+", "/", text).replace("^", "**")
+    text = re.sub(r"\s+rdiv\s+", "/", text)
+    text = _mark_negative_literals(text).replace("^", "**")
+    if re.search(r"(?<!\w)\d[\d_]*_", text):
+        raise ValueError(f"not a Prolog number in {text!r}")
     if re.search(r"[\w.]\s+[\w.]", text):
         raise ValueError(f"blanks between two words in {text!r}")
     return re.sub(r"\s+", "", text)
@@ -69,13 +94,27 @@ def _is_int(node):
     return (isinstance(node, ast.Constant) and type(node.value) is int)
 
 
-def _exponent(node):
+def _integer(node):
+    """*node*'s value when it is an int literal or a marked negative one."""
     if _is_int(node):
         return node.value
-    if (isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub)
-            and _is_int(node.operand)):
-        return -node.operand.value
-    raise ValueError(f"exponent is not an integer: {ast.unparse(node)}")
+    if isinstance(node, ast.Name):
+        negative = _NEGATIVE_NAME.match(node.id)
+        if negative:
+            return -int(negative.group(1))
+    return None
+
+
+def _exponent(node):
+    """An exponent: a constant expression with an integer value.  Python's
+    ``**`` is right-associative like ISO's ``^`` (200 xfy), so ``X^2^2`` is
+    X^(2^2) (test_a_power_is_right_associative)."""
+    def variable(identifier):
+        raise ValueError(f"exponent is not an integer: {ast.unparse(node)}")
+    value = _arithmetic(node, variable, Fraction, Fraction)
+    if value.denominator != 1:
+        raise ValueError(f"exponent is not an integer: {ast.unparse(node)}")
+    return int(value)
 
 
 def _arithmetic(node, name, number, rational):
@@ -86,19 +125,17 @@ def _arithmetic(node, name, number, rational):
             raise ValueError(f"constant is not an integer: {node.value!r}")
         return number(node.value)
     if isinstance(node, ast.Name):
+        negative = _NEGATIVE_NAME.match(node.id)
+        if negative:
+            return number(-int(negative.group(1)))
         return name(node.id)
-    if (isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub)
-            and isinstance(node.operand, ast.BinOp) and isinstance(node.operand.op, ast.Pow)
-            and _is_int(node.operand.left)):
-        # Prolog reads -2 as one number, so -2^2 is (-2)^2; Python reads
-        # -(2**2) (test_a_negative_literal_is_the_base_of_a_power).
-        return number(-node.operand.left.value) ** _exponent(node.operand.right)
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
         value = _arithmetic(node.operand, name, number, rational)
         return -value if isinstance(node.op, ast.USub) else value
     if isinstance(node, ast.BinOp):
-        if isinstance(node.op, ast.Div) and _is_int(node.left) and _is_int(node.right):
-            return rational(node.left.value, node.right.value)
+        if (isinstance(node.op, ast.Div) and _integer(node.left) is not None
+                and _is_int(node.right)):
+            return rational(_integer(node.left), node.right.value)
         if isinstance(node.op, ast.Pow):
             return _arithmetic(node.left, name, number, rational) ** _exponent(node.right)
         left = _arithmetic(node.left, name, number, rational)
@@ -134,8 +171,10 @@ def _sides(constraint):
     constraint = constraint.strip()
     if constraint.startswith("{") and constraint.endswith("}"):
         constraint = constraint[1:-1]
-    left, relation, right = _SPLIT.split(_normal(constraint), maxsplit=1)
-    return left, relation, right
+    # Split the text as printed; each side is normalised once, by _parse
+    # (test_text_is_normalised_once).
+    left, relation, right = _SPLIT.split(constraint, maxsplit=1)
+    return left.strip(), relation, right.strip()
 
 
 def _formula(residual, names):
@@ -261,20 +300,34 @@ def same_solution_sets(left, right):
 
 # ---- values ---------------------------------------------------------------
 
+def _rational_literal(node):
+    """``N/D`` (or ``N rdiv D``) as Prolog prints a rational: two int
+    literals, D > 1, in lowest terms; else None."""
+    if not (isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)):
+        return None
+    numerator, denominator = _integer(node.left), node.right
+    if numerator is None or not _is_int(denominator) or denominator.value <= 1:
+        return None
+    value = Fraction(numerator, denominator.value)
+    return value if value.denominator == denominator.value else None
+
+
 def _literal(node):
-    """*node* as a Fraction when it is a number as Prolog prints one: an int,
-    a negated literal, or an int division (``N rdiv D``, ``N/D``); else None.
-    Nothing else is evaluated, so ``1+1`` is not 2 (test_a_binding_is_not_evaluated)."""
-    if _is_int(node):
-        return Fraction(node.value)
+    """*node* as a Fraction when it is a number as Prolog prints one: an int
+    literal (``-3`` included), a rational ``N/D`` in lowest terms, or a
+    negated rational ``-(N/D)``; else None.  Nothing else is evaluated, so
+    ``1+1``, ``4/2`` and ``- (1)`` stay text (test_a_binding_is_not_evaluated,
+    test_a_binding_rational_is_printed_in_lowest_terms)."""
+    integer = _integer(node)
+    if integer is not None:
+        return Fraction(integer)
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
-        value = _literal(node.operand)
+        value = _rational_literal(node.operand)
         return None if value is None else -value
-    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
-        numerator, denominator = _literal(node.left), _literal(node.right)
-        if numerator is not None and denominator:
-            return numerator / denominator
-    return None
+    return _rational_literal(node)
+
+
+_FLOAT = re.compile(r"^-?\d+\.\d+([eE][+-]?\d+)?$")
 
 
 def _value(text):
@@ -287,10 +340,9 @@ def _value(text):
         value = None
     if value is not None:
         return value
-    try:
+    if _FLOAT.match(text):
         return float(text)
-    except ValueError:
-        return text
+    return text
 
 
 def _skip_without_scryer():
