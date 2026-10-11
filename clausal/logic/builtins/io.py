@@ -6,6 +6,7 @@ listing/1, portray_clause/1."""
 from __future__ import annotations
 
 import numbers as _numbers
+from fractions import Fraction as _Fraction
 import sys as _sys
 
 from clausal.logic.atoms import (
@@ -179,6 +180,7 @@ def _format_term_iso(val, quoted: bool, double_quotes: bool = False,
     if (isinstance(val, _ISO_TERM_TYPES) or is_term_instance(val)
             or isinstance(val, (Var, SegList, SegString))
             or (isinstance(val, (int, float)) and not isinstance(val, bool))
+            or type(val) is _Fraction
             or (type(val) is tuple and val
                 and (type(val[0]) is str or val[0] is TUPLE_TAG))):
         # Every TERM shape goes through the Scryer writer: atoms, strings,

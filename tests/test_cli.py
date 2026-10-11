@@ -43,8 +43,10 @@ PROG = textwrap.dedent("""\
 """)
 
 
-def _clausal(tmp_path, *argv):
+def _clausal(tmp_path, *argv, **extra_env):
     env = dict(os.environ)
+    env.pop("CLAUSAL_PL_FRONTEND", None)
+    env.update(extra_env)
     env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
     return subprocess.run(
         [sys.executable, "-m", "clausal", *argv], cwd=tmp_path, env=env,
@@ -164,3 +166,70 @@ def test_usage_errors_exit_2(prog, argv, says):
     r = _clausal(prog, *argv)
     assert r.returncode == 2
     assert says in r.stderr, r.stderr
+
+
+# ── answers: rationals, unbound variables, CLP(Q) residuals (2026-10-11) ──
+
+CLPQ = textwrap.dedent("""\
+    :- use_module(library(clpq)).
+    dependent(X, Y) :- {X + Y = 3, 2*X + 2*Y = 6}.
+    between_1_3(X) :- {X > 1, X < 3}.
+    not_two(X) :- {X =\\= 2}.
+    at_least_2(X) :- {X >= 2}.
+    hidden(X) :- {X + Y = 3}, Y = Y.
+    inside(S) :- {X + Y = 3}, S = f(X, Y).
+    halves(S) :- {2*X = 1, 3*Y = 1}, S = X-Y.
+    lin(A-B-C, D-E-F, X-Y) :- {A*X + B*Y = C, D*X + E*Y = F}.
+""")
+
+
+@pytest.fixture
+def clpq_prog(tmp_path):
+    (tmp_path / "lin.clausal").write_text(CLPQ)
+    return tmp_path
+
+
+@pytest.mark.parametrize("goal, answer", [
+    ("X is 1 rdiv 2", "X = 1 rdiv 2."),
+    ("X is -3 rdiv 2, Y = f(1-X, 2*X)", "X = -3 rdiv 2, Y = f(1- -3 rdiv 2,2*(-3 rdiv 2))."),
+    ("halves(S)", "S = 1 rdiv 2-1 rdiv 3."),
+    ("lin(1-1-3, 1-(-1)-1, S)", "S = 2-1."),
+    ("dependent(X, Y)", "{X + Y = 3}."),
+    ("between_1_3(X)", "{X > 1}, {X < 3}."),
+    ("not_two(X)", "{X =\\= 2}."),
+    ("at_least_2(X), at_least_2(Y)", "{X >= 2}, {Y >= 2}."),
+    # Y is free once X is: projecting X + Y = 3 onto X leaves nothing.
+    ("hidden(X)", "true."),
+    ("inside(S)", None),
+    ("X = f(Y)", "X = f(Y)."),
+    ("X = Y", "Y = X."),
+    ("X = _", "true."),
+])
+def test_g_answer_spelling(clpq_prog, goal, answer):
+    r = _clausal(clpq_prog, "-g", goal, "lin.clausal")
+    assert r.returncode == 0, r.stderr
+    if answer is None:
+        # S = f(_A, _B) and the constraint on the same two variables.
+        line = r.stdout.strip()
+        assert line.startswith("S = f(_") and "{_" in line, line
+        names = line[len("S = f("):line.index(")")].split(",")
+        assert line.endswith(f", {{{names[0]} + {names[1]} = 3}}."), line
+    else:
+        assert r.stdout == answer + "\n"
+
+
+def test_g_clpq_answers_in_the_sandbox(clpq_prog):
+    r = _clausal(clpq_prog, "-g", "dependent(X, Y)", "lin.clausal",
+                 CLAUSAL_SANDBOX="1")
+    assert (r.returncode, r.stdout) == (0, "{X + Y = 3}.\n"), r.stderr
+
+
+@pytest.mark.parametrize("frontend", ["translator", "native"])
+def test_a_pl_program_imports_library_clpq(tmp_path, frontend):
+    # The translator read library(clpq) as a module named clpq ("No module
+    # named 'clpq'"), and `{A = B, C = D}` as one set-goal element.
+    (tmp_path / "lin.pl").write_text(CLPQ)
+    r = _clausal(tmp_path, "-g", "dependent(X, Y)", "-g", "between_1_3(X)",
+                 "lin.pl", CLAUSAL_PL_FRONTEND=frontend)
+    assert (r.returncode, r.stdout) == (
+        0, "{X + Y = 3}.\n{X > 1}, {X < 3}.\n"), r.stderr

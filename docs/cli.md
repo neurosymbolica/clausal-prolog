@@ -52,7 +52,28 @@ false.
 
 - `-g` can be given more than once; the goals run in order.
 - `--once` (or `-1`) prints only the first answer of each goal.
-- Variables whose names start with `_` are not printed.
+- Variables whose names start with `_` are not printed. A variable left
+  unbound is not printed on its own, and appears by its name inside other
+  answers (`S = f(X)`).
+- A rational prints as Scryer prints it: `X is 1 rdiv 2` answers
+  `X = 1 rdiv 2.`
+- CLP(Q) constraints left on the answer's variables are printed after the
+  bindings, projected onto those variables:
+
+  ```prolog
+  :- use_module(library(clpq)).
+  dependent(X, Y) :- {X + Y = 3, 2*X + 2*Y = 6}.
+  between_1_3(X) :- {X > 1, X < 3}.
+  ```
+
+  ```bash
+  $ clausal lin.clausal -g "dependent(X, Y)"
+  {X + Y = 3}.
+  $ clausal lin.clausal -g "between_1_3(X)"
+  {X > 1}, {X < 3}.
+  ```
+
+  Other constraints (`clpz`, `freeze/2`, `dif/2`) are not printed yet.
 - A goal can use the operators the program has: its own `op/3` directives
   and those of the libraries it imports, such as `#=` after
   `:- use_module(library(clpz)).`

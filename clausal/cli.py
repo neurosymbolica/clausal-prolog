@@ -163,21 +163,57 @@ def _read_goal(text: str, op_table):
     return goal, shown
 
 
+def _term_vars(t, out: dict) -> None:
+    """The unbound variables of a walked answer, in first-occurrence order."""
+    from clausal.logic.variables import Var  # noqa: PLC0415
+    stack = [t]
+    while stack:
+        x = stack.pop()
+        if isinstance(x, Var):
+            out.setdefault(id(x), x)
+        elif type(x) in (tuple, list):
+            stack.extend(reversed(x))
+
+
+def _answer(shown, trail) -> str:
+    """One answer as a toplevel prints it: ``Name = Value`` for each bound
+    answer variable, an unbound one by its own name (``S = f(X)``), then
+    the CLP(Q) constraints left on the answer's variables (``{X + Y = 3}``,
+    ``{X >= 2}``); ``true`` when there is nothing to show."""
+    from clausal.logic import clpq  # noqa: PLC0415
+    from clausal.logic.solve import _deref_walk  # noqa: PLC0415
+    from clausal.logic.variables import Var  # noqa: PLC0415
+    from clausal.terms import term_writeq  # noqa: PLC0415
+
+    values = [(name, _deref_walk(v)) for name, v in shown]
+    names: dict[int, str] = {}
+    for name, w in values:
+        if isinstance(w, Var):
+            names.setdefault(id(w), name)
+    parts = []
+    for name, w in values:
+        if isinstance(w, Var) and names[id(w)] == name:
+            continue                    # X = X: nothing to say
+        parts.append(f"{name} = {term_writeq(w, var_names=names)}")
+    free: dict = {}
+    for _, w in values:
+        _term_vars(w, free)
+    if free:
+        parts += clpq.residual_q(
+            list(free.values()), trail,
+            lambda v: names.get(id(v)) or term_writeq(v))
+    return ", ".join(parts) if parts else "true"
+
+
 def _run_goal(module, text: str, op_table, once: bool) -> bool:
     """Run one ``-g`` goal, printing its answers.  True iff it had one."""
     from clausal import solve  # noqa: PLC0415
-    from clausal.terms import term_writeq  # noqa: PLC0415
-    from clausal.logic.solve import _deref_walk  # noqa: PLC0415
 
     goal, shown = _read_goal(text, op_table)
     found = False
-    for _ in solve(("call", goal), module=module):
+    for trail in solve(("call", goal), module=module):
         found = True
-        if shown:
-            print(", ".join(f"{name} = {term_writeq(_deref_walk(v))}"
-                            for name, v in shown) + ".")
-        else:
-            print("true.")
+        print(_answer(shown, trail) + ".")
         sys.stdout.flush()
         if once:
             break

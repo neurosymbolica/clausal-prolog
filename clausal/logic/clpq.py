@@ -609,14 +609,29 @@ class Tableau:
 
         max_iters = 10 * (len(self.rows) + len(self.lo) + 1)
         for _ in range(max_iters):
-            # Find entering: first non-basic with positive obj coefficient
+            # Find entering (Bland): the first non-basic var that improves
+            # the objective by moving off its bound.  A positive coefficient
+            # wants it to rise (room below its upper bound); a negative one
+            # wants it to fall (room above its lower bound).  A var parked at
+            # its upper bound must be able to come back down: dropping that
+            # case left box-bounded maxima at a suboptimal vertex.
             entering = None
+            step = 0
             for v in sorted(obj.keys()):
                 if v in self.rows:
                     continue
-                if obj.get(v, ZERO) > ZERO:
-                    entering = v
-                    break
+                c = obj[v]
+                a = self.assign.get(v, ZERO)
+                if c > ZERO:
+                    hi = self.hi.get(v)
+                    if hi is None or a < hi:
+                        entering, step = v, 1
+                        break
+                elif c < ZERO:
+                    lo = self.lo.get(v)
+                    if lo is None or a > lo:
+                        entering, step = v, -1
+                        break
 
             if entering is None:
                 # Optimal: compute from original objective and current assignments
@@ -632,20 +647,16 @@ class Tableau:
                     val += c * a
                 return val
 
-            # Minimum ratio test: find which basic var first hits ANY bound
-            # as we increase the entering variable.
-            # Row convention: B = rhs + Σ row[v]*v.
-            # Increasing entering by delta changes B by row[entering]*delta.
-            # If row[entering] < 0, B decreases → may hit lower bound.
-            #   ratio = (bval - blo) / (-coeff)
-            # If row[entering] > 0, B increases → may hit upper bound.
-            #   ratio = (bhi - bval) / coeff
+            # Minimum ratio test: how far can entering move (by t >= 0 in
+            # direction *step*) before a basic var hits a bound?
+            # Row convention: B = rhs + Σ row[v]*v, so B changes by
+            # row[entering]*step*t: falling → lower bound, rising → upper.
             leaving = None
             min_ratio: Fraction | None = None
             for bv, brow in self.rows.items():
                 if entering not in brow:
                     continue
-                coeff = brow[entering]
+                coeff = brow[entering] * step
                 if coeff == ZERO:
                     continue
                 bval = self.assign.get(bv, ZERO)
@@ -664,33 +675,28 @@ class Tableau:
                     min_ratio = ratio
                     leaving = bv
 
-            # The entering variable can also hit its OWN upper bound before any
-            # basic var does — a bound flip.  The ratio test previously checked
-            # this only when NO basic var limited entering, so in a degenerate
-            # maximum the entering var was pivoted past its bound (e.g. x rose
-            # to 10 with x <= 5), leaving an infeasible optimal vertex that a
-            # correct fix_variable then rejects (A08-F001 exposed this).
-            e_hi = self.hi.get(entering)
-            entering_ratio = (e_hi - self.assign.get(entering, ZERO)) \
-                if e_hi is not None else None
+            # The entering variable can also hit its OWN opposite bound
+            # before any basic var does — a bound flip.  It stays non-basic
+            # and keeps its objective coefficient (A08-F001: without this
+            # check x rose past x <= 5 in a degenerate maximum).
+            e_bound = self.hi.get(entering) if step > 0 else self.lo.get(entering)
+            entering_ratio = abs(e_bound - self.assign.get(entering, ZERO)) \
+                if e_bound is not None else None
             if entering_ratio is not None and (min_ratio is None
                                                or entering_ratio <= min_ratio):
-                # Cap entering at its upper bound instead of pivoting.
                 old_val = self.assign.get(entering, ZERO)
-                self.assign[entering] = e_hi
-                delta = e_hi - old_val
+                self.assign[entering] = e_bound
+                delta = e_bound - old_val
                 for bv, brow in self.rows.items():
                     if entering in brow:
                         self.assign[bv] += brow[entering] * delta
-                obj.pop(entering, None)
                 continue
 
             if leaving is None:
                 return None  # truly unbounded (no basic limit, no own bound)
 
             # Determine which bound the leaving variable hit
-            bv_coeff = self.rows[leaving][entering]
-            bv_val = self.assign[leaving]
+            bv_coeff = self.rows[leaving][entering] * step
             if bv_coeff < ZERO:
                 # B decreased → hit lower bound
                 lv_bound = self.lo.get(leaving, ZERO)
@@ -1612,14 +1618,22 @@ def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
 # ── Public API: projection ───────────────────────────────────────────────────
 
 
-def dump_q(target_vars: list, trail: Trail) -> list[str]:
+def dump_q(target_vars: list, trail: Trail, name_of=None, *,
+           toplevel: bool = False) -> list[str]:
     """Project the constraint store onto *target_vars*.
 
     Returns a list of constraint strings over only the target variables,
     with all internal (slack, parametric) variables eliminated via
     Fourier-Motzkin elimination.
 
-    Each returned string is of the form ``"{2*X + Y =< 16}"`` or ``"{X = 5}"``.
+    Each returned string is of the form ``"{2*X + Y =< 16}"``, ``"{X = 5}"``,
+    ``"{X < 3}"`` (a bound and a disequality on the same expression) or
+    ``"{X =\\= 2}"``.  A disequality is shown only when every variable it
+    mentions is a target: it cannot be projected through an eliminated one.
+
+    *name_of* names a target variable (default: ``str``).  *toplevel*
+    writes a constraint whose coefficients are all negative the other way
+    round (``{X >= 2}``, not ``{-X =< -2}``), as an answer is printed.
     """
     tableau = _get_tableau(trail)
     target_ids = set()
@@ -1632,7 +1646,7 @@ def dump_q(target_vars: list, trail: Trail) -> list[str]:
         v, s = deref(v), deref(s)
         if is_var(s):
             target_ids.add(s._id)
-            id_to_name[s._id] = str(v)
+            id_to_name[s._id] = str(v) if name_of is None else name_of(v)
 
     constraints = _collect_constraints(tableau, target_ids)
 
@@ -1643,7 +1657,31 @@ def dump_q(target_vars: list, trail: Trail) -> list[str]:
     for elim_vid in sorted(all_var_ids - target_ids):
         constraints = _fm_eliminate(constraints, elim_vid)
 
-    return _format_constraints(constraints, id_to_name)
+    # Disequalities (q_ne, and the strict half of q_lt) over targets only.
+    # A bound on the same expression and value makes the pair one strict
+    # constraint: X =< 3 and X =\= 3 are X < 3.
+    for _tag, coeffs, constant in tableau.diseqs:
+        if not coeffs or not set(coeffs) <= target_ids:
+            continue
+        neg = {v: -c for v, c in coeffs.items()}
+        for i, (c2, rel2, rhs2) in enumerate(constraints):
+            if rel2 == '=<' and ((c2 == coeffs and rhs2 == constant)
+                                 or (c2 == neg and rhs2 == -constant)):
+                constraints[i] = (c2, '<', rhs2)
+                break
+        else:
+            constraints.append((dict(coeffs), '=\\=', constant))
+
+    return _format_constraints(constraints, id_to_name, toplevel=toplevel)
+
+
+def residual_q(target_vars: list, trail: Trail, name_of) -> list[str]:
+    """The CLP(Q) constraints on *target_vars* as a toplevel prints them
+    (:func:`dump_q` with ``toplevel=True``); ``[]`` without creating a
+    store when this trail never posted one."""
+    if id(trail) not in _tableaux:
+        return []
+    return dump_q(target_vars, trail, name_of, toplevel=True)
 
 
 def _collect_constraints(tableau: Tableau, target_ids: set[int],
@@ -1701,9 +1739,9 @@ def _fm_eliminate(constraints: list[tuple[dict[int, Fraction], str, Fraction]],
             result: list[tuple[dict[int, Fraction], str, Fraction]] = []
             for j, (coeffs2, rel2, rhs2) in enumerate(constraints):
                 if j == i:
-                    other = {v: coeff for v, coeff in coeffs.items() if v != elim_vid}
-                    if other:
-                        result.append((other, '=', rhs))
+                    # The equality defines elim_vid and is used up by the
+                    # substitution: X + Y = 3 projected onto X is no
+                    # constraint, not X = 3.
                     continue
                 c2 = coeffs2.get(elim_vid, ZERO)
                 if c2 == ZERO:
@@ -1747,13 +1785,21 @@ def _fm_eliminate(constraints: list[tuple[dict[int, Fraction], str, Fraction]],
     return keep
 
 
+#: A relation written with every coefficient negated (``toplevel``).
+_FLIPPED = {'=': '=', '=\\=': '=\\=', '=<': '>=', '<': '>'}
+
+
 def _format_constraints(constraints: list[tuple[dict[int, Fraction], str, Fraction]],
-                        id_to_name: dict[int, str]) -> list[str]:
+                        id_to_name: dict[int, str], *,
+                        toplevel: bool = False) -> list[str]:
     """Format constraint triples as human-readable strings."""
     result: list[str] = []
     for coeffs, rel, rhs in constraints:
         if not coeffs:
             continue
+        if toplevel and all(c < ZERO for c in coeffs.values()):
+            coeffs = {v: -c for v, c in coeffs.items()}
+            rel, rhs = _FLIPPED[rel], -rhs
         terms = []
         for vid in sorted(coeffs.keys()):
             c = coeffs[vid]
@@ -1767,10 +1813,7 @@ def _format_constraints(constraints: list[tuple[dict[int, Fraction], str, Fracti
             else:
                 terms.append(f'{c}*{name}')
         lhs = ' + '.join(terms).replace('+ -', '- ')
-        if rel == '=':
-            result.append(f'{{{lhs} = {rhs}}}')
-        else:
-            result.append(f'{{{lhs} =< {rhs}}}')
+        result.append(f'{{{lhs} {rel} {rhs}}}')
     return result
 
 

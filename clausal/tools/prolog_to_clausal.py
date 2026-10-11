@@ -1102,6 +1102,13 @@ class _PrologToClausal:
         parts = [self._emit_goal(g) for g in goals]
         return ", ".join(parts)
 
+    def _emit_clpq_constraint(self, c: PTerm) -> str:
+        if (isinstance(c, PCompound) and c.functor in ("=", "=:=")
+                and len(c.args) == 2):
+            return (f"{self._emit_term(c.args[0])} == "
+                    f"{self._emit_term(c.args[1])}")
+        return self._emit_term(c)
+
     def _emit_goal(self, goal: PTerm) -> str:
         """Emit a single goal in body context."""
         # A10-F001: a body-position cut must be REJECTED, not emitted as a
@@ -1114,6 +1121,14 @@ class _PrologToClausal:
         folded = self._fold_in_domain(goal)
         if folded is not None:
             return folded
+        # library(clpq)'s {C}: the seam's set goal, one element per
+        # constraint, `=` and `=:=` both equality (`==`), as the native front
+        # end lowers it.  `{X + Y = 3, X - Y = 1}` used to come out as ONE
+        # element `(X + Y is 3, ...)` -- a SetGoalElementError at load.
+        if isinstance(goal, PCurly):
+            return "{" + ", ".join(
+                self._emit_clpq_constraint(c)
+                for c in self._flatten_conjunction(goal.body)) + "}"
         # Disjunction: (A ; B) → (A or B)
         if isinstance(goal, PCompound) and goal.functor == ";":
             return self._emit_disjunction(goal)
@@ -1397,6 +1412,11 @@ class _PrologToClausal:
                     "a/b path.")
             if lib_name in _BUILTIN_LIBRARIES:
                 return f"# library({lib_name}) is built-in — no import needed"
+            if lib_name == "clpq" and len(body.args) == 1:
+                # Its {}/1 is the seam's set goal and its predicates are
+                # engine builtins: nothing to import.  (It was read as a
+                # module named clpq: "No module named 'clpq'" at load.)
+                return "# library(clpq) is built-in — no import needed"
             facade = (None if lib_name in _LIBRARY_TO_MODULE
                       else _library_facade(lib_name))
             if lib_name in _LIBRARY_TO_MODULE:

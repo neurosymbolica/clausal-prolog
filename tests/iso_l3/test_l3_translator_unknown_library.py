@@ -99,3 +99,18 @@ def test_library_lambda_keeps_its_old_refusal():
     with pytest.raises(PrologTranslationError) as ei:
         prolog_to_clausal(":- use_module(library(lambda)).\n")
     assert "'lambda' names no module" in str(ei.value)
+
+
+def test_library_clpq_without_a_list_is_built_in(native, ans):
+    """``use_module(library(clpq))`` alone read clpq as a module name ("No
+    module named 'clpq'"), and ``{A = B, C = D}`` came out as one set-goal
+    element with ``=`` as ``is`` (2026-10-11)."""
+    out = prolog_to_clausal(":- use_module(library(clpq)).\n"
+                            "t(X, Y) :- {X + Y = 3, X - Y =:= 1}.\n")
+    assert "-import_module(clpq)" not in out, out
+    assert "{X + Y == 3, X - Y == 1}" in out, out
+    mod = native.load("unk_clpq_bare", textwrap.dedent("""\
+        :- use_module(library(clpq)).
+        t(X, Y) :- {X + Y = 3, X - Y =:= 1}.
+        """), frontend="translator")
+    assert ans(mod, "t", 2) == [(2, 1)]

@@ -3449,6 +3449,13 @@ def _char_list_str(text: str, style: "TermStyle", _bd: int, quoted: bool,
     return ob + sep.join(parts) + cb
 
 
+def _rdiv_term(q: Fraction) -> tuple:
+    """A rational as the term the writers print for it, ``rdiv(N, D)``:
+    Scryer writes ``X is 1 rdiv 2`` as ``X = 1 rdiv 2`` and canonically
+    as ``rdiv(1,2)``.  (An integral rational is already an int.)"""
+    return ("rdiv", q.numerator, q.denominator)
+
+
 def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
              *, quoted: bool = True, double_quotes: bool = True,
              sep: str = ", ") -> str:
@@ -3493,6 +3500,10 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
         return _truth_spelling(t)   # the atoms true/false/undefined (D35)
     if isinstance(t, Decimal):
         return _c(str(t), 'number', style)
+    if type(t) is Fraction:
+        # A rational is written as Scryer writes it: the term ``N rdiv D``.
+        return term_str(_rdiv_term(t), style, _bd, quoted=quoted,
+                        double_quotes=double_quotes, sep=sep)
     if isinstance(t, (int, float, complex)):
         return _c(repr(t), 'number', style)
     if is_chars(t):
@@ -3681,6 +3692,8 @@ def term_canonical(t: Any) -> str:
         return _truth_spelling(t)   # the atoms true/false/undefined (D35)
     if isinstance(t, Decimal):
         return str(t)
+    if type(t) is Fraction:
+        return term_canonical(_rdiv_term(t))       # rdiv(N,D), as Scryer
     if isinstance(t, (int, float, complex)):
         return repr(t)
     if is_chars(t):
@@ -3930,6 +3943,12 @@ def _wq_list(elems: list, tail) -> str:
 _WQ_LOCAL_VARS: _contextvars.ContextVar = _contextvars.ContextVar(
     "_WQ_LOCAL_VARS", default=None)
 
+#: ``term_writeq(..., var_names=...)``: the toplevel's names for answer
+#: variables, keyed by ``id(var)`` (ISO ``write_term/2``'s
+#: ``variable_names/1``).
+_WQ_VAR_NAMES: _contextvars.ContextVar = _contextvars.ContextVar(
+    "_WQ_VAR_NAMES", default=None)
+
 
 #: The ISO write options in force while ``term_write`` renders:
 #: ``(quoted, double_quotes, ignore_ops, numbervars)``.  ``term_writeq``
@@ -3949,6 +3968,9 @@ def _wq_name(s: str) -> str:
 
 
 def _wq_var(v) -> str:
+    names = _WQ_VAR_NAMES.get()
+    if names is not None and id(v) in names:
+        return names[id(v)]
     seen = _WQ_LOCAL_VARS.get()
     if seen is None:
         return _canonical_var(v)
@@ -3989,6 +4011,8 @@ def _wq(t: Any, prec: int, operand: bool = False) -> str:
         return _wq_float(t)
     if isinstance(t, int):
         return str(t)
+    if type(t) is Fraction:
+        return _wq(_rdiv_term(t), prec, operand)     # ``1 rdiv 2``, as Scryer
     if is_chars(t):
         text = chars_text(t)
         if not text:
@@ -4106,7 +4130,8 @@ def term_write(t: Any, *, quoted: bool, double_quotes: bool = False,
         _WQ_OPTS.reset(token)
 
 
-def term_writeq(t: Any, *, local_vars: bool = False) -> str:
+def term_writeq(t: Any, *, local_vars: bool = False,
+                var_names: "dict[int, str] | None" = None) -> str:
     """Render *t* as Scryer prints an uncaught error term.
 
     ``writeq``-style with operators: ``error(type_error(evaluable,(+)/2),
@@ -4124,12 +4149,17 @@ def term_writeq(t: Any, *, local_vars: bool = False) -> str:
     then the same for every copy of the term, which ``_N`` is not.  A
     subterm handed whole to ``term_str`` (see above) prints its variables
     as ``_`` itself, so sharing with such a subterm is not shown.
+
+    *var_names* (``id(var) -> name``) spells those variables by name, as a
+    toplevel prints an answer's variables.
     """
     token = _WQ_LOCAL_VARS.set({} if local_vars else None)
+    names_token = _WQ_VAR_NAMES.set(var_names)
     try:
         text = _wq(t, 1200)
         return _wq_local_names(text, _WQ_LOCAL_VARS.get()) if local_vars else text
     finally:
+        _WQ_VAR_NAMES.reset(names_token)
         _WQ_LOCAL_VARS.reset(token)
 
 
