@@ -2,8 +2,14 @@
 """The per-variable solver state and the queue for follow-up work.
 
 The state is one record per constrained variable, replaced (never mutated)
-through put_attr, so the engine's trail undoes every change.  The fields
-are clp(q,r) 1.3.3's attributes in full words (NAMES.md).
+through put_attr, so the engine's trail undoes every change
+(test_a_state_change_is_undone_on_backtracking).  The fields are
+clp(q,r) 1.3.3's attributes in full words (NAMES.md).
+
+Records are immutable by convention.  A collection field (delayed_goals, or
+any list) is a value that is replaced, never edited in place: with_changes
+copies shallowly, so an in-place edit would reach every copy and escape the
+trail.
 """
 from collections import deque
 
@@ -42,10 +48,11 @@ def state_of(variable):
 
 
 def with_changes(state, **fields):
-    copy = SolverState.__new__(SolverState)
+    values = {}
     for name in _FIELDS:
-        setattr(copy, name, fields[name] if name in fields else getattr(state, name))
-    return copy
+        values[name] = getattr(state, name)
+    values.update(fields)
+    return SolverState(**values)        # an unknown field raises TypeError
 
 
 def put_state(variable, state, trail):
@@ -64,8 +71,12 @@ class LaterWork:
 
     def drain(self):
         queue = self.queue
-        while queue:
-            if not queue.popleft()():
-                queue.clear()
-                return False
+        try:
+            while queue:
+                if not queue.popleft()():
+                    queue.clear()
+                    return False
+        except BaseException:
+            queue.clear()
+            raise
         return True
