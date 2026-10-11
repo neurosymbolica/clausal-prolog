@@ -352,9 +352,10 @@ class Tableau:
         # i.e., they reduce to a constant)
         self._propagate_determined()
 
-        # A var fixed here can complete a disequality (the strict half of
-        # X < Y): X < Y, Y =< 3, X = 3 bound Y = 3 and succeeded.
-        return self._check_diseqs()
+        # An equality (a binding, X = Y, or a posted one) can force a
+        # disequality (the strict half of X < Y): X < Y, Y =< 3, X = 3
+        # bound Y = 3 and succeeded.
+        return self._check_diseqs(entail=True)
 
     def _propagate_determined(self) -> None:
         """Mark variables whose value is now forced as fixed (lo == hi).
@@ -711,9 +712,9 @@ class Tableau:
     def fix_variable(self, vid: int, value: Fraction) -> bool:
         """Fix vid = value (a binding); False when the store rejects it.
 
-        Disequalities on vid are checked by entailment too (see
+        Disequalities are checked by entailment too (see
         :meth:`_check_diseqs`)."""
-        return self._fix(vid, value) and self._check_diseqs(focus={vid})
+        return self._fix(vid, value) and self._check_diseqs(entail=True)
 
     def _fix(self, vid: int, value: Fraction) -> bool:
         """Fix vid = value.  Returns False on infeasibility.
@@ -767,21 +768,31 @@ class Tableau:
 
     # ── Disequality check ────────────────────────────────────────────────
 
-    def _check_diseqs(self, focus: set[int] | None = None) -> bool:
+    def _value(self, vid: int) -> Fraction:
+        """vid's value at the current (feasible) assignment."""
+        if vid in self.parametric:
+            pc, pk = self.parametric[vid]
+            return pk + sum(c * self._value(v) for v, c in pc.items())
+        return self.assign.get(vid, ZERO)
+
+    def _check_diseqs(self, entail: bool = False) -> bool:
         """Fail if any disequality is violated.
 
-        Disequalities are stored as ``('linear', coeffs, constant)``
+        Disequalities are stored as ``(tag, coeffs, constant)``, *tag*
+        ``'linear'`` or ``'strict'`` (from ``<``, so the expression is
+        already =< the constant),
         meaning ``Σ coeffs[v]*v != constant``.  One fails when every
         variable in it is fixed to values that make it equal.
 
-        Those mentioning a variable in *focus* (one just bound) are also
-        checked by entailment: they fail when the store's minimum and
-        maximum of the expression are both the constant, which finds
-        X < Y, Y =< 3, X = 3 (Y forced to 3 through a row, not its own
-        bounds).  It costs two LPs, so it runs on bindings and on posted
-        equalities only, not on every post: a strict bound closed by
-        inequalities or by a new disequality is not caught
-        (todo/clpq-strict-bounds-closed-by-inequalities).
+        With *entail* (after a binding or an equality) each is also checked
+        by entailment: it fails when the store's minimum and maximum of the
+        expression are both the constant, which finds X < Y, Y =< 3, X = 3
+        (Y forced to 3 through a row, not its own bounds).  The current
+        assignment is a feasible point, so an expression whose value there
+        differs from the constant cannot be forced and needs no LP.
+        Inequalities and new disequalities do not run it (two LPs per open
+        disequality on every post): a strict bound they close is caught at
+        the next binding (todo/clpq-strict-bounds-closed-by-inequalities).
         """
         work = None
         for entry in self.diseqs:
@@ -809,18 +820,24 @@ class Tableau:
                 if val == constant:
                     return False  # disequality violated
                 continue
-            if not focus or focus.isdisjoint(coeffs):
+            if not entail:
+                continue
+            if sum(c * self._value(v) for v, c in coeffs.items()) != constant:
                 continue
             # Not every variable is fixed, but the store can still force
             # the expression to the value: X < Y, Y =< 3, X = 3 leaves Y
             # only in [3, 3] through a row, not its own bounds.
             if work is None:
                 work = self.copy()
-            hi = work.optimize(dict(coeffs), 'max')
-            if hi is not None and hi == constant:
-                lo = work.optimize(dict(coeffs), 'min')
-                if lo is not None and lo == constant:
-                    return False
+            if tag != 'strict':
+                # A strict one's expression is already =< the constant,
+                # so its minimum alone decides.
+                hi = work.optimize(dict(coeffs), 'max')
+                if hi is None or hi != constant:
+                    continue
+            lo = work.optimize(dict(coeffs), 'min')
+            if lo is not None and lo == constant:
+                return False
         return True
 
     # ── Implied bindings ─────────────────────────────────────────────────
@@ -1342,16 +1359,17 @@ def q_eq(l: Any, r: Any, trail: Trail) -> bool:
     _snapshot_tableau(trail)
     if not tableau.add_equality(coeffs, constant):
         return False
-    # An equality can close a strict bound ({X + Y < -1, X + Y = -1}):
-    # check every disequality by entailment (equalities are rare posts).
-    if tableau.diseqs and not tableau._check_diseqs(
-            focus={v for _, c, _ in tableau.diseqs for v in c}):
-        return False
     return tableau.check_implied_bindings(trail)
 
 
 def q_ne(l: Any, r: Any, trail: Trail) -> bool:
-    """Post l != r as a passive disequality.
+    """Post l != r as a passive disequality."""
+    return _post_ne(l, r, trail, 'linear')
+
+
+def _post_ne(l: Any, r: Any, trail: Trail, tag: str) -> bool:
+    """Post l != r as a passive disequality, tagged *tag*: ``'strict'`` when
+    ``l =< r`` is already posted (the strict half of ``l < r``).
 
     The disequality is stored in the Tableau and checked whenever a
     variable becomes ground.  If both sides are already ground at
@@ -1383,7 +1401,7 @@ def q_ne(l: Any, r: Any, trail: Trail) -> bool:
     _snapshot_tableau(trail)
     # Store as (coefficients, constant) — the disequality is:
     # Σ coeffs[v]*v != constant
-    tableau.diseqs.append(('linear', coeffs, constant))
+    tableau.diseqs.append((tag, coeffs, constant))
     return tableau._check_diseqs()
 
 
@@ -1424,7 +1442,7 @@ def q_lt(l: Any, r: Any, trail: Trail) -> bool:
     l, r = _units_strip(l, r, "(<)/2", trail)
     if not q_le(l, r, trail):
         return False
-    return q_ne(l, r, trail)
+    return _post_ne(l, r, trail, 'strict')
 
 
 def q_gt(l: Any, r: Any, trail: Trail) -> bool:

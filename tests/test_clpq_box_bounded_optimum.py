@@ -213,3 +213,20 @@ def test_an_equality_that_closes_a_strict_bound_fails():
     t, x, y = Trail(), Var(), Var()
     assert q_lt(Add(left=x, right=y), -1, t)
     assert not q_eq(Add(left=x, right=y), -1, t)
+
+
+_CLOSED = """\
+:- use_module(library(clpq)).
+unify_vars :- {X < Y}, X = Y.
+bind_elsewhere :- {A < B, B - A =< D}, D = 0.
+post_elsewhere :- {A < B, B - A =< D}, {D = 0}.
+"""
+
+
+@pytest.mark.parametrize("name", ["unify_vars", "bind_elsewhere", "post_elsewhere"])
+def test_a_binding_or_equality_that_closes_a_strict_bound_fails(tmp_path, name):
+    # Every binding and equality checks every disequality, not only those
+    # naming the variable bound (fifth review, 2026-10-11).
+    p = tmp_path / "closed.clausal"
+    p.write_text(_CLOSED)
+    assert list(solve(name, load_clausal_module(p))) == []
