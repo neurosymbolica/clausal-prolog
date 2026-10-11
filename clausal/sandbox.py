@@ -236,6 +236,7 @@ ENGINE_ATTR_KEYS = (
     ("clausal.logic.clpfd", "ZCMP_KEY"),
     ("clausal.logic.clpb", "B_KEY"),
     ("clausal.logic.clpq.legacy", "Q_KEY"),
+    ("clausal.logic.clpq.attributes", "CLPQ_KEY"),
     ("clausal.logic.clpr", "REAL_KEY"),
     ("clausal.logic.units_constraint", "UNITS_KEY"),
     ("clausal.logic.units_clp", "LINK_KEY"),

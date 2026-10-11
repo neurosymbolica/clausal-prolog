@@ -74,7 +74,7 @@ attributes, renamed:
 | `type` | `bounds` | the bound type, which includes which bound is active (a capital letter in `t_L`, `t_U`, `t_Lu`, `t_lU` marks the active bound, `bv.pl`), plus the bound values |
 | `strictness` | `lower_strict`, `upper_strict` | the strictness bits (0b10 lower, 0b01 upper); separate from the bound type |
 | `class` | `component` | the connected component: a hidden attributed variable holding its member and basis lists |
-| `order` | `ordering` | stable order, for deterministic answers |
+| `order` | `variable_order` | stable order, for deterministic answers |
 | `nonzero` | `nonzero` | `=\=` against zero |
 | `goals`, `all_nonlin` | `delayed_goals` | non-linear constraints waiting to become linear |
 | `forward`, `target`, `keep_indep`, `keep` | full-word names as found | projection and solving bookkeeping |
