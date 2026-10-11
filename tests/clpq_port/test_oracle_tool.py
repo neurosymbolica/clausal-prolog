@@ -180,3 +180,28 @@ def test_clausal_answers_do_not_need_scryer(monkeypatch):
     program = ":- use_module(library(clpq)).\np(X) :- {X >= 1}.\n"
     assert tool.clausal_answers(program, "p(X)", ["X"], solver="legacy") == [
         Answer({}, ["X >= 1"])]
+
+
+# ---- fix round 2 -------------------------------------------------------------
+
+def test_a_binding_is_not_evaluated():
+    assert _value("1+1") == "1+1"
+    assert _value("-(1 rdiv 2)") == Fraction(-1, 2)
+    assert not same_solution_sets([Answer({"X": _value("1+1")}, [])],
+                                  [Answer({"X": _value("2")}, [])])[0]
+
+
+def test_a_negative_literal_is_the_base_of_a_power():
+    # Prolog reads -2 as one number, so -2^2 is (-2)^2 = 4 (Scryer: Y is -2^2 gives 4).
+    assert same_solution_sets([Answer({}, ["Y=-2^2"])], [Answer({}, ["Y=4"])])[0]
+    assert not same_solution_sets([Answer({}, ["Y=-2^2"])], [Answer({}, ["Y=-4"])])[0]
+
+
+def test_an_arithmetic_equality_with_a_constant_is_a_binding():
+    ok, why = same_solution_sets([Answer({"X": Fraction(3)}, [])], [Answer({}, ["X=:=3"])])
+    assert ok, why
+
+
+def test_blanks_that_separate_two_words_are_refused():
+    with pytest.raises(ValueError):
+        same_solution_sets([Answer({}, ["Y=X mod 2"])], [Answer({}, ["Y=X mod 2"])])

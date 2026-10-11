@@ -36,8 +36,16 @@ _VARIABLE = re.compile(r"^[A-Z_][A-Za-z0-9_]*$")
 
 
 def _normal(text):
-    """*text* with ``rdiv`` spelt ``/``, ``^`` spelt ``**`` and no blanks."""
-    return re.sub(r"\s+", "", text.replace(" rdiv ", "/").replace("^", "**"))
+    """*text* with ``rdiv`` spelt ``/``, ``^`` spelt ``**`` and no blanks.
+
+    Blanks between two word characters (``X mod 2``) are refused: removing
+    them would merge two tokens into one name
+    (test_blanks_that_separate_two_words_are_refused).
+    """
+    text = re.sub(r"\s+rdiv\s+", "/", text).replace("^", "**")
+    if re.search(r"[\w.]\s+[\w.]", text):
+        raise ValueError(f"blanks between two words in {text!r}")
+    return re.sub(r"\s+", "", text)
 
 
 # ---- arithmetic: an ast whitelist, never eval ------------------------------
@@ -79,6 +87,12 @@ def _arithmetic(node, name, number, rational):
         return number(node.value)
     if isinstance(node, ast.Name):
         return name(node.id)
+    if (isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub)
+            and isinstance(node.operand, ast.BinOp) and isinstance(node.operand.op, ast.Pow)
+            and _is_int(node.operand.left)):
+        # Prolog reads -2 as one number, so -2^2 is (-2)^2; Python reads
+        # -(2**2) (test_a_negative_literal_is_the_base_of_a_power).
+        return number(-node.operand.left.value) ** _exponent(node.operand.right)
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
         value = _arithmetic(node.operand, name, number, rational)
         return -value if isinstance(node.op, ast.USub) else value
@@ -214,7 +228,7 @@ def _normalised(answer):
         if relation == "=" and _shown(left) and _shown(right):
             residual.append(_equality(left, right))
             continue
-        if relation == "=":
+        if relation in ("=", "=:="):
             for variable, other in ((left, right), (right, left)):
                 if _shown(variable) and variable not in bindings:
                     try:
@@ -247,19 +261,36 @@ def same_solution_sets(left, right):
 
 # ---- values ---------------------------------------------------------------
 
+def _literal(node):
+    """*node* as a Fraction when it is a number as Prolog prints one: an int,
+    a negated literal, or an int division (``N rdiv D``, ``N/D``); else None.
+    Nothing else is evaluated, so ``1+1`` is not 2 (test_a_binding_is_not_evaluated)."""
+    if _is_int(node):
+        return Fraction(node.value)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+        value = _literal(node.operand)
+        return None if value is None else -value
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+        numerator, denominator = _literal(node.left), _literal(node.right)
+        if numerator is not None and denominator:
+            return numerator / denominator
+    return None
+
+
 def _value(text):
     """A printed binding: a Fraction for an exact number, a float for a float
     literal, otherwise the text itself."""
     text = text.strip()
     try:
-        return _constant(text)
-    except _NotConstant:
-        return text
+        value = _literal(_parse(text))
     except ValueError:
-        try:
-            return float(text)
-        except ValueError:
-            return text
+        value = None
+    if value is not None:
+        return value
+    try:
+        return float(text)
+    except ValueError:
+        return text
 
 
 def _skip_without_scryer():
