@@ -218,6 +218,51 @@ def absolute(x):
     return (abs(x[0]), x[1])
 
 
+def _truncated_quotient(numerator, denominator):
+    """SICStus `N // D` (integer_rounding_function toward_zero); Python's
+    `//` floors, so it is corrected for a negative numerator."""
+    quotient = abs(numerator) // denominator
+    return -quotient if numerator < 0 else quotient
+
+
+def truncate_rational(x):
+    """arith.pl, truncate_rational/4 (truncateq/4)."""
+    return (_truncated_quotient(x[0], x[1]), 1)
+
+
+def floor_rational(x):
+    """arith.pl, floor_rational/4 (floorq/4)."""
+    numerator, denominator = x
+    if denominator == 1:
+        return x
+    if numerator < 0:
+        return (_truncated_quotient(numerator, denominator) - 1, 1)
+    return (_truncated_quotient(numerator, denominator), 1)
+
+
+def ceiling_rational(x):
+    """arith.pl, ceiling_rational/4 (ceilingq/4)."""
+    numerator, denominator = x
+    if denominator == 1:
+        return x
+    if numerator > 0:
+        return (_truncated_quotient(numerator, denominator) + 1, 1)
+    return (_truncated_quotient(numerator, denominator), 1)
+
+
+def round_rational(x):
+    """arith.pl, round_rational/4 (roundq/4): I = N // D, then I when
+    |x - I| < 1/2, else I + 1 when I >= 0, else I - 1.  So -1/2 gives 1
+    (test_round_and_floor_and_ceiling_follow_arith_pl)."""
+    whole = _truncated_quotient(x[0], x[1])
+    rest = subtract(x, (whole, 1))
+    if compare(absolute(rest), (1, 2)) < 0:
+        return (whole, 1)
+    if whole >= 0:
+        return (whole + 1, 1)
+    return (whole - 1, 1)
+
+
 def rational_to_float(x):
     """arith.pl, rational_to_float/3 (rat_float/3)."""
     numerator, denominator = limit_encoding_length(x[0], x[1], 1023)

@@ -48,6 +48,7 @@ in `arith.pl`'s file order:
 | `rat_float/3` | `rational_to_float` | A result past the float range raises `evaluation_error(float_overflow)`.  bv.pl's `float(X)` in `decrease_evaluate/2` uses it too. |
 | `float_rat/3,9` | `float_to_rational` | The recursion is a loop; NaN raises `evaluation_error(undefined)` and an infinity `evaluation_error(float_overflow)`. |
 | `arith_normalize/2` (`arith_q.pl`) | `arithmetic_normalize` | Takes an engine number or a rational pair.  A float goes through `float_to_rational`, as `get_rational/3` reads one, so `{X = 0.1}` gives `X = 1/10` (`test_numbers_are_exact_and_a_float_is_its_short_convergent`); Scryer's own `library(clpq)` gives the float's exact binary value instead. |
+| `truncateq/4`, `floorq/4`, `ceilingq/4`, `roundq/4` | `truncate_rational`, `floor_rational`, `ceiling_rational`, `round_rational` (Task 13, for bb.pl) | Take and return a pair.  They keep the `_rational` suffix, so they do not shadow Python's `round`.  SICStus `//` truncates toward zero and Python's floors; `_truncated_quotient` gives SICStus's.  `round_rational` keeps 1.3.3's rule, so `-1/2` rounds to `1` (`test_round_and_floor_and_ceiling_follow_arith_pl`). |
 | `integerp/2` (`arith_q.pl`) | `rational_integer` | Returns the int, or None. |
 | `number/1` as nf.pl applies it | `is_number` | An int, Fraction, Decimal or float, not a bool. |
 
@@ -196,8 +197,11 @@ member lists the solver walks.  What the port guarantees (ruling R21):
   `attribute_goal` when given a trail.  The normal form is taken again
   when the catch-up bound anything, so it reads the values.  This covers
   a goal another key's hook runs in place in the middle of a unification
-  (a `freeze/2` goal outside a driver).  Task 13 must do the same in
-  `bb_inf`.  `dump/3` and `projecting_assert/1` do it (Task 12).
+  (a `freeze/2` goal outside a driver).  `bb_inf` (Task 13) catches up
+  the variables of its integer list at entry, and wait_linear those of
+  its objective (`test_bb_inf_catches_up_at_entry`: bare, the frozen
+  `bb_inf([Q - X], W, I)` would otherwise read `Q - 2`, which
+  `branch_and_bound_intern/4` refuses with an instantiation error).  `dump/3` and `projecting_assert/1` do it (Task 12).
 - A solver step reaches no other part of the store: a constraint
   dereferences its variables, and a binding runs that variable's hook,
   which catches up its own components.
@@ -368,6 +372,14 @@ What the order decides, and what checks it:
   creation order, the port can give a different residual or a different
   optimal vertex.  The check for those is the oracle tests of Task 12
   (residuals) and Task 13 (`bb_inf`), not this task's tests.
+  The Task 13 result (2026-10-12): `BB_INF_CASES` in
+  `tests/clpq_port/test_against_oracle.py` compares the Vertex of
+  `bb_inf/5` with Scryer's, and agrees in every case, including the ones
+  with several optimal vertices: `{X + Y >= 3/2, X >= 0, Y >= 0}` gives
+  `[1, 1]` (of `[1, 1]`, `[2, 0]`, `[0, 2]`) with the list in either
+  order, `{X + Y + Z >= 5/2, ...}` gives `[2, 0, 1]`, and the three
+  knapsacks give `[2, 1, 0]`, `[2, 1, 0, 0]` and `[2, 1, 0, 1, 1, 0]`.
+  No order difference was found.
 
 Component variables are ordered the same way.  bv.pl `select_dependent/7`
 collects the components of a new equation's old variables with
@@ -439,7 +451,16 @@ a `DelayedGoal(mutex, procedure, argument)` and runs
   `'solve_<'/1`, ineq.pl `inequality_one_variable/4`, ...) is already
   deterministic (Tasks 8, 9).  `wait_linear_retry`'s Goal is bv.pl's
   `minimize_linear/1` or `infimum_linear/4`, both deterministic, or bb.pl's
-  `branch_and_bound_infimum_internal/5`, which Task 13 must check.
+  `branch_and_bound_infimum_internal/5`.  That one is deterministic too
+  (Task 13): its first clause always ends in `fail`, and its second, the
+  last, runs `bb_delete/2`, a unification of the vertex lists and
+  `{Inf =:= InfVal}`, none of which leaves a choice point.  The port's
+  `branch_and_bound_infimum_internal` returns True or False and runs once
+  per wake (`test_the_delayed_goal_is_deterministic`).  bb.pl's goal is
+  `bb_inf_internal(Is, Nf, EpsN, Inf, Vertex)`, with Nf second;
+  `translate_goal` writes it that way, `branch_and_bound_infimum_internal(Is,
+  Res, Eps, Inf, Vertex)` (`test_the_delayed_goal_shows_nf_second`,
+  `test_a_delayed_bb_inf_shows_in_the_residual`).
 - Translation.  `geler/2` is a meta-predicate (`geler.pl`, `compenv.pl`
   `nfq:geler(?,:)`), so 1.3.3 stores `nfq:G`, and `translate_goal//1`'s
   `M:G` clause calls nfq.pl's exported `translate_goal//1` (the `transg` of
@@ -676,3 +697,26 @@ engine number (`to_number`: an int, or a Fraction), as nf.pl's
 (`test_normal_form_to_sum_writes_engine_numbers`,
 `test_dump_variable_and_dump_disequation_write_engine_numbers`,
 `test_dump_emits_engine_numbers_never_rational_pairs`).
+
+## D17: the incumbent of `bb_inf` is local to each search
+
+bb.pl keeps the best leaf found so far in one global record,
+`bb_put(incumbent, Inf-Vertex)`, which `branch_and_bound_infimum_internal/5`
+clears at the start (`bb_delete(incumbent, _)`) and takes at the end.  A
+second `bb_inf` that runs inside the search, a delayed one woken when a
+branch binds the variable it waits on, clears and takes the same record.
+The outer search then has no incumbent: `branch_and_bound_better_bound/1`
+lets every later node through, and the leaf it records last is its
+answer, which can be worse than the optimum, or none, so that the outer
+`bb_inf` fails.
+
+The port keeps the incumbent in a local of `branch_and_bound_loop`
+(the plan's Task 13 brief), so each search has its own.  The
+case `{W >= 1/2}, bb_inf([W], W*X, I2), {X >= 0, X =< 1, Z + 2*X >= 1,
+Z - 2*X >= 0}, bb_inf([X], Z, I, [VX], 0)`: the minimum of Z is 1, at
+X = 0.  Scryer answers `I = 2, VX = 1`, the port `I = 1, VX = 0`
+(`test_a_nested_bb_inf_differs_from_the_oracle`,
+`test_a_nested_bb_inf_keeps_the_outer_incumbent`); without the inner
+`bb_inf` both answer 1.  A copy of the port with one shared record in
+place of the local (the Task 13 report) answers 2, as Scryer does.  Not
+checked against SICStus.

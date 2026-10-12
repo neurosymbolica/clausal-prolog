@@ -388,6 +388,16 @@ def format_term(term, name_of):
                 text = "(" + text + ")"
             pieces.append(text)
             continue
+        if kind is list:        # bb.pl's goal holds Is (test_a_delayed_bb_inf_shows_in_the_residual)
+            stack.append("]")
+            index = len(node) - 1
+            while index >= 0:
+                stack.append((node[index], 999, False))
+                if index > 0:
+                    stack.append(", ")
+                index -= 1
+            stack.append("[")
+            continue
         if kind is not tuple or not node or type(node[0]) is not str:
             pieces.append(str(node))
             continue

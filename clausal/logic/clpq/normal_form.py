@@ -1662,8 +1662,10 @@ def translate_goal(procedure, argument):
     wait_linear_retry(Nf, Res, Goal) is `[clpq:{Term = Res}, Goal]`, where
     Goal is `clpq:Name(Res, Arguments...)` (1.3.3's goal is the bv.pl or
     bb.pl call, module-qualified by wait_linear/3's meta-argument; the port
-    names it after the procedure).  Raises ValueError for a goal nf.pl does
-    not delay, where 1.3.3's translate_goal//1 fails."""
+    names it after the procedure).  bb.pl's goal has Res second, as
+    bb.pl:22 writes `bb_inf_internal(Is, Nf, EpsN, Inf, Vertex)`
+    (test_the_delayed_goal_shows_nf_second).  Raises ValueError for a goal
+    nf.pl does not delay, where 1.3.3's translate_goal//1 fails."""
     if procedure is resubmit_equal:
         return [_solver_constraint("=", argument, normal_form_to_term([]))]
     if procedure is resubmit_less_than:
@@ -1673,9 +1675,15 @@ def translate_goal(procedure, argument):
     if procedure is resubmit_not_equal:
         return [_solver_constraint("=\\=", argument, normal_form_to_term([]))]
     if procedure is wait_linear_retry:
+        from clausal.logic.clpq.branch_and_bound import (  # cyclic: bb.pl
+            branch_and_bound_infimum_internal)
         result = argument.result
         goal_argument = argument.argument
-        if goal_argument is None:
+        if argument.procedure is branch_and_bound_infimum_internal:
+            integer_variables, epsilon, infimum, vertex = goal_argument
+            goal = (argument.procedure.__name__, integer_variables, result,
+                    to_number(epsilon), infimum, vertex)
+        elif goal_argument is None:
             goal = (argument.procedure.__name__, result)
         elif type(goal_argument) is tuple:
             goal = (argument.procedure.__name__, result) + goal_argument

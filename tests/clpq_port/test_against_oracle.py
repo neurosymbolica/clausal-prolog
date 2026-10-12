@@ -133,6 +133,18 @@ def _solve(query, goals, trail, found):
     elif functor == "maximize":
         if bv.maximize(query.expression(goal[1]), trail):
             _solve(query, rest, trail, found)
+    elif functor == "bb_inf":
+        from clausal.logic.clpq.branch_and_bound import bb_inf
+        integers = [query.expression(element) for element in goal[1]]
+        extra = ()
+        if len(goal) == 6:
+            vertex = goal[4]
+            vertex = ([_term(query, element) for element in vertex]
+                      if type(vertex) is list else _term(query, vertex))
+            extra = (vertex, query.expression(goal[5]))
+        if bb_inf(integers, query.expression(goal[2]),
+                  query.expression(goal[3]), trail, *extra):
+            _solve(query, rest, trail, found)
     elif functor in ("sup", "inf"):
         optimum = bv.sup if functor == "sup" else bv.inf
         if optimum(query.expression(goal[1]), query.expression(goal[2]), trail):
@@ -452,6 +464,93 @@ def test_random_stores_bound_through_the_hook_against_the_oracle(seed):
     want = scryer_answers(text, shown)
     got = port_answers(text, shown)
     check_against_oracle(text, shown, got, want)
+
+
+# ---------------------------------------------------------------- bb_inf (Task 13)
+
+def _knapsack_text(weights, values, capacity, most):
+    names = [f"X{i + 1}" for i in range(len(weights))]
+    bounds = ", ".join(f"{n} >= 0, {n} =< {most}" for n in names)
+    weight = " + ".join(f"{w}*{n}" for w, n in zip(weights, names))
+    value = " + ".join(f"{v}*{n}" for v, n in zip(values, names))
+    vertex = ", ".join(f"V{i + 1}" for i in range(len(names)))
+    text = (f"{{{bounds}, {weight} =< {capacity}}}, "
+            f"bb_inf([{', '.join(names)}], -({value}), I, [{vertex}], 0.001)")
+    return text, names + ["I"] + [f"V{i + 1}" for i in range(len(names))]
+
+
+def _deep_chain_text(size, upper):
+    names = [f"X{i + 1}" for i in range(size)]
+    bounds = ", ".join(f"{n} >= 0, {n} =< {upper}" for n in names)
+    links = ", ".join(f"2*{names[i + 1]} = 2*{names[i]} - 1"
+                      for i in range(size - 1))
+    return (f"{{{bounds}, {links}}}, bb_inf([{', '.join(names)}], X1, I)",
+            ["I"])
+
+
+#: (query, shown variables, number of answers).  The vertex cases with
+#: several optimal vertices are marked; Scryer and the port agree on which
+#: one comes back (DEVIATIONS.md D4).
+BB_INF_CASES = [
+    ("{X > 0, X =< 2}, bb_inf([X], X, I)", ["X", "I"], 1),
+    ("{X > 0, X =< 2}, bb_inf([X], X, I, [V], 0)", ["X", "I", "V"], 1),
+    ("{X > 1, X < 4}, bb_inf([X], -X, I)", ["X", "I"], 1),
+    # several optimal vertices: (1, 1), (2, 0), (0, 2)
+    ("{X + Y >= 3/2, X >= 0, Y >= 0}, bb_inf([X, Y], X + Y, I, [VX, VY], 0)",
+     ["X", "Y", "I", "VX", "VY"], 1),
+    ("{X + Y >= 3/2, X >= 0, Y >= 0}, bb_inf([Y, X], X + Y, I, [VY, VX], 0)",
+     ["X", "Y", "I", "VX", "VY"], 1),
+    ("{2*X + 2*Y >= 3, X >= 0, Y >= 0, X =< 3, Y =< 3},"
+     " bb_inf([X, Y], X + Y, I, [VX, VY], 0)", ["X", "Y", "I", "VX", "VY"], 1),
+    ("{X + Y + Z >= 5/2, X >= 0, Y >= 0, Z >= 0},"
+     " bb_inf([X, Y, Z], X + Y + Z, I, [VX, VY, VZ], 0)",
+     ["I", "VX", "VY", "VZ"], 1),
+    ("{X - Y =< 1/2, Y - X =< 1/2, X + Y >= 3/2, X =< 4, Y =< 4},"
+     " bb_inf([X, Y], X + Y, I, [VX, VY], 0)", ["I", "VX", "VY"], 1),
+    # Eps 1/2: the relaxed optimum counts as integral, the vertex is rounded
+    ("{2*X + 2*Y >= 3, X >= 0, Y >= 0}, bb_inf([X, Y], X + Y, I, [VX, VY], 1/2)",
+     ["X", "Y", "I", "VX", "VY"], 1),
+    ("{X >= 1/2}, bb_inf([3, 0], X, I, [V1, V2], 0.001)", ["X", "I", "V1", "V2"], 1),
+    ("{X >= 1/2}, bb_inf([3/2], X, I)", ["X", "I"], 0),
+    ("{X >= 1/2, X =< 2/3}, bb_inf([X], X, I)", ["X", "I"], 0),
+    ("{X >= 1/2, X =< 3/2}, bb_inf([X], X + 1, I)", ["X", "I"], 1),
+    ("{X =< 3}, bb_inf([X], X, I)", ["X", "I"], 0),
+    ("{X >= 1/2}, bb_inf([X], 5, I)", ["X", "I"], 1),
+    # a non-linear objective waits, then runs once linear
+    ("{X >= 1/2}, bb_inf([X], X*Y, I), Y = 1", ["X", "Y", "I"], 1),
+    ("{X >= 1/2}, bb_inf([X], X*Y, I), X = 1", ["X", "Y", "I"], 0),
+    ("{X >= 1/2, Y >= 1/3}, bb_inf([X], X*Y, I), X = 1", ["X", "Y", "I"], 1),
+    _knapsack_text([3, 4, 5], [4, 5, 6], 10, 3) + (1,),
+    _knapsack_text([5, 7, 4, 3], [8, 11, 6, 4], 17, 2) + (1,),
+    _knapsack_text([2, 3, 7, 9, 4, 6], [3, 5, 10, 14, 6, 7], 20, 2) + (1,),
+    _deep_chain_text(12, 600) + (0,),
+]
+
+
+@pytest.mark.parametrize("text, shown, count", BB_INF_CASES)
+def test_bb_inf_answers_as_the_oracle(text, shown, count):
+    want = scryer_answers(text, shown)
+    assert len(want) == count, want
+    got = port_answers(text, shown)
+    check_against_oracle(text, shown, got, want)
+
+
+def test_a_nested_bb_inf_differs_from_the_oracle():
+    # DEVIATIONS.md D17: the minimum of Z is 1 (at X = 0).  Scryer answers
+    # I = 2, V = [1]: the inner bb_inf, woken when the outer search binds
+    # X = 1, deletes the outer search's incumbent (one global record, as
+    # 1.3.3's bb_put/bb_delete), so the outer one keeps the worse leaf.
+    # The port's incumbent is a local and it answers 1.
+    text = ("{W >= 1/2}, bb_inf([W], W*X, I2),"
+            " {X >= 0, X =< 1, Z + 2*X >= 1, Z - 2*X >= 0},"
+            " bb_inf([X], Z, I, [VX], 0)")
+    (want,) = scryer_answers(text, ["I", "VX"], bounds=False)
+    (got,) = port_answers(text, ["I", "VX"], bounds=False)
+    assert (want.bindings["I"], want.bindings["VX"]) == (2, 1)
+    assert (got.bindings["I"], got.bindings["VX"]) == (1, 0)
+    alone = text.split("bb_inf([W], W*X, I2), ")[1]
+    (want_alone,) = scryer_answers(alone, ["I", "VX"], bounds=False)
+    assert (want_alone.bindings["I"], want_alone.bindings["VX"]) == (1, 0)
 
 
 # ---------------------------------------------------------------- the brief's residual cases
