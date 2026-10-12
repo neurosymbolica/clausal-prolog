@@ -143,10 +143,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
   raised `existence_error(procedure, catch/1)` before call/N ran, under
   both compile strategies: a special form's name built its cell only at
   one of its own arities. Written with fewer arguments it is now a closure
-  cell, and call/N extends it. An extension that is no control construct
-  (`call(catch(G), C)`) is still `existence_error(procedure, catch/2)`, as
-  in Scryer and Trealla. Clausal Prolog (`.clausal`) files already ran
-  these.
+  cell, and call/N extends it. The full set of names this covers, each
+  below its widest arity: catch/1-2, findall/1-3, bagof/1-2, setof/1-2,
+  forall/1, catch_error/1, catch_recover/1-2, call_nth/1, count_all/1,
+  setup_call_cleanup/1-2, call_cleanup/1, freeze/1, when/1 and eval_/1.
+  An extension that is no control construct (`call(catch(G), C)`) is
+  still `existence_error(procedure, catch/2)`, as in Scryer and Trealla.
+  Clausal Prolog (`.clausal`) files already ran these. **Visible in term
+  position:** such a name with fewer arguments now builds its cell instead
+  of raising, so `X is eval_(1 + 2)` binds X to the term `eval_(1 + 2)`
+  (it raised `existence_error(procedure, eval_/1)`; evaluation needs the
+  full `eval_(1 + 2, X)`), and `G is freeze(1)` or `G is when(C)` likewise
+  bind the term.
 - **A goal woken by an inline comparison runs before the next goal, as in
   Scryer.** A CLP(FD) comparison is compiled inline, and it can bind:
   `X == 3` directly, and `X <= 3` once `X >= 3` has narrowed X's domain to

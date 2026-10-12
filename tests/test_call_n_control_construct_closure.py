@@ -51,7 +51,7 @@ from tests._suffix import SEAM
 
 _SEAM = """
 -module(NAME, [])
--private([z, w, once, caught(x), nope(x)])
+-private([z, w, once, caught(x), nope(x), a, b, c, t])
 SHALLOW
 g(1),
 g(2),
@@ -65,10 +65,36 @@ built(G) <- (G is catch(throw(z)))
 catch_too_few() <- call(catch(throw(z)), _)
 findall_too_few() <- call(findall(X), g(X))
 no_such() <- call(nope(1), 2)
+h(1, a),
+h(2, b),
+h(1, c),
+fa4_2(L) <- call(findall(X, g(X)), L, [t])
+fa4_1(L) <- call(findall(X), g(X), L, [t])
+bag_1(K, L) <- call(bagof(V), h(K, V), L)
+bag_2(L) <- call(bagof(V, h(1, V)), L)
+set_1(K, L) <- call(setof(V), h(K, V), L)
+set_2(L) <- call(setof(V, h(1, V)), L)
+scc_1(X) <- call(setup_call_cleanup(True), g(X), True)
+scc_2(X) <- call(setup_call_cleanup(True, g(X)), True)
+cc_1(X) <- call(call_cleanup(g(X)), True)
+fr_1(Y) <- (call(freeze(X), Y is a), X is 1)
+fr_1_waits(Y) <- call(freeze(_X), Y is a)
+wh_1(Y) <- (call(when(nonvar(X)), Y is a), X is 1)
+cn_1(X) <- call(call_nth(g(X)), 2)
+cnt_1(N) <- call(count_all(g(_)), N)
+ce_1(E) <- call(catch_error(throw(z)), E)
+cr_1(R) <- call(catch_recover(throw(z)), E, R is caught(E))
+cr_2(R) <- call(catch_recover(throw(z), E), R is caught(E))
+cr_nomatch() <- call(catch_recover(throw(z), w), True)
+ev_1(R) <- call(eval_(1 + 2), R)
+built_eval(G) <- (G is eval_(1 + 2))
 """
 
 _PREDS = ("catch_1/1, catch_2/1, catch_nomatch/0, findall_1/1, forall_1/1, "
-          "once_0/1, built/1, catch_too_few/0, findall_too_few/0, no_such/0")
+          "once_0/1, built/1, catch_too_few/0, findall_too_few/0, no_such/0, "
+          "fa4_2/1, fa4_1/1, bag_1/2, bag_2/1, set_1/2, set_2/1, scc_1/1, "
+          "scc_2/1, cc_1/1, fr_1/1, fr_1_waits/1, wh_1/1, cn_1/1, cnt_1/1, "
+          "ce_1/1, cr_1/1, cr_2/1, cr_nomatch/0, ev_1/1, built_eval/1")
 
 _CLAUSAL = r"""
 :- module(NAME, []).
@@ -84,6 +110,29 @@ built(G) :- G = catch(throw(z)).
 catch_too_few :- call(catch(throw(z)), _).
 findall_too_few :- call(findall(X), g(X)).
 no_such :- call(nope(1), 2).
+h(1, a).
+h(2, b).
+h(1, c).
+fa4_2(L) :- call(findall(X, g(X)), L, [t]).
+fa4_1(L) :- call(findall(X), g(X), L, [t]).
+bag_1(K, L) :- call(bagof(V), h(K, V), L).
+bag_2(L) :- call(bagof(V, h(1, V)), L).
+set_1(K, L) :- call(setof(V), h(K, V), L).
+set_2(L) :- call(setof(V, h(1, V)), L).
+scc_1(X) :- call(setup_call_cleanup(true), g(X), true).
+scc_2(X) :- call(setup_call_cleanup(true, g(X)), true).
+cc_1(X) :- call(call_cleanup(g(X)), true).
+fr_1(Y) :- call(freeze(X), Y = a), X = 1.
+fr_1_waits(Y) :- call(freeze(_X), Y = a).
+wh_1(Y) :- call(when(nonvar(X)), Y = a), X = 1.
+cn_1(X) :- call(call_nth(g(X)), 2).
+cnt_1(N) :- call(count_all(g(_)), N).
+ce_1(E) :- call(catch_error(throw(z)), E).
+cr_1(R) :- call(catch_recover(throw(z)), E, R = caught(E)).
+cr_2(R) :- call(catch_recover(throw(z), E), R = caught(E)).
+cr_nomatch :- call(catch_recover(throw(z), w), true).
+ev_1(R) :- call(eval_(1 + 2), R).
+built_eval(G) :- G = eval_(1 + 2).
 :- end_module(NAME).
 """
 
@@ -195,3 +244,104 @@ def test_a_closure_extended_to_no_control_construct_is_existence_error(mod):
 def test_an_undefined_closure_is_still_existence_error(mod):
     """Control: a real undefined closure keeps its error at the CALLED arity."""
     assert _existence_pi(_error(mod, "no_such")) == ("/", "nope", 2)
+
+
+# ── every other special form, under-applied ──────────────────────────────────
+#
+# Review of 18c0eaed (2026-10-13): ``is_special_form_closure`` covers every
+# special-form name below its widest arity -- catch/1-2, findall/1-3,
+# bagof/1-2, setof/1-2, forall/1, catch_error/1, catch_recover/1-2,
+# call_nth/1, count_all/1, setup_call_cleanup/1-2, call_cleanup/1, freeze/1,
+# when/1, eval_/1 -- and each closure below was RED in the seam on a33877ec
+# (existence_error at the written arity).  Scryer (``library(iso_ext)``,
+# ``library(freeze)``, ``library(when)``) and Trealla (``library(freeze)``,
+# ``library(when)``) give the same answers wherever they have the predicate:
+#
+#     call(findall(X, g(X)), L, [t])                 L = [1, 2, t]
+#     call(findall(X), g(X), L, [t])                 L = [1, 2, t]
+#     call(bagof(V), h(K, V), L)                     K = 1, L = [a, c] ; K = 2, L = [b]
+#     call(bagof(V, h(1, V)), L)                     L = [a, c]
+#     call(setof(V), h(K, V), L)                     K = 1, L = [a, c] ; K = 2, L = [b]
+#     call(setof(V, h(1, V)), L)                     L = [a, c]
+#     call(setup_call_cleanup(true), g(X), true)     X = 1 ; X = 2
+#     call(setup_call_cleanup(true, g(X)), true)     X = 1 ; X = 2
+#     call(call_cleanup(g(X)), true)                 X = 1 ; X = 2
+#     call(freeze(X), Y = a), X = 1                  Y = a
+#     call(freeze(_), Y = a)                         Y unbound
+#     call(when(nonvar(X)), Y = a), X = 1            Y = a
+#     call(call_nth(g(X)), 2)                        X = 2
+#
+# count_all/2, catch_error/2, catch_recover/3 and eval_/2 are Clausal's own
+# (no Scryer/Trealla predicate); their answers follow the same forms written
+# at full arity (docs/builtins.md).
+
+
+def test_call_findall_closures_extend_to_findall_4(mod):
+    assert _answers(mod, "fa4_2", Var()) == [([1, 2, "t"],)]
+    assert _answers(mod, "fa4_1", Var()) == [([1, 2, "t"],)]
+
+
+def test_call_bagof_closures(mod):
+    assert _answers(mod, "bag_1", Var(), Var()) == [
+        (1, ["a", "c"]), (2, ["b"])]
+    assert _answers(mod, "bag_2", Var()) == [(["a", "c"],)]
+
+
+def test_call_setof_closures(mod):
+    assert _answers(mod, "set_1", Var(), Var()) == [
+        (1, ["a", "c"]), (2, ["b"])]
+    assert _answers(mod, "set_2", Var()) == [(["a", "c"],)]
+
+
+def test_call_setup_call_cleanup_closures(mod):
+    assert _answers(mod, "scc_1", Var()) == [(1,), (2,)]
+    assert _answers(mod, "scc_2", Var()) == [(1,), (2,)]
+
+
+def test_call_call_cleanup_closure(mod):
+    assert _answers(mod, "cc_1", Var()) == [(1,), (2,)]
+
+
+def test_call_freeze_closure(mod):
+    assert _answers(mod, "fr_1", Var()) == [("a",)]
+    from clausal.logic.variables import is_var
+    ((y,),) = _answers(mod, "fr_1_waits", Var())
+    assert is_var(y), y
+
+
+def test_call_when_closure(mod):
+    assert _answers(mod, "wh_1", Var()) == [("a",)]
+
+
+def test_call_call_nth_closure(mod):
+    assert _answers(mod, "cn_1", Var()) == [(2,)]
+
+
+def test_call_count_all_closure(mod):
+    assert _answers(mod, "cnt_1", Var()) == [(2,)]
+
+
+def test_call_catch_error_closure(mod):
+    assert _answers(mod, "ce_1", Var()) == [("z",)]
+
+
+def test_call_catch_recover_closures(mod):
+    assert _answers(mod, "cr_1", Var()) == [(("caught", "z"),)]
+    assert _answers(mod, "cr_2", Var()) == [(("caught", "z"),)]
+    # catch_recover never re-raises: a catcher that does not unify FAILS.
+    assert _answers(mod, "cr_nomatch") == []
+
+
+def test_call_eval_closure(mod):
+    """``call(eval_(1 + 2), R)`` is ``eval_(1 + 2, R)``: R = 3."""
+    assert _answers(mod, "ev_1", Var()) == [(3,)]
+
+
+def test_an_under_applied_eval_in_term_position_is_a_cell(mod):
+    """The visible side of the fix: ``G is eval_(1 + 2)`` (seam) used to
+    raise ``existence_error(procedure, eval_/1)``; it now binds the CELL
+    ``eval_(1 + 2)`` -- the closure -- as ``.clausal``'s ``G = eval_(1 + 2)``
+    always did.  Nothing evaluates it: eval_/1 is no goal and no evaluable."""
+    ((g,),) = _answers(mod, "built_eval", Var())
+    assert type(g) is tuple and cell_functor(g) == "eval_", g
+    assert len(cell_args(g)) == 1, g
