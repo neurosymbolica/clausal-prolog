@@ -155,6 +155,23 @@ surface described in [docs/public-api.md](docs/public-api.md).
 - **`replace_subterm/4` rewrites inside a partial list whose holes are
   filled** (`[a, *T]` with `T` bound), as `reified_subterm/2` already
   walked it.
+- **Building text one char at a time takes linear time and memory.** A
+  Python `str` cannot grow, so `[a|T]` with `T` a long text, or
+  `append("a", T, L)` / `append(T, "a", L)`, copied all of `T` at every step:
+  building n chars copied about n²/2. A non-tail-recursive builder also kept
+  every copy alive, so at 256,000 chars it ran out of memory. A long text
+  built by concatenation is now a rope: an immutable tree of short leaves
+  that shares the rest of the text (operator ruling 2026-10-12). Nothing is
+  mutated, so backtracking and other branches keep their own text. Reading
+  the front of a rope (`[C|Rest]`) does not flatten it. The first reader that
+  needs the whole text builds the str once. Python never sees a rope:
+  `Var.value`, `clausal.deref`, `to_python` and the library adapters hand out
+  a `str`. Times are unchanged for short text. Building 100,000 chars with
+  `rec(N, [a|T])` went from 3.4 s and 5.05 GB peak memory to 1.2 s and
+  299 MB. At 256,000 chars the copying engine ran out of memory; it now takes
+  10.6 s and 698 MB. Stripping a prefix with
+  `append(Prefix, Rest, Text)` now leaves `Rest` as a view rather than a copy.
+
 - **Python-backed library predicates accept the rest of a long list.**
   Matching `[_|Rest]` against a list of 64 or more elements makes `Rest` a
   list view rather than a copy. A view is not a Python `list`, so

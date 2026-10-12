@@ -245,9 +245,8 @@ This replaces both the SegList tail-sharing idea and the separate `('$chars', bu
 3. ~~The typed boundary, then compaction at copy points and one-step builtins.~~ PARKED (ruled
    2026-10-11, below).
 4. ~~Step 2a (reader refactor)~~ DONE with the read-only views; verified 2026-10-12 (stress run
-   below). 2b, the growable half of `_Text`: NOT warranted by the census (text is nearly always
-   under 64 chars; the condition in this item is not met). Reopen with a measured program that
-   builds long text incrementally.
+   below). ~~2b, the growable half of `_Text`~~ DONE 2026-10-12 as an immutable ROPE, not a growable
+   buffer (operator ruling 2026-10-12, "resolve both"; see "Building text: the rope" below).
 5. Refcount-driven mutation of text: parked. It is checkable: CPython's own `unicode_modifiable`
    rule extended to the tuple -- carrier and str uniquely referenced, carrier `ob_hash == -1` (3.14+,
    `cpython/tupleobject.h`), str hash `-1`, not interned, exact `str`; a moved str is written back
@@ -294,4 +293,32 @@ import the engine's. Operator ruling 2026-10-12 ("resolve both"): every module u
 function). Pinned by `tests/test_list_views_at_adapters.py` (each case at 30 and at 100 elements).
 Not covered: the optional packages under `packages/`, which import the engine's `deref` and are a
 follow-up in their own lane.
+
+## Building text: the rope (DONE 2026-10-12)
+
+Operator ruling 2026-10-12. Of the designs above, the growable buffer view needs the heap-top rule
+and spare room at both ends, and refcount-gated in-place growth never fires (refcount 5 at
+`append/3`). In-place growth also cannot prepend, and `[a|T]` prepends. The rope needs neither.
+
+- `cells._Text` has a second form, a rope node: `base` None, `left` and `right` each a str or a
+  `_Text`, `hi` the stored length. `cells.text_concat(a, b)` returns a str under `ROPE_MIN` (64)
+  chars and a node otherwise. A short piece joins an adjacent short leaf (up to `ROPE_LEAF`, 64),
+  so building one char at a time copies at most a leaf per step and makes one node per 64 chars.
+- Immutable: no choice-point, refcount or hash concern. An older term keeps its own node.
+- Readers are unchanged, because a rope is a `_Text`. `len` is stored. One char at position 0 and
+  a suffix (`[C|Rest]`) are read in place (`_rope_suffix`). Any other positional read, the whole
+  str (`flat`), hashing and equality flatten the node ONCE, iteratively, and it becomes a view of
+  that str.
+- Writers: `carrier_star_concat` in `runtime/_list_unify.c` (head output `[a|T]`; it calls
+  `cells.text_concat` through `_chars_carrier.h` from `CHARS_ROPE_MIN` chars) and its Python twin,
+  and `append/3`'s text-with-text path. `append(Prefix, Rest, Text)` now cuts `Rest` as a view.
+- Measured (aarch64): `rec` 100k chars 3.4 s / 5.05 GB peak -> 1.2 s / 299 MB; 256k:
+  OOM-killed -> 10.6 s / 698 MB. tracemalloc at 20k: 249-268 MB -> 52-70 MB (the list-building
+  twin `recl`: 55 MB). Short text is unchanged within noise (4k and 16k A/B).
+- Pinned by `tests/test_text_ropes.py`.
+- Not covered: a program that reads a rope in the MIDDLE between build steps still flattens each
+  new node (quadratic again). A balanced tree would answer it in O(log n); not built until a program
+  needs it.
+- Seen while measuring, NOT the rope's: a segfault in the cycle collector after a 1M-deep
+  recursion, which reproduces on main with no text at all. engine-lane owns it.
 

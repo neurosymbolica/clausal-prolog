@@ -28,6 +28,11 @@
 
 static PyObject *g_text_view_type = NULL;   /* cells._Text, looked up once */
 static PyObject *g_text_slice_fn = NULL;    /* cells.text_slice */
+static PyObject *g_text_concat_fn = NULL;   /* cells.text_concat */
+
+/* A concatenation this long or longer is a rope node (cells.text_concat);
+ * the same number as ``cells.ROPE_MIN``. */
+#define CHARS_ROPE_MIN 64
 
 /* Resolve cells._Text and cells.text_slice.  1, or -1 with an exception.
  * From sys.modules, never through the import machinery: this runs inside
@@ -48,8 +53,10 @@ text_view_lookup(void)
     }
     PyObject *tp = PyObject_GetAttrString(mod, "_Text");
     PyObject *fn = tp ? PyObject_GetAttrString(mod, "text_slice") : NULL;
+    PyObject *cat = fn ? PyObject_GetAttrString(mod, "text_concat") : NULL;
     Py_DECREF(mod);
-    if (!fn) { Py_XDECREF(tp); return -1; }
+    if (!cat) { Py_XDECREF(tp); Py_XDECREF(fn); return -1; }
+    g_text_concat_fn = cat;
     g_text_slice_fn = fn;
     g_text_view_type = tp;      /* set last: it is the "resolved" flag */
     return 1;

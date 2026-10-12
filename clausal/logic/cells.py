@@ -204,23 +204,90 @@ class _Text:
     read by position for len, one char and slices; anything that needs the
     whole str (``flat``, ``chars_text``) builds it once and keeps it.  The
     chars ``[lo, hi)`` never change, so the hash (cached in a tuple by CPython
-    3.14) never goes stale."""
-    __slots__ = ("base", "lo", "hi", "_flat")
+    3.14) never goes stale.
+
+    Its second form is a ROPE node (``base`` None): the text ``left + right``,
+    each a str or a ``_Text``, made by :func:`text_concat` when a long text is
+    built by concatenation (``[a|T]``, ``append/3``).  A node never changes
+    what it spells; the first reader that needs a position or the whole str
+    flattens it ONCE, iteratively, and the node becomes a view of that str
+    (dropping its children).  Length is stored, so it never flattens."""
+    __slots__ = ("base", "lo", "hi", "_flat", "left", "right")
 
     def __init__(self, base: str, lo: int, hi: int):
         self.base, self.lo, self.hi, self._flat = base, lo, hi, None
+        self.left = self.right = None
+
+    @classmethod
+    def _rope(cls, left, right):
+        node = object.__new__(cls)
+        node.base, node.lo, node.hi, node._flat = None, 0, len(left) + len(right), None
+        node.left, node.right = left, right
+        return node
+
+    def _flatten(self) -> None:
+        """A rope node becomes a view of its whole text (once)."""
+        parts, stack = [], [self]
+        while stack:
+            x = stack.pop()
+            if type(x) is str:
+                parts.append(x)
+            elif x._flat is not None:
+                parts.append(x._flat)
+            elif x.base is not None:
+                parts.append(x.base[x.lo:x.hi])
+            else:
+                stack.append(x.right)
+                stack.append(x.left)
+        text = "".join(parts)
+        self.base, self.lo, self.hi, self._flat = text, 0, len(text), text
+        self.left = self.right = None
 
     @property
     def flat(self) -> str:
         """The text as a str, built once."""
         if self._flat is None:
-            self._flat = self.base[self.lo:self.hi]
+            if self.base is None:
+                self._flatten()
+            else:
+                self._flat = self.base[self.lo:self.hi]
         return self._flat
 
     def __len__(self):
         return self.hi - self.lo
 
+    def _rope_suffix(self, a: int):
+        """The text from position *a* (0 < a < len) of a rope node, without
+        flattening it: descend to the leaf holding position *a*, cut that leaf,
+        and rejoin the right-hand parts passed on the way.  A rope built by
+        prepending holds its first chars in its leftmost leaf, so taking
+        ``[C|Rest]`` costs at most a leaf."""
+        rights, x = [], self
+        while type(x) is _Text and x.base is None:
+            ll = len(x.left)
+            if a >= ll:
+                a -= ll
+                x = x.right
+            else:
+                rights.append(x.right)
+                x = x.left
+        out = text_slice(x, a, len(x)) if type(x) is str else x[a:]
+        for r in reversed(rights):
+            out = text_concat(out, r)
+        return out
+
     def __getitem__(self, i):
+        if self.base is None:
+            # A rope reads its FRONT in place -- one char from the leftmost
+            # leaf, a suffix by _rope_suffix; anything else builds the str once.
+            n = self.hi
+            if isinstance(i, slice):
+                a, b, step = i.indices(n)
+                if step == 1 and b == n and 0 < a < n:
+                    return self._rope_suffix(a)
+            elif i == 0 and type(self.left) is str:
+                return self.left[0]
+            self._flatten()
         if isinstance(i, slice):
             a, b, step = i.indices(self.hi - self.lo)
             if step != 1:
@@ -290,6 +357,39 @@ def text_slice(base: str, lo: int, hi: int):
     if hi - lo >= VIEW_MIN:
         return _Text(base, lo, hi)
     return base[lo:hi]
+
+
+# A concatenation shorter than this is a plain str; a longer one a rope node.
+# A rope node's short leaf grows up to ROPE_LEAF chars before a new node
+# starts, so prepending (or appending) one char copies at most a leaf.
+ROPE_MIN = 64
+ROPE_LEAF = 64
+
+
+def text_concat(a, b):
+    """The text ``a + b`` of two texts, each a str or a ``_Text``: a str when
+    short, else a rope node sharing both -- never a copy of a long text.  A
+    short piece joins the adjacent short leaf of a node, so building a text
+    one char at a time makes one node per ROPE_LEAF chars."""
+    la, lb = len(a), len(b)
+    if not la:
+        return b
+    if not lb:
+        return a
+    if la + lb < ROPE_MIN:
+        return (a if type(a) is str else a.flat) + (b if type(b) is str else b.flat)
+    if (type(a) is str and type(b) is _Text and b.base is None
+            and type(b.left) is str and la + len(b.left) <= ROPE_LEAF):
+        return _Text._rope(a + b.left, b.right)
+    if (type(b) is str and type(a) is _Text and a.base is None
+            and type(a.right) is str and lb + len(a.right) <= ROPE_LEAF):
+        return _Text._rope(a.left, a.right + b)
+    return _Text._rope(a, b)
+
+
+def chars_concat(c1, c2) -> tuple:
+    """The chars carrier of the text of carrier *c1* followed by *c2*'s."""
+    return (CHARS_TAG, text_concat(c1[1], c2[1]))
 
 
 def is_chars(x) -> bool:

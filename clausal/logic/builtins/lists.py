@@ -15,7 +15,8 @@ from clausal.logic.trampoline import DONE
 
 from clausal.logic.builtins._registry import _trampoline_builtin, _builtin
 from clausal.logic.builtins._helpers import _standard_order_key, _standard_order_sorted
-from clausal.logic.cells import chars, is_chars, chars_text
+from clausal.logic.cells import (chars, is_chars, chars_text, chars_payload, chars_concat,
+                                 text_slice, CHARS_TAG)
 
 # ── Destructive-reuse: CPython refcount availability ────────────────────────
 
@@ -393,16 +394,20 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
     if _out_str and is_chars(l1_val):
         if is_chars(l2_val):
             mark = trail.mark()
-            if unify(l3, chars(chars_text(l1_val) + chars_text(l2_val)), trail):
+            if unify(l3, chars_concat(l1_val, l2_val), trail):   # a rope when long: no copy
                 yield (_proceed, None)
             trail.undo(mark)
             yield (_fail, DONE)
             return
         if is_chars(l3_val) and _as_items(l2_val) is None:
-            t1, t3 = chars_text(l1_val), chars_text(l3_val)
-            if t3.startswith(t1):
+            # Compare and cut by position: the rest is a view of L3's text,
+            # not a copy (stripping a prefix in a loop copied the rest each time).
+            t1, p3 = chars_text(l1_val), chars_payload(l3_val)
+            if len(p3) >= len(t1) and p3[:len(t1)] == t1:
                 mark = trail.mark()
-                if unify(l2, chars(t3[len(t1):]), trail):
+                k = len(t1)
+                rest = text_slice(p3, k, len(p3)) if type(p3) is str else p3[k:]
+                if unify(l2, (CHARS_TAG, rest), trail):
                     yield (_proceed, None)
                 trail.undo(mark)
             yield (_fail, DONE)

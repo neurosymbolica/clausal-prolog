@@ -78,7 +78,8 @@ fallbacks are used.
 
 from __future__ import annotations
 
-from clausal.logic.cells import chars, is_chars, chars_text  # stage 1: the chars carrier
+from clausal.logic.cells import (chars, is_chars, chars_text,  # stage 1: the chars carrier
+                                 chars_payload, text_concat, CHARS_TAG)
 from clausal.logic.variables import is_var, deref, unify
 from clausal.terms import (
     SegList, SegListView, ConcreteSeg, VarSeg, list_rest,
@@ -245,12 +246,14 @@ def _carrier_star_concat(before, s, after_vals):
     if not is_chars(s):
         return None
     after = [deref(v) for v in after_vals]
-    text = chars_text(s)
-    if not (before or after or text):
+    text = chars_payload(s)             # a str, a view or a rope: never flattened here
+    if not (before or after or len(text)):
         return None
     if not all(is_char_atom(e) for e in before) or not all(is_char_atom(e) for e in after):
         return None
-    return chars("".join(before) + text + "".join(after))
+    # A long result is a rope sharing the tail: building text one char at a
+    # time copied the whole tail at every step.
+    return (CHARS_TAG, text_concat(text_concat("".join(before), text), "".join(after)))
 
 
 def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):

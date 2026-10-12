@@ -622,11 +622,67 @@ py_head_list_unify_input(PyObject *Py_UNUSED(module), PyObject *args)
  * quadratic in Python objects; one join copies the text at memcpy speed.
  * Returns a new carrier, Py_None (new reference) when the fast path does
  * not apply, or NULL on error. */
+/* The chars of *vals* (each derefs to a one-char atom) joined into a str --
+ * a new reference; Py_None (new) when one is not a char; NULL on error. */
+static PyObject *
+join_char_atoms(PyObject *vals)
+{
+    Py_ssize_t n = PyList_GET_SIZE(vals);
+    PyObject *parts = PyList_New(n);
+    if (!parts) return NULL;
+    for (Py_ssize_t i = 0; i < n; i++) {
+        PyObject *dv = call_deref(PyList_GET_ITEM(vals, i));
+        if (!dv) { Py_DECREF(parts); return NULL; }
+        if (!is_char_atom_obj(dv)) {
+            Py_DECREF(dv);
+            Py_DECREF(parts);
+            Py_RETURN_NONE;
+        }
+        PyList_SET_ITEM(parts, i, dv);   /* steals dv */
+    }
+    PyObject *empty = PyUnicode_FromStringAndSize("", 0);
+    if (!empty) { Py_DECREF(parts); return NULL; }
+    PyObject *joined = PyUnicode_Join(empty, parts);
+    Py_DECREF(empty);
+    Py_DECREF(parts);
+    return joined;
+}
+
+/* carrier_star_concat for a long result: the carrier of
+ * text_concat(text_concat(before, payload), after), the payload (a str, a
+ * view or a rope) never flattened. */
+static PyObject *
+carrier_star_rope(PyObject *var_vals, PyObject *s, PyObject *after_vals)
+{
+    if (text_view_lookup() < 0) return NULL;
+    PyObject *before = join_char_atoms(var_vals);
+    if (!before || before == Py_None) return before;
+    PyObject *after = join_char_atoms(after_vals);
+    if (!after || after == Py_None) { Py_DECREF(before); return after; }
+    PyObject *head = PyObject_CallFunctionObjArgs(
+        g_text_concat_fn, before, PyTuple_GET_ITEM(s, 1), NULL);
+    Py_DECREF(before);
+    PyObject *whole = head ? PyObject_CallFunctionObjArgs(g_text_concat_fn, head, after, NULL) : NULL;
+    Py_XDECREF(head);
+    Py_DECREF(after);
+    if (!whole) return NULL;
+    PyObject *carrier = make_chars_carrier(whole);
+    Py_DECREF(whole);
+    return carrier;
+}
+
 static PyObject *
 carrier_star_concat(PyObject *var_vals, PyObject *s, PyObject *after_vals)
 {
     Py_ssize_t nb = PyList_GET_SIZE(var_vals);
     Py_ssize_t na = PyList_GET_SIZE(after_vals);
+    Py_ssize_t tl = carrier_len(s);
+    if (tl < 0) return NULL;
+    /* A long result is a rope node sharing the tail (cells.text_concat), never
+     * a copy of it: building text one char at a time copied the whole tail at
+     * every step. */
+    if (nb + na + tl >= CHARS_ROPE_MIN)
+        return carrier_star_rope(var_vals, s, after_vals);
     PyObject *text = carrier_text(s);
     if (!text) return NULL;
     /* an empty result stays the empty list, as maybe_promote_to_str leaves it */
