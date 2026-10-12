@@ -133,9 +133,10 @@ def test_a_queued_goal_blocks_the_tail_call_commit():
     assert t.commit_fresh(mark, floor) is False
 
 
-def test_without_a_driver_a_hook_runs_its_goal_in_place():
-    """A bare unify from Python (no driver owns the trail) keeps the old
-    behaviour: the frozen goal runs inside the unification."""
+def test_without_a_driver_the_unify_runs_the_woken_goal():
+    """A bare unify from Python (no driver owns the trail) runs the goal it
+    woke before it returns, to its first answer, after every hook
+    (tests/test_bare_unify_runs_pending_goals.py)."""
     from clausal.logic.coroutining import _freeze_var
     t, x, y = Trail(), Var(), Var()
     assert t.defer is False

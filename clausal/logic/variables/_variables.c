@@ -510,8 +510,9 @@ struct TrailObject {
      * queued by an attribute hook for the engine to run at the next goal
      * boundary.  Every change is trailed (TRAIL_PENDING). */
     PyObject   *pending;
-    /* Nonzero while a driver that runs pending goals owns this trail; a
-     * hook queues its goals only then, and runs them in place otherwise. */
+    /* Nonzero while a driver that runs pending goals owns this trail, or
+     * while a unification with no driver fires its wakeups and runs the
+     * goals they queued (do_unify_and_wake). */
     int         defer;
 };
 
@@ -1929,6 +1930,57 @@ fire_wakeups(PyObject *wakeup_list, TrailObject *trail)
  *   4. Fire wakeups; roll back on failure or exception.
  * ================================================================ */
 
+static PyObject *g_drain_factory = NULL;  /* set by _set_pending_drain */
+
+/*
+ * run_pending_first — run the goals queued on *trail* to their first
+ * answer and keep its bindings, as clausal.logic.pending.run_first does:
+ * 1 (an answer), 0 (none), -1 (exception).  The drain generator is then
+ * dropped, as run_first drops it.
+ */
+static int
+run_pending_first(TrailObject *trail)
+{
+    if (!g_drain_factory) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "pending goals queued but no drain is registered");
+        return -1;
+    }
+    PyObject *gen = PyObject_CallOneArg(g_drain_factory, (PyObject *)trail);
+    if (!gen) return -1;
+    PyObject *answer = PyIter_Next(gen);
+    if (answer) {
+        Py_DECREF(answer);
+        Py_DECREF(gen);
+        return 1;
+    }
+    Py_DECREF(gen);
+    return PyErr_Occurred() ? -1 : 0;
+}
+
+/*
+ * A unification with no driver (trail->defer == 0: a bare unify from
+ * Python, a compiled predicate called directly) is deterministic and
+ * complete when it returns:
+ *
+ *   1. it makes all its bindings (do_unify);
+ *   2. it fires every wakeup -- every hook of every bound attributed
+ *      variable -- and hooks queue the goals they wake (push_pending);
+ *   3. then, when goals are queued, it runs them to their first answer.
+ *
+ * So a woken goal sees every hook of the unification already run (Scryer:
+ * woken goals are queued during the unification and run before the next
+ * call).  If the goals fail the unification fails and is undone; if they
+ * raise, the exception propagates and the unification is undone.
+ *
+ * During steps 2 and 3 the unification owns the queue: it sets defer, as
+ * a driver does, so a unification nested in a hook or in a woken goal
+ * only queues, and its goals run in this drain (pending.drain runs goals
+ * queued by the conjunction after it) or at a compiled goal boundary --
+ * never a second drain, and no recursion beyond the goals' own.  Under a
+ * driver (defer already set) nothing is drained here; the engine runs the
+ * queue at the next goal boundary with every answer.
+ */
 static PyObject *
 do_unify_and_wake(PyObject *t1, PyObject *t2, TrailObject *trail, int oc)
 {
@@ -1957,9 +2009,16 @@ do_unify_and_wake(PyObject *t1, PyObject *t2, TrailObject *trail, int oc)
         Py_RETURN_FALSE;
     }
 
-    /* Fire attribute wakeup hooks */
+    /* Fire attribute wakeup hooks; with no driver, own the queue (above). */
+    int bare = !trail->defer;
+    if (bare)
+        trail->defer = 1;
     int wake = fire_wakeups(my_wl, trail);
     Py_DECREF(my_wl);
+    if (bare && wake > 0 && trail->pending != NULL)
+        wake = run_pending_first(trail);
+    if (bare)
+        trail->defer = 0;
 
     if (wake < 0) {
         trail_undo_to(trail, mark);
@@ -3919,7 +3978,6 @@ py_unify_census(PyObject *self, PyObject *Py_UNUSED(ignored))
  * goals queued it is the drain generator registered by
  * clausal.logic.pending, which runs them and yields once per answer. */
 static PyObject *g_once_tuple = NULL;     /* (None,) */
-static PyObject *g_drain_factory = NULL;  /* set by _set_pending_drain */
 
 static PyObject *
 py_pending_or_once(PyObject *Py_UNUSED(mod), PyObject *trail)

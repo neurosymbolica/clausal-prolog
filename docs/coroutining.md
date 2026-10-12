@@ -43,7 +43,7 @@ Multiple freezes on the same variable accumulate. All fire when the variable is 
 ??? info "Implementation"
     freeze uses the attributed variable hook infrastructure (the same mechanism used by [`dif/2`](constraints.md), [CLP(ℤ)](constraints.md), and [CLP(B)](clpb.md)). The frozen goal is compiled as a closure (zero-arg generator factory) and stored under the `"freeze"` attribute key. When the variable is bound, the hook queues the goal on the trail (`trail.push_pending`); the engine runs the queue at the next goal boundary — after an inline unification, at the start of a clause body whose head unified, and at every answer of a called predicate or builtin — once per answer. The queue and every change to it are trailed, so backtracking restores it.
 
-    A bare `unify(...)` called from Python with no driver owning the trail (`trail.defer` false) runs a woken goal in place, to its first answer, as before.
+    A bare `unify(...)` called from Python with no driver owning the trail (`trail.defer` false) queues woken goals the same way, and runs the queue itself before it returns: after every hook of the unification has run, to the first answer. If the goals fail, the unification fails and binds nothing.
 
     **Implementation:** `clausal/logic/compiler/control_constructs.py` (`_compile_freeze`), `clausal/logic/coroutining.py` (`_freeze_hook`), `clausal/logic/pending.py` (the queue's drain)
 

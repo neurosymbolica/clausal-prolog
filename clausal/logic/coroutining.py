@@ -2,10 +2,11 @@
 
 freeze/2 delays a goal until a variable is bound. The goal is stored as an
 attributed variable attribute under the key ``"freeze"``. When the variable
-is unified (bound), the hook wakes the goal: under a driver it is queued on
-the trail and runs at the next goal boundary with every answer
-(``clausal.logic.pending``); a bare unify from Python runs it in place to
-its first answer, and fails the unification when it has none.
+is unified (bound), the hook wakes the goal: it is queued on the trail.
+Under a driver it runs at the next goal boundary with every answer
+(``clausal.logic.pending``); a bare unify from Python runs the queue itself
+once every hook of the unification has run, to its first answer, and fails
+when it has none.
 
 Multiple freezes on the same variable accumulate in a list. All are fired
 when the variable is bound.
@@ -22,31 +23,23 @@ from __future__ import annotations
 from clausal.logic.variables import (
     register_attr_hook, get_attr, put_attr, deref, is_var, Var, unify,
 )
+import clausal.logic.pending  # noqa: F401  -- registers the drain a bare unify runs
 
 FREEZE_KEY = "freeze"
 
 
 def _freeze_hook(goals, bound_to, trail):
-    """Wake all frozen goals when a variable is bound.
+    """Wake all frozen goals when a variable is bound: queue them.
 
     Each goal is a zero-arg generator factory (closure capturing trail and
-    variables from the compilation context).  Under a driver
-    (``trail.defer``) the goals are queued on the trail and run at the next
-    goal boundary with every answer (``clausal.logic.pending``).  Otherwise
-    (a bare ``unify`` from Python) the hook drives each goal to its first
-    answer in place; if any goal has none, the unification fails.
+    variables from the compilation context).  The goals never run inside
+    the hook, where other variables of the same unification may not have
+    had their hooks run yet: under a driver they run at the next goal
+    boundary with every answer (``clausal.logic.pending``); a bare
+    ``unify`` runs them after all its hooks, to their first answer.
     """
-    if trail.defer:
-        for goal_fn in goals:
-            trail.push_pending(goal_fn)
-        return True
     for goal_fn in goals:
-        found = False
-        for _ in goal_fn():
-            found = True
-            break  # one solution suffices
-        if not found:
-            return False
+        trail.push_pending(goal_fn)
     return True
 
 
@@ -65,18 +58,14 @@ def _freeze_var(var, goal_thunk, trail):
 
 
 def _run_now(goal_thunk, trail):
-    """Run a goal whose condition already holds; False when it fails.
+    """Queue a goal whose condition already holds, like a woken goal.
 
-    Under a driver (``trail.defer``) it is queued like a woken goal and runs
-    at the next goal boundary with every answer; otherwise it runs here to
-    its first answer.
+    It runs at the next goal boundary with every answer: compiled when/2
+    puts one right after the install, and a drain that ran the goal calling
+    this runs what it queued after it.
     """
-    if trail.defer:
-        trail.push_pending(goal_thunk)
-        return True
-    for _ in goal_thunk():
-        return True
-    return False
+    trail.push_pending(goal_thunk)
+    return True
 
 
 def _collect_free_vars(term):

@@ -21,8 +21,12 @@ queue and every change to it are on the trail, so backtracking past a push or
 a take restores it.
 
 Outside a driver (``trail.defer`` false: a bare ``unify`` from Python, a
-compiled predicate called directly) a hook runs its goals in place, to their
-first answer, as before.
+compiled predicate called directly) hooks queue their goals all the same,
+and the unification runs the queue itself before it returns, once every
+hook has run, to the first answer (``run_first``); it fails when there is
+none.  While it fires its hooks and runs the queue it owns the trail as a
+driver does (``trail.defer`` is set), so a unification nested in a hook or
+in a woken goal only queues, and this drain runs what it queued.
 """
 
 from __future__ import annotations
