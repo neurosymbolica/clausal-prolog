@@ -244,17 +244,22 @@ def _improper_star(before, star_val):
     walks to one -- so the term is the cons cells ``'.'(H, T)`` (as ISO's
     ``T = foo, X = [a|T]``), never S as one more element.  None otherwise.
     Shared with the C twin (``_list_unify.c``), which calls it."""
-    from clausal.terms import SegList, _is_improper_tail   # noqa: PLC0415
+    from clausal.terms import _is_improper_tail   # noqa: PLC0415
     s = deref(star_val)
-    if isinstance(s, SegList):
-        s = s.__walk__()
-        if isinstance(s, SegList):
-            return None
+    # A SegList star is NOT walked here: the SegList arm of the caller walks
+    # it once and hands an improper walk to :func:`_cons_star`.  Walking it
+    # here too made forward hole-building (``build(N, [x|H], T)``) walk
+    # every link twice.
     if not _is_improper_tail(s):
         return None
+    return _cons_star(before, s)
+
+
+def _cons_star(before, tail):
+    """``[*before|tail]`` as the cons cells ``'.'(H, T)`` (D50)."""
     for e in reversed(before):
-        s = (".", deref(e), s)
-    return s
+        tail = (".", deref(e), tail)
+    return tail
 
 
 def _carrier_star_concat(before, s, after_vals):
@@ -368,6 +373,11 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
                 # Liskov "strings-as-lists" rule (default output is list;
                 # str only when provable from the elements themselves).
                 return unify(d, maybe_promote_to_str(result), trail)
+            elif not isinstance(walked, SegList):
+                # The star walks to an IMPROPER list (D50): it is the tail.
+                if after_vals:
+                    return False          # [*S, x] with S improper: no term
+                return unify(d, _cons_star(result, walked), trail)
             else:
                 # Still partially unbound: build a new SegList
                 after_result = [deref(v) for v in after_vals]

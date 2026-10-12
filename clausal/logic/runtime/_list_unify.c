@@ -29,6 +29,7 @@ static PyObject *fn_seglist_fallback = NULL;
  * first use for the same reason. */
 static PyObject *fn_cons_fallback = NULL;
 static PyObject *fn_improper_star = NULL;   /* list_unify._improper_star */
+static PyObject *fn_cons_star = NULL;       /* list_unify._cons_star */
 
 static PyTypeObject *SegListType     = NULL;
 static PyTypeObject *SegStringType   = NULL;
@@ -765,7 +766,13 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
     if (star_val != Py_None && PyList_GET_SIZE(after_vals) == 0) {
         PyObject *s0 = call_deref(star_val);
         if (!s0) { Py_DECREF(d); return NULL; }
-        int skip = PyList_Check(s0) || PyBytes_Check(s0) || is_chars_carrier(s0);
+        /* A Seg* star is walked once by its own arm below, which handles an
+         * improper walk there: walking it here too doubled the cost of
+         * forward hole-building. */
+        int skip = PyList_Check(s0) || PyBytes_Check(s0) || is_chars_carrier(s0)
+            || PyObject_TypeCheck(s0, SegListType)
+            || PyObject_TypeCheck(s0, SegStringType)
+            || PyObject_TypeCheck(s0, SegBytesType);
         if (!skip) {
             int isv = call_is_var(s0);
             if (isv < 0) { Py_DECREF(s0); Py_DECREF(d); return NULL; }
@@ -978,6 +985,36 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
                 if (!promoted) { Py_DECREF(d); Py_DECREF(result); return NULL; }
                 int ok = call_unify(d, promoted, trail);
                 Py_DECREF(promoted);
+                Py_DECREF(d);
+                Py_DECREF(result);
+                if (ok < 0) return NULL;
+                if (ok) Py_RETURN_TRUE;
+                Py_RETURN_FALSE;
+            } else if (!PyObject_TypeCheck(walked, SegListType) &&
+                       !PyObject_TypeCheck(walked, SegStringType) &&
+                       !PyObject_TypeCheck(walked, SegBytesType)) {
+                /* The star walks to an IMPROPER list (D50): it is the tail,
+                 * [*before|walked] as cons cells (list_unify._cons_star). */
+                if (n_after > 0) {
+                    Py_DECREF(walked);
+                    Py_DECREF(d);
+                    Py_DECREF(result);
+                    Py_RETURN_FALSE;   /* [*S, x] with S improper: no term */
+                }
+                if (!fn_cons_star) {
+                    PyObject *mod = PyImport_ImportModule(
+                        "clausal.logic.runtime.list_unify");
+                    if (!mod) { Py_DECREF(walked); goto error; }
+                    fn_cons_star = PyObject_GetAttrString(mod, "_cons_star");
+                    Py_DECREF(mod);
+                    if (!fn_cons_star) { Py_DECREF(walked); goto error; }
+                }
+                PyObject *cons = PyObject_CallFunctionObjArgs(
+                    fn_cons_star, result, walked, NULL);
+                Py_DECREF(walked);
+                if (!cons) goto error;
+                int ok = call_unify(d, cons, trail);
+                Py_DECREF(cons);
                 Py_DECREF(d);
                 Py_DECREF(result);
                 if (ok < 0) return NULL;
