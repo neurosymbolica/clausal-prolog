@@ -266,3 +266,28 @@ class TestPythonSide:
             "Clause", "Goal", "Variable", "Atom", "Escape",
         ):
             assert hasattr(reflection, name), name
+
+
+@pytest.mark.parametrize("seq", ["view", "seglist"])
+def test_subterm_walk_descends_partial_lists_and_list_views(seq):
+    """A goal list can reach reified_subterm/2 as a SegList (a list built
+    through an open tail) or a SegListView (the rest of a list of 64 or
+    more elements): the walk must see their elements, as a list's."""
+    from clausal.modules.reflection import _subterms
+    from clausal.terms import ConcreteSeg, SegList, SegListView
+    goals = [("g", i) for i in range(100)] + ["needle"]
+    term = (SegListView(goals, 1, len(goals)) if seq == "view"
+            else SegList([ConcreteSeg(goals[1:])]))
+    assert "needle" in list(_subterms(term))
+
+
+def test_replace_subterm_rewrites_inside_a_list_view():
+    """The rest of a list of 64 or more elements is a SegListView; it is a
+    list, so replace_subterm/4 rewrites inside it rather than treating it
+    as a leaf."""
+    from clausal.logic.variables import Trail
+    from clausal.modules.reflection import _rewrites
+    from clausal.terms import SegListView
+    goals = [("g", i) for i in range(100)] + ["needle"]
+    out = list(_rewrites(SegListView(goals, 1, len(goals)), "needle", "found", Trail()))
+    assert out == [[("g", i) for i in range(1, 100)] + ["found"]]

@@ -100,6 +100,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **`reified_subterm/2` and `replace_subterm/4` see past the 64th element of
+  a list.** The rest of a list of 64 or more elements is a list view
+  (`SegListView`), and both walks treated it as a leaf. So
+  `not reified_subterm(Rest, X)` succeeded when `X` occurred late in a long
+  goal list, and the head-fold rewrite rule folded a variable that a later
+  goal still read. Both walks now descend a view as a list, and
+  `reified_subterm/2` also descends a partial list's known elements.
+
 - **`clausal-acl2`: `thm/1,2` and `event/1,2` no longer succeed on every
   input.** ACL2 8.7's `ld` (with `:ld-error-action :return!`) answers
   `(NIL :EOF state)` when the event is accepted and `(NIL (:STOP-LD n)

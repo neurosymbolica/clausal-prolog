@@ -148,3 +148,12 @@ def test_folds_a_nested_goal_term(rules):
 )
 def test_refusals(rules, source):
     assert _rewrite(rules, source) is None
+
+
+def test_refuses_when_the_variable_occurs_far_down_a_long_body(rules):
+    """The rest of a long goal list is a list view (64 or more elements);
+    the occurrence check must see inside it, or ``S`` in ``log(S)`` is
+    missed and the rule folds a variable another goal still reads."""
+    middle = ", ".join(f"g{i}(K)" for i in range(70))
+    source = f"r(K, S) <- (S is unknown(K), {middle}, log(S))\n"
+    assert _rewrite(rules, source) is None

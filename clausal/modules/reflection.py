@@ -58,6 +58,7 @@ from clausal.logic.trampoline import DONE
 from clausal.logic.variables import deref, is_var, unify
 from clausal.modules.py import ModulePredicate, simple_to_trampoline, to_text
 from clausal.pythonic_ast import nodes as simple_ast
+from clausal.terms import SegList, SegListView
 from clausal.reflection import (
     Atom,
     Clause,
@@ -217,7 +218,10 @@ def _subterms(term):
             if field.name == "position":
                 continue
             yield from _subterms(getattr(term, field.name))
-    elif isinstance(term, (list, tuple)):
+    elif isinstance(term, (list, tuple, SegList)):
+        # A SegList iterates its elements (a partial list's known ones):
+        # the rest of a long goal list is a SegListView, and a walk that
+        # stopped at it missed every occurrence past the 64th goal.
         for element in term:
             yield from _subterms(element)
     elif isinstance(term, dict):
@@ -401,6 +405,8 @@ def _rewrites(term, old, new, trail):
     carried on every rebuilt node.  Vars, scalars, atoms, segmented strings and
     native dict/list term objects (``DictTerm``/``ListTerm``) are leaves."""
     term = deref(term)
+    if type(term) is SegListView:
+        term = term.elements()   # the rest of a long list: a list, not a leaf
     # pre-order: replace this whole occurrence if it unifies OLD.  An unbound
     # var subterm is an opaque leaf, never a match site (so a bare TERM var is
     # preserved, not "matched" and bound).  Matching OLD against a ground-rooted

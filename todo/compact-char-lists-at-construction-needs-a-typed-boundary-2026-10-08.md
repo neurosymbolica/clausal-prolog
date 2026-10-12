@@ -242,7 +242,10 @@ This replaces both the SegList tail-sharing idea and the separate `('$chars', bu
    `text-census-results-2026-10-08.md`.
 3. ~~The typed boundary, then compaction at copy points and one-step builtins.~~ PARKED (ruled
    2026-10-11, below).
-4. Step 2a (reader refactor), then 2b (`_Text`) if the census shows long incremental text matters.
+4. ~~Step 2a (reader refactor)~~ DONE with the read-only views; verified 2026-10-12 (stress run
+   below). 2b, the growable half of `_Text`: NOT warranted by the census (text is nearly always
+   under 64 chars; the condition in this item is not met). Reopen with a measured program that
+   builds long text incrementally.
 5. Refcount-driven mutation of text: parked. It is checkable: CPython's own `unicode_modifiable`
    rule extended to the tuple -- carrier and str uniquely referenced, carrier `ob_hash == -1` (3.14+,
    `cpython/tupleobject.h`), str hash `-1`, not interned, exact `str`; a moved str is written back
@@ -253,3 +256,28 @@ This replaces both the SegList tail-sharing idea and the separate `('$chars', bu
 Dropped: compiler-inserted compaction calls. The copy points and one-step builtins already see every
 long-lived list, and a static pass that guesses where text is built adds analysis without a case it
 covers that those do not.
+
+## Stress run: every slice a view (2026-10-12, main at a3fbb271)
+
+The engine suite was run with `VIEW_MIN` / `CHARS_VIEW_MIN` set to 1 (every text rest is a view),
+then also with `LIST_VIEW_MIN` set to 1 in Python and C (every list rest is a view), and the failure
+set was compared against a baseline run by test name.
+
+- Text views: no new failures beyond the one that pins the threshold
+  (`test_a_slice_of_a_view_is_a_view_of_the_same_str`). Every reader of a carrier's slot 1 goes
+  through the accessors, so step 2a is complete.
+- List views: one real reader bug. `reified_subterm/2` and `replace_subterm/4`
+  (`clausal/modules/reflection.py`) treated a `SegListView` as a leaf, so the head-fold rule folded
+  a variable that a goal past the 64th still read. FIXED (the commit that adds this section; pinned by
+  `tests/rewrite/test_head_fold_rule.py::test_refuses_when_the_variable_occurs_far_down_a_long_body`
+  and two tests in `tests/test_reflection_builtins.py`).
+- Two more, both the raw-`deref` exposure in the OPEN item above (a nested `deref` after the answer
+  returns a view): `test_segstring.py::...test_seglist_still_works_with_lists` and
+  `test_string_head_patterns.py::...test_list_input_still_gives_list`. They pass at the real
+  threshold only because their lists are short. Ruling requested 2026-10-12 on how views leave a
+  `solve()` answer: a deep flatten in `solve()`, a boundary `clausal.deref`, or docs only.
+
+To repeat the stress run, change the four constants (`cells.VIEW_MIN`, `CHARS_VIEW_MIN` in
+`variables/_chars_carrier.h`, `terms.LIST_VIEW_MIN`, `LIST_VIEW_MIN` in `runtime/_list_unify.c`),
+rebuild the extensions, and diff the failure set against an unmodified build.
+
