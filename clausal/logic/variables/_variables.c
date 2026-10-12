@@ -514,6 +514,12 @@ struct TrailObject {
      * while a unification with no driver fires its wakeups and runs the
      * goals they queued (do_unify_and_wake). */
     int         defer;
+    /* How many attribute-hook dispatches (fire_wakeups) are in progress on
+     * this trail: 0 at a goal, 1 inside a hook, one more per unification
+     * nested in a hook that fires hooks of its own.  defer is set both
+     * inside a hook and at a goal under a driver; this tells them apart
+     * (docs/coroutining.md, "Inside a hook or at a goal"). */
+    int         hooks_running;
 };
 
 /*
@@ -551,6 +557,7 @@ Trail_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         self->weakrefs        = NULL;
         self->pending         = NULL;
         self->defer           = 0;
+        self->hooks_running   = 0;
     }
     PyObject_GC_Track(self);
     return (PyObject *)self;
@@ -1111,6 +1118,12 @@ Trail_get_pending(TrailObject *self, void *Py_UNUSED(closure))
 }
 
 static PyObject *
+Trail_get_hooks_running(TrailObject *self, void *Py_UNUSED(closure))
+{
+    return PyLong_FromLong(self->hooks_running);
+}
+
+static PyObject *
 Trail_get_defer(TrailObject *self, void *Py_UNUSED(closure))
 {
     return PyBool_FromLong(self->defer);
@@ -1136,6 +1149,13 @@ static PyGetSetDef Trail_getset[] = {
     {"defer", (getter)Trail_get_defer, (setter)Trail_set_defer,
      "True while a driver that runs pending goals owns this trail: an\n"
      "attribute hook then queues the goals it wakes instead of running them.",
+     NULL},
+    {"hooks_running", (getter)Trail_get_hooks_running, NULL,
+     "How many attribute-hook dispatches are in progress on this trail (an\n"
+     "int): 0 at a goal, under a driver or not; 1 inside an attribute hook;\n"
+     "one more for each unification nested in a hook that fires hooks of its\n"
+     "own.  Inside a hook a constraint library must queue what it would post\n"
+     "(trail.push_pending); at a goal it may post in place.",
      NULL},
     {NULL, NULL, NULL, NULL, NULL}
 };
@@ -1890,7 +1910,7 @@ hooks:
  * ================================================================ */
 
 static int
-fire_wakeups(PyObject *wakeup_list, TrailObject *trail)
+fire_wakeups_dispatch(PyObject *wakeup_list, TrailObject *trail)
 {
     Py_ssize_t n = PyList_GET_SIZE(wakeup_list);
     for (Py_ssize_t i = 0; i < n; i++) {
@@ -1966,6 +1986,19 @@ fire_wakeups(PyObject *wakeup_list, TrailObject *trail)
         Py_DECREF(items);
     }
     return 1;
+}
+
+/* fire_wakeups: the dispatch, counted on trail->hooks_running while it
+ * runs (every exit path: success, a hook's failure, an exception). */
+static int
+fire_wakeups(PyObject *wakeup_list, TrailObject *trail)
+{
+    if (PyList_GET_SIZE(wakeup_list) == 0)
+        return 1;
+    trail->hooks_running++;
+    int r = fire_wakeups_dispatch(wakeup_list, trail);
+    trail->hooks_running--;
+    return r;
 }
 
 

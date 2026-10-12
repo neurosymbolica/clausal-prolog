@@ -72,6 +72,8 @@ typedef struct TrailObject {
     PyObject   *weakrefs;
     PyObject   *pending;     /* NULL or a tuple of queued goals */
     int         defer;
+    int         hooks_running;  /* attribute-hook dispatches in progress:
+                                 * 0 at a goal, >0 inside a hook */
 } TrailObject;
 
 #endif  /* !VARIABLES_CAPI_PROVIDER */

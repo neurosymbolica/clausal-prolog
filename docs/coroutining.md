@@ -158,6 +158,28 @@ Unlike [findall](meta_predicates.md) + `length`, `count_all` does not build a li
 
 ---
 
+## Inside a hook or at a goal
+
+For constraint-library authors.  An attribute hook runs while the unification that bound its variable is still firing hooks; a goal runs at a goal boundary.  Under a driver `trail.defer` is true in both places, so it cannot tell them apart.  `trail.hooks_running` can:
+
+| Where | `trail.defer` | `trail.hooks_running` |
+|---|---|---|
+| A goal under a driver (a body goal, a woken goal) | `True` | `0` |
+| A goal outside a driver (a bare `unify` from Python) | `False` | `0` |
+| Inside an attribute hook | `True` | `1` |
+| Inside a hook of a unification nested in a hook | `True` | `2`, one more per level |
+
+The contract:
+
+- **Inside a hook** (`hooks_running > 0`) a library must not post a constraint in place, and must not run another library's entry point.  It queues the work as a goal with `trail.push_pending(goal)`, and the goal runs at the next goal boundary, after every hook of the unification has run.
+- **At a goal** (`hooks_running == 0`) a library may post in place.  A binding it makes wakes goals, which run at the goal boundary that follows: compiled code drains after every inline goal that can bind, as after a call.
+
+The counter goes up when a unification starts dispatching the hooks of the attributed variables it bound, and back down when that dispatch ends, whether it succeeds, a hook fails, or a hook raises.  Woken goals that a bare `unify` runs itself (to their first answer) run after its dispatch has ended, so they see `0`.  The counter is read-only.  C extensions read the `hooks_running` field of `TrailObject` from `_variables_capi.h`.
+
+**Implementation:** `clausal/logic/variables/_variables.c` (`fire_wakeups`, `Trail.hooks_running`)
+
+---
+
 ## Nesting inside meta-predicates
 
 All of these are compiler special forms that compile their goal arguments inline. They nest freely inside other meta-predicates — [findall](meta_predicates.md), [once](control.md), [catch](exceptions.md), [forall](meta_predicates.md), and each other:
