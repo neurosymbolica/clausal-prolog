@@ -350,6 +350,7 @@ def _numeric_types_agree(a, b) -> bool:
     # from a leaf surfaces in the same order).
     stack = [(a, b)]
     seen: set = set()
+    keep: list = []     # strong references: a seen id is never reused
     while stack:
         a, b = stack.pop()
         a = deref(a)
@@ -382,6 +383,7 @@ def _numeric_types_agree(a, b) -> bool:
         if key in seen:
             continue
         seen.add(key)
+        keep.append((a, b))
         if isinstance(a, (list, tuple)):
             if len(a) == len(b):
                 stack.extend(reversed(list(zip(a, b))))
@@ -453,64 +455,9 @@ def _iso_identical(a, b) -> bool:
     `'=='("ab", [a, b])` is TRUE, and this conjunction keeps it true while
     still answering no to `'=='(1, 1.0)`.
     """
-    try:
-        if not _structural_eq(a, b):
-            return False
-    except RecursionError:
-        # Two DISTINCT cyclic terms (``X = f(X), Y = f(Y)``): the unifier
-        # behind structural_eq recurses without end.  Compare them
-        # coinductively instead -- only here, where the answer used to be
-        # the exception.
-        return _cyclic_identical(a, b)
+    if not _structural_eq(a, b):
+        return False
     return _numeric_types_agree(a, b)
-
-
-def _cyclic_identical(a, b) -> bool:
-    """``a == b`` for terms that may be CYCLIC, coinductively: a pair met
-    again while it is being compared counts as identical (the bisimulation
-    Scryer and Trealla answer ``X = f(X), Y = f(Y), X == Y`` with), with an
-    explicit stack.  Compounds and lists -- a proper list, the cons cells of
-    an improper or cyclic one, a partial list read as either -- are taken
-    apart here; every other pair is a LEAF for structural_eq and the numeric
-    check, which do not recurse on it."""
-    from clausal.terms import SegList, as_improper   # noqa: PLC0415
-    from clausal.logic.atoms import is_nil           # noqa: PLC0415
-
-    def norm(t):
-        t = as_improper(deref(t))
-        if isinstance(t, SegList):
-            w = t._walk_once()
-            if w is not None:
-                t = w
-        if type(t) is list and t:
-            return (".", t[0], t[1:])      # a list as its first cons cell
-        return t
-
-    stack = [(a, b)]
-    seen: set = set()
-    while stack:
-        x, y = stack.pop()
-        x, y = norm(x), norm(y)
-        if x is y:
-            continue
-        key = (id(x), id(y))
-        if key in seen:
-            continue
-        seen.add(key)
-        if is_var(x) or is_var(y):
-            return False
-        if is_nil(x) or is_nil(y):
-            if not (is_nil(x) and is_nil(y)):
-                return False
-            continue
-        if type(x) is tuple and type(y) is tuple:
-            if len(x) != len(y):
-                return False
-            stack.extend(reversed(list(zip(x, y))))
-            continue
-        if not (_structural_eq(x, y) and _numeric_types_agree(x, y)):
-            return False
-    return True
 
 
 @_builtin("==", 2)
