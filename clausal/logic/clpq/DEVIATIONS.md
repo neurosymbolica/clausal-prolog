@@ -185,19 +185,53 @@ and returns at once.  Components are scanned once each: X's and Y's are
 one component when the binding is inside it
 (`test_a_binding_within_one_component_makes_one_stand_in`).
 
-Nothing else runs inside that window.  The engine contract since 9b38a0f1
-(`clausal/logic/pending.py`, `docs/coroutining.md`): every unification,
-bare or under a driver, sets `trail.defer` while it binds and runs the
-hooks, so every hook, the port's and every other key's (`freeze/2`,
-`when/2`), only queues the goals it wakes; a bare unify then runs the queue
-to its first answer, after every hook of the unification, and fails
-(undone) when the goals have no answer.  So a hook never sees another
-hook's Later work run before it, and a woken goal (a Later goal, a frozen
-goal that posts or reads the store) runs after every hook of the
-unification, bare and under a driver alike.  A solver step reaches no
-other part of the store: a constraint dereferences its variables, and a
-binding runs that variable's hook, which makes the stand-ins for its own
-components.
+Nothing else runs inside that window, as long as one rule holds (ruling
+R27, a stated contract, not enforced in code): **no attribute hook body
+calls an entry point of the port** (`post_constraint` and the other `{}/1`
+forms, `inf`, `sup`, `minimize`, `maximize`, `entailed`, `bb_inf`,
+`dump/3`, `projecting_assert/1`, `attribute_goal`).  A hook body runs while
+other variables of the same unification are bound and their hooks are
+still to come, so an entry point called there reads rows and member lists
+that hold unhooked bindings.  The rule holds bare and under a driver
+alike, because `trail.defer` is True inside every hook (below).  The
+reason, a hook registered on another key that dumps and posts in its body:
+
+```python
+def hook(state, other, trail):
+    out['dump'] = rc.dump([W], ["W"], trail)
+    return post(trail, ("=<", Q, 1))
+register_attr_hook("other_key", hook)
+post(t, ("=", ("+", X, Q), 3), (">=", W, ("+", Q, Fraction(1, 2))),
+     ("=<", W, 20))
+put_attr(Z, "other_key", 1, t); unify(("f", Z, X), ("f", 1, 2), t)
+```
+
+Z's hook runs before X's.  At f0081942 the dump gives `[W =< 20]` and Q
+is left unbound with sup 1; with the retired entry catch-up (800048a2) it
+gave `[W >= 3/2, W =< 20]` and Q = 1.  A `post`, `inf`, `entailed` or
+`bb_inf` from a hook body was wrong already at 800048a2.  The hooks the
+engine registers keep the rule: `freeze/2` and `when/2` queue their goals,
+and dif, clpfd, clpb, clpr, the two units keys, the legacy clpq key and
+COMPONENT_KEY call no entry point.  The tripwire
+`test_the_registered_attribute_hooks_are_the_known_set` fails when a hook
+is registered or removed, and says to check this rule before extending
+its list.  It scans the source under `clausal/` for
+`register_attr_hook(KEY, ...)` at the start of a line, so it misses a hook
+registered from C, from outside `clausal/`, or through a qualified or
+aliased call.
+
+The engine contract since 9b38a0f1 (`clausal/logic/pending.py`,
+`docs/coroutining.md`): every unification, bare or under a driver, sets
+`trail.defer` while it binds and runs the hooks, so the goals a hook wakes
+through the queue (the port's Later goals, `freeze/2`, `when/2`) wait on
+it; a bare unify then runs the queue to its first answer, after every hook
+of the unification, and fails (undone) when the goals have no answer.  So
+a hook never sees another hook's Later work run before it, and a woken
+goal (a Later goal, a frozen goal that posts or reads the store) runs
+after every hook of the unification, bare and under a driver alike.  A
+solver step reaches no other part of the store: a constraint dereferences
+its variables, and a binding runs that variable's hook, which makes the
+stand-ins for its own components.
 
 The checks: `test_one_unification_binding_two_constrained_variables`,
 `test_a_later_goal_reads_no_unhooked_binding` (and `_the_other_way`),
@@ -222,14 +256,15 @@ covered that with `catch_up` (a stand-in pass over the components a Later
 goal reached, before it ran), `catch_up_entry` (the same at every
 store-reading entry point: nf.pl's `{}/1` comparisons, `wait_linear/3`,
 `bb_inf`, `dump/3`, `projecting_assert/1`, `attribute_goal` with a trail),
-the R22 skip of `catch_up_entry` under a driver with its tripwire test on
-the registered hook keys, and the `DRAINING` marker (below, "Later
+the R22 skip of `catch_up_entry` under a driver (its tripwire test on the
+registered hook keys stays, for ruling R27 above), and the `DRAINING` marker (below, "Later
 goals").  On the rebased branch, counted over the regression set
 (`tests/clpq_port tests/test_sandbox.py tests/test_clpq*.py`), `catch_up`
 and `catch_up_entry` scanned 67,514 times and made 0 stand-ins (270 on the
 old engine), and `DRAINING` was met 0 times (2,732 on the old engine), so
-all four went.  The cost they carried: posting a chain `{X(i+1) = X(i)}`
-into one component was quadratic outside a driver.
+the catch-ups, the skip and the marker went (the tripwire stays, R27).
+The cost they carried: posting a chain `{X(i+1) = X(i)}` into one
+component was quadratic outside a driver.
 
 PERF-BASELINE (Task 13c, 2026-10-12, the same engine build at 800048a2,
 best of 3, two interleaved rounds within 0.05 s of each other), chain

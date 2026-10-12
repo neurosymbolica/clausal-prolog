@@ -855,8 +855,8 @@ def _woken_by_another_key(order, make_goal, mode):
 def test_a_goal_another_key_wakes_answers_the_same_bare_and_under_a_driver(order):
     # A frozen goal that posts or reads the store, woken by the same
     # unification that binds a constrained X: it runs after X's hook in
-    # both modes, so the answers agree (this replaces ruling R22's tripwire
-    # on the registered hook keys and the entry-point catch-up it guarded).
+    # both modes, so the answers agree (this replaces the entry-point
+    # catch-up of rulings R21 and R22; a hook body itself is ruling R27).
     goals = (_posting(lambda x, q, w: (">=", q, 5)),
              _posting(lambda x, q, w: ("=<", q, 1)),
              _posting(lambda x, q, w: ("=", w, ("+", q, x))),
@@ -867,6 +867,63 @@ def test_a_goal_another_key_wakes_answers_the_same_bare_and_under_a_driver(order
         bare = _woken_by_another_key(order, goal, "bare")
         driver = _woken_by_another_key(order, goal, "driver")
         assert bare == driver == answer
+
+
+# ---------------------------------------------------------------- the hook-body rule (R27)
+
+#: Every (module, key constant) the engine registers an attribute hook for.
+_KNOWN_HOOKS = {
+    ("clausal.logic.clpb", "B_KEY"),
+    ("clausal.logic.clpfd", "FD_KEY"),
+    ("clausal.logic.clpfd", "ZCMP_KEY"),
+    ("clausal.logic.clpq.attribute_hooks", "CLPQ_KEY"),
+    ("clausal.logic.clpq.components", "COMPONENT_KEY"),
+    ("clausal.logic.clpq.legacy", "Q_KEY"),
+    ("clausal.logic.clpr", "REAL_KEY"),
+    ("clausal.logic.constraints", "DIF_KEY"),
+    ("clausal.logic.coroutining", "FREEZE_KEY"),
+    ("clausal.logic.units_clp", "LINK_KEY"),
+    ("clausal.logic.units_constraint", "UNITS_KEY"),
+}
+
+
+def test_the_registered_attribute_hooks_are_the_known_set():
+    # Ruling R27: no attribute hook body calls an entry point of the port.
+    # A hook body runs while other variables of the same unification are
+    # bound with their hooks still to come, bare and under a driver alike
+    # (trail.defer is True inside every hook), so an entry point called
+    # there reads unhooked bindings (DEVIATIONS.md D3 has the repro).
+    # Known limits: this scans source under clausal/ for
+    # `register_attr_hook(KEY, ...)` at the start of a line, so it misses a
+    # hook registered from C, from outside clausal/, or through a qualified
+    # or aliased call.
+    import os
+    import re
+    import clausal
+    root = os.path.dirname(os.path.abspath(clausal.__file__))
+    found = set()
+    for directory, _, files in os.walk(root):
+        for name in files:
+            if not name.endswith(".py"):
+                continue
+            path = os.path.join(directory, name)
+            with open(path, encoding="utf-8") as handle:
+                text = handle.read()
+            module = os.path.relpath(path[:-3], os.path.dirname(root)) \
+                .replace(os.sep, ".")
+            for key in re.findall(r"^\s*register_attr_hook\(\s*(\w+)\s*,",
+                                  text, re.M):
+                if key != "key":
+                    found.add((module, key))
+    assert found == _KNOWN_HOOKS, (
+        "the set of registered attribute hooks changed: "
+        f"new {sorted(found - _KNOWN_HOOKS)}, gone {sorted(_KNOWN_HOOKS - found)}. "
+        "Before extending _KNOWN_HOOKS, check that the new hook body never "
+        "calls a CLP(Q) port entry point (post_constraint and the other {}/1 "
+        "forms, inf, sup, minimize, maximize, entailed, bb_inf, dump, "
+        "projecting_assert, attribute_goal): it would read bindings whose "
+        "hooks have not run yet, bare or under a driver (DEVIATIONS.md D3, "
+        "ruling R27).")
 
 
 def test_a_stand_in_left_in_a_row_is_a_member():

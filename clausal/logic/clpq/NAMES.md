@@ -111,7 +111,7 @@ Names with no 1.3.3 atom of their own.  They are not in `rename_map.tsv`.
 | `holzbaur_hook` | `attribute_hooks.py` | the CLPQ_KEY hook: `itf3.pl`'s `verify_attributes/3` with `geler.pl`'s, then the Later goals |
 | `verify_bound` | `attribute_hooks.py` | `verify_attributes/3` clause 3 after `put_atts(X, forward(Y))`, with `geler.pl`'s part |
 | `bind_queued`, `bind_all` | `attribute_hooks.py` | `export_binding/1` as the hook binds: each binding checked before it is made, from a work list (DEVIATIONS.md D3) |
-| `run_later`, `PendingLater`, `DrainMarker`, `DRAINING` | `attribute_hooks.py` | running the Later list: on the trail's pending queue, or drained by the outermost hook (DEVIATIONS.md D3) |
+| `run_later`, `PendingLater` | `attribute_hooks.py` | running the Later list: on the trail's pending queue, after every hook of the unification (DEVIATIONS.md D3; `DrainMarker`/`DRAINING`, retired in Task 13c) |
 | `PostBound` | `attribute_hooks.py` | one Later goal `{L =< V}` / `{L < V}` of `later_lower_bound//3` and `later_upper_bound//3` |
 | `SOLVER_TYPE` | `attribute_hooks.py` | the atom `rational` of `solver_type(clpq, rational)` |
 | `dump_disequation_in_context` | `attribute_hooks.py` | `itf3.pl`'s `dump_disequation//4` (bv.pl's `dump_disequation//3` keeps the name) |
