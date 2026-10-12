@@ -291,3 +291,30 @@ def test_replace_subterm_rewrites_inside_a_list_view():
     goals = [("g", i) for i in range(100)] + ["needle"]
     out = list(_rewrites(SegListView(goals, 1, len(goals)), "needle", "found", Trail()))
     assert out == [[("g", i) for i in range(1, 100)] + ["found"]]
+
+
+def test_replace_subterm_rewrites_inside_a_closed_partial_list():
+    """``[a, *T]`` with ``T = [b, needle]`` is a SegList whose hole is
+    filled: reified_subterm/2 walks its elements, so replace_subterm/4 must
+    rewrite inside it too (the two walks agree on what a subterm is)."""
+    from clausal.logic.variables import Trail, Var, unify
+    from clausal.modules.reflection import _rewrites, _subterms
+    from clausal.terms import ConcreteSeg, SegList, VarSeg
+    trail = Trail()
+    tail = Var()
+    term = SegList([ConcreteSeg(["a"]), VarSeg(tail)])
+    assert unify(tail, ["b", "needle"], trail)
+    assert "needle" in list(_subterms(term))
+    out = list(_rewrites(term, "needle", "found", Trail()))
+    assert out == [["a", "b", "found"]]
+
+
+def test_replace_subterm_leaves_an_open_partial_list_whole():
+    """With the hole unbound there is no list to rebuild: the partial list
+    is still a leaf for replace_subterm/4 (and only the whole term can
+    match)."""
+    from clausal.logic.variables import Trail, Var
+    from clausal.modules.reflection import _rewrites
+    from clausal.terms import ConcreteSeg, SegList, VarSeg
+    term = SegList([ConcreteSeg(["a", "needle"]), VarSeg(Var())])
+    assert list(_rewrites(term, "needle", "found", Trail())) == []

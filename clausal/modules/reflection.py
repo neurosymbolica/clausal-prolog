@@ -394,7 +394,10 @@ def _rewrites(term, old, new, trail):
     str-functor CELL (P3-2 Task 7) diverges from ``_subterms`` the same way:
     this walk protects its functor (only args are
     rewrite targets), whereas ``_subterms`` still walks it as a generic tuple
-    (functor included) — off the reified domain, same caveat.
+    (functor included) — off the reified domain, same caveat.  A list view
+    and a partial list whose holes are filled are walked as the lists they
+    are; a partial list with an unbound hole is a leaf here, while
+    ``_subterms`` walks its known elements.
 
     Only the spine from the root to the rewritten position is rebuilt; every
     off-path subterm is reused *by reference*, so structure and variable
@@ -407,6 +410,15 @@ def _rewrites(term, old, new, trail):
     term = deref(term)
     if type(term) is SegListView:
         term = term.elements()   # the rest of a long list: a list, not a leaf
+    elif isinstance(term, SegList):
+        # A partial list whose holes are all filled (``[a, *T]`` with T
+        # bound) is a list: ``_subterms`` walks its elements, so this walk
+        # rewrites inside it.  One with an unbound hole stays a leaf -- there
+        # is no list to rebuild -- where ``_subterms`` still walks its known
+        # elements.
+        walked = term._walk_raw()
+        if isinstance(walked, list):
+            term = walked
     # pre-order: replace this whole occurrence if it unifies OLD.  An unbound
     # var subterm is an opaque leaf, never a match site (so a bare TERM var is
     # preserved, not "matched" and bound).  Matching OLD against a ground-rooted
