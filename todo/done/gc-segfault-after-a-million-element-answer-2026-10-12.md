@@ -27,6 +27,14 @@ chars or more used to run out of memory; it now builds, then segfaults while gar
 rope of depth 1M frees cleanly, so the rope is not the cause. `recl` (no text) crashes between 200k
 and 300k on both trees.
 
+**Observed before the fix (parity harness, slice 8.1, on a tree without the trashcan fix):** `tests/iso_diff/prelude.pl` under the native front end reaches
+it too. Calling `nvt/3` (or `nv_/3`) with fresh variables runs away. When a SIGALRM-raised exception
+ended that call after about 30 s, the process segfaulted in the garbage collector during a LATER call
+(faulthandler: `Garbage-collecting`, inside `vix__4`). It left a 2.4 GB core. The same call left to
+run for 100 s without the alarm did not crash. `clausal/tools/pl_parity.py` now runs each test and
+call in a forked child that is killed on timeout, so the harness no longer reaches this. The engine
+still does.
+
 ## Resolution (2026-10-13)
 
 Fixed by "fix(runtime): free long StepGenerator and Var chains through the trashcan".

@@ -1,205 +1,300 @@
 {
  "about": "Pinned translator-vs-native differences over the repository's .pl sources (clausal.tools.pl_parity; tests/test_pl_parity.py). Classes: a translator bug (native agrees with the oracle), b native gap, c both wrong, d intentional by a ruling. Measured 2026-10-12.",
+ "observations": "pl_parity_native.json",
  "known": [
   {
    "key": "clausal/tools/prolog_preludes/clausal_constants_scryer.pl::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: Cannot import /workspace/_cand_slice7/clausal/tools/prolog_preludes/clausal_constants_scryer.pl: line 36: Prolog functor ':-' cannot be translated to a Clausal predicate name (':-' is not a valid Pyth"
+   "note": "oracle: scryer loads it, as native does. Translator: Cannot import <root>/clausal/tools/prolog_preludes/clausal_constants_scryer.pl: line 36: Prolog functor ':-' cannot be translated to a Clausal predicate name (':-' is not a valid Pyth",
+   "translator_sha": "f4563d94b359faf9",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "clausal/tools/prolog_preludes/clausal_constants_trealla.pl::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: Cannot import /workspace/_cand_slice7/clausal/tools/prolog_preludes/clausal_constants_trealla.pl: line 39: Prolog functor ':' cannot be translated to a Clausal predicate name (':' is not a valid Pytho"
+   "note": "oracle: scryer loads it, as native does. Translator: Cannot import <root>/clausal/tools/prolog_preludes/clausal_constants_trealla.pl: line 39: Prolog functor ':' cannot be translated to a Clausal predicate name (':' is not a valid Pytho",
+   "translator_sha": "2fb1de7051749612",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "tests/fixtures/prolog_golden/dcg_grammar.pl::load::",
    "class": "a",
-   "note": "native refuses \\+ in a grammar body as Scryer does (representation_error(dcg_body)); the translator accepts it. ISO first, then Scryer (ruling 2026-09-27)"
+   "note": "native refuses the WHOLE file at the one grammar rule that has \\+ in its body (dcg_grammar.pl:31, representation_error(dcg_body)), as Scryer refuses that rule; Scryer and Trealla still load the rest of the file, the translator accepts all of it. Classed (a) because native's reading of the rule is Scryer's (ISO first, then Scryer, ruling 2026-09-27); refusing the whole file rather than the one clause is the slice 0 fail-closed rule",
+   "translator_sha": "c48b5b1a9776c846",
+   "native_sha": "72b0c8124459795e"
   },
   {
    "key": "tests/fixtures/prolog_golden/iso_arithmetic.pl::tests::abs_ of -5 is 5",
    "class": "a",
-   "note": "oracle: scryer: error(error(existence_error(procedure,abs/2),abs/2)), as native. Translator: pass; native: error: PredicateNotFoundError: Predicate abs/2 not found"
+   "note": "oracle: scryer: error(error(existence_error(procedure,abs/2),abs/2)), as native. Translator: pass; native: error: PredicateNotFoundError: Predicate abs/2 not found",
+   "translator_sha": "fedce8e8af485c25",
+   "native_sha": "3fe8fa25361f73ca"
   },
   {
    "key": "tests/fixtures/prolog_golden/iso_arithmetic.pl::tests::max_ 3 7 is 7",
    "class": "a",
-   "note": "oracle: scryer: error(error(existence_error(procedure,max/3),max/3)), as native. Translator: pass; native: error: PredicateNotFoundError: Predicate max/3 not found"
+   "note": "oracle: scryer: error(error(existence_error(procedure,max/3),max/3)), as native. Translator: pass; native: error: PredicateNotFoundError: Predicate max/3 not found",
+   "translator_sha": "fedce8e8af485c25",
+   "native_sha": "2240e0dc52857a0f"
   },
   {
    "key": "tests/fixtures/prolog_golden/iso_arithmetic.pl::tests::min_ 3 7 is 3",
    "class": "a",
-   "note": "oracle: scryer: error(error(existence_error(procedure,min/3),min/3)), as native. Translator: pass; native: error: PredicateNotFoundError: Predicate min/3 not found"
+   "note": "oracle: scryer: error(error(existence_error(procedure,min/3),min/3)), as native. Translator: pass; native: error: PredicateNotFoundError: Predicate min/3 not found",
+   "translator_sha": "fedce8e8af485c25",
+   "native_sha": "3e3141afd0c28b5c"
   },
   {
    "key": "tests/iso_diff/allsol.pl::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: functor in_/3 was constructed with 2 positional argument(s) but its class was registered with 3 field(s) ('position', 'left', 'right')"
+   "note": "oracle: scryer loads it, as native does. Translator: functor in_/3 was constructed with 2 positional argument(s) but its class was registered with 3 field(s) ('position', 'left', 'right')",
+   "translator_sha": "5a918e78662eb2bd",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "tests/iso_diff/arith.pl::answers::t/3",
    "class": "c",
-   "note": "oracle: scryer agrees with neither (native differs in 1 of 170 rows, the translator in 170); native's rows that differ are -0.0, which Scryer and Trealla both read and print as 0.0; the translator stores body goals as data in its own lowered form (eval_/2, Python node reprs)"
+   "note": "oracle: scryer agrees with neither (native differs in 1 of 170 rows, the translator in 170); native's rows that differ are -0.0, which Scryer and Trealla both read and print as 0.0; the translator stores body goals as data in its own lowered form (eval_/2, Python node reprs)",
+   "translator_sha": "db2c5d76a8dea4dd",
+   "native_sha": "55758b17495756c4"
   },
   {
    "key": "tests/iso_diff/atoms.pl::answers::t/3",
    "class": "a",
-   "note": "oracle: scryer agrees with native"
+   "note": "oracle: scryer agrees with native",
+   "translator_sha": "9a33677404a9c789",
+   "native_sha": "5e08d74e66682a98"
   },
   {
    "key": "tests/iso_diff/between.pl::answers::t/3",
    "class": "a",
-   "note": "oracle: scryer agrees with native"
+   "note": "oracle: scryer agrees with native",
+   "translator_sha": "0205d2071754d102",
+   "native_sha": "6eb589638a7ae9e8"
   },
   {
    "key": "tests/iso_diff/except.pl::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: functor in_/3 was constructed with 2 positional argument(s) but its class was registered with 3 field(s) ('position', 'left', 'right')"
+   "note": "oracle: scryer loads it, as native does. Translator: functor in_/3 was constructed with 2 positional argument(s) but its class was registered with 3 field(s) ('position', 'left', 'right')",
+   "translator_sha": "5a918e78662eb2bd",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "tests/iso_diff/lists.pl::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: Cannot import /workspace/_cand_slice7/tests/iso_diff/lists.pl: line 61: Prolog functor '=' cannot be translated to a Clausal predicate name ('=' is not a valid Python identifier)."
+   "note": "oracle: scryer loads it, as native does. Translator: Cannot import <root>/tests/iso_diff/lists.pl: line 61: Prolog functor '=' cannot be translated to a Clausal predicate name ('=' is not a valid Python identifier).",
+   "translator_sha": "ae02f65f8cfff370",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "tests/iso_diff/prelude.pl::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: Cannot import /workspace/_cand_slice7/tests/iso_diff/prelude.pl: line 19: Prolog functor '_' is underscore-led (variable-shaped), which has no role as a Clausal predicate or functor name (those are lo"
+   "note": "oracle: scryer loads it, as native does. Translator: Cannot import <root>/tests/iso_diff/prelude.pl: line 19: Prolog functor '_' is underscore-led (variable-shaped), which has no role as a Clausal predicate or functor name (those are lo",
+   "translator_sha": "9fecf30aa383b256",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "tests/iso_diff/sorting.pl::answers::t/3",
    "class": "c",
-   "note": "oracle: scryer agrees with neither (native differs in 1 of 30 rows, the translator in 3); native's rows that differ are -0.0, which Scryer and Trealla both read and print as 0.0; the translator stores body goals as data in its own lowered form (eval_/2, Python node reprs)"
+   "note": "oracle: scryer agrees with neither (native differs in 1 of 30 rows, the translator in 3); native's rows that differ are -0.0, which Scryer and Trealla both read and print as 0.0; the translator stores body goals as data in its own lowered form (eval_/2, Python node reprs)",
+   "translator_sha": "30d7e2cee4402f8a",
+   "native_sha": "2a3c7d3385831bb3"
   },
   {
    "key": "tests/iso_diff/terms.pl::answers::t/3",
    "class": "c",
-   "note": "oracle: scryer agrees with neither (native differs in 2 of 90 rows, the translator in 22); native's rows that differ are -0.0, which Scryer and Trealla both read and print as 0.0; the translator stores body goals as data in its own lowered form (eval_/2, Python node reprs)"
+   "note": "oracle: scryer agrees with neither (native differs in 2 of 90 rows, the translator in 22); native's rows that differ are -0.0, which Scryer and Trealla both read and print as 0.0; the translator stores body goals as data in its own lowered form (eval_/2, Python node reprs)",
+   "translator_sha": "22e34deddae38d12",
+   "native_sha": "5af53ae3192b406f"
   },
   {
    "key": "tests/iso_l3/rulebase_s1.pl::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: AttVar(_53) is not a callable goal: a bare variable appears in goal position in predicate goal_var/2. If a meta-call was intended, wrap it as call/1 (e.g. call(R))."
+   "note": "oracle: scryer loads it, as native does. Translator: AttVar(_53) is not a callable goal: a bare variable appears in goal position in predicate goal_var/2. If a meta-call was intended, wrap it as call/1 (e.g. call(R)).",
+   "translator_sha": "d378089bd81083f3",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "tests/iso_l3/s2/native/s2lib/facts.pl::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: Cannot import /workspace/_cand_slice7/tests/iso_l3/s2/native/s2lib/facts.pl: Expected ')', got 'atom' ('===>') at 15:7 (facts.pl, line 0)"
+   "note": "oracle: scryer loads it, as native does. Translator: Cannot import <root>/tests/iso_l3/s2/native/s2lib/facts.pl: Expected ')', got 'atom' ('===>') at 15:7 (facts.pl, line 0)",
+   "translator_sha": "1af5626675b9a26c",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "tests/iso_l3/s2/native/s2main.pl::load::",
    "class": "a",
-   "note": "translator bug: it does not install the ops a module exports (^^, ===>); native does, as Scryer does -- Scryer loads this file with the s2/oracle stand-in for the .seam import (tests/iso_l3/test_l3_s2_exit.py); its own refusal here is the missing .seam module"
+   "note": "translator bug: it does not install the ops a module exports (^^, ===>); native does, as Scryer does -- Scryer loads this file with the s2/oracle stand-in for the .seam import (tests/iso_l3/test_l3_s2_exit.py); its own refusal here is the missing .seam module",
+   "translator_sha": "2497f16bff253095",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "tests/iso_l3/s3/native/s3main.pl::load::",
    "class": "d",
-   "note": "ruling D4 (2026-09-30): :- constructors([...]) is Clausal Prolog's field-name directive; the native front end implements it, the end-of-life translator does not and will not"
+   "note": "ruling D4 (2026-09-30): :- constructors([...]) is Clausal Prolog's field-name directive; the native front end implements it, the end-of-life translator does not and will not",
+   "translator_sha": "f3a9a5a8e2804395",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "tests/iso_l3/s3/native/s3pkg/__init__.pl::load::",
    "class": "d",
-   "note": "ruling D4: re-exports kinds.pl, whose :- constructors/1 the translator refuses"
+   "note": "ruling D4: re-exports kinds.pl, whose :- constructors/1 the translator refuses",
+   "translator_sha": "f3a9a5a8e2804395",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "tests/iso_l3/s3/native/s3pkg/kinds.pl::load::",
    "class": "d",
-   "note": "ruling D4: :- constructors([pt(x, y)]), as s3main.pl"
+   "note": "ruling D4: :- constructors([pt(x, y)]), as s3main.pl",
+   "translator_sha": "f3a9a5a8e2804395",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "tests/iso_l3/s4/s4_exit.pl::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: Cannot import /workspace/_cand_slice7/tests/iso_l3/s4/s4_exit.pl: line 66: Prolog functor '=' cannot be translated to a Clausal predicate name ('=' is not a valid Python identifier)."
+   "note": "oracle: scryer loads it, as native does. Translator: Cannot import <root>/tests/iso_l3/s4/s4_exit.pl: line 66: Prolog functor '=' cannot be translated to a Clausal predicate name ('=' is not a valid Python identifier).",
+   "translator_sha": "b5c1a5d38b266539",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "tests/iso_l3/s5/s5_clpq_exit.pl::load::",
    "class": "a",
-   "note": "translator bug: it reads {...} as the seam's CLP(Q) set goal and refuses `is` inside it; native lowers clpq's {}/1, and the clpq build of Scryer (/workspace/scryer-prolog-clpq) loads the file cleanly; Scryer core has no library(clpq)"
+   "note": "translator bug: it reads {...} as the seam's CLP(Q) set goal and refuses `is` inside it; native lowers clpq's {}/1, and the clpq build of Scryer (/workspace/scryer-prolog-clpq) loads the file cleanly; Scryer core has no library(clpq)",
+   "translator_sha": "e2a76f3397014f82",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "tests/iso_l3/s5/s5_clpz_exit.pl::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: Cannot import /workspace/_cand_slice7/tests/iso_l3/s5/s5_clpz_exit.pl: Expected ')', got 'atom' ('#>') at 16:26 (s5_clpz_exit.pl, line 0)"
+   "note": "oracle: scryer loads it, as native does. Translator: Cannot import <root>/tests/iso_l3/s5/s5_clpz_exit.pl: Expected ')', got 'atom' ('#>') at 16:26 (s5_clpz_exit.pl, line 0)",
+   "translator_sha": "461e8f9e008de2f6",
+   "native_sha": "c48b5b1a9776c846"
+  },
+  {
+   "key": "README.md#L100::load::",
+   "class": "a",
+   "note": "as docs/clausal_prolog.md#L36 (the same family example): the translator lacks the clpz operators (`#>` is a syntax error); Scryer's only refusal is :- table without library(tabling), which Clausal Prolog provides by default",
+   "translator_sha": "c826f70316926a90",
+   "native_sha": "c48b5b1a9776c846"
+  },
+  {
+   "key": "README.md#L177::load::",
+   "class": "a",
+   "note": "oracle: scryer loads it, as native does. Translator: no clpz operators after use_module(library(clpz)) (`ins` is a syntax error)",
+   "translator_sha": "c3c4eec0ab7d6c52",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "docs/clausal_prolog.md#L36::load::",
    "class": "a",
-   "note": "translator bug: no clpz operators after use_module(library(clpz)) (`#>` is a syntax error); native agrees with Scryer on every clause; Scryer itself refuses only :- table without library(tabling), which Clausal Prolog provides by default"
+   "note": "translator bug: no clpz operators after use_module(library(clpz)) (`#>` is a syntax error); native agrees with Scryer on every clause; Scryer itself refuses only :- table without library(tabling), which Clausal Prolog provides by default",
+   "translator_sha": "d4386b1f93a47b93",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "docs/clausal_prolog.md#L109::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: Cannot import /tmp/pl_parity_86qxi7ci/docs/doc_clausal_prolog_L109.pl: Expected '.', got 'atom' ('ins') at 12:10 (doc_clausal_prolog_L109.pl, line 0)"
+   "note": "oracle: scryer loads it, as native does. Translator: Cannot import <work>/docs/doc_clausal_prolog_L109.pl: Expected '.', got 'atom' ('ins') at 12:10 (doc_clausal_prolog_L109.pl, line 0)",
+   "translator_sha": "829714352014e0f2",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "docs/clausal_prolog.md#L170::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: No module named 'reif'"
+   "note": "oracle: scryer loads it, as native does. Translator: No module named 'reif'",
+   "translator_sha": "6b74fbd2b8a70880",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "docs/clpq.md#L232::load::",
    "class": "d",
-   "note": "rulings D7/D8: constant_number_units/3 with a unit from the european_union library is Clausal Prolog only; the translator misreads the unit (`'euro'` is not a unit expression)"
+   "note": "rulings D7/D8: constant_number_units/3 with a unit from the european_union library is Clausal Prolog only; the translator misreads the unit (`'euro'` is not a unit expression)",
+   "translator_sha": "55efbd60dbe12ac0",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "docs/for_prolog_programmers.md#L86::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: Cannot import /tmp/pl_parity_86qxi7ci/docs/doc_for_prolog_programmers_L86.pl: Expected '.', got 'atom' ('ins') at 7:8 (doc_for_prolog_programmers_L86.pl, line 0)"
+   "note": "oracle: scryer loads it, as native does. Translator: Cannot import <work>/docs/doc_for_prolog_programmers_L86.pl: Expected '.', got 'atom' ('ins') at 7:8 (doc_for_prolog_programmers_L86.pl, line 0)",
+   "translator_sha": "def6b6a67dad0bc8",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "docs/for_prolog_programmers.md#L119::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: '//' is not a plain name, so it cannot be declared (a body goal may name it, a declaration entry may not): rename it, or drop the entry and let the clauses define the predicate (doc_for_prolog_program"
+   "note": "oracle: scryer loads it, as native does. Translator: '//' is not a plain name, so it cannot be declared (a body goal may name it, a declaration entry may not): rename it, or drop the entry and let the clauses define the predicate (doc_for_prolog_program",
+   "translator_sha": "0a073ff1559f27de",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "docs/for_prolog_programmers.md#L144::tests::a_static_procedure_cannot_be_modified",
    "class": "a",
-   "note": "oracle: scryer: pass, as native. Translator: fail; native: pass"
+   "note": "oracle: scryer: pass, as native. Translator: fail; native: pass",
+   "translator_sha": "34e382cfb94027bb",
+   "native_sha": "fedce8e8af485c25"
   },
   {
    "key": "docs/for_prolog_programmers.md#L144::tests::iso_error_terms_in_scryer_s_form",
    "class": "a",
-   "note": "oracle: scryer: pass, as native. Translator: fail; native: pass"
+   "note": "oracle: scryer: pass, as native. Translator: fail; native: pass",
+   "translator_sha": "34e382cfb94027bb",
+   "native_sha": "fedce8e8af485c25"
   },
   {
    "key": "docs/for_prolog_programmers.md#L242::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: Cannot import /tmp/pl_parity_86qxi7ci/docs/doc_for_prolog_programmers_L242.pl: Expected '.', got 'atom' ('#=') at 7:22 (doc_for_prolog_programmers_L242.pl, line 0)"
+   "note": "oracle: scryer loads it, as native does. Translator: Cannot import <work>/docs/doc_for_prolog_programmers_L242.pl: Expected '.', got 'atom' ('#=') at 7:22 (doc_for_prolog_programmers_L242.pl, line 0)",
+   "translator_sha": "240db5b583beabd8",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "docs/importing_prolog.md#L719::load::",
    "class": "d",
-   "note": "rulings D7/D8: the constants/currency directive family with units from the european_union library (Clausal Prolog only); the translator misreads eur_cent"
+   "note": "rulings D7/D8: the constants/currency directive family with units from the european_union library (Clausal Prolog only); the translator misreads eur_cent",
+   "translator_sha": "bce4ae982efc69cf",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "docs/importing_prolog.md#L766::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: '//' is not a plain name, so it cannot be declared (a body goal may name it, a declaration entry may not): rename it, or drop the entry and let the clauses define the predicate (doc_importing_prolog_L"
+   "note": "oracle: scryer loads it, as native does. Translator: '//' is not a plain name, so it cannot be declared (a body goal may name it, a declaration entry may not): rename it, or drop the entry and let the clauses define the predicate (doc_importing_prolog_L",
+   "translator_sha": "000a688575f70b14",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "docs/index.md#L94::load::",
    "class": "a",
-   "note": "as docs/clausal_prolog.md#L36: translator lacks the clpz operators; Scryer's only refusal is :- table without library(tabling)"
+   "note": "as docs/clausal_prolog.md#L36: translator lacks the clpz operators; Scryer's only refusal is :- table without library(tabling)",
+   "translator_sha": "76a1356a01ec58a6",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "docs/tutorial.md#L286::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: Cannot import /tmp/pl_parity_86qxi7ci/docs/doc_tutorial_L286.pl: Expected '.', got 'atom' ('#=') at 4:21 (doc_tutorial_L286.pl, line 0)"
+   "note": "oracle: scryer loads it, as native does. Translator: Cannot import <work>/docs/doc_tutorial_L286.pl: Expected '.', got 'atom' ('#=') at 4:21 (doc_tutorial_L286.pl, line 0)",
+   "translator_sha": "c3b9cee2583e76ab",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "docs/tutorial.md#L310::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: Cannot import /tmp/pl_parity_86qxi7ci/docs/doc_tutorial_L310.pl: Expected '.', got 'atom' ('#=') at 4:22 (doc_tutorial_L310.pl, line 0)"
+   "note": "oracle: scryer loads it, as native does. Translator: Cannot import <work>/docs/doc_tutorial_L310.pl: Expected '.', got 'atom' ('#=') at 4:22 (doc_tutorial_L310.pl, line 0)",
+   "translator_sha": "d232bb6864e5420c",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "docs/tutorial.md#L347::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: Cannot import /tmp/pl_parity_86qxi7ci/docs/doc_tutorial_L347.pl: Expected '.', got 'atom' ('#=') at 4:35 (doc_tutorial_L347.pl, line 0)"
+   "note": "oracle: scryer loads it, as native does. Translator: Cannot import <work>/docs/doc_tutorial_L347.pl: Expected '.', got 'atom' ('#=') at 4:35 (doc_tutorial_L347.pl, line 0)",
+   "translator_sha": "7f252c28e66d9830",
+   "native_sha": "c48b5b1a9776c846"
   },
   {
    "key": "docs/tutorial.md#L453::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: Cannot import /tmp/pl_parity_86qxi7ci/docs/doc_tutorial_L453.pl: Expected '.', got 'atom' ('#=') at 7:11 (doc_tutorial_L453.pl, line 0)"
+   "note": "oracle: scryer loads it, as native does. Translator: Cannot import <work>/docs/doc_tutorial_L453.pl: Expected '.', got 'atom' ('#=') at 7:11 (doc_tutorial_L453.pl, line 0)",
+   "translator_sha": "875c5aa813152953",
+   "native_sha": "c48b5b1a9776c846"
   }
  ]
 }

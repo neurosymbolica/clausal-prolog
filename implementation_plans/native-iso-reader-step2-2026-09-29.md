@@ -461,7 +461,7 @@ of that day, which replace the D6-D8 recommendations below where they differ:
 * Tests: `tests/iso_l3/test_l3_s6_constants_units_dicts.py` (seam twins; the `{C}` test
   skips until slice 5 lowers `{C}`).
 
-### Slice 7: the test runner and diagnostics on the native path (LANDED on feat/iso-reader-slice7-2026-10-12)
+### Slice 7: the test runner and diagnostics on the native path (CANDIDATE on feat/iso-reader-slice7-2026-10-12, not landed)
 
 * The runner already collects `.pl` `test/1` (measured). This slice makes failure reports
   print `.pl` goals and lines from spans, and removes the translation note.
@@ -470,7 +470,7 @@ of that day, which replace the D6-D8 recommendations below where they differ:
   step 1 requires.
 * **Exit:** each output shape has a golden test. A directory of `.pl` tests with zero `test/1`
   exits non-zero. A D14 negative test that finds a solution goes red.
-* **Done (2026-10-12).** Before this slice, main already reported native line numbers
+* **Built (2026-10-12, candidate).** Before this slice, main already reported native line numbers
   (40d097d9), had `test(Name, fail)` (D14, ruled 2026-09-29), and failed an empty scan in both
   the CLI and pytest. This slice closed the remaining gaps:
   * a goal is quoted from its span (`Y =:= 5`, not `=:=(_, 5)`);
@@ -501,8 +501,11 @@ need not be exported to itself. R7 goes with it.
    * The tool is `clausal/tools/pl_parity.py`, and it fails closed on N = 0. The **permanent
      gate** is `tests/test_pl_parity.py`, which pins the classed list in
      `tests/fixtures/pl_parity_known.json`. This is the divergence alarm for R1.
-   * Measured in `native-iso-reader-step2-2026-09-29/parity-2026-10-12.md`: 98 files, 40
-     differences, (a) 32 / (b) 0 / (c) 3 / (d) 5.
+   * Measured in `native-iso-reader-step2-2026-09-29/parity-2026-10-12.md`: 101 files read.
+     Depth: 40 deep, 10 identical errors only, 2 with nothing to compare, 31 native only, 1
+     translator only, 17 both refused.
+   * 42 differences: (a) 34 / (b) 0 / (c) 3 / (d) 5.
+   * The fixture pins each row's values and native's observation of every file.
 2. **The pilot domain, owned downstream.** This lane never reads downstream code. A pilot
    `<downstream-domain>` in `.pl` or Clausal Prolog, loaded natively, must pass its own tests.
    The downstream answer-set checks follow.

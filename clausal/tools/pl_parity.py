@@ -55,6 +55,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -66,8 +67,11 @@ LOADER_OF = {"translator": "PrologLoader", "native": "NativePrologLoader"}
 MAX_ARITY = 3
 #: Answers collected per call (a generator past this is cut, both sides).
 MAX_ANSWERS = 200
-#: Seconds per test or per predicate call, and per child process.
-CALL_TIMEOUT = 5.0
+#: Seconds per test or per predicate call, and per child process.  A
+#: timeout is its own observation ("timeout"), never a pinned difference:
+#: under ``-j`` load a slow native call (``which_fib_is_55``: 3.7 s alone)
+#: must not read as a divergence.
+CALL_TIMEOUT = 30.0
 CHILD_TIMEOUT = 300.0
 
 _JSON_MARK = "PL-PARITY-JSON:"
@@ -117,17 +121,22 @@ def discover(root: Path) -> list[Source]:
 
 
 def doc_snippets(root: Path, outdir: Path) -> list[Source]:
-    """Each ```prolog / ```pl block of ``docs/*.md`` as a file in *outdir*
+    """Each ```prolog / ```pl block of ``README.md`` and ``docs/*.md`` as a
+    file in *outdir*
     (outside the tree: nothing is written into the repository)."""
     found = []
-    for md in sorted((root / "docs").glob("*.md")):
+    mds = sorted((root / "docs").glob("*.md"))
+    if (root / "README.md").exists():
+        mds.insert(0, root / "README.md")
+    for md in mds:
         text = md.read_text(encoding="utf-8")
         for m in _DOC_FENCE.finditer(text):
             line = text.count("\n", 0, m.start()) + 1
             name = f"doc_{md.stem}_L{line}.pl".replace("-", "_")
             dest = outdir / name
             dest.write_text(m.group(1), encoding="utf-8")
-            found.append(Source(str(dest), f"docs/{md.name}#L{line}", "docs"))
+            rel = md.relative_to(root).as_posix()
+            found.append(Source(str(dest), f"{rel}#L{line}", "docs"))
     return found
 
 
@@ -168,11 +177,16 @@ def _render(value) -> str:
 
 def probe(path: str) -> dict:
     """Load *path* under the current ``CLAUSAL_PL_FRONTEND`` and observe it."""
+    import clausal  # noqa: PLC0415
     from clausal.import_hook import pl_frontend  # noqa: PLC0415
     from clausal.testing import (  # noqa: PLC0415
         TestCollectionError, collect_tests, load_clausal_module, run_test)
 
-    out: dict = {"path": path, "frontend": pl_frontend(), "loader": None,
+    # Which engine and which front end, recorded BEFORE the load, so a
+    # refusal proves them as well as a load does.
+    out: dict = {"path": path, "frontend": pl_frontend(),
+                 "clausal_file": os.path.abspath(clausal.__file__),
+                 "loader": None, "skipped_arity": 0,
                  "load": "ok", "error": None, "tests": None,
                  "collect_error": None, "preds": None}
     # The file's directory, and the directory above each enclosing package
@@ -206,65 +220,105 @@ def probe(path: str) -> dict:
         out["collect_error"] = _first_line(e)
         names = []
     if names:
-        verdicts = {}
-        for name in names:
-            try:
-                with contextlib.redirect_stdout(sink), \
-                        contextlib.redirect_stderr(sink), \
-                        _deadline(CALL_TIMEOUT):
-                    r = run_test(mod, name)
-                verdicts[name] = ("pass" if r.passed else
-                                  "fail" if r.error is None else
-                                  "error: " + _first_line(r.error))
-            except _Timeout:
-                verdicts[name] = "timeout"
-            except BaseException as e:  # noqa: BLE001
-                verdicts[name] = "error: " + _first_line(e)
-        out["tests"] = verdicts
+        out["tests"] = {name: _isolated(lambda n=name: _one_test(mod, n))
+                        for name in names}
         from clausal.testing import _names_negative  # noqa: PLC0415
         out["negatives"] = [n for n in names if _names_negative(lm, n)]
         return out
 
-    out["preds"] = _answers(lm, sink)
+    own = [k for k, cs in lm.db._clauses.items()
+           if cs and isinstance(k, tuple) and len(k) == 2
+           and isinstance(k[0], str) and not k[0].startswith("$")
+           and k[0] not in ("test", "Test")]
+    keys = sorted((k for k in own if k[1] <= MAX_ARITY),
+                  key=lambda k: (k[0], k[1]))
+    out["skipped_arity"] = len(own) - len(keys)
+    out["preds"] = {f"{name}/{arity}": _isolated(
+        lambda n=name, a=arity: _one_call(lm, n, a)) for name, arity in keys}
     return out
 
 
-def _answers(lm, sink) -> dict:
-    """``{"name/N": [answer, ...] | "error: ..." | "timeout"}`` for each
-    predicate the module's own database defines, arity <= MAX_ARITY."""
+def _isolated(fn):
+    """Run *fn* in a forked child and return its JSON-able result, or
+    ``"timeout"`` after CALL_TIMEOUT (the child is killed), or
+    ``"crash: signal N"``.
+
+    Each test or call runs in its own copy of the loaded module: a call
+    that never answers is killed outright instead of being interrupted by
+    an exception raised inside the engine (measured 2026-10-12: an alarm
+    raised inside a runaway native call left the process to segfault in
+    the garbage collector on a LATER call), a crash costs one item, not
+    the file, and state a call asserts does not leak into the next."""
+    import select  # noqa: PLC0415
+    r, w = os.pipe()
+    pid = os.fork()
+    if pid == 0:                                       # the child
+        os.close(r)
+        try:
+            import resource  # noqa: PLC0415
+            resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+            sink = io.StringIO()
+            with contextlib.redirect_stdout(sink), \
+                    contextlib.redirect_stderr(sink):
+                value = fn()
+        except BaseException as e:  # noqa: BLE001
+            value = "error: " + _first_line(e)
+        try:
+            data = json.dumps(value).encode()
+        except Exception:  # noqa: BLE001
+            data = json.dumps("error: unserialisable result").encode()
+        with os.fdopen(w, "wb") as f:
+            f.write(data)
+        os._exit(0)
+    os.close(w)
+    chunks, deadline = [], time.monotonic() + CALL_TIMEOUT
+    try:
+        while True:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                os.kill(pid, signal.SIGKILL)
+                os.waitpid(pid, 0)
+                return "timeout"
+            ready, _, _ = select.select([r], [], [], left)
+            if ready:
+                chunk = os.read(r, 1 << 16)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+    finally:
+        os.close(r)
+    _, status = os.waitpid(pid, 0)
+    if os.WIFSIGNALED(status):
+        return f"crash: signal {os.WTERMSIG(status)}"
+    try:
+        return json.loads(b"".join(chunks) or b'"crash: no result"')
+    except ValueError:
+        return "crash: unreadable result"
+
+
+def _one_test(mod, name):
+    from clausal.testing import run_test  # noqa: PLC0415
+    r = run_test(mod, name)
+    return ("pass" if r.passed else "fail" if r.error is None
+            else "error: " + _first_line(r.error))
+
+
+def _one_call(lm, name, arity):
+    """All answers (at most MAX_ANSWERS, then "...") of ``name/arity``
+    called with fresh variables, or ``{"error": ..., "after": [...]}``."""
     from clausal.logic.solve import call  # noqa: PLC0415
     from clausal.logic.variables import Var  # noqa: PLC0415
-
-    keys = sorted((k for k, cs in lm.db._clauses.items()
-                   if cs and isinstance(k, tuple) and len(k) == 2
-                   and isinstance(k[0], str) and not k[0].startswith("$")
-                   and k[1] <= MAX_ARITY and k[0] not in ("test", "Test")),
-                  key=lambda k: (k[0], k[1]))
-    result: dict = {}
-    for name, arity in keys:
-        args = [Var() for _ in range(arity)]
-        answers: list[str] = []
-        gen = None
-        try:
-            with contextlib.redirect_stdout(sink), \
-                    contextlib.redirect_stderr(sink), _deadline(CALL_TIMEOUT):
-                gen = call(name, *args, module=lm)
-                for _ in gen:
-                    answers.append(_render(args) if args else "true")
-                    if len(answers) >= MAX_ANSWERS:
-                        answers.append("...")
-                        break
-            result[f"{name}/{arity}"] = answers
-        except _Timeout:
-            result[f"{name}/{arity}"] = {"timeout": answers}
-        except BaseException as e:  # noqa: BLE001
-            result[f"{name}/{arity}"] = {"error": _first_line(e),
-                                         "after": answers}
-        finally:
-            if gen is not None:
-                with contextlib.suppress(BaseException):
-                    gen.close()
-    return result
+    args = [Var() for _ in range(arity)]
+    answers: list[str] = []
+    try:
+        for _ in call(name, *args, module=lm):
+            answers.append(_render(args) if args else "true")
+            if len(answers) >= MAX_ANSWERS:
+                answers.append("...")
+                break
+    except Exception as e:  # noqa: BLE001
+        return {"error": _first_line(e), "after": answers}
+    return answers
 
 
 # ── the parent: both front ends, then compare ────────────────────────────────
@@ -272,6 +326,7 @@ def _answers(lm, sink) -> dict:
 
 def run_side(src: Source, frontend: str, cache_root: Path,
              repo_root: Path) -> dict:
+    cache_root.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ)
     env["CLAUSAL_PL_FRONTEND"] = frontend
     env["PYTHONPYCACHEPREFIX"] = str(cache_root / frontend)
@@ -282,20 +337,48 @@ def run_side(src: Source, frontend: str, cache_root: Path,
         proc = subprocess.run(
             [sys.executable, "-m", "clausal.tools.pl_parity", "--probe",
              src.path],
-            capture_output=True, text=True, env=env, cwd=str(repo_root),
-            timeout=CHILD_TIMEOUT, stdin=subprocess.DEVNULL)
+            capture_output=True, text=True, env=env, cwd=str(cache_root),
+            timeout=CHILD_TIMEOUT, stdin=subprocess.DEVNULL,
+            preexec_fn=_no_core_dumps)
     except subprocess.TimeoutExpired:
         return {"crash": "child timed out"}
     for line in reversed(proc.stdout.splitlines()):
         if line.startswith(_JSON_MARK):
             data = json.loads(line[len(_JSON_MARK):])
-            want = LOADER_OF[frontend]
-            if data.get("loader") not in (None, want):
-                return {"crash": f"wrong front end: {data['loader']} "
-                                 f"under CLAUSAL_PL_FRONTEND={frontend}"}
-            return data
+            problem = _engine_problem(data, frontend, repo_root)
+            return {"crash": problem} if problem else data
     tail = (proc.stderr or proc.stdout).strip().splitlines()[-3:]
     return {"crash": f"exit {proc.returncode}: " + " | ".join(tail)}
+
+
+def _no_core_dumps():
+    """A crashing child must not write a multi-gigabyte core into the
+    tree (measured: 2.4 GB, 2026-10-12)."""
+    import resource  # noqa: PLC0415
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+
+
+def _engine_problem(data: dict, frontend: str, root: Path) -> "str | None":
+    """Why a child's observation cannot be trusted, or None.  Checked on
+    every row, a refusal included: the front end the child resolved, the
+    engine it imported (the venv's editable install resolves elsewhere
+    without PYTHONPATH), and the loader that ran."""
+    if data.get("frontend") != frontend:
+        return (f"wrong front end: the child ran {data.get('frontend')!r} "
+                f"under CLAUSAL_PL_FRONTEND={frontend}")
+    cf = data.get("clausal_file") or ""
+    try:
+        Path(cf).resolve().relative_to(Path(root).resolve())
+    except ValueError:
+        return f"wrong engine: the child imported {cf}, not one under {root}"
+    if data.get("loader") not in (None, LOADER_OF[frontend]):
+        return (f"wrong loader: {data['loader']} under "
+                f"CLAUSAL_PL_FRONTEND={frontend}")
+    return None
+
+
+def _is_timeout(v) -> bool:
+    return v == "timeout"
 
 
 @dataclass
@@ -327,6 +410,8 @@ def compare(rel: str, t: dict, n: dict) -> list[Difference]:
                                 n["collect_error"]))
     tt, nt = t["tests"] or {}, n["tests"] or {}
     for name in sorted(set(tt) | set(nt)):
+        if _is_timeout(tt.get(name)) or _is_timeout(nt.get(name)):
+            continue                      # an observation, not a difference
         if tt.get(name) != nt.get(name):
             diffs.append(Difference(rel, "tests", name, tt.get(name),
                                     nt.get(name)))
@@ -342,6 +427,8 @@ def compare(rel: str, t: dict, n: dict) -> list[Difference]:
             diffs.append(Difference(rel, "predicates", key,
                                     "defined" if key in tp else "absent",
                                     "defined" if key in np_ else "absent"))
+        elif _is_timeout(tp[key]) or _is_timeout(np_[key]):
+            continue
         elif tp[key] != np_[key]:
             diffs.append(Difference(rel, "answers", key, tp[key], np_[key]))
     return diffs
@@ -635,12 +722,63 @@ class Run:
     sources: list = field(default_factory=list)
     sides: dict = field(default_factory=dict)        # rel -> (t, n)
     diffs: list = field(default_factory=list)
+    categories: dict = field(default_factory=dict)   # rel -> category
+    timeouts: list = field(default_factory=list)     # "rel::side::item"
+    root: str = ""
+    work: str = ""
+
+
+#: How deep a file's comparison went (the breakdown ``summary_lines``
+#: prints: "compared" alone overstates the evidence).
+CATEGORIES = (
+    ("deep", "both loaded; at least one test or predicate compared on a "
+             "non-error result"),
+    ("errors_only", "both loaded; every compared item is an error on both "
+                    "sides (e.g. a doc block that needs an earlier block)"),
+    ("nothing", "both loaded; no test and no predicate of arity <= "
+                f"{MAX_ARITY} to compare"),
+    ("native_only", "only native loads it: load compared, answers pinned "
+                    "for native alone"),
+    ("translator_only", "only the translator loads it"),
+    ("both_refused", "both refuse it"),
+    ("crash", "a child crashed or proved the wrong engine"),
+)
+
+
+def _is_error(v) -> bool:
+    return (isinstance(v, str) and v.startswith("error: ")) or (
+        isinstance(v, dict) and "error" in v)
+
+
+def category(t: dict, n: dict) -> str:
+    if "crash" in t or "crash" in n:
+        return "crash"
+    tl, nl = t["load"] == "ok", n["load"] == "ok"
+    if not tl and not nl:
+        return "both_refused"
+    if nl and not tl:
+        return "native_only"
+    if tl and not nl:
+        return "translator_only"
+    items = []
+    for side_t, side_n in ((t.get("tests") or {}, n.get("tests") or {}),
+                           (t.get("preds") or {}, n.get("preds") or {})):
+        for k in set(side_t) & set(side_n):
+            items.append((side_t[k], side_n[k]))
+    items = [(a, b) for a, b in items
+             if not _is_timeout(a) and not _is_timeout(b)]
+    if not items:
+        return "nothing"
+    if all(_is_error(a) and _is_error(b) for a, b in items):
+        return "errors_only"
+    return "deep"
 
 
 def run(root: Path, *, docs: bool = True, jobs: int = 4,
-        only: "list[str] | None" = None) -> Run:
-    r = Run()
+        only: "list[str] | None" = None, oracle: bool = True) -> Run:
+    r = Run(root=str(root))
     work = Path(tempfile.mkdtemp(prefix="pl_parity_"))
+    r.work = str(work)
     try:
         sources = discover(root)
         if docs:
@@ -659,53 +797,236 @@ def run(root: Path, *, docs: bool = True, jobs: int = 4,
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
             for src, t, n in ex.map(both, sources):
+                t = normalize(t, root, work)
+                n = normalize(n, root, work)
                 r.sides[src.rel] = (t, n)
+                r.categories[src.rel] = category(t, n)
                 if "crash" not in t and "crash" not in n:
                     r.compared += 1
                 r.diffs.extend(compare(src.rel, t, n))
-        # Oracle evidence while the doc snippets still exist.
-        paths = {s.rel: s.path for s in sources}
-        for d in r.diffs:
-            d.auto = classify_auto(d, paths[d.rel], r.sides[d.rel])
+                for label, side in (("translator", t), ("native", n)):
+                    for group in ("tests", "preds"):
+                        for k, v in (side.get(group) or {}).items():
+                            if _is_timeout(v):
+                                r.timeouts.append(f"{src.rel}::{label}::{k}")
+        if oracle:
+            # Oracle evidence while the doc snippets still exist.  Not run
+            # under --check: it never decides pass/fail.
+            paths = {s.rel: s.path for s in sources}
+            for d in r.diffs:
+                d.auto = classify_auto(d, paths[d.rel], r.sides[d.rel])
     finally:
         shutil.rmtree(work, ignore_errors=True)
     return r
 
 
+# ── pinning ──────────────────────────────────────────────────────────────────
+
+_VOLATILE = (
+    (re.compile(r"AttVar\(_\d+\)"), "AttVar(_)"),
+    (re.compile(r"\b0x[0-9a-fA-F]+\b"), "0x?"),
+    (re.compile(r"/tmp/pl_parity_[A-Za-z0-9_]+"), "<work>"),
+)
+
+
+def normalize(side: dict, root: Path, work: Path) -> dict:
+    """*side* with machine-specific text replaced (the repository root, the
+    temp directory, object addresses, variable ids), so an observation
+    pins the same on every checkout."""
+    roots = sorted({str(root), str(Path(root).resolve())}, key=len,
+                   reverse=True)
+    works = sorted({str(work), str(Path(work).resolve())}, key=len,
+                   reverse=True)
+
+    def fix(v):
+        if isinstance(v, str):
+            for w in works:
+                v = v.replace(w, "<work>")
+            for rt in roots:
+                v = v.replace(rt, "<root>")
+            for rx, rep in _VOLATILE:
+                v = rx.sub(rep, v)
+            return v
+        if isinstance(v, list):
+            return [fix(x) for x in v]
+        if isinstance(v, dict):
+            return {k: fix(x) for k, x in v.items()}
+        return v
+    return fix(side)
+
+
+def pinned_view(side: dict) -> dict:
+    """The part of one side's observation the fixture pins: load and its
+    error, collect error, verdicts and answers.  Timed-out items are kept
+    as "timeout" and never compared."""
+    if "crash" in side:
+        return {"crash": side["crash"]}
+    return {k: side.get(k) for k in
+            ("load", "error", "collect_error", "tests", "preds")}
+
+
+def sha(value) -> str:
+    import hashlib  # noqa: PLC0415
+    blob = json.dumps(value, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(blob.encode()).hexdigest()[:16]
+
+
 def load_fixture(path: Path) -> dict:
+    """``{"known": {key: row}, "native": {rel: view},
+    "translator_sha": {rel: sha}}``."""
     data = json.loads(path.read_text(encoding="utf-8"))
-    return {e["key"]: e for e in data["known"]}
+    obs_path = path.with_name(data.get("observations",
+                                       "pl_parity_native.json"))
+    obs = (json.loads(obs_path.read_text(encoding="utf-8"))
+           if obs_path.exists() else {"native": {}, "translator_sha": {}})
+    return {"known": {e["key"]: e for e in data["known"]},
+            "native": obs["native"], "translator_sha": obs["translator_sha"],
+            "about": data.get("about", "")}
 
 
-def check(r: Run, known: dict) -> list[str]:
-    """Problems: a difference the fixture does not list, or a listed one
-    that no longer occurs."""
-    seen = {d.key for d in r.diffs}
-    problems = [f"NEW difference: {d.key}  translator={_short(d.translator)}"
-                f"  native={_short(d.native)}"
-                for d in r.diffs if d.key not in known]
+def _diff_items(pinned: dict, now: dict) -> list[str]:
+    """Item-level changes between two pinned views (timeouts skipped)."""
+    out = []
+    for k in ("load", "error", "collect_error"):
+        if pinned.get(k) != now.get(k):
+            out.append(f"{k}: pinned={_short(pinned.get(k))} "
+                       f"now={_short(now.get(k))}")
+    for group in ("tests", "preds"):
+        a, b = pinned.get(group) or {}, now.get(group) or {}
+        if (pinned.get(group) is None) != (now.get(group) is None):
+            out.append(f"{group}: pinned={_short(pinned.get(group))} "
+                       f"now={_short(now.get(group))}")
+            continue
+        for item in sorted(set(a) | set(b)):
+            if _is_timeout(a.get(item)) or _is_timeout(b.get(item)):
+                continue
+            if a.get(item) != b.get(item):
+                out.append(f"{group} {item}: pinned={_short(a.get(item))} "
+                           f"now={_short(b.get(item))}")
+    if "crash" in now or "crash" in pinned:
+        if now.get("crash") != pinned.get("crash"):
+            out.append(f"crash: pinned={pinned.get('crash')} "
+                       f"now={now.get('crash')}")
+    return out
+
+
+def check(r: Run, fixture: dict) -> list[str]:
+    """Every way the run disagrees with the fixture:
+
+    * a difference the fixture does not list (NEW), or a listed one that no
+      longer occurs (GONE);
+    * a listed difference whose translator or native VALUE changed (a
+      regression inside a pinned row goes red, not just a new row);
+    * any change in native's own observation of any file (load, verdicts,
+      answers), so a native regression in a native-only file goes red too;
+    * any change in the translator's observation of a file (by hash)."""
+    known = fixture["known"]
+    problems = []
+    seen = {}
+    for d in r.diffs:
+        seen[d.key] = d
+        row = known.get(d.key)
+        if row is None:
+            problems.append(f"NEW difference: {d.key}  translator="
+                            f"{_short(d.translator)}  native={_short(d.native)}")
+            continue
+        if row.get("native_sha") and sha(d.native) != row["native_sha"]:
+            problems.append(f"CHANGED native value in pinned row {d.key}: "
+                            f"now {_short(d.native)}")
+        if (row.get("translator_sha")
+                and sha(d.translator) != row["translator_sha"]):
+            problems.append(f"CHANGED translator value in pinned row "
+                            f"{d.key}: now {_short(d.translator)}")
     problems += [f"GONE (prune the fixture): {k}" for k in sorted(known)
                  if k not in seen]
+    natives = fixture["native"]
+    tshas = fixture["translator_sha"]
+    for rel, (t, n) in sorted(r.sides.items()):
+        if rel not in natives:
+            problems.append(f"NEW file (not pinned): {rel}")
+            continue
+        for line in _diff_items(natives[rel], pinned_view(n)):
+            problems.append(f"NATIVE CHANGED {rel}: {line}")
+        if tshas.get(rel) and sha(_masked(pinned_view(t))) != tshas[rel]:
+            problems.append(f"TRANSLATOR CHANGED {rel} (hash)")
+    problems += [f"GONE file (prune the fixture): {rel}"
+                 for rel in sorted(set(natives) - set(r.sides))]
     return problems
 
 
+def _masked(view: dict) -> dict:
+    """*view* with timed-out items dropped, for hashing."""
+    out = dict(view)
+    for group in ("tests", "preds"):
+        if isinstance(out.get(group), dict):
+            out[group] = {k: v for k, v in out[group].items()
+                          if not _is_timeout(v)}
+    return out
+
+
+def update_fixture(r: Run, path: Path) -> list[str]:
+    """Rewrite the fixture from *r*, keeping each known row's class and note
+    (a new row gets class "?", which the gate refuses until it is set)."""
+    old = load_fixture(path) if path.exists() else {
+        "known": {}, "about": ""}
+    known = []
+    for d in r.diffs:
+        prev = old["known"].get(d.key, {})
+        known.append({"key": d.key, "class": prev.get("class", "?"),
+                      "note": prev.get("note", ""),
+                      "translator_sha": sha(d.translator),
+                      "native_sha": sha(d.native)})
+    obs_name = "pl_parity_native.json"
+    path.write_text(json.dumps({"about": old.get("about", ""),
+                                "observations": obs_name,
+                                "known": known},
+                               indent=1, ensure_ascii=False) + "\n",
+                    encoding="utf-8")
+    path.with_name(obs_name).write_text(json.dumps({
+        "about": "Native's pinned observation of every file, and a hash of "
+                 "the translator's (clausal.tools.pl_parity --update).",
+        "native": {rel: pinned_view(n) for rel, (t, n) in
+                   sorted(r.sides.items())},
+        "translator_sha": {rel: sha(_masked(pinned_view(t))) for rel, (t, n)
+                           in sorted(r.sides.items())},
+    }, indent=1, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
+    return [d.key for d in r.diffs if d.key not in old["known"]]
+
+
 def _short(v, n: int = 160) -> str:
-    s = v if isinstance(v, str) else json.dumps(v)
+    s = v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)
     return s if len(s) <= n else s[:n] + "..."
+
+
+def category_counts(r: Run) -> dict:
+    counts = {name: 0 for name, _ in CATEGORIES}
+    for c in r.categories.values():
+        counts[c] += 1
+    return counts
 
 
 def summary_lines(r: Run, known: "dict | None" = None) -> list[str]:
     by_pop: dict[str, int] = {}
     for s in r.sources:
         by_pop[s.population] = by_pop.get(s.population, 0) + 1
+    c = category_counts(r)
+    skipped = sum(n.get("skipped_arity", 0) for _, n in r.sides.values())
     lines = [f"pl_parity: {r.read} files read, {r.compared} compared "
              f"({', '.join(f'{k} {v}' for k, v in sorted(by_pop.items()))})",
+             "pl_parity: depth: " + ", ".join(
+                 f"{name} {c[name]}" for name, _ in CATEGORIES),
+             f"pl_parity: {skipped} predicate(s) of arity > {MAX_ARITY} "
+             "not called (native side)",
+             f"pl_parity: {len(r.timeouts)} timed-out item(s) "
+             f"(observations, never differences; limit {CALL_TIMEOUT:g}s)",
              f"pl_parity: {len(r.diffs)} differences"]
+    for t in r.timeouts:
+        lines.append(f"pl_parity:   timeout {t}")
     if known is not None:
         counts: dict[str, int] = {}
         for d in r.diffs:
-            c = known.get(d.key, {}).get("class", "?")
-            counts[c] = counts.get(c, 0) + 1
+            cl = known.get(d.key, {}).get("class", "?")
+            counts[cl] = counts.get(cl, 0) + 1
         lines.append("pl_parity: by class " + ", ".join(
             f"{k}={v}" for k, v in sorted(counts.items())))
     return lines
@@ -720,14 +1041,19 @@ def main(argv: "list[str] | None" = None) -> int:
                     help="(child) observe FILE under the current front end")
     ap.add_argument("--root", default=str(Path(__file__).resolve().parents[2]))
     ap.add_argument("--no-docs", action="store_true",
-                    help="skip the ```prolog blocks of docs/*.md")
+                    help="skip the ```prolog blocks of README.md and "
+                         "docs/*.md")
     ap.add_argument("--only", action="append",
                     help="restrict to sources whose path contains this")
     ap.add_argument("-j", "--jobs", type=int, default=4)
     ap.add_argument("--json", metavar="OUT", help="write every observation")
-    ap.add_argument("--check", metavar="FIXTURE",
-                    help="exit 1 on a difference the fixture does not list "
-                         "or a listed one that is gone")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--check", metavar="FIXTURE",
+                      help="exit 1 on any disagreement with the fixture "
+                           "(see check())")
+    mode.add_argument("--update", metavar="FIXTURE",
+                      help="rewrite the fixture and its observations file "
+                           "from this run (new rows get class '?')")
     a = ap.parse_args(argv)
 
     if a.probe:
@@ -736,23 +1062,30 @@ def main(argv: "list[str] | None" = None) -> int:
         sys.stdout.flush()
         os._exit(0)                      # no atexit work in the child
 
-    r = run(Path(a.root), docs=not a.no_docs, jobs=a.jobs, only=a.only)
-    known = load_fixture(Path(a.check)) if a.check else None
-    for line in summary_lines(r, known):
+    r = run(Path(a.root), docs=not a.no_docs, jobs=a.jobs, only=a.only,
+            oracle=not a.check)
+    fixture = load_fixture(Path(a.check)) if a.check else None
+    for line in summary_lines(r, fixture and fixture["known"]):
         print(line)
     if a.json:
         Path(a.json).write_text(json.dumps({
             "read": r.read, "compared": r.compared,
+            "categories": r.categories, "timeouts": r.timeouts,
             "sides": r.sides,
             "diffs": [dict(key=d.key, rel=d.rel, kind=d.kind, item=d.item,
                            translator=d.translator, native=d.native,
                            auto=getattr(d, "auto", None)) for d in r.diffs],
-        }, indent=1, sort_keys=True))
+        }, indent=1, sort_keys=True, ensure_ascii=False))
     if r.compared == 0:
         print("pl_parity: ERROR: 0 files compared -- refusing an empty run")
         return 2
-    if known is not None:
-        problems = check(r, known)
+    if a.update:
+        new = update_fixture(r, Path(a.update))
+        for k in new:
+            print(f"pl_parity: new row, classify it: {k}")
+        return 0
+    if fixture is not None:
+        problems = check(r, fixture)
         for p in problems:
             print(p)
         return 1 if problems else 0

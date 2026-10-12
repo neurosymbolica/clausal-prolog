@@ -6,7 +6,11 @@ each in its own subprocess with its own empty bytecode cache, and compares
 load/refusal, test verdicts and (for files without tests) all-answers.  The
 known differences are pinned, with their class, in
 ``tests/fixtures/pl_parity_known.json``: a NEW difference goes red, and so
-does a pinned one that has gone (prune the fixture as gaps close).
+does a pinned one that has gone (prune the fixture as gaps close), and so
+does any change in a pinned row's values or in native's observation of any
+file (``tests/fixtures/pl_parity_native.json``).  Regenerate both with
+``python -m clausal.tools.pl_parity --update tests/fixtures/pl_parity_known.json``
+and classify each new row (class "?" is refused).
 """
 
 from __future__ import annotations
@@ -51,14 +55,90 @@ def test_compare_reports_each_kind():
     assert kinds({"crash": "boom"}, _side()) == ["crash"]
 
 
+def _fixture(known=None, native=None, tsha=None):
+    return {"known": known or {}, "native": native or {},
+            "translator_sha": tsha or {}}
+
+
 def test_check_flags_new_and_gone_differences():
     r = P.Run(read=1, compared=1)
     r.diffs = [P.Difference("f.pl", "load", "", "ok", "refused: x")]
-    assert P.check(r, {"f.pl::load::": {"class": "b"}}) == []
-    problems = P.check(r, {"g.pl::load::": {"class": "b"}})
+    r.sides = {}
+    assert P.check(r, _fixture({"f.pl::load::": {"class": "b"}})) == []
+    problems = P.check(r, _fixture({"g.pl::load::": {"class": "b"}}))
     assert any(p.startswith("NEW difference: f.pl::load::") for p in problems)
     assert any(p.startswith("GONE (prune the fixture): g.pl::load::")
                for p in problems)
+
+
+def test_a_changed_value_inside_a_pinned_row_goes_red():
+    """The fixture pins VALUES, not just keys: a native regression inside a
+    row that is already a known difference is caught."""
+    r = P.Run(read=1, compared=1)
+    r.sides = {}
+    r.diffs = [P.Difference("f.pl", "tests", "t", "pass", "fail")]
+    row = {"class": "a", "native_sha": P.sha("fail"),
+           "translator_sha": P.sha("pass")}
+    assert P.check(r, _fixture({r.diffs[0].key: row})) == []
+    r.diffs = [P.Difference("f.pl", "tests", "t", "pass", "error: boom")]
+    problems = P.check(r, _fixture({r.diffs[0].key: row}))
+    assert any(p.startswith("CHANGED native value in pinned row")
+               for p in problems), problems
+
+
+def test_native_observation_of_every_file_is_pinned():
+    """A native-only file has no translator side to differ from; its native
+    answers are pinned on their own, so a native regression there is red."""
+    t = {"load": "refused", "error": "x", "tests": None,
+         "collect_error": None, "preds": None}
+    n = _side(preds={"p/1": ["[a]", "[b]"]})
+    r = P.Run(read=1, compared=1, sides={"f.pl": (t, n)})
+    r.diffs = P.compare("f.pl", t, n)
+    known = {d.key: {"class": "a"} for d in r.diffs}
+    pinned = {"f.pl": P.pinned_view(n)}
+    tsha = {"f.pl": P.sha(P._masked(P.pinned_view(t)))}
+    assert P.check(r, _fixture(known, pinned, tsha)) == []
+    n2 = _side(preds={"p/1": ["[a]"]})
+    r.sides = {"f.pl": (t, n2)}
+    problems = P.check(r, _fixture(known, pinned, tsha))
+    assert any(p.startswith("NATIVE CHANGED f.pl: preds p/1") for p in problems)
+
+
+def test_a_timeout_is_an_observation_not_a_difference():
+    t = _side(preds={"p/1": "timeout", "q/0": ["true"]})
+    n = _side(preds={"p/1": ["[a]"], "q/0": ["true"]})
+    assert P.compare("f.pl", t, n) == []
+    r = P.Run(read=1, compared=1, sides={"f.pl": (t, n)})
+    pinned = {"f.pl": P.pinned_view(_side(preds={"p/1": "timeout",
+                                                 "q/0": ["true"]}))}
+    tsha = {"f.pl": P.sha(P._masked(P.pinned_view(t)))}
+    assert P.check(r, _fixture({}, pinned, tsha)) == []
+
+
+def test_depth_categories():
+    ok = _side(tests={"t": "pass"})
+    err = _side(tests={"t": "error: E"})
+    ref = _side(load="refused", error="x")
+    assert P.category(ok, ok) == "deep"
+    assert P.category(err, err) == "errors_only"
+    assert P.category(_side(preds={}), _side(preds={})) == "nothing"
+    assert P.category(ref, ok) == "native_only"
+    assert P.category(ok, ref) == "translator_only"
+    assert P.category(ref, ref) == "both_refused"
+    assert P.category({"crash": "x"}, ok) == "crash"
+
+
+def test_the_child_must_prove_its_engine():
+    root = REPO_ROOT
+    good = {"frontend": "native", "loader": None,
+            "clausal_file": str(root / "clausal" / "__init__.py")}
+    assert P._engine_problem(good, "native", root) is None
+    # A refusal (loader None) still proves its front end and engine.
+    assert "wrong front end" in P._engine_problem(good, "translator", root)
+    elsewhere = dict(good, clausal_file="/elsewhere/clausal/__init__.py")
+    assert "wrong engine" in P._engine_problem(elsewhere, "native", root)
+    wrong_loader = dict(good, loader="PrologLoader")
+    assert "wrong loader" in P._engine_problem(wrong_loader, "native", root)
 
 
 def test_norm_ignores_spacing_and_variable_names():
@@ -106,8 +186,15 @@ def test_fixture_classes_are_valid():
     for e in data["known"]:
         assert e["class"] in ("a", "b", "c", "d"), e
         assert e.get("note"), e
+        assert e.get("native_sha") and e.get("translator_sha"), e
+    obs = json.loads((FIXTURE.parent / data["observations"]).read_text())
+    assert len(obs["native"]) == len(obs["translator_sha"]) > 0
 
 
+# About 2 minutes (about 200 children at -j 6, each test or call forked).
+# Move this behind CLAUSAL_SLOW_TESTS when that convention lands (planned
+# with the CLP(Q) port); main has no slow-test convention yet.
+@pytest.mark.timeout(1500)
 def test_repository_parity_matches_the_pinned_differences():
     proc = subprocess.run(
         [sys.executable, "-m", "clausal.tools.pl_parity", "-j", "6",
@@ -120,4 +207,7 @@ def test_repository_parity_matches_the_pinned_differences():
     read = int(first.split()[1])
     compared = int(first.split()[4])
     assert read > 0 and compared == read, out
+    assert "pl_parity: depth: deep " in out, out
+    deep = int(out.split("pl_parity: depth: deep ", 1)[1].split(",")[0])
+    assert deep > 0, out
     assert proc.returncode == 0, out
