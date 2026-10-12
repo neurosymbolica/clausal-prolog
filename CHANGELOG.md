@@ -34,6 +34,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
   [...])`. Named `pure_random` because a facade never takes a Scryer
   library name (`library(random)`). See [docs/pure_random.md](docs/pure_random.md).
 
+- **`Trail.hooks_running`: tell an attribute hook from a goal.** A
+  read-only int on every `Trail`: the number of attribute-hook dispatches
+  in progress on it. It is 0 at a goal (a body goal, or a woken goal under a
+  driver or run by a bare `unify`), 1 inside a hook, and one more for each
+  unification nested in a hook that fires hooks of its own. It is restored
+  on every exit, including a hook that fails or raises. `trail.defer` is
+  true in both places, so a constraint library needs this counter to know
+  when it must queue its posts (`trail.push_pending`) and when it may post
+  in place. C extensions read the `hooks_running` field of `TrailObject` in
+  `_variables_capi.h`. See [docs/coroutining.md](docs/coroutining.md),
+  "Inside a hook or at a goal".
+
 ### Changed (docs)
 
 - **`once/1`, `\+` and `forall/2` are documented as supported but
@@ -99,6 +111,29 @@ surface described in [docs/public-api.md](docs/public-api.md).
   [docs/asyncio.md](docs/asyncio.md).
 
 ### Fixed
+
+- **A goal woken by an inline comparison runs before the next goal, as in
+  Scryer.** A CLP(FD) comparison is compiled inline, and it can bind:
+  `X == 3` directly, and `X <= 3` once `X >= 3` has narrowed X's domain to
+  one value. The goals that binding woke stayed queued past the goals that
+  followed. So `freeze(X, Y is 1), X == 3, var(Y)` succeeded, where Scryer
+  fails. Inside `count_all/2`, `findall/3` or `\+` the woken goals never ran
+  at all. They now run right after the comparison, and after each branch a
+  reified `if_/3` test posts, with every answer. **Answer order changes:**
+  in `X == 3, member(Z, Zs)` the woken goal's answers now vary slowest,
+  where they used to interleave after `member/2`'s. `catch/3` now catches a
+  ball thrown by such a woken goal; under the default (trampoline) strategy
+  it escaped.
+- **`solve/2` and `call/N` refuse to drive a goal on a trail whose attribute
+  hooks are running.** A hook that drove a goal on its own trail ran the
+  goals the outer unification had queued, and those goals then ran again
+  at the outer boundary. Such a call now raises
+  `error(permission_error(call, goal, Goal), solve/2)`. A hook queues what
+  it would run (`trail.push_pending`). A driver on a fresh trail is still
+  allowed.
+- **`replace_subterm/4` rewrites inside a partial list whose holes are
+  filled** (`[a, *T]` with `T` bound), as `reified_subterm/2` already
+  walked it.
 
 - **`reified_subterm/2` and `replace_subterm/4` see past the 64th element of
   a list.** The rest of a list of 64 or more elements is a list view
