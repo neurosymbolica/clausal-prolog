@@ -303,7 +303,7 @@ def _drained(k_stmts: list[ast.stmt], trail_name: str) -> list[ast.stmt]:
 
     A unification may wake goals (``freeze/2``, ``when/2``) that queue on the
     trail; the rest of the clause must see their bindings, once per answer.
-    With nothing queued ``$pending`` is ``(None,)`` and *k* runs once.
+    With nothing queued ``$pending`` is ``range(1)`` and *k* runs once.
     """
     if not k_stmts or _is_trampoline_leaf(k_stmts) or _is_drained(k_stmts):
         return k_stmts

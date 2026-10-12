@@ -4068,17 +4068,23 @@ py_unify_census(PyObject *self, PyObject *Py_UNUSED(ignored))
 /* ── pending_or_once(trail): the iterable a goal boundary loops over ─────
  *
  * Compiled code continues after a goal with ``for _ in pending_or_once(trail):
- * <rest>``.  With no goal queued (the usual case) this is a shared 1-tuple,
- * so the rest runs once at the cost of a call and a tuple iteration; with
- * goals queued it is the drain generator registered by
- * clausal.logic.pending, which runs them and yields once per answer. */
-static PyObject *g_once_tuple = NULL;     /* (None,) */
+ * <rest>``.  With no goal queued (the usual case) this is a shared
+ * ``range(1)``, so the rest runs once at the cost of a call and one
+ * iteration; with goals queued it is the drain generator registered by
+ * clausal.logic.pending, which runs them and yields once per answer.
+ *
+ * A range, not ``(None,)``: a frame suspended inside <rest> keeps the
+ * loop's iterator alive, and a deep recursion through goal boundaries holds
+ * one per boundary per frame.  A tuple iterator is GC-tracked, so every
+ * collection walked them all; a range iterator is not (and is smaller).
+ * Every consumer only iterates the value. */
+static PyObject *g_once_range = NULL;     /* range(1) */
 
 static PyObject *
 py_pending_or_once(PyObject *Py_UNUSED(mod), PyObject *trail)
 {
     if (Py_TYPE(trail) == &TrailType && ((TrailObject *)trail)->pending == NULL)
-        return Py_NewRef(g_once_tuple);
+        return Py_NewRef(g_once_range);
     if (Py_TYPE(trail) != &TrailType) {
         PyErr_SetString(PyExc_TypeError, "pending_or_once() expects a Trail");
         return NULL;
@@ -4097,7 +4103,7 @@ py_pending_or_once(PyObject *Py_UNUSED(mod), PyObject *trail)
 static PyObject *g_empty_tuple = NULL;    /* () */
 
 /* unify_iter(t1, t2, trail): unify, as the iterable a goal boundary loops
- * over -- () on failure, (None,) on success with no goal woken, the drain
+ * over -- () on failure, range(1) on success with no goal woken, the drain
  * generator when the unification woke goals.  Compiled code writes
  * ``for _ in unify_iter(a, b, trail): <rest>`` (one call, not two). */
 static PyObject *
@@ -4135,8 +4141,9 @@ py_set_pending_drain(PyObject *Py_UNUSED(mod), PyObject *fn)
 static PyMethodDef module_methods[] = {
     {"pending_or_once", py_pending_or_once, METH_O,
      "pending_or_once(trail) -> iterable\n\n"
-     "(None,) when no goal is queued on *trail*; otherwise a generator that\n"
-     "runs the queued goals and yields once per answer."},
+     "An iterable of one item (range(1)) when no goal is queued on *trail*;\n"
+     "otherwise a generator that runs the queued goals and yields once per\n"
+     "answer.  Only iterate it."},
     {"unify_iter", (PyCFunction)(void (*)(void))py_unify_iter, METH_FASTCALL,
      "unify_iter(t1, t2, trail) -> iterable\n\n"
      "Unify; () on failure, else pending_or_once(trail)."},
@@ -4291,9 +4298,9 @@ static struct PyModuleDef moduledef = {
 PyMODINIT_FUNC
 PyInit__variables(void)
 {
-    if (!g_once_tuple) {
-        g_once_tuple = PyTuple_Pack(1, Py_None);
-        if (!g_once_tuple) return NULL;
+    if (!g_once_range) {
+        g_once_range = PyObject_CallFunction((PyObject *)&PyRange_Type, "i", 1);
+        if (!g_once_range) return NULL;
     }
     if (!g_empty_tuple) {
         g_empty_tuple = PyTuple_New(0);

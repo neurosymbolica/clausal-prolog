@@ -186,3 +186,26 @@ def test_a_woken_goal_that_fails_fails_the_catch_goal(mod):
 ])
 def test_a_scoped_goal_runs_what_it_woke_inside_the_scope(mod, goal, expected):
     assert _answers(mod, goal) == expected
+
+
+# ── The goal boundary with nothing queued holds no GC-tracked object ───────
+#
+# A frame suspended inside a continuation keeps the boundary's iterator
+# alive: a deep recursion through comparisons held one per comparison per
+# frame, and a tuple iterator is GC-tracked, so every collection walked
+# them all.  With nothing queued the boundary now iterates a shared range.
+
+import gc  # noqa: E402
+
+from clausal.logic.variables import Trail, pending_or_once, unify_iter  # noqa: E402
+
+
+def test_an_empty_boundary_runs_its_continuation_once():
+    assert len(list(pending_or_once(Trail()))) == 1
+    assert len(list(unify_iter(Var(), 1, Trail()))) == 1
+    assert list(unify_iter(1, 2, Trail())) == []
+
+
+def test_an_empty_boundary_iterator_is_not_gc_tracked():
+    assert not gc.is_tracked(iter(pending_or_once(Trail())))
+    assert not gc.is_tracked(iter(unify_iter(Var(), 1, Trail())))
