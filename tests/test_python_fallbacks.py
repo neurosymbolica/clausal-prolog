@@ -1039,7 +1039,9 @@ class TestListUnifyCharTwinParity:
             target, before, star = Var(), Var(), Var()
             trail = Trail()
             unify(before, ("ab",), trail)       # arity-0 cell, but not a char
-            unify(star, "c", trail)
+            # The star holds the LIST [c]: a bare str is an atom, and a star
+            # bound to an atom is an improper tail (D50), not an element.
+            unify(star, ["c"], trail)
             assert impl(target, [before], star, [], trail) is True
             got = deref(target)
             assert isinstance(got, list), f"{impl} promoted {got!r}"
