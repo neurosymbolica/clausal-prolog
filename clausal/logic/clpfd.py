@@ -398,19 +398,15 @@ def _narrow(var: Var, new_domain: Domain, trail: Trail, queue: deque) -> bool:
                       domain_max(new_domain), trail):
         return False
 
-    # Keep Q bounds in sync if present (mirrors REAL sync above)
-    from clausal.logic.clpq import Q_KEY, QVar  # noqa: PLC0415
-    q_state = get_attr(var, Q_KEY)
-    if q_state is not None:
-        fd_lo_q = Fraction(domain_min(new_domain))
-        fd_hi_q = Fraction(domain_max(new_domain))
-        new_q_lo = max(q_state.lo, fd_lo_q) if q_state.lo is not None else fd_lo_q
-        new_q_hi = min(q_state.hi, fd_hi_q) if q_state.hi is not None else fd_hi_q
-        if new_q_lo > new_q_hi:
+    # Keep Q bounds in sync if present (mirrors REAL sync above).  The
+    # selected CLP(Q) solver owns the sync (CLAUSAL_CLPQ): the port queues
+    # its post while trail.defer is set, since this runs inside clpfd's
+    # propagation and so inside a hook (clpq/holzbaur.py, ruling R28).
+    from clausal.logic.clpq import Q_KEY, sync_fd_bounds  # noqa: PLC0415
+    if get_attr(var, Q_KEY) is not None:
+        if not sync_fd_bounds(var, domain_min(new_domain),
+                              domain_max(new_domain), trail):
             return False
-        if new_q_lo != q_state.lo or new_q_hi != q_state.hi:
-            updated_q = QVar(new_q_lo, new_q_hi, q_state.tab_id)
-            put_attr(var, Q_KEY, updated_q, trail)
 
     # Singleton → bind variable
     val = domain_singleton(new_domain)

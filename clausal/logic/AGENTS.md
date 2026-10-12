@@ -59,7 +59,7 @@ repo-root `tests/`. Up: [../AGENTS.md](../AGENTS.md)
 | `clpfd.py` | CLP(Z) solver | `_clpfd_core.c` (domains), `_clpfd_propagate.c` (propagation); both include `_clpfd_domain_ops.h` |
 | `clpz_surface.py` | Scryer-named `in/2`, `ins/2`, `labeling/2`, reified connectives over `clpfd` | |
 | `clpb.py` | CLP(B) via BDDs | `_clpb_core.c` |
-| `clpq.py` / `clpr.py` | CLP(Q) (exact simplex) / CLP(R) (intervals) | `clpr`: `_clpr_core.c` |
+| `clpq/` / `clpr.py` | CLP(Q): `legacy.py` (exact simplex, the default) or the clp(q,r) 1.3.3 port behind `holzbaur.py` (`CLAUSAL_CLPQ=holzbaur`) / CLP(R) (intervals) | `clpr`: `_clpr_core.c` |
 | `clpz3.py`, `clportools*.py`, `clpsat.py` | Optional Z3, OR-Tools (CP-SAT, LP, graph, routing), PySAT backends | |
 | `units_clp.py`, `units_constraint.py`, `_units_flag.py` | Physical-units side channel around CLP | |
 | `tabling.py` | SLG tabling and WFS (delayed negation, `_naf_tabled`) | `_tabling_core.c` |

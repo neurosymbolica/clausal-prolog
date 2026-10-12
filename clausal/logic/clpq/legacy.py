@@ -951,6 +951,23 @@ def _promote_fd_to_q(var: Var, trail: Trail) -> None:
     put_attr(var, Q_KEY, QVar(lo, hi, tab_id), trail)
 
 
+def sync_fd_bounds(var: Var, lo: Any, hi: Any, trail: Trail) -> bool:
+    """clpfd narrowed the domain of *var*, which has a Q attribute, to
+    ``[lo, hi]``: keep the QVar bounds in sync.  False when they cross."""
+    q_state = get_attr(var, Q_KEY)
+    if q_state is None:
+        return True
+    fd_lo_q = Fraction(lo)
+    fd_hi_q = Fraction(hi)
+    new_q_lo = max(q_state.lo, fd_lo_q) if q_state.lo is not None else fd_lo_q
+    new_q_hi = min(q_state.hi, fd_hi_q) if q_state.hi is not None else fd_hi_q
+    if new_q_lo > new_q_hi:
+        return False
+    if new_q_lo != q_state.lo or new_q_hi != q_state.hi:
+        put_attr(var, Q_KEY, QVar(new_q_lo, new_q_hi, q_state.tab_id), trail)
+    return True
+
+
 def _ensure_q_for_expr(expr: Any, trail: Trail) -> None:
     """Ensure all Vars in *expr* have Q-domain attributes.
 
@@ -2094,6 +2111,13 @@ def clpq_constraint_block(constraints: Any, trail: Trail) -> bool:
         if not _post_q_constraint_node(elem, trail):
             return False
     return True
+
+
+def clpq_constraint_answers(constraints: Any, trail: Trail):
+    """:func:`clpq_constraint_block` as the generator the ``clpq.rational``
+    builtin iterates: one answer or none."""
+    if clpq_constraint_block(constraints, trail):
+        yield None
 
 
 def _post_q_constraint_node(node: Any, trail: Trail) -> bool:

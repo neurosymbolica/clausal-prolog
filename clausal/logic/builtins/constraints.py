@@ -326,10 +326,10 @@ def _inf__2(expr, result, trail, k):
 
 @_builtin("clpq.rational", 1)
 def _clpq_mod_rational(constraints, trail, k):
-    """clpq.rational((constraints)) — post rational constraints."""
-    from clausal.logic.clpq import clpq_constraint_block
-    if clpq_constraint_block(constraints, trail):
-        yield None
+    """clpq.rational((constraints)) — post rational constraints.  One answer
+    per branch of a ``;`` the block holds (the port, ruling R18)."""
+    from clausal.logic.clpq import clpq_constraint_answers
+    yield from clpq_constraint_answers(constraints, trail)
 
 @_builtin("clpq.maximize", 2)
 def _clpq_mod_maximize(expr, result, trail, k):

@@ -189,9 +189,11 @@ def _refuse_bypassed(v, context: str) -> None:
 
 
 def _has_solver_state(v) -> bool:
-    # FD_KEY / Q_KEY / REAL_KEY, spelled literally to keep this module free
-    # of solver imports; tests/test_units_clp.py pins the spellings agree.
+    # FD_KEY / Q_KEY (legacy's "clpq", the port's CLPQ_KEY "clpq_holzbaur")
+    # / REAL_KEY, spelled literally to keep this module free of solver
+    # imports; tests/test_units_clp.py pins the spellings agree.
     return (get_attr(v, "fd") is not None or get_attr(v, "clpq") is not None
+            or get_attr(v, "clpq_holzbaur") is not None
             or get_attr(v, "real") is not None)
 
 

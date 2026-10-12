@@ -77,7 +77,7 @@ clausal.logic                core logic engine
 ├── trampoline.py            constant-stack driver (C twin + _trampoline_py.py)
 ├── seam.py / solve.py       goal-position seam; solve/call/once/query_wfs
 ├── builtins/                built-in predicates (lists, arithmetic, io, ...)
-├── clpfd.py, clpq.py, clpr.py, clpb.py   constraint solvers
+├── clpfd.py, clpq/, clpr.py, clpb.py    constraint solvers
 └── tabling.py               SLG resolution + well-founded semantics
 clausal.modules.py           library wrappers (re, logging, datetime, sqlite, ...)
 packages/clausal-trealla     embedded Trealla Prolog engine (optional)

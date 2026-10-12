@@ -30,9 +30,6 @@ def q(numerator, denominator=1):
     return make_rational(numerator, denominator)
 
 
-# clausal_answers(solver="holzbaur") runs the CLI, where the switch to the
-# port is wired in Task 14; until then it would run the legacy solver.
-needs_the_switch = pytest.mark.skip(reason="needs Task 14")
 
 
 # ---------------------------------------------------------------- helpers
@@ -677,7 +674,6 @@ range(S, I) :- {X0 >= 0, X0 =< 1}, chain(X0, X60, 60), sup(X60, S), inf(X60, I).
 """
 
 
-@needs_the_switch
 @pytest.mark.parametrize("goal, variables, expected", [
     ("fixed(X)", ["X"], {"X": _chain_value(1)}),
     ("range(S, I)", ["S", "I"], {"S": _chain_value(1), "I": _chain_value(0)}),
@@ -702,7 +698,6 @@ def test_a_strict_bound_met_by_a_non_strict_one_fails(normal_form_split):
     assert _upper(trail, x, 0, False) is False
 
 
-@needs_the_switch
 def test_a_strict_bound_met_by_a_non_strict_one_fails_end_to_end():
     # The same on the oracle and through nf.pl.
     from tests.clpq_oracle import clausal_answers, oracle_answers

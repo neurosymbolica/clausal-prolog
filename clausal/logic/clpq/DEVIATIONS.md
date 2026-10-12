@@ -212,7 +212,12 @@ gave `[W >= 3/2, W =< 20]` and Q = 1.  A `post`, `inf`, `entailed` or
 `bb_inf` from a hook body was wrong already at 800048a2.  The hooks the
 engine registers keep the rule: `freeze/2` and `when/2` queue their goals,
 and dif, clpfd, clpb, clpr, the two units keys, the legacy clpq key and
-COMPONENT_KEY call no entry point.  The tripwire
+COMPONENT_KEY call no entry point.  clpfd's calls into CLP(Q) are calls,
+not registrations, and some run inside a hook (clpfd's propagation in its
+own hook, its reified comparisons, the units hook): under
+`CLAUSAL_CLPQ=holzbaur` the adapter queues such a post while a component
+it reads holds an unhooked binding (ruling R28, `holzbaur.py`'s docstring,
+`test_a_comparison_from_clpfd_inside_a_hook_is_queued`).  The tripwire
 `test_the_registered_attribute_hooks_are_the_known_set` fails when a hook
 is registered or removed, and says to check this rule before extending
 its list.  It scans the source under `clausal/` for
@@ -682,6 +687,26 @@ backtracking calls `resume_constraint` with the same state until it
 returns False, as a generator over the engine's backtracking.  It must not
 call `post_constraint` for a constraint that holds `;`.
 
+The precondition of `resume_constraint`: the trail must not have been
+undone below the post since the answer was given.  Each choice point holds
+the trail mark taken where its `;` was met, after the conjuncts before
+it; `resume_constraint` undoes to that mark and runs the other branch.
+Undone below the post first, the mark is past the end of the trail, the
+undo does nothing, and the other branch runs without the conjuncts before
+the `;` (and on a store that may have been changed since).  The adapter
+(`holzbaur.clpq_constraint_answers`, behind the `clpq.rational` builtin)
+keeps it: a builtin's generator undoes its own bindings between answers,
+the engine does not, so when the engine asks for the next answer the
+trail is where the previous answer left it, above the post.  After the
+last answer the generator undoes to the mark it took before posting.
+`{X + Y = 4, (X = 1 ; X = 3)}` answers `X = 1, Y = 3` then `X = 3, Y = 1`,
+as Scryer does
+(`test_a_block_with_a_disjunction_gives_every_answer`,
+`test_a_disjunction_in_a_block_answers_once_per_branch` under the engine,
+`test_the_disjunction_answers_are_the_oracle_s`).  The `.pl` front end
+and the seam's set goal accept comparisons only, so today a `;` reaches the
+adapter only from a goal built at run time.
+
 ## D13: an nf.pl binding of a stored variable raised until Task 11 (resolved)
 
 Resolved by Task 11: the interim error is gone, and nf.pl's bindings go
@@ -908,3 +933,33 @@ on that variable, and in the fuzz the pending queue had the same length
 before and after each check (Task 8's inf/sup is the same case).
 
 Not checked against SICStus: MORNING-SICSTUS (7) stays open.
+
+## D20: the legacy API in front of the port (`holzbaur.py`)
+
+`CLAUSAL_CLPQ=holzbaur` puts the port behind legacy's names
+(`clausal/logic/clpq/__init__.py`, Task 14).  Where the adapter answers
+differently from 1.3.3 itself:
+
+- A variable against a number in an equation (`q_eq(X, N)`, a block's
+  `X == N`) is the unification `X = N` with the number as written, as
+  legacy's fast path does, so a Decimal keeps its scale: `X == 2.50`
+  binds `Decimal('2.50')`.  nf.pl's `{X = N}` would bind the rational
+  5/2.  The two are equal numbers; the scale is Clausal's (ruled
+  2026-09-17) (`test_a_decimal_keeps_its_scale_through_an_equation`).
+- A variable that dump/3 keeps and that is not a target (the slack of a
+  disequation) is named `_Q1`, `_Q2`, ... in `dump_q`/`residual_q`, as
+  legacy names its internal variables, where 1.3.3 prints a fresh
+  variable (`_A`).  Each constraint is written in braces (`{X >= 2}`), as
+  the `-g` printer writes it (D14's `wrap/2`).
+- `in_q(X)` with no bound makes X a linear variable without bounds
+  (bv.pl's `var_intern/2`, which ordering/1 uses), so X carries CLPQ_KEY
+  state and clpfd sends its later comparisons on X to CLP(Q).  1.3.3 has no
+  `in_q`.
+- An FD variable in a CLP(Q) post first gets its FD bounds as `{Lo =< X,
+  X =< Hi}` (legacy's promotion, ruling R4), and clpfd's narrowing of a
+  variable that has CLPQ_KEY state posts the new bounds
+  (`sync_fd_bounds`).  clpfd's C propagation narrows without that call
+  (its `c_narrow` syncs CLP(R) only), so with the C extension loaded, as
+  it is in every build, a narrowing reaches neither solver's store; the
+  Python twin's does (`test_fd_to_q_bare_and_under_a_driver_against_legacy_and_the_oracle`).
+

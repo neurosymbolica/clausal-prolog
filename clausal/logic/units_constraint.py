@@ -92,6 +92,7 @@ def constrain_var_dims(var, dims: dict, trail: Trail) -> bool:
 
 def _has_bare_solver_state(v) -> bool:
     return (get_attr(v, "fd") is not None or get_attr(v, "clpq") is not None
+            or get_attr(v, "clpq_holzbaur") is not None
             or get_attr(v, "real") is not None)
 
 
