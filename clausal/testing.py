@@ -936,9 +936,11 @@ _BUILTIN_TESTS = frozenset({
 
 
 def _is_builtin_test(goal, logic_module) -> bool:
+    """True for a call of an ISO comparison/unification in a NATIVE report
+    (seam and translator reports keep their established diagnosis)."""
     from clausal.terms import Call, LoadName  # noqa: PLC0415
 
-    if not isinstance(goal, Call) or not isinstance(goal.func, LoadName):
+    if not _NATIVE_REPORT.get() or not isinstance(goal, Call) or not isinstance(goal.func, LoadName):
         return False
     name = str(goal.func.name)
     if name not in _BUILTIN_TESTS or len(goal.args or ()) != 2:

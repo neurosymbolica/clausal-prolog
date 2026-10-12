@@ -1,0 +1,44 @@
+.FFFFFF                                                                  [100%]
+=================================== FAILURES ===================================
+________________________ test('double of two is five') _________________________
+test('double of two is five') failed (no solutions)
+    goal 2 of 2 failed:
+      Y == 5
+    bindings at failure: Y = 4
+    no solution (this conjunct is not a predicate call, so there is no nearest solution to show)
+________________________________ test('raises') ________________________________
+test('raises') raised: Uncaught logic exception: error(type_error(evaluable,foo/0),eval_/2)
+    goal 1 of 2 raised:
+      eval_(foo + 1, X)
+      LogicException: Uncaught logic exception: error(type_error(evaluable,foo/0),eval_/2)
+_______________________ test('double of three is seven') _______________________
+test('double of three is seven') failed (no solutions)
+    goal 1 of 1 failed:
+      double(3, 7)
+    bindings at failure: (none — goal 1 is the first goal)
+    the predicate DID have a solution, which did not unify (argument 2 differs):
+      double(3, 6)
+_______________________ test('no double of two is four') _______________________
+test('no double of two is four', fail) succeeded (its goal has a solution; a `fail` test passes only when it has none)
+___________________________ test('a colour is blue') ___________________________
+test('a colour is blue') failed (no solutions)
+    goal 2 of 2 failed:
+      C == blue
+    bindings at failure: C = red
+    no solution (this conjunct is not a predicate call, so there is no nearest solution to show)
+____________________________ test('five is small') _____________________________
+test('five is small') failed (no solutions)
+    goal 1 of 1 failed:
+      small(5)
+    bindings at failure: (none — goal 1 is the first goal)
+    the predicate has solutions with argument 1 freed, but none binds argument 1 to a concrete value; no clause body survives:
+      arith.seam:5  N < 3
+          N = 5
+=========================== short test summary info ============================
+FAILED arith.seam::double of two is five - test('double of two is five') fail...
+FAILED arith.seam::raises - test('raises') raised: Uncaught logic exception: ...
+FAILED arith.seam::double of three is seven - test('double of three is seven'...
+FAILED arith.seam::no double of two is four - test('no double of two is four'...
+FAILED arith.seam::a colour is blue - test('a colour is blue') failed (no sol...
+FAILED arith.seam::five is small - test('five is small') failed (no solutions)
+6 failed, 1 passed in Xs

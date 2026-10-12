@@ -29,6 +29,7 @@ from clausal._suffixes import SEAM_SUFFIX, SOURCE_SUFFIXES
 from clausal.testing import (
     TestCollectionError,
     _load_error_line,
+    _native_positions,
     collect_tests,
     load_clausal_module,
     opts_out_of_collection,
@@ -149,7 +150,7 @@ class ClausalFile(pytest.File):
             yield ClausalItem.from_parent(self, name=desc, mod=mod)
 
 
-def _with_diagnosis(message: str, result, path=None) -> str:
+def _with_diagnosis(message: str, result, path=None, mod=None) -> str:
     """Attach a goal-level diagnosis under a plugin failure *message*.
 
     Appended, never substituted: the headline is what names the test in a CI
@@ -159,16 +160,16 @@ def _with_diagnosis(message: str, result, path=None) -> str:
     format.  A diagnostic that could attribute nothing renders no lines at
     all, and an empty block under a headline reads as a broken report — so in
     that case the message is left as it was, but for the ``at file:N`` line
-    when the result has a source line (:func:`_at_line`).
+    of a natively loaded file (:func:`_at_line`).
     """
     lines = result.diagnostic.lines() if result.diagnostic is not None else []
-    return "\n".join([message, *_at_line(result, path), *lines])
+    return "\n".join([message, *_at_line(result, path, mod), *lines])
 
 
-def _at_line(result, path) -> list[str]:
-    """``    at file:N`` under a headline, when the result has a source line
-    (none for a translated ``.pl``: its positions are of the translation)."""
-    if not result.line or path is None:
+def _at_line(result, path, mod=None) -> list[str]:
+    """``    at file:N`` under a headline, for a file the NATIVE front end
+    loaded (slice 7).  Seam and translator reports are unchanged."""
+    if not result.line or path is None or not _native_positions(mod, path):
         return []
     return [f"    at {Path(path).name}:{result.line}"]
 
@@ -201,18 +202,18 @@ class ClausalItem(pytest.Item):
                 raise ClausalTestFailure(
                     _with_diagnosis(
                         f"{_spelled(self.name, result)} raised: {result.error}",
-                        result, self.path,
+                        result, self.path, self._mod,
                     )
                 ) from result.error
             if result.negative:
                 raise ClausalTestFailure("\n".join([
                     f"test({self.name!r}, fail) succeeded (its goal has a "
                     "solution; a `fail` test passes only when it has none)",
-                    *_at_line(result, self.path)]))
+                    *_at_line(result, self.path, self._mod)]))
             raise ClausalTestFailure(
                 _with_diagnosis(
                     f"test({self.name!r}) failed (no solutions)", result,
-                    self.path,
+                    self.path, self._mod,
                 )
             )
 

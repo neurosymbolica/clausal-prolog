@@ -1,0 +1,39 @@
+  PASS  arith.seam::double of two is four
+  FAIL  arith.seam::double of two is five
+  FAIL  arith.seam::raises  (Uncaught logic exception: error(type_error(evaluable,foo/0),eval_/2))
+  FAIL  arith.seam::double of three is seven
+  FAIL  arith.seam::no double of two is four
+  FAIL  arith.seam::a colour is blue
+  FAIL  arith.seam::five is small
+
+FAILURES:
+  arith.seam:7 :: double of two is five
+    goal 2 of 2 failed:
+      Y == 5
+    bindings at failure: Y = 4
+    no solution (this conjunct is not a predicate call, so there is no nearest solution to show)
+  arith.seam:8 :: raises — Uncaught logic exception: error(type_error(evaluable,foo/0),eval_/2)
+    goal 1 of 2 raised:
+      eval_(foo + 1, X)
+      LogicException: Uncaught logic exception: error(type_error(evaluable,foo/0),eval_/2)
+  arith.seam:9 :: double of three is seven
+    goal 1 of 1 failed:
+      double(3, 7)
+    bindings at failure: (none — goal 1 is the first goal)
+    the predicate DID have a solution, which did not unify (argument 2 differs):
+      double(3, 6)
+  arith.seam :: no double of two is four — test(..., fail) succeeded: its goal has a solution, and a `fail` test passes only when it has none
+  arith.seam:11 :: a colour is blue
+    goal 2 of 2 failed:
+      C == blue
+    bindings at failure: C = red
+    no solution (this conjunct is not a predicate call, so there is no nearest solution to show)
+  arith.seam:12 :: five is small
+    goal 1 of 1 failed:
+      small(5)
+    bindings at failure: (none — goal 1 is the first goal)
+    the predicate has solutions with argument 1 freed, but none binds argument 1 to a concrete value; no clause body survives:
+      arith.seam:5  N < 3
+          N = 5
+
+7 tests: 1 passed, 6 failed [FAILED]

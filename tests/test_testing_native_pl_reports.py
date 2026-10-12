@@ -181,16 +181,50 @@ def test_collection_error_names_its_line(native, capsys, monkeypatch,
     assert "opt.pl:3 :: <collect>" in out, out
 
 
-def test_translator_report_is_unchanged(monkeypatch, capsys, tmp_path):
-    """Negative control: the translator keeps no source map, so it reports
-    no line and keeps its note."""
-    monkeypatch.delenv("CLAUSAL_PL_FRONTEND", raising=False)
-    (tmp_path / "arith.pl").write_text(FAILS_PL)
-    rc, out = _cli(capsys, monkeypatch, tmp_path, ["arith.pl"])
-    assert rc == EXIT_TESTS_FAILED
-    assert "arith.pl :: double of two is five" in out, out
-    assert "arith.pl :: no double of two is four" in out, out
-    assert "translated to seam source before it ran" in out, out
+#: The seam twin of FAILS_PL, for the unchanged-output controls.
+FAILS_SEAM = """\
+-private([red, green, blue, foo])
+double(X, Y) <- eval_(X * 2, Y)
+colour(red),
+colour(green),
+small(N) <- (N < 3)
+test("double of two is four") <- double(2, 4)
+test("double of two is five") <- (double(2, Y), Y == 5)
+test("raises") <- (eval_(foo + 1, X), X > 0)
+test("double of three is seven") <- double(3, 7)
+test("no double of two is four", fail) <- double(2, 4)
+test("a colour is blue") <- (colour(C), C == blue)
+test("five is small") <- small(5)
+"""
+
+
+@pytest.mark.parametrize("runner", ["cli", "plugin"])
+@pytest.mark.parametrize("name,text", [("arith.pl", FAILS_PL),
+                                       ("arith.seam", FAILS_SEAM)],
+                         ids=["pl", "seam"])
+def test_translator_and_seam_reports_are_unchanged(runner, name, text,
+                                                   tmp_path):
+    """Negative control, EXACT: the translator (no source map) and the seam
+    report byte-for-byte as they did on 7c0379db, before this slice.  The
+    goldens ``runner_unchanged_*.txt`` were recorded from that commit and
+    are never regenerated from this one."""
+    import re
+    (tmp_path / name).write_text(text)
+    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
+    env.pop("CLAUSAL_PL_FRONTEND", None)              # translator for .pl
+    if runner == "cli":
+        argv = [sys.executable, "-m", "clausal.testing", "-v", name]
+    else:
+        (tmp_path / "conftest.py").write_text(
+            _SHIM.format(path=str(REPO_ROOT / "conftest.py")))
+        argv = [sys.executable, "-m", "pytest", "-q", "-rfE",
+                "-p", "no:cacheprovider", name]
+    proc = subprocess.run(argv, capture_output=True, text=True,
+                          cwd=tmp_path, env=env)
+    out = re.sub(r"in [0-9.]+s", "in Xs", proc.stdout + proc.stderr)
+    suffix = "pl" if name.endswith(".pl") else "seam"
+    golden = GOLDEN / f"runner_unchanged_{runner}_{suffix}.txt"
+    assert out == golden.read_text(), out
 
 
 # ── an empty scan fails, on the native path too ──────────────────────────────
