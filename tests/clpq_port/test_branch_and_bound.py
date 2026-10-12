@@ -277,8 +277,8 @@ def test_the_incumbent_prunes_worse_branches():
 
 
 def test_round_and_floor_and_ceiling_follow_arith_pl():
-    # arith.pl: SICStus // truncates; round_rational/4 rounds half away
-    # from zero, except that -1/2 gives 1 (I = 0 >= 0).
+    # arith.pl: SICStus // truncates.  round_rational rounds half away
+    # from zero, where 1.3.3's roundq/4 gives 1 for -1/2 (DEVIATIONS.md D18).
     def q(numerator, denominator=1):
         return arithmetic.make_rational(numerator, denominator)
     assert arithmetic.floor_rational(q(-3, 2)) == q(-2)
@@ -289,9 +289,47 @@ def test_round_and_floor_and_ceiling_follow_arith_pl():
     assert arithmetic.truncate_rational(q(-3, 2)) == q(-1)
     assert arithmetic.round_rational(q(5, 2)) == q(3)
     assert arithmetic.round_rational(q(-5, 2)) == q(-3)
-    assert arithmetic.round_rational(q(-1, 2)) == q(1)
+    assert arithmetic.round_rational(q(-1, 2)) == q(-1)
     assert arithmetic.round_rational(q(7, 5)) == q(1)
     assert arithmetic.round_rational(q(-7, 5)) == q(-1)
+
+
+@pytest.mark.parametrize("numerator, denominator, rounded", [
+    (-3, 2, -2), (-1, 1, -1), (-3, 4, -1), (-1, 2, -1), (-1, 4, 0),
+    (0, 1, 0), (1, 2, 1), (3, 2, 2)])
+def test_round_rational_is_nearest_with_half_away_from_zero(
+        numerator, denominator, rounded):
+    # DEVIATIONS.md D18: ISO round/1.  1.3.3's roundq/4 gives 1 on
+    # (-1, -1/2] (I = N // D is 0 there, and I >= 0 adds one).
+    value = arithmetic.make_rational(numerator, denominator)
+    assert arithmetic.round_rational(value) == arithmetic.make_rational(rounded, 1)
+
+
+def test_the_vertex_rounds_a_value_in_minus_one_to_minus_a_half_down():
+    # {X >= -1, Y >= 0, X + Y >= -3/4}, Eps 1/2: the relaxed optimum has
+    # X = -3/4, within Eps of -1, so it is a leaf; its vertex is
+    # round(-3/4) = -1, as Scryer gives (test_bb_inf_answers_as_the_oracle).
+    trail = Trail()
+    x, y, infimum, vertex = Var(), Var(), Var(), Var()
+    assert _post(trail, (">=", x, -1), (">=", y, 0),
+                 (">=", ("+", x, y), Fraction(-3, 4)))
+    assert bb.bb_inf([x], ("+", x, ("*", 2, y)), infimum, trail, [vertex],
+                     Fraction(1, 2))
+    assert _value(infimum) == Fraction(-3, 4)
+    assert deref(vertex) == -1
+
+
+def test_a_function_in_the_list_raises_a_type_error():
+    # branch_and_bound_intern/4 clause 3 takes sin(X)'s skeleton as V, and
+    # branch_and_bound_narrow_lower's inf reads it as an expression; Scryer:
+    # error(type_error(expression, nf([v(1,[_A^1])],_B)), ...).
+    trail = Trail()
+    x = Var()
+    with pytest.raises(LogicException) as raised:
+        bb.bb_inf([("sin", x)], x, Var(), trail)
+    error = raised.value.term
+    assert error[0] == "error"
+    assert error[1][0] == "type_error" and error[1][1] == "expression"
 
 
 def test_vertex_value_reads_the_right_hand_side():
@@ -415,19 +453,135 @@ def test_a_delayed_bb_inf_shows_in_the_residual():
                         "branch_and_bound_infimum_internal([X], _I1, 1/1000, I, _I2)"]
 
 
-def test_a_nested_bb_inf_keeps_the_outer_incumbent():
+# ---------------------------------------------------------------- goals the search wakes (R24)
+
+def _start(mode):
+    trail = Trail()
+    trail.defer = mode == "driver"
+    return trail
+
+
+def _post_and_run(trail, *constraints):
+    return _post(trail, *constraints) and run_first(trail)
+
+
+@pytest.mark.parametrize("mode", ["bare", "driver"])
+def test_a_goal_woken_by_narrowing_runs_in_it(mode):
+    # Narrowing posts X >= 0 and X =< 0, which bind X = 0 and wake
+    # X*Y = 1, which fails, so bb_inf fails, as on Scryer.  Under a driver
+    # the woken goal is queued; the search runs it after the post.
+    trail = _start(mode)
+    try:
+        x, y = Var(), Var()
+        assert _post_and_run(trail, (">=", x, Fraction(-1, 2)),
+                             ("=<", x, Fraction(1, 2)), ("=", ("*", x, y), 1))
+        assert not bb.bb_inf([x], x, Var(), trail)
+    finally:
+        trail.defer = False
+
+
+@pytest.mark.parametrize("mode", ["bare", "driver"])
+def test_a_goal_woken_by_a_branch_runs_in_it(mode):
+    # The relaxed optimum is X = 1/3, Z = 0.  The branch X =< 0 binds
+    # X = 0 and wakes X*W = 1, which fails, so that branch is pruned; the
+    # branch X >= 1 gives Z = 2/3, as on Scryer.  Without the woken goal
+    # the answer would be Z = 1/3 at X = 0.
+    trail = _start(mode)
+    try:
+        x, z, w, infimum, vertex = Var(), Var(), Var(), Var(), Var()
+        assert _post_and_run(trail, (">=", x, 0), ("=<", x, 1),
+                             (">=", z, ("-", Fraction(1, 3), x)),
+                             (">=", z, ("-", x, Fraction(1, 3))),
+                             ("=", ("*", x, w), 1))
+        assert bb.bb_inf([x], z, infimum, trail, [vertex], 0)
+        assert run_first(trail)
+        assert _value(infimum) == Fraction(2, 3) and deref(vertex) == 1
+        assert is_var(deref(x)) and is_var(deref(w))
+    finally:
+        trail.defer = False
+
+
+@pytest.mark.parametrize("mode", ["bare", "driver"])
+def test_a_goal_woken_by_the_narrowing_s_entailed_runs_in_it(mode):
+    # {X >= 0, X =< 1, X*Y = 1}: branch_and_bound_narrow_lower asks
+    # entailed(X > 0), whose probe {X =< 0} binds X = 0 and wakes X*Y = 1,
+    # which fails; so it posts X >= 1 and I = 1, as on Scryer.
+    trail = _start(mode)
+    try:
+        x, y, infimum = Var(), Var(), Var()
+        assert _post_and_run(trail, (">=", x, 0), ("=<", x, 1),
+                             ("=", ("*", x, y), 1))
+        assert bb.bb_inf([x], x, infimum, trail)
+        assert run_first(trail)
+        assert _value(infimum) == 1
+    finally:
+        trail.defer = False
+
+
+@pytest.mark.parametrize("mode", ["bare", "driver"])
+def test_a_woken_bb_inf_runs_the_goals_its_search_wakes(mode):
+    # bb_inf waits on Z*K, and K = 1 wakes it from the hook's Later work:
+    # bare, inside run_later's drain, behind its DRAINING marker; under a
+    # driver, from the queue.  Its branch X =< 0 binds X = 0 and wakes
+    # X*W = 1, which fails, so I = 2/3 at X = 1, as on Scryer; with the
+    # woken goal left behind the marker it would be 1/3 at X = 0.
+    trail = _start(mode)
+    try:
+        x, z, w, k, infimum, vertex = Var(), Var(), Var(), Var(), Var(), Var()
+        assert _post_and_run(trail, (">=", x, 0), ("=<", x, 1),
+                             (">=", z, ("-", Fraction(1, 3), x)),
+                             (">=", z, ("-", x, Fraction(1, 3))),
+                             ("=", ("*", x, w), 1))
+        assert bb.bb_inf([x], ("*", z, k), infimum, trail, [vertex], 0)
+        assert is_var(deref(infimum))
+        assert unify(k, 1, trail) and run_first(trail)
+        assert _value(infimum) == Fraction(2, 3) and deref(vertex) == 1
+    finally:
+        trail.defer = False
+
+
+def test_work_queued_before_bb_inf_stays_queued():
+    # Under a driver, only the work the search queues is the search's:
+    # a goal queued before bb_inf (one that would fail) is neither run nor
+    # dropped by it.
+    trail = _start("driver")
+    try:
+        x, infimum = Var(), Var()
+        assert _post_and_run(trail, (">", x, 0), ("=<", x, 2))
+        runs = []
+
+        def queued():
+            runs.append(1)
+            return ()
+        trail.push_pending(queued)
+        assert bb.bb_inf([x], x, infimum, trail)
+        assert _value(infimum) == 1
+        assert runs == [] and trail.pending == (queued,)
+    finally:
+        trail.defer = False
+
+
+@pytest.mark.parametrize("mode", ["bare", "driver"])
+def test_a_nested_bb_inf_keeps_the_outer_incumbent(mode):
     # DEVIATIONS.md D17.  The inner bb_inf waits on X; the outer search
     # binds X = 0, records the leaf Z = 1, then binds X = 1, which wakes
     # the inner one.  1.3.3's incumbent is one global record that the inner
     # bb_inf deletes, so the outer then records Z = 2 and answers 2 (Scryer
     # does, test_a_nested_bb_inf_differs_from_the_oracle); the port's
     # incumbent is local to each search and the minimum 1 comes back.
-    trail = Trail()
-    w, x, z, inner, outer, vertex = Var(), Var(), Var(), Var(), Var(), Var()
-    assert _post(trail, (">=", w, Fraction(1, 2)))
-    assert bb.bb_inf([w], ("*", w, x), inner, trail)
-    assert _post(trail, (">=", x, 0), ("=<", x, 1),
-                 (">=", ("+", z, ("*", 2, x)), 1),
-                 (">=", ("-", z, ("*", 2, x)), 0))
-    assert bb.bb_inf([x], z, outer, trail, vertex, 0)
-    assert _value(outer) == 1 and deref(vertex) == [0]
+    # Under a driver the inner bb_inf is queued when the outer search
+    # binds X, and the search runs it after that post (R24).
+    trail = _start(mode)
+    try:
+        w, x, z, inner, outer, vertex = Var(), Var(), Var(), Var(), Var(), Var()
+        assert _post_and_run(trail, (">=", w, Fraction(1, 2)))
+        assert bb.bb_inf([w], ("*", w, x), inner, trail)
+        assert _post_and_run(trail, (">=", x, 0), ("=<", x, 1),
+                             (">=", ("+", z, ("*", 2, x)), 1),
+                             (">=", ("-", z, ("*", 2, x)), 0))
+        assert bb.bb_inf([x], z, outer, trail, vertex, 0)
+        assert run_first(trail)
+        assert _value(outer) == 1 and deref(vertex) == [0]
+        assert is_var(deref(inner))
+    finally:
+        trail.defer = False

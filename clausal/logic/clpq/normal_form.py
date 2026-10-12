@@ -65,6 +65,7 @@ from clausal.logic.clpq.linear_forms import (
     MINUS_ONE, add_linear_forms, normalize_scalar)
 from clausal.logic.exceptions import (
     LogicException, instantiation_error, type_error)
+from clausal.logic.pending import run_first
 from clausal.logic.variables import Var, deref, is_var
 from clausal.pythonic_ast import nodes as _nodes
 
@@ -300,11 +301,16 @@ def _normal_form_caught_up(term, trail):
 #
 def entailed(term, trail):
     """nf.pl, entailed/1: `negate(C, Cn), \\+ {Cn}`.  The store is left as
-    it was (test_entailed_leaves_the_store_as_it_was)."""
+    it was (test_entailed_leaves_the_store_as_it_was).  The goals {Cn}
+    wakes run inside the `\\+`, to their first answer; under a driver they
+    are queued, so the queue entailed was entered with is taken first and
+    the undo puts it back (ruling R24,
+    test_entailed_runs_the_goals_its_probe_wakes)."""
     negation = negate(term)
     mark = trail.mark()
     try:
-        return not post_constraint(negation, trail)
+        trail.take_pending()
+        return not (post_constraint(negation, trail) and run_first(trail))
     finally:
         trail.undo(mark)
 

@@ -48,7 +48,7 @@ in `arith.pl`'s file order:
 | `rat_float/3` | `rational_to_float` | A result past the float range raises `evaluation_error(float_overflow)`.  bv.pl's `float(X)` in `decrease_evaluate/2` uses it too. |
 | `float_rat/3,9` | `float_to_rational` | The recursion is a loop; NaN raises `evaluation_error(undefined)` and an infinity `evaluation_error(float_overflow)`. |
 | `arith_normalize/2` (`arith_q.pl`) | `arithmetic_normalize` | Takes an engine number or a rational pair.  A float goes through `float_to_rational`, as `get_rational/3` reads one, so `{X = 0.1}` gives `X = 1/10` (`test_numbers_are_exact_and_a_float_is_its_short_convergent`); Scryer's own `library(clpq)` gives the float's exact binary value instead. |
-| `truncateq/4`, `floorq/4`, `ceilingq/4`, `roundq/4` | `truncate_rational`, `floor_rational`, `ceiling_rational`, `round_rational` (Task 13, for bb.pl) | Take and return a pair.  They keep the `_rational` suffix, so they do not shadow Python's `round`.  SICStus `//` truncates toward zero and Python's floors; `_truncated_quotient` gives SICStus's.  `round_rational` keeps 1.3.3's rule, so `-1/2` rounds to `1` (`test_round_and_floor_and_ceiling_follow_arith_pl`). |
+| `truncateq/4`, `floorq/4`, `ceilingq/4`, `roundq/4` | `truncate_rational`, `floor_rational`, `ceiling_rational`, `round_rational` (Task 13, for bb.pl) | Take and return a pair.  They keep the `_rational` suffix, so they do not shadow Python's `round`.  SICStus `//` truncates toward zero and Python's floors; `_truncated_quotient` gives SICStus's.  `round_rational` rounds to the nearest integer, a half away from zero (ISO `round/1`), where 1.3.3's `roundq/4` gives `1` on (-1, -1/2] (D18). |
 | `integerp/2` (`arith_q.pl`) | `rational_integer` | Returns the int, or None. |
 | `number/1` as nf.pl applies it | `is_number` | An int, Fraction, Decimal or float, not a bool. |
 
@@ -201,7 +201,8 @@ member lists the solver walks.  What the port guarantees (ruling R21):
   the variables of its integer list at entry, and wait_linear those of
   its objective (`test_bb_inf_catches_up_at_entry`: bare, the frozen
   `bb_inf([Q - X], W, I)` would otherwise read `Q - 2`, which
-  `branch_and_bound_intern/4` refuses with an instantiation error).  `dump/3` and `projecting_assert/1` do it (Task 12).
+  `branch_and_bound_intern/4` refuses with an instantiation error).
+  `dump/3` and `projecting_assert/1` do it (Task 12).
 - A solver step reaches no other part of the store: a constraint
   dereferences its variables, and a binding runs that variable's hook,
   which catches up its own components.
@@ -279,6 +280,32 @@ Later work behind it, so a cascade of delayed goals runs in one loop
 goals (the bounds `{L =< Y}`) run before geler.pl's (the delayed goals) for
 the same variable; SICStus's order between the two modules' hooks is not
 checked.
+
+Goals a probe or a search wakes (Task 13 fix round 1, ruling R24).  In
+1.3.3 the goals a `{}/1` wakes run inside it, so `\+ {Cn}` in nf.pl's
+`entailed/1` and every `{}/1` of bb.pl's search (`bb_branch/3`,
+`bb_narrow_lower/1`, `bb_narrow_upper/1`) fail when a woken goal fails.
+In the port such a goal is queued on the trail when a driver owns it, and
+also outside one when the caller itself runs from a hook's Later work
+(behind `DRAINING`).  The probe's and the search's mark and undo then
+dropped the queued goals unrun, so `{X >= -1/2, X =< 1/2, X*Y = 1},
+bb_inf([X], X, I)` answered `I = 0` under a driver where Scryer fails.
+Now `entailed` and `branch_and_bound_infimum_internal` take the queue
+they were entered with (the undo puts it back, so work queued before them
+is neither run nor dropped), and after each post run what it queued to its
+first answer with `clausal.logic.pending.run_first`; no answer fails the
+post, so a branch is pruned and a narrowing fails as a failed post would.
+Checks, bare and under a driver: `test_a_goal_woken_by_narrowing_runs_in_it`,
+`test_a_goal_woken_by_a_branch_runs_in_it`,
+`test_a_goal_woken_by_the_narrowing_s_entailed_runs_in_it`,
+`test_a_woken_bb_inf_runs_the_goals_its_search_wakes` (bare too: before,
+the search's goals waited behind `DRAINING` and were dropped),
+`test_work_queued_before_bb_inf_stays_queued`,
+`test_entailed_runs_the_goals_its_probe_wakes`, and every case of
+`BB_INF_CASES` run both ways (`test_bb_inf_answers_as_the_oracle`).  D17's
+nested case gives the same answer both ways (`I = 1, V = [0]`): the inner
+`bb_inf` runs on each of the four bindings of X (two from the narrowing's
+`entailed` probes, one from each branch), bare and under a driver.
 
 A stand-in left in a row.  Where X is independent and Y's row holds X
 (`{Y = X + Z}, X = Y`), `X - Y` has no X and 1.3.3 calls `solve/1` instead
@@ -720,3 +747,21 @@ X = 0.  Scryer answers `I = 2, VX = 1`, the port `I = 1, VX = 0`
 `bb_inf` both answer 1.  A copy of the port with one shared record in
 place of the local (the Task 13 report) answers 2, as Scryer does.  Not
 checked against SICStus.
+
+## D18: `round_rational` is ISO `round/1`, not 1.3.3's `roundq/4`
+
+arith.pl's `roundq/4` (lines 614-626) takes `I is N//D`, keeps I when
+`|x - I| < 1/2`, and otherwise adds one when `I >= 0` and subtracts one
+when not.  The sign it tests is I's, not x's, and I is 0 for every x in
+(-1, -1/2], so all of them round to `+1`: `round(-1/2) = 1` and
+`round(-3/4) = 1`.  bb.pl's `round_values/2` rounds the vertex with it,
+so a leaf whose value is within Eps of -1 gets the vertex 1.
+
+The port rounds correctly, as for D17 (correctness first, ruling R25):
+the nearest integer, a half away from zero, so `-1/2` and `-3/4` give
+`-1` (`test_round_rational_is_nearest_with_half_away_from_zero`, over
+-3/2, -1, -3/4, -1/2, -1/4, 0, 1/2 and 3/2).  Scryer agrees with the port:
+`{X >= -1, Y >= 0, X + Y >= -3/4}, bb_inf([X], X + 2*Y, I, [V], 1/2)`
+gives `I = -3/4, V = -1` on both (`test_bb_inf_answers_as_the_oracle`,
+`test_the_vertex_rounds_a_value_in_minus_one_to_minus_a_half_down`).
+Not checked against SICStus.

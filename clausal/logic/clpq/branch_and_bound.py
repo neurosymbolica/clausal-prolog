@@ -16,6 +16,18 @@ record.  Here `branch_and_bound_loop` is one loop over an explicit stack of
 the second alternatives, each with its trail mark, and the incumbent is a
 local it returns (test_a_search_deeper_than_1000_branches_needs_no_recursion).
 A predicate that fails returns False or None, as its docstring says.
+
+Goals a post of the search wakes run after that post, to their first
+answer, and their failure fails the post (ruling R24): in 1.3.3 they run
+inside `{}/1`.  The hooks queue them on the trail under a driver
+(`trail.defer`), and also outside one when bb_inf itself runs from a
+hook's Later work (behind run_later's DRAINING marker).  So clause 1 of
+branch_and_bound_infimum_internal takes the queue it was entered with:
+the queue then holds only the search's goals, and its undo puts the outer
+queue back (test_a_goal_woken_by_a_branch_runs_in_it,
+test_a_goal_woken_by_narrowing_runs_in_it,
+test_a_woken_bb_inf_runs_the_goals_its_search_wakes,
+test_work_queued_before_bb_inf_stays_queued).
 """
 from clausal.logic.clpq.arithmetic import (
     ONE, add, arithmetic_normalize, ceiling_rational, compare, floor_rational,
@@ -27,6 +39,7 @@ from clausal.logic.clpq.normal_form import (
     entailed, normal_form, normal_form_constant, post_constraint, repair,
     wait_linear)
 from clausal.logic.exceptions import LogicException, instantiation_error
+from clausal.logic.pending import run_first
 from clausal.logic.variables import Var, deref, is_var, unify
 
 #: bb_inf/3's Eps, the float 0.001, which normal_form/2 reads as 1/1000.
@@ -80,6 +93,7 @@ def branch_and_bound_infimum_internal(normal_form, argument, trail):
     mark = trail.mark()
     incumbent = None                    # ( bb_delete(incumbent, _) -> true ; true )
     try:
+        trail.take_pending()            # the outer queue, back at the undo
         integer_forms = branch_and_bound_intern(integer_variables, epsilon,
                                                 trail)          # clause 1
         if integer_forms is not None:
@@ -167,8 +181,14 @@ def branch_and_bound_branch(variable, upper, lower, alternative, trail):
     """bb.pl, branch_and_bound_branch/3 (bb_branch/3): its clause
     *alternative*, 0 for `{V =< U}` and 1 for `{V >= L}`."""
     if alternative == 0:
-        return post_constraint(("=<", variable, to_number(upper)), trail)
-    return post_constraint((">=", variable, to_number(lower)), trail)
+        return branch_and_bound_post(("=<", variable, to_number(upper)), trail)
+    return branch_and_bound_post((">=", variable, to_number(lower)), trail)
+
+
+def branch_and_bound_post(constraint, trail):
+    """bb.pl's `{}/1` inside the search: post_constraint, then the goals it
+    queued, to their first answer (ruling R24)."""
+    return post_constraint(constraint, trail) and run_first(trail)
 
 
 def vertex_value(vector, trail):
@@ -186,8 +206,6 @@ def right_hand_side_value(term, trail):
     linear form; a non-variable is its own value (a number as a rational)."""
     term = deref(term)
     if not is_var(term):
-        if type(term) is tuple and len(term) == 2 and type(term[0]) is int:
-            return term                     # already a rational
         if is_number(term):
             return arithmetic_normalize(term)
         return term
@@ -272,8 +290,8 @@ def branch_and_bound_narrow_lower(variable, trail):
         return True
     bound = to_number(ceiling_rational(arithmetic_normalize(deref(infimum))))
     if entailed((">", variable, bound), trail):
-        return post_constraint((">=", variable, ("+", bound, 1)), trail)
-    return post_constraint((">=", variable, bound), trail)
+        return branch_and_bound_post((">=", variable, ("+", bound, 1)), trail)
+    return branch_and_bound_post((">=", variable, bound), trail)
 
 
 def branch_and_bound_narrow_upper(variable, trail):
@@ -285,5 +303,5 @@ def branch_and_bound_narrow_upper(variable, trail):
         return True
     bound = to_number(floor_rational(arithmetic_normalize(deref(supremum))))
     if entailed(("<", variable, bound), trail):
-        return post_constraint(("=<", variable, ("-", bound, 1)), trail)
-    return post_constraint(("=<", variable, bound), trail)
+        return branch_and_bound_post(("=<", variable, ("-", bound, 1)), trail)
+    return branch_and_bound_post(("=<", variable, bound), trail)

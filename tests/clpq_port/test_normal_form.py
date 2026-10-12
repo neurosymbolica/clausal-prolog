@@ -578,6 +578,31 @@ def test_entailed_leaves_the_store_as_it_was():
     assert (state_of(x), state_of(y)) == before
 
 
+@pytest.mark.parametrize("mode", ["bare", "driver"])
+def test_entailed_runs_the_goals_its_probe_wakes(mode):
+    # nf.pl's `\+ {Cn}`: the goals {Cn} wakes run inside the \+.  With
+    # {X >= 0, X =< 1, X*Y = 1}, {X =< 0} binds X = 0 and wakes X*Y = 1,
+    # which fails, so X > 0 is entailed (Scryer: yes).  Under a driver the
+    # woken goal is queued; a goal queued before entailed (one that would
+    # fail) is not run by it and stays queued.
+    from clausal.logic.pending import run_first
+    trail = Trail()
+    trail.defer = mode == "driver"
+    try:
+        x, y = Var(), Var()
+        for constraint in ((">=", x, 0), ("=<", x, 1), ("=", ("*", x, y), 1)):
+            assert nf.post_constraint(constraint, trail) and run_first(trail)
+
+        def queued():
+            return ()
+        trail.push_pending(queued)
+        assert nf.entailed((">", x, 0), trail)
+        assert not nf.entailed((">", x, Fraction(1, 2)), trail)
+        assert trail.pending == (queued,) and is_var(deref(x))
+    finally:
+        trail.defer = False
+
+
 def test_negate():
     x = Var()
     assert nf.negate(Lt(left=x, right=1)) == (">=", x, 1)

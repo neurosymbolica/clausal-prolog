@@ -107,6 +107,7 @@ Names with no 1.3.3 atom of their own.  They are not in `rename_map.tsv`.
 | `SOLVER_MODULE` | `normal_form.py` | the atom `clpq` of the `clpq:G` goals `translate_goal//1` builds |
 | `branch_and_bound_intern_one` | `branch_and_bound.py` | `branch_and_bound_intern/4` (`bb_intern/4`; `branch_and_bound_intern` is `/3`) |
 | `DEFAULT_EPSILON` | `branch_and_bound.py` | `bb_inf/3`'s literal `0.001` |
+| `branch_and_bound_post` | `branch_and_bound.py` | the `{}/1` of `branch_and_bound_branch/3` and `bb_narrow_lower/1`, `bb_narrow_upper/1`: a post, then the goals it wakes (ruling R24, DEVIATIONS.md D3) |
 | `holzbaur_hook` | `attribute_hooks.py` | the CLPQ_KEY hook: `itf3.pl`'s `verify_attributes/3` with `geler.pl`'s, then the Later goals |
 | `verify_bound` | `attribute_hooks.py` | `verify_attributes/3` clause 3 after `put_atts(X, forward(Y))`, with `geler.pl`'s part |
 | `bind_queued`, `bind_all` | `attribute_hooks.py` | `export_binding/1` as the hook binds: each binding checked before it is made, from a work list (DEVIATIONS.md D3) |

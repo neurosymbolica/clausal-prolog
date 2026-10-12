@@ -251,14 +251,16 @@ def ceiling_rational(x):
 
 
 def round_rational(x):
-    """arith.pl, round_rational/4 (roundq/4): I = N // D, then I when
-    |x - I| < 1/2, else I + 1 when I >= 0, else I - 1.  So -1/2 gives 1
-    (test_round_and_floor_and_ceiling_follow_arith_pl)."""
+    """arith.pl, round_rational/4 (roundq/4): the nearest integer, a half
+    away from zero, as ISO round/1.  I = N // D, then I when |x - I| < 1/2,
+    else one further from zero by the sign of x.  1.3.3 takes the sign of
+    I, which is 0 on (-1, -1/2], so it gives 1 there (DEVIATIONS.md D18,
+    test_round_rational_is_nearest_with_half_away_from_zero)."""
     whole = _truncated_quotient(x[0], x[1])
     rest = subtract(x, (whole, 1))
     if compare(absolute(rest), (1, 2)) < 0:
         return (whole, 1)
-    if whole >= 0:
+    if x[0] >= 0:
         return (whole + 1, 1)
     return (whole - 1, 1)
 

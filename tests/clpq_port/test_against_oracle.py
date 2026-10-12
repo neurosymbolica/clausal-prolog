@@ -22,8 +22,13 @@ _KNOWN_TEXT_DIFFERENCES.
 
 A binding `A = B` is the engine's unify, so it reaches the store through
 the CLPQ_KEY hook (itf3.pl's verify_attributes/3, Task 11).
+
+With *defer* (port_answers), the driver owns the trail as the engine's
+does (`trail.defer`): hooks queue their goals on the trail, and the driver
+runs them after each goal, with every answer (clausal.logic.pending).
 """
 import ast
+import functools
 import re
 from fractions import Fraction
 
@@ -32,6 +37,7 @@ import pytest
 from clausal.logic.clpq import bounded_simplex as bv
 from clausal.logic.clpq.normal_form import post_constraint
 from clausal.logic.clpq.residual_constraints import residual_strings
+from clausal.logic.pending import drain
 from clausal.logic.variables import Trail, Var, deref, is_var, unify
 from clausal.pythonic_ast import nodes
 from clausal.tools.iso_l3 import _CLPQ_BINARY, _CLPQ_COMPARISONS, read_iso
@@ -104,6 +110,16 @@ def _term(query, term):
     return term
 
 
+def _then(query, goals, trail, found):
+    """The goal boundary: the goals queued on the trail, if any, then the
+    rest of the goal list for each of their answers."""
+    if trail.pending is None:
+        _solve(query, goals, trail, found)
+        return
+    for _ in drain(trail):
+        _solve(query, goals, trail, found)
+
+
 def _solve(query, goals, trail, found):
     """Run the goal list depth first, calling *found* at each answer.  A
     binding `A = B` is the engine's unify, through the CLPQ_KEY hook."""
@@ -119,20 +135,20 @@ def _solve(query, goals, trail, found):
     functor = goal[0]
     mark = trail.mark()
     if functor == ",":
-        _solve(query, [goal[1], goal[2]] + rest, trail, found)
+        _then(query, [goal[1], goal[2]] + rest, trail, found)
     elif functor == ";":
         _solve(query, [goal[1]] + rest, trail, found)
         trail.undo(mark)
         _solve(query, [goal[2]] + rest, trail, found)
     elif functor == "{}":
         if post_constraint(query.constraints(goal[1]), trail):
-            _solve(query, rest, trail, found)
+            _then(query, rest, trail, found)
     elif functor == "=":
         if unify(_term(query, goal[1]), _term(query, goal[2]), trail):
-            _solve(query, rest, trail, found)
+            _then(query, rest, trail, found)
     elif functor == "maximize":
         if bv.maximize(query.expression(goal[1]), trail):
-            _solve(query, rest, trail, found)
+            _then(query, rest, trail, found)
     elif functor == "bb_inf":
         from clausal.logic.clpq.branch_and_bound import bb_inf
         integers = [query.expression(element) for element in goal[1]]
@@ -144,11 +160,11 @@ def _solve(query, goals, trail, found):
             extra = (vertex, query.expression(goal[5]))
         if bb_inf(integers, query.expression(goal[2]),
                   query.expression(goal[3]), trail, *extra):
-            _solve(query, rest, trail, found)
+            _then(query, rest, trail, found)
     elif functor in ("sup", "inf"):
         optimum = bv.sup if functor == "sup" else bv.inf
         if optimum(query.expression(goal[1]), query.expression(goal[2]), trail):
-            _solve(query, rest, trail, found)
+            _then(query, rest, trail, found)
     else:
         raise ValueError(f"the driver does not run {goal!r}")
     trail.undo(mark)
@@ -198,12 +214,13 @@ def shown_residual(query, shown, trail):
     return aliases + residual_strings(free, trail, name_of)
 
 
-def port_answers(text, shown, bounds=True):
+def port_answers(text, shown, bounds=True, defer=False):
     """Every answer of the query *text* on the port, as Answers over the
     *shown* variables, their `_inf`/`_sup` companions (unless *bounds* is
-    False) and the residual constraints."""
+    False) and the residual constraints.  With *defer*, under a driver."""
     query = _Query(text)
     trail = Trail()
+    trail.defer = defer
     answers = []
 
     def found():
@@ -219,7 +236,10 @@ def port_answers(text, shown, bounds=True):
                 bindings[name + "_sup"] = high
         answers.append(Answer(bindings, shown_residual(query, shown, trail)))
 
-    _solve(query, [query.body], trail, found)
+    try:
+        _solve(query, [query.body], trail, found)
+    finally:
+        trail.defer = False
     return answers
 
 
@@ -524,18 +544,40 @@ BB_INF_CASES = [
     _knapsack_text([5, 7, 4, 3], [8, 11, 6, 4], 17, 2) + (1,),
     _knapsack_text([2, 3, 7, 9, 4, 6], [3, 5, 10, 14, 6, 7], 20, 2) + (1,),
     _deep_chain_text(12, 600) + (0,),
+    # goals the search wakes run in it (R24): narrowing binds X = 0, a
+    # branch binds X = 0; X*Y = 1 / X*W = 1 then fails
+    ("{X >= -1/2, X =< 1/2, X*Y = 1}, bb_inf([X], X, I)", ["X", "Y", "I"], 0),
+    ("{X >= 0, X =< 1, Z >= 1/3 - X, Z >= X - 1/3, X*W = 1},"
+     " bb_inf([X], Z, I, [V], 0)", ["I", "V"], 1),
+    # the same search, in a bb_inf woken by K = 1
+    ("{X >= 0, X =< 1, Z >= 1/3 - X, Z >= X - 1/3, X*W = 1},"
+     " bb_inf([X], Z*K, I, [V], 0), K = 1", ["I", "V"], 1),
+    # narrowing's entailed(X > 0) runs the goal its probe wakes, X*Y = 1
+    # with X = 0, which fails, so X >= 1
+    ("{X >= 0, X =< 1, X*Y = 1}, bb_inf([X], X, I)", ["I"], 1),
+    # round(-3/4) = -1 (DEVIATIONS.md D18)
+    ("{X >= -1, Y >= 0, X + Y >= -3/4}, bb_inf([X], X + 2*Y, I, [V], 1/2)",
+     ["X", "Y", "I", "V"], 1),
 ]
 
 
+@functools.lru_cache(maxsize=None)
+def _scryer_answers_once(text, shown, bounds=True):
+    """scryer_answers, asked once for the bare and the driver run."""
+    return scryer_answers(text, list(shown), bounds)
+
+
+@pytest.mark.parametrize("defer", [False, True], ids=["bare", "driver"])
 @pytest.mark.parametrize("text, shown, count", BB_INF_CASES)
-def test_bb_inf_answers_as_the_oracle(text, shown, count):
-    want = scryer_answers(text, shown)
+def test_bb_inf_answers_as_the_oracle(text, shown, count, defer):
+    want = _scryer_answers_once(text, tuple(shown))
     assert len(want) == count, want
-    got = port_answers(text, shown)
+    got = port_answers(text, shown, defer=defer)
     check_against_oracle(text, shown, got, want)
 
 
-def test_a_nested_bb_inf_differs_from_the_oracle():
+@pytest.mark.parametrize("defer", [False, True], ids=["bare", "driver"])
+def test_a_nested_bb_inf_differs_from_the_oracle(defer):
     # DEVIATIONS.md D17: the minimum of Z is 1 (at X = 0).  Scryer answers
     # I = 2, V = [1]: the inner bb_inf, woken when the outer search binds
     # X = 1, deletes the outer search's incumbent (one global record, as
@@ -544,12 +586,12 @@ def test_a_nested_bb_inf_differs_from_the_oracle():
     text = ("{W >= 1/2}, bb_inf([W], W*X, I2),"
             " {X >= 0, X =< 1, Z + 2*X >= 1, Z - 2*X >= 0},"
             " bb_inf([X], Z, I, [VX], 0)")
-    (want,) = scryer_answers(text, ["I", "VX"], bounds=False)
-    (got,) = port_answers(text, ["I", "VX"], bounds=False)
+    (want,) = _scryer_answers_once(text, ("I", "VX"), bounds=False)
+    (got,) = port_answers(text, ["I", "VX"], bounds=False, defer=defer)
     assert (want.bindings["I"], want.bindings["VX"]) == (2, 1)
     assert (got.bindings["I"], got.bindings["VX"]) == (1, 0)
     alone = text.split("bb_inf([W], W*X, I2), ")[1]
-    (want_alone,) = scryer_answers(alone, ["I", "VX"], bounds=False)
+    (want_alone,) = _scryer_answers_once(alone, ("I", "VX"), bounds=False)
     assert (want_alone.bindings["I"], want_alone.bindings["VX"]) == (1, 0)
 
 
