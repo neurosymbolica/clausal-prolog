@@ -129,6 +129,13 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A `-shallow` predicate none of whose clauses yields fails instead of
+  raising `TypeError`.** With every clause throwing or failing
+  (`c3(2) <- throw(z)`, `c4(2) <- False`), the shallow compile emitted a
+  plain function, not a generator, and every call -- a head matching no
+  clause included -- raised `TypeError: 'NoneType' object is not iterable`.
+  It now fails where no clause matches or the matching clause fails, and
+  raises the ball where it throws, as Scryer and Trealla do.
 - **A goal woken by an inline comparison runs before the next goal, as in
   Scryer.** A CLP(FD) comparison is compiled inline, and it can bind:
   `X == 3` directly, and `X <= 3` once `X >= 3` has narrowed X's domain to

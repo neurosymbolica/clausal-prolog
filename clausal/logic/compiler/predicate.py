@@ -1945,12 +1945,13 @@ def _build_predicate_funcdef(
     if clauses and arity > 0:
         _finalize_subject_depths(_subject_assigns, all_stmts, subject)
 
-    # Empty body is invalid Python; use return+yield to make a no-op generator.
-    if not all_stmts:
-        all_stmts = [
-            ast.Return(value=ast.Constant(value=None)),
-            ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
-        ]
+    # The function must be a GENERATOR even when no clause can yield: an
+    # empty body is invalid Python, and a body whose every clause throws or
+    # fails (``c3(2) <- throw(z)``, ``c4(2) <- False``) has no ``yield``, so
+    # CPython compiled a plain function that returned None -- and every call,
+    # a head that matched no clause included, raised "'NoneType' object is
+    # not iterable" instead of failing.  The trampoline builder's twin.
+    all_stmts = _stmts_force_generator(all_stmts)
 
     func_name = f"{functor}__{arity}"
     func_def = ast.FunctionDef(
