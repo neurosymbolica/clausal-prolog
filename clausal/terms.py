@@ -768,14 +768,17 @@ class SegList:
             segs.append(ConcreteSeg(run))
         return SegList(segs)
 
-    def _open_or_proper(self) -> bool:
-        """False when this SegList walks to an IMPROPER list (cons cells)."""
+    def _walk_once(self):
+        """:meth:`_walk_raw`, for ``__unify__``/``__eq__`` to read ONCE and
+        reuse in every arm -- or None when the arms must decide alone: a
+        SegList not built of ConcreteSeg/VarSeg, or one out of contract
+        (their own walk reports it)."""
         if not all(isinstance(g, (ConcreteSeg, VarSeg)) for g in self._segments):
-            return True         # not a SegList this module builds: the arms decide
+            return None
         try:
-            return isinstance(self._walk_raw(), (list, SegList))
+            return self._walk_raw()
         except PartialTermError:
-            return True         # out of contract: the arms below report it
+            return None
 
     def __walk__(self):
         """Called by C do_walk. Normalise: collapse bound VarSegs, merge
@@ -837,13 +840,14 @@ class SegList:
         or text" above :func:`_seg_split_gen`): exact for one hole; every
         split, as a pending goal, for two or more."""
         from .logic.variables import unify, walk
-        if not self._open_or_proper():
+        walked = self._walk_once()
+        if walked is not None and not isinstance(walked, (list, SegList)):
             # An IMPROPER list (D50): unify the cons cells it denotes.
-            return unify(self._walk_raw(), other, trail)
+            return unify(walked, other, trail)
         # An EMPTY Seg IS the empty list, in every spelling (fix round 4,
         # item 5).  See ``_EMPTY_SEG_IS_NIL`` above this class for why this
         # sits ahead of the ``()`` rewrite and why it leaves VarSeg alone.
-        if _is_nil(other) and _walked_nil(self._walk_raw()):
+        if _is_nil(other) and _walked_nil((walked if walked is not None else self._walk_raw())):
             return True
         # The empty TUPLE is the empty LIST (fix round 3, item 3): it is the
         # hashable nil spelling ``atoms.NIL_KEY`` uses, and the arms below
@@ -868,7 +872,7 @@ class SegList:
         if isinstance(other, list) or other_text or type(other) is SegListView:
             # (A view is read in place, as the list it is: indexed and
             # sliced, never walked.)
-            walked = self._walk_raw()
+            walked = (walked if walked is not None else self._walk_raw())
             if isinstance(walked, list):
                 # No unbound *VarSeg* remains, but ConcreteSeg *element* Vars
                 # can still be present (``_walk_raw`` returns a plain list as
@@ -893,14 +897,14 @@ class SegList:
             if not all(isinstance(g, (ConcreteSeg, VarSeg))
                        for g in (*self._segments, *other._segments)):
                 return NotImplemented   # not a SegList this class builds
-            walked = self._walk_raw()
+            walked = (walked if walked is not None else self._walk_raw())
             other_walked = other._walk_raw()
             if not isinstance(walked, SegList) or not isinstance(other_walked, SegList):
                 # One side walks to a plain list: the list arm above decides.
                 return unify(walked, other_walked, trail)
             return _unify_open_seglists(walked, other_walked, trail)
         if _is_cons_cell(other):
-            return _unify_seglist_cons(self._walk_raw(), other, trail)
+            return _unify_seglist_cons((walked if walked is not None else self._walk_raw()), other, trail)
         return NotImplemented
 
     # ── sequence protocol (partial-aware) ────────────────────────────────────
@@ -1045,8 +1049,9 @@ class SegList:
         return NotImplemented
 
     def __eq__(self, other):
-        if not self._open_or_proper():
-            return self._walk_raw() == other    # an improper list (D50)
+        w = self._walk_once()
+        if w is not None and not isinstance(w, (list, SegList)):
+            return w == other                   # an improper list (D50)
         # The empty TUPLE is the empty LIST (fix round 3, item 3), and the
         # arms below accept list/str/bytes only.
         if _is_nil(other) and _walked_nil(self._walk_raw()):
