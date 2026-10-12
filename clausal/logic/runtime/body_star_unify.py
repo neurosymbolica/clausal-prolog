@@ -38,7 +38,7 @@ from ._seg_helpers import (
     maybe_promote_to_str, join_chars, seq_getitem, str_chars,
 )
 from .list_unify import _head_list_unify_input, _head_list_unify_output
-from clausal.terms import _is_cons_cell
+from clausal.terms import _is_cons_cell, _is_improper_tail
 
 
 def _body_star_unify(target, before_vals, star_val, after_vals, trail):
@@ -94,8 +94,19 @@ def _build_star_list(before, star, after):
 
     when star is bound to a ``str`` and all before/after elements are
     chars, returns a ``str`` (or ``SegString`` when partial).
+
+    when star is the TAIL (nothing after it) and is bound to a non-list --
+    an atom (a bare ``str``: text is the chars carrier), a number, a
+    compound -- the result is the IMPROPER list ``[*before|star]``, the cons
+    cells ``'.'(H, T)`` (D50), as ISO's ``T = foo, X = [a|T]`` gives.
     """
-    d = _unwrap(deref(star))
+    raw = deref(star)
+    if not after and _is_improper_tail(raw):
+        out = raw
+        for e in reversed(list(before)):
+            out = (".", e, out)
+        return out
+    d = _unwrap(raw)
     if isinstance(d, str):
         # Check if all before/after elements are chars
         b = list(before)

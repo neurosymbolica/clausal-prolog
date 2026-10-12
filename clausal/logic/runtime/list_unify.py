@@ -238,6 +238,25 @@ def _head_multi_star_error():
     )
 
 
+def _improper_star(before, star_val):
+    """``[*before|S]`` when S, the LAST star, ends an IMPROPER list (D50): S
+    holds an atom, a number, a compound or a cons cell -- or a SegList that
+    walks to one -- so the term is the cons cells ``'.'(H, T)`` (as ISO's
+    ``T = foo, X = [a|T]``), never S as one more element.  None otherwise.
+    Shared with the C twin (``_list_unify.c``), which calls it."""
+    from clausal.terms import SegList, _is_improper_tail   # noqa: PLC0415
+    s = deref(star_val)
+    if isinstance(s, SegList):
+        s = s.__walk__()
+        if isinstance(s, SegList):
+            return None
+    if not _is_improper_tail(s):
+        return None
+    for e in reversed(before):
+        s = (".", deref(e), s)
+    return s
+
+
 def _carrier_star_concat(before, s, after_vals):
     """``[C1, ..., *S, ..., Cn]`` with *S* a chars carrier and every Ci a
     char: the carrier of the joined text, built by one join rather than one
@@ -270,6 +289,10 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
         fast = _carrier_star_concat(result, deref(star_val), after_vals)
         if fast is not None:
             return unify(d, fast, trail)
+    if star_val is not None and not after_vals:
+        improper = _improper_star(result, star_val)
+        if improper is not None:
+            return unify(d, improper, trail)
     # THE FLIP (atoms-as-cells/strings §6.2) DELETED the ``star_was_str``
     # gate that used to stand here (and its C twin in ``_list_unify.c``).
     # It guarded a hazard that no longer exists: under P3-1 an atom was a

@@ -989,8 +989,10 @@ def _sort_items(lst_val, sorted_val, who: str):
     if items is None:
         if isinstance(lst_val, SegList):
             walked = lst_val._walk_raw()
-            if not isinstance(walked, list):
+            if isinstance(walked, SegList):
                 raise LogicException(instantiation_error(who))
+            if not isinstance(walked, list):   # an improper list (D50)
+                raise LogicException(type_error("list", walked, who))
             items = walked
         elif is_var(lst_val) or isinstance(lst_val, (SegString, SegBytes)):
             raise LogicException(instantiation_error(who))
@@ -1061,8 +1063,10 @@ def _keysort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trai
     if items is None:
         if isinstance(lst_val, SegList):
             walked = lst_val._walk_raw()
-            if not isinstance(walked, list):
+            if isinstance(walked, SegList):
                 raise LogicException(instantiation_error(who))
+            if not isinstance(walked, list):   # an improper list (D50)
+                raise LogicException(type_error("list", walked, who))
             items = walked
         elif is_var(lst_val) or isinstance(lst_val, (SegString, SegBytes)):
             raise LogicException(instantiation_error(who))

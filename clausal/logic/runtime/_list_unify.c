@@ -28,6 +28,7 @@ static PyObject *fn_seglist_fallback = NULL;
 /* clausal.logic.runtime.list_unify._cons_cell_input_fallback, looked up on
  * first use for the same reason. */
 static PyObject *fn_cons_fallback = NULL;
+static PyObject *fn_improper_star = NULL;   /* list_unify._improper_star */
 
 static PyTypeObject *SegListType     = NULL;
 static PyTypeObject *SegStringType   = NULL;
@@ -754,6 +755,45 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
             Py_RETURN_FALSE;
         }
         Py_DECREF(fast);
+    }
+
+    /* [*before|S] with S the LAST star bound to a non-list -- an atom, a
+     * number, a compound, a cons cell, or a SegList that walks to one -- is
+     * an IMPROPER list, the cons cells '.'(H, T) (D50), never S as one more
+     * element.  The cheap C checks keep the common [H|T] construction (S a
+     * variable, a list, text, bytes) off the Python helper. */
+    if (star_val != Py_None && PyList_GET_SIZE(after_vals) == 0) {
+        PyObject *s0 = call_deref(star_val);
+        if (!s0) { Py_DECREF(d); return NULL; }
+        int skip = PyList_Check(s0) || PyBytes_Check(s0) || is_chars_carrier(s0);
+        if (!skip) {
+            int isv = call_is_var(s0);
+            if (isv < 0) { Py_DECREF(s0); Py_DECREF(d); return NULL; }
+            skip = isv;
+        }
+        Py_DECREF(s0);
+        if (!skip) {
+            if (!fn_improper_star) {
+                PyObject *mod = PyImport_ImportModule(
+                    "clausal.logic.runtime.list_unify");
+                if (!mod) { Py_DECREF(d); return NULL; }
+                fn_improper_star = PyObject_GetAttrString(mod, "_improper_star");
+                Py_DECREF(mod);
+                if (!fn_improper_star) { Py_DECREF(d); return NULL; }
+            }
+            PyObject *imp = PyObject_CallFunctionObjArgs(
+                fn_improper_star, var_vals, star_val, NULL);
+            if (!imp) { Py_DECREF(d); return NULL; }
+            if (imp != Py_None) {
+                int ok = call_unify(d, imp, trail);
+                Py_DECREF(imp);
+                Py_DECREF(d);
+                if (ok < 0) return NULL;
+                if (ok) Py_RETURN_TRUE;
+                Py_RETURN_FALSE;
+            }
+            Py_DECREF(imp);
+        }
     }
 
     /* Build result list from [deref(v) for v in var_vals] */

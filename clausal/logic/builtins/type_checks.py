@@ -380,6 +380,15 @@ def _callable__1_factory(db):
 _db_builtin("callable", 1, fields=("x",))(_callable__1_factory)
 
 
+def _seg_proper(term) -> bool:
+    """A Seg* every hole of which is filled AND whose last hole holds a list:
+    a PROPER list.  One whose last hole holds an atom, a number or a
+    compound walks to an IMPROPER list (D50) and is no list."""
+    from clausal.logic.cells import is_chars  # noqa: PLC0415
+    closed = seg_closed(term)
+    return isinstance(closed, (list, bytes)) or is_chars(closed)
+
+
 @_builtin("is_list", 1)
 def _is_list__1(x, trail, k):
     """is_list(X) — succeeds if X is a Python list or a Python str.
@@ -399,7 +408,7 @@ def _is_list__1(x, trail, k):
     from clausal.logic.cells import is_chars  # noqa: PLC0415
     if isinstance(x_val, (list, bytes)) or is_chars(x_val):   # STAGE 2: a str is an ATOM; the carrier is the list
         yield None
-    elif isinstance(x_val, (SegList, SegString, SegBytes)) and seg_closed(x_val) is not None:
+    elif isinstance(x_val, (SegList, SegString, SegBytes)) and _seg_proper(x_val):
         yield None                         # every hole filled; elements may be unbound
 
 
@@ -492,7 +501,7 @@ def _check_type(type_name: str, term) -> bool:
         # one. Rejecting them here contradicted is_list("abc") succeeding.
         if isinstance(term, (list, bytes)) or is_chars(term):   # STAGE 2: a str is an ATOM; the carrier is the list
             return True
-        return isinstance(term, (SegList, SegString, SegBytes)) and seg_closed(term) is not None
+        return isinstance(term, (SegList, SegString, SegBytes)) and _seg_proper(term)
     elif type_name in ("boolean", "bool"):
         return isinstance(term, bool)
     elif type_name == "callable":

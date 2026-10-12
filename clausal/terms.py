@@ -440,6 +440,8 @@ def _partial_list_parts(t):
         w = t._walk_raw()
         if isinstance(w, list):
             return w, None
+        if not isinstance(w, SegList):
+            return None        # an IMPROPER list (D50): its cons cells, not a list
         segs = w.segments
         if not isinstance(segs[-1], VarSeg) or not all(
                 isinstance(s, ConcreteSeg) for s in segs[:-1]):
@@ -586,6 +588,42 @@ def _unify_open_seglists(a, b, trail):
 
 
 _WALK_END = object()   # end of a segment iterator in SegList._walk_raw
+_NO_TAIL = object()    # SegList._walk_raw: no improper tail seen yet
+
+
+def _is_improper_tail(v) -> bool:
+    """Whether *v*, the dereferenced value of a SegList hole, ends the list
+    as an IMPROPER tail (D50): anything bound that is no list, partial list
+    or text -- an atom (a bare ``str``), a number, a compound, a cons cell.
+    The nil in any spelling is the empty list, not a tail."""
+    from .logic.variables import is_var
+    if is_var(v) or isinstance(v, (list, bytes, SegList, SegString, SegBytes)):
+        return False
+    if is_chars(v) or _is_nil(v):
+        return False
+    if type(v) is str:
+        return v != "[]"
+    return True
+
+
+def _splice_non_list(v, run: list) -> None:
+    """The pre-D50 reading of a non-list a hole holds where it cannot be the
+    tail (an interior hole, ``[*A, x]``): a ``str`` splices as its chars,
+    anything else is out of contract."""
+    if type(v) is str:
+        run.extend(char_atom(c) for c in v)
+        return
+    raise PartialTermError(
+        f"SegList VarSeg bound to non-sequence value: "
+        f"{type(v).__name__} ({v!r}); VarSegs of a SegList "
+        f"must bind to list/str.")
+
+
+def _improper_tail(t):
+    """The tail of the cons chain *t* (``foo`` for ``[a, b|foo]``)."""
+    while _is_cons_cell(t):
+        t = t[2]
+    return t
 
 
 class SegList:
@@ -612,6 +650,19 @@ class SegList:
 
     # ── Walk / normalisation ──────────────────────────────────────────────────
 
+    def _walk_seq(self):
+        """:meth:`_walk_raw` for the SEQUENCE protocol (``len``, ``iter``,
+        ``in``, indexing, ``to_list``): a ``list`` or a ``SegList``.  An
+        IMPROPER list is neither, and raises ``PartialTermError`` here, as a
+        hole bound to a number always did."""
+        w = self._walk_raw()
+        if isinstance(w, (list, SegList)):
+            return w
+        raise PartialTermError(
+            f"SegList is an improper list (its tail is "
+            f"{type(_improper_tail(w)).__name__} "
+            f"{_improper_tail(w)!r}), not a list")
+
     def _walk_raw(self):
         """``__walk__`` WITHOUT the F018 str promotion: a ground SegList
         normalises to its plain element ``list``, a non-ground one to a
@@ -627,7 +678,18 @@ class SegList:
         yield one of the two shapes, so a SegList of cell chars stopped being
         equal to, and unifiable with, its own elements.  Reading the elements
         directly is exact in both stages.
-        """
+
+        It gives the TERM this SegList denotes: a plain ``list`` when ground, a
+        ``SegList`` whose holes are all unbound when partial, or -- when its
+        LAST hole holds a tail that is no list (an atom, a number, a
+        compound, a cons cell) -- the IMPROPER list ``[E1, ..., En|Tail]``
+        as the cons cells ``'.'(H, T)`` (D50), the term ISO gives
+        ``X = [a|T], T = foo``.  A bare ``str`` in a hole is an ATOM
+        (atoms-as-str): text is the chars carrier.
+
+        A non-list held by a hole that is NOT the last (``[*A, x]``, which
+        ISO cannot write) keeps the old reading: a ``str`` splices its
+        chars, anything else raises ``PartialTermError``."""
         # Iterative, with one flat accumulator: a partial list built forward
         # through its open tail (a DCG, ``Hole = [a|Hole1]`` in a loop) is a
         # chain of SegLists, one link per step, and walking it recursively
@@ -639,11 +701,18 @@ class SegList:
         run: list = []           # the concrete elements since the last hole
         stack = [(iter(self._segments), id(self))]
         open_ids = {id(self)}    # SegLists being walked, to stop on a cycle
+        tail = _NO_TAIL          # a non-list a hole holds, while it is last
         while stack:
             seg = next(stack[-1][0], _WALK_END)
             if seg is _WALK_END:
                 open_ids.discard(stack.pop()[1])
                 continue
+            if tail is not _NO_TAIL:
+                if isinstance(seg, ConcreteSeg) and not seg.elements:
+                    continue
+                # Something follows it: it was no tail after all.
+                _splice_non_list(tail, run)
+                tail = _NO_TAIL
             if isinstance(seg, ConcreteSeg):
                 run.extend(walk(e) for e in seg.elements)
                 continue
@@ -653,12 +722,15 @@ class SegList:
             v = deref(seg.var)
             if type(v) is SegListView:
                 v = v.elements()           # its elements, walked below as a list's
+            if _is_improper_tail(v):
+                tail = v
+                continue
             if not isinstance(v, SegList):
                 v = walk(v)
             if is_chars(v):
                 v = chars_text(v)          # stage 1: a hole bound to the carrier is a str-bound hole
             if isinstance(v, str):
-                run.extend(char_atom(c) for c in v)   # a substring: its CHARS
+                run.extend(char_atom(c) for c in v)   # text (a walked SegString): its CHARS
             elif isinstance(v, list):
                 run.extend(v)
             elif isinstance(v, SegList):
@@ -681,12 +753,27 @@ class SegList:
                     segs.append(ConcreteSeg(run))
                     run = []
                 segs.append(VarSeg(v))
+        if tail is not _NO_TAIL:
+            if segs:
+                # An unbound hole before it: ``[*A, x|foo]`` has no term.
+                _splice_non_list(tail, run)
+            else:
+                for e in reversed(run):
+                    tail = (".", e, tail)
+                return tail
         # If no VarSegs remain, return a plain Python list of the elements.
         if not segs:
             return run
         if run:
             segs.append(ConcreteSeg(run))
         return SegList(segs)
+
+    def _open_or_proper(self) -> bool:
+        """False when this SegList walks to an IMPROPER list (cons cells)."""
+        try:
+            return isinstance(self._walk_raw(), (list, SegList))
+        except PartialTermError:
+            return True         # out of contract: the arms below report it
 
     def __walk__(self):
         """Called by C do_walk. Normalise: collapse bound VarSegs, merge
@@ -702,7 +789,7 @@ class SegList:
         if isinstance(w, list):
             from .logic.runtime._seg_helpers import maybe_promote_to_str
             return maybe_promote_to_str(w)
-        return w
+        return w                # a SegList, or an improper list's cons cells
 
     def is_ground(self) -> bool:
         """True iff the term contains no unbound Var.
@@ -721,7 +808,7 @@ class SegList:
         never has to be reversed: the elements come back exactly as the
         SegList held them.
         """
-        w = self._walk_raw()
+        w = self._walk_seq()
         if isinstance(w, list):
             return w
         raise TypeError(
@@ -748,6 +835,9 @@ class SegList:
         or text" above :func:`_seg_split_gen`): exact for one hole; every
         split, as a pending goal, for two or more."""
         from .logic.variables import unify, walk
+        if not self._open_or_proper():
+            # An IMPROPER list (D50): unify the cons cells it denotes.
+            return unify(self._walk_raw(), other, trail)
         # An EMPTY Seg IS the empty list, in every spelling (fix round 4,
         # item 5).  See ``_EMPTY_SEG_IS_NIL`` above this class for why this
         # sits ahead of the ``()`` rewrite and why it leaves VarSeg alone.
@@ -838,7 +928,7 @@ class SegList:
         order; ``has_var_seg`` is True iff at least one VarSeg remains
         unbound after walking.
         """
-        w = self._walk_raw()
+        w = self._walk_seq()
         if isinstance(w, list):
             return w, False
         elements: list = []
@@ -871,7 +961,7 @@ class SegList:
         # ``_walk_raw``: membership is over the SegList's OWN elements, so a
         # SegList of cell chars answers True for ``("a",)`` rather than for
         # the raw ``"a"`` the F018 promotion would have decoded to.
-        w = self._walk_raw()
+        w = self._walk_seq()
         if isinstance(w, list):
             return item in w
         # Non-ground: True if the item is in any ConcreteSeg; otherwise
@@ -897,7 +987,7 @@ class SegList:
         # raise PartialTermError so the caller can distinguish "known
         # absent" from "unknown until bound".
         # ``_walk_raw``: indexing yields the element the SegList holds.
-        w = self._walk_raw()
+        w = self._walk_seq()
         if isinstance(w, list):
             return w[index]
         elements: list = []
@@ -953,6 +1043,8 @@ class SegList:
         return NotImplemented
 
     def __eq__(self, other):
+        if not self._open_or_proper():
+            return self._walk_raw() == other    # an improper list (D50)
         # The empty TUPLE is the empty LIST (fix round 3, item 3), and the
         # arms below accept list/str/bytes only.
         if _is_nil(other) and _walked_nil(self._walk_raw()):
