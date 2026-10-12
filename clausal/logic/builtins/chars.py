@@ -335,7 +335,8 @@ def _refuse_non_list(val, who):
     PARTIAL list -- ``[a | T]`` -- is an instantiation error, anything else
     that is not a list a ``type_error(list, L)``.  A partial list used to get
     the type error."""
-    from clausal.terms import SegList, SegString, SegBytes  # noqa: PLC0415
+    from clausal.terms import SegList, SegString, SegBytes, as_improper  # noqa: PLC0415
+    val = as_improper(val)   # a hole-built IMPROPER list is no partial list
     if isinstance(val, (SegList, SegString, SegBytes)):
         raise LogicException(instantiation_error(who))
     raise LogicException(type_error("list", val, who))

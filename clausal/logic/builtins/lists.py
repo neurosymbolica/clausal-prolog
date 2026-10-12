@@ -11,6 +11,7 @@ from typing import Any
 
 from clausal.logic.atoms import char_atom, is_char_atom, is_truth_atom, spelling
 from clausal.logic.variables import Var, deref, is_var, unify
+from clausal.terms import as_improper as _as_improper
 from clausal.logic.trampoline import DONE
 
 from clausal.logic.builtins._registry import _trampoline_builtin, _builtin
@@ -60,6 +61,14 @@ def _is_int(v) -> bool:
     a bool is NOT accepted (True is not 1) so length(L, True), list_item(True,
     …), take(True, …) etc. fail instead of silently treating True as 1."""
     return isinstance(v, int) and not isinstance(v, bool)
+
+
+def _ld(x):
+    """``deref`` for a LIST argument: a SegList that walks to an improper
+    list (its last hole bound to an atom, number or compound, or closing a
+    cycle) is read as that list's cons cells, so ``X = [a|T], T = foo``
+    answers as the literal ``[a|foo]`` in every builtin here."""
+    return _as_improper(deref(x))
 
 
 def _as_items(val):
@@ -241,6 +250,11 @@ def _cons_onto(prefix: list, tail):
     return tail
 
 
+def _is_cons(val) -> bool:
+    """*val* is the cons cell ``'.'(H, T)`` of an improper list (D50)."""
+    return type(val) is tuple and len(val) == 3 and val[0] == "."
+
+
 def _cons_heads(val):
     """The heads of the cons cells ``'.'(H, T)`` that *val* (dereferenced)
     starts with: ``[a, b|foo]`` gives ``[a, b]``, a term that is not a cons
@@ -288,7 +302,7 @@ def _member__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
     Also accepts the collections the ``in`` operator iterates (DictTerm/dict
     keys, SetTerm/set elements) so the predicate and operator spellings of
     membership agree."""
-    lst_val = deref(lst)
+    lst_val = _ld(lst)
     items = _as_items(lst_val)
     if items is None:
         items = _as_membership_items(lst_val)
@@ -346,7 +360,7 @@ def _memberchk__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
     """memberchk(Elem, List) — like member/2 but commits to the first match.
 
     Accepts the same dict/set collections as ``in_/2`` (see _member__2)."""
-    lst_val = deref(lst)
+    lst_val = _ld(lst)
     items = _as_items(lst_val)
     if items is None:
         items = _as_membership_items(lst_val)
@@ -407,12 +421,12 @@ def _append_dr__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
     not shared, extend it in-place instead of allocating a new list.  Falls
     back to the standard (copying) implementation otherwise.
     """
-    l1_val = deref(l1)
+    l1_val = _ld(l1)
     # Only attempt destructive reuse for the deterministic (+,+,-) mode
     # with an actual Python list (not string) and a low reference count.
     if (_HAS_REFCOUNT and isinstance(l1_val, list)
             and _sys.getrefcount(l1_val) <= 3):
-        l2_val = deref(l2)
+        l2_val = _ld(l2)
         l2_items = _as_items(l2_val)
         if l2_items is not None:
             l1_val.extend(l2_items)
@@ -435,9 +449,9 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
       append(+, -, +) — split L3 starting from L1
       append(-, -, +) — enumerate all splits of L3
     """
-    l1_val = deref(l1)
-    l2_val = deref(l2)
-    l3_val = deref(l3)
+    l1_val = _ld(l1)
+    l2_val = _ld(l2)
+    l3_val = _ld(l3)
 
     # Track the result container type. str output when a str is present and no
     # list/bytes; bytes output (codes model) when a bytes is present and no
@@ -676,7 +690,7 @@ def _append__2(this_generator, _proceed, _fail, _catcher, lists, lst, trail):
     ``append(foo, L)`` fails.  Where the definition does not terminate
     (``append(Ls, [1])`` with Ls unbound) neither does this.  A proper list
     of proper lists is concatenated in one step."""
-    ls_val = deref(lists)
+    ls_val = _ld(lists)
     if isinstance(ls_val, list):
         parts = []
         for x in ls_val:
@@ -729,7 +743,7 @@ def _length__2(this_generator, _proceed, _fail, _catcher, lst, n, trail):
     F051 (C9 audit): accepts ground SegList/SegString via ``_as_items``
     so a Seg* term reports the length of the sequence it walks to.
     """
-    lst_val = deref(lst)
+    lst_val = _ld(lst)
     n_val = deref(n)
     items = _as_items(lst_val)
     if items is not None:
@@ -794,7 +808,7 @@ def _last__2(this_generator, _proceed, _fail, _catcher, lst, elem, trail):
 
     F051 (C9 audit): accepts ground SegList/SegString via ``_as_items``.
     """
-    lst_val = deref(lst)
+    lst_val = _ld(lst)
     items = _as_items(lst_val)
     if items is not None and len(items) > 0:
         mark = trail.mark()
@@ -817,7 +831,7 @@ def _reverse_dr__2(this_generator, _proceed, _fail, _catcher, lst, rev, trail):
     refcount gate guards object-level sharing at run time, exactly as in
     ``_append_dr__3``.
     """
-    lst_val = deref(lst)
+    lst_val = _ld(lst)
     # Belt-and-braces beyond the compile-time analysis: mutate only in the
     # true forward OUTPUT mode (second arg an unbound var). A bound second
     # arg — the self-aliased reverse(L, L) palindrome idiom included — takes
@@ -849,7 +863,7 @@ def _reverse__2(this_generator, _proceed, _fail, _catcher, lst, rev, trail):
 
     F051 (C9 audit): accepts ground SegList/SegString via ``_as_items``.
     """
-    lst_val = deref(lst)
+    lst_val = _ld(lst)
     items = _as_items(lst_val)
     if items is not None:
         was_str = _was_string(lst_val)
@@ -886,7 +900,7 @@ def _nth0__3(this_generator, _proceed, _fail, _catcher, n, lst, elem, trail):
     ISO-named ``arg/3`` which follows cons-cell head/tail semantics.
     """
     n_val = deref(n)
-    lst_val = deref(lst)
+    lst_val = _ld(lst)
     items = _as_items(lst_val)
     if items is not None:
         if not is_var(n_val):
@@ -926,7 +940,7 @@ def _flatten__2(this_generator, _proceed, _fail, _catcher, lst, flat, trail):
     the same reason a 1-element atom flattens to its 1-element
     wrapper.
     """
-    lst_val = deref(lst)
+    lst_val = _ld(lst)
     if not is_var(lst_val):
         result: list = []
         outer = True
@@ -1007,7 +1021,7 @@ def _sort_items(lst_val, sorted_val, who: str):
 @_trampoline_builtin("msort", 2)
 def _msort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
     """msort(List, Sorted) — Sorted is List sorted, preserving duplicates."""
-    lst_val = deref(lst)
+    lst_val = _ld(lst)
     items = _sort_items(lst_val, deref(sorted_lst), "msort/2")
     if items is not None:
         items = [deref(x) for x in items]
@@ -1058,7 +1072,7 @@ def _keysort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trai
     from clausal.logic.exceptions import (  # noqa: PLC0415
         LogicException, instantiation_error, type_error)
     who = "keysort/2"
-    lst_val = deref(lst)
+    lst_val = _ld(lst)
     items = _as_items(lst_val)
     if items is None:
         if isinstance(lst_val, SegList):
@@ -1150,7 +1164,7 @@ def _sort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
     ``_OpaqueOrder``, and its band tag differs from every other band's, so an
     unhashable key can only ever equal another unhashable key.
     """
-    lst_val = deref(lst)
+    lst_val = _ld(lst)
     items = _sort_items(lst_val, deref(sorted_lst), "sort/2")
     if items is not None:
         result = sorted_set([deref(x) for x in items])
@@ -1168,7 +1182,7 @@ def _permutation__2(this_generator, _proceed, _fail, _catcher, lst, perm, trail)
     argument may be the proper list: ``permutation(Xs, [1, 2])`` enumerates
     Xs as Scryer does (it had no answers)."""
     import itertools
-    lst_val = deref(lst)
+    lst_val = _ld(lst)
     items = _as_items(lst_val)
     if items is None and is_var(lst_val):
         # List unbound: the relation is symmetric, so run it the other way
@@ -1199,7 +1213,7 @@ def _permutation__2(this_generator, _proceed, _fail, _catcher, lst, perm, trail)
 @_trampoline_builtin("select", 3)
 def _select__3(this_generator, _proceed, _fail, _catcher, elem, lst, rest, trail):
     """select(Elem, List, Rest) — Elem is in List, Rest is List without one occurrence."""
-    lst_val = deref(lst)
+    lst_val = _ld(lst)
     items = _as_items(lst_val)
     if items is not None:
         was_str = _was_string(lst_val)
@@ -1221,6 +1235,21 @@ def _select__3(this_generator, _proceed, _fail, _catcher, elem, lst, rest, trail
                 if unify(elem, item, trail) and unify(rest, remainder, trail):
                     yield (_proceed, None)
                 trail.undo(mark)
+    elif _is_cons(lst_val):
+        # An IMPROPER list (D50): Scryer's select/3 recursion takes each
+        # head in turn and keeps the tail, ``select(a, [a|foo], R)`` gives
+        # ``R = foo``.
+        heads = _cons_heads(lst_val)
+        end = lst_val
+        while _is_cons(end):
+            end = deref(end[2])
+        for i, item in enumerate(heads):
+            mark = trail.mark()
+            if (unify(elem, item, trail)
+                    and unify(rest, _cons_onto(heads[:i] + heads[i + 1:], end),
+                              trail)):
+                yield (_proceed, None)
+            trail.undo(mark)
     yield (_fail, DONE)
 
 
@@ -1329,7 +1358,7 @@ def _union__3(this_generator, _proceed, _fail, _catcher, set1, set2, uni, trail)
 def _list_to_set__2(this_generator, _proceed, _fail, _catcher, lst, set_out, trail):
     """list_to_set(List, Set) — Set is List with duplicates (==/2) removed,
     first occurrences kept in order."""
-    lst_val = deref(lst)
+    lst_val = _ld(lst)
     items = _as_items(lst_val)
     if items is not None:
         items = [deref(x) for x in items]
@@ -1374,7 +1403,7 @@ def _sum_list__2(this_generator, _proceed, _fail, _catcher, lst, total, trail):
     indistinguishable from the legitimate "the list is empty" result.
     """
     from clausal.logic.exceptions import LogicException, type_error
-    lst_val = deref(lst)
+    lst_val = _ld(lst)
     items = _as_items(lst_val)
     if items is not None:
         import numbers                                        # noqa: PLC0415
@@ -1447,7 +1476,7 @@ def _max_list__2(this_generator, _proceed, _fail, _catcher, lst, maximum, trail)
     than silently converted to ``(_fail, DONE)``.
     """
     from clausal.logic.exceptions import LogicException, type_error
-    lst_val = deref(lst)
+    lst_val = _ld(lst)
     items = _as_items(lst_val)
     if items is not None and len(items) > 0:
         _refuse_truth_atoms(items, "max_list/2")
@@ -1473,7 +1502,7 @@ def _min_list__2(this_generator, _proceed, _fail, _catcher, lst, minimum, trail)
     DONE)``.
     """
     from clausal.logic.exceptions import LogicException, type_error
-    lst_val = deref(lst)
+    lst_val = _ld(lst)
     items = _as_items(lst_val)
     if items is not None and len(items) > 0:
         _refuse_truth_atoms(items, "min_list/2")
@@ -1506,7 +1535,7 @@ def _list_extreme(fn, lst, extreme, trail, _proceed, _fail):
     from clausal.logic.builtins.iso_compare import _iso_eval  # noqa: PLC0415
     from clausal.logic.exceptions import (  # noqa: PLC0415
         LogicException, instantiation_error)
-    val = deref(lst)
+    val = _ld(lst)
     items = _as_items(val)
     tail = None
     if items is None:
@@ -1610,7 +1639,7 @@ def _zip__3(this_generator, _proceed, _fail, _catcher, l1, l2, pairs, trail):
     """zip_(L1, L2, Pairs) — Pairs is the list of ``X-Y`` pairs (the
     ``'-'(X, Y)`` cell, as library(pairs); RULED 2026-09-28 -- it was a list
     of ``[X, Y]`` lists) from L1 and L2."""
-    l1_val, l2_val = deref(l1), deref(l2)
+    l1_val, l2_val = _ld(l1), deref(l2)
     l1_items = _as_items(l1_val)
     l2_items = _as_items(l2_val)
     if l1_items is not None and l2_items is not None:
@@ -1655,7 +1684,7 @@ def _split_with__3(this_generator, _proceed, _fail, _catcher, sep, lst, parts, t
       split_with(+Sep, -List, +Parts) — join (flatten Parts interleaved with Sep)
     """
     sep_val = deref(sep)
-    lst_val = deref(lst)
+    lst_val = _ld(lst)
     parts_val = deref(parts)
 
     items = _as_items(lst_val)
@@ -1847,7 +1876,7 @@ def _nth_solutions(base, index, lst, elem, rest, trail, who):
     """Yield once per solution of nthB(Index, List, Elem[, Rest])."""
     n_val = deref(index)
     _nth_index_check(n_val, who)
-    lst_val = deref(lst)
+    lst_val = _ld(lst)
     items = _as_items(lst_val)
     if items is None:
         from clausal.terms import SegList  # noqa: PLC0415
@@ -1856,6 +1885,32 @@ def _nth_solutions(base, index, lst, elem, rest, trail, who):
             if isinstance(walked, list):
                 # every hole filled, an element still unbound: a proper list
                 items = walked
+    if items is None and _is_cons(lst_val):
+        # An IMPROPER list ``[a, b|foo]`` (D50): Scryer and Trealla select
+        # among its heads (``nth0(0, [a|foo], E)`` gives ``a``), and Rest
+        # keeps the improper tail (``nth0(0, [a|foo], E, R)``: ``R = foo``).
+        heads = _cons_heads(lst_val)
+        end = lst_val
+        while _is_cons(end):
+            end = deref(end[2])
+        if is_var(n_val):
+            indices = range(len(heads))
+        else:
+            pos = n_val - base
+            if pos < 0 or pos >= len(heads):
+                return
+            indices = (pos,)
+        for i in indices:
+            mark = trail.mark()
+            ok = unify(elem, heads[i], trail)
+            if ok and is_var(n_val):
+                ok = unify(index, i + base, trail)
+            if ok and rest is not None:
+                ok = unify(rest, _cons_onto(heads[:i] + heads[i + 1:], end), trail)
+            if ok:
+                yield None
+            trail.undo(mark)
+        return
     if items is None:
         skeleton = _open_skeleton(lst_val)
         if skeleton is None:

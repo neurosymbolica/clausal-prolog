@@ -561,8 +561,8 @@ def _univ__2(term, lst, trail, k):
         # domain_error(non_empty_list, []).  All used to FAIL silently.
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, domain_error, instantiation_error, type_error)
-        from clausal.logic.builtins.lists import _as_items  # noqa: PLC0415
-        lst_val = deref(lst)
+        from clausal.logic.builtins.lists import _as_items, _ld  # noqa: PLC0415
+        lst_val = _ld(lst)      # an improper list: type_error(list, _), below
         items = _as_items(lst_val)
         if items is None:
             if is_var(lst_val) or isinstance(lst_val, (SegList, SegString)):
