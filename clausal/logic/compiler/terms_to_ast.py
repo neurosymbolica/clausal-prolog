@@ -279,7 +279,8 @@ def _goal_cell_functor(fname: str, arity: int, namespace) -> "str | None":
     * a compiler SPECIAL FORM (``findall/3``, ``once/1``, ``catch/3`` ...,
       ``call_body.SPECIAL_FORMS``), bare: nothing callable is bound to the
       name, and ``G is findall(X, p(X), L)`` raised NameError "not in scope
-      as a term class";
+      as a term class" -- or its call/N CLOSURE, the name with fewer
+      arguments (``catch(G)``, ``findall(X)``, ``forall(G)``);
     * a name -- bare, or the DOTTED spelling ``-import_from`` rewrites an
       imported name into (``py.re.match``) -- bound to a NON-callable
       ``_get_dispatch`` goal object such as a ``ModulePredicate``, where
@@ -298,8 +299,16 @@ def _goal_cell_functor(fname: str, arity: int, namespace) -> "str | None":
     if binding is not None and is_declared_predicate_name(
             binding, db=namespace_db(namespace)):
         return None
-    from clausal.logic.builtins.call_body import is_special_form  # noqa: PLC0415
-    if "." not in fname and is_special_form(fname, arity):
+    from clausal.logic.builtins.call_body import (  # noqa: PLC0415
+        is_special_form, is_special_form_closure,
+    )
+    if "." not in fname and (is_special_form(fname, arity)
+                             or is_special_form_closure(fname, arity)):
+        # A special form at one of its arities, or written with FEWER
+        # arguments: a call/N closure of it -- ``call(catch(G), C, R)`` is
+        # catch/3 (ISO 8.15.4; Scryer and Trealla run it).  Asking only the
+        # written arity sent ``catch(G)`` to the undeclared-functor path:
+        # ``existence_error(procedure, catch/1)`` before call/3 ran.
         return fname
     if (binding is not None and type(binding) is not str
             and hasattr(binding, "_get_dispatch") and not callable(binding)):

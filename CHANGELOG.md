@@ -136,6 +136,17 @@ surface described in [docs/public-api.md](docs/public-api.md).
   clause included -- raised `TypeError: 'NoneType' object is not iterable`.
   It now fails where no clause matches or the matching clause fails, and
   raises the ball where it throws, as Scryer and Trealla do.
+- **`call/N` runs a control-construct closure written in the seam.**
+  `call(catch(G), C, R)` is catch/3 (ISO 8.15.4), and likewise
+  `call(catch(G, C), R)`, `call(findall(X), G, L)` and
+  `call(forall(G), A)`. In a seam clause, building the closure `catch(G)`
+  raised `existence_error(procedure, catch/1)` before call/N ran, under
+  both compile strategies: a special form's name built its cell only at
+  one of its own arities. Written with fewer arguments it is now a closure
+  cell, and call/N extends it. An extension that is no control construct
+  (`call(catch(G), C)`) is still `existence_error(procedure, catch/2)`, as
+  in Scryer and Trealla. Clausal Prolog (`.clausal`) files already ran
+  these.
 - **A goal woken by an inline comparison runs before the next goal, as in
   Scryer.** A CLP(FD) comparison is compiled inline, and it can bind:
   `X == 3` directly, and `X <= 3` once `X >= 3` has narrowed X's domain to

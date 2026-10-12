@@ -395,6 +395,27 @@ def is_special_form(functor: Any, arity: int) -> bool:
     return type(functor) is str and (functor, arity) in SPECIAL_FORMS
 
 
+#: The highest arity of each special form's name: a name written with fewer
+#: arguments is a call/N CLOSURE of it (``catch(G)`` in ``call(catch(G), C,
+#: R)``).
+_SPECIAL_FORM_MAX_ARITY: dict[str, int] = {}
+for _name, _arity in SPECIAL_FORMS:
+    if _arity > _SPECIAL_FORM_MAX_ARITY.get(_name, -1):
+        _SPECIAL_FORM_MAX_ARITY[_name] = _arity
+del _name, _arity
+
+
+def is_special_form_closure(functor: Any, arity: int) -> bool:
+    """True when *functor*/*arity* (``arity`` >= 1) is a special-form name
+    written with FEWER arguments than one of its arities: a closure call/N
+    extends into the form (ISO 8.15.4) -- ``catch/1`` and ``catch/2`` for
+    catch/3, ``findall/1`` .. ``findall/3``, ``forall/1``.  Whether the
+    extended goal IS a special form is call/N's question at run time
+    (``call(catch(G), C)`` is catch/2, existence_error)."""
+    return (type(functor) is str and arity >= 1
+            and arity < _SPECIAL_FORM_MAX_ARITY.get(functor, 0))
+
+
 def _when_condition(conv, raw):
     """A when/2 condition: ``or`` (and ISO ``;``) rebuilt as the node the
     compiler lowers to ``$install_when_disjunction``; everything else --
@@ -774,5 +795,6 @@ __all__ = [
     "cut_refusal_error",
     "is_non_callable_term",
     "needs_meta_call", "MetaCallGoal",
-    "SPECIAL_FORMS", "is_special_form", "special_form_dispatch",
+    "SPECIAL_FORMS", "is_special_form", "is_special_form_closure",
+    "special_form_dispatch",
 ]
