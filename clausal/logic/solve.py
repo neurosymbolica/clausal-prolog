@@ -1835,9 +1835,10 @@ def call(
     _sb_ctx = f"{functor if type(functor) is str else 'call'}/{len(args)}"
     if trail is not None:
         # The goal call/N would run, and call/N's own indicator (the functor
-        # is its first argument).
-        _goal = ((functor, *args) if type(functor) is str
-                 else (getattr(functor, "_name", functor), *args))
+        # is its first argument).  With no arguments the goal is the ATOM:
+        # the 1-tuple ('p',) is reserved, not an atom.
+        _name = functor if type(functor) is str else getattr(functor, "_name", functor)
+        _goal = (_name, *args) if args else _name
         _refuse_inside_attribute_hook(trail, _goal, f"call/{len(args) + 1}")
     if _sandbox_state.ACTIVE:
         # The functor names a predicate: an atom.  A goal OBJECT handed in

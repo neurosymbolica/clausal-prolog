@@ -296,6 +296,20 @@ def test_call_on_the_trail_inside_a_hook_is_refused(mod):
     _assert_refusal(log[0][1], ("bind", v), ("/", "call", 2))
 
 
+def test_call_with_no_arguments_reports_the_goal_as_an_atom(mod):
+    # call("bind") would run the goal bind -- the atom, not the RESERVED
+    # 1-tuple ('bind',) -- and is call/1.
+    log = []
+    register_attr_hook(_A, _nested_driver_hook(
+        log, lambda tr: call("bind", module=mod, trail=tr)))
+    t, x = Trail(), Var()
+    put_attr(x, _A, 1, t)
+    assert unify(x, 1, t)
+    assert [e[0] for e in log] == ["refused", "queued goal ran"]
+    assert log[0][1] == (
+        "error", ("permission_error", "call", "goal", "bind"), ("/", "call", 1))
+
+
 def test_a_driver_on_a_fresh_trail_inside_a_hook_is_allowed(mod):
     log = []
     register_attr_hook(_A, _nested_driver_hook(

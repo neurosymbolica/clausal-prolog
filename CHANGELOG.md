@@ -138,7 +138,8 @@ surface described in [docs/public-api.md](docs/public-api.md).
   at the outer boundary. Such a call now raises
   `error(permission_error(call, goal, Goal), solve/2)` from `solve`, and
   `error(permission_error(call, goal, F(A1, ..., Ak)), call/N)` with
-  N = k + 1 from `call(F, A1, ..., Ak)`. A hook queues what it would run
+  N = k + 1 from `call(F, A1, ..., Ak)` (the goal is the atom `F` when
+  k = 0). A hook queues what it would run
   (`trail.push_pending`). A driver on a fresh trail is still allowed, but
   its bindings are on its own trail: one it makes to an outer variable and
   keeps survives an undo of the outer trail (see docs/coroutining.md).
