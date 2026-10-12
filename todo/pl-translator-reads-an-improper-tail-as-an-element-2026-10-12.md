@@ -104,3 +104,26 @@ with Y bound later to a non-list.
     `type_error(list, [a|...])`. `@<` and `msort` as well (`term_key`).
   - Printing a named cyclic binding at `-g` raises (`_deref_walk`).
   - `copy_term`/`findall` of a cyclic term raise (`_copy_term`/`_is_ground` depth).
+
+## Status after fix round 4 (2026-10-13)
+
+- `==`/`\==` now keep 1 and 1.0 apart through a hole-built list: `X = [a|T], T = 1.0, X == [a|1]`
+  was TRUE (all three front ends; base raised PartialTermError), `T = [1], X == [a,1.0]` was true
+  on base too, and `[1|T] == [1.0|T]` was true. `_numeric_types_agree` (the ISO numeric pass after
+  `structural_eq`) skipped any SegList against a list, tuple or cons cell, and never descended
+  into one. It now reads a SegList as the term it denotes (its list, its cons cells, or its
+  elements with the holes as their variables). The seen guard keys on the term's own objects, so
+  a cyclic partial list still terminates. compare/3, @</2, msort/2, sort/2, the tabling variant
+  key, dif/2, subsumes_term/2 and `\=` were audited: each already read a hole-built list as the
+  literal (the order key and the tabling key walk it; the others unify). dif/2, `\=`,
+  subsumes_term/2 and memberchk/2 conflate 1 with 1.0 for the LITERAL as well, because `=` does:
+  todo/iso-unify-conflates-int-and-float-2026-09-09.md, not this family.
+- Seam: `A is [*T], T is foo, R is [x, *A]` gave `"xfoo"` (the twins read the bare str a
+  hole-only SegList walks to as text; an atom is a str since atoms-as-str, text is the carrier).
+  It is `[x|foo]`. `R is [*A, x]` with A improper (hole-built or a cons cell) failed silently, or
+  appended the cons cell as an element; it is `type_error(list, A)` in both twins and in
+  `_build_star_list`.
+- Still open, minor: a star bound to a non-list that is no cons cell (`[*A, x]` with `A = foo`)
+  is still appended as an element by the twins' catch-all. A cyclic star before another star
+  (`A is [b, *A], B is [c], R is [*A, *B]`) raises the Python `_CyclicPartialList`, not a logic
+  error.
