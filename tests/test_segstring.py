@@ -422,12 +422,21 @@ class TestSegListStringPreserving:
         # nv
         trail = Trail()
         A = Var()
-        unify(A, "hello", trail)
+        unify(A, chars("hello"), trail)    # text is the chars carrier
         sl = SegList([VarSeg(A)])
         walked = sl.__walk__()
         # F018 fix: all-1-char-str walked list promotes to str.
         assert is_chars(walked)
         assert walked == chars("hello")
+
+    def test_walk_reads_an_atom_bound_last_hole_as_the_tail(self):
+        """A bare str is an ATOM (atoms-as-str): a LAST hole bound to it is
+        the tail of an improper list (D50), not text spliced as chars."""
+        trail = Trail()
+        A = Var()
+        unify(A, "foo", trail)
+        sl = SegList([ConcreteSeg([char_atom("a")]), VarSeg(A)])
+        assert sl.__walk__() == (".", char_atom("a"), "foo")
 
     def test_seglist_still_works_with_lists(self):
         """SegList against list still returns list slices."""
@@ -511,10 +520,20 @@ class TestBuildStarListString:
         from clausal.logic.runtime.body_star_unify import _build_star_list
         trail = Trail()
         X = Var()
-        unify(X, "ello", trail)
+        unify(X, chars("ello"), trail)    # text is the chars carrier
         result = _build_star_list([char_atom("h")], X, [])
         assert result == chars("hello")
         assert is_chars(result)
+
+    def test_star_atom_is_the_improper_tail(self):
+        # A bare str is an ATOM (atoms-as-str): as the last star it is the
+        # tail of an improper list, [h|ello] (D50), not the text "hello".
+        from clausal.logic.runtime.body_star_unify import _build_star_list
+        trail = Trail()
+        X = Var()
+        unify(X, "ello", trail)
+        result = _build_star_list([char_atom("h")], X, [])
+        assert result == (".", char_atom("h"), "ello")
 
     def test_star_str_with_after(self):
         from clausal.logic.runtime.body_star_unify import _build_star_list

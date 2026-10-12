@@ -770,6 +770,8 @@ class SegList:
 
     def _open_or_proper(self) -> bool:
         """False when this SegList walks to an IMPROPER list (cons cells)."""
+        if not all(isinstance(g, (ConcreteSeg, VarSeg)) for g in self._segments):
+            return True         # not a SegList this module builds: the arms decide
         try:
             return isinstance(self._walk_raw(), (list, SegList))
         except PartialTermError:
