@@ -255,8 +255,15 @@ def _improper_star(before, star_val):
     return _cons_star(before, s)
 
 
-def _cons_star(before, tail):
-    """``[*before|tail]`` as the cons cells ``'.'(H, T)`` (D50)."""
+def _cons_star(before, tail, after=()):
+    """``[*before|tail]`` as the cons cells ``'.'(H, T)`` (D50).
+
+    With *after* non-empty -- ``[*S, x]`` where S is the improper list
+    *tail* -- there is no such term: ``type_error(list, S)``, never a
+    silent failure.  Shared with the C twin, which hands it ``after_vals``."""
+    if after:
+        from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+        raise LogicException(type_error("list", tail))
     for e in reversed(before):
         tail = (".", deref(e), tail)
     return tail
@@ -363,11 +370,12 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
             # wrapped in ``char_atom_obj``).
             walked = s.__walk__()
             if is_chars(walked):
-                walked = chars_text(walked)   # stage 1
-            if isinstance(walked, (list, str)):
-                result.extend(
-                    str_chars(walked) if isinstance(walked, str) else walked
-                )
+                # A char SegList walks to the carrier: TEXT, its chars (the
+                # C twin's is_chars_carrier arm).  Read it here, before the
+                # split below, where a bare str is an ATOM tail.
+                walked = str_chars(chars_text(walked))   # stage 1
+            if isinstance(walked, list):
+                result.extend(walked)
                 result.extend(deref(v) for v in after_vals)
                 # F033: promote list-of-1-char-strs back to str under the
                 # Liskov "strings-as-lists" rule (default output is list;
@@ -375,9 +383,10 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
                 return unify(d, maybe_promote_to_str(result), trail)
             elif not isinstance(walked, SegList):
                 # The star walks to an IMPROPER list (D50): it is the tail.
-                if after_vals:
-                    return False          # [*S, x] with S improper: no term
-                return unify(d, _cons_star(result, walked), trail)
+                # A bare ``str`` here is an ATOM tail (``[*T]`` with
+                # ``T = foo``), never text: a char list walks to the carrier.
+                # ``[*S, x]`` with S improper is a type_error (``_cons_star``).
+                return unify(d, _cons_star(result, walked, after_vals), trail)
             else:
                 # Still partially unbound: build a new SegList
                 after_result = [deref(v) for v in after_vals]
@@ -428,6 +437,10 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
             if after_result:
                 segs.append(ConcreteSeg(after_result))
             return unify(d, SegList(segs), trail)
+        elif _is_cons_cell(s):
+            # [*S, x] with S the improper list [b|foo]: no term, so
+            # type_error(list, S) (``_cons_star``), never S as an element.
+            return unify(d, _cons_star(result, s, after_vals), trail)
         else:
             result.append(s)
     result.extend(deref(v) for v in after_vals)

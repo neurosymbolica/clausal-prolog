@@ -37,7 +37,7 @@ def _text_out(x):
 from ._seg_helpers import (
     maybe_promote_to_str, join_chars, seq_getitem, str_chars,
 )
-from .list_unify import _head_list_unify_input, _head_list_unify_output
+from .list_unify import _cons_star, _head_list_unify_input, _head_list_unify_output
 from clausal.terms import _is_cons_cell, _is_improper_tail
 
 
@@ -149,16 +149,8 @@ def _build_star_list(before, star, after):
             return maybe_promote_to_str(list(before) + walked + list(after))
         if not isinstance(walked, SegList):
             # It walks to an IMPROPER (or cyclic) list, cons cells (D50).
-            if not after:
-                for e in reversed(list(before)):
-                    walked = (".", e, walked)
-                return walked
-            # [*S, x] with S improper has no term: keep S as a hole, so
-            # the walk reports it as it reports any non-list hole.
-            return SegList([ConcreteSeg(list(before)), VarSeg(d),
-                            ConcreteSeg(list(after))]
-                           if before else
-                           [VarSeg(d), ConcreteSeg(list(after))])
+            # [*S, x] with S improper has no term: type_error(list, S).
+            return _cons_star(list(before), walked, list(after))
         # non-ground SegList — wrap into a new SegList
         segs = []
         if before:

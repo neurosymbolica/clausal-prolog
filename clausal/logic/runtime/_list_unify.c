@@ -955,19 +955,17 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
                     goto error;
                 }
                 Py_DECREF(walked);
-            } else if (PyList_Check(walked) || PyUnicode_Check(walked)) {
-                /* Ground SegList (→ list) or ground SegString (→ str):
-                 * extend result with the elements / CHARS. */
-                if (PyList_Check(walked)) {
-                    Py_ssize_t wlen = PyList_GET_SIZE(walked);
-                    for (Py_ssize_t i = 0; i < wlen; i++) {
-                        PyObject *item = PyList_GET_ITEM(walked, i);
-                        if (PyList_Append(result, item) < 0) {
-                            Py_DECREF(walked); goto error;
-                        }
+            } else if (PyList_Check(walked)) {
+                /* Ground SegList (→ list): extend result with the elements.
+                 * A ground SegString walks to the carrier (above).  A bare
+                 * str here is an ATOM tail (``[*T]`` with ``T = foo``),
+                 * never text, and takes the improper arm below. */
+                Py_ssize_t wlen = PyList_GET_SIZE(walked);
+                for (Py_ssize_t i = 0; i < wlen; i++) {
+                    PyObject *item = PyList_GET_ITEM(walked, i);
+                    if (PyList_Append(result, item) < 0) {
+                        Py_DECREF(walked); goto error;
                     }
-                } else if (extend_with_str_chars(result, walked) < 0) {
-                    Py_DECREF(walked); goto error;
                 }
                 Py_DECREF(walked);
                 /* Append after_vals and unify */
@@ -994,13 +992,9 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
                        !PyObject_TypeCheck(walked, SegStringType) &&
                        !PyObject_TypeCheck(walked, SegBytesType)) {
                 /* The star walks to an IMPROPER list (D50): it is the tail,
-                 * [*before|walked] as cons cells (list_unify._cons_star). */
-                if (n_after > 0) {
-                    Py_DECREF(walked);
-                    Py_DECREF(d);
-                    Py_DECREF(result);
-                    Py_RETURN_FALSE;   /* [*S, x] with S improper: no term */
-                }
+                 * [*before|walked] as cons cells (list_unify._cons_star).
+                 * [*S, x] with S improper has no term: _cons_star raises
+                 * type_error(list, S) when after_vals is non-empty. */
                 if (!fn_cons_star) {
                     PyObject *mod = PyImport_ImportModule(
                         "clausal.logic.runtime.list_unify");
@@ -1010,7 +1004,7 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
                     if (!fn_cons_star) { Py_DECREF(walked); goto error; }
                 }
                 PyObject *cons = PyObject_CallFunctionObjArgs(
-                    fn_cons_star, result, walked, NULL);
+                    fn_cons_star, result, walked, after_vals, NULL);
                 Py_DECREF(walked);
                 if (!cons) goto error;
                 int ok = call_unify(d, cons, trail);
@@ -1163,6 +1157,29 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
 
                 int ok = call_unify(d, new_seglist, trail);
                 Py_DECREF(new_seglist);
+                Py_DECREF(d);
+                Py_DECREF(result);
+                if (ok < 0) return NULL;
+                if (ok) Py_RETURN_TRUE;
+                Py_RETURN_FALSE;
+            } else if (is_cons_cell(s)) {
+                /* [*S, x] with S the improper list [b|foo]: no term, so
+                 * list_unify._cons_star raises type_error(list, S) (the
+                 * last-star case was handled by _improper_star above). */
+                if (!fn_cons_star) {
+                    PyObject *mod = PyImport_ImportModule(
+                        "clausal.logic.runtime.list_unify");
+                    if (!mod) { Py_DECREF(s); goto error; }
+                    fn_cons_star = PyObject_GetAttrString(mod, "_cons_star");
+                    Py_DECREF(mod);
+                    if (!fn_cons_star) { Py_DECREF(s); goto error; }
+                }
+                PyObject *cons = PyObject_CallFunctionObjArgs(
+                    fn_cons_star, result, s, after_vals, NULL);
+                Py_DECREF(s);
+                if (!cons) goto error;
+                int ok = call_unify(d, cons, trail);
+                Py_DECREF(cons);
                 Py_DECREF(d);
                 Py_DECREF(result);
                 if (ok < 0) return NULL;

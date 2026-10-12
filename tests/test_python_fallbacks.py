@@ -1031,6 +1031,44 @@ class TestListUnifyCharTwinParity:
         assert outs[0] == chars("ab"), outs
         assert len(set(outs)) == 1, f"twins disagree: {outs}"
 
+    def test_a_hole_only_star_bound_to_an_atom_is_the_improper_tail(self):
+        """``[x, *A]`` with ``A = [*T], T = foo``: the star is a SegList of
+        one hole, which walks to the bare str ``foo`` -- an ATOM since
+        atoms-as-str, never text (text is the chars carrier) -- so the
+        result is the improper list ``[x|foo]`` (D50) in both twins, not
+        the chars ``"xfoo"``."""
+        # nv
+        outs = []
+        for impl in _OUTPUT_TWINS:
+            target, x, hole = Var(), Var(), Var()
+            trail = Trail()
+            unify(x, char_atom("x"), trail)
+            star = SegList([VarSeg(hole)])
+            unify(hole, "foo", trail)
+            assert impl(target, [x], star, [], trail) is True
+            outs.append(deref(target))
+        assert outs[0] == (".", char_atom("x"), "foo"), outs
+        assert len(set(outs)) == 1, f"twins disagree: {outs}"
+
+    def test_an_improper_star_before_an_element_is_a_type_error(self):
+        """``[*A, x]`` with A the improper list ``[b|foo]`` has no term:
+        both twins raise ``type_error(list, [b|foo])`` rather than failing
+        silently."""
+        # nv
+        from clausal.logic.exceptions import LogicException
+        outs = []
+        for impl in _OUTPUT_TWINS:
+            target, x, hole = Var(), Var(), Var()
+            trail = Trail()
+            unify(x, char_atom("x"), trail)
+            star = SegList([ConcreteSeg([char_atom("b")]), VarSeg(hole)])
+            unify(hole, "foo", trail)
+            with pytest.raises(LogicException) as exc:
+                impl(target, [], star, [x], trail)
+            outs.append(exc.value.term[1])     # the formal; the context var differs
+        assert outs[0] == ("type_error", "list", (".", char_atom("b"), "foo")), outs
+        assert len(set(outs)) == 1, f"twins disagree: {outs}"
+
     def test_a_cell_shaped_non_char_blocks_promotion_in_both_twins(self):
         """The dual acceptance is the CHAR cell only, not any 1-tuple."""
         # nv
