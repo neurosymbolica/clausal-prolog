@@ -482,8 +482,10 @@ def _parse_oracle(stdout):
     return answers
 
 
-def oracle_answers(program_text: str, goal: str, variables: list) -> list:
-    """Every answer of *goal* on Scryer's CLP(Q), in Scryer's order."""
+def oracle_answers(program_text: str, goal: str, variables: list,
+                   timeout: float = 60) -> list:
+    """Every answer of *goal* on Scryer's CLP(Q), in Scryer's order;
+    *timeout* is the seconds Scryer may take."""
     _skip_without_scryer()
     with tempfile.TemporaryDirectory() as directory:
         program = pathlib.Path(directory, "program.pl")
@@ -491,7 +493,7 @@ def oracle_answers(program_text: str, goal: str, variables: list) -> list:
         helper = pathlib.Path(directory, "clpq_oracle_helper.pl")
         helper.write_text(_SCRYER_HELPER)
         result = run_scryer([str(program), str(helper)], [oracle_goal(goal, variables)],
-                            cwd=directory)
+                            cwd=directory, timeout=timeout)
     return _parse_oracle(result.stdout)
 
 

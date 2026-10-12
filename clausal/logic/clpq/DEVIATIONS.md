@@ -1101,3 +1101,92 @@ Not changed: an unbound VECTOR.  1.3.3's `vertex_value/2` then enumerates
 lists of growing length inside a failure-driven loop; on the oracle the
 query does not terminate.  The port raises the engine's
 `UnboundVarCoercionError` there (`if vector:` on an unbound variable).
+
+## D22: acceptance: filled_rectangle, and the first timing baseline (Task 15)
+
+Not a deviation from 1.3.3; the evidence the port answers as 1.3.3 on a
+whole program, and the baseline any later optimisation entry measures
+against.
+
+The program is Colmerauer's filled rectangle, the clp(q,r) distribution's
+`examples/squares.pl`: `filled_rectangle(A, C)` with C a list of n squares.
+No perfect squared rectangle has fewer than 9 squares, so n = 2..8 has no
+solution.  `tests/clpq_port/test_acceptance.py` checks, under the port
+through the `clausal` CLI with `CLAUSAL_CLPQ=holzbaur`: n = 1 gives the
+trivial answer, n = 2..7 (and 8 with `CLAUSAL_SLOW_TESTS=1`) give none,
+and n = 9 gives the same 8 solutions in the same order as the oracle, the
+first being the one `squares.pl` documents (A = 33/32).  The oracle is the
+LOCAL clpq.pl port of 1.3.3 on Scryer (upstream Scryer has no CLP(Q)):
+agreement is two ports of the same source agreeing, not an independent
+check; the documented first answer is the one value from neither port.
+
+Legacy is WRONG on this program below n = 9.  Evidence (2026-10-12,
+answers counted with findall over the CLI's `-g`; not tested, since they
+are wrong):
+
+| n | legacy answers | port answers | oracle answers |
+|---|---|---|---|
+| 6 | 19 | 0 | 0 |
+| 7 | 50 | 0 | 0 |
+| 8 | 152 | 0 | 0 |
+| 9 | 457 | 8 | 8 |
+
+PERF-BASELINE (2026-10-12, local aarch64, 8 cores, engine a750f58c +
+the port at Task 15).  Wall time of every answer of
+`C = [C1, ..., Cn], filled_rectangle(A, C)` through the `clausal` CLI
+(start-up included, about 0.6 s), and of the same query as
+`findall` + `length` on Scryer with the local clpq.pl port:
+
+| n | port | legacy | local clpq.pl port on Scryer |
+|---|---|---|---|
+| 2..5 | 0.7 s each | | |
+| 6 | 0.8 s | 1.7 s | |
+| 7 | 1.2 s | 7.3 s | |
+| 8 | 2.9 s | 38.1 s | |
+| 9 | 10.7 s (first answer 1.6 s) | 351.6 s | 21.0 s |
+
+The machine is SHARED.  The port and Scryer rows for n = 9 ran with load
+average 0.35 (no other jobs).  The legacy rows ran in the background
+while the acceptance test ran, with load up to 5.7, so they are upper
+bounds.  Two later interleaved rounds of the port and Scryer at load
+5.6 to 6.0 gave the port 27.8 s, 25.7 s (first answer 4.2 s, 3.8 s) and
+Scryer 50.6 s, 52.9 s: the same ratio, about 2x.  An earlier
+measurement on the same machine during gate runs (the Task 14b ledger)
+gave port 42.5 s, legacy 652 s, Scryer 64.2 s.
+
+cProfile of the port's n = 9 run (`python -m cProfile -m clausal -g ...`,
+107.3 s under the profiler at load about 5.7), top 15 by own time:
+
+| ncalls | tottime | cumtime | function |
+|---|---|---|---|
+| 1,244,004 | 11.07 | 39.01 | linear_forms.py add_homogeneous_parts_first_scaled |
+| 14,266,938 | 6.66 | 9.45 | arithmetic.py make_rational |
+| 1,388,602 | 6.08 | 9.83 | attributes.py with_changes |
+| 5,002,721 | 5.35 | 8.20 | variable_ordering.py compare_order_values |
+| 4,144,850 | 4.27 | 16.06 | variable_ordering.py compare_variable_order |
+| 13,775,827 | 4.24 | 8.19 | attributes.py state_of |
+| 13,973,539 | 4.01 | 4.01 | _variables.get_attr (C) |
+| 27,374,183 | 3.90 | 3.90 | _variables.deref (C) |
+| 2,327,398 | 3.81 | 5.22 | linear_forms.py delete_factor_homogeneous |
+| 7,716,414 | 3.56 | 8.65 | arithmetic.py multiply |
+| 1,244,004 | 3.37 | 48.01 | linear_forms.py add_linear_forms_first_scaled |
+| 6,211,296 | 3.19 | 7.31 | arithmetic.py add |
+| 16,730,984 | 2.88 | 2.88 | builtins.getattr |
+| 18,953 | 2.82 | 53.74 | bounded_simplex.py back_substitute_variables |
+| 14,268,365 | 2.79 | 2.79 | math.gcd |
+
+By cumulative time, 88.3 s of the 107.3 s is in `{}` posts
+(`holzbaur.clpq_constraint_answers` through `_post_now`), and
+`back_substitute_variables` holds 53.7 s, mostly the linear-form merge
+`add_linear_forms_first_scaled` (48.0 s).  Rational arithmetic
+(`make_rational` with its `gcd`) and the variable-order comparison of the
+merge are the next costs.
+
+The fuzzers (`tests/clpq_port/fuzz/`, the 2026-10-11 reviewer scripts
+rewritten for the port, each bare and under a driver): LP against
+scipy's HiGHS with each optimum confirmed exactly by z3; satisfiability
+with strict, non-strict, equal and not-equal constraints and bindings
+against z3; undo against a replay of the base store; projection against
+the store with the other variables existentially closed, proved by z3.
+Each was checked to fail on a mutant (q_lt as q_le, sup as inf, no undo,
+a dropped residual constraint).
