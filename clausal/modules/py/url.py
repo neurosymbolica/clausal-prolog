@@ -26,7 +26,8 @@ from clausal.modules.py import (
 _urllib_parse = _import_stdlib("urllib.parse")
 
 from clausal.logic.atoms import mint
-from clausal.logic.variables import deref, is_var, unify
+from clausal.logic.variables import is_var, unify
+from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
 from clausal.terms import DictTerm
 
 

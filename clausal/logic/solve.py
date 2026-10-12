@@ -81,7 +81,7 @@ from clausal.terms import (
     LoadAttr as _ReifiedLoadAttr,
 )
 from clausal.terms import PyThunk as _PyThunk
-from clausal.terms import SegListView as _SegListView
+from clausal.terms import plain_deref as _plain_deref
 from clausal.pythonic_ast.nodes import Lambda as _Lambda, Node as _GoalNode
 from clausal import _sandbox_state
 
@@ -160,17 +160,10 @@ def _deref_walk_py(term: Any) -> Any:
         })
     return term
 
-def answer_deref(term: Any) -> Any:
-    """Public ``clausal.deref``: dereference *term* one step, as the engine's
-    ``deref`` does, but hand a VIEW out as what it stands for -- a text view
-    carrier as the str carrier of its text, a list view as the list of its
-    elements.  The rule ``Var.value`` applies at the top of an answer, at any
-    depth a caller derefs (operator ruling D38, 2026-10-12).  The engine's own
-    ``clausal.logic.variables.deref`` keeps views: they stay inside a parse."""
-    term = deref(term)
-    if type(term) is _SegListView:
-        return term.elements()
-    return flat_carrier(term)
+# Public ``clausal.deref`` (operator ruling D38, 2026-10-12): a view leaves as
+# its text or as a plain list, the ``Var.value`` rule at any depth a caller
+# derefs.  The engine's ``deref`` keeps views.
+answer_deref = _plain_deref
 
 
 _deref_walk = _deref_walk_py

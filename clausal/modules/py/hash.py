@@ -28,7 +28,8 @@ from clausal.modules.py import (
 )
 _hashlib = _import_stdlib("hashlib")
 
-from clausal.logic.variables import deref, is_var, unify
+from clausal.logic.variables import is_var, unify
+from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
 
 
 # ── Helper ───────────────────────────────────────────────────────────────

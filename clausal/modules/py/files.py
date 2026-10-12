@@ -29,7 +29,8 @@ _tempfile = _import_stdlib("tempfile")
 
 import pathlib
 
-from clausal.logic.variables import Var, deref, is_var, unify
+from clausal.logic.variables import Var, is_var, unify
+from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
 
 
 # ── Helper ──────────────────────────────────────────────────────────────

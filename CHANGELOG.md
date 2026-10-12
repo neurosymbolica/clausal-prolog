@@ -154,6 +154,15 @@ surface described in [docs/public-api.md](docs/public-api.md).
 - **`replace_subterm/4` rewrites inside a partial list whose holes are
   filled** (`[a, *T]` with `T` bound), as `reified_subterm/2` already
   walked it.
+- **Python-backed library predicates accept the rest of a long list.**
+  Matching `[_|Rest]` against a list of 64 or more elements makes `Rest` a
+  list view rather than a copy. A view is not a Python `list`, so
+  `choice/2`, `json` `generate/2`, `py_csv` `generate/2`, the graphs
+  predicates, `sqlite` parameters and the other adapters that test for a
+  list raised `type_error(list, ...)` or skipped the argument, but only once
+  the list was long enough. The modules under `clausal/modules/` now read
+  their arguments through `terms.plain_deref`, which hands a view out as a
+  list, or as a str for text (operator ruling 2026-10-12, extending D38).
 
 - **`reified_subterm/2` and `replace_subterm/4` see past the 64th element of
   a list.** The rest of a list of 64 or more elements is a list view

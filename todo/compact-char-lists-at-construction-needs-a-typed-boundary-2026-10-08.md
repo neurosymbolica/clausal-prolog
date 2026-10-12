@@ -284,3 +284,14 @@ To repeat the stress run, change the four constants (`cells.VIEW_MIN`, `CHARS_VI
 `variables/_chars_carrier.h`, `terms.LIST_VIEW_MIN`, `LIST_VIEW_MIN` in `runtime/_list_unify.c`),
 rebuild the extensions, and diff the failure set against an unmodified build.
 
+## List views reaching Python-backed modules (FIXED 2026-10-12)
+
+Measured on main a3fbb271: with `Rest` the tail of a 100-element list, `choice(Rest, X)`,
+`json` `generate(Rest, T)`, `py_csv` `generate(Rows, T)` and graphs `vertices(Es, Vs)` raised
+`type_error`; at 30 elements they worked. D38 B covered only public `clausal.deref`, and the modules
+import the engine's. Operator ruling 2026-10-12 ("resolve both"): every module under
+`clausal/modules/` now imports `terms.plain_deref` as its `deref` (public `clausal.deref` is the same
+function). Pinned by `tests/test_list_views_at_adapters.py` (each case at 30 and at 100 elements).
+Not covered: the optional packages under `packages/`, which import the engine's `deref` and are a
+follow-up in their own lane.
+

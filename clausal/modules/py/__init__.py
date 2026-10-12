@@ -186,14 +186,14 @@ def to_text(val):
     # STAGE 1 of the atoms-as-str flip: the chars carrier ('$chars', text)
     # IS text -- every py-module text position reads it as its str.
     from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
-    from clausal.logic.variables import deref as _d  # noqa: PLC0415
+    from clausal.terms import plain_deref as _d  # noqa: PLC0415 -- a view leaves the engine as a list or a str
     _v = _d(val)
     if is_chars(_v):
         return chars_text(_v)
     if type(val) is str:
         return val                     # STAGE 2: an ATOM -- its spelling is the text (spec §3)
     from clausal.logic.atoms import is_atom as _is_atom, spelling as _spelling
-    from clausal.logic.variables import deref
+    from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
     val = deref(val)
     if type(val) is str:
         return val
@@ -398,7 +398,7 @@ def text_or_str(val):
     text = to_text(val)
     if text is not None:
         return text
-    from clausal.logic.variables import deref  # noqa: PLC0415
+    from clausal.terms import plain_deref as deref  # noqa: PLC0415 -- a view leaves the engine as a list or a str
     return str(deref(val))
 
 
@@ -431,7 +431,7 @@ def require_text(val, pred, arg=1):
     text = to_text(val)
     if text is not None:
         return text
-    from clausal.logic.variables import deref  # noqa: PLC0415
+    from clausal.terms import plain_deref as deref  # noqa: PLC0415 -- a view leaves the engine as a list or a str
     expect_type(deref(val), str, pred, arg=arg)   # raises: not text
     raise AssertionError("unreachable: expect_type raised")
 

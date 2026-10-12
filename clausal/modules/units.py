@@ -51,7 +51,8 @@ from typing import Callable
 from clausal.terms import (  # noqa: F401
     Quantity, UnitsMismatch, _dims_str, _colliding_dim_names)
 from clausal.lint_warnings import ClausalDeprecatedSpellingWarning
-from clausal.logic.variables import deref, is_var, unify, get_attr
+from clausal.logic.variables import is_var, unify, get_attr
+from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
 from clausal.logic.trampoline import DONE
 from clausal.logic.exceptions import LogicException, instantiation_error, type_error
 from clausal.modules.py import ModulePredicate, simple_to_trampoline

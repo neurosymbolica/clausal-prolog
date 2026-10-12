@@ -32,7 +32,8 @@ _urllib_parse = _import_stdlib("urllib.parse")
 _json_mod = _import_stdlib("json")
 _http_client = _import_stdlib("http.client")
 
-from clausal.logic.variables import deref, is_var, unify
+from clausal.logic.variables import is_var, unify
+from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
 from clausal.logic.exceptions import (
     LogicException, instantiation_error, type_error)
 from clausal.terms import DictTerm

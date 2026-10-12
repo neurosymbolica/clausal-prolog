@@ -37,7 +37,8 @@ _pylogging = _import_stdlib("logging")
 import sys as _sys
 from typing import Any
 
-from clausal.logic.variables import Var, deref, is_var, unify
+from clausal.logic.variables import Var, is_var, unify
+from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────

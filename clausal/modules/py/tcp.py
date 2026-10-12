@@ -23,7 +23,8 @@ from clausal.modules.py import (
 )
 _socket = _import_stdlib("socket")
 
-from clausal.logic.variables import deref, is_var, unify
+from clausal.logic.variables import is_var, unify
+from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
 
 
 # ── Internal helpers ─────────────────────────────────────────────────────

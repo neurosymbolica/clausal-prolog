@@ -11,7 +11,8 @@ from typing import Callable
 
 from clausal.terms import Quantity, _quantize_to_scale, _format_money
 from clausal.logic.cells import chars, is_chars, chars_text  # stage 1: the chars carrier
-from clausal.logic.variables import deref, is_var, unify
+from clausal.logic.variables import is_var, unify
+from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
 from clausal.logic.trampoline import DONE
 from clausal.logic.exceptions import (
     LogicException, domain_error, instantiation_error, type_error)

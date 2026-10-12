@@ -1177,6 +1177,22 @@ class SegListView(SegList):
         return repr(self.elements())
 
 
+def plain_deref(term):
+    """Dereference *term* one step, as ``deref`` does, but hand a VIEW out as
+    what it stands for: a text view carrier as the str carrier of its text, a
+    list view as the list of its elements (a fresh copy).  The rule
+    ``Var.value`` applies, for Python code outside the engine -- the public
+    ``clausal.deref`` and the Python-backed modules, which test for ``list``
+    and ``str`` (operator rulings D38 and 2026-10-12).  The engine's own
+    ``deref`` keeps views: they stay inside a parse."""
+    term = deref(term)
+    if type(term) is SegListView:
+        return term.elements()
+    if type(term) is tuple and len(term) == 2 and type(term[1]) is _Text and term[0] == CHARS_TAG:
+        return (CHARS_TAG, term[1].flat)
+    return term
+
+
 def _seglist_unify_gen(seglist, target_list, trail):
     """Non-deterministic generator: yield True for each valid split of
     *target_list* across the VarSegs of *seglist*.

@@ -29,7 +29,8 @@ from clausal.modules.py import (
     expect_type,
     simple_to_trampoline,
 )
-from clausal.logic.variables import deref, unify
+from clausal.logic.variables import unify
+from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
 
 _asyncio = _import_stdlib("asyncio")
 _inspect = _import_stdlib("inspect")

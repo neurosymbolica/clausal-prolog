@@ -99,7 +99,8 @@ from clausal.logic.cells import chars_text, is_chars
 from clausal.logic.exceptions import (
     LogicException, domain_error, instantiation_error, type_error,
 )
-from clausal.logic.variables import deref, is_var, unify, walk
+from clausal.logic.variables import is_var, unify, walk
+from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
 from clausal.modules.py import ModulePredicate, simple_to_trampoline
 
 #: The domain separator of the seed material: bump the version and every

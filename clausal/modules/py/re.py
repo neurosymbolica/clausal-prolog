@@ -37,7 +37,8 @@ from typing import Any
 
 from clausal.logic.cells import chars, is_chars, chars_text  # stage 1: the chars carrier
 from clausal.logic.atoms import is_atom as _term_is_atom, spelling as _atom_spelling
-from clausal.logic.variables import Var, deref, is_var, unify
+from clausal.logic.variables import Var, is_var, unify
+from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.logic.runtime._seg_helpers import maybe_promote_to_str
 

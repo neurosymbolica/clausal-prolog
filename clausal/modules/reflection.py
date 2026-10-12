@@ -55,7 +55,8 @@ from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.logic.exceptions import (
     LogicException, instantiation_error, type_error)
 from clausal.logic.trampoline import DONE
-from clausal.logic.variables import deref, is_var, unify
+from clausal.logic.variables import is_var, unify
+from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
 from clausal.modules.py import ModulePredicate, simple_to_trampoline, to_text
 from clausal.pythonic_ast import nodes as simple_ast
 from clausal.terms import SegList, SegListView

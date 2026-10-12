@@ -53,7 +53,8 @@ from clausal.logic.atoms import crossing_value, is_atom, key_of, mint, spelling
 from clausal.logic.cells import TUPLE_TAG, chars, is_chars, chars_text
 from clausal.logic.exceptions import (
     LogicException, domain_error, instantiation_error, type_error)
-from clausal.logic.variables import Var, deref, is_var, unify
+from clausal.logic.variables import Var, is_var, unify
+from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
 from clausal.terms import DictTerm
 
 

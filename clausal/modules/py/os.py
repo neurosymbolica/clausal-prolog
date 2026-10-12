@@ -25,7 +25,8 @@ from clausal.modules.py import (
 _os = _import_stdlib("os")
 _sys = _import_stdlib("sys")
 
-from clausal.logic.variables import Var, deref, is_var, unify
+from clausal.logic.variables import Var, is_var, unify
+from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
 
 
 # ── Helper ──────────────────────────────────────────────────────────────
