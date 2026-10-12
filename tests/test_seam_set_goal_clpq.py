@@ -32,6 +32,7 @@ import pytest
 
 from clausal.import_hook import _load_module
 from clausal.logic.exceptions import LogicException
+from clausal.logic.clpq import Q_KEY
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, walk, is_var, get_attr
 from clausal.terms import Quantity, SetTerm, term_str
@@ -194,8 +195,10 @@ def test_both_unbound_leaves_a_residual_rational_constraint(tmp_path):
         for _ in call("two", N, Q, module=mod):
             seen += 1
             assert is_var(N) and is_var(Q)
-            assert get_attr(N, "clpq") is not None
-            assert get_attr(Q, "clpq") is not None
+            # Task 14, output spelling (the key): the selected solver's
+            # Q_KEY, legacy's "clpq" or the port's "clpq_holzbaur".
+            assert get_attr(N, Q_KEY) is not None
+            assert get_attr(Q, Q_KEY) is not None
         assert seen == 1
 
 

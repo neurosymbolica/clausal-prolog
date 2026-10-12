@@ -183,6 +183,15 @@ CLPQ = textwrap.dedent("""\
 """)
 
 
+#: Task 14, output spelling: under CLAUSAL_CLPQ=holzbaur a residual is what
+#: 1.3.3's dump/3 gives, in Clausal's braces, and so is Scryer's clpq
+#: answer: {X + Y = 3} dumps [x=3-y], {X =\= 2} [x=2+_A,_A=\=0], and
+#: {X >= 2}, {Y >= 2} dumps [y>=2,x>=2].  An internal variable is _Q1, as
+#: legacy names one.
+HOLZBAUR = os.environ.get("CLAUSAL_CLPQ", "legacy") == "holzbaur"
+DEPENDENT = "{X = 3 - Y}." if HOLZBAUR else "{X + Y = 3}."
+
+
 @pytest.fixture
 def clpq_prog(tmp_path):
     (tmp_path / "lin.clausal").write_text(CLPQ)
@@ -194,10 +203,12 @@ def clpq_prog(tmp_path):
     ("X is -3 rdiv 2, Y = f(1-X, 2*X)", "X = -3 rdiv 2, Y = f(1- -3 rdiv 2,2*(-3 rdiv 2))."),
     ("halves(S)", "S = 1 rdiv 2-1 rdiv 3."),
     ("lin(1-1-3, 1-(-1)-1, S)", "S = 2-1."),
-    ("dependent(X, Y)", "{X + Y = 3}."),
+    ("dependent(X, Y)", DEPENDENT),
     ("between_1_3(X)", "{X > 1}, {X < 3}."),
-    ("not_two(X)", "{X =\\= 2}."),
-    ("at_least_2(X), at_least_2(Y)", "{X >= 2}, {Y >= 2}."),
+    ("not_two(X)", "{X = 2 + _Q1}, {_Q1 =\\= 0}." if HOLZBAUR
+     else "{X =\\= 2}."),
+    ("at_least_2(X), at_least_2(Y)", "{Y >= 2}, {X >= 2}." if HOLZBAUR
+     else "{X >= 2}, {Y >= 2}."),
     # Y is free once X is: projecting X + Y = 3 onto X leaves nothing.
     ("hidden(X)", "true."),
     ("inside(S)", None),
@@ -213,7 +224,9 @@ def test_g_answer_spelling(clpq_prog, goal, answer):
         line = r.stdout.strip()
         assert line.startswith("S = f(_") and "{_" in line, line
         names = line[len("S = f("):line.index(")")].split(",")
-        assert line.endswith(f", {{{names[0]} + {names[1]} = 3}}."), line
+        constraint = (f"{names[0]} = 3 - {names[1]}" if HOLZBAUR
+                      else f"{names[0]} + {names[1]} = 3")
+        assert line.endswith(f", {{{constraint}}}."), line
     else:
         assert r.stdout == answer + "\n"
 
@@ -221,7 +234,7 @@ def test_g_answer_spelling(clpq_prog, goal, answer):
 def test_g_clpq_answers_in_the_sandbox(clpq_prog):
     r = _clausal(clpq_prog, "-g", "dependent(X, Y)", "lin.clausal",
                  CLAUSAL_SANDBOX="1")
-    assert (r.returncode, r.stdout) == (0, "{X + Y = 3}.\n"), r.stderr
+    assert (r.returncode, r.stdout) == (0, DEPENDENT + "\n"), r.stderr
 
 
 @pytest.mark.parametrize("frontend", ["translator", "native"])
@@ -232,4 +245,4 @@ def test_a_pl_program_imports_library_clpq(tmp_path, frontend):
     r = _clausal(tmp_path, "-g", "dependent(X, Y)", "-g", "between_1_3(X)",
                  "lin.pl", CLAUSAL_PL_FRONTEND=frontend)
     assert (r.returncode, r.stdout) == (
-        0, "{X + Y = 3}.\n{X > 1}, {X < 3}.\n"), r.stderr
+        0, DEPENDENT + "\n{X > 1}, {X < 3}.\n"), r.stderr

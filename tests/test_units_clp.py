@@ -85,7 +85,7 @@ class TestExactNumberCurrency:
 
 import random
 
-from clausal.logic.variables import Trail, Var, deref, get_attr, put_attr, unify
+from clausal.logic.variables import Trail, Var, deref, get_attr, is_var, put_attr, unify
 from clausal.logic.units_constraint import UNITS_KEY, UnitState
 from clausal.modules.py.units import metre, second, ampere, volt, ohm, watt, kilogram
 from clausal.terms import Add, Sub, Mult, Div, FloorDiv, Mod, Pow, Negate, UnitsMismatch
@@ -458,10 +458,17 @@ class TestComparatorsEngine:
         assert deref(x) == 5 and get_attr(x, UNITS_KEY) is None
 
     def test_attr_key_spellings_agree(self):
+        # Task 14, output spelling (the key): Q_KEY is the selected solver's,
+        # legacy's "clpq" or the port's CLPQ_KEY; units_clp and
+        # units_constraint spell both.
         from clausal.logic.clpfd import FD_KEY
-        from clausal.logic.clpq import Q_KEY
+        from clausal.logic.clpq import Q_KEY, SOLVER
+        from clausal.logic.clpq.attributes import CLPQ_KEY
+        from clausal.logic.clpq.legacy import Q_KEY as LEGACY_Q_KEY
         from clausal.logic.clpr import REAL_KEY
-        assert (FD_KEY, Q_KEY, REAL_KEY) == ("fd", "clpq", "real")
+        assert (FD_KEY, REAL_KEY) == ("fd", "real")
+        assert (LEGACY_Q_KEY, CLPQ_KEY) == ("clpq", "clpq_holzbaur")
+        assert Q_KEY == {"legacy": LEGACY_Q_KEY, "holzbaur": CLPQ_KEY}[SOLVER]
 
 
 class TestDomainAndLabel:
@@ -1519,7 +1526,14 @@ class TestClpqFrontEnd:
         t, q, m = Trail(), Var(), Var()
         assert clpq.q_ge(_bin(Mult, 2, q), self._euro(3), t)
         assert clpq.bb_inf([q], q, m, t)
-        assert deref(q) == self._euro(2) and deref(m) == self._euro(2)
+        assert deref(m) == self._euro(2)
+        if clpq.SOLVER == "holzbaur":
+            # Task 14, legacy-only answer: 1.3.3's bb_inf/3 binds Inf alone
+            # (Scryer: {X >= 3/2, X =< 10}, bb_inf([X], X, I) leaves X
+            # unbound); legacy binds the integer variables too.
+            assert is_var(deref(q))
+        else:
+            assert deref(q) == self._euro(2)
 
 
 class TestCellsHoldingQuantities:

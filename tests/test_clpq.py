@@ -11,6 +11,7 @@ from clausal.logic.clpq import (
     _linearize, _get_tableau, _tableaux, _last_snapshot,
 )
 from clausal.terms import Add, Sub, Mult, Div, Negate
+from clausal.logic.exceptions import LogicException
 from tests._suffix import SEAM
 
 
@@ -31,6 +32,21 @@ def fresh():
 
 def state(v):
     return get_attr(deref(v), Q_KEY)
+
+
+def bounds(v, trail):
+    """(inf, sup) of *v* through the public API, None for an open end.
+
+    Task 14, legacy-only answer: these tests read legacy's QVar record
+    (``.lo``/``.hi``); the port's state (CLAUSAL_CLPQ=holzbaur) has no such
+    fields.  inf/2 and sup/2 are the observable both solvers answer, so the
+    tests read the bounds through them."""
+    lo, hi = Var(), Var()
+    return (deref(lo) if inf(v, lo, trail) else None,
+            deref(hi) if sup(v, hi, trail) else None)
+
+
+HOLZBAUR = __import__("clausal.logic.clpq", fromlist=["SOLVER"]).SOLVER == "holzbaur"
 
 
 # ── Phase 1: Dispatch ────────────────────────────────────────────────────────
@@ -76,19 +92,15 @@ class TestInQ:
         # nv
         trail, x = fresh()
         assert in_q(x, 0, 10, trail)
-        s = state(x)
-        assert s is not None
-        assert s.lo == F(0)
-        assert s.hi == F(10)
+        assert state(x) is not None
+        assert bounds(x, trail) == (0, 10)   # Task 14: see bounds()
 
     def test_narrows(self):
         # nv
         trail, x = fresh()
         in_q(x, 0, 10, trail)
         in_q(x, 2, 8, trail)
-        s = state(x)
-        assert s.lo == F(2)
-        assert s.hi == F(8)
+        assert bounds(x, trail) == (2, 8)    # Task 14: see bounds()
 
     def test_infeasible(self):
         # nv
@@ -120,9 +132,8 @@ class TestInQ:
         # nv
         trail, x = fresh()
         assert in_q(x, trail=trail)
-        s = state(x)
-        assert s.lo is None
-        assert s.hi is None
+        assert state(x) is not None
+        assert bounds(x, trail) == (None, None)   # Task 14: see bounds()
 
 
 # ── Phase 3: Ground rational constraints ─────────────────────────────────────
@@ -329,8 +340,7 @@ class TestBacktracking:
         mark = trail.mark()
         assert q_le(x, F(5), trail)
         trail.undo(mark)
-        s = state(x)
-        assert s.hi == F(10)
+        assert bounds(x, trail) == (0, 10)   # Task 14: see bounds()
 
     def test_undo_restores_tableau(self):
         # nv
@@ -643,7 +653,10 @@ class TestDumpQ:
         x = Var()
         in_q(x, 0, 10, trail)
         result = dump_q([x], trail)
-        assert any('=< 0' in c for c in result)   # lower bound
+        # Task 14, output spelling: the port writes a lower bound as 1.3.3's
+        # dump/3 and legacy's toplevel form do ({X >= 0}; Scryer's dump/3
+        # gives x>=0), legacy's dump_q as {-X =< 0}.
+        assert any('=< 0' in c or '>= 0' in c for c in result)   # lower bound
         assert any('=< 10' in c for c in result)   # upper bound
 
     def test_inequality_projection(self):
@@ -819,7 +832,14 @@ class TestBBInf:
         result = Var()
         assert bb_inf([x], x, result, trail)
         assert deref(result) == F(2)
-        assert deref(x) == F(2)  # x must be bound, not just result
+        if HOLZBAUR:
+            # Task 14, legacy-only answer: 1.3.3's bb_inf/3 binds Inf alone
+            # and leaves the store as it was; Scryer's clpq answers
+            # {X >= 3/2, X =< 10}, bb_inf([X], X, I) with I = 2 and X
+            # unbound.
+            assert is_var(deref(x))
+        else:
+            assert deref(x) == F(2)  # x must be bound, not just result
 
     def test_binds_multiple_vars(self):
         """bb_inf binds all constrained vars to optimal integer point."""
@@ -833,6 +853,11 @@ class TestBBInf:
         result = Var()
         assert bb_inf([x, y, z], x, result, trail)
         assert deref(result) == F(4)
+        if HOLZBAUR:
+            # Task 14, legacy-only answer: bb_inf/3 binds Inf alone (see
+            # test_binds_variables).
+            assert all(is_var(deref(v)) for v in (x, y, z))
+            return
         # Variables should be bound to integers
         assert deref(x) == F(4)
         assert deref(y) == F(2)
@@ -1100,14 +1125,16 @@ class TestFDQPromotion:
         assert get_attr(x, FD_KEY) is not None
         # Now use x in a Q context (q_le triggers _ensure_q_for_expr → _promote_fd_to_q)
         assert q_le(x, F(3), trail)
-        q_state = get_attr(x, Q_KEY)
-        assert q_state is not None
-        # QVar inherited FD bounds exactly
-        assert q_state.lo == F(1)
-        assert q_state.hi == F(5)  # QVar stores the promoted FD bounds
-        # The tighter bound (<=3) is in the tableau, not on QVar directly
-        tab = _get_tableau(trail)
-        assert tab.hi.get(q_state.tab_id) == F(3)
+        assert get_attr(x, Q_KEY) is not None
+        # The FD lower bound 1 is inherited; the tighter <= 3 holds.
+        # Task 14: read through inf/sup, see bounds().
+        assert bounds(x, trail) == (1, 3)
+        if not HOLZBAUR:
+            q_state = get_attr(x, Q_KEY)
+            assert q_state.lo == F(1)
+            assert q_state.hi == F(5)  # QVar stores the promoted FD bounds
+            tab = _get_tableau(trail)
+            assert tab.hi.get(q_state.tab_id) == F(3)
 
     def test_fd_var_promoted_to_q_keeps_fd(self):
         """After promotion, both FD and Q attributes coexist."""
@@ -1181,7 +1208,12 @@ class TestFDQPromotion:
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
-        with pytest.raises(TypeError, match="Cannot unify CLP\\(Q\\)"):
+        # Task 14, output spelling: the port raises the ISO
+        # type_error(rational, 3.14) 1.3.3's arith_normalize test gives
+        # (DEVIATIONS.md D3), legacy a Python TypeError.
+        with pytest.raises(LogicException if HOLZBAUR else TypeError,
+                           match=("type_error\\(rational,3.14\\)" if HOLZBAUR
+                                  else "Cannot unify CLP\\(Q\\)")):
             unify(x, 3.14, trail)
 
 
@@ -1193,7 +1225,12 @@ class TestA5FloatTypeError:
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
-        with pytest.raises(TypeError, match="Cannot unify CLP\\(Q\\)"):
+        # Task 14, output spelling: the port raises the ISO
+        # type_error(rational, 3.14) 1.3.3's arith_normalize test gives
+        # (DEVIATIONS.md D3), legacy a Python TypeError.
+        with pytest.raises(LogicException if HOLZBAUR else TypeError,
+                           match=("type_error\\(rational,3.14\\)" if HOLZBAUR
+                                  else "Cannot unify CLP\\(Q\\)")):
             unify(x, 3.14, trail)
 
     def test_float_literal_does_not_reach_q(self):
@@ -1395,7 +1432,12 @@ class TestClausalIntegration:
         assert result is not None
         x, cost = result
         assert cost == F(2)
-        assert x == F(2)  # variable bound to optimal integer
+        if HOLZBAUR:
+            # Task 14, legacy-only answer: bb_inf/3 binds Inf alone (see
+            # TestBBInf.test_binds_variables).
+            assert is_var(x)
+        else:
+            assert x == F(2)  # variable bound to optimal integer
 
     def test_bb_sicstus(self):
         # nv
@@ -1403,6 +1445,11 @@ class TestClausalIntegration:
         assert result is not None
         x, y, z, cost = result
         assert cost == F(4)
+        if HOLZBAUR:
+            # Task 14, legacy-only answer: bb_inf/3 binds Inf alone (see
+            # TestBBInf.test_binds_variables).
+            assert all(is_var(v) for v in (x, y, z))
+            return
         assert x == F(4)
         assert y == F(2)
         assert z == F(2)

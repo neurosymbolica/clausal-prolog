@@ -23,6 +23,10 @@ from clausal.logic.solve import solve
 from clausal.logic.variables import Trail, Var, deref, unify
 from clausal.terms import Add, Mult, Sub
 from clausal.testing import load_clausal_module
+from clausal.logic.variables import is_var
+import clausal.logic.clpq as _clpq
+
+HOLZBAUR = _clpq.SOLVER == "holzbaur"
 
 
 @pytest.fixture(autouse=True)
@@ -163,6 +167,19 @@ def test_random_box_bounded_lp_matches_the_vertices(seed):
         assert op(_expr(obj, xs), r, t), op.__name__
         assert deref(r) == want, (op.__name__, n, boxes, extra, obj)
         if op in (maximize, minimize):
+            if any(is_var(deref(x)) for x in xs):
+                # Task 14, legacy-only answer: 1.3.3's maximize/1 and
+                # minimize/1 post {Expr =:= Optimum} and bind only what that
+                # implies, so on an optimal edge or face the variables stay
+                # free (Scryer: {X >= 0, X =< 2, Y >= 0, Y =< 3},
+                # maximize(X) leaves Y unbound).  Legacy picks a vertex.
+                # The face is optimal: the objective is fixed at the optimum.
+                assert HOLZBAUR
+                lo_r, hi_r = Var(), Var()
+                assert inf(_expr(obj, xs), lo_r, t)
+                assert sup(_expr(obj, xs), hi_r, t)
+                assert deref(lo_r) == deref(hi_r) == want
+                continue
             point = [F(deref(x)) for x in xs]
             assert all(sum(F(ai) * xi for ai, xi in zip(a, point)) <= b
                        for a, b in cons)
@@ -190,7 +207,9 @@ def test_an_eliminated_variable_keeps_its_bounds():
 
 @pytest.mark.parametrize("order", [
     "bind_last", "bind_first",
-    pytest.param("bound_last", marks=pytest.mark.xfail(
+    # Task 14, legacy-only answer: the port fails it, as Scryer's clpq does
+    # ({X < Y, X >= 3, Y =< 3} has no answer), so the xfail is legacy's.
+    pytest.param("bound_last", marks=[] if HOLZBAUR else pytest.mark.xfail(
         strict=True, reason="todo/clpq-strict-bounds-closed-by-inequalities")),
 ])
 def test_a_strict_inequality_the_store_closes_fails(order):
