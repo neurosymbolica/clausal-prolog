@@ -272,13 +272,20 @@ StepGen_dealloc(StepGenObject *self)
     Py_XDECREF(self->trail);
     Py_XDECREF(self->drain);
     Py_XDECREF(self->drain_step);
-    Py_TYPE(self)->tp_free((PyObject *)self);
+    /* A heap type: every instance owns a reference to its type (taken by
+     * PyType_GenericAlloc), and subtype_dealloc leaves the release of a
+     * Python subclass's type to a heap base too.  Inside the trashcan, so
+     * a deferred object's type is released once, when it is really freed. */
+    PyTypeObject *tp = Py_TYPE(self);
+    tp->tp_free((PyObject *)self);
+    Py_DECREF(tp);
     Py_TRASHCAN_END
 }
 
 static int
 StepGen_traverse(StepGenObject *self, visitproc visit, void *arg)
 {
+    Py_VISIT(Py_TYPE(self));   /* heap type: instances own their type */
     Py_VISIT(self->gen);
     Py_VISIT(self->proceed);
     Py_VISIT(self->fail);

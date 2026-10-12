@@ -41,21 +41,35 @@ _SLOW = pytest.mark.skipif(
 _CAPPED_STACK = 2 * 1024 * 1024
 
 
+# Every child names the C extensions it loaded, so a test cannot pass
+# against some other tree's engine (a shared venv's editable install, or a
+# script directory on sys.path[0]).
+_ENGINE_PRELUDE = (
+    "import clausal.logic.runtime._trampoline as _t, "
+    "clausal.logic.variables._variables as _v\n"
+    "print('ENGINE', _t.__file__)\n"
+    "print('ENGINE', _v.__file__)\n"
+    "del _t, _v\n"
+)
+
+
 def _run(code, *, stack=None, timeout=600):
     def _cap():
+        # Never leave a core file behind -- set first, so no early return
+        # below can skip it.
+        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
         if stack is not None:
             _soft, hard = resource.getrlimit(resource.RLIMIT_STACK)
             if hard != resource.RLIM_INFINITY and hard < stack:
                 return
             resource.setrlimit(resource.RLIMIT_STACK, (stack, hard))
-        # Never leave a core file behind.
-        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join(
         [str(_ROOT)] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
     proc = subprocess.run(
-        [sys.executable, "-X", "faulthandler", "-c", textwrap.dedent(code)],
+        [sys.executable, "-X", "faulthandler", "-c",
+         _ENGINE_PRELUDE + textwrap.dedent(code)],
         cwd=str(_ROOT), env=env, preexec_fn=_cap,
         capture_output=True, text=True, timeout=timeout)
     return proc
@@ -66,6 +80,12 @@ def _assert_clean(proc, marker):
         f"exit {proc.returncode}\nstdout:\n{proc.stdout[-2000:]}\n"
         f"stderr:\n{proc.stderr[-2000:]}")
     assert marker in proc.stdout, proc.stdout[-2000:]
+    engines = [line.split(" ", 1)[1] for line in proc.stdout.splitlines()
+               if line.startswith("ENGINE ")]
+    assert len(engines) == 2, proc.stdout[-2000:]
+    for path in engines:
+        assert Path(path).resolve().is_relative_to(_ROOT), (
+            f"child loaded {path}, not this tree's engine under {_ROOT}")
 
 
 # ── fast: the chains themselves, capped stack ────────────────────────────────
@@ -127,6 +147,50 @@ def test_stepgenerator_catcher_chain_freed_by_collector():
         print("FREED")
     """, stack=_CAPPED_STACK)
     _assert_clean(proc, "FREED")
+
+
+def test_stepgenerator_instances_release_their_heap_type():
+    # StepGenerator is a heap type: every instance owns a reference to its
+    # type (PyType_GenericAlloc takes it), which its tp_dealloc must give
+    # back, and its tp_traverse must visit.  subtype_dealloc/traverse leave
+    # both to a heap base.  Otherwise each freed instance leaks one type
+    # reference, and a Python subclass is never collected.
+    proc = _run("""
+        import gc, sys, weakref
+        from clausal.logic.runtime._trampoline import StepGenerator
+        body = lambda this, proceed, fail, catcher: 0
+
+        class Sub(StepGenerator):
+            pass
+
+        for cls in (StepGenerator, Sub):
+            gc.collect()
+            before = sys.getrefcount(cls)
+            for _ in range(100_000):
+                cls(body, None, None, None)
+            gc.collect()
+            delta = sys.getrefcount(cls) - before
+            assert delta == 0, (cls.__name__, delta)
+
+        def make():
+            class Dyn(StepGenerator):
+                pass
+            keep = [Dyn(body, None, None, None) for _ in range(10)]
+            # A cycle through the instance's generator result, so freeing
+            # it goes through the collector and tp_traverse as well.
+            cyc = Dyn(lambda this, p, f, c: [this], None, None, None)
+            # A cycle THROUGH the type (class -> instance -> its type): only
+            # tp_traverse visiting Py_TYPE(self) lets the collector see it.
+            Dyn.instance = Dyn(body, None, None, None)
+            del keep, cyc
+            return weakref.ref(Dyn)
+
+        ref = make()
+        gc.collect()
+        assert ref() is None, "dynamic StepGenerator subclass never collected"
+        print("TYPEREF_OK")
+    """)
+    _assert_clean(proc, "TYPEREF_OK")
 
 
 @pytest.mark.parametrize("kind", ["Var", "AttVar"])
