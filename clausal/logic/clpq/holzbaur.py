@@ -74,11 +74,16 @@ from clausal.logic.clpq import branch_and_bound as _branch_and_bound
 from clausal.logic.clpq import normal_form as _normal_form
 from clausal.logic.clpq import residual_constraints as _residual_constraints
 from clausal.logic.clpq import variable_ordering as _variable_ordering
+from clausal.logic.clpq.arithmetic import (
+    arithmetic_normalize, is_exact_decimal, is_number)
 from clausal.logic.clpq.attributes import (
     CLPQ_KEY, culprit_argument, refuse_inside_attribute_hooks, state_of)
 from clausal.logic.clpq.legacy import (
     _cell_as_node, _cells_as_nodes, _units_result, _units_strip,
     _units_strip_expr)
+from clausal.logic.clpz_surface import _proper_list
+from clausal.logic.exceptions import (
+    LogicException, instantiation_error, type_error)
 from clausal.logic.variables import (
     PlainVar, Var, deref, get_attr, is_var, present_number, unify)
 from clausal.pythonic_ast.nodes import (
@@ -111,7 +116,23 @@ def _labels(variables, context):
 
 
 def _is_ground_number(x):
-    return isinstance(x, (int, Fraction, Decimal)) and not isinstance(x, bool)
+    """An exact engine number the adapter may bind or compare as it is: an
+    int, a Fraction or a Decimal ``from_number`` takes.  A Decimal NaN or
+    infinity, or one past DECIMAL_EXPONENT_LIMIT (present_number would
+    build its billion-digit integer), goes through nf.pl, whose arithmetic
+    raises the ISO error (test_a_decimal_without_a_rational_raises)."""
+    kind = type(x)
+    if kind is int or kind is Fraction:
+        return True
+    return kind is Decimal and is_exact_decimal(x)
+
+
+def _exact(number):
+    """An engine number as a Fraction, as nf.pl reads it
+    (``arithmetic_normalize``): a float through its short convergent, a
+    Decimal checked (no NaN, no infinity, no absurd exponent)."""
+    numerator, denominator = arithmetic_normalize(number)
+    return Fraction(numerator, denominator)
 
 
 # ---------------------------------------------------------------- posting
@@ -193,7 +214,7 @@ def _post_now(node_class, left, right, trail):
         if is_var(right) and _is_ground_number(left):
             return unify(right, present_number(left), trail)
     if _is_ground_number(left) and _is_ground_number(right):
-        return _compare_numbers(node_class, Fraction(left), Fraction(right))
+        return _compare_numbers(node_class, _exact(left), _exact(right))
     if not _promote_fd_variables(left, right, trail):
         return False
     return _normal_form.post_constraint(node_class(left=left, right=right),
@@ -244,6 +265,8 @@ def _post_from_library(node_class, left, right, trail):
 
 
 def _prepare(left, right, context, trail):
+    _normal_form.refuse_cyclic_term(left)
+    _normal_form.refuse_cyclic_term(right)
     left, right = _cells_as_nodes(deref(left), deref(right), context)
     return _units_strip(left, right, context, trail)
 
@@ -320,21 +343,33 @@ def in_q(var_or_list, lo=None, hi=None, trail=None):
     united = _in_q_units(targets, lo, hi, trail)
     if united is not None:
         return united
-    if lo is not None:
-        lo = Fraction(lo)
-    if hi is not None:
-        hi = Fraction(hi)
+    lo = _bound(lo)
+    hi = _bound(hi)
     for target in (targets if isinstance(targets, list) else [targets]):
         if not _declare(deref(target), lo, hi, trail):
             return False
     return True
 
 
+def _bound(value):
+    """An in_q/3 bound as a Fraction, None when it is absent.  Only an
+    engine number is a bound: a variable is an instantiation_error, any
+    other term (an atom such as '1/3', a string) type_error(rational, X);
+    the number is read as nf.pl reads it (``_exact``)."""
+    if value is None:
+        return None
+    if is_var(value):
+        raise LogicException(instantiation_error("in_q/3"))
+    if not is_number(value):
+        raise LogicException(type_error("rational", value, "in_q/3"))
+    return _exact(value)
+
+
 def _declare(target, lower, upper, trail):
     if isinstance(target, bool):
         return False
-    if _is_ground_number(target):
-        value = Fraction(target)
+    if is_number(target):
+        value = _exact(target)
         return ((lower is None or value >= lower)
                 and (upper is None or value <= upper))
     if not is_var(target):
@@ -447,6 +482,7 @@ def _optimum(port_call, expr, result_var, dims, trail):
 
 
 def _objective(expr, context, trail):
+    _normal_form.refuse_cyclic_term(expr)
     expr = _cell_as_node(deref(expr), context)
     return _units_strip_expr(expr, context, trail)
 
@@ -511,8 +547,9 @@ def bb_inf(int_vars, expr, result_var, trail):
     (1.3.3's shape, Task 13).  A united variable's shadow is the integer."""
     refuse_inside_attribute_hooks(
         trail, ("bb_inf", int_vars, expr, result_var), "bb_inf", 3)
+    int_vars = _proper_list(int_vars, "bb_inf/3")
     expr, dims = _objective(expr, "bb_inf/3", trail)
-    integers = _labels(deref(int_vars), "bb_inf/3")
+    integers = _labels(int_vars, "bb_inf/3")
     return _optimum(
         lambda objective, value, trail: _branch_and_bound.bb_inf(
             integers, objective, value, trail),
@@ -528,7 +565,10 @@ def entailed(constraint_type, l, r, trail):
         trail, ("entailed", (constraint_type, l, r)), "entailed", 1)
     node_class = _ENTAILED_NODES.get(constraint_type)
     if node_class is None:
-        raise ValueError(f"Unknown constraint type: {constraint_type!r}")
+        # nf.pl negate/2's last clause: illarg(type(constraint),
+        # entailed(Rel), 1); the culprit is the relation as a cell.
+        raise LogicException(type_error(
+            "constraint", (constraint_type, l, r), "entailed/1"))
     l, r = _prepare(l, r, "entailed/1", trail)
     return _without_a_queue(
         trail, lambda: _normal_form.entailed(node_class(left=l, right=r),
@@ -569,6 +609,7 @@ def dump_q(target_vars, trail, name_of=None, *, toplevel=False):
     answer."""
     refuse_inside_attribute_hooks(
         trail, ("dump_q", target_vars, Var()), "dump_q", 2)
+    target_vars = _proper_list(target_vars, "dump_q/2")
     shadows, name = _named_targets(target_vars, "dump_q/2", name_of)
     return _without_a_queue(
         trail, lambda: _residual_constraints.residual_strings(
@@ -609,6 +650,7 @@ def _block_tree(constraints):
     """(tree, holds a `;`) for the block *constraints*: a comparison node, a
     tuple or list of them, a CompareChain, or `,`/`;` cells."""
     disjunctive = False
+    _normal_form.refuse_cyclic_term(constraints)
     root = [deref(constraints)]
     work = [(root, 0)]
     while work:
@@ -628,11 +670,11 @@ def _block_tree(constraints):
             work.append((branch, 2))
             continue
         else:
+            if is_var(term):                    # nf.pl {}/1 clause 1
+                raise LogicException(instantiation_error("{}/1"))
             context = _BLOCK_CONTEXTS.get(kind)
-            if context is None:
-                raise TypeError(
-                    f"clpq constraint block: unsupported node "
-                    f"{kind.__name__}: {term}")
+            if context is None:                 # nf.pl {}/1 clause 13
+                raise LogicException(type_error("constraint", term, "{}/1"))
             left, right = _cells_as_nodes(deref(term.left),
                                           deref(term.right), context)
             holder[index] = (kind, left, right, context)
@@ -701,13 +743,16 @@ def _as_term(tree, trail):
 def clpq_constraint_block(constraints, trail):
     """Post the constraints of a ``{...}`` block; True or False.  A block
     that holds ``;`` has several answers and goes through
-    clpq_constraint_answers (ruling R18); here it raises TypeError, as
-    legacy's does for a node it cannot post."""
+    clpq_constraint_answers (ruling R18); here it raises
+    type_error(constraint, Block), as legacy's does for a node it cannot
+    post (DEVIATIONS.md D20)."""
     refuse_inside_attribute_hooks(trail, ("{}", constraints), "{}", 1)
     tree, disjunctive = _block_tree(constraints)
     if disjunctive:
-        raise TypeError("clpq constraint block: a disjunction has several "
-                        "answers; post it with clpq_constraint_answers")
+        raise LogicException(type_error(
+            "constraint", deref(constraints),
+            "{}/1: a disjunction has several answers; post it with "
+            "clpq_constraint_answers"))
     return _post_leaves(tree, trail)
 
 
@@ -719,6 +764,21 @@ def _post_leaves(tree, trail):
         if not _post_now(kind, left, right, trail):
             return False
     return True
+
+
+def _post_comparison_keeping_scale(functor, arguments, goal, trail):
+    """nf.pl's comparison clauses for a block that holds ``;``, with the
+    fast path ``_post_now`` takes on the other path: ``X = N`` with X a
+    variable and N an exact number is the unification, so a Decimal keeps
+    its scale in a branch too (Fable M5,
+    test_a_decimal_keeps_its_scale_in_a_disjunction)."""
+    if (functor == "=" or functor == "=:=") and len(arguments) == 2:
+        left, right = deref(arguments[0]), deref(arguments[1])
+        if is_var(left) and _is_ground_number(right):
+            return unify(left, present_number(right), trail)
+        if is_var(right) and _is_ground_number(left):
+            return unify(right, present_number(left), trail)
+    return _normal_form._post_comparison(functor, arguments, goal, trail)
 
 
 def clpq_constraint_answers(constraints, trail):
@@ -738,7 +798,8 @@ def clpq_constraint_answers(constraints, trail):
         term = _as_term(tree, trail)
         if not _promote_fd_variables(term, None, trail):
             return
-        state = _normal_form.post_constraint_with_choices(term, trail)
+        state = _normal_form.post_constraint_with_choices(
+            term, trail, _post_comparison_keeping_scale)
         if state is None:
             return
         yield None

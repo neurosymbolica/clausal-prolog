@@ -140,10 +140,15 @@ def test_a_block_with_a_disjunction_gives_every_answer():
 
 
 def test_the_bool_block_refuses_a_disjunction():
+    # type_error(constraint, Block), the prose naming the entry point that
+    # takes one (test_iso_errors.py has the whole term).
+    from clausal.logic.exceptions import LogicException
     t, x = Trail(), Var()
-    with pytest.raises(TypeError, match="clpq_constraint_answers"):
+    with pytest.raises(LogicException, match="clpq_constraint_answers") \
+            as caught:
         h.clpq_constraint_block((";", LtE(left=x, right=1),
                                  GtE(left=x, right=3)), t)
+    assert caught.value.term[1][:2] == ("type_error", "constraint")
 
 
 def test_legacy_s_block_answers_once():

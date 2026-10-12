@@ -161,3 +161,46 @@ def test_block_form_controls_answer_as_the_oracle(woken):
     assert _answers(woken, "block_var_y", 2) == []
     assert _answers(woken, "block_nonvar_y", 2) == [(2, 2)]
     assert _answers(woken, "block_equal_var_y", 2) == []
+
+
+# ---------------------------------------------------------------- Task 16
+#
+# The security review's repros (High 2, DEVIATIONS.md D23) and its
+# big-integer bound (Medium 5), through the engine's driver.
+
+_CYCLIC = """\
+:- use_module(library(clpq)).
+c1(Y) :- X = 1 + X, {Y >= X}.
+c3(I) :- X = 1 + X, bb_inf([X], 0, I).
+c9(Y) :- {Y*Y >= Z}, Z = 1 + Z.
+"""
+
+
+@pytest.mark.parametrize("name", ["c1", "c3", "c9"])
+def test_a_cyclic_term_raises_through_the_engine(tmp_path, name):
+    from clausal.logic.exceptions import LogicException, type_error
+    from clausal.testing import load_clausal_module
+    path = tmp_path / f"_cyclic_{next(_N)}.clausal"
+    path.write_text(_CYCLIC)
+    module = load_clausal_module(str(path))
+    with pytest.raises(LogicException) as caught:
+        list(call(name, Var(), module=module))
+    assert caught.value.term == type_error(
+        "evaluable", ("/", "+", 2), "normal_form/2")
+
+
+def test_the_cli_prints_a_bound_past_4300_digits(tmp_path):
+    import os
+    import subprocess
+    import sys
+    path = tmp_path / "big.clausal"
+    path.write_text(":- use_module(library(clpq)).\n"
+                    "big(Y) :- X is 10^5000, {Y >= X}.\n")
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2]
+    env = dict(os.environ, CLAUSAL_CLPQ="holzbaur", PYTHONPATH=str(root))
+    r = subprocess.run([sys.executable, "-m", "clausal", str(path), "-1",
+                        "-g", "big(Y)"], capture_output=True, text=True,
+                       env=env, cwd=root, timeout=120)
+    assert r.returncode == 0, r.stderr[-2000:]
+    assert "Y >= 1" + "0" * 5000 in r.stdout, r.stdout[-500:]

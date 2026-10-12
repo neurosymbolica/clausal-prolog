@@ -100,11 +100,26 @@ class _IntSubclass(int):
 
 @pytest.mark.parametrize("value", [
     True, False, 0.5, 1.0, _IntSubclass(3), "1", None,
-    Decimal("NaN"), Decimal("sNaN"), Decimal("Infinity"), Decimal("-Infinity"),
 ])
 def test_from_number_rejects_inexact_input(value):
     with pytest.raises(TypeError, match="not an exact number"):
         a.from_number(value)
+
+
+@pytest.mark.parametrize("value, kind", [
+    (Decimal("NaN"), "undefined"), (Decimal("sNaN"), "undefined"),
+    (Decimal("Infinity"), "float_overflow"),
+    (Decimal("-Infinity"), "float_overflow"),
+])
+def test_from_number_of_a_decimal_without_a_rational_is_an_iso_error(
+        value, kind):
+    # A Decimal is an engine number nf.pl reads (is_number), so a NaN or an
+    # infinity reaches from_number from a program: ruling R19, as a float's
+    # does in float_to_rational (Task 16 fix round).
+    from clausal.logic.exceptions import LogicException, evaluation_error
+    with pytest.raises(LogicException) as caught:
+        a.from_number(value)
+    assert caught.value.term == evaluation_error(kind, "is/2")
 
 
 # ---------------------------------------------------------------- arith.pl runtime (Task 10, for nf.pl)

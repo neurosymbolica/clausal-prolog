@@ -30,7 +30,7 @@ module drops the `_rational` suffix):
 | `comq/5` | `compare` | Returns -1, 0 or 1 instead of binding `<`, `=` or `>`. |
 | `signumq/4` | `sign` | Returns the int sign; 1.3.3 returns it as the rational `S/1`. |
 | `putq/3` | `make_rational` | `putq` builds `rat(N, D)` from an already-normal pair; `make_rational` also normalises (sign of the denominator, gcd) and raises `ZeroDivisionError` on a zero denominator. |
-| `getq/3` | `from_number` | `getq` accepts an integer, a float (through `float_rat`) or a normal `rat(N, D)`.  `from_number` accepts an `int`, a `Fraction` or a finite `Decimal`, and raises `TypeError` for anything else, including floats, `bool`, subclasses and non-finite Decimals.  Floats are refused because the interface takes exact numbers only. |
+| `getq/3` | `from_number` | `getq` accepts an integer, a float (through `float_rat`) or a normal `rat(N, D)`.  `from_number` accepts an `int`, a `Fraction` or a finite `Decimal`, and raises `TypeError` for anything else, including floats, `bool` and subclasses (a programming error: nf.pl's callers read a float through `float_to_rational`).  A Decimal is an engine number a program can write, so its refusals are ISO errors (ruling R19, Task 16): NaN is `evaluation_error(undefined)` and an infinity `evaluation_error(float_overflow)`, as for a float; an exponent of ten past `DECIMAL_EXPONENT_LIMIT` (100,000) is `representation_error(max_integer)`, because `Decimal('1E+999999999')` would build an integer of a billion digits and never return (`test_a_decimal_without_a_rational_raises`). |
 | (none) | `to_number` | The way out: an `int` when the denominator is 1, otherwise a `Fraction`, as `present_number` does. |
 | (none) | `negate`, `is_zero`, `ZERO`, `ONE` | 1.3.3 writes these inline (`N is -Na`, `N =:= 0`, `0, 1`). |
 
@@ -46,7 +46,7 @@ in `arith.pl`'s file order:
 | `minq/6`, `maxq/6` | `minimum`, `maximum` | Return the rational. |
 | `abs(rat(N, D))` (`specialize_rational_function//2`) | `absolute` | |
 | `rat_float/3` | `rational_to_float` | A result past the float range raises `evaluation_error(float_overflow)`.  bv.pl's `float(X)` in `decrease_evaluate/2` uses it too. |
-| `float_rat/3,9` | `float_to_rational` | The recursion is a loop; NaN raises `evaluation_error(undefined)` and an infinity `evaluation_error(float_overflow)`. |
+| `float_rat/3,9` | `float_to_rational` | The recursion is a loop; NaN raises `evaluation_error(undefined)` and an infinity `evaluation_error(float_overflow)`.  Where the next step's reciprocal is past the float range (a remainder under about 5.6e-309, a subnormal float such as 5.0e-324), the answer is the float's exact value; the step raised `OverflowError` before Task 16, and SICStus's float division would overflow there.  Not checked against SICStus (`test_the_smallest_float_is_read_exactly`). |
 | `arith_normalize/2` (`arith_q.pl`) | `arithmetic_normalize` | Takes an engine number or a rational pair.  A float goes through `float_to_rational`, as `get_rational/3` reads one, so `{X = 0.1}` gives `X = 1/10` (`test_numbers_are_exact_and_a_float_is_its_short_convergent`); Scryer's own `library(clpq)` gives the float's exact binary value instead. |
 | `truncateq/4`, `floorq/4`, `ceilingq/4`, `roundq/4` | `truncate_rational`, `floor_rational`, `ceiling_rational`, `round_rational` (Task 13, for bb.pl) | Take and return a pair.  They keep the `_rational` suffix, so they do not shadow Python's `round`.  SICStus `//` truncates toward zero and Python's floors; `_truncated_quotient` gives SICStus's.  `round_rational` rounds to the nearest integer, a half away from zero (ISO `round/1`), where 1.3.3's `roundq/4` gives `1` on (-1, -1/2] (D18). |
 | `integerp/2` (`arith_q.pl`) | `rational_integer` | Returns the int, or None. |
@@ -1080,6 +1080,39 @@ differently from 1.3.3 itself:
   type_error: the program's term is a variable, the right type; the limit
   is the engine's variable kind.
 
+- Errors (ruling R19, Task 16 fix round; `tests/clpq_port/test_iso_errors.py`
+  asserts each whole term).  A block node that is no comparison raises
+  nf.pl clause 13's `type_error(constraint, Node)` from `{}/1`, an unbound
+  block clause 1's `instantiation_error` (so `clpq.rational(X)` with X
+  unbound); the culprit is the node, as the port's `{}/1` names the goal,
+  not `{Node}`.  A block that holds `;` given to `clpq_constraint_block`,
+  which answers once, raises `type_error(constraint, Block)` whose prose
+  names `clpq_constraint_answers`; legacy refuses the same node.
+  `entailed/4` with a relation it does not know raises negate/2's
+  `type_error(constraint, Rel)`, with Rel the cell `(Type, L, R)`.
+  `bb_inf/3` and `dump_q/2` take a proper list: a variable or a partial
+  list is `instantiation_error`, anything else `type_error(list, X)`
+  (Scryer's `must_be(list, X)`, clpz_surface's `_proper_list`); legacy
+  iterated whatever it was given.  A failing dump/3 under a store that
+  holds is `system_error(clpq_dump_failed)` (it was a RuntimeError), and a
+  number past 4,300 digits prints through Decimal, as chars.py prints one.
+- `in_q/3`'s bounds are engine numbers only: an unbound bound is
+  `instantiation_error`, any other term `type_error(rational, X)` (the
+  atom `'1/3'` and the string "1" included; legacy and the port before
+  Task 16 read them through `Fraction(...)`).  A bound is read as nf.pl
+  reads the number in `{Lo =< X}`, so a float is its short convergent
+  (`in_q(X, 0.1, 1)` gives inf 1/10; `Fraction(0.1)` before).
+- The Decimal-scale fast path above also holds in a block that holds `;`
+  (Fable M5): each `X = N` branch is posted through
+  `_post_comparison_keeping_scale`, which `post_constraint_with_choices`
+  takes as an argument and keeps for `resume_constraint`, so
+  `{X = 2.50 ; X = 3.750}` binds `Decimal('2.50')`, then
+  `Decimal('3.750')` (it bound 5/2 before;
+  `test_a_decimal_keeps_its_scale_in_a_disjunction`).  The fast path takes
+  an int, a Fraction or a Decimal `from_number` takes; a Decimal NaN, an
+  infinity or one past `DECIMAL_EXPONENT_LIMIT` goes through nf.pl and
+  raises (D1).
+
 ## D21: inf/4 and sup/4 raised on an unbound Vertex until Task 15 (resolved)
 
 Resolved by Task 15.  bv.pl's `infimum_linear/4` ends with
@@ -1208,3 +1241,75 @@ a dropped residual constraint, every post failing, `put_attr` on a trail
 that is never undone).  A store the port rejects is checked against z3,
 and the undo and projection fuzzers require more than half their cases to
 reach the undo or the projection.
+
+## D23: a cyclic term raises type_error(evaluable, F/A)
+
+1.3.3's `nf/2` recurses on the term, so on a cyclic term (`X = 1 + X`) it
+recurses for ever; the local clpq.pl port on Scryer does not answer
+`X = 1+X, {Y >= X}`, `X = 1+X, bb_inf([X], 0, I)`, `X = 1+X, inf(X, I)` or
+`{Y*Y >= Z}, Z = 1+Z` within 10 s (checked 2026-10-12).  The port's
+`normal_form` walks the term with an explicit stack, so it looped with
+growing memory instead (security review High 2): `c3(I) :- X = 1 + X,
+bb_inf([X], 0, I)` and `c9(Y) :- {Y*Y >= Z}, Z = 1 + Z` (the second through
+the delayed goal Z's binding wakes).
+
+`normal_form` now keeps the set of compounds on the path from the root to
+the term it reads (each compound's `_LEAVE` work item takes it off), and a
+compound met again while on the path raises
+`error(type_error(evaluable, F/A), normal_form/2)`, F/A the functor of
+that compound.  The check is per path, so a shared subterm (`S = X + X`,
+`{Y = S + S}`) is no cycle (`test_a_shared_subterm_is_not_a_cycle`).
+
+Why this error.  ISO terms are finite, so the standard has no case for a
+cyclic one; Scryer's `is/2` on `X = 1+X, Y is X` raises
+`type_error(evaluable, (+)/2)` and on `X = f(X)` `type_error(evaluable,
+f/1)` (checked 2026-10-12).  nf.pl's own refusal of a non-expression is
+`type_error(expression, nf(Term, Norm))`, but its culprit would be the
+cyclic term itself, which no printer can write; Scryer's form names a
+finite culprit.  The context is `normal_form/2`, as the port's
+`type_error(expression, ...)` names it.
+
+The adapter (`holzbaur.py`) runs the same check (`refuse_cyclic_term`, one
+walk that does not revisit a compound it has left) on each expression
+before clpfd's cell walk, which recursed on a cyclic term and raised
+`RecursionError` (`c1(Y) :- X = 1 + X, {Y >= X}`), so `q_*`, `{}/1`,
+`inf/2`, `sup/2`, `maximize/2`, `minimize/2`, `bb_inf/3` and `entailed/1`
+raise the same term.  Tests (bare and as a driver leaves the trail):
+`test_normal_form_of_a_cyclic_term_raises`,
+`test_bb_inf_of_a_cyclic_term_raises`,
+`test_a_cyclic_binding_of_a_delayed_variable_raises`,
+`test_the_adapter_refuses_a_cyclic_term`; through the engine,
+`test_switch_engine.py`'s `test_a_cyclic_term_raises_through_the_engine`.
+
+Not covered: the `inf/2` and `sup/2` builtins ask CLP(R) first
+(`clpr.is_real_expression`), whose cell walk recurses before CLP(Q) is
+reached, so `X = 1 + X, inf(X, I)` through the engine still raises
+`RecursionError`, under both switches (shared code; D24, deep terms).
+
+## D24: known limits, deferred by ruling R34
+
+The security review of Task 16 measured these; ruling R34 defers them, the
+first three to the operator as one question (resource limits beyond
+1.3.3) and the last two as follow-ups, all before the default flip.  The
+port behaves as 1.3.3 does on the first three; nothing here is reachable
+under the default switch except where it says "legacy the same".
+
+- **bb_inf/3 on a store with no integer point does not terminate**
+  (High 1).  `noint(I) :- {X >= 0, Y >= 0, 2*X - 2*Y =:= 1},
+  bb_inf([X, Y], X, I).`  bb.pl branches for ever; memory grows by about
+  50 MB/s.  1.3.3 does the same; legacy caps its depth at 50 and fails.
+- **Projection is exponential with no cap** (Medium 3).  dump/3 on two of
+  n variables under 3n random `=<` constraints (coefficients in -3..3):
+  worst over the seeds tried, 0.70 s at n = 4 and 13.50 s at n = 5.  The
+  `-g` printer projects every answer, so a sandboxed program reaches it.
+  Fourier-Motzkin in 1.3.3 is the same.
+- **Power expansion is about N^3** (Medium 4): `{X = (Y + 1)^(10^7)}`
+  does not finish.  nf.pl expands binomially as the port does.
+- **Unifying lists of constrained variables is cubic** (Low 8): `X1 =<
+  X2 =< ... =< Xn`, then `[X1, ..., Xn] = [0, ..., n-1]`: n = 400 takes
+  24 s; legacy 1.4 s.  A measured regression against legacy.
+- **Deep terms raise RecursionError in shared clpfd code** (Medium 7):
+  a sum nested 100,000 deep (`lsum(N, X, T) :- ..., lsum(N1, X + 1, T)`,
+  then `{Y >= T}`) raises `RecursionError` from clpfd's cell walk before
+  the port is reached.  Legacy the same.  The cyclic case of the same walk
+  under `inf/2`/`sup/2` is in D23.

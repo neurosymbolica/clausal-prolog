@@ -26,8 +26,9 @@ from clausal.logic.clpq.delayed_goals import _term_variables, collect_nonlinear
 from clausal.logic.clpq.normal_form import SOLVER_MODULE
 from clausal.logic.clpq.projection import project_attributes
 from clausal.logic.clpq.variable_ordering import ordering
-from clausal.logic.exceptions import LogicException, _error
+from clausal.logic.exceptions import LogicException, _error, system_error
 from clausal.logic.variables import PlainVar, Var, deref, is_var, unify
+from decimal import Decimal
 from fractions import Fraction
 
 
@@ -336,8 +337,9 @@ def residual_strings(target_variables, trail, name_of):
     carry constraints) are left out of the targets.  Without any CLP(Q)
     state on the targets the answer is [] at once, which is what dump/3
     gives there (test_residual_strings_without_a_store_is_empty).  Raises
-    RuntimeError where dump/3 fails, so an answer's constraints are never
-    dropped in silence."""
+    system_error(clpq_dump_failed) where dump/3 fails, so an answer's
+    constraints are never dropped in silence
+    (test_a_failing_dump_raises_a_system_error)."""
     targets = []
     seen = set()
     stateful = False
@@ -355,7 +357,8 @@ def residual_strings(target_variables, trail, name_of):
         return []
     goals = dump(targets, targets, trail)
     if goals is None:
-        raise RuntimeError("dump/3 failed on a store that holds")
+        raise LogicException(system_error(
+            "clpq_dump_failed", "dump/3: dump/3 failed on a store that holds"))
     result = []
     for goal in goals:
         text = format_term(goal, name_of)
@@ -448,6 +451,21 @@ def format_term(term, name_of):
 def _number_text(number):
     if type(number) is Fraction:
         if number.denominator == 1:
-            return str(number.numerator)
-        return f"{number.numerator}/{number.denominator}"
+            return _integer_text(number.numerator)
+        return (f"{_integer_text(number.numerator)}/"
+                f"{_integer_text(number.denominator)}")
+    if type(number) is int:
+        return _integer_text(number)
     return str(number)
+
+
+_PLAIN_TEXT_LIMIT = 10 ** 4000
+
+
+def _integer_text(integer):
+    """*integer* in decimal.  CPython's str(int) refuses more than 4300
+    digits; Decimal's does not, as chars.py's _number_text prints it
+    (test_a_bound_past_4300_digits_prints)."""
+    if -_PLAIN_TEXT_LIMIT < integer < _PLAIN_TEXT_LIMIT:
+        return str(integer)
+    return str(Decimal(integer))

@@ -167,11 +167,14 @@ class ConstraintChoices:
     """The choice points `{R ; Rs}` (nf.pl `{}/1` clause 3) leaves: a stack
     of (trail mark, the other branch, the goals after it), newest last.
     resume_constraint takes the newest one; it is how a caller backtracks
-    into a posted `{}` (DEVIATIONS.md D12)."""
-    __slots__ = ("choices",)
+    into a posted `{}` (DEVIATIONS.md D12).  *post_comparison* is the
+    function each comparison is posted with, kept so the branches a resume
+    takes are posted as the first was."""
+    __slots__ = ("choices", "post_comparison")
 
-    def __init__(self, choices):
+    def __init__(self, choices, post_comparison=None):
         self.choices = choices
+        self.post_comparison = post_comparison
 
 
 def post_constraint(term, trail):
@@ -184,18 +187,26 @@ def post_constraint(term, trail):
     the caller.  The conjunction and disjunction are a work list, not
     recursion."""
     refuse_inside_attribute_hooks(trail, ("{}", term), "{}", 1)
-    return _run_constraint_goals((term, None), [], trail)
+    return _run_constraint_goals((term, None), [], trail, _post_comparison)
 
 
-def post_constraint_with_choices(term, trail):
+def post_constraint_with_choices(term, trail, post_comparison=None):
     """nf.pl, {}/1 with its choice points handed back: a ConstraintChoices
     to pass to resume_constraint after a later failure, or None where the
-    constraint fails (test_a_caller_resumes_a_posted_disjunction)."""
+    constraint fails (test_a_caller_resumes_a_posted_disjunction).
+
+    *post_comparison*, when given, posts each comparison in place of nf.pl's
+    clauses 4 to 12 (same arguments as _post_comparison): the adapter's
+    Decimal-scale fast path (DEVIATIONS.md D20,
+    test_a_decimal_keeps_its_scale_in_a_disjunction)."""
     refuse_inside_attribute_hooks(trail, ("{}", term), "{}", 1)
+    if post_comparison is None:
+        post_comparison = _post_comparison
     choices = []
-    if not _run_constraint_goals((term, None), choices, trail):
+    if not _run_constraint_goals((term, None), choices, trail,
+                                 post_comparison):
         return None
-    return ConstraintChoices(choices)
+    return ConstraintChoices(choices, post_comparison)
 
 
 def resume_constraint(state, trail):
@@ -206,15 +217,19 @@ def resume_constraint(state, trail):
     refuse_inside_attribute_hooks(
         trail, ("resume_constraint", state), "resume_constraint", 1)
     choices = state.choices
+    post_comparison = state.post_comparison
+    if post_comparison is None:
+        post_comparison = _post_comparison
     while choices:
         mark, alternative, goals = choices.pop()
         trail.undo(mark)
-        if _run_constraint_goals((alternative, goals), choices, trail):
+        if _run_constraint_goals((alternative, goals), choices, trail,
+                                 post_comparison):
             return True
     return False
 
 
-def _run_constraint_goals(goals, choices, trail):
+def _run_constraint_goals(goals, choices, trail, post_comparison):
     """{}/1's clauses on the goal list *goals* (a cons list), pushing the
     choice points of `;` onto *choices* and backtracking into them on
     failure.  True when every goal has succeeded."""
@@ -242,7 +257,7 @@ def _run_constraint_goals(goals, choices, trail):
             choices.append((trail.mark(), arguments[1], goals))
             goals = (arguments[0], goals)
             continue
-        if _post_comparison(functor, arguments, goal, trail):
+        if post_comparison(functor, arguments, goal, trail):
             continue
         if not choices:
             return False
@@ -711,6 +726,65 @@ def nonlinear_invertible(base, value):
 
 # -----------------------------------------------------------------------
 
+def cyclic_term_error(functor, arity):
+    """The error a cyclic expression raises: Scryer's is/2 on `X = 1+X`
+    raises type_error(evaluable, (+)/2), naming the functor of the compound
+    that closes the cycle, so the culprit is a finite term (DEVIATIONS.md
+    D23)."""
+    return type_error("evaluable", ("/", functor, arity), "normal_form/2")
+
+
+def refuse_cyclic_term(term):
+    """Raise cyclic_term_error when *term* is cyclic; otherwise return.
+    A depth-first walk with an explicit stack: a compound is on the path
+    from its entry to its exit, and one met again while on the path closes
+    a cycle.  A compound already left is not walked again, so a term with
+    shared subterms costs its number of distinct compounds.  The adapter
+    calls it before clpfd's cell walk, which recurses
+    (test_the_adapter_refuses_a_cyclic_term)."""
+    on_path = set()
+    done = set()
+    stack = [(False, term)]
+    while stack:
+        leaving, item = stack.pop()
+        if leaving:
+            on_path.discard(id(item))
+            done.add(id(item))
+            continue
+        item = deref(item)
+        if is_var(item):
+            continue
+        kind = type(item)
+        if kind is list:
+            arguments = item
+            functor = "."
+            arity = 2
+        elif kind is _nodes.CompareChain:
+            arguments = item.comparisons
+            functor = ","
+            arity = 2
+        else:
+            functor, arguments = _functor_and_arguments(item)
+            if functor is None:
+                if kind is tuple and item and type(item[0]) is not str:
+                    arguments = item                # a block's sequence
+                    functor = ","
+                    arity = 2
+                else:
+                    continue
+            else:
+                arity = len(arguments)
+        key = id(item)
+        if key in done:
+            continue
+        if key in on_path:
+            raise LogicException(cyclic_term_error(functor, arity))
+        on_path.add(key)
+        stack.append((True, item))
+        for argument in arguments:
+            stack.append((False, argument))
+
+
 # Work items of normal_form's explicit stack.
 _EVALUATE = 0
 _NEGATE = 1
@@ -719,6 +793,7 @@ _MULTIPLY = 3
 _DIVIDE = 4
 _NONLINEAR_UNARY = 5
 _NONLINEAR_BINARY = 6
+_LEAVE = 7
 
 
 def normal_form(term):
@@ -728,15 +803,23 @@ def normal_form(term):
     1.3.3 recurses on the term; the port walks it with an explicit stack of
     work items and a stack of results, so a long sum needs no recursion
     (test_a_long_sum_needs_no_recursion).  Each clause pushes the
-    operation to apply after its arguments."""
+    operation to apply after its arguments.
+
+    *path* holds the compounds between the root and the term being read
+    (each one's `_LEAVE` item takes it off again), so a cyclic term raises
+    type_error(evaluable, F/A) where 1.3.3 loops (DEVIATIONS.md D23,
+    test_normal_form_of_a_cyclic_term_raises)."""
     work = [(_EVALUATE, term)]
     values = []
+    path = set()
     while work:
         item = work.pop()
         action = item[0]
         if action == _EVALUATE:
-            if not _evaluate_step(item[1], work, values):
+            if not _evaluate_step(item[1], work, values, path):
                 return None
+        elif action == _LEAVE:
+            path.discard(item[1])
         elif action == _NEGATE:
             values.append(normal_form_multiply_factor(
                 Monomial(MINUS_ONE, []), values.pop()))
@@ -763,9 +846,10 @@ def normal_form(term):
     return values[0]
 
 
-def _evaluate_step(term, work, values):
+def _evaluate_step(term, work, values, path):
     """One clause of normal_form/2 on *term*: push its value, or push the
-    work for its arguments.  False where the clause fails."""
+    work for its arguments.  False where the clause fails.  *path* is
+    normal_form's set of the compounds above *term*."""
     term = deref(term)
     if is_var(term):                                        # clause 1
         values.append([Monomial(ONE, [(term, 1)])])
@@ -775,6 +859,12 @@ def _evaluate_step(term, work, values):
         return True
     functor, arguments = _functor_and_arguments(term)
     arity = len(arguments)
+    if functor is not None:
+        key = id(term)
+        if key in path:
+            raise LogicException(cyclic_term_error(functor, arity))
+        path.add(key)
+        work.append((_LEAVE, key))
     if functor == "rat" and arity == 2:                     # clause 3
         numerator, denominator = deref(arguments[0]), deref(arguments[1])
         if type(numerator) is int and type(denominator) is int:
@@ -1557,7 +1647,10 @@ def _order_class(term):
         return _ORDER_NUMBER
     if type(term) is NonlinearBase:
         return _ORDER_COMPOUND
-    raise TypeError(f"normal form: a base bound to {term!r} before repair")
+    # A base bound to a term that is no number: nf.pl reads it as an
+    # expression, and its last clause raises type_error(expression, Term)
+    # (test_a_base_bound_to_a_non_number_raises_a_type_error).
+    raise LogicException(type_error("expression", term, "normal_form/2"))
 
 
 def _standard_order(kind, first, second):

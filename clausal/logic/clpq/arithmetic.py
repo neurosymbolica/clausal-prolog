@@ -13,6 +13,14 @@ from math import gcd
 ZERO = (0, 1)
 ONE = (1, 1)
 
+#: The largest exponent of ten a Decimal may carry into the solver.
+#: Decimal('1E+999999999') is a short term whose integer has a billion
+#: digits; as_integer_ratio does not return on it.  Past the limit,
+#: representation_error(max_integer) (DEVIATIONS.md D1,
+#: test_a_decimal_without_a_rational_raises); Decimal('1E+100000')'s
+#: integer took 3 ms to build (2026-10-12, local aarch64).
+DECIMAL_EXPONENT_LIMIT = 100_000
+
 
 def make_rational(numerator, denominator):
     if denominator == 0:
@@ -67,10 +75,27 @@ def from_number(x):
         return (x, 1)
     if type(x) is Fraction:
         return (x.numerator, x.denominator)
-    if type(x) is Decimal and x.is_finite():
+    if type(x) is Decimal:
+        if x.is_nan():
+            raise _evaluation_error("undefined")
+        if x.is_infinite():
+            raise _evaluation_error("float_overflow")
+        exponent = x.as_tuple().exponent
+        if exponent > DECIMAL_EXPONENT_LIMIT or \
+                exponent < -DECIMAL_EXPONENT_LIMIT:
+            raise _representation_error("max_integer")
         numerator, denominator = x.as_integer_ratio()
         return (numerator, denominator)
     raise TypeError(f"not an exact number: {x!r}")
+
+
+def is_exact_decimal(value):
+    """A Decimal from_number takes: finite, and its exponent of ten within
+    DECIMAL_EXPONENT_LIMIT."""
+    if not value.is_finite():
+        return False
+    exponent = value.as_tuple().exponent
+    return -DECIMAL_EXPONENT_LIMIT <= exponent <= DECIMAL_EXPONENT_LIMIT
 
 
 def is_number(value):
@@ -115,6 +140,14 @@ def _evaluation_error(kind):
     from clausal.logic.exceptions import (  # noqa: PLC0415
         LogicException, evaluation_error)
     return LogicException(evaluation_error(kind, "is/2"))
+
+
+def _representation_error(flag):
+    """ISO error(representation_error(Flag), _): a limit of the port's
+    (DECIMAL_EXPONENT_LIMIT) is breached."""
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, representation_error)
+    return LogicException(representation_error(flag, "is/2"))
 
 
 def _through_float(function, *arguments):
@@ -278,7 +311,12 @@ def float_to_rational(value):
     """arith.pl, float_to_rational/3,9 (float_rat): the continued fraction
     of *value*, at most 100 steps, stopping at the first convergent equal to
     it as a float (test_float_to_rational_gives_the_short_convergent: 0.1 is
-    1/10).  The recursion is a loop."""
+    1/10).  The recursion is a loop.
+
+    Where the next step's reciprocal is past the float range (a remainder
+    under about 5.6e-309, a subnormal), the float's exact value is the
+    answer: SICStus's float division would overflow there
+    (test_the_smallest_float_is_read_exactly, DEVIATIONS.md D1)."""
     if value != value:
         raise _evaluation_error("undefined")
     if value in (_math.inf, -_math.inf):
@@ -302,6 +340,9 @@ def float_to_rational(value):
         denominator_a, denominator_b = (denominator_a * whole + denominator_b,
                                         denominator_a)
         remaining = 1 / (remaining - whole)
+        if remaining in (_math.inf, -_math.inf):
+            numerator, denominator = value.as_integer_ratio()
+            return make_rational(numerator, denominator)
         steps -= 1
     return make_rational(numerator_a, denominator_a)
 
