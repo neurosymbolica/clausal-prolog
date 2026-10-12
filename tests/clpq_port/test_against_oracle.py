@@ -180,8 +180,8 @@ def _solve(query, goals, trail, found):
         if len(goal) == 5:              # inf/4, sup/4: Vector, Vertex
             extra = ([query.expression(element) for element in goal[3]],
                      _term(query, goal[4]))
-        if optimum(query.expression(goal[1]), query.expression(goal[2]), trail,
-                   *extra):
+        bound = goal[2] if type(goal[2]) is str else query.expression(goal[2])
+        if optimum(query.expression(goal[1]), bound, trail, *extra):
             _then(query, rest, trail, found)
     else:
         raise ValueError(f"the driver does not run {goal!r}")
@@ -654,6 +654,32 @@ def test_inf_4_and_sup_4_bind_the_vertex_as_the_oracle(text, shown, count, defer
     assert len(want) == count, want
     got = port_answers(text, shown, defer=defer)
     check_against_oracle(text, shown, got, want)
+
+
+#: 1.3.3's assign/2 posts {Inf =:= Inf0}, then each cell as it matches
+#: it, so a non-expression raises type_error(expression, ...) even where a
+#: later cell would not match.
+INF_4_ERROR_CASES = [
+    ("{X >= 1, Y >= 2}, inf(X+Y, foo, [X,Y], [])", ["X"]),
+    ("{X >= 1, Y >= 2}, sup(-X-Y, foo, [X,Y], [])", ["X"]),
+    ("{X >= 1, Y >= 2}, inf(X+Y, I, [X,Y], [foo, B, C])", ["I", "B", "C"]),
+]
+
+
+@pytest.mark.parametrize("defer", [False, True], ids=["bare", "driver"])
+@pytest.mark.parametrize("text, shown", INF_4_ERROR_CASES)
+def test_inf_4_posts_before_it_matches_the_vertex(text, shown, defer):
+    # The oracle's culprit is nf(foo, _), the port's foo (normal_form/2):
+    # the kind and type are compared, as test_branch_and_bound.py's
+    # test_a_function_in_the_list_raises_a_type_error does.
+    from clausal.logic.exceptions import LogicException
+    with pytest.raises(RuntimeError, match=r"type_error\(expression,"):
+        _scryer_answers_once(text, tuple(shown), bounds=False)
+    with pytest.raises(LogicException) as raised:
+        port_answers(text, shown, bounds=False, defer=defer)
+    error = raised.value.term
+    assert error[0] == "error"
+    assert error[1][0] == "type_error" and error[1][1] == "expression"
 
 
 # ---------------------------------------------------------------- the brief's residual cases

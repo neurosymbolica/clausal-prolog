@@ -54,6 +54,7 @@ from clausal.logic.clpq.linear_forms import (
     multiply_linear_factor, normal_form_right_hand_side,
     normal_form_substitute, normal_form_to_sum, normalize_scalar)
 from clausal.logic.variables import Var, deref, get_attr, is_var, unify
+from clausal.terms import ConcreteSeg, SegList, VarSeg
 
 STATUS_OPTIMUM = 0
 STATUS_APPLIED = 1
@@ -397,25 +398,31 @@ def infimum_linear(normal_form, argument, trail):
     trail.undo(mark)                                        # fail
     if found is None:                                       # bb_delete fails
         return False
-    # clause 2, assign([Infimum|Vertex], L): Vertex is a list term, unbound,
-    # partial or proper.  Against the proper list L, assign/2's clause
-    # choice binds it to a list as long as L's tail, so it is unified with
-    # that many fresh variables, which assign then posts
-    # (test_inf_4_and_sup_4_bind_the_vertex_as_the_oracle).
-    elements = [Var() for _ in range(len(found) - 1)]
-    if not unify(vertex, elements, trail):
+    # clause 2, assign([Infimum|Vertex], L): {Infimum =:= Inf} first, then
+    # Vertex cell by cell
+    if not _post_equal(infimum, found[0], trail):
         return False
-    return assign([infimum] + elements, found, trail)
+    return assign(vertex, found[1:], trail)
 
 
 def assign(variables, values, trail):
-    """bv.pl, assign/2: {X =:= Y} for each pair."""
-    if len(variables) != len(values):
-        return False
-    for i in range(len(variables)):
-        if not _post_equal(variables[i], values[i], trail):
+    """bv.pl, assign/2: {X =:= Y} for each pair.  *variables* is a list
+    term (a list, a partial list, or unbound) and *values* a list.  The
+    recursion is a loop that takes one cell at a time, as the clauses do:
+    clause 2 matches `[X|Xs]` and posts {X =:= Y} before the next cell is
+    matched, so a non-expression cell raises before a later cell fails to
+    match, and an unbound tail is bound one cell at a time; clause 1 matches
+    `[]` at the end (test_inf_4_and_sup_4_bind_the_vertex_as_the_oracle,
+    test_inf_4_posts_before_it_matches_the_vertex)."""
+    rest = variables
+    for value in values:
+        head, tail = Var(), Var()                           # clause 2
+        if not unify(rest, SegList([ConcreteSeg([head]), VarSeg(tail)]), trail):
             return False
-    return True
+        if not _post_equal(head, value, trail):
+            return False
+        rest = tail
+    return unify(rest, [], trail)                           # clause 1
 
 
 # --------------------------------- optimization -------------------------------

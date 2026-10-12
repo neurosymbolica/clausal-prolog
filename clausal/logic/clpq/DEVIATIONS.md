@@ -1089,13 +1089,23 @@ built `[infimum] + list(vertex)`, so an unbound Vertex raised a Python
 `TypeError` (an `AttVar` is not iterable) and a partial list (`[A|T]`, a
 `SegList`) gave a wrong answer.  The failure was in the port's own
 `bounded_simplex.infimum_linear`, not in shared code: `vertex_value`
-reads Vector, which was always a list.  The port now unifies Vertex with a
-list of fresh variables as long as L's tail and posts `{X =:= V}` for each,
-as `assign/2` does (`test_inf_4_and_sup_4_bind_the_vertex_as_the_oracle`,
-bare and under a driver, against the local clpq.pl port of 1.3.3 on
-Scryer: two ports of the same source agreeing, not an independent check).
-1.3.3 posts `{Inf =:= V0}` before it matches Vertex; the port matches
-first.  Either order fails or succeeds together, with the same bindings.
+reads Vector, which was always a list.  `assign/2` is now ported clause by
+clause, with its recursion as a loop: `{Infimum =:= Inf}` is posted first,
+then each cell of Vertex is matched (`[X|Xs]`) and posted before the next
+is matched, and `[]` is matched at the end.  An unbound tail is bound one
+cell at a time (`test_inf_4_and_sup_4_bind_the_vertex_as_the_oracle`, bare
+and under a driver, against the local clpq.pl port of 1.3.3 on Scryer:
+two ports of the same source agreeing, not an independent check).
+
+The order is observable.  Task 15's first fix unified the whole Vertex
+before posting anything, so `inf(X+Y, foo, [X,Y], [])` failed (`[]` does
+not match a list of two) where 1.3.3 posts `{foo =:= 3}` first and raises
+`type_error(expression, ...)`; `[foo, B, C]` likewise.  The port now
+raises there too (`test_inf_4_posts_before_it_matches_the_vertex`).  The
+culprit differs from the oracle's: the port raises with `foo`, as nf.pl's
+`illarg(type(expression), normal_form(Term, Norm), 1)` names Term; the
+local clpq.pl port names `nf(foo, _)`.  The test compares the error kind
+and type only, as `test_a_function_in_the_list_raises_a_type_error` does.
 
 Not changed: an unbound VECTOR.  1.3.3's `vertex_value/2` then enumerates
 lists of growing length inside a failure-driven loop; on the oracle the
@@ -1113,12 +1123,13 @@ The program is Colmerauer's filled rectangle, the clp(q,r) distribution's
 No perfect squared rectangle has fewer than 9 squares, so n = 2..8 has no
 solution.  `tests/clpq_port/test_acceptance.py` checks, under the port
 through the `clausal` CLI with `CLAUSAL_CLPQ=holzbaur`: n = 1 gives the
-trivial answer, n = 2..7 (and 8 with `CLAUSAL_SLOW_TESTS=1`) give none,
-and n = 9 gives the same 8 solutions in the same order as the oracle, the
-first being the one `squares.pl` documents (A = 33/32).  The oracle is the
+trivial answer and n = 2..7 give none, in the default suite; with
+`CLAUSAL_SLOW_TESTS=1` (ruling R32), n = 8 gives none and n = 9 gives the
+same 8 solutions in the same order as the oracle, the first two being the
+two `squares.pl` documents (A = 33/32, then A = 69/61).  The oracle is the
 LOCAL clpq.pl port of 1.3.3 on Scryer (upstream Scryer has no CLP(Q)):
 agreement is two ports of the same source agreeing, not an independent
-check; the documented first answer is the one value from neither port.
+check; the two documented answers are the only values from neither port.
 
 Legacy is WRONG on this program below n = 9.  Evidence (2026-10-12,
 answers counted with findall over the CLI's `-g`; not tested, since they
@@ -1139,14 +1150,14 @@ the port at Task 15).  Wall time of every answer of
 
 | n | port | legacy | local clpq.pl port on Scryer |
 |---|---|---|---|
-| 2..5 | 0.7 s each | | |
-| 6 | 0.8 s | 1.7 s | |
-| 7 | 1.2 s | 7.3 s | |
-| 8 | 2.9 s | 38.1 s | |
-| 9 | 10.7 s (first answer 1.6 s) | 351.6 s | 21.0 s |
+| 2..5 | 0.7 s each, 0 answers | | |
+| 6 | 0.8 s, 0 answers | 1.7 s, 19 answers, WRONG | |
+| 7 | 1.2 s, 0 answers | 7.3 s, 50 answers, WRONG | |
+| 8 | 2.9 s, 0 answers | 38.1 s, 152 answers, WRONG | |
+| 9 | 10.7 s (first answer 1.6 s), 8 answers | 351.6 s, 457 answers, WRONG | 21.0 s, 8 answers |
 
-The machine is SHARED.  The port and Scryer rows for n = 9 ran with load
-average 0.35 (no other jobs).  The legacy rows ran in the background
+The machine is SHARED.  Every port row (n = 2..9) and the Scryer row ran
+with load average 0.35 (no other jobs).  The legacy rows ran in the background
 while the acceptance test ran, with load up to 5.7, so they are upper
 bounds.  Two later interleaved rounds of the port and Scryer at load
 5.6 to 6.0 gave the port 27.8 s, 25.7 s (first answer 4.2 s, 3.8 s) and
@@ -1175,10 +1186,14 @@ cProfile of the port's n = 9 run (`python -m cProfile -m clausal -g ...`,
 | 18,953 | 2.82 | 53.74 | bounded_simplex.py back_substitute_variables |
 | 14,268,365 | 2.79 | 2.79 | math.gcd |
 
-By cumulative time, 88.3 s of the 107.3 s is in `{}` posts
-(`holzbaur.clpq_constraint_answers` through `_post_now`), and
-`back_substitute_variables` holds 53.7 s, mostly the linear-form merge
-`add_linear_forms_first_scaled` (48.0 s).  Rational arithmetic
+By cumulative time, 88.07 s of the 107.3 s is in `{}` posts
+(`holzbaur.clpq_constraint_answers`, 87.03 s of it through `_post_now`).
+`back_substitute_variables` holds 53.74 s, of which 42.86 s is its calls
+of `normal_form_substitute` (1,399,194 of that function's 2,274,948 calls,
+56.81 s over all callers).  The linear-form merge
+`add_linear_forms_first_scaled` (48.01 s) is called only from
+`normal_form_substitute`, so it is that merge over all of its callers, not
+back substitution's share alone.  Rational arithmetic
 (`make_rational` with its `gcd`) and the variable-order comparison of the
 merge are the next costs.
 
@@ -1189,4 +1204,7 @@ with strict, non-strict, equal and not-equal constraints and bindings
 against z3; undo against a replay of the base store; projection against
 the store with the other variables existentially closed, proved by z3.
 Each was checked to fail on a mutant (q_lt as q_le, sup as inf, no undo,
-a dropped residual constraint).
+a dropped residual constraint, every post failing, `put_attr` on a trail
+that is never undone).  A store the port rejects is checked against z3,
+and the undo and projection fuzzers require more than half their cases to
+reach the undo or the projection.

@@ -12,13 +12,14 @@ The oracle is the LOCAL clpq.pl port of clp(q,r) 1.3.3 running on Scryer
 ports of the same 1.3.3 source agreeing, not an independent check: a bug
 1.3.3 itself has would show in both.
 
-What the program must give: no perfect squared rectangle has fewer than 9
-squares, so for n = 2..8 there is no solution, and n = 9 has the 8
-solutions both ports give (the trivial n = 1, a 1 x 1 square, is one).
-Legacy gives wrong answers below 9 (DEVIATIONS.md D22); it is not tested
-here.
+What the program must give: n = 1 has one answer, the trivial 1 x 1
+square.  No perfect squared rectangle has 2 to 8 squares, so n = 2..8 has
+no answer.  n = 9 has 8 answers, the same on both ports; the first two
+are the two that squares.pl's comment documents.  Legacy gives wrong answers
+below 9 (DEVIATIONS.md D22); it is not tested here.
 
-CLAUSAL_SLOW_TESTS=1 runs n = 8 as well.
+n <= 7 runs in the default suite; CLAUSAL_SLOW_TESTS=1 runs n = 8 and the
+n = 9 comparison as well (ruling R32).
 """
 import os
 import pathlib
@@ -82,6 +83,8 @@ def test_no_perfect_squared_rectangle_has_8_squares():
     assert port(8) == []
 
 
+@pytest.mark.skipif(os.environ.get("CLAUSAL_SLOW_TESTS") != "1",
+                    reason="about 30 s (port and oracle), set CLAUSAL_SLOW_TESTS=1")
 def test_filled_rectangle_with_9_squares_answers_as_the_oracle(record_property):
     start = time.perf_counter()
     got = port(9)
@@ -96,10 +99,13 @@ def test_filled_rectangle_with_9_squares_answers_as_the_oracle(record_property):
           f"{oracle_seconds:.1f} s, {len(got)} and {len(want)} solutions")
     assert len(want) == 8
     assert same_solution_sets(got, want) == (True, "")
-    # The first answer, as examples/squares.pl's comment gives it: the one
-    # value here that comes from neither port.
-    first = [Fraction(15, 32), Fraction(9, 16), Fraction(1, 4), Fraction(7, 32),
-             Fraction(1, 8), Fraction(7, 16), Fraction(1, 32), Fraction(5, 16),
-             Fraction(9, 32)]
-    assert got[0].bindings["A"] == Fraction(33, 32)
-    assert [got[0].bindings[f"C{i}"] for i in range(1, 10)] == first
+    # Every answer examples/squares.pl's comment documents for
+    # `length(L, 9), filled_rectangle(A, L)`, its first two, in its order:
+    # the only values here that come from neither port.
+    documented = [
+        (Fraction(33, 32), [Fraction(n, 32) for n in (15, 18, 8, 7, 4, 14, 1, 10, 9)]),
+        (Fraction(69, 61), [Fraction(n, 61) for n in (33, 36, 28, 5, 2, 9, 25, 7, 16)]),
+    ]
+    for answer, (width, squares) in zip(got, documented):
+        assert answer.bindings["A"] == width
+        assert [answer.bindings[f"C{i}"] for i in range(1, 10)] == squares

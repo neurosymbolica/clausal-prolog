@@ -7,12 +7,18 @@ replayed on a fresh trail: the same bindings, the same sup and inf of two
 random objectives, and the same strictness: each optimum is probed with
 {Objective = Optimum}, which holds iff the optimum is attained, so a strict
 bound that came back as =< after the undo shows.
+
+A base the port rejects must be one z3 calls unsatisfiable, and more than
+half the cases must have a base to undo to.
 """
 import random
 from fractions import Fraction
 
+import z3
+
 from tests.clpq_port.fuzz._fuzz_common import (
-    CASES, MODES, Var, at_goal, bind, expression, holzbaur, new_trail, post, value_of)
+    CASES, MODES, Var, at_goal, bind, expression, holzbaur, new_trail, post, value_of,
+    z3_store)
 
 
 def generate(seed):
@@ -69,6 +75,9 @@ def run(defer, cases):
         trail = new_trail(defer)
         variables = [Var() for _ in range(n)]
         if not all(post(trail, variables, row) for row in base):
+            solver, _ = z3_store(base, n)
+            if solver.check() == z3.sat:            # a satisfiable base rejected
+                mismatches.append((seed, "base rejected", base))
             continue
         before = bindings(variables)
         mark = trail.mark()
@@ -95,3 +104,7 @@ def test_undo_leaves_the_store_as_a_replay_of_the_base(defer):
     mismatches, checked = run(defer, CASES)
     print(f"undo: {CASES} cases, {checked} with a satisfiable base")
     assert mismatches == []
+    # A rejected base is checked against z3 above, but checks no undo; the
+    # floor keeps the test from passing on stores it never undid (273 of
+    # 300 and 8116 of 9000 bases are satisfiable).
+    assert checked > CASES // 2

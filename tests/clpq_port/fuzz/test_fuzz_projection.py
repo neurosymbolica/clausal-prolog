@@ -12,6 +12,9 @@ two halves with a trail mark between them.  Checked:
   existentially closed (tests/clpq_oracle.py _equivalent);
 * undo: after undoing the second half, membership answers by the first
   half alone.
+
+A first half the port rejects must be one z3 calls unsatisfiable, and
+more than half the stores must be projected.
 """
 import random
 from fractions import Fraction
@@ -88,6 +91,9 @@ def run(defer, cases):
         variables = [Var() for _ in range(n)]
         split = rng.randint(0, len(rows))
         if not all(post(trail, variables, row) for row in rows[:split]):
+            solver, _ = z3_store(rows[:split], n)
+            if solver.check() == z3.sat:            # a satisfiable half rejected
+                mismatches.append(("first half rejected", seed, rows[:split]))
             continue
         mark = trail.mark()
         accepted = all(post(trail, variables, row) for row in rows[split:])
@@ -132,3 +138,7 @@ def test_projection_feasibility_membership_and_undo(defer):
     mismatches, projected = run(defer, CASES)
     print(f"projection: {CASES} stores, {projected} projected")
     assert mismatches == []
+    # A rejected store is checked against z3 above, but projects nothing;
+    # the floor keeps the test from passing on stores it never projected
+    # (205 of 300 and 5988 of 9000 stores are satisfiable).
+    assert projected > CASES // 2
