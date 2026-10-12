@@ -59,7 +59,7 @@ from clausal.logic.variables import is_var, unify
 from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
 from clausal.modules.py import ModulePredicate, simple_to_trampoline, to_text
 from clausal.pythonic_ast import nodes as simple_ast
-from clausal.terms import SegList, SegListView
+from clausal.terms import SegList
 from clausal.reflection import (
     Atom,
     Clause,
@@ -408,10 +408,8 @@ def _rewrites(term, old, new, trail):
     occurrences don't leak bindings into one another.  ``_position`` metadata is
     carried on every rebuilt node.  Vars, scalars, atoms, segmented strings and
     native dict/list term objects (``DictTerm``/``ListTerm``) are leaves."""
-    term = deref(term)
-    if type(term) is SegListView:
-        term = term.elements()   # the rest of a long list: a list, not a leaf
-    elif isinstance(term, SegList):
+    term = deref(term)          # plain_deref: a list view is already a list here
+    if isinstance(term, SegList):
         # A partial list whose holes are all filled (``[a, *T]`` with T
         # bound) is a list: ``_subterms`` walks its elements, so this walk
         # rewrites inside it.  One with an unbound hole stays a leaf -- there

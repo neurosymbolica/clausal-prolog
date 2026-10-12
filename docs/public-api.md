@@ -148,7 +148,7 @@ from clausal import (
 | `Trail` | `Trail()` | Pass one explicitly to keep a residual constraint store. |
 | `Module` | `Module(name)` | A logic module. `module=` also accepts an imported predicate module (`.seam`, `.clausal`, `.pl`) or a dotted name. |
 | `Module.declare_dynamic` | `m.declare_dynamic(name, arity) -> None` | Declares `name/arity` dynamic, as `-dynamic(name/arity)` does. Idempotent; ISO `dynamic/1` errors. See [Database Operations](database_ops.md). |
-| `deref`, `unify` | `deref(term)`, `unify(a, b, trail) -> bool` | `deref` resolves one step and always hands back plain data: a str for text and a `list` for a list, as `Var.value` does, at whatever depth you call it. |
+| `deref`, `unify` | `deref(term)`, `unify(a, b, trail) -> bool` | `deref` resolves one step, as `Var.value` does. A text view comes back as the text carrier `('$chars', str)` (read it with `chars_text`). A list view comes back as a fresh `list`, copied on every call, so deref a long rest once and keep the result. An unbound variable comes back as itself, a partial list as a `SegList` with its open tail, and a compound unchanged: deref its arguments yourself. |
 | `LogicException` | `.term` is the thrown term; `.message` is the prose or `None` | Every `throw/1` and ISO error that reaches Python. |
 | `UnboundVarCoercionError` | subclass of `TypeError` | |
 | `Quantity`, `UnitsMismatch` | | The units value and its error. |

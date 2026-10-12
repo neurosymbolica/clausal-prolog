@@ -70,8 +70,9 @@ _dt = _import_stdlib("datetime")
 from typing import Any
 
 from clausal.logic.variables import (  # noqa: F401
-    Var, deref as _deref, is_var, unify as _unify, walk as _walk,
+    Var, is_var, unify as _unify, walk as _walk,
 )
+from clausal.terms import plain_deref as _deref  # a view leaves the engine as a list or a str
 from clausal.logic.builtins._helpers import _is_ground
 from clausal.logic.exceptions import (
     LogicException, domain_error, instantiation_error, representation_error,
@@ -286,7 +287,7 @@ def date_term_to_python(value):
 
 
 def deref(value):  # noqa: F811 -- deliberately shadows the import above
-    """``variables.deref`` then term->Python, so every predicate below reads
+    """``terms.plain_deref`` then term->Python, so every predicate below reads
     a Python value whatever the caller wrote."""
     return _term_to_dt(_deref(value))
 

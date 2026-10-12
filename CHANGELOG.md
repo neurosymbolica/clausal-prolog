@@ -75,13 +75,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
   not `None`; `unify_iter` hands back the same value on success. Only iterate
   it: a range iterator is not GC-tracked, so a deep recursion through goal
   boundaries no longer fills the collector.
-- **`clausal.deref` hands out plain data at every depth** (operator ruling
-  D38, 2026-10-12). Inside a parse, the rest of a long text or list is a
+- **`clausal.deref` hands a view out as plain data, at whatever depth it
+  is called** (operator ruling D38, 2026-10-12). Inside a parse, the rest of a long text or list is a
   view of the original rather than a copy. `Var.value` already handed a
   view out as its text, or as a plain list, but `clausal.deref` called on
   a nested subterm of an answer returned the view itself: a `SegListView`,
   which `json.dumps` refuses, or a text carrier holding a non-`str`. The
-  public `deref` now applies the `Var.value` rule. The engine's own
+  public `deref` now applies the `Var.value` rule, one step at a time: a
+  list view is copied into a fresh `list` on every call. The engine's own
   `clausal.logic.variables.deref` is unchanged, so parsing keeps its views.
 
 ### Deprecated
