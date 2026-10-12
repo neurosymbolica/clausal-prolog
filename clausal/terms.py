@@ -588,6 +588,12 @@ def _unify_open_seglists(a, b, trail):
 
 
 _WALK_END = object()   # end of a segment iterator in SegList._walk_raw
+class _CyclicPartialList(RecursionError):
+    """A cycle a SegList walk cannot spell as cons cells (an unbound hole
+    before it, or content after it).  Its own class, so a caller that
+    tolerates it never swallows a genuine stack overflow."""
+
+
 _NO_TAIL = object()    # SegList._walk_raw: no improper tail seen yet
 
 
@@ -604,6 +610,37 @@ def _is_improper_tail(v) -> bool:
     if type(v) is str:
         return v != "[]"
     return True
+
+
+def as_improper(v):
+    """*v* (dereferenced) as the term a list builtin should read: a SegList
+    that walks to an IMPROPER list (its last hole holds an atom, a number, a
+    compound or a cons cell, or closes a cycle) is that list's cons cells
+    ``'.'(H, T)`` -- the term the literal ``[a|foo]`` is -- so a hole-built
+    list and a literal answer alike.  Anything else is *v* itself.
+
+    Cheap when the answer is *v*: it follows the chain of last holes and
+    walks only when the chain ends in a non-list."""
+    if type(v) is not SegList:
+        return v
+    from .logic.variables import deref, is_var
+    t = v
+    seen = set()
+    while type(t) is SegList:
+        if id(t) in seen:
+            break                       # a cycle: walk it below
+        seen.add(id(t))
+        segs = t._segments
+        if not segs or not isinstance(segs[-1], VarSeg):
+            return v
+        t = deref(segs[-1].var)
+    else:
+        if is_var(t) or not _is_improper_tail(t):
+            return v
+    w = v._walk_once()
+    if w is None or isinstance(w, (list, SegList)):
+        return v
+    return w
 
 
 def _splice_non_list(v, run: list) -> None:
@@ -702,6 +739,7 @@ class SegList:
         stack = [(iter(self._segments), id(self))]
         open_ids = {id(self)}    # SegLists being walked, to stop on a cycle
         tail = _NO_TAIL          # a non-list a hole holds, while it is last
+        cyclic = False           # that tail closes a cycle
         while stack:
             seg = next(stack[-1][0], _WALK_END)
             if seg is _WALK_END:
@@ -711,6 +749,8 @@ class SegList:
                 if isinstance(seg, ConcreteSeg) and not seg.elements:
                     continue
                 # Something follows it: it was no tail after all.
+                if cyclic:
+                    raise _CyclicPartialList("cyclic partial list")
                 _splice_non_list(tail, run)
                 tail = _NO_TAIL
             if isinstance(seg, ConcreteSeg):
@@ -735,7 +775,13 @@ class SegList:
                 run.extend(v)
             elif isinstance(v, SegList):
                 if id(v) in open_ids:
-                    raise RecursionError("cyclic partial list")
+                    # A CYCLIC list (``X = [a|X]``): the hole closes the
+                    # cycle.  It is the tail -- the hole's VARIABLE, whose
+                    # binding is the cycle -- so the walk is ``'.'(a, X)``,
+                    # one lap, as the cyclic term ISO's ``X = [a|X]`` is.
+                    tail = seg.var
+                    cyclic = True
+                    continue
                 stack.append((iter(v._segments), id(v)))
                 open_ids.add(id(v))
             else:
@@ -754,6 +800,8 @@ class SegList:
                     run = []
                 segs.append(VarSeg(v))
         if tail is not _NO_TAIL:
+            if segs and cyclic:
+                raise _CyclicPartialList("cyclic partial list")
             if segs:
                 # An unbound hole before it: ``[*A, x|foo]`` has no term.
                 _splice_non_list(tail, run)
@@ -777,7 +825,7 @@ class SegList:
             return None
         try:
             return self._walk_raw()
-        except PartialTermError:
+        except (PartialTermError, _CyclicPartialList):
             return None
 
     def __walk__(self):
