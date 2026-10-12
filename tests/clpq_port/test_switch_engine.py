@@ -77,3 +77,98 @@ def test_compiled_comparisons_post_before_the_next_goal(blocks):
     x, lo, hi = Var(), Var(), Var()
     assert [(walk(lo), walk(hi)) for _ in call("bounded", x, lo, hi,
                                                module=blocks)] == [(3, 10)]
+
+
+# ---------------------------------------------------------------- R29
+#
+# Fable's integration review (HIGH-1): a comparison compiled inline in a
+# seam clause (`X <= 2`, clpfd's fd_le) is not followed by a goal boundary,
+# so the delayed goal {X*Y == 4} that X = 2 wakes runs only at the next
+# boundary, after the goals between have read Y.  The fix is the engine's
+# (ruling R29: a pending drain after every inline goal that can bind or
+# wake); until it lands these are strict xfails.  The expected answers are
+# Scryer's on the {} form (test_switch.py,
+# test_the_inline_goal_cases_answer_as_the_oracle), which the block-form
+# controls below give today.
+
+_R29 = pytest.mark.xfail(
+    strict=True, reason="engine: no pending boundary after inline goals (R29)")
+
+_WOKEN = """\
+var_y(X, Y) <- ({X*Y == 4}, X <= 2, X >= 2, var(Y))
+nonvar_y(X, Y) <- ({X*Y == 4}, X <= 2, X >= 2, nonvar(Y))
+found_y(X, Y, L) <- ({X*Y == 4}, X <= 2, X >= 2, findall(Y, true, L))
+inf_y(X, Y, L) <- ({X*Y == 4}, X <= 2, X >= 2, inf(Y, L))
+entailed_y(X, Y) <- ({X*Y == 4, Y >= 1}, X <= 2, X >= 2, entailed(Y >= 2))
+bb_inf_y(X, Y, I) <- ({X*Y == 4}, X <= 2, X >= 2, bb_inf([Y], Y, I))
+dump_y(X, Y, C) <- ({X*Y == 4}, X <= 2, X >= 2, dump_q([Y], C))
+equal_var_y(X, Y) <- ({X*Y == 4, X >= 1}, X == 2, var(Y))
+block_var_y(X, Y) <- ({X*Y == 4}, {X <= 2}, {X >= 2}, var(Y))
+block_nonvar_y(X, Y) <- ({X*Y == 4}, {X <= 2}, {X >= 2}, nonvar(Y))
+block_equal_var_y(X, Y) <- ({X*Y == 4, X >= 1}, {X == 2}, var(Y))
+"""
+_WOKEN_EXPORTS = ["var_y/2", "nonvar_y/2", "found_y/3", "inf_y/3",
+                  "entailed_y/2", "bb_inf_y/3", "dump_y/3", "equal_var_y/2",
+                  "block_var_y/2", "block_nonvar_y/2", "block_equal_var_y/2"]
+
+
+@pytest.fixture(scope="module")
+def woken(tmp_path_factory):
+    return _module(tmp_path_factory.mktemp("woken"), _WOKEN, _WOKEN_EXPORTS)
+
+
+def _answers(module, name, arity):
+    variables = [Var() for _ in range(arity)]
+    return [tuple(walk(v) for v in variables)
+            for _ in call(name, *variables, module=module)]
+
+
+@_R29
+def test_var_after_inline_comparisons_fails(woken):
+    assert _answers(woken, "var_y", 2) == []
+
+
+@_R29
+def test_nonvar_after_inline_comparisons_sees_the_binding(woken):
+    assert _answers(woken, "nonvar_y", 2) == [(2, 2)]
+
+
+@_R29
+def test_findall_after_inline_comparisons_sees_the_binding(woken):
+    assert [answer[2] for answer in _answers(woken, "found_y", 3)] == [[2]]
+
+
+@_R29
+def test_inf_after_inline_comparisons_sees_the_binding(woken):
+    assert [answer[2] for answer in _answers(woken, "inf_y", 3)] == [2]
+
+
+@_R29
+def test_entailed_after_inline_comparisons_sees_the_binding(woken):
+    assert _answers(woken, "entailed_y", 2) == [(2, 2)]
+
+
+@_R29
+def test_bb_inf_after_inline_comparisons_sees_the_binding(woken):
+    assert [answer[2] for answer in _answers(woken, "bb_inf_y", 3)] == [2]
+
+
+@_R29
+def test_dump_q_after_inline_comparisons_sees_the_binding(woken):
+    # Y is bound, so dump_q([Y], C) has nothing to project: C = [].
+    # Scryer's dump/3 raises uninstantiation_error for a bound target, but
+    # dump_q/2 is legacy's API, whose contract leaves a bound target out
+    # (legacy's dump_q and the port's residual_strings both do), and the
+    # -g printer relies on that; the adapter keeps the legacy contract.
+    assert _answers(woken, "dump_y", 3) == [(2, 2, [])]
+
+
+@_R29
+def test_var_after_an_inline_equation_fails(woken):
+    assert _answers(woken, "equal_var_y", 2) == []
+
+
+def test_block_form_controls_answer_as_the_oracle(woken):
+    assert _answers(woken, "block_var_y", 2) == []
+    assert _answers(woken, "block_nonvar_y", 2) == [(2, 2)]
+    assert _answers(woken, "block_equal_var_y", 2) == []

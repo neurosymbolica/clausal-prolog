@@ -320,3 +320,19 @@ def test_a_huge_exponent_is_refused():
     with pytest.raises(ValueError):
         _equal("Y=X^ -10001", "Y=X")
     assert _constant("2^14") == 16384
+
+
+@needs_scryer
+@pytest.mark.parametrize("goal", ["a(A, L)", "{A >= 1, L = A + 1}, A = 2"])
+def test_a_goal_naming_the_findall_variables_keeps_its_answers(goal):
+    # oracle_goal's findall template was `A` and its result `L`: a goal
+    # naming either shared the variable and answered [] (Task 14 review).
+    program = ":- use_module(library(clpq)).\na(A, L) :- {A >= 1, L = A + 1}, A = 2.\n"
+    answers = oracle_answers(program, goal, ["A", "L"])
+    assert [a.bindings for a in answers] == [{"A": 2, "L": 3}]
+
+
+def test_the_oracle_query_refuses_its_reserved_names():
+    from tests.clpq_oracle import oracle_goal
+    with pytest.raises(ValueError, match="reserved"):
+        oracle_goal("p(ClpqOracleAnswer__)", ["X"])

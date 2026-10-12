@@ -275,11 +275,33 @@ def test_a_variable_whose_row_holds_the_other_one():
 
 
 def test_a_plain_var_cannot_take_the_constraint():
+    # A PlainVar cannot carry attributes, so X's constraints cannot move
+    # onto it.  This failed in silence (Task 14 review, LOW-1; legacy's
+    # put_attr raised TypeError); it raises system_error(plain_variable):
+    # the program's term is a variable, which is the right type, so a
+    # type_error would blame the program for the engine's variable kind.
+    # The engine binds the newer variable to the older: with the PlainVar
+    # older, X is bound to it and X's hook meets it.
     trail = Trail()
-    plain = PlainVar()
-    x = Var()
+    plain, x = PlainVar(), Var()
     assert _post(trail, (">=", x, 1))
-    assert unify(x, plain, trail) is False
+    with pytest.raises(LogicException) as caught:
+        unify(x, plain, trail)
+    assert caught.value.term[1] == ("system_error", "plain_variable")
+    assert is_var(deref(x)) and is_var(deref(plain))
+    assert _inf(x, trail) == 1
+    # With X older the PlainVar is bound to X: no hook runs, X keeps its
+    # constraints.
+    trail = Trail()
+    x, plain = Var(), PlainVar()
+    assert _post(trail, (">=", x, 1))
+    assert unify(x, plain, trail) and deref(plain) is x
+
+
+def test_a_plain_var_meeting_an_unconstrained_state_is_fine():
+    trail = Trail()
+    plain, x = PlainVar(), Var()
+    assert unify(x, plain, trail)
 
 
 # ---------------------------------------------------------------- several bindings at once

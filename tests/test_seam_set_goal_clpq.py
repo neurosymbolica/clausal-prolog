@@ -74,7 +74,10 @@ def _scryer(tmp_path, program: str, goal: str, outs: str) -> list:
     f.write_text(":- use_module(library(clpq)).\n" + program)
     proc = subprocess.run(
         [SCRYER, str(f), "-g",
-         f"(findall({outs}, {goal}, L), writeq(answers(L)), nl, halt)",
+         # Task 14 fix round 1: a reserved result name, so a goal that names
+         # L keeps its own variable (the oracle-goal fault of clpq_oracle).
+         f"(findall({outs}, {goal}, SetGoalOracle__), "
+         f"writeq(answers(SetGoalOracle__)), nl, halt)",
          "-g", "halt"],
         cwd=tmp_path, stdin=subprocess.DEVNULL,
         capture_output=True, text=True, timeout=120)

@@ -53,7 +53,7 @@ from clausal.logic.clpq.components import (
 from clausal.logic.clpq.delayed_goals import verify_delayed
 from clausal.logic.clpq.linear_forms import (
     LinearForm, independent, normal_form_coefficient_of)
-from clausal.logic.exceptions import LogicException, type_error
+from clausal.logic.exceptions import LogicException, system_error, type_error
 from clausal.logic.pending import run_first
 from clausal.logic.variables import (
     AttVar, PlainVar, deref, get_attr, is_var, put_attr, register_attr_hook,
@@ -121,6 +121,14 @@ def verify_attributes(state, other, trail, later):
     """itf3.pl, verify_attributes/3, with geler.pl's verify_attributes/3.
     X is bound already; *state* is its state and *other* is Y."""
     other = deref(other)
+    if type(other) is PlainVar and not _carries_nothing(state):
+        # Y cannot carry X's attributes (put_atts would fail on it): a
+        # limit of the engine's variable kind, not a fault of the program's
+        # term, so system_error, before any trailed change
+        # (test_a_plain_var_cannot_take_the_constraint).
+        raise LogicException(system_error(
+            "plain_variable", "=/2: a constrained variable met a variable "
+            "that cannot carry attributes (PlainVar)"))
     if state.forward is not None:                               # clause 2
         # Only bind_queued sets forward on a variable it then binds, after
         # verify_bound has run geler.pl's part for it.
@@ -144,6 +152,12 @@ def verify_attributes(state, other, trail, later):
     if not _verify_stand_ins(stand_ins, trail, later, bindings):
         return False
     return bind_queued(bindings, trail, later)
+
+
+def _carries_nothing(state):
+    """*state* holds no attribute a binding would move: clause 1 with no
+    delayed goals."""
+    return _without_solver_attributes(state) and not state.delayed_goals
 
 
 def _verify_stand_ins(stand_ins, trail, later, bindings):

@@ -52,7 +52,10 @@ test_switch.py, test_a_comparison_from_clpfd_at_a_goal_is_posted_in_place).
 Outside a hook's window no member is bound (each hook puts a stand-in in
 place of its variable before it returns), so the check queues exactly
 the posts R27 forbids.  ``{}`` (``clpq_constraint_block``) and the
-optimisers are goals, never called from a hook, and post in place.
+optimisers are goals, never called from a hook, and post in place.  The
+scan is linear in the components per post (cost in DEVIATIONS.md D20);
+ruling R29 replaces it with an engine flag set while hooks are
+dispatched, once the engine has it.
 
 ``{C1 ; C2}`` (ruling R18, DEVIATIONS.md D12).  A block that holds ``;``
 is posted with ``post_constraint_with_choices``, and

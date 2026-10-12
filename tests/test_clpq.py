@@ -37,10 +37,10 @@ def state(v):
 def bounds(v, trail):
     """(inf, sup) of *v* through the public API, None for an open end.
 
-    Task 14, legacy-only answer: these tests read legacy's QVar record
-    (``.lo``/``.hi``); the port's state (CLAUSAL_CLPQ=holzbaur) has no such
-    fields.  inf/2 and sup/2 are the observable both solvers answer, so the
-    tests read the bounds through them."""
+    Task 14, representation (not an answer): legacy keeps the bounds in its
+    QVar record (``.lo``/``.hi``), which these tests also read under the
+    default switch; the port's state (CLAUSAL_CLPQ=holzbaur) has no such
+    fields.  inf/2 and sup/2 are the observable both solvers answer."""
     lo, hi = Var(), Var()
     return (deref(lo) if inf(v, lo, trail) else None,
             deref(hi) if sup(v, hi, trail) else None)
@@ -94,6 +94,10 @@ class TestInQ:
         assert in_q(x, 0, 10, trail)
         assert state(x) is not None
         assert bounds(x, trail) == (0, 10)   # Task 14: see bounds()
+        if not HOLZBAUR:
+            s = state(x)
+            assert s.lo == F(0)
+            assert s.hi == F(10)
 
     def test_narrows(self):
         # nv
@@ -101,6 +105,10 @@ class TestInQ:
         in_q(x, 0, 10, trail)
         in_q(x, 2, 8, trail)
         assert bounds(x, trail) == (2, 8)    # Task 14: see bounds()
+        if not HOLZBAUR:
+            s = state(x)
+            assert s.lo == F(2)
+            assert s.hi == F(8)
 
     def test_infeasible(self):
         # nv
@@ -134,6 +142,10 @@ class TestInQ:
         assert in_q(x, trail=trail)
         assert state(x) is not None
         assert bounds(x, trail) == (None, None)   # Task 14: see bounds()
+        if not HOLZBAUR:
+            s = state(x)
+            assert s.lo is None
+            assert s.hi is None
 
 
 # ── Phase 3: Ground rational constraints ─────────────────────────────────────
@@ -341,6 +353,8 @@ class TestBacktracking:
         assert q_le(x, F(5), trail)
         trail.undo(mark)
         assert bounds(x, trail) == (0, 10)   # Task 14: see bounds()
+        if not HOLZBAUR:
+            assert state(x).hi == F(10)
 
     def test_undo_restores_tableau(self):
         # nv
@@ -656,7 +670,8 @@ class TestDumpQ:
         # Task 14, output spelling: the port writes a lower bound as 1.3.3's
         # dump/3 and legacy's toplevel form do ({X >= 0}; Scryer's dump/3
         # gives x>=0), legacy's dump_q as {-X =< 0}.
-        assert any('=< 0' in c or '>= 0' in c for c in result)   # lower bound
+        lower = '>= 0' if HOLZBAUR else '=< 0'
+        assert any(lower in c for c in result)   # lower bound
         assert any('=< 10' in c for c in result)   # upper bound
 
     def test_inequality_projection(self):

@@ -963,3 +963,28 @@ differently from 1.3.3 itself:
   it is in every build, a narrowing reaches neither solver's store; the
   Python twin's does (`test_fd_to_q_bare_and_under_a_driver_against_legacy_and_the_oracle`).
 
+- `dump_q(targets, trail, name_of, toplevel=...)`: `toplevel` is accepted
+  for legacy's signature and ignored.  `dump_q/2` and `clpq.dump/2` (and
+  the `-g` printer through `residual_q`) always give 1.3.3's dump/3 form,
+  each constraint oriented as 1.3.3 writes it (`{X >= 2}`).  Legacy's
+  `dump_q` without `toplevel` wrote its own normal form and flipped only
+  rows whose coefficients were all negative under `toplevel`
+  (`{-X =< -2}` vs `{X >= 2}`), so `dump_q/2`'s spelling changes under the
+  switch (`test_dump_q_projection.py`, `test_strict_bounds`).
+- A post from clpfd scans the components it reads for an unhooked
+  binding (ruling R28's adapter rule, `_reads_unhooked_bindings`).  It is
+  linear in their size, per post, under a driver.  Measured (Task 14
+  review): 9 µs of a 33 µs clpfd-routed post at 50 variables, 181 µs of
+  756 µs at 800; a chain of 4,000 variables with one bound posted per
+  variable through clpfd takes 0.14 s bare and 1.79 s under a driver, and
+  the scan is the whole 12x.  Ruling R29 replaces the scan with an engine
+  flag set while hooks are dispatched (the adapter queues iff it is set),
+  together with a pending drain after every inline goal; until that
+  engine change lands the scan stays, and CLAUSAL_CLPQ stays opt-in.
+- A constrained variable bound to an older PlainVar (a variable that
+  cannot carry attributes) raises `system_error(plain_variable)` from the
+  hook, before any trailed change; 1.3.3's `put_atts` cannot meet such a
+  variable, and the port failed in silence before (Task 14 review,
+  `test_a_plain_var_cannot_take_the_constraint`).  system_error, not
+  type_error: the program's term is a variable, the right type; the limit
+  is the engine's variable kind.

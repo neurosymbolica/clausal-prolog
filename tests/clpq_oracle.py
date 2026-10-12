@@ -443,12 +443,22 @@ def _prolog_atom(text):
     return "'" + text.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
+#: The findall template and result of oracle_goal: names no goal uses, so
+#: a goal that names A or L keeps its own variables
+#: (test_a_goal_naming_the_findall_variables_keeps_its_answers).
+_TEMPLATE, _RESULT = "ClpqOracleAnswer__", "ClpqOracleAnswers__"
+
+
 def oracle_goal(goal, variables):
     """The one query put to Scryer for *goal* over the shown *variables*."""
+    for name in (_TEMPLATE, _RESULT):
+        if name in goal or name in variables:
+            raise ValueError(f"{name} is reserved by the oracle query")
     shown = "[" + ", ".join(variables) + "]"
     names = "[" + ", ".join(_prolog_atom(v) for v in variables) + "]"
-    return (f"\\+ \\+ (findall(A, (({goal}), '$clpq_oracle_answer'({shown}, {names}, A)), L), "
-            f"'$clpq_oracle_print'(L))")
+    return (f"\\+ \\+ (findall({_TEMPLATE}, (({goal}), "
+            f"'$clpq_oracle_answer'({shown}, {names}, {_TEMPLATE})), {_RESULT}), "
+            f"'$clpq_oracle_print'({_RESULT}))")
 
 
 def _parse_oracle(stdout):

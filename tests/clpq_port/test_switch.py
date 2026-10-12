@@ -521,3 +521,55 @@ def test_the_cli_answers_as_the_oracle(goal, variables):
     port = clausal_answers(_CLI_PROGRAM, goal, variables, solver="holzbaur")
     ok, why = same_solution_sets(oracle, port)
     assert ok, why
+
+
+# ---------------------------------------------------------------- R29
+
+_FROZEN = "frozen(X, Y) <- (freeze(X, Y is 1), X == 3, var(Y))\n"
+
+
+@pytest.mark.xfail(strict=True,
+                   reason="engine: no pending boundary after inline goals (R29)")
+def test_a_goal_woken_by_an_inline_comparison_runs_before_the_next_goal(
+        tmp_path):
+    # Not CLP(Q): freeze/2 under either solver.  Scryer runs a woken goal
+    # before the next call, so var(Y) fails.
+    from clausal.import_hook import _load_module
+    from clausal.logic.solve import call
+    from tests._suffix import SEAM
+    path = tmp_path / f"r29_frozen{SEAM}"
+    path.write_text(f"-module(r29_frozen, [frozen/2])\n-allow_singletons\n"
+                    f"{_FROZEN}")
+    module = _load_module("r29_frozen", str(path)).__dict__["$module"]
+    assert list(call("frozen", Var(), Var(), module=module)) == []
+
+
+def test_the_inline_goal_cases_answer_as_the_oracle():
+    # The answers test_switch_engine.py's R29 tests expect, on Scryer's {}.
+    from tests.clpq_oracle import oracle_answers
+    program = (":- use_module(library(clpq)).\n"
+               ":- use_module(library(freeze)).\n"
+               "var_y(X, Y) :- {X*Y = 4}, {X =< 2}, {X >= 2}, var(Y).\n"
+               "nonvar_y(X, Y) :- {X*Y = 4}, {X =< 2}, {X >= 2}, nonvar(Y).\n"
+               "found_y(L) :- {X*Y = 4}, {X =< 2}, {X >= 2}, findall(Y, true, L).\n"
+               "inf_y(L) :- {X*Y = 4}, {X =< 2}, {X >= 2}, inf(Y, L).\n"
+               "entailed_y(X, Y) :- {X*Y = 4, Y >= 1}, {X =< 2}, {X >= 2},"
+               " entailed(Y >= 2).\n"
+               "bb_inf_y(I) :- {X*Y = 4}, {X =< 2}, {X >= 2}, bb_inf([Y], Y, I).\n"
+               "equal_var_y(X, Y) :- {X*Y = 4, X >= 1}, {X = 2}, var(Y).\n"
+               "frozen(Y) :- freeze(X, Y = 1), X = 3, var(Y).\n"
+               "dump_y(E) :- {X*Y = 4}, {X =< 2}, {X >= 2},"
+               " catch((dump([Y], [y], _), E = none), error(E, _), true).\n")
+    def bindings(goal, shown):
+        return [a.bindings for a in oracle_answers(program, goal, shown)]
+    assert bindings("var_y(X, Y)", ["X", "Y"]) == []
+    assert bindings("nonvar_y(X, Y)", ["X", "Y"]) == [{"X": 2, "Y": 2}]
+    assert bindings("found_y(L)", ["L"]) == [{"L": "[2]"}]   # a list stays text
+    assert bindings("inf_y(L)", ["L"]) == [{"L": 2}]
+    assert bindings("entailed_y(X, Y)", ["X", "Y"]) == [{"X": 2, "Y": 2}]
+    assert bindings("bb_inf_y(I)", ["I"]) == [{"I": 2}]
+    assert bindings("equal_var_y(X, Y)", ["X", "Y"]) == []
+    assert bindings("frozen(Y)", ["Y"]) == []
+    (error,) = [a.bindings["E"] for a in oracle_answers(program, "dump_y(E)",
+                                                         ["E"])]
+    assert "uninstantiation_error" in str(error)

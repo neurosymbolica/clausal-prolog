@@ -116,9 +116,9 @@ def _bounds(lines):
 def test_a_pruned_projection_gives_the_tight_bounds(seed):
     # Pruning drops only redundant constraints: what is left bounds X
     # exactly as inf/2 and sup/2 do.
-    # Task 14, legacy-only answer (the size): 1.3.3's projection has no
-    # pruning limit and is exponential here as in Scryer (seed 0 of 7
-    # variables and 22 constraints: the port 84 s, Scryer 132 s, the same
+    # Task 14, projection cost (not an answer): 1.3.3's projection has no
+    # pruning limit and is exponential here, the port as Scryer (seed 0 of
+    # 7 variables and 22 constraints: the port 84 s, Scryer 132 s, the same
     # bounds), so under the port the systems are 5 variables, 10
     # constraints.
     t, vs = _random_system(seed, *((5, 10) if HOLZBAUR else (7, 22)))
@@ -133,7 +133,7 @@ def test_a_pruned_projection_gives_the_tight_bounds(seed):
 
 
 @pytest.mark.skipif(HOLZBAUR, reason=(
-    "Task 14, legacy-only answer: legacy's unprojected fallback; 1.3.3 and "
+    "Task 14, projection cost: legacy's unprojected fallback; 1.3.3 and "
     "Scryer always project (seed 0: the port 84 s, Scryer 132 s)"))
 def test_a_projection_too_large_to_finish_is_shown_unprojected():
     t, vs = _random_system(0, 7, 22)
