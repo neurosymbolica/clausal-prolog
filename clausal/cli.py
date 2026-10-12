@@ -126,6 +126,7 @@ def _read_goal(text: str, op_table):
     """``text`` -> ``(goal_cell, [(name, Var), ...])``: the named variables
     in first-occurrence order, ``_``-led names left out (a toplevel does not
     report them).  A syntax error raises ``SyntaxError``."""
+    from clausal.pythonic_ast.nodes import StarUnpack  # noqa: PLC0415
     from clausal.logic.variables import Var  # noqa: PLC0415
     from clausal.tools.prolog_reader import PrologReader, VarRef  # noqa: PLC0415
     from clausal.tools.toklex import EOF  # noqa: PLC0415
@@ -151,11 +152,40 @@ def _read_goal(text: str, op_table):
             if v is None:
                 v = variables[t.i] = Var()
             return v
+        if type(t) is tuple and len(t) == 3 and t[0] == ".":
+            return build_cons(t)
         if type(t) is tuple:
             return tuple(build(x) for x in t)
         if type(t) is list:
             return [build(x) for x in t]
         return t
+
+    def build_cons(t):
+        # The reader spells ``[H|T]`` as the cons cells '.'(H, T), and a
+        # proper or partial list never unifies with a cons cell.  So, as
+        # the native front end lowers it (iso_l3 ``_cons``): a tail that
+        # can be a list -- a variable, a list, ``[]``, a "..." -- splices
+        # (a variable tail as the compiler's ``[H, *T]``, since the goal is
+        # compiled as a query); any other tail keeps the cons cells of an
+        # improper list (D50).  Heads are built before the tail: variables
+        # are numbered in reading order.
+        heads = []
+        while type(t) is tuple and len(t) == 3 and t[0] == ".":
+            heads.append(build(t[1]))
+            t = t[2]
+        if isinstance(t, VarRef):
+            return heads + [StarUnpack(value=build(t))]
+        if type(t) is list:
+            return heads + [build(x) for x in t]
+        if t == "[]":
+            return heads
+        if type(t) is tuple and len(t) == 2 and t[0] == "$chars" \
+                and type(t[1]) is str:
+            return heads + [sys.intern(c) for c in t[1]]
+        out = build(t)
+        for h in reversed(heads):
+            out = (".", h, out)
+        return out
 
     goal = build(item.term)
     shown = [(names.get(i, f"_G{i}"), v) for i, v in variables.items()
