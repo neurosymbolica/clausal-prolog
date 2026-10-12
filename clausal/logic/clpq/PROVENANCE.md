@@ -63,8 +63,16 @@ The operator decided to port 1.3.3 directly and faithfully. The reasons:
   a mechanical translation of 1.3.3 into one Scryer Prolog module.  It is
   run to get expected answers; its code is not the port's source.
 - **The examples**: `/workspace/claude_sicstus_clpq/test_examples_clpq.pl`
-  runs the 1.3.3 example programs.  It is run, never copied into this
-  repository.
+  inlines the 1.3.3 example programs.  It is outside `library/clpq`, so
+  the licence acceptance for the 1.3.3 sources does not cover it, and it
+  is never copied into this repository.  `tests/clpq_port/test_examples.py`
+  reads it from that path, and skips where it is absent.  It runs the
+  file's cut-free example predicates (mg and the Monash mortgage, simplex
+  1 to 9, eliminat, laplace, fib, SEND+MORE=MONEY, option) under the port
+  and on the oracle, and checks the values the file documents.  The file's
+  own driver (`->`) and its cut-using examples cannot load in cut-free
+  Clausal and are not run; the rest of its examples are not run either
+  (the test's docstring lists them).
 - **The reading copy**: `tools/clpq_reference/rename.py` with
   `tools/clpq_reference/rename_map.tsv` rewrites the 1.3.3 files (and the
   Scryer copy) with the full-word names of `NAMES.md`.  The output lives
