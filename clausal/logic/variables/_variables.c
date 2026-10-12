@@ -803,8 +803,17 @@ trail_undo_to(TrailObject *trail, Py_ssize_t mark)
     PyObject *pending_type, *pending_value, *pending_tb;
     PyErr_Fetch(&pending_type, &pending_value, &pending_tb);
 #endif
-    for (Py_ssize_t i = trail->length - 1; i >= mark; i--) {
-        TrailEntry *e = &trail->entries[i];
+    /* The length drops BEFORE each entry is released, and the loop re-reads
+     * it: releasing an entry can run Python (an undo callback, a finaliser),
+     * and that Python can undo this trail further or push onto it.  A nested
+     * undo then sees only the entries not yet released, and this loop never
+     * raises the length back over entries something else released (a hook
+     * or a woken goal that undid below a unification's mark used to make the
+     * unification's own undo re-expose them: a double DECREF).  The entry is
+     * copied out first because a push can reallocate the array. */
+    while (trail->length > mark) {
+        TrailEntry entry = trail->entries[--trail->length];
+        TrailEntry *e = &entry;
         if (e->kind == TRAIL_BINDING) {
             VarObject *var = e->u.binding.var;
             PyObject  *old = e->u.binding.old_value;
@@ -847,7 +856,6 @@ trail_undo_to(TrailObject *trail, Py_ssize_t mark)
             Py_DECREF(fn);
         }
     }
-    trail->length = mark;
 #if PY_VERSION_HEX >= 0x030C0000
     if (pending_exc)
         PyErr_SetRaisedException(pending_exc);   /* steals */
@@ -987,9 +995,12 @@ Trail_commit_fresh(TrailObject *self, PyObject *const *args, Py_ssize_t nargs)
         if (id < (uint64_t)floor)
             Py_RETURN_FALSE;
     }
-    /* All fresh: release the trail's references, keep the effects. */
-    for (Py_ssize_t i = self->length - 1; i >= mark; i--) {
-        TrailEntry *e = &self->entries[i];
+    /* All fresh: release the trail's references, keep the effects.  As in
+     * trail_undo_to, the length drops before each release (a release can
+     * run a finaliser that touches this trail). */
+    while (self->length > mark) {
+        TrailEntry entry = self->entries[--self->length];
+        TrailEntry *e = &entry;
         if (e->kind == TRAIL_BINDING) {
             Py_XDECREF(e->u.binding.old_value);
             Py_DECREF(e->u.binding.var);
@@ -999,7 +1010,6 @@ Trail_commit_fresh(TrailObject *self, PyObject *const *args, Py_ssize_t nargs)
             Py_XDECREF(e->u.attr.old_attr);
         }
     }
-    self->length = mark;
     Py_RETURN_TRUE;
 }
 
@@ -1946,7 +1956,11 @@ run_pending_first(TrailObject *trail)
                         "pending goals queued but no drain is registered");
         return -1;
     }
-    PyObject *gen = PyObject_CallOneArg(g_drain_factory, (PyObject *)trail);
+    /* A strong reference for the call: the drain is Python and could
+     * re-register (_set_pending_drain), releasing the global's. */
+    PyObject *factory = Py_NewRef(g_drain_factory);
+    PyObject *gen = PyObject_CallOneArg(factory, (PyObject *)trail);
+    Py_DECREF(factory);
     if (!gen) return -1;
     PyObject *answer = PyIter_Next(gen);
     if (answer) {
@@ -3998,7 +4012,10 @@ py_pending_or_once(PyObject *Py_UNUSED(mod), PyObject *trail)
                         "pending goals queued but no drain is registered");
         return NULL;
     }
-    return PyObject_CallOneArg(g_drain_factory, trail);
+    PyObject *factory = Py_NewRef(g_drain_factory);   /* see run_pending_first */
+    PyObject *it = PyObject_CallOneArg(factory, trail);
+    Py_DECREF(factory);
+    return it;
 }
 
 static PyObject *g_empty_tuple = NULL;    /* () */

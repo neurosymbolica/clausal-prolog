@@ -42,28 +42,34 @@ def drain(trail):
     """Run every goal queued on *trail*, as a conjunction; yield per answer.
 
     Goals a running goal queues in turn are run after the conjunction (each
-    goal's own goal boundaries run the ones it wakes itself first).  The
-    conjunction is driven with an explicit stack, so a thousand goals woken
-    by one unification nest no Python frames.
+    goal's own goal boundaries run the ones it wakes itself first), as the
+    next conjunction.  Every conjunction, and every generation of goals
+    woken by the one before, is driven on ONE explicit stack: a thousand
+    goals woken by one unification, or a chain of a hundred thousand goals
+    each waking the next, nest no Python frames and no generators.  (A
+    nested ``yield from drain(trail)`` per generation was a chain of
+    suspended generators; dropping it after a first answer recursed in C.)
     """
     goals = trail.take_pending()
     if goals is None:
         yield None
         return
-    n = len(goals)
-    its = [iter(goals[0]())]
-    while its:
+    # One frame per running goal: (its answers, its conjunction, its index).
+    stack = [(iter(goals[0]()), goals, 0)]
+    while stack:
+        it, conj, i = stack[-1]
         try:
-            next(its[-1])
+            next(it)
         except StopIteration:
-            its.pop()
+            stack.pop()
             continue
-        if len(its) < n:
-            its.append(iter(goals[len(its)]()))
+        if i + 1 < len(conj):
+            stack.append((iter(conj[i + 1]()), conj, i + 1))
         elif trail.pending is None:
             yield None
         else:
-            yield from drain(trail)
+            woken = trail.take_pending()
+            stack.append((iter(woken[0]()), woken, 0))
 
 
 def run_first(trail) -> bool:
