@@ -1884,6 +1884,19 @@ Elements present in both `Set1` and `Set2`.
 ```
 Elements in `Set1` or `Set2`, with duplicates removed.
 
+!!! note "Comparison in `subtract/3`, `intersection/3` and `union/3`"
+    These three compare elements with `==/2`, so they never bind a
+    variable. SWI-Prolog and Trealla compare with `memberchk/2`, which
+    unifies, so an unbound element can give a different answer:
+
+    | Goal | Clausal | Trealla/SWI |
+    |---|---|---|
+    | `subtract([X],[a],R)` | `R=[X]` | `X=a, R=[]` |
+    | `intersection([X],[a],R)` | `R=[]` | `X=a, R=[a]` |
+    | `union([X],[a],R)` | `R=[X,a]` | `X=a, R=[a]` |
+
+    Scryer's `library(lists)` has none of the three.
+
 ??? info "Implementation & tests"
     **Seam tests:** `tests/fixtures/builtins_lists.seam`
     **Python tests:** `tests/test_builtins.py`
