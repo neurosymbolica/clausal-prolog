@@ -73,6 +73,11 @@ from clausal.logic.clpq import (  # noqa: E402
 )
 from clausal.terms import Add, Sub, Mult, Mod  # noqa: E402
 
+#: CLAUSAL_CLPQ=holzbaur: the port keeps its store in the variables'
+#: attributes, not in legacy's _tableaux, so the two tableau tests below
+#: assert the same behaviour through the API there (Task 16).
+HOLZBAUR = __import__("clausal.logic.clpq", fromlist=["SOLVER"]).SOLVER == "holzbaur"
+
 
 class TestClpqSoundness:
     """Confirmed soundness bugs: unsatisfiable stores accepted."""
@@ -148,6 +153,9 @@ class TestClpqSoundness:
         assert deref(rv) == F(1, 2)
 
     def test_no_stale_tableau_on_recycled_trail_id(self):
+        if HOLZBAUR:
+            self._no_stale_store_on_recycled_trail_id_under_the_port()
+            return
         gc.collect()
         t = Trail()
         x = Var()
@@ -165,6 +173,28 @@ class TestClpqSoundness:
             "tableau entry survives Trail GC — recycled trail ids inherit "
             "stale constraint stores"
         )
+
+
+    def _no_stale_store_on_recycled_trail_id_under_the_port(self):
+        # The port keeps no store keyed by trail (no module-level mutable
+        # state; a constraint is an attribute of its variable), so a Trail
+        # at a recycled address inherits nothing: each query's bounds are
+        # exactly its own, and legacy's _tableaux is never written.
+        seen, recycled = set(), 0
+        for i in range(200):
+            gc.collect()
+            t = Trail()
+            if id(t) in seen:
+                recycled += 1
+            seen.add(id(t))
+            x, low, high = Var(), Var(), Var()
+            assert in_q(x, i, i + 5, t)
+            assert inf(x, low, t) and sup(x, high, t)
+            assert (deref(low), deref(high)) == (i, i + 5)
+            assert q_ge(x, i + 5, t) and deref(x) == i + 5
+            assert id(t) not in _tableaux
+            del t, x, low, high
+        assert recycled > 0, "no Trail address was recycled; the check is vacuous"
 
 
 class TestClpqSemanticsVsReference:
@@ -262,6 +292,19 @@ class TestClpqRegressionGuards:
         t = Trail()
         w = Var()
         assert in_q(w, 0, 100, t)
+        if HOLZBAUR:
+            # The port's bound is in w's attributes: sup reads it.  The
+            # oracle (local clpq.pl port on Scryer): {W >= 0, W =< 100},
+            # {W =< 5}, sup(W, S) gives S = 5; undone, S = 100.
+            mark = t.mark()
+            assert q_le(w, 5, t)
+            s = Var()
+            assert sup(w, s, t) and deref(s) == 5
+            t.undo(mark)
+            s = Var()
+            assert sup(w, s, t) and deref(s) == 100
+            assert unify(w, 50, t)          # 50 was out of [0, 5]
+            return
         st = get_attr(w, Q_KEY)
         mark = t.mark()
         assert q_le(w, 5, t)

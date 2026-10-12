@@ -461,11 +461,18 @@ def test_clp_posts_after_the_ground_fold_answer_as_before():
         X = Var()
         assert f(X, e, Trail())
         assert deref(X) == want and type(deref(X)) is type(want)
-    for f, e, key in ((fd_lt, Add(None, 0.5, 1), "real"), (fd_le, Div(None, 1, 2), "clpq"),
+    # The CLP(Q) row reads the selected solver's key: legacy's is "clpq",
+    # the port's (CLAUSAL_CLPQ=holzbaur) "clpq_holzbaur".
+    from clausal.logic.clpq import Q_KEY, sup
+    for f, e, key in ((fd_lt, Add(None, 0.5, 1), "real"), (fd_le, Div(None, 1, 2), Q_KEY),
                       (fd_ne, Add(None, 1.5, 1), "real")):
         X = Var()
-        assert f(X, e, Trail())
+        t = Trail()
+        assert f(X, e, t)
         assert is_var(deref(X)) and get_attr(deref(X), key) is not None
+        if key == Q_KEY:            # the bound itself, under either solver
+            S = Var()
+            assert sup(X, S, t) and deref(S) == Fraction(1, 2)
 
 
 def test_ground_data_pairs_keep_the_ground_fallback():
