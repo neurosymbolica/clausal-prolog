@@ -101,6 +101,16 @@ def _build_star_list(before, star, after):
     cells ``'.'(H, T)`` (D50), as ISO's ``T = foo, X = [a|T]`` gives.
     """
     raw = deref(star)
+    if is_var(raw):
+        # The common forward build, ``L = [x|H]`` with H unbound: a
+        # partial list, decided before any other shape is tested.
+        segs = []
+        if before:
+            segs.append(ConcreteSeg(list(before)))
+        segs.append(VarSeg(raw))
+        if after:
+            segs.append(ConcreteSeg(list(after)))
+        return SegList(segs)
     if not after and _is_improper_tail(raw):
         out = raw
         for e in reversed(list(before)):

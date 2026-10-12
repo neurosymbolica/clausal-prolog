@@ -35,7 +35,7 @@ from .logic.atoms import (
 )
 from .logic.cells import (TUPLE_TAG, CHARS_TAG, chars, is_chars, chars_text, chars_payload,
                           refuse_reserved_1tuple, _Text, text_slice)
-from .logic.variables import Var, deref
+from .logic.variables import Var, deref, is_var
 # Operator table for ``term_writeq``; this module imports nothing from clausal.
 from clausal.tools.prolog_operators import OperatorTable as _OperatorTable
 
@@ -602,7 +602,6 @@ def _is_improper_tail(v) -> bool:
     as an IMPROPER tail (D50): anything bound that is no list, partial list
     or text -- an atom (a bare ``str``), a number, a compound, a cons cell.
     The nil in any spelling is the empty list, not a tail."""
-    from .logic.variables import is_var
     if is_var(v) or isinstance(v, (list, bytes, SegList, SegString, SegBytes)):
         return False
     if is_chars(v) or _is_nil(v):
@@ -623,7 +622,6 @@ def as_improper(v):
     walks only when the chain ends in a non-list."""
     if type(v) is not SegList:
         return v
-    from .logic.variables import deref, is_var
     t = v
     seen = set()
     while type(t) is SegList:
@@ -760,9 +758,11 @@ class SegList:
             # chain is walked HERE, on the stack.  ``walk`` would resolve it
             # through that link's ``__walk__``, which is the recursion.
             v = deref(seg.var)
-            if type(v) is SegListView:
+            if type(v) is SegList:
+                pass                       # the next link of a chain: the common case
+            elif type(v) is SegListView:
                 v = v.elements()           # its elements, walked below as a list's
-            if _is_improper_tail(v):
+            elif _is_improper_tail(v):
                 tail = v
                 continue
             if not isinstance(v, SegList):
