@@ -48,3 +48,19 @@ with Y bound later to a non-list.
   `@<` and `msort` raise RecursionError at 500 cells (`_helpers.term_key` builds a nested key
   tuple). The native reader still crashes on a 500-element `[...|foo]` literal.
 - **Item 3 (quadratic `append(-, +, +improper)`): not touched.**
+
+## Status after fix round 1 (2026-10-13)
+
+- **Item 1: FIXED** (4ff9b485). A partial list's hole bound to a non-list is the improper tail in
+  every front end, at `-g`, and whether bound before or after the list is built:
+  `L = [x|V], V = 1` gives `[x|1]`, and `X = [a|T], T = foo` gives `[a|foo]` (was "afoo").
+  `append([x], V, L), V = foo` gives `[x|foo]`, `==` holds, and `length` fails.
+- **Item 2: `==` FIXED, also on cyclic terms (ffcc40b8).** Still open: `compare/3`, `@<` and
+  `msort` raise RecursionError at about 500 cells (`_helpers.term_key`). The native reader still
+  crashes on a 500-element `[...|foo]` literal.
+- **Item 3: not touched.**
+- Size limit of improper literals under the translator: filed as
+  `todo/translator-improper-list-literal-size-limit-2026-10-13.md`.
+- Seen while testing: the NATIVE front end refuses `g --> [x|"ab"].` under
+  `double_quotes(chars)` ("a terminal list ends in \"ab\""). Scryer and the translator accept it
+  (`phrase(g, L)` gives `[x,a,b]`).
