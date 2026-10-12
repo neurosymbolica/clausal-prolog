@@ -172,3 +172,33 @@ def test_a_ground_prefix_answers_once(twin):
         None, "ok", "no", None, ["a", "b"], r, ["a", "b", "c", 1], trail)
         if sig == "ok"]
     assert got == [["c", 1]]
+
+
+def test_goals_woken_by_the_prefix_run_after_all_of_it(twin):
+    """With no driver (``trail.defer`` false) the prefix is ONE unification:
+    a goal woken by binding X runs after Y is bound too, so it sees Y = c.
+    The C helper used to unify element by element, running the goal before
+    Y was bound -- and it failed where the twin succeeded."""
+    from clausal.logic.builtins.lists import _append__3
+    from clausal.logic.variables import (Trail, deref, put_attr,
+                                         register_attr_hook)
+    y = Var()
+
+    def check():
+        def goal():
+            if deref(y) == "c":
+                yield None
+        return goal()
+
+    def hook(val, bound_to, trail):
+        trail.push_pending(check)
+        return True
+
+    register_attr_hook("append_prefix_test", hook)
+    trail = Trail()
+    assert not trail.defer
+    x, r = Var(), Var()
+    put_attr(x, "append_prefix_test", 1, trail)
+    sigs = [s for s, _ in _append__3(None, "ok", "no", None,
+                                     [x, y], r, ["a", "c", "d"], trail)]
+    assert sigs == ["ok", "no"]

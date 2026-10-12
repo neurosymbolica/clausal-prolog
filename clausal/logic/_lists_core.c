@@ -218,12 +218,17 @@ py_member_find(PyObject *Py_UNUSED(module), PyObject *args)
 /*
  * prefix_unify(l1_items, l3_items, trail) → True | False
  *
- * Unifies l1_items[i] with l3_items[i] for every i < len(l1_items) (the
- * prologue clause ``append([H|T], L, [H|R])``).  False when l3_items is
- * shorter.  An element that IS its partner unifies with no binding, so it
- * is passed over without a call: a ground prefix of shared atoms and small
- * ints costs one pointer compare an element.  Bindings made are left
- * active on True AND on False; the caller holds the mark and undoes it.
+ * Unifies l1_items with l3_items[:len(l1_items)] (the prologue clause
+ * ``append([H|T], L, [H|R])``) as ONE unification, exactly as the Python
+ * twin ``unify(l1_items, l3_items[:n], trail)`` does.  False when l3_items is
+ * shorter.  The leading elements that ARE their partners unify with no
+ * binding, so they are passed over with one pointer compare each, and the
+ * rest -- from the first pair that is not identical -- is handed to a single
+ * unify() of the two slices.  One call, not one per element: with no driver
+ * (trail.defer false) unify() runs the goals it woke once, after the whole
+ * prefix is bound, as the twin does.  A ground prefix of shared atoms and
+ * small ints makes no unify() call at all.  Bindings made on True stay for
+ * the caller's mark; on False unify() has undone its own.
  * Twin: the Python fallback in ``lists._append__3``.
  */
 static PyObject *
@@ -247,25 +252,22 @@ py_prefix_unify(PyObject *Py_UNUSED(module), PyObject *args)
     if (PyList_GET_SIZE(l3) < n)
         Py_RETURN_FALSE;
 
-    for (Py_ssize_t i = 0; i < n; i++) {
-        /* Re-read the sizes: a unify hook runs Python code. */
-        if (i >= PyList_GET_SIZE(l1) || i >= PyList_GET_SIZE(l3)) {
-            PyErr_SetString(PyExc_RuntimeError, "list changed size during append/3");
-            return NULL;
-        }
-        PyObject *a = PyList_GET_ITEM(l1, i);
-        PyObject *b = PyList_GET_ITEM(l3, i);
-        if (a == b)
-            continue;
-        Py_INCREF(a);
-        Py_INCREF(b);
-        int ok = call_unify(a, b, trail);
-        Py_DECREF(a);
-        Py_DECREF(b);
-        if (ok < 0) return NULL;
-        if (!ok) Py_RETURN_FALSE;
-    }
-    Py_RETURN_TRUE;
+    /* No Python code runs in this scan, so the sizes cannot change. */
+    Py_ssize_t k = 0;
+    while (k < n && PyList_GET_ITEM(l1, k) == PyList_GET_ITEM(l3, k))
+        k++;
+    if (k == n)
+        Py_RETURN_TRUE;
+
+    PyObject *a = PyList_GetSlice(l1, k, n);
+    if (!a) return NULL;
+    PyObject *b = PyList_GetSlice(l3, k, n);
+    if (!b) { Py_DECREF(a); return NULL; }
+    int ok = call_unify(a, b, trail);
+    Py_DECREF(a);
+    Py_DECREF(b);
+    if (ok < 0) return NULL;
+    return PyBool_FromLong(ok);
 }
 
 
@@ -619,8 +621,8 @@ static PyMethodDef module_methods[] = {
     {"prefix_unify", py_prefix_unify, METH_VARARGS,
      "prefix_unify(l1_items, l3_items, trail) -> True or False\n"
      "\n"
-     "append/3 with L1 and L3 known: unify L1's elements with L3's prefix.\n"
-     "Bindings stay on either answer; the caller undoes its mark."},
+     "append/3 with L1 and L3 known: unify L1 with L3's prefix as one\n"
+     "unification (identical leading pairs are passed over)."},
     {"memberchk_find", py_memberchk_find, METH_VARARGS,
      "memberchk_find(items, elem, trail) -> True or False\n"
      "\n"
