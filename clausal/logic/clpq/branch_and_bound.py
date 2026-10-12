@@ -19,9 +19,9 @@ A predicate that fails returns False or None, as its docstring says.
 
 Goals a post of the search wakes run after that post, to their first
 answer, and their failure fails the post (ruling R24): in 1.3.3 they run
-inside `{}/1`.  The hooks queue them on the trail under a driver
-(`trail.defer`), and also outside one when bb_inf itself runs from a
-hook's Later work (behind run_later's DRAINING marker).  So clause 1 of
+inside `{}/1`.  The hooks queue them on the trail whenever a driver or
+a unification owns it (`trail.defer`), and bb_inf can run there: under a
+driver, or as a goal a bare unify woke, in its drain.  So clause 1 of
 branch_and_bound_infimum_internal takes the queue it was entered with:
 the queue then holds only the search's goals, and its undo puts the outer
 queue back (test_a_goal_woken_by_a_branch_runs_in_it,
@@ -51,20 +51,11 @@ def bb_inf(integer_variables, term, infimum, trail, vertex=None, epsilon=None):
     of *integer_variables* is integral, posted as `{Infimum =:= value}`,
     and the rounded values of *integer_variables* there unified with
     *vertex*.  True or False.  bb_inf/3 is bb_inf/5 with a fresh Vertex
-    and Eps 0.001.  Like inf, it waits until *term* is linear.
-
-    First it catches up the variables of *integer_variables*, as every
-    entry point that reads the store does (DEVIATIONS.md D3,
-    test_bb_inf_catches_up_at_entry); wait_linear catches up those of
-    *term*."""
-    from clausal.logic.clpq.attribute_hooks import (   # cyclic: itf3.pl
-        catch_up_entry)
+    and Eps 0.001.  Like inf, it waits until *term* is linear."""
     if vertex is None:
         vertex = Var()
     if epsilon is None:
         epsilon = DEFAULT_EPSILON
-    if not catch_up_entry(integer_variables, trail):
-        return False
     epsilon_form = normal_form(epsilon)
     if epsilon_form is None:
         return False

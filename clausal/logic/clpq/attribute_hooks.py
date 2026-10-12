@@ -24,14 +24,13 @@ itself (DEVIATIONS.md D3).  So the hook:
 - binds what solve/5 implies one binding at a time from a work list, each
   checked before it is made, so a cascade does not nest
   (test_implied_bindings_are_queued_not_nested);
-- runs the Later goals after all of that: on the trail's pending queue when
-  a driver owns the trail, otherwise from a LaterWork queue it drains
-  itself, one loop for a whole cascade
+- puts the Later goals on the trail's pending queue.  Every unification
+  owns that queue while it binds and runs the hooks (`trail.defer`), so
+  they run after every hook of the unification, at the next goal boundary
+  under a driver and before a bare unify returns otherwise
   (test_later_work_goes_on_the_pending_queue_under_a_driver,
-  test_a_cascade_of_delayed_goals_needs_no_recursion);
-- before each Later goal, does the work of any variable the same
-  unification bound whose hook has not run yet, in the components the goal
-  reaches (catch_up; test_a_later_goal_reads_no_unhooked_binding).
+  test_a_cascade_of_delayed_goals_needs_no_recursion,
+  test_one_unification_bare_one_at_a_time_and_under_a_driver_agree).
 
 bv.pl's export_binding/1 (bounded_simplex.export_bindings) binds through
 the same work list.
@@ -51,10 +50,11 @@ from clausal.logic.clpq.bounded_simplex import (
 from clausal.logic.clpq.components import (
     COMPONENT_KEY, ComponentRecord, ListCell, component_all_variables,
     component_drop, list_elements)
-from clausal.logic.clpq.delayed_goals import _term_variables, verify_delayed
+from clausal.logic.clpq.delayed_goals import verify_delayed
 from clausal.logic.clpq.linear_forms import (
     LinearForm, independent, normal_form_coefficient_of)
 from clausal.logic.exceptions import LogicException, type_error
+from clausal.logic.pending import run_first
 from clausal.logic.variables import (
     AttVar, PlainVar, deref, get_attr, is_var, put_attr, register_attr_hook,
     unify)
@@ -84,88 +84,37 @@ class PendingLater:
     tuple and runs a fresh queue of it on every call, because the engine's
     drain calls the factory again when an earlier queued goal gives another
     answer (test_later_work_survives_a_retry_under_a_driver)."""
-    __slots__ = ("work", "trail")
+    __slots__ = ("work",)
 
-    def __init__(self, later, trail):
+    def __init__(self, later):
         self.work = tuple(later.queue)
-        self.trail = trail
-
-    def fresh(self):
-        later = LaterWork()
-        later.queue.extend(self.work)
-        return later
 
     def __call__(self):
-        if drain_later(self.fresh(), self.trail):
+        later = LaterWork()
+        later.queue.extend(self.work)
+        if later.drain():
             return (None,)
         return ()
 
 
-def drain_later(later, trail):
-    """LaterWork.drain, with catch_up before each goal."""
-    queue = later.queue
-    try:
-        while queue:
-            work = queue.popleft()
-            if not catch_up(work, trail, later) or not work():
-                queue.clear()
-                return False
-    except BaseException:
-        queue.clear()
-        raise
-    return True
-
-
-class DrainMarker:
-    """The goal at the front of the trail's pending queue while run_later
-    drains outside a driver.  A hook woken inside that drain finds it and
-    queues its Later work behind it instead of draining it there."""
-    __slots__ = ()
-
-    def __call__(self):
-        return (None,)
-
-
-DRAINING = DrainMarker()
-
-
 def run_later(later, trail):
-    """Run the Later goals.  When a driver owns the trail they wait on its
-    pending queue for the next goal boundary.  Otherwise the outermost call
-    runs them, and the Later work of every hook they wake in turn, in one
-    loop (test_a_cascade_of_delayed_goals_needs_no_recursion)."""
+    """Run the Later goals after every hook of the unification: they go on
+    the trail's pending queue.  Inside a unification or under a driver
+    (`trail.defer`) the engine runs that queue after the last hook.  Called
+    with no unification and no driver (bind_all from a bare post), it owns
+    the queue as a bare unify does and runs it to its first answer, so a
+    cascade of delayed goals runs in the engine's one drain loop
+    (test_a_cascade_of_delayed_goals_needs_no_recursion)."""
     if not later.queue:
         return True
+    trail.push_pending(PendingLater(later))
     if trail.defer:
-        trail.push_pending(PendingLater(later, trail))
         return True
-    pending = trail.pending
-    if pending is not None:
-        if pending[0] is DRAINING:
-            trail.push_pending(PendingLater(later, trail))
-            return True
-        return drain_later(later, trail)    # goals of another kind wait there
-    trail.push_pending(DRAINING)
+    trail.defer = True
     try:
-        if not drain_later(later, trail):
-            return False
-        while True:
-            goals = trail.take_pending()
-            if goals is None or len(goals) == 1:
-                return True
-            trail.push_pending(DRAINING)
-            for goal in goals[1:]:
-                if not _first_answer(goal):
-                    return False
+        return run_first(trail)
     finally:
-        trail.take_pending()
-
-
-def _first_answer(goal):
-    """Run a pending goal to its first answer: True when it has one."""
-    for _ in goal():
-        return True
-    return False
+        trail.defer = False
 
 
 def verify_attributes(state, other, trail, later):
@@ -207,51 +156,6 @@ def _verify_stand_ins(stand_ins, trail, later, bindings):
                             bindings):
             return False
     return True
-
-
-def catch_up(work, trail, later):
-    """Before a Later goal *work* runs: do the work of every constrained
-    variable that this unification has bound but whose hook has not run
-    yet, in the components the goal's variables are in (and the components
-    those reach).  Its own hook then finds it done.  The goal then reads
-    no row that holds a bound variable (DEVIATIONS.md D3,
-    test_a_later_goal_reads_no_unhooked_binding)."""
-    components = []
-    for variable in _term_variables([work]):
-        component = _component_of(variable)
-        if component is not None:
-            components.append(component)
-    if not components:
-        return True
-    stand_ins = _stand_in_for_bound_members(components, None, trail)
-    if not stand_ins:
-        return True
-    bindings = []
-    if not _verify_stand_ins(stand_ins, trail, later, bindings):
-        return False
-    return bind_queued(bindings, trail, later)
-
-
-def catch_up_entry(term, trail):
-    """catch_up at an entry point of the port that reads the store (nf.pl's
-    {}/1 comparisons, wait_linear for inf/sup/minimize/maximize,
-    attribute_goal), then the Later work it produced.  A goal another
-    key's hook runs in place in the middle of a unification can reach these
-    while a variable bound by that unification has not been hooked yet
-    (test_a_frozen_goal_reads_no_unhooked_binding).
-
-    Under a driver (`trail.defer`) it does nothing (ruling R22): then no
-    hook body calls an entry point of the port, because freeze/2 and when/2
-    queue their goals under `defer` and no other registered hook calls one
-    (DEVIATIONS.md D3, test_the_registered_attribute_hooks_are_the_known_set),
-    so an entry point is reached at a goal boundary, after every hook of
-    the unification has run.  The catch_up before each Later goal stays."""
-    if trail.defer:
-        return True
-    later = LaterWork()
-    if not catch_up(term, trail, later):
-        return False
-    return run_later(later, trail)
 
 
 def _component_of(value):
@@ -349,10 +253,10 @@ def _stand_in_for_bound_members(components, state, trail):
     member lists, the bases and the rows.
 
     Returns [(stand_in, its state, the bound variable)], the member whose
-    own state is *state* (X) first.  None where *state* is given and no
-    bound member carries it: X is not a member any more, because the work
-    of the hook of another variable bound in the same unification, or a
-    catch_up, has done X's work already."""
+    own state is *state* (X) first.  None where no bound member
+    carries *state*: X is not a member any more, because the hook
+    of another variable bound in the same unification has done X's work
+    already."""
     unique = []
     seen = set()
     for component in components:
@@ -361,7 +265,7 @@ def _stand_in_for_bound_members(components, state, trail):
             unique.append(component)
     components = unique
     bound = []
-    found = state is None
+    found = False
     i = 0
     while i < len(components):
         component = components[i]
@@ -652,13 +556,10 @@ def _difference_form(variable, value, trail):
 
 # ---------------------------------------------------------------- answers
 
-def attribute_goal(variable, context="toplevel", trail=None):
+def attribute_goal(variable, context="toplevel"):
     """itf3.pl, attribute_goal/2: the residual goal of *variable*, `true`
     for none, or None where it fails.  presentation_context/2 is the
-    parameter *context* (DEVIATIONS.md D14).  With a *trail*, catch_up runs
-    first (DEVIATIONS.md D3)."""
-    if trail is not None and not catch_up_entry([variable], trail):
-        return None
+    parameter *context* (DEVIATIONS.md D14)."""
     linear = dump_linear(variable, context)
     if linear is None:
         return None

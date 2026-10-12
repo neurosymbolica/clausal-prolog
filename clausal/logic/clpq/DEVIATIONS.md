@@ -137,20 +137,16 @@ does instead:
   a variable it is about to bind (below), so the hook that binding wakes
   takes clause 2.  geler.pl's part has run for that variable already, so
   clause 2 does not run it again.
-- Clause 3, `numbers_only(Y, X)`: runs first, before the stand-ins are made.
-  The engine's undo after a hook raises clears the exception
-  (`trail_undo_to` calls `PyErr_Clear` after deleting an attribute key, so
-  `unify` returns NULL with no exception set); checking before any trailed
-  change keeps the `type_error` (`test_a_non_number_raises_a_type_error`).
-  This covers the first hook of a unification and every bound member a
-  stand-in is made for.  It does not cover a later hook of the same
-  unification after an earlier one has changed the trail:
-  `{X >= 0}, {Y >= 0}, f(X, Y) = f(1, a)` (X and Y in different components)
-  raises `SystemError` instead of `type_error(rational, a)`, and so does any
-  other exception that leaves the hook after a trailed change (an
-  evaluation error in a Later goal run in place).  X's hook cannot see Y,
-  so no port-side order helps; the fix is the engine's `trail_undo_to`
-  keeping the pending exception.
+- Clause 3, `numbers_only(Y, X)`: runs first, before the stand-ins are made,
+  for X and for every bound member a stand-in is made for, so the
+  `type_error` leaves before any trailed change
+  (`test_a_non_number_raises_a_type_error`).  Until the engine change
+  64d5e9f6 (engine bug F5) this order was needed: the undo after a hook
+  raised cleared the exception, and `unify` raised `SystemError`.  The
+  engine now keeps it, so a later hook of the same unification after an
+  earlier one changed the trail also gives the `type_error`:
+  `{X >= 0}, {Y >= 0}, f(X, Y) = f(1, a)` (X and Y in different
+  components) raises `type_error(rational, a)` (the same test).
   Y is accepted when it is a variable or an exact number (an int, a
   Fraction, a finite Decimal); a float raises `type_error(rational, Y)` as
   1.3.3's `arith_normalize(Y, Y)` test does (Scryer's clpq accepts it).
@@ -180,79 +176,70 @@ Several variables bound in one unification.  The engine makes every
 binding of a unification first, then calls the hooks in turn.  So while X's
 hook runs, another constrained variable W of the same unification can be
 bound with its hook still to come ("unhooked"), and W can be in rows and
-member lists the solver walks.  What the port guarantees (ruling R21):
+member lists the solver walks.  Before X's hook reads a row, it makes a
+stand-in for every bound member of X's component, of Y's, and of the
+component each such member's value is in, transitively, and does each
+one's work (`_stand_in_for_bound_members`).  An unhooked W whose work was
+done this way is no longer a member; when its own hook comes it finds that
+and returns at once.  Components are scanned once each: X's and Y's are
+one component when the binding is inside it
+(`test_a_binding_within_one_component_makes_one_stand_in`).
 
-- Before X's hook reads a row, it makes a stand-in for every bound member
-  of X's component, of Y's, and of the component each such member's value
-  is in, transitively, and does each one's work
-  (`_stand_in_for_bound_members`).
-- Before each Later goal runs, outside a driver or in it, `catch_up` does
-  the same for the components of the variables the goal holds (and those
-  they reach).
-- Every entry point of the port that reads the store runs `catch_up` on
-  the variables it was given first, then the Later work that produced:
-  nf.pl's `{}/1` comparisons (so `post_constraint`,
-  `post_constraint_with_choices`, `resume_constraint`, `entailed/1`),
-  `wait_linear/3` (so `inf`, `sup`, `minimize`, `maximize`), and
-  `attribute_goal` when given a trail.  The normal form is taken again
-  when the catch-up bound anything, so it reads the values.  This covers
-  a goal another key's hook runs in place in the middle of a unification
-  (a `freeze/2` goal outside a driver).  `bb_inf` (Task 13) catches up
-  the variables of its integer list at entry, and wait_linear those of
-  its objective (`test_bb_inf_catches_up_at_entry`: bare, the frozen
-  `bb_inf([Q - X], W, I)` would otherwise read `Q - 2`, which
-  `branch_and_bound_intern/4` refuses with an instantiation error).
-  `dump/3` and `projecting_assert/1` do it (Task 12).
-- A solver step reaches no other part of the store: a constraint
-  dereferences its variables, and a binding runs that variable's hook,
-  which catches up its own components.
-- An unhooked W whose work was done this way is no longer a member; when
-  its own hook comes it finds that and returns at once.
-- Components are scanned once each: X's and Y's are one component when
-  the binding is inside it (`test_a_binding_within_one_component_makes_one_stand_in`).
+Nothing else runs inside that window.  The engine contract since 9b38a0f1
+(`clausal/logic/pending.py`, `docs/coroutining.md`): every unification,
+bare or under a driver, sets `trail.defer` while it binds and runs the
+hooks, so every hook, the port's and every other key's (`freeze/2`,
+`when/2`), only queues the goals it wakes; a bare unify then runs the queue
+to its first answer, after every hook of the unification, and fails
+(undone) when the goals have no answer.  So a hook never sees another
+hook's Later work run before it, and a woken goal (a Later goal, a frozen
+goal that posts or reads the store) runs after every hook of the
+unification, bare and under a driver alike.  A solver step reaches no
+other part of the store: a constraint dereferences its variables, and a
+binding runs that variable's hook, which makes the stand-ins for its own
+components.
 
-So no code of the port reads a row or member list that holds an unhooked
-binding.  The checks:
-`test_one_unification_binding_two_constrained_variables`,
+The checks: `test_one_unification_binding_two_constrained_variables`,
 `test_a_later_goal_reads_no_unhooked_binding` (and `_the_other_way`),
 `test_a_frozen_goal_reads_no_unhooked_binding` (Z frozen and bound before
 X, bare, one at a time and under a driver: a post that must fail, one that
-must hold, `W = Q + X`, and `inf(Q)` read in the goal), and
+must hold, `W = Q + X`, and `inf(Q)` read in the goal),
+`test_a_goal_another_key_wakes_answers_the_same_bare_and_under_a_driver`
+(the same four goals, Z first and X first, bare equal to driver), and
 `test_one_unification_bare_one_at_a_time_and_under_a_driver_agree`: 2,000
 random stores of two components joined by a delayed goal, two or three
 members bound in one unification, bare, one at a time and under a driver,
 with 0 disagreements (20,000 seeds with `CLPQ_PORT_PROPERTY_SEEDS=20000`
-also gave 0; before the fix, 50 of 2,000 disagreed).
+also gave 0).  Scryer's clpq fails `{X + Y = 3}, f(X, Y) = f(1, 2)`; the
+port answers it.
 
-Under a driver the entry points skip `catch_up` (ruling R22).  That rests
-on an invariant: no hook body calls a port entry point while `trail.defer`
-is True.  freeze/2 and when/2 queue their goals under `defer`
-(coroutining.py `_freeze_hook`, `_run_now`); no other registered hook (dif,
-clpfd, clpb, clpr, the two units keys, legacy clpq, COMPONENT_KEY) calls an
-entry point; and the port's own hook covers its components with stand-ins
-and pushes its Later work to the pending queue.  So under a driver an
-entry point is reached at a goal boundary, after every hook of the
-unification has run.  `test_the_registered_attribute_hooks_are_the_known_set`
-fails when a hook is registered or removed, and says to check this
-invariant before extending its list;
-`test_frozen_goals_under_a_driver_skip_the_entry_catch_up` runs the frozen
-cases under a driver with the skip active.  The `catch_up` before each
-Later goal stays in both modes.
+History (rulings R20, R21, R22; retired in Task 13c).  Before 9b38a0f1 a
+bare unify ran no queue: outside a driver the port's hook ran its Later
+goals in place, and `freeze/2` ran its goal in place, while sibling hooks
+of the unification had not run yet (50 of 2,000 random stores disagreed
+between bare and driver, and frozen posts failed unsoundly).  The port
+covered that with `catch_up` (a stand-in pass over the components a Later
+goal reached, before it ran), `catch_up_entry` (the same at every
+store-reading entry point: nf.pl's `{}/1` comparisons, `wait_linear/3`,
+`bb_inf`, `dump/3`, `projecting_assert/1`, `attribute_goal` with a trail),
+the R22 skip of `catch_up_entry` under a driver with its tripwire test on
+the registered hook keys, and the `DRAINING` marker (below, "Later
+goals").  On the rebased branch, counted over the regression set
+(`tests/clpq_port tests/test_sandbox.py tests/test_clpq*.py`), `catch_up`
+and `catch_up_entry` scanned 67,514 times and made 0 stand-ins (270 on the
+old engine), and `DRAINING` was met 0 times (2,732 on the old engine), so
+all four went.  The cost they carried: posting a chain `{X(i+1) = X(i)}`
+into one component was quadratic outside a driver.
 
-The cost: outside a driver, every entry and every Later goal scans the
-member lists of the components it reaches, so posting a chain
-`{X(i+1) = X(i)}` into one component is quadratic.  Measured 2026-10-12,
-2,500 / 5,000 / 10,000 posts: bare 0.26 / 0.92 / 3.59 s, under a driver
-0.09 / 0.09 / 0.20 s (without any entry catch-up 0.07 / 0.09 / 0.20 s).  Scryer's clpq fails `{X + Y = 3}, f(X, Y) = f(1, 2)`;
-the port answers it.
+PERF-BASELINE (Task 13c, 2026-10-12, the same engine build at 800048a2,
+best of 3, two interleaved rounds within 0.05 s of each other), chain
+posts, bare / under a driver:
 
-Proposed engine alternative (needs the operator): when `trail.defer` is
-false, a bare `unify` runs `trail.pending` to its first answer after
-`fire_wakeups`, so Later goals always run after every hook of the
-unification, and `freeze/2` and the other keys' hooks always queue their
-goals there too.  Then no goal runs inside the window: the hook would
-always push its Later work, `DRAINING` and every `catch_up` (and their
-cost) would go, and the stand-ins for X's and Y's components would stay.
+| Posts | With the catch-up | Without |
+|---|---|---|
+| 2,500 | 0.24 / 0.04 s | 0.04 / 0.04 s |
+| 5,000 | 0.83 / 0.09 s | 0.08 / 0.09 s |
+| 10,000 | 3.46 / 0.17 s | 0.20 / 0.17 s |
 
 Implied bindings are queued, not nested.  bv.pl's `export_binding/1` binds
 each `X = Value` at once, and in 1.3.3 each binding runs X's
@@ -270,24 +257,31 @@ order, where 1.3.3 checks each one's implied bindings before the next of
 its own.
 
 Later goals.  1.3.3 runs X's Later goals right after X's binding, inside
-the binding that caused it.  The port runs them after all of the hook's
-bindings: on the trail's pending queue when a driver owns it
-(`trail.defer`), otherwise in the hook.  Outside a driver the outermost
-hook puts a marker (`DRAINING`) at the front of the pending queue while it
-drains; a hook woken by a Later goal finds the marker and queues its own
-Later work behind it, so a cascade of delayed goals runs in one loop
-(`test_a_cascade_of_delayed_goals_needs_no_recursion`).  itf3.pl's Later
-goals (the bounds `{L =< Y}`) run before geler.pl's (the delayed goals) for
-the same variable; SICStus's order between the two modules' hooks is not
-checked.
+the binding that caused it.  The port puts them on the trail's pending
+queue (`PendingLater`, `run_later`), so they run after every hook of the
+unification: at the next goal boundary under a driver, and in the bare
+unify's own drain otherwise.  `bind_all` (bv.pl's `export_binding/1` from a
+post, with no unification around it) owns the queue the same way when no
+driver does: it sets `trail.defer`, queues the Later work and runs the
+queue to its first answer.  A cascade of delayed goals, each waking the
+next, runs in the engine's one drain loop
+(`test_a_cascade_of_delayed_goals_needs_no_recursion`, started by a unify
+and by a post).  itf3.pl's Later goals (the bounds `{L =< Y}`) run before
+geler.pl's (the delayed goals) for the same variable; SICStus's order
+between the two modules' hooks is not checked.  Before 9b38a0f1 the
+outermost hook outside a driver drained the Later work itself, behind a
+`DRAINING` marker at the front of the queue (retired, Task 13c).  On the
+new engine that marker no longer held a cascade flat: rebased with it
+still in place, the cascade started by a post (each binding implied by
+bounds, so `bind_all` makes it) raised `RecursionError` at 300 links.
 
 Goals a probe or a search wakes (Task 13 fix round 1, ruling R24).  In
 1.3.3 the goals a `{}/1` wakes run inside it, so `\+ {Cn}` in nf.pl's
 `entailed/1` and every `{}/1` of bb.pl's search (`bb_branch/3`,
 `bb_narrow_lower/1`, `bb_narrow_upper/1`) fail when a woken goal fails.
 In the port such a goal is queued on the trail when a driver owns it, and
-also outside one when the caller itself runs from a hook's Later work
-(behind `DRAINING`).  The probe's and the search's mark and undo then
+also as a goal a bare unify woke, in its drain, which owns the queue the
+same way.  The probe's and the search's mark and undo then
 dropped the queued goals unrun, so `{X >= -1/2, X =< 1/2, X*Y = 1},
 bb_inf([X], X, I)` answered `I = 0` under a driver where Scryer fails.
 Now `entailed` and `branch_and_bound_infimum_internal` take the queue
@@ -298,8 +292,9 @@ post, so a branch is pruned and a narrowing fails as a failed post would.
 Checks, bare and under a driver: `test_a_goal_woken_by_narrowing_runs_in_it`,
 `test_a_goal_woken_by_a_branch_runs_in_it`,
 `test_a_goal_woken_by_the_narrowing_s_entailed_runs_in_it`,
-`test_a_woken_bb_inf_runs_the_goals_its_search_wakes` (bare too: before,
-the search's goals waited behind `DRAINING` and were dropped),
+`test_a_woken_bb_inf_runs_the_goals_its_search_wakes` (bare too: on the
+old engine the search's goals waited behind the retired `DRAINING` marker
+and were dropped),
 `test_work_queued_before_bb_inf_stays_queued`,
 `test_entailed_runs_the_goals_its_probe_wakes`, and every case of
 `BB_INF_CASES` run both ways (`test_bb_inf_answers_as_the_oracle`).  D17's
@@ -335,20 +330,24 @@ on the pending queue, the trial succeeds and the dump keeps `X < 1`
 goals alone no difference was found (1,330 random stores): inside a dump
 the non-linear goals are already marked run.
 `test_dump_under_a_driver_matches_a_bare_dump` also checks that `defer` is
-restored.
+restored.  Since 9b38a0f1 a bare binding runs the whole queue, so the
+projection first takes the queue it was entered with, as `entailed` does,
+and the undo puts it back: a trial runs only what it wakes itself.
+Without that, a failing goal already queued under a driver made every
+trial fail and `dump/3` fail (`test_work_queued_before_dump_stays_queued`).
 
-A dump inside the unification window.  `dump/3` and `projecting_assert/1`
-check their targets again after their catch-up, which can bind a target
-whose binding's hook has not run: `{X + Q = 3, Q >= 0}`,
-`freeze(Z, dump([Q], [Q1], C))`, `f(Z, X) = f(1, 2)` (Z first, bare) raises
-`uninstantiation_error(1)`, as 1.3.3's `must_be/4` does with Q bound
-(`test_dump_of_a_target_the_catch_up_binds_raises`,
-`test_projecting_assert_of_a_variable_the_catch_up_binds`).  Such a dump
-cannot see the Later bound of a variable-variable binding of the same
-unification (`{L =< Y}` from `verify_type`), which waits behind the
-frozen goal; 1.3.3 has the same gap, since the order of a frozen goal and
-the Later goals of the hook is implementation-defined (Task 12 review,
-probe `window.py` case (b)).
+A dump in a goal the unification wakes.  `{X + Q = 3, Q >= 0}`,
+`freeze(Z, dump([Q], [Q1], C))`, `f(Z, X) = f(1, 2)` (Z first): the frozen
+goal runs after X's hook has bound Q = 1, so `dump/3` raises
+`uninstantiation_error(1)`, as 1.3.3's `must_be/4` does with Q bound, and
+`projecting_assert/1` projects nothing
+(`test_dump_in_a_frozen_goal_sees_the_unification_s_bindings`,
+`test_projecting_assert_in_a_frozen_goal_sees_the_unification_s_bindings`).
+Such a dump cannot see the Later bound of a variable-variable binding of
+the same unification (`{L =< Y}` from `verify_type`), which is queued
+behind the frozen goal; 1.3.3 has the same gap, since the order of a
+frozen goal and the Later goals of the hook is implementation-defined
+(Task 12 review, probe `window.py` case (b)).
 
 ## D4: the order of variables is creation order
 

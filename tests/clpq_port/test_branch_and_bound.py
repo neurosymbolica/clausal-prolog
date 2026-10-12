@@ -395,12 +395,12 @@ def test_the_delayed_goal_is_deterministic():
     assert runs == [1] and _value(infimum) == 2
 
 
-# ---------------------------------------------------------------- entry catch-up (D3)
+# ---------------------------------------------------------------- a woken bb_inf (D3)
 
 def _frozen_bb_inf(mode):
     """{X + Q = 3}, {W >= 1/2}, freeze(Z, bb_inf([Q - X], W, I)), then
-    f(Z, X) = f(1, 2): outside a driver the frozen goal runs before X's
-    hook, with X bound and Q not yet."""
+    f(Z, X) = f(1, 2): Z is bound first, and the frozen goal runs after
+    X's hook too, bare and under a driver."""
     from clausal.logic.coroutining import _freeze_var
     trail = Trail()
     x, q, w, z, infimum = Var(), Var(), Var(), Var(), Var()
@@ -424,9 +424,9 @@ def _frozen_bb_inf(mode):
 
 
 @pytest.mark.parametrize("mode", ["bare", "one at a time", "driver"])
-def test_bb_inf_catches_up_at_entry(mode):
-    # Q - X is the constant -1 once Q's component has caught up with X = 2;
-    # without the catch-up it is Q - 2, which branch_and_bound_intern/4
+def test_a_frozen_bb_inf_answers_the_same_in_every_mode(mode):
+    # Q - X is the constant -1 once X's hook has bound Q = 1; a goal that
+    # ran before that hook would read Q - 2, which branch_and_bound_intern/4
     # refuses with an instantiation error.
     assert _frozen_bb_inf(mode) == (True, Fraction(1, 2), 1)
 
@@ -520,11 +520,11 @@ def test_a_goal_woken_by_the_narrowing_s_entailed_runs_in_it(mode):
 
 @pytest.mark.parametrize("mode", ["bare", "driver"])
 def test_a_woken_bb_inf_runs_the_goals_its_search_wakes(mode):
-    # bb_inf waits on Z*K, and K = 1 wakes it from the hook's Later work:
-    # bare, inside run_later's drain, behind its DRAINING marker; under a
-    # driver, from the queue.  Its branch X =< 0 binds X = 0 and wakes
+    # bb_inf waits on Z*K, and K = 1 wakes it from the hook's Later work,
+    # on the queue: bare, in the unify's drain; under a driver, at the goal
+    # boundary.  Its branch X =< 0 binds X = 0 and wakes
     # X*W = 1, which fails, so I = 2/3 at X = 1, as on Scryer; with the
-    # woken goal left behind the marker it would be 1/3 at X = 0.
+    # woken goal left on the queue unrun it would be 1/3 at X = 0.
     trail = _start(mode)
     try:
         x, z, w, k, infimum, vertex = Var(), Var(), Var(), Var(), Var(), Var()

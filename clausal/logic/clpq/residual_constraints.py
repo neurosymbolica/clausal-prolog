@@ -18,8 +18,7 @@ A constraint goal is a compound cell (`("=<", Sum, Bound)`), with engine
 numbers (int or Fraction) for the rationals
 (test_dump_emits_engine_numbers_never_rational_pairs).
 """
-from clausal.logic.clpq.attribute_hooks import (
-    catch_up_entry, dump_linear, dump_nonzero)
+from clausal.logic.clpq.attribute_hooks import dump_linear, dump_nonzero
 from clausal.logic.clpq.attributes import state_of
 from clausal.logic.clpq.components import ListCell, component_all_variables
 from clausal.logic.clpq.delayed_goals import _term_variables, collect_nonlinear
@@ -45,20 +44,21 @@ def dump(target_variables, names, trail):
     that is not an unbound variable raises uninstantiation_error, as
     must_be(Target, proper_list(var), ...) does.
 
-    Before reading the store, catch_up (DEVIATIONS.md D3).  The projection
-    runs with `trail.defer` off and restores it after, as a bare call does
-    (DEVIATIONS.md D3; test_dump_under_a_driver_matches_a_bare_dump)."""
+    The projection runs with `trail.defer` off and restores it after, as a
+    bare call does, so its trial posts run what they wake inside the trial
+    (DEVIATIONS.md D3; test_dump_under_a_driver_matches_a_bare_dump).  It
+    takes the queue it was entered with first, so a trial runs only what
+    it wakes itself; the undo puts the queue back
+    (test_work_queued_before_dump_stays_queued)."""
     targets = _unbound_targets(target_variables)
     if len(names) != len(targets):
         return None
     saved_defer = trail.defer
     trail.defer = False
     try:
-        if not catch_up_entry(targets, trail):
-            return None
-        targets = _unbound_targets(targets)     # the catch-up may bind one
         mark = trail.mark()
         try:
+            trail.take_pending()        # the outer queue, back at the undo
             goals = variables_constraints(targets, trail)
             if goals is None:
                 return None
@@ -83,9 +83,7 @@ def dump(target_variables, names, trail):
 
 def _unbound_targets(target_variables):
     """must_be(Target, proper_list(var), dump(...), 1): the dereferenced
-    targets; a bound one raises uninstantiation_error.  dump/3 checks again
-    after its catch-up, which can bind a target that a unification bound
-    and whose hook has not run (test_dump_of_a_target_the_catch_up_binds_raises)."""
+    targets; a bound one raises uninstantiation_error."""
     targets = []
     for variable in target_variables:
         variable = deref(variable)
@@ -107,11 +105,9 @@ def projecting_assert(clause, trail):
     saved_defer = trail.defer
     trail.defer = False
     try:
-        if not catch_up_entry(target, trail):
-            return clause
-        target = _term_variables([clause])      # the catch-up may bind one
         mark = trail.mark()
         try:
+            trail.take_pending()        # the outer queue, back at the undo
             goals = variables_constraints(target, trail)
             if goals is None:
                 return clause

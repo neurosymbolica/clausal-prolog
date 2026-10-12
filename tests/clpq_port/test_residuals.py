@@ -928,11 +928,38 @@ def test_a_frozen_goal_woken_in_a_trial_post_runs_inside_it():
             trail.defer = False
 
 
-def test_dump_of_a_target_the_catch_up_binds_raises():
+def test_work_queued_before_dump_stays_queued():
+    # A failing goal already on the queue when dump/3 starts is not dump's
+    # to run: its trial posts must not run it (each bare binding runs the
+    # whole queue), and the undo puts it back.  Without taking the queue,
+    # the trial {1 =< X} fails on it, and so does the whole projection.
+    def fails():
+        return iter(())
+
+    for defer in (False, True):
+        for project in ("dump", "projecting_assert"):
+            trail = Trail()
+            x, w = Var(), Var()
+            _post(trail, ("<", x, 1), ("=<", ("+", x, w), 1), (">=", w, 0))
+            trail.defer = defer
+            trail.push_pending(fails)
+            try:
+                if project == "dump":
+                    assert rc.dump([x], ["X"], trail) == [("<", "X", 1)]
+                else:
+                    clause = rc.projecting_assert(("p", x), trail)
+                    assert clause != ("p", x)
+                assert trail.pending is not None
+                assert trail.take_pending() == (fails,)
+            finally:
+                trail.defer = False
+
+
+def test_dump_in_a_frozen_goal_sees_the_unification_s_bindings():
     # {X + Q = 3, Q >= 0}, freeze(Z, dump([Q], [Q1], C)), f(Z, X) = f(1, 2):
-    # Z's goal runs before X's hook; dump's catch-up does X's work and binds
-    # Q = 1, which must_be/4 then sees bound.  projecting_assert/1 takes
-    # the clause's variables again after its catch-up.
+    # Z is bound first, but its goal runs after X's hook has bound Q = 1
+    # (the engine runs woken goals after every hook of the unification), so
+    # must_be/4 sees Q bound, and projecting_assert/1 projects nothing.
     from clausal.logic.coroutining import _freeze_var
     from clausal.logic.variables import unify
     trail = Trail()
@@ -955,10 +982,9 @@ def test_dump_of_a_target_the_catch_up_binds_raises():
     assert seen[1] == ("p", q_) and deref(q_) == 1
 
 
-def test_projecting_assert_of_a_variable_the_catch_up_binds():
+def test_projecting_assert_in_a_frozen_goal_sees_the_unification_s_bindings():
     # As above, with projecting_assert/1 the first to read the store: Q is
-    # unbound when it collects the clause's variables, bound after its
-    # catch-up, so it takes them again (no put_attr on a bound Q).
+    # bound when it collects the clause's variables.
     from clausal.logic.coroutining import _freeze_var
     from clausal.logic.variables import unify
     trail = Trail()
@@ -1064,11 +1090,3 @@ def test_residual_strings_without_a_store_is_empty():
     _post(trail, (">=", x, 1))
     assert rc.residual_strings([x, 3, x], trail, _namer([(x, "X")])) == \
         ["{X >= 1}"]
-
-
-def test_attribute_goal_with_a_trail_catches_up_first():
-    from clausal.logic.clpq import attribute_hooks as hooks
-    trail = Trail()
-    x = Var()
-    _post(trail, (">=", x, 1))
-    assert hooks.attribute_goal(x, trail=trail) == hooks.attribute_goal(x)

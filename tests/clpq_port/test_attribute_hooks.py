@@ -176,6 +176,16 @@ def test_a_non_number_raises_a_type_error():
     with pytest.raises(LogicException):
         unify(x, 1.5, trail)
     assert is_var(deref(x))
+    # A later hook of the same unification, after X's hook changed the
+    # trail: the engine's undo keeps the exception (64d5e9f6, engine bug F5;
+    # before, unify raised SystemError here).
+    trail = Trail()
+    x, y = Var(), Var()
+    assert _post(trail, (">=", x, 0), (">=", y, 0))
+    with pytest.raises(LogicException) as caught:
+        unify(("f", x, y), ("f", 1, "a"), trail)
+    assert "type_error" in str(caught.value.term)
+    assert is_var(deref(x)) and is_var(deref(y))
 
 
 # ---------------------------------------------------------------- two constrained variables
@@ -367,8 +377,8 @@ def test_the_chain_bound_from_the_far_end():
 
 def test_a_cascade_of_delayed_goals_needs_no_recursion():
     # {X1 = X0*X0}, {X2 = X1*X1}, ...: each binding wakes the goal that
-    # binds the next variable.  Outside a driver the outermost hook runs the
-    # Later work of the hooks woken inside it in one loop.
+    # binds the next variable.  Each hook queues its Later work, and the
+    # bare unify's drain runs every generation of it in one loop.
     trail = Trail()
     variables = [Var() for _ in range(2_001)]
     for i in range(2_000):
@@ -381,6 +391,25 @@ def test_a_cascade_of_delayed_goals_needs_no_recursion():
     finally:
         sys.setrecursionlimit(limit)
     assert all(deref(v) == 1 for v in variables)
+    assert trail.pending is None
+    # {Xi >= 0}, {X(i+1) =< Xi*Xi}, then the post {X0 =< 0}: each binding
+    # is implied by bounds, so bind_all makes it with no unification
+    # around it, and its Later work runs from run_later with no driver
+    # (Task 13c: on the rebased head with DRAINING still in place this
+    # raised RecursionError, and so does draining the Later work in place).
+    trail = Trail()
+    variables = [Var() for _ in range(2_001)]
+    for variable in variables:
+        assert _post(trail, (">=", variable, 0))
+    for i in range(2_000):
+        assert _post(trail, ("=<", variables[i + 1],
+                             ("*", variables[i], variables[i])))
+    sys.setrecursionlimit(_depth() + 250)
+    try:
+        assert _post(trail, ("=<", variables[0], 0))
+    finally:
+        sys.setrecursionlimit(limit)
+    assert all(deref(v) == 0 for v in variables)
     assert trail.pending is None
     trail = Trail()
     variables = [Var() for _ in range(301)]
@@ -719,8 +748,9 @@ def test_one_unification_bare_one_at_a_time_and_under_a_driver_agree():
 
 def _frozen_case(make_goal, mode):
     """{X + Q = 3}, freeze(Z, Goal), then f(Z, X) = f(1, 2): the engine
-    binds Z and X, then runs Z's freeze hook (Goal, in place outside a
-    driver) before X's CLPQ_KEY hook."""
+    binds Z and X, runs Z's freeze hook (which queues Goal) and X's
+    CLPQ_KEY hook, then Goal: in the unify's drain bare, at the goal
+    boundary (run_first here) under a driver."""
     from clausal.logic.coroutining import _freeze_var
     trail = Trail()
     x, q, z, w = Var(), Var(), Var(), Var()
@@ -793,79 +823,50 @@ def test_a_binding_within_one_component_makes_one_stand_in():
     assert _inf(x, trail) == Fraction(3, 2) and _sup(y, trail) == Fraction(3, 2)
 
 
-# ---------------------------------------------------------------- fix round 3
+# ---------------------------------------------------------------- goals another key wakes
 
-#: Every (module, key constant) the engine registers an attribute hook for.
-_KNOWN_HOOKS = {
-    ("clausal.logic.clpb", "B_KEY"),
-    ("clausal.logic.clpfd", "FD_KEY"),
-    ("clausal.logic.clpfd", "ZCMP_KEY"),
-    ("clausal.logic.clpq.attribute_hooks", "CLPQ_KEY"),
-    ("clausal.logic.clpq.components", "COMPONENT_KEY"),
-    ("clausal.logic.clpq.legacy", "Q_KEY"),
-    ("clausal.logic.clpr", "REAL_KEY"),
-    ("clausal.logic.constraints", "DIF_KEY"),
-    ("clausal.logic.coroutining", "FREEZE_KEY"),
-    ("clausal.logic.units_clp", "LINK_KEY"),
-    ("clausal.logic.units_constraint", "UNITS_KEY"),
-}
-
-
-def test_the_registered_attribute_hooks_are_the_known_set():
-    # Ruling R22: under a driver the entry points skip catch_up, which is
-    # sound only while no hook body calls an entry point of the port while
-    # trail.defer is True (freeze/2 and when/2 queue their goals then).
-    import os
-    import re
-    import clausal
-    root = os.path.dirname(os.path.abspath(clausal.__file__))
-    found = set()
-    for directory, _, files in os.walk(root):
-        for name in files:
-            if not name.endswith(".py"):
-                continue
-            path = os.path.join(directory, name)
-            with open(path, encoding="utf-8") as handle:
-                text = handle.read()
-            module = os.path.relpath(path[:-3], os.path.dirname(root)) \
-                .replace(os.sep, ".")
-            for key in re.findall(r"^\s*register_attr_hook\(\s*(\w+)\s*,",
-                                  text, re.M):
-                if key != "key":
-                    found.add((module, key))
-    assert found == _KNOWN_HOOKS, (
-        "the set of registered attribute hooks changed: "
-        f"new {sorted(found - _KNOWN_HOOKS)}, gone {sorted(_KNOWN_HOOKS - found)}. "
-        "Before extending _KNOWN_HOOKS, check that the new hook never calls "
-        "a CLP(Q) port entry point (post_constraint, inf, sup, minimize, "
-        "maximize, entailed, attribute_goal) while trail.defer is True; "
-        "attribute_hooks.catch_up_entry relies on it (DEVIATIONS.md D3, "
-        "ruling R22).")
+def _woken_by_another_key(order, make_goal, mode):
+    """{X + Q = 3}, Goal frozen on Z, then Z and X bound in one
+    unification, Z first or X first: (ok, inf Q, sup Q, inf W, sup W,
+    what Goal read)."""
+    from clausal.logic.coroutining import _freeze_var
+    trail = Trail()
+    x, q, z, w = Var(), Var(), Var(), Var()
+    assert _post(trail, ("=", ("+", x, q), 3))
+    seen = []
+    _freeze_var(z, make_goal(x, q, w, trail, seen), trail)
+    left, right = (("f", z, x), ("f", 1, 2)) if order == "z first" \
+        else (("f", x, z), ("f", 2, 1))
+    if mode == "bare":
+        ok = unify(left, right, trail)
+    else:
+        trail.defer = True
+        try:
+            ok = unify(left, right, trail) and run_first(trail)
+        finally:
+            trail.defer = False
+    if not ok:
+        return (False,)
+    return (True, _inf(q, trail), _sup(q, trail), _inf(w, trail),
+            _sup(w, trail), seen)
 
 
-def test_frozen_goals_under_a_driver_skip_the_entry_catch_up():
-    # The four frozen cases under a driver, with the entry catch_up skipped
-    # (these cases make no Later goals, so a catch_up call under defer
-    # could only come from an entry point; the spy sees none).
-    calls = []
-    original = hooks.catch_up
-
-    def spy(work, trail, later):
-        calls.append(trail.defer)
-        return original(work, trail, later)
-    hooks.catch_up = spy
-    try:
-        mode = "driver"
-        assert _frozen_case(_posting(lambda x, q, w: (">=", q, 5)), mode) \
-            == (False, None)
-        assert _frozen_case(_posting(lambda x, q, w: ("=<", q, 1)), mode) \
-            == (True, (1, 1, None, None, []))
-        assert _frozen_case(_posting(lambda x, q, w: ("=", w, ("+", q, x))),
-                            mode) == (True, (1, 1, 3, 3, []))
-        assert _frozen_case(_reading, mode) == (True, (1, 1, None, None, [1]))
-    finally:
-        hooks.catch_up = original
-    assert True not in calls
+@pytest.mark.parametrize("order", ["z first", "x first"])
+def test_a_goal_another_key_wakes_answers_the_same_bare_and_under_a_driver(order):
+    # A frozen goal that posts or reads the store, woken by the same
+    # unification that binds a constrained X: it runs after X's hook in
+    # both modes, so the answers agree (this replaces ruling R22's tripwire
+    # on the registered hook keys and the entry-point catch-up it guarded).
+    goals = (_posting(lambda x, q, w: (">=", q, 5)),
+             _posting(lambda x, q, w: ("=<", q, 1)),
+             _posting(lambda x, q, w: ("=", w, ("+", q, x))),
+             _reading)
+    expected = [(False,), (True, 1, 1, None, None, []),
+                (True, 1, 1, 3, 3, []), (True, 1, 1, None, None, [1])]
+    for goal, answer in zip(goals, expected):
+        bare = _woken_by_another_key(order, goal, "bare")
+        driver = _woken_by_another_key(order, goal, "driver")
+        assert bare == driver == answer
 
 
 def test_a_stand_in_left_in_a_row_is_a_member():
