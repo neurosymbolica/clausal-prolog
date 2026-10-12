@@ -12,13 +12,15 @@ test_acceptance.py does for filled_rectangle.pl).
 What runs.  The file's own driver uses ``->`` and its matmul, root and
 SEND+MORE checks use cuts, so Clausal (cut-free) cannot load it whole.  The
 tests take the clauses of the cut-free example predicates by name: mg
-(mortgage), monash_mg (the Monash mortgage), example/3 (simplex 1 to 9),
+(mortgage), monash_mg (the Monash mortgage), caneghem/2, example/3
+(simplex 1 to 9 and the utility, electricity and water models),
 elim_example/2 and conv_hull/2 (eliminat), laplace/1 (symbolic 4 x 4 and
-ground 11 x 11), fib/2, smm_p/8 (SEND+MORE=MONEY, without the file's cut:
-``once/1`` takes the first answer) and opt_value/9 (option).  The query
-predicates below are this test's own.  Not run: caneghem, the simplex
-utility/electricity/water models, matmul, root, squares (test_acceptance.py
-runs filled_rectangle), complex, invert, air, pictures, toolpath.
+ground 11 x 11), zmul/3 (complex), fib/2, inv_matmul/3 (invert), smm_p/8
+(SEND+MORE=MONEY, without the file's cut: ``once/1`` takes the first
+answer), opt_value/9 (option), bal/3 (air), pic_intersect/5 (pictures) and
+tp_geometry/2 (toolpath).  The query predicates below are this test's own.
+Not run: matmul and root, whose clauses use cuts (mat/4, mat_row/5,
+ident/3, root/3), and squares (test_acceptance.py runs filled_rectangle).
 
 Two textual adaptations for Clausal, on the port's copy only (the oracle
 reads the clauses as written):
@@ -51,6 +53,12 @@ _PREDICATES = {
     "laplace", "laplace_vec", "fib", "smm_p", "smm_carry", "smm_dig",
     "smm_digit", "smm_difflist", "smm_notmem", "opt_h", "opt_r",
     "opt_value", "opt_check_param", "opt_get_sign", "opt_table",
+    "caneghem", "zmul", "sizemat", "allvec", "inv_matmul", "inv_rowmul",
+    "inv_vecmul", "mol_comp", "comp", "basis_val", "bal", "air_zero",
+    "bal_side", "add_species", "add_elements", "pic_gradient",
+    "pic_lineeq", "pic_intersect", "tp_get_vars", "tp_make_vars",
+    "tp_make_db", "tp_neq_r", "tp_get_constraint", "tp_make_constraints",
+    "tp_geometry",
 }
 
 _QUERIES = r"""
@@ -88,6 +96,33 @@ q_laplace_ground(Center) :-
 q_fib(Z, Y) :- fib(10, Z), once(fib(Y, 89)).
 q_smm(S, E, N, D, M, O, R, Y) :- once(smm_p(S, E, N, D, M, O, R, Y)).
 q_option_go1(Value) :- opt_value(call, sell, 60, 5, _, 1/20, 50, _, Value).
+q_caneghem(V1, V2, V3, V4, V5, V6, V7, V8, V9, V10) :-
+    caneghem(10, [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10]).
+q_simplex_models(U, El, Wa) :-
+    example(utility, _, U), example(electricity, _, El),
+    example(water, _, Wa).
+q_complex(R, I, Yr, Yi, Xr, Xi) :-
+    zmul(c(1,1), c(2,2), c(R,I)),
+    zmul(c(1,1), c(Yr,Yi), c(0,4)),
+    zmul(c(Xr,Xi), c(2,2), c(0,4)).
+q_invert(N11, N12, N13, N21, N22, N23, N31, N32, N33,
+         A, B, C, D, E, F, G, H, K) :-
+    M = [[4,5,6],[1,5,3],[1,8,9]],
+    sizemat(N, 3, 3),
+    inv_matmul(M, N, [[1,0,0],[0,1,0],[0,0,1]]),
+    N = [[N11,N12,N13],[N21,N22,N23],[N31,N32,N33]],
+    inv_matmul(M, N, [[A,B,C],[D,E,F],[G,H,K]]).
+q_air(A, F) :-
+    basis_val(Base),
+    bal([f(air, A), f(fuel, Base)], [f(flue, F)], [f(c,0), f(o,0)]).
+q_pictures(Px, Py) :-
+    pic_intersect(p(0,1), p(4,2), p(7/2,1), p(2,5), p(Px, Py)).
+q_toolpath(X5, Y5) :-
+    {Ten = 10}, {Twenty = 20},
+    tp_geometry([p(1,xy(Ten,Ten)), p(2,xy(Ten,Twenty)),
+                 p(3,xy(Twenty,Ten)), p(4,xy(Twenty,Twenty)),
+                 l(1,p(1),p(4)), l(2,p(2),p(3)), p(5,l(1),l(2))], DB),
+    member(p(5,X5,Y5), DB).
 q_option_go5(none) :-
     \+ ( {Put = 5, Exercise = 20, Interest = 1/10, S >= 0, W > 100},
          opt_value(put, buy, S, _, Put, Interest, Exercise, _, W) ).
@@ -137,7 +172,8 @@ def _both(name, variables):
 def test_the_cut_free_subset_is_found():
     port_program, _ = _programs()
     for name in ("mg", "monash_mg", "example", "elim_example", "laplace",
-                 "fib", "smm_p", "opt_value"):
+                 "fib", "smm_p", "opt_value", "caneghem", "zmul",
+                 "inv_matmul", "bal", "pic_intersect", "tp_geometry"):
         assert re.search(rf"^{name}\(", port_program, re.M), name
 
 
@@ -199,3 +235,54 @@ def test_option():
     [answer] = _both("q_option_go1", ["Value"])
     assert answer.bindings["Value"] == Fraction(-19, 4)
     assert len(_both("q_option_go5", ["X"])) == 1   # no solution for W > 100
+
+
+def _numbers(answer, variables):
+    return all(type(answer.bindings.get(v)) in (int, Fraction)
+               for v in variables)
+
+
+def test_caneghem():
+    variables = [f"V{i}" for i in range(1, 11)]
+    [answer] = _both("q_caneghem", variables)
+    assert _numbers(answer, variables)          # test_caneghem_10
+
+
+def test_simplex_models():
+    [answer] = _both("q_simplex_models", ["U", "El", "Wa"])
+    assert _numbers(answer, ["U", "El", "Wa"])  # test_simplex_utility etc.
+
+
+def test_complex():
+    [answer] = _both("q_complex", ["R", "I", "Yr", "Yi", "Xr", "Xi"])
+    assert [answer.bindings[v] for v in ("R", "I", "Yr", "Yi", "Xr", "Xi")] \
+        == [0, 4, 2, 2, 1, 1]                   # test_complex
+
+
+def test_invert():
+    inverse = [f"N{i}{j}" for i in range(1, 4) for j in range(1, 4)]
+    product = ["A", "B", "C", "D", "E", "F", "G", "H", "K"]
+    [answer] = _both("q_invert", inverse + product)
+    assert _numbers(answer, inverse)
+    assert [answer.bindings[v] for v in product] == \
+        [1, 0, 0, 0, 1, 0, 0, 0, 1]             # test_invert
+
+
+def test_air():
+    # bal/3 leaves choice points (add_elements/5); the file's run_test
+    # takes the first answer, and every answer is compared with the oracle.
+    answer = _both("q_air", ["A", "F"])[0]
+    assert answer.bindings["A"] == Fraction(335, 63)   # test_air's comment
+    assert 6 < answer.bindings["F"] < 7
+
+
+def test_pictures():
+    [answer] = _both("q_pictures", ["Px", "Py"])
+    assert _numbers(answer, ["Px", "Py"])       # test_pictures
+
+
+def test_toolpath():
+    answers = _both("q_toolpath", ["X5", "Y5"])
+    assert answers
+    assert (answers[0].bindings["X5"], answers[0].bindings["Y5"]) == \
+        (15, 15)                                # test_toolpath

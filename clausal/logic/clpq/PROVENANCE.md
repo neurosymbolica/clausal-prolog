@@ -67,12 +67,13 @@ The operator decided to port 1.3.3 directly and faithfully. The reasons:
   the licence acceptance for the 1.3.3 sources does not cover it, and it
   is never copied into this repository.  `tests/clpq_port/test_examples.py`
   reads it from that path, and skips where it is absent.  It runs the
-  file's cut-free example predicates (mg and the Monash mortgage, simplex
-  1 to 9, eliminat, laplace, fib, SEND+MORE=MONEY, option) under the port
-  and on the oracle, and checks the values the file documents.  The file's
-  own driver (`->`) and its cut-using examples cannot load in cut-free
-  Clausal and are not run; the rest of its examples are not run either
-  (the test's docstring lists them).
+  file's cut-free example predicates (mg and the Monash mortgage,
+  caneghem, simplex 1 to 9 and the utility, electricity and water models,
+  eliminat, laplace, complex, fib, invert, SEND+MORE=MONEY, option, air,
+  pictures, toolpath) under the port and on the oracle, and checks the
+  values the file documents.  The file's own driver (`->`) and the
+  examples whose clauses use cuts (matmul, root) cannot load in cut-free
+  Clausal and are not run; squares runs in test_acceptance.py.
 - **The reading copy**: `tools/clpq_reference/rename.py` with
   `tools/clpq_reference/rename_map.tsv` rewrites the 1.3.3 files (and the
   Scryer copy) with the full-word names of `NAMES.md`.  The output lives

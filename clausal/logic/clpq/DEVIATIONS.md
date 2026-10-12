@@ -1299,15 +1299,26 @@ under the default switch except where it says "legacy the same".
   bb_inf([X, Y], X, I).`  bb.pl branches for ever; memory grows by about
   50 MB/s.  1.3.3 does the same; legacy caps its depth at 50 and fails.
 - **Projection is exponential with no cap** (Medium 3).  dump/3 on two of
-  n variables under 3n random `=<` constraints (coefficients in -3..3):
-  worst over the seeds tried, 0.70 s at n = 4 and 13.50 s at n = 5.  The
-  `-g` printer projects every answer, so a sandboxed program reaches it.
-  Fourier-Motzkin in 1.3.3 is the same.
-- **Power expansion is about N^3** (Medium 4): `{X = (Y + 1)^(10^7)}`
-  does not finish.  nf.pl expands binomially as the port does.
-- **Unifying lists of constrained variables is cubic** (Low 8): `X1 =<
-  X2 =< ... =< Xn`, then `[X1, ..., Xn] = [0, ..., n-1]`: n = 400 takes
-  24 s; legacy 1.4 s.  A measured regression against legacy.
+  n variables under 3n random `=<` constraints (coefficients in -3..3), the
+  security review's probe `secport/proj.py SEED N COUNT` (Task 16
+  scratchpad): worst over the seeds tried, 0.70 s at n = 4 and 13.50 s at
+  n = 5.  The 13.5 s case is seed 101 (`random.Random(101)`, n = 5, 15
+  constraints, a 13-constraint answer): `proj.py 101 5 1`, rerun at
+  3f8fceb2, took 7.47 s.  The `-g` printer projects every answer, so a
+  sandboxed program reaches it.  Fourier-Motzkin in 1.3.3 is the same.
+- **Power expansion is about N^3** (Medium 4).  `{X = (Y + 1)^N}` takes
+  0.04 s, 0.12 s and 0.45 s at N = 1000, 2000 and 4000;
+  `(Y + Z + W)^120` takes 0.95 s and `^240` 7.1 s (security review), and
+  `{X = (Y + 1)^(10^7)}` does not finish.  nf.pl expands binomially as
+  the port does.
+- **Unifying constrained variables with constrained variables is slower
+  than legacy** (Low 8).  `X1 =< X2 =< ... =< Xn`, each `Yi >= 0`, then
+  `[X1, ..., Xn] = [Y1, ..., Yn]` (`secport/hookscale.py N`, mode
+  `varvar`; legacy `secport/hookscale_leg.py N`): n = 100 takes 1.17 s on
+  the port against 0.15 s on legacy, n = 200 12.25 s against 0.77 s.  A
+  measured regression against legacy.  The other shape is not: unifying
+  the chain with numbers, `[X1, ..., Xn] = [0, ..., n-1]` (mode `list`),
+  is FASTER on the port, n = 200 1.16 s against legacy 10.09 s.
 - **Deep terms raise RecursionError in shared clpfd code** (Medium 7):
   a sum nested 100,000 deep (`lsum(N, X, T) :- ..., lsum(N1, X + 1, T)`,
   then `{Y >= T}`) raises `RecursionError` from clpfd's cell walk before
