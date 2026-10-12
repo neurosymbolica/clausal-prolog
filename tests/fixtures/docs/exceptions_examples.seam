@@ -12,9 +12,10 @@ test("catch/3 protects its Goal only") <- (
     catch((w(_), fail), BALL, BALL is 'later')
 )  # nv
 
-# Re-entered on backtracking, the Goal is protected again.
+# Re-entered on backtracking, the Goal is protected again: Y is 'two' rejects
+# gen's first answer, and the ball gen's second answer throws is caught.
 gen(1),
 gen(_) <- throw('two')
 test("catch/3 protects its Goal again on backtracking") <- (
-    catch(gen(Y), E, Y is E), not (Y is 1), Y is 'two'
+    catch(gen(Y), E, Y is E), Y is 'two'
 )  # nv
