@@ -2187,14 +2187,43 @@ class _PrologToClausal:
         return self._emit_term(term)
 
     def _emit_list(self, lst: PList) -> str:
-        """Emit a list, converting [H|T] to [H, *T]."""
-        if not lst.elements and lst.tail is None:
+        """Emit a list, converting [H|T] to [H, *T].
+
+        Only a tail that can BE a list is spliced: a variable, a list, or a
+        ``"..."`` read as chars or codes.  Any other tail -- ``[x|foo]``,
+        ``[x|1]``, ``[x|f(a)]``, ``[x|"ab"]`` under ``double_quotes(atom)``
+        -- makes an IMPROPER list, the cons cells ``'.'(H, T)`` (D50), and
+        is emitted as those tuples, as the native front end lowers it.
+        Spliced as ``*foo`` the seam reads the atom as one more element,
+        ``[x, foo]``, a different term."""
+        elements = list(lst.elements)
+        tail = lst.tail
+        while isinstance(tail, PList):        # [x|[y|T]] is [x, y|T]
+            elements.extend(tail.elements)
+            tail = tail.tail
+        if not elements and tail is None:
             return "[]"
-        parts = [self._emit_term(e) for e in lst.elements]
-        if lst.tail is not None:
-            tail_s = self._emit_term(lst.tail)
-            parts.append(f"*{tail_s}")
-        return "[" + ", ".join(parts) + "]"
+        parts = [self._emit_term(e) for e in elements]
+        if tail is None:
+            return "[" + ", ".join(parts) + "]"
+        tail_s = self._emit_term(tail)
+        if self._list_tail(tail):
+            return "[" + ", ".join(parts + [f"*{tail_s}"]) + "]"
+        for part in reversed(parts):
+            tail_s = f"('.', {part}, {tail_s})"
+        return tail_s
+
+    def _list_tail(self, tail: PTerm) -> bool:
+        """Whether a list's ``|`` tail can be a list, so it splices: a
+        variable, ``[]``, or a ``"..."`` the double_quotes flag reads as
+        chars or codes (a list is flattened before this is asked)."""
+        if isinstance(tail, PVar):
+            return True
+        if isinstance(tail, PAtom):
+            return tail.name == "[]"
+        if isinstance(tail, PString):
+            return self._dq_mode != "atom"
+        return False
 
     # ── Name conversion helpers ──────────────────────────────────────
 

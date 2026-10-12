@@ -28,3 +28,23 @@ with Y bound later to a non-list.
    literal (`iso_l3_directives._show`).
 3. **`append(-, +, +improper)` is quadratic,** because it rebuilds the cons chain for every split:
    n=2000 takes 0.74 s, about 50x the proper-list path.
+
+## Status after fix/frontend-anon-var-and-improper-tail-2026-10-12
+
+- **Headline: FIXED.** `prolog_to_clausal._emit_list` splices only a tail that can be a list
+  (a variable, a list, `[]`, or a `"..."` under chars or codes). Any other tail is emitted as
+  `('.', H, T)` tuples. `[x|foo]`, `[x,y|foo]`, `[x|f(a)]`, `[x|1]`, `[x|"ab"]` under all three
+  double_quotes modes, and a head `h([x|foo])` now answer as Scryer and Trealla do
+  (`tests/test_pl_translator_improper_tail.py`).
+- **New limit:** the cons tuples nest, so one improper literal of about 190 or more elements
+  overflows Python's parser ("Parser stack overflowed"). Before the fix it loaded, but with the
+  wrong term. The native front end loads 250 and fails at 500 (RecursionError), which is item 2.
+- **Item 1 (var tail bound to a non-list): still open.** `L = [x|V], V = 1` still raises
+  PartialTermError in both front ends and at `-g`. A partial list is a SegList whose hole must bind
+  to a list or str. The fix belongs in the engine (a hole bound to a non-list must become the
+  cons tail), not in a front end.
+- **Item 2: `==`/`\==` FIXED.** `iso_compare._numeric_types_agree` uses an explicit stack, so
+  `eq(20000)` is true (`tests/test_iso_identical_deep_cons_chain.py`). Still open: `compare/3`,
+  `@<` and `msort` raise RecursionError at 500 cells (`_helpers.term_key` builds a nested key
+  tuple). The native reader still crashes on a 500-element `[...|foo]` literal.
+- **Item 3 (quadratic `append(-, +, +improper)`): not touched.**
