@@ -30,6 +30,8 @@ g(Y) :- freeze(X, member(Y, [1, 2, 3])), X = go, Y > 1.   % Y = 2 ; Y = 3
 
 Goals woken inside a test run inside it: `X \= go` and `\+ X = go` succeed when the goals `X = go` wakes have no answer, and `memberchk/2` (`once(member(...))`) passes over an element whose woken goals fail and keeps the first answer of the rest.
 
+As a builtin, `append/3` unifies its whole known prefix as one unification, so the goals it wakes run after all of it rather than after each element. Scryer's clause-by-clause `append/3` runs them after each element, so an impure woken goal can answer differently: `freeze(X, Y == c), append([X, Y], R, [a, c, d])` answers `R = [d]` here and fails in Scryer. Pure goals give the same answers in both.
+
 Multiple freezes on the same variable accumulate. All fire when the variable is bound. Backtracking undoes the attribute (the freeze is removed if the trail is unwound).
 
 ```seam
