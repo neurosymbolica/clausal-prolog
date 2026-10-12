@@ -26,3 +26,21 @@ trashcan or iterative clear. Add a subprocess regression test at 1M.
 chars or more used to run out of memory; it now builds, then segfaults while garbage-collecting. A
 rope of depth 1M frees cleanly, so the rope is not the cause. `recl` (no text) crashes between 200k
 and 300k on both trees.
+
+## Resolution (2026-10-13)
+
+Fixed by "fix(runtime): free long StepGenerator and Var chains through the trashcan".
+
+Root cause: `StepGen_dealloc` (clausal/logic/runtime/_trampoline.c) released `catcher`, the
+parent link, with a plain `Py_XDECREF` and no trashcan. A suspended 1M-deep answer keeps one
+StepGenerator per level, so freeing it recursed once per link and overflowed the C stack. A
+SIGSEGV-handler backtrace showed every captured frame at `StepGen_dealloc`
+`Py_XDECREF(self->catcher)`. The threshold scales with `ulimit -s` (2 MiB: <100k; 4 MiB: 100k-200k;
+8 MiB: 200k-300k; 64 MiB and up: 1M clean). An acyclic chain crashes on a plain `del` with gc
+disabled. The collector only provides the trigger: its `tp_clear` on the leaf starts the cascade.
+
+`Var_dealloc`/`AttVar_dealloc` had the same flaw for binding chains (a 999,999-link chain
+segfaulted on `del`). All three now use `Py_TRASHCAN_BEGIN/END`.
+
+Regression: tests/test_dealloc_long_chains.py (5 fast subprocess cases under a 2 MiB stack cap,
+plus recl 1M and rec 500k behind CLAUSAL_SLOW_TESTS=1). The rope was never involved.
