@@ -11,3 +11,9 @@ forbid a fresh-trail driver inside a hook, which may be too strong.
 
 The port pins the current limit with a test that flips when this lands.
 Good to ride the catch/3 transparency engine candidate.
+
+**Fixed 2026-10-12** on fix/catch-transparency-and-hook-depth-2026-10-12: `clausal.logic.variables.hook_dispatch_depth()`
+(thread-local, raised and lowered in `fire_wakeups` beside `trail.hooks_running`), and the `_C_API` capsule entry
+`hook_dispatch_depth`. `solve()`/`call()` keep refusing on the same trail only; a fresh-trail driver in a hook stays
+allowed (docs/coroutining.md). No in-repo library consulted `hooks_running` for a refusal, so none changes here; the
+CLP(Q) port adopts the second counter, and its pinned-limit test flips, when it rebases onto this.

@@ -1999,15 +1999,25 @@ fire_wakeups_dispatch(PyObject *wakeup_list, TrailObject *trail)
     return 1;
 }
 
-/* fire_wakeups: the dispatch, counted on trail->hooks_running while it
- * runs (every exit path: success, a hook's failure, an exception). */
+/* The attribute-hook dispatches in progress in this THREAD, on any trail.
+ * trail->hooks_running counts one trail's: a hook that builds a fresh Trail
+ * and calls a library on it sees 0 there, and this is what it sees instead.
+ * Thread-local, so a hook running in another thread does not count here
+ * (Trail objects are per-thread too). */
+static _Thread_local int g_hook_dispatch_depth = 0;
+
+/* fire_wakeups: the dispatch, counted on trail->hooks_running and on the
+ * thread's g_hook_dispatch_depth while it runs (every exit path: success,
+ * a hook's failure, an exception). */
 static int
 fire_wakeups(PyObject *wakeup_list, TrailObject *trail)
 {
     if (PyList_GET_SIZE(wakeup_list) == 0)
         return 1;
     trail->hooks_running++;
+    g_hook_dispatch_depth++;
     int r = fire_wakeups_dispatch(wakeup_list, trail);
+    g_hook_dispatch_depth--;
     trail->hooks_running--;
     return r;
 }
@@ -3877,6 +3887,13 @@ capi_term_field_names(PyObject *obj)
     return py_term_field_names(NULL, obj);
 }
 
+/* hook_dispatch_depth for C consumers: the calling thread's count */
+static int
+capi_hook_dispatch_depth(void)
+{
+    return g_hook_dispatch_depth;
+}
+
 /* The singleton API table — populated in PyInit */
 static VariablesCAPI capi_table;
 
@@ -4146,7 +4163,18 @@ py_set_pending_drain(PyObject *Py_UNUSED(mod), PyObject *fn)
     Py_RETURN_NONE;
 }
 
+static PyObject *
+py_hook_dispatch_depth(PyObject *Py_UNUSED(mod), PyObject *Py_UNUSED(arg))
+{
+    return PyLong_FromLong(g_hook_dispatch_depth);
+}
+
 static PyMethodDef module_methods[] = {
+    {"hook_dispatch_depth", py_hook_dispatch_depth, METH_NOARGS,
+     "hook_dispatch_depth() -> int\n\n"
+     "The attribute-hook dispatches in progress in the calling thread, on\n"
+     "any trail: 0 at a goal, 1 inside a hook, one more per dispatch nested\n"
+     "in a hook (a fresh Trail's included).  Read-only."},
     {"pending_or_once", py_pending_or_once, METH_O,
      "pending_or_once(trail) -> iterable\n\n"
      "An iterable of one item (range(1)) when no goal is queued on *trail*;\n"
@@ -4381,6 +4409,7 @@ PyInit__variables(void)
     capi_table.is_term_instance = c_is_term_instance;
     capi_table.term_field_names = capi_term_field_names;
     capi_table.unify            = capi_unify;
+    capi_table.hook_dispatch_depth = capi_hook_dispatch_depth;
 
     {
         PyObject *cap = PyCapsule_New(

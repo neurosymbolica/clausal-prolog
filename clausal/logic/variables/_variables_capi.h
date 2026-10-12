@@ -119,6 +119,11 @@ typedef struct {
     /* unify (no occurs check): returns new ref (Py_True/Py_False), NULL on error */
     PyObject *(*unify)(PyObject *t1, PyObject *t2, TrailObject *trail);
 
+    /* hook_dispatch_depth: attribute-hook dispatches in progress in the
+     * calling thread, on any trail (0 at a goal).  Appended last: a consumer
+     * built against an older header never reads it. */
+    int (*hook_dispatch_depth)(void);
+
 } VariablesCAPI;
 
 

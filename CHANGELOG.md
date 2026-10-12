@@ -9,6 +9,16 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Added
 
+- **`clausal.logic.variables.hook_dispatch_depth()`: attribute-hook dispatch
+  in progress on any trail.** `trail.hooks_running` counts one trail's
+  dispatches, so a hook that built a fresh `Trail()` and called a library on
+  it looked to that library like a goal. The new count is per thread and
+  covers every trail: 0 at a goal, one more per dispatch nested in a hook.
+  A library that must not run inside a hook checks it as well as
+  `trail.hooks_running`. `solve()`/`call()` still refuse only on the trail
+  whose hooks are running. C extensions read it through the `_C_API`
+  capsule's new `hook_dispatch_depth` entry. See docs/coroutining.md.
+
 - **Optional packages on PyPI.** Ten library wrappers are published:
   `clausal-acl2`, `clausal-decide`, `clausal-jax`, `clausal-opencv`,
   `clausal-scipy`, `clausal-sklearn`, `clausal-spacy`, `clausal-sympy`,

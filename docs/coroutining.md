@@ -179,7 +179,25 @@ The contract:
 
 The counter goes up when a unification starts dispatching the hooks of the attributed variables it bound, and back down when that dispatch ends, whether it succeeds, a hook fails, or a hook raises (`KeyboardInterrupt` and `RecursionError` included).  Woken goals that a bare `unify` runs itself (to their first answer) run after its dispatch has ended, so they see `0`.  The counter is read-only.  C extensions read the `hooks_running` field of `TrailObject` from `_variables_capi.h`.
 
-**Implementation:** `clausal/logic/variables/_variables.c` (`fire_wakeups`, `Trail.hooks_running`)
+### On any trail: `hook_dispatch_depth()`
+
+`trail.hooks_running` counts one trail's dispatches.  A hook that builds a fresh `Trail()` and calls a library on it sees `0` on that trail, although it is still inside a hook.  `clausal.logic.variables.hook_dispatch_depth()` counts the dispatches in progress in the calling **thread**, on every trail:
+
+| Where | `trail.hooks_running` | `hook_dispatch_depth()` |
+|---|---|---|
+| A goal (under a driver or not) | `0` | `0` |
+| Inside a hook | `1` | `1` |
+| Inside a hook, on a fresh trail the hook built | `0` (the fresh trail's) | `1` |
+| Inside a hook of a unification on that fresh trail | `1` (the fresh trail's) | `2` |
+
+It goes up and down with `trail.hooks_running`, in the same place and on the same exit paths.  It is thread-local: a hook running in another thread does not count.  It is read-only.  C extensions call the `hook_dispatch_depth` entry of the `_C_API` capsule (`_variables_capi.h`).
+
+The contract:
+
+- **A library entry point that must not run inside a hook** refuses, or queues its work, when **either** count is above zero: `trail.hooks_running` on the trail it was given, or `hook_dispatch_depth()`.  Checking only the trail it was handed lets a hook bypass the rule with a fresh trail.
+- **`solve()` and `call()` still refuse only on the same trail** (`trail.hooks_running > 0`).  A driver on a fresh trail inside a hook stays allowed, with the caveat above; inside it, `hook_dispatch_depth()` is above zero, so the libraries it calls can tell where they are.
+
+**Implementation:** `clausal/logic/variables/_variables.c` (`fire_wakeups`, `Trail.hooks_running`, `hook_dispatch_depth`)
 
 ---
 

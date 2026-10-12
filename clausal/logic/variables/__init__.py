@@ -44,6 +44,7 @@ from ._variables import (
     pending_or_once,
     unify_iter,
     _set_pending_drain,
+    hook_dispatch_depth,
 )
 
 # All logic variables are AttVars so constraints (dif, etc.) can be attached.
@@ -149,6 +150,7 @@ __all__ = [
     "UnboundVarCoercionError",
     "pending_or_once",
     "unify_iter",
+    "hook_dispatch_depth",
 ]
 
 # Registers the drain that pending_or_once hands out (clausal.logic.pending).
