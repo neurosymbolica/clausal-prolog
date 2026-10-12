@@ -99,22 +99,24 @@ def test_a_copy_of_an_open_chain_does_not_share_its_tail(mod):
     assert _holds(mod, "o_copy", N)
 
 
-def test_a_cyclic_chain_is_an_error_not_a_hang():
+def test_a_cyclic_chain_walks_one_lap_not_a_hang():
+    # The walk of a cyclic partial list ``X = [a|X]`` used to raise
+    # RecursionError; since the improper-tail fix (D50) it is the cyclic
+    # term itself, one lap: the cons cell '.'(a, X) whose tail is the hole
+    # variable that closes the cycle.  Either way it must not hang.
     src = textwrap.dedent("""
         from clausal.terms import SegList, ConcreteSeg, VarSeg
         from clausal.logic.variables import Var, Trail, unify
         x = Var()
         s = SegList([ConcreteSeg(["a"]), VarSeg(x)])
         unify(x, s, Trail())
-        try:
-            s.__walk__()
-        except RecursionError as e:
-            print("RecursionError", e)
+        w = s.__walk__()
+        print(type(w).__name__, w[0], w[1], w[2] is x)
     """)
     r = subprocess.run([sys.executable, "-c", src], capture_output=True,
                        text=True, timeout=60)
     assert r.returncode == 0, r.stderr[-2000:]
-    assert r.stdout.startswith("RecursionError"), r.stdout
+    assert r.stdout == "tuple . a True\n", r.stdout
 
 
 # A DCG over ``[_]`` builds ``[V1, *T]`` with ``T`` bound to ``[]``: a proper

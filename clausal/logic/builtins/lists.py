@@ -255,6 +255,28 @@ def _is_cons(val) -> bool:
     return type(val) is tuple and len(val) == 3 and val[0] == "."
 
 
+def _cyclic_list(val) -> bool:
+    """Whether the list *val* (a cons chain, possibly through partial-list
+    holes) closes a CYCLE, ``X = [a, b|X]``.  It walks the tails and keys
+    on the dereferenced objects of the term itself, each kept alive by a
+    strong reference for the walk, so an id can never be reused."""
+    seen: set = set()
+    keep: list = []
+    cur = val
+    while True:
+        cur = deref(cur)
+        if id(cur) in seen:
+            return True
+        seen.add(id(cur))
+        keep.append(cur)
+        cur = _as_improper(cur)
+        keep.append(cur)
+        if _is_cons(cur):
+            cur = cur[2]
+        else:
+            return False
+
+
 def _cons_heads(val):
     """The heads of the cons cells ``'.'(H, T)`` that *val* (dereferenced)
     starts with: ``[a, b|foo]`` gives ``[a, b]``, a term that is not a cons
@@ -745,6 +767,19 @@ def _length__2(this_generator, _proceed, _fail, _catcher, lst, n, trail):
     """
     lst_val = _ld(lst)
     n_val = deref(n)
+    if _is_cons(lst_val) and _cyclic_list(lst_val):
+        # A CYCLIC list has no length.  Scryer: resource_error(finite_memory)
+        # with N unbound (the length it would count is unbounded), failure
+        # with N an integer (no finite length equals it).
+        if is_var(n_val):
+            from clausal.logic.exceptions import LogicException, _error  # noqa: PLC0415
+            from clausal.logic.atoms import mint  # noqa: PLC0415
+            raise LogicException(_error(("resource_error", mint("finite_memory")),
+                                        "length/2"))
+        if type(n_val) is not int or n_val < 0:
+            _length_n_error(n_val)
+        yield (_fail, DONE)
+        return
     items = _as_items(lst_val)
     if items is not None:
         if type(n_val) is int:
@@ -1886,31 +1921,41 @@ def _nth_solutions(base, index, lst, elem, rest, trail, who):
                 # every hole filled, an element still unbound: a proper list
                 items = walked
     if items is None and _is_cons(lst_val):
-        # An IMPROPER list ``[a, b|foo]`` (D50): Scryer and Trealla select
-        # among its heads (``nth0(0, [a|foo], E)`` gives ``a``), and Rest
-        # keeps the improper tail (``nth0(0, [a|foo], E, R)``: ``R = foo``).
-        heads = _cons_heads(lst_val)
-        end = lst_val
-        while _is_cons(end):
-            end = deref(end[2])
-        if is_var(n_val):
-            indices = range(len(heads))
-        else:
-            pos = n_val - base
-            if pos < 0 or pos >= len(heads):
-                return
-            indices = (pos,)
-        for i in indices:
-            mark = trail.mark()
-            ok = unify(elem, heads[i], trail)
-            if ok and is_var(n_val):
-                ok = unify(index, i + base, trail)
-            if ok and rest is not None:
-                ok = unify(rest, _cons_onto(heads[:i] + heads[i + 1:], end), trail)
-            if ok:
-                yield None
-            trail.undo(mark)
-        return
+        # An IMPROPER list ``[a, b|foo]`` (D50) or a CYCLIC one
+        # ``X = [a, b|X]``: Scryer and Trealla select by walking its cells
+        # (``nth0(0, [a|foo], E)`` gives ``a``; ``nth0(5, X, E)`` on the
+        # cycle gives ``b``), and Rest is the heads before the pick consed
+        # onto the cells after it (``nth0(0, [a|foo], E, R)``: ``R = foo``).
+        # An unbound index enumerates -- without end on a cycle, as there.
+        target = None if is_var(n_val) else n_val - base
+        if target is not None and target < 0:
+            return
+        prefix: list = []
+        cur = lst_val
+        i = 0
+        while True:
+            cur = _as_improper(deref(cur))
+            if _is_cons(cur):
+                head, nxt = cur[1], cur[2]
+            elif type(cur) is list and cur:
+                head, nxt = cur[0], cur[1:]
+            else:
+                return          # [], an improper end, or an open tail
+            if target is None or i == target:
+                mark = trail.mark()
+                ok = unify(elem, head, trail)
+                if ok and target is None:
+                    ok = unify(index, i + base, trail)
+                if ok and rest is not None:
+                    ok = unify(rest, _cons_onto(list(prefix), nxt), trail)
+                if ok:
+                    yield None
+                trail.undo(mark)
+                if target is not None:
+                    return
+            prefix.append(head)
+            cur = nxt
+            i += 1
     if items is None:
         skeleton = _open_skeleton(lst_val)
         if skeleton is None:

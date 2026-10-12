@@ -137,6 +137,18 @@ def _build_star_list(before, star, after):
         if isinstance(walked, list):
             # F043: promote a list of chars back to str.
             return maybe_promote_to_str(list(before) + walked + list(after))
+        if not isinstance(walked, SegList):
+            # It walks to an IMPROPER (or cyclic) list, cons cells (D50).
+            if not after:
+                for e in reversed(list(before)):
+                    walked = (".", e, walked)
+                return walked
+            # [*S, x] with S improper has no term: keep S as a hole, so
+            # the walk reports it as it reports any non-list hole.
+            return SegList([ConcreteSeg(list(before)), VarSeg(d),
+                            ConcreteSeg(list(after))]
+                           if before else
+                           [VarSeg(d), ConcreteSeg(list(after))])
         # non-ground SegList — wrap into a new SegList
         segs = []
         if before:
@@ -441,6 +453,11 @@ def _build_multi_star_list(segments):
                         segs[-1] = ConcreteSeg(segs[-1].elements + walked)
                     elif walked:
                         segs.append(ConcreteSeg(walked))
+                elif not isinstance(walked, SegList):
+                    # An IMPROPER (or cyclic) list: kept as a hole bound to
+                    # it, which SegList's walk reads as the tail when it is
+                    # last (D50).
+                    segs.append(VarSeg(d))
                 else:
                     segs.extend(walked.segments)
             elif isinstance(d, SegString):

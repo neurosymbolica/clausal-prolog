@@ -83,3 +83,24 @@ with Y bound later to a non-list.
     list (instantiation_error).
   - The native reader crashes on a 500-element `[...|foo]` literal; item 3 (quadratic append)
     is not touched.
+
+## Status after fix round 3 (2026-10-13)
+
+- **`==` on two DISTINCT cyclic terms RAISES again** (`X = f(X), Y = f(Y), X == Y`;
+  `X = [a|X], Y = [a|Y], X == Y`; also two cyclic terms under `=`). That matches base; Scryer
+  answers yes/no. Round 2's coinductive fallback was REMOVED by ruling: its seen set keyed on ids
+  of objects it created and freed, so it answered TRUE for different terms (`X = f(X,[1,2,3]),
+  Y = f(Y,[1,2,4])`, and acyclic pairs deep enough to overflow). A correct cycle-safe compare
+  needs stable keys (dereferenced objects of the term, kept alive), a termination argument for
+  SegList cycles, and a fuzz with Python-list leaves. A deep ACYCLIC pair that overflows
+  `structural_eq` raises too.
+- nth0/nth1 walk a cyclic list by index (Scryer/Trealla: `X = [a,b|X], nth0(5, X, E)` gives `b`).
+  `length/2` on a cyclic list is `resource_error(finite_memory)` with N unbound and fails with N
+  bound (Scryer).
+- Still open, minor (round-3 review):
+  - A builtin's error ball carries the culprit's hole unbound: `atom_length` on a hole-built
+    list shows `[a|_254]`.
+  - `sort`, `atom_codes` and `=..` on a cyclic list raise RecursionError where Scryer gives
+    `type_error(list, [a|...])`. `@<` and `msort` as well (`term_key`).
+  - Printing a named cyclic binding at `-g` raises (`_deref_walk`).
+  - `copy_term`/`findall` of a cyclic term raise (`_copy_term`/`_is_ground` depth).
