@@ -1,0 +1,5 @@
+
+FAILURES:
+  opt.pl:3 :: <collect> — opt.pl: line 3: test('t', throws(x)): unknown test option `throws(x)`; only `fail` is supported (test(Name, fail) passes iff Name's goal has no solution). plunit's other options are not: true(Cond), all(Template Cmp Values), set(Template Cmp Values), throws(Error), error(Error), false, nondet, blocked(Reason), fixme(Reason), setup(Goal), cleanup(Goal), forall(Generator), condition(Goal), occurs_check(Mode), timeout(Seconds)
+
+1 tests: 0 passed, 1 failed [FAILED]

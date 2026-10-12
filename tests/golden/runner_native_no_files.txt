@@ -1,0 +1,5 @@
+
+1 file(s) skipped (unsupported suffix: 1):
+  notes.md  (unsupported suffix)
+no test files (.seam, .clausal or .pl) found
+0 tests [NO TESTS] (exit 5; pass --allow-empty to accept an empty run)

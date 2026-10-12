@@ -28,6 +28,7 @@ import pytest
 from clausal._suffixes import SEAM_SUFFIX, SOURCE_SUFFIXES
 from clausal.testing import (
     TestCollectionError,
+    _load_error_line,
     collect_tests,
     load_clausal_module,
     opts_out_of_collection,
@@ -148,7 +149,7 @@ class ClausalFile(pytest.File):
             yield ClausalItem.from_parent(self, name=desc, mod=mod)
 
 
-def _with_diagnosis(message: str, result) -> str:
+def _with_diagnosis(message: str, result, path=None) -> str:
     """Attach a goal-level diagnosis under a plugin failure *message*.
 
     Appended, never substituted: the headline is what names the test in a CI
@@ -157,10 +158,19 @@ def _with_diagnosis(message: str, result) -> str:
     indents it (``clausal.testing._failure_lines``) so both readers see one
     format.  A diagnostic that could attribute nothing renders no lines at
     all, and an empty block under a headline reads as a broken report — so in
-    that case the message is left exactly as it was.
+    that case the message is left as it was, but for the ``at file:N`` line
+    when the result has a source line (:func:`_at_line`).
     """
     lines = result.diagnostic.lines() if result.diagnostic is not None else []
-    return "\n".join([message, *lines]) if lines else message
+    return "\n".join([message, *_at_line(result, path), *lines])
+
+
+def _at_line(result, path) -> list[str]:
+    """``    at file:N`` under a headline, when the result has a source line
+    (none for a translated ``.pl``: its positions are of the translation)."""
+    if not result.line or path is None:
+        return []
+    return [f"    at {Path(path).name}:{result.line}"]
 
 
 class ClausalItem(pytest.Item):
@@ -172,9 +182,13 @@ class ClausalItem(pytest.Item):
     def runtest(self):
         if self._load_error is not None:
             verb = "collect tests from" if self.name == "<collect>" else "load"
-            raise ClausalTestFailure(
-                f"Failed to {verb} {self.path}: {self._load_error}"
-            ) from self._load_error
+            line = (getattr(self._load_error, "line", None)
+                    if self.name == "<collect>"
+                    else _load_error_line(self.path, self._load_error))
+            at = [f"    at {self.path.name}:{line}"] if line else []
+            raise ClausalTestFailure("\n".join([
+                f"Failed to {verb} {self.path}: {self._load_error}", *at]
+            )) from self._load_error
         # ``diagnose=True``: a bare "no solutions" is close to no signal, and
         # pytest is where CI and most day-to-day runs read failures — the
         # detail must not be a privilege of the CLI runner.  ``path`` is what
@@ -187,17 +201,18 @@ class ClausalItem(pytest.Item):
                 raise ClausalTestFailure(
                     _with_diagnosis(
                         f"{_spelled(self.name, result)} raised: {result.error}",
-                        result,
+                        result, self.path,
                     )
                 ) from result.error
             if result.negative:
-                raise ClausalTestFailure(
+                raise ClausalTestFailure("\n".join([
                     f"test({self.name!r}, fail) succeeded (its goal has a "
-                    "solution; a `fail` test passes only when it has none)"
-                )
+                    "solution; a `fail` test passes only when it has none)",
+                    *_at_line(result, self.path)]))
             raise ClausalTestFailure(
                 _with_diagnosis(
-                    f"test({self.name!r}) failed (no solutions)", result
+                    f"test({self.name!r}) failed (no solutions)", result,
+                    self.path,
                 )
             )
 

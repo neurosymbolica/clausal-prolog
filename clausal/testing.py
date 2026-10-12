@@ -60,6 +60,7 @@ effects* are not free: see :func:`diagnose_failure` for the exposure.
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import io
 import os
 import signal
@@ -333,6 +334,10 @@ class TestCollectionError(ValueError):
 
     __test__ = False                    # not a pytest test class
 
+    #: The source line of the offending clause, for a file the native ISO
+    #: front end loaded (Clausal Prolog, native ``.pl``).
+    line: "int | None" = None
+
 
 def _test_clauses(logic_module) -> list[tuple[str, object]]:
     """``(functor, clause)`` for every ``test/1``, ``Test/1`` and ``test/2``
@@ -502,13 +507,20 @@ def _check_test_option(mod, clause, name: str) -> None:
     if value == TEST_OPTION_FAIL:
         return
     where = getattr(mod, "__file__", None) or getattr(mod, "__name__", "<module>")
+    line = None
     if clause.position and not _positions_are_translated(mod, where):
+        if _native_positions(mod, where):
+            # Lifted into the report's ``file:N`` location on the native
+            # path (slice 7); a seam report keeps its established shape.
+            line = clause.position[0]
         where = f"{where}: line {clause.position[0]}"
-    raise TestCollectionError(
+    err = TestCollectionError(
         f"{where}: test({name!r}, {text}): unknown test option `{text}`; "
         f"only `{TEST_OPTION_FAIL}` is supported (test(Name, fail) passes "
         "iff Name's goal has no solution). plunit's other options are not: "
         + ", ".join(PLUNIT_UNSUPPORTED_OPTIONS))
+    err.line = line
+    raise err
 
 
 def _test_description_term(clause, db=None):
@@ -650,7 +662,14 @@ def run_test(
 
     # Observation only, and only on failure.  ``passed`` is already decided.
     # A ``fail`` test whose goal SUCCEEDED has no failing conjunct to find:
-    # the conjunct walk would only report that every goal solved.
+    # the conjunct walk would only report that every goal solved -- but on
+    # the native path its clause still has a line to point at (D14: the red
+    # names where it is).
+    if (not result.passed and result.negative and result.error is None
+            and _native_positions(mod, path)):
+        entry = _test_entry(logic_module, description)
+        if entry is not None and entry[1].position:
+            result.line = entry[1].position[0]
     if (diagnose and not result.passed
             and not (result.negative and result.error is None)):
         result.diagnostic = diagnose_failure(mod, description, path=path,
@@ -690,6 +709,246 @@ def _positions_are_translated(mod, path) -> bool:
     return not isinstance(loader, NativePrologLoader)
 
 
+#: True while a diagnostic is written for a module the NATIVE ISO front end
+#: loaded from a Prolog source (``.clausal``, or ``.pl`` under
+#: ``CLAUSAL_PL_FRONTEND=native``): its goal positions are spans of that
+#: source, so the report quotes them and prints values as Prolog.
+_NATIVE_REPORT: "contextvars.ContextVar[bool]" = contextvars.ContextVar(
+    "clausal_testing_native_report", default=False)
+
+
+def _native_positions(mod, path) -> bool:
+    """True when *mod* is a Prolog-syntax file whose positions are spans of
+    its own source (the native front end), not of a translation."""
+    return (path is not None and is_prolog_source(path)
+            and not _positions_are_translated(mod, path))
+
+
+#: Source text of the files a report quotes, by path (bounded, as
+#: ``_REIFY_CACHE``).  Lines are split on ``\n`` only, as the native front
+#: end's ``_Positions`` numbers them.
+_SOURCE_CACHE: dict[str, list[str]] = {}
+_SOURCE_CACHE_MAX = 16
+
+
+def _source_lines(path) -> "list[str] | None":
+    key = str(path)
+    lines = _SOURCE_CACHE.get(key)
+    if lines is None:
+        try:
+            with open(key, encoding="utf-8", newline="") as f:
+                lines = f.read().split("\n")
+        except Exception:  # noqa: BLE001 - quoting is a nicety
+            return None
+        if len(_SOURCE_CACHE) >= _SOURCE_CACHE_MAX:
+            _SOURCE_CACHE.pop(next(iter(_SOURCE_CACHE)), None)
+        _SOURCE_CACHE[key] = lines
+    return lines
+
+
+def _native_source_text(node, path) -> "str | None":
+    """The source text of a natively lowered goal, sliced from its span.
+
+    A goal's ``position`` is ``(line, col, end_line, end_col)`` with an
+    exclusive end column (``iso_l3._Positions``).  A goal written over
+    several lines is joined into one, its line breaks and indentation
+    collapsed to a space.  ``None`` outside a native report, without a
+    position, or when the slice does not name the goal's predicate (a
+    callee loaded by the translator has positions of a translation)."""
+    if not _NATIVE_REPORT.get() or path is None or not is_prolog_source(path):
+        return None
+    pos = getattr(node, "position", None)
+    if not (isinstance(pos, (tuple, list)) and len(pos) == 4
+            and all(isinstance(x, int) for x in pos)):
+        return None
+    line, col, end_line, end_col = pos
+    lines = _source_lines(path)
+    if lines is None or not 1 <= line <= end_line <= len(lines):
+        return None
+    if line == end_line:
+        text = lines[line - 1][col:end_col]
+    else:
+        parts = ([lines[line - 1][col:]] + lines[line:end_line - 1]
+                 + [lines[end_line - 1][:end_col]])
+        text = " ".join(p.strip() for p in parts if p.strip())
+    text = text.strip()
+    if not text:
+        return None
+    name = _goal_name(node)
+    if name is not None:
+        bare = name[:-len("(...)")].rsplit(".", 1)[-1]
+        if bare and bare not in text:
+            return None
+    return text
+
+
+#: Re-read clauses of native Prolog files, by path: ``{start line: item}``.
+_NATIVE_ITEMS_CACHE: dict[str, dict] = {}
+
+
+def _native_items(path) -> "dict | None":
+    """``{start line: reader Clause item}`` for the Prolog file at *path*.
+
+    Read with the loader's own table (``iso_l3.reader_op_table``), applying
+    each ``op/3`` directive and a library import's operators as the loader
+    does, so a clpz file re-reads as it was loaded.  ``None`` on any error:
+    only variable NAMES come from here, and none is better than a wrong one.
+    """
+    key = str(path)
+    if key in _NATIVE_ITEMS_CACHE:
+        return _NATIVE_ITEMS_CACHE[key]
+    out: "dict | None" = None
+    try:
+        from clausal.tools import iso_l3  # noqa: PLC0415
+        from clausal.tools.iso_l3_directives import _LIBRARY_OPS  # noqa: PLC0415
+        from clausal.tools.prolog_reader import Clause as ReaderClause  # noqa: PLC0415
+        lines = _source_lines(path)
+        if lines is not None:
+            source = "\n".join(lines)
+            items, table = iso_l3.iter_iso(source)
+            out = {}
+            for it in items:
+                if isinstance(it, ReaderClause):
+                    line = iso_l3.line_of(source, iso_l3._top_span(it.spans))
+                    if line is not None:
+                        out.setdefault(line, it)
+                    continue
+                t = getattr(it, "term", None)
+                if type(t) is not tuple or not t:
+                    continue
+                if t[0] == "op" and len(t) == 4:
+                    names = t[3] if type(t[3]) is list else [t[3]]
+                    for n in names:
+                        table.define(t[1], t[2], n)
+                elif t[0] == "use_module" and len(t) in (2, 3):
+                    lib = t[1]
+                    if (type(lib) is tuple and len(lib) == 2
+                            and lib[0] == "library" and type(lib[1]) is str):
+                        for prec, spec, n in _LIBRARY_OPS.get(lib[1], ()):
+                            table.define(prec, spec, n)
+    except Exception:  # noqa: BLE001 - names are a nicety
+        out = None
+    if len(_NATIVE_ITEMS_CACHE) >= _SOURCE_CACHE_MAX:
+        _NATIVE_ITEMS_CACHE.pop(next(iter(_NATIVE_ITEMS_CACHE)), None)
+    _NATIVE_ITEMS_CACHE[key] = out
+    return out
+
+
+def _native_twins(path, clause, arity):
+    """``[(reader goal, var_names)]`` per body conjunct of a native clause,
+    or ``None`` when the re-read clause does not have *arity* conjuncts."""
+    if path is None or not clause.position:
+        return None
+    items = _native_items(path)
+    it = items.get(clause.position[0]) if items else None
+    if it is None:
+        return None
+    t = it.term
+    if not (type(t) is tuple and len(t) == 3 and t[0] == ":-"):
+        return None
+    goals, body = [], t[2]
+    while type(body) is tuple and len(body) == 3 and body[0] == ",":
+        goals.append(body[1])
+        body = body[2]
+    goals.append(body)
+    if len(goals) != arity:
+        return None
+    return [(g, it.var_names) for g in goals]
+
+
+def _collect_native_named(goals, twins) -> "list[tuple[str, object]] | None":
+    """``(source name, runtime Var)`` for every variable in *goals*, paired
+    with their re-read twins; ``None`` the moment a shape disagrees."""
+    named: list[tuple[str, object]] = []
+    for goal, (twin, var_names) in zip(goals, twins):
+        if not _pair_native(goal, twin, var_names, named):
+            return None
+    return named
+
+
+def _pair_native(runtime, t, var_names, out) -> bool:
+    """Walk a runtime goal or term and the reader term it was lowered from
+    (``iso_l3._ClauseLowering``) in lockstep, collecting named variables."""
+    from clausal.logic.variables import Var  # noqa: PLC0415
+    from clausal.terms import Call  # noqa: PLC0415
+    from clausal.tools.prolog_reader import VarRef  # noqa: PLC0415
+
+    if type(t) is VarRef:
+        if not isinstance(runtime, Var):
+            return False
+        name = var_names.get(t.i, "_")
+        if name != "_" and not name.startswith("_"):
+            out.append((name, runtime))
+        return True
+    if isinstance(runtime, Call):
+        if runtime.kwargs:
+            return False
+        args = list(runtime.args or ())
+        if type(t) is str:
+            return not args
+        if type(t) is not tuple or len(t) - 1 != len(args):
+            return False
+        return all(_pair_native(a, x, var_names, out)
+                   for a, x in zip(args, t[1:]))
+    if type(t) is list:
+        return (isinstance(runtime, list) and len(runtime) == len(t)
+                and all(_pair_native(a, x, var_names, out)
+                        for a, x in zip(runtime, t)))
+    if type(t) is tuple and t:
+        if t[0] == "$chars":
+            return True
+        if (t[0] == "." or type(runtime) is not tuple
+                or len(runtime) != len(t)):
+            return False
+        return all(_pair_native(a, x, var_names, out)
+                   for a, x in zip(runtime[1:], t[1:]))
+    return type(t) in (str, int, float)
+
+
+def _native_goal_text(goal, replaced: dict) -> "str | None":
+    """*goal* as Prolog text (``writeq``), with ``replaced[("arg", i)]``
+    standing for argument *i*: the near-miss a native report prints."""
+    from clausal.terms import LoadName, term_writeq  # noqa: PLC0415
+
+    func = getattr(goal, "func", None)
+    if not isinstance(func, LoadName) or getattr(goal, "kwargs", None):
+        return None
+    args = list(goal.args or ())
+    for (kind, i), value in replaced.items():
+        if kind != "arg" or not 0 <= i < len(args):
+            return None
+        args[i] = value
+    try:
+        name = str(func.name).rsplit(".", 1)[-1]
+        return term_writeq((name, *args) if args else name, local_vars=True)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+#: ISO built-in comparisons and unifications.  The native front end lowers
+#: them to calls (``Y =:= 5`` is ``Call(=:=, [Y, 5])``) where the seam has
+#: operator nodes, so the diagnosis treats them as the seam's nodes: a test,
+#: not a predicate whose clauses could be probed.
+_BUILTIN_TESTS = frozenset({
+    "=", "\\=", "==", "\\==", "=:=", "=\\=", "<", ">", "=<", ">=",
+    "@<", "@>", "@=<", "@>=", "is", "dif", "unify_with_occurs_check",
+})
+
+
+def _is_builtin_test(goal, logic_module) -> bool:
+    from clausal.terms import Call, LoadName  # noqa: PLC0415
+
+    if not isinstance(goal, Call) or not isinstance(goal.func, LoadName):
+        return False
+    name = str(goal.func.name)
+    if name not in _BUILTIN_TESTS or len(goal.args or ()) != 2:
+        return False
+    try:
+        return logic_module is None or not logic_module.db.is_defined(name, 2)
+    except Exception:  # noqa: BLE001
+        return True
+
+
 def run_file(path: str | Path) -> FileResults:
     """Load a .clausal/.seam/.pl file and run all its test/1 clauses.
 
@@ -700,13 +959,15 @@ def run_file(path: str | Path) -> FileResults:
     try:
         mod = load_clausal_module(path)
     except Exception as e:
-        results.results.append(TestResult(name="<load>", passed=False, error=e))
+        results.results.append(TestResult(name="<load>", passed=False, error=e,
+                                          line=_load_error_line(path, e)))
         return results
     try:
         descs = collect_tests(mod)
     except TestCollectionError as e:
         results.results.append(
-            TestResult(name="<collect>", passed=False, error=e))
+            TestResult(name="<collect>", passed=False, error=e,
+                       line=getattr(e, "line", None)))
         return results
     try:
         for desc in descs:
@@ -716,6 +977,27 @@ def run_file(path: str | Path) -> FileResults:
         from clausal.logic.constants import unregister_detached_module
         unregister_detached_module(mod)
     return results
+
+
+def _load_error_line(path, error) -> "int | None":
+    """The source line a NATIVE Prolog front-end refusal names, else None.
+
+    The native loader raises ``SyntaxError`` at the refused item's real
+    ``.pl``/``.clausal`` line.  The translator's ``SyntaxError`` carries a
+    line of its generated text (or 0), and a seam file's message already
+    names its own line, so only the native front end's line is lifted into
+    the report's ``file:N`` location."""
+    if not isinstance(error, SyntaxError) or not is_prolog_source(path):
+        return None
+    try:
+        from clausal.import_hook import (  # noqa: PLC0415
+            NativePrologLoader, _prolog_loader_class_for)
+        native = issubclass(_prolog_loader_class_for(str(path)),
+                            NativePrologLoader)
+    except Exception:  # noqa: BLE001 - a location is a nicety
+        return None
+    lineno = error.lineno
+    return lineno if native and isinstance(lineno, int) and lineno > 0 else None
 
 
 # ── Failure diagnostics ───────────────────────────────────────────────────────
@@ -759,6 +1041,7 @@ def diagnose_failure(
     logic_module = mod.__dict__.get("$module") if hasattr(mod, "__dict__") else None
     before = _clause_count(logic_module)
     budget = _diag_budget()
+    native_token = _NATIVE_REPORT.set(_native_positions(mod, path))
     try:
         with _watchdog(budget):
             sink = io.StringIO()
@@ -779,6 +1062,8 @@ def diagnose_failure(
         raise
     except BaseException as exc:  # noqa: BLE001 - diagnostics must never escape
         diag.notes.append(f"diagnostic unavailable: {type(exc).__name__}: {exc}")
+    finally:
+        _NATIVE_REPORT.reset(native_token)
 
     after = _clause_count(logic_module)
     if before is not None and after is not None and after != before:
@@ -822,7 +1107,11 @@ def _diagnose_into(diag, mod, description, path, error, budget) -> None:
         )
 
     reified = _reified_goals(path, clause, len(body))
-    sources = _goal_sources(body, reified)
+    sources = _goal_sources(body, reified, path)
+    # A native Prolog clause has no reified (seam) twin; its variable names
+    # come from re-reading the clause (:func:`_native_twins`).
+    twins = (_native_twins(path, clause, len(body))
+             if reified is None and _NATIVE_REPORT.get() else None)
 
     deadline = time.monotonic() + budget
 
@@ -869,8 +1158,12 @@ def _diagnose_into(diag, mod, description, path, error, budget) -> None:
                         "bindings and nearest-solution analysis skipped"
                     )
                     return
-                named = _collect_named(
-                    prefix, reified and reified[:failing - 1])
+                if twins is not None:
+                    named = _collect_native_named(prefix,
+                                                  twins[:failing - 1])
+                else:
+                    named = _collect_named(
+                        prefix, reified and reified[:failing - 1])
                 _report_bindings(diag, prefix, named, failing, path)
                 _report_nearest(diag, goal, reified_goal, logic_module, deadline, path)
                 _report_wrong_value(
@@ -991,14 +1284,17 @@ def _reified_goals(path, clause, arity):
     return goals if len(goals) == arity else None
 
 
-def _goal_sources(body, reified) -> list[str]:
-    """Source text per conjunct, falling back to the runtime term's own str."""
+def _goal_sources(body, reified, path=None) -> list[str]:
+    """Source text per conjunct, falling back to the runtime term's own str.
+
+    A natively loaded Prolog clause quotes each goal's own span
+    (:func:`_native_source_text`)."""
     from clausal.terms import term_str
 
     out = []
     for i, goal in enumerate(body):
-        text = None
-        if reified is not None:
+        text = _native_source_text(goal, path)
+        if text is None and reified is not None:
             try:
                 from clausal.reflection import render_source, is_v, vfield
 
@@ -1312,6 +1608,16 @@ def _report_nearest(diag, goal, reified_goal, logic_module, deadline, path) -> N
             "no nearest solution to show)"
         )
         return
+    if _is_builtin_test(goal, logic_module):
+        # The native front end lowers ``Y =:= 5`` to a call of the built-in
+        # (the seam has an operator node): it has no clauses to probe, and
+        # "no solution for ANY arguments ... check its own clauses" is wrong.
+        diag.nearest_note = (
+            "no solution (this conjunct is a built-in comparison or "
+            "unification, not a predicate with clauses, so there is no "
+            "nearest solution to show)"
+        )
+        return
 
     # ``forall(X in LIST, Body)`` reaches here as a Call to a "predicate"
     # named ``forall`` that has no clauses: the generic slot/all-holes/descent
@@ -1480,7 +1786,7 @@ def _report_wrong_value(diag, goal, prefix, logic_module, deadline, path) -> Non
     the already-rendered comparison note in place."""
     from clausal.terms import Call
 
-    if isinstance(goal, Call):
+    if isinstance(goal, Call) and not _is_builtin_test(goal, logic_module):
         return
     if diag.descent or diag.nearest_examples:
         return  # ordinary descent already spoke; don't pile on
@@ -1522,7 +1828,7 @@ def _wrong_value_producer(goal, prefix):
     if not wanted:
         return None
     for conjunct in prefix:
-        if not isinstance(conjunct, Call):
+        if not isinstance(conjunct, Call) or _is_builtin_test(conjunct, None):
             continue
         here: set[int] = set()
         _collect_var_ids(conjunct, here)
@@ -1670,6 +1976,11 @@ def _render_probe_solution(goal, reified_goal, holes, kw_holes,
 
     values = [_deref_walk_py(h) for h in holes]
     kw_values = [(str(k.name), _deref_walk_py(k.value)) for k in kw_holes]
+    if reified_goal is None and _NATIVE_REPORT.get() and not kw_holes:
+        text = _native_goal_text(
+            goal, {("arg", i): v for i, v in enumerate(values)})
+        if text is not None:
+            return text
     if is_v(reified_goal, Goal):
         try:
             return render_source(Goal(
@@ -1698,6 +2009,10 @@ def _render_nearest(goal, reified_goal, kind, index, value,
     """
     from clausal.reflection import Goal, render_source, is_v, vfield
 
+    if reified_goal is None and _NATIVE_REPORT.get():
+        text = _native_goal_text(goal, {(kind, index): value})
+        if text is not None:
+            return text
     if is_v(reified_goal, Goal):
         try:
             reified_value = _reify_value(value, path=path)
@@ -1838,7 +2153,14 @@ def _atomize_declared_atoms(reified, path):
 
 
 def _render_value(value, path=None) -> str:
-    """A computed runtime value as seam (``.seam``) surface text."""
+    """A computed runtime value as seam (``.seam``) surface text -- or, in
+    the report of a natively loaded Prolog file, as Prolog (``writeq``)."""
+    if _NATIVE_REPORT.get():
+        try:
+            from clausal.terms import term_writeq  # noqa: PLC0415
+            return term_writeq(value, local_vars=True)
+        except Exception:  # noqa: BLE001 - fall back to the seam spelling
+            pass
     try:
         from clausal.reflection import render_source, is_v, vfield
 
@@ -2619,6 +2941,15 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
         k = len(body) - len(rgoals)
         if k < 0 or not all(isinstance(g, Unify) for g in body[:k]):
             rgoals, k = None, 0
+    else:
+        # No reified twin (a native Prolog clause): the clause itself counts
+        # the head-argument Unify goals the compiler hoisted into its body,
+        # so a fact ``colour(green)`` that does not match is a head mismatch,
+        # not a failing ``Unify`` leaf.
+        k = getattr(clause, "hoisted", 0) or 0
+        if not (0 <= k <= len(body)
+                and all(isinstance(g, Unify) for g in body[:k])):
+            k = 0
 
     goals_list = pre + body
     failing, raised = _first_failing(goals_list, logic_module, deadline)
@@ -2652,6 +2983,11 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
         rgoals[src_idx]
         if rgoals is not None and 0 <= src_idx < len(rgoals) else None
     )
+    native_leaf = None
+    if reified_leaf is None and _NATIVE_REPORT.get():
+        twins = _native_twins(path, clause, len(body) - k)
+        if twins is not None and 0 <= src_idx < len(twins):
+            native_leaf = twins[src_idx]
 
     trail = Trail()
     gen = None
@@ -2675,7 +3011,8 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
                 # A head listing beneath this parent leaf is ONE finding: the
                 # parent conjunct, its bindings, and the heads, all one group.
                 lines = [_descent_leaf_line(leaf, reified_leaf, clause, path)]
-                for name, value in _leaf_bindings(leaf, reified_leaf, path):
+                for name, value in _leaf_bindings(
+                        leaf, reified_leaf, path, native_leaf):
                     lines.append(f"    {name} = {value}")
                 lines.append("    no clause head unifies with these arguments; "
                              "the heads are:")
@@ -2683,7 +3020,8 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
                 return [lines], "leaves"
             # "none" falls through to render this conjunct as the leaf.
         lines = [_descent_leaf_line(leaf, reified_leaf, clause, path)]
-        for name, value in _leaf_bindings(leaf, reified_leaf, path):
+        for name, value in _leaf_bindings(
+                leaf, reified_leaf, path, native_leaf):
             lines.append(f"    {name} = {value}")
         # A failing leaf that CONSUMES a collapsed findall's bag (`length(
         # VALID_DAYS, LENGTH)` with `VALID_DAYS = []`) is only the symptom;
@@ -2773,8 +3111,8 @@ def _head_listing(row, clauses, path) -> list[str]:
 
 def _descent_leaf_line(leaf, reified_leaf, clause, path) -> str:
     """``file:line  <source text>`` for one leaf conjunct."""
-    text = None
-    if reified_leaf is not None:
+    text = _native_source_text(leaf, path)
+    if text is None and reified_leaf is not None:
         try:
             from clausal.reflection import render_source, is_v, vfield
 
@@ -2798,13 +3136,20 @@ def _descent_leaf_line(leaf, reified_leaf, clause, path) -> str:
     return f"{label}:{line}  {text}" if line is not None else f"{label}  {text}"
 
 
-def _leaf_bindings(leaf, reified_leaf, path=None) -> list[tuple[str, str]]:
-    """Up to DIAG_MAX_DESCENT_BINDINGS named, bound variables of the leaf."""
+def _leaf_bindings(leaf, reified_leaf, path=None,
+                   native_leaf=None) -> list[tuple[str, str]]:
+    """Up to DIAG_MAX_DESCENT_BINDINGS named, bound variables of the leaf.
+
+    *native_leaf* is the ``(reader goal, var_names)`` twin of a native
+    Prolog leaf (:func:`_native_twins`), used when there is no reified one."""
     from clausal.logic.variables import deref, is_var
 
-    if reified_leaf is None:
+    if reified_leaf is not None:
+        named = _collect_named([leaf], [reified_leaf]) or []
+    elif native_leaf is not None:
+        named = _collect_native_named([leaf], [native_leaf]) or []
+    else:
         return []
-    named = _collect_named([leaf], [reified_leaf]) or []
     out: list[tuple[str, str]] = []
     seen_ids: set[int] = set()
     for name, var in named:

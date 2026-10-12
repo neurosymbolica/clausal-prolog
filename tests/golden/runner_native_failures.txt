@@ -1,0 +1,40 @@
+  PASS  arith.pl::double of two is four
+  FAIL  arith.pl::double of two is five
+  FAIL  arith.pl::raises  (Uncaught logic exception: error(type_error(evaluable,foo/0),(is)/2))
+  FAIL  arith.pl::double of three is seven
+  PASS  arith.pl::no double of two is five
+  FAIL  arith.pl::no double of two is four
+  FAIL  arith.pl::a colour is blue
+  FAIL  arith.pl::five is small
+
+FAILURES:
+  arith.pl:6 :: double of two is five
+    goal 2 of 2 failed:
+      Y =:= 5
+    bindings at failure: Y = 4
+    no solution (this conjunct is a built-in comparison or unification, not a predicate with clauses, so there is no nearest solution to show)
+  arith.pl:9 :: raises — Uncaught logic exception: error(type_error(evaluable,foo/0),(is)/2)
+    goal 1 of 2 raised:
+      X is foo + 1
+      LogicException: Uncaught logic exception: error(type_error(evaluable,foo/0),(is)/2)
+  arith.pl:10 :: double of three is seven
+    goal 1 of 1 failed:
+      double(3, 7)
+    bindings at failure: (none — goal 1 is the first goal)
+    the predicate DID have a solution, which did not unify (argument 2 differs):
+      double(3,6)
+  arith.pl:12 :: no double of two is four — test(..., fail) succeeded: its goal has a solution, and a `fail` test passes only when it has none
+  arith.pl:14 :: a colour is blue
+    goal 2 of 2 failed:
+      C == blue
+    bindings at failure: C = red
+    no solution (this conjunct is a built-in comparison or unification, not a predicate with clauses, so there is no nearest solution to show)
+  arith.pl:16 :: five is small
+    goal 1 of 1 failed:
+      small(5)
+    bindings at failure: (none — goal 1 is the first goal)
+    the predicate has no solution for ANY arguments at this point; no clause body survives:
+      arith.pl:15  N < 3
+          N = 5
+
+8 tests: 2 passed, 6 failed [FAILED]

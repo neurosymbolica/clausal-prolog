@@ -1,0 +1,6 @@
+
+2 file(s) skipped (no test/1 clauses: 2):
+  a.pl  (no test/1 clauses)
+  b.pl  (no test/1 clauses)
+2 file(s) collected, but no test/1 clauses found
+0 tests [NO TESTS] (exit 5; pass --allow-empty to accept an empty run)

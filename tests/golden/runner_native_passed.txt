@@ -1,0 +1,4 @@
+  PASS  ok.pl::one
+  PASS  ok.pl::none
+
+2 tests: 2 passed, 0 failed [PASSED]
