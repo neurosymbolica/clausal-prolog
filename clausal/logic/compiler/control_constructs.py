@@ -40,7 +40,7 @@ from clausal.logic.meta_predicate import MetaArg as _MetaArg
 
 from ._ast_helpers import (
     _name, _attr, _call, _assign, _assign_mark, _undo_stmt, _if,
-    _yield_none_stmt, _in_iter_expr, _drained,
+    _yield_none_stmt, _in_iter_expr, _drained, _drained_always,
     _MARK_PREFIX, _TRAIL_PARAM_NAME, _K_PARAM_NAME,
     _THIS_GEN_NAME,
     _EXTRA_FUNCDEF,
@@ -1066,7 +1066,10 @@ def _compile_catch(
     """
     from .strategy import TrampolineStrategy
     if isinstance(ctx.strategy, TrampolineStrategy):
-        goal_stmts = _lower_inner_trampoline(ctx, goal_arg, k_stmts)
+        # The goal's woken goals belong to the catch: they run inside the
+        # ``try``, not at the solution step's boundary outside it.
+        goal_stmts = _lower_inner_trampoline(
+            ctx, goal_arg, _drained_always(k_stmts, ctx.trail_name))
         recovery_stmts = _lower_inner_trampoline(ctx, recovery, k_stmts)
         return _compile_catch_impl(
             ctx, catcher,

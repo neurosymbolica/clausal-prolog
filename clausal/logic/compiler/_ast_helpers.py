@@ -305,7 +305,22 @@ def _drained(k_stmts: list[ast.stmt], trail_name: str) -> list[ast.stmt]:
     trail; the rest of the clause must see their bindings, once per answer.
     With nothing queued ``$pending`` is ``(None,)`` and *k* runs once.
     """
-    if not k_stmts or _is_trampoline_leaf(k_stmts):
+    if not k_stmts or _is_trampoline_leaf(k_stmts) or _is_drained(k_stmts):
+        return k_stmts
+    return _drained_always(k_stmts, trail_name)
+
+
+def _drained_always(k_stmts: list[ast.stmt], trail_name: str) -> list[ast.stmt]:
+    """*k_stmts* behind a goal boundary even when it is the trampoline's
+    solution step.
+
+    The step's own boundary (``StepGenerator.send``) runs the queued goals
+    OUTSIDE the generator frame that yielded it.  Where that frame sets up a
+    dynamic scope around the goal -- the ``try`` of a trampoline catch/3 --
+    the goals the goal woke must run inside the scope, so the step is put
+    behind a boundary of its own (the inner ops' ``_drained`` then sees it
+    already drained and adds none)."""
+    if not k_stmts or _is_drained(k_stmts):
         return k_stmts
     return [ast.For(
         target=_name("_", ast.Store()),
@@ -313,6 +328,15 @@ def _drained(k_stmts: list[ast.stmt], trail_name: str) -> list[ast.stmt]:
         body=k_stmts,           # the same list: compiled once, never copied
         orelse=[],
     )]
+
+
+def _is_drained(k_stmts: list[ast.stmt]) -> bool:
+    """``[for _ in $pending(trail): ...]``: already behind a boundary."""
+    if len(k_stmts) != 1 or not isinstance(k_stmts[0], ast.For):
+        return False
+    it = k_stmts[0].iter
+    return (isinstance(it, ast.Call) and isinstance(it.func, ast.Name)
+            and it.func.id == "$pending")
 
 
 def _is_trampoline_leaf(k_stmts: list[ast.stmt]) -> bool:
