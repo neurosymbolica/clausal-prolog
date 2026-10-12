@@ -44,7 +44,8 @@ from clausal.logic.clpq.attributes import (
     strictness_fields, with_changes)
 from clausal.logic.clpq.components import (
     COMPONENT_KEY, ListCell, component_all_variables, component_basis_add,
-    component_basis_drop, component_basis_pivot, component_new, open_list)
+    component_basis_drop, component_basis_pivot, component_new,
+    list_elements, open_list)
 from clausal.logic.clpq.linear_forms import (
     MINUS_ONE, LinearForm, add_linear_forms, add_linear_forms_scaled,
     delete_factor, independent, isolate, multiply_homogeneous_part,
@@ -821,13 +822,127 @@ def solve_homogeneous(terms, form, constant, bindings, trail):
     its inhomogeneous part; implied bindings are appended to *bindings*.
     Its last goal for categories 3 and 4, reconsider_basis_list/3, runs
     after solve_step returns, so the tail calls between the two do not nest
-    (test_a_cascade_of_implied_values_needs_no_recursion)."""
+    (test_a_cascade_of_implied_values_needs_no_recursion).  Where that pass
+    changes the store, strictly_satisfiable checks it (D19)."""
     code, new_basis = solve_step(terms, form, constant, bindings, trail)
     if code == _SOLVE_FAILED:
         return False
     if code == _SOLVE_FINISHED:
         return True
-    return reconsider_basis_list(new_basis, bindings, trail)
+    component = state_of(new_basis.head).component
+    mark = trail.mark()
+    if not reconsider_basis_list(new_basis, bindings, trail):
+        return False
+    if trail.mark() == mark:                    # the pass changed nothing
+        return True
+    return strictly_satisfiable(component, trail)
+
+
+def strictly_satisfiable(component, trail):
+    """Not in 1.3.3 (DEVIATIONS.md D19): False when a strict bound of a
+    member of *component* cannot hold.  1.3.3's reconsider pass can leave
+    a variable at a strict bound that it cannot leave, so a binding is
+    accepted on an unsatisfiable store
+    (test_a_binding_that_leaves_strict_constraints_unsatisfiable_fails,
+    test_a_binding_is_accepted_exactly_when_z3_finds_it_satisfiable).
+
+    The store without strictness is satisfiable here: the pass keeps the
+    values within the bounds.  A strict bound holds somewhere in that
+    store when its variable is inside it now, or when a small step takes
+    it inside: a nonbasic variable at a strict active bound can step
+    inside unless the row of a basis variable at one of its bounds would
+    step out with it.  Otherwise its sup (or inf) over the store must be
+    beyond the bound.  If each strict bound holds somewhere, all hold at
+    once, at the average of those points: the store is convex."""
+    members = component_all_variables(deref(component))
+    if members is None:
+        return True
+    variables = []
+    for member in list_elements(members):
+        variable = deref(member)
+        if is_var(variable):
+            variables.append(variable)
+    candidates = []             # (variable, factor): minimise factor*variable
+    cannot_increase = {}        # nonbasic variables, by _id
+    cannot_decrease = {}
+    for variable in variables:                  # basis variables at a bound
+        state = state_of(variable)
+        if state is None or state.bounds is None or state.linear_form is None:
+            continue
+        form = state.linear_form
+        if independent(form, variable):
+            continue
+        bounds = state.bounds
+        kind = bounds.kind
+        value = add(form.rest, form.constant)
+        at_lower = (kind == BOUNDS_LOWER or kind == BOUNDS_LOWER_UPPER) \
+            and compare(value, bounds.lower) <= 0
+        at_upper = (kind == BOUNDS_UPPER or kind == BOUNDS_LOWER_UPPER) \
+            and compare(value, bounds.upper) >= 0
+        if not (at_lower or at_upper):
+            continue
+        if at_lower and state.lower_strict:
+            candidates.append((variable, MINUS_ONE))
+        if at_upper and state.upper_strict:
+            candidates.append((variable, ONE))
+        for term_variable, coefficient in form.terms:
+            signum = sign(coefficient)
+            if (at_lower and signum < 0) or (at_upper and signum > 0):
+                cannot_increase[term_variable._id] = True
+            if (at_lower and signum > 0) or (at_upper and signum < 0):
+                cannot_decrease[term_variable._id] = True
+    if not cannot_increase and not cannot_decrease and not candidates:
+        return True
+    for variable in variables:          # blocked at a strict active bound
+        state = state_of(variable)
+        if state is None or state.bounds is None:
+            continue
+        kind = state.bounds.kind
+        if state.lower_strict and variable._id in cannot_increase and \
+                (kind == BOUNDS_LOWER_ACTIVE
+                 or kind == BOUNDS_LOWER_ACTIVE_UPPER):
+            candidates.append((variable, MINUS_ONE))
+        if state.upper_strict and variable._id in cannot_decrease and \
+                (kind == BOUNDS_UPPER_ACTIVE
+                 or kind == BOUNDS_LOWER_UPPER_ACTIVE):
+            candidates.append((variable, ONE))
+    for variable, factor in candidates:
+        state = state_of(variable)
+        if factor is MINUS_ONE:
+            beyond = negate(state.bounds.lower)
+        else:
+            beyond = state.bounds.upper
+        if not _decreases_below(state.linear_form, factor, beyond, trail):
+            return False
+    return True
+
+
+def _decreases_below(form, factor, limit, trail):
+    """Whether *factor* times *form* takes a value below *limit* in the
+    store, strictness ignored: iterate_decrease on it, as infimum_linear
+    sets it up, stopped as soon as the value is below *limit* or the
+    decrease is unlimited.  The store is left as it was."""
+    mark = trail.mark()
+    objective = multiply_linear_factor(form, factor)
+    dependent = Var()
+    below = False
+    if variable_with_definition_intern(bounds_none(), dependent, objective,
+                                       0b00, trail) \
+            and determine_active_decrease(objective, trail):
+        while True:                                 # iterate_decrease/2
+            state = state_of(dependent)
+            current = state.linear_form
+            if compare(add(current.rest, current.constant), limit) < 0:
+                below = True
+                break
+            status = decrease_step(current.terms, trail)
+            if status is None or status[0] == STATUS_OPTIMUM:
+                break
+            if status[0] == STATUS_UNLIMITED:
+                below = True
+                break
+    trail.undo(mark)
+    return below
 
 
 def solve_step(terms, form, constant, bindings, trail):

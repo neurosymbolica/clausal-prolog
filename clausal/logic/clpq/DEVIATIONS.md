@@ -765,3 +765,86 @@ the nearest integer, a half away from zero, so `-1/2` and `-3/4` give
 gives `I = -3/4, V = -1` on both (`test_bb_inf_answers_as_the_oracle`,
 `test_the_vertex_rounds_a_value_in_minus_one_to_minus_a_half_down`).
 Not checked against SICStus.
+
+## D19: a binding checks that its strict bounds can still hold
+
+bv.pl's `solve/5` ends in `rcbl/3` (`reconsider_basis_list`, bv.pl lines
+682 and 697), which walks the basis once (lines 1055-1060) and keeps its
+Continuation across pivots (`rcbl_app/5`, `rcbl_unl/7`, lines 1166-1193).
+It tests strictness only for the culprit it is handling, at its optimum
+(`rcbl_opt/5`, lines 1121-1162).  A variable that an applied or unlimited
+pivot moves into the basis is not in the Continuation and is never
+examined.  When it sits at a strict bound it cannot leave, the store is
+unsatisfiable and the binding is accepted.  itf3.pl's `verify_lin/2`
+(itf3.pl line 242) reaches `solve/5` for every binding of a constrained
+variable, and nf.pl reaches it for every posted equation.  A posted bound
+does not show this (`udu/5`, ineq.pl, reconsiders the bounded variable
+first): 17,047 random bound posts agree with z3.
+
+The reproducer (found by the Task 12 projection fuzz, seed 30):
+
+    {-X0 - 3*X4 + X1 =< 4, -3*X0 =< 3, -3*X3 + 3*X4 < 4,
+     -X0 - 2*X4 - X3 < -2, 3*X0 - X1 - 3*X4 < 0}, X4 = -1
+
+Here `X0 - 1/3*X1 < -1` and `X0 - X1 >= -1` give `X0 < -1`, against
+`X0 >= -1`.  Scryer's clpq accepts it as `X4 = -1` and as `{X4 = -1}`;
+z3 says unsatisfiable; `{X4 =< -1}` fails on both.
+
+The port keeps 1.3.3's pass unchanged.  When that pass has changed the
+store (the trail grew), `strictly_satisfiable` (bounded_simplex.py) checks
+that every strict bound in the component can still hold.  The store
+without strictness is satisfiable there, because the pass keeps values
+within their bounds.  A strict bound can hold when its variable is inside
+it now.  A nonbasic variable at a strict active bound can also take a
+small step inside, unless a basis variable at one of its bounds has it in
+its row with the sign that pushes the basis variable out.  Each remaining
+variable is checked with `iterate_decrease` on it (as `infimum_linear`
+sets that up, under a mark and undo).  These are the basis variables at a
+strict bound and the blocked nonbasic ones.  The walk stops at the first
+value past the bound, and the binding fails when it cannot reach one.  If
+each strict bound holds at some point of the store, all of them hold at
+once at the average of those points, because the store is convex
+(`test_a_binding_that_leaves_strict_constraints_unsatisfiable_fails`, and
+a z3 fuzz, `test_a_binding_is_accepted_exactly_when_z3_finds_it_satisfiable`,
+bare and under a driver).  Each part of the check is needed: removing
+the basis-variable candidates, the nonbasic ones, or either sign of
+blocking makes those tests fail.  This is a correctness divergence,
+ruled by the operator (2026-10-12), with the same precedent as D17 and
+D18.
+
+The operator's first choice was a re-walk of the basis until a pass moves
+nothing.  It was built and does not terminate.  Two variables at strict
+bounds 0, each unlimited through the other, are exchanged on every pass
+(fuzz seed 2582).  Degenerate applied pivots at one vertex also cycle
+(seed 1532).  A basis variable whose row is already a constant, its binding
+waiting in the bindings list, is found on every pass (seed 40).  A
+fixpoint would need an anti-cycling rule that 1.3.3 does not have.  The
+check needs none: it reads the store and undoes its pivots.
+
+Cost, measured 2026-10-12: an A/B in one process with the check switched
+off, interleaved, the minimum of 5 runs (Task 13b report).  Optimising
+every strict variable at a bound to its full optimum made binding a
+50-variable store 60 times slower (21.3 s against 0.35 s).  The blocking
+filter and the early stop bring it to:
+
+| Workload | With the check | Without | Extra | Checks run |
+|---|---|---|---|---|
+| 10,000 chain posts and the binding `X0 = 5`, driver | 0.470 s | 0.461 s | +2.0% | 0 |
+| bb_inf: the three knapsacks of test_branch_and_bound.py and the 12-variable deep search | 0.170 s | 0.165 s | +3.0% | 12 |
+| 200 variables in (0, 10), 200 random constraints tight at a point, the 200 bound to it one at a time, bare | 0.827 s | 0.758 s | +9.1% | 118 |
+| the same, driver | 0.848 s | 0.786 s | +8.0% | 118 |
+| the z3 fuzz, 3,000 seeds, bare (z3 included) | 7.803 s | 7.747 s | +0.7% | 1,118 |
+
+Over the 30,000 fuzz seeds, the first pass ran 36,019 times, the check
+11,050 times (when the pass changed the store), and it walked a variable
+513 times; it refused 73 bindings.
+
+The fuzz: 30,000 seeds, 39,782 bindings checked in each mode.  Before D19
+there were 73 disagreements in each mode, all of them an unsatisfiable
+binding accepted; after it there are none.  Woken goals: the only
+unification under the check's mark is class.pl's join of the fresh
+objective variable's component.  No frozen goal can be on that variable,
+and in the fuzz the pending queue had the same length before and after
+each check (Task 8's inf/sup is the same case).
+
+Not checked against SICStus: MORNING-SICSTUS (7) stays open.

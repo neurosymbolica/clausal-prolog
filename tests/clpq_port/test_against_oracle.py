@@ -659,9 +659,9 @@ def own_interval(variable, name, trail):
     """The port's own inf and sup of *variable* with strictness: the inf I
     is attained where posting `{V =< I}` succeeds, the sup S where
     `{V >= S}` does.  As residual text over *name*.  (Posting `{V = I}`
-    is no test: like Scryer's, the port can accept a binding that leaves
-    strict constraints unsatisfiable;
-    test_a_binding_can_leave_strict_constraints_unsatisfiable.)"""
+    is no test: Scryer's clpq can accept a binding that leaves strict
+    constraints unsatisfiable;
+    test_a_binding_that_leaves_strict_constraints_unsatisfiable_fails.)"""
     from clausal.logic.clpq.normal_form import post_constraint as post
     interval = []
     for optimum, closed, open_, probe in ((bv.inf, ">=", ">", "=<"),
@@ -729,23 +729,19 @@ def test_the_projection_fuzz_against_the_oracle(seed):
         check_against_oracle(text, [name], got, want)
 
 
-def test_a_binding_can_leave_strict_constraints_unsatisfiable():
+def test_a_binding_that_leaves_strict_constraints_unsatisfiable_fails():
     # Found by the projection fuzz (seed 30): the store with X4 = -1 is
     # unsatisfiable (X0 - 1/3*X1 < -1 and X0 - X1 >= -1 give X0 < -1,
-    # against X0 >= -1), yet the binding is accepted, by Scryer's clpq as by
-    # the port; {X4 =< -1} fails on both.  The same answer on both, so the
-    # port keeps it; whether SICStus 1.3.3 does too is not checked.
+    # against X0 >= -1).  Scryer's clpq accepts the binding, as 1.3.3 does;
+    # the port re-walks the basis to a fixpoint and fails (DEVIATIONS.md
+    # D19).  {X4 =< -1} fails on both.
     store = ("{-1*X0 + -3*X4 + 1*X1 =< 4, -3*X0 =< 3, -3*X3 + 3*X4 < 4,"
              " -1*X0 + -2*X4 + -1*X3 < -2, 3*X0 + -1*X1 + -3*X4 < 0}")
     shown = ["X0", "X1", "X3", "X4"]
-    for extra, count in ((", X4 = -1", 1), (", {X4 = -1}", 1), (", {X4 =< -1}", 0)):
-        got = port_answers(store + extra, shown, bounds=False)
-        want = scryer_answers(store + extra, shown, bounds=False)
-        assert len(got) == len(want) == count
-        check_against_oracle(store + extra, shown, got, want)
-    (answer,) = port_answers(store + ", X4 = -1", shown, bounds=False)
-    import z3
-    from tests.clpq_oracle import _formula
-    solver = z3.Solver()
-    solver.add(_formula(answer.residual, {})[0])
-    assert solver.check() == z3.unsat
+    for extra, scryer_count in ((", X4 = -1", 1), (", {X4 = -1}", 1),
+                                (", {X4 =< -1}", 0)):
+        for defer in (False, True):
+            assert port_answers(store + extra, shown, bounds=False,
+                                defer=defer) == [], (extra, defer)
+        assert len(scryer_answers(store + extra, shown, bounds=False)) \
+            == scryer_count, extra
