@@ -1504,9 +1504,12 @@ def exponent_to_term(exponent, term):
 
 def power_base_to_term(base, table):
     """nf.pl, power_base_to_term/2 (pe2term/2): a variable, or the term of
-    a skeleton, built already in *table* (see normal_form_to_term)."""
+    a skeleton, built already in *table* (see normal_form_to_term).  A
+    base bound to anything but a skeleton (a number, while its delayed goal
+    has not run yet) is itself: clause 2's `=..` keeps an atomic term
+    (test_a_delayed_goal_on_a_bound_base_translates_to_its_value)."""
     base = deref(base)
-    if is_var(base):
+    if type(base) is not NonlinearBase:
         return base
     return table[id(base)]
 

@@ -48,13 +48,7 @@ def dump(target_variables, names, trail):
     Before reading the store, catch_up (DEVIATIONS.md D3).  The projection
     runs with `trail.defer` off and restores it after, as a bare call does
     (DEVIATIONS.md D3; test_dump_under_a_driver_matches_a_bare_dump)."""
-    targets = []
-    for variable in target_variables:
-        variable = deref(variable)
-        if not is_var(variable):
-            raise LogicException(_error(("uninstantiation_error", variable),
-                                        "dump/3"))
-        targets.append(variable)
+    targets = _unbound_targets(target_variables)
     if len(names) != len(targets):
         return None
     saved_defer = trail.defer
@@ -62,6 +56,7 @@ def dump(target_variables, names, trail):
     try:
         if not catch_up_entry(targets, trail):
             return None
+        targets = _unbound_targets(targets)     # the catch-up may bind one
         mark = trail.mark()
         try:
             goals = variables_constraints(targets, trail)
@@ -86,6 +81,21 @@ def dump(target_variables, names, trail):
     return copied
 
 
+def _unbound_targets(target_variables):
+    """must_be(Target, proper_list(var), dump(...), 1): the dereferenced
+    targets; a bound one raises uninstantiation_error.  dump/3 checks again
+    after its catch-up, which can bind a target that a unification bound
+    and whose hook has not run (test_dump_of_a_target_the_catch_up_binds_raises)."""
+    targets = []
+    for variable in target_variables:
+        variable = deref(variable)
+        if not is_var(variable):
+            raise LogicException(_error(("uninstantiation_error", variable),
+                                        "dump/3"))
+        targets.append(variable)
+    return targets
+
+
 def projecting_assert(clause, trail):
     """dump.pl, projecting_assert/1: the clause to assert for *clause* (a
     cell, `(":-", H, B)` for a rule), with the projection of the
@@ -99,6 +109,7 @@ def projecting_assert(clause, trail):
     try:
         if not catch_up_entry(target, trail):
             return clause
+        target = _term_variables([clause])      # the catch-up may bind one
         mark = trail.mark()
         try:
             goals = variables_constraints(target, trail)

@@ -294,14 +294,30 @@ case now gives Scryer's `X = Y, X >= 1`).
 `dump/3` and `projecting_assert/1` (Task 12) project with `trail.defer`
 off and restore it after, as a bare call runs: the trial posts of
 redund.pl's `negate_lower/3` and `negate_upper/3`, which 1.3.3 runs inside
-`\+` with their Later goals, then run their Later work inside the trial
-and undo it.  No store was found where this changes a dump: 1,330 random
-stores (some with a variable-variable binding), searched 2026-10-12, gave
-the same dump with the switch removed under a driver; inside a dump the
-non-linear goals are already marked run, and a trial post of one bound
-rarely binds anything.  `test_dump_under_a_driver_matches_a_bare_dump`
-checks the dump under a driver against a bare one and that `defer` is
+`\+` with everything they wake, then run what they wake inside the trial
+and undo it.  It shows with another key's goal:
+`{X < 1, X + W =< 1, W >= 0}` with `freeze(W, fail)` dumps `X =< 1` bare
+and under a driver, because the trial `{1 =< X}` binds W = 0 and the
+frozen goal fails it; without the switch, under a driver, the goal waits
+on the pending queue, the trial succeeds and the dump keeps `X < 1`
+(`test_a_frozen_goal_woken_in_a_trial_post_runs_inside_it`).  With clpq
+goals alone no difference was found (1,330 random stores): inside a dump
+the non-linear goals are already marked run.
+`test_dump_under_a_driver_matches_a_bare_dump` also checks that `defer` is
 restored.
+
+A dump inside the unification window.  `dump/3` and `projecting_assert/1`
+check their targets again after their catch-up, which can bind a target
+whose binding's hook has not run: `{X + Q = 3, Q >= 0}`,
+`freeze(Z, dump([Q], [Q1], C))`, `f(Z, X) = f(1, 2)` (Z first, bare) raises
+`uninstantiation_error(1)`, as 1.3.3's `must_be/4` does with Q bound
+(`test_dump_of_a_target_the_catch_up_binds_raises`,
+`test_projecting_assert_of_a_variable_the_catch_up_binds`).  Such a dump
+cannot see the Later bound of a variable-variable binding of the same
+unification (`{L =< Y}` from `verify_type`), which waits behind the
+frozen goal; 1.3.3 has the same gap, since the order of a frozen goal and
+the Later goals of the hook is implementation-defined (Task 12 review,
+probe `window.py` case (b)).
 
 ## D4: the order of variables is creation order
 

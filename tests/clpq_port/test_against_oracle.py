@@ -476,6 +476,18 @@ def test_a_strict_bound_projects_strict_onto_x():
     check_against_oracle(text, ["X"], got, scryer_answers(text, ["X"], bounds=False))
 
 
+@pytest.mark.parametrize("text, expected", [
+    ("{Y >= 2, X - Y >= 0, X > 0, X < 5}", ["{X >= 2}", "{X < 5}"]),
+    ("{Y =< 2, X - Y =< 0, X < 9, X > -5}", ["{X =< 2}", "{X > -5}"]),
+])
+def test_the_bound_that_stays_keeps_its_strictness(text, expected):
+    # redund.pl strictness_parts/3: the redundant bound goes, the other
+    # keeps its own strictness bit (X > 0 and X < 9 go).
+    got = port_answers(text, ["X"], bounds=False)
+    assert [a.residual for a in got] == [expected]
+    check_against_oracle(text, ["X"], got, scryer_answers(text, ["X"], bounds=False))
+
+
 # ---------------------------------------------------------------- the projection fuzz
 
 def fuzz_store(seed):

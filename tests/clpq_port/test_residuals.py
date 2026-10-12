@@ -384,17 +384,63 @@ def test_a_bound_that_is_not_redundant_comes_back():
 
 
 def test_of_two_bounds_only_the_redundant_one_goes():
-    # 0 =< X =< 5 with X >= Z >= 1: the lower bound goes, the upper stays.
+    # 0 =< X < 5 with X >= Z >= 1: the lower bound goes, the strict upper
+    # stays strict (strictness_parts/3).
     trail = Trail()
     x, z = Var(), Var()
-    _post(trail, (">=", x, 0), ("=<", x, 5), (">=", z, 1),
+    _post(trail, (">=", x, 0), ("<", x, 5), (">=", z, 1),
           (">=", ("-", x, z), 0))
     bounds = state_of(x).bounds
     assert bounds.lower is not None and bounds.upper is not None
     assert rd.redundancy_variable_list([x], trail)
-    bounds = state_of(x).bounds
-    assert bounds.lower is None and bounds.upper == q(5)
-    assert _implied(trail, (">", x, 5)) and _implied(trail, ("<", x, 1))
+    state = state_of(x)
+    assert state.bounds.lower is None and state.bounds.upper == q(5)
+    assert state.upper_strict and not state.lower_strict
+    assert _implied(trail, (">=", x, 5)) and _implied(trail, ("<", x, 1))
+
+
+def test_t_lU_drops_the_lower_bound_and_keeps_the_strict_active_upper():
+    # The intro-free branch of redundant(t_lU): put t_U(U), strictness Su.
+    trail = Trail()
+    x, z = Var(), Var()
+    _post(trail, (">=", x, 0), ("<", x, 5), (">=", z, 1),
+          (">=", ("-", x, z), 0))
+    assert state_of(x).bounds == bounds_lower_upper_active(q(0), q(5))
+    assert rd.redundancy_variable_list([x], trail)
+    state = state_of(x)
+    assert state.bounds == bounds_upper_active(q(5))
+    assert state.upper_strict and not state.lower_strict
+    assert _implied(trail, (">=", x, 5))
+
+
+def test_t_Lu_drops_the_upper_bound_and_keeps_the_strict_active_lower():
+    # redundant(t_Lu): the first branch (intro_at to t_u(U)) finds the lower
+    # bound needed and is undone; the second puts t_L(L), strictness Sl.
+    trail = Trail()
+    x, z = Var(), Var()
+    _post(trail, (">", x, 0), ("=<", x, 5), ("=<", z, 2),
+          ("=<", ("-", x, z), 0))
+    assert state_of(x).bounds == bounds_lower_active_upper(q(0), q(5))
+    assert rd.redundancy_variable_list([x], trail)
+    state = state_of(x)
+    assert state.bounds == bounds_lower_active(q(0))
+    assert state.lower_strict and not state.upper_strict
+    assert _implied(trail, ("=<", x, 0)) and _implied(trail, (">", x, 2))
+
+
+def test_t_Lu_with_a_redundant_lower_bound_keeps_the_upper_one():
+    # redundant(t_Lu)'s first branch: intro_at(X, -L, t_u(U)) and Su.
+    trail = Trail()
+    x, z = Var(), Var()
+    _post(trail, (">", x, 0), ("<", x, 5), (">=", z, 1),
+          (">=", ("-", x, z), 0))
+    kind = state_of(x).bounds.kind
+    assert kind in (BOUNDS_LOWER_ACTIVE_UPPER, BOUNDS_LOWER_UPPER_ACTIVE)
+    assert rd.redundancy_variable_list([x], trail)
+    state = state_of(x)
+    assert state.bounds.lower is None and state.bounds.upper == q(5)
+    assert state.upper_strict and not state.lower_strict
+    assert _implied(trail, (">=", x, 5)) and _implied(trail, ("<", x, 1))
 
 
 @pytest.mark.parametrize("seed", range(60))
@@ -856,6 +902,93 @@ def test_projecting_assert_puts_the_projection_first():
                        ("q", variable))
     plain = ("p", Var())
     assert rc.projecting_assert(plain, trail) is plain       # nothing to add
+
+
+def test_a_frozen_goal_woken_in_a_trial_post_runs_inside_it():
+    # {X < 1, X + W =< 1, W >= 0} with freeze(W, fail): the redundancy trial
+    # for X < 1 posts {1 =< X}, which binds W = 0; the frozen goal fails
+    # there (inside \\+ in 1.3.3), so X < 1 counts as implied and is
+    # dropped, leaving X =< 1.  Under a driver dump/3 runs with defer off,
+    # so the answer is the same (DEVIATIONS.md D3).
+    from clausal.logic.coroutining import _freeze_var
+
+    def fails():
+        return iter(())
+
+    for defer in (False, True):
+        trail = Trail()
+        x, w = Var(), Var()
+        _freeze_var(w, fails, trail)
+        _post(trail, ("<", x, 1), ("=<", ("+", x, w), 1), (">=", w, 0))
+        trail.defer = defer
+        try:
+            assert rc.dump([x], ["X"], trail) == [("=<", "X", 1)]
+            assert trail.defer is defer
+        finally:
+            trail.defer = False
+
+
+def test_dump_of_a_target_the_catch_up_binds_raises():
+    # {X + Q = 3, Q >= 0}, freeze(Z, dump([Q], [Q1], C)), f(Z, X) = f(1, 2):
+    # Z's goal runs before X's hook; dump's catch-up does X's work and binds
+    # Q = 1, which must_be/4 then sees bound.  projecting_assert/1 takes
+    # the clause's variables again after its catch-up.
+    from clausal.logic.coroutining import _freeze_var
+    from clausal.logic.variables import unify
+    trail = Trail()
+    x, q_, z = Var(), Var(), Var()
+    _post(trail, ("=", ("+", x, q_), 3), (">=", q_, 0))
+    seen = []
+
+    def goal():
+        try:
+            rc.dump([q_], ["Q1"], trail)
+            seen.append("no error")
+        except LogicException as error:
+            seen.append(error.term[1])
+        seen.append(rc.projecting_assert(("p", q_), trail))
+        yield None
+
+    _freeze_var(z, goal, trail)
+    assert unify(("f", z, x), ("f", 1, 2), trail)
+    assert seen[0] == ("uninstantiation_error", 1)
+    assert seen[1] == ("p", q_) and deref(q_) == 1
+
+
+def test_projecting_assert_of_a_variable_the_catch_up_binds():
+    # As above, with projecting_assert/1 the first to read the store: Q is
+    # unbound when it collects the clause's variables, bound after its
+    # catch-up, so it takes them again (no put_attr on a bound Q).
+    from clausal.logic.coroutining import _freeze_var
+    from clausal.logic.variables import unify
+    trail = Trail()
+    x, q_, z = Var(), Var(), Var()
+    _post(trail, ("=", ("+", x, q_), 3), (">=", q_, 0))
+    seen = []
+
+    def goal():
+        seen.append(rc.projecting_assert(("p", q_), trail))
+        yield None
+
+    _freeze_var(z, goal, trail)
+    assert unify(("f", z, x), ("f", 1, 2), trail)
+    assert seen == [("p", q_)] and deref(q_) == 1
+
+
+def test_a_delayed_goal_on_a_bound_base_translates_to_its_value():
+    # Under a driver W = 2 leaves X*W = 3's goal queued, not yet re-posted;
+    # its translation writes W's value (nf.pl pe2term/2 clause 2).
+    from clausal.logic.variables import unify
+    trail = Trail()
+    x, w = Var(), Var()
+    _post(trail, (">=", x, 0), (">=", w, 0), ("=", ("*", x, w), 3))
+    trail.defer = True
+    try:
+        assert unify(w, 2, trail)
+        residual = _residual(trail, [(x, "X")])
+    finally:
+        trail.defer = False
+    assert residual == ["{X >= 0}", "{-3 + 2*X = 0}"]
 
 
 @pytest.mark.parametrize("seed", range(60))
