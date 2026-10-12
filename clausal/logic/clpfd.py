@@ -400,8 +400,9 @@ def _narrow(var: Var, new_domain: Domain, trail: Trail, queue: deque) -> bool:
 
     # Keep Q bounds in sync if present (mirrors REAL sync above).  The
     # selected CLP(Q) solver owns the sync (CLAUSAL_CLPQ): the port queues
-    # its post while trail.defer is set, since this runs inside clpfd's
-    # propagation and so inside a hook (clpq/holzbaur.py, ruling R28).
+    # its post while trail.hooks_running is above 0, since this can run
+    # inside clpfd's propagation and so inside a hook (clpq/holzbaur.py,
+    # ruling R28c).
     from clausal.logic.clpq import Q_KEY, sync_fd_bounds  # noqa: PLC0415
     if get_attr(var, Q_KEY) is not None:
         if not sync_fd_bounds(var, domain_min(new_domain),

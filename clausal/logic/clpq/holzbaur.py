@@ -27,35 +27,31 @@ currency amount keeps its scale; through nf.pl it would come back as the
 rational 5/2 (``arithmetic.to_number``).
 (test_switch.py, test_a_decimal_keeps_its_scale_through_an_equation)
 
-The rule for calls from another constraint library (ruling R28).  No
-attribute hook body may call an entry point of the port (ruling R27,
+The rule for calls from another constraint library (rulings R28, R28c).
+No attribute hook body may call an entry point of the port (ruling R27,
 DEVIATIONS.md D3): a hook runs while other variables of the same
 unification are bound with their hooks still to come, and an entry point
 reads rows and member lists that hold those bindings.  clpfd calls
 ``q_eq``, ``q_ne``, ``q_le``, ``q_lt`` (and ``q_gt``, ``q_ge`` through
 them) and ``sync_fd_bounds`` from its propagation, which runs inside the
-FD hook, from its reified comparisons and from the units hook.  So these
-functions do not post in place while a component the post reads holds a
-member that is bound with its CLPQ_KEY hook still to come: they queue the
-post on the trail's pending queue (``trail.push_pending`` of a
-``QueuedPost``) and return True, and the post runs after every hook of the
-unification.  Otherwise they post in place.
+FD hook, from its reified comparisons and from the units hook.  So while
+``trail.hooks_running`` is above 0 (the engine is dispatching attribute
+hooks, docs/coroutining.md "Inside a hook or at a goal") these functions
+queue the post on the trail's pending queue (``trail.push_pending`` of a
+``QueuedPost``) and return True; the post runs at the goal boundary after
+every hook of the unification.  At a goal (``hooks_running == 0``) they
+post in place, bare or under a driver: the engine's goal boundary after
+an inline comparison runs what the post wakes before the next goal
+(test_switch.py, test_a_comparison_from_clpfd_inside_a_hook_is_queued,
+test_a_comparison_from_clpfd_inside_a_hook_is_queued_on_any_store and
+test_a_comparison_from_clpfd_at_a_goal_is_posted_in_place).
 
 Why not queue whenever ``trail.defer`` is True, as R28 is worded: under a
-driver ``defer`` is True at every goal, not only inside a hook, and a
-compiled comparison (``X =< 10`` in a seam clause, lowered to ``fd_le``)
-is not followed by a goal boundary, so the queued post would run only
-after the next goals had read the store without it: ``in_q(X, 0, 100), X
-=< 10, X >= 3, inf(X, Lo)`` gave ``Lo = 0``
-(tests/test_clpq.py::TestClausalIntegration::test_sup_inf, and
-test_switch.py, test_a_comparison_from_clpfd_at_a_goal_is_posted_in_place).
-Outside a hook's window no member is bound (each hook puts a stand-in in
-place of its variable before it returns), so the check queues exactly
-the posts R27 forbids.  ``{}`` (``clpq_constraint_block``) and the
-optimisers are goals, never called from a hook, and post in place.  The
-scan is linear in the components per post (cost in DEVIATIONS.md D20);
-ruling R29 replaces it with an engine flag set while hooks are
-dispatched, once the engine has it.
+driver ``defer`` is True at every goal, not only inside a hook, so every
+post from a seam comparison would wait in the queue and an entry point
+called bare would leave it there (DEVIATIONS.md D20).  ``{}``
+(``clpq_constraint_block``) and the optimisers are goals, never called
+from a hook, and post in place.
 
 ``{C1 ; C2}`` (ruling R18, DEVIATIONS.md D12).  A block that holds ``;``
 is posted with ``post_constraint_with_choices``, and
@@ -73,15 +69,12 @@ from clausal.logic.clpq import branch_and_bound as _branch_and_bound
 from clausal.logic.clpq import normal_form as _normal_form
 from clausal.logic.clpq import residual_constraints as _residual_constraints
 from clausal.logic.clpq import variable_ordering as _variable_ordering
-from clausal.logic.clpq.attribute_hooks import _own_state
 from clausal.logic.clpq.attributes import CLPQ_KEY, state_of
-from clausal.logic.clpq.components import (
-    component_all_variables, list_elements)
 from clausal.logic.clpq.legacy import (
     _cell_as_node, _cells_as_nodes, _units_result, _units_strip,
     _units_strip_expr)
 from clausal.logic.variables import (
-    AttVar, PlainVar, Var, deref, get_attr, is_var, present_number, unify)
+    PlainVar, Var, deref, get_attr, is_var, present_number, unify)
 from clausal.pythonic_ast.nodes import (
     ArithEq, ArithNeq, CompareChain, Gt, GtE, Lt, LtE)
 
@@ -214,9 +207,9 @@ def _compare_numbers(node_class, left, right):
 
 
 class QueuedPost:
-    """A post a constraint library made under ``trail.defer``, as a goal on
-    the trail's pending queue (ruling R28): a zero-argument factory with
-    one answer or none, as attribute_hooks.PendingLater is."""
+    """A post a constraint library made inside a hook, as a goal on the
+    trail's pending queue (ruling R28c): a zero-argument factory with one
+    answer or none, as attribute_hooks.PendingLater is."""
     __slots__ = ("node_class", "left", "right", "trail")
 
     def __init__(self, node_class, left, right, trail):
@@ -234,36 +227,12 @@ class QueuedPost:
 
 def _post_from_library(node_class, left, right, trail):
     """A comparison from clpfd (fd_eq and the others, its Python and its C
-    form): queued while it may run inside a hook's window, posted in place
-    otherwise (ruling R28 as the module docstring states it)."""
-    if trail.defer and _reads_unhooked_bindings(left, right):
+    form): queued while the engine is dispatching attribute hooks, posted
+    in place at a goal (ruling R28c as the module docstring states it)."""
+    if trail.hooks_running > 0:
         trail.push_pending(QueuedPost(node_class, left, right, trail))
         return True
     return _post_now(node_class, left, right, trail)
-
-
-def _reads_unhooked_bindings(*terms):
-    """True when a component a post on *terms* reads holds a member that a
-    unification has bound and whose CLPQ_KEY hook has not run yet: the
-    window of DEVIATIONS.md D3 (ruling R27).  After a unification's hooks
-    have run no member is bound (each hook puts a stand-in in place of its
-    variable), so at a goal this is False and the post is made in place
-    (test_switch.py, test_a_comparison_from_clpfd_inside_a_hook_is_queued
-    and test_a_comparison_from_clpfd_at_a_goal_is_posted_in_place)."""
-    seen = set()
-    for variable in _variables_of(*terms):
-        state = state_of(variable)
-        if state is None or state.component is None:
-            continue
-        component = deref(state.component)
-        if id(component) in seen:
-            continue
-        seen.add(id(component))
-        for member in list_elements(component_all_variables(component)):
-            if type(member) is AttVar and member.is_bound \
-                    and _own_state(member) is not None:
-                return True
-    return False
 
 
 def _prepare(left, right, context, trail):
@@ -311,11 +280,11 @@ def sync_fd_bounds(variable, lower, upper, trail):
     """clpfd narrowed the domain of *variable*, which has CLP(Q) state, to
     [lower, upper]: post those bounds (an infinite end is left open).
     clpfd's propagation calls this, so it may run inside a hook: queued
-    as _post_from_library queues (ruling R28)."""
+    as _post_from_library queues (ruling R28c)."""
     variable = deref(variable)
     if not is_var(variable):
         return True
-    if trail.defer and _reads_unhooked_bindings(variable):
+    if trail.hooks_running > 0:
         if type(lower) is int:
             trail.push_pending(QueuedPost(GtE, variable, lower, trail))
         if type(upper) is int:

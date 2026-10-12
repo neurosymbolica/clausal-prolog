@@ -913,8 +913,10 @@ def test_the_registered_attribute_hooks_are_the_known_set():
     # Ruling R27: no attribute hook body calls an entry point of the port.
     # A hook body runs while other variables of the same unification are
     # bound with their hooks still to come, bare and under a driver alike
-    # (trail.defer is True inside every hook), so an entry point called
-    # there reads unhooked bindings (DEVIATIONS.md D3 has the repro).
+    # (trail.hooks_running is above 0 inside every hook; the next test),
+    # so an entry point called there reads unhooked bindings (DEVIATIONS.md
+    # D3 has the repro).  clpfd's calls into the port are queued on that
+    # counter (ruling R28c, test_switch.py).
     # Known limits: this scans source under clausal/ for
     # `register_attr_hook(KEY, ...)` at the start of a line, so it misses a
     # hook registered from C, from outside clausal/, or through a qualified
@@ -946,6 +948,46 @@ def test_the_registered_attribute_hooks_are_the_known_set():
         "projecting_assert, attribute_goal): it would read bindings whose "
         "hooks have not run yet, bare or under a driver (DEVIATIONS.md D3, "
         "ruling R27).")
+
+
+@pytest.mark.parametrize("driver", [False, True])
+def test_the_port_hook_runs_inside_the_counter_and_its_later_work_at_a_goal(
+        driver, monkeypatch):
+    # The engine contract R27 and R28c rest on (docs/coroutining.md,
+    # "Inside a hook or at a goal"): the port's hook body runs with
+    # trail.hooks_running above 0, and the Later work it queues, like any
+    # goal, runs with it at 0.  {X >= 1}, {Y =< 5}, X = Y queues Later work.
+    from clausal.logic.pending import drain
+    from clausal.logic.variables import register_attr_hook
+    trail = Trail()
+    x, y = Var(), Var()
+    assert _post(trail, (">=", x, 1))
+    assert _post(trail, ("=<", y, 5))
+    in_hook, in_later = [], []
+
+    def spy(state, other, hook_trail):
+        in_hook.append(hook_trail.hooks_running)
+        return hooks.holzbaur_hook(state, other, hook_trail)
+    later_call = hooks.PendingLater.__call__
+
+    def recording_call(self):
+        in_later.append(trail.hooks_running)
+        return later_call(self)
+    monkeypatch.setattr(hooks.PendingLater, "__call__", recording_call)
+    assert trail.hooks_running == 0
+    register_attr_hook(CLPQ_KEY, spy)
+    try:
+        if driver:
+            trail.defer = True
+        assert unify(x, y, trail)
+        if driver:
+            assert [None for _ in drain(trail)][:1] == [None]
+            trail.defer = False
+    finally:
+        register_attr_hook(CLPQ_KEY, hooks.holzbaur_hook)
+    assert in_hook and all(level >= 1 for level in in_hook)
+    assert in_later and all(level == 0 for level in in_later)
+    assert trail.hooks_running == 0
 
 
 def test_a_stand_in_left_in_a_row_is_a_member():

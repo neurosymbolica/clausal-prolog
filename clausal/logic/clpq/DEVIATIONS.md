@@ -186,15 +186,18 @@ one component when the binding is inside it
 (`test_a_binding_within_one_component_makes_one_stand_in`).
 
 Nothing else runs inside that window, as long as one rule holds (ruling
-R27, a stated contract, not enforced in code): **no attribute hook body
+R27, a stated contract): **no attribute hook body
 calls an entry point of the port** (`post_constraint` and the other `{}/1`
 forms, `inf`, `sup`, `minimize`, `maximize`, `entailed`, `bb_inf`,
 `dump/3`, `projecting_assert/1`, `attribute_goal`).  A hook body runs while
 other variables of the same unification are bound and their hooks are
 still to come, so an entry point called there reads rows and member lists
 that hold unhooked bindings.  The rule holds bare and under a driver
-alike, because `trail.defer` is True inside every hook (below).  The
-reason, a hook registered on another key that dumps and posts in its body:
+alike: the engine's `trail.hooks_running` is above 0 inside every hook
+and 0 at every goal (a750f58c, docs/coroutining.md "Inside a hook or at a
+goal";
+`test_the_port_hook_runs_inside_the_counter_and_its_later_work_at_a_goal`).
+The reason, a hook registered on another key that dumps and posts in its body:
 
 ```python
 def hook(state, other, trail):
@@ -215,9 +218,16 @@ and dif, clpfd, clpb, clpr, the two units keys, the legacy clpq key and
 COMPONENT_KEY call no entry point.  clpfd's calls into CLP(Q) are calls,
 not registrations, and some run inside a hook (clpfd's propagation in its
 own hook, its reified comparisons, the units hook): under
-`CLAUSAL_CLPQ=holzbaur` the adapter queues such a post while a component
-it reads holds an unhooked binding (ruling R28, `holzbaur.py`'s docstring,
-`test_a_comparison_from_clpfd_inside_a_hook_is_queued`).  The tripwire
+`CLAUSAL_CLPQ=holzbaur` the counter enforces the rule for them.  The
+adapter queues such a post while `trail.hooks_running` is above 0, and
+posts in place at a goal (ruling R28c, `holzbaur.py`'s docstring,
+`test_a_comparison_from_clpfd_inside_a_hook_is_queued` and
+`test_a_comparison_from_clpfd_inside_a_hook_is_queued_on_any_store`).  The same post made in place inside the hook gives the
+wrong answer above: through `q_le` from Z's hook, Q is left unbound with
+sup 1, `inf(W)` fails and `dump/3` raises "renormalize: empty homogeneous
+part" (the mutation check of Task 14b).  A direct call from a hook body to
+an entry point (`{}`, `inf`, `dump/3`, ...) is not checked: the rule stays
+a contract there.  The tripwire
 `test_the_registered_attribute_hooks_are_the_known_set` fails when a hook
 is registered or removed, and says to check this rule before extending
 its list.  It scans the source under `clausal/` for
@@ -971,16 +981,24 @@ differently from 1.3.3 itself:
   rows whose coefficients were all negative under `toplevel`
   (`{-X =< -2}` vs `{X >= 2}`), so `dump_q/2`'s spelling changes under the
   switch (`test_dump_q_projection.py`, `test_strict_bounds`).
-- A post from clpfd scans the components it reads for an unhooked
-  binding (ruling R28's adapter rule, `_reads_unhooked_bindings`).  It is
-  linear in their size, per post, under a driver.  Measured (Task 14
-  review): 9 µs of a 33 µs clpfd-routed post at 50 variables, 181 µs of
-  756 µs at 800; a chain of 4,000 variables with one bound posted per
-  variable through clpfd takes 0.14 s bare and 1.79 s under a driver, and
-  the scan is the whole 12x.  Ruling R29 replaces the scan with an engine
-  flag set while hooks are dispatched (the adapter queues iff it is set),
-  together with a pending drain after every inline goal; until that
-  engine change lands the scan stays, and CLAUSAL_CLPQ stays opt-in.
+- A post from clpfd is queued iff `trail.hooks_running` is above 0
+  (ruling R28c), an O(1) read of the engine's counter (a750f58c).  It
+  replaced Task 14's scan of the components a post reads for an unhooked
+  binding, which was linear in their size per post under a driver.
+  PERF-BASELINE (Task 14b, 2026-10-12, one engine build at a750f58c, the
+  two adapters in otherwise identical copies of the package, best of 3,
+  two interleaved rounds): a chain of 4,000 variables `{X(i+1) = X(i) +
+  1}` posted through `q_eq`, then one bound per variable through `q_ge`,
+  bare (`defer` False) and as a driver leaves the trail at a goal (`defer`
+  True):
+
+  | | chain posts bare | chain posts driver | bound posts bare | bound posts driver |
+  |---|---|---|---|---|
+  | scan (rebased Task 14) | 0.20 s, 0.18 s | 1.24 s, 1.13 s | 0.057 s, 0.053 s | 1.97 s, 1.96 s |
+  | counter (R28c) | 0.20 s, 0.17 s | 0.17 s, 0.18 s | 0.051 s, 0.052 s | 0.052 s, 0.053 s |
+
+  Under a driver the bound posts are 38x faster and now cost what they
+  cost bare; the chain posts about 6.5x.
 - A constrained variable bound to an older PlainVar (a variable that
   cannot carry attributes) raises `system_error(plain_variable)` from the
   hook, before any trailed change; 1.3.3's `put_atts` cannot meet such a

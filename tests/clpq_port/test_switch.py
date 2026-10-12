@@ -267,17 +267,24 @@ def _store():
 
 
 @pytest.mark.parametrize("driver", [False, True])
-def test_a_comparison_from_clpfd_inside_a_hook_is_queued(driver):
-    # Ruling R28: a hook body (Z's, first in the unification) posts
+def test_a_comparison_from_clpfd_inside_a_hook_is_queued(driver, monkeypatch):
+    # Ruling R28c: a hook body (Z's, first in the unification) posts
     # {Q =< 1} through q_le while X is bound with its CLPQ_KEY hook still
     # to come.  In place it read rows holding X and left Q unbound with
     # sup 1 (DEVIATIONS.md D3, ruling R27); queued, it runs after X's hook
-    # bound Q = 1.
+    # bound Q = 1, at a goal (trail.hooks_running == 0).
     t, x, q, w = _store()
     seen = {}
+    posted_at = []
+    post_now = h._post_now
+
+    def recording_post_now(node_class, left, right, trail):
+        posted_at.append(trail.hooks_running)
+        return post_now(node_class, left, right, trail)
+    monkeypatch.setattr(h, "_post_now", recording_post_now)
 
     def body(trail):
-        seen["window"] = h._reads_unhooked_bindings(q)
+        seen["hooks_running"] = trail.hooks_running
         before = trail.pending
         ok = h.q_le(q, 1, trail)
         seen["queued"] = trail.pending is not before
@@ -290,19 +297,48 @@ def test_a_comparison_from_clpfd_inside_a_hook_is_queued(driver):
     if driver:
         assert [None for _ in drain(t)][:1] == [None]
         t.defer = False
-    assert seen == {"window": True, "queued": True}
+    assert seen == {"hooks_running": 1, "queued": True}
+    assert posted_at == [0]
     assert deref(q) == 1
     low = Var()
     assert h.inf(w, low, t) and deref(low) == Fraction(3, 2)
 
 
+@pytest.mark.parametrize("driver", [False, True])
+def test_a_comparison_from_clpfd_inside_a_hook_is_queued_on_any_store(driver):
+    # Ruling R28c: the trigger is the engine's counter, not the store the
+    # post reads.  Inside a hook a post is queued even when the component
+    # it reads holds no binding of this unification (V is in a store of
+    # its own); it runs at the goal boundary after the hooks.
+    t = Trail()
+    v = Var()
+    assert h.q_ge(v, 0, t)
+    seen = {}
+
+    def body(trail):
+        before = trail.pending
+        ok = h.q_le(v, 4, trail)
+        seen["queued"] = trail.pending is not before
+        return ok
+    z = Var()
+    put_attr(z, _PROBE_KEY, body, t)
+    if driver:
+        t.defer = True
+    assert unify(z, 1, t)
+    if driver:
+        assert [None for _ in drain(t)][:1] == [None]
+        t.defer = False
+    assert seen == {"queued": True}
+    high = Var()
+    assert h.sup(v, high, t) and deref(high) == 4
+
+
 def test_a_comparison_from_clpfd_at_a_goal_is_posted_in_place():
-    # Under a driver trail.defer is True at every goal.  A compiled
-    # comparison is not followed by a goal boundary, so a queued post would
-    # be missed by the next goal: the post is made in place when no
-    # component it reads holds an unhooked binding.
+    # Under a driver trail.defer is True at every goal; hooks_running is 0
+    # there, so the post is made in place and the next goal reads it.
     t, x, q, w = _store()
     t.defer = True
+    assert t.hooks_running == 0
     assert h.q_le(q, 1, t)
     assert t.pending is None
     high = Var()
@@ -313,17 +349,19 @@ def test_a_comparison_from_clpfd_at_a_goal_is_posted_in_place():
 
 
 @pytest.mark.parametrize("seed", range(100))
-def test_no_component_holds_an_unhooked_binding_at_a_goal(seed):
-    # The window check never fires between goals, so a post from clpfd at a
-    # goal is made in place: random posts, implied bindings and unifications
-    # (16,000 checks over 400 seeds gave none).
+def test_a_post_from_clpfd_at_a_goal_is_never_queued(seed):
+    # Between goals (bare or under a driver) hooks_running is 0, so a post
+    # from clpfd is made in place: random posts, implied bindings and
+    # unifications, none of which leaves a post on the queue.
     import random
     rng = random.Random(seed)
     t = Trail()
+    t.defer = rng.random() < 0.5
     variables = [Var() for _ in range(5)]
     for _ in range(8):
         kind = rng.random()
         a, b = rng.sample(variables, 2)
+        before = t.pending
         if kind < 0.3:
             h.q_eq(Add(left=Mult(left=rng.randint(-2, 2), right=a), right=b),
                    rng.randint(-3, 3), t)
@@ -331,11 +369,17 @@ def test_no_component_holds_an_unhooked_binding_at_a_goal(seed):
             h.q_le(Sub(left=a, right=b), rng.randint(-3, 3), t)
         elif kind < 0.8:
             h.q_ge(a, rng.randint(-3, 3), t)
-        elif kind < 0.9:
-            unify(a, b, t)
         else:
-            unify(a, rng.randint(-3, 3), t)
-        assert not any(h._reads_unhooked_bindings(v) for v in variables)
+            if kind < 0.9:
+                unify(a, b, t)
+            else:
+                unify(a, rng.randint(-3, 3), t)
+            if t.defer:
+                for _ in drain(t):
+                    break
+            before = t.pending
+        assert t.hooks_running == 0
+        assert t.pending is before
 
 
 def test_sync_fd_bounds_inside_a_hook_is_queued():
@@ -528,8 +572,6 @@ def test_the_cli_answers_as_the_oracle(goal, variables):
 _FROZEN = "frozen(X, Y) <- (freeze(X, Y is 1), X == 3, var(Y))\n"
 
 
-@pytest.mark.xfail(strict=True,
-                   reason="engine: no pending boundary after inline goals (R29)")
 def test_a_goal_woken_by_an_inline_comparison_runs_before_the_next_goal(
         tmp_path):
     # Not CLP(Q): freeze/2 under either solver.  Scryer runs a woken goal

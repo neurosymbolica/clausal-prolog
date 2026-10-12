@@ -72,8 +72,8 @@ def test_the_goal_after_a_disjunction_sees_each_branch(blocks):
 
 def test_compiled_comparisons_post_before_the_next_goal(blocks):
     # `X <= 10` in a seam clause is clpfd's fd_le, which dispatches to q_le
-    # with trail.defer set and no goal boundary after it (ruling R28's
-    # adapter rule): inf/2 must see it.
+    # at a goal (trail.defer set, trail.hooks_running 0), so the adapter
+    # posts it in place (ruling R28c): inf/2 must see it.
     x, lo, hi = Var(), Var(), Var()
     assert [(walk(lo), walk(hi)) for _ in call("bounded", x, lo, hi,
                                                module=blocks)] == [(3, 10)]
@@ -82,17 +82,14 @@ def test_compiled_comparisons_post_before_the_next_goal(blocks):
 # ---------------------------------------------------------------- R29
 #
 # Fable's integration review (HIGH-1): a comparison compiled inline in a
-# seam clause (`X <= 2`, clpfd's fd_le) is not followed by a goal boundary,
-# so the delayed goal {X*Y == 4} that X = 2 wakes runs only at the next
-# boundary, after the goals between have read Y.  The fix is the engine's
-# (ruling R29: a pending drain after every inline goal that can bind or
-# wake); until it lands these are strict xfails.  The expected answers are
-# Scryer's on the {} form (test_switch.py,
+# seam clause (`X <= 2`, clpfd's fd_le) was not followed by a goal
+# boundary, so the delayed goal {X*Y == 4} that X = 2 wakes ran only at
+# the next boundary, after the goals between had read Y.  The engine now
+# runs woken goals after every inline comparison that can bind (ruling
+# R29, a750f58c; docs/coroutining.md "Inside a hook or at a goal").  The
+# expected answers are Scryer's on the {} form (test_switch.py,
 # test_the_inline_goal_cases_answer_as_the_oracle), which the block-form
-# controls below give today.
-
-_R29 = pytest.mark.xfail(
-    strict=True, reason="engine: no pending boundary after inline goals (R29)")
+# controls below also give.
 
 _WOKEN = """\
 var_y(X, Y) <- ({X*Y == 4}, X <= 2, X >= 2, var(Y))
@@ -123,37 +120,30 @@ def _answers(module, name, arity):
             for _ in call(name, *variables, module=module)]
 
 
-@_R29
 def test_var_after_inline_comparisons_fails(woken):
     assert _answers(woken, "var_y", 2) == []
 
 
-@_R29
 def test_nonvar_after_inline_comparisons_sees_the_binding(woken):
     assert _answers(woken, "nonvar_y", 2) == [(2, 2)]
 
 
-@_R29
 def test_findall_after_inline_comparisons_sees_the_binding(woken):
     assert [answer[2] for answer in _answers(woken, "found_y", 3)] == [[2]]
 
 
-@_R29
 def test_inf_after_inline_comparisons_sees_the_binding(woken):
     assert [answer[2] for answer in _answers(woken, "inf_y", 3)] == [2]
 
 
-@_R29
 def test_entailed_after_inline_comparisons_sees_the_binding(woken):
     assert _answers(woken, "entailed_y", 2) == [(2, 2)]
 
 
-@_R29
 def test_bb_inf_after_inline_comparisons_sees_the_binding(woken):
     assert [answer[2] for answer in _answers(woken, "bb_inf_y", 3)] == [2]
 
 
-@_R29
 def test_dump_q_after_inline_comparisons_sees_the_binding(woken):
     # Y is bound, so dump_q([Y], C) has nothing to project: C = [].
     # Scryer's dump/3 raises uninstantiation_error for a bound target, but
@@ -163,7 +153,6 @@ def test_dump_q_after_inline_comparisons_sees_the_binding(woken):
     assert _answers(woken, "dump_y", 3) == [(2, 2, [])]
 
 
-@_R29
 def test_var_after_an_inline_equation_fails(woken):
     assert _answers(woken, "equal_var_y", 2) == []
 
