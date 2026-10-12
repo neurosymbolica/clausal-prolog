@@ -187,32 +187,52 @@ member lists the solver walks.  What the port guarantees (ruling R21):
   (`_stand_in_for_bound_members`).
 - Before each Later goal runs, outside a driver or in it, `catch_up` does
   the same for the components of the variables the goal holds (and those
-  they reach).  A Later goal reaches the store only through those
-  variables: a constraint it posts dereferences them, a binding it makes
-  runs that variable's hook, which catches up its own components.
+  they reach).
+- Every entry point of the port that reads the store runs `catch_up` on
+  the variables it was given first, then the Later work that produced:
+  nf.pl's `{}/1` comparisons (so `post_constraint`,
+  `post_constraint_with_choices`, `resume_constraint`, `entailed/1`),
+  `wait_linear/3` (so `inf`, `sup`, `minimize`, `maximize`), and
+  `attribute_goal` when given a trail.  The normal form is taken again
+  when the catch-up bound anything, so it reads the values.  This covers
+  a goal another key's hook runs in place in the middle of a unification
+  (a `freeze/2` goal outside a driver).  Task 13 must do the same in
+  `bb_inf`, and Task 12 in `dump/3`.
+- A solver step reaches no other part of the store: a constraint
+  dereferences its variables, and a binding runs that variable's hook,
+  which catches up its own components.
 - An unhooked W whose work was done this way is no longer a member; when
   its own hook comes it finds that and returns at once.
+- Components are scanned once each: X's and Y's are one component when
+  the binding is inside it (`test_a_binding_within_one_component_makes_one_stand_in`).
 
-So no solver code of this module reads a row or member list that holds an
-unhooked binding.  Not covered: code that other keys' hooks run in place
-in the same unification (a `freeze/2` goal outside a driver that posts a
-constraint) can still meet one.  The checks:
+So no code of the port reads a row or member list that holds an unhooked
+binding.  The checks:
 `test_one_unification_binding_two_constrained_variables`,
-`test_a_later_goal_reads_no_unhooked_binding` (and `_the_other_way`), and
+`test_a_later_goal_reads_no_unhooked_binding` (and `_the_other_way`),
+`test_a_frozen_goal_reads_no_unhooked_binding` (Z frozen and bound before
+X, bare, one at a time and under a driver: a post that must fail, one that
+must hold, `W = Q + X`, and `inf(Q)` read in the goal), and
 `test_one_unification_bare_one_at_a_time_and_under_a_driver_agree`: 2,000
 random stores of two components joined by a delayed goal, two or three
 members bound in one unification, bare, one at a time and under a driver,
 with 0 disagreements (20,000 seeds with `CLPQ_PORT_PROPERTY_SEEDS=20000`
-also gave 0; before the fix, 50 of 2,000 disagreed).  The cost: each Later
-goal scans the member lists of its variables' components.  Scryer's clpq
-fails `{X + Y = 3}, f(X, Y) = f(1, 2)`; the port answers it.
+also gave 0; before the fix, 50 of 2,000 disagreed).
+
+The cost: every entry and every Later goal scans the member lists of the
+components it reaches.  Posting a chain `{X(i+1) = X(i)}` into one
+component becomes quadratic: 2,500 / 5,000 / 10,000 posts took 0.24 /
+0.88 / 3.49 s with the entry catch-up and 0.07 / 0.09 / 0.20 s without it
+(measured 2026-10-12).  Scryer's clpq fails `{X + Y = 3}, f(X, Y) = f(1, 2)`;
+the port answers it.
 
 Proposed engine alternative (needs the operator): when `trail.defer` is
 false, a bare `unify` runs `trail.pending` to its first answer after
 `fire_wakeups`, so Later goals always run after every hook of the
-unification.  The hook would then always push its Later work, and
-`DRAINING` and `catch_up` would go; the stand-ins for X's and Y's
-components would stay.
+unification, and `freeze/2` and the other keys' hooks always queue their
+goals there too.  Then no goal runs inside the window: the hook would
+always push its Later work, `DRAINING` and every `catch_up` (and their
+cost) would go, and the stand-ins for X's and Y's components would stay.
 
 Implied bindings are queued, not nested.  bv.pl's `export_binding/1` binds
 each `X = Value` at once, and in 1.3.3 each binding runs X's

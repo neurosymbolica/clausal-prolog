@@ -232,6 +232,19 @@ def catch_up(work, trail, later):
     return bind_queued(bindings, trail, later)
 
 
+def catch_up_entry(term, trail):
+    """catch_up at an entry point of the port that reads the store (nf.pl's
+    {}/1 comparisons, wait_linear for inf/sup/minimize/maximize,
+    attribute_goal), then the Later work it produced.  A goal another
+    key's hook runs in place in the middle of a unification can reach these
+    while a variable bound by that unification has not been hooked yet
+    (test_a_frozen_goal_reads_no_unhooked_binding)."""
+    later = LaterWork()
+    if not catch_up(term, trail, later):
+        return False
+    return run_later(later, trail)
+
+
 def _component_of(value):
     """The component of *value*, dereferenced, or None."""
     if type(value) is not AttVar or not is_var(value):
@@ -331,10 +344,13 @@ def _stand_in_for_bound_members(components, state, trail):
     bound member carries it: X is not a member any more, because the work
     of the hook of another variable bound in the same unification, or a
     catch_up, has done X's work already."""
-    components = list(components)
+    unique = []
     seen = set()
     for component in components:
-        seen.add(id(component))
+        if id(component) not in seen:
+            seen.add(id(component))
+            unique.append(component)
+    components = unique
     bound = []
     found = state is None
     i = 0
@@ -623,10 +639,13 @@ def _difference_form(variable, value, trail):
 
 # ---------------------------------------------------------------- answers
 
-def attribute_goal(variable, context="toplevel"):
+def attribute_goal(variable, context="toplevel", trail=None):
     """itf3.pl, attribute_goal/2: the residual goal of *variable*, `true`
     for none, or None where it fails.  presentation_context/2 is the
-    parameter *context* (DEVIATIONS.md D14)."""
+    parameter *context* (DEVIATIONS.md D14).  With a *trail*, catch_up runs
+    first (DEVIATIONS.md D3)."""
+    if trail is not None and not catch_up_entry([variable], trail):
+        return None
     linear = dump_linear(variable, context)
     if linear is None:
         return None

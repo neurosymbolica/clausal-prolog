@@ -713,3 +713,81 @@ def test_one_unification_bare_one_at_a_time_and_under_a_driver_agree():
         if outcomes and not (outcomes[0] == outcomes[1] == outcomes[2]):
             disagreements.append((seed, outcomes))
     assert disagreements == []
+
+
+# ---------------------------------------------------------------- fix round 2
+
+def _frozen_case(make_goal, mode):
+    """{X + Q = 3}, freeze(Z, Goal), then f(Z, X) = f(1, 2): the engine
+    binds Z and X, then runs Z's freeze hook (Goal, in place outside a
+    driver) before X's CLPQ_KEY hook."""
+    from clausal.logic.coroutining import _freeze_var
+    trail = Trail()
+    x, q, z, w = Var(), Var(), Var(), Var()
+    assert _post(trail, ("=", ("+", x, q), 3))
+    seen = []
+    _freeze_var(z, make_goal(x, q, w, trail, seen), trail)
+    if mode == "bare":
+        ok = unify(("f", z, x), ("f", 1, 2), trail)
+    elif mode == "one at a time":
+        ok = unify(x, 2, trail) and unify(z, 1, trail)
+    else:
+        trail.defer = True
+        try:
+            ok = unify(("f", z, x), ("f", 1, 2), trail) and run_first(trail)
+        finally:
+            trail.defer = False
+    if not ok:
+        return False, None
+    return True, (_inf(q, trail), _sup(q, trail), _inf(w, trail),
+                  _sup(w, trail), seen)
+
+
+def _posting(constraint_of):
+    def make(x, q, w, trail, seen):
+        def goal():
+            if nf.post_constraint(constraint_of(x, q, w), trail):
+                yield None
+        return goal
+    return make
+
+
+def _reading(x, q, w, trail, seen):
+    def goal():
+        seen.append(_inf(q, trail))
+        yield None
+    return goal
+
+
+@pytest.mark.parametrize("mode", ["bare", "one at a time", "driver"])
+def test_a_frozen_goal_reads_no_unhooked_binding(mode):
+    assert _frozen_case(_posting(lambda x, q, w: (">=", q, 5)), mode) \
+        == (False, None)
+    assert _frozen_case(_posting(lambda x, q, w: ("=<", q, 1)), mode) \
+        == (True, (1, 1, None, None, []))
+    assert _frozen_case(_posting(lambda x, q, w: ("=", w, ("+", q, x))),
+                        mode) == (True, (1, 1, 3, 3, []))
+    assert _frozen_case(_reading, mode) == (True, (1, 1, None, None, [1]))
+
+
+def test_a_binding_within_one_component_makes_one_stand_in():
+    # {X + Y = 3}, X = Y: X's and Y's component is the same one; it is
+    # scanned once and X gets one stand-in.
+    made = []
+    original = hooks._stand_in_for_bound_members
+
+    def spy(components, state, trail):
+        result = original(components, state, trail)
+        if result:
+            made.append([member for _, _, member in result])
+        return result
+    hooks._stand_in_for_bound_members = spy
+    try:
+        trail = Trail()
+        x, y = Var(), Var()
+        assert _post(trail, ("=", ("+", x, y), 3))
+        assert unify(x, y, trail)
+    finally:
+        hooks._stand_in_for_bound_members = original
+    assert len(made) == 1 and len(made[0]) == 1
+    assert _inf(x, trail) == Fraction(3, 2) and _sup(y, trail) == Fraction(3, 2)

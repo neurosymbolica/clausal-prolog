@@ -250,29 +250,47 @@ def _post_comparison(functor, arguments, goal, trail):
     if len(arguments) == 2:
         left, right = arguments
         if functor == "<":
-            norm = _difference(left, right)
+            norm = _difference(left, right, trail)
             return norm is not None and submit_less_than(norm, trail)
         if functor == ">":
-            norm = _difference(right, left)
+            norm = _difference(right, left, trail)
             return norm is not None and submit_less_than(norm, trail)
         if functor == "=<" or functor == "<=":
-            norm = _difference(left, right)
+            norm = _difference(left, right, trail)
             return norm is not None and submit_less_or_equal(norm, trail)
         if functor == ">=":
-            norm = _difference(right, left)
+            norm = _difference(right, left, trail)
             return norm is not None and submit_less_or_equal(norm, trail)
         if functor == "=\\=":
-            norm = _difference(left, right)
+            norm = _difference(left, right, trail)
             return norm is not None and submit_not_equal(norm, trail)
         if functor == "=:=" or functor == "=":
-            norm = _difference(left, right)
+            norm = _difference(left, right, trail)
             return norm is not None and submit_equal(norm, trail)
     raise LogicException(type_error("constraint", goal, "{}/1"))   # clause 13
 
 
-def _difference(left, right):
-    """normal_form(L-R, Nf)."""
-    return normal_form(("-", left, right))
+def _difference(left, right, trail):
+    """normal_form(L-R, Nf); None where it fails.  Before the store is read
+    for it, catch_up (DEVIATIONS.md D3)."""
+    return _normal_form_caught_up(("-", left, right), trail)
+
+
+def _normal_form_caught_up(term, trail):
+    """normal_form(Term, Nf), then attribute_hooks.catch_up_entry on its
+    variables.  Where that binds anything, Nf is taken again, so it reads
+    the values (test_a_frozen_goal_reads_no_unhooked_binding)."""
+    from clausal.logic.clpq.attribute_hooks import (   # cyclic: itf3.pl
+        catch_up_entry)
+    norm = normal_form(term)
+    if norm is None:
+        return None
+    length = len(trail)
+    if not catch_up_entry(norm, trail):
+        return None
+    if len(trail) != length:
+        norm = normal_form(term)
+    return norm
 
 
 #
@@ -608,7 +626,7 @@ def wait_linear(term, procedure, argument, trail):
     normal form Nf of *term* is linear.  1.3.3's `Var` is the Nf the goal
     receives; the delayed goal keeps a variable of its own for it
     (WaitLinearRetry.result), which translate_goal shows."""
-    norm = normal_form(term)
+    norm = _normal_form_caught_up(term, trail)
     if norm is None:
         return False
     if linear(norm):
