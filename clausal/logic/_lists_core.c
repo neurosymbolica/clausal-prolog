@@ -212,6 +212,64 @@ py_member_find(PyObject *Py_UNUSED(module), PyObject *args)
 
 
 /* ================================================================
+ * prefix_unify  —  append/3 with L1 and L3 known
+ * ================================================================ */
+
+/*
+ * prefix_unify(l1_items, l3_items, trail) → True | False
+ *
+ * Unifies l1_items[i] with l3_items[i] for every i < len(l1_items) (the
+ * prologue clause ``append([H|T], L, [H|R])``).  False when l3_items is
+ * shorter.  An element that IS its partner unifies with no binding, so it
+ * is passed over without a call: a ground prefix of shared atoms and small
+ * ints costs one pointer compare an element.  Bindings made are left
+ * active on True AND on False; the caller holds the mark and undoes it.
+ * Twin: the Python fallback in ``lists._append__3``.
+ */
+static PyObject *
+py_prefix_unify(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *l1, *l3, *trail_obj;
+
+    if (!PyArg_ParseTuple(args, "OOO", &l1, &l3, &trail_obj))
+        return NULL;
+
+    if (!PyList_Check(l1) || !PyList_Check(l3)) {
+        PyErr_SetString(PyExc_TypeError, "items must be lists");
+        return NULL;
+    }
+    if (!Trail_Check(trail_obj)) {
+        PyErr_SetString(PyExc_TypeError, "trail argument must be a Trail");
+        return NULL;
+    }
+    TrailObject *trail = Trail_CAST(trail_obj);
+    Py_ssize_t n = PyList_GET_SIZE(l1);
+    if (PyList_GET_SIZE(l3) < n)
+        Py_RETURN_FALSE;
+
+    for (Py_ssize_t i = 0; i < n; i++) {
+        /* Re-read the sizes: a unify hook runs Python code. */
+        if (i >= PyList_GET_SIZE(l1) || i >= PyList_GET_SIZE(l3)) {
+            PyErr_SetString(PyExc_RuntimeError, "list changed size during append/3");
+            return NULL;
+        }
+        PyObject *a = PyList_GET_ITEM(l1, i);
+        PyObject *b = PyList_GET_ITEM(l3, i);
+        if (a == b)
+            continue;
+        Py_INCREF(a);
+        Py_INCREF(b);
+        int ok = call_unify(a, b, trail);
+        Py_DECREF(a);
+        Py_DECREF(b);
+        if (ok < 0) return NULL;
+        if (!ok) Py_RETURN_FALSE;
+    }
+    Py_RETURN_TRUE;
+}
+
+
+/* ================================================================
  * memberchk_find  —  inner loop for in_check/2 (memberchk)
  * ================================================================ */
 
@@ -558,6 +616,11 @@ static PyMethodDef module_methods[] = {
      "member_find(items, start, elem, trail) -> (next_start, mark) or None\n"
      "\n"
      "Inner loop for in_/2 (member).  Finds next element that unifies."},
+    {"prefix_unify", py_prefix_unify, METH_VARARGS,
+     "prefix_unify(l1_items, l3_items, trail) -> True or False\n"
+     "\n"
+     "append/3 with L1 and L3 known: unify L1's elements with L3's prefix.\n"
+     "Bindings stay on either answer; the caller undoes its mark."},
     {"memberchk_find", py_memberchk_find, METH_VARARGS,
      "memberchk_find(items, elem, trail) -> True or False\n"
      "\n"

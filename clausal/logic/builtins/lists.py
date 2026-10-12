@@ -47,6 +47,11 @@ except ImportError:
     _c_permutation_find = None
     _c_nth0_find = None
 
+try:    # on its own: a .so built before it keeps the helpers above
+    from clausal.logic._lists_core import prefix_unify as _c_prefix_unify
+except ImportError:
+    _c_prefix_unify = None
+
 
 # ── String-as-list helpers ───────────────────────────────────────────────────
 
@@ -430,12 +435,16 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
         # rest.  Python's ``==`` here made ``append([X], R, [a, b])`` fail
         # (an unbound X is not ``==`` to a) and ``append([1], R, [true])``
         # succeed (true is the bool True, and ``1 == True``).
+        # The C twin passes over an element that IS its partner, so a
+        # ground prefix costs a pointer compare an element, as ``==`` did.
         n = len(l1_items)
         if len(l3_items) >= n:
             mark = trail.mark()
-            if (unify(l1_items, l3_items[:n], trail)
-                    and unify(l2, _seq_result(l3_items[n:], _out_str, _out_bytes),
-                              trail)):
+            if _c_prefix_unify is not None:
+                ok = _c_prefix_unify(l1_items, l3_items, trail)
+            else:
+                ok = unify(l1_items, l3_items[:n], trail)
+            if ok and unify(l2, _seq_result(l3_items[n:], _out_str, _out_bytes), trail):
                 yield (_proceed, None)
             trail.undo(mark)
     elif l3_items is not None:

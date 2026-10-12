@@ -75,6 +75,17 @@ def mod(request, tmp_path_factory):
     return load_clausal_module(p)
 
 
+@pytest.fixture(params=["c", "py"])
+def twin(request, monkeypatch):
+    """Run append/3 through the C prefix helper and through its Python twin."""
+    from clausal.logic.builtins import lists
+    if request.param == "py":
+        monkeypatch.setattr(lists, "_c_prefix_unify", None)
+    elif lists._c_prefix_unify is None:
+        pytest.skip("the C helper is not built")
+    return request.param
+
+
 def _plain(v):
     """An answer as plain Python data: a text or a list view is its list of
     chars / elements, so every front end's answer compares alike."""
@@ -107,7 +118,7 @@ def _answers(mod, name, arity):
     ("t12", 2, [("a", ["b", "c"])]),
     ("t13", 2, [("a", ["b"])]),
 ])
-def test_append_unifies_the_prefix(mod, name, arity, expected):
+def test_append_unifies_the_prefix(mod, twin, name, arity, expected):
     assert _answers(mod, name, arity) == expected
 
 
@@ -119,7 +130,7 @@ def test_group_by_keys_are_equal_by_identity(mod):
     assert _answers(mod, "g1", 1) == [([[1], [True], [1.0], [1, 1]],)]
 
 
-def test_append_on_a_list_view_binds_through_it():
+def test_append_on_a_list_view_binds_through_it(twin):
     """L3 a long list VIEW (the rest of a list after a head match) answers
     like the list it stands for, and the bindings go when the call is done."""
     from clausal.terms import SegListView
@@ -136,3 +147,28 @@ def test_append_on_a_list_view_binds_through_it():
                          _plain(deref(r))))
     assert seen == [(True, 7, list(range(3, 101)))]
     assert all(is_var(deref(v)) for v in (x, r, *base[:3]))
+
+
+def test_a_failed_prefix_leaves_no_binding(twin):
+    """``append([X, X], R, [a, b, c])`` binds X to a, then fails at b: the
+    binding is undone before append/3 fails."""
+    from clausal.logic.builtins.lists import _append__3
+    from clausal.logic.variables import Trail, deref, is_var
+    x, r = Var(), Var()
+    trail = Trail()
+    sigs = [sig for sig, _ in _append__3(None, "ok", "no", None,
+                                         [x, x], r, ["a", "b", "c"], trail)]
+    assert sigs == ["no"]
+    assert is_var(deref(x)) and is_var(deref(r))
+
+
+def test_a_ground_prefix_answers_once(twin):
+    """The common case: L1 ground and shared with L3's prefix."""
+    from clausal.logic.builtins.lists import _append__3
+    from clausal.logic.variables import Trail, deref
+    r = Var()
+    trail = Trail()
+    got = [list(deref(r)) for sig, _ in _append__3(
+        None, "ok", "no", None, ["a", "b"], r, ["a", "b", "c", 1], trail)
+        if sig == "ok"]
+    assert got == [["c", 1]]
