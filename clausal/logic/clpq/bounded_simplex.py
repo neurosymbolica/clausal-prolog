@@ -846,10 +846,14 @@ def strictly_satisfiable(component, trail):
     (test_a_binding_that_leaves_strict_constraints_unsatisfiable_fails,
     test_a_binding_is_accepted_exactly_when_z3_finds_it_satisfiable).
 
-    The store without strictness is satisfiable here: the pass keeps the
-    values within the bounds.  A strict bound holds somewhere in that
-    store when its variable is inside it now, or when a small step takes
-    it inside: a nonbasic variable at a strict active bound can step
+    The store without strictness is satisfiable here.  The pass leaves
+    the row of every bounded basis variable holding only nonbasic
+    variables at an active bound, and every basis value within its
+    bounds, so a nonbasic variable without an active bound (an implicit
+    0, which can be outside its bounds) is only in unbounded rows
+    (test_the_check_runs_where_its_invariant_holds).  A strict bound
+    holds somewhere in that store when its variable is inside it now, or
+    when a small step takes it inside: a nonbasic variable at a strict active bound can step
     inside unless the row of a basis variable at one of its bounds would
     step out with it.  Otherwise its sup (or inf) over the store must be
     beyond the bound.  If each strict bound holds somewhere, all hold at
@@ -921,7 +925,16 @@ def _decreases_below(form, factor, limit, trail):
     """Whether *factor* times *form* takes a value below *limit* in the
     store, strictness ignored: iterate_decrease on it, as infimum_linear
     sets it up, stopped as soon as the value is below *limit* or the
-    decrease is unlimited.  The store is left as it was."""
+    decrease is unlimited.  The store is left as it was.
+
+    A failed determine_active_decrease (a free variable in the row) or
+    decrease_step (a term without an active bound) counts as "not below",
+    and the binding is refused.  Neither can happen: *form* is a bounded
+    basis variable's row, which holds only nonbasic variables at an
+    active bound, or a nonbasic variable at an active bound itself
+    (test_the_check_runs_where_its_invariant_holds).  If the invariant
+    ever broke, a refused binding is a visible missing answer, where
+    an accepted one could hide an unsatisfiable store."""
     mark = trail.mark()
     objective = multiply_linear_factor(form, factor)
     dependent = Var()

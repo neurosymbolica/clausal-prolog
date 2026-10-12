@@ -793,24 +793,41 @@ z3 says unsatisfiable; `{X4 =< -1}` fails on both.
 The port keeps 1.3.3's pass unchanged.  When that pass has changed the
 store (the trail grew), `strictly_satisfiable` (bounded_simplex.py) checks
 that every strict bound in the component can still hold.  The store
-without strictness is satisfiable there, because the pass keeps values
-within their bounds.  A strict bound can hold when its variable is inside
-it now.  A nonbasic variable at a strict active bound can also take a
-small step inside, unless a basis variable at one of its bounds has it in
-its row with the sign that pushes the basis variable out.  Each remaining
-variable is checked with `iterate_decrease` on it (as `infimum_linear`
-sets that up, under a mark and undo).  These are the basis variables at a
-strict bound and the blocked nonbasic ones.  The walk stops at the first
-value past the bound, and the binding fails when it cannot reach one.  If
-each strict bound holds at some point of the store, all of them hold at
-once at the average of those points, because the store is convex
+without strictness is satisfiable there.  The reason is not that every
+variable is within its bounds: a nonbasic variable without an active
+bound has the implicit value 0, which can be outside them.  The reason
+is an invariant of the pass.  The row of every bounded basis variable
+holds only nonbasic variables at an active bound, and every basis value
+is within its bounds.  So a nonbasic variable without an active bound is
+only in rows of unbounded variables, and the point with it anywhere
+inside its own interval satisfies the store without strictness.  The
+Task 13b review argued the invariant from bv.pl's pivots and measured 0
+violations over about 2,900 calls of the check.
+`test_the_check_runs_where_its_invariant_holds` asserts it at every call
+of the check over the fuzz.  The same assertion, run mid-pass at the
+start of each culprit's handling, reports violations at 1,409 of 1,858
+entries, so it can fail.
+
+A strict bound can hold when its variable is inside it now.  A nonbasic
+variable at a strict active bound can also take a small step inside,
+unless a basis variable at one of its bounds has it in its row with the
+sign that pushes the basis variable out.  Each remaining variable is
+checked with `iterate_decrease` on it (as `infimum_linear` sets that up,
+under a mark and undo).  These are the basis variables at a strict bound
+and the blocked nonbasic ones.  The walk stops at the first value past
+the bound, and the binding fails when it cannot reach one.  If each
+strict bound holds at some point of the store, all of them hold at once
+at the average of those points, because the store is convex
 (`test_a_binding_that_leaves_strict_constraints_unsatisfiable_fails`, and
 a z3 fuzz, `test_a_binding_is_accepted_exactly_when_z3_finds_it_satisfiable`,
 bare and under a driver).  Each part of the check is needed: removing
 the basis-variable candidates, the nonbasic ones, or either sign of
-blocking makes those tests fail.  This is a correctness divergence,
-ruled by the operator (2026-10-12), with the same precedent as D17 and
-D18.
+blocking makes those tests fail.  A failed `determine_active_decrease` or
+`decrease_step` in the walk refuses the binding.  The invariant makes
+both unreachable, and a refusal shows as a missing answer where an
+acceptance could hide an unsatisfiable store.  This is a correctness
+divergence, ruled by the operator (2026-10-12, R26), with the same
+precedent as D17 and D18.
 
 The operator's first choice was a re-walk of the basis until a pass moves
 nothing.  It was built and does not terminate.  Two variables at strict
@@ -835,16 +852,25 @@ filter and the early stop bring it to:
 | the same, driver | 0.848 s | 0.786 s | +8.0% | 118 |
 | the z3 fuzz, 3,000 seeds, bare (z3 included) | 7.803 s | 7.747 s | +0.7% | 1,118 |
 
-Over the 30,000 fuzz seeds, the first pass ran 36,019 times, the check
-11,050 times (when the pass changed the store), and it walked a variable
-513 times; it refused 73 bindings.
+The fuzz row and the counts below are for the fuzz as first committed
+(35144b69), with single-variable bindings only.  Over its 30,000 seeds,
+the first pass ran 36,019 times, the check ran 11,050 times (when the
+pass changed the store), and it walked a variable 513 times; it refused
+73 bindings.  With 39,782 bindings checked in each mode, there were 73
+disagreements in each mode before D19, every one an unsatisfiable
+binding accepted, and none after it.
 
-The fuzz: 30,000 seeds, 39,782 bindings checked in each mode.  Before D19
-there were 73 disagreements in each mode, all of them an unsatisfiable
-binding accepted; after it there are none.  Woken goals: the only
-unification under the check's mark is class.pl's join of the fresh
-objective variable's component.  No frozen goal can be on that variable,
-and in the fuzz the pending queue had the same length before and after
-each check (Task 8's inf/sup is the same case).
+The fuzz now also has `=` among the store's constraints and an equation
+step `{aX + bY (+ cZ) = K}`, with K at the sum's inf, its sup or a point,
+and it checks every store post against z3 as well.  Over 30,000 seeds,
+227,426 posts and steps are checked in each mode.  With the check
+switched off there are 26 disagreements in each mode, all of them an
+unsatisfiable step accepted: 15 equations, 7 `{X = K}` and 4 `X = K`.
+No store post disagrees.  With the check on there are none.
+
+Woken goals: the only unification under the check's mark is class.pl's
+join of the fresh objective variable's component.  No frozen goal can be
+on that variable, and in the fuzz the pending queue had the same length
+before and after each check (Task 8's inf/sup is the same case).
 
 Not checked against SICStus: MORNING-SICSTUS (7) stays open.

@@ -733,8 +733,8 @@ def test_a_binding_that_leaves_strict_constraints_unsatisfiable_fails():
     # Found by the projection fuzz (seed 30): the store with X4 = -1 is
     # unsatisfiable (X0 - 1/3*X1 < -1 and X0 - X1 >= -1 give X0 < -1,
     # against X0 >= -1).  Scryer's clpq accepts the binding, as 1.3.3 does;
-    # the port re-walks the basis to a fixpoint and fails (DEVIATIONS.md
-    # D19).  {X4 =< -1} fails on both.
+    # the port checks that its strict bounds can still hold, and fails
+    # (DEVIATIONS.md D19).  {X4 =< -1} fails on both.
     store = ("{-1*X0 + -3*X4 + 1*X1 =< 4, -3*X0 =< 3, -3*X3 + 3*X4 < 4,"
              " -1*X0 + -2*X4 + -1*X3 < -2, 3*X0 + -1*X1 + -3*X4 < 0}")
     shown = ["X0", "X1", "X3", "X4"]
