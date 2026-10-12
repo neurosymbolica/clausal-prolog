@@ -80,8 +80,8 @@ def twin(request, monkeypatch):
     """Run append/3 through the C prefix helper and through its Python twin."""
     from clausal.logic.builtins import lists
     if request.param == "py":
-        monkeypatch.setattr(lists, "_c_prefix_unify", None)
-    elif lists._c_prefix_unify is None:
+        monkeypatch.setattr(lists, "_c_prefix_unify", None, raising=False)
+    elif getattr(lists, "_c_prefix_unify", None) is None:
         pytest.skip("the C helper is not built")
     return request.param
 
