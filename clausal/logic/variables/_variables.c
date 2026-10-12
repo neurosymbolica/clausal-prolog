@@ -119,12 +119,18 @@ Var_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     return (PyObject *)self;
 }
 
+/* Var_dealloc and AttVar_dealloc use the trashcan: a binding chain
+ * (v[n] -> v[n-1] -> ... -> v[0]) otherwise recurses once per link when it
+ * is freed and overflows the C stack (SIGSEGV) at a few hundred thousand
+ * links.  See StepGen_dealloc in ../runtime/_trampoline.c (2026-10-12). */
 static void
 Var_dealloc(VarObject *self)
 {
     PyObject_GC_UnTrack(self);
+    Py_TRASHCAN_BEGIN(self, Var_dealloc)
     Py_XDECREF(self->binding);
     Py_TYPE(self)->tp_free((PyObject *)self);
+    Py_TRASHCAN_END
 }
 
 static int
@@ -356,9 +362,11 @@ static void
 AttVar_dealloc(AttVarObject *self)
 {
     PyObject_GC_UnTrack(self);
+    Py_TRASHCAN_BEGIN(self, AttVar_dealloc)
     Py_XDECREF(self->base.binding);
     Py_XDECREF(self->attrs);
     Py_TYPE(self)->tp_free((PyObject *)self);
+    Py_TRASHCAN_END
 }
 
 static int

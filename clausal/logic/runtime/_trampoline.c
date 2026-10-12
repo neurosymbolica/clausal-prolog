@@ -253,10 +253,18 @@ StepGen_init(StepGenObject *self, PyObject *args, PyObject *kwds)
     return 0;
 }
 
+/* The trashcan bounds the C recursion: ``catcher`` (and ``proceed``/``fail``)
+ * link StepGenerators into chains as long as the search is deep, and a
+ * 1M-deep recursion keeps 1M of them alive in a suspended answer.  Without
+ * it, freeing that chain recursed once per link (Py_XDECREF(catcher) ->
+ * StepGen_dealloc -> ...) and overflowed the C stack -- SIGSEGV, usually
+ * inside the cycle collector (2026-10-12).  UnTrack must come first: the
+ * trashcan reuses the GC header to queue a deferred object. */
 static void
 StepGen_dealloc(StepGenObject *self)
 {
     PyObject_GC_UnTrack(self);
+    Py_TRASHCAN_BEGIN(self, StepGen_dealloc)
     Py_XDECREF(self->gen);
     Py_XDECREF(self->proceed);
     Py_XDECREF(self->fail);
@@ -265,6 +273,7 @@ StepGen_dealloc(StepGenObject *self)
     Py_XDECREF(self->drain);
     Py_XDECREF(self->drain_step);
     Py_TYPE(self)->tp_free((PyObject *)self);
+    Py_TRASHCAN_END
 }
 
 static int
