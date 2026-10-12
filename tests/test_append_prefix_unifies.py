@@ -7,6 +7,10 @@ unbound or partly bound element of L1 never matched (the goal FAILED), and
 ``append([1], R, [true, 2])`` succeeded (``1 == True`` in Python).  Every
 expected answer below is Scryer's (library(lists), library(freeze),
 library(dif); double_quotes chars).
+
+The same audit found split_with/3 and group_by/3 comparing elements with
+Python's ``==``: ``true`` split or grouped as 1, and 1 as 1.0.  They now
+compare by ==/2, as group_pairs_by_key/2 does.
 """
 
 from __future__ import annotations
@@ -34,6 +38,9 @@ t10(X, Y, R) :- numlist(0, 100, L), rest(L, T), append([X, Y], R, T).
 t11(R) :- append([1], R, [true, 2]).
 t12(X, R) :- append([[X], R], [a, b, c]).
 t13(X, R) :- append([f(X)], R, [f(a), b]).
+s1(P) :- split_with(1, [a, true, b, 1, c, 1.0], P).
+key(X, X).
+g1(G) :- group_by(key, [1, true, 1.0, 1, 1], G).
 """
 
 SEAM = """\
@@ -52,6 +59,9 @@ t10(X, Y, R) <- (numlist(0, 100, L), rest(L, T), append([X, Y], R, T))
 t11(R) <- append([1], R, [True, 2])
 t12(X, R) <- append([[X], R], ['a', 'b', 'c'])
 t13(X, R) <- append([('f', X)], R, [('f', 'a'), 'b'])
+s1(P) <- split_with(1, ['a', True, 'b', 1, 'c', 1.0], P)
+key(X, X),
+g1(G) <- group_by(key, [1, True, 1.0, 1, 1], G)
 """
 
 
@@ -99,6 +109,14 @@ def _answers(mod, name, arity):
 ])
 def test_append_unifies_the_prefix(mod, name, arity, expected):
     assert _answers(mod, name, arity) == expected
+
+
+def test_split_with_finds_the_separator_by_identity(mod):
+    assert _answers(mod, "s1", 1) == [([["a", True, "b"], ["c", 1.0]],)]
+
+
+def test_group_by_keys_are_equal_by_identity(mod):
+    assert _answers(mod, "g1", 1) == [([[1], [True], [1.0], [1, 1]],)]
 
 
 def test_append_on_a_list_view_binds_through_it():

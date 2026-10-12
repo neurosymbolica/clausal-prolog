@@ -1556,9 +1556,12 @@ def _split_with__3(this_generator, _proceed, _fail, _catcher, sep, lst, parts, t
         was_str = _was_string(lst_val)
         was_bytes = _was_bytes(lst_val)
         # Split mode
+        # The separator is found by ==/2, not Python's ``==``: ``true`` is
+        # not 1 (D35) and 1 is not 1.0 (``==`` made each split at the other).
+        from clausal.logic.builtins.iso_compare import _iso_identical  # noqa: PLC0415
         result: list = [[]]
         for item in items:
-            if deref(item) == sep_val:
+            if _iso_identical(deref(item), sep_val):
                 result.append([])
             else:
                 result[-1].append(deref(item))

@@ -1402,6 +1402,7 @@ def _group_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, groups, t
         return
     was_str = _was_string(lst_val)   # stage 1: str, carrier or ground SegString
     dispatch = _ensure_trampoline_dispatch(goal_val, 2)
+    from clausal.logic.builtins.iso_compare import _iso_identical  # noqa: PLC0415
     outer_mark = trail.mark()
     result: list[list] = []
     prev_key = object()  # sentinel
@@ -1417,7 +1418,9 @@ def _group_by__3(this_generator, _proceed, _fail, _catcher, goal, lst, groups, t
             return
         k = deref(key)
         trail.undo(mark)
-        if k == prev_key and result:
+        # Keys are equal by ==/2, not Python's ``==`` (which made ``true``,
+        # 1 and 1.0 one key), as group_pairs_by_key/2 compares them.
+        if result and _iso_identical(k, prev_key):
             result[-1].append(deref(elem))
         else:
             result.append([deref(elem)])
