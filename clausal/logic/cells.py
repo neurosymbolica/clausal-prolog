@@ -346,6 +346,17 @@ class _Text:
     def __repr__(self):
         return repr(self.flat)
 
+    # A text is immutable: copying it is itself, and pickling it is its str
+    # -- not a rope's nodes (as deep as the text is long) nor a view's base.
+    def __reduce__(self):
+        return (_Text, (self.flat, 0, len(self)))
+
+    def __copy__(self):
+        return self
+
+    def __deepcopy__(self, memo):
+        return self
+
 
 # A slice shorter than this is copied, as before; a longer one is a view.
 # The same number as CHARS_VIEW_MIN in variables/_chars_carrier.h.
@@ -369,8 +380,9 @@ ROPE_LEAF = 64
 def text_concat(a, b):
     """The text ``a + b`` of two texts, each a str or a ``_Text``: a str when
     short, else a rope node sharing both -- never a copy of a long text.  A
-    short piece joins the adjacent short leaf of a node, so building a text
-    one char at a time makes one node per ROPE_LEAF chars."""
+    short piece joins the adjacent short leaf of a node (or of its child on
+    that side), so building a text one char at a time -- at either end, or
+    alternating -- makes one node per ROPE_LEAF chars."""
     la, lb = len(a), len(b)
     if not la:
         return b
@@ -378,12 +390,24 @@ def text_concat(a, b):
         return a
     if la + lb < ROPE_MIN:
         return (a if type(a) is str else a.flat) + (b if type(b) is str else b.flat)
-    if (type(a) is str and type(b) is _Text and b.base is None
-            and type(b.left) is str and la + len(b.left) <= ROPE_LEAF):
-        return _Text._rope(a + b.left, b.right)
-    if (type(b) is str and type(a) is _Text and a.base is None
-            and type(a.right) is str and lb + len(a.right) <= ROPE_LEAF):
-        return _Text._rope(a.left, a.right + b)
+    if type(a) is str and type(b) is _Text and b.base is None:
+        bl = b.left
+        if type(bl) is str:
+            if la + len(bl) <= ROPE_LEAF:
+                return _Text._rope(a + bl, b.right)
+        elif (bl.base is None and type(bl.left) is str
+                and la + len(bl.left) <= ROPE_LEAF):
+            # One level down: a build that alternates prepends and appends
+            # wraps its front leaf in the node of the last append.
+            return _Text._rope(_Text._rope(a + bl.left, bl.right), b.right)
+    if type(b) is str and type(a) is _Text and a.base is None:
+        ar = a.right
+        if type(ar) is str:
+            if lb + len(ar) <= ROPE_LEAF:
+                return _Text._rope(a.left, ar + b)
+        elif (ar.base is None and type(ar.right) is str
+                and lb + len(ar.right) <= ROPE_LEAF):
+            return _Text._rope(a.left, _Text._rope(ar.left, ar.right + b))
     return _Text._rope(a, b)
 
 

@@ -166,7 +166,10 @@ surface described in [docs/public-api.md](docs/public-api.md).
   the front of a rope (`[C|Rest]`) does not flatten it. The first reader that
   needs the whole text builds the str once. Python never sees a rope:
   `Var.value`, `clausal.deref`, `to_python` and the library adapters hand out
-  a `str`. Times are unchanged for short text. Building 100,000 chars with
+  a `str`. A text built at both ends in turn fills its leaves the same way,
+  and a rope pickles or deep-copies as its `str`, not as its tree. Times are
+  unchanged for text under 64 chars; just above 64, `[a|T]` is about 3-5%
+  slower, because that is where the rope starts. Building 100,000 chars with
   `rec(N, [a|T])` went from 3.4 s and 5.05 GB peak memory to 1.2 s and
   299 MB. At 256,000 chars the copying engine ran out of memory; it now takes
   10.6 s and 698 MB. Stripping a prefix with

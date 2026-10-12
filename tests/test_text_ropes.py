@@ -15,7 +15,7 @@ import tracemalloc
 
 import pytest
 
-from clausal.logic.cells import _Text, chars, chars_text, is_chars, text_concat, ROPE_MIN
+from clausal.logic.cells import _Text, chars, chars_text, is_chars, text_concat, ROPE_LEAF, ROPE_MIN
 from clausal.logic.solve import solve
 from clausal.logic.variables import Var, deref
 from clausal.testing import load_clausal_module
@@ -93,6 +93,44 @@ def test_a_deep_rope_is_freed_without_a_crash():
            "del t\nprint('ok')\n")
     r = subprocess.run([sys.executable, "-c", src], capture_output=True, text=True, timeout=300)
     assert r.returncode == 0 and r.stdout.strip() == "ok", r.stderr[-2000:]
+
+
+def _rope_nodes(t):
+    n, stack = 0, [t]
+    while stack:
+        x = stack.pop()
+        if type(x) is _Text and x.base is None:
+            n += 1
+            stack += [x.left, x.right]
+    return n
+
+
+def test_a_build_alternating_both_ends_makes_a_node_per_leaf():
+    """Prepending and appending in turn still fills the short leaves -- the
+    front leaf sits one level down, under the last append's node -- instead
+    of making one node per char."""
+    t, front, back = "x" * 64, [], []
+    for i in range(4000):
+        if i % 2:
+            t = text_concat("p", t); front.append("p")
+        else:
+            t = text_concat(t, str(i % 10)); back.append(str(i % 10))
+    assert _rope_nodes(t) <= 2 * 4064 // ROPE_LEAF + 4   # before a read flattens it
+    assert t[0] == "p" and t.base is None                 # the front reads in place
+    assert t == "".join(front[::-1]) + "x" * 64 + "".join(back)
+
+
+def test_a_text_copies_as_itself_and_pickles_as_its_str():
+    import copy, pickle
+    deep = "z" * 64
+    for _ in range(20_000):                       # deeper than the recursion limit
+        deep = text_concat("a", deep)
+    for t in (deep, _Text("v" * 100_000, 10, 200)):
+        assert copy.copy(t) is t and copy.deepcopy(t) is t
+        back = pickle.loads(pickle.dumps(t))
+        assert back == t and type(back) is _Text
+    # A view pickles its own chars, not the str it is a view of.
+    assert len(pickle.dumps(_Text("v" * 100_000, 10, 200))) < 1000
 
 
 # ── building in the engine ──────────────────────────────────────────────────
