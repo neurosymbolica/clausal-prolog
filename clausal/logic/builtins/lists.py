@@ -425,12 +425,17 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
             yield (_proceed, None)
         trail.undo(mark)
     elif l1_items is not None and l3_items is not None:
-        # L1 and L3 known: compute L2
+        # L1 and L3 known: L1's elements UNIFY with L3's prefix (the
+        # prologue's clause ``append([H|T], L, [H|R])``), then L2 with the
+        # rest.  Python's ``==`` here made ``append([X], R, [a, b])`` fail
+        # (an unbound X is not ``==`` to a) and ``append([1], R, [true])``
+        # succeed (true is the bool True, and ``1 == True``).
         n = len(l1_items)
-        if len(l3_items) >= n and l3_items[:n] == l1_items:
-            remainder = _seq_result(l3_items[n:], _out_str, _out_bytes)
+        if len(l3_items) >= n:
             mark = trail.mark()
-            if unify(l2, remainder, trail):
+            if (unify(l1_items, l3_items[:n], trail)
+                    and unify(l2, _seq_result(l3_items[n:], _out_str, _out_bytes),
+                              trail)):
                 yield (_proceed, None)
             trail.undo(mark)
     elif l3_items is not None:
