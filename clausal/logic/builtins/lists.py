@@ -223,6 +223,33 @@ def _partial(prefix: list, tail):
     return SegList([ConcreteSeg(list(prefix)), VarSeg(tail)])
 
 
+def _cons_onto(prefix: list, tail):
+    """The term ``[*prefix | tail]`` for ANY *tail*, as the prologue's
+    append/3 builds it (``append([], L, L)`` never looks at L): a list, a
+    partial list or a variable through :func:`_partial`, anything else --
+    an atom, a number, a compound, a cons cell -- as the cons cells
+    ``'.'(H, T)`` of an improper list (D50: a str tail must not splice as
+    its chars)."""
+    from clausal.terms import SegList   # noqa: PLC0415
+    tail = deref(tail)
+    if not prefix or is_var(tail) or isinstance(tail, (list, SegList)):
+        return _partial(prefix, tail)
+    for item in reversed(prefix):
+        tail = (".", item, tail)
+    return tail
+
+
+def _cons_heads(val):
+    """The heads of the cons cells ``'.'(H, T)`` that *val* (dereferenced)
+    starts with: ``[a, b|foo]`` gives ``[a, b]``, a term that is not a cons
+    cell gives ``[]``."""
+    heads = []
+    while type(val) is tuple and len(val) == 3 and val[0] == ".":
+        heads.append(val[1])
+        val = deref(val[2])
+    return heads
+
+
 @_trampoline_builtin("in_", 2)
 def _member__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
     """member(Elem, List) — Elem is a member of List; enumerates on backtrack.
@@ -469,35 +496,44 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
                     yield (_proceed, None)
                 trail.undo(mark)
     elif l1_items is not None:
-        # L1 proper, L2 and L3 open: L3 is L1 followed by L2 -- one answer,
-        # ``append([1], L2, L3)`` is ``L3 = [1|L2]``.
-        rest = l2_val if (is_var(l2_val) or _open_skeleton(l2_val) is not None) else None
-        if rest is not None:
-            mark = trail.mark()
-            if unify(l3, _partial(list(l1_items), rest), trail):
-                yield (_proceed, None)
-            trail.undo(mark)
+        # L1 proper, L3 not a proper list: L3 is L1 followed by L2 -- one
+        # answer, ``append([1], L2, L3)`` is ``L3 = [1|L2]``.  L2 may be ANY
+        # term: ``append([x], foo, L)`` is ``L = [x|foo]``, as in ISO.
+        mark = trail.mark()
+        if unify(l3, _cons_onto(list(l1_items), l2_val), trail):
+            yield (_proceed, None)
+        trail.undo(mark)
     else:
         # L1 open and L3 not a proper list: the prologue enumerates L1's
         # length, ``X = [], Z = Y; X = [_A], Z = [_A|Y]; ...``, without end
-        # (as in ISO).  L2 must be a list or an open one.
+        # (as in ISO).  L2 may be any term, and L3 too: an improper list
+        # ``[a|foo]`` or a non-list (``append(L, R, foo)`` is
+        # ``L = [], R = foo``).  Only a partial list with a hole before its
+        # end (``[*A, 1]``) is still not taken apart here.
+        from clausal.terms import SegList   # noqa: PLC0415
         skel = _open_skeleton(l1_val)
-        l2_ok = l2_items is not None or is_var(l2_val) or _open_skeleton(l2_val) is not None
-        l3_ok = is_var(l3_val) or _open_skeleton(l3_val) is not None
-        if skel is not None and l2_ok and l3_ok:
+        l3_skel = None if is_var(l3_val) else _open_skeleton(l3_val)
+        l3_ok = (is_var(l3_val) or l3_skel is not None
+                 or not isinstance(l3_val, SegList))
+        if skel is not None and l3_ok:
             prefix, tail = skel
             rest = l2_items if l2_items is not None else l2_val
             # Once L1 is as long as L3's known prefix, every element of that
             # prefix has met L1's: a failure then repeats for every longer
             # L1 (``append([a, *T], Y, [b, *Z])`` fails, as in ISO, rather
             # than looping).
-            known = 0 if is_var(l3_val) else len(_open_skeleton(l3_val)[0])
+            if is_var(l3_val):
+                known = 0
+            elif l3_skel is not None:
+                known = len(l3_skel[0])
+            else:
+                known = len(_cons_heads(l3_val))
             k = 0
             while True:
                 fresh = [Var() for _ in range(k)]
                 mark = trail.mark()
                 if (unify(tail, fresh, trail)
-                        and unify(l3, _partial(prefix + fresh, rest), trail)):
+                        and unify(l3, _cons_onto(prefix + fresh, rest), trail)):
                     yield (_proceed, None)
                 elif len(prefix) + k >= known:
                     trail.undo(mark)
