@@ -461,7 +461,7 @@ of that day, which replace the D6-D8 recommendations below where they differ:
 * Tests: `tests/iso_l3/test_l3_s6_constants_units_dicts.py` (seam twins; the `{C}` test
   skips until slice 5 lowers `{C}`).
 
-### Slice 7: the test runner and diagnostics on the native path
+### Slice 7: the test runner and diagnostics on the native path (LANDED on feat/iso-reader-slice7-2026-10-12)
 
 * The runner already collects `.pl` `test/1` (measured). This slice makes failure reports
   print `.pl` goals and lines from spans, and removes the translation note.
@@ -470,23 +470,46 @@ of that day, which replace the D6-D8 recommendations below where they differ:
   step 1 requires.
 * **Exit:** each output shape has a golden test. A directory of `.pl` tests with zero `test/1`
   exits non-zero. A D14 negative test that finds a solution goes red.
+* **Done (2026-10-12).** Before this slice, main already reported native line numbers
+  (40d097d9), had `test(Name, fail)` (D14, ruled 2026-09-29), and failed an empty scan in both
+  the CLI and pytest. This slice closed the remaining gaps:
+  * a goal is quoted from its span (`Y =:= 5`, not `=:=(_, 5)`);
+  * the clause's variables are named, and values print as Prolog;
+  * a built-in comparison is no longer reported as a predicate with no solutions;
+  * a fact that does not match is a head mismatch, not a failing leaf;
+  * a D14 red, a `<load>` and a `<collect>` result each carry `file:N`, and the plugin
+    prints `at file:N`.
+
+  The tests are in `tests/test_testing_native_pl_reports.py`, and the six goldens are
+  `tests/golden/runner_native_*.txt`.
 
 ### Slice 8: parity and cutover (the strategy's exit test)
 
-1. **The engine-internal A/B, owned by this lane.** This needs a downstream exporter's
-   **Clausal-Prolog dialect** of `clausal_to_prolog`. Today's exporter drops declarations,
-   lowers dicts to `attribute/2` lists, strips units and emits `profile_get` (measured on a
-   5-line file), so a round trip through it cannot be faithful (R7). With that dialect in
-   place, round-trip the engine's own 150 `.clausal` test modules that carry `test(...)`
-   clauses (of 329 `.clausal`/`.seam` files under `tests/`). Load each natively and require the pass set and
-   the per-test all-answers to equal the seam run. Every refusal is listed with its count.
-   This becomes a **permanent gate**: the divergence alarm for R1.
+**Re-planned 2026-10-12 (operator).** The "Clausal-Prolog exporter dialect" prerequisite is
+obsolete. It predates the extension flip: `.clausal` is Clausal Prolog now, and a language
+need not be exported to itself. R7 goes with it.
+
+1. **Translator-vs-native parity over every `.pl` source in the repository (this lane).** The
+   population is `tests/**/*.pl`, the `iso_l3` corpus, library and example `.pl` files (none
+   today), and the ```` ```prolog ```` blocks of `docs/*.md`.
+   * Each file is loaded under `CLAUSAL_PL_FRONTEND=translator` and under `native`, in separate
+     subprocesses, each with its own empty bytecode cache.
+   * Compared: load or refusal; the `test/1` verdicts; and, for a file without tests, the
+     bounded all-answers of each predicate of arity up to 3.
+   * Every difference is classed: (a) translator bug, where native agrees with Scryer or
+     Trealla; (b) native gap; (c) both wrong; (d) intentional, by a ruling.
+   * The tool is `clausal/tools/pl_parity.py`, and it fails closed on N = 0. The **permanent
+     gate** is `tests/test_pl_parity.py`, which pins the classed list in
+     `tests/fixtures/pl_parity_known.json`. This is the divergence alarm for R1.
+   * Measured in `native-iso-reader-step2-2026-09-29/parity-2026-10-12.md`: 98 files, 40
+     differences, (a) 32 / (b) 0 / (c) 3 / (d) 5.
 2. **The pilot domain, owned downstream.** This lane never reads downstream code. A pilot
-   `<downstream-domain>`, exported in the Clausal-Prolog dialect and loaded natively, must pass
-   its own tests. The downstream answer-set checks follow.
-3. Flip the `.pl` default to native. `prolog_to_clausal` leaves the import path and stays a
-   tool until nothing imports it. The downstream reader switches to the same reader table (R4).
-4. The `.clausal`-reads-ISO flip is **not** in this slice (D3). It follows downstream migration.
+   `<downstream-domain>` in `.pl` or Clausal Prolog, loaded natively, must pass its own tests.
+   The downstream answer-set checks follow.
+3. **HELD for the operator:** flip the `.pl` default to native. `prolog_to_clausal` leaves the
+   import path and stays a tool until nothing imports it. The downstream reader switches to the
+   same reader table (R4).
+4. The `.clausal`-reads-ISO flip is done (the extension flip), and is out of this slice.
 
 ---
 
@@ -589,6 +612,10 @@ them. **Recommend accept + count** (a lint, keyed to the `todo/cut-like-*` files
 is enforced by a lint, not by the loader.
 
 **D14. The negative-test form** (the strategy's open decision; the runner is this lane's).
+**RULED 2026-09-29 (operator, relayed):** plunit's spelling, `test(Name, fail) :- Goal.`, which
+passes iff Goal has no solution. Option (a)'s `false` is not accepted. It is a collection error
+that names the option, as every other plunit option is. Implemented in the runner
+(`tests/test_testing_fail_option.py`).
 (a) `test(Name, false) :- Goal.`, meaning "Goal has no solution".
 (b) A separate `test_fails/1`.
 (c) Keep `\+` in tests.
@@ -601,8 +628,8 @@ vocabulary, and keeps negation out of the language.
 
 * **R1. The two front ends diverge.** Seam and native lower the same program differently,
   and nothing notices. Mitigations: the directives share one implementation (D1c); clause
-  lowering calls the seam's helper functions rather than copies; slice 8.1's round-trip A/B
-  over 150 engine test modules is a permanent gate; the downstream answer-set A/B runs on
+  lowering calls the seam's helper functions rather than copies; slice 8.1's translator-vs-native
+  parity over every repository `.pl` source is a permanent gate (`tests/test_pl_parity.py`); the downstream answer-set A/B runs on
   each engine candidate. Field-name divergence (`arg_i` vs seam-derived names) is already
   pinned as unobservable within a module.
 * **R2. Stale bytecode serves the wrong front end.** The `.pyc` cache is keyed per engine
@@ -623,7 +650,7 @@ vocabulary, and keeps negation out of the language.
 * **R6. Metacall gaps.** A variable meta-argument is refused at compile time, and `query()`
   refuses control-construct cells. ISO body conversion in L3 covers the first. Test and REPL
   harnesses must go through `call/1` for the second.
-* **R7. The exit test depends on another lane.** Without the exporter's Clausal-Prolog
+* **R7. (Obsolete since the 2026-10-12 re-plan of slice 8.)** The exit test depends on another lane. Without the exporter's Clausal-Prolog
   dialect, round trips measure the exporter's lossy choices, not this front end. Sequence
   the downstream exporter's dialect work in parallel with slices 3-6.
 * **R8. Repository boundary.** This lane cannot run the pilot domain. The pilot

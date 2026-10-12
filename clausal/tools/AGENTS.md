@@ -53,6 +53,7 @@ Up: [../AGENTS.md](../AGENTS.md)
 |---|---|
 | `gen_library_facades.py` | Generates `clausal/library/*.seam` and `clausal/_py_facades.py` from `clausal/modules`. `--check` exits 1 on drift. See [../library/AGENTS.md](../library/AGENTS.md). |
 | `transition_census.py` + `transition_census_baseline.json` | "Count must not grow" ratchet for `\+`, `once/1`, `forall/2`, `memberchk/2`, `findall(_,G,[])`, `make_quantity/3` across `clausal/ tests/ docs/`. `--update` re-baselines. Tested by `tests/test_seam_transition_constructs.py`. |
+| `pl_parity.py` | Translator-vs-native parity over every repository `.pl` source and the docs' prolog blocks (plan slice 8.1): one subprocess per file and front end, with private bytecode caches. Compares load, test verdicts and bounded all-answers, and uses Scryer/Trealla as the oracle. `--check tests/fixtures/pl_parity_known.json` is the gate (`tests/test_pl_parity.py`). Refuses a run that compares 0 files. |
 | `doc_snippet_check.py` | Shared check functions for `tests/test_doc_snippet_*.py` and per-package doc tests. |
 | `dump_transformed.py` | Dump the transformed AST of seam files as Python (`__transformed__/`). |
 | `visualize.py` | Pretty-print a compiled predicate's generated Python. |
