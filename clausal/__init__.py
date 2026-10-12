@@ -14,10 +14,11 @@ for _sp in _site.getsitepackages():
 
 from clausal.logic.solve import (
     call, solve, query, once, query_wfs, _deref_walk, declared_atoms,
+    answer_deref as deref,
     imported_atoms, module_signatures, has_predicate, defines_predicate, module_binds,
 )
 from clausal.logic.database import Module, Database, Clause
-from clausal.logic.variables import Var, Trail, deref, unify, UnboundVarCoercionError
+from clausal.logic.variables import Var, Trail, unify, UnboundVarCoercionError
 from clausal.terms import Quantity, UnitsMismatch
 from clausal.logic.builtins import (
     structural_unify,

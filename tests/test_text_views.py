@@ -198,6 +198,30 @@ def test_value_hands_out_the_text_not_a_view(mod):
     assert r.value == chars(TEXT) and type(r.value[1]) is str
 
 
+def test_public_deref_hands_out_the_text_not_a_view(mod):
+    """Public ``clausal.deref`` is a boundary deref (operator ruling D38,
+    2026-10-12): a view comes out as its text, or as a plain list, at every
+    depth a caller derefs, as ``.value`` does at the top.  The engine's own
+    ``clausal.logic.variables.deref`` keeps the view."""
+    import json
+    import clausal
+    w = Var()
+    assert next(solve(("wrap", chars("aaa" + TEXT), w), mod), None) is not None
+    x, r, fr = clausal.deref(w)
+    for sub in (r, clausal.deref(fr)[1]):
+        assert type(deref(sub)[1]) is _Text      # inside the engine: a view
+        got = clausal.deref(sub)
+        assert got == chars(TEXT) and type(got[1]) is str
+    long = list(range(300))
+    w = Var()
+    assert next(solve(("wrap", long, w), mod), None) is not None
+    _, r, _ = clausal.deref(w)
+    assert type(deref(r)).__name__ == "SegListView"
+    got = clausal.deref(r)
+    assert type(got) is list and got == long[3:]
+    json.dumps(got)
+
+
 @pytest.mark.parametrize("walker", ["c", "py"])
 def test_a_walked_answer_holds_no_view(mod, walker):
     import json

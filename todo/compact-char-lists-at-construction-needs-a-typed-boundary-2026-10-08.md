@@ -163,6 +163,8 @@ BORROWED str owned by the view's cache: safe for an untampered view, but a monke
 (or a write to `_flat`) can hand C a str another object owns and frees mid-loop; the full fix is a new
 reference from `carrier_text`.
 
+**RESOLVED 2026-10-12 (operator ruling D38: option B):** public `clausal.deref` is a boundary deref (`solve.answer_deref`): a view comes out as its text or as a plain list, the `Var.value` rule at any depth a caller derefs. The engine's `clausal.logic.variables.deref` still returns views, by design; there is no deep flatten in `solve()` and no trail change. Pinned by `tests/test_text_views.py::test_public_deref_hands_out_the_text_not_a_view`. The history follows.
+
 OPEN (2026-10-08): `Var.value` flattens a view only at the TOP level (it stays an O(1) one-step deref,
 and the engine reads it internally). An answer like `f(R)` with `R` a view still hands a view to Python
 code that derefs the subterm itself during the solution (measured: `f(R, [R], g-R)` -> a view at all
@@ -274,8 +276,9 @@ set was compared against a baseline run by test name.
 - Two more, both the raw-`deref` exposure in the OPEN item above (a nested `deref` after the answer
   returns a view): `test_segstring.py::...test_seglist_still_works_with_lists` and
   `test_string_head_patterns.py::...test_list_input_still_gives_list`. They pass at the real
-  threshold only because their lists are short. Ruling requested 2026-10-12 on how views leave a
-  `solve()` answer: a deep flatten in `solve()`, a boundary `clausal.deref`, or docs only.
+  threshold only because their lists are short. Ruled 2026-10-12 (D38 B, above): those tests call
+  the ENGINE's `deref`, which keeps views by design, so under the stress constants they stay
+  expected failures; only public `clausal.deref` hands out plain data.
 
 To repeat the stress run, change the four constants (`cells.VIEW_MIN`, `CHARS_VIEW_MIN` in
 `variables/_chars_carrier.h`, `terms.LIST_VIEW_MIN`, `LIST_VIEW_MIN` in `runtime/_list_unify.c`),
