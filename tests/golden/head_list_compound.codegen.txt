@@ -319,8 +319,9 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                         _st12 = (yield (_gen12, None))
                         while _st12 is not $DONE:
                             if $fd_eq(_v18, 7, trail):
-                                if $fd_eq(_v19, 8, trail):
-                                    yield (_proceed, None)
+                                for _ in $pending(trail):
+                                    if $fd_eq(_v19, 8, trail):
+                                        yield (_proceed, None)
                             _st12 = (yield (_gen12, None))
             except $GeneratorExit:
                 _mark_cl = True
@@ -460,8 +461,9 @@ def test__p0_b6__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                     _st23 = (yield (_gen23, None))
                     while _st23 is not $DONE:
                         if $fd_eq(_v18, 7, trail):
-                            if $fd_eq(_v19, 8, trail):
-                                yield (_proceed, None)
+                            for _ in $pending(trail):
+                                if $fd_eq(_v19, 8, trail):
+                                    yield (_proceed, None)
                         _st23 = (yield (_gen23, None))
 
 # ----

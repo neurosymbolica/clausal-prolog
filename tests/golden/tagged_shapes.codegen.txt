@@ -380,11 +380,13 @@ def mk__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _m2 = trail.mark()
                 for _ in $unify_iter(_v29, ('point', _v28, _v30), trail):
                     if $fd_gt(_v28, 0, trail):
-                        if $fd_eq(_v31, $Sub(left=_v28, right=1), trail):
-                            _gen0 = $StepGenerator($dispatch_at(mk, 2), _proceed, this_generator, this_generator, _v31, _v30, trail)
-                            _st0 = (yield (_gen0, None))
-                            while _st0 is not $DONE:
-                                _st0 = (yield (_gen0, None))
+                        for _ in $pending(trail):
+                            if $fd_eq(_v31, $Sub(left=_v28, right=1), trail):
+                                for _ in $pending(trail):
+                                    _gen0 = $StepGenerator($dispatch_at(mk, 2), _proceed, this_generator, this_generator, _v31, _v30, trail)
+                                    _st0 = (yield (_gen0, None))
+                                    while _st0 is not $DONE:
+                                        _st0 = (yield (_gen0, None))
                 trail.undo(_m2)
             except $GeneratorExit:
                 _mark_cl = True
