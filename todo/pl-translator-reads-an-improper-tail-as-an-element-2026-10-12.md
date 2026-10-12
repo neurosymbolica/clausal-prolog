@@ -64,3 +64,22 @@ with Y bound later to a non-list.
 - Seen while testing: the NATIVE front end refuses `g --> [x|"ab"].` under
   `double_quotes(chars)` ("a terminal list ends in \"ab\""). Scryer and the translator accept it
   (`phrase(g, L)` gives `[x,a,b]`).
+
+## Status after fix round 2 (2026-10-13)
+
+- List builtins now read a hole-built improper list exactly as the literal `[a|foo]` (0c8257ae).
+  nth0/nth1/select now handle improper lists, and `=..`, atom_codes, atom_chars and number_codes
+  give type_error(list, _).
+- A cyclic partial list (`X = [a|X]`) walks as its cons cells, and `==` on two DISTINCT cyclic
+  terms answers coinductively (444b1425).
+- Still open from this family:
+  - `compare/3`, `@<` and `msort` on a cyclic term, or on a cons chain of about 500 cells,
+    raise RecursionError (`_helpers.term_key`); Scryer gives `=`.
+  - `findall(Z, member(Z, [X, Y]), L)` with X and Y cyclic raises
+    `RecursionError: _is_ground: term nesting too deep` (copying a cyclic term).
+  - `_seglists_as_source` (assertz) scans only tuples and lists, so a hole inside a DictTerm in
+    an asserted clause is still shared with the caller.
+  - The translator loads `h(T) --> [x|T].`, where native and Scryer refuse a partial terminal
+    list (instantiation_error).
+  - The native reader crashes on a 500-element `[...|foo]` literal; item 3 (quadratic append)
+    is not touched.
