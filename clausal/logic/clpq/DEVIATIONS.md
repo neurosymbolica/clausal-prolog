@@ -186,7 +186,8 @@ one component when the binding is inside it
 (`test_a_binding_within_one_component_makes_one_stand_in`).
 
 Nothing else runs inside that window, because one rule holds (ruling
-R27, fail-closed since ruling R30): **no attribute hook body calls an
+R27, fail-closed on the hook's own trail since ruling R30, with the
+per-trail limit of ruling R31 below): **no attribute hook body calls an
 entry point of the port**.  A hook body runs while other variables of the
 same unification are bound and their hooks are still to come, so an
 entry point called there reads rows and member lists that hold unhooked
@@ -212,20 +213,31 @@ gave `[W >= 3/2, W =< 20]` and Q = 1.  A `post`, `inf`, `entailed` or
 `bb_inf` from a hook body was wrong already at 800048a2.
 
 How the rule is enforced (ruling R30, Task 14b).  Every public entry
-point that reads or writes the store raises
+point that reads or writes the store, called with a trail whose hooks are
+running, raises
 `error(permission_error(call, goal, Culprit), Name/Arity)` while
 `trail.hooks_running` is above 0, the shape the engine's `solve`/`call`
 raise there (`attributes.refuse_inside_attribute_hooks`).  The port's own
 entry points (1.3.3's user predicates): nf.pl's `{}/1`
 (`post_constraint`, `post_constraint_with_choices`, and
-`resume_constraint`), `entailed/1`, bv.pl's `inf/2`, `sup/2`,
-`maximize/1`, `minimize/1`, bb.pl's `bb_inf/3`, dump.pl's `dump/3` and
+`resume_constraint`), `entailed/1`, bv.pl's `inf/2` and `inf/4`, `sup/2`
+and `sup/4`, `maximize/1`, `minimize/1`, bb.pl's `bb_inf/3` and
+`bb_inf/5`, dump.pl's `dump/3` and
 `projecting_assert/1`, ordering.pl's `ordering/1`.  The adapter's
-(`holzbaur.py`): `in_q/3`, `inf/2`, `sup/2`, `maximize/2`, `minimize/2`,
+(`holzbaur.py`): `in_q/1` and `in_q/3`, `inf/2`, `sup/2`, `maximize/2`, `minimize/2`,
 `bb_inf/3`, `entailed/1`, `dump_q/2` (and the `clpq.dump` builtin through
 it), `residual_q/1`, `ordering/1`, `{}/1` (`clpq_constraint_block`,
 `clpq_constraint_answers`) and `promote_fd_to_q/1`; the Culprit is the
-goal as the program writes it, with the Python API's arguments.  The
+goal as the entry point was called.  An omitted optional argument is a
+fresh variable in the Culprit, never a Python None (`in_q(X)` is
+`in_q/1`, `in_q(X, 0, None)` is `in_q(X, 0, _)`), and the port's
+`inf/4`, `sup/4` and `bb_inf/5` report those arities with every argument.
+The indicator names the entry point, not the builtin that reached it:
+`rational/1` reports `in_q/1`, `int_minimize/3` reports `bb_inf/3`,
+`clpq.supremum/2` and `clpq.infimum/2` report `sup/2` and `inf/2`, and
+`clpq.rational/1` reports `{}/1` (the adapter does not know the builtin's
+name, and threading it through would change the legacy API the two
+solvers share).  The
 repro above now raises `permission_error(call, goal, dump([W], [W], _))`
 from `dump/3`, and the unification raises with it
 (`test_the_d3_repro_raises_instead_of_answering_wrong`; with the check
@@ -237,7 +249,18 @@ its internals call no public entry point inside the dispatch: its Later
 goals (`PostBound` and the others) post through `{}/1` from the pending
 queue, at a goal (`test_the_port_s_own_hook_is_not_refused`, the gate
 set and the hook-window fuzz under both switches).  `attribute_goal`
-takes no trail and is not checked; it only reads, for the toplevel.
+takes no trail and is not checked; only tests call it (the engine's
+toplevel prints residuals through `residual_q`, which is checked).
+
+The check is per trail (ruling R31).  It reads the counter of the trail
+the entry point is given, and the engine counts hook dispatch per trail.
+A hook body that reaches the store through another trail (a fresh
+`Trail()`) reads 0 there, is not refused, and gets the wrong answer
+above: D3's repro through a fresh trail dumps `[W =< 20]` and leaves Q
+unbound (`test_a_fresh_trail_inside_a_hook_is_not_seen_by_the_check`,
+which pins this limit so that an engine-wide dispatch depth flips it).
+This was so before R30 as well.  So a hook must not reach the store
+through another trail; R27 stays a contract there.
 
 clpfd's calls into CLP(Q) are the exception.  They are calls, not
 registrations, and some run inside a hook (clpfd's propagation in its own

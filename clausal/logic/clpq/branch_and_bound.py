@@ -29,7 +29,8 @@ test_a_goal_woken_by_narrowing_runs_in_it,
 test_a_woken_bb_inf_runs_the_goals_its_search_wakes,
 test_work_queued_before_bb_inf_stays_queued).
 """
-from clausal.logic.clpq.attributes import refuse_inside_attribute_hooks
+from clausal.logic.clpq.attributes import (
+    culprit_argument, refuse_inside_attribute_hooks)
 from clausal.logic.clpq.arithmetic import (
     ONE, add, arithmetic_normalize, ceiling_rational, compare, floor_rational,
     is_number, minimum, round_rational, subtract, to_number)
@@ -53,8 +54,14 @@ def bb_inf(integer_variables, term, infimum, trail, vertex=None, epsilon=None):
     and the rounded values of *integer_variables* there unified with
     *vertex*.  True or False.  bb_inf/3 is bb_inf/5 with a fresh Vertex
     and Eps 0.001.  Like inf, it waits until *term* is linear."""
-    refuse_inside_attribute_hooks(
-        trail, ("bb_inf", integer_variables, term, infimum), "bb_inf", 3)
+    if vertex is None and epsilon is None:
+        refuse_inside_attribute_hooks(
+            trail, ("bb_inf", integer_variables, term, infimum), "bb_inf", 3)
+    else:
+        refuse_inside_attribute_hooks(
+            trail, ("bb_inf", integer_variables, term, infimum,
+                    culprit_argument(vertex), culprit_argument(epsilon)),
+            "bb_inf", 5)
     if vertex is None:
         vertex = Var()
     if epsilon is None:

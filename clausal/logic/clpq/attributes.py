@@ -13,7 +13,7 @@ trail.
 """
 from collections import deque
 
-from clausal.logic.variables import get_attr, put_attr
+from clausal.logic.variables import Var, get_attr, put_attr
 
 CLPQ_KEY = "clpq_holzbaur"
 
@@ -43,6 +43,13 @@ class SolverState:
         self.keep = keep
 
 
+def culprit_argument(value):
+    """*value* as an argument of a refused goal's culprit: an omitted
+    optional argument (None) is a fresh variable, so no Python None goes
+    into a term (test_an_omitted_argument_is_a_variable_in_the_culprit)."""
+    return Var() if value is None else value
+
+
 def refuse_inside_attribute_hooks(trail, culprit, name, arity):
     """Ruling R30: a public entry point of the port does not run while the
     engine is dispatching attribute hooks (``trail.hooks_running`` above
@@ -52,15 +59,21 @@ def refuse_inside_attribute_hooks(trail, culprit, name, arity):
     ``error(permission_error(call, goal, Culprit), Name/Arity)``, the shape
     the engine's ``solve``/``call`` raise there (a750f58c).  The port's own
     hook and its internals call no public entry point
-    (tests/clpq_port/test_refused_inside_a_hook.py)."""
+    (tests/clpq_port/test_refused_inside_a_hook.py).
+
+    The check is per trail (ruling R31): it reads the counter of the trail
+    the entry point is given.  A hook body that reaches the store through
+    another trail (a fresh ``Trail()``) reads 0 there and is not refused,
+    and it gets R27's wrong answer.  A hook must not reach the store
+    through another trail
+    (test_a_fresh_trail_inside_a_hook_is_not_seen_by_the_check)."""
     if trail is not None and trail.hooks_running:
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, permission_error)
         raise LogicException(
             permission_error("call", "goal", culprit, ("/", name, arity)),
-            f"{name}/{arity}: a CLP(Q) entry point cannot run while "
-            f"attribute hooks are running; queue it with "
-            f"trail.push_pending(goal)")
+            "a CLP(Q) entry point cannot run while attribute hooks are "
+            "running; queue it with trail.push_pending(goal)")
 
 
 def state_of(variable):

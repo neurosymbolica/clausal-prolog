@@ -75,7 +75,7 @@ from clausal.logic.clpq import normal_form as _normal_form
 from clausal.logic.clpq import residual_constraints as _residual_constraints
 from clausal.logic.clpq import variable_ordering as _variable_ordering
 from clausal.logic.clpq.attributes import (
-    CLPQ_KEY, refuse_inside_attribute_hooks, state_of)
+    CLPQ_KEY, culprit_argument, refuse_inside_attribute_hooks, state_of)
 from clausal.logic.clpq.legacy import (
     _cell_as_node, _cells_as_nodes, _units_result, _units_strip,
     _units_strip_expr)
@@ -308,8 +308,13 @@ def in_q(var_or_list, lo=None, hi=None, trail=None):
     ``{lo =< X, X =< hi}``, or bv.pl's var_intern/2 when there is no
     bound.  A Quantity bound declares the dimension too, as legacy's
     in_q does (units_clp's shadow carries the bounds)."""
-    refuse_inside_attribute_hooks(
-        trail, ("in_q", var_or_list, lo, hi), "in_q", 3)
+    if lo is None and hi is None:
+        refuse_inside_attribute_hooks(
+            trail, ("in_q", var_or_list), "in_q", 1)
+    else:
+        refuse_inside_attribute_hooks(
+            trail, ("in_q", var_or_list, culprit_argument(lo), culprit_argument(hi)),
+            "in_q", 3)
     targets = deref(var_or_list)
     lo, hi = deref(lo), deref(hi)
     united = _in_q_units(targets, lo, hi, trail)

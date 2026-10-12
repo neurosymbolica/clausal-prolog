@@ -58,7 +58,9 @@ def _promote(trail):
 #: store W is in.
 _ENTRY_POINTS = [
     # the legacy API in front of the port (holzbaur.py)
-    ("in_q", lambda t, w: h.in_q(w, 0, 30, t), "in_q", 3),
+    ("in_q/3", lambda t, w: h.in_q(w, 0, 30, t), "in_q", 3),
+    ("in_q/1", lambda t, w: h.in_q(w, trail=t), "in_q", 1),
+    ("in_q/3 one bound", lambda t, w: h.in_q(w, 0, None, t), "in_q", 3),
     ("sup", lambda t, w: h.sup(w, Var(), t), "sup", 2),
     ("inf", lambda t, w: h.inf(w, Var(), t), "inf", 2),
     ("maximize", lambda t, w: h.maximize(w, Var(), t), "maximize", 2),
@@ -90,9 +92,14 @@ _ENTRY_POINTS = [
      "entailed", 1),
     ("bv.inf", lambda t, w: bv.inf(w, Var(), t), "inf", 2),
     ("bv.sup", lambda t, w: bv.sup(w, Var(), t), "sup", 2),
+    ("bv.inf/4", lambda t, w: bv.inf(w, Var(), t, [w], [Var()]), "inf", 4),
+    ("bv.sup/4", lambda t, w: bv.sup(w, Var(), t, [w], [Var()]), "sup", 4),
     ("bv.maximize", lambda t, w: bv.maximize(w, t), "maximize", 1),
     ("bv.minimize", lambda t, w: bv.minimize(w, t), "minimize", 1),
     ("bb.bb_inf", lambda t, w: bb.bb_inf([w], w, Var(), t), "bb_inf", 3),
+    ("bb.bb_inf/5",
+     lambda t, w: bb.bb_inf([w], w, Var(), t, Var(), Fraction(1, 1000)),
+     "bb_inf", 5),
     ("rc.dump", lambda t, w: rc.dump([w], ["W"], t), "dump", 3),
     ("rc.projecting_assert",
      lambda t, w: rc.projecting_assert(("clause", w), t),
@@ -141,6 +148,27 @@ def test_an_entry_point_called_from_a_hook_is_refused(
     assert type(culprit) is tuple and culprit[0] == name
     assert len(culprit) == arity + 1
     assert context == ("/", name, arity)
+    assert not _holds_none(culprit), culprit
+    # The indicator is the term's; the prose does not repeat it.
+    assert not raised.message.startswith(f"{name}/"), raised.message
+
+
+def _holds_none(term):
+    stack = [term]
+    while stack:
+        item = deref(stack.pop())
+        if item is None:
+            return True
+        if type(item) in (tuple, list):
+            stack.extend(item)
+    return False
+
+
+def test_an_omitted_argument_is_a_variable_in_the_culprit():
+    # in_q(X, 0) with no upper bound: in_q/3, the missing Hi a variable.
+    raised = _inside_a_hook(lambda t, w: h.in_q(w, 0, None, t), False)
+    culprit = raised.term[1][3]
+    assert culprit[0] == "in_q" and culprit[2] == 0 and is_var(culprit[3])
 
 
 @pytest.mark.parametrize("driver", [False, True])
@@ -204,3 +232,26 @@ def test_the_port_s_own_hook_is_not_refused():
         low, high = Var(), Var()
         assert h.inf(a, low, t2) and h.sup(a, high, t2)
         assert (deref(low), deref(high)) == (1, 5)
+
+
+def test_a_fresh_trail_inside_a_hook_is_not_seen_by_the_check():
+    # Ruling R31, a documented limit: the check reads the counter of the
+    # trail the entry point is given.  A hook body that reaches the store
+    # through a fresh Trail reads 0 there, is not refused, and gets R27's
+    # wrong answer (D3's repro: `[W =< 20]`, Q unbound).  A hook must not
+    # do this (DEVIATIONS.md D3).  An engine-wide dispatch depth would
+    # refuse it, and this test would then fail: flip it to expect the
+    # permission_error.
+    t, x, q, w = _store()
+    out = {}
+
+    def body(trail):
+        other = Trail()
+        out["hooks_running"] = other.hooks_running
+        out["dump"] = rc.dump([w], ["W"], other)
+        return nf.post_constraint(("=<", q, 1), other)
+    z = Var()
+    put_attr(z, _PROBE_KEY, body, t)
+    assert unify(("f", z, x), ("f", 1, 2), t)
+    assert out == {"hooks_running": 0, "dump": [("=<", "W", 20)]}
+    assert is_var(deref(q))
