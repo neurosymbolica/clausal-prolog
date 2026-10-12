@@ -103,7 +103,7 @@ def _sort_vertices(terms):
     return result
 
 
-def _ord_union(set_a, set_b):
+def _ordered_set_union(set_a, set_b):
     """library(ordsets) ord_union/3 on two sorted vertex lists."""
     result = []
     i = 0
@@ -184,7 +184,7 @@ def graph_union(graph_a, graph_b):
             result.append(graph_b[j])
             j += 1
         else:
-            result.append((graph_a[i][0], _ord_union(graph_a[i][1], graph_b[j][1])))
+            result.append((graph_a[i][0], _ordered_set_union(graph_a[i][1], graph_b[j][1])))
             i += 1
             j += 1
     while i < len(graph_a):

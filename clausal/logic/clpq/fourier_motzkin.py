@@ -176,7 +176,8 @@ def eliminate_minimum(variable, occurrences, target, pivots, trail):
 # restore NF by reverse pivoting
 #
 def reverse_pivot(pivots, trail):
-    """fourmotz.pl, reverse_pivot/1: undo each pivot `I:D`, newest first."""
+    """fourmotz.pl, reverse_pivot/1: undo each pivot `I:D` in list order,
+    head first, as reverse_pivot/1's recursion walks the list."""
     for independent_variable, dependent in pivots:
         state = state_of(dependent)
         if state is None or state.bounds is None:

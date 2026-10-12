@@ -4,8 +4,8 @@ Date: 2026-10-12. Status: design, for review. Replaces `clausal/logic/clpq.py`.
 
 ## Why
 
-CLP(Q) is now the default arithmetic for the formalized domains: decimal
-currency fines and thresholds go through it.  On 2026-10-11 six review rounds
+CLP(Q) is now the default arithmetic for exact rational constraints:
+currency amounts go through it.  On 2026-10-11 six review rounds
 of `clpq.py` kept finding wrong answers.  Most were in the previous round's
 patch.  Four structural faults sit under almost all of them:
 
