@@ -21,3 +21,8 @@ rope type is not the cause.
 
 Next: get a C backtrace (gdb or `-X faulthandler` plus a debug build), find the type, then add a
 trashcan or iterative clear. Add a subprocess regression test at 1M.
+
+**Update (after the rope, 9ecfb760):** text builders now reach this too. `rec(N, [a|T])` at 300k
+chars or more used to run out of memory; it now builds, then segfaults while garbage-collecting. A
+rope of depth 1M frees cleanly, so the rope is not the cause. `recl` (no text) crashes between 200k
+and 300k on both trees.
