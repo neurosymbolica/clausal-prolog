@@ -89,6 +89,22 @@ This holds wherever in the goal the exception is raised — in the clause that
 wrote the `catch/3`, or several predicate calls down. Whether a handler is live
 never depends on how the engine chose to compile the call.
 
+`catch/3` protects **its Goal only** (ISO 7.8.9, as in Scryer). Once Goal has
+succeeded, a ball thrown by the goals after the `catch/3` is not offered to its
+Catcher; it goes to an enclosing `catch/3`, or out to the caller:
+
+```seam
+chk(Y) <- (var(Y), throw(later))
+chk(Y) <- nonvar(Y)
+w(Y) <- (catch(true, E, Y is E), chk(Y))     % raises later; Y is never bound
+```
+
+When the goals after it fail back into Goal, the catch is active again while
+Goal looks for its next answer: a ball Goal throws then is caught. A goal that
+`freeze/2` or `when/2` wakes belongs to the goal whose binding woke it: woken
+inside Goal it runs inside the catch, woken by a binding after the `catch/3` it
+runs outside.
+
 ### `++` catchers: matching the Python exception object
 
 The `ClassName(Message)` shape above matches by *spelling*. A catcher written

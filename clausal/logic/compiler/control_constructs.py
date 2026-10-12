@@ -40,7 +40,7 @@ from clausal.logic.meta_predicate import MetaArg as _MetaArg
 
 from ._ast_helpers import (
     _name, _attr, _call, _assign, _assign_mark, _undo_stmt, _if,
-    _yield_none_stmt, _in_iter_expr, _drained, _drained_always,
+    _yield_none_stmt, _in_iter_expr, _drained, _drained_always, _is_drained,
     _MARK_PREFIX, _TRAIL_PARAM_NAME, _K_PARAM_NAME,
     _THIS_GEN_NAME,
     _EXTRA_FUNCDEF,
@@ -953,8 +953,16 @@ def _compile_catch_impl(
     goal_body_stmts: list[ast.stmt],
     recovery_body_stmts: list[ast.stmt],
     always_catch: bool,
+    in_goal_name: str,
 ) -> list[ast.stmt]:
-    """Shared catch-block assembly."""
+    """Shared catch-block assembly.
+
+    *in_goal_name* is the flag :func:`_compile_catch` keeps True while the
+    goal runs and False while the continuation runs.  The ``try`` covers
+    both (a generator-based lowering runs the continuation inside it), so
+    the handler re-raises, untouched, a ball thrown while the flag is clear:
+    catch/3 protects its Goal only (ISO 7.8.9).
+    """
     var_context = ctx.var_context
     trail_name = ctx.trail_name
     catch_mark = ctx.fresh("_catch_m")
@@ -978,6 +986,8 @@ def _compile_catch_impl(
         else [_undo_stmt(unify_mark, trail_name), ast.Raise()]
     )
     except_body: list[ast.stmt] = [
+        _if(ast.UnaryOp(op=ast.Not(), operand=_name(in_goal_name)),
+            [ast.Raise()]),
         term_extract,
         _undo_stmt(catch_mark, trail_name),
         _assign_mark(unify_mark, trail_name),
@@ -1009,7 +1019,33 @@ def _compile_catch_impl(
         finalbody=[],
     )
 
-    return [_assign_mark(catch_mark, trail_name), try_block]
+    return [
+        _assign_mark(catch_mark, trail_name),
+        _assign(in_goal_name, ast.Constant(value=True)),
+        try_block,
+    ]
+
+
+def _mark_continuation(k_stmts: list[ast.stmt], in_goal_name: str) -> list[ast.stmt]:
+    """*k_stmts* run with the catch's goal flag clear, set again after.
+
+    The continuation leaves the goal's dynamic extent; falling off its end
+    (the continuation has no more answers) re-enters the goal, which looks
+    for its next answer under the catch again.  A drained continuation
+    (``for _ in $pending(trail): k``) is marked inside the loop: the goals
+    the catch goal woke run inside the catch, before the flag clears.
+    """
+    if not k_stmts:
+        return k_stmts
+    leave = _assign(in_goal_name, ast.Constant(value=False))
+    enter = _assign(in_goal_name, ast.Constant(value=True))
+    if _is_drained(k_stmts):
+        loop = k_stmts[0]
+        return [ast.For(
+            target=loop.target, iter=loop.iter,
+            body=[leave, *loop.body, enter], orelse=loop.orelse,
+        )]
+    return [leave, *k_stmts, enter]
 
 
 def _make_catch_subgen_fn_and_loop(
@@ -1065,24 +1101,29 @@ def _compile_catch(
     the try/except/unify block given pre-compiled body statements.
     """
     from .strategy import TrampolineStrategy
+    in_goal = ctx.fresh("_catch_in")
     if isinstance(ctx.strategy, TrampolineStrategy):
         # The goal's woken goals belong to the catch: they run inside the
-        # ``try``, not at the solution step's boundary outside it.
+        # ``try``, not at the solution step's boundary outside it.  The
+        # continuation is compiled INTO the goal, so it runs inside the
+        # ``try`` too; the flag marks where the goal ends.
         goal_stmts = _lower_inner_trampoline(
-            ctx, goal_arg, _drained_always(k_stmts, ctx.trail_name))
+            ctx, goal_arg,
+            _mark_continuation(_drained_always(k_stmts, ctx.trail_name), in_goal))
         recovery_stmts = _lower_inner_trampoline(ctx, recovery, k_stmts)
         return _compile_catch_impl(
             ctx, catcher,
             goal_body_stmts=goal_stmts,
             recovery_body_stmts=recovery_stmts,
             always_catch=always_catch,
+            in_goal_name=in_goal,
         )
 
     goal_stmts = _lower_inner(ctx, goal_arg, [_yield_none_stmt()])
     recovery_stmts = _lower_inner(ctx, recovery, [_yield_none_stmt()])
 
     goal_gen_fn, goal_loop = _make_catch_subgen_fn_and_loop(
-        ctx, "_catch_gen", goal_stmts, k_stmts,
+        ctx, "_catch_gen", goal_stmts, _mark_continuation(k_stmts, in_goal),
     )
     rec_gen_fn, rec_loop = _make_catch_subgen_fn_and_loop(
         ctx, "_catch_rec", recovery_stmts, k_stmts,
@@ -1093,8 +1134,9 @@ def _compile_catch(
         goal_body_stmts=[goal_loop],
         recovery_body_stmts=[rec_gen_fn, rec_loop],
         always_catch=always_catch,
+        in_goal_name=in_goal,
     )
-    return [body[0], goal_gen_fn, body[1]]
+    return [body[0], body[1], goal_gen_fn, body[2]]
 
 
 # ── Goal lambda compilation ──────────────────────────────────────────────────

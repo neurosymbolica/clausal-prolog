@@ -155,6 +155,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
   (it raised `existence_error(procedure, eval_/1)`; evaluation needs the
   full `eval_(1 + 2, X)`), and `G is freeze(1)` or `G is when(C)` likewise
   bind the term.
+- **`catch/3` protects its Goal only.** A ball thrown by the goals AFTER a
+  `catch/3` was caught by it, in both compile strategies: in
+  `catch(true, E, Y is E), chk(Y)` the catcher took a ball `chk(Y)` threw
+  after `catch/3` had succeeded. ISO 7.8.9 and Scryer let it escape, and now
+  it does. The same holds for a goal woken by a binding after the `catch/3`
+  (`catch(freeze(X, throw(oops)), _, true), X == 3` raises `oops`); a goal
+  woken inside Goal still runs inside the catch. When the continuation fails
+  back into Goal, the catch is active again while Goal runs.
 - **A goal woken by an inline comparison runs before the next goal, as in
   Scryer.** A CLP(FD) comparison is compiled inline, and it can bind:
   `X == 3` directly, and `X <= 3` once `X >= 3` has narrowed X's domain to

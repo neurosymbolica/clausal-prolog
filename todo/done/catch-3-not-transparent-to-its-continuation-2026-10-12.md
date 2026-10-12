@@ -26,3 +26,8 @@ lowering, the continuation runs while the `try` frame is still active.
 - The except clause re-raises when the flag is clear.
 - Change both strategies' lowerings and the C drive loop where it handles catch frames.
 - Tests: w5, nc2, nested catches, and a ball from a goal after the catch inside findall/forall/once.
+
+**Fixed 2026-10-12** on fix/catch-transparency-and-hook-depth-2026-10-12: a flag on the catch frame, set while
+the Goal runs and cleared around the continuation, in both strategies (`_compile_catch`); the handler re-raises
+when it is clear. No drive-loop change: the C and Python twins only throw into the catcher chain, and a frame
+that re-raises passes the ball up. Tests: `tests/test_catch_is_transparent_to_its_continuation.py`.
