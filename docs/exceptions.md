@@ -94,9 +94,7 @@ succeeded, a ball thrown by the goals after the `catch/3` is not offered to its
 Catcher; it goes to an enclosing `catch/3`, or out to the caller:
 
 ```seam
-chk(Y) <- (var(Y), throw(later))
-chk(Y) <- nonvar(Y)
-w(Y) <- (catch(true, E, Y is E), chk(Y))     % raises later; Y is never bound
+--8<-- "tests/fixtures/docs/exceptions_examples.seam:catch_3_goal_only"
 ```
 
 When the goals after it fail back into Goal, the catch is active again while

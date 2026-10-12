@@ -1,0 +1,20 @@
+# Doc snippet fixtures for docs/exceptions.md
+
+# --8<-- [start:catch_3_goal_only]
+chk(Y) <- (var(Y), throw('later'))
+chk(Y) <- nonvar(Y)
+w(Y) <- (catch(true, E, Y is E), chk(Y))    # raises 'later'; Y is never bound
+# --8<-- [end:catch_3_goal_only]
+
+# The ball chk(Y) throws after catch/3 has succeeded is not w's to catch: it
+# reaches the enclosing catch.  (w used to answer Y = 'later'.)
+test("catch/3 protects its Goal only") <- (
+    catch((w(_), fail), BALL, BALL is 'later')
+)  # nv
+
+# Re-entered on backtracking, the Goal is protected again.
+gen(1),
+gen(_) <- throw('two')
+test("catch/3 protects its Goal again on backtracking") <- (
+    catch(gen(Y), E, Y is E), not (Y is 1), Y is 'two'
+)  # nv
