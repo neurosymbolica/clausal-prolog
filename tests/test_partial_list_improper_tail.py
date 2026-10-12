@@ -9,6 +9,9 @@ translator) or ``[a,f,o,o]``.  ISO, Scryer and Trealla give ``[a|foo]`` and
 ``[x|1]``: the cons cells ``'.'(H, T)`` the native reader builds.  A tail
 that is a list, ``[]`` or text still makes a proper list.
 
+``assertz`` of a partial list (``assertz(r([a|T]))``) raised
+NotImplementedError, and stored the caller's hole variable.
+
 Every expected line below is what Scryer and Trealla print.
 """
 
@@ -105,6 +108,9 @@ hd([H|T], H, T).
     ("X = [a|T], T = foo, copy_term(X, Y), writeq(Y)", "[a|foo]"),
     ("X = [a|T], T = foo, catch(msort(X, _), error(E, _), true), writeq(E)",
      "type_error(list,[a|foo])"),
+    # assertz copies a partial list: the stored hole is not the caller's.
+    ("assertz(r([a|T])), r([_|R]), \\+ R == T, writeq(yes)", "yes"),
+    ("assertz(r([a|T])), r(Y), Y = [a,b], var(T), writeq(Y)", "[a,b]"),
 ])
 def test_g_partial_list_tails(tmp_path, front, goal, out):
     r = _run(tmp_path, *front, G_SOURCE, "--once", "-g", goal + ", nl")

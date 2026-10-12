@@ -35,7 +35,7 @@ from typing import Any
 
 from clausal.logic.variables import Var, is_var, deref, present_number
 from clausal.terms import (
-    SegListView,
+    SegListView, SegList, ConcreteSeg,
     Add, Sub, Mult, Div, FloorDiv, Mod, Pow,
     Negate,
     Call, LoadName, LoadAttr, LoadSubscript,
@@ -1204,6 +1204,16 @@ def term_to_ast_expr(
     term = flat_carrier(deref(term))    # a text VIEW is compiled as its text
     if type(term) is SegListView:
         term = term.elements()          # and a list view as its elements: the clause must not hold its base
+    elif type(term) is SegList:
+        # A partial list held by a term being compiled (assertz(r([a|T]))):
+        # the term it walks to -- a list, an improper list's cons cells, or
+        # the compiler's own ``[E, ..., *T]`` spelling of its open holes,
+        # which the list arm below builds at run time.
+        term = term._walk_raw()
+        if type(term) is SegList:
+            term = [x for seg in term.segments
+                    for x in (seg.elements if isinstance(seg, ConcreteSeg)
+                              else (StarUnpack(value=seg.var),))]
 
     if type(term) is _MetaArg and term.module is not None:
         # A dotted ``lib.p(...)`` / ``lib.p`` in a qualifying meta position:

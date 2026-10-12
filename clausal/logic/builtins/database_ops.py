@@ -80,6 +80,58 @@ def _normalize_fact_clause(term: Any, hoist_all: bool = False):
     return Clause(head=term, body=[])
 
 
+def _seglists_as_source(term: Any) -> Any:
+    """*term* with every partial list (a ``SegList``) in it spelled as the
+    compiler's own source form ``[E, ..., *T]`` -- or, once walked, as the
+    list or improper list it now is.  Untouched when it holds none.
+
+    An asserted clause is compiled, and a SegList is no source form: in a
+    head argument it was captured as an opaque literal, so the stored clause
+    kept the CALLER'S hole variable (``assertz(r([a|T])), r([_|R])`` gave
+    ``R == T``) and a body raised NotImplementedError.  As ``[a, *T]`` the
+    hole is an ordinary clause variable, fresh at every call, as ISO's
+    copying assert gives."""
+    from clausal.terms import SegList, ConcreteSeg  # noqa: PLC0415
+    from clausal.pythonic_ast.nodes import StarUnpack  # noqa: PLC0415
+
+    def has_seglist(t, seen):
+        stack = [t]
+        while stack:
+            x = deref(stack.pop())
+            if isinstance(x, SegList):
+                return True
+            if type(x) in (tuple, list) and id(x) not in seen:
+                seen.add(id(x))
+                stack.extend(x)
+        return False
+
+    def rebuild(t):
+        t = deref(t)
+        if isinstance(t, SegList):
+            t = t._walk_raw()
+            if isinstance(t, SegList):
+                return [x for seg in t.segments
+                        for x in ([rebuild(e) for e in seg.elements]
+                                  if isinstance(seg, ConcreteSeg)
+                                  else [StarUnpack(value=seg.var)])]
+        if type(t) is list:
+            return [rebuild(e) for e in t]
+        if type(t) is tuple and len(t) == 3 and t[0] == ".":
+            heads = []                      # a cons chain, without recursion
+            while type(t) is tuple and len(t) == 3 and t[0] == ".":
+                heads.append(rebuild(t[1]))
+                t = deref(t[2])
+            out = rebuild(t)
+            for h in reversed(heads):
+                out = (".", h, out)
+            return out
+        if type(t) is tuple:
+            return tuple(rebuild(e) for e in t)
+        return t
+
+    return rebuild(term) if has_seglist(term, set()) else term
+
+
 def _build_clause(term_val: Any, context: str, db, module_dict) -> "Any":
     """Build a Clause from a runtime term passed to assertz/asserta.
 
@@ -104,6 +156,7 @@ def _build_clause(term_val: Any, context: str, db, module_dict) -> "Any":
     from clausal.terms import Predicate as _Predicate
     from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
 
+    term_val = _seglists_as_source(term_val)
     if isinstance(term_val, _Predicate):
         raise LogicException(
             permission_error("assert", "rule", term_val.head, context))
