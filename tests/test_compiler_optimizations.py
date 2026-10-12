@@ -256,6 +256,15 @@ class TestDerefOnce:
 # ── Phase 2: ITE duplicate compilation ────────────────────────────────────────
 
 
+def _drained_body(stmts):
+    """The body of ``[for _ in $pending(trail): body]``."""
+    assert len(stmts) == 1 and isinstance(stmts[0], ast.For), stmts
+    it = stmts[0].iter
+    assert isinstance(it, ast.Call) and isinstance(it.func, ast.Name)
+    assert it.func.id == "$pending", ast.dump(it)
+    return stmts[0].body
+
+
 class TestITENoDuplication:
     """Reified ITE compiles then/else branches exactly once each.
 
@@ -385,10 +394,14 @@ class TestITENoDuplication:
         stmts = self._compile_ite(test, then, else_)
         true_branch = self._fd_true_branch(stmts)
         undetermined = self._fd_undetermined_block(stmts)
-        # FD undetermined: [mark, if fd_true → then_stmts, undo, mark, if fd_false → else_stmts, undo]
+        # FD undetermined: [mark, if fd_true → drained then_stmts, undo,
+        #                   mark, if fd_false → drained else_stmts, undo]
+        # The post can bind and wake goals, so each branch is behind a goal
+        # boundary -- ``for _ in $pending(trail): <branch>`` -- whose body is
+        # still the one compiled list.
         fd_true_if = undetermined[1]
         assert isinstance(fd_true_if, ast.If)
-        assert true_branch is fd_true_if.body, (
+        assert true_branch is _drained_body(fd_true_if.body), (
             "then_stmts for 'if _reif is True' and fd_then_stmts should be the same object"
         )
 
@@ -404,7 +417,7 @@ class TestITENoDuplication:
         undetermined = self._fd_undetermined_block(stmts)
         fd_false_if = undetermined[4]
         assert isinstance(fd_false_if, ast.If)
-        assert false_branch is fd_false_if.body, (
+        assert false_branch is _drained_body(fd_false_if.body), (
             "else_stmts for 'elif _reif is False' and fd_else_stmts should be the same object"
         )
 

@@ -10,7 +10,10 @@ unification, run before the next call.
 The goal boundaries are:
 
 * compiled code after a unification, ``for _ in pending_or_once(trail): <rest>``
-  (``pending_or_once`` is ``(None,)`` when nothing is queued);
+  (``pending_or_once`` is ``(None,)`` when nothing is queued), and after
+  every other goal the compiler lowers inline that can bind: a CLP(FD)
+  comparison (``X == 3``, ``X <= 3``; a domain squeezed to one value binds
+  too) and each branch of a reified comparison it posts;
 * a trampoline generator's solution step (``StepGenerator.send``), so every
   builtin's and every predicate's answers pass one;
 * a shallow-mode sub-call, after each answer.

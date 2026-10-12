@@ -465,10 +465,14 @@ def _lower_shared_body(
             with construction_context("evaluable", _ctx):
                 l_expr = _adapter_side_expr(l, var_context, False, _ctx)
                 r_expr = _adapter_side_expr(r, var_context, False, _ctx)
+            # A comparison can bind (``X == 3``; ``X <= 3`` once ``X >= 3``
+            # squeezed X's domain to one value), and a binding can wake
+            # goals: the rest of the clause is behind a goal boundary, as
+            # after a unification.
             return [
                 _if(
                     _call(_name(_FD_RUNTIME[op]), l_expr, r_expr, _name(trail_name)),
-                    k_stmts,
+                    _drained(k_stmts, trail_name),
                 ),
             ]
 
@@ -708,12 +712,17 @@ def _lower_reified_branch(
     # FD reified.
     op_name, fd_true_name, fd_false_name = _FD_REIFY[kind]
     mark = ctx.fresh(_MARK_PREFIX)
+    # Undetermined: each branch POSTS its comparison, which can bind and
+    # wake goals -- each branch is behind a goal boundary, as after the
+    # plain comparison.  (Determined, nothing is posted and nothing wakes.)
     undetermined = [
         _assign_mark(mark, trail_name),
-        _if(_call(_name(fd_true_name), l_expr, r_expr, _name(trail_name)), then_stmts),
+        _if(_call(_name(fd_true_name), l_expr, r_expr, _name(trail_name)),
+            _drained(then_stmts, trail_name)),
         _undo_stmt(mark, trail_name),
         _assign_mark(mark, trail_name),
-        _if(_call(_name(fd_false_name), l_expr, r_expr, _name(trail_name)), else_stmts),
+        _if(_call(_name(fd_false_name), l_expr, r_expr, _name(trail_name)),
+            _drained(else_stmts, trail_name)),
         _undo_stmt(mark, trail_name),
     ]
     reif_call = _call(
