@@ -58,14 +58,24 @@ def _freeze_var(var, goal_thunk, trail):
 
 
 def _run_now(goal_thunk, trail):
-    """Queue a goal whose condition already holds, like a woken goal.
+    """Run a goal whose condition already holds; False when it fails.
 
-    It runs at the next goal boundary with every answer: compiled when/2
-    puts one right after the install, and a drain that ran the goal calling
-    this runs what it queued after it.
+    While the trail is owned (``trail.defer``: a driver, or a bare unify
+    firing its hooks and running its queue) it is queued like a woken goal:
+    compiled when/2 puts a goal boundary right after the install, and a
+    drain that ran the goal calling this runs what it queued after it.
+
+    Otherwise nothing would ever run the queue for it -- a later bare unify
+    drains only within its own unification, and leaving a goal there made
+    every later unify on the trail run it (a failing one failed them all).
+    So it runs here, to its first answer, as a bare unify runs its goals.
     """
-    trail.push_pending(goal_thunk)
-    return True
+    if trail.defer:
+        trail.push_pending(goal_thunk)
+        return True
+    for _ in goal_thunk():
+        return True
+    return False
 
 
 def _collect_free_vars(term):

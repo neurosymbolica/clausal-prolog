@@ -722,6 +722,33 @@ py_unify_answer(PyObject *Py_UNUSED(module), PyObject *args)
 
     Py_ssize_t n = n1 < n2 ? n1 : n2;
 
+    /* With no driver (a bare call) the answer is ONE unification, as a
+     * clause head's arguments are: a unify per argument would each run the
+     * goals its own hooks woke before the next argument was bound.  The
+     * arguments go into one ('$answer', A1, ..., An) pair, so every binding
+     * is made and every hook fired before a woken goal runs, and a failure
+     * undoes them all.  Under a driver nothing runs between the arguments
+     * (hooks only queue), so the loop below is kept there unchanged. */
+    if (!((TrailObject *)trail)->defer) {
+        PyObject *ta = PyTuple_New(n + 1);
+        PyObject *ts = ta ? PyTuple_New(n + 1) : NULL;
+        if (!ts) { Py_XDECREF(ta); return NULL; }
+        PyObject *tag = PyUnicode_InternFromString("$answer");
+        if (!tag) { Py_DECREF(ta); Py_DECREF(ts); return NULL; }
+        PyTuple_SET_ITEM(ta, 0, Py_NewRef(tag));
+        PyTuple_SET_ITEM(ts, 0, tag);
+        for (Py_ssize_t i = 0; i < n; i++) {
+            PyTuple_SET_ITEM(ta, i + 1, Py_NewRef(args_is_tuple
+                ? PyTuple_GET_ITEM(py_args, i) : PyList_GET_ITEM(py_args, i)));
+            PyTuple_SET_ITEM(ts, i + 1, Py_NewRef(stored_is_tuple
+                ? PyTuple_GET_ITEM(stored, i) : PyList_GET_ITEM(stored, i)));
+        }
+        PyObject *r = VarAPI->unify(ta, ts, (TrailObject *)trail);
+        Py_DECREF(ta);
+        Py_DECREF(ts);
+        return r;
+    }
+
     for (Py_ssize_t i = 0; i < n; i++) {
         PyObject *a = args_is_tuple
             ? PyTuple_GET_ITEM(py_args, i)

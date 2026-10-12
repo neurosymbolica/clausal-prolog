@@ -24,9 +24,13 @@ Outside a driver (``trail.defer`` false: a bare ``unify`` from Python, a
 compiled predicate called directly) hooks queue their goals all the same,
 and the unification runs the queue itself before it returns, once every
 hook has run, to the first answer (``run_first``); it fails when there is
-none.  While it fires its hooks and runs the queue it owns the trail as a
-driver does (``trail.defer`` is set), so a unification nested in a hook or
-in a woken goal only queues, and this drain runs what it queued.
+none.  From its first binding until the queue has run it owns the trail as
+a driver does (``trail.defer`` is set), so a unification nested in it -- a
+term's ``__unify__`` unifying element by element, a hook, a woken goal --
+only queues, and this drain runs what it queued.  A goal queued with no
+unification to run it is not left on the queue: ``when/2`` whose condition
+already holds runs its goal in place outside a driver
+(``coroutining._run_now``).
 """
 
 from __future__ import annotations

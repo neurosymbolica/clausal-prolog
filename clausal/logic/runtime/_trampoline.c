@@ -721,7 +721,8 @@ drive_to_root_yield_core(PyObject *root, int stopiteration_is_exhaustion,
 /* While a driver runs, the root's trail defers woken goals: they are queued
  * and run at the next goal boundary with every answer
  * (clausal/logic/pending.py).  The flag is restored on every exit, so a
- * bare unify on the trail between drives runs them in place, as before. */
+ * bare unify on the trail between drives runs the goals its hooks queued
+ * itself, after every hook of the unification, to their first answer. */
 static inline drive_result
 drive_to_root_yield(PyObject *root, int stopiteration_is_exhaustion,
                     const char *who, PyObject **out_value)

@@ -733,7 +733,15 @@ freeze_args = _freeze_args_py
 
 
 def _unify_answer_py(args, stored, trail):
-    """Unify each arg with the corresponding stored value."""
+    """Unify each arg with the corresponding stored value.
+
+    With no driver this is ONE unification, as a clause head's arguments
+    are, so a goal one argument's hook wakes runs after every argument is
+    bound (twin of ``_tabling_core._unify_answer``)."""
+    if not trail.defer:
+        pairs = list(zip(args, stored))
+        return unify(("$answer", *(a for a, _ in pairs)),
+                     ("$answer", *(s for _, s in pairs)), trail)
     for a, s in zip(args, stored):
         if not unify(a, s, trail):
             return False

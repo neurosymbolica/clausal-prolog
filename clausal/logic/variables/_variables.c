@@ -1973,10 +1973,11 @@ run_pending_first(TrailObject *trail)
  * call).  If the goals fail the unification fails and is undone; if they
  * raise, the exception propagates and the unification is undone.
  *
- * During steps 2 and 3 the unification owns the queue: it sets defer, as
- * a driver does, so a unification nested in a hook or in a woken goal
- * only queues, and its goals run in this drain (pending.drain runs goals
- * queued by the conjunction after it) or at a compiled goal boundary --
+ * Through steps 1 to 3 the unification owns the queue: it sets defer, as
+ * a driver does, so a unification nested in it -- a term's __unify__
+ * unifying element by element, a hook, a woken goal -- only queues, and
+ * its goals run in this drain (pending.drain runs goals queued by the
+ * conjunction after it) or at a compiled goal boundary --
  * never a second drain, and no recursion beyond the goals' own.  Under a
  * driver (defer already set) nothing is drained here; the engine runs the
  * queue at the next goal boundary with every answer.
@@ -1992,27 +1993,31 @@ do_unify_and_wake(PyObject *t1, PyObject *t2, TrailObject *trail, int oc)
     if (!my_wl) return NULL;
     trail->wakeup_list = my_wl;
 
+    /* With no driver, own the queue (above) from the first binding on:
+     * do_unify itself can call unify() -- a term's __unify__ (a partial
+     * list, a segment string) unifies element by element -- and those
+     * nested unifications are part of this one, so they must only queue. */
+    int bare = !trail->defer;
+    if (bare)
+        trail->defer = 1;
+
     int result = do_unify(t1, t2, trail, 0, oc);
 
     /* Restore wakeup_list before firing hooks so nested unify() calls
      * (from within hooks) each get their own scope. */
     trail->wakeup_list = saved_wl;
 
-    if (result < 0) {
+    if (result <= 0) {
+        if (bare)
+            trail->defer = 0;
         trail_undo_to(trail, mark);
         Py_DECREF(my_wl);
-        return NULL;
-    }
-    if (!result) {
-        trail_undo_to(trail, mark);
-        Py_DECREF(my_wl);
+        if (result < 0)
+            return NULL;
         Py_RETURN_FALSE;
     }
 
-    /* Fire attribute wakeup hooks; with no driver, own the queue (above). */
-    int bare = !trail->defer;
-    if (bare)
-        trail->defer = 1;
+    /* Fire attribute wakeup hooks, then (with no driver) run the queue. */
     int wake = fire_wakeups(my_wl, trail);
     Py_DECREF(my_wl);
     if (bare && wake > 0 && trail->pending != NULL)

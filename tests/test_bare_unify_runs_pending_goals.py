@@ -185,9 +185,83 @@ def test_a_raising_hook_restores_defer():
 # ── when/2 outside a driver ──────────────────────────────────────────────────
 
 
-def test_when_queues_a_goal_whose_condition_holds():
+def test_under_a_driver_when_queues_a_goal_whose_condition_holds():
     from clausal.logic.coroutining import _run_now
     t = Trail()
     g = _goal(lambda: None)
+    t.defer = True
     assert _run_now(g, t) is True
     assert t.pending == (g,)
+
+
+# ── fix round 1 ──────────────────────────────────────────────────────────────
+
+
+def test_outside_a_driver_when_runs_a_goal_whose_condition_holds_in_place():
+    """Review M2: a bare unify drains only what its own hooks queued.  A
+    when/2 installed with no driver and its condition already true runs the
+    goal there (no unification will ever drain it); a failing goal fails the
+    install and leaves nothing queued to poison later unifications."""
+    from clausal.logic.coroutining import _install_when_condition, _run_now
+    ran = []
+    t = Trail()
+    assert _run_now(_goal(lambda: ran.append(1)), t) is True
+    assert ran == [1] and t.pending is None
+
+    t = Trail()
+    assert _install_when_condition(("nonvar", 1), _goal(lambda: False), t) is False
+    assert t.pending is None
+    assert unify(1, 1, t) is True
+    x = Var()
+    assert unify(x, 2, t) is True and deref(x) == 2
+
+
+def test_a_partial_list_unify_wakes_goals_after_every_hook():
+    """Review I1: SegList.__unify__ unifies element by element through
+    unify(); those nested unifies are part of the outer unification and must
+    not drain on their own."""
+    from clausal.terms import ConcreteSeg, SegList, VarSeg
+    log = []
+    register_attr_hook(_ORDER, lambda v, o, t: log.append("probe") or True)
+    t, z, w, rest = Trail(), Var(), Var(), Var()
+    _freeze_var(z, _goal(lambda: log.append(("goal", deref(w)))), t)
+    put_attr(w, _ORDER, 1, t)
+    assert unify(SegList([ConcreteSeg([z, w]), VarSeg(rest)]), [1, 2, 3], t)
+    assert log == ["probe", ("goal", 2)]
+    assert deref(rest) == [3]
+    assert t.pending is None and t.defer is False
+
+
+def test_a_bare_multi_hole_partial_list_unify_binds_the_first_split():
+    from clausal.terms import SegList, VarSeg
+    t, a, b = Trail(), Var(), Var()
+    assert unify(SegList([VarSeg(a), VarSeg(b)]), [1, 2], t)
+    assert deref(a) == [] and deref(b) == [1, 2]
+    assert t.pending is None and t.defer is False
+
+
+@pytest.mark.parametrize("which", ["c", "py"])
+def test_a_tabled_answer_is_one_unification(which):
+    """_unify_answer binds a call's arguments to a stored answer: one head
+    unification, so a woken goal sees every argument bound and hooked."""
+    from clausal.logic import tabling
+    fn = tabling._unify_answer_py if which == "py" else tabling._unify_answer
+    log = []
+    register_attr_hook(_ORDER, lambda v, o, t: log.append("probe") or True)
+    t, z, w = Trail(), Var(), Var()
+    _freeze_var(z, _goal(lambda: log.append(("goal", deref(w)))), t)
+    put_attr(w, _ORDER, 1, t)
+    assert fn((z, w), (1, 2), t)
+    assert log == ["probe", ("goal", 2)]
+    assert t.pending is None and t.defer is False
+
+
+@pytest.mark.parametrize("which", ["c", "py"])
+def test_a_failing_tabled_answer_binds_nothing(which):
+    from clausal.logic import tabling
+    fn = tabling._unify_answer_py if which == "py" else tabling._unify_answer
+    t, z, w = Trail(), Var(), Var()
+    _freeze_var(z, _goal(lambda: False), t)
+    mark = t.mark()
+    assert not fn((z, w), (1, 2), t)
+    assert is_var(deref(z)) and is_var(deref(w)) and t.mark() == mark
