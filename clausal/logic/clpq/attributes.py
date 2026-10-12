@@ -43,6 +43,26 @@ class SolverState:
         self.keep = keep
 
 
+def refuse_inside_attribute_hooks(trail, culprit, name, arity):
+    """Ruling R30: a public entry point of the port does not run while the
+    engine is dispatching attribute hooks (``trail.hooks_running`` above
+    0).  A hook body runs while other variables of the same unification
+    are bound with their hooks still to come, so the store it would read
+    holds unhooked bindings (DEVIATIONS.md D3, ruling R27).  Raises
+    ``error(permission_error(call, goal, Culprit), Name/Arity)``, the shape
+    the engine's ``solve``/``call`` raise there (a750f58c).  The port's own
+    hook and its internals call no public entry point
+    (tests/clpq_port/test_refused_inside_a_hook.py)."""
+    if trail is not None and trail.hooks_running:
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            LogicException, permission_error)
+        raise LogicException(
+            permission_error("call", "goal", culprit, ("/", name, arity)),
+            f"{name}/{arity}: a CLP(Q) entry point cannot run while "
+            f"attribute hooks are running; queue it with "
+            f"trail.push_pending(goal)")
+
+
 def state_of(variable):
     return get_attr(variable, CLPQ_KEY)
 

@@ -185,17 +185,14 @@ and returns at once.  Components are scanned once each: X's and Y's are
 one component when the binding is inside it
 (`test_a_binding_within_one_component_makes_one_stand_in`).
 
-Nothing else runs inside that window, as long as one rule holds (ruling
-R27, a stated contract): **no attribute hook body
-calls an entry point of the port** (`post_constraint` and the other `{}/1`
-forms, `inf`, `sup`, `minimize`, `maximize`, `entailed`, `bb_inf`,
-`dump/3`, `projecting_assert/1`, `attribute_goal`).  A hook body runs while
-other variables of the same unification are bound and their hooks are
-still to come, so an entry point called there reads rows and member lists
-that hold unhooked bindings.  The rule holds bare and under a driver
-alike: the engine's `trail.hooks_running` is above 0 inside every hook
-and 0 at every goal (a750f58c, docs/coroutining.md "Inside a hook or at a
-goal";
+Nothing else runs inside that window, because one rule holds (ruling
+R27, fail-closed since ruling R30): **no attribute hook body calls an
+entry point of the port**.  A hook body runs while other variables of the
+same unification are bound and their hooks are still to come, so an
+entry point called there reads rows and member lists that hold unhooked
+bindings.  The engine's `trail.hooks_running` is above 0 inside every
+hook and 0 at every goal, bare and under a driver (a750f58c,
+docs/coroutining.md "Inside a hook or at a goal";
 `test_the_port_hook_runs_inside_the_counter_and_its_later_work_at_a_goal`).
 The reason, a hook registered on another key that dumps and posts in its body:
 
@@ -209,31 +206,70 @@ post(t, ("=", ("+", X, Q), 3), (">=", W, ("+", Q, Fraction(1, 2))),
 put_attr(Z, "other_key", 1, t); unify(("f", Z, X), ("f", 1, 2), t)
 ```
 
-Z's hook runs before X's.  At f0081942 the dump gives `[W =< 20]` and Q
-is left unbound with sup 1; with the retired entry catch-up (800048a2) it
+Z's hook runs before X's.  At f0081942 the dump gave `[W =< 20]` and Q
+was left unbound with sup 1; with the retired entry catch-up (800048a2) it
 gave `[W >= 3/2, W =< 20]` and Q = 1.  A `post`, `inf`, `entailed` or
-`bb_inf` from a hook body was wrong already at 800048a2.  The hooks the
-engine registers keep the rule: `freeze/2` and `when/2` queue their goals,
-and dif, clpfd, clpb, clpr, the two units keys, the legacy clpq key and
-COMPONENT_KEY call no entry point.  clpfd's calls into CLP(Q) are calls,
-not registrations, and some run inside a hook (clpfd's propagation in its
-own hook, its reified comparisons, the units hook): under
-`CLAUSAL_CLPQ=holzbaur` the counter enforces the rule for them.  The
-adapter queues such a post while `trail.hooks_running` is above 0, and
-posts in place at a goal (ruling R28c, `holzbaur.py`'s docstring,
+`bb_inf` from a hook body was wrong already at 800048a2.
+
+How the rule is enforced (ruling R30, Task 14b).  Every public entry
+point that reads or writes the store raises
+`error(permission_error(call, goal, Culprit), Name/Arity)` while
+`trail.hooks_running` is above 0, the shape the engine's `solve`/`call`
+raise there (`attributes.refuse_inside_attribute_hooks`).  The port's own
+entry points (1.3.3's user predicates): nf.pl's `{}/1`
+(`post_constraint`, `post_constraint_with_choices`, and
+`resume_constraint`), `entailed/1`, bv.pl's `inf/2`, `sup/2`,
+`maximize/1`, `minimize/1`, bb.pl's `bb_inf/3`, dump.pl's `dump/3` and
+`projecting_assert/1`, ordering.pl's `ordering/1`.  The adapter's
+(`holzbaur.py`): `in_q/3`, `inf/2`, `sup/2`, `maximize/2`, `minimize/2`,
+`bb_inf/3`, `entailed/1`, `dump_q/2` (and the `clpq.dump` builtin through
+it), `residual_q/1`, `ordering/1`, `{}/1` (`clpq_constraint_block`,
+`clpq_constraint_answers`) and `promote_fd_to_q/1`; the Culprit is the
+goal as the program writes it, with the Python API's arguments.  The
+repro above now raises `permission_error(call, goal, dump([W], [W], _))`
+from `dump/3`, and the unification raises with it
+(`test_the_d3_repro_raises_instead_of_answering_wrong`; with the check
+removed it answers `[W =< 20]` and Q unbound with sup 1 again, the
+mutation check of Task 14b).  Each entry point is refused from a probe
+hook and runs at a goal, bare and under a driver
+(tests/clpq_port/test_refused_inside_a_hook.py).  The port's own hook and
+its internals call no public entry point inside the dispatch: its Later
+goals (`PostBound` and the others) post through `{}/1` from the pending
+queue, at a goal (`test_the_port_s_own_hook_is_not_refused`, the gate
+set and the hook-window fuzz under both switches).  `attribute_goal`
+takes no trail and is not checked; it only reads, for the toplevel.
+
+clpfd's calls into CLP(Q) are the exception.  They are calls, not
+registrations, and some run inside a hook (clpfd's propagation in its own
+hook, its reified comparisons, the units hook).  Under
+`CLAUSAL_CLPQ=holzbaur` the adapter's `q_eq`, `q_ne`, `q_le`, `q_lt`,
+`q_gt`, `q_ge` and `sync_fd_bounds` are not refused: they queue the post
+while `trail.hooks_running` is above 0 and post in place at a goal
+(ruling R28c, `holzbaur.py`'s docstring,
 `test_a_comparison_from_clpfd_inside_a_hook_is_queued` and
-`test_a_comparison_from_clpfd_inside_a_hook_is_queued_on_any_store`).  The same post made in place inside the hook gives the
-wrong answer above: through `q_le` from Z's hook, Q is left unbound with
-sup 1, `inf(W)` fails and `dump/3` raises "renormalize: empty homogeneous
-part" (the mutation check of Task 14b).  A direct call from a hook body to
-an entry point (`{}`, `inf`, `dump/3`, ...) is not checked: the rule stays
-a contract there.  The tripwire
-`test_the_registered_attribute_hooks_are_the_known_set` fails when a hook
-is registered or removed, and says to check this rule before extending
-its list.  It scans the source under `clausal/` for
-`register_attr_hook(KEY, ...)` at the start of a line, so it misses a hook
-registered from C, from outside `clausal/`, or through a qualified or
-aliased call.
+`test_a_comparison_from_clpfd_inside_a_hook_is_queued_on_any_store`).
+The same post made in place inside the hook gives the wrong answer above:
+through `q_le` from Z's hook, Q is left unbound with sup 1, `inf(W)` fails
+and `dump/3` raises "renormalize: empty homogeneous part" (Task 14b's
+mutation check).  Queueing every post, at a goal too, is the other
+mutation: since a750f58c a seam goal still answers right, because the
+engine's boundary after an inline comparison runs the queued post before
+the next goal (`in_q(X, 0, 100), X =< 10, X >= 3, inf(X, Lo)` gives
+Lo = 3).  The callers it breaks are those that post at a goal through the
+Python API and read before any boundary: Lo = 0, with the posts left on
+the queue, and 114 tests of test_switch.py and test_attribute_hooks.py
+fail (among them `test_a_comparison_from_clpfd_at_a_goal_is_posted_in_place`
+and every seed of `test_a_post_from_clpfd_at_a_goal_is_never_queued`).
+
+The hooks the engine registers keep the rule (`freeze/2` and `when/2`
+queue their goals, and dif, clpfd, clpb, clpr, the two units keys, the
+legacy clpq key and COMPONENT_KEY call no entry point), and the tripwire
+`test_the_registered_attribute_hooks_are_the_known_set` stays as a second
+net: it fails when a hook is registered or removed, and says to check
+this rule before extending its list.  It scans the source under
+`clausal/` for `register_attr_hook(KEY, ...)` at the start of a line, so
+it misses a hook registered from C, from outside `clausal/`, or through a
+qualified or aliased call.
 
 The engine contract since 9b38a0f1 (`clausal/logic/pending.py`,
 `docs/coroutining.md`): every unification, bare or under a driver, sets
@@ -999,6 +1035,20 @@ differently from 1.3.3 itself:
 
   Under a driver the bound posts are 38x faster and now cost what they
   cost bare; the chain posts about 6.5x.
+  The trigger's two mutation checks (D3): posting in place inside a hook
+  gives R27's wrong answer.  Queueing at a goal too no longer breaks a
+  seam goal, since a750f58c's boundary after an inline comparison runs the
+  queued post.  It does break the Python-API callers that post at a goal
+  and read before a boundary (`in_q`, `q_le`, `q_ge`, `inf` gives Lo = 0),
+  and 114 tests catch it.  The Task 14b brief expected the seam goal
+  `in_q(X, 0, 100), X =< 10, X >= 3, inf(X, Lo)` to catch it.  That was
+  true before a750f58c and is not now.
+- The adapter's entry points other than clpfd's posts refuse to run while
+  `trail.hooks_running` is above 0 (ruling R30, D3).  Legacy has no such
+  check.  A program whose hook body called `inf/2`, `{}/1`, `dump_q/2`
+  and the others got an answer from legacy, and gets
+  `permission_error(call, goal, Goal)` from the port.  The cost is one
+  attribute read per call.
 - A constrained variable bound to an older PlainVar (a variable that
   cannot carry attributes) raises `system_error(plain_variable)` from the
   hook, before any trailed change; 1.3.3's `put_atts` cannot meet such a

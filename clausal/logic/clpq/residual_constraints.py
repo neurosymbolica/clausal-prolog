@@ -18,6 +18,7 @@ A constraint goal is a compound cell (`("=<", Sum, Bound)`), with engine
 numbers (int or Fraction) for the rationals
 (test_dump_emits_engine_numbers_never_rational_pairs).
 """
+from clausal.logic.clpq.attributes import refuse_inside_attribute_hooks
 from clausal.logic.clpq.attribute_hooks import dump_linear, dump_nonzero
 from clausal.logic.clpq.attributes import state_of
 from clausal.logic.clpq.components import ListCell, component_all_variables
@@ -50,6 +51,8 @@ def dump(target_variables, names, trail):
     takes the queue it was entered with first, so a trial runs only what
     it wakes itself; the undo puts the queue back
     (test_work_queued_before_dump_stays_queued)."""
+    refuse_inside_attribute_hooks(
+        trail, ("dump", target_variables, names, Var()), "dump", 3)
     targets = _unbound_targets(target_variables)
     if len(names) != len(targets):
         return None
@@ -101,6 +104,8 @@ def projecting_assert(clause, trail):
     returns the clause and its caller asserts it (DEVIATIONS.md D15).
     Where the projection fails or is empty, the clause itself ("not our
     business")."""
+    refuse_inside_attribute_hooks(
+        trail, ("projecting_assert", clause), "projecting_assert", 1)
     target = _term_variables([clause])
     saved_defer = trail.defer
     trail.defer = False

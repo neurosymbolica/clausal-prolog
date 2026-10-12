@@ -53,6 +53,11 @@ called bare would leave it there (DEVIATIONS.md D20).  ``{}``
 (``clpq_constraint_block``) and the optimisers are goals, never called
 from a hook, and post in place.
 
+Every other entry point here refuses to run inside a hook (ruling R30):
+``error(permission_error(call, goal, Goal), Name/Arity)`` while
+``trail.hooks_running`` is above 0, as the engine's ``solve`` does there
+(DEVIATIONS.md D3, tests/clpq_port/test_refused_inside_a_hook.py).
+
 ``{C1 ; C2}`` (ruling R18, DEVIATIONS.md D12).  A block that holds ``;``
 is posted with ``post_constraint_with_choices``, and
 ``clpq_constraint_answers`` yields one answer per branch, resuming the
@@ -69,7 +74,8 @@ from clausal.logic.clpq import branch_and_bound as _branch_and_bound
 from clausal.logic.clpq import normal_form as _normal_form
 from clausal.logic.clpq import residual_constraints as _residual_constraints
 from clausal.logic.clpq import variable_ordering as _variable_ordering
-from clausal.logic.clpq.attributes import CLPQ_KEY, state_of
+from clausal.logic.clpq.attributes import (
+    CLPQ_KEY, refuse_inside_attribute_hooks, state_of)
 from clausal.logic.clpq.legacy import (
     _cell_as_node, _cells_as_nodes, _units_result, _units_strip,
     _units_strip_expr)
@@ -152,6 +158,8 @@ def promote_fd_to_q(variable, fd_state, trail):
     bounds posted as `{Lo =< X, X =< Hi}` (an infinite end is left open).
     The FD attribute stays, so both solvers see the variable, as legacy's
     _promote_fd_to_q does."""
+    refuse_inside_attribute_hooks(
+        trail, ("promote_fd_to_q", variable), "promote_fd_to_q", 1)
     from clausal.logic.clpfd import domain_max, domain_min  # noqa: PLC0415
     lower = domain_min(fd_state.domain)
     upper = domain_max(fd_state.domain)
@@ -300,6 +308,8 @@ def in_q(var_or_list, lo=None, hi=None, trail=None):
     ``{lo =< X, X =< hi}``, or bv.pl's var_intern/2 when there is no
     bound.  A Quantity bound declares the dimension too, as legacy's
     in_q does (units_clp's shadow carries the bounds)."""
+    refuse_inside_attribute_hooks(
+        trail, ("in_q", var_or_list, lo, hi), "in_q", 3)
     targets = deref(var_or_list)
     lo, hi = deref(lo), deref(hi)
     united = _in_q_units(targets, lo, hi, trail)
@@ -438,6 +448,7 @@ def _objective(expr, context, trail):
 
 def sup(expr, result_var, trail):
     """bv.pl sup/2: the supremum of *expr*; fails where it is unbounded."""
+    refuse_inside_attribute_hooks(trail, ("sup", expr, result_var), "sup", 2)
     expr, dims = _objective(expr, "sup/2", trail)
     return _optimum(_bounded_simplex.sup, expr, deref(result_var), dims,
                     trail)
@@ -445,6 +456,7 @@ def sup(expr, result_var, trail):
 
 def inf(expr, result_var, trail):
     """bv.pl inf/2: the infimum of *expr*; fails where it is unbounded."""
+    refuse_inside_attribute_hooks(trail, ("inf", expr, result_var), "inf", 2)
     expr, dims = _objective(expr, "inf/2", trail)
     return _optimum(_bounded_simplex.inf, expr, deref(result_var), dims,
                     trail)
@@ -453,6 +465,8 @@ def inf(expr, result_var, trail):
 def maximize(expr, result_var, trail):
     """bv.pl maximize/1, then *result_var* is the maximum: sup/2 first, so
     an unbounded objective fails as legacy's does."""
+    refuse_inside_attribute_hooks(
+        trail, ("maximize", expr, result_var), "maximize", 2)
     expr, dims = _objective(expr, "maximize/2", trail)
     value = Var()
     if not _without_a_queue(
@@ -466,6 +480,8 @@ def maximize(expr, result_var, trail):
 
 def minimize(expr, result_var, trail):
     """bv.pl minimize/1, then *result_var* is the minimum."""
+    refuse_inside_attribute_hooks(
+        trail, ("minimize", expr, result_var), "minimize", 2)
     expr, dims = _objective(expr, "minimize/2", trail)
     value = Var()
     if not _without_a_queue(
@@ -488,6 +504,8 @@ def bb_inf(int_vars, expr, result_var, trail):
     """bb.pl bb_inf/3: the infimum of *expr* with every variable of
     *int_vars* integral.  Binds *result_var* alone; the store is as it was
     (1.3.3's shape, Task 13).  A united variable's shadow is the integer."""
+    refuse_inside_attribute_hooks(
+        trail, ("bb_inf", int_vars, expr, result_var), "bb_inf", 3)
     expr, dims = _objective(expr, "bb_inf/3", trail)
     integers = _labels(deref(int_vars), "bb_inf/3")
     return _optimum(
@@ -501,6 +519,8 @@ def bb_inf(int_vars, expr, result_var, trail):
 def entailed(constraint_type, l, r, trail):
     """nf.pl entailed/1 for ``l constraint_type r``.  The store is left as
     it was."""
+    refuse_inside_attribute_hooks(
+        trail, ("entailed", (constraint_type, l, r)), "entailed", 1)
     node_class = _ENTAILED_NODES.get(constraint_type)
     if node_class is None:
         raise ValueError(f"Unknown constraint type: {constraint_type!r}")
@@ -542,6 +562,8 @@ def dump_q(target_vars, trail, name_of=None, *, toplevel=False):
     shows (``{X + Y = 3}``).  *toplevel* is accepted for legacy's
     signature: dump/3 already writes each constraint as 1.3.3 shows an
     answer."""
+    refuse_inside_attribute_hooks(
+        trail, ("dump_q", target_vars, Var()), "dump_q", 2)
     shadows, name = _named_targets(target_vars, "dump_q/2", name_of)
     return _without_a_queue(
         trail, lambda: _residual_constraints.residual_strings(
@@ -551,6 +573,8 @@ def dump_q(target_vars, trail, name_of=None, *, toplevel=False):
 def residual_q(target_vars, trail, name_of):
     """The CLP(Q) constraints on *target_vars* as a toplevel prints them;
     ``[]`` when none of them carries CLP(Q) state."""
+    refuse_inside_attribute_hooks(
+        trail, ("residual_q", target_vars), "residual_q", 1)
     return dump_q(target_vars, trail, name_of, toplevel=True)
 
 
@@ -559,6 +583,7 @@ def residual_q(target_vars, trail, name_of):
 def ordering(spec, trail):
     """ordering.pl ordering/1: *spec* is a list of variables or a ``<`` /
     ``>`` between two (an operator node or a cell)."""
+    refuse_inside_attribute_hooks(trail, ("ordering", spec), "ordering", 1)
     spec = deref(spec)
     kind = type(spec)
     if kind is Lt:
@@ -673,6 +698,7 @@ def clpq_constraint_block(constraints, trail):
     that holds ``;`` has several answers and goes through
     clpq_constraint_answers (ruling R18); here it raises TypeError, as
     legacy's does for a node it cannot post."""
+    refuse_inside_attribute_hooks(trail, ("{}", constraints), "{}", 1)
     tree, disjunctive = _block_tree(constraints)
     if disjunctive:
         raise TypeError("clpq constraint block: a disjunction has several "
@@ -696,6 +722,7 @@ def clpq_constraint_answers(constraints, trail):
     its bindings; the next request resumes the newest choice point
     (DEVIATIONS.md D12), and after the last the trail is undone to where
     the block started."""
+    refuse_inside_attribute_hooks(trail, ("{}", constraints), "{}", 1)
     tree, disjunctive = _block_tree(constraints)
     if not disjunctive:
         if _post_leaves(tree, trail):

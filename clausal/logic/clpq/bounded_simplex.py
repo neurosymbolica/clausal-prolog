@@ -32,6 +32,7 @@ bounded_simplex imports normal_form, inequalities and branch_and_bound at
 the call site, inside the function that needs them, because each of those
 modules imports this one.  Each such import is marked "cyclic".
 """
+from clausal.logic.clpq.attributes import refuse_inside_attribute_hooks
 from clausal.logic.clpq.arithmetic import (
     ONE, ZERO, add, compare, divide, is_zero, multiply, negate,
     rational_to_float, sign, subtract, to_number)
@@ -291,12 +292,14 @@ def solve_less_or_equal(normal_form, trail):
 
 def maximize(term, trail):
     """bv.pl, maximize/1."""
+    refuse_inside_attribute_hooks(trail, ("maximize", term), "maximize", 1)
     from clausal.terms import Negate
     return minimize(Negate(operand=term), trail)
 
 
 def minimize(term, trail):
     """bv.pl, minimize/1: wait until *term* is linear, then minimize_linear."""
+    refuse_inside_attribute_hooks(trail, ("minimize", term), "minimize", 1)
     from clausal.logic.clpq.normal_form import wait_linear  # cyclic: nf.pl
     return wait_linear(term, minimize_linear, None, trail)
 
@@ -330,6 +333,8 @@ def _post_equal(left, right, trail):
 
 def sup(expression, supremum, trail, vector=None, vertex=None):
     """bv.pl, sup/2 and sup/4: inf(-Expression, -Sup, Vector, Vertex)."""
+    refuse_inside_attribute_hooks(
+        trail, ("sup", expression, supremum), "sup", 2)
     from clausal.terms import Negate
     return inf(Negate(operand=expression), Negate(operand=supremum), trail,
                vector, vertex)
@@ -340,6 +345,8 @@ def inf(expression, infimum, trail, vector=None, vertex=None):
     infimum_linear.  inf/2 is inf(Expression, Inf, [], []): Vector and
     Vertex are lists, as a delayed goal shows them
     (test_translate_goal_of_wait_linear_retry_reaches_res_and_the_goal)."""
+    refuse_inside_attribute_hooks(
+        trail, ("inf", expression, infimum), "inf", 2)
     from clausal.logic.clpq.normal_form import wait_linear  # cyclic: nf.pl
     if vector is None:
         vector = []

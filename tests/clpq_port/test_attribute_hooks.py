@@ -914,9 +914,12 @@ def test_the_registered_attribute_hooks_are_the_known_set():
     # A hook body runs while other variables of the same unification are
     # bound with their hooks still to come, bare and under a driver alike
     # (trail.hooks_running is above 0 inside every hook; the next test),
-    # so an entry point called there reads unhooked bindings (DEVIATIONS.md
-    # D3 has the repro).  clpfd's calls into the port are queued on that
-    # counter (ruling R28c, test_switch.py).
+    # so an entry point called there would read unhooked bindings
+    # (DEVIATIONS.md D3 has the repro).  Ruling R30 enforces the rule:
+    # the entry points refuse inside a hook
+    # (test_refused_inside_a_hook.py), and clpfd's calls queue on the
+    # counter (ruling R28c, test_switch.py).  This scan stays as a second
+    # net.
     # Known limits: this scans source under clausal/ for
     # `register_attr_hook(KEY, ...)` at the start of a line, so it misses a
     # hook registered from C, from outside clausal/, or through a qualified

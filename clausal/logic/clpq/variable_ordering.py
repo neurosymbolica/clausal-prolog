@@ -20,6 +20,7 @@ A graph is 1.3.3's ugraph: a list of `(vertex, neighbours)` pairs sorted by
 vertex, each `neighbours` a sorted list without duplicates.  An edge is a
 `(from, to)` pair.
 """
+from clausal.logic.clpq.attributes import refuse_inside_attribute_hooks
 from clausal.logic.clpq.attributes import state_of
 from clausal.logic.exceptions import LogicException, system_error
 from clausal.logic.variables import deref, is_var, unify
@@ -241,6 +242,7 @@ def top_sort(graph):
 def ordering(term, trail):
     """ordering.pl, ordering/1.  A constraint is the cell ('<', A, B) or
     ('>', A, B), or a list.  Returns False where ordering/1 fails."""
+    refuse_inside_attribute_hooks(trail, ("ordering", term), "ordering", 1)
     term = deref(term)
     if is_var(term):                                    # clause 1
         return False

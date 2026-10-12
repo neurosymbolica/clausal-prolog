@@ -44,6 +44,7 @@ Imports: nf.pl calls bv.pl and ineq.pl, and bv.pl calls nf.pl back
 call sites ("cyclic") and this module imports bounded_simplex and
 inequalities at the top.
 """
+from clausal.logic.clpq.attributes import refuse_inside_attribute_hooks
 from clausal.logic.cells import TUPLE_TAG, compound_cell_shape
 from clausal.logic.clpq.arithmetic import (
     ONE, ZERO, absolute, add, arc_cosine, arc_sine, arc_tangent,
@@ -182,6 +183,7 @@ def post_constraint(term, trail):
     function then drops them.  post_constraint_with_choices keeps them for
     the caller.  The conjunction and disjunction are a work list, not
     recursion."""
+    refuse_inside_attribute_hooks(trail, ("{}", term), "{}", 1)
     return _run_constraint_goals((term, None), [], trail)
 
 
@@ -189,6 +191,7 @@ def post_constraint_with_choices(term, trail):
     """nf.pl, {}/1 with its choice points handed back: a ConstraintChoices
     to pass to resume_constraint after a later failure, or None where the
     constraint fails (test_a_caller_resumes_a_posted_disjunction)."""
+    refuse_inside_attribute_hooks(trail, ("{}", term), "{}", 1)
     choices = []
     if not _run_constraint_goals((term, None), choices, trail):
         return None
@@ -200,6 +203,8 @@ def resume_constraint(state, trail):
     undo to its newest choice point and take the other branch, then the
     goals after it.  True when that succeeds (the state keeps any choice
     points that are left), False when no branch is left."""
+    refuse_inside_attribute_hooks(
+        trail, ("resume_constraint", state), "resume_constraint", 1)
     choices = state.choices
     while choices:
         mark, alternative, goals = choices.pop()
@@ -288,6 +293,7 @@ def entailed(term, trail):
     are queued, so the queue entailed was entered with is taken first and
     the undo puts it back (ruling R24,
     test_entailed_runs_the_goals_its_probe_wakes)."""
+    refuse_inside_attribute_hooks(trail, ("entailed", term), "entailed", 1)
     negation = negate(term)
     mark = trail.mark()
     try:
