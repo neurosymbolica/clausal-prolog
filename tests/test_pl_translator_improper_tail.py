@@ -76,3 +76,19 @@ def test_an_improper_tail_stays_the_tail(tmp_path, dq, frontend):
     assert r.returncode == 0, r.stderr
     assert r.stdout.splitlines() == (
         EXPECTED_COMMON + [EXPECTED_J[dq]] + EXPECTED_TAIL), r.stdout
+
+
+@pytest.mark.parametrize("frontend", ["translator", "native"])
+def test_an_improper_terminal_list_is_refused(tmp_path, frontend):
+    # ISO 7.14 / Scryer: type_error(list, [x|foo]).  The translator emitted
+    # the cons cell ('.', x, foo) as a body goal instead.
+    (tmp_path / "g.pl").write_text("g --> [x|foo].\n")
+    env = dict(os.environ)
+    env["CLAUSAL_PL_FRONTEND"] = frontend
+    env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+    r = subprocess.run(
+        [sys.executable, "-m", "clausal", "-g", "phrase(g, L)", "g.pl"],
+        cwd=tmp_path, env=env, capture_output=True, text=True, timeout=120)
+    assert r.returncode == 1
+    assert "did not load" in r.stderr
+    assert "type_error(list" in r.stderr, r.stderr

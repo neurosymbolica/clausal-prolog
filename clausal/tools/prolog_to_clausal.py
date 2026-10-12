@@ -1260,6 +1260,18 @@ class _PrologToClausal:
         """Emit a single DCG body goal."""
         # Terminal list: [a, b, c]
         if isinstance(goal, PList):
+            tail = goal.tail
+            while isinstance(tail, PList):
+                tail = tail.tail
+            if tail is not None and not self._list_tail(tail):
+                # ISO 7.14 / Scryer: a terminal list must be a list;
+                # ``g --> [x|foo]`` is type_error(list, [x|foo]), as the
+                # native front end refuses it.  Emitted, it would be the
+                # cons cell ('.', x, foo) read as a nonterminal call.
+                raise PrologTranslationError(
+                    f"grammar rule: a terminal list ends in "
+                    f"{_plain_term(tail)}: an improper list is no terminal "
+                    f"list (ISO type_error(list, ...))")
             return self._emit_term(goal)
         # Inline goal: {Goal}. Braces mark DCG *body* position in Clausal;
         # emit them explicitly so the goal is not rewritten as a non-terminal.
