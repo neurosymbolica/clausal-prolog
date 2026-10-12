@@ -102,9 +102,22 @@ class _Query:
 
 def _term(query, term):
     """A reader term as an engine term: variables become the query's Vars,
-    a compound a tuple cell."""
+    a list a list, a partial list `[H|T]` (the reader's '.'(H, T)) a
+    SegList, a compound a tuple cell."""
     if type(term) is VarRef:
         return query.variables[term.i]
+    if type(term) is list:
+        return [_term(query, element) for element in term]
+    if type(term) is tuple and len(term) == 3 and term[0] == ".":
+        from clausal.terms import ConcreteSeg, SegList, VarSeg
+        head = [_term(query, term[1])]
+        tail = term[2]
+        while type(tail) is tuple and len(tail) == 3 and tail[0] == ".":
+            head.append(_term(query, tail[1]))
+            tail = tail[2]
+        if type(tail) is VarRef:
+            return SegList([ConcreteSeg(head), VarSeg(query.variables[tail.i])])
+        return head + _term(query, tail)
     if type(term) is tuple:
         return (term[0],) + tuple(_term(query, argument) for argument in term[1:])
     return term
@@ -163,7 +176,12 @@ def _solve(query, goals, trail, found):
             _then(query, rest, trail, found)
     elif functor in ("sup", "inf"):
         optimum = bv.sup if functor == "sup" else bv.inf
-        if optimum(query.expression(goal[1]), query.expression(goal[2]), trail):
+        extra = ()
+        if len(goal) == 5:              # inf/4, sup/4: Vector, Vertex
+            extra = ([query.expression(element) for element in goal[3]],
+                     _term(query, goal[4]))
+        if optimum(query.expression(goal[1]), query.expression(goal[2]), trail,
+                   *extra):
             _then(query, rest, trail, found)
     else:
         raise ValueError(f"the driver does not run {goal!r}")
@@ -593,6 +611,49 @@ def test_a_nested_bb_inf_differs_from_the_oracle(defer):
     alone = text.split("bb_inf([W], W*X, I2), ")[1]
     (want_alone,) = _scryer_answers_once(alone, ("I", "VX"), bounds=False)
     assert (want_alone.bindings["I"], want_alone.bindings["VX"]) == (1, 0)
+
+
+# ---------------------------------------------------------------- inf/4 and sup/4 (Task 15)
+
+#: bv.pl's inf/4 and sup/4 with a Vertex that is unbound, partial, or a
+#: list of the wrong length.  1.3.3's assign([Inf|Vertex], [Inf0|Values])
+#: binds an unbound Vertex (or a partial one's tail) to a list as long as
+#: Vector, posting {X =:= Value} for each element.  The oracle is the local
+#: clpq.pl port of 1.3.3 on Scryer: agreement is two ports of the same
+#: source agreeing, not an independent check.  An unbound VECTOR is left
+#: out: on the oracle it does not terminate (vertex_value/2 enumerates
+#: lists).
+INF_4_CASES = [
+    ("{X >= 1, Y >= 2}, inf(X+Y, I, [X,Y], V), V = [V1, V2]",
+     ["I", "V1", "V2"], 1),
+    ("{X >= 1, Y >= 2}, sup(-X-Y, S, [X,Y], V), V = [V1, V2]",
+     ["S", "V1", "V2"], 1),
+    ("{2*X >= 1, X+Y >= 3, Y =< 5}, inf(X, I, [X,Y], V), V = [V1, V2]",
+     ["I", "V1", "V2"], 1),
+    ("{X >= 1, Y >= 2}, inf(X+Y, I, [], V), V = []", ["I"], 1),
+    ("{X >= 1, Y >= 2}, inf(X+Y, I, [X], V), V = [V1]", ["I", "V1"], 1),
+    ("{X >= 1, Y >= 2}, inf(X+Y, I, [X,Y], V), X = 7, V = [V1, V2]",
+     ["I", "V1", "V2", "Y"], 1),
+    # partially bound
+    ("{X >= 1, Y >= 2}, inf(X+Y, I, [X,Y], [A|T]), T = [B]",
+     ["I", "A", "B"], 1),
+    ("{X >= 1, Y >= 2}, sup(-X-Y, S, [X,Y], [A|T]), T = [B]",
+     ["S", "A", "B"], 1),
+    ("{X >= 1, Y >= 2}, inf(X+Y, I, [X,Y], [_, _|T]), T = []", ["I"], 1),
+    ("{X >= 1, Y >= 2}, inf(X+Y, I, [X,Y], [A, 2])", ["I", "A"], 1),
+    ("{X >= 1, Y >= 2}, inf(X+Y, I, [X,Y], [A, 5])", ["I", "A"], 0),
+    ("{X >= 1, Y >= 2}, inf(X+Y, I, [X,Y], [A, B, C])", ["I", "A"], 0),
+    ("{X >= 1, Y >= 2}, inf(X+Y, I, [X,Y], [A])", ["I", "A"], 0),
+]
+
+
+@pytest.mark.parametrize("defer", [False, True], ids=["bare", "driver"])
+@pytest.mark.parametrize("text, shown, count", INF_4_CASES)
+def test_inf_4_and_sup_4_bind_the_vertex_as_the_oracle(text, shown, count, defer):
+    want = _scryer_answers_once(text, tuple(shown))
+    assert len(want) == count, want
+    got = port_answers(text, shown, defer=defer)
+    check_against_oracle(text, shown, got, want)
 
 
 # ---------------------------------------------------------------- the brief's residual cases

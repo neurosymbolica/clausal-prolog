@@ -397,7 +397,15 @@ def infimum_linear(normal_form, argument, trail):
     trail.undo(mark)                                        # fail
     if found is None:                                       # bb_delete fails
         return False
-    return assign([infimum] + list(vertex), found, trail)   # clause 2
+    # clause 2, assign([Infimum|Vertex], L): Vertex is a list term, unbound,
+    # partial or proper.  Against the proper list L, assign/2's clause
+    # choice binds it to a list as long as L's tail, so it is unified with
+    # that many fresh variables, which assign then posts
+    # (test_inf_4_and_sup_4_bind_the_vertex_as_the_oracle).
+    elements = [Var() for _ in range(len(found) - 1)]
+    if not unify(vertex, elements, trail):
+        return False
+    return assign([infimum] + elements, found, trail)
 
 
 def assign(variables, values, trail):

@@ -1079,3 +1079,25 @@ differently from 1.3.3 itself:
   `test_a_plain_var_cannot_take_the_constraint`).  system_error, not
   type_error: the program's term is a variable, the right type; the limit
   is the engine's variable kind.
+
+## D21: inf/4 and sup/4 raised on an unbound Vertex until Task 15 (resolved)
+
+Resolved by Task 15.  bv.pl's `infimum_linear/4` ends with
+`assign([Infimum|Vertex], L)`; with Vertex unbound, or a partial list,
+`assign/2`'s clause choice binds it to a list as long as Vector.  The port
+built `[infimum] + list(vertex)`, so an unbound Vertex raised a Python
+`TypeError` (an `AttVar` is not iterable) and a partial list (`[A|T]`, a
+`SegList`) gave a wrong answer.  The failure was in the port's own
+`bounded_simplex.infimum_linear`, not in shared code: `vertex_value`
+reads Vector, which was always a list.  The port now unifies Vertex with a
+list of fresh variables as long as L's tail and posts `{X =:= V}` for each,
+as `assign/2` does (`test_inf_4_and_sup_4_bind_the_vertex_as_the_oracle`,
+bare and under a driver, against the local clpq.pl port of 1.3.3 on
+Scryer: two ports of the same source agreeing, not an independent check).
+1.3.3 posts `{Inf =:= V0}` before it matches Vertex; the port matches
+first.  Either order fails or succeeds together, with the same bindings.
+
+Not changed: an unbound VECTOR.  1.3.3's `vertex_value/2` then enumerates
+lists of growing length inside a failure-driven loop; on the oracle the
+query does not terminate.  The port raises the engine's
+`UnboundVarCoercionError` there (`if vector:` on an unbound variable).
