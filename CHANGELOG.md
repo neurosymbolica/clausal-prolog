@@ -155,6 +155,22 @@ surface described in [docs/public-api.md](docs/public-api.md).
 - **`replace_subterm/4` rewrites inside a partial list whose holes are
   filled** (`[a, *T]` with `T` bound), as `reified_subterm/2` already
   walked it.
+- **A terminal in a `phrase/2,3` body reads one element, not the whole
+  rest.** The run-time translation of a terminal list, as in
+  `phrase((anything, [X]), S)`, was `append(T, S, S0)`. append/3 turned all
+  of S0 into a list at every call, so walking n chars this way copied about
+  n²/2 of them, and a text kept each copy alive as long as its choice point
+  did. The terminal is now ISO's `S0 = [T|S]` (7.14.2), as in a compiled
+  grammar rule, and the rest of a long text or list is a view of it. For
+  `phrase((anything, [X]), S)` over 10,000 chars, peak memory went from
+  81 MB to 31 MB, the same as for a list. Its time grows with the square of
+  the length either way, because backtracking into a deep recursion does.
+  The rest such a body leaves of a text is now text, as a compiled
+  nonterminal leaves it: `phrase([_, b], "abc", R)` gives `R = "c"`, not the
+  Python list `['c']` (the same term: `R == [c]` holds either way).
+  append(L1, L2, L3) with L1 and L3 known also reads only L3's first len(L1)
+  elements. A long list rest is a view, and a text rest is text when L1 is
+  text, else the list of its chars built from a slice.
 - **Building text one char at a time takes linear time and memory.** A
   Python `str` cannot grow, so `[a|T]` with `T` a long text, or
   `append("a", T, L)` / `append(T, "a", L)`, copied all of `T` at every step:

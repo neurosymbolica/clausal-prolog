@@ -232,6 +232,8 @@ def _cons_onto(prefix: list, tail):
     its chars)."""
     from clausal.terms import SegList   # noqa: PLC0415
     tail = deref(tail)
+    if (type(tail) is tuple and not tail) or is_chars(tail) or type(tail) is bytes:
+        tail = _as_items(tail)         # nil is [], a text its chars, bytes its codes
     if not prefix or is_var(tail) or isinstance(tail, (list, SegList)):
         return _partial(prefix, tail)
     for item in reversed(prefix):
@@ -248,6 +250,35 @@ def _cons_heads(val):
         heads.append(val[1])
         val = deref(val[2])
     return heads
+
+
+def _prefix_window(l3_val, n, out_str):
+    """For append/3 with an L1 of *n* elements: ``(head, rest_of)`` when L3
+    is a list, a list view or a text -- *head* a list holding L3's first *n*
+    elements (or all of a shorter L3), ``rest_of()`` the term after them --
+    else None (the caller's general path).  Reads the first *n* elements;
+    the rest is a view of L3 when long.  A text rest is the carrier when the
+    answer is text, else (a list L1 makes the answer a list) its chars,
+    taken from a slice so the long text is never copied whole onto itself."""
+    from clausal.terms import SegListView, list_rest   # noqa: PLC0415
+    if type(l3_val) is list:
+        m = len(l3_val)
+        return l3_val, lambda: list_rest(l3_val, n, m)
+    if type(l3_val) is SegListView:
+        lo, m = l3_val._lo, l3_val._hi - l3_val._lo
+        head = l3_val._base[lo:lo + min(n, m)]
+        return head, lambda: list_rest(l3_val, n, m)
+    if is_chars(l3_val):
+        p3 = chars_payload(l3_val)
+        m = len(p3)
+        head = [char_atom(c) for c in str(p3[:min(n, m)])]
+        def rest_of():
+            rest = text_slice(p3, n, m) if type(p3) is str else p3[n:]
+            if out_str:
+                return (CHARS_TAG, rest)
+            return [char_atom(c) for c in str(rest)]
+        return head, rest_of
+    return None
 
 
 @_trampoline_builtin("in_", 2)
@@ -447,6 +478,32 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
 
     l1_items = _as_items(l1_val)
     l2_items = _as_items(l2_val)
+
+    if l1_items is not None and l2_items is None:
+        window = _prefix_window(l3_val, len(l1_items), _out_str)
+        if window is not None:
+            # L1 and L3 known: L1's elements UNIFY with L3's prefix (the
+            # prologue's clause ``append([H|T], L, [H|R])``), then L2 with the
+            # rest.  Only L3's first len(L1) elements are read, and a long rest
+            # is a view of L3, so ``append([X], R, L3)`` costs len(L1), not
+            # len(L3) -- a DCG terminal stepping down a long text or list
+            # copied the whole rest at each step.
+            # The C twin passes over an element that IS its partner, so a
+            # ground prefix costs a pointer compare an element.
+            n = len(l1_items)
+            head, rest_of = window
+            if len(head) >= n:
+                mark = trail.mark()
+                if _c_prefix_unify is not None:
+                    ok = _c_prefix_unify(l1_items, head, trail)
+                else:
+                    ok = unify(l1_items, head[:n], trail)
+                if ok and unify(l2, rest_of(), trail):
+                    yield (_proceed, None)
+                trail.undo(mark)
+            yield (_fail, DONE)
+            return
+
     l3_items = _as_items(l3_val)
 
     if l1_items is not None and l2_items is not None:
@@ -457,7 +514,8 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
             yield (_proceed, None)
         trail.undo(mark)
     elif l1_items is not None and l3_items is not None:
-        # L1 and L3 known: L1's elements UNIFY with L3's prefix (the
+        # L1 and L3 known, L3 not one _prefix_window reads (bytes, a closed
+        # partial list): L1's elements UNIFY with L3's prefix (the
         # prologue's clause ``append([H|T], L, [H|R])``), then L2 with the
         # rest.  Python's ``==`` here made ``append([X], R, [a, b])`` fail
         # (an unbound X is not ``==`` to a) and ``append([1], R, [true])``

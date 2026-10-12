@@ -172,10 +172,15 @@ def _dcg_body_goal(body, s0, s):
         # ``_is_whole_body_cut``).
         return (",", "!", ("=", s0, s))
     if isinstance(b, list) or is_chars(b) or isinstance(b, bytes):
+        # ISO 7.14.2: the terminals T are ``S0 = T-followed-by-S``, one
+        # unification, so a long S0 hands back its rest as a view (as the
+        # compiled translation does); append/3 here copied the rest at every
+        # terminal, and so every step of a walk down S0.
+        from clausal.logic.builtins.lists import _cons_onto   # noqa: PLC0415
         items = list(_elements(b))
         if not items:
             return ("=", s0, s)
-        return ("append", items, s, s0)
+        return ("=", s0, _cons_onto(items, s))
     if is_cell:
         return (functor, *b[1:], s0, s)
     return (b, s0, s)
