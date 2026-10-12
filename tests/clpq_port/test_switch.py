@@ -5,7 +5,10 @@ The adapter (clausal/logic/clpq/holzbaur.py) is tested here in process,
 through its own functions, whatever CLAUSAL_CLPQ says.  What needs the
 package to export the port (clpfd's dispatch, the builtins, the CLI) runs
 in a subprocess with CLAUSAL_CLPQ=holzbaur: the legacy suites, and
-test_switch_engine.py, which is skipped unless the port is selected.
+test_switch_engine.py, which is skipped unless the port is selected.  Those
+nested runs take minutes and run with CLAUSAL_SLOW_TESTS=1 (Fable M4); the
+default suite checks the switch in process
+(test_the_switch_exports_the_solver_it_names).
 """
 import os
 import pathlib
@@ -39,6 +42,51 @@ def _under(solver, argv, timeout=1800):
                           capture_output=True, text=True, timeout=timeout)
 
 
+# The nested suites take minutes (Fable M4): they run with
+# CLAUSAL_SLOW_TESTS=1, as the Task 16 gate runs them, and the default
+# suite keeps the in-process smoke test below.
+_SLOW = pytest.mark.skipif(
+    os.environ.get("CLAUSAL_SLOW_TESTS") != "1",
+    reason="nested pytest runs of the legacy suites, set CLAUSAL_SLOW_TESTS=1")
+
+
+def _package_under(solver, monkeypatch):
+    """A fresh copy of clausal.logic.clpq, its __init__ run with
+    CLAUSAL_CLPQ=*solver* (the submodules are the ones loaded already)."""
+    import importlib.util
+    import clausal.logic.clpq as package
+    monkeypatch.setenv("CLAUSAL_CLPQ", solver)
+    spec = importlib.util.spec_from_file_location(
+        f"_clpq_switch_{solver}", package.__file__)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize("solver, implementation", [("legacy", legacy),
+                                                    ("holzbaur", h)])
+def test_the_switch_exports_the_solver_it_names(solver, implementation,
+                                                monkeypatch):
+    # In process and fast, whatever CLAUSAL_CLPQ the suite runs under.
+    package = _package_under(solver, monkeypatch)
+    assert package.SOLVER == solver
+    for name in package.HOLZBAUR_API:
+        if solver == "legacy" and not hasattr(legacy, name):
+            assert not hasattr(package, name), name     # ordering: port only
+            continue
+        assert getattr(package, name) is getattr(implementation, name), name
+    t, x, s = Trail(), Var(), Var()
+    assert package.in_q(x, 0, 10, t) and package.q_le(x, 3, t)
+    assert package.sup(x, s, t) and deref(s) == 3
+    assert get_attr(x, package.Q_KEY) is not None
+
+
+def test_the_switch_refuses_an_unknown_solver_in_process(monkeypatch):
+    with pytest.raises(ValueError, match="not 'simplex'"):
+        _package_under("simplex", monkeypatch)
+
+
+@_SLOW
 @pytest.mark.parametrize("suite", LEGACY_SUITES)
 def test_the_suite_passes_under_the_port(suite):          # Review Focus 4
     r = _under("holzbaur", ["-m", "pytest", "-q", "-p", "no:cacheprovider",
@@ -46,6 +94,7 @@ def test_the_suite_passes_under_the_port(suite):          # Review Focus 4
     assert r.returncode == 0, r.stdout[-3000:]
 
 
+@_SLOW
 def test_the_engine_tests_pass_under_the_port():
     r = _under("holzbaur", ["-m", "pytest", "-q", "-p", "no:cacheprovider",
                             "tests/clpq_port/test_switch_engine.py"])
