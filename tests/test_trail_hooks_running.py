@@ -240,6 +240,20 @@ def _nested_driver_hook(log, drive):
     return hook
 
 
+def _assert_refusal(term, goal, context):
+    """The whole error term: error(permission_error(call, goal, Goal), PI),
+    the goal compared element by element (a Var by identity)."""
+    assert type(term) is tuple and len(term) == 3, term
+    assert term[0] == "error"
+    assert term[2] == context, term
+    formal = term[1]
+    assert formal[:3] == ("permission_error", "call", "goal"), formal
+    culprit = formal[3]
+    assert len(culprit) == len(goal) and all(
+        a is b or a == b for a, b in zip(culprit, goal)), (culprit, goal)
+    assert len(formal) == 4
+
+
 def test_solve_on_the_trail_inside_a_hook_is_refused_and_nothing_runs_twice(mod):
     log = []
     goal = ("bind", Var())
@@ -249,9 +263,7 @@ def test_solve_on_the_trail_inside_a_hook_is_refused_and_nothing_runs_twice(mod)
     put_attr(x, _A, 1, t)
     assert unify(x, 1, t)
     assert [e[0] for e in log] == ["refused", "queued goal ran"]
-    err = log[0][1]
-    assert err[0] == "error" and err[1][:3] == ("permission_error", "call", "goal")
-    assert err[2] == ("/", "solve", 2)
+    _assert_refusal(log[0][1], goal, ("/", "solve", 2))
     assert log[1] == ("queued goal ran", 0)
     assert t.hooks_running == 0
 
@@ -265,19 +277,23 @@ def test_solve_on_the_trail_inside_a_hook_is_refused_under_a_driver(mod):
     put_attr(x, _A, 1, t)
     assert len(list(solve(("bind", x), mod, trail=t))) == 1
     assert [e[0] for e in log] == ["refused", "queued goal ran"]
+    _assert_refusal(log[0][1], goal, ("/", "solve", 2))
     assert log[1] == ("queued goal ran", 0)
     assert t.hooks_running == 0
 
 
 def test_call_on_the_trail_inside_a_hook_is_refused(mod):
     log = []
+    v = Var()
     register_attr_hook(_A, _nested_driver_hook(
-        log, lambda tr: call("bind", Var(), module=mod, trail=tr)))
+        log, lambda tr: call("bind", v, module=mod, trail=tr)))
     t, x = Trail(), Var()
     put_attr(x, _A, 1, t)
     assert unify(x, 1, t)
     assert [e[0] for e in log] == ["refused", "queued goal ran"]
-    assert log[0][1][1][:3] == ("permission_error", "call", "goal")
+    # The goal call/N would have run, and call/N's indicator: the functor
+    # is call's first argument, so call("bind", V) is call/2.
+    _assert_refusal(log[0][1], ("bind", v), ("/", "call", 2))
 
 
 def test_a_driver_on_a_fresh_trail_inside_a_hook_is_allowed(mod):

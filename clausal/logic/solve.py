@@ -176,7 +176,10 @@ def _refuse_inside_attribute_hook(trail: Trail, culprit: Any, who: str) -> None:
     goal").  A driver started there would run INSIDE the outer dispatch,
     and its first goal boundary would run the goals the outer unification
     had queued so far -- which leaving the driver puts back on the queue,
-    so they ran twice.  ISO ``permission_error(call, goal, Goal)``.
+    so they ran twice.  Raises the ISO-shaped
+    ``error(permission_error(call, goal, Goal), Who)`` -- ``call`` and
+    ``goal`` are not ISO 7.12.2 action/type values -- with *who* the
+    indicator of the refusing entry (``solve/2``, ``call/N``).
     """
     if trail.hooks_running:
         from clausal.logic.exceptions import (  # noqa: PLC0415
@@ -1831,7 +1834,11 @@ def call(
     _handle_module_name = _handle_name = None
     _sb_ctx = f"{functor if type(functor) is str else 'call'}/{len(args)}"
     if trail is not None:
-        _refuse_inside_attribute_hook(trail, functor, "call/N")
+        # The goal call/N would run, and call/N's own indicator (the functor
+        # is its first argument).
+        _goal = ((functor, *args) if type(functor) is str
+                 else (getattr(functor, "_name", functor), *args))
+        _refuse_inside_attribute_hook(trail, _goal, f"call/{len(args) + 1}")
     if _sandbox_state.ACTIVE:
         # The functor names a predicate: an atom.  A goal OBJECT handed in
         # from Python is no data (clausal.sandbox).
