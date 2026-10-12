@@ -783,10 +783,25 @@ trail_enqueue_wakeup(TrailObject *trail, PyObject *attvar, PyObject *bound_to)
  *
  * Processes entries in reverse order (newest first), exactly as
  * Scryer's unwind_trail() and GNU Prolog's Pl_Untrail() do.
+ *
+ * Callers undo on their error paths too, with an exception pending (an
+ * attribute hook raised; do_unify_and_wake, every C extension through the
+ * capsule's trail_undo).  The undo keeps that exception: it is taken off
+ * the thread state before the first entry, so an undo callback runs with
+ * no error set and the PyErr_Clear calls below clear only the undo's own
+ * errors, and it is put back once the undo is complete.  Without this the
+ * hook's exception was cleared and Python saw "returned NULL without
+ * setting an exception".
  */
 static void
 trail_undo_to(TrailObject *trail, Py_ssize_t mark)
 {
+#if PY_VERSION_HEX >= 0x030C0000
+    PyObject *pending_exc = PyErr_GetRaisedException();
+#else
+    PyObject *pending_type, *pending_value, *pending_tb;
+    PyErr_Fetch(&pending_type, &pending_value, &pending_tb);
+#endif
     for (Py_ssize_t i = trail->length - 1; i >= mark; i--) {
         TrailEntry *e = &trail->entries[i];
         if (e->kind == TRAIL_BINDING) {
@@ -808,7 +823,8 @@ trail_undo_to(TrailObject *trail, Py_ssize_t mark)
                     PyErr_Clear();
                 } else {
                     /* Restore previous value */
-                    PyDict_SetItem(av->attrs, key, old);  /* ignoring errors */
+                    if (PyDict_SetItem(av->attrs, key, old) < 0)
+                        PyErr_Clear();  /* undo must always complete */
                 }
             }
             Py_DECREF(e->u.attr.attvar);
@@ -831,6 +847,17 @@ trail_undo_to(TrailObject *trail, Py_ssize_t mark)
         }
     }
     trail->length = mark;
+#if PY_VERSION_HEX >= 0x030C0000
+    if (pending_exc)
+        PyErr_SetRaisedException(pending_exc);   /* steals */
+    else
+        PyErr_Clear();   /* the undo's own errors never escape it */
+#else
+    if (pending_type)
+        PyErr_Restore(pending_type, pending_value, pending_tb);
+    else
+        PyErr_Clear();
+#endif
 }
 
 /* ---- Trail Python methods ---- */
