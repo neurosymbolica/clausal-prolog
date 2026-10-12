@@ -791,3 +791,78 @@ def test_a_binding_within_one_component_makes_one_stand_in():
         hooks._stand_in_for_bound_members = original
     assert len(made) == 1 and len(made[0]) == 1
     assert _inf(x, trail) == Fraction(3, 2) and _sup(y, trail) == Fraction(3, 2)
+
+
+# ---------------------------------------------------------------- fix round 3
+
+#: Every (module, key constant) the engine registers an attribute hook for.
+_KNOWN_HOOKS = {
+    ("clausal.logic.clpb", "B_KEY"),
+    ("clausal.logic.clpfd", "FD_KEY"),
+    ("clausal.logic.clpfd", "ZCMP_KEY"),
+    ("clausal.logic.clpq.attribute_hooks", "CLPQ_KEY"),
+    ("clausal.logic.clpq.components", "COMPONENT_KEY"),
+    ("clausal.logic.clpq.legacy", "Q_KEY"),
+    ("clausal.logic.clpr", "REAL_KEY"),
+    ("clausal.logic.constraints", "DIF_KEY"),
+    ("clausal.logic.coroutining", "FREEZE_KEY"),
+    ("clausal.logic.units_clp", "LINK_KEY"),
+    ("clausal.logic.units_constraint", "UNITS_KEY"),
+}
+
+
+def test_the_registered_attribute_hooks_are_the_known_set():
+    # Ruling R22: under a driver the entry points skip catch_up, which is
+    # sound only while no hook body calls an entry point of the port while
+    # trail.defer is True (freeze/2 and when/2 queue their goals then).
+    import os
+    import re
+    import clausal
+    root = os.path.dirname(os.path.abspath(clausal.__file__))
+    found = set()
+    for directory, _, files in os.walk(root):
+        for name in files:
+            if not name.endswith(".py"):
+                continue
+            path = os.path.join(directory, name)
+            with open(path, encoding="utf-8") as handle:
+                text = handle.read()
+            module = os.path.relpath(path[:-3], os.path.dirname(root)) \
+                .replace(os.sep, ".")
+            for key in re.findall(r"^\s*register_attr_hook\(\s*(\w+)\s*,",
+                                  text, re.M):
+                if key != "key":
+                    found.add((module, key))
+    assert found == _KNOWN_HOOKS, (
+        "the set of registered attribute hooks changed: "
+        f"new {sorted(found - _KNOWN_HOOKS)}, gone {sorted(_KNOWN_HOOKS - found)}. "
+        "Before extending _KNOWN_HOOKS, check that the new hook never calls "
+        "a CLP(Q) port entry point (post_constraint, inf, sup, minimize, "
+        "maximize, entailed, attribute_goal) while trail.defer is True; "
+        "attribute_hooks.catch_up_entry relies on it (DEVIATIONS.md D3, "
+        "ruling R22).")
+
+
+def test_frozen_goals_under_a_driver_skip_the_entry_catch_up():
+    # The four frozen cases under a driver, with the entry catch_up skipped
+    # (these cases make no Later goals, so a catch_up call under defer
+    # could only come from an entry point; the spy sees none).
+    calls = []
+    original = hooks.catch_up
+
+    def spy(work, trail, later):
+        calls.append(trail.defer)
+        return original(work, trail, later)
+    hooks.catch_up = spy
+    try:
+        mode = "driver"
+        assert _frozen_case(_posting(lambda x, q, w: (">=", q, 5)), mode) \
+            == (False, None)
+        assert _frozen_case(_posting(lambda x, q, w: ("=<", q, 1)), mode) \
+            == (True, (1, 1, None, None, []))
+        assert _frozen_case(_posting(lambda x, q, w: ("=", w, ("+", q, x))),
+                            mode) == (True, (1, 1, 3, 3, []))
+        assert _frozen_case(_reading, mode) == (True, (1, 1, None, None, [1]))
+    finally:
+        hooks.catch_up = original
+    assert True not in calls

@@ -238,7 +238,16 @@ def catch_up_entry(term, trail):
     attribute_goal), then the Later work it produced.  A goal another
     key's hook runs in place in the middle of a unification can reach these
     while a variable bound by that unification has not been hooked yet
-    (test_a_frozen_goal_reads_no_unhooked_binding)."""
+    (test_a_frozen_goal_reads_no_unhooked_binding).
+
+    Under a driver (`trail.defer`) it does nothing (ruling R22): then no
+    hook body calls an entry point of the port, because freeze/2 and when/2
+    queue their goals under `defer` and no other registered hook calls one
+    (DEVIATIONS.md D3, test_the_registered_attribute_hooks_are_the_known_set),
+    so an entry point is reached at a goal boundary, after every hook of
+    the unification has run.  The catch_up before each Later goal stays."""
+    if trail.defer:
+        return True
     later = LaterWork()
     if not catch_up(term, trail, later):
         return False

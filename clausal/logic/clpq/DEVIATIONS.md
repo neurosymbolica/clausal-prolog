@@ -219,11 +219,26 @@ members bound in one unification, bare, one at a time and under a driver,
 with 0 disagreements (20,000 seeds with `CLPQ_PORT_PROPERTY_SEEDS=20000`
 also gave 0; before the fix, 50 of 2,000 disagreed).
 
-The cost: every entry and every Later goal scans the member lists of the
-components it reaches.  Posting a chain `{X(i+1) = X(i)}` into one
-component becomes quadratic: 2,500 / 5,000 / 10,000 posts took 0.24 /
-0.88 / 3.49 s with the entry catch-up and 0.07 / 0.09 / 0.20 s without it
-(measured 2026-10-12).  Scryer's clpq fails `{X + Y = 3}, f(X, Y) = f(1, 2)`;
+Under a driver the entry points skip `catch_up` (ruling R22).  That rests
+on an invariant: no hook body calls a port entry point while `trail.defer`
+is True.  freeze/2 and when/2 queue their goals under `defer`
+(coroutining.py `_freeze_hook`, `_run_now`); no other registered hook (dif,
+clpfd, clpb, clpr, the two units keys, legacy clpq, COMPONENT_KEY) calls an
+entry point; and the port's own hook covers its components with stand-ins
+and pushes its Later work to the pending queue.  So under a driver an
+entry point is reached at a goal boundary, after every hook of the
+unification has run.  `test_the_registered_attribute_hooks_are_the_known_set`
+fails when a hook is registered or removed, and says to check this
+invariant before extending its list;
+`test_frozen_goals_under_a_driver_skip_the_entry_catch_up` runs the frozen
+cases under a driver with the skip active.  The `catch_up` before each
+Later goal stays in both modes.
+
+The cost: outside a driver, every entry and every Later goal scans the
+member lists of the components it reaches, so posting a chain
+`{X(i+1) = X(i)}` into one component is quadratic.  Measured 2026-10-12,
+2,500 / 5,000 / 10,000 posts: bare 0.26 / 0.92 / 3.59 s, under a driver
+0.09 / 0.09 / 0.20 s (without any entry catch-up 0.07 / 0.09 / 0.20 s).  Scryer's clpq fails `{X + Y = 3}, f(X, Y) = f(1, 2)`;
 the port answers it.
 
 Proposed engine alternative (needs the operator): when `trail.defer` is
