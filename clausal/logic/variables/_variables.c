@@ -611,25 +611,38 @@ Trail_traverse(TrailObject *self, visitproc visit, void *arg)
     return 0;
 }
 
+/* Release the references one entry owns, with no undo effect. */
+static void
+trail_entry_release(TrailEntry *e)
+{
+    if (e->kind == TRAIL_BINDING) {
+        Py_DECREF(e->u.binding.var);
+        Py_XDECREF(e->u.binding.old_value);
+    } else if (e->kind == TRAIL_ATTR) {
+        Py_DECREF(e->u.attr.attvar);
+        Py_DECREF(e->u.attr.key);
+        Py_XDECREF(e->u.attr.old_attr);
+    } else {
+        /* TRAIL_CALLBACK; TRAIL_PENDING (fn may be NULL) */
+        Py_XDECREF(e->u.callback.fn);
+    }
+}
+
 static int
 Trail_clear(TrailObject *self)
 {
+    /* Detach the whole array before releasing anything: a release can run
+     * Python that pushes onto this trail, and a push must land in a fresh
+     * array, never on an entry still to be released here (it was released
+     * twice, and the pushed entry once too often). */
+    TrailEntry *entries = self->entries;
     Py_ssize_t len = self->length;
-    self->length = 0;
-    for (Py_ssize_t i = 0; i < len; i++) {
-        TrailEntry *e = &self->entries[i];
-        if (e->kind == TRAIL_BINDING) {
-            Py_DECREF(e->u.binding.var);
-            Py_XDECREF(e->u.binding.old_value);
-        } else if (e->kind == TRAIL_ATTR) {
-            Py_DECREF(e->u.attr.attvar);
-            Py_DECREF(e->u.attr.key);
-            Py_XDECREF(e->u.attr.old_attr);
-        } else {
-            /* TRAIL_CALLBACK; TRAIL_PENDING (fn may be NULL) */
-            Py_XDECREF(e->u.callback.fn);
-        }
-    }
+    self->entries  = NULL;
+    self->capacity = 0;
+    self->length   = 0;
+    for (Py_ssize_t i = 0; i < len; i++)
+        trail_entry_release(&entries[i]);
+    PyMem_Free(entries);
     Py_CLEAR(self->wakeup_list);
     Py_CLEAR(self->pending);
     return 0;
@@ -803,16 +816,37 @@ trail_undo_to(TrailObject *trail, Py_ssize_t mark)
     PyObject *pending_type, *pending_value, *pending_tb;
     PyErr_Fetch(&pending_type, &pending_value, &pending_tb);
 #endif
-    /* The length drops BEFORE each entry is released, and the loop re-reads
-     * it: releasing an entry can run Python (an undo callback, a finaliser),
-     * and that Python can undo this trail further or push onto it.  A nested
-     * undo then sees only the entries not yet released, and this loop never
-     * raises the length back over entries something else released (a hook
-     * or a woken goal that undid below a unification's mark used to make the
-     * unification's own undo re-expose them: a double DECREF).  The entry is
-     * copied out first because a push can reallocate the array. */
-    while (trail->length > mark) {
-        TrailEntry entry = trail->entries[--trail->length];
+    /* Releasing an entry can run Python (an undo callback, a finaliser),
+     * and that Python can undo this trail further or push onto it.  So each
+     * entry is taken OFF the trail (copied out, the length lowered) before
+     * it is released, and the loop never sets the length itself: a nested
+     * undo sees only entries not yet taken, and nothing re-exposes entries
+     * something else released (a hook or a woken goal that undid below a
+     * unification's mark used to make the unification's own undo raise the
+     * length back over them: a double DECREF).
+     *
+     * The undo releases the entries that were on the trail when it began,
+     * newest first.  An entry pushed while it runs is live and stays on
+     * the trail, above the mark: it is moved down over the slot taken, so
+     * it is never released here, never lost, and a later undo past it
+     * undoes it.  (Taking pushed entries too never ended for an undo
+     * callback that records itself again.)  `top` is the end of the entries
+     * still to undo; everything above it was pushed during this undo.  A
+     * nested undo below `top` lowers it.  Each step lowers it by one, so
+     * the loop ends. */
+    Py_ssize_t top = trail->length;
+    for (;;) {
+        if (top > trail->length)
+            top = trail->length;          /* a nested undo took some */
+        if (top <= mark)
+            break;
+        TrailEntry entry = trail->entries[top - 1];
+        Py_ssize_t pushed = trail->length - top;
+        if (pushed > 0)
+            memmove(&trail->entries[top - 1], &trail->entries[top],
+                    (size_t)pushed * sizeof(TrailEntry));
+        trail->length--;
+        top--;
         TrailEntry *e = &entry;
         if (e->kind == TRAIL_BINDING) {
             VarObject *var = e->u.binding.var;
@@ -995,21 +1029,27 @@ Trail_commit_fresh(TrailObject *self, PyObject *const *args, Py_ssize_t nargs)
         if (id < (uint64_t)floor)
             Py_RETURN_FALSE;
     }
-    /* All fresh: release the trail's references, keep the effects.  As in
-     * trail_undo_to, the length drops before each release (a release can
-     * run a finaliser that touches this trail). */
-    while (self->length > mark) {
-        TrailEntry entry = self->entries[--self->length];
-        TrailEntry *e = &entry;
-        if (e->kind == TRAIL_BINDING) {
-            Py_XDECREF(e->u.binding.old_value);
-            Py_DECREF(e->u.binding.var);
-        } else {
-            Py_DECREF(e->u.attr.attvar);
-            Py_DECREF(e->u.attr.key);
-            Py_XDECREF(e->u.attr.old_attr);
-        }
+    /* All fresh: release the trail's references, keep the effects.  The
+     * scan above proved the kinds of exactly these entries, so they are
+     * taken off the trail in one step (copied out, the length set to the
+     * mark) before any is released: a release can run a finaliser that
+     * pushes onto this trail, and a pushed entry is live -- it stays on the
+     * trail, undoable, and is never read as one of these.  Running out of
+     * memory for the copy just keeps the entries (False: not committed). */
+    Py_ssize_t n = self->length - mark;
+    TrailEntry small[16];
+    TrailEntry *taken = small;
+    if (n > (Py_ssize_t)(sizeof small / sizeof small[0])) {
+        taken = PyMem_Malloc((size_t)n * sizeof(TrailEntry));
+        if (!taken)
+            Py_RETURN_FALSE;
     }
+    memcpy(taken, &self->entries[mark], (size_t)n * sizeof(TrailEntry));
+    self->length = mark;
+    for (Py_ssize_t i = n - 1; i >= 0; i--)
+        trail_entry_release(&taken[i]);
+    if (taken != small)
+        PyMem_Free(taken);
     Py_RETURN_TRUE;
 }
 
