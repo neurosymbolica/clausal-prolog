@@ -510,8 +510,8 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     "$dict_key": _dict_key,
     "$unify": unify,
     # A goal boundary after an inline unification: the rest of the clause
-    # runs once per answer of the goals the unification woke (``(None,)``
-    # when it woke none; clausal/logic/pending.py).
+    # runs once per answer of the goals the unification woke (a shared
+    # ``range(1)`` when it woke none; clausal/logic/pending.py).
     "$pending": pending_or_once,
     "$unify_iter": unify_iter,
     # A test that only asks whether a unification succeeds (``not in``) runs

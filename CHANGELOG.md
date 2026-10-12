@@ -68,6 +68,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
   leaving `m` unloaded), and is still a translation error on the default
   `.pl` importer.
 
+### Changed
+
+- **`clausal.logic.variables.pending_or_once` yields `range(1)` when nothing
+  is queued.** It was the shared tuple `(None,)`. Its one item is now `0`,
+  not `None`; `unify_iter` hands back the same value on success. Only iterate
+  it: a range iterator is not GC-tracked, so a deep recursion through goal
+  boundaries no longer fills the collector.
+
 ### Deprecated
 
 - **`py.random` (`library(py_random)`)** (operator ruling 2026-10-07). It
@@ -128,9 +136,12 @@ surface described in [docs/public-api.md](docs/public-api.md).
   hooks are running.** A hook that drove a goal on its own trail ran the
   goals the outer unification had queued, and those goals then ran again
   at the outer boundary. Such a call now raises
-  `error(permission_error(call, goal, Goal), solve/2)`. A hook queues what
-  it would run (`trail.push_pending`). A driver on a fresh trail is still
-  allowed.
+  `error(permission_error(call, goal, Goal), solve/2)` from `solve`, and
+  `error(permission_error(call, goal, F(A1, ..., Ak)), call/N)` with
+  N = k + 1 from `call(F, A1, ..., Ak)`. A hook queues what it would run
+  (`trail.push_pending`). A driver on a fresh trail is still allowed, but
+  its bindings are on its own trail: one it makes to an outer variable and
+  keeps survives an undo of the outer trail (see docs/coroutining.md).
 - **`replace_subterm/4` rewrites inside a partial list whose holes are
   filled** (`[a, *T]` with `T` bound), as `reified_subterm/2` already
   walked it.
