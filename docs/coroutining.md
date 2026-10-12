@@ -165,16 +165,17 @@ For constraint-library authors.  An attribute hook runs while the unification th
 | Where | `trail.defer` | `trail.hooks_running` |
 |---|---|---|
 | A goal under a driver (a body goal, a woken goal) | `True` | `0` |
-| A goal outside a driver (a bare `unify` from Python) | `False` | `0` |
-| Inside an attribute hook | `True` | `1` |
+| A woken goal that a bare `unify` runs itself | `True` | `0` |
+| Python code outside any driver or unification | `False` | `0` |
+| Inside an attribute hook, under a driver or not | `True` | `1` |
 | Inside a hook of a unification nested in a hook | `True` | `2`, one more per level |
 
 The contract:
 
-- **Inside a hook** (`hooks_running > 0`) a library must not post a constraint in place, and must not run another library's entry point.  It queues the work as a goal with `trail.push_pending(goal)`, and the goal runs at the next goal boundary, after every hook of the unification has run.
-- **At a goal** (`hooks_running == 0`) a library may post in place.  A binding it makes wakes goals, which run at the goal boundary that follows: compiled code drains after every inline goal that can bind, as after a call.
+- **Inside a hook** (`hooks_running > 0`) a library must not post a constraint in place, must not run another library's entry point, and must not drive a goal on the trail.  It queues the work as a goal with `trail.push_pending(goal)`, and the goal runs at the next goal boundary, after every hook of the unification has run.  `solve(..., trail=t)` and `call(..., trail=t)` on a trail whose hooks are running raise `error(permission_error(call, goal, Goal), solve/2)` (`call/N` for `call`).  A driver on a different, fresh trail is allowed.
+- **At a goal** (`hooks_running == 0`) a library may post in place.  A binding it makes wakes goals, which run at the goal boundary that follows, before the next goal and with every answer.  In compiled code that boundary comes after every unification, every inline comparison that can bind (`X == 3`, `X <= 3`, and the posts of a reified test in `if_/3`), and every answer of a call.  A goal that ends in such an op inside a construct with a scope of its own (`catch/3`, `findall/3`, `\+`, `once/1`, `forall/2`, `call_cleanup/2`, `setup_call_cleanup/3`) runs what it woke inside that scope, so `catch/3` catches a ball thrown by a woken goal.
 
-The counter goes up when a unification starts dispatching the hooks of the attributed variables it bound, and back down when that dispatch ends, whether it succeeds, a hook fails, or a hook raises.  Woken goals that a bare `unify` runs itself (to their first answer) run after its dispatch has ended, so they see `0`.  The counter is read-only.  C extensions read the `hooks_running` field of `TrailObject` from `_variables_capi.h`.
+The counter goes up when a unification starts dispatching the hooks of the attributed variables it bound, and back down when that dispatch ends, whether it succeeds, a hook fails, or a hook raises (`KeyboardInterrupt` and `RecursionError` included).  Woken goals that a bare `unify` runs itself (to their first answer) run after its dispatch has ended, so they see `0`.  The counter is read-only.  C extensions read the `hooks_running` field of `TrailObject` from `_variables_capi.h`.
 
 **Implementation:** `clausal/logic/variables/_variables.c` (`fire_wakeups`, `Trail.hooks_running`)
 

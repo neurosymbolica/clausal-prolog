@@ -168,6 +168,26 @@ except ImportError:
     pass
 
 
+def _refuse_inside_attribute_hook(trail: Trail, culprit: Any, who: str) -> None:
+    """No driver runs on a trail whose attribute hooks are running.
+
+    A hook body queues what it would run (``trail.push_pending``); it never
+    runs a goal in place (docs/coroutining.md, "Inside a hook or at a
+    goal").  A driver started there would run INSIDE the outer dispatch,
+    and its first goal boundary would run the goals the outer unification
+    had queued so far -- which leaving the driver puts back on the queue,
+    so they ran twice.  ISO ``permission_error(call, goal, Goal)``.
+    """
+    if trail.hooks_running:
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            LogicException, permission_error,
+        )
+        raise LogicException(permission_error(
+            "call", "goal", culprit,
+            f"{who}: a goal cannot be driven on a trail whose attribute "
+            f"hooks are running; queue it with trail.push_pending(goal)"))
+
+
 def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Trail]:
     """Drive a trampoline-protocol dispatch function, yielding trail per solution."""
     from clausal.logic.tabling import begin_drive_episode, end_drive_episode
@@ -1810,6 +1830,8 @@ def call(
     # exactly as they were for a functor that was never a handle.
     _handle_module_name = _handle_name = None
     _sb_ctx = f"{functor if type(functor) is str else 'call'}/{len(args)}"
+    if trail is not None:
+        _refuse_inside_attribute_hook(trail, functor, "call/N")
     if _sandbox_state.ACTIVE:
         # The functor names a predicate: an atom.  A goal OBJECT handed in
         # from Python is no data (clausal.sandbox).
@@ -2064,6 +2086,8 @@ def solve(
     ------
     Trail after each solution (bindings are live on the trail).
     """
+    if trail is not None:
+        _refuse_inside_attribute_hook(trail, goal, "solve/2")
     _sandbox_entry(goal, "solve/2")
     goal, module = _resolved_goal_and_module(goal, module, "solve/2")
     goal = _python_entry(goal)

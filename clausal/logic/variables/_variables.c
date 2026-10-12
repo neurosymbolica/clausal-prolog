@@ -1152,10 +1152,13 @@ static PyGetSetDef Trail_getset[] = {
      NULL},
     {"hooks_running", (getter)Trail_get_hooks_running, NULL,
      "How many attribute-hook dispatches are in progress on this trail (an\n"
-     "int): 0 at a goal, under a driver or not; 1 inside an attribute hook;\n"
-     "one more for each unification nested in a hook that fires hooks of its\n"
-     "own.  Inside a hook a constraint library must queue what it would post\n"
-     "(trail.push_pending); at a goal it may post in place.",
+     "int): 0 at a goal (a body goal or a woken goal, under a driver or run\n"
+     "by a bare unify) and in Python code outside any unification; 1 inside\n"
+     "an attribute hook; one more for each unification nested in a hook\n"
+     "that fires hooks of its own.  Inside a hook a constraint library must\n"
+     "queue what it would post or run (trail.push_pending), and solve/call\n"
+     "on this trail raise permission_error(call, goal, Goal); at a goal it\n"
+     "may post in place.",
      NULL},
     {NULL, NULL, NULL, NULL, NULL}
 };

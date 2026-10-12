@@ -210,3 +210,81 @@ def test_read_only():
     with pytest.raises(AttributeError):
         t.hooks_running = 1
     assert t.hooks_running == 0
+
+
+# ── No driver on the trail inside a hook ─────────────────────────────────────
+#
+# A hook that drove a goal on its own trail ran that driver INSIDE the outer
+# dispatch (hooks_running > 0 throughout), and the driver's first goal
+# boundary ran the goals the OUTER unification had queued so far; leaving the
+# driver undid that take, so they ran a second time at the outer boundary.
+# A hook body queues; it never runs goals in place: solve/call on a trail
+# whose hooks are running are refused with an ISO permission error.
+
+from clausal.logic.exceptions import LogicException  # noqa: E402
+from clausal.logic.solve import call  # noqa: E402
+
+
+def _nested_driver_hook(log, drive):
+    def hook(_attr, _bound_to, trail):
+        def queued():
+            log.append(("queued goal ran", trail.hooks_running))
+            yield None
+        trail.push_pending(queued)
+        try:
+            for _ in drive(trail):
+                log.append(("nested answer", trail.hooks_running))
+        except LogicException as exc:
+            log.append(("refused", exc.term))
+        return True
+    return hook
+
+
+def test_solve_on_the_trail_inside_a_hook_is_refused_and_nothing_runs_twice(mod):
+    log = []
+    goal = ("bind", Var())
+    register_attr_hook(_A, _nested_driver_hook(
+        log, lambda tr: solve(goal, mod, trail=tr)))
+    t, x = Trail(), Var()
+    put_attr(x, _A, 1, t)
+    assert unify(x, 1, t)
+    assert [e[0] for e in log] == ["refused", "queued goal ran"]
+    err = log[0][1]
+    assert err[0] == "error" and err[1][:3] == ("permission_error", "call", "goal")
+    assert err[2] == ("/", "solve", 2)
+    assert log[1] == ("queued goal ran", 0)
+    assert t.hooks_running == 0
+
+
+def test_solve_on_the_trail_inside_a_hook_is_refused_under_a_driver(mod):
+    log = []
+    goal = ("bind", Var())
+    register_attr_hook(_A, _nested_driver_hook(
+        log, lambda tr: solve(goal, mod, trail=tr)))
+    t, x = Trail(), Var()
+    put_attr(x, _A, 1, t)
+    assert len(list(solve(("bind", x), mod, trail=t))) == 1
+    assert [e[0] for e in log] == ["refused", "queued goal ran"]
+    assert log[1] == ("queued goal ran", 0)
+    assert t.hooks_running == 0
+
+
+def test_call_on_the_trail_inside_a_hook_is_refused(mod):
+    log = []
+    register_attr_hook(_A, _nested_driver_hook(
+        log, lambda tr: call("bind", Var(), module=mod, trail=tr)))
+    t, x = Trail(), Var()
+    put_attr(x, _A, 1, t)
+    assert unify(x, 1, t)
+    assert [e[0] for e in log] == ["refused", "queued goal ran"]
+    assert log[0][1][1][:3] == ("permission_error", "call", "goal")
+
+
+def test_a_driver_on_a_fresh_trail_inside_a_hook_is_allowed(mod):
+    log = []
+    register_attr_hook(_A, _nested_driver_hook(
+        log, lambda _tr: solve(("bind", Var()), mod, trail=Trail())))
+    t, x = Trail(), Var()
+    put_attr(x, _A, 1, t)
+    assert unify(x, 1, t)
+    assert log == [("nested answer", 1), ("queued goal ran", 0)]
