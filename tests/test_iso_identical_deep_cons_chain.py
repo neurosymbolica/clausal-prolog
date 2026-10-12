@@ -43,3 +43,23 @@ def test_identity_on_a_long_cons_chain(tmp_path, frontend, goal):
         [sys.executable, "-m", "clausal", "-g", goal, "chain.pl"],
         cwd=tmp_path, env=env, capture_output=True, text=True, timeout=120)
     assert (r.returncode, r.stdout) == (0, "true.\n"), r.stderr
+
+
+@pytest.mark.parametrize("goal, answer", [
+    # A cyclic term: the explicit-stack walk must not loop on it (it
+    # recursed into RecursionError before, and looped forever once it was
+    # made iterative).  Scryer and Trealla: true / false.
+    ("_X = f(_X), _X == _X", "true."),
+    ("_X = f(_X, _X), _X == _X", "true."),
+    ("_X = f(_X), _X \\== _X", "false."),
+    ("_X = f(_X, _X), _X \\== _X", "false."),
+    ("_X = f(_X), subtract([_X], [_X], R)", "R = []."),
+])
+def test_identity_on_a_cyclic_term(tmp_path, goal, answer):
+    (tmp_path / "cyc.pl").write_text("p.\n")
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+    r = subprocess.run(
+        [sys.executable, "-m", "clausal", "-g", goal, "cyc.pl"],
+        cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60)
+    assert r.stdout == answer + "\n", (r.stdout, r.stderr)

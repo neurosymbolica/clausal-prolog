@@ -343,8 +343,13 @@ def _numeric_types_agree(a, b) -> bool:
     # one tuple per element, and a few hundred cells overflowed Python's
     # stack (RecursionError) once ``structural_eq`` had said "equal".  The
     # answer is a pure conjunction over the pairs, so the visiting order is
-    # free.
+    # free.  A pair already visited is skipped: the answer for a pair is a
+    # pure function of the two objects, and a CYCLIC term (``X = f(X)``)
+    # would otherwise be walked forever.  Children are pushed reversed, so
+    # they are visited left to right, as the recursive version did (an error
+    # from a leaf surfaces in the same order).
     stack = [(a, b)]
+    seen: set = set()
     while stack:
         a, b = stack.pop()
         a = deref(a)
@@ -373,9 +378,13 @@ def _numeric_types_agree(a, b) -> bool:
             continue
         if type(a) is not type(b):
             continue
+        key = (id(a), id(b))
+        if key in seen:
+            continue
+        seen.add(key)
         if isinstance(a, (list, tuple)):
             if len(a) == len(b):
-                stack.extend(zip(a, b))
+                stack.extend(reversed(list(zip(a, b))))
         elif isinstance(a, DictTerm):
             if not _dict_numeric_types_agree(a.data, b.data):
                 return False
@@ -391,7 +400,8 @@ def _numeric_types_agree(a, b) -> bool:
         elif is_term_instance(a):
             fields = term_field_names(a)
             if fields == term_field_names(b):
-                stack.extend((getattr(a, f), getattr(b, f)) for f in fields)
+                stack.extend(reversed([(getattr(a, f), getattr(b, f))
+                                       for f in fields]))
     return True
 
 
