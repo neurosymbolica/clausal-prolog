@@ -24,7 +24,7 @@ from clausal.logic.exceptions import (
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.logic.variables import deref, is_var
 from clausal.logic.variables import unify as _unify
-from clausal.terms import DictTerm, SetTerm
+from clausal.terms import ConcreteSeg, DictTerm, SegList, SetTerm, VarSeg
 from clausal.terms import Quantity as _Quantity
 from clausal.terms import UnitsMismatch as _UnitsMismatch
 
@@ -355,6 +355,8 @@ def _numeric_types_agree(a, b) -> bool:
         a, b = stack.pop()
         a = deref(a)
         b = deref(b)
+        if a is b:
+            continue            # one object: its numeric leaves are its own
         ta = _numeric_tag(a)
         tb = _numeric_tag(b)
         if ta is not None or tb is not None:
@@ -377,13 +379,27 @@ def _numeric_types_agree(a, b) -> bool:
             if ta is _Decimal and _decimal_scale(a) != _decimal_scale(b):
                 return False
             continue
-        if type(a) is not type(b):
-            continue
+        # The pair is keyed BEFORE a SegList is read: the walk below makes
+        # fresh objects, and a cyclic partial list (``X = [a|X]``) walks to
+        # a cons cell whose tail is the SegList itself, so only the term's
+        # own objects can close the loop.  ``keep`` pins them.
         key = (id(a), id(b))
         if key in seen:
             continue
         seen.add(key)
         keep.append((a, b))
+        if isinstance(a, SegList) or isinstance(b, SegList):
+            # A hole-built list is read as the term it denotes, so it lines
+            # up with the literal: ``X = [a|T], T = 1`` against ``[a|1.0]``
+            # (cons cells), ``T = [1]`` against ``[a, 1.0]`` (a list), and
+            # a partial list against a partial list (round 4 of the
+            # improper-tail fix; before, a SegList against anything but a
+            # SegList stopped here with "no objection", so ``==`` said yes).
+            a = _seg_term(a)
+            b = _seg_term(b)
+            keep.append((a, b))
+        if type(a) is not type(b):
+            continue
         if isinstance(a, (list, tuple)):
             if len(a) == len(b):
                 stack.extend(reversed(list(zip(a, b))))
@@ -405,6 +421,35 @@ def _numeric_types_agree(a, b) -> bool:
                 stack.extend(reversed([(getattr(a, f), getattr(b, f))
                                        for f in fields]))
     return True
+
+
+_PARTIAL = "$partial"      # marks a partial list's items, so only two line up
+
+
+def _seg_term(x):
+    """A SegList as the term `_numeric_types_agree` can pair up: its element
+    list when ground, its cons cells when it is an improper (or cyclic)
+    list, or, when it is still partial, the tuple ``($partial, item, ...)``
+    of its elements with each open hole as that hole's variable -- so two
+    partial lists of one shape pair element by element and a hole pairs
+    with a hole.  Anything else, and a SegList the walk cannot read, is
+    returned as is (the type check then stops the descent: no objection)."""
+    if not isinstance(x, SegList):
+        return x
+    w = x._walk_once()
+    if w is None:
+        return x
+    if isinstance(w, SegList):
+        items = [_PARTIAL]
+        for seg in w._segments:
+            if isinstance(seg, VarSeg):
+                items.append(seg.var)
+            elif isinstance(seg, ConcreteSeg):
+                items.extend(seg.elements)
+            else:
+                return x
+        return tuple(items)
+    return w
 
 
 def _dict_numeric_types_agree(a, b) -> bool:

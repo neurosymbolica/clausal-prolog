@@ -287,3 +287,59 @@ def test_a_list_built_onto_a_hole_built_improper_or_cyclic_list(tmp_path,
     assert r.stdout.splitlines() == [
         "[a,b|foo]", "foo", "eq", "b-a", "b", "a", "b-a-a",
         "resource_error(finite_memory)", "no", "true."], r.stdout
+
+
+IDENTITY = """\
+t(1) :- X = [a|T], T = 1.0, X == [a|1].
+t(2) :- X = [a|T], T = 1, X \\== [a|1.0].
+t(3) :- X = [a|T], T = f(1), Y = [a|U], U = f(1.0), X \\== Y.
+t(4) :- X0 = [g(1,2,3)|X1], X1 = 1, Y0 = [g(1,2,3)|Y1], Y1 = 1.0, X0 \\== Y0.
+t(5) :- X0 = [[1,2,3]|X1], X1 = 1.0, Y0 = [[1,2,3]|Y3], Y3 = 1, X0 \\== Y0.
+t(6) :- X = [a|T], T = [1], X == [a,1.0].
+t(7) :- X = [a|T], T = [1], X \\== [a,1.0].
+t(8) :- X = [a|T], T = 1.0, X == [a|1.0].
+t(9) :- X = [a|T], T = [1], X == [a,1].
+t(10) :- X = [1|T], X == [1.0|T].
+t(11) :- X = [1|T], X \\== [1.0|T].
+t(12) :- X = [1|T], Y = [1.0|T], X == Y.
+t(13) :- X = [a|T], T = [1], Y = [a|U], U = [1.0], X \\== Y.
+t(14) :- X = [a|T], T = 1, Y = [a|U], U = 1.0, X == Y.
+t(15) :- X = [a|T], T = [1], Y = [a|U], U = [1.0], X == Y.
+t(16) :- X = [a|T], T = 1, [a|1.0] == X.
+t(17) :- X = [a|T], T = 1, f(X) == f([a|1.0]).
+t(18) :- X = [a|T], T = [1], X == [a|T].
+t(19) :- X = [a|T], T = 1, X == [a|T].
+t(20) :- X = [a|T], T = 1, compare(O, X, [a|1.0]), compare(O, [a|1], [a|1.0]), O \\== (=).
+t(21) :- X = [a|T], T = [1], compare(O, X, [a,1.0]), compare(O, [a,1], [a,1.0]), O \\== (=).
+t(22) :- X = [a|T], T = 1, msort([[a|1.0], X], S), msort([[a|1.0], [a|1]], S), S = [P, Q], P \\== Q.
+t(23) :- X = [a|T], T = [1], msort([[a,1.0], X], S), msort([[a,1.0], [a,1]], S), S = [P, Q], P \\== Q.
+t(24) :- X = [a|T], T = 1, Y = [a|U], U = 1.0, sort([X, Y, [a|1], [a|1.0]], S), length(S, 2).
+t(25) :- X = [a|T], T = [1], Y = [a|U], U = [1.0], sort([X, Y, [a,1], [a,1.0]], S), length(S, 2).
+t(26) :- X = [a|T], T = 1, X == [a|1], \\+ X @< [a|1], \\+ X @> [a|1].
+p(K) :- catch(t(K), E, (write(K), write('-err '), write(E), nl, fail)), write(K), write('-yes'), nl.
+p(K) :- \\+ catch(t(K), _, fail), write(K), write('-no'), nl.
+main :- p(1), p(2), p(3), p(4), p(5), p(6), p(7), p(8), p(9), p(10), p(11), p(12), p(13),
+        p(14), p(15), p(16), p(17), p(18), p(19), p(20), p(21), p(22), p(23), p(24), p(25), p(26).
+"""
+
+IDENTITY_EXPECTED = [
+    "1-no", "2-yes", "3-yes", "4-yes", "5-yes", "6-no", "7-yes", "8-yes",
+    "9-yes", "10-no", "11-yes", "12-no", "13-yes", "14-no", "15-no", "16-no",
+    "17-no", "18-yes", "19-yes", "20-yes", "21-yes", "22-yes", "23-yes",
+    "24-yes", "25-yes", "26-yes"]
+
+
+@pytest.mark.parametrize("front", FRONT_ENDS, ids=lambda f: f[1] or "clausal")
+def test_identity_keeps_int_and_float_apart_in_a_hole_built_list(tmp_path,
+                                                                front):
+    # ISO standard order: 1 and 1.0 are different terms, so ==/2 is false
+    # and \\==/2 true across them.  Scryer and Trealla print every line
+    # below (t(4) is fz_302 #34 and t(5) is fz_206 #49 of the round-3 fuzz).
+    # A hole-built improper list (or a list spliced through a hole) must
+    # answer exactly as the literal: round 3 answered 1-yes, 2-no, 3-no,
+    # 4-no, 5-no, 6-yes, 7-no, 13-no, 14-yes, 15-no and 10-yes/12-yes.
+    # t(20)-t(26) pin compare/3, msort/2, sort/2 and @</2 to the literal's
+    # answer, whatever the int/float order is.
+    r = _run(tmp_path, *front, IDENTITY, "--once", "-g", "main")
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.splitlines()[:-1] == IDENTITY_EXPECTED, r.stdout
