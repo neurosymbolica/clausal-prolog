@@ -477,7 +477,7 @@ def test_attribute_goal_dumps_the_bounds_and_the_disequation():
     trail = Trail()
     x = Var()
     assert _post(trail, (">=", x, 1))
-    assert hooks.attribute_goal(x) == ("{}", (">=", x, (1, 1)))
+    assert hooks.attribute_goal(x) == ("{}", (">=", x, 1))
     y = Var()
     assert hooks.attribute_goal(y) == "true"
     z = Var()
@@ -866,3 +866,24 @@ def test_frozen_goals_under_a_driver_skip_the_entry_catch_up():
     finally:
         hooks.catch_up = original
     assert True not in calls
+
+
+def test_a_stand_in_left_in_a_row_is_a_member():
+    # Task 12: {0*Z + Y = X + Z, X >= 1}, X = Y.  In 1.3.3 X stays in Y's
+    # row and is Y once bound, so the bound X >= 1 is on a member and
+    # dump/3 shows it.  The stand-in in X's place stays a member.
+    from clausal.logic.clpq.components import (
+        component_all_variables, list_elements)
+    from clausal.logic.clpq.residual_constraints import dump
+    for swap in (False, True):
+        trail = Trail()
+        z = Var()
+        y = Var()
+        x = Var()
+        assert _post(trail, ("=", y, ("+", x, z)), (">=", x, 1))
+        assert unify(y, x, trail) if swap else unify(x, y, trail)
+        (term,) = state_of(deref(y)).linear_form.terms
+        members = list_elements(component_all_variables(
+            state_of(deref(y)).component))
+        assert any(deref(m) is term[0] for m in members)
+        assert dump([deref(y)], ["Y"], trail) == [(">=", "Y", 1)]

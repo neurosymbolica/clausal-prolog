@@ -467,13 +467,29 @@ def test_independent():
 
 def test_normal_form_to_sum_builds_the_1_3_3_term():
     x, y, z = Var(), Var(), Var()
-    assert normal_form_to_sum([], (3, 1)) == (3, 1)
+    assert normal_form_to_sum([], (3, 1)) == 3
     assert normal_form_to_sum([(x, ONE), (y, (-1, 1))], ZERO) == ("-", x, y)
     assert normal_form_to_sum([(x, (-1, 1))], ZERO) == ("-", x)
     assert normal_form_to_sum([(x, (2, 1)), (y, (-3, 1)), (z, (1, 2))], ZERO) == \
-        ("+", ("-", ("*", (2, 1), x), ("*", (3, 1), y)), ("*", (1, 2), z))
-    assert normal_form_to_sum([(x, ONE)], (5, 1)) == ("+", (5, 1), x)
+        ("+", ("-", ("*", 2, x), ("*", 3, y)), ("*", Fraction(1, 2), z))
+    assert normal_form_to_sum([(x, ONE)], (5, 1)) == ("+", 5, x)
     assert homogeneous_to_sum([], x) is x
+
+
+def test_normal_form_to_sum_writes_engine_numbers():
+    # Task 12 carry: a rational pair (n, d) inside a cell reads as a
+    # compound; the sum holds ints and Fractions only.
+    x, y = Var(), Var()
+    term = normal_form_to_sum([(x, (-2, 3)), (y, (-5, 7))], (1, 4))
+    assert term == ("-", ("-", Fraction(1, 4), ("*", Fraction(2, 3), x)),
+                    ("*", Fraction(5, 7), y))
+    assert type(normal_form_to_sum([], (6, 1))) is int
+    stack = [term]
+    while stack:
+        item = stack.pop()
+        if type(item) is tuple:
+            assert type(item[0]) is str
+            stack.extend(item[1:])
 
 
 def test_renormalize_folds_bound_variables_into_the_constant():

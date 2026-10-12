@@ -143,8 +143,10 @@ def test_inf_and_sup_leave_the_store_as_it_was():
     from clausal.logic.clpq.normal_form import post_constraint
     from clausal.pythonic_ast.nodes import LtE
     from clausal.terms import Add, Mult
-    # The states are compared by identity; the dump comparison under
-    # same_solution_sets needs dump/3 (Task 12).
+    # The dumps before and after are the same solution set
+    # (tests/clpq_oracle.py same_solution_sets; Task 12 carry).
+    from clausal.logic.clpq.residual_constraints import residual_strings
+    from tests.clpq_oracle import Answer, same_solution_sets
     trail = Trail()
     x, y = Var(), Var()
     assert post_constraint(LtE(left=0, right=x), trail)
@@ -152,12 +154,21 @@ def test_inf_and_sup_leave_the_store_as_it_was():
     assert post_constraint(LtE(left=0, right=y), trail)
     assert post_constraint(LtE(left=y, right=3), trail)
     assert post_constraint(LtE(left=Add(left=x, right=Mult(left=2, right=y)), right=6), trail)
-    before = _snapshot([x, y])
+    names = {id(x): "X", id(y): "Y"}
+
+    def dump():
+        return Answer({}, residual_strings(
+            [x, y], trail, lambda v: names.setdefault(id(v), f"_I{len(names)}")))
+
+    before = dump()
     infimum, supremum = Var(), Var()
     assert bv.inf(Add(left=x, right=Mult(left=3, right=y)), infimum, trail)
     assert bv.sup(Add(left=x, right=Mult(left=3, right=y)), supremum, trail)
     assert deref(infimum) == 0 and deref(supremum) == 9
-    assert _same_snapshot(before, [x, y])
+    after = dump()
+    assert len(before.residual) == 4
+    assert same_solution_sets([after], [before]) == (True, "")
+    assert not same_solution_sets([Answer({}, before.residual[1:])], [before])[0]
 
 
 def test_review_focus_1_a_strict_bound_comes_back_strict_after_backtracking():
@@ -644,11 +655,28 @@ def test_dump_variable_writes_bounds_with_their_strictness():
     form = state_of(v).linear_form
     result = bv.dump_variable(state_of(v).bounds, v, form.constant, form.terms)
     # 2 + 2X > 1  is  X > -1/2 ;  2 + 2X =< 4  is  X =< 1
-    assert result == [(">", x, q(-1, 2)), ("=<", x, q(1))]
+    assert result == [(">", x, Fraction(-1, 2)), ("=<", x, 1)]
     assert bv.dump_variable(bounds_none(), x, ZERO, [(x, ONE)]) == []
     assert bv.dump_variable(bounds_none(), v, q(2), [(x, q(2))]) == \
-        [("=", v, ("+", q(2), ("*", q(2), x)))]
-    assert bv.dump_disequation(v, [(x, q(2))], q(4)) == [("=\\=", x, q(-2))]
+        [("=", v, ("+", 2, ("*", 2, x)))]
+    assert bv.dump_disequation(v, [(x, q(2))], q(4)) == [("=\\=", x, -2)]
+
+
+def test_dump_variable_and_dump_disequation_write_engine_numbers():
+    # Task 12 carry: bounds and the disequation's value are ints or
+    # Fractions, never rational pairs.
+    trail = Trail()
+    x = _bounded(trail, bounds_none())
+    v = Var()
+    assert bv.variable_with_definition_intern(
+        bounds_lower_upper(q(1, 3), q(4)), v,
+        LinearForm(q(1, 2), ZERO, [(x, q(3))]), 0, trail)
+    form = state_of(v).linear_form
+    lower, upper = bv.dump_variable(state_of(v).bounds, v, form.constant,
+                                    form.terms)
+    assert lower == (">=", x, Fraction(-1, 18)) and type(upper[2]) is Fraction
+    ((_, _, value),) = bv.dump_disequation(v, [(x, q(3))], q(1, 2))
+    assert value == Fraction(-1, 6)
     assert bv.dump_strict(0, "n", "s") == "n"
     assert bv.dump_strict(2, "n", "s") == "s"
 

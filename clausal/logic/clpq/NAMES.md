@@ -113,6 +113,12 @@ Names with no 1.3.3 atom of their own.  They are not in `rename_map.tsv`.
 | `SOLVER_TYPE` | `attribute_hooks.py` | the atom `rational` of `solver_type(clpq, rational)` |
 | `dump_disequation_in_context` | `attribute_hooks.py` | `itf3.pl`'s `dump_disequation//4` (bv.pl's `dump_disequation//3` keeps the name) |
 | `exponential_power`, `power`, `absolute`, `minimum`, `maximum`, `exponential`, `logarithm`, `sine`, `cosine`, `tangent`, `arc_sine`, `arc_cosine`, `arc_tangent` | `arithmetic.py` | `expq/6`, `powq/7`, `abs` of a rational, `minq`, `maxq`, `expq/4`, `logq`, `sinq`, `cosq`, `tanq`, `asinq`, `acosq`, `atanq` with the `_rational` suffix dropped (DEVIATIONS.md D1); `expq/6` gets its own name beside `expq/4`; `is_number` is `number/1` as nf.pl applies it |
+| `crossproduct_with` | `fourier_motzkin.py` | `crossproduct//2` (`crossproduct` is `//1`) |
+| `cross_product_cardinality_with` | `fourier_motzkin.py` | `cross_product_cardinality/4` (`cp_card/4`; `/3` keeps the name) |
+| `occurences_in`, `occurs_in` | `fourier_motzkin.py` | `occurences/3`, `occurs/2` (`occurences/2`, `occurs/1` keep the names) |
+| `sort_variables` | `projection.py` | `sort/2` on a list of variables, as `project_attributes/2` applies it |
+| `related_linear_system_variables` | `residual_constraints.py` | `related_linear_variables//1` (`related_linear_vars//1`; `/2` keeps the name) |
+| `residual_strings`, `format_term` | `residual_constraints.py` | the port's printer of a `dump/3` answer, in the form the `-g` printer shows |
 
 ## Table
 

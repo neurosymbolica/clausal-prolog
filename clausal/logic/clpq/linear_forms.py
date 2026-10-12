@@ -16,7 +16,7 @@ A predicate that can fail returns None where it fails.
 """
 from clausal.logic.clpq.arithmetic import (
     ONE, ZERO, add, arithmetic_normalize, compare, divide, is_zero,
-    make_rational, multiply, negate, sign)
+    make_rational, multiply, negate, sign, to_number)
 from clausal.logic.clpq.attributes import state_of
 from clausal.logic.clpq.variable_ordering import (
     compare_order_values, compare_variable_order)
@@ -344,9 +344,12 @@ def independent(form, x):
 
 def normal_form_to_sum(terms, constant):
     """store.pl, nf2sum/3: the term constant + sum K*X, written as 1.3.3
-    writes it (cells '+', '-', '*'; coefficients stay rationals)."""
+    writes it (cells '+', '-', '*').  The rationals become engine numbers
+    (to_number), as normal_form_to_term writes them, so a term never holds
+    a rational pair that reads as a compound
+    (test_normal_form_to_sum_writes_engine_numbers)."""
     if not terms:
-        return constant
+        return to_number(constant)
     if is_zero(constant):
         variable, coefficient = terms[0]
         if compare(coefficient, ONE) == 0:
@@ -354,20 +357,20 @@ def normal_form_to_sum(terms, constant):
         elif compare(coefficient, MINUS_ONE) == 0:
             start = ("-", variable)
         else:
-            start = ("*", coefficient, variable)
+            start = ("*", to_number(coefficient), variable)
         return homogeneous_to_sum(terms[1:], start)
-    return homogeneous_to_sum(terms, constant)
+    return homogeneous_to_sum(terms, to_number(constant))
 
 
 def homogeneous_to_sum(terms, so_far):
-    """store.pl, hom2sum/3."""
+    """store.pl, hom2sum/3, with engine numbers (see normal_form_to_sum)."""
     for variable, coefficient in terms:
         if compare(coefficient, ONE) == 0:
             so_far = ("+", so_far, variable)
         elif compare(coefficient, MINUS_ONE) == 0:
             so_far = ("-", so_far, variable)
         elif sign(coefficient) < 0:
-            so_far = ("-", so_far, ("*", negate(coefficient), variable))
+            so_far = ("-", so_far, ("*", to_number(negate(coefficient)), variable))
         else:
-            so_far = ("+", so_far, ("*", coefficient, variable))
+            so_far = ("+", so_far, ("*", to_number(coefficient), variable))
     return so_far

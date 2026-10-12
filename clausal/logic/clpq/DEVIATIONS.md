@@ -118,8 +118,8 @@ itf3.pl's code then runs on it unchanged: `detach_bounds/1`,
 `back_substitute/2`, `normal_form_coefficient_of/3` and the rest need no
 variants that take the state (`test_a_binding_reaches_the_rows_of_the_other_variables`,
 `test_a_variable_whose_row_holds_the_other_one`).  Afterwards the
-stand-in is out of the component (`component_drop/2`) and, except in the
-case "A stand-in left in a row" below, out of every row
+stand-in is, except in the case "A stand-in left in a row" below, out of
+the component (`component_drop/2`) and out of every row
 (`solve_for_variable/2`).  So class.pl's
 `delete_first/3` (above) now gets the unbound stand-in from itf3.pl, not
 the bound X.
@@ -197,7 +197,7 @@ member lists the solver walks.  What the port guarantees (ruling R21):
   when the catch-up bound anything, so it reads the values.  This covers
   a goal another key's hook runs in place in the middle of a unification
   (a `freeze/2` goal outside a driver).  Task 13 must do the same in
-  `bb_inf`, and Task 12 in `dump/3`.
+  `bb_inf`.  `dump/3` and `projecting_assert/1` do it (Task 12).
 - A solver step reaches no other part of the store: a constraint
   dereferences its variables, and a binding runs that variable's hook,
   which catches up its own components.
@@ -283,7 +283,25 @@ deep shit because the ordering is violated", itf3.pl); X stays in Y's row
 and is then bound to Y.  In the port the stand-in stays in the row,
 unbound, and nothing binds it, so the store holds `Y = stand-in` with Z = 0
 (`test_a_variable_whose_row_holds_the_other_one`, and the oracle cases
-`{Y = X + Z, X >= 1}, X = Y`).
+`{Y = X + Z, X >= 1}, X = Y`).  The stand-in stays a member of the
+component in X's place (Task 12): `verify_linear` drops it only where it
+solves for it.  In 1.3.3 X is Y once bound, and Y is a member, so the bound
+that the Later goal `{L =< Y}` leaves on the stand-in must reach `dump/3`.
+Before this, the residual of `{0*Z + Y = X + Z, X >= 1}, X = Y` was `X = Y`
+without `X >= 1` (`test_a_stand_in_left_in_a_row_is_a_member`; the oracle
+case now gives Scryer's `X = Y, X >= 1`).
+
+`dump/3` and `projecting_assert/1` (Task 12) project with `trail.defer`
+off and restore it after, as a bare call runs: the trial posts of
+redund.pl's `negate_lower/3` and `negate_upper/3`, which 1.3.3 runs inside
+`\+` with their Later goals, then run their Later work inside the trial
+and undo it.  No store was found where this changes a dump: 1,330 random
+stores (some with a variable-variable binding), searched 2026-10-12, gave
+the same dump with the switch removed under a driver; inside a dump the
+non-linear goals are already marked run, and a trial post of one bound
+rarely binds anything.  `test_dump_under_a_driver_matches_a_bare_dump`
+checks the dump under a driver against a bare one and that `defer` is
+restored.
 
 ## D4: the order of variables is creation order
 
@@ -343,6 +361,21 @@ variables; the port orders them by `Var._id`
 is the one `equate/2` unifies the others with, so with D8 this order decides
 which component variable is bound and so the order of the merged member
 list.  The check is again Task 12's oracle tests.
+
+Task 12 sites.  `project_attributes/2` sorts its two variable lists with
+`sort/2` (`projection.sort_variables`), and `related_linear_systems/3`
+keys an assoc by the component variables; both use creation order.  The
+order decides which variable a residual solves for and the order of the
+residual's constraints.  The result of the oracle check (2026-10-12): the
+residual text, order included, equals Scryer's dump in every oracle case
+of `tests/clpq_port/test_against_oracle.py` (the 40 listed cases, the 4
+hook cases, 40 random stores bound through the hook, the Review Focus 3
+chain) and for each variable of the projection fuzz's first 30 seeds.  No
+order difference was found, so `_KNOWN_TEXT_DIFFERENCES` there is empty;
+`check_against_oracle` fails on a new one.  The only text difference is
+the delayed goal Scryer drops (ruling R8, D7).  Scryer, not SICStus, is the
+oracle, so an order difference between creation order and SICStus's
+order of variables is not excluded.
 
 ## D5: renormalize of a form with no variables raises
 
@@ -425,6 +458,18 @@ a `DelayedGoal(mutex, procedure, argument)` and runs
   walk covers tuples, lists and `__slots__` records; nf.pl's argument
   records (`Monomial`, `NonlinearBase`, `WaitLinearRetry`) are `__slots__`
   records.
+- In `dump/3`, dump.pl's `nonlinear_crux/2` runs `collect_nonlinear//1`
+  before `project_attributes/2`, so every goal is marked run when
+  `project_nonlinear/3` collects again inside it: its reachable set is
+  empty in a dump, as in 1.3.3.  dump.pl's `nonlinear_strip/3` drops a
+  goal `M:What` whose M is not `clpq`, while `project_nonlinear/3` counts
+  that goal's variables (`test_a_goal_of_another_module_is_stripped_yet_counts_as_reachable`).
+  `wait_linear_retry`'s Goal is not such a goal: bv.pl is part of module
+  `clpq` (clpq.pl `ensure_loaded`s it), so `nfq:wait_linear/3`'s
+  meta-argument qualifies the Goal `clpq:`, and `nonlinear_strip/3` keeps
+  it.  A residual can show `infimum_linear(R, ...)` beside `{Term = R}`
+  (`test_wait_linear_retry_s_goal_is_clpq_qualified_so_it_is_kept`); not
+  checked against SICStus.
 - `project_nonlinear/3` also sorts the collected goals and puts them on a
   fresh variable as `all_nonlinear/1`, which `attribute_goal/2`'s second
   clause reads.  The variable is local to `project_nonlinear/3`, so no
@@ -456,7 +501,9 @@ the port keeps it apart from `SolverState`, under
   Which of two attributed variables SICStus binds is not checked; if it is
   the other, the merged member order differs, and the member order decides
   `project.pl`'s numbering of unordered variables.  Task 12's oracle tests
-  are the check.
+  are the check: no residual order differs from Scryer's (D4, "Task 12
+  sites"), including the merges of the 40 random stores bound through the
+  hook.
 - A PlainVar Y (an engine variable that cannot carry attributes; 1.3.3 has
   none) cannot take the record, so `verify_component` fails there
   (`test_verify_component_fails_closed_on_a_plain_var`).  1.3.3 would bind
@@ -578,3 +625,38 @@ raise where 1.3.3 answers.  Task 11 removes this check.
   `nf_ordering/3` is `variable_ordering.compare_variable_order` (Task 6),
   and `decompose/4` is reading a `LinearForm`'s fields.
 
+## D15: dump.pl and redund.pl: what is not ported or differs
+
+- `projecting_assert/1` asserts the projected clause into the caller's
+  module.  The solver core has no database, so the port's
+  `projecting_assert(clause, trail)` returns the clause to assert, with
+  `clpq:{Conj}` as its first goal (or the clause itself where 1.3.3's
+  second clause applies), and its caller asserts it
+  (`test_projecting_assert_puts_the_projection_first`).
+- `dump/3`'s `must_be(Target, proper_list(var), ...)`: the target list is a
+  Python list, so a partial list cannot occur; an element that is not an
+  unbound variable raises `uninstantiation_error(E)`, the error
+  library(types) documents for a bound term where a variable is expected
+  (`test_dump_raises_for_a_bound_target_and_fails_for_unequal_lengths`).
+  The context term is `dump/3`, not SICStus's goal and argument number.
+- `dump/3` is a `findall/3` of the target list and the goals, unified with
+  `[NewVars-Constraints]`.  The port takes a trail mark, projects, copies
+  the goals with each target replaced by its name, and undoes; where a
+  target occurs twice, it then unifies the two names, which is what the
+  unification with `NewVars` does
+  (`test_dump_of_a_repeated_target_unifies_its_names`).
+- `redundancy_variables/1`'s second clause, which times the first clause's
+  call, is unreachable after the first clause's cut and is not ported.
+
+## D16: residual terms hold engine numbers
+
+1.3.3's `dump/3` answers hold rationals as `rat(N, D)` terms, which
+SICStus prints through `portray/1`.  The port's rational is a pair
+`(n, d)` (D1), and a pair inside a compound cell reads as a compound.  So
+store.pl's `normal_form_to_sum/3` and `homogeneous_to_sum/3` and bv.pl's
+`dump_variable//4` and `dump_disequation//3` write each rational as an
+engine number (`to_number`: an int, or a Fraction), as nf.pl's
+`normal_form_to_term/2` already does
+(`test_normal_form_to_sum_writes_engine_numbers`,
+`test_dump_variable_and_dump_disequation_write_engine_numbers`,
+`test_dump_emits_engine_numbers_never_rational_pairs`).

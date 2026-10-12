@@ -1639,7 +1639,9 @@ def narrow_lower(bounds, variable, lower, trail):
 #
 # The DCG rules return the list of constraint terms they produce, or None
 # where they fail.  A term is a tuple (operator, left, right) as
-# linear_forms.normal_form_to_sum writes its cells; bounds stay rationals.
+# linear_forms.normal_form_to_sum writes its cells; bounds and values are
+# engine numbers (to_number), never rational pairs
+# (test_dump_variable_and_dump_disequation_write_engine_numbers).
 
 def dump_variable(bounds, variable, constant, homogeneous):
     """bv.pl, dump_variable//4 (dump_var//4)."""
@@ -1675,7 +1677,7 @@ def _dump_lower(lower, variable, constant, homogeneous):
         return None
     strict = 0b10 if state.lower_strict else 0              # Strict /\ 0b10
     reciprocal = divide(ONE, coefficient)
-    bound = multiply(reciprocal, subtract(lower, constant))
+    bound = to_number(multiply(reciprocal, subtract(lower, constant)))
     total = normal_form_to_sum(multiply_homogeneous_part(homogeneous, reciprocal),
                                ZERO)
     if sign(coefficient) > 0:
@@ -1697,7 +1699,7 @@ def _dump_upper(upper, variable, constant, homogeneous):
         return None
     strict = 0b01 if state.upper_strict else 0              # Strict /\ 0b01
     reciprocal = divide(ONE, coefficient)
-    bound = multiply(reciprocal, subtract(upper, constant))
+    bound = to_number(multiply(reciprocal, subtract(upper, constant)))
     total = normal_form_to_sum(multiply_homogeneous_part(homogeneous, reciprocal),
                                ZERO)
     if sign(coefficient) > 0:
@@ -1724,7 +1726,7 @@ def dump_disequation(variable, homogeneous, constant):
     if not homogeneous:
         return None
     reciprocal = divide(ONE, homogeneous[0][1])
-    value = multiply(negate(reciprocal), constant)
+    value = to_number(multiply(negate(reciprocal), constant))
     total = normal_form_to_sum(multiply_homogeneous_part(homogeneous, reciprocal),
                                ZERO)
     return [("=\\=", total, value)]

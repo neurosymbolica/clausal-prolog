@@ -616,14 +616,18 @@ def verify_linear(variable, value, trail, bindings):
     if independent(state.linear_form, variable):
         if not detach_bounds(variable, trail):
             return False
-        if not component_drop(component, variable, trail):
-            return False
         form = _difference_form(variable, value, trail)
         if form is None:
             return False
         if normal_form_coefficient_of(form, variable) is not None:
+            if not component_drop(component, variable, trail):
+                return False
             return solve_for_variable_homogeneous(
                 form.terms, form, form.constant, variable, bindings, trail)
+        # itf3.pl drops X here too, but X stays in a row and is then bound
+        # to Y, a member.  The stand-in left in the row stays a member in
+        # X's place, so dump/3 finds its bound (DEVIATIONS.md D3, "A
+        # stand-in left in a row"; test_a_stand_in_left_in_a_row_is_a_member).
         return solve_homogeneous(form.terms, form, form.constant, bindings,
                                  trail)
     if not component_drop(component, variable, trail):
