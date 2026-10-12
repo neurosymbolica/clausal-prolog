@@ -339,47 +339,59 @@ def _numeric_types_agree(a, b) -> bool:
     therefore SAFE by construction: it can only ever fail to tighten, never
     wrongly reject.
     """
-    a = deref(a)
-    b = deref(b)
-    ta = _numeric_tag(a)
-    tb = _numeric_tag(b)
-    if ta is not None or tb is not None:
-        # Only a PAIR of tagged numbers raises the cross-type question. A
-        # tagged number against an UNTAGGED one — `Decimal`/`Fraction`, which
-        # `_normalize_for_key` also leaves untagged, so `Decimal('1')` and `1`
-        # already read as identical today — is not this check's business and
-        # gets no objection.
-        if ta is None or tb is None or ta is not tb:
-            return ta is None or tb is None
-        # RULED 2026-09-17 Q2: two decimals of equal VALUE and different SCALE
-        # are distinct terms (``1.0`` vs ``1.00``, the analogue of ISO's ``1``
-        # vs ``1.0``).  Python's ``Decimal.__eq__`` ignores scale, so the
-        # objection has to be raised here, where the order key raises it too
-        # (``_helpers._number_key``) -- that agreement is what keeps
-        # ``compare(=, X, Y) <=> X == Y`` true by construction.
-        if ta is _Decimal:
-            return _decimal_scale(a) == _decimal_scale(b)
-        return True
-    if type(a) is not type(b):
-        return True
-    if isinstance(a, (list, tuple)):
-        if len(a) != len(b):
-            return True
-        return all(_numeric_types_agree(x, y) for x, y in zip(a, b))
-    if isinstance(a, DictTerm):
-        return _dict_numeric_types_agree(a.data, b.data)
-    if isinstance(a, dict):
-        return _dict_numeric_types_agree(a, b)
-    if isinstance(a, SetTerm):
-        return _set_numeric_types_agree(a.elements, b.elements)
-    if isinstance(a, (set, frozenset)):
-        return _set_numeric_types_agree(a, b)
-    if is_term_instance(a):
-        fields = term_field_names(a)
-        if fields != term_field_names(b):
-            return True
-        return all(_numeric_types_agree(getattr(a, f), getattr(b, f))
-                   for f in fields)
+    # An explicit stack, not recursion: a cons chain ``[1,2,...|foo]`` nests
+    # one tuple per element, and a few hundred cells overflowed Python's
+    # stack (RecursionError) once ``structural_eq`` had said "equal".  The
+    # answer is a pure conjunction over the pairs, so the visiting order is
+    # free.
+    stack = [(a, b)]
+    while stack:
+        a, b = stack.pop()
+        a = deref(a)
+        b = deref(b)
+        ta = _numeric_tag(a)
+        tb = _numeric_tag(b)
+        if ta is not None or tb is not None:
+            # Only a PAIR of tagged numbers raises the cross-type question. A
+            # tagged number against an UNTAGGED one -- `Decimal`/`Fraction`,
+            # which `_normalize_for_key` also leaves untagged, so
+            # `Decimal('1')` and `1` already read as identical today -- is
+            # not this check's business and gets no objection.
+            if ta is None or tb is None:
+                continue
+            if ta is not tb:
+                return False
+            # RULED 2026-09-17 Q2: two decimals of equal VALUE and different
+            # SCALE are distinct terms (``1.0`` vs ``1.00``, the analogue of
+            # ISO's ``1`` vs ``1.0``).  Python's ``Decimal.__eq__`` ignores
+            # scale, so the objection has to be raised here, where the order
+            # key raises it too (``_helpers._number_key``) -- that agreement
+            # is what keeps ``compare(=, X, Y) <=> X == Y`` true by
+            # construction.
+            if ta is _Decimal and _decimal_scale(a) != _decimal_scale(b):
+                return False
+            continue
+        if type(a) is not type(b):
+            continue
+        if isinstance(a, (list, tuple)):
+            if len(a) == len(b):
+                stack.extend(zip(a, b))
+        elif isinstance(a, DictTerm):
+            if not _dict_numeric_types_agree(a.data, b.data):
+                return False
+        elif isinstance(a, dict):
+            if not _dict_numeric_types_agree(a, b):
+                return False
+        elif isinstance(a, SetTerm):
+            if not _set_numeric_types_agree(a.elements, b.elements):
+                return False
+        elif isinstance(a, (set, frozenset)):
+            if not _set_numeric_types_agree(a, b):
+                return False
+        elif is_term_instance(a):
+            fields = term_field_names(a)
+            if fields == term_field_names(b):
+                stack.extend((getattr(a, f), getattr(b, f)) for f in fields)
     return True
 
 
