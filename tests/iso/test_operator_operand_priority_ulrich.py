@@ -1,4 +1,4 @@
-"""Operator atoms as operands.
+"""Operator atoms as operands, and ``yf`` postfix priority.
 
 Ruled against Ulrich Neumerkel's syntax conformity suite
 (https://www.complang.tuwien.ac.at/ulrich/iso-prolog/conformity_testing,
@@ -11,6 +11,8 @@ fetched 2026-10-14), then against Scryer:
   As a whole argument (6.3.3.1, priority 999), a list element or tail, or
   in parentheses (6.3.4.1) it is fine: ``f(-)``, ``[-]``, ``(-)``.  Scryer
   also takes ``{-}``.
+* ``yf`` takes a left operand of its own priority, as ``yfx`` does: #160
+  ``0 f f`` is ``f(f(0))``.
 
 Every row runs in the engine (the native ``.pl`` front end) and, unchanged,
 in Scryer.  A row of the suite that is a ``write_canonical/1`` goal is
@@ -36,7 +38,9 @@ _P_YFX = (":- op(9, fy, p).", ":- op(9, yfx, p).")
 _P_XFY = (":- op(9, fy, p).", ":- op(9, xfy, p).")
 _P7_YFX = (":- op(7, fy, p).", ":- op(9, yfx, p).")
 _FY_YFX = (":- op(9, fy, fy).", ":- op(9, yfx, yfx).")
+_YF_XFY = (":- op(9, yf, yf).", ":- op(9, xfy, xfy).")
 _XF1 = (":- op(1, xf, xf1).",)
+_YF1 = (":- op(1, yf, yf1).",)
 _F400 = (":- op(400, fx, f).",)
 
 #: (row, op directives, goal) -- every goal must succeed.
@@ -60,6 +64,11 @@ READ_OK = [
     ("{-}", (), "X = {-}, X = {Y}, Y == (-)"),
     ("- - c", (), "X = (- - c), X == -(-(c))"),
     ("- (-)", (), "X = - (-), X == -(-)"),
+    # yf takes a left operand of its own priority.
+    ("#160 0 f f", _F, "X = (0 f f), X == f(f(0))"),
+    ("#154 1 xfy 2 yf", _YF_XFY, "X = (1 xfy 2 yf), X == xfy(1,yf(2))"),
+    ("#55 {-1 yf1}", _YF1, "{-1 yf1}={yf1(X)}, X == -1"),
+    ("1 yf1 yf1", _YF1, "X = (1 yf1 yf1), X == yf1(yf1(1))"),
 ]
 
 #: (row, op directives, goal) -- every goal is a syntax error.

@@ -258,8 +258,13 @@ class PrologParser:
                 # below instead of guessing wrong (F041-style bug: a bare
                 # 3+-way chain of an operator declared both infix and
                 # postfix, e.g. toklex's `+`, used to raise a spurious
-                # ParseError here).
-                if not self._can_start_term_conservative(self._peek(1)):
+                # ParseError here). With no infix entry at all there is no
+                # chain to continue: after a complete term the name can only
+                # be postfix (`0 f f` with f fy and yf, Ulrich #160, where
+                # the 2nd `f` is also a prefix operator and so "can start a
+                # term").
+                if infix_entry is None \
+                        or not self._can_start_term_conservative(self._peek(1)):
                     entry = postfix_entry
 
             if entry is None:
@@ -467,10 +472,10 @@ class PrologParser:
         return entry.precedence - 1
 
     def _left_prec(self, entry: OpEntry) -> int:
-        """Left-side precedence from infix specifier."""
-        if entry.specifier == "yfx":
+        """Left-side precedence from an infix or postfix specifier."""
+        if entry.specifier in ("yfx", "yf"):
             return entry.precedence
-        # xfx, xfy: left must be strictly less
+        # xfx, xfy, xf: left must be strictly less
         return entry.precedence - 1
 
     def _prefix_right_prec(self, entry: OpEntry) -> int:
