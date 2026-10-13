@@ -74,6 +74,8 @@ typedef struct TrailObject {
     int         defer;
     int         hooks_running;  /* attribute-hook dispatches in progress:
                                  * 0 at a goal, >0 inside a hook */
+    int         unify_oc;       /* nonzero inside a __unify__ hook called
+                                 * by an occurs-checked unification */
 } TrailObject;
 
 #endif  /* !VARIABLES_CAPI_PROVIDER */

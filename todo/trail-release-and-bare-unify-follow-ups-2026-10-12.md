@@ -24,7 +24,9 @@ unusual, or direct Python use of the runtime helpers.
    free-threaded builds.
 4. **Undo with pushes is O(entries x pushed),** because each step memmoves the pushed block.
 5. **`Trail_dealloc` keeps its own copy of the release switch.** Reuse `trail_entry_release`.
-6. **Bare `unify_with_occurs_check` on a multi-hole SegList builds a cyclic term.** For example,
+6. **FIXED 2026-10-14 (the split binds with the occurs check while `trail.unify_oc` is set; see
+   todo/done/unify-with-occurs-check-of-a-repeated-hole-overflows-2026-10-11.md).**
+   **Bare `unify_with_occurs_check` on a multi-hole SegList builds a cyclic term.** For example,
    `[*A, 2, *B]` against `[A, 2]` gives True with `A = [A]`. The split binding skips the occurs check
    outside a driver. This predates 9b38a0f1 and is present on b7b93c11.
 7. **A hook that undoes below the unify's mark and then returns True** makes `unify` return True with

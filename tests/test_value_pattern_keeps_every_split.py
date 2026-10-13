@@ -12,9 +12,10 @@ import pytest
 
 from clausal.logic.cells import chars
 from clausal.logic.solve import solve
-from clausal.logic.variables import Trail, Var, deref, unify
+from clausal.logic.variables import (
+    Trail, Var, deref, is_var, unify, unify_with_occurs_check)
 from clausal.logic.to_python import to_python
-from clausal.terms import SegList, VarSeg
+from clausal.terms import ConcreteSeg, SegList, VarSeg
 from clausal.testing import load_clausal_module
 
 _SRC = r"""
@@ -36,6 +37,13 @@ subsumed_by_list(R) <- (P is [*A, *B], findall(1, subsumes_term([1, 2], P), R))
 subsumes_a_list(R) <- (P is [*A, *B], findall(1, subsumes_term(P, [1, 2]), R))
 subsumes_cyclic(R) <- (P is [*A, *B], findall(1, subsumes_term(P, [A]), R))
 oc_only_last(R) <- (P is [*A, *B, *B], findall(1, (unify_with_occurs_check(P, [A]), not acyclic_term(A)), R))
+oc_rep(R) <- (P is [*A, *A], findall(1, unify_with_occurs_check(P, [[A], A]), R))
+oc_rep_mid(R) <- (P is [*A, 'x', *A], findall(A, unify_with_occurs_check(P, [A, 'x', 1]), R))
+oc_rep_fits(R) <- (P is [*A, 'x', *A], findall(A, unify_with_occurs_check(P, [1, 'x', 1]), R))
+oc_rep_halves(R) <- (P is [*A, *A], findall(A, unify_with_occurs_check(P, [1, 2, 1, 2]), R))
+oc_tail_in_target(R) <- (P is [*A, *B], findall(A-B, unify_with_occurs_check(P, [B, 1]), R))
+oc_nested(R) <- (P is [*A, *A], findall(1, unify_with_occurs_check(0-[P], 0-[[[A], A]]), R))
+subsumes_rep(R) <- (P is [*A, *A], findall(1, subsumes_term(P, [[A], A]), R))
 """
 
 
@@ -177,3 +185,66 @@ def test_occurs_check_unify_when_only_the_last_split_fits(mod):
     # A to a cycle; it is queued like any other, so it is checked (it got
     # through unchecked on 1b717269 too).
     assert _answers(mod, "oc_only_last", nvars=1) == [([],)]
+
+
+# A repeated hole: the split bound each hole with plain unification, so the
+# second ``A`` unified a cycle with more of itself and the stack ran out
+# (RecursionError) before the acyclicity check above could run.  The holes
+# now bind with the occurs check while unify_with_occurs_check runs
+# (trail.unify_oc).  Answers are Scryer's, for the append/3 formulation
+# ``length(L, N), append(X, Y, L), unify_with_occurs_check(X-Y-L, A-A-T)``.
+@pytest.mark.parametrize("name, answer", [
+    ("oc_rep", []),                        # every split makes A cyclic
+    ("oc_rep_mid", []),                    # A = [A]
+    ("oc_rep_fits", [[1]]),
+    ("oc_rep_halves", [[1, 2]]),
+    ("oc_tail_in_target", [([[1]], [1]), ([[], 1], [])]),
+    ("oc_nested", []),                     # the pattern inside a term
+    ("subsumes_rep", []),
+])
+def test_occurs_check_unify_with_a_repeated_hole(mod, name, answer):
+    [(r,)] = _answers(mod, name, nvars=1)
+    # an A-B pair comes back as the operator node Sub(left, right)
+    assert [(x.left, x.right) if hasattr(x, "left") else x
+            for x in r] == answer
+
+
+# Bare unify_with_occurs_check from Python (no driver): the first split that
+# fits is bound, and it was bound without the occurs check.
+def test_bare_occurs_check_unify_refuses_a_cyclic_split():
+    a, b = Var(), Var()
+    t = Trail()
+    p = SegList([VarSeg(a), ConcreteSeg([2]), VarSeg(b)])
+    assert unify_with_occurs_check(p, [a, 2], t) is False
+    assert len(t) == 0 and is_var(a) and is_var(b)
+
+
+def test_bare_occurs_check_unify_with_a_repeated_hole():
+    a = Var()
+    t = Trail()
+    assert unify_with_occurs_check(SegList([VarSeg(a), VarSeg(a)]),
+                                   [[a], a], t) is False
+
+
+def test_bare_occurs_check_unify_of_a_pattern_inside_a_compound():
+    a = Var()
+    t = Trail()
+    p = ("f", SegList([ConcreteSeg([1]), VarSeg(a)]))
+    assert unify_with_occurs_check(p, ("f", [1, a]), t) is False
+
+
+def test_bare_occurs_check_unify_still_binds_an_acyclic_split():
+    a, b = Var(), Var()
+    t = Trail()
+    assert unify_with_occurs_check(SegList([VarSeg(a), VarSeg(b)]), [1, 2], t)
+    assert (deref(a), deref(b)) == ([], [1, 2])
+    assert t.unify_oc is False
+
+
+def test_plain_unify_of_a_cyclic_split_is_unchanged():
+    # ``=``/2 has no occurs check: the split builds the rational tree A = [A].
+    a, b = Var(), Var()
+    t = Trail()
+    p = SegList([VarSeg(a), ConcreteSeg([2]), VarSeg(b)])
+    assert unify(p, [a, 2], t) is True
+    assert deref(deref(a)[0]) is deref(a)

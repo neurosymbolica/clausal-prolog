@@ -253,11 +253,12 @@ def _seg_slice_out(sl):
     return sl
 
 
-def _apply_seglist_split(seglist, target_list, split, trail):
+def _apply_seglist_split(seglist, target_list, split, trail, unify):
     """Bind *seglist* against *target_list* for one *split*; return True on
     success (bindings left on *trail*), False otherwise. Mirrors the inner
-    loop of :func:`_seglist_unify_gen`."""
-    from .logic.variables import unify
+    loop of :func:`_seglist_unify_gen`.  *unify* is the unifier the split
+    binds with: ``unify_with_occurs_check`` when the unification that reached
+    the pattern is occurs-checked (:func:`_seg_unifier`)."""
     # A ``str`` target is a char list: its ELEMENTS are chars, its SLICES
     # stay str (R-S2). Twin of ``_seg_helpers.seq_getitem``.
     target_is_str = type(target_list) is str or type(target_list) is _Text
@@ -291,10 +292,9 @@ def _apply_seglist_split(seglist, target_list, split, trail):
     return True
 
 
-def _apply_segstring_split(segstring, target_str, split, trail):
+def _apply_segstring_split(segstring, target_str, split, trail, unify):
     """SegString analogue of :func:`_apply_seglist_split` (str segments are
     compared, not unified). Mirrors :func:`_segstring_unify_gen`."""
-    from .logic.variables import unify
     pos = 0
     si = 0
     for seg in segstring.segments:
@@ -311,10 +311,9 @@ def _apply_segstring_split(segstring, target_str, split, trail):
     return True
 
 
-def _apply_segbytes_split(segbytes, target_bytes, split, trail):
+def _apply_segbytes_split(segbytes, target_bytes, split, trail, unify):
     """SegBytes analogue of :func:`_apply_seglist_split`. Mirrors
     :func:`_segbytes_unify_gen`."""
-    from .logic.variables import unify
     pos = 0
     si = 0
     for seg in segbytes.segments:
@@ -331,6 +330,21 @@ def _apply_segbytes_split(segbytes, target_bytes, split, trail):
     return True
 
 
+def _seg_unifier(trail):
+    """The unifier a Seg* ``__unify__`` binds its parts with: the occurs-
+    checked one while the hook runs for ``unify_with_occurs_check``
+    (``trail.unify_oc``, set by the C unifier around the hook call), plain
+    ``unify`` otherwise.  Binding a hole with plain unification inside an
+    occurs-checked one built the cycle the check exists to refuse -- and
+    with a repeated hole (``[*A, *A]`` against ``[[A], A]``) the second
+    hole's unification chased that cycle until the stack ran out."""
+    if trail.unify_oc:
+        from .logic.variables import unify_with_occurs_check
+        return unify_with_occurs_check
+    from .logic.variables import unify
+    return unify
+
+
 def _drive_seg_unify(walked, other, trail, concrete_len, apply_fn):
     """Unify *walked* against *other*; True on success, False with the trail
     as it was.
@@ -342,10 +356,15 @@ def _drive_seg_unify(walked, other, trail, concrete_len, apply_fn):
     goal that binds each split in turn, so the next goal boundary backtracks
     into every one (``clausal.logic.pending``).  One hole is bound here.
     Outside a driver (a bare ``unify`` from Python) the first
-    split that fits is bound, as before."""
+    split that fits is bound, as before.
+
+    Every split, the queued ones too, binds with the unifier of the
+    unification that reached the pattern (:func:`_seg_unifier`), read now:
+    the queued goal runs later, outside that unification."""
+    unify = _seg_unifier(trail)
     for split in _seg_split_gen(walked.segments, len(other), concrete_len):
         mark = trail.mark()
-        if apply_fn(walked, other, split, trail):
+        if apply_fn(walked, other, split, trail, unify):
             if not trail.defer or sum(
                     isinstance(s, VarSeg) for s in walked.segments) < 2:
                 return True
@@ -359,7 +378,7 @@ def _drive_seg_unify(walked, other, trail, concrete_len, apply_fn):
                 for each in _seg_split_gen(walked.segments, len(other),
                                            concrete_len):
                     m = trail.mark()
-                    if apply_fn(walked, other, each, trail):
+                    if apply_fn(walked, other, each, trail, unify):
                         yield None
                     trail.undo(m)
 
@@ -521,7 +540,7 @@ def _unify_seglist_cons(walked, cell, trail):
     tail.  ``[H, *T] = '.'(b, foo)`` binds ``H = b, T = foo``, as ISO's
     ``[H|T] = [b|foo]`` does; ``[b] = [b|foo]`` fails (a proper list is
     never an improper one)."""
-    from .logic.variables import unify
+    unify = _seg_unifier(trail)
     segs = (list(walked.segments) if isinstance(walked, SegList)
             else [ConcreteSeg(list(walked))])
     elems: list = []
@@ -562,7 +581,8 @@ def _unify_seglist_cons(walked, cell, trail):
 def _unify_open_seglists(a, b, trail):
     """Unify two walked, non-ground SegLists; NotImplemented when the pair is
     ambiguous (see the block comment above)."""
-    from .logic.variables import unify, deref
+    from .logic.variables import deref
+    unify = _seg_unifier(trail)
     ta, tb = _seglist_tokens(a), _seglist_tokens(b)
     i = 0
     n = min(len(ta), len(tb))
@@ -887,11 +907,10 @@ class SegList:
         through :func:`_drive_seg_unify` (see "Seg* __unify__ against a list
         or text" above :func:`_seg_split_gen`): exact for one hole; every
         split, as a pending goal, for two or more."""
-        from .logic.variables import unify, walk
         walked = self._walk_once()
         if walked is not None and not isinstance(walked, (list, SegList)):
             # An IMPROPER list (D50): unify the cons cells it denotes.
-            return unify(walked, other, trail)
+            return _seg_unifier(trail)(walked, other, trail)
         # An EMPTY Seg IS the empty list, in every spelling (fix round 4,
         # item 5).  See ``_EMPTY_SEG_IS_NIL`` above this class for why this
         # sits ahead of the ``()`` rewrite and why it leaves VarSeg alone.
@@ -933,7 +952,7 @@ class SegList:
                 # side needs splitting, into CHARS.
                 if other_text:
                     other = [char_atom(c) for c in other]
-                return unify(walked, other, trail)
+                return _seg_unifier(trail)(walked, other, trail)
             # Non-ground: every split that fits (_drive_seg_unify).
             # String targets pass through directly (list/str slicing both
             # yield the right shape).
@@ -949,7 +968,7 @@ class SegList:
             other_walked = other._walk_raw()
             if not isinstance(walked, SegList) or not isinstance(other_walked, SegList):
                 # One side walks to a plain list: the list arm above decides.
-                return unify(walked, other_walked, trail)
+                return _seg_unifier(trail)(walked, other_walked, trail)
             return _unify_open_seglists(walked, other_walked, trail)
         if _is_cons_cell(other):
             return _unify_seglist_cons((walked if walked is not None else self._walk_raw()), other, trail)

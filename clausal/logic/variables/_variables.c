@@ -528,6 +528,13 @@ struct TrailObject {
      * inside a hook and at a goal under a driver; this tells them apart
      * (docs/coroutining.md, "Inside a hook or at a goal"). */
     int         hooks_running;
+    /* Nonzero while a term's __unify__ hook runs on behalf of an
+     * occurs-checked unification (do_unify with oc set), zero while one
+     * runs for a plain one.  A hook that unifies the parts itself (a
+     * SegList binding its holes) reads it as trail.unify_oc and binds them
+     * with the occurs check too.  Set and restored around each hook call;
+     * outside one it is 0. */
+    int         unify_oc;
 };
 
 /*
@@ -566,6 +573,7 @@ Trail_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         self->pending         = NULL;
         self->defer           = 0;
         self->hooks_running   = 0;
+        self->unify_oc        = 0;
     }
     PyObject_GC_Track(self);
     return (PyObject *)self;
@@ -1132,6 +1140,12 @@ Trail_get_hooks_running(TrailObject *self, void *Py_UNUSED(closure))
 }
 
 static PyObject *
+Trail_get_unify_oc(TrailObject *self, void *Py_UNUSED(closure))
+{
+    return PyBool_FromLong(self->unify_oc);
+}
+
+static PyObject *
 Trail_get_defer(TrailObject *self, void *Py_UNUSED(closure))
 {
     return PyBool_FromLong(self->defer);
@@ -1152,6 +1166,13 @@ Trail_set_defer(TrailObject *self, PyObject *value, void *Py_UNUSED(closure))
 }
 
 static PyGetSetDef Trail_getset[] = {
+    {"unify_oc", (getter)Trail_get_unify_oc, NULL,
+     "True while a term's __unify__ hook runs for an occurs-checked\n"
+     "unification (unify_with_occurs_check), False while one runs for a\n"
+     "plain one and outside any hook.  A hook that binds parts of the term\n"
+     "itself (a SegList's holes) binds them with the occurs check when it\n"
+     "is set.",
+     NULL},
     {"pending", (getter)Trail_get_pending, NULL,
      "The goals queued for the next goal boundary (a tuple), or None.", NULL},
     {"defer", (getter)Trail_get_defer, (setter)Trail_set_defer,
@@ -1798,8 +1819,11 @@ hooks:
         PyObject *hook;
         if (probe_unify_hook(t1, &hook) < 0) return -1;
         if (hook) {
+            int saved_oc = trail->unify_oc;
+            trail->unify_oc = oc;
             PyObject *result = PyObject_CallFunctionObjArgs(
                 hook, t2_term, (PyObject *)trail, NULL);   /* STAGE 2: a Seg* hook must see the CARRIER -- a bare str is an atom to it */
+            trail->unify_oc = saved_oc;
             Py_DECREF(hook);
             if (result == NULL) return -1;
             if (result != Py_NotImplemented) {
@@ -1816,8 +1840,11 @@ hooks:
         PyObject *hook;
         if (probe_unify_hook(t2, &hook) < 0) return -1;
         if (hook) {
+            int saved_oc = trail->unify_oc;
+            trail->unify_oc = oc;
             PyObject *result = PyObject_CallFunctionObjArgs(
                 hook, t1_term, (PyObject *)trail, NULL);
+            trail->unify_oc = saved_oc;
             Py_DECREF(hook);
             if (result == NULL) return -1;
             if (result != Py_NotImplemented) {
