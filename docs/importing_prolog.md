@@ -669,21 +669,41 @@ may use the `library(...)` spelling too.
 
 ### Module paths
 
-A module is named by an atom (`helpers`), a quoted or unquoted path
-(`'sub/helpers'`, `sub/helpers`, `'../shared/helpers'`, with or without a
-`.pl` suffix), or `library(Name)`. As in Scryer, a path is resolved against
-the **importing file's own directory** first; the file found there is
-imported under its dotted module name (relative to the importer's package
-root, or else to a `sys.path` entry). A path with no such file beside the
-importer is read as a dotted module on `sys.path` (`a/b` is `a.b`), which is
-how a bare name has always been resolved.
+A module is named by an atom (`helpers`), a quoted or unquoted slash path
+(`'sub/helpers'`, `sub/helpers`, with or without a `.pl` suffix), or
+`library(Name)`.
 
-A module spec that names no importable module — a variable, a compound that
-is not an `a/b` path, `'../../x'` with no such file and no dotted reading, or
-a file outside every `sys.path` entry — is a load-time `SyntaxError` that
-names the directive and its line. Until 2026-09-29 an unquoted `a/b` path
-became a comment and the import vanished, and a quoted one failed with
-"argument must be a dotted module path".
+With the native front end (the default), a slash path `a/b` names the
+dotted module `a.b` on `sys.path` (or in the importer's package). A
+**relative or absolute file path is refused** (ruling D10): `./`, `../` and
+a leading `/` are a load-time `SyntaxError` that names the directive and its
+line, and a library or module name is the supported form. A spec that names
+no importable module (a variable, a compound that is not an `a/b` path, a
+name that is on no `sys.path` entry) is refused the same way.
+
+```text
+# plhpkg/lib1.pl:      :- module(lib1, [v/1]).  v(1).
+# plhpkg/sub/m2.pl:    :- use_module('../lib1', [v/1]).  w(X) :- v(X).
+
+native (default):  SyntaxError: ... m2.pl:1: directive: use_module(../lib1, [...]):
+                   a relative or absolute file path is refused (ruling D10);
+                   name the module by its package path a/b ...
+translator:        w(X) -> [1]
+Scryer:            [1]
+```
+
+Write `use_module('plhpkg/lib1', [v/1])` (the dotted module `plhpkg.lib1`)
+instead.
+
+**Translator only** (`CLAUSAL_PL_FRONTEND=translator`). A path may also be
+`'../shared/helpers'`. As in Scryer, a path is resolved against the
+**importing file's own directory** first; the file found there is imported
+under its dotted module name (relative to the importer's package root, or
+else to a `sys.path` entry). A path with no such file beside the importer is
+read as a dotted module on `sys.path` (`a/b` is `a.b`). A spec that names no
+importable module (`'../../x'` with no such file and no dotted reading, or a
+file outside every `sys.path` entry) is a load-time `SyntaxError` that names
+the directive and its line.
 
 ### Name clashes: qualified calls
 
@@ -708,7 +728,23 @@ directive. (A `.seam` file has its own rename,
 
 ### Library imports
 
-Standard Prolog library imports are mapped to built-in modules:
+With the native front end (the default), these `library(...)` names are
+known:
+
+- built in, so no import is needed: `apply`, `between`, `dcgs`, `dif`,
+  `error`, `freeze`, `iso_ext`, `lists`, `pairs`, `when`;
+- mapped to an engine module: `clpfd`, `clpz` (both
+  `clausal.logic.clpfd`), `clpq`, `lambda`, `reif`, `tabling`;
+- the Python facades (see the facade section above).
+
+Any other `library(Name)` is refused at load with a `SyntaxError` naming the
+directive and the known libraries; it is not read as a module `Name`. (Scryer
+raises `existence_error(source_sink, library(Name))`.) A predicate of a
+built-in library that the engine lacks raises the ISO `existence_error` when
+it is called.
+
+**Translator only** (`CLAUSAL_PL_FRONTEND=translator`). The translator also
+maps `library(clpb)`, and it writes each import as a seam directive:
 
 | Prolog | Seam equivalent |
 |---|---|
@@ -720,10 +756,6 @@ Standard Prolog library imports are mapped to built-in modules:
 | `:- use_module(library(apply))` | *(built-in — no import needed)* |
 | `:- use_module(library(L))`, L one of `dif`, `between`, `error`, `pairs`, `when`, `freeze`, `iso_ext`, `dcgs` | *(built-in — no import needed)* |
 | `:- use_module(library(L), [...])`, every listed name an engine builtin | *(built-in — no import needed)* |
-
-Any other `library(Name)` is read as the module `Name` (a missing one is an
-`ImportError` at load). A predicate of a built-in library that the engine
-lacks raises the ISO `existence_error` when it is called.
 
 ### Constants, units and dicts (native front end)
 
@@ -869,8 +901,19 @@ the directive itself is kept as a comment.
 
 ### Atoms and strings
 
-The translator preserves the ISO distinction: a Prolog **atom** loads as a
+Both front ends preserve the ISO distinction: a Prolog **atom** loads as a
 Clausal Prolog atom, and a Prolog **double-quoted string** loads as a Clausal Prolog string.
+The native front end (the default) differs from the translator in two
+spellings:
+
+- `true` and `false` are Python `True`/`False` under both front ends, but
+  `fail` as a data argument is the atom `fail` under native and `False` under
+  the translator (as a goal `fail` fails under both);
+- `undefined`, quoted or bare, is the truth value `Undefined` under native
+  (see below).
+
+The text below, up to the `set_prolog_flag` paragraphs, describes what the
+**translator** (`CLAUSAL_PL_FRONTEND=translator`) writes.
 
 ```prolog
 p("ab").          % a STRING -- the list ['a','b']
@@ -909,6 +952,12 @@ r('hello world'),
 - The atom `undefined` is emitted quoted (`'undefined'`): bare `undefined`
   is Clausal Prolog's truth value `Undefined`, which `-private` cannot declare
   (until 2026-09-29 a file holding the atom failed to load).
+
+**Native** (the default) reads `undefined`, bare or quoted, as the truth
+value `Undefined`, not as an atom: both `p(undefined).` and `p('undefined').`
+answer `Undefined` (rulings D35/D47). The translator answers the atom
+`'undefined'` for both; Scryer answers the atom `undefined`. A file that needs
+the atom should use another name.
 
 The ISO directive `:- set_prolog_flag(double_quotes, Mode)` (or the short
 `:- double_quotes(Mode)`) governs every `"…"` below it, as in Scryer, and the
@@ -1035,17 +1084,22 @@ A translation error names the `.pl` line it comes from
 
 ## Bytecode caching
 
-Translated `.pl` files are cached as `.pyc` bytecode in `__pycache__/`, just
+Compiled `.pl` files are cached as `.pyc` bytecode in `__pycache__/`, just
 like `.seam` files. Cache invalidation is automatic — if you modify the
-`.pl` file, the next import re-translates and recompiles.
+`.pl` file, the next import re-reads and recompiles it (the native front end
+lowers it again, the translator re-translates it).
 
 The `.pyc` is keyed on the `.pl` file's mtime and size, and on a
-fingerprint of the engine, including the translator itself (see
-[Caching](caching.md)), so:
+fingerprint of the engine, including the front end that compiled it: the
+translator, or for the native front end the reader and lowering sources
+(`prolog_reader.py`, `iso_l3.py`, `iso_l3_directives.py`). The two front ends
+never share a cache entry (see [Caching](caching.md)), so:
 
-- **Editing the `.pl` file** invalidates the cache (triggers re-translation)
+- **Editing the `.pl` file** invalidates the cache (triggers recompilation)
 - **Upgrading or editing the engine** invalidates it too
-- **Restarting Python** loads from cache (no re-translation)
+- **Restarting Python** loads from cache (no re-reading)
+- **Switching `CLAUSAL_PL_FRONTEND`** recompiles on the next import (the
+  `.pyc` holds one front end's bytecode at a time)
 - **`sys.dont_write_bytecode = True`** suppresses cache writes
 
 ---

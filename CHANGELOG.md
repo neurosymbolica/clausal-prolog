@@ -20,11 +20,22 @@ surface described in [docs/public-api.md](docs/public-api.md).
   Why: ISO conformance (Ulrich Neumerkel's conformity cases among them).
   `clausal.tools.pl_parity` loaded all 101 `.pl` sources in the repository
   under both front ends: 40 differ, 33 of them translator bugs where native
-  agrees with the Scryer oracle, and none is a native gap (the rest are
-  intentional by a ruling, or wrong on both sides). Visible differences:
+  agrees with the Scryer oracle, and none of the 101 is a native gap (the
+  rest are intentional by a ruling, or wrong on both sides); that count
+  covers those in-repo sources only. Two kinds of file that loaded before now
+  fail to load: (1) a `use_module` with a relative or absolute file path
+  (`'../lib'`, `./lib`, `/abs/lib`) is refused (ruling D10; name the module
+  by its package path `a/b`, or a library name), where the translator and
+  Scryer load a relative path that names an existing file; (2) native refuses the whole file when any one rule is
+  refused, where the translator loaded the rest (in the repository,
+  `tests/fixtures/prolog_golden/dcg_grammar.pl`, refused at its one
+  grammar rule with `\+` in the body, as Scryer refuses that rule). No in-repo `.pl` uses a
+  relative path, so the parity count cannot show (1). Visible differences:
   a failing `.pl` test names its source line and its goals are shown as
-  written, not in a seam translation; `use_module(M, [])` loads (as in
-  Scryer) instead of being refused; data-position `true`/`false`/
+  written, not in a seam translation; `use_module(M, [])` is accepted and
+  imports nothing (M is not loaded), so a call to an M predicate raises
+  `existence_error(procedure, p/1)`, as in Scryer, instead of the directive
+  being refused; data-position `true`/`false`/
   `undefined` are the truth values, as in Clausal Prolog; and refusal
   messages are the native front end's (for example "`->` (if-then) is
   refused" rather than "If-then-else"). Bytecode cached by the translator
