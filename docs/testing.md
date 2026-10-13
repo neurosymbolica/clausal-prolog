@@ -62,7 +62,7 @@ Exit codes:
 | Code | Meaning |
 |---|---|
 | 0 | every collected test passed |
-| 1 | a test failed, or a file failed to load (for a `.pl` file, to translate) |
+| 1 | a test failed, or a file failed to load (a `.pl` file the front end refuses included) |
 | 2 | usage error: a path does not exist, or names a file that is not `.seam`, `.clausal` or `.pl` |
 | 5 | no tests collected (the same number as pytest's "no tests collected") |
 
@@ -90,11 +90,11 @@ test('double of two is four') :- double(2, 4).
 test('append works') :- append([1], [2], [1, 2]).
 ```
 
-A `.pl` file the translator rejects (a syntax error, or a construct it cannot translate, such as a cut) is a failing `<load>` item carrying the translator error -- never a skipped file. The translator keeps no source map, so a failing `.pl` test is reported without a line number, and its goals are shown in their seam translation.
+A `.pl` file the front end rejects (a syntax error, or a refused construct such as a cut) is a failing `<load>` item carrying the error -- never a skipped file. The native front end (the default) reads the `.pl` source directly, so a failure names its source line. Under `CLAUSAL_PL_FRONTEND=translator` the translator keeps no source map, so a failing `.pl` test is reported without a line number, and its goals are shown in their seam translation.
 
 ## Running `test/1` tests via pytest
 
-The `conftest.py` at the project root registers a pytest plugin that automatically collects `.seam` files, `.clausal` files, Prolog `.pl` files (through the Prolog importer; a file that does not translate is one failing `<load>` item), and also every ```` ```seam ```` block (or its older alias ```` ```clausal ````) in `docs/*.md` that contains a `test/1` clause. The [import hook](import.md) handles loading and compilation. Each `test/1` clause appears as an individual pytest item:
+The `conftest.py` at the project root registers a pytest plugin that automatically collects `.seam` files, `.clausal` files, Prolog `.pl` files (through the Prolog importer; a file that does not load is one failing `<load>` item), and also every ```` ```seam ```` block (or its older alias ```` ```clausal ````) in `docs/*.md` that contains a `test/1` clause. The [import hook](import.md) handles loading and compilation. Each `test/1` clause appears as an individual pytest item:
 
 ```bash
 python -m pytest clausal/examples/fibonacci.seam -v

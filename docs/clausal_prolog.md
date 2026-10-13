@@ -11,7 +11,7 @@ The engine reads three source surfaces:
 | Extension | Surface | Syntax | Read by |
 |---|---|---|---|
 | `.clausal` | **Clausal Prolog** | ISO Prolog, cut-free | the native ISO front end, always |
-| `.pl` | **ISO Prolog** | Regular ISO Prolog, cut included | external Prolog systems (the Scryer and Trealla embeddings); experimental in-process import via `CLAUSAL_PL_FRONTEND` |
+| `.pl` | **ISO Prolog** | Regular ISO Prolog, cut included | external Prolog systems (the Scryer and Trealla embeddings); experimental in-process import through the native ISO front end (`CLAUSAL_PL_FRONTEND=translator` selects the legacy translator) |
 | `.seam` | **the seam** | Python syntax | `PredicateLoader` |
 
 The seam is the boundary with Python. It is where the `++expr` escape,

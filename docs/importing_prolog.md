@@ -2,10 +2,12 @@
 
 !!! warning "Experimental in 1.0"
     `.pl` import is **experimental** and outside the 1.0 compatibility
-    promise (see [Public API](public-api.md)). It translates Prolog source
-    into seam syntax with an older translator; it is not an ISO
-    Prolog system. This loader does not run cut or if-then-else yet: programs
-    that use them are refused (see [Known limitations](#known-limitations)).
+    promise (see [Public API](public-api.md)). By default it reads `.pl`
+    with the native ISO front end (the reader `.clausal` files use);
+    `CLAUSAL_PL_FRONTEND=translator` selects the older translator, which
+    rewrites Prolog source into seam syntax. Clausal is cut-free: programs
+    that use cut or if-then-else are refused by both front ends (see
+    [Known limitations](#known-limitations)).
     For running real ISO Prolog alongside Clausal Prolog, use the
     [Scryer](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scryer/docs/scryer.md) or [Trealla](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-trealla/docs/trealla.md) embeddings.
 
@@ -81,15 +83,28 @@ path(2, 4)
 
 ## How it works
 
-The translation pipeline runs inside Python's import machinery:
+The pipeline runs inside Python's import machinery. `CLAUSAL_PL_FRONTEND`
+picks the front end: unset, empty or `native` is the native ISO front end;
+`translator` is the legacy translator. Any other value is an `ImportError`.
 
 ```
-.pl source
+.pl source (native, the default)
+  → PrologReader           # ISO reader, Scryer's operator table
+  → iso_l3                 # clauses lowered straight to the Python AST
+  → compile()              # Python AST → bytecode
+  → .pyc cache             # bytecode cached in __pycache__/
+
+.pl source (CLAUSAL_PL_FRONTEND=translator)
   → prolog_to_clausal()    # Prolog text → seam text
   → EmbedTransformer       # seam text → Python AST
   → compile()              # Python AST → bytecode
   → .pyc cache             # bytecode cached in __pycache__/
 ```
+
+The two front ends have different cache keys, so switching the variable
+never serves one front end's bytecode to the other. Unless a section says
+otherwise, the details further down this page (what translates, the error
+texts, the translation reference) describe the translator.
 
 On the first import, the full pipeline runs. On subsequent imports, the cached
 `.pyc` is loaded directly — no translation or parsing.
@@ -344,11 +359,11 @@ load `m`, so `m:p(X)` is an `existence_error`), while Trealla and SWI load
 `m` and import nothing. What Clausal does depends on the path:
 
 - A Clausal Prolog (`.clausal`) module, and a `.pl` file on the native front
-  end (`CLAUSAL_PL_FRONTEND=native`), **load** with the empty list. It
+  end (the default), **load** with the empty list. It
   imports nothing and, as in Scryer, leaves `m` unloaded: `m:p(X)` is
   `error(existence_error(procedure, p/1), p/1)`.
-- The default `.pl` importer (the translator described on this page) still
-  refuses it, with a `SyntaxError` naming the line.
+- The legacy translator (`CLAUSAL_PL_FRONTEND=translator`) refuses it, with
+  a `SyntaxError` naming the line.
 
 Write `use_module(m)` or `use_module(m, [p/1])` to get `m` loaded; after
 either, `m:p(X)` reaches every predicate `m` exports, in Clausal Prolog,
@@ -442,7 +457,7 @@ leaves it out, or has it removed on the way
 
 ### Importing a Python-backed module
 
-Under the native front end (`CLAUSAL_PL_FRONTEND=native`) a `.pl` file can
+Under the native front end (the default) a `.pl` file can
 import an engine module whose predicates are written in Python, such as
 `py.datetime`:
 
@@ -712,7 +727,7 @@ lacks raises the ISO `existence_error` when it is called.
 
 ### Constants, units and dicts (native front end)
 
-With `CLAUSAL_PL_FRONTEND=native`, a `.pl` file declares constants and units
+With the native front end (the default), a `.pl` file declares constants and units
 with the same directive family as the seam
 ([Constants Directive](directives.md#constants-directive)), in ISO syntax:
 
@@ -757,7 +772,7 @@ value(V)    :- constant_value(max_fine, V).               % program-wide
 
 ### DCG rules (native front end)
 
-With `CLAUSAL_PL_FRONTEND=native` (the front end of Clausal Prolog), a
+With the native front end (the default, and the front end of Clausal Prolog), a
 `-->` rule is translated to the clause ISO 7.14 and Scryer's
 `library(dcgs)` give it, then loaded as that clause. A nonterminal
 `name//N` is the predicate `name/(N+2)`, the two list states last, and
@@ -973,8 +988,8 @@ it with `:- op/3`, which the reader applies as it goes, or pass
 
 ## Running a `.pl` file's tests
 
-`test/1` clauses in a `.pl` file are tests, as in a `.seam` file: the
-translator keeps the `test` name, so `test('name') :- Body.` is the runner's
+`test/1` clauses in a `.pl` file are tests, as in a `.seam` file: both
+front ends keep the `test` name, so `test('name') :- Body.` is the runner's
 `test/1`. Both runners collect `.pl` files:
 
 ```bash
@@ -982,8 +997,9 @@ python -m clausal.testing path/to/rules.pl      # or a directory holding .pl fil
 python -m pytest path/to/rules.pl
 ```
 
-A `.pl` file that fails to translate is reported as a failing `<load>` test
-carrying the translator error (exit 1), never skipped. A `.pl` file with no
+A `.pl` file that fails to load is reported as a failing `<load>` test
+carrying the front end's error (exit 1), never skipped; the native front end
+names the source line (`broken.pl:1 :: <load>`). A `.pl` file with no
 `test/1` clauses exits 5 ("no tests collected") unless `--allow-empty` is
 given. See [Testing](testing.md).
 
@@ -991,12 +1007,17 @@ given. See [Testing](testing.md).
 
 ## Error handling
 
-Translation and parse errors are surfaced as `SyntaxError`, which Python's
-import machinery displays clearly:
+Load, translation and parse errors are surfaced as `SyntaxError`, which
+Python's import machinery displays clearly. The native front end (the
+default) names the file and line:
 
 ```
-SyntaxError: Cannot import foo.pl: Cut (!/0) cannot be translated to Clausal.
+SyntaxError: Cannot import foo.pl: foo.pl:3: `!` (cut) is refused ...
 ```
+
+The table below lists the translator's (`CLAUSAL_PL_FRONTEND=translator`)
+errors; the native front end raises the same exception types, except that it
+loads `use_module(M, [])` (see above).
 
 | Error type | Cause | Exception |
 |---|---|---|

@@ -14,7 +14,7 @@ Up: [../AGENTS.md](../AGENTS.md)
 | Source | Loader (in `clausal/import_hook.py`) | Path through this folder |
 |---|---|---|
 | `.clausal` (Clausal Prolog) | `NativePrologLoader`, always | `prolog_reader` -> `iso_l3` (+ `iso_l3_directives`) |
-| `.pl` | `PrologLoader` by default; `NativePrologLoader` when `CLAUSAL_PL_FRONTEND=native` | default: `prolog_to_clausal` -> seam text -> `EmbedTransformer` |
+| `.pl` | `NativePrologLoader` by default; `PrologLoader` when `CLAUSAL_PL_FRONTEND=translator` | default: `prolog_reader` -> `iso_l3`; translator: `prolog_to_clausal` -> seam text -> `EmbedTransformer` |
 | `.seam` | `PredicateLoader` | not here (seam compiler is in `clausal/templating/`) |
 
 ## Map
@@ -30,7 +30,7 @@ Up: [../AGENTS.md](../AGENTS.md)
 | `prolog_ast.py` | Frozen-dataclass Prolog AST (`PAtom`, `PCompound`, `PClause`, `PModule`, ...), visitors, builders. |
 | `prolog_reader.py` | The "§1c contract": `PrologReader` (incremental, item-at-a-time over toklex) and `transform_term` (P-tree -> functor-first tuple cells, `VarRef`s, spans). Items: `Clause`, `Directive`, `DCGRule`, `Query`, `SyntaxIssue`. Must not import the engine (`clausal.logic.*`). |
 
-**Native front end (`.clausal`, and `.pl` with `CLAUSAL_PL_FRONTEND=native`)**
+**Native front end (`.clausal`, and `.pl` by default)**
 
 | File | What it is |
 |---|---|
@@ -41,7 +41,7 @@ Up: [../AGENTS.md](../AGENTS.md)
 
 | File | What it is |
 |---|---|
-| `prolog_to_clausal.py` | `.pl` -> seam text (the default `.pl` front end, "translator"). `prolog_to_clausal(src, dialect=...)`. Has its own `_BUILTIN_LIBRARIES` / `_LIBRARY_TO_MODULE` tables. |
+| `prolog_to_clausal.py` | `.pl` -> seam text (the legacy `.pl` front end, "translator", selected by `CLAUSAL_PL_FRONTEND=translator`). `prolog_to_clausal(src, dialect=...)`. Has its own `_BUILTIN_LIBRARIES` / `_LIBRARY_TO_MODULE` tables. |
 | `clausal_to_prolog.py` | seam -> Prolog AST -> `.pl` text (the exporter). `clausal_source_to_prolog()`, `emit_term/item/module`. Raises `UntranslatableConstructError`. |
 | `prolog_dialect.py` | `Dialect` (`iso`, `swi`, `scryer`, `scryer_reader`, `gprolog`, `trealla`): operator table, library map, CLP module, how constants cross; name maps (`BUILTIN_NAME_MAP`, var-name conversion). |
 | `prolog_preludes/` | `clausal_constants_scryer.pl`, `clausal_constants_trealla.pl`: term_expansion preludes an exported file loads for constants under an `expansion` dialect (referenced from `prolog_dialect.py`). |

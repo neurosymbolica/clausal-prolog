@@ -700,24 +700,30 @@ The following names are injected into every predicate module's namespace by the 
 
 !!! warning "Experimental in 1.0"
     `.pl` import is **experimental** and outside the 1.0 compatibility promise
-    (see [Public API](public-api.md)). It runs an older translator into the
-    seam syntax: cut and if-then-else are refused, and it is not an ISO
-    Prolog consult.
+    (see [Public API](public-api.md)). It reads `.pl` with the native ISO
+    front end by default (`CLAUSAL_PL_FRONTEND=translator` selects the older
+    translator into the seam syntax). Clausal is cut-free: cut and
+    if-then-else are refused, and it is not an ISO Prolog consult.
 
 Clausal Prolog can import Prolog `.pl` files without a manual translation step. Placing a `.pl` file on `sys.path` makes it importable:
 
 ```python
 import clausal            # installs the import hook
-import my_prolog_module   # finds and translates my_prolog_module.pl
+import my_prolog_module   # finds and loads my_prolog_module.pl
 ```
 
-The translation pipeline runs on the fly:
+The pipeline runs on the fly. `CLAUSAL_PL_FRONTEND` picks the front end:
 
 ```
-.pl source → prolog_to_clausal() → seam text → EmbedTransformer → bytecode
+native (unset, empty or "native"):
+  .pl source → PrologReader → iso_l3 lowering → bytecode
+translator ("translator"):
+  .pl source → prolog_to_clausal() → seam text → EmbedTransformer → bytecode
 ```
 
-The resulting bytecode is cached as a `.pyc` file, so subsequent imports skip translation entirely.
+Any other value is an `ImportError`. The resulting bytecode is cached as a
+`.pyc` file, keyed per front end, so subsequent imports skip the front end
+entirely.
 
 ### Finder priority
 
@@ -735,7 +741,7 @@ but a `foo.pl` in an earlier entry beats a `foo.seam` in a later one. See
 
 ### Recursive imports
 
-when a `.pl` file contains `:- use_module(bar, [helper/1]).`, the translator emits `-import_from(bar, [helper])` in the seam text. At compile time, `importlib.import_module("bar")` triggers the import hook again, which finds and translates `bar.pl`. Python's `sys.modules` sentinel handles circular imports.
+when a `.pl` file contains `:- use_module(bar, [helper/1]).`, both front ends import `bar`; the translator, for instance, emits `-import_from(bar, [helper])` in the seam text. At compile time, `importlib.import_module("bar")` triggers the import hook again, which finds and translates `bar.pl`. Python's `sys.modules` sentinel handles circular imports.
 
 Library imports are mapped to built-in modules:
 
@@ -747,17 +753,17 @@ Library imports are mapped to built-in modules:
 | `:- use_module(library(apply))` | *(built-in — no import emitted)* |
 | `:- use_module(bar)` | `-import_module(bar)` |
 
-### Translation errors
+### Load errors
 
-If a `.pl` file contains constructs that cannot be translated (cut, if-then-else), the import raises a `SyntaxError` with a clear message:
+If a `.pl` file contains constructs Clausal refuses (cut, if-then-else), the import raises a `SyntaxError` naming the file and line:
 
 ```
-SyntaxError: Cannot import foo.pl: Cut (!/0) cannot be translated to Clausal.
+SyntaxError: Cannot import foo.pl: foo.pl:1: `!` (cut) is refused: ...
 ```
 
 ### Caveats
 
-- **Bare Prolog atoms** (lowercase identifiers like `red`, `foo`) are declared for you: the translator emits a `-private([red, ...])` line, so they load under the strict-atoms default.
+- **Bare Prolog atoms** (lowercase identifiers like `red`, `foo`) are atoms under both front ends; you never declare them (the translator emits a `-private([red, ...])` line for you).
 - **The `.pl` extension is also used by Perl.** If a Perl script ends up on `sys.path`, the import hook will attempt to parse it as Prolog and raise a `SyntaxError` — even when a `.seam` or `.clausal` module of the same name sits in a later `sys.path` entry, since the earlier entry wins. `sys.path[0]` is the script directory or the current directory, so a stray `foo.pl` there shadows an installed `foo.seam`. Avoid placing Perl scripts in directories on `sys.path`.
 - **Encoding:** All `.pl` files must be UTF-8 encoded. Non-UTF-8 files will raise `UnicodeDecodeError`.
 - **Stdlib shadowing:** The Clausal Prolog finders (`.seam`, `.clausal`, `.pl`) run *before* Python's `PathFinder` on `sys.meta_path`. A file like `os.seam` or `re.pl` on `sys.path` named after a standard-library module is almost always an accident, so the finder does **not** shadow it: the finder emits a `ClausalLintWarning` and defers to the standard library (the stdlib module is imported). Rename the file to avoid the warning. Avoid naming `.seam`/`.clausal`/`.pl` files after standard Python or engine modules.

@@ -4,9 +4,9 @@ Tests for "L3", the native ISO front end: the ISO reader
 (`clausal/tools/prolog_reader.py`) followed by `clausal/tools/iso_l3.py`, which
 lowers clauses straight to the transformed AST the seam produces, with
 directives handled by `clausal/tools/iso_l3_directives.py`. `.clausal` (Clausal
-Prolog) files always load through it; a `.pl` file does only when
-`CLAUSAL_PL_FRONTEND=native` (unset or `translator` is the default: the older
-`prolog_to_clausal` → seam text path). Plan:
+Prolog) files always load through it, and so does a `.pl` file by default
+(`CLAUSAL_PL_FRONTEND` unset, empty or `native`); `CLAUSAL_PL_FRONTEND=translator`
+selects the older `prolog_to_clausal` → seam text path. Plan:
 `implementation_plans/native-iso-reader-step2-2026-09-29.md`.
 Up: [../AGENTS.md](../AGENTS.md).
 
@@ -24,8 +24,8 @@ Up: [../AGENTS.md](../AGENTS.md).
 ## Gotchas
 
 - The rulebases and `s2`–`s5` are listed in `conftest.py`'s `collect_ignore`:
-  collected by the root plugin they would load under the default (translator)
-  front end and test the wrong thing. Add new rulebase data there too.
+  they are data for the exit tests, which load them natively with the
+  slice's controls (loader class, L3 stats). Add new rulebase data there too.
 - Always assert which front end ran (use the `native` fixture, or check the
   loader class). Both front ends write the same `__pycache__` file name with
   different cache keys; a stale cache or a missing env var silently tests the

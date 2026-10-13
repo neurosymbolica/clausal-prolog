@@ -6,8 +6,9 @@ Up: [../AGENTS.md](../AGENTS.md)
 `sys.meta_path` stub (`_lazy_hook.py`). The real import hook (`import_hook.py`)
 loads on the first `.seam`, `.clausal` or `.pl` import and sends each file to a
 front end: seam text goes to the seam compiler ([templating/](templating/AGENTS.md));
-Prolog syntax goes to the native ISO reader / `iso_l3` lowering or to the
-`.pl` translator ([tools/](tools/AGENTS.md)). The result is compiled to
+Prolog syntax goes to the native ISO reader / `iso_l3` lowering (or, under
+`CLAUSAL_PL_FRONTEND=translator`, to the legacy `.pl` translator)
+([tools/](tools/AGENTS.md)). The result is compiled to
 generator functions by the core ([logic/](logic/AGENTS.md)). The root modules
 here are the edges of that system: the hook, the CLI, the test runner,
 reflection, the Python-bridge policy, and the diagnostics that rewrite raw
@@ -37,7 +38,7 @@ their files are few and their module docstrings serve as the map.
 |---|---|
 | `__init__.py` | Public API (`solve`, `query`, `once`, `call`, `Var`, `to_python`, ...) and re-exports every builtin by name. See [public-api](../docs/public-api.md). |
 | `_lazy_hook.py` | A stub finder that installs the real hook on first use. |
-| `import_hook.py` | Finders and loaders: `PredicateLoader` (seam), `PrologLoader` (`.pl` via the translator), `NativePrologLoader` (`.clausal` always; `.pl` when `CLAUSAL_PL_FRONTEND=native`), `ModulesFinder`, the `.pyc` cache fingerprint, IPython wiring. See [import](../docs/import.md) and [caching](../docs/caching.md). |
+| `import_hook.py` | Finders and loaders: `PredicateLoader` (seam), `PrologLoader` (`.pl` via the legacy translator, when `CLAUSAL_PL_FRONTEND=translator`), `NativePrologLoader` (`.clausal` always; `.pl` by default), `ModulesFinder`, the `.pyc` cache fingerprint, IPython wiring. See [import](../docs/import.md) and [caching](../docs/caching.md). |
 | `_suffixes.py` | The ONE place file extensions are defined (`CLAUSAL_SUFFIXES`=`.seam`, `CLAUSAL_PROLOG_SUFFIXES`=`.clausal`, `.pl`). Use these names; never spell a suffix in code. |
 | `end_module.py` | `:- end_module(Name)` checks and `surface_of(path)` (which surface a file belongs to). |
 | `aio.py` | Asyncio driver (experimental): `adrive` runs any answer generator in a greenlet (`asolve`/`aonce`/`acall` are built on it); `await_only` switches to the event loop (or blocks on a private per-thread loop in a sync query); `async_predicate`; per-query tabling thread-local state, whose `owner` tags tables so another query can't see one half-built (`tabling._foreign`). Seam `--goal` in an `async def` lowers to `seam.aonce_bind`/`aeach`/`aeach_fresh` (`templating/term_rewriting.py`, `_async_scope`), and `++await` in a clause to `seam.await_only`. Predicates in `modules/py/asyncio.py`. See [asyncio](../docs/asyncio.md). |

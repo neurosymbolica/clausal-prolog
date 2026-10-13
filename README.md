@@ -246,8 +246,9 @@ Importing a `.pl` file straight into the engine (put it on `sys.path` and
 `import` it) is
 **experimental** and outside the 1.0 compatibility promise. That in-process
 loader does not run cut yet: a `.pl` file that uses `!` or `->` fails to
-load there. `CLAUSAL_PL_FRONTEND` selects its front end (`translator` by
-default, or `native`, the ISO reader that `.clausal` files always use).
+load there. It reads `.pl` with the native ISO front end, the reader that
+`.clausal` files always use; `CLAUSAL_PL_FRONTEND=translator` selects the
+legacy translator instead.
 
 ## The seam: `.seam` files
 

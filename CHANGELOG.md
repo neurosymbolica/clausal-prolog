@@ -7,6 +7,29 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Breaking
+
+- **`.pl` files load through the native ISO front end by default.** An
+  import of a `.pl` module, `python -m clausal.testing`, the pytest plugin
+  and the `clausal` CLI now read `.pl` source with the ISO reader and the
+  `iso_l3` lowering that `.clausal` files already use, instead of the legacy
+  `prolog_to_clausal` translator into seam text. `CLAUSAL_PL_FRONTEND`
+  unset or empty now means `native`; set `CLAUSAL_PL_FRONTEND=translator`
+  to get the old behaviour back. An unknown value is still an
+  `ImportError`, and the sandbox still always uses the native front end.
+  Why: ISO conformance (Ulrich Neumerkel's conformity cases among them).
+  `clausal.tools.pl_parity` loaded all 101 `.pl` sources in the repository
+  under both front ends: 40 differ, 33 of them translator bugs where native
+  agrees with the Scryer oracle, and none is a native gap (the rest are
+  intentional by a ruling, or wrong on both sides). Visible differences:
+  a failing `.pl` test names its source line and its goals are shown as
+  written, not in a seam translation; `use_module(M, [])` loads (as in
+  Scryer) instead of being refused; data-position `true`/`false`/
+  `undefined` are the truth values, as in Clausal Prolog; and refusal
+  messages are the native front end's (for example "`->` (if-then) is
+  refused" rather than "If-then-else"). Bytecode cached by the translator
+  is not served to the native loader: the cache key is per front end.
+
 ### Added
 
 - **`clausal.logic.variables.hook_dispatch_depth()`: attribute-hook dispatch
