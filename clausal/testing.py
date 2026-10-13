@@ -2943,11 +2943,12 @@ def _clause_leaves(clause, goal, logic_module, path, deadline, depth, seen, note
         k = len(body) - len(rgoals)
         if k < 0 or not all(isinstance(g, Unify) for g in body[:k]):
             rgoals, k = None, 0
-    else:
-        # No reified twin (a native Prolog clause): the clause itself counts
-        # the head-argument Unify goals the compiler hoisted into its body,
-        # so a fact ``colour(green)`` that does not match is a head mismatch,
-        # not a failing ``Unify`` leaf.
+    elif _NATIVE_REPORT.get():
+        # No reified twin, in a NATIVE report: the clause itself counts the
+        # head-argument Unify goals the compiler hoisted into its body, so a
+        # fact ``colour(green)`` that does not match is a head mismatch, not
+        # a failing ``Unify`` leaf.  (Translator reports keep their 7c0379db
+        # shape: slice 7 changes the native path only.)
         k = getattr(clause, "hoisted", 0) or 0
         if not (0 <= k <= len(body)
                 and all(isinstance(g, Unify) for g in body[:k])):

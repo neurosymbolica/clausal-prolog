@@ -1,0 +1,44 @@
+  PASS  q.pl::len_three
+  FAIL  q.pl::len_wrong
+  FAIL  q.pl::shape_tri
+  FAIL  q.pl::unify_bad
+  FAIL  q.pl::less
+  FAIL  q.pl::raise_it  (Uncaught logic exception: error(instantiation_error,atom_length/2))
+  FAIL  q.pl::neg
+
+FAILURES:
+  q.pl :: len_wrong
+    goal 2 of 2 failed:
+      (_ == 5)
+    bindings at failure: (unavailable — could not recover source variable names for goals 1..1)
+    no solution (this conjunct is not a predicate call, so there is no nearest solution to show)
+      the value it compares was produced by len(...), which succeeded with a wrong value; that producer's failing route:
+      q.pl:5  (_ is [])
+    note: a clause of tuple re-ran satisfiable during descent — non-determinism, or state changed by the run
+    note: this .pl file was translated to seam source before it ran (CLAUSAL_PL_FRONTEND=translator): goals above are shown in that translation, and its line numbers are not lines of the .pl source, so none are reported
+  q.pl :: shape_tri
+    goal 2 of 2 failed:
+      ==(_, triangle)
+    bindings at failure: (unavailable — could not recover source variable names for goals 1..1)
+    the predicate has no solution for ANY arguments at this point (check the goals that produced its inputs, or its own clauses)
+    note: this .pl file was translated to seam source before it ran (CLAUSAL_PL_FRONTEND=translator): goals above are shown in that translation, and its line numbers are not lines of the .pl source, so none are reported
+  q.pl :: unify_bad
+    goal 2 of 2 failed:
+      (_ is f(2))
+    bindings at failure: (unavailable — could not recover source variable names for goals 1..1)
+    no solution (this conjunct is not a predicate call, so there is no nearest solution to show)
+    note: this .pl file was translated to seam source before it ran (CLAUSAL_PL_FRONTEND=translator): goals above are shown in that translation, and its line numbers are not lines of the .pl source, so none are reported
+  q.pl :: less
+    goal 1 of 1 failed:
+      (3 < 2)
+    bindings at failure: (none — goal 1 is the first goal)
+    no solution (this conjunct is not a predicate call, so there is no nearest solution to show)
+    note: this .pl file was translated to seam source before it ran (CLAUSAL_PL_FRONTEND=translator): goals above are shown in that translation, and its line numbers are not lines of the .pl source, so none are reported
+  q.pl :: raise_it — Uncaught logic exception: error(instantiation_error,atom_length/2)
+    goal 1 of 2 raised:
+      atom_length(_, _)
+      LogicException: Uncaught logic exception: error(instantiation_error,atom_length/2)
+    note: this .pl file was translated to seam source before it ran (CLAUSAL_PL_FRONTEND=translator): goals above are shown in that translation, and its line numbers are not lines of the .pl source, so none are reported
+  q.pl :: neg — test(..., fail) succeeded: its goal has a solution, and a `fail` test passes only when it has none
+
+7 tests: 1 passed, 6 failed [FAILED]

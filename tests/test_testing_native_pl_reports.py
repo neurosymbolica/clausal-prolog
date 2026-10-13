@@ -198,12 +198,32 @@ test("five is small") <- small(5)
 """
 
 
+#: A translator .pl whose wrong-value producer (``len/2``) has a fact with a
+#: hoisted head argument (``len([], 0)``): its descent route and note are
+#: the translator's 7c0379db shape, which the native-only head-mismatch
+#: rule must not touch.
+HOISTED_PL = """\
+:- module(q, []).
+len([], 0).
+len([_|T], N) :- len(T, M), N is M + 1.
+shape(circle).
+shape(square).
+test(len_three) :- len([a,b,c], 3).
+test(len_wrong) :- len([a,b], N), N =:= 5.
+test(shape_tri) :- shape(S), S == triangle.
+test(unify_bad) :- X = f(1), X = f(2).
+test(less) :- 3 < 2.
+test(raise_it) :- atom_length(X, _), X > 1.
+test(neg, fail) :- shape(circle).
+"""
+
+
 @pytest.mark.parametrize("runner", ["cli", "plugin"])
-@pytest.mark.parametrize("name,text", [("arith.pl", FAILS_PL),
-                                       ("arith.seam", FAILS_SEAM)],
-                         ids=["pl", "seam"])
+@pytest.mark.parametrize("name,text,suffix", [
+    ("arith.pl", FAILS_PL, "pl"), ("arith.seam", FAILS_SEAM, "seam"),
+    ("q.pl", HOISTED_PL, "hoisted_pl")], ids=["pl", "seam", "hoisted_pl"])
 def test_translator_and_seam_reports_are_unchanged(runner, name, text,
-                                                   tmp_path):
+                                                   suffix, tmp_path):
     """Negative control, EXACT: the translator (no source map) and the seam
     report byte-for-byte as they did on 7c0379db, before this slice.  The
     goldens ``runner_unchanged_*.txt`` were recorded from that commit and
@@ -222,7 +242,6 @@ def test_translator_and_seam_reports_are_unchanged(runner, name, text,
     proc = subprocess.run(argv, capture_output=True, text=True,
                           cwd=tmp_path, env=env)
     out = re.sub(r"in [0-9.]+s", "in Xs", proc.stdout + proc.stderr)
-    suffix = "pl" if name.endswith(".pl") else "seam"
     golden = GOLDEN / f"runner_unchanged_{runner}_{suffix}.txt"
     assert out == golden.read_text(), out
 
