@@ -127,10 +127,15 @@ class PrologParser:
         TokenType.BAR, TokenType.COMMA, TokenType.DOT, TokenType.END,
     })
 
-    def __init__(self, tokens: list[Token], op_table: OperatorTable):
+    def __init__(self, tokens: list[Token], op_table: OperatorTable, *,
+                 operator_atom_operands: bool = False):
+        """*operator_atom_operands* keeps the pre-ISO reading in which a bare
+        operator atom has priority 0 and may be an operand (`'*' then x`).
+        Only the toklex spec DSL, which is not Prolog text, asks for it."""
         self._tokens = tokens
         self._pos = 0
         self._ops = op_table
+        self._operator_atom_operands = operator_atom_operands
 
     # ── Program-level parsing ────────────────────────────────────────
 
@@ -143,12 +148,12 @@ class PrologParser:
 
     def parse_term_public(self, max_prec: int = 1200) -> PTerm:
         """Public entry point for parsing a single term."""
-        return self._parse_term(max_prec)
+        return self._parse_term(max_prec, bare_op_atom=True)
 
     def _parse_item(self) -> PItem:
         """Parse one clause, directive, or query, consuming the trailing '.'."""
         line = self._peek().line
-        term = self._parse_term(1200)
+        term = self._parse_term(1200, bare_op_atom=True)
         self._expect(TokenType.DOT)
         return dataclasses.replace(self._classify_item(term), line=line)
 
@@ -198,15 +203,25 @@ class PrologParser:
 
     # ── Term parsing (Pratt) ─────────────────────────────────────────
 
-    def _parse_term(self, max_prec: int) -> PTerm:
-        """Parse a term with operators up to *max_prec*."""
-        left = self._parse_primary(max_prec)
-        # Priority of the term built so far. Primaries (atoms, numbers, vars,
-        # functor(...) calls, parenthesised terms) have priority 0; an operator
-        # compound gets the operator's priority. Used to enforce xfx/xfy/yfx
-        # argument-priority limits so `a = b = c` / `2 ** 3 ** 2` are rejected
-        # (F028) rather than silently accepted.
-        left_prec = 0
+    def _parse_term(self, max_prec: int, bare_op_atom: bool = False) -> PTerm:
+        """Parse a term with operators up to *max_prec*.
+
+        *bare_op_atom* admits a lone operator atom (priority 1201) as the
+        whole term, where ISO allows one: an argument or list element
+        (6.3.3.1), a parenthesised term (6.3.4.1), and -- as Scryer reads
+        them -- a curly term and a whole clause or read term (`- .`).
+        Only the operand of an operator is parsed without it.
+        """
+        first_tok = self._peek()
+        left, left_prec = self._parse_primary(max_prec)
+        # Priority of the term built so far. Primaries (numbers, vars,
+        # functor(...) calls, parenthesised terms, atoms that are not
+        # operators) have priority 0; an operator compound gets the
+        # operator's priority. Used to enforce xfx/xfy/yfx argument-priority
+        # limits so `a = b = c` / `2 ** 3 ** 2` are rejected (F028) rather
+        # than silently accepted. A bare atom that IS an operator has
+        # priority 1201 (ISO 6.3.1.3), so it is never an operand: `1 = f`
+        # after op(400, fx, f), `(- -)`, `(-, (1))` are syntax errors.
         while True:
             tok = self._peek()
             if tok.type == TokenType.END:
@@ -274,11 +289,22 @@ class PrologParser:
             else:
                 break
 
+        if left_prec > max_prec and not bare_op_atom:
+            raise ParseError(
+                f"operator priority clash: operator atom {left.name!r} "
+                f"cannot be an operand",
+                first_tok.line, first_tok.col,
+            )
         return left
 
-    def _parse_primary(self, context_prec: int = 1200) -> PTerm:
-        """Parse a primary (non-operator) term."""
+    def _parse_primary(self, context_prec: int = 1200) -> tuple[PTerm, int]:
+        """Parse a primary (non-operator) term; return it with its priority."""
         tok = self._peek()
+        if tok.type == TokenType.ATOM:
+            return self._parse_atom_or_compound(context_prec)
+        return self._parse_primary_nonatom(tok, context_prec), 0
+
+    def _parse_primary_nonatom(self, tok: Token, context_prec: int) -> PTerm:
 
         if tok.type == TokenType.INTEGER:
             self._advance()
@@ -305,9 +331,6 @@ class PrologParser:
         if tok.type == TokenType.LCURLY:
             return self._parse_curly()
 
-        if tok.type == TokenType.ATOM:
-            return self._parse_atom_or_compound(context_prec)
-
         # Check for prefix operator on non-atom tokens
         # (e.g., - as prefix for negative numbers)
         name = self._operator_name_from_token(tok)
@@ -321,8 +344,9 @@ class PrologParser:
             tok.line, tok.col,
         )
 
-    def _parse_atom_or_compound(self, context_prec: int = 1200) -> PTerm:
-        """Parse an atom, possibly followed by (...) arguments, or a prefix operator."""
+    def _parse_atom_or_compound(self, context_prec: int = 1200) -> tuple[PTerm, int]:
+        """Parse an atom, possibly followed by (...) arguments, or a prefix
+        operator; return the term with its priority (see _parse_term)."""
         tok = self._advance()
         name = tok.value
         assert isinstance(name, str)
@@ -330,7 +354,7 @@ class PrologParser:
         # Check if followed by '(' with no space → compound term
         nxt = self._peek()
         if nxt.type == TokenType.LPAREN and self._is_functor_paren(tok, nxt):
-            return self._parse_compound_args(name, tok)
+            return self._parse_compound_args(name, tok), 0
 
         # The name `-` followed by a numeric literal IS the negative literal
         # (ISO 6.3.4.1 `term = - integer | - float number`, priority 0),
@@ -342,7 +366,7 @@ class PrologParser:
         # `- (1)` stays the compound -(1) -- the form writeq/1 prints.
         if name == "-" and nxt.type in (TokenType.INTEGER, TokenType.FLOAT):
             self._advance()
-            return PNumber(-nxt.value, span=_span_join(tok, nxt))
+            return PNumber(-nxt.value, span=_span_join(tok, nxt)), 0
 
         # Check for prefix operator
         prefix_entry = self._ops.lookup_prefix(name)
@@ -352,19 +376,22 @@ class PrologParser:
             if self._can_start_term():
                 r_prec = self._prefix_right_prec(prefix_entry)
                 operand = self._parse_term(r_prec)
-                return PCompound(name, (operand,), span=_span_join(tok, operand))
+                return PCompound(name, (operand,), span=_span_join(tok, operand)), 0
 
-        return PAtom(name, quoted=tok.quoted, span=(tok.offset, tok.end_offset))
+        atom = PAtom(name, quoted=tok.quoted, span=(tok.offset, tok.end_offset))
+        if self._operator_atom_operands or not self._ops.is_operator(name):
+            return atom, 0
+        return atom, 1201
 
     def _parse_compound_args(self, functor: str, functor_tok: Token) -> PCompound:
         """Parse f(arg1, arg2, ...) after the functor name."""
         self._advance()  # consume (
         args: list[PTerm] = []
         if self._peek().type != TokenType.RPAREN:
-            args.append(self._parse_term(999))  # args are parsed at prec 999
+            args.append(self._parse_term(999, bare_op_atom=True))  # args: prec 999
             while self._peek().type == TokenType.COMMA:
                 self._advance()  # consume ,
-                args.append(self._parse_term(999))
+                args.append(self._parse_term(999, bare_op_atom=True))
         rparen_tok = self._expect(TokenType.RPAREN)
         return PCompound(functor, tuple(args),
                           span=(functor_tok.offset, rparen_tok.end_offset))
@@ -373,7 +400,7 @@ class PrologParser:
         """Parse ( term ). The span is attributed to the parens themselves,
         not the inner term's own extent (`(a)` spans '(' through ')')."""
         lparen_tok = self._advance()  # consume (
-        term = self._parse_term(1200)
+        term = self._parse_term(1200, bare_op_atom=True)
         rparen_tok = self._expect(TokenType.RPAREN)
         return dataclasses.replace(term, span=(lparen_tok.offset, rparen_tok.end_offset))
 
@@ -385,18 +412,18 @@ class PrologParser:
             return PList((), None, span=(lbracket_tok.offset, rbracket_tok.end_offset))
 
         elements: list[PTerm] = []
-        elements.append(self._parse_term(999))
+        elements.append(self._parse_term(999, bare_op_atom=True))
         while self._peek().type == TokenType.COMMA:
             self._advance()
             # Check for | after comma — some Prolog allows [a, b | T]
             if self._peek().type == TokenType.BAR:
                 break
-            elements.append(self._parse_term(999))
+            elements.append(self._parse_term(999, bare_op_atom=True))
 
         tail = None
         if self._peek().type == TokenType.BAR:
             self._advance()  # consume |
-            tail = self._parse_term(999)
+            tail = self._parse_term(999, bare_op_atom=True)
 
         rbracket_tok = self._expect(TokenType.RBRACKET)
         return PList(tuple(elements), tail,
@@ -408,7 +435,7 @@ class PrologParser:
         if self._peek().type == TokenType.RCURLY:
             rcurly_tok = self._advance()
             return PAtom("{}", span=(lcurly_tok.offset, rcurly_tok.end_offset))
-        body = self._parse_term(1200)
+        body = self._parse_term(1200, bare_op_atom=True)
         rcurly_tok = self._expect(TokenType.RCURLY)
         return PCurly(body, span=(lcurly_tok.offset, rcurly_tok.end_offset))
 

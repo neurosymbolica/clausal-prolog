@@ -101,12 +101,9 @@ READ_ERR = [
     ("#60 integer(-/*.*/1)", "integer(-/*.*/1)"),
     ("#350 -[]1", "writeq(-[]1)"),
     ("#351 -{}1", "writeq(-{}1)"),
-]
-
-#: Rows Clausal still reads where the suite says syntax error.  The defect
-#: is not the literal: an infix operator atom (``=``) is accepted as the
-#: bare operand of prefix ``-``.  Kept here, strict, so a fix flips them.
-READ_ERR_OPEN = [
+    # Not the literal: an infix operator atom (``=``) is a term of priority
+    # 1201, so it is not the operand of prefix ``-`` (ISO 6.3.1.3; see
+    # test_operator_operand_priority_ulrich.py).
     ("#86 {- = - 1}", "{- = - 1}={(-(=)) - 1}"),
     ("#87 (- = - 1)", "write_canonical((- = - 1))"),
     ("#88 (- = -1)", "write_canonical((- = -1))"),
@@ -255,15 +252,6 @@ def test_syntax_error(loads, fe, i):
     _assert_syntax_error(loads, f"_minus_err{i}_{fe}", READ_ERR[i][1], fe)
 
 
-@pytest.mark.xfail(strict=True, reason="an infix operator atom is accepted as "
-                   "the bare operand of prefix -; not the literal rule")
-@pytest.mark.parametrize("fe", FRONTENDS)
-@pytest.mark.parametrize("i", range(len(READ_ERR_OPEN)),
-                         ids=[r[0] for r in READ_ERR_OPEN])
-def test_syntax_error_open(loads, fe, i):
-    _assert_syntax_error(loads, f"_minus_open{i}_{fe}", READ_ERR_OPEN[i][1], fe)
-
-
 # ── The Scryer oracle: the same rows, unchanged ─────────────────────────────
 
 
@@ -300,7 +288,7 @@ def test_oracle_write(scryer_bin):
 
 
 def test_oracle_syntax_errors(scryer_bin):
-    rows = READ_ERR + READ_ERR_OPEN
+    rows = READ_ERR
     proc = run_scryer(None, [g + "." for _, g in rows], timeout=120, binary=scryer_bin)
     lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
     assert len(lines) == len(rows), proc.stdout + proc.stderr
