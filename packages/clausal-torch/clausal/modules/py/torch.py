@@ -216,7 +216,9 @@ from __future__ import annotations
 import threading as _threading
 import types as _types
 
-from clausal.logic.variables import deref, is_var, unify
+from clausal.logic.variables import is_var, unify
+
+from clausal.terms import plain_deref as deref  # noqa: PLC0415 -- a view leaves the engine as a list or a str
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import symbol as _symbol
 from clausal.modules.py import require_text

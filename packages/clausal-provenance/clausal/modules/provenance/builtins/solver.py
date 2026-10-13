@@ -17,7 +17,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from clausal.logic.variables import deref, unify
+from clausal.logic.variables import unify
+
+from clausal.terms import plain_deref as deref  # noqa: PLC0415 -- a view leaves the engine as a list or a str
 from clausal.logic.database import Module
 from clausal.modules.py import ModulePredicate, simple_to_trampoline
 from clausal.modules.provenance.engine import evaluate

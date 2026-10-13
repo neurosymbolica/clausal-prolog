@@ -474,7 +474,9 @@ filter_pmap_apply = _pred("filter_pmap_apply",
 # to decompose a tuple — the partition step is in the hot path of
 # every filter_grad call and the slight non-uniformity is justified.
 
-from clausal.logic.variables import deref, unify
+from clausal.logic.variables import unify
+
+from clausal.terms import plain_deref as deref  # noqa: PLC0415 -- a view leaves the engine as a list or a str
 from clausal.logic.trampoline import DONE
 from clausal.modules.py._helpers import _deep_deref
 

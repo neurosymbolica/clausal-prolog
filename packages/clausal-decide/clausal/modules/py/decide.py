@@ -86,7 +86,8 @@ from clausal.logic.exceptions import (
     LogicException, domain_error, permission_error, type_error,
 )
 from clausal.logic.to_python import to_python
-from clausal.logic.variables import deref, is_var, unify
+from clausal.logic.variables import is_var, unify
+from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
 from clausal.modules.py import (
     ModulePredicate, _import_stdlib, expect_type, has_option, option,
     raise_domain_error, require_text, simple_to_trampoline, text_result,

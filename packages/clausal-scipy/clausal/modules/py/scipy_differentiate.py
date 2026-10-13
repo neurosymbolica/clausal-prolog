@@ -44,7 +44,9 @@ from __future__ import annotations
 import threading as _threading
 from typing import Callable
 
-from clausal.logic.variables import deref, unify
+from clausal.logic.variables import unify
+
+from clausal.terms import plain_deref as deref  # noqa: PLC0415 -- a view leaves the engine as a list or a str
 from clausal.modules.py._helpers import _text_arg
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate

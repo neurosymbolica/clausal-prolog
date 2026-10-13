@@ -40,7 +40,7 @@ from __future__ import annotations
 import sys
 
 from clausal.logic.predicate import PredicateMeta
-from clausal.logic.variables import deref
+from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
 from clausal.logic.trampoline import DONE
 
 

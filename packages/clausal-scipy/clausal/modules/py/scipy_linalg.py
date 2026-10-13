@@ -71,7 +71,9 @@ from typing import Callable
 
 import numpy as _np
 
-from clausal.logic.variables import deref, is_var, unify
+from clausal.logic.variables import is_var, unify
+
+from clausal.terms import plain_deref as deref  # noqa: PLC0415 -- a view leaves the engine as a list or a str
 from clausal.modules.py._helpers import _text_arg
 from clausal.logic.trampoline import DONE
 from clausal.modules.py import ModulePredicate

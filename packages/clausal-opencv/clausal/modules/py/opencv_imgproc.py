@@ -68,7 +68,9 @@ Registries:
 
 from __future__ import annotations
 
-from clausal.logic.variables import deref, unify
+from clausal.logic.variables import unify
+
+from clausal.terms import plain_deref as deref  # noqa: PLC0415 -- a view leaves the engine as a list or a str
 from clausal.logic.trampoline import DONE
 from clausal.modules.py._helpers import (
     _pred, _pure, _fact_table_2, _deep_deref, _bidir_2,

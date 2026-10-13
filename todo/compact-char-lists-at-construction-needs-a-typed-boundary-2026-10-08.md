@@ -291,8 +291,13 @@ Measured on main a3fbb271: with `Rest` the tail of a 100-element list, `choice(R
 import the engine's. Operator ruling 2026-10-12 ("resolve both"): every module under
 `clausal/modules/` now imports `terms.plain_deref` as its `deref` (public `clausal.deref` is the same
 function). Pinned by `tests/test_list_views_at_adapters.py` (each case at 30 and at 100 elements).
-Not covered: the optional packages under `packages/`, which import the engine's `deref` and are a
-follow-up in their own lane.
+The optional packages under `packages/` followed (operator ruling 2026-10-13): their 38 adapter
+files import `plain_deref` the same way. On the unchanged code, yaml `get(Data, Rest, R)` with a
+100-key path failed while a 30-key one worked. Pinned by
+`packages/clausal-yaml/tests/test_yaml_list_views.py`, and for every package, whatever is installed,
+by a source check in `tests/test_list_views_at_adapters.py`. Untouched on purpose: the scryer,
+trealla and gprolog bridges (their `to_prolog` takes Python values, not engine terms), and acl2's
+`walk` (it walks a list view to a list and reads text through `chars_text`).
 
 ## Building text: the rope (DONE 2026-10-12)
 

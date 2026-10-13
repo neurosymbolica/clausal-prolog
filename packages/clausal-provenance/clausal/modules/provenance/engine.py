@@ -39,7 +39,8 @@ from clausal.logic.predicate import (
     term_field_names,
 )
 from clausal.logic.database import Clause, head_key
-from clausal.logic.variables import Var, Trail, deref, is_var, unify
+from clausal.logic.variables import Var, Trail, is_var, unify
+from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
 from clausal.logic.trampoline import DONE
 
 from clausal.modules.provenance.protocol import Provenance, NonGroundTupleError

@@ -43,7 +43,9 @@ _yaml = _import_stdlib("yaml")
 
 from typing import Any
 
-from clausal.logic.variables import Var, deref, is_var, unify
+from clausal.logic.variables import Var, is_var, unify
+
+from clausal.terms import plain_deref as deref  # noqa: PLC0415 -- a view leaves the engine as a list or a str
 from clausal.logic.cells import chars_text, is_chars
 from clausal.logic.to_python import to_python
 from clausal.logic.exceptions import LogicException, type_error

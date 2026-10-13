@@ -76,3 +76,21 @@ def test_csv_generate_takes_the_rest_of_a_long_list_of_rows(csv_mod, n):
 @pytest.mark.parametrize("n", [30, 100])
 def test_graph_vertices_take_the_rest_of_a_long_edge_list(mod, n):
     assert _one(mod, "edge_count", n) == n + 1      # 1..n and x
+
+
+def test_no_package_adapter_reads_its_arguments_with_the_engine_deref():
+    """The optional packages' Python-backed modules take the same boundary:
+    ``plain_deref``, never the engine's view-keeping ``deref`` (operator
+    ruling 2026-10-13).  Checked on the source, since most of their third-party
+    dependencies are not installed where the engine suite runs; each
+    package's own suite checks behaviour (packages/clausal-yaml's
+    test_yaml_list_views.py)."""
+    import re
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1] / "packages"
+    engine_deref = re.compile(
+        r"^\s*from clausal\.logic\.variables import [^\n(]*\bderef\b", re.M)
+    offenders = sorted(
+        str(p.relative_to(root)) for p in root.glob("*/clausal/**/*.py")
+        if engine_deref.search(p.read_text(encoding="utf-8")))
+    assert offenders == []

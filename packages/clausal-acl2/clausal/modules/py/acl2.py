@@ -80,7 +80,8 @@ from clausal.logic.cells import TUPLE_TAG, chars, chars_text, is_chars
 from clausal.logic.exceptions import (
     LogicException, domain_error, existence_error, instantiation_error, type_error,
 )
-from clausal.logic.variables import deref, is_var, unify, walk
+from clausal.logic.variables import is_var, unify, walk
+from clausal.terms import plain_deref as deref  # a view leaves the engine as a list or a str
 from clausal.modules.py import (
     ModulePredicate, expect_type, has_option, option, simple_to_trampoline,
     syntax_error_term, text_result, to_text,

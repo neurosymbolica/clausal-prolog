@@ -244,6 +244,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
   the list was long enough. The modules under `clausal/modules/` now read
   their arguments through `terms.plain_deref`, which hands a view out as a
   list, or as a str for text (operator ruling 2026-10-12, extending D38).
+  The optional `clausal-*` packages under `packages/` do the same
+  (operator ruling 2026-10-13): yaml `get/3` with a path of 64 or more
+  keys failed, along with the other package adapters that test for a list.
 
 - **`reified_subterm/2` and `replace_subterm/4` see past the 64th element of
   a list.** The rest of a list of 64 or more elements is a list view

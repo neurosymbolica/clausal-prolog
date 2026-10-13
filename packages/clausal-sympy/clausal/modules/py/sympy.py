@@ -41,7 +41,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from clausal.logic.variables import Var, Trail, deref, is_var, unify
+from clausal.logic.variables import Var, Trail, is_var, unify
+
+from clausal.terms import plain_deref as deref  # noqa: PLC0415 -- a view leaves the engine as a list or a str
 from clausal.logic.trampoline import DONE
 from clausal.logic.exceptions import LogicException, instantiation_error, type_error
 from clausal.logic.cells import chars_text, is_chars
