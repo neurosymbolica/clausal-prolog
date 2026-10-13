@@ -941,37 +941,53 @@ def _refuse_bound_chars_shape(vc, who):
     """
     if is_var(vc):
         return
-    if isinstance(vc, list):
-        for e in vc:
+
+    def _check(elems):
+        for e in elems:
             e = deref(e)
             if not is_var(e) and not is_char_atom(e):
                 raise LogicException(type_error("character", e, who))
+
+    # A list, or a Seg* view whose holes are all filled (whatever order the
+    # holes were bound in): its elements are all known, check them.
+    items = _as_items(vc)
+    if items is not None:
+        _check(items)
         return
-    from clausal.terms import SegList  # noqa: PLC0415
+    from clausal.terms import SegList, SegString, SegBytes  # noqa: PLC0415
     if isinstance(vc, SegList):
         skeleton = _open_skeleton(vc)
-        if skeleton is None:
-            return
-        prefix, _tail_var = skeleton
-        for e in prefix:
-            e = deref(e)
-            if not is_var(e) and not is_char_atom(e):
-                raise LogicException(type_error("character", e, who))
+        if skeleton is not None:
+            _check(skeleton[0])
         return
     heads = []
     cur = vc
+    seen = set()
     while type(cur) is tuple and len(cur) == 3 and cur[0] == ".":
+        if id(cur) in seen:
+            return                     # cyclic cons chain: leave it to the unify
+        seen.add(id(cur))
         heads.append(deref(cur[1]))
         cur = deref(cur[2])
     # Scryer checks the tail's list-ness before any element's character-ness
     # (measured 2026-10-13 against the clean build): number_chars(1,[[]|2])
     # raises type_error(list,[[]|2]), not type_error(character,[]), even
     # though the head is ALSO bad -- so the shape check comes first here.
-    if not (is_var(cur) or (type(cur) is tuple and not cur)):
+    tail_items = ()
+    if is_var(cur) or isinstance(cur, (SegString, SegBytes)):
+        pass
+    elif isinstance(cur, SegList):
+        skeleton = _open_skeleton(cur)
+        if skeleton is not None:
+            tail_items = skeleton[0]
+        elif _as_items(cur) is not None:
+            tail_items = _as_items(cur)
+    elif _as_items(cur) is not None:   # [] / a list: a proper tail
+        tail_items = _as_items(cur)
+    else:
         raise LogicException(type_error("list", vc, who))
-    for e in heads:
-        if not is_var(e) and not is_char_atom(e):
-            raise LogicException(type_error("character", e, who))
+    _check(heads)
+    _check(tail_items)
 
 
 def _refuse_partial(vc, who, is_elem, elem_type):

@@ -76,7 +76,24 @@ ROWS = [
      ["-1"]),
 ]
 
-PROGRAM = "".join(f"r{i}(R) :- {body}.\n" for i, (_, body, _) in enumerate(ROWS))
+ROWS += [
+    # Bind order must not matter: the same list, holes bound before or after.
+    ("bind-order: hole bound before the call",
+     "T = [], L = [_,[]|T], catch(number_chars(1,L), error(F, C), R = [F, C])",
+     ["[type_error(character,[]),number_chars/2]"]),
+    ("bind-order: hole bound after the list is built",
+     "L = [_,[]|T], T = [], catch(number_chars(1,L), error(F, C), R = [F, C])",
+     ["[type_error(character,[]),number_chars/2]"]),
+    ("bind-order: tail bound to a list holding a bad element",
+     "L = [X|T], T = [[]], catch(number_chars(1,L), error(F, C), R = [F, C])",
+     ["[type_error(character,[]),number_chars/2]"]),
+    # A partial list built by a DCG body is a partial list, not a non-list.
+    ("DCG-built partial list is filled in",
+     "phrase(one, L, T), number_chars(12, L), T = ['2'], R = true",
+     ["true"]),
+]
+
+PROGRAM = "one --> \"1\".\n" + "".join(f"r{i}(R) :- {body}.\n" for i, (_, body, _) in enumerate(ROWS))
 
 
 @pytest.fixture(scope="module")
