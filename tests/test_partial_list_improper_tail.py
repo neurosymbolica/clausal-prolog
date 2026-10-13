@@ -322,11 +322,13 @@ t(29) :- X = [a|T], T = [b|U], Y = [a,b|U], X == Y, Y == X.
 t(30) :- X = [1|T], T = [2], Y = [1|U], U = [2], X == Y.
 t(31) :- X = [f(1)|T], T = [], Y = [f(1.0)|U], U = [], X \\== Y.
 t(32) :- X = [a|T], T = [b|U], Y = [a|W], W = [b,c|U], X \\== Y.
+t(33) :- X = [a|T], Y = [b|T], X \\== Y.
+t(34) :- X = [1|T], Y = [2|T], X \\== Y.
 p(K) :- catch(t(K), E, (write(K), write('-err '), write(E), nl, fail)), write(K), write('-yes'), nl.
 p(K) :- \\+ catch(t(K), _, fail), write(K), write('-no'), nl.
 main :- p(1), p(2), p(3), p(4), p(5), p(6), p(7), p(8), p(9), p(10), p(11), p(12), p(13),
         p(14), p(15), p(16), p(17), p(18), p(19), p(20), p(21), p(22), p(23), p(24), p(25), p(26),
-        p(27), p(28), p(29), p(30), p(31), p(32).
+        p(27), p(28), p(29), p(30), p(31), p(32), p(33), p(34).
 """
 
 IDENTITY_EXPECTED = [
@@ -334,7 +336,7 @@ IDENTITY_EXPECTED = [
     "9-yes", "10-no", "11-yes", "12-no", "13-yes", "14-no", "15-no", "16-no",
     "17-no", "18-yes", "19-yes", "20-yes", "21-yes", "22-yes", "23-yes",
     "24-yes", "25-yes", "26-yes", "27-yes", "28-yes", "29-yes", "30-yes",
-    "31-yes", "32-yes"]
+    "31-yes", "32-yes", "33-yes", "34-yes"]
 
 
 @pytest.mark.parametrize("front", FRONT_ENDS, ids=lambda f: f[1] or "clausal")
@@ -350,7 +352,8 @@ def test_identity_keeps_int_and_float_apart_in_a_hole_built_list(tmp_path,
     # answer, whatever the int/float order is.  t(27)-t(32) are two
     # hole-built lists against each other (the read-once path of
     # ``_iso_identical``): a bound element variable, two tails, a spliced
-    # chain, a ground int-only pair and a compound element.
+    # chain, a ground int-only pair and a compound element; t(33)-t(34)
+    # differ in an element over a shared open tail.
     r = _run(tmp_path, *front, IDENTITY, "--once", "-g", "main")
     assert r.returncode == 0, r.stderr
     assert r.stdout.splitlines()[:-1] == IDENTITY_EXPECTED, r.stdout
