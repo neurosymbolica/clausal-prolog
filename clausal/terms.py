@@ -4079,6 +4079,15 @@ def _wq_cell(t):
     return None
 
 
+def _wq_is_infix_form(t, ops) -> bool:
+    """True when the writer prints *t* as an infix operator term (``1^2``,
+    ``a:b``) -- a two-argument compound whose functor is an infix operator,
+    a list cell excepted."""
+    cell = _wq_cell(t)
+    return (cell is not None and len(cell[1]) == 2 and cell[0] != "."
+            and ops.lookup_infix(cell[0]) is not None)
+
+
 def _wq_list(elems: list, tail) -> str:
     quoted, double_quotes, ignore_ops, _nv = _WQ_OPTS.get()
     if (double_quotes and tail is None and elems
@@ -4268,6 +4277,13 @@ def _wq(t: Any, prec: int, operand: bool = False) -> str:
             if (name == "-" and not isinstance(arg, bool)
                     and isinstance(arg, (int, float)) and arg >= 0):
                 # ``-(1)`` is not the number ``-1``: Scryer writes ``- (1)``.
+                a = "(" + _wq(arg, 1200) + ")"
+            elif name == "-" and _wq_is_infix_form(arg, ops):
+                # An infix operand is bracketed too, as Scryer and Ulrich's
+                # conformity suite write it (#183 ``- (1^2)``, #327
+                # ``- ((1*2)^3)``, #260 ``- (a^2)``).  ``-1^2`` would read
+                # back as ``(-1)^2``: `-` before a number, layout or not, is
+                # the negative literal.
                 a = "(" + _wq(arg, 1200) + ")"
             else:
                 a = _wq(arg, p if spec == "fy" else p - 1, True)

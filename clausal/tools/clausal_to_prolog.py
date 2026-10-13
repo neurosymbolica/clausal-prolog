@@ -405,8 +405,19 @@ def _emit_prefix(term: PCompound, entry, op_table: OperatorTable,
     spec = entry.specifier  # fx or fy
 
     arg_prec = prec if spec == "fy" else prec - 1
-    arg_str = emit_term(term.args[0], op_table, context_prec=arg_prec,
-                        operand_of_op=True)
+    arg = term.args[0]
+    if term.functor == "-" and (
+            (isinstance(arg, PNumber) and not arg.value < 0)
+            or (isinstance(arg, PCompound) and len(arg.args) == 2
+                and op_table.lookup_infix(arg.functor))):
+        # `-` before a number, layout or not, is the negative literal
+        # (ISO 6.3.4.1, WDCor4), so the compound -(1) must be written
+        # `- (1)`, and an infix operand `- (1^2)` -- `- 1^2` reads as
+        # (-1)^2. Scryer writes both this way (Ulrich #135, #183).
+        arg_str = "(" + emit_term(arg, op_table) + ")"
+    else:
+        arg_str = emit_term(arg, op_table, context_prec=arg_prec,
+                            operand_of_op=True)
 
     result = term.functor + " " + arg_str
 
