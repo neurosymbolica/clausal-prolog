@@ -108,8 +108,9 @@ def test_clausal_prolog_ignores_the_pl_frontend_switch(flip, monkeypatch,
                                                        frontend):
     monkeypatch.setenv(ih.PL_FRONTEND_ENV, frontend)
     assert ih._prolog_loader_class_for("m.clausal") is ih.NativePrologLoader
-    expected = (ih.NativePrologLoader if frontend == "native"
-                else ih.PrologLoader)
+    # unset/empty is native (the .pl default); only "translator" opts out
+    expected = (ih.PrologLoader if frontend == "translator"
+                else ih.NativePrologLoader)
     assert ih._prolog_loader_class_for("m.pl") is expected
 
 

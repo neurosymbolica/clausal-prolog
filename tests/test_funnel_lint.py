@@ -633,7 +633,8 @@ def test_lint_catches_dotted_receiver_functor_fallback(tmp_path):
 
 
 def test_testing_py_allowlist_entry_is_load_bearing():
-    """clausal/testing.py:2972 (2638 before the native-path failure reports
+    """clausal/testing.py:2973 (2972 before load_clausal_module's docstring
+        named the native .pl default above it, 2026-10-13; 2638 before the native-path failure reports
     were added above it, 2026-10-13; 2612 before ``_positions_are_translated`` and
     the reworded translator note were added above it, 2026-10-05; 2631 before the py-interop note collection
     was removed from ``diagnose_failure`` above it, 2026-10-02; 2628 before the suffix-tuple imports and the
@@ -675,7 +676,7 @@ def test_testing_py_allowlist_entry_is_load_bearing():
         "allowlist entry is a dead no-op again"
     )
     assert any(
-        v.pattern == "functor_fallback" and v.line == 2972
+        v.pattern == "functor_fallback" and v.line == 2973
         for v in testing_violations
     ), testing_violations
 
