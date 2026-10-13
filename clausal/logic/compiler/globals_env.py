@@ -22,7 +22,7 @@ from clausal.logic.generated_names import dollar_ref
 from clausal.logic.variables import deref, is_var, unify
 from clausal.terms import (
     Call, LoadName, LoadAttr,
-    PyThunk,
+    PyThunk, DictTerm, SetTerm,
     SegBytes, SegList, SegString, VarSeg,
 )
 from clausal.pythonic_ast.nodes import StarUnpack
@@ -720,6 +720,13 @@ def _collect_py_thunks(clauses: list[Clause]) -> dict[str, Any]:
         elif isinstance(term, list):
             for e in term:
                 _walk(e)
+        elif isinstance(term, (DictTerm, dict)):
+            for k, v in term.items():
+                _walk(k)
+                _walk(v)
+        elif isinstance(term, SetTerm):
+            for e in term.elements:
+                _walk(e)
         elif is_term_instance(term):
             for name in term_field_names(term):
                 _walk(getattr(term, name))
@@ -921,6 +928,17 @@ def _collect_globals_info(
                 val = getattr(dterm, name)
                 if val is not None:
                     _walk_body(val)
+        elif isinstance(dterm, (DictTerm, dict)):
+            # A ``++`` thunk can sit in a dict value (``{'k': ++a}``) or key;
+            # the compiled code reads it by its ``_pyt_<id>`` name, so the
+            # dict is walked like a list.  Keys are walked too: a dict
+            # literal's computed key lowers through the same expression walk.
+            for k, v in dterm.items():
+                _walk_body(k)
+                _walk_body(v)
+        elif isinstance(dterm, SetTerm):
+            for e in dterm.elements:
+                _walk_body(e)
         elif _cell_shape(dterm)[0]:
             # A CELL written as data in a goal argument (the native .pl front
             # end lowers an ISO compound to its cell): its slots can hold a

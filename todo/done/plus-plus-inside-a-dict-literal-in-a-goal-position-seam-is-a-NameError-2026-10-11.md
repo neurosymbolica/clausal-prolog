@@ -44,3 +44,9 @@ collectors. Then check the query cache: `_goal_cache_key` fills
 walk, so the cache key must see a thunk inside a dict too, or a second call
 with a different `++a` would be served the first call's value. Test with
 two calls of different values, as `flat(1)`/`flat(2)` do.
+
+## Resolved 2026-10-14
+
+`_walk_body` and `_collect_py_thunks` (globals_env.py) now walk DictTerm/dict keys and values and SetTerm elements; `_structural_key` (solve.py) keys a DictTerm/SetTerm by its members so the cache key sees the thunk and rebinds it per call (a set holding a thunk is left uncached: members lower in repr order, which names a closure address). Tests: tests/test_seam_thunk_in_dict.py.
+
+Separate, noticed while probing and NOT fixed: a clause head `n({'k': {'j': X}}) <- (X == 1)` (a dict nested in a dict head with the variable in the inner dict) answers true for any argument.

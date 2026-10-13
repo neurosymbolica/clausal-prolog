@@ -81,6 +81,7 @@ from clausal.terms import (
     LoadAttr as _ReifiedLoadAttr,
 )
 from clausal.terms import PyThunk as _PyThunk
+from clausal.terms import DictTerm as _DictTerm, SetTerm as _SetTerm
 from clausal.terms import plain_deref as _plain_deref
 from clausal.pythonic_ast.nodes import Lambda as _Lambda, Node as _GoalNode
 from clausal import _sandbox_state
@@ -460,6 +461,31 @@ def _structural_key(term: Any, var_index: dict, thunks: list | None = None) -> t
             thunks.append(t)
         return ("thunk", code,
                 _structural_key(t._position, var_index, thunks))
+    if isinstance(t, (_DictTerm, _SetTerm)):
+        # A dict or set term is keyed by its members, not by ``hash(t)``: a
+        # ``++`` thunk in a value (``{'k': ++a}``) is hashed by identity, so
+        # the ``lit`` fallback gave every execution its own entry AND hid the
+        # thunk from ``thunks``, leaving the compiled ``_pyt_<id>`` call
+        # unbound on a hit.  Walking the members hands the thunk to the same
+        # per-execution rebind as one in a list or compound.  Dict keys are
+        # keyed too (a key can be a ``++`` or a Var).  Members keep their
+        # insertion / repr order, so two orderings are two entries, never
+        # one conflated entry.
+        if isinstance(t, _DictTerm):
+            return ("dict", tuple(
+                (_structural_key(k, var_index, thunks),
+                 _structural_key(v, var_index, thunks))
+                for k, v in t.items()))
+        # Set members are lowered in ``repr`` order, and a thunk's repr names
+        # its closure's address, so two ``++`` members would be visited in a
+        # different order on each execution -- the rebind would swap them.
+        # A set holding a thunk is therefore not cached.
+        inner: list = []
+        key = tuple(_structural_key(e, var_index, inner)
+                    for e in sorted(t.elements, key=repr))
+        if inner:
+            raise _Uncacheable()
+        return ("set", key)
     if isinstance(t, (list, tuple)):
         is_cell, functor = compound_cell_shape(t)
         if is_cell:
