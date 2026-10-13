@@ -114,8 +114,11 @@ with Y bound later to a non-list.
   into one. It now reads a SegList as the term it denotes (its list, its cons cells, or its
   elements with the holes as their variables). The seen guard keys on the term's own objects, so
   a cyclic partial list still terminates. compare/3, @</2, msort/2, sort/2, the tabling variant
-  key, dif/2, subsumes_term/2 and `\=` were audited: each already read a hole-built list as the
-  literal (the order key and the tabling key walk it; the others unify). dif/2, `\=`,
+  key, dif/2, subsumes_term/2 and `\=` were audited: for a GROUND hole-built list (proper or
+  improper) each already reads it as the literal (the order key and the tabling key walk it; the
+  others unify). NOT for a PARTIAL list: compare/3, @< and sort/2 key a non-ground SegList in the
+  opaque band, so `compare(O, [0.0|T], [0|T])` gives `=` while `==` says no (corrected by the
+  round-4 review; todo/compare-on-partial-seglist-keys-opaque-band-2026-10-13.md). dif/2, `\=`,
   subsumes_term/2 and memberchk/2 conflate 1 with 1.0 for the LITERAL as well, because `=` does:
   todo/iso-unify-conflates-int-and-float-2026-09-09.md, not this family.
 - Seam: `A is [*T], T is foo, R is [x, *A]` gave `"xfoo"` (the twins read the bare str a
