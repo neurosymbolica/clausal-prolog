@@ -55,6 +55,15 @@ truth value is `true` / `false`, which compile to Python's `True` / `False`.
 - **`require_end_module`**: whether a Prolog module file must end with
   `:- end_module(Name).` -- see
   [Importing Prolog Code](importing_prolog.md#end_module-closing-a-module).
+- **`clpq_max_nodes`, `clpq_max_projection`, `clpq_max_power`**
+  (implementation-defined, under `CLAUSAL_CLPQ=holzbaur` only): the
+  resource caps of the clp(q,r) 1.3.3 port, each a positive integer, process
+  wide and settable. Past one the port raises
+  `error(resource_error(clpq_nodes), _)` (the nodes of one `bb_inf/3`
+  search), `clpq_projection` (the rows one projection writes, as `dump_q/2`
+  and the `-g` answer printer do) or `clpq_power` (the terms of one integer
+  power's expansion). Defaults 20,000, 50,000 and
+  10,000. The legacy solver has no such flags.
 
 `current_prolog_flag(F, V)` with `F` unbound enumerates every flag that has a
 value.

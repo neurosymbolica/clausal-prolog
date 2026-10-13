@@ -1286,31 +1286,72 @@ Not covered: the `inf/2` and `sup/2` builtins ask CLP(R) first
 reached, so `X = 1 + X, inf(X, I)` through the engine still raises
 `RecursionError`, under both switches (shared code; D24, deep terms).
 
-## D24: known limits, deferred by ruling R34
+## D24: known limits, deferred by ruling R34; three of them capped (ruling D51)
 
 The security review of Task 16 measured these; ruling R34 defers them, the
 first three to the operator as one question (resource limits beyond
-1.3.3) and the last two as follow-ups, all before the default flip.  The
-port behaves as 1.3.3 does on the first three; nothing here is reachable
-under the default switch except where it says "legacy the same".
+1.3.3) and the last two as follow-ups, all before the default flip.
+Ruling D42 asks for a cap on each of the first three before any flip, and
+ruling D51 says what a cap does: past it the port raises
+`error(resource_error(R), _)`, as Scryer shapes it (the context is a
+variable, the explanation goes to the exception's message).  It never
+fails in place of an answer and never answers in part.  1.3.3 has no such
+caps, so these are deviations; the port answers as 1.3.3 does below them.
 
-- **bb_inf/3 on a store with no integer point does not terminate**
+| Resource R | What is counted | Default | Flag |
+|---|---|---|---|
+| `clpq_nodes` | the nodes of one bb_inf search (one pass of `branch_and_bound_loop`) | 20,000 | `clpq_max_nodes` |
+| `clpq_projection` | the rows one projection writes: each row a pivot's back substitution rewrites, and each constraint a Fourier-Motzkin elimination derives, charged before it is made | 50,000 | `clpq_max_projection` |
+| `clpq_power` | the terms of one integer power's binomial expansion, `binomial(N + T - 1, T - 1)` for a sum of T terms to the N (or -N), counted before like products merge and before expanding | 10,000 | `clpq_max_power` |
+
+The caps live in `clausal/logic/clpq/limits.py` (`limit`, `set_limit`).
+A program reads and sets them with `current_prolog_flag/2` and
+`set_prolog_flag/2`; each flag is process wide and takes a positive
+integer (anything else is `domain_error(flag_value, F+V)`).  The flags
+exist only under `CLAUSAL_CLPQ=holzbaur`, so the legacy switch's flag set
+is unchanged (`test_the_legacy_switch_has_no_cap_flags`).  The engine's
+flag mechanism (`clausal/logic/builtins/flags.py`) was chosen over an
+environment variable because it is what ISO gives a program for
+implementation-defined limits.  A projection counts rows rather than
+derived constraints alone because the time goes into the pivots of
+redundancy elimination: 176 derived constraints took over 20 s on one
+probe and 316 took 9 s on another, while rows written track the time to
+within about two times.
+
+Headroom, measured 2026-10-14 by recording the most each cap saw over
+tests/clpq_port (CLAUSAL_SLOW_TESTS=1: the examples, filled_rectangle
+n = 9 and the nested legacy suites under the port) and every other test
+file that names clpq, bb_inf or dump_q, all under `CLAUSAL_CLPQ=holzbaur`:
+at most 1,167 nodes in one search (17 times under the cap), 6,493 rows in
+one projection (7.7 times) and 10 terms in one power (1,000 times).  At
+the caps, under a load average near 20 on 8 cores: the search with no
+integer point raises after 8.3 s and 63 MB (with a counting wrapper;
+before the caps it ran 14,000 nodes/s and grew by 30 MB/s), the probe below raises after 5.4 s at n = 5 (seed 101) and
+5.7 s at n = 6, and `(Y + 1)^9999`, the largest power of a binomial the
+cap admits, takes 1.4 s; `(Y + 1)^(10^7)` raises at once.
+
+- **bb_inf/3 on a store with no integer point does not terminate in 1.3.3**
   (High 1).  `noint(I) :- {X >= 0, Y >= 0, 2*X - 2*Y =:= 1},
   bb_inf([X, Y], X, I).`  bb.pl branches for ever; memory grows by about
-  50 MB/s.  1.3.3 does the same; legacy caps its depth at 50 and fails.
-- **Projection is exponential with no cap** (Medium 3).  dump/3 on two of
-  n variables under 3n random `=<` constraints (coefficients in -3..3), the
-  security review's probe `secport/proj.py SEED N COUNT` (Task 16
-  scratchpad): worst over the seeds tried, 0.70 s at n = 4 and 13.50 s at
-  n = 5.  The 13.5 s case is seed 101 (`random.Random(101)`, n = 5, 15
-  constraints, a 13-constraint answer): `proj.py 101 5 1`, rerun at
-  3f8fceb2, took 7.47 s.  The `-g` printer projects every answer, so a
-  sandboxed program reaches it.  Fourier-Motzkin in 1.3.3 is the same.
+  30 MB/s (14,000 nodes/s, measured under load).  Legacy caps its depth
+  at 50 and fails.  The port raises `resource_error(clpq_nodes)` at the
+  cap (`test_bb_inf_without_an_integer_point_raises_at_the_default_cap`).
+- **Projection is exponential** (Medium 3).  dump/3 on two of n variables
+  under 3n random `=<` constraints (coefficients in -3..3), the security
+  review's probe `secport/proj.py SEED N COUNT` (Task 16 scratchpad):
+  worst over the seeds tried, 0.70 s at n = 4 and 13.50 s at n = 5; the
+  13.5 s case is seed 101 (n = 5, 15 constraints, a 13-constraint answer),
+  7.47 s at 3f8fceb2.  It writes about 240,000 rows; n = 6 runs past a
+  minute.  The `-g` printer projects every answer, so a sandboxed program
+  reaches it: past the cap the printer reports the error and prints no
+  answer (`test_the_answer_printer_reports_the_projection_cap`).
+  Fourier-Motzkin in 1.3.3 is the same, uncapped.
 - **Power expansion is about N^3** (Medium 4).  `{X = (Y + 1)^N}` takes
   0.04 s, 0.12 s and 0.45 s at N = 1000, 2000 and 4000;
   `(Y + Z + W)^120` takes 0.95 s and `^240` 7.1 s (security review), and
-  `{X = (Y + 1)^(10^7)}` does not finish.  nf.pl expands binomially as
-  the port does.
+  `{X = (Y + 1)^(10^7)}` did not finish; it now raises at once.  nf.pl
+  expands binomially as the port does.  Only the adapter's API reaches
+  it: the `.pl` front end lowers `{}` with linear expressions only.
 - **Unifying constrained variables with constrained variables is slower
   than legacy** (Low 8).  `X1 =< X2 =< ... =< Xn`, each `Yi >= 0`, then
   `[X1, ..., Xn] = [Y1, ..., Yn]` (`secport/hookscale.py N`, mode

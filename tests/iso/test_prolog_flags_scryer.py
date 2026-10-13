@@ -110,13 +110,18 @@ def test_max_and_min_integer_have_no_value(plain, flag):
     assert _answers(("current_prolog_flag", flag, Var()), plain) == []
 
 
+#: The CLP(Q) port's caps, flags under CLAUSAL_CLPQ=holzbaur only.
+_CLPQ_FLAGS = ({"clpq_max_nodes", "clpq_max_projection", "clpq_max_power"}
+               if os.environ.get("CLAUSAL_CLPQ") == "holzbaur" else set())
+
+
 def test_an_unbound_flag_enumerates_every_flag_with_a_value(plain):
     F, V = Var(), Var()
     got = dict(_answers(("current_prolog_flag", F, V), plain, F, V))
     assert set(got) == {"bounded", "integer_rounding_function",
                         "char_conversion", "debug", "max_arity", "unknown",
                         "double_quotes", "assert_creates_dynamic",
-                        "require_end_module", "argv"}
+                        "require_end_module", "argv"} | _CLPQ_FLAGS
     # argv (Scryer, SWI): the program arguments, a list of atoms -- set by
     # the `clausal` command, the empty list otherwise.
     assert isinstance(got["argv"], list)

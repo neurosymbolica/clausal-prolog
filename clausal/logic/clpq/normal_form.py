@@ -44,6 +44,7 @@ Imports: nf.pl calls bv.pl and ineq.pl, and bv.pl calls nf.pl back
 call sites ("cyclic") and this module imports bounded_simplex and
 inequalities at the top.
 """
+from clausal.logic.clpq import limits
 from clausal.logic.clpq.attributes import refuse_inside_attribute_hooks
 from clausal.logic.cells import TUPLE_TAG, compound_cell_shape
 from clausal.logic.clpq.arithmetic import (
@@ -1224,13 +1225,36 @@ def multiply_exponents(powers, factor):
 # Timing 00:00:00.660     0.660   binomial
 def normal_form_power(exponent, norm):
     """nf.pl, normal_form_power/3 (nf_power/3): *norm* to the int
-    *exponent*; None where a negative power of zero divides by zero."""
+    *exponent*; None where a negative power of zero divides by zero.
+
+    Where the expansion would make more terms than the clpq_power cap, it
+    raises `resource_error(clpq_power)` before expanding (DEVIATIONS.md
+    D24): `(Y + 1)^N` costs about N^3."""
+    check_power_size(abs(exponent), len(norm))
     if exponent < 0:
         inverse = binomial_power(norm, -exponent)
         return normal_form_divide(inverse, [Monomial(ONE, [])])
     if exponent > 0:
         return binomial_power(norm, exponent)
     return [Monomial(ONE, [])]          # 0^0 is indeterminate but we say 1
+
+
+def check_power_size(exponent, count):
+    """Raise `resource_error(clpq_power)` where a sum of *count* terms to
+    the *exponent* expands into more terms than the clpq_power cap:
+    binomial(exponent + count - 1, count - 1), the number of its power
+    products before like ones merge.  The binomial is built a factor at a
+    time and stops at the cap, so a huge exponent costs nothing."""
+    if exponent < 2 or count < 2:
+        return
+    cap = limits.limit("clpq_power")
+    terms = 1
+    for index in range(1, count):
+        terms = terms * (exponent + index) // index
+        if terms > cap:
+            break
+    limits.check("clpq_power", terms,
+                 "the terms of an integer power's expansion")
 
 
 def normal_form_power_positive(exponent, norm):

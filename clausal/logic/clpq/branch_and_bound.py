@@ -29,6 +29,7 @@ test_a_goal_woken_by_narrowing_runs_in_it,
 test_a_woken_bb_inf_runs_the_goals_its_search_wakes,
 test_work_queued_before_bb_inf_stays_queued).
 """
+from clausal.logic.clpq import limits
 from clausal.logic.clpq.attributes import (
     culprit_argument, refuse_inside_attribute_hooks)
 from clausal.logic.clpq.arithmetic import (
@@ -130,10 +131,18 @@ def branch_and_bound_loop(objective, integer_forms, epsilon, trail):
     leaf backtracks into the newest pushed alternative.  The incumbent is a
     local, not 1.3.3's global bb_put/bb_get
     (test_a_search_deeper_than_1000_branches_needs_no_recursion,
-    test_the_incumbent_prunes_worse_branches)."""
+    test_the_incumbent_prunes_worse_branches).
+
+    Each pass is one node.  Past the clpq_nodes cap it raises
+    `resource_error(clpq_nodes)` (DEVIATIONS.md D24): 1.3.3 searches a
+    store with no integer point for ever."""
     incumbent = None
     alternatives = []
+    nodes = 0
     while True:
+        nodes += 1
+        limits.check("clpq_nodes", nodes,
+                     "the branch and bound nodes of bb_inf")
         infimum = branch_and_bound_reoptimize(objective, trail)
         if infimum is not None \
                 and branch_and_bound_better_bound(infimum, incumbent):

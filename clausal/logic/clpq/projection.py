@@ -13,6 +13,7 @@ Lists: a variable list is a Python list or a components.ListCell chain
 (an open member list), walked up to its tail.  A pivot `T:Nt` is the pair
 (T, Nt); the pivot list is a Python list, newest first.
 """
+from clausal.logic.clpq import limits
 from clausal.logic.clpq.attributes import BOUNDS_NONE, bounds_none, state_of
 from clausal.logic.clpq.bounded_simplex import _put_attributes, pivot
 from clausal.logic.clpq.components import (
@@ -34,7 +35,20 @@ from clausal.logic.variables import deref, is_var, unify
 def project_attributes(target_variables, constrained_variables, trail):
     """project.pl, project_attributes/2: project the store of
     *constrained_variables* onto *target_variables*.  False where it
-    fails."""
+    fails.
+
+    The rows it writes are counted (limits.start_projection): past the
+    clpq_projection cap it raises `resource_error(clpq_projection)`
+    (DEVIATIONS.md D24).  Its caller undoes the store either way."""
+    previous = limits.start_projection()
+    try:
+        return _project_attributes(target_variables, constrained_variables,
+                                   trail)
+    finally:
+        limits.stop_projection(previous)
+
+
+def _project_attributes(target_variables, constrained_variables, trail):
     targets = sort_variables(target_variables)             # duplicates ?
     constrained = sort_variables(constrained_variables)    # duplicates ?
     mark_target(targets, trail)

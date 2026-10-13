@@ -25,6 +25,7 @@ Imports at the call site.  fourmotz.pl and project.pl call each other;
 projection imports this module at the top, so this module imports
 projection at its call sites ("cyclic").
 """
+from clausal.logic.clpq import limits
 from clausal.logic.clpq.arithmetic import (
     ZERO, divide, multiply, negate, sign, add)
 from clausal.logic.clpq.attributes import (
@@ -70,7 +71,13 @@ def prefilter(variables, trail):
 def fourier_motzkin_eliminate_internal(variables, target, pivots, trail):
     """fourmotz.pl, fourier_motzkin_eliminate_internal/3 (fm_elim_int/3).
     The target variables are marked; *target* lists them too.  The
-    recursion is a loop; where best/3 finds no candidate, it gives up."""
+    recursion is a loop; where best/3 finds no candidate, it gives up.
+
+    Each elimination derives the cross product of its occurrences, a row
+    each.  They are charged to the projection before they are made: past
+    the clpq_projection cap it raises `resource_error(clpq_projection)`
+    (limits.charge_projection, DEVIATIONS.md D24); their number can grow
+    exponentially."""
     while variables:
         found = best(variables)
         if found is not None:
@@ -78,6 +85,8 @@ def fourier_motzkin_eliminate_internal(variables, target, pivots, trail):
             occurrences = occurences(chosen)
             if occurrences is None:
                 return False
+            limits.charge_projection(
+                cross_product_cardinality(occurrences, 0))
             pivots = eliminate_minimum(chosen, occurrences, target, pivots,
                                        trail)
             if pivots is None:

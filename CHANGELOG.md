@@ -141,6 +141,20 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Experimental
 
+- **Resource caps in the clp(q,r) 1.3.3 port (`CLAUSAL_CLPQ=holzbaur`).**
+  Three kinds of work that 1.3.3 does without limit now stop at a cap and
+  raise `error(resource_error(R), _)`; nothing fails silently or answers in
+  part. `clpq_nodes`: the nodes of one `bb_inf/3` search (a store with no
+  integer point used to branch for ever), default 20,000.
+  `clpq_projection`: the rows one projection writes (pivots and the
+  constraints Fourier-Motzkin derives) in `dump/3`, `dump_q/2` and the
+  `-g` answer printer, default 50,000. `clpq_power`: the terms
+  of one integer power's expansion (`{X = (Y + 1)^(10^7)}` never
+  finished), default 10,000. The Prolog flags `clpq_max_nodes`,
+  `clpq_max_projection` and `clpq_max_power` read and set them
+  (`set_prolog_flag/2`, a positive integer); they exist only under the
+  port, and the legacy solver is unchanged. See
+  `clausal/logic/clpq/DEVIATIONS.md` D24.
 - **Asyncio.** `clausal.aio.asolve` / `aonce` run a query on an asyncio
   event loop: a predicate that waits (`clausal.aio.await_only`) suspends the
   query and frees the loop for other tasks, so concurrent queries overlap

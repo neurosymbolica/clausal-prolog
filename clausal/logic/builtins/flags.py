@@ -18,6 +18,9 @@ double_quotes              chars         directive   module
 assert_creates_dynamic     false         yes         module
 require_end_module         default       yes         process (goal)
 argv                       []            no          process
+clpq_max_nodes             20000         yes         process
+clpq_max_projection        50000         yes         process
+clpq_max_power             10000         yes         process
 =========================  ============  ==========  =================
 
 ``require_end_module`` (implementation-defined) is the process-wide
@@ -34,6 +37,15 @@ file cannot set it.
 program's command-line arguments, as atoms: what follows ``--`` on the
 ``clausal`` command line (``clausal.cli``), set from Python with
 :func:`set_argv`.  It is ``[]`` otherwise, and read-only to a program.
+
+``clpq_max_nodes``, ``clpq_max_projection`` and ``clpq_max_power``
+(implementation-defined) are the resource caps of the CLP(Q) port of
+clp(q,r) 1.3.3, each a positive integer: past one the port raises
+``error(resource_error(clpq_nodes), _)``, ``clpq_projection`` or
+``clpq_power`` (``clausal/logic/clpq/limits.py``, which holds the values,
+and ``clausal/logic/clpq/DEVIATIONS.md`` D24).  They exist only under
+``CLAUSAL_CLPQ=holzbaur``: the legacy solver has no such caps, and its
+flags are as they were.
 
 Integers are unbounded, so ``bounded`` is ``false`` and ``max_integer`` /
 ``min_integer`` have no value: ``current_prolog_flag(max_integer, X)``
@@ -69,6 +81,7 @@ neither ``char_conversion`` nor ``debug``.  Here ISO decides.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from clausal.logic.variables import deref, is_var, unify
@@ -100,9 +113,16 @@ class _Flag:
         self.name = name
         self.default = default
         self.admits = admits            # value -> bool: ISO's value set
-        self.supported = supported      # the values it can be SET to here
+        self.supported = supported      # the values it can be SET to here,
+                                        # or a test of the value
         self.scope = scope              # "process" | "module" | "directive"
                                         # | "end_module" (clausal.end_module)
+                                        # | "clpq" (clausal.logic.clpq.limits)
+
+    def can_be(self, value) -> bool:
+        if callable(self.supported):
+            return self.supported(value)
+        return value in self.supported
 
 
 #: The flags, in the order current_prolog_flag/2 enumerates them.
@@ -130,6 +150,24 @@ FLAGS: dict[str, _Flag] = {f.name: f for f in (
           supported=("true", "false", "default"), scope="end_module"),
     _Flag("argv", [], lambda v: type(v) is list),
 )}
+
+
+def _is_positive_int(v) -> bool:
+    return _is_int(v) and v > 0
+
+
+#: The CLP(Q) port's caps, flag -> resource (clausal.logic.clpq.limits).
+#: Under CLAUSAL_CLPQ=holzbaur only, read here as clausal.logic.clpq reads
+#: it: importing that package from here would import the builtins again.
+CLPQ_LIMIT_FLAGS = {
+    "clpq_max_nodes": "clpq_nodes",
+    "clpq_max_projection": "clpq_projection",
+    "clpq_max_power": "clpq_power",
+}
+if os.environ.get("CLAUSAL_CLPQ", "legacy") == "holzbaur":
+    for _name in CLPQ_LIMIT_FLAGS:
+        FLAGS[_name] = _Flag(_name, None, _is_positive_int,
+                             supported=_is_positive_int, scope="clpq")
 
 #: Process-wide values of the settable process flags.
 _PROCESS: dict[str, Any] = {}
@@ -184,7 +222,7 @@ def check_setting(flag, value, *, directive: bool = False) -> tuple[str, Any]:
         raise LogicException(domain_error(
             "flag_value", ("+", spec.name, value),
             f"{_SET}: {v!r} is not a value of the {spec.name} flag"))
-    if v not in spec.supported:
+    if not spec.can_be(v):
         why = ("is read-only" if not spec.supported else
                f"can only be {' or '.join(spec.supported)} here")
         raise LogicException(permission_error(
@@ -218,6 +256,9 @@ def apply_setting(db, name: str, value) -> None:
         from clausal.end_module import set_require_end_module  # noqa: PLC0415
         set_require_end_module(None if value == "default"
                                else value == "true")
+    elif spec.scope == "clpq":
+        from clausal.logic.clpq import limits  # noqa: PLC0415
+        limits.set_limit(CLPQ_LIMIT_FLAGS[name], value)
     elif spec.scope in ("module", "directive"):
         if db is not None:
             module_flags(db)[name] = value
@@ -238,6 +279,9 @@ def flag_value(db, name: str):
                 "flag_value", ("+", name, "CLAUSAL_REQUIRE_END_MODULE"),
                 f"{_CURRENT}: {e}")) from None
         return spec.default if v is None else ("true" if v else "false")
+    if spec.scope == "clpq":
+        from clausal.logic.clpq import limits  # noqa: PLC0415
+        return limits.limit(CLPQ_LIMIT_FLAGS[name])
     if spec.scope in ("module", "directive"):
         if db is not None:
             v = module_flags(db).get(name)

@@ -32,6 +32,7 @@ bounded_simplex imports normal_form, inequalities and branch_and_bound at
 the call site, inside the function that needs them, because each of those
 modules imports this one.  Each such import is marked "cyclic".
 """
+from clausal.logic.clpq import limits
 from clausal.logic.clpq.attributes import (
     culprit_argument, refuse_inside_attribute_hooks)
 from clausal.logic.clpq.arithmetic import (
@@ -1525,7 +1526,10 @@ def back_substitute(variable, form, trail):
 
 def back_substitute_variables(members, variable, form, trail):
     """bv.pl, back_substitute_variables/3 (bs/3): walk the open member list
-    up to its tail; a member whose row holds *variable* gets the new row."""
+    up to its tail; a member whose row holds *variable* gets the new row.
+    Inside a projection the rows rewritten are charged to it
+    (limits.charge_projection)."""
+    rewritten = 0
     node = deref(members)
     while type(node) is ListCell:
         member = deref(node.head)
@@ -1536,13 +1540,17 @@ def back_substitute_variables(members, variable, form, trail):
         new_form = normal_form_substitute(variable, form, state.linear_form)
         if new_form is not None:
             put_state(member, with_changes(state, linear_form=new_form), trail)
+            rewritten += 1
+    if limits.projection_rows is not None:
+        limits.charge_projection(rewritten)
     return True
 
 
 def back_substitute_collect_bindings(members, variable, form, bindings, trail):
     """bv.pl, back_substitute_collect_bindings/5 (bs_collect_bindings/5):
     back_substitute_variables, also collecting each row that became
-    constant."""
+    constant.  Inside a projection the rows rewritten are charged to it."""
+    rewritten = 0
     node = deref(members)
     while type(node) is ListCell:
         member = deref(node.head)
@@ -1555,6 +1563,9 @@ def back_substitute_collect_bindings(members, variable, form, bindings, trail):
             put_state(member, with_changes(state, linear_form=new_form), trail)
             back_substitute_collect_binding(new_form.terms, member,
                                             new_form.constant, bindings)
+            rewritten += 1
+    if limits.projection_rows is not None:
+        limits.charge_projection(rewritten)
     return True
 
 
