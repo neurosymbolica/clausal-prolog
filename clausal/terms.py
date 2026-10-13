@@ -4020,6 +4020,36 @@ import unicodedata as _unicodedata
 #: fy 200, ``div`` and ``rdiv`` yfx 400).
 _WQ_OPS = _OperatorTable.scryer_builtin_default()
 
+#: The operator table the writer in progress consults: ``_WQ_OPS`` unless
+#: ``term_write(..., ops=table)`` was handed another one (ISO 8.14.2: the
+#: writer follows the operator table in force, as the reader does).
+_WQ_TABLE: _contextvars.ContextVar = _contextvars.ContextVar(
+    "_WQ_TABLE", default=_WQ_OPS)
+
+
+# ── SEAM: the runtime operator table the ISO writers print with ──────────────
+#
+# writeq/1, write/1, writeln/1, write_term/2, format/1,2 and
+# write_to_string/2 all render through ``_format_term_iso``
+# (clausal/logic/builtins/io.py), which asks THIS function for the table.  The
+# process-wide table that op/3 (as a goal, and as a ``.pl`` directive at
+# load) changes is ``clausal.tools.prolog_operators.runtime_op_table()``.
+# This is the one place the writer reads it.  It is looked up by name, so the
+# writer works whether or not that accessor exists yet: without it, the
+# writer prints with Scryer's default table, as before.  When the table is
+# still the default (``runtime_op_table_is_default()``), the default table
+# object is returned, so the common case costs one call.
+def writer_op_table():
+    """The operator table the ISO writers print with right now."""
+    from clausal.tools import prolog_operators as _po  # noqa: PLC0415
+    runtime = getattr(_po, "runtime_op_table", None)
+    if runtime is None:
+        return _WQ_OPS
+    is_default = getattr(_po, "runtime_op_table_is_default", None)
+    if is_default is not None and is_default():
+        return _WQ_OPS
+    return runtime()
+
 
 #: Named escapes Scryer writes inside a quoted token; every other control or
 #: non-printing character is ``\xHH\`` (lower-case hex, no padding).
@@ -4068,9 +4098,10 @@ def _wq_float(x: float) -> str:
 
 
 def _wq_is_op_atom(name: str) -> bool:
-    ops = _WQ_OPS
+    ops = _WQ_TABLE.get()
     return (ops.lookup_infix(name) is not None
-            or ops.lookup_prefix(name) is not None)
+            or ops.lookup_prefix(name) is not None
+            or ops.lookup_postfix(name) is not None)
 
 
 def _wq_glue(left: str, right: str) -> bool:
@@ -4081,6 +4112,63 @@ def _wq_glue(left: str, right: str) -> bool:
     a, b = left[-1], right[0]
     return ((a in _GRAPHIC_CHARS and b in _GRAPHIC_CHARS)
             or ((a.isalnum() or a == "_") and (b.isalnum() or b == "_")))
+
+
+_WQ_ZERO_END = _re.compile(r"(?:^|[^0-9A-Za-z_])0$")
+
+
+def _wq_sep(left: str, right: str) -> bool:
+    """True when *left* and *right* need layout between them to read back
+    as two tokens: :func:`_wq_glue`, and two quoted tokens (``' op' '1'``
+    would read as one atom) or ``0`` before a quote (``0 'f '``: ``0'`` opens
+    a character code)."""
+    if _wq_glue(left, right):
+        return True
+    return (bool(left) and bool(right) and right[0] == "'"
+            and (left[-1] == "'" or _WQ_ZERO_END.search(left) is not None))
+
+
+def _wq_right_open(t, ops) -> int:
+    """The highest priority the RIGHTMOST operand of *t* accepts when *t* is
+    written as a prefix or infix operator term, else -1.  An operator of that
+    priority or lower written after *t* would be read INTO that operand
+    (``fy 1 yf`` reads as ``fy(yf(1))``), so such a *t* on the left of it is
+    bracketed (Ulrich #150 ``(fy 1)yf``, #153, #156)."""
+    if isinstance(t, Var):
+        return -1
+    cell = _wq_cell(t)
+    if cell is None:
+        return -1
+    name, args = cell
+    if len(args) == 2:
+        if name == ".":
+            return -1
+        e = ops.lookup_infix(name)
+        if e is None:
+            return -1
+        return e.precedence if e.specifier[2] == "y" else e.precedence - 1
+    if len(args) == 1 and name != "{}":
+        arg = deref(args[0])
+        if name == "$VAR" and type(arg) is int and arg >= 0:
+            return -1
+        e = ops.lookup_prefix(name)
+        if e is None:
+            return -1
+        if name == "-" and (
+                (not isinstance(arg, bool) and isinstance(arg, (int, float))
+                 and arg >= 0) or _wq_is_infix_form(arg, ops)
+                or _wq_is_postfix_form(arg, ops)):
+            return -1               # written ``- (1)``: the operand is closed
+        return e.precedence if e.specifier == "fy" else e.precedence - 1
+    return -1
+
+
+def _wq_left(t, maxp: int, p: int, ops) -> str:
+    """The left operand of an infix or postfix operator of priority *p*
+    whose left argument accepts priority *maxp*."""
+    if _wq_right_open(t, ops) >= p:
+        return "(" + _wq(t, 1200) + ")"
+    return _wq(t, maxp, True)
 
 
 def _wq_cell(t):
@@ -4105,6 +4193,25 @@ def _wq_is_infix_form(t, ops) -> bool:
     cell = _wq_cell(t)
     return (cell is not None and len(cell[1]) == 2 and cell[0] != "."
             and ops.lookup_infix(cell[0]) is not None)
+
+
+def _wq_is_postfix_form(t, ops) -> bool:
+    """True when the writer prints *t* as a postfix operator term (``1 yf``):
+    a one-argument compound whose functor is a postfix operator and not a
+    prefix or infix one (none in the default table)."""
+    if ops is _WQ_OPS:
+        return False
+    cell = _wq_cell(t)
+    if cell is None or len(cell[1]) != 1 or cell[0] == "{}":
+        return False
+    name = cell[0]
+    if name == "$VAR" and _WQ_OPTS.get()[3]:
+        arg = deref(cell[1][0])
+        if type(arg) is int and arg >= 0:
+            return False
+    return (ops.lookup_postfix(name) is not None
+            and ops.lookup_prefix(name) is None
+            and ops.lookup_infix(name) is None)
 
 
 def _wq_list(elems: list, tail) -> str:
@@ -4246,7 +4353,7 @@ def _wq(t: Any, prec: int, operand: bool = False) -> str:
         return term_str(t, quoted=quoted, double_quotes=double_quotes,
                         sep=",")
     name, args = cell
-    ops = _WQ_OPS
+    ops = _WQ_TABLE.get()
     if ignore_ops:
         if (numbervars and name == "$VAR" and len(args) == 1
                 and type(deref(args[0])) is int and deref(args[0]) >= 0):
@@ -4274,15 +4381,31 @@ def _wq(t: Any, prec: int, operand: bool = False) -> str:
         e = ops.lookup_infix(name)
         if e is not None:
             p, spec = e.precedence, e.specifier
-            left = _wq(args[0], p if spec[0] == "y" else p - 1, True)
+            if ops is _WQ_OPS:
+                left = _wq(args[0], p if spec[0] == "y" else p - 1, True)
+            else:
+                left = _wq_left(args[0], p if spec[0] == "y" else p - 1, p,
+                                ops)
             right = _wq(args[1], p if spec[2] == "y" else p - 1, True)
+            # An operator name is written as the atom it is (``'a b'``); no
+            # default operator's name but ``|`` needs quotes.
+            nm = name if name in (",", "|") else _wq_name(name)
             if name == ",":
                 s = left + "," + right
-            elif name[0].isalpha():
-                s = left + " " + name + " " + right
+            elif nm[0].isalpha() and _WQ_OPS.lookup_infix(name) == e:
+                s = left + " " + nm + " " + right
+            elif nm[0].isalpha():
+                # An operator op/3 defined: Scryer's layout, layout only
+                # where the tokens would glue, and before ``(`` (``op(`` is
+                # functional notation) -- ``(fy 1)yfx 2`` (Ulrich #153).  A
+                # default operator (`` mod ``, `` is ``) keeps its spacing
+                # byte for byte, whatever table is in force.
+                s = (left + (" " if _wq_sep(left, nm) else "") + nm
+                     + (" " if _wq_sep(nm, right) or right[:1] == "("
+                        else "") + right)
             else:
-                s = (left + (" " if _wq_glue(left, name) else "") + name
-                     + (" " if _wq_glue(name, right) else "") + right)
+                s = (left + (" " if _wq_sep(left, nm) else "") + nm
+                     + (" " if _wq_sep(nm, right) else "") + right)
             return "(" + s + ")" if p > prec else s
     if len(args) == 1:
         arg = deref(args[0])
@@ -4297,34 +4420,59 @@ def _wq(t: Any, prec: int, operand: bool = False) -> str:
                     and isinstance(arg, (int, float)) and arg >= 0):
                 # ``-(1)`` is not the number ``-1``: Scryer writes ``- (1)``.
                 a = "(" + _wq(arg, 1200) + ")"
-            elif name == "-" and _wq_is_infix_form(arg, ops):
+            elif name == "-" and (_wq_is_infix_form(arg, ops)
+                                  or _wq_is_postfix_form(arg, ops)):
                 # An infix operand is bracketed too, as Scryer and Ulrich's
                 # conformity suite write it (#183 ``- (1^2)``, #327
                 # ``- ((1*2)^3)``, #260 ``- (a^2)``).  ``-1^2`` would read
                 # back as ``(-1)^2``: `-` before a number, layout or not, is
-                # the negative literal.
+                # the negative literal.  A postfix operand likewise:
+                # ``-1 yf`` reads as ``yf(-1)``, so Scryer writes ``- (1 yf)``.
                 a = "(" + _wq(arg, 1200) + ")"
             else:
                 a = _wq(arg, p if spec == "fy" else p - 1, True)
-            sep = " " if (a[0] == "(" or name[0].isalpha()
-                          or _wq_glue(name, a)) else ""
-            s = _wq_name(name) + sep + a
+            nm = _wq_name(name)
+            sep = " " if (a[0] == "(" or nm[0].isalpha()
+                          or _wq_sep(nm, a)) else ""
+            s = nm + sep + a
+            return "(" + s + ")" if p > prec else s
+        e = ops.lookup_postfix(name) if ops is not _WQ_OPS else None
+        if e is not None and ops.lookup_infix(name) is None:
+            # A postfix operator (none in the default table).  One that is
+            # also infix is written canonically: ``a> >b`` does not read
+            # back (Ulrich #238/#239).
+            p, spec = e.precedence, e.specifier
+            left = _wq_left(arg, p if spec[0] == "y" else p - 1, p, ops)
+            nm = _wq_name(name)
+            s = left + (" " if _wq_sep(left, nm) else "") + nm
             return "(" + s + ")" if p > prec else s
     return _wq_name(name) + "(" + ",".join(_wq(a, 999) for a in args) + ")"
 
 
 def term_write(t: Any, *, quoted: bool, double_quotes: bool = False,
-               ignore_ops: bool = False, numbervars: bool = True) -> str:
+               ignore_ops: bool = False, numbervars: bool = True,
+               ops: "_OperatorTable | None" = None) -> str:
     """Render *t* as ISO ``write_term/2`` does with these options, byte for
     byte as Scryer writes it: operator syntax (unless *ignore_ops*), no space
     after a comma, a distinct ``_N`` per variable, Scryer's float spelling,
     and -- under *quoted* -- every atom, functor included, quoted when it
     would not re-read as itself.  The ISO writer family (``write/1``,
-    ``writeq/1``, ``write_term/2``) prints through this."""
+    ``writeq/1``, ``write_term/2``) prints through this.
+
+    *ops* is the operator table to write with (default: Scryer's, with no
+    library loaded): an operator term is written in operator syntax, with
+    the brackets its priorities and associativity need, only while its
+    name is an operator of that kind in *ops*; an operator removed with
+    ``op(0, ...)`` is written in canonical form (``-(1)``)."""
     token = _WQ_OPTS.set((quoted, double_quotes, ignore_ops, numbervars))
+    table = None
+    if ops is not None and ops is not _WQ_OPS:
+        table = _WQ_TABLE.set(ops)
     try:
         return _wq(t, 1200)
     finally:
+        if table is not None:
+            _WQ_TABLE.reset(table)
         _WQ_OPTS.reset(token)
 
 

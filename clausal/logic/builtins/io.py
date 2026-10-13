@@ -24,6 +24,7 @@ from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.terms import (
     term_str as _term_str,
     term_write as _term_write,
+    writer_op_table as _writer_op_table,
     term_canonical as _term_canonical,
     term_pformat as _term_pformat,
     quote_string as _quote_string,
@@ -189,8 +190,11 @@ def _format_term_iso(val, quoted: bool, double_quotes: bool = False,
         # read RAW, no deref (a slot-0-Var tuple is not a legal cell, see
         # ``clausal/logic/cells.py``).  Any other Python value -- a date, a
         # Quantity's own spelling aside, an opaque object -- keeps ``str()``.
+        # The operator table in force (the runtime seam, clausal/terms.py
+        # ``writer_op_table``): ``op/3`` changes what is written.
         return _term_write(val, quoted=quoted, double_quotes=double_quotes,
-                           ignore_ops=ignore_ops, numbervars=numbervars)
+                           ignore_ops=ignore_ops, numbervars=numbervars,
+                           ops=_writer_op_table())
     if is_truth_atom(val):
         return truth_spelling(val)     # the atoms true/false/undefined (D35)
     return str(val)
