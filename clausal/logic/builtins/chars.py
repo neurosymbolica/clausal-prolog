@@ -34,7 +34,7 @@ from clausal.logic.builtins._registry import _builtin
 from clausal.logic.builtins._helpers import (
     NIL_SPELLING, _is_empty_list, _check_nonneg_int_arg,
 )
-from clausal.logic.builtins.lists import _as_items
+from clausal.logic.builtins.lists import _as_items, _open_skeleton
 
 # ── C-accelerated inner loops (Option B: C helpers from Python generators) ───
 
@@ -712,7 +712,12 @@ def _char_code_token(s: str, j: int):
         if j + 1 >= n:
             raise _eof()
         e = s[j + 1]
-        if e in _CHAR_ESCAPES:
+        # "0" is a key in _CHAR_ESCAPES too (atom_number/2's single-char
+        # shorthand), but here it must fall through to the octal-digit-run
+        # branch below like any other octal digit, so a bare "\0" (no
+        # closing backslash) still raises instead of silently completing
+        # as NUL (ruled 2026-10-13, Ulrich's number_chars_cont #86/#89).
+        if e in _CHAR_ESCAPES and e != "0":
             return ord(_CHAR_ESCAPES[e]), j + 2
         if e == "x" or e in "01234567":
             base, k = (16, j + 2) if e == "x" else (8, j + 1)
@@ -827,6 +832,14 @@ def _read_number_text(s: str):
         i = _skip_layout(s, i + 1)
         if i == n:
             raise _eof()
+    elif s[i] == "'" and s[i + 1:i + 3] == "-'":
+        # the quoted-atom spelling of the same name "-" forms the negative
+        # sign too (ruled 2026-10-13, Ulrich's number_chars_cont #54: Scryer
+        # accepts both spellings of the token).
+        neg = True
+        i = _skip_layout(s, i + 3)
+        if i == n:
+            raise _eof()
     if "0" <= s[i] <= "9":
         value, end = _number_token_at(s, i)
         if end < n:
@@ -898,6 +911,7 @@ def _number_chars__2(number, chars, trail, k):
         trail.undo(mark)
         return
     if n_bound:
+        _refuse_bound_chars_shape(vc, "number_chars/2")
         mark = trail.mark()
         if unify(chars, [char_atom(c) for c in _number_text(vn)], trail):
             yield None
@@ -906,6 +920,58 @@ def _number_chars__2(number, chars, trail, k):
     if not is_var(vc):
         _refuse_partial(vc, "number_chars/2", is_char_atom, "character")
     raise LogicException(instantiation_error("number_chars/2"))
+
+
+def _refuse_bound_chars_shape(vc, who):
+    """Number already bound, Chars not a ground proper list (A09-F030
+    follow-up, ruled 2026-10-13): validate what IS determinable about Chars
+    BEFORE falling back to unifying it with Number's own text, so a bound
+    element of the wrong type, or a definite non-list/non-``[]`` tail,
+    still raises -- instead of the blind unify just failing silently
+    (``number_chars(1, 1)`` used to fail instead of ``type_error(list,
+    1)``; ``number_chars(1, [[]|_])`` instead of ``type_error(character,
+    [])``).
+
+    Returns normally (no error) when Chars is a bare variable (plain
+    output mode), a syntactically proper list whose only problem is an
+    unbound element (``number_chars(1, [_, []])`` still raises below, but
+    ``number_chars(1, ['.'|_])`` falls through to fail on the mismatch, not
+    an error), or a partial list whose known prefix is well-typed -- the
+    caller's fallback unify decides those.
+    """
+    if is_var(vc):
+        return
+    if isinstance(vc, list):
+        for e in vc:
+            e = deref(e)
+            if not is_var(e) and not is_char_atom(e):
+                raise LogicException(type_error("character", e, who))
+        return
+    from clausal.terms import SegList  # noqa: PLC0415
+    if isinstance(vc, SegList):
+        skeleton = _open_skeleton(vc)
+        if skeleton is None:
+            return
+        prefix, _tail_var = skeleton
+        for e in prefix:
+            e = deref(e)
+            if not is_var(e) and not is_char_atom(e):
+                raise LogicException(type_error("character", e, who))
+        return
+    heads = []
+    cur = vc
+    while type(cur) is tuple and len(cur) == 3 and cur[0] == ".":
+        heads.append(deref(cur[1]))
+        cur = deref(cur[2])
+    # Scryer checks the tail's list-ness before any element's character-ness
+    # (measured 2026-10-13 against the clean build): number_chars(1,[[]|2])
+    # raises type_error(list,[[]|2]), not type_error(character,[]), even
+    # though the head is ALSO bad -- so the shape check comes first here.
+    if not (is_var(cur) or (type(cur) is tuple and not cur)):
+        raise LogicException(type_error("list", vc, who))
+    for e in heads:
+        if not is_var(e) and not is_char_atom(e):
+            raise LogicException(type_error("character", e, who))
 
 
 def _refuse_partial(vc, who, is_elem, elem_type):
