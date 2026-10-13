@@ -504,7 +504,7 @@ need not be exported to itself. R7 goes with it.
    * Measured in `native-iso-reader-step2-2026-09-29/parity-2026-10-12.md`: 101 files read.
      Depth: 40 deep, 10 identical errors only, 2 with nothing to compare, 31 native only, 1
      translator only, 17 both refused.
-   * 42 differences: (a) 34 / (b) 0 / (c) 3 / (d) 5.
+   * 40 differences: (a) 33 / (b) 0 / (c) 2 / (d) 5 (42 before the translator kept improper tails).
    * The fixture pins each row's values and native's observation of every file.
 2. **The pilot domain, owned downstream.** This lane never reads downstream code. A pilot
    `<downstream-domain>` in `.pl` or Clausal Prolog, loaded natively, must pass its own tests.

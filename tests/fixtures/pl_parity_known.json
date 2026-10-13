@@ -59,13 +59,6 @@
    "native_sha": "55758b17495756c4"
   },
   {
-   "key": "tests/iso_diff/atoms.pl::answers::t/3",
-   "class": "a",
-   "note": "oracle: scryer agrees with native",
-   "translator_sha": "9a33677404a9c789",
-   "native_sha": "5e08d74e66682a98"
-  },
-  {
    "key": "tests/iso_diff/between.pl::answers::t/3",
    "class": "a",
    "note": "oracle: scryer agrees with native",
@@ -94,17 +87,10 @@
    "native_sha": "c48b5b1a9776c846"
   },
   {
-   "key": "tests/iso_diff/sorting.pl::answers::t/3",
-   "class": "c",
-   "note": "oracle: scryer agrees with neither (native differs in 1 of 30 rows, the translator in 3); native's rows that differ are -0.0, which Scryer and Trealla both read and print as 0.0; the translator stores body goals as data in its own lowered form (eval_/2, Python node reprs)",
-   "translator_sha": "30d7e2cee4402f8a",
-   "native_sha": "2a3c7d3385831bb3"
-  },
-  {
    "key": "tests/iso_diff/terms.pl::answers::t/3",
    "class": "c",
-   "note": "oracle: scryer agrees with neither (native differs in 2 of 90 rows, the translator in 22); native's rows that differ are -0.0, which Scryer and Trealla both read and print as 0.0; the translator stores body goals as data in its own lowered form (eval_/2, Python node reprs)",
-   "translator_sha": "22e34deddae38d12",
+   "note": "oracle: scryer agrees with neither (native differs in 2 of 90 rows, the translator in 20; 22 before the translator kept an improper tail); native's rows that differ are -0.0, which Scryer and Trealla both read and print as 0.0; the translator stores body goals as data in its own lowered form (eval_/2, Python node reprs)",
+   "translator_sha": "aab2750906145271",
    "native_sha": "5af53ae3192b406f"
   },
   {
