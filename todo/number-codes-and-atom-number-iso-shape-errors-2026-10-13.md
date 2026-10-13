@@ -1,20 +1,19 @@
-# number_codes/2, atom_number/2 and a few reader spellings: ISO shape errors still missing
+# atom_number/2 and a few reader spellings: ISO shape errors still missing
 
-number_chars/2 now raises the ISO type errors when Number is bound and Chars
+number_chars/2 and number_codes/2 now raise the ISO type errors when Number is bound and Chars
 is malformed. The same gaps remain elsewhere. Scryer outputs measured
 2026-10-13 against the clean build.
 
-## number_codes/2 (Number bound, Codes malformed): fails silently
+## number_codes/2 (Number bound, Codes malformed): FIXED 2026-10-14
 
-| query | engine | Scryer |
-|---|---|---|
-| `number_codes(1,1)` | fails | `type_error(list,1)` |
-| `number_codes(1,[a\|2])` | fails | `type_error(list,[a\|2])` |
-| `number_codes(1,[[]\|_])` | fails | `type_error(integer,[])` |
-
-The shape check `_refuse_bound_chars_shape` in
-`clausal/logic/builtins/chars.py` is character-specific; it needs an
-element-kind parameter (code vs character) before number_codes/2 can use it.
+`number_codes(1,1)`, `number_codes(1,[a|2])` and `number_codes(1,[[]|_])` now
+raise `type_error(list,1)`, `type_error(list,[a|2])` and
+`type_error(integer,[])`, as Scryer. `_refuse_bound_chars_shape` in
+`clausal/logic/builtins/chars.py` takes an element kind (characters by
+default, `_is_code` / `integer` for number_codes/2). Pinned by
+`tests/iso/test_number_codes_bound_shape.py`. Open residue shared with
+number_chars/2: a SegList whose hole is not the tail (`[*A, []]`) is not
+element-checked, so `number_codes(12, [*A, []])` fails instead of raising.
 
 ## atom_number/2
 

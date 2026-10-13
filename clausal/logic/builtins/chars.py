@@ -922,7 +922,7 @@ def _number_chars__2(number, chars, trail, k):
     raise LogicException(instantiation_error("number_chars/2"))
 
 
-def _refuse_bound_chars_shape(vc, who):
+def _refuse_bound_chars_shape(vc, who, is_elem=None, elem_type="character"):
     """Number already bound, Chars not a ground proper list (A09-F030
     follow-up, ruled 2026-10-13): validate what IS determinable about Chars
     BEFORE falling back to unifying it with Number's own text, so a bound
@@ -938,15 +938,20 @@ def _refuse_bound_chars_shape(vc, who):
     ``number_chars(1, ['.'|_])`` falls through to fail on the mismatch, not
     an error), or a partial list whose known prefix is well-typed -- the
     caller's fallback unify decides those.
+
+    ``is_elem`` / ``elem_type`` name the element kind: characters by default
+    (number_chars/2), ``_is_code`` / ``"integer"`` for number_codes/2.
     """
     if is_var(vc):
         return
+    if is_elem is None:
+        is_elem = is_char_atom
 
     def _check(elems):
         for e in elems:
             e = deref(e)
-            if not is_var(e) and not is_char_atom(e):
-                raise LogicException(type_error("character", e, who))
+            if not is_var(e) and not is_elem(e):
+                raise LogicException(type_error(elem_type, e, who))
 
     # A list, or a Seg* view whose holes are all filled (whatever order the
     # holes were bound in): its elements are all known, check them.
@@ -1046,6 +1051,7 @@ def _number_codes__2(number, codes, trail, k):
         trail.undo(mark)
         return
     if n_bound:
+        _refuse_bound_chars_shape(vc, "number_codes/2", _is_code, "integer")
         mark = trail.mark()
         if unify(codes, [ord(c) for c in _number_text(vn)], trail):
             yield None
