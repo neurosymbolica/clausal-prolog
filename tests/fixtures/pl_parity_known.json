@@ -234,17 +234,17 @@
    "native_sha": "c48b5b1a9776c846"
   },
   {
-   "key": "docs/importing_prolog.md#L734::load::",
+   "key": "docs/importing_prolog.md#L766::load::",
    "class": "d",
    "note": "rulings D7/D8: the constants/currency directive family with units from the european_union library (Clausal Prolog only); the translator misreads eur_cent",
    "translator_sha": "bce4ae982efc69cf",
    "native_sha": "c48b5b1a9776c846"
   },
   {
-   "key": "docs/importing_prolog.md#L781::load::",
+   "key": "docs/importing_prolog.md#L813::load::",
    "class": "a",
    "note": "oracle: scryer loads it, as native does. Translator: '//' is not a plain name, so it cannot be declared (a body goal may name it, a declaration entry may not): rename it, or drop the entry and let the clauses define the predicate (doc_importing_prolog_L",
-   "translator_sha": "ec0332e007693079",
+   "translator_sha": "ed829fb40cb72388",
    "native_sha": "c48b5b1a9776c846"
   },
   {

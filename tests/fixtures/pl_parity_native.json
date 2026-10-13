@@ -376,14 +376,14 @@
    "preds": {},
    "tests": null
   },
-  "docs/importing_prolog.md#L697": {
+  "docs/importing_prolog.md#L717": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L697.pl: doc_importing_prolog_L697.pl:1: directive: use_module(small_sizes): no module small_sizes on sys.path (a slash path a/b names the dotted module a.b) (doc_importing_prolog_L697.pl, line 1)",
+   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L717.pl: doc_importing_prolog_L717.pl:1: directive: use_module(small_sizes): no module small_sizes on sys.path (a slash path a/b names the dotted module a.b) (doc_importing_prolog_L717.pl, line 1)",
    "load": "refused",
    "preds": null,
    "tests": null
   },
-  "docs/importing_prolog.md#L734": {
+  "docs/importing_prolog.md#L766": {
    "collect_error": null,
    "error": null,
    "load": "ok",
@@ -408,7 +408,7 @@
    },
    "tests": null
   },
-  "docs/importing_prolog.md#L781": {
+  "docs/importing_prolog.md#L813": {
    "collect_error": null,
    "error": null,
    "load": "ok",
@@ -438,7 +438,7 @@
    },
    "tests": null
   },
-  "docs/importing_prolog.md#L875": {
+  "docs/importing_prolog.md#L918": {
    "collect_error": null,
    "error": null,
    "load": "ok",
@@ -2947,10 +2947,10 @@
   "docs/importing_prolog.md#L385": "0260373fe64daf78",
   "docs/importing_prolog.md#L464": "a967e2c3b696a5fd",
   "docs/importing_prolog.md#L485": "57b9d1766ac5ee1c",
-  "docs/importing_prolog.md#L697": "808de0f6e0dc161f",
-  "docs/importing_prolog.md#L734": "44bbc956b49e7cc7",
-  "docs/importing_prolog.md#L781": "95f7d893eed32064",
-  "docs/importing_prolog.md#L875": "c9dd3a3c1fc2df50",
+  "docs/importing_prolog.md#L717": "808de0f6e0dc161f",
+  "docs/importing_prolog.md#L766": "44bbc956b49e7cc7",
+  "docs/importing_prolog.md#L813": "195c47e210df5d28",
+  "docs/importing_prolog.md#L918": "c9dd3a3c1fc2df50",
   "docs/index.md#L94": "72604ff11fb53c41",
   "docs/prolog_translation.md#L33": "8848f32154e44b13",
   "docs/pure_random.md#L104": "1045bf0cc5b76ef6",
