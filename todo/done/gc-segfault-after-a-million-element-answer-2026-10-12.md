@@ -33,7 +33,11 @@ ended that call after about 30 s, the process segfaulted in the garbage collecto
 (faulthandler: `Garbage-collecting`, inside `vix__4`). It left a 2.4 GB core. The same call left to
 run for 100 s without the alarm did not crash. `clausal/tools/pl_parity.py` now runs each test and
 call in a forked child that is killed on timeout, so the harness no longer reaches this. The engine
-still does.
+fix below resolves the in-process case too. The slice 7 review re-ran the repro in-process, without
+forking: it loads `prelude.pl` natively and calls each predicate under a SIGALRM-raised exception,
+then the later calls. On e6f69962 it survived 30 s × 3 rounds, 30 s × 2 rounds with a `gc.collect()`
+after every call, and 60 s × 2 rounds. On 7c0379db it still crashes with the original signature
+(exit 139, `Garbage-collecting`, `vix__4`).
 
 ## Resolution (2026-10-13)
 

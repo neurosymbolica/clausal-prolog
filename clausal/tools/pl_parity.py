@@ -74,12 +74,18 @@ LOADER_OF = {"translator": "PrologLoader", "native": "NativePrologLoader"}
 MAX_ARITY = 3
 #: Answers collected per call (a generator past this is cut, both sides).
 MAX_ANSWERS = 200
-#: Seconds per test or per predicate call, and per child process.  A
-#: timeout is its own observation ("timeout"), never a pinned difference:
-#: under ``-j`` load a slow native call (``which_fib_is_55``: 3.7 s alone)
-#: must not read as a divergence.
+#: Seconds per test or per predicate call.  A timeout is recorded as the
+#: value "timeout": never a translator-vs-native difference row (a slow
+#: native call such as ``which_fib_is_55``, 3.7 s alone, must not read as a
+#: divergence), but pinned like any value under ``--check``/``--update``
+#: (after one retry): a pinned answer that now times out is red, and so is a
+#: pinned timeout that now terminates.
 CALL_TIMEOUT = float(os.environ.get("CLAUSAL_PARITY_CALL_TIMEOUT", "30"))
-CHILD_TIMEOUT = 300.0
+#: Seconds per probe process (one file, one front end), derived from
+#: CALL_TIMEOUT.  On expiry the probe's whole process group is killed, its
+#: forked call children included.
+CHILD_TIMEOUT = float(os.environ.get("CLAUSAL_PARITY_CHILD_TIMEOUT",
+                                     str(10 * CALL_TIMEOUT)))
 
 _JSON_MARK = "PL-PARITY-JSON:"
 
@@ -261,6 +267,12 @@ def _isolated(fn):
     pid = os.fork()
     if pid == 0:                                       # the child
         os.close(r)
+        # Backstop: should the probe die without killing this child (its
+        # own SIGKILL is the normal end of a timeout), SIGALRM's default
+        # action ends it a little after CALL_TIMEOUT -- never an orphan.
+        signal.signal(signal.SIGALRM, signal.SIG_DFL)
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.alarm(int(CALL_TIMEOUT) + 5)
         try:
             sink = io.StringIO()
             with contextlib.redirect_stdout(sink), \
@@ -338,14 +350,22 @@ def run_side(src: Source, frontend: str, cache_root: Path,
     env["PYTHONPATH"] = str(repo_root) + (
         os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     env.pop("CLAUSAL_SANDBOX", None)
+    # Its own session, so a timeout kills the probe AND the call children
+    # it forked (they share its process group).
+    child = subprocess.Popen(
+        [sys.executable, "-m", "clausal.tools.pl_parity", "--probe",
+         src.path],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env,
+        cwd=str(cache_root), stdin=subprocess.DEVNULL,
+        start_new_session=True)
     try:
-        proc = subprocess.run(
-            [sys.executable, "-m", "clausal.tools.pl_parity", "--probe",
-             src.path],
-            capture_output=True, text=True, env=env, cwd=str(cache_root),
-            timeout=CHILD_TIMEOUT, stdin=subprocess.DEVNULL)
+        out, err = child.communicate(timeout=CHILD_TIMEOUT)
     except subprocess.TimeoutExpired:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(child.pid, signal.SIGKILL)
+        child.communicate()
         return {"crash": "child timed out"}
+    proc = subprocess.CompletedProcess(child.args, child.returncode, out, err)
     for line in reversed(proc.stdout.splitlines()):
         if line.startswith(_JSON_MARK):
             data = json.loads(line[len(_JSON_MARK):])
@@ -361,7 +381,8 @@ def _no_core_dumps():
     thread pool starts, and inherited by every child: a ``preexec_fn``
     under a threaded parent can deadlock."""
     import resource  # noqa: PLC0415
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    _soft, hard = resource.getrlimit(resource.RLIMIT_CORE)
+    resource.setrlimit(resource.RLIMIT_CORE, (0, hard))   # soft limit only
 
 
 def _engine_problem(data: dict, frontend: str, root: Path) -> "str | None":
@@ -786,7 +807,7 @@ def run(root: Path, *, docs: bool = True, jobs: int = 4,
         pinned: "dict | None" = None) -> Run:
     """Observe every source under both front ends.
 
-    With *pinned* (a loaded fixture, under ``--check``), a side that timed
+    With *pinned* (a loaded fixture, under ``--check`` or ``--update``), a side that timed
     out where the fixture pins a value is run ONCE more, alone, before
     anything is compared: one retry absorbs load from ``-j``; a second
     timeout stands and goes red in :func:`check`."""
@@ -901,8 +922,8 @@ def normalize(side: dict, root: Path, work: Path) -> dict:
 
 def pinned_view(side: dict) -> dict:
     """The part of one side's observation the fixture pins: load and its
-    error, collect error, verdicts and answers.  Timed-out items are kept
-    as "timeout" and never compared."""
+    error, collect error, verdicts and answers.  A timed-out item is kept
+    as the value "timeout" and compared like any other (see CALL_TIMEOUT)."""
     if "crash" in side:
         return {"crash": side["crash"]}
     return {k: side.get(k) for k in
@@ -1155,8 +1176,13 @@ def main(argv: "list[str] | None" = None) -> int:
         os._exit(0)                      # no atexit work in the child
 
     fixture = load_fixture(Path(a.check)) if a.check else None
+    # --update retries a timeout against the fixture it is about to
+    # rewrite exactly as --check does, so a load-induced timeout is not
+    # pinned by accident.
+    previous = (load_fixture(Path(a.update))
+                if a.update and Path(a.update).exists() else None)
     r = run(Path(a.root), docs=not a.no_docs, jobs=a.jobs, only=a.only,
-            oracle=not a.check, pinned=fixture)
+            oracle=not a.check, pinned=fixture or previous)
     for line in summary_lines(r, fixture and fixture["known"]):
         print(line)
     if a.json:

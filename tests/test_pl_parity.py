@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -140,6 +141,76 @@ def test_a_runaway_call_is_killed_and_observed_as_timeout(tmp_path,
     n = P.run_side(P.Source(str(f), "loop.pl", "tests"), "native",
                    tmp_path / "cache", REPO_ROOT)
     assert n["preds"] == {"loop/1": "timeout", "ok/1": ["[1]"]}, n
+
+
+def _processes_mentioning(text: str) -> list[int]:
+    out = []
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as f:
+                if text.encode() in f.read():
+                    out.append(int(pid))
+        except OSError:
+            continue
+    return out
+
+
+def test_a_probe_timeout_leaves_no_orphan_call_child(tmp_path, monkeypatch):
+    """The probe is killed at CHILD_TIMEOUT while its forked call child is
+    looping; the whole process group goes, so nothing survives."""
+    import time
+    monkeypatch.setenv("CLAUSAL_PARITY_CALL_TIMEOUT", "60")
+    monkeypatch.setenv("CLAUSAL_PARITY_CHILD_TIMEOUT", "8")
+    monkeypatch.setattr(P, "CHILD_TIMEOUT", 8.0)
+    d = tmp_path / "orphan_probe_unique_dir"
+    d.mkdir()
+    f = d / "loop.pl"
+    f.write_text("loop(X) :- loop(X).\n")
+    t0 = time.monotonic()
+    n = P.run_side(P.Source(str(f), "loop.pl", "tests"), "native",
+                   tmp_path / "cache", REPO_ROOT)
+    assert n == {"crash": "child timed out"}, n
+    # Killed with its group at once, not left to the call child's alarm
+    # backstop (60 s + 5 here), which would also hold the pipes open.
+    assert time.monotonic() - t0 < 30
+    deadline = time.monotonic() + 5
+    while _processes_mentioning(str(f)) and time.monotonic() < deadline:
+        time.sleep(0.2)
+    assert _processes_mentioning(str(f)) == []
+
+
+def test_a_call_child_has_an_alarm_backstop(tmp_path):
+    """Even if nothing kills it, a forked call child ends on its own a
+    little after CALL_TIMEOUT (SIGALRM's default action)."""
+    import time
+    # Run _isolated in a process that is then SIGKILLed mid-wait, so its
+    # call child loses its killer; the backstop must end it.
+    proc = subprocess.Popen(
+        [sys.executable, "-c",
+         "import os, sys, time, signal\n"
+         "from clausal.tools import pl_parity as P\n"
+         "P.CALL_TIMEOUT = 1.0\n"
+         "import threading\n"
+         "def die(): time.sleep(0.5); os.kill(os.getpid(), signal.SIGKILL)\n"
+         "threading.Thread(target=die, daemon=True).start()\n"
+         "P._isolated(lambda: time.sleep(600) or 'orphan_backstop_marker')\n"],
+        cwd=REPO_ROOT, env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
+        start_new_session=True)
+    proc.wait(timeout=30)
+    # The forked child is the only survivor with this parent's cmdline;
+    # find it by its session (start_new_session put both in one group).
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        try:
+            os.killpg(proc.pid, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.3)
+    else:
+        os.killpg(proc.pid, signal.SIGKILL)
+        pytest.fail("the call child outlived its killer past the backstop")
 
 
 def test_depth_categories():
