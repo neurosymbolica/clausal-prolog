@@ -8,10 +8,11 @@ free-form result) was not answered separately; the build follows the
 existing text adapters (py.files ...): a bound result is compared as a
 term, so the atom spelling fails. The `++` escape is unchanged.
 
-Left open (not covered by the ruling, not built):
-- spacy `shape/2` and a token's `shape` (`Xxxxx`, `dd`, `X.X.`): a
-  derived orthographic class, neither prose nor a vocabulary label --
-  stays an atom until ruled.
+Shape, RULED 2026-10-04 (with the rest, "all rec"): spacy `shape/2` and a
+token's `shape` (`Xxxxx`, `dd`, `X.X.`) are atoms, a derived orthographic
+class rather than prose. The code already does this; it is pinned by
+packages/clausal-spacy/tests/test_spacy_free_form_outputs_stubbed.py::test_shape_is_an_atom.
+Nothing is left open.
 
 The 2026-10-04 ruling (D11, U2 b) asked for one Breaking commit per package to
 make free-form adapter OUTPUTS strings `('$chars', s)`. It came with a

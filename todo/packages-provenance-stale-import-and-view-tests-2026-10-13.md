@@ -1,0 +1,4 @@
+# Packages: provenance's stale test import, and testing list views at adapters
+
+- **clausal-provenance is disabled, and its tests no longer import.** `packages/clausal-provenance/tests/test_provenance_engine.py` imports `make_predicate`, which no longer exists, so the suite breaks as soon as the package is re-enabled. Port the test to the current predicate API before turning the package back on.
+- **A test of the list-view path has to build the view inside the program.** `solve()` converts the arguments Python passes in, so a direct Python call never hands an adapter a list view. Only `[_|Rest]` inside a program does. A test that builds the view in Python and passes it to `solve()` can't fail, so it proves nothing. See `packages/clausal-yaml/tests/test_yaml_list_views.py` for the working shape.
