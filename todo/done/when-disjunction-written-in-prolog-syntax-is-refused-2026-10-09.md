@@ -20,3 +20,14 @@ accepts only a functor-less pair).
 Fix: give the runtime dispatcher `;` and `,` cell arms (`;` →
 `_install_when_disjunction`, `,` → the nested install), and check `when/2`
 called through `call/N`.
+
+## Resolved
+
+`clausal/logic/coroutining.py`: the runtime dispatcher now reads `;` and `,`
+cells (and the seam `Or`/`And` nodes) nested to any depth, adds `?=/2`, and
+checks the whole condition first -- `instantiation_error` for a variable,
+`domain_error(when_condition, C)` for anything else (Scryer's forms).  A `;`
+fires once.  `when/2` through `call/N` goes the same dispatcher.  Tests:
+`tests/test_when_prolog_syntax_conditions.py` (translator and native `.pl`,
+plus the seam surface).  The translator front end cannot spell a `?=` functor
+(not a Python identifier), so `?=` is tested under native only.
