@@ -628,7 +628,8 @@ def test_F037_spaced_minus_is_compound():
         assert t.args[0].value == 1
     ops = OperatorTable.iso_default()
     for text, emitted in (("-(1)", "- (1)"), ("-(1^2)", "- (1 ^ 2)"),
-                          ("-(-1)", "- -1"), ("-(a)", "- a")):
+                          ("-(-1)", "- -1"), ("-(a)", "- a"),
+                          ("-(0)", "- (0)"), ("-(0.0)", "- (0.0)")):
         t = parse_term(text)
         assert emit_term(t, ops) == emitted
         assert parse_term(emitted) == t, text
