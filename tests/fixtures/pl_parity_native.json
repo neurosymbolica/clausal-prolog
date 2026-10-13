@@ -275,7 +275,7 @@
   },
   "docs/importing_prolog.md#L159": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L144.pl: doc_importing_prolog_L144.pl:1: syntax error (SyntaxIssue): unterminated item (missing end token) (doc_importing_prolog_L144.pl, line 1)",
+   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L159.pl: doc_importing_prolog_L159.pl:1: syntax error (SyntaxIssue): unterminated item (missing end token) (doc_importing_prolog_L159.pl, line 1)",
    "load": "refused",
    "preds": null,
    "tests": null
@@ -297,7 +297,7 @@
   },
   "docs/importing_prolog.md#L193": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L178.pl: doc_importing_prolog_L178.pl:3: directive: use_module(kit, [...]): no module kit on sys.path (a slash path a/b names the dotted module a.b) (doc_importing_prolog_L178.pl, line 3)",
+   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L193.pl: doc_importing_prolog_L193.pl:3: directive: use_module(kit, [...]): no module kit on sys.path (a slash path a/b names the dotted module a.b) (doc_importing_prolog_L193.pl, line 3)",
    "load": "refused",
    "preds": null,
    "tests": null
@@ -318,7 +318,7 @@
   },
   "docs/importing_prolog.md#L336": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L321.pl: doc_importing_prolog_L321.pl:5: directive: use_module(helpers, [...]): no module helpers on sys.path (a slash path a/b names the dotted module a.b) (doc_importing_prolog_L321.pl, line 5)",
+   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L336.pl: doc_importing_prolog_L336.pl:5: directive: use_module(helpers, [...]): no module helpers on sys.path (a slash path a/b names the dotted module a.b) (doc_importing_prolog_L336.pl, line 5)",
    "load": "refused",
    "preds": null,
    "tests": null
@@ -378,7 +378,7 @@
   },
   "docs/importing_prolog.md#L697": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L682.pl: doc_importing_prolog_L682.pl:1: directive: use_module(small_sizes): no module small_sizes on sys.path (a slash path a/b names the dotted module a.b) (doc_importing_prolog_L682.pl, line 1)",
+   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L697.pl: doc_importing_prolog_L697.pl:1: directive: use_module(small_sizes): no module small_sizes on sys.path (a slash path a/b names the dotted module a.b) (doc_importing_prolog_L697.pl, line 1)",
    "load": "refused",
    "preds": null,
    "tests": null
@@ -2938,7 +2938,7 @@
   "docs/for_prolog_programmers.md#L314": "d0aaa6c6f92eac22",
   "docs/for_prolog_programmers.md#L54": "a17138887a920d25",
   "docs/for_prolog_programmers.md#L86": "d1598395083db33f",
-  "docs/importing_prolog.md#L159": "13b23b5d7848aeb7",
+  "docs/importing_prolog.md#L159": "a61f8adc945955a8",
   "docs/importing_prolog.md#L184": "80cbfe211879457f",
   "docs/importing_prolog.md#L193": "8ab7c57d8935077d",
   "docs/importing_prolog.md#L218": "37c2900e05f83841",
@@ -2949,7 +2949,7 @@
   "docs/importing_prolog.md#L485": "57b9d1766ac5ee1c",
   "docs/importing_prolog.md#L697": "808de0f6e0dc161f",
   "docs/importing_prolog.md#L734": "44bbc956b49e7cc7",
-  "docs/importing_prolog.md#L781": "9c7518d0b9e7b09d",
+  "docs/importing_prolog.md#L781": "95f7d893eed32064",
   "docs/importing_prolog.md#L875": "c9dd3a3c1fc2df50",
   "docs/index.md#L94": "72604ff11fb53c41",
   "docs/prolog_translation.md#L33": "8848f32154e44b13",
