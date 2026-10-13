@@ -23,11 +23,12 @@ called through `call/N`.
 
 ## Resolved
 
-`clausal/logic/coroutining.py`: the runtime dispatcher now reads `;` and `,`
-cells (and the seam `Or`/`And` nodes) nested to any depth, adds `?=/2`, and
-checks the whole condition first -- `instantiation_error` for a variable,
-`domain_error(when_condition, C)` for anything else (Scryer's forms).  A `;`
-fires once.  `when/2` through `call/N` goes the same dispatcher.  Tests:
-`tests/test_when_prolog_syntax_conditions.py` (translator and native `.pl`,
-plus the seam surface).  The translator front end cannot spell a `?=` functor
-(not a Python identifier), so `?=` is tested under native only.
+`clausal/logic/coroutining.py`: the runtime dispatcher parses a condition once
+into a tree and reads `;` and `,` cells (and the seam `Or`/`And` nodes), nested
+to any depth.  The whole condition is checked before anything is installed:
+`instantiation_error` (context `when_condition/1`) for a variable, and
+`domain_error(when_condition, Condition)` naming the WHOLE condition for
+anything else, as Scryer does.  `?=/2` is not a condition (Scryer refuses it
+the same way).  A `;` fires once; `when/2` through `call/N` uses the same
+dispatcher.  Tests: `tests/test_when_prolog_syntax_conditions.py` (translator
+and native `.pl`, plus the seam surface).

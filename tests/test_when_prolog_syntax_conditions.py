@@ -17,7 +17,7 @@ from clausal.logic.variables import Var
 _N = itertools.count()
 
 PL = """\
-:- module({name}, [d1/1, d2/1, c1/1, hook/1, hook2/1, nest/1, nest2/1, once_only/1, ground_or/1,
+:- module({name}, [d1/1, d2/1, c1/1, hook/1, hook2/1, nest/1, nest2/1, side_once/1, side_once2/1, bad_whole/1, ground_or/1,
                    bad_dom/1, bad_var/1, bad_inner/1,
                    viacall/1, inhook/1, backtrack/1, fired_twice/1]).
 
@@ -29,9 +29,13 @@ hook2(R) :- freeze(X, when((nonvar(Y) ; nonvar(Z)), R = fired)), X = go, Z = 2, 
 nest(R) :- when(((nonvar(A), nonvar(B)) ; ground(C)), R = fired), A = 1, C = 2.
 nest2(R) :- when(((nonvar(A) ; nonvar(B)), (ground(C) ; ground(D))), R = fired),
             A = 1, D = 2.
-once_only(L) :- when((nonvar(A) ; nonvar(B)), put_in(L, x)), A = 1, B = 2.
-put_in(L, X) :- nb_ins(L, X).
-nb_ins(L, X) :- L = [X|_].
+:- dynamic(mark/1).
+count_marks(N) :- findall(m, mark(_), L), length(L, N).
+side_once(N) :- retractall(mark(_)),
+    when((nonvar(A) ; nonvar(B)), assertz(mark(x))), A = 1, B = 2, count_marks(N).
+side_once2(N) :- retractall(mark(_)),
+    when((nonvar(A) ; nonvar(B)), assertz(mark(x))), A = B, A = 1, count_marks(N).
+bad_whole(E) :- catch(when((nonvar(_) ; foo), true), error(E, _), true).
 ground_or(R) :- when((ground(f(A)) ; nonvar(B)), R = fired), A = 1.
 bad_dom(E) :- catch(when(foo(_), true), error(E, _), true).
 bad_var(E) :- catch(when(_, true), error(E, _), true).
@@ -75,6 +79,18 @@ def test_fires_once(plmod):
     assert _all(plmod, "fired_twice") == [1]
 
 
+def test_fires_once_observably(plmod):
+    # the goal asserts a fact: a second firing would make the count 2
+    assert _all(plmod, "side_once") == [1]
+    assert _all(plmod, "side_once2") == [1]
+
+
+def test_whole_condition_named_in_domain_error(plmod):
+    (e,) = _all(plmod, "bad_whole")
+    assert e[0] == "domain_error" and e[1] == "when_condition"
+    assert e[2][0] == ";" and e[2][2] == "foo"
+
+
 def test_errors(plmod):
     (dom,) = _all(plmod, "bad_dom")
     assert dom[0] == "domain_error" and dom[1] == "when_condition"
@@ -100,35 +116,22 @@ def test_inside_a_wake_up_hook(plmod):
     assert _all(plmod, "hook2") == ["fired"]
 
 
-# ── ?=/2 and the seam surface ───────────────────────────────────────────────
+# ── the seam surface ────────────────────────────────────────────────────────
 
 from clausal.logic.exceptions import LogicException  # noqa: E402
 from clausal.terms import And, Or, Call, LoadName, Unify  # noqa: E402
 
-Q = """\
-:- module({name}, [unif/1, unif2/1, unif3/1, unif4/1, unif_or/1, unif_once/1]).
-unif(R) :- when('?='(X, Y), R = fired), X = 1, Y = 2.
-unif2(R) :- when('?='(X, Y), R = fired), X = Y.
-unif3(R) :- when('?='(f(X, a), f(Y, b)), R = fired).
-unif4(R) :- when('?='(X, Y), R = fired), X = 1, R \\== fired, Y = 1.
-unif_or(R) :- when(('?='(X, Y) ; nonvar(Z)), R = fired), Z = 1, X = 1, Y = 2.
-unif_once(N) :- findall(x, (when(('?='(X, Y) ; nonvar(X)), true), X = 1, Y = 2), L),
-                length(L, N).
-"""
 
-
-def test_query_unify_native(tmp_path, monkeypatch):
+def test_query_equality_is_not_a_condition_native(tmp_path, monkeypatch):
+    """?=/2 is not a when/2 condition (Scryer: domain_error naming it)."""
     monkeypatch.setenv("CLAUSAL_PL_FRONTEND", "native")
     name = f"when_q_{next(_N)}"
     p = tmp_path / f"{name}.pl"
-    p.write_text(Q.format(name=name))
-    mod = _load_module(name, str(p))
-    assert _all(mod, "unif") == ["fired"]
-    assert _all(mod, "unif2") == ["fired"]
-    assert _all(mod, "unif3") == ["fired"]   # decided already: never unifiable
-    assert _all(mod, "unif4") == ["fired"]
-    assert _all(mod, "unif_or") == ["fired"]
-    assert _all(mod, "unif_once") == [1]
+    p.write_text(f":- module({name}, [q/1]).\n"
+                 "q(E) :- catch(when('?='(_, _), true), error(E, _), true).\n")
+    (e,) = _all(_load_module(name, str(p)), "q")
+    assert e[0] == "domain_error" and e[1] == "when_condition"
+    assert e[2][0] == "?="
 
 
 def _when(cond, goal):

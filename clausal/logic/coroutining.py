@@ -23,6 +23,11 @@ from __future__ import annotations
 from clausal.logic.variables import (
     register_attr_hook, get_attr, put_attr, deref, is_var, Var, unify,
 )
+from clausal.logic.cells import compound_cell_shape, cell_args
+from clausal.logic.exceptions import (
+    LogicException, domain_error, instantiation_error)
+from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.pythonic_ast import nodes as _nodes
 import clausal.logic.pending  # noqa: F401  -- registers the drain a bare unify runs
 
 FREEZE_KEY = "freeze"
@@ -122,12 +127,11 @@ def _install_when_ground(term, goal_thunk, trail):
 def _install_when_disjunction(cond_left, cond_right, goal_thunk, trail):
     """Install a when((C1 ; C2), Goal) disjunction at runtime (the entry the
     compiler's ``Or`` lowering calls); the condition is checked whole first."""
-    _check_when_condition((";", cond_left, cond_right))
-    return _install_when_disjunction_checked(
-        deref(cond_left), deref(cond_right), goal_thunk, trail)
+    tree = _parse_when_condition((";", cond_left, cond_right))
+    return _install_when_disjunction_tree(tree[1], tree[2], goal_thunk, trail)
 
 
-def _install_when_disjunction_checked(cond_left, cond_right, goal_thunk, trail):
+def _install_when_disjunction_tree(cond_left, cond_right, goal_thunk, trail):
     """Install a when((C1 ; C2), Goal) disjunction at runtime.
 
     Attaches to vars in both conditions. Whichever fires first runs Goal.
@@ -147,154 +151,101 @@ def _install_when_disjunction_checked(cond_left, cond_right, goal_thunk, trail):
         else:
             yield None  # already fired in this surviving world — succeed silently
 
-    return (_install_checked(deref(cond_left), _guarded_thunk, trail)
-            and _install_checked(deref(cond_right), _guarded_thunk, trail))
+    return (_install_tree(cond_left, _guarded_thunk, trail)
+            and _install_tree(cond_right, _guarded_thunk, trail))
 
 
-def _condition_parts(cond):
-    """``(kind, args)`` for a dereferenced when/2 condition, else ``(None, ())``.
+def _parse_when_condition(condition):
+    """Parse a when/2 condition once into a tree, or raise Scryer's error.
 
-    *kind* is one of ``nonvar``, ``ground``, ``?=``, ``,`` and ``;``.  A
-    condition is the functor-first CELL ``('nonvar', X)`` (and ``(';', A, B)``
-    for a disjunction written in Prolog syntax); the seam ``Or``/``And`` nodes
-    and a functor-less pair ``(C1, C2)`` are read as ``;`` and ``,``.  A CELL
-    is a tuple, so the functor-less pair must be tried LAST: ``('nonvar', X)``
-    has length 2 and would otherwise be taken for a conjunction.
-    """
-    from clausal.logic.predicate import is_term_instance, term_field_names
-    from clausal.logic.cells import compound_cell_shape, cell_args  # noqa: PLC0415
-    from clausal.pythonic_ast import nodes as _nodes  # noqa: PLC0415
-
-    is_cell, functor = compound_cell_shape(cond)
-    if is_cell:
-        args = tuple(cell_args(cond))
-    elif type(cond) in (_nodes.Or, _nodes.And):
-        functor = ";" if type(cond) is _nodes.Or else ","
-        args = (cond.left, cond.right)
-    elif is_term_instance(cond):
-        functor = type(cond).__name__
-        args = tuple(getattr(cond, f) for f in term_field_names(cond))
-    elif isinstance(cond, (tuple, list)) and len(cond) == 2:
-        return ",", tuple(cond)
-    else:
-        return None, ()
-    arity = len(args)
-    if (functor, arity) in (("nonvar", 1), ("ground", 1), ("?=", 2),
-                            (",", 2), (";", 2)):
-        return functor, args
-    return None, ()
-
-
-def _check_when_condition(condition):
-    """Raise Scryer's error unless *condition* is a valid when/2 condition.
+    The tree is ``("nonvar", X)``, ``("ground", X)``, ``(",", L, R)`` or
+    ``(";", L, R)``.  A condition is the functor-first CELL ``('nonvar', X)``
+    (``(';', A, B)`` for a disjunction written in Prolog syntax); the seam
+    ``Or``/``And`` nodes and a functor-less pair ``(C1, C2)`` read as ``;``
+    and ``,``.  A CELL is a tuple, so the functor-less pair is tried LAST:
+    ``('nonvar', X)`` has length 2 and would otherwise pass for a conjunction.
 
     An unbound condition (or sub-condition) is ``instantiation_error``; any
-    other term that is not ``nonvar/1``, ``ground/1``, ``?=/2`` or a ``,``/``;``
-    of conditions is ``domain_error(when_condition, Condition)``, naming the
-    whole condition.  The check covers the whole tree before anything is
-    installed, so a bad branch leaves no half-installed condition behind.
+    other term that is not ``nonvar/1``, ``ground/1`` or a ``,``/``;`` of
+    conditions is ``domain_error(when_condition, Condition)`` naming the WHOLE
+    condition, as Scryer does.  The whole tree is parsed before anything is
+    installed, so a bad branch leaves nothing half-installed.
     """
-    from clausal.logic.exceptions import (  # noqa: PLC0415
-        LogicException, domain_error, instantiation_error)
+    def bad():
+        raise LogicException(
+            domain_error("when_condition", deref(condition), "when/2"))
 
     def walk(c):
         c = deref(c)
         if is_var(c):
-            raise LogicException(instantiation_error("when/2"))
-        kind, args = _condition_parts(c)
-        if kind is None:
-            raise LogicException(domain_error("when_condition", c, "when/2"))
-        if kind in (",", ";"):
-            for a in args:
-                walk(a)
+            raise LogicException(instantiation_error("when_condition/1"))
+        if type(c) is tuple:
+            is_cell, functor = compound_cell_shape(c)
+            if is_cell:
+                args = cell_args(c)
+                n = len(args)
+                if n == 1 and (functor == "nonvar" or functor == "ground"):
+                    return (functor, args[0])
+                if n == 2 and (functor == "," or functor == ";"):
+                    return (functor, walk(args[0]), walk(args[1]))
+                bad()
+        t = type(c)
+        if t is _nodes.Or:
+            return (";", walk(c.left), walk(c.right))
+        if t is _nodes.And:
+            return (",", walk(c.left), walk(c.right))
+        if t is not tuple and is_term_instance(c):
+            name = t.__name__
+            args = tuple(getattr(c, f) for f in term_field_names(c))
+            if len(args) == 1 and name in ("nonvar", "ground"):
+                return (name, args[0])
+            bad()
+        if isinstance(c, (tuple, list)) and len(c) == 2:
+            return (",", walk(c[0]), walk(c[1]))
+        bad()
 
-    walk(condition)
-
-
-def _install_when_unifiable(left, right, goal_thunk, trail):
-    """Install ``?=(Left, Right)``: fire once the two terms are decided.
-
-    ``?=`` holds when the terms are identical or cannot unify.  Until then it
-    waits on every variable of both terms and looks again when one is bound.
-    """
-    from clausal.logic.constraints import structural_eq  # noqa: PLC0415
-    from clausal.logic.pending import run_first  # noqa: PLC0415
-
-    def decided():
-        if structural_eq(left, right):
-            return True
-        mark = trail.mark()
-        ok = unify(left, right, trail) and run_first(trail)
-        trail.undo(mark)
-        return not ok
-
-    if decided():
-        return _run_now(goal_thunk, trail)
-
-    # A single guard shared by every variable's wake-up, so the goal fires
-    # once even when several of the terms' variables are bound in one step.
-    fired = Var()
-
-    def _recheck():
-        if not is_var(deref(fired)):
-            yield None
-        elif decided():
-            unify(fired, True, trail)
-            yield from goal_thunk()
-        else:
-            for v in _collect_free_vars((deref(left), deref(right))):
-                _freeze_var(v, _recheck, trail)
-            yield None
-
-    for v in _collect_free_vars((deref(left), deref(right))):
-        _freeze_var(v, _recheck, trail)
-    return True
+    return walk(condition)
 
 
 def _install_when_condition(condition, goal_thunk, trail):
     """Dispatch a when condition at runtime.
 
-    Handles nonvar(X), ground(X), ?=(X, Y), conjunction and disjunction, the
-    last two nested to any depth.  The condition is checked whole first
-    (:func:`_check_when_condition`).
-
-    Parameters
-    ----------
-    condition : the condition to check (a term or AST-like structure)
-    goal_thunk : zero-arg generator factory to fire when condition is met
-    trail : the current Trail
+    Handles nonvar(X), ground(X), conjunction and disjunction, the last two
+    nested to any depth.  The condition is parsed whole first
+    (:func:`_parse_when_condition`).
     """
-    _check_when_condition(condition)
-    return _install_checked(deref(condition), goal_thunk, trail)
+    c = deref(condition)
+    # Fast path: the common ``nonvar(X)`` cell, exactly as before the
+    # dispatcher learned ``,`` and ``;``.
+    if type(c) is tuple and len(c) == 2 and c[0] == "nonvar":
+        x = deref(c[1])
+        if is_var(x):
+            _freeze_var(x, goal_thunk, trail)
+            return True
+        return _run_now(goal_thunk, trail)
+    return _install_tree(_parse_when_condition(c), goal_thunk, trail)
 
 
-def _install_checked(cond, goal_thunk, trail):
-    kind, args = _condition_parts(cond)
+def _install_tree(tree, goal_thunk, trail):
+    kind = tree[0]
 
     if kind == "nonvar":
-        x = deref(args[0])
+        x = deref(tree[1])
         if is_var(x):
             _freeze_var(x, goal_thunk, trail)
             return True
         return _run_now(goal_thunk, trail)
 
     if kind == "ground":
-        return _install_when_ground(args[0], goal_thunk, trail)
-
-    if kind == "?=":
-        return _install_when_unifiable(args[0], args[1], goal_thunk, trail)
+        return _install_when_ground(tree[1], goal_thunk, trail)
 
     if kind == ",":
-        c1, c2 = args
+        right = tree[2]
 
         # when(C1, when(C2, Goal))
         def _inner_thunk():
-            if _install_checked(deref(c2), goal_thunk, trail):
+            if _install_tree(right, goal_thunk, trail):
                 yield None
-        return _install_checked(deref(c1), _inner_thunk, trail)
+        return _install_tree(tree[1], _inner_thunk, trail)
 
-    if kind == ";":
-        return _install_when_disjunction_checked(
-            deref(args[0]), deref(args[1]), goal_thunk, trail)
-
-    raise ValueError(f"Unsupported when condition: {cond!r}")
+    return _install_when_disjunction_tree(tree[1], tree[2], goal_thunk, trail)
