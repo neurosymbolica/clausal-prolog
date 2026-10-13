@@ -96,7 +96,7 @@ def test_native_observation_of_every_file_is_pinned():
     r.diffs = P.compare("f.pl", t, n)
     known = {d.key: {"class": "a"} for d in r.diffs}
     pinned = {"f.pl": P.pinned_view(n)}
-    tsha = {"f.pl": P.sha(P._masked(P.pinned_view(t)))}
+    tsha = {"f.pl": P.sha(P.pinned_view(t))}
     assert P.check(r, _fixture(known, pinned, tsha)) == []
     n2 = _side(preds={"p/1": ["[a]"]})
     r.sides = {"f.pl": (t, n2)}
@@ -104,15 +104,42 @@ def test_native_observation_of_every_file_is_pinned():
     assert any(p.startswith("NATIVE CHANGED f.pl: preds p/1") for p in problems)
 
 
-def test_a_timeout_is_an_observation_not_a_difference():
+def test_a_timeout_is_not_a_translator_vs_native_difference():
     t = _side(preds={"p/1": "timeout", "q/0": ["true"]})
     n = _side(preds={"p/1": ["[a]"], "q/0": ["true"]})
     assert P.compare("f.pl", t, n) == []
-    r = P.Run(read=1, compared=1, sides={"f.pl": (t, n)})
-    pinned = {"f.pl": P.pinned_view(_side(preds={"p/1": "timeout",
-                                                 "q/0": ["true"]}))}
-    tsha = {"f.pl": P.sha(P._masked(P.pinned_view(t)))}
-    assert P.check(r, _fixture({}, pinned, tsha)) == []
+
+
+def test_a_timeout_where_a_value_is_pinned_goes_red():
+    """A native regression that turns into a hang must not hide behind the
+    timeout: against a pinned value it is a change (after run()'s retry)."""
+    pinned = {"load": "ok", "preds": {"p/1": ["[a]"]}}
+    now = {"load": "ok", "preds": {"p/1": "timeout"}}
+    assert P._diff_items(pinned, now)
+    assert P._needs_retry(now, pinned)
+
+
+def test_a_pinned_timeout_that_now_terminates_goes_red():
+    pinned = {"load": "ok", "preds": {"p/1": "timeout"}}
+    now = {"load": "ok", "preds": {"p/1": ["[a]"]}}
+    assert P._diff_items(pinned, now)
+    assert not P._needs_retry(now, pinned)
+
+
+def test_only_a_pinned_timeout_that_still_times_out_passes():
+    pinned = {"load": "ok", "preds": {"p/1": "timeout"}}
+    assert P._diff_items(pinned, dict(pinned)) == []
+    assert not P._needs_retry(pinned, pinned)
+
+
+def test_a_runaway_call_is_killed_and_observed_as_timeout(tmp_path,
+                                                         monkeypatch):
+    monkeypatch.setenv("CLAUSAL_PARITY_CALL_TIMEOUT", "2")
+    f = tmp_path / "loop.pl"
+    f.write_text("loop(X) :- loop(X).\nok(1).\n")
+    n = P.run_side(P.Source(str(f), "loop.pl", "tests"), "native",
+                   tmp_path / "cache", REPO_ROOT)
+    assert n["preds"] == {"loop/1": "timeout", "ok/1": ["[1]"]}, n
 
 
 def test_depth_categories():
@@ -194,11 +221,16 @@ def test_fixture_classes_are_valid():
 # About 2 minutes (about 200 children at -j 6, each test or call forked).
 # Move this behind CLAUSAL_SLOW_TESTS when that convention lands (planned
 # with the CLP(Q) port); main has no slow-test convention yet.
+REPORT = (REPO_ROOT / "implementation_plans"
+          / "native-iso-reader-step2-2026-09-29" / "parity-2026-10-12.md")
+
+
 @pytest.mark.timeout(1500)
-def test_repository_parity_matches_the_pinned_differences():
+def test_repository_parity_matches_the_pinned_differences(tmp_path):
+    summary = tmp_path / "summary.md"
     proc = subprocess.run(
         [sys.executable, "-m", "clausal.tools.pl_parity", "-j", "6",
-         "--check", str(FIXTURE)],
+         "--check", str(FIXTURE), "--summary-md", str(summary)],
         capture_output=True, text=True, cwd=REPO_ROOT, timeout=1500,
         env={**os.environ, "PYTHONPATH": str(REPO_ROOT)})
     out = proc.stdout + proc.stderr
@@ -211,3 +243,11 @@ def test_repository_parity_matches_the_pinned_differences():
     deep = int(out.split("pl_parity: depth: deep ", 1)[1].split(",")[0])
     assert deep > 0, out
     assert proc.returncode == 0, out
+    # The report's numbers are the tool's: its generated block equals this
+    # run's, byte for byte.
+    text = REPORT.read_text(encoding="utf-8")
+    begin = text.index(P.SUMMARY_BEGIN)
+    end = text.index(P.SUMMARY_END) + len(P.SUMMARY_END) + 1
+    assert text[begin:end] == summary.read_text(encoding="utf-8"), (
+        "parity-2026-10-12.md's generated block is stale; paste the "
+        "--summary-md output")

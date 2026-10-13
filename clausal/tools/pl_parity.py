@@ -9,8 +9,10 @@ and the two are compared.
 Each file is loaded twice, each time in its own subprocess, with
 ``CLAUSAL_PL_FRONTEND`` set and a private, empty ``PYTHONPYCACHEPREFIX``
 per front end (the bytecode cache key is salted by front end already; a
-separate cache makes a stale hit impossible rather than unlikely).  The
-child asserts which loader ran.  Compared, per file:
+separate cache makes a stale hit impossible rather than unlikely).  Every
+row, a refusal included, proves its front end, its engine (under
+``--root``) and its loader (:func:`_engine_problem`).  Each test and call
+runs in a forked child killed after ``CALL_TIMEOUT``.  Compared, per file:
 
 * load success or refusal (each side's error is kept for the report);
 * the ``test/1``/``test/2`` verdicts, by test name;
@@ -20,12 +22,16 @@ child asserts which loader ran.  Compared, per file:
   rendered with ``term_writeq`` (local variable names), so the two sides
   compare as Prolog text.
 
-The harness fails closed: it prints how many files it read and how many it
-compared, and an N of 0 is an error.  A known-difference fixture
-(``tests/fixtures/pl_parity_known.json``) lists each accepted difference
-with its class; ``--check`` exits non-zero on any difference the fixture
-does not list, and on any listed one that has gone (so the fixture is
-pruned as the gaps close).
+The harness fails closed: it prints how many files it read, how many it
+compared and how deep (:data:`CATEGORIES`), and an N of 0 is an error.
+``tests/fixtures/pl_parity_known.json`` lists each accepted difference with
+its class and a hash of both values; ``pl_parity_native.json`` beside it
+pins native's whole observation of every file and a hash of the
+translator's.  ``--check`` exits non-zero on any disagreement
+(:func:`check`): a new or vanished difference, a changed value in a pinned
+row, any change in native's observation of any file -- a timeout included,
+after one retry -- or in the translator's hash.  ``--update`` rewrites both
+fixtures; ``--summary-md`` writes the report's generated number block.
 
 Classes (the report's vocabulary):
 
@@ -37,7 +43,8 @@ Classes (the report's vocabulary):
 Usage::
 
     python -m clausal.tools.pl_parity [--root DIR] [--no-docs]
-        [--json OUT.json] [--report OUT.md] [--check FIXTURE.json] [-j N]
+        [--json OUT.json] [--summary-md OUT.md]
+        [--check FIXTURE.json | --update FIXTURE.json] [-j N]
     python -m clausal.tools.pl_parity --probe FILE   # one side, in a child
 """
 
@@ -71,7 +78,7 @@ MAX_ANSWERS = 200
 #: timeout is its own observation ("timeout"), never a pinned difference:
 #: under ``-j`` load a slow native call (``which_fib_is_55``: 3.7 s alone)
 #: must not read as a divergence.
-CALL_TIMEOUT = 30.0
+CALL_TIMEOUT = float(os.environ.get("CLAUSAL_PARITY_CALL_TIMEOUT", "30"))
 CHILD_TIMEOUT = 300.0
 
 _JSON_MARK = "PL-PARITY-JSON:"
@@ -255,8 +262,6 @@ def _isolated(fn):
     if pid == 0:                                       # the child
         os.close(r)
         try:
-            import resource  # noqa: PLC0415
-            resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
             sink = io.StringIO()
             with contextlib.redirect_stdout(sink), \
                     contextlib.redirect_stderr(sink):
@@ -338,8 +343,7 @@ def run_side(src: Source, frontend: str, cache_root: Path,
             [sys.executable, "-m", "clausal.tools.pl_parity", "--probe",
              src.path],
             capture_output=True, text=True, env=env, cwd=str(cache_root),
-            timeout=CHILD_TIMEOUT, stdin=subprocess.DEVNULL,
-            preexec_fn=_no_core_dumps)
+            timeout=CHILD_TIMEOUT, stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired:
         return {"crash": "child timed out"}
     for line in reversed(proc.stdout.splitlines()):
@@ -352,8 +356,10 @@ def run_side(src: Source, frontend: str, cache_root: Path,
 
 
 def _no_core_dumps():
-    """A crashing child must not write a multi-gigabyte core into the
-    tree (measured: 2.4 GB, 2026-10-12)."""
+    """A crashing child must not write a multi-gigabyte core into the tree
+    (measured: 2.4 GB, 2026-10-12).  Set once in the parent, before the
+    thread pool starts, and inherited by every child: a ``preexec_fn``
+    under a threaded parent can deadlock."""
     import resource  # noqa: PLC0415
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
@@ -724,6 +730,7 @@ class Run:
     diffs: list = field(default_factory=list)
     categories: dict = field(default_factory=dict)   # rel -> category
     timeouts: list = field(default_factory=list)     # "rel::side::item"
+    retried: list = field(default_factory=list)      # "rel::side"
     root: str = ""
     work: str = ""
 
@@ -775,7 +782,15 @@ def category(t: dict, n: dict) -> str:
 
 
 def run(root: Path, *, docs: bool = True, jobs: int = 4,
-        only: "list[str] | None" = None, oracle: bool = True) -> Run:
+        only: "list[str] | None" = None, oracle: bool = True,
+        pinned: "dict | None" = None) -> Run:
+    """Observe every source under both front ends.
+
+    With *pinned* (a loaded fixture, under ``--check``), a side that timed
+    out where the fixture pins a value is run ONCE more, alone, before
+    anything is compared: one retry absorbs load from ``-j``; a second
+    timeout stands and goes red in :func:`check`."""
+    _no_core_dumps()            # once, here: every child inherits it
     r = Run(root=str(root))
     work = Path(tempfile.mkdtemp(prefix="pl_parity_"))
     r.work = str(work)
@@ -791,24 +806,36 @@ def run(root: Path, *, docs: bool = True, jobs: int = 4,
         r.read = len(sources)
         cache = work / "pycache"
 
+        def side(src, frontend):
+            return normalize(run_side(src, frontend, cache, root), root, work)
+
         def both(src):
-            return src, run_side(src, "translator", cache, root), \
-                run_side(src, "native", cache, root)
+            return src, side(src, "translator"), side(src, "native")
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
             for src, t, n in ex.map(both, sources):
-                t = normalize(t, root, work)
-                n = normalize(n, root, work)
                 r.sides[src.rel] = (t, n)
-                r.categories[src.rel] = category(t, n)
-                if "crash" not in t and "crash" not in n:
-                    r.compared += 1
-                r.diffs.extend(compare(src.rel, t, n))
-                for label, side in (("translator", t), ("native", n)):
-                    for group in ("tests", "preds"):
-                        for k, v in (side.get(group) or {}).items():
-                            if _is_timeout(v):
-                                r.timeouts.append(f"{src.rel}::{label}::{k}")
+        if pinned is not None:
+            for src in sources:
+                t, n = r.sides[src.rel]
+                if _needs_retry(n, pinned["native"].get(src.rel)):
+                    n = side(src, "native")
+                    r.retried.append(f"{src.rel}::native")
+                tsha = pinned["translator_sha"].get(src.rel)
+                if (_timed_out_items(t) and tsha
+                        and sha(pinned_view(t)) != tsha):
+                    t = side(src, "translator")
+                    r.retried.append(f"{src.rel}::translator")
+                r.sides[src.rel] = (t, n)
+        for src in sources:
+            t, n = r.sides[src.rel]
+            r.categories[src.rel] = category(t, n)
+            if "crash" not in t and "crash" not in n:
+                r.compared += 1
+            r.diffs.extend(compare(src.rel, t, n))
+            for label, s_ in (("translator", t), ("native", n)):
+                r.timeouts += [f"{src.rel}::{label}::{k}"
+                               for k in _timed_out_items(s_)]
         if oracle:
             # Oracle evidence while the doc snippets still exist.  Not run
             # under --check: it never decides pass/fail.
@@ -818,6 +845,23 @@ def run(root: Path, *, docs: bool = True, jobs: int = 4,
     finally:
         shutil.rmtree(work, ignore_errors=True)
     return r
+
+
+def _timed_out_items(side: dict) -> list[str]:
+    return [k for group in ("tests", "preds")
+            for k, v in (side.get(group) or {}).items() if _is_timeout(v)]
+
+
+def _needs_retry(now: dict, pinned: "dict | None") -> bool:
+    """True when *now* timed out on an item the fixture pins a value for."""
+    if pinned is None:
+        return False
+    for group in ("tests", "preds"):
+        was = pinned.get(group) or {}
+        for k, v in (now.get(group) or {}).items():
+            if _is_timeout(v) and k in was and not _is_timeout(was[k]):
+                return True
+    return False
 
 
 # ── pinning ──────────────────────────────────────────────────────────────────
@@ -885,7 +929,8 @@ def load_fixture(path: Path) -> dict:
 
 
 def _diff_items(pinned: dict, now: dict) -> list[str]:
-    """Item-level changes between two pinned views (timeouts skipped)."""
+    """Item-level changes between two pinned views (a timeout compares as
+    the value "timeout")."""
     out = []
     for k in ("load", "error", "collect_error"):
         if pinned.get(k) != now.get(k):
@@ -897,9 +942,10 @@ def _diff_items(pinned: dict, now: dict) -> list[str]:
             out.append(f"{group}: pinned={_short(pinned.get(group))} "
                        f"now={_short(now.get(group))}")
             continue
+        # A timeout is a VALUE here: a pinned answer that now times out is
+        # red (after run()'s one retry), and so is a pinned timeout that now
+        # terminates -- the fixture is updated on purpose, never drifts.
         for item in sorted(set(a) | set(b)):
-            if _is_timeout(a.get(item)) or _is_timeout(b.get(item)):
-                continue
             if a.get(item) != b.get(item):
                 out.append(f"{group} {item}: pinned={_short(a.get(item))} "
                            f"now={_short(b.get(item))}")
@@ -947,21 +993,11 @@ def check(r: Run, fixture: dict) -> list[str]:
             continue
         for line in _diff_items(natives[rel], pinned_view(n)):
             problems.append(f"NATIVE CHANGED {rel}: {line}")
-        if tshas.get(rel) and sha(_masked(pinned_view(t))) != tshas[rel]:
+        if tshas.get(rel) and sha(pinned_view(t)) != tshas[rel]:
             problems.append(f"TRANSLATOR CHANGED {rel} (hash)")
     problems += [f"GONE file (prune the fixture): {rel}"
                  for rel in sorted(set(natives) - set(r.sides))]
     return problems
-
-
-def _masked(view: dict) -> dict:
-    """*view* with timed-out items dropped, for hashing."""
-    out = dict(view)
-    for group in ("tests", "preds"):
-        if isinstance(out.get(group), dict):
-            out[group] = {k: v for k, v in out[group].items()
-                          if not _is_timeout(v)}
-    return out
 
 
 def update_fixture(r: Run, path: Path) -> list[str]:
@@ -987,7 +1023,7 @@ def update_fixture(r: Run, path: Path) -> list[str]:
                  "the translator's (clausal.tools.pl_parity --update).",
         "native": {rel: pinned_view(n) for rel, (t, n) in
                    sorted(r.sides.items())},
-        "translator_sha": {rel: sha(_masked(pinned_view(t))) for rel, (t, n)
+        "translator_sha": {rel: sha(pinned_view(t)) for rel, (t, n)
                            in sorted(r.sides.items())},
     }, indent=1, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
     return [d.key for d in r.diffs if d.key not in old["known"]]
@@ -1017,11 +1053,16 @@ def summary_lines(r: Run, known: "dict | None" = None) -> list[str]:
                  f"{name} {c[name]}" for name, _ in CATEGORIES),
              f"pl_parity: {skipped} predicate(s) of arity > {MAX_ARITY} "
              "not called (native side)",
-             f"pl_parity: {len(r.timeouts)} timed-out item(s) "
-             f"(observations, never differences; limit {CALL_TIMEOUT:g}s)",
+             f"pl_parity: {len(r.timeouts)} timed-out item(s) (limit "
+             f"{CALL_TIMEOUT:g}s; never a translator-vs-native difference, "
+             "but pinned like any value)",
              f"pl_parity: {len(r.diffs)} differences"]
     for t in r.timeouts:
         lines.append(f"pl_parity:   timeout {t}")
+    if r.retried:
+        lines.append(f"pl_parity: {len(r.retried)} side(s) re-run once "
+                     "after a timeout where a value is pinned: "
+                     + ", ".join(r.retried))
     if known is not None:
         counts: dict[str, int] = {}
         for d in r.diffs:
@@ -1030,6 +1071,54 @@ def summary_lines(r: Run, known: "dict | None" = None) -> list[str]:
         lines.append("pl_parity: by class " + ", ".join(
             f"{k}={v}" for k, v in sorted(counts.items())))
     return lines
+
+
+SUMMARY_BEGIN = "<!-- BEGIN pl_parity summary (generated) -->"
+SUMMARY_END = "<!-- END pl_parity summary -->"
+
+
+def summary_md(r: Run, known: "dict | None") -> str:
+    """The parity report's numbers, as markdown between SUMMARY_BEGIN and
+    SUMMARY_END: written by ``--summary-md``, pasted verbatim into the
+    report, and compared with a fresh run by the gate test, so the report
+    cannot drift from the tool."""
+    by_pop: dict[str, int] = {}
+    for src in r.sources:
+        by_pop[src.population] = by_pop.get(src.population, 0) + 1
+    c = category_counts(r)
+    out = [SUMMARY_BEGIN,
+           f"**{r.read} files read, {r.compared} compared** ("
+           + ", ".join(f"{k} {v}" for k, v in sorted(by_pop.items()))
+           + ").", "", "| depth | files | meaning |", "|---|---|---|"]
+    out += [f"| {name} | {c[name]} | {what} |" for name, what in CATEGORIES]
+    loads = {(a, b): 0 for a in (True, False) for b in (True, False)}
+    for t, n in r.sides.values():
+        if "crash" in t or "crash" in n:
+            continue
+        loads[(t["load"] == "ok", n["load"] == "ok")] += 1
+    out += ["", "| translator \\ native | loads | refused |", "|---|---|---|",
+            f"| **loads** | {loads[(True, True)]} | {loads[(True, False)]} |",
+            f"| **refused** | {loads[(False, True)]} | "
+            f"{loads[(False, False)]} |", ""]
+    kinds: dict[str, int] = {}
+    for d in r.diffs:
+        kinds[d.kind] = kinds.get(d.kind, 0) + 1
+    line = f"**{len(r.diffs)} differences"
+    if known is not None:
+        classes = {k: 0 for k in "abcd"}
+        for d in r.diffs:
+            cl = known.get(d.key, {}).get("class", "?")
+            classes[cl] = classes.get(cl, 0) + 1
+        line += ": " + ", ".join(f"({k}) {v}" for k, v in classes.items())
+    out.append(line + ".** Kinds: " + ", ".join(
+        f"{k} {v}" for k, v in sorted(kinds.items())) + ".")
+    skipped = sum(n.get("skipped_arity", 0) for _, n in r.sides.values())
+    out += ["", f"Timed out at {CALL_TIMEOUT:g} s: {len(r.timeouts)} item(s)"
+            + (" (" + ", ".join(f"`{t}`" for t in r.timeouts) + ")"
+               if r.timeouts else "") + ". Predicates of arity > "
+            f"{MAX_ARITY} not called (native side): {skipped}.",
+            SUMMARY_END]
+    return "\n".join(out) + "\n"
 
 
 def main(argv: "list[str] | None" = None) -> int:
@@ -1047,6 +1136,9 @@ def main(argv: "list[str] | None" = None) -> int:
                     help="restrict to sources whose path contains this")
     ap.add_argument("-j", "--jobs", type=int, default=4)
     ap.add_argument("--json", metavar="OUT", help="write every observation")
+    ap.add_argument("--summary-md", metavar="OUT",
+                    help="write the report's generated summary block "
+                         "(classes need --check or --update's fixture)")
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--check", metavar="FIXTURE",
                       help="exit 1 on any disagreement with the fixture "
@@ -1062,9 +1154,9 @@ def main(argv: "list[str] | None" = None) -> int:
         sys.stdout.flush()
         os._exit(0)                      # no atexit work in the child
 
-    r = run(Path(a.root), docs=not a.no_docs, jobs=a.jobs, only=a.only,
-            oracle=not a.check)
     fixture = load_fixture(Path(a.check)) if a.check else None
+    r = run(Path(a.root), docs=not a.no_docs, jobs=a.jobs, only=a.only,
+            oracle=not a.check, pinned=fixture)
     for line in summary_lines(r, fixture and fixture["known"]):
         print(line)
     if a.json:
@@ -1076,6 +1168,11 @@ def main(argv: "list[str] | None" = None) -> int:
                            translator=d.translator, native=d.native,
                            auto=getattr(d, "auto", None)) for d in r.diffs],
         }, indent=1, sort_keys=True, ensure_ascii=False))
+    if a.summary_md:
+        fx = fixture or (load_fixture(Path(a.update)) if a.update
+                         and Path(a.update).exists() else None)
+        Path(a.summary_md).write_text(
+            summary_md(r, fx and fx["known"]), encoding="utf-8")
     if r.compared == 0:
         print("pl_parity: ERROR: 0 files compared -- refusing an empty run")
         return 2
