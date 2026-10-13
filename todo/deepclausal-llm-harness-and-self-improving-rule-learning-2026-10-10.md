@@ -87,6 +87,9 @@ model-written rules needs one. ISO has no standard form; check Scryer's
   the audit record. False: deny. Undefined: escalate to a human. The model
   cannot widen its own permissions. Suggested first build: U2 with U1's
   "allowed if ..." answers.
+  *Status (2026-10-13):* deferred to the stage-4 bolt-ons, not dropped. The
+  downstream design's stage-4 list carries H3, S1 and U1 from this todo; U2
+  joins them.
 - **U3. Rulebases drafted from text, one transaction at a time.** A rule is
   committed only if recorded cases still pass. Genuine ambiguity is
   `undefined`, and each one is a precise question for a human. Output exports
