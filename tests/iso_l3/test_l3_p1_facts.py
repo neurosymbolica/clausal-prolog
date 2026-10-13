@@ -66,6 +66,9 @@ def l3_env(tmp_path, monkeypatch):
         return compile(mod, path, "exec")
 
     monkeypatch.setattr(import_hook.PrologLoader, "source_to_code", l3_source_to_code)
+    # The patch is on PrologLoader, which only the translator setting
+    # selects (NativePrologLoader overrides source_to_code).
+    monkeypatch.setenv("CLAUSAL_PL_FRONTEND", "translator")
     monkeypatch.syspath_prepend(str(tmp_path))
     yield tmp_path, stats, L3
     for p in tmp_path.rglob("__pycache__"):

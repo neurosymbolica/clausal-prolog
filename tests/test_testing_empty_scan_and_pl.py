@@ -184,7 +184,7 @@ def test_cli_honours_the_no_collect_marker(capsys, tmp_path):
 
 
 def test_pl_file_runs_its_test_clauses(capsys, tmp_path, monkeypatch):
-    monkeypatch.delenv("CLAUSAL_PL_FRONTEND", raising=False)   # translator
+    monkeypatch.setenv("CLAUSAL_PL_FRONTEND", "translator")
     p = tmp_path / "arith.pl"
     p.write_text(ARITH_PL)
     rc, out, _ = _run(capsys, ["-v", str(p)])
@@ -267,7 +267,9 @@ def test_pl_files_are_discovered_under_a_directory(capsys, tmp_path):
     assert "2 passed, 0 failed [PASSED]" in out
 
 
-def test_pl_syntax_error_fails_with_the_translator_error(capsys, tmp_path):
+def test_pl_syntax_error_fails_with_the_translator_error(capsys, tmp_path,
+                                                        monkeypatch):
+    monkeypatch.setenv("CLAUSAL_PL_FRONTEND", "translator")
     p = tmp_path / "broken.pl"
     p.write_text(BROKEN_PL)
     rc, out, _ = _run(capsys, [str(p)])
@@ -281,7 +283,9 @@ def test_pl_syntax_error_in_a_dir_is_not_skipped(capsys, tmp_path):
     (tmp_path / "broken.pl").write_text(BROKEN_PL)
     rc, out, _ = _run(capsys, [str(tmp_path)])
     assert rc == EXIT_TESTS_FAILED
-    assert "broken.pl :: <load>" in out
+    # the native front end (the default) names the line; the translator
+    # keeps no source map
+    assert re.search(r"broken\.pl(:1)? :: <load>", out), out
     assert "skipped" not in out
 
 

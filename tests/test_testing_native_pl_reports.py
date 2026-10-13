@@ -231,7 +231,7 @@ def test_translator_and_seam_reports_are_unchanged(runner, name, text,
     import re
     (tmp_path / name).write_text(text)
     env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
-    env.pop("CLAUSAL_PL_FRONTEND", None)              # translator for .pl
+    env["CLAUSAL_PL_FRONTEND"] = "translator"         # the goldens' .pl path
     if runner == "cli":
         argv = [sys.executable, "-m", "clausal.testing", "-v", name]
     else:

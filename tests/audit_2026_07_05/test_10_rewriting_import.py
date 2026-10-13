@@ -68,11 +68,17 @@ def test_F001_pl_cut_rejected_at_import(tmp_path):
         _load_prolog_module("a10_cutmod", str(pl))
 
 
-def test_F001_guard_pl_ite_rejected(tmp_path):
-    """(C -> T ; E) is properly rejected with a clear message."""
+@pytest.mark.parametrize("frontend,message", [
+    ("native", r"`->` \(if-then\) is refused"),
+    ("translator", "If-then-else"),
+])
+def test_F001_guard_pl_ite_rejected(tmp_path, monkeypatch, frontend, message):
+    """(C -> T ; E) is properly rejected with a clear message, by both
+    ``.pl`` front ends."""
+    monkeypatch.setenv("CLAUSAL_PL_FRONTEND", frontend)
     pl = tmp_path / "a10_ite.pl"
     pl.write_text("g(X) :- ( X > 0 -> Y = pos ; Y = neg ), h(Y).\n")
-    with pytest.raises(SyntaxError, match="If-then-else"):
+    with pytest.raises(SyntaxError, match=message):
         _load_prolog_module("a10_itemod", str(pl))
 
 

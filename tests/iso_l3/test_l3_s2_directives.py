@@ -373,13 +373,22 @@ def test_the_cache_hit_path_re_lowers_only_the_directives(native, ans):
     assert ans(mod2, "get") == [1] and ans(mod2, "m") == ["atom"]
 
 
-# ── the translator stays the default ──
+# ── the default and the way back ──
 
 
-def test_with_the_variable_unset_the_translator_loads_use_module(native, ans):
+def test_with_the_variable_unset_the_native_front_end_loads_use_module(
+        native, ans):
+    _write(native, "s2p/s2plib.pl", LIB_PL)
+    mod = native.load("s2_unset", ":- use_module(s2p/s2plib, [pair/2]).\n"
+                                  "t(K) :- pair(K, _).\n", frontend=None)
+    assert type(mod.__loader__).__name__ == "NativePrologLoader"
+    assert ans(mod, "t") == ["a", "b"]
+
+
+def test_the_translator_setting_still_loads_use_module(native, ans):
     _write(native, "s2p/s2plib.pl", LIB_PL)
     mod = native.load("s2_tr", ":- use_module(s2p/s2plib, [pair/2]).\n"
-                               "t(K) :- pair(K, _).\n", frontend=None)
+                               "t(K) :- pair(K, _).\n", frontend="translator")
     assert type(mod.__loader__).__name__ == "PrologLoader"
     assert ans(mod, "t") == ["a", "b"]
 

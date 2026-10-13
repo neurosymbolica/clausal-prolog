@@ -685,13 +685,14 @@ def _effective_bytecode_tag() -> int:
 # ── The .pl front end (plan native-iso-reader-step2, D3(a)) ─────────────────
 #
 # ``CLAUSAL_PL_FRONTEND=native|translator`` selects how a ``.pl`` file becomes
-# code: ``translator`` (the default until slice 8) is ``prolog_to_clausal`` ->
-# seam text -> EmbedTransformer; ``native`` is the ISO reader -> ``iso_l3``,
-# which lowers clauses straight to the transformed AST.  The two write the
+# code: ``native`` (the default) is the ISO reader -> ``iso_l3``, which lowers
+# clauses straight to the transformed AST; ``translator`` (the legacy path,
+# opt-in) is ``prolog_to_clausal`` -> seam text -> EmbedTransformer.  The two write the
 # SAME ``__pycache__`` file name, so the front end is part of the cache key
 # (R2): the native loader XORs a NONZERO salt into the key the translator
-# uses unchanged -- a cache written with the variable unset stays valid, and
-# no entry one front end wrote can ever validate for the other.
+# uses unchanged, so no entry one front end wrote can ever validate for the
+# other (a translator cache written before the default flipped to native is
+# simply not served to the native loader).
 
 #: The environment variable that selects the ``.pl`` front end.
 PL_FRONTEND_ENV = "CLAUSAL_PL_FRONTEND"
@@ -712,9 +713,10 @@ _NATIVE_SALT_CACHE: "int | None" = None
 
 def pl_frontend() -> str:
     """The ``.pl`` front end ``CLAUSAL_PL_FRONTEND`` selects, read at each
-    lookup.  Unset or empty is ``translator``; an unknown value is an
-    ``ImportError``, never a silent default (a typo would otherwise run the
-    front end its author did not ask for).
+    lookup.  Unset or empty is ``native`` (the ISO front end);
+    ``translator`` selects the legacy ``prolog_to_clausal`` path.  An unknown
+    value is an ``ImportError``, never a silent default (a typo would
+    otherwise run the front end its author did not ask for).
 
     In the sandbox (:mod:`clausal.sandbox`) it is always ``native``
     (operator ruling S1): the translator lowers float evaluables to
@@ -723,11 +725,11 @@ def pl_frontend() -> str:
         return "native"
     value = os.environ.get(PL_FRONTEND_ENV, "").strip()
     if not value:
-        return "translator"
+        return "native"
     if value not in _PL_FRONTENDS:
         raise ImportError(
             f"{PL_FRONTEND_ENV}={value!r} is not a .pl front end; use one of "
-            f"{', '.join(_PL_FRONTENDS)} (unset means translator)")
+            f"{', '.join(_PL_FRONTENDS)} (unset means native)")
     return value
 
 
@@ -1040,7 +1042,8 @@ def _prolog_default_items() -> list:
 
 
 class PrologLoader(_ClausalSourceLoader):
-    """SourceLoader for .pl Prolog modules — translates to the seam on-the-fly.
+    """SourceLoader for .pl Prolog modules through the legacy TRANSLATOR
+    (``CLAUSAL_PL_FRONTEND=translator``) — translates to the seam on-the-fly.
 
     Pipeline: .pl source → prolog_to_clausal() → seam text →
               ast.parse → EmbedTransformer → bytecode (cached as .pyc)
@@ -1138,8 +1141,9 @@ class _NativeItems:
 
 
 class NativePrologLoader(PrologLoader):
-    """SourceLoader for ``.pl`` files through the NATIVE front end
-    (``CLAUSAL_PL_FRONTEND=native``; plan native-iso-reader-step2).
+    """SourceLoader for ``.pl`` files through the NATIVE front end (the
+    default: ``CLAUSAL_PL_FRONTEND`` unset, empty or ``native``; plan
+    native-iso-reader-step2).
 
     Pipeline: .pl source -> ``PrologReader`` (Scryer's operator table, D2(b))
               -> ``iso_l3`` lowering -> transformed ``ast.Module`` -> bytecode
@@ -1278,7 +1282,7 @@ def _load_prolog_module(fullname, path, dialect=None):
     """Load a .pl file as a Clausal module and return it.
 
     Test/external helper. Each call creates a fresh loader and module, of the
-    front end ``CLAUSAL_PL_FRONTEND`` selects (the translator when unset) --
+    front end ``CLAUSAL_PL_FRONTEND`` selects (native when unset) --
     or, for a Clausal Prolog file, always the native one.
     *path* may be any path-like.
     """

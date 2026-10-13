@@ -1,6 +1,6 @@
 """D3(a): ``CLAUSAL_PL_FRONTEND=native|translator`` selects the ``.pl`` front
-end; the translator stays the default until slice 8, and the front-end id is
-part of the bytecode cache key (R2: the P1 author was once served the other
+end; native is the default (unset or empty) and ``translator`` the way back,
+and the front-end id is part of the bytecode cache key (R2: the P1 author was once served the other
 front end's cached code).
 
 Every test here clears ``__pycache__`` (or starts in a fresh tmp dir) and
@@ -51,14 +51,22 @@ def _answers(mod, name):
 # ── selection ──
 
 
-def test_unset_env_selects_the_translator(pkg, monkeypatch):
+def test_unset_env_selects_the_native_front_end(pkg, monkeypatch):
     tmp, names = pkg
     monkeypatch.delenv(ENV, raising=False)
     (tmp / "fe_unset.pl").write_text("f(1).\ng(X) :- f(X).\n")
     mod = _import(tmp, names, "fe_unset")
-    assert type(mod.__loader__) is ih.PrologLoader
-    assert ih.pl_frontend() == "translator"
+    assert type(mod.__loader__) is ih.NativePrologLoader
+    assert ih.pl_frontend() == "native"
+    st = mod.__loader__.l3_stats
+    assert st["read"] == 2 and st["lowered"] == 2 and st["refused"] == 0, st
     assert _answers(mod, "g") == [1]
+
+
+@pytest.mark.parametrize("value", ["", "  "])
+def test_empty_env_selects_the_native_front_end(monkeypatch, value):
+    monkeypatch.setenv(ENV, value)
+    assert ih.pl_frontend() == "native"
 
 
 def test_explicit_translator_is_the_translator(pkg, monkeypatch):
@@ -86,10 +94,13 @@ def test_load_prolog_module_follows_the_env(tmp_path, monkeypatch):
     mod = ih._load_prolog_module("fe_helper_n", str(path))
     assert type(mod.__loader__) is ih.NativePrologLoader
     assert mod.__loader__.l3_stats["lowered"] == 1
-    monkeypatch.delenv(ENV)
+    monkeypatch.setenv(ENV, "translator")
     mod = ih._load_prolog_module("fe_helper_t", str(path))
     assert type(mod.__loader__) is ih.PrologLoader
-    for n in ("fe_helper_n", "fe_helper_t"):
+    monkeypatch.delenv(ENV)
+    mod = ih._load_prolog_module("fe_helper_u", str(path))
+    assert type(mod.__loader__) is ih.NativePrologLoader
+    for n in ("fe_helper_n", "fe_helper_t", "fe_helper_u"):
         sys.modules.pop(n, None)
 
 
@@ -99,6 +110,8 @@ def test_an_unknown_frontend_value_is_an_error_not_a_default(pkg, monkeypatch):
     (tmp / "fe_typo.pl").write_text("f(1).\n")
     with pytest.raises(ImportError, match="CLAUSAL_PL_FRONTEND"):
         _import(tmp, names, "fe_typo")
+    with pytest.raises(ImportError, match="unset means native"):
+        ih.pl_frontend()
 
 
 def test_native_refusal_is_an_import_error_naming_the_pl_line(pkg, monkeypatch):

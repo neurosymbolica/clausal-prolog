@@ -18,8 +18,8 @@ ENV = "CLAUSAL_PL_FRONTEND"
 # the slice-3 package for test_l3_s3_declarations.py, s4/ the slice-4
 # rulebase and its twin for test_l3_s4_exit.py and s5/ the slice-5
 # rulebases for test_l3_s5_exit.py;
-# each runs them under the native front end.  Collected
-# as test files they would run under the default (the translator) instead.
+# each runs them under the native front end explicitly, with the slice's
+# controls; collected as test files they would run without them.
 collect_ignore = ["rulebase_s1.pl", "rulebase_s1_twin.seam", "s2", "s3", "s4",
                   "s5"]
 

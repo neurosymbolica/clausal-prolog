@@ -25,6 +25,13 @@ _PREFIX = "plhonest_"
 
 
 @pytest.fixture(autouse=True)
+def _translator(monkeypatch):
+    """Every case here is about the translator (``PrologLoader``), so pin it:
+    the ``.pl`` default is the native front end."""
+    monkeypatch.setenv("CLAUSAL_PL_FRONTEND", "translator")
+
+
+@pytest.fixture(autouse=True)
 def _on_path(tmp_path):
     sys.path.insert(0, str(tmp_path))
     yield

@@ -53,7 +53,11 @@ def _write(tmp_path, name, text):
     return str(p)
 
 
-def test_empty_import_list_is_a_located_error_through_the_hook(tmp_path):
+def test_empty_import_list_is_a_located_error_through_the_hook(
+        tmp_path, monkeypatch):
+    # The translator's refusal; the native front end loads it, as Scryer
+    # does (tests/iso_l3/test_l3_s2_directives.py, the D27 cases).
+    monkeypatch.setenv("CLAUSAL_PL_FRONTEND", "translator")
     _write(tmp_path, "qmempty", QM)
     main = _write(tmp_path, "_pl_empty_main", """\
         % a comment line

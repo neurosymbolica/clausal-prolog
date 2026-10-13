@@ -26,7 +26,7 @@ Standalone usage
     python -m clausal.testing path/to/rules.pl
 
 Exit codes: 0 all tests passed; 1 a test failed or a file failed to load
-(or, for a ``.pl`` file, to translate); 2 a usage error (missing path, a file
+(a ``.pl`` file the front end refuses included); 2 a usage error (missing path, a file
 of an unsupported type); 5 no tests were collected.  Pass ``--allow-empty``
 to turn "no tests collected" into exit 0.
 
@@ -82,7 +82,7 @@ from clausal._suffixes import (
 )
 
 #: File extensions the runner collects test/1 clauses from: the Clausal
-#: source spellings plus Prolog ``.pl`` (translated on load).
+#: source spellings plus Prolog ``.pl`` (loaded by the ``.pl`` front end).
 TEST_SUFFIXES: tuple[str, ...] = SOURCE_SUFFIXES
 
 #: Exit codes of ``python -m clausal.testing`` (``main``).
@@ -259,7 +259,8 @@ def load_clausal_module(path: str | Path) -> object:
 
     A ``.clausal`` file goes through the native ISO front end
     (``NativePrologLoader``), always.  A ``.pl`` file goes through the
-    experimental Prolog importer that ``CLAUSAL_PL_FRONTEND`` selects -- the
+    experimental Prolog importer that ``CLAUSAL_PL_FRONTEND`` selects (native
+    by default, ``translator`` for the legacy translator) -- the
     same loader an import of a ``.pl`` file uses -- so a file the front end
     rejects raises ``SyntaxError`` carrying its error.
 
