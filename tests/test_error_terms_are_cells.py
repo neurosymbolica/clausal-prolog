@@ -270,7 +270,7 @@ RAISED = [
     ("mx", "error(type_error(orderable,[1,a,[2]]),max_list/2)"),
     ("al", "error(type_error(atom,1),atom_length/2)"),
     ("inst", "error(instantiation_error,atom_length/2)"),
-    ("must", "error(domain_error(type,nosuchtype),must_be/2)"),
+    ("must", "error(type_error(type,nosuchtype),must_be/2)"),
 ]
 
 

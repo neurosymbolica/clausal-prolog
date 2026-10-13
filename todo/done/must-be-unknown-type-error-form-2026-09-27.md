@@ -1,6 +1,8 @@
 # `must_be/2` with an unknown type raises `domain_error(type, T)`; Scryer raises `type_error(type, T)`
 
-**Status: OPEN. Found 2026-09-27 during Compound retirement slice 2; not fixed.**
+**Status: RESOLVED 2026-10-14. Found 2026-09-27 during Compound retirement slice 2.**
+
+Resolved: `must_be/2` and `can_be/2` raise `type_error(type, T)` for an unknown or non-atom Type (Scryer's library(error)); the Type is checked before the term, as in Scryer. Pinned by `tests/test_must_be_type_error_forms.py`.
 
 ## Measured
 
