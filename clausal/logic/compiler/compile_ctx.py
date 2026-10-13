@@ -72,7 +72,7 @@ from __future__ import annotations
 
 import dataclasses
 from contextlib import contextmanager
-from typing import Any, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING
 
 from ._ast_helpers import (
     FreshNames,
@@ -192,6 +192,16 @@ class CompilationContext:
     # state (defence against a stray ``tail_recursive`` hint slipping
     # through the IR shadow into ``_compile_body_impl``).
     tro_mode: "str | None" = None
+    # ISO cut (D59).  ``cut_exit`` builds the statements that leave the
+    # enclosing barrier scope exhausted; ``None`` means "no cut may land
+    # here" and the Cut arm raises.  Read ONLY by the Cut lowering arm, so a
+    # cut-free body compiles exactly as before.
+    cut_exit: "Callable[[], list] | None" = None
+    # The clause arm's trail mark the predicate-scope exit undoes, or None
+    # when the arm was built with ``skip_trail=True`` (a single-clause index
+    # bucket emits no mark).  Set by the funcdef builders before they call
+    # the body compiler.
+    clause_mark_name: "str | None" = "_mark"
 
     # ── Slice E6c: TRO plan for the current clause-body compile ──────────
     #

@@ -364,6 +364,20 @@ class MetaCall(GoalOp):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+class CompilerError(Exception):
+    """A body shape the compiler cannot lower where it stands."""
+
+
+@dataclasses.dataclass
+class Cut(GoalOp):
+    """ISO cut.  Lowers to: the continuation, then ``ctx.cut_exit()`` --
+    the statements that leave the enclosing BARRIER SCOPE exhausted (a
+    compiled predicate: undo + ``yield (_fail, DONE)`` + ``return``; a
+    shallow sub-generator: ``return``).  Transparent to Sequence/Alternate
+    and to IfThenElse's then/else; every other construct that nests a goal
+    is its own scope (ISO 7.8.4)."""
+
+
 @dataclasses.dataclass
 class Fail(GoalOp):
     """The constant-failure goal — succeeds for nobody, drops the
@@ -577,7 +591,7 @@ __all__ = [
     # Call
     "SubCall", "MetaCall",
     # Low-level
-    "Fail", "PyThunkOp", "ListPatternUnify",
+    "Fail", "PyThunkOp", "ListPatternUnify", "Cut", "CompilerError",
     # Traversal
     "walk_goal_ops", "walk_goal_ops_deep",
     # Meta-call manifest (Slice E precursor)

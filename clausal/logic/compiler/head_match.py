@@ -1532,6 +1532,20 @@ def _is_bare_solution(stmts: list[ast.stmt]) -> bool:
     return isinstance(s, ast.Expr) and isinstance(s.value, ast.Yield)
 
 
+def _has_arm_level_return(stmts: list[ast.stmt]) -> bool:
+    """True when *stmts* hold a ``return`` outside every nested function
+    definition -- the signature of a predicate-scope ISO cut exit."""
+    stack: list[ast.AST] = list(stmts)
+    while stack:
+        n = stack.pop()
+        if isinstance(n, ast.Return):
+            return True
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+            continue
+        stack.extend(ast.iter_child_nodes(n))
+    return False
+
+
 def compile_head_to_match_case(
     head: Any,
     body_stmts: list[ast.stmt],
@@ -1889,7 +1903,17 @@ def compile_head_to_match_case(
     # Also skip when *skip_trail* is set (single-clause index bucket —
     # there is no sibling clause to backtrack to, so the caller's
     # mark/undo will clean up head bindings).
-    if skip_trail or (not head_var_ctx and not dup_guards and not list_guards):
+    #
+    # ISO cut: a predicate-scope cut exit (``trail.undo(_mark); yield
+    # (_fail, DONE); return``) undoes this arm's mark, so an arm whose body
+    # holds one needs the mark even with no head vars -- the mark also
+    # discards the trail entries the early ``return`` skipped inner undos
+    # for.  The exit is the only ``return`` at the arm's own level: the
+    # ``return`` statements of nested sub-generator defs (once, findall,
+    # NAF, a cut inside them ...) are not looked at, so cut-free arms
+    # compile exactly as before.
+    if skip_trail or (not head_var_ctx and not dup_guards and not list_guards
+                      and not _has_arm_level_return(body_stmts)):
         return ast.match_case(
             pattern=outer_pattern,
             guard=None,

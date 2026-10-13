@@ -61,7 +61,7 @@ __all__ = [
     # Boolean operators
     "And", "Or",
     # Unary operators
-    "UnaryPlus", "Negate", "Not", "Invert",
+    "UnaryPlus", "Negate", "Not", "Cut", "Invert",
     # Comparison operators
     "ArithEq", "ArithNeq", "Lt", "LtE", "Gt", "GtE", "Unify", "DoesNotUnify", "Evaluate",
     "StructuralEq", "StructuralNeq",
@@ -677,6 +677,13 @@ class Negate(UnaryOp):
 @dataclass
 class Not(UnaryOp):
     op: ClassVar = 'not'
+
+@dataclass
+class Cut(Node):
+    """ISO ``!/0`` in a ``.pl`` body (D59, 2026-10-14).  Built only by the
+    ``.pl`` lowering (``iso_l3``, surface ``pl``) and by call/1's body
+    converter for a ``.pl`` db; the seam parser has no spelling for it and
+    ``.clausal`` lowering refuses it before this node exists."""
 
 @dataclass
 class Invert(UnaryOp):

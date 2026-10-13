@@ -488,8 +488,28 @@ def _make_body_compiler_impl(
         # via the ``destructive_reuse`` SubCall hint.
         from .destructive_reuse import _flatten_and_goals
         goals = _flatten_and_goals(clause.body)
+        # ISO cut: this clause body is a barrier scope.  The exit undoes the
+        # arm's own trail mark (none when the arm was built with
+        # ``skip_trail=True``), then leaves the predicate exhausted.  Only
+        # the Cut lowering arm calls ``cut_exit``.
+        from .strategy import TrampolineStrategy as _TS
+        from .goal_trampoline import _yield_step_stmt as _ys
+        _mark = ctx_template.clause_mark_name
+
+        def _undo() -> list[ast.stmt]:
+            return [] if _mark is None else [_undo_stmt(_mark, _TRAIL_PARAM_NAME)]
+
+        if isinstance(ctx_template.strategy, _TS):
+            _fail = ctx_template.fail_name
+
+            def _exit() -> list[ast.stmt]:
+                return _undo() + [_ys(_name(_fail), _name("$DONE")), ast.Return(value=None)]
+        else:
+            def _exit() -> list[ast.stmt]:
+                return _undo() + [ast.Return(value=None)]
         ctx = ctx_template.replace(
             db=db, var_context=var_context, trail_name=_TRAIL_PARAM_NAME,
+            cut_exit=_exit,
         )
         # Slice E6d-β: reuse the IR the predicate-trampoline TRO sweep
         # already built (see ``_build_predicate_trampoline_funcdef``).

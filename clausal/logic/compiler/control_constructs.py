@@ -78,6 +78,10 @@ def _lower_inner(
     from . import lower_python_shallow
     if not isinstance(ctx.strategy, ShallowStrategy):
         ctx = ctx.replace(strategy=ShallowStrategy())
+    # A shallow sub-generator is a cut barrier (once/findall/\+/catch ...
+    # are all defined on call/1, ISO 7.8.3): a cut inside leaves the
+    # sub-generator, nothing more.
+    ctx = ctx.replace(cut_exit=lambda: [ast.Return(value=None)])
     ir = terms_to_goalop([inner], ctx.db)
     return lower_python_shallow.lower(ir, ctx, k_stmts)
 
@@ -93,6 +97,8 @@ def _lower_inner_trampoline(
     """
     from .terms_to_goalop import terms_to_goalop
     from . import lower_python_trampoline
+    # The inline form has no scope of its own: no cut may land here.
+    ctx = ctx.replace(cut_exit=None)
     ir = terms_to_goalop([inner], ctx.db)
     return lower_python_trampoline.lower(ir, ctx, k_stmts)
 

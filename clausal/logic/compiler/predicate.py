@@ -916,6 +916,9 @@ def _build_predicate_trampoline_funcdef(
         _find_list_dispatch_pos(clauses, arity) if (clauses and arity > 0) else None
     )
     if dispatch_pos is not None:
+        # ISO cut: list-dispatch arms are built without ``skip_trail`` (they
+        # always carry ``_mark``), so the cut exit always undoes it.
+        ctx_template.clause_mark_name = "_mark"
         loop_stmts.extend(
             _build_list_dispatch_guard(
                 clauses, dispatch_pos, arity, subject, body_compiler
@@ -923,6 +926,9 @@ def _build_predicate_trampoline_funcdef(
         )
     else:
         _head_globals = ctx_template.base_globals
+        # ISO cut: the exit undoes the arm's mark, which a ``skip_trail``
+        # arm (single-clause index bucket) does not emit.
+        ctx_template.clause_mark_name = None if skip_trail else "_mark"
         for ci, clause in enumerate(clauses):
             var_context: dict[int, str] = {}
             _head_arg_patterns(clause.head, var_context, arity, globals_=_head_globals)
@@ -1890,12 +1896,18 @@ def _build_predicate_funcdef(
     body_compiler: Callable[[Clause, dict[int, str]], list[ast.stmt]],
     skip_trail: bool = False,
     globals_: dict | None = None,
+    ctx_template: CompilationContext | None = None,
 ) -> ast.FunctionDef:
     """Build the ``ast.FunctionDef`` for a simple/short-stack compiled predicate.
 
     Returns the fixed-up FunctionDef without executing it.  Used by both
     ``compile_predicate`` (which then calls ``functiondef_to_function``) and
     ``compile_predicate_ast`` (which returns the FunctionDef directly).
+
+    *ctx_template* is the template *body_compiler* captured, when the caller
+    has it: the builder records on it whether the clause arms carry a trail
+    mark (ISO cut's exit undoes it).  Without one the arms are built with
+    the default ``"_mark"``, which is right unless *skip_trail* is set.
     """
     if globals_ is None:
         globals_ = _CURRENT_SHALLOW_BASE_GLOBALS
@@ -1923,6 +1935,8 @@ def _build_predicate_funcdef(
             ctx=ast.Load(),
         )
 
+    if ctx_template is not None:
+        ctx_template.clause_mark_name = None if skip_trail else "_mark"
     for clause in clauses:
         var_context: dict[int, str] = {}
         _head_arg_patterns(clause.head, var_context, arity, globals_=globals_)
@@ -2190,7 +2204,7 @@ def _compile_predicate_shallow_impl(
         if index_positions:
             # Compile fallback (all clauses, for when no arg is ground)
             fallback_def = _build_predicate_funcdef(
-                f"{functor}__all", arity, clauses, _effective_db, body_compiler,
+                f"{functor}__all", arity, clauses, _effective_db, body_compiler, ctx_template=ctx_template,
             )
 
             fallback_fn = functiondef_to_function(fallback_def, globals_=base_globals)
@@ -2202,14 +2216,14 @@ def _compile_predicate_shallow_impl(
                     bname = f"{functor}__p{pos}_b{len(idx_dict)}"
                     _skip_trail = len(bucket_clauses) == 1
                     bdef = _build_predicate_funcdef(
-                        bname, arity, bucket_clauses, _effective_db, body_compiler,
+                        bname, arity, bucket_clauses, _effective_db, body_compiler, ctx_template=ctx_template,
                         skip_trail=_skip_trail,
                     )
                     idx_dict[key] = functiondef_to_function(bdef, globals_=base_globals)
                 if index["defaults"]:
                     ddef = _build_predicate_funcdef(
                         f"{functor}__p{pos}_dflt", arity, index["defaults"],
-                        _effective_db, body_compiler,
+                        _effective_db, body_compiler, ctx_template=ctx_template,
                     )
                     pos_default_fn = functiondef_to_function(ddef, globals_=base_globals)
                 else:
@@ -2250,7 +2264,7 @@ def _compile_predicate_shallow_impl(
                                         )
                                         bdef = _build_predicate_funcdef(
                                             bname, arity, bkt,
-                                            _effective_db, body_compiler,
+                                            _effective_db, body_compiler, ctx_template=ctx_template,
                                             skip_trail=len(bkt) == 1,
                                         )
                                         l1_fns[kj] = functiondef_to_function(
@@ -2261,7 +2275,7 @@ def _compile_predicate_shallow_impl(
                                     )
                                     l1ddef = _build_predicate_funcdef(
                                         l1dname, arity, l1_defaults,
-                                        _effective_db, body_compiler,
+                                        _effective_db, body_compiler, ctx_template=ctx_template,
                                     )
                                     level0_compiled[ki] = (
                                         l1_fns,
@@ -2275,7 +2289,7 @@ def _compile_predicate_shallow_impl(
                                     )
                                     bdef = _build_predicate_funcdef(
                                         bname, arity, l1_defaults,
-                                        _effective_db, body_compiler,
+                                        _effective_db, body_compiler, ctx_template=ctx_template,
                                     )
                                     level0_compiled[ki] = (
                                         None,
@@ -2286,7 +2300,7 @@ def _compile_predicate_shallow_impl(
                                 l0ddef = _build_predicate_funcdef(
                                     f"{functor}__s{pos_i}_{pos_j}_l0dflt",
                                     arity, sec["level0_defaults"],
-                                    _effective_db, body_compiler,
+                                    _effective_db, body_compiler, ctx_template=ctx_template,
                                 )
                                 level0_default_fn = functiondef_to_function(
                                     l0ddef, globals_=base_globals)
@@ -2306,7 +2320,7 @@ def _compile_predicate_shallow_impl(
                             )
                             jbdef = _build_predicate_funcdef(
                                 jbname, arity, bkt,
-                                _effective_db, body_compiler,
+                                _effective_db, body_compiler, ctx_template=ctx_template,
                                 skip_trail=len(bkt) == 1,
                             )
                             joint_dict[jk] = functiondef_to_function(
@@ -2315,7 +2329,7 @@ def _compile_predicate_shallow_impl(
                             jddef = _build_predicate_funcdef(
                                 f"{functor}__j{pos_i}_{pos_j}_dflt",
                                 arity, joint_info["defaults"],
-                                _effective_db, body_compiler,
+                                _effective_db, body_compiler, ctx_template=ctx_template,
                             )
                             joint_default_fn = functiondef_to_function(
                                 jddef, globals_=base_globals)
@@ -2338,7 +2352,7 @@ def _compile_predicate_shallow_impl(
                 fn = _make_groundness_dispatch_simple(plans, fallback_fn)
         else:
             func_def = _build_predicate_funcdef(
-                functor, arity, clauses, _effective_db, body_compiler,
+                functor, arity, clauses, _effective_db, body_compiler, ctx_template=ctx_template,
             )
 
             fn = functiondef_to_function(func_def, globals_=base_globals)

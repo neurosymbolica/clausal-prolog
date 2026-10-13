@@ -117,6 +117,9 @@ def _is_deterministic_op_ir(op: Any) -> bool:
             return neg
         case _ir.Negate():
             return True
+        case _ir.Cut():
+            # One solution, no StepGenerator.
+            return True
         case _ir.Branch():
             # A03-F001: a reified ``If`` explores BOTH arms when the condition
             # is undetermined at runtime — not statically provable as

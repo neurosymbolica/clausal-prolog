@@ -84,6 +84,11 @@ def _lower_body(
                     proceed_name="_naf_proceed",
                     fail_name="_naf_fail",
                     catcher_name="_naf_catcher",
+                    # ISO cut: the NAF mini-generator is a barrier scope.
+                    cut_exit=lambda: [
+                        _yield_step_stmt(_name("_naf_fail"), _name("$DONE")),
+                        ast.Return(value=None),
+                    ],
                 ),
                 inner_k,
             )

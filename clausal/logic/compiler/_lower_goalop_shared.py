@@ -23,6 +23,8 @@ from clausal.logic.compiler.ir import (
     Alternate,
     ArithEval,
     Branch,
+    CompilerError,
+    Cut,
     Dif,
     Fail,
     FDCompare,
@@ -376,6 +378,14 @@ def _lower_shared_body(
         # truncates everything to its left.
         case Fail():
             return []
+
+        # ── ISO cut: run the rest of the scope, then leave it exhausted.
+        case Cut():
+            if ctx.cut_exit is None:
+                raise CompilerError(
+                    "a cut reached a goal position that is not a barrier scope "
+                    "(compiler bug: every scope must set ctx.cut_exit)")
+            return list(k_stmts) + ctx.cut_exit()
 
         # ── PyThunk as a body goal — evaluate the embedded callable
         # for side effects, then continue.  Identical between shallow
