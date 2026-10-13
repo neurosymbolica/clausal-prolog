@@ -414,6 +414,9 @@ class PrologParser:
         lbracket_tok = self._advance()  # consume [
         if self._peek().type == TokenType.RBRACKET:
             rbracket_tok = self._advance()
+            call = self._maybe_bracket_functor("[]", lbracket_tok, rbracket_tok)
+            if call is not None:
+                return call
             return PList((), None, span=(lbracket_tok.offset, rbracket_tok.end_offset))
 
         elements: list[PTerm] = []
@@ -439,10 +442,24 @@ class PrologParser:
         lcurly_tok = self._advance()  # consume {
         if self._peek().type == TokenType.RCURLY:
             rcurly_tok = self._advance()
+            call = self._maybe_bracket_functor("{}", lcurly_tok, rcurly_tok)
+            if call is not None:
+                return call
             return PAtom("{}", span=(lcurly_tok.offset, rcurly_tok.end_offset))
         body = self._parse_term(1200, bare_op_atom=True)
         rcurly_tok = self._expect(TokenType.RCURLY)
         return PCurly(body, span=(lcurly_tok.offset, rcurly_tok.end_offset))
+
+    def _maybe_bracket_functor(self, name: str, open_tok: Token,
+                               close_tok: Token) -> PCompound | None:
+        """`[]` or `{}` directly followed by `(` is a functor name, as any
+        other name is: `{}(1)` is {1}, `[ ](X)` is '[]'(X) (Ulrich #95, #97).
+        With layout before the `(` it is not (#98 `[] (1)`)."""
+        nxt = self._peek()
+        if nxt.type != TokenType.LPAREN or not self._is_functor_paren(close_tok, nxt):
+            return None
+        call = self._parse_compound_args(name, close_tok)
+        return dataclasses.replace(call, span=(open_tok.offset, call.span[1]))
 
     def _parse_prefix(self, entry: OpEntry) -> PTerm:
         """Parse a prefix operator application."""

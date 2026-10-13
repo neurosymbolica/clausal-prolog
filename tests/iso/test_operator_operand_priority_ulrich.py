@@ -1,4 +1,5 @@
-"""Operator atoms as operands, and ``yf`` postfix priority.
+"""Operator atoms as operands, ``yf`` postfix priority, and ``{}(...)`` /
+``[](...)`` as functor-call syntax.
 
 Ruled against Ulrich Neumerkel's syntax conformity suite
 (https://www.complang.tuwien.ac.at/ulrich/iso-prolog/conformity_testing,
@@ -13,6 +14,9 @@ fetched 2026-10-14), then against Scryer:
   also takes ``{-}``.
 * ``yf`` takes a left operand of its own priority, as ``yfx`` does: #160
   ``0 f f`` is ``f(f(0))``.
+* ``{}`` and ``[]`` directly followed by ``(`` are functor names: #95
+  ``{1} = {}(1)``, #97 ``'[]'(1) = [ ](X)``.  With layout before the ``(``
+  they are not (#98 ``X = [] (1)``).
 
 Every row runs in the engine (the native ``.pl`` front end) and, unchanged,
 in Scryer.  A row of the suite that is a ``write_canonical/1`` goal is
@@ -69,6 +73,21 @@ READ_OK = [
     ("#154 1 xfy 2 yf", _YF_XFY, "X = (1 xfy 2 yf), X == xfy(1,yf(2))"),
     ("#55 {-1 yf1}", _YF1, "{-1 yf1}={yf1(X)}, X == -1"),
     ("1 yf1 yf1", _YF1, "X = (1 yf1 yf1), X == yf1(yf1(1))"),
+    # {}(...) and [](...) are functor-call syntax.
+    ("#95 {1} = {}(1)", (), "{1} = {}(1)"),
+    ("#97 '[]'(1) = [ ](X)", (), "'[]'(1) = [ ](X), X == 1"),
+    ("[](1)", (), "X = [](1), X = '[]'(Y), Y == 1"),
+    ("{}(1,2)", (), "X = {}(1,2), functor(X, F, 2), F == {}"),
+    ("{ }(1)", (), "{ }(1) = {1}"),
+    ("{}(a,b) is not {a,b}", (), "{}(a,b) \\= {a,b}"),
+    # ...and the ordinary readings stay as they were.
+    ("{} atom", (), "X = {}, atom(X)"),
+    ("[] atom", (), "X = [], X == '[]'"),
+    ("{a,b}", (), "X = {a,b}, X = {Y}, Y == (a,b)"),
+    ("[a,b,c]", (), "X = [a,b,c], length(X, 3)"),
+    ("[a|T]", (), "X = [a|T], T = [], X == [a]"),
+    ("{} then infix", (), "X = ({} = {}), X == =({}, {})"),
+    ("[] then infix", (), "X = ([] = []), X == =([], [])"),
 ]
 
 #: (row, op directives, goal) -- every goal is a syntax error.
@@ -91,6 +110,11 @@ READ_ERR = [
     ("(- , a)", (), "X = (- , a)"),
     ("(a :- -)", (), "X = (a :- -)"),
     ("X = - -", (), "X = - -"),
+    # Layout between {} or [] and `(`: not a functor call.
+    ("#98 [] (1)", (), "X = [] (1)"),
+    ("{} (1)", (), "X = {} (1)"),
+    ("[a](1)", (), "X = [a](1)"),
+    ("{a}(1)", (), "X = {a}(1)"),
 ]
 
 _PRELUDES = sorted({ops for _, ops, _ in READ_OK})
