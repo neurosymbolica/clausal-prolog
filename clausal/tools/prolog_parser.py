@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import dataclasses
 
-from clausal.tools.prolog_tokenizer import Token, TokenType, tokenize
+from clausal.tools.prolog_tokenizer import Token, TokenizeError, TokenType, tokenize
 from clausal.tools.prolog_ast import (
     PAtom, PVar, PNumber, PString, PCompound, PList, PCurly,
     PClause, PDCGRule, PDirective, PQuery, PModule,
@@ -88,7 +88,18 @@ def parse(source: str, *, dialect: Dialect | None = None,
             op_table = dialect.operator_table
         else:
             op_table = OperatorTable.scryer_builtin_default()
-    tokens = tokenize(source, nested_comments=nested_comments)
+    try:
+        tokens = tokenize(source, nested_comments=nested_comments)
+    except TokenizeError as e:
+        # A lexical fault is a syntax error of the text like any other:
+        # the .pl loaders (import_hook, sandbox) convert ParseError, and
+        # a TokenizeError escaped them raw (ISO conformity rows #121,
+        # #129, #206, #281: a quoted atom that never closes).
+        msg = str(e)
+        suffix = f" at {e.line}:{e.col}"
+        if msg.endswith(suffix):
+            msg = msg[:-len(suffix)]
+        raise ParseError(msg, e.line, e.col) from e
     parser = PrologParser(tokens, op_table)
     return parser.parse_program()
 

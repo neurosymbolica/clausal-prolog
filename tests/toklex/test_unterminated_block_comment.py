@@ -10,7 +10,8 @@ the file were not there.  Now the L0 layer emits ONE
 ``('unterminated', <comment text>)`` error token spanning the comment from
 its outermost opener, and every front end that reads Prolog text turns it
 into a syntax error: the reader (a ``resumable=False`` ``SyntaxIssue``),
-the public ``tokenize()`` (``TokenizeError``), and both ``.pl`` loaders.
+the public ``tokenize()`` (``TokenizeError``), and both ``.pl`` loaders
+(``SyntaxError``).
 
 Scryer (clean clpq build) for the same inputs: consulting a file with an
 unclosed ``/*`` prints ``error(syntax_error(incomplete_reduction),
@@ -190,10 +191,14 @@ def test_translator_loader_refuses_the_file(tmp_path, monkeypatch):
     name = f"_unclosed_translator_{next(_N)}"
     p = tmp_path / f"{name}.pl"
     p.write_text(PL)
-    with pytest.raises(TokenizeError) as ei:
+    # A SyntaxError, as from the native loader -- not the tokenizer's own
+    # TokenizeError, which used to escape the import raw.
+    with pytest.raises(SyntaxError) as ei:
         _load_module(name, str(p))
     assert "Unterminated block comment" in str(ei.value)
-    assert ei.value.line == 4
+    tok = ei.value.__cause__.__cause__
+    assert isinstance(tok, TokenizeError)
+    assert tok.line == 4
 
 
 def test_seam_source_is_not_affected(tmp_path, monkeypatch):
