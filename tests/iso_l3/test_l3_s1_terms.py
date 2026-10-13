@@ -27,14 +27,15 @@ def test_each_term_shape_answers_as_the_iso_term(native, ans):
         "k(a + b * c).",
         "k(-).",
         "k(f(-(1))).",
-        "k(- 1).",
+        "k(- 1).",          # the integer -1 (Ulrich's syntax suite #56)
+        "k(- (1)).",        # the compound -(1)
         "k(2 ^ 3).",
         "k(max(1, 2)).",
     ]) + "\n")
     assert ans(mod, "k") == [
         1.5, -3, "Hello World", (CHARS_TAG, "ab"), ("pt", 1, ("f", "a")),
         ["a", "b"], [], [], ["a"], ("{}", (",", "a", "b")),
-        ("+", "a", ("*", "b", "c")), "-", ("f", ("-", 1)), ("-", 1),
+        ("+", "a", ("*", "b", "c")), "-", ("f", ("-", 1)), -1, ("-", 1),
         ("^", 2, 3), ("max", 1, 2)]
 
 

@@ -2079,10 +2079,20 @@ class _PrologToClausal:
 
         # Prefix operators
         if functor in _PREFIX_MAP and len(args) == 1:
+            # The compound -(1) is not the integer -1, and the seam's `-1`
+            # IS the integer: emit the quoted functor, `'-'(1)`. (The
+            # reader already turned `- 1` into the number; only `-(1)` and
+            # `- (1)` reach here.)
+            if (functor == "-" and isinstance(args[0], PNumber)
+                    and args[0].unit is None):
+                return self._emit_quoted_op_term(term)
             clausal_op = _PREFIX_MAP[functor]
             operand = self._emit_term(args[0])
             if clausal_op == "not":
                 return f"not {operand}"
+            if functor == "-" and isinstance(args[0], PCompound):
+                # Bracketed: a bare `-1 * 2` is (-1)*2, `-a, b` a tuple.
+                return f"-({operand})"
             return f"{clausal_op}{operand}"
 
         # Regular compound: functor(args) → functor(args), name unchanged
@@ -2183,6 +2193,12 @@ class _PrologToClausal:
                 return result
             # Arithmetic unary operators
             if len(term.args) == 1 and term.functor in ("-", "+"):
+                if (term.functor == "-" and isinstance(term.args[0], PNumber)
+                        and term.args[0].unit is None):
+                    # The compound -(1), not the integer -1 that the seam's
+                    # `-1` is (a data `1-(-(1))` is emitted through here);
+                    # as an expression it evaluates the same.
+                    return self._emit_quoted_op_term(term)
                 operand = self._emit_expr(term.args[0], 9)
                 op = _PREFIX_MAP.get(term.functor, term.functor)
                 return f"{op}{operand}"

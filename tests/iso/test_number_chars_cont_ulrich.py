@@ -74,6 +74,11 @@ ROWS = [
     ("#54 quoted '-' atom as the negative sign",
      r"number_chars(R, ['\'', '-', '\'', '1'])",
      ["-1"]),
+    # `- 1` IS the integer -1 in the source too (the syntax suite's #56):
+    # it used to read as the compound -(1), which is not a number.
+    ("#91 number_chars(- 1, \"- 1\")",
+     'number_chars(- 1, "- 1"), R = true',
+     ["true"]),
 ]
 
 ROWS += [

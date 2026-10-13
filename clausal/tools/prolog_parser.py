@@ -321,21 +321,24 @@ class PrologParser:
         if nxt.type == TokenType.LPAREN and self._is_functor_paren(tok, nxt):
             return self._parse_compound_args(name, tok)
 
+        # The name `-` followed by a numeric literal IS the negative literal
+        # (ISO 6.3.4.1 `term = - integer | - float number`, priority 0),
+        # layout and comments between them included: `- 1`, `'-' 1` and
+        # `- /**/1` all read as the integer -1 (Ulrich's syntax conformity
+        # suite #56-#61, WDCor4).  It is a term in its own right, not the
+        # prefix operator, so it applies in any context priority and even
+        # after `op(0, fy, -)` (#63/#64).  A `(` is not a numeric token, so
+        # `- (1)` stays the compound -(1) -- the form writeq/1 prints.
+        if name == "-" and nxt.type in (TokenType.INTEGER, TokenType.FLOAT):
+            self._advance()
+            return PNumber(-nxt.value, span=_span_join(tok, nxt))
+
         # Check for prefix operator
         prefix_entry = self._ops.lookup_prefix(name)
         if prefix_entry and prefix_entry.precedence <= context_prec:
             # But not if it's also an atom that's being used as a term
             # Heuristic: if next token can start a term, treat as prefix
             if self._can_start_term():
-                # Special case: - IMMEDIATELY before a number → negative
-                # literal. ISO 6.3.1.2: only an adjacent `-1` is a negative
-                # number; a spaced `- 1` is the compound -(1) (F037).
-                nxt = self._peek()
-                if (name == "-"
-                        and nxt.type in (TokenType.INTEGER, TokenType.FLOAT)
-                        and self._adjacent(tok, nxt)):
-                    self._advance()
-                    return PNumber(-nxt.value, span=_span_join(tok, nxt))
                 r_prec = self._prefix_right_prec(prefix_entry)
                 operand = self._parse_term(r_prec)
                 return PCompound(name, (operand,), span=_span_join(tok, operand))
@@ -403,27 +406,17 @@ class PrologParser:
         tok = self._advance()
         name = entry.name
 
-        # Special case: - IMMEDIATELY before a number → negative literal
-        # (a spaced `- 1` is the compound -(1), ISO 6.3.1.2) — F037.
+        # `-` then a numeric literal, layout allowed, is the negative
+        # literal (see _parse_atom_or_compound).
         nxt = self._peek()
         if (name == "-"
-                and nxt.type in (TokenType.INTEGER, TokenType.FLOAT)
-                and self._adjacent(tok, nxt)):
+                and nxt.type in (TokenType.INTEGER, TokenType.FLOAT)):
             self._advance()
             return PNumber(-nxt.value, span=_span_join(tok, nxt))
 
         r_prec = self._prefix_right_prec(entry)
         operand = self._parse_term(r_prec)
         return PCompound(name, (operand,), span=_span_join(tok, operand))
-
-    @staticmethod
-    def _adjacent(left: Token, right: Token) -> bool:
-        """True if *right* immediately follows *left* with no gap."""
-        if left.end_col:
-            return right.line == left.end_line and right.col == left.end_col
-        # Fallback when no end position is recorded.
-        return (right.line == left.line and
-                right.col == left.col + len(str(left.value)))
 
     # ── Precedence helpers ───────────────────────────────────────────
 

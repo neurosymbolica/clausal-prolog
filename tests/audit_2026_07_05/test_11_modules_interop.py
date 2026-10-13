@@ -612,10 +612,26 @@ def test_F035_quoted_flag_set():
 
 
 def test_F037_spaced_minus_is_compound():
-    # A11-F037 (fixed): spaced '- 1' is the compound -(1).
+    # A11-F037 asked for the emit->parse fixpoint of the compound -(1).
+    # Superseded reading (WDCor4, Ulrich's syntax suite #56): `- 1`, layout
+    # and all, is the integer -1; the compound is `- (1)` / `-(1)`, which is
+    # what writeq/1 and the exporter print, so the round trip still holds.
+    from clausal.terms import term_writeq
+    from clausal.tools.clausal_to_prolog import emit_term
+    from clausal.tools.prolog_operators import OperatorTable
     from clausal.tools.prolog_parser import parse_term
-    from clausal.tools.prolog_ast import PCompound
-    assert isinstance(parse_term("- 1"), PCompound)
+    from clausal.tools.prolog_ast import PCompound, PNumber
+    assert parse_term("- 1") == PNumber(-1)
+    for text in ("- (1)", "-(1)", term_writeq(("-", 1))):
+        t = parse_term(text)
+        assert isinstance(t, PCompound) and t.functor == "-", text
+        assert t.args[0].value == 1
+    ops = OperatorTable.iso_default()
+    for text, emitted in (("-(1)", "- (1)"), ("-(1^2)", "- (1 ^ 2)"),
+                          ("-(-1)", "- -1"), ("-(a)", "- a")):
+        t = parse_term(text)
+        assert emit_term(t, ops) == emitted
+        assert parse_term(emitted) == t, text
 
 
 def test_F038_op_zero_removes():
