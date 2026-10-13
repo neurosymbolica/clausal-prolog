@@ -500,9 +500,70 @@ def _iso_identical(a, b) -> bool:
     `'=='("ab", [a, b])` is TRUE, and this conjunction keeps it true while
     still answering no to `'=='(1, 1.0)`.
     """
+    a = deref(a)
+    b = deref(b)
+    if type(a) is SegList and type(b) is SegList:
+        # Two hole-built lists (the common case of a list built through its
+        # open tail): read each ONCE.  ``structural_eq`` on the SegLists
+        # walks both, and ``_numeric_types_agree`` would walk both again
+        # (``_seg_term``) and then visit every element pair in Python --
+        # measured as ~1.85x on ``==`` over two equal 100-element lists.
+        pa = _seg_list_parts(a)
+        pb = _seg_list_parts(b)
+        if pa is not None and pb is not None:
+            ea, ta = pa
+            eb, tb = pb
+            # ``[E1..En|T1] == [F1..Fm|T2]``: one tail variable (or both
+            # proper), equal lengths, and the elements pairwise identical.
+            # That is exactly what ``structural_eq`` (unify with no
+            # bindings) answers for this shape, read off the walked parts.
+            if ta is not tb or len(ea) != len(eb):
+                return False
+            if not _structural_eq(ea, eb):
+                return False
+            if _int_or_atom_leaves(ea) and _int_or_atom_leaves(eb):
+                # No float/Decimal/... leaf on either side: every pair of
+                # tagged leaves is int against int, so the numeric
+                # objection cannot arise.
+                return True
+            return _numeric_types_agree(ea, eb)
     if not _structural_eq(a, b):
         return False
     return _numeric_types_agree(a, b)
+
+
+# Element types that hold no tagged number other than int: an atom, an int,
+# a truth atom.  Deliberately NOT a variable (an element may be a bound one)
+# nor any compound (it may hold a float).
+_INT_OR_ATOM = frozenset({int, str, bool})
+
+
+def _int_or_atom_leaves(elements) -> bool:
+    return _INT_OR_ATOM.issuperset(map(type, elements))
+
+
+def _seg_list_parts(x):
+    """The SegList *x* read once as ``(elements, tail)``: *tail* the open
+    tail's unbound variable, or None for a proper list.  None when *x* is
+    any other shape -- an improper or cyclic list, a hole that is not the
+    tail, a SegList out of contract -- which the general path answers."""
+    w = x._walk_once()
+    if isinstance(w, list):
+        return w, None
+    if type(w) is not SegList:
+        return None
+    segs = w._segments
+    if not segs or type(segs[-1]) is not VarSeg:
+        return None
+    elements = []
+    for seg in segs[:-1]:
+        if type(seg) is not ConcreteSeg:
+            return None
+        elements.extend(seg.elements)
+    tail = deref(segs[-1].var)
+    if not is_var(tail):
+        return None
+    return elements, tail
 
 
 @_builtin("==", 2)
