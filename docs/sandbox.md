@@ -207,6 +207,16 @@ raises `error(permission_error(access, private_procedure, Name/Arity), _)`:
 | `z3_set_option/2`, `z3.set_option/2` | solver options include trace files |
 | `z3_stats/1`, `z3.statistics/1` | process-wide solver counters |
 
+A load-time `set_prolog_flag` directive is refused the same way, in every
+front end (`:- set_prolog_flag(F, V).` in a `.pl` or `.clausal` file,
+`-set_prolog_flag(F, V)` in a `.seam` file): the module does not load.
+The exceptions are the two flags whose value belongs to the module alone,
+`assert_creates_dynamic` and `double_quotes`
+(`clausal.logic.builtins.flags.SANDBOX_DIRECTIVE_FLAGS`). The CLP(Q)
+port's resource caps (`clpq_max_*`) are therefore the host's: it sets them
+from Python with `clausal.logic.clpq.limits.set_limit`. They bound one
+call; time and memory limits on the worker remain the host's too.
+
 Some other builtins behave differently in the sandbox:
 
 - **The engine's own attribute keys are off limits.** These are `freeze`,

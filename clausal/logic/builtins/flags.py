@@ -47,6 +47,13 @@ and ``clausal/logic/clpq/DEVIATIONS.md`` D24).  They exist only under
 ``CLAUSAL_CLPQ=holzbaur``: the legacy solver has no such caps, and its
 flags are as they were.
 
+In the sandbox (``clausal.sandbox``) a program sets no flag that reaches
+past its own module: the goal ``set_prolog_flag/2`` is refused there, and
+so is a load-time ``set_prolog_flag`` directive of any front end, with the
+same ``permission_error(access, private_procedure, set_prolog_flag/2)``,
+unless the flag is in :data:`SANDBOX_DIRECTIVE_FLAGS`.  The host sets the
+CLP(Q) caps from Python (``clausal.logic.clpq.limits.set_limit``).
+
 Integers are unbounded, so ``bounded`` is ``false`` and ``max_integer`` /
 ``min_integer`` have no value: ``current_prolog_flag(max_integer, X)``
 fails, as in Scryer.  ``integer_rounding_function`` is ``toward_zero`` --
@@ -169,6 +176,39 @@ if os.environ.get("CLAUSAL_CLPQ", "legacy") == "holzbaur":
         FLAGS[_name] = _Flag(_name, None, _is_positive_int,
                              supported=_is_positive_int, scope="clpq")
 
+#: The flags a SANDBOXED module may still set with a load-time directive.
+#: Each one's value lives on that module's own Database and governs that
+#: module alone, so no other program and no later load sees it:
+#:
+#: * ``assert_creates_dynamic`` (scope "module"): whether an assert into a
+#:   missing procedure of THIS module creates it; every ``.pl`` module
+#:   starts with a directive setting it (import_hook._prolog_default_items).
+#: * ``double_quotes`` (scope "directive"): how THIS module's ``"..."``
+#:   literals are read, decided while it compiles.
+#:
+#: Every other flag is refused (sandbox_refusal), the process-wide ones
+#: (``debug``, the ``clpq_max_*`` caps, ...) and any flag added later
+#: until it is listed here: the list fails closed.
+SANDBOX_DIRECTIVE_FLAGS = frozenset({"assert_creates_dynamic",
+                                     "double_quotes"})
+
+
+def sandbox_refusal(name: str):
+    """The error refusing a sandboxed setting of the flag *name* (the
+    flag table's name, as check_setting resolved it), or None where the
+    setting is allowed: outside the sandbox, or a flag of
+    SANDBOX_DIRECTIVE_FLAGS.  The same term as the refused goal
+    (clausal.sandbox._refusing_dispatch)."""
+    from clausal import _sandbox_state  # noqa: PLC0415
+    if not _sandbox_state.ACTIVE or name in SANDBOX_DIRECTIVE_FLAGS:
+        return None
+    return LogicException(permission_error(
+        "access", "private_procedure", ("/", "set_prolog_flag", 2),
+        f"{_SET}: the {name} flag reaches past this module, so the "
+        f"sandbox does not let a program set it, as a goal or as a "
+        f"directive"))
+
+
 #: Process-wide values of the settable process flags.
 _PROCESS: dict[str, Any] = {}
 
@@ -228,6 +268,9 @@ def check_setting(flag, value, *, directive: bool = False) -> tuple[str, Any]:
         raise LogicException(permission_error(
             "modify", "flag", spec.name,
             f"{_SET}: the {spec.name} flag {why}"))
+    refusal = sandbox_refusal(spec.name)
+    if refusal is not None:
+        raise refusal
     if spec.scope == "directive" and not directive:
         raise LogicException(permission_error(
             "modify", "flag", spec.name,
@@ -250,7 +293,13 @@ def module_flags(db) -> dict:
 
 
 def apply_setting(db, name: str, value) -> None:
-    """Record an already-validated setting (:func:`check_setting`)."""
+    """Record an already-validated setting (:func:`check_setting`).  Every
+    setting goes through here, the goal's and each front end's load-time
+    directive's, so the sandbox's refusal is checked again here: a path
+    that skipped check_setting still cannot write a flag (fails closed)."""
+    refusal = sandbox_refusal(name)
+    if refusal is not None:
+        raise refusal
     spec = FLAGS[name]
     if spec.scope == "end_module":
         from clausal.end_module import set_require_end_module  # noqa: PLC0415

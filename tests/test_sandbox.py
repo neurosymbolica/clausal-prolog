@@ -1988,3 +1988,87 @@ def test_python_inside_a_dict_or_set_term_is_refused(shape):
     with pytest.raises(LogicException) as e:
         check_term(term)
     assert "python_object" in str(e.value)
+
+
+# ── load-time set_prolog_flag directives ────────────────────────────────────
+
+#: (file, source) per front end and flag kind: a process flag (debug), a
+#: CLP(Q) cap (process-wide, under the port), and the allowlisted
+#: module-scoped flag (flags.SANDBOX_DIRECTIVE_FLAGS), which still loads.
+_FLAG_DIRECTIVES = {
+    "pl_debug": ("fpd.pl", ":- module(fpd, [p/1]).\n"
+                           ":- set_prolog_flag(debug, on).\np(1).\n"),
+    "pl_cap": ("fpc.pl", ":- module(fpc, [p/1]).\n"
+                         ":- set_prolog_flag(clpq_max_nodes, 1000000000).\n"
+                         "p(1).\n"),
+    "pl_module": ("fpm.pl", ":- module(fpm, [p/1]).\n"
+                            ":- set_prolog_flag(assert_creates_dynamic, "
+                            "false).\np(1).\n"),
+    "clausal_debug": ("fcd.clausal", ":- module(fcd, [p/1]).\n"
+                                     ":- set_prolog_flag(debug, on).\n"
+                                     "p(1).\n:- end_module(fcd).\n"),
+    "clausal_cap": ("fcc.clausal", ":- module(fcc, [p/1]).\n"
+                                   ":- set_prolog_flag(clpq_max_projection, "
+                                   "1).\np(1).\n:- end_module(fcc).\n"),
+    "clausal_module": ("fcm.clausal", ":- module(fcm, [p/1]).\n"
+                                      ":- set_prolog_flag("
+                                      "assert_creates_dynamic, true).\n"
+                                      "p(1).\n:- end_module(fcm).\n"),
+    "seam_debug": ("fsd.seam", "-module(fsd, [p/1])\n"
+                               "-set_prolog_flag(debug, on)\np(1),\n"),
+    "seam_cap": ("fsc.seam", "-module(fsc, [p/1])\n"
+                             "-set_prolog_flag(clpq_max_power, 1)\n"
+                             "p(1),\n"),
+    "seam_module": ("fsm.seam", "-module(fsm, [p/1])\n"
+                                "-set_prolog_flag(assert_creates_dynamic, "
+                                "true)\np(1),\n"),
+}
+
+
+def test_a_sandboxed_directive_sets_no_process_flag(sbx):
+    # A load-time set_prolog_flag of a process-wide flag is refused in
+    # every front end, as the goal is; a module's own flag still loads.
+    # The CLP(Q) caps stay the host's (clausal.logic.clpq.limits).
+    for _, (path, source) in _FLAG_DIRECTIVES.items():
+        sbx.write(path, source)
+    res = sbx.run(f"""
+        import clausal.sandbox as sb
+        sb.enable()
+        from clausal.logic.builtins import flags
+        from clausal.logic.clpq import limits
+        before = {{c: limits.limit(c) for c in limits.DEFAULTS}}
+        for key, (path, _) in {_FLAG_DIRECTIVES!r}.items():
+            probe(key, lambda path=path: load(path.split(".")[0]))
+        probe("debug", lambda: flags.flag_value(None, "debug"))
+        # The backstop: a setting that skipped check_setting is refused
+        # where it would be written.
+        probe("apply_debug", lambda: flags.apply_setting(None, "debug", "on"))
+        probe("apply_cap", lambda: flags.apply_setting(
+            None, "clpq_max_nodes", 5))
+        probe("caps_unchanged", lambda: before == {{
+            c: limits.limit(c) for c in limits.DEFAULTS}})
+    """, env={"CLAUSAL_CLPQ": "holzbaur", "CLAUSAL_PL_FRONTEND": "native"})
+    for key in _FLAG_DIRECTIVES:
+        r = res[key]
+        if key.endswith("_module"):
+            assert r["ok"], (key, r)
+        else:
+            assert not r["ok"], (key, r)
+            assert ("permission_error(access,private_procedure,"
+                    "set_prolog_flag/2)") in (r["term"] or r["msg"]), (key, r)
+    for key in ("apply_debug", "apply_cap"):
+        refused(res, key, PRIVATE)
+    assert ok(res, "debug") == "'off'"
+    assert ok(res, "caps_unchanged") == "True"
+
+
+def test_without_the_sandbox_a_directive_sets_a_process_flag(sbx):
+    # The control: the same directive outside the sandbox sets the flag.
+    sbx.write("fpd.pl", _FLAG_DIRECTIVES["pl_debug"][1])
+    res = sbx.run("""
+        from clausal.logic.builtins import flags
+        probe("load", lambda: load("fpd"))
+        probe("debug", lambda: flags.flag_value(None, "debug"))
+    """, env={"CLAUSAL_PL_FRONTEND": "native"})
+    assert res["load"]["ok"], res["load"]
+    assert ok(res, "debug") == "'on'"
