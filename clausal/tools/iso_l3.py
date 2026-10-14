@@ -479,6 +479,10 @@ class _ClauseLowering:
         if type(g) is tuple and g and _is_callable_name(g[0]) and g[0] != "$chars":
             name, args = g[0], g[1:]
             spans = _arg_spans(sp, len(args))
+            if name == "->" and len(args) == 2 and self._cut_allowed:
+                return _node("IfThenElse", test=self.goal(args[0], spans[0]),
+                             body=self.goal(args[1], spans[1]),
+                             orelse=_const(None), position=_pos_expr(pos))
             if name in _REFUSED_CONTROL and len(args) == 2:
                 raise LoweringRefused(
                     f"{_REFUSED_CONTROL[name]} is refused: {_CUT_FREE}",
@@ -495,6 +499,13 @@ class _ClauseLowering:
                              position=_pos_expr(pos))
             if name == ";" and len(args) == 2:
                 left = args[0]
+                if (type(left) is tuple and len(left) == 3 and left[0] == "->"
+                        and self._cut_allowed):
+                    ls = _arg_spans(spans[0], 2)
+                    return _node("IfThenElse", test=self.goal(left[1], ls[0]),
+                                 body=self.goal(left[2], ls[1]),
+                                 orelse=self.goal(args[1], spans[1]),
+                                 position=_pos_expr(pos))
                 if (type(left) is tuple and len(left) == 3
                         and left[0] in ("->", "*->")):
                     raise LoweringRefused(

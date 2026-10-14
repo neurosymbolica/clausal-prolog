@@ -61,7 +61,7 @@ __all__ = [
     # Boolean operators
     "And", "Or",
     # Unary operators
-    "UnaryPlus", "Negate", "Not", "Cut", "Invert",
+    "UnaryPlus", "Negate", "Not", "Cut", "IfThenElse", "Invert",
     # Comparison operators
     "ArithEq", "ArithNeq", "Lt", "LtE", "Gt", "GtE", "Unify", "DoesNotUnify", "Evaluate",
     "StructuralEq", "StructuralNeq",
@@ -684,6 +684,28 @@ class Cut(Node):
     ``.pl`` lowering (``iso_l3``, surface ``pl``) and by call/1's body
     converter for a ``.pl`` db; the seam parser has no spelling for it and
     ``.clausal`` lowering refuses it before this node exists."""
+
+@dataclass
+class IfThenElse(Node):
+    """ISO ``( test -> body ; orelse )`` (7.8.8) and ``( test -> body )``
+    (7.8.7, ``orelse`` is None) in a ``.pl`` body.  The test is a cut
+    barrier committed to its first solution.  NOT the seam's reified
+    ``if_/3`` (``IfExpr``), which stays monotonic and `.clausal`-only."""
+    test: Node = None
+    body: Node = None
+    orelse: Optional[Node] = None
+
+    def visit_children(node, visit) -> None:
+        visit(node.test); visit(node.body)
+        if node.orelse is not None:
+            visit(node.orelse)
+
+    def transform_children(node, transform) -> "IfThenElse":
+        t, b = transform(node.test), transform(node.body)
+        e = None if node.orelse is None else transform(node.orelse)
+        if t is node.test and b is node.body and e is node.orelse:
+            return node
+        return IfThenElse(test=t, body=b, orelse=e, position=node.position)
 
 @dataclass
 class Invert(UnaryOp):

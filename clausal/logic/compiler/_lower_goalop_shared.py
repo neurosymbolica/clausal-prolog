@@ -30,6 +30,7 @@ from clausal.logic.compiler.ir import (
     FDCompare,
     FDOp,
     GoalOp,
+    IfThenElse,
     ListPatternUnify,
     MemberIn,
     MetaCall,
@@ -386,6 +387,42 @@ def _lower_shared_body(
                     "a cut reached a goal position that is not a barrier scope "
                     "(compiler bug: every scope must set ctx.cut_exit)")
             return list(k_stmts) + ctx.cut_exit()
+
+        # ── ISO if-then-else.  The condition is a shallow sub-generator
+        # (a cut barrier, like once/1's); the first solution commits;
+        # then/else run inline in the enclosing scope (a cut there cuts the
+        # clause).  Mirrors control_constructs._compile_once.
+        case IfThenElse(test=t_op, then=th_op, else_=el_op):
+            from .strategy import ShallowStrategy
+            from . import lower_python_shallow
+            from ._ast_helpers import _yield_none_stmt, _EXTRA_FUNCDEF
+            cond_ctx = ctx.replace(strategy=ShallowStrategy(),
+                                   cut_exit=lambda: [ast.Return(value=None)])
+            cond_stmts = lower_python_shallow.lower(t_op, cond_ctx, [_yield_none_stmt()])
+            gen_name = ctx.fresh("_ite_cond")
+            gen_fn = ast.FunctionDef(
+                name=gen_name,
+                args=ast.arguments(posonlyargs=[], args=[], vararg=None,
+                                   kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[]),
+                body=cond_stmts + [ast.Return(value=None),
+                                   ast.Expr(value=ast.Yield(value=ast.Constant(None)))],
+                decorator_list=[], returns=None, type_comment=None, **_EXTRA_FUNCDEF)
+            mark = ctx.fresh(_MARK_PREFIX)
+            taken = ctx.fresh("_ite_taken")
+            then_stmts = recurse(th_op, ctx, k_stmts)
+            else_stmts = recurse(el_op, ctx, k_stmts)     # [] for Fail()
+            out = [
+                gen_fn,
+                _assign_mark(mark, trail_name),
+                _assign(taken, ast.Constant(False)),
+                ast.For(target=_name("_", ast.Store()), iter=_call(_name(gen_name)),
+                        body=[_assign(taken, ast.Constant(True))] + then_stmts + [ast.Break()],
+                        orelse=[]),
+                _undo_stmt(mark, trail_name),
+            ]
+            if else_stmts:
+                out.append(_if(ast.UnaryOp(op=ast.Not(), operand=_name(taken)), else_stmts))
+            return out
 
         # ── PyThunk as a body goal — evaluate the embedded callable
         # for side effects, then continue.  Identical between shallow

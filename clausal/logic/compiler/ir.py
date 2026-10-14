@@ -379,6 +379,17 @@ class Cut(GoalOp):
 
 
 @dataclasses.dataclass
+class IfThenElse(GoalOp):
+    """ISO if-then-else.  ``test`` is lowered as a shallow sub-generator
+    (its own cut barrier, 7.8.7.1) and committed to its first solution;
+    ``then``/``else_`` run in the ENCLOSING scope, so a cut in them cuts
+    the clause (7.8.8).  No-else is ``else_ = Fail()``."""
+    test: GoalOp
+    then: GoalOp
+    else_: GoalOp
+
+
+@dataclasses.dataclass
 class Fail(GoalOp):
     """The constant-failure goal — succeeds for nobody, drops the
     continuation.  Lowering returns ``[]``; in a :class:`Sequence` fold
@@ -462,6 +473,10 @@ def walk_goal_ops(ir: GoalOp, visit: Callable[[GoalOp], None]) -> None:
         case Negate(op=child):
             walk_goal_ops(child, visit)
         case Branch(test=t, then=th, else_=e):
+            walk_goal_ops(t, visit)
+            walk_goal_ops(th, visit)
+            walk_goal_ops(e, visit)
+        case IfThenElse(test=t, then=th, else_=e):
             walk_goal_ops(t, visit)
             walk_goal_ops(th, visit)
             walk_goal_ops(e, visit)
@@ -557,6 +572,10 @@ def walk_goal_ops_deep(
             walk_goal_ops_deep(t, visit, db=db)
             walk_goal_ops_deep(th, visit, db=db)
             walk_goal_ops_deep(e, visit, db=db)
+        case IfThenElse(test=t, then=th, else_=e):
+            walk_goal_ops_deep(t, visit, db=db)
+            walk_goal_ops_deep(th, visit, db=db)
+            walk_goal_ops_deep(e, visit, db=db)
         case MetaCall(kind=kind, args=margs):
             from .terms_to_goalop import _convert
             for key in META_GOAL_POSITIONS.get(kind, ()):
@@ -591,7 +610,7 @@ __all__ = [
     # Call
     "SubCall", "MetaCall",
     # Low-level
-    "Fail", "PyThunkOp", "ListPatternUnify", "Cut", "CompilerError",
+    "Fail", "PyThunkOp", "ListPatternUnify", "Cut", "IfThenElse", "CompilerError",
     # Traversal
     "walk_goal_ops", "walk_goal_ops_deep",
     # Meta-call manifest (Slice E precursor)

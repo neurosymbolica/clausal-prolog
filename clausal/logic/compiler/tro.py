@@ -120,6 +120,10 @@ def _is_deterministic_op_ir(op: Any) -> bool:
         case _ir.Cut():
             # One solution, no StepGenerator.
             return True
+        case _ir.IfThenElse():
+            # Conservative: then/else may be nondeterministic.  A follow-up
+            # may return ``det(then) and det(else_)``.
+            return False
         case _ir.Branch():
             # A03-F001: a reified ``If`` explores BOTH arms when the condition
             # is undetermined at runtime — not statically provable as

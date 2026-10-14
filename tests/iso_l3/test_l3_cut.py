@@ -55,15 +55,13 @@ def test_cut_rows_match_scryer(native, ans, name, want):
     assert ans(mod, name) == want
 
 
-# S33 needs `->`, which the .pl lowering still refuses until if-then-else
-# lands; strict, so the row flips to a failure the day it starts passing.
+# S33: a cut in the Then of `->` inside a `;` cuts the clause (7.8.6/7.8.8).
 NEST_SRC = SRC + """\
 nest(X) :- ( ( X = 1 ; X = 2 ), ( X = 2 -> ! ; true ) ; X = 3 ).
 nest(4).
 """
 
 
-@pytest.mark.xfail(strict=True, reason="`->` is not lowered for .pl yet")
 def test_cut_in_a_then_inside_a_disjunction_cuts_the_clause(native, ans):
     mod = native.load("l3_cut_nest", NEST_SRC)
     assert ans(mod, "nest") == [1, 2]

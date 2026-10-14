@@ -46,6 +46,7 @@ from clausal.logic.compiler.ir import (
     FDCompare,
     FDOp,
     GoalOp,
+    IfThenElse,
     ListPatternUnify,
     MemberIn,
     MetaCall,
@@ -415,6 +416,11 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
         # ``IfExpr(test, body, orelse)`` -- seam ``if_/3`` -- requires a
         # REIFIABLE condition (operator ruling 2026-10-01), as Scryer's
         # library(reif) does: see :func:`_convert_if`.
+        case nodes.IfThenElse(test=t, body=b, orelse=e):
+            return IfThenElse(
+                test=_convert(t, db), then=_convert(b, db),
+                else_=Fail() if e is None else _convert(e, db),
+                position=getattr(goal, "position", None))
         case nodes.Cut():
             return Cut(position=getattr(goal, "position", None))
 
