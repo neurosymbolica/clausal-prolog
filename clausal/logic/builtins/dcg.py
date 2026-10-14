@@ -314,6 +314,13 @@ def _is_whole_body_cut(rule_val) -> bool:
     return False
 
 
+def _is_whole_body_true(rule_val) -> bool:
+    """True when the WHOLE grammar body handed to phrase/2,3 is ``true``
+    (what ``_dcg_translate`` already answers as ``S0 = S`` inside a larger
+    body)."""
+    return rule_val is True or (type(rule_val) is str and rule_val == "true")
+
+
 def _resolve_nonterminal(db, rule_val, extra_args, context):
     """A CELL nonterminal -> ``(dispatch, call_args)``, else ``None``.
 
@@ -363,6 +370,11 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, instantiation_error)
         raise LogicException(instantiation_error(context))
+    if len(extra_args) == 2 and _is_whole_body_true(rule_val):
+        # ISO 7.14.2: ``true`` is the empty body, ``S0 = S``.  It used to be
+        # looked up as the nonterminal ``true//0`` and failed silently.
+        s0, s = extra_args
+        return _resolve_named_goal(db, ("=", s0, s), [], context)
     if len(extra_args) == 2 and _is_whole_body_cut(rule_val):
         # ``phrase(!, L)`` is ``call((!, S0 = S))``: the local cut cuts
         # nothing (``_is_whole_body_cut``).  It used to be looked up as the

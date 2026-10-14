@@ -134,9 +134,30 @@ ROWS = [
      ["true"], None),
     ("phrase(1,L)", _f("phrase(1,L)"),
      ["type_error(callable,1)"], ["type_error(callable,1)"]),
+    # ── a whole body of ``true`` is the empty body, S0 = S (ISO 7.14.2).
+    # Scryer has no such rule here (existence_error(procedure,true/2)).
+    ("phrase(true,[])", "phrase(true,[]), R = true",
+     ["true"], None),
+    ("phrase(true,[a],R)", "phrase(true,[a],R)",
+     ['"a"'], None),
+    ("phrase(true,L)", "phrase(true,L), L == [], R = true",
+     ["true"], None),
+    ("\\+ true is false", "phrase((\\+ true),[]), R = true",
+     [], None),
+    ("\\+ true consumes nothing and fails", "phrase((\\+ true),[a],R)",
+     [], None),
+    # ── the state after a negation is S0 = S, observed through phrase/3
+    ("\\+ [b] leaves the input", "phrase(\\+ [b],[a],R)",
+     ['"a"'], None),
+    ("g, \\+ h fails when h would match", "phrase((g, \\+ h),[x,y,z],R)",
+     [], None),
+    ("g, \\+ g leaves the rest", "phrase((g, \\+ g),[x,y,z],R)",
+     ['"yz"'], None),
 ]
 
-PROGRAM = ("g --> [x].\n"
+PROGRAM = ("g --> [x].\nh --> [y].\n"
+           "cyc(T) :- X = [a|X], catch(phrase(X, _), B, true), nonvar(B),\n"
+           "          B = error(type_error(T, _), _).\n"
            + "".join(f"r{i}(R) :- {body}.\n"
                      for i, (_, body, _, _) in enumerate(ROWS)))
 
@@ -192,3 +213,37 @@ def test_oracle(scryer):
     picked = [i for i, r in enumerate(ROWS) if r[3] is not None]
     got = _scryer_answers(SCRYER_PROGRAM, [(f"r{i}(R)", 3) for i in picked])
     assert got == [ROWS[i][3] for i in picked]
+
+
+def test_cyclic_terminal_list_is_an_error_not_a_hang(pl_mod, monkeypatch):
+    """``X = [a|X]`` is not a list: it is ``type_error(list, X)``, raised
+    before the walk that would never end.  The ball is caught by a VARIABLE
+    and taken apart afterwards: an ``error(type_error(list,_),_)`` pattern
+    in the catch itself trips an engine-wide RecursionError on a ball that
+    holds a cyclic term (it reproduces with a plain ``throw``), so the error
+    builder is wrapped to record its culprit and to hand the ball an acyclic
+    stand-in."""
+    import signal
+    import clausal.logic.exceptions as exc
+
+    real = exc.type_error
+    seen = []
+
+    def spy(kind, culprit, *rest):
+        seen.append(kind)
+        return real(kind, "cyclic", *rest)
+
+    monkeypatch.setattr(exc, "type_error", spy)
+
+    def alarm(*_):
+        raise TimeoutError("phrase on a cyclic list hung")
+
+    old = signal.signal(signal.SIGALRM, alarm)
+    signal.alarm(20)
+    try:
+        got = _engine_answers(pl_mod, "cyc", 1)
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old)
+    assert seen == ["list"]
+    assert got == ["list"]
