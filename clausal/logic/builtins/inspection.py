@@ -1174,12 +1174,13 @@ def _unify_with_occurs_check__2(a, b, trail, k):
     fails).
 
     A pattern with two or more holes (``[*A, *B]``) unifies through a queued
-    goal that binds each split with plain unification
-    (``_drive_seg_unify``), and a split's binding was never occurs-checked,
-    even the first.  So the queued goals run here, and only an answer whose
-    terms are acyclic is one: plain unification that ends acyclic is the
-    occurs-checked unifier.  With nothing queued the occurs check above
-    already decided, and the acyclicity walk is skipped."""
+    goal that binds each split in turn (``_drive_seg_unify``).  Each split
+    binds with the occurs check: the SegList hook reads ``trail.unify_oc``,
+    set by the C unifier while it runs for this unification, and the queued
+    goal keeps the unifier it was queued with.  The queued goals run here,
+    and the acyclicity walk on each answer is a backstop (an input that was
+    already cyclic).  With nothing queued the occurs check above already
+    decided, and the walk is skipped."""
     from clausal.logic.constraints import _structural_unify_oc  # noqa: PLC0415
     from clausal.logic.pending import drain  # noqa: PLC0415
     mark = trail.mark()

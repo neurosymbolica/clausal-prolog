@@ -248,3 +248,74 @@ def test_plain_unify_of_a_cyclic_split_is_unchanged():
     p = SegList([VarSeg(a), ConcreteSeg([2]), VarSeg(b)])
     assert unify(p, [a, 2], t) is True
     assert deref(deref(a)[0]) is deref(a)
+
+
+# Every place the SegList hook binds a part takes the occurs check from the
+# outer unification.  One case per site; each binds X to a term holding X
+# (``g(X)``) unless the site is occurs-checked.
+def _site_split_element():
+    # an element of a split's concrete run (_apply_seglist_split)
+    a, x = Var(), Var()
+    return SegList([VarSeg(a), ConcreteSeg([x])]), [("g", x)]
+
+
+def _site_cons_cell():
+    # against an improper list's cons cells (_unify_seglist_cons)
+    x, tl = Var(), Var()
+    return SegList([ConcreteSeg([x]), VarSeg(tl)]), (".", ("g", x), "foo")
+
+
+def _site_open_seglists():
+    # two open partial lists (_unify_open_seglists)
+    x, a, b = Var(), Var(), Var()
+    return (SegList([ConcreteSeg([x]), VarSeg(a)]),
+            SegList([ConcreteSeg([("g", x)]), VarSeg(b)]))
+
+
+def _site_improper_walk():
+    # a pattern that walks to an improper list (SegList.__unify__)
+    a, x = Var(), Var()
+    unify(a, (".", x, "foo"), Trail())
+    return SegList([VarSeg(a)]), (".", ("g", x), "foo")
+
+
+def _site_filled_against_list():
+    # every hole filled, against a list (SegList.__unify__)
+    a, x = Var(), Var()
+    unify(a, [x], Trail())
+    return SegList([VarSeg(a)]), [("g", x)]
+
+
+def _site_filled_against_seglist():
+    # every hole filled, against an open SegList (SegList.__unify__)
+    a, x, b = Var(), Var(), Var()
+    unify(a, [x], Trail())
+    return SegList([VarSeg(a)]), SegList([ConcreteSeg([("g", x)]), VarSeg(b)])
+
+
+def _site_symmetric_hook():
+    # the pattern on the RIGHT: the C unifier's second hook call
+    a, x = Var(), Var()
+    return [("g", x)], SegList([VarSeg(a), ConcreteSeg([x])])
+
+
+@pytest.mark.parametrize("make", [
+    _site_split_element, _site_cons_cell, _site_open_seglists,
+    _site_improper_walk, _site_filled_against_list,
+    _site_filled_against_seglist, _site_symmetric_hook,
+], ids=lambda f: f.__name__[len("_site_"):])
+def test_every_hook_site_is_occurs_checked(make):
+    t = Trail()
+    left, right = make()
+    assert unify_with_occurs_check(left, right, t) is False
+    assert len(t) == 0
+    assert t.unify_oc is False
+
+
+def test_the_flag_is_restored_after_a_symmetric_call():
+    a, b = Var(), Var()
+    t = Trail()
+    assert unify_with_occurs_check([1, 2], SegList([VarSeg(a), VarSeg(b)]), t)
+    assert t.unify_oc is False
+    assert unify([1, 2], SegList([VarSeg(Var()), VarSeg(Var())]), t)
+    assert t.unify_oc is False
