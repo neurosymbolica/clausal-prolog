@@ -516,7 +516,9 @@ class _ClauseLowering:
                              right=self.goal(args[1], spans[1]),
                              position=_pos_expr(pos))
             if name == "\\+" and len(args) == 1:
-                return _node("Not", operand=self.goal(args[0], spans[0]),
+                # ISO 8.15.1: \+ is a predicate, true iff call(Term) fails --
+                # its argument is converted when it runs (``_meta_goal``).
+                return _node("Not", operand=self._meta_goal(args[0], spans[0]),
                              position=_pos_expr(pos))
             if name == ":" and len(args) == 2:
                 return self._qualified(args, spans, sp, pos)
@@ -814,7 +816,8 @@ def _var_inside_body(g: Any) -> bool:
     """True when a variable sits in a goal position of *g* reached through
     ISO body conversion's constructs (``,``, ``;``, ``->``: 7.6.2) -- not
     when *g* is itself the variable, and not under ``\\+`` or any other
-    predicate (they convert their own argument when they run)."""
+    predicate: each converts its own argument when it runs (``\\+``'s
+    through ``_meta_goal`` too, ISO 8.15.1)."""
     def walk(t):
         if type(t) is VarRef:
             return True

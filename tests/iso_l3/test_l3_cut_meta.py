@@ -255,3 +255,64 @@ def test_retract_of_a_disjunction_pattern_takes_the_if_then_else(native, ans):
     assert ans(mod, "g3") == ["x"]
     [left] = ans(mod, "g7")
     assert len(left) == 3 and left[1][0] == "->"
+
+
+# ``\+`` is the built-in predicate 8.15.1, true iff call(Term) fails: its
+# argument is converted when it RUNS, like any meta-argument's.
+NEG_SRC = """\
+p(1). p(2).
+n1(R) :- G = (!, fail), ( \\+ (G ; true) -> R = yes ; R = no ).
+n8(R) :- G = (!, fail), findall(x, \\+ (G ; true), R).
+n9(R) :- G = 1, catch(( \\+ (fail, G) -> R = yes ; R = no ), error(E, _), R = E).
+n10(R) :- ( \\+ (fail ; true) -> R = yes ; R = no ).
+n11(R) :- G = (!, fail), ( once((G ; true)) -> R = yes ; R = no ).
+"""
+
+
+@pytest.mark.parametrize("name,want", [
+    # Scryer, Trealla and ISO: [[x]]
+    ("n8", [["x"]]),
+    ("n9", [("type_error", "callable", (",", "fail", 1))]),
+    ("n10", ["no"]),
+    # once/1 and \\+ agree: the goal fails under once, so \\+ succeeds
+    ("n11", ["no"]),
+    # DELIBERATE divergence from Scryer's clause body ([no]): ISO 8.15.1
+    # makes \\+ a predicate that calls its argument, and Scryer itself
+    # answers yes for the same \\+ inside findall (n8), for
+    # ``\\+ call((G ; true))`` and for ``H = (G ; true), \\+ H`` -- its [no]
+    # here is an artefact of compiling \\+ inline.
+    ("n1", ["yes"]),
+])
+def test_negation_converts_its_argument_when_it_runs(native, ans, name, want):
+    mod = native.load("l3_cut_meta_neg", NEG_SRC)
+    assert ans(mod, name) == want
+
+
+# A conjunction pattern nested inside a construct must never match a single
+# compound goal (the stored body's flat tuple ``("=", X, 2)``): that deleted
+# clauses Scryer keeps.  Scryer's answers for this program.
+NESTED_SRC = """\
+:- dynamic(d/2).
+d(1, X) :- ( X = 1 -> X = 2 ; true ).
+d(4, X) :- ( X = 1 -> true ; X = 2 ).
+d(7, X) :- X = 0, ( X = 1 -> true ; X = 2 ).
+d(8, X) :- ( X = 1 -> true ; X = 2, X = 3 ).
+v3(L) :- findall(N, retract((d(N, _) :- (_ ; (_, _)))), L).
+v6(L) :- findall(N, retract((d(N, _) :- (_, (_ ; (_, _))))), L).
+v10(L) :- findall(N, retract((d(N, _) :- (_ ; (_, _, _)))), L).
+y1(L) :- findall(N, retract((d(N, _) :- (_ -> (_, _, 2) ; _))), L).
+y2(L) :- findall(N, retract((d(N, _) :- (_ ; (_, _, 2)))), L).
+k1(L) :- findall(N, clause(d(N, _), (_ -> _ ; (_, _))), L).
+k2(L) :- findall(N, clause(d(N, _), (_, (_ -> _ ; _))), L).
+k3(L) :- findall(N, clause(d(N, _), (_ -> _ ; (_ = 2, _ = 3))), L).
+"""
+
+
+@pytest.mark.parametrize("name,want", [
+    ("v3", [[8]]), ("v6", [[]]), ("v10", [[]]), ("y1", [[]]), ("y2", [[]]),
+    ("k1", [[8]]), ("k2", [[7]]), ("k3", [[8]]),
+])
+def test_a_nested_conjunction_pattern_never_matches_one_goal(native, ans, name,
+                                                             want):
+    mod = native.load(f"l3_cut_meta_nested_{name}", NESTED_SRC)
+    assert ans(mod, name) == want

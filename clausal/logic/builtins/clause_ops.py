@@ -783,24 +783,28 @@ def _on_private_trail(built: _Built, then, trail=None):
 class OpenConjunction:
     """A body pattern ``(G1, ..., Gk, Rest)`` whose tail Rest is unbound:
     it matches a stored flat body of MORE than k goals, Rest taking the
-    remaining goals (one goal as itself, several as the flat tuple)."""
-    __slots__ = ("prefix", "tail")
+    remaining goals (one goal as itself, several as the flat tuple).
+    *top* is False for one nested inside a construct (see
+    :func:`unify_body`)."""
+    __slots__ = ("prefix", "tail", "top")
 
-    def __init__(self, prefix, tail):
+    def __init__(self, prefix, tail, top=True):
         self.prefix = prefix
         self.tail = tail
+        self.top = top
 
 
 class ClosedConjunction:
-    """A top-level body pattern ``(G1, ..., Gk)`` (k >= 2, no open tail).
-    Kept apart from a plain tuple so it never matches an if-then-else body:
+    """A body pattern ``(G1, ..., Gk)`` (k >= 2, no open tail).  Kept apart
+    from a plain tuple so it never matches an if-then-else body:
     ``_spell_as_cells`` spells that as the 3-tuple ``(";", ("->", C, T), E)``
     / ``("->", C, T)``, which a bare tuple pattern of three goals unified
-    with (D59 review)."""
-    __slots__ = ("goals",)
+    with (D59 review).  *top* as for :class:`OpenConjunction`."""
+    __slots__ = ("goals", "top")
 
-    def __init__(self, goals):
+    def __init__(self, goals, top=True):
         self.goals = goals
+        self.top = top
 
 
 def _is_ite_cell(b) -> bool:
@@ -824,12 +828,11 @@ def engine_body_pattern(t, _top=True, *, iso: bool = False):
       the atom ``true`` is True, ``\\+ G`` the Not node, a ``';'``/2 cell
       the Or node, and a conjunction the flat tuple): a
       right-nested ``','``/2 cell chain is the flat tuple of its goals --
-      an :class:`OpenConjunction` when its tail is unbound.  An if-then-else
-      spelled by ``_spell_as_cells`` keeps its ``->`` cell (D59).  At the
-      top level (*_top*) a closed conjunction is a
-      :class:`ClosedConjunction`, so it cannot match an if-then-else body;
-      inside a construct it is the plain tuple.  Known residue: a body
-      written ``(A, B), C`` matches nothing.
+      an :class:`OpenConjunction` when its tail is unbound, else a
+      :class:`ClosedConjunction`.  An if-then-else spelled by
+      ``_spell_as_cells`` keeps its ``->`` cell (D59).  *_top* is False
+      below the top level (see :func:`_conjunction_body`).  Known residue:
+      a body written ``(A, B), C`` matches nothing.
 
     Match with :func:`unify_body`."""
     if iso:
@@ -867,9 +870,21 @@ def engine_body_pattern(t, _top=True, *, iso: bool = False):
         goals.append(engine_body_pattern(left, False))
         x = deref(x[2])
     if is_var(x):
-        return OpenConjunction(tuple(goals), x)
+        return OpenConjunction(tuple(goals), x, _top)
     goals.append(engine_body_pattern(x, False))
-    return ClosedConjunction(tuple(goals)) if _top else tuple(goals)
+    return ClosedConjunction(tuple(goals), _top)
+
+
+def _conjunction_body(pattern, body) -> bool:
+    """Whether the stored *body* can be the conjunction a conjunction
+    *pattern* asks for.  Never an if-then-else cell.  Below the top level,
+    never a tuple whose slot 0 is a str either: there it is ONE compound
+    goal (``("=", X, 2)``), and the flat-tuple conjunction cannot be told
+    apart from it -- reading it as a conjunction deleted clauses Scryer
+    keeps (a nested ``(_, _)`` matched ``X = 2``).  The cost is a miss on a
+    nested conjunction whose first goal is an atom."""
+    return (type(body) is tuple and not _is_ite_cell(body)
+            and (pattern.top or not (body and type(body[0]) is str)))
 
 
 def _iso_pattern(t):
@@ -920,8 +935,10 @@ def unify_body(pattern, body, trail) -> bool:
     """Unify an :func:`engine_body_pattern` result with a stored body.
 
     A stored if-then-else body is ONE goal (the ISO cell), never a
-    conjunction, and an ``Or`` pattern ``(A ; B)`` matches its ``;`` cell
-    (Scryer: ``clause(d(_), (A ; B))`` gives ``A = (C -> T)``)."""
+    conjunction; an ``Or`` pattern ``(A ; B)`` matches its ``;`` cell
+    (Scryer: ``clause(d(_), (A ; B))`` gives ``A = (C -> T)``); and every
+    construct pattern is matched part by part, so a conjunction nested in
+    it keeps its own rule (:func:`_conjunction_body`)."""
     if type(body) is FailClosedBody:
         if type(pattern) is OpenConjunction or not is_var(deref(pattern)):
             return False
@@ -929,28 +946,41 @@ def unify_body(pattern, body, trail) -> bool:
     tp = type(pattern)
     if tp is ClosedConjunction:
         body = deref(body)
-        if (type(body) is not tuple or _is_ite_cell(body)
+        if (not _conjunction_body(pattern, body)
                 or len(body) != len(pattern.goals)):
             return False
         return all(unify_body(p, g, trail)
                    for p, g in zip(pattern.goals, body))
+    if tp is OpenConjunction:
+        body = deref(body)
+        k = len(pattern.prefix)
+        if not _conjunction_body(pattern, body) or len(body) <= k:
+            return False
+        for p, g in zip(pattern.prefix, body):
+            if not unify_body(p, g, trail):
+                return False
+        rest = body[k:]
+        return unify(pattern.tail, rest[0] if len(rest) == 1 else rest, trail)
     if tp is nodes.Or:
         body = deref(body)
+        if type(body) is nodes.Or:
+            return (unify_body(pattern.left, body.left, trail)
+                    and unify_body(pattern.right, body.right, trail))
         if _is_ite_cell(body) and body[0] == ";":
             return (unify_body(pattern.left, body[1], trail)
                     and unify_body(pattern.right, body[2], trail))
-        return unify(pattern, body, trail)
-    if tp is not OpenConjunction:
-        return unify(pattern, body, trail)
-    body = deref(body)
-    k = len(pattern.prefix)
-    if type(body) is not tuple or _is_ite_cell(body) or len(body) <= k:
         return False
-    for p, g in zip(pattern.prefix, body):
-        if not unify_body(p, g, trail):
-            return False
-    rest = body[k:]
-    return unify(pattern.tail, rest[0] if len(rest) == 1 else rest, trail)
+    if tp is nodes.Not:
+        body = deref(body)
+        return (type(body) is nodes.Not
+                and unify_body(pattern.operand, body.operand, trail))
+    if _is_ite_cell(pattern):
+        # an if-then(-else) pattern cell: part by part
+        body = deref(body)
+        return (_is_ite_cell(body) and body[0] == pattern[0]
+                and unify_body(pattern[1], body[1], trail)
+                and unify_body(pattern[2], body[2], trail))
+    return unify(pattern, body, trail)
 
 
 def head_matches(clause, home_db, cell, trail=None) -> "tuple[bool, str | None]":
