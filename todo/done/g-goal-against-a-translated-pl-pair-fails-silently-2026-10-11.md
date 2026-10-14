@@ -25,3 +25,7 @@ sandbox) answers correctly, and so does a `.clausal` module.  Flipping the
 `implementation_plans/native-iso-reader-step2-2026-09-29.md`; this is
 another reason for it.  Short of that: the CLI could read a goal for a
 translator module through the translator.
+
+## Resolved (2026-10-14)
+
+The native ISO front end became the `.pl` default with the D43 flip (76c6c27d). Under native, the `-g` goal answers `X = a, Y = b.`. The translator, which is now opt-back only, still gives `false.`.
