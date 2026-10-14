@@ -24,6 +24,13 @@ a27(X) :- ( p(X) -> ( X > 1 -> fail ; true ) ; X = z ).
 a30(X) :- ( p(X) -> true ; true ), X > 1.
 a31(L) :- findall(X, ( ( p(X) ; X = 4 ) -> true ; X = 5 ), L).
 side(L) :- findall(X, ( ( p(X), X > 1 -> true ; true ) ), L).
+bv(X) :- ( Y = f(1) -> X = Y ; X = no ).
+ex(R) :- catch(( ( X = 1, throw(e) ) -> true ; true ), e, true),
+         ( var(X) -> R = unbound ; R = bound ).
+tb(R) :- ( ( X = 1 -> fail ; true ) ; true ), ( var(X) -> R = unbound ; R = X ).
+d6(R-Y) :- atom_chars(ab, L0), append(L0, [c], R), ( true -> Y = L0 ; Y = no ).
+d7(R-Y) :- atom_chars(ab, L0), reverse(L0, R), ( true -> Y = L0 ; Y = no ).
+d8(R-Y) :- atom_chars(ab, L0), append(L0, [c], R), ( L0 = [_, _] -> Y = yes ; Y = no ).
 """
 
 ROWS = [
@@ -34,6 +41,18 @@ ROWS = [
         strict=True, reason="call/1 does not run a cut in a .pl body yet")),
     ("a23", [[("-", 1, "no"), ("-", 2, "yes"), ("-", 3, "no")]]),
     ("a24", [[1]]), ("a27", [1]), ("a30", []), ("a31", [[1]]), ("side", [[2]]),
+    # A binding made in C is visible in T.
+    ("bv", [("f", 1)]),
+    # An exception out of C restores the trail: X is unbound in the handler.
+    ("ex", ["unbound"]),
+    # Trail balance: a failed then-branch leaves no binding for the next
+    # disjunct.
+    ("tb", ["unbound"]),
+    # Destructive reuse must see the variables read inside an ITE: L0 is
+    # still live after append/3 / reverse/2 when T, E or C reads it.
+    ("d6", [("-", ["a", "b", "c"], ["a", "b"])]),
+    ("d7", [("-", ["b", "a"], ["a", "b"])]),
+    ("d8", [("-", ["a", "b", "c"], "yes")]),
 ]
 
 

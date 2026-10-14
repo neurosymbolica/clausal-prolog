@@ -237,11 +237,13 @@ def _collect_op_var_ids(op: Any, ids: set[int]) -> None:
                 _collect_op_var_ids(child, ids)
         case _ir.Negate(op=child):
             _collect_op_var_ids(child, ids)
-        case _ir.Branch(test=t, then=th, else_=e):
+        case _ir.Branch(test=t, then=th, else_=e) \
+                | _ir.IfThenElse(test=t, then=th, else_=e):
             _collect_op_var_ids(t, ids)
             _collect_op_var_ids(th, ids)
             _collect_op_var_ids(e, ids)
-        case _ir.Fail():
+        case _ir.Fail() | _ir.Cut():
+            # No operands: reads no variable.
             pass
 
 
