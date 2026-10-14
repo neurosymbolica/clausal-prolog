@@ -117,11 +117,13 @@ def _is_dcg_terminal_body(rule_val) -> bool:
     included), a string (the chars carrier) or a code list.  ISO DCG and
     Scryer's phrase/2,3 accept any grammar body, so ``phrase([a], L)`` is
     ``L = [a]`` and ``phrase("ab", L)`` is ``L = [a, b]``; both used to fail
-    silently here.  A cons cell is list-SHAPED too: ``[a|b]`` is not a
-    nonterminal call of ``'.'//2`` but a malformed terminal list, which
-    ``_dcg_terminals`` refuses."""
-    return (isinstance(rule_val, (list, bytes)) or is_chars(rule_val)
-            or _is_cons(rule_val))
+    silently here.  A cons cell and a partial list (a ``SegList``,
+    ``[a|L]``) are list-SHAPED too: ``[a|b]`` is not a nonterminal call of
+    ``'.'//2`` but a malformed terminal list, and ``[a|L]`` is terminals
+    whose number is not known yet -- ``_dcg_terminals`` refuses both."""
+    from clausal.terms import SegList, SegString, SegBytes  # noqa: PLC0415
+    return (isinstance(rule_val, (list, bytes, SegList, SegString, SegBytes))
+            or is_chars(rule_val) or _is_cons(rule_val))
 
 
 def _dcg_terminals(body, context) -> list:
@@ -132,19 +134,47 @@ def _dcg_terminals(body, context) -> list:
     be a LIST.  ``[a|b]`` -- a chain of cons cells ending in a non-list --
     is ``type_error(list, [a|b])``, raised when the body is translated; it
     used to reach the nonterminal arm as ``'.'(a, b, S0, S)`` and raise
-    ``existence_error(procedure, '.'/4)``."""
-    from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+    ``existence_error(procedure, '.'/4)``.
+
+    A PARTIAL list, ``[a|L]`` with L unbound when the body is translated,
+    is ``instantiation_error`` (ISO; Scryer measured): how many terminals
+    it names is not known.  It used to be read as the terminals it had so
+    far, or as a goal, and phrase failed silently.  A tail bound before the
+    translation is just a list: ``L = [], phrase([a|L], [a])`` succeeds."""
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, instantiation_error, type_error)
+    from clausal.terms import (  # noqa: PLC0415
+        SegList, SegString, SegBytes, as_improper, seg_closed)
+    from clausal.logic.builtins.lists import _cyclic_list  # noqa: PLC0415
     items: list = []
     t = deref(body)
-    while _is_cons(t):
-        items.append(t[1])
-        t = deref(t[2])
+    if _cyclic_list(t):
+        # ``X = [a|X]``: no list at all, and walking it would never end.
+        raise LogicException(type_error(
+            "list", t,
+            f"{context}: a terminal list in a grammar body must be a list"))
+    while True:
+        if isinstance(t, (SegList, SegString, SegBytes)):
+            closed = seg_closed(t)      # None while a hole is unbound
+            if closed is None:
+                t = None
+                break
+            t = deref(closed)
+        elif _is_cons(t):
+            items.append(t[1])
+            t = deref(t[2])
+        else:
+            break
+    if t is None or is_var(t):
+        raise LogicException(instantiation_error(
+            f"{context}: a terminal list in a grammar body must not be a "
+            f"partial list"))
     if type(t) is tuple and not t:
         return items                    # the nil cell () is []
     if isinstance(t, (list, bytes)) or is_chars(t):
         return items + list(_elements(t))
     raise LogicException(type_error(
-        "list", body,
+        "list", as_improper(deref(body)),
         f"{context}: a terminal list in a grammar body must be a list"))
 
 
