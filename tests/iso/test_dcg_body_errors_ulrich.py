@@ -134,18 +134,24 @@ ROWS = [
      ["true"], None),
     ("phrase(1,L)", _f("phrase(1,L)"),
      ["type_error(callable,1)"], ["type_error(callable,1)"]),
-    # ── a whole body of ``true`` is the empty body, S0 = S (ISO 7.14.2).
-    # Scryer has no such rule here (existence_error(procedure,true/2)).
-    ("phrase(true,[])", "phrase(true,[]), R = true",
-     ["true"], None),
-    ("phrase(true,[a],R)", "phrase(true,[a],R)",
-     ['"a"'], None),
-    ("phrase(true,L)", "phrase(true,L), L == [], R = true",
-     ["true"], None),
-    ("\\+ true is false", "phrase((\\+ true),[]), R = true",
-     [], None),
-    ("\\+ true consumes nothing and fails", "phrase((\\+ true),[a],R)",
-     [], None),
+    # ── ``true`` and ``false`` are not grammar control constructs (WG17 DCG,
+    # Scryer): they name the nonterminals true//0 and false//0, which do not
+    # exist.  It used to fail silently.  Scryer refuses ``\\+`` in a body, so
+    # the negated rows are the engine's alone: ``\\+ G`` is
+    # ``\\+ phrase(G, S0, _), S0 = S`` and the inner phrase/3 raises.
+    ("phrase(true,[])", _f("phrase(true,[])"),
+     ["existence_error(procedure,true/2)"],
+     ["existence_error(procedure,true/2)"]),
+    ("phrase(true,[a],R)", _f("phrase(true,[a],_)"),
+     ["existence_error(procedure,true/2)"],
+     ["existence_error(procedure,true/2)"]),
+    ("phrase(false,[])", _f("phrase(false,[])"),
+     ["existence_error(procedure,false/2)"],
+     ["existence_error(procedure,false/2)"]),
+    ("\\+ true raises", _f("phrase((\\+ true),[])"),
+     ["existence_error(procedure,true/2)"], None),
+    ("\\+ true raises under phrase/3", _f("phrase((\\+ true),[a],_)"),
+     ["existence_error(procedure,true/2)"], None),
     # ── the state after a negation is S0 = S, observed through phrase/3
     ("\\+ [b] leaves the input", "phrase(\\+ [b],[a],R)",
      ['"a"'], None),

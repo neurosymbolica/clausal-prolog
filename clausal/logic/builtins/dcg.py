@@ -314,13 +314,6 @@ def _is_whole_body_cut(rule_val) -> bool:
     return False
 
 
-def _is_whole_body_true(rule_val) -> bool:
-    """True when the WHOLE grammar body handed to phrase/2,3 is ``true``
-    (what ``_dcg_translate`` already answers as ``S0 = S`` inside a larger
-    body)."""
-    return rule_val is True or (type(rule_val) is str and rule_val == "true")
-
-
 def _resolve_nonterminal(db, rule_val, extra_args, context):
     """A CELL nonterminal -> ``(dispatch, call_args)``, else ``None``.
 
@@ -370,11 +363,6 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, instantiation_error)
         raise LogicException(instantiation_error(context))
-    if len(extra_args) == 2 and _is_whole_body_true(rule_val):
-        # ISO 7.14.2: ``true`` is the empty body, ``S0 = S``.  It used to be
-        # looked up as the nonterminal ``true//0`` and failed silently.
-        s0, s = extra_args
-        return _resolve_named_goal(db, ("=", s0, s), [], context)
     if len(extra_args) == 2 and _is_whole_body_cut(rule_val):
         # ``phrase(!, L)`` is ``call((!, S0 = S))``: the local cut cuts
         # nothing (``_is_whole_body_cut``).  It used to be looked up as the
@@ -398,6 +386,14 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
         from clausal.logic.exceptions import LogicException  # noqa: PLC0415
         raise LogicException(non_callable_goal_error(rule_val, context))
     if not is_cell:
+        if rule_val is True or rule_val is False:
+            # ``true`` / ``false`` are not grammar control constructs (WG17
+            # DCG, Scryer): they name the nonterminals true//0 and false//0,
+            # i.e. true/2 and false/2.  The resolver folds the truth value to
+            # that name and raises existence_error(procedure, true/2) unless
+            # a module defines it.  They used to fall through to ``None``
+            # below, and so failed silently.
+            return _resolve_named_goal(db, rule_val, list(extra_args), context)
         if type(rule_val) is str and rule_val:
             # A bare ATOM names the nonterminal: ruling S (2026-09-24) makes
             # ``phrase(greeting, L)`` pass the plain atom ``greeting``, not the
