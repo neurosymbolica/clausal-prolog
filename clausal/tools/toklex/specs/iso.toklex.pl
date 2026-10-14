@@ -27,9 +27,15 @@ class(sign,      ['+', '-']).
 % a single escape, not a repeated sequence of them. See the quoted_atom/
 % string grammar surgery below for the repeated case, where this shape DOES
 % create a real ambiguity.
+%
+% `any - nl`: a backslash-newline is the continuation escape, which stands
+% for NO character, so `0'\<newline>` names no code and is not a
+% char_code token. Excluding it lets maximal munch back up to the integer
+% `0`, leaving the quote to open a quoted token in which the continuation
+% is read (Ulrich's conformity row #213, `X is 0'\<newline>+'1.` -> X = 1).
 def(escape,   bslash then ( octdig then octdig* then bslash?
                           | 'x' then hexdig then hexdig* then bslash?
-                          | any )).
+                          | (any - nl) )).
 def(udigits,  digit then (digit | '_')*).
 def(exp,      ('e' | 'E') then sign? then digit then digit*).
 

@@ -87,10 +87,11 @@ class(reserved,  ['\x1f\']).
 % closing backslash to be confused with a "next" escape, since char_code is
 % a single escape, not a repeated sequence of them. See the quoted_atom/
 % string grammar surgery below for the repeated case, where this shape DOES
-% create a real ambiguity.
+% create a real ambiguity. `- nl`: see iso.toklex.pl (a continuation
+% names no character, so `0'\<newline>` is not a char_code token).
 def(escape,   bslash then ( octdig then octdig* then bslash?
                           | 'x' then hexdig then hexdig* then bslash?
-                          | (any - reserved) )).
+                          | (any - reserved - nl) )).
 def(udigits,  digit then (digit | '_')*).
 def(exp,      ('e' | 'E') then sign? then digit then digit*).
 

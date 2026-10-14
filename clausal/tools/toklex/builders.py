@@ -125,12 +125,19 @@ def float_of(lexeme: str) -> float:
 def char_code(lexeme: str) -> int:
     """Decode `0'c` (incl. `0'''` -> 39 and `0'\\n`-style escapes) to its
     character code, mirroring `prolog_tokenizer._read_number`'s `0'`
-    branch."""
+    branch.
+
+    A continuation (backslash-newline) decodes to no character; the spec's
+    `escape` excludes it, so it never reaches here.  Raising (the driver
+    turns that into an error token) rather than inventing a code keeps a
+    grammar/builder disagreement loud instead of reading it as 0."""
     body = lexeme[2:]  # strip the leading "0'"
     ch = body[0]
     if ch == "\\":
         decoded, _ = _decode_escape(body, 1)
-        return ord(decoded) if decoded else 0
+        if len(decoded) != 1:
+            raise ValueError(f"0' escape names no single character: {lexeme!r}")
+        return ord(decoded)
     if ch == "'" and len(body) > 1 and body[1] == "'":
         return ord("'")
     return ord(ch)
