@@ -1109,21 +1109,43 @@ def _compile_catch(
     from .strategy import TrampolineStrategy
     in_goal = ctx.fresh("_catch_in")
     if isinstance(ctx.strategy, TrampolineStrategy):
-        # The goal's woken goals belong to the catch: they run inside the
-        # ``try``, not at the solution step's boundary outside it.  The
-        # continuation is compiled INTO the goal, so it runs inside the
-        # ``try`` too; the flag marks where the goal ends.
-        goal_stmts = _lower_inner_trampoline(
-            ctx, goal_arg,
-            _mark_continuation(_drained_always(k_stmts, ctx.trail_name), in_goal))
-        recovery_stmts = _lower_inner_trampoline(ctx, recovery, k_stmts)
-        return _compile_catch_impl(
+        from .terms_to_goalop import terms_to_goalop
+        from .cut_scope import cut_reaches_scope
+        # A cut in the Goal or the Recovery is local to it (ISO 7.8.9: each
+        # is called "as call/1").  The inline form has no scope of its own,
+        # so an argument that cuts takes the sub-generator form instead,
+        # whose ``def`` is the barrier.  Cut-free arguments stay inline.
+        goal_gen_fn = None
+        if not cut_reaches_scope(terms_to_goalop([goal_arg], ctx.db)):
+            # The goal's woken goals belong to the catch: they run inside the
+            # ``try``, not at the solution step's boundary outside it.  The
+            # continuation is compiled INTO the goal, so it runs inside the
+            # ``try`` too; the flag marks where the goal ends.
+            goal_stmts = _lower_inner_trampoline(
+                ctx, goal_arg,
+                _mark_continuation(_drained_always(k_stmts, ctx.trail_name), in_goal))
+        else:
+            goal_gen_fn, goal_loop = _make_catch_subgen_fn_and_loop(
+                ctx, "_catch_gen",
+                _lower_inner(ctx, goal_arg, [_yield_none_stmt()]),
+                _mark_continuation(_drained_always(k_stmts, ctx.trail_name), in_goal))
+            goal_stmts = [goal_loop]
+        if not cut_reaches_scope(terms_to_goalop([recovery], ctx.db)):
+            recovery_stmts = _lower_inner_trampoline(ctx, recovery, k_stmts)
+        else:
+            recovery_stmts = _make_catch_subgen_fn_and_loop(
+                ctx, "_catch_rec",
+                _lower_inner(ctx, recovery, [_yield_none_stmt()]), k_stmts)
+        body = _compile_catch_impl(
             ctx, catcher,
             goal_body_stmts=goal_stmts,
             recovery_body_stmts=recovery_stmts,
             always_catch=always_catch,
             in_goal_name=in_goal,
         )
+        if goal_gen_fn is None:
+            return body
+        return [body[0], body[1], goal_gen_fn, body[2]]
 
     goal_stmts = _lower_inner(ctx, goal_arg, [_yield_none_stmt()])
     recovery_stmts = _lower_inner(ctx, recovery, [_yield_none_stmt()])

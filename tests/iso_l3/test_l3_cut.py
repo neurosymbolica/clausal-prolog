@@ -67,17 +67,85 @@ def test_cut_in_a_then_inside_a_disjunction_cuts_the_clause(native, ans):
     assert ans(mod, "nest") == [1, 2]
 
 
-# S20: catch/3's trampoline-inline form has no cut exit yet (the compiler
-# raises CompilerError); strict, as above.
+# S20: an exception thrown after a cut in catch/3's Goal (7.8.9).
 CATCH_SRC = SRC + """\
 a17(R) :- catch((p(X), !, throw(got(X))), got(Y), R = Y).
 """
 
 
-@pytest.mark.xfail(strict=True, reason="catch/3's inline form is not a cut scope yet")
 def test_exception_after_a_cut_in_a_catch_goal(native, ans):
     mod = native.load("l3_cut_catch", CATCH_SRC)
     assert ans(mod, "a17") == [1]
+
+
+# S11 and its neighbours: catch/3 calls its Goal "as call/1" (ISO 7.8.9), so a
+# cut in the Goal is local to it.  The brief recorded Scryer's c3 as
+# [1,2,3,9], a deviation from its own call/1 ([1,2,9]); the Scryer at
+# /workspace/scryer-prolog (2026-10-14, scratchpad/cut/t4_s.pl) answers
+# [1,2,9] for both, which is also ISO (7.8.8: a cut in Then is transparent
+# to the catch Goal).  c6: the cut prunes the Goal's own `;` and nothing else.
+# f: a goal woken in the cutting Goal throws inside the catch; k: a ball from
+# the continuation is not the Goal's; n: nested catches, both cutting.
+CATCH_GOAL_SRC = """\
+p(1). p(2). p(3).
+a11(X) :- catch((p(X), !), _, true).
+a11(9).
+c2(X) :- catch(p(X), _, true), !.
+c2(9).
+c3(X) :- catch(( p(X), ( X > 1 -> ! ; true ) ), _, true).
+c3(9).
+c4(R) :- catch(( p(X), !, X > 5 ), _, true), R = X.
+c4(none).
+c6(X) :- catch(( ! ; X = 2 ), _, true), X == 2.
+c6(7).
+f(X) :- catch((freeze(Y, throw(w)), p(X), !, Y = 1), w, X = caught).
+k(X) :- catch(k0(X), out(Z), X = outer(Z)).
+k0(X) :- catch((p(X), !), _, X = caught), throw(out(X)).
+n(X) :- catch(catch((p(X), !, throw(i)), j, true), i, (p(X), X > 1, !)).
+n(9).
+"""
+
+
+@pytest.mark.parametrize("name,want", [
+    ("a11", [1, 9]), ("c2", [1]), ("c3", [1, 2, 9]), ("c4", ["none"]),
+    ("c6", [7]), ("f", ["caught"]), ("k", [("outer", 1)]), ("n", [2, 9]),
+])
+def test_catch_goal_is_opaque_to_cut(native, ans, name, want):
+    """catch/3's Goal is a cut barrier (ISO 7.8.9, "as call/1").  Every
+    value is Scryer's and ISO's (see the comment above for c3)."""
+    mod = native.load("l3_cut_catch_goal", CATCH_GOAL_SRC)
+    assert ans(mod, name) == want
+
+
+# catch/3's Recovery is likewise called "as call/1" (ISO 7.8.9): a cut in it
+# is local to the Recovery.  All values are Scryer's (scratchpad/cut/t4_s.pl).
+CATCH_RECOVERY_SRC = """\
+p(1). p(2). p(3).
+r1(X) :- catch(throw(e), e, (p(X), !)).
+r1(9).
+r2(X) :- catch(throw(e), e, (p(X), ( X > 1 -> ! ; true ))).
+r2(9).
+r3(X) :- catch(throw(e), e, p(X)), !.
+r3(9).
+r4(X-Y) :- catch((p(X), !), _, true), catch(throw(e), e, (p(Y), !)).
+r4(9-9).
+r5(R) :- catch(throw(e), e, (p(X), !, X > 5)), R = X.
+r5(none).
+r6(X) :- catch(throw(e), e, (p(X), !, throw(again(X)))).
+r7(X) :- catch(r6(X), again(Y), X = c(Y)).
+r9(X) :- catch(throw(e), e, ( ! ; X = 2 )), X == 2.
+r9(7).
+"""
+
+
+@pytest.mark.parametrize("name,want", [
+    ("r1", [1, 9]), ("r2", [1, 2, 9]), ("r3", [1]),
+    ("r4", [("-", 1, 1), ("-", 9, 9)]), ("r5", ["none"]),
+    ("r7", [("c", 1)]), ("r9", [7]),
+])
+def test_catch_recovery_is_opaque_to_cut(native, ans, name, want):
+    mod = native.load("l3_cut_catch_rec", CATCH_RECOVERY_SRC)
+    assert ans(mod, name) == want
 
 
 def test_zero_arity_and_multi_arity_rows(native, ans):
