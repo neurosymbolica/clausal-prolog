@@ -10,8 +10,11 @@ produced it (``:- op(700, xfx, -).`` then ``writeq(-(-(1,2),3))`` printed
 writers ask ``clausal.terms.writer_op_table()`` for it -- the one seam onto
 ``clausal.tools.prolog_operators.runtime_op_table()``, the process-wide table
 op/3 changes.  These tests drive that seam through its interface
-(``runtime_op_table`` / ``runtime_op_table_is_default``), set here with
-monkeypatch, so they hold whether or not the runtime table exists yet.
+(``runtime_op_table`` / ``runtime_op_table_is_default``): they replace ONLY
+the writer's own view of that module (``clausal.terms._prolog_operators``)
+with a stand-in, never ``prolog_operators`` itself -- code that imports
+``runtime_op_table`` by name must keep the real one -- so they hold whether
+or not the runtime table exists yet.
 
 Expected strings are the answers of Ulrich Neumerkel's ISO conformity table
 (https://www.complang.tuwien.ac.at/ulrich/iso-prolog/conformity_testing,
@@ -25,11 +28,12 @@ import os
 import pathlib
 import random
 import sys
+import types
 
 import pytest
 
+import clausal.terms
 from clausal.terms import term_canonical, term_write, writer_op_table, _WQ_OPS
-from clausal.tools import prolog_operators
 from clausal.tools.prolog_operators import OperatorTable
 from clausal.tools.prolog_reader import read_module
 
@@ -144,15 +148,22 @@ def _program(ops, goal):
     return "".join(f":- op({o}).\n" for o in ops) + f"r :- {goal}.\n"
 
 
+def _seam_sees(monkeypatch, **interface):
+    """Make the writer's seam see a ``prolog_operators`` that offers exactly
+    *interface*.  Only ``clausal.terms._prolog_operators`` is replaced: the
+    real module is untouched, so a module that imports ``runtime_op_table``
+    from it while this is in force still binds the real function."""
+    monkeypatch.setattr(clausal.terms, "_prolog_operators",
+                        types.SimpleNamespace(**interface))
+
+
 @pytest.fixture
 def runtime_table(monkeypatch):
-    """Install *table* as the runtime operator table, through the interface
-    the writer's seam reads."""
-    def install(table):
-        monkeypatch.setattr(prolog_operators, "runtime_op_table",
-                            lambda: table, raising=False)
-        monkeypatch.setattr(prolog_operators, "runtime_op_table_is_default",
-                            lambda: False, raising=False)
+    """Install *table* as the runtime operator table, as the writer's seam
+    sees it."""
+    def install(table, is_default=False):
+        _seam_sees(monkeypatch, runtime_op_table=lambda: table,
+                   runtime_op_table_is_default=lambda: is_default)
     return install
 
 
@@ -214,9 +225,7 @@ def test_op_directive_reaches_the_writer_only_through_the_seam(
         tmp_path, monkeypatch, runtime_table):
     """With the default runtime table the writer prints as it always did --
     the case the seam's fast path covers."""
-    runtime_table(_table([]))
-    monkeypatch.setattr(prolog_operators, "runtime_op_table_is_default",
-                        lambda: True, raising=False)
+    runtime_table(_table([]), is_default=True)
     out = _run_native(tmp_path, monkeypatch, [], "writeq(-(-(1,2),3))",
                       "_wq_ops_default")
     assert out == "1-2-3"
@@ -243,16 +252,14 @@ def test_ignore_ops(goal, want, tmp_path, monkeypatch, runtime_table):
 
 
 def test_seam_without_runtime_accessor(monkeypatch):
-    monkeypatch.delattr(prolog_operators, "runtime_op_table", raising=False)
+    _seam_sees(monkeypatch)
     assert writer_op_table() is _WQ_OPS
 
 
 def test_seam_fast_path_when_default(monkeypatch):
     calls = []
-    monkeypatch.setattr(prolog_operators, "runtime_op_table",
-                        lambda: calls.append(1), raising=False)
-    monkeypatch.setattr(prolog_operators, "runtime_op_table_is_default",
-                        lambda: True, raising=False)
+    _seam_sees(monkeypatch, runtime_op_table=lambda: calls.append(1),
+               runtime_op_table_is_default=lambda: True)
     assert writer_op_table() is _WQ_OPS
     assert calls == []
 
@@ -386,6 +393,9 @@ def test_round_trip_under_random_tables(seed, tmp_path):
     same term.  The native reader cannot yet read some postfix-operator
     texts (``b++ ++`` with yf, ``b yf-1`` with xf -- reader limits, not the
     writer's); those are read back by Scryer instead."""
+    # TODO: once the native reader's postfix-operator fix (the parser
+    # branch) lands, drop the Scryer fallback below and require every text
+    # to read back natively (``assert not reader_gaps``).
     rng = random.Random(seed)
     reader_gaps = []
     for _ in range(1500):
