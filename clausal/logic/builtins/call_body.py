@@ -49,6 +49,13 @@ and ``("\\+", G)`` -- what a runtime-built ISO term or a .pl import holds --
 run through the same converter.  ``->`` and ``*->`` are refused
 (``iso_control_cell_dispatch``): Clausal is cut-free with no committed choice.
 
+CUT IN A ``.pl`` MODULE (D59, 2026-10-14).  A ``.pl`` file is regular ISO
+Prolog, so a goal compiled against a ``.pl`` module's db
+(:func:`cut_allowed`) may hold ``!`` and ``->``: the converter emits the
+compiler's ``Cut`` and ``IfThenElse`` nodes, and the query compile gives the
+body a predicate scope, so the cut is local to this call (ISO 7.8.3) and
+still prunes inside it.  ``*->`` stays refused on every surface.
+
 ERRORS (checked against ISO first, then Scryer, 2026-09-25).  A
 non-callable top-level goal (number, tuple data, None) is
 ``type_error(callable, G)``; a non-empty list or string is the callable
@@ -145,10 +152,19 @@ def _culprit(term: Any) -> Any:
     return str(walked) if has_node(walked) else walked
 
 
-def check_callable_body(goal: Any, context: str) -> None:
+def cut_allowed(db) -> bool:
+    """D59: a goal compiled against a ``.pl`` module's db may cut; any other
+    db (``.clausal``, ``.seam``, a Python-made Module) keeps the refusal."""
+    from clausal.end_module import SURFACE_PL  # noqa: PLC0415
+    return getattr(db, "surface", None) == SURFACE_PL
+
+
+def check_callable_body(goal: Any, context: str, ite: bool = False) -> None:
     """ISO 7.6.2: raise ``type_error(callable, Goal)`` when a goal position
     reachable through the TRANSPARENT constructs holds a number.  ``not``'s
-    operand is not walked (it is checked when the negation runs)."""
+    operand is not walked (it is checked when the negation runs).  With
+    *ite* (a ``.pl`` caller, :func:`cut_allowed`) ``->`` is a construct too,
+    so its condition and then-branch are walked."""
     def walk(t):
         t = deref(t)
         if is_var(t):
@@ -164,7 +180,8 @@ def check_callable_body(goal: Any, context: str) -> None:
         if type(t) is nodes.IfExpr:
             return walk(t.test) or walk(t.body) or walk(t.orelse)
         is_cell, functor = compound_cell_shape(t)
-        if is_cell and len(t) == 3 and functor in (",", ";"):
+        if is_cell and len(t) == 3 and (functor in (",", ";")
+                                        or (ite and functor == "->")):
             return walk(t[1]) or walk(t[2])
         return False
 
@@ -277,6 +294,11 @@ class _Converter:
         if type(t) is str and t in ("fail", "false"):
             return False
         if type(t) is str and t == "!":
+            if cut_allowed(self.db):
+                # D59: a ``.pl`` caller's body may cut.  The query compile
+                # gives the body its own predicate scope, so the cut prunes
+                # this body's choice points and nothing past the call.
+                return nodes.Cut()
             # A cut INSIDE a body term -- ``(G, !)``, ``(!, G)``, ``(G ; !)``,
             # ``\\+ (G, !)``, an if_ branch.  Here it would cut the body's
             # own choice points, which Clausal cannot do, so running it as
@@ -332,7 +354,19 @@ class _Converter:
         if is_cell and len(t) == 3 and functor == ",":
             return nodes.TupleLiteral(elements=[self.goal(t[1]), self.goal(t[2])])
         if is_cell and len(t) == 3 and functor == ";":
+            left = deref(t[1])
+            l_cell, l_functor = compound_cell_shape(left)
+            if (l_cell and len(left) == 3 and l_functor == "->"
+                    and cut_allowed(self.db)):
+                # ISO 7.8.8 ``( C -> T ; E )``, a ``.pl`` caller only (D59).
+                return nodes.IfThenElse(test=self.goal(left[1]),
+                                        body=self.goal(left[2]),
+                                        orelse=self.goal(t[2]))
             return nodes.Or(left=self.goal(t[1]), right=self.goal(t[2]))
+        if is_cell and len(t) == 3 and functor == "->" and cut_allowed(self.db):
+            # ISO 7.8.7 ``( C -> T )``: fails when C fails (D59, ``.pl``).
+            return nodes.IfThenElse(test=self.goal(t[1]), body=self.goal(t[2]),
+                                    orelse=None)
         if is_cell and len(t) == 2 and functor == "\\+":
             direct = self._maybe_tabled(t[1])
             return nodes.Not(operand=direct if direct is not None
@@ -679,13 +713,18 @@ def iso_control_cell_dispatch(db, cell, functor, arity, context):
     The refusal is ``existence_error(procedure, '->'/2)`` -- exactly what an
     ISO system that does not provide a construct answers when a program calls
     it, so a portable ``catch/3`` for "no such procedure" sees it; the
-    context names the reason and the Clausal alternative.  Any other arity is
+    context names the reason and the Clausal alternative.  A ``.pl`` caller
+    (:func:`cut_allowed`, D59) runs ``->`` as a body; ``*->`` stays refused
+    on every surface.  Any other arity is
     the fold's ``','/3`` and friends (Scryer: existence_error).
     """
     from clausal.logic.exceptions import (  # noqa: PLC0415
         LogicException, existence_error,
     )
     if (functor in (",", ";") and arity == 2) or (functor == "\\+" and arity == 1):
+        return body_goal_dispatch(db, cell, context)
+    if functor == "->" and arity == 2 and cut_allowed(db):
+        # D59: a ``.pl`` caller runs ISO if-then (7.8.7) as a body.
         return body_goal_dispatch(db, cell, context)
     if functor in ("->", "*->") and arity == 2:
         raise LogicException(existence_error(
@@ -756,7 +795,7 @@ def body_goal_dispatch(db, goal_val, context: str):
     The shape ``higher_order._resolve_named_goal`` returns, so ``call/N``
     drives it like any resolved goal.
     """
-    check_callable_body(goal_val, context)
+    check_callable_body(goal_val, context, ite=cut_allowed(db))
     conv = _Converter(db)
     node = conv.goal(goal_val)
     if node is True:
@@ -792,7 +831,7 @@ __all__ = [
     "is_body_term", "check_callable_body", "body_goal_dispatch",
     "body_with_extras_error", "non_callable_goal_error",
     "iso_control_cell_dispatch", "folded_existence_error",
-    "cut_refusal_error",
+    "cut_refusal_error", "cut_allowed",
     "is_non_callable_term",
     "needs_meta_call", "MetaCallGoal",
     "SPECIAL_FORMS", "is_special_form", "is_special_form_closure",

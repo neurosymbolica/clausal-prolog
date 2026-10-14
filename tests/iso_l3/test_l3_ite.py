@@ -42,10 +42,9 @@ d8(R-Y) :- atom_chars(ab, L0), append(L0, [c], R), ( L0 = [_, _] -> Y = yes ; Y 
 
 ROWS = [
     ("a4", ["e"]), ("a5", [1]), ("a6", [1]), ("a7", [1]), ("a13", [2]),
-    # S22: call((p(X), !)) in the condition needs call/1 to run a cut in a
-    # .pl body (Task 5); today it raises existence_error(procedure, !/0).
-    pytest.param("a19", [1], marks=pytest.mark.xfail(
-        strict=True, reason="call/1 does not run a cut in a .pl body yet")),
+    # S22: call((p(X), !)) in the condition -- call/1 runs a cut in a .pl
+    # caller's body, local to the call (Task 5).
+    ("a19", [1]),
     ("a23", [[("-", 1, "no"), ("-", 2, "yes"), ("-", 3, "no")]]),
     ("a24", [[1]]), ("a27", [1]), ("a30", []), ("a31", [[1]]), ("side", [[2]]),
     # A binding made in C is visible in T.

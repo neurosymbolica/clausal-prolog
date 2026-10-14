@@ -277,6 +277,10 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
     dummy_logic_module = mark_import_placeholder(
         LogicModule(module.__name__, module_dict=module_dict))
     module_dict["$module"] = dummy_logic_module
+    # D59: the surface rides on the db, so a goal meta-called while the
+    # body runs (a directive's call/1) knows whether it may cut.
+    from clausal.end_module import surface_of  # noqa: PLC0415
+    dummy_logic_module.db.surface = surface_of(module_dict.get("__file__") or "")
     module_dict["$define_predicate"] = (
         lambda pred, lm: predicate_nodes.append(pred)
     )

@@ -630,6 +630,12 @@ class Database:
         # writer.
         self._adopted_owners: dict[str, list] = {}
         self.module_dict: dict | None = module_dict
+        # D59 (2026-10-14): ``end_module.surface_of``'s name for the file that
+        # owns this module ("pl", "clausal_prolog", "seam"), or None for a
+        # module no file owns.  Only "pl" permits cut: a goal built at run
+        # time and compiled against this db (call/1, phrase/2,3, a query)
+        # may hold ``!`` and ``->`` (``call_body.cut_allowed``).
+        self.surface: "str | None" = None
 
     def _home_stores(self) -> tuple:
         """The containers whose keys make a predicate KNOWN here besides a

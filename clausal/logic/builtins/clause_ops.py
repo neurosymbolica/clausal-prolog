@@ -298,6 +298,19 @@ def _spell_as_cells(t: Any, namespace: dict, db=None) -> Any:
         return t if all(a is b for a, b in zip(new, t)) else new
     if not isinstance(t, nodes.Node) or not dataclasses.is_dataclass(t):
         return t
+    if type(t) is nodes.Cut:
+        # D59: a ``.pl`` clause's cut is the atom ``!`` in its Body (ISO).
+        return "!"
+    if type(t) is nodes.IfThenElse:
+        # ISO ``( C -> T )`` / ``( C -> T ; E )``: the ``->`` cell, inside a
+        # ``;`` cell when there is an else.
+        ite = nodes.TupleLiteral(elements=[
+            "->", _spell_as_cells(t.test, namespace, db),
+            _spell_as_cells(t.body, namespace, db)])
+        if t.orelse is None:
+            return ite
+        return nodes.TupleLiteral(elements=[
+            ";", ite, _spell_as_cells(t.orelse, namespace, db)])
     if (type(t) is nodes.Call and type(t.func) is nodes.LoadName
             and not t.kwargs and _needs_cell(t.func.name, len(t.args),
                                              namespace, db)):
@@ -418,6 +431,8 @@ def _goal_thunk(goals: list, db=None) -> Any:
             subs = (g.operand,)
         elif type(g) is nodes.IfExpr:
             subs = (g.test, g.body, g.orelse)
+        elif type(g) is nodes.IfThenElse:
+            subs = tuple(x for x in (g.test, g.body, g.orelse) if x is not None)
         elif type(g) is nodes.Call and type(g.func) is nodes.LoadName:
             idx = _goal_positions(g.func.name, len(g.args), db)
             subs = [g.args[i] for i in idx if i < len(g.args)]
@@ -802,7 +817,15 @@ def engine_body_pattern(t, *, iso: bool = False):
         return nodes.Not(operand=engine_body_pattern(t[1]))
     if type(t) is not tuple or len(t) != 3 or type(t[0]) is not str:
         return t
+    if t[0] == "->":
+        # D59: a .pl clause's if-then is spelled as its ISO cell (and its
+        # cut as the atom ``!``) by ``_spell_as_cells``, so the pattern
+        # keeps the cell; only the goals inside it are rebuilt.
+        return ("->", engine_body_pattern(t[1]), engine_body_pattern(t[2]))
     if t[0] == ";":
+        left = deref(t[1])
+        if type(left) is tuple and len(left) == 3 and left[0] == "->":
+            return (";", engine_body_pattern(left), engine_body_pattern(t[2]))
         return nodes.Or(left=engine_body_pattern(t[1]),
                         right=engine_body_pattern(t[2]))
     if t[0] != ",":

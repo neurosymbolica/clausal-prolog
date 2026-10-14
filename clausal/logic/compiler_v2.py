@@ -154,6 +154,10 @@ def compile_module(
     """
     logic_module = LogicModule(module_name, module_dict=module_dict)
     db = logic_module.db
+    # D59: which surface wrote this module decides whether a goal built at
+    # run time against its db may cut (``call_body.cut_allowed``).
+    from clausal.end_module import surface_of  # noqa: PLC0415
+    db.surface = surface_of(module_dict.get("__file__") or "")
     _install_real_module(module_dict, logic_module)
 
     # ── Step 0-: Reserved truth-value names ───────────────────────────────

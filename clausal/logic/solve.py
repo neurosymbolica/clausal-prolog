@@ -352,6 +352,15 @@ def _term_to_goal(term: Any, db: Any = None) -> Any:
                 term, "solve/1", call_extra=0, dialect_gate=False)
             _sandbox_query_edge(_module, "solve/1")
             return _term_to_goal(inner, getattr(_module, "db", None))
+        if (functor in (",", ";", "->", "\\+")
+                and len(term) == (2 if functor == "\\+" else 3)):
+            from clausal.logic.builtins.call_body import cut_allowed  # noqa: PLC0415
+            if cut_allowed(db):
+                # D59 (ruling Q2): a query against a ``.pl`` module runs an
+                # ISO control cell as call/1 does -- conjunction, disjunction,
+                # negation, if-then-else, and a cut inside them, local to
+                # the query.  ``*->`` falls through to the refusal.
+                return AstCall(func=LoadName(name="call"), args=[term], kwargs=[])
         refuse_control_construct_cell(term, functor, "solve/1")
         return AstCall(
             func=LoadName(name=functor), args=list(term[1:]), kwargs=[],
@@ -938,6 +947,15 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
         # emitted through it, exactly as in a compiled clause.  Without it
         # the query emitted ``$dispatch_at(name, N)`` on the BINDING, which
         # resolves another arity in the binding's owner, not in this module.
+        # The query body is a one-clause predicate, so it is a cut barrier
+        # (D59): a ``.pl`` caller's runtime-built ``(G, !)`` reaches here
+        # through call/1's converter, and the cut leaves this predicate --
+        # local to the call, as ISO 7.8.3 makes it.  Read only by the Cut
+        # lowering arm, so a cut-free query compiles as before.
+        if ctx_template is not None:
+            from clausal.logic.compiler.goal_shallow import predicate_cut_exit
+            ctx_template = ctx_template.replace(
+                cut_exit=predicate_cut_exit(ctx_template))
         return compile_body_trampoline(clause.body, db, var_context, "trail",
                                        ctx=ctx_template)
 

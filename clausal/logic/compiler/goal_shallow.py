@@ -455,6 +455,59 @@ def compile_body(
     return _compile_body_impl(goals, ctx)
 
 
+def predicate_cut_exit(ctx_template: CompilationContext) -> Callable[[], list[ast.stmt]]:
+    """The ``cut_exit`` of a PREDICATE clause body compiled under
+    *ctx_template* (read now, so call it per clause).  Shared by the
+    clause-body compiler below and ``solve._compile_as_query``, whose
+    query body is a one-clause predicate too (D59)."""
+    # ISO cut: this clause body is a barrier scope.  The exit undoes the
+    # arm's own trail mark (none when the arm was built with
+    # ``skip_trail=True``), then leaves the predicate exhausted.  Only
+    # the Cut lowering arm calls ``cut_exit``.
+    from .strategy import TrampolineStrategy as _TS
+    from .goal_trampoline import _yield_step_stmt as _ys
+    _mark = ctx_template.clause_mark_name
+
+    def _undo() -> list[ast.stmt]:
+        return [] if _mark is None else [_undo_stmt(_mark, _TRAIL_PARAM_NAME)]
+
+    if isinstance(ctx_template.strategy, _TS):
+        _fail = ctx_template.fail_name
+        _tro_mode = ctx_template.cut_tro_restart
+
+        def _restart() -> list[ast.stmt]:
+            # A TRO tail (this clause's own, or an earlier arm's) has
+            # set the restart flag: take the restart, which also leaves
+            # the remaining clauses untried.  The arm's ``finally``
+            # undoes its mark on the way out, as on the plain TRO path.
+            if _tro_mode == "loop":
+                from .tro import TRO_CUT_RESTART_NAME
+                return [_if(_name("_tro"), [
+                    ast.Raise(exc=_name(TRO_CUT_RESTART_NAME), cause=None)])]
+            if _tro_mode == "signal":
+                # This activation's own flag and tail args: the shared
+                # ``$tro_state`` may hold a re-entrant call's.  Write
+                # them back so ``_drive_tro_bucket``'s snapshot on
+                # StopIteration re-dispatches THIS tail.
+                from .tro import TRO_SIG_NAME, TRO_SIG_ARGS_NAME
+                _st = lambda sl: ast.Subscript(  # noqa: E731
+                    value=_name("$tro_state"), slice=sl, ctx=ast.Store())
+                return [_if(_name(TRO_SIG_NAME), [
+                    ast.Assign(targets=[_st(ast.Constant(0))], value=ast.Constant(True)),
+                    ast.Assign(targets=[_st(ast.Slice(lower=ast.Constant(1)))],
+                               value=_name(TRO_SIG_ARGS_NAME)),
+                    ast.Return(value=None)])]
+            return []
+
+        def _exit() -> list[ast.stmt]:
+            return _restart() + _undo() + [
+                _ys(_name(_fail), _name("$DONE")), ast.Return(value=None)]
+    else:
+        def _exit() -> list[ast.stmt]:
+            return _undo() + [ast.Return(value=None)]
+    return _exit
+
+
 def _make_body_compiler_impl(
     db: Database,
     *,
@@ -488,51 +541,7 @@ def _make_body_compiler_impl(
         # via the ``destructive_reuse`` SubCall hint.
         from .destructive_reuse import _flatten_and_goals
         goals = _flatten_and_goals(clause.body)
-        # ISO cut: this clause body is a barrier scope.  The exit undoes the
-        # arm's own trail mark (none when the arm was built with
-        # ``skip_trail=True``), then leaves the predicate exhausted.  Only
-        # the Cut lowering arm calls ``cut_exit``.
-        from .strategy import TrampolineStrategy as _TS
-        from .goal_trampoline import _yield_step_stmt as _ys
-        _mark = ctx_template.clause_mark_name
-
-        def _undo() -> list[ast.stmt]:
-            return [] if _mark is None else [_undo_stmt(_mark, _TRAIL_PARAM_NAME)]
-
-        if isinstance(ctx_template.strategy, _TS):
-            _fail = ctx_template.fail_name
-            _tro_mode = ctx_template.cut_tro_restart
-
-            def _restart() -> list[ast.stmt]:
-                # A TRO tail (this clause's own, or an earlier arm's) has
-                # set the restart flag: take the restart, which also leaves
-                # the remaining clauses untried.  The arm's ``finally``
-                # undoes its mark on the way out, as on the plain TRO path.
-                if _tro_mode == "loop":
-                    from .tro import TRO_CUT_RESTART_NAME
-                    return [_if(_name("_tro"), [
-                        ast.Raise(exc=_name(TRO_CUT_RESTART_NAME), cause=None)])]
-                if _tro_mode == "signal":
-                    # This activation's own flag and tail args: the shared
-                    # ``$tro_state`` may hold a re-entrant call's.  Write
-                    # them back so ``_drive_tro_bucket``'s snapshot on
-                    # StopIteration re-dispatches THIS tail.
-                    from .tro import TRO_SIG_NAME, TRO_SIG_ARGS_NAME
-                    _st = lambda sl: ast.Subscript(  # noqa: E731
-                        value=_name("$tro_state"), slice=sl, ctx=ast.Store())
-                    return [_if(_name(TRO_SIG_NAME), [
-                        ast.Assign(targets=[_st(ast.Constant(0))], value=ast.Constant(True)),
-                        ast.Assign(targets=[_st(ast.Slice(lower=ast.Constant(1)))],
-                                   value=_name(TRO_SIG_ARGS_NAME)),
-                        ast.Return(value=None)])]
-                return []
-
-            def _exit() -> list[ast.stmt]:
-                return _restart() + _undo() + [
-                    _ys(_name(_fail), _name("$DONE")), ast.Return(value=None)]
-        else:
-            def _exit() -> list[ast.stmt]:
-                return _undo() + [ast.Return(value=None)]
+        _exit = predicate_cut_exit(ctx_template)
         ctx = ctx_template.replace(
             db=db, var_context=var_context, trail_name=_TRAIL_PARAM_NAME,
             cut_exit=_exit,

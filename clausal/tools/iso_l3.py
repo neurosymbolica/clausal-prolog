@@ -755,10 +755,15 @@ class _ClauseLowering:
     def _refuse_control_in(self, g: Any, sp) -> None:
         """A goal written as ``call/N``'s first argument is still a goal: the
         cut-free refusal applies to what is visible of it at load time.
-        In a ``.pl`` file a cut there is allowed: call/1's converter runs
-        it, local to the call (ISO 7.8.3); ``->`` and ``*->`` stay refused
-        here."""
+        In a ``.pl`` file a cut and ``->`` there are allowed: call/1's
+        converter runs them, local to the call (ISO 7.8.3); ``*->`` stays
+        refused on every surface, so ``->``'s arguments are still walked."""
         if g == "!" and self._cut_allowed:
+            return
+        if (self._cut_allowed and type(g) is tuple and len(g) == 3
+                and g[0] == "->"):
+            for a, s in zip(g[1:], _arg_spans(sp, 2)):
+                self._refuse_control_in(a, s)
             return
         if type(g) is str and g in _REFUSED_CONTROL:
             raise LoweringRefused(

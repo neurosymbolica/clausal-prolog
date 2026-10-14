@@ -85,8 +85,9 @@ def _empty_remainder_like(list_val):
 
 #: The control constructs a DCG BODY term may be built from (ISO 7.14 /
 #: Scryer's library(dcgs)): conjunction, disjunction (``;`` and ``|``) and
-#: negation.  ``->`` stays refused -- Clausal has no committed choice.
-_DCG_CONTROL_CELLS = frozenset({",", ";", "|", "\\+"})
+#: negation -- and if-then ``->`` (7.14.2), which call/1's converter runs
+#: for a ``.pl`` caller and refuses for any other (D59).
+_DCG_CONTROL_CELLS = frozenset({",", ";", "|", "\\+", "->"})
 
 
 def _is_dcg_control_body(rule_val) -> bool:
@@ -218,6 +219,12 @@ def _dcg_translate(body, s0, s, context, bad):
     if is_cell and functor in (";", "|") and len(b) == 3:
         return (";", _dcg_translate(b[1], s0, s, context, bad),
                 _dcg_translate(b[2], s0, s, context, bad))
+    if is_cell and functor == "->" and len(b) == 3:
+        # ISO 7.14.2 / Ulrich's dcgs: ``(C -> T)`` threads the state through
+        # C then T.  Whether it may run is call/1's to decide (D59).
+        mid = Var()
+        return ("->", _dcg_translate(b[1], s0, mid, context, bad),
+                _dcg_translate(b[2], mid, s, context, bad))
     if is_cell and functor == "\\+" and len(b) == 2:
         # ``\+ B`` is ``\+ phrase(B, S0, _), S0 = S``: B is translated when
         # the negation RUNS, so ``phrase(([a], \+ 1), [])`` fails at ``[a]``
@@ -238,7 +245,8 @@ def _dcg_translate(body, s0, s, context, bad):
         return (",", b[1], ("=", s0, s))
     if type(b) is str and b == "!":
         # ISO 7.14.2: ``!`` inside a grammar body is ``!, S0 = S``, so the
-        # cut is a leaf of the translated body and call/1's converter
+        # cut is a leaf of the translated body: call/1's converter runs it
+        # for a ``.pl`` caller (D59) and otherwise
         # REFUSES it (existence_error(procedure, !/0)), as in any other
         # meta-called body -- it used to reach the fold as the nonterminal
         # ``!/2``.  A cut that is the WHOLE phrase body never comes here:
