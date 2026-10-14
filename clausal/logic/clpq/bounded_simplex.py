@@ -1524,12 +1524,27 @@ def back_substitute(variable, form, trail):
     return back_substitute_variables(members, variable, form, trail)
 
 
+def row_size(form):
+    """The work units of writing the row *form*: a unit for the row and
+    for each term, and a unit for each 64 bits of a coefficient, the
+    constant and the rest included (DEVIATIONS.md D24: big coefficients
+    cost as much as many terms)."""
+    units = 1
+    for value in (form.constant, form.rest):
+        units += 1 + ((value[0].bit_length() + value[1].bit_length()) >> 6)
+    for _, coefficient in form.terms:
+        units += 1 + ((coefficient[0].bit_length()
+                       + coefficient[1].bit_length()) >> 6)
+    return units
+
+
 def back_substitute_variables(members, variable, form, trail):
     """bv.pl, back_substitute_variables/3 (bs/3): walk the open member list
     up to its tail; a member whose row holds *variable* gets the new row.
-    Inside a projection the rows rewritten are charged to it
-    (limits.charge_projection)."""
-    rewritten = 0
+    Inside a bb_inf search or a projection, the rows read and the size of
+    the rows written are charged to it (limits.charge_rows, row_size)."""
+    metered = limits.metering()
+    written = 0
     node = deref(members)
     while type(node) is ListCell:
         member = deref(node.head)
@@ -1537,20 +1552,25 @@ def back_substitute_variables(members, variable, form, trail):
         state = state_of(member)
         if state is None or state.linear_form is None:
             continue
+        written += 1                    # the row read
         new_form = normal_form_substitute(variable, form, state.linear_form)
         if new_form is not None:
             put_state(member, with_changes(state, linear_form=new_form), trail)
-            rewritten += 1
-    if limits.projection_rows is not None:
-        limits.charge_projection(rewritten)
+            if metered:
+                written += row_size(new_form)
+    if metered:
+        limits.charge_rows(written)
     return True
 
 
 def back_substitute_collect_bindings(members, variable, form, bindings, trail):
     """bv.pl, back_substitute_collect_bindings/5 (bs_collect_bindings/5):
     back_substitute_variables, also collecting each row that became
-    constant.  Inside a projection the rows rewritten are charged to it."""
-    rewritten = 0
+    constant.  Inside a bb_inf search or a projection, the rows read and
+    the size of the rows written are charged to it (limits.charge_rows,
+    row_size)."""
+    metered = limits.metering()
+    written = 0
     node = deref(members)
     while type(node) is ListCell:
         member = deref(node.head)
@@ -1558,14 +1578,16 @@ def back_substitute_collect_bindings(members, variable, form, bindings, trail):
         state = state_of(member)
         if state is None or state.linear_form is None:
             continue
+        written += 1                    # the row read
         new_form = normal_form_substitute(variable, form, state.linear_form)
         if new_form is not None:
             put_state(member, with_changes(state, linear_form=new_form), trail)
             back_substitute_collect_binding(new_form.terms, member,
                                             new_form.constant, bindings)
-            rewritten += 1
-    if limits.projection_rows is not None:
-        limits.charge_projection(rewritten)
+            if metered:
+                written += row_size(new_form)
+    if metered:
+        limits.charge_rows(written)
     return True
 
 

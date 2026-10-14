@@ -809,7 +809,24 @@ def normal_form(term):
     *path* holds the compounds between the root and the term being read
     (each one's `_LEAVE` item takes it off again), so a cyclic term raises
     type_error(evaluable, F/A) where 1.3.3 loops (DEVIATIONS.md D23,
-    test_normal_form_of_a_cyclic_term_raises)."""
+    test_normal_form_of_a_cyclic_term_raises).
+
+    Its powers and products of sums are charged, before each is made, to
+    meters of this call's own: past a clpq_expansion cap it raises
+    `resource_error(clpq_expansion)` (DEVIATIONS.md D24)."""
+    terms_token = limits.start("clpq_expansion",
+                               "the terms one normal form expanded")
+    bits_token = limits.start("clpq_expansion_bits",
+                              "the coefficient bits one normal form "
+                              "expanded")
+    try:
+        return _normal_form(term)
+    finally:
+        limits.stop(bits_token)
+        limits.stop(terms_token)
+
+
+def _normal_form(term):
     work = [(_EVALUATE, term)]
     values = []
     path = set()
@@ -829,7 +846,7 @@ def normal_form(term):
             values.append(normal_form_add(values.pop(), right))
         elif action == _MULTIPLY:
             right = values.pop()
-            values.append(normal_form_multiply(values.pop(), right))
+            values.append(charged_multiply(values.pop(), right))
         elif action == _DIVIDE:
             divisor = values.pop()
             result = normal_form_divide(divisor, values.pop())
@@ -1227,10 +1244,11 @@ def normal_form_power(exponent, norm):
     """nf.pl, normal_form_power/3 (nf_power/3): *norm* to the int
     *exponent*; None where a negative power of zero divides by zero.
 
-    Where the expansion would make more terms than the clpq_power cap, it
-    raises `resource_error(clpq_power)` before expanding (DEVIATIONS.md
-    D24): `(Y + 1)^N` costs about N^3."""
-    check_power_size(abs(exponent), len(norm))
+    The expansion is charged before it is made (power_size): past the
+    clpq_expansion caps it raises `resource_error(clpq_expansion)`
+    (DEVIATIONS.md D24): `(Y + 1)^N` costs about N^3."""
+    terms, bits = power_size(abs(exponent), norm)
+    limits.charge_expansion(terms, bits, "the terms of an expansion")
     if exponent < 0:
         inverse = binomial_power(norm, -exponent)
         return normal_form_divide(inverse, [Monomial(ONE, [])])
@@ -1239,22 +1257,51 @@ def normal_form_power(exponent, norm):
     return [Monomial(ONE, [])]          # 0^0 is indeterminate but we say 1
 
 
-def check_power_size(exponent, count):
-    """Raise `resource_error(clpq_power)` where a sum of *count* terms to
-    the *exponent* expands into more terms than the clpq_power cap:
-    binomial(exponent + count - 1, count - 1), the number of its power
-    products before like ones merge.  The binomial is built a factor at a
-    time and stops at the cap, so a huge exponent costs nothing."""
-    if exponent < 2 or count < 2:
-        return
-    cap = limits.limit("clpq_power")
+def coefficient_bits(norm):
+    """The most bits a coefficient of *norm* takes, numerator and
+    denominator together."""
+    most = 0
+    for monomial in norm:
+        numerator, denominator = monomial.coefficient
+        most = max(most, numerator.bit_length() + denominator.bit_length())
+    return most
+
+
+def power_size(exponent, norm):
+    """(terms, bits) of *norm* (a sum of T terms) to the *exponent*,
+    before it is expanded: binomial(exponent + T - 1, T - 1) power
+    products before like ones merge, each coefficient a product of
+    *exponent* of *norm*'s and a multinomial coefficient under
+    T^exponent.  The binomial is built a factor at a time and stops past
+    the clpq_expansion cap, so a huge exponent costs nothing.  (0, 0) for
+    an exponent under 2."""
+    count = len(norm)
+    if exponent < 2 or count == 0:
+        return 0, 0
+    cap = limits.limit("clpq_expansion")
     terms = 1
     for index in range(1, count):
         terms = terms * (exponent + index) // index
         if terms > cap:
-            break
-    limits.check("clpq_power", terms,
-                 "the terms of an integer power's expansion")
+            return terms, 0                     # raises on the terms
+    per_term = exponent * (coefficient_bits(norm) + count.bit_length())
+    return terms, terms * per_term
+
+
+def product_size(first, second):
+    """(terms, bits) of the product of two normal forms, before it is
+    made: every pair of terms, each coefficient the product of two."""
+    terms = len(first) * len(second)
+    return terms, terms * (coefficient_bits(first) + coefficient_bits(second))
+
+
+def charged_multiply(first, second):
+    """normal_form_multiply, charged first to the clpq_expansion caps
+    (a product of sums multiplies out: 2^k terms for k factors)."""
+    if len(first) > 1 and len(second) > 1:
+        terms, bits = product_size(first, second)
+        limits.charge_expansion(terms, bits, "the terms of an expansion")
+    return normal_form_multiply(first, second)
 
 
 def normal_form_power_positive(exponent, norm):
@@ -1337,6 +1384,18 @@ def repair(norm):
     repairs every skeleton first, innermost first (_nested_bases), into a
     table that repair_power_base reads, so the only recursion left halves
     its count (test_deeply_nested_bases_repair_without_recursion)."""
+    terms_token = limits.start("clpq_expansion",
+                               "the terms one repair expanded")
+    bits_token = limits.start("clpq_expansion_bits",
+                              "the coefficient bits one repair expanded")
+    try:
+        return _repair(norm)
+    finally:
+        limits.stop(bits_token)
+        limits.stop(terms_token)
+
+
+def _repair(norm):
     table = {}
     for base in _nested_bases(norm):
         try:
@@ -1472,7 +1531,7 @@ def repair_power(term, exponent, so_far, table):
     powered = normal_form_power(exponent, base)
     if powered is None:
         return None
-    return [], normal_form_multiply(powered, so_far)
+    return [], charged_multiply(powered, so_far)
 
 
 #

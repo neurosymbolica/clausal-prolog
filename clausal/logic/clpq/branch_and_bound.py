@@ -94,6 +94,9 @@ def branch_and_bound_infimum_internal(normal_form, argument, trail):
     integer_variables, epsilon, infimum, vertex = argument
     mark = trail.mark()
     incumbent = None                    # ( bb_delete(incumbent, _) -> true ; true )
+    # The work of the search's pivots, against the clpq_work cap
+    # (DEVIATIONS.md D24): the work of a node grows with the store.
+    token = limits.start("clpq_work", "the work of one bb_inf search")
     try:
         trail.take_pending()            # the outer queue, back at the undo
         integer_forms = branch_and_bound_intern(integer_variables, epsilon,
@@ -109,6 +112,7 @@ def branch_and_bound_infimum_internal(normal_form, argument, trail):
                         incumbent = branch_and_bound_loop(
                             dependent, integer_forms, epsilon, trail)
     finally:
+        limits.stop(token)
         trail.undo(mark)                                        # fail
     if incumbent is None:                                       # bb_delete fails
         return False
@@ -135,7 +139,8 @@ def branch_and_bound_loop(objective, integer_forms, epsilon, trail):
 
     Each pass is one node.  Past the clpq_nodes cap it raises
     `resource_error(clpq_nodes)` (DEVIATIONS.md D24): 1.3.3 searches a
-    store with no integer point for ever."""
+    store with no integer point for ever.  The nodes are this call's own;
+    the work of its pivots is metered by its caller."""
     incumbent = None
     alternatives = []
     nodes = 0

@@ -1286,7 +1286,7 @@ Not covered: the `inf/2` and `sup/2` builtins ask CLP(R) first
 reached, so `X = 1 + X, inf(X, I)` through the engine still raises
 `RecursionError`, under both switches (shared code; D24, deep terms).
 
-## D24: known limits, deferred by ruling R34; three of them capped (ruling D51)
+## D24: known limits, deferred by ruling R34; the first three capped (rulings D42, D51)
 
 The security review of Task 16 measured these; ruling R34 defers them, the
 first three to the operator as one question (resource limits beyond
@@ -1295,63 +1295,117 @@ Ruling D42 asks for a cap on each of the first three before any flip, and
 ruling D51 says what a cap does: past it the port raises
 `error(resource_error(R), _)`, as Scryer shapes it (the context is a
 variable, the explanation goes to the exception's message).  It never
-fails in place of an answer and never answers in part.  1.3.3 has no such
+fails in place of an answer and never answers in part, and the defaults
+refuse no query 1.3.3 answers in reasonable time.  1.3.3 has no such
 caps, so these are deviations; the port answers as 1.3.3 does below them.
 
-| Resource R | What is counted | Default | Flag |
+| Resource R | Flag | What one call counts | Default |
 |---|---|---|---|
-| `clpq_nodes` | the nodes of one bb_inf search (one pass of `branch_and_bound_loop`) | 20,000 | `clpq_max_nodes` |
-| `clpq_projection` | the rows one projection writes: each row a pivot's back substitution rewrites, and each constraint a Fourier-Motzkin elimination derives, charged before it is made | 50,000 | `clpq_max_projection` |
-| `clpq_power` | the terms of one integer power's binomial expansion, `binomial(N + T - 1, T - 1)` for a sum of T terms to the N (or -N), counted before like products merge and before expanding | 10,000 | `clpq_max_power` |
+| `clpq_nodes` | `clpq_max_nodes` | the nodes of one bb_inf search (passes of `branch_and_bound_loop`) | 20,000 |
+| `clpq_work` | `clpq_max_work` | the work of one bb_inf search: a unit for each row its pivots' back substitution reads, and for each row it writes a unit per term and per 64 bits of a coefficient (`bounded_simplex.row_size`) | 2,000,000 |
+| `clpq_projection` | `clpq_max_projection` | the same work for one projection, plus each row Fourier-Motzkin derives, charged before it is made as wide as the widest row it comes from | 4,000,000 |
+| `clpq_expansion` | `clpq_max_expansion` | the terms one normal form (or repair) makes in powers, `binomial(N + T - 1, T - 1)` for a sum of T terms to the N or -N, and in products of sums, `len(A) * len(B)` each, counted before each is built | 20,000 |
+| `clpq_expansion` | `clpq_max_expansion_bits` | the bits those terms' coefficients take, estimated before each is built: `terms * N * (bits of the base's largest coefficient + bits of T)` for a power, `terms * (largest of A + largest of B)` for a product | 200,000,000 |
 
-The caps live in `clausal/logic/clpq/limits.py` (`limit`, `set_limit`).
-A program reads and sets them with `current_prolog_flag/2` and
-`set_prolog_flag/2`; each flag is process wide and takes a positive
-integer (anything else is `domain_error(flag_value, F+V)`).  The flags
-exist only under `CLAUSAL_CLPQ=holzbaur`, so the legacy switch's flag set
-is unchanged (`test_the_legacy_switch_has_no_cap_flags`).  The engine's
-flag mechanism (`clausal/logic/builtins/flags.py`) was chosen over an
-environment variable because it is what ISO gives a program for
-implementation-defined limits.  A projection counts rows rather than
-derived constraints alone because the time goes into the pivots of
-redundancy elimination: 176 derived constraints took over 20 s on one
-probe and 316 took 9 s on another, while rows written track the time to
-within about two times.
+**Where they live.** `clausal/logic/clpq/limits.py` holds the caps
+(`limit`, `set_limit`) and the meters.  Each count belongs to one call: a
+`Meter` on a context variable, so two threads or two asyncio tasks never
+share a count (review F5: a process global made 70 of 80 threaded
+projections raise for each other's work).  A metered call inside another,
+a projection under a search or a bb_inf woken in a search, is charged to
+its own meter and to every meter around it, so the outer cap bounds the
+whole.  The caps bound one call; a program that calls again in a loop is
+the host's to bound (docs/sandbox.md: time and memory limits).
 
-Headroom, measured 2026-10-14 by recording the most each cap saw over
-tests/clpq_port (CLAUSAL_SLOW_TESTS=1: the examples, filled_rectangle
-n = 9 and the nested legacy suites under the port) and every other test
-file that names clpq, bb_inf or dump_q, all under `CLAUSAL_CLPQ=holzbaur`:
-at most 1,167 nodes in one search (17 times under the cap), 6,493 rows in
-one projection (7.7 times) and 10 terms in one power (1,000 times).  At
-the caps, under a load average near 20 on 8 cores: the search with no
-integer point raises after 8.3 s and 63 MB (with a counting wrapper;
-before the caps it ran 14,000 nodes/s and grew by 30 MB/s), the probe below raises after 5.4 s at n = 5 (seed 101) and
-5.7 s at n = 6, and `(Y + 1)^9999`, the largest power of a binomial the
-cap admits, takes 1.4 s; `(Y + 1)^(10^7)` raises at once.
+**Configuration.** A program reads and sets the caps with
+`current_prolog_flag/2` and `set_prolog_flag/2`; each flag is process wide
+and takes a positive integer (anything else is
+`domain_error(flag_value, F+V)`).  The flags exist only under
+`CLAUSAL_CLPQ=holzbaur`, so the legacy switch's flag set is unchanged
+(`test_the_legacy_switch_has_no_cap_flags`).  The engine's flag mechanism
+(`clausal/logic/builtins/flags.py`) was chosen over an environment
+variable because it is what ISO gives a program for implementation-defined
+limits.  In the sandbox the caps are the host's: a program sets them
+neither with the goal (refused before) nor with a load-time directive of
+any front end (`flags.sandbox_refusal`, checked where the setting is
+validated and again where it is written; only the module-scoped
+`assert_creates_dynamic` and `double_quotes` are allowed,
+`SANDBOX_DIRECTIVE_FLAGS`).  The host calls `limits.set_limit`.
+
+**Why work, not nodes or rows alone.** The work of a node grows with the
+store: under the node cap alone, the store with no integer point plus 20,
+60 and 200 variables tied to X and Y took 79 s (490 MB), 163 s (1.4 GB) and
+an estimated 46 min (review F2).  Most of it is the back substitution's
+walk over every row of the component, most of which do not hold the
+variable, so a row read counts as well as a row written; and a row with
+big coefficients costs as much as a long one (the D24 probe with
+coefficients up to 10^9 ran 51 s to a cap counting terms alone), so a
+written row counts its coefficients' size too.  Measured at a load
+average of 4 to 5 on 8 cores, the work runs at 270,000 to 750,000 units a
+second across the wide searches, the D24 projections and the big
+coefficients, so time tracks the count within about three times; derived
+constraints alone did not (176 took over 20 s, 316 took 9 s).  Posting a
+wide store is not metered: the program pays for the store it builds
+(review F7: n = 50, 150 rows took 29 s to post, then its projection
+raised 9 s later).
+
+**Why bits as well as terms.** `(10^1000*Y + 1)^2000` has 2,001 terms but
+took 46 s and 1.7 GB (review F4): the coefficients are the cost.
+
+**Headroom.** Measured 2026-10-14 by recording the most each cap saw,
+with every cap lifted, over tests/clpq_port (CLAUSAL_SLOW_TESTS=1: the
+examples, filled_rectangle n = 9, the fuzz tests and the nested legacy
+suites under the port) and every other test file that names clpq, bb_inf
+or dump_q, all under `CLAUSAL_CLPQ=holzbaur`:
+
+| Cap | Most used | Default | Headroom |
+|---|---|---|---|
+| nodes | 1,167 | 20,000 | 17 times |
+| work | 72,216 | 2,000,000 | 27 times |
+| projection | 45,055 | 4,000,000 | 89 times |
+| expansion terms | 27 | 20,000 | 740 times |
+| expansion bits | 126 | 200,000,000 | 1.6 million times |
+
+The projection default is set by the D24 probe, not by the tests: over
+seeds 100 to 119 at n = 5 the most work was 2,011,385 (seed 101, 5 to
+8 s), so every one of them answers with 2 times to spare, and seed 101 at
+n = 6 (212 s to answer uncapped) raises after 12 to 15 s.  The work
+default raises the wide searches (20 to 400 more variables) after 6 to
+7 s.  The expansion terms default admits a product of 13 sums (16,380
+terms) and refuses 14 (32,764); the bits default admits `(Y + 1)^7000`
+(3 s) and `(10^1000*Y + 1)^240` (0.5 s to expand; printing its 241
+coefficients of 240,000 digits is slow, as printing any such integer is).
 
 - **bb_inf/3 on a store with no integer point does not terminate in 1.3.3**
   (High 1).  `noint(I) :- {X >= 0, Y >= 0, 2*X - 2*Y =:= 1},
   bb_inf([X, Y], X, I).`  bb.pl branches for ever; memory grows by about
-  30 MB/s (14,000 nodes/s, measured under load).  Legacy caps its depth
-  at 50 and fails.  The port raises `resource_error(clpq_nodes)` at the
-  cap (`test_bb_inf_without_an_integer_point_raises_at_the_default_cap`).
+  30 MB/s.  Legacy caps its depth at 50 and fails.  The port raises
+  `resource_error(clpq_nodes)` at the node cap, and on a wide store
+  `resource_error(clpq_work)` first
+  (`test_bb_inf_without_an_integer_point_raises_at_the_default_cap`,
+  `test_a_wide_search_raises_clpq_work_at_the_default_cap`).
 - **Projection is exponential** (Medium 3).  dump/3 on two of n variables
-  under 3n random `=<` constraints (coefficients in -3..3), the security
-  review's probe `secport/proj.py SEED N COUNT` (Task 16 scratchpad):
-  worst over the seeds tried, 0.70 s at n = 4 and 13.50 s at n = 5; the
-  13.5 s case is seed 101 (n = 5, 15 constraints, a 13-constraint answer),
-  7.47 s at 3f8fceb2.  It writes about 240,000 rows; n = 6 runs past a
-  minute.  The `-g` printer projects every answer, so a sandboxed program
-  reaches it: past the cap the printer reports the error and prints no
-  answer (`test_the_answer_printer_reports_the_projection_cap`).
+  under 3n random `=<` constraints (coefficients in -3..3, bounds in
+  1..9), the security review's probe `secport/proj.py SEED N COUNT` (Task
+  16 scratchpad): worst over the seeds tried, 0.70 s at n = 4 and 13.50 s
+  at n = 5; the 13.5 s case is seed 101 (15 constraints, a 13-constraint
+  answer), which ANSWERS at the default cap; n = 6 runs past two minutes
+  and raises `resource_error(clpq_projection)`.  The `-g` printer
+  projects every answer, so a sandboxed program reaches it: past the cap
+  the printer reports the error and prints no answer
+  (`test_the_answer_printer_reports_the_projection_cap`).
   Fourier-Motzkin in 1.3.3 is the same, uncapped.
-- **Power expansion is about N^3** (Medium 4).  `{X = (Y + 1)^N}` takes
-  0.04 s, 0.12 s and 0.45 s at N = 1000, 2000 and 4000;
-  `(Y + Z + W)^120` takes 0.95 s and `^240` 7.1 s (security review), and
-  `{X = (Y + 1)^(10^7)}` did not finish; it now raises at once.  nf.pl
-  expands binomially as the port does.  Only the adapter's API reaches
-  it: the `.pl` front end lowers `{}` with linear expressions only.
+- **Expansions are polynomial in the exponent and exponential in the
+  factors** (Medium 4, review F3 and F4).  `{X = (Y + 1)^N}` takes 0.04 s,
+  0.12 s and 0.45 s at N = 1000, 2000 and 4000, `(Y + Z + W)^240` 7.1 s,
+  and `(Y + 1)^(10^7)` did not finish; a product of 18 sums ran past 120 s
+  and 1 GB.  Each now raises `resource_error(clpq_expansion)` before it
+  expands.  Every front end reaches them: `.pl` and `.clausal` refuse a
+  literal non-linear `{}` at load, but a term bound at run time is posted
+  (`power(N, X, Y) :- E = (Y + 1)^N, {X = E}.`,
+  `test_catch_takes_the_errors_in_a_program`), and a seam `{...}` accepts
+  a product literal.  nf.pl expands as the port does.  A power of a
+  constant (`7^N`) is ordinary arithmetic, uncapped here as in `is/2`.
 - **Unifying constrained variables with constrained variables is slower
   than legacy** (Low 8).  `X1 =< X2 =< ... =< Xn`, each `Yi >= 0`, then
   `[X1, ..., Xn] = [Y1, ..., Yn]` (`secport/hookscale.py N`, mode

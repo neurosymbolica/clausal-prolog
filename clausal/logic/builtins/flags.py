@@ -19,8 +19,10 @@ assert_creates_dynamic     false         yes         module
 require_end_module         default       yes         process (goal)
 argv                       []            no          process
 clpq_max_nodes             20000         yes         process
-clpq_max_projection        50000         yes         process
-clpq_max_power             10000         yes         process
+clpq_max_work              2000000       yes         process
+clpq_max_projection        4000000       yes         process
+clpq_max_expansion         20000         yes         process
+clpq_max_expansion_bits    200000000     yes         process
 =========================  ============  ==========  =================
 
 ``require_end_module`` (implementation-defined) is the process-wide
@@ -38,12 +40,12 @@ program's command-line arguments, as atoms: what follows ``--`` on the
 ``clausal`` command line (``clausal.cli``), set from Python with
 :func:`set_argv`.  It is ``[]`` otherwise, and read-only to a program.
 
-``clpq_max_nodes``, ``clpq_max_projection`` and ``clpq_max_power``
-(implementation-defined) are the resource caps of the CLP(Q) port of
-clp(q,r) 1.3.3, each a positive integer: past one the port raises
-``error(resource_error(clpq_nodes), _)``, ``clpq_projection`` or
-``clpq_power`` (``clausal/logic/clpq/limits.py``, which holds the values,
-and ``clausal/logic/clpq/DEVIATIONS.md`` D24).  They exist only under
+The ``clpq_max_*`` flags (implementation-defined) are the resource caps
+of the CLP(Q) port of clp(q,r) 1.3.3, each a positive integer: past one
+the port raises ``error(resource_error(R), _)`` with R ``clpq_nodes``,
+``clpq_work``, ``clpq_projection`` or ``clpq_expansion``
+(``clausal/logic/clpq/limits.py``, which holds the values, and
+``clausal/logic/clpq/DEVIATIONS.md`` D24).  They exist only under
 ``CLAUSAL_CLPQ=holzbaur``: the legacy solver has no such caps, and its
 flags are as they were.
 
@@ -168,8 +170,10 @@ def _is_positive_int(v) -> bool:
 #: it: importing that package from here would import the builtins again.
 CLPQ_LIMIT_FLAGS = {
     "clpq_max_nodes": "clpq_nodes",
+    "clpq_max_work": "clpq_work",
     "clpq_max_projection": "clpq_projection",
-    "clpq_max_power": "clpq_power",
+    "clpq_max_expansion": "clpq_expansion",
+    "clpq_max_expansion_bits": "clpq_expansion_bits",
 }
 if os.environ.get("CLAUSAL_CLPQ", "legacy") == "holzbaur":
     for _name in CLPQ_LIMIT_FLAGS:

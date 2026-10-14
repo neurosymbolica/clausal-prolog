@@ -74,8 +74,9 @@ def fourier_motzkin_eliminate_internal(variables, target, pivots, trail):
     recursion is a loop; where best/3 finds no candidate, it gives up.
 
     Each elimination derives the cross product of its occurrences, a row
-    each.  They are charged to the projection before they are made: past
-    the clpq_projection cap it raises `resource_error(clpq_projection)`
+    each.  They are charged to the projection before they are made, each
+    as wide as the widest occurrence row plus one: past the
+    clpq_projection cap it raises `resource_error(clpq_projection)`
     (limits.charge_projection, DEVIATIONS.md D24); their number can grow
     exponentially."""
     while variables:
@@ -86,7 +87,8 @@ def fourier_motzkin_eliminate_internal(variables, target, pivots, trail):
             if occurrences is None:
                 return False
             limits.charge_projection(
-                cross_product_cardinality(occurrences, 0))
+                cross_product_cardinality(occurrences, 0)
+                * (_widest(occurrences) + 1))
             pivots = eliminate_minimum(chosen, occurrences, target, pivots,
                                        trail)
             if pivots is None:
@@ -95,6 +97,17 @@ def fourier_motzkin_eliminate_internal(variables, target, pivots, trail):
             rest = []
         variables = rest
     return unkeep(pivots, trail)                            # done
+
+
+def _widest(occurrences):
+    """The most terms a row of *occurrences* has: the width of a row
+    their cross product derives, near enough, before it is made."""
+    widest = 0
+    for row, _ in occurrences:
+        state = state_of(row)
+        if state is not None and state.linear_form is not None:
+            widest = max(widest, len(state.linear_form.terms))
+    return widest
 
 
 def best(variables):

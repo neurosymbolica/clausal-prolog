@@ -37,15 +37,17 @@ def project_attributes(target_variables, constrained_variables, trail):
     *constrained_variables* onto *target_variables*.  False where it
     fails.
 
-    The rows it writes are counted (limits.start_projection): past the
-    clpq_projection cap it raises `resource_error(clpq_projection)`
-    (DEVIATIONS.md D24).  Its caller undoes the store either way."""
-    previous = limits.start_projection()
+    The work of its pivots is counted on a meter of its own (limits.start):
+    past the clpq_projection cap it raises
+    `resource_error(clpq_projection)` (DEVIATIONS.md D24).  Its caller
+    undoes the store either way."""
+    token = limits.start("clpq_projection",
+                         "the work of one projection")
     try:
         return _project_attributes(target_variables, constrained_variables,
                                    trail)
     finally:
-        limits.stop_projection(previous)
+        limits.stop(token)
 
 
 def _project_attributes(target_variables, constrained_variables, trail):

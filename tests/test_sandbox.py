@@ -2017,7 +2017,7 @@ _FLAG_DIRECTIVES = {
     "seam_debug": ("fsd.seam", "-module(fsd, [p/1])\n"
                                "-set_prolog_flag(debug, on)\np(1),\n"),
     "seam_cap": ("fsc.seam", "-module(fsc, [p/1])\n"
-                             "-set_prolog_flag(clpq_max_power, 1)\n"
+                             "-set_prolog_flag(clpq_max_expansion, 1)\n"
                              "p(1),\n"),
     "seam_module": ("fsm.seam", "-module(fsm, [p/1])\n"
                                 "-set_prolog_flag(assert_creates_dynamic, "

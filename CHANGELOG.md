@@ -142,18 +142,24 @@ surface described in [docs/public-api.md](docs/public-api.md).
 ### Experimental
 
 - **Resource caps in the clp(q,r) 1.3.3 port (`CLAUSAL_CLPQ=holzbaur`).**
-  Three kinds of work that 1.3.3 does without limit now stop at a cap and
-  raise `error(resource_error(R), _)`; nothing fails silently or answers in
+  Work that 1.3.3 does without limit now stops at a cap and raises
+  `error(resource_error(R), _)`; nothing fails silently or answers in
   part. `clpq_nodes`: the nodes of one `bb_inf/3` search (a store with no
-  integer point used to branch for ever), default 20,000.
-  `clpq_projection`: the rows one projection writes (pivots and the
-  constraints Fourier-Motzkin derives) in `dump/3`, `dump_q/2` and the
-  `-g` answer printer, default 50,000. `clpq_power`: the terms
-  of one integer power's expansion (`{X = (Y + 1)^(10^7)}` never
-  finished), default 10,000. The Prolog flags `clpq_max_nodes`,
-  `clpq_max_projection` and `clpq_max_power` read and set them
-  (`set_prolog_flag/2`, a positive integer); they exist only under the
-  port, and the legacy solver is unchanged. See
+  integer point used to branch for ever), default 20,000. `clpq_work`: the
+  rows one search's pivots read and write (a node's work grows with the
+  store), default 2,000,000. `clpq_projection`: the same work for one
+  projection in `dump/3`, `dump_q/2` and the `-g` answer printer, plus the
+  rows Fourier-Motzkin derives, default 4,000,000 (the D24 probe's
+  15-constraint store still answers). `clpq_expansion`: the terms (default
+  20,000) and coefficient bits (default 200,000,000) of the powers and
+  products of sums one normal form expands, counted before each is built
+  (`{X = (Y + 1)^(10^7)}` and a product of 18 sums never finished). Each
+  count is per call and per thread. The Prolog flags `clpq_max_nodes`,
+  `clpq_max_work`, `clpq_max_projection`, `clpq_max_expansion` and
+  `clpq_max_expansion_bits` read and set them (`set_prolog_flag/2`, a
+  positive integer); they exist only under the port, and the legacy
+  solver is unchanged. In the sandbox the caps are the host's
+  (`clausal.logic.clpq.limits.set_limit`). See
   `clausal/logic/clpq/DEVIATIONS.md` D24.
 - **Asyncio.** `clausal.aio.asolve` / `aonce` run a query on an asyncio
   event loop: a predicate that waits (`clausal.aio.await_only`) suspends the
