@@ -898,14 +898,24 @@ def _collect_globals_info(
             # reference them by $headlit_<id>. Keyed to match the guard emitter.
             types[headlit_global_key(term)] = term
 
-    def _walk_body(term: Any) -> None:
+    def _walk_body(term: Any, in_data: bool = False) -> None:
         # Call-target detection runs on the raw (pre-deref) term so that
         # Call/LoadName nodes (which are dataclass instances, not Vars) are
         # seen before any potential deref() short-circuits them.
+        #
+        # *in_data* is set under a dict or set member: those are walked for
+        # ``++`` thunks and term types only, never for call targets.  A
+        # target binds its name in the compiled globals, so ``{'k': cite(a)}``
+        # with ``cite`` undeclared and unimported would resolve to the
+        # undeclared-functor dispatch (``existence_error(procedure,
+        # cite/1)``) instead of raising the NameError -- and the sibling
+        # hint -- that an undefined name used as data owes the author.
         if (exp := _if_expansion_of(term)) is not None:
-            _walk_body(exp)
+            _walk_body(exp, in_data)
             return
-        if isinstance(term, Call) and isinstance(term.func, LoadName):
+        if in_data:
+            pass
+        elif isinstance(term, Call) and isinstance(term.func, LoadName):
             n_kwargs = len(term.kwargs) if term.kwargs else 0
             targets.add((term.func.name, len(term.args) + n_kwargs))
         elif isinstance(term, Call) and isinstance(term.func, LoadAttr):
@@ -921,24 +931,26 @@ def _collect_globals_info(
             thunks[f"_pyt_{id(dterm)}"] = dterm.fn
         elif isinstance(dterm, list):
             for e in dterm:
-                _walk_body(e)
+                _walk_body(e, in_data)
         elif is_term_instance(dterm):
             cls = _record_term_type(types, dterm)
             for name in term_field_names(dterm):
                 val = getattr(dterm, name)
                 if val is not None:
-                    _walk_body(val)
+                    _walk_body(val, in_data)
         elif isinstance(dterm, (DictTerm, dict)):
             # A ``++`` thunk can sit in a dict value (``{'k': ++a}``) or key;
             # the compiled code reads it by its ``_pyt_<id>`` name, so the
             # dict is walked like a list.  Keys are walked too: a dict
             # literal's computed key lowers through the same expression walk.
+            # Members are walked as DATA (see *in_data* above): thunks and
+            # types, no call targets.
             for k, v in dterm.items():
-                _walk_body(k)
-                _walk_body(v)
+                _walk_body(k, True)
+                _walk_body(v, True)
         elif isinstance(dterm, SetTerm):
             for e in dterm.elements:
-                _walk_body(e)
+                _walk_body(e, True)
         elif _cell_shape(dterm)[0]:
             # A CELL written as data in a goal argument (the native .pl front
             # end lowers an ISO compound to its cell): its slots can hold a
@@ -946,7 +958,7 @@ def _collect_globals_info(
             # code reads by its ``_pyt_<id>`` name, so the slots are walked
             # as ``_walk_head`` walks a head cell's.
             for e in dterm[1:]:
-                _walk_body(e)
+                _walk_body(e, in_data)
 
     for clause in clauses:
         _walk_head(clause.head)

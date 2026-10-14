@@ -138,3 +138,25 @@ def test_clausal_source_still_refuses_a_plus_plus_escape():
         with pytest.raises(SyntaxError) as e:
             _load_module("dtk_clausal", path)
     assert "Expected '}'" in str(e.value)
+
+
+def test_an_undefined_name_beside_a_thunk_in_a_dict_is_still_a_name_error():
+    # Walking dict members for thunks must not also register their calls as
+    # call targets: that binds the name to the undeclared-functor dispatch,
+    # so an undefined data name raised existence_error(procedure, ...) where
+    # the contract is a NameError (which carries the sibling-export hint).
+    # The thunk in the other value must still be injected.
+    from clausal.logic.solve import solve
+    from clausal.logic.variables import Var
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, f"dtk_undef{SEAM}")
+        with open(path, "w") as fh:
+            fh.write("-private([a])\n"
+                     "ok(D) <- (D is {'t': ++len('ab')})\n"
+                     "h(D) <- (D is {'t': ++len('ab'), 'k': undef_cite(a)})\n")
+        m = _load_module("dtk_undef", path)
+    v = Var()
+    assert len(list(solve(("ok", v), m))) == 1
+    with pytest.raises(NameError) as e:
+        list(solve(("h", Var()), m))
+    assert str(e.value).startswith("name 'undef_cite' is not defined")
