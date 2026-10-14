@@ -376,15 +376,7 @@ def _register_guard_vars(
         if not is_var(v) or v._id in names:
             continue
         if v._id in var_context:
-            if _list_reg_ids is not None and v._id not in _list_reg_ids:
-                orig_name = var_context[v._id]
-                n_dups = len(dup_guards) if dup_guards is not None else 0
-                dup_name = f"{orig_name}__dup{n_dups}"
-                if dup_guards is not None:
-                    dup_guards.append((orig_name, dup_name))
-                names[v._id] = dup_name
-            else:
-                names[v._id] = var_context[v._id]
+            names[v._id] = var_context[v._id]
         else:
             name = _var_python_name(v)
             var_context[v._id] = name
@@ -1884,7 +1876,7 @@ def compile_head_to_match_case(
     # (``p([X], {'k': X})``) must be the same object in both, so it cannot be
     # re-allocated between them.  Match captures are never allocated here;
     # a guard reaches one through its dup name (``_register_guard_vars``).
-    inner = _guard_var_allocs(list_guards) + inner
+    inner = _guard_var_allocs(list_guards, _list_reg_ids) + inner
 
     # A head that unifies nothing wakes nothing: when no guard wrapped the
     # body's goal boundary, drop it.
@@ -1939,7 +1931,7 @@ def compile_head_to_match_case(
     )
 
 
-def _guard_var_allocs(list_guards: list[tuple]) -> list[ast.stmt]:
+def _guard_var_allocs(list_guards: list[tuple], reg_ids=None) -> list[ast.stmt]:
     """``name = $Var()`` for each distinct name the list and dict guards
     reference, in first-reference order."""
     allocs: list[ast.stmt] = []
@@ -1958,6 +1950,8 @@ def _guard_var_allocs(list_guards: list[tuple]) -> list[ast.stmt]:
             term = [seg_val for _seg_type, seg_val in segments]
         for v in _collect_vars(term):
             vname = vc.get(v._id)
+            if reg_ids is not None and v._id not in reg_ids:
+                continue
             if vname is not None and vname not in seen:
                 seen.add(vname)
                 allocs.append(_assign(vname, _call(_name("$Var"))))
