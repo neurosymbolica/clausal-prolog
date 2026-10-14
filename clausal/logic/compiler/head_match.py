@@ -345,6 +345,55 @@ def _resolved_field_names(resolved: Any) -> tuple[str, ...] | None:
     return term_field_names_of_class(resolved)
 
 
+def _register_guard_vars(
+    term_vars: list[Any],
+    var_context: dict[int, str],
+    dup_guards: list[tuple[str, str]] | None,
+    _list_reg_ids: set[int] | None,
+) -> dict[int, str]:
+    """Name every Var of a GUARD-compiled head subterm (a list or a dict).
+
+    A guard-compiled subterm is captured whole by a wildcard and unified at
+    run time against an expression the guard builds, so its Vars are not
+    match captures: each is pre-allocated (``$Var()``) before the guards run
+    and referenced by name inside them.  *term_vars* is every Var the guard
+    expression will reference, at any depth.  Returns the names this guard
+    uses for them.  Three cases for a Var ``v``:
+
+    (a) new: register it in *var_context* (so the body reads the same name)
+        and mark it guard-allocated in *_list_reg_ids*;
+    (b) already guard-allocated by an earlier guard: the same name -- every
+        guard shares the one pre-allocated Var;
+    (c) already a DIRECT match capture (registered, but not in
+        *_list_reg_ids*): a fresh dup name plus a dup guard unifying it with
+        the capture, so the pre-allocation never overwrites the capture.
+
+    *_list_reg_ids* is None only on the registration pre-pass, which needs
+    the names and no guards: case (c) then reuses the capture's name.
+    """
+    names: dict[int, str] = {}
+    for v in term_vars:
+        if not is_var(v) or v._id in names:
+            continue
+        if v._id in var_context:
+            if _list_reg_ids is not None and v._id not in _list_reg_ids:
+                orig_name = var_context[v._id]
+                n_dups = len(dup_guards) if dup_guards is not None else 0
+                dup_name = f"{orig_name}__dup{n_dups}"
+                if dup_guards is not None:
+                    dup_guards.append((orig_name, dup_name))
+                names[v._id] = dup_name
+            else:
+                names[v._id] = var_context[v._id]
+        else:
+            name = _var_python_name(v)
+            var_context[v._id] = name
+            if _list_reg_ids is not None:
+                _list_reg_ids.add(v._id)
+            names[v._id] = name
+    return names
+
+
 def head_to_match_pattern(
     term: Any,
     var_context: dict[int, str],
@@ -525,71 +574,22 @@ def head_to_match_pattern(
                     new_val.append(elem)
             segments[seg_idx] = ("fixed", new_val)
 
-        # Collect all vars from segments for registration (recursing into nested lists)
-        def _collect_vars(items):
-            result = []
-            for item in items:
-                if isinstance(item, list):
-                    result.extend(_collect_vars(item))
-                else:
-                    result.append(item)
-            return result
-
+        # Every Var the guard expressions will reference, at ANY depth --
+        # through nested lists, dicts, cells and star segments alike (the
+        # module-level ``_collect_vars``, the walk ``term_to_ast_expr`` makes
+        # when it lowers these elements).  A Var missed here never reaches the
+        # head's variable context: the body compiler then takes the body's
+        # first occurrence for a fresh variable and the guard and the body
+        # read two different variables (``[{'k': X}]`` dropped ``X == 1``).
         all_vars: list[Any] = []
         for seg_type, seg_val in segments:
-            if seg_type == "fixed":
-                all_vars.extend(_collect_vars(seg_val))
-            else:
-                all_vars.append(seg_val)
+            all_vars.extend(_collect_vars(seg_val))
         # Also collect vars from nested star-lists (they need registration too)
         for _proxy, _nested_list in _nested_star_guards:
-            for _ne in _nested_list:
-                if isinstance(_ne, StarUnpack):
-                    all_vars.append(deref(_ne.value))
-                elif isinstance(_ne, list):
-                    all_vars.extend(_collect_vars(_ne))
-                else:
-                    all_vars.append(deref(_ne))
+            all_vars.extend(_collect_vars(_nested_list))
 
-        # Register vars from list elements into var_context.
-        # Three cases for a Var v inside this list:
-        #   (a) New Var: register normally, mark as list-registered in _list_reg_ids.
-        #   (b) Already registered from a PREVIOUS LIST: same name, no dup needed
-        #       (both list guards share the pre-allocated Var).
-        #   (c) Already registered as a DIRECT MATCH CAPTURE (not in _list_reg_ids):
-        #       generate a dup name + dup_guard so the match-captured value is
-        #       compared against the list-element Var after unification.
-        list_elem_vc: dict[int, str] = {}  # name overrides for this list's elements
-        for v in all_vars:
-            if not is_var(v):
-                continue
-            if v._id in var_context:
-                if v._id not in list_elem_vc:
-                    # is_direct_capture: True only when _list_reg_ids is provided
-                    # (meaning compile_head_to_match_case called us) AND the var
-                    # was registered by the direct Var branch (not a list branch).
-                    is_direct_capture = (
-                        _list_reg_ids is not None and v._id not in _list_reg_ids
-                    )
-                    if is_direct_capture:
-                        # Case (c): direct match capture — need dup name
-                        orig_name = var_context[v._id]
-                        n_dups = len(dup_guards) if dup_guards is not None else 0
-                        dup_name = f"{orig_name}__dup{n_dups}"
-                        if dup_guards is not None:
-                            dup_guards.append((orig_name, dup_name))
-                        list_elem_vc[v._id] = dup_name
-                    else:
-                        # Case (b): already list-allocated or _list_reg_ids not
-                        # provided (legacy call) — reuse same name
-                        list_elem_vc[v._id] = var_context[v._id]
-            else:
-                # Case (a): new Var — register and mark as list-allocated
-                name = _var_python_name(v)
-                var_context[v._id] = name
-                if _list_reg_ids is not None:
-                    _list_reg_ids.add(v._id)
-                list_elem_vc[v._id] = name
+        list_elem_vc = _register_guard_vars(
+            all_vars, var_context, dup_guards, _list_reg_ids)
         # Build a var_context snapshot for this list guard using the element vc.
         guard_vc = dict(var_context)
         guard_vc.update(list_elem_vc)
@@ -684,16 +684,17 @@ def head_to_match_pattern(
 
     # DictTerm → wildcard capture + unify guard (pairwise value unification)
     if isinstance(term, _DictTerm):
-        # Register Var values in var_context so they get python names
-        for val in term.values():
-            if is_var(val) and val._id not in var_context:
-                name = _var_python_name(val)
-                var_context[val._id] = name
-                if _list_reg_ids is not None:
-                    _list_reg_ids.add(val._id)
+        # Name every Var the guard's DictTerm expression holds, at ANY depth
+        # (``{'k': {'j': X}}``, ``{'k': [X]}``, ``{'k': pt(X)}``), not just
+        # the top-level values: a nested Var left out of the head's variable
+        # context is a different variable from the body's (see
+        # ``_register_guard_vars``).
+        dict_vc = _register_guard_vars(
+            _collect_vars(term), var_context, dup_guards, _list_reg_ids)
         cap_name = f"_dcap{len(list_guards) if list_guards is not None else 0}"
         if list_guards is not None:
             guard_vc = dict(var_context)
+            guard_vc.update(dict_vc)
             list_guards.append(("dict", cap_name, term, guard_vc))
         return ast.MatchAs(pattern=None, name=cap_name)
 
@@ -1623,17 +1624,6 @@ def compile_head_to_match_case(
     dict_guards = [g for g in list_guards if isinstance(g[0], str) and g[0] == "dict"]
     set_guards = [g for g in list_guards if isinstance(g[0], str) and g[0] in ("set", "set_literal")]
     if dict_guards or set_guards:
-        dict_set_stmts: list[ast.stmt] = []
-        # Pre-allocate Vars for dict value patterns
-        _ds_alloc_seen: set[str] = set()
-        for _, _cap, dt, _vc in dict_guards:
-            for val in dt.values():
-                if is_var(val) and val._id in _vc:
-                    vname = _vc[val._id]
-                    if vname not in _ds_alloc_seen:
-                        _ds_alloc_seen.add(vname)
-                        dict_set_stmts.append(_assign(vname, _call(_name("$Var"))))
-
         for _, cap_name, dt, vc in dict_guards:
             # Build DictTerm({k: var_or_const, ...}) expression
             dict_keys_ast = []
@@ -1672,7 +1662,6 @@ def compile_head_to_match_case(
                 orelse=[],
             )]
 
-        inner = dict_set_stmts + inner
 
     # Emit str-literal guards (F046): wildcard capture + same-type short-circuit.
     #   if _scap == "abc" or unify(_scap, "abc", trail): <inner>
@@ -1806,38 +1795,6 @@ def compile_head_to_match_case(
         single_star_guards = [g for g in actual_list_guards if len(g) == 5]
         multi_star_guards = [g for g in actual_list_guards if len(g) == 4]
 
-        # Pre-allocate Var() for list-pattern vars (not captured by match pattern)
-        def _flatten_elems(items):
-            """Recursively collect all items from nested lists."""
-            result = []
-            for item in items:
-                if isinstance(item, list):
-                    result.extend(_flatten_elems(item))
-                else:
-                    result.append(item)
-            return result
-
-        list_var_allocs: list[ast.stmt] = []
-        _alloc_seen: set[str] = set()
-        for guard in actual_list_guards:
-            if len(guard) == 5:
-                _cap_name, _before, _star, _after, _vc = guard
-                elems = _flatten_elems(_before + ([_star] if _star is not None else []) + _after)
-            else:
-                _cap_name, _segments, _vc, _ = guard
-                elems = []
-                for seg_type, seg_val in _segments:
-                    if seg_type == "fixed":
-                        elems.extend(_flatten_elems(seg_val))
-                    else:
-                        elems.append(seg_val)
-            for elem in elems:
-                if is_var(elem) and elem._id in _vc:
-                    vname = _vc[elem._id]
-                    if vname not in _alloc_seen:
-                        _alloc_seen.add(vname)
-                        list_var_allocs.append(_assign(vname, _call(_name("$Var"))))
-
         # ── Single-star guards (existing path) ────────────────────────────
         if single_star_guards:
             def _list_guard_args(cap_name, before, star, after, vc):
@@ -1922,7 +1879,12 @@ def compile_head_to_match_case(
                 cap_name, segments, vc, trail_name, inner,
             )
 
-        inner = list_var_allocs + inner
+    # Pre-allocate every guard-allocated Var -- a list's or a dict's, at any
+    # depth -- ONCE, ahead of every guard: a Var two guards share
+    # (``p([X], {'k': X})``) must be the same object in both, so it cannot be
+    # re-allocated between them.  Match captures are never allocated here;
+    # a guard reaches one through its dup name (``_register_guard_vars``).
+    inner = _guard_var_allocs(list_guards) + inner
 
     # A head that unifies nothing wakes nothing: when no guard wrapped the
     # body's goal boundary, drop it.
@@ -1975,6 +1937,31 @@ def compile_head_to_match_case(
               _assign(closing_name, ast.Constant(value=False)),
               try_finally],
     )
+
+
+def _guard_var_allocs(list_guards: list[tuple]) -> list[ast.stmt]:
+    """``name = $Var()`` for each distinct name the list and dict guards
+    reference, in first-reference order."""
+    allocs: list[ast.stmt] = []
+    seen: set[str] = set()
+    for guard in list_guards:
+        if guard[0] == "dict":
+            _tag, _cap, term, vc = guard
+        elif guard[0] in ("set", "set_literal", "str", "bytes", "atom",
+                          "scalar", "headlit"):
+            continue
+        elif len(guard) == 5:
+            _cap, before, star, after, vc = guard
+            term = before + ([star] if star is not None else []) + after
+        else:
+            _cap, segments, vc, _ = guard
+            term = [seg_val for _seg_type, seg_val in segments]
+        for v in _collect_vars(term):
+            vname = vc.get(v._id)
+            if vname is not None and vname not in seen:
+                seen.add(vname)
+                allocs.append(_assign(vname, _call(_name("$Var"))))
+    return allocs
 
 
 def _head_arg_patterns(
