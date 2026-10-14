@@ -37,6 +37,7 @@ from .logic.cells import (TUPLE_TAG, CHARS_TAG, chars, is_chars, chars_text, cha
                           refuse_reserved_1tuple, _Text, text_slice)
 from .logic.variables import Var, deref, is_var
 # Operator table for ``term_writeq``; this module imports nothing from clausal.
+from clausal.tools import prolog_operators as _prolog_operators
 from clausal.tools.prolog_operators import OperatorTable as _OperatorTable
 
 # Re-export operator/expression classes already defined in pythonic_ast.
@@ -4041,11 +4042,11 @@ _WQ_TABLE: _contextvars.ContextVar = _contextvars.ContextVar(
 # object is returned, so the common case costs one call.
 def writer_op_table():
     """The operator table the ISO writers print with right now."""
-    from clausal.tools import prolog_operators as _po  # noqa: PLC0415
-    runtime = getattr(_po, "runtime_op_table", None)
+    runtime = getattr(_prolog_operators, "runtime_op_table", None)
     if runtime is None:
         return _WQ_OPS
-    is_default = getattr(_po, "runtime_op_table_is_default", None)
+    is_default = getattr(_prolog_operators, "runtime_op_table_is_default",
+                         None)
     if is_default is not None and is_default():
         return _WQ_OPS
     return runtime()
@@ -4382,10 +4383,18 @@ def _wq(t: Any, prec: int, operand: bool = False) -> str:
         if e is not None:
             p, spec = e.precedence, e.specifier
             if ops is _WQ_OPS:
+                # The default table: the layout it always had.
                 left = _wq(args[0], p if spec[0] == "y" else p - 1, True)
-            else:
-                left = _wq_left(args[0], p if spec[0] == "y" else p - 1, p,
-                                ops)
+                right = _wq(args[1], p if spec[2] == "y" else p - 1, True)
+                if name == ",":
+                    s = left + "," + right
+                elif name[0].isalpha():
+                    s = left + " " + name + " " + right
+                else:
+                    s = (left + (" " if _wq_glue(left, name) else "") + name
+                         + (" " if _wq_glue(name, right) else "") + right)
+                return "(" + s + ")" if p > prec else s
+            left = _wq_left(args[0], p if spec[0] == "y" else p - 1, p, ops)
             right = _wq(args[1], p if spec[2] == "y" else p - 1, True)
             # An operator name is written as the atom it is (``'a b'``); no
             # default operator's name but ``|`` needs quotes.
@@ -4432,8 +4441,12 @@ def _wq(t: Any, prec: int, operand: bool = False) -> str:
             else:
                 a = _wq(arg, p if spec == "fy" else p - 1, True)
             nm = _wq_name(name)
-            sep = " " if (a[0] == "(" or nm[0].isalpha()
-                          or _wq_sep(nm, a)) else ""
+            if ops is _WQ_OPS:
+                sep = " " if (a[0] == "(" or nm[0].isalpha()
+                              or _wq_glue(nm, a)) else ""
+            else:
+                sep = " " if (a[0] == "(" or nm[0].isalpha()
+                              or _wq_sep(nm, a)) else ""
             s = nm + sep + a
             return "(" + s + ")" if p > prec else s
         e = ops.lookup_postfix(name) if ops is not _WQ_OPS else None
