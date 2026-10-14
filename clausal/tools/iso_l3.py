@@ -1086,7 +1086,8 @@ class _DcgTranslation:
                 return ("=", s0, s), (top, None, None)
             return ("=", s0, _cons_onto(items, s)), (top, None, None)
         if type(b) is str and b == "!":
-            # ``!, S0 = S``: the clause lowering refuses the cut.
+            # ``!, S0 = S``: the clause lowering lowers the cut on the
+            # ``.pl`` surface and refuses it on every other one.
             return (",", b, ("=", s0, s)), (top, sp, (top, None, None))
         if type(b) is tuple and b and type(b[0]) is str:
             name, n = b[0], len(b) - 1

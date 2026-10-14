@@ -1,6 +1,6 @@
 
 FAILURES:
   broken.pl:1 :: <load> — Cannot import broken.pl: broken.pl:1: syntax error (SyntaxIssue): Unexpected token . ('.') at 1:16 (broken.pl, line 1)
-  cut.pl:2 :: <load> — Cannot import cut.pl: cut.pl:2: `!` (cut) is refused: Clausal is cut-free with no committed choice, by design (ruling): !, -> and *-> are refused (cut.pl, line 2)
+  cut.pl:2 :: <load> — Cannot import cut.pl: cut.pl:2: `*->` (soft-cut) is refused: Clausal is cut-free with no committed choice, by design (ruling): !, -> and *-> are refused (cut.pl, line 2)
 
 2 tests: 0 passed, 2 failed [FAILED]

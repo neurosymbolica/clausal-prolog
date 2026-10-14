@@ -166,7 +166,7 @@ def test_d14_alone_decides_the_exit_status(native, capsys, monkeypatch,
 
 
 def test_load_refusal_names_its_line(native, capsys, monkeypatch, tmp_path):
-    (tmp_path / "cut.pl").write_text("p(1).\np(X) :- !, X = 2.\n"
+    (tmp_path / "cut.pl").write_text("p(1).\np(X) :- '*->'(true, X = 2).\n"
                                      "test(t) :- p(1).\n")
     rc, out = _cli(capsys, monkeypatch, tmp_path, ["cut.pl"])
     assert rc == EXIT_TESTS_FAILED
@@ -310,7 +310,7 @@ GOLDEN_CASES = {
                          "p(2).\n"}, ["-v", "ok.pl"], EXIT_OK),
     # A reader syntax error and a refused construct.
     "load": ({"broken.pl": "test(x) :- foo(.\n",
-              "cut.pl": "p(1).\np(X) :- !, X = 2.\ntest(t) :- p(1).\n"},
+              "cut.pl": "p(1).\np(X) :- '*->'(true, X = 2).\ntest(t) :- p(1).\n"},
              ["."], EXIT_TESTS_FAILED),
     # An unsupported test option.
     "collect": ({"opt.pl": "p(1).\n\ntest(t, throws(x)) :- p(1).\n"},

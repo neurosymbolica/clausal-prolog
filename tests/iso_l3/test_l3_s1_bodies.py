@@ -179,6 +179,6 @@ def test_true_false_none_as_predicate_names_are_refused_cleanly(native, text):
 def test_a_refusal_line_counts_newlines_only(native):
     # The form feed sits in layout after the end token: ISO 6.4.2.1 bars a
     # raw one inside quotes, and str.splitlines() would still count it.
-    with pytest.raises(SyntaxError) as ei:
-        native.load("s1_ff", "a.\f\np :- (a *-> a ; a).\n")
-    assert ei.value.lineno == 2 and ei.value.text == "p :- (a *-> a ; a)."
+    with pytest.raises(SyntaxError, match=r"`\*->` \(soft-cut\) is refused") as ei:
+        native.load("s1_ff", "a.\f\np :- '*->'(a, a).\n")
+    assert ei.value.lineno == 2 and ei.value.text == "p :- '*->'(a, a)."
