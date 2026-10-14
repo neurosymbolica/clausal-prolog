@@ -106,16 +106,49 @@ def _is_dcg_control_body(rule_val) -> bool:
             and len(rule_val) == (2 if functor == "\\+" else 3))
 
 
+def _is_cons(t) -> bool:
+    """*t* is the cons cell ``'.'(H, T)``: how an IMPROPER list such as
+    ``[a|b]`` is spelled (D50)."""
+    return type(t) is tuple and len(t) == 3 and t[0] == "."
+
+
 def _is_dcg_terminal_body(rule_val) -> bool:
     """True for a DCG body that is its own TERMINALS: a list (``[]``
     included), a string (the chars carrier) or a code list.  ISO DCG and
     Scryer's phrase/2,3 accept any grammar body, so ``phrase([a], L)`` is
     ``L = [a]`` and ``phrase("ab", L)`` is ``L = [a, b]``; both used to fail
-    silently here."""
-    return isinstance(rule_val, (list, bytes)) or is_chars(rule_val)
+    silently here.  A cons cell is list-SHAPED too: ``[a|b]`` is not a
+    nonterminal call of ``'.'//2`` but a malformed terminal list, which
+    ``_dcg_terminals`` refuses."""
+    return (isinstance(rule_val, (list, bytes)) or is_chars(rule_val)
+            or _is_cons(rule_val))
 
 
-def _dcg_body_goal(body, s0, s):
+def _dcg_terminals(body, context) -> list:
+    """The terminals the list-shaped grammar body *body* names, as a list of
+    terms (``_is_dcg_terminal_body`` says which bodies are list-shaped).
+
+    ISO 7.14.2 (and Scryer's ``must_be(list, ...)``): a terminal list must
+    be a LIST.  ``[a|b]`` -- a chain of cons cells ending in a non-list --
+    is ``type_error(list, [a|b])``, raised when the body is translated; it
+    used to reach the nonterminal arm as ``'.'(a, b, S0, S)`` and raise
+    ``existence_error(procedure, '.'/4)``."""
+    from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
+    items: list = []
+    t = deref(body)
+    while _is_cons(t):
+        items.append(t[1])
+        t = deref(t[2])
+    if type(t) is tuple and not t:
+        return items                    # the nil cell () is []
+    if isinstance(t, (list, bytes)) or is_chars(t):
+        return items + list(_elements(t))
+    raise LogicException(type_error(
+        "list", body,
+        f"{context}: a terminal list in a grammar body must be a list"))
+
+
+def _dcg_body_goal(body, s0, s, context="phrase/3"):
     """The GOAL a DCG body term means between the states *s0* and *s* -- the
     ISO translation (7.14.2), built at run time as a term ``call/1`` runs:
     conjunction threads a fresh state, disjunction shares both, negation
@@ -146,11 +179,14 @@ def _dcg_body_goal(body, s0, s):
     is_cell, functor = compound_cell_shape(b)
     if is_cell and functor == "," and len(b) == 3:
         mid = Var()
-        return (",", _dcg_body_goal(b[1], s0, mid), _dcg_body_goal(b[2], mid, s))
+        return (",", _dcg_body_goal(b[1], s0, mid, context),
+                _dcg_body_goal(b[2], mid, s, context))
     if is_cell and functor in (";", "|") and len(b) == 3:
-        return (";", _dcg_body_goal(b[1], s0, s), _dcg_body_goal(b[2], s0, s))
+        return (";", _dcg_body_goal(b[1], s0, s, context),
+                _dcg_body_goal(b[2], s0, s, context))
     if is_cell and functor == "\\+" and len(b) == 2:
-        return (",", ("\\+", _dcg_body_goal(b[1], s0, Var())), ("=", s0, s))
+        return (",", ("\\+", _dcg_body_goal(b[1], s0, Var(), context)),
+                ("=", s0, s))
     if is_cell and functor == "{}" and len(b) == 2:
         # ISO 7.14.2 / Scryer's library(dcgs): ``{G}`` is ``G, S0 = S`` --
         # G runs as written (its bindings shared with the rest of the body,
@@ -171,13 +207,13 @@ def _dcg_body_goal(body, s0, s):
         # ``_resolve_nonterminal`` answers it as ``S0 = S`` (see
         # ``_is_whole_body_cut``).
         return (",", "!", ("=", s0, s))
-    if isinstance(b, list) or is_chars(b) or isinstance(b, bytes):
+    if _is_dcg_terminal_body(b):
         # ISO 7.14.2: the terminals T are ``S0 = T-followed-by-S``, one
         # unification, so a long S0 hands back its rest as a view (as the
         # compiled translation does); append/3 here copied the rest at every
         # terminal, and so every step of a walk down S0.
         from clausal.logic.builtins.lists import _cons_onto   # noqa: PLC0415
-        items = list(_elements(b))
+        items = _dcg_terminals(b, context)
         if not items:
             return ("=", s0, s)
         return ("=", s0, _cons_onto(items, s))
@@ -271,8 +307,8 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
         # conjunction tuple reached the resolver as a call of its first
         # element).  Triage B3b, Scryer's phrase/2,3.
         s0, s = extra_args
-        return _resolve_named_goal(db, _dcg_body_goal(rule_val, s0, s), [],
-                                   context)
+        return _resolve_named_goal(db, _dcg_body_goal(rule_val, s0, s, context),
+                                   [], context)
     is_cell, functor = compound_cell_shape(rule_val)
     from clausal.logic.builtins.call_body import (  # noqa: PLC0415
         is_non_callable_term, non_callable_goal_error,
