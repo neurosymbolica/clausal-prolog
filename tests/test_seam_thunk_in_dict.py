@@ -126,3 +126,15 @@ def test_prolog_source_still_refuses_a_plus_plus_escape():
     with pytest.raises(SyntaxError) as e:
         _load_pl("dtk_pl", "r(1).\nt :- r(f(++a)).\n")
     assert "Expected ')'" in str(e.value)
+
+
+def test_clausal_source_still_refuses_a_plus_plus_escape():
+    # ``.clausal`` is Clausal Prolog: ``{...}`` is a curly term and ``++`` has
+    # no reading, so the escape never reaches a thunk collector.
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "dtk_clausal.clausal")
+        with open(path, "w") as fh:
+            fh.write("r({k: 1}).\nt :- r({k: ++a}).\n")
+        with pytest.raises(SyntaxError) as e:
+            _load_module("dtk_clausal", path)
+    assert "Expected '}'" in str(e.value)
