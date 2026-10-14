@@ -89,6 +89,12 @@ _DATA_NODE_NAMES = frozenset({
     "LoadName", "LoadAttr", "LoadSubscript", "Predicate", "DictTerm",
     "SetTerm", "PyThunk", "FStringThunk", "Quantity", "Var", "FrozenList",
     "FrozenDict", "FrozenSet", "NoneLiteral", "EllipsisLiteral",
+    # D59: ISO cut and if-then-else in a ``.pl`` clause body.  Pure clause
+    # data (``Cut()`` takes nothing; IfThenElse's goals are audited like
+    # every other argument), and the logic compiler refuses both for any db
+    # that may not cut (terms_to_goalop), so admitting them here opens no
+    # route a ``.seam``/``.clausal`` module could use.
+    "Cut", "IfThenElse",
 })
 
 

@@ -372,6 +372,78 @@ def test_a_pl_py_import_is_refused_unless_the_adapter_is_allowed(
     assert ok(res, "plok") == "[('date', 2020, 1, 2)]"
 
 
+PL_CUT = """
+:- module(plcut, [first/1, ite/2]).
+p(1). p(2). p(3).
+first(X) :- p(X), !.
+ite(X, Y) :- ( p(X), X > 1 -> Y = big ; Y = small ).
+"""
+
+PL_CUT_PY = """
+:- module(plcutpy, [p/1]).
+:- use_module(py/os, [pid/1]).
+p(X) :- pid(X), !.
+"""
+
+
+def test_a_pl_module_that_cuts_loads_in_the_sandbox(sbx):
+    """D59: the audit of the generated module admits the compiler's
+    ``$Cut()`` / ``$IfThenElse(...)`` clause-data nodes (it refused every
+    ``.pl`` with ``!`` or ``->`` as "python_call"), and a cutting file
+    with a real Python route is still refused."""
+    sbx.write("plcut.pl", PL_CUT)
+    sbx.write("plcutpy.pl", PL_CUT_PY)
+    sbx.write("plcutw.seam", "-module(plcutw, [f/1, i/2])\n"
+              "-import_from(plcut, [first, ite])\n"
+              "f(X) <- first(X)\ni(X, Y) <- ite(X, Y)\n")
+    res = sbx.run("""
+        import clausal.sandbox as sb
+        sb.enable()
+        from clausal import Var
+        X, Y = Var(), Var()
+        probe("plcutpy", lambda: load("plcutpy"))
+        w = load("plcutw")
+        probe("first", lambda: answers(("f", X), w, X))
+        probe("ite", lambda: answers(("i", X, Y), w, (X, Y)))
+    """, env={"CLAUSAL_PL_FRONTEND": "native"})
+    refused(res, "plcutpy", LOAD, import_error=True)
+    assert ok(res, "first") == "[1]"
+    assert ok(res, "ite") == "[(2, 'big')]"
+
+
+def test_the_sandbox_refuses_the_clausal_seam_pl_relay(sbx):
+    """D59 (Task 6 fix round 1): in normal mode a .clausal goal relayed
+    through a .seam meta-call (library(reif)'s cond_t/3, a user
+    ``cg1(G) <- call(G)``) reaches a .pl module, cut and all
+    (tests/iso_l3/test_l3_cut_boundary.py::
+    test_clausal_relays_a_cut_into_pl_through_a_seam_meta_call).  In the
+    sandbox the seam frame is gated, so every row -- the cut-free control
+    too -- is the edge refusal."""
+    sbx.write("pls.pl", ":- module(pls, [p/1]).\np(1). p(2). p(3).\n")
+    sbx.write("seams.seam", "cg1(G) <- call(G),\n")
+    sbx.write("cls.clausal", """
+        :- use_module(library(reif)).
+        r_cond_t(L) :- catch((G = (p(X), !), findall(X, cond_t(=(true), pls:G, _), L)), error(E, _), L = E).
+        r_cond_t_ite(L) :- catch((G = (p(X) -> true ; true), findall(X, cond_t(=(true), pls:G, _), L)), error(E, _), L = E).
+        r_cond_t_ctl(L) :- catch(findall(X, cond_t(=(true), pls:p(X), _), L), error(E, _), L = E).
+        r_seam_relay(L) :- catch((G = (p(X), !), M = seams, findall(X, call(M:cg1, pls:G), L)), error(E, _), L = E).
+    """)
+    res = sbx.run("""
+        import clausal.sandbox as sb
+        sb.enable()
+        from clausal import Var
+        load("pls")
+        load("seams")
+        cl = load("cls")
+        for r in ("r_cond_t", "r_cond_t_ite", "r_cond_t_ctl", "r_seam_relay"):
+            L = Var()
+            probe(r, lambda r=r, L=L: answers((r, L), cl, L))
+    """, env={"CLAUSAL_PL_FRONTEND": "native"})
+    for r in ("r_cond_t", "r_cond_t_ite", "r_cond_t_ctl", "r_seam_relay"):
+        assert ok(res, r) == (
+            "[('permission_error', 'access', 'prolog_module', 'pls')]"), r
+
+
 @pytest.mark.parametrize("frontend, suffix, text", [
     ("translator", ".pl", ":- module(pk, [t/1]).\n"
                           ":- use_module(usrpkg/m, [f/1]).\nt(X) :- f(X).\n"),
