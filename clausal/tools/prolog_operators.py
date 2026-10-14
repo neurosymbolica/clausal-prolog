@@ -18,8 +18,16 @@ class OperatorTable:
     def __init__(self):
         self._ops: dict[str, list[OpEntry]] = {}
         self._default_names: set[str] = set()
+        #: Bumped by every :meth:`define`: a reader of the table can cache
+        #: what it computed from it and recompute only when this moves.
+        self.version = 0
 
     def define(self, prec: int, spec: str, name: str) -> None:
+        """Set *name*'s operator of *spec*'s class (prefix, infix or
+        postfix) to *prec*, or remove it when *prec* is 0.  Unchecked: the
+        ISO permission checks are :func:`op_error`'s, which ``op/3`` makes
+        before it gets here (a dialect table may hold what ISO refuses)."""
+        self.version += 1
         # Replace any existing entry of the same specifier class.
         kind = _specifier_kind(spec)
         if name in self._ops:
@@ -52,6 +60,11 @@ class OperatorTable:
             if e.specifier in ("xf", "yf"):
                 return e
         return None
+
+    def entries(self):
+        """Every operator in the table, as :class:`OpEntry` s."""
+        for entries in self._ops.values():
+            yield from entries
 
     def is_operator(self, name: str) -> bool:
         return name in self._ops and len(self._ops[name]) > 0
@@ -113,6 +126,49 @@ class OperatorTable:
         _load_iso(t)
         _load_trealla(t)
         return t
+
+
+#: ISO 8.14.3's operator specifiers.
+SPECIFIERS = ("xfx", "xfy", "yfx", "fy", "fx", "xf", "yf")
+
+
+def op_error(table: "OperatorTable | None", prec: int, spec: str,
+             names: list) -> "tuple | None":
+    """The ISO 8.14.3.3 error ``op(prec, spec, names)`` raises, as a tuple
+    of its formal's name and arguments, or ``None`` when it may be applied.
+
+    The caller has made the instantiation and type checks: *prec* is an
+    int, *spec* and every one of *names* an atom's spelling (``'[]'`` for
+    the empty list).  Checked here, in Scryer's order (measured):
+
+    * ``,`` cannot be changed: ``permission_error(modify, operator, ',')``,
+      whatever the priority and specifier (8.14.3.3 h, i);
+    * ``domain_error(operator_priority, P)`` outside 0..1200 and
+      ``domain_error(operator_specifier, S)`` for any other atom (f, g);
+    * ``permission_error(create, operator, N)`` (j, k, and Cor.2) when *N*
+      is ``[]`` or ``{}``; when it is ``|`` and the operator is not infix
+      with priority 1001 or more (``op(0, _, '|')`` removes, and is
+      allowed); and when the operator would leave *N* both infix and
+      postfix (6.3.4.3) in *table* -- not checked when *table* is None.
+    """
+    if "," in names:
+        return ("permission_error", "modify", "operator", ",")
+    if not 0 <= prec <= 1200:
+        return ("domain_error", "operator_priority", prec)
+    if spec not in SPECIFIERS:
+        return ("domain_error", "operator_specifier", spec)
+    kind = _specifier_kind(spec)
+    for n in names:
+        if n in ("[]", "{}"):
+            return ("permission_error", "create", "operator", n)
+        if n == "|" and prec != 0 and (kind != "infix" or prec < 1001):
+            return ("permission_error", "create", "operator", n)
+        if prec != 0 and table is not None and kind != "prefix":
+            other = (table.lookup_postfix(n) if kind == "infix"
+                     else table.lookup_infix(n))
+            if other is not None:
+                return ("permission_error", "create", "operator", n)
+    return None
 
 
 def _specifier_kind(spec: str) -> str:
@@ -238,3 +294,47 @@ def _load_trealla(t: OperatorTable) -> None:
     d(700, "xfx", "#>")
     d(700, "xfx", "#=<")
     d(700, "xfx", "#>=")
+
+
+# ── the run-time table ───────────────────────────────────────────────
+
+#: The process-wide operator table ``op/3`` and ``current_op/3`` act on
+#: (ISO 8.14.3: one table, which every op/3 changes).  A ``.pl`` file
+#: applies to it what is global in Scryer: the ``op/3`` directives of a
+#: file that is not a module, and the ops a module EXPORTS (a module's own
+#: unexported ``op/3`` stays in the table that file is read with).  Each
+#: file is still READ with its own fresh table (``iso_l3.reader_op_table``).
+_RUNTIME: "OperatorTable | None" = None
+_RUNTIME_DEFAULT_VERSION = 0
+
+
+def runtime_op_table() -> OperatorTable:
+    """The process-wide run-time operator table, created on first use with
+    the defaults the native reader reads with (Scryer's table with no
+    library loaded, ``scryer_builtin_default``).  Always the same object:
+    :func:`reset_runtime_op_table` resets it in place."""
+    global _RUNTIME, _RUNTIME_DEFAULT_VERSION
+    if _RUNTIME is None:
+        _RUNTIME = OperatorTable.scryer_builtin_default()
+        _RUNTIME_DEFAULT_VERSION = _RUNTIME.version
+    return _RUNTIME
+
+
+def reset_runtime_op_table() -> None:
+    """Put the run-time table back to its defaults (in place, so a held
+    reference stays good; its ``version`` moves on, so a cache keyed on it
+    is invalidated)."""
+    global _RUNTIME_DEFAULT_VERSION
+    t = runtime_op_table()
+    fresh = OperatorTable.scryer_builtin_default()
+    t._ops = fresh._ops
+    t._default_names = fresh._default_names
+    t.version += 1
+    _RUNTIME_DEFAULT_VERSION = t.version
+
+
+def runtime_op_table_is_default() -> bool:
+    """True when nothing has been defined in the run-time table since it was
+    created or last reset -- a cheap test (no walk of the table).  An op
+    defined and then removed again counts as a change."""
+    return runtime_op_table().version == _RUNTIME_DEFAULT_VERSION

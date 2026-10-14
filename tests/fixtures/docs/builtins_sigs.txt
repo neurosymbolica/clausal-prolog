@@ -1070,3 +1070,11 @@ set_prolog_flag(+Flag, +Value)
 --8<-- [start:current_prolog_flag_2]
 current_prolog_flag(?Flag, ?Value)
 --8<-- [end:current_prolog_flag_2]
+
+--8<-- [start:op_3]
+op(+Priority, +Specifier, +Operator)
+--8<-- [end:op_3]
+
+--8<-- [start:current_op_3]
+current_op(?Priority, ?Specifier, ?Operator)
+--8<-- [end:current_op_3]

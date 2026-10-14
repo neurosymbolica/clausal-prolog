@@ -70,6 +70,7 @@ import re
 from typing import Any
 
 from clausal.end_module import SURFACE_CLAUSAL_PROLOG as _SURFACE_CLAUSAL_PROLOG
+from clausal.tools.prolog_operators import op_error, runtime_op_table
 from clausal.tools.prolog_reader import VarRef
 
 #: Libraries whose predicates the engine provides natively: importing one
@@ -159,8 +160,6 @@ _LIBRARY_OVERRIDES: dict[str, dict[str, str]] = {
 _OVERRIDE_ARITIES = {"label": ("label", 1), "sum": ("sum", 3),
                      "tfilter": ("tfilter", 3),
                      "tpartition": ("tpartition", 4)}
-
-_OP_SPECIFIERS = ("xfx", "xfy", "yfx", "fy", "fx", "xf", "yf")
 
 _AS_REFUSED = ("import aliasing with `as` is refused (it is SWI-only: not "
                "ISO, and Scryer cannot read it); resolve a name clash with a "
@@ -763,24 +762,61 @@ class DirectiveContext:
             stmts.append(s)
         return stmts
 
-    def apply_op(self, prec: Any, spec: Any, names: Any, span, what: str):
+    def apply_op(self, prec: Any, spec: Any, names: Any, span, what: str,
+                 *, runtime: bool = True):
         """``op(P, T, N)`` checked as ISO 8.14.3 checks it, then applied to
-        the reader's table (when the reader has one to share)."""
-        if type(prec) is not int or not 0 <= prec <= 1200:
+        the reader's table (when the reader has one to share) and, when
+        *runtime*, to the run-time table ``current_op/3`` reads
+        (``prolog_operators.runtime_op_table``): what is global in Scryer,
+        a non-module file's own op/3 and a module's exported ops.  A context
+        with no reader table (a checker) only checks."""
+        if type(prec) is not int:
             raise _refused(f"{what}: the priority must be an integer 0..1200 "
-                           f"(ISO domain_error(operator_priority)), got "
-                           f"{_show(prec)}", span)
-        if spec not in _OP_SPECIFIERS:
-            raise _refused(f"{what}: {_show(spec)} is not an operator "
-                           f"specifier (ISO domain_error(operator_specifier))",
+                           f"(ISO type_error(integer)), got {_show(prec)}",
                            span)
-        ns = names if type(names) is list else [names]
-        if not ns or any(type(n) is not str for n in ns):
+        if type(spec) is not str:
+            raise _refused(f"{what}: the specifier must be an atom (ISO "
+                           f"type_error(atom)), got {_show(spec)}", span)
+        if names == [] or names == "[]":
+            ns = ["[]"]                  # the atom '[]', not an empty list
+        else:
+            ns = names if type(names) is list else [names]
+        if any(type(n) is not str for n in ns):
             raise _refused(f"{what}: the operator must be an atom or a list "
                            f"of atoms, got {_show(names)}", span)
-        if self.op_table is not None:
+        err = op_error(self.op_table, prec, spec, ns)
+        if err is not None:
+            raise _refused(f"{what}: {_op_refusal(err, prec, spec)}", span)
+        if self.op_table is None:
+            return
+        for n in ns:
+            self.op_table.define(prec, spec, n)
+        if runtime:
+            table = runtime_op_table()
             for n in ns:
-                self.op_table.define(prec, spec, n)
+                table.define(prec, spec, n)
+
+
+def _op_refusal(err: tuple, prec, spec) -> str:
+    """The refusal text for :func:`op_error`'s *err*, naming the ISO error."""
+    if err[0] == "domain_error" and err[1] == "operator_priority":
+        return (f"the priority must be an integer 0..1200 (ISO "
+                f"domain_error(operator_priority)), got {_show(prec)}")
+    if err[0] == "domain_error":
+        return (f"{_show(spec)} is not an operator specifier (ISO "
+                f"domain_error(operator_specifier))")
+    action, name = err[1], err[3]
+    if action == "modify":
+        why = "the comma operator cannot be changed"
+    elif name in ("[]", "{}"):
+        why = f"{_show(name)} cannot be an operator"
+    elif name == "|":
+        why = "'|' can only be an infix operator of priority 1001 or more"
+    else:
+        why = (f"{_show(name)} would be both an infix and a postfix "
+               f"operator")
+    return (f"{why} (ISO permission_error({action}, operator, "
+            f"{_show(name)}))")
 
 
 # ── the directives ───────────────────────────────────────────────────────────
@@ -1374,9 +1410,13 @@ def _end_module(ctx, args, spans, span):
 
 def _op(ctx, args, spans, span):
     # The reader applied it to its table when it read the directive (ISO
-    # 8.14.3); what is left is the check.  Nothing runs at load.
-    probe = DirectiveContext(source=None, filename="", positions=ctx._pos)
-    probe.apply_op(*args, span, f"op({', '.join(_show(a) for a in args)})")
+    # 8.14.3) -- unless op_error refuses it, which the check here reports;
+    # applying it again is a no-op.  A file that is not a module also
+    # applies it to the run-time table (current_op/3's), as Scryer makes
+    # it global; a module's own op/3 stays in the module's reading.
+    # Nothing runs at load.
+    ctx.apply_op(*args, span, f"op({', '.join(_show(a) for a in args)})",
+                 runtime=ctx.own_module is None)
     return []
 
 

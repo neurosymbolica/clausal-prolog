@@ -67,6 +67,7 @@ Notation in signature lines:
 | [Term Inspection](#term-inspection) | functor/3, arg/3, unpack/2, copy_term/2, term_variables/2, numbervars/3, gensym/2, module_constant/3 |
 | [Runtime Database](#runtime-database) | assertz/1, asserta/1, retract/1, clause/2, abolish_table/2, abolish_all_tables/0 |
 | [Prolog Flags](#prolog-flags) | set_prolog_flag/2, current_prolog_flag/2 |
+| [Operators](#operators) | op/3, current_op/3 |
 | [Keyword-Term Introspection](#keyword-term-introspection) | vary/3, unbound_keys/2, signature/3 |
 | [Attributed Variables](#attributed-variables) | put_attr/3, get_attr/3, del_attr/2, get_attrs/2, put_attrs/2, attvar/1, term_attvars/2 |
 | [Constraint Predicates](#constraint-predicates) | dif/2, eq/3, dif_t/3, =/3, dif/3 |
@@ -852,6 +853,48 @@ module's value. With `Flag` unbound it enumerates every flag that has a value
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/flags.py`
     **Python tests:** `tests/iso/test_prolog_flags_scryer.py`
+
+---
+
+## Operators
+
+One process-wide operator table, as in ISO 8.14.3 and Scryer. `op/3` run as
+a goal changes it and `current_op/3` reads it. Loading a `.pl` or `.clausal`
+file adds to it what Scryer makes global: the `:- op/3` directives of a file
+that is not a module, and the ops a module exports in its `module/2` list. A
+module's own unexported `:- op/3` governs only how that file is read. Every
+file is read with its own fresh table, so `op/3` run as a goal does not
+change how loaded source reads.
+
+### `op/3`
+```seam
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:op_3"
+```
+Sets (priority 1..1200) or removes (priority 0) the operator(s) `Operator`,
+an atom or a list of atoms, of `Specifier`'s class (ISO 8.14.3). The ISO
+8.14.3.3 errors include `permission_error(modify, operator, ',')` for any
+op/3 on the comma, and `permission_error(create, operator, Name)` for `[]`,
+`{}`, a `|` that is not infix with priority 1001 or more, and a name that
+would be both infix and postfix. The same checks refuse the `:- op/3`
+directive at load. A refused op/3 changes nothing.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/operators.py`, `clausal/tools/prolog_operators.py`
+    **Python tests:** `tests/iso/test_iso_op3_current_op3.py`
+
+---
+
+### `current_op/3`
+```seam
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:current_op_3"
+```
+Enumerates the operators in the table (ISO 8.14.4). A bound argument of the
+wrong kind is `domain_error(operator_priority, P)`,
+`domain_error(operator_specifier, S)` or `type_error(atom, O)`.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/operators.py`
+    **Python tests:** `tests/iso/test_iso_op3_current_op3.py`
 
 ---
 

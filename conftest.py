@@ -102,6 +102,16 @@ def _clear_pycache_before_tests():
     clear_pycache()
 
 
+@pytest.fixture(autouse=True)
+def _reset_runtime_op_table():
+    """Put the process-wide run-time operator table (op/3, current_op/3,
+    and the ``:- op`` directives a loaded ``.pl`` file makes global) back
+    to its defaults after each test, so no test sees another's operators."""
+    yield
+    from clausal.tools.prolog_operators import reset_runtime_op_table  # noqa: PLC0415
+    reset_runtime_op_table()
+
+
 # A fixture opts out of automatic collection with the no-collect marker —
 # for files that are *meant* to fail at load (diagnostic regression fixtures).
 # The marker and its check live in clausal.testing so the CLI runner honours

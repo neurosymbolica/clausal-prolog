@@ -14,6 +14,7 @@ This package is organized into submodules by category:
 - lists        — in_/2, append/3, length/2, sort/2, select/3, etc.
 - pairs        — pairs_keys_values/3, pairs_keys/2, pairs_values/2, group_pairs_by_key/2
 - flags        — set_prolog_flag/2, current_prolog_flag/2
+- operators    — op/3, current_op/3
 - higher_order — call_goal/1..8, call/1..8, maplist/2,3, include/3, exclude/3, foldl/4,5,6
 - io           — write/1, writeln/1, print_term/1, nl/0, tab/1, write_to_string/2, term_to_string/2
 - dcg          — phrase/2, phrase/3
@@ -55,6 +56,7 @@ from clausal.logic.builtins._registry import (  # noqa: F401
 from clausal.logic.builtins import inspection      # noqa: F401
 from clausal.logic.builtins import database_ops    # noqa: F401
 from clausal.logic.builtins import clause_ops      # noqa: F401  (clause/2)
+from clausal.logic.builtins import operators       # noqa: F401  (op/3, current_op/3)
 from clausal.logic.builtins import keyword_ops     # noqa: F401
 from clausal.logic.builtins import constraints     # noqa: F401
 from clausal.logic.builtins import clpz_names      # noqa: F401  (library(clpz) names)

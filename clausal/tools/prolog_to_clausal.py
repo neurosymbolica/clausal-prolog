@@ -1376,9 +1376,10 @@ class _PrologToClausal:
             return f"-set_prolog_flag({flag.name}, {v})"
         # :- op(P, T, N): the READER has already applied it (the terms
         # below it parse with the operator), which is its effect on a
-        # program's text.  Clausal keeps no run-time operator table
-        # (current_op/3, op/3 as a goal), so what remains is a comment
-        # recording the declaration.
+        # program's text.  This seam translation keeps no run-time effect
+        # (the native front end's run-time table, current_op/3's, is
+        # clausal.tools.prolog_operators.runtime_op_table), so what remains
+        # is a comment recording the declaration.
         if isinstance(body, PCompound) and body.functor == "op" and len(body.args) == 3:
             return (f"# operator: op({_plain_term(body.args[0])}, "
                     f"{_plain_term(body.args[1])}, {_plain_term(body.args[2])}) "

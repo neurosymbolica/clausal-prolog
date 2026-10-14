@@ -21,7 +21,7 @@ from clausal.tools.prolog_ast import (
     PClause, PDCGRule, PDirective, PQuery, PModule,
     PTerm, PItem,
 )
-from clausal.tools.prolog_operators import OperatorTable, OpEntry
+from clausal.tools.prolog_operators import OperatorTable, OpEntry, op_error
 from clausal.tools.prolog_dialect import Dialect
 
 
@@ -194,12 +194,19 @@ class PrologParser:
             return
         # Name can be an atom
         if isinstance(name_t, PAtom):
-            self._ops.define(prec_t.value, spec_t.name, name_t.name)
+            names = [name_t.name]
         # Or a list of atoms
         elif isinstance(name_t, PList):
-            for elem in name_t.elements:
-                if isinstance(elem, PAtom):
-                    self._ops.define(prec_t.value, spec_t.name, elem.name)
+            names = [e.name for e in name_t.elements if isinstance(e, PAtom)]
+        else:
+            return
+        # One ISO 8.14.3.3 refuses (``op(0, xfy, ',')``, ``op(699, xf, >)``)
+        # is not applied: the loader refuses the directive, and until then
+        # the table stays as it was.
+        if op_error(self._ops, prec_t.value, spec_t.name, names) is not None:
+            return
+        for n in names:
+            self._ops.define(prec_t.value, spec_t.name, n)
 
     # ── Term parsing (Pratt) ─────────────────────────────────────────
 
