@@ -127,6 +127,16 @@ SPECIAL_FORMS = frozenset({
 # The zero-arity control constructs (``higher_order._ZERO_ARITY_CONTROL_GOALS``).
 _ZERO_ARITY_CONTROL = frozenset({"true", "fail", "false", "!"})
 
+# Reserved for the database builtins, though no control construct: a
+# ``-->`` term is a grammar rule, which only DCG translation turns into
+# clauses.  The WG17 DCG draft (8.18.1.3; Neumerkel's phrase/2,3 table, rows
+# 24-25) makes ``asserta((a-->b))`` permission_error(modify,
+# static_procedure, (-->)/2) and ``clause((a-->b), B)``
+# permission_error(access, private_procedure, (-->)/2).  CALLING it is
+# untouched -- ``(X-->Y)`` is existence_error(procedure, (-->)/2), row 26 --
+# so this is not in ``CELL_GOAL_CONTROL_FUNCTORS``.
+_RESERVED_DB_INDICATORS = frozenset({("-->", 2)})
+
 
 def _indicator(name: str, arity: int):
     from clausal.logic.builtins.call_body import _indicator as ind  # noqa: PLC0415
@@ -773,6 +783,8 @@ def _resolve(db, head):
     if name in CELL_GOAL_CONTROL_FUNCTORS or (
             arity == 0 and name in _ZERO_ARITY_CONTROL):
         raise _private(name, arity, "is a control construct")
+    if (name, arity) in _RESERVED_DB_INDICATORS:
+        raise _private(name, arity, "is a grammar rule, not a clause")
     row = _indicator_row(db, name, arity, None) if db is not None else None
     if row is not None:
         if row.dynamic or not row.locked:

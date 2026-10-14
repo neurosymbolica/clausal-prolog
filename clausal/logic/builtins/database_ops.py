@@ -720,9 +720,15 @@ def _refuse_control_construct(head, who):
     permission_error(modify, static_procedure, (',')/2).  They used to fail
     (retract/1) or succeed (retractall/1) silently.  ISO 8.9.1.3 c gives
     assertz/asserta the same error: ``assertz(!)`` used to STORE a fact
-    ``!/0``, which ``solve("!")`` then answered."""
+    ``!/0``, which ``solve("!")`` then answered.
+
+    ``(-->)/2`` is refused the same way though it is no control construct
+    (``clause_ops._RESERVED_DB_INDICATORS``): ``asserta((a-->b))`` used to
+    store a fact of ``(-->)/2`` -- an untranslated grammar rule."""
     from clausal.logic.builtins.call_body import _construct, is_body_term  # noqa: PLC0415
-    from clausal.logic.builtins.clause_ops import _ZERO_ARITY_CONTROL  # noqa: PLC0415
+    from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
+        _RESERVED_DB_INDICATORS, _ZERO_ARITY_CONTROL,
+    )
     from clausal.logic.cells import (  # noqa: PLC0415
         CELL_GOAL_CONTROL_FUNCTORS, compound_cell_shape,
     )
@@ -735,6 +741,12 @@ def _refuse_control_construct(head, who):
             name, arity = functor, len(head) - 1
         elif type(head) is str and head in _ZERO_ARITY_CONTROL:
             name, arity = head, 0
+        elif ok and (functor, len(head) - 1) in _RESERVED_DB_INDICATORS:
+            raise LogicException(permission_error(
+                "modify", "static_procedure",
+                ("/", mint(functor), len(head) - 1),
+                f"{who}: {functor}/{len(head) - 1} is a grammar rule, not a "
+                f"clause -- DCG translation makes its clauses"))
         else:
             return
     raise LogicException(permission_error(
