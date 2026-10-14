@@ -83,7 +83,7 @@ from clausal.terms import (
 from clausal.terms import PyThunk as _PyThunk
 from clausal.terms import DictTerm as _DictTerm, SetTerm as _SetTerm
 from clausal.terms import plain_deref as _plain_deref
-from clausal.pythonic_ast.nodes import Lambda as _Lambda, Node as _GoalNode
+from clausal.pythonic_ast.nodes import Lambda as _Lambda, Node as _GoalNode, Cut as _CutNode
 from clausal import _sandbox_state
 
 
@@ -365,55 +365,14 @@ def _term_to_goal(term: Any, db: Any = None) -> Any:
         return AstCall(
             func=LoadName(name=functor), args=list(term[1:]), kwargs=[],
         )
-    _refuse_cut_nodes(term, db)
+    if type(term) is _CutNode:
+        # A Cut node that IS the whole query cuts nothing (ISO 7.8.3): true,
+        # as the atom ``!`` is above.  A Cut or IfThenElse node anywhere
+        # else is refused for a cut-free db where it is compiled
+        # (``terms_to_goalop._refuse_unless_cut_allowed``), whichever
+        # argument of whichever goal it sits in.
+        return True
     return term
-
-
-def _refuse_cut_nodes(term: Any, db: Any) -> None:
-    """D59: a compiler-node goal from Python is held to the rule a cell goal
-    is held to -- ``Cut`` and ``IfThenElse`` nodes compile only against a
-    ``.pl`` module's db (``call_body.cut_allowed``).  Without this a node
-    tree passed to ``solve`` compiled its cut against a ``.clausal`` or
-    ``.seam`` db.  A Cut that IS the whole query cuts nothing (ISO 7.8.3)
-    and is ``true``, as the atom ``!`` is above."""
-    if not isinstance(term, _GoalNode):
-        return
-    from clausal.pythonic_ast import nodes  # noqa: PLC0415
-    if isinstance(term, nodes.Cut):
-        return
-    from clausal.logic.builtins.call_body import (  # noqa: PLC0415
-        cut_allowed, cut_refusal_error,
-    )
-    if cut_allowed(db):
-        return
-    from clausal.logic.exceptions import (  # noqa: PLC0415
-        LogicException, existence_error,
-    )
-
-    def walk(t):
-        t = deref(t)
-        if isinstance(t, nodes.Cut):
-            raise LogicException(cut_refusal_error("solve/1"))
-        if isinstance(t, nodes.IfThenElse):
-            raise LogicException(existence_error(
-                "procedure", ("/", "->", 2),
-                "solve/1: ->/2 is not provided -- Clausal is cut-free with "
-                "no committed choice (ruled permanently); write if_(Cond, "
-                "Then, Else), whose test is not committed"))
-        if isinstance(t, (nodes.And, nodes.Or)):
-            walk(t.left)
-            walk(t.right)
-        elif isinstance(t, nodes.Not):
-            walk(t.operand)
-        elif isinstance(t, nodes.IfExpr):
-            walk(t.test)
-            walk(t.body)
-            walk(t.orelse)
-        elif isinstance(t, nodes.TupleLiteral):
-            for e in t.elements:
-                walk(e)
-
-    walk(term)
 
 
 _VAR_SENTINEL = object()

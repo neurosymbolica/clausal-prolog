@@ -282,6 +282,27 @@ def _extend(ops: list[GoalOp], body: Any, db: Any) -> None:
     ops.append(_convert(body, db))
 
 
+def _refuse_unless_cut_allowed(db: Any, construct: str) -> None:
+    """D59: the ONE choke point for cut and if-then-else.  A ``Cut`` or
+    ``IfThenElse`` node compiles only against a db that may cut
+    (``call_body.cut_allowed``: a ``.pl`` module's).  Every route that
+    could carry one into a ``.clausal``, ``.seam`` or Python-made module --
+    a node goal handed to ``solve``, one nested in a meta-call's argument
+    (findall, catch, call_cleanup ...), a clause compiled through the
+    Python API -- reaches this conversion, so the refusal holds without
+    each entry point having to walk the goal.  Fails closed: no db, no cut.
+    The error is the run-time one call/1 gives the same construct."""
+    from clausal.logic.builtins.call_body import (  # noqa: PLC0415
+        cut_allowed, cut_refusal_error, if_then_refusal_error,
+    )
+    if cut_allowed(db):
+        return
+    from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+    if construct == "!":
+        raise LogicException(cut_refusal_error("a Cut node"))
+    raise LogicException(if_then_refusal_error("->", "an IfThenElse node"))
+
+
 def _convert(goal: Any, db: Any) -> GoalOp:
     """Convert one goal term to a :class:`GoalOp`, stamping its source
     position from the originating term.
@@ -417,11 +438,13 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
         # REIFIABLE condition (operator ruling 2026-10-01), as Scryer's
         # library(reif) does: see :func:`_convert_if`.
         case nodes.IfThenElse(test=t, body=b, orelse=e):
+            _refuse_unless_cut_allowed(db, "->")
             return IfThenElse(
                 test=_convert(t, db), then=_convert(b, db),
                 else_=Fail() if e is None else _convert(e, db),
                 position=getattr(goal, "position", None))
         case nodes.Cut():
+            _refuse_unless_cut_allowed(db, "!")
             return Cut(position=getattr(goal, "position", None))
 
         case nodes.IfExpr():

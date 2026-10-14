@@ -75,7 +75,9 @@ def test_clausal_source_still_refuses_cut_and_ite_at_load(native):
 
 
 def test_seam_source_cannot_spell_a_cut(native):
-    with pytest.raises(SyntaxError):
+    native.load("seam_ok", "q(1),\np(X) <- (q(X), q(X)),\n", suffix=".seam")
+    with pytest.raises(SyntaxError,
+                       match=r"invalid syntax \(seam_refused\.seam, line 2\)"):
         native.load("seam_refused", "q(1),\np(X) <- (q(X), !),\n", suffix=".seam")
 
 
@@ -188,32 +190,43 @@ def _seam_run(seam, goal):
 
 
 def _seam_rows():
+    """Each row builds its goal from its own fresh variables."""
     from clausal.logic.variables import Var
-    x = Var()
-    cut = (",", ("q", x), "!")
-    v1, v2 = Var(), Var()
+
+    def cut(x):
+        return (",", ("q", x), "!")
+
+    def frz(v):
+        return (",", ("freeze", v, cut(Var())), ("=", v, 1))
+
+    def when(v):
+        return (",", ("when", ("nonvar", v), cut(Var())), ("=", v, 1))
+
     return [
-        ("ite", (";", ("->", ("q", x), "true"), "true"), ITE_REFUSED),
-        ("if_then", ("->", ("q", x), "true"), ITE_REFUSED),
-        ("catch", ("catch", cut, "foo", "true"), REFUSED),
-        ("scc", ("setup_call_cleanup", "true", cut, "true"), REFUSED),
-        ("call_cleanup", ("call_cleanup", cut, "true"), REFUSED),
-        ("freeze", (",", ("freeze", v1, cut), ("=", v1, 1)), REFUSED),
-        ("when", (",", ("when", ("nonvar", v2), cut), ("=", v2, 1)), REFUSED),
-        ("bagof", ("bagof", x, cut, Var()), REFUSED),
-        ("setof", ("setof", x, cut, Var()), REFUSED),
-        ("call_nth", ("call_nth", cut, 1), REFUSED),
-        ("call/2 builds it", ("call", (",", ("q", x)), "!"), REFUSED),
-        ("\\+ \\+", ("\\+", ("\\+", cut)), REFUSED),
-        ("nested findall", ("findall", 1, ("findall", x, cut, Var()), Var()),
+        ("ite", lambda x: (";", ("->", ("q", x), "true"), "true"), ITE_REFUSED),
+        ("if_then", lambda x: ("->", ("q", x), "true"), ITE_REFUSED),
+        ("catch", lambda x: ("catch", cut(x), "foo", "true"), REFUSED),
+        ("scc", lambda x: ("setup_call_cleanup", "true", cut(x), "true"),
+         REFUSED),
+        ("call_cleanup", lambda x: ("call_cleanup", cut(x), "true"), REFUSED),
+        ("freeze", frz, REFUSED),
+        ("when", when, REFUSED),
+        ("bagof", lambda x: ("bagof", x, cut(x), Var()), REFUSED),
+        ("setof", lambda x: ("setof", x, cut(x), Var()), REFUSED),
+        ("call_nth", lambda x: ("call_nth", cut(x), 1), REFUSED),
+        ("call/2 builds it", lambda x: ("call", (",", ("q", x)), "!"), REFUSED),
+        ("\\+ \\+", lambda x: ("\\+", ("\\+", cut(x))), REFUSED),
+        ("nested findall",
+         lambda x: ("findall", 1, ("findall", x, cut(x), Var()), Var()),
          REFUSED),
     ]
 
 
 def test_every_meta_call_of_seam_refuses_a_runtime_cut(seam):
     """The rows tests/test_meta_call_cut_refused.py does not already hold."""
-    for label, goal, want in _seam_rows():
-        assert _seam_run(seam, goal) == want, label
+    from clausal.logic.variables import Var
+    for label, mk, want in _seam_rows():
+        assert _seam_run(seam, mk(Var())) == want, label
 
 
 def test_a_pl_closure_called_from_seam_keeps_its_cut_local(native, seam):
@@ -241,15 +254,55 @@ def test_seam_qualifying_into_a_pl_module_runs_as_that_module(native, seam):
     converted against the .pl db and may cut there -- local to the call, as
     every .pl meta-call cut is.  This is the same reach a .seam module has
     through any .pl predicate that calls its argument (``plcut:cutter(G)``).
-    A cut qualified to the seam module itself cuts nothing."""
+    A cut qualified to the seam module itself cuts nothing.  Pinned as it
+    is today; the question is open (todo/seam-qualified-goal-into-pl-may-
+    cut-2026-10-14.md)."""
     from clausal.logic.variables import Var
     native.load("plcut", PL)
-    x = Var()
-    assert _seam_run(seam, (":", "plcut", (",", ("p", x), "!"))) == 1
-    assert _seam_run(seam, (":", "plcut", ("cutter", (",", ("p", x), "!")))) == 1
-    assert _seam_run(seam, (",", (":", "plcut", ("p", x)), "!")) == REFUSED
-    assert _seam_run(seam, (":", "plcut", (",", ("p", x),
+    assert _seam_run(seam, (":", "plcut", (",", ("p", Var()), "!"))) == 1
+    assert _seam_run(seam, (":", "plcut", ("p", Var()))) == 3     # control
+    assert _seam_run(seam, (":", "plcut", ("cutter", (",", ("p", Var()), "!")))) == 1
+    assert _seam_run(seam, (",", (":", "plcut", ("p", Var())), "!")) == REFUSED
+    assert _seam_run(seam, (":", "plcut", (",", ("p", Var()),
                                            (":", "seamcut", "!")))) == 3
+
+
+# ── .clausal -> .seam -> .pl: the relay (ruling: pinned, not blocked) ──────
+
+RELAY_PL = """\
+:- module(pls, [p/1]).
+p(1). p(2). p(3).
+"""
+
+RELAY_CL = """\
+:- use_module(library(reif)).
+r_cond_t(L) :- catch((G = (p(X), !), findall(X, cond_t(=(true), pls:G, _), L)), error(E, _), L = E).
+r_cond_t_ite(L) :- catch((G = (p(X) -> true ; true), findall(X, cond_t(=(true), pls:G, _), L)), error(E, _), L = E).
+r_cond_t_ctl(L) :- catch(findall(X, cond_t(=(true), pls:p(X), _), L), error(E, _), L = E).
+r_seam_relay(L) :- catch((G = (p(X), !), M = seams, findall(X, call(M:cg1, pls:G), L)), error(E, _), L = E).
+r_seam_relay_ctl(L) :- catch((M = seams, findall(X, call(M:cg1, pls:p(X)), L)), error(E, _), L = E).
+"""
+
+
+def test_clausal_relays_a_cut_into_pl_through_a_seam_meta_call(native, ans):
+    """KNOWN, RULED NOT A BLOCKER (Task 6 fix round 1): the edge gate checks
+    the IMMEDIATE caller, and a .seam frame (library(reif)'s cond_t/3, or a
+    user ``cg1(G) <- call(G)``) is the trusted bridge, so a .clausal-built
+    ``pls:(p(X), !)`` reaches the .pl module and is converted against ITS
+    db: the cut (or the if-then-else commit) runs there, local to that call.
+    The .clausal -> seam -> .pl crossing itself predates the series (the
+    ``_ctl`` rows); the sandbox refuses the route
+    (tests/test_sandbox.py::test_the_sandbox_refuses_the_clausal_seam_pl_relay).
+    Open question for the operator:
+    todo/seam-qualified-goal-into-pl-may-cut-2026-10-14.md."""
+    native.load("pls", RELAY_PL)
+    native.load("seams", "cg1(G) <- call(G),\n", suffix=".seam")
+    cl = native.load("cls", RELAY_CL, suffix=".clausal")
+    assert ans(cl, "r_cond_t") == [[1]]
+    assert ans(cl, "r_cond_t_ite") == [[1]]
+    assert ans(cl, "r_cond_t_ctl") == [[1, 2, 3]]
+    assert ans(cl, "r_seam_relay") == [[1]]
+    assert ans(cl, "r_seam_relay_ctl") == [[1, 2, 3]]
 
 
 # ── Python entry points ─────────────────────────────────────────────────────
@@ -274,38 +327,58 @@ def test_solve_refuses_control_cells_on_cut_free_modules(native, seam):
                 "type_error", "callable_control_construct_unsupported"), name
 
 
-def test_call_refuses_a_cut_node_from_python(native, seam):
+def test_call_treats_a_cut_node_as_the_cut(native, seam):
+    """call/1 handed a Cut or IfThenElse node from Python answers as for the
+    cells ``!`` and ``->``: a whole-goal cut is true, a nested cut is
+    ``!/0`` refused, an if-then-else is ``->/2`` refused.  (They used to be
+    ``type_error(callable, 'Cut()')`` -- one shape per spelling.)"""
     from clausal.logic.exceptions import LogicException
     from clausal.logic.solve import call
+    from clausal.logic.variables import Var
     from clausal.pythonic_ast import nodes
-    cl = native.load("clcut_cg", "cg(G) :- call(G).\n", suffix=".clausal")
-    for mod in (cl, seam):
-        pred = "cg" if mod is cl else "cg1"
-        for goal in (nodes.Cut(), nodes.IfThenElse(test=True, body=True,
-                                                   orelse=True)):
+    cl = native.load("clcut_cg", "q(1). q(2).\ncg(G) :- call(G).\n",
+                     suffix=".clausal")
+    for mod, pred in ((cl, "cg"), (seam, "cg1")):
+        assert len(list(call(pred, nodes.Cut(), module=mod))) == 1
+        for goal, want in (
+                (nodes.IfThenElse(test=True, body=True, orelse=True),
+                 ITE_REFUSED),
+                (nodes.And(left=("q", Var()), right=nodes.Cut()), REFUSED),
+                ((",", ("q", Var()), nodes.Cut()), REFUSED)):
             with pytest.raises(LogicException) as ei:
                 list(call(pred, goal, module=mod))
-            assert _formal(ei.value)[:2] == ("type_error", "callable")
+            assert _formal(ei.value) == want, (pred, goal)
 
 
-def _node_goals(x):
+def _q(x):
     from clausal.pythonic_ast import nodes
-    q = nodes.Call(func=nodes.LoadName(name="q"), args=[x], kwargs=[])
+    return nodes.Call(func=nodes.LoadName(name="q"), args=[x], kwargs=[])
+
+
+def _node_goals():
+    """(label, make, refusal): *make(x)* builds the goal on a fresh x."""
+    from clausal.pythonic_ast import nodes
+
+    def tl_cut(x):
+        return nodes.TupleLiteral(elements=[_q(x), nodes.Cut()])
+
     return [
-        ("TupleLiteral[q, Cut]", nodes.TupleLiteral(elements=[q, nodes.Cut()]),
+        ("TupleLiteral[q, Cut]", tl_cut, REFUSED),
+        ("And(q, Cut)", lambda x: nodes.And(left=_q(x), right=nodes.Cut()),
          REFUSED),
-        ("And(q, Cut)", nodes.And(left=q, right=nodes.Cut()), REFUSED),
-        ("Or(q, Cut)", nodes.Or(left=q, right=nodes.Cut()), REFUSED),
-        ("Not(TupleLiteral[q, Cut])",
-         nodes.Not(operand=nodes.TupleLiteral(elements=[q, nodes.Cut()])),
+        ("Or(q, Cut)", lambda x: nodes.Or(left=_q(x), right=nodes.Cut()),
          REFUSED),
-        ("IfThenElse", nodes.IfThenElse(test=q, body=True, orelse=True),
+        ("Not(TupleLiteral[q, Cut])", lambda x: nodes.Not(operand=tl_cut(x)),
+         REFUSED),
+        ("IfThenElse",
+         lambda x: nodes.IfThenElse(test=_q(x), body=True, orelse=True),
          ITE_REFUSED),
-        ("IfThen", nodes.IfThenElse(test=q, body=True, orelse=None),
+        ("IfThen",
+         lambda x: nodes.IfThenElse(test=_q(x), body=True, orelse=None),
          ITE_REFUSED),
         ("And(q, IfThenElse)",
-         nodes.And(left=True, right=nodes.IfThenElse(test=q, body=True,
-                                                     orelse=True)),
+         lambda x: nodes.And(left=True, right=nodes.IfThenElse(
+             test=_q(x), body=True, orelse=True)),
          ITE_REFUSED),
     ]
 
@@ -319,10 +392,80 @@ def test_solve_refuses_cut_and_ite_nodes_on_cut_free_modules(native, seam):
     from clausal.logic.solve import solve
     from clausal.logic.variables import Var
     for name, mod in _targets(native, seam):
-        for label, goal, want in _node_goals(Var()):
+        for label, mk, want in _node_goals():
+            with pytest.raises(LogicException) as ei:
+                list(solve(mk(Var()), module=mod))
+            assert _formal(ei.value) == want, (name, label)
+
+
+def _meta_node_rows():
+    """Review probe 6: a Cut / IfThenElse node in a meta-call's GOAL
+    argument, the meta-call a node or a cell.  (row, make(x, L) ->
+    (goal, out), control make, refusal).  The control is the same goal
+    without the cut."""
+    from clausal.logic.variables import Var
+    from clausal.pythonic_ast import nodes
+
+    def C(name, *a):
+        return nodes.Call(func=nodes.LoadName(name=name), args=list(a),
+                          kwargs=[])
+
+    def cut(x):
+        return nodes.TupleLiteral(elements=[_q(x), nodes.Cut()])
+
+    def ite(x):
+        return nodes.IfThenElse(test=_q(x), body=True, orelse=True)
+
+    return [
+        ("node findall(q, !)", lambda x, L: (C("findall", x, cut(x), L), L),
+         lambda x, L: (C("findall", x, _q(x), L), L), REFUSED, [[1, 2]]),
+        ("node findall(q -> true ; true)",
+         lambda x, L: (C("findall", x, ite(x), L), L),
+         lambda x, L: (C("findall", x, _q(x), L), L), ITE_REFUSED, [[1, 2]]),
+        ("node catch((q, !), foo, true)",
+         lambda x, L: (C("catch", cut(x), "foo", True), x),
+         lambda x, L: (C("catch", _q(x), "foo", True), x), REFUSED, [1, 2]),
+        ("node call_cleanup((q, !), true)",
+         lambda x, L: (C("call_cleanup", cut(x), True), x),
+         lambda x, L: (C("call_cleanup", _q(x), True), x), REFUSED, [1, 2]),
+        ("node once(q -> true ; true)", lambda x, L: (C("once", ite(x)), x),
+         lambda x, L: (C("once", _q(x)), x), ITE_REFUSED, [1]),
+        ("cell findall(x, node(q, !), L)",
+         lambda x, L: (("findall", x, cut(x), L), L),
+         lambda x, L: (("findall", x, _q(x), L), L), REFUSED, [[1, 2]]),
+        ("cell forall(q, node(true, !))",
+         lambda x, L: (("forall", ("q", x), nodes.TupleLiteral(
+             elements=[True, nodes.Cut()])), x),
+         lambda x, L: (("forall", ("q", x), True), Var()), REFUSED, [None]),
+    ]
+
+
+def test_solve_refuses_a_cut_node_under_a_meta_call(native, seam):
+    """The compiler is the choke point: a Cut or IfThenElse node is refused
+    wherever it sits -- under findall/catch/call_cleanup/once/forall, built
+    as a node or as a cell -- for any db that may not cut.  Each row's
+    control (the same goal without the cut) answers in full."""
+    from clausal.logic.exceptions import LogicException
+    from clausal.logic.solve import solve
+    from clausal.logic.variables import Var, deref, is_var, walk
+    for name, mod in _targets(native, seam):
+        for label, mk, ctl, want, ctl_want in _meta_node_rows():
+            if name == "python" and label.startswith("cell forall"):
+                # forall runs q/1 before it converts the action, and the
+                # Python-made module defines none: nothing to compare
+                continue
+            goal, _ = mk(Var(), Var())
             with pytest.raises(LogicException) as ei:
                 list(solve(goal, module=mod))
             assert _formal(ei.value) == want, (name, label)
+            if name == "python":        # no q/1 to run the control against
+                continue
+            goal, out = ctl(Var(), Var())
+            got = []
+            for _ in solve(goal, module=mod):
+                v = walk(deref(out))
+                got.append(None if is_var(v) else v)
+            assert got == ctl_want, (name, label)
 
 
 def test_a_whole_query_cut_node_is_true_like_the_atom(native, seam):
@@ -342,11 +485,12 @@ def test_solve_runs_cut_and_ite_nodes_on_a_pl_module(native):
     pl = native.load("pl_nodes", "q(1). q(2).\n")
     want = {"TupleLiteral[q, Cut]": [1], "And(q, Cut)": [1],
             "Or(q, Cut)": [1, 2, None], "IfThenElse": [1], "IfThen": [1]}
-    for label, goal, _ in _node_goals(x := Var()):
+    for label, mk, _ in _node_goals():
         if label not in want:
             continue
+        x = Var()
         got = []
-        for _ in solve(goal, module=pl):
+        for _ in solve(mk(x), module=pl):
             v = deref(x)
             got.append(None if is_var(v) else v)
         assert got == want[label], label

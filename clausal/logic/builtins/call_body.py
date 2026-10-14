@@ -98,6 +98,11 @@ _CMP_GOALS = (
 _BODY_NODES = _CMP_GOALS + (
     nodes.And, nodes.Or, nodes.Not, nodes.IfExpr, nodes.CompareChain,
     nodes.TupleLiteral,
+    # D59: the compiler's cut and if-then-else nodes from Python.  They go
+    # through the converter like the cells ``!`` and ``->``; the compiler
+    # refuses them for a cut-free db (terms_to_goalop), with the error the
+    # cells get, so a node no longer gives type_error(callable) instead.
+    nodes.Cut, nodes.IfThenElse,
 )
 
 # Non-callable in ISO terms: a number.  (bool is True/False -- a goal.)
@@ -310,6 +315,12 @@ class _Converter:
             # call's whole goal too.
             from clausal.logic.exceptions import LogicException  # noqa: PLC0415
             raise LogicException(cut_refusal_error("call/1"))
+        if type(t) is nodes.Cut:
+            return nodes.Cut()
+        if type(t) is nodes.IfThenElse:
+            return nodes.IfThenElse(
+                test=self.goal(t.test), body=self.goal(t.body),
+                orelse=None if t.orelse is None else self.goal(t.orelse))
         if is_conjunction_tuple(t):
             return nodes.TupleLiteral(elements=[self.goal(e) for e in t])
         tt = type(t)
@@ -591,6 +602,20 @@ def cut_refusal_error(context):
         f"for the first solution, or if_(Cond, Then, Else)")
 
 
+def if_then_refusal_error(functor, context):
+    """``existence_error(procedure, '->'/2)`` (or ``'*->'/2``): the refusal
+    of an if-then construct where Clausal provides none -- the run-time
+    cell (:func:`iso_control_cell_dispatch`) and the compiler's node
+    choke point (``terms_to_goalop``) share it."""
+    from clausal.logic.exceptions import existence_error  # noqa: PLC0415
+    return existence_error(
+        "procedure", _indicator(functor, 2),
+        f"{context}: {functor}/2 is not provided -- Clausal is cut-free "
+        f"with no committed choice (ruled permanently), so if-then "
+        f"{'(soft cut) ' if functor == '*->' else ''}has no construct; "
+        f"write if_(Cond, Then, Else), whose test is not committed")
+
+
 def body_with_extras_error(goal, n_extra, context):
     """``call((A, B), X)``: the fold makes ``','(A, B, X)``, which names no
     procedure -- Scryer: ``existence_error(procedure, ','/3)``, and the
@@ -727,12 +752,7 @@ def iso_control_cell_dispatch(db, cell, functor, arity, context):
         # D59: a ``.pl`` caller runs ISO if-then (7.8.7) as a body.
         return body_goal_dispatch(db, cell, context)
     if functor in ("->", "*->") and arity == 2:
-        raise LogicException(existence_error(
-            "procedure", _indicator(functor, 2),
-            f"{context}: {functor}/2 is not provided -- Clausal is cut-free "
-            f"with no committed choice (ruled permanently), so if-then "
-            f"{'(soft cut) ' if functor == '*->' else ''}has no construct; "
-            f"write if_(Cond, Then, Else), whose test is not committed"))
+        raise LogicException(if_then_refusal_error(functor, context))
     raise LogicException(existence_error(
         "procedure", _indicator(functor, arity),
         f"{context}: {functor}/{arity} is no procedure -- the control "
@@ -796,6 +816,10 @@ def body_goal_dispatch(db, goal_val, context: str):
     drives it like any resolved goal.
     """
     check_callable_body(goal_val, context, ite=cut_allowed(db))
+    if type(deref(goal_val)) is nodes.Cut:
+        # A Cut node that is the WHOLE goal cuts nothing (ISO 7.8.3), as
+        # ``call(!)`` -- higher_order._ZERO_ARITY_CONTROL_GOALS.
+        goal_val = True
     conv = _Converter(db)
     node = conv.goal(goal_val)
     if node is True:
@@ -831,7 +855,7 @@ __all__ = [
     "is_body_term", "check_callable_body", "body_goal_dispatch",
     "body_with_extras_error", "non_callable_goal_error",
     "iso_control_cell_dispatch", "folded_existence_error",
-    "cut_refusal_error", "cut_allowed",
+    "cut_refusal_error", "cut_allowed", "if_then_refusal_error",
     "is_non_callable_term",
     "needs_meta_call", "MetaCallGoal",
     "SPECIAL_FORMS", "is_special_form", "is_special_form_closure",

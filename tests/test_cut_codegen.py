@@ -10,11 +10,20 @@ from pathlib import Path
 import pytest
 
 from clausal.logic.compiler import compile_predicate_trampoline, compile_predicate_trampoline_ast
-from clausal.logic.database import Clause, Database
+from clausal.end_module import SURFACE_PL
+from clausal.logic.database import Clause, Database as _Database
 from clausal.logic.variables import Var
 from clausal.pythonic_ast import nodes
 from clausal.pythonic_ast.nodes import StarUnpack
 from clausal.terms import Call, LoadName
+
+
+def Database():
+    """A db that may cut: the compiler refuses Cut and IfThenElse nodes for
+    any other (D59, ``terms_to_goalop._refuse_unless_cut_allowed``)."""
+    db = _Database()
+    db.surface = SURFACE_PL
+    return db
 
 
 def _call(name, *args):
