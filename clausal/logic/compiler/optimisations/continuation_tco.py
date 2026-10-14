@@ -37,6 +37,7 @@ from ..ir import (
     Alternate,
     Branch,
     GoalOp,
+    IfThenElse,
     Sequence,
     SubCall,
 )
@@ -52,8 +53,9 @@ def analyse(ir: Any) -> ContinuationTCOPlan:
     """Find every :class:`SubCall` in tail position within *ir*.
 
     Walks :class:`Sequence`\\'s last op, every arm of
-    :class:`Alternate`, and both arms of :class:`Branch` (but not the
-    test — its solutions are committed-choice).  :class:`Negate`,
+    :class:`Alternate`, and both arms of :class:`Branch` and
+    :class:`IfThenElse` (but not the test — its solutions are
+    committed-choice).  :class:`Negate`,
     :class:`MetaCall`, and all leaf ops terminate the walk —
     solutions of their inner goals are observed, so the enclosing
     TCO would leak.
@@ -73,6 +75,13 @@ def _walk(node: GoalOp, marks: set[int]) -> None:
         case Branch(then=then, else_=else_):
             # test is NOT tail — solutions are committed-choice.
             # both arms inherit the outer continuation.
+            _walk(then, marks)
+            _walk(else_, marks)
+        case IfThenElse(then=then, else_=else_):
+            # ISO if-then-else (.pl): the condition is a committed
+            # sub-generator, NOT tail; then/else inherit the outer
+            # continuation, and the frame still wakes on the child's
+            # exhaustion to finish the condition loop and undo its mark.
             _walk(then, marks)
             _walk(else_, marks)
         case SubCall() if not node.tail_recursive:
@@ -110,6 +119,12 @@ def _rewrite(node: GoalOp, marks: frozenset) -> GoalOp:
         changed = any(a is not b for a, b in zip(new_ops, node.ops))
         return Alternate(ops=new_ops) if changed else node
     if isinstance(node, Branch):
+        new_then = _rewrite(node.then, marks)
+        new_else = _rewrite(node.else_, marks)
+        if new_then is node.then and new_else is node.else_:
+            return node
+        return dataclasses.replace(node, then=new_then, else_=new_else)
+    if isinstance(node, IfThenElse):
         new_then = _rewrite(node.then, marks)
         new_else = _rewrite(node.else_, marks)
         if new_then is node.then and new_else is node.else_:

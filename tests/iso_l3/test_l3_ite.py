@@ -30,6 +30,13 @@ ex(R) :- catch(( ( X = 1, throw(e) ) -> true ; true ), e, true),
 tb(R) :- ( ( X = 1 -> fail ; true ) ; true ), ( var(X) -> R = unbound ; R = X ).
 d6(R-Y) :- atom_chars(ab, L0), append(L0, [c], R), ( true -> Y = L0 ; Y = no ).
 d7(R-Y) :- atom_chars(ab, L0), reverse(L0, R), ( true -> Y = L0 ; Y = no ).
+q(1, a). q(2, b). q(2, c). q(3, d).
+t1(X) :- ( true -> p(X) ; X = 9 ).
+t2(X) :- ( fail -> X = 0 ; p(X) ).
+t3(X-Y) :- ( p(Y), Y > 1 -> q(Y, X) ; X = none ).
+t4(X) :- ( true -> !, p(X) ; true ).
+t4(9).
+t5(L) :- findall(X, t1(X), L1), findall(X, t3(X), L2), append(L1, L2, L).
 d8(R-Y) :- atom_chars(ab, L0), append(L0, [c], R), ( L0 = [_, _] -> Y = yes ; Y = no ).
 """
 
@@ -53,6 +60,11 @@ ROWS = [
     ("d6", [("-", ["a", "b", "c"], ["a", "b"])]),
     ("d7", [("-", ["b", "a"], ["a", "b"])]),
     ("d8", [("-", ["a", "b", "c"], "yes")]),
+    # Tail calls in then/else (continuation-TCO marks them): every answer
+    # of the tail call reaches the caller, and the else never runs after T.
+    ("t1", [1, 2, 3]), ("t2", [1, 2, 3]),
+    ("t3", [("-", "b", 2), ("-", "c", 2)]), ("t4", [1, 2, 3]),
+    ("t5", [[1, 2, 3, ("-", "b", 2), ("-", "c", 2)]]),
 ]
 
 
@@ -107,3 +119,19 @@ def test_a_grammar_body_if_then_else_runs(native):
     assert list(query(("phrase", "s", ["a", "b"]), {}, mod)) == [{}]
     assert list(query(("phrase", "s", ["c"]), {}, mod)) == [{}]
     assert list(query(("phrase", "s", ["a", "c"]), {}, mod)) == []
+
+
+def test_continuation_tco_marks_tail_calls_in_then_and_else():
+    """A SubCall ending T or E is in tail position; one in C is not."""
+    from clausal.logic.compiler import ir
+    from clausal.logic.compiler.optimisations import continuation_tco
+    c, t, e = (ir.SubCall(fname=n, arity=0, args=[]) for n in "cte")
+    body = ir.Sequence(ops=[ir.IfThenElse(test=ir.Sequence(ops=[c]),
+                                          then=ir.Sequence(ops=[t]),
+                                          else_=ir.Sequence(ops=[e]))])
+    plan = continuation_tco.analyse(body)
+    assert plan.marks == frozenset({id(t), id(e)})
+    out = continuation_tco.apply(body, plan)
+    ite = out.ops[0]
+    assert ite.then.ops[0].tail_position and ite.else_.ops[0].tail_position
+    assert not ite.test.ops[0].tail_position

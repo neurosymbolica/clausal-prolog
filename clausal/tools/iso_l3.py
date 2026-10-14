@@ -1104,7 +1104,8 @@ class _DcgTranslation:
             name, n = b[0], len(b) - 1
             if name in ("->", "*->") and n == 2:
                 # ``(If -> Then)`` translated as Scryer does; the clause
-                # lowering refuses it, alone or as a `;` condition.
+                # lowering lowers ``->`` on the ``.pl`` surface and refuses
+                # it (and ``*->`` everywhere), alone or as a `;` condition.
                 a_sp, b_sp = _arg_spans(sp, 2)
                 mid = self.fresh()
                 g1, g1_sp = self.body(b[1], a_sp, s0, mid)
