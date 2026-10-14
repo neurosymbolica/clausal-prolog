@@ -449,6 +449,12 @@ class _ClauseLowering:
 
     # ── goals ──
 
+    @property
+    def _cut_allowed(self) -> bool:
+        """D59 (2026-10-14): a ``.pl`` file is regular ISO Prolog and may
+        cut; ``.clausal`` is the cut-free language and keeps the refusal."""
+        return getattr(self._ctx, "surface", None) == "pl"
+
     def goal(self, g: Any, sp=None) -> ast.expr:
         """ISO 7.6.2 body conversion, to the seam's goal nodes.  The
         control constructs' goal positions are ``_BODY_GOAL_CONTROL``, which
@@ -458,6 +464,8 @@ class _ClauseLowering:
         if type(g) is VarRef:
             return self._call("call", [self.var(g)], pos, pos)
         if type(g) is str:
+            if g == "!" and self._cut_allowed:
+                return _node("Cut", position=_pos_expr(pos))
             if g in _REFUSED_CONTROL:
                 raise LoweringRefused(
                     f"{_REFUSED_CONTROL[g]} is refused: {_CUT_FREE}",
@@ -735,7 +743,12 @@ class _ClauseLowering:
 
     def _refuse_control_in(self, g: Any, sp) -> None:
         """A goal written as ``call/N``'s first argument is still a goal: the
-        cut-free refusal applies to what is visible of it at load time."""
+        cut-free refusal applies to what is visible of it at load time.
+        In a ``.pl`` file a cut there is allowed: call/1's converter runs
+        it, local to the call (ISO 7.8.3); ``->`` and ``*->`` stay refused
+        here."""
+        if g == "!" and self._cut_allowed:
+            return
         if type(g) is str and g in _REFUSED_CONTROL:
             raise LoweringRefused(
                 f"{_REFUSED_CONTROL[g]} is refused: {_CUT_FREE}", _top_span(sp))
