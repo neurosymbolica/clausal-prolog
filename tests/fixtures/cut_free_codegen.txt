@@ -688,6 +688,136 @@ def cnt__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
         break
     yield (_fail, $DONE)
 
+### cc/0 trampoline #0
+def cc__0(this_generator, _proceed, _fail, _catcher, trail):
+    match ():
+        case []:
+            _v18 = $Var()
+            _v19 = $Var()
+            _catch_m6 = trail.mark()
+            _catch_in1 = True
+            try:
+                _gen2 = $StepGenerator($dispatch_at(p, 1), this_generator, this_generator, this_generator, _v18, trail)
+                _st3 = (yield (_gen2, None))
+                while _st3 is not $DONE:
+                    for _ in $pending(trail):
+                        _catch_in1 = False
+                        yield (_proceed, None)
+                        _catch_in1 = True
+                    _st3 = (yield (_gen2, None))
+            except $Exception as _exc7:
+                if not _catch_in1:
+                    raise
+                _term8 = _exc7.term if $isinstance(_exc7, $LogicException) else $python_error_term(_exc7)
+                trail.undo(_catch_m6)
+                _catch_um9 = trail.mark()
+                if $catch_match(_v19, _term8, _exc7, trail):
+                    for _ in $pending(trail):
+                        _gen4 = $StepGenerator($dispatch_at(p, 1), this_generator, this_generator, this_generator, 1, trail)
+                        _st5 = (yield (_gen4, None))
+                        while _st5 is not $DONE:
+                            yield (_proceed, None)
+                            _st5 = (yield (_gen4, None))
+                else:
+                    trail.undo(_catch_um9)
+                    raise
+                trail.undo(_catch_um9)
+    yield (_fail, $DONE)
+
+### cc2/1 trampoline #0
+def cc2__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_v20]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _v21 = $Var()
+                _catch_m5 = trail.mark()
+                _catch_in1 = True
+                try:
+                    _gen2 = $StepGenerator($dispatch_at(p, 1), this_generator, this_generator, this_generator, _v20, trail)
+                    _st3 = (yield (_gen2, None))
+                    while _st3 is not $DONE:
+                        for _ in $pending(trail):
+                            _catch_in1 = False
+                            yield (_proceed, None)
+                            _catch_in1 = True
+                        _st3 = (yield (_gen2, None))
+                except $Exception as _exc6:
+                    if not _catch_in1:
+                        raise
+                    _term7 = _exc6.term if $isinstance(_exc6, $LogicException) else $python_error_term(_exc6)
+                    trail.undo(_catch_m5)
+                    _catch_um8 = trail.mark()
+                    if $catch_match(_v21, _term7, _exc6, trail):
+                        for _ in $pending(trail):
+                            _m4 = trail.mark()
+                            for _ in $unify_iter(_v20, _v21, trail):
+                                yield (_proceed, None)
+                            trail.undo(_m4)
+                    else:
+                        trail.undo(_catch_um8)
+                        raise
+                    trail.undo(_catch_um8)
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    yield (_fail, $DONE)
+
+### d/1 trampoline #0
+def d__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_v22]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _m3 = trail.mark()
+                _m4 = trail.mark()
+                for _ in $unify_iter(_v22, 1, trail):
+                    _gen1 = $StepGenerator($dispatch_at(p, 1), _proceed, this_generator, this_generator, _v22, trail)
+                    _st2 = (yield (_gen1, None))
+                    while _st2 is not $DONE:
+                        _st2 = (yield (_gen1, None))
+                trail.undo(_m4)
+                trail.undo(_m3)
+                _m5 = trail.mark()
+                for _ in $unify_iter(_v22, 2, trail):
+                    _gen1 = $StepGenerator($dispatch_at(p, 1), _proceed, this_generator, this_generator, _v22, trail)
+                    _st2 = (yield (_gen1, None))
+                    while _st2 is not $DONE:
+                        _st2 = (yield (_gen1, None))
+                trail.undo(_m5)
+                trail.undo(_m3)
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    yield (_fail, $DONE)
+
+### zo/0 trampoline #0
+def zo__0(this_generator, _proceed, _fail, _catcher, trail):
+    match ():
+        case []:
+            _m1 = trail.mark()
+            _gen2 = $StepGenerator($dispatch_at(p, 1), _proceed, this_generator, this_generator, 1, trail)
+            _st3 = (yield (_gen2, None))
+            while _st3 is not $DONE:
+                _st3 = (yield (_gen2, None))
+            trail.undo(_m1)
+            _gen4 = $StepGenerator($dispatch_at(p, 1), _proceed, this_generator, this_generator, 2, trail)
+            _st5 = (yield (_gen4, None))
+            while _st5 is not $DONE:
+                _st5 = (yield (_gen4, None))
+            trail.undo(_m1)
+    yield (_fail, $DONE)
+
 ### z/0 shallow
 def z__0(trail, k):
     match ():
@@ -800,3 +930,59 @@ def col__2(arg0, arg1, trail, k):
             finally:
                 if not _mark_cl:
                     trail.undo(_mark)
+
+### cc/0 shallow
+def cc__0(trail, k):
+    match ():
+        case []:
+            _v18 = $Var()
+            _v19 = $Var()
+            _catch_m4 = trail.mark()
+            _catch_in1 = True
+
+            def _catch_gen2():
+                for _ in $tramp_call($dispatch_at(p, 1), (_v18,), trail):
+                    for _ in $pending(trail):
+                        yield None
+                return None
+                yield None
+            try:
+                for _ in _catch_gen2():
+                    _catch_in1 = False
+                    yield None
+                    _catch_in1 = True
+            except $Exception as _exc5:
+                if not _catch_in1:
+                    raise
+                _term6 = _exc5.term if $isinstance(_exc5, $LogicException) else $python_error_term(_exc5)
+                trail.undo(_catch_m4)
+                _catch_um7 = trail.mark()
+                if $catch_match(_v19, _term6, _exc5, trail):
+                    for _ in $pending(trail):
+
+                        def _catch_rec3():
+                            for _ in $tramp_call($dispatch_at(p, 1), (1,), trail):
+                                for _ in $pending(trail):
+                                    yield None
+                            return None
+                            yield None
+                        for _ in _catch_rec3():
+                            yield None
+                else:
+                    trail.undo(_catch_um7)
+                    raise
+                trail.undo(_catch_um7)
+
+### zo/0 shallow
+def zo__0(trail, k):
+    match ():
+        case []:
+            _m1 = trail.mark()
+            for _ in $tramp_call($dispatch_at(p, 1), (1,), trail):
+                for _ in $pending(trail):
+                    yield None
+            trail.undo(_m1)
+            for _ in $tramp_call($dispatch_at(p, 1), (2,), trail):
+                for _ in $pending(trail):
+                    yield None
+            trail.undo(_m1)

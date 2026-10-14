@@ -126,7 +126,8 @@ def _cut_free_program():
     """Cut-free predicates covering every place the cut work touched:
     list dispatch (app, nrev, mem), arms with no head vars holding once /
     findall / \\+ sub-generators (z, w, k), a first-argument index with
-    single-clause buckets (col), loop-mode TRO (cnt), and a shallow build."""
+    single-clause buckets (col), loop-mode TRO (cnt), catch/3 and `;` (cc,
+    cc2, d, zo), and shallow builds."""
     from clausal.terms import Evaluate, Gt, Sub
     db = Database()
     _p_facts(db)
@@ -152,8 +153,17 @@ def _cut_free_program():
     db.assertz(Clause(head=("cnt", 0), body=[]))
     db.assertz(Clause(head=("cnt", n), body=[
         Gt(left=n, right=0), Evaluate(left=n1, right=Sub(left=n, right=1)), _call("cnt", n1)]))
+    # catch/3 (its trampoline-inline form) and `;`, in arms with and
+    # without head vars.
+    db.assertz(Clause(head="cc", body=[_call("catch", _call("p", Var()), Var(), _call("p", 1))]))
+    r, e = Var(), Var()
+    db.assertz(Clause(head=("cc2", r), body=[_call("catch", _call("p", r), e, nodes.Unify(left=r, right=e))]))
+    x = Var()
+    db.assertz(Clause(head=("d", x), body=[
+        nodes.Or(left=nodes.Unify(left=x, right=1), right=nodes.Unify(left=x, right=2)), _call("p", x)]))
+    db.assertz(Clause(head="zo", body=[nodes.Or(left=_call("p", 1), right=_call("p", 2))]))
     return db, [("p", 1), ("app", 3), ("nrev", 2), ("mem", 2), ("z", 0), ("w", 1),
-                ("k", 0), ("col", 2), ("cnt", 1)]
+                ("k", 0), ("col", 2), ("cnt", 1), ("cc", 0), ("cc2", 1), ("d", 1), ("zo", 0)]
 
 
 def _cut_free_dump() -> str:
@@ -163,7 +173,7 @@ def _cut_free_dump() -> str:
     for f, a in preds:
         for i, code in enumerate(_compile_capturing(db, f, a)):
             out.append(f"### {f}/{a} trampoline #{i}\n{code}\n")
-    for f, a in (("z", 0), ("k", 0), ("col", 2)):
+    for f, a in (("z", 0), ("k", 0), ("col", 2), ("cc", 0), ("zo", 0)):
         fd = compile_predicate_shallow_ast(f, a, db.clauses_for(f, a), db)
         out.append(f"### {f}/{a} shallow\n{ast.unparse(fd)}\n")
     return _normalise_var_names("\n".join(out))
@@ -310,13 +320,15 @@ def test_cut_in_a_later_clause_keeps_an_earlier_clauses_tro_restart():
     assert len(_answers(db, "wa", 1, list(range(300)))) == 301
 
 
-@_ORDERS
-def test_cut_before_a_signal_mode_tro_tail(rec_first):
-    """A signal-mode (index bucket) TRO arm.  Built directly: the index
-    path's TRO recompute names the BUCKET function as the functor, so no
-    bucket clause is TRO-eligible through `compile_predicate_trampoline`
-    today.  The dispatch loop below is the shape of `arg_index`'s: drive the
-    bucket through `_drive_tro_bucket`, re-dispatch on a pending tail."""
+def _signal_bucket_dispatch(name, clauses_spec, tro_pos):
+    """Build *name*/1 as ONE signal-mode (index bucket) TRO function and a
+    dispatch loop of `arg_index`'s shape around it: drive the bucket through
+    `_drive_tro_bucket`, re-dispatch on a pending tail.  Built directly: the
+    index path's TRO recompute names the BUCKET function as the functor, so
+    no bucket clause is TRO-eligible through `compile_predicate_trampoline`
+    today.  The bucket's own self-calls are routed to this dispatch, so
+    re-entrant activations really share the one `$tro_state` cell.
+    Returns (dispatch, generated source, the ctx template)."""
     from clausal.codegen import functiondef_to_function
     from clausal.logic.compiler import DONE
     from clausal.logic.compiler.arg_index import _drive_tro_bucket
@@ -324,25 +336,22 @@ def test_cut_before_a_signal_mode_tro_tail(rec_first):
     from clausal.logic.compiler.goal_trampoline import _make_body_compiler_trampoline
     from clausal.logic.compiler.predicate import _build_predicate_trampoline_funcdef
     from clausal.logic.compiler.strategy import TrampolineStrategy
-    from clausal.logic.trampoline import StepGenerator, solutions
-    from clausal.logic.variables import Trail
     db = Database()
-    rec, base = _cnt_clauses("cnt")
-    _in_order(db, rec, base, rec_first)
-    clauses = db.clauses_for("cnt", 1)
-    compile_predicate_trampoline("cnt", 1, clauses, db)
-    g = dict(db.get_dispatch("cnt", 1).__globals__)
+    for c in clauses_spec:
+        db.assertz(c)
+    clauses = db.clauses_for(name, 1)
+    compile_predicate_trampoline(name, 1, clauses, db)
+    g = dict(db.get_dispatch(name, 1).__globals__)
     ctx = CompilationContext(db=db, var_context={}, trail_name="trail", strategy=TrampolineStrategy())
     ctx.base_globals = g
     fd = _build_predicate_trampoline_funcdef(
-        "cnt", 1, clauses, db, _make_body_compiler_trampoline(db, ctx_template=ctx),
-        emit_done=False, tro_indices=frozenset(i for i, c in enumerate(clauses) if c is rec),
-        ctx_template=ctx)
-    src = ast.unparse(fd)
-    assert "$tro_state[0] = True" in src
-    assert ctx.clause_mark_name == "_mark" and ctx.cut_tro_restart is None  # restored
+        name, 1, clauses, db, _make_body_compiler_trampoline(db, ctx_template=ctx),
+        emit_done=False, tro_indices=frozenset(tro_pos), ctx_template=ctx)
     tro_state = [False, None]
     g["$tro_state"] = tro_state
+    holder = {}
+    dispatch_at = g["$dispatch_at"]
+    g["$dispatch_at"] = lambda o, a, *r: holder["d"] if a == 1 else dispatch_at(o, a, *r)
     bucket = functiondef_to_function(fd, globals_=g)
 
     def dispatch(this, proceed, fail, catcher, a0, trail):
@@ -357,8 +366,72 @@ def test_cut_before_a_signal_mode_tro_tail(rec_first):
             args = [pending[1]]
         yield (fail, DONE)
 
-    for k in (5, _DEEP):
-        assert len(solutions(StepGenerator(dispatch, None, None, None, k, Trail()))) == 1
+    holder["d"] = dispatch
+    return dispatch, ast.unparse(fd), ctx
+
+
+def _count(dispatch, arg):
+    from clausal.logic.trampoline import StepGenerator, solutions
+    from clausal.logic.variables import Trail
+    trail = Trail()
+    before = trail.mark()
+    n = len(solutions(StepGenerator(dispatch, None, None, None, arg, trail)))
+    assert trail.mark() == before
+    return n
+
+
+@_ORDERS
+def test_cut_before_a_signal_mode_tro_tail(rec_first):
+    rec, base = _cnt_clauses("cnt")
+    spec = [rec, base] if rec_first else [base, rec]
+    dispatch, src, ctx = _signal_bucket_dispatch("cnt", spec, [0 if rec_first else 1])
+    assert "$tro_state[0] = True" in src
+    assert ctx.clause_mark_name == "_mark" and ctx.cut_tro_restart is None  # restored
+    assert _count(dispatch, 5) == 1
+    assert _count(dispatch, _DEEP) == 1
+
+
+def test_signal_mode_cut_keeps_its_own_tail_across_reentry():
+    """q([_|T]) :- _ = 1, q(T).  q([_|_]) :- q([]), !.  q([]).
+    Scryer: q([1]) 2 answers, q([1,2]) 3.  The nested q([]) resets the
+    shared cell; the cut must still restart THIS activation's tail."""
+    pat, t = _cons()
+    pat2, _ = _cons()
+    spec = [Clause(head=("q", pat), body=[nodes.Unify(left=Var(), right=1), _call("q", t)]),
+            Clause(head=("q", pat2), body=[_call("q", []), nodes.Cut()]),
+            Clause(head=("q", []), body=[])]
+    dispatch, src, _ = _signal_bucket_dispatch("q", spec, [0])
+    assert "$tro_state[0] = True" in src
+    assert _count(dispatch, [1]) == 2
+    assert _count(dispatch, [1, 2]) == 3
+
+
+def test_signal_mode_cut_ignores_a_nested_activations_tail():
+    """r([_|T]) :- _ = 1, r(T).  r(x) :- r([1]), !.  r(_).
+    Scryer: r(x) 1 answer, r([1,2]) 3.  The nested r([1]) leaves the shared
+    cell set; r(x)'s own arm took no tail, so its cut must not restart."""
+    pat, t = _cons()
+    spec = [Clause(head=("r", pat), body=[nodes.Unify(left=Var(), right=1), _call("r", t)]),
+            Clause(head=("r", "x"), body=[_call("r", [1]), nodes.Cut()]),
+            Clause(head=("r", Var()), body=[])]
+    dispatch, src, _ = _signal_bucket_dispatch("r", spec, [0])
+    assert "$tro_state[0] = True" in src
+    assert _count(dispatch, "x") == 1
+    assert _count(dispatch, [1, 2]) == 3
+
+
+def test_signal_mode_cut_restarts_with_its_own_tail_args():
+    """q2([_|T]) :- _ = 1, q2(T).  q2([_,_|_]) :- q2([z]), !.  q2([]).
+    Scryer: q2([1,2]) 2, q2([1,2,3]) 3, q2([1,2,3,4]) 4.  The nested
+    q2([z]) leaves ITS tail args ([]) in the shared cell; the cut must
+    write this activation's own tail args back before it returns."""
+    pat, t = _cons()
+    spec = [Clause(head=("q2", pat), body=[nodes.Unify(left=Var(), right=1), _call("q2", t)]),
+            Clause(head=("q2", [Var(), Var(), StarUnpack(value=Var())]),
+                   body=[_call("q2", ["z"]), nodes.Cut()]),
+            Clause(head=("q2", []), body=[])]
+    dispatch, _, _ = _signal_bucket_dispatch("q2", spec, [0])
+    assert [_count(dispatch, a) for a in ([1, 2], [1, 2, 3], [1, 2, 3, 4])] == [2, 3, 4]
 
 
 def test_cut_after_a_nondeterministic_goal_in_an_index_bucket():

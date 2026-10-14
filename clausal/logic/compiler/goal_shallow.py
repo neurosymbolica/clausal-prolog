@@ -513,9 +513,18 @@ def _make_body_compiler_impl(
                     return [_if(_name("_tro"), [
                         ast.Raise(exc=_name(TRO_CUT_RESTART_NAME), cause=None)])]
                 if _tro_mode == "signal":
-                    return [_if(ast.Subscript(
-                        value=_name("$tro_state"), slice=ast.Constant(0),
-                        ctx=ast.Load()), [ast.Return(value=None)])]
+                    # This activation's own flag and tail args: the shared
+                    # ``$tro_state`` may hold a re-entrant call's.  Write
+                    # them back so ``_drive_tro_bucket``'s snapshot on
+                    # StopIteration re-dispatches THIS tail.
+                    from .tro import TRO_SIG_NAME, TRO_SIG_ARGS_NAME
+                    _st = lambda sl: ast.Subscript(  # noqa: E731
+                        value=_name("$tro_state"), slice=sl, ctx=ast.Store())
+                    return [_if(_name(TRO_SIG_NAME), [
+                        ast.Assign(targets=[_st(ast.Constant(0))], value=ast.Constant(True)),
+                        ast.Assign(targets=[_st(ast.Slice(lower=ast.Constant(1)))],
+                                   value=_name(TRO_SIG_ARGS_NAME)),
+                        ast.Return(value=None)])]
                 return []
 
             def _exit() -> list[ast.stmt]:

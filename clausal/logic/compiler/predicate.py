@@ -329,6 +329,7 @@ from .tro import (  # noqa: E402,F401
     _TRO_MARK_NAME, _TRO_FLOOR_NAME,
     TroCutRestart as _TroCutRestart,
     TRO_CUT_RESTART_NAME as _TRO_CUT_RESTART_NAME,
+    TRO_SIG_NAME as _TRO_SIG_NAME,
 )
 
 
@@ -663,6 +664,43 @@ def _sweep_tro_eligible(
     return frozenset(eligible)
 
 
+def _clauses_have_cut(clauses: list, db) -> bool:
+    """True if any clause body holds an ISO cut node anywhere in its term
+    tree.  Deliberately an over-approximation (a cut inside once/findall,
+    whose exit is local, counts too): it only decides whether the
+    predicate's cut exits get the TRO-restart check, and missing a cut
+    that reaches predicate scope would drop a pending tail call."""
+    import dataclasses as _dc
+    from clausal.pythonic_ast import nodes as _nodes
+    seen: set[int] = set()
+    stack = [c.body for c in clauses if c.body]
+    while stack:
+        t = stack.pop()
+        if isinstance(t, _nodes.Cut):
+            return True
+        if isinstance(t, (str, bytes, int, float, bool)) or t is None or is_var(t):
+            continue
+        if id(t) in seen:
+            continue
+        seen.add(id(t))
+        if isinstance(t, (list, tuple)):
+            stack.extend(t)
+        elif isinstance(t, dict):
+            stack.extend(t.values())
+        elif _dc.is_dataclass(t) and not isinstance(t, type):
+            stack.extend(getattr(t, f.name, None) for f in _dc.fields(t))
+    return False
+
+
+def _mentions_name(stmts: list[ast.stmt], name: str) -> bool:
+    """True if *stmts* read or write the local *name* anywhere."""
+    for stmt in stmts:
+        for node in ast.walk(stmt):
+            if isinstance(node, ast.Name) and node.id == name:
+                return True
+    return False
+
+
 def _raises_tro_cut_restart(stmts: list[ast.stmt]) -> bool:
     """True if *stmts* raise :class:`tro.TroCutRestart` (an ISO cut exit on
     a loop-mode TRO path)."""
@@ -936,7 +974,12 @@ def _build_predicate_trampoline_funcdef(
     # clause loop only and restore them after, so no other build or body
     # compile through the same template ever reads a stale value.
     _saved_cut_fields = (ctx_template.clause_mark_name, ctx_template.cut_tro_restart)
-    ctx_template.cut_tro_restart = tro_mode if use_tro else None
+    # Only a predicate whose clauses can cut at predicate scope needs the
+    # restart check in its cut exits (and, in signal mode, the per-
+    # activation tail locals the check reads), so cut-free TRO code is
+    # untouched.
+    ctx_template.cut_tro_restart = (
+        tro_mode if use_tro and _clauses_have_cut(clauses, db) else None)
     try:
         if dispatch_pos is not None:
             # List-dispatch arms are built without ``skip_trail``: they always
@@ -1024,6 +1067,10 @@ def _build_predicate_trampoline_funcdef(
         )
         loop_stmts.append(ast.Break())
     elif use_tro and tro_mode == "signal":
+        if _mentions_name(loop_stmts, _TRO_SIG_NAME):
+            # ISO cut: this activation's own pending-tail flag (see the
+            # signal-mode cut exit).
+            loop_stmts.insert(0, _assign(_TRO_SIG_NAME, ast.Constant(False)))
         # Signal mode (bucket): _tro_state was set by _compile_tro_tail.
         # NOTE: _compile_tro_tail emits only the $tro_state stores — there is
         # NO per-arm early exit, so match arms AFTER a signalling TRO arm

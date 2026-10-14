@@ -550,6 +550,11 @@ class TroCutRestart(BaseException):
 #: Generated-code name of :class:`TroCutRestart`.
 TRO_CUT_RESTART_NAME = "$tro_cut_restart"
 
+#: Signal-mode locals of one activation's pending tail call, kept beside the
+#: shared ``$tro_state`` cell in predicates with a cut (see the cut exit).
+TRO_SIG_NAME = "_tro_sig"
+TRO_SIG_ARGS_NAME = "_tro_sig_args"
+
 
 def _compile_tro_tail(
     ctx: CompilationContext,
@@ -642,6 +647,15 @@ def _compile_tro_tail(
                 )],
                 value=_name(f"_tro_arg{i}"),
             ))
+        if ctx.cut_tro_restart == "signal":
+            # ISO cut: the shared ``$tro_state`` cell is clobbered by a
+            # re-entrant call of the predicate, so a cut exit must not read
+            # it.  Record THIS activation's pending tail in locals too; the
+            # cut exit tests ``_tro_sig`` and writes ``_tro_sig_args`` back
+            # before it returns.  Emitted only in predicates with a cut.
+            tro_set_stmts.append(_assign(TRO_SIG_NAME, ast.Constant(True)))
+            tro_set_stmts.append(_assign(TRO_SIG_ARGS_NAME, ast.List(
+                elts=[_name(f"_tro_arg{i}") for i in range(arity)], ctx=ast.Load())))
     else:
         # Loop mode: set _tro = True
         tro_set_stmts = [_assign("_tro", ast.Constant(True))]
