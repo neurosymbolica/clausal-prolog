@@ -70,7 +70,7 @@ import re
 from typing import Any
 
 from clausal.end_module import SURFACE_CLAUSAL_PROLOG as _SURFACE_CLAUSAL_PROLOG
-from clausal.tools.prolog_operators import op_error, runtime_op_table
+from clausal.tools.prolog_operators import op_error, op_lock, runtime_op_table
 from clausal.tools.prolog_reader import VarRef
 
 #: Libraries whose predicates the engine provides natively: importing one
@@ -784,17 +784,19 @@ class DirectiveContext:
         if any(type(n) is not str for n in ns):
             raise _refused(f"{what}: the operator must be an atom or a list "
                            f"of atoms, got {_show(names)}", span)
-        err = op_error(self.op_table, prec, spec, ns)
-        if err is not None:
-            raise _refused(f"{what}: {_op_refusal(err, prec, spec)}", span)
-        if self.op_table is None:
-            return
-        for n in ns:
-            self.op_table.define(prec, spec, n)
-        if runtime:
-            table = runtime_op_table()
+        with op_lock:
+            err = op_error(self.op_table, prec, spec, ns)
+            if err is not None:
+                raise _refused(f"{what}: {_op_refusal(err, prec, spec)}",
+                               span)
+            if self.op_table is None:
+                return
             for n in ns:
-                table.define(prec, spec, n)
+                self.op_table.define(prec, spec, n)
+            if runtime:
+                table = runtime_op_table()
+                for n in ns:
+                    table.define(prec, spec, n)
 
 
 def _op_refusal(err: tuple, prec, spec) -> str:

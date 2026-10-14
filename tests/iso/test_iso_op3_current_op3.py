@@ -145,6 +145,22 @@ ISO_ONLY_ROWS = [
      ["domain_error(operator_specifier,1)"]),
 ]
 
+#: Engine-only judgment calls.  A refused list is atomic here (Scryer applies
+#: it element by element and leaves ``z_4``); and the table current_op/3
+#: walks is a snapshot, so an op/3 run between two answers is not seen by the
+#: enumeration in progress.
+ISO_ONLY_ROWS += [
+    ("a refused list is atomic",
+     "op(200, xf, z_3a), op(200, xfx, z_3), "
+     "catch(op(200, xf, [z_4, z_3]), _, true), "
+     "findall(P-T, current_op(P, T, z_4), R)", ["[]"]),
+    ("op between current_op answers is not seen",
+     "findall(O, (current_op(_, _, O), op(700, xfx, mid_x)), L), "
+     "findall(x, memberchk(mid_x, L), M), "
+     "length(M, N), R = N",
+     ["0"]),
+]
+
 _ALL = ROWS + ISO_ONLY_ROWS
 
 PROGRAM = "".join(f"r{i}(R) :- {body}.\n" for i, (_, body, _) in enumerate(_ALL))
@@ -361,3 +377,80 @@ def test_clausal_prolog_surface_follows_the_same_rule(tmp_path, monkeypatch):
     finally:
         for n in names:
             sys.modules.pop(n, None)
+
+
+# ── the translator's reader leaves a refused op directive unapplied ─────────
+
+def test_translator_reader_leaves_a_refused_op_unapplied():
+    from clausal.tools.prolog_operators import OperatorTable  # noqa: PLC0415
+    from clausal.tools.prolog_parser import parse  # noqa: PLC0415
+    t = OperatorTable.scryer_builtin_default()
+    parse(":- op(0, xfy, ',').\n:- op(699, xf, >).\n:- op(700, xfx, tr_ok).\n",
+          op_table=t)
+    assert t.lookup_infix(",") is not None          # not removed
+    assert t.lookup_postfix(">") is None            # not given a postfix class
+    assert t.lookup_infix("tr_ok") is not None      # a legal one still applies
+
+
+def test_op3_names_a_seglist_with_a_non_list_tail_is_a_type_error():
+    """``[o_i|T]`` with T bound to ``b`` is a SegList whose last hole holds a
+    non-list: the improper list ``[o_i|b]``, ``type_error(list, ...)``."""
+    from clausal.logic.builtins.operators import _op__3  # noqa: PLC0415
+    from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+    from clausal.logic.variables import Trail, Var, unify  # noqa: PLC0415
+    from clausal.terms import ConcreteSeg, SegList, VarSeg  # noqa: PLC0415
+    trail, tail = Trail(), Var()
+    assert unify(tail, "b", trail)
+    names = SegList([ConcreteSeg(["o_i"]), VarSeg(tail)])
+    with pytest.raises(LogicException) as exc:
+        list(_op__3(1, "xfx", names, trail, None))
+    assert "type_error(list,[o_i|b])" in str(exc.value)
+
+
+# ── thread safety of the run-time table ─────────────────────────────────────
+
+def test_op3_against_current_op3_in_two_threads():
+    """op/3 in one thread while another walks the table with current_op/3:
+    neither may raise (``dictionary changed size during iteration``), and
+    every op/3 must land."""
+    import threading  # noqa: PLC0415
+    from clausal.logic.builtins.operators import _current_op__3, _op__3  # noqa: PLC0415
+    from clausal.terms import Var  # noqa: PLC0415
+    from clausal.tools.prolog_operators import runtime_op_table  # noqa: PLC0415
+
+    from clausal.logic.variables import Trail  # noqa: PLC0415
+
+    n = 3000
+    errors: list = []
+    old_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)          # switch threads as often as possible
+    go = threading.Barrier(2)
+
+    def writer():
+        try:
+            go.wait()
+            for i in range(n):
+                list(_op__3(700, "xfx", f"thr_{i}", Trail(), None))
+        except BaseException as e:      # noqa: BLE001
+            errors.append(e)
+
+    def reader():
+        try:
+            go.wait()
+            for _ in range(n):
+                # drive the enumeration the way the engine does
+                for _ans in _current_op__3(Var(), Var(), Var(), Trail(), None):
+                    break
+        except BaseException as e:      # noqa: BLE001
+            errors.append(e)
+
+    ts = [threading.Thread(target=writer), threading.Thread(target=reader)]
+    for t in ts:
+        t.start()
+    try:
+        for t in ts:
+            t.join(120)
+    finally:
+        sys.setswitchinterval(old_interval)
+    assert errors == [], errors
+    assert runtime_op_table().lookup_infix(f"thr_{n - 1}") is not None

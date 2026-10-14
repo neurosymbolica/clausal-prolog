@@ -39,7 +39,7 @@ from clausal.logic.builtins._registry import _builtin
 from clausal.logic.builtins.chars import _atom_to_str
 from clausal.logic.builtins.lists import _as_items
 from clausal.tools.prolog_operators import (
-    SPECIFIERS, op_error, runtime_op_table,
+    SPECIFIERS, op_error, op_lock, runtime_op_table,
 )
 
 _OP = "op/3"
@@ -102,11 +102,13 @@ def _op__3(priority, specifier, operator, trail, k):
         raise LogicException(type_error("atom", s, _OP))
     names = _op_names(o)
     table = runtime_op_table()
-    err = op_error(table, p, spec, names)
+    with op_lock:          # the 6.3.4.3 check and the define are one step
+        err = op_error(table, p, spec, names)
+        if err is None:
+            for n in names:
+                table.define(p, spec, n)
     if err is not None:
         _raise(err, s, p)
-    for n in names:
-        table.define(p, spec, n)
     yield None
 
 

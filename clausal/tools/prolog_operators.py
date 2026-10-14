@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 
 
@@ -10,6 +11,14 @@ class OpEntry:
     precedence: int   # 1–1200
     specifier: str    # xf, yf, xfx, xfy, yfx, fy, fx
     name: str         # operator name (atom)
+
+
+#: Guards every change to, and every walk of, an operator table, and makes
+#: op/3's check-then-define one step: ``with op_lock:`` around
+#: :func:`op_error` and the ``define`` calls it clears.  Re-entrant, so
+#: ``define`` and ``entries`` take it themselves.  One lock for all tables
+#: (a table change is rare and short).
+op_lock = threading.RLock()
 
 
 class OperatorTable:
@@ -27,6 +36,10 @@ class OperatorTable:
         postfix) to *prec*, or remove it when *prec* is 0.  Unchecked: the
         ISO permission checks are :func:`op_error`'s, which ``op/3`` makes
         before it gets here (a dialect table may hold what ISO refuses)."""
+        with op_lock:
+            self._define(prec, spec, name)
+
+    def _define(self, prec: int, spec: str, name: str) -> None:
         self.version += 1
         # Replace any existing entry of the same specifier class.
         kind = _specifier_kind(spec)
@@ -62,9 +75,11 @@ class OperatorTable:
         return None
 
     def entries(self):
-        """Every operator in the table, as :class:`OpEntry` s."""
-        for entries in self._ops.values():
-            yield from entries
+        """Every operator in the table, as :class:`OpEntry` s: a snapshot
+        list, so a define in another thread (or between two answers) cannot
+        disturb the walk."""
+        with op_lock:
+            return [e for es in list(self._ops.values()) for e in es]
 
     def is_operator(self, name: str) -> bool:
         return name in self._ops and len(self._ops[name]) > 0
@@ -139,7 +154,8 @@ def op_error(table: "OperatorTable | None", prec: int, spec: str,
 
     The caller has made the instantiation and type checks: *prec* is an
     int, *spec* and every one of *names* an atom's spelling (``'[]'`` for
-    the empty list).  Checked here, in Scryer's order (measured):
+    the empty list).  Checked here, in this order (ISO 7.12 leaves the
+    order open; it is not Scryer's in every case):
 
     * ``,`` cannot be changed: ``permission_error(modify, operator, ',')``,
       whatever the priority and specifier (8.14.3.3 h, i);
@@ -327,10 +343,11 @@ def reset_runtime_op_table() -> None:
     global _RUNTIME_DEFAULT_VERSION
     t = runtime_op_table()
     fresh = OperatorTable.scryer_builtin_default()
-    t._ops = fresh._ops
-    t._default_names = fresh._default_names
-    t.version += 1
-    _RUNTIME_DEFAULT_VERSION = t.version
+    with op_lock:
+        t._ops = fresh._ops
+        t._default_names = fresh._default_names
+        t.version += 1
+        _RUNTIME_DEFAULT_VERSION = t.version
 
 
 def runtime_op_table_is_default() -> bool:
