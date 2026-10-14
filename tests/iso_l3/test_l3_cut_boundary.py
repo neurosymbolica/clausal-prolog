@@ -70,7 +70,7 @@ def test_clausal_source_still_refuses_cut_and_ite_at_load(native):
     for src in ("p :- !.\n", "p :- ( true -> true ; true ).\n",
                 "p :- ( true -> true ).\n", "s --> [a], !.\n",
                 "p :- call((true, !)).\n", "p :- findall(x, (true -> true), _).\n"):
-        with pytest.raises(SyntaxError, match="refused"):
+        with pytest.raises(SyntaxError, match=r"is refused.*: Clausal is cut-free with no committed choice"):
             native.load("cl_refused", src, suffix=".clausal")
 
 
