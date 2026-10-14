@@ -724,7 +724,14 @@ def _refuse_control_construct(head, who):
 
     ``(-->)/2`` is refused the same way though it is no control construct
     (``clause_ops._RESERVED_DB_INDICATORS``): ``asserta((a-->b))`` used to
-    store a fact of ``(-->)/2`` -- an untranslated grammar rule."""
+    store a fact of ``(-->)/2`` -- an untranslated grammar rule.
+
+    No row of Ulrich's phrase/2,3 table covers retract/1 or retractall/1 of
+    ``(-->)/2`` directly; this follows from its row 24 (asserta's refusal)
+    plus ISO 8.9.3.3 c.  The local clean Scryer build (unmeasured by that
+    table) differs here the same way it does for an ordinary control
+    construct above: its retract/1 just fails on ``(-->)/2``, and its
+    retractall/1 succeeds silently."""
     from clausal.logic.builtins.call_body import _construct, is_body_term  # noqa: PLC0415
     from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
         _RESERVED_DB_INDICATORS, _ZERO_ARITY_CONTROL,

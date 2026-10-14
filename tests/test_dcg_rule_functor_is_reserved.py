@@ -13,6 +13,15 @@ stored a fact of ``(-->)/2`` (with ``assert_creates_dynamic`` on, as in every
 ``.pl`` file), which ``clause/2`` and a bare ``(X-->Y)`` goal then answered.
 retract/1 and retractall/1 share assert's refusal (they used to remove that
 fact).  Calling ``(-->)/2`` as a goal is untouched: no such procedure.
+
+No row on the page covers retract/1 or retractall/1 of ``(-->)/2`` directly
+-- this follows from row 24 (asserta's refusal) plus ISO 8.9.3.3 c (a
+static procedure cannot be retracted), the same way ``_refuse_control_construct``
+already covers ``retract((a,b))``.  The local clean Scryer build (not a
+WG17-measured row) differs here: its ``retract/1`` just fails on
+``(-->)/2`` rather than raising, and its ``retractall/1`` succeeds
+silently -- the same divergence it has for an ordinary control construct
+like ``,``/2 (see ``_refuse_control_construct``'s docstring).
 """
 import pytest
 
