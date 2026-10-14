@@ -549,7 +549,7 @@ class _ClauseLowering:
                 if key in _ITERATED_GOAL:
                     lowered.append(self._iterated_goal(a, s))
                 else:
-                    lowered.append(self.goal(a, s))
+                    lowered.append(self._meta_goal(a, s))
             else:
                 if name == "call" and i == 0:
                     self._refuse_control_in(a, s)
@@ -750,6 +750,22 @@ class _ClauseLowering:
             return _node("BitXor", left=self.term(g[1], spans[0]),
                          right=self._iterated_goal(g[2], spans[1]),
                          position=_pos_expr(self._pos.of(_top_span(sp))))
+        return self._meta_goal(g, sp)
+
+    def _meta_goal(self, g: Any, sp) -> ast.expr:
+        """A meta-argument goal (findall's, once's, catch's ...).  ISO
+        converts it to a body when the meta-call CALLS it (8.10.1, 8.15.2,
+        7.8.9), not at consult: a variable reached through ``,``/``;``/``->``
+        inside it is bound by then, so a ``!`` or ``->`` it holds is part of
+        the converted body, and a non-callable it holds is
+        ``type_error(callable, Whole)``.  In a ``.pl`` file such a goal is
+        lowered as ``call(Term)``, which is that conversion (call/1's
+        converter); every other goal compiles as written, so cut-free code
+        is unchanged.  A bare variable is ``call(G)`` either way."""
+        if self._cut_allowed and _var_inside_body(g):
+            self._refuse_control_in(g, sp)
+            pos = self._pos.of(_top_span(sp))
+            return self._call("call", [self.term(g, sp)], pos, pos)
         return self.goal(g, sp)
 
     def _refuse_control_in(self, g: Any, sp) -> None:
@@ -792,6 +808,20 @@ class _ClauseLowering:
             args=ast.List(elts=args, ctx=ast.Load()),
             kwargs=ast.List(elts=[], ctx=ast.Load()),
             position=_pos_expr(pos))
+
+
+def _var_inside_body(g: Any) -> bool:
+    """True when a variable sits in a goal position of *g* reached through
+    ISO body conversion's constructs (``,``, ``;``, ``->``: 7.6.2) -- not
+    when *g* is itself the variable, and not under ``\\+`` or any other
+    predicate (they convert their own argument when they run)."""
+    def walk(t):
+        if type(t) is VarRef:
+            return True
+        return (type(t) is tuple and len(t) == 3
+                and t[0] in (",", ";", "->") and (walk(t[1]) or walk(t[2])))
+    return (type(g) is tuple and len(g) == 3 and g[0] in (",", ";", "->")
+            and (walk(g[1]) or walk(g[2])))
 
 
 def _thunk(expr: ast.expr, pos) -> ast.expr:

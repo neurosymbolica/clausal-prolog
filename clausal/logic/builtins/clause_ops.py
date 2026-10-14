@@ -791,7 +791,25 @@ class OpenConjunction:
         self.tail = tail
 
 
-def engine_body_pattern(t, *, iso: bool = False):
+class ClosedConjunction:
+    """A top-level body pattern ``(G1, ..., Gk)`` (k >= 2, no open tail).
+    Kept apart from a plain tuple so it never matches an if-then-else body:
+    ``_spell_as_cells`` spells that as the 3-tuple ``(";", ("->", C, T), E)``
+    / ``("->", C, T)``, which a bare tuple pattern of three goals unified
+    with (D59 review)."""
+    __slots__ = ("goals",)
+
+    def __init__(self, goals):
+        self.goals = goals
+
+
+def _is_ite_cell(b) -> bool:
+    """A stored body that is ONE if-then(-else) goal -- the ISO cell
+    ``_spell_as_cells`` builds -- not a flat conjunction tuple."""
+    return type(b) is tuple and len(b) == 3 and b[0] in (";", "->")
+
+
+def engine_body_pattern(t, _top=True, *, iso: bool = False):
     """A body PATTERN in the shape :func:`clause_terms` hands a Body back.
 
     It depends on *iso* (keyword-only) -- :func:`iso_bodies` of the
@@ -799,13 +817,19 @@ def engine_body_pattern(t, *, iso: bool = False):
 
     - *iso* (a ``.pl`` / Clausal Prolog procedure, whose Body is the term
       as read): the pattern itself, with a seam caller's spellings made
-      ISO (:func:`_iso_pattern`).
+      ISO (:func:`_iso_pattern`).  An if-then-else body is then its own
+      ISO cell and a conjunction pattern its ``','`` cells, so the two
+      never meet.
     - otherwise (a seam procedure, whose Body is the term the seam builds:
       the atom ``true`` is True, ``\\+ G`` the Not node, a ``';'``/2 cell
       the Or node, and a conjunction the flat tuple): a
       right-nested ``','``/2 cell chain is the flat tuple of its goals --
-      an :class:`OpenConjunction` when its tail is unbound.  Known
-      residue: a body written ``(A, B), C`` matches nothing.
+      an :class:`OpenConjunction` when its tail is unbound.  An if-then-else
+      spelled by ``_spell_as_cells`` keeps its ``->`` cell (D59).  At the
+      top level (*_top*) a closed conjunction is a
+      :class:`ClosedConjunction`, so it cannot match an if-then-else body;
+      inside a construct it is the plain tuple.  Known residue: a body
+      written ``(A, B), C`` matches nothing.
 
     Match with :func:`unify_body`."""
     if iso:
@@ -814,20 +838,22 @@ def engine_body_pattern(t, *, iso: bool = False):
     if type(t) is str and t == "true":
         return True
     if type(t) is tuple and len(t) == 2 and t[0] == "\\+":
-        return nodes.Not(operand=engine_body_pattern(t[1]))
+        return nodes.Not(operand=engine_body_pattern(t[1], False))
     if type(t) is not tuple or len(t) != 3 or type(t[0]) is not str:
         return t
     if t[0] == "->":
         # D59: a .pl clause's if-then is spelled as its ISO cell (and its
         # cut as the atom ``!``) by ``_spell_as_cells``, so the pattern
         # keeps the cell; only the goals inside it are rebuilt.
-        return ("->", engine_body_pattern(t[1]), engine_body_pattern(t[2]))
+        return ("->", engine_body_pattern(t[1], False),
+                engine_body_pattern(t[2], False))
     if t[0] == ";":
         left = deref(t[1])
         if type(left) is tuple and len(left) == 3 and left[0] == "->":
-            return (";", engine_body_pattern(left), engine_body_pattern(t[2]))
-        return nodes.Or(left=engine_body_pattern(t[1]),
-                        right=engine_body_pattern(t[2]))
+            return (";", engine_body_pattern(left, False),
+                    engine_body_pattern(t[2], False))
+        return nodes.Or(left=engine_body_pattern(t[1], False),
+                        right=engine_body_pattern(t[2], False))
     if t[0] != ",":
         return t
     goals = []
@@ -838,12 +864,12 @@ def engine_body_pattern(t, *, iso: bool = False):
             # ((A, B), C): the clause as written had that grouping, which
             # the compiler's flat body no longer shows -- no match
             return t
-        goals.append(engine_body_pattern(left))
+        goals.append(engine_body_pattern(left, False))
         x = deref(x[2])
     if is_var(x):
         return OpenConjunction(tuple(goals), x)
-    goals.append(engine_body_pattern(x))
-    return tuple(goals)
+    goals.append(engine_body_pattern(x, False))
+    return ClosedConjunction(tuple(goals)) if _top else tuple(goals)
 
 
 def _iso_pattern(t):
@@ -891,19 +917,37 @@ class FailClosedBody:
 
 
 def unify_body(pattern, body, trail) -> bool:
-    """Unify an :func:`engine_body_pattern` result with a stored body."""
+    """Unify an :func:`engine_body_pattern` result with a stored body.
+
+    A stored if-then-else body is ONE goal (the ISO cell), never a
+    conjunction, and an ``Or`` pattern ``(A ; B)`` matches its ``;`` cell
+    (Scryer: ``clause(d(_), (A ; B))`` gives ``A = (C -> T)``)."""
     if type(body) is FailClosedBody:
         if type(pattern) is OpenConjunction or not is_var(deref(pattern)):
             return False
         return unify(pattern, body.term, trail)
-    if type(pattern) is not OpenConjunction:
+    tp = type(pattern)
+    if tp is ClosedConjunction:
+        body = deref(body)
+        if (type(body) is not tuple or _is_ite_cell(body)
+                or len(body) != len(pattern.goals)):
+            return False
+        return all(unify_body(p, g, trail)
+                   for p, g in zip(pattern.goals, body))
+    if tp is nodes.Or:
+        body = deref(body)
+        if _is_ite_cell(body) and body[0] == ";":
+            return (unify_body(pattern.left, body[1], trail)
+                    and unify_body(pattern.right, body[2], trail))
+        return unify(pattern, body, trail)
+    if tp is not OpenConjunction:
         return unify(pattern, body, trail)
     body = deref(body)
     k = len(pattern.prefix)
-    if type(body) is not tuple or len(body) <= k:
+    if type(body) is not tuple or _is_ite_cell(body) or len(body) <= k:
         return False
     for p, g in zip(pattern.prefix, body):
-        if not unify(p, g, trail):
+        if not unify_body(p, g, trail):
             return False
     rest = body[k:]
     return unify(pattern.tail, rest[0] if len(rest) == 1 else rest, trail)

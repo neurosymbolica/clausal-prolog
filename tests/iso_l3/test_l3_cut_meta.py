@@ -67,10 +67,11 @@ def test_soft_cut_inside_call_stays_refused_at_load(native):
                     "p(1).\nm(X) :- call((p(X) -> '*->'(true, true) ; true)).\n")
 
 
-# Bodies here call builtins only: a .pl dynamic clause whose body calls a
-# user predicate has no term form for clause/2 today (pre-existing,
-# independent of cut: ``existence_error(procedure, p/1)`` "nothing declares
-# the functor").
+# Bodies here call builtins only: clause/2 on a .pl dynamic clause whose
+# body calls a user predicate raises
+# ``permission_error(access, private_procedure, d/1)`` today (pre-existing,
+# independent of cut; todo/clause-2-pl-dynamic-body-calling-user-predicate-
+# 2026-10-14.md).
 CLAUSE_SRC = """\
 :- dynamic(d/1).
 d(X) :- X = 1, !.
@@ -157,3 +158,100 @@ def test_phrase_body_runs_cut_and_if_then_else(native, ans):
     assert ans(mod, "t6") == [[("-", 1, [3])]]
     # ``{!}`` is not local to the braces: it prunes ``{p(X)}``
     assert ans(mod, "t7") == [[1]]
+
+
+# A meta-argument goal is converted when the meta-call CALLS it (ISO 8.10.1,
+# 8.15.2, 7.8.9): a variable reached through ``,``/``;``/``->`` inside it is
+# bound by then, so a cut it holds is transparent to the goal's own ``;``.
+# (A clause BODY is converted at consult, 7.6.2: there it is call(G).)
+META_ARG_SRC = """\
+p(1). p(2). p(3).
+f1(L) :- G = (p(X), !), findall(X, (G ; X = 8), L).
+f2(L) :- G = (p(X), !), findall(X, ((G ; X = 8), true), L).
+f3(L) :- G = (p(X), !), findall(X, catch((G ; X = 8), _, true), L).
+f4(L) :- G = !, findall(X, ((X = 1 ; X = 2), G), L).
+f5(R) :- G = (!, fail), ( once((G ; true)) -> R = yes ; R = no ).
+f6(R) :- G = (!, fail), ( catch((G ; true), _, true) -> R = yes ; R = no ).
+f7(R) :- G = (p(X), !), ( forall((G ; X = 8), X < 5) -> R = yes ; R = no ).
+f8(L) :- G = (p(X) -> true), findall(X, (G ; X = 8), L).
+f9(L) :- G = (p(X), !), bagof(X, Y^(G ; X = 8 ; Y = 1), L).
+f10(R) :- G = 1, catch((once((X = 8 ; G)), R = ok(X)), error(E, _), R = E).
+f11(R) :- G = (!, fail), catch(( catch(throw(x), _, (G ; true)) -> R = yes ; R = no ), _, R = err).
+f12(L) :- findall(Y, ((Y = 1 ; Y = 2), true), L).
+body(X) :- G = (p(X), !), (G ; X = 8).
+"""
+
+
+@pytest.mark.parametrize("name,want", [
+    ("f1", [[1]]), ("f2", [[1]]), ("f3", [[1]]), ("f4", [[1]]),
+    ("f5", ["no"]), ("f6", ["no"]),
+    # Scryer has forall/2 only as library code, ``\\+ (C, \\+ A)`` on the
+    # passed term: [yes] there.
+    ("f7", ["yes"]),
+    ("f8", [[1]]), ("f9", [[1]]), ("f11", ["no"]),
+    # cut-free meta-arguments are untouched
+    ("f12", [[1, 2]]),
+    # control: a clause body converts at consult -- call(G) is local
+    ("body", [1, 8]),
+])
+def test_a_meta_argument_is_converted_when_it_is_called(native, ans, name,
+                                                        want):
+    mod = native.load("l3_cut_meta_arg", META_ARG_SRC)
+    assert ans(mod, name) == want
+
+
+def test_a_non_callable_bound_into_a_meta_argument_is_a_type_error(native, ans):
+    """Scryer: type_error(callable, (X=8;1)) -- the whole goal, checked when
+    once/1 converts it.  It used to answer ok(8)."""
+    from clausal.logic.variables import is_var
+    mod = native.load("l3_cut_meta_arg_te", META_ARG_SRC)
+    [r] = ans(mod, "f10")
+    assert r[0] == "type_error" and r[1] == "callable"
+    culprit = r[2]
+    assert culprit[0] == ";" and culprit[1][0] == "=" and is_var(culprit[1][1])
+    assert culprit[1][2] == 8 and culprit[2] == 1
+
+
+# An if-then-else body is ONE goal, never a conjunction: its ISO cell
+# ``(";", ("->", C, T), E)`` is a 3-tuple, the same shape as the engine's
+# flat conjunction of three goals.  Scryer's answers for this program.
+ITE_CLAUSE_SRC = """\
+:- dynamic(d/1).
+d(X) :- ( X = 2 -> true ; X = 3 ).
+d(X) :- X = 1, !.
+d(X) :- ( X = 4 -> true ).
+d(X) :- X = 5, X > 0, true.
+g1(C) :- retract((d(_) :- (_ , C))).
+g2(A-B) :- clause(d(_), (A ; B)).
+g3(x) :- retract((d(_) :- (_ ; _))).
+g4(x) :- clause(d(_), (_, _)).
+g5(x) :- clause(d(_), (_, _, _)).
+g6(A-B) :- clause(d(_), (A -> B)).
+g7(L) :- findall(B, clause(d(_), B), L).
+"""
+
+
+def test_clause_tells_an_if_then_else_body_from_a_conjunction(native, ans):
+    mod = native.load("l3_cut_meta_ite_clause", ITE_CLAUSE_SRC)
+    [(_, a, b)] = ans(mod, "g2")
+    assert a[0] == "->" and a[1][2] == 2 and a[2] is True and b[2] == 3
+    assert ans(mod, "g4") == ["x", "x"]      # X = 1, ! and the 3-goal body
+    assert ans(mod, "g5") == ["x"]           # the 3-goal body only
+    [(_, c, t)] = ans(mod, "g6")
+    assert c[2] == 4 and t is True
+
+
+def test_retract_never_takes_an_if_then_else_for_a_conjunction(native, ans):
+    mod = native.load("l3_cut_meta_ite_retract", ITE_CLAUSE_SRC)
+    # Scryer: [!, (_>0, true)] -- the ITE clause is NOT one of them
+    first, second = ans(mod, "g1")
+    assert first == "!" and second[0][0] == ">" and second[1] is True
+    [left] = ans(mod, "g7")
+    assert [b[0] for b in left] == [";", "->"]
+
+
+def test_retract_of_a_disjunction_pattern_takes_the_if_then_else(native, ans):
+    mod = native.load("l3_cut_meta_ite_retract_or", ITE_CLAUSE_SRC)
+    assert ans(mod, "g3") == ["x"]
+    [left] = ans(mod, "g7")
+    assert len(left) == 3 and left[1][0] == "->"
