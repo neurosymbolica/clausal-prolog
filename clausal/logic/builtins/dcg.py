@@ -178,13 +178,17 @@ def _dcg_terminals(body, context) -> list:
         f"{context}: a terminal list in a grammar body must be a list"))
 
 
-def _dcg_body_goal(body, s0, s, context="phrase/3"):
+def _dcg_translate(body, s0, s, context, bad):
     """The GOAL a DCG body term means between the states *s0* and *s* -- the
     ISO translation (7.14.2), built at run time as a term ``call/1`` runs:
     conjunction threads a fresh state, disjunction shares both, negation
     consumes nothing, a list or string is its terminals, ``true`` is the
     empty body, and any other callable is the nonterminal with S0/S
-    appended.  A variable body is ``phrase(B, S0, S)`` at run time."""
+    appended.  A variable body is ``phrase(B, S0, S)`` at run time.
+
+    A non-callable leaf (a number, tuple data) is not emitted: it goes on
+    *bad* and the caller raises for the first one once the whole body is
+    translated (see ``_dcg_body_goal``)."""
     from clausal.logic.builtins.call_body import is_conjunction_tuple  # noqa: PLC0415
     from clausal.pythonic_ast import nodes  # noqa: PLC0415
     b = deref(body)
@@ -209,14 +213,18 @@ def _dcg_body_goal(body, s0, s, context="phrase/3"):
     is_cell, functor = compound_cell_shape(b)
     if is_cell and functor == "," and len(b) == 3:
         mid = Var()
-        return (",", _dcg_body_goal(b[1], s0, mid, context),
-                _dcg_body_goal(b[2], mid, s, context))
+        return (",", _dcg_translate(b[1], s0, mid, context, bad),
+                _dcg_translate(b[2], mid, s, context, bad))
     if is_cell and functor in (";", "|") and len(b) == 3:
-        return (";", _dcg_body_goal(b[1], s0, s, context),
-                _dcg_body_goal(b[2], s0, s, context))
+        return (";", _dcg_translate(b[1], s0, s, context, bad),
+                _dcg_translate(b[2], s0, s, context, bad))
     if is_cell and functor == "\\+" and len(b) == 2:
-        return (",", ("\\+", _dcg_body_goal(b[1], s0, Var(), context)),
-                ("=", s0, s))
+        # ``\+ B`` is ``\+ phrase(B, S0, _), S0 = S``: B is translated when
+        # the negation RUNS, so ``phrase(([a], \+ 1), [])`` fails at ``[a]``
+        # before ``1`` is looked at, and ``phrase(\+ 1, L)`` raises
+        # type_error(callable, 1) from that phrase/3 (Ulrich's phrase rows
+        # #28-#30; Scryer refuses ``\+`` in a grammar body outright).
+        return (",", ("\\+", ("phrase", b[1], s0, Var())), ("=", s0, s))
     if is_cell and functor == "{}" and len(b) == 2:
         # ISO 7.14.2 / Scryer's library(dcgs): ``{G}`` is ``G, S0 = S`` --
         # G runs as written (its bindings shared with the rest of the body,
@@ -249,7 +257,38 @@ def _dcg_body_goal(body, s0, s, context="phrase/3"):
         return ("=", s0, _cons_onto(items, s))
     if is_cell:
         return (functor, *b[1:], s0, s)
+    from clausal.logic.builtins.call_body import is_non_callable_term  # noqa: PLC0415
+    if is_non_callable_term(b, lists=False):
+        bad.append(b)
+        return "true"
     return (b, s0, s)
+
+
+def _dcg_body_goal(body, s0, s, context="phrase/3"):
+    """The goal the grammar body *body* means between *s0* and *s*
+    (``_dcg_translate``), or the error translating it raises.
+
+    A non-callable nonterminal leaf is ``type_error(callable, Leaf)`` for
+    the FIRST such leaf, left to right, raised once the whole body is
+    translated (Ulrich Neumerkel's phrase rows #13, #46, #47: before
+    anything runs, so ``phrase(({fail}, 1), L)`` raises rather than fails).
+    It used to be emitted as the goal ``(1, S0, S)``, and call/1's converter
+    named the whole translated body, Python internals and all.
+
+    Raising AFTER the walk is Scryer's order (measured; the table accepts
+    either for #19-#21 and #48): a malformed terminal list anywhere in the
+    body, which ``_dcg_terminals`` raises during the walk, wins over a
+    non-callable leaf anywhere in it -- ``phrase((1, [a|L]), [])`` is
+    instantiation_error and ``phrase((1, [a|b]), [])`` is
+    type_error(list, [a|b]).  A goal inside ``{}`` is not a leaf of this
+    walk: call/1 checks it when it runs (#46: ``(1, {2})`` names ``1``)."""
+    bad: list = []
+    goal = _dcg_translate(body, s0, s, context, bad)
+    if bad:
+        from clausal.logic.builtins.call_body import non_callable_goal_error  # noqa: PLC0415
+        from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+        raise LogicException(non_callable_goal_error(bad[0], context))
+    return goal
 
 
 def _is_whole_body_cut(rule_val) -> bool:
