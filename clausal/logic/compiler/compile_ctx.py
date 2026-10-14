@@ -202,6 +202,13 @@ class CompilationContext:
     # bucket emits no mark).  Set by the funcdef builders before they call
     # the body compiler.
     clause_mark_name: "str | None" = "_mark"
+    # The TRO restart mode of the predicate being built (``"loop"``,
+    # ``"signal"``) or None when it has no TRO clause.  A predicate-scope
+    # cut exit first checks whether a tail call already set the restart
+    # flag and, if so, takes the restart instead of exhausting (the restart
+    # abandons the remaining clauses too).  Set by the trampoline funcdef
+    # builder around its clause loop; read only by the cut exit.
+    cut_tro_restart: "str | None" = None
 
     # ── Slice E6c: TRO plan for the current clause-body compile ──────────
     #

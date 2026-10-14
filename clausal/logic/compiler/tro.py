@@ -537,6 +537,20 @@ _TRO_MARK_NAME = "_tro_mark"
 _TRO_FLOOR_NAME = "_tro_floor"
 
 
+class TroCutRestart(BaseException):
+    """ISO cut on a loop-mode TRO path: a cut's exit raises this when the
+    activation's restart flag ``_tro`` is set, and the predicate's
+    ``while True`` body catches it and restarts.  The restart abandons this
+    activation's remaining clauses, which is what the cut asks for; the
+    plain cut exit (``yield (_fail, DONE)``) would drop the pending tail
+    call instead.  A ``BaseException`` so no ``except Exception`` a goal's
+    lowering emits around its continuation can swallow it."""
+
+
+#: Generated-code name of :class:`TroCutRestart`.
+TRO_CUT_RESTART_NAME = "$tro_cut_restart"
+
+
 def _compile_tro_tail(
     ctx: CompilationContext,
     tail_call: Call,

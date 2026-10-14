@@ -1,0 +1,802 @@
+### p/1 trampoline #0
+def p__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_ncap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _ncap0.__class__ is 1 .__class__ and _ncap0 == 1 or $unify(_ncap0, 1, trail):
+                    yield (_proceed, None)
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_ncap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _ncap0.__class__ is 2 .__class__ and _ncap0 == 2 or $unify(_ncap0, 2, trail):
+                    yield (_proceed, None)
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0,):
+        case [_ncap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if _ncap0.__class__ is 3 .__class__ and _ncap0 == 3 or $unify(_ncap0, 3, trail):
+                    yield (_proceed, None)
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    yield (_fail, $DONE)
+
+### app/3 trampoline #0
+def app__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    _d2 = $deref(arg2)
+    if $isinstance(_d0, ($list, $str, $bytes)):
+        if not _d0:
+            match (_d0, _d1, _d2):
+                case [_lcap0, _v0, _v0__dup0]:
+                    _mark = trail.mark()
+                    _mark_cl = False
+                    try:
+                        _lr0 = $head_list_unify_input(_lcap0, [], None, [], trail)
+                        if _lr0 is not False:
+                            if $unify(_v0, _v0__dup0, trail):
+                                if _lr0 is not None or $head_list_unify_output(_lcap0, [], None, [], trail):
+                                    yield (_proceed, None)
+                    except $GeneratorExit:
+                        _mark_cl = True
+                        raise
+                    finally:
+                        if not _mark_cl:
+                            trail.undo(_mark)
+        else:
+            match (_d0, _d1, _d2):
+                case [_lcap0, _v0, _lcap1]:
+                    _mark = trail.mark()
+                    _mark_cl = False
+                    try:
+                        _v1 = $Var()
+                        _v2 = $Var()
+                        _v3 = $Var()
+                        _lr0 = $head_list_unify_input(_lcap0, [_v1], _v2, [], trail)
+                        _lr1 = $head_list_unify_input(_lcap1, [_v1], _v3, [], trail)
+                        if _lr0 is not False and _lr1 is not False:
+                            for _ in $pending(trail):
+                                _gen1 = $StepGenerator($dispatch_at(app, 3), this_generator, this_generator, this_generator, _v2, _v0, _v3, trail)
+                                _st2 = (yield (_gen1, None))
+                                while _st2 is not $DONE:
+                                    if (_lr0 is not None or $head_list_unify_output(_lcap0, [_v1], _v2, [], trail)) and (_lr1 is not None or $head_list_unify_output(_lcap1, [_v1], _v3, [], trail)):
+                                        yield (_proceed, None)
+                                    _st2 = (yield (_gen1, None))
+                    except $GeneratorExit:
+                        _mark_cl = True
+                        raise
+                    finally:
+                        if not _mark_cl:
+                            trail.undo(_mark)
+    elif $is_var(_d0):
+        match (_d0, _d1, _d2):
+            case [_lcap0, _v0, _v0__dup0]:
+                _mark = trail.mark()
+                _mark_cl = False
+                try:
+                    _lr0 = $head_list_unify_input(_lcap0, [], None, [], trail)
+                    if _lr0 is not False:
+                        if $unify(_v0, _v0__dup0, trail):
+                            if _lr0 is not None or $head_list_unify_output(_lcap0, [], None, [], trail):
+                                yield (_proceed, None)
+                except $GeneratorExit:
+                    _mark_cl = True
+                    raise
+                finally:
+                    if not _mark_cl:
+                        trail.undo(_mark)
+        match (_d0, _d1, _d2):
+            case [_lcap0, _v0, _lcap1]:
+                _mark = trail.mark()
+                _mark_cl = False
+                try:
+                    _v1 = $Var()
+                    _v2 = $Var()
+                    _v3 = $Var()
+                    _lr0 = $head_list_unify_input(_lcap0, [_v1], _v2, [], trail)
+                    _lr1 = $head_list_unify_input(_lcap1, [_v1], _v3, [], trail)
+                    if _lr0 is not False and _lr1 is not False:
+                        for _ in $pending(trail):
+                            _gen3 = $StepGenerator($dispatch_at(app, 3), this_generator, this_generator, this_generator, _v2, _v0, _v3, trail)
+                            _st4 = (yield (_gen3, None))
+                            while _st4 is not $DONE:
+                                if (_lr0 is not None or $head_list_unify_output(_lcap0, [_v1], _v2, [], trail)) and (_lr1 is not None or $head_list_unify_output(_lcap1, [_v1], _v3, [], trail)):
+                                    yield (_proceed, None)
+                                _st4 = (yield (_gen3, None))
+                except $GeneratorExit:
+                    _mark_cl = True
+                    raise
+                finally:
+                    if not _mark_cl:
+                        trail.undo(_mark)
+    else:
+        match (_d0, _d1, _d2):
+            case [_lcap0, _v0, _v0__dup0]:
+                _mark = trail.mark()
+                _mark_cl = False
+                try:
+                    _lr0 = $head_list_unify_input(_lcap0, [], None, [], trail)
+                    if _lr0 is not False:
+                        if $unify(_v0, _v0__dup0, trail):
+                            if _lr0 is not None or $head_list_unify_output(_lcap0, [], None, [], trail):
+                                yield (_proceed, None)
+                except $GeneratorExit:
+                    _mark_cl = True
+                    raise
+                finally:
+                    if not _mark_cl:
+                        trail.undo(_mark)
+        match (_d0, _d1, _d2):
+            case [_lcap0, _v0, _lcap1]:
+                _mark = trail.mark()
+                _mark_cl = False
+                try:
+                    _v1 = $Var()
+                    _v2 = $Var()
+                    _v3 = $Var()
+                    _lr0 = $head_list_unify_input(_lcap0, [_v1], _v2, [], trail)
+                    _lr1 = $head_list_unify_input(_lcap1, [_v1], _v3, [], trail)
+                    if _lr0 is not False and _lr1 is not False:
+                        for _ in $pending(trail):
+                            _gen5 = $StepGenerator($dispatch_at(app, 3), this_generator, this_generator, this_generator, _v2, _v0, _v3, trail)
+                            _st6 = (yield (_gen5, None))
+                            while _st6 is not $DONE:
+                                if (_lr0 is not None or $head_list_unify_output(_lcap0, [_v1], _v2, [], trail)) and (_lr1 is not None or $head_list_unify_output(_lcap1, [_v1], _v3, [], trail)):
+                                    yield (_proceed, None)
+                                _st6 = (yield (_gen5, None))
+                except $GeneratorExit:
+                    _mark_cl = True
+                    raise
+                finally:
+                    if not _mark_cl:
+                        trail.undo(_mark)
+    yield (_fail, $DONE)
+
+### nrev/2 trampoline #0
+def nrev__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    if $isinstance(_d0, ($list, $str, $bytes)):
+        if not _d0:
+            match (_d0, _d1):
+                case [_lcap0, _lcap1]:
+                    _mark = trail.mark()
+                    _mark_cl = False
+                    try:
+                        _lr0 = $head_list_unify_input(_lcap0, [], None, [], trail)
+                        _lr1 = $head_list_unify_input(_lcap1, [], None, [], trail)
+                        if _lr0 is not False and _lr1 is not False:
+                            if (_lr0 is not None or $head_list_unify_output(_lcap0, [], None, [], trail)) and (_lr1 is not None or $head_list_unify_output(_lcap1, [], None, [], trail)):
+                                yield (_proceed, None)
+                    except $GeneratorExit:
+                        _mark_cl = True
+                        raise
+                    finally:
+                        if not _mark_cl:
+                            trail.undo(_mark)
+        else:
+            match (_d0, _d1):
+                case [_lcap0, _v4]:
+                    _mark = trail.mark()
+                    _mark_cl = False
+                    try:
+                        _v5 = $Var()
+                        _v6 = $Var()
+                        _lr0 = $head_list_unify_input(_lcap0, [_v5], _v6, [], trail)
+                        if _lr0 is not False:
+                            for _ in $pending(trail):
+                                _v7 = $Var()
+                                _gen3 = $StepGenerator($dispatch_at(nrev, 2), this_generator, this_generator, this_generator, _v6, _v7, trail)
+                                _st4 = (yield (_gen3, None))
+                                while _st4 is not $DONE:
+                                    _gen1 = $StepGenerator($dispatch_at(app, 3), this_generator, this_generator, this_generator, _v7, [_v5], _v4, trail)
+                                    _st2 = (yield (_gen1, None))
+                                    while _st2 is not $DONE:
+                                        if _lr0 is not None or $head_list_unify_output(_lcap0, [_v5], _v6, [], trail):
+                                            yield (_proceed, None)
+                                        _st2 = (yield (_gen1, None))
+                                    _st4 = (yield (_gen3, None))
+                    except $GeneratorExit:
+                        _mark_cl = True
+                        raise
+                    finally:
+                        if not _mark_cl:
+                            trail.undo(_mark)
+    elif $is_var(_d0):
+        match (_d0, _d1):
+            case [_lcap0, _lcap1]:
+                _mark = trail.mark()
+                _mark_cl = False
+                try:
+                    _lr0 = $head_list_unify_input(_lcap0, [], None, [], trail)
+                    _lr1 = $head_list_unify_input(_lcap1, [], None, [], trail)
+                    if _lr0 is not False and _lr1 is not False:
+                        if (_lr0 is not None or $head_list_unify_output(_lcap0, [], None, [], trail)) and (_lr1 is not None or $head_list_unify_output(_lcap1, [], None, [], trail)):
+                            yield (_proceed, None)
+                except $GeneratorExit:
+                    _mark_cl = True
+                    raise
+                finally:
+                    if not _mark_cl:
+                        trail.undo(_mark)
+        match (_d0, _d1):
+            case [_lcap0, _v4]:
+                _mark = trail.mark()
+                _mark_cl = False
+                try:
+                    _v5 = $Var()
+                    _v6 = $Var()
+                    _lr0 = $head_list_unify_input(_lcap0, [_v5], _v6, [], trail)
+                    if _lr0 is not False:
+                        for _ in $pending(trail):
+                            _v7 = $Var()
+                            _gen7 = $StepGenerator($dispatch_at(nrev, 2), this_generator, this_generator, this_generator, _v6, _v7, trail)
+                            _st8 = (yield (_gen7, None))
+                            while _st8 is not $DONE:
+                                _gen5 = $StepGenerator($dispatch_at(app, 3), this_generator, this_generator, this_generator, _v7, [_v5], _v4, trail)
+                                _st6 = (yield (_gen5, None))
+                                while _st6 is not $DONE:
+                                    if _lr0 is not None or $head_list_unify_output(_lcap0, [_v5], _v6, [], trail):
+                                        yield (_proceed, None)
+                                    _st6 = (yield (_gen5, None))
+                                _st8 = (yield (_gen7, None))
+                except $GeneratorExit:
+                    _mark_cl = True
+                    raise
+                finally:
+                    if not _mark_cl:
+                        trail.undo(_mark)
+    else:
+        match (_d0, _d1):
+            case [_lcap0, _lcap1]:
+                _mark = trail.mark()
+                _mark_cl = False
+                try:
+                    _lr0 = $head_list_unify_input(_lcap0, [], None, [], trail)
+                    _lr1 = $head_list_unify_input(_lcap1, [], None, [], trail)
+                    if _lr0 is not False and _lr1 is not False:
+                        if (_lr0 is not None or $head_list_unify_output(_lcap0, [], None, [], trail)) and (_lr1 is not None or $head_list_unify_output(_lcap1, [], None, [], trail)):
+                            yield (_proceed, None)
+                except $GeneratorExit:
+                    _mark_cl = True
+                    raise
+                finally:
+                    if not _mark_cl:
+                        trail.undo(_mark)
+        match (_d0, _d1):
+            case [_lcap0, _v4]:
+                _mark = trail.mark()
+                _mark_cl = False
+                try:
+                    _v5 = $Var()
+                    _v6 = $Var()
+                    _lr0 = $head_list_unify_input(_lcap0, [_v5], _v6, [], trail)
+                    if _lr0 is not False:
+                        for _ in $pending(trail):
+                            _v7 = $Var()
+                            _gen11 = $StepGenerator($dispatch_at(nrev, 2), this_generator, this_generator, this_generator, _v6, _v7, trail)
+                            _st12 = (yield (_gen11, None))
+                            while _st12 is not $DONE:
+                                _gen9 = $StepGenerator($dispatch_at(app, 3), this_generator, this_generator, this_generator, _v7, [_v5], _v4, trail)
+                                _st10 = (yield (_gen9, None))
+                                while _st10 is not $DONE:
+                                    if _lr0 is not None or $head_list_unify_output(_lcap0, [_v5], _v6, [], trail):
+                                        yield (_proceed, None)
+                                    _st10 = (yield (_gen9, None))
+                                _st12 = (yield (_gen11, None))
+                except $GeneratorExit:
+                    _mark_cl = True
+                    raise
+                finally:
+                    if not _mark_cl:
+                        trail.undo(_mark)
+    yield (_fail, $DONE)
+
+### mem/2 trampoline #0
+def mem__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    match (_d0, _d1):
+        case [_v8, _lcap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _v8__dup0 = $Var()
+                _v9 = $Var()
+                _lr0 = $head_list_unify_input(_lcap0, [_v8__dup0], _v9, [], trail)
+                if _lr0 is not False:
+                    if $unify(_v8, _v8__dup0, trail):
+                        if _lr0 is not None or $head_list_unify_output(_lcap0, [_v8__dup0], _v9, [], trail):
+                            yield (_proceed, None)
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0, _d1):
+        case [_v10, _lcap0]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _v11 = $Var()
+                _v12 = $Var()
+                _lr0 = $head_list_unify_input(_lcap0, [_v11], _v12, [], trail)
+                if _lr0 is not False:
+                    for _ in $pending(trail):
+                        _gen1 = $StepGenerator($dispatch_at(mem, 2), this_generator, this_generator, this_generator, _v10, _v12, trail)
+                        _st2 = (yield (_gen1, None))
+                        while _st2 is not $DONE:
+                            if _lr0 is not None or $head_list_unify_output(_lcap0, [_v11], _v12, [], trail):
+                                yield (_proceed, None)
+                            _st2 = (yield (_gen1, None))
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    yield (_fail, $DONE)
+
+### z/0 trampoline #0
+def z__0(this_generator, _proceed, _fail, _catcher, trail):
+    match ():
+        case []:
+            _v13 = $Var()
+
+            def _once_gen1():
+                for _ in $tramp_call($dispatch_at(mem, 2), (_v13, [1]), trail):
+                    for _ in $pending(trail):
+                        yield None
+                return None
+                yield None
+            _m2 = trail.mark()
+            for _ in _once_gen1():
+                yield (_proceed, None)
+                break
+            trail.undo(_m2)
+    yield (_fail, $DONE)
+
+### w/1 trampoline #0
+def w__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    _d0 = $deref(arg0)
+    match (_d0,):
+        case [_v14]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                _v15 = $Var()
+                _fa_bag7 = _v14
+                $check_bag(_fa_bag7, 'findall/3')
+                _fa_results1 = []
+                _fa_cond2 = []
+                _fa_cl3 = $current_leader()
+                _fa_m4 = trail.mark()
+
+                def _fa_gen5():
+                    for _ in $tramp_call($dispatch_at(mem, 2), (_v15, [1, 2]), trail):
+                        for _ in $pending(trail):
+                            yield None
+                    return None
+                    yield None
+                for _ in _fa_gen5():
+                    _fa_results1.append($findall_copy(_v15))
+                    $harvest_conditions(_fa_cl3, _fa_cond2)
+                trail.undo(_fa_m4)
+                $charge_conditions(trail, _fa_cl3, _fa_cond2)
+                _fa_um6 = trail.mark()
+                if $unify(_fa_bag7, _fa_results1, trail):
+                    yield (_proceed, None)
+                trail.undo(_fa_um6)
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    yield (_fail, $DONE)
+
+### k/0 trampoline #0
+def k__0(this_generator, _proceed, _fail, _catcher, trail):
+    match ():
+        case []:
+
+            def _naf_gen_fn1(_naf_self, _naf_proceed, _naf_fail, _naf_catcher, trail):
+                _gen6 = $StepGenerator($dispatch_at(p, 1), _naf_self, _naf_self, _naf_self, 9, trail)
+                _st7 = (yield (_gen6, None))
+                while _st7 is not $DONE:
+                    yield (_naf_proceed, None)
+                    _st7 = (yield (_gen6, None))
+                yield (_naf_fail, $DONE)
+            _m8 = trail.mark()
+            _naf_sg3 = $StepGenerator(_naf_gen_fn1, None, None, None, trail)
+            _naf2 = not $naf_has_solution(_naf_sg3)
+            trail.undo(_m8)
+            if _naf2:
+                yield (_proceed, None)
+    yield (_fail, $DONE)
+
+### col/2 trampoline #0
+def col__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_acap0, 'red', trail):
+                    if _ncap1.__class__ is 1 .__class__ and _ncap1 == 1 or $unify(_ncap1, 1, trail):
+                        yield (_proceed, None)
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_acap0, 'green', trail):
+                    if _ncap1.__class__ is 2 .__class__ and _ncap1 == 2 or $unify(_ncap1, 2, trail):
+                        yield (_proceed, None)
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_acap0, 'blue', trail):
+                    if _ncap1.__class__ is 3 .__class__ and _ncap1 == 3 or $unify(_ncap1, 3, trail):
+                        yield (_proceed, None)
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_acap0, 'red', trail):
+                    if _ncap1.__class__ is 4 .__class__ and _ncap1 == 4 or $unify(_ncap1, 4, trail):
+                        yield (_proceed, None)
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_acap0, 'black', trail):
+                    if _ncap1.__class__ is 5 .__class__ and _ncap1 == 5 or $unify(_ncap1, 5, trail):
+                        yield (_proceed, None)
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+
+### col/2 trampoline #1
+def col__p1_b0__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            if $unify(_acap0, 'red', trail):
+                if _ncap1.__class__ is 1 .__class__ and _ncap1 == 1 or $unify(_ncap1, 1, trail):
+                    yield (_proceed, None)
+
+### col/2 trampoline #2
+def col__p1_b1__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            if $unify(_acap0, 'green', trail):
+                if _ncap1.__class__ is 2 .__class__ and _ncap1 == 2 or $unify(_ncap1, 2, trail):
+                    yield (_proceed, None)
+
+### col/2 trampoline #3
+def col__p1_b2__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            if $unify(_acap0, 'blue', trail):
+                if _ncap1.__class__ is 3 .__class__ and _ncap1 == 3 or $unify(_ncap1, 3, trail):
+                    yield (_proceed, None)
+
+### col/2 trampoline #4
+def col__p1_b3__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            if $unify(_acap0, 'red', trail):
+                if _ncap1.__class__ is 4 .__class__ and _ncap1 == 4 or $unify(_ncap1, 4, trail):
+                    yield (_proceed, None)
+
+### col/2 trampoline #5
+def col__p1_b4__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            if $unify(_acap0, 'black', trail):
+                if _ncap1.__class__ is 5 .__class__ and _ncap1 == 5 or $unify(_ncap1, 5, trail):
+                    yield (_proceed, None)
+
+### col/2 trampoline #6
+def col__p1_dflt__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    return None
+    yield None
+
+### col/2 trampoline #7
+def col__p0_b0__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_acap0, 'red', trail):
+                    if _ncap1.__class__ is 1 .__class__ and _ncap1 == 1 or $unify(_ncap1, 1, trail):
+                        yield (_proceed, None)
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_acap0, 'red', trail):
+                    if _ncap1.__class__ is 4 .__class__ and _ncap1 == 4 or $unify(_ncap1, 4, trail):
+                        yield (_proceed, None)
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+
+### col/2 trampoline #8
+def col__p0_b1__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            if $unify(_acap0, 'green', trail):
+                if _ncap1.__class__ is 2 .__class__ and _ncap1 == 2 or $unify(_ncap1, 2, trail):
+                    yield (_proceed, None)
+
+### col/2 trampoline #9
+def col__p0_b2__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            if $unify(_acap0, 'blue', trail):
+                if _ncap1.__class__ is 3 .__class__ and _ncap1 == 3 or $unify(_ncap1, 3, trail):
+                    yield (_proceed, None)
+
+### col/2 trampoline #10
+def col__p0_b3__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            if $unify(_acap0, 'black', trail):
+                if _ncap1.__class__ is 5 .__class__ and _ncap1 == 5 or $unify(_ncap1, 5, trail):
+                    yield (_proceed, None)
+
+### col/2 trampoline #11
+def col__p0_dflt__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
+    return None
+    yield None
+
+### cnt/1 trampoline #0
+def cnt__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
+    while True:
+        _tro_mark = trail.mark()
+        _tro_floor = trail.var_floor()
+        _d0 = $deref(arg0)
+        _tro = False
+        match (_d0,):
+            case [_ncap0]:
+                _mark = trail.mark()
+                _mark_cl = False
+                try:
+                    if _ncap0.__class__ is 0 .__class__ and _ncap0 == 0 or $unify(_ncap0, 0, trail):
+                        yield (_proceed, None)
+                except $GeneratorExit:
+                    _mark_cl = True
+                    raise
+                finally:
+                    if not _mark_cl:
+                        trail.undo(_mark)
+        match (_d0,):
+            case [_v16]:
+                _mark = trail.mark()
+                _mark_cl = False
+                try:
+                    _v17 = $Var()
+                    if $fd_gt(_v16, 0, trail):
+                        for _ in $pending(trail):
+                            _m3 = trail.mark()
+                            for _ in $unify_iter(_v17, $present($sub($deref(_v16), 1)), trail):
+                                _tro_arg0 = $deref(_v17)
+                                if trail.commit_fresh(_tro_mark, _tro_floor):
+                                    _tro = True
+                                else:
+                                    _gen1 = $StepGenerator($dispatch_at(cnt, 1), this_generator, this_generator, this_generator, _tro_arg0, trail)
+                                    _st2 = (yield (_gen1, None))
+                                    while _st2 is not $DONE:
+                                        yield (_proceed, None)
+                                        _st2 = (yield (_gen1, None))
+                            trail.undo(_m3)
+                except $GeneratorExit:
+                    _mark_cl = True
+                    raise
+                finally:
+                    if not _mark_cl:
+                        trail.undo(_mark)
+        if _tro:
+            arg0 = _tro_arg0
+            continue
+        break
+    yield (_fail, $DONE)
+
+### z/0 shallow
+def z__0(trail, k):
+    match ():
+        case []:
+            _v13 = $Var()
+
+            def _once_gen1():
+                for _ in $tramp_call($dispatch_at(mem, 2), (_v13, [1]), trail):
+                    for _ in $pending(trail):
+                        yield None
+                return None
+                yield None
+            _m2 = trail.mark()
+            for _ in _once_gen1():
+                yield None
+                break
+            trail.undo(_m2)
+
+### k/0 shallow
+def k__0(trail, k):
+    match ():
+        case []:
+
+            def _naf_gen1():
+                for _ in $tramp_call($dispatch_at(p, 1), (9,), trail):
+                    for _ in $pending(trail):
+                        yield None
+                return None
+                yield None
+            _naf2 = True
+            _m3 = trail.mark()
+            for _ in _naf_gen1():
+                _naf2 = False
+                break
+            trail.undo(_m3)
+            if _naf2:
+                yield None
+
+### col/2 shallow
+def col__2(arg0, arg1, trail, k):
+    _d0 = $deref(arg0)
+    _d1 = $deref(arg1)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_acap0, 'red', trail):
+                    if _ncap1.__class__ is 1 .__class__ and _ncap1 == 1 or $unify(_ncap1, 1, trail):
+                        yield None
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_acap0, 'green', trail):
+                    if _ncap1.__class__ is 2 .__class__ and _ncap1 == 2 or $unify(_ncap1, 2, trail):
+                        yield None
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_acap0, 'blue', trail):
+                    if _ncap1.__class__ is 3 .__class__ and _ncap1 == 3 or $unify(_ncap1, 3, trail):
+                        yield None
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_acap0, 'red', trail):
+                    if _ncap1.__class__ is 4 .__class__ and _ncap1 == 4 or $unify(_ncap1, 4, trail):
+                        yield None
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)
+    match (_d0, _d1):
+        case [_acap0, _ncap1]:
+            _mark = trail.mark()
+            _mark_cl = False
+            try:
+                if $unify(_acap0, 'black', trail):
+                    if _ncap1.__class__ is 5 .__class__ and _ncap1 == 5 or $unify(_ncap1, 5, trail):
+                        yield None
+            except $GeneratorExit:
+                _mark_cl = True
+                raise
+            finally:
+                if not _mark_cl:
+                    trail.undo(_mark)

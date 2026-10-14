@@ -327,6 +327,8 @@ from .tro import (  # noqa: E402,F401
     _contains_star_unpack,
     _compile_tro_tail,
     _TRO_MARK_NAME, _TRO_FLOOR_NAME,
+    TroCutRestart as _TroCutRestart,
+    TRO_CUT_RESTART_NAME as _TRO_CUT_RESTART_NAME,
 )
 
 
@@ -550,6 +552,8 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # (a user predicate ``is_var/1``, a seam ``SegList = ...``): same rule.
     "$is_var": is_var,
     "$StepGenerator": StepGenerator,
+    # ISO cut on a loop-mode TRO path (``tro.TroCutRestart``).
+    _TRO_CUT_RESTART_NAME: _TroCutRestart,
     "$SegList": SegList,
     "$SegString": SegString,
     "$SegBytes": SegBytes,
@@ -657,6 +661,17 @@ def _sweep_tro_eligible(
         if plan.eligible:
             eligible.append(i)
     return frozenset(eligible)
+
+
+def _raises_tro_cut_restart(stmts: list[ast.stmt]) -> bool:
+    """True if *stmts* raise :class:`tro.TroCutRestart` (an ISO cut exit on
+    a loop-mode TRO path)."""
+    for stmt in stmts:
+        for node in ast.walk(stmt):
+            if (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Name)
+                    and node.exc.id == _TRO_CUT_RESTART_NAME):
+                return True
+    return False
 
 
 def _emits_tro_commit(stmts: list[ast.stmt]) -> bool:
@@ -915,43 +930,52 @@ def _build_predicate_trampoline_funcdef(
     dispatch_pos = (
         _find_list_dispatch_pos(clauses, arity) if (clauses and arity > 0) else None
     )
-    if dispatch_pos is not None:
-        # ISO cut: list-dispatch arms are built without ``skip_trail`` (they
-        # always carry ``_mark``), so the cut exit always undoes it.
-        ctx_template.clause_mark_name = "_mark"
-        loop_stmts.extend(
-            _build_list_dispatch_guard(
-                clauses, dispatch_pos, arity, subject, body_compiler
-            )
-        )
-    else:
-        _head_globals = ctx_template.base_globals
-        # ISO cut: the exit undoes the arm's mark, which a ``skip_trail``
-        # arm (single-clause index bucket) does not emit.
-        ctx_template.clause_mark_name = None if skip_trail else "_mark"
-        for ci, clause in enumerate(clauses):
-            var_context: dict[int, str] = {}
-            _head_arg_patterns(clause.head, var_context, arity, globals_=_head_globals)
-
-            # Slice G5: scope head-match scaffolding (mark/undo, pattern
-            # guards, unify calls) on the clause's own source position.
-            # Without this the `_assign_mark`/`_undo_stmt` calls inside
-            # ``compile_head_to_match_case`` emit at lineno=0.
-            _push_position(getattr(clause, "position", None))
-            try:
-                body_stmts = body_compiler(clause, var_context)
-
-                case_arm = compile_head_to_match_case(
-                    head=clause.head,
-                    body_stmts=body_stmts,
-                    var_context=var_context,
-                    arity=arity,
-                    skip_trail=skip_trail,
-                    globals_=_head_globals,
+    # ISO cut: the predicate-scope cut exit reads two facts about the arms
+    # this call builds -- whether they carry a trail mark, and the TRO
+    # restart mode -- off the shared template.  Set them for this call's
+    # clause loop only and restore them after, so no other build or body
+    # compile through the same template ever reads a stale value.
+    _saved_cut_fields = (ctx_template.clause_mark_name, ctx_template.cut_tro_restart)
+    ctx_template.cut_tro_restart = tro_mode if use_tro else None
+    try:
+        if dispatch_pos is not None:
+            # List-dispatch arms are built without ``skip_trail``: they always
+            # carry ``_mark``.
+            ctx_template.clause_mark_name = "_mark"
+            loop_stmts.extend(
+                _build_list_dispatch_guard(
+                    clauses, dispatch_pos, arity, subject, body_compiler
                 )
-            finally:
-                _pop_position()
-            loop_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
+            )
+        else:
+            _head_globals = ctx_template.base_globals
+            # A ``skip_trail`` arm (single-clause index bucket) emits no mark.
+            ctx_template.clause_mark_name = None if skip_trail else "_mark"
+            for ci, clause in enumerate(clauses):
+                var_context: dict[int, str] = {}
+                _head_arg_patterns(clause.head, var_context, arity, globals_=_head_globals)
+
+                # Slice G5: scope head-match scaffolding (mark/undo, pattern
+                # guards, unify calls) on the clause's own source position.
+                # Without this the `_assign_mark`/`_undo_stmt` calls inside
+                # ``compile_head_to_match_case`` emit at lineno=0.
+                _push_position(getattr(clause, "position", None))
+                try:
+                    body_stmts = body_compiler(clause, var_context)
+
+                    case_arm = compile_head_to_match_case(
+                        head=clause.head,
+                        body_stmts=body_stmts,
+                        var_context=var_context,
+                        arity=arity,
+                        skip_trail=skip_trail,
+                        globals_=_head_globals,
+                    )
+                finally:
+                    _pop_position()
+                loop_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
+    finally:
+        ctx_template.clause_mark_name, ctx_template.cut_tro_restart = _saved_cut_fields
 
     if clauses and arity > 0:
         _finalize_subject_depths(_subject_assigns, loop_stmts, subject)
@@ -974,6 +998,15 @@ def _build_predicate_trampoline_funcdef(
             _assign(_TRO_FLOOR_NAME, _call(_attr(_tn, "var_floor"))),
         ]
 
+    if use_tro and tro_mode == "loop" and _raises_tro_cut_restart(loop_stmts):
+        # ISO cut: a cut exit that finds ``_tro`` set raises out of its arm
+        # to here, skipping the remaining arms; the restart below follows.
+        loop_stmts = [ast.Try(
+            body=loop_stmts,
+            handlers=[ast.ExceptHandler(
+                type=_name(_TRO_CUT_RESTART_NAME), name=None, body=[ast.Pass()])],
+            orelse=[], finalbody=[],
+        )]
     if use_tro and tro_mode == "loop":
         # After all match arms: if _tro was set, reassign args and continue.
         reassign_stmts: list[ast.stmt] = []
@@ -1935,26 +1968,33 @@ def _build_predicate_funcdef(
             ctx=ast.Load(),
         )
 
+    # ISO cut: see the trampoline builder -- set for this call's clause
+    # loop only, then restored.
+    _saved_mark_name = None if ctx_template is None else ctx_template.clause_mark_name
     if ctx_template is not None:
         ctx_template.clause_mark_name = None if skip_trail else "_mark"
-    for clause in clauses:
-        var_context: dict[int, str] = {}
-        _head_arg_patterns(clause.head, var_context, arity, globals_=globals_)
-        # Slice G5: scope head-match + body emission on clause position.
-        _push_position(getattr(clause, "position", None))
-        try:
-            body_stmts = body_compiler(clause, var_context)
-            case_arm = compile_head_to_match_case(
-                head=clause.head,
-                body_stmts=body_stmts,
-                var_context=var_context,
-                arity=arity,
-                skip_trail=skip_trail,
-                globals_=globals_,
-            )
-        finally:
-            _pop_position()
-        all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
+    try:
+        for clause in clauses:
+            var_context: dict[int, str] = {}
+            _head_arg_patterns(clause.head, var_context, arity, globals_=globals_)
+            # Slice G5: scope head-match + body emission on clause position.
+            _push_position(getattr(clause, "position", None))
+            try:
+                body_stmts = body_compiler(clause, var_context)
+                case_arm = compile_head_to_match_case(
+                    head=clause.head,
+                    body_stmts=body_stmts,
+                    var_context=var_context,
+                    arity=arity,
+                    skip_trail=skip_trail,
+                    globals_=globals_,
+                )
+            finally:
+                _pop_position()
+            all_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
+    finally:
+        if ctx_template is not None:
+            ctx_template.clause_mark_name = _saved_mark_name
 
     if clauses and arity > 0:
         _finalize_subject_depths(_subject_assigns, all_stmts, subject)

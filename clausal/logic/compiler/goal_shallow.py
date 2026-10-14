@@ -501,9 +501,26 @@ def _make_body_compiler_impl(
 
         if isinstance(ctx_template.strategy, _TS):
             _fail = ctx_template.fail_name
+            _tro_mode = ctx_template.cut_tro_restart
+
+            def _restart() -> list[ast.stmt]:
+                # A TRO tail (this clause's own, or an earlier arm's) has
+                # set the restart flag: take the restart, which also leaves
+                # the remaining clauses untried.  The arm's ``finally``
+                # undoes its mark on the way out, as on the plain TRO path.
+                if _tro_mode == "loop":
+                    from .tro import TRO_CUT_RESTART_NAME
+                    return [_if(_name("_tro"), [
+                        ast.Raise(exc=_name(TRO_CUT_RESTART_NAME), cause=None)])]
+                if _tro_mode == "signal":
+                    return [_if(ast.Subscript(
+                        value=_name("$tro_state"), slice=ast.Constant(0),
+                        ctx=ast.Load()), [ast.Return(value=None)])]
+                return []
 
             def _exit() -> list[ast.stmt]:
-                return _undo() + [_ys(_name(_fail), _name("$DONE")), ast.Return(value=None)]
+                return _restart() + _undo() + [
+                    _ys(_name(_fail), _name("$DONE")), ast.Return(value=None)]
         else:
             def _exit() -> list[ast.stmt]:
                 return _undo() + [ast.Return(value=None)]

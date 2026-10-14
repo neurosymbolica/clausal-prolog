@@ -63,7 +63,11 @@ def _lower_body(
             trail_name = ctx.trail_name
             naf_gen = ctx.fresh("_naf_gen")
             naf_flag = ctx.fresh("_naf")
-            inner_stmts = lower(inner, ctx, [_yield_none_stmt()])
+            # ISO cut: the NAF sub-generator is a barrier scope -- a cut
+            # inside leaves it, nothing more (8.15.1).
+            inner_stmts = lower(
+                inner, ctx.replace(cut_exit=lambda: [ast.Return(value=None)]),
+                [_yield_none_stmt()])
             naf_body = inner_stmts + [
                 ast.Return(value=ast.Constant(value=None)),
                 ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
