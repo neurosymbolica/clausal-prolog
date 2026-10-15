@@ -7,6 +7,7 @@ Each test asserts the whole error term.  The adapter is called in process,
 bare (trail.defer False) and as a driver leaves the trail at a goal
 (trail.defer True, the queue run after with run_first), whatever CLAUSAL_CLPQ says.
 """
+import dataclasses
 import signal
 from decimal import Decimal
 from fractions import Fraction
@@ -38,6 +39,44 @@ def _raised(call, trail=None):
         if trail is not None and trail.defer:
             run_first(trail)
     return caught.value.term
+
+
+def _variant_eq(actual, expected, vmap=None) -> bool:
+    """True when *actual* is *expected* up to renaming of unbound
+    variables -- ISO ``copy_term/2`` semantics (2026-10-15: ``_error()``
+    now copies a builtin error's culprit at raise time, ISO 7.8.10.1 b, the
+    same discipline ``throw/1`` already applied, so a culprit built here
+    with a genuinely-unbound ``Var`` no longer comes back as that exact
+    Python object -- a fresh one, consistently, stands in its place).
+
+    Each DISTINCT *expected* Var must map to exactly one *actual* Var,
+    consistently across the whole term (so sharing -- the same variable
+    occurring twice -- is checked, not just erased), and that actual
+    counterpart must itself still be unbound."""
+    if vmap is None:
+        vmap = {}
+    actual = deref(actual)
+    if is_var(expected):
+        if id(expected) in vmap:
+            return actual is vmap[id(expected)]
+        if not is_var(actual):
+            return False
+        vmap[id(expected)] = actual
+        return True
+    if type(expected) is tuple and type(actual) is tuple:
+        return (len(expected) == len(actual)
+                and all(_variant_eq(a, e, vmap) for a, e in zip(actual, expected)))
+    if dataclasses.is_dataclass(expected) and type(actual) is type(expected):
+        # A pythonic_ast node (ArithEq, Add, ...): recurse into its fields
+        # rather than falling to dataclass `==`, which compares embedded
+        # Vars by Python identity and would fail the same way the bare
+        # tuple case above would without the recursion.
+        fields = dataclasses.fields(expected)
+        return all(
+            _variant_eq(getattr(actual, f.name), getattr(expected, f.name), vmap)
+            for f in fields
+        )
+    return actual == expected
 
 
 class _Hang(BaseException):
@@ -153,17 +192,21 @@ def test_a_block_that_is_a_variable_raises():
 
 
 def test_a_disjunction_through_the_one_answer_entry_raises():
+    # x is never bound in this test, so the raised culprit's copy (2026-10-15:
+    # _error() now snapshots at raise time) replaces it with a FRESH unbound
+    # Var rather than the literal object built here -- _variant_eq checks the
+    # shape and the sharing (x occurs twice) survive, not Python identity.
     t, x = Trail(), Var()
     block = (";", ArithEq(left=x, right=1), ArithEq(left=x, right=2))
-    assert _raised(lambda: h.clpq_constraint_block(block, t)) == \
-        type_error("constraint", block, "{}/1")
+    assert _variant_eq(_raised(lambda: h.clpq_constraint_block(block, t)),
+                        type_error("constraint", block, "{}/1"))
 
 
 def test_entailed_of_an_unknown_relation_raises():
     # nf.pl negate/2 clause 11: illarg(type(constraint), entailed(Rel), 1).
     t, x = Trail(), Var()
-    assert _raised(lambda: h.entailed("=>>", x, 1, t)) == \
-        type_error("constraint", ("=>>", x, 1), "entailed/1")
+    assert _variant_eq(_raised(lambda: h.entailed("=>>", x, 1, t)),
+                        type_error("constraint", ("=>>", x, 1), "entailed/1"))
 
 
 # ---------------------------------------------------------------- in_q bounds

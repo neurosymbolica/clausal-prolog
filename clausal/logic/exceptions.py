@@ -452,9 +452,47 @@ def _context(context: Any) -> tuple[Any, str | None]:
     return context, None
 
 
+def _copy_culprit(term: Any) -> Any:
+    """Snapshot *term* the way ``throw/1`` snapshots its ball (ISO
+    7.8.10.1 b, ``globals_env._throw_ball`` / ``_findall_copy_row``):
+    resolve every binding as of THIS moment and replace whatever is still
+    unbound with a fresh Var, before the raise unwinds the stack and the
+    generator chain's trail-undo retroactively erases the binding.
+
+    Without this, an ISO builtin error raised mid-conjunction embeds the
+    culprit by REFERENCE whenever the raise site hands a term that still
+    nests a live, currently-bound ``Var``: ``N = 'X', write_term(T,
+    [variable_names([N=T])])`` raises ``domain_error(write_option,
+    variable_names([N=T]))`` whose Python object still holds the live Var
+    for ``N`` -- and when that error is UNCAUGHT (no ``catch/3``, or one
+    that does not match), ``solve()``'s generator-chain unwind undoes the
+    trail on its way out of the clause, unbinding ``N`` again before the
+    top level ever reads ``.term``, so the printed error showed
+    ``variable_names([_=_])`` with everything unbound, instead of
+    ``variable_names(['X'=_])``.  (A ``catch/3`` that matches is a
+    different, already-correct path -- its handler runs inline, before any
+    unwind -- so this symptom was only ever visible on an uncaught raise.)
+    ``copy_term`` semantics are exactly the fix: a bound variable is
+    resolved to its concrete value in the copy, a genuinely unbound one
+    gets a fresh, independent Var rather than being spuriously grounded.
+
+    Ground terms skip the copy entirely (``_is_ground`` short-circuits on
+    the first Var) -- the overwhelmingly common case, since most culprits
+    are already-ground atoms, numbers or type names -- so this costs
+    nothing where there is nothing to protect.
+    """
+    from clausal.logic.solve import _deref_walk  # noqa: PLC0415
+    from clausal.logic.builtins._helpers import _is_ground  # noqa: PLC0415
+    walked = _deref_walk(term)
+    if _is_ground(walked):
+        return walked
+    from clausal.logic.builtins.inspection import _copy_term  # noqa: PLC0415
+    return _copy_term(walked, {})
+
+
 def _error(formal: Any, context: Any) -> tuple:
     second, prose = _context(context)
-    return _with_prose(("error", formal, second), prose)
+    return _with_prose(("error", _copy_culprit(formal), second), prose)
 
 
 # ── Structured error term helpers ─────────────────────────────────────────────
@@ -516,6 +554,15 @@ def existence_error(obj_type: str, culprit: Any, context: Any = "") -> tuple:
     (``call(nosuch, 1)`` -> ``error(existence_error(procedure,nosuch/1),
     nosuch/1)``), so an indicator *culprit* is the second argument here too
     and the whole context text becomes prose.
+
+    No :func:`_copy_culprit` here, unlike :func:`_error`: a PROCEDURE
+    culprit on this path is always an indicator cell built fresh at the
+    raise site from a minted name and a literal arity (``dangling_handle_
+    indicator_and_why``, callers in ``globals_env.py`` / ``modules/py``) --
+    never a term a program could still have a live, currently-bound Var
+    inside, so there is nothing for the copy to protect and it would only
+    cost an allocation (and, measured 2026-10-15, break an existing
+    identity-sensitive test with no compensating safety gain).
     """
     formal = ("existence_error", _name_atom(obj_type), culprit)
     if (obj_type == "procedure" and _is_indicator(culprit)
