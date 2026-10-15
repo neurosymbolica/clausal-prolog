@@ -70,10 +70,16 @@ def _walk_goal(goal, negative, add_edge):
     if isinstance(goal, nodes.IfThenElse):
         # ISO ``( C -> T ; E )``.  The test is NOT a negation: the else arm
         # runs when it fails, but evaluation is the plain left-to-right
-        # Prolog one, and a TABLED call in a test is refused at compile time
-        # (cut_scope, Task 7), so no WFS delay can hang on it.  It is still
-        # a dependency, so it is walked with the surrounding polarity; an
-        # enclosing ``\+`` stays sticky over all three arms.
+        # Prolog one, and a DIRECT tabled call in a test is refused at
+        # compile time (cut_scope), so no WFS delay can hang on that call.
+        # That holds only for direct calls: a test that reaches a table
+        # through an UNTABLED intermediary (``w :- ( t -> fail ; true ).``
+        # with w tabled and ``t :- w.`` untabled) loads, and since the test
+        # is walked as a positive edge this lint stays silent on it, where
+        # its ``\+ t`` twin warns (non-stratified).  The answer does not
+        # change (the commit is operational, not NAF); only the lint does.
+        # The test is a dependency, so it is walked with the surrounding
+        # polarity; an enclosing ``\+`` stays sticky over all three arms.
         _walk_goal(goal.test, negative, add_edge)
         _walk_goal(goal.body, negative, add_edge)
         if goal.orelse is not None:

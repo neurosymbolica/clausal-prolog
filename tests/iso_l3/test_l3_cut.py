@@ -213,11 +213,8 @@ def test_goal_expansion_descends_into_ite_and_leaves_cut_alone():
 
 def test_term_expansion_goal_names_walk_the_ite_arms():
     from clausal.logic.term_expansion import _goal_names
-    from clausal.logic.variables import Var
     from clausal.pythonic_ast.nodes import Call, Cut, IfThenElse, LoadName
-    v = Var()
     c = lambda n, *a: Call(func=LoadName(name=n), args=list(a), kwargs=[])
-    ite = IfThenElse(test=c("t"), body=c("b"), orelse=c("e", v))
     out = set()
     _goal_names(IfThenElse(test=c("t"), body=Cut(), orelse=c("e")), out)
     assert out == {"t", "e"}
@@ -351,3 +348,29 @@ def test_cut_scope_treats_a_branch_test_as_part_of_the_scope():
     assert cut_reaches_scope(br(call("q"), Cut(), Sequence(ops=[])))
     assert cut_reaches_scope(br(call("q"), Sequence(ops=[]), Cut()))
     assert not cut_reaches_scope(br(call("q"), call("r"), Sequence(ops=[])))
+
+
+def test_goal_expansion_collects_vars_from_all_three_ite_arms(monkeypatch):
+    """``_collect_vars_from_term`` walks an ISO IfThenElse's test, then and
+    else (and skips a missing else), as it walks And/Or/Not."""
+    from clausal.logic import goal_expansion as ge
+    from clausal.logic.variables import Var
+    from clausal.pythonic_ast.nodes import Cut, IfThenElse
+    monkeypatch.setattr(ge, "_cell_slot_names",
+                        lambda f, n, md: tuple(f"{f}{i}" for i in range(n)))
+    x, y, z = Var(), Var(), Var()
+    out: dict = {}
+    ge._collect_vars_from_term(
+        IfThenElse(test=("t", x), body=("b", y), orelse=("e", z)), out)
+    assert out == {"t0": x, "b0": y, "e0": z}
+    out = {}
+    ge._collect_vars_from_term(
+        IfThenElse(test=("t", x), body=Cut(), orelse=None), out)
+    assert out == {"t0": x}
+    # The ITE's own fields are goal positions, not named slots: a bare
+    # variable goal names nothing (the generic term walk would record it
+    # under "test").
+    out = {}
+    ge._collect_vars_from_term(
+        IfThenElse(test=x, body=("b", y), orelse=z), out)
+    assert out == {"b0": y}

@@ -134,3 +134,30 @@ def test_continuation_tco_marks_tail_calls_in_then_and_else():
     ite = out.ops[0]
     assert ite.then.ops[0].tail_position and ite.else_.ops[0].tail_position
     assert not ite.test.ops[0].tail_position
+
+
+def test_an_opaque_value_in_an_if_then_else_node_is_parameterised(native):
+    """solve's ``_parameterize_opaque`` rebuilds an IfThenElse node whose
+    arms hold an opaque value (a Decimal), keeping ``orelse=None`` for the
+    no-else form; the query then runs on a ``.pl`` module."""
+    from decimal import Decimal
+    from clausal.logic.solve import _deref_walk, _parameterize_opaque, solve
+    from clausal.logic.variables import Var
+    from clausal.pythonic_ast.nodes import IfThenElse
+    mod = native.load("l3_ite_opaque", "w(2).\nok(1).\n")
+    y = Var()
+    ite = IfThenElse(test=("w", Decimal("2")), body=("ok", y), orelse=None)
+    params: list = []
+    out = _parameterize_opaque(ite, params)
+    assert out is not ite and type(out) is IfThenElse
+    assert out.orelse is None and len(params) == 1
+    assert params[0][1] == Decimal("2")
+    for orelse in (False, True):
+        y = Var()
+        ite = IfThenElse(test=("w", Decimal("2")), body=("ok", y),
+                         orelse=("ok", y) if orelse else None)
+        assert [_deref_walk(y) for _ in solve(ite, mod)] == [1], orelse
+    # The else arm taken, with the Decimal in it.
+    ite = IfThenElse(test=("w", 99), body=("ok", 7),
+                     orelse=("w", Decimal("2")))
+    assert len(list(solve(ite, mod))) == 1
