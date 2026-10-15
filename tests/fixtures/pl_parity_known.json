@@ -192,7 +192,7 @@
    "native_sha": "c48b5b1a9776c846"
   },
   {
-   "key": "docs/clpq.md#L232::load::",
+   "key": "docs/clpq.md#L243::load::",
    "class": "d",
    "note": "rulings D7/D8: constant_number_units/3 with a unit from the european_union library is Clausal Prolog only; the translator misreads the unit (`'euro'` is not a unit expression)",
    "translator_sha": "55efbd60dbe12ac0",
