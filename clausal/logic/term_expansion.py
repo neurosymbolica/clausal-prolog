@@ -88,6 +88,10 @@ def _goal_names(goal, out: set) -> None:
     elif isinstance(goal, nodes.IfExpr):
         for g in (goal.test, goal.body, goal.orelse):
             _goal_names(g, out)
+    elif isinstance(goal, nodes.IfThenElse):      # ISO ->/; (orelse may be None)
+        for g in (goal.test, goal.body, goal.orelse):
+            if g is not None:
+                _goal_names(g, out)
     elif isinstance(goal, nodes.TupleLiteral):
         for g in goal.elements:
             _goal_names(g, out)

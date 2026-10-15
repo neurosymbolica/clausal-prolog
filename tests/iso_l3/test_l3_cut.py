@@ -180,3 +180,89 @@ def test_a_clausal_file_keeps_the_cut_free_refusal(native, body):
 def test_the_loader_counts_no_refusal(native):
     mod = native.load("l3_cut_stats", SRC)
     assert mod.__loader__.l3_stats["refused"] == 0
+
+
+# ── Task 8: the body visitors that walk Not also walk the two ISO nodes ─────
+
+def _regex_goal(text):
+    from clausal.pythonic_ast.nodes import Call, LoadName
+    return Call(func=LoadName(name="match"),
+                args=[text, LoadName(name="S"), LoadName(name="G")], kwargs=[])
+
+
+def test_goal_expansion_descends_into_ite_and_leaves_cut_alone():
+    from clausal.logic.goal_expansion import _ExpansionContext, _expand_goal
+    from clausal.modules.py import re as regex_mod
+    from clausal.pythonic_ast.nodes import And, Cut, IfThenElse, LoadName
+    ctx = _ExpansionContext({"match": regex_mod.match})
+    cut = Cut()
+    assert _expand_goal(cut, ctx) is cut
+    ite = IfThenElse(test=_regex_goal(r"\d+"), body=And(left=cut, right=_regex_goal(r"a+")),
+                     orelse=_regex_goal(r"b+"))
+    out = _expand_goal(ite, ctx)
+    assert type(out) is IfThenElse and out is not ite
+    for g in (out.test, out.body.right, out.orelse):
+        assert g.args[0].name.startswith("_re_")      # pattern pre-compiled
+    assert out.body.left is cut
+    no_else = IfThenElse(test=_regex_goal(r"\d+"), body=cut, orelse=None)
+    out = _expand_goal(no_else, ctx)
+    assert out.orelse is None and out.test.args[0].name.startswith("_re_")
+    untouched = IfThenElse(test=cut, body=cut, orelse=cut)
+    assert _expand_goal(untouched, ctx) is untouched
+
+
+def test_term_expansion_goal_names_walk_the_ite_arms():
+    from clausal.logic.term_expansion import _goal_names
+    from clausal.logic.variables import Var
+    from clausal.pythonic_ast.nodes import Call, Cut, IfThenElse, LoadName
+    v = Var()
+    c = lambda n, *a: Call(func=LoadName(name=n), args=list(a), kwargs=[])
+    ite = IfThenElse(test=c("t"), body=c("b"), orelse=c("e", v))
+    out = set()
+    _goal_names(IfThenElse(test=c("t"), body=Cut(), orelse=c("e")), out)
+    assert out == {"t", "e"}
+    out = set()
+    _goal_names(IfThenElse(test=c("t"), body=c("b"), orelse=None), out)
+    assert out == {"t", "b"}
+
+
+def _graph(native, name, src):
+    from clausal.logic.stratification import build_dependency_graph
+    mod = native.load(name, src)
+    from clausal.logic.predicate import namespace_db
+    return build_dependency_graph(namespace_db(vars(mod)))
+
+
+def test_stratification_walks_ite_arms_and_ignores_cut(native):
+    g = _graph(native, "l3_cut_strat", """\
+q. r. s.
+a :- ( q -> r ; s ).
+b :- q, !, r.
+c :- ( \\+ q -> ! ; r ).
+""")
+    assert sorted(g[("a", 0)]) == [(("q", 0), False), (("r", 0), False), (("s", 0), False)]
+    assert sorted(g[("b", 0)]) == [(("q", 0), False), (("r", 0), False)]
+    # a Not above the ITE is sticky; the test itself is not a negation
+    assert (("q", 0), True) in g[("c", 0)] and (("r", 0), False) in g[("c", 0)]
+
+
+def test_a_negation_cycle_through_an_ite_arm_warns(native):
+    import warnings
+    from clausal.logic.stratification import ClausalStratificationWarning
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        native.load("l3_cut_strat_cyc", "p :- ( true -> \\+ q ; true ).\nq :- ( p -> true ; fail ).\n")
+    assert any(issubclass(w.category, ClausalStratificationWarning) for w in caught)
+
+
+def test_solve_runs_an_ite_node_query_with_cell_goals(native):
+    from clausal.logic.solve import _deref_walk, solve
+    from clausal.logic.variables import Var
+    from clausal.pythonic_ast.nodes import IfThenElse
+    mod = native.load("l3_cut_solve", "p(1). p(2). q(2).\n")
+    x = Var()
+    ite = IfThenElse(test=("p", x), body=("q", x), orelse=("q", 2))
+    assert [_deref_walk(x) for _ in solve(ite, mod)] == []       # commits to p(1); q(1) fails
+    y = Var()
+    ite = IfThenElse(test=("q", 7), body=("p", y), orelse=("p", y))
+    assert [_deref_walk(y) for _ in solve(ite, mod)] == [1, 2]

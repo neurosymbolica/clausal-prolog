@@ -29,6 +29,7 @@ from clausal.pythonic_ast.nodes import (
     And,
     Call,
     IfExpr,
+    IfThenElse as IsoIfThenElse,   # ISO ->/; node; NOT the seam's if_/3 (IfExpr)
     LoadAttr,
     LoadName,
     Not,
@@ -148,6 +149,11 @@ def _collect_vars_from_term(term: Any, result: dict[str, Any],
     if isinstance(term, Not):
         _collect_vars_from_term(term.operand, result, module_dict)
         return
+    if isinstance(term, IsoIfThenElse):
+        for part in (term.test, term.body, term.orelse):
+            if part is not None:
+                _collect_vars_from_term(part, result, module_dict)
+        return
     if isinstance(term, list):
         for e in term:
             _collect_vars_from_term(e, result, module_dict)
@@ -212,6 +218,19 @@ def _expand_goal(goal: Any, ctx: _ExpansionContext) -> Any:
         if new_inner is goal.operand:
             return goal
         return Not(operand=new_inner)
+    if isinstance(goal, IsoIfThenElse):
+        # ISO ``( C -> T ; E )`` / ``( C -> T )``: all three are goals, so a
+        # regex goal in any of them is expanded.  A Cut is a leaf: it falls
+        # through to ``_try_expand``, which returns it unchanged.
+        new_test = _expand_goal(goal.test, ctx)
+        new_body = _expand_goal(goal.body, ctx)
+        new_orelse = (None if goal.orelse is None
+                      else _expand_goal(goal.orelse, ctx))
+        if (new_test is goal.test and new_body is goal.body
+                and new_orelse is goal.orelse):
+            return goal
+        return IsoIfThenElse(test=new_test, body=new_body, orelse=new_orelse,
+                             position=goal.position)
     if isinstance(goal, IfExpr):
         new_test = _expand_goal(goal.test, ctx)
         new_body = _expand_goal(goal.body, ctx)

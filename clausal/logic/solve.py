@@ -258,6 +258,10 @@ def _control_node_holds_a_cell_goal(term: Any) -> bool:
     if isinstance(term, nodes.IfExpr):
         return any(_goal_is_or_holds_cell(g)
                    for g in (term.test, term.body, term.orelse))
+    if isinstance(term, nodes.IfThenElse):         # ISO ->/;, orelse may be None
+        return any(_goal_is_or_holds_cell(g)
+                   for g in (term.test, term.body, term.orelse)
+                   if g is not None)
     if isinstance(term, nodes.TupleLiteral):
         return any(_goal_is_or_holds_cell(g) for g in term.elements)
     return False
@@ -784,6 +788,14 @@ def _parameterize_opaque(goal: Any, params: list) -> Any:
         if type(t) is _nodes.Not:
             op = walk(t.operand, goal_position)
             return t if op is t.operand else _nodes.Not(operand=op)
+        if type(t) is _nodes.IfThenElse:
+            parts = (walk(t.test, goal_position), walk(t.body, goal_position),
+                     None if t.orelse is None else walk(t.orelse, goal_position))
+            if (parts[0] is t.test and parts[1] is t.body
+                    and parts[2] is t.orelse):
+                return t
+            return _nodes.IfThenElse(test=parts[0], body=parts[1],
+                                     orelse=parts[2], position=t.position)
         if type(t) is tuple:
             if t and type(t[0]) is str:        # a cell: slot 0 is its name
                 new = (t[0],) + tuple(walk(e) for e in t[1:])

@@ -67,6 +67,18 @@ def _walk_goal(goal, negative, add_edge):
         _walk_goal(goal.left, negative, add_edge)
         _walk_goal(goal.right, negative, add_edge)
         return
+    if isinstance(goal, nodes.IfThenElse):
+        # ISO ``( C -> T ; E )``.  The test is NOT a negation: the else arm
+        # runs when it fails, but evaluation is the plain left-to-right
+        # Prolog one, and a TABLED call in a test is refused at compile time
+        # (cut_scope, Task 7), so no WFS delay can hang on it.  It is still
+        # a dependency, so it is walked with the surrounding polarity; an
+        # enclosing ``\+`` stays sticky over all three arms.
+        _walk_goal(goal.test, negative, add_edge)
+        _walk_goal(goal.body, negative, add_edge)
+        if goal.orelse is not None:
+            _walk_goal(goal.orelse, negative, add_edge)
+        return
     if isinstance(goal, nodes.IfExpr):
         # if_/3 is library(reif)'s (ruling 2026-10-01): its condition is a
         # reified comparison (no predicate edge) or a closure called with
