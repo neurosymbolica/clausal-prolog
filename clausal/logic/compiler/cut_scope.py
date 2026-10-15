@@ -275,17 +275,90 @@ def tabled_calls_in_cut_scope(ir: GoalOp, db) -> list[tuple[str, int]]:
     return found
 
 
+#: The names a construct that commits can be spelled with, in any shape
+#: the scan converts: ``!`` and ``->`` cells, once/setup_call_cleanup
+#: (as a ``LoadName``, a ``MetaCall`` kind, a cell functor or a call/N
+#: closure atom).
+_COMMIT_NAMES = frozenset({"!", "->", "once", "setup_call_cleanup"})
+
+
+def _raw_may_commit(t) -> bool:
+    """:func:`_may_commit` for a raw goal TERM (a meta-call's goal, call/N's
+    arguments), which the scan converts: any commit node, or any string
+    spelled like a commit, anywhere in it."""
+    from clausal.logic.variables import Var, deref
+    from clausal.pythonic_ast import nodes
+    stack = [t]
+    while stack:
+        t = stack.pop()
+        if isinstance(t, Var):
+            t = deref(t)
+            if isinstance(t, Var):
+                continue
+        if type(t) is str:
+            if t in _COMMIT_NAMES:
+                return True
+        elif isinstance(t, (nodes.Cut, nodes.IfThenElse, Cut, IfThenElse)):
+            return True
+        elif isinstance(t, (tuple, list)):
+            stack.extend(t)
+        elif isinstance(t, dict):
+            stack.extend(t.values())
+        elif hasattr(t, "__dataclass_fields__"):
+            stack.extend(getattr(t, f, None) for f in t.__dataclass_fields__)
+    return False
+
+
+def _may_commit(ir) -> bool:
+    """Cheap pre-check for :func:`tabled_calls_in_cut_scope`: can anything
+    in *ir* commit -- a ``Cut``, an ``IfThenElse``, once/1 or
+    setup_call_cleanup/3?  The scan reports only at such a commit, so False
+    proves it would report nothing.  It walks exactly the goal positions
+    the scan walks, with no conversion and no table lookups; a raw goal
+    term (a meta-call's goal, call/N's arguments) counts if it holds a
+    commit in any spelling (:func:`_raw_may_commit`)."""
+    from .ir import META_GOAL_POSITIONS, MetaCall, Negate, SubCall
+    stack = [ir]
+    while stack:
+        op = stack.pop()
+        match op:
+            case Cut() | IfThenElse():
+                return True
+            case Sequence(ops=ops) | Alternate(ops=ops):
+                stack.extend(ops)
+            case Branch(test=t, then=th, else_=el):
+                stack.extend((t, th, el))
+            case Negate(op=inner):
+                stack.append(inner)
+            case MetaCall(kind=kind, args=margs):
+                if kind in _COMMIT_NAMES:
+                    return True
+                for key in META_GOAL_POSITIONS.get(kind, ()):
+                    inner = margs.get(key)
+                    if isinstance(inner, GoalOp):
+                        stack.append(inner)
+                    elif inner is not None and _raw_may_commit(inner):
+                        return True
+            case SubCall(fname="call"):
+                if _raw_may_commit(op.args):
+                    return True
+            case _:
+                pass
+    return False
+
+
 def check_cut_over_tabled(ir: GoalOp, db, goals=()) -> None:
     """Raise :class:`~.ir.CutOverTableError` if a cut in *ir* would cut over
     a tabled call -- under :data:`CUT_OVER_TABLED_CALL` ``== "refuse"``.
 
     Only a ``.pl`` db can hold a ``Cut``/``IfThenElse`` node (the converter
     refuses them elsewhere), so every other body returns before the walk:
-    cut-free code pays one attribute read."""
+    cut-free code pays one attribute read.  A ``.pl`` body that cannot
+    commit (:func:`_may_commit`) skips the scan."""
     if CUT_OVER_TABLED_CALL != "refuse":
         return
     from clausal.logic.builtins.call_body import cut_allowed
-    if not cut_allowed(db):
+    if not cut_allowed(db) or not _may_commit(ir):
         return
     over = tabled_calls_in_cut_scope(ir, db)
     if over:

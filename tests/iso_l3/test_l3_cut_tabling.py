@@ -263,3 +263,64 @@ def test_a_call_qualified_with_its_own_module_or_user_is_seen(native, key):
            + SELF_QUALIFIED[key].format(mod=mod) + "\n")
     with pytest.raises(SyntaxError, match=r"tabled call\(s\) \w+:tf/1"):
         native.load(mod, src)
+
+
+# ── the pre-check: a body that cannot commit skips the scan ─────────────────
+
+NO_COMMIT = """\
+p(1). p(2).
+:- table(tf/1).
+tf(X) :- p(X).
+w(L) :- findall(X, (tf(X), p(X)), L).
+w2(X) :- ( tf(X) ; p(X) ), \\+ tf(9), call(tf, X).
+"""
+
+
+def test_a_body_that_cannot_commit_skips_the_scan(native, ans, monkeypatch):
+    """The scan runs only for a body that holds a commit (``!``, ``->``,
+    once/1, setup_call_cleanup/3, in any spelling); the refusal itself is
+    unchanged (the rows above, and the cutting twin here)."""
+    from clausal.logic.compiler import cut_scope
+    scanned = []
+    real = cut_scope.tabled_calls_in_cut_scope
+
+    def spy(ir, db):
+        scanned.append(ir)
+        return real(ir, db)
+    monkeypatch.setattr(cut_scope, "tabled_calls_in_cut_scope", spy)
+    mod = native.load("l3_tab_nocommit", NO_COMMIT)
+    assert scanned == []
+    assert ans(mod, "w") == [[1, 2]]
+    assert ans(mod, "w2") == [1, 2, 1, 2]
+    with pytest.raises(SyntaxError, match="tf/1"):
+        native.load("l3_tab_nocommit_cut",
+                    NO_COMMIT + "c(L) :- findall(X, (tf(X), !), L).\n")
+    assert scanned
+
+
+def test_the_pre_check_sees_every_commit_spelling():
+    from clausal.logic.compiler.cut_scope import _may_commit
+    from clausal.logic.compiler.ir import (
+        Cut, IfThenElse, MetaCall, Sequence, SubCall)
+    from clausal.pythonic_ast import nodes
+
+    def call(f, *a):
+        return SubCall(fname=f, arity=len(a), args=list(a))
+    assert not _may_commit(Sequence(ops=[call("tf", 1), call("p", 2)]))
+    assert not _may_commit(Sequence(ops=[MetaCall(
+        kind="findall", args={"inner": ("tf", 1), "template": 1})]))
+    for commit in (
+            Cut(),
+            IfThenElse(test=call("tf", 1), then=Sequence(ops=[]),
+                       else_=Sequence(ops=[])),
+            MetaCall(kind="once", args={"inner": ("tf", 1)}),
+            MetaCall(kind="setup_call_cleanup",
+                     args={"setup": ("tf", 1), "call": True,
+                           "cleanup": True}),
+            call("call", "once", ("tf", 1)),          # call/N closure atom
+            call("call", (",", ("tf", 1), "!")),      # a cell cut
+            call("call", ("->", ("tf", 1), True)),    # a cell if-then
+            MetaCall(kind="findall", args={           # a node in a raw goal
+                "inner": nodes.And(left=("tf", 1), right=nodes.Cut())}),
+    ):
+        assert _may_commit(Sequence(ops=[commit])), commit
