@@ -461,6 +461,66 @@ def test_a_clausal_module_that_cuts_is_still_refused_in_the_sandbox(sbx):
         assert what in r["msg"], (name, r)
 
 
+def test_the_audit_refuses_cut_nodes_in_a_clausal_load(sbx):
+    """The wiring, not just the unit: simulate a front-end regression that
+    lets a ``.clausal`` file emit the cut nodes, and the sandbox AUDIT
+    refuses the load ("python_call"), before the compiler's own refusal
+    (existence_error(procedure, !/0)) could.  A ``.pl`` control loads."""
+    sbx.write("clwire.clausal", "p(1). p(2).\nfirst(X) :- p(X), !.\n")
+    sbx.write("plwire.pl", "p(1). p(2).\nfirst(X) :- p(X), !.\n")
+    res = sbx.run("""
+        from clausal.tools import iso_l3
+        iso_l3._ClauseLowering._cut_allowed = property(lambda self: True)
+        import clausal.sandbox as sb
+        sb.enable()
+        from clausal import Var
+        X = Var()
+        probe("cl", lambda: load("clwire"))
+        probe("pl", lambda: load("plwire").__name__)
+    """, env={"CLAUSAL_PL_FRONTEND": "native"})
+    r = res["cl"]
+    assert not r["ok"] and "python_call" in r["msg"], r
+    assert "it reaches Python" in r["msg"], r
+    assert ok(res, "pl") == "'plwire'"
+
+
+def test_only_a_native_pl_load_gets_the_cut_surface(sbx, tmp_path):
+    """``cut_surface`` is exact: a ``.pl`` through the native front end (the
+    only emitter of the cut nodes) -- never a ``.pl`` through the
+    translator, a ``.clausal`` or a ``.seam``.  The sandbox always loads
+    ``.pl`` natively, so the translator case is checked on the decider."""
+    from clausal import import_hook as ih
+    from clausal import sandbox
+    pl = str(tmp_path / "x.pl")
+    assert sandbox._cut_surface(ih.NativePrologLoader("x", pl), pl)
+    assert not sandbox._cut_surface(ih.PrologLoader("x", pl), pl)
+    cl = str(tmp_path / "x.clausal")
+    assert not sandbox._cut_surface(ih.NativePrologLoader("x", cl), cl)
+    sbx.write("plflag.pl", "p(1).\n")
+    sbx.write("clflag.clausal", "p(1).\n")
+    sbx.write("smflag.seam", "p(1),\n")
+    res = sbx.run("""
+        from clausal import seam_audit
+        seen = {}
+        real = seam_audit.audit_tree
+        CURRENT = [None]
+        def spy(tree, check, **kw):
+            seen[CURRENT[0]] = kw.get("cut_surface")
+            return real(tree, check, **kw)
+        seam_audit.audit_tree = spy
+        import clausal.sandbox as sb
+        sb.enable()
+        for name in ("plflag", "clflag", "smflag"):
+            CURRENT[0] = name
+            probe(name, lambda: load(name).__name__)
+        RES["seen"] = seen
+    """)
+    for name in ("plflag", "clflag", "smflag"):
+        ok(res, name)
+    assert res["seen"] == {"plflag": True, "clflag": False,
+                           "smflag": False}, res["seen"]
+
+
 def test_the_sandbox_refuses_the_clausal_seam_pl_relay(sbx):
     """D59 (Task 6 fix round 1): in normal mode a .clausal goal relayed
     through a .seam meta-call (library(reif)'s cond_t/3, a user

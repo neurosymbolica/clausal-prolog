@@ -1083,6 +1083,15 @@ def _is_pl_surface(path) -> bool:
     return surface_of(path) == SURFACE_PL
 
 
+def _cut_surface(loader, path) -> bool:
+    """D59: the audit's *cut_surface* for this load -- exact, and fail
+    closed: a ``.pl`` file (:func:`_is_pl_surface`) loaded by the native
+    front end, the only loader that emits the cut nodes.  The translator
+    refuses cut, so a ``.pl`` it loads never needs them."""
+    from clausal import import_hook as ih  # noqa: PLC0415
+    return isinstance(loader, ih.NativePrologLoader) and _is_pl_surface(path)
+
+
 def _sandboxed_code(loader, fullname: str):
     """The code object a loader runs for *fullname* in the sandbox, built
     from the source read ONCE here: the final generated tree is audited and
@@ -1133,7 +1142,7 @@ def _sandboxed_code(loader, fullname: str):
         tree, _sandbox_checker(routes, children, denied),
         translations=translations or (), module_items=items or (),
         prolog_surface=isinstance(loader, ih.PrologLoader),
-        cut_surface=_is_pl_surface(path))
+        cut_surface=_cut_surface(loader, path))
     routes = routes + found + extra
     if routes:
         if _bridge_admitted(fullname, path, data):
