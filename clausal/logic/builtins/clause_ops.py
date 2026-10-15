@@ -237,7 +237,17 @@ def _needs_cell(name: str, arity: int, namespace: dict, db=None) -> bool:
     - a name bound to a predicate at ANOTHER arity: construction goes
       through that binding and refuses the argument count, where the call
       itself names ``name/arity`` -- a different procedure, spelled as the
-      cell.
+      cell;
+    - a name bound to a STATIC predicate at the RIGHT arity (found
+      2026-10-15, via ``clause/2``/``retract/1`` of a clause whose body
+      calls one): the P2 cell discipline only registers a ``-dynamic`` (or
+      still-unlocked) row as a value-constructor, so construction going
+      through the binding for an ordinary static one raises
+      ``existence_error(procedure, ...)`` ("nothing declares the functor"),
+      not the cell -- the same failure a WRONG-arity binding gets, just
+      from a different compiler door.  A clause's own body is read back
+      the same regardless of what its calls happen to resolve to today, so
+      this is checked on the row, not the binding.
     """
     from clausal.logic.predicate import (  # noqa: PLC0415
         binding_grants_arity, is_declared_predicate_name,
@@ -250,7 +260,10 @@ def _needs_cell(name: str, arity: int, namespace: dict, db=None) -> bool:
     if _is_goal_object(binding):
         return True
     if is_declared_predicate_name(binding, db=db):
-        return not binding_grants_arity(binding, arity, db, name)
+        if not binding_grants_arity(binding, arity, db, name):
+            return True
+        row = db.row(name, arity) if db is not None else None
+        return row is not None and not (row.dynamic or not row.locked)
     return False
 
 
