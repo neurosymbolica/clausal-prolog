@@ -2579,8 +2579,8 @@ Print `Term` to stdout under an ISO **write-option list** (ISO 8.14.2), without 
 |---|---|
 | `quoted(Bool)` | quote an atom that would not read back as itself (`'foo bar'`) |
 | `double_quotes(Bool)` | print a string — and the char list that *is* one — as `"abc"` rather than `[a,b,c]` |
-| `ignore_ops(Bool)` | accepted, inert: the write family here never prints operator forms |
-| `numbervars(Bool)` | accepted, inert: there is no `'$VAR'/1` convention here |
+| `ignore_ops(Bool)` | `true` writes every compound in canonical form, ignoring the operator table: `write_term(1+2, [ignore_ops(true)])` prints `+(1,2)` |
+| `numbervars(Bool)` | `true` writes `'$VAR'(N)` as a variable name (`'$VAR'(1)` prints `B`); `false` writes the term itself |
 | `variable_names(List)` | ISO 7.10 / WG17 N246: a variable identical to `V` in a `Name = V` pair of `List` prints as `Name`, unquoted, instead of `_N`; when several pairs name one variable the first in list order wins. An unbound `List` (or an unbound element, `Name` or tail) raises `instantiation_error`; a malformed element, a non-atom `Name` or an improper tail raises `domain_error(write_option, variable_names(List))` |
 
 | Call | Output |
