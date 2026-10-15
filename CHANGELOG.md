@@ -82,13 +82,16 @@ surface described in [docs/public-api.md](docs/public-api.md).
   7.8 semantics, on the native front end (`CLAUSAL_PL_FRONTEND=native`;
   the translator still refuses them); `.clausal` stays cut-free. A cut
   whose scope holds a tabled call is refused (XSB's rule), including
-  `once/1` and `setup_call_cleanup/3`'s Setup: at load where the compiler
-  can see the call, otherwise at run time when the cut would prune an
-  incomplete table (`permission_error(cut, incomplete_table, F/N)`).
+  `once/1` and `setup_call_cleanup/3`'s Setup (in `.pl` modules): at load
+  where the compiler can see the call, otherwise at run time when the cut
+  would prune an incomplete table (`permission_error(cut, incomplete_table,
+  F/N)`). A commit on the first answer of a fresh table currently raises,
+  even for a non-recursive table; this may change to complete-then-cut.
   `*->` stays refused. Recursion through an if-then-else condition, through
   `once/1`, or through a `catch/3` Recovery that cuts is limited by the
   Python stack: about 330-400 deep at Python's default recursion limit
-  (an if-then-else condition then raises `resource_error(stack)`).
+  (recursion through an if-then-else condition then raises
+  `resource_error(stack)`).
   Cut-free `catch/3`, and a `catch/3` whose Goal cuts, are not limited.
   See docs/importing_prolog.md.
 - **`clausal.logic.variables.hook_dispatch_depth()`: attribute-hook dispatch

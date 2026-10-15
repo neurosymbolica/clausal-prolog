@@ -833,23 +833,35 @@ may not import a `.pl` one.
     from a table that is not complete, it throws
     `error(permission_error(cut, incomplete_table, F/N), _)`, naming the
     tabled predicate. A table that completed before the cut is fine:
-    `findall(Y, t(Y), _), q(X), !` with `q(X) :- t(X)` runs. Answers stream
-    from a table before it is complete, so a commit on the first answer of
-    a fresh table, e.g. `( q(X) -> ... )`, is refused even when `t/1` is
-    not recursive. XSB under local scheduling completes the table first
-    and would run it. `once/1` and Setup carry the check only in a module
-    that can see a tabled predicate when it is compiled: its own, or one
-    it imports, directly or through the modules it imports.
+    `findall(Y, t(Y), _), q(X), !` with `q(X) :- t(X)` runs.
+  * **A fresh table, even a non-recursive one, currently raises.** A
+    table returns its answers while it is still being computed, so a
+    commit on the first answer of a fresh table, e.g. `( q(X) -> ... )`,
+    raises even when `t/1` is not recursive. This may change to
+    completing the table first and then cutting.
+  * **`once/1` and setup_call_cleanup's Setup** are checked only in `.pl`
+    modules. They are checked whenever the goal is a variable or reaches
+    `call/N`, e.g. `first(G) :- once(G).` in a library, and whenever the
+    module can see a tabled predicate when it is compiled: one it tables,
+    or one it imports, directly or through the modules it imports. A
+    `once/1` over a literal goal in a module that sees no table is not
+    checked.
+  * **Not checked:** a goal that `freeze/2` wakes while a clause's head is
+    being unified runs before that clause's cut scope begins, so the
+    clause's cut does not see a tabled call it makes.
 * **`*->` (soft-cut) is refused**, as Scryer refuses it.
 * **Recursion through an if-then-else condition, through `once/1`, or
   through a `catch/3` Recovery that cuts is limited by the Python stack.**
   Each of these runs its goal in a nested Python generator, so the depth
   depends on Python's recursion limit: about 330-400 levels at the default
   `sys.getrecursionlimit()` of 1000. Scryer has no such limit.
-  * Past the limit, an if-then-else condition throws
-    `error(resource_error(stack), _)`. `once/1` and a cutting Recovery
-    still surface Python's `RecursionError`, which `catch/3` sees as
-    `'RecursionError'(Message)`.
+  * Past the limit, recursion through an if-then-else CONDITION throws
+    `error(resource_error(stack), _)`. Recursion through `once/1` or a
+    cutting Recovery that does not pass through a condition surfaces
+    Python's `RecursionError`, which `catch/3` sees as
+    `'RecursionError'(Message)`. That holds even when an if-then-else
+    comes earlier in the clause or encloses the recursion in its Then
+    branch.
   * A catch-all such as `catch(G, _, fail)` turns either one into plain
     failure.
   * A cut-free `catch/3`, and a `catch/3` whose Goal cuts, are not limited:
