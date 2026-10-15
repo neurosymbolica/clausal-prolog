@@ -228,3 +228,18 @@ def test_a_qualified_imported_callee_is_named_in_iso_spelling(native, tmp_path):
     src = ":- use_module(tabled_lib).\nv(X) :- tabled_lib:lib_t(X), !.\n"
     with pytest.raises(SyntaxError, match=r"tabled call\(s\) tabled_lib:lib_t/1"):
         native.load("l3_tab_qual", src)
+
+
+def test_setup_call_cleanups_setup_commits_like_once(native, ans):
+    """setup_call_cleanup/3 runs Setup as once/1 (Scryer), so a tabled call
+    in Setup is refused like once(tf(X)) (coordinator ruling).  Its Goal
+    keeps its choice points: a tabled call there is allowed (no cut)."""
+    bad = ":- table(tf/1).\ntf(1). tf(2).\nc(X) :- setup_call_cleanup(tf(X), true, true).\n"
+    with pytest.raises(SyntaxError, match=r"once/1.*tf/1"):
+        native.load("l3_tab_scc_bad", bad)
+    bad_lit = ":- table(tf/1).\ntf(1). tf(2).\nc(X) :- call(setup_call_cleanup(tf(X), true, true)).\n"
+    with pytest.raises(SyntaxError, match=r"tf/1"):
+        native.load("l3_tab_scc_bad_lit", bad_lit)
+    ok = ":- table(tf/1).\ntf(1). tf(2).\nc(X) :- setup_call_cleanup(true, tf(X), true).\n"
+    mod = native.load("l3_tab_scc_ok", ok)
+    assert sorted(ans(mod, "c")) == [1, 2]                    # Scryer: [1,2]

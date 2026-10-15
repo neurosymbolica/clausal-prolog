@@ -56,7 +56,10 @@ _TRANSPARENT_TO_CHOICE_POINTS = frozenset({
 # ISO 8.15.2: once(G) is call((G, !)) -- so they cut over its tabled calls
 # (coordinator ruling on Task 7 I-3; part of Mike's Q1).  \+ and findall
 # are not defined through cut and stay allowed.
-_COMMITS = frozenset({("once", "inner")})
+_COMMITS = frozenset({("once", "inner"),
+                      # setup_call_cleanup runs Setup as once/1 (Scryer;
+                      # coordinator ruling, with once/1's)
+                      ("setup_call_cleanup", "setup")})
 
 
 def _literal_call_goal(op, db):
@@ -99,6 +102,8 @@ _META_TERMS = {
     ("setof", 3): ("setof", {2: "inner"}),
     ("forall", 2): ("forall", {1: "cond", 2: "action"}),
     ("catch", 3): ("catch", {1: "inner", 3: "recovery"}),
+    ("setup_call_cleanup", 3): ("setup_call_cleanup",
+                                {1: "setup", 2: "call", 3: "cleanup"}),
 }
 
 
