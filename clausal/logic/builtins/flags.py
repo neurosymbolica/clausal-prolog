@@ -23,6 +23,7 @@ clpq_max_work              4000000       yes         process
 clpq_max_projection        4000000       yes         process
 clpq_max_expansion         40000         yes         process
 clpq_max_expansion_bits    200000000     yes         process
+clpq_max_coefficient_bits  20000000      yes         process
 =========================  ============  ==========  =================
 
 ``require_end_module`` (implementation-defined) is the process-wide
@@ -174,6 +175,7 @@ CLPQ_LIMIT_FLAGS = {
     "clpq_max_projection": "clpq_projection",
     "clpq_max_expansion": "clpq_expansion",
     "clpq_max_expansion_bits": "clpq_expansion_bits",
+    "clpq_max_coefficient_bits": "clpq_coefficient_bits",
 }
 if os.environ.get("CLAUSAL_CLPQ", "legacy") == "holzbaur":
     for _name in CLPQ_LIMIT_FLAGS:

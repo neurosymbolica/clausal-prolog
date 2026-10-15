@@ -23,6 +23,7 @@ import signal
 import subprocess
 import sys
 import threading
+from fractions import Fraction
 from math import comb
 
 import pytest
@@ -33,7 +34,7 @@ from clausal.logic.clpq import limits
 from clausal.logic.clpq import normal_form as nf
 from clausal.logic.exceptions import LogicException
 from clausal.logic.variables import Trail, Var, deref, is_var, walk
-from clausal.pythonic_ast.nodes import Add, ArithEq, IsoIntPow, Mult
+from clausal.pythonic_ast.nodes import Add, ArithEq, Div, IsoIntPow, Mult
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -390,6 +391,77 @@ def test_a_power_of_a_monomial_counts_its_coefficient_bits(caps):
                               "clpq_expansion")
 
 
+def test_a_power_s_count_includes_its_multinomial_bits():
+    # (Y + Z)^10: 11 terms, each coefficient under 2^10 (binomials), and
+    # the base's coefficients 1: the bits are the multinomial's alone
+    # (review N5b: dropping them went unnoticed).
+    norm = nf.normal_form(Add(left=Var(), right=Var()))
+    assert nf.power_size(10, norm) == (11, 11 * 10)
+    norm = nf.normal_form(Add(left=Add(left=Var(), right=Var()),
+                              right=Var()))
+    assert nf.power_size(10, norm) == (66, 66 * 10 * 2)
+
+
+def test_one_huge_coefficient_raises_on_its_own_bits():
+    # Review R2: one integer of n bits costs about n^1.6 to build, so
+    # under the total bits cap (3*Y)^(10^8) took 131 s, (Y/3)^(10^8)
+    # 133 s and (3^1000*Y)^120000 ran past 150 s.  Their largest
+    # coefficient is checked before it is built.
+    for base, exponent in [(Mult(left=3, right=Var()), 10 ** 8),
+                           (Div(left=Var(), right=3), 10 ** 8),
+                           (Mult(left=7, right=Var()), 3 * 10 ** 7),
+                           (Mult(left=3 ** 1000, right=Var()), 120_000)]:
+        term = _within(10, lambda: _raised(lambda: _power(base, exponent)))
+        assert _is_resource_error(term, "clpq_expansion")
+        assert nf.largest_coefficient_bits(exponent, nf.normal_form(base)) \
+            > limits.DEFAULTS["clpq_coefficient_bits"]
+
+
+def test_a_huge_power_of_a_number_raises_on_its_bits():
+    # Review R2: 3^(10^8) is one integer of 158,496,250 bits too.
+    term = _within(10, lambda: _raised(lambda: _power(3, 10 ** 8)))
+    assert _is_resource_error(term, "clpq_expansion")
+    term = _within(10, lambda: _raised(lambda: _power(3, -(10 ** 8))))
+    assert _is_resource_error(term, "clpq_expansion")
+    assert _power(1, 10 ** 8) and _power(-1, 10 ** 8 + 1)
+    # An exponent past the float range: no OverflowError on the estimate.
+    assert _is_resource_error(_raised(lambda: _power(3, 10 ** 400)),
+                              "clpq_expansion")
+    assert _is_resource_error(
+        _raised(lambda: _power(Mult(left=3, right=Var()), 10 ** 400)),
+        "clpq_expansion")
+    assert _power(1, 10 ** 400) and _power(Var(), 10 ** 400)
+
+
+def test_a_coefficient_answers_at_its_cap_and_raises_under_it(caps):
+    # (3*Y)^1000: one coefficient of log2(3^1000) = 1584.96 bits.
+    base = Mult(left=3, right=Var())
+    bits = nf.largest_coefficient_bits(1000, nf.normal_form(base))
+    assert 1584 < bits < 1585
+    caps("clpq_coefficient_bits", 1585)
+    assert _power(base, 1000)
+    assert _power(base, -1000)
+    caps("clpq_coefficient_bits", 1584)
+    assert _is_resource_error(_raised(lambda: _power(base, 1000)),
+                              "clpq_expansion")
+    assert _is_resource_error(_raised(lambda: _power(base, -1000)),
+                              "clpq_expansion")
+    assert _is_resource_error(_raised(lambda: _power(3, 1000)),
+                              "clpq_expansion")
+    caps("clpq_coefficient_bits", 1585)     # raising the cap lets it through
+    assert _power(3, 1000)
+
+
+def test_the_ruled_powers_answer_at_the_default_caps():
+    # Ruling D51 (review N4): (Y + 1)^9999 and Y^(10^8) answer; so do
+    # (10^1000*Y + 1)^240 and a coefficient of a million bits.
+    assert _within(30, lambda: _power(Add(left=Var(), right=1), 9999))
+    assert _within(10, lambda: _power(Var(), 10 ** 8))
+    assert _within(30, lambda: _power(
+        Add(left=Mult(left=10 ** 1000, right=Var()), right=1), 240))
+    assert _within(30, lambda: _power(Mult(left=3, right=Var()), 10 ** 6))
+
+
 # ---------------------------------------------------------------- products
 
 def _product(k):
@@ -411,6 +483,11 @@ def test_a_product_of_sums_raises_at_the_default_cap():
     # D24 F3: 18 factors (2^18 terms) ran past 120 s and 1 GB.
     term = _within(30, lambda: _raised(lambda: _post_product(18)))
     assert _is_resource_error(term, "clpq_expansion")
+
+
+def test_a_product_of_14_sums_answers_at_the_default_cap():
+    # Ruling D51 (review N4): 14 sums, 32,764 terms over the steps, answer.
+    assert _within(60, lambda: _post_product(14))
 
 
 def test_a_product_answers_at_its_cap_and_raises_under_it(caps, used):
@@ -454,15 +531,17 @@ def test_a_product_counts_its_coefficient_bits(caps, used):
 
 # ---------------------------------------------------------------- repair
 
-def _sums_with_late_exponents(k):
-    """X = (A1 + B1)^N1 * ... * (Ak + Bk)^Nk posted with every Ni
+def _sums_with_late_exponents(k, coefficient=1):
+    """X = (c*A1 + B1)^N1 * ... * (c*Ak + Bk)^Nk posted with every Ni
     unbound, as (trail, [N1, ..., Nk]): binding Ni to 1 wakes the delayed
     equation, whose repair multiplies one more sum in (review N1)."""
     trail = Trail()
     exponents = [Var() for _ in range(k)]
     product = None
     for exponent in exponents:
-        factor = IsoIntPow(left=Add(left=Var(), right=Var()), right=exponent)
+        first = Var() if coefficient == 1 \
+            else Mult(left=coefficient, right=Var())
+        factor = IsoIntPow(left=Add(left=first, right=Var()), right=exponent)
         product = factor if product is None else Mult(left=product,
                                                       right=factor)
     assert h.q_eq(Var(), product, trail)
@@ -492,6 +571,23 @@ def test_a_repair_charges_a_monomial_times_a_sum(caps):
         _raised(lambda: _bind_all(trail, exponents)), "clpq_expansion")
 
 
+def test_a_repair_charges_its_coefficients_bits(caps, used):
+    # Review N5b: the repair's charge counts the bits of the sum it
+    # multiplies in, not its terms alone.
+    coefficient = 10 ** 300
+    trail, exponents = _sums_with_late_exponents(3, coefficient)
+    assert _bind_all(trail, exponents)
+    bits = used["clpq_expansion_bits"]
+    assert bits >= 2 * 996          # a sum of two, one coefficient 10^300
+    caps("clpq_expansion_bits", bits)
+    trail, exponents = _sums_with_late_exponents(3, coefficient)
+    assert _bind_all(trail, exponents)
+    caps("clpq_expansion_bits", bits - 1)
+    trail, exponents = _sums_with_late_exponents(3, coefficient)
+    assert _is_resource_error(
+        _raised(lambda: _bind_all(trail, exponents)), "clpq_expansion")
+
+
 def test_a_constraint_s_count_persists_across_its_wake_ups(caps):
     # A cap each wake-up fits alone (the last one charges 64) still
     # raises: the delayed constraint carries its count to the next
@@ -505,18 +601,21 @@ def test_a_constraint_s_count_persists_across_its_wake_ups(caps):
 
 # ---------------------------------------------------------------- work
 
-def _wide_no_integer_point(width, seed=1):
+def _wide_no_integer_point(width, seed=1, bound=lambda index: 10 ** 6,
+                           difference=1):
     """D24 F2: the store with no integer point, and *width* more variables
-    each tied to X and Y: every node's pivots rewrite every row."""
+    each tied to X and Y: every node's pivots rewrite every row.  The
+    i-th of them is bounded by *bound(i)*; with *difference* even, there
+    is an integer point."""
     rng = random.Random(seed)
     trail, x, y = Trail(), Var(), Var()
     others = [Var() for _ in range(width)]
     assert h.q_ge(x, 0, trail) and h.q_ge(y, 0, trail)
-    assert h.q_eq(_sum([2, -2], [x, y]), 1, trail)
-    for z in others:
+    assert h.q_eq(_sum([2, -2], [x, y]), difference, trail)
+    for index, z in enumerate(others):
         assert h.q_ge(z, 0, trail)
         assert h.q_le(_sum([1, rng.randint(-3, 3) or 1, rng.randint(1, 3)],
-                           [z, x, y]), 10 ** 6, trail)
+                           [z, x, y]), bound(index), trail)
         assert h.q_ge(_sum([1, -1], [z, x]), -5, trail)
     return lambda: h.bb_inf([x, y] + others, x, Var(), trail)
 
@@ -644,6 +743,83 @@ def test_a_big_substitution_charges_each_row_s_size(caps):
             if state.linear_form.rest[0].bit_length() > 64:     # rewritten
                 sizes += bounded_simplex.row_size(state.linear_form)
     assert sizes > 0 and used == rows + sizes
+
+
+def _huge_bound(digits):
+    """Review R1's probe (bigrow.py): the i-th bound a rational with a
+    numerator of *digits* digits and a denominator of twice as many
+    trits, so every row's constant is huge while every pivot row's
+    coefficients are small."""
+    return lambda index: Fraction(10 ** digits + 2 * index + 1,
+                                  3 ** (2 * digits) + 7 * index)
+
+
+def _charged_rows(monkeypatch):
+    """The units the back substitution charges, summed: a list of one."""
+    from clausal.logic.clpq import bounded_simplex
+    total = [0]
+    charge = limits.charge_rows_to
+
+    def counting(meter, units):
+        total[0] += units
+        return charge(meter, units)
+    monkeypatch.setattr(limits, "charge_rows_to", counting)
+    assert bounded_simplex.limits is limits
+    return total
+
+
+def test_rows_with_huge_constants_are_charged_their_size(caps, monkeypatch):
+    # Review R1: a small substitution charged only for itself, so rows
+    # holding 2,000-digit constants were charged as small ones and the
+    # search ran 96 s to the work cap.  The same search charges each such
+    # row its constant's words now: 12.9 times the small store's units
+    # over the same 30 nodes (2.7 times before, from the few big
+    # substitutions).
+    total = _charged_rows(monkeypatch)
+    caps("clpq_nodes", 30)
+    assert _is_resource_error(_raised(_wide_no_integer_point(10)),
+                              "clpq_nodes")
+    small = total[0]
+    total[0] = 0
+    assert _is_resource_error(
+        _raised(_wide_no_integer_point(10, bound=_huge_bound(2000))),
+        "clpq_nodes")
+    assert total[0] > 8 * small, (small, total[0])
+
+
+def test_a_search_over_huge_constants_raises_clpq_work_quickly(caps):
+    # Review R1: under a work cap of 200,000 the 2,000-digit store raises
+    # within seconds, as the same store with small bounds does.
+    caps("clpq_work", 200_000)
+    search = _wide_no_integer_point(20, bound=_huge_bound(2000))
+    term = _within(60, lambda: _raised(search))
+    assert _is_resource_error(term, "clpq_work")
+
+
+def test_a_feasible_search_over_huge_constants_answers():
+    # The control: the same shape with an integer point, every bound
+    # about 3 * 10^6 but a ratio of 2,000-digit integers, answers at the
+    # default caps.
+    def bound(index):
+        return Fraction(3 * 10 ** 2000 + 2 * index + 1, 10 ** 1994)
+    search = _wide_no_integer_point(20, bound=bound, difference=2)
+    assert _within(60, search)
+
+
+def test_small_row_size_reads_the_constant_and_the_rest():
+    # Review R1: the fast path reads a written row's constant and rest
+    # (four bit_length calls), and charges row_size past four words.
+    from clausal.logic.clpq import bounded_simplex
+    from clausal.logic.clpq.linear_forms import LinearForm
+    terms = [(Var(), (5, 7)), (Var(), (1, 1))]
+    for constant, rest in [((10 ** 600, 3 ** 1200), (0, 1)),
+                           ((0, 1), (-(2 ** 300), 1)),
+                           ((2 ** 200, 1), (1, 2 ** 100))]:
+        form = LinearForm(constant, rest, terms)
+        assert bounded_simplex.small_row_size(form) \
+            == bounded_simplex.row_size(form) > 5
+    edge = LinearForm((2 ** 63, 2 ** 63), (2 ** 63, 2 ** 63), terms)
+    assert bounded_simplex.small_row_size(edge) == 5    # 256 bits: small
 
 
 def test_fourier_motzkin_charges_rows_as_wide_as_their_widest_source(

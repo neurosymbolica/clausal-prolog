@@ -20,6 +20,11 @@ clpq_expansion          the terms one constraint's normal form     nf
                         across a delayed constraint's wake-ups
 clpq_expansion          the bits those terms' coefficients take,   nf
   clpq_max_expansion_bits  estimated before each is built
+clpq_expansion          the bits of the largest coefficient one    nf
+  clpq_max_coefficient_bits  power builds, estimated before it is
+                        built (one integer of n bits costs about
+                        n^1.6 to build, so the total alone is not
+                        enough)
 ======================  =========================================  =======
 
 The defaults are DEFAULTS; DEVIATIONS.md D24 has how they were measured.
@@ -43,18 +48,21 @@ from clausal.logic.atoms import mint
 from clausal.logic.exceptions import LogicException, _error
 
 #: cap -> the flag that reads and sets it.  A cap is named by its
-#: resource, except the second expansion cap, which raises clpq_expansion.
+#: resource, except the second and third expansion caps, which raise
+#: clpq_expansion.
 FLAGS = {
     "clpq_nodes": "clpq_max_nodes",
     "clpq_work": "clpq_max_work",
     "clpq_projection": "clpq_max_projection",
     "clpq_expansion": "clpq_max_expansion",
     "clpq_expansion_bits": "clpq_max_expansion_bits",
+    "clpq_coefficient_bits": "clpq_max_coefficient_bits",
 }
 
 #: cap -> the resource its error names.
 RESOURCES = {cap: cap for cap in FLAGS}
 RESOURCES["clpq_expansion_bits"] = "clpq_expansion"
+RESOURCES["clpq_coefficient_bits"] = "clpq_expansion"
 
 #: cap -> its default (DEVIATIONS.md D24: the largest use measured, and
 #: the headroom over it).
@@ -64,6 +72,7 @@ DEFAULTS = {
     "clpq_projection": 4_000_000,
     "clpq_expansion": 40_000,
     "clpq_expansion_bits": 200_000_000,
+    "clpq_coefficient_bits": 20_000_000,
 }
 
 _LIMITS = dict(DEFAULTS)
@@ -201,6 +210,15 @@ def charge_expansion(terms, bits, what, expansion=None):
         bits = expansion.bits
     check("clpq_expansion", terms, what)
     check("clpq_expansion_bits", bits, what + " (coefficient bits)")
+
+
+def check_coefficient(bits, what):
+    """A power will build one coefficient of about *bits* bits: raise
+    `resource_error(clpq_expansion)` past the clpq_coefficient_bits cap.
+    Building an integer of n bits costs about n^1.6 (review R2:
+    `(3*Y)^(10^8)` took 131 s under the bits cap), so this bounds the
+    largest coefficient as well as charge_expansion bounds them all."""
+    check("clpq_coefficient_bits", bits, what + " (one coefficient's bits)")
 
 
 #: Inside the run of a delayed goal (delayed_goals.run): the (terms, bits)

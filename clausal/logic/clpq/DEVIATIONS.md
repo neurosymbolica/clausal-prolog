@@ -1306,10 +1306,11 @@ them.
 | Resource R | Flag | What one call counts | Default |
 |---|---|---|---|
 | `clpq_nodes` | `clpq_max_nodes` | the nodes of one bb_inf search (passes of `branch_and_bound_loop`) | 20,000 |
-| `clpq_work` | `clpq_max_work` | the work of one bb_inf search: a unit for each row its pivots' back substitution reads, and for each row it writes a unit per term and per 64 bits of a coefficient (`bounded_simplex.row_size`; a substitution whose own coefficients fit in 64 bits charges its rows `3 + terms`) | 4,000,000 |
+| `clpq_work` | `clpq_max_work` | the work of one bb_inf search: a unit for each row its pivots' back substitution reads, and for each row it writes a unit per term and per 64 bits of a coefficient (`bounded_simplex.row_size`; a substitution whose own coefficients fit in 64 bits charges each row `3 + terms` while the row's constant and rest fit in 256 bits, `row_size` otherwise) | 4,000,000 |
 | `clpq_projection` | `clpq_max_projection` | the same work for one projection, plus each row Fourier-Motzkin derives, charged before it is made as wide as the widest row it comes from | 4,000,000 |
 | `clpq_expansion` | `clpq_max_expansion` | the terms one constraint's normal form makes in powers, `binomial(N + T - 1, T - 1)` for a sum of T terms to the N or -N, and in products of sums, `len(A) * len(B)` each, counted before each is built; a delayed constraint's repairs add a monomial times a sum, `len(sum)`, and count on across its wake-ups | 40,000 |
 | `clpq_expansion` | `clpq_max_expansion_bits` | the bits those terms' coefficients take, estimated before each is built from log2 of each coefficient (0 for a coefficient of 1): `terms * N * (log2 of the base's largest coefficient + bits of T - 1)` for a power, `terms * (log2 of the largest of A + of B)` for a product | 200,000,000 |
+| `clpq_expansion` | `clpq_max_coefficient_bits` | the bits of the largest single coefficient one power builds, estimated before it is built with exact log2: `N * log2(the base's largest coefficient * T)` for a sum of T terms to the N or -N, and `N * log2(the number)` for a power of a number | 20,000,000 |
 
 **Where they live.** `clausal/logic/clpq/limits.py` holds the caps
 (`limit`, `set_limit`) and the counts.  Each count belongs to one call,
@@ -1365,6 +1366,28 @@ raised 9 s later).
 **Why bits as well as terms.** `(10^1000*Y + 1)^2000` has 2,001 terms but
 took 46 s and 1.7 GB (review F4): the coefficients are the cost.
 
+**Why one coefficient as well as all.** Building one integer of n bits
+costs about n^1.6 (repeated squaring, Karatsuba), so a cap linear in the
+total bits admits one huge coefficient that takes minutes: under the
+total alone `(3*Y)^(10^8)` took 131 s, `(7*Y)^(3*10^7)` 47 s, and
+`(3^1000*Y)^120000` ran past 150 s (review R2).  The largest coefficient
+of a power is bounded on its own, with exact log2 (3 counts 1.58 bits,
+where the total's floor counts 1).  At the default, `(3*Y)^12,600,000`,
+a coefficient of 19,970,000 bits, answers in about 14 s of CPU at a load
+of 15 on 8 cores; `(3*Y)^(10^8)` and the others raise at once.
+
+**Rows with big constants.** A small substitution's rows were charged
+`3 + terms` without reading them (review N2: reading every coefficient
+of every written row cost about 5% of a search).  A store whose rows hold
+2,000-digit constants, rewritten by small pivot rows, then ran 96 s to the
+work cap, 14 times its charge's time (review R1; 5,000 digits ran past
+400 s).  The fast path now reads each written row's constant and rest
+(four `bit_length` calls), the part every rewrite computes on, and
+charges `row_size` past 256 bits; the same store raises in a time near
+its charge.  A row whose term coefficients alone are big, rewritten by a
+small substitution that leaves them as they were, is still charged as a
+small row.
+
 **Headroom.** Measured 2026-10-15 by recording the most each cap saw,
 with every cap lifted, over tests/clpq_port (CLAUSAL_SLOW_TESTS=1: the
 examples, filled_rectangle n = 9, the fuzz tests and the nested legacy
@@ -1378,6 +1401,12 @@ or dump_q, all under `CLAUSAL_CLPQ=holzbaur`:
 | projection | 45,055 | 4,000,000 | 89 times |
 | expansion terms | 27 | 40,000 | 1,481 times |
 | expansion bits | 60 | 200,000,000 | 3.3 million times |
+| one coefficient's bits | 10 | 20,000,000 | 2 million times |
+
+The coefficient cap's row was recorded later (fix round 3), at the
+default caps, in the pytest process only, over tests/clpq_port but
+test_resource_caps.py and the four tests/test_clpq*.py files, with
+CLAUSAL_SLOW_TESTS=1.
 
 The tests are not what sets the defaults; the slow queries the reviews
 found are.  Timed at a load average of 9 to 11 on 8 cores:
@@ -1400,6 +1429,10 @@ found are.  Timed at a load average of 9 to 11 on 8 cores:
   (0.5 s to expand; printing its 241 coefficients of 240,000 digits is
   slow, as printing any such integer is), and `Y^(10^8)` costs no bits.
   `(Y + 1)^(10^7)` raises at once.
+- The coefficient cap admits `(Y + 1)^9999` (a largest coefficient of
+  9,999 bits), `(10^1000*Y + 1)^240` (797,000 bits) and `(3*Y)^(10^6)`;
+  it refuses `(3*Y)^(10^8)`, `(Y/3)^(10^8)`, `(7*Y)^(3*10^7)`,
+  `(3^1000*Y)^120000` and `{X = 3^(10^8)}` before building them.
 
 - **bb_inf/3 on a store with no integer point does not terminate in 1.3.3**
   (High 1).  `noint(I) :- {X >= 0, Y >= 0, 2*X - 2*Y =:= 1},

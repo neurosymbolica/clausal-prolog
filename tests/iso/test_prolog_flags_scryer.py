@@ -112,7 +112,8 @@ def test_max_and_min_integer_have_no_value(plain, flag):
 
 #: The CLP(Q) port's caps, flags under CLAUSAL_CLPQ=holzbaur only.
 _CLPQ_FLAGS = ({"clpq_max_nodes", "clpq_max_work", "clpq_max_projection",
-                "clpq_max_expansion", "clpq_max_expansion_bits"}
+                "clpq_max_expansion", "clpq_max_expansion_bits",
+                "clpq_max_coefficient_bits"}
                if os.environ.get("CLAUSAL_CLPQ") == "holzbaur" else set())
 
 

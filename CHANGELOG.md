@@ -152,14 +152,17 @@ surface described in [docs/public-api.md](docs/public-api.md).
   rows Fourier-Motzkin derives, default 4,000,000 (the D24 probe's
   15-constraint store still answers). `clpq_expansion`: the terms (default
   40,000) and coefficient bits (default 200,000,000) of the powers and
-  products of sums one constraint expands, counted before each is built,
+  products of sums one constraint expands, and the bits of the largest
+  single coefficient one power builds (default 20,000,000: building one
+  integer costs more than its size, and `(3*Y)^(10^8)` took two minutes
+  under the total), each counted before it is built,
   and carried across a delayed constraint's wake-ups (`{X = (Y + 1)^(10^7)}`
   and a product of 18 sums never finished). Each count is per call and per
   thread. In the sandbox a load-time `set_prolog_flag` of a process-wide
   flag is refused with `SandboxLoadError`. The Prolog flags `clpq_max_nodes`,
-  `clpq_max_work`, `clpq_max_projection`, `clpq_max_expansion` and
-  `clpq_max_expansion_bits` read and set them (`set_prolog_flag/2`, a
-  positive integer); they exist only under the port, and the legacy
+  `clpq_max_work`, `clpq_max_projection`, `clpq_max_expansion`,
+  `clpq_max_expansion_bits` and `clpq_max_coefficient_bits` read and set
+  them (`set_prolog_flag/2`, a positive integer); they exist only under the port, and the legacy
   solver is unchanged. In the sandbox the caps are the host's
   (`clausal.logic.clpq.limits.set_limit`). See
   `clausal/logic/clpq/DEVIATIONS.md` D24.

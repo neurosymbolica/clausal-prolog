@@ -1540,9 +1540,25 @@ def row_size(form):
 
 
 def small_row_size(form):
-    """row_size of *form* when its coefficients each fit in 64 bits, done
-    without reading them: the row, its constant and rest, and its terms."""
+    """row_size of a row *form* written by a small substitution: the row,
+    its constant and rest, and its terms, when its constant and rest are
+    small; row_size otherwise.  It reads the constant and rest, which
+    every rewrite of the row computes on (a gcd each), but not the terms'
+    coefficients: a small substitution leaves those as they were but for
+    the ones it adds to (review R1: a store whose rows hold 2,000-digit
+    constants ran 96 s, 14 times the time of its charge, when neither
+    was read).  The back substitution inlines it."""
+    c0, c1 = form.constant
+    r0, r1 = form.rest
+    if c0.bit_length() + c1.bit_length() + r0.bit_length() \
+            + r1.bit_length() > _SMALL_ROW_BITS:
+        return row_size(form)
     return 3 + len(form.terms)
+
+
+#: The bits of a row's constant and rest, numerators and denominators,
+#: past which small_row_size reads the whole row: four 64-bit words.
+_SMALL_ROW_BITS = 256
 
 
 #: limits.current_meter, bound once: the back substitution reads it on
@@ -1557,10 +1573,11 @@ def _row_sizer(form):
     """The row_size a back substitution of *form* charges each row it
     writes: small_row_size when every coefficient of *form* fits in 64
     bits, row_size otherwise.  Reading each written row's coefficients
-    costs about 5% of a search (review N2), and big rows come from big
-    substitutions, so a small one is charged as if its rows were small
-    too: a big row rewritten by a small substitution is undercounted.
-    Only metered substitutions ask."""
+    costs about 5% of a search (review N2), so small_row_size reads only
+    the row's constant and rest (review R1): a row whose term
+    coefficients are big but whose constant and rest are small, rewritten
+    by a small substitution, is still undercounted.  Only metered
+    substitutions ask."""
     word = _WORD
     for value in (form.constant, form.rest):
         if not -word < value[0] < word or value[1] >= word:
@@ -1592,9 +1609,17 @@ def back_substitute_variables(members, variable, form, trail):
         new_form = normal_form_substitute(variable, form, state.linear_form)
         if new_form is not None:
             put_state(member, with_changes(state, linear_form=new_form), trail)
-            if metered:            # small_row_size, inlined
-                written += row_size(new_form) if big \
-                    else 3 + len(new_form.terms)
+            if metered:
+                if big:
+                    written += row_size(new_form)
+                else:              # small_row_size, inlined (review R1)
+                    c0, c1 = new_form.constant
+                    r0, r1 = new_form.rest
+                    if c0.bit_length() + c1.bit_length() + r0.bit_length() \
+                            + r1.bit_length() > _SMALL_ROW_BITS:
+                        written += row_size(new_form)
+                    else:
+                        written += 3 + len(new_form.terms)
     if metered:
         limits.charge_rows_to(meter, written)
     return True
@@ -1624,9 +1649,17 @@ def back_substitute_collect_bindings(members, variable, form, bindings, trail):
             put_state(member, with_changes(state, linear_form=new_form), trail)
             back_substitute_collect_binding(new_form.terms, member,
                                             new_form.constant, bindings)
-            if metered:            # small_row_size, inlined
-                written += row_size(new_form) if big \
-                    else 3 + len(new_form.terms)
+            if metered:
+                if big:
+                    written += row_size(new_form)
+                else:              # small_row_size, inlined (review R1)
+                    c0, c1 = new_form.constant
+                    r0, r1 = new_form.rest
+                    if c0.bit_length() + c1.bit_length() + r0.bit_length() \
+                            + r1.bit_length() > _SMALL_ROW_BITS:
+                        written += row_size(new_form)
+                    else:
+                        written += 3 + len(new_form.terms)
     if metered:
         limits.charge_rows_to(meter, written)
     return True

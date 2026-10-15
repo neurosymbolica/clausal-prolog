@@ -56,15 +56,18 @@ truth value is `true` / `false`, which compile to Python's `True` / `False`.
   `:- end_module(Name).` -- see
   [Importing Prolog Code](importing_prolog.md#end_module-closing-a-module).
 - **`clpq_max_nodes`, `clpq_max_work`, `clpq_max_projection`,
-  `clpq_max_expansion`, `clpq_max_expansion_bits`** (implementation-defined,
+  `clpq_max_expansion`, `clpq_max_expansion_bits`,
+  `clpq_max_coefficient_bits`** (implementation-defined,
   under `CLAUSAL_CLPQ=holzbaur` only): the resource caps of the clp(q,r)
   1.3.3 port, each a positive integer, process wide and settable. Past one
   the port raises `error(resource_error(R), _)`: `clpq_nodes` (the nodes of
   one `bb_inf/3` search), `clpq_work` (the rows that search's pivots read
   and write), `clpq_projection` (the same for one projection, as `dump_q/2`
   and the `-g` answer printer make) or `clpq_expansion` (the terms, or the
-  coefficient bits, of the powers and products one constraint expands).
-  Defaults 20,000, 4,000,000, 4,000,000, 40,000 and 200,000,000. The legacy
+  coefficient bits, of the powers and products one constraint expands, or
+  the bits of the largest single coefficient one power builds).
+  Defaults 20,000, 4,000,000, 4,000,000, 40,000, 200,000,000 and
+  20,000,000. The legacy
   solver has no such flags. In the [sandbox](sandbox.md) a program sets no
   process-wide flag, as a goal or as a load-time directive.
 

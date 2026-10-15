@@ -44,6 +44,8 @@ Imports: nf.pl calls bv.pl and ineq.pl, and bv.pl calls nf.pl back
 call sites ("cyclic") and this module imports bounded_simplex and
 inequalities at the top.
 """
+from math import log2 as _log2
+
 from clausal.logic.clpq import limits
 from clausal.logic.clpq.attributes import refuse_inside_attribute_hooks
 from clausal.logic.cells import TUPLE_TAG, compound_cell_shape
@@ -986,6 +988,14 @@ def normal_form_nonlinear_binary(name, first, second, expansion=None):
     constant_first = normal_form_constant(first)
     constant_second = normal_form_constant(second)
     if constant_first is not None and constant_second is not None:
+        if name == "exp":
+            exponent = rational_integer(constant_second)
+            if exponent is not None and abs(exponent) > 1:
+                # one exact power of a number (review R2)
+                limits.check_coefficient(
+                    _times_exponent(abs(exponent),
+                                    rational_log2(constant_first)),
+                    "a power of a number")
         value = evaluate_nonlinear(name, (constant_first, constant_second))
         if value is None:
             return None
@@ -1245,10 +1255,14 @@ def normal_form_power(exponent, norm, expansion=None):
     The expansion is charged before it is made (power_size) to
     *expansion*, the count of the call making it: past the
     clpq_expansion caps it raises `resource_error(clpq_expansion)`
-    (DEVIATIONS.md D24): `(Y + 1)^N` costs about N^3."""
+    (DEVIATIONS.md D24): `(Y + 1)^N` costs about N^3.  The largest
+    coefficient it builds is checked too (largest_coefficient_bits),
+    since one big integer costs more than its bits."""
     terms, bits = power_size(abs(exponent), norm)
     limits.charge_expansion(terms, bits, "the terms of an expansion",
                             expansion)
+    limits.check_coefficient(largest_coefficient_bits(abs(exponent), norm),
+                             "the largest coefficient of an expansion")
     if exponent < 0:
         inverse = binomial_power(norm, -exponent)
         return normal_form_divide(inverse, [Monomial(ONE, [])])
@@ -1268,6 +1282,51 @@ def coefficient_bits(norm):
         if bits > most:
             most = bits
     return most
+
+
+def rational_log2(value):
+    """log2 of the rational *value*'s numerator and denominator together,
+    |N| * D: 0 for 0, 1 and -1."""
+    numerator, denominator = value
+    bits = 0.0
+    if numerator not in (0, 1, -1):
+        bits += _log2(abs(numerator))
+    if denominator != 1:
+        bits += _log2(denominator)
+    return bits
+
+
+def largest_coefficient_bits(exponent, norm):
+    """About the bits of the largest coefficient of *norm* (a sum of T
+    terms) to the *exponent*, before it is built: under the base's largest
+    coefficient times T, to the *exponent* (the multinomial coefficients
+    are under T^exponent).  Exact log2, not power_size's floor: the cost
+    of one integer is superlinear in its size (limits.check_coefficient),
+    so `(3*Y)^N` counts log2(3) bits for each N.  0 for an exponent under
+    2, and for a power of a monomial with coefficient 1 (`Y^(10^8)`)."""
+    count = len(norm)
+    if exponent < 2 or count == 0:
+        return 0
+    most = 0.0
+    for monomial in norm:
+        bits = rational_log2(monomial.coefficient)
+        if bits > most:
+            most = bits
+    if count > 1:
+        most += _log2(count)
+    return _times_exponent(exponent, most)
+
+
+def _times_exponent(exponent, bits):
+    """*exponent* times the float *bits* (a log2: 0, or at least 1),
+    without the float overflow of an exponent past 2^1024: such a power
+    counts *exponent* bits, under its size and past any cap but a host's
+    beyond reason."""
+    if not bits:
+        return 0
+    if exponent >= 1 << 60:
+        return exponent
+    return exponent * bits
 
 
 def power_size(exponent, norm):
