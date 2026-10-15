@@ -136,6 +136,14 @@ class PrologParser:
         self._pos = 0
         self._ops = op_table
         self._operator_atom_operands = operator_atom_operands
+        # True while parsing the direct items/tail of a `[...]` list, where
+        # `|` is the fixed list-syntax head/tail separator (ISO 6.3.5) and
+        # must never be read as the general infix/postfix operator, no
+        # matter what `op/3` declares for the atom `|` (Ulrich, 2026-10-15).
+        # Suspended (set False) whenever a fully bracketed subform --
+        # `(...)`, `f(...)`, `{...}` -- is entered, since those are bounded
+        # by their own closing token and a `|` inside them is unambiguous.
+        self._bar_reserved = False
 
     # ── Program-level parsing ────────────────────────────────────────
 
@@ -398,12 +406,20 @@ class PrologParser:
     def _parse_compound_args(self, functor: str, functor_tok: Token) -> PCompound:
         """Parse f(arg1, arg2, ...) after the functor name."""
         self._advance()  # consume (
-        args: list[PTerm] = []
-        if self._peek().type != TokenType.RPAREN:
-            args.append(self._parse_term(999, bare_op_atom=True))  # args: prec 999
-            while self._peek().type == TokenType.COMMA:
-                self._advance()  # consume ,
-                args.append(self._parse_term(999, bare_op_atom=True))
+        # `(...)` is bounded by its own `)`, so a `|` inside it is
+        # unambiguous even while a parent `[...]` has `|` reserved as its
+        # list separator (e.g. the `|` in `[f(a|b)]`'s argument).
+        saved_bar_reserved = self._bar_reserved
+        self._bar_reserved = False
+        try:
+            args: list[PTerm] = []
+            if self._peek().type != TokenType.RPAREN:
+                args.append(self._parse_term(999, bare_op_atom=True))  # args: prec 999
+                while self._peek().type == TokenType.COMMA:
+                    self._advance()  # consume ,
+                    args.append(self._parse_term(999, bare_op_atom=True))
+        finally:
+            self._bar_reserved = saved_bar_reserved
         rparen_tok = self._expect(TokenType.RPAREN)
         return PCompound(functor, tuple(args),
                           span=(functor_tok.offset, rparen_tok.end_offset))
@@ -412,12 +428,32 @@ class PrologParser:
         """Parse ( term ). The span is attributed to the parens themselves,
         not the inner term's own extent (`(a)` spans '(' through ')')."""
         lparen_tok = self._advance()  # consume (
-        term = self._parse_term(1200, bare_op_atom=True)
+        # See `_parse_compound_args`: `(...)` has its own closer, so `|`
+        # inside it is a normal operator even within a list's `|` scope.
+        saved_bar_reserved = self._bar_reserved
+        self._bar_reserved = False
+        try:
+            term = self._parse_term(1200, bare_op_atom=True)
+        finally:
+            self._bar_reserved = saved_bar_reserved
         rparen_tok = self._expect(TokenType.RPAREN)
         return dataclasses.replace(term, span=(lparen_tok.offset, rparen_tok.end_offset))
 
     def _parse_list(self) -> PTerm:
-        """Parse [elem1, elem2, ... | tail] or []."""
+        """Parse [elem1, elem2, ... | tail] or [].
+
+        The `|` here is ISO 6.3.5's dedicated list-syntax separator, fixed
+        by the list-bracket grammar rule itself -- NOT a parse of `|` as a
+        general operator -- so it applies unconditionally regardless of any
+        `op/3` declaration for the atom `|`, and at most one bare `|` may
+        appear at this list's own nesting level (a second one before `]` is
+        a syntax error, not a chained structure). `self._bar_reserved`
+        enforces this for the whole items/tail parse; it is saved and
+        restored around it so nested brackets of either kind behave
+        correctly: a nested `[...]` re-asserts the same reservation for its
+        own items (harmless, since it also saves/restores), while a nested
+        `(...)`, `f(...)`, or `{...}` suspends it for its own extent.
+        """
         lbracket_tok = self._advance()  # consume [
         if self._peek().type == TokenType.RBRACKET:
             rbracket_tok = self._advance()
@@ -426,20 +462,28 @@ class PrologParser:
                 return call
             return PList((), None, span=(lbracket_tok.offset, rbracket_tok.end_offset))
 
-        elements: list[PTerm] = []
-        elements.append(self._parse_term(999, bare_op_atom=True))
-        while self._peek().type == TokenType.COMMA:
-            self._advance()
-            # Check for | after comma — some Prolog allows [a, b | T]
-            if self._peek().type == TokenType.BAR:
-                break
+        saved_bar_reserved = self._bar_reserved
+        self._bar_reserved = True
+        try:
+            elements: list[PTerm] = []
             elements.append(self._parse_term(999, bare_op_atom=True))
+            while self._peek().type == TokenType.COMMA:
+                self._advance()
+                # Check for | after comma — some Prolog allows [a, b | T]
+                if self._peek().type == TokenType.BAR:
+                    break
+                elements.append(self._parse_term(999, bare_op_atom=True))
 
-        tail = None
-        if self._peek().type == TokenType.BAR:
-            self._advance()  # consume |
-            tail = self._parse_term(999, bare_op_atom=True)
+            tail = None
+            if self._peek().type == TokenType.BAR:
+                self._advance()  # consume |
+                tail = self._parse_term(999, bare_op_atom=True)
+        finally:
+            self._bar_reserved = saved_bar_reserved
 
+        # A second bare `|` at this same nesting level (e.g. `[a|b|c]`) is
+        # left unconsumed by the tail parse above (it stopped being read as
+        # an operator) and is a syntax error here, not a 2nd tail.
         rbracket_tok = self._expect(TokenType.RBRACKET)
         return PList(tuple(elements), tail,
                      span=(lbracket_tok.offset, rbracket_tok.end_offset))
@@ -453,7 +497,14 @@ class PrologParser:
             if call is not None:
                 return call
             return PAtom("{}", span=(lcurly_tok.offset, rcurly_tok.end_offset))
-        body = self._parse_term(1200, bare_op_atom=True)
+        # See `_parse_compound_args`: `{...}` has its own closer, so `|`
+        # inside it is a normal operator even within a list's `|` scope.
+        saved_bar_reserved = self._bar_reserved
+        self._bar_reserved = False
+        try:
+            body = self._parse_term(1200, bare_op_atom=True)
+        finally:
+            self._bar_reserved = saved_bar_reserved
         rcurly_tok = self._expect(TokenType.RCURLY)
         return PCurly(body, span=(lcurly_tok.offset, rcurly_tok.end_offset))
 
@@ -541,6 +592,11 @@ class PrologParser:
         if tok.type == TokenType.COMMA:
             return ","
         if tok.type == TokenType.BAR:
+            # Reserved as the list head/tail separator (see
+            # `self._bar_reserved`): never an operator name there, even
+            # under a custom `op/3` declaration for `|`.
+            if self._bar_reserved:
+                return None
             return "|"
         return None
 
