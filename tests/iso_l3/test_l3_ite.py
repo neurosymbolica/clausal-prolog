@@ -182,6 +182,8 @@ rk(N) :- N > 0, N1 is N-1, catch((rk(N1), !), _, true).
 o(0).
 o(N) :- N > 0, N1 is N-1, once(o(N1)).
 o_err(N, E) :- catch((o(N), E = none), E, true).
+o_after_ite(N, E) :- catch(((true -> true ; true), o(N), E = none), E, true).
+o_in_then(N, E) :- catch((true -> o(N), E = none ; true), E, true).
 rec(0).
 rec(N) :- N > 0, N1 is N-1, catch(throw(x), x, (!, rec(N1))).
 rec_err(N, E) :- catch((rec(N), E = none), E, true).
@@ -223,6 +225,12 @@ def test_once_and_a_cutting_recovery_still_overflow_as_a_python_error(native, an
     byte-identical (tests/test_cut_codegen.py).  Scryer: none, none."""
     mod = native.load("l3_ite_deep_once", DEEP)
     [e] = ans(mod, "o_err", 2, 2000)
+    assert e[0] == "RecursionError"
+    # The condition's try covers the CONDITION only: an if-then-else before
+    # the recursion, or around it in Then, does not reclassify it.
+    [e] = ans(mod, "o_after_ite", 2, 2000)
+    assert e[0] == "RecursionError"
+    [e] = ans(mod, "o_in_then", 2, 2000)
     assert e[0] == "RecursionError"
     [e] = ans(mod, "rec_err", 2, 2000)
     assert e[0] == "RecursionError"

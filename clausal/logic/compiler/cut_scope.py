@@ -59,15 +59,18 @@ def cut_mark_assign(name: str) -> "ast.stmt":
     return _assign(name, cut_seq_expr())
 
 
-def cut_check_stmt(name: str, owner: "str | None") -> "ast.stmt":
-    """``if $tab_ctx.cut_seq > name: $cut_over_incomplete(name, owner)``."""
+def cut_check_stmt(name: str, owner: "str | None", trail_name: str) -> "ast.stmt":
+    """``if $tab_ctx.cut_seq > name: $cut_over_incomplete(name, owner,
+    trail)`` -- the trail tells this query's tabled frames from those of
+    another query interleaved on the same thread."""
     import ast
     from ._ast_helpers import _call, _if, _locate, _name
     return _if(
         ast.Compare(left=cut_seq_expr(), ops=[ast.Gt()],
                     comparators=[_name(name)]),
         [_locate(ast.Expr(value=_call(_name(CUT_CHECK_GLOBAL), _name(name),
-                                      ast.Constant(owner))))])
+                                      ast.Constant(owner),
+                                      _name(trail_name))))])
 
 
 def cut_check_stmts(ctx) -> list:
@@ -78,7 +81,7 @@ def cut_check_stmts(ctx) -> list:
         return []
     if guard[0] is None:
         guard[0] = ctx.fresh("_cutm")
-    return [cut_check_stmt(guard[0], ctx.cut_owner)]
+    return [cut_check_stmt(guard[0], ctx.cut_owner, ctx.trail_name)]
 
 
 def cut_guard_entry(guard: "list | None", stmts: list) -> list:
@@ -125,21 +128,80 @@ def may_reach_a_table(db) -> bool:
     return False
 
 
-def commit_check(ctx) -> "tuple[list, list]":
-    """``(before, at_commit)`` statements for a committing construct of a
-    ``.pl`` body (once/1, setup_call_cleanup's Setup): mark before the
-    sub-search, check at its first solution.
+#: Callees that run a goal argument at run time when they are reached as
+#: an ordinary call rather than compiled inline.
+_RUN_TIME_META = frozenset({
+    "call", ",", ";", "->", "*->", "\\+", "not", "once", "ignore", "findall",
+    "bagof", "setof", "forall", "catch", "call_cleanup", "setup_call_cleanup",
+    ":", "aggregate_all", "call_nth", "phrase"})
 
-    ``([], [])`` for any other db, and for a ``.pl`` db that cannot see a
-    tabled predicate (:func:`may_reach_a_table`): once/1 is common in
+
+def _goal_is_open(goal, db) -> bool:
+    """Can *goal* (a once/1 or Setup argument, as written) run a goal that
+    is only known at run time: a variable, or a call/N anywhere in its goal
+    positions?  Conservative: a goal the converter cannot read counts."""
+    from clausal.logic.variables import deref, is_var
+    from .ir import META_GOAL_POSITIONS, MetaCall, Negate, SubCall
+    from .terms_to_goalop import terms_to_goalop, _convert
+    goal = deref(goal)
+    if is_var(goal):
+        return True
+    try:
+        stack = [terms_to_goalop([goal], db)]
+    except Exception:  # noqa: BLE001 - unreadable: assume open
+        return True
+    while stack:
+        op = stack.pop()
+        match op:
+            case SubCall(fname=f) if f in _RUN_TIME_META:
+                return True            # call/N, or a control construct
+                                       # reached as a predicate call
+            case Sequence(ops=ops) | Alternate(ops=ops):
+                stack.extend(ops)
+            case IfThenElse(test=t, then=th, else_=el) | Branch(test=t, then=th, else_=el):
+                stack.extend((t, th, el))
+            case Negate(op=inner):
+                stack.append(inner)
+            case MetaCall(kind=kind, args=margs):
+                for key in META_GOAL_POSITIONS.get(kind, ()):
+                    inner = margs.get(key)
+                    if inner is None:
+                        continue
+                    if not isinstance(inner, GoalOp):
+                        if is_var(deref(inner)):
+                            return True
+                        try:
+                            inner = _convert(inner, db)
+                        except Exception:  # noqa: BLE001
+                            return True
+                    stack.append(inner)
+            case _:
+                pass
+    return False
+
+
+def commit_check(ctx, goal=None) -> "tuple[list, list]":
+    """``(before, at_commit)`` statements for a committing construct of a
+    ``.pl`` body (once/1, setup_call_cleanup's Setup, its *goal*): mark
+    before the sub-search, check at its first solution.
+
+    ``([], [])`` for any other db (``.clausal``, ``.seam``: cut-free code
+    stays byte-identical), and in a ``.pl`` db for a goal that is closed
+    (no variable goal, no call/N) when the db cannot see a tabled predicate
+    (:func:`may_reach_a_table`): once/1 over a literal goal is common in
     cut-free ``.pl`` code, whose codegen stays byte-identical
-    (tests/test_cut_codegen.py).  A ``!`` and an if-then-else always
-    carry the check -- they are new code either way."""
+    (tests/test_cut_codegen.py).  An open goal -- ``first(G) :- once(G).``
+    in a library module -- may run any table at all, so it is always
+    checked.  A ``!`` and an if-then-else always carry the check."""
     from clausal.logic.builtins.call_body import cut_allowed
-    if not cut_allowed(ctx.db) or not may_reach_a_table(ctx.db):
+    if not cut_allowed(ctx.db):
+        return [], []
+    if not may_reach_a_table(ctx.db) and not (
+            goal is not None and _goal_is_open(goal, ctx.db)):
         return [], []
     m = ctx.fresh("_cutm")
-    return [cut_mark_assign(m)], [cut_check_stmt(m, ctx.cut_owner)]
+    return ([cut_mark_assign(m)],
+            [cut_check_stmt(m, ctx.cut_owner, ctx.trail_name)])
 
 
 # ─────────────────────────────────────────────────────────────────────────────

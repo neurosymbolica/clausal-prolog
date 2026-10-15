@@ -120,7 +120,7 @@ class _LeaderContext(threading.local):
         # XSB's run-time cut check (D61 Q1, ``cut_over_incomplete``): every
         # tabled call frame over an INCOMPLETE table (a leader mid-fixpoint,
         # a consumer yielding known answers) has a record ``[id, token,
-        # entry, functor, arity]`` while it can still deliver answers.
+        # entry, functor, arity, trail]`` while it can still deliver answers.
         # ``cut_seq`` is the id of the newest one ever opened; a cut scope
         # reads it at entry and its cut compares -- one int compare when no
         # tabled frame opened inside the scope since.
@@ -156,7 +156,7 @@ def _open_tabled(entry, functor, arity, trail) -> list:
     tok = Var()
     unify(tok, True, trail)
     ctx.cut_seq += 1
-    rec = [ctx.cut_seq, tok, entry, functor, arity]
+    rec = [ctx.cut_seq, tok, entry, functor, arity, trail]
     recs.append(rec)
     return rec
 
@@ -169,11 +169,14 @@ def _close_tabled(rec) -> None:
             return
 
 
-def cut_over_incomplete(mark: int, owner: "str | None" = None) -> None:
+def cut_over_incomplete(mark: int, owner: "str | None" = None,
+                        trail=None) -> None:
     """The slow half of a cut's check, reached only when a tabled frame over
     an incomplete table opened since the cut's scope began (``cut_seq >
     mark``): raise ``permission_error(cut, incomplete_table, F/N)`` if one of
-    them is still live."""
+    them is still live ON THE CUT'S TRAIL.  A record of another query --
+    Python holding one solve() iterator open while it runs another on the
+    same thread -- is not this cut's to prune (final re-review N-1)."""
     recs = _leader_ctx.open_tabled
     live = None
     i = len(recs) - 1
@@ -181,7 +184,7 @@ def cut_over_incomplete(mark: int, owner: "str | None" = None) -> None:
         rec = recs[i]
         if is_var(deref(rec[1])) or rec[2].status == "complete":
             del recs[i]                # abandoned, or finished meanwhile
-        else:
+        elif trail is None or rec[5] is trail:
             live = rec
         i -= 1
     if live is None:

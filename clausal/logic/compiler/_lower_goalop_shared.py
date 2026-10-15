@@ -358,6 +358,24 @@ def lower_shared(
         return _lower_shared_body(ir, ctx, k_stmts, recurse)
 
 
+def _overflow_guard(cond_stmts: list) -> list:
+    """An if-then-else condition's statements inside ``try: ... except
+    RecursionError: $ite_overflow()`` (final review I-1).  Recursion through
+    a condition nests Python generators; a RecursionError leaving the
+    CONDITION becomes ISO ``resource_error(stack)``.  The try is inside the
+    condition's generator, so the Then branch and the rest of the clause --
+    which run in the enclosing ``for`` body -- are not covered.  A try costs
+    nothing until something raises."""
+    if not cond_stmts:
+        return cond_stmts
+    return [ast.Try(
+        body=cond_stmts,
+        handlers=[ast.ExceptHandler(
+            type=_name("$RecursionError"), name=None,
+            body=[ast.Expr(value=_call(_name("$ite_overflow")))])],
+        orelse=[], finalbody=[])]
+
+
 def _lower_shared_body(
     ir: GoalOp,
     ctx: CompilationContext,
@@ -412,8 +430,9 @@ def _lower_shared_body(
                 name=gen_name,
                 args=ast.arguments(posonlyargs=[], args=[], vararg=None,
                                    kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[]),
-                body=cond_stmts + [ast.Return(value=None),
-                                   ast.Expr(value=ast.Yield(value=ast.Constant(None)))],
+                body=_overflow_guard(cond_stmts) + [
+                    ast.Return(value=None),
+                    ast.Expr(value=ast.Yield(value=ast.Constant(None)))],
                 decorator_list=[], returns=None, type_comment=None, **_EXTRA_FUNCDEF)
             mark = ctx.fresh(_MARK_PREFIX)
             taken = ctx.fresh("_ite_taken")
@@ -424,20 +443,10 @@ def _lower_shared_body(
                 _assign_mark(mark, trail_name),
                 cut_mark_assign(cut_m),
                 _assign(taken, ast.Constant(False)),
-                # Recursion through a condition nests Python generators: a
-                # RecursionError leaving it becomes ISO resource_error(stack)
-                # here (final review I-1), so a catch-all sees an error term.
-                # A try costs nothing until something raises.
-                ast.Try(
-                    body=[ast.For(
-                        target=_name("_", ast.Store()), iter=_call(_name(gen_name)),
-                        body=[cut_check_stmt(cut_m, ctx.cut_owner),
+                ast.For(target=_name("_", ast.Store()), iter=_call(_name(gen_name)),
+                        body=[cut_check_stmt(cut_m, ctx.cut_owner, ctx.trail_name),
                               _assign(taken, ast.Constant(True))] + then_stmts + [ast.Break()],
-                        orelse=[])],
-                    handlers=[ast.ExceptHandler(
-                        type=_name("$RecursionError"), name=None,
-                        body=[ast.Expr(value=_call(_name("$ite_overflow")))])],
-                    orelse=[], finalbody=[]),
+                        orelse=[]),
                 _undo_stmt(mark, trail_name),
             ]
             if else_stmts:

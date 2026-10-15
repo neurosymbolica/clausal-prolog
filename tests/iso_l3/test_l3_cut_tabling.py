@@ -403,6 +403,9 @@ o3(X) :- setup_call_cleanup(tq(X), true, true).
 n1(X) :- \\+ \\+ tq(_), p(X), !.
 n2(X) :- catch((tq(Y), Y > 1, throw(oops)), oops, true), p(X), !.
 n3(X) :- tq(X), \\+ (p(Y), !, Y > 5).
+n4(X) :- tq(X), \\+ (findall(Y, tq(Y), _), !, fail).
+fa(L) :- findall(X, (tq(X), !), L).
+nf(L) :- findall(x, \\+ (tq(_), !, fail), L).
 r(N, E) :- G =.. [N, _], catch((findall(x, G, _), E = none), error(E0, _), E = E0).
 """
 
@@ -417,12 +420,13 @@ def test_a_cut_after_its_tables_completed_runs(native, ans):
     assert ans(mod, "done") == [1]
 
 
-@pytest.mark.parametrize("name", ["w", "w2", "o1", "o2", "o3"])
+@pytest.mark.parametrize("name", ["w", "w2", "o1", "o2", "o3", "fa", "nf"])
 def test_every_commit_over_an_incomplete_table_raises_at_run_time(native, ans, name):
     """A ``!``, an if-then-else commit, once/1 and setup_call_cleanup's
     Setup, each over t/1 reached through the untabled tq/1 while t/1's
-    leader is still streaming (w2/1 commits on its SECOND answer).  Scryer
-    answers [1], [2], [1], [1], [1].  XSB under local scheduling completes
+    leader is still streaming (w2/1 commits on its SECOND answer); fa/1 and
+    nf/1 cut inside findall's goal and inside a \\+ nested in it.  Scryer
+    answers [1], [2], [1], [1], [1], [[1]], [[]].  XSB under local scheduling completes
     t/1 before it returns an answer and would not raise; this engine
     streams answers before completion, so the table is incomplete at the
     cut."""
@@ -430,11 +434,15 @@ def test_every_commit_over_an_incomplete_table_raises_at_run_time(native, ans, n
     assert ans(mod, "r", 2, name) == [_INCOMPLETE("t", 1)]
 
 
-@pytest.mark.parametrize("name,want", [("n1", [1]), ("n2", [1]), ("n3", [1, 2, 3])])
+@pytest.mark.parametrize("name,want", [("n1", [1]), ("n2", [1]), ("n3", [1, 2, 3]),
+                                       ("n4", [1, 2, 3])])
 def test_a_sub_search_abandoned_by_backtracking_is_not_pruned_by_the_cut(native, ans, name, want):
     """\\+ and catch/3's recovery abandon t/1's leader mid-stream, but they
     undo the trail past it first, so a later cut does not prune it; a cut
-    inside \\+ does not reach the tq/1 call before it.  Scryer agrees."""
+    inside \\+ does not reach the tq/1 call before it, even when a tabled
+    call made inside the \\+ (and finished there) moved the counter: the
+    still-streaming tq/1 call opened BEFORE the \\+ is not in its scope
+    (n4).  Scryer agrees."""
     mod = native.load("l3_tab_rt_" + name, INDIRECT)
     assert ans(mod, name) == want
 
@@ -444,3 +452,81 @@ def test_the_switch_turns_off_the_run_time_half_too(native, ans, monkeypatch):
     monkeypatch.setattr(cut_scope, "CUT_OVER_TABLED_CALL", "run")
     mod = native.load("l3_tab_rt_switch", INDIRECT)
     assert ans(mod, "w") == [1]                               # Scryer: [1]
+
+
+def test_a_cut_does_not_see_the_tabled_frames_of_another_query(native, ans):
+    """Final re-review N-1: Python holds one call() iterator open, with t/1's
+    leader live and incomplete, while another query on the same thread runs
+    a cut that has no tabled call in its scope.  The record is keyed by
+    trail, so the other query's cut ignores it.  Base: [1, 2]."""
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var, deref
+    src = ":- table(t/1).\nt(1). t(2). t(3).\nc(X) :- ( X = 1 ; !, X = 2 ).\n"
+    mod = native.load("l3_tab_rt_interleaved", src)
+    x, held, got = Var(), [], []
+    for _ in call("c", x, module=mod):
+        got.append(deref(x))
+        it = iter(call("t", Var(), module=mod))
+        next(it)
+        held.append(it)
+    assert got == [1, 2]
+
+
+LIB = """\
+:- module(rt_util, [first/1, first_scc/1]).
+:- meta_predicate(first(0)).
+:- meta_predicate(first_scc(0)).
+first(G) :- once(G).
+first_scc(G) :- setup_call_cleanup(G, true, true).
+"""
+
+LIB_USER = """\
+:- use_module(rt_util).
+:- table(path/2).
+e(a, b). e(b, a).
+path(X, Y) :- e(X, Y).
+path(X, Y) :- path(X, Z), e(Z, Y).
+u1(Y) :- first(path(a, Y)).
+u2(Y) :- first_scc(path(a, Y)).
+r(N, E) :- G =.. [N, _], catch((findall(x, G, _), E = none), error(E0, _), E = E0).
+"""
+
+
+@pytest.mark.parametrize("name", ["u1", "u2"])
+def test_once_on_a_goal_argument_in_a_table_blind_module_is_checked(native, ans, tmp_path, name):
+    """Final re-review N-2: a library meta-predicate (``first(G) :-
+    once(G).``) in a module that tables and imports nothing commits over
+    the caller's incomplete recursive table.  Its goal is a variable, so
+    the check is emitted whatever the module can see.  It used to answer
+    [b] silently; Scryer: [a]; XSB: the run-time error."""
+    (tmp_path / "rt_util.pl").write_text(LIB)
+    mod = native.load("l3_tab_rt_lib_" + name, LIB_USER)
+    assert ans(mod, "r", 2, name) == [_INCOMPLETE("path", 2)]
+
+
+def test_once_on_a_closed_goal_in_a_table_blind_module_is_not_checked():
+    """The other side of N-2's rule: once/1 over a literal goal with no
+    call/N, in a .pl module that cannot see a table, compiles as it did
+    before cut existed (the codegen snapshot pins that); a variable goal or
+    a call/N in it is checked.  .clausal/.seam never get the check."""
+    from clausal.end_module import SURFACE_PL
+    from clausal.logic.compiler.compile_ctx import CompilationContext
+    from clausal.logic.compiler.cut_scope import commit_check
+    from clausal.logic.database import Database
+    from clausal.logic.variables import Var
+    from clausal.pythonic_ast import nodes
+    from clausal.terms import Call, LoadName
+
+    def ctx(surface):
+        db = Database()
+        db.surface = surface
+        return CompilationContext(db=db, var_context={}, trail_name="trail")
+
+    def call(f, *a):
+        return Call(func=LoadName(name=f), args=list(a), kwargs=[])
+    pl = ctx(SURFACE_PL)
+    assert commit_check(pl, call("mem", Var(), [1])) == ([], [])
+    assert commit_check(pl, Var()) != ([], [])
+    assert commit_check(pl, nodes.And(left=call("p"), right=call("call", Var()))) != ([], [])
+    assert commit_check(pl, nodes.And(left=call("p"), right=call("q", Var()))) == ([], [])
+    assert commit_check(ctx(None), Var()) == ([], [])

@@ -186,7 +186,7 @@ def _compile_once(ctx: CompilationContext, inner, k_stmts):
     # once(G) is call((G, !)) (ISO 8.15.2): in a .pl body its commit is
     # checked like a cut's (D61 Q1); elsewhere both lists are empty.
     from .cut_scope import commit_check
-    before, at_commit = commit_check(ctx)
+    before, at_commit = commit_check(ctx, inner)
     return [
         once_fn,
         _assign_mark(once_mark, trail_name),
@@ -384,7 +384,7 @@ def _compile_setup_call_cleanup(ctx: CompilationContext, setup, call, cleanup, k
     # Setup runs as once/1: in a .pl body its commit is checked like a
     # cut's (D61 Q1); elsewhere both lists are empty.
     from .cut_scope import commit_check
-    setup_before, setup_commit = commit_check(ctx)
+    setup_before, setup_commit = commit_check(ctx, setup)
     setup_loop = ast.For(
         target=_name("_", ast.Store()),
         iter=_call(_name(setup_gen)),
