@@ -157,6 +157,23 @@ def _body_term_ir(t) -> GoalOp:
     return SubCall(fname=f, arity=n, args=list(args))
 
 
+def _is_tabled_call(fname: str, arity: int, db) -> bool:
+    """Does the call ``fname/arity`` (as compiled against *db*) reach a
+    table?  A qualified ``M.g`` whose M is ``user`` or *db*'s own module
+    names the LOCAL predicate g: the qualifier is stripped before the lookup
+    (the dotted spelling is not a key of the local table)."""
+    from .tabled_naf import _resolve_tabled_call
+    if _resolve_tabled_call(fname, arity, db) is not None:
+        return True
+    mod, dot, base = fname.rpartition(".")
+    if dot and mod and base and db is not None:
+        own = getattr(db, "module_name", None)
+        own = own() if callable(own) else own
+        if mod == "user" or mod == own:
+            return _resolve_tabled_call(base, arity, db) is not None
+    return False
+
+
 def _pi_text(pi: "tuple[str, int]") -> str:
     """ISO spelling of a predicate indicator: ``lib_t:lt/1`` for the dotted
     ``lib_t.lt`` an imported call compiles to."""
@@ -184,7 +201,6 @@ def tabled_calls_in_cut_scope(ir: GoalOp, db) -> list[tuple[str, int]]:
 
     Goals built at run time (``G = (tf(X), !), call(G)``) are not seen: no
     static rule can (XSB pairs its static rule with a run-time check)."""
-    from .tabled_naf import _resolve_tabled_call
     from .ir import META_GOAL_POSITIONS, MetaCall, Negate, SubCall
     found: list[tuple[str, int]] = []
 
@@ -250,7 +266,7 @@ def tabled_calls_in_cut_scope(ir: GoalOp, db) -> list[tuple[str, int]]:
                     join(left, sub)            # ... its choice points are not
             case SubCall():
                 pi = (op.fname, op.arity)
-                if pi not in left and _resolve_tabled_call(op.fname, op.arity, db) is not None:
+                if pi not in left and _is_tabled_call(op.fname, op.arity, db):
                     left.append(pi)
             case _:
                 pass

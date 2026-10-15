@@ -243,3 +243,23 @@ def test_setup_call_cleanups_setup_commits_like_once(native, ans):
     ok = ":- table(tf/1).\ntf(1). tf(2).\nc(X) :- setup_call_cleanup(true, tf(X), true).\n"
     mod = native.load("l3_tab_scc_ok", ok)
     assert sorted(ans(mod, "c")) == [1, 2]                    # Scryer: [1,2]
+
+
+SELF_QUALIFIED = {
+    "user_direct": "t(X) :- user:tf(X), !.",
+    "self_direct": "t(X) :- {mod}:tf(X), !.",
+    "self_closure": "t(X) :- call({mod}:tf, X), !.",
+    "self_call1": "t(X) :- call({mod}:tf(X)), !.",
+}
+
+
+@pytest.mark.parametrize("key", list(SELF_QUALIFIED))
+def test_a_call_qualified_with_its_own_module_or_user_is_seen(native, key):
+    """``user:tf(X)`` and ``<this module>:tf(X)`` name the local table, so
+    the qualifier is stripped before the tabled lookup (Scryer commits
+    ``user:tf(X), !`` to [1]: a real cut over a table)."""
+    mod = f"l3_tab_selfq_{key}"
+    src = (":- table(tf/1).\ntf(1). tf(2).\n"
+           + SELF_QUALIFIED[key].format(mod=mod) + "\n")
+    with pytest.raises(SyntaxError, match=r"tabled call\(s\) \w+:tf/1"):
+        native.load(mod, src)
