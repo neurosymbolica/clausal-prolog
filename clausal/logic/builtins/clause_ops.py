@@ -238,16 +238,25 @@ def _needs_cell(name: str, arity: int, namespace: dict, db=None) -> bool:
       through that binding and refuses the argument count, where the call
       itself names ``name/arity`` -- a different procedure, spelled as the
       cell;
-    - a name bound to a STATIC predicate at the RIGHT arity (found
-      2026-10-15, via ``clause/2``/``retract/1`` of a clause whose body
-      calls one): the P2 cell discipline only registers a ``-dynamic`` (or
-      still-unlocked) row as a value-constructor, so construction going
-      through the binding for an ordinary static one raises
-      ``existence_error(procedure, ...)`` ("nothing declares the functor"),
-      not the cell -- the same failure a WRONG-arity binding gets, just
-      from a different compiler door.  A clause's own body is read back
-      the same regardless of what its calls happen to resolve to today, so
-      this is checked on the row, not the binding.
+    - a name bound to a predicate at the RIGHT arity whose functor nothing
+      DECLARES (found 2026-10-15, via ``clause/2``/``retract/1`` of a
+      clause whose body calls one): construction through an ordinary
+      ``Call`` node, when the functor has no export-list / ``-private`` /
+      ``-dynamic`` declaration giving it a signature, raises
+      ``existence_error(procedure, ...)`` ("nothing declares the
+      functor") rather than building the cell -- the same failure a
+      WRONG-arity binding gets, just from a different compiler door.
+      Typically a local, unexported STATIC predicate (an exported or an
+      imported static one already has a declaration elsewhere and reads
+      back fine without this).  There is no cheap way to ask the compiler
+      "does this functor have a signature" from here, so this checks the
+      ROW instead, as a superset: not dynamic and locked.  A locked row
+      with no declaration is exactly the broken case; a locked row WITH
+      one (exported/imported) is rewritten too, but that is a no-op --
+      the rewrite builds the identical cell construction would have built
+      on its own.  A clause's own body is read back the same regardless
+      of what its calls happen to resolve to today, so this is checked on
+      the row, not the binding.
     """
     from clausal.logic.predicate import (  # noqa: PLC0415
         binding_grants_arity, is_declared_predicate_name,
@@ -286,6 +295,15 @@ def _spell_as_cells(t: Any, namespace: dict, db=None) -> Any:
     if (type(t) is nodes.Call and type(t.func) is nodes.LoadName
             and not t.kwargs and _needs_cell(t.func.name, len(t.args),
                                              namespace, db)):
+        if not t.args:
+            # A 0-arity cell IS its atom -- ``TupleLiteral(['zst'])`` would
+            # build the 1-tuple ``('zst',)``, which construction refuses as
+            # a reserved shape (found 2026-10-15: a local static 0-arity
+            # callee, e.g. ``t(2, _) :- zst.``, crashed with a raw Python
+            # TypeError instead of reading back as the atom ``zst``,
+            # because this was the first path that routed an ordinary
+            # 0-arity predicate call here at all).
+            return t.func.name
         return nodes.TupleLiteral(
             elements=[t.func.name] + [_spell_as_cells(a, namespace, db)
                                       for a in t.args])
