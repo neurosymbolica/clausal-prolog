@@ -249,8 +249,9 @@ with the native ISO front end, the reader that `.clausal` files always use,
 and runs `!`, `->` and if-then-else with ISO semantics, cut included.
 `CLAUSAL_PL_FRONTEND=translator` selects the legacy translator instead,
 which refuses them. A cut whose scope holds a call to a tabled predicate is
-refused at load, and `*->` is refused. Full ISO (streams, flags, `op/3`,
-...) remains the embeddings' job.
+refused (at load where the compiler can see it, otherwise at run time when
+the cut would prune an incomplete table), and `*->` is refused. Full ISO
+(streams, flags, `op/3`, ...) remains the embeddings' job.
 
 ## The seam: `.seam` files
 

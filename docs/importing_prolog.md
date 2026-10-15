@@ -815,16 +815,56 @@ barriers as ISO says: `call/N`, `once/1`, `\+`, `findall/3`,
 cut-free: the same constructs are refused there, and a `.clausal` module
 may not import a `.pl` one.
 
-* **A cut over a tabled call is refused at load** (XSB's rule): a `!`, an
+* **A cut over a tabled call is refused** (XSB's rule): a `!`, an
   if-then-else condition, `once/1` or `setup_call_cleanup/3`'s Setup whose
-  scope holds a call to a tabled predicate raises `SyntaxError` naming the
-  call. Scryer runs such a cut; the answer it would give depends on the
-  fixpoint's pass order, which this engine cannot promise.
+  scope holds a call to a tabled predicate. Scryer runs such a cut; the
+  answer it would give depends on the fixpoint's pass order, which this
+  engine cannot promise. The refusal comes at load where the compiler can
+  see the call, otherwise at run time when the cut would prune an
+  incomplete table:
+  * **At load**, for a call in the cut's scope that names a tabled
+    predicate directly, or through a literal `call/N` goal: the import
+    raises `SyntaxError` naming the predicate, the line and the call. This
+    applies even when the table would be complete by then.
+  * **At run time**, for what the compiler cannot see: a tabled predicate
+    reached through an untabled one, or a goal built at run time
+    (`G = (path(a, Y), !), call(G)`). When the cut (or the commit) runs
+    while a tabled call made inside its scope can still return answers
+    from a table that is not complete, it throws
+    `error(permission_error(cut, incomplete_table, F/N), _)`, naming the
+    tabled predicate. A table that completed before the cut is fine:
+    `findall(Y, t(Y), _), q(X), !` with `q(X) :- t(X)` runs. Answers stream
+    from a table before it is complete, so a commit on the first answer of
+    a fresh table, e.g. `( q(X) -> ... )`, is refused even when `t/1` is
+    not recursive. XSB under local scheduling completes the table first
+    and would run it. `once/1` and Setup carry the check only in a module
+    that can see a tabled predicate when it is compiled: its own, or one
+    it imports, directly or through the modules it imports.
 * **`*->` (soft-cut) is refused**, as Scryer refuses it.
-* **Recursion through `once/1` or `catch/3` is limited by the Python
-  stack**, cut or no cut: each such Goal runs in a nested sub-generator,
-  so the depth depends on Python's recursion limit (about 330 levels at
-  the default `sys.getrecursionlimit()` of 1000).
+* **Recursion through an if-then-else condition, through `once/1`, or
+  through a `catch/3` Recovery that cuts is limited by the Python stack.**
+  Each of these runs its goal in a nested Python generator, so the depth
+  depends on Python's recursion limit: about 330-400 levels at the default
+  `sys.getrecursionlimit()` of 1000. Scryer has no such limit.
+  * Past the limit, an if-then-else condition throws
+    `error(resource_error(stack), _)`. `once/1` and a cutting Recovery
+    still surface Python's `RecursionError`, which `catch/3` sees as
+    `'RecursionError'(Message)`.
+  * A catch-all such as `catch(G, _, fail)` turns either one into plain
+    failure.
+  * A cut-free `catch/3`, and a `catch/3` whose Goal cuts, are not limited:
+    2000 levels run.
+* **`setup_call_cleanup/3` cleans up late.** Cleanup runs once the Goal's
+  sub-search is finished with, which is after the caller's continuation
+  has run. Scryer, and the draft standard, run it as soon as the Goal
+  exits deterministically, or at the cut that prunes it. Cut does not make
+  it earlier here: a cut is compiled as "run the rest of the clause and the
+  caller's continuation, then leave", and the pruned choice points stay
+  alive until then. So in
+  `u :- setup_call_cleanup(open(F, read, S), read(S, T), close(S)), !,
+  use(T).`, the stream `S` is still open while `use(T)` runs. A
+  deterministic Goal, and `once/1`, behaved the same before cut was
+  supported.
 
 ### DCG rules (native front end)
 

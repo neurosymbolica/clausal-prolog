@@ -81,11 +81,16 @@ surface described in [docs/public-api.md](docs/public-api.md).
 - **The in-process `.pl` loader runs `!`, `->` and if-then-else** with ISO
   7.8 semantics, on the native front end (`CLAUSAL_PL_FRONTEND=native`;
   the translator still refuses them); `.clausal` stays cut-free. A cut
-  whose scope holds a tabled call is refused at compile time (XSB's rule),
-  including `once/1` and `setup_call_cleanup/3`'s Setup; `*->` stays
-  refused. Recursion through `once/1` or `catch/3` (with or without a cut)
-  is limited by the Python stack: about 330 deep at Python's default
-  recursion limit. See docs/importing_prolog.md.
+  whose scope holds a tabled call is refused (XSB's rule), including
+  `once/1` and `setup_call_cleanup/3`'s Setup: at load where the compiler
+  can see the call, otherwise at run time when the cut would prune an
+  incomplete table (`permission_error(cut, incomplete_table, F/N)`).
+  `*->` stays refused. Recursion through an if-then-else condition, through
+  `once/1`, or through a `catch/3` Recovery that cuts is limited by the
+  Python stack: about 330-400 deep at Python's default recursion limit
+  (an if-then-else condition then raises `resource_error(stack)`).
+  Cut-free `catch/3`, and a `catch/3` whose Goal cuts, are not limited.
+  See docs/importing_prolog.md.
 - **`clausal.logic.variables.hook_dispatch_depth()`: attribute-hook dispatch
   in progress on any trail.** `trail.hooks_running` counts one trail's
   dispatches, so a hook that built a fresh `Trail()` and called a library on

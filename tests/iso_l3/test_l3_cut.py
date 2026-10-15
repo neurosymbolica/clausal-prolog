@@ -374,3 +374,40 @@ def test_goal_expansion_collects_vars_from_all_three_ite_arms(monkeypatch):
     ge._collect_vars_from_term(
         IfThenElse(test=x, body=("b", y), orelse=z), out)
     assert out == {"b0": y}
+
+
+# ── Cleanup of a pruned setup_call_cleanup (final review I-2) ───────────────
+#
+# A cut is compiled as "run the rest of the clause and the caller's
+# continuation, then leave", so the choice points it prunes -- and the
+# generator holding a setup_call_cleanup's Goal -- stay alive until that
+# continuation has finished.  Cleanup therefore runs AFTER the caller's
+# continuation, not at the cut.  Scryer (and Ulrich Neumerkel's
+# setup_call_cleanup draft) run Cleanup when the Goal's choice points are
+# cut, or as soon as it exits deterministically.  Documented in
+# docs/importing_prolog.md; not fixed in this series
+# (todo/setup-call-cleanup-cleanup-runs-after-the-continuation-2026-10-16.md).
+
+SCC_PRUNED = """\
+:- use_module(library(lists)).
+:- dynamic(cl/0).
+chk(R) :- cl, R = early.
+chk(R) :- \\+ cl, R = late.
+u :- setup_call_cleanup(true, member(_, [1,2]), assertz(cl)), !.
+t21(R) :- retractall(cl), u, chk(R).
+v :- ( setup_call_cleanup(true, member(_, [1,2]), assertz(cl)) -> true ; true ).
+t22(R) :- retractall(cl), v, chk(R).
+t24(R) :- retractall(cl), \\+ \\+ u, chk(R).
+t26(R) :- retractall(cl), setup_call_cleanup(true, true, assertz(cl)), chk(R).
+"""
+
+
+@pytest.mark.xfail(strict=True, reason="final review I-2: Cleanup of a Goal "
+                   "pruned by ! or -> runs after the caller's continuation")
+@pytest.mark.parametrize("name", ["t21", "t22", "t24", "t26"])
+def test_a_pruned_setup_call_cleanup_runs_cleanup_at_the_cut(native, ans, name):
+    """t21/t22/t24: pruned by ``!``, by ``->``, by ``!`` under ``\\+ \\+``.
+    t26 is the pre-existing root: a DETERMINISTIC Goal's Cleanup also runs
+    only after the continuation."""
+    mod = native.load("l3_cut_scc_pruned_" + name, SCC_PRUNED)
+    assert ans(mod, name) == ["early"]                        # Scryer: early
