@@ -1405,9 +1405,12 @@ and rest once, and the meter is added to in place and compared with one
 threshold (`limits.Meter.threshold`: its cap, read when the call starts,
 or -1 inside another meter, which takes the slow path that charges the
 meters around it).  An unmetered back substitution runs the loop of
-1.3.3 unchanged.  On the box, against main before the caps, the
-search-heavy benches (bb_noint, 20,000 nodes; bb_knap, 40 small ILPs)
-are within 5%.
+1.3.3 unchanged.  On the box (32 cores, idle), against main before the
+caps (a7484a4b), CPU time in fresh processes, the median of 18
+interleaved rounds' ratios (fix round 4): bb_noint (20,000 nodes) 1.047,
+bb_knap (40 small ILPs) 1.040, bb_wide (one node 60 variables wide)
+1.035, the 17 clpq examples 1.004; the inline charge took bb_noint from
+1.065 and bb_knap from 1.064.
 
 **Why the cost of a coefficient, not only its bits (review R2b, R2c).**
 The coefficient cap bounds one coefficient; the total counted bits
