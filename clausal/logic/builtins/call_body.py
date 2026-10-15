@@ -85,6 +85,7 @@ from clausal.logic.atoms import is_mangled
 from clausal.logic.cells import _cell_shape, compound_cell_shape, is_chars
 from clausal.logic.trampoline import DONE, StepGenerator
 from clausal.pythonic_ast import nodes
+from clausal.end_module import SURFACE_PL as _SURFACE_PL
 
 
 # Comparison / unification goal nodes: both operands are ARGUMENTS.
@@ -160,8 +161,7 @@ def _culprit(term: Any) -> Any:
 def cut_allowed(db) -> bool:
     """D59: a goal compiled against a ``.pl`` module's db may cut; any other
     db (``.clausal``, ``.seam``, a Python-made Module) keeps the refusal."""
-    from clausal.end_module import SURFACE_PL  # noqa: PLC0415
-    return getattr(db, "surface", None) == SURFACE_PL
+    return getattr(db, "surface", None) == _SURFACE_PL
 
 
 def check_callable_body(goal: Any, context: str, ite: bool = False) -> None:
