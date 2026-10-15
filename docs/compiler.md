@@ -1,5 +1,13 @@
 # Clausal Prolog — Predicate Compiler
 
+!!! note "Seam vs Prolog syntax"
+
+    Examples on this page use seam syntax (`.seam`), which differs slightly from
+    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead of
+    `:-`, and lists are Python-style. Keep this in mind when comparing with
+    Prolog resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
+    Prolog syntax.
+
 ## Overview
 
 `clausal.logic.compiler` translates predicate clauses into Python generator functions. Each compiled function implements a complete search over all clauses of a predicate: attempting each clause in order, setting up variable bindings via the Trail, running the clause body, yielding solutions, and undoing bindings on backtracking.

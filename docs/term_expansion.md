@@ -2,6 +2,14 @@
 
 Term expansion and goal expansion are compile-time transformation passes that rewrite [clauses](predicates.md) and goals before [compilation](compiler.md). They enable metaprogramming, syntactic sugar, and optimization — transforming what you write into what the compiler sees.
 
+!!! note "Seam vs Prolog syntax"
+
+    Examples on this page use seam syntax (`.seam`), which differs slightly from
+    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead of
+    `:-`, and lists are Python-style. Keep this in mind when comparing with
+    Prolog resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
+    Prolog syntax.
+
 ---
 
 ## Quick Example

@@ -1,5 +1,13 @@
 # Clausal Prolog — Predicate Indexing
 
+!!! note "Seam vs Prolog syntax"
+
+    Examples on this page use seam syntax (`.seam`), which differs slightly from
+    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead of
+    `:-`, and lists are Python-style. Keep this in mind when comparing with
+    Prolog resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
+    Prolog syntax.
+
 ## Problem
 
 Without indexing, every query against a predicate tries all clauses sequentially. For a predicate with N fact clauses, a ground lookup costs O(N) — each clause's `match` block is entered and compared. This is acceptable for small predicates but becomes a bottleneck for large fact tables (100+ clauses).

@@ -5,6 +5,14 @@ Seam (`.seam`) source has one authoritative style, and one tool that produces it
 what the formatter emits, so a formatted tree never churns under it again
 (formatting is idempotent, comment-preserving, and AST-preserving).
 
+!!! note "Seam vs Prolog syntax"
+
+    Examples on this page use seam syntax (`.seam`), which differs slightly from
+    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead of
+    `:-`, and lists are Python-style. Keep this in mind when comparing with
+    Prolog resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
+    Prolog syntax.
+
 ## One goal per line
 
 A parenthesised clause body lists **exactly one goal per line**, indented one

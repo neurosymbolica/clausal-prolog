@@ -4,6 +4,14 @@ Tabling memoises subgoal calls and their computed answers. when a recursive call
 
 The implementation lives in `clausal.logic.tabling`.
 
+!!! note "Seam vs Prolog syntax"
+
+    Examples on this page use seam syntax (`.seam`), which differs slightly from
+    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead of
+    `:-`, and lists are Python-style. Keep this in mind when comparing with
+    Prolog resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
+    Prolog syntax.
+
 ---
 
 ## The problem

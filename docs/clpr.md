@@ -7,6 +7,14 @@ The implementation lives in `clausal/logic/clpr.py`.
 !!! note
     For CLP(ℤ) (integer constraints over all integers), see [Constraints](constraints.md). For CLP(B) (Boolean constraints), see [CLP(B)](clpb.md).
 
+!!! note "Seam vs Prolog syntax"
+
+    Examples on this page use seam syntax (`.seam`), which differs slightly from
+    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead of
+    `:-`, and lists are Python-style. Keep this in mind when comparing with
+    Prolog resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
+    Prolog syntax.
+
 ---
 
 ## Unified syntax

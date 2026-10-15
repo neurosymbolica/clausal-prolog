@@ -7,6 +7,14 @@ The implementation lives in `clausal/logic/clpq.py`.
 !!! note
     For CLP(Z) (integer constraints), see [Constraints](constraints.md). For CLP(R) (real constraints via interval arithmetic), see [CLP(R)](clpr.md). For CLP(B) (Boolean constraints), see [CLP(B)](clpb.md).
 
+!!! note "Seam vs Prolog syntax"
+
+    Examples on this page use seam syntax (`.seam`), which differs slightly from
+    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead of
+    `:-`, and lists are Python-style. Keep this in mind when comparing with
+    Prolog resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
+    Prolog syntax.
+
 ---
 
 ## Why CLP(Q)?

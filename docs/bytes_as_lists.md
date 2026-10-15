@@ -6,6 +6,14 @@ in the range `[0, 255]` — at the logic level. This is the classical Prolog
 term inspection, and DCGs the way character strings do under
 [strings as lists](strings_as_lists.md).
 
+!!! note "Seam vs Prolog syntax"
+
+    Examples on this page use seam syntax (`.seam`), which differs slightly from
+    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead of
+    `:-`, and lists are Python-style. Keep this in mind when comparing with
+    Prolog resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
+    Prolog syntax.
+
 ```seam
 --8<-- "tests/fixtures/docs/bytes_as_lists_examples.seam:unification"
 ```

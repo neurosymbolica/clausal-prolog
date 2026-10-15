@@ -4,6 +4,14 @@ Lambdas are anonymous clauses that can be passed as arguments to [higher-order p
 
 The implementation lives in `clausal/logic/compiler/` (codegen), `clausal/templating/term_rewriting.py` (term transformation), and `clausal/logic/builtins/` (`call_goal` builtins).
 
+!!! note "Seam vs Prolog syntax"
+
+    Examples on this page use seam syntax (`.seam`), which differs slightly from
+    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead of
+    `:-`, and lists are Python-style. Keep this in mind when comparing with
+    Prolog resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
+    Prolog syntax.
+
 ---
 
 ## Syntax

@@ -8,6 +8,14 @@ Flag names and values are atoms. In seam (`.seam`) source, write them quoted
 (`'unknown'`), or declare them with `-private([...])`, as with any atom. A
 truth value is `true` / `false`, which compile to Python's `True` / `False`.
 
+!!! note "Seam vs Prolog syntax"
+
+    Examples on this page use seam syntax (`.seam`), which differs slightly from
+    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead of
+    `:-`, and lists are Python-style. Keep this in mind when comparing with
+    Prolog resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
+    Prolog syntax.
+
 ---
 
 ## The flags

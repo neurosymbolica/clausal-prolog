@@ -1,5 +1,13 @@
 # Clausal Prolog — Module System and Import Hook
 
+!!! note "Seam vs Prolog syntax"
+
+    Examples on this page use seam syntax (`.seam`), which differs slightly from
+    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead of
+    `:-`, and lists are Python-style. Keep this in mind when comparing with
+    Prolog resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
+    Prolog syntax.
+
 ## Overview
 
 Predicate modules have three source surfaces: `.seam` (the seam, Python syntax), `.clausal` ([Clausal Prolog](clausal_prolog.md), cut-free ISO-like Prolog) and `.pl` (regular ISO Prolog; its in-process import is experimental). In one directory `name.seam` beats `name.clausal`, which beats `name.pl`. The examples and loader internals on this page are the seam's (`PredicateLoader`, `EmbedTransformer`). Importing one with a normal Python `import` statement is enough to load and compile all predicates in that file. The `clausal.import_hook` module installs a `sys.meta_path` finder that intercepts these imports before Python's standard machinery runs.

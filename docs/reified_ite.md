@@ -1,5 +1,13 @@
 # Clausal Prolog — Reified If-Then-Else
 
+!!! note "Seam vs Prolog syntax"
+
+    Examples on this page use seam syntax (`.seam`), which differs slightly from
+    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead of
+    `:-`, and lists are Python-style. Keep this in mind when comparing with
+    Prolog resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
+    Prolog syntax.
+
 ## Overview
 
 Clausal Prolog provides a **reified if-then-else** based on Neumerkel & Kral's `if_/3` ([arXiv:1607.01590](https://arxiv.org/abs/1607.01590)). Unlike Prolog's committed-choice `(->)/2`, reified ITE is **monotonic**: adding constraints can only restrict, never lose solutions. This is the same philosophy behind the use of [`dif/2`](constraints.md) instead of `\=`, and, in the seam, [CLP(ℤ)](constraints.md#clp-integer-constraints) (`==`) instead of ISO `'is'/2` arithmetic (see [Arithmetic](arithmetic.md)).
