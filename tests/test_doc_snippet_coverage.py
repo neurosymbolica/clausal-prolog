@@ -36,12 +36,13 @@ _KNOWN_UNCOMPILABLE = {
     # deliberately documents a runtime failure. Neither is standalone-compilable.
     #
     # These are keyed by fence line, so prose inserted ABOVE them shifts every
-    # one; the numbers below match docs/import.md after the adapter-`is` note (2026-10-04).
-    ("import.md", 459),
-    ("import.md", 501),
+    # one; the numbers below match docs/import.md after the "Seam vs Prolog
+    # syntax" admonition's wording fix (2026-10-15).
+    ("import.md", 469),
+    ("import.md", 511),
     # import.md: one more `# caller.seam` block that `-import_from(lib, …)`
     # a fictional library. Not standalone-compilable.
-    ("import.md", 566),
+    ("import.md", 576),
 }
 
 
