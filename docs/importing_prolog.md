@@ -840,12 +840,22 @@ may not import a `.pl` one.
     raises even when `t/1` is not recursive. This may change to
     completing the table first and then cutting.
   * **`once/1` and setup_call_cleanup's Setup** are checked only in `.pl`
-    modules. They are checked whenever the goal is a variable or reaches
-    `call/N`, e.g. `first(G) :- once(G).` in a library, and whenever the
-    module can see a tabled predicate when it is compiled: one it tables,
-    or one it imports, directly or through the modules it imports. A
-    `once/1` over a literal goal in a module that sees no table is not
-    checked.
+    modules, and there in two cases:
+    * the goal written inside `once/1` or the Setup is itself a variable,
+      or contains a `call/N` (or a control construct called as a
+      predicate), e.g. `first(G) :- once(G).` in a library;
+    * any goal, in a module that can see a tabled predicate when it is
+      compiled: one it tables, or one it imports, directly or through the
+      modules it imports.
+
+    Otherwise the commit is not checked. That covers a goal that only
+    calls a local helper which then calls `call/N`, e.g.
+    `g(G) :- once(run(G)).` with `run(G) :- call(G).` in a module that
+    tables nothing.
+  * **Not checked: a query a Python predicate starts on a new trail.** A
+    `call()`/`solve()` without `trail=` runs on a new trail, so its
+    tabled calls are not seen by the caller's cut. Pass the caller's trail
+    through (`trail=trail`).
   * **Not checked:** a goal that `freeze/2` wakes while a clause's head is
     being unified runs before that clause's cut scope begins, so the
     clause's cut does not see a tabled call it makes.
