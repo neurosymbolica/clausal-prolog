@@ -303,6 +303,22 @@ def _refuse_unless_cut_allowed(db: Any, construct: str) -> None:
     raise LogicException(if_then_refusal_error("->", "an IfThenElse node"))
 
 
+def whole_goal_cut_as_true(goal: Any, db: Any) -> "GoalOp | None":
+    """ISO 7.8.3: a cut that is the WHOLE goal of a barrier (once/1,
+    findall/3, ``\\+``, ... -- every construct defined on call/1) is local
+    to it and cuts nothing: it is ``true``.  On a db that may not cut, a
+    ``Cut`` node in that position is therefore ``true`` -- the answer the
+    atom ``'!'`` and call/1 already give there -- rather than the refusal
+    a cut in a conjunction gets.  None for anything else (and for a ``.pl``
+    db, whose lowering already gives ``true`` there)."""
+    if isinstance(goal, nodes.Cut):
+        from clausal.logic.builtins.call_body import (  # noqa: PLC0415
+            cut_allowed)
+        if not cut_allowed(db):
+            return Sequence(ops=[])
+    return None
+
+
 def _convert(goal: Any, db: Any) -> GoalOp:
     """Convert one goal term to a :class:`GoalOp`, stamping its source
     position from the originating term.
@@ -432,7 +448,8 @@ def _convert_inner(goal: Any, db: Any) -> GoalOp:
         case nodes.Not(operand=op):
             if isinstance(op, nodes.Call) and _is_tabled_naf(op, db):
                 return MetaCall(kind="naf_tabled", args={"call": op})
-            return Negate(op=_convert(op, db))
+            whole = whole_goal_cut_as_true(op, db)
+            return Negate(op=whole if whole is not None else _convert(op, db))
 
         # ``IfExpr(test, body, orelse)`` -- seam ``if_/3`` -- requires a
         # REIFIABLE condition (operator ruling 2026-10-01), as Scryer's

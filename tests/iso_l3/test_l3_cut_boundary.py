@@ -478,6 +478,51 @@ def test_a_whole_query_cut_node_is_true_like_the_atom(native, seam):
         assert len(list(solve("!", module=mod))) == 1, name
 
 
+def test_a_whole_goal_cut_node_under_a_meta_call_is_true_like_the_atom(
+        native, seam):
+    """A Cut node that is the WHOLE goal of once/findall/bagof/setof/
+    aggregate_all/forall/catch/``\\+`` is local to that call and cuts
+    nothing (ISO 7.8.3): the answers are the atom ``'!'``'s, on every
+    surface (it used to be ``existence_error(!/0)`` for the node and
+    ``true`` for the atom).  A Cut node NESTED in such a goal is still
+    refused on a cut-free surface."""
+    from clausal.logic.exceptions import LogicException
+    from clausal.logic.solve import solve
+    from clausal.logic.variables import Var
+    from clausal.pythonic_ast import nodes
+    pl = native.load("pl_whole", "q(1). q(2).\n")
+
+    def wrapped(c):
+        L = Var()
+        return {
+            "once": ("once", c), "findall": ("findall", 1, c, L),
+            "bagof": ("bagof", 1, c, L), "setof": ("setof", 1, c, L),
+            "aggregate_all": ("aggregate_all", "count", c, L),
+            "forall": ("forall", c, True), "catch": ("catch", c, Var(), True),
+            "once_once": ("once", ("once", c)),
+            "findall_once": ("findall", 1, ("once", c), L),
+        }
+    for name, mod in _targets(native, seam) + [("pl", pl)]:
+        atom = {k: len(list(solve(g, module=mod)))
+                for k, g in wrapped("!").items()}
+        node = {k: len(list(solve(g, module=mod)))
+                for k, g in wrapped(nodes.Cut()).items()}
+        assert node == atom and set(atom.values()) == {1}, (name, node, atom)
+        # \\+ over a node: \\+ ! fails, \\+ \\+ ! succeeds.
+        nn = nodes.Not(operand=nodes.Not(operand=nodes.Cut()))
+        assert len(list(solve(nn, module=mod))) == 1, name
+        assert list(solve(nodes.Not(operand=nodes.Cut()), module=mod)) == []
+        assert len(list(solve(("findall", 1, nn, Var()), module=mod))) == 1
+        if name == "pl":
+            continue
+        nested = nodes.And(left=True, right=nodes.Cut())
+        for goal in (("once", nested), ("findall", 1, nested, Var()),
+                     nodes.Not(operand=nested)):
+            with pytest.raises(LogicException) as ei:
+                list(solve(goal, module=mod))
+            assert _formal(ei.value) == REFUSED, (name, goal)
+
+
 def test_solve_runs_cut_and_ite_nodes_on_a_pl_module(native):
     """Control: the same nodes compile and cut against a .pl db."""
     from clausal.logic.solve import solve

@@ -74,7 +74,7 @@ def _lower_inner(
     fold lowers identically to a single ``_dispatch_goal`` call.
     """
     from .strategy import ShallowStrategy
-    from .terms_to_goalop import terms_to_goalop
+    from .terms_to_goalop import terms_to_goalop, whole_goal_cut_as_true
     from . import lower_python_shallow
     if not isinstance(ctx.strategy, ShallowStrategy):
         ctx = ctx.replace(strategy=ShallowStrategy())
@@ -82,7 +82,9 @@ def _lower_inner(
     # are all defined on call/1, ISO 7.8.3): a cut inside leaves the
     # sub-generator, nothing more.
     ctx = ctx.replace(cut_exit=lambda: [ast.Return(value=None)])
-    ir = terms_to_goalop([inner], ctx.db)
+    ir = whole_goal_cut_as_true(inner, ctx.db)
+    if ir is None:
+        ir = terms_to_goalop([inner], ctx.db)
     return lower_python_shallow.lower(ir, ctx, k_stmts)
 
 
@@ -95,11 +97,13 @@ def _lower_inner_trampoline(
     replacement for ``_dispatch_goal_trampoline(ctx, inner, k_stmts)``
     via :mod:`.lower_python_trampoline`.
     """
-    from .terms_to_goalop import terms_to_goalop
+    from .terms_to_goalop import terms_to_goalop, whole_goal_cut_as_true
     from . import lower_python_trampoline
     # The inline form has no scope of its own: no cut may land here.
     ctx = ctx.replace(cut_exit=None)
-    ir = terms_to_goalop([inner], ctx.db)
+    ir = whole_goal_cut_as_true(inner, ctx.db)
+    if ir is None:
+        ir = terms_to_goalop([inner], ctx.db)
     return lower_python_trampoline.lower(ir, ctx, k_stmts)
 
 
