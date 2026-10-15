@@ -4,8 +4,10 @@ Clausal Prolog supports constraint logic programming through attributed variable
 
 !!! note "Seam vs Prolog syntax"
 
-    Seam and Prolog syntax may slightly differ — for example, variables are
-    `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style. Keep
+    Seam and Prolog syntax differ — for example, variables are
+    `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style.
+    `++`/`--` Python escapes exist only in `.seam`; Clausal Prolog imports
+    modules and never escapes into Python (per a 2026-10-14 ruling). Keep
     this in mind when comparing with Prolog resources.
     Prolog constraint programs using `library(clpfd)` or `library(clpz)` can be [imported directly](importing_prolog.md).
 
