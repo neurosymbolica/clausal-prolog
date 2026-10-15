@@ -605,10 +605,15 @@ def _logic_exception():
 
 
 class SandboxLoadError(ImportError):
-    """A module the sandbox refuses to load.  Raised as the ISO term
-    ``error(permission_error(load, python_escape, File), load/1)`` -- a
+    """A module the sandbox refuses to load, carrying the ISO term of the
+    refusal as ``.term``: ``error(permission_error(load, python_escape,
+    File), load/1)`` for a Python escape (:func:`load_error`), or the
+    refused goal's ``error(permission_error(access, private_procedure,
+    set_prolog_flag/2), set_prolog_flag/2)`` for a load-time
+    ``set_prolog_flag`` directive (:func:`refusal_load_error`).  A
     :class:`~clausal.logic.exceptions.LogicException` too (the class is
-    rebuilt with that base on first use, see :func:`load_error`)."""
+    rebuilt with that base on first use), so a host catching ImportError,
+    LogicException or SandboxLoadError around an import catches it."""
 
 
 _LOAD_ERROR_CLASS = None
