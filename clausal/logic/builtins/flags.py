@@ -197,16 +197,29 @@ SANDBOX_DIRECTIVE_FLAGS = frozenset({"assert_creates_dynamic",
                                      "double_quotes"})
 
 
+#: The scopes a flag of SANDBOX_DIRECTIVE_FLAGS must have for the sandbox
+#: to let a directive set it: a flag listed there that ever became process
+#: wide is refused like any other (fails closed).
+_SANDBOX_DIRECTIVE_SCOPES = ("module", "directive")
+
+
 def sandbox_refusal(name: str):
     """The error refusing a sandboxed setting of the flag *name* (the
     flag table's name, as check_setting resolved it), or None where the
     setting is allowed: outside the sandbox, or a flag of
-    SANDBOX_DIRECTIVE_FLAGS.  The same term as the refused goal
-    (clausal.sandbox._refusing_dispatch)."""
+    SANDBOX_DIRECTIVE_FLAGS that is still module-scoped.  The term is the
+    refused goal's (clausal.sandbox._refusing_dispatch), raised as a
+    clausal.sandbox.SandboxLoadError (an ImportError and a LogicException)
+    since it refuses a load."""
     from clausal import _sandbox_state  # noqa: PLC0415
-    if not _sandbox_state.ACTIVE or name in SANDBOX_DIRECTIVE_FLAGS:
+    if not _sandbox_state.ACTIVE:
         return None
-    return LogicException(permission_error(
+    spec = FLAGS.get(name)
+    if name in SANDBOX_DIRECTIVE_FLAGS and spec is not None \
+            and spec.scope in _SANDBOX_DIRECTIVE_SCOPES:
+        return None
+    from clausal.sandbox import refusal_load_error  # noqa: PLC0415
+    return refusal_load_error(permission_error(
         "access", "private_procedure", ("/", "set_prolog_flag", 2),
         f"{_SET}: the {name} flag reaches past this module, so the "
         f"sandbox does not let a program set it, as a goal or as a "

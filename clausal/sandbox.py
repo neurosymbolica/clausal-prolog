@@ -614,19 +614,32 @@ class SandboxLoadError(ImportError):
 _LOAD_ERROR_CLASS = None
 
 
-def load_error(path: str, why: str) -> Exception:
-    """The :class:`SandboxLoadError` (an ImportError AND a LogicException)
-    refusing the module at *path*."""
+def _load_error_class():
     global _LOAD_ERROR_CLASS
-    from clausal.logic.exceptions import (  # noqa: PLC0415
-        LogicException, permission_error)
+    from clausal.logic.exceptions import LogicException  # noqa: PLC0415
     if _LOAD_ERROR_CLASS is None:
         _LOAD_ERROR_CLASS = type("SandboxLoadError",
                                  (LogicException, SandboxLoadError), {})
         _LOAD_ERROR_CLASS.__module__ = __name__
+    return _LOAD_ERROR_CLASS
+
+
+def load_error(path: str, why: str) -> Exception:
+    """The :class:`SandboxLoadError` (an ImportError AND a LogicException)
+    refusing the module at *path*."""
+    from clausal.logic.exceptions import permission_error  # noqa: PLC0415
     term = permission_error("load", "python_escape", os.path.abspath(path),
                             f"load/1: {why}")
-    return _LOAD_ERROR_CLASS(term)
+    return _load_error_class()(term)
+
+
+def refusal_load_error(term) -> Exception:
+    """The :class:`SandboxLoadError` (an ImportError AND a LogicException)
+    whose term is *term*: a load the sandbox refuses for a directive
+    (``clausal.logic.builtins.flags.sandbox_refusal``), raised as such so
+    a host that catches ImportError or LogicException around an import
+    catches it."""
+    return _load_error_class()(term)
 
 
 def _access_error(kind: str, culprit, why: str, context: str = "call/1"):

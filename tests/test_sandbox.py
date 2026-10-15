@@ -2053,9 +2053,11 @@ def test_a_sandboxed_directive_sets_no_process_flag(sbx):
         if key.endswith("_module"):
             assert r["ok"], (key, r)
         else:
-            assert not r["ok"], (key, r)
-            assert ("permission_error(access,private_procedure,"
-                    "set_prolog_flag/2)") in (r["term"] or r["msg"]), (key, r)
+            # A load error the host catches as ImportError or as
+            # LogicException, carrying the refused goal's term.
+            refused(res, key, PRIVATE + "set_prolog_flag/2)",
+                    import_error=True)
+            assert r["type"] == "SandboxLoadError", (key, r)
     for key in ("apply_debug", "apply_cap"):
         refused(res, key, PRIVATE)
     assert ok(res, "debug") == "'off'"
@@ -2072,3 +2074,18 @@ def test_without_the_sandbox_a_directive_sets_a_process_flag(sbx):
     """, env={"CLAUSAL_PL_FRONTEND": "native"})
     assert res["load"]["ok"], res["load"]
     assert ok(res, "debug") == "'on'"
+
+
+def test_an_allowed_flag_that_became_process_wide_is_refused(sbx):
+    # SANDBOX_DIRECTIVE_FLAGS is honoured only while its flag is module
+    # scoped: give assert_creates_dynamic a process scope and its
+    # directive is refused like any other.
+    sbx.write("fpm.pl", _FLAG_DIRECTIVES["pl_module"][1])
+    res = sbx.run("""
+        import clausal.sandbox as sb
+        sb.enable()
+        from clausal.logic.builtins import flags
+        flags.FLAGS["assert_creates_dynamic"].scope = "process"
+        probe("load", lambda: load("fpm"))
+    """, env={"CLAUSAL_PL_FRONTEND": "native"})
+    refused(res, "load", PRIVATE + "set_prolog_flag/2)", import_error=True)

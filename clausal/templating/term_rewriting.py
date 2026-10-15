@@ -9601,6 +9601,9 @@ class EmbedTransformer(NodeTransformer):
         try:
             name, v = check_setting(flag, value, directive=True)
         except LogicException as exc:
+            from clausal.sandbox import SandboxLoadError  # noqa: PLC0415
+            if isinstance(exc, SandboxLoadError):
+                raise           # the sandbox's refusal, as a load error
             from clausal.logic.exceptions import render_error_term  # noqa: PLC0415
             text = render_error_term(exc.term)
             if exc.message:

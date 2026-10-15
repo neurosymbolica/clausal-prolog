@@ -209,10 +209,13 @@ raises `error(permission_error(access, private_procedure, Name/Arity), _)`:
 
 A load-time `set_prolog_flag` directive is refused the same way, in every
 front end (`:- set_prolog_flag(F, V).` in a `.pl` or `.clausal` file,
-`-set_prolog_flag(F, V)` in a `.seam` file): the module does not load.
-The exceptions are the two flags whose value belongs to the module alone,
+`-set_prolog_flag(F, V)` in a `.seam` file): the module does not load,
+and the import raises `clausal.sandbox.SandboxLoadError` (an `ImportError`
+and a `LogicException`) whose term is the refused goal's. The exceptions
+are the two flags whose value belongs to the module alone,
 `assert_creates_dynamic` and `double_quotes`
-(`clausal.logic.builtins.flags.SANDBOX_DIRECTIVE_FLAGS`). The CLP(Q)
+(`clausal.logic.builtins.flags.SANDBOX_DIRECTIVE_FLAGS`), and only while
+each is still module-scoped. The CLP(Q)
 port's resource caps (`clpq_max_*`) are therefore the host's: it sets them
 from Python with `clausal.logic.clpq.limits.set_limit`. They bound one
 call; time and memory limits on the worker remain the host's too.
@@ -298,6 +301,7 @@ stay available.
 | `M:G` (and the like) into a `.pl` module | `error(permission_error(access, prolog_module, M), Context)` |
 | `M:G` (and the like) into a Python module | `error(permission_error(access, python_module, M), Context)` |
 | A refused builtin | `error(permission_error(access, private_procedure, Name/Arity), Name/Arity)` |
+| A loaded module's `set_prolog_flag` directive of a flag outside its module | `error(permission_error(access, private_procedure, set_prolog_flag/2), set_prolog_flag/2)`, raised as `SandboxLoadError` |
 | The engine's own attribute key | `error(permission_error(access, attribute, Key), _)` |
 | A dotted name or `M:G` reaching a non-module Python object | `error(permission_error(access, python_object, Type), _)` |
 | `enable()` after an unchecked load | `RuntimeError` (Python) |
