@@ -9,7 +9,7 @@ This page follows the structure of Markus Triska's [A Couple of Meta-Interpreter
     Seam and Prolog syntax differ — for example, variables are
     `ALLCAPS`, rules use `<-` instead of `:-`, and [lists](lists.md) are Python-style.
     `++`/`--` Python escapes exist only in `.seam`; Clausal Prolog imports
-    modules and never escapes into Python (per a 2026-10-14 ruling). Keep
+    modules and never escapes into Python. Keep
     this in mind when comparing with Prolog resources. [Clausal Prolog](clausal_prolog.md)
     (`.clausal`) uses Prolog syntax.
 

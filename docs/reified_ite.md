@@ -6,7 +6,7 @@
     differs from Prolog's — for example, variables are `ALLCAPS`, rules
     use `<-` instead of `:-`, and lists are Python-style. `++`/`--` Python
     escapes exist only in `.seam`; Clausal Prolog imports modules and never
-    escapes into Python (per a 2026-10-14 ruling). Other examples on this
+    escapes into Python. Other examples on this
     page are genuine [Clausal Prolog](clausal_prolog.md) (`.clausal`), which
     uses ISO Prolog syntax directly. Keep this in mind when comparing with
     Prolog resources.

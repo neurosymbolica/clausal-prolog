@@ -37,12 +37,14 @@ _KNOWN_UNCOMPILABLE = {
     #
     # These are keyed by fence line, so prose inserted ABOVE them shifts every
     # one; the numbers below match docs/import.md after the "Seam vs Prolog
-    # syntax" admonition's wording fix (2026-10-15).
-    ("import.md", 469),
-    ("import.md", 511),
+    # syntax" admonition's two wording fixes (2026-10-15): the ruling-date
+    # parenthetical's removal merged one wrapped line back into its
+    # predecessor, shifting everything below it up by one more line.
+    ("import.md", 468),
+    ("import.md", 510),
     # import.md: one more `# caller.seam` block that `-import_from(lib, …)`
     # a fictional library. Not standalone-compilable.
-    ("import.md", 576),
+    ("import.md", 575),
 }
 
 

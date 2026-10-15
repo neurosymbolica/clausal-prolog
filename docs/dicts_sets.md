@@ -7,8 +7,7 @@ Clausal Prolog has first-class support for dictionaries and sets as logic terms.
     Examples on this page use seam syntax (`.seam`), which differs from
     Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
     of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python
-    (per a 2026-10-14 ruling). Keep this in mind when comparing with Prolog
+    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
     resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
     Prolog syntax.
 

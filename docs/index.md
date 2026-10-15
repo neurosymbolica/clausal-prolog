@@ -161,7 +161,7 @@ rules the surface enforces.
 
 Both ISO surfaces (`.clausal`'s syntax and `.pl`) are measured against
 ISO/IEC 13211-1, primarily using the conformity-testing suites published by
-Ulrich Neumerkel, the editor of the core standard. See
+Ulrich Neumerkel, who maintains the ISO conformity-testing tables. See
 [ISO Prolog Conformity](iso_conformity.md) for why that matters and how we
 measure it, and the [ISO Prolog Compatibility Report](iso_prolog_compatibility_report.md)
 for where things stand today.

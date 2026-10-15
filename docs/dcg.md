@@ -11,7 +11,7 @@ The implementation lives in `clausal/templating/term_rewriting.py` (source-level
     Seam and Prolog syntax differ — for example, variables are
     `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style.
     `++`/`--` Python escapes exist only in `.seam`; Clausal Prolog imports
-    modules and never escapes into Python (per a 2026-10-14 ruling). Keep
+    modules and never escapes into Python. Keep
     this in mind when comparing with Prolog resources.
     Prolog DCGs (`-->`) can be [imported directly](importing_prolog.md) — they translate to the seam's `>>` syntax automatically. [Clausal Prolog](clausal_prolog.md) (`.clausal`) files write grammar rules with ISO `-->` directly.
 
