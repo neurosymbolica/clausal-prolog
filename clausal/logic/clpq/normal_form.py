@@ -812,24 +812,13 @@ def normal_form(term):
     test_normal_form_of_a_cyclic_term_raises).
 
     Its powers and products of sums are charged, before each is made, to
-    meters of this call's own: past a clpq_expansion cap it raises
-    `resource_error(clpq_expansion)` (DEVIATIONS.md D24)."""
-    terms_token = limits.start("clpq_expansion",
-                               "the terms one normal form expanded")
-    bits_token = limits.start("clpq_expansion_bits",
-                              "the coefficient bits one normal form "
-                              "expanded")
-    try:
-        return _normal_form(term)
-    finally:
-        limits.stop(bits_token)
-        limits.stop(terms_token)
-
-
-def _normal_form(term):
+    a count of this call's own (limits.Expansion, made at the first one):
+    past a clpq_expansion cap it raises `resource_error(clpq_expansion)`
+    (DEVIATIONS.md D24)."""
     work = [(_EVALUATE, term)]
     values = []
     path = set()
+    expansion = None
     while work:
         item = work.pop()
         action = item[0]
@@ -846,7 +835,13 @@ def _normal_form(term):
             values.append(normal_form_add(values.pop(), right))
         elif action == _MULTIPLY:
             right = values.pop()
-            values.append(charged_multiply(values.pop(), right))
+            left = values.pop()
+            if len(left) > 1 and len(right) > 1:
+                if expansion is None:
+                    expansion = limits.Expansion()
+                values.append(charged_multiply(left, right, expansion))
+            else:
+                values.append(normal_form_multiply(left, right))
         elif action == _DIVIDE:
             divisor = values.pop()
             result = normal_form_divide(divisor, values.pop())
@@ -857,7 +852,10 @@ def _normal_form(term):
             values.append(normal_form_nonlinear_unary(item[1], values.pop()))
         else:
             right = values.pop()
-            result = normal_form_nonlinear_binary(item[1], values.pop(), right)
+            if expansion is None:
+                expansion = limits.Expansion()
+            result = normal_form_nonlinear_binary(item[1], values.pop(), right,
+                                                  expansion)
             if result is None:
                 return None
             values.append(result)
@@ -982,7 +980,7 @@ def normal_form_nonlinear_unary(name, argument):
     return [Monomial(ONE, [(NonlinearBase(name, (argument,)), 1)])]
 
 
-def normal_form_nonlinear_binary(name, first, second):
+def normal_form_nonlinear_binary(name, first, second, expansion=None):
     """nf.pl, normal_form_nonlinear_binary/6 (nf_nonlin_2/6).  None where
     a negative integer power of zero divides by zero."""
     constant_first = normal_form_constant(first)
@@ -995,7 +993,7 @@ def normal_form_nonlinear_binary(name, first, second):
     if name == "exp" and constant_second is not None:
         exponent = rational_integer(constant_second)
         if exponent is not None:
-            return normal_form_power(exponent, first)
+            return normal_form_power(exponent, first, expansion)
     return [Monomial(ONE, [(NonlinearBase(name, (first, second)), 1)])]
 
 
@@ -1240,15 +1238,17 @@ def multiply_exponents(powers, factor):
 # | ?- time({(1+X+Y+Z)^15=0}).
 # Timing 00:00:02.610     2.610   iterative
 # Timing 00:00:00.660     0.660   binomial
-def normal_form_power(exponent, norm):
+def normal_form_power(exponent, norm, expansion=None):
     """nf.pl, normal_form_power/3 (nf_power/3): *norm* to the int
     *exponent*; None where a negative power of zero divides by zero.
 
-    The expansion is charged before it is made (power_size): past the
+    The expansion is charged before it is made (power_size) to
+    *expansion*, the count of the call making it: past the
     clpq_expansion caps it raises `resource_error(clpq_expansion)`
     (DEVIATIONS.md D24): `(Y + 1)^N` costs about N^3."""
     terms, bits = power_size(abs(exponent), norm)
-    limits.charge_expansion(terms, bits, "the terms of an expansion")
+    limits.charge_expansion(terms, bits, "the terms of an expansion",
+                            expansion)
     if exponent < 0:
         inverse = binomial_power(norm, -exponent)
         return normal_form_divide(inverse, [Monomial(ONE, [])])
@@ -1258,12 +1258,15 @@ def normal_form_power(exponent, norm):
 
 
 def coefficient_bits(norm):
-    """The most bits a coefficient of *norm* takes, numerator and
-    denominator together."""
+    """About log2 of the largest coefficient of *norm*, numerator and
+    denominator together: 0 for a coefficient of 1, so a power of a
+    monomial with coefficient 1 makes no bits (`Y^N`)."""
     most = 0
     for monomial in norm:
         numerator, denominator = monomial.coefficient
-        most = max(most, numerator.bit_length() + denominator.bit_length())
+        bits = numerator.bit_length() + denominator.bit_length() - 2
+        if bits > most:
+            most = bits
     return most
 
 
@@ -1274,7 +1277,9 @@ def power_size(exponent, norm):
     *exponent* of *norm*'s and a multinomial coefficient under
     T^exponent.  The binomial is built a factor at a time and stops past
     the clpq_expansion cap, so a huge exponent costs nothing.  (0, 0) for
-    an exponent under 2."""
+    an exponent under 2.  The bits are log2 of each coefficient: the
+    base's largest to the *exponent*, times the multinomial's, under
+    (T - 1)^exponent (none for a monomial)."""
     count = len(norm)
     if exponent < 2 or count == 0:
         return 0, 0
@@ -1284,7 +1289,7 @@ def power_size(exponent, norm):
         terms = terms * (exponent + index) // index
         if terms > cap:
             return terms, 0                     # raises on the terms
-    per_term = exponent * (coefficient_bits(norm) + count.bit_length())
+    per_term = exponent * (coefficient_bits(norm) + (count - 1).bit_length())
     return terms, terms * per_term
 
 
@@ -1295,12 +1300,14 @@ def product_size(first, second):
     return terms, terms * (coefficient_bits(first) + coefficient_bits(second))
 
 
-def charged_multiply(first, second):
-    """normal_form_multiply, charged first to the clpq_expansion caps
-    (a product of sums multiplies out: 2^k terms for k factors)."""
+def charged_multiply(first, second, expansion=None):
+    """normal_form_multiply, charged first to *expansion*, the count of the
+    call making it, against the clpq_expansion caps (a product of sums
+    multiplies out: 2^k terms for k factors)."""
     if len(first) > 1 and len(second) > 1:
         terms, bits = product_size(first, second)
-        limits.charge_expansion(terms, bits, "the terms of an expansion")
+        limits.charge_expansion(terms, bits, "the terms of an expansion",
+                                expansion)
     return normal_form_multiply(first, second)
 
 
@@ -1383,20 +1390,30 @@ def repair(norm):
     repair/2 again, to the nesting depth of the skeletons.  The port
     repairs every skeleton first, innermost first (_nested_bases), into a
     table that repair_power_base reads, so the only recursion left halves
-    its count (test_deeply_nested_bases_repair_without_recursion)."""
-    terms_token = limits.start("clpq_expansion",
-                               "the terms one repair expanded")
-    bits_token = limits.start("clpq_expansion_bits",
-                              "the coefficient bits one repair expanded")
+    its count (test_deeply_nested_bases_repair_without_recursion).
+
+    Its expansions are charged to a count of its own (limits.Expansion,
+    kept in the table under _EXPANSION), against the clpq_expansion caps.
+    A delayed constraint's repair starts from what its earlier wake-ups
+    spent (limits.CARRIED) and hands the new total on, so a product of
+    sums multiplied out one binding at a time is counted whole
+    (DEVIATIONS.md D24)."""
+    carried = limits.CARRIED.get()
+    expansion = limits.Expansion() if carried is None \
+        else limits.Expansion(*carried)
     try:
-        return _repair(norm)
+        return _repair(norm, expansion)
     finally:
-        limits.stop(bits_token)
-        limits.stop(terms_token)
+        if carried is not None:
+            limits.CARRIED.set((expansion.terms, expansion.bits))
 
 
-def _repair(norm):
-    table = {}
+#: The key of the repair's limits.Expansion in its table.
+_EXPANSION = "expansion"
+
+
+def _repair(norm, expansion):
+    table = {_EXPANSION: expansion}
     for base in _nested_bases(norm):
         try:
             table[id(base)] = (True, _repair_skeleton(base, table))
@@ -1480,6 +1497,14 @@ def repair_term(coefficient, powers, table):
     if result is None:
         return None
     repaired_powers, _, factor = result
+    if len(factor) > 1:
+        # a monomial times a sum: as many terms as the sum (a product of
+        # sums repaired a binding at a time grows so, review N1)
+        limits.charge_expansion(
+            len(factor),
+            len(factor) * (coefficient_bits(factor)
+                           + coefficient_bits([Monomial(coefficient, [])])),
+            "the terms of an expansion", table[_EXPANSION])
     return normal_form_multiply_factor(Monomial(coefficient, repaired_powers),
                                        factor)
 
@@ -1528,10 +1553,10 @@ def repair_power(term, exponent, so_far, table):
     base = repair_power_base(term, table)
     if base is None:
         return None
-    powered = normal_form_power(exponent, base)
+    powered = normal_form_power(exponent, base, table[_EXPANSION])
     if powered is None:
         return None
-    return [], charged_multiply(powered, so_far)
+    return [], charged_multiply(powered, so_far, table[_EXPANSION])
 
 
 #

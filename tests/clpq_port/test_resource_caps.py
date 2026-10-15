@@ -49,14 +49,24 @@ def caps():
 
 @pytest.fixture
 def used(monkeypatch):
-    """The most of each resource a test used: resource -> count."""
+    """The most of each cap a test used: cap -> count.  Read where a count
+    is checked, and where a meter closes (the back substitution checks
+    only past the cap)."""
     most = {}
     check = limits.check
+    stop = limits.stop
 
-    def recording(resource, count, what):
-        most[resource] = max(most.get(resource, 0), count)
-        return check(resource, count, what)
+    def recording(cap, count, what):
+        most[cap] = max(most.get(cap, 0), count)
+        return check(cap, count, what)
+
+    def closing(token):
+        meter = limits._METER.get()
+        if meter is not None:
+            most[meter.cap] = max(most.get(meter.cap, 0), meter.used)
+        return stop(token)
     monkeypatch.setattr(limits, "check", recording)
+    monkeypatch.setattr(limits, "stop", closing)
     return most
 
 
@@ -133,9 +143,20 @@ def test_bb_inf_without_an_integer_point_raises_at_the_default_cap():
     assert _is_resource_error(term, "clpq_nodes")
 
 
-def test_bb_inf_answers_at_its_node_cap_and_raises_under_it(caps, used):
+def test_bb_inf_answers_at_its_node_cap_and_raises_under_it(
+        caps, monkeypatch):
+    # A node is a pass of branch_and_bound_loop: one reoptimize each.
+    from clausal.logic.clpq import branch_and_bound
+    passes = []
+    reoptimize = branch_and_bound.branch_and_bound_reoptimize
+
+    def counting(objective, trail):
+        passes.append(1)
+        return reoptimize(objective, trail)
+    monkeypatch.setattr(branch_and_bound, "branch_and_bound_reoptimize",
+                        counting)
     expected = _integer_optimum()
-    nodes = used["clpq_nodes"]
+    nodes = len(passes)
     assert nodes > 2                    # the search branches
     caps("clpq_nodes", nodes)
     assert _integer_optimum() == expected
@@ -349,6 +370,26 @@ def test_big_coefficients_raise_on_their_bits(caps):
                               "clpq_expansion")
 
 
+def test_a_power_of_a_monomial_with_coefficient_1_makes_no_bits():
+    # Review N3: Y^(10^8) is one monomial, 1^N; it answers at once.
+    assert _within(10, lambda: _power(Var(), 10 ** 8))
+    assert nf.power_size(10 ** 8, nf.normal_form(Var())) == (1, 0)
+
+
+def test_a_power_of_a_monomial_counts_its_coefficient_bits(caps):
+    # (2^64*Y)^(10^7) builds a coefficient of 640,000,000 bits.
+    big = Mult(left=2 ** 64, right=Var())
+    term = _within(10, lambda: _raised(lambda: _power(big, 10 ** 7)))
+    assert _is_resource_error(term, "clpq_expansion")
+    terms, bits = nf.power_size(1000, nf.normal_form(big))
+    assert (terms, bits) == (1, 64_000)
+    caps("clpq_expansion_bits", bits)
+    assert _power(big, 1000)
+    caps("clpq_expansion_bits", bits - 1)
+    assert _is_resource_error(_raised(lambda: _power(big, 1000)),
+                              "clpq_expansion")
+
+
 # ---------------------------------------------------------------- products
 
 def _product(k):
@@ -381,6 +422,85 @@ def test_a_product_answers_at_its_cap_and_raises_under_it(caps, used):
     caps("clpq_expansion", terms - 1)
     assert _is_resource_error(_raised(lambda: _post_product(6)),
                               "clpq_expansion")
+
+
+def _big_product(k, coefficient):
+    """(c*A1 + B1) * ... * (c*Ak + Bk)."""
+    variables = [Var() for _ in range(2 * k)]
+
+    def factor(index):
+        return Add(left=Mult(left=coefficient, right=variables[2 * index]),
+                   right=variables[2 * index + 1])
+    product = factor(0)
+    for index in range(1, k):
+        product = Mult(left=product, right=factor(index))
+    return product
+
+
+def test_a_product_counts_its_coefficient_bits(caps, used):
+    # Each step multiplies two sums with big coefficients: their bits are
+    # charged before the product is made (review N5, product bits).
+    coefficient = 10 ** 300
+    assert h.q_eq(Var(), _big_product(4, coefficient), Trail())
+    bits = used["clpq_expansion_bits"]
+    assert bits > 4 * 2 * 3 * 996      # the 4-sum product's own coefficients
+    caps("clpq_expansion_bits", bits)
+    assert h.q_eq(Var(), _big_product(4, coefficient), Trail())
+    caps("clpq_expansion_bits", bits - 1)
+    assert _is_resource_error(
+        _raised(lambda: h.q_eq(Var(), _big_product(4, coefficient), Trail())),
+        "clpq_expansion")
+
+
+# ---------------------------------------------------------------- repair
+
+def _sums_with_late_exponents(k):
+    """X = (A1 + B1)^N1 * ... * (Ak + Bk)^Nk posted with every Ni
+    unbound, as (trail, [N1, ..., Nk]): binding Ni to 1 wakes the delayed
+    equation, whose repair multiplies one more sum in (review N1)."""
+    trail = Trail()
+    exponents = [Var() for _ in range(k)]
+    product = None
+    for exponent in exponents:
+        factor = IsoIntPow(left=Add(left=Var(), right=Var()), right=exponent)
+        product = factor if product is None else Mult(left=product,
+                                                      right=factor)
+    assert h.q_eq(Var(), product, trail)
+    return trail, exponents
+
+
+def _bind_all(trail, exponents):
+    from clausal.logic.variables import unify
+    for exponent in exponents:
+        if not unify(exponent, 1, trail):
+            return False
+    return True
+
+
+def test_a_repair_charges_a_monomial_times_a_sum(caps):
+    # The i-th binding multiplies 2^(i-1) monomials by a sum of 2: each
+    # wake-up's repair charges 2^i terms.  Six sums: at most 64 in one
+    # wake-up, 126 over all six.
+    trail, exponents = _sums_with_late_exponents(6)
+    assert _bind_all(trail, exponents)
+    caps("clpq_expansion", 126)
+    trail, exponents = _sums_with_late_exponents(6)
+    assert _bind_all(trail, exponents)
+    caps("clpq_expansion", 125)
+    trail, exponents = _sums_with_late_exponents(6)
+    assert _is_resource_error(
+        _raised(lambda: _bind_all(trail, exponents)), "clpq_expansion")
+
+
+def test_a_constraint_s_count_persists_across_its_wake_ups(caps):
+    # A cap each wake-up fits alone (the last one charges 64) still
+    # raises: the delayed constraint carries its count to the next
+    # wake-up (limits.CARRIED).
+    caps("clpq_expansion", 64)
+    trail, exponents = _sums_with_late_exponents(6)
+    assert _is_resource_error(
+        _raised(lambda: _bind_all(trail, exponents)), "clpq_expansion")
+    assert limits.CARRIED.get() is None
 
 
 # ---------------------------------------------------------------- work
@@ -471,6 +591,102 @@ def test_a_back_substitution_charges_the_rows_it_reads(caps):
         limits.stop(token)
 
 
+def test_row_size_counts_each_64_bits_of_a_coefficient():
+    from clausal.logic.clpq import bounded_simplex
+    from clausal.logic.clpq.linear_forms import LinearForm
+    small = LinearForm((3, 1), (0, 1), [(Var(), (5, 7)), (Var(), (1, 1))])
+    big = LinearForm((3, 1), (0, 1), [(Var(), (2 ** 200, 7)),
+                                      (Var(), (1, 1))])
+    big_constant = LinearForm((2 ** 130, 1), (0, 1), [(Var(), (1, 1))])
+    # a unit for the row, and one for each value plus one per 64 bits
+    assert bounded_simplex.row_size(small) == 1 + 2 + 2
+    assert bounded_simplex.row_size(big) == 1 + 2 + 2 + (201 + 3) // 64
+    assert bounded_simplex.row_size(big_constant) == 1 + 2 + 1 + (131 + 1) // 64
+    assert bounded_simplex.small_row_size(small) == 5
+    assert bounded_simplex._row_sizer(small) is bounded_simplex.small_row_size
+    assert bounded_simplex._row_sizer(big) is bounded_simplex.row_size
+
+
+def test_a_big_substitution_charges_each_row_s_size(caps):
+    # A substitution with a coefficient past 64 bits charges every row it
+    # writes by row_size (its coefficients' words), not the small count.
+    from clausal.logic.clpq import bounded_simplex
+    from clausal.logic.clpq.attributes import state_of
+    from clausal.logic.clpq.linear_forms import LinearForm
+    from clausal.logic.clpq.arithmetic import ONE, ZERO
+    trail, targets, _ = _small_store()
+    members = bounded_simplex.all_variables(targets[0])
+    variable = None
+    node = deref(members)
+    while type(node).__name__ == "ListCell":
+        state = state_of(deref(node.head))
+        if state is not None and state.linear_form is not None \
+                and state.linear_form.terms:
+            variable = state.linear_form.terms[0][0]
+            break
+        node = deref(node.rest)
+    assert variable is not None
+    form = LinearForm(ZERO, (2 ** 300, 1), [(Var(), ONE)])
+    token = limits.start("clpq_work", "test")
+    try:
+        bounded_simplex.back_substitute_variables(members, variable, form,
+                                                  trail)
+        used = limits._METER.get().used
+    finally:
+        limits.stop(token)
+    rows, sizes = 0, 0
+    node = deref(members)
+    while type(node).__name__ == "ListCell":
+        state = state_of(deref(node.head))
+        node = deref(node.rest)
+        if state is not None and state.linear_form is not None:
+            rows += 1
+            if state.linear_form.rest[0].bit_length() > 64:     # rewritten
+                sizes += bounded_simplex.row_size(state.linear_form)
+    assert sizes > 0 and used == rows + sizes
+
+
+def test_fourier_motzkin_charges_rows_as_wide_as_their_widest_source(
+        monkeypatch):
+    # Each elimination charges its cross product's count times one more
+    # than the widest row it comes from, worked out just before.
+    from clausal.logic.clpq import fourier_motzkin
+    events = []
+    cardinality = fourier_motzkin.cross_product_cardinality
+    widest = fourier_motzkin._widest
+    charge = limits.charge_projection
+
+    def counting(occurrences, count):
+        result = cardinality(occurrences, count)
+        events.append(("count", result))
+        return result
+
+    def measuring(occurrences):
+        result = widest(occurrences)
+        events.append(("width", result))
+        return result
+
+    def recording(units):
+        if sys._getframe(1).f_code.co_name \
+                == "fourier_motzkin_eliminate_internal":
+            events.append(("charge", units))
+        return charge(units)
+    monkeypatch.setattr(fourier_motzkin, "cross_product_cardinality",
+                        counting)
+    monkeypatch.setattr(fourier_motzkin, "_widest", measuring)
+    monkeypatch.setattr(limits, "charge_projection", recording)
+    _project(_SMALL)
+    checked = 0
+    for index, (kind, units) in enumerate(events):
+        if kind != "charge":
+            continue
+        count = next(v for k, v in reversed(events[:index]) if k == "count")
+        width = next(v for k, v in reversed(events[:index]) if k == "width")
+        assert units == count * (width + 1)
+        checked += width > 0 and count > 0
+    assert checked
+
+
 # ---------------------------------------------------------------- meters
 
 def _small_store():
@@ -542,7 +758,7 @@ def test_set_limit_refuses_what_is_not_a_positive_int(caps):
 
 _PROGRAM = """\
 :- module(caps_probe, [noint/1, project/1, big/2, post/1, caught/2,
-                       power/3, product/2]).
+                       power/3, product/2, rep/1]).
 :- use_module(library(clpq)).
 noint(I) :- {X >= 0, Y >= 0, 2*X - 2*Y =:= 1}, bb_inf([X, Y], X, I).
 big(X1, X2) :-
@@ -556,6 +772,11 @@ power(N, X, Y) :- E = (Y + 1)^N, {X = E}.
 product(K, X) :- length(L, K), sums(L, P), {X = P}.
 sums([A], (A + _)).
 sums([A, B|T], (A + _) * P) :- sums([B|T], P).
+late([], 1, []).
+late([A, B|T], (A + B)^N * R, [N|Ns]) :- late(T, R, Ns).
+ones([]).
+ones([1|T]) :- ones(T).
+rep(K) :- K2 is 2*K, length(L, K2), late(L, P, Ns), {_ = P}, ones(Ns).
 """
 
 
@@ -655,6 +876,15 @@ def test_catch_takes_the_errors_in_a_program(tmp_path):
         "R1 = clpq_nodes, R2 = clpq_projection, R3 = clpq_expansion, "
         "R4 = clpq_expansion, {"), result.stderr
     assert "Y^3" in result.stdout, result.stdout
+
+
+def test_a_product_repaired_a_binding_at_a_time_raises(tmp_path):
+    # Review N1, from .pl source: K sums each to an unbound exponent, then
+    # every exponent bound to 1.  Each binding's repair multiplies one more
+    # sum in; the constraint's count runs over its wake-ups.  4 sums
+    # answer; 17 (52 s and 265 MB before) raise.
+    result = _clausal(tmp_path, "rep(4), caught(rep(17), R)")
+    assert result.stdout.strip() == "R = clpq_expansion.", result.stderr
 
 
 def test_a_cap_flag_takes_a_positive_integer_only(tmp_path):

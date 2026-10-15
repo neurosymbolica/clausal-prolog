@@ -14,17 +14,19 @@ clpq_work               the work of one bb_inf search's pivots:    bb, bv
 clpq_projection         the same work for one projection, and the  project,
   clpq_max_projection   rows Fourier-Motzkin derives (charged      fourmotz,
                         before they are made)                      bv
-clpq_expansion          the terms one normal form makes in powers  nf
-  clpq_max_expansion    and products of sums, counted before each
-                        is built
+clpq_expansion          the terms one constraint's normal form     nf
+  clpq_max_expansion    makes in powers and products of sums,
+                        counted before each is built, and carried
+                        across a delayed constraint's wake-ups
 clpq_expansion          the bits those terms' coefficients take,   nf
   clpq_max_expansion_bits  estimated before each is built
 ======================  =========================================  =======
 
 The defaults are DEFAULTS; DEVIATIONS.md D24 has how they were measured.
 
-Each count belongs to one call: a Meter on a context variable, so two
-threads (or two asyncio tasks) never share one.  A metered call inside
+Each count belongs to one call: the work on a Meter on a context
+variable, so two threads (or two asyncio tasks) never share one; an
+expansion on an Expansion its normal form or repair keeps to itself.  A metered call inside
 another (a bb_inf woken in a search, a projection under a search) is
 charged to its own meter and to every meter around it, so the outer cap
 bounds the whole.
@@ -58,9 +60,9 @@ RESOURCES["clpq_expansion_bits"] = "clpq_expansion"
 #: the headroom over it).
 DEFAULTS = {
     "clpq_nodes": 20_000,
-    "clpq_work": 2_000_000,
+    "clpq_work": 4_000_000,
     "clpq_projection": 4_000_000,
-    "clpq_expansion": 20_000,
+    "clpq_expansion": 40_000,
     "clpq_expansion_bits": 200_000_000,
 }
 
@@ -151,21 +153,58 @@ def charge_rows(units):
     charge(units, ROW_CAPS)
 
 
+def current_meter():
+    """The innermost open meter, or None: a hot path reads it once."""
+    return _METER.get()
+
+
+def charge_rows_to(meter, units):
+    """charge_rows, from the innermost open meter *meter* (current_meter)
+    outwards: the back substitution's hot path."""
+    while meter is not None:
+        cap = meter.cap
+        if cap == "clpq_work" or cap == "clpq_projection":
+            meter.used += units
+            if meter.used > _LIMITS[cap]:
+                check(cap, meter.used, meter.what)
+        meter = meter.parent
+
+
 def charge_projection(units):
     """Fourier-Motzkin will derive rows of *units* terms in all: charge the
     open projection meters.  Nothing when no projection runs."""
     charge(units, ("clpq_projection",))
 
 
-_EXPANSION = ("clpq_expansion",)
-_EXPANSION_BITS = ("clpq_expansion_bits",)
+class Expansion:
+    """The terms and coefficient bits one normal form, or one repair, has
+    expanded so far.  Made only when an expansion is charged (a linear
+    constraint never needs one).  A repair of a delayed constraint starts
+    from what that constraint's earlier wake-ups spent (CARRIED), so the
+    count persists across them."""
+    __slots__ = ("terms", "bits")
+
+    def __init__(self, terms=0, bits=0):
+        self.terms = terms
+        self.bits = bits
 
 
-def charge_expansion(terms, bits, what):
+def charge_expansion(terms, bits, what, expansion=None):
     """An expansion will make *terms* terms whose coefficients take about
-    *bits* bits: charge the open normal form's meters, or, outside one,
-    check it alone against the caps."""
-    if not charge(terms, _EXPANSION):
-        check("clpq_expansion", terms, what)
-    if not charge(bits, _EXPANSION_BITS):
-        check("clpq_expansion_bits", bits, what + " (coefficient bits)")
+    *bits* bits: add them to *expansion*, the count of the call making it,
+    and raise `resource_error(clpq_expansion)` past either cap; with no
+    *expansion*, check this one alone."""
+    if expansion is not None:
+        expansion.terms += terms
+        expansion.bits += bits
+        terms = expansion.terms
+        bits = expansion.bits
+    check("clpq_expansion", terms, what)
+    check("clpq_expansion_bits", bits, what + " (coefficient bits)")
+
+
+#: Inside the run of a delayed goal (delayed_goals.run): the (terms, bits)
+#: that goal's constraint has expanded over its wake-ups so far, which its
+#: repair starts from and the goal it delays again carries on.  None
+#: outside a run.
+CARRIED = ContextVar("clpq_carried_expansion", default=None)

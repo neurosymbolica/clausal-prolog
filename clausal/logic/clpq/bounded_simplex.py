@@ -1528,7 +1528,8 @@ def row_size(form):
     """The work units of writing the row *form*: a unit for the row and
     for each term, and a unit for each 64 bits of a coefficient, the
     constant and the rest included (DEVIATIONS.md D24: big coefficients
-    cost as much as many terms)."""
+    cost as much as many terms).  A substitution whose own coefficients
+    are small charges `small_row_size` instead (back_substitute)."""
     units = 1
     for value in (form.constant, form.rest):
         units += 1 + ((value[0].bit_length() + value[1].bit_length()) >> 6)
@@ -1538,12 +1539,47 @@ def row_size(form):
     return units
 
 
+def small_row_size(form):
+    """row_size of *form* when its coefficients each fit in 64 bits, done
+    without reading them: the row, its constant and rest, and its terms."""
+    return 3 + len(form.terms)
+
+
+#: limits.current_meter, bound once: the back substitution reads it on
+#: every call (review N2).
+_current_meter = limits._METER.get
+
+#: A coefficient part past this does not fit in 64 bits.
+_WORD = 1 << 64
+
+
+def _row_sizer(form):
+    """The row_size a back substitution of *form* charges each row it
+    writes: small_row_size when every coefficient of *form* fits in 64
+    bits, row_size otherwise.  Reading each written row's coefficients
+    costs about 5% of a search (review N2), and big rows come from big
+    substitutions, so a small one is charged as if its rows were small
+    too: a big row rewritten by a small substitution is undercounted.
+    Only metered substitutions ask."""
+    word = _WORD
+    for value in (form.constant, form.rest):
+        if not -word < value[0] < word or value[1] >= word:
+            return row_size
+    for _, coefficient in form.terms:
+        if not -word < coefficient[0] < word or coefficient[1] >= word:
+            return row_size
+    return small_row_size
+
+
 def back_substitute_variables(members, variable, form, trail):
     """bv.pl, back_substitute_variables/3 (bs/3): walk the open member list
     up to its tail; a member whose row holds *variable* gets the new row.
     Inside a bb_inf search or a projection, the rows read and the size of
     the rows written are charged to it (limits.charge_rows, row_size)."""
-    metered = limits.metering()
+    meter = _current_meter()
+    metered = meter is not None
+    if metered:
+        big = _row_sizer(form) is row_size
     written = 0
     node = deref(members)
     while type(node) is ListCell:
@@ -1556,10 +1592,11 @@ def back_substitute_variables(members, variable, form, trail):
         new_form = normal_form_substitute(variable, form, state.linear_form)
         if new_form is not None:
             put_state(member, with_changes(state, linear_form=new_form), trail)
-            if metered:
-                written += row_size(new_form)
+            if metered:            # small_row_size, inlined
+                written += row_size(new_form) if big \
+                    else 3 + len(new_form.terms)
     if metered:
-        limits.charge_rows(written)
+        limits.charge_rows_to(meter, written)
     return True
 
 
@@ -1569,7 +1606,10 @@ def back_substitute_collect_bindings(members, variable, form, bindings, trail):
     constant.  Inside a bb_inf search or a projection, the rows read and
     the size of the rows written are charged to it (limits.charge_rows,
     row_size)."""
-    metered = limits.metering()
+    meter = _current_meter()
+    metered = meter is not None
+    if metered:
+        big = _row_sizer(form) is row_size
     written = 0
     node = deref(members)
     while type(node) is ListCell:
@@ -1584,10 +1624,11 @@ def back_substitute_collect_bindings(members, variable, form, bindings, trail):
             put_state(member, with_changes(state, linear_form=new_form), trail)
             back_substitute_collect_binding(new_form.terms, member,
                                             new_form.constant, bindings)
-            if metered:
-                written += row_size(new_form)
+            if metered:            # small_row_size, inlined
+                written += row_size(new_form) if big \
+                    else 3 + len(new_form.terms)
     if metered:
-        limits.charge_rows(written)
+        limits.charge_rows_to(meter, written)
     return True
 
 

@@ -64,7 +64,7 @@ truth value is `true` / `false`, which compile to Python's `True` / `False`.
   and write), `clpq_projection` (the same for one projection, as `dump_q/2`
   and the `-g` answer printer make) or `clpq_expansion` (the terms, or the
   coefficient bits, of the powers and products one constraint expands).
-  Defaults 20,000, 2,000,000, 4,000,000, 20,000 and 200,000,000. The legacy
+  Defaults 20,000, 4,000,000, 4,000,000, 40,000 and 200,000,000. The legacy
   solver has no such flags. In the [sandbox](sandbox.md) a program sets no
   process-wide flag, as a goal or as a load-time directive.
 

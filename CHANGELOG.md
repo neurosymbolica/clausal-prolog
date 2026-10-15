@@ -147,14 +147,16 @@ surface described in [docs/public-api.md](docs/public-api.md).
   part. `clpq_nodes`: the nodes of one `bb_inf/3` search (a store with no
   integer point used to branch for ever), default 20,000. `clpq_work`: the
   rows one search's pivots read and write (a node's work grows with the
-  store), default 2,000,000. `clpq_projection`: the same work for one
+  store), default 4,000,000. `clpq_projection`: the same work for one
   projection in `dump/3`, `dump_q/2` and the `-g` answer printer, plus the
   rows Fourier-Motzkin derives, default 4,000,000 (the D24 probe's
   15-constraint store still answers). `clpq_expansion`: the terms (default
-  20,000) and coefficient bits (default 200,000,000) of the powers and
-  products of sums one normal form expands, counted before each is built
-  (`{X = (Y + 1)^(10^7)}` and a product of 18 sums never finished). Each
-  count is per call and per thread. The Prolog flags `clpq_max_nodes`,
+  40,000) and coefficient bits (default 200,000,000) of the powers and
+  products of sums one constraint expands, counted before each is built,
+  and carried across a delayed constraint's wake-ups (`{X = (Y + 1)^(10^7)}`
+  and a product of 18 sums never finished). Each count is per call and per
+  thread. In the sandbox a load-time `set_prolog_flag` of a process-wide
+  flag is refused with `SandboxLoadError`. The Prolog flags `clpq_max_nodes`,
   `clpq_max_work`, `clpq_max_projection`, `clpq_max_expansion` and
   `clpq_max_expansion_bits` read and set them (`set_prolog_flag/2`, a
   positive integer); they exist only under the port, and the legacy

@@ -1295,23 +1295,35 @@ Ruling D42 asks for a cap on each of the first three before any flip, and
 ruling D51 says what a cap does: past it the port raises
 `error(resource_error(R), _)`, as Scryer shapes it (the context is a
 variable, the explanation goes to the exception's message).  It never
-fails in place of an answer and never answers in part, and the defaults
-refuse no query 1.3.3 answers in reasonable time.  1.3.3 has no such
-caps, so these are deviations; the port answers as 1.3.3 does below them.
+fails in place of an answer and never answers in part.  The defaults
+refuse no query of the clpq tests, no D24 probe store at n = 5, and none
+of the cases the reviews found 1.3.3 answering in seconds (`(Y + 1)^9999`,
+`Y^(10^8)`, a product of 14 sums, a feasible search 100 variables wide);
+a query that runs longer than about ten seconds may raise.  1.3.3 has no
+such caps, so these are deviations; the port answers as 1.3.3 does below
+them.
 
 | Resource R | Flag | What one call counts | Default |
 |---|---|---|---|
 | `clpq_nodes` | `clpq_max_nodes` | the nodes of one bb_inf search (passes of `branch_and_bound_loop`) | 20,000 |
-| `clpq_work` | `clpq_max_work` | the work of one bb_inf search: a unit for each row its pivots' back substitution reads, and for each row it writes a unit per term and per 64 bits of a coefficient (`bounded_simplex.row_size`) | 2,000,000 |
+| `clpq_work` | `clpq_max_work` | the work of one bb_inf search: a unit for each row its pivots' back substitution reads, and for each row it writes a unit per term and per 64 bits of a coefficient (`bounded_simplex.row_size`; a substitution whose own coefficients fit in 64 bits charges its rows `3 + terms`) | 4,000,000 |
 | `clpq_projection` | `clpq_max_projection` | the same work for one projection, plus each row Fourier-Motzkin derives, charged before it is made as wide as the widest row it comes from | 4,000,000 |
-| `clpq_expansion` | `clpq_max_expansion` | the terms one normal form (or repair) makes in powers, `binomial(N + T - 1, T - 1)` for a sum of T terms to the N or -N, and in products of sums, `len(A) * len(B)` each, counted before each is built | 20,000 |
-| `clpq_expansion` | `clpq_max_expansion_bits` | the bits those terms' coefficients take, estimated before each is built: `terms * N * (bits of the base's largest coefficient + bits of T)` for a power, `terms * (largest of A + largest of B)` for a product | 200,000,000 |
+| `clpq_expansion` | `clpq_max_expansion` | the terms one constraint's normal form makes in powers, `binomial(N + T - 1, T - 1)` for a sum of T terms to the N or -N, and in products of sums, `len(A) * len(B)` each, counted before each is built; a delayed constraint's repairs add a monomial times a sum, `len(sum)`, and count on across its wake-ups | 40,000 |
+| `clpq_expansion` | `clpq_max_expansion_bits` | the bits those terms' coefficients take, estimated before each is built from log2 of each coefficient (0 for a coefficient of 1): `terms * N * (log2 of the base's largest coefficient + bits of T - 1)` for a power, `terms * (log2 of the largest of A + of B)` for a product | 200,000,000 |
 
 **Where they live.** `clausal/logic/clpq/limits.py` holds the caps
-(`limit`, `set_limit`) and the meters.  Each count belongs to one call: a
-`Meter` on a context variable, so two threads or two asyncio tasks never
-share a count (review F5: a process global made 70 of 80 threaded
-projections raise for each other's work).  A metered call inside another,
+(`limit`, `set_limit`) and the counts.  Each count belongs to one call,
+never to the process: the search and projection work on a `Meter` on a
+context variable, so two threads or two asyncio tasks never share a count
+(review F5: a process global made 70 of 80 threaded projections raise for
+each other's work); an expansion's count is an `Expansion` the normal form
+or repair makes at its first charge and keeps to itself, so a linear
+constraint pays nothing for it (review N2).  A delayed constraint carries
+its count to its next wake-up on the goal it delays (`DelayedGoal.spent`,
+`limits.CARRIED`): a product of sums whose exponents are bound one at a
+time, each binding's repair multiplying one more sum into every term,
+grew 2^k terms for k sums with no cap (review N1: 17 sums took 52 s and
+265 MB) and is now counted whole.  A metered call inside another,
 a projection under a search or a bb_inf woken in a search, is charged to
 its own meter and to every meter around it, so the outer cap bounds the
 whole.  The caps bound one call; a program that calls again in a loop is
@@ -1328,9 +1340,10 @@ variable because it is what ISO gives a program for implementation-defined
 limits.  In the sandbox the caps are the host's: a program sets them
 neither with the goal (refused before) nor with a load-time directive of
 any front end (`flags.sandbox_refusal`, checked where the setting is
-validated and again where it is written; only the module-scoped
-`assert_creates_dynamic` and `double_quotes` are allowed,
-`SANDBOX_DIRECTIVE_FLAGS`).  The host calls `limits.set_limit`.
+validated and again where it is written, and raised as the load error
+`clausal.sandbox.SandboxLoadError`; only `assert_creates_dynamic` and
+`double_quotes`, `SANDBOX_DIRECTIVE_FLAGS`, are allowed, and only while
+each is still module-scoped).  The host calls `limits.set_limit`.
 
 **Why work, not nodes or rows alone.** The work of a node grows with the
 store: under the node cap alone, the store with no integer point plus 20,
@@ -1352,7 +1365,7 @@ raised 9 s later).
 **Why bits as well as terms.** `(10^1000*Y + 1)^2000` has 2,001 terms but
 took 46 s and 1.7 GB (review F4): the coefficients are the cost.
 
-**Headroom.** Measured 2026-10-14 by recording the most each cap saw,
+**Headroom.** Measured 2026-10-15 by recording the most each cap saw,
 with every cap lifted, over tests/clpq_port (CLAUSAL_SLOW_TESTS=1: the
 examples, filled_rectangle n = 9, the fuzz tests and the nested legacy
 suites under the port) and every other test file that names clpq, bb_inf
@@ -1361,20 +1374,32 @@ or dump_q, all under `CLAUSAL_CLPQ=holzbaur`:
 | Cap | Most used | Default | Headroom |
 |---|---|---|---|
 | nodes | 1,167 | 20,000 | 17 times |
-| work | 72,216 | 2,000,000 | 27 times |
+| work | 72,216 | 4,000,000 | 55 times |
 | projection | 45,055 | 4,000,000 | 89 times |
-| expansion terms | 27 | 20,000 | 740 times |
-| expansion bits | 126 | 200,000,000 | 1.6 million times |
+| expansion terms | 27 | 40,000 | 1,481 times |
+| expansion bits | 60 | 200,000,000 | 3.3 million times |
 
-The projection default is set by the D24 probe, not by the tests: over
-seeds 100 to 119 at n = 5 the most work was 2,011,385 (seed 101, 5 to
-8 s), so every one of them answers with 2 times to spare, and seed 101 at
-n = 6 (212 s to answer uncapped) raises after 12 to 15 s.  The work
-default raises the wide searches (20 to 400 more variables) after 6 to
-7 s.  The expansion terms default admits a product of 13 sums (16,380
-terms) and refuses 14 (32,764); the bits default admits `(Y + 1)^7000`
-(3 s) and `(10^1000*Y + 1)^240` (0.5 s to expand; printing its 241
-coefficients of 240,000 digits is slow, as printing any such integer is).
+The tests are not what sets the defaults; the slow queries the reviews
+found are.  Timed at a load average of 9 to 11 on 8 cores:
+
+- The D24 probe stores at n = 5 (seeds 100 to 119) all answer: the most
+  work is 2,011,385 (seed 101, 6 to 8 s), 2 times under the projection
+  cap.  Seed 101 at n = 6 (212 s to answer uncapped) raises after 12 to
+  15 s.
+- The work cap matches the projection cap (review N4).  The feasible
+  search 100 variables wide answers (3,075,865 units, 16 s at this load,
+  5 s at base under less); 130 and more raise after about 20 s.  The
+  store with no integer point raises on its nodes after 3 s, and the
+  same store 20 to 400 variables wide on its work after 20 to 28 s.
+- The terms cap admits a product of 14 sums (32,764 terms, 2.8 s) and
+  `(Y + Z + W)^280` (27 s at this load; the security review timed `^240`
+  at 7.1 s); 15 sums and more, `^300`, and the repaired product of 15 or
+  more raise at once or within 4 s.  A repaired product of 14 sums
+  answers.
+- The bits cap admits `(Y + 1)^14100` (2.3 s) and `(10^1000*Y + 1)^240`
+  (0.5 s to expand; printing its 241 coefficients of 240,000 digits is
+  slow, as printing any such integer is), and `Y^(10^8)` costs no bits.
+  `(Y + 1)^(10^7)` raises at once.
 
 - **bb_inf/3 on a store with no integer point does not terminate in 1.3.3**
   (High 1).  `noint(I) :- {X >= 0, Y >= 0, 2*X - 2*Y =:= 1},

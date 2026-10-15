@@ -144,10 +144,12 @@ def branch_and_bound_loop(objective, integer_forms, epsilon, trail):
     incumbent = None
     alternatives = []
     nodes = 0
+    cap = limits.limit("clpq_nodes")
     while True:
         nodes += 1
-        limits.check("clpq_nodes", nodes,
-                     "the branch and bound nodes of bb_inf")
+        if nodes > cap:
+            limits.check("clpq_nodes", nodes,
+                         "the branch and bound nodes of bb_inf")
         infimum = branch_and_bound_reoptimize(objective, trail)
         if infimum is not None \
                 and branch_and_bound_better_bound(infimum, incumbent):

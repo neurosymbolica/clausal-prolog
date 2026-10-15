@@ -19,9 +19,9 @@ assert_creates_dynamic     false         yes         module
 require_end_module         default       yes         process (goal)
 argv                       []            no          process
 clpq_max_nodes             20000         yes         process
-clpq_max_work              2000000       yes         process
+clpq_max_work              4000000       yes         process
 clpq_max_projection        4000000       yes         process
-clpq_max_expansion         20000         yes         process
+clpq_max_expansion         40000         yes         process
 clpq_max_expansion_bits    200000000     yes         process
 =========================  ============  ==========  =================
 

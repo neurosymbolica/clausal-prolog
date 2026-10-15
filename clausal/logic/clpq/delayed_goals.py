@@ -22,6 +22,7 @@ after the hook returns
 """
 from clausal.logic.clpq.attributes import (
     SolverState, put_state, state_of, with_changes)
+from clausal.logic.clpq import limits
 from clausal.logic.variables import PlainVar, Var, deref, is_var, unify
 
 DONE = "done"
@@ -29,13 +30,16 @@ DONE = "done"
 
 class DelayedGoal:
     """geler.pl's `run(Mutex, Goal)`: *mutex* is a variable bound to `done`
-    once the goal has run."""
-    __slots__ = ("mutex", "procedure", "argument")
+    once the goal has run.  *spent* is the port's own: the (terms, bits)
+    the constraint expanded in the wake-ups before this goal was delayed
+    (limits.CARRIED, DEVIATIONS.md D24)."""
+    __slots__ = ("mutex", "procedure", "argument", "spent")
 
-    def __init__(self, mutex, procedure, argument):
+    def __init__(self, mutex, procedure, argument, spent=(0, 0)):
         self.mutex = mutex
         self.procedure = procedure
         self.argument = argument
+        self.spent = spent
 
 
 class RunGoals:
@@ -166,13 +170,22 @@ def run(goal, trail):
     if not is_var(deref(goal.mutex)):                           # clause 1
         return True
     unify(goal.mutex, DONE, trail)                              # clause 2
-    return goal.procedure(goal.argument, trail)
+    # What the constraint expanded in its earlier wake-ups, for its repair
+    # to go on from and the goal it delays again to carry (limits.CARRIED).
+    token = limits.CARRIED.set(goal.spent)
+    try:
+        return goal.procedure(goal.argument, trail)
+    finally:
+        limits.CARRIED.reset(token)
 
 
 def delay_goal(variables, procedure, argument, trail):
     """geler.pl, geler/2: delay `procedure(argument, trail)` until one of
     *variables* is bound.  False where attach fails."""
-    return attach(variables, DelayedGoal(Var(), procedure, argument), trail)
+    spent = limits.CARRIED.get()
+    return attach(variables, DelayedGoal(Var(), procedure, argument,
+                                         (0, 0) if spent is None else spent),
+                  trail)
 
 
 def attach(variables, goal, trail):
