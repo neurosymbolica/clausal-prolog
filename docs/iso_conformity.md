@@ -2,17 +2,18 @@
 
 Clausal Prolog measures itself against the ISO/IEC 13211-1 standard, and
 specifically against the conformity-testing work published by
-**Ulrich Neumerkel**, the editor of ISO/IEC 13211-1 (the core standard) and
-convenor of ISO/IEC JTC1/SC22 WG17, the working group that maintains it.
-Where our behavior and his published tables disagree, we treat that as a bug
-in Clausal Prolog, not as a difference of opinion. His
+**Ulrich Neumerkel**, who maintains the ISO conformity-testing tables this
+page refers to and is active in ISO/IEC JTC1/SC22 WG17, the working group
+responsible for the Prolog standard. Where our behavior and his published
+tables disagree, we treat that as a bug in Clausal Prolog, not as a
+difference of opinion. His
 [conformity testing](https://www.complang.tuwien.ac.at/ulrich/iso-prolog/conformity_testing)
 pages — syntax, DCGs/`phrase`, and the rest — are our **primary reference**
 for what ISO actually requires in cases the bare standard text leaves hard to
 pin down. They exist precisely because the standard alone under-determines
-some answers; a test suite maintained by the person who wrote and still
-edits the standard is the closest thing to ground truth a conformance effort
-can ask for.
+some answers; a test suite maintained this closely, by someone this involved
+in the standard itself, is the closest thing to ground truth a conformance
+effort can ask for.
 
 ## Why ISO adherence matters
 
@@ -69,24 +70,34 @@ considered design decision (see [Purity and Monotonicity](purity.md)) in
 service of a different goal: keeping every `.clausal` predicate monotonic,
 so that formalized rules (law, policy, business logic) compose safely and
 stay explainable under the guarantees described in the project's
-[goals](goals.md). `.clausal` and `.pl` share the same ISO-grammar parser and
-writer, so syntax-level conformance work on one benefits the other, but a
-`.clausal` program will never gain `!/0` by design, regardless of how
-conformant the underlying reader becomes.
+[goals](goals.md). `.clausal` and `.pl` share the same ISO-grammar
+**reader**, so syntax-level conformance work on one benefits the other, but
+a `.clausal` program will never gain `!/0` by design, regardless of how
+conformant the underlying reader becomes. The restriction holds at the
+language boundary too: `.clausal` may never import a `.pl` module, since
+arbitrary Prolog is assumed to use cut — cut-freedom is transitive by
+construction, not just a parsing-time check.
 
-For the detailed, continuously-updated list of what conforms today and what
-doesn't, see the
-[ISO Prolog Compatibility Report](iso_prolog_compatibility_report.md). This
-page is about *why* and *against what*; that one is about *where things
-stand right now*.
+The native `.pl` loader itself is still **experimental**, and does not yet
+accept cut (that support is in progress). Today, the way to run Prolog code
+that genuinely needs cut is to embed a real external ISO engine — Scryer or
+Trealla — as a separate package running alongside Clausal Prolog, not
+through the native `.pl` reader.
+
+For a detailed list of what conforms and what doesn't, see the
+[ISO Prolog Compatibility Report](iso_prolog_compatibility_report.md) — that
+page tracks specifics and is being actively revised alongside in-progress
+engine work, so treat it as a snapshot, not a finished inventory. This page
+is about *why* and *against what*; that one is about *where things stand*.
 
 ## How we measure it
 
 In rough order of authority:
 
 1. **Ulrich Neumerkel's conformity-testing pages** — the primary reference,
-   described above. When a page gives a definitive expected answer ("Codex"
-   column), that answer wins, full stop.
+   described above. Each page's table has a column for the expected answer,
+   headed "Codex" on his pages as published. When that column gives a
+   definitive answer, it wins, full stop.
 2. **The ISO/IEC 13211-1 standard text itself** (plus its corrigenda),
    for anything the conformity pages don't cover directly.
 3. **[Scryer Prolog](https://www.scryer.pl)**, a modern, actively-maintained
