@@ -77,7 +77,9 @@ def _lower_body(
             naf_g = ctx.fresh("_naf_g")
             naf_v = ctx.fresh("_naf_v")
             inner_k = [_yield_step_stmt(_name("_naf_proceed"), ast.Constant(None))]
-            inner_stmts = lower(
+            from .cut_scope import cut_guard_entry, new_cut_guard
+            guard = new_cut_guard()
+            inner_stmts = cut_guard_entry(guard, lower(
                 inner,
                 ctx.replace(
                     self_name="_naf_self",
@@ -89,9 +91,10 @@ def _lower_body(
                         _yield_step_stmt(_name("_naf_fail"), _name("$DONE")),
                         ast.Return(value=None),
                     ],
+                    cut_guard=guard,
                 ),
                 inner_k,
-            )
+            ))
             naf_body = inner_stmts + [
                 _yield_step_stmt(_name("_naf_fail"), _name("$DONE")),
             ]

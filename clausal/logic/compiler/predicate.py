@@ -317,7 +317,10 @@ from clausal.logic.tabling import (  # noqa: F401
     harvest_conditions as _harvest_conditions,
     current_leader as _current_leader_fn,
     charge_conditions as _charge_conditions,
+    _leader_ctx as _tab_ctx,
+    cut_over_incomplete as _cut_over_incomplete,
 )
+from clausal.logic.exceptions import ite_condition_overflow as _ite_overflow  # noqa: E402
 _naf_tabled_fn_s = _naf_tabled_fn
 
 # ── TRO (moved to .tro) ─────────────────────────────────────────────────────
@@ -1307,6 +1310,10 @@ def _compile_predicate_trampoline_impl(
         "$bagof_bind": _bagof_bind,
         "$harvest_conditions": _harvest_conditions,
         "$current_leader": _current_leader_fn,
+        "$tab_ctx": _tab_ctx,
+        "$cut_over_incomplete": _cut_over_incomplete,
+        "$RecursionError": RecursionError,
+        "$ite_overflow": _ite_overflow,
         "$charge_conditions": _charge_conditions,
         "$LogicException": _LogicException_cls,
         "$python_error_term": _python_error_term_fn,
@@ -2204,6 +2211,10 @@ def _compile_predicate_shallow_impl(
         "$bagof_bind": _bagof_bind,
         "$harvest_conditions": _harvest_conditions,
         "$current_leader": _current_leader_fn,
+        "$tab_ctx": _tab_ctx,
+        "$cut_over_incomplete": _cut_over_incomplete,
+        "$RecursionError": RecursionError,
+        "$ite_overflow": _ite_overflow,
         "$charge_conditions": _charge_conditions,
         "$LogicException": _LogicException_cls,
         "$python_error_term": _python_error_term_fn_s,

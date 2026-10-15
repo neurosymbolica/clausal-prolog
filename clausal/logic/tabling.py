@@ -37,7 +37,7 @@ from __future__ import annotations
 import threading
 from typing import Any, Callable
 
-from clausal.logic.variables import deref, is_var, unify
+from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.predicate import is_term_instance, tabled_home_of, term_field_names
 from clausal.terms import ConcreteSeg, SegBytes, SegList, SegString, Undefined, VarSeg
 from clausal.logic.cells import is_cell, intern_cell, is_intern_enabled, is_chars, chars_text
@@ -117,8 +117,85 @@ class _LeaderContext(threading.local):
         # into them -- so cycle detection has to keep seeing them, even though
         # they must not be the attribution target while another goal runs.
         self.detached: list[list] = []
+        # XSB's run-time cut check (D61 Q1, ``cut_over_incomplete``): every
+        # tabled call frame over an INCOMPLETE table (a leader mid-fixpoint,
+        # a consumer yielding known answers) has a record ``[id, token,
+        # entry, functor, arity]`` while it can still deliver answers.
+        # ``cut_seq`` is the id of the newest one ever opened; a cut scope
+        # reads it at entry and its cut compares -- one int compare when no
+        # tabled frame opened inside the scope since.
+        self.cut_seq: int = 0
+        self.open_tabled: list[list] = []
 
 _leader_ctx = _LeaderContext()
+
+
+# ── XSB's run-time cut check (D61 Q1) ─────────────────────────────────────
+#
+# The static rule (``compiler.cut_scope``) refuses at load every cut whose
+# scope holds a call to a tabled predicate the compiler can SEE.  A tabled
+# call reached through an untabled predicate, or through a goal built at run
+# time, is checked here instead: a cut (an if-then-else commit, once/1,
+# setup_call_cleanup's Setup) raises when a tabled call frame opened INSIDE
+# its scope can still deliver answers from an incomplete table -- the cut
+# would prune it, and the answer would depend on the fixpoint's pass order.
+#
+# A frame stops counting when it closes (exhausted, suspended, completed) or
+# when backtracking passes the point it opened at: the record's ``token`` is
+# a fresh variable bound on the caller's trail at open, so \+, findall,
+# catch/3's recovery -- every construct that abandons a sub-search undoes
+# its trail -- leave it unbound, and an abandoned frame that the GC has not
+# finalised yet is not taken for a live one.
+
+
+def _open_tabled(entry, functor, arity, trail) -> list:
+    ctx = _leader_ctx
+    recs = ctx.open_tabled
+    while recs and is_var(deref(recs[-1][1])):
+        recs.pop()                     # abandoned by backtracking
+    tok = Var()
+    unify(tok, True, trail)
+    ctx.cut_seq += 1
+    rec = [ctx.cut_seq, tok, entry, functor, arity]
+    recs.append(rec)
+    return rec
+
+
+def _close_tabled(rec) -> None:
+    recs = _leader_ctx.open_tabled
+    for i in range(len(recs) - 1, -1, -1):
+        if recs[i] is rec:
+            del recs[i]
+            return
+
+
+def cut_over_incomplete(mark: int, owner: "str | None" = None) -> None:
+    """The slow half of a cut's check, reached only when a tabled frame over
+    an incomplete table opened since the cut's scope began (``cut_seq >
+    mark``): raise ``permission_error(cut, incomplete_table, F/N)`` if one of
+    them is still live."""
+    recs = _leader_ctx.open_tabled
+    live = None
+    i = len(recs) - 1
+    while i >= 0 and recs[i][0] > mark:
+        rec = recs[i]
+        if is_var(deref(rec[1])) or rec[2].status == "complete":
+            del recs[i]                # abandoned, or finished meanwhile
+        else:
+            live = rec
+        i -= 1
+    if live is None:
+        return
+    from clausal.logic.compiler import cut_scope
+    if cut_scope.CUT_OVER_TABLED_CALL != "refuse":
+        return                         # the one switch governs both halves
+    from clausal.logic.compiler.ir import cut_over_tabled_message
+    from clausal.logic.exceptions import LogicException, permission_error
+    functor, arity = live[3], live[4]
+    raise LogicException(permission_error(
+        "cut", "incomplete_table", ("/", functor, arity),
+        cut_over_tabled_message([(functor, arity)], owner, None,
+                                incomplete=True)))
 
 
 def push_leader(entry: TableEntry) -> None:
@@ -1480,14 +1557,20 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             cl = current_leader()
             if cl is not None:
                 cl.scc_deps.add(entry)
-            for i, stored in enumerate(entry.answers):
-                if entry.conditions[i] is _FAILED:
-                    continue
-                mark = trail.mark()
-                if _unify_answer(args, stored, trail):
-                    _propagate_answer_delays(entry, i, table_store, trail)
-                    yield (_proceed, None)
-                trail.undo(mark)
+            # Answers from an incomplete table: a cut over this frame is
+            # XSB's run-time error (``cut_over_incomplete``).
+            _rec = _open_tabled(entry, functor, arity, trail)
+            try:
+                for i, stored in enumerate(entry.answers):
+                    if entry.conditions[i] is _FAILED:
+                        continue
+                    mark = trail.mark()
+                    if _unify_answer(args, stored, trail):
+                        _propagate_answer_delays(entry, i, table_store, trail)
+                        yield (_proceed, None)
+                    trail.undo(mark)
+            finally:
+                _close_tabled(_rec)
 
             # Register as suspended consumer
             sc = SuspendedConsumer(
@@ -1557,6 +1640,9 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
         deferred: set[int] = set()   # answer indices withheld from the root
         _note_driven_store(table_store)
         push_leader(entry)
+        # Until the fixpoint ends this frame streams answers from an
+        # incomplete table: a cut over it is XSB's run-time error.
+        _rec = _open_tabled(entry, functor, arity, trail)
 
         try:
             for i in range(replay_count):
@@ -1658,6 +1744,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             _repair_lead(entry, lead, table_store, store_key)
             raise
         finally:
+            _close_tabled(_rec)
             if entry.lead is lead:
                 pop_leader(entry)
 

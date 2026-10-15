@@ -65,9 +65,12 @@ def _lower_body(
             naf_flag = ctx.fresh("_naf")
             # ISO cut: the NAF sub-generator is a barrier scope -- a cut
             # inside leaves it, nothing more (8.15.1).
-            inner_stmts = lower(
-                inner, ctx.replace(cut_exit=lambda: [ast.Return(value=None)]),
-                [_yield_none_stmt()])
+            from .cut_scope import cut_guard_entry, new_cut_guard
+            guard = new_cut_guard()
+            inner_stmts = cut_guard_entry(guard, lower(
+                inner, ctx.replace(cut_exit=lambda: [ast.Return(value=None)],
+                                   cut_guard=guard),
+                [_yield_none_stmt()]))
             naf_body = inner_stmts + [
                 ast.Return(value=ast.Constant(value=None)),
                 ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),

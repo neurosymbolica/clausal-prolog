@@ -161,3 +161,68 @@ def test_an_opaque_value_in_an_if_then_else_node_is_parameterised(native):
     ite = IfThenElse(test=("w", 99), body=("ok", 7),
                      orelse=("w", Decimal("2")))
     assert len(list(solve(ite, mod))) == 1
+
+
+# ── Recursion through a condition (final review I-1) ────────────────────────
+#
+# A condition runs as a nested Python generator (like once/1's goal), so
+# recursion THROUGH it is bounded by Python's stack: about 330-400 levels.
+# Scryer answers every row below without error.
+
+DEEP = """\
+all_pos([]).
+all_pos([X|Xs]) :- ( X > 0, all_pos(Xs) -> true ; fail ).
+ite(N, R) :- numlist(1, N, L), ( all_pos(L) -> R = yes ; R = no ).
+ite_err(N, E) :- numlist(1, N, L), catch((all_pos(L), E = none), error(E0, _), E = E0).
+ite_quiet(N, R) :- numlist(1, N, L), ( catch(all_pos(L), _, fail) -> R = yes ; R = no ).
+r(0) :- !.
+r(N) :- N1 is N-1, catch(r(N1), _, true).
+rk(0).
+rk(N) :- N > 0, N1 is N-1, catch((rk(N1), !), _, true).
+o(0).
+o(N) :- N > 0, N1 is N-1, once(o(N1)).
+o_err(N, E) :- catch((o(N), E = none), E, true).
+rec(0).
+rec(N) :- N > 0, N1 is N-1, catch(throw(x), x, (!, rec(N1))).
+rec_err(N, E) :- catch((rec(N), E = none), E, true).
+"""
+
+
+def test_recursion_through_a_condition_overflows_as_an_iso_resource_error(native, ans):
+    """Past the limit the RecursionError leaves the condition as
+    error(resource_error(stack), _), so a catch/3 can see what happened.
+    Scryer: yes / none for both depths."""
+    mod = native.load("l3_ite_deep", DEEP)
+    assert ans(mod, "ite", 2, 100) == ["yes"]
+    assert ans(mod, "ite_err", 2, 100) == ["none"]
+    assert ans(mod, "ite_err", 2, 2000) == [("resource_error", "stack")]
+
+
+def test_a_catch_all_still_turns_the_overflow_into_failure(native, ans):
+    """PINNED, not a target: catch(G, _, fail) catches the resource error
+    like any other, so the deep row answers ``no`` where Scryer answers
+    ``yes`` (todo/ite-condition-recursion-is-bounded-by-the-python-stack-2026-10-16.md)."""
+    mod = native.load("l3_ite_deep_quiet", DEEP)
+    assert ans(mod, "ite_quiet", 2, 2000) == ["no"]           # Scryer: [yes]
+
+
+def test_cut_free_catch_and_a_catch_whose_goal_cuts_are_not_bounded(native, ans):
+    """catch/3 stays in the trampoline (a cut-free Goal inline, a cutting
+    Goal as a sub-generator the trampoline drives), so 2000 levels run.
+    Scryer: the same."""
+    mod = native.load("l3_ite_deep_catch", DEEP)
+    assert ans(mod, "r", 1, 2000) == [()]
+    assert ans(mod, "rk", 1, 2000) == [()]
+
+
+def test_once_and_a_cutting_recovery_still_overflow_as_a_python_error(native, ans):
+    """PINNED, not a target: recursion through once/1 (pre-existing, cut or
+    no cut) and through a catch/3 Recovery that cuts still leaves Python's
+    RecursionError, transliterated ``'RecursionError'(Message)``.  once/1's
+    lowering is shared with cut-free code, whose codegen is pinned
+    byte-identical (tests/test_cut_codegen.py).  Scryer: none, none."""
+    mod = native.load("l3_ite_deep_once", DEEP)
+    [e] = ans(mod, "o_err", 2, 2000)
+    assert e[0] == "RecursionError"
+    [e] = ans(mod, "rec_err", 2, 2000)
+    assert e[0] == "RecursionError"

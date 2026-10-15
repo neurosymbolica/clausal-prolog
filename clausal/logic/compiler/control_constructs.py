@@ -81,11 +81,14 @@ def _lower_inner(
     # A shallow sub-generator is a cut barrier (once/findall/\+/catch ...
     # are all defined on call/1, ISO 7.8.3): a cut inside leaves the
     # sub-generator, nothing more.
-    ctx = ctx.replace(cut_exit=lambda: [ast.Return(value=None)])
+    from .cut_scope import cut_guard_entry, new_cut_guard
+    guard = new_cut_guard()
+    ctx = ctx.replace(cut_exit=lambda: [ast.Return(value=None)], cut_guard=guard)
     ir = whole_goal_cut_as_true(inner, ctx.db)
     if ir is None:
         ir = terms_to_goalop([inner], ctx.db)
-    return lower_python_shallow.lower(ir, ctx, k_stmts)
+    # The guard's entry mark heads the goal's statements: the scope's entry.
+    return cut_guard_entry(guard, lower_python_shallow.lower(ir, ctx, k_stmts))
 
 
 def _lower_inner_trampoline(
@@ -100,7 +103,7 @@ def _lower_inner_trampoline(
     from .terms_to_goalop import terms_to_goalop, whole_goal_cut_as_true
     from . import lower_python_trampoline
     # The inline form has no scope of its own: no cut may land here.
-    ctx = ctx.replace(cut_exit=None)
+    ctx = ctx.replace(cut_exit=None, cut_guard=None)
     ir = whole_goal_cut_as_true(inner, ctx.db)
     if ir is None:
         ir = terms_to_goalop([inner], ctx.db)
@@ -180,13 +183,18 @@ def _compile_once(ctx: CompilationContext, inner, k_stmts):
         **_EXTRA_FUNCDEF,
     )
     once_mark = ctx.fresh(_MARK_PREFIX)
+    # once(G) is call((G, !)) (ISO 8.15.2): in a .pl body its commit is
+    # checked like a cut's (D61 Q1); elsewhere both lists are empty.
+    from .cut_scope import commit_check
+    before, at_commit = commit_check(ctx)
     return [
         once_fn,
         _assign_mark(once_mark, trail_name),
+        *before,
         ast.For(
             target=_name("_", ast.Store()),
             iter=_call(_name(once_gen)),
-            body=k_stmts + [ast.Break()],
+            body=at_commit + k_stmts + [ast.Break()],
             orelse=[],
         ),
         _undo_stmt(once_mark, trail_name),
@@ -373,10 +381,14 @@ def _compile_setup_call_cleanup(ctx: CompilationContext, setup, call, cleanup, k
     call_fn = _make_sub_gen(call_gen, call)
     cleanup_fn = _make_sub_gen(cleanup_gen, cleanup)
 
+    # Setup runs as once/1: in a .pl body its commit is checked like a
+    # cut's (D61 Q1); elsewhere both lists are empty.
+    from .cut_scope import commit_check
+    setup_before, setup_commit = commit_check(ctx)
     setup_loop = ast.For(
         target=_name("_", ast.Store()),
         iter=_call(_name(setup_gen)),
-        body=[
+        body=setup_commit + [
             _assign(ok_var, ast.Constant(value=True)),
             ast.Break(),
         ],
@@ -435,6 +447,7 @@ def _compile_setup_call_cleanup(ctx: CompilationContext, setup, call, cleanup, k
     return [
         setup_fn,
         _assign(ok_var, ast.Constant(value=False)),
+        *setup_before,
         setup_loop,
         if_ok,
     ]

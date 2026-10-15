@@ -209,6 +209,12 @@ class CompilationContext:
     # abandons the remaining clauses too).  Set by the trampoline funcdef
     # builder around its clause loop; read only by the cut exit.
     cut_tro_restart: "str | None" = None
+    # XSB's run-time cut check (D61 Q1, ``cut_scope.cut_check_stmts``): the
+    # current barrier scope's one-slot mark holder, set wherever
+    # ``cut_exit`` is, and the ``F/N`` text of the predicate being compiled
+    # for the error.  Read only by the Cut arm and the .pl commits.
+    cut_guard: "list | None" = None
+    cut_owner: "str | None" = None
 
     # ── Slice E6c: TRO plan for the current clause-body compile ──────────
     #

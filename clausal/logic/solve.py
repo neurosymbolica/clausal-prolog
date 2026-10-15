@@ -971,12 +971,17 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
         # through call/1's converter, and the cut leaves this predicate --
         # local to the call, as ISO 7.8.3 makes it.  Read only by the Cut
         # lowering arm, so a cut-free query compiles as before.
+        guard = None
         if ctx_template is not None:
             from clausal.logic.compiler.goal_shallow import predicate_cut_exit
+            from clausal.logic.compiler.cut_scope import new_cut_guard
+            guard = new_cut_guard()
             ctx_template = ctx_template.replace(
-                cut_exit=predicate_cut_exit(ctx_template))
-        return compile_body_trampoline(clause.body, db, var_context, "trail",
-                                       ctx=ctx_template)
+                cut_exit=predicate_cut_exit(ctx_template), cut_guard=guard,
+                cut_owner=None)
+        from clausal.logic.compiler.cut_scope import cut_guard_entry
+        return cut_guard_entry(guard, compile_body_trampoline(
+            clause.body, db, var_context, "trail", ctx=ctx_template))
 
     _query_body_compiler.accepts_ctx_template = True
 

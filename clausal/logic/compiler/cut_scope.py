@@ -25,6 +25,124 @@ def cut_reaches_scope(ir: GoalOp) -> bool:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# XSB's run-time half: the cut's check (D61 Q1)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Every barrier scope that sets ``ctx.cut_exit`` also sets ``ctx.cut_guard``
+# to a fresh one-slot holder.  The first Cut lowered in the scope names a
+# local there (``_cutm``); the scope's builder then prepends
+# ``_cutm = $tab_ctx.cut_seq`` to the scope's body (``cut_guard_entry``), and
+# the Cut emits ``if $tab_ctx.cut_seq > _cutm: $cut_over_incomplete(...)``
+# before the continuation.  A scope with no cut emits nothing, so cut-free
+# code is byte-identical; a cut pays one attribute read and one int compare
+# unless a tabled call over an incomplete table opened inside its scope
+# (``tabling.cut_over_incomplete`` then decides).
+
+CUT_SEQ_GLOBAL = "$tab_ctx"
+CUT_CHECK_GLOBAL = "$cut_over_incomplete"
+
+
+def new_cut_guard(name: "str | None" = None) -> list:
+    """A scope's guard holder: ``[local name or None]``.  Pass *name* for a
+    scope whose builder assigns the mark itself (an if-then-else)."""
+    return [name]
+
+
+def cut_seq_expr() -> "ast.expr":
+    from ._ast_helpers import _attr
+    return _attr(CUT_SEQ_GLOBAL, "cut_seq")
+
+
+def cut_mark_assign(name: str) -> "ast.stmt":
+    """``name = $tab_ctx.cut_seq`` -- a scope's entry mark."""
+    from ._ast_helpers import _assign
+    return _assign(name, cut_seq_expr())
+
+
+def cut_check_stmt(name: str, owner: "str | None") -> "ast.stmt":
+    """``if $tab_ctx.cut_seq > name: $cut_over_incomplete(name, owner)``."""
+    import ast
+    from ._ast_helpers import _call, _if, _locate, _name
+    return _if(
+        ast.Compare(left=cut_seq_expr(), ops=[ast.Gt()],
+                    comparators=[_name(name)]),
+        [_locate(ast.Expr(value=_call(_name(CUT_CHECK_GLOBAL), _name(name),
+                                      ast.Constant(owner))))])
+
+
+def cut_check_stmts(ctx) -> list:
+    """The Cut arm's check, naming the scope's mark on first use; ``[]``
+    for a scope with no guard (none is built without one)."""
+    guard = ctx.cut_guard
+    if guard is None:
+        return []
+    if guard[0] is None:
+        guard[0] = ctx.fresh("_cutm")
+    return [cut_check_stmt(guard[0], ctx.cut_owner)]
+
+
+def cut_guard_entry(guard: "list | None", stmts: list) -> list:
+    """*stmts* (a scope's body) with its entry mark prepended -- only when a
+    cut in it named one."""
+    if guard is None or guard[0] is None:
+        return stmts
+    return [cut_mark_assign(guard[0])] + list(stmts)
+
+
+def head_pi_text(head) -> "str | None":
+    """``F/N`` of a clause head (a tuple term or an atom), for the error."""
+    if isinstance(head, tuple) and head and isinstance(head[0], str):
+        return f"{head[0]}/{len(head) - 1}"
+    if isinstance(head, str):
+        return f"{head}/0"
+    return None
+
+
+def may_reach_a_table(db) -> bool:
+    """Can a goal compiled against *db* reach a tabled predicate it can see
+    when it is compiled: one *db* tables, or one tabled by a module *db*
+    imports from, transitively (an untabled imported predicate may call a
+    tabled one in its own imports)?"""
+    from clausal.logic.atoms import is_mangled
+    from clausal.logic.predicate import _resolve_mangled_owner
+    seen: set = set()
+    stack = [db]
+    while stack:
+        d = stack.pop()
+        if d is None or id(d) in seen:
+            continue
+        seen.add(id(d))
+        if getattr(d, "_tabled", None):
+            return True
+        md = getattr(d, "module_dict", None)
+        if not isinstance(md, dict):
+            continue
+        for v in list(md.values()):
+            if is_mangled(v):
+                owner = _resolve_mangled_owner(v, d)
+                if owner is not None and id(owner[0]) not in seen:
+                    stack.append(owner[0])
+    return False
+
+
+def commit_check(ctx) -> "tuple[list, list]":
+    """``(before, at_commit)`` statements for a committing construct of a
+    ``.pl`` body (once/1, setup_call_cleanup's Setup): mark before the
+    sub-search, check at its first solution.
+
+    ``([], [])`` for any other db, and for a ``.pl`` db that cannot see a
+    tabled predicate (:func:`may_reach_a_table`): once/1 is common in
+    cut-free ``.pl`` code, whose codegen stays byte-identical
+    (tests/test_cut_codegen.py).  A ``!`` and an if-then-else always
+    carry the check -- they are new code either way."""
+    from clausal.logic.builtins.call_body import cut_allowed
+    if not cut_allowed(ctx.db) or not may_reach_a_table(ctx.db):
+        return [], []
+    m = ctx.fresh("_cutm")
+    return [cut_mark_assign(m)], [cut_check_stmt(m, ctx.cut_owner)]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Cut over a tabled call (XSB's rule, ruling Q1 -- provisional)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -38,9 +156,10 @@ def cut_reaches_scope(ir: GoalOp) -> bool:
 #: as written.  It is NOT Scryer's behaviour -- over an incomplete
 #: (recursive) table the committed answer depends on our re-lead fixpoint's
 #: pass order and differs from Scryer's (S37's tg/1: [0,1] here, [0,1,2] in
-#: Scryer; pinned in tests/iso_l3/test_l3_cut_tabling.py).  THE ONE SWITCH:
-#: :func:`check_cut_over_tabled` is the only reader, and the only caller is
-#: ``goal_shallow._compile_body_impl``.
+#: Scryer; pinned in tests/iso_l3/test_l3_cut_tabling.py).  THE ONE SWITCH,
+#: for both halves: :func:`check_cut_over_tabled` (load time; its only
+#: caller is ``goal_shallow._compile_body_impl``) and
+#: ``tabling.cut_over_incomplete`` (run time) are its only readers.
 CUT_OVER_TABLED_CALL = "refuse"
 
 # Meta-calls whose goal's choice points SURVIVE the meta-call (ISO: catch/3
@@ -199,8 +318,11 @@ def tabled_calls_in_cut_scope(ir: GoalOp, db) -> list[tuple[str, int]]:
     commits like ``( G -> true )``.  ``\\+`` and findall/bagof/setof/
     forall/count_all are not cuts and leave no choice points behind.
 
-    Goals built at run time (``G = (tf(X), !), call(G)``) are not seen: no
-    static rule can (XSB pairs its static rule with a run-time check)."""
+    Goals built at run time (``G = (tf(X), !), call(G)``), and tabled
+    predicates reached through an untabled one, are not seen: no static rule
+    can.  As in XSB, the run-time half covers them: a cut that would prune a
+    tabled call over an INCOMPLETE table raises (``tabling.
+    cut_over_incomplete``, the Cut arm's ``cut_check_stmts``)."""
     from .ir import META_GOAL_POSITIONS, MetaCall, Negate, SubCall
     found: list[tuple[str, int]] = []
 

@@ -386,7 +386,10 @@ def _lower_shared_body(
                 raise CompilerError(
                     "a cut reached a goal position that is not a barrier scope "
                     "(compiler bug: every scope must set ctx.cut_exit)")
-            return list(k_stmts) + ctx.cut_exit()
+            # XSB's run-time half (D61 Q1): refuse to prune a tabled call
+            # over an incomplete table opened in this scope.
+            from .cut_scope import cut_check_stmts
+            return cut_check_stmts(ctx) + list(k_stmts) + ctx.cut_exit()
 
         # ── ISO if-then-else.  The condition is a shallow sub-generator
         # (a cut barrier, like once/1's); the first solution commits;
@@ -396,8 +399,13 @@ def _lower_shared_body(
             from .strategy import ShallowStrategy
             from . import lower_python_shallow
             from ._ast_helpers import _yield_none_stmt, _EXTRA_FUNCDEF
+            from .cut_scope import cut_check_stmt, cut_mark_assign, new_cut_guard
+            # The commit (and a cut inside the condition) is checked against
+            # the tabled frames opened since the condition began (D61 Q1).
+            cut_m = ctx.fresh("_cutm")
             cond_ctx = ctx.replace(strategy=ShallowStrategy(),
-                                   cut_exit=lambda: [ast.Return(value=None)])
+                                   cut_exit=lambda: [ast.Return(value=None)],
+                                   cut_guard=new_cut_guard(cut_m))
             cond_stmts = lower_python_shallow.lower(t_op, cond_ctx, [_yield_none_stmt()])
             gen_name = ctx.fresh("_ite_cond")
             gen_fn = ast.FunctionDef(
@@ -414,10 +422,22 @@ def _lower_shared_body(
             out = [
                 gen_fn,
                 _assign_mark(mark, trail_name),
+                cut_mark_assign(cut_m),
                 _assign(taken, ast.Constant(False)),
-                ast.For(target=_name("_", ast.Store()), iter=_call(_name(gen_name)),
-                        body=[_assign(taken, ast.Constant(True))] + then_stmts + [ast.Break()],
-                        orelse=[]),
+                # Recursion through a condition nests Python generators: a
+                # RecursionError leaving it becomes ISO resource_error(stack)
+                # here (final review I-1), so a catch-all sees an error term.
+                # A try costs nothing until something raises.
+                ast.Try(
+                    body=[ast.For(
+                        target=_name("_", ast.Store()), iter=_call(_name(gen_name)),
+                        body=[cut_check_stmt(cut_m, ctx.cut_owner),
+                              _assign(taken, ast.Constant(True))] + then_stmts + [ast.Break()],
+                        orelse=[])],
+                    handlers=[ast.ExceptHandler(
+                        type=_name("$RecursionError"), name=None,
+                        body=[ast.Expr(value=_call(_name("$ite_overflow")))])],
+                    orelse=[], finalbody=[]),
                 _undo_stmt(mark, trail_name),
             ]
             if else_stmts:

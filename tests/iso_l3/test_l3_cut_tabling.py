@@ -196,11 +196,15 @@ def test_a_literal_call_goal_is_scanned_like_the_body(native, clause):
         native.load("l3_tab_call", src)
 
 
-def test_a_run_time_goal_is_out_of_reach(native, ans):
+def test_a_run_time_goal_loads_and_the_run_time_check_refuses_it(native, ans):
+    """Out of reach of the static rule, so the file loads; the cut then
+    prunes tf/1's leader while its table is still incomplete, which is the
+    run-time half's error (D61 Q1).  Scryer: [[1]]."""
     src = (":- table(tf/1).\ntf(1). tf(2).\n"
-           "c(L) :- G = (tf(X), !), findall(X, call(G), L).\n")
+           "c(L) :- G = (tf(X), !), findall(X, call(G), L).\n"
+           "r(E) :- catch((c(_), E = none), error(E0, _), E = E0).\n")
     mod = native.load("l3_tab_rt", src)
-    assert ans(mod, "c") == [[1]]                             # Scryer: [[1]]
+    assert ans(mod, "r") == [_INCOMPLETE("tf", 1)]
 
 
 def test_once_over_a_tabled_call_is_refused(native):
@@ -324,3 +328,119 @@ def test_the_pre_check_sees_every_commit_spelling():
                 "inner": nodes.And(left=("tf", 1), right=nodes.Cut())}),
     ):
         assert _may_commit(Sequence(ops=[commit])), commit
+
+
+# ── XSB's run-time half (D61 Q1, final review C-1) ───────────────────────────
+#
+# What the static rule cannot see -- a tabled predicate reached through an
+# untabled one, or a goal built at run time -- is checked when the cut runs:
+# a cut (an if-then-else commit, once/1, setup_call_cleanup's Setup) that
+# would prune a tabled call over a table that is still INCOMPLETE raises
+# permission_error(cut, incomplete_table, F/N).  XSB raises at run time on
+# the same programs; Scryer runs them (answers in the comments).
+
+
+def _INCOMPLETE(f, n):
+    return ("permission_error", "cut", "incomplete_table", ("/", f, n))
+
+
+THROUGH_UNTABLED = """\
+:- table(a/1).
+a(X) :- b(X), !.
+b(X) :- a(Y), X is Y+1, X < 3.
+b(0).
+r(E) :- catch((findall(X, a(X), _), E = none), error(E0, _), E = E0).
+"""
+
+
+def test_a_cut_over_an_incomplete_table_through_an_untabled_predicate_raises(native, ans):
+    """The final review's repro: a/1's cut prunes b/1's consumer call of
+    a/1 while a/1's table is incomplete.  It used to answer [0,1] silently
+    (Scryer: [0,1,2]; XSB: the run-time error)."""
+    mod = native.load("l3_tab_rt_untabled", THROUGH_UNTABLED)
+    assert ans(mod, "r") == [_INCOMPLETE("a", 1)]
+
+
+def test_the_run_time_error_names_the_rule_and_the_predicate(native):
+    from clausal.logic.exceptions import LogicException
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var
+    mod = native.load("l3_tab_rt_msg", THROUGH_UNTABLED)
+    with pytest.raises(LogicException) as e:
+        list(call("a", Var(), module=mod))
+    msg = str(e.value)
+    assert "in predicate a/1 cuts over the tabled call(s) a/1" in msg
+    assert "the scope of a cut cannot include a call to a tabled predicate" in msg
+
+
+CALL_N = """\
+:- table(path/2).
+e(a, b). e(b, a).
+path(X, Y) :- e(X, Y).
+path(X, Y) :- path(X, Z), e(Z, Y).
+u(Y) :- G = (path(a, Y), !), call(G).
+r(E) :- catch((findall(Y, u(Y), _), E = none), error(E0, _), E = E0).
+"""
+
+
+def test_a_run_time_built_goal_cutting_over_an_incomplete_table_raises(native, ans):
+    """Scryer: [a]; this engine used to answer [b] silently."""
+    mod = native.load("l3_tab_rt_calln", CALL_N)
+    assert ans(mod, "r") == [_INCOMPLETE("path", 2)]
+
+
+INDIRECT = """\
+:- table(t/1).
+t(1). t(2). t(3).
+tq(X) :- t(X).
+p(1). p(2).
+done(X) :- findall(Y, t(Y), _), tq(X), !.
+w(X) :- tq(X), !.
+w2(X) :- tq(X), X > 1, !.
+o1(X) :- once(tq(X)).
+o2(X) :- ( tq(X) -> true ; X = 0 ).
+o3(X) :- setup_call_cleanup(tq(X), true, true).
+n1(X) :- \\+ \\+ tq(_), p(X), !.
+n2(X) :- catch((tq(Y), Y > 1, throw(oops)), oops, true), p(X), !.
+n3(X) :- tq(X), \\+ (p(Y), !, Y > 5).
+r(N, E) :- G =.. [N, _], catch((findall(x, G, _), E = none), error(E0, _), E = E0).
+"""
+
+
+def test_a_cut_after_its_tables_completed_runs(native, ans):
+    """The static rule refuses ``t(X), !`` even over a COMPLETE table (our
+    ruling, test_cut_over_a_tabled_call_is_refused_at_load's tc/1); the
+    run-time half only adds what the static rule cannot see, and only over
+    an INCOMPLETE table.  done/1 completes t/1 with findall/3 first, so its
+    cut over tq/1 prunes nothing incomplete.  Scryer: [1]."""
+    mod = native.load("l3_tab_rt_done", INDIRECT)
+    assert ans(mod, "done") == [1]
+
+
+@pytest.mark.parametrize("name", ["w", "w2", "o1", "o2", "o3"])
+def test_every_commit_over_an_incomplete_table_raises_at_run_time(native, ans, name):
+    """A ``!``, an if-then-else commit, once/1 and setup_call_cleanup's
+    Setup, each over t/1 reached through the untabled tq/1 while t/1's
+    leader is still streaming (w2/1 commits on its SECOND answer).  Scryer
+    answers [1], [2], [1], [1], [1].  XSB under local scheduling completes
+    t/1 before it returns an answer and would not raise; this engine
+    streams answers before completion, so the table is incomplete at the
+    cut."""
+    mod = native.load("l3_tab_rt_" + name, INDIRECT)
+    assert ans(mod, "r", 2, name) == [_INCOMPLETE("t", 1)]
+
+
+@pytest.mark.parametrize("name,want", [("n1", [1]), ("n2", [1]), ("n3", [1, 2, 3])])
+def test_a_sub_search_abandoned_by_backtracking_is_not_pruned_by_the_cut(native, ans, name, want):
+    """\\+ and catch/3's recovery abandon t/1's leader mid-stream, but they
+    undo the trail past it first, so a later cut does not prune it; a cut
+    inside \\+ does not reach the tq/1 call before it.  Scryer agrees."""
+    mod = native.load("l3_tab_rt_" + name, INDIRECT)
+    assert ans(mod, name) == want
+
+
+def test_the_switch_turns_off_the_run_time_half_too(native, ans, monkeypatch):
+    from clausal.logic.compiler import cut_scope
+    monkeypatch.setattr(cut_scope, "CUT_OVER_TABLED_CALL", "run")
+    mod = native.load("l3_tab_rt_switch", INDIRECT)
+    assert ans(mod, "w") == [1]                               # Scryer: [1]

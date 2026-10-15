@@ -547,18 +547,21 @@ def _make_body_compiler_impl(
         from .destructive_reuse import _flatten_and_goals
         goals = _flatten_and_goals(clause.body)
         _exit = predicate_cut_exit(ctx_template)
+        from .cut_scope import cut_guard_entry, head_pi_text, new_cut_guard
+        guard = new_cut_guard()
         ctx = ctx_template.replace(
             db=db, var_context=var_context, trail_name=_TRAIL_PARAM_NAME,
-            cut_exit=_exit,
+            cut_exit=_exit, cut_guard=guard,
+            cut_owner=head_pi_text(clause.head),
         )
         # Slice E6d-β: reuse the IR the predicate-trampoline TRO sweep
         # already built (see ``_build_predicate_trampoline_funcdef``).
         cached_ir = None
         if ctx_template.clause_ir_cache is not None:
             cached_ir = ctx_template.clause_ir_cache.get(id(clause))
-        return _compile_body_impl(
+        return cut_guard_entry(guard, _compile_body_impl(
             goals, ctx, head=clause.head, body_ir=cached_ir,
-        )
+        ))
     return _body_compiler
 
 

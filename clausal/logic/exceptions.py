@@ -746,6 +746,27 @@ def permission_error(
                    _name_atom(obj_type), culprit), context)
 
 
+def resource_error(resource: str, context: Any = "") -> tuple:
+    """Build error(resource_error(Resource), Context) -- ISO 7.12.2 h."""
+    return _error(("resource_error", _name_atom(resource)), context)
+
+
+def ite_condition_overflow() -> None:
+    """Raise ``error(resource_error(stack), _)`` for a Python
+    ``RecursionError`` leaving an if-then-else (final review I-1).
+
+    Each condition of a ``.pl`` if-then-else runs as a nested Python
+    generator, so recursion THROUGH a condition is bounded by Python's
+    stack (about 330-400 levels).  The if-then-else lowering catches the
+    RecursionError at the condition's boundary and calls this, so a
+    catch-all ``catch(G, E, R)`` sees an ISO error term rather than
+    ``'RecursionError'(Message)``."""
+    raise LogicException(resource_error(
+        "stack", "Python's recursion limit was reached (recursion through "
+        "an if-then-else condition is bounded by Python's stack, about "
+        "330-400 levels; see docs/importing_prolog.md)"))
+
+
 def domain_error(domain: str, culprit: Any, context: Any = "") -> tuple:
     """Build error(domain_error(Domain, Culprit), PI).
 

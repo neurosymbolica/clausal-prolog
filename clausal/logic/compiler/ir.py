@@ -368,6 +368,27 @@ class CompilerError(Exception):
     """A body shape the compiler cannot lower where it stands."""
 
 
+def cut_over_tabled_message(over: "list[tuple[str, int]]",
+                            predicate: "str | None" = None,
+                            line: "int | None" = None,
+                            incomplete: bool = False) -> str:
+    """The one wording of the cut-over-a-table refusal: the load-time
+    :class:`CutOverTableError` and the run-time
+    ``permission_error(cut, incomplete_table, F/N)`` (``tabling.
+    cut_over_incomplete``) both say it."""
+    from .cut_scope import _pi_text
+    pis = ", ".join(_pi_text(pi) for pi in over)
+    where = f" in predicate {predicate}" if predicate else ""
+    if line:
+        where += f" (line {line})"
+    still = " (its table is still incomplete)" if incomplete else ""
+    return (f"a cut (or an if-then-else condition, or once/1){where} cuts "
+            f"over the tabled call(s) {pis}{still}: the scope of a cut "
+            f"cannot include a call to a tabled predicate (XSB's rule; "
+            f"Clausal tables by re-running the clause to a fixpoint, so the "
+            f"committed answer would depend on pass order)")
+
+
 class CutOverTableError(SyntaxError):
     """A cut (or if-then-else commit) whose scope holds a call to a tabled
     predicate -- XSB's compile-time rule (``cut_scope.check_cut_over_tabled``).
@@ -380,18 +401,7 @@ class CutOverTableError(SyntaxError):
         self.over = list(over)
         self.predicate = predicate
         self.line = line
-        from .cut_scope import _pi_text
-        pis = ", ".join(_pi_text(pi) for pi in self.over)
-        where = f" in predicate {predicate}" if predicate else ""
-        if line:
-            where += f" (line {line})"
-        super().__init__(
-            f"a cut (or an if-then-else condition, or once/1){where} cuts "
-            f"over the tabled "
-            f"call(s) {pis}: the scope of a cut cannot include a call to a "
-            f"tabled predicate (XSB's rule; Clausal tables by re-running the "
-            f"clause to a fixpoint, so the committed answer would depend on "
-            f"pass order)")
+        super().__init__(cut_over_tabled_message(self.over, predicate, line))
 
     def located(self, path: str, text: str = "") -> "CutOverTableError":
         """The loader's framing -- ``Cannot import <path>: <file>:<line>:
