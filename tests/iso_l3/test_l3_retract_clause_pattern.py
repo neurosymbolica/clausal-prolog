@@ -95,8 +95,9 @@ def test_clause_2_with_a_conjunction_body(native, ans):
 
 
 def test_open_tail_and_negation_patterns(native, ans):
-    """(G, Rest) with Rest unbound takes the remaining goals; \\+ G matches
-    a negation.  Scryer: c2 [X = 1], c3 [], c4 [x], c5 [x]."""
+    """(G, Rest) with Rest unbound takes the rest of the conjunction -- the
+    ISO term ``(X > 0, X < 5)``, a ','/2 cell; \\+ G matches a negation.
+    Scryer: c1 (X > 0, X < 5), c2 [X = 1], c3 [], c4 [x], c5 [x]."""
     src = (":- dynamic(g/1).\n"
            "g(X) :- X = 1, X > 0, X < 5.\n"
            "g(X) :- \\+ X = 2.\n"
@@ -106,7 +107,8 @@ def test_open_tail_and_negation_patterns(native, ans):
            "c4(L) :- findall(x, clause(g(Y), \\+ Y = 2), L).\n"
            "c5(L) :- retract((g(_) :- _, _)), findall(x, clause(g(_), _), L).\n")
     for name, check in (
-            ("c1", lambda r: len(r) == 1 and [g[0] for g in r[0]] == [">", "<"]),
+            ("c1", lambda r: len(r) == 1 and r[0][0] == ","
+             and (r[0][1][0], r[0][2][0]) == (">", "<")),
             ("c2", lambda r: len(r) == 1 and [g[0] for g in r[0]] == ["="]),
             ("c3", lambda r: r == [[]]),
             ("c4", lambda r: r == [["x"]]),

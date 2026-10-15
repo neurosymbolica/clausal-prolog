@@ -12,7 +12,13 @@ arguments out of the head into leading ``Unify(V, Arg)`` body goals.
 the unifications they are, which binds each fresh head variable to its
 argument -- so ``fib(0, 0)`` reads back as ``fib(0, 0)`` with Body ``true``.
 
-BODY.  ``body[hoisted:]`` is handed back as a TERM, in exactly the form term
+BODY.  A ``.pl`` / Clausal Prolog rule hands back its body AS READ
+(``Clause.source_body``, kept by the native front end: ISO ``','``/2,
+``;``, ``\\+``, ``M:G``, grouping and ``fail``/``false`` as written), renamed
+with the head -- see :func:`clause_terms` and :func:`iso_bodies`.  Every
+other clause (seam, Python-built):
+
+``body[hoisted:]`` is handed back as a TERM, in exactly the form term
 position builds from the same text -- which is the form ``call/1`` runs
 (step 1, ``call_body``).  It is built by the SAME lowering: the goals go
 through the query compiler as ``Out = (G1, ..., Gn)``, the construction the
@@ -455,6 +461,30 @@ def _as_goal(goals: list) -> Any:
     return nodes.TupleLiteral(elements=list(goals))
 
 
+# ── ISO bodies (Prolog-surface clauses) ─────────────────────────────────────
+
+
+def iso_bodies(db) -> bool:
+    """True when *db*'s clauses were lowered by the native ISO front end
+    (a ``.pl`` or Clausal Prolog module).  Such a clause carries its body
+    AS READ (``Clause.source_body``, see :func:`clause_terms`): the ISO term
+    with every ``','``/2, ``;``, ``\\+``, ``M:G``, grouping and
+    ``fail``/``false`` as written, which clause/2 and retract/1 hand back
+    and match.
+
+    Rebuilding a Body from the lowered goals instead cannot be faithful:
+    the engine stores a conjunction as a FLAT goal list (a tuple whose
+    first element is an atom is a CELL, so ``nl, X = 1`` read back as
+    ``nl(X = 1)`` and ``retract((d(_) :- (_, _)))`` removed
+    ``d(X) :- X = 1``), and the lowering drops grouping, module qualifiers
+    and the fail/false spelling.  Seam modules keep the term their term
+    position builds from the same text (the flat tuple)."""
+    module_dict = getattr(db, "module_dict", None)
+    if not module_dict:
+        return False
+    return getattr(module_dict.get("__loader__"), "frontend", None) == "native"
+
+
 class _Built:
     """A compiled construction over one clause's own variables.
 
@@ -585,7 +615,7 @@ def _full_built(clause, home_db, why: "str | None" = None) -> _Built:
     built = None
     if why is None:
         namespace = getattr(home_db, "module_dict", None) or {}
-        body = _as_goal([_spell_as_cells(g, namespace, home_db) for g in rest])
+        body = _spell_as_cells(_as_goal(rest), namespace, home_db)
         if body is True:
             built = _Built(head.direct, head.fn, head.params, True, None)
         else:
@@ -601,6 +631,76 @@ def _full_built(clause, home_db, why: "str | None" = None) -> _Built:
     if built is None:
         built = _Built(head.direct, head.fn, head.params, None, why)
     slot["full"] = built
+    return built
+
+
+def _is_term_data(t) -> bool:
+    """True when the body as read (``Clause.source_body``) is already the
+    term: variables, atomic values and cells/lists of them.  Anything else
+    -- a node, a ``PyThunk``, any other engine object -- is a compile-time
+    expansion the lowering left for the compiled body to evaluate, and goes
+    through :func:`_source_built`."""
+    stack = [t]
+    while stack:
+        t = stack.pop()
+        if type(t) in _PLAIN or is_var(t):
+            continue
+        if type(t) in (list, tuple):
+            stack.extend(t)
+            continue
+        return False
+    return True
+
+
+def _engine_object_in(t):
+    """The first node or ``PyThunk`` in the built Body *t* (lists and cells
+    walked), or ``None``.  Either is engine internals, never a term."""
+    from clausal.terms import PyThunk  # noqa: PLC0415
+    stack = [t]
+    while stack:
+        t = deref(stack.pop())
+        if isinstance(t, (nodes.Node, PyThunk)):
+            return t
+        if type(t) in (list, tuple):
+            stack.extend(t)
+    return None
+
+
+def _source_built(clause, home_db) -> _Built:
+    """The construction of ``(Head, Body)`` from the body AS READ, for an
+    ISO rule whose source term holds a compile-time expansion
+    (:func:`_is_term_data` is False): ``Out = <source term>`` through the
+    query compiler, the lowering the clause's own goals had -- so
+    ``constant(three)`` is ``3``, ``[1|T]`` the partial list.  Compiled
+    once and cached, like :func:`_full_built`."""
+    slot = _cache_for(clause)
+    built = slot.get("source")
+    if built is not None:
+        return built
+    from clausal.terms import Unify  # noqa: PLC0415
+    head = _head_built(clause, home_db)
+    why = head.why
+    if why is None:
+        _, lead = _split_lead(list(clause.body[:clause.hoisted]))
+        out = Var()
+        try:
+            fn, params = _compile(
+                lead + [Unify(left=out, right=clause.source_body)], home_db)
+        except _BUILD_ERRORS as exc:
+            why = f"its body cannot be built as a term ({exc})"
+        else:
+            built = _Built(head.direct, fn, params, out, None)
+    if built is None:
+        built = _Built(head.direct, head.fn, head.params, None, why)
+    slot["source"] = built
+    return built
+
+
+def _source_failed(clause, exc) -> _Built:
+    """Record that the source construction raised at RUN time."""
+    built = _Built((), None, (), None,
+                   f"its body cannot be built as a term ({exc})")
+    _cache_for(clause)["source"] = built
     return built
 
 
@@ -676,18 +776,25 @@ class OpenConjunction:
         self.tail = tail
 
 
-def engine_body_pattern(t):
-    """A body PATTERN as Prolog source spells it, in the shape clause_terms
-    builds a body: the atom ``true`` is True, ``\\+ G`` the Not node, a
-    right-nested ``','``/2 cell chain the flat tuple of its goals (as the
-    compiler flattens a body) -- an :class:`OpenConjunction` when its tail
-    is unbound -- and a ``';'``/2 cell the Or node.  So
-    ``clause(g(X), (X = 1, X > 0))`` finds ``g(X) :- X = 1, X > 0``; it
-    found nothing (the cell never unified with the tuple).  Known residue:
-    the compiler's flat body has lost a clause's own grouping, so a body
-    written ``A, (B, C)`` matches the pattern ``(A, B, C)`` (Scryer: no),
-    and a left-nested pattern ``((A, B), C)`` matches nothing.  Match with
-    :func:`unify_body`."""
+def engine_body_pattern(t, *, iso: bool = False):
+    """A body PATTERN in the shape :func:`clause_terms` hands a Body back.
+
+    It depends on *iso* (keyword-only) -- :func:`iso_bodies` of the
+    clauses' home database, so the caller resolves the procedure first:
+
+    - *iso* (a ``.pl`` / Clausal Prolog procedure, whose Body is the term
+      as read): the pattern itself, with a seam caller's spellings made
+      ISO (:func:`_iso_pattern`).
+    - otherwise (a seam procedure, whose Body is the term the seam builds:
+      the atom ``true`` is True, ``\\+ G`` the Not node, a ``';'``/2 cell
+      the Or node, and a conjunction the flat tuple): a
+      right-nested ``','``/2 cell chain is the flat tuple of its goals --
+      an :class:`OpenConjunction` when its tail is unbound.  Known
+      residue: a body written ``(A, B), C`` matches nothing.
+
+    Match with :func:`unify_body`."""
+    if iso:
+        return _iso_pattern(t)
     t = deref(t)
     if type(t) is str and t == "true":
         return True
@@ -716,8 +823,56 @@ def engine_body_pattern(t):
     return tuple(goals)
 
 
+def _iso_pattern(t):
+    """A body pattern against an ISO-surface procedure, whose Body is the
+    ISO term as read: the pattern unifies with it as it is.  Only a SEAM
+    caller's spellings change, at any depth: a tuple whose first element
+    is not a name is the seam's conjunction (a Prolog compound always has
+    a name) -- the right-nested ``','(A, ','(B, C))`` -- and the seam's
+    Not / Or nodes are the ``\\+`` / ``;`` cells.  Any other seam node
+    (``X is 1``, ``X > 0``) stays a node and matches nothing: a miss."""
+    t = deref(t)
+    if type(t) is nodes.Not:
+        return ("\\+", _iso_pattern(t.operand))
+    if type(t) is nodes.Or:
+        return (";", _iso_pattern(t.left), _iso_pattern(t.right))
+    if type(t) is list:
+        new = [_iso_pattern(e) for e in t]
+        return t if all(a is b for a, b in zip(new, t)) else new
+    if type(t) is not tuple or not t:
+        return t
+    if type(t[0]) is not str:
+        if len(t) == 1:
+            return _iso_pattern(t[0])
+        parts = [_iso_pattern(e) for e in t]
+        out = parts[-1]
+        for p in reversed(parts[:-1]):
+            out = (",", p, out)
+        return out
+    args = [_iso_pattern(a) for a in t[1:]]
+    if all(a is b for a, b in zip(args, t[1:])):
+        return t
+    return (t[0], *args)
+
+
+class FailClosedBody:
+    """A Body that is not faithfully the clause as written: an ISO-surface
+    rule whose lowering rewrote it (reif's if_/3) or that carries no body
+    as read (:func:`clause_terms`).  :func:`unify_body` lets only an
+    UNBOUND pattern take it: a bound pattern never matches, so retract
+    misses the clause rather than delete one ISO would keep."""
+    __slots__ = ("term",)
+
+    def __init__(self, term):
+        self.term = term
+
+
 def unify_body(pattern, body, trail) -> bool:
     """Unify an :func:`engine_body_pattern` result with a stored body."""
+    if type(body) is FailClosedBody:
+        if type(pattern) is OpenConjunction or not is_var(deref(pattern)):
+            return False
+        return unify(pattern, body.term, trail)
     if type(pattern) is not OpenConjunction:
         return unify(pattern, body, trail)
     body = deref(body)
@@ -760,15 +915,58 @@ def clause_terms(clause, home_db) -> tuple:
     """``(Head, Body, why)`` for *clause*: the head with its hoisted
     arguments put back and the body remainder as a term, both a FRESH
     renaming.  When the body cannot be a term, Body is ``None`` and *why*
-    says so."""
+    says so.
+
+    An ISO-surface rule (:func:`iso_bodies`) hands back its body AS READ
+    (``Clause.source_body``), renamed together with the head.  It is a
+    :class:`FailClosedBody` -- only an unbound pattern takes it -- when
+    the lowering rewrote the body (``source_rewritten``: reif's if_/3) or
+    when the clause carries no source term at all (then the Body is the
+    term rebuilt from the lowered goals, which is only approximate)."""
     from clausal.logic.builtins.inspection import _copy_term  # noqa: PLC0415
     head = _as_cell(clause.head)
+    iso_rule = (iso_bodies(home_db)
+                and clause.body[clause.hoisted:] not in ([], [True]))
+    src = getattr(clause, "source_body", None) if iso_rule else None
+    if src is not None:
+        if _is_term_data(src):
+            built = _head_built(clause, home_db)
+            out = src
+        else:
+            # a compile-time expansion the lowering left for the compiled
+            # body to evaluate (constant/1's thunk, a partial list's
+            # StarUnpack, ``undefined``'s LoadName): built by the SAME
+            # construction, so Body is the term the compiled body sees
+            built = _source_built(clause, home_db)
+            out = built.out
+        if built.why is None:
+            try:
+                h, b = _on_private_trail(
+                    built, lambda tmp: _copy_term((head, out), {}))
+            except _BuildFailed as failed:
+                if out is src:
+                    built = _head_failed(clause, home_db, failed.exc)
+                else:
+                    built = _source_failed(clause, failed.exc)
+            else:
+                # (a plain source term holds none: _is_term_data walked it)
+                leak = None if out is src else _engine_object_in(b)
+                if leak is not None:
+                    # fail closed: never hand an engine object out as a term
+                    return None, None, (
+                        f"its body holds {type(leak).__name__} {leak!r}, "
+                        f"an engine object, not a term")
+                if getattr(clause, "source_rewritten", False):
+                    b = FailClosedBody(b)
+                return h, b, None
+        return None, None, built.why
     built = _full_built(clause, home_db)
     if built.why is None:
         try:
             h, b = _on_private_trail(
                 built, lambda tmp: _copy_term((head, built.out), {}))
-            return h, b, None
+            # an ISO rule with no source term: approximate, fail closed
+            return h, (FailClosedBody(b) if iso_rule else b), None
         except _BuildFailed as failed:
             built = _full_built(
                 clause, home_db,
@@ -841,14 +1039,16 @@ def _clause_factory(db):
         b = deref(body)
         if not is_var(b):
             _type_check(b, "body")
-            # the Prolog spelling of a body (the atom ``true``, ``','``/2
-            # and ``';'``/2 cells) as the engine's body term
-            body = engine_body_pattern(b)
         resolved = _resolve(db, h)
         if resolved is None:
             return
         row, cell = resolved
         home = row.db
+        if not is_var(b):
+            # the Prolog spelling of a body (the atom ``true``, ``','``/2
+            # and ``';'``/2 cells) as the engine's body term -- which, for
+            # a conjunction, depends on the procedure's surface
+            body = engine_body_pattern(b, iso=iso_bodies(home))
         # The logical update view (ISO 7.5.4): the clauses as they are NOW;
         # an assertz/retract made while this iterates changes nothing here.
         for clause in list(row.clauses):

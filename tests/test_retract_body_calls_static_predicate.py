@@ -268,6 +268,9 @@ cf(B) :- clause(legs(_, fa), B).
 cca(B) :- clause(legs(_, ca), B).
 cfo(B) :- clause(legs(_, fo), B).
 cc(B) :- clause(legs(_, conj), B).
+ud(B) :- clause(legs(A, disj), B), B = (animal(A) ; p_insect(A)).
+un(B) :- clause(legs(A, neg), B), B = (\\+ animal(A)).
+uc(B) :- clause(legs(A, conj), B), B = (animal(A), p_insect(A)).
 """
 
 
@@ -277,8 +280,8 @@ def control_mod(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("goal, expected", [
-    ("cd", "or(animal(_1),p_insect(_1))"),
-    ("cn", "not(animal(_))"),
+    ("cd", "animal(_1);p_insect(_1)"),
+    ("cn", "\\+animal(_)"),
     ("cf", "findall(_1,animal(_1),_)"),
     ("cca", "catch(animal(_),_,true)"),
     ("cfo", "forall(animal(_),true)"),
@@ -291,15 +294,29 @@ def test_static_callee_inside_a_control_construct(control_mod, goal, expected):
 
 
 def test_static_callee_inside_a_conjunction(control_mod):
-    """A conjunction body reads back as a raw flat Python tuple of its two
-    goals (a separate, pre-existing display residue, unrelated to this fix
-    -- see the in-flight retract-conjunction work); what matters here is
-    that it no longer raises, and each conjunct is the expected call."""
+    """A conjunction body reads back as the ISO term ``','(A, B)`` -- the
+    body as read, as clause/2 hands it back in Scryer -- and each conjunct
+    is the expected call, sharing the head's variable."""
     result = _first_term(control_mod, "cc")
-    assert isinstance(result, tuple) and len(result) == 2
-    left, right = (deref(e) for e in result)
+    assert cell_functor(result) == ","
+    left, right = (deref(e) for e in cell_args(result))
     assert cell_functor(left) == "animal"
     assert cell_functor(right) == "p_insect"
+    assert deref(cell_args(left)[0]) is deref(cell_args(right)[0])
+
+
+@pytest.mark.parametrize("goal, expected", [
+    ("ud", "animal(_1);p_insect(_1)"),
+    ("un", "\\+animal(_)"),
+    ("uc", "animal(_1),p_insect(_1)"),
+])
+def test_control_body_unifies_with_the_body_as_written(control_mod, goal,
+                                                       expected):
+    """Pure unification against the body as WRITTEN, over the head's own
+    variable: ``clause(legs(A, K), B), B = <written body>`` succeeds once.
+    Checked against Scryer (the same program and unifications succeed
+    there; ``or/2`` and ``not/1`` do not unify with what it hands back)."""
+    assert _answers(control_mod, goal, limit=2) == [expected]
 
 
 # ── F3: an exported / imported static callee keeps working (control) ───────

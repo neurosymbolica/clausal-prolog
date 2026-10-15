@@ -921,7 +921,7 @@ def _retract_in(db, author, term_val, trail):
     else the caller's), writing as *author*."""
     from clausal.logic.database import head_key  # noqa: PLC0415
     from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
-        _as_cell, engine_body_pattern, unify_body)
+        _as_cell, engine_body_pattern, iso_bodies, unify_body)
     module_dict = getattr(db, "module_dict", None)
     # ISO 8.9.3: retract(Head) is retract((Head :- true)) -- it removes
     # a FACT only -- and retract((Head :- Body)) matches the clause's
@@ -932,8 +932,9 @@ def _retract_in(db, author, term_val, trail):
         return
     body_pattern = True
     if type(term_val) is _OpenBody:
-        term_val, body_pattern = (term_val.head,
-                                  engine_body_pattern(term_val.body))
+        # converted below, once the procedure's home (and so its surface,
+        # ``clause_ops.iso_bodies``) is known
+        term_val, body_pattern = term_val.head, term_val.body
     _refuse_control_construct(term_val, "retract/1")
     # A CELL pattern goes through the SAME gate as the assert doors (P3-3
     # Task 5, R11) and comes back normalized to the shape the clause list
@@ -951,6 +952,9 @@ def _retract_in(db, author, term_val, trail):
     clause_list = home._clauses.get((functor, arity))
     if clause_list is None:
         return
+    if body_pattern is not True:
+        body_pattern = engine_body_pattern(body_pattern,
+                                           iso=iso_bodies(home))
     # SEARCH FIRST, THEN OPEN THE TRANSACTION (P3-3 Task 3 fix round 2).
     # A retract that matches nothing is not a write, and the gate's exit
     # invalidates on the KIND rather than on what the body did — so
