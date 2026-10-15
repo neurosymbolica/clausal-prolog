@@ -3,9 +3,10 @@
 filled_rectangle(A, C) fills an A x 1 rectangle with the list C of squares,
 all of different sizes (Colmerauer's example, the clp(q,r) distribution's
 examples/squares.pl).  The program is loaded from
-``/workspace/claude_sicstus_clpq/filled_rectangle.pl`` with
+``filled_rectangle.pl`` in ``CLAUSAL_CLPQ_EXAMPLES_DIR`` (default
+``/workspace/claude_sicstus_clpq``, tests/clpq_example_files.py) with
 ``use_module(clpq)`` changed to ``use_module(library(clpq))``; the tests skip
-when it is missing.
+when it is missing, or fail when CLAUSAL_REQUIRE_CLPQ_EXAMPLES=1.
 
 The oracle is the LOCAL clpq.pl port of clp(q,r) 1.3.3 running on Scryer
 (``tests/clpq_oracle.py``); upstream Scryer has no CLP(Q).  Agreement is two
@@ -22,22 +23,20 @@ n <= 7 runs in the default suite; CLAUSAL_SLOW_TESTS=1 runs n = 8 and the
 n = 9 comparison as well (ruling R32).
 """
 import os
-import pathlib
 import time
 
 from fractions import Fraction
 
 import pytest
 
+from tests.clpq_example_files import example_file
 from tests.clpq_oracle import clausal_answers, oracle_answers, same_solution_sets
 
-PROGRAM = pathlib.Path("/workspace/claude_sicstus_clpq/filled_rectangle.pl")
+PROGRAM = "filled_rectangle.pl"
 
 
 def _source():
-    if not PROGRAM.exists():
-        pytest.skip(f"needs {PROGRAM}")
-    text = PROGRAM.read_text()
+    text = example_file(PROGRAM).read_text()
     assert ":- use_module(clpq)." in text
     return text.replace(":- use_module(clpq).", ":- use_module(library(clpq)).")
 

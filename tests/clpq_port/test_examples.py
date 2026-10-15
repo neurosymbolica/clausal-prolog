@@ -2,12 +2,14 @@
 programs under the port, against the oracle and the answers the examples
 file documents.
 
-The programs are read at test time from
-``/workspace/claude_sicstus_clpq/test_examples_clpq.pl``, which inlines the
+The programs are read at test time from ``test_examples_clpq.pl`` in
+``CLAUSAL_CLPQ_EXAMPLES_DIR`` (default ``/workspace/claude_sicstus_clpq``,
+tests/clpq_example_files.py), which inlines the
 1.3.3 distribution's examples.  That file is outside ``library/clpq``, so
 the licence acceptance for the 1.3.3 sources does not cover it: it is never
 copied into this repository, and the tests skip where it is absent (as
-test_acceptance.py does for filled_rectangle.pl).
+test_acceptance.py does for filled_rectangle.pl), or fail when
+CLAUSAL_REQUIRE_CLPQ_EXAMPLES=1.
 
 What runs.  The file's own driver uses ``->`` and its matmul, root and
 SEND+MORE checks use cuts, so Clausal (cut-free) cannot load it whole.  The
@@ -37,15 +39,13 @@ Scryer: two ports of one source, not an independent check) answer by
 answer, residuals by z3 equivalence, and with the values the examples
 file documents, which come from neither port.
 """
-import pathlib
 import re
 from fractions import Fraction
 
-import pytest
-
+from tests.clpq_example_files import example_file
 from tests.clpq_oracle import clausal_answers, oracle_answers, same_solution_sets
 
-PROGRAM = pathlib.Path("/workspace/claude_sicstus_clpq/test_examples_clpq.pl")
+PROGRAM = "test_examples_clpq.pl"
 
 _PREDICATES = {
     "mg", "monash_mg", "allpos", "example", "elim_example", "conv_hull",
@@ -150,9 +150,7 @@ def _clauses(text):
 
 
 def _programs():
-    if not PROGRAM.exists():
-        pytest.skip(f"needs {PROGRAM}")
-    clauses = _clauses(PROGRAM.read_text())
+    clauses = _clauses(example_file(PROGRAM).read_text())
     assert "!" not in clauses and "->" not in clauses
     port = re.sub(r"\b(maximize|minimize)\((\w+)\)", r"\1(\2, _)", clauses)
     port = re.sub(r"(?<![=<>])<=", "=<", port)
