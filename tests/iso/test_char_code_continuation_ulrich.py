@@ -118,8 +118,23 @@ def test_syntax_error(loads, fe, i):
     ``'abc`` does the same, independent of this row -- so it is accepted
     there; the native front end must raise SyntaxError.  Both must name the
     unterminated quoted atom: before the fix this was a syntax error only
-    because ``0 a`` does not parse (``Expected '.', got 'atom'``)."""
+    because ``0 a`` does not parse (``Expected '.', got 'atom'``).
+
+    2026-10-15 (Ulrich conformity pass, Bug 1b): a raw, unescaped layout
+    byte (other than space) is no longer legal content inside a quoted
+    atom/string (ISO 6.4.2.1). ``loads.load`` writes this row's goal into a
+    ``.pl`` file as ``f"r(R) :- {goal}, R = true.\n"`` -- that trailing
+    ``\n`` is itself now a disallowed raw byte inside the still-open quoted
+    atom, so the scan now gets stuck AT that newline instead of running on
+    to a clean end-of-input. The driver reports that as "Unexpected
+    character" at the position of the *opening* quote rather than
+    "Unterminated quoted atom" at EOF -- still unambiguously a syntax error
+    over the right quoted-atom construct, just a different message shape
+    from the lexer's generic "stuck mid-token, more input exists" path
+    rather than its "ran out of input mid-token" path. Accept either
+    wording.
+    """
     name, goal = f"_ccnl_err{i}_{fe}", READ_ERR[i][1]
     want = SyntaxError if fe == "native" else (SyntaxError, TokenizeError)
-    with pytest.raises(want, match="[Uu]nterminated quoted"):
+    with pytest.raises(want, match="[Uu]nterminated quoted|[Uu]nexpected character"):
         loads.load(name, f"r(R) :- {goal}, R = true.\n", fe)

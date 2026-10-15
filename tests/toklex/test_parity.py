@@ -74,7 +74,14 @@ NASTY = [
     "foo(X) :- bar(X).", "X =.. L.", "a. ", "1. ", "1.5.", "1.0e7. ", "0'a.",
     "0'''.", "'qu''ote'.", '"str".', "% c\na.", "/* x /* y */ z */a.",
     "[1,2|T].", "{a}.", "a;b.", "!.", "1_000.", "0x1F.", "0o17.", "0b101.",
-    "'\\x41\\'.", "'\\q'.", "p :- q, r.", "- 1.", "-1.", "f(-1).",
+    # `'\\q'.` lived here through round 3 as a "lenient unknown escape"
+    # nasty-but-parses case; moved out 2026-10-15 (Ulrich conformity pass,
+    # Bug 1a) -- ISO 6.4.2.1's escape set is closed, so `\q` is now a
+    # syntax error, not a shape this smoke test should expect to parse.
+    # See tests/iso/test_number_and_escape_lexing_ulrich.py for the new
+    # coverage. `'\\t'.` (a real ISO symbolic escape) keeps an
+    # escape-bearing case in this list.
+    "'\\x41\\'.", "'\\t'.", "p :- q, r.", "- 1.", "-1.", "f(-1).",
 ]
 
 
@@ -219,14 +226,25 @@ class TestExpectedDivergences:
         EXPECTED_DIVERGENCES[src](toks)
 
     def test_no_divergence_for_underscore_in_exponent(self):
-        # The brief's third check: `1e1_0` -- old's exponent loop is a bare
-        # `isdigit()` scan (no `_` allowed), and toklex's `exp` def also
-        # uses bare `digit` (not `udigits`) for its exponent run. Both stop
-        # at `1e1`, leaving `_0` to lex separately as a VAR. No divergence.
+        # Originally the brief's third check: `1e1_0` -- old's exponent loop
+        # is a bare `isdigit()` scan (no `_` allowed), and toklex's `exp`
+        # def also used bare `digit` (not `udigits`) for its exponent run.
+        # Both stopped at `1e1`, leaving `_0` to lex separately as a VAR.
+        #
+        # Superseded 2026-10-15 (Ulrich conformity pass, Bug 3): ISO's
+        # <float number> never allows an exponent without the mandatory
+        # `.`-fraction part, so `float_num`'s bare `udigits then exp`
+        # alternative (the thing this test exercised) was removed outright
+        # -- there is no longer any exponent-without-fraction float reading
+        # to be divergence-free about. `1e1_0` now doesn't match
+        # `float_num` at all: `integer` claims `1`, and the rest (`e1_0`)
+        # is a single NAME_ATOM (`e` is small-initial, and `alnum*` happily
+        # eats the digits and the underscore too -- unlike `exp`'s bare
+        # `digit`, `name_atom`'s `alnum*` has always included `_`).
         toks = tokenize("1e1_0.")
         got = [(t.type, t.value) for t in toks[:3]]
         assert got == [
-            (TokenType.FLOAT, 10.0), (TokenType.VAR, "_0"), (TokenType.DOT, "."),
+            (TokenType.INTEGER, 1), (TokenType.ATOM, "e1_0"), (TokenType.DOT, "."),
         ]
 
     def test_no_divergence_for_digit_adjacent_underscore(self):

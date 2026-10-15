@@ -93,7 +93,14 @@ def(escape,   bslash then ( octdig then octdig* then bslash?
                           | 'x' then hexdig then hexdig* then bslash?
                           | (any - reserved - nl) )).
 def(udigits,  digit then (digit | '_')*).
-def(exp,      ('e' | 'E') then sign? then digit then digit*).
+% Bug 2 (2026-10-15, Ulrich conformity pass, kept in sync with
+% iso.toklex.pl): ISO's <float number> exponent letter is a lowercase-only
+% terminal; the uppercase 'E' alternative was accidental duplication of
+% iso.toklex.pl's own now-fixed leniency, not a deliberate Clausal-surface
+% choice (unlike the escape-grammar leniency left alone below, which IS a
+% deliberate difference -- see this file's header). See iso.toklex.pl's
+% `exp`/hex_int/oct_int/bin_int comments for the full rationale.
+def(exp,      'e' then sign? then digit then digit*).
 
 % ── quoted_atom / string escape grammar (Task 10 round 4 surgery) ───────
 %
@@ -202,11 +209,17 @@ token(char_code, '0' then quote then (quote then quote | escape | (any - reserve
 % hex_int/oct_int/bin_int: kept in sync with iso.toklex.pl -- require at
 % least one REAL digit (underscores alone don't count); see that file's
 % comment above the same three rules for the full rationale.
-token(hex_int,  '0' then ('x' | 'X') then '_'* then hexdig then (hexdig | '_')*) value int_16.
-token(oct_int,  '0' then ('o' | 'O') then '_'* then octdig then (octdig | '_')*) value int_8.
-token(bin_int,  '0' then ('b' | 'B') then '_'* then bindig then (bindig | '_')*) value int_2.
-token(float_num, (udigits then '.' then udigits then exp?
-               | udigits then exp)) value float_of.
+%
+% Bug 2 (2026-10-15): uppercase 'X'/'O'/'B' radix letters removed, kept in
+% sync with iso.toklex.pl -- see that file's comment above these same
+% three rules.
+token(hex_int,  '0' then 'x' then '_'* then hexdig then (hexdig | '_')*) value int_16.
+token(oct_int,  '0' then 'o' then '_'* then octdig then (octdig | '_')*) value int_8.
+token(bin_int,  '0' then 'b' then '_'* then bindig then (bindig | '_')*) value int_2.
+% Bug 3 (2026-10-15): exponent-without-mandatory-fraction alternative
+% removed, kept in sync with iso.toklex.pl -- see that file's comment
+% above its own `float_num` rule.
+token(float_num, (udigits then '.' then udigits then exp?)) value float_of.
 token(integer,  udigits) value int_10.
 % `(esc_open_hex | esc_open_oct)?` immediately before the closing
 % delimiter: an escape run with no closing backslash yet consumed is fine
