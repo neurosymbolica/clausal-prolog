@@ -411,6 +411,56 @@ def test_a_pl_module_that_cuts_loads_in_the_sandbox(sbx):
     assert ok(res, "ite") == "[(2, 'big')]"
 
 
+def test_the_audit_admits_the_cut_nodes_for_a_pl_tree_only(tmp_path):
+    """D59, fail closed: ``$Cut``/``$IfThenElse`` are allowed callees only
+    under *cut_surface*, which the sandbox sets for a ``.pl`` file alone --
+    a ``.clausal`` file is *prolog_surface* (bare names are functors) but
+    never *cut_surface*, so the very tree of a cutting ``.pl`` audited as a
+    non-``.pl`` tree has a route at each cut node."""
+    from clausal import import_hook as ih
+    from clausal import sandbox, seam_audit
+    path = tmp_path / "audcut.pl"
+    path.write_text("p(1). p(2).\nfirst(X) :- p(X), !.\n"
+                    "ite(X, Y) :- ( p(X), X > 1 -> Y = big ; Y = small ).\n")
+    tree, items = ih.NativePrologLoader("audcut", str(path))._lower(
+        path.read_text(), str(path))
+
+    def check(kind, a, b, node):
+        return True
+
+    def routes(cut_surface):
+        found, _ = seam_audit.audit_tree(
+            tree, check, module_items=items, prolog_surface=True,
+            cut_surface=cut_surface)
+        return found
+    assert routes(False) == [("python_call", 2), ("python_call", 3)]
+    assert routes(True) == []
+    assert sandbox._is_pl_surface(str(path))
+    for ext in (".clausal", ".seam"):
+        assert not sandbox._is_pl_surface(str(tmp_path / ("x" + ext))), ext
+    assert "$Cut" not in seam_audit._allowed_callees()
+    assert "$IfThenElse" not in seam_audit._allowed_callees()
+    assert {"$Cut", "$IfThenElse"} <= seam_audit._allowed_callees(True)
+
+
+def test_a_clausal_module_that_cuts_is_still_refused_in_the_sandbox(sbx):
+    """The ``.clausal`` twin of ``plcut``: the cut is refused at load."""
+    sbx.write("clcut.clausal", "p(1). p(2).\nfirst(X) :- p(X), !.\n")
+    sbx.write("clite.clausal",
+              "p(1). p(2).\nite(X, Y) :- ( p(X) -> Y = a ; Y = b ).\n")
+    res = sbx.run("""
+        import clausal.sandbox as sb
+        sb.enable()
+        probe("clcut", lambda: load("clcut"))
+        probe("clite", lambda: load("clite"))
+    """, env={"CLAUSAL_PL_FRONTEND": "native"})
+    for name, what in (("clcut", "`!` (cut) is refused"),
+                       ("clite", "`->` (if-then) is refused")):
+        r = res[name]
+        assert not r["ok"] and r["type"] == "SyntaxError", (name, r)
+        assert what in r["msg"], (name, r)
+
+
 def test_the_sandbox_refuses_the_clausal_seam_pl_relay(sbx):
     """D59 (Task 6 fix round 1): in normal mode a .clausal goal relayed
     through a .seam meta-call (library(reif)'s cond_t/3, a user

@@ -1075,6 +1075,14 @@ def sandboxed_code(loader, fullname: str):
         stack.pop()
 
 
+def _is_pl_surface(path) -> bool:
+    """D59: may this file's generated tree hold the cut nodes?  Only a
+    ``.pl`` file's (the extension decides, as it decides the db's surface
+    and so ``call_body.cut_allowed``); ``.clausal`` and ``.seam`` never."""
+    from clausal.end_module import SURFACE_PL, surface_of  # noqa: PLC0415
+    return surface_of(path) == SURFACE_PL
+
+
 def _sandboxed_code(loader, fullname: str):
     """The code object a loader runs for *fullname* in the sandbox, built
     from the source read ONCE here: the final generated tree is audited and
@@ -1124,7 +1132,8 @@ def _sandboxed_code(loader, fullname: str):
     found, _ = seam_audit.audit_tree(
         tree, _sandbox_checker(routes, children, denied),
         translations=translations or (), module_items=items or (),
-        prolog_surface=isinstance(loader, ih.PrologLoader))
+        prolog_surface=isinstance(loader, ih.PrologLoader),
+        cut_surface=_is_pl_surface(path))
     routes = routes + found + extra
     if routes:
         if _bridge_admitted(fullname, path, data):

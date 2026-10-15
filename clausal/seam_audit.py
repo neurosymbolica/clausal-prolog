@@ -89,34 +89,40 @@ _DATA_NODE_NAMES = frozenset({
     "LoadName", "LoadAttr", "LoadSubscript", "Predicate", "DictTerm",
     "SetTerm", "PyThunk", "FStringThunk", "Quantity", "Var", "FrozenList",
     "FrozenDict", "FrozenSet", "NoneLiteral", "EllipsisLiteral",
-    # D59: ISO cut and if-then-else in a ``.pl`` clause body.  Pure clause
-    # data (``Cut()`` takes nothing; IfThenElse's goals are audited like
-    # every other argument), and the logic compiler refuses both for any db
-    # that may not cut (terms_to_goalop), so admitting them here opens no
-    # route a ``.seam``/``.clausal`` module could use.
-    "Cut", "IfThenElse",
 })
 
+#: D59: ISO cut and if-then-else in a ``.pl`` clause body.  Pure clause data
+#: (``Cut()`` takes nothing; IfThenElse's goals are audited like every other
+#: argument), admitted ONLY for a ``.pl`` file's tree (``audit_tree``'s
+#: *cut_surface*), so a ``.seam``/``.clausal`` module that spells them is a
+#: route -- fail closed, on top of the logic compiler's own refusal for any
+#: db that may not cut (terms_to_goalop).
+_CUT_NODE_NAMES = frozenset({"Cut", "IfThenElse"})
 
-def _allowed_callees() -> frozenset:
+
+def _allowed_callees(cut_surface: bool = False) -> frozenset:
     """The ``$`` callees generated code may call: the helper functions
     above, and the engine's DATA node classes -- the literal, operator,
     pattern, comprehension and parameter families of the compiler's node
-    hierarchy plus the term nodes named above.  Never a node that stands
-    for a Python effect (a store, delete, assignment, return, yield,
-    await, a module or a loop), which the logic compiler would turn into
-    one."""
+    hierarchy plus the term nodes named above (and, with *cut_surface*,
+    the ``.pl`` cut nodes :data:`_CUT_NODE_NAMES`).  Never a node that
+    stands for a Python effect (a store, delete, assignment, return,
+    yield, await, a module or a loop), which the logic compiler would turn
+    into one."""
     from clausal import import_hook  # noqa: PLC0415
     from clausal.pythonic_ast import nodes  # noqa: PLC0415
     families = tuple(getattr(nodes, n) for n in (
         "Literal", "ElementsLiteral", "BinOp", "UnaryOp", "PatternList",
         "ElemComp", "Param") if hasattr(nodes, n))
     out = set(_HELPER_CALLEES & _engine_names())
+    data = _DATA_NODE_NAMES | (_CUT_NODE_NAMES if cut_surface else frozenset())
     for name, value in import_hook.runtime_builtins.items():
         if not name.startswith("$"):
             continue
         bare = name[1:]
-        if bare in _DATA_NODE_NAMES or (
+        if bare in _CUT_NODE_NAMES and not cut_surface:
+            continue
+        if bare in data or (
                 isinstance(value, type) and families
                 and issubclass(value, families)):
             out.add(name)
@@ -284,11 +290,11 @@ def node_line(node) -> int:
 
 
 class _Audit:
-    def __init__(self, check_module):
+    def __init__(self, check_module, cut_surface: bool = False):
         self.routes: list = []
         self.children: list = []
         self.engine = _engine_names()
-        self.callees = _allowed_callees()
+        self.callees = _allowed_callees(cut_surface)
         self.reserved = _runtime_bare_names()
         self.imported_modules: dict = {}    # guarded import -> names
         self.implicit_functors = False      # set from the tree
@@ -637,7 +643,8 @@ class _Audit:
 
 
 def audit_tree(tree: ast.Module, check_module, *, translations=(),
-               module_items=(), prolog_surface=False) -> "tuple[list, list]":
+               module_items=(), prolog_surface=False,
+               cut_surface=False) -> "tuple[list, list]":
     """``(routes, [])`` of the generated module *tree*: every node that is
     not on the allow-list is a route.  *check_module(kind, a, b, node)*
     answers the module questions (``"module"``: may module *a* be imported;
@@ -648,8 +655,12 @@ def audit_tree(tree: ast.Module, check_module, *, translations=(),
     ``.clausal``), where a bare name is always a functor (a predicate
     defined elsewhere, or asserted later): read as under
     ``-implicit_functors`` -- any name the loader does not inject and
-    Python's builtins do not bind."""
-    audit = _Audit(check_module)
+    Python's builtins do not bind.
+
+    *cut_surface*: the tree is a ``.pl`` file's -- the only surface whose
+    clause bodies may hold the cut nodes (D59).  A ``.clausal`` tree is
+    *prolog_surface* but never *cut_surface*."""
+    audit = _Audit(check_module, cut_surface=bool(cut_surface))
     audit.implicit_functors = bool(prolog_surface)
     # *translations*: the dumps of the statements the -translations lowering
     # emitted (``EmbedTransformer._emitted_translations``); each matches one
