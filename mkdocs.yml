@@ -129,6 +129,7 @@ nav:
     - Caching: caching.md
     - Specialization: specialization.md
   - Prolog:
+    - ISO Conformity: iso_conformity.md
     - Importing Prolog Code: importing_prolog.md
     - Translation Reference: prolog_translation.md
   - IPython / Jupyter: ipython.md

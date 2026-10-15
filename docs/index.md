@@ -159,6 +159,13 @@ Each one says so, and the semantics carry over to Clausal Prolog.
 [Clausal Prolog](clausal_prolog.md) gives the spelling differences and the
 rules the surface enforces.
 
+Both ISO surfaces (`.clausal`'s syntax and `.pl`) are measured against
+ISO/IEC 13211-1, primarily using the conformity-testing suites published by
+Ulrich Neumerkel, the editor of the core standard. See
+[ISO Prolog Conformity](iso_conformity.md) for why that matters and how we
+measure it, and the [ISO Prolog Compatibility Report](iso_prolog_compatibility_report.md)
+for where things stand today.
+
 ---
 
 ## Why Clausal Prolog?
