@@ -159,7 +159,7 @@ surface described in [docs/public-api.md](docs/public-api.md).
   its bits squared over 2,500,000 toward the total, so sixteen near the
   coefficient cap no longer pass), each counted before it is built,
   and carried across a delayed constraint's wake-ups (`{X = (Y + 1)^(10^7)}`
-  and a product of 18 sums never finished). Each count is per call and per
+  and a product of 18 sums never finished). Adding two big rationals is not charged: a sum such as `{X = (1/3)^4000000 + (1/5)^2730000}` can run for minutes and can build a coefficient past `clpq_max_coefficient_bits`. Coefficients past 64 bits in a linear constraint count their bits, so about ten 19,000,000-bit coefficients in one constraint answer and an eleventh raises. Each count is per call and per
   thread. In the sandbox a load-time `set_prolog_flag` of a process-wide
   flag is refused with `SandboxLoadError`. The Prolog flags `clpq_max_nodes`,
   `clpq_max_work`, `clpq_max_projection`, `clpq_max_expansion`,

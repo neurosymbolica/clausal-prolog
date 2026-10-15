@@ -74,7 +74,12 @@ truth value is `true` / `false`, which compile to Python's `True` / `False`.
   the size of the numbers in the store (a store whose row constants have
   20,000 digits reaches it in about 43 s, 50,000 digits in about 105 s,
   on an idle 32-core box), so the host's own time limit applies
-  (DEVIATIONS.md D24). The legacy
+  (DEVIATIONS.md D24).
+  Adding two big rationals is not charged either: a sum such as
+  `{X = (1/3)^4000000 + (1/5)^2730000}` can run for minutes and can build
+  a coefficient past `clpq_max_coefficient_bits`. Coefficients past 64 bits
+  in a linear constraint count their bits, so about ten 19,000,000-bit
+  coefficients in one constraint answer and an eleventh raises. The legacy
   solver has no such flags. In the [sandbox](sandbox.md) a program sets no
   process-wide flag, as a goal or as a load-time directive.
 

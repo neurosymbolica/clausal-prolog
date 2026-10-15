@@ -1319,7 +1319,9 @@ context variable, so two threads or two asyncio tasks never share a count
 (review F5: a process global made 70 of 80 threaded projections raise for
 each other's work); an expansion's count is an `Expansion` the normal form
 or repair makes at its first charge and keeps to itself, so a linear
-constraint pays nothing for it (review N2).  A delayed constraint carries
+constraint with small coefficients pays nothing for it (review N2); its
+coefficients past 64 bits are charged their bits (fix round 4), so ten
+19,000,000-bit coefficients in one constraint answer and an eleventh raises.  A delayed constraint carries
 its count to its next wake-up on the goal it delays (`DelayedGoal.spent`,
 `limits.CARRIED`): a product of sums whose exponents are bound one at a
 time, each binding's repair multiplying one more sum into every term,
@@ -1398,6 +1400,16 @@ with the size of the numbers the program posts, which the program pays
 to build; the caps bound work, not time, and the host's time limit on
 the worker applies (docs/sandbox.md).  Not fixed, by ruling.
 
+**Adding big rationals is not charged (known residual, fix-round-4
+review).**  The caps charge building a coefficient (a power, root,
+product or quotient), not adding two: a sum's gcd is superlinear in the
+digits and nothing charges it, and a sum can build a coefficient past
+`clpq_max_coefficient_bits` (a 126,788-bit result under a 100,000-bit
+cap).  `{X = (1/3)^4000000 + (1/5)^2730000}` took 7.1 min on the box and
+was charged 16% of the total.  Like R1b it is bounded and grows with the
+numbers the program builds; the host's time limit applies
+(docs/sandbox.md).  Not fixed, by ruling.
+
 **What the meters cost a search (review N2).**  A search's every pivot
 passes through the back substitution, so its charge is inlined there:
 the substitution's own values are read once, each written row's constant
@@ -1423,7 +1435,7 @@ against the coefficient cap and charged to the total before it is built,
 a big one at `bits * bits / COSTLY_BITS`: the total admits one
 coefficient near the coefficient cap (`(3*Y)^12,600,000`, 19,970,000
 bits, charges 152,000,000) and refuses a second; past it, coefficients
-of any one size cost about 13 s at most on the box.  A product of a big
+of any one size cost about 13 s at most on the box to BUILD.  A product of a big
 coefficient with a small one (`C*Y`) costs its bits and counts them: a
 chain `C*3*5*...` of a 19,000,000-bit C raises at its eleventh factor.
 
