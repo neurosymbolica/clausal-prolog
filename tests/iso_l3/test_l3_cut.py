@@ -266,3 +266,88 @@ def test_solve_runs_an_ite_node_query_with_cell_goals(native):
     y = Var()
     ite = IfThenElse(test=("q", 7), body=("p", y), orelse=("p", y))
     assert [_deref_walk(y) for _ in solve(ite, mod)] == [1, 2]
+
+
+# ── catch/3 around and inside the cut constructs ────────────────────────────
+# i*: a catch in an if-then-else condition (the catch Goal is a barrier
+# inside the condition's own barrier); b*: an exception thrown after
+# backtracking INTO the catch Goal, with and without a cut first; n*: a
+# cutting catch nested in findall, \+, \+ \+ and once; t*: the trail is
+# balanced when the clause fails into the next one.  Every value is
+# Scryer's (2026-10-15).
+CATCH_MORE_SRC = """\
+p(1). p(2). p(3).
+i1(X) :- ( catch((p(X), !), _, true) -> true ; X = 9 ).
+i1(8).
+i2(X) :- ( catch(p(X), _, true), X > 1 -> true ; X = 9 ).
+i3(X) :- ( catch((p(X), X > 5), _, true) -> true ; X = 9 ).
+i4(X) :- ( catch(throw(e), e, (p(X), !)) -> ! ; true ).
+i4(7).
+b1(X) :- catch(( ( X = 1 ; X = 2 ), ( X == 2 -> throw(c) ; true ) ), c, X = c).
+b2(X) :- catch(( ( X = 1 ; X = 2 ), ( X == 1 -> true ; !, throw(c) ) ), c,
+               X = c).
+b3(X) :- catch(( p(X), X >= 2, throw(c(X)) ), c(Y), X = got(Y)).
+n1(L) :- findall(X, catch((p(X), !), _, true), L).
+n2(R) :- ( \\+ catch((p(X), !, X > 1), _, true) -> R = yes ; R = no ).
+n3(X) :- once(catch((p(X), X > 1, !), _, true)).
+n3(9).
+n4(L) :- findall(X, ( p(X), catch(( X > 1, ! ), _, true) ), L).
+n5(R) :- ( \\+ \\+ catch((p(X), !, X =:= 1), _, true) -> R = yes ; R = no ).
+t1(X) :- catch((X = 1, !, fail), _, true).
+t1(X) :- var(X), X = 2.
+t2(Y) :- Y = a, catch((p(_), !), _, true), fail.
+t2(Y) :- var(Y), Y = b.
+t3(X) :- ( catch((X = 1, !), _, true), fail -> true ; var(X), X = 3 ).
+t4(X) :- catch((X = 1, throw(e)), e, true), var(X), !, X = 4.
+t4(5).
+"""
+
+
+@pytest.mark.parametrize("name,want", [
+    ("i1", [1, 8]), ("i2", [2]), ("i3", [9]), ("i4", [1]),
+    ("b1", [1, "c"]), ("b2", [1, "c"]), ("b3", [("got", 2)]),
+    ("n1", [[1]]), ("n2", ["yes"]), ("n3", [2, 9]), ("n4", [[2, 3]]),
+    ("n5", ["yes"]),
+    ("t1", [2]), ("t2", ["b"]), ("t3", [3]), ("t4", [4]),
+])
+def test_catch_composes_with_cut_and_if_then_else(native, ans, name, want):
+    mod = native.load("l3_cut_catch_more", CATCH_MORE_SRC)
+    assert ans(mod, name) == want
+
+
+def test_cut_scope_treats_a_branch_test_as_part_of_the_scope():
+    """The seam's ``if_/3`` (``Branch``) lowers its test, then and else in
+    the enclosing scope -- no barrier -- so a cut in its then/else cuts over
+    a tabled call in its test, and ``cut_reaches_scope`` sees through it."""
+    from clausal.logic.compiler.cut_scope import (
+        cut_reaches_scope, tabled_calls_in_cut_scope)
+    from clausal.logic.compiler.ir import Branch, Cut, Sequence, SubCall
+
+    class _DB:
+        module_dict: dict = {}
+
+        def is_tabled(self, f, n):
+            return f == "tf"
+
+    def call(f):
+        return SubCall(fname=f, arity=1, args=[1])
+
+    def br(test, then, else_):
+        return Branch(test=test, then=then, else_=else_,
+                      reified_test="unify")
+
+    db = _DB()
+    assert tabled_calls_in_cut_scope(
+        br(call("tf"), Cut(), Sequence(ops=[])), db) == [("tf", 1)]
+    assert tabled_calls_in_cut_scope(
+        br(call("tf"), Sequence(ops=[]), Cut()), db) == [("tf", 1)]
+    # A tabled call in then is not before a cut in else.
+    assert tabled_calls_in_cut_scope(
+        br(call("q"), call("tf"), Cut()), db) == []
+    # ... but is before a cut that follows the Branch.
+    assert tabled_calls_in_cut_scope(Sequence(ops=[
+        br(call("q"), call("tf"), Sequence(ops=[])), Cut()]), db) == [
+        ("tf", 1)]
+    assert cut_reaches_scope(br(call("q"), Cut(), Sequence(ops=[])))
+    assert cut_reaches_scope(br(call("q"), Sequence(ops=[]), Cut()))
+    assert not cut_reaches_scope(br(call("q"), call("r"), Sequence(ops=[])))
