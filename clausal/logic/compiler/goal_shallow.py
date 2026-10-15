@@ -337,6 +337,11 @@ def _compile_body_impl(
     # subset.  ``terms_to_goalop`` now signals a genuine compiler bug
     # if it raises :class:`NotImplementedError`.
     ir = body_ir if body_ir is not None else terms_to_goalop(goals, ctx.db)
+    # XSB's rule: no cut over a tabled call (ruling Q1; the switch is
+    # ``cut_scope.CUT_OVER_TABLED_CALL``).  Before the passes, on the IR as
+    # written.
+    from .cut_scope import check_cut_over_tabled
+    check_cut_over_tabled(ir, ctx.db, goals)
 
     if tro_active:
         from .optimisations import tro as _tro_pass

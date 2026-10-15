@@ -368,6 +368,30 @@ class CompilerError(Exception):
     """A body shape the compiler cannot lower where it stands."""
 
 
+class CutOverTableError(SyntaxError):
+    """A cut (or if-then-else commit) whose scope holds a call to a tabled
+    predicate -- XSB's compile-time rule (``cut_scope.check_cut_over_tabled``).
+    ``predicate`` is filled in by the predicate compiler once the enclosing
+    ``functor/arity`` is known (like ``NonReifiableConditionError``)."""
+
+    def __init__(self, over: "list[tuple[str, int]]",
+                 predicate: "str | None" = None,
+                 line: "int | None" = None) -> None:
+        self.over = list(over)
+        self.predicate = predicate
+        self.line = line
+        pis = ", ".join(f"{f}/{a}" for f, a in self.over)
+        where = f" in predicate {predicate}" if predicate else ""
+        if line:
+            where += f" (line {line})"
+        super().__init__(
+            f"a cut (or if-then-else condition){where} cuts over the tabled "
+            f"call(s) {pis}: the scope of a cut cannot include a call to a "
+            f"tabled predicate (XSB's rule; Clausal tables by re-running the "
+            f"clause to a fixpoint, so the committed answer would depend on "
+            f"pass order)")
+
+
 @dataclasses.dataclass
 class Cut(GoalOp):
     """ISO cut.  Lowers to: the continuation, then ``ctx.cut_exit()`` --
@@ -611,6 +635,7 @@ __all__ = [
     "SubCall", "MetaCall",
     # Low-level
     "Fail", "PyThunkOp", "ListPatternUnify", "Cut", "IfThenElse", "CompilerError",
+    "CutOverTableError",
     # Traversal
     "walk_goal_ops", "walk_goal_ops_deep",
     # Meta-call manifest (Slice E precursor)

@@ -158,6 +158,7 @@ from .terms_to_ast import lowering_scope
 from .terms_to_goalop import (BareGoalVariableError, BareGoalUndefinedError,
                               SetGoalElementError, DictGoalError,
                               NonReifiableConditionError)
+from .ir import CutOverTableError
 from .globals_env import (
     _GlobalsDb, _DbDispatchAdapter, _set_of_dedup, _set_of_sort_dedup,
     _undeclared_functor, _undeclared_functor_in, _constructor_in,
@@ -1836,6 +1837,12 @@ def _compile_predicate_trampoline_impl(
                 exc.goal, exc.test, f"{functor}/{arity}",
                 closure=exc.closure, reason=exc.reason) from None
         raise
+    except CutOverTableError as exc:
+        # A cut over a tabled call (XSB's rule) -- same enrichment.
+        if exc.predicate is None:
+            raise CutOverTableError(exc.over, f"{functor}/{arity}",
+                                    line=exc.line) from None
+        raise
     finally:
         pass
 
@@ -2478,6 +2485,12 @@ def _compile_predicate_shallow_impl(
             raise NonReifiableConditionError(
                 exc.goal, exc.test, f"{functor}/{arity}",
                 closure=exc.closure, reason=exc.reason) from None
+        raise
+    except CutOverTableError as exc:
+        # A cut over a tabled call (XSB's rule) -- same enrichment.
+        if exc.predicate is None:
+            raise CutOverTableError(exc.over, f"{functor}/{arity}",
+                                    line=exc.line) from None
         raise
     finally:
         _CURRENT_SHALLOW_BASE_GLOBALS = _saved_shallow_globals
