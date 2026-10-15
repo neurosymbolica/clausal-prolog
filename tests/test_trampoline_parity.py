@@ -647,3 +647,36 @@ def test_a_driver_defers_woken_goals_only_while_it_runs(impl):
         yield (fail, impl.DONE)
     assert impl.solutions(impl.StepGenerator(fn, None, None, None, trail)) == [1]
     assert during == [True] and trail.defer is False
+
+
+# ── the compiled cut's exit (D59) ────────────────────────────────────────────
+
+
+def cut_exit_fn(impl):
+    """The compiled cut's exit: a solution from inside a child loop, then
+    exhaustion yielded EARLY and the frame returns with the child abandoned
+    (D59).  No protocol error, exactly one solution, in both twins."""
+    DONE = impl.DONE
+
+    def child(this, proceed, fail, catcher):
+        for v in (1, 2, 3):
+            yield (proceed, v)
+        yield (fail, DONE)
+
+    def parent(this, proceed, fail, catcher):
+        gen = impl.StepGenerator(child, this, this, this)
+        st = yield (gen, None)
+        while st is not DONE:
+            yield (proceed, st)
+            yield (fail, DONE)
+            return
+            st = yield (gen, None)  # noqa: unreachable by design
+        yield (fail, DONE)
+    return parent
+
+
+def test_cut_shaped_early_exhaustion(impl):
+    assert impl.solutions(root(impl, cut_exit_fn(impl))) == [1]
+    sg = root(impl, cut_exit_fn(impl))
+    assert impl._drive_until_yield(sg) is True
+    assert impl._drive_until_yield(sg) is None
