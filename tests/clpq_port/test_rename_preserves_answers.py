@@ -15,16 +15,19 @@ import sys
 import pytest
 
 from tests._oracles import SCRYER, run_scryer
+from tests.clpq_example_files import example_file
 
 HERE = pathlib.Path(__file__).resolve().parents[2]
 RENAME = HERE / "tools/clpq_reference/rename.py"
 MAP = HERE / "tools/clpq_reference/rename_map.tsv"
 ORIGINAL = pathlib.Path("/workspace/scryer-prolog-clpq/src/lib/clpq.pl")
-EXAMPLES = pathlib.Path("/workspace/claude_sicstus_clpq/test_examples_clpq.pl")
+#: The 1.3.3 examples, from CLAUSAL_CLPQ_EXAMPLES_DIR (tests/clpq_example_files.py:
+#: skipped where absent, failed under CLAUSAL_REQUIRE_CLPQ_EXAMPLES=1).
+EXAMPLES = "test_examples_clpq.pl"
 
 needs_oracle = pytest.mark.skipif(
-    not (ORIGINAL.exists() and EXAMPLES.exists() and pathlib.Path(SCRYER).exists()),
-    reason="needs the local Scryer CLP(Q) build and the 1.3.3 examples")
+    not (ORIGINAL.exists() and pathlib.Path(SCRYER).exists()),
+    reason="needs the local Scryer CLP(Q) build")
 
 sys.path.insert(0, str(RENAME.parent))
 import rename  # noqa: E402  (tools/clpq_reference is not a package)
@@ -81,13 +84,13 @@ def test_the_committed_map_is_injective_over_both_sources():
     rename.check_map(rename.load_map(MAP), atoms)
 
 
-def _run_examples(clpq_source, directory):
+def _run_examples(clpq_source, examples, directory):
     directory.mkdir()
     shutil.copy(clpq_source, directory / "clpq.pl")
-    shutil.copy(EXAMPLES, directory / EXAMPLES.name)
+    shutil.copy(examples, directory / examples.name)
     # The examples file loads clpq.pl from its own directory and runs under
     # `:- initialization(main)`, so it is loaded with no goal.
-    return run_scryer(str(directory / EXAMPLES.name), timeout=600, cwd=directory)
+    return run_scryer(str(directory / examples.name), timeout=600, cwd=directory)
 
 
 def _failed_count(stdout):
@@ -97,10 +100,11 @@ def _failed_count(stdout):
 
 @needs_oracle
 def test_renamed_copy_gives_the_same_example_results(tmp_path):
+    examples = example_file(EXAMPLES)
     renamed = tmp_path / "renamed.pl"
     subprocess.run([sys.executable, RENAME, MAP, ORIGINAL, renamed], check=True)
-    before = _run_examples(ORIGINAL, tmp_path / "original")
-    after = _run_examples(renamed, tmp_path / "renamed")
+    before = _run_examples(ORIGINAL, examples, tmp_path / "original")
+    after = _run_examples(renamed, examples, tmp_path / "renamed")
     assert "tests passed" in before.stdout
     assert after.stdout == before.stdout
     assert _failed_count(after.stdout) == _failed_count(before.stdout) == 0

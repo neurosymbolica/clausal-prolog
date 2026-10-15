@@ -71,9 +71,33 @@ _HEAD = ":- use_module(library(clpq)).\n"
 _ORACLE_HEAD = ":- use_module(library(lists)).\n:- use_module(library(between)).\n"
 
 
-def _disagrees(reason):
-    return pytest.mark.xfail(strict=True, raises=(AssertionError, RuntimeError),
-                             reason=reason)
+def _disagrees(reason, error=None):
+    """A strict xfail that holds only for the stated disagreement.
+
+    *error* is a regex the port's RuntimeError (its error text) must match;
+    None means the disagreement is a wrong answer, an AssertionError.  Any
+    other failure (a crash, an AssertionError where an error is expected,
+    another error text) is a real failure, so a crash cannot satisfy the
+    xfail.  A missing example file fails too (pytest.fail is not in
+    ``raises``)."""
+    def decorate(test):
+        @functools.wraps(test)
+        def run(*args, **kwargs):
+            try:
+                test(*args, **kwargs)
+            except RuntimeError as exc:
+                if error is None or not re.search(error, str(exc)):
+                    pytest.fail(f"not the stated disagreement ({reason}):\n{exc}",
+                                pytrace=False)
+                raise
+            except AssertionError as exc:
+                if error is not None:
+                    pytest.fail(f"expected the error {error!r} ({reason}), "
+                                f"got a wrong answer:\n{exc}", pytrace=False)
+                raise
+        return pytest.mark.xfail(strict=True, raises=(AssertionError, RuntimeError),
+                                 reason=reason)(run)
+    return decorate
 
 
 # ---- the programs, from the manual's text ----------------------------------
@@ -239,10 +263,19 @@ def test_entailed_on_the_oracle():
     _is(answer, {}, ["A=<4"])
 
 
+@_disagrees("entailed/1 fails on every constraint written as a Prolog term "
+            "(see test_entailed), so a `no` from the port means nothing until "
+            "the positive control, {A =< 4}, entailed(A =\\= 5), answers yes")
 def test_not_entailed():
-    # {A =< 4}, entailed(A =\= 3): no.  (The port passes this one only
-    # because its entailed/1 always fails; see test_entailed.)
+    # {A =< 4}, entailed(A =\= 3): no.  The port's `no` counts only once
+    # its entailed/1 can say yes: the positive control comes first.  When
+    # entailed/1 is fixed this flips to XPASS and fails, forcing a revisit.
+    assert len(port(_SOLVER, "q_entailed", ["A"])) == 1
     assert port(_SOLVER, "q_not_entailed", ["A"]) == []
+
+
+def test_not_entailed_on_the_oracle():
+    assert len(oracle(_SOLVER_ORACLE, "q_entailed", ["A"])) == 1
     assert oracle(_SOLVER_ORACLE, "q_not_entailed", ["A"]) == []
 
 
@@ -264,7 +297,8 @@ def test_maximize():
 
 
 @_disagrees("maximize/1 is not a .pl builtin: existence_error(procedure, "
-            "maximize/1); only Clausal's maximize/2 exists (DEVIATIONS.md D20)")
+            "maximize/1); only Clausal's maximize/2 exists (DEVIATIONS.md D20)",
+            error=r"existence_error\(procedure,maximize/1\)")
 def test_maximize_1_as_documented():
     answer = _one(port(_SOLVER, "q_maximize_1", ["X", "Y", "Z"]))
     _is(answer, {"X": 7, "Y": 2, "Z": 310}, [])
@@ -306,7 +340,8 @@ def _check_dump(answer):
 
 
 @_disagrees("dump/3 raises type_error(callable, <function dump>) in a .pl "
-            "program: the name resolves to a Python function, not a builtin")
+            "program: the name resolves to a Python function, not a builtin",
+            error=r"type_error\(callable,<function dump")
 def test_dump_3():
     answer = _one(port(_SOLVER, "q_dump", ["A", "B", "Vs", "Cs", "Bp", "Cb"]))
     _check_dump(answer)
@@ -327,7 +362,8 @@ def _check_dump_nonlinear(answer):
 
 
 @_disagrees("sin/1 in {}: the .pl front end lowers only + - * / "
-            "(iso_l3.py _clpq_expr) and refuses the program at load")
+            "(iso_l3.py _clpq_expr) and refuses the program at load",
+            error=r"is not a linear arithmetic expression")
 def test_dump_3_of_a_nonlinear_store():
     answer = _one(port(_DUMP_NONLINEAR, "q_dump_nonlinear", ["X", "V", "C"]))
     _check_dump_nonlinear(answer)
@@ -464,7 +500,8 @@ def _nonlinear_program(goal, variables):
      in _NONLINEAR])
 @_disagrees("sin/cos/pow/exp in {}: the .pl front end lowers only + - * / "
             "(iso_l3.py _clpq_expr) and refuses the program at load; the "
-            "oracle answers each")
+            "oracle answers each",
+            error=r"is not a linear arithmetic expression")
 def test_nonlinear(goal, variables, check):
     answer = _one(port(_nonlinear_program(goal, variables), "q_nonlinear", variables))
     check(answer, "port")
@@ -556,7 +593,8 @@ _ORDERINGS = [
 @pytest.mark.parametrize("query, variables, defined, documented",
                          [pytest.param(*row, id=row[0][2:]) for row in _ORDERINGS])
 @_disagrees("ordering/1 is not a .pl builtin: existence_error(procedure, "
-            "ordering/1) (holzbaur.ordering exists, unregistered)")
+            "ordering/1) (holzbaur.ordering exists, unregistered)",
+            error=r"existence_error\(procedure,ordering/1\)")
 def test_ordering(query, variables, defined, documented):
     # The relation, and which variable it defines: ordering/1's effect.
     answer = _one(port(_mg(), query, variables))
@@ -607,7 +645,8 @@ def _check_dump_names(answer):
 
 
 @_disagrees("dump/3 raises type_error(callable, <function dump>) in a .pl "
-            "program: the name resolves to a Python function, not a builtin")
+            "program: the name resolves to a Python function, not a builtin",
+            error=r"type_error\(callable,<function dump")
 def test_dump_3_with_atoms_for_names():
     answer = _one(port(_TERMS, "q_dump_names", ["A", "B", "C", "D", "E", "Cs"]))
     _check_dump_names(answer)
@@ -620,7 +659,8 @@ def test_dump_3_with_atoms_for_names_on_the_oracle():
 
 @_disagrees("call_residue/2 does not exist: existence_error(procedure, "
             "call_residue/2) (Scryer has no call_residue/2 either, so there is "
-            "no oracle answer)")
+            "no oracle answer)",
+            error=r"existence_error\(procedure,call_residue/2\)")
 def test_call_residue():
     # [[A]-{A<10.0}, [B]-{B=10.0-2.0*A-C}, [D]-{D=C-E}]: together, the
     # store (exact).
@@ -871,7 +911,8 @@ def _check_bb_inf_5(answer):
 
 @_disagrees("bb_inf/5 is not a .pl builtin: existence_error(procedure, "
             "bb_inf/5); only bb_inf/3 is registered (builtins/constraints.py), "
-            "though branch_and_bound.py implements the /5 form")
+            "though branch_and_bound.py implements the /5 form",
+            error=r"existence_error\(procedure,bb_inf/5\)")
 def test_flugpl_bb_inf_5():
     answer = _one(port(_flugpl(), "q_bb_inf_5", ["Inf", "Vertex"]))
     _check_bb_inf_5(answer)
