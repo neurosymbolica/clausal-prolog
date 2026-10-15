@@ -196,17 +196,30 @@ def test_a_disjunction_through_the_one_answer_entry_raises():
     # _error() now snapshots at raise time) replaces it with a FRESH unbound
     # Var rather than the literal object built here -- _variant_eq checks the
     # shape and the sharing (x occurs twice) survive, not Python identity.
+    #
+    # The expected value is a HAND-BUILT literal tuple (review F2), not a
+    # second call through type_error(...): that would route through
+    # _error()/_copy_at_raise_time too, so a mutant that breaks SHARING
+    # would break it identically on both sides (x's two occurrences would
+    # both become distinct-but-still-distinct-from-each-other variables),
+    # and _variant_eq's injectivity check would find nothing to object to.
+    # block itself, used here directly with x unshared-from-the-original,
+    # is what makes the sharing check meaningful.
     t, x = Trail(), Var()
     block = (";", ArithEq(left=x, right=1), ArithEq(left=x, right=2))
-    assert _variant_eq(_raised(lambda: h.clpq_constraint_block(block, t)),
-                        type_error("constraint", block, "{}/1"))
+    assert _variant_eq(
+        _raised(lambda: h.clpq_constraint_block(block, t)),
+        ("error", ("type_error", "constraint", block), ("/", "{}", 1)))
 
 
 def test_entailed_of_an_unknown_relation_raises():
     # nf.pl negate/2 clause 11: illarg(type(constraint), entailed(Rel), 1).
+    # Hand-built expected value, same reasoning as the test above.
     t, x = Trail(), Var()
-    assert _variant_eq(_raised(lambda: h.entailed("=>>", x, 1, t)),
-                        type_error("constraint", ("=>>", x, 1), "entailed/1"))
+    assert _variant_eq(
+        _raised(lambda: h.entailed("=>>", x, 1, t)),
+        ("error", ("type_error", "constraint", ("=>>", x, 1)),
+         ("/", "entailed", 1)))
 
 
 # ---------------------------------------------------------------- in_q bounds
