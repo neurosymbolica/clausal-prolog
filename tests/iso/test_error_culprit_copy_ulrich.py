@@ -123,13 +123,13 @@ _PROGRAM = textwrap.dedent(r"""
         N = foo(_Y),
         atom_length(N, R).
 
-    % -- Ulrich's variable_names page, row 1: an atom bound earlier, nested
-    % inside the option term write_term/2 rejects as unsupported. The
-    % domain_error is CORRECT (write_term/2 does not implement
-    % variable_names/1 yet -- a separate, bigger fix); only the culprit's
-    % N=X pair is under test here.
+    % -- a name bound earlier to a COMPOUND, nested inside the option term:
+    % write_term/2 implements variable_names/1, but a name that is not an
+    % atom is a domain_error(write_option, ...) (ISO 7.10.4).  Only the
+    % culprit's f(x)=_ pair is under test here.  (Ulrich's own row 1 binds
+    % N = 'X', which is now a valid option and prints X.)
     row_ulrich_atom(R) :-
-        N = 'X',
+        N = f(x),
         write_term(T, [variable_names([N=T])]),
         R = T.
 
@@ -215,10 +215,10 @@ def test_genuinely_unbound_value_stays_a_free_variable(mod):
 
 
 def test_ulrich_row_atom_culprit_shows_the_bound_pair(mod):
-    """N = 'X' bound before write_term/2 raises; domain_error(write_option,
-    variable_names(['X'=_])) must show 'X', not variable_names([_=_])."""
+    """N = f(x) bound before write_term/2 raises; domain_error(write_option,
+    variable_names([f(x)=_])) must show f(x), not variable_names([_=_])."""
     text = _raise_text(mod, "row_ulrich_atom")
-    assert "variable_names(['X'=_])" in text, text
+    assert "variable_names([f(x)=_])" in text, text
     assert "domain_error(write_option," in text, text
 
 
