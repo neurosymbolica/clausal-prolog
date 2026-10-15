@@ -44,10 +44,13 @@ See ``clausal.logic.exceptions._copy_at_raise_time`` for the fix and the
 cyclic-culprit (``RecursionError``) fallback it needed (row_cyclic_*
 below).
 
-This file is engine-only (no Scryer oracle needed): it is testing an
-internal identity/timing bug in Clausal's own exception construction, not
-an ISO ANSWER Clausal and Scryer might disagree on.  The c1-c3 expectations
-are Scryer-verified by hand (see the review that found F1-F7, 2026-10-15).
+Most of this file tests an internal identity/timing bug in Clausal's own
+exception construction (whether a term comes back by reference or as a
+snapshot), not an ISO ANSWER Clausal and Scryer might disagree on, so it
+needs no running Scryer oracle to drive it.  c1-c3 are the exception:
+they pin a specific ISO ANSWER (copy_term/2 semantics under a matching
+catch/3), and are Scryer-verified by hand (see the review that found
+F1-F7, 2026-10-15).
 """
 
 from __future__ import annotations

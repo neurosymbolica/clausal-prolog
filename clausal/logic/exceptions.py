@@ -506,22 +506,33 @@ def _copy_at_raise_time(term: Any) -> Any:
     groundness question, an O(n) walk of *term* (cheap per raise, not
     free; see the commit's performance note).
 
-    A CYCLIC term (no occurs check: ``X = f(X)``) makes that walk recurse
-    without bound.  Falling back to the UNCOPIED *term* on
-    ``RecursionError`` matches this engine's behaviour before the fix --
-    an occasionally-unbound-looking culprit on a pathological cyclic
-    input is far better than turning the raise itself into an unrelated
-    ``RecursionError`` instead of the ISO error it should be.
+    A CYCLIC term (no occurs check: ``X = f(X)``) exceeds the walker's
+    depth bound (``MAX_DEPTH`` 50000, ``_tabling_core.c``) and raises
+    ``RecursionError`` -- so does a non-cyclic term deeper than that
+    bound, which this same fallback also covers (such a term cannot be
+    rendered on either engine anyway).  Falling back to the UNCOPIED
+    *term* on ``RecursionError`` matches this engine's behaviour before
+    the fix -- an occasionally-unbound-looking culprit on a pathological
+    cyclic or over-deep input is far better than turning the raise
+    itself into an unrelated ``RecursionError`` instead of the ISO error
+    it should be.
 
     Parked, not fixed here: a copied variable that carried ATTRIBUTES
-    (``dif/2``, ``freeze/2``, clpz) comes back plain -- ``_copy_term`` is
-    called with no ``attvars`` sink, so the coroutining goal those
-    attributes would re-wake is lost on the copy.  ``_throw_ball`` has the
-    identical gap already (a thrown ball's attributed variables are not
-    preserved either), so this fix makes the two raise paths consistent
-    with each other rather than introducing a new class of bug; closing
-    it for both is a separate task (the ``attvars`` parameter plus
-    ``_copy_attributes``, as ``copy_term/2`` itself does).
+    (``dif/2``, ``freeze/2``, clpz, clpq) comes back plain -- ``_copy_term``
+    is called with no ``attvars`` sink, so whatever that attribute would
+    re-wake or re-check is lost on the copy.  ``dif/2`` is the easy case --
+    ``copy_term/2`` already copies it, via ``_ATTRIBUTE_COPIERS`` in
+    ``clausal/logic/builtins/inspection.py`` -- so plugging the same
+    machinery in here would close that one attribute immediately; ``freeze``
+    and the CLP libraries are harder, blocked on the design questions in
+    ``todo/copy-term-attributes-freeze-clpz-and-copy-term-3-2026-09-30.md``.
+    ``_throw_ball`` has the identical gap already (a thrown ball's
+    attributed variables are not preserved either), so this fix makes the
+    two raise paths consistent with each other rather than introducing a
+    new class of bug; closing it for both is a separate task (the
+    ``attvars`` parameter plus ``_copy_attributes``, as ``copy_term/2``
+    itself does) -- see
+    ``todo/raise-time-copy-drops-attributes-like-throw-2026-10-15.md``.
     """
     # Local, not hoisted: clausal.__init__ -> solve -> database -> exceptions
     # -> (a module-level) solve is a genuine import cycle (measured
@@ -541,8 +552,17 @@ def _copy_at_raise_time(term: Any) -> Any:
 
 def _error(formal: Any, context: Any) -> tuple:
     second, prose = _context(context)
+    # _context's str/None branches hand back either a ground indicator it
+    # just built from text, or a fresh Var it just minted -- neither can
+    # share state with anything else, so _copy_at_raise_time's walk would
+    # be pure overhead. Only a caller-supplied context TERM (the `else`
+    # branch in _context, not reached from a str/None input) can carry a
+    # live Var or attribute by reference, so only that case needs the copy
+    # (see F5 in the fix's own review history).
+    if not (type(context) is str or context is None):
+        second = _copy_at_raise_time(second)
     return _with_prose(
-        ("error", _copy_at_raise_time(formal), _copy_at_raise_time(second)),
+        ("error", _copy_at_raise_time(formal), second),
         prose)
 
 

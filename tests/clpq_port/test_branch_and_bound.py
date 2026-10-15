@@ -197,7 +197,11 @@ def test_a_term_that_is_not_a_variable_raises_an_instantiation_error():
     # throw/1's pre-existing one -- see _copy_at_raise_time's docstring).
     assert error[2][0] == "bb_inf"
     assert error[2][1][0] == "*" and error[2][1][1] == 2
-    assert is_var(error[2][1][2])
+    copied = error[2][1][2]
+    assert is_var(copied) and copied is not x
+    # Binding the copy must not reach the live x (it is a detached copy,
+    # not the same AttVar, so the clpq constraint on x cannot fire here).
+    assert unify(copied, 0, trail) and is_var(deref(x))
 
 
 def test_narrowing_binds_and_the_objective_is_repaired():

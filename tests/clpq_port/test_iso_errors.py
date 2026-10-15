@@ -41,7 +41,7 @@ def _raised(call, trail=None):
     return caught.value.term
 
 
-def _variant_eq(actual, expected, vmap=None) -> bool:
+def _variant_eq(actual, expected, vmap=None, rmap=None) -> bool:
     """True when *actual* is *expected* up to renaming of unbound
     variables -- ISO ``copy_term/2`` semantics (2026-10-15: ``_error()``
     now copies a builtin error's culprit at raise time, ISO 7.8.10.1 b, the
@@ -49,23 +49,32 @@ def _variant_eq(actual, expected, vmap=None) -> bool:
     with a genuinely-unbound ``Var`` no longer comes back as that exact
     Python object -- a fresh one, consistently, stands in its place).
 
-    Each DISTINCT *expected* Var must map to exactly one *actual* Var,
-    consistently across the whole term (so sharing -- the same variable
-    occurring twice -- is checked, not just erased), and that actual
-    counterpart must itself still be unbound."""
+    The variable renaming is a bijection, checked in both directions:
+    each DISTINCT *expected* Var must map to exactly one *actual* Var
+    (``vmap``, so sharing on the expected side -- the same variable
+    occurring twice -- is checked, not just erased), AND each DISTINCT
+    *actual* Var must come from exactly one *expected* Var (``rmap``, so
+    two different expected vars can't both be satisfied by collapsing
+    onto the same actual var). That actual counterpart must itself still
+    be unbound. Recurses into tuples, lists and dataclass terms alike."""
     if vmap is None:
         vmap = {}
+    if rmap is None:
+        rmap = {}
     actual = deref(actual)
     if is_var(expected):
         if id(expected) in vmap:
             return actual is vmap[id(expected)]
         if not is_var(actual):
             return False
+        if id(actual) in rmap:
+            return False
         vmap[id(expected)] = actual
+        rmap[id(actual)] = expected
         return True
-    if type(expected) is tuple and type(actual) is tuple:
+    if type(expected) in (tuple, list) and type(actual) is type(expected):
         return (len(expected) == len(actual)
-                and all(_variant_eq(a, e, vmap) for a, e in zip(actual, expected)))
+                and all(_variant_eq(a, e, vmap, rmap) for a, e in zip(actual, expected)))
     if dataclasses.is_dataclass(expected) and type(actual) is type(expected):
         # A pythonic_ast node (ArithEq, Add, ...): recurse into its fields
         # rather than falling to dataclass `==`, which compares embedded
@@ -73,7 +82,7 @@ def _variant_eq(actual, expected, vmap=None) -> bool:
         # tuple case above would without the recursion.
         fields = dataclasses.fields(expected)
         return all(
-            _variant_eq(getattr(actual, f.name), getattr(expected, f.name), vmap)
+            _variant_eq(getattr(actual, f.name), getattr(expected, f.name), vmap, rmap)
             for f in fields
         )
     return actual == expected
@@ -202,9 +211,10 @@ def test_a_disjunction_through_the_one_answer_entry_raises():
     # _error()/_copy_at_raise_time too, so a mutant that breaks SHARING
     # would break it identically on both sides (x's two occurrences would
     # both become distinct-but-still-distinct-from-each-other variables),
-    # and _variant_eq's injectivity check would find nothing to object to.
-    # block itself, used here directly with x unshared-from-the-original,
-    # is what makes the sharing check meaningful.
+    # and _variant_eq's check would find nothing to object to. What makes
+    # the check meaningful here is that the EXPECTED x is the original
+    # Var, appearing twice in `block` below, so _variant_eq requires both
+    # ACTUAL occurrences in the raised culprit to be the same object too.
     t, x = Trail(), Var()
     block = (";", ArithEq(left=x, right=1), ArithEq(left=x, right=2))
     assert _variant_eq(
