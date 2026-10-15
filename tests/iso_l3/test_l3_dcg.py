@@ -7,10 +7,11 @@ on Scryer Prolog (scryer-prolog-clpq, 2026-10-01) with the same program.
 Until 2026-10-01 the native front end refused every ``-->`` rule at load
 ("DCG is out of scope"), so every load here failed.
 
-Clausal is cut-free: ``!`` and ``->`` in a grammar body are refused with
-the clause-body refusal, word for word; ``{!}`` is the cut ``!, S0 = S``
-in the rule's clause and is refused too.  ``\\+`` is refused as Scryer
-refuses it, representation_error(dcg_body).
+In a ``.pl`` file ``!`` and ``->`` in a grammar body run with ISO 7.14.2's
+translation: ``!`` and ``{!}`` cut the rule's clause (``{!}`` is the cut
+``!, S0 = S``).  On the Clausal Prolog surface (``.clausal``, cut-free)
+they are refused with the clause-body refusal, word for word.  ``\\+`` is
+refused as Scryer refuses it, representation_error(dcg_body).
 """
 from __future__ import annotations
 
@@ -147,7 +148,7 @@ CUT_FREE = ("Clausal is cut-free with no committed choice, by design "
             "(ruling): !, -> and *-> are refused")
 
 
-@pytest.mark.parametrize("name, rule, clause", [
+CUT_RULES = [
     ("bang", "s --> [a], !.", "s :- a, !."),
     ("bang_whole", "s --> !.", "s :- !."),
     ("brace_bang", "s --> {!}.", "s :- !."),
@@ -156,19 +157,60 @@ CUT_FREE = ("Clausal is cut-free with no committed choice, by design "
     ("it", "s --> [a] -> [b].", "s :- a -> b."),
     ("brace_ite", "s --> {a -> b ; c}.", "s :- (a -> b ; c)."),
     ("call_bang", "s --> call(!).", "s :- call(!)."),
-])
+]
+
+
+@pytest.mark.parametrize("name, rule, clause", CUT_RULES)
 def test_cut_and_if_then_are_refused_as_in_a_clause_body(native, name, rule,
                                                         clause):
-    """The DCG refusal is the clause-body refusal, word for word."""
+    """On the cut-free ``.clausal`` surface the DCG refusal is the
+    clause-body refusal, word for word."""
     def refusal(text, mod):
         with pytest.raises(SyntaxError) as ei:
-            native.load(mod, "a. b. c.\n" + text + "\n")
+            native.load(mod, "a. b. c.\n" + text + "\n", suffix=".clausal")
         assert ei.value.lineno == 2
         msg = str(ei.value)
-        return msg.split(f"{mod}.pl:2: ", 1)[1].rsplit(" (", 1)[0]
+        return msg.split(f"{mod}.clausal:2: ", 1)[1].rsplit(" (", 1)[0]
     got = refusal(rule, f"l3_dcg_cut_{name}")
     want = refusal(clause, f"l3_dcg_cutc_{name}")
     assert got == want and CUT_FREE in got, (got, want)
+
+
+#: Scryer (2026-10-15): which of [], [a], [b], [c], [a,b], [a,c] ``s``
+#: accepts, and the rests of ``phrase(s, [a,b,c], Rest)``.  ``it`` is the
+#: one difference: Scryer raises representation_error(dcg_body) for a
+#: ``->`` with no else; we translate it (Ulrich's dcgs table, row 22,
+#: accepts that).  ``call_bang`` is ``call(!, S0, S)``: no procedure !/2.
+CUT_RULE_ANSWERS = {
+    "bang": ([["a"]], [["b", "c"]]),
+    "bang_whole": ([[]], [["a", "b", "c"]]),
+    "brace_bang": ([[]], [["a", "b", "c"]]),
+    "brace_bang_seq": ([["a"]], [["b", "c"]]),
+    "ite": ([["c"], ["a", "b"]], [["c"]]),
+    "it": ([["a", "b"]], [["c"]]),
+    "brace_ite": ([[]], [["a", "b", "c"]]),
+    "call_bang": (("existence_error", "procedure", ("/", "!", 2)), None),
+}
+
+
+@pytest.mark.parametrize("name, rule, clause", CUT_RULES)
+def test_cut_and_if_then_run_in_a_pl_grammar(native, ans, name, rule,
+                                             clause):
+    """ISO 7.14.2: the ``.pl`` twin of the refusal above loads and runs;
+    ``s --> [a], !.`` accepts ``[a]``."""
+    mod = native.load(f"l3_dcg_cutrun_{name}", textwrap.dedent("""\
+        :- use_module(library(lists)).
+        a. b. c.
+        %s
+        t(R) :- catch(findall(I, (member(I, [[],[a],[b],[c],[a,b],[a,c]]),
+                                  phrase(s, I)), R),
+                      error(E, _), R = E).
+        u(R) :- findall(Rest, phrase(s, [a,b,c], Rest), R).
+        """) % rule)
+    accepted, rests = CUT_RULE_ANSWERS[name]
+    assert [_n(r) for r in ans(mod, "t")] == [_n(accepted)]
+    if rests is not None:
+        assert [_n(r) for r in ans(mod, "u")] == [_n(rests)]
 
 
 @pytest.mark.parametrize("rule, fragment", [
