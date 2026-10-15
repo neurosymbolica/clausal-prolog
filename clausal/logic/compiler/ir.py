@@ -380,16 +380,30 @@ class CutOverTableError(SyntaxError):
         self.over = list(over)
         self.predicate = predicate
         self.line = line
-        pis = ", ".join(f"{f}/{a}" for f, a in self.over)
+        from .cut_scope import _pi_text
+        pis = ", ".join(_pi_text(pi) for pi in self.over)
         where = f" in predicate {predicate}" if predicate else ""
         if line:
             where += f" (line {line})"
         super().__init__(
-            f"a cut (or if-then-else condition){where} cuts over the tabled "
+            f"a cut (or an if-then-else condition, or once/1){where} cuts "
+            f"over the tabled "
             f"call(s) {pis}: the scope of a cut cannot include a call to a "
             f"tabled predicate (XSB's rule; Clausal tables by re-running the "
             f"clause to a fixpoint, so the committed answer would depend on "
             f"pass order)")
+
+    def located(self, path: str, text: str = "") -> "CutOverTableError":
+        """The loader's framing -- ``Cannot import <path>: <file>:<line>:
+        ...`` with ``filename``/``lineno`` set, as every other ``.pl`` load
+        refusal reads."""
+        import os
+        line = self.line or 0
+        framed = CutOverTableError(self.over, self.predicate, self.line)
+        loc = f"{os.path.basename(path)}:{line}: " if line else f"{os.path.basename(path)}: "
+        SyntaxError.__init__(framed, f"Cannot import {path}: {loc}{self.msg}",
+                             (path, line, 1, text))
+        return framed
 
 
 @dataclasses.dataclass

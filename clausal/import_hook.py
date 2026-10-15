@@ -1115,8 +1115,24 @@ class PrologLoader(_ClausalSourceLoader):
         # not break THIS module's own generated-code construction).
         module_dict.update(predicate_builtins)
         module_dict.update(runtime_builtins)
-        _run_v2_pipeline(self, module, module_dict, filename,
-                         self._recover_module_items)
+        from clausal.logic.compiler.ir import CutOverTableError  # noqa: PLC0415
+        try:
+            _run_v2_pipeline(self, module, module_dict, filename,
+                             self._recover_module_items)
+        except CutOverTableError as e:
+            # A body refusal found at compile time: frame it like the
+            # lowering's refusals (``Cannot import <path>: <file>:<line>``).
+            if e.filename is not None:
+                raise
+            text = ""
+            if e.line:
+                try:
+                    lines = self.get_data(filename).decode("utf-8").split("\n")
+                    if 0 < e.line <= len(lines):
+                        text = lines[e.line - 1]
+                except (OSError, UnicodeDecodeError):
+                    pass
+            raise e.located(filename, text) from None
         # Operator ruling 2026-10-01: an unbound atom-shaped data name read
         # as an attribute is its atom (clausal/pl_data_imports.py).
         from clausal.pl_data_imports import install_attribute_fallback  # noqa: PLC0415
