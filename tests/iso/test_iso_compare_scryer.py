@@ -283,24 +283,27 @@ def test_iso_unify_conflates_int_and_float_OPEN_iso_divergence_oracle(scryer):
         "ISO/Scryer: 1 = 1.0 fails"
 
 
-def test_iso_is_conflates_int_and_float_OPEN_iso_divergence(run_clausal):
-    """The SAME open divergence as `'='`/2 above, through the hotter
-    spelling. Documents, does not bless.
-
-    `'is'`/2 ends in the same `unify`, so it inherits the same int/float
-    conflation: measured 2026-09-09, `'is'(7.0, 3 + 4)` SUCCEEDS in Clausal
-    while Scryer answers no (oracle half below). Spec §2 records that the
-    `'is'` role is where ~826 corpus goal positions are heading, against a
-    handful for `'='` — so this, not the `'='` pin, is the instance that
-    will actually be hit. Same deferral and same record:
-    todo/iso-unify-conflates-int-and-float-2026-09-09.md."""
-    assert _engine_yesno(run_clausal, "'is'(7.0, 3 + 4)") == [_YES], \
-        "current (diverging) Clausal behavior: 'is'(7.0, 3 + 4) succeeds"
-    # The int spelling is not in dispute in either engine.
+def test_iso_is_type_sensitive_int_float_CLOSED_2026_10_15(run_clausal):
+    """CLOSED 2026-10-15 (Ciao `iso_tests` `is_test4`, `3 is 3.0`; ahead of
+    the Ulrich Neumerkel presentation). Formerly
+    `test_iso_is_conflates_int_and_float_OPEN_iso_divergence`: `'is'`/2 used
+    to end in the same int/float-conflating `unify` as `'='`/2 above, so
+    `'is'(7.0, 3 + 4)` SUCCEEDED where Scryer answers no. That half of
+    todo/iso-unify-conflates-int-and-float-2026-09-09.md is now fixed —
+    `_iso_is` (clausal/logic/builtins/iso_compare.py) guards its own final
+    unification with `_numeric_types_agree` before calling `unify`, so
+    `is`/2 is now type-sensitive WITHOUT narrowing the shared `unify` the
+    `'='`/2 pin just above is still pinning as open. See
+    tests/iso/test_is_type_sensitivity_and_cyclic_unify_ulrich.py for the
+    fuller matrix (both directions, the int/int and float/float cases, and
+    the unbound-left-argument case that must stay unaffected)."""
+    assert _engine_yesno(run_clausal, "'is'(7.0, 3 + 4)") == [_NO], \
+        "fixed Clausal behavior: 'is'(7.0, 3 + 4) now fails, matching ISO/Scryer"
+    # The int spelling was never in dispute in either engine.
     assert _engine_yesno(run_clausal, "'is'(7, 3 + 4)") == [_YES]
 
 
-def test_iso_is_conflates_int_and_float_OPEN_iso_divergence_oracle(scryer):
+def test_iso_is_type_sensitive_int_float_CLOSED_2026_10_15_oracle(scryer):
     assert scryer("(7.0 is 3 + 4 -> write(yes) ; write(no)), nl, halt.") == "no", \
         "ISO/Scryer: 7.0 is 3 + 4 fails"
     assert scryer("(7 is 3 + 4 -> write(yes) ; write(no)), nl, halt.") == "yes"

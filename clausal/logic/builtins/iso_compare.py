@@ -12,6 +12,7 @@ from fractions import Fraction as _Fraction
 from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.logic.variables import deref as _deref, is_var as _is_var
 from clausal.logic.builtins._helpers import _arity as _term_arity
+from clausal.logic.builtins._helpers import _cell_functor
 from clausal.logic.builtins._helpers import _functor_name as _term_functor_name
 from clausal.logic.builtins._helpers import _standard_order_key
 from clausal.logic.builtins._registry import _builtin
@@ -224,6 +225,255 @@ _arith_cmp("=<", _o.le)     # ISO spells it =<, never <=
 _arith_cmp(">=", _o.ge)
 
 
+def _cycle_unify(a, b, trail) -> bool:
+    """Plain unify (what `'='`/2, `'\\='`/2 and `'is'`/2's result step run),
+    made safe against a cyclic or very-deep term WITHOUT paying for it on
+    the overwhelmingly common acyclic call: this tries the engine's own
+    `unify` FIRST, unchanged, and only falls back to the explicit-stack
+    walk (`_cycle_unify_walk`, below) on the one failure mode that means
+    "this term is too deep or cyclic for a recursive walk" —
+    ``RecursionError``. Every acyclic call is therefore LITERALLY a call to
+    `unify` with nothing around it but a `try`/`except RecursionError`
+    (and the `except` branch is never entered for an acyclic term, so its
+    cost there is the `try` setup only) — not a parallel reimplementation
+    that merely resembles `unify`'s behaviour, so trail effects, hook
+    firing and every documented divergence (int/float conflation, …) are
+    `unify`'s own, by construction, for every term this does not need the
+    walk for.
+
+    Safe to catch: `unify`'s depth cap (`MAX_DEPTH` in
+    `clausal/logic/variables/_variables.c`) is a C-level counter checked at
+    the TOP of every recursive step, before doing any further work or
+    recursing deeper — not CPython's own interpreter recursion limit, and
+    not an uncontrolled stack walk that might segfault before the check
+    fires. Measured directly (not assumed): calling the raw `unify` on
+    this exact cyclic pair, 5 times in one process, raised a clean,
+    catchable `RecursionError` every time with no process death (the
+    independent Ciao-sweep harness this bug was found by, `run_cases.py`,
+    already relies on exactly this — it caught the same exception and kept
+    running hundreds more cases afterward in the SAME process).
+
+    `unify`'s own C wrapper (`do_unify_and_wake`) ALSO already takes a
+    mark before it starts and undoes every binding it made back to that
+    mark on ANY non-success return — an ordinary mismatch (0) and an error
+    (-1, including this `RecursionError`) are handled by the identical
+    line, `trail_undo_to(trail, mark)` — and discards its OWN per-call
+    wakeup list without ever firing it when that happens. So by the time
+    this function's `except RecursionError` runs, every BINDING (and
+    attribute-state change) the aborted attempt made is already undone —
+    nothing here needs to re-undo what `unify` already undid. A mark is
+    therefore taken only in the `except` branch below, against that
+    already-clean state, not before the `try` (an earlier version of this
+    function took it before the `try` too, redundantly: nothing on the
+    success path ever reads it, and the C wrapper's own mark/undo makes it
+    unnecessary on the exception path as well — it was ~20ns of pure
+    waste on the one path that matters for performance).
+
+    One SPECIFIC case is NOT "no hook fired for the aborted attempt": a
+    term whose shape has its own `__unify__` hook that re-enters `unify`
+    itself — a SegList (partial list), a chars carrier's own protocol —
+    calls the TOP-LEVEL `unify()` again per element from WITHIN the
+    aborted attempt's own C descent, each such nested call its OWN
+    `do_unify_and_wake` scope with its OWN wakeup list fired immediately
+    on success (`clausal/logic/pending.py`'s own module docstring: "a
+    unification nested in it — a term's `__unify__` unifying element by
+    element … — only queues [goals]", not hooks). So a hook THROUGH one of
+    those shapes genuinely can fire during the aborted fast attempt, and
+    the OUTER `trail_undo_to` still undoes its binding/attribute-state
+    effect once the RecursionError propagates out — the check function
+    ran, but the trail ends up exactly as if it had not, the same
+    not-fully-atomic-on-non-trail-effects property `_cycle_unify_walk`'s
+    own leaf-by-leaf calls already have (see its docstring).
+
+    `unify_with_occurs_check`/2 never reaches this function: it is a
+    SEPARATE C entry point (`clausal/logic/variables/_variables.c`'s
+    `occurs_check`/`unify_with_occurs_check`, imported directly by
+    `clausal/logic/builtins/inspection.py::_unify_with_occurs_check__2` and
+    `clausal/logic/constraints.py::_structural_unify_oc`), and neither of
+    those two call sites — nor anything else in the tree — names
+    `_cycle_unify` (`grep -rn _cycle_unify clausal/` turns up only this
+    file's own three builtins: `'is'`, `'='`, `'\\='`).
+
+    The SAME explicit-stack / seen-pairs pattern `==`/2's own walk already
+    uses (`a480b5b8` "==/2 terminates on a cyclic term", `51f4e844` "a
+    cyclic partial list walks as its cons cells") is what the FALLBACK,
+    not the default path, now runs — a pair already in progress is
+    skipped rather than re-descended. See `_cycle_unify_walk` for why the
+    fallback needs its OWN trail mark/undo and `defer`/`run_first`
+    discipline, rather than just calling that walk directly.
+    """
+    try:
+        return bool(_unify(a, b, trail))
+    except RecursionError:
+        pass
+    return _cycle_unify_fallback(a, b, trail)
+
+
+def _cycle_unify_fallback(a, b, trail) -> bool:
+    """`_cycle_unify`'s slow path, for a caller that has already tried
+    `_unify` and caught its RecursionError (the builtins below inline the
+    fast attempt so the common call pays no extra Python frame)."""
+    # Slow path. `_unify`'s own internal mark/undo (see the docstring
+    # above) already rolled back whatever the aborted fast attempt had
+    # bound, so a mark taken HERE -- not before the `try`, where it would
+    # sit unused on the success path -- still denotes "the state as of
+    # entering this function": nothing has changed under us since.
+    mark = trail.mark()
+    #
+    # Unlike a single `unify()` call's recursive C descent -- which
+    # defers EVERY attribute hook of the WHOLE structure until that one
+    # descent succeeds, firing none of them on failure -- this walk calls
+    # `unify()` again per LEAF pair, so each successful leaf's hooks fire
+    # as that leaf is processed, not held back for the pairs after it.
+    # That is the SAME granularity a term's own `__unify__` already uses
+    # when it unifies element by element by calling back into `unify()`
+    # (clausal/logic/pending.py's module docstring: "a unification nested
+    # in it -- a term's `__unify__` unifying element by element, a hook, a
+    # woken goal -- only queues"), not a new discipline invented here, and
+    # `trail.defer` is what keeps it from running a woken GOAL at the
+    # wrong moment: set for the whole walk (saved and restored, the same
+    # idiom `clausal/logic/_trampoline_py.py::_drive_to_root_yield` uses),
+    # a nested leaf `unify()` call sees it already set and only QUEUES
+    # what it wakes, same as that term-level nesting does, instead of
+    # draining the queue itself mid-walk.
+    #
+    # What IS new here, because the engine's own wrapper does not need it
+    # for a single descent: if a LATER leaf fails after an EARLIER one
+    # already bound (and already fired that binding's own hooks), this
+    # function's OWN mark is what undoes those earlier bindings (and any
+    # attribute-state change a hook recorded on the trail) before
+    # reporting failure -- trail state ends up exactly as if nothing had
+    # run, even though a hook's CHECK function itself may have executed
+    # once for a binding that is later rolled back. A hook whose only
+    # observable effect is trail-tracked state (the normal case: dropping
+    # or re-attaching a constraint) is therefore fully restored; one with
+    # an effect OUTSIDE the trail (arbitrary IO) is not made atomic by
+    # this, but it was never atomic on that axis elsewhere in the engine
+    # either (the same per-element `__unify__` nesting above already
+    # fires hooks before an enclosing failure is known).
+    bare = not trail.defer
+    if bare:
+        trail.defer = True
+    try:
+        ok = _cycle_unify_walk(a, b, trail)
+    finally:
+        if bare:
+            trail.defer = False
+    if ok and bare:
+        from clausal.logic.pending import run_first  # noqa: PLC0415
+        ok = run_first(trail)
+    if not ok:
+        trail.undo(mark)
+    return ok
+
+
+def _cycle_unify_walk(a, b, trail) -> bool:
+    """The slow, cycle-safe fallback `_cycle_unify` reaches only after the
+    fast `unify` raised ``RecursionError`` -- see its docstring for why
+    that is safe to catch and why the trail is already clean by then.
+
+    Before this existed, the Ciao `iso_tests` cases `unify_test16`
+    (``'='(f(X, Y, X, 1), f(a(X), a(Y), Y, 2))``) and `not_uni_test15`
+    (the same pair through `'\\='`/2) crashed the engine's C `unify` with a
+    raw ``RecursionError: unify: term nesting too deep`` instead of
+    producing a clean Prolog outcome. `X = a(X)` and `Y = a(Y)` each bind a
+    variable into a term that contains itself — ISO 7.3.2/8.2.2 require
+    plain `=`/2 (unlike `unify_with_occurs_check`/2) to allow exactly that —
+    and the third argument then asks to unify X (now bound to the cyclic
+    `a(X)`) against Y (bound to the cyclic `a(Y)`): a naive recursive walk
+    re-enters that same pair of terms forever and hits the depth cap.
+    Treating a REVISITED pair as already settled — a rational-tree
+    unifier's cycle closes the proof instead of re-deriving it — lets that
+    third argument through cleanly, and the FOURTH argument (`1` against
+    `2`) then decides the whole unification: `fails`, the Ciao-asserted and
+    ISO-correct outcome, not a crash. (`'\\='`/2 on the same pair therefore
+    `not_fails`: the trial unification it runs internally fails for the
+    same reason, so the negation succeeds.)
+
+    Delegates every LEAF case — either side still an unbound variable after
+    deref (a var-to-anything bind is O(1), no structural walk, so it is safe
+    even when the other side is cyclic or huge) and any pair where neither
+    side is a dataclass term instance, a compound CELL, or a plain `list`
+    — to the engine's own `unify`, so atoms, numbers, strings, SegLists,
+    DictTerms, SetTerms, bytes and Quantities keep its EXACT existing
+    semantics, including the documented, separately-OPEN int/float
+    conflation (todo/iso-unify-conflates-int-and-float-2026-09-09.md) that
+    this function does not touch. A cycle folded entirely inside one of
+    those delegated shapes (e.g. a cyclic SegList reached only through a
+    dict value) is a narrower, pre-existing gap this does not close — none
+    of the ISO suite's current cases need it, so it is left as a known
+    residual rather than papered over here.
+
+    A compound term is, UNCONDITIONALLY since P3-2 (clausal/logic/cells.py
+    module docstring, "every compound term compiles to a cell"), a plain
+    `tuple` whose slot 0 is its functor name — `f(X, Y, X, 1)` is
+    `('f', X, Y, X, 1)`. That tuple shape is NOT unique to compounds: the
+    str/char-list carrier (`"ab"` as `('$chars', 'ab')`) and a tuple-DATA
+    cell use the SAME `(str-or-tag, ...)` shape with a reserved tag in slot
+    0. `_cell_functor` (`clausal/logic/builtins/_helpers.py`, the funnel's
+    own single cell-shape check — the same one `functor/3`/`arity/2` use)
+    is what tells them apart: it answers `(True, 'f')` for the former and
+    `(False, None)` for the latter, deliberately excluding `'$chars'`/the
+    `tuple`-type tag. Recursing into every plain `(str, ...)` tuple
+    regardless (an EARLIER version of this function did, matching on
+    `isinstance(x, tuple)` alone) broke `'='("ab", [a, b])` — a `('$chars',
+    'ab')` cell paired against a plain char-list `['a', 'b']` is NOT two
+    cells to recurse elementwise, it is exactly the Liskov str↔char-list
+    case the engine `unify` already has its own protocol for — so this
+    asks `_cell_functor` first and only recurses when BOTH sides answer a
+    real compound functor.
+    """
+    stack = [(a, b)]
+    seen: set = set()
+    keep: list = []       # pins visited objects: an id is never reused
+    while stack:
+        x, y = stack.pop()
+        x = deref(x)
+        y = deref(y)
+        if x is y:
+            continue
+        if is_var(x) or is_var(y):
+            if not _unify(x, y, trail):
+                return False
+            continue
+        if is_term_instance(x) and is_term_instance(y):
+            if type(x) is not type(y):
+                return False
+            key = (id(x), id(y))
+            if key in seen:
+                continue
+            seen.add(key)
+            keep.append((x, y))
+            stack.extend((getattr(x, f), getattr(y, f))
+                         for f in term_field_names(x))
+            continue
+        is_cell_x, fx = _cell_functor(x)
+        is_cell_y, fy = _cell_functor(y)
+        if is_cell_x and is_cell_y:
+            if fx != fy or len(x) != len(y):
+                return False
+            key = (id(x), id(y))
+            if key in seen:
+                continue
+            seen.add(key)
+            keep.append((x, y))
+            stack.extend(zip(x[1:], y[1:]))
+            continue
+        if not is_cell_x and not is_cell_y and type(x) is list and type(y) is list:
+            if len(x) != len(y):
+                return False
+            key = (id(x), id(y))
+            if key in seen:
+                continue
+            seen.add(key)
+            keep.append((x, y))
+            stack.extend(zip(x, y))
+            continue
+        if not _unify(x, y, trail):
+            return False
+    return True
+
+
 @_builtin("is", 2)
 def _iso_is(result, expr, trail, k):
     """ISO is/2: evaluate Expr, unify with Result.
@@ -233,13 +483,32 @@ def _iso_is(result, expr, trail, k):
     infix syntax for `'is'(X, E)`, so they never collide. See
     todo/is-and-eq-are-swapped-relative-to-iso-2026-09-09.md
 
-    The unification at the end is the engine's `unify`, which conflates int
-    and float, so `'is'(7.0, 3 + 4)` SUCCEEDS here where Scryer says no.
-    That is an OPEN, deliberately deferred divergence shared with `'='`/2 —
-    see todo/iso-unify-conflates-int-and-float-2026-09-09.md and the two
-    `*_OPEN_iso_divergence` pins in tests/iso/test_iso_compare_scryer.py.
+    FIXED 2026-10-15 (Ciao `iso_tests` `is_test4`, `3 is 3.0`): ISO's
+    implicit unification of Result against the evaluated expression is
+    `=`/2's unification, which is type-sensitive between numeric kinds —
+    `3` and `3.0` do not unify even though `3 =:= 3.0` — the same way
+    `3 == 3.0` is false. The engine's shared `unify` deliberately still
+    conflates int/float for its many OTHER callers (clause-head matching,
+    `'='`/2 itself, `dif`/2, …; narrowing that is an engine-wide,
+    operator-level call — todo/iso-unify-conflates-int-and-float-2026-09-09.md),
+    so this guards ONLY is/2's own final step: `_numeric_types_agree`
+    (already used by `'=='`/2 for the identical question) is run first and,
+    when Result is already bound to a numeric leaf of a DIFFERENT numeric
+    kind than the evaluated expression, is/2 fails before ever reaching
+    `unify` — matching what a type-sensitive unify would have done — while
+    an unbound Result (`X is 3.0`) is untouched (`_numeric_types_agree`
+    raises no objection to an unbound variable) and binds exactly as before.
+    `'='`/2 itself is intentionally NOT changed; see the todo file.
     """
-    if _unify(result, _iso_eval(expr, "is/2"), trail):
+    value = _iso_eval(expr, "is/2")
+    # The evaluated value is a number, never a cyclic term, so the engine's
+    # own unify is safe here without the cyclic fallback; and an unbound
+    # Result (the common `X is E`) needs no numeric-kind check.
+    r = _deref(result)
+    if _is_var(r):
+        if _unify(r, value, trail):
+            yield None
+    elif _numeric_types_agree(r, value) and _unify(r, value, trail):
         yield None
 
 
@@ -250,8 +519,18 @@ def _iso_unify(a, b, trail, k):
     Clausal's `unify` conflates int and float, so `'='(1, 1.0)` succeeds
     where Scryer says no — OPEN and deferred, see
     todo/iso-unify-conflates-int-and-float-2026-09-09.md.
+
+    Cyclic-term safe since 2026-10-15 via `_cycle_unify` (see its docstring)
+    — previously a term built to contain itself, e.g. through a third
+    argument that equates two already-cyclic subterms, raised a raw
+    ``RecursionError`` instead of failing or succeeding cleanly.
     """
-    if _unify(a, b, trail):
+    # `_cycle_unify` inlined: the fast attempt costs no extra frame.
+    try:
+        ok = _unify(a, b, trail)
+    except RecursionError:
+        ok = _cycle_unify_fallback(a, b, trail)
+    if ok:
         yield None
 
 
@@ -260,7 +539,10 @@ def _iso_not_unifiable(a, b, trail, k):
     from clausal.logic.pending import run_first  # noqa: PLC0415
     mark = trail.mark()
     # \+ A = B: the goals the unification wakes run inside the negation.
-    ok = _unify(a, b, trail) and run_first(trail)
+    # _cycle_unify (not the raw engine _unify): see its docstring — the
+    # same cyclic-term pair that must crash neither succeeds nor fails
+    # cleanly.
+    ok = _cycle_unify(a, b, trail) and run_first(trail)
     trail.undo(mark)
     if not ok:
         yield None
