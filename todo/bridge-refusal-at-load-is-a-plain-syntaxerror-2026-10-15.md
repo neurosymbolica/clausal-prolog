@@ -22,8 +22,11 @@ if refusal is not None:
                    f"{refusal.message}", span)
 ```
 
-`_refused` builds the front end's SyntaxError; the ISO term exists only as
-text (`BridgeRefusal.term_text`).
+`_refused` builds a `DirectiveRefused`, which `iso_l3` turns into a
+`LoweringRefused`. `clausal/import_hook.py:1187-1194`, the `except
+iso_l3.LoweringRefused` handler of the native front end's `_lower`,
+re-raises that as the plain `SyntaxError`, so the fix most likely goes
+there. The ISO term exists only as text (`BridgeRefusal.term_text`).
 
 ## To decide
 
