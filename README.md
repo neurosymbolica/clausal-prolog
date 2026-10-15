@@ -244,11 +244,13 @@ To run full ISO Prolog, cut included, alongside Clausal Prolog, use the
 
 Importing a `.pl` file straight into the engine (put it on `sys.path` and
 `import` it) is
-**experimental** and outside the 1.0 compatibility promise. That in-process
-loader does not run cut yet: a `.pl` file that uses `!` or `->` fails to
-load there. It reads `.pl` with the native ISO front end, the reader that
-`.clausal` files always use; `CLAUSAL_PL_FRONTEND=translator` selects the
-legacy translator instead.
+**experimental** and outside the 1.0 compatibility promise. It reads `.pl`
+with the native ISO front end, the reader that `.clausal` files always use,
+and runs `!`, `->` and if-then-else with ISO semantics, cut included.
+`CLAUSAL_PL_FRONTEND=translator` selects the legacy translator instead,
+which refuses them. A cut whose scope holds a call to a tabled predicate is
+refused at load, and `*->` is refused. Full ISO (streams, flags, `op/3`,
+...) remains the embeddings' job.
 
 ## The seam: `.seam` files
 

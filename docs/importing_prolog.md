@@ -3,11 +3,12 @@
 !!! warning "Experimental in 1.0"
     `.pl` import is **experimental** and outside the 1.0 compatibility
     promise (see [Public API](public-api.md)). By default it reads `.pl`
-    with the native ISO front end (the reader `.clausal` files use);
+    with the native ISO front end (the reader `.clausal` files use), which
+    runs cut and if-then-else (see
+    [Cut and if-then-else](#cut-and-if-then-else-native-front-end));
     `CLAUSAL_PL_FRONTEND=translator` selects the older translator, which
-    rewrites Prolog source into seam syntax. Clausal is cut-free: programs
-    that use cut or if-then-else are refused by both front ends (see
-    [Known limitations](#known-limitations)).
+    rewrites Prolog source into seam syntax and refuses them. It is not an
+    ISO Prolog system.
     For running real ISO Prolog alongside Clausal Prolog, use the
     [Scryer](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-scryer/docs/scryer.md) or [Trealla](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-trealla/docs/trealla.md) embeddings.
 
@@ -802,6 +803,28 @@ value(V)    :- constant_value(max_fine, V).               % program-wide
   strictly (`existence_error(dict_key, Key)`), `dict_put/4` and
   `dict_put_pairs/3` update.
 
+### Cut and if-then-else (native front end)
+
+With `CLAUSAL_PL_FRONTEND=native`, a `.pl` file runs `!`, `( C -> T ; E )`
+and `( C -> T )` with ISO 7.8 semantics: a cut prunes the clause's
+alternatives and the choice points made since the clause was entered;
+`->` commits to the condition's first solution. Meta-calls are cut
+barriers as ISO says: `call/N`, `once/1`, `\+`, `findall/3`,
+`catch/3`'s Goal and Recovery, ... A cut built at run time
+(`G = (p(X), !), call(G)`) is local to that call. `.clausal` files stay
+cut-free: the same constructs are refused there, and a `.clausal` module
+may not import a `.pl` one.
+
+* **A cut over a tabled call is refused at load** (XSB's rule): a `!`, an
+  if-then-else condition, `once/1` or `setup_call_cleanup/3`'s Setup whose
+  scope holds a call to a tabled predicate raises `SyntaxError` naming the
+  call. Scryer runs such a cut; the answer it would give depends on the
+  fixpoint's pass order, which this engine cannot promise.
+* **`*->` (soft-cut) is refused**, as Scryer refuses it.
+* **Recursion through a cutting `catch/3` or `once/1` is limited by the
+  Python stack** (about 330 levels): each such Goal runs in a nested
+  sub-generator.
+
 ### DCG rules (native front end)
 
 With the native front end (the default, and the front end of Clausal Prolog), a
@@ -838,10 +861,13 @@ look(X), [X] --> [X].                  % pushback: X is left in the input
 * Export and import nonterminals as `name//N` (`:- module(m, [greeting//0])`,
   `:- use_module(m, [greeting//0])`); `name/(N+2)` names the same
   predicate, as in Scryer.
-* `!` and `->` are refused in a grammar body exactly as in a clause body
-  (this loader does not run cut), and so is `{!}`: in a rule it is the cut
-  `!, S0 = S` of the rule's own clause. Only a WHOLE `phrase/2,3` body
-  `!` or `{!}` is local to the call, and answers `S0 = S`.
+* `!` and `{!}` in a grammar body cut the rule's clause (ISO 7.14.2):
+  `{!}` is the cut `!, S0 = S` of the rule's own clause, and
+  `s --> [a], !.` is `s(S0, S) :- S0 = [a|S1], !, S1 = S`. `->` translates
+  as in a clause body (`( A -> B ; C )` threads the list through each
+  part). Only a WHOLE `phrase/2,3` body `!` or `{!}` is local to the call,
+  and answers `S0 = S`. In a `.clausal` file all of these are refused, as
+  in a clause body.
 * `\+` in a grammar body is refused, as Scryer refuses it
   (`representation_error(dcg_body)`); negate a goal inside `{...}`.
 * A partial or improper terminal list (`[a|T]`, `[a|b]`) is refused at
@@ -882,7 +908,9 @@ Most standard Prolog translates cleanly:
 
 ### Unsupported constructs
 
-The translator **rejects** programs containing:
+The translator (the default front end) **rejects** programs containing
+(the native front end runs them: see
+[Cut and if-then-else](#cut-and-if-then-else-native-front-end)):
 
 - **Cut (`!/0`)** — raises `SyntaxError`. Use `dif/2`, first-argument
   indexing, constraints, `if_/3` with a reifiable condition, or a
@@ -1200,7 +1228,8 @@ renamed to `_pi`.)
   `in_check(a, L)`.
 - **`use_module/1` of a `.seam` module** gives qualified access
   only (`-import_module`); name the predicates with `use_module/2`.
-- **No cut, no if-then-else** (above), and no streams or `op/3`. The ISO
+- **No cut, no if-then-else on the translator** (above; the native front
+  end runs them), and no streams or `op/3`. The ISO
   flags are there ([Prolog Flags](flags.md)), but `unknown` can only be
   `error`.
 

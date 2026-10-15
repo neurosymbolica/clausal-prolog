@@ -78,6 +78,13 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Added
 
+- **The in-process `.pl` loader runs `!`, `->` and if-then-else** with ISO
+  7.8 semantics, on the native front end (`CLAUSAL_PL_FRONTEND=native`;
+  the translator still refuses them); `.clausal` stays cut-free. A cut
+  whose scope holds a tabled call is refused at compile time (XSB's rule),
+  including `once/1` and `setup_call_cleanup/3`'s Setup; `*->` stays
+  refused. Recursion through a cutting `catch/3` or `once/1` is limited by
+  the Python stack (about 330 deep). See docs/importing_prolog.md.
 - **`clausal.logic.variables.hook_dispatch_depth()`: attribute-hook dispatch
   in progress on any trail.** `trail.hooks_running` counts one trail's
   dispatches, so a hook that built a fresh `Trail()` and called a library on

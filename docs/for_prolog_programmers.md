@@ -381,9 +381,11 @@ import my_prolog_module     # loads my_prolog_module.pl, cached as .pyc
 !!! warning "Experimental in 1.0"
     The in-process `.pl` loader is experimental: what it accepts and how it
     names things may change in a minor release (see
-    [Public API](public-api.md)). It does not run cut yet: `!` and `->` in
-    a `.pl` file are refused when it loads, as they are in `.clausal`.
-    That is a current limitation of this loader, not a property of `.pl`.
+    [Public API](public-api.md)). On the native front end
+    (`CLAUSAL_PL_FRONTEND=native`) it runs `!`, `->` and if-then-else with
+    ISO semantics; a cut over a tabled call and `*->` are refused at load.
+    The translator, the default front end, still refuses cut and `->`.
+    `.clausal` files stay cut-free.
 
 Cross-file `use_module` between `.pl` files works, and a `.pl` file may
 import a `.clausal` module. In a `.pl` file `end_module/1` is optional.
