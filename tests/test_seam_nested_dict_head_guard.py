@@ -238,3 +238,49 @@ def prolog_mod(request, tmp_path_factory):
 ])
 def test_prolog_curly_heads_unchanged(prolog_mod, name, expected):
     assert any(True for _ in solve(name, prolog_mod)) is expected
+
+
+# A head variable inside a compound inside a list guard, that is ALSO in
+# another argument, is ONE variable.  The old per-section allocation made
+# the body's copy fresh after the list guard had bound it, so the second
+# argument came back as f(_, g(_)) whatever the list held: a call with a
+# fully bound second argument succeeded for ANY element, and an answer
+# variable in it stayed unbound.
+PICK = """\
+-module(pk, [f(A, B), g(A)])
+{shallow}pick([f(A, g(B)), *_], f(A, g(B))) <- True
+pick([_, *R], X) <- pick(R, X)
+pickd([{{'k': A}}, *_], A) <- True
+pickd([_, *R], X) <- pickd(R, X)
+"""
+
+PICK_LIST = [("f", 1, ("g", 2)), ("f", 3, ("g", 4))]
+
+
+@pytest.fixture(scope="module", params=["trampoline", "shallow"])
+def pick_mod(request, tmp_path_factory):
+    shallow = ("-shallow([pick/2, pickd/2])\n"
+               if request.param == "shallow" else "")
+    p = tmp_path_factory.mktemp("nested_compound_guard") / ("pk" + SEAM_EXT)
+    p.write_text("-private([k])\n" + PICK.format(shallow=shallow))
+    return load_clausal_module(p)
+
+
+def test_compound_in_a_list_guard_binds_the_other_argument(pick_mod):
+    a, b = Var(), Var()
+    got = [(a.value, b.value)
+           for _ in solve(("pick", PICK_LIST, ("f", a, ("g", b))), pick_mod)]
+    assert got == [(1, 2), (3, 4)]
+
+
+def test_compound_in_a_list_guard_checks_the_other_argument(pick_mod):
+    assert _holds(pick_mod, "pick", PICK_LIST, ("f", 3, ("g", 4)))
+    assert not _holds(pick_mod, "pick", PICK_LIST, ("f", 3, ("g", 5)))
+    assert not _holds(pick_mod, "pick", PICK_LIST, ("f", 2, ("g", 2)))
+
+
+def test_dict_in_a_list_guard_binds_the_other_argument(pick_mod):
+    x = Var()
+    assert _answers(pick_mod, "pickd", [{"k": 1}, {"k": 2}], x) == [
+        (1,), (2,)]
+    assert not _holds(pick_mod, "pickd", [{"k": 1}, {"k": 2}], 3)
