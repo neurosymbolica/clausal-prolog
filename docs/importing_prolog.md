@@ -821,9 +821,10 @@ may not import a `.pl` one.
   call. Scryer runs such a cut; the answer it would give depends on the
   fixpoint's pass order, which this engine cannot promise.
 * **`*->` (soft-cut) is refused**, as Scryer refuses it.
-* **Recursion through a cutting `catch/3` or `once/1` is limited by the
-  Python stack** (about 330 levels): each such Goal runs in a nested
-  sub-generator.
+* **Recursion through `once/1` or `catch/3` is limited by the Python
+  stack**, cut or no cut: each such Goal runs in a nested sub-generator,
+  so the depth depends on Python's recursion limit (about 330 levels at
+  the default `sys.getrecursionlimit()` of 1000).
 
 ### DCG rules (native front end)
 
