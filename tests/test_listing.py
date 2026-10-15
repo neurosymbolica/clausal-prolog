@@ -145,7 +145,12 @@ class TestListing:
         formal = _formal(exc_info)
         assert cell_functor(formal) == "type_error"
         assert cell_args(formal)[0] == mint("predicate_indicator")
-        assert cell_args(formal)[1] is term
+        # == , not `is`: 2026-10-15's culprit-copy fix (exceptions.py's
+        # _copy_at_raise_time) walks the formal term at raise time --
+        # ``term`` is a dataclass (is_term_instance), so even though it is
+        # GROUND, the walk REBUILDS it (``cls(**{...})``), not just a
+        # tuple's nested cells.  Equal, but no longer the same object.
+        assert cell_args(formal)[1] == term
 
     def test_non_predicate_error(self):
         # nv

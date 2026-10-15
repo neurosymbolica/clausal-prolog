@@ -186,7 +186,18 @@ def test_a_term_that_is_not_a_variable_raises_an_instantiation_error():
         bb.bb_inf([term], x, Var(), trail)
     error = raised.value.term
     assert error[1] == "instantiation_error"
-    assert error[2][0] == "bb_inf" and error[2][1] is term
+    # Not `is term`: 2026-10-15's F5 fix has _error() copy error/2's SECOND
+    # argument too (this exact site -- branch_and_bound.py:281 -- is why:
+    # it passes a context term holding a LIVE AttVar carrying clpq state,
+    # the same class of bug the culprit copy already fixed). So the
+    # context's embedded var is a fresh copy of x, structurally ("*", 2,
+    # <var>) but never `is term` or `is x` again -- check the shape and
+    # that the slot is still a variable, not identity or attribute
+    # preservation (attributes on a copied var are a parked gap, same as
+    # throw/1's pre-existing one -- see _copy_at_raise_time's docstring).
+    assert error[2][0] == "bb_inf"
+    assert error[2][1][0] == "*" and error[2][1][1] == 2
+    assert is_var(error[2][1][2])
 
 
 def test_narrowing_binds_and_the_objective_is_repaired():

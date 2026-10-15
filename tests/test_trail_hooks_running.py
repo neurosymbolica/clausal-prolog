@@ -22,7 +22,7 @@ import pytest
 
 from clausal.logic.solve import solve
 from clausal.logic.variables import (
-    Trail, Var, put_attr, register_attr_hook, unify,
+    Trail, Var, is_var, put_attr, register_attr_hook, unify,
 )
 from clausal.testing import load_clausal_module
 
@@ -242,7 +242,11 @@ def _nested_driver_hook(log, drive):
 
 def _assert_refusal(term, goal, context):
     """The whole error term: error(permission_error(call, goal, Goal), PI),
-    the goal compared element by element (a Var by identity)."""
+    the goal compared element by element (a Var by its VAR-NESS, not
+    identity: 2026-10-15's culprit-copy fix (exceptions.py's
+    _copy_at_raise_time) snapshots the permission_error's culprit at raise
+    time -- ISO copy_term semantics -- so an unbound element of *goal* is
+    no longer the same Python object in *culprit*, only still unbound)."""
     assert type(term) is tuple and len(term) == 3, term
     assert term[0] == "error"
     assert term[2] == context, term
@@ -250,7 +254,8 @@ def _assert_refusal(term, goal, context):
     assert formal[:3] == ("permission_error", "call", "goal"), formal
     culprit = formal[3]
     assert len(culprit) == len(goal) and all(
-        a is b or a == b for a, b in zip(culprit, goal)), (culprit, goal)
+        (is_var(b) and is_var(a)) or a == b
+        for a, b in zip(culprit, goal)), (culprit, goal)
     assert len(formal) == 4
 
 

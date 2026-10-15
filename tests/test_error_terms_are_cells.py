@@ -153,8 +153,13 @@ def test_context_text_splits_into_indicator_and_prose(text, second, prose):
 
 
 def test_an_indicator_given_as_the_context_is_the_second_argument():
+    # == , not `is`: 2026-10-15's F5 fix has _error() run error/2's SECOND
+    # argument through _copy_at_raise_time too (branch_and_bound.py:281
+    # passes one holding live clpq AttVars), so even a GROUND context like
+    # this indicator comes back a structurally-equal but freshly rebuilt
+    # tuple (_deref_walk always reconstructs), not the same Python object.
     pi = ("/", "foo", 1)
-    assert cell_args(instantiation_error(pi))[1] is pi
+    assert cell_args(instantiation_error(pi))[1] == pi
 
 
 def test_a_missing_procedure_names_itself_as_scryer_does():
@@ -340,5 +345,9 @@ def test_a_string_goal_error_without_a_context_has_no_leading_separator():
 def test_a_ratio_is_prose_and_an_explicit_procedure_context_is_kept():
     term = instantiation_error("1/2: ratio must be reduced")
     assert _is_unbound(cell_args(term)[1])
+    # A non-str, non-None context on existence_error("procedure", ...)
+    # does NOT take that constructor's own procedure/indicator shortcut
+    # (that one requires context to be str or None) -- it falls through to
+    # _error(), so == , not `is`, for the same reason as the test above.
     ctx = ("/", "call", 2)
-    assert cell_args(existence_error("procedure", ("/", "f", 1), ctx))[1] is ctx
+    assert cell_args(existence_error("procedure", ("/", "f", 1), ctx))[1] == ctx

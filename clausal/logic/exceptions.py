@@ -452,47 +452,98 @@ def _context(context: Any) -> tuple[Any, str | None]:
     return context, None
 
 
-def _copy_culprit(term: Any) -> Any:
+def _copy_at_raise_time(term: Any) -> Any:
     """Snapshot *term* the way ``throw/1`` snapshots its ball (ISO
     7.8.10.1 b, ``globals_env._throw_ball`` / ``_findall_copy_row``):
     resolve every binding as of THIS moment and replace whatever is still
-    unbound with a fresh Var, before the raise unwinds the stack and the
-    generator chain's trail-undo retroactively erases the binding.
+    unbound with a fresh Var.  Used on BOTH of ``error/2``'s arguments --
+    the formal error term and the context/info term -- wherever either can
+    carry a term the raise site built from live, currently-running state
+    rather than from scratch.
 
-    Without this, an ISO builtin error raised mid-conjunction embeds the
-    culprit by REFERENCE whenever the raise site hands a term that still
-    nests a live, currently-bound ``Var``: ``N = 'X', write_term(T,
-    [variable_names([N=T])])`` raises ``domain_error(write_option,
-    variable_names([N=T]))`` whose Python object still holds the live Var
-    for ``N`` -- and when that error is UNCAUGHT (no ``catch/3``, or one
-    that does not match), ``solve()``'s generator-chain unwind undoes the
-    trail on its way out of the clause, unbinding ``N`` again before the
-    top level ever reads ``.term``, so the printed error showed
-    ``variable_names([_=_])`` with everything unbound, instead of
-    ``variable_names(['X'=_])``.  (A ``catch/3`` that matches is a
-    different, already-correct path -- its handler runs inline, before any
-    unwind -- so this symptom was only ever visible on an uncaught raise.)
-    ``copy_term`` semantics are exactly the fix: a bound variable is
-    resolved to its concrete value in the copy, a genuinely unbound one
-    gets a fresh, independent Var rather than being spuriously grounded.
+    This fixes two separate things, both ISO 7.8.9/7.8.10 requirements
+    Clausal was not meeting before 2026-10-15:
 
-    Ground terms skip the copy entirely (``_is_ground`` short-circuits on
-    the first Var) -- the overwhelmingly common case, since most culprits
-    are already-ground atoms, numbers or type names -- so this costs
-    nothing where there is nothing to protect.
+    1. An UNCAUGHT raise (no ``catch/3``, or one that does not match)
+       propagates by unwinding ``solve()``'s generator chain -- a clause
+       body is nested sub-generators, one per conjunct -- and each
+       suspended frame's cleanup undoes the trail back to its own mark on
+       the way out.  Without a snapshot, a value bound EARLIER in the same
+       clause and still embedded in the culprit by reference is unbound
+       again before anything reads ``.term``: ``N = 'X', write_term(T,
+       [variable_names([N=T])])`` raised ``domain_error(write_option,
+       variable_names([N=T]))`` holding the live Var for ``N``, and an
+       uncaught read of it printed ``variable_names([_=_])`` with
+       everything unbound, instead of ``variable_names(['X'=_])``.  A
+       ``catch/3`` that MATCHES was never exposed to this specific symptom
+       -- its handler is an inline ``try/except`` wrapped directly around
+       the goal (``_compile_catch_impl``,
+       ``clausal/logic/compiler/control_constructs.py``), so it reads
+       ``.term`` before any unwind, while the bound value is still live.
+
+    2. Independently of (1), and affecting BOTH the caught and uncaught
+       case: a culprit's genuinely-still-unbound variables must become
+       FRESH, independent ones in the raised term -- ``copy_term/2``
+       semantics, exactly what ``throw/1`` already does -- not the
+       caller's own Var objects shared by reference.  Before this fix,
+       ``catch(atom_length(f(Y), _), error(type_error(_, C), _), true), C
+       = f(Z)`` bound ``Z`` to the SAME object as ``Y``; Scryer (and now
+       Clausal) give a DISTINCT, fresh variable instead.  So a matching
+       ``catch/3`` is not "already correct" in every respect -- the
+       bound-value timing in (1) was fine under it; the variable-sharing
+       in (2) was not, and this fix changes catch/3's observable behaviour
+       for that half even though timing was never its problem.
+
+    A bound variable is resolved to its concrete value in the copy; a
+    genuinely unbound one gets a fresh, independent Var rather than being
+    spuriously grounded -- read back with ``is_var``/``deref``, it is a
+    real free variable, not a lookalike.
+
+    Ground terms skip the actual COPY (``_is_ground`` short-circuits on
+    the first Var, the overwhelmingly common case: most culprits and
+    contexts are already-ground atoms, numbers or indicators) -- but
+    getting there still costs the ``_deref_walk`` that answers the
+    groundness question, an O(n) walk of *term* (cheap per raise, not
+    free; see the commit's performance note).
+
+    A CYCLIC term (no occurs check: ``X = f(X)``) makes that walk recurse
+    without bound.  Falling back to the UNCOPIED *term* on
+    ``RecursionError`` matches this engine's behaviour before the fix --
+    an occasionally-unbound-looking culprit on a pathological cyclic
+    input is far better than turning the raise itself into an unrelated
+    ``RecursionError`` instead of the ISO error it should be.
+
+    Parked, not fixed here: a copied variable that carried ATTRIBUTES
+    (``dif/2``, ``freeze/2``, clpz) comes back plain -- ``_copy_term`` is
+    called with no ``attvars`` sink, so the coroutining goal those
+    attributes would re-wake is lost on the copy.  ``_throw_ball`` has the
+    identical gap already (a thrown ball's attributed variables are not
+    preserved either), so this fix makes the two raise paths consistent
+    with each other rather than introducing a new class of bug; closing
+    it for both is a separate task (the ``attvars`` parameter plus
+    ``_copy_attributes``, as ``copy_term/2`` itself does).
     """
+    # Local, not hoisted: clausal.__init__ -> solve -> database -> exceptions
+    # -> (a module-level) solve is a genuine import cycle (measured
+    # 2026-10-15) -- `import clausal` fails on partially-initialised
+    # `clausal.logic.solve` if this import moves to module scope.
     from clausal.logic.solve import _deref_walk  # noqa: PLC0415
     from clausal.logic.builtins._helpers import _is_ground  # noqa: PLC0415
-    walked = _deref_walk(term)
-    if _is_ground(walked):
-        return walked
-    from clausal.logic.builtins.inspection import _copy_term  # noqa: PLC0415
-    return _copy_term(walked, {})
+    try:
+        walked = _deref_walk(term)
+        if _is_ground(walked):
+            return walked
+        from clausal.logic.builtins.inspection import _copy_term  # noqa: PLC0415
+        return _copy_term(walked, {})
+    except RecursionError:
+        return term
 
 
 def _error(formal: Any, context: Any) -> tuple:
     second, prose = _context(context)
-    return _with_prose(("error", _copy_culprit(formal), second), prose)
+    return _with_prose(
+        ("error", _copy_at_raise_time(formal), _copy_at_raise_time(second)),
+        prose)
 
 
 # ── Structured error term helpers ─────────────────────────────────────────────
@@ -555,14 +606,23 @@ def existence_error(obj_type: str, culprit: Any, context: Any = "") -> tuple:
     nosuch/1)``), so an indicator *culprit* is the second argument here too
     and the whole context text becomes prose.
 
-    No :func:`_copy_culprit` here, unlike :func:`_error`: a PROCEDURE
-    culprit on this path is always an indicator cell built fresh at the
-    raise site from a minted name and a literal arity (``dangling_handle_
-    indicator_and_why``, callers in ``globals_env.py`` / ``modules/py``) --
-    never a term a program could still have a live, currently-bound Var
-    inside, so there is nothing for the copy to protect and it would only
-    cost an allocation (and, measured 2026-10-15, break an existing
-    identity-sensitive test with no compensating safety gain).
+    No :func:`_copy_at_raise_time` here, unlike :func:`_error`: a
+    PROCEDURE culprit on THIS shortcut path is always an indicator cell
+    built fresh at the raise site from a minted name and a literal arity
+    (``dangling_handle_indicator_and_why``, callers in ``globals_env.py``
+    / ``modules/py``) -- never a term a program could still have a live,
+    currently-bound Var inside, so there is nothing for the copy to
+    protect and it would only cost an allocation (and, measured
+    2026-10-15, break an existing identity-sensitive test with no
+    compensating safety gain).
+
+    Parked, not fixed here: that "never a term with a live Var inside" is
+    true of every CURRENT caller, verified by reading all of them, but the
+    guard that takes this shortcut (``_is_indicator(culprit)`` below) is a
+    SHAPE test, not a check on where the culprit came from.  A future
+    caller that passes a user-influenced ``F/A`` term here would silently
+    skip the copy.  Revisit if that guard ever needs to admit a
+    non-literal indicator.
     """
     formal = ("existence_error", _name_atom(obj_type), culprit)
     if (obj_type == "procedure" and _is_indicator(culprit)
