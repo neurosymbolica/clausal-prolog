@@ -19,22 +19,26 @@ clpq_expansion          the terms one constraint's normal form     nf
                         counted before each is built, and carried
                         across a delayed constraint's wake-ups
 clpq_expansion          the bits those terms' coefficients take,   nf
-  clpq_max_expansion_bits  estimated before each is built
+  clpq_max_expansion_bits  and the coefficients powers of numbers,
+                        roots and big products build, estimated
+                        before each is built; past COSTLY_BITS a
+                        coefficient counts its cost
+                        (coefficient_charge)
 clpq_expansion          the bits of the largest coefficient one    nf
-  clpq_max_coefficient_bits  power builds, estimated before it is
-                        built (one integer of n bits costs about
-                        n^1.6 to build, so the total alone is not
-                        enough)
+  clpq_max_coefficient_bits  power, root or product builds,
+                        estimated before it is built (one integer
+                        of n bits costs about n^1.6 to build, so
+                        the total alone is not enough)
 ======================  =========================================  =======
 
 The defaults are DEFAULTS; DEVIATIONS.md D24 has how they were measured.
 
-Each count belongs to one call: the work on a Meter on a context
-variable, so two threads (or two asyncio tasks) never share one; an
-expansion on an Expansion its normal form or repair keeps to itself.  A metered call inside
-another (a bb_inf woken in a search, a projection under a search) is
-charged to its own meter and to every meter around it, so the outer cap
-bounds the whole.
+Each count belongs to one call: the work on a Meter (which reads its cap
+when its call starts) on a context variable, so two threads (or two
+asyncio tasks) never share one; an expansion on an Expansion its normal
+form or repair keeps to itself.  A metered call inside another (a bb_inf
+woken in a search, a projection under a search) is charged to its own
+meter and to every meter around it, so the outer cap bounds the whole.
 
 A program reads and sets the caps with the Prolog flags of FLAGS, under
 `CLAUSAL_CLPQ=holzbaur` only (clausal/logic/builtins/flags.py); in the
@@ -107,15 +111,29 @@ def check(cap, used, what):
 
 
 class Meter:
-    """The count of one call: *used* so far against the cap *cap*, and the
-    meter of the call around it (*parent*), which is charged too."""
-    __slots__ = ("cap", "what", "used", "parent")
+    """The count of one call: *used* so far against the cap *cap*, whose
+    value *limit* is read when the call starts, and the meter of the call
+    around it (*parent*), which is charged too.  *threshold* is what a
+    hot path compares *used* with after adding to it in place: *limit*,
+    or -1 inside another meter, whose charge takes the slow path
+    (rows_charged)."""
+    __slots__ = ("cap", "what", "used", "parent", "limit", "threshold")
 
     def __init__(self, cap, what, parent):
         self.cap = cap
         self.what = what
         self.used = 0
         self.parent = parent
+        self.limit = _LIMITS[cap]
+        self.threshold = self.limit if parent is None else -1
+
+
+def _passed(meter):
+    """Raise `error(resource_error(R), _)`: *meter* has passed its cap."""
+    raise LogicException(_error(
+        ("resource_error", mint(RESOURCES[meter.cap])),
+        f"clpq: {meter.what} passed {meter.limit} "
+        f"(the {FLAGS[meter.cap]} flag)"))
 
 
 #: The meter of the innermost metered call running in this context.
@@ -146,7 +164,8 @@ def charge(units, caps):
     while meter is not None:
         if meter.cap in caps:
             meter.used += units
-            check(meter.cap, meter.used, meter.what)
+            if meter.used > meter.limit:
+                _passed(meter)
             charged = True
         meter = meter.parent
     return charged
@@ -168,15 +187,23 @@ def current_meter():
 
 
 def charge_rows_to(meter, units):
-    """charge_rows, from the innermost open meter *meter* (current_meter)
-    outwards: the back substitution's hot path."""
+    """charge_rows, from the open meter *meter* (current_meter) outwards.
+    Every meter is on a ROW_CAPS cap (start is called on no other)."""
     while meter is not None:
-        cap = meter.cap
-        if cap == "clpq_work" or cap == "clpq_projection":
-            meter.used += units
-            if meter.used > _LIMITS[cap]:
-                check(cap, meter.used, meter.what)
+        meter.used += units
+        if meter.used > meter.limit:
+            _passed(meter)
         meter = meter.parent
+
+
+def rows_charged(meter, units):
+    """The back substitution has added *units* to the innermost open meter
+    *meter* in place, and found it past its threshold (past its cap, or
+    inside another meter): raise for it, or charge the meters around it.
+    Its hot path is the add and one comparison (review N2)."""
+    if meter.used > meter.limit:
+        _passed(meter)
+    charge_rows_to(meter.parent, units)
 
 
 def charge_projection(units):
@@ -212,6 +239,27 @@ def charge_expansion(terms, bits, what, expansion=None):
     check("clpq_expansion_bits", bits, what + " (coefficient bits)")
 
 
+#: Past this many bits, a coefficient costs more than its bits: one built
+#: by a power or a product charges the clpq_expansion_bits cap
+#: coefficient_charge(bits), bits * bits / COSTLY_BITS (review R2c: the
+#: coefficient cap bounds one, and sixteen powers each under it took 76
+#: s under the total, counted linearly).  Building n bits costs about
+#: n^1.6, so the square overcharges a big one; at the default caps the
+#: total then admits one coefficient near the coefficient cap, and about
+#: 13 s (on 32 idle cores) of coefficients of any one size.
+COSTLY_BITS = 2_500_000
+
+
+def coefficient_charge(bits):
+    """The bits one coefficient of about *bits* bits (a log2) charges the
+    clpq_expansion_bits cap: *bits*, and bits * bits / COSTLY_BITS past
+    COSTLY_BITS."""
+    bits = int(bits)
+    if bits <= COSTLY_BITS:
+        return bits
+    return bits * bits // COSTLY_BITS
+
+
 def check_coefficient(bits, what):
     """A power will build one coefficient of about *bits* bits: raise
     `resource_error(clpq_expansion)` past the clpq_coefficient_bits cap.
@@ -219,6 +267,17 @@ def check_coefficient(bits, what):
     `(3*Y)^(10^8)` took 131 s under the bits cap), so this bounds the
     largest coefficient as well as charge_expansion bounds them all."""
     check("clpq_coefficient_bits", bits, what + " (one coefficient's bits)")
+
+
+def charge_coefficients(count, bits, what, expansion=None):
+    """*count* coefficients of about *bits* bits each (a log2, the largest)
+    will be built: raise `resource_error(clpq_expansion)` where one passes
+    the clpq_coefficient_bits cap (check_coefficient), or where their
+    coefficient_charge passes the clpq_expansion_bits cap on *expansion*,
+    the count of the call building them (charge_expansion).  Powers of
+    numbers, roots and products charge so (review R2b, R2c)."""
+    check_coefficient(bits, what)
+    charge_expansion(0, count * coefficient_charge(bits), what, expansion)
 
 
 #: Inside the run of a delayed goal (delayed_goals.run): the (terms, bits)

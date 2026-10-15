@@ -65,9 +65,16 @@ truth value is `true` / `false`, which compile to Python's `True` / `False`.
   and write), `clpq_projection` (the same for one projection, as `dump_q/2`
   and the `-g` answer printer make) or `clpq_expansion` (the terms, or the
   coefficient bits, of the powers and products one constraint expands, or
-  the bits of the largest single coefficient one power builds).
-  Defaults 20,000, 4,000,000, 4,000,000, 40,000, 200,000,000 and
-  20,000,000. The legacy
+  the bits of the largest single coefficient one power or product builds;
+  a coefficient past 2,500,000 bits counts its bits squared over
+  2,500,000 against `clpq_max_expansion_bits`, as building it costs more
+  than its size). Defaults 20,000, 4,000,000, 4,000,000, 40,000,
+  200,000,000 and 20,000,000. The caps bound how much one call computes,
+  not how long it takes: the time to reach the work cap still grows with
+  the size of the numbers in the store (a store whose row constants have
+  20,000 digits reaches it in about 43 s, 50,000 digits in about 105 s,
+  on an idle 32-core box), so the host's own time limit applies
+  (DEVIATIONS.md D24). The legacy
   solver has no such flags. In the [sandbox](sandbox.md) a program sets no
   process-wide flag, as a goal or as a load-time directive.
 

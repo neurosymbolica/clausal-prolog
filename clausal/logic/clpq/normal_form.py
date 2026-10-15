@@ -722,8 +722,14 @@ def nonlinear_invertible(base, value):
             return None
         if is_zero(value) and compare(constant_exponent, ZERO) <= 0:
             return None
-        return exponent_base, exponential_power(
-            value, divide(ONE, constant_exponent))
+        inverse = divide(ONE, constant_exponent)
+        if inverse[1] == 1 and abs(inverse[0]) > 1:
+            # an exact power of the value, Y = 3^(10^8) for
+            # Y^(1/10^8) = 3: checked before it is built (review R2b)
+            limits.charge_coefficients(
+                1, _times_exponent(abs(inverse[0]), rational_log2(value)),
+                "the power that inverts a root")
+        return exponent_base, exponential_power(value, inverse)
     return None
 
 
@@ -813,9 +819,10 @@ def normal_form(term):
     type_error(evaluable, F/A) where 1.3.3 loops (DEVIATIONS.md D23,
     test_normal_form_of_a_cyclic_term_raises).
 
-    Its powers and products of sums are charged, before each is made, to
-    a count of this call's own (limits.Expansion, made at the first one):
-    past a clpq_expansion cap it raises `resource_error(clpq_expansion)`
+    Its powers and products of sums, and its products and quotients with a
+    coefficient past 64 bits, are charged, before each is made, to a count
+    of this call's own (limits.Expansion, made at the first one): past a
+    clpq_expansion cap it raises `resource_error(clpq_expansion)`
     (DEVIATIONS.md D24)."""
     work = [(_EVALUATE, term)]
     values = []
@@ -838,7 +845,9 @@ def normal_form(term):
         elif action == _MULTIPLY:
             right = values.pop()
             left = values.pop()
-            if len(left) > 1 and len(right) > 1:
+            if len(left) > 1 and len(right) > 1 \
+                    or has_big_coefficient(left) \
+                    or has_big_coefficient(right):
                 if expansion is None:
                     expansion = limits.Expansion()
                 values.append(charged_multiply(left, right, expansion))
@@ -846,7 +855,14 @@ def normal_form(term):
                 values.append(normal_form_multiply(left, right))
         elif action == _DIVIDE:
             divisor = values.pop()
-            result = normal_form_divide(divisor, values.pop())
+            dividend = values.pop()
+            if len(divisor) == 1 and (has_big_coefficient(divisor)
+                                      or has_big_coefficient(dividend)):
+                # dividend times the inverse of a monomial (review R2c)
+                if expansion is None:
+                    expansion = limits.Expansion()
+                charge_product_coefficients(divisor, dividend, expansion)
+            result = normal_form_divide(divisor, dividend)
             if result is None:
                 return None
             values.append(result)
@@ -984,18 +1000,21 @@ def normal_form_nonlinear_unary(name, argument):
 
 def normal_form_nonlinear_binary(name, first, second, expansion=None):
     """nf.pl, normal_form_nonlinear_binary/6 (nf_nonlin_2/6).  None where
-    a negative integer power of zero divides by zero."""
+    a negative integer power of zero divides by zero.  An exact power, of a
+    number or of a normal form, is charged first to *expansion*, the count
+    of the call making it (DEVIATIONS.md D24)."""
     constant_first = normal_form_constant(first)
     constant_second = normal_form_constant(second)
     if constant_first is not None and constant_second is not None:
         if name == "exp":
             exponent = rational_integer(constant_second)
             if exponent is not None and abs(exponent) > 1:
-                # one exact power of a number (review R2)
-                limits.check_coefficient(
-                    _times_exponent(abs(exponent),
-                                    rational_log2(constant_first)),
-                    "a power of a number")
+                # one exact power of a number (review R2), charged to the
+                # call's count too (review R2c)
+                limits.charge_coefficients(
+                    1, _times_exponent(abs(exponent),
+                                       rational_log2(constant_first)),
+                    "a power of a number", expansion)
         value = evaluate_nonlinear(name, (constant_first, constant_second))
         if value is None:
             return None
@@ -1257,12 +1276,25 @@ def normal_form_power(exponent, norm, expansion=None):
     clpq_expansion caps it raises `resource_error(clpq_expansion)`
     (DEVIATIONS.md D24): `(Y + 1)^N` costs about N^3.  The largest
     coefficient it builds is checked too (largest_coefficient_bits),
-    since one big integer costs more than its bits."""
+    since one big integer costs more than its bits; and the expansion
+    is charged at least its terms times that coefficient's cost
+    (limits.coefficient_charge: its bits, and more past
+    limits.COSTLY_BITS)."""
     terms, bits = power_size(abs(exponent), norm)
     limits.charge_expansion(terms, bits, "the terms of an expansion",
                             expansion)
-    limits.check_coefficient(largest_coefficient_bits(abs(exponent), norm),
+    largest = largest_coefficient_bits(abs(exponent), norm)
+    limits.check_coefficient(largest,
                              "the largest coefficient of an expansion")
+    # The larger of two estimates: power_size's floor bits, and each term
+    # charged as the largest coefficient, exact log2, at its cost past
+    # limits.COSTLY_BITS (review R2c: sixteen powers each under the
+    # coefficient cap took 76 s under the floor bits).
+    cost = terms * limits.coefficient_charge(largest)
+    if cost > bits:
+        limits.charge_expansion(0, cost - bits,
+                                "the coefficients of an expansion",
+                                expansion)
     if exponent < 0:
         inverse = binomial_power(norm, -exponent)
         return normal_form_divide(inverse, [Monomial(ONE, [])])
@@ -1313,6 +1345,10 @@ def largest_coefficient_bits(exponent, norm):
         if bits > most:
             most = bits
     if count > 1:
+        # Never decides at the defaults: a sum's log2(T) passes the
+        # coefficient cap only past an exponent of 2*10^7 / log2(T), and
+        # its binomial(N + T - 1, T - 1) terms pass the terms cap long
+        # before (review R2, the log2(T) mutant survives so).
         most += _log2(count)
     return _times_exponent(exponent, most)
 
@@ -1361,13 +1397,68 @@ def product_size(first, second):
 
 def charged_multiply(first, second, expansion=None):
     """normal_form_multiply, charged first to *expansion*, the count of the
-    call making it, against the clpq_expansion caps (a product of sums
-    multiplies out: 2^k terms for k factors)."""
-    if len(first) > 1 and len(second) > 1:
+    call making it, against the clpq_expansion caps: a product of sums
+    multiplies out (2^k terms for k factors), and a product with a
+    coefficient past 64 bits builds big ones (charge_product_coefficients;
+    review R2c: four factors 3^12000000 took 59 s)."""
+    sums = len(first) > 1 and len(second) > 1
+    if sums:
         terms, bits = product_size(first, second)
         limits.charge_expansion(terms, bits, "the terms of an expansion",
                                 expansion)
+    if has_big_coefficient(first) or has_big_coefficient(second):
+        charge_product_coefficients(first, second, expansion, sums)
     return normal_form_multiply(first, second)
+
+
+#: A coefficient is big when the magnitudes of its numerator and
+#: denominator sum to this or more.  A product of two smaller ones takes
+#: under 128 bits, and costs no more than the term that asks for it.
+_WORD = 1 << 64
+
+
+def has_big_coefficient(norm):
+    """True when a coefficient of *norm* is big (_WORD)."""
+    word = _WORD
+    for monomial in norm:
+        numerator, denominator = monomial.coefficient
+        if abs(numerator) + denominator >= word:
+            return True
+    return False
+
+
+def largest_log2(norm):
+    """rational_log2 of the largest coefficient of *norm*; 0 for none."""
+    most = 0.0
+    for monomial in norm:
+        bits = rational_log2(monomial.coefficient)
+        if bits > most:
+            most = bits
+    return most
+
+
+def charge_product_coefficients(first, second, expansion,
+                                bits_charged=False):
+    """The product of *first* and *second* builds len(first) *
+    len(second) coefficients of about largest_log2(first) +
+    largest_log2(second) bits: check that against the
+    clpq_coefficient_bits cap, and charge them to *expansion*, the count
+    of the call making them, against the clpq_expansion_bits cap: their
+    bits (unless *bits_charged*: product_size has), and when both factors
+    are big (64 bits or more) what each costs past its bits
+    (limits.coefficient_charge; a big number times a small one costs its
+    bits, review R2c)."""
+    first_bits = largest_log2(first)
+    second_bits = largest_log2(second)
+    bits = first_bits + second_bits
+    what = "the largest coefficient of a product"
+    limits.check_coefficient(bits, what)
+    each = 0 if bits_charged else int(bits)
+    if first_bits >= 64 and second_bits >= 64:
+        each += limits.coefficient_charge(bits) - int(bits)
+    if each:
+        limits.charge_expansion(0, len(first) * len(second) * each, what,
+                                expansion)
 
 
 def normal_form_power_positive(exponent, norm):
@@ -1556,14 +1647,20 @@ def repair_term(coefficient, powers, table):
     if result is None:
         return None
     repaired_powers, _, factor = result
+    scalar = [Monomial(coefficient, [])]
     if len(factor) > 1:
         # a monomial times a sum: as many terms as the sum (a product of
         # sums repaired a binding at a time grows so, review N1)
         limits.charge_expansion(
             len(factor),
             len(factor) * (coefficient_bits(factor)
-                           + coefficient_bits([Monomial(coefficient, [])])),
+                           + coefficient_bits(scalar)),
             "the terms of an expansion", table[_EXPANSION])
+    if has_big_coefficient(factor) or has_big_coefficient(scalar):
+        # big coefficients multiplied (review R2c); a sum's bits are
+        # charged above
+        charge_product_coefficients(scalar, factor, table[_EXPANSION],
+                                    len(factor) > 1)
     return normal_form_multiply_factor(Monomial(coefficient, repaired_powers),
                                        factor)
 
@@ -1658,7 +1755,8 @@ def _repair_skeleton(term, table):
         second = (_repair_with(arguments[1], table)
                   if first is not None else None)
         if second is not None:
-            return normal_form_nonlinear_binary(name, first, second)
+            return normal_form_nonlinear_binary(name, first, second,
+                                                table[_EXPANSION])
     # 1.3.3's last clause reads the skeleton as an expression and raises
     # type_error(expression, ...) on its list argument
     # (test_a_zero_divisor_inside_a_repaired_quotient_raises).

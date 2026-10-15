@@ -153,9 +153,11 @@ surface described in [docs/public-api.md](docs/public-api.md).
   15-constraint store still answers). `clpq_expansion`: the terms (default
   40,000) and coefficient bits (default 200,000,000) of the powers and
   products of sums one constraint expands, and the bits of the largest
-  single coefficient one power builds (default 20,000,000: building one
-  integer costs more than its size, and `(3*Y)^(10^8)` took two minutes
-  under the total), each counted before it is built,
+  single coefficient one power or product builds (default 20,000,000:
+  building one integer costs more than its size, and `(3*Y)^(10^8)` took
+  two minutes under the total; a coefficient past 2,500,000 bits counts
+  its bits squared over 2,500,000 toward the total, so sixteen near the
+  coefficient cap no longer pass), each counted before it is built,
   and carried across a delayed constraint's wake-ups (`{X = (Y + 1)^(10^7)}`
   and a product of 18 sums never finished). Each count is per call and per
   thread. In the sandbox a load-time `set_prolog_flag` of a process-wide

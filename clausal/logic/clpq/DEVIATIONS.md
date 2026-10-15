@@ -1306,11 +1306,11 @@ them.
 | Resource R | Flag | What one call counts | Default |
 |---|---|---|---|
 | `clpq_nodes` | `clpq_max_nodes` | the nodes of one bb_inf search (passes of `branch_and_bound_loop`) | 20,000 |
-| `clpq_work` | `clpq_max_work` | the work of one bb_inf search: a unit for each row its pivots' back substitution reads, and for each row it writes a unit per term and per 64 bits of a coefficient (`bounded_simplex.row_size`; a substitution whose own coefficients fit in 64 bits charges each row `3 + terms` while the row's constant and rest fit in 256 bits, `row_size` otherwise) | 4,000,000 |
+| `clpq_work` | `clpq_max_work` | the work of one bb_inf search: a unit for each row its pivots' back substitution reads, and for each row it writes a unit per term and per 64 bits of a coefficient (`bounded_simplex.row_size`; a substitution whose own values are small charges each row `3 + terms` while the row's constant and rest are small, `row_size` otherwise; a value is small while the magnitudes of its numerator and denominator, with the other's, sum under 2^64) | 4,000,000 |
 | `clpq_projection` | `clpq_max_projection` | the same work for one projection, plus each row Fourier-Motzkin derives, charged before it is made as wide as the widest row it comes from | 4,000,000 |
 | `clpq_expansion` | `clpq_max_expansion` | the terms one constraint's normal form makes in powers, `binomial(N + T - 1, T - 1)` for a sum of T terms to the N or -N, and in products of sums, `len(A) * len(B)` each, counted before each is built; a delayed constraint's repairs add a monomial times a sum, `len(sum)`, and count on across its wake-ups | 40,000 |
-| `clpq_expansion` | `clpq_max_expansion_bits` | the bits those terms' coefficients take, estimated before each is built from log2 of each coefficient (0 for a coefficient of 1): `terms * N * (log2 of the base's largest coefficient + bits of T - 1)` for a power, `terms * (log2 of the largest of A + of B)` for a product | 200,000,000 |
-| `clpq_expansion` | `clpq_max_coefficient_bits` | the bits of the largest single coefficient one power builds, estimated before it is built with exact log2: `N * log2(the base's largest coefficient * T)` for a sum of T terms to the N or -N, and `N * log2(the number)` for a power of a number | 20,000,000 |
+| `clpq_expansion` | `clpq_max_expansion_bits` | the bits those terms' coefficients take, estimated before each is built from log2 of each coefficient (0 for a coefficient of 1): `terms * N * (log2 of the base's largest coefficient + bits of T - 1)` for a power, `terms * (log2 of the largest of A + of B)` for a product of sums; and the bits of each coefficient a power of a number, a root's inverse power, or a product or quotient with a coefficient past 64 bits builds. A coefficient past `limits.COSTLY_BITS` (2,500,000) counts `bits * bits / 2,500,000` (`limits.coefficient_charge`; the extra only, on terms already counted), and a big number times a small one counts its bits | 200,000,000 |
+| `clpq_expansion` | `clpq_max_coefficient_bits` | the bits of the largest single coefficient one power, root or product builds, estimated before it is built with exact log2: `N * log2(the base's largest coefficient * T)` for a sum of T terms to the N or -N, `N * log2(the number)` for a power of a number and for `Y^(1/N) = V` (Y = V^N), and `log2(A's largest) + log2(B's largest)` for a product or quotient | 20,000,000 |
 
 **Where they live.** `clausal/logic/clpq/limits.py` holds the caps
 (`limit`, `set_limit`) and the counts.  Each count belongs to one call,
@@ -1381,12 +1381,48 @@ of 15 on 8 cores; `(3*Y)^(10^8)` and the others raise at once.
 of every written row cost about 5% of a search).  A store whose rows hold
 2,000-digit constants, rewritten by small pivot rows, then ran 96 s to the
 work cap, 14 times its charge's time (review R1; 5,000 digits ran past
-400 s).  The fast path now reads each written row's constant and rest
-(four `bit_length` calls), the part every rewrite computes on, and
-charges `row_size` past 256 bits; the same store raises in a time near
-its charge.  A row whose term coefficients alone are big, rewritten by a
-small substitution that leaves them as they were, is still charged as a
-small row.
+400 s).  The fast path now reads each written row's constant and rest,
+the part every rewrite computes on, and charges `row_size` once the
+magnitudes of their numerators and denominators sum to 2^64 (one sum and
+one comparison); the same store raises in a time near its charge.  A row
+whose term coefficients alone are big, rewritten by a small substitution
+that leaves them as they were, is still charged as a small row.
+
+**The time to the work cap grows with the digits (known residual, review
+R1b).**  A row's charge is linear in its constant's words, but each
+rewrite does a gcd on that constant, which costs more than linearly.  At
+the work cap the review's store (bigrow, K = 20) took 12.7 s at 5,000
+digits, 43 s at 20,000 and 105 s at 50,000 (idle 32-core box); the
+units charged are the same 4,000,000 in each.  It is bounded, and grows
+with the size of the numbers the program posts, which the program pays
+to build; the caps bound work, not time, and the host's time limit on
+the worker applies (docs/sandbox.md).  Not fixed, by ruling.
+
+**What the meters cost a search (review N2).**  A search's every pivot
+passes through the back substitution, so its charge is inlined there:
+the substitution's own values are read once, each written row's constant
+and rest once, and the meter is added to in place and compared with one
+threshold (`limits.Meter.threshold`: its cap, read when the call starts,
+or -1 inside another meter, which takes the slow path that charges the
+meters around it).  An unmetered back substitution runs the loop of
+1.3.3 unchanged.  On the box, against main before the caps, the
+search-heavy benches (bb_noint, 20,000 nodes; bb_knap, 40 small ILPs)
+are within 5%.
+
+**Why the cost of a coefficient, not only its bits (review R2b, R2c).**
+The coefficient cap bounds one coefficient; the total counted bits
+linearly, so sixteen powers `(3*Y)^12000000`, each under the coefficient
+cap, were admitted in 76 s, and a power of a number or a product of two
+monomials was charged to no total (`3^12000000 * ...` with four factors
+took 59 s).  `{Y^(1/10^8) = 3}` built 3^(10^8) through the inversion of
+a root, unchecked (131 s).  Each of these coefficients is now checked
+against the coefficient cap and charged to the total before it is built,
+a big one at `bits * bits / COSTLY_BITS`: the total admits one
+coefficient near the coefficient cap (`(3*Y)^12,600,000`, 19,970,000
+bits, charges 152,000,000) and refuses a second; past it, coefficients
+of any one size cost about 13 s at most on the box.  A product of a big
+coefficient with a small one (`C*Y`) costs its bits and counts them: a
+chain `C*3*5*...` of a 19,000,000-bit C raises at its eleventh factor.
 
 **Headroom.** Measured 2026-10-15 by recording the most each cap saw,
 with every cap lifted, over tests/clpq_port (CLAUSAL_SLOW_TESTS=1: the
