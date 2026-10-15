@@ -246,6 +246,10 @@ class _ClauseLowering:
         self._bound: set[int] = set()
         self.occurrences: dict[str, int] = {}
         self._if_n = 0          # if_/3 truth-value variables minted so far
+        # clause/2 metadata (``Predicate.source_rewritten``): an if_/3
+        # lowering adds, duplicates or swaps goals, so the compiled body is
+        # not the term the text writes
+        self.reordered = False
 
     # ── variables ──
 
@@ -446,7 +450,10 @@ class _ClauseLowering:
     # ── goals ──
 
     def goal(self, g: Any, sp=None) -> ast.expr:
-        """ISO 7.6.2 body conversion, to the seam's goal nodes."""
+        """ISO 7.6.2 body conversion, to the seam's goal nodes.  The
+        control constructs' goal positions are ``_BODY_GOAL_CONTROL``, which
+        the clause/2 source term (:func:`_source_goal`) follows: change one,
+        change both."""
         pos = self._pos.of(_top_span(sp))
         if type(g) is VarRef:
             return self._call("call", [self.var(g)], pos, pos)
@@ -674,6 +681,7 @@ class _ClauseLowering:
         first."""
         c, th, el = args
         c_sp, th_sp, el_sp = spans
+        self.reordered = True
         top = _top_span(sp)
         ppos = _pos_expr(pos)
         if type(c) is tuple and len(c) == 3 and c[0] in (",", ";"):
@@ -807,6 +815,69 @@ def _functor_span(sp, name: str, source: "str | None" = None):
 # ── clauses ──────────────────────────────────────────────────────────────────
 
 
+#: The GOAL positions of the body's control constructs, by ``(name,
+#: arity)``: the operands :meth:`_ClauseLowering.goal` lowers as goals (so a
+#: variable there runs as ``call(X)``).  ``->`` and ``*->`` are refused by
+#: the cut-free surface; they are listed so the source term could never
+#: disagree with a lowering that admits them.  A meta-argument
+#: (``findall(_, X, _)``, ``call(X)``) is NOT a body position: ISO 7.6.2
+#: and Scryer keep the variable there as it is.
+_BODY_GOAL_CONTROL: dict[tuple[str, int], tuple[int, ...]] = {
+    (",", 2): (0, 1),
+    (";", 2): (0, 1),
+    ("->", 2): (0, 1),
+    ("*->", 2): (0, 1),
+    ("\\+", 1): (0,),
+}
+
+
+def _source_goal(lw: "_ClauseLowering", g: Any, sp) -> ast.expr:
+    """A body goal lowered as DATA under ISO 7.6.2's body conversion: a
+    variable at a goal position is ``call(X)`` -- the goal
+    :meth:`_ClauseLowering.goal` compiles for it, and the term ISO and
+    Scryer store (``p(X) :- X`` reads back as ``p(X) :- call(X)``).  Kept
+    bare, ``X`` unified with ANY retract pattern, so ``retract((p(_) :-
+    foo))`` deleted ``p(X) :- X``.  Every other subterm is :meth:`term`."""
+    if type(g) is VarRef:
+        return ast.Tuple(elts=[_const("call"), lw.var(g)], ctx=ast.Load())
+    if type(g) is tuple and g and type(g[0]) is str:
+        goal_args = _BODY_GOAL_CONTROL.get((g[0], len(g) - 1))
+        if goal_args is not None:
+            spans = _arg_spans(sp, len(g) - 1)
+            return ast.Tuple(
+                elts=[_const(g[0])]
+                + [_source_goal(lw, a, s) if i in goal_args else lw.term(a, s)
+                   for i, (a, s) in enumerate(zip(g[1:], spans))],
+                ctx=ast.Load())
+    return lw.term(g, sp)
+
+
+def _source_body_kw(lw: "_ClauseLowering", body: Any, body_sp) -> dict:
+    """``Predicate`` keywords carrying the clause body AS READ, for
+    ``clause/2`` / ``retract/1`` (ISO 8.8.1, 8.9.3): the body term lowered
+    as DATA -- ``','``/2, ``;``, ``\\+``, ``M:G``, ``fail`` vs ``false``,
+    grouping, all as written, a variable goal as ``call(X)``
+    (:func:`_source_goal`) -- over the clause's own variables (every one
+    is bound by the time this argument is evaluated: it comes after the
+    head and the goal body).  The compiled clause never reads it.  A body
+    that cannot be lowered as data has no source term (``source_rewritten``,
+    so the clause fails closed); the singleton census is not touched."""
+    saved = dict(lw.occurrences)
+    try:
+        src = _source_goal(lw, body, body_sp)
+    except LoweringRefused:
+        src = None
+    finally:
+        lw.occurrences.clear()
+        lw.occurrences.update(saved)
+    kw = {}
+    if src is not None:
+        kw["source_body"] = src
+    if src is None or lw.reordered:
+        kw["source_rewritten"] = _const(True)
+    return kw
+
+
 def lower_clause(term: Any, spans=None, var_names=None,
                  positions: "_Positions | None" = None,
                  singletons: "list | None" = None, ctx=None) -> list[ast.stmt]:
@@ -866,10 +937,14 @@ def lower_clause(term: Any, spans=None, var_names=None,
         keywords=[ast.keyword(arg=f, value=lw.term(a, s))
                   for f, a, s in zip(fields, args, _arg_spans(head_sp, len(args)))])
     body_ast = _const(True) if body is None else lw.goal(body, body_sp)
+    pred_kw = {}
+    if body is not None:
+        pred_kw = _source_body_kw(lw, body, body_sp)
     define = ast.Expr(value=ast.Call(
         func=_name(_DOLLAR + "define_predicate"),
         args=[_node("Predicate", head=head_ast, body=body_ast,
-                    position=_pos_expr(positions.of(whole_span))),
+                    position=_pos_expr(positions.of(whole_span)),
+                    **pred_kw),
               _name(_DOLLAR + "module")],
         keywords=[]))
     if singletons is not None:

@@ -177,7 +177,10 @@ def test_no_term_type_hides_a_semantic_field_behind_compare_false():
     import clausal.pythonic_ast.nodes as nodes
     import clausal.terms as terms
 
-    cosmetic = {"position", "_position"}
+    # source_body / source_rewritten: clause/2 data on the Predicate (clause)
+    # node -- never a head term, never unified by head matching
+    # (clause_ops.clause_terms reads them).
+    cosmetic = {"position", "_position", "source_body", "source_rewritten"}
     offenders = {}
     for module in (terms, nodes):
         for cls_name, obj in vars(module).items():

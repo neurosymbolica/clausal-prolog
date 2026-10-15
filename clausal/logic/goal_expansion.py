@@ -187,7 +187,10 @@ def _expand_predicate(pred: Predicate, ctx: _ExpansionContext) -> Predicate:
     new_body = _expand_goal(pred.body, ctx)
     if new_body is pred.body:
         return pred
-    return Predicate(head=pred.head, body=new_body)
+    # replace, not a fresh Predicate: every other field -- position, the
+    # clause/2's ``source_body`` -- is the clause's own
+    import dataclasses  # noqa: PLC0415
+    return dataclasses.replace(pred, body=new_body)
 
 
 def _expand_goal(goal: Any, ctx: _ExpansionContext) -> Any:

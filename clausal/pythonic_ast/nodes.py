@@ -22,7 +22,7 @@ import dataclasses
 from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Any, Optional, ClassVar
-from .node_class import node_class
+from .node_class import node_class, opaque_field
 
 
 __all__ = [
@@ -1092,9 +1092,20 @@ class Assign(Node):
 
 @node_class
 class Predicate(Node):
-    """Prolog-style predicate: head <- body."""
+    """Prolog-style predicate: head <- body.
+
+    ``source_body`` is clause/2 DATA from the native ISO front end
+    (``iso_l3``), never read by the compiler: the clause's body as READ --
+    the ISO term, sharing the clause's variables -- which ``clause/2`` and
+    ``retract/1`` hand back and match instead of rebuilding a term from the
+    lowered ``body``.  ``None`` (the default): no source term (a seam or
+    Python-built clause, a fact).  ``source_rewritten``: the lowering
+    turned the body into goals the text does not show (reif's ``if_/3``),
+    so the compiled clause is not the term; such a clause fails closed."""
     head: Node = None  # type: ignore[assignment]
     body: Node = None  # type: ignore[assignment]
+    source_body: Any = opaque_field(default=None, compare=False, repr=False)
+    source_rewritten: bool = field(default=False, compare=False, repr=False)
 
 
 # ── Module-level items (pipeline split) ──────────────────────────────────────

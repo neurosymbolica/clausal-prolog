@@ -1,7 +1,21 @@
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from .transform import _transform_node_list
 
 _unspecified = object()
+
+#: Dataclass field metadata key: the field holds opaque runtime DATA (a
+#: term), never a node, whatever its annotation -- ``visit_children`` and
+#: ``transform_children`` skip it.  Set it with :func:`opaque_field`.
+OPAQUE = "opaque"
+
+
+def opaque_field(**kwargs):
+    """``dataclasses.field(**kwargs)`` marked :data:`OPAQUE`: a node field
+    that holds runtime data (``Predicate.source_body``, a term over live
+    variables) and must never be visited or transformed as a node."""
+    metadata = dict(kwargs.pop("metadata", None) or {})
+    metadata[OPAQUE] = True
+    return field(metadata=metadata, **kwargs)
 
 # Primitive scalar type names — anything else in an annotation is a Node subclass.
 _PRIMITIVE_NAMES = frozenset({'str', 'int', 'float', 'bool', 'bytes', 'complex'})
@@ -15,12 +29,16 @@ def _field_kind(f):
     it as a live type object (which was the original bug).
 
     Rules:
+      a field marked OPAQUE (:func:`opaque_field`) → 'plain'
       Optional[X] where X is a non-primitive  → 'optional_node'
       list[X]     where X is a non-primitive  → 'node_list'
       list[X]     where X is a primitive       → 'plain'
       any primitive scalar                     → 'plain'
       anything else (Node, Params, ForClause…) → 'node'
     """
+    if f.metadata.get(OPAQUE):
+        return 'plain'
+
     s = f.type if isinstance(f.type, str) else repr(f.type)
     s = s.strip()
 

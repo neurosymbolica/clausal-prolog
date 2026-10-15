@@ -68,6 +68,14 @@ class Clause:
     # clause nothing hoisted from, and for every Clause built without a
     # normalizer.  Location-like metadata: not part of equality.
     hoisted: int = dataclasses.field(default=0, compare=False, repr=False)
+    # clause/2 DATA (ISO 8.8.1), never read by the compiler or the engine:
+    # ``Predicate.source_body`` -- the body AS READ, over the clause's own
+    # variables, which clause/2 and retract/1 hand back and match -- and
+    # ``Predicate.source_rewritten``.  Not part of equality.
+    source_body: Any = dataclasses.field(
+        default=None, compare=False, repr=False)
+    source_rewritten: bool = dataclasses.field(
+        default=False, compare=False, repr=False)
 
     def is_fact(self) -> bool:
         return not self.body
@@ -1701,6 +1709,9 @@ class Module:
             body=body_goals,
             position=getattr(predicate_node, "position", None),
             hoisted=hoisted,
+            source_body=getattr(predicate_node, "source_body", None),
+            source_rewritten=getattr(predicate_node, "source_rewritten",
+                                     False),
         ))
         functor, arity = head_key(head)
         param_names = _extract_param_names(head)
