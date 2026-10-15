@@ -126,6 +126,7 @@ Boolean options default to **false**, so an option-free call is exactly
 | `double_quotes(Bool)` | print a string (and the char list that *is* one) as `"abc"` rather than as `[a,b,c]` |
 | `ignore_ops(Bool)` | accepted and inert — the write family here never prints operator forms to begin with |
 | `numbervars(Bool)` | accepted and inert — there is no `'$VAR'/1` convention here |
+| `variable_names(List)` | ISO 7.10 / WG17 N246 — a variable identical to `V` in a `Name = V` pair of `List` prints as `Name`, unquoted, instead of `_N`; the first pair in list order wins when several name one variable. An unbound `List` (or element, `Name` or tail) raises `instantiation_error`; a malformed element, a non-atom `Name` or an improper tail raises `domain_error(write_option, variable_names(List))` |
 
 | Call | Output |
 |---|---|

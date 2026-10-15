@@ -4464,7 +4464,8 @@ def _wq(t: Any, prec: int, operand: bool = False) -> str:
 
 def term_write(t: Any, *, quoted: bool, double_quotes: bool = False,
                ignore_ops: bool = False, numbervars: bool = True,
-               ops: "_OperatorTable | None" = None) -> str:
+               ops: "_OperatorTable | None" = None,
+               var_names: "dict[int, str] | None" = None) -> str:
     """Render *t* as ISO ``write_term/2`` does with these options, byte for
     byte as Scryer writes it: operator syntax (unless *ignore_ops*), no space
     after a comma, a distinct ``_N`` per variable, Scryer's float spelling,
@@ -4476,8 +4477,16 @@ def term_write(t: Any, *, quoted: bool, double_quotes: bool = False,
     library loaded): an operator term is written in operator syntax, with
     the brackets its priorities and associativity need, only while its
     name is an operator of that kind in *ops*; an operator removed with
-    ``op(0, ...)`` is written in canonical form (``-(1)``)."""
+    ``op(0, ...)`` is written in canonical form (``-(1)``).
+
+    *var_names* is ``write_term/2``'s ``variable_names(List)`` (ISO 7.10 /
+    WG17 N246): ``dict[id(var), name]``, exactly ``term_writeq``'s own
+    *var_names* parameter below -- a variable identical to some mapped Var
+    prints as its *name*, the bare spelling (never quoted, see
+    ``_wq_var``), in place of the engine's default fresh-variable
+    notation."""
     token = _WQ_OPTS.set((quoted, double_quotes, ignore_ops, numbervars))
+    names_token = _WQ_VAR_NAMES.set(var_names)
     table = None
     if ops is not None and ops is not _WQ_OPS:
         table = _WQ_TABLE.set(ops)
@@ -4486,6 +4495,7 @@ def term_write(t: Any, *, quoted: bool, double_quotes: bool = False,
     finally:
         if table is not None:
             _WQ_TABLE.reset(table)
+        _WQ_VAR_NAMES.reset(names_token)
         _WQ_OPTS.reset(token)
 
 

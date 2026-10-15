@@ -35,6 +35,7 @@ from clausal.terms import (
     SegList,
     SegString,
     SetTerm,
+    VarSeg,
 )
 from clausal.logic.runtime._seg_helpers import normalize_seg_input
 from clausal.logic.predicate import (
@@ -147,7 +148,8 @@ ISO_SEP = ","
 
 
 def _format_term_iso(val, quoted: bool, double_quotes: bool = False,
-                     ignore_ops: bool = False, numbervars: bool = True) -> str:
+                     ignore_ops: bool = False, numbervars: bool = True,
+                     var_names=None) -> str:
     """Format a dereffed value for the ISO family (``write/1``/``writeq/1``/
     ``write_term/2``).
 
@@ -164,7 +166,11 @@ def _format_term_iso(val, quoted: bool, double_quotes: bool = False,
     Python reprs inside an ISO writer's output.
 
     *double_quotes*, *ignore_ops* and *numbervars* are here for
-    ``write_term/2``'s options of those names.
+    ``write_term/2``'s options of those names.  *var_names* is
+    ``write_term/2``'s ``variable_names(List)`` (ISO 7.10 / WG17 N246) --
+    ``dict[id(var), name]``, from :func:`_parse_variable_names` -- threaded
+    straight through to ``term_write``, which sets it the same way
+    ``term_writeq(var_names=...)`` already does for a toplevel answer.
 
     The layout is Scryer's (``clausal.terms.term_write``): operator syntax
     (``foo/1``, ``1+2``, ``- (1)``), a distinct ``_N`` per variable (so
@@ -194,7 +200,8 @@ def _format_term_iso(val, quoted: bool, double_quotes: bool = False,
         # ``writer_op_table``): ``op/3`` changes what is written.
         return _term_write(val, quoted=quoted, double_quotes=double_quotes,
                            ignore_ops=ignore_ops, numbervars=numbervars,
-                           ops=_writer_op_table())
+                           ops=_writer_op_table(),
+                           var_names=var_names)
     if is_truth_atom(val):
         return truth_spelling(val)     # the atoms true/false/undefined (D35)
     return str(val)
@@ -326,9 +333,12 @@ def _write_canonical__1(term, trail, k):
 #: ``domain_error(write_option, Opt)``, as ISO 8.14.2.3 g requires.
 #: ``ignore_ops(true)`` writes every compound in functional notation (a list
 #: as its ``'.'/2`` structure), and ``numbervars(true)`` writes
-#: ``'$VAR'(N)`` as a variable letter -- both as Scryer does.
+#: ``'$VAR'(N)`` as a variable letter -- both as Scryer does.  ``
+#: variable_names(List)`` is ISO 7.10 / WG17 N246: see ``_parse_variable_names``
+#: below for the list's validation and the deterministic choices this engine
+#: makes where N246 leaves the answer open (2026-10-15).
 _WRITE_OPTIONS = frozenset({
-    "quoted", "double_quotes", "ignore_ops", "numbervars",
+    "quoted", "double_quotes", "ignore_ops", "numbervars", "variable_names",
 })
 
 
@@ -353,9 +363,136 @@ def _write_option_bool(value, option):
     raise LogicException(domain_error("write_option", option, "write_term/2"))
 
 
+def _vn_list_walk(value):
+    """Walk *value* (already ``deref``'d + :func:`normalize_seg_input`'d) as
+    far as its spine is known.  Returns ``(elems, tail_kind)``:
+
+    * *elems* -- the elements found so far (not yet dereffed), in list
+      order.
+    * *tail_kind* -- ``"nil"`` for a proper, fully-closed list; ``"var"``
+      for a genuinely OPEN/partial one, an unbound tail (``[E|_]``); or
+      ``"other"`` for one that is closed but IMPROPER -- a bound,
+      non-list, non-``[]`` tail (``[E|non_list]``).
+
+    Used only by :func:`_parse_variable_names`; general list-reading
+    elsewhere in this engine has its own walkers -- this one exists because
+    ``variable_names(List)``'s validation (ISO 8.14.2.3 / WG17 N246) must
+    tell those three tail shapes apart (see Ulrich's conformity rows 30-68,
+    https://www.complang.tuwien.ac.at/ulrich/iso-prolog/variable_names).
+    """
+    elems: list = []
+    cur = value
+    while True:
+        cur = normalize_seg_input(deref(cur))
+        if isinstance(cur, list):
+            return elems + cur, "nil"
+        if is_var(cur):
+            return elems, "var"
+        if isinstance(cur, SegList):
+            segs = list(cur.segments)
+            if segs and isinstance(segs[-1], VarSeg):
+                for seg in segs[:-1]:
+                    elems.extend(seg.elements)
+                return elems, "var"
+            for seg in segs:
+                elems.extend(seg.elements)
+            return elems, "nil"
+        if _is_empty_list(cur):
+            return elems, "nil"
+        if type(cur) is tuple and len(cur) == 3 and cur[0] == ".":
+            elems.append(cur[1])
+            cur = cur[2]
+            continue
+        return elems, "other"
+
+
+def _parse_variable_names(list_term, option_term):
+    """``dict[id(var), name]`` for ``variable_names(List)`` (ISO 7.10 /
+    WG17 N246, http://www.complang.tuwien.ac.at/ulrich/iso-prolog/variable_names).
+
+    Consulted by ``_wq_var`` (``clausal/terms.py``) exactly as
+    ``term_writeq(var_names=...)`` already does for a toplevel answer: a
+    variable identical to some *Var* in a *Name=Var* pair prints as *Name*
+    -- the bare spelling, not run through atom-quoting -- instead of the
+    engine's default fresh-variable notation.  When a *Var* has more than
+    one matching pair (N246 leaves the choice open -- Ulrich's rows 13-24),
+    the FIRST pair in list order wins: confirmed against rows 15/16/21/22
+    (``['X'=X,'Y'=Y,'Z'=Z]`` then ``Z=Y`` prints ``Y`` for BOTH aliased
+    positions -- 'Y' is earlier in the list than 'Z').  Repeating the
+    *option itself* (``[variable_names([...]), variable_names([...])]``)
+    is not this function's concern -- the LAST occurrence wins because
+    ``_write_term_options`` calls this once per occurrence and keeps
+    overwriting its result, the same rule already in force for every other
+    write-option (row 71).
+
+    Validation (ISO 8.14.2.3 as read off Ulrich's conformity rows -- the
+    standard text alone underspecifies several shapes):
+
+    * ``List`` unbound                                  -> instantiation_error
+    * an element that is CONCLUSIVELY malformed -- wrong principal functor
+      or arity (not ``Name=Var``), or a *Name* that is bound but not an
+      atom                                               -> domain_error
+      (the WHOLE List is the culprit, confirmed by row 67:
+      ``[i=i,7=i]`` -> ``domain_error(write_option,
+      variable_names([i=i,7=i]))``, not just the ``7=i`` element)
+    * the list's own spine is closed but IMPROPER (a bound, non-list,
+      non-``[]`` tail, e.g. ``[P|non_list]``)            -> domain_error
+    * otherwise, anything still insufficiently instantiated to tell --
+      an element itself unbound, a pair's *Name* position unbound, or an
+      open/partial tail (``[P|_]``)                      -> instantiation_error
+
+    Rows 35/63/64/66 are the cases ISO marks ``domain_error(...) or
+    instantiation_error`` (both conformant): this engine always prefers
+    domain_error when a conclusive one is ALSO present alongside an
+    unresolved element or an open tail -- a documented, deterministic
+    choice, not a per-call guess.
+    """
+    value = normalize_seg_input(deref(list_term))
+    if is_var(value):
+        raise LogicException(instantiation_error("write_term/2"))
+
+    elems, tail_kind = _vn_list_walk(value)
+
+    saw_bad = False
+    saw_unresolved = tail_kind == "var"
+    pairs: list = []   # (Name atom, Var-slot term) for every well-shaped element
+    for elem in elems:
+        elem = deref(elem)
+        if is_var(elem):
+            saw_unresolved = True
+            continue
+        if not (type(elem) is tuple and len(elem) == 3 and elem[0] == "="):
+            saw_bad = True   # wrong principal functor/arity -- not Name=Var
+            continue
+        name_val = deref(elem[1])
+        if is_var(name_val):
+            saw_unresolved = True
+            continue
+        if not _term_is_atom(name_val):
+            saw_bad = True   # Name is bound, but not an atom
+            continue
+        pairs.append((name_val, elem[2]))
+
+    if saw_bad or tail_kind == "other":
+        raise LogicException(
+            domain_error("write_option", option_term, "write_term/2"))
+    if saw_unresolved:
+        raise LogicException(instantiation_error("write_term/2"))
+
+    names: dict = {}
+    for name_val, var_slot in pairs:
+        slot_val = deref(var_slot)
+        if is_var(slot_val):
+            # first pair in list order wins when several alias one Var.
+            names.setdefault(id(slot_val), spelling(name_val))
+    return names
+
+
 def _write_term_options(options):
-    """``(quoted, double_quotes, ignore_ops, numbervars)`` for an ISO
-    write-option list.
+    """``(quoted, double_quotes, ignore_ops, numbervars, variable_names)``
+    for an ISO write-option list.  *variable_names* is ``None`` (no option
+    given) or the ``dict[id(var), name]`` :func:`_parse_variable_names`
+    built.
 
     ISO 8.14.2's defaults are all ``false``, so ``write_term(T, [])`` prints
     a string as ``[a,b,c]`` -- as ``write/1`` does, except that ``write/1``
@@ -381,6 +518,7 @@ def _write_term_options(options):
     double_quotes = False
     ignore_ops = False
     numbervars = False
+    variable_names = None
     for opt in opts_val:
         opt = deref(opt)
         if is_var(opt):
@@ -392,6 +530,12 @@ def _write_term_options(options):
         if name not in _WRITE_OPTIONS:
             raise LogicException(
                 domain_error("write_option", opt, "write_term/2"))
+        if name == "variable_names":
+            # Validated (and the Var->name map built) fresh on every
+            # occurrence; the LAST one simply overwrites the local, which is
+            # how every other repeated option here already resolves (row 71).
+            variable_names = _parse_variable_names(opt[1], opt)
+            continue
         value = _write_option_bool(opt[1], opt)
         if name == "quoted":
             quoted = value
@@ -401,7 +545,7 @@ def _write_term_options(options):
             ignore_ops = value
         elif name == "numbervars":
             numbervars = value
-    return quoted, double_quotes, ignore_ops, numbervars
+    return quoted, double_quotes, ignore_ops, numbervars, variable_names
 
 
 @_builtin("write_term", 2)
@@ -418,7 +562,11 @@ def _write_term__2(term, options, trail, k):
     ``write_term(T, [quoted(true), double_quotes(true)])`` is the SPELLING
     ``print_term/1`` / ``term_to_string/2`` give a string (fix round 1,
     item 4) — those two additionally keep the display comma spacing, which
-    this writer, being ISO, does not.
+    this writer, being ISO, does not.  ``variable_names(List)`` (ISO 7.10 /
+    WG17 N246) names a variable identical to some ``Var`` in a ``Name=Var``
+    pair of *List* by *Name* instead of the engine's default fresh-variable
+    notation -- see :func:`_parse_variable_names` for its validation and the
+    deterministic choices made where N246 leaves the answer open.
 
     An unrecognised option is ``domain_error(write_option, Opt)``; a
     non-list *Options* is ``type_error(list, Options)``; an unbound or
@@ -429,11 +577,13 @@ def _write_term__2(term, options, trail, k):
     (fix round 1, item 0).
     """
     from clausal.logic.solve import _deref_walk
-    quoted, double_quotes, ignore_ops, numbervars = _write_term_options(options)
+    quoted, double_quotes, ignore_ops, numbervars, variable_names = \
+        _write_term_options(options)
     _sys.stdout.write(_format_term_iso(_deref_walk(term), quoted=quoted,
                                        double_quotes=double_quotes,
                                        ignore_ops=ignore_ops,
-                                       numbervars=numbervars))
+                                       numbervars=numbervars,
+                                       var_names=variable_names))
     _sys.stdout.flush()
     yield None
 
