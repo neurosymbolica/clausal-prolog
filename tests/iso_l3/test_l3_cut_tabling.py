@@ -196,15 +196,16 @@ def test_a_literal_call_goal_is_scanned_like_the_body(native, clause):
         native.load("l3_tab_call", src)
 
 
-def test_a_run_time_goal_loads_and_the_run_time_check_refuses_it(native, ans):
-    """Out of reach of the static rule, so the file loads; the cut then
-    prunes tf/1's leader while its table is still incomplete, which is the
-    run-time half's error (D61 Q1).  Scryer: [[1]]."""
+def test_a_run_time_goal_loads_and_cuts_a_complete_table(native, ans):
+    """Out of reach of the static rule, so the file loads.  tf/1 is called
+    outside any table's evaluation, so it completes its table before its
+    first answer (D68) and the cut prunes a COMPLETE table: no error.  It
+    raised permission_error(cut, incomplete_table, tf/1) before D68.
+    Scryer: [[1]]."""
     src = (":- table(tf/1).\ntf(1). tf(2).\n"
-           "c(L) :- G = (tf(X), !), findall(X, call(G), L).\n"
-           "r(E) :- catch((c(_), E = none), error(E0, _), E = E0).\n")
+           "c(L) :- G = (tf(X), !), findall(X, call(G), L).\n")
     mod = native.load("l3_tab_rt", src)
-    assert ans(mod, "r") == [_INCOMPLETE("tf", 1)]
+    assert ans(mod, "c") == [[1]]
 
 
 def test_once_over_a_tabled_call_is_refused(native):
@@ -361,7 +362,12 @@ def test_a_cut_over_an_incomplete_table_through_an_untabled_predicate_raises(nat
     assert ans(mod, "r") == [_INCOMPLETE("a", 1)]
 
 
-def test_the_run_time_error_names_the_rule_and_the_predicate(native):
+def test_the_run_time_error_says_what_happened_and_what_to_do(native):
+    """D68: Mike -- "When the error is raised, is it clear enough what has
+    happened?  These are subtle errors."  The message names the clause
+    holding the cut, the tabled predicate, why its table is still being
+    computed (here: a recursive call inside a/1's own evaluation), what the
+    cut would do, and what to do instead."""
     from clausal.logic.exceptions import LogicException
     from clausal.logic.solve import call
     from clausal.logic.variables import Var
@@ -369,8 +375,46 @@ def test_the_run_time_error_names_the_rule_and_the_predicate(native):
     with pytest.raises(LogicException) as e:
         list(call("a", Var(), module=mod))
     msg = str(e.value)
-    assert "in predicate a/1 cuts over the tabled call(s) a/1" in msg
-    assert "the scope of a cut cannot include a call to a tabled predicate" in msg
+    assert "permission_error(cut,incomplete_table,a/1)" in msg
+    assert ("in predicate a/1 would prune the call to the tabled predicate "
+            "a/1 while its table is still being computed") in msg
+    assert ("the call is made inside the evaluation of a/1 itself "
+            "(a recursive call, directly or through other predicates)") in msg
+    assert "the cut would throw away answers it has not produced yet" in msg
+    assert "Collect the answers first (findall/3 over the call" in msg
+    assert "move the commit out of the recursive evaluation" in msg
+
+
+MUTUAL = """\
+:- table(p/1).
+:- table(q/1).
+p(X) :- once(qq(X)).
+p(5).
+qq(X) :- q(X).
+q(X) :- p(Y), X is Y + 1, X < 3.
+q(0).
+r(E) :- catch((findall(X, p(X), _), E = none), error(E0, _), E = E0).
+"""
+
+
+def test_a_cut_over_an_scc_members_incomplete_table_names_the_ancestor(native, ans):
+    """The refused case that remains after D68: q/1 is a fresh call made
+    inside p/1's evaluation, and q/1 calls p/1 back, so q/1's table cannot
+    complete before p/1's does.  It hands back what it has so far, and
+    once/1 over it raises, naming p/1 as the evaluation it is inside."""
+    from clausal.logic.exceptions import LogicException
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var
+    mod = native.load("l3_tab_rt_mutual", MUTUAL)
+    assert ans(mod, "r") == [_INCOMPLETE("q", 1)]
+    mod = native.load("l3_tab_rt_mutual_msg", MUTUAL)
+    with pytest.raises(LogicException) as e:
+        list(call("p", Var(), module=mod))
+    msg = str(e.value)
+    assert ("in predicate p/1 would prune the call to the tabled predicate "
+            "q/1 while its table is still being computed") in msg
+    assert ("the call is made inside the evaluation of the tabled predicate "
+            "p/1, and q/1 depends on it (mutual recursion)") in msg
 
 
 CALL_N = """\
@@ -383,10 +427,18 @@ r(E) :- catch((findall(Y, u(Y), _), E = none), error(E0, _), E = E0).
 """
 
 
-def test_a_run_time_built_goal_cutting_over_an_incomplete_table_raises(native, ans):
-    """Scryer: [a]; this engine used to answer [b] silently."""
+def test_a_run_time_built_goal_cutting_over_a_root_recursive_table_runs(native, ans):
+    """path/2 is left-recursive, but u/1 calls it from outside any table's
+    evaluation: its table (the whole SCC) completes before the first answer
+    (D68), and the cut keeps the first answer in TABLE order, b -- the
+    answer the untabled program gives too (e(a, b) is path/2's first
+    derivation).  Scryer: [a] (its own table order).  It raised
+    permission_error(cut, incomplete_table, path/2) before D68, and before
+    the run-time check answered [b] silently from an incomplete table."""
     mod = native.load("l3_tab_rt_calln", CALL_N)
-    assert ans(mod, "r") == [_INCOMPLETE("path", 2)]
+    assert ans(mod, "r") == ["none"]
+    mod = native.load("l3_tab_rt_calln_u", CALL_N)
+    assert ans(mod, "u") == ["b"]
 
 
 INDIRECT = """\
@@ -420,18 +472,27 @@ def test_a_cut_after_its_tables_completed_runs(native, ans):
     assert ans(mod, "done") == [1]
 
 
-@pytest.mark.parametrize("name", ["w", "w2", "o1", "o2", "o3", "fa", "nf"])
-def test_every_commit_over_an_incomplete_table_raises_at_run_time(native, ans, name):
-    """A ``!``, an if-then-else commit, once/1 and setup_call_cleanup's
-    Setup, each over t/1 reached through the untabled tq/1 while t/1's
-    leader is still streaming (w2/1 commits on its SECOND answer); fa/1 and
-    nf/1 cut inside findall's goal and inside a \\+ nested in it.  Scryer
-    answers [1], [2], [1], [1], [1], [[1]], [[]].  XSB under local scheduling completes
-    t/1 before it returns an answer and would not raise; this engine
-    streams answers before completion, so the table is incomplete at the
-    cut."""
+@pytest.mark.parametrize("name,want", [
+    ("w", [1]), ("w2", [2]), ("o1", [1]), ("o2", [1]), ("o3", [1]),
+    ("fa", [[1]]), ("nf", [["x"]])])
+def test_every_commit_over_a_fresh_table_runs_over_a_complete_table(native, ans, name, want):
+    """D68 (operator ruling 2026-10-16, option B; XSB's local scheduling):
+    a ``!``, an if-then-else commit, once/1 and setup_call_cleanup's Setup,
+    each over t/1 reached through the untabled tq/1 (w2/1 commits on its
+    SECOND answer); fa/1 and nf/1 cut inside findall's goal and inside a
+    \\+ nested in it.  t/1 is called outside any table's evaluation, so it
+    completes its table before its first answer and every commit prunes a
+    COMPLETE table, with the answer the untabled program gives.  Each
+    raised permission_error(cut, incomplete_table, t/1) before D68.
+    Scryer answers [1], [2], [1], [1], [1], [[1]], [[]] (recorded when the
+    series was written).  nf/1 differs: ``(tq(_), !, fail)`` fails, so its
+    \\+ succeeds and findall/3 collects one x, as ISO says for the same
+    program untabled; Scryer's [[]] is its tabling's answer, which this
+    engine does not reproduce (not re-checked here: no Scryer binary)."""
     mod = native.load("l3_tab_rt_" + name, INDIRECT)
-    assert ans(mod, "r", 2, name) == [_INCOMPLETE("t", 1)]
+    assert ans(mod, "r", 2, name) == ["none"]
+    mod = native.load("l3_tab_rt_ok_" + name, INDIRECT)
+    assert ans(mod, name) == want
 
 
 @pytest.mark.parametrize("name,want", [("n1", [1]), ("n2", [1]), ("n3", [1, 2, 3]),
@@ -493,15 +554,39 @@ r(N, E) :- G =.. [N, _], catch((findall(x, G, _), E = none), error(E0, _), E = E
 
 
 @pytest.mark.parametrize("name", ["u1", "u2"])
-def test_once_on_a_goal_argument_in_a_table_blind_module_is_checked(native, ans, tmp_path, name):
+def test_once_on_a_goal_argument_in_a_table_blind_module_commits_a_complete_table(native, ans, tmp_path, name):
     """Final re-review N-2: a library meta-predicate (``first(G) :-
     once(G).``) in a module that tables and imports nothing commits over
-    the caller's incomplete recursive table.  Its goal is a variable, so
-    the check is emitted whatever the module can see.  It used to answer
-    [b] silently; Scryer: [a]; XSB: the run-time error."""
+    the caller's recursive table.  Its goal is a variable, so the check is
+    emitted whatever the module can see.  Since D68 path/2 is called
+    outside any table's evaluation and completes first, so the commit takes
+    the first answer in table order, b (the untabled program's answer).
+    Before D68: the run-time error (XSB's); before that, [b] silently from
+    an incomplete table.  Scryer: [a]."""
     (tmp_path / "rt_util.pl").write_text(LIB)
     mod = native.load("l3_tab_rt_lib_" + name, LIB_USER)
-    assert ans(mod, "r", 2, name) == [_INCOMPLETE("path", 2)]
+    assert ans(mod, "r", 2, name) == ["none"]
+    mod = native.load("l3_tab_rt_lib_ok_" + name, LIB_USER)
+    assert ans(mod, name) == ["b"]
+
+
+LIB_USER_IN_TABLE = """\
+:- use_module(rt_util).
+:- table(path/2).
+e(a, b). e(b, a).
+path(X, Y) :- e(X, Y).
+path(X, Y) :- path(X, Z), first(e(Z, Y)), first(path(Z, _)).
+r(E) :- catch((findall(Y, path(a, Y), _), E = none), error(E0, _), E = E0).
+"""
+
+
+def test_once_on_a_goal_argument_inside_the_tables_own_evaluation_is_refused(native, ans, tmp_path):
+    """The N-2 route still raises where the table really is incomplete:
+    the library's once/1 commits over a recursive call of path/2 made
+    inside path/2's own evaluation."""
+    (tmp_path / "rt_util.pl").write_text(LIB)
+    mod = native.load("l3_tab_rt_lib_in", LIB_USER_IN_TABLE)
+    assert ans(mod, "r") == [_INCOMPLETE("path", 2)]
 
 
 def test_once_on_a_closed_goal_in_a_table_blind_module_is_not_checked():

@@ -370,23 +370,60 @@ class CompilerError(Exception):
 
 def cut_over_tabled_message(over: "list[tuple[str, int]]",
                             predicate: "str | None" = None,
-                            line: "int | None" = None,
-                            incomplete: bool = False) -> str:
-    """The one wording of the cut-over-a-table refusal: the load-time
-    :class:`CutOverTableError` and the run-time
-    ``permission_error(cut, incomplete_table, F/N)`` (``tabling.
-    cut_over_incomplete``) both say it."""
+                            line: "int | None" = None) -> str:
+    """The wording of the load-time cut-over-a-table refusal,
+    :class:`CutOverTableError`.  The run-time ``permission_error(cut,
+    incomplete_table, F/N)`` has its own: :func:`cut_over_incomplete_table_
+    message`."""
     from .cut_scope import _pi_text
     pis = ", ".join(_pi_text(pi) for pi in over)
     where = f" in predicate {predicate}" if predicate else ""
     if line:
         where += f" (line {line})"
-    still = " (its table is still incomplete)" if incomplete else ""
     return (f"a cut (or an if-then-else condition, or once/1){where} cuts "
-            f"over the tabled call(s) {pis}{still}: the scope of a cut "
+            f"over the tabled call(s) {pis}: the scope of a cut "
             f"cannot include a call to a tabled predicate (XSB's rule; "
             f"Clausal tables by re-running the clause to a fixpoint, so the "
             f"committed answer would depend on pass order)")
+
+
+def cut_over_incomplete_table_message(called: "tuple[str, int]",
+                                      predicate: "str | None" = None,
+                                      within: "tuple[str, int] | None" = None
+                                      ) -> str:
+    """The run-time refusal ``permission_error(cut, incomplete_table, F/N)``
+    (``tabling.cut_over_incomplete``), said plainly (D68): which tabled
+    predicate, why its table is still being computed (the call is inside
+    the evaluation of *within*), what the cut would do, and what to do
+    instead.  *predicate* is the clause holding the cut, when known."""
+    from .cut_scope import _pi_text
+    pi = _pi_text(called)
+    where = f" in predicate {predicate}" if predicate else ""
+    if within == "$constrained":
+        # tabling.STREAMED_CONSTRAINED
+        why = (f"its answers carry constraints (dif/2, CLP, freeze/2), "
+               f"which a table cannot store, so {pi} hands them back as it "
+               f"finds them instead of completing its table first")
+    elif within is None:
+        why = ("the call is made inside the evaluation of another tabled "
+               "predicate, which this table depends on")
+    elif tuple(within) == tuple(called):
+        why = (f"the call is made inside the evaluation of {pi} itself "
+               f"(a recursive call, directly or through other predicates)")
+    else:
+        why = (f"the call is made inside the evaluation of the tabled "
+               f"predicate {_pi_text(within)}, and {pi} depends on it "
+               f"(mutual recursion)")
+    return (f"a cut (or an if-then-else condition, once/1, or "
+            f"setup_call_cleanup/3's Setup){where} would prune the call to "
+            f"the tabled predicate {pi} while its table is still being "
+            f"computed: {why}, so the table holds only the answers found so "
+            f"far and the cut would throw away answers it has not produced "
+            f"yet. Collect the answers first (findall/3 over the call, then "
+            f"pick from the list), or move the commit out of the recursive "
+            f"evaluation. (A tabled call that does not depend on a table "
+            f"still being computed completes its table before its first "
+            f"answer, and may be cut; XSB raises this same error.)")
 
 
 class CutOverTableError(SyntaxError):

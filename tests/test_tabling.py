@@ -550,13 +550,12 @@ class TestTabledFib:
 # chains, not scalars.  Unlike TestTabledFib above (which safely lets
 # `for trail in call(...)` run to natural exhaustion, since a scalar answer
 # is captured by value the instant `deref` is called), these tests `break`
-# immediately after the first solution: abandoning the generator early is
-# what forces the *next* fresh call to recompute from scratch instead of
-# hitting the COMPLETE fast path (test_nats_break_drops_table below verifies
-# an abandoned-via-break query leaves ``db.table_store`` empty; a query
-# drained via ``list(...)`` leaves the table intact instead, per
-# test_nats_cache_hit below -- see task-4-report.md for the timings this
-# produces). Reading a nested
+# immediately after the first solution.  Abandoning the generator early used
+# to drop the table, forcing the next fresh call to recompute; since D68
+# (operator ruling 2026-10-16) a tabled call completes its table before its
+# first answer, so the table survives a `break` complete
+# (test_nats_break_keeps_the_completed_table below) and the benchmarks reload
+# the module every rep to recompute.  Reading a nested
 # field (``node.T``) off a compound answer *before* the generator is
 # abandoned/exhausted is required for the same reason bench_qsort/
 # bench_tabling break after the first answer: continuing to iterate a
@@ -610,13 +609,14 @@ class TestStructTabling:
         results = list(call("nats", 3, L, module=_module(m)))
         assert len(results) == 1
 
-    def test_nats_break_drops_table(self):
-        """Verifies the module comment's claim above: abandoning the
-        generator via break (instead of draining it) leaves
-        db.table_store empty afterward -- unlike a full drain, which
-        leaves it populated (test_nats_cache_hit below). This is why
-        bench_struct_tabling must reload the module every rep instead of
-        relying on break alone to force recomputation."""
+    def test_nats_break_keeps_the_completed_table(self):
+        """D68 (operator ruling 2026-10-16): a tabled call completes its
+        table before its first answer, so abandoning the generator via
+        break after that answer leaves every table it drove COMPLETE, and
+        kept -- a complete table is the same whoever stops reading it.  It
+        used to drop the half-built table instead (A04-F007's repair of an
+        abandoned leader).  bench_struct_tabling reloads the module every
+        rep, so it recomputes either way."""
         # nv
         m = _load("struct_tabling")
         db = _module(m).db
@@ -624,7 +624,8 @@ class TestStructTabling:
         for trail in call("nats", 5, L, module=_module(m)):
             deref(L)
             break
-        assert len(db.table_store) == 0
+        assert len(db.table_store) > 0
+        assert all(e.status == "complete" for e in db.table_store.values())
 
     def test_nats_cache_hit(self):
         """Second query should use cached table (COMPLETE path), same as

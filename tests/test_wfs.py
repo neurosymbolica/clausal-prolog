@@ -1114,10 +1114,15 @@ class TestRootLeadConditionalDeferral:
         assert pw.status == "complete"
         assert pw.conditions[1] is _FAILED
 
-    def test_unconditional_answers_still_stream_before_completion(self, tmp_path):
-        """A negation-free tabled predicate must keep streaming: the caller
-        receives the first answer while the leader's table is still
-        'evaluating' (mid-fixpoint), exactly as before the deferral."""
+    def test_a_root_call_answers_from_a_complete_table(self, tmp_path):
+        """D68 (operator ruling 2026-10-16, XSB local scheduling): a
+        negation-free tabled predicate no longer streams.  The caller's
+        FIRST answer arrives with the table already complete, and answers
+        come in table order.  This test pinned the opposite (answers
+        streaming while the table was still 'evaluating') until D68: that
+        streaming let a second call of the same table in the caller's
+        continuation join against a partial table (todo/done/tabled-
+        findall-over-two-calls-loses-pairs-2026-10-16.md)."""
         # nv
         from clausal.import_hook import _load_module
         p = tmp_path / f"wfs_stream_probe{SEAM}"
@@ -1133,12 +1138,12 @@ class TestRootLeadConditionalDeferral:
         first_val = deref(X)
         entries = [e for (f, _a, _k), e in lm.db.table_store.items()
                    if f == "cnt"]
-        assert entries, "table entry must exist while streaming"
-        assert entries[0].status == "evaluating", (
-            "unconditional answers must stream before the fixpoint completes"
+        assert entries, "table entry must exist"
+        assert entries[0].status == "complete", (
+            "the first answer must come from a complete table (D68)"
         )
         rest = [deref(X) for _ in it]
-        assert sorted([first_val] + rest) == [0, 1, 2, 3]
+        assert [first_val] + rest == [0, 1, 2, 3]
 # ── Cross-module tabled NAF (todo/cross-module-tabled-naf-loses-wfs-delay.md) ─
 # ``not Imported(...)`` where Imported is tabled in ITS OWN module's db must
 # lower to the WFS-sound ``$naf_tabled`` form, exactly like the single-module

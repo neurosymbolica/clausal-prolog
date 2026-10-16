@@ -920,15 +920,10 @@ class TestF005UnhashableAnswers:
         one_query()                       # populate the table (leader)
         assert one_query() == [({"k": 7},)]   # cache hit → frozen answer
 
-    @pytest.mark.xfail(strict=False, reason="A04-F005 residual: the tabling "
-                       "LEADER yields the live body binding, and a ++-built dict "
-                       "holds a raw Var (X bound to 7 but the dict still "
-                       "references X), so the FIRST (leader) query derefs to "
-                       "{'k': <Var>}. The stored/cache answer is correctly "
-                       "frozen (see test_dict_answer_cache_hit_is_frozen); "
-                       "presenting frozen answers from the leader is a separate "
-                       "change — see the residual note in the archived todo.")
     def test_dict_answer_leader_query(self, load):
+        # A04-F005 residual, resolved by D68 (2026-10-16): the leader used
+        # to yield the live body binding (a ++-built dict holding a raw
+        # Var); it now completes its table and delivers the frozen answer.
         m = load("f005b2", TD_DICT_SRC)
         V = Var()
         got = answers(call("td", V, module=m), V)

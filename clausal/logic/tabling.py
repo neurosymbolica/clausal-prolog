@@ -118,9 +118,13 @@ class _LeaderContext(threading.local):
         # they must not be the attribution target while another goal runs.
         self.detached: list[list] = []
         # XSB's run-time cut check (D61 Q1, ``cut_over_incomplete``): every
-        # tabled call frame over an INCOMPLETE table (a leader mid-fixpoint,
-        # a consumer yielding known answers) has a record ``[id, token,
-        # entry, functor, arity, trail]`` while it can still deliver answers.
+        # tabled call frame that delivers answers from an INCOMPLETE table (a
+        # consumer of a table under evaluation, or an SCC member handing back
+        # what it has while an ancestor is still evaluating -- D68: every
+        # other leader completes its table first) has a record ``[id, token,
+        # entry, functor, arity, trail, within]`` while it can still deliver
+        # answers; *within* is the ``(functor, arity)`` of the tabled
+        # predicate whose evaluation keeps the table incomplete.
         # ``cut_seq`` is the id of the newest one ever opened; a cut scope
         # reads it at entry and its cut compares -- one int compare when no
         # tabled frame opened inside the scope since.
@@ -148,7 +152,7 @@ _leader_ctx = _LeaderContext()
 # finalised yet is not taken for a live one.
 
 
-def _open_tabled(entry, functor, arity, trail) -> list:
+def _open_tabled(entry, functor, arity, trail, within=None) -> list:
     ctx = _leader_ctx
     recs = ctx.open_tabled
     while recs and is_var(deref(recs[-1][1])):
@@ -156,7 +160,7 @@ def _open_tabled(entry, functor, arity, trail) -> list:
     tok = Var()
     unify(tok, True, trail)
     ctx.cut_seq += 1
-    rec = [ctx.cut_seq, tok, entry, functor, arity, trail]
+    rec = [ctx.cut_seq, tok, entry, functor, arity, trail, within]
     recs.append(rec)
     return rec
 
@@ -192,13 +196,64 @@ def cut_over_incomplete(mark: int, owner: "str | None" = None,
     from clausal.logic.compiler import cut_scope
     if cut_scope.CUT_OVER_TABLED_CALL != "refuse":
         return                         # the one switch governs both halves
-    from clausal.logic.compiler.ir import cut_over_tabled_message
+    from clausal.logic.compiler.ir import cut_over_incomplete_table_message
     from clausal.logic.exceptions import LogicException, permission_error
     functor, arity = live[3], live[4]
     raise LogicException(permission_error(
         "cut", "incomplete_table", ("/", functor, arity),
-        cut_over_tabled_message([(functor, arity)], owner, None,
-                                incomplete=True)))
+        cut_over_incomplete_table_message((functor, arity), owner, live[6])))
+
+
+def _evaluating_ancestor(entry) -> "tuple[str, int] | None":
+    """The predicate indicator of the OUTERMOST still-evaluating tabled
+    call on the leader stack that *entry* (an SCC member about to hand back
+    an incomplete table) depends on -- the evaluation that keeps its table
+    open.  None when no such entry carries a name."""
+    pending = {id(d) for d in entry.scc_deps
+               if d is not entry and d.status == "evaluating"}
+    for e in _leader_ctx.stack:
+        if id(e) in pending and e.pi is not None:
+            return e.pi
+    for d in entry.scc_deps:
+        if d is not entry and d.status == "evaluating" and d.pi is not None:
+            return d.pi
+    return None
+
+
+def _has_pending_dep(entry) -> bool:
+    """Whether *entry* consumed a still-evaluating ancestor: an SCC member,
+    whose table cannot complete before that ancestor's (A04-F001)."""
+    for dep in entry.scc_deps:
+        if dep is not entry and dep.status == "evaluating":
+            return True
+    return False
+
+
+#: The *within* of a cut-check record for a leader that streams an answer
+#: carrying constraints (``_has_attributed_var``) before its table completes.
+STREAMED_CONSTRAINED = "$constrained"
+
+
+def _has_attributed_var(answer) -> bool:
+    """Whether a frozen answer holds an unbound variable with attributes (a
+    ``dif/2``, CLP or ``freeze/2`` constraint).  The table cannot store the
+    constraint (todo/audit-2026-07-05/investigate-A12-tabling-answer-
+    constraints.md: a replayed answer loses it), so such an answer is the
+    one a leader still hands over live, mid-fixpoint, instead of from the
+    completed table (D68)."""
+    global _collect_vars
+    if _collect_vars is None:
+        from clausal.logic.builtins.inspection import _collect_vars_impl  # noqa: PLC0415
+        _collect_vars = _collect_vars_impl
+    vs: list = []
+    _collect_vars(answer, vs)
+    for v in vs:
+        if getattr(v, "attrs", None):
+            return True
+    return False
+
+
+_collect_vars = None   # inspection._collect_vars_impl, bound on first use
 
 
 def push_leader(entry: TableEntry) -> None:
@@ -502,9 +557,13 @@ def _complete_scc(root: TableEntry, table_store) -> None:
     root.status = "complete"
     # Only entries this drive owns: completing another query's abandoned
     # entry would freeze its partial answers for good (rule 3).
+    # The cheap tests first: ``_on_leader_stack`` walks the leader stack, so
+    # asking it of every evaluating entry (each ancestor of a deep recursion)
+    # made a completion cost O(store x depth).  Since D68 every leader
+    # completes before its first answer, so that was paid on every call.
     members = [e for e in table_store.values()
-               if e.status == "evaluating" and not _on_leader_stack(e)
-               and e.scc_deps and _mine(e)]
+               if e.status == "evaluating" and e.scc_deps
+               and not _on_leader_stack(e) and _mine(e)]
     if not members:
         return
     member_ids = {id(e) for e in members}
@@ -550,10 +609,14 @@ class TableEntry:
     """Stores status, answers, and suspended consumers for one subgoal."""
     __slots__ = ("status", "answers", "answer_set", "_answer_index",
                  "suspended", "conditions", "_current_delays", "scc_deps",
-                 "_sources", "owner", "lead")
+                 "_sources", "owner", "lead", "pi")
 
-    def __init__(self):
+    def __init__(self, pi: "tuple[str, int] | None" = None):
         self.status: str = "evaluating"       # "evaluating" | "complete"
+        # ``(functor, arity)`` of the tabled call, for the run-time cut
+        # error's wording (``cut_over_incomplete``); None for a judging
+        # leader (seam.judged_answers), which is no predicate.
+        self.pi = pi
         # The clausal.aio query leading this table (None when synchronous)
         # and the token of its current lead: see "Ownership" above.
         self.owner = _drive_ctx.owner
@@ -582,10 +645,9 @@ class TableEntry:
     def add_answer(self, answer: tuple, delay_set: frozenset | None = None) -> int | None:
         """Add a frozen answer tuple.  Returns its INDEX if the tuple was new.
 
-        The index (never a bare bool: index 0 is falsy, so callers test
-        ``is not None``) lets the root-lead deferral in the trampoline
-        wrapper record which row it withheld without re-deriving the private
-        canonical key.  ``None`` means the visible answer set did not change.
+        The index is never a bare bool (index 0 is falsy, so callers test
+        ``is not None``).  ``None`` means the visible answer set did not
+        change.
 
         Dedup uses the canonical, hashable key (A04-F005) — a frozen answer may
         contain a list/dict/set/term instance, which are unhashable and cannot
@@ -596,8 +658,8 @@ class TableEntry:
 
         A re-derivation of a known answer under a DIFFERENT delay set unions
         that set into the answer's disjunction (A04-F003) and still returns
-        None — the tuple was already streamed to the caller; only its truth
-        got sharper. An unconditional re-derivation erases the delays.
+        None — the tuple is already in the table; only its truth got
+        sharper. An unconditional re-derivation erases the delays.
 
         Phase 2 bridge Task 4 -- selective ground-cell interning: this is
         the SINGLE Python funnel every frozen answer passes through
@@ -1561,8 +1623,9 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             if cl is not None:
                 cl.scc_deps.add(entry)
             # Answers from an incomplete table: a cut over this frame is
-            # XSB's run-time error (``cut_over_incomplete``).
-            _rec = _open_tabled(entry, functor, arity, trail)
+            # XSB's run-time error (``cut_over_incomplete``).  The table is
+            # incomplete because this very call is inside its evaluation.
+            _rec = _open_tabled(entry, functor, arity, trail, entry.pi)
             try:
                 for i, stored in enumerate(entry.answers):
                     if entry.conditions[i] is _FAILED:
@@ -1609,73 +1672,85 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             _close_suspended(entry)
             entry = None
         if entry is None:
-            entry = TableEntry()
+            entry = TableEntry((functor, arity))
             lead = _new_lead(entry)
             table_store[store_key] = entry
             _record_created_entry(entry, table_store, store_key)  # A04-F007
-            replay_count = 0
         else:
-            lead = _new_lead(entry)    # a dormant member of our own drive
-            # A04-F001 (re-lead replay): this caller has seen NONE of the
-            # already-tabled answers, but the fixpoint loop below streams only
-            # NEW answers (add_answer dedups the old ones away). Replay the
-            # known answers first — exactly like the consumer and complete
-            # paths — or joins against them are silently lost (e.g. a clause
-            # calling this table twice never pairs an old first-call answer
-            # with a new second-call answer). No double delivery: everything
-            # replayed here dedups inside the drive.
-            replay_count = len(entry.answers)
-        # Root-lead deferral (todo/tabled-conditional-answers-stream-before-
-        # invalidation.md): a ROOT leader's incremental yields land in the
-        # surface caller (solve()/call()/query()), which cannot retract an
-        # answer that root-exit resolution later invalidates (_FAILED) — the
-        # same ground query then returns a different answer SET on the first
-        # call vs the second. So the outermost leader (empty leader stack at
-        # push — the one whose exit runs global resolution) DEFERS conditional
-        # answers and delivers the survivors after resolution, while
-        # unconditional answers keep streaming untouched. Inner (non-root)
-        # leaders still stream conditionals: their consumers are other tabled
-        # frames mid-fixpoint, which legitimately join against them and
-        # re-derive per pass. A spawn-discard root (also pushed on an empty
-        # stack) defers into _drive_dispatch_to_completion's discard loop —
-        # harmless, the yields are discarded either way.
-        root_lead = not _leader_ctx.stack
-        deferred: set[int] = set()   # answer indices withheld from the root
+            # A dormant member of our own drive.  A04-F001 (re-lead): this
+            # caller has seen NONE of the already-tabled answers; the
+            # delivery below hands back every row, old and new, once.
+            lead = _new_lead(entry)
+        # Complete first (operator ruling 2026-10-16, D68; XSB's local
+        # scheduling): a leader hands its caller NO answer until its fixpoint
+        # has ended -- every answer is delivered from the table afterwards,
+        # in table order.  Streaming answers mid-fixpoint ran the caller's
+        # continuation while this entry was still on the leader stack, so a
+        # second call of the same variant there (``findall(X-Y, (t(X),
+        # t(Y)), L)``) took the CONSUMER path and joined against a partial
+        # table: lost answers, and, inside another table, a non-monotone
+        # aggregate (a 6-pair and a 9-pair list both tabled).  And a cut
+        # over the first answer pruned an incomplete table.  Now:
+        #   * a leader whose table COMPLETES here (any leader that is not a
+        #     member of an ancestor's SCC: a top-level call, or a fresh call
+        #     inside another table's evaluation that does not depend on that
+        #     evaluation) delivers from a complete table -- a cut over it is
+        #     fine, and it opens no cut-check record;
+        #   * an SCC member (it consumed a still-evaluating ancestor, so its
+        #     table cannot complete before that ancestor's) streams its
+        #     answers as before D68, from the moment it knows it is one
+        #     (``_has_pending_dep``: on a re-lead, from the start, replaying
+        #     its known rows first), under a cut-check record naming the
+        #     ancestor: that table really is incomplete.  Withholding them
+        #     too would let the enclosing fixpoint gain one step per pass
+        #     (even/odd mutual recursion to depth n: O(n) passes); answers it
+        #     derived before it knew are delivered after its fixpoint.
+        # The root lead's conditional answers were already deferred until
+        # after global resolution (todo/tabled-conditional-answers-stream-
+        # before-invalidation.md); now every answer is.  Positive delay
+        # propagation for a conditional row is credited at delivery, to the
+        # leader BELOW this one (``_streaming_consumer_leader``: none for a
+        # root or spawn-discard lead), as the streaming site used to.
+        #   * one exception: an unconditional answer that carries a
+        #     constraint (an attributed variable) is still handed over live,
+        #     when derived, as before D68 -- the table cannot store the
+        #     constraint, and delivering it from the table would drop it
+        #     (``_has_attributed_var``).  Such an answer comes from an
+        #     incomplete table, under a cut-check record.
         _note_driven_store(table_store)
         push_leader(entry)
-        # Until the fixpoint ends this frame streams answers from an
-        # incomplete table: a cut over it is XSB's run-time error.
-        _rec = _open_tabled(entry, functor, arity, trail)
+        consumer = _streaming_consumer_leader(entry)
+        streamed: set[int] = set()   # rows already handed over (above)
+        _srec = None                 # their cut-check record
 
         try:
-            for i in range(replay_count):
-                if entry.conditions[i] is _FAILED:
-                    continue
-                if root_lead and entry.conditions[i] is not _UNCONDITIONAL:
-                    # Re-lead at the root: conditional rows join the same
-                    # deferred delivery as newly-derived ones.
-                    deferred.add(i)
-                    continue
-                mark = trail.mark()
-                if _unify_answer(args, entry.answers[i], trail):
-                    if entry.conditions[i] is not _UNCONDITIONAL:
-                        replay_delays = entry.delays_for(i)
-                        if replay_delays:
-                            # Same streaming-site attribution as above.
-                            consumer = _streaming_consumer_leader(entry)
-                            if consumer is not None:
+            if _has_pending_dep(entry):
+                # A re-led SCC member: replay its known rows first, as
+                # before D68 (A04-F001 re-lead replay); new ones stream.
+                _srec = _open_tabled(entry, functor, arity, trail,
+                                     _evaluating_ancestor(entry))
+                for i in range(len(entry.answers)):
+                    c = entry.conditions[i]
+                    if c is _FAILED:
+                        continue
+                    streamed.add(i)
+                    mark = trail.mark()
+                    if _unify_answer(args, entry.answers[i], trail):
+                        if consumer is not None and c is not _UNCONDITIONAL:
+                            delays = entry.delays_for(i)
+                            if delays:
                                 _credit_consumer(consumer, entry, i,
-                                                 table_store, trail,
-                                                 replay_delays)
-                    yield (_proceed, None)
-                trail.undo(mark)
+                                                 table_store, trail, delays)
+                        yield (_proceed, None)
+                    trail.undo(mark)
             # A04-F001: drive the dispatch to a FIXPOINT by re-running it until
             # no new answer appears, rather than a single pass followed by the
             # (broken) consumer-resume completion phase. On each re-run a
             # consumer (an inner call to this same still-evaluating table) sees
             # the grown answer set and routes it to its clause continuation,
-            # which derives further answers. New answers stream to the leader's
-            # caller exactly once (add_answer dedups). This makes tabled
+            # which derives further answers. Each answer reaches the leader's
+            # caller once, after the fixpoint (complete first, D68; add_answer
+            # dedups). This makes tabled
             # solution sets clause-order-independent for single-table recursion;
             # mutual recursion additionally needs SCC-aware completion (below).
             changed = True
@@ -1700,29 +1775,24 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     new_idx = entry.add_answer(answer, delay_set)
                     if new_idx is not None:
                         # New tuple OR a revived _FAILED row — both change the
-                        # visible answer set: stream it and run another pass.
+                        # visible answer set: run another pass.  Nothing is
+                        # handed to the caller yet (complete first, above) --
+                        # unless it carries a constraint the table would drop.
                         changed = True
-                        if delay_set and root_lead:
-                            # Root-lead deferral: the surface caller must not
-                            # see a conditional answer that root-exit
-                            # resolution may yet invalidate. Withhold it; the
-                            # survivors are delivered after resolution below.
-                            # (No positive propagation either — a root lead
-                            # has no leader below it to credit.)
-                            deferred.add(new_idx)
-                        else:
-                            if delay_set:
-                                # Positive propagation for the STREAMING site:
-                                # the consumer of this incremental yield is the
-                                # leader below OUR OWN stack position (a deeper
-                                # leader may be parked mid-stream above us), and
-                                # a spawn-discard root propagates to nobody.
-                                consumer = _streaming_consumer_leader(entry)
-                                if consumer is not None:
-                                    _credit_consumer(consumer, entry, new_idx,
-                                                     table_store, trail,
-                                                     delay_set)
-                            yield (_proceed, None)  # new answer to caller (incremental)
+                        member = _has_pending_dep(entry)
+                        if member or (not delay_set
+                                      and _has_attributed_var(answer)):
+                            if _srec is None:
+                                _srec = _open_tabled(
+                                    entry, functor, arity, trail,
+                                    _evaluating_ancestor(entry) if member
+                                    else STREAMED_CONSTRAINED)
+                            streamed.add(new_idx)
+                            if delay_set and consumer is not None:
+                                _credit_consumer(consumer, entry, new_idx,
+                                                 table_store, trail,
+                                                 delay_set)
+                            yield (_proceed, None)
                     _st = yield (_gen, None)
                 entry._current_delays.clear()
                 # Consumers that suspended during this pass are re-derived by the
@@ -1747,7 +1817,8 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             _repair_lead(entry, lead, table_store, store_key)
             raise
         finally:
-            _close_tabled(_rec)
+            if _srec is not None:
+                _close_tabled(_srec)
             if entry.lead is lead:
                 pop_leader(entry)
 
@@ -1784,19 +1855,37 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                             and dep.status == "evaluating"
                             and _on_leader_stack(dep)):
                         cl.scc_deps.add(dep)
-        # Root-lead deferred delivery: fixpoint done and (on the normal path)
-        # global resolution has run — deliver the withheld conditional rows
-        # that SURVIVED (skipping _FAILED), re-unifying against the call args
-        # exactly like the COMPLETE path. Index order keeps delivery
-        # deterministic. A caller that stopped pulling earlier (once()-style)
-        # simply never resumes this generator — normal abandonment.
-        for i in sorted(deferred):
-            if entry.conditions[i] is _FAILED:
-                continue
-            mark = trail.mark()
-            if _unify_answer(args, entry.answers[i], trail):
-                yield (_proceed, None)
-            trail.undo(mark)
+        # Delivery (complete first, above): the fixpoint is done and, at the
+        # root, global resolution has run.  Every live row in table order,
+        # re-unified against the call args like the COMPLETE path.  A row
+        # appended meanwhile (the caller's continuation re-led this dormant
+        # entry) is delivered too.  A caller that stops pulling (once/1)
+        # simply never resumes this generator -- normal abandonment.
+        _rec = None
+        if entry.status != "complete":
+            # An SCC member: its table is incomplete until the ancestor it
+            # depends on completes, so a cut over this call is XSB's
+            # run-time error, naming that ancestor.
+            _rec = _open_tabled(entry, functor, arity, trail,
+                                _evaluating_ancestor(entry))
+        try:
+            i = 0
+            while i < len(entry.answers):
+                c = entry.conditions[i]
+                if c is not _FAILED and i not in streamed:
+                    mark = trail.mark()
+                    if _unify_answer(args, entry.answers[i], trail):
+                        if consumer is not None and c is not _UNCONDITIONAL:
+                            delays = entry.delays_for(i)
+                            if delays:
+                                _credit_consumer(consumer, entry, i,
+                                                 table_store, trail, delays)
+                        yield (_proceed, None)
+                    trail.undo(mark)
+                i += 1
+        finally:
+            if _rec is not None:
+                _close_tabled(_rec)
         yield (_fail, DONE)
 
     tabled_dispatch._tabled_for = (functor, arity)

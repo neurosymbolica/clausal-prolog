@@ -345,23 +345,27 @@ def test_a_table_another_query_is_building_is_refused_not_partial(demo):
     assert _engine_state_clean()
 
 
-def test_a_table_still_streaming_answers_is_exclusive(demo):
-    # Query 1 has taken reach('a', Y)'s first answer; its table is still
-    # evaluating.  Another query over the same table is refused, and query 1
-    # still gets every answer (it used to lose two, silently).
+def test_a_table_holding_out_its_first_answer_is_complete_and_shared(demo):
+    # D68 (operator ruling 2026-10-16): a tabled call completes its table
+    # before its first answer.  Query 1 has taken reach('a', Y)'s first
+    # answer, so the table is COMPLETE: another query over it is answered
+    # from it (3), not refused, and query 1 still gets every answer.  Before
+    # D68 the table was still evaluating here and the second query was
+    # refused (it used to lose two answers, silently, before that); the
+    # refusal of a table another query is still BUILDING is
+    # test_a_table_another_query_is_building_is_refused_not_partial.
     async def main():
         y = Var()
         agen = asolve(("reach", "a", y), demo)
         first = [deref(y) for _ in [await agen.__anext__()]]
-        with pytest.raises(LogicException) as info:
-            await aonce(("reach_count", Var()), demo)
+        n = Var()
+        assert await aonce(("reach_count", n), demo) is not None
+        count = deref(n)
         rest = [deref(y) async for _ in agen]
-        return sorted(first + rest), info.value
-    answers, refusal = run(main())
+        return sorted(first + rest), count
+    answers, count = run(main())
     assert answers == ["a", "b", "c"]
-    assert _table_refusal(refusal)
-    n = Var()
-    assert once(("reach_count", n), demo) is not None and deref(n) == 3
+    assert count == 3
     assert _engine_state_clean()
 
 
@@ -475,18 +479,21 @@ def test_a_query_dropped_after_its_loop_closed_does_not_hold_its_table(demo):
     assert once(("reach_count", n), demo) is not None and deref(n) == 3
 
 
-def test_an_async_query_inside_a_streaming_sync_query_is_refused(demo):
+def test_an_async_query_inside_a_sync_query_reads_its_complete_table(demo):
     # Second review 2026-10-06: the async query re-led the table the
     # synchronous query was still building, and the synchronous one then
-    # lost two of its three answers.
-    y, out = Var(), []
+    # lost two of its three answers; it was then refused.  Since D68 the
+    # synchronous query's table is complete before its first answer, so the
+    # async query reads it (3) and the synchronous one keeps all three.
+    y, out, counts = Var(), [], []
     for _ in solve(("reach", "a", y), demo):
         out.append(deref(y))
         if len(out) == 1:
-            with pytest.raises(LogicException) as info:
-                run(aonce(("reach_count", Var()), demo))
-            assert _table_refusal(info.value)
+            n = Var()
+            assert run(aonce(("reach_count", n), demo)) is not None
+            counts.append(deref(n))
     assert sorted(out) == ["a", "b", "c"]
+    assert counts == [3]
     assert _engine_state_clean()
 
 
@@ -620,10 +627,20 @@ def test_a_dropped_querys_scc_is_rebuilt_not_resumed(tmp_path, second):
     assert _engine_state_clean()
 
 
+# cvar/2's answer carries a dif/2 constraint, so its leader hands it over
+# live, before its table completes (D68's one exception: a table cannot store
+# a constraint).  A query holding that answer holds an EVALUATING table, the
+# state the dropped-query tests below need; every other tabled call
+# completes its table before its first answer.  Its first clause calls
+# cvar/2 back, so the dead query's entry has an SCC dependency and
+# _complete_scc's store scan looks at it (the store-scan test below).
 _SWEEP_PROGRAM = (
-    "-module(sweep, [path/2, other/1, np/0])\n"
+    "-module(sweep, [path/2, other/1, np/0, cvar/2])\n"
     "-table(path/2)\n"
     "-table(other/1)\n"
+    "-table(cvar/2)\n"
+    "cvar(X, V) <- (cvar(X, V), X > 5)\n"
+    "cvar(X, V) <- (path(X, _), V is not X)\n"
     "edge(1, 2),\n"
     "edge(2, 3),\n"
     "edge(3, 4),\n"
@@ -668,7 +685,9 @@ def test_a_dropped_query_leaves_no_half_built_table_behind(tmp_path):
     # The general fix behind the round 5 and 6 findings: once the iterator
     # of an unclosed query is gone, its evaluating tables leave the store at
     # the next safe point (here: the next tabled call), before any
-    # finaliser runs.
+    # finaliser runs.  Since D68 a query holding an answer holds a complete
+    # table unless the answer carries a constraint: cvar/2 (see
+    # _SWEEP_PROGRAM).
     import gc
     src = tmp_path / "sweep_gone.seam"
     src.write_text(_SWEEP_PROGRAM.replace("sweep,", "sweep_gone,"))
@@ -676,7 +695,7 @@ def test_a_dropped_query_leaves_no_half_built_table_behind(tmp_path):
     store = mod.__dict__["$module"].db.table_store
 
     async def main():
-        dropped = asolve(("path", 1, Var()), mod)
+        dropped = asolve(("cvar", 1, Var()), mod)
         await dropped.__anext__()
         assert any(e.status == "evaluating" for e in store.values())
         del dropped
@@ -707,7 +726,10 @@ def test_a_query_dying_during_a_store_scan_does_not_break_it(
         loop = asyncio.new_event_loop()
 
         async def park():
-            answers = asolve(("path", 1, Var()), mod)
+            # cvar/2: its table is still evaluating after its first answer
+            # (a constrained answer, see _SWEEP_PROGRAM); since D68 path/2's
+            # would be complete
+            answers = asolve(("cvar", 1, Var()), mod)
             await answers.__anext__()
             await asyncio.sleep(10)
         task = loop.create_task(park())
@@ -881,20 +903,21 @@ def test_a_gc_run_cleanup_cannot_wait_inside_another_query(
 
 def test_negation_is_not_delayed_on_a_dropped_querys_table(tmp_path):
     # Sixth review 2026-10-06: `not path(1, _)` delayed on the dead query's
-    # evaluating entry and came out undefined instead of true.
+    # evaluating entry and came out undefined instead of true.  Since D68
+    # the dead query's half-built table is made by a query dropped while
+    # parked at a wait inside the evaluation (nap_path/2 sleeps).
     import gc
     from clausal.logic.solve import query_wfs
     src = tmp_path / "sweep_np.seam"
-    src.write_text(_SWEEP_PROGRAM.replace("sweep,", "sweep_np,"))
+    src.write_text(_DEAD_PROGRAM.replace("dead, [", "sweep_np, [np/0, ")
+                   + "np <- (not nap_path(1, _))\n")
     mod = load_clausal_module(src)
-
-    async def main():
-        dropped = asolve(("path", 1, Var()), mod)
-        await dropped.__anext__()
-        del dropped
-        gc.collect()
-        return [r["_truth"] for r in query_wfs("np", {}, mod)]
-    assert run(main()) == [True]
+    store = mod.__dict__["$module"].db.table_store
+    _park_until_loop_closes(("nap_path", 1, Var()), mod,
+                            between_answers=False)
+    assert any(e.status == "evaluating" for e in store.values())
+    gc.collect()
+    assert [r["_truth"] for r in query_wfs("np", {}, mod)] == [True]
 
 
 def test_a_thread_loop_closed_from_inside_a_running_loop(demo):
