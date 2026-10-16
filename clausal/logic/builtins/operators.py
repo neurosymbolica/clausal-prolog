@@ -95,6 +95,15 @@ def _raise(err: tuple, culprit_spec, culprit_prec):
 def _op__3(priority, specifier, operator, trail, k):
     """op(Priority, Specifier, Operator) -- ISO 8.14.3: set (or, with
     priority 0, remove) the operator(s) in the run-time table."""
+    if _sandbox_state.ACTIVE:
+        # The sandbox replaces this builtin's registry entries
+        # (DENIED_BUILTINS); this is the backstop for a route that kept a
+        # reference to it: the table is process-wide.  First, before
+        # any argument check, so every call is refused.
+        raise LogicException(permission_error(
+            "access", "private_procedure", ("/", "op", 3),
+            f"{_OP}: {_OP} is not available in the sandbox (changes the "
+            f"process-wide operator table)"))
     p, s, o = deref(priority), deref(specifier), deref(operator)
     if is_var(p) or is_var(s) or is_var(o):
         raise LogicException(instantiation_error(_OP))
@@ -104,14 +113,6 @@ def _op__3(priority, specifier, operator, trail, k):
     if spec is None:
         raise LogicException(type_error("atom", s, _OP))
     names = _op_names(o)
-    if _sandbox_state.ACTIVE:
-        # The sandbox replaces this builtin's registry entries
-        # (DENIED_BUILTINS); this is the backstop for a route that kept a
-        # reference to it: the table is process-wide.
-        raise LogicException(permission_error(
-            "access", "private_procedure", ("/", "op", 3),
-            f"{_OP}: {_OP} is not available in the sandbox (changes the "
-            f"process-wide operator table)"))
     table = runtime_op_table()
     with op_lock:          # the 6.3.4.3 check and the define are one step
         err = op_error(table, p, spec, names)

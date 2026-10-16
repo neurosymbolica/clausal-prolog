@@ -777,7 +777,7 @@ class DirectiveContext:
         changes no process-wide state.  The op still applies to the
         reader's table, so the file (and an importer of a module's or a
         library's ops, ``library(clpz)``'s ``#=``) reads as it would; only
-        ``current_op/3`` and later loads do not see it.  The check is here,
+        ``current_op/3`` and the term writers do not see it.  The check is here,
         at the one write, so a caller that forgets it cannot reach the
         table (fails closed).  Provisional ruling 2026-10-16, after the
         ``set_prolog_flag`` split: the local effect stays, the process-wide

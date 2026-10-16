@@ -2151,11 +2151,21 @@ def test_op_goal_is_refused_and_the_operator_table_is_unchanged(sbx):
         from clausal.logic.variables import Trail
         probe("backstop", lambda: list(_op__3(700, "xfx", "zzdirect",
                                               Trail(), None)))
+        # The backstop comes before the argument checks.
+        probe("backstop_unbound", lambda: list(_op__3(Var(), "xfx",
+                                                      "zzdirect", Trail(),
+                                                      None)))
+        probe("meta", lambda: answers(
+            ("call", "op", 700, "xfx", "zzmeta"), m, X))
         probe("unchanged", lambda: version() - v0)
+        # The term writers print with the run-time table.
+        from clausal.terms import writer_op_table, _WQ_OPS
+        probe("writer", lambda: writer_op_table() is _WQ_OPS)
     """)
     assert ok(res, "registry") == "'sandbox_refused[op/3]'"
-    for key in ("goal", "body", "backstop"):
+    for key in ("goal", "body", "backstop", "backstop_unbound", "meta"):
         refused(res, key, PRIVATE + "op/3)")
+    assert ok(res, "writer") == "True"
     assert "private_procedure" in ok(res, "caught")
     assert ok(res, "current_op") == "[700]"
     assert ok(res, "unchanged") == "0"
