@@ -277,11 +277,31 @@ def _joined_span(a, b):
     return (a_span[0], b_span[1])
 
 
-def _lex_error_message(t) -> str:
+def _lex_error_message(t, text: str | None = None) -> str:
     """A human-readable message for an L0 ``error`` Tok, mirroring
     ``prolog_tokenizer.tokenize()``'s ``TokenizeError`` text (same
-    reasons, message-only rather than raised)."""
+    reasons, message-only rather than raised).
+
+    With the lexer's *text*, a refused quoted token is diagnosed
+    (``toklex.diagnose.quoted_fault``): the message names the offending
+    escape or character and its line:col."""
     reason, culprit = t.value
+    if text is not None:
+        off = None
+        if reason == "no_token" and culprit in ("'", '"'):
+            off = t.start[0]
+        elif reason == "unterminated" and t.lexeme[:1] in ("'", '"'):
+            off = t.start[0]
+        elif reason == "unterminated" and t.lexeme.startswith("0'"):
+            off = t.start[0] + 1
+        if off is not None:
+            from clausal.tools.toklex.diagnose import quoted_fault
+            fault = quoted_fault(text, off)
+            if fault is not None:
+                msg, at = fault
+                line = text.count("\n", 0, at) + 1
+                col = at - (text.rfind("\n", 0, at) + 1) + 1
+                return f"{msg} at {line}:{col}"
     if reason == "unterminated":
         if t.lexeme.startswith("/*"):
             # ISO: an unclosed block comment is a syntax error; Scryer's
@@ -452,7 +472,7 @@ class PrologReader:
     def _handle_error_tok(self, t):
         """Handle one L0 ``error`` Tok. Returns a ``SyntaxIssue`` to
         return from ``read_term()`` now, or ``None`` to keep looping."""
-        message = _lex_error_message(t)
+        message = _lex_error_message(t, getattr(self._lexer, "_text", None))
         reason, _culprit = t.value
         if reason == "unterminated":
             # Terminal: the driver has consumed all remaining input and

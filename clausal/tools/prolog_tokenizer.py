@@ -108,6 +108,21 @@ def _end_of_source_pos(source: str) -> tuple[int, int]:
 PL_SOURCE_NESTED_COMMENTS = False
 
 
+def _raise_quoted_fault(source: str, off: int) -> None:
+    """Raise a TokenizeError naming the first ISO 6.4.2.1 fault in the
+    quoted token opening at ``source[off]``, at the fault's own position
+    (``toklex.diagnose.quoted_fault``). Return when it finds none, so the
+    caller raises its generic message."""
+    from clausal.tools.toklex.diagnose import quoted_fault
+    fault = quoted_fault(source, off)
+    if fault is None:
+        return
+    msg, at = fault
+    line = source.count("\n", 0, at) + 1
+    col = at - (source.rfind("\n", 0, at) + 1) + 1
+    raise TokenizeError(msg[0].upper() + msg[1:], line, col)
+
+
 def tokenize(source: str, *, nested_comments: bool = True) -> list[Token]:
     """Tokenize Prolog source text into a list of tokens.
 
@@ -159,12 +174,19 @@ def tokenize(source: str, *, nested_comments: bool = True) -> list[Token]:
             reason, culprit = t.value
             line, col = t.start[1], t.start[2]
             if reason == "unterminated":
+                if t.lexeme[:1] in ("'", '"'):
+                    _raise_quoted_fault(source, t.start[0])
+                elif t.lexeme.startswith("0'"):
+                    # a `0'\...` char code committed into its digit loop
+                    _raise_quoted_fault(source, t.start[0] + 1)
                 if t.lexeme.startswith("/*"):
                     raise TokenizeError("Unterminated block comment", line, col)
                 if t.lexeme.startswith('"'):
                     raise TokenizeError("Unterminated string", line, col)
                 raise TokenizeError("Unterminated quoted atom", line, col)
             if reason == "no_token":
+                if culprit in ("'", '"'):
+                    _raise_quoted_fault(source, t.start[0])
                 raise TokenizeError(f"Unexpected character {culprit!r}", line, col)
             if reason == "bad_token":
                 # A value builder raised on this lexeme (driver.py's

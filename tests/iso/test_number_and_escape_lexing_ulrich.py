@@ -380,3 +380,28 @@ def test_raw_control_character_is_a_syntax_error(shape, cp):
 def test_non_control_unicode_in_quotes_still_reads(ch):
     assert _kv(f"'a{ch}b'.", n=1) == [(TokenType.ATOM, f"a{ch}b")]
 
+
+# ── The error names the fault, at its own position ─────────────────────
+
+@pytest.mark.parametrize("src, msg, line, col", [
+    ("X = 'ab\\zcd'.", "Invalid escape sequence '\\z' in quoted atom", 1, 8),
+    ("X = '\\ '.", "Invalid escape sequence \\ followed by U+0020 in quoted atom", 1, 6),
+    ("X = '\\\t'.", "Invalid escape sequence \\ followed by U+0009 in quoted atom", 1, 6),
+    ("X = 'a\x01b'.", "Raw control character U+0001 in quoted atom", 1, 7),
+    ("X = '\\141'.", "Octal escape '\\141' needs a closing backslash", 1, 6),
+    ('X = "a\\x41b".', "Hex escape '\\x41b' needs a closing backslash", 1, 7),
+    ("X = 0'\\e.", "Invalid escape sequence '\\e' in 0' character code", 1, 7),
+    ("X = 0'\\141.", "Octal escape '\\141' needs a closing backslash in 0'", 1, 7),
+    ("Y = 1,\n X = 'q\\cz'.", "Invalid escape sequence '\\c' in quoted atom", 2, 8),
+    ("X = 'ab\ncd'.", "Unterminated quoted atom", 1, 5),
+])
+def test_tokenize_error_names_the_fault_at_its_position(src, msg, line, col):
+    with pytest.raises(TokenizeError) as ei:
+        tokenize(src)
+    assert msg in str(ei.value)
+    assert (ei.value.line, ei.value.col) == (line, col)
+
+
+def test_engine_error_names_the_bad_escape(loads):
+    with pytest.raises(SyntaxError, match=r"invalid escape sequence '\\z' in quoted atom at 1:16"):
+        loads.load("_numesc_diag", "r(R) :- X = 'ab\\zcd', R = X.\n")

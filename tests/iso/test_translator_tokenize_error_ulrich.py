@@ -68,22 +68,11 @@ def test_row_is_a_syntax_error(tmp_path, monkeypatch, fe, i):
 @pytest.mark.parametrize("i", range(len(ROWS)), ids=[r[0] for r in ROWS])
 def test_translator_error_names_the_lexical_fault(tmp_path, monkeypatch, i):
     # The tokenizer's message and position survive the conversion, chained.
-    #
-    # 2026-10-15 (Ulrich conformity pass, Bug 1b): every row here is
-    # written to a file via `_write`, which always ends in a trailing
-    # `\n`. A raw, unescaped newline is no longer legal content inside a
-    # quoted atom (ISO 6.4.2.1), so the still-open quoted atom from each
-    # row's lexical fault now gets stuck AT that trailing newline instead
-    # of running on to a clean end-of-input -- the message is "Unexpected
-    # character" at the opening quote's position rather than "Unterminated
-    # quoted atom" at EOF. Still unambiguously the same syntax error over
-    # the same quoted-atom construct; accept either wording.
     monkeypatch.setenv(ih.PL_FRONTEND_ENV, "translator")
     name, path = _write(tmp_path, "msg", ROWS[i][1])
     with pytest.raises(SyntaxError) as ei:
         ih._load_module(name, path)
-    msg = str(ei.value)
-    assert "Unterminated quoted atom" in msg or "Unexpected character" in msg
+    assert "Unterminated quoted atom" in str(ei.value)
     cause = ei.value.__cause__
     assert cause is not None and isinstance(cause.__cause__, TokenizeError)
     line = 2 if i == 2 else 1
