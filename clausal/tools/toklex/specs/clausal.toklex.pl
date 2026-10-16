@@ -93,14 +93,12 @@ def(escape,   bslash then ( octdig then octdig* then bslash?
                           | 'x' then hexdig then hexdig* then bslash?
                           | (any - reserved - nl) )).
 def(udigits,  digit then (digit | '_')*).
-% Bug 2 (2026-10-15, Ulrich conformity pass, kept in sync with
-% iso.toklex.pl): ISO's <float number> exponent letter is a lowercase-only
-% terminal; the uppercase 'E' alternative was accidental duplication of
-% iso.toklex.pl's own now-fixed leniency, not a deliberate Clausal-surface
-% choice (unlike the escape-grammar leniency left alone below, which IS a
-% deliberate difference -- see this file's header). See iso.toklex.pl's
-% `exp`/hex_int/oct_int/bin_int comments for the full rationale.
-def(exp,      'e' then sign? then digit then digit*).
+% Kept in sync with iso.toklex.pl's `exp`: ISO 6.4.5's exponent char is
+% "e" | "E", so 'E' stays (2026-10-16; the 10-15 pass had wrongly removed
+% it). The number grammar is not a deliberate Clausal-surface difference
+% (unlike the escape-grammar leniency left alone below -- see this file's
+% header). See iso.toklex.pl's `exp`/hex_int/oct_int/bin_int comments.
+def(exp,      ('e' | 'E') then sign? then digit then digit*).
 
 % ── quoted_atom / string escape grammar (Task 10 round 4 surgery) ───────
 %

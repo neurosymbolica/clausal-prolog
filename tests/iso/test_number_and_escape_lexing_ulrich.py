@@ -19,11 +19,11 @@ quotes, is a syntax error. Clausal previously:
       ``'\\141'`` (no closing ``\\``) was read as octal 141 = ``'a'``
       instead of raising.
 
-Bug 2 -- ISO's ``<integer>``/``<float number>`` token grammar names the
-hex/octal/binary radix letters (``x``/``o``/``b``) and the float exponent
-letter (``e``) as LOWERCASE-ONLY terminals. ``0X1``/``0O17``/``0B101``/
-``1E9`` are not number tokens at all; Clausal accepted the uppercase forms
-too.
+Bug 2 -- ISO's ``<integer>`` token grammar names the hex/octal/binary
+radix letters (``x``/``o``/``b``) as LOWERCASE-ONLY terminals. ``0X1``/
+``0O17``/``0B101`` are not number tokens at all; Clausal accepted the
+uppercase forms too. The float exponent char is ``e`` OR ``E`` (ISO 6.4.5),
+so ``1.5E9`` is a float; ``1E9`` fails only for its missing fraction (Bug 3).
 
 Bug 3 -- ISO's ``<float number>`` is
 ``<integer part> . <fraction part> [<exponent part>]``: the ``.`` and
@@ -139,16 +139,26 @@ def test_hex_escape_with_closing_backslash_still_decodes():
     assert _kv("'\\x61\\'.", n=1) == [(TokenType.ATOM, "a")]  # 0x61 == ord('a')
 
 
-# ── Bug 2: lowercase-only radix/exponent letters ─────────────────────────
+# ── Bug 2: lowercase-only radix letters ──────────────────────────────────
 
 UPPERCASE_RADIX_FALLBACKS = [
     # (src, expected (type, value) pairs for the fallback reading)
     ("0X1.", [(TokenType.INTEGER, 0), (TokenType.VAR, "X1")]),
     ("0O17.", [(TokenType.INTEGER, 0), (TokenType.VAR, "O17")]),
     ("0B101.", [(TokenType.INTEGER, 0), (TokenType.VAR, "B101")]),
+    # No fraction, so no float (Bug 3); the capital remainder is a VARIABLE.
     ("1E9.", [(TokenType.INTEGER, 1), (TokenType.VAR, "E9")]),
-    ("1.5E9.", [(TokenType.FLOAT, 1.5), (TokenType.VAR, "E9")]),
 ]
+
+
+@pytest.mark.parametrize("src,value", [
+    ("1.5E9.", 1.5e9),
+    ("1.0E-3.", 1.0e-3),
+    ("1.0E+2.", 100.0),
+])
+def test_uppercase_exponent_char_with_fraction_is_a_float(src, value):
+    # ISO 6.4.5: exponent char = "e" | "E" (Scryer and Trealla agree).
+    assert _kv(src, n=1) == [(TokenType.FLOAT, value)]
 
 
 @pytest.mark.parametrize("src,want", UPPERCASE_RADIX_FALLBACKS)

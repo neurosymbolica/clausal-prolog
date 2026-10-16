@@ -6,7 +6,7 @@
 % 2026-10-15 (Ulrich conformity pass, clausal-bug-fix lane): the escape and
 % number grammars below were TIGHTENED to match ISO 6.4.2.1's closed
 % escape-sequence set and the ISO <integer>/<float number> token grammar's
-% lowercase-only radix/exponent letters and mandatory fraction part. This
+% lowercase-only radix letters and mandatory fraction part. This
 % file previously advertised "lenient unknown escapes, 1e5 floats" here as
 % deliberate dialect choices; per-clause review against the standard's
 % grammar text (not just Ciao's iso_tests_parsing_lexing corpus) found
@@ -79,12 +79,16 @@ def(escape,   bslash then ( octdig then octdig* then bslash?
                           | 'x' then hexdig then hexdig* then bslash?
                           | (any - nl) )).
 def(udigits,  digit then (digit | '_')*).
-% ISO's <float number> exponent letter and the radix letters in
-% <integer>'s 0x/0o/0b forms (see hex_int/oct_int/bin_int below) are
-% lowercase-only terminals in the token grammar -- 'E'/'X'/'O'/'B' are not
-% part of any number token at all. Previously accepted here as a lenient
-% extension; removed 2026-10-15 (Ulrich conformity pass).
-def(exp,      'e' then sign? then digit then digit*).
+% The radix letters in <integer>'s 0x/0o/0b forms (see hex_int/oct_int/
+% bin_int below) are lowercase-only terminals in the token grammar --
+% 'X'/'O'/'B' are not part of any number token at all (removed 2026-10-15,
+% Ulrich conformity pass). The <float number> exponent char is NOT: ISO
+% 6.4.5's `exponent char` is "e" | "E" (Scryer's lexer spells the same
+% production `exponent_char!`: 'e' || 'E'), so `1.0E9` is a float. What
+% ISO forbids is an exponent without the mandatory fraction (`1E9`, `1e9`,
+% Ulrich #47) -- see Bug 3 at float_num below. (2026-10-16: the 10-15 pass
+% had wrongly made 'E' lowercase-only too; restored.)
+def(exp,      ('e' | 'E') then sign? then digit then digit*).
 
 % ── quoted_atom / string escape grammar ──────────────────────────────────
 %
@@ -160,10 +164,11 @@ token(char_code, '0' then quote then (quote then quote | escape | (any - bslash 
 % case; see tests/toklex/test_parity.py's EXPECTED_DIVERGENCES.
 %
 % Bug 2 (2026-10-15, Ulrich conformity pass): the radix letters in ISO's
-% <integer> token grammar (`x`/`o`/`b`) and the exponent letter in
-% <float number> (`e`, in `exp` above) are lowercase-only terminals --
-% `0X1`/`0O17`/`0B101`/`1E9` are not number tokens at all under ISO, so
-% the uppercase alternatives (previously `('x'|'X')` etc.) are removed.
+% <integer> token grammar (`x`/`o`/`b`) are lowercase-only terminals --
+% `0X1`/`0O17`/`0B101` are not number tokens at all under ISO, so the
+% uppercase alternatives (previously `('x'|'X')` etc.) are removed. (The
+% exponent char keeps 'E' -- see `exp` above; `1E9` fails for lack of a
+% fraction, Bug 3, not for its capital.)
 % Maximal munch then falls back exactly the way it already does for
 % `0x.`/`1.5e.` (see EXPECTED_DIVERGENCES above): with no hex_int match,
 % `0X1` lexes as `integer` `0` followed by `X1` as a fresh token -- here a
