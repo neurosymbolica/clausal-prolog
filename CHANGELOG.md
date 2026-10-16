@@ -171,8 +171,8 @@ surface described in [docs/public-api.md](docs/public-api.md).
   depends on a table that is still being computed (a recursive or mutually
   recursive call inside an SCC, which SLG still answers from the
   incomplete table, or an answer carrying a constraint, which a table
-  cannot store and is still handed over as it is derived). Answers then
-  come back in table order.
+  cannot store and is still handed over as it is derived: provisional,
+  below). Answers then come back in table order.
   Why: a table used to hand back answers while it was still being filled,
   so a second call of the same table in the caller's continuation joined
   against a partial table -- a silent wrong answer:
@@ -187,10 +187,32 @@ surface described in [docs/public-api.md](docs/public-api.md).
   what the cut would lose, and what to do instead (`findall/3` first, or
   move the commit out of the recursion). The load-time refusal of a cut
   whose scope holds a tabled call (D61 Q1) is unchanged. Visible effects:
-  a caller abandoning a tabled call after its first answer leaves the table
-  complete (it used to be dropped); a first answer costs the whole table,
-  so a table that never completes (an infinite one) no longer hands back a
-  first answer before running forever.
+  - **Answer order changes: a tabled call answers in table order**, the
+    order its answers were first derived in. With `move(a,b). move(b,a).
+    move(b,c). move(c,d).` and the tabled `win(X) :- move(X, Y), \+ win(Y).`,
+    `win(X)` answered `c, a, b` (the definite answer streamed, the undefined
+    ones after resolution) and now answers `a, b, c`. Tabled Scryer answers
+    in the standard order of terms (its table is a trie on
+    `library(assoc)`), so a commit over `path(a, Y)` with `e(a, b).
+    e(b, a).` takes `a` there and `b` here.
+  - A caller abandoning a tabled call after its first answer leaves the
+    table complete (it used to be dropped), and an exception in the
+    caller's continuation no longer truncates it.
+  - A leader whose pass read only complete tables, and no conditional
+    answer, runs no confirming second pass; a body that reads its own
+    `assertz` from the same pass therefore gives the untabled program's
+    answers, with the side effect run once.
+  - **Provisional, pending ruling 2026-10-16** (docs/tabling.md):
+    (Q1) an answer carrying a constraint is still handed over as it is
+    derived, before its table completes -- a recorded limitation: with
+    `c(X) :- dif(X, a). c(1). c(2).` tabled, `findall(X-Y, (c(X), c(Y)),
+    L)` gives 7 pairs, not 9 (todo/audit-2026-07-05/investigate-A12-
+    tabling-answer-constraints.md); (Q2) an error raised during a table's
+    evaluation reaches the caller with no answers before it (XSB and SWI do
+    the same; tabled Scryer swallows it); (Q3) a table that never completes
+    never answers -- `once/1` over an unbounded tabled generator hangs, its
+    table growing (todo/tabled-streaming-mode-per-predicate-2026-10-16.md).
+  - A first answer costs the whole table.
 
 - **`clausal.logic.variables.pending_or_once` yields `range(1)` when nothing
   is queued.** It was the shared tuple `(None,)`. Its one item is now `0`,

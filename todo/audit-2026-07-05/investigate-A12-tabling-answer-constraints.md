@@ -19,7 +19,12 @@
 
 The stored answer is the normalized skeleton (`tabling.py` `add_answer` /
 `_normalize_for_key` path); attributes never make it into the table, and
-replay builds plain fresh vars.
+replay does NOT build fresh vars (corrected 2026-10-16, D68 review F2): the
+frozen row keeps the answer's own unbound Var objects (`freeze_args` is a
+deref-walk), whose attributes were trailed and undone when the derivation
+backtracked, so replay unifies the caller with the SAME, now attribute-free,
+variables -- every replay of the row shares them (todo/tabled-answer-rows-
+share-their-unbound-variables-2026-10-16.md).
 
 Note the converse direction is CORRECT and regression-pinned: a
 *caller*-constrained var filters replayed answers through its hooks
@@ -36,8 +41,14 @@ variable over live, when derived, before its table completes
 (`tabling._has_attributed_var`), under a cut-check record (a cut over it
 raises, naming the constraint as the reason).  Such answers keep the pre-D68
 weaknesses: a second call of the same table in the caller's continuation
-sees a partial table.  Resolving this todo (storing the residue) removes the
-stopgap.
+sees a partial table (the review's F1: with `c(X) :- dif(X, a). c(1).
+c(2).` tabled, `findall(X-Y, (c(X), c(Y)), L)` gives 7 pairs, not 9, and a
+tabled `tp(N)` over the same findall tables [7, 9], not [9]; pinned xfail in
+tests/iso_l3/test_l3_tabled_complete_first.py::
+test_constrained_answers_pair_with_every_answer and
+::test_constrained_answers_pair_inside_a_table_once).  Shipped as a
+RECORDED LIMITATION (provisional, pending ruling 2026-10-16, Q1).
+Resolving this todo (storing the residue) removes the stopgap.
 
 ## Investigation
 

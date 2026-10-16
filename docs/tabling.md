@@ -92,7 +92,15 @@ def main():
 
 From a plain `.py` file (which cannot use `--`), use `solve(goal, module=m)` or `call` — see [Python integration](python_integration.md).
 
-**A tabled call completes its table before its first answer** (operator ruling D68, 2026-10-16; XSB's local scheduling), then hands back the answers in table order, the order they were first derived in. So a second call of the same table in the first call's continuation (`findall(X-Y, (t(X), t(Y)), L)`) sees every answer, and taking only the first answer leaves the table complete. The exceptions: a recursive or mutually recursive call inside the evaluation of a table it depends on, which SLG hands the answers found so far while the table is still being computed; and an answer that carries a constraint (`dif/2`, CLP, `freeze/2` on a variable it leaves unbound), which is handed over when it is derived, because the table cannot store the constraint (audit finding A12-F001). A table that never completes (infinitely many answers) gives no first answer either.
+**A tabled call completes its table before its first answer** (operator ruling D68, 2026-10-16; XSB's local scheduling), then hands back the answers in table order, the order they were first derived in. So a second call of the same table in the first call's continuation (`findall(X-Y, (t(X), t(Y)), L)`) sees every answer, and taking only the first answer leaves the table complete. The exceptions: a recursive or mutually recursive call inside the evaluation of a table it depends on, which SLG hands the answers found so far while the table is still being computed; and an answer that carries a constraint (below).
+
+**Answer order is table order**: the order answers were first derived in, not clause order across re-derivations, and not the standard order of terms. With `move(a,b). move(b,a). move(b,c). move(c,d).` and the tabled `win(X) :- move(X, Y), \+ win(Y).`, `call`/`solve` of `win(X)` used to answer `c, a, b` (the definite answer streamed first, the undefined ones after resolution) and now answers `a, b, c` (`query_wfs` still lists its definite answers first). Tabled Scryer returns a table's answers in the standard order of terms (its table is a trie built on `library(assoc)`), so the first answer of `path(a, Y)` over `e(a, b). e(b, a).` is `a` there and `b` here.
+
+The following are **provisional, pending ruling 2026-10-16**:
+
+- **Constrained answers (Q1) — a recorded limitation.** An answer that carries a constraint (`dif/2`, CLP, `freeze/2` on a variable it leaves unbound) is handed over when it is derived, before its table completes, because the table cannot store the constraint (audit finding A12-F001, `todo/audit-2026-07-05/investigate-A12-tabling-answer-constraints.md`). Such answers keep the old weakness: with `c(X) :- dif(X, a). c(1). c(2).` tabled, `findall(X-Y, (c(X), c(Y)), L)` gives 7 pairs instead of 9. A cut over such a call raises `permission_error(cut, incomplete_table, c/1)`.
+- **An error during evaluation arrives with no answers before it (Q2).** The table is computed before any answer is returned, so an exception raised anywhere in its evaluation reaches the caller first: `fib(N, F)` with `N` unbound, whose third clause raises `instantiation_error` in `is/2`, used to return `fib(0, 0)` and `fib(1, 1)` first and now raises at once. XSB and SWI behave the same; tabled Scryer swallows the error.
+- **A table that never completes never answers (Q3).** A tabled predicate with infinitely many answers (`nat(0). nat(N) :- nat(M), N is M + 1.`) never gives a first answer: the call runs, and its table grows, until memory runs out. `once(nat(X))` hangs. Bound the generator (`M < 1000`), or do not table it; an opt-in per-predicate streaming mode is `todo/tabled-streaming-mode-per-predicate-2026-10-16.md`.
 
 ### Invalidation
 
@@ -374,7 +382,7 @@ Non-tabled predicates fall through to the existing inline NAF codegen (no behavi
 
 - **Variant-only tabling.** Two calls are the same subgoal only if their arguments are structurally identical (modulo unbound variables). Subsumption-based tabling (where `p(1, X)` subsumes `p(1, 2)`) is not implemented.
 - **No answer subsumption.** All answers are kept. There is no mechanism for lattice-based answer combination (e.g., keeping only the maximum).
-- **First-answer cost.** A tabled call computes its whole table before its first answer, so `once/1` over a large table pays for all of it, and a call whose table is infinite never answers.
+- **First-answer cost.** A tabled call computes its whole table before its first answer, so `once/1` over a large table pays for all of it, and a call whose table is infinite never answers (provisional, pending ruling 2026-10-16, Q3: above).
 - **Side effects during incomplete evaluation.** Python code called from within a tabled predicate may observe intermediate state when the table is still evaluating. This is documented, not prevented.
 
 ---
