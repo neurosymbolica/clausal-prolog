@@ -711,8 +711,9 @@ The following names are injected into every predicate module's namespace by the 
     `.pl` import is **experimental** and outside the 1.0 compatibility promise
     (see [Public API](public-api.md)). It reads `.pl` with the native ISO
     front end by default (`CLAUSAL_PL_FRONTEND=translator` selects the older
-    translator into the seam syntax). Clausal is cut-free: cut and
-    if-then-else are refused, and it is not an ISO Prolog consult.
+    translator into the seam syntax). It aims at ISO Prolog's rules, but cut
+    and if-then-else are not supported yet (support is in progress), so a
+    file that uses them is refused.
 
 Clausal Prolog can import Prolog `.pl` files without a manual translation step. Placing a `.pl` file on `sys.path` makes it importable:
 
