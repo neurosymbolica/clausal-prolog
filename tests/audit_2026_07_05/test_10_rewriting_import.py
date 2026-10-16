@@ -61,20 +61,44 @@ def _values(goal, var, *, module=None):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-def test_F001_pl_cut_rejected_at_import(tmp_path):
+def test_F001_pl_cut_runs_on_native_and_is_rejected_by_the_translator(tmp_path, monkeypatch):
+    """A10-F001 was: cut translated to a dead goal; the fix refused it at
+    import.  Since the cut series (D59) the native front end (the default)
+    RUNS ISO cut; the legacy translator still refuses it, and a ``.clausal``
+    file stays cut-free.  Never a dead goal."""
+    from clausal.logic.variables import deref
     pl = tmp_path / "a10_cut.pl"
-    pl.write_text("f(X) :- X > 0, !.\n")
+    pl.write_text("f(X) :- X > 0, !.\nf(0).\n")
+    monkeypatch.delenv("CLAUSAL_PL_FRONTEND", raising=False)
+    lm = _load_prolog_module("a10_cutmod", str(pl)).__clausal_module__
+    assert len(list(call("f", 5, module=lm))) == 1
+    assert len(list(call("f", 0, module=lm))) == 1
+    monkeypatch.setenv("CLAUSAL_PL_FRONTEND", "translator")
     with pytest.raises(SyntaxError, match="[Cc]ut"):
-        _load_prolog_module("a10_cutmod", str(pl))
+        _load_prolog_module("a10_cutmod_tr", str(pl))
+    cl = tmp_path / "a10_cut_cl.clausal"
+    cl.write_text("f(X) :- X > 0, !.\n")
+    with pytest.raises(SyntaxError, match=r"`!` \(cut\) is refused"):
+        _load_prolog_module("a10_cutmod_cl", str(cl))
+
+
+def test_F001_guard_pl_ite_runs_on_native(tmp_path, monkeypatch):
+    """(C -> T ; E) runs on the native front end since the cut series."""
+    from clausal.logic.variables import deref
+    monkeypatch.setenv("CLAUSAL_PL_FRONTEND", "native")
+    pl = tmp_path / "a10_ite.pl"
+    pl.write_text("g(X, Y) :- ( X > 0 -> Y = pos ; Y = neg ).\n")
+    lm = _load_prolog_module("a10_itemod", str(pl)).__clausal_module__
+    y = Var()
+    assert [deref(y) for _ in call("g", 3, y, module=lm)] == ["pos"]
 
 
 @pytest.mark.parametrize("frontend,message", [
-    ("native", r"`->` \(if-then\) is refused"),
     ("translator", "If-then-else"),
 ])
 def test_F001_guard_pl_ite_rejected(tmp_path, monkeypatch, frontend, message):
-    """(C -> T ; E) is properly rejected with a clear message, by both
-    ``.pl`` front ends."""
+    """(C -> T ; E) is properly rejected with a clear message by the legacy
+    translator (the native front end runs it: above)."""
     monkeypatch.setenv("CLAUSAL_PL_FRONTEND", frontend)
     pl = tmp_path / "a10_ite.pl"
     pl.write_text("g(X) :- ( X > 0 -> Y = pos ; Y = neg ), h(Y).\n")

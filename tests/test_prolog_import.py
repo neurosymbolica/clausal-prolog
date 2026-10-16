@@ -8,7 +8,8 @@ Verifies:
   - Recursive imports (use_module chaining)
   - Library imports (use_module(library(clpfd)))
   - .clausal takes priority over .pl when both exist
-  - Translation errors (cut, if-then-else) surface as SyntaxError
+  - Cut and if-then-else run on the native front end; the translator and a
+    cut over a tabled call refuse them with SyntaxError
   - DCG rules
   - dynamic/assertz after import
 """
@@ -347,24 +348,62 @@ class TestPriority:
 class TestErrors:
     """Translation errors surface as SyntaxError."""
 
-    def test_cut_rejected(self, tmp_path):
-        # nv — A10-F001: cut is rejected at import (cut-free contract), not
-        # emitted as a dead Cut() goal that fails at query time.
+    def test_cut_runs_on_the_native_front_end(self, tmp_path, monkeypatch):
+        # nv — A10-F001 rejected cut at import (the cut-free contract).  The
+        # cut series (D59) runs ISO cut in .pl modules on the native front
+        # end, the default; it is never a dead goal.
+        monkeypatch.delenv("CLAUSAL_PL_FRONTEND", raising=False)
         path = _write_pl(tmp_path, "_pl_test_cut", """\
             first(X, [X|_]) :- !.
             first(X, [_|T]) :- first(X, T).
         """)
-        with pytest.raises(SyntaxError, match="[Cc]ut"):
-            _load_prolog_module("_pl_test_cut", path)
+        lm = _load_prolog_module("_pl_test_cut", path).__clausal_module__
+        x = Var()
+        assert [deref(x) for _ in call("first", x, [1, 2, 3], module=lm)] == [1]
 
-    def test_if_then_else_raises_syntax_error(self, tmp_path):
+    def test_cut_rejected_by_the_translator(self, tmp_path, monkeypatch):
+        # nv — the legacy translator keeps A10-F001's refusal.
+        monkeypatch.setenv("CLAUSAL_PL_FRONTEND", "translator")
+        path = _write_pl(tmp_path, "_pl_test_cut_tr", """\
+            first(X, [X|_]) :- !.
+            first(X, [_|T]) :- first(X, T).
+        """)
+        with pytest.raises(SyntaxError, match="[Cc]ut"):
+            _load_prolog_module("_pl_test_cut_tr", path)
+
+    def test_cut_over_a_tabled_call_is_still_refused(self, tmp_path, monkeypatch):
+        # nv — XSB's rule (D61 Q1): a cut whose scope holds a tabled call.
+        monkeypatch.delenv("CLAUSAL_PL_FRONTEND", raising=False)
+        path = _write_pl(tmp_path, "_pl_test_cut_tab", """\
+            :- table(t/1).
+            t(1). t(2).
+            c(X) :- t(X), !.
+        """)
+        with pytest.raises(SyntaxError, match="tabled"):
+            _load_prolog_module("_pl_test_cut_tab", path)
+
+    def test_if_then_else_runs_on_the_native_front_end(self, tmp_path, monkeypatch):
         # nv
+        monkeypatch.delenv("CLAUSAL_PL_FRONTEND", raising=False)
         path = _write_pl(tmp_path, "_pl_test_ite", """\
             classify(X, Cls) :-
                 (X > 0 -> Cls = positive ; Cls = nonpositive).
         """)
+        lm = _load_prolog_module("_pl_test_ite", path).__clausal_module__
+        c = Var()
+        assert [deref(c) for _ in call("classify", 5, c, module=lm)] == ["positive"]
+        c = Var()
+        assert [deref(c) for _ in call("classify", 0, c, module=lm)] == ["nonpositive"]
+
+    def test_if_then_else_raises_syntax_error_on_the_translator(self, tmp_path, monkeypatch):
+        # nv
+        monkeypatch.setenv("CLAUSAL_PL_FRONTEND", "translator")
+        path = _write_pl(tmp_path, "_pl_test_ite_tr", """\
+            classify(X, Cls) :-
+                (X > 0 -> Cls = positive ; Cls = nonpositive).
+        """)
         with pytest.raises(SyntaxError):
-            _load_prolog_module("_pl_test_ite", path)
+            _load_prolog_module("_pl_test_ite_tr", path)
 
 
 # ── TestDCG ───────────────────────────────────────────────────────────────────

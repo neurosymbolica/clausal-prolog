@@ -26,7 +26,7 @@
     "send_more_money": "pass"
    }
   },
-  "README.md#L270": {
+  "README.md#L273": {
    "collect_error": null,
    "error": null,
    "load": "ok",
@@ -242,14 +242,31 @@
     "the_first_8_queens_placement": "pass"
    }
   },
-  "docs/importing_prolog.md#L159": {
+  "docs/importing_prolog.md#L1022": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L159.pl: doc_importing_prolog_L159.pl:1: syntax error (SyntaxIssue): unterminated item (missing end token) (doc_importing_prolog_L159.pl, line 1)",
+   "error": null,
+   "load": "ok",
+   "preds": {
+    "p/1": [
+     "[\"ab\"]"
+    ],
+    "q/1": [
+     "[red]"
+    ],
+    "r/1": [
+     "['hello world']"
+    ]
+   },
+   "tests": null
+  },
+  "docs/importing_prolog.md#L160": {
+   "collect_error": null,
+   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L160.pl: doc_importing_prolog_L160.pl:1: syntax error (SyntaxIssue): unterminated item (missing end token) (doc_importing_prolog_L160.pl, line 1)",
    "load": "refused",
    "preds": null,
    "tests": null
   },
-  "docs/importing_prolog.md#L184": {
+  "docs/importing_prolog.md#L185": {
    "collect_error": null,
    "error": null,
    "load": "ok",
@@ -264,14 +281,14 @@
    },
    "tests": null
   },
-  "docs/importing_prolog.md#L193": {
+  "docs/importing_prolog.md#L194": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L193.pl: doc_importing_prolog_L193.pl:3: directive: use_module(kit, [...]): no module kit on sys.path (a slash path a/b names the dotted module a.b) (doc_importing_prolog_L193.pl, line 3)",
+   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L194.pl: doc_importing_prolog_L194.pl:3: directive: use_module(kit, [...]): no module kit on sys.path (a slash path a/b names the dotted module a.b) (doc_importing_prolog_L194.pl, line 3)",
    "load": "refused",
    "preds": null,
    "tests": null
   },
-  "docs/importing_prolog.md#L218": {
+  "docs/importing_prolog.md#L219": {
    "collect_error": null,
    "error": null,
    "load": "ok",
@@ -285,14 +302,14 @@
    },
    "tests": null
   },
-  "docs/importing_prolog.md#L336": {
+  "docs/importing_prolog.md#L337": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L336.pl: doc_importing_prolog_L336.pl:5: directive: use_module(helpers, [...]): no module helpers on sys.path (a slash path a/b names the dotted module a.b) (doc_importing_prolog_L336.pl, line 5)",
+   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L337.pl: doc_importing_prolog_L337.pl:5: directive: use_module(helpers, [...]): no module helpers on sys.path (a slash path a/b names the dotted module a.b) (doc_importing_prolog_L337.pl, line 5)",
    "load": "refused",
    "preds": null,
    "tests": null
   },
-  "docs/importing_prolog.md#L35": {
+  "docs/importing_prolog.md#L36": {
    "collect_error": null,
    "error": null,
    "load": "ok",
@@ -313,7 +330,7 @@
    },
    "tests": null
   },
-  "docs/importing_prolog.md#L385": {
+  "docs/importing_prolog.md#L386": {
    "collect_error": null,
    "error": null,
    "load": "ok",
@@ -327,7 +344,7 @@
    },
    "tests": null
   },
-  "docs/importing_prolog.md#L464": {
+  "docs/importing_prolog.md#L465": {
    "collect_error": null,
    "error": null,
    "load": "ok",
@@ -338,21 +355,21 @@
    },
    "tests": null
   },
-  "docs/importing_prolog.md#L485": {
+  "docs/importing_prolog.md#L486": {
    "collect_error": null,
    "error": null,
    "load": "ok",
    "preds": {},
    "tests": null
   },
-  "docs/importing_prolog.md#L717": {
+  "docs/importing_prolog.md#L718": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L717.pl: doc_importing_prolog_L717.pl:1: directive: use_module(small_sizes): no module small_sizes on sys.path (a slash path a/b names the dotted module a.b) (doc_importing_prolog_L717.pl, line 1)",
+   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L718.pl: doc_importing_prolog_L718.pl:1: directive: use_module(small_sizes): no module small_sizes on sys.path (a slash path a/b names the dotted module a.b) (doc_importing_prolog_L718.pl, line 1)",
    "load": "refused",
    "preds": null,
    "tests": null
   },
-  "docs/importing_prolog.md#L766": {
+  "docs/importing_prolog.md#L767": {
    "collect_error": null,
    "error": null,
    "load": "ok",
@@ -377,7 +394,7 @@
    },
    "tests": null
   },
-  "docs/importing_prolog.md#L813": {
+  "docs/importing_prolog.md#L912": {
    "collect_error": null,
    "error": null,
    "load": "ok",
@@ -403,23 +420,6 @@
     ],
     "word/3": [
      "[_1,[_1|_2],_2]"
-    ]
-   },
-   "tests": null
-  },
-  "docs/importing_prolog.md#L918": {
-   "collect_error": null,
-   "error": null,
-   "load": "ok",
-   "preds": {
-    "p/1": [
-     "[\"ab\"]"
-    ],
-    "q/1": [
-     "[red]"
-    ],
-    "r/1": [
-     "['hello world']"
     ]
    },
    "tests": null
@@ -2413,10 +2413,7 @@
      "[[97,98]]"
     ],
     "fib/2": {
-     "after": [
-      "[0,0]",
-      "[1,1]"
-     ],
+     "after": [],
      "error": "LogicException: Uncaught logic exception: error(instantiation_error,(is)/2)"
     },
     "inc/2": {
@@ -2862,7 +2859,7 @@
  "translator_sha": {
   "README.md#L100": "d93da5ed0aa687e8",
   "README.md#L177": "da8a0fccf6cc6834",
-  "README.md#L270": "c07d2fd5682cc0ce",
+  "README.md#L273": "c07d2fd5682cc0ce",
   "clausal/tools/prolog_preludes/clausal_constants_scryer.pl": "c670a58962e4e263",
   "clausal/tools/prolog_preludes/clausal_constants_trealla.pl": "2c6654aacd571b8a",
   "clausal/tools/toklex/specs/clausal.toklex.pl": "04d67a9b0c9775ee",
@@ -2882,19 +2879,19 @@
   "docs/for_prolog_programmers.md#L314": "d0aaa6c6f92eac22",
   "docs/for_prolog_programmers.md#L54": "a17138887a920d25",
   "docs/for_prolog_programmers.md#L86": "d1598395083db33f",
-  "docs/importing_prolog.md#L159": "a61f8adc945955a8",
-  "docs/importing_prolog.md#L184": "80cbfe211879457f",
-  "docs/importing_prolog.md#L193": "8ab7c57d8935077d",
-  "docs/importing_prolog.md#L218": "37c2900e05f83841",
-  "docs/importing_prolog.md#L336": "d0aaa6c6f92eac22",
-  "docs/importing_prolog.md#L35": "27df4d08858020b8",
-  "docs/importing_prolog.md#L385": "0260373fe64daf78",
-  "docs/importing_prolog.md#L464": "a967e2c3b696a5fd",
-  "docs/importing_prolog.md#L485": "57b9d1766ac5ee1c",
-  "docs/importing_prolog.md#L717": "808de0f6e0dc161f",
-  "docs/importing_prolog.md#L766": "44bbc956b49e7cc7",
-  "docs/importing_prolog.md#L813": "195c47e210df5d28",
-  "docs/importing_prolog.md#L918": "c9dd3a3c1fc2df50",
+  "docs/importing_prolog.md#L1022": "c9dd3a3c1fc2df50",
+  "docs/importing_prolog.md#L160": "6364c204ab15be05",
+  "docs/importing_prolog.md#L185": "80cbfe211879457f",
+  "docs/importing_prolog.md#L194": "8ab7c57d8935077d",
+  "docs/importing_prolog.md#L219": "37c2900e05f83841",
+  "docs/importing_prolog.md#L337": "d0aaa6c6f92eac22",
+  "docs/importing_prolog.md#L36": "27df4d08858020b8",
+  "docs/importing_prolog.md#L386": "0260373fe64daf78",
+  "docs/importing_prolog.md#L465": "a967e2c3b696a5fd",
+  "docs/importing_prolog.md#L486": "57b9d1766ac5ee1c",
+  "docs/importing_prolog.md#L718": "808de0f6e0dc161f",
+  "docs/importing_prolog.md#L767": "44bbc956b49e7cc7",
+  "docs/importing_prolog.md#L912": "cf328a2677953c18",
   "docs/index.md#L94": "72604ff11fb53c41",
   "docs/prolog_translation.md#L33": "8848f32154e44b13",
   "docs/python_integration.md#L536": "499dfb388eedb3e8",
