@@ -9,6 +9,20 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Breaking
 
+- **`'[]'` and `[]` are the same atom everywhere** (operator ruling D70,
+  2026-10-16, after Markus Triska confirmed ISO's reading). The reader now
+  reads the quoted atom `'[]'` as the empty list in every path. Before,
+  a loaded clause body already compared them equal, but a goal read on
+  its own (`clausal -g "[] = '[]'"`, a query string) read `'[]'` as a
+  different atom, so `[] = '[]'` failed there.
+
+  Newly refused: a fact or clause head spelled `'[]'` (`'[]'.`). It
+  loaded before and now gives "a clause head is not callable: [] (ISO
+  type_error(callable))", the same refusal unquoted `[].` already had. In
+  ISO `[]` is an atom and so callable (Scryer loads both), so both
+  refusals are a gap, tracked in
+  todo/iso-empty-list-is-not-callable-2026-10-17.md.
+
 - **The reader follows ISO 6.4's escape, quoted-character and number
   rules exactly** (operator ruling D60, 2026-10-16). These used to read
   and are now syntax errors, in `.pl` and `.clausal` files alike (both use

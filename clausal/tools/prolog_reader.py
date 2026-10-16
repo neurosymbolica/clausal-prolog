@@ -162,6 +162,10 @@ class _Transform:
             # is the §1c contract's data heart and must not grow an import
             # edge into the engine — but it is the same term ``mint`` makes,
             # interned spelling included.
+            if node.name == "[]":
+                # ISO 6.3.5 / D70: `'[]'` and `[]` are the same atom, and
+                # the empty list is carried as the Python empty list.
+                return []
             return _sys.intern(node.name)   # STAGE 2: an atom IS the interned str
         if isinstance(node, PNumber):
             return node.value

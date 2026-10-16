@@ -83,3 +83,20 @@ class TestDiagnosedQuotedFaults:
         msgs = [i.message for i in read_module("x(X) :- X = 0'\\z.\n")
                 if isinstance(i, SyntaxIssue)]
         assert msgs == ["invalid escape sequence '\\z' in 0' character code at 1:15"]
+
+
+class TestQuotedEmptyListAtom:
+    """ISO: `'[]'` and `[]` are the same atom (D70; Markus Triska
+    confirmed 2026-10-16), so the reader reads both as the empty list."""
+
+    def test_quoted_and_bare_read_the_same(self):
+        quoted, bare = (read_module(f"t({s}).\n")[0].term for s in ("'[]'", "[]"))
+        assert quoted == bare == ("t", [])
+
+    def test_inside_a_term_and_a_list(self):
+        (item,) = read_module("t(f('[]'), [a, '[]']).\n")
+        assert item.term == ("t", ("f", []), [mint("a"), []])
+
+    def test_other_bracket_atoms_are_unchanged(self):
+        (item,) = read_module("t('{}', '[ ]', '[]x').\n")
+        assert item.term == ("t", "{}", "[ ]", "[]x")
