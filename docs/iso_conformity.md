@@ -90,6 +90,11 @@ page tracks specifics and is being actively revised alongside in-progress
 engine work, so treat it as a snapshot, not a finished inventory. This page
 is about *why* and *against what*; that one is about *where things stand*.
 
+The reader follows ISO's token grammar exactly, including the corners many
+systems relax (bare-exponent floats, unknown escapes, raw tabs in quotes).
+[ISO Lexer Edge Cases](iso_lexer_edge_cases.md) lists each one with its
+rationale and what other systems do.
+
 ## How we measure it
 
 In rough order of authority:
