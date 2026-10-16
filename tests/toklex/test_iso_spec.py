@@ -62,8 +62,13 @@ class TestSuspension:
 
 
 class TestCompilerClaims:
-    def test_backup_bound_is_exactly_two(self):
-        assert load_lexer().max_backup == 2
+    def test_backup_bound_is_exactly_four(self):
+        # The worst case is `0` + `'\xa`: a 0' hex escape needs its closing
+        # backslash (ISO 6.4.2.1), so after `0'\x` and a hex digit the
+        # scanner may be 4 characters past its last accept (`0`) before it
+        # is stuck. (The digit loop itself is a commit region.) It was 2
+        # while the 0' escape's closing backslash was optional.
+        assert load_lexer().max_backup == 4
 
     def test_strict_iso_comments_flag(self):
         strict = IncrementalLexer(load_lexer(), nested_comments=False)

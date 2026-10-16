@@ -330,3 +330,53 @@ def test_engine_char_code_row_is_a_syntax_error(loads, i):
     with pytest.raises(SyntaxError) as ei:
         loads.load(name, text)
     assert not isinstance(ei.value, TokenizeError)
+
+
+# ── Bug 5: a 0' escape uses the quoted-token escape grammar ─────────────
+#
+# After ``0'\`` comes one ISO 6.4.2.1 escape: a symbolic escape from the
+# closed set, or an octal/hex escape WITH its closing backslash. ``\e`` and
+# ``\s`` are not escapes, and ``0'\141`` (no closing ``\``) is not 97 --
+# the same rules ``'\e'`` and ``'\141'`` already follow inside quotes.
+
+@pytest.mark.parametrize("src", [
+    "X = 0'\\141.",    # octal, no closing backslash
+    "X = 0'\\x41.",    # hex, no closing backslash
+    "X = 0'\\e.",      # ESC: not an ISO escape
+    "X = 0'\\s.",      # space: not an ISO escape
+    "X = 0'\\z.",
+])
+def test_bad_escape_after_0_quote_is_a_syntax_error(src):
+    with pytest.raises(TokenizeError):
+        tokenize(src)
+
+
+@pytest.mark.parametrize("src, code", [
+    ("0'\\141\\.", 97),
+    ("0'\\x41\\.", 65),
+    ("0'\\n.", 10),
+    ("0'\\\\.", 92),
+    ("0'\\`.", 96),
+])
+def test_closed_escapes_after_0_quote_still_read(src, code):
+    assert _kv(src, n=1) == [(TokenType.INTEGER, code)]
+
+
+# ── Bug 6: no raw control character anywhere in a quoted token ──────────
+#
+# ISO 6.4.2.1's single quoted character is a graphic, alphanumeric, solo or
+# space char, or an escape; a control character is none of these. Bug 1b
+# excluded only the layout controls (TAB, NL, CR, FF, VT). Every Unicode
+# ``Cc`` character -- C0, DEL and C1 -- is now refused, as Scryer does.
+
+@pytest.mark.parametrize("cp", [0x00, 0x01, 0x1B, 0x1F, 0x7F, 0x85, 0x9F])
+@pytest.mark.parametrize("shape", ["'a{c}b'.", '"a{c}b".', "0'{c}."])
+def test_raw_control_character_is_a_syntax_error(shape, cp):
+    with pytest.raises(TokenizeError):
+        tokenize(shape.format(c=chr(cp)))
+
+
+@pytest.mark.parametrize("ch", ["é", "λ", "—", "­"])
+def test_non_control_unicode_in_quotes_still_reads(ch):
+    assert _kv(f"'a{ch}b'.", n=1) == [(TokenType.ATOM, f"a{ch}b")]
+

@@ -15,6 +15,12 @@ The escape-decoding logic here is a deliberate bit-parity mirror of
 verbatim as backslash+char (lenient -- the tokenizer never raises on
 this path; malformed escapes at the far end of input are a driver-level
 'unterminated'/'no_token' error, not a builder concern).
+
+That leniency is reached only through the lenient ``clausal.toklex.pl``
+dialect. ``iso.toklex.pl``'s grammar (operator ruling D60) admits only the
+closed ISO escape set, with mandatory closing backslashes, inside quotes
+and after ``0'``, so under the ISO reader ``\\e``, ``\\s``, ``0'\\141``
+and unknown escapes are refused by the lexer before a builder runs.
 """
 
 from __future__ import annotations

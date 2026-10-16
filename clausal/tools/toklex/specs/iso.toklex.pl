@@ -3,20 +3,13 @@
 % dialect choices: '_' digit separators, nested block comments (nesting is
 % a driver flag, not a spec change).
 %
-% 2026-10-15 (Ulrich conformity pass, clausal-bug-fix lane): the escape and
-% number grammars below were TIGHTENED to match ISO 6.4.2.1's closed
-% escape-sequence set and the ISO <integer>/<float number> token grammar's
-% lowercase-only radix letters and mandatory fraction part. This
-% file previously advertised "lenient unknown escapes, 1e5 floats" here as
-% deliberate dialect choices; per-clause review against the standard's
-% grammar text (not just Ciao's iso_tests_parsing_lexing corpus) found
-% these were defects, not dialect choices, for the NATIVE ISO reader this
-% spec compiles. `clausal.toklex.pl` (the separate Clausal surface
-% dialect) is NOT touched for the escape grammar -- see its own header for
-% why it isn't trying to be ISO-conformant here -- but IS tightened for the
-% number grammar below, since that half was accidental duplication of this
-% same non-dialect-specific grammar, not a deliberate difference (see that
-% file's "kept in sync with iso.toklex.pl" comments on hex_int/oct_int/bin_int).
+% The escape, quoted-character and number grammars follow ISO 6.4 exactly
+% (tightened 2026-10-15/16, operator ruling D60): the closed escape set with
+% mandatory closing backslashes on octal/hex escapes, no raw control
+% characters in quoted tokens, lowercase-only radix letters, and a mandatory
+% fraction before an exponent. docs/iso_lexer_edge_cases.md lists each case
+% with its rationale. `clausal.toklex.pl` keeps its lenient escape grammar
+% (see its header) but shares this number grammar.
 encoding(chars).
 
 class(layout,    [' ', '\t', '\n', '\r', '\f', '\v']).
@@ -33,104 +26,53 @@ class(dquote,    ['"']).
 class(bslash,    ['\\']).
 class(nl,        ['\n']).
 class(sign,      ['+', '-']).
-% ISO 6.4.2.1's quoted-token content excludes raw layout text other than
-% space -- a literal (unescaped) tab/newline/CR/FF/VT byte inside a quoted
-% atom or string is a syntax error; only `\<newline>` (continuation) or a
-% named escape (`\n`, `\t`, ...) may stand for one. Space itself is a
-% distinct, explicitly-permitted literal, so it is NOT in this set.
-class(ctrl_layout, layout - [' ']).
-% ISO 6.4.2.1 Table 2's CLOSED set of symbolic escape sequences: exactly
-% these ten single-char-after-backslash forms (plus the octal/hex/
-% continuation forms handled separately below). `\e` (ESC) and `\s`
-% (space) are SWI/non-ISO extensions and are deliberately NOT in this set
-% -- `\e`/`\s`/`\c`/anything else after a backslash is not a valid escape
-% at all and must raise a syntax error, not be kept verbatim.
+% ISO 6.4.2.1: a single quoted character is a graphic, alphanumeric, solo or
+% space char, or an escape sequence. A raw control character is none of
+% these, so every Unicode Cc character (C0, DEL, C1 -- which includes TAB,
+% NL, CR, FF and VT) is refused inside a quoted token and after `0'`, as
+% Scryer does. Space is a space char and stays allowed; a newline in the
+% text is written `\n`, or continued with backslash-newline.
+class(ctrl, unicode('Cc')).
+% ISO 6.4.2.1's closed set of symbolic escape sequences: these eleven
+% characters after a backslash (meta escapes \\ \' \" \` and control
+% escapes a b f n r t v), plus the octal and hex escapes below. `\e` (ESC)
+% and `\s` (space) are non-ISO extensions and are not escapes here.
 class(symbolic_escape, ['a','b','f','n','r','t','v','\\','''','"','`']).
 
-% `escape` (unlooped, combined octal/hex/simple form) is kept ONLY for
-% char_code's `0'\...` construct, where the driver's ordinary longest-match
-% (not qitem*/ditem*-style repetition) already resolves greedily without
-% any adjacency ambiguity -- there is nothing after a `0'`-escape's optional
-% closing backslash to be confused with a "next" escape, since char_code is
-% a single escape, not a repeated sequence of them. See the quoted_atom/
-% string grammar surgery below for the repeated case, where this shape DOES
-% create a real ambiguity.
-%
-% `any - nl`: a backslash-newline is the continuation escape, which stands
-% for NO character, so `0'\<newline>` names no code and is not a
-% char_code token. Excluding it lets maximal munch back up to the integer
-% `0`, leaving the quote to open a quoted token in which the continuation
-% is read (Ulrich's conformity row #213, `X is 0'\<newline>+'1.` -> X = 1).
-%
-% NOT narrowed to `symbolic_escape` here (2026-10-15 pass): unlike
-% quoted_atom/string's `esc_other`, this grammar-level leniency is already
-% caught one layer down -- `char_code`'s builder (`builders.char_code`)
-% decodes the escape and raises unless the result is EXACTLY one
-% character, so `0'\q` (and `0'\141` missing its closing backslash
-% decoding to a single char) already raise a positioned TokenizeError
-% today (see tests/toklex/test_parity.py's MALFORMED_INPUTS /
-% test_unknown_escape_in_char_code_raises_positioned_error). Narrowing the
-% grammar here too would be redundant belt-and-suspenders for the same
-% outcome, not a behavior change, so it's left alone to keep this change
-% targeted to the construct that actually has the bug (the repeated
-% qunit*/dunit* case below, where the lenient fallback silently keeps
-% backslash+char as 2 literal chars instead of raising).
-def(escape,   bslash then ( octdig then octdig* then bslash?
-                          | 'x' then hexdig then hexdig* then bslash?
-                          | (any - nl) )).
+% The escape after `0'\`: the same closed grammar as inside quotes (see
+% esc_term below) -- a symbolic escape, or an octal/hex escape with its
+% mandatory closing backslash. Backslash-newline names no character, so
+% `0'\<newline>` is not a char code: maximal munch backs up to `0`, and the
+% quote opens a quoted token in which the continuation is read (Ulrich
+% #213, `X is 0'\<newline>+'1.` -> X = 1). `0'\141` (no closing `\`),
+% `0'\e` and `0'\s` are syntax errors, like `'\141'`, `'\e'` and `'\s'`.
+def(escape,   bslash then ( (octdig then octdig* then bslash)
+                          | ('x' then hexdig then hexdig* then bslash)
+                          | symbolic_escape )).
 def(udigits,  digit then (digit | '_')*).
-% The radix letters in <integer>'s 0x/0o/0b forms (see hex_int/oct_int/
-% bin_int below) are lowercase-only terminals in the token grammar --
-% 'X'/'O'/'B' are not part of any number token at all (removed 2026-10-15,
-% Ulrich conformity pass). The <float number> exponent char is NOT: ISO
-% 6.4.5's `exponent char` is "e" | "E" (Scryer's lexer spells the same
-% production `exponent_char!`: 'e' || 'E'), so `1.0E9` is a float. What
-% ISO forbids is an exponent without the mandatory fraction (`1E9`, `1e9`,
-% Ulrich #47) -- see Bug 3 at float_num below. (2026-10-16: the 10-15 pass
-% had wrongly made 'E' lowercase-only too; restored.)
+% ISO 6.4.5's exponent char is "e" | "E", so `1.0E9` is a float; an exponent
+% needs the fraction before it (see float_num).
 def(exp,      ('e' | 'E') then sign? then digit then digit*).
 
 % ── quoted_atom / string escape grammar ──────────────────────────────────
 %
-% 2026-10-15 (Ulrich conformity pass): ISO 6.4.2.1 requires an octal/hex
-% escape's closing backslash (`\NNN\`, `\xHH\`) -- it is NOT optional, so
-% `'\141'` (no closing backslash before the delimiter) must be a syntax
-% error, not octal 141. This retires the ENTIRE `esc_open_hex`/
-% `esc_open_oct`/`qplain_no_hex`/`qplain_no_oct`/`dplain_no_hex`/
-% `dplain_no_oct` apparatus that earlier rounds (Task 10, rounds 1-4) built
-% to support an optional-closing-backslash reading without ambiguity: with
-% the closing backslash now mandatory, only `esc_term` is needed, and
-% `esc_term` was ALREADY unambiguous on its own (its mandatory trailing
-% backslash pins the digit run's length exactly -- a shorter digit run
-% would leave a non-backslash character where the backslash is required,
-% so it simply fails to match; there is no rival shorter-digit-run parse
-% to disambiguate against, unlike the old optional-close case). See git
-% history (`git log -p` on this file) for the retired rules' full
-% round-1-4 derivation if the shape ever needs resurrecting.
-%
-% `esc_other` is also narrowed here (Bug 1a): previously `bslash then (any
-% - octdig - 'x')`, i.e. ANY character after a backslash that isn't a
-% digit/`x` was accepted as a "lenient unknown escape" and kept verbatim
-% (backslash + char, 2 literal chars) by the builder. ISO 6.4.2.1's escape
-% set is CLOSED -- `\c`, `\e`, `\s`, an incomplete `\u1`, etc. are not
-% escape sequences at all and must be syntax errors. Narrowed to exactly
-% the closed `symbolic_escape` set plus the backslash-newline continuation
-% (`nl`) -- the only two things `\<char>` may still mean here.
+% ISO 6.4.2.1: an octal/hex escape needs its closing backslash (`'\141'` is a
+% syntax error), which also pins the digit run's length, so `esc_term` is
+% unambiguous on its own. `esc_other` is the closed symbolic set plus the
+% backslash-newline continuation; any other `\<char>` (`\c`, `\e`, `\s`,
+% `\u1`) is a syntax error. (The optional-close rules `esc_open_*`/
+% `qplain_no_*` that the old reading needed are retired; see git history.)
 def(esc_term,      bslash then ( (octdig then octdig* then bslash)
                                 | ('x' then hexdig then hexdig* then bslash) )).
 def(esc_other,     bslash then (symbolic_escape | nl)).
 
-% Bug 1b: ISO 6.4.2.1's quoted-token content excludes raw layout bytes
-% other than space (see `ctrl_layout` above) -- a literal, unescaped
-% newline/tab/CR/FF/VT inside a quoted atom or string is now excluded from
-% `qplain`/`dplain` (previously only `quote`/`bslash` were excluded, so a
-% raw newline byte was silently accepted as 1 literal char).
+% No raw control character in quoted content (see `ctrl` above).
 def(qq,     quote then quote).
-def(qplain, (any - quote - bslash - ctrl_layout)).
+def(qplain, (any - quote - bslash - ctrl)).
 def(qunit,  (qq | esc_term | esc_other | qplain)).
 
 def(dqq,    dquote then dquote).
-def(dplain, (any - dquote - bslash - ctrl_layout)).
+def(dplain, (any - dquote - bslash - ctrl)).
 def(dunit,  (dqq | esc_term | esc_other | dplain)).
 
 token(lparen,   '(').
@@ -146,12 +88,11 @@ token(semicolon, ';').
 token(end,      '.' followed_by (layout | '%' | eof)).
 token(variable, (capital | '_') then alnum*).
 token(name_atom, small then alnum*).
-% Bug 4 (2026-10-16): after `0'` comes ONE ISO 6.4.2.1 single quoted
-% character. A lone quote is not one (it must be doubled, `0'''`), nor is a
-% raw layout byte other than space (see `ctrl_layout`). Excluding both lets
-% `0''` back up to the integer `0` and the atom `''` (Ulrich #117/#120/#197),
-% and makes `0'<TAB>` a syntax error (#177).
-token(char_code, '0' then quote then (quote then quote | escape | (any - bslash - quote - ctrl_layout))) value char_code.
+% After `0'` comes one single quoted character (ISO 6.4.4, 6.4.2.1): a lone
+% quote is not one (it is doubled, `0'''`), nor is a raw control character.
+% So `0''` backs up to the integer `0` and the atom `''` (Ulrich #117, #120,
+% #197), and `0'<TAB>` is a syntax error (#177).
+token(char_code, '0' then quote then (quote then quote | escape | (any - bslash - quote - ctrl))) value char_code.
 % hex_int/oct_int/bin_int require at least one REAL digit somewhere in the
 % run (underscores alone don't count) -- `'_'* then hexdig then (hexdig |
 % '_')*` generates exactly the language "any string over {hexdig,'_'} that
@@ -163,32 +104,15 @@ token(char_code, '0' then quote then (quote then quote | escape | (any - bslash 
 % shape (Task 10 divergence set), extended here to the underscore-only
 % case; see tests/toklex/test_parity.py's EXPECTED_DIVERGENCES.
 %
-% Bug 2 (2026-10-15, Ulrich conformity pass): the radix letters in ISO's
-% <integer> token grammar (`x`/`o`/`b`) are lowercase-only terminals --
-% `0X1`/`0O17`/`0B101` are not number tokens at all under ISO, so the
-% uppercase alternatives (previously `('x'|'X')` etc.) are removed. (The
-% exponent char keeps 'E' -- see `exp` above; `1E9` fails for lack of a
-% fraction, Bug 3, not for its capital.)
-% Maximal munch then falls back exactly the way it already does for
-% `0x.`/`1.5e.` (see EXPECTED_DIVERGENCES above): with no hex_int match,
-% `0X1` lexes as `integer` `0` followed by `X1` as a fresh token -- here a
-% VARIABLE (capital-initial), not an atom, since `variable` (capital then
-% alnum*) is the rule that actually claims a capital-led run in this
-% grammar; same for `1E9` -> `integer` `1` then VARIABLE `E9`.
+% ISO 6.4.4: the radix letters are lowercase only. `0X1` is not a number
+% token, so maximal munch backs up to `0` and a VARIABLE `X1`, the same
+% fallback shape as `0x.` and `1.5e.` (see EXPECTED_DIVERGENCES above).
 token(hex_int,  '0' then 'x' then '_'* then hexdig then (hexdig | '_')*) value int_16.
 token(oct_int,  '0' then 'o' then '_'* then octdig then (octdig | '_')*) value int_8.
 token(bin_int,  '0' then 'b' then '_'* then bindig then (bindig | '_')*) value int_2.
-% Bug 3 (2026-10-15, Ulrich conformity pass): ISO's <float number> is
-% <integer part> . <fraction part> [<exponent part>] -- the decimal point
-% and fraction are MANDATORY; an exponent can never appear without them.
-% The old second alternative (`udigits then exp`, no '.') let `1e9` lex as
-% the float 1000000000.0 with no fractional part at all. Removed outright:
-% `1.5e9` (has the mandatory `.5`) still matches the first alternative
-% unchanged, but `1e9` (no '.') now fails `float_num` entirely, and
-% maximal munch falls back to `integer` `1` followed by a fresh token for
-% `e9` -- `e` is lowercase/small-initial, so that's a NAME_ATOM `e9`
-% (matching `name_atom`'s `small then alnum*`), available to be parsed as
-% e.g. a postfix operator atom rather than silently fused into the number.
+% ISO 6.4.5: a float is <integer> . <fraction> [<exponent>]; the fraction is
+% mandatory. `1e9` is the integer `1` and the atom `e9` (Ulrich #49/#50 rely
+% on `e9` as a postfix operator); `1E9` is `1` and the variable `E9` (#47).
 token(float_num, (udigits then '.' then udigits then exp?)) value float_of.
 token(integer,  udigits) value int_10.
 token(quoted_atom, quote then qunit* then quote) value quoted_atom_val.

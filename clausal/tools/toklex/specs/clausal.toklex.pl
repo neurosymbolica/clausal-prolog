@@ -2,8 +2,13 @@
 % clausal.toklex.pl — Clausal surface dialect, built from iso.toklex.pl
 % (Task 11, design §9, rulings of 2026-09-04).
 %
-% Deltas applied to the ISO base (see iso.toklex.pl for everything else,
-% copied verbatim below):
+% Deltas applied to the ISO base. This file was a verbatim copy of
+% iso.toklex.pl as of 2026-09-04 plus the deltas below; it is no longer
+% verbatim: iso.toklex.pl's 2026-10-15/16 escape and quoted-character
+% tightening (operator ruling D60) was NOT applied here, so this dialect
+% keeps the lenient escape grammar (the esc_open_*/qplain_no_*/dplain_no_*
+% rules and `| any` alternatives listed below). The number grammar is kept
+% in sync with iso.toklex.pl.
 %
 %   1. class(reserved, ['\x1f\']) — US (0x1F), ruled as ⟨SEP⟩ by
 %      R1-revised (user-ratified 2026-09-05,
