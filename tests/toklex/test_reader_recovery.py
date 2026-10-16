@@ -30,3 +30,56 @@ class TestRecovery:
         items = read_module("foo(a).\n)(x.\n")
         s, e = items[1].span
         assert isinstance(s, int) and isinstance(e, int) and 0 <= s < e
+
+
+class TestDiagnosedQuotedFaults:
+    """A refused quoted token is diagnosed with the fault's own line:col
+    (D60 fix round 2)."""
+
+    def test_each_error_names_its_own_line(self):
+        src = "".join(f"p({i}, 'ab\\zcd').\n" if i % 3 == 0 else f"q({i}).\n"
+                      for i in range(30))
+        msgs = [i.message for i in read_module(src) if isinstance(i, SyntaxIssue)]
+        assert msgs == [f"invalid escape sequence '\\z' in quoted atom at "
+                        f"{n + 1}:{len(f'p({n}, ab') + 2}" for n in range(0, 30, 3)]
+
+    def test_the_reader_takes_lines_from_the_lexer_not_a_scan(self, monkeypatch):
+        # The line of each diagnosed fault comes from the lexer's line
+        # starts (a bisect). Counting newlines from the start of the text
+        # made a file with many faults quadratic to read.
+        import clausal.tools.prolog_reader as pr
+        seen = []
+        real = pr._lex_error_message
+
+        def spy(t, text=None, pos=None):
+            seen.append(pos)
+            return real(t, text, pos)
+
+        monkeypatch.setattr(pr, "_lex_error_message", spy)
+        read_module("a.\np('\\z').\n")
+        assert seen and all(callable(p) for p in seen)
+
+    def test_a_given_pos_is_what_the_message_reports(self):
+        from clausal.tools.prolog_reader import PrologReader, _lex_error_message
+        r = PrologReader()
+        r.feed("p('\\z').\n")
+        r.close()
+        t = next(t for t in iter(r._lexer.next_token, None)
+                 if getattr(t, "kind", None) == "error")
+        msg = _lex_error_message(t, r._lexer._text, lambda off: (off, 41, 7))
+        assert msg.endswith(" at 41:7")
+
+    def test_last_item_without_a_newline_keeps_its_diagnosis(self):
+        msgs = [i.message for i in read_module("y('ab\\zcd').")
+                if isinstance(i, SyntaxIssue)]
+        assert msgs == ["invalid escape sequence '\\z' in quoted atom at 1:6"]
+
+    def test_a_float_before_a_quote_is_not_a_char_code(self):
+        msgs = [i.message for i in read_module("x(X) :- X = 1.0'\\z'.\n")
+                if isinstance(i, SyntaxIssue)]
+        assert msgs == ["invalid escape sequence '\\z' in quoted atom at 1:17"]
+
+    def test_a_real_0_quote_is_still_labelled_a_char_code(self):
+        msgs = [i.message for i in read_module("x(X) :- X = 0'\\z.\n")
+                if isinstance(i, SyntaxIssue)]
+        assert msgs == ["invalid escape sequence '\\z' in 0' character code at 1:15"]

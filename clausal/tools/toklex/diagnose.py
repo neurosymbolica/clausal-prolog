@@ -44,7 +44,7 @@ def quoted_fault(text: str, off: int) -> tuple[str, int] | None:
         return None
     msg, at = fault
     if (at == off + 1 and q == "'" and off >= 1 and text[off - 1] == "0"
-            and (off < 2 or not (text[off - 2].isalnum() or text[off - 2] == "_"))):
+            and (off < 2 or not (text[off - 2].isalnum() or text[off - 2] in "_."))):
         # `0'` + a bad first character: the lexer backed up to the integer
         # `0` and the quote opened an atom, but the writer meant a char
         # code. (A fault further in is in a real quoted atom: `0'\<newline>`

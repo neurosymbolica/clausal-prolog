@@ -101,6 +101,12 @@ of swallowing the rest of the file. A newline that belongs in the text is
 written `\n`, and a quoted atom can continue onto the next line with
 backslash-newline.
 
+Clausal still reads some characters that Scryer refuses. These are the
+non-ASCII space and separator characters, such as U+00A0 (no-break space),
+U+2003 (em space) and U+2028 (line separator), and the lone-surrogate
+escape `'\xD800\'`. ISO leaves characters outside its own character set to
+the implementation, so we have not tightened them.
+
 ## Character codes (`0'`)
 
 | Case | ISO | Clausal before | Scryer | Trealla | Ulrich row |

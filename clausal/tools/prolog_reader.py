@@ -277,14 +277,17 @@ def _joined_span(a, b):
     return (a_span[0], b_span[1])
 
 
-def _lex_error_message(t, text: str | None = None) -> str:
+def _lex_error_message(t, text: str | None = None, pos=None) -> str:
     """A human-readable message for an L0 ``error`` Tok, mirroring
     ``prolog_tokenizer.tokenize()``'s ``TokenizeError`` text (same
     reasons, message-only rather than raised).
 
     With the lexer's *text*, a refused quoted token is diagnosed
     (``toklex.diagnose.quoted_fault``): the message names the offending
-    escape or character and its line:col."""
+    escape or character and its line:col. *pos* maps an offset to
+    ``(offset, line, col)`` (the lexer's ``_pos_tuple``, a bisect over its
+    line starts); without it the line is counted, which is linear in the
+    text, so a reader diagnosing many errors must pass it."""
     reason, culprit = t.value
     if text is not None:
         off = None
@@ -299,8 +302,11 @@ def _lex_error_message(t, text: str | None = None) -> str:
             fault = quoted_fault(text, off)
             if fault is not None:
                 msg, at = fault
-                line = text.count("\n", 0, at) + 1
-                col = at - (text.rfind("\n", 0, at) + 1) + 1
+                if pos is not None:
+                    _, line, col = pos(at)
+                else:
+                    line = text.count("\n", 0, at) + 1
+                    col = at - (text.rfind("\n", 0, at) + 1) + 1
                 return f"{msg} at {line}:{col}"
     if reason == "unterminated":
         if t.lexeme.startswith("/*"):
@@ -472,7 +478,8 @@ class PrologReader:
     def _handle_error_tok(self, t):
         """Handle one L0 ``error`` Tok. Returns a ``SyntaxIssue`` to
         return from ``read_term()`` now, or ``None`` to keep looping."""
-        message = _lex_error_message(t, getattr(self._lexer, "_text", None))
+        message = _lex_error_message(t, getattr(self._lexer, "_text", None),
+                                     getattr(self._lexer, "_pos_tuple", None))
         reason, _culprit = t.value
         if reason == "unterminated":
             # Terminal: the driver has consumed all remaining input and
@@ -480,7 +487,10 @@ class PrologReader:
             # etc.). Record it and let the EOF branch above close the
             # item out (resumable=False) on the next next_token() call.
             self._touch_item(t)
-            self._item_error = message
+            # Keep an earlier diagnosis of this item: an unclosed quote at
+            # the end of the text follows the fault that left it unclosed.
+            if self._item_error is None:
+                self._item_error = message
             return None
         # no_token / bad_token / invalid_encoding: a single skippable bad
         # token; lexing continues normally afterward.
