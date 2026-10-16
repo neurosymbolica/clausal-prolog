@@ -1168,7 +1168,7 @@ Python's import machinery displays clearly. The native front end (the
 default) names the file and line:
 
 ```
-SyntaxError: Cannot import foo.pl: foo.pl:3: `!` (cut) is refused ...
+SyntaxError: Cannot import foo.pl: foo.pl:3: `*->` (soft-cut) is refused ...
 ```
 
 The table below lists the translator's (`CLAUSAL_PL_FRONTEND=translator`)

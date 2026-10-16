@@ -22,7 +22,7 @@ ISO/IEC 13211-1:
 |---|---|---|
 | **What it is** | Clausal Prolog proper: a deliberately **restricted subset** of ISO Prolog | A **compatibility mode** for existing ISO Prolog code |
 | **What it is for** | Encoding ontologies, rules and policy, where we want firm guarantees about what can be expressed: every predicate stays monotonic and explainable | Running Prolog programs written for other ISO systems |
-| **Cut, if-then-else, committed choice** | Not part of the dialect, by design (see [Purity and Monotonicity](purity.md)) | Part of ISO, so part of this mode. Support is in progress; today the loader still refuses them |
+| **Cut, if-then-else, committed choice** | Not part of the dialect, by design (see [Purity and Monotonicity](purity.md)) | Part of ISO, so part of this mode: the native front end runs them (ISO 7.8); `*->` and a cut over a tabled call are refused |
 | **Status** | Supported | Experimental ([Public API](public-api.md)) |
 
 The restriction in `.clausal` does not take it outside the standard. A
@@ -270,7 +270,7 @@ with Markus Triska. Their outcome:
 
 | Question | Decision then | Where it stands |
 |---|---|---|
-| Cut and if-then-else | Out of scope; reject on import | Split: never in `.clausal`, by design; part of the `.pl` compatibility mode (in progress) |
+| Cut and if-then-else | Out of scope; reject on import | Split: never in `.clausal`, by design; part of the `.pl` compatibility mode (done on the native front end) |
 | Strings | Lists of characters | Done: `"…"` is a list of characters by default |
 | Atoms | A distinct type | Done |
 | Modules | `use_module` | `.pl` import works for plain programs and is experimental |

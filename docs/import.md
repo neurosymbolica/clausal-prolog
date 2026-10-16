@@ -723,9 +723,9 @@ The following names are injected into every predicate module's namespace by the 
     `.pl` import is **experimental** and outside the 1.0 compatibility promise
     (see [Public API](public-api.md)). It reads `.pl` with the native ISO
     front end by default (`CLAUSAL_PL_FRONTEND=translator` selects the older
-    translator into the seam syntax). It aims at ISO Prolog's rules, but cut
-    and if-then-else are not supported yet (support is in progress), so a
-    file that uses them is refused.
+    translator into the seam syntax). It aims at ISO Prolog's rules; the
+    native front end runs cut and if-then-else (the translator refuses
+    them; see [Importing Prolog](importing_prolog.md)).
 
 Clausal Prolog can import Prolog `.pl` files without a manual translation step. Placing a `.pl` file on `sys.path` makes it importable:
 
@@ -777,10 +777,10 @@ Library imports are mapped to built-in modules:
 
 ### Load errors
 
-If a `.pl` file contains constructs Clausal refuses (cut, if-then-else), the import raises a `SyntaxError` naming the file and line:
+If a `.pl` file contains a construct Clausal refuses (`*->`, or a cut whose scope holds a tabled call; on the translator also cut and if-then-else), the import raises a `SyntaxError` naming the file and line:
 
 ```
-SyntaxError: Cannot import foo.pl: foo.pl:1: `!` (cut) is refused: ...
+SyntaxError: Cannot import foo.pl: foo.pl:1: `*->` (soft-cut) is refused: ...
 ```
 
 ### Caveats
