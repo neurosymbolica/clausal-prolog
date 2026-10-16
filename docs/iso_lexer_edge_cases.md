@@ -1,10 +1,11 @@
 # ISO Lexer Edge Cases
 
-Clausal Prolog's reader follows the token grammar of ISO/IEC 13211-1 §6.4
-exactly, including in places where many Prolog systems are more lenient.
-Until October 2026 our lexer was lenient too. It accepted bare-exponent
-floats, uppercase radix prefixes, unknown escapes, raw tabs and newlines
-inside quotes, and a few other forms. We tightened it to match the standard,
+Clausal Prolog's reader follows the escape, quoted-character and number
+rules of ISO/IEC 13211-1 §6.4, including in places where many Prolog systems
+are more lenient. Until October 2026 our lexer was lenient too. It accepted
+bare-exponent floats, uppercase radix prefixes, unknown escapes, octal and
+hex escapes without their closing backslash, raw control characters inside
+quotes, and a few other forms. We tightened it to match the standard,
 and if the standard is ever relaxed in these areas, we will relax with it.
 
 This page records each tightened case: what ISO says, what we used to do,
@@ -68,14 +69,16 @@ in another.
 |---|---|---|---|---|---|
 | `'\e'` | error | ESC character | error | ESC character | #17, #19 |
 | `'\s'` | error | space | error | space | — |
-| `'\d'`, `'\z'`, `'\ca'`, `'\N'` | error | kept the backslash | error | `'\d'` kept, `'\z'` error | #16, #21, #105, #229, #241 |
+| `'\d'`, `'\z'`, `'\ca'`, `'\N'`, `'\9'`, `'\u1'` | error | kept the backslash | error | `'\d'` kept, `'\z'` error | #16, #21, #22, #104, #105, #229, #241 |
+| `'\ '`, `'\<TAB>'` (a backslash before a space or tab) | error | kept the backslash | error | error | #11, #12, #193 |
 | `'\141'` (no closing `\`) | error | `a` | error | error | #102 |
 | `'\141\'` | `a` | `a` | `a` | `a` | — |
-| a raw tab inside quotes | error | accepted | error | error | #5, #12 |
-| a raw newline inside quotes | error | accepted | error | error | #6, #193 |
+| a raw tab inside quotes | error | accepted | error | error | #5 |
+| a raw newline inside quotes | error | accepted | error | error | #6 |
+| another raw control character (U+0001, DEL) | error | accepted | error | U+0001 error, DEL accepted | — |
 
 **A closed set of escapes.** ISO 6.4.2.1 lists exactly which characters may
-follow a backslash: the symbolic escapes `a b f n r t v \ ' " ``, the octal
+follow a backslash: the symbolic escapes `` a b f n r t v \ ' " ` ``, the octal
 and hex escapes, and backslash-newline as a line continuation. Anything else
 is an error. A closed set means `'\e'` reads the same everywhere or is
 refused everywhere. It does not depend on which extensions a system happens
@@ -89,8 +92,9 @@ discussing.
 and octal 1411. The terminator makes the end of the escape explicit, so the
 escape does not need a fixed width.
 
-**No raw layout inside quotes.** A literal tab, newline or other control
-character inside quotes is an error, but a space is allowed. The rule makes
+**No raw control characters inside quotes.** A literal tab, newline or any
+other control character (Unicode category Cc: U+0000 to U+001F, DEL, and
+U+0080 to U+009F) inside quotes is an error, but a space is allowed. The rule makes
 quoted text visible on the page: a tab that looks like spaces cannot slip
 into an atom. It also makes an unclosed quote fail on its own line instead
 of swallowing the rest of the file. A newline that belongs in the text is
@@ -105,6 +109,9 @@ backslash-newline.
 | `0'''` | 39 | 39 | 39 | 39 | #115 |
 | `0'\'` | 39 | 39 | 39 | 39 | #114 |
 | `0'` followed by a raw tab | error | 9 | error | error | #177 |
+| `0'\141`, `0'\x41` (no closing `\`) | error | 97, 65 | error | error | — |
+| `0'\e`, `0'\s` | error | 27, 32 | error | 27, 32 | — |
+| `0'\141\`, `0'\x41\` | 97, 65 | 97, 65 | 97, 65 | 97, 65 | — |
 
 **A quote after `0'` must be doubled**, just as inside a quoted atom
 (`0'''`), or escaped (`0'\'`). A single quote is not a valid character
@@ -113,6 +120,11 @@ Ulrich's rows #120 and #197 depend on that reading: with `''` declared as an
 operator, `0''1` reads as `''(0, 1)`, and with `''` as a postfix
 operator, `0''` reads as `''(0)`.
 
-**No raw layout after `0'`**, for the same reason as inside quotes: `0'`
-followed by a tab looks like `0'` followed by spaces. A space itself is
-allowed, so `0' ` is 32.
+**No raw control character after `0'`**, for the same reason as inside
+quotes: `0'` followed by a tab looks like `0'` followed by spaces. A space
+itself is allowed, so `0' ` is 32.
+
+**The same escapes as inside quotes.** After `0'\` comes one escape from
+the same closed set, and an octal or hex escape needs its closing
+backslash: `0'\141\` is 97, and `0'\141`, `0'\e` and `0'\s` are errors,
+just as `'\141'`, `'\e'` and `'\s'` are.

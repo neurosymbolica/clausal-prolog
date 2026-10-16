@@ -9,6 +9,27 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Breaking
 
+- **The reader follows ISO 6.4's escape, quoted-character and number
+  rules exactly** (operator ruling D60, 2026-10-16). These used to read
+  and are now syntax errors, in `.pl` and `.clausal` files alike (both use
+  the ISO lexer):
+  - floats without a fraction: `1e9`, `1E9` (`1.0e9` and `1.0E9` still read);
+  - uppercase radix prefixes: `0X1F`, `0O17`, `0B101`;
+  - escapes outside ISO's closed set: `'\e'`, `'\s'`, `'\d'`, `'\z'`,
+    `'\ca'`, `'\N'`, `'\u1'`, a backslash before a space or tab, in quoted
+    atoms, strings and `0'` codes (`0'\e`, `0'\s`);
+  - octal and hex escapes without their closing backslash: `'\141'`,
+    `0'\141`, `0'\x41` (write `'\141\'`, `0'\141\`);
+  - raw control characters (Unicode Cc: C0, DEL, C1, including a literal
+    tab or newline) inside quotes or after `0'`; write them as escapes;
+  - `0''`: it now reads as `0` followed by `''` (write `0'''` or `0'\'`
+    for 39).
+
+  Why: ISO conformance, measured against Ulrich Neumerkel's syntax
+  conformity rows (27 more of them pass). A refused quoted token's error
+  now names the bad escape or character at its own position, instead of
+  pointing at the opening quote. See docs/iso_lexer_edge_cases.md.
+
 - **`.pl` files load through the native ISO front end by default.** An
   import of a `.pl` module, `python -m clausal.testing`, the pytest plugin
   and the `clausal` CLI now read `.pl` source with the ISO reader and the
