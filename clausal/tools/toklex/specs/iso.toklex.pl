@@ -142,7 +142,12 @@ token(semicolon, ';').
 token(end,      '.' followed_by (layout | '%' | eof)).
 token(variable, (capital | '_') then alnum*).
 token(name_atom, small then alnum*).
-token(char_code, '0' then quote then (quote then quote | escape | (any - bslash))) value char_code.
+% Bug 4 (2026-10-16): after `0'` comes ONE ISO 6.4.2.1 single quoted
+% character. A lone quote is not one (it must be doubled, `0'''`), nor is a
+% raw layout byte other than space (see `ctrl_layout`). Excluding both lets
+% `0''` back up to the integer `0` and the atom `''` (Ulrich #117/#120/#197),
+% and makes `0'<TAB>` a syntax error (#177).
+token(char_code, '0' then quote then (quote then quote | escape | (any - bslash - quote - ctrl_layout))) value char_code.
 % hex_int/oct_int/bin_int require at least one REAL digit somewhere in the
 % run (underscores alone don't count) -- `'_'* then hexdig then (hexdig |
 % '_')*` generates exactly the language "any string over {hexdig,'_'} that

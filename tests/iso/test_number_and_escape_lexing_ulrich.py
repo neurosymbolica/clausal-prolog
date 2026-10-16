@@ -273,3 +273,50 @@ def test_engine_still_accepts_the_legitimate_control_case(loads, i):
     name, goal = f"_numesc_ok{i}", ENGINE_OK_ROWS[i][1]
     mod = loads.load(name, f"r(R) :- {goal}, R = true.\n")
     assert _engine_answers(mod, "r", 2) == ["true"]
+
+
+# ── Bug 4: char_code's ``0'`` single quoted character ───────────────────
+#
+# ISO 6.4.4 / 6.4.2.1: after ``0'`` comes ONE single quoted character, and
+# a lone quote is not one (a quote must be doubled, ``0'''``), nor is a raw
+# layout byte other than space. ``0''`` must back up to the integer ``0``
+# followed by the atom ``''`` (Ulrich #117 ``integer(0'').`` is a syntax
+# error; #120 ``functor(0''1,F,A)`` under ``op(100,xfx,'')`` gives
+# ``F = ''``), and ``0'<TAB>`` leaves a quoted token holding a raw tab
+# (#177, syntax error).
+
+def test_lone_quote_after_0_quote_is_integer_then_empty_atom():
+    assert _kv("0''.", n=2) == [(TokenType.INTEGER, 0), (TokenType.ATOM, "")]
+
+
+@pytest.mark.parametrize("src", ["0'\t.", "0'\n.", "X = 0'\t."])
+def test_raw_layout_after_0_quote_is_a_syntax_error(src):
+    with pytest.raises(TokenizeError):
+        tokenize(src)
+
+
+@pytest.mark.parametrize("src, code", [
+    ("0'''.", 39),     # #115: the doubled quote
+    ("0'\\'.", 39),    # #114: the escaped quote
+    ("0' .", 32),      # space is a single quoted character
+    ("0'a.", 97),
+    ("0'\\t.", 9),     # the escape, not a raw tab
+])
+def test_legitimate_char_codes_still_read(src, code):
+    assert _kv(src, n=1) == [(TokenType.INTEGER, code)]
+
+
+CHAR_CODE_SYNTAX_ERROR_ROWS = [
+    ("#117 integer(0'')", "r(R) :- integer(0''), R = true.\n"),
+    ("#177 raw tab after 0'", "r(R) :- 0'\\t = 0'\t, R = true.\n"),
+]
+
+
+@pytest.mark.parametrize(
+    "i", range(len(CHAR_CODE_SYNTAX_ERROR_ROWS)),
+    ids=[r[0] for r in CHAR_CODE_SYNTAX_ERROR_ROWS])
+def test_engine_char_code_row_is_a_syntax_error(loads, i):
+    name, text = f"_numesc_cc{i}", CHAR_CODE_SYNTAX_ERROR_ROWS[i][1]
+    with pytest.raises(SyntaxError) as ei:
+        loads.load(name, text)
+    assert not isinstance(ei.value, TokenizeError)
