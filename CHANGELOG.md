@@ -200,6 +200,25 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **In the sandbox, `op/3` and op directives cannot change the
+  process-wide operator table.** `op(700, xfx, zz)` as a goal succeeded
+  in a sandboxed query and changed the run-time table that every
+  module's `current_op/3` reads and every term writer prints with, for
+  every later query in the process; a sandboxed `.pl` or `.clausal` file's
+  non-module `:- op`, a module's exported `op(...)`, and a `use_module`
+  that installs ops (`library(clpz)` included) changed it too. `op/3` is
+  now a refused builtin (`permission_error(access, private_procedure,
+  op/3)`, in `clausal.sandbox.DENIED_BUILTINS`, with a backstop in the
+  builtin itself). The directives keep their local effect: the op applies
+  to the table the file is read with, so the file and a `library(clpz)`
+  importer still read as before, but nothing reaches the run-time table.
+  The check sits at the one write
+  (`iso_l3_directives.DirectiveContext.apply_op`), whatever its caller
+  asks, so it fails closed. Provisional ruling 2026-10-16, after the
+  `set_prolog_flag` split (local effect kept, process-wide write
+  refused). Outside the sandbox nothing changes. `current_op/3` stays
+  allowed. Pinned by the four `op` tests in `tests/test_sandbox.py`.
+
 - **A `-shallow` predicate none of whose clauses yields fails instead of
   raising `TypeError`.** With every clause throwing or failing
   (`c3(2) <- throw(z)`, `c4(2) <- False`), the shallow compile emitted a

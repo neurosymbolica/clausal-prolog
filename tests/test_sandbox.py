@@ -2089,3 +2089,127 @@ def test_an_allowed_flag_that_became_process_wide_is_refused(sbx):
         probe("load", lambda: load("fpm"))
     """, env={"CLAUSAL_PL_FRONTEND": "native"})
     refused(res, "load", PRIVATE + "set_prolog_flag/2)", import_error=True)
+
+
+# ── op/3: the process-wide operator table ───────────────────────────────────
+#
+# runtime_op_table() (current_op/3's) is one table for the process.  In the
+# sandbox op/3 as a goal is refused, and an op directive or an imported op
+# reaches only the table its file is read with: the file still reads with
+# its op, current_op/3 and later loads do not see it.
+
+_OP_FILES = {
+    "opn.pl": ":- op(700, xfx, zzpl).\np(a zzpl b).\n",
+    "ope.pl": ":- module(ope, [p/1, op(700, xfx, zzple)]).\np(a zzple b).\n",
+    "opu.pl": ":- module(opu, [q/1]).\n:- use_module(ope).\n"
+              "q(a zzple b).\n",
+    "opn_c.clausal": ":- op(700, xfx, zzcl).\np(a zzcl b).\n",
+    "ope_c.clausal": ":- module(ope_c, [p/1, op(700, xfx, zzcle)]).\n"
+                     "p(a zzcle b).\n:- end_module(ope_c).\n",
+    "opu_c.clausal": ":- module(opu_c, [q/1]).\n:- use_module(ope_c).\n"
+                     "q(a zzcle b).\n:- end_module(opu_c).\n",
+    "opz_c.clausal": ":- module(opz_c, [s/1]).\n:- use_module(library(clpz)).\n"
+                     "s(X) :- X #= 1 + 2.\n:- end_module(opz_c).\n",
+    "opg_c.clausal": ":- module(opg_c, [t/1, u/0]).\nt(1).\n"
+                     "u :- op(700, xfx, zzbody).\n:- end_module(opg_c).\n",
+}
+
+_OP_RUN = """
+        from clausal import Var
+        from clausal.tools.prolog_operators import runtime_op_table
+        def version():
+            return runtime_op_table().version
+        def delta(fn):
+            v0 = version()
+            fn()
+            return version() - v0
+"""
+
+
+def test_op_goal_is_refused_and_the_operator_table_is_unchanged(sbx):
+    for path, source in _OP_FILES.items():
+        sbx.write(path, source)
+    res = sbx.run(_OP_RUN + """
+        import clausal.sandbox as sb
+        sb.enable()
+        m = load("opg_c")
+        v0 = version()
+        X = Var()
+        probe("goal", lambda: answers(("op", 700, "xfx", "zzgoal"), m, X))
+        probe("body", lambda: answers("u", m, X))
+        probe("caught", lambda: answers(
+            ("catch", ("op", 700, "xfx", "zzgoal"), ("error", X, Var()),
+             "true"), m, X))
+        probe("current_op", lambda: answers(
+            ("current_op", X, "xfx", "is"), m, X))
+        # The two guards, each on its own: the registry entry is the
+        # refusing one (DENIED_BUILTINS), and the builtin itself refuses
+        # when reached by a reference kept from before enable().
+        from clausal.logic.builtins._registry import _BUILTINS
+        probe("registry", lambda: _BUILTINS[("op", 3)].__qualname__)
+        from clausal.logic.builtins.operators import _op__3
+        from clausal.logic.variables import Trail
+        probe("backstop", lambda: list(_op__3(700, "xfx", "zzdirect",
+                                              Trail(), None)))
+        probe("unchanged", lambda: version() - v0)
+    """)
+    assert ok(res, "registry") == "'sandbox_refused[op/3]'"
+    for key in ("goal", "body", "backstop"):
+        refused(res, key, PRIVATE + "op/3)")
+    assert "private_procedure" in ok(res, "caught")
+    assert ok(res, "current_op") == "[700]"
+    assert ok(res, "unchanged") == "0"
+
+
+def test_a_sandboxed_op_directive_reads_its_file_but_leaves_the_table(sbx):
+    # A non-module file's op/3, a module's exported op and an imported one
+    # apply to the table the file is read with, not the run-time table.
+    for path, source in _OP_FILES.items():
+        sbx.write(path, source)
+    res = sbx.run(_OP_RUN + """
+        import clausal.sandbox as sb
+        sb.enable()
+        X = Var()
+        for name in ("opn", "ope", "opu", "opn_c", "ope_c", "opu_c"):
+            probe(name, lambda name=name: delta(lambda: load(name)))
+        probe("reads_c", lambda: answers(("p", X), load("ope_c"), X))
+        probe("imports_c", lambda: answers(("q", X), load("opu_c"), X))
+        probe("current_op", lambda: answers(
+            ("current_op", Var(), Var(), X), load("ope_c"), X))
+    """)
+    for name in ("opn", "ope", "opu", "opn_c", "ope_c", "opu_c"):
+        assert ok(res, name) == "0", (name, res[name])
+    assert ok(res, "reads_c") == "[('zzcle', 'a', 'b')]"
+    assert ok(res, "imports_c") == "[('zzcle', 'a', 'b')]"
+    assert not any(n.startswith("zz") for n in eval(ok(res, "current_op")))
+
+
+def test_a_sandboxed_clpz_import_still_loads_without_the_table(sbx):
+    # library(clpz)'s #= and friends reach the importer's reading only.
+    for path, source in _OP_FILES.items():
+        sbx.write(path, source)
+    res = sbx.run(_OP_RUN + """
+        import clausal.sandbox as sb
+        sb.enable()
+        X = Var()
+        probe("load", lambda: delta(lambda: load("opz_c")))
+        probe("solve", lambda: answers(("s", X), load("opz_c"), X))
+    """)
+    assert ok(res, "load") == "0"
+    assert ok(res, "solve") == "[3]"
+
+
+def test_without_the_sandbox_op_changes_the_operator_table(sbx):
+    # The control: op/3 as a goal and the same directives do change it.
+    for path, source in _OP_FILES.items():
+        sbx.write(path, source)
+    res = sbx.run(_OP_RUN + """
+        m = load("opg_c")
+        X = Var()
+        probe("goal", lambda: delta(lambda: answers(
+            ("op", 700, "xfx", "zzgoal"), m, X)))
+        for name in ("opn", "ope", "opn_c", "ope_c", "opz_c"):
+            probe(name, lambda name=name: delta(lambda: load(name)))
+    """)
+    for name in ("goal", "opn", "ope", "opn_c", "ope_c", "opz_c"):
+        assert int(ok(res, name)) > 0, (name, res[name])

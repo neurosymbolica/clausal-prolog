@@ -50,7 +50,8 @@ RUN TIME
       ``error(permission_error(access, python_module, M), _)`` when it is
       resolved or called, whichever route reached it.
     * Engine builtins with process-wide effects or I/O (``halt``,
-      ``set_prolog_flag``, the stdout writers, the clock readers ...) raise
+      ``set_prolog_flag``, ``op/3``, the stdout writers, the clock
+      readers ...) raise
       ``error(permission_error(access, private_procedure, Name/Arity), _)``.
 """
 from __future__ import annotations
@@ -198,6 +199,7 @@ _FACADES = "clausal.library."
 DENIED_BUILTINS: "dict[str, str]" = {
     "halt": "ends the process",
     "set_prolog_flag": "changes process-wide flags and later loads",
+    "op": "changes the process-wide operator table",
     "global_atom": "writes the atom pool every module is seeded from",
     "gensym": "a process-wide counter",
     "current_time": "reads the clock",

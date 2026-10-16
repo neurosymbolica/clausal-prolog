@@ -69,6 +69,7 @@ import os
 import re
 from typing import Any
 
+from clausal import _sandbox_state
 from clausal.end_module import SURFACE_CLAUSAL_PROLOG as _SURFACE_CLAUSAL_PROLOG
 from clausal.tools.prolog_operators import op_error, op_lock, runtime_op_table
 from clausal.tools.prolog_reader import VarRef
@@ -769,7 +770,18 @@ class DirectiveContext:
         *runtime*, to the run-time table ``current_op/3`` reads
         (``prolog_operators.runtime_op_table``): what is global in Scryer,
         a non-module file's own op/3 and a module's exported ops.  A context
-        with no reader table (a checker) only checks."""
+        with no reader table (a checker) only checks.
+
+        In the sandbox nothing here reaches the run-time table, whatever
+        *runtime* says: the table is process-wide, and a sandboxed program
+        changes no process-wide state.  The op still applies to the
+        reader's table, so the file (and an importer of a module's or a
+        library's ops, ``library(clpz)``'s ``#=``) reads as it would; only
+        ``current_op/3`` and later loads do not see it.  The check is here,
+        at the one write, so a caller that forgets it cannot reach the
+        table (fails closed).  Provisional ruling 2026-10-16, after the
+        ``set_prolog_flag`` split: the local effect stays, the process-wide
+        write does not."""
         if type(prec) is not int:
             raise _refused(f"{what}: the priority must be an integer 0..1200 "
                            f"(ISO type_error(integer)), got {_show(prec)}",
@@ -793,7 +805,7 @@ class DirectiveContext:
                 return
             for n in ns:
                 self.op_table.define(prec, spec, n)
-            if runtime:
+            if runtime and not _sandbox_state.ACTIVE:
                 table = runtime_op_table()
                 for n in ns:
                     table.define(prec, spec, n)

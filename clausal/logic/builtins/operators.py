@@ -7,6 +7,8 @@ goal changes it, ``current_op/3`` enumerates it.  A ``.pl`` file's
 reaches this table when Scryer would make it global (a file that is not a
 module; a module's exported ops).  Clauses are read when their file is
 loaded, so ``op/3`` as a goal does not change how any loaded source reads.
+In the sandbox ``op/3`` is refused (``permission_error(access,
+private_procedure, op/3)``) and no directive reaches the run-time table.
 
 Errors, with ``op/3`` / ``current_op/3`` as the context:
 
@@ -29,6 +31,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from clausal import _sandbox_state
 from clausal.logic.atoms import mint
 from clausal.logic.exceptions import (
     LogicException, domain_error, instantiation_error, permission_error,
@@ -101,6 +104,14 @@ def _op__3(priority, specifier, operator, trail, k):
     if spec is None:
         raise LogicException(type_error("atom", s, _OP))
     names = _op_names(o)
+    if _sandbox_state.ACTIVE:
+        # The sandbox replaces this builtin's registry entries
+        # (DENIED_BUILTINS); this is the backstop for a route that kept a
+        # reference to it: the table is process-wide.
+        raise LogicException(permission_error(
+            "access", "private_procedure", ("/", "op", 3),
+            f"{_OP}: {_OP} is not available in the sandbox (changes the "
+            f"process-wide operator table)"))
     table = runtime_op_table()
     with op_lock:          # the 6.3.4.3 check and the define are one step
         err = op_error(table, p, spec, names)

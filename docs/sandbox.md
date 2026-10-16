@@ -200,6 +200,7 @@ raises `error(permission_error(access, private_procedure, Name/Arity), _)`:
 |---|---|
 | `halt/0,1` | ends the process |
 | `set_prolog_flag/2` | changes process-wide flags and later loads |
+| `op/3` | changes the process-wide operator table |
 | `global_atom/2` | writes the atom pool every module is seeded from |
 | `gensym/2` | a process-wide counter |
 | `current_time/1`, `statistics/2`, `time_goal/1,2` | read the clock (`time_goal/1` writes to stderr) |
@@ -219,6 +220,16 @@ each is still module-scoped. The CLP(Q)
 port's resource caps (`clpq_max_*`) are therefore the host's: it sets them
 from Python with `clausal.logic.clpq.limits.set_limit`. They bound one
 call; time and memory limits on the worker remain the host's too.
+
+An `op/3` directive still loads, with only its local effect. The
+operator applies to the table its file is read with, so the file reads as
+it would: `:- op(...)` in a file that is not a module, an `op(...)` a
+module exports, and the ops a `use_module` brings in, `library(clpz)`'s
+`#=` and the other ops included. None of them reaches the process-wide
+run-time table, which outside the sandbox these directives also change:
+`current_op/3` does not list them and the term writers
+(`write_to_string/2` and the others) do not print with
+them, in this query or any other. `current_op/3` is allowed.
 
 Some other builtins behave differently in the sandbox:
 
