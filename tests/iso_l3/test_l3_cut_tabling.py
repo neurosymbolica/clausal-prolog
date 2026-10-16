@@ -432,7 +432,9 @@ def test_a_run_time_built_goal_cutting_over_a_root_recursive_table_runs(native, 
     evaluation: its table (the whole SCC) completes before the first answer
     (D68), and the cut keeps the first answer in TABLE order, b -- the
     answer the untabled program gives too (e(a, b) is path/2's first
-    derivation).  Scryer: [a] (its own table order).  It raised
+    derivation).  Scryer: [a]: tabled Scryer returns answers in the
+    standard order of terms (its table is a trie over library(assoc)), and
+    a @< b; this engine returns them in derivation order.  It raised
     permission_error(cut, incomplete_table, path/2) before D68, and before
     the run-time check answered [b] silently from an incomplete table."""
     mod = native.load("l3_tab_rt_calln", CALL_N)
@@ -484,11 +486,9 @@ def test_every_commit_over_a_fresh_table_runs_over_a_complete_table(native, ans,
     completes its table before its first answer and every commit prunes a
     COMPLETE table, with the answer the untabled program gives.  Each
     raised permission_error(cut, incomplete_table, t/1) before D68.
-    Scryer answers [1], [2], [1], [1], [1], [[1]], [[]] (recorded when the
-    series was written).  nf/1 differs: ``(tq(_), !, fail)`` fails, so its
-    \\+ succeeds and findall/3 collects one x, as ISO says for the same
-    program untabled; Scryer's [[]] is its tabling's answer, which this
-    engine does not reproduce (not re-checked here: no Scryer binary)."""
+    Scryer answers [1], [2], [1], [1], [1], [[1]], [[x]] -- the same
+    (nf/1's ``(tq(_), !, fail)`` fails, so its \\+ succeeds and findall/3
+    collects one x; Scryer, /opt/scryer-prolog-clpq, 2026-10-16)."""
     mod = native.load("l3_tab_rt_" + name, INDIRECT)
     assert ans(mod, "r", 2, name) == ["none"]
     mod = native.load("l3_tab_rt_ok_" + name, INDIRECT)

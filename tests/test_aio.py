@@ -593,24 +593,32 @@ def test_a_dropped_querys_scc_is_rebuilt_not_resumed(tmp_path, second):
     import gc
     from clausal.logic.solve import query_wfs
     src = tmp_path / "scc_drop.seam"
+    # Since D68 a query holding an answer holds a complete table, so the
+    # dropped query parks INSIDE the SCC's evaluation instead: q(2)'s body
+    # waits (hang/1) the first time, after q/1 has consumed p/1 -- p and q
+    # both evaluating, q depending on p.
     src.write_text(
         "-module(scc_drop, [p/1, q/1, r/1, nr/0])\n"
+        "-import_from(tests.fixtures.aio_helpers, [hang])\n"
+        "-dynamic(armed/0)\n"
         "-table(p/1)\n"
         "-table(q/1)\n"
         "-table(r/1)\n"
+        "armed,\n"
         "p(X) <- (q(X), not r(X))\n"
         "p(1),\n"
-        "q(2),\n"
         "q(X) <- p(X)\n"
+        "q(2) <- pause\n"
+        "pause <- (retract(armed), hang(_))\n"
+        "pause <- (not armed)\n"
         "r(Y) <- (p(Z), Z == Y + 1)\n"
         "nr <- (not r(2))\n")
     mod = load_clausal_module(src)
     store = mod.__dict__["$module"].db.table_store
+    _drop_mid_evaluation(("p", Var()), mod, close_loop=True)
+    assert {k[0] for k, e in store.items() if e.status == "evaluating"} >= {"p", "q"}
 
     async def main():
-        dropped = asolve(("p", Var()), mod)
-        await dropped.__anext__()
-        del dropped                           # never closed; close pending
         gc.collect()
         z = Var()
         if second == "sync":
@@ -627,20 +635,27 @@ def test_a_dropped_querys_scc_is_rebuilt_not_resumed(tmp_path, second):
     assert _engine_state_clean()
 
 
-# cvar/2's answer carries a dif/2 constraint, so its leader hands it over
-# live, before its table completes (D68's one exception: a table cannot store
-# a constraint).  A query holding that answer holds an EVALUATING table, the
-# state the dropped-query tests below need; every other tabled call
-# completes its table before its first answer.  Its first clause calls
-# cvar/2 back, so the dead query's entry has an SCC dependency and
-# _complete_scc's store scan looks at it (the store-scan test below).
+# Since D68 a query holding an answer holds a complete table, so the
+# dropped-query tests below need another way to leave a table EVALUATING:
+# - hp/2: a query parks INSIDE its evaluation -- hp(1, _) has its answer 2,
+#   its consumer of itself (an SCC dependency, so _complete_scc's store scan
+#   looks at it) has gone on to 3, and waits at hang/1
+#   (_drop_mid_evaluation).  Such a query is never reclaimed by the GC.
+# - cvar/2: its answer carries a dif/2 constraint, so its leader hands it
+#   over live before its table completes (D68's constrained-answer
+#   exception, A12-F001); a query HOLDING that answer is reclaimable, which
+#   the reap tests need.  When A12-F001 is fixed these need another route.
 _SWEEP_PROGRAM = (
-    "-module(sweep, [path/2, other/1, np/0, cvar/2])\n"
+    "-module(sweep, [path/2, other/1, np/0, hp/2, cvar/2])\n"
+    "-import_from(tests.fixtures.aio_helpers, [hang])\n"
     "-table(path/2)\n"
     "-table(other/1)\n"
+    "-table(hp/2)\n"
     "-table(cvar/2)\n"
     "cvar(X, V) <- (cvar(X, V), X > 5)\n"
     "cvar(X, V) <- (path(X, _), V is not X)\n"
+    "hp(X, Y) <- edge(X, Y)\n"
+    "hp(X, Y) <- (hp(X, Z), edge(Z, Y), hang(_))\n"
     "edge(1, 2),\n"
     "edge(2, 3),\n"
     "edge(3, 4),\n"
@@ -658,24 +673,36 @@ def test_an_unrelated_scc_sweep_leaves_a_dropped_querys_table_alone(
     # dormant SCC members and completed a dropped query's self-recursive
     # path(1, _) with its one partial answer -- [2] instead of [2, 3, 4],
     # for good.
+    # Rebuilt for D68: the dropped query holds hp(1, _) EVALUATING, with its
+    # partial answer [2], parked mid-evaluation; the GC has not reclaimed it
+    # yet, so the unrelated query's _complete_scc sweep meets it and must
+    # leave it alone (_mine).  Completing it would freeze [2] for good.
     import gc
     src = tmp_path / "sweep.seam"
     src.write_text(_SWEEP_PROGRAM)
     mod = load_clausal_module(src)
+    store = mod.__dict__["$module"].db.table_store
+    gc.collect()
+    gc.disable()
+    try:
+        _drop_mid_evaluation(("hp", 1, Var()), mod)
+        [hp] = [e for k, e in store.items() if k[0] == "hp"]
+        assert hp.status == "evaluating" and [a[1] for a in hp.answers] == [2]
 
-    async def main():
-        dropped = asolve(("path", 1, Var()), mod)
-        await dropped.__anext__()
-        del dropped                           # never closed; close pending
-        gc.collect()
-        x = Var()
-        if second == "sync":
-            list(solve(("other", x), mod))   # an unrelated tabled query
-        else:
-            [_ async for _ in asolve(("other", x), mod)]
-        y = Var()
-        return sorted(deref(y) for _ in solve(("path", 1, y), mod))
-    assert run(main()) == [2, 3, 4]
+        async def main():
+            x = Var()
+            if second == "sync":
+                list(solve(("other", x), mod))   # an unrelated tabled query
+            else:
+                [_ async for _ in asolve(("other", x), mod)]
+        run(main())
+        assert hp.status == "evaluating"         # left alone by the sweep
+    finally:
+        gc.enable()
+    gc.collect()
+    list(solve(("other", Var()), mod))           # a safe point: reaped
+    assert not any(k[0] == "hp" and e.status == "complete"
+                   for k, e in store.items())
     y = Var()
     assert sorted(deref(y) for _ in solve(("path", 1, y), mod)) == [2, 3, 4]
     assert _engine_state_clean()
@@ -722,13 +749,12 @@ def test_a_query_dying_during_a_store_scan_does_not_break_it(
     gc.disable()
     try:
         # A query parked at a wait when its loop closes is held only by a
-        # Task <-> Future cycle: only the cyclic GC can reclaim it.
+        # Task <-> Future cycle: only the cyclic GC can reclaim it.  It holds
+        # cvar/2's constrained answer, so its table is still evaluating
+        # (since D68 every other table is complete): see _SWEEP_PROGRAM.
         loop = asyncio.new_event_loop()
 
         async def park():
-            # cvar/2: its table is still evaluating after its first answer
-            # (a constrained answer, see _SWEEP_PROGRAM); since D68 path/2's
-            # would be complete
             answers = asolve(("cvar", 1, Var()), mod)
             await answers.__anext__()
             await asyncio.sleep(10)
@@ -749,6 +775,11 @@ def test_a_query_dying_during_a_store_scan_does_not_break_it(
     finally:
         gc.enable()
     assert fired and answers == []
+    # The scan met the dead query's cvar(1, _) (evaluating, with an SCC
+    # dependency) and left it alone (_mine): completing it would freeze its
+    # partial table for good.
+    assert not any(k[0] == "cvar" and e.status == "complete"
+                   for k, e in store.items())
     list(solve(("other", Var()), mod))       # a safe point: reaped now
     assert all(e.owner is None for e in store.values()
                if e.status == "evaluating")
@@ -773,6 +804,32 @@ _DEAD_PROGRAM = (
     "other(1),\n"
     "other(X) <- (other(Y), X == Y + 1, X < 3)\n"
     "caller(X) <- (other(X), path(X, _))\n")
+
+
+def _drop_mid_evaluation(goal, mod, *, close_loop=False):
+    """Start *goal* in a task, let it park at ``hang/1`` inside its tabled
+    evaluation, and drop it unclosed -- its tables genuinely EVALUATING
+    (since D68 a query holding an answer holds a complete table).  A query
+    parked inside an evaluation is never reclaimed by the GC (see
+    _park_until_loop_closes); with *close_loop* its loop is closed, which
+    makes it no longer live (later queries re-lead its tables), else it
+    stays a live, suspended query."""
+    loop = asyncio.new_event_loop()
+
+    async def park():
+        await asolve(goal, mod).__anext__()
+    task = loop.create_task(park())
+    for _ in range(20):
+        loop.run_until_complete(asyncio.sleep(0))
+    assert not task.done()
+    if close_loop:
+        loop.close()
+    else:
+        _OPEN_LOOPS.append(loop)
+    del task, loop
+
+
+_OPEN_LOOPS: list = []      # loops of live parked queries, kept open
 
 
 def _park_until_loop_closes(goal, mod, *, between_answers):

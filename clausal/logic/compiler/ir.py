@@ -399,12 +399,26 @@ def cut_over_incomplete_table_message(called: "tuple[str, int]",
     from .cut_scope import _pi_text
     pi = _pi_text(called)
     where = f" in predicate {predicate}" if predicate else ""
+    head = (f"a cut (or an if-then-else condition, once/1, or "
+            f"setup_call_cleanup/3's Setup){where} would prune the call to "
+            f"the tabled predicate {pi} while its table is still being "
+            f"computed: ")
+    lose = (", so the table holds only the answers found so far and the "
+            "cut would throw away answers it has not produced yet. ")
     if within == "$constrained":
-        # tabling.STREAMED_CONSTRAINED
-        why = (f"its answers carry constraints (dif/2, CLP, freeze/2), "
-               f"which a table cannot store, so {pi} hands them back as it "
-               f"finds them instead of completing its table first")
-    elif within is None:
+        # tabling.STREAMED_CONSTRAINED: not a recursion -- the advice is
+        # about the constraint, not about moving the commit.
+        return (head + f"its answers carry constraints (dif/2, CLP, "
+                f"freeze/2); a table cannot store a constraint, and {pi} "
+                f"hands such answers back as it finds them instead of "
+                f"completing its table first" + lose +
+                f"Collect the answers first (findall/3 over the call, then "
+                f"pick from the list), or make {pi}'s answers ground (bind "
+                f"the constrained variable before it returns, e.g. with "
+                f"label/1), so that its table completes first and may be "
+                f"cut. (A known limitation: todo/audit-2026-07-05/"
+                f"investigate-A12-tabling-answer-constraints.md.)")
+    if within is None:
         why = ("the call is made inside the evaluation of another tabled "
                "predicate, which this table depends on")
     elif tuple(within) == tuple(called):
@@ -414,12 +428,8 @@ def cut_over_incomplete_table_message(called: "tuple[str, int]",
         why = (f"the call is made inside the evaluation of the tabled "
                f"predicate {_pi_text(within)}, and {pi} depends on it "
                f"(mutual recursion)")
-    return (f"a cut (or an if-then-else condition, once/1, or "
-            f"setup_call_cleanup/3's Setup){where} would prune the call to "
-            f"the tabled predicate {pi} while its table is still being "
-            f"computed: {why}, so the table holds only the answers found so "
-            f"far and the cut would throw away answers it has not produced "
-            f"yet. Collect the answers first (findall/3 over the call, then "
+    return (head + why + lose +
+            f"Collect the answers first (findall/3 over the call, then "
             f"pick from the list), or move the commit out of the recursive "
             f"evaluation. (A tabled call that does not depend on a table "
             f"still being computed completes its table before its first "

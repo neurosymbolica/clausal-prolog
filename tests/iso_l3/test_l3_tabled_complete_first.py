@@ -196,6 +196,9 @@ def test_a_cut_over_a_constrained_answer_raises_and_says_why(native):
     msg = str(e.value)
     assert "permission_error(cut,incomplete_table,cd/1)" in msg
     assert "its answers carry constraints (dif/2, CLP, freeze/2)" in msg
+    # its advice is about the constraint, not about a recursion (F7)
+    assert "make cd/1's answers ground" in msg
+    assert "recursive" not in msg
 
 
 # A leader whose pass read only complete tables runs no confirming pass (D68
@@ -222,3 +225,100 @@ def test_a_side_effect_runs_once_and_is_not_reread(native, ans):
     mod = native.load("l3_cf_side_effect_untabled", SIDE_EFFECT)
     assert ans(mod, "untabled") == [1, 2]
 
+
+# An exception thrown in the CALLER's continuation, after the first answer,
+# abandons the call; the table it completed first stays whole.  On main the
+# leader was still streaming, and its half-built table was cut short.
+EXCEPTION = """\
+:- table(k/1).
+k(1). k(2). k(3).
+r(L) :- catch((k(X), X >= 2, throw(stop)), stop, true), findall(Y, k(Y), L).
+"""
+
+
+def test_an_exception_in_the_continuation_leaves_the_table_whole(native, ans):
+    mod = native.load("l3_cf_exception", EXCEPTION)
+    assert ans(mod, "r") == [[1, 2, 3]]
+
+
+# A leader that turns out to be an SCC member (it consumes a still-evaluating
+# ancestor) switches to streaming; answers it found before it knew are
+# delivered after its fixpoint.  The answer sets are SLG's.
+SWITCH = """\
+:- table(p/1).
+:- table(q/1).
+p(X) :- q(X).
+p(10).
+q(0).
+q(X) :- p(Y), Y < 3, X is Y + 1.
+"""
+
+
+def test_a_leader_that_becomes_an_scc_member_streams_every_answer(native, ans):
+    mod = native.load("l3_cf_switch", SWITCH)
+    assert sorted(ans(mod, "p")) == [0, 1, 2, 3, 10]
+    mod = native.load("l3_cf_switch_q", SWITCH)
+    assert sorted(ans(mod, "q")) == [0, 1, 2, 3]
+
+
+# A fresh inner call reached through call/N, and through findall/3, inside
+# another table's evaluation: it does not depend on that evaluation, so it
+# completes first and the commit over it runs.
+INNER = COMMIT + """\
+:- table(tn/1).
+tn(X) :- call(c, X).
+:- table(tf/1).
+tf(L) :- findall(X, c(X), L).
+:- table(tg/1).
+tg(L) :- G = tq(X), findall(X-Y, (call(G), tq(Y)), L).
+"""
+
+
+def test_a_fresh_inner_call_through_call_n_and_findall_completes_first(native, ans):
+    mod = native.load("l3_cf_inner", INNER)
+    assert ans(mod, "tn") == [2]
+    assert ans(mod, "tf") == [[2]]
+    [pairs] = ans(mod, "tg")
+    assert sorted(pairs) == sorted(("-", x, y) for x in (2, 1, 3) for y in (2, 1, 3))
+    assert _t_table(mod).status == "complete"
+
+
+# RECORDED LIMITATION (provisional, pending ruling 2026-10-16, Q1): an
+# answer carrying a constraint is still handed over as it is derived, before
+# its table completes (a table cannot store the constraint: todo/audit-
+# 2026-07-05/investigate-A12-tabling-answer-constraints.md), so a second call
+# of the same table in the continuation joins against a partial table --
+# the pre-D68 wrong answer, for constrained answers only.  The review's F1.
+CONSTRAINED_PAIRS = """\
+:- table(c/1).
+c(X) :- dif(X, a).
+c(1).
+c(2).
+pairs(N) :- findall(X-Y, (c(X), c(Y)), L), length(L, N).
+:- table(tp/1).
+tp(N) :- findall(X-Y, (c(X), c(Y)), L), length(L, N).
+"""
+
+
+@pytest.mark.xfail(strict=True, reason="recorded limitation (provisional, "
+                   "pending ruling 2026-10-16 Q1): constrained answers stream "
+                   "before their table completes; A12-F001")
+def test_constrained_answers_pair_with_every_answer(native, ans):
+    mod = native.load("l3_cf_constrained_pairs", CONSTRAINED_PAIRS)
+    assert ans(mod, "pairs") == [9]          # today: [7]
+
+
+@pytest.mark.xfail(strict=True, reason="recorded limitation (provisional, "
+                   "pending ruling 2026-10-16 Q1): constrained answers stream "
+                   "before their table completes; A12-F001")
+def test_constrained_answers_pair_inside_a_table_once(native, ans):
+    mod = native.load("l3_cf_constrained_tp", CONSTRAINED_PAIRS)
+    assert ans(mod, "tp") == [9]             # today: [7, 9]
+
+
+def test_constrained_answers_today(native, ans):
+    """The limitation's current answers, pinned so a change is seen."""
+    mod = native.load("l3_cf_constrained_now", CONSTRAINED_PAIRS)
+    assert ans(mod, "pairs") == [7]
+    mod = native.load("l3_cf_constrained_now_tp", CONSTRAINED_PAIRS)
+    assert ans(mod, "tp") == [7, 9]

@@ -47,6 +47,18 @@ def _episode_depth():
 episode_depth = async_predicate("episode_depth", _episode_depth, 1)
 
 
+async def _hang():
+    # Wait on a future nothing holds but this coroutine: a query parked here,
+    # INSIDE a tabled evaluation, is held only by a Task <-> Future cycle, so
+    # dropping its task leaves it to the cyclic GC (tests/test_aio.py's
+    # dropped-query tests: since D68 a query holding an ANSWER holds a
+    # complete table, so an evaluating one has to be parked mid-evaluation).
+    await asyncio.get_running_loop().create_future()
+
+
+hang = async_predicate("hang", _hang, 1)
+
+
 CLOSED = []
 
 

@@ -281,10 +281,10 @@ def _cnt_clauses(name):
     return rec, Clause(head=(name, 0), body=[])
 
 
-_ORDERS = pytest.mark.parametrize("rec_first", [True, False], ids=["recursive-first", "base-first"])
+_CLAUSE_ORDER = pytest.mark.parametrize("rec_first", [True, False], ids=["recursive-first", "base-first"])
 
 
-@_ORDERS
+@_CLAUSE_ORDER
 def test_cut_before_a_loop_mode_tro_tail_list(rec_first):
     db = Database()
     pat, t = _cons()
@@ -296,7 +296,7 @@ def test_cut_before_a_loop_mode_tro_tail_list(rec_first):
     assert len(_answers(db, "walk", 1, list(range(500)))) == 1
 
 
-@_ORDERS
+@_CLAUSE_ORDER
 def test_cut_before_a_loop_mode_tro_tail_runs_deep(rec_first):
     db = Database()
     _in_order(db, *_cnt_clauses("cnt"), rec_first)
@@ -392,7 +392,7 @@ def _count(dispatch, arg):
     return n
 
 
-@_ORDERS
+@_CLAUSE_ORDER
 def test_cut_before_a_signal_mode_tro_tail(rec_first):
     rec, base = _cnt_clauses("cnt")
     spec = [rec, base] if rec_first else [base, rec]
