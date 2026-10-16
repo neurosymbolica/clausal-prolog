@@ -196,3 +196,29 @@ def test_a_cut_over_a_constrained_answer_raises_and_says_why(native):
     msg = str(e.value)
     assert "permission_error(cut,incomplete_table,cd/1)" in msg
     assert "its answers carry constraints (dif/2, CLP, freeze/2)" in msg
+
+
+# A leader whose pass read only complete tables runs no confirming pass (D68
+# review F3).  The one body that could tell: one that reads its OWN side
+# effects.  Ruled here: the single pass stands -- the answers are the
+# untabled program's, and the assertz runs once per answer (a second pass
+# would add 11 and 12 and assert both again).  Tabling with side effects is
+# undefined in XSB too.
+SIDE_EFFECT = """\
+:- dynamic(seen/1).
+:- table(p/1).
+p(X) :- seen(X).
+p(X) :- member(X, [1, 2]), Y is X + 10, assertz(seen(Y)).
+untabled(X) :- seen(X).
+untabled(X) :- member(X, [1, 2]), Y is X + 10, assertz(seen(Y)).
+count(N) :- findall(x, seen(_), L), length(L, N).
+"""
+
+
+def test_a_side_effect_runs_once_and_is_not_reread(native, ans):
+    mod = native.load("l3_cf_side_effect", SIDE_EFFECT)
+    assert ans(mod, "p") == [1, 2]
+    assert ans(mod, "count") == [2]
+    mod = native.load("l3_cf_side_effect_untabled", SIDE_EFFECT)
+    assert ans(mod, "untabled") == [1, 2]
+

@@ -130,6 +130,12 @@ class _LeaderContext(threading.local):
         # tabled frame opened inside the scope since.
         self.cut_seq: int = 0
         self.open_tabled: list[list] = []
+        # Bumped whenever a tabled frame hands out answers of an INCOMPLETE
+        # table (a consumer of a table under evaluation; a leader streaming
+        # an SCC member's or a constrained answer).  A leader compares it
+        # across a fixpoint pass: unchanged means the pass read only
+        # complete tables, so it needs no confirming pass (D68 review F3).
+        self.incomplete_reads: int = 0
 
 _leader_ctx = _LeaderContext()
 
@@ -1626,6 +1632,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             # XSB's run-time error (``cut_over_incomplete``).  The table is
             # incomplete because this very call is inside its evaluation.
             _rec = _open_tabled(entry, functor, arity, trail, entry.pi)
+            _leader_ctx.incomplete_reads += 1
             try:
                 for i, stored in enumerate(entry.answers):
                     if entry.conditions[i] is _FAILED:
@@ -1729,6 +1736,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                 # before D68 (A04-F001 re-lead replay); new ones stream.
                 _srec = _open_tabled(entry, functor, arity, trail,
                                      _evaluating_ancestor(entry))
+                _leader_ctx.incomplete_reads += 1
                 for i in range(len(entry.answers)):
                     c = entry.conditions[i]
                     if c is _FAILED:
@@ -1756,6 +1764,8 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             changed = True
             while changed:
                 changed = False
+                pass_delays = False
+                reads_at_start = _leader_ctx.incomplete_reads
                 _gen = StepGenerator(original_dispatch, this_generator,
                                      this_generator, this_generator, *args, trail)
                 _st = yield (_gen, None)
@@ -1772,6 +1782,8 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     # covers callers that reach ``_charge_delays`` with no
                     # trail to record on.
                     delay_set = frozenset(entry._current_delays)
+                    if delay_set:
+                        pass_delays = True
                     new_idx = entry.add_answer(answer, delay_set)
                     if new_idx is not None:
                         # New tuple OR a revived _FAILED row — both change the
@@ -1788,12 +1800,31 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                                     _evaluating_ancestor(entry) if member
                                     else STREAMED_CONSTRAINED)
                             streamed.add(new_idx)
+                            _leader_ctx.incomplete_reads += 1
                             if delay_set and consumer is not None:
                                 _credit_consumer(consumer, entry, new_idx,
                                                  table_store, trail,
                                                  delay_set)
                             yield (_proceed, None)
                     _st = yield (_gen, None)
+                if (changed and not entry.suspended and not entry.scc_deps
+                        and not pass_delays
+                        and _leader_ctx.incomplete_reads == reads_at_start):
+                    # No confirming pass (D68 review F3): nothing in this pass
+                    # read an incomplete table -- no consumer suspended on
+                    # this one, no SCC dependency, no answer handed out from
+                    # an incomplete table anywhere beneath it (the
+                    # ``incomplete_reads`` counter: a constrained answer
+                    # streamed into the pass, say) -- and no answer is
+                    # conditional.  Every tabled call it made is complete,
+                    # so a re-run derives the same answers.  Only a
+                    # body that reads its OWN side effects (an assertz in the
+                    # pass, read by a clause that ran before it) could differ,
+                    # and then the single pass gives what the untabled
+                    # program gives, with the side effects run once
+                    # (tests/iso_l3/test_l3_tabled_complete_first.py::
+                    # test_a_side_effect_runs_once_and_is_not_reread).
+                    changed = False
                 entry._current_delays.clear()
                 # Consumers that suspended during this pass are re-derived by the
                 # next pass; finish their parked generators cleanly.
