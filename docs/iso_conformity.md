@@ -123,3 +123,8 @@ In rough order of authority:
    on them.
 
 When these disagree, the order above is the tie-break, not a vote.
+
+Sometimes none of them settles a case: the standard is silent, or two of its
+rules seem to conflict. Those cases are collected as questions for Ulrich
+Neumerkel in [Open Questions for the Standard](iso_questions_for_ulrich.md),
+with our provisional answer for each.
