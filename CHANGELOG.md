@@ -79,14 +79,15 @@ surface described in [docs/public-api.md](docs/public-api.md).
 ### Added
 
 - **The in-process `.pl` loader runs `!`, `->` and if-then-else** with ISO
-  7.8 semantics, on the native front end (`CLAUSAL_PL_FRONTEND=native`;
-  the translator still refuses them); `.clausal` stays cut-free. A cut
+  7.8 semantics, on the native front end (the default; the legacy
+  translator, `CLAUSAL_PL_FRONTEND=translator`, still refuses them);
+  `.clausal` stays cut-free. A cut
   whose scope holds a tabled call is refused (XSB's rule), including
   `once/1` and `setup_call_cleanup/3`'s Setup (in `.pl` modules): at load
   where the compiler can see the call, otherwise at run time when the cut
   would prune an incomplete table (`permission_error(cut, incomplete_table,
-  F/N)`). A commit on the first answer of a fresh table currently raises,
-  even for a non-recursive table; this may change to complete-then-cut.
+  F/N)`). A commit on the first answer of a fresh table runs: the table
+  completes first (D68, below).
   `*->` stays refused. Recursion through an if-then-else condition, through
   `once/1`, or through a `catch/3` Recovery that cuts is limited by the
   Python stack: about 330-400 deep at Python's default recursion limit
@@ -164,6 +165,32 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `.pl` importer.
 
 ### Changed
+
+- **A tabled call completes its table before its first answer** (operator
+  ruling 2026-10-16 (D68), option B; XSB's local scheduling), unless it
+  depends on a table that is still being computed (a recursive or mutually
+  recursive call inside an SCC, which SLG still answers from the
+  incomplete table, or an answer carrying a constraint, which a table
+  cannot store and is still handed over as it is derived). Answers then
+  come back in table order.
+  Why: a table used to hand back answers while it was still being filled,
+  so a second call of the same table in the caller's continuation joined
+  against a partial table -- a silent wrong answer:
+  `findall(X-Y, (t(X), t(Y)), L)` over `t(1). t(2). t(3).` gave 6 pairs,
+  not 9, and inside another tabled predicate both the 6-pair and the
+  9-pair list were tabled. And a cut, `->`, `once/1` or
+  `setup_call_cleanup/3`'s Setup over the first answer of a fresh table
+  raised `permission_error(cut, incomplete_table, F/N)` even when the table
+  was not recursive; it now prunes a complete table and runs. The error
+  remains for a cut over a call whose table really is incomplete, and its
+  message now says which tabled predicate, which evaluation it is inside,
+  what the cut would lose, and what to do instead (`findall/3` first, or
+  move the commit out of the recursion). The load-time refusal of a cut
+  whose scope holds a tabled call (D61 Q1) is unchanged. Visible effects:
+  a caller abandoning a tabled call after its first answer leaves the table
+  complete (it used to be dropped); a first answer costs the whole table,
+  so a table that never completes (an infinite one) no longer hands back a
+  first answer before running forever.
 
 - **`clausal.logic.variables.pending_or_once` yields `range(1)` when nothing
   is queued.** It was the shared tuple `(None,)`. Its one item is now `0`,

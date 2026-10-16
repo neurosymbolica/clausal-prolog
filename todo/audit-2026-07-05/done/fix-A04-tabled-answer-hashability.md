@@ -7,6 +7,9 @@ binding, and a `++`-built dict holds a raw Var, so the FIRST (leader) query
 derefs to `{'k': <Var>}` (the cache-hit query is correct — see
 `test_dict_answer_cache_hit_is_frozen`). Presenting frozen answers from the
 leader is a separate change; `test_dict_answer_leader_query` stays xfail.
+**Residual RESOLVED 2026-10-16 (D68):** a leader now completes its table and
+delivers every answer from it, frozen, so the first query gives `{'k': 7}`
+too; `test_dict_answer_leader_query` passes and its xfail is removed.
 
 ---
 

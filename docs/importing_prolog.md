@@ -805,7 +805,8 @@ value(V)    :- constant_value(max_fine, V).               % program-wide
 
 ### Cut and if-then-else (native front end)
 
-With `CLAUSAL_PL_FRONTEND=native`, a `.pl` file runs `!`, `( C -> T ; E )`
+On the native front end (the default; the legacy translator,
+`CLAUSAL_PL_FRONTEND=translator`, refuses them), a `.pl` file runs `!`, `( C -> T ; E )`
 and `( C -> T )` with ISO 7.8 semantics: a cut prunes the clause's
 alternatives and the choice points made since the clause was entered;
 `->` commits to the condition's first solution. Meta-calls are cut
@@ -828,17 +829,29 @@ may not import a `.pl` one.
     applies even when the table would be complete by then.
   * **At run time**, for what the compiler cannot see: a tabled predicate
     reached through an untabled one, or a goal built at run time
-    (`G = (path(a, Y), !), call(G)`). When the cut (or the commit) runs
-    while a tabled call made inside its scope can still return answers
-    from a table that is not complete, it throws
-    `error(permission_error(cut, incomplete_table, F/N), _)`, naming the
-    tabled predicate. A table that completed before the cut is fine:
-    `findall(Y, t(Y), _), q(X), !` with `q(X) :- t(X)` runs.
-  * **A fresh table, even a non-recursive one, currently raises.** A
-    table returns its answers while it is still being computed, so a
-    commit on the first answer of a fresh table, e.g. `( q(X) -> ... )`,
-    raises even when `t/1` is not recursive. This may change to
-    completing the table first and then cutting.
+    (`G = (path(a, Y), !), call(G)`). A cut there runs when the table it
+    prunes is complete, and raises only when it is not.
+  * **A tabled call completes its table before its first answer**
+    (operator ruling D68, 2026-10-16; XSB's local scheduling), unless it
+    depends on a table that is still being computed. So a commit on the
+    first answer of a fresh table, e.g. `( q(X) -> ... )` with
+    `q(X) :- t(X)`, prunes a complete table and runs, recursive `t/1` or
+    not, at the top level or inside another table's evaluation. Answers
+    come back in table order: the order they were first derived in. (An
+    answer carrying a constraint, such as `dif/2` on a variable it leaves
+    unbound, is still handed over when it is derived, before the table
+    completes: a table cannot store the constraint. A cut over it raises.)
+  * **What still raises:** a cut over a call whose table really is
+    incomplete. That is a call made inside the evaluation of a tabled
+    predicate it depends on: a recursive call to `a/1` inside `a/1`'s own
+    evaluation, or a call to `q/1` inside `p/1`'s evaluation when `q/1`
+    calls `p/1` back. Such a table holds only the answers found so far,
+    and SLG must hand them back before the table is complete, so a cut
+    would throw away answers not produced yet. The cut throws
+    `error(permission_error(cut, incomplete_table, F/N), _)`, and the
+    message names the tabled predicate and the evaluation it is inside,
+    and suggests collecting the answers first with `findall/3` or moving
+    the commit out of the recursion.
   * **`once/1` and setup_call_cleanup's Setup** are checked only in `.pl`
     modules, and there in two cases:
     * the goal written inside `once/1` or the Setup is itself a variable,
@@ -971,7 +984,7 @@ Most standard Prolog translates cleanly:
 
 ### Unsupported constructs
 
-The translator (the default front end) **rejects** programs containing
+The legacy translator (`CLAUSAL_PL_FRONTEND=translator`) **rejects** programs containing
 (the native front end runs them: see
 [Cut and if-then-else](#cut-and-if-then-else-native-front-end)):
 

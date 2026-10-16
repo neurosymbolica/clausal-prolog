@@ -92,6 +92,8 @@ def main():
 
 From a plain `.py` file (which cannot use `--`), use `solve(goal, module=m)` or `call` — see [Python integration](python_integration.md).
 
+**A tabled call completes its table before its first answer** (operator ruling D68, 2026-10-16; XSB's local scheduling), then hands back the answers in table order, the order they were first derived in. So a second call of the same table in the first call's continuation (`findall(X-Y, (t(X), t(Y)), L)`) sees every answer, and taking only the first answer leaves the table complete. The exceptions: a recursive or mutually recursive call inside the evaluation of a table it depends on, which SLG hands the answers found so far while the table is still being computed; and an answer that carries a constraint (`dif/2`, CLP, `freeze/2` on a variable it leaves unbound), which is handed over when it is derived, because the table cannot store the constraint (audit finding A12-F001). A table that never completes (infinitely many answers) gives no first answer either.
+
 ### Invalidation
 
 Tabled answers are cached for the lifetime of the module. If the underlying clauses change (via [`assertz`, `asserta`, or `retract`](database_ops.md) on a tabled predicate — which must be declared `dynamic`), all cached answers for that predicate are automatically invalidated. The next query recomputes from scratch.
@@ -182,7 +184,7 @@ From Python, in a `.seam` file, the same builtins run in goal position: `if --ab
 
     1. Create a `TableEntry` with status `"evaluating"`. Push it onto the leader context stack.
     2. Spawn a `StepGenerator` over the original dispatch.
-    3. Drive it via the trampoline protocol. Each time the inner dispatch yields a solution, freeze the args, snapshot `entry._current_delays` as the answer's condition set, and `add_answer` to the table. If the answer is new, yield it to the leader's caller.
+    3. Drive it via the trampoline protocol. Each time the inner dispatch yields a solution, freeze the args, snapshot `entry._current_delays` as the answer's condition set, and `add_answer` to the table. Nothing is yielded to the leader's caller yet: the leader re-runs the dispatch until no new answer appears (a fixpoint), then hands back every answer from the table, in table order (complete first, operator ruling D68, 2026-10-16; XSB's local scheduling). If the leader consumed an ancestor that is still evaluating, it is a member of that ancestor's SCC: it stays `"evaluating"`, and the answers it hands back come from an incomplete table, so a cut over that call raises `permission_error(cut, incomplete_table, F/N)`.
     4. when the inner dispatch is exhausted, enter the *completion phase*.
     5. After completion, run `_resolve_conditions` to simplify delayed negations (WFS).
     6. Pop the leader from the context stack and mark `"complete"`.
@@ -372,6 +374,7 @@ Non-tabled predicates fall through to the existing inline NAF codegen (no behavi
 
 - **Variant-only tabling.** Two calls are the same subgoal only if their arguments are structurally identical (modulo unbound variables). Subsumption-based tabling (where `p(1, X)` subsumes `p(1, 2)`) is not implemented.
 - **No answer subsumption.** All answers are kept. There is no mechanism for lattice-based answer combination (e.g., keeping only the maximum).
+- **First-answer cost.** A tabled call computes its whole table before its first answer, so `once/1` over a large table pays for all of it, and a call whose table is infinite never answers.
 - **Side effects during incomplete evaluation.** Python code called from within a tabled predicate may observe intermediate state when the table is still evaluating. This is documented, not prevented.
 
 ---

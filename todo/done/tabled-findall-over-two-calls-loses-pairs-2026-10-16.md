@@ -1,5 +1,7 @@
 # WRONG ANSWER: findall over two calls to one non-recursive tabled predicate loses pairs (2026-10-16)
 
+**Status: FIXED 2026-10-16 (4f7e6cb8).** Operator ruling D68 (option B): a tabled call that does not depend on a table still being computed completes its table before its first answer, so the inner t(Y) reads a complete table; 9 pairs, also inside a tabled predicate. Pinned in tests/iso_l3/test_l3_tabled_complete_first.py::test_findall_over_two_calls_of_one_table_gives_every_pair and ::test_the_same_findall_inside_a_tabled_predicate_has_one_answer.
+
 On canonical 0731c12e, no cut involved:
 
 ```prolog

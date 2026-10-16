@@ -25,6 +25,20 @@ Note the converse direction is CORRECT and regression-pinned: a
 *caller*-constrained var filters replayed answers through its hooks
 (`TestTablingReplayRespectsCallerConstraints`).
 
+## Interaction with D68 (2026-10-16)
+
+Operator ruling D68 made a tabled call complete its table before its first
+answer, delivering every answer from the table.  That would have dropped the
+constraint from the FIRST evaluation too (the two tests
+`test_first_evaluation_answer_carries_dif` / `_fd_domain` failed).  Stopgap:
+the leader still hands an unconditional answer that carries an attributed
+variable over live, when derived, before its table completes
+(`tabling._has_attributed_var`), under a cut-check record (a cut over it
+raises, naming the constraint as the reason).  Such answers keep the pre-D68
+weaknesses: a second call of the same table in the caller's continuation
+sees a partial table.  Resolving this todo (storing the residue) removes the
+stopgap.
+
 ## Investigation
 
 1. Decide semantics (A12-D001): (a) SLG(C)-style — store constraint residue
