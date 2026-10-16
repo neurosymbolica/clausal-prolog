@@ -71,7 +71,7 @@
   },
   "clausal/tools/toklex/specs/iso.toklex.pl": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <root>/clausal/tools/toklex/specs/iso.toklex.pl: iso.toklex.pl:36: syntax error (SyntaxIssue): Expected ')', got 'atom' ('then') at 36:22 (iso.toklex.pl, line 36)",
+   "error": "SyntaxError: Cannot import <root>/clausal/tools/toklex/specs/iso.toklex.pl: iso.toklex.pl:78: syntax error (SyntaxIssue): Expected ')', got 'atom' ('then') at 78:22 (iso.toklex.pl, line 78)",
    "load": "refused",
    "preds": null,
    "tests": null
@@ -2920,7 +2920,7 @@
   "clausal/tools/prolog_preludes/clausal_constants_scryer.pl": "c670a58962e4e263",
   "clausal/tools/prolog_preludes/clausal_constants_trealla.pl": "2c6654aacd571b8a",
   "clausal/tools/toklex/specs/clausal.toklex.pl": "5af47cde17e6beee",
-  "clausal/tools/toklex/specs/iso.toklex.pl": "edfc1c4532a865be",
+  "clausal/tools/toklex/specs/iso.toklex.pl": "dfb37695d2205955",
   "docs/asyncio.md#L147": "51c65bcbe50ffab7",
   "docs/clausal_prolog.md#L109": "073d4a2d11fc5484",
   "docs/clausal_prolog.md#L170": "421f52234df0668b",
