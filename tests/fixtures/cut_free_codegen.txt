@@ -323,13 +323,11 @@ def mem__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             _mark = trail.mark()
             _mark_cl = False
             try:
-                _v8__dup0 = $Var()
                 _v9 = $Var()
-                _lr0 = $head_list_unify_input(_lcap0, [_v8__dup0], _v9, [], trail)
+                _lr0 = $head_list_unify_input(_lcap0, [_v8], _v9, [], trail)
                 if _lr0 is not False:
-                    if $unify(_v8, _v8__dup0, trail):
-                        if _lr0 is not None or $head_list_unify_output(_lcap0, [_v8__dup0], _v9, [], trail):
-                            yield (_proceed, None)
+                    if _lr0 is not None or $head_list_unify_output(_lcap0, [_v8], _v9, [], trail):
+                        yield (_proceed, None)
             except $GeneratorExit:
                 _mark_cl = True
                 raise

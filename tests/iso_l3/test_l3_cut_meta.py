@@ -93,11 +93,13 @@ def test_clause_spells_the_cut_and_if_then_else(native, ans):
     # the cut is the atom ``!``; ``->`` the ISO cell, inside ``;`` with an else
     # (Scryer: [(_=1,!), (_=2->true;_=3), (_=4->true), (_=5,true)])
     b1, b2, b3, b4 = bodies
-    assert b1[1] == "!" and b1[0][0] == "=" and b1[0][2] == 1 and is_var(b1[0][1])
+    # (an ISO body is the term as read, so a conjunction is its ``,`` cell)
+    assert b1[0] == "," and b1[2] == "!"
+    assert b1[1][0] == "=" and b1[1][2] == 1 and is_var(b1[1][1])
     assert b2[0] == ";" and b2[1][0] == "->" and b2[1][2] is True
     assert b2[1][1][2] == 2 and b2[2][2] == 3
     assert b3[0] == "->" and b3[1][2] == 4 and b3[2] is True
-    assert b4[0][2] == 5
+    assert b4[0] == "," and b4[1][2] == 5 and b4[2] is True
     # the Body clause/2 hands back is callable, and its cut is local to call/1
     assert ans(mod, "m11") == [[1, 2, 4, 5]]
 
@@ -245,7 +247,8 @@ def test_retract_never_takes_an_if_then_else_for_a_conjunction(native, ans):
     mod = native.load("l3_cut_meta_ite_retract", ITE_CLAUSE_SRC)
     # Scryer: [!, (_>0, true)] -- the ITE clause is NOT one of them
     first, second = ans(mod, "g1")
-    assert first == "!" and second[0][0] == ">" and second[1] is True
+    assert first == "!"
+    assert second[0] == "," and second[1][0] == ">" and second[2] is True
     [left] = ans(mod, "g7")
     assert [b[0] for b in left] == [";", "->"]
 
