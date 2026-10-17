@@ -7,14 +7,15 @@ The implementation lives in `clausal/logic/clpb.py`.
 !!! note
     For CLP(ℤ) (integer constraints over all integers) and dif/2 (disequality), see [Constraints](constraints.md).
 
-!!! note "Seam vs Prolog syntax"
+!!! warning "The examples on this page are seam"
 
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+    CLP(B) formulas are written with Python's bitwise operators (`&`, `|`,
+    `^`, `~`), which only the [seam](syntax.md) (`.seam`, Clausal's
+    Python-syntax surface) has. So the examples below are seam. From
+    [Clausal Prolog](clausal_prolog.md) (`.clausal`) the four builtins are
+    callable, but a formula may use only variables, `0`, `1` and the
+    `'BoolEq'/2` and `'BoolImpl'/2` terms; see
+    [From Clausal Prolog](#from-clausal-prolog).
 
 ---
 
@@ -32,6 +33,37 @@ Python's bitwise operators express Boolean formulas:
 | `BoolImpl(X, Y)` | Implication (X → Y) |
 
 Variables in CLP(B) are constrained to values 0 (false) and 1 (true).
+
+### From Clausal Prolog
+
+In a `.clausal` file there is no AND, OR, XOR or NOT. `X & Y`, `X | Y`
+and `~X` are syntax errors there, and `sat/1` refuses the terms that do
+parse, such as `X ^ Y`, `X * Y`, `X + Y`, `\+ X` or `and(X, Y)`, by
+throwing the Python `TypeError` "CLP(B): unsupported expression type"
+(caught by `catch/3` as `'TypeError'(Message)`). Equivalence and implication do work, written as the
+quoted terms `'BoolEq'(X, Y)` and `'BoolImpl'(X, Y)`:
+
+```clausal
+same(X, Y) :-
+    sat('BoolEq'(X, Y)).
+
+implies(X, Y) :-
+    sat('BoolImpl'(X, Y)).
+
+test("equivalence forces the other side") :-
+    same(1, Y),
+    Y == 1.
+
+test("implication has three models") :-
+    findall(X-Y, (implies(X, Y), bool_labeling([X, Y])), MODELS),
+    MODELS == [0-0, 0-1, 1-1].
+
+test("taut and sat_count") :-
+    taut('BoolImpl'(X, X), T),
+    T == 1,
+    sat_count('BoolEq'(_, _), N),
+    N == 2.
+```
 
 `BoolEq` and `BoolImpl` are term constructors (Python classes), so a module names them in
 its import list — the one place a TitleCase name is declared:
