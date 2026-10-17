@@ -1,0 +1,11 @@
+-double_quotes(chars)
+# Companion test for docs/directives.md's double_quotes snippet: b"…" is
+# codes in either mode.  A seam-only literal (a .clausal file has no
+# b"…"), so this test stays in seam syntax.
+
+raw(b"hello"),
+
+test("b-literals are codes in either mode") <- (
+    raw(R),
+    R is [104, 101, 108, 108, 111]
+)  # nv

@@ -1,0 +1,8 @@
+% The rules module of docs/directives.md's module_predicate_export_vocab
+% section: it defines verdict/2 and exports it.
+% directives_sig_tests.clausal imports it.
+:- module(directives_rules, [verdict/2]).
+
+verdict(ok, cited).
+
+:- end_module(directives_rules).

@@ -1,0 +1,44 @@
+% Companion tests for docs/directives.md signature blocks.
+% Validates that directive-related predicates exist.
+%
+% The file sets double_quotes to chars, so it also pins the `double_quotes`
+% snippet's claims: "…" is a string here and '…' is an atom in either mode.
+% The b"…" codes claim is seam-only (a .clausal file has no b"…" literal):
+% it lives in directives_bliteral_sig_tests.seam.
+:- set_prolog_flag(double_quotes, chars).
+:- use_module(directives_rules, [verdict/2]).
+
+test("import_from works") :-
+    length([1, 2, 3], N),
+    N == 3.  % nv
+
+% ── module_predicate_export_impl: import from the defining module ───────────
+
+cited_ok(C) :-
+    verdict(ok, C).
+
+test("imported predicate from its defining module") :-
+    cited_ok(cited).  % nv
+
+% ── double_quotes ───────────────────────────────────────────────────────────
+
+greeting("hello").
+tag('hello').
+
+test("chars mode: a double-quoted literal is a string") :-
+    greeting(G),
+    string(G),
+    \+ atom(G),
+    G = [h, e, l, l, o].  % nv
+
+test("single quotes are an atom in either mode") :-
+    tag(T),
+    atom(T),
+    \+ string(T).  % nv
+
+test("the two kinds do not unify") :-
+    greeting(G2), tag(T2),
+    \+ G2 = T2.  % nv
+
+test("the flag reports chars") :-
+    current_prolog_flag(double_quotes, chars).  % nv

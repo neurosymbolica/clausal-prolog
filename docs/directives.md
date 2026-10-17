@@ -1,26 +1,74 @@
 # Directives
 
-Directives are module-level declarations in seam (`.seam`) files that control predicate properties, imports, and compilation behavior. They are prefixed with `-` and placed at the top of the file. [Clausal Prolog](clausal_prolog.md) (`.clausal`) files use ISO `:-` directives instead.
+Directives are module-level declarations that control predicate properties, imports, and compilation behavior. In [Clausal Prolog](clausal_prolog.md) (`.clausal`) they are ISO directives, `:- name(Args).`, and the examples on this page are `.clausal` where the directive has a `.clausal` form. The [seam](syntax.md) (`.seam`) writes them prefixed with `-`, `-name(Args)`, and has several directives Clausal Prolog does not: a `.clausal` file that writes one of those is refused at load with `unknown directive name/N`. Those sections say so and keep the seam spelling.
+
+| Seam directive | Clausal Prolog | |
+|---|---|---|
+| `-module(m, [...])` | `:- module(m, [p/1]).` … `:- end_module(m).` | atoms are not listed |
+| `-private([...])` | — | seam-only |
+| `-import_from(m, [...])` | `:- use_module(m, [p/1]).` | no `alias(...)` renaming |
+| `-import_module(m)` | `:- use_module(m).`, then `m:p(X)` | |
+| `-strict_atoms`, `-hide([...])`, `-implicit_functors` | — | seam-only; `.clausal` auto-declares atoms and functors |
+| `-dynamic`, `-table`, `-discontiguous`, `-meta_predicate` | `:- dynamic(p/1).` etc. | |
+| `-set_prolog_flag(F, V)` | `:- set_prolog_flag(F, V).` | |
+| `-shallow(p/2)` | — | seam-only |
+| `-constant_value`, `-constant_number_units`, … | `:- constant_value(name, V).` etc. | |
+| `-allow_singletons` | — | seam-only |
+| `-specialize(...)` | — | seam-only |
+| `-edcg_acc`, `-edcg_pass`, `-edcg_pred` | — | seam-only |
+| `-double_quotes(Mode)` | `:- set_prolog_flag(double_quotes, Mode).` | |
+
+Besides these, Clausal Prolog has `:- op/3`, `:- end_module/1` and `:- constructors/1`, and refuses `:- initialization/1` (a rulebase has no entry point).
 
 ---
 
 ## Module Declaration
 
-```seam
--module(my_module, [pred1(A, B), pred2(X)])
+```clausal
+:- module(my_module, [pred1/2, pred2/1]).
+
+pred1(a, b).
+pred2(a).
+
+test("pred1") :-
+    pred1(a, b).
+
+:- end_module(my_module).
 ```
 
-Declares the module name and its public exports. The export list specifies which predicates are accessible to importers. If omitted, the module name is derived from the filename.
+Declares the module name and its public exports. The export list specifies which predicates are accessible to importers. If omitted, the module name is derived from the filename. A `.clausal` module must end with `:- end_module(Name).` (see [Clausal Prolog](clausal_prolog.md#modules-end-with-end_module1)). The seam writes the exports as templates, `-module(my_module, [pred1(A, B), pred2(X)])`.
 
-The export list may mix predicates with arity (e.g. `pred1(A, B)`) and bare atoms (zero-arity predicates):
+In the seam the export list may also list bare atoms, which grants the right to write them under strict atoms:
 
 ```seam
 --8<-- "tests/fixtures/docs/directives_sigs.txt:module_with_atoms"
 ```
 
+Clausal Prolog auto-declares every atom a file uses, so its export list holds
+predicate indicators (and `op/3`s) only: `:- module(traffic, [phase/1, red])`
+is refused at load ("the export entry red is not a predicate indicator name/N
+(or name//N) or an op/3").
+
 #### Data functors vs predicates
 
-A **field-carrying** entry — `point(X, Y)` — declares a *data functor*: a shape
+In Clausal Prolog a compound term needs no declaration: every data functor a
+file uses is auto-declared. `:- constructors([point(x, y)]).` optionally
+gives one its field names, and `point/2` in the `module/2` list exports it:
+
+```clausal
+:- module(shapes, [point/2, kind/2]).
+:- constructors([point(x, y)]).
+
+kind(point(_, _), point).
+
+test("kind") :-
+    kind(point(1, 2), K),
+    K == point.
+
+:- end_module(shapes).
+```
+
+The rest of this section is about the seam's export templates (seam syntax). A **field-carrying** entry — `point(X, Y)` — declares a *data functor*: a shape
 you build terms with. Its terms compile to cells, plain tuples tagged with the
 functor spelling, and the name binds that spelling rather than a class:
 
@@ -41,18 +89,19 @@ dispatch on it, and from Python it runs as a goal cell with `module=`:
 #### `name/arity` — a predicate export
 
 The ISO `name/arity` spelling exports a **predicate** by name and arity, which
-is what module exports look like in ISO Prolog anyway. The module that exports
-it is the module that defines it, and other modules import it from there:
+is what module exports look like in ISO Prolog anyway, and the only spelling
+Clausal Prolog has. The module that exports it is the module that defines it,
+and other modules import it from there:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/directives_sigs.txt:module_predicate_export_vocab"
 ```
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/directives_sigs.txt:module_predicate_export_impl"
 ```
 
-Field names are placeholders (`arg_0`, `arg_1`) until a real clause supplies
+In the seam, field names are placeholders (`arg_0`, `arg_1`) until a real clause supplies
 its own, exactly as with [`-dynamic`](#-dynamic).
 
 !!! warning "No *vocabulary module*: the importer cannot supply the clauses"
@@ -64,20 +113,25 @@ its own, exactly as with [`-dynamic`](#-dynamic).
     "vocabulary-implements" idiom was supported until 2026-09-24; a predicate
     has exactly one defining module.)
 
-Both spellings work in [`-private`](#-private) too.
+Both spellings work in the seam's [`-private`](#-private) too.
 
 An entry whose arity looks like a typo loads with a
-`ClausalExportArityMismatchWarning`: `-module(m, [base/9])` in a module
+`ClausalExportArityMismatchWarning`: `:- module(m, [base/9]).` (seam `-module(m, [base/9])`) in a module
 whose clauses are all `base/2` warns at the entry's line, names both
 arities and suggests `base/2`. It stays a warning because exporting a
 predicate with no clauses is legal (calling it raises `existence_error`).
 It is silent when `base/9` has clauses or a declaration (`-dynamic(base/9)`,
 `-table`, …) in the module, and when `base` has no clauses at any arity.
 
-!!! info "Listing an atom declares the RIGHT to write it, not a new identity"
+!!! info "Seam: listing an atom declares the RIGHT to write it, not a new identity"
     **Atoms are global by spelling.** Listing `red` here does not create a module-local variant of it: the atom **is** the interned Python `str` `'red'`, and every module that writes `red` — by `-module`, by `-private`, or by `-import_from` — has that same atom, equal by `==`. What the listing buys is the *right to write the bare name*: an unlisted, unimported bare atom raises a compile-time `NameError` by default (strict is the default). For an atom other modules genuinely cannot reach or spell, use [`-hide`](#-hide), which is the only module-local mechanism. See [Atoms § Strict by default](syntax.md#atoms), [Import System § Atoms are global by spelling](import.md#atoms-are-global-by-spelling), and the [global-atoms-default spec](https://gitlab.com/MikeAmy/clausal/-/blob/main/implementation_plans/atoms_refactor/GLOBAL_ATOMS_DEFAULT.md).
 
 ### -private
+
+**Seam-only.** Clausal Prolog has no `private/1` directive (a `.clausal`
+`:- private([...]).` is `unknown directive private/1`): what a `.clausal`
+module does not list in `module/2` is simply not exported, and its atoms need
+no declaration. Seam syntax:
 
 ```seam
 -private([helper(X, Y), edge(A, B)])
@@ -117,13 +171,16 @@ A [constant](#-constant_value) used to be listable in `-private` as pure documen
 
 ### -import_from
 
-Import specific predicates from another module:
+In Clausal Prolog this is `:- use_module(Module, [Name/Arity, ...]).` Import specific predicates from another module:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/directives_sigs.txt:import_from"
 ```
 
-With aliasing:
+`double/2` imports one arity, as in Scryer. Clausal Prolog has no import
+aliasing: `use_module(utils, [double/2 as my_double])` is refused at load (it
+is SWI-only); resolve a name clash with a module-qualified call,
+`utils:double(X, Y)`. The seam renames on import:
 
 ```seam
 --8<-- "tests/fixtures/docs/directives_sigs.txt:import_from_ex2"
@@ -131,9 +188,9 @@ With aliasing:
 
 This imports `double` from `utils` but makes it available locally as `my_double`.
 
-A bare name imports every arity the module has for it; the ISO indicator
-`double/2` imports one arity, as Scryer's `use_module(utils, [double/2])`
-does, and `alias(double/2, my_double)` renames one arity. See
+In the seam a bare name imports every arity the module has for it; the ISO
+indicator `double/2` imports one arity, and `alias(double/2, my_double)`
+renames one arity. See
 [Importing one arity](import.md#importing-one-arity-namen).
 
 !!! info "Importing an atom: when it matters"
@@ -141,13 +198,14 @@ does, and `alias(double/2, my_double)` renames one arity. See
 
 ### -import_module
 
-Import all exported predicates from a module:
+In Clausal Prolog this is `:- use_module(Module).` Import all exported predicates from a module:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/directives_sigs.txt:import_module"
 ```
 
-Imported predicates are accessed via qualified names: `utils.double(X, Y)`.
+A predicate can then also be called qualified, `utils:double(X, Y)` (the
+seam writes `utils.double(X, Y)`).
 
 See [Import System](import.md) for full details. For importing Prolog `.pl` files directly, see [Importing Prolog](importing_prolog.md).
 
@@ -155,7 +213,13 @@ See [Import System](import.md) for full details. For importing Prolog `.pl` file
 
 ## Atom-Identity Directives
 
-These directives control atom resolution and scope. Atoms are **global by spelling** — `red` denotes the same atom everywhere in a process, there is no per-module atom identity to shadow or overwrite (see [Import System](import.md#atoms-are-global-by-spelling) for the full story and its history). The short version: strict resolution is the default — an undeclared bare atom reference is a compile-time `NameError`; there is no opt-out (the old `-implicit_atoms` was removed before 1.0); `-hide` gives a module a private, compiler-renamed atom namespace other modules cannot spell.
+**Seam-only.** None of the directives in this section exists in Clausal
+Prolog (`:- strict_atoms.`, `:- hide([...]).` and `:- implicit_functors.` are
+each `unknown directive`): a `.clausal` file auto-declares every atom and data
+functor it uses (Clausal Prolog is not strict), so there is nothing to opt in
+to or out of. The examples are seam syntax.
+
+These directives control atom resolution and scope in the seam. Atoms are **global by spelling** — `red` denotes the same atom everywhere in a process, there is no per-module atom identity to shadow or overwrite (see [Import System](import.md#atoms-are-global-by-spelling) for the full story and its history). The short version: strict resolution is the default — an undeclared bare atom reference is a compile-time `NameError`; there is no opt-out (the old `-implicit_atoms` was removed before 1.0); `-hide` gives a module a private, compiler-renamed atom namespace other modules cannot spell.
 
 Upgrading an existing codebase from the old auto-mint default? See the [strict-atoms migration guide](strict-atoms-migration.md).
 
@@ -307,19 +371,18 @@ imported modules.
 them at runtime. But some programs need to add or remove facts during execution
 (counters, caches, learned knowledge).
 
-```seam
--dynamic(color/1)
+```clausal
+:- dynamic(color/1).
 
-color('red'),
+color(red).
 
-test("add at runtime") <- (
-    assertz(color('blue')),
-    color('blue')
-)
+test("add at runtime") :-
+    assertz(color(blue)),
+    color(blue).
 ```
 
 `assertz`/`asserta`/`retract` work **only** on a predicate declared
-`-dynamic` — declare first. Without the declaration the `assertz` above raises
+dynamic — declare first. Without the declaration the `assertz` above raises
 the ISO error `error(permission_error(modify, static_procedure, color/1), assertz/1)`,
 and a name that is not declared at all is refused, unless the module sets the
 flag [`assert_creates_dynamic`](flags.md#assert_creates_dynamic) (below). A
@@ -328,24 +391,28 @@ flag [`assert_creates_dynamic`](flags.md#assert_creates_dynamic) (below). A
 
 ### -set_prolog_flag
 
-`-set_prolog_flag(Flag, Value)` sets a [Prolog flag](flags.md) when the module
-loads, the ISO `:- set_prolog_flag(Flag, Value).` as a directive. A module-scoped
-flag is set for this module:
+`:- set_prolog_flag(Flag, Value).` (seam `-set_prolog_flag(Flag, Value)`) sets a
+[Prolog flag](flags.md) when the module loads. A module-scoped flag is set for
+this module:
 
-```seam
--set_prolog_flag(assert_creates_dynamic, true)
+```clausal
+:- set_prolog_flag(assert_creates_dynamic, true).
+
+test("assert creates a dynamic predicate") :-
+    assertz(fresh(1)),
+    fresh(1).
 ```
 
 - `assert_creates_dynamic`: `true` makes `assertz`/`asserta` of a procedure that
   does not exist create it as dynamic (ISO 7.5.2(2)) instead of refusing it.
-- `double_quotes`: the same as [`-double_quotes(Mode)`](#-double_quotes), and
+- `double_quotes`: the same as the seam's [`-double_quotes(Mode)`](#-double_quotes), and
   position-sensitive like it.
 - A process flag (`debug`) is set for the whole process.
 
-A setting that `set_prolog_flag/2` would refuse is a load-time `SyntaxError`
+A setting that `set_prolog_flag/2` would refuse is a load-time error
 carrying the ISO error term, e.g.
 `error(permission_error(modify,flag,unknown),set_prolog_flag/2)` for
-`-set_prolog_flag(unknown, fail)`.
+`:- set_prolog_flag(unknown, fail).`
 
 ### -table
 
@@ -353,21 +420,27 @@ carrying the ISO error term, e.g.
 subproblems. Tabling automatically caches answers and handles left-recursive
 definitions.
 
-```seam
--table(path/2)
+```clausal
+:- table(path/2).
 
-edge(1, 2),
-edge(2, 3),
-edge(3, 1),
+edge(1, 2).
+edge(2, 3).
+edge(3, 1).
 
-path(X, Y) <- edge(X, Y)
-path(X, Y) <- (edge(X, Z), path(Z, Y))
+path(X, Y) :-
+    edge(X, Y).
+path(X, Y) :-
+    edge(X, Z),
+    path(Z, Y).
 
-test("path 1 3") <- path(1, 3)
-test("path 2 1") <- path(2, 1)
+test("path 1 3") :-
+    path(1, 3).
+
+test("path 2 1") :-
+    path(2, 1).
 ```
 
-Without `-table`, `path/2` would loop forever on the cycle `1→2→3→1`. With
+Without `table/1`, `path/2` would loop forever on the cycle `1→2→3→1`. With
 tabling, it terminates and returns all reachable pairs. Also required for
 [Well-Founded Semantics](wfs.md).
 
@@ -392,18 +465,23 @@ See [Tabling](tabling.md) for details.
 **Problem**: By default, all clauses for a predicate must be grouped together
 in the source file. Sometimes it's clearer to interleave related predicates.
 
-```seam
--discontiguous(test/1)
+```clausal
+:- use_module(library(clpz)).
+:- discontiguous(test/1).
 
-helper(X, Y) <- (Y == X + 1)
-test("first") <- helper(1, 2)
+helper(X, Y) :-
+    Y #= X + 1.
+test("first") :-
+    helper(1, 2).
 
-other_helper(X, Y) <- (Y == X * 2)
-test("second") <- other_helper(3, 6)
+other_helper(X, Y) :-
+    Y #= X * 2.
+test("second") :-
+    other_helper(3, 6).
 ```
 
-Without `-discontiguous`, the `test` clauses being separated by `other_helper`
-would trigger a warning or error.
+In the seam, without `-discontiguous` the `test` clauses being separated by
+`other_helper` would trigger a warning or error.
 
 ### -meta_predicate
 
@@ -411,30 +489,34 @@ would trigger a warning or error.
 module system needs to know which arguments are goals (to resolve them in the
 correct module context).
 
-```seam
--meta_predicate(my_map(2, '+', '-'))
+```clausal
+:- use_module(library(clpz)).
+:- meta_predicate(my_map(2, +, -)).
 
-my_map(_, [], []),
-my_map(G, [X, *Xs], [Y, *Ys]) <- (
+my_map(_, [], []).
+my_map(G, [X|Xs], [Y|Ys]) :-
     call(G, X, Y),
-    my_map(G, Xs, Ys)
-)
+    my_map(G, Xs, Ys).
 
-double(X, Y) <- (Y == X * 2)
+double(X, Y) :-
+    Y #= X * 2.
 
-test("my_map calls its goal on each element") <- (
+test("my_map calls its goal on each element") :-
     my_map(double, [1, 2, 3], L),
-    L == [2, 4, 6]
-)
+    L == [2, 4, 6].
 ```
 
 The `2` means the first argument is a goal that takes 2 extra arguments.
-`'+'` means input, `'-'` means output (and `'?'` either, `':'` a
-module-sensitive argument that is not a goal). The modes are QUOTED atoms:
-a bare `+` or `-` is an operator, not a term, in this syntax. This ensures
+`+` means input, `-` means output (and `?` either, `:` a
+module-sensitive argument that is not a goal). In the seam the modes are
+QUOTED atoms (`'+'`, `'-'`): a bare `+` or `-` is an operator there, not a
+term. This ensures
 correct cross-module resolution when `my_map` is imported. See [Higher-Order Predicates](higher_order.md) for builtins like `maplist` that use this pattern.
 
 ### -shallow
+
+**Seam-only**: `:- shallow(lookup/2).` in a `.clausal` file is
+`unknown directive shallow/1`. Seam syntax below.
 
 **Problem**: The default trampoline compilation mode has slight overhead for
 stack safety. For predicates known to have bounded recursion depth (lookups,
@@ -463,31 +545,42 @@ matters. See [Compiler](compiler.md) for details on the two compilation modes.
 
 **Problem**: A magic number like `3.14159` or `3` repeated across several clauses is a
 maintenance hazard — rename the meaning, and every occurrence has to be found and checked by
-hand. Prolog has no answer to this beyond a fact plus an extra goal (`is_pi(PI), area == PI *
-R**2`); the seam gives constants their own lexical class instead.
+hand. Prolog has no answer to this beyond a fact plus an extra goal (`is_pi(PI), AREA is PI *
+R**2`); Clausal gives constants their own declaration instead.
 
-```seam
--constant_value(pi, 3.14159)
--constant_value(max_retries, 3)
+```clausal
+:- constant_value(pi, 3.14159).
+:- constant_value(max_retries, 3).
 
-area(R, AREA) <- (AREA == constant(pi) * R**2)
+area(R, AREA) :-
+    AREA is constant(pi) * R ** 2.
 
-test("area of radius 2") <- (
+test("area of radius 2") :-
     area(2, AREA),
-    AREA == 12.56636
-)
+    AREA =:= 12.56636.
+
+test("max retries") :-
+    constant(max_retries) =:= 3.
 ```
+
+(The seam writes the area as a CLP constraint, `AREA == constant(pi) * R**2`.)
 
 ### -constant_number_units
 
-```seam
--import_from(european_union, [euro])
--constant_number_units(max_fine, 5000, euro)
+```clausal
+:- use_module(library(countries/european_union), [euro]).
+:- constant_number_units(max_fine, 5000, euro).
 
-applies(X) <- (fine(X, F), F > constant(max_fine))
+applies(X) :-
+    fine(X, F),
+    F > constant(max_fine).
+
+test("the constant carries its unit") :-
+    X = constant(max_fine),
+    nonvar(X).
 ```
 
-`-constant_number_units(name, number, units)` is the same declaration with the unit kept **out**
+`constant_number_units(name, number, units)` is the same declaration with the unit kept **out**
 of the value. It is spelled `number`, not `value`, because **only numbers carry units** — a
 non-numeric value is refused at load time, naming the directive. Reflect on one with
 [`constant_number_units/3`](builtins.md#constant_number_units3). It binds `name = Quantity(value, units)` — the identical object the
@@ -499,10 +592,10 @@ The two directives are a family, which is why they are positional rather than ke
 arguments: `-constants(a = 1, b = 2)` had no room for a third argument on one of its pairs.
 One line per constant also reads better in a diff.
 
-### In ISO syntax (`.pl`)
+### In ISO syntax (`.clausal`, `.pl`)
 
-A `.pl` file read by the native front end writes the same directives as
-ISO directives, verbatim: `:- constant_value(max_retries, 3).`,
+A `.clausal` file, and a `.pl` file read by the native front end, writes the
+same directives as ISO directives, verbatim: `:- constant_value(max_retries, 3).`,
 `:- constant_number_units(max_fine, 5000, euro).`,
 `:- constant_number_currency(fee, "292.00", euro).` and the table forms
 `:- constants_number_units(p/2, [[1, 10], [2, 20]], euro, number_at(2)).`
@@ -514,12 +607,20 @@ is used as `constant(max_fine)`, folded at compile time exactly as here. See
 ### Reaching a constant from another module
 
 **Ruled 2026-09-12.** A constant is in scope where it is **declared**, where it is
-**imported**, or where its owner is **named**:
+**imported**, or (in the seam) where its owner is **named**:
 
 ```text
 -import_from(other_module, [max_fine])      # then: constant(max_fine)
 -import_module(other_module)                # then: constant(other_module.max_fine)
 ```
+
+In Clausal Prolog the owning module exports the constant as `max_fine/0` in
+its `module/2` list, and the importer writes
+`:- use_module(other_module, [max_fine/0]).` (or `[max_fine]`), then
+`constant(max_fine)`. The qualified form has no `.clausal` spelling:
+`constant(other_module:max_fine)` is refused ("constant() takes the name of a
+declared constant, not other_module:max_fine"), and an unexported constant
+cannot be imported.
 
 Both forms work for the value and for
 [`constant_number_units/3`](builtins.md#constant_number_units3), whose scope is resolved at
@@ -547,7 +648,7 @@ a **structured literal** — a list, tuple, set, dict, or functor call, nested a
 unground right-hand side (one that computes to a value containing an unbound variable) raises
 `ConstantNotGroundError` before any clause compiles; a logic-variable-shaped name anywhere in a
 structured RHS is caught earlier still, as a located `SyntaxError` at compile time. A structured
-RHS builds the same real term the identical literal would build in a clause body — see
+RHS builds the same real term the identical literal would build in a clause body (the `++` escape is seam-only) — see
 [Structured constants](syntax.md#structured-constants) for the full reference, including the
 declared-above ordering rule a functor call needs and the frozen/immutable-value guarantee.
 
@@ -560,9 +661,10 @@ declared-above ordering rule a functor call needs and the frozen/immutable-value
 constant an earlier one declared, exactly like a later `name = value` pair within one directive
 can.
 
-**Constants are always public** — the declaration itself is module-global. Listing the name
+**Constants are always public in the seam** — the declaration itself is module-global. Listing the name
 in `-module` or `-private` declares the bare **atom** of that spelling (see above), not the
-constant. Import a constant the same way you import a predicate:
+constant. Import a constant the same way you import a predicate (seam syntax; for
+`.clausal`, see [Reaching a constant from another module](#reaching-a-constant-from-another-module)):
 
 ```seam
 --8<-- "tests/fixtures/docs/syntax_sigs.txt:constants_importing"
@@ -581,6 +683,11 @@ error and the `_UNUSED`-suffix naming trap.
 ## Lint Directives
 
 ### -allow_singletons
+
+**Seam-only**: `:- allow_singletons.` in a `.clausal` file is
+`unknown directive allow_singletons/0`; a `.clausal` file still gets the
+singleton warning, and names a deliberately unused variable `_` or `_Name`.
+Seam syntax below.
 
 **Problem**: Clausal Prolog warns by default whenever a named variable occurs exactly once in its
 clause (`ClausalSingletonWarning`) — almost always a typo. A few files have a *legitimate*
@@ -613,6 +720,11 @@ lint reference, including the exact warning text and the DCG/EDCG coverage gap.
 
 ### -specialize
 
+**Seam-only**: `:- specialize(...)` in a `.clausal` file is
+`unknown directive specialize/3`. Declare the specialization in a `.seam`
+module and import the predicate it makes (see
+[Meta-Interpreter Specialization](specialization.md#calling-it-from-clausal-prolog)).
+
 ```seam
 --8<-- "tests/fixtures/docs/directives_sigs.txt:specialize"
 ```
@@ -631,8 +743,10 @@ See [Meta-Interpreter Specialization](specialization.md) for full details.
 
 ## EDCG Directives
 
-!!! warning "Experimental"
+!!! warning "Experimental, seam-only"
     EDCG directives are parsed but end-to-end rewriting is not yet implemented.
+    They exist only in the seam: `:- edcg_acc(...)`, `:- edcg_pass(...)` and
+    `:- edcg_pred(...)` in a `.clausal` file are each `unknown directive`.
 
 Extended DCGs allow multiple named accumulators and passed arguments to be threaded through grammar rules automatically. See [DCGs](dcg.md) for the standard DCG system.
 
@@ -666,23 +780,27 @@ Declares how many visible arguments a predicate has and which accumulators/passe
 
 ### -double_quotes
 
-**Transitional — scheduled for removal.** It selects what a **double-quoted**
+**Seam directive, transitional — scheduled for removal.** It selects what a **double-quoted**
 literal means in the file, and it exists only so modules can migrate one at a
-time. Single quotes are unaffected: `'hello'` is the atom `hello` in every
-mode, and `b"…"`/`b'…'` are always [codes](bytes_as_lists.md).
+time. Clausal Prolog spells it with ISO's flag, `:- set_prolog_flag(double_quotes, Mode).`
+(`:- double_quotes(chars).` is `unknown directive double_quotes/1` there):
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/directives_sigs.txt:double_quotes"
 ```
+
+Single quotes are unaffected: `'hello'` is the atom `hello` in every
+mode. In the seam, `b"…"`/`b'…'` are always [codes](bytes_as_lists.md); a
+`.clausal` file has no `b"…"` literal (it is a syntax error).
 
 | Mode | `"hello"` means | Status |
 |---|---|---|
 | `chars` | the string `"hello"`, which *is* the list `['h','e','l','l','o']`; `atom("hello")` is false, `string("hello")` is true | the engine **default** (since 2026-09-26, as in Scryer and Trealla) |
 | `atom` | the atom `hello` — the same term as bare `hello` and as `'hello'` | the **opt-out** for a module that still relies on the old reading |
-| `codes` | — | **refused**. Codes are spelled `b"…"`. Any other argument is likewise an error. |
+| `codes` | in `.clausal`, the code list `[104, 101, 108, 108, 111]`, as ISO | **refused** in the seam, where codes are spelled `b"…"`. Any other argument is likewise an error. |
 
-`-set_prolog_flag(double_quotes, Mode)` is the same directive in ISO's
-spelling, and `current_prolog_flag(double_quotes, M)` reports the module's mode
+`-set_prolog_flag(double_quotes, Mode)` is the same directive in the seam, and
+`current_prolog_flag(double_quotes, M)` reports the module's mode
 ([Prolog Flags](flags.md)).
 
 The directive is **file-scoped and position-sensitive**: it governs the
@@ -761,7 +879,7 @@ for QS in --queens(8, QS):   # drives Scryer under the hood
 
 Directives are processed during module loading:
 
-1. The term transformer parses `-directive(...)` syntax into directive AST nodes
+1. The term transformer parses `-directive(...)` syntax into directive AST nodes (in a `.clausal` file the native front end reads each `:- directive.` and hands it to the same handler; an unknown one is a load error naming the directives it handles)
 2. The compiler (v2 pipeline) processes directives before clause compilation via `_process_directives`
 3. Property directives set metadata flags on the predicate's row in the module's `Database` (see [Predicates](predicates.md))
 4. Import directives trigger module loading and predicate injection (see [Import System](import.md))
