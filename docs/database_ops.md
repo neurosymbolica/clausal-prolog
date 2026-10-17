@@ -4,48 +4,48 @@ Clausal Prolog supports runtime modification of the predicate database — addin
 removing clauses while a program is running. This enables dynamic state,
 memoization, and self-modifying programs.
 
-!!! note "Seam vs Prolog syntax"
-
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+Examples on this page are [Clausal Prolog](clausal_prolog.md)
+(`.clausal`): ISO Prolog syntax, without cut. (The [seam](syntax.md),
+Clausal's Python-syntax surface, writes the directive `-dynamic(Name/Arity)`
+and has a different default for undeclared names; the page notes where.)
 
 ---
 
 ## Quick Example
 
-```seam
---8<-- "tests/fixtures/docs/database_ops_examples.seam:quick_example"
+```clausal
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:quick_example"
 ```
 
 ---
 
-## Declare first: the `-dynamic` directive
+## Declare first: the `dynamic/1` directive
 
-`assertz`, `asserta` and `retract` work **only on a predicate declared
-`-dynamic`**. Every other predicate is static once its module has loaded, as in
-ISO Prolog: modifying it raises
-`permission_error(modify, static_procedure, Name/Arity)`, with the builtin
-as the culprit (Scryer's form; see [Exceptions](exceptions.md)).
+`assertz`, `asserta` and `retract` modify a **dynamic** predicate, declared
+with `:- dynamic(Name/Arity).`. A predicate that has clauses in its module and
+no declaration is static once the module has loaded, as in ISO Prolog:
+modifying it raises `permission_error(modify, static_procedure, Name/Arity)`,
+with the builtin as the culprit (Scryer's form; see
+[Exceptions](exceptions.md)). Builtins are static too.
 
-```seam
---8<-- "tests/fixtures/docs/database_ops_examples.seam:declare_first"
+```clausal
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:declare_first"
 ```
 
 The declaration also makes the predicate exist before it has clauses: a
-`-dynamic` predicate with no clauses simply fails, where an undeclared name is
-refused with the same `permission_error(modify, static_procedure, Name/Arity)`
-(it is static by default). The module flag
-[`assert_creates_dynamic`](flags.md#assert_creates_dynamic) changes that last
-case to ISO 7.5.2(2): with it `true`, asserting into a procedure that does not
-exist creates it as a dynamic procedure. An imported `.pl` module has it on.
-Declare several at once:
+dynamic predicate with no clauses simply fails, where calling an undeclared
+name with no clauses raises `existence_error(procedure, Name/Arity)`.
+Asserting into a name that does not exist at all follows the module flag
+[`assert_creates_dynamic`](flags.md#assert_creates_dynamic), which is `true`
+in a `.clausal` module (and an imported `.pl` one): as in ISO 7.5.2(2), the
+assert creates it as a dynamic procedure. (A seam module has the flag
+`false`, so there an undeclared name is refused with the same
+`permission_error(modify, static_procedure, Name/Arity)`.) Declaring the
+predicate is still the clear way to say it is meant to change. Declare
+several at once:
 
-```seam
---8<-- "tests/fixtures/docs/database_ops_examples.seam:dynamic_directive"
+```clausal
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:dynamic_directive"
 ```
 
 See [Directives](directives.md) for the other directives.
@@ -54,14 +54,14 @@ See [Directives](directives.md) for the other directives.
 
 A `Module` built from Python has no directives, so declare its dynamic
 predicates with `Module.declare_dynamic(name, arity)`, the same declaration
-as `-dynamic(name/arity)`. It also works on the `Module` of a loaded
+as `:- dynamic(name/arity).`. It also works on the `Module` of a loaded
 `.seam` or `.clausal` file (`mod.__clausal_module__`).
 
 ```python
 from clausal import Module, Var, solve
 
 m = Module("counter")
-m.declare_dynamic("count", 1)          # -dynamic(count/1)
+m.declare_dynamic("count", 1)          # :- dynamic(count/1).
 list(solve(("assertz", ("count", 0)), module=m))
 n = Var()
 [n.value for _ in solve(("count", n), module=m)]    # [0]
@@ -83,8 +83,8 @@ static predicate that already has clauses.
 `assertz(Term)` — add a fact at the **end** of the clause list (like Prolog's
 `assertz`).
 
-```seam
---8<-- "tests/fixtures/docs/database_ops_examples.seam:assertz_example"
+```clausal
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:assertz_example"
 ```
 
 ### asserta/1
@@ -92,8 +92,8 @@ static predicate that already has clauses.
 `asserta(Term)` — add a fact at the **beginning** of the clause list (like
 Prolog's `asserta`). The new clause will be tried first on subsequent queries.
 
-```seam
---8<-- "tests/fixtures/docs/database_ops_examples.seam:asserta_example"
+```clausal
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:asserta_example"
 ```
 
 ---
@@ -104,8 +104,8 @@ Prolog's `asserta`). The new clause will be tried first on subsequent queries.
 
 `retract(Term)` — remove the first clause whose head unifies with `Term`.
 
-```seam
---8<-- "tests/fixtures/docs/database_ops_examples.seam:retract_example"
+```clausal
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:retract_example"
 ```
 
 As in ISO (8.9.3) and Scryer, `retract` of a name nothing declares simply
@@ -117,8 +117,8 @@ an unbound `Term` raises `instantiation_error`. (`retractall/1` and
 
 `retract` uses unification for matching, so you can retract by pattern:
 
-```seam
---8<-- "tests/fixtures/docs/database_ops_examples.seam:retract_pattern"
+```clausal
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:retract_pattern"
 ```
 
 ---
@@ -130,16 +130,17 @@ an unbound `Term` raises `instantiation_error`. (`retractall/1` and
 `abolish_table(functor, Arity)` — clear cached answers for a specific tabled
 predicate.
 
-```seam
---8<-- "tests/fixtures/docs/database_ops_examples.seam:abolish_table_example"
+```clausal
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:abolish_table_example"
 ```
 
 ### abolish_all_tables/0
 
-`abolish_all_tables()` — clear all tabling caches at once.
+`abolish_all_tables` — clear all tabling caches at once.
 
-```seam
-test("clear all") <- abolish_all_tables()
+```clausal
+test("clear all") :-
+    abolish_all_tables.
 ```
 
 ---
@@ -148,27 +149,28 @@ test("clear all") <- abolish_all_tables()
 
 ### Memoization
 
-Cache computed results in a dynamic predicate. Arithmetic goes through a
-constraint (`N1 == N - 1`): a bare `X is N - 1` is unification and would
-bind `X` to the unevaluated term (see [Operators](operators.md)).
+Cache computed results in a dynamic predicate. Arithmetic goes through
+CLP(ℤ) constraints (`N1 #= N - 1`); ISO `N1 is N - 1` would also do here,
+since `N` is bound. (In the seam, a bare `X is N - 1` is unification and
+would bind `X` to the unevaluated term; see [Operators](operators.md).)
 
 
-```seam
---8<-- "tests/fixtures/docs/database_ops_examples.seam:memoization_recipe"
+```clausal
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:memoization_recipe"
 ```
 
-(For automatic memoization, consider [`-table`](tabling.md) instead.)
+(For automatic memoization, consider [`:- table`](tabling.md) instead.)
 
 ### Counter / mutable state
 
-```seam
---8<-- "tests/fixtures/docs/database_ops_examples.seam:counter_recipe"
+```clausal
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:counter_recipe"
 ```
 
 ### Collecting facts from a computation
 
-```seam
---8<-- "tests/fixtures/docs/database_ops_examples.seam:collect_recipe"
+```clausal
+--8<-- "tests/fixtures/docs/database_ops_examples.clausal:collect_recipe"
 ```
 
 (Prefer [`findall`](meta_predicates.md) for this pattern — it is cleaner and
@@ -178,23 +180,27 @@ does not require dynamic predicates.)
 
 ## Gotchas
 
-- **Must declare `-dynamic`** — without it, assertz/asserta/retract raise
+- **A predicate with clauses must be declared `dynamic`** — without it,
+  assertz/asserta/retract raise
   `error(permission_error(modify, static_procedure, Name/Arity), assertz/1)`
-  (catchable by `catch/3`). A name with no declaration and no clauses is
-  refused too by assertz/asserta, unless the module sets the flag
-  [`assert_creates_dynamic`](flags.md#assert_creates_dynamic) (an imported
-  `.pl` module does); retract of such a name just fails. To match the culprit in a catch pattern, quote it:
-  `'/'('assertz', 1)` (a bare builtin name in a term is the builtin's object,
-  not the atom).
-- **assertz adds facts, not rules** — `assertz(foo(X) <- bar(X))` is not
+  (catchable by `catch/3`; the culprit is matched as written, `assertz/1`).
+  A name with no declaration and no clauses is created by assertz/asserta in
+  a `.clausal` module, where the flag
+  [`assert_creates_dynamic`](flags.md#assert_creates_dynamic) is on; retract
+  of such a name just fails. (In a seam module the flag is off and the
+  assert is refused; to match the culprit in a seam catch pattern, quote it,
+  `'/'('assertz', 1)`, because a bare builtin name in a seam term is the
+  builtin's object, not the atom.)
+- **assertz adds facts, not rules** — `assertz((foo(X) :- bar(X)))` is not
   supported and raises `permission_error(assert, rule, Head)` at
   assert time (the predicate's existing clauses are left untouched). Only
   ground or partially-ground facts can be asserted.
-- **Arity is part of the name** — `assertz(foo(a))` when only `foo/2` is
-  declared dynamic is refused with
-  `error(permission_error(modify, static_procedure, foo/1), assertz/1)`:
-  `foo/1` is a different predicate, it is not declared, and an undeclared
-  procedure is static (ISO 7.5.2).
+- **Arity is part of the name** — `foo/1` and `foo/2` are different
+  predicates: declaring `foo/2` dynamic says nothing about `foo/1`. In a
+  `.clausal` module, `assertz(foo(a))` then creates a new dynamic `foo/1`; in
+  a seam module it is refused with
+  `error(permission_error(modify, static_procedure, foo/1), assertz/1)`,
+  since an undeclared procedure is static there (ISO 7.5.2).
 - **retract removes one clause** — it removes the *first* matching clause only.
   Call it in a loop (or use `findall` + multiple retracts) to remove all
   matches.
@@ -206,7 +212,7 @@ does not require dynamic predicates.)
 
 ---
 
-*See also: [Directives](directives.md) — `-dynamic` and other predicate
-directives, [Tabling](tabling.md) — automatic memoization with `-table`,
+*See also: [Directives](directives.md) — `dynamic` and other predicate
+directives, [Tabling](tabling.md) — automatic memoization with `table`,
 [Meta-Predicates](meta_predicates.md) — findall as an alternative to
 assert-based collection.*
