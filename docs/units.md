@@ -1,21 +1,83 @@
 # Physical Units
 
 Dimensional analysis via `Quantity(value, dims)` terms, with full arithmetic,
-named-unit predicates, SI prefix constants, imperial unit vectors, and
-syntactic sugar for writing measurements inline.
+named-unit predicates, SI prefix constants, imperial unit vectors, and, in
+the seam, syntactic sugar for writing measurements inline.
 
-!!! note "Seam vs Prolog syntax"
+!!! note "Clausal Prolog and the seam"
 
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+    Examples on this page are [Clausal Prolog](clausal_prolog.md)
+    (`.clausal`, ISO Prolog syntax) where it has a spelling, and are marked
+    *seam* where only the [seam](syntax.md) does. In Clausal Prolog a
+    quantity comes **only** from a units declaration,
+    `:- constant_number_units(Name, Number, Unit).`, read in a clause as
+    `constant(Name)` (see [Directives](directives.md#-constant_number_units));
+    the unit names come from `:- use_module(library(units), [...])` and
+    `library(imperial)`. `5 * m` is the ordinary term `'*'(5, m)`. The seam
+    also writes a measurement inline, `100(m)`, and computes in `++()`
+    escapes; neither exists in Clausal Prolog.
 
 ---
 
 ## Quick start
+
+```clausal
+:- use_module(library(units), [m, s, newton, has_units/2, strip_units/2]).
+:- use_module(library(imperial), [foot, inch]).
+
+:- constant_number_units(distance, 100, m).        % 100 (metre)
+:- constant_number_units(time, 9.58, s).           % 9.58 (second)
+:- constant_number_units(one_newton, 1, newton).
+:- constant_number_units(metre_per_second, 1, m/s).
+:- constant_number_units(six_feet, 6, foot).
+:- constant_number_units(two_inches, 2, inch).
+
+% Arithmetic on quantities: 10.438... (metre / second)
+speed(V) :-
+    V is constant(distance) / constant(time).
+
+% Scale a unit quantity: 5000 (kilogram * metre / second ** 2)
+big_force(F) :-
+    F is 5000 * constant(one_newton).
+
+% Imperial: 1.8796... (metre)
+height(H) :-
+    H is constant(six_feet) + constant(two_inches).
+
+% Check a dimension, against a quantity of that dimension
+is_speed(V) :-
+    has_units(V, constant(metre_per_second)).
+
+% Extract the numeric component: V = 9.8
+force_value(V) :-
+    F is 9.8 * constant(one_newton),
+    strip_units(F, V).
+
+test("speed") :-
+    speed(V),
+    is_speed(V),
+    strip_units(V, X),
+    X > 10.438,
+    X < 10.439.
+
+test("big force") :-
+    big_force(F),
+    strip_units(F, X),
+    X == 5000.
+
+test("height") :-
+    height(H),
+    strip_units(H, X),
+    X > 1.8795,
+    X < 1.8797.
+
+test("force value") :-
+    force_value(V),
+    V == 9.8.
+```
+
+The seam writes the same program with its inline sugar and `++()` escapes,
+and runs it from Python with a goal-position `--` (seam syntax):
 
 ```seam
 -import_from(py.units,    [m, s, newton, kilo, has_units, strip_units])
@@ -67,7 +129,7 @@ prints as `5000 (metre)`).
 
 The spellings these replaced — TitleCase `Metre`, `Second`, `Newton`,
 `SpeedOfLight`, … and the American `kilometer`, `centimeter`, … — are
-deprecated aliases.  They still resolve — `-import_from(py.units, [Metre])`
+deprecated aliases.  They still resolve — the seam's `-import_from(py.units, [Metre])`
 imports `metre` under the old name, and `units.Metre` in Python returns
 `units.metre` — but each warns with a `ClausalDeprecatedSpellingWarning`:
 once per file from the `-import_from` list (naming every rename in it), once
@@ -87,9 +149,53 @@ dimension keys and arithmetic are unchanged.
 
 ---
 
-## Two syntactic styles
+## Writing a measurement
 
-### `n(Unit)` sugar — SI predicates only
+### In Clausal Prolog: a units declaration
+
+A quantity is a units constant: `:- constant_number_units(Name, Number,
+Unit).` declares it, and `constant(Name)` stands for it in a clause (it is
+replaced at compile time). `Unit` is a unit name or an expression of them
+with `*`, `/` and `**` (`m/s`, `m**2`); a scaled unit stores in base units.
+A value known only at run time is scaled from a unit quantity, `F is N *
+constant(one_newton)`:
+
+```clausal
+:- use_module(library(units), [m, s, newton, kilometre, strip_units/2]).
+
+:- constant_number_units(five_m, 5, m).            % 5 (metre)
+:- constant_number_units(weight, 9.8, newton).     % 9.8 (kilogram * metre / second ** 2)
+:- constant_number_units(back, -3, s).             % -3 (second)
+:- constant_number_units(pace, 5, m/s).            % 5 (metre / second)
+:- constant_number_units(area, 10, m**2).          % 10 (metre ** 2)
+:- constant_number_units(trip, 5, kilometre).      % 5000 (metre)
+:- constant_number_units(one_newton, 1, newton).
+
+force_of(N, F) :-
+    F is N * constant(one_newton).
+
+test("declared quantities") :-
+    X is constant(trip),
+    strip_units(X, 5000),
+    constant_number_units(trip, 5, U),
+    U == kilometre.
+
+test("from a runtime value") :-
+    force_of(9.8, F),
+    F =:= constant(weight).
+```
+
+(`constant_number_units/3` as a goal reads a declaration back: `trip`'s
+number and unit as written, `5` and `kilometre`.)
+
+The SI prefix constants (`kilo`, `nano`, …) and IEC binary prefixes
+(`kibi`, …) are plain Python numbers, which Clausal Prolog cannot evaluate:
+`X is 5 * kilo` raises `type_error(evaluable, kilo/0)`. Use a prefixed unit
+(`kilometre`, `gibibyte`, `millisecond`) or write the number.
+
+### Seam sugar: `n(Unit)` — SI predicates only
+
+The rest of this section is seam syntax.
 
 ```seam
 -import_from(py.units, [m, s, newton])
@@ -119,7 +225,7 @@ For unusual constructions, use `++()` directly:
 custom(X) <- (X is ++(kilogram(1) * metre(1) / second(1)**2 * 9.8))   # same as 9.8(newton)
 ```
 
-### `* unit` style — SI prefixes and imperial
+### Seam: `* unit` style — SI prefixes and imperial
 
 SI prefixes are plain numbers; imperial/non-SI units are `Quantity` unit
 vectors.  Both are used via multiplication inside a `++()` escape:
@@ -137,7 +243,7 @@ pace(X) <- (X is ++(60 * mph))                     # 60 mph → 26.8224 (metre /
 
 ---
 
-## `n()` — dimensionless literal
+## Seam: `n()` — dimensionless literal
 
 An empty-argument call on any numeric literal produces a dimensionless
 `Quantity(n, {})`:
@@ -149,8 +255,10 @@ pi(X) <- eval_(3.14(), X)       # 3.14 (dimensionless)
 
 ---
 
-## `X(Unit)` — construction from a runtime value
+## Seam: `X(Unit)` — construction from a runtime value
 
+(Clausal Prolog scales a unit quantity instead, `F is N *
+constant(one_newton)`; see [Writing a measurement](#in-clausal-prolog-a-units-declaration).)
 when the callee is a logic variable, `MY_VAL(Unit)` desugars to
 `++(Quantity(MY_VAL, Unit))`:
 
@@ -164,6 +272,48 @@ force_of(N, F) <- eval_(N(newton), F)     # force_of(9.8, F): F = 9.8 (kilogram 
 
 ## `has_units(X, Unit)` — dimension constraint / check
 
+In Clausal Prolog the unit argument is a **quantity** of the wanted
+dimension, a units constant. (A bare unit name such as `newton` or `m/s` is
+the plain atom or term there, and `has_units(F, newton)` fails; the seam's
+unit names are the unit predicates themselves.)
+
+```clausal
+:- use_module(library(units), [m, s, newton, has_units/2]).
+
+:- constant_number_units(one_newton, 1, newton).
+:- constant_number_units(metre_per_second, 1, m/s).
+:- constant_number_units(weight, 9.8, newton).
+:- constant_number_units(nine_m, 9.8, m).
+
+% check or constrain: F must have newton dims
+is_force(F) :-
+    has_units(F, constant(one_newton)).
+
+% velocity check/constraint
+is_velocity(V) :-
+    has_units(V, constant(metre_per_second)).
+
+% an unbound F is constrained first, then checked when it is bound
+newton_ok(F) :-
+    has_units(F, constant(one_newton)),
+    F = constant(weight).
+
+metre_bad(F) :-
+    has_units(F, constant(one_newton)),
+    F = constant(nine_m).
+
+test("constrain then bind") :-
+    newton_ok(_),
+    \+ metre_bad(_).
+
+test("check a bound quantity") :-
+    V is constant(nine_m) / 2,
+    \+ is_velocity(V),
+    is_force(constant(weight)).
+```
+
+In the seam (seam syntax):
+
 ```seam
 -import_from(py.units, [m, s, newton, has_units])
 
@@ -176,10 +326,10 @@ newton_ok(F) <- (has_units(F, newton), eval_(9.8(newton), F))   # succeeds
 metre_bad(F) <- (has_units(F, newton), eval_(9.8(m), F))        # fails
 ```
 
-`has_units/2` posts an AttVar constraint on `F` if it is unbound. Compound unit
-expressions work directly — the transformer auto-wraps them.
-
-`has_units` cannot appear inside an `eval_/2` expression or on the RHS of `==`.
+`has_units/2` posts an AttVar constraint on `F` if it is unbound. In the
+seam, compound unit expressions work directly — the transformer auto-wraps
+them — and `has_units` cannot appear inside an `eval_/2` expression or on
+the RHS of `==`.
 
 ---
 
@@ -207,15 +357,50 @@ d.dims    # MappingProxyType({<metre>: 1, <second>: -1})
 | `a * k`    | Scales value by plain number; preserves dims |
 | `k / a`    | Inverts dims and scales |
 
-These are the Python operators on a `Quantity`. In a clause, compute with
-[`eval_/2`](arithmetic.md): `+ - * **` behave as above, and division is
-**exact**. Two integer magnitudes divide to a `Fraction`, not a float —
-`eval_(7(m) / 2, X)` gives `X` a magnitude of `Fraction(7, 2)` — unlike a bare
-`7 / 2` between plain numbers, which is 3.5 (see [Operators](operators.md)). A float
-magnitude stays a float (`eval_(9.58(s) * 2, X)`), and a zero divisor raises
-`evaluation_error(zero_divisor)` in `eval_/2` and fails inside a constraint
-(`X == 1(m) / 0`). A [currency](currency.md) amount is stricter: a float factor beside
-its exact `Decimal` magnitude is refused.
+These are the Python operators on a `Quantity`. In a Clausal Prolog clause,
+compute with `is/2` (the seam's [`eval_/2`](arithmetic.md)): `+ - * **`
+behave as above, and division is **exact**. Two integer magnitudes divide
+to a rational, not a float — with `seven_m` declared as 7 m, `X is
+constant(seven_m) / 2` gives `X` the magnitude `7 rdiv 2` — unlike `7 / 2`
+between plain numbers, which is 3.5 (see [Operators](operators.md)). A float
+magnitude stays a float, a dimension mismatch (`constant(seven_m) + 1`, or
+a length plus a force) raises `error(system_error(units_mismatch), (is)/2)`,
+and a zero divisor raises `evaluation_error(zero_divisor)` in `is/2` and
+fails inside a constraint (`X #= constant(seven_m) / 0`). A
+[currency](currency.md) amount is stricter: a float factor beside its exact
+`Decimal` magnitude is refused.
+
+```clausal
+:- use_module(library(units), [m, newton, strip_units/2]).
+:- use_module(library(clpz)).
+
+:- constant_number_units(seven_m, 7, m).
+:- constant_number_units(weight, 9.8, newton).
+
+test("exact division") :-
+    X is constant(seven_m) / 2,
+    strip_units(X, V),
+    Half is 7 rdiv 2,
+    V == Half,
+    \+ float(V).
+
+test("exponents add") :-
+    X is constant(seven_m) * constant(seven_m),
+    strip_units(X, 49).
+
+test("units that cancel give a plain number") :-
+    X is constant(seven_m) / constant(seven_m),
+    X == 1.
+
+test("a mismatch is an ISO error") :-
+    catch(_ is constant(seven_m) + constant(weight), error(E, _), true),
+    E == system_error(units_mismatch).
+
+test("a zero divisor") :-
+    catch(_ is constant(seven_m) / 0, error(E, _), true),
+    E == evaluation_error(zero_divisor),
+    \+ _ #= constant(seven_m) / 0.
+```
 
 ---
 
@@ -223,8 +408,11 @@ its exact `Decimal` magnitude is refused.
 
 ### `py.units` — SI units and prefixes
 
-```seam
--import_from(py.units, [m, kg, s, newton, kilo, has_units, strip_units])
+Clausal Prolog imports it through its facade, `library(units)` (the seam
+imports `py.units` directly):
+
+```clausal
+:- use_module(library(units), [m, kg, s, newton, has_units/2, strip_units/2]).
 ```
 
 Contains: SI base unit predicates, scaled SI unit predicates, named derived SI
@@ -234,8 +422,8 @@ and utility predicates (`has_units`, `strip_units`, `dimension_of`, `make_quanti
 
 ### `py.imperial` — imperial and non-SI unit vectors
 
-```seam
--import_from(py.imperial, [inch, foot, yard, mile, pound_mass, mph, lbf])
+```clausal
+:- use_module(library(imperial), [inch, foot, yard, mile, pound_mass, mph, lbf]).
 ```
 
 Contains: imperial and non-SI `Quantity` unit vectors for length, mass, force,
@@ -246,7 +434,7 @@ values are stored in SI base units; `has_units` checks work without changes.
 
 ### SI base unit predicates
 
-Used with `n(Unit)` sugar.
+Used in a `constant_number_units` declaration, or with the seam's `n(Unit)` sugar.
 
 | Alias | Full name  | Dims             | SI symbol |
 |-------|------------|------------------|-----------|
@@ -273,7 +461,7 @@ variables in Clausal Prolog.
 
 ### Scaled SI unit predicates
 
-These scale on the way in and store as SI base units.  Use with `n(Unit)` sugar.
+These scale on the way in and store as SI base units.  Use them like the base units.
 
 #### length (stored as metres)
 
@@ -293,14 +481,23 @@ These scale on the way in and store as SI base units.  Use with `n(Unit)` sugar.
 
 `bit` is the base unit (IEC 80000-13).  All values are normalised to bits.
 
-```seam
--import_from(py.units, [bit, byte, kilobyte, gigabyte, kibibyte, gibibyte,
-                        kilobit, megabit, kibi, mebi, gibi, tebi])
+```clausal
+:- use_module(library(units), [gibibyte, megabit, mebibyte, strip_units/2]).
 
-disk(SIZE) <- eval_(4(gibibyte), SIZE)         # 34359738368 (bit)
-link(RATE) <- eval_(100(megabit), RATE)        # 100000000 (bit)
-buffer(X) <- (X is ++(512 * mebi * byte(1)))   # 512 MiB via binary prefix: 4294967296 (bit)
+:- constant_number_units(disk, 4, gibibyte).       % 34359738368 (bit)
+:- constant_number_units(link, 100, megabit).      % 100000000 (bit)
+:- constant_number_units(buffer, 512, mebibyte).   % 4294967296 (bit)
+
+test("digital units store bits") :-
+    D is constant(disk),
+    strip_units(D, 34359738368),
+    L is constant(link),
+    strip_units(L, 100000000),
+    B is constant(buffer),
+    strip_units(B, 4294967296).
 ```
+
+(The seam can also scale by a binary prefix, `++(512 * mebi * byte(1))`.)
 
 Decimal (SI-prefixed) byte multiples:
 
@@ -366,8 +563,10 @@ Scaled variants: `bar`, `millibar`, `atmosphere`, `electronvolt`, `kilowatt`
 
 ### SI prefix constants
 
-Plain Python numbers — **not** predicates.  Use inside `++()` by multiplying
-against a unit vector:
+Plain Python numbers — **not** predicates, and not evaluable from Clausal
+Prolog (see [Writing a measurement](#in-clausal-prolog-a-units-declaration)).
+The seam uses them inside `++()` by multiplying against a unit vector (seam
+syntax):
 
 ```seam
 -import_from(py.units, [kilo, nano, giga, mega, newton, second, hertz, joule])
@@ -411,7 +610,9 @@ unit together.
 
 #### IEC binary prefix constants
 
-Plain Python numbers — use inside `++()` by multiplying against a unit vector:
+Plain Python numbers. The seam uses them inside `++()` by multiplying
+against a unit vector (seam syntax); Clausal Prolog writes the prefixed unit
+(`gibibyte`, `mebibyte`, `kibibit`):
 
 ```seam
 -import_from(py.units, [gibi, mebi, kibi, byte, bit])
@@ -438,28 +639,49 @@ an uppercase letter is a logic variable.
 
 ### Imperial and non-SI unit vectors  (`py.imperial`)
 
-Plain `Quantity` values — **not** predicates.  Import from `py.imperial` and
-use by multiplying a scalar inside a `++()` escape:
+Plain `Quantity` values — **not** predicates.  Import them from
+`library(imperial)` and declare quantities with them (the seam multiplies a
+scalar inside a `++()` escape, `++(20 * inch)`):
 
-```seam
--import_from(py.imperial, [inch, pound_mass, mph, kilowatt_hour])
+```clausal
+:- use_module(library(imperial), [inch, pound_mass, mph, kilowatt_hour]).
+:- use_module(library(units), [strip_units/2]).
 
-imperial(LEN, MASS, SPD, E) <- (
-    LEN is ++(20 * inch),              # 0.508 (metre)
-    MASS is ++(150 * pound_mass),      # 68.0388555 (kilogram)
-    SPD is ++(60 * mph),               # 26.8224 (metre / second)
-    E is ++(1 * kilowatt_hour)         # 3600000.0 (kilogram * metre ** 2 / second ** 2)
-)
+:- constant_number_units(len, 20, inch).            % 0.508 (metre)
+:- constant_number_units(mass, 150, pound_mass).    % 68.0388555 (kilogram)
+:- constant_number_units(spd, 60, mph).             % 26.8224 (metre / second)
+:- constant_number_units(energy, 1, kilowatt_hour). % 3600000.0 (kilogram * metre ** 2 / second ** 2)
+
+test("imperial quantities in SI base units") :-
+    L is constant(len),
+    strip_units(L, LV),
+    abs(LV - 0.508) < 1.0e-9,
+    M is constant(mass),
+    strip_units(M, MV),
+    abs(MV - 68.0388555) < 1.0e-9,
+    S is constant(spd),
+    strip_units(S, SV),
+    abs(SV - 26.8224) < 1.0e-9,
+    E is constant(energy),
+    strip_units(E, 3600000.0).
 ```
 
 All values are stored in SI base units; dimensions are the same as their SI
 equivalents so `has_units` checks work without any changes:
 
-```seam
--import_from(py.imperial, [inch])
--import_from(py.units, [metre, has_units])
+```clausal
+:- use_module(library(imperial), [inch]).
+:- use_module(library(units), [metre, has_units/2]).
 
-is_length() <- has_units(++(20 * inch), metre)     # succeeds — both have {metre: 1}
+:- constant_number_units(span, 20, inch).
+:- constant_number_units(one_metre, 1, metre).
+
+% succeeds — both have {metre: 1}
+is_length :-
+    has_units(constant(span), constant(one_metre)).
+
+test("an imperial length is a length") :-
+    is_length.
 ```
 
 #### length (stored as metres)
@@ -552,6 +774,23 @@ ratio scales.
 | `strip_units(D, V)`         | Unify `V` with the numeric component |
 | `make_quantity(V, Dims, D)` | Construct `Quantity` from value `V` and `DictTerm` dims |
 
+```clausal
+:- use_module(library(units), [newton, dimension_of/2, strip_units/2,
+                               make_quantity/3]).
+
+:- constant_number_units(weight, 9.8, newton).
+
+test("dimension_of and make_quantity") :-
+    dimension_of(constant(weight), Dims),
+    make_quantity(2, Dims, Q),
+    strip_units(Q, 2),
+    dimension_of(Q, Dims).
+
+test("a bare number is dimensionless") :-
+    dimension_of(5, Dims),
+    dict_pairs(Dims, []).
+```
+
 ### `has_units/2`
 
 ```python
@@ -605,8 +844,27 @@ and the design in `docs/superpowers/specs/2026-09-12-clp-units-side-channel-desi
 
 ## Catching unit errors
 
-`UnitsMismatch` is a Python exception class, so a module imports it and catches it with a
-`++` catcher (see [`catch/3`](exceptions.md)); the instance form binds the message:
+In Clausal Prolog a dimension mismatch in arithmetic is the ISO error term
+`error(system_error(units_mismatch), (is)/2)`, caught with
+[`catch/3`](exceptions.md) like any other:
+
+```clausal
+:- use_module(library(units), [metre, second]).
+
+:- constant_number_units(three_m, 3, metre).
+:- constant_number_units(two_s, 2, second).
+
+mismatch(E) :-
+    catch(_ is constant(three_m) + constant(two_s), error(E, _), true).
+
+test("caught") :-
+    mismatch(E),
+    E == system_error(units_mismatch).
+```
+
+In the seam, `UnitsMismatch` is also a Python exception class, so a module
+imports it and catches it with a `++` catcher; the instance form binds the
+message (seam syntax):
 
 ```seam
 -import_from(py.units, [metre, second])
@@ -621,7 +879,8 @@ mismatch_message(MSG) <- catch(
 ```
 
 A **comparison** across dimensions (`X > 0` with `X` a length) is not a `UnitsMismatch`
-exception but the ISO error term `error(system_error(units_mismatch), (>)/2)`.
+exception but the ISO error term `error(system_error(units_mismatch), Ctx)`;
+the seam names `(>)/2` as the context, Clausal Prolog `(is)/2`.
 
 ---
 
@@ -674,23 +933,27 @@ See each module's documentation for details.
 ## Design notes
 
 - **No offset scales**: `Celsius`/`Fahrenheit` are unsupported.
-- **Integer-only exponents in `Pow`**: `area ** 0.5` raises `UnitsMismatch`.
+- **Integer-only exponents in `Pow`**: `area ** 0.5` raises `UnitsMismatch`
+  (in Clausal Prolog, `error(system_error(units_mismatch), (is)/2)`).
 - **Dimension keys are predicate objects**: the seven SI base unit predicates
   are the keys in `dims`.
 - **`A` and `K` aliases omitted**: single uppercase letters are logic
   variables in Clausal Prolog.
 - **SI prefixes are plain numbers**: `kilo = 1e3`, `milli = 1e-3`, etc.
-  They cannot appear inside `n(Unit)` parentheses; use multiplication in
-  a `++()` escape instead.
+  Clausal Prolog cannot evaluate them; use a prefixed unit (`kilometre`).
+  In the seam they cannot appear inside `n(Unit)` parentheses; use
+  multiplication in a `++()` escape instead.
 - **IEC binary prefixes are plain numbers**: `kibi = 2¹⁰`, `mebi = 2²⁰`, etc.
-  Same rules as SI prefixes — multiply against a unit vector in `++()`.
+  Same rules as SI prefixes — in the seam, multiply against a unit vector
+  in `++()`.
 - **`bit` is the information base unit** (IEC 80000-13): all byte and
   prefixed-bit predicates store internally in bits, so arithmetic between them
   works without conversion.
 - **Imperial units are Quantity unit vectors**: `inch`, `foot`, `pound_mass`,
-  etc.  Multiply by a scalar in a `++()` escape.  `has_units` checks work
+  etc.  Declare a quantity with one (`:- constant_number_units(span, 20,
+  inch).`), or in the seam multiply by a scalar in a `++()` escape.  `has_units` checks work
   normally since the dimensions are identical to their SI equivalents.
 
 ---
 
-*See also: [Currency](currency.md) — exact-decimal money built on this units machinery · [Arithmetic](arithmetic.md) — numeric operations in Clausal Prolog · [Python Interop](python_integration.md) — `++()` escape for direct Pint operations.*
+*See also: [Currency](currency.md) — exact-decimal money built on this units machinery · [Arithmetic](arithmetic.md) — numeric operations in Clausal Prolog · [Python Interop](python_integration.md) — the seam's `++()` escape for direct Pint operations.*
