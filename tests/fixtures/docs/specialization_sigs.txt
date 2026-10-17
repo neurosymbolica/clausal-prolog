@@ -6,7 +6,7 @@ test("count natnum(s(s(0)))") :-
 # --8<-- [end:count_natnum_test]
 
 # --8<-- [start:clausal_caller]
-:- use_module(natnum_spec, [solve_count_natnum/2]).
+:- use_module(specialization_natnum, [solve_count_natnum/2]).
 
 test("count natnum(s(s(0)))") :-
     solve_count_natnum([[natnum, [s, [s, 0]]]], 3).

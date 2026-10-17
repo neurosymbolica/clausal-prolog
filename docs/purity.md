@@ -237,12 +237,14 @@ principal functor of a term. A **defaulty** representation requires guards or
 type tests to distinguish cases.
 
 ```clausal
+:- use_module(library(clpz)).
+
 % Defaulty: need a guard to tell if the value is special
 handle(0, zero).
 handle(N, positive) :-
-    N > 0.
+    N #> 0.
 handle(N, negative) :-
-    N < 0.
+    N #< 0.
 
 % Clean: cases are distinguished by the functor — the wrapped value
 % doesn't matter here, only which functor it's wrapped in
@@ -253,6 +255,11 @@ classify(negative(_), negative).
 test("defaulty needs the guard") :-
     handle(-4, KIND),
     KIND == negative.
+
+% With CLP(Z) guards, the open query still lists every case
+test("the open query lists the kinds") :-
+    findall(K, handle(_, K), KS),
+    KS == [zero, positive, negative].
 
 test("clean reads the functor") :-
     classify(negative(4), KIND),

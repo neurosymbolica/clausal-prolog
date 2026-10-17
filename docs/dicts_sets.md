@@ -32,7 +32,7 @@ Clausal Prolog has first-class support for dictionaries and sets as logic terms.
 
 ### Syntax
 
-In [seam (`.seam`) files](syntax.md), Python dict literals `{k: v, ...}` are automatically wrapped as `DictTerm`. (In `.clausal`, `dict_pairs(D, [x-0, y-0])` builds the same dict; there is no literal.) The examples in this section and the next ones, up to [Backtracking](#backtracking), are seam:
+In [seam (`.seam`) files](syntax.md), Python dict literals `{k: v, ...}` are automatically wrapped as `DictTerm`. (In `.clausal`, `dict_pairs(D, [x-0, y-0])` builds the same dict; there is no literal.) The `python` blocks in this section and the next ones, up to [Backtracking](#backtracking), are seam; the `clausal` blocks beside them are the same examples in `.clausal`:
 
 ```python
 # Fact with a ground dict

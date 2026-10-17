@@ -75,7 +75,8 @@ This produces a new predicate `solve_count_natnum` that:
 - Preserves the counting extension from `solve_count`
 - Drops the `PROGRAM` argument (it was static)
 
-Call it directly:
+A `.clausal` test calls it like any other predicate, once it is imported
+as the next section shows:
 
 ```text
 --8<-- "tests/fixtures/docs/specialization_sigs.txt:count_natnum_test"
@@ -91,8 +92,10 @@ predicate:
 --8<-- "tests/fixtures/docs/specialization_sigs.txt:clausal_caller"
 ```
 
-Here `natnum_spec` is the seam module holding `natnum_program/1` and the
-`-specialize` directive above, with `-module(natnum_spec, [solve_count_natnum/2])`.
+Here `specialization_natnum` is the seam module holding `natnum_program/1`
+and the `-specialize` directive above, with
+`-module(specialization_natnum, [solve_count_natnum/2])`
+(`tests/fixtures/docs/specialization_natnum.seam`).
 
 ### Directive syntax
 

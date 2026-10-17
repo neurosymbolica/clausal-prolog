@@ -316,7 +316,7 @@ test("both positions answer") :-
     msort(XS, [1, 2]).
 ```
 
-`win(1)` depends on `not win(2)`, and `win(2)` depends on `not win(1)`. Both are unfounded — WFS assigns truth value `undefined` to both.
+`win(1)` depends on `\+ win(2)`, and `win(2)` depends on `\+ win(1)`. Both are unfounded — WFS assigns truth value `undefined` to both.
 
 ### Example: asymmetric game
 

@@ -1,6 +1,6 @@
 # Meta-Predicates & Higher-Order
 
-Clausal Prolog provides meta-predicates for collecting solutions and higher-order list predicates for functional-style list processing. Meta-predicates are compiler special forms (compiled inline); higher-order list predicates are builtins that take goal closures.
+Clausal Prolog provides meta-predicates for collecting solutions and higher-order list predicates for functional-style list processing. Meta-predicates take an ordinary goal as an argument (in the seam they are compiler special forms, compiled inline); higher-order list predicates are builtins that take goal closures.
 
 !!! note "Clausal Prolog and the seam"
 
@@ -11,9 +11,9 @@ Clausal Prolog provides meta-predicates for collecting solutions and higher-orde
 
 ---
 
-## Meta-Predicates (Compiler Special Forms)
+## Meta-Predicates
 
-These are compiled inline by the compiler — they are not dispatched as builtins.
+Each takes an ordinary goal as an argument. In the seam they are compiler special forms, compiled inline rather than dispatched as builtins.
 
 ### findall/3
 
@@ -463,7 +463,7 @@ test("pairs") :-
 
 ??? tip "Combining Meta-Predicates with Lambdas"
 
-    Meta-predicates take inline goal expressions (not closures), so lambdas aren't needed:
+    The goal argument of a meta-predicate is an ordinary goal, so it needs no lambda:
 
     ```clausal
     --8<-- "tests/fixtures/docs/meta_predicates_examples.clausal:meta_with_inline"

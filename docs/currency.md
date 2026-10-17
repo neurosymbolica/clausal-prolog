@@ -51,6 +51,7 @@ A `.clausal` module declares the amounts and the rules over them:
 :- constant_number_currency(a, "0.1", euro).
 :- constant_number_currency(b, "0.2", euro).
 :- constant_number_currency(ten, "10.00", euro).
+:- constant_number_currency(three_tenths, "0.3", euro).
 
 price(P) :-
     P is constant(list_price).
@@ -74,7 +75,7 @@ sym(S) :-
 
 test("total is exact") :-
     total(T),
-    T =:= constant(a) + constant(b).      % 0.3 (euro), magnitude Decimal('0.3')
+    T =:= constant(three_tenths).         % 0.3 (euro), magnitude Decimal('0.3')
 
 test("rounded") :-
     rounded(R),
@@ -120,11 +121,13 @@ word the system **prints**.
 
 ```clausal
 :- use_module(library(countries/japan), [yen]).
+:- use_module(library(currency), [money_str/3]).
 :- constant_number_currency(budget, 1000000, yen).   % a Japanese rule means Japanese yen
 
 test("budget") :-
     constant_value(budget, B),
-    B =:= constant(budget).
+    money_str(B, half_up, S),
+    S == "1000000 JPY".
 ```
 
 **Multiple currencies** — import each:
@@ -132,6 +135,7 @@ test("budget") :-
 ```clausal
 :- use_module(library(countries/european_union), [euro]).
 :- use_module(library(countries/united_states), [usd]).
+:- use_module(library(currency), [money_str/3]).
 
 :- constant_number_currency(eu_amount, "10.00", euro).
 :- constant_number_currency(us_amount, "12.00", usd).
@@ -145,8 +149,10 @@ us_price(P) :-
 test("prices") :-
     eu_price(E),
     us_price(U),
-    E =:= constant(eu_amount),
-    U =:= constant(us_amount).
+    money_str(E, half_up, ES),
+    ES == "10.00 EUR",
+    money_str(U, half_up, US),
+    US == "12.00 USD".
 ```
 
 The seam can also qualify a currency with its jurisdiction, `12.00(united_states.usd)`, after
@@ -958,6 +964,7 @@ rules for each operator are in [Arithmetic](arithmetic.md) and [Operators](opera
 
 :- constant_number_units(vat_rate, 20, percent).
 :- constant_number_currency(ten, "10.00", euro).
+:- constant_number_currency(three_tenths, "0.3", euro).
 
 vat(NET, VAT) :-
     VAT is NET * constant(vat_rate).       % exact
@@ -1007,6 +1014,7 @@ hand the rounding predicate the unevaluated term and fail.
 :- use_module(library(currency), [money_precise/3, money_round/3, money_str/3,
                                   money_format/4, currency_code/2]).
 :- constant_number_currency(ten, "10.00", euro).
+:- constant_number_currency(three_tenths, "0.3", euro).
 
 r(R) :-
     Q is constant(ten) / 3,
