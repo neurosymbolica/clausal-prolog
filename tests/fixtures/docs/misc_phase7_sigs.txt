@@ -2,18 +2,8 @@
 
 # === wfs.md ===
 
---8<-- [start:wfs_example]
--table(wins/1)
-
-move('a', 'b'),
-move('b', 'c'),
-move('c', 'a'),
-
-wins(X) <- (move(X, Y), (not wins(Y)))
---8<-- [end:wfs_example]
-
 --8<-- [start:wfs_directive]
--table(pred/arity)
+:- table(pred/arity).
 --8<-- [end:wfs_directive]
 
 # === testing.md ===

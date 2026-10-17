@@ -2,28 +2,31 @@
 
 Well-Founded Semantics provides a sound three-valued treatment of negation for [tabled](tabling.md) predicates. Unlike simple negation-as-failure (which can loop or give wrong answers with recursive negation), WFS assigns each atom a truth value of **true**, **false**, or **undefined** — and that third value is exactly the strong-Kleene `Undefined` literal the language already has, not a separate marker.
 
-!!! note "Seam vs Prolog syntax"
-
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+Examples on this page are [Clausal Prolog](clausal_prolog.md) (`.clausal`). The
+Python examples run in a [seam](syntax.md) (`.seam`) file, Clausal's
+Python-syntax surface, which is where Python asks logic questions.
 
 ---
 
 ## when You Need WFS
 
-Standard negation-as-failure (`not Goal`) works fine when negation is not recursive — e.g., `not member(X, List)`. But when a program has **recursion through negation** on tabled predicates, NAF can loop infinitely or produce wrong answers.
+Standard negation-as-failure (`\+ Goal`) works fine when negation is not recursive — e.g., `\+ member(X, List)`. But when a program has **recursion through negation** on tabled predicates, NAF can loop infinitely or produce wrong answers.
 
 WFS handles this by delaying negation until enough information is available:
 
-```seam
---8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:wfs_example"
+```clausal
+:- table(wins/1).
+
+move(a, b).
+move(b, c).
+move(c, a).
+
+wins(X) :-
+    move(X, Y),
+    \+ wins(Y).
 ```
 
-Without WFS, `not wins(Y)` would loop or produce incorrect answers. With WFS:
+Without WFS, `\+ wins(Y)` would loop or produce incorrect answers. With WFS:
 
 - If `wins(Y)` is provably true → negation fails
 - If `wins(Y)` is provably false → negation succeeds
@@ -31,7 +34,13 @@ Without WFS, `not wins(Y)` would loop or produce incorrect answers. With WFS:
 
 ## Spelling the truth values
 
-Each truth value has two spellings, and they are the same value — not two values
+In Clausal Prolog, `true` and `false` are ISO's `true/0` and `false/0`, and
+`undefined` is an ordinary atom: there is no `undefined/0` goal (calling one
+is an existence error), and an unfounded tabled answer carries its
+`Undefined` truth value on the *answer* rather than on the call. Python sees
+that value as the `Undefined` singleton (see [The `query_wfs` API](#the-query_wfs-api)).
+
+In the seam, each truth value has two spellings, and they are the same value — not two values
 that happen to compare equal:
 
 | value | canonical | alias |
@@ -40,18 +49,17 @@ that happen to compare equal:
 | false | `False` | `false` |
 | third | `Undefined` | `undefined` |
 
-The canonical spellings are Python's, because the seam (`.seam`) borrows Python's parser.
+The canonical spellings are Python's, because the seam borrows Python's parser.
 The aliases are Prolog's: ISO writes `true`/`false`, and XSB and SWI write
 `undefined` for the well-founded third value. Aliases are resolved at parse
 time, so the two spellings are indistinguishable everywhere downstream — they
 unify with each other, key the same dict entry, and emit the same Prolog atom.
 
-Two consequences worth knowing:
+Two consequences worth knowing, in the seam:
 
 - `true` and `false` work in goal position, as ISO `true/0` and `fail/0` do.
-  `undefined` does **not**: unlike XSB/SWI, Clausal Prolog has no `undefined/0` goal.
-  A goal either succeeds or fails, and an unfounded tabled answer carries its
-  `Undefined` truth value on the *answer* rather than on the call. Writing
+  `undefined` does **not**: unlike XSB/SWI, there is no `undefined/0` goal.
+  A goal either succeeds or fails. Writing
   `undefined` as a goal is a compile-time error that says so.
 - `true`, `false` and `undefined` are therefore reserved: they cannot also be
   used as ordinary atom or predicate names.
@@ -65,11 +73,11 @@ match XSB/SWI; writing it gets a diagnostic pointing at `Undefined`.
 
 | Scenario | Standard NAF | WFS |
 |---|---|---|
-| `not member(X, [1,2,3])` | Works fine | Works fine (overkill) |
-| `not wins(Y)` with cycles | Loops forever | Returns `Undefined` |
-| `not even(X)` where `even`/`odd` are mutually recursive through negation | Wrong answers or loops | Correct three-valued result |
+| `\+ member(X, [1,2,3])` | Works fine | Works fine (overkill) |
+| `\+ wins(Y)` with cycles | Loops forever | Returns `Undefined` |
+| `\+ even(X)` where `even`/`odd` are mutually recursive through negation | Wrong answers or loops | Correct three-valued result |
 
-**Rule of thumb**: Use `-table` + WFS when you have negation inside a recursive predicate. For non-recursive negation, standard NAF is sufficient and faster.
+**Rule of thumb**: Use `:- table` + WFS when you have negation inside a recursive predicate. For non-recursive negation, standard NAF is sufficient and faster.
 
 ---
 
@@ -122,7 +130,7 @@ The annotation is independent of how the goal is asked: the same atom reports
 the same truth value whether the goal is a reified `Call` or a cell, and whether the query is ground or unbound — and answer sets
 are stable across query order (see the implementation overview below). It is
 also independent of the goal's SHAPE: an untabled wrapper over a tabled
-predicate, a conjunction (through goal position), a call fed through `++` —
+predicate, a conjunction (through goal position), a call fed through the seam's `++` —
 the whole solve runs under a throwaway tabling leader, so `_truth`/`_delays`
 are the delays the answer's own derivation incurred. Definite answers come in
 derivation order; conditional ones are delivered after global resolution; a
@@ -131,14 +139,14 @@ WFS-false answer never appears.
 The judgement is per ANSWER, not per solve, in three ways worth naming. A
 branch that delayed and then FAILED does not leave its conditions behind for
 the next answer: conditions are trailed, so the backtracking that undoes the
-branch's bindings retracts them too (`p(X) <- (wins(X), ok(X))` with `ok(d)`
+branch's bindings retracts them too (`p(X) :- wins(X), ok(X).` with `ok(d)`
 the only fact reports `d` as plain true, however many branches delayed before
 it). A condition consumed FROM a table is remembered as the row it came from,
 so a later delay-free re-derivation of that row — which nothing re-streams,
 because the answer tuple is already known — still makes the answer true.  And
 a definite derivation of bindings already deferred as conditional collapses
 them to unconditional, because WFS truth is a disjunction over derivations:
-`r(a) <- wins(a)` alongside the fact `r(a)` gives one true answer, not a true
+`r(a) :- wins(a).` alongside the fact `r(a).` gives one true answer, not a true
 one and an undefined one.
 
 A bag carries its conditions. `findall`/`bagof`/`setof` and `count_all`
@@ -153,14 +161,21 @@ undefined answers is itself undefined, not true.
 
 A position wins if there is a move to a position that does NOT win:
 
-```seam
--table(wins/1)
+```clausal
+:- table(wins/1).
 
-move('a', 'b'),
-move('b', 'c'),
-move('c', 'a'),
+move(a, b).
+move(b, c).
+move(c, a).
 
-wins(X) <- (move(X, Y), not wins(Y))
+wins(X) :-
+    move(X, Y),
+    \+ wins(Y).
+
+% A plain query yields every non-false answer, unmarked: here all three,
+% each Undefined (query_wfs reports the truth values).
+test("every position is an answer, none definite") :-
+    findall(X, wins(X), [a, b, c]).
 ```
 
 With the cyclic graph a→b→c→a, every position depends on its successor not winning, which depends on *its* successor not winning, and so on in a circle. WFS correctly assigns all positions as **`Undefined`** — there are no definite winners.
@@ -169,23 +184,32 @@ With the cyclic graph a→b→c→a, every position depends on its successor not
 
 Add a non-cyclic escape and the picture changes:
 
-```seam
--table(wins/1)
+```clausal
+:- table(wins/1).
 
-move('a', 'b'),
-move('b', 'a'),
-move('a', 'c'),
+move(a, b).
+move(b, a).
+move(a, c).
 
-wins(X) <- (move(X, Y), not wins(Y))
+wins(X) :-
+    move(X, Y),
+    \+ wins(Y).
 
-test("a wins") <- wins('a')
+test("a wins") :-
+    wins(a).
+
+test("b does not win", fail) :-
+    wins(b).
+
+test("c does not win", fail) :-
+    wins(c).
 ```
 
 Now:
 
 - `wins(c)` = **false** (no moves from c)
-- `wins(a)` = **true** (via `move(a, c)`, and `not wins(c)` succeeds since wins(c) is false)
-- `wins(b)` = **false** (only move is to a, but wins(a) is true, so `not wins(a)` fails)
+- `wins(a)` = **true** (via `move(a, c)`, and `\+ wins(c)` succeeds since wins(c) is false)
+- `wins(b)` = **false** (only move is to a, but wins(a) is true, so `\+ wins(a)` fails)
 
 ---
 
@@ -193,20 +217,30 @@ Now:
 
 WFS handles mutual recursion where two predicates depend on each other's negation:
 
-```seam
--table(even_node/1)
--table(odd_node/1)
+```clausal
+:- table(even_node/1).
+:- table(odd_node/1).
 
-edge(1, 2),
-edge(2, 3),
-edge(3, 4),
-edge(4, 1),
+edge(1, 2).
+edge(2, 3).
+edge(3, 4).
+edge(4, 1).
 
-even_node(X) <- (edge(X, Y), not odd_node(Y))
-odd_node(X) <- (edge(X, Y), not even_node(Y))
+even_node(X) :-
+    edge(X, Y),
+    \+ odd_node(Y).
+
+odd_node(X) :-
+    edge(X, Y),
+    \+ even_node(Y).
+
+% On this pure cycle every node is an answer of both, each Undefined.
+test("all four nodes answer, undefined") :-
+    findall(X, even_node(X), [1, 2, 3, 4]),
+    findall(X, odd_node(X), [1, 2, 3, 4]).
 ```
 
-In a cycle of length 4 (1→2→3→4→1), `even_node` and `odd_node` are mutually recursive through negation. WFS resolves this: nodes whose parity is determinable get **true**/**false**, while nodes in an unfounded cycle get **undefined**.
+In a cycle of length 4 (1→2→3→4→1), `even_node` and `odd_node` are mutually recursive through negation. WFS resolves this: nodes whose parity is determinable get **true**/**false**, while nodes in an unfounded cycle get **undefined** — on this pure cycle, every node of both (`query_wfs` reports `Undefined` for all eight answers).
 
 ---
 
@@ -229,9 +263,9 @@ Undefined does NOT mean "error" — it is a legitimate third truth value. In gam
 
 ## Requirements
 
-WFS only applies to **tabled** predicates. Mark them with the [`-table` directive](directives.md):
+WFS only applies to **tabled** predicates. Mark them with the [`table` directive](directives.md):
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:wfs_directive"
 ```
 
@@ -243,7 +277,7 @@ Non-tabled predicates with negation use standard negation-as-failure (which can 
 
     ### Delayed Negation
 
-    when `not Goal` is encountered for a tabled predicate and the answer is not yet determined:
+    when `\+ Goal` is encountered for a tabled predicate and the answer is not yet determined:
 
     1. The negation is **delayed** rather than immediately evaluated
     2. A conditional answer is recorded: "this answer holds if the delayed condition resolves"
@@ -262,9 +296,9 @@ Non-tabled predicates with negation use standard negation-as-failure (which can 
     - Incomplete tables (computation still in progress)
     - Conditional answers (answers with delayed conditions) — negating a
       *complete* table whose only matching answers are themselves conditional
-      delays too (`not Undefined` is `Undefined`), rather than failing
+      delays too (the negation of `Undefined` is `Undefined`), rather than failing
     - Cyclic dependencies
-    - Never-evaluated subgoals: a ground `not p(...)` with no table and no
+    - Never-evaluated subgoals: a ground `\+ p(...)` with no table and no
       complete subsuming table **spawns** the positive subgoal (the compiled
       seam passes the database as `$naf_db`) and decides against the
       completed result, instead of conservatively succeeding — this is what
@@ -305,5 +339,5 @@ Non-tabled predicates with negation use standard negation-as-failure (which can 
 ---
 
 *See also: [Tabling](tabling.md) — SLG tabling, which WFS builds on.*
-*See also: [Directives](directives.md) — the `-table` directive.*
+*See also: [Directives](directives.md) — the `table` directive.*
 *See also: [Constraints](constraints.md) — `dif/2` for disequality constraints (a different approach to negation).*
