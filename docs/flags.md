@@ -4,18 +4,17 @@
 flags of ISO 13211-1 (7.11, 8.17), plus one flag of Clausal Prolog's own,
 `assert_creates_dynamic`.
 
-Flag names and values are atoms. In seam (`.seam`) source, write them quoted
-(`'unknown'`), or declare them with `-private([...])`, as with any atom. A
-truth value is `true` / `false`, which compile to Python's `True` / `False`.
+Flag names and values are atoms, written bare (`unknown`) as in ISO. A
+truth value is `true` / `false`.
 
-!!! note "Seam vs Prolog syntax"
+!!! note "Clausal Prolog and the seam"
 
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+    Examples on this page are [Clausal Prolog](clausal_prolog.md)
+    (`.clausal`), ISO Prolog syntax. In the [seam](syntax.md) (`.seam`),
+    Clausal's Python-syntax surface, flag names are written quoted
+    (`'unknown'`) or declared with `-private([...])`, as with any atom,
+    `true` / `false` compile to Python's `True` / `False`, and the
+    directive is spelled `-set_prolog_flag(Flag, Value)`.
 
 ---
 
@@ -37,20 +36,23 @@ truth value is `true` / `false`, which compile to Python's `True` / `False`.
 
 - **Integers are unbounded** (Python `int`), so `bounded` is `false` and
   `max_integer` / `min_integer` have no value:
-  `current_prolog_flag('max_integer', X)` fails, as in Scryer.
+  `current_prolog_flag(max_integer, X)` fails, as in Scryer.
 - **`integer_rounding_function`** is `toward_zero`: the ISO evaluable
-  `'//'(-7, 2)` is `-3`. (A bare `-7 // 2` in source is Python's floor
-  division, which is not the ISO evaluable; see [Operators](operators.md).)
+  `-7 // 2` is `-3`. (In the seam, a bare `-7 // 2` is Python's floor
+  division, which is not the ISO evaluable; the seam's quoted
+  `'//'(-7, 2)` is. See [Operators](operators.md).)
 - **`max_arity`** is `unbounded`: a compound term is a Python tuple, and there
   is no arity limit.
 - **`unknown`** is always `error`: calling an unknown procedure raises
   `existence_error(procedure, PI)`. The ISO values `fail` and `warning` are not
   implemented.
 - **`debug`** can be set, but changes nothing yet.
-- **`double_quotes`** is the module's [`-double_quotes`](directives.md#-double_quotes)
-  mode: `chars` (the default: `"…"` is a string) or `atom`. It decides how the
+- **`double_quotes`** is the module's double-quotes mode
+  (`:- set_prolog_flag(double_quotes, Mode).`; in the seam also
+  [`-double_quotes`](directives.md#-double_quotes)):
+  `chars` (the default: `"…"` is a string) or `atom`. It decides how the
   compiler reads the module's `"…"` literals, so it is set by a directive, never
-  at run time. `codes` is not a mode: codes are spelled `b"…"`.
+  at run time. `codes` is not a mode: the seam spells codes `b"…"`.
 - **`assert_creates_dynamic`**: see [below](#assert_creates_dynamic).
 - **`require_end_module`**: whether a Prolog module file must end with
   `:- end_module(Name).` -- see
@@ -86,17 +88,19 @@ truth value is `true` / `false`, which compile to Python's `True` / `False`.
 `current_prolog_flag(F, V)` with `F` unbound enumerates every flag that has a
 value.
 
-```seam
-test("bounded") <- current_prolog_flag('bounded', false)
+```clausal
+test("bounded") :-
+    current_prolog_flag(bounded, false).
 
-test("unknown is error") <- current_prolog_flag('unknown', 'error')
+test("unknown is error") :-
+    current_prolog_flag(unknown, error).
 
-test("no max_integer") <- (not current_prolog_flag('max_integer', _M))
+test("no max_integer") :-
+    \+ current_prolog_flag(max_integer, _M).
 
-test("enumerate") <- (
+test("enumerate") :-
     findall(F, current_prolog_flag(F, _V), FLAGS),
-    in_('double_quotes', FLAGS)
-)
+    in_(double_quotes, FLAGS).
 ```
 
 ---
@@ -109,26 +113,32 @@ A **module** flag has a value per module:
 
 - `set_prolog_flag/2`, run as a goal, sets it for the **calling** module;
 - `current_prolog_flag/2` reports the calling module's value;
-- the directive `-set_prolog_flag(Flag, Value)` sets it for the module that
+- the directive `:- set_prolog_flag(Flag, Value).` sets it for the module that
   carries the directive.
 
-```seam
-test("a module flag") <- (
-    set_prolog_flag('assert_creates_dynamic', true),
-    current_prolog_flag('assert_creates_dynamic', true)
-)
+A `.clausal` module starts with `assert_creates_dynamic` set to `true`, so
+the test turns it off and back on:
+
+```clausal
+test("a module flag") :-
+    set_prolog_flag(assert_creates_dynamic, false),
+    current_prolog_flag(assert_creates_dynamic, false),
+    set_prolog_flag(assert_creates_dynamic, true),
+    current_prolog_flag(assert_creates_dynamic, true).
 ```
 
 ### The directive
 
-`-set_prolog_flag(Flag, Value)` sets a flag when the module loads. For
-`double_quotes` it is the same as `-double_quotes(Value)`, and like that
-directive it governs the literals below it. A setting that `set_prolog_flag/2`
-would refuse is a load-time `SyntaxError` that carries the ISO error term.
+`:- set_prolog_flag(Flag, Value).` sets a flag when the module loads. For
+`double_quotes` it governs the literals below it (in the seam it is the same
+as `-double_quotes(Value)`). A setting that `set_prolog_flag/2`
+would refuse is a load-time `SyntaxError` that carries the ISO error term:
+`:- set_prolog_flag(bounded, true).` fails to load with
+`error(permission_error(modify,flag,bounded),set_prolog_flag/2)`.
 
-```seam
--set_prolog_flag(assert_creates_dynamic, true)
--set_prolog_flag(double_quotes, chars)
+```clausal
+:- set_prolog_flag(assert_creates_dynamic, true).
+:- set_prolog_flag(double_quotes, chars).
 ```
 
 ---
@@ -150,21 +160,21 @@ Scryer departs from ISO on two rows. It reports a read-only flag
 (`set_prolog_flag(max_arity, 5)`) and a bad `unknown` value as
 `domain_error(prolog_flag, Flag)`. Here ISO decides.
 
-```seam
-test("not a flag") <- catch(
-    set_prolog_flag('nosuch', 1),
-    error(domain_error('prolog_flag', 'nosuch'), _),
-    true)
+```clausal
+test("not a flag") :-
+    catch(set_prolog_flag(nosuch, 1),
+          error(domain_error(prolog_flag, nosuch), _),
+          true).
 
-test("read-only") <- catch(
-    set_prolog_flag('bounded', true),
-    error(permission_error('modify', 'flag', 'bounded'), _),
-    true)
+test("read-only") :-
+    catch(set_prolog_flag(bounded, true),
+          error(permission_error(modify, flag, bounded), _),
+          true).
 
-test("not a value") <- catch(
-    set_prolog_flag('unknown', 'bogus'),
-    error(domain_error('flag_value', '+'('unknown', 'bogus')), _),
-    true)
+test("not a value") :-
+    catch(set_prolog_flag(unknown, bogus),
+          error(domain_error(flag_value, unknown + bogus), _),
+          true).
 ```
 
 ---
@@ -176,7 +186,8 @@ What `assertz/1` and `asserta/1` do with a procedure that does not exist yet.
 - **`false`** (the default in `.seam` modules): the dynamic database
   is declare-first. Asserting into a procedure nothing declares raises
   `permission_error(modify, static_procedure, PI)`, because ISO makes an
-  undeclared procedure static (7.5.2). Declare it with `-dynamic` first.
+  undeclared procedure static (7.5.2). Declare it dynamic first (the seam's
+  `-dynamic(PI)`, `.clausal`'s `:- dynamic(PI).`).
 - **`true`** (the default in a Clausal Prolog `.clausal` module and in an imported `.pl` module): ISO 7.5.2(2). Asserting
   into a procedure that does not exist **creates** it, as a dynamic procedure of
   the module.
@@ -190,17 +201,33 @@ With either value, these are still refused with
 
 The flag is module-scoped: it governs asserts into the module whose flag is set.
 
-```seam
--set_prolog_flag(assert_creates_dynamic, true)
+```clausal
+% true is already the .clausal default; the directive makes it explicit
+:- set_prolog_flag(assert_creates_dynamic, true).
 
-remember(X) <- assertz(seen(X))
+remember(X) :-
+    assertz(seen(X)).
 
-test("assertz creates the procedure") <- (
+test("assertz creates the procedure") :-
     remember(1),
     remember(2),
     findall(X, seen(X), XS),
-    XS == [1, 2]
-)
+    XS == [1, 2].
+```
+
+With the flag off, the same assert is refused:
+
+```clausal
+:- set_prolog_flag(assert_creates_dynamic, false).
+
+remember(X) :-
+    assertz(seen(X)).
+
+test("assertz into an undeclared procedure raises") :-
+    catch(remember(1),
+          error(permission_error(modify, static_procedure, PI), _),
+          true),
+    PI == seen/1.
 ```
 
 A [Clausal Prolog](clausal_prolog.md) (`.clausal`) module or an [imported Prolog module](importing_prolog.md) starts with
