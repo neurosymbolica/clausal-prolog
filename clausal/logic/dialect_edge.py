@@ -197,7 +197,8 @@ def _sandbox_filter(kind: "str | None", target: Any) -> "str | None":
     return kind
 
 
-#: (caller file, target file) -> (project file, its stamp, BridgeRefusal or
+#: (caller file, target file, sandbox adapters or None) -> (project file,
+#: its stamp, BridgeRefusal or
 #: None).  Reused while the project file is unchanged (one stat per ask);
 #: a loaded module's code does not change, so its own file is not re-read.
 _BRIDGE_DECISIONS: dict = {}
@@ -207,6 +208,14 @@ def _file_of(obj: Any) -> "str | None":
     md = _namespace(obj)
     path = md.get("__file__") if md is not None else None
     return path if isinstance(path, str) and path else None
+
+
+def _sandbox_adapters() -> "frozenset | None":
+    """The adapters the sandbox allows now; None while it is off."""
+    if not _sandbox_state.ACTIVE:
+        return None
+    from clausal.sandbox import allowed_adapters  # noqa: PLC0415
+    return allowed_adapters()
 
 
 def bridge_refusal_for(caller: Any, target: Any):
@@ -222,7 +231,13 @@ def bridge_refusal_for(caller: Any, target: Any):
         return None
     from clausal import python_bridges as pb  # noqa: PLC0415
     caller_file = _file_of(caller)
-    key = (caller_file, target_file)
+    # In the sandbox a verdict also depends on the adapters allowed NOW
+    # (an allowed adapter's term constructors are no Python route,
+    # clausal.sandbox.sandbox_constructor), and enable() may narrow them
+    # after a verdict was cached: the set is part of the key.  Read before
+    # deciding, and the set only narrows, so a racing decision is never
+    # cached under a wider set than it was made with.
+    key = (caller_file, target_file, _sandbox_adapters())
     hit = _BRIDGE_DECISIONS.get(key)
     if hit is not None and pb.project_stamp(hit[0]) == hit[1]:
         return hit[2]

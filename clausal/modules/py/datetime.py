@@ -78,6 +78,7 @@ from clausal.logic.exceptions import (
     LogicException, domain_error, instantiation_error, representation_error,
     type_error)
 from clausal.logic.trampoline import DONE
+from clausal import _sandbox_state
 
 
 # ── now / today ──────────────────────────────────────────────────────────
@@ -370,8 +371,22 @@ def _today_1(d, trail, k):
 # 2026-09-26.md.)
 
 
-def date(year, month, day):
-    """Construct a datetime.date, or a pattern when a component is unbound."""
+def date(*components):
+    """Construct a datetime.date, or a pattern when a component is unbound.
+
+    Called directly by compiled code (``D is date(2024, 2, 28)``), so it
+    answers every bad call with an ISO error term, never a bare Python
+    exception: the wrong number of components is ``type_error(date, Term)``
+    (as ``_reject_dt_term`` says for a short date term), and in the sandbox
+    it checks, when it RUNS, that its adapter is still allowed
+    (``clausal.sandbox.check_constructor``)."""
+    if _sandbox_state.ACTIVE:
+        from clausal.sandbox import check_constructor  # noqa: PLC0415
+        check_constructor(__name__, "date", "date/3")
+    if len(components) != 3:
+        raise LogicException(type_error(
+            "date", ("date", *map(_deref, components)), "date/3")) from None
+    year, month, day = components
     y, m, d = _deref(year), _deref(month), _deref(day)
     if is_var(y) or is_var(m) or is_var(d):
         # No pattern class any more. A cell with unbound components IS the
@@ -389,7 +404,7 @@ def date(year, month, day):
     # (F015) -- a bogus date must never be constructible.
     try:
         _dt.date(y, m, d)          # VALIDATE through datetime, then discard:
-    except (TypeError, ValueError) as exc:   # rejects 2025-02-29 and floats
+    except (TypeError, ValueError, OverflowError) as exc:  # 2025-02-29, floats
         # A term constructor cannot FAIL the way date/4's goal could, so it
         # raises -- but as a proper ISO error term, not a bare Python one.
         # An impossible date is a fact about the PROGRAM, not about Python,
@@ -403,8 +418,12 @@ def date(year, month, day):
             # Wrong TYPE of component (a float, a string) -> type_error.
             raise LogicException(
                 type_error("integer", culprit, "date/3")) from None
-        # Right types, impossible VALUE (month 13, 29 Feb in a common year)
-        # -> domain_error. This is the ISO distinction and it is the one a
+        # Right types, impossible VALUE (month 13, 29 Feb in a common year,
+        # and a component too big for a C int, 10**30: OverflowError) ->
+        # domain_error, as for the date terms (_reject_dt_term).  Not
+        # representation_error: that is date_add/3's, where in-domain
+        # arguments give a RESULT the calendar cannot hold; here the
+        # argument itself is no date. This is the ISO distinction and it is the one a
         # reader needs: a typo in the shape, versus a date that is not a day.
         raise LogicException(
             domain_error("date", culprit, "date/3")) from None

@@ -271,17 +271,32 @@ a term, not registered predicates: `date` in `clausal.modules.py.datetime`
 (`D is date(2024, 2, 28)`). A sandboxed module may import only the ones
 listed in the adapter's row (`clausal.sandbox.ADAPTERS`, field
 `constructors`), each reviewed as pure: no clock, I/O, host time zone or
-other state, and it returns data built from its own arguments. Each import
-works by name or by alias (`-import_from(date_time, [date])`), and also as
-the exact `module.name` chain the compiler lowers each use to. It works only
-while the adapter is allowed: `enable(allow_adapters=...)` without datetime
-refuses `date` too. Everything else the adapter module binds (its helpers,
-its own imports) stays a `non_export`, as does any attribute of the
-constructor (`date.year`). A `library(...)` facade re-exports no
-constructor. A query's `M:G` or `call/N` into a module that uses one
-passes the Python-bridge check by the same rule. The function object is
-inert data: a bare `F is date` binds it,
-but `call(F, ...)` refuses it as a Python object.
+other state, and it returns data built from its own arguments. Import one
+by name or alias (`-import_from(date_time, [date])`), or import its module
+(`-import_module(date_time)`) and write `date_time.date(...)`. A qualified
+`py.datetime.date(...)` with no import of its module is not a supported
+spelling: it loads but does not resolve when it runs.
+
+- **Only while the adapter is allowed.** `enable(allow_adapters=...)`
+  without datetime refuses `date` at load. Narrowing after a load revokes
+  it everywhere: the Python-bridge check decides again (its cached
+  verdicts are keyed by the allowed adapters), and `date` itself refuses to
+  run, with `permission_error(access, python_module, M)`, in code compiled
+  before the narrowing, as a registered predicate does.
+- **Bad calls are ISO errors.** A non-date (`date(2025, 2, 29)`, a year too
+  big for the calendar such as `10^30`) is `domain_error(date, Term)`. A
+  component of the wrong type is `type_error(integer, Term)`. The wrong
+  number of components (`date(2024, 1)`) is `type_error(date, Term)`.
+- **Nothing else.** Everything else the adapter module binds (its helpers,
+  its own imports) stays a `non_export`, as does any attribute of the
+  constructor (`date.year`). A `library(...)` facade re-exports no
+  constructor.
+- **The same rule at the bridge check.** A query's `M:G` or `call/N` into
+  a module that uses a constructor passes the Python-bridge check by the
+  same rule.
+- **The function object is inert data.** A bare `F is date` binds it, but
+  `call(F, ...)`, `maplist(F, ...)` and a goal that resolves to it refuse
+  it as no goal.
 
 Any adapter that is not engine-shipped is refused, including an optional
 `clausal-*` package's adapter, even one spliced into

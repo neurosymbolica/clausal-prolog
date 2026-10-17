@@ -525,13 +525,17 @@ def enable(allow_adapters=None, allow_bridges=()) -> None:
                     "unchecked: " + ", ".join(users) + ".  Enable the "
                     "sandbox before loading anything (or set "
                     f"{ENV_VAR}=1).")
+        # Everything that can fail is computed BEFORE any state changes, so
+        # a failed enable() leaves no half-on sandbox behind (the adapter
+        # set is read by sandbox_constructor and the bridge gate).
         ids, keep = _collect_allowed(wanted)
+        attr_keys = _engine_attr_keys() if not _st.ACTIVE else None
         _STATE.adapters = wanted
         _STATE.bridges = bridges
         _STATE.allowed_ids = ids
         _STATE.keep = keep
         if not _st.ACTIVE:
-            _STATE.attr_keys = _engine_attr_keys()
+            _STATE.attr_keys = attr_keys
             _install_finders()
             _deny_builtins()
             _clear_query_caches()
@@ -736,7 +740,8 @@ def sandbox_constructor(dotted: str, name: "str | None") -> bool:
     to the very function it defines under that name -- not a re-export,
     a class, a predicate object or anything rebound later."""
     import types  # noqa: PLC0415
-    if not name or name.startswith("_") or dotted.startswith(_FACADES):
+    if (not _st.ACTIVE or not name or name.startswith("_")
+            or dotted.startswith(_FACADES)):
         return False
     row = adapter_row(dotted)
     if (row is None or name not in row.constructors or name in row.denied
@@ -753,6 +758,21 @@ def sandbox_constructor(dotted: str, name: "str | None") -> bool:
     return (type(fn) is types.FunctionType
             and fn.__module__ == _SHIMS.get(dotted, dotted)
             and fn.__qualname__ == name)
+
+
+def check_constructor(module: str, name: str, context: str) -> None:
+    """At CALL time, in the sandbox: raise unless *name* is still a
+    constructor of an adapter allowed NOW.  A module compiled before a
+    narrowing ``enable(allow_adapters=...)`` calls the constructor
+    directly, so the constructor itself asks, as a registered predicate's
+    dispatch does (:func:`check_adapter`)."""
+    row = adapter_row(module)
+    if (row is not None and name in row.constructors
+            and _canonical(module) in _STATE.adapters):
+        return
+    why = (f"{module}.{name} is a term constructor of an adapter the "
+           f"sandbox does not allow now")
+    raise _access_error("python_module", module, why, context)
 
 
 def _drop_constructor_refs(record):

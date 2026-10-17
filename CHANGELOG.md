@@ -244,10 +244,16 @@ surface described in [docs/public-api.md](docs/public-api.md).
   Schengen max-stay, GDPR Arts 33-34) could not load. Each adapter row in
   `clausal.sandbox.ADAPTERS` now names its reviewed pure constructors
   (`constructors`; datetime's is `date`, which validates and returns the
-  cell `date(Y, M, D)` of its own arguments, or raises the ISO
-  `domain_error`/`type_error`). They import by name or alias and are
-  reachable as the exact `module.name` chain, only while the adapter is
-  allowed. Everything else the adapter module binds stays refused, and so
+  cell `date(Y, M, D)` of its own arguments). They import by name or
+  alias, or through `-import_module`, only while the adapter is allowed.
+  Narrowing `allow_adapters` after a load revokes them: the bridge check's
+  cached verdicts are keyed by the allowed adapters, and `date` refuses to
+  run once its adapter is gone. `date` now raises an ISO error for every
+  bad call: `domain_error(date, T)` for a non-date, including a year too
+  big for a C int (a bare `OverflowError` before), and `type_error(date,
+  T)` for the wrong number of components (a bare `TypeError` before). A
+  failed `enable()` no longer leaves the adapter set changed. Everything
+  else the adapter module binds stays refused, and so
   do the clock readers. A `library(datetime)` facade still exports no
   `date`. The Python-bridge gate applies the same rule in the sandbox, so
   a query's `M:G` or `call/N` into a module that uses `date` is no longer

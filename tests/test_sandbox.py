@@ -1158,7 +1158,6 @@ def test_the_date_constructor_is_unchanged_without_the_sandbox(sbx):
     # past the constructor: an attribute of the function object
     "-import_from(date_time, [date])\np(X) <- (X is date.year)\n",
     "p(X) <- (X is py.datetime.date.year)\n",
-    "p(X) <- (X is py.datetime.date.__globals__)\n",
     "-import_from(date_time, [date])\np(X) <- (X is ++date(2024, 1, 1))\n",
     # a facade re-exports no constructor
     "-import_from(clausal.library.datetime, [date])\np(1),\n",
@@ -1170,10 +1169,20 @@ def test_only_the_reviewed_constructors_are_importable(sbx, text):
         sb.enable()
         probe("load", lambda: load("bad"))
     """)
-    if "__globals__" in text:       # the compiler refuses it first
-        assert res["load"]["type"] == "SyntaxError", res["load"]
-        return
     refused(res, "load", LOAD, import_error=True)
+
+
+def test_an_underscore_attribute_of_the_constructor_is_the_compiler_s(sbx):
+    """``py.datetime.date.__globals__`` never reaches the sandbox's audit:
+    the seam compiler refuses an underscore-led attribute as no qualified
+    name, sandbox or not."""
+    sbx.write("bad.seam", "-module(bad, [p/1])\n"
+              "p(X) <- (X is py.datetime.date.__globals__)\n")
+    for body in ("import clausal.sandbox as sb\nsb.enable()\n",
+                 "import clausal\n"):
+        res = sbx.run(body + 'probe("load", lambda: load("bad"))\n')
+        assert res["load"]["type"] == "SyntaxError", res["load"]
+        assert "underscore-led attribute" in res["load"]["msg"]
 
 
 def test_a_constructor_follows_its_adapter_out_of_the_allowlist(sbx):
@@ -1245,6 +1254,141 @@ def test_the_bridge_gate_is_unchanged_for_date_without_the_sandbox(sbx):
     """)
     r = res["load"]
     assert not r["ok"] and "python_bridges" in r["msg"], r
+
+
+def test_narrowing_after_a_load_revokes_the_constructor(sbx):
+    """``enable(allow_adapters=...)`` after a load: the bridge gate's cached
+    verdict for a module importing ``date`` is not reused (its key holds the
+    allowed adapters), and code compiled before the narrowing that calls
+    ``date`` directly is refused when it runs, as ``date_add`` is."""
+    sbx.write("dmod.seam", DMOD_SEAM.replace(
+        "[made/1, shift/2, span/3, day/4]",
+        "[made/1, shift/2, span/3, day/4, plain/1]") + "plain(1),\n")
+    sbx.write("caller.seam", "-module(caller, [c/1])\n"
+              "-import_from(dmod, [made])\nc(D) <- made(D)\n")
+    res = sbx.run("""
+        import clausal.sandbox as sb
+        sb.enable()
+        from clausal import Var
+        c = load("caller")
+        X = Var()
+        Q = lambda g: (":", "dmod", g)
+        probe("plain_before", lambda: answers(Q(("plain", X)), c, X))
+        probe("made_before", lambda: answers(("c", X), c, X))
+        sb.enable(allow_adapters=["units"])
+        probe("plain_after", lambda: answers(Q(("plain", X)), c, X))
+        probe("made_after", lambda: answers(("c", X), c, X))
+        probe("shift_after", lambda: answers(
+            ("call", Q("shift"), ("date", 2024, 2, 28), X), c, X))
+    """)
+    assert ok(res, "plain_before") == "[1]"
+    assert ok(res, "made_before") == "[('date', 2024, 2, 28)]"
+    refused(res, "plain_after", "permission_error(import,python_bridge,")
+    refused(res, "made_after", PYMOD)
+    assert not res["shift_after"]["ok"], res["shift_after"]
+
+
+def test_a_failed_enable_leaves_no_constructor_admitted(sbx):
+    """``enable()`` computes everything that can fail before it changes any
+    state, and ``sandbox_constructor`` also requires the sandbox ON."""
+    res = sbx.run("""
+        import clausal.sandbox as S
+        from clausal import _sandbox_state
+        def boom():
+            raise RuntimeError("fault injected")
+        real = S._engine_attr_keys
+        S._engine_attr_keys = boom
+        probe("enable", lambda: S.enable())
+        probe("active", lambda: _sandbox_state.ACTIVE)
+        probe("adapters", lambda: len(S._STATE.adapters))
+        probe("sc", lambda: S.sandbox_constructor(
+            "clausal.modules.py.datetime", "date"))
+        S._STATE.adapters = S._default_adapters()     # as if half-on
+        probe("sc_half_on", lambda: S.sandbox_constructor(
+            "clausal.modules.py.datetime", "date"))
+    """)
+    assert res["enable"]["msg"] == "fault injected", res["enable"]
+    assert ok(res, "active") == "False"
+    assert ok(res, "adapters") == "0"
+    assert ok(res, "sc") == "False"
+    assert ok(res, "sc_half_on") == "False"
+
+
+BAD_DATES = """
+-module(bd, [big/1, short/1, long/1])
+-import_from(date_time, [date])
+big(D) <- (D is date(1000000000000000000000000000000, 1, 1))
+short(D) <- (D is date(2024, 1))
+long(D) <- (D is date(2024, 1, 1, 5))
+"""
+
+
+@pytest.mark.parametrize("on", [True, False])
+def test_a_bad_date_call_is_an_iso_error(sbx, on):
+    """A year too big for a C int is a ``domain_error`` like any non-date
+    (an OverflowError before); the wrong number of components is
+    ``type_error(date, Term)`` (a bare TypeError before)."""
+    sbx.write("bd.seam", BAD_DATES)
+    res = sbx.run(("import clausal.sandbox as sb\nsb.enable()\n"
+                   if on else "") + """
+from clausal import Var
+m = load("bd")
+X = Var()
+for n in ("big", "short", "long"):
+    probe(n, lambda n=n: answers((n, X), m, X))
+""")
+    refused(res, "big", "domain_error(date,date(1000000000000000000000000000000,1,1))")
+    refused(res, "short", "type_error(date,date(2024,1))")
+    refused(res, "long", "type_error(date,date(2024,1,1,5))")
+
+
+GAPS = {
+    "a1.seam": "-module(a1, [t/1, n/1])\n"
+               "-import_from(date_time, [alias(date, today)])\n"
+               "t(D) <- (D is today(2024, 1, 2))\nn(D) <- today(D)\n",
+    "a2.seam": "-module(a2, [t/1, c/1])\n"
+               "-import_from(date_time, [alias(date, call)])\n"
+               "t(D) <- (D is call(2024, 1, 2))\n"
+               "c(X) <- call(member(X, [1, 2]))\n",
+    "a3.seam": "-module(a3, [t/1])\n-import_module(date_time)\n"
+               "t(D) <- (D is date_time.date(2024, 1, 2))\n",
+    "a4.seam": "-module(a4, [m/1, f/1, c/1, w/1])\n"
+               "-import_from(date_time, [date])\n"
+               "m(L) <- (F is date, maplist(F, [2024], L))\n"
+               "f(L) <- (F is date, findall(X, call(F, 2024, 1, 1, X), L))\n"
+               "c(D) <- (F is date, D is F(2024, 1, 1))\n"
+               "w(D) <- (F is date, G is F(2024, 1, 1), call(G, D))\n",
+}
+
+
+def test_the_constructor_under_aliases_module_imports_and_meta_calls(sbx):
+    """An alias that shadows a denied predicate (``today``) or a control
+    construct (``call``) binds only the constructor: no clock, and a goal
+    resolving to the function is no goal.  ``-import_module(date_time)``
+    reaches it as ``date_time.date``.  The bare function object reached
+    through maplist, findall or a ``F(...)`` call term is refused or stays
+    inert data."""
+    for f, text in GAPS.items():
+        sbx.write(f, text)
+    res = sbx.run("""
+import clausal.sandbox as sb
+sb.enable()
+from clausal import Var
+X = Var()
+for mod, preds in (("a1", "tn"), ("a2", "tc"), ("a3", "t"), ("a4", "mfcw")):
+    m = load(mod)
+    for p in preds:
+        probe(mod + p, lambda m=m, p=p: answers((p, X), m, X))
+""")
+    assert ok(res, "a1t") == "[('date', 2024, 1, 2)]"
+    refused(res, "a1n", "type_error(callable,")
+    assert ok(res, "a2t") == "[('date', 2024, 1, 2)]"
+    refused(res, "a2c", "type_error(callable,")
+    assert ok(res, "a3t") == "[('date', 2024, 1, 2)]"
+    refused(res, "a4m", PYOBJ)
+    refused(res, "a4f", PYOBJ)
+    assert ok(res, "a4c").startswith("[Call(func=<function date"), res["a4c"]
+    refused(res, "a4w", "type_error(callable,")
 
 
 def test_every_sandbox_constructor_is_a_function_of_its_adapter():
