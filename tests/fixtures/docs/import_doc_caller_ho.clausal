@@ -1,0 +1,18 @@
+% Doc snippet fixtures for docs/import.md: the caller of
+% import_doc_lib_ho.clausal. (A separate file from import_doc_caller.clausal,
+% which imports run_check/1 from another module.)
+
+% --8<-- [start:caller_ho]
+% caller — passes its hook in as a goal
+:- use_module(import_doc_lib_ho, [run_check/2]).
+
+hook(42).
+
+test_ho(X) :-
+    run_check(hook, X).       % binds X = 42
+% --8<-- [end:caller_ho]
+
+test("pass the hook in as a goal") :-
+    test_ho(X),
+    X == 42.
+

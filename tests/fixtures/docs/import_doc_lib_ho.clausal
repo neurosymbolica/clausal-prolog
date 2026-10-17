@@ -1,0 +1,19 @@
+% Doc snippet fixtures for docs/import.md: the hook as a goal argument
+% (see import_doc_caller.clausal).
+
+% --8<-- [start:lib_ho]
+% import_doc_lib_ho.clausal — the hook is a parameter, not a free name
+:- module(import_doc_lib_ho, [run_check/2]).
+:- meta_predicate(run_check(1, ?)).
+
+run_check(Hook, X) :-
+    call(Hook, X).
+% --8<-- [end:lib_ho]
+
+local_hook(7).
+
+test("a goal of this module") :-
+    run_check(local_hook, X),
+    X == 7.
+
+:- end_module(import_doc_lib_ho).

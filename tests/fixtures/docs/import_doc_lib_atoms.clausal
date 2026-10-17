@@ -1,0 +1,14 @@
+% Doc snippet fixtures for docs/import.md: atoms are global by spelling
+% (see import_doc_caller.clausal).
+
+% --8<-- [start:lib_atoms]
+% import_doc_lib_atoms.clausal — uses the atom `approved`
+:- module(import_doc_lib_atoms, [check/1]).
+
+check(approved).
+% --8<-- [end:lib_atoms]
+
+test("check") :-
+    check(approved).
+
+:- end_module(import_doc_lib_atoms).

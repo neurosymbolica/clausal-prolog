@@ -1,17 +1,17 @@
 # Clausal Prolog — Module System and Import Hook
 
-!!! note "Seam vs Prolog syntax"
+!!! note "Clausal Prolog and the seam"
 
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+    The scoping examples on this page are [Clausal Prolog](clausal_prolog.md)
+    (`.clausal`, ISO Prolog syntax), which imports with `use_module/1,2`.
+    The loader internals and the directive reference (`-import_from`,
+    `-import_module`) are the [seam](syntax.md)'s, and their examples are
+    seam syntax, marked as such. `++`/`--` Python escapes exist only in
+    `.seam`; Clausal Prolog imports modules and never escapes into Python.
 
 ## Overview
 
-Predicate modules have three source surfaces: `.seam` (the seam, Python syntax), `.clausal` ([Clausal Prolog](clausal_prolog.md), cut-free ISO-like Prolog) and `.pl` (regular ISO Prolog; its in-process import is experimental). In one directory `name.seam` beats `name.clausal`, which beats `name.pl`. The examples and loader internals on this page are the seam's (`PredicateLoader`, `EmbedTransformer`). Importing one with a normal Python `import` statement is enough to load and compile all predicates in that file. The `clausal.import_hook` module installs a `sys.meta_path` finder that intercepts these imports before Python's standard machinery runs.
+Predicate modules have three source surfaces: `.seam` (the seam, Python syntax), `.clausal` ([Clausal Prolog](clausal_prolog.md), cut-free ISO-like Prolog) and `.pl` (regular ISO Prolog; its in-process import is experimental). In one directory `name.seam` beats `name.clausal`, which beats `name.pl`. The loader internals on this page are the seam's (`PredicateLoader`, `EmbedTransformer`). Importing one with a normal Python `import` statement is enough to load and compile all predicates in that file. The `clausal.import_hook` module installs a `sys.meta_path` finder that intercepts these imports before Python's standard machinery runs.
 
 ```python
 import clausal  # installs the import hook as a side effect
@@ -25,7 +25,8 @@ for trail in solve(("fib", 7, F := Var()), module=fibonacci):
 
 A `.seam` file imports another the same way, with a directive, and
 can then query it in [goal position](python_integration.md#goal-position-if-goal-for-in-goal)
-— the usual way to drive Clausal Prolog from Python code:
+— the usual way to drive Clausal Prolog from Python code (seam syntax; a
+`.clausal` file has no Python):
 
 ```seam
 # report.seam
@@ -132,6 +133,26 @@ This is safe because no predicate of the file is queried during its own load. (A
 
 ---
 
+## Importing predicates in Clausal Prolog
+
+A `.clausal` module is `:- module(Name, Exports).` … `:- end_module(Name).`,
+and another file imports it with ISO's `use_module/1,2`, as in Scryer. A
+selective import lists predicate indicators; a whole-module import brings
+every export, and a qualified goal `M:G` runs `G` in `M`:
+
+```clausal
+--8<-- "tests/fixtures/docs/import_doc_lib_atoms.clausal:lib_atoms"
+```
+
+```clausal
+--8<-- "tests/fixtures/docs/import_doc_caller.clausal:use_module_forms"
+```
+
+There is no import alias in Clausal Prolog (SWI's `p/1 as q` is refused,
+since neither ISO nor Scryer reads it); resolve a name clash with a
+qualified call, `m:p(X)`. The rest of this section is the seam's directive
+reference.
+
 ## Importing predicates between `.seam` files
 
 `.seam` files can import predicates from other `.seam` files (or from Python modules that bind a plain object with a `_get_dispatch()` method) using two directives: `-import_from` and `-import_module`.
@@ -144,7 +165,7 @@ This is safe because no predicate of the file is queried during its own load. (A
 
 This emits `from myapp.graphs.utils import shortest_path, reachable` in the generated Python code. The imported names are bound to the exporting module's predicate handles in module globals, where the compiler picks them up and wires dispatch automatically.
 
-Imported predicates can be used in clause bodies just like locally-defined ones:
+Imported predicates can be used in clause bodies just like locally-defined ones (seam syntax):
 
 ```seam
 connected(X, Y) <- reachable(X, Y)
@@ -458,19 +479,14 @@ declaration would do behind your back becomes an ordinary, visible argument.
 
 A library predicate cannot "reach back" into the importer to call a predicate
 the importer defined. The name isn't in the library's namespace, so the call
-raises at runtime:
+raises at runtime (the seam behaves the same way):
 
-```seam
-# lib.seam — the library knows nothing about hook
-run_check(X) <- (hook(X))
+```clausal
+--8<-- "tests/fixtures/docs/import_doc_lib.clausal:lib_hook"
 ```
 
-```seam
-# caller.seam
--import_from(lib, [run_check])
-
-hook(42),                          # defined HERE, in the caller
-test_dynamic(X) <- (run_check(X))    # asks the library to call hook
+```clausal
+--8<-- "tests/fixtures/docs/import_doc_caller.clausal:caller_hook"
 ```
 
 Querying `test_dynamic(X)` raises `Predicate hook/1 not found` (a
@@ -478,7 +494,7 @@ Querying `test_dynamic(X)` raises `Predicate hook/1 not found` (a
 `LogicException` carrying the ISO term Scryer raises for the same call:
 `error(existence_error(procedure, hook/1), hook/1)`, so
 `catch(G, error(existence_error(procedure, PI), _), Recovery)` catches it, as do
-`except KeyError` in Python and a `++KeyError` catcher). The message goes on to name
+`except KeyError` in Python and, in the seam, a `++KeyError` catcher). The message goes on to name
 the namespace it searched and list what `lib` *does* define — which is the
 point: the list is `run_check/1`, and `hook` is not on it.
 `run_check` was compiled in `lib`'s namespace, where `hook` does not exist — and
@@ -496,42 +512,46 @@ This is the Pythonic equivalent of passing a callback / function object instead
 of relying on a global name being in scope.
 
 A predicate name passed as data is a plain atom, so the library must say which
-argument is a goal, with Scryer's [`-meta_predicate`](directives.md#-meta_predicate)
-declaration. An integer (or `':'`) position is qualified with the **caller's**
-module at the call site; `'+'`, `'-'` and `'?'` positions are left alone:
+argument is a goal, with Scryer's `meta_predicate` declaration
+(the seam's [`-meta_predicate`](directives.md#-meta_predicate)). An integer
+(or `:`) position is qualified with the **caller's** module at the call
+site; `+`, `-` and `?` positions are left alone:
 
-```seam
-# lib.seam — the hook is a parameter, not a free name
--meta_predicate(run_check(1, '?'))
-
-run_check(HOOK, X) <- (call_goal(HOOK, X))
+```clausal
+--8<-- "tests/fixtures/docs/import_doc_lib_ho.clausal:lib_ho"
 ```
 
-```seam
-# caller.seam
--import_from(lib, [run_check])
-
-hook(42),
-test_ho(X) <- (run_check(hook, X))   # pass our hook in as a goal → binds X = 42
+```clausal
+--8<-- "tests/fixtures/docs/import_doc_caller_ho.clausal:caller_ho"
 ```
 
-Without the `-meta_predicate` line, `hook` would be looked up in `lib`, and the
-call raises `error(existence_error(procedure,hook/1),hook/1)` — exactly what
-Scryer does.
+Without the `meta_predicate` line, `hook` would be looked up in the
+library, and the call raises `error(existence_error(procedure,hook/1),hook/1)`
+— exactly what Scryer does.
 
 This is the right pattern whenever a generic library predicate must call back
 into domain-specific predicates. For example, a generic eligibility engine takes
 the domain's `requirement` predicate as a goal argument rather than calling a
 bare `requirement/4` and hoping the caller defined one:
 
-```seam
--allow_singletons
-# Generic, reusable: the requirement relation is passed in. Every
-# parameter below is a singleton on purpose — the body is elided; the
-# point of this sketch is the meaningful argument names themselves.
-assess(SUBJECT, REQ_IDS, PROFILE, REQUIREMENT, LABELS, RESULT) <- (
-    # ... evaluate each id in REQ_IDS by calling REQUIREMENT as a goal ...
-)
+```clausal
+% Generic, reusable: the requirement relation is passed in, and each id in
+% ReqIds is evaluated by calling it as a goal.
+assess(Subject, ReqIds, Profile, Requirement, Labels) :-
+    maplist(assess_one(Subject, Profile, Requirement), ReqIds, Labels).
+
+assess_one(Subject, Profile, Requirement, Id, Label) :-
+    call(Requirement, Subject, Id, Profile, Label).
+
+% One domain's requirement/4
+requirement(_, adult, profile(Age), met) :-
+    Age >= 18.
+requirement(_, adult, profile(Age), not_met) :-
+    Age < 18.
+
+test("assess with a domain requirement") :-
+    assess(alice, [adult], profile(30), requirement, Labels),
+    Labels == [met].
 ```
 
 ### Why Clausal Prolog chose this
@@ -542,7 +562,7 @@ imports, modules, and name scoping should behave the way they already do in
 Python — lexical resolution against the defining module, predicates as
 first-class objects you pass explicitly — rather than a flat global predicate
 database. Caller-module qualification happens only where a library declares it
-with `-meta_predicate`, as in Scryer. The closure/lexical model is also what
+with `meta_predicate`, as in Scryer. The closure/lexical model is also what
 makes predicates ordinary named values (their handles) you can import, pass around,
 and call by reference, which is exactly what the [`call/N`/`call_goal`
 higher-order builtins](higher_order.md) and [lambdas](lambdas.md) rely on.
@@ -550,7 +570,7 @@ higher-order builtins](higher_order.md) and [lambdas](lambdas.md) rely on.
 > **One-line summary.** If you came from Prolog: a library predicate sees the
 > names *in its own file*, never the caller's. Need it to call something the
 > caller owns? Pass that predicate in as a goal argument, and declare the
-> argument with `-meta_predicate` in the library.
+> argument with `meta_predicate` in the library.
 
 ### Atoms are global by spelling
 
@@ -558,34 +578,26 @@ Unlike predicates, **atoms are not lexically scoped.** An atom **is** the
 interned Python `str` itself, and its spelling IS its value, everywhere in
 the process — two atoms of the same spelling are the same value wherever
 they were made (`==`; interning makes `is` agree too, but `==` is the
-test). Listing
+test). A Clausal Prolog file declares no atoms at all. In the seam, listing
 an atom in `-module(...)` / `-private([...])` declares that this file is
 allowed to reference the spelling (undeclared bare atoms are a compile-time
 error — see [`-strict_atoms`](directives.md#-strict_atoms)) — it does **not**
-create a module-local variant of it. Two modules that each declare the same
-atom hold the exact same value.
+create a module-local variant of it. Two modules that use the same atom
+hold the exact same value.
 
-```seam
-# lib.seam — declares its own `approved`
--module(lib, [approved, check(X)])
-
-check(approved),
+```clausal
+--8<-- "tests/fixtures/docs/import_doc_lib_atoms.clausal:lib_atoms"
 ```
 
-```seam
-# caller.seam — separately declares the SAME spelling `approved`
--import_from(lib, [check])
--private([approved])
-
-ask <- check(approved)             # SUCCEEDS: `approved` is the same atom
-                                   # everywhere, whichever file declares it
+```clausal
+--8<-- "tests/fixtures/docs/import_doc_caller.clausal:caller_atoms"
 ```
 
 `ask` succeeds: `check`'s clause head and the goal `check(approved)` both
 carry the atom `approved` (the interned `str` `'approved'`) — there is nothing to
-re-import for agreement's sake. (Importing it anyway, `-import_from(lib,
-[check, approved])`, still works and is a reasonable style choice — it just
-is not REQUIRED the way it used to be.)
+import for agreement's sake. (In the seam, importing it anyway,
+`-import_from(lib, [check, approved])`, still works and is a reasonable
+style choice — it just is not REQUIRED the way it used to be.)
 
 **This used to be the sharpest edge in Clausal Prolog's scoping model** — atoms
 previously carried per-module identity (a distinct class per declaring

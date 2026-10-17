@@ -1,0 +1,42 @@
+% Doc snippet fixtures for docs/import.md: the callers of the
+% import_doc_lib*.clausal modules.
+
+% --8<-- [start:use_module_forms]
+% Selective import: these predicates, called by their own names
+:- use_module(import_doc_lib_atoms, [check/1]).
+
+% Whole-module import: call it qualified, M:G
+:- use_module(import_doc_lib_atoms).
+
+checked(X) :-
+    import_doc_lib_atoms:check(X).
+% --8<-- [end:use_module_forms]
+
+test("selective and qualified") :-
+    check(approved),
+    checked(X),
+    X == approved.
+
+% --8<-- [start:caller_hook]
+% caller — asks the library to call hook
+:- use_module(import_doc_lib, [run_check/1]).
+
+hook(42).                     % defined HERE, in the caller
+
+test_dynamic(X) :-
+    run_check(X).
+% --8<-- [end:caller_hook]
+
+test("the library cannot see the caller's hook") :-
+    catch(test_dynamic(_), error(E, _), true),
+    E == existence_error(procedure, hook/1).
+
+% --8<-- [start:caller_atoms]
+% caller — spells the SAME atom `approved`, with no declaration
+ask :-
+    check(approved).          % SUCCEEDS: `approved` is the same atom
+                              % everywhere
+% --8<-- [end:caller_atoms]
+
+test("the same atom in every module") :-
+    ask.

@@ -1,0 +1,16 @@
+% Doc snippet fixtures for docs/import.md: a library that calls a name
+% it does not define (see import_doc_caller.clausal).
+
+% --8<-- [start:lib_hook]
+% import_doc_lib.clausal — the library knows nothing about hook
+:- module(import_doc_lib, [run_check/1]).
+
+run_check(X) :-
+    hook(X).
+% --8<-- [end:lib_hook]
+
+test("hook is not defined here") :-
+    catch(run_check(_), error(E, _), true),
+    E == existence_error(procedure, hook/1).
+
+:- end_module(import_doc_lib).
