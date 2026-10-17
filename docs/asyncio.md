@@ -140,7 +140,7 @@ simulation: protocols, queues, schedules, tested in milliseconds.
 | `await_each(AsyncIterable, Item)` | One solution per item of an async iterator, fetched as backtracking asks for the next. |
 | `sleep(Seconds)` | `asyncio.sleep`: other queries run meanwhile. |
 
-```prolog
+```clausal
 :- module(naps, [nap/2]).
 :- use_module(library(asyncio), [sleep/1]).
 

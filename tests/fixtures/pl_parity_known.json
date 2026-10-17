@@ -192,13 +192,6 @@
    "native_sha": "c48b5b1a9776c846"
   },
   {
-   "key": "docs/clpq.md#L243::load::",
-   "class": "d",
-   "note": "rulings D7/D8: constant_number_units/3 with a unit from the european_union library is Clausal Prolog only; the translator misreads the unit (`'euro'` is not a unit expression)",
-   "translator_sha": "55efbd60dbe12ac0",
-   "native_sha": "c48b5b1a9776c846"
-  },
-  {
    "key": "docs/for_prolog_programmers.md#L86::load::",
    "class": "a",
    "note": "oracle: scryer loads it, as native does. Translator: Cannot import <work>/docs/doc_for_prolog_programmers_L86.pl: Expected '.', got 'atom' ('ins') at 7:8 (doc_for_prolog_programmers_L86.pl, line 0)",

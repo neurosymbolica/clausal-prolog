@@ -76,17 +76,6 @@
    "preds": null,
    "tests": null
   },
-  "docs/asyncio.md#L147": {
-   "collect_error": null,
-   "error": null,
-   "load": "ok",
-   "preds": {
-    "nap/2": [
-     "[_1,done(_1)]"
-    ]
-   },
-   "tests": null
-  },
   "docs/clausal_prolog.md#L109": {
    "collect_error": null,
    "error": null,
@@ -149,26 +138,6 @@
    "preds": {
     "main/0": [
      "true"
-    ]
-   },
-   "tests": null
-  },
-  "docs/clpq.md#L243": {
-   "collect_error": null,
-   "error": null,
-   "load": "ok",
-   "preds": {
-    "fine/1": [
-     "[_]"
-    ],
-    "half/1": [
-     "[3 (euro) / 2]"
-    ],
-    "price/1": [
-     "[100 (euro)]"
-    ],
-    "split/1": [
-     "[300]"
     ]
    },
    "tests": null
@@ -481,29 +450,6 @@
    },
    "tests": null
   },
-  "docs/pure_random.md#L115": {
-   "collect_error": null,
-   "error": null,
-   "load": "ok",
-   "preds": {
-    "dice/3": {
-     "after": [],
-     "error": "PredicateNotFoundError: Predicate random_between/5 not found"
-    },
-    "roll/1": {
-     "after": [],
-     "error": "PredicateNotFoundError: Predicate rng_seed/2 not found"
-    }
-   },
-   "tests": null
-  },
-  "docs/pure_random.md#L57": {
-   "collect_error": null,
-   "error": null,
-   "load": "ok",
-   "preds": {},
-   "tests": null
-  },
   "docs/python_integration.md#L536": {
    "collect_error": null,
    "error": null,
@@ -516,22 +462,22 @@
    },
    "tests": null
   },
-  "docs/reified_ite.md#L282": {
-   "collect_error": null,
-   "error": "SyntaxError: Cannot import <work>/docs/doc_reified_ite_L282.pl: doc_reified_ite_L282.pl:1: cannot define the control construct ,/2 (ISO permission_error(modify, static_procedure, ,/2)) (doc_reified_ite_L282.pl, line 1)",
+  "docs/reified_ite.md#L334": {
    "load": "refused",
-   "preds": null,
-   "tests": null
-  },
-  "docs/testing.md#L86": {
+   "error": "SyntaxError: Cannot import <work>/docs/doc_reified_ite_L334.pl: doc_reified_ite_L334.pl:1: cannot define the control construct ,/2 (ISO permission_error(modify, static_procedure, ,/2)) (doc_reified_ite_L334.pl, line 1)",
    "collect_error": null,
-   "error": null,
+   "tests": null,
+   "preds": null
+  },
+  "docs/testing.md#L92": {
    "load": "ok",
-   "preds": null,
+   "error": null,
+   "collect_error": null,
    "tests": {
     "append works": "pass",
     "double of two is four": "pass"
-   }
+   },
+   "preds": null
   },
   "docs/tutorial.md#L114": {
    "collect_error": null,
@@ -2921,14 +2867,12 @@
   "clausal/tools/prolog_preludes/clausal_constants_trealla.pl": "2c6654aacd571b8a",
   "clausal/tools/toklex/specs/clausal.toklex.pl": "04d67a9b0c9775ee",
   "clausal/tools/toklex/specs/iso.toklex.pl": "a5472da790702be3",
-  "docs/asyncio.md#L147": "51c65bcbe50ffab7",
   "docs/clausal_prolog.md#L109": "073d4a2d11fc5484",
   "docs/clausal_prolog.md#L170": "421f52234df0668b",
   "docs/clausal_prolog.md#L226": "d0aaa6c6f92eac22",
   "docs/clausal_prolog.md#L36": "d4b85e1d99ebb323",
   "docs/cli.md#L104": "c1230bf772c2d31b",
   "docs/cli.md#L16": "c1230bf772c2d31b",
-  "docs/clpq.md#L243": "5e08752f9ccb90cf",
   "docs/coroutining.md#L26": "0d3d867f596c51b2",
   "docs/for_prolog_programmers.md#L119": "cc7da0876c8fc29b",
   "docs/for_prolog_programmers.md#L144": "b668aa9b81349700",
@@ -2953,11 +2897,9 @@
   "docs/importing_prolog.md#L918": "c9dd3a3c1fc2df50",
   "docs/index.md#L94": "72604ff11fb53c41",
   "docs/prolog_translation.md#L33": "8848f32154e44b13",
-  "docs/pure_random.md#L115": "1045bf0cc5b76ef6",
-  "docs/pure_random.md#L57": "57b9d1766ac5ee1c",
   "docs/python_integration.md#L536": "499dfb388eedb3e8",
-  "docs/reified_ite.md#L282": "b39b786b792d43a2",
-  "docs/testing.md#L86": "6ece34f4b33a3ac9",
+  "docs/reified_ite.md#L334": "63251fc99d6fc68c",
+  "docs/testing.md#L92": "6ece34f4b33a3ac9",
   "docs/tutorial.md#L114": "5b617cd00de4c21f",
   "docs/tutorial.md#L170": "d2d6021c68558bf9",
   "docs/tutorial.md#L186": "e3375ff2c081cd2f",

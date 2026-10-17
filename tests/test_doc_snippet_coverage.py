@@ -30,21 +30,11 @@ _HOWTO = (
 # Pre-existing display fragments that don't compile standalone — partial
 # examples / pseudo-code in guide pages. Allowlist, not aspiration: do not
 # grow this set. New blocks should compile or be moved to fixtures.
-_KNOWN_UNCOMPILABLE = {
-    # import.md: two `# caller.seam` blocks that `-import_from(lib, …)` a
-    # fictional library and illustrate cross-module name scoping; the first
-    # deliberately documents a runtime failure. Neither is standalone-compilable.
-    #
-    # These are keyed by fence line, so prose inserted ABOVE them shifts every
-    # one; the numbers below match docs/import.md after the "Seam vs Prolog
-    # syntax" admonition's two wording fixes (2026-10-15): the ruling-date
-    # parenthetical's removal merged one wrapped line back into its
-    # predecessor, shifting everything below it up by one more line.
-    ("import.md", 468),
-    ("import.md", 510),
-    # import.md: one more `# caller.seam` block that `-import_from(lib, …)`
-    # a fictional library. Not standalone-compilable.
-    ("import.md", 575),
+_KNOWN_UNCOMPILABLE: set[tuple[str, int]] = {
+    # Empty since 2026-10-17: import.md's three fictional-library `caller`
+    # blocks became real modules in tests/fixtures/docs/import_doc_*.clausal
+    # when the docs moved to Clausal Prolog, and every seam block left there
+    # compiles.
 }
 
 

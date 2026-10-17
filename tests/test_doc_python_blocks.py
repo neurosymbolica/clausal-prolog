@@ -146,7 +146,7 @@ _PAGE_MODULE_ANCHORS = {
     ("index.md", "report"): ("python", "# report.seam"),
     ("tutorial.md", "hello"): ("prolog", ":- module(hello,"),
     ("tutorial.md", "graph"): ("prolog", ":- module(graph,"),
-    ("asyncio.md", "naps"): ("prolog", ":- module(naps,"),
+    ("asyncio.md", "naps"): ("clausal", ":- module(naps,"),
 }
 
 
@@ -162,9 +162,10 @@ def test_doc_python_block_runs(tmp_path, page, anchor, modules, post, expected):
             module_anchor = _PAGE_MODULE_ANCHORS[(page, name)]
             if isinstance(module_anchor, tuple):
                 lang, module_anchor = module_anchor
-                # ```prolog is Clausal Prolog; a ```python block named
-                # ``# x.seam`` is seam source shown in a python fence.
-                if lang == "prolog":
+                # ```clausal (and the older ```prolog) is Clausal Prolog;
+                # a ```python block named ``# x.seam`` is seam source shown
+                # in a python fence.
+                if lang in ("clausal", "prolog"):
                     suffix = CLAUSAL_PROLOG_SUFFIXES[0]
             else:
                 lang = "seam"
