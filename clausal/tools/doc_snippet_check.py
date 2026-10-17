@@ -196,3 +196,57 @@ def check_no_raw_untested_blocks(
             finally:
                 tmp.unlink(missing_ok=True)
     return violations
+
+
+#: Code-fence pattern for a Clausal Prolog (``.clausal``, ISO syntax) block;
+#: group 1 is its content.  Distinct from SEAM_FENCE_RE: a ```clausal block is
+#: loaded through the native ISO front end, not compiled as seam.
+CLAUSAL_PROLOG_FENCE_RE = re.compile(r"^```clausal[ \t]*\n(.*?)^```",
+                                     re.DOTALL | re.MULTILINE)
+
+
+def check_clausal_blocks(
+    docs_dir: Path,
+    *,
+    known_display_only: set[tuple[str, int]] | None = None,
+) -> list[str]:
+    """Every inline ```clausal block loads as a ``.clausal`` module and every
+    ``test/1``/``test/2`` clause in it passes.
+
+    Stricter than the seam check: a block with tests is loaded and its tests
+    are run, rather than trusted.  A ``--8<--`` reference is skipped (its
+    target is checked where it lives).  ``known_display_only`` allowlists
+    ``(filename, fence_line)`` pairs for fragments that are not a whole
+    program (a single goal shown for reading, for example).
+    """
+    from clausal.testing import run_file
+
+    allowed = known_display_only or set()
+    violations = []
+    for md in sorted(docs_dir.glob("*.md")):
+        text = md.read_text()
+        for m in CLAUSAL_PROLOG_FENCE_RE.finditer(text):
+            content = m.group(1)
+            if _is_snippet(content):
+                continue
+            lineno = text[: m.start()].count("\n") + 1
+            if (md.name, lineno) in allowed:
+                continue
+            with tempfile.TemporaryDirectory() as d:
+                stem = re.sub(r"\W", "_", f"doc_{md.stem}_{lineno}")
+                path = Path(d) / f"{stem}.clausal"
+                path.write_text(content)
+                try:
+                    results = run_file(path).results
+                except Exception as e:      # a crash is a violation, not a skip
+                    violations.append(f"  {md.name}:{lineno}  crashed: {e!r:.120}")
+                    continue
+            bad = [r for r in results if not r.passed]
+            if bad:
+                first = bad[0]
+                what = ("does not load" if first.name == "<load>"
+                        else f"{len(bad)}/{len(results)} test(s) fail, "
+                             f"first {first.name!r}")
+                violations.append(f"  {md.name}:{lineno}  {what}: "
+                                  f"{str(first.error)[:160]}")
+    return violations
