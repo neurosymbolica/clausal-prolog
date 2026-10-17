@@ -1,11 +1,12 @@
-# === Control Flow ===
+% === Control Flow ===
 
 --8<-- [start:once_1]
 once(+Goal)
 --8<-- [end:once_1]
 
 --8<-- [start:not_1]
-not +Goal
+\+ +Goal       % Clausal Prolog (ISO)
+not +Goal      % the seam's spelling
 --8<-- [end:not_1]
 
 --8<-- [start:if_3]
@@ -29,7 +30,7 @@ catch(+Goal, ?Catcher, +Recovery)
 --8<-- [end:catch_3]
 
 --8<-- [start:halt_0]
-halt()
+halt
 halt(+Code)
 --8<-- [end:halt_0]
 
@@ -42,7 +43,7 @@ call_cleanup(+Call, +Cleanup)
 --8<-- [end:call_cleanup_2]
 
 
-# === Coroutining ===
+% === Coroutining ===
 
 --8<-- [start:freeze_2]
 freeze(?X, +Goal)
@@ -53,7 +54,7 @@ when(+Condition, +Goal)
 --8<-- [end:when_2]
 
 
-# === Meta-Predicates ===
+% === Meta-Predicates ===
 
 --8<-- [start:findall_3]
 findall(+Template, +Goal, -Bag)
@@ -80,7 +81,7 @@ count_all(+Goal, -Count)
 --8<-- [end:count_all_2]
 
 
-# === Time & statistics ===
+% === Time & statistics ===
 
 --8<-- [start:current_time_1]
 current_time(-T)
@@ -91,14 +92,14 @@ statistics(?Key, -Value)
 --8<-- [end:statistics_2]
 
 
-# === Higher-Order Call ===
+% === Higher-Order Call ===
 
 --8<-- [start:call]
-Call(+Goal)
-Call(+Goal, +A1)
-Call(+Goal, +A1, +A2)
+call(+Goal)
+call(+Goal, +A1)
+call(+Goal, +A1, +A2)
 ...
-Call(+Goal, +A1, ..., +A7)
+call(+Goal, +A1, ..., +A7)
 --8<-- [end:call]
 
 --8<-- [start:call_goal_1]
@@ -108,7 +109,7 @@ call_goal(+Goal, +A1, +A2)
 --8<-- [end:call_goal_1]
 
 
-# === DCG (Definite Clause Grammars) ===
+% === DCG (Definite Clause Grammars) ===
 
 --8<-- [start:phrase_2]
 phrase(+RuleBody, +List)
@@ -128,7 +129,7 @@ phrase(sequence(["a", "b"]), ["a", "b", "c"], REST)            % REST = ["c"]
 --8<-- [end:sequence_ex2]
 
 
-# === Term Inspection ===
+% === Term Inspection ===
 
 --8<-- [start:functor_3]
 functor(+Term, -Name, -Arity)   % decompose
@@ -169,13 +170,13 @@ global_atom(-Name, -Atom)   % enumerate global atoms (ordering not guaranteed)
 
 --8<-- [start:module_constant_3]
 module_constant(+Module, +Name, ?Value)   % look up / check a declared constant
-module_constant(+Module, -Name, ?Value)   % enumerate Module's own -constants
+module_constant(+Module, -Name, ?Value)   % enumerate Module's own constants
 module_constant(-Module, +Name, ?Value)   % find which loaded module(s) declare Name
 module_constant(-Module, -Name, ?Value)   % enumerate every loaded module's constants
 --8<-- [end:module_constant_3]
 
 
-# === Runtime Database ===
+% === Runtime Database ===
 
 --8<-- [start:assertz_1]
 assertz(+Clause)
@@ -194,11 +195,11 @@ abolish_table(+functor, +Arity)
 --8<-- [end:abolish_table_2]
 
 --8<-- [start:abolish_all_tables_0]
-abolish_all_tables()
+abolish_all_tables
 --8<-- [end:abolish_all_tables_0]
 
 
-# === Keyword-Term Introspection ===
+% === Keyword-Term Introspection ===
 
 --8<-- [start:vary_3]
 vary(+Overrides, +Term, -NewTerm)
@@ -213,7 +214,7 @@ signature(+FunctorName, +Arity, -Names)
 --8<-- [end:signature_3]
 
 
-# === Attributed Variables ===
+% === Attributed Variables ===
 
 --8<-- [start:put_attr_3]
 put_attr(+Var, +Key, +Value)
@@ -244,7 +245,7 @@ term_attvars(+Term, -Vars)
 --8<-- [end:term_attvars_2]
 
 
-# === Constraint Predicates ===
+% === Constraint Predicates ===
 
 --8<-- [start:dif_2]
 dif(+X, +Y)
@@ -259,7 +260,7 @@ dif_t(+X, +Y, -T)
 --8<-- [end:dif_t_3]
 
 
-# === CLP(ℤ) — Integer Constraints ===
+% === CLP(ℤ) — Integer Constraints ===
 
 --8<-- [start:in_domain_3]
 in_domain(+VarOrList, +Lo, +Hi)
@@ -313,7 +314,7 @@ circuit([2, 3, 1])         % valid: 1→2→3→1
 --8<-- [end:circuit_1_ex2]
 
 
-# === CLP(B) — Boolean Constraints ===
+% === CLP(B) — Boolean Constraints ===
 
 --8<-- [start:sat_1]
 sat(+Expr)
@@ -332,7 +333,7 @@ bool_labeling(+Vars)
 --8<-- [end:bool_labeling_1]
 
 
-# === Type Checks ===
+% === Type Checks ===
 
 --8<-- [start:var_1]
 var(?X)
@@ -392,7 +393,7 @@ can_be(+Type, ?Term)
 --8<-- [end:can_be_2]
 
 
-# === Dict and Set Predicates ===
+% === Dict and Set Predicates ===
 
 --8<-- [start:is_dict_1]
 is_dict(+Term)
@@ -491,7 +492,7 @@ gen_set(?Elem, +Set)
 --8<-- [end:gen_set_2]
 
 
-# === Arithmetic ===
+% === Arithmetic ===
 
 --8<-- [start:between_3]
 between(+Low, +High, ?X)
@@ -550,7 +551,7 @@ lsb(+X, -Bit)   % Bit = position of least significant set bit (0-indexed)
 --8<-- [end:lsb_2]
 
 
-# === List Predicates ===
+% === List Predicates ===
 
 --8<-- [start:in__2]
 in_(?Elem, +List)
@@ -704,7 +705,7 @@ transpose([[1, 2], [3, 4]], T)   % T = [[1, 3], [2, 4]]
 --8<-- [end:transpose_2_ex2]
 
 
-# === Higher-Order List Predicates ===
+% === Higher-Order List Predicates ===
 
 --8<-- [start:maplist_2]
 maplist(+Goal, +List)
@@ -727,8 +728,8 @@ partition(+Goal, +List, -Included, -Excluded)
 --8<-- [end:partition_4]
 
 --8<-- [start:partition_4_ex2]
-partition(integer, [1, 'a', 2, 'b'], YES, NO)
-% YES = [1, 2], NO = ['a', 'b']
+partition(integer, [1, a, 2, b], YES, NO)
+% YES = [1, 2], NO = [a, b]
 --8<-- [end:partition_4_ex2]
 
 --8<-- [start:tfilter_3]
@@ -736,7 +737,7 @@ tfilter(+Goal, +List, -Filtered)
 --8<-- [end:tfilter_3]
 
 --8<-- [start:tfilter_3_ex2]
-tfilter(eq(_, 1), [1, 2, 1, 3], FILTERED)
+tfilter(eq(1), [1, 2, 1, 3], FILTERED)
 % FILTERED = [1, 1]
 --8<-- [end:tfilter_3_ex2]
 
@@ -745,7 +746,7 @@ tpartition(+Goal, +List, -Included, -Excluded)
 --8<-- [end:tpartition_4]
 
 --8<-- [start:tpartition_4_ex2]
-tpartition(eq(_, 1), [1, 2, 1, 3], YES, NO)
+tpartition(eq(1), [1, 2, 1, 3], YES, NO)
 % YES = [1, 1], NO = [2, 3]
 --8<-- [end:tpartition_4_ex2]
 
@@ -786,30 +787,28 @@ filter_map(+Goal, +List, -Result)
 --8<-- [end:filter_map_3]
 
 
-# === Character/String ===
+% === Character/String ===
 
 --8<-- [start:chars_family_kinds]
--double_quotes(chars)
+% ATOM in, ATOMS out:
+atom_length(hello, 5)
+atom_concat(he, llo, hello)
+upcase_atom(hello, 'HELLO')
+char_code(a, 97)
+char_type(a, alpha)
 
-# ATOM in, ATOMS out:
-atom_length('hello', 5),
-atom_concat('he', 'llo', 'hello'),
-upcase_atom('hello', 'HELLO'),
-char_code('a', 97),
-char_type('a', alpha),
+% atom_chars/2 is the bridge: an atom's spelling AS a char list, which is
+% the same term as the string of that text.
+atom_chars(hello, "hello")
+atom_chars(A, "hello")             % A = hello, an atom
 
-# atom_chars/2 is the bridge: an atom's spelling AS a char list, which is
-# the same term as the string of that text.
-atom_chars('hello', "hello"),
-atom_chars(A, "hello"),            # A = hello, an atom
+% A STRING in an atom position is an ERROR, not a failure:
+% atom_length("hello", N)   -->  type_error(atom, "hello")
+% char_code("a", C)         -->  type_error(character, "a")
 
-# A STRING in an atom position is an ERROR, not a failure:
-# atom_length("hello", N)   -->  type_error(atom, "hello")
-# char_code("a", C)         -->  type_error(character, "a")
-
-# For a STRING, use the list predicates -- a string IS a list:
-length("hello", 5),
-append("he", "llo", "hello"),
+% For a STRING, use the list predicates -- a string IS a list:
+length("hello", 5)
+append("he", "llo", "hello")
 --8<-- [end:chars_family_kinds]
 
 --8<-- [start:char_type_2]
@@ -853,10 +852,10 @@ number_chars(?Number, ?Chars)
 --8<-- [end:number_chars_2]
 
 --8<-- [start:number_chars_2_ex2]
-number_chars(42, ['4', '2'])        # succeeds -- the elements are char ATOMS
-number_chars(-3.14, CHARS)          # CHARS = ['-', '3', '.', '1', '4']
-number_chars(N, ['1', '0'])         # N = 10
-number_chars(N, "10")               # N = 10 -- same term as ['1', '0']
+number_chars(42, ['4', '2'])        % succeeds -- the elements are char ATOMS
+number_chars(-3.14, CHARS)          % CHARS = ['-', '3', '.', '1', '4'] (printed "-3.14")
+number_chars(N, ['1', '0'])         % N = 10
+number_chars(N, "10")               % N = 10 -- same term as ['1', '0']
 --8<-- [end:number_chars_2_ex2]
 
 --8<-- [start:number_codes_2]
@@ -864,12 +863,12 @@ number_codes(?Number, ?Codes)
 --8<-- [end:number_codes_2]
 
 --8<-- [start:number_codes_2_ex2]
-number_codes(42, [52, 50])          # succeeds (ord("4")=52, ord("2")=50)
-number_codes(N, [52, 50])           # N = 42
+number_codes(42, [52, 50])          % succeeds (char_code('4', 52), char_code('2', 50))
+number_codes(N, [52, 50])           % N = 42
 --8<-- [end:number_codes_2_ex2]
 
 
-# === I/O ===
+% === I/O ===
 
 --8<-- [start:write_1]
 write(+Term)
@@ -904,7 +903,7 @@ print_term(+Term)
 --8<-- [end:print_term_1]
 
 --8<-- [start:nl_0]
-nl()
+nl
 --8<-- [end:nl_0]
 
 --8<-- [start:tab_1]
@@ -932,7 +931,7 @@ portray_clause(+Term)
 --8<-- [end:portray_clause_1]
 
 
-# === Logging (`log` module) ===
+% === Logging (`log` module) ===
 
 --8<-- [start:getlogger_1]
 get_logger(-Logger)
@@ -1005,7 +1004,7 @@ basic_config(+Opts)
 --8<-- [end:basicconfig_1]
 
 
-# === Date & Time (`date_time` module) ===
+% === Date & Time (`date_time` module) ===
 
 --8<-- [start:now_1]
 now(-DT)
@@ -1020,7 +1019,7 @@ today(-D)
 --8<-- [end:today_1]
 
 --8<-- [start:date_4]
-date(?Year, ?Month, ?Day, ?DateObj)
+date(Year, Month, Day)      % a term, not a predicate: there is no date/4
 --8<-- [end:date_4]
 
 --8<-- [start:time_4]

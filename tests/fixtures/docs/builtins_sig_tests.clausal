@@ -1,0 +1,597 @@
+% Companion tests for docs/builtins.md signature blocks.
+% Validates that documented predicates exist and accept the documented arities.
+% (builtins_sig_tests.seam keeps the tests that need seam syntax: the CLP(B)
+% operators and the dict and set literals.)
+
+:- use_module(library(reif)).
+:- use_module(library(logging), [get_logger/2, set_level/2, get_level/2]).
+:- use_module(library(datetime), [now/1, today/1, datetime_string/3,
+                                  weekday/2]).
+
+% ── Control Flow ─────────────────────────────────────────────────────────────
+
+test("once exists") :-
+    once(1 =:= 1).
+
+test("\\+ exists") :-
+    \+ 1 =:= 2.
+
+test("if_ exists") :-
+    if_(1 = 1, true, fail).
+
+test("catch/3 exists") :-
+    catch(true, _, true).
+
+% ── Coroutining ──────────────────────────────────────────────────────────────
+
+test("freeze exists") :-
+    freeze(X, X > 0),
+    X = 5.
+
+% ── Meta-Predicates ──────────────────────────────────────────────────────────
+
+test("findall exists") :-
+    findall(X, in_(X, [1, 2, 3]), BAG),
+    BAG == [1, 2, 3].
+
+test("bagof exists") :-
+    bagof(X, in_(X, [1, 2]), BAG),
+    BAG == [1, 2].
+
+test("forall exists") :-
+    forall(in_(X, [1, 2, 3]), number(X)).
+
+test("count_all exists") :-
+    count_all(in_(_, [1, 2, 3]), N),
+    N == 3.
+
+% ── Time & Statistics ────────────────────────────────────────────────────────
+
+test("current_time exists") :-
+    current_time(_).
+
+test("statistics exists") :-
+    statistics(wall_time, _).
+
+% ── Higher-Order Call ────────────────────────────────────────────────────────
+
+test("call exists") :-
+    call(number, 1).
+
+% ── DCG ──────────────────────────────────────────────────────────────────────
+
+greet_dcg --> ["hi"].
+
+test("phrase/2 exists") :-
+    phrase(greet_dcg, ["hi"]).
+
+% ── Term Inspection ──────────────────────────────────────────────────────────
+
+% A STRING is the list of its char atoms, so it decomposes as one --
+% functor '.'/2, the ISO cons-cell reading.
+test("functor exists") :-
+    functor("hello", NAME, ARITY),
+    NAME == '.',
+    ARITY == 2.
+
+test("arg exists") :-
+    arg(1, [10, 20, 30], V),
+    V == 10.
+
+test("copy_term exists") :-
+    copy_term([_X, _Y], [_A, _B]).
+
+test("term_variables exists") :-
+    term_variables([_X, 1, _Y], VARS),
+    length(VARS, 2).
+
+test("gensym exists") :-
+    gensym(test_, _).
+
+% ── Runtime Database ─────────────────────────────────────────────────────────
+
+:- dynamic(db_fact/1).
+
+db_fact("initial").
+
+test("assertz/retract exist") :-
+    assertz(db_fact("added")),
+    db_fact("added"),
+    retract(db_fact("added")).
+
+% ── Attributed Variables ─────────────────────────────────────────────────────
+
+% An attribute Key is a NAME, so it is an ATOM; a string key is refused.
+test("put_attr/get_attr exist") :-
+    put_attr(V, my_key, 42),
+    get_attr(V, my_key, VAL),
+    VAL == 42.
+
+test("attvar exists") :-
+    put_attr(V, k, 1),
+    attvar(V).
+
+% ── Constraint Predicates ────────────────────────────────────────────────────
+
+test("dif exists") :-
+    dif(1, 2).
+
+test("eq reified exists") :-
+    eq(1, 1, T),
+    T == true.
+
+test("dif_t reified exists") :-
+    dif_t(1, 2, T),
+    T == true.
+
+% ── CLP(Z) ───────────────────────────────────────────────────────────────────
+
+test("in_domain exists") :-
+    in_domain(X, 1, 5),
+    label([X]),
+    X == 1.
+
+test("all_different exists") :-
+    in_domain([A, B], 1, 2),
+    all_different([A, B]),
+    label([A, B]),
+    A == 1.
+
+test("element exists") :-
+    element(2, [10, 20, 30], V),
+    V == 20.
+
+% ── CLP(B): the BoolEq/BoolImpl terms (the operators are seam syntax) ────────
+
+test("sat exists") :-
+    sat('BoolImpl'(X, X)).
+
+test("taut exists") :-
+    taut('BoolImpl'(X, X), T),
+    T == 1.
+
+test("sat_count exists") :-
+    sat_count('BoolEq'(_, _), N),
+    N == 2.
+
+% ── Type Checks ──────────────────────────────────────────────────────────────
+
+test("var exists") :-
+    var(_).
+
+test("nonvar exists") :-
+    nonvar(42).
+
+test("atom exists") :-
+    \+ atom(42).
+
+test("is_str exists") :-
+    is_str("hello").
+
+test("string/1 is the same test as is_str/1") :-
+    string("hello"),
+    is_str("hello"),
+    \+ string(42).
+
+test("atomic/1 takes atoms and numbers, not strings") :-
+    atomic(hello),
+    atomic(42),
+    \+ atomic("hello"),
+    \+ atomic(pair_probe(1, 2)).
+
+test("number exists") :-
+    number(42).
+
+test("integer exists") :-
+    integer(42).
+
+test("float_ exists") :-
+    float_(3.14).
+
+test("compound exists") :-
+    \+ compound(42).
+
+test("is_list exists") :-
+    is_list([1, 2, 3]).
+
+test("ground exists") :-
+    ground(42).
+
+% ── Dict and Set Predicates (built with dict_pairs/2 and set_list/2) ─────────
+
+test("is_dict exists") :-
+    dict_pairs(D, []),
+    is_dict(D).
+
+test("dict_get exists") :-
+    dict_pairs(D, [a-1]),
+    dict_get(a, D, 1).
+
+test("dict_put exists") :-
+    dict_pairs(D, [a-1]),
+    dict_put(b, 2, D, _).
+
+test("dict_merge exists") :-
+    dict_pairs(D1, [a-1]),
+    dict_pairs(D2, [b-2]),
+    dict_merge(D1, D2, _).
+
+test("dict_keys exists") :-
+    dict_pairs(D, [x-1]),
+    dict_keys(D, [x]).
+
+test("dict_pairs exists") :-
+    dict_pairs(D, [a-1]),
+    dict_pairs(D, PAIRS),
+    PAIRS == [a-1].
+
+test("is_set exists") :-
+    set_list(S, [1, 2, 3]),
+    is_set(S).
+
+test("set_union exists") :-
+    set_list(S1, [1]),
+    set_list(S2, [2]),
+    set_union(S1, S2, _).
+
+test("set_subset exists") :-
+    set_list(S1, [1]),
+    set_list(S2, [1, 2]),
+    set_subset(S1, S2).
+
+test("gen_set exists") :-
+    set_list(S, [1, 2, 3]),
+    gen_set(1, S).
+
+test("gen_dict exists") :-
+    dict_pairs(D, [a-1]),
+    gen_dict(a, D, 1).
+
+% ── Arithmetic ───────────────────────────────────────────────────────────────
+
+test("between exists") :-
+    between(1, 3, 2).
+
+test("succ exists") :-
+    succ(4, Y),
+    Y == 5.
+
+test("plus exists") :-
+    plus(2, 3, Z),
+    Z == 5.
+
+test("abs_ exists") :-
+    abs_(-5, Y),
+    Y == 5.
+
+test("max_ exists") :-
+    max_(3, 7, Z),
+    Z == 7.
+
+test("min_ exists") :-
+    min_(3, 7, Z),
+    Z == 3.
+
+test("gcd exists") :-
+    gcd(12, 8, G),
+    G == 4.
+
+test("divmod_ exists") :-
+    divmod_(7, 3, Q, R),
+    Q == 2,
+    R == 1.
+
+% ── List Predicates ──────────────────────────────────────────────────────────
+
+test("in_ exists") :-
+    in_(2, [1, 2, 3]).
+
+test("append exists") :-
+    append([1], [2, 3], L),
+    L == [1, 2, 3].
+
+test("length exists") :-
+    length([1, 2, 3], N),
+    N == 3.
+
+test("last exists") :-
+    last([1, 2, 3], E),
+    E == 3.
+
+test("reverse exists") :-
+    reverse([1, 2, 3], R),
+    R == [3, 2, 1].
+
+test("flatten exists") :-
+    flatten([[1, 2], [3]], F),
+    F == [1, 2, 3].
+
+test("sort exists") :-
+    sort([3, 1, 2], S),
+    S == [1, 2, 3].
+
+test("select exists") :-
+    select(2, [1, 2, 3], [1, 3]).
+
+test("take exists") :-
+    take(2, [1, 2, 3], T),
+    T == [1, 2].
+
+test("drop exists") :-
+    drop(1, [1, 2, 3], D),
+    D == [2, 3].
+
+test("zip_ exists") :-
+    zip_([1, 2], ["a", "b"], P),
+    P == [1-"a", 2-"b"].
+
+test("numlist exists") :-
+    numlist(1, 3, L),
+    L == [1, 2, 3].
+
+test("same_length exists") :-
+    same_length([1, 2], [3, 4]).
+
+test("transpose exists") :-
+    transpose([[1, 2], [3, 4]], T),
+    T == [[1, 3], [2, 4]].
+
+test("sum_list exists") :-
+    sum_list([1, 2, 3], S),
+    S == 6.
+
+test("pairs_keys_values exists") :-
+    pairs_keys_values(P, [1, 2], ["a", "b"]),
+    P == [1-"a", 2-"b"].
+
+% ── Higher-Order List Predicates ─────────────────────────────────────────────
+
+test("maplist/2 exists") :-
+    maplist(number, [1, 2, 3]).
+
+test("maplist/3 exists") :-
+    maplist(succ, [1, 2], YS),
+    YS == [2, 3].
+
+test("include exists") :-
+    include(integer, [1, "a", 2], R),
+    R == [1, 2].
+
+test("exclude exists") :-
+    exclude(integer, [1, "a", 2], R),
+    R == ["a"].
+
+test("foldl exists") :-
+    foldl(plus, [1, 2, 3], 0, S),
+    S == 6.
+
+test("take_while exists") :-
+    take_while(integer, [1, 2, "a", 3], P),
+    P == [1, 2].
+
+test("drop_while exists") :-
+    drop_while(integer, [1, 2, "a", 3], S),
+    S == ["a", 3].
+
+% The tfilter/tpartition examples of builtins_sigs.txt, as shown.
+test("tfilter with eq/3") :-
+    tfilter(eq(1), [1, 2, 1, 3], FILTERED),
+    FILTERED == [1, 1].
+
+test("tpartition with eq/3") :-
+    tpartition(eq(1), [1, 2, 1, 3], YES, NO),
+    YES == [1, 1],
+    NO == [2, 3].
+
+test("partition with integer/1") :-
+    partition(integer, [1, a, 2, b], YES, NO),
+    YES == [1, 2],
+    NO == [a, b].
+
+% ── Character/String ─────────────────────────────────────────────────────────
+
+test("char_code exists") :-
+    char_code('A', C),
+    C == 65.
+
+test("upcase_atom exists") :-
+    upcase_atom(hello, U),
+    U == 'HELLO'.
+
+test("downcase_atom exists") :-
+    downcase_atom('HELLO', D),
+    D == hello.
+
+test("atom_length exists") :-
+    atom_length(hello, N),
+    N == 5.
+
+test("atom_chars exists") :-
+    atom_chars(hi, CS),
+    CS == [h, i].
+
+test("atom_concat exists") :-
+    atom_concat(he, llo, R),
+    R == hello.
+
+test("number_chars exists") :-
+    number_chars(42, ['4', '2']).
+
+% ── I/O ──────────────────────────────────────────────────────────────────────
+
+test("write_to_string exists") :-
+    write_to_string(42, S),
+    is_str(S).
+
+test("term_to_string exists") :-
+    term_to_string(42, S),
+    is_str(S).
+
+% The three string forms are the three writer FAMILIES (docs/builtins.md,
+% docs/io.md): write_to_string is ISO (unquoted, a string spells itself out
+% and there is no space after a comma), write_text_to_string is the Clausal
+% TEXT family, term_to_string is the Clausal DISPLAY family (quoted).
+test("write_to_string is the ISO family") :-
+    write_to_string('a b', S),
+    S == "a b".
+
+test("write_to_string spells a string out, with no comma spacing") :-
+    write_to_string("ab", S),
+    S == "[a,b]",
+    write_to_string([1, 2], S2),
+    S2 == "[1,2]".
+
+test("write_text_to_string is the text family") :-
+    write_text_to_string("ab", S),
+    S == "ab".
+
+test("term_to_string is the quoted family") :-
+    term_to_string('a b', S),
+    S == "'a b'".
+
+test("term_to_string keeps a string's quotes") :-
+    term_to_string("hello", S),
+    S == "\"hello\"".
+
+test("writeq/1 exists") :-
+    writeq('a b').
+
+test("write_canonical/1 spells the cons view") :-
+    write_canonical("hi").
+
+% ── The chars family takes ATOMS (docs/builtins.md Character/String) ─────────
+
+test("atom_length on an atom") :-
+    atom_length(hello, 5).
+
+test("atom_length on a string is an error") :-
+    catch(atom_length("hello", _),
+          error(type_error(atom, "hello"), _),
+          true).
+
+test("char_code on a string is an error") :-
+    catch(char_code("a", _),
+          error(type_error(character, "a"), _),
+          true).
+
+test("atom_chars bridges atom and text") :-
+    atom_chars(hello, CS2),
+    CS2 == "hello",
+    atom_chars(A2, "hello"),
+    A2 == hello.
+
+test("atom_concat gives an atom") :-
+    atom_concat(he, llo, X2),
+    X2 == hello,
+    atom(X2).
+
+test("upcase_atom gives an atom") :-
+    upcase_atom(hello, U2),
+    U2 == 'HELLO'.
+
+test("number_chars answers char atoms") :-
+    number_chars(42, NCS),
+    NCS == ['4', '2'],
+    number_chars(N2, "10"),
+    N2 == 10.
+
+test("list predicates do the string work") :-
+    length("hello", 5),
+    append("he", "llo", "hello").
+
+% ── functor/3 and unpack/2 speak ATOMS (docs/builtins.md Term Inspection) ────
+
+test("functor decomposes to an atom name") :-
+    functor(pair_probe(1, 2), FN, FA),
+    FN == pair_probe,
+    atom(FN),
+    FA == 2.
+
+test("functor on an atom is arity 0") :-
+    functor(bar, FN2, FA2),
+    FN2 == bar,
+    FA2 == 0.
+
+test("functor on a list is the cons view") :-
+    functor([1, 2], LN, LA),
+    LN == '.',
+    LA == 2,
+    functor([], EN, EA),
+    EN == [],
+    EA == 0.
+
+% The term functor/3 builds must unify with a SOURCE-WRITTEN pair_probe(A, B).
+test("functor constructs the compound") :-
+    functor(T3, pair_probe, 2),
+    T3 = pair_probe(_, _),
+    functor(T3, N3, A3),
+    N3 == pair_probe,
+    A3 == 2.
+
+test("unpack constructs the same compound") :-
+    unpack(T6, [pair_probe, 1, 2]),
+    T6 == pair_probe(1, 2).
+
+test("functor refuses a string name") :-
+    catch(functor(_, "foo", 1),
+          error(type_error(atomic, "foo"), _),
+          true).
+
+test("unpack decomposes with an atom head") :-
+    unpack(pair_probe(1, 2), UL),
+    UL == [pair_probe, 1, 2].
+
+test("unpack sees a string as its cons view") :-
+    unpack("abc", SL),
+    SL == ['.', a, "bc"].
+
+test("unpack builds the engine list shapes") :-
+    unpack(T4, ['.', a, "bc"]),
+    T4 == "abc",
+    string(T4),
+    unpack(T5, ['.', 1, [2]]),
+    T5 == [1, 2],
+    is_list(T5).
+
+test("unpack refuses a string name") :-
+    catch(unpack(_, ["foo", 1]),
+          error(type_error(atom, "foo"), _),
+          true).
+
+test("arg answers virtually on a string") :-
+    arg(2, "hello", AT),
+    AT == "ello",
+    string(AT).
+
+% ── Logging (library(logging)) ───────────────────────────────────────────────
+
+test("log: get_logger exists") :-
+    get_logger("builtins_sig_test", _).
+
+test("log: set_level/get_level exist") :-
+    get_logger("builtins_sig_level", L),
+    set_level(L, "warning"),
+    get_level(L, LVL),
+    LVL == warning.
+
+% ── Date & Time (library(datetime)) ──────────────────────────────────────────
+
+test("date_time: now exists") :-
+    now(_).
+
+test("date_time: today exists") :-
+    today(_).
+
+test("date_time: a date term formats") :-
+    D = date(2024, 1, 15),
+    datetime_string(D, S, "%Y-%m-%d"),
+    S == "2024-01-15".
+
+test("date_time: weekday exists") :-
+    D = date(2024, 1, 15),
+    weekday(D, W),
+    integer(W).
+
+test("date_time: there is no date/4") :-
+    catch(date(2024, 1, 15, _), E, true),
+    E == error(existence_error(procedure, date/4), date/4).
