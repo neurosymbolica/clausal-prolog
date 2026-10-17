@@ -16,16 +16,12 @@ state `S0` to an output state `S`:
 
 The implementation lives in `clausal/modules/pure_random.py`.
 
-!!! note "Seam vs Prolog syntax"
+!!! note "Clausal Prolog and the seam"
 
-    Some examples on this page are marked seam syntax (`.seam`), which
-    differs from Prolog's — for example, variables are `ALLCAPS`, rules
-    use `<-` instead of `:-`, and lists are Python-style. `++`/`--` Python
-    escapes exist only in `.seam`; Clausal Prolog imports modules and never
-    escapes into Python. Other examples on this
-    page are genuine [Clausal Prolog](clausal_prolog.md) (`.clausal`), which
-    uses ISO Prolog syntax directly. Keep this in mind when comparing with
-    Prolog resources.
+    Examples on this page are [Clausal Prolog](clausal_prolog.md)
+    (`.clausal`), ISO Prolog syntax. The [seam](syntax.md), Clausal's
+    Python-syntax surface, imports the library with `-import_from` instead
+    of `use_module`; [Import](#import) shows both.
 
 ## Why state-threaded
 
@@ -45,6 +41,14 @@ example from the command line, and pass it in.
 
 ## Import
 
+From Clausal Prolog (`.clausal`) or a `.pl` file:
+
+```clausal
+:- use_module(library(pure_random),
+              [rng_seed/2, random/3, random_between/5, random_member/4,
+               random_permutation/4, random_sample/5]).
+```
+
 From the seam:
 
 ```seam
@@ -52,44 +56,37 @@ From the seam:
                            random_permutation, random_sample])
 ```
 
-From Clausal Prolog (`.clausal`) or a `.pl` file:
-
-```prolog
-:- use_module(library(pure_random),
-              [rng_seed/2, random/3, random_between/5, random_member/4,
-               random_permutation/4, random_sample/5]).
-```
-
 ## Threading the state
 
 Pass each output state on as the next input:
 
-```seam
--import_from(pure_random, [rng_seed, random_between])
+```clausal
+:- use_module(library(pure_random), [rng_seed/2, random_between/5]).
 
-two_dice(A, B) <- (
+two_dice(A, B) :-
     rng_seed(42, S0),
     random_between(1, 6, A, S0, S1),
-    random_between(1, 6, B, S1, _)
-)
+    random_between(1, 6, B, S1, _).
 
-test("the same seed gives the same rolls") <- (
-    two_dice(A1, B1), two_dice(A2, B2), A1 == A2, B1 == B2
-)
+test("the same seed gives the same rolls") :-
+    two_dice(A1, B1),
+    two_dice(A2, B2),
+    A1 == A2,
+    B1 == B2.
 ```
 
 Backtracking restores the state, so both branches below draw the same
 number:
 
-```seam
--import_from(pure_random, [rng_seed, random_between])
+```clausal
+:- use_module(library(pure_random), [rng_seed/2, random_between/5]).
 
-test("backtracking restores the state") <- (
+test("backtracking restores the state") :-
     rng_seed(7, S0),
-    findall(X, (random_between(1, 100, X, S0, _)
-                or random_between(1, 100, X, S0, _)), [A, B]),
-    A == B
-)
+    findall(X, ( random_between(1, 100, X, S0, _)
+               ; random_between(1, 100, X, S0, _)
+               ), [A, B]),
+    A == B.
 ```
 
 ### With DCGs
@@ -98,25 +95,23 @@ The state is the last two arguments, which is where a grammar rule threads
 its pair. So a DCG body threads the generator with no plumbing, and
 `phrase/3` runs it from a seed:
 
-```seam
--import_from(pure_random, [rng_seed, random_between])
+```clausal
+:- use_module(library(pure_random), [rng_seed/2, random_between/5]).
 
-dice([X, Y]) >> (random_between(1, 6, X), random_between(1, 6, Y))
-
-test("a grammar threads the state") <- (
-    rng_seed(1, S0),
-    phrase(dice([X, Y]), S0, _),
-    between(1, 6, X), between(1, 6, Y)
-)
-```
-
-The same in Clausal Prolog:
-
-```prolog
 dice([X, Y]) --> random_between(1, 6, X), random_between(1, 6, Y).
 
-roll(Xs) :- rng_seed(1, S0), phrase(dice(Xs), S0, _).
+roll(Xs) :-
+    rng_seed(1, S0),
+    phrase(dice(Xs), S0, _).
+
+test("a grammar threads the state") :-
+    roll([X, Y]),
+    between(1, 6, X),
+    between(1, 6, Y).
 ```
+
+(The seam writes the rule `dice([X, Y]) >> (random_between(1, 6, X),
+random_between(1, 6, Y))`.)
 
 ## Errors
 
