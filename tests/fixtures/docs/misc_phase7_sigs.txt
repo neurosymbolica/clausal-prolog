@@ -85,12 +85,6 @@ Phase A: Source -> EmbedTransformer -> module_items + Python AST bytecode
 Phase B: compile_module(predicate_nodes, module_items, module_dict) -> compiled predicates
 --8<-- [end:compiler_phases]
 
-# === files.md ===
-
---8<-- [start:directory_listing]
-print_entries(DIR) <- (directory_entries(DIR, ENTRY), writeln_text(ENTRY), fail)
---8<-- [end:directory_listing]
-
 # === reified_ite.md ===
 
 --8<-- [start:if_signature]

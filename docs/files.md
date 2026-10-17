@@ -1,32 +1,31 @@
 # Files Module
 
-The `py.files` standard library module provides relational predicates for file and directory operations: existence checks, listing, metadata, CRUD, path manipulation, and temporary files. For higher-level file formats, see the [JSON](json.md), [CSV](csv.md), and [YAML](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-yaml/docs/yaml.md) modules.
+The files library (`library(py_files)`, the Python module `py.files`) provides relational predicates for file and directory operations: existence checks, listing, metadata, CRUD, path manipulation, and temporary files. For higher-level file formats, see the [JSON](json.md), [CSV](csv.md), and [YAML](https://github.com/neurosymbolica/clausal-prolog/blob/main/packages/clausal-yaml/docs/yaml.md) modules.
 
 The implementation lives in `clausal/modules/py/files.py`.
 
-!!! note "Seam vs Prolog syntax"
-
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+Examples on this page are [Clausal Prolog](clausal_prolog.md) (`.clausal`). They
+reach the Python module through its `library(py_files)` facade; the
+[seam](syntax.md) imports the module itself, `-import_from(py.files, [...])`.
 
 ---
 
 ## Import
 
-```seam
--import_from(py.files, [file_exists, directory_files, read_file_to_string,
-                        write_string_to_file, join_path, make_directory_path])
+```clausal
+:- use_module(library(py_files), [file_exists/1, directory_files/2,
+                                  read_file_to_string/2, write_string_to_file/2,
+                                  join_path/3, make_directory_path/1]).
 ```
 
-Or via [module import](import.md):
+Or import every predicate, and call them module-qualified if you like:
 
-```seam
--import_module(py.files)
-# then use py.files.file_exists("data.csv"), py.files.join_path(A_, B_, P_), etc.
+```clausal
+:- use_module(library(py_files)).
+
+% then call file_exists("data.csv"), or py_files:file_exists("data.csv"), etc.
+has_data :-
+    py_files:file_exists("data.csv").
 ```
 
 ---
@@ -34,7 +33,7 @@ Or via [module import](import.md):
 ## Text in, text out
 
 A path or content argument may be a string (`"data.csv"`) or an atom
-(`'data.csv'`, or a Python `str` passed in with `++`). Every text the module
+(`'data.csv'`; from the seam, also a Python `str` passed in with `++`). Every text the module
 hands back — file names, joined paths, file contents, extensions — is a
 **string**: `directory_files` on a directory holding `a.py` and `b.txt` gives
 `["a.py", "b.txt"]`, which Python sees as `[('$chars', 'a.py'), ('$chars', 'b.txt')]`
@@ -69,8 +68,11 @@ failure is the answer, also for a path the process may not look at.
 
 `file_exists(Path)` — succeeds if Path is a regular file.
 
-```seam
-check_config <- file_exists("config.json")
+```clausal
+:- use_module(library(py_files), [file_exists/1]).
+
+check_config :-
+    file_exists("config.json").
 ```
 
 #### directory_exists/1
@@ -87,16 +89,38 @@ check_config <- file_exists("config.json")
 
 `directory_files(Dir, Files)` — unify Files with a sorted list of filenames in Dir. Deterministic (one solution, full list).
 
-```seam
-list_dir(DIR, FILES) <- directory_files(DIR, FILES)
+```clausal
+:- use_module(library(py_files), [directory_files/2, temp_directory/1,
+                                  join_path/3, write_string_to_file/2]).
+
+list_dir(DIR, FILES) :-
+    directory_files(DIR, FILES).
+
+test("sorted names, as strings") :-
+    temp_directory(DIR),
+    join_path(DIR, "b.txt", B), write_string_to_file(B, "b"),
+    join_path(DIR, "a.py", A), write_string_to_file(A, "a"),
+    list_dir(DIR, FILES),
+    FILES == ["a.py", "b.txt"].
 ```
 
 #### directory_entries/2
 
 `directory_entries(Dir, Entry)` — enumerate directory entries one at a time via backtracking.
 
-```seam
---8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:directory_listing"
+```clausal
+:- use_module(library(py_files), [directory_entries/2, temp_directory/1,
+                                  join_path/3, write_string_to_file/2]).
+
+print_entries(DIR) :-
+    forall(directory_entries(DIR, ENTRY), format("~s~n", [ENTRY])).
+
+test("one entry per solution") :-
+    temp_directory(DIR),
+    join_path(DIR, "only.txt", P), write_string_to_file(P, "x"),
+    findall(E, directory_entries(DIR, E), ES),
+    ES == ["only.txt"],
+    print_entries(DIR).
 ```
 
 ### File Metadata
@@ -105,8 +129,12 @@ list_dir(DIR, FILES) <- directory_files(DIR, FILES)
 
 `file_size(Path, Size)` — unify Size with file size in bytes (integer).
 
-```seam
-is_large_file(PATH) <- (file_size(PATH, SIZE), SIZE > 1000000)
+```clausal
+:- use_module(library(py_files), [file_size/2]).
+
+is_large_file(PATH) :-
+    file_size(PATH, SIZE),
+    SIZE > 1000000.
 ```
 
 #### file_modification_time/2
@@ -143,8 +171,11 @@ All destructive predicates require ground path arguments.
 
 `make_directory_path(Path)` — create a directory and all parents (like `mkdir -p`). Succeeds even if the directory already exists.
 
-```seam
-ensure_output_dir <- make_directory_path("output/reports/2024")
+```clausal
+:- use_module(library(py_files), [make_directory_path/1]).
+
+ensure_output_dir :-
+    make_directory_path("output/reports/2024").
 ```
 
 ### File I/O
@@ -153,8 +184,12 @@ ensure_output_dir <- make_directory_path("output/reports/2024")
 
 `read_file_to_string(Path, Contents)` — read an entire file as a UTF-8 string. A missing file is `existence_error(source_sink, Path)`; content that is not UTF-8 fails.
 
-```seam
-read_config(PATH, CONTENT) <- (file_exists(PATH), read_file_to_string(PATH, CONTENT))
+```clausal
+:- use_module(library(py_files), [file_exists/1, read_file_to_string/2]).
+
+read_config(PATH, CONTENT) :-
+    file_exists(PATH),
+    read_file_to_string(PATH, CONTENT).
 ```
 
 #### write_string_to_file/2
@@ -175,24 +210,45 @@ read_config(PATH, CONTENT) <- (file_exists(PATH), read_file_to_string(PATH, CONT
 
 `join_path(Base, Relative, Joined)` — join two path components.
 
-```seam
-output_path(DIR, NAME, PATH) <- join_path(DIR, NAME, PATH)
+```clausal
+:- use_module(library(py_files), [join_path/3]).
+
+output_path(DIR, NAME, PATH) :-
+    join_path(DIR, NAME, PATH).
+
+test("join") :-
+    output_path("out", "report.txt", PATH),
+    PATH == "out/report.txt".
 ```
 
 #### split_path/3
 
 `split_path(Path, Directory, Filename)` — split a path into its directory and filename parts.
 
-```seam
-get_filename(PATH, NAME) <- split_path(PATH, _, NAME)
+```clausal
+:- use_module(library(py_files), [split_path/3]).
+
+get_filename(PATH, NAME) :-
+    split_path(PATH, _, NAME).
+
+test("split") :-
+    get_filename("out/report.txt", NAME),
+    NAME == "report.txt".
 ```
 
 #### file_extension/2
 
 `file_extension(Path, Extension)` — unify Extension with the file extension (including the dot, e.g. `".csv"`). Empty string if no extension.
 
-```seam
-is_python_file(PATH) <- file_extension(PATH, ".py")
+```clausal
+:- use_module(library(py_files), [file_extension/2]).
+
+is_python_file(PATH) :-
+    file_extension(PATH, ".py").
+
+test("extension") :-
+    is_python_file("src/main.py"),
+    \+ is_python_file("README.md").
 ```
 
 ### Temporary Files
@@ -211,25 +267,36 @@ is_python_file(PATH) <- file_extension(PATH, ".py")
 
 This example uses [`include`](higher_order.md) to select files by extension.
 
-```seam
--import_from(py.files, [file_exists, directory_files, read_file_to_string,
-                        write_string_to_file, join_path, make_directory_path,
-                        file_extension])
+```clausal
+:- use_module(library(py_files), [file_exists/1, directory_files/2,
+                                  read_file_to_string/2, write_string_to_file/2,
+                                  join_path/3, make_directory_path/1,
+                                  file_extension/2, temp_directory/1]).
 
-save_output(DIR, NAME, CONTENT) <- (
+save_output(DIR, NAME, CONTENT) :-
     make_directory_path(DIR),
     join_path(DIR, NAME, PATH),
-    write_string_to_file(PATH, CONTENT)
-)
+    write_string_to_file(PATH, CONTENT).
 
-python_files(DIR, FILES) <- (
+python_files(DIR, FILES) :-
     directory_files(DIR, ALL),
-    include(is_py, ALL, FILES)
-)
-is_py(F) <- file_extension(F, ".py")
+    include(is_py, ALL, FILES).
 
-read_config(PATH, CONTENT) <- (
+is_py(F) :-
+    file_extension(F, ".py").
+
+read_config(PATH, CONTENT) :-
     file_exists(PATH),
-    read_file_to_string(PATH, CONTENT)
-)
+    read_file_to_string(PATH, CONTENT).
+
+test("save, select, read back") :-
+    temp_directory(TMP),
+    join_path(TMP, "out", DIR),
+    save_output(DIR, "main.py", "print(1)"),
+    save_output(DIR, "notes.txt", "todo"),
+    python_files(DIR, FILES),
+    FILES == ["main.py"],
+    join_path(DIR, "notes.txt", NOTES),
+    read_config(NOTES, CONTENT),
+    CONTENT == "todo".
 ```
