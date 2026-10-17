@@ -1,0 +1,50 @@
+% Doc snippet fixtures for docs/meta_predicates.md
+
+:- use_module(library(lambda)).
+:- use_module(library(clpz)).
+
+% --8<-- [start:filter_map_example]
+double_positives(Xs, Rs) :-
+    filter_map(\X^Y^(X > 0, Y #= X * 2), Xs, Rs).
+% --8<-- [end:filter_map_example]
+
+% --8<-- [start:meta_with_inline]
+% findall with inline goal — no lambda required
+squares(Ns, Sqs) :-
+    findall(Sq, (in_(X, Ns), Sq #= X * X), Sqs).
+
+% forall with inline condition and action
+all_positive(Ns) :-
+    forall(in_(X, Ns), X > 0).
+% --8<-- [end:meta_with_inline]
+
+% --8<-- [start:higher_order_with_lambda]
+% include with lambda
+positives(Xs, Ps) :-
+    include(\X^(X > 0), Xs, Ps).
+
+% include with a builtin predicate directly
+keep_ints(Xs, Is) :-
+    include(integer, Xs, Is).
+% --8<-- [end:higher_order_with_lambda]
+
+% Validates the examples
+test("filter_map") :-
+    double_positives([1, -2, 3], Rs),
+    Rs == [2, 6].
+
+test("squares") :-
+    squares([1, 2, 3], Sqs),
+    Sqs == [1, 4, 9].
+
+test("all_positive") :-
+    all_positive([1, 2]),
+    \+ all_positive([1, 0]).
+
+test("positives") :-
+    positives([1, -2, 3], Ps),
+    Ps == [1, 3].
+
+test("keep_ints") :-
+    keep_ints([1, a, 2.0, 3], Is),
+    Is == [1, 3].
