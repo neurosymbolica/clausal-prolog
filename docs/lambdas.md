@@ -1,23 +1,80 @@
 # Lambdas (Goal Closures)
 
-Lambdas are anonymous clauses that can be passed as arguments to [higher-order predicates](higher_order.md). They use the same `head <- body` arrow syntax as clause definitions. Variables from the enclosing clause are captured implicitly — no special declarations are needed. Lambdas are the primary mechanism for higher-order logic programming in seam source.
+Lambdas are anonymous goals that can be passed as arguments to [higher-order predicates](higher_order.md). In [Clausal Prolog](clausal_prolog.md) (`.clausal`, the syntax of the examples on this page) a lambda is a term of Ulrich Neumerkel's `library(lambda)`, as in Scryer Prolog: `\X^Goal` takes a parameter `X`, and `Free+\X^Goal` also shares the variables of `Free` with the enclosing clause. It is applied with `call/N`, like any other goal.
 
-The implementation lives in `clausal/logic/compiler/` (codegen), `clausal/templating/term_rewriting.py` (term transformation), and `clausal/logic/builtins/` (`call_goal` builtins).
+The [seam](syntax.md) has its own lambda: an anonymous clause, `head <- body`, which captures the enclosing clause's variables implicitly and compiles to a Python generator. The sections marked *seam* below describe it.
 
-!!! note "Seam vs Prolog syntax"
-
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+The implementation lives in `clausal/logic/builtins/lambda_lib.py` (`library(lambda)`); for the seam's arrow lambdas, in `clausal/logic/compiler/` (codegen), `clausal/templating/term_rewriting.py` (term transformation), and `clausal/logic/builtins/` (`call_goal` builtins).
 
 ---
 
 ## Syntax
 
-Arrow lambdas use `head <- body` — the same syntax as clause definitions, making them anonymous clauses:
+`\X1^...^Xn^Goal` is a lambda with parameters `X1` ... `Xn`:
+
+```clausal
+:- use_module(library(lambda)).
+:- use_module(library(clpz)).
+
+% One-arg lambda; Result is shared, so it is named in Free
+apply_val(Result, Val) :-
+    call(Result+\X^(Result = X), Val).
+
+% Two-arg lambda with arithmetic
+succ_of(R) :-
+    call(\X^Y^(Y #= X + 1), 5, R).
+
+% Zero-arg lambda
+run_goal(Result) :-
+    call(Result+\(Result = 42)).
+
+% Variables of the enclosing clause, shared through Free
+add_z(Z, R) :-
+    call([Z, R]+\X^(R #= X + Z), 10).
+
+test("one arg") :-
+    apply_val(R, 7),
+    R == 7.
+
+test("two args") :-
+    succ_of(R),
+    R == 6.
+
+test("zero args") :-
+    run_goal(R),
+    R == 42.
+
+test("shared variables") :-
+    add_z(3, R),
+    R == 13.
+```
+
+The parameters come first, each followed by `^`; the body is any goal —
+unification, arithmetic, predicate calls, or conjunctions. A lambda is an
+ordinary term (`\X^(X > 0)` is the term `\(X^(X > 0))`), so it can be stored,
+passed around and inspected like any other.
+
+### Conjunction bodies
+
+Multiple goals are separated with `,` inside `(...)`:
+
+```clausal
+:- use_module(library(lambda)).
+:- use_module(library(clpz)).
+
+transform(R) :-
+    call(\X^Y^(T #= X + 1, Y #= T * 2), 5, R).
+
+test("conjunction") :-
+    transform(R),
+    R == 12.
+```
+
+### The seam's arrow lambdas (seam)
+
+The seam writes a lambda as an anonymous clause, `head <- body`, in the same
+syntax as its clause definitions. The head is a variable (single param) or a
+tuple of variables (multiple params). This is seam syntax:
 
 ```seam
 # One-arg lambda
@@ -31,23 +88,7 @@ run_goal(RESULT) <- call_goal((() <- (RESULT is 42)))
 
 # Captured variable from enclosing clause
 add_z(Z, R) <- call_goal((X <- (R == X + Z)), 10)
-```
 
-The head is a variable (single param) or tuple of variables (multiple params). The body is any goal expression — unification, arithmetic evaluation, predicate calls, or conjunctions.
-
-### Conjunction bodies
-
-Multiple goals are separated with `,` inside `(...)`:
-
-```seam
-transform(R) <- call_goal(((X, Y) <- (T == X + 1, Y == T * 2)), 5, R)
-```
-
-### Why arrow syntax?
-
-Arrow lambdas are homoiconic — they look like the clause definitions they represent:
-
-```seam
 # Clause definition (statement level)
 double(X, Y) <- (Y == X + X)
 
@@ -61,19 +102,44 @@ Python's `lambda` syntax is not supported in `.seam` files.
 
 ## Variable capture
 
-Lambdas capture variables from the enclosing clause implicitly, using Python's native closure semantics. No `in` declaration or explicit free-variable marking is needed.
+A `library(lambda)` lambda is **copied** each time it is called: its
+parameters and every other unbound variable in it are fresh in the copy,
+so a lambda called twice never carries a binding from the first call into
+the second. A variable that is already bound when the lambda is called
+keeps its value (the copy has the value, not the variable). To share an
+unbound variable with the enclosing clause, typically an output, name it
+in `Free`:
 
-```seam
-# Z and RESULT are captured from the enclosing clause head.
-# X is a lambda parameter.
-captured_add(Z, RESULT) <- call_goal((X <- (RESULT == X + Z)), 10)
+```clausal
+:- use_module(library(lambda)).
+:- use_module(library(clpz)).
+
+% Z is bound when the lambda runs; Result is the output, so it is in Free.
+captured_add(Z, Result) :-
+    call(Result+\X^(Result #= X + Z), 10).
+
+% Without Free, the binding of Result stays inside the copy.
+lost_add(Z, Result) :-
+    call(\X^(Result #= X + Z), 10).
+
+test("captured") :-
+    captured_add(3, R),
+    R == 13.
+
+test("not shared") :-
+    lost_add(3, R),
+    var(R).
 ```
 
-when queried as `captured_add(3, R)`, this yields `R = 13`: the lambda captures `Z` (bound to 3) and `RESULT` from the clause, receives `X` = 10 as a parameter, and evaluates `RESULT == 10 + 3`.
+When queried as `captured_add(3, R)`, this yields `R = 13`: the lambda
+receives `X` = 10 as a parameter, sees `Z` = 3, and shares `Result` with
+the clause.
 
-### How capture works
+### How capture works (seam)
 
-Variables fall into three categories inside a lambda body:
+The seam's arrow lambdas capture the enclosing clause's variables
+**implicitly**, by reference, with no `Free` term. Variables fall into three
+categories inside a seam lambda body:
 
 | Category | Example | How it works |
 |---|---|---|
@@ -85,71 +151,103 @@ Captured variables share the same `Var` object as the enclosing clause. when the
 
 ### Parameter shadowing
 
-If a lambda parameter has the same name as an enclosing variable, the parameter shadows it:
+A lambda parameter with the same name as an enclosing variable is a
+different variable: the copy renames it.
 
-```seam
-# X in the lambda body refers to the parameter, not the clause-head X
-shadowed(X) <- call_goal((X <- (X is 42)), _)
+```clausal
+:- use_module(library(lambda)).
+
+% X in the lambda is the parameter, not the clause-head X
+shadowed(X) :-
+    call(\X^(X = 42), _).
+
+test("the head X stays unbound") :-
+    shadowed(X),
+    var(X).
 ```
 
 ---
 
 ## Calling lambdas
 
-Lambdas are invoked with the `call_goal` builtin, which takes a goal closure and optional extra arguments:
+Lambdas are invoked with `call/N`, which takes a goal and extra arguments
+(the seam's `call_goal/N` is the same builtin):
 
 | Builtin | Usage |
 |---|---|
-| `call_goal/1` | `call_goal(Goal)` — call a zero-arg closure |
-| `call_goal/2` | `call_goal(Goal, Arg1)` — call with one extra arg |
-| `call_goal/3` | `call_goal(Goal, Arg1, Arg2)` — call with two extra args |
-| `call_goal/4..8` | Higher arities, same pattern |
-| `call/1..8` | Aliases for `call_goal/1..8` |
+| `call/1` | `call(Goal)` — call a zero-arg closure |
+| `call/2` | `call(Goal, Arg1)` — call with one extra arg |
+| `call/3` | `call(Goal, Arg1, Arg2)` — call with two extra args |
+| `call/4..8` | Higher arities, same pattern |
+| `call_goal/1..8` | Aliases for `call/1..8` |
 
-The extra arguments are passed as positional parameters to the lambda:
+The extra arguments are passed as the lambda's parameters, in order:
 
-```seam
---8<-- "tests/fixtures/docs/lambdas_sigs.txt:call_goal_examples"
+```clausal
+:- use_module(library(lambda)).
+:- use_module(library(clpz)).
+
+% the lambda receives X = 5
+test("one parameter") :-
+    call(\X^(X > 0), 5).
+
+% the lambda receives X = 5, Y = Result
+test("two parameters") :-
+    call(\X^Y^(Y #= X * 2), 5, Result),
+    Result == 10.
 ```
 
 ### Multi-solution lambdas
 
 A lambda can produce multiple solutions. If the lambda body calls a multi-solution predicate, each solution is propagated to the caller:
 
-```seam
-color('red'),
-color('green'),
-color('blue'),
+```clausal
+:- use_module(library(lambda)).
 
-get_color(C) <- call_goal((X <- (color(X), C is X)), _)
-```
+color(red).
+color(green).
+color(blue).
 
-Querying it yields three solutions:
+get_color(C) :-
+    call(C+\X^(color(X), C = X), _).
 
-```python
-# in a .seam file
-[C for C in --get_color(C)]     # ['red', 'green', 'blue']
+test("three solutions") :-
+    findall(C, get_color(C), Cs),
+    Cs == [red, green, blue].
 ```
 
 ---
 
 ## Calling predicates from lambdas
 
-Lambda bodies can call user-defined predicates. Internally, this works through the `_tramp_call` bridge, which adapts between the lambda's simple-mode execution and the predicate's trampoline-mode dispatch:
+Lambda bodies can call user-defined predicates, resolved in the calling
+module:
 
-```seam
-double(X, Y) <- (Y == X + X)
+```clausal
+:- use_module(library(lambda)).
+:- use_module(library(clpz)).
 
-apply_double(VAL, RESULT) <- call_goal((X <- (double(X, RESULT))), VAL)
+double(X, Y) :-
+    Y #= X + X.
+
+apply_double(Val, Result) :-
+    call(Result+\X^double(X, Result), Val).
+
+test("apply double") :-
+    apply_double(5, R),
+    R == 10.
 ```
 
-This is transparent — no special syntax is needed. The bridge (`_tramp_call`) handles the protocol mismatch automatically.
+This is transparent — no special syntax is needed. (In the seam, a call from
+an arrow lambda's body goes through the `_tramp_call` bridge, which adapts
+between the lambda's simple-mode execution and the predicate's
+trampoline-mode dispatch.)
 
 ---
 
-## Compilation
+## Compilation (seam)
 
-Lambdas compile to **simple-mode** Python generator functions. A lambda like:
+The seam's arrow lambdas compile to **simple-mode** Python generator functions. A lambda like (seam syntax):
 
 ```seam
 --8<-- "tests/fixtures/docs/lambdas_sigs.txt:compilation_example"
@@ -177,19 +275,29 @@ Key details:
 
 ### Lambda hoisting
 
-when a lambda appears as an argument to a predicate call, the compiler **hoists** it: the `FunctionDef` is emitted before the call statement, and the lambda argument is replaced with a reference to the generated function name. This means the lambda is compiled once and called by reference.
+when a seam arrow lambda appears as an argument to a predicate call, the compiler **hoists** it: the `FunctionDef` is emitted before the call statement, and the lambda argument is replaced with a reference to the generated function name. This means the lambda is compiled once and called by reference.
 
 ---
 
 ## Anonymous variables
 
-`_` in a lambda body is the anonymous variable — each occurrence is a fresh `Var()`:
+`_` in a lambda is the anonymous variable — each occurrence is a fresh variable:
 
-```seam
-get_color(C) <- call_goal((X <- (color(X), C is X)), _)
+```clausal
+:- use_module(library(lambda)).
+
+color(red).
+color(green).
+
+get_color(C) :-
+    call(C+\X^(color(X), C = X), _).
+
+test("anonymous argument") :-
+    findall(C, get_color(C), Cs),
+    Cs == [red, green].
 ```
 
-Here `_` as the second arg to `call_goal` is a fresh throwaway variable.
+Here `_` as the second arg to `call` is a fresh throwaway variable.
 
 ---
 
@@ -197,66 +305,140 @@ Here `_` as the second arg to `call_goal` is a fresh throwaway variable.
 
 Lambdas combine naturally with [findall, bagof, setof, and forall](meta_predicates.md). The goal argument to these meta-predicates can be any goal expression, including lambda calls:
 
-```seam
-# Collect squares of a list using a lambda
-squares(NS, SQS) <- (
-    findall(
-        SQ,
-        (in_(X, NS), SQ == X * X),
-        SQS,
-    )
-)
+```clausal
+:- use_module(library(clpz)).
 
-# include with forall
-all_positive(NS) <- forall(in_(X, NS), X > 0)
+% Collect squares of a list
+squares(Ns, Sqs) :-
+    findall(Sq, (in_(X, Ns), Sq #= X * X), Sqs).
+
+% include with forall
+all_positive(Ns) :-
+    forall(in_(X, Ns), X > 0).
+
+test("squares") :-
+    squares([1, 2, 3], S),
+    S == [1, 4, 9].
+
+test("forall") :-
+    all_positive([1, 2]),
+    \+ all_positive([0, 1]).
 ```
 
-Since `findall` and friends are compiler special forms, the goal argument is compiled inline — it is not passed as a closure. This means any goal expression works directly as the second argument, without needing to wrap it in a lambda.
+The goal argument of `findall` and friends is an ordinary goal, so any goal
+expression works directly as the second argument, without wrapping it in a
+lambda. (In the seam they are compiler special forms and the goal is compiled
+inline.)
 
 ---
 
 ## Lambdas with higher-order list predicates
 
-The [higher-order list builtins](higher_order.md) — `maplist`, `include`, `exclude`, `foldl` — take a **callable goal** as a runtime argument. This can be a lambda (goal closure) or a **predicate reference** (builtin or user-defined):
+The [higher-order list builtins](higher_order.md) — `maplist`, `include`, `exclude`, `foldl` — take a **callable goal** as a runtime argument. This can be a lambda or a **predicate reference** (builtin or user-defined):
 
-```seam
---8<-- "tests/fixtures/docs/lambdas_sigs.txt:builtin_as_goal"
+```clausal
+% Builtin predicates can be passed directly — no lambda needed
+all_numbers(Xs) :-
+    maplist(number, Xs).
+
+keep_ints(Xs, Is) :-
+    include(integer, Xs, Is).
+
+incremented(Xs, Ys) :-
+    maplist(succ, Xs, Ys).
+
+test("predicate references") :-
+    all_numbers([1, 2.0]),
+    keep_ints([1, a, 2.0, 3], Is),
+    Is == [1, 3],
+    incremented([1, 2], Ys),
+    Ys == [2, 3].
 ```
 
 when the goal logic is more complex than a single predicate call, lambdas are the natural choice:
 
-```seam
-# maplist/3 — double every element
-doubles(XS, YS) <- maplist(((X, Y) <- (Y == X * 2)), XS, YS)
+```clausal
+:- use_module(library(lambda)).
+:- use_module(library(clpz)).
 
-# maplist/2 — check all positive
-all_pos(XS) <- maplist((X <- (X > 0)), XS)
+% maplist/3 — double every element
+doubles(Xs, Ys) :-
+    maplist(\X^Y^(Y #= X * 2), Xs, Ys).
 
-# include/3 — filter positive elements
-positives(XS, PS) <- include((X <- (X > 0)), XS, PS)
+% maplist/2 — check all positive
+all_pos(Xs) :-
+    maplist(\X^(X > 0), Xs).
 
-# exclude/3 — remove even elements
-remove_evens(XS, RS) <- exclude((X <- (M == X % 2, M is 0)), XS, RS)
+% include/3 — filter positive elements
+positives(Xs, Ps) :-
+    include(\X^(X > 0), Xs, Ps).
 
-# foldl/4 — sum a list
-fold_sum(XS, S) <- foldl(((E, A, R) <- (R == A + E)), XS, 0, S)
+% exclude/3 — remove even elements
+remove_evens(Xs, Rs) :-
+    exclude(\X^(0 is X mod 2), Xs, Rs).
+
+% foldl/4 — sum a list
+fold_sum(Xs, S) :-
+    foldl(\E^A^R^(R #= A + E), Xs, 0, S).
+
+test("maplist/3") :-
+    doubles([1, 2, 3], Ys),
+    Ys == [2, 4, 6].
+
+test("maplist/2") :-
+    all_pos([1, 2]),
+    \+ all_pos([1, -2]).
+
+test("include/3") :-
+    positives([1, -2, 3], Ps),
+    Ps == [1, 3].
+
+test("exclude/3") :-
+    remove_evens([1, 2, 3, 4], Rs),
+    Rs == [1, 3].
+
+test("foldl/4") :-
+    fold_sum([1, 2, 3], S),
+    S == 6.
 ```
 
-All higher-order list predicates use **committed choice** — they take the first solution from the goal for each element: `maplist((X <- in_(X, [1, 2])), [A, B])` has the single answer `A = 1, B = 1`. (ISO-style `maplist/2..` in Scryer backtracks into the goal and would give four answers; use `findall`/recursion when you need every combination.)
+`maplist` and `foldl` backtrack into the goal, as ISO's (Scryer's) do:
+`maplist(\X^in_(X, [1, 2]), [A, B])` has four answers, `A = 1, B = 1`;
+`A = 1, B = 2`; `A = 2, B = 1`; `A = 2, B = 2`. `include/3` and `exclude/3`
+test each element once, keeping its first solution. (The seam's arrow
+lambdas behave the same.)
+
+```clausal
+:- use_module(library(lambda)).
+
+test("maplist backtracks into the goal") :-
+    findall(A-B, maplist(\X^in_(X, [1, 2]), [A, B]), Answers),
+    Answers == [1-1, 1-2, 2-1, 2-2].
+
+test("include keeps one answer per element") :-
+    findall(L, include(\X^in_(X, [1, 1]), [1], L), Ls),
+    Ls == [[1]].
+```
 
 ---
 
 ## Limitations
 
-- **Lambdas are meant as predicate call arguments.** In other positions (e.g., `X is (Y <- ...)`) the lambda is not a term: `X` is bound to the compiled Python function, which no other predicate can inspect.
-- **Nested lambdas are supported** for variable capture but are an edge case. Inner lambdas can reference outer lambda parameters via closure.
-- **No pattern-matching on parameters.** Lambda parameters are positional arguments, not patterns. Use a predicate clause for pattern matching.
+- **A lambda copies its unbound variables.** An output must be named in
+  `Free` (`R+\X^...`), or its binding stays inside the copy.
+- **No pattern-matching on parameters.** Lambda parameters are positional,
+  not patterns. Use a predicate clause for pattern matching.
+- *Seam:* an arrow lambda is meant as a predicate call argument. In other
+  positions (e.g., `X is (Y <- ...)`) it is not a term: `X` is bound to the
+  compiled Python function, which no other predicate can inspect. Nested
+  arrow lambdas are supported for variable capture but are an edge case:
+  inner lambdas can reference outer lambda parameters via closure.
 
 ---
 
 ??? example "Python API"
 
-    Lambdas are a `.seam` file feature — they are compiled from source by the term transformer and compiler. From pure Python you can construct the equivalent AST tree manually (internal API, not part of [the 1.0 surface](public-api.md)):
+    Arrow lambdas are a `.seam` file feature — they are compiled from source by the term transformer and compiler. From pure Python you can construct the equivalent AST tree manually (internal API, not part of [the 1.0 surface](public-api.md)):
 
     ```python
     from clausal.pythonic_ast import nodes as sa
@@ -287,4 +469,4 @@ All higher-order list predicates use **committed choice** — they take the firs
 
 ---
 
-*See also: [Higher-Order](higher_order.md) — `maplist`, `include`, `foldl` and friends · [Meta-Predicates](meta_predicates.md) — `findall`, `bagof`, `setof`, `forall`, `call/N` · [Python Interop](python_integration.md) — `++()` escape for calling Python from clause bodies.*
+*See also: [Higher-Order](higher_order.md) — `maplist`, `include`, `foldl` and friends · [Meta-Predicates](meta_predicates.md) — `findall`, `bagof`, `setof`, `forall`, `call/N` · [Python Interop](python_integration.md) — the seam's `++()` escape for calling Python from clause bodies.*
