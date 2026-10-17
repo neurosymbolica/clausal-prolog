@@ -36,7 +36,7 @@ from clausal.testing import (
     run_test,
 )
 from clausal.tools.clear_pycache import clear_pycache
-from clausal.tools.doc_snippet_check import SEAM_FENCE_RE
+from clausal.tools.doc_snippet_check import CLAUSAL_PROLOG_FENCE_RE, SEAM_FENCE_RE
 
 # Ensure test fixtures directory is importable (for -import_from directives
 # between fixture files, e.g. expansion_importer.seam).
@@ -246,20 +246,25 @@ def _spelled(name, result) -> str:
 # ── docs/*.md code-block collection ──────────────────────────────────────────
 
 
-def _extract_clausal_blocks(md_path: Path) -> list[tuple[int, str]]:
-    """Return (line_number, content) pairs for each seam block (```seam)."""
+def _extract_clausal_blocks(md_path: Path) -> list[tuple[int, str, str]]:
+    """Return (line_number, content, suffix) for each executable code block:
+    a seam block (```seam, loaded as .seam) or a Clausal Prolog block
+    (```clausal, ISO syntax, loaded as .clausal), in page order."""
     text = md_path.read_text()
     results = []
-    for m in _CLAUSAL_FENCE_RE.finditer(text):
-        line_no = text[: m.start()].count("\n") + 1
-        results.append((line_no, m.group(1)))
-    return results
+    for regex, suffix in ((_CLAUSAL_FENCE_RE, SEAM_SUFFIX),
+                          (CLAUSAL_PROLOG_FENCE_RE, ".clausal")):
+        for m in regex.finditer(text):
+            line_no = text[: m.start()].count("\n") + 1
+            results.append((line_no, m.group(1), suffix))
+    return sorted(results)
 
 
 def _should_skip(content: str) -> bool:
-    """True if the block starts with a # skip comment."""
+    """True if the block starts with a skip comment (``# skip`` in seam,
+    ``% skip`` in Clausal Prolog)."""
     first_line = content.lstrip().split("\n", 1)[0].strip()
-    return first_line in ("# skip", "# clausal: skip")
+    return first_line in ("# skip", "# clausal: skip", "% skip")
 
 
 def _is_snippet_block(content: str) -> bool:
@@ -271,7 +276,7 @@ def _is_snippet_block(content: str) -> bool:
 class DocMdFile(pytest.File):
     def collect(self):
         blocks = _extract_clausal_blocks(self.path)
-        for lineno, content in blocks:
+        for lineno, content, suffix in blocks:
             if _should_skip(content):
                 yield DocItem.from_parent(
                     self,
@@ -304,7 +309,7 @@ class DocMdFile(pytest.File):
                     self.path.relative_to(_docs_dir).with_suffix("").parts)
             except ValueError:
                 stem = self.path.stem
-            tmp_path = _doc_block_home() / f"{stem}_L{lineno}{SEAM_SUFFIX}"
+            tmp_path = _doc_block_home() / f"{stem}_L{lineno}{suffix}"
             tmp_path.write_text(content)
 
             try:
