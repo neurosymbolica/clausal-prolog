@@ -1,0 +1,92 @@
+% Doc snippet fixtures for docs/term_inspection.md (Fields by Name)
+
+% The field NAMES these builtins address come from the declaration. A
+% declared constructor is data: point/3 is built, never defined by clauses.
+% --8<-- [start:declaration]
+:- constructors([point(x, y, z)]).
+% --8<-- [end:declaration]
+
+% --8<-- [start:quick_example]
+test("vary") :-
+    dict_pairs(Overrides, [y-99]),
+    vary(Overrides, point(1, 2, 3), Result),
+    Result == point(1, 99, 3).
+% --8<-- [end:quick_example]
+
+% --8<-- [start:vary_examples]
+test("change one field") :-
+    dict_pairs(Overrides, [x-100]),
+    vary(Overrides, point(1, 2, 3), R),
+    R == point(100, 2, 3).
+
+test("change multiple") :-
+    dict_pairs(Overrides, [x-10, z-30]),
+    vary(Overrides, point(1, 2, 3), R),
+    R == point(10, 2, 30).
+% --8<-- [end:vary_examples]
+
+% --8<-- [start:unbound_keys_examples]
+% A field name is an ATOM, so the keys are `y` and `z`, not the strings
+% "y" and "z".
+test("unbound") :-
+    unbound_keys(point(1, _Y, _Z), Keys),
+    Keys == [y, z].
+
+test("fully bound") :-
+    unbound_keys(point(1, 2, 3), []).
+% --8<-- [end:unbound_keys_examples]
+
+% --8<-- [start:signature_example]
+% The name position speaks atoms in AND out.
+test("signature") :-
+    signature(point, 3, Names),
+    Names == [x, y, z].
+% --8<-- [end:signature_example]
+
+% --8<-- [start:partial_terms]
+p(P) :- P = point(10, _Y, _Z).      % point(10, _, _)
+p(P) :- P = point(_X, 20, 30).
+% --8<-- [end:partial_terms]
+
+test("partial terms") :-
+    findall(K, (p(P), unbound_keys(P, K)), Ks),
+    Ks == [[y, z], [x]].
+
+:- constructors([label(text, color, size)]).
+
+% --8<-- [start:default_values]
+with_defaults(Term, Result) :-
+    dict_pairs(Defaults, [color-"black", size-12]),
+    vary(Defaults, Term, Result).
+% --8<-- [end:default_values]
+
+% --8<-- [start:inspect_fields]
+needs_input(Term) :-
+    unbound_keys(Term, Keys),
+    length(Keys, N),
+    N > 0.
+% --8<-- [end:inspect_fields]
+
+% --8<-- [start:reflect_predicate]
+describe_predicate(Name, Arity) :-
+    signature(Name, Arity, FieldNames),
+    format("Predicate ~w/~w~n", [Name, Arity]),
+    format("Fields: ~w~n", [FieldNames]).
+% --8<-- [end:reflect_predicate]
+
+% Validates the recipes
+test("with_defaults") :-
+    with_defaults(label("hi", red, 9), R),
+    R == label("hi", "black", 12).
+
+test("needs_input") :-
+    needs_input(point(1, _, 3)),
+    \+ needs_input(point(1, 2, 3)).
+
+test("describe_predicate") :-
+    describe_predicate(point, 3).
+
+test("no declaration, no field names") :-
+    \+ signature(undeclared_pair, 2, _),
+    unbound_keys(undeclared_pair(1, _), Keys),
+    Keys == [].

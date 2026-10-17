@@ -4,30 +4,27 @@ Term inspection predicates let you decompose, construct, copy, and analyze the
 structure of terms at runtime. They are the foundation for meta-programming —
 writing predicates that operate on other predicates.
 
-!!! note "Seam vs Prolog syntax"
+!!! note "Clausal Prolog and the seam"
 
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+    Examples on this page are [Clausal Prolog](clausal_prolog.md)
+    (`.clausal`, ISO Prolog syntax). The [seam](syntax.md), Clausal's
+    Python-syntax surface, has the same builtins; where its spelling
+    differs (field-name declarations, dict literals), the page says so.
 
 ---
 
 ## Quick Example
 
-```seam
-# The name position speaks ATOMS. `'hello'` is single-quoted, so it is the
-# atom in every -double_quotes mode and needs no -private declaration.
-test("decompose atom") <- (
-    functor('hello', NAME_, ARITY_),
-    NAME_ is 'hello',
-    atom(NAME_),
-    ARITY_ == 0
-)
+```clausal
+% The name position speaks ATOMS.
+test("decompose atom") :-
+    functor(hello, Name, Arity),
+    Name == hello,
+    atom(Name),
+    Arity == 0.
 
-test("unpack atom") <- unpack('hello', ['hello'])
+test("unpack atom") :-
+    unpack(hello, [hello]).
 ```
 
 ---
@@ -41,46 +38,52 @@ name and arity, or construct a term from a name and arity.
 
 **Decompose mode** (Term bound):
 
-```seam
-test("atom") <- functor('hello', 'hello', 0)
+```clausal
+test("atom") :-
+    functor(hello, hello, 0).
 ```
 
-**Decompose a compound term** — define the predicate first so it is a known term:
+**Decompose a compound term**:
 
-```seam
-point(1, 2, 3),
-
-test("decompose compound") <- (
-    functor(point(1, 2, 3), NAME_, ARITY_),
-    NAME_ is 'point',
-    ARITY_ == 3
-)
+```clausal
+test("decompose compound") :-
+    functor(point(1, 2, 3), Name, Arity),
+    Name == point,
+    Arity == 3.
 ```
 
 **Construct mode** (Term unbound, Name + Arity bound). The result is a
 **cell** — the same term a source-written data functor `pair(A, B)` compiles
-to (a plain tuple):
+to (a plain tuple), with fresh variables as its arguments:
 
-```seam
--implicit_functors
-
-test("construct") <- (
-    functor(TERM_, 'pair', 2),
-    TERM_ is pair(A_UNUSED, B_UNUSED)
-)
+```clausal
+test("construct") :-
+    functor(Term, pair, 2),
+    Term = pair(A, B),
+    var(A),
+    var(B).
 ```
 
 ### arg/3
 
-`arg(N, Term, Value)` — access the N-th argument of a compound term (1-based).
-Define the predicate first so its terms are recognized:
+`arg(N, Term, Value)` — access the N-th argument of a compound term (1-based):
 
-```seam
-point(10, 20, 30),
+```clausal
+test("first arg") :-
+    arg(1, point(10, 20, 30), 10).
 
-test("first arg") <- arg(1, point(10, 20, 30), 10)
-test("second arg") <- arg(2, point(10, 20, 30), 20)
-test("third arg") <- arg(3, point(10, 20, 30), 30)
+test("second arg") :-
+    arg(2, point(10, 20, 30), 20).
+
+test("third arg") :-
+    arg(3, point(10, 20, 30), 30).
+
+test("out of range fails") :-
+    \+ arg(4, point(10, 20, 30), _).
+
+test("atomic term") :-
+    catch(arg(1, abc, _), error(E, _), true),
+    E == type_error(compound, abc).
 ```
 
 Fails if N is out of range. An unbound `N` or `Term` is `instantiation_error`,
@@ -89,40 +92,45 @@ an unbound `N` used to enumerate the `(N, Value)` pairs).
 
 ### unpack/2
 
-`unpack(Term, List)` — the "univ" operator (`=..` in Prolog). Converts between a
-term and a list `[functor | Args]`.
+`unpack(Term, List)` — the "univ" relation, ISO's `=..` (which Clausal
+Prolog also spells `Term =.. List`). Converts between a term and a list
+`[Functor|Args]`.
 
 **Decompose mode**:
 
-```seam
-foo(1, 2, 3),
+```clausal
+test("unpack") :-
+    unpack(foo(1, 2, 3), [foo, 1, 2, 3]).
 
-test("unpack") <- unpack(foo(1, 2, 3), ['foo', 1, 2, 3])
-test("atom") <- unpack('hello', ['hello'])
+test("atom") :-
+    unpack(hello, [hello]).
+
+test("univ") :-
+    foo(1, 2, 3) =.. [foo, 1, 2, 3].
 ```
 
 **Construct mode**:
 
-```seam
--implicit_functors
+```clausal
+point(1, 2).
 
-test("construct") <- (
-    unpack(TERM_, ['point', 10, 20]),
-    TERM_ is point(10, 20),   # the same cell a source-written point(10, 20) is
-    arg(1, TERM_, 10),
-    arg(2, TERM_, 20)
-)
+test("construct") :-
+    unpack(Term, [point, 10, 20]),
+    % the same cell a source-written point(10, 20) is
+    Term == point(10, 20),
+    arg(1, Term, 10),
+    arg(2, Term, 20).
 ```
 
 A compound term is always a **cell**, a plain tuple `(functor, *args)`: the
 term `unpack/2` or `functor/3` builds, a data functor written in source, and
-a declared predicate's name used as a term (`point(10, 20)` above, where
-`point/2` is a fact) are the same cell and unify. There is no separate class
-of "predicate instance".
+a predicate's name used as a term (`point(10, 20)` above, where `point/2` is
+a fact) are the same cell and unify. There is no separate class of
+"predicate instance".
 
 From Python, read a cell with `clausal.cell_functor` and `clausal.cell_args`
 (and build one with `clausal.make_cell`). In a `.seam` file, the
-goal-position seam hands the cell back as it is:
+goal-position seam hands the cell back as it is (seam syntax):
 
 ```seam
 from clausal import cell_functor, cell_args
@@ -147,14 +155,21 @@ See [Python integration](python_integration.md) for the seam.
 variables replaced by fresh variables. Shared variables remain shared in the
 copy.
 
-```seam
--allow_singletons
-# X_ stands for "some unbound variable" — its identity is never used
-# again, only that copy_term/2 gives it a fresh one in COPY_.
-test("copy list") <- (
-    copy_term([1, X_, 3], COPY_),
-    length(COPY_, 3)
-)
+```clausal
+% _X stands for "some unbound variable"; copy_term/2 gives the copy a
+% fresh one in its place.
+test("copy list") :-
+    copy_term([1, _X, 3], Copy),
+    Copy = [1, V, 3],
+    var(V).
+
+test("sharing is preserved") :-
+    copy_term(f(X, Y, X), Copy),
+    Copy = f(A, B, C),
+    A == C,
+    A \== B,
+    A \== X,
+    var(Y).
 ```
 
 ---
@@ -166,16 +181,13 @@ test("copy list") <- (
 `term_variables(Term, Vars)` — collect all unbound variables in a term into a
 list, in left-to-right order, with duplicates removed (by identity).
 
-```seam
--allow_singletons
-# X_, Y_, Z_ each stand for "some unbound variable" — the point is that
-# term_variables/2 collects three of them, not what they're named.
-test("collect vars") <- (
-    term_variables([X_, 1, Y_, Z_], VARS_),
-    length(VARS_, 3)
-)
+```clausal
+test("collect vars") :-
+    term_variables([X, 1, Y, Z, X], Vars),
+    Vars == [X, Y, Z].
 
-test("ground term") <- term_variables([1, 2, 3], [])
+test("ground term") :-
+    term_variables([1, 2, 3], []).
 ```
 
 ### numbervars/3
@@ -184,14 +196,13 @@ test("ground term") <- term_variables([1, 2, 3], [])
 `'$VAR'(N)`, numbered sequentially from `Start`. `End` is unified with the
 next available number.
 
-```seam
--allow_singletons
-# X_, Y_, Z_ each stand for "some unbound variable" — numbervars/3 binds
-# them to $VAR(0..2); their names are never referenced again.
-test("number vars") <- (
-    numbervars([X_, Y_, Z_], 0, END_),
-    END_ == 3
-)
+```clausal
+test("number vars") :-
+    numbervars([X, Y, Z], 0, End),
+    End == 3,
+    X == '$VAR'(0),
+    Z == '$VAR'(2),
+    Y \== Z.
 ```
 
 This is useful for displaying terms with readable variable names.
@@ -201,7 +212,7 @@ This is useful for displaying terms with readable variable names.
 `gensym(Prefix, Atom)` — generate a unique atom by appending a monotonically
 increasing counter to `Prefix`.
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/term_inspection_sigs.txt:gensym_example"
 ```
 
@@ -214,12 +225,13 @@ meta-programming or code generation.
 ## Fields by Name
 
 A term's fields can also be addressed by NAME. The names come from the
-functor's **declaration**:
+functor's **declaration**, in Clausal Prolog a `constructors/1` directive
+(the seam declares them with `-private([point(x, y, z)])`). A declared
+constructor is data: `point/3` is then built as a term and never defined
+by clauses.
 
-```seam
--private([point(x, y, z)])
-
-point(1, 2, 3),
+```clausal
+--8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:declaration"
 ```
 
 `vary/3` copies a term with some fields replaced, `unbound_keys/2` lists the
@@ -242,29 +254,29 @@ names of a functor.
     keyword fields) went with it: a compound term is a plain cell, and its
     fields are fixed by its declaration.
 
-```seam
---8<-- "tests/fixtures/docs/keyword_preds_examples.seam:quick_example"
+```clausal
+--8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:quick_example"
 ```
 
 A term is never padded: a construction with fewer arguments than the declared
-functor has fields is refused, not filled with fresh logic variables. A field
-you want to leave open is written as a variable -- which is what a partial
-term is:
+functor has fields is not filled with fresh logic variables. (The seam
+refuses one; in Clausal Prolog `point(1)` is simply another functor,
+`point/1`, with no field names.) A field you want to leave open is written
+as a variable -- which is what a partial term is:
 
-```seam
--private([point(x, y, z)])
-
-p(P) <- (P is point(10, _Y, _Z))        # point(10, _, _)
-p(P) <- (P is point(_X, 20, 30))
+```clausal
+--8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:partial_terms"
 ```
 
 ### vary/3
 
 `vary(Overrides, Term, NewTerm)` — copy a term, replacing specified fields with
-new values. `Overrides` is a Python dict mapping field names to new values.
+new values. `Overrides` is a dict mapping field names to new values; Clausal
+Prolog builds it with `dict_pairs/2` (see [Dicts & Sets](dicts_sets.md)),
+the seam writes a dict literal, `{"x": 100}`.
 
-```seam
---8<-- "tests/fixtures/docs/keyword_preds_examples.seam:vary_examples"
+```clausal
+--8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:vary_examples"
 ```
 
 Works for declared functor cells and term (dataclass) instances.
@@ -274,8 +286,8 @@ Works for declared functor cells and term (dataclass) instances.
 `unbound_keys(Term, Keys)` — list the field names that are still unbound
 (contain logic variables).
 
-```seam
---8<-- "tests/fixtures/docs/keyword_preds_examples.seam:unbound_keys_examples"
+```clausal
+--8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:unbound_keys_examples"
 ```
 
 ### signature/3
@@ -284,48 +296,50 @@ Works for declared functor cells and term (dataclass) instances.
 predicate. Given a functor name and arity, unifies `Names` with the tuple of
 field names.
 
-```seam
---8<-- "tests/fixtures/docs/keyword_preds_examples.seam:signature_example"
+```clausal
+--8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:signature_example"
 ```
 
-This is a database-dependent operation — the predicate must have been defined
-(with a signature) before `signature` is called.
+This is a database-dependent operation — the functor must have been declared
+(with its field names) before `signature` is called.
 
 ### Recipes: fields by name
 
 Default values via `vary`:
 
-```seam
---8<-- "tests/fixtures/docs/keyword_preds_sigs.txt:default_values"
+```clausal
+--8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:default_values"
 ```
 
 Inspect which fields need filling:
 
-```seam
---8<-- "tests/fixtures/docs/keyword_preds_sigs.txt:inspect_fields"
+```clausal
+--8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:inspect_fields"
 ```
 
 Reflect on predicate structure:
 
-```seam
---8<-- "tests/fixtures/docs/keyword_preds_sigs.txt:reflect_predicate"
+```clausal
+--8<-- "tests/fixtures/docs/keyword_preds_examples.clausal:reflect_predicate"
 ```
 
 ### Gotchas: fields by name
 
 - **A term cannot grow new fields** — a functor's fields are the ones it is
   declared with. Use `vary` to change existing fields.
-- **`signature` requires the predicate to be registered** — if you call it
-  before the predicate is defined (e.g., in a different module that hasn't been
-  imported), it will fail.
+- **`signature` requires the functor to be declared** — if you call it
+  before the declaration is loaded (e.g., in a different module that hasn't
+  been imported), it will fail.
 - **Field names are atoms** — `unbound_keys` and `signature` answer atoms
-  (`['x', 'y', 'z']`). An override dict's keys may be quoted atoms
-  (`{'x': 10}`) or strings (`{"x": 10}`); a bare `{x: 10}` key must be a
-  declared atom, like any bare atom.
-- **Field names come from the declaration** — `-private([point(x, y, z)])` or
-  the `-module` export list. An undeclared predicate's fields are `arg_0`,
-  `arg_1`, … , which `vary` and `unbound_keys` will happily use but nobody
-  wants to read.
+  (`[x, y, z]`). An override dict's keys may be atoms (`dict_pairs(D,
+  [x-10])`) or strings (`dict_pairs(D, ["x"-10])`).
+- **Field names come from the declaration** — `:- constructors([point(x, y,
+  z)]).` in Clausal Prolog. A functor without one has no field names:
+  `signature/3` fails and `unbound_keys/2` answers `[]`, even for a
+  predicate defined by clauses. (In the seam the names come from
+  `-private([point(x, y, z)])` or the `-module` export list, and an
+  undeclared predicate's fields are `arg_0`, `arg_1`, … , which `vary` and
+  `unbound_keys` will happily use but nobody wants to read.)
 
 ---
 
@@ -335,24 +349,26 @@ Reflect on predicate structure:
 
 Transform all arguments of any term by applying a goal (using [maplist](higher_order.md)):
 
-```seam
---8<-- "tests/fixtures/docs/term_inspection_sigs.txt:map_args_recipe"
+```clausal
+--8<-- "tests/fixtures/docs/term_inspection_examples.clausal:map_args_recipe"
 ```
 
 ### Count variables in a term
 
-```seam
--allow_singletons
-var_count(TERM_, N_) <- (term_variables(TERM_, VARS_), length(VARS_, N_))
+```clausal
+var_count(Term, N) :-
+    term_variables(Term, Vars),
+    length(Vars, N).
 
-# X_, Y_, Z_ each stand for "some unbound variable" fed into var_count/2.
-test("count") <- var_count([X_, 1, Y_, Z_], 3)
+% _X, _Y, _Z each stand for "some unbound variable" fed into var_count/2.
+test("count") :-
+    var_count([_X, 1, _Y, _Z], 3).
 ```
 
 ### Clone a predicate call with different arguments
 
-```seam
---8<-- "tests/fixtures/docs/term_inspection_sigs.txt:rewrite_arg_recipe"
+```clausal
+--8<-- "tests/fixtures/docs/term_inspection_examples.clausal:rewrite_arg_recipe"
 ```
 
 ---

@@ -1,0 +1,22 @@
+% Companion tests for docs/term_inspection.md display snippets.
+
+test("gensym generates unique") :-
+    gensym(test_doc_, A1),
+    gensym(test_doc_, A2),
+    dif(A1, A2).
+
+% The counter is process-wide, so only the shape of the answer is fixed:
+% the prefix, then "_" and the count.
+test("gensym appends _N to the prefix") :-
+    gensym(doc_x, X1),
+    atom_concat(doc_x_, N, X1),
+    atom_number(N, Count),
+    integer(Count).
+
+% A non-empty atom is its own name (arity 0), so unpack gives [self].
+test("unpack decompose") :-
+    unpack(hello, [hello]).
+
+test("numbervars") :-
+    numbervars([_X, _Y, _Z], 0, End),
+    End == 3.

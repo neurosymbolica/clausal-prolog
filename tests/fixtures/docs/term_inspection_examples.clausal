@@ -1,0 +1,23 @@
+% Doc snippet fixtures for docs/term_inspection.md
+
+% --8<-- [start:map_args_recipe]
+map_args(Goal, Term, Result) :-
+    unpack(Term, [Functor|Args]),
+    maplist(Goal, Args, NewArgs),
+    unpack(Result, [Functor|NewArgs]).
+% --8<-- [end:map_args_recipe]
+
+% --8<-- [start:rewrite_arg_recipe]
+rewrite_first_arg(Term, NewArg, Result) :-
+    unpack(Term, [F, _|Rest]),
+    unpack(Result, [F, NewArg|Rest]).
+% --8<-- [end:rewrite_arg_recipe]
+
+% Validates the recipes
+test("map_args") :-
+    map_args(succ, point(1, 2, 3), R),
+    R == point(2, 3, 4).
+
+test("rewrite_first_arg") :-
+    rewrite_first_arg(edge(a, b), c, R),
+    R == edge(c, b).
