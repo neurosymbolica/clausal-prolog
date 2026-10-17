@@ -1,7 +1,9 @@
-# Tutorial: Writing Thread-Safe Seam Predicates
+# Tutorial: Writing Thread-Safe Clausal Predicates
 
-This tutorial explains how to write seam (`.seam`) predicates that are safe
-for concurrent use from multiple Python threads. It covers which predicates
+This tutorial explains how to write [Clausal Prolog](clausal_prolog.md)
+(`.clausal`) predicates that are safe for concurrent use from multiple
+Python threads. The examples are `.clausal`, which uses ISO Prolog syntax;
+the same rules hold for predicates written in the [seam](syntax.md). It covers which predicates
 are naturally safe, which need care, and the design patterns that work well
 with parallelism.
 
@@ -21,28 +23,33 @@ Any predicate that only unifies, backtracks, and calls other pure
 predicates is safe for concurrent use. The C extension handles all the
 locking internally.
 
-```seam
-# These are all safe for concurrent queries:
+```clausal
+% These are all safe for concurrent queries:
+:- use_module(library(clpz)).
 
-list_concat([], YS, YS),
-list_concat([H, *XS], YS, [H, *ZS]) <- list_concat(XS, YS, ZS)
+list_concat([], YS, YS).
+list_concat([H|XS], YS, [H|ZS]) :-
+    list_concat(XS, YS, ZS).
 
-factorial(0, 1),
-factorial(N, F) <- (
-    N > 0,
-    N1 == N - 1,
+factorial(0, 1).
+factorial(N, F) :-
+    N #> 0,
+    N1 #= N - 1,
     factorial(N1, F1),
-    F == N * F1
-)
+    F #= N * F1.
 
-test("concat") <- list_concat([1], [2, 3], [1, 2, 3])
-test("factorial") <- factorial(5, 120)
+test("concat") :-
+    list_concat([1], [2, 3], [1, 2, 3]).
+
+test("factorial") :-
+    factorial(5, 120).
 ```
 
-!!! tip "Use `==` for arithmetic"
-    Prefer `N1 == N - 1` over `eval_(N - 1, N1)`. The `==` operator uses
-    CLP(ℤ) constraints, making predicates bidirectional where possible.
-    `eval_/2` forces eager evaluation in one direction only.
+!!! tip "Use `#=` for arithmetic"
+    Prefer `N1 #= N - 1` over `N1 is N - 1`. `#=` posts a CLP(ℤ)
+    constraint, making predicates bidirectional where possible. `is/2`
+    forces eager evaluation in one direction only. (The seam spells the
+    constraint `N1 == N - 1` and eager evaluation `eval_(N - 1, N1)`.)
 
 Each thread creates its own Vars and Trail when it calls these
 predicates. The clause database is read-only during resolution —
@@ -54,20 +61,22 @@ Tabled predicates memoize their answers. A completed table is kept on
 the module and reused: a second query for the same call does not run the
 clauses again.
 
-```seam
--table(path/2)
+```clausal
+:- table(path/2).
 
-edge('a', 'b'),
-edge('b', 'c'),
-edge('c', 'a'),
+edge(a, b).
+edge(b, c).
+edge(c, a).
 
-path(X, Y) <- edge(X, Y)
-path(X, Y) <- (path(X, Z), edge(Z, Y))
+path(X, Y) :-
+    edge(X, Y).
+path(X, Y) :-
+    path(X, Z),
+    edge(Z, Y).
 
-test("a reaches every node, despite the cycle") <- (
-    findall(Y, path('a', Y), YS),
-    msort(YS, ['a', 'b', 'c'])
-)
+test("a reaches every node, despite the cycle") :-
+    findall(Y, path(a, Y), YS),
+    msort(YS, [a, b, c]).
 ```
 
 Multiple threads can query `path` with the GIL enabled. Concurrent tabled
@@ -82,32 +91,30 @@ free-threading, the per-variable critical section in `unify()` protects
 attribute access. As long as each thread works with its own constraint
 variables (the normal case), constraint solving is safe.
 
-```seam
--private([safe_queens(QS), no_attack(Q, QS, D)])
+```clausal
+:- use_module(library(clpz)).
 
-n_queens(N, QUEENS) <- (
+n_queens(N, QUEENS) :-
     length(QUEENS, N),
     in_domain(QUEENS, 1, N),
     all_different(QUEENS),
     safe_queens(QUEENS),
-    label(QUEENS)
-)
+    label(QUEENS).
 
-safe_queens([]),
-safe_queens([Q, *QS]) <- (
+safe_queens([]).
+safe_queens([Q|QS]) :-
     no_attack(Q, QS, 1),
-    safe_queens(QS)
-)
+    safe_queens(QS).
 
-no_attack(_, [], _),
-no_attack(Q, [Q1, *QS], D) <- (
-    Q != Q1 + D,
-    Q != Q1 - D,
-    D1 == D + 1,
-    no_attack(Q, QS, D1)
-)
+no_attack(_, [], _).
+no_attack(Q, [Q1|QS], D) :-
+    Q #\= Q1 + D,
+    Q #\= Q1 - D,
+    D1 #= D + 1,
+    no_attack(Q, QS, D1).
 
-test("6 queens") <- n_queens(6, [2, 4, 6, 1, 3, 5])
+test("6 queens") :-
+    n_queens(6, [2, 4, 6, 1, 3, 5]).
 ```
 
 Multiple threads can solve N-Queens for different N values concurrently.
@@ -119,16 +126,21 @@ Multiple threads can solve N-Queens for different N values concurrently.
 ### [Dynamic](directives.md) predicates (`assert` / `retract`)
 
 Dynamic predicates modify the clause database at runtime; only a
-predicate declared `-dynamic` accepts `assertz`/`retract`. Concurrent
+predicate declared `:- dynamic(Name/Arity)` accepts `assertz`/`retract`. Concurrent
 `assertz` and `retract` from multiple threads is **not yet safe**
 (Phase 2 will add copy-on-write locking). However, asserting facts
-before launching threads and then only reading is fine. In `counters.seam`:
+before launching threads and then only reading is fine. In `counters.clausal`:
 
-```seam
--module(counters, [counter(N)])
--dynamic(counter/1)
+```clausal
+:- module(counters, [counter/1]).
+:- dynamic(counter/1).
 
-counter(0),
+counter(0).
+
+test("counter starts at 0") :-
+    counter(0).
+
+:- end_module(counters).
 ```
 
 ```python
@@ -157,12 +169,18 @@ Predicates that perform I/O or call Python functions with side effects
 are safe in the sense that they won't crash, but the *ordering* of side
 effects across threads is nondeterministic:
 
-```seam
-# Output from different threads will interleave unpredictably
-log(MSG) <- ++print(MSG)
+```clausal
+% Output from different threads will interleave unpredictably
+log(MSG) :-
+    writeln_text(MSG).
 
-test("log succeeds once") <- log('hello')
+test("log succeeds once") :-
+    log(hello).
 ```
+
+(A `.clausal` predicate reaches Python only through a library or a `.seam`
+module; in the seam itself, `log(MSG) <- ++print(MSG)` calls Python's
+`print` directly. The ordering caveat is the same.)
 
 Use Python-level synchronization (locks, queues) if you need ordered output.
 
@@ -175,14 +193,16 @@ Use Python-level synchronization (locks, queues) if you need ordered output.
 Predicates that only unify and backtrack are trivially safe. Push
 side effects to the Python caller:
 
-```seam
-# Good: a pure relation; the caller does the I/O
-order_total(ITEMS, TOTAL) <- (
-    findall(P, in_([_, P], ITEMS), PRICES),
-    sum_list(PRICES, TOTAL)
-)
+In `orders.clausal`:
 
-test("total") <- order_total([['apple', 30], ['pear', 20]], 50)
+```clausal
+% Good: a pure relation; the caller does the I/O
+order_total(ITEMS, TOTAL) :-
+    findall(P, in_([_, P], ITEMS), PRICES),
+    sum_list(PRICES, TOTAL).
+
+test("total") :-
+    order_total([[apple, 30], [pear, 20]], 50).
 ```
 
 ```python
@@ -228,29 +248,35 @@ print(sorted(results))  # [30, 31, 32, 33, 34, 35, 36, 37]
 
 Sharing one unbound `Var` between threads (a module-level `total = Var()`
 used by every worker) races on its binding. A goal-position `--` query in a
-`.seam` file makes fresh variables on every run, so it cannot
-share one by accident; see
+`.seam` file (the seam's way to query from Python) makes fresh variables on
+every run, so it cannot share one by accident; see
 [Parallel Queries from Python](tutorial_parallel_python.md).
 
 ---
 
 ## Testing thread safety
 
-You can write `.seam` tests that exercise predicate logic, and then
-test concurrent execution from Python. The [`.seam` test format](testing.md)
-(`test("name") <- goal`) runs sequentially in the test runner, which is
+You can write `.clausal` tests that exercise predicate logic, and then
+test concurrent execution from Python. The [test format](testing.md)
+(`test("name") :- Goal.`) runs sequentially in the test runner, which is
 the right place to test correctness. Thread-safety stress tests belong
 in Python test files (`tests/test_free_threading.py`).
 
-### `.seam` tests for correctness
+### `.clausal` tests for correctness
 
-```seam
-list_concat([], YS, YS),
-list_concat([H, *XS], YS, [H, *ZS]) <- list_concat(XS, YS, ZS)
+```clausal
+list_concat([], YS, YS).
+list_concat([H|XS], YS, [H|ZS]) :-
+    list_concat(XS, YS, ZS).
 
-# Verify the predicate works correctly (sequential)
-test("concat nil") <- (list_concat([], [1, 2], R), R is [1, 2])
-test("concat cons") <- (list_concat([1], [2, 3], R), R is [1, 2, 3])
+% Verify the predicate works correctly (sequential)
+test("concat nil") :-
+    list_concat([], [1, 2], R),
+    R == [1, 2].
+
+test("concat cons") :-
+    list_concat([1], [2, 3], R),
+    R == [1, 2, 3].
 ```
 
 ### Python tests for concurrency
@@ -290,4 +316,4 @@ def test_concurrent_order_total():
 | Tabled | With the GIL | Completed tables are shared; free-threaded concurrency not yet tested |
 | CLP(ℤ) / CLP(B) / CLP(ℝ) | Yes | Per-thread constraint variables |
 | Dynamic (`assert` / `retract`) | Read-only | Concurrent writes not yet safe |
-| Side effects (I/O, `++` calls) | Safe but nondeterministic | Use Python locks for ordering |
+| Side effects (I/O; the seam's `++` calls) | Safe but nondeterministic | Use Python locks for ordering |
