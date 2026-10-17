@@ -1,0 +1,42 @@
+-double_quotes(chars)
+-private([h, i])
+# Doc fixture for docs/io.md: pins write_canonical/1's exact output text.
+# The rendered write_canonical snippet is in io_examples.clausal. This file
+# stays seam: .clausal has no way to capture a writer's output as text
+# (no with_output_to/2, no format/3), so reaching the writer needs ++.
+
+# Not part of the rendered snippet.  write_canonical/1 has no string form
+# (there is no write_canonical_to_string/2), so pinning its exact output text
+# means reaching the writer it uses.  That is what makes the three lines
+# commented in io_examples.clausal's write_family snippet assertions
+# rather than claims.
+#
+# CAVEAT, and the reason only atom-free terms are pinned here: a ``++``
+# escape converts its arguments with ``to_python`` (spec §9.1), which unwraps
+# an atom to its spelling -- so an atom inside TERM would reach
+# term_canonical as a STRING and print as a char list.  Terms containing
+# atoms are pinned by tests/test_writers_atoms_strings.py, which calls the
+# builtin and captures stdout instead.
+canonical_text(TERM, TEXT) <- (
+    TEXT is ++__import__(
+        "clausal.terms", fromlist=["term_canonical"]
+    ).term_canonical(TERM)
+)
+
+test("write_canonical text: a string") <- (
+    # stage 2: a string crossing ``++`` reaches Python as its text (a str,
+    # which the engine side reads back as an ATOM), so the equal char-list
+    # spelling of the same term is what canonical_text can be handed.
+    canonical_text([h, i], C1),
+    atom_chars(C1, "'.'(h,'.'(i,[]))")
+)  # nv
+
+test("write_canonical text: a list") <- (
+    canonical_text([1, 2], C2),
+    atom_chars(C2, "'.'(1,'.'(2,[]))")
+)  # nv
+
+test("write_canonical text: the empty list") <- (
+    canonical_text([], C3),
+    atom_chars(C3, "[]")
+)  # nv

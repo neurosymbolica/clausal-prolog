@@ -2,26 +2,21 @@
 
 Clausal Prolog provides built-in predicates for formatted output and term-to-string conversion, and the seam (`.seam`) adds f-string interpolation. Whether you need to print debug output, format a table, or build strings from logic variables, the I/O builtins have you covered. For calling Python functions directly, see [Python Integration](python_integration.md).
 
-!!! note "Seam vs Prolog syntax"
-
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+Examples on this page are [Clausal Prolog](clausal_prolog.md) (`.clausal`),
+which uses ISO Prolog syntax, except the f-string examples: f-strings exist
+only in the [seam](syntax.md).
 
 ---
 
 ## Quick Example
 
-```seam
-greet(NAME) <- (
+```clausal
+greet(NAME) :-
     write_text("Hello, "),
-    writeln_text(NAME)
-)
+    writeln_text(NAME).
 
-test("greet") <- greet("Alice")
+test("greet") :-
+    greet("Alice").
 ```
 
 `write_text/1` and `writeln_text/1` are the **text** writers — a string prints
@@ -67,31 +62,33 @@ They differ in **how much of the term's structure they spell out**:
 | string `"abc"` | `[a,b,c]` | `[a,b,c]` | `'.'(a,'.'(b,'.'(c,[])))` |
 | char list `[a, b]` | `[a,b]` | `[a,b]` | `'.'(a,'.'(b,[]))` |
 | `[1, 2]` | `[1,2]` | `[1,2]` | `'.'(1,'.'(2,[]))` |
-| code list `b"ab"` | `[97,98]` | `[97,98]` | `'.'(97,'.'(98,[]))` |
-| `""` / `[]` / `b""` | `[]` | `[]` | `[]` |
+| code list (the seam's `b"ab"`) | `[97,98]` | `[97,98]` | `'.'(97,'.'(98,[]))` |
+| `""` / `[]` | `[]` | `[]` | `[]` |
 | `foo(bar, "baz")` | `foo(bar,[b,a,z])` | `foo(bar,[b,a,z])` | `foo(bar,'.'(b,'.'(a,'.'(z,[]))))` |
-| `'+'(1, 2)` | `+(1,2)` | `+(1,2)` | `+(1,2)` |
+| `1 + 2` | `1+2` | `1+2` | `+(1,2)` |
 
-A string *is* the list of its characters, so all three spell it out; a `b"…"`
-code list is the list of its code numbers and spells out the same way. The
+A string *is* the list of its characters, so all three spell it out; a code
+list is the list of its code numbers and spells out the same way. The
 three differ in quoting and in whether list syntax is used at all.
 
-The `'+'(1, 2)` row is the quoted cell. A bare `1 + 2` written as an argument
-in today's syntax is a runtime operator node, not that cell, and every writer
-prints it in its source form, `(1 + 2)`; see [Operators](operators.md).
-`write_canonical/1` additionally drops operator forms, so its output is the
-`'.'/2` structure itself; the string stays a compact `str` internally, the
-writer only *shows* the cons structure.
+In `.clausal`, `1 + 2` and `'+'(1, 2)` are one term. `write/1` and
+`writeq/1` print it with the operator, `1+2`; `write_canonical/1` drops
+operator forms, so its output is `+(1,2)`, and a list's is the `'.'/2`
+structure itself. The string stays a compact `str` internally; the writer
+only *shows* the cons structure. (In the [seam](syntax.md), `'+'(1, 2)` is
+the quoted cell, which every writer prints `+(1,2)`, and a bare `1 + 2` is a
+runtime operator node, printed in its source form `(1 + 2)`; see
+[Operators](operators.md).)
 
-```seam
---8<-- "tests/fixtures/docs/io_examples.seam:three_writers"
+```clausal
+--8<-- "tests/fixtures/docs/io_examples.clausal:three_writers"
 ```
 
 #### The text writers: `write_text/1`, `writeln_text/1`, `write_text_to_string/2`
 
 These print a string as its **text** and a char list as the text it spells; an
 atom prints its bare spelling, and every other term prints exactly as `write/1`
-prints it. This is the engine's `~s`, and it is where f-strings go:
+prints it. This is the engine's `~s`, and it is where text you build goes:
 
 | Term | `write_text` |
 |---|---|
@@ -99,10 +96,14 @@ prints it. This is the engine's `~s`, and it is where f-strings go:
 | char list `[a, b]` | `ab` |
 | atom `'foo bar'` | `foo bar` |
 | `[1, 2]` | `[1, 2]` |
-| code list `b"ab"` | `b'ab'` |
+| `1 + 2` | `+(1, 2)` |
+| a Python `bytes` value (the seam's `b"ab"`) | `b'ab'` |
 | `""` / `[]` | `[]` |
 
-`writeln_text(f"X is {X}")` is the idiomatic way to print an interpolated line.
+The text and display families print an operator term in functional
+notation, `+(1, 2)`, where `write/1` prints `1+2`. To print an interpolated
+line, use `format/2`, e.g. `format("X is ~w~n", [X])`; in the seam,
+`writeln_text(f"X is {X}")` is the idiom.
 
 #### The display writers: `print_term/1`, `term_to_string/2`
 
@@ -148,8 +149,8 @@ An unrecognised option raises `domain_error(write_option, Opt)`; a non-list
 (`[quoted(true) | _]`) raises `instantiation_error`. Streams are out of
 scope, so there is no `write_term/3`, and `max_depth(N)` is not supported.
 
-```seam
---8<-- "tests/fixtures/docs/io_examples.seam:write_term"
+```clausal
+--8<-- "tests/fixtures/docs/io_examples.clausal:write_term"
 ```
 
 ### The newline and string forms of each family
@@ -162,14 +163,14 @@ scope, so there is no `write_term/3`, and `max_depth(N)` is not supported.
 | `writeq/1` | ISO, quoted | no |
 | `write_canonical/1` | canonical | no |
 
-```seam
---8<-- "tests/fixtures/docs/io_examples.seam:write_family"
+```clausal
+--8<-- "tests/fixtures/docs/io_examples.clausal:write_family"
 ```
 
 **When to use which:**
 
-- `write_text` / `writeln_text` — human-facing output and f-strings; text comes
-  out bare
+- `write_text` / `writeln_text` — human-facing output (and the seam's
+  f-strings); text comes out bare
 - `print_term` / `term_to_string` — debugging: you can tell an atom from a
   string
 - `write` / `writeq` — ISO term output; a string spells itself out
@@ -180,18 +181,23 @@ scope, so there is no `write_term/3`, and `max_depth(N)` is not supported.
 
 write a newline character:
 
-```seam
-test("newline") <- (nl(), nl())
+```clausal
+test("newline") :-
+    nl,
+    nl.
 ```
 
 ### tab/1
 
 write N spaces:
 
-```seam
-indented(X) <- (tab(4), writeln_text(X))
+```clausal
+indented(X) :-
+    tab(4),
+    writeln_text(X).
 
-test("indented") <- indented("hello")
+test("indented") :-
+    indented("hello").
 ```
 
 ---
@@ -204,17 +210,19 @@ Both answer with a **string**, never with an atom.
 
 `write_text_to_string(Term, String)` — unify String with the `write_text/1`
 rendering of Term: text comes out bare. This is the one to build
-human-readable text with.
+human-readable text with; a string is a list, so `append/3` joins the
+pieces:
 
-```seam
--double_quotes(chars)
+```clausal
+format_pair(K, V, S) :-
+    write_text_to_string(K, KS),
+    write_text_to_string(V, VS),
+    append(KS, ": ", PREFIX),
+    append(PREFIX, VS, S).
 
-format_pair(K, V, S) <- write_text_to_string(K - V, S)
-
-test("write text to string") <- (
-    format_pair('name', 'alice', S),
-    S == "name - alice"
-)
+test("write text to string") :-
+    format_pair(name, alice, S),
+    S == "name: alice".
 ```
 
 ### write_to_string/2
@@ -223,15 +231,13 @@ test("write text to string") <- (
 rendering of Term: unquoted, list syntax intact, and a string spelled out as
 the char list it is.
 
-```seam
--double_quotes(chars)
+```clausal
+iso_form(X, S) :-
+    write_to_string(X, S).
 
-iso_form(X, S) <- write_to_string(X, S)
-
-test("write to string is ISO") <- (
+test("write to string is ISO") :-
     iso_form("ab", S),
-    S == "[a,b]"
-)
+    S == "[a,b]".
 ```
 
 ### term_to_string/2
@@ -240,13 +246,17 @@ test("write to string is ISO") <- (
 rendering of Term (`write_term(Term, [quoted(true), double_quotes(true)])`):
 quoted, so an atom is distinguishable from a string.
 
-```seam
--double_quotes(chars)
+```clausal
+label(X, S) :-
+    term_to_string(X, S).
 
-label(X, S) <- term_to_string(X, S)
+test("term to string int") :-
+    label(42, S),
+    S == "42".
 
-test("term to string int") <- (label(42, S), S == "42")
-test("term to string keeps the quotes") <- (label("hello", S2), S2 == "\"hello\"")
+test("term to string keeps the quotes") :-
+    label("hello", S2),
+    S2 == "\"hello\"".
 ```
 
 **The three string forms side by side:**
@@ -268,7 +278,25 @@ back.
 
 ## F-String Support
 
-In seam (`.seam`) files, f-strings build text with logic variable interpolation. Variables are automatically dereferenced before the f-string is evaluated, and a string interpolates as its text.
+In seam (`.seam`) files, f-strings build text with logic variable
+interpolation. They are seam syntax: `.clausal` has no f-strings, and the
+examples in this section are seam. In `.clausal`, build the text with
+`write_text_to_string/2` and `append/2,3`, or print it with `format/2`:
+
+```clausal
+describe(NAME, AGE, S) :-
+    write_text_to_string(AGE, A),
+    append(["Name: ", NAME, ", Age: ", A], S).
+
+test("describe without an f-string") :-
+    describe("Alice", 30, S),
+    S == "Name: Alice, Age: 30".
+
+test("format/2 prints it") :-
+    format("Name: ~s, Age: ~w~n", ["Alice", 30]).
+```
+
+In the seam, variables are automatically dereferenced before the f-string is evaluated, and a string interpolates as its text.
 
 An f-string is a **string**: the same term a `"..."` literal is under the
 module's `-double_quotes` mode — the chars string by default, and an atom
@@ -356,49 +384,45 @@ test("deferred f-string") <- (
 
 ### Printing a List
 
-```seam
-show_all(XS) <- (
+```clausal
+show_all(XS) :-
     in_(X, XS),
-    writeln_text(X)
-)
+    writeln_text(X).
 
-test("show all") <- show_all([1, 2, 3])
+test("show all") :-
+    show_all([1, 2, 3]).
 ```
 
 ### String Building with term_to_string
 
-```seam
--double_quotes(chars)
+```clausal
+format_item(X, S) :-
+    term_to_string(X, S).
 
-format_item(X, S) <- term_to_string(X, S)
-
-test("format item") <- (
+test("format item") :-
     format_item(42, S),
-    S == "42"
-)
+    S == "42".
 ```
 
 ### Building Strings with [foldl](higher_order.md)
 
-A string is a list, so `append/3` concatenates one — use it inside a foldl
-closure. (`+` is arithmetic, not concatenation: `R == A + E` on text raises
-`type_error(integer, "ab")` from the CLP(ℤ) expression. `==` itself is fine on
-strings — it is the `+` that has no text meaning.)
+A string is a list, so `append/3` concatenates one — use it as the foldl
+step. (`+` is arithmetic, not concatenation: `R is A + E` on text raises
+`type_error(evaluable, '.'/2)`, and `R #= A + E` raises
+`domain_error(clpz_expression, "a")`.) `.clausal` has no lambda syntax, so
+the step is a named predicate; the seam can write it inline as the arrow
+lambda `((E, A, R) <- append(A, E, R))` (see [Lambdas](lambdas.md)).
 
-```seam
--double_quotes(chars)
+```clausal
+concat_step(E, A, R) :-
+    append(A, E, R).
 
-concat_all(XS, RESULT) <- (
-    foldl(
-        ((E, A, R) <- append(A, E, R)),
-        XS, "", RESULT
-    )
-)
+concat_all(XS, RESULT) :-
+    foldl(concat_step, XS, "", RESULT).
 
-test("concat all") <- (
+test("concat all") :-
     concat_all(["a", "b", "c"], R),
-    R is "abc"
-)
+    R == "abc".
 ```
 
 ---
@@ -412,24 +436,42 @@ test("concat all") <- (
 
 ### Examples
 
-```seam
-fib(0, 0),
-fib(1, 1),
+```clausal
+fib(0, 0).
+fib(1, 1).
 
-digits([D, *T]) >> (digit(D), digits(T))
-digits([D]) >> digit(D)
-digit(D) >> [D]
+digits([D|T]) --> digit(D), digits(T).
+digits([D]) --> digit(D).
+digit(D) --> [D].
 
-# List all clauses for a predicate, by its Name/Arity indicator -- `fib/2`
-# here is `/`, the arithmetic operator, applied to a name and an int; it is
-# NOT data (see the paragraph below):
-debug_fib <- listing(fib/2)
+% List all clauses for a predicate, by its Name/Arity indicator:
+debug_fib :-
+    listing(fib/2).
 
-# Name//Arity (a DCG nonterminal indicator) names Name/(Arity+2):
-debug_digits <- listing(digits // 1)
+% Name//Arity (a DCG nonterminal indicator) names Name/(Arity+2):
+debug_digits :-
+    listing(digits//1).
 
-# Pretty-print a complex term:
-show_deep(TERM) <- portray_clause(TERM)
+% Pretty-print a complex term:
+show_deep(TERM) :-
+    portray_clause(TERM).
+
+test("list fib") :-
+    debug_fib.
+
+test("an unbound indicator fails") :-
+    \+ listing(_).
+
+test("a predicate with no clauses fails") :-
+    \+ listing(nosuch/3).
+
+test("a bare atom is not an indicator") :-
+    catch(listing(fib),
+          error(type_error(predicate_indicator, fib), _),
+          true).
+
+test("pretty-print") :-
+    show_deep(point(1, [a, "b"], _)).
 ```
 
 `listing/1` follows Scryer Prolog's contract (operator ruling 2026-09-25,
@@ -447,23 +489,23 @@ or `Name//Arity`:
   `domain_error(not_less_than_zero, A)`, a string name
   `type_error(atomic, N)`, a number name `type_error(atom, N)`.
 
-The indicator has several representations: the cells `('/', Name, Arity)` /
-`('//', Name, Arity)` (reachable from Python/engine callers that already hold the name and arity as
-data), and -- what a user-written `foo/2` or `foo // 2` actually compiles to
-in `.seam` source -- a runtime `Div` / `FloorDiv` node, since `/` and `//`
-are arithmetic operators and a structural (non-`is`) use stays a reified
-operator term rather than data. It prints a header with clause count, then
-each clause in `head <- (body).` format.
+In `.clausal`, `fib/2` is the compound `/(fib, 2)`, ordinary data. (The
+indicator has other representations: the cells `('/', Name, Arity)` /
+`('//', Name, Arity)`, reachable from Python/engine callers that already
+hold the name and arity as data, and -- what a user-written `foo/2` or
+`foo // 2` compiles to in `.seam` source -- a runtime `Div` / `FloorDiv`
+node, since in the seam `/` and `//` are arithmetic operators.) It prints a
+header with clause count, then each clause in `head <- (body).` format.
 
 From Python, `listing` also takes a predicate handle (`listing(mod.fib)`
 lists every arity the module defines under that name, and prints
 `"% name/arity — no clauses"` for an empty one) or a builtin
 (`"% name/arity — builtin"`).
 
-The indicator finds an IMPORTED predicate as well as a local one: an
-`-import_from` binds the exporter's predicate, so `listing(qq/1)` and
-`listing('qq'/1)` from the importer print exactly what `listing(qq/1)`
-prints in the exporting module.
+The indicator finds an IMPORTED predicate as well as a local one: a
+`use_module/2` import (the seam's `-import_from`) binds the exporter's
+predicate, so `listing(qq/1)` from the importer prints exactly what
+`listing(qq/1)` prints in the exporting module.
 
 ---
 
@@ -474,7 +516,7 @@ Logic variables have `__str__` and `__format__` methods (in the C extension) tha
 - **Bound var**: displays the bound value
 - **Unbound var**: displays `_N` (unique numeric ID)
 
-This means `f"{X}"` and `write_text(X)` show the value if bound, or a placeholder if unbound. This works in both `.seam` files and Python code:
+This means `write_text(X)` (and the seam's `f"{X}"`) shows the value if bound, or a placeholder if unbound. This works in `.clausal` and `.seam` files and in Python code:
 
 ```python
 from clausal.logic.variables import Var, Trail, unify
@@ -493,14 +535,15 @@ print(f"Bound: {v}")     # hello
 
 - **`write/1` prints a string as `[a,b,c]`, not as `abc`.** It is the ISO
   writer, and a string *is* a list of characters. For human text — and for
-  f-strings — use `write_text/1` / `writeln_text/1`.
+  the seam's f-strings — use `write_text/1` / `writeln_text/1`.
 - **`write/1` does NOT quote; `print_term/1` and `term_to_string/2` do.** If
   your output has unwanted quotes, switch to the text writers.
 - **`write_text/1` cannot tell an atom from a string** — both print bare. Use
   `print_term/1` when the distinction matters, `write_canonical/1` when you need
   to see the list structure a string denotes.
-- **F-strings evaluate at search time**, not at parse time. An f-string with an unbound variable will show the Var placeholder (`_N`), not raise an error.
-- **nl/0 takes no arguments** — `nl()` not `nl(1)`. Use `tab(N)` for spacing.
+- **F-strings (seam) evaluate at search time**, not at parse time. An f-string with an unbound variable will show the Var placeholder (`_N`), not raise an error.
+- **nl/0 takes no arguments** — write `nl` (the seam writes `nl()`), not
+  `nl(1)`. Use `tab(N)` for spacing.
 
 ---
 
@@ -518,5 +561,5 @@ print(f"Bound: {v}")     # hello
 
 ---
 
-*See also: [Python Integration](python_integration.md) — using `++()` escape for Python calls inside logic goals.*
+*See also: [Python Integration](python_integration.md) — the seam's `++()` escape for Python calls inside logic goals.*
 *See also: [Lambdas](lambdas.md) — goal closures used with foldl and other higher-order predicates.*
