@@ -119,6 +119,9 @@ own files are exempt.
    - a dotted reference that is not exactly `module.export`;
    - an engine adapter outside the allowlist, or a denied predicate of an
      allowed one;
+   - a name an allowed adapter binds that is neither one of its
+     predicates nor one of its reviewed **term constructors** (see
+     [The adapter allowlist](#the-adapter-allowlist));
    - any other engine module (only the adapters on the allowlist, their
      `library(...)` facades, the `.seam` stdlib and CLP(Z) may be
      imported).
@@ -263,6 +266,21 @@ A bare import of such a module, `:- use_module(library(datetime)).`,
 brings its denied predicates in too, so it is refused at load. The
 refusal names them. List only the predicates you need:
 `:- use_module(library(datetime), [date_add/3]).` loads.
+**Term constructors** are the plain functions an adapter offers to build
+a term, not registered predicates: `date` in `clausal.modules.py.datetime`
+(`D is date(2024, 2, 28)`). A sandboxed module may import only the ones
+listed in the adapter's row (`clausal.sandbox.ADAPTERS`, field
+`constructors`), each reviewed as pure: no clock, I/O, host time zone or
+other state, and it returns data built from its own arguments. Each import
+works by name or by alias (`-import_from(date_time, [date])`), and also as
+the exact `module.name` chain the compiler lowers each use to. It works only
+while the adapter is allowed: `enable(allow_adapters=...)` without datetime
+refuses `date` too. Everything else the adapter module binds (its helpers,
+its own imports) stays a `non_export`, as does any attribute of the
+constructor (`date.year`). A `library(...)` facade re-exports no
+constructor. The function object is inert data: a bare `F is date` binds it,
+but `call(F, ...)` refuses it as a Python object.
+
 Any adapter that is not engine-shipped is refused, including an optional
 `clausal-*` package's adapter, even one spliced into
 `clausal.modules.py`. A new engine adapter is refused until it gets a row
@@ -271,7 +289,7 @@ missing.
 
 | Adapter module | `library(...)` | Verdict | Denied predicates | Evidence |
 |---|---|---|---|---|
-| `clausal.modules.py.datetime` | `datetime` | allow | `now/1`, `now_utc/1`, `today/1`, `timestamp/2` | date/time arithmetic and formatting; `now`/`now_utc`/`today` read the clock, `timestamp/2` depends on the host time zone |
+| `clausal.modules.py.datetime` | `datetime` | allow | `now/1`, `now_utc/1`, `today/1`, `timestamp/2` | date/time arithmetic and formatting; `now`/`now_utc`/`today` read the clock, `timestamp/2` depends on the host time zone. Term constructor: `date` (validates through `datetime.date`, returns `date(Y, M, D)`), importable from the module, not from the facade |
 | `clausal.modules.py.json` | `json` | allow | `read_file/2`, `write_file/2` | parse/generate/get are pure; the two file predicates touch the filesystem |
 | `clausal.modules.py.csv` | `py_csv` | allow | `read_file`, `read_records`, `write_file` | parse/generate are pure; the file predicates touch the filesystem |
 | `clausal.modules.py.re` | `re` | allow | | regular expressions over the given text |

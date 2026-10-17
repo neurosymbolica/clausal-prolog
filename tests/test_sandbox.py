@@ -1063,6 +1063,156 @@ def test_the_denied_predicates_exist():
                 m, name)
 
 
+# ── an allowed adapter's pure term constructors (datetime's date/3) ─────────
+
+DATE_SEAM = """
+-module(dates, [start/1, next_day/1, made/1, aliased/1, bad/1, bare/1,
+                call_bare/1, profile/1, as_of/1, listed/1, quarter/2,
+                as_of_date, name])
+-import_from(date_time, [date, date_add, timedelta])
+-import_from(py.datetime, [alias(date, mk_date)])
+start(date(2024, 2, 28)),
+profile({as_of_date: date(2024, 6, 1), name: "ann"}),
+listed([date(2024, 1, 1), date(2024, 1, 2)]),
+quarter(date(2024, 3, 31), N) <- (N is 1)
+as_of(D) <- (profile(P), D is P[as_of_date])
+next_day(R) <- (start(D), timedelta(1, 0, TD), date_add(D, TD, R))
+made(R) <- (D is date(2024, 2, 28), timedelta(2, 0, TD), date_add(D, TD, R))
+aliased(D) <- (D is mk_date(2024, 12, 31))
+bad(D) <- (D is date(2025, 2, 29))
+bare(F) <- (F is date)
+call_bare(D) <- (F is date, call(F, 2024, 1, 1, D))
+"""
+
+_DATE_RUN = """
+    from clausal import Var
+    m = load("dates")
+    X = Var()
+    probe("start", lambda: answers(("start", X), m, X))
+    probe("next_day", lambda: answers(("next_day", X), m, X))
+    probe("made", lambda: answers(("made", X), m, X))
+    probe("aliased", lambda: answers(("aliased", X), m, X))
+    probe("bad", lambda: answers(("bad", X), m, X))
+    probe("call_bare", lambda: answers(("call_bare", X), m, X))
+    probe("as_of", lambda: answers(("as_of", X), m, X))
+    probe("listed", lambda: answers(("listed", X), m, X))
+    probe("quarter", lambda: answers(("quarter", X, 1), m, X))
+    probe("quarter_in", lambda: answers(
+        ("quarter", ("date", 2024, 3, 31), X), m, X))
+    probe("on", lambda: __import__("clausal.sandbox").sandbox.is_enabled())
+"""
+
+
+def test_a_sandboxed_seam_imports_the_date_constructor(sbx):
+    """``date`` is no registered predicate of the allowed datetime adapter
+    but its TERM constructor, a plain function (``clausal.sandbox.ADAPTERS``
+    ``constructors``).  A sandboxed module may import it, by name or alias,
+    and use it in a fact, a dict value, a list, a rule head and a body; a
+    non-date is still the ISO domain_error, and the function object is no
+    goal."""
+    sbx.write("dates.seam", DATE_SEAM)
+    res = sbx.run("""
+    import clausal.sandbox as sb
+    sb.enable()
+""" + _DATE_RUN)
+    assert ok(res, "on") == "True"
+    assert ok(res, "start") == "[('date', 2024, 2, 28)]"
+    assert ok(res, "next_day") == "[('date', 2024, 2, 29)]"
+    assert ok(res, "made") == "[('date', 2024, 3, 1)]"
+    assert ok(res, "aliased") == "[('date', 2024, 12, 31)]"
+    assert ok(res, "as_of") == "[('date', 2024, 6, 1)]"         # dict value
+    assert ok(res, "listed") == (
+        "[[('date', 2024, 1, 1), ('date', 2024, 1, 2)]]")       # list
+    assert ok(res, "quarter") == "[('date', 2024, 3, 31)]"      # rule head
+    assert ok(res, "quarter_in") == "[1]"
+    r = refused(res, "bad", "domain_error(date,")
+    assert r["type"] == "LogicException", r
+    refused(res, "call_bare", PYOBJ)
+
+
+def test_the_date_constructor_is_unchanged_without_the_sandbox(sbx):
+    sbx.write("dates.seam", DATE_SEAM)
+    res = sbx.run(_DATE_RUN)
+    assert ok(res, "on") == "False"
+    assert ok(res, "start") == "[('date', 2024, 2, 28)]"
+    assert ok(res, "made") == "[('date', 2024, 3, 1)]"
+    assert ok(res, "aliased") == "[('date', 2024, 12, 31)]"
+    assert ok(res, "as_of") == "[('date', 2024, 6, 1)]"
+    assert ok(res, "quarter") == "[('date', 2024, 3, 31)]"
+    refused(res, "bad", "domain_error(date,")
+    assert not res["call_bare"]["ok"]
+
+
+@pytest.mark.parametrize("text", [
+    # the module's other Python callables: helpers and its own imports
+    "-import_from(date_time, [date_term_to_python])\np(1),\n",
+    "-import_from(date_time, [expect_type])\np(1),\n",
+    "-import_from(date_time, [deref])\np(1),\n",
+    "-import_from(date_time, [unify])\np(1),\n",
+    "-import_from(date_time, [raise_domain_error])\np(1),\n",
+    "-import_from(date_time, [ModulePredicate])\np(1),\n",
+    "-import_from(date_time, [alias(date_term_to_python, date)])\np(1),\n",
+    # the clock readers stay denied, beside the constructor too
+    "-import_from(date_time, [today])\np(1),\n",
+    "-import_from(date_time, [date, now])\np(1),\n",
+    # past the constructor: an attribute of the function object
+    "-import_from(date_time, [date])\np(X) <- (X is date.year)\n",
+    "p(X) <- (X is py.datetime.date.year)\n",
+    "p(X) <- (X is py.datetime.date.__globals__)\n",
+    "-import_from(date_time, [date])\np(X) <- (X is ++date(2024, 1, 1))\n",
+    # a facade re-exports no constructor
+    "-import_from(clausal.library.datetime, [date])\np(1),\n",
+])
+def test_only_the_reviewed_constructors_are_importable(sbx, text):
+    sbx.write("bad.seam", "-module(bad, [p/1])\n" + text)
+    res = sbx.run("""
+        import clausal.sandbox as sb
+        sb.enable()
+        probe("load", lambda: load("bad"))
+    """)
+    if "__globals__" in text:       # the compiler refuses it first
+        assert res["load"]["type"] == "SyntaxError", res["load"]
+        return
+    refused(res, "load", LOAD, import_error=True)
+
+
+def test_a_constructor_follows_its_adapter_out_of_the_allowlist(sbx):
+    """``allow_adapters`` without datetime takes its constructor too."""
+    sbx.write("dates.seam", DATE_SEAM)
+    sbx.write("dotted.seam", "-module(dotted, [p/1])\n"
+              "p(X) <- (X is py.datetime.date(2024, 1, 1))\n")
+    res = sbx.run("""
+        import clausal.sandbox as sb
+        sb.enable(allow_adapters=["units"])
+        probe("load", lambda: load("dates"))
+        probe("dotted", lambda: load("dotted"))
+    """)
+    refused(res, "load", LOAD, import_error=True)
+    refused(res, "dotted", LOAD, import_error=True)
+    assert "non_export" in res["load"]["msg"] or "sandbox_adapter" in res[
+        "load"]["msg"], res["load"]
+
+
+def test_every_sandbox_constructor_is_a_function_of_its_adapter():
+    """The ``constructors`` allowlist names plain functions the adapter
+    itself defines -- no predicate (judged as one), no denied name, no
+    re-export or class -- each reviewed as pure."""
+    import importlib
+    import types
+    from clausal.sandbox import ADAPTERS
+    seen = 0
+    for m, row in ADAPTERS.items():
+        mod = importlib.import_module(m)
+        for name in row.constructors:
+            fn = vars(mod).get(name)
+            assert type(fn) is types.FunctionType, (m, name)
+            assert fn.__module__ == m and fn.__qualname__ == name, (m, name)
+            assert row.allowed and name not in row.denied, (m, name)
+            seen += 1
+    assert ADAPTERS["clausal.modules.py.datetime"].constructors == {"date"}
+    assert seen == 1
+
+
 @pytest.mark.parametrize("module", [
     "clausal.modules.py.os", "clausal.modules.py.process",
     "clausal.modules.py.files", "clausal.modules.py.http",

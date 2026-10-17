@@ -97,11 +97,21 @@ class Adapter:
     *allowed*: the module is pure computation (no filesystem, process,
     network, environment, clock or randomness, logging/I/O, database or
     reflection); *denied*: the predicates of an allowed module that are NOT
-    (``datetime``'s clock readers); *why*: the evidence, in a sentence."""
+    (``datetime``'s clock readers); *why*: the evidence, in a sentence.
+
+    *constructors*: the module's plain Python TERM CONSTRUCTORS (functions
+    the compiler calls to build a cell, not registered predicates) that a
+    sandboxed module may ``-import_from`` the adapter while it is allowed.
+    Each entry is reviewed: a function the module itself defines under that
+    name, with no clock, I/O, host time zone or other state, that returns
+    data built from its arguments (see :func:`sandbox_constructor`).
+    Nothing else the module binds (its helpers, its own imports) is ever
+    importable."""
     module: str
     allowed: bool
     why: str
     denied: frozenset = frozenset()
+    constructors: frozenset = frozenset()
 
 
 _PY = "clausal.modules.py."
@@ -114,7 +124,13 @@ ADAPTERS: "dict[str, Adapter]" = {a.module: a for a in (
             "date/time arithmetic and formatting; now/1, now_utc/1 and "
             "today/1 read the clock and timestamp/2 depends on the host "
             "time zone",
-            frozenset({"now", "now_utc", "today", "timestamp"})),
+            frozenset({"now", "now_utc", "today", "timestamp"}),
+            # date/3, the date TERM constructor: it validates (Y, M, D)
+            # through datetime.date and returns the cell ('date', Y, M, D)
+            # of its own arguments (an ISO type_error/domain_error for a
+            # non-date); no clock, I/O or time zone.  (time, datetime and
+            # timedelta are registered predicates, judged as such.)
+            constructors=frozenset({"date"})),
     Adapter(_PY + "json", True,
             "parse/generate/get are pure; read_file/2 and write_file/2 touch "
             "the filesystem",
@@ -709,6 +725,46 @@ def _engine_reference_ok(dotted: str, name: "str | None") -> "str | None":
     return None
 
 
+def sandbox_constructor(dotted: str, name: "str | None") -> bool:
+    """True when *name*, imported from the engine module *dotted*, is a
+    reviewed pure term constructor (:attr:`Adapter.constructors`) of an
+    adapter the sandbox ALLOWS now (under ``enable(allow_adapters=...)``).
+
+    Fail closed: *dotted* must be the adapter module itself (not a
+    ``library(...)`` facade, which does not re-export constructors), the
+    name must not be denied or underscore-led, and the module must bind it
+    to the very function it defines under that name -- not a re-export,
+    a class, a predicate object or anything rebound later."""
+    import types  # noqa: PLC0415
+    if not name or name.startswith("_") or dotted.startswith(_FACADES):
+        return False
+    row = adapter_row(dotted)
+    if (row is None or name not in row.constructors or name in row.denied
+            or _canonical(dotted) not in _STATE.adapters):
+        return False
+    mod = sys.modules.get(dotted)
+    if mod is None:
+        import importlib  # noqa: PLC0415
+        try:
+            mod = importlib.import_module(dotted)
+        except Exception:  # noqa: BLE001 -- unreadable: no constructor
+            return False
+    fn = vars(mod).get(name)
+    return (type(fn) is types.FunctionType
+            and fn.__module__ == _SHIMS.get(dotted, dotted)
+            and fn.__qualname__ == name)
+
+
+def _drop_constructor_refs(record):
+    """The compiler *record* less each ``-import_from`` of a
+    :func:`sandbox_constructor` (its own export check would call it a
+    non-export; every other reference is kept as it is)."""
+    from clausal import python_bridges as pb  # noqa: PLC0415
+    return [r for r in record
+            if not (r[0] == "import_from"
+                    and sandbox_constructor(pb._module_path(r[1]), r[2]))]
+
+
 _STDLIB_EXPORTS: dict = {}
 
 
@@ -859,16 +915,21 @@ def _sandbox_checker(routes: list, children: list,
         """The bridge gate's check, except that an engine ``library(...)``
         facade also exports the VALUES it re-exports (a unit, a currency,
         a number: ``use_module(library(units), [metre])``), which its
-        module/2 list does not name."""
+        module/2 list does not name; and that an allowed adapter's
+        reviewed pure term constructor (``-import_from(date_time,
+        [date])``, :func:`sandbox_constructor`) is an export too: by its
+        import, and by the exact ``module.name`` chain the compiler lowers
+        each use of it to (``date_time.date``)."""
         n = len(routes)
         ok = base(kind, a, b, node)
         new = routes[n:]
         if (new and name is not None and all(r[0] == "non_export"
                                              for r in new)
-                and dotted.startswith(_FACADES)
                 and origin not in (None, pb._UNRESOLVABLE)
                 and pb.is_engine_shipped(dotted, origin)
-                and _facade_value(dotted, name)):
+                and ((dotted.startswith(_FACADES)
+                      and _facade_value(dotted, name))
+                     or sandbox_constructor(dotted, name))):
             del routes[n:]
             return True
         return ok
@@ -954,7 +1015,7 @@ def _diagnostic_routes(text: str, path: str) -> list:
         record = None
     if record is None:
         return [("uncompilable", 0)]
-    routes += pb._check_refs(record)[0]
+    routes += pb._check_refs(_drop_constructor_refs(record))[0]
     try:
         routes += [r for r in pb.python_routes(ast.parse(text), text)
                    if r[0] == "seam"]

@@ -235,6 +235,22 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A sandboxed module may import the datetime adapter's `date`
+  constructor** (2026-10-17). `-import_from(date_time, [date])` was refused
+  at load under `CLAUSAL_SANDBOX=1` with `non_export`, at the import and at
+  every `date(Y, M, D)` it built, because the sandbox counted only an
+  adapter's registered predicates as its exports and `date` is a plain
+  term constructor. Domain modules that build dates (MiFID planning,
+  Schengen max-stay, GDPR Arts 33-34) could not load. Each adapter row in
+  `clausal.sandbox.ADAPTERS` now names its reviewed pure constructors
+  (`constructors`; datetime's is `date`, which validates and returns the
+  cell `date(Y, M, D)` of its own arguments, or raises the ISO
+  `domain_error`/`type_error`). They import by name or alias and are
+  reachable as the exact `module.name` chain, only while the adapter is
+  allowed. Everything else the adapter module binds stays refused, and so
+  do the clock readers. A `library(datetime)` facade still exports no
+  `date`. Outside the sandbox nothing changes.
+
 - **In the sandbox, `op/3` and op directives cannot change the
   process-wide operator table.** `op(700, xfx, zz)` as a goal succeeded
   in a sandboxed query and changed the run-time table that every
