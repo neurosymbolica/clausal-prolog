@@ -201,7 +201,9 @@ def check_no_raw_untested_blocks(
 #: Code-fence pattern for a Clausal Prolog (``.clausal``, ISO syntax) block;
 #: group 1 is its content.  Distinct from SEAM_FENCE_RE: a ```clausal block is
 #: loaded through the native ISO front end, not compiled as seam.
-CLAUSAL_PROLOG_FENCE_RE = re.compile(r"^```clausal[ \t]*\n(.*?)^```",
+#: The fences may be indented (a block inside a ``!!!``/``???`` admonition);
+#: Prolog ignores the leading layout, so the content is used as it stands.
+CLAUSAL_PROLOG_FENCE_RE = re.compile(r"^[ \t]*```clausal[ \t]*\n(.*?)^[ \t]*```",
                                      re.DOTALL | re.MULTILINE)
 
 

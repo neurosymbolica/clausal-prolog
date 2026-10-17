@@ -41,3 +41,11 @@ def test_the_checker_says_no(tmp_path):
 def test_the_fence_pattern_finds_clausal_but_not_seam_or_prolog():
     text = "```clausal\na.\n```\n```seam\nb\n```\n```prolog\nc.\n```\n"
     assert [m.group(1) for m in CLAUSAL_PROLOG_FENCE_RE.finditer(text)] == ["a.\n"]
+
+
+def test_an_indented_block_inside_an_admonition_is_checked(tmp_path):
+    # Found by docs batch 5: a column-0-only pattern skipped these silently.
+    (tmp_path / "page.md").write_text(
+        "!!! note\n\n    ```clausal\n    bad(1).\n    test(\"bad\") :- bad(2).\n    ```\n")
+    v = check_clausal_blocks(tmp_path)
+    assert len(v) == 1 and "page.md:3" in v[0] and "test(s) fail" in v[0]
