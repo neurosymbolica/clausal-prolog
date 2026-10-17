@@ -1,0 +1,32 @@
+% Doc snippet fixtures for docs/uuid.md
+
+% --8<-- [start:session_tokens]
+:- use_module(library(py_uuid), [uuid_v4/1, uuid_str/2]).
+
+new_session(_USERID, TOKEN) :-
+    uuid_v4(U),
+    uuid_str(U, TOKEN).
+% --8<-- [end:session_tokens]
+
+% --8<-- [start:deterministic_ids]
+:- use_module(library(py_uuid), [uuid_v5/3, uuid_str/2]).
+
+resource_id(_TYPE, NAME, ID) :-
+    uuid_v5(url, NAME, U),
+    uuid_str(U, ID).
+% --8<-- [end:deterministic_ids]
+
+% Validates the session tokens example: a fresh token each call
+test("session tokens") :-
+    new_session(alice, T1),
+    new_session(alice, T2),
+    string(T1),
+    length(T1, 36),
+    T1 \== T2.
+
+% Validates the deterministic IDs example: the same name, the same ID
+test("deterministic ids") :-
+    resource_id(page, "https://example.com", ID1),
+    resource_id(page, "https://example.com", ID2),
+    ID1 == ID2,
+    ID1 == "4fd35a71-71ef-5a55-a9d9-aa75c889a6d0".

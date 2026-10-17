@@ -1,57 +1,59 @@
 # Clausal Prolog — UUIDs (`uuid` module)
 
-!!! note "Seam vs Prolog syntax"
-
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+Examples on this page are [Clausal Prolog](clausal_prolog.md) (`.clausal`),
+which uses ISO Prolog syntax.
 
 ## Overview
 
 The `uuid` module provides predicates for generating, converting, and inspecting UUIDs backed by Python's `uuid` module. It produces and consumes real `uuid.UUID` objects.
 
-```seam
--import_from(uuid, [uuid_v4, uuid_str, uuid_version, is_uuid])
+```clausal
+:- use_module(library(py_uuid), [uuid_v4/1, uuid_str/2]).
 
-make_id(ID) <- (
+make_id(ID) :-
     uuid_v4(U),
-    uuid_str(U, ID)
-)
+    uuid_str(U, ID).
 
-main <- (
+main :-
     make_id(ID),
-    ++print(f"Generated ID: {ID}")
-)
+    format("Generated ID: ~s~n", [ID]).
+
+test("make_id") :-
+    make_id(ID),
+    length(ID, 36).
 ```
 
 Or via [module import](import.md):
 
-```seam
--import_module(uuid)
+```clausal
+:- use_module(library(py_uuid)).
 
-main <- (
-    uuid.uuid_v4(U),
-    uuid.uuid_str(U, S),
-    ++print(S)
-)
+main :-
+    py_uuid:uuid_v4(U),
+    py_uuid:uuid_str(U, S),
+    format("~s~n", [S]).
+
+test("qualified calls") :-
+    py_uuid:uuid_v4(U),
+    py_uuid:is_uuid(U).
 ```
 
 ---
 
 ## Import
 
-```seam
--import_from(uuid, [
-    uuid_v4, uuid_v1, uuid_v3, uuid_v5,
-    uuid_str, uuid_hex, uuid_urn, uuid_bytes, uuid_int,
-    uuid_version, uuid_fields, is_uuid
-])
+```clausal
+:- use_module(library(py_uuid), [
+    uuid_v4/1, uuid_v1/1, uuid_v3/3, uuid_v5/3,
+    uuid_str/2, uuid_hex/2, uuid_urn/2, uuid_bytes/2, uuid_int/2,
+    uuid_version/2, uuid_fields/7, is_uuid/1
+]).
 ```
 
-The module name is `uuid` in the seam (internally mapped to `uuid_mod` to avoid shadowing Python's stdlib).
+A `.clausal` file reaches the module through its library facade,
+`library(py_uuid)`. The module name is `uuid` in the [seam](syntax.md),
+`-import_from(uuid, [...])` (internally mapped to `uuid_mod` to avoid
+shadowing Python's stdlib).
 
 ---
 
@@ -66,16 +68,17 @@ The module name is `uuid` in the seam (internally mapped to `uuid_mod` to avoid 
 
 ### Namespace aliases
 
-For `uuid_v3` and `uuid_v5`, the namespace argument accepts string aliases or raw `uuid.UUID` objects:
+For `uuid_v3` and `uuid_v5`, the namespace argument accepts an alias or a raw `uuid.UUID` object. An
+alias is an atom, or the same name as a string (`"dns"`):
 
 | Alias | UUID constant |
 |-------|---------------|
-| `"dns"` | `uuid.NAMESPACE_DNS` |
-| `"url"` | `uuid.NAMESPACE_URL` |
-| `"oid"` | `uuid.NAMESPACE_OID` |
-| `"x500"` | `uuid.NAMESPACE_X500` |
+| `dns` | `uuid.NAMESPACE_DNS` |
+| `url` | `uuid.NAMESPACE_URL` |
+| `oid` | `uuid.NAMESPACE_OID` |
+| `x500` | `uuid.NAMESPACE_X500` |
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/uuid_sigs.txt:generation_examples"
 ```
 
@@ -93,7 +96,7 @@ All conversion predicates are **bidirectional**: pass a ground UUID to decompose
 | `uuid_bytes(U, B)` | `?U, ?B` | UUID ↔ 16-byte `bytes` object |
 | `uuid_int(U, N)` | `?U, ?N` | UUID ↔ 128-bit integer |
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/uuid_sigs.txt:conversion_examples"
 ```
 
@@ -107,7 +110,7 @@ All conversion predicates are **bidirectional**: pass a ground UUID to decompose
 | `uuid_fields(U, TL, TM, TH, CSH, CSL, NODE)` | `+U, -TL, -TM, -TH, -CSH, -CSL, -NODE` | Decompose into 6 integer fields |
 | `is_uuid(U)` | `+U` | Type test — succeeds if U is a `uuid.UUID` |
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/uuid_sigs.txt:inspection_examples"
 ```
 
@@ -117,16 +120,16 @@ All conversion predicates are **bidirectional**: pass a ground UUID to decompose
 
     ### Session tokens
 
-    ```seam
-    --8<-- "tests/fixtures/docs/uuid_sigs.txt:session_tokens"
+    ```clausal
+    --8<-- "tests/fixtures/docs/uuid_examples.clausal:session_tokens"
     ```
 
     ### Deterministic IDs
 
-    ```seam
-    --8<-- "tests/fixtures/docs/uuid_sigs.txt:deterministic_ids"
+    ```clausal
+    --8<-- "tests/fixtures/docs/uuid_examples.clausal:deterministic_ids"
     ```
 
 ---
 
-*See also: [Python Interop](python_integration.md) — `++()` escape for additional UUID operations · [Database Ops](database_ops.md) — using UUIDs as fact keys.*
+*See also: [Python Interop](python_integration.md) — the seam's `++()` escape for additional UUID operations · [Database Ops](database_ops.md) — using UUIDs as fact keys.*
