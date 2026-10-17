@@ -170,7 +170,7 @@ Execute `Goal`. If it throws and the thrown term unifies with `Error`, execute `
 ```
 Execute `Goal`. If `Goal` throws, unify the thrown term with `Catcher`. If unification succeeds, execute `Recovery`; otherwise re-raise. If `Goal` succeeds without throwing, `catch/3` is transparent — all solutions pass through.
 
-An ISO error arrives in Scryer's form, `error(Formal, Culprit)`, where `Culprit` is the predicate indicator (`catch(atom_length(1, _), E, true)` binds `E = error(type_error(atom, 1), atom_length/2)`); see [Exceptions](exceptions.md). A Python exception raised inside `Goal` is caught as the term `ClassName(Message)`: from Clausal Prolog, `catch(sat(X * Y), E, true)` binds `E = 'TypeError'('CLP(B): unsupported expression type ...')`, and from the seam, where `++expr` runs Python, `catch(++int("x"), E, true)` binds `E` to the cell `('ValueError', "invalid literal for int() with base 10: 'x'")`. Bindings made by the failing goal are undone before recovery runs.
+An ISO error arrives in Scryer's form, `error(Formal, Culprit)`, where `Culprit` is the predicate indicator (`catch(atom_length(1, _), E, true)` binds `E = error(type_error(atom, 1), atom_length/2)`); see [Exceptions](exceptions.md). A Python exception raised inside `Goal` (by a builtin's implementation, for example) is caught as the term `ClassName(Message)`, from Clausal Prolog and the seam alike. In the seam, where `++expr` runs Python, `catch(++int("x"), E, true)` binds `E` to the cell `('ValueError', "invalid literal for int() with base 10: 'x'")`. Bindings made by the failing goal are undone before recovery runs.
 
 ??? info "Implementation & tests"
     **Seam tests:** `tests/clausal_modules/exceptions.seam`

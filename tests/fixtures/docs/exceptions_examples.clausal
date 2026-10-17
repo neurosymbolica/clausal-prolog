@@ -1,10 +1,14 @@
 % Doc snippet fixtures for docs/exceptions.md
 
 % --8<-- [start:catch_3_goal_only]
-chk(Y) :- var(Y), throw(later).
+chk(Y) :-
+    var(Y),
+    throw(later).
 chk(Y) :- nonvar(Y).
 % w/1 raises later; Y is never bound
-w(Y) :- catch(true, E, Y = E), chk(Y).
+w(Y) :-
+    catch(true, E, Y = E),
+    chk(Y).
 % --8<-- [end:catch_3_goal_only]
 
 % The ball chk(Y) throws after catch/3 has succeeded is not w's to catch: it

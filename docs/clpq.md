@@ -295,7 +295,9 @@ anywhere in a constraint, on either front end:
 
 price(Q)  :- {Q = 100 * constant(one_euro)}.        % Q = 100 euro
 fine(Q)   :- {Q >= constant(max_fine)}.             % posts; a later binding decides
-split(N)  :- {Q = N * constant(one_euro)}, Q is 300 * constant(one_euro).   % N = 300
+split(N)  :-                                          % N = 300
+    {Q = N * constant(one_euro)},
+    Q is 300 * constant(one_euro).
 half(Q)   :- {2 * Q = 3 * constant(one_euro)}.      % Q = 3/2 euro
 
 test("price is 100 euro") :-

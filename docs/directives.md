@@ -480,7 +480,9 @@ test("second") :-
     other_helper(3, 6).
 ```
 
-In the seam, without `-discontiguous` the `test` clauses being separated by
+In a `.clausal` file the directive is accepted and changes nothing: clauses
+of one predicate may be interleaved with others without it, silently. In the
+seam, without `-discontiguous` the `test` clauses being separated by
 `other_helper` would trigger a warning or error.
 
 ### -meta_predicate

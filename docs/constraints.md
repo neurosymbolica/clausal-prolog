@@ -365,10 +365,28 @@ Since `#=<` is CLP(ℤ), `1 #=< X` and `X #=< 10` constrain X's domain. (The sea
 :- use_module(library(clpz)).
 
 queens(N, QS) :-
+    length(QS, N),
     in_domain(QS, 1, N),
     all_different(QS),
-    label(QS),
-    check_diagonals(QS).
+    safe(QS),
+    label(QS).
+
+% No two queens share a diagonal
+safe([]).
+safe([Q|QS]) :-
+    no_attack(Q, QS, 1),
+    safe(QS).
+
+no_attack(_, [], _).
+no_attack(Q, [Q1|QS], D) :-
+    Q #\= Q1 + D,
+    Q #\= Q1 - D,
+    D1 #= D + 1,
+    no_attack(Q, QS, D1).
+
+test("four queens") :-
+    findall(QS, queens(4, QS), ALL),
+    ALL == [[2, 4, 1, 3], [3, 1, 4, 2]].
 ```
 
 **SEND + MORE = MONEY:**
