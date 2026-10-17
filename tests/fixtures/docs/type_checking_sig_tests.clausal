@@ -1,0 +1,56 @@
+% Companion tests for docs/type_checking.md display snippets.
+
+test("var check") :-
+    var(_).
+
+test("integer check") :-
+    integer(42).
+
+test("is_str check") :-
+    is_str("hello").
+
+% The describe_example snippet runs in type_checking_examples.clausal.
+
+% The `atom_vs_string` snippet, row by row (spec §6.3).
+test("atom row") :-
+    atom(bar), atomic(bar), callable_(bar), ground(bar),
+    \+ string(bar), \+ is_list(bar), \+ is_chars(bar), \+ compound(bar).
+
+% Task 15 item 2 (ISO alignment, 2026-09-07): a non-empty string is the
+% LIST of its characters, and a non-empty list is the compound './2', so
+% compound/1 and callable_/1 answer TRUE for it -- as ISO and Scryer do.
+test("string row") :-
+    string("bar"), is_str("bar"), is_list("bar"), is_chars("bar"),
+    ground("bar"), callable_("bar"), compound("bar"),
+    \+ atom("bar"), \+ atomic("bar").
+
+% "" is [] is the reserved ATOM '[]', so atom/1 and atomic/1 answer TRUE and
+% compound/1 answers FALSE (Task 15 item 2; Scryer agrees).
+test("empty string row") :-
+    "" == [],
+    string(""), is_list(""), is_chars(""),
+    atom(""), atomic(""), callable_(""),
+    \+ compound("").
+
+% "" and [] are one term, so string([]) is TRUE -- re-asserted in Task 14b,
+% where string/1 stopped keying on the `str` representation.
+test("empty list row") :-
+    string([]), is_str([]), is_list([]), is_chars([]),
+    atom([]), atomic([]), callable_([]),
+    \+ compound([]).
+
+% The other spelling of the same rule: a proper list of char atoms is the
+% string it is equal to (spec §6.3).
+test("char list row") :-
+    string([a, b]), is_str([a, b]),
+    \+ string([1, 2]), \+ string([ab]).
+
+test("compound row") :-
+    compound(pair(1, 2)), callable_(pair(1, 2)),
+    \+ atom(pair(1, 2)), \+ atomic(pair(1, 2)), \+ is_list(pair(1, 2)).
+
+test("number row") :-
+    atomic(42), ground(42),
+    \+ atom(42), \+ string(42), \+ is_list(42), \+ compound(42).
+
+pair(1, 2).
