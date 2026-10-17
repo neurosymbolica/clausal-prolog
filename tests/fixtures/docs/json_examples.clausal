@@ -1,0 +1,38 @@
+% Doc snippet fixtures for docs/json.md.
+%
+% Object KEYS are minted as atoms, string VALUES stay strings, and
+% parse/3's atoms(Spellings) option is the vocabulary hook that promotes
+% chosen values to atoms.
+
+:- use_module(library(json), [parse/2, parse/3, generate/2, get/3]).
+
+% --8<-- [start:parse_atoms]
+% Keys are atoms; string values are strings.
+test("keys are atoms, values are strings") :-
+    parse("{\"colour\": \"red\", \"note\": \"hi\"}", D),
+    get(D, colour, V),
+    string(V),
+    V == "red".
+
+% atoms(["red"]) promotes just that value to the atom red.
+test("the atoms option mints a vocabulary") :-
+    parse("{\"colour\": \"red\", \"note\": \"red flag\"}", D2, [atoms(["red"])]),
+    get(D2, colour, C),
+    atom(C),
+    C == red,
+    get(D2, note, N),
+    string(N).             % not in the vocabulary -- still text
+% --8<-- [end:parse_atoms]
+
+% --8<-- [start:generate_kinds]
+% Generating is the mirror: an atom becomes the JSON string of its spelling.
+test("an atom generates as a JSON string") :-
+    dict_pairs(D, [colour-red]),
+    generate(D, S),
+    S == "{\"colour\": \"red\"}".
+
+% A compound term has no JSON counterpart.
+test("a compound term is a type error") :-
+    catch(generate(point(1, 2), _), error(E, _), true),
+    E == type_error(json_term, point(1, 2)).
+% --8<-- [end:generate_kinds]
