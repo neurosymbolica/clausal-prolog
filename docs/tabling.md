@@ -4,14 +4,9 @@ Tabling memoises subgoal calls and their computed answers. when a recursive call
 
 The implementation lives in `clausal.logic.tabling`.
 
-!!! note "Seam vs Prolog syntax"
-
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+Examples on this page are [Clausal Prolog](clausal_prolog.md) (`.clausal`). The
+Python examples run in a [seam](syntax.md) (`.seam`) file, Clausal's
+Python-syntax surface, which spells the directive `-table(path/2)`.
 
 ---
 
@@ -19,18 +14,22 @@ The implementation lives in `clausal.logic.tabling`.
 
 Plain SLD resolution (depth-first, left-to-right) diverges on left-recursive definitions. Consider transitive closure over an acyclic graph:
 
-```seam
--table(path/2)
+```clausal
+:- table(path/2).
 
-edge(1, 2),
-edge(2, 3),
-edge(3, 4),
+edge(1, 2).
+edge(2, 3).
+edge(3, 4).
 
-path(X, Y) <- edge(X, Y)
-path(X, Y) <- (
+path(X, Y) :-
+    edge(X, Y).
+path(X, Y) :-
     path(X, Z),
-    edge(Z, Y)
-)
+    edge(Z, Y).
+
+test("terminates on left recursion") :-
+    findall(Y, path(1, Y), YS),
+    YS == [2, 3, 4].
 ```
 
 The second clause is *left-recursive*: the first body goal is `path` itself. Without tabling, `path(1, Y)` immediately recurses on `path(1, Z)`, which recurses on `path(1, Z2)`, ad infinitum — even though the graph has no cycles and the answer set is finite.
@@ -44,26 +43,42 @@ Other classic programs that require tabling:
 
 ## Using tabling
 
-Mark a predicate as tabled with the [`-table` directive](directives.md):
+Mark a predicate as tabled with the [`table` directive](directives.md):
 
-```seam
--table(path/2)
+```clausal
+:- table(path/2).
 
-path(X, Y) <- edge(X, Y)
-path(X, Y) <- (
+edge(1, 2).
+
+path(X, Y) :-
+    edge(X, Y).
+path(X, Y) :-
     path(X, Z),
-    edge(Z, Y)
-)
+    edge(Z, Y).
 ```
 
-The directive must appear before any clauses for that predicate. Multiple predicates can be tabled in the same module:
+Put the directive before the predicate's clauses, by convention (it also takes effect when written after them). Multiple predicates can be tabled in the same module, here two that call each other over a cyclic graph:
 
-```seam
--table(reach_a/2)
--table(reach_b/2)
+```clausal
+:- table(reach_a/2).
+:- table(reach_b/2).
 
-reach_a(X, X),
-reach_b(X, X),
+link_a(1, 2).
+link_b(2, 1).
+
+reach_a(X, X).
+reach_a(X, Y) :-
+    link_a(X, Z),
+    reach_b(Z, Y).
+
+reach_b(X, X).
+reach_b(X, Y) :-
+    link_b(X, Z),
+    reach_a(Z, Y).
+
+test("mutual recursion terminates") :-
+    findall(Y, reach_a(1, Y), YS),
+    msort(YS, [1, 2]).
 ```
 
 Tabled predicates are queried exactly like non-tabled ones — the tabling wrapper is transparent. In a `.seam` file, query with the goal-position seam:
@@ -79,16 +94,26 @@ From a plain `.py` file (which cannot use `--`), use `solve(goal, module=m)` or 
 
 ### Invalidation
 
-Tabled answers are cached for the lifetime of the module. If the underlying clauses change (via [`assertz`, `asserta`, or `retract`](database_ops.md) on a tabled predicate — which must be declared `-dynamic`), all cached answers for that predicate are automatically invalidated. The next query recomputes from scratch.
+Tabled answers are cached for the lifetime of the module. If the underlying clauses change (via [`assertz`, `asserta`, or `retract`](database_ops.md) on a tabled predicate — which must be declared `dynamic`), all cached answers for that predicate are automatically invalidated. The next query recomputes from scratch.
 
 To invalidate manually, call the builtins:
 
-```python
-if --abolish_table(path, 2): ...     # clear one predicate's cache
-if --abolish_all_tables(): ...       # clear all
+```clausal
+:- table(path/2).
+
+edge(1, 2).
+
+path(X, Y) :-
+    edge(X, Y).
+
+test("abolish, then recompute") :-
+    path(1, 2),
+    abolish_table(path, 2),        % clear one predicate's cache
+    abolish_all_tables,            % clear all
+    path(1, 2).
 ```
 
-The same builtins work in a clause body (`abolish_all_tables()` — a zero-arity builtin goal is written with parentheses). The `Database` object also has `abolish_table(functor, arity)` / `abolish_all_tables()` methods, but `Database` is internal (see [Public API](public-api.md)).
+From Python, in a `.seam` file, the same builtins run in goal position: `if --abolish_table(path, 2): ...` (the seam writes the zero-arity goal with parentheses, `abolish_all_tables()`). The `Database` object also has `abolish_table(functor, arity)` / `abolish_all_tables()` methods, but `Database` is internal (see [Public API](public-api.md)).
 
 ---
 
@@ -217,9 +242,9 @@ The same builtins work in a clause body (`abolish_all_tables()` — a zero-arity
 
 ### Directive handling
 
-The `-table(pred/arity)` directive is parsed by the [import hook](import.md) alongside `-dynamic` and `-discontiguous`. It calls `db.mark_tabled(functor, arity)`, which records the predicate in `Database._tabled`.
+The `table(pred/arity)` directive (the seam's `-table(pred/arity)`) is parsed by the [import hook](import.md) alongside `dynamic` and `discontiguous`. It calls `db.mark_tabled(functor, arity)`, which records the predicate in `Database._tabled`.
 
-The target must be a predicate the declaring module compiles — one with clauses there, or a `-dynamic` one that will get them. `-table` on an imported predicate, on a `-specialize` alias, or on a clause-less declaration is refused at load by `compiler_v2._refuse_untablable_target`, because marking `Database._tabled` in a module that never compiles the predicate wraps nothing at all.
+The target must be a predicate the declaring module compiles — one with clauses there, or a `dynamic` one that will get them. `table` on an imported predicate, on a seam `-specialize` alias, or on a clause-less declaration is refused at load by `compiler_v2._refuse_untablable_target`, because marking `Database._tabled` in a module that never compiles the predicate wraps nothing at all.
 
 ### Compilation pipeline
 
@@ -258,49 +283,62 @@ The [architecture doc](architecture.md) notes that tabling is easier on generato
 
 ## Well-founded semantics
 
-when a program recurses through negation — e.g. `win(X) <- move(X, Y) and not win(Y)` with symmetric moves — standard NAF gives unsound answers because it checks immediately whether the negated goal succeeds, but that goal is still being evaluated (circular dependency). [Well-Founded Semantics (WFS)](wfs.md) provides a principled three-valued semantics (true / false / undefined) that handles this correctly.
+when a program recurses through negation — e.g. `win(X) :- move(X, Y), \+ win(Y).` with symmetric moves — standard NAF gives unsound answers because it checks immediately whether the negated goal succeeds, but that goal is still being evaluated (circular dependency). [Well-Founded Semantics (WFS)](wfs.md) provides a principled three-valued semantics (true / false / undefined) that handles this correctly.
 
 ### How it works
 
-when evaluating `not P(args)` where `P` is tabled:
+when evaluating `\+ P(args)` where `P` is tabled:
 
 - **Complete table**: standard NAF — check if any answer matches, negate.
 - **Evaluating table** (cycle detected): **delay** the negation. The derivation continues conditionally — the answer is recorded with a `DelayedNegation` condition attached.
 
 After the SLG leader finishes driving all consumers and no new answers appear, `_resolve_conditions` runs:
 
-1. Delayed `not P(args)` targeting a completed table with no matching answer → negation **true** → condition removed (answer becomes unconditional).
-2. Delayed `not P(args)` targeting a completed table with an unconditional matching answer → negation **false** → answer invalidated.
+1. Delayed `\+ P(args)` targeting a completed table with no matching answer → negation **true** → condition removed (answer becomes unconditional).
+2. Delayed `\+ P(args)` targeting a completed table with an unconditional matching answer → negation **false** → answer invalidated.
 3. Remaining conditional answers form **unfounded sets** — truth value **undefined**.
 
 ### Example: symmetric game
 
-```seam
--table(win/1)
+```clausal
+:- table(win/1).
 
-move(1, 2),
-move(2, 1),
+move(1, 2).
+move(2, 1).
 
-win(X) <- (move(X, Y), not win(Y))
+win(X) :-
+    move(X, Y),
+    \+ win(Y).
+
+% Both answers are undefined; a plain query yields them unmarked.
+test("both positions answer") :-
+    findall(X, win(X), XS),
+    msort(XS, [1, 2]).
 ```
 
 `win(1)` depends on `not win(2)`, and `win(2)` depends on `not win(1)`. Both are unfounded — WFS assigns truth value `undefined` to both.
 
 ### Example: asymmetric game
 
-```seam
--table(win/1)
+```clausal
+:- table(win/1).
 
-move('a', 'b'),
-move('b', 'a'),
-move('a', 'c'),
+move(a, b).
+move(b, a).
+move(a, c).
 
-win(X) <- (move(X, Y), not win(Y))
+win(X) :-
+    move(X, Y),
+    \+ win(Y).
+
+test("a wins, b and c do not") :-
+    findall(X, win(X), XS),
+    XS == [a].
 ```
 
-- `win('c')` = false (no moves from `'c'`)
-- `win('a')` = true (via `move('a', 'c')`, `not win('c')` succeeds)
-- `win('b')` = false (`not win('a')` fails because `win('a')` is true)
+- `win(c)` = false (no moves from `c`)
+- `win(a)` = true (via `move(a, c)`, `\+ win(c)` succeeds)
+- `win(b)` = false (`\+ win(a)` fails because `win(a)` is true)
 
 ### Truth value inspection
 
@@ -308,7 +346,7 @@ win(X) <- (move(X, Y), not win(Y))
 
 ### Compiler integration
 
-The compiler detects a negated call to a tabled predicate (`not p(...)`) and emits:
+The compiler detects a negated call to a tabled predicate (`\+ p(...)`) and emits:
 
 ```python
 _m = trail.mark()
@@ -371,7 +409,7 @@ Non-tabled predicates fall through to the existing inline NAF codegen (no behavi
     - Positive-only regression: tabled fib and cyclic path still work
     - Complete table NAF: immediate check on complete table
     - Symmetric win/move: both win(1) and win(2) are undefined
-    - Asymmetric win/move: win('a') is true
+    - Asymmetric win/move: win(a) is true
     - No negation cycle: tabled with NAF but no cycle → standard behavior
     - `query_wfs` API: returns list with truth annotations
 
@@ -382,7 +420,7 @@ Non-tabled predicates fall through to the existing inline NAF codegen (no behavi
     - `tests/fixtures/tabled_same_gen.seam` — same-generation problem
     - `tests/fixtures/tabled_mutual_rec.seam` — mutual recursion via alternating link types
     - `tests/fixtures/wfs_win.seam` — symmetric win/move (WFS: both undefined)
-    - `tests/fixtures/wfs_win_asym.seam` — asymmetric win/move (WFS: win('a') true)
+    - `tests/fixtures/wfs_win_asym.seam` — asymmetric win/move (WFS: win(a) true)
 
 ---
 
