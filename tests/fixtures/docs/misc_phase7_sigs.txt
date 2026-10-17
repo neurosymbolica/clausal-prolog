@@ -19,7 +19,8 @@ wins(X) <- (move(X, Y), (not wins(Y)))
 # === testing.md ===
 
 --8<-- [start:test_syntax]
-test("description") <- goal1, goal2, ...
+test(name) :- Goal1, Goal2, ...
+test("a description") :- Goal1, Goal2, ...
 --8<-- [end:test_syntax]
 
 --8<-- [start:test_output]

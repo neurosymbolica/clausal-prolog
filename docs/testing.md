@@ -1,46 +1,52 @@
 # Testing
 
-Clausal Prolog has two kinds of tests: Python-level pytest tests in `tests/`, and inline `test/1` clauses in source files: seam (`.seam`), [Clausal Prolog](clausal_prolog.md) (`.clausal`), and Prolog `.pl` files (through the [Prolog importer](importing_prolog.md)).
+Clausal Prolog has two kinds of tests: Python-level pytest tests in `tests/`, and inline `test/1` clauses in source files: [Clausal Prolog](clausal_prolog.md) (`.clausal`), seam (`.seam`), and Prolog `.pl` files (through the [Prolog importer](importing_prolog.md)). Examples on this page are Clausal Prolog.
 
 ## Inline `test/1` clauses
 
-Any seam (`.seam`) file (see [Syntax](syntax.md)) can include test clauses of the form:
+Any source file can include test clauses of the form:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:test_syntax"
 ```
 
-In a Clausal Prolog (`.clausal`) or `.pl` file the name is a lowercase atom, `test(fib_5) :- fib(5, 5).`, which is the primary spelling. A string name, `test("fib(5) = 5") :- ...`, also loads and is accepted. In a seam file the name is a string, as below.
+In a Clausal Prolog (`.clausal`) or `.pl` file the name is a lowercase atom, `test(fib_5) :- fib(5, 5).`, which is the primary spelling. A string name, `test("fib(5) = 5") :- ...`, also loads and is accepted; the examples on this page use it for readable names. In a [seam](syntax.md) file the name is a string: `test("fib(5) = 5") <- fib(5, 5)`.
 
 A test passes if its body succeeds (produces at least one solution); a body that raises fails the test and reports the error. The head is `test/1`, lowercase like every predicate name: the old `Test/1` spelling is now a load-time error (TitleCase names have no role in Clausal Prolog), and the runner names the rename. Tests live alongside the predicates they exercise:
 
-```seam
-fib(0, 0),
-fib(1, 1),
-fib(N, F) <- (
-    N > 1,
-    N1 == N - 1,
-    N2 == N - 2,
+```clausal
+:- use_module(library(clpz)).
+
+fib(0, 0).
+fib(1, 1).
+fib(N, F) :-
+    N #> 1,
+    N1 #= N - 1,
+    N2 #= N - 2,
     fib(N1, F1),
     fib(N2, F2),
-    F == F1 + F2
-)
+    F #= F1 + F2.
 
-test("fib(5) = 5") <- fib(5, 5)
-test("fib(7) = 13") <- (fib(7, F), F == 13)
+test("fib(5) = 5") :-
+    fib(5, 5).
+
+test("fib(7) = 13") :-
+    fib(7, F),
+    F == 13.
 ```
 
 ### Negative tests: `test(Name, fail)`
 
-A test that must find **no** solution is plunit's `test/2` with the option `fail`. It passes iff its body has no solution; a body that succeeds fails the test (reported as `test(..., fail) succeeded`), and a body that raises is an error, as for `test/1`. The seam spelling is the same term:
+A test that must find **no** solution is plunit's `test/2` with the option `fail`. It passes iff its body has no solution; a body that succeeds fails the test (reported as `test(..., fail) succeeded`), and a body that raises is an error, as for `test/1`:
 
-```seam
-parent("tom", "bob"),
+```clausal
+parent(tom, bob).
 
-test("bob is not tom's parent", fail) <- parent("bob", "tom")
+test(bob_is_not_toms_parent, fail) :-
+    parent(bob, tom).
 ```
 
-and a `.pl` file writes it as plunit does: `test(no_cycle, fail) :- parent(bob, tom).` `fail` is the only option supported. Any other option -- `true(Cond)`, `throws(Error)`, `nondet`, `blocked(Reason)`, `setup(Goal)` and the rest of plunit's list, or a list of options -- is a collection error naming the option: the file is one failing `<collect>` item (`<collect>` in the CLI report too), never a silently skipped test.
+A `.pl` file writes it the same way, as plunit does, and the seam spelling is the same term: `test("bob is not tom's parent", fail) <- parent("bob", "tom")`. `fail` is the only option supported. Any other option -- `true(Cond)`, `throws(Error)`, `nondet`, `blocked(Reason)`, `setup(Goal)` and the rest of plunit's list, or a list of options -- is a collection error naming the option: the file is one failing `<collect>` item (`<collect>` in the CLI report too), never a silently skipped test.
 
 ## Running `test/1` tests standalone
 
@@ -94,7 +100,7 @@ A `.pl` file the front end rejects (a syntax error, or a refused construct such 
 
 ## Running `test/1` tests via pytest
 
-The `conftest.py` at the project root registers a pytest plugin that automatically collects `.seam` files, `.clausal` files, Prolog `.pl` files (through the Prolog importer; a file that does not load is one failing `<load>` item), and also every ```` ```seam ```` block (or its older alias ```` ```clausal ````) in `docs/*.md` that contains a `test/1` clause. The [import hook](import.md) handles loading and compilation. Each `test/1` clause appears as an individual pytest item:
+The `conftest.py` at the project root registers a pytest plugin that automatically collects `.seam` files, `.clausal` files, Prolog `.pl` files (through the Prolog importer; a file that does not load is one failing `<load>` item), and also every ```` ```clausal ```` block (loaded as Clausal Prolog) and ```` ```seam ```` block (loaded as seam) in `docs/*.md`: each `test/1` clause in a block is an item, and a block without one is checked to load. The [import hook](import.md) handles loading and compilation. Each `test/1` clause appears as an individual pytest item:
 
 ```bash
 python -m pytest clausal/examples/fibonacci.seam -v
@@ -102,7 +108,7 @@ python -m pytest clausal/examples/fibonacci.seam -v
 
 Output looks like:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:test_output"
 ```
 
@@ -116,12 +122,12 @@ python -m pytest tests/ -q
 
 ## Writing good `test/1` clauses
 
-- Each test should be a single rule with a descriptive string as the argument.
+- Each test should be a single rule with a descriptive name.
 - Test bodies can use any predicates defined in the module, plus [builtins](predicates.md) like `append`, `in_`, `member`, etc.
-- Use `==` for [CLP(ℤ)](constraints.md) arithmetic equality on computed results: `test("check") <- (some_pred(X), X == 13)`. For ground numbers this behaves like equality; for Vars it posts a constraint (see [Arithmetic](arithmetic.md) for what `/` means there).
-- Use `X is TERM` to unify with a non-numeric expected answer: `test("colour") <- (colour_of(apple, C), C is red)`.
-- Use `structural_eq(X, Y)` for structural equality (Prolog `==/2`) when comparing non-integer terms.
-- Use `==` for [arithmetic](arithmetic.md): `test("arith") <- (N == 2 + 3, N == 5)`.
+- Use `==` to check a computed result that is already bound, numeric or not: `test(check) :- some_pred(X), X == 13.`
+- Use `=` to unify with an expected answer: `test(colour) :- colour_of(apple, C), C = red.`
+- Use [CLP(ℤ)](constraints.md) for arithmetic, with `:- use_module(library(clpz)).`: `test(arith) :- N #= 2 + 3, N #= 5.` ISO `N is 2 + 3, N =:= 5` also works when the right-hand side is ground (see [Arithmetic](arithmetic.md)).
+- In the seam, bare `==` is the CLP(ℤ) constraint, `X is T` unifies, and `structural_eq(X, Y)` is ISO `==`.
 
 ---
 
