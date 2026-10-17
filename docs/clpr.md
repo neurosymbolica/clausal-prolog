@@ -7,32 +7,31 @@ The implementation lives in `clausal/logic/clpr.py`.
 !!! note
     For CLP(ℤ) (integer constraints over all integers), see [Constraints](constraints.md). For CLP(B) (Boolean constraints), see [CLP(B)](clpb.md).
 
-!!! note "Seam vs Prolog syntax"
+!!! note "Clausal Prolog and the seam"
 
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+    Examples on this page are [Clausal Prolog](clausal_prolog.md)
+    (`.clausal`, ISO Prolog syntax). The constraint operators are CLP(ℤ)'s
+    `#=` family, loaded with `:- use_module(library(clpz)).`; `in_real/1,3`,
+    `label_real/1,2`, `inf/2` and `sup/2` are builtins. The [seam](syntax.md)
+    spells the same constraints with its bare `==`, `!=`, `<`, `<=`, ....
 
 ---
 
 ## Unified syntax
 
-Clausal Prolog's [comparison operators](arithmetic.md) are shared between CLP(ℤ) and CLP(ℝ). The domain is determined by how variables are declared (or inferred from float literals), not by which operator is used:
+The [constraint operators](arithmetic.md) are shared between CLP(ℤ) and CLP(ℝ). The domain is determined by how variables are declared (or inferred from float literals), not by which operator is used:
 
-| Operator | CLP(ℤ) meaning | CLP(ℝ) meaning |
-|---|---|---|
-| `==` | integer equality | real equality |
-| `!=` | integer disequality | real disequality |
-| `<` `>` `<=` `>=` | integer comparisons | real comparisons |
+| Operator | CLP(ℤ) meaning | CLP(ℝ) meaning | Seam spelling |
+|---|---|---|---|
+| `#=` | integer equality | real equality | `==` |
+| `#\=` | integer disequality | real disequality | `!=` |
+| `#<` `#>` `#=<` `#>=` | integer comparisons | real comparisons | `<` `>` `<=` `>=` |
 
 **Dispatch rule:** if either operand is a `float` literal or a variable declared with `in_real`, the constraint goes to CLP(ℝ). Otherwise it goes to CLP(ℤ).
 
-This means `X * X == 2.0` (with undeclared `X`) automatically enters CLP(ℝ) because `2.0` is a float. No special operators or brace syntax needed.
+This means `X * X #= 2.0` (with undeclared `X`) automatically enters CLP(ℝ) because `2.0` is a float: it narrows `X` to about `[-1.41421, 1.41421]`. No special operators or brace syntax needed.
 
-Inside a constraint a bare `/` is **exact rational** division (see [Operators](operators.md)), so an integer quotient belongs to [CLP(Q)](clpq.md), not CLP(ℝ): `in_real(X), X == 7 / 2` raises `TypeError: cannot mix CLP(Q) rational and CLP(R) float in the same constraint`. Give a real constraint a float operand, `X == 7.0 / 2`. A zero divisor inside a constraint makes it fail (`X == 1.0 / 0` has no solutions); only evaluation raises `evaluation_error(zero_divisor)`.
+Inside a `#=` constraint between integers, `/` is CLP(ℤ)'s exact division: `X #= 6 / 2` gives `X = 3`, and `X #= 7 / 2` has no solution, even for a real `X` (`in_real(X), X #= 7 / 2` fails). Give a real constraint a float operand, `X #= 7.0 / 2` (`X = 3.5`). (In the seam a bare `/` inside a constraint is exact rational division instead, so there `in_real(X), X == 7 / 2` raises `TypeError: cannot mix CLP(Q) rational and CLP(R) float in the same constraint`; see [Operators](operators.md).) A zero divisor inside a constraint makes it fail (`X #= 1.0 / 0` has no solutions); only evaluation raises `evaluation_error(zero_divisor)` (`X is 1.0 / 0`).
 
 ---
 
@@ -51,7 +50,7 @@ Inside a constraint a bare `/` is **exact rational** division (see [Operators](o
 
 Declares one or more real variables. If the variable already has a real domain, intersects with the new bounds. Fails if the intersection is empty.
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/clpr_sigs.txt:in_real_1_and_in_real_3"
 ```
 
@@ -59,7 +58,7 @@ Declares one or more real variables. If the variable already has a real domain, 
 
 Bisects intervals using a **widest-first** strategy (the variable with the largest interval is bisected first, analogous to largest-domain-first in CLP(ℤ)).
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/clpr_sigs.txt:label_real_1_and_label_real_2"
 ```
 
@@ -97,14 +96,18 @@ whose bounds propagation fixed, but interval arithmetic can make it looser
 than the true infimum (`X - X` over `[0, 1]` is `[-1, 1]`). A non-linear
 `Expr` is accepted and bounded the same way.
 
-```seam
-test("inf and sup read the interval") <- (
+```clausal
+:- use_module(library(clpz)).
+
+test("inf and sup read the interval") :-
     in_real(X, 0.0, 10.0),
     in_real(Y, 0.0, 5.0),
-    X + Y == 12.0,
-    sup(X, S), S == 10.0,
-    inf(2 * Y, I), I <= 4.0, I >= 3.9999
-)
+    X + Y #= 12.0,
+    sup(X, S),
+    S == 10.0,
+    inf(2 * Y, I),
+    I =< 4.0,
+    I >= 3.9999.
 ```
 
 `inf/2` and `sup/2` answer from CLP(ℝ) when `Expr` mentions a real
@@ -117,7 +120,12 @@ goal fails rather than mixing the two solvers. A term that is not arithmetic rai
 
 ### Module API
 
-CLP(R) constraints can also be posted via the `clpr` module namespace using constraint blocks:
+CLP(R) constraints can also be posted via the `clpr` module namespace using
+constraint blocks. This API reads seam constraint syntax (Python operators,
+chained comparisons), so it is seam-only: from Clausal Prolog, post the same
+constraints with `in_real/3` and the `#=` family as above. (A Clausal Prolog
+call `clpr:real((X =< 2.0))` raises `TypeError: clpr constraint block:
+unsupported node`.) The seam spelling:
 
 ```seam
 circle(X, Y) <- (
@@ -144,42 +152,42 @@ Inside the constraint block, standard Python operators are interpreted as real-d
 
 ### Linear constraints
 
-```seam
---8<-- "tests/fixtures/docs/clpr_sigs.txt:linear_constraints"
+```clausal
+--8<-- "tests/fixtures/docs/clpr_examples.clausal:linear_constraints"
 ```
 
 ### Non-linear constraints
 
-```seam
---8<-- "tests/fixtures/docs/clpr_sigs.txt:non_linear_constraints"
+```clausal
+--8<-- "tests/fixtures/docs/clpr_examples.clausal:non_linear_constraints"
 ```
 
-```seam
---8<-- "tests/fixtures/docs/clpr_sigs.txt:non_linear_constraints_ex2"
+```clausal
+--8<-- "tests/fixtures/docs/clpr_examples.clausal:non_linear_constraints_ex2"
 ```
 
 ### Mixed FD and real
 
 Integer and real variables can appear together. when an FD variable is involved in a real constraint, a real interval is added alongside the existing FD domain — both attributes coexist on the same variable:
 
-```seam
---8<-- "tests/fixtures/docs/clpr_sigs.txt:mixed_fd_and_real"
+```clausal
+--8<-- "tests/fixtures/docs/clpr_examples.clausal:mixed_fd_and_real"
 ```
 
-In this example, `HOURS` keeps its FD domain `{1..8}` even after participating in the real constraint `COST >= HOURS * 12.5`. The FD domain enforces integrality and holes, while the real interval handles continuous narrowing. Both hooks fire independently on unification — the variable is only valid if both agree.
+In this example, `Hours` keeps its FD domain `1..8` even after participating in the real constraint `Cost #>= Hours * 12.5`. The FD domain enforces integrality and holes, while the real interval handles continuous narrowing. Both hooks fire independently on unification — the variable is only valid if both agree.
 
 You can also add an FD domain to a variable that already has a real interval:
 
-```seam
---8<-- "tests/fixtures/docs/clpr_sigs.txt:mixed_fd_and_real_ex2"
+```clausal
+--8<-- "tests/fixtures/docs/clpr_examples.clausal:mixed_fd_and_real_ex2"
 ```
 
 The FD domain is automatically narrowed against the real interval (and vice versa), so the tightest bounds from either domain are always used.
 
 ### Float literals trigger CLP(ℝ) automatically
 
-```seam
---8<-- "tests/fixtures/docs/clpr_sigs.txt:float_literals_trigger_clp"
+```clausal
+--8<-- "tests/fixtures/docs/clpr_examples.clausal:float_literals_trigger_clp"
 ```
 
 ---
@@ -311,7 +319,7 @@ The FD domain is automatically narrowed against the real interval (and vice vers
 
     **Labeling order matters.** If a variable has both FD and real attributes, use `label` (FD) to enumerate integer values. `label_real` bisects the continuous interval and does not enforce integrality — it will find non-integer points within the interval. For mixed-domain variables, label with FD first to fix the integer value, then use `label_real` for any remaining real variables.
 
-    **Large integers lose precision in float.** when an FD variable participates in a real constraint, its bounds are converted to IEEE doubles. Integers beyond 2^53 cannot be represented exactly as floats. For ground integer-integer comparisons (e.g., `X == Y` where both are bound to ints), the comparison is done exactly without float conversion. But during interval propagation, the float approximation is used.
+    **Large integers lose precision in float.** when an FD variable participates in a real constraint, its bounds are converted to IEEE doubles. Integers beyond 2^53 cannot be represented exactly as floats. For ground integer-integer comparisons (e.g., `X #= Y` where both are bound to ints), the comparison is done exactly without float conversion. But during interval propagation, the float approximation is used.
 
 ---
 

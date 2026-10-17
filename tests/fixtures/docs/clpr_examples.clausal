@@ -1,0 +1,115 @@
+% Doc snippet fixtures for docs/clpr.md
+
+% --8<-- [start:linear_constraints]
+:- use_module(library(clpz)).   % the #= family of constraint operators
+
+% Two-variable linear system: 2x + 3y = 12, x - y = 1
+linear_system(X, Y) :-
+    in_real(X, -100.0, 100.0),
+    in_real(Y, -100.0, 100.0),
+    2.0 * X + 3.0 * Y #= 12.0,
+    X - Y #= 1.0,
+    label_real([X, Y], 1.0e-9).
+% → X ≈ 3.0, Y ≈ 2.0
+% --8<-- [end:linear_constraints]
+
+% --8<-- [start:non_linear_constraints]
+% Unit circle (first quadrant)
+unit_circle(X, Y) :-
+    in_real(X, 0.0, 1.0),
+    in_real(Y, 0.0, 1.0),
+    X * X + Y * Y #= 1.0,
+    label_real([X, Y], 1.0e-9).
+% → points on the quarter circle, one per bisection leaf;
+%   the first is X ≈ 0.0, Y ≈ 1.0
+% --8<-- [end:non_linear_constraints]
+
+% --8<-- [start:non_linear_constraints_ex2]
+% Square root: find x where x^2 = 2
+sqrt2(X) :-
+    in_real(X, 0.0, 2.0),
+    X * X #= 2.0,
+    label_real([X], 1.0e-12).
+% → X ≈ 1.4142135623730951
+% --8<-- [end:non_linear_constraints_ex2]
+
+% --8<-- [start:mixed_fd_and_real]
+% Worker schedule: integer hours, real cost
+task(Hours, Cost) :-
+    Hours in 1..8,                  % integer hours (CLP(ℤ))
+    in_real(Cost, 10.0, 100.0),     % real cost (CLP(ℝ))
+    Cost #>= Hours * 12.5,          % mixes FD + real
+    Hours #=< 6,
+    label([Hours]),
+    label_real([Cost], 1.0e-6).
+% --8<-- [end:mixed_fd_and_real]
+
+% --8<-- [start:mixed_fd_and_real_ex2]
+% Start with a real constraint, then restrict to integers
+mixed(X) :-
+    in_real(X, 0.0, 100.0),
+    X * X #=< 50.0,
+    X in 1..10,                     % adds FD domain alongside real
+    label([X]).
+% --8<-- [end:mixed_fd_and_real_ex2]
+
+% --8<-- [start:float_literals_trigger_clp]
+% The float literal 25.0 puts the equation in CLP(ℝ); in_real only sets the bounds
+pythagorean_real(X, Y) :-
+    in_real(X, 0.0, 10.0),
+    in_real(Y, 0.0, 10.0),
+    X * X + Y * Y #= 25.0,
+    label_real([X, Y], 1.0e-6).
+% --8<-- [end:float_literals_trigger_clp]
+
+% Validates the examples. label_real/2 narrows, it does not bind, so each
+% test reads the interval with inf/2 and sup/2. A bisection has very many
+% leaves, so each labelling test takes the first answer only, with once/1.
+near(V, Target, Tol) :-
+    inf(V, L),
+    sup(V, H),
+    abs((L + H) / 2 - Target) =< Tol.
+
+on_circle(X, Y, R2, Tol) :-
+    inf(X, XL), sup(X, XH),
+    inf(Y, YL), sup(Y, YH),
+    MX is (XL + XH) / 2,
+    MY is (YL + YH) / 2,
+    abs(MX * MX + MY * MY - R2) =< Tol.
+
+test("linear system") :-
+    once(linear_system(X, Y)),
+    near(X, 3.0, 1.0e-6),
+    near(Y, 2.0, 1.0e-6).
+
+test("unit circle: the first point") :-
+    once(unit_circle(X, Y)),
+    on_circle(X, Y, 1.0, 1.0e-6),
+    near(X, 0.0, 1.0e-6),
+    near(Y, 1.0, 1.0e-6).
+
+test("sqrt2") :-
+    once(sqrt2(X)),
+    inf(X, L),
+    sup(X, H),
+    L =< 1.4142135623730951,
+    1.4142135623730951 =< H,
+    H - L =< 1.0e-12.
+
+test("task: the first schedule") :-
+    once(task(Hours, Cost)),
+    Hours == 1,
+    near(Cost, 12.5, 1.0e-6).
+
+test("task keeps the FD domain of Hours") :-
+    findall(H, (H in 1..8, H #=< 6, in_real(C, 10.0, 100.0),
+                C #>= H * 12.5, label([H])), Hs),
+    Hs == [1, 2, 3, 4, 5, 6].
+
+test("mixed: integers with X*X =< 50") :-
+    findall(X, mixed(X), Xs),
+    Xs == [1, 2, 3, 4, 5, 6, 7].
+
+test("pythagorean_real: the first point") :-
+    once(pythagorean_real(X, Y)),
+    on_circle(X, Y, 25.0, 1.0e-4).
