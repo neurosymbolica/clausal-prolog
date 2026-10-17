@@ -10,60 +10,91 @@ with **no implicit conversion** (exchange rates are not constants).
 
 This page is the integration guide. If you are converting existing rules to use currency,
 read [Applying currency to existing rules](#applying-currency-to-existing-rules) first.
-Arithmetic in general (what `/`, `//`, `rdiv` and `eval_/2` do) is documented in
+Arithmetic in general (what `/`, `//`, `rdiv` and `is/2` do; the seam's `eval_/2`) is documented in
 [Arithmetic](arithmetic.md) and [Operators](operators.md); this page covers only what a
 currency adds.
 
-!!! note "Seam vs Prolog syntax"
+Examples on this page are [Clausal Prolog](clausal_prolog.md) (`.clausal`),
+which uses ISO Prolog syntax. Three things about money read differently there
+than in the [seam](syntax.md), and the page relies on them throughout:
 
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+- **An amount is declared, never written inline.** The seam writes an amount
+  as a literal, `7.89(euro)`; `.clausal` has no quantity literal (`7.89(euro)`
+  is a syntax error there). An amount comes from a declaration,
+  `:- constant_number_currency(price, "7.89", euro).`, and a rule refers to it
+  as `constant(price)`, which is replaced at compile time. Tables
+  (`constants_number_currency`), `money/3` and arithmetic on declared amounts
+  make the rest. In prose and in the `text` tables on this page, `7.89(euro)`
+  is shorthand for "the amount 7.89 euro".
+- **Arithmetic is ISO `is/2`.** The seam's `eval_(E, X)` is `X is E`.
+- **A currency's name in a goal is an atom.** A currency imported with
+  `use_module` is the unit in a declaration, but `euro` written in a rule body
+  is just the atom `euro`, and the predicates that take a currency
+  (`money/3`, `currency_scale/2`, `compatible_units/2`, …) refuse it with
+  `type_error(currency, euro)`. Look the currency up by its code instead:
+  `currency_code(EURO, eur)` binds `EURO` to the currency.
 
 ---
 
 ## Quick start
 
-A `.seam` file (the Python-syntax seam, hosting Python) declares the rules and
-queries them from Python with a goal-position `--`:
+A `.clausal` module declares the amounts and the rules over them:
 
-```seam
--module(shop, [])
--import_from(european_union, [euro])
--import_from(currency, [money_round, money_str, money_format])
--private([half_up, half_even, symbol])   # rounding modes and styles are atoms
+```clausal
+:- module(shop, [price/1, total/1, show/1, rounded/1, sym/1]).
+:- use_module(library(countries/european_union), [euro]).
+:- use_module(library(currency),
+              [money_round/3, money_str/3, money_format/4]).
 
-from clausal import to_python
+% declare an amount: name, value, currency; the value is an exact Decimal
+:- constant_number_currency(list_price, "7.89", euro).
+:- constant_number_currency(a, "0.1", euro).
+:- constant_number_currency(b, "0.2", euro).
+:- constant_number_currency(ten, "10.00", euro).
 
-# write an amount: value(currency); the value is an exact Decimal
-price(P) <- eval_(7.89(euro), P)
+price(P) :-
+    P is constant(list_price).
 
-# arithmetic keeps full precision; same currency only
-total(T) <- eval_(0.1(euro) + 0.2(euro), T)
+% arithmetic keeps full precision; same currency only
+total(T) :-
+    T is constant(a) + constant(b).
 
-# round and display with an EXPLICIT mode
-show(S) <- (total(T), money_str(T, half_up, S))
-rounded(R) <- (eval_(10.00(euro) / 3, Q), money_round(Q, half_even, R))
-sym(S) <- (price(P), money_format(P, symbol, half_up, S))
+% round and display with an EXPLICIT mode
+show(S) :-
+    total(T),
+    money_str(T, half_up, S).
 
-def main():
-    for T in --total(T):
-        print(T)                 # 0.3 (euro)   magnitude Decimal('0.3'), no float anywhere
-    for R in --rounded(R):
-        print(R)                 # 3.33 (euro)
-    for S in --show(S):
-        print(to_python(S))      # 0.30 EUR     money_str answers a string
-    for S in --sym(S):
-        print(S)                 # €7.89        money_format answers an atom (a str)
+rounded(R) :-
+    Q is constant(ten) / 3,
+    money_round(Q, half_even, R).
+
+sym(S) :-
+    price(P),
+    money_format(P, symbol, half_up, S).
+
+test("total is exact") :-
+    total(T),
+    T =:= constant(a) + constant(b).      % 0.3 (euro), magnitude Decimal('0.3')
+
+test("rounded") :-
+    rounded(R),
+    money_str(R, half_even, "3.33 EUR").  % R = 3.33 (euro)
+
+test("money_str answers a string") :-
+    show(S),
+    S == "0.30 EUR".
+
+test("money_format answers an atom") :-
+    sym(S),
+    S == '€7.89'.
+
+:- end_module(shop).
 ```
 
-Rounding modes (`half_up`, …) and display styles (`symbol`, …) are ordinary atoms, so a
-module declares the ones it writes (here with `-private`), as it would any other atom.
-A query runs from a function (`main` above), not at module top level: the module's
-predicates are registered only once the file has finished loading.
+Rounding modes (`half_up`, …) and display styles (`symbol`, …) are ordinary atoms. Python
+queries the module like any other (see [Python Integration](python_integration.md)); a
+`.seam` file can also host the queries with a goal-position `--`, and in the seam the
+amounts can be written inline, `0.1(euro) + 0.2(euro)`.
 
 ---
 
@@ -71,7 +102,8 @@ predicates are registered only once the file has finished loading.
 
 Each currency is defined **once**, in its home **jurisdiction module**, and referenced
 from there. Jurisdiction modules are spelled out (`european_union`, `united_states`, …) —
-never ISO country codes (`is`/`in`/`as` collide with reserved words).
+never ISO country codes (`is`/`in`/`as` collide with reserved words). A `.clausal` file
+imports one as `library(countries/<jurisdiction>)`.
 
 **A currency's identifier names exactly one currency, program-wide.** The everyday word is
 kept when it belongs to a single *current* currency — `euro`, `yen`, `baht`, `sterling`,
@@ -86,23 +118,42 @@ word the system **prints**.
 
 **Single-currency module** — import the bare name and never write the prefix:
 
-```seam
--import_from(japan, [yen])
--constant_number_currency(budget, 1000000, yen)   # a Japanese rule means Japanese yen
+```clausal
+:- use_module(library(countries/japan), [yen]).
+:- constant_number_currency(budget, 1000000, yen).   % a Japanese rule means Japanese yen
+
+test("budget") :-
+    constant_value(budget, B),
+    B =:= constant(budget).
 ```
 
-**Multiple currencies** — import each, or qualify with the jurisdiction:
+**Multiple currencies** — import each:
 
-```seam
--import_from(european_union, [euro])
--import_from(united_states, [usd])
--import_module(united_states)         # enables the qualified form below
+```clausal
+:- use_module(library(countries/european_union), [euro]).
+:- use_module(library(countries/united_states), [usd]).
 
-eu_price(P) <- eval_(10.00(euro), P)
-us_price(P) <- eval_(12.00(united_states.usd), P)   # qualified — same currency as the bare `usd`
+:- constant_number_currency(eu_amount, "10.00", euro).
+:- constant_number_currency(us_amount, "12.00", usd).
+
+eu_price(P) :-
+    P is constant(eu_amount).
+
+us_price(P) :-
+    P is constant(us_amount).
+
+test("prices") :-
+    eu_price(E),
+    us_price(U),
+    E =:= constant(eu_amount),
+    U =:= constant(us_amount).
 ```
 
-Two references to the **same** currency (bare-imported or module-qualified) are the same
+The seam can also qualify a currency with its jurisdiction, `12.00(united_states.usd)`, after
+`-import_module(united_states)`; a `.clausal` declaration takes the bare imported name only
+(`united_states:usd` is refused: "not a unit expression").
+
+Two references to the **same** currency are the same
 dimension and add freely. Two **different** currencies are distinct dimensions and never
 add — `euro + usd` raises [`UnitsMismatch`](#errors-and-catch3).
 
@@ -148,11 +199,22 @@ Where a country reused a currency word across successive currencies, the names a
 discriminated: the **current** one keeps the plain word, and older ones take the
 distinguishing term from their official name, or a date range when only the date differs:
 
-```seam
--import_from(germany, [dem])            # Deutsche Mark (1948–2002), historical
--import_from(zimbabwe, [gold, dollar_1980_2008, dollar_2009_2024])
--import_from(angola,  [kwanza, new_kwanza, readjusted_kwanza])
--import_from(venezuela, [bolivar, bolivar_1871_2008, bolivar_2008_2018])
+```clausal
+:- use_module(library(countries/germany), [dem]).   % Deutsche Mark (1948–2002), historical
+:- use_module(library(countries/zimbabwe),
+              [gold, dollar_1980_2008, dollar_2009_2024]).
+:- use_module(library(countries/angola),
+              [kwanza, new_kwanza, readjusted_kwanza]).
+:- use_module(library(countries/venezuela),
+              [bolivar, bolivar_1871_2008, bolivar_2008_2018]).
+
+:- constant_number_currency(dm_price, "19.99", dem).
+:- constant_number_currency(dm_pfennig, "0.01", dem).
+:- constant_number_currency(dm_total, "20.00", dem).
+
+test("historical amounts add") :-
+    X is constant(dm_price) + constant(dm_pfennig),
+    X =:= constant(dm_total).
 ```
 
 Historical amounts behave exactly like current ones — exact `Decimal`, dimension-safe, the
@@ -163,39 +225,63 @@ same `money_*` predicates. `19.99(dem) + 0.01(dem)` is `20.00(dem)`; `dem + euro
 
 ## Writing amounts
 
-### `value(currency)` — the normal form
+### Declaring an amount — the normal form
 
-```seam
--import_from(european_union, [euro])
--import_from(japan, [yen])
--import_from(bahrain, [bhd])
+```clausal
+:- use_module(library(countries/european_union), [euro]).
+:- use_module(library(countries/japan), [yen]).
+:- use_module(library(countries/bahrain), [bhd]).
+:- use_module(library(currency), [money_str/3]).
 
-a(X) <- eval_(7.89(euro), X)     # X = 7.89 (euro),  magnitude Decimal('7.89')
-b(X) <- eval_(1000(yen), X)      # X = 1000 (yen),   yen has no minor unit
-c(X) <- eval_(1.234(bhd), X)     # X = 1.234 (bhd),  the Bahraini dinar has scale 3
+:- constant_number_currency(a, "7.89", euro).    % 7.89 (euro),  magnitude Decimal('7.89')
+:- constant_number_currency(b, 1000, yen).       % 1000 (yen),   yen has no minor unit
+:- constant_number_currency(c, "1.234", bhd).    % 1.234 (bhd),  the Bahraini dinar has scale 3
+
+% each displays at its currency's own scale
+test("three amounts") :-
+    money_str(constant(a), half_even, "7.89 EUR"),
+    money_str(constant(b), half_even, "1000 JPY"),
+    money_str(constant(c), half_even, "1.234 BHD").
 ```
 
-The written value becomes an **exact `Decimal`** — `7.89(euro)` is exactly 7.89, never the
-binary-float `7.8899999…`. Integers and decimal literals both work.
+The declared value becomes an **exact `Decimal`** — `7.89(euro)` is exactly 7.89, never the
+binary-float `7.8899999…`. Integers, decimal strings and decimal literals all work (see
+[decimal strings](#decimal-strings-declaring-the-digits) for why a string is the exact
+spelling). The seam also writes an amount inline, `7.89(euro)`, as `value(currency)`.
 
 ### The precision check
 
 Tagging a number as a currency **rejects any value with more decimal places than the
-currency's scale**, raising [`CurrencyPrecisionError`](#errors-and-catch3):
+currency's scale**, raising [`CurrencyPrecisionError`](#errors-and-catch3). These load:
 
-```seam
--import_from(european_union, [euro])
--import_from(japan, [yen])
--import_from(bahrain, [bhd])
+```clausal
+:- use_module(library(countries/european_union), [euro]).
+:- use_module(library(countries/bahrain), [bhd]).
+:- use_module(library(currency), [money_str/3]).
 
-ok_1(X) <- eval_(7.89(euro), X)     # ok
-bad_1(X) <- eval_(7.891(euro), X)   # RAISES CurrencyPrecisionError: 3 dp for a 2-dp currency
-bad_2(X) <- eval_(7.5(yen), X)      # RAISES: yen has scale 0
-ok_2(X) <- eval_(1.234(bhd), X)     # ok: the Bahraini dinar has scale 3
+:- constant_number_currency(ok_1, "7.89", euro).    % ok
+:- constant_number_currency(ok_2, "1.234", bhd).    % ok: the Bahraini dinar has scale 3
+
+test("in scale") :-
+    money_str(constant(ok_1), half_even, "7.89 EUR"),
+    money_str(constant(ok_2), half_even, "1.234 BHD").
+```
+
+and each of these refuses the file at load (the message's first sentence; it goes on to
+name the three remedies below):
+
+```text
+:- constant_number_currency(bad_1, "7.891", euro).
+    CurrencyPrecisionError: 7.891 has more decimal places than euro supports (scale 2).
+:- constant_number_currency(bad_2, "7.5", yen).
+    CurrencyPrecisionError: 7.5 has more decimal places than yen supports (scale 0).
 ```
 
 This is deliberate: it catches money entering through lossy float arithmetic. The
-canonical footgun is doing the maths in float **before** tagging:
+canonical footgun is doing the maths in float **before** tagging. `.clausal` cannot tag an
+expression at all (an amount is declared, or built by arithmetic on amounts, and
+`(0.1 + 0.2) * constant(one_euro)` is refused as a float factor), so the footgun is the
+seam's, where an amount is a literal:
 
 ```seam
 -import_from(european_union, [euro])
@@ -208,14 +294,15 @@ right(X) <- eval_(0.1(euro) + 0.2(euro), X)  # each literal is an exact Decimal:
 17 significant digits; see [below](#float-literals-are-exact-to-15-significant-digits).)
 
 When the check fires, do one of three things (the error message says so):
-1. **combine per-currency literals** — `0.1(euro) + 0.2(euro)`, not `(0.1 + 0.2)(euro)`;
+1. **combine per-currency amounts** — `constant(a) + constant(b)` (in the seam,
+   `0.1(euro) + 0.2(euro)`), not `(0.1 + 0.2)(euro)`;
 2. **round explicitly** — `money_round(V, Mode, Out)` after deciding the rounding;
 3. **use `money_precise`** for a deliberately sub-scale amount.
 
 ### Float literals are exact to 15 significant digits
 
-There is no decimal literal syntax: `1550.00` in a `.seam` file is a Python float before
-any currency code sees it. That is safe far further than it sounds, because the currency path
+There is no decimal literal syntax: `1550.00` in a `.clausal` or `.seam` file is a float
+before any currency code sees it. That is safe far further than it sounds, because the currency path
 coerces through `Decimal(str(f))` — never `Decimal(f)` — and **measured on this code path, a
 decimal with 15 or fewer significant digits always survives**. Past that it is a hazard, not
 a certainty: over 40,000 random two-decimal amounts per row, 16 digits lost 11.77%, 17 lost
@@ -253,26 +340,51 @@ way to write one:
 precision-checked). `money_precise(Text, Currency, Out)` is the same but **skips** the
 precision check — for genuine sub-scale amounts (unit prices, tariffs, tax rates).
 
-```seam
--import_from(european_union, [euro])
--import_from(currency, [money, money_precise])
+In `.clausal` the currency argument is the currency itself, looked up with
+`currency_code/2` (a bare `euro` in a goal is the atom, and `money/3` raises
+`type_error(currency, euro)`):
 
-price(P) <- money("7.89", euro, P)                # P = 7.89 (euro); "7.891" would raise
-rate(RATE) <- money_precise("0.0034", euro, RATE) # RATE = 0.0034 (euro), sub-cent, allowed
+```clausal
+:- use_module(library(currency), [money/3, money_precise/3, money_str/3,
+                                  currency_code/2]).
+
+price(P) :-
+    currency_code(EURO, eur),
+    money("7.89", EURO, P).               % P = 7.89 (euro); "7.891" would raise
+
+rate(RATE) :-
+    currency_code(EURO, eur),
+    money_precise("0.0034", EURO, RATE).  % RATE = 0.0034 (euro), sub-cent, allowed
+
+test("price") :-
+    price(P),
+    money_str(P, half_even, "7.89 EUR").
+
+test("sub-cent rate") :-
+    rate(R),
+    price(P),
+    R < P.
 ```
 
-Prefer `money("...", C, X)` (string) over `X(euro)` when the value comes from external data
-you want parsed exactly with no chance of a float in the pipeline.
+Prefer `money("...", C, X)` (string) when the value comes from external data you want
+parsed exactly with no chance of a float in the pipeline.
 
 ### Extracting the number
 
-`strip_units/2` (from `py.units`) yields the bare `Decimal`:
+`strip_units/2` (from `library(units)`) yields the bare `Decimal`:
 
-```seam
--import_from(py.units, [strip_units])
--import_from(european_union, [euro])
+```clausal
+:- use_module(library(units), [strip_units/2]).
+:- use_module(library(countries/european_union), [euro]).
+:- constant_number_currency(amount, "7.89", euro).
 
-amount_value(V) <- (eval_(7.89(euro), A), strip_units(A, V))   # V = Decimal('7.89')
+amount_value(V) :-
+    strip_units(constant(amount), V).    % V = Decimal('7.89')
+
+test("no unit left") :-
+    amount_value(V),
+    \+ quantity(V),
+    V * 100 =:= 789.
 ```
 
 ---
@@ -306,7 +418,7 @@ the amount with -constant_number_currency (or -constant_number_units) and use it
 so the unit is a fact the engine holds.
 ```
 
-It fires on both shapes: a **fact** with a bare literal argument, and a `-constant_value`
+It fires on both shapes: a **fact** with a bare literal argument, and a `constant_value`
 declaration whose name claims a scale but which takes no unit. A site that has been
 converted carries a quantity rather than a literal and goes quiet, so the lint is a
 **migration worklist, not a permanent complaint**.
@@ -348,7 +460,7 @@ Worth stating plainly, because the count is offered as a migration progress sign
   telling an author to declare an index as money.
 * It **over-reports** wherever the lint has not been taught that a site is already declared.
   It exempts a row carrying a unit, including one produced by
-  [`-constants_number_currency`](#tables-a-declaration-that-defines-the-predicate) — but the
+  [`constants_number_currency`](#tables-a-declaration-that-defines-the-predicate) — but the
   exemption is a rule about the row's shape, and a future declaration form the rule does not
   recognise would warn on correct code again.
 
@@ -371,11 +483,20 @@ Much published money is in TABLES, not single facts. Declare the table and it **
 predicate your rules already call** — so a program migrates by replacing N fact lines with one
 declaration, and no call site changes:
 
-```seam
--import_from(united_states, [usd, usd_cent])
--constants_number_currency(benefit_cap/2,
-                           [(1, 29200), (2, 53600), (3, 76800)],
-                           usd_cent, money_at(2))
+```clausal
+:- use_module(library(countries/united_states), [usd, usd_cent]).
+:- use_module(library(currency), [money_str/3]).
+:- constants_number_currency(benefit_cap/2,
+                             [[1, 29200], [2, 53600], [3, 76800]],
+                             usd_cent, money_at(2)).
+
+test("lookup by key") :-
+    benefit_cap(2, A),
+    money_str(A, half_even, "536.00 USD").
+
+test("enumerate the rows") :-
+    findall(SIZE, benefit_cap(SIZE, _), SIZES),
+    SIZES == [1, 2, 3].
 ```
 
 ```text
@@ -383,12 +504,14 @@ benefit_cap(2, A)        A = 536.00 (usd)
 benefit_cap(SIZE, A)     (1, 292.00) (2, 536.00) (3, 768.00)
 ```
 
+(A row is a list in `.clausal`; the seam writes it as a tuple, `(1, 29200)`.)
+
 **There is no `constant(...)` retrieval and no subscript.** `constant/1` substitutes a single
 value at *compile* time; a table is a lookup by key at *runtime*, which is a predicate call —
 so the rows are reached exactly as hand-written facts were.
 
-`-constants_number_units(name/arity, ROWS, unit, number_at(N))` is the general-unit sibling,
-matching [`-constant_number_units`](#declaring-money-constant_number_currency); the money form
+`constants_number_units(name/arity, ROWS, unit, number_at(N))` is the general-unit sibling,
+matching [`constant_number_units`](#declaring-money-constant_number_currency); the money form
 refuses a unit that is not money, and each names its own column keyword.
 
 **The money column is declared, never inferred** — real tables put it in arg 2 of 2, in arg 3
@@ -407,11 +530,16 @@ recorded below rather than deleted.
 A minor unit is an **ordinary scaled unit** of its base currency, defined in the same
 jurisdiction module as the currency itself — the same shape as `kilometre` against `metre`:
 
-```seam
--import_from(united_states, [usd, usd_cent])
+```clausal
+:- use_module(library(countries/united_states), [usd, usd_cent]).
 
-# what the source SAID, in the unit it said it in
--constant_number_units(monthly_limit, 155000, usd_cent)
+% what the source SAID, in the unit it said it in
+:- constant_number_units(monthly_limit, 155000, usd_cent).
+
+test("declared pair") :-
+    constant_number_units(monthly_limit, N, U),
+    N == 155000,
+    U == usd_cent.
 ```
 
 ```text
@@ -428,24 +556,34 @@ documentation the engine cannot check; a declared unit is a fact it can.
 After declaration the constant simply **is** a dollar amount, which is what makes minor and
 major amounts add with no conversion logic and no mixed-dimension arithmetic:
 
-```seam
--import_from(european_union, [euro, eur_cent])
+```clausal
+:- use_module(library(countries/european_union), [euro, eur_cent]).
+:- use_module(library(currency), [money_str/3]).
 
-total(T) <- (eval_(5000 (eur_cent), A), eval_(10.00 (euro), B), eval_(A + B, T))   # T = 60.00 (euro)
+:- constant_number_units(a, 5000, eur_cent).
+:- constant_number_currency(b, "10.00", euro).
+
+total(T) :-
+    T is constant(a) + constant(b).      % T = 60.00 (euro)
+
+test("minor and major add") :-
+    total(T),
+    money_str(T, half_even, "60.00 EUR").
 ```
 
-Being an ordinary unit, a minor unit works in a declaration, in the `155000 (usd_cent)` annotation
-sugar and in arithmetic — there is no special case anywhere, and nothing to remember about
-where the spelling is legal.
+Being an ordinary unit, a minor unit works in a declaration and in arithmetic — there is no
+special case anywhere. (In the seam it also works inline, in the `155000 (usd_cent)`
+annotation sugar; `.clausal` has no inline quantity, so a scaled amount such as
+`100(usd_cent)` is declared, `:- constant_number_units(fee, 100, usd_cent).`)
 
 ## Decimal strings: declaring the digits
 
-**Ruled 2026-09-12.** A written `292.00` is a Python **float literal**, and it has already lost
+**Ruled 2026-09-12.** A written `292.00` is a **float literal**, and it has already lost
 its trailing zero by the time any quantity exists:
 
 ```text
--constant_number_units(fee, 292.00, usd)     stores  Decimal('292.0')
--constant_number_units(fee, "292.00", usd)   stores  Decimal('292.00')
+:- constant_number_units(fee, 292.00, usd).     stores  Decimal('292.0')
+:- constant_number_units(fee, "292.00", usd).   stores  Decimal('292.00')
 ```
 
 Same number, different scale, and the scale is the part the source wrote. Nothing downstream can
@@ -454,25 +592,31 @@ recover it — by the time the value reaches a `Quantity` the digits are gone.
 So a **string in the number position is read as an exact `Decimal`**, in all four members of the
 family:
 
-```seam
--import_from(united_states, [usd])
+```clausal
+:- use_module(library(countries/united_states), [usd]).
+:- use_module(library(currency), [money_str/3]).
 
--constant_number_units(s_fee, "292.00", usd)
--constant_number_currency(s_limit, "1550.00", usd)
+:- constant_number_units(s_fee, "292.00", usd).
+:- constant_number_currency(s_limit, "1550.00", usd).
+
+test("the declared digits") :-
+    constant_number_units(s_fee, N, _),
+    money_str(constant(s_limit), half_even, "1550.00 USD"),
+    N =:= 292.
 ```
 
 This is the counterpart of [minor units](#minor-units), reached from the other side. A minor unit
 keeps a published "29200 cents" recoverable by declaring the **scale**; a decimal string keeps a
 published "292.00 dollars" exact by declaring the **digits**. Use whichever the source text uses.
 
-**Only the directives named for carrying a unit.** `-constant_value(greeting, "292.00")` is a
+**Only the directives named for carrying a unit.** `constant_value(greeting, "292.00")` is a
 string constant and stays one — reading strings as numbers there would silently retype every text
 constant in every program.
 
 **What is still refused**, because the directive is named for the claim that only numbers carry
 units: a string that is not a number (`"abc"`), and the non-finite Decimals (`"NaN"`,
 `"Infinity"`) which parse perfectly well and are not amounts. The currency precision check is
-unchanged and now runs against an exact value, so `-constant_number_currency(x, "19.999", usd)`
+unchanged and now runs against an exact value, so `constant_number_currency(x, "19.999", usd)`
 is still refused for sub-scale digits.
 
 `constant_number_units/3` reports the **Decimal**, not the string: the string is how the
@@ -494,11 +638,14 @@ as unit ones. As ever, a falling count is evidence of progress rather than a mea
 number written at a scale — 300 basis points **is** the ratio 0.03 — so a ratio unit is an
 ordinary scaled unit against the *dimensionless* base rather than a currency:
 
-```seam
--import_from(py.units, [basis_point])
+```clausal
+:- use_module(library(units), [basis_point]).
 
-# what the regulation SAID, in the unit it said it in
--constant_number_units(min_margin, 300, basis_point)
+% what the regulation SAID, in the unit it said it in
+:- constant_number_units(min_margin, 300, basis_point).
+
+test("declared in basis points") :-
+    constant_number_units(min_margin, 300, basis_point).
 ```
 
 ```text
@@ -516,11 +663,24 @@ quantity** and compare equal — a program declares in whichever spelling its so
 the arithmetic does not care which was chosen. A ratio multiplies against money and keeps the
 money's dimension:
 
-```seam
--import_from(py.units, [basis_point])
--import_from(united_states, [usd])
+```clausal
+:- use_module(library(units), [basis_point, percent]).
+:- use_module(library(countries/united_states), [usd]).
+:- use_module(library(currency), [money_str/3]).
 
-charge(C) <- eval_(300 (basis_point) * 1550.00 (usd), C)   # C = 46.50000 (usd), exact
+:- constant_number_units(margin, 300, basis_point).
+:- constant_number_units(three_percent, 3, percent).
+:- constant_number_currency(limit, "1550.00", usd).
+
+charge(C) :-
+    C is constant(margin) * constant(limit).    % C = 46.500000 (usd), exact
+
+test("one ratio, two spellings") :-
+    constant(margin) =:= constant(three_percent).
+
+test("charge") :-
+    charge(C),
+    money_str(C, half_even, "46.50 USD").
 ```
 
 **The factor is a `Decimal`, built with `scaleb`, and that is the whole safety argument.** A
@@ -550,17 +710,21 @@ module whose *public interface* computes in basis points — a `margin_ratio_bps
 — still has to rescale its producers and consumers together. This makes that conversion
 cheaper, because no representation changes at any interface, not free.
 
-## Declaring money: `-constant_number_currency`
+## Declaring money: `constant_number_currency`
 
-`-constant_number_units` takes any unit. When the constant is **money**, say so:
+`constant_number_units` takes any unit. When the constant is **money**, say so:
 
-```seam
--import_from(united_states, [usd])
--constant_number_currency(monthly_limit, 5000, usd)     # stored Decimal('5000') usd
+```clausal
+:- use_module(library(countries/united_states), [usd]).
+:- constant_number_currency(monthly_limit, 5000, usd).     % stored Decimal('5000') usd
+
+test("declared as money") :-
+    constant_number_units(monthly_limit, 5000, usd).
 ```
 
+(The seam spells the directives with a leading dash, `-constant_number_currency(...)`.)
 The directive is named for its claim and enforces it, exactly as
-`-constant_number_units` is named for "only numbers carry units". The third argument must be
+`constant_number_units` is named for "only numbers carry units". The third argument must be
 **money**, which is a *shape* and not a type: **one currency at exponent one**. That admits a
 currency and a [minor unit](#minor-units) of one, and nothing else:
 
@@ -588,8 +752,8 @@ not accepted either. Use -constant_number_units for a quantity that is not money
 
 That is the gap it closes, and it is worth being precise about which one. A **mistyped or
 unbound** currency was already caught — a currency identifier has to be bound to be written,
-so `-constant_number_units(fee, 5000, dollar)` is a `NameError`. What was not caught is a
-unit that loads perfectly well and **is not money**: `-constant_number_units(fee, 5000,
+so `constant_number_units(fee, 5000, dollar)` is a `NameError` ("name 'dollar' is not defined"). What was not caught is a
+unit that loads perfectly well and **is not money**: `constant_number_units(fee, 5000,
 metre)` yields `Quantity(5000, metre)`, an int-valued length, in silence. Asking for money
 and getting a length is the error this refuses.
 
@@ -622,8 +786,8 @@ curated word table, not written per currency.
 
 This is not decoration. It closes two holes by construction:
 
-* `-import_from(european_union, [euro, eur_cent])` followed by
-  `-import_from(united_states, [usd, usd_cent])` used to bind `cent` **twice, silently,
+* importing `[euro, eur_cent]` from `european_union` and then
+  `[usd, usd_cent]` from `united_states` used to bind `cent` **twice, silently,
   last-one-wins** — and a rulebase computing throughout in what it believed were euro cents
   would be holding dollars and never raise, because nothing would ever meet a euro amount to
   mismatch against. Two minor units can now be imported into one file.
@@ -643,12 +807,28 @@ subunit is `penny`, even where a rulebase spells its own identifiers `_pence`.
 A minor unit is **jurisdiction-scoped**, and since a shared word is not bound bare, the
 identifier already says which. A cent of one currency still never adds to a cent of another.
 
-```seam
--import_from(united_states, [usd, usd_cent])
--import_module(european_union)
+```clausal
+:- use_module(library(countries/united_states), [usd, usd_cent]).
+:- use_module(library(countries/european_union), [euro, eur_cent]).
+:- use_module(library(currency), [money_str/3]).
 
-us(A) <- eval_(5000 (usd_cent), A)        # A = 50.00 (usd)
-eu(A) <- eval_(5000 (european_union.eur_cent), A)   # A = 50.00 (euro)
+:- constant_number_units(us_amount, 5000, usd_cent).
+:- constant_number_units(eu_amount, 5000, eur_cent).
+
+us(A) :-
+    A is constant(us_amount).        % A = 50.00 (usd)
+
+eu(A) :-
+    A is constant(eu_amount).        % A = 50.00 (euro)
+
+test("two cents, two currencies") :-
+    us(U),
+    eu(E),
+    money_str(U, half_even, "50.00 USD"),
+    money_str(E, half_even, "50.00 EUR"),
+    catch((_ is U + E, fail),
+          error(system_error(units_mismatch), _),
+          true).
 ```
 
 ### The factor is derived, never written
@@ -676,7 +856,7 @@ the name entirely, because the declaration carries it.
 
 ### The Prolog exporter and scaled units
 
-`clausal_to_prolog` discards units on export, which is faithful for a **base** unit (a
+`clausal_to_prolog` (the seam-to-Prolog exporter) discards units on export, which is faithful for a **base** unit (a
 currency, `metre`, `second`, or a factor-1 derived unit like `newton`) and wrong for a
 **scaled** one unless the magnitude is converted first. The two shapes are handled
 differently:
@@ -727,20 +907,26 @@ hold**:
 Decimal amounts in the **base** currency remain exact and remain correct — minor units record
 what a source *said*, they do not make the base form insufficient:
 
-```seam
--import_from(european_union, [euro])
--constant_number_units(rate, 0.10, euro)
+```clausal
+:- use_module(library(countries/european_union), [euro]).
+:- use_module(library(currency), [money_str/3]).
+:- constant_number_units(rate, 0.10, euro).
 
-# 0.1 + 0.1 + 0.1 is exactly 0.3 (euro) -- a float would give 0.30000000000000004
-sums(X) <- eval_(constant(rate) + constant(rate) + constant(rate), X)
+% 0.1 + 0.1 + 0.1 is exactly 0.3 (euro) -- a float would give 0.30000000000000004
+sums(X) :-
+    X is constant(rate) + constant(rate) + constant(rate).
+
+test("exact sum") :-
+    sums(X),
+    money_str(X, half_even, "0.30 EUR").
 ```
 
-Use [`eval_/2`](arithmetic.md) to *compute* an amount. A comparison (`==`, `>`, `<=`, …)
-between amounts works directly and respects the currency, and `X == A + B` with `X` unbound
-binds `X` to the sum. But `==` is a constraint, and inside a constraint division is rational
-(see [Operators](operators.md)), so `X == 7.89(euro)` answers a magnitude of
-`Fraction(789, 100)` rather than `Decimal('7.89')`: the same amount, not the same
-representation.
+Use [`is/2`](arithmetic.md) to *compute* an amount. An ISO comparison (`=:=`, `>`, `=<`, …)
+between amounts works directly and respects the currency. (In the seam, the comparison
+operators are constraints: `X == A + B` with `X` unbound binds `X` to the sum, and inside a
+constraint division is rational (see [Operators](operators.md)), so `X == 7.89(euro)`
+answers a magnitude of `Fraction(789, 100)` rather than `Decimal('7.89')`: the same amount,
+not the same representation.)
 
 **Ratios are covered too** — see [ratio units](#ratio-units-percent-and-basis_point).
 
@@ -753,24 +939,44 @@ length and business days need a holiday calendar, neither of which a scalar can 
 Inherited from [units](units.md); currency just keeps the magnitude exact. The general
 rules for each operator are in [Arithmetic](arithmetic.md) and [Operators](operators.md).
 
-| Operation (inside `eval_/2`) | Behaviour |
+| Operation (inside `is/2`; the seam's `eval_/2`) | Behaviour |
 |-----------|-----------|
 | `euro + euro`, `euro - euro` | same currency required; **full precision kept** (no rounding) |
-| `euro + usd` | `UnitsMismatch` — different currencies never combine |
-| `euro + 5` | `UnitsMismatch` — a currency amount and a plain number never add |
+| `euro + usd` | `UnitsMismatch` — different currencies never combine (in `.clausal`, the ISO error `error(system_error(units_mismatch), _)`) |
+| `euro + 5` | `UnitsMismatch` — a currency amount and a plain number never add (likewise) |
 | `euro * 3`, `euro * 20(percent)`, `euro * rdiv(6, 5)` | scale by an exact dimensionless number → euro |
 | `euro * 0.2` | **refused**: `type_error(exact_number, 0.2)` — a float beside an exact amount; write the factor exactly (`20(percent)`, `rdiv(1, 5)`) |
 | `euro / 4` | exact: `10.00(euro) / 4` is `2.5 (euro)`, magnitude `Decimal('2.5')` |
 | `euro / 3` | exact: `10.00(euro) / 3` is `10/3 (euro)`, magnitude `Fraction(10, 3)` — never a 28-digit rounded `Decimal` |
-| `euro / 0` | `evaluation_error(zero_divisor)` in `eval_/2`; inside a constraint (`X == 1(euro) / 0`) the goal fails |
+| `euro / 0` | `evaluation_error(zero_divisor)` in `is/2` (and the seam's `eval_/2`); inside a seam constraint (`X == 1(euro) / 0`) the goal fails |
 | `euro / euro` | a **dimensionless** ratio (e.g. for “what fraction of …”) |
 
-```seam
--import_from(european_union, [euro])
--import_from(py.units, [percent])
+```clausal
+:- use_module(library(countries/european_union), [euro]).
+:- use_module(library(units), [percent]).
+:- use_module(library(currency), [money_str/3]).
 
-vat(NET, VAT) <- eval_(NET * 20 (percent), VAT)       # exact
-share(S) <- eval_(10.00(euro) / 3, S)                   # S = 10/3 (euro), Fraction(10, 3)
+:- constant_number_units(vat_rate, 20, percent).
+:- constant_number_currency(ten, "10.00", euro).
+
+vat(NET, VAT) :-
+    VAT is NET * constant(vat_rate).       % exact
+
+share(S) :-
+    S is constant(ten) / 3.                % S = 10/3 (euro), Fraction(10, 3)
+
+test("vat") :-
+    vat(constant(ten), VAT),
+    money_str(VAT, half_even, "2.00 EUR").
+
+test("a third, kept exact") :-
+    share(S),
+    S * 3 =:= constant(ten).
+
+test("a float factor is refused") :-
+    catch((_ is constant(ten) * 0.2, fail),
+          error(type_error(exact_number, 0.2), _),
+          true).
 ```
 
 **Rounding is never automatic.** Intermediate results keep every digit; you quantize only
@@ -782,8 +988,8 @@ only when you ask.
 ## Rounding and display
 
 Every rounding/display predicate takes a **required, explicit mode**. The mode and style
-are atoms, written bare once the module declares them (`-private([half_up, symbol])`); a
-string (`"half_up"`) is accepted too.
+are atoms, written bare (the seam declares them first, e.g. `-private([half_up, symbol])`);
+a string (`"half_up"`) is accepted too.
 
 **Modes:** `half_up`, `half_even` (banker's), `half_down`, `up`, `down`, `ceiling`, `floor`.
 
@@ -793,23 +999,51 @@ string (`"half_up"`) is accepted too.
 - `money_format(Amount, Style, Mode, Str)` — `Style` ∈ `symbol` (`'€3.33'`), `code`
   (`'3.33 EUR'`), `name` (`'3.33 euro'`), `plain` (`'3.33'`), answered as an **atom**.
 
-The argument is an amount, so compute it first; `money_round(10.00(euro) / 3, …)` would hand
-the rounding predicate the unevaluated term and fail.
+The argument is an amount, so compute it first; `money_round(constant(ten) / 3, …)` would
+hand the rounding predicate the unevaluated term and fail.
 
-```seam
--import_from(european_union, [euro])
--import_from(currency, [money_precise, money_round, money_str, money_format])
--private([half_up, symbol])
+```clausal
+:- use_module(library(countries/european_union), [euro]).
+:- use_module(library(currency), [money_precise/3, money_round/3, money_str/3,
+                                  money_format/4, currency_code/2]).
+:- constant_number_currency(ten, "10.00", euro).
 
-r(R) <- (eval_(10.00(euro) / 3, Q), money_round(Q, half_up, R))          # R = 3.33 (euro)
-s(S) <- (money_precise("2.675", euro, P), money_str(P, half_up, S))       # S = "2.68 EUR" (not 2.67: no float trap)
-f(S) <- (money_precise("3.345", euro, P), money_format(P, symbol, half_up, S))   # S = '€3.35'
+r(R) :-
+    Q is constant(ten) / 3,
+    money_round(Q, half_up, R).                  % R = 3.33 (euro)
+
+s(S) :-
+    currency_code(EURO, eur),
+    money_precise("2.675", EURO, P),
+    money_str(P, half_up, S).                    % S = "2.68 EUR" (not 2.67: no float trap)
+
+f(S) :-
+    currency_code(EURO, eur),
+    money_precise("3.345", EURO, P),
+    money_format(P, symbol, half_up, S).         % S = '€3.35'
+
+test("round") :-
+    r(R),
+    money_str(R, half_up, "3.33 EUR").
+
+test("no float trap") :-
+    s(S),
+    S == "2.68 EUR".
+
+test("symbol style") :-
+    f(S),
+    S == '€3.35'.
+
+test("an unknown mode raises") :-
+    catch((money_round(constant(ten), nonsense, _), fail),
+          error(domain_error(rounding_mode, nonsense), _),
+          true).
 ```
 
 An unknown mode or style raises (catchable — see below).
 
-**Python / f-strings.** A currency `Quantity` also formats in Python f-strings (inside a
-`++()` escape or interop), spec `"<style>[,<mode>]"`, default style `code`, default mode
+**Python / f-strings.** A currency `Quantity` also formats in Python f-strings (in Python
+code, or inside the seam's `++()` escape), spec `"<style>[,<mode>]"`, default style `code`, default mode
 `half_even`:
 
 ```python
@@ -826,17 +1060,34 @@ f"{amt:plain,half_up}"# "3.35"
 
 Query a currency's metadata (the argument is the currency, e.g. `euro`):
 
-```seam
--import_from(currency, [currency_scale, currency_code, currency_symbol,
-                        currency_start, currency_end])
--import_from(european_union, [euro])
--import_from(germany, [dem])
+In `.clausal` the currency argument is the currency itself; `currency_code/2` looks it
+up from its code:
 
-facts(N, C, S) <- (currency_scale(euro, N),    # N = 2
-                   currency_code(euro, C),     # C = "EUR"   a string
-                   currency_symbol(euro, S))   # S = '€'     an atom
-history(S, E) <- (currency_start(dem, S),      # S = '1948-06-20'  an ISO date, as an atom
-                  currency_end(dem, E))        # E = '2002-05-15'; euro's end is None (still current)
+```clausal
+:- use_module(library(currency), [currency_scale/2, currency_code/2, currency_symbol/2,
+                                  currency_start/2, currency_end/2]).
+
+facts(N, C, S) :-
+    currency_code(EURO, eur),
+    currency_scale(EURO, N),    % N = 2
+    currency_code(EURO, C),     % C = "EUR"   a string
+    currency_symbol(EURO, S).   % S = '€'     an atom
+
+history(S, E) :-
+    currency_code(DEM, dem),
+    currency_start(DEM, S),     % S = '1948-06-20'  an ISO date, as an atom
+    currency_end(DEM, E).       % E = '2002-05-15'; euro's end is None (still current)
+
+test("facts") :-
+    facts(N, C, S),
+    N == 2,
+    C == "EUR",
+    S == '€'.
+
+test("history") :-
+    history(S, E),
+    S == '1948-06-20',
+    E == '2002-05-15'.
 ```
 
 **An unbound currency RAISES.** An accessor is a function of a currency, so asking with an
@@ -854,14 +1105,17 @@ direction:
 currency_code(euro, X)      X = "EUR"       the canonical UPPERCASE string
 currency_code(C, eur)       C = euro        an atom, in either case
 currency_code(C, "EUR")     C = euro
-currency_code(C, ++"EUR")   C = euro        a Python string
+currency_code(C, ++"EUR")   C = euro        a Python string (seam)
 currency_code(C, Code)      enumerates all 254
 ```
 
-**The code may be written as an atom or a string.** `"EUR"` written in a `.seam`
-file is a *string* (the default `-double_quotes(chars)`), `eur` or `'EUR'` is an
-*atom*, and `++"EUR"` hands in a Python `str`, which is an atom too. All of them reach the
-same currency; `currency_code(euro, X)` answers the string.
+(Here `euro` is the currency, as the seam's imported name is. In `.clausal`, where `euro` in
+a goal is the atom, the forward mode is reached through a currency you hold:
+`currency_code(EURO, eur), currency_code(EURO, X)`.)
+
+**The code may be written as an atom or a string.** `"EUR"` is a *string*, `eur` or
+`'EUR'` is an *atom*, and the seam's `++"EUR"` hands in a Python `str`, which is an atom too.
+All of them reach the same currency; `currency_code(EURO, X)` answers the string.
 
 Case-insensitive, which covers the two spellings that **can** exist: `eur` and `"EUR"`. A
 mixed-case `Eur` is not a misspelled code — TitleCase is a logic *variable*, so it would
@@ -921,13 +1175,32 @@ In a goal position a failure is swallowed — the guard does not fire, the rule 
 and the caller gets "no" rather than "you passed the wrong thing". When the answer matters,
 assert it:
 
-```seam
--import_from(py.units, [compatible_units])
--import_from(european_union, [euro])
+```clausal
+:- use_module(library(units), [compatible_units/2]).
+:- use_module(library(countries/european_union), [euro]).
+:- use_module(library(countries/united_states), [usd]).
+:- use_module(library(currency), [currency_code/2]).
+:- constant_number_currency(zero, "0.00", euro).
+:- constant_number_currency(fee, "12.50", euro).
+:- constant_number_currency(us_fee, "12.50", usd).
 
-# raises UnitsMismatch unless AMOUNT is a euro quantity
-positive_fee(AMOUNT) <- (compatible_units(AMOUNT, euro), AMOUNT > 0.00(euro))
+% raises UnitsMismatch unless AMOUNT is a euro quantity
+positive_fee(AMOUNT) :-
+    currency_code(EURO, eur),
+    compatible_units(AMOUNT, EURO),
+    AMOUNT > constant(zero).
+
+test("a euro fee") :-
+    positive_fee(constant(fee)).
+
+test("a dollar fee raises") :-
+    catch((positive_fee(constant(us_fee)), fail),
+          error(system_error(units_mismatch), _),
+          true).
 ```
+
+(The unit argument is the unit itself: `compatible_units(AMOUNT, euro)` with the atom `euro`
+raises a `TypeError`, "'euro' is not a unit", so the rule looks the currency up.)
 
 ```text
 compatible_units: expected usd, got aud
@@ -936,8 +1209,10 @@ compatible, not even with dimensionless — write the quantity (`5(euro)`), or d
 it with -constant_number_currency.
 ```
 
-It raises [`UnitsMismatch`](#errors-and-catch3), so `catch/3` catches it and binds the
-message exactly as for a mismatch raised by arithmetic.
+It raises [`UnitsMismatch`](#errors-and-catch3), so `catch/3` catches it exactly as a
+mismatch raised by arithmetic: in `.clausal` as the ISO term
+`error(system_error(units_mismatch), _)`, in the seam with a `++UnitsMismatch(M)` catcher
+that also binds the message.
 
 **Scale is ignored, because by here it has already been applied.** A scaled unit normalises
 at construction, so `155000 usd_cent` *is* `Decimal('1550.00') usd` and `5 kilometre` is 5000
@@ -966,19 +1241,46 @@ catch. A dimensionless *quantity* — a ratio built by division, say — passes.
 
 ## Errors and `catch/3`
 
-Two catchable exceptions, and one warning.  Both exceptions are Python classes, so a `.seam` file names
-them in its import list and catches them with a `++` catcher (see
-[exceptions](exceptions.md)): the bare class `++CurrencyPrecisionError`
-matches by `isinstance`; the instance form `++UnitsMismatch(M)` also binds `M`
-to the message.
+Two catchable exceptions, and one warning.
 
 - **`UnitsMismatch`** — combining different currencies, or a currency with a plain number,
-  in arithmetic (`eval_/2`, `sum_list/2`) or in `compatible_units/2`.
+  in arithmetic (`is/2`, the seam's `eval_/2`, `sum_list/2`) or in `compatible_units/2`.
 - **`CurrencyPrecisionError`** — tagging a value with sub-scale precision.
 
-A **comparison** across dimensions (`V > 0` with `V` a euro amount) raises the ISO error
-term `error(system_error(units_mismatch), (>)/2)` instead; catch it with an ordinary
-`error(system_error(units_mismatch), _)` pattern.
+In `.clausal`, arithmetic with mismatched units raises the ISO error term
+`error(system_error(units_mismatch), (is)/2)`, so an ordinary pattern catches it:
+
+```clausal
+:- use_module(library(countries/european_union), [euro]).
+:- use_module(library(countries/united_states), [usd]).
+:- constant_number_currency(eu_amount, "10.00", euro).
+:- constant_number_currency(us_amount, "10.00", usd).
+
+% report a currency mismatch instead of aborting
+checked_sum(A, B, RESULT) :-
+    catch(RESULT is A + B,
+          error(system_error(units_mismatch), _),
+          RESULT = mismatch).
+
+test("same currency adds") :-
+    checked_sum(constant(eu_amount), constant(eu_amount), R),
+    R \== mismatch.
+
+test("different currencies are reported") :-
+    checked_sum(constant(eu_amount), constant(us_amount), R),
+    R == mismatch.
+```
+
+A **comparison** across dimensions (`V > 0` with `V` a euro amount) raises the same ISO
+error term: in the seam its context is `(>)/2`, in `.clausal` (measured) `(is)/2`; catch it
+with an ordinary `error(system_error(units_mismatch), _)` pattern.
+
+The two exceptions are Python classes, and catching one *by class* needs the seam: a `.seam`
+file names them in its import list and catches them with a `++` catcher (see
+[exceptions](exceptions.md)): the bare class `++CurrencyPrecisionError` matches by
+`isinstance`; the instance form `++UnitsMismatch(M)` also binds `M` to the message. A
+`.clausal` catcher can only catch a `CurrencyPrecisionError` with a variable, which catches
+everything. In the seam:
 
 ```seam
 -module(prices, [safe_price(TEXT, P), checked_sum(A, B, RESULT), mismatch(MESSAGE)])
@@ -1046,36 +1348,71 @@ alpha-3 codes as atoms (`currency.eur`, plus `all`/`try_` escapes). Replace them
 
 **4. Common patterns.**
 
-```seam
--import_from(european_union, [euro])
--import_from(py.units, [percent])
--import_from(currency, [money_precise, money_round])
+```clausal
+:- use_module(library(countries/european_union), [euro]).
+:- use_module(library(units), [percent]).
+:- use_module(library(currency), [money_precise/3, money_round/3, money_str/3,
+                                  currency_code/2]).
 
-# a threshold comparison (same currency; comparison respects dims)
-over_limit(AMOUNT) <- (AMOUNT > 1000(euro))
+:- constant_number_currency(limit, 1000, euro).
+:- constant_number_units(gross_factor, 120, percent).
+:- constant_number_units(vat_rate, 20, percent).
+:- constant_number_currency(net, "19.99", euro).
+:- constant_number_currency(item, "2.50", euro).
 
-# a percentage / tax rate: an exact dimensionless factor (a float factor is refused)
-with_vat(NET, GROSS) <- eval_(NET * 120 (percent), GROSS)     # GROSS keeps full precision
-vat_due(NET, MODE, DUE) <- (eval_(NET * 20 (percent), RAW), money_round(RAW, MODE, DUE))
+% a threshold comparison (same currency; comparison respects dims)
+over_limit(AMOUNT) :-
+    AMOUNT > constant(limit).
 
-# summing line items: sum_list/2 totals a list of amounts; round once, at the end
-order_total(ITEMS, TOTAL) <- sum_list(ITEMS, TOTAL)
+% a percentage / tax rate: an exact dimensionless factor (a float factor is refused)
+with_vat(NET, GROSS) :-
+    GROSS is NET * constant(gross_factor).    % GROSS keeps full precision
 
-# a per-unit price below display scale: money_precise
-unit_price(P) <- money_precise("0.0034", euro, P)
+vat_due(NET, MODE, DUE) :-
+    RAW is NET * constant(vat_rate),
+    money_round(RAW, MODE, DUE).
+
+% summing line items: sum_list/2 totals a list of amounts; round once, at the end
+order_total(ITEMS, TOTAL) :-
+    sum_list(ITEMS, TOTAL).
+
+% a per-unit price below display scale: money_precise
+unit_price(P) :-
+    currency_code(EURO, eur),
+    money_precise("0.0034", EURO, P).
+
+test("under the limit") :-
+    \+ over_limit(constant(net)).
+
+test("gross") :-
+    with_vat(constant(net), G),
+    money_str(G, half_up, "23.99 EUR").
+
+test("vat due, rounded once") :-
+    vat_due(constant(net), half_up, DUE),
+    money_str(DUE, half_up, "4.00 EUR").
+
+test("order total") :-
+    order_total([constant(net), constant(item)], T),
+    money_str(T, half_up, "22.49 EUR").
+
+test("unit price") :-
+    unit_price(P),
+    P < constant(item).
 ```
 
 **5. Pitfalls to avoid.**
-- **Float-first maths.** Never compute in plain floats and then tag — `(0.1 + 0.2)(euro)`
-  raises, and even where it wouldn't, it would carry drift. Keep money in Decimal from the
-  first literal: `0.1(euro) + 0.2(euro)`.
+- **Float-first maths.** Never compute in plain floats and then tag — the seam's
+  `(0.1 + 0.2)(euro)` raises, and even where it wouldn't, it would carry drift. Keep money in
+  Decimal from the first declaration: declare `"0.1"` and `"0.2"` and add the constants.
 - **Rounding mid-computation.** Don't `money_round` intermediates; keep full precision and
   round once at the boundary you actually report. Repeated rounding accumulates error.
 - **Choosing a rounding mode by default.** There is none — the mode is required. Use the one
   the rule mandates (tax rules often say “round half up”); state it explicitly.
 - **Cross-currency arithmetic.** If a rule can see mixed currencies, either it's a modelling
   error or you must convert *explicitly* (there is no built-in conversion) and `catch` the
-  `UnitsMismatch`.
+  mismatch (`error(system_error(units_mismatch), _)` in `.clausal`, `UnitsMismatch` in the
+  seam).
 
 **6. Current limitations**: amounts above ~10²⁶
 minor units, and `NaN`/`Infinity`, surface as raw/awkward errors; currency `__format__`
