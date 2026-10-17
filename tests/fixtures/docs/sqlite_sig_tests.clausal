@@ -1,0 +1,79 @@
+% Companion tests for docs/sqlite.md display snippets.
+% The multi-column-row test is seam-only and lives in
+% sqlite_multicolumn_sig_tests.seam.
+:- set_prolog_flag(double_quotes, chars).
+:- use_module(library(sqlite), [connect/2, disconnect/1, current_connection/1,
+                                exec/2, exec/3, query/3, query/4, row_count/3,
+                                table/2, column/4]).
+
+% ── Connection ───────────────────────────────────────────────────────────────
+
+test("connect") :-
+    connect(":memory:", "doc_test_conn"),
+    current_connection("doc_test_conn").  % nv
+
+test("disconnect") :-
+    connect(":memory:", "doc_test_disc"),
+    disconnect("doc_test_disc"),
+    \+ current_connection("doc_test_disc"),
+    \+ disconnect("doc_test_disc").  % nv
+
+% ── Exec and Query ───────────────────────────────────────────────────────────
+
+test("exec and query") :-
+    connect(":memory:", "doc_test_eq"),
+    exec("doc_test_eq", "CREATE TABLE t1 (x INTEGER)"),
+    exec("doc_test_eq", "INSERT INTO t1 VALUES (?)", [42]),
+    query("doc_test_eq", "SELECT x FROM t1", V),
+    V == 42.  % nv
+
+test("query params") :-
+    connect(":memory:", "doc_test_qp"),
+    exec("doc_test_qp", "CREATE TABLE t2 (x INTEGER)"),
+    exec("doc_test_qp", "INSERT INTO t2 VALUES (1)"),
+    exec("doc_test_qp", "INSERT INTO t2 VALUES (2)"),
+    query("doc_test_qp", "SELECT x FROM t2 WHERE x > ?", [1], V),
+    V == 2.  % nv
+
+test("text is a string in single-column rows") :-
+    connect(":memory:", "doc_test_txt"),
+    exec("doc_test_txt", "CREATE TABLE users (name TEXT, age INTEGER)"),
+    exec("doc_test_txt", "INSERT INTO users VALUES ('alice', 30)"),
+    query("doc_test_txt", "SELECT name FROM users", ONE),
+    string(ONE), ONE == "alice".  % nv
+
+% ── Row count ────────────────────────────────────────────────────────────────
+
+test("row count") :-
+    connect(":memory:", "doc_test_rc"),
+    exec("doc_test_rc", "CREATE TABLE t3 (x INTEGER)"),
+    exec("doc_test_rc", "INSERT INTO t3 VALUES (1)"),
+    exec("doc_test_rc", "INSERT INTO t3 VALUES (2)"),
+    row_count("doc_test_rc", "DELETE FROM t3", N),
+    N == 2.  % nv
+
+% ── Schema introspection ─────────────────────────────────────────────────────
+
+test("table exists") :-
+    connect(":memory:", "doc_test_tbl"),
+    exec("doc_test_tbl", "CREATE TABLE users (name TEXT, age INTEGER)"),
+    table("doc_test_tbl", "users").  % nv
+
+test("column info") :-
+    connect(":memory:", "doc_test_col"),
+    exec("doc_test_col", "CREATE TABLE items (id INTEGER, name TEXT)"),
+    column("doc_test_col", "items", "id", _).  % nv
+
+% ── schema_example: describe/1 ───────────────────────────────────────────────
+
+describe(DB) :-
+    table(DB, TABLE),
+    format("~n~s:~n", [TABLE]),
+    column(DB, TABLE, COL, TYPE),
+    format("  ~s ~s~n", [COL, TYPE]).
+
+test("schema example") :-
+    connect(":memory:", "doc_test_desc"),
+    exec("doc_test_desc", "CREATE TABLE items (id INTEGER, name TEXT)"),
+    findall(x, describe("doc_test_desc"), XS),
+    length(XS, 2).  % nv

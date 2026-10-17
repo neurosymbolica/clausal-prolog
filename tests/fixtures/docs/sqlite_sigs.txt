@@ -79,12 +79,11 @@ emp_dept(EMP, DEPT) <- (
 --8<-- [end:join_example]
 
 --8<-- [start:schema_example]
--import_from(sqlite, [connect, table, column])
+:- use_module(library(sqlite), [connect/2, table/2, column/4]).
 
-describe(DB) <- (
+describe(DB) :-
     table(DB, TABLE),
-    ++print(f"\n{TABLE}:"),
+    format("~n~s:~n", [TABLE]),
     column(DB, TABLE, COL, TYPE),
-    ++print(f"  {COL} {TYPE}")
-)
+    format("  ~s ~s~n", [COL, TYPE]).
 --8<-- [end:schema_example]
