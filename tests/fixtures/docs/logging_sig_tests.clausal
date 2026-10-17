@@ -1,0 +1,129 @@
+% Companion tests for docs/logging.md display snippets.
+:- set_prolog_flag(double_quotes, chars).
+:- use_module(library(logging), [
+    get_logger/1, get_logger/2,
+    debug/2, info/2, warning/2, error/2, critical/2,
+    set_level/2, get_level/2, is_enabled_for/2, log/3,
+    add_handler/2, remove_handler/2,
+    stream_handler/2, file_handler/2, set_formatter/2
+]).
+
+% ── Logger management ────────────────────────────────────────────────────────
+
+test("get logger named") :- get_logger("test.doc.named", _).  % nv
+
+test("get logger default") :- get_logger(_).  % nv
+
+test("set and get level") :-
+    get_logger("test.doc.level", L),
+    set_level(L, "debug"),
+    get_level(L, LEVEL),
+    LEVEL == debug.  % nv
+
+test("get level accepts atom or string, either case") :-
+    get_logger("test.doc.level2", L),
+    set_level(L, "warning"),
+    get_level(L, 'WARNING'),
+    get_level(L, "warning").  % nv
+
+test("is enabled for") :-
+    get_logger("test.doc.enabled", L),
+    set_level(L, "debug"),
+    is_enabled_for(L, "debug").  % nv
+
+% ── Logging predicates ───────────────────────────────────────────────────────
+
+test("debug succeeds") :-
+    get_logger("test.doc.debug", L),
+    set_level(L, "debug"),
+    debug(L, "test message").  % nv
+
+test("info succeeds") :-
+    get_logger("test.doc.info", L),
+    info(L, "test message").  % nv
+
+test("warning succeeds") :-
+    get_logger("test.doc.warn", L),
+    warning(L, "test message").  % nv
+
+test("error succeeds") :-
+    get_logger("test.doc.err", L),
+    error(L, "test message").  % nv
+
+test("critical succeeds") :-
+    get_logger("test.doc.crit", L),
+    critical(L, "test message").  % nv
+
+test("log at level") :-
+    get_logger("test.doc.log", L),
+    log(L, "info", "test message").  % nv
+
+% ── Messages (fstring_example) ───────────────────────────────────────────────
+
+test("message from parts") :-
+    get_logger("test.doc.msg", L),
+    USERID = "alice", IP = "10.0.0.1",
+    append(["User ", USERID, " logged in from ", IP], MSG),
+    MSG == "User alice logged in from 10.0.0.1",
+    info(L, MSG).  % nv
+
+% ── Handler management ───────────────────────────────────────────────────────
+
+test("stream handler") :-
+    stream_handler("stderr", H),
+    nonvar(H).  % nv
+
+test("set formatter") :-
+    stream_handler("stderr", H),
+    set_formatter(H, "%(message)s").  % nv
+
+test("add and remove handler") :-
+    get_logger("test.doc.handler", L),
+    stream_handler("stderr", H),
+    add_handler(L, H),
+    remove_handler(L, H).  % nv
+
+% ── Examples: basic_usage, logger_hierarchy ──────────────────────────────────
+
+init(L) :-
+    get_logger("test.doc.myapp", L),
+    set_level(L, "info"),
+    info(L, "Application started").
+
+process_item(L, ITEM) :-
+    ITEM > 0,
+    number_chars(ITEM, DIGITS),
+    append("Processing item ", DIGITS, MSG),
+    info(L, MSG).
+process_item(L, ITEM) :-
+    ITEM =< 0,
+    number_chars(ITEM, DIGITS),
+    append("Skipping invalid item ", DIGITS, MSG),
+    warning(L, MSG).
+
+test("basic usage") :-
+    init(L),
+    process_item(L, 3),
+    process_item(L, -1).  % nv
+
+test("logger hierarchy") :-
+    get_logger("test.doc.myapp", PARENT),
+    set_level(PARENT, "info"),
+    get_logger("test.doc.myapp.db", DBLOG),
+    set_level(DBLOG, "debug"),
+    info(DBLOG, "DB logger inherits parent's handlers"),
+    get_level(DBLOG, debug).  % nv
+
+% custom_handler, with /dev/null for the example's /var/log/myapp.log
+test("custom handler") :-
+    get_logger("test.doc.custom", L),
+    set_level(L, "debug"),
+    file_handler("/dev/null", FH),
+    set_formatter(FH, "%(asctime)s [%(levelname)s] %(name)s: %(message)s"),
+    add_handler(L, FH),
+    stream_handler("stderr", SH),
+    set_formatter(SH, "%(levelname)s: %(message)s"),
+    add_handler(L, SH),
+    info(L, "custom handler"),
+    remove_handler(L, FH),
+    remove_handler(L, SH).  % nv
