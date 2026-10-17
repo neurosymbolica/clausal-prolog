@@ -1,13 +1,12 @@
 # Clausal Prolog — TCP Module (`tcp`)
 
-!!! note "Seam vs Prolog syntax"
+!!! note "Clausal Prolog examples"
 
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+    Examples on this page are [Clausal Prolog](clausal_prolog.md)
+    (`.clausal`), which uses ISO Prolog syntax. Clausal Prolog reaches
+    Python only through a `.seam` module, so it imports this module through
+    its facade `library(tcp)`; the [seam](syntax.md) imports `py.tcp`
+    directly (`-import_from(py.tcp, [...])`).
 
 ## Overview
 
@@ -15,40 +14,50 @@ The `tcp` module provides predicates for TCP client/server socket operations,
 wrapping Python's `socket` module. Socket handles are opaque Python objects —
 use them with `send`, `receive`, and `close`.
 
-```seam
--import_from(py.tcp, [connect, send, receive, close])
+```clausal
+:- use_module(library(tcp), [connect/3, send/2, receive/2, close/1]).
 
-echo_client(HOST, PORT, MESSAGE, RESPONSE) <- (
+echo_client(HOST, PORT, MESSAGE, RESPONSE) :-
     connect(HOST, PORT, SOCKET),
     send(SOCKET, MESSAGE),
     receive(SOCKET, RESPONSE),
-    close(SOCKET)
-)
+    close(SOCKET).
+
+% Nothing listens on port 1 here: the connection is refused, and that raises.
+test("refused") :-
+    catch(echo_client("127.0.0.1", 1, "hi", _),
+          error(system_error(connection_refused), _),
+          true).
 ```
 
-Or via [module import](import.md):
+Or import the whole module and qualify each call with the module name:
 
-```seam
--import_module(py.tcp)
+```clausal
+:- use_module(library(tcp)).
 
-main <- (
-    py.tcp.connect("localhost", 8080, S),
-    py.tcp.send(S, "hello"),
-    py.tcp.receive(S, REPLY),
-    ++print(REPLY),
-    py.tcp.close(S)
-)
+main :-
+    tcp:connect("localhost", 8080, S),
+    tcp:send(S, "hello"),
+    tcp:receive(S, REPLY),
+    format("~s~n", [REPLY]),
+    tcp:close(S).
 ```
+
+(The seam prints the reply with a Python escape, `++print(REPLY)`.)
 
 ---
 
 ## Import
 
-```seam
--import_from(py.tcp, [
-    connect, listen, accept,
-    send, receive, close, set_timeout
-])
+```clausal
+:- use_module(library(tcp), [
+    connect/3, listen/3, accept/2,
+    send/2, receive/2, receive/3, close/1, set_timeout/2
+]).
+
+test("listen on an ephemeral port") :-
+    listen("127.0.0.1", 0, SERVER),
+    close(SERVER).
 ```
 
 ---
@@ -59,7 +68,7 @@ main <- (
 |-----------|------|-------------|
 | `connect(Host, Port, Socket)` | `+Host, +Port, -Socket` | connect to TCP server, bind opaque socket handle |
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/tcp_sigs.txt:connect_example"
 ```
 
@@ -81,7 +90,7 @@ connection `system_error(broken_pipe)` or `system_error(connection_reset)`.
 | `listen(Host, Port, ServerSocket)` | `+Host, +Port, -ServerSocket` | Create listening socket with `SO_REUSEADDR`. Port `0` → ephemeral. |
 | `accept(ServerSocket, ClientSocket)` | `+Server, -Client` | accept incoming connection. Blocks until a client connects. |
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/tcp_sigs.txt:server_example"
 ```
 
@@ -98,7 +107,7 @@ connection `system_error(broken_pipe)` or `system_error(connection_reset)`.
 `receive` returns a string if the data is valid UTF-8, or raw `bytes` if
 decoding fails. Fails if the connection is closed (no data received).
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/tcp_sigs.txt:data_transfer_examples"
 ```
 
@@ -111,7 +120,7 @@ decoding fails. Fails if the connection is closed (no data received).
 | `close(Socket)` | `+Socket` | close socket. Always succeeds (even on already-closed sockets). |
 | `set_timeout(Socket, Seconds)` | `+Socket, +Seconds` | Set socket timeout (float). A later operation that times out raises `resource_error(timeout)`. |
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/tcp_sigs.txt:socket_management_example"
 ```
 
@@ -121,13 +130,13 @@ decoding fails. Fails if the connection is closed (no data received).
 
     ### Simple TCP client
 
-    ```seam
+    ```text
     --8<-- "tests/fixtures/docs/tcp_sigs.txt:tcp_client_example"
     ```
 
     ### Echo server (single client)
 
-    ```seam
+    ```text
     --8<-- "tests/fixtures/docs/tcp_sigs.txt:echo_server_example"
     ```
 
@@ -149,4 +158,4 @@ decoding fails. Fails if the connection is closed (no data received).
 
 *See also: [HTTP](http.md) — higher-level HTTP requests (no sockets needed) ·
 [Process](process.md) — shell commands and subprocess execution ·
-[Python Interop](python_integration.md) — `++()` for advanced socket operations.*
+[Python Interop](python_integration.md) — the seam's `++()` for advanced socket operations.*

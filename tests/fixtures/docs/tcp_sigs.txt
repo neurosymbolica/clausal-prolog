@@ -8,7 +8,7 @@ connect("example.com", 80, SOCKET)
 listen("0.0.0.0", 8080, SERVER),
 accept(SERVER, CLIENT),
 receive(CLIENT, DATA),
-send(CLIENT, DATA),    # echo back
+send(CLIENT, DATA),    % echo back
 close(CLIENT),
 close(SERVER)
 --8<-- [end:server_example]
@@ -17,35 +17,33 @@ close(SERVER)
 send(SOCKET, "Hello, server!")
 receive(SOCKET, RESPONSE)
 
-# Custom buffer size
+% Custom buffer size
 receive(SOCKET, 65536, LARGE_DATA)
 --8<-- [end:data_transfer_examples]
 
 --8<-- [start:socket_management_example]
-set_timeout(SOCKET, 5.0),     # 5-second timeout
-receive(SOCKET, DATA)         # fails if no data within 5 seconds
+set_timeout(SOCKET, 5.0),     % 5-second timeout
+receive(SOCKET, DATA)         % raises resource_error(timeout) if no data within 5 seconds
 --8<-- [end:socket_management_example]
 
 --8<-- [start:tcp_client_example]
--import_from(py.tcp, [connect, send, receive, close])
+:- use_module(library(tcp), [connect/3, send/2, receive/2, close/1]).
 
-tcp_request(HOST, PORT, REQUEST, RESPONSE) <- (
+tcp_request(HOST, PORT, REQUEST, RESPONSE) :-
     connect(HOST, PORT, S),
     send(S, REQUEST),
     receive(S, RESPONSE),
-    close(S)
-)
+    close(S).
 --8<-- [end:tcp_client_example]
 
 --8<-- [start:echo_server_example]
--import_from(py.tcp, [listen, accept, send, receive, close])
+:- use_module(library(tcp), [listen/3, accept/2, send/2, receive/2, close/1]).
 
-echo_server(PORT) <- (
+echo_server(PORT) :-
     listen("0.0.0.0", PORT, SERVER),
     accept(SERVER, CLIENT),
     receive(CLIENT, DATA),
     send(CLIENT, DATA),
     close(CLIENT),
-    close(SERVER)
-)
+    close(SERVER).
 --8<-- [end:echo_server_example]

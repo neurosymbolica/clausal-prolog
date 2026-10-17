@@ -1,0 +1,52 @@
+% Companion tests for docs/tcp.md display snippets.
+% TCP predicates require network I/O: these use loopback only.
+:- set_prolog_flag(double_quotes, chars).
+:- use_module(library(tcp), [connect/3, listen/3, accept/2, send/2,
+                             receive/2, receive/3, close/1, set_timeout/2]).
+
+test("listen on ephemeral port") :-
+    listen("127.0.0.1", 0, SERVER),
+    close(SERVER).  % nv
+
+test("set timeout") :-
+    listen("127.0.0.1", 0, SERVER),
+    set_timeout(SERVER, 1.0),
+    close(SERVER).  % nv
+
+test("accept times out") :-
+    listen("127.0.0.1", 0, SERVER),
+    set_timeout(SERVER, 0.2),
+    catch(accept(SERVER, _), error(resource_error(timeout), _), true),
+    close(SERVER).  % nv
+
+test("connect refused raises") :-
+    catch(connect("127.0.0.1", 1, _),
+          error(system_error(connection_refused), _),
+          true).  % nv
+
+test("close twice succeeds") :-
+    listen("127.0.0.1", 0, SERVER),
+    close(SERVER),
+    close(SERVER).  % nv
+
+% ── Examples: tcp_client_example, echo_server_example (defined, not run:
+% the client needs a server, and the server blocks in accept/2) ────────────
+
+tcp_request(HOST, PORT, REQUEST, RESPONSE) :-
+    connect(HOST, PORT, S),
+    send(S, REQUEST),
+    receive(S, RESPONSE),
+    close(S).
+
+echo_server(PORT) :-
+    listen("0.0.0.0", PORT, SERVER),
+    accept(SERVER, CLIENT),
+    receive(CLIENT, DATA),
+    send(CLIENT, DATA),
+    close(CLIENT),
+    close(SERVER).
+
+test("client example reaches connect") :-
+    catch(tcp_request("127.0.0.1", 1, "hi", _),
+          error(system_error(connection_refused), _),
+          true).  % nv
