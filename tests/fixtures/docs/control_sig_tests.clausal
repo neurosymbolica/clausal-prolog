@@ -1,0 +1,17 @@
+% Companion tests for docs/control.md display snippets.
+
+test("time_goal 1 exists") :-
+    time_goal(append([1, 2], [3, 4], _)).
+
+test("time_goal 2 measure") :-
+    time_goal(length([1, 2, 3], _), SECS),
+    number(SECS).
+
+% The benchmark_recipe snippet, as shown.
+compare_approaches(GOAL_A, GOAL_B) :-
+    time_goal(GOAL_A, TIME_A),
+    time_goal(GOAL_B, TIME_B),
+    format("A: ~ws, B: ~ws~n", [TIME_A, TIME_B]).
+
+test("benchmark recipe") :-
+    compare_approaches(length(_, 3), length(_, 4)).

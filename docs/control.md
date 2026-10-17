@@ -4,14 +4,9 @@ Control predicates manage execution flow — forcing determinism, measuring
 performance, and controlling search. For delayed execution, see
 [Coroutining](coroutining.md).
 
-!!! note "Seam vs Prolog syntax"
-
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+Examples on this page are [Clausal Prolog](clausal_prolog.md)
+(`.clausal`): ISO Prolog syntax, without cut. (The [seam](syntax.md),
+Clausal's Python-syntax surface, spells the same goals in Python syntax.)
 
 ---
 
@@ -31,40 +26,47 @@ backtracking into the goal.
     construction, or [`if_/3`](reified_ite.md) with a reifiable condition.
     Both are shown below.
 
-```seam
-test("first only") <- (
+```clausal
+test("first only") :-
     once(in_(X, [1, 2, 3])),
-    X == 1
-)
+    X == 1.
 ```
 
 `once` is what you reach for when you know a predicate has multiple solutions
 but you only want the first:
 
-```seam
-any_member(ELEM, LIST) <- once(in_(ELEM, LIST))
+```clausal
+any_member(ELEM, LIST) :-
+    once(in_(ELEM, LIST)).
 
-test("any") <- (any_member(X, [10, 20, 30]), X == 10)
+test("any") :-
+    any_member(X, [10, 20, 30]),
+    X == 10.
 ```
 
 The cut-free alternative is to write the predicate so it has only the one
 solution you want:
 
-```seam
-first_member(X, [X, *_]),
+```clausal
+first_member(X, [X|_]).
 
-test("first") <- (first_member(X, [10, 20, 30]), X == 10)
+test("first") :-
+    first_member(X, [10, 20, 30]),
+    X == 10.
 ```
 
 and, where `once` stood in for a condition (`( Cond -> Then ; Else )`),
 `if_/3` with a reified condition such as `memberd_t`:
 
-```seam
--import_from(clausal.stdlib.reif, [memberd_t])
--private([yes, no])
-listed(X, XS, R) <- if_(memberd_t(X, XS), R is yes, R is no)
+```clausal
+:- use_module(library(reif)).
 
-test("listed") <- (listed(2, [1, 2, 3], yes), listed(9, [1, 2, 3], no))
+listed(X, XS, R) :-
+    if_(memberd_t(X, XS), R = yes, R = no).
+
+test("listed") :-
+    listed(2, [1, 2, 3], yes),
+    listed(9, [1, 2, 3], no).
 ```
 
 ---
@@ -76,9 +78,9 @@ test("listed") <- (listed(2, [1, 2, 3], yes), listed(9, [1, 2, 3], no))
 `time_goal(Goal)` — execute `Goal` and print the solution count, wall-clock
 and CPU time to stderr. The goal's solutions pass through unchanged; the line
 is printed once `Goal` is **exhausted**, so a caller that stops at the first
-solution (`once`, an `if --` seam) prints nothing.
+solution (`once`, or an `if --` goal in a seam file) prints nothing.
 
-```seam
+```clausal
 --8<-- "tests/fixtures/docs/control_sigs.txt:time_goal_1"
 ```
 
@@ -93,7 +95,7 @@ Output (to stderr):
 `time_goal(Goal, Elapsed)` — execute `Goal` and unify `Elapsed` with the
 wall-clock time in seconds (as a float). Useful for programmatic benchmarking.
 
-```seam
+```clausal
 --8<-- "tests/fixtures/docs/control_sigs.txt:time_goal_2"
 ```
 
@@ -103,7 +105,7 @@ wall-clock time in seconds (as a float). Useful for programmatic benchmarking.
 
 ### Benchmark two approaches
 
-```seam
+```clausal
 --8<-- "tests/fixtures/docs/control_sigs.txt:benchmark_recipe"
 ```
 
@@ -113,8 +115,9 @@ A test passes when its body has a solution, so there is nothing to guard:
 call the predicate with its inputs and its expected output, and no `once` is
 needed.
 
-```seam
-test("a permutation") <- permutation([1, 2, 3], [3, 2, 1])
+```clausal
+test("a permutation") :-
+    permutation([1, 2, 3], [3, 2, 1]).
 ```
 
 ---
