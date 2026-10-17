@@ -6,14 +6,17 @@ in the range `[0, 255]` — at the logic level. This is the classical Prolog
 term inspection, and DCGs the way character strings do under
 [strings as lists](strings_as_lists.md).
 
-!!! note "Seam vs Prolog syntax"
+!!! note "A seam feature"
 
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+    A `bytes` value is a Python object, and only the [seam](syntax.md)
+    (`.seam`, Clausal's Python-syntax surface) can write one: its `b"abc"`
+    literal is Python's. [Clausal Prolog](clausal_prolog.md) (`.clausal`)
+    has no bytes literal (`b"abc"` is a syntax error there), so the
+    examples on this page are seam syntax: `[H, *T]` is the seam's `[H|T]`,
+    `X is Y` is unification and `not G` is `\+ G`. A `.clausal` program
+    meets a `bytes` value when a library hands one over, and then it
+    behaves exactly as described here (see
+    [In Clausal Prolog](#in-clausal-prolog) below).
 
 ```seam
 --8<-- "tests/fixtures/docs/bytes_as_lists_examples.seam:unification"
@@ -61,6 +64,35 @@ list at the unification layer; nothing is converted. The int list is a
 **logical view**, exactly as the character list is for a string. A `bytes`
 threaded through unification and recursion stays `bytes`, so you can still call
 `.decode()` / `.hex()` on a bound result.
+
+### In Clausal Prolog
+
+A `bytes` value that reaches a `.clausal` program, here the raw MD5 digest
+from `hash_bytes/3`, is a list of codes there too: it passes `is_codes/1`,
+destructures as `[H|T]` into an int head, and a DCG can parse it.
+
+```clausal
+:- use_module(library(hash), [hash_bytes/3]).
+
+first_byte(B) --> [B].
+
+test("a digest is 16 codes") :-
+    hash_bytes(md5, "abc", DIGEST),
+    is_codes(DIGEST),
+    \+ is_chars(DIGEST),
+    length(DIGEST, 16).
+
+test("its head is an int code") :-
+    hash_bytes(md5, "abc", DIGEST),
+    DIGEST = [FIRST|_],
+    FIRST == 144.
+
+test("a DCG reads it") :-
+    hash_bytes(md5, "abc", DIGEST),
+    phrase(first_byte(B), DIGEST, REST),
+    B == 144,
+    length(REST, 15).
+```
 
 ---
 
