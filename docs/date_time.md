@@ -2,36 +2,38 @@
 
 The `date_time` standard library module provides relational predicates for constructing, decomposing, and manipulating dates and times. A date, time, datetime or duration is an ordinary **term** — a cell such as `date(2026, 3, 16)`, which Python sees as the tuple `('date', 2026, 3, 16)`. The predicates compute with Python's `datetime` module internally, but they take and give back terms, never `datetime` objects.
 
-The implementation lives in `clausal/modules/py/datetime.py`.
+The implementation lives in `clausal/modules/py/datetime.py`. Clausal Prolog
+imports it through its facade, `library(datetime)`.
 
-!!! note "Seam vs Prolog syntax"
-
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+Examples on this page are [Clausal Prolog](clausal_prolog.md) (`.clausal`):
+ISO Prolog syntax, without cut. (The [seam](syntax.md), Clausal's
+Python-syntax surface, imports the module as `date_time`; the page notes
+where the seam behaves differently.)
 
 ---
 
 ## Import
 
-```seam
--import_from(date_time, [now, today, date, time, datetime,
-                         timedelta, date_add, date_sub, date_diff,
-                         days_between, datetime_string,
-                         date_of, weekday, date_between, timestamp,
-                         datetime_string_iso, date_string_iso,
-                         date_max, date_min, ordinal])
+```clausal
+:- use_module(library(datetime), [now/1, now_utc/1, today/1, time/4,
+                                  datetime/7, timedelta/3, date_add/3,
+                                  date_sub/3, date_diff/3, days_between/3,
+                                  datetime_string/3, date_of/2, weekday/2,
+                                  date_between/3, timestamp/2,
+                                  datetime_string_iso/2, date_string_iso/2,
+                                  date_max/3, date_min/3, ordinal/2]).
 ```
 
-Or via [module import](import.md):
+Or import every predicate the module exports:
 
-```seam
--import_module(date_time)
-# then use date_time.now(...), date_time.date_add(...), etc.
+```clausal
+:- use_module(library(datetime)).
 ```
+
+There is no `date/3` to import: a date is a term (next section). (The seam
+imports `-import_from(date_time, [now, today, date, ...])`, where `date` is a
+validating constructor, or the whole module, `-import_module(date_time)`,
+calling `date_time.now(...)`; see [module import](import.md).)
 
 ---
 
@@ -44,21 +46,25 @@ Or via [module import](import.md):
 | `datetime(Year, Month, Day, Hour, Minute, Second, Microsecond)` | naive `datetime.datetime` (a tz-aware one carries a ninth argument, the UTC offset in seconds) |
 | `timedelta(Days, Seconds, Microseconds)` | `datetime.timedelta` |
 
-`date(Y, M, D)` is a term, not a goal: write `D is date(2026, 3, 16)` to build
-one and `date(Y, M, DAY) is D` to take one apart — both are plain
-unification. Importing `date` makes the ground form validated: an impossible
-date raises `domain_error(date, …)` instead of building a bogus term:
+`date(Y, M, D)` is a term, not a goal: write `D = date(2026, 3, 16)` to build
+one and `date(Y, M, DAY) = D` to take one apart — both are plain
+unification. Building the term checks nothing; the first predicate that
+reads an impossible date raises `domain_error(date, …)` instead of
+computing with a bogus term:
 
 ```
-D is date(2025, 2, 29)
-% error(domain_error(date,date(2025,2,29)),date/3)
+D = date(2025, 2, 29), date_add(D, timedelta(1, 0, 0), R)
+% error(domain_error(date,date(2025,2,29)),date_add/3)
 ```
 
-Wrap it in `catch/3` if a caller wants failure instead.
+Wrap it in `catch/3` if a caller wants failure instead. (In the seam,
+importing `date` validates the ground form when it is built:
+`D is date(2025, 2, 29)` raises `error(domain_error(date,date(2025,2,29)),date/3)`.)
 
 To call a Python `datetime` method, convert explicitly with
 [`to_python`](python_integration.md), which turns a date term into the
-`datetime` object:
+`datetime` object. That needs the seam's `++` escape into Python, which
+Clausal Prolog does not have, so this example is seam:
 
 ```seam
 -import_from(date_time, [date])
@@ -76,9 +82,9 @@ and `clausal.to_clausal` goes the other way.
 
 !!! tip "Prefer the declarative predicates over `++` escapes"
 
-    `++()` drops into arbitrary Python and is reserved for last-resort interop. The common date operations all have clean, relational equivalents — reach for these first:
+    In the seam, `++()` drops into arbitrary Python and is reserved for last-resort interop; Clausal Prolog has no `++` at all. The common date operations all have clean, relational equivalents — reach for these first:
 
-    | Instead of `++` … | Use |
+    | Instead of the seam's `++` … | Use |
     |---|---|
     | `S is ++to_python(DT).isoformat()` | `datetime_string(DT, S, "%Y-%m-%d")` |
     | `N is ++to_python(TD).days` | `timedelta(N, _, TD)` |
@@ -96,36 +102,48 @@ gives `S = "2026-03-16"`.
 
 ## Ordering & comparison
 
-`date`, `time`, and `datetime` terms are ordered chronologically by the
-comparison operators — `<`, `>`, `<=`, `>=`:
+`date`, `time`, and `datetime` terms of the same kind are ordered
+chronologically by the standard order of terms — `@<`, `@>`, `@=<`, `@>=`
+and `compare/3` — because their arguments run from the largest unit to the
+smallest:
 
-```seam
--import_from(date_time, [date])
+```clausal
+earlier(A, B) :-
+    A = date(2020, 12, 1),
+    B = date(2021, 1, 1),
+    A @< B.
 
-earlier(A, B) <- (A is date(2020, 1, 1), B is date(2021, 1, 1), A < B)  # succeeds
+test("earlier") :-
+    earlier(_, _).
 ```
 
 The same terms sort chronologically through `sort/2`, `msort/2`,
-`min_list/2`, and `max_list/2`.
+`min_list/2`, and `max_list/2`. The ISO arithmetic comparisons (`<`, `>`,
+`=<`, `>=`) evaluate their arguments, so `date(2020, 1, 1) < date(2021, 1, 1)`
+raises `error(type_error(evaluable, date/3), (is)/2)`. (The seam's `<`, `>`,
+`<=`, `>=` compare date terms chronologically.)
 
-Only terms of the same kind should be compared. Comparing a date with a
-number throws `error(type_error(orderable, 5), (<)/2)`, and `min_list/2` /
-`max_list/2` raise `type_error(orderable, List)` for such a mix. `catch/3`
-intercepts it and binds the error term:
+Only terms of the same kind should be compared. `min_list/2` and
+`max_list/2` raise `type_error(orderable, List)` for a list that mixes
+dates and numbers; `catch/3` intercepts it and binds the error term:
 
-```seam
--import_from(date_time, [date])
+```clausal
+latest(DATES, LATEST) :-
+    catch(max_list(DATES, LATEST), ERROR, (writeln(ERROR), fail)).
 
-compare_safe(D, X) <- catch(
-    (D < X),
-    _Error,
-    writeln(_Error)
-)
+test("latest of dates") :-
+    latest([date(2021, 1, 1), date(2020, 5, 1)], LATEST),
+    LATEST == date(2021, 1, 1).
+
+test("a date and a number do not mix") :-
+    catch(max_list([date(2021, 1, 1), 5], _), E, true),
+    E == error(type_error(orderable, [date(2021, 1, 1), 5]), max_list/2).
 ```
 
-Comparing a `date` with a `datetime` does **not** raise today and does not
-compare chronologically (`date(2030, 1, 1) < DT` holds for a `datetime` in
-2020): convert with `date_of/2` first.
+The standard order never raises, but across kinds it is not chronological:
+it sorts a number before every compound term, and a `date` (arity 3) before
+every `datetime` (arity 7), so `date(2030, 1, 1) @< DT` holds for a
+`datetime` in 2020. Convert with `date_of/2` first.
 
 ---
 
@@ -133,7 +151,7 @@ compare chronologically (`date(2030, 1, 1) < DT` holds for a `datetime` in
 
 ### now/1, now_utc/1, today/1
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:now_today"
 ```
 
@@ -141,7 +159,7 @@ compare chronologically (`date(2030, 1, 1) < DT` holds for a `datetime` in
 
 `date(Year, Month, Day)` is the date itself; unification constructs and decomposes it:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:date_examples"
 ```
 
@@ -149,7 +167,7 @@ compare chronologically (`date(2030, 1, 1) < DT` holds for a `datetime` in
 
 `time(Hour, Minute, Second, TimeObj)`:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:time_examples"
 ```
 
@@ -157,7 +175,7 @@ compare chronologically (`date(2030, 1, 1) < DT` holds for a `datetime` in
 
 `datetime(Year, Month, Day, Hour, Minute, Second, DtObj)`:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:datetime_example"
 ```
 
@@ -167,19 +185,19 @@ A component of the right type but no such value raises a domain error carrying t
 
 `timedelta(Days, Seconds, TdObj)`:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:timedelta_examples"
 ```
 
 ### date_add/3, date_sub/3
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:date_add_sub"
 ```
 
 ### date_diff/3
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:date_diff"
 ```
 
@@ -187,29 +205,29 @@ A component of the right type but no such value raises a domain error carrying t
 
 `days_between(DateA, DateB, N)` — the whole-day count of `DateA - DateB` as a plain integer, so the common "days between two dates" need is a single goal instead of `date_diff(A, B, TD), timedelta(N, _, TD)`:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:days_between"
 ```
 
 ### datetime_string/3
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:datetime_string"
 ```
 
 ### date_of/2 — Bidirectional
 
-`date_of(DateTime, Date)` — the declarative form of `++to_python(DT).date()`. Forward, it extracts the calendar `date` from a `datetime`; in reverse (with `DateTime` unbound) it builds the midnight `datetime` of a `date`:
+`date_of(DateTime, Date)` — the declarative form of the seam's `++to_python(DT).date()`. Forward, it extracts the calendar `date` from a `datetime`; in reverse (with `DateTime` unbound) it builds the midnight `datetime` of a `date`:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:date_of"
 ```
 
 ### date_max/3, date_min/3
 
-`date_max(D1, D2, M)` / `date_min(D1, D2, M)` — `M` is the later (resp. earlier) of two dates or datetimes, with no `++` escape. A date/datetime mix is not comparable and raises a `type_error` on the second argument (`date_max(date(2026,3,16), datetime(2026,3,16,9,0,0,0), M)` is `type_error(date, datetime(2026,3,16,9,0,0,0))`: the first argument fixes the type); a naive with an aware datetime raises `domain_error(naive_datetime, DT)` (or `aware_datetime`). `date_diff/3`, `days_between/3` and `date_between/3` raise the same:
+`date_max(D1, D2, M)` / `date_min(D1, D2, M)` — `M` is the later (resp. earlier) of two dates or datetimes. A date/datetime mix is not comparable and raises a `type_error` on the second argument (`date_max(date(2026,3,16), datetime(2026,3,16,9,0,0,0), M)` is `type_error(date, datetime(2026,3,16,9,0,0,0))`: the first argument fixes the type); a naive with an aware datetime raises `domain_error(naive_datetime, DT)` (or `aware_datetime`). `date_diff/3`, `days_between/3` and `date_between/3` raise the same:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:date_max_min"
 ```
 
@@ -217,13 +235,13 @@ A component of the right type but no such value raises a domain error carrying t
 
 `ordinal(Date, N)` — the proleptic-Gregorian day number (Python's `toordinal()`). Forward binds `N` (a datetime contributes its calendar day's ordinal); in reverse (`Date` unbound) it builds the `date` term for day `N` (an `N` outside 1..3652059 raises `domain_error(ordinal, N)`), so enumerating every calendar day in `[CS, CE]` is `ordinal(CS, A), ordinal(CE, B), numlist(A, B, Ns)` mapped back through the inverse mode:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:ordinal"
 ```
 
 ### weekday/2
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:weekday"
 ```
 
@@ -231,7 +249,7 @@ A component of the right type but no such value raises a domain error carrying t
 
 `timestamp(DateTime, Stamp)` — convert between a `datetime` term and a POSIX epoch float:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:timestamp"
 ```
 
@@ -241,7 +259,7 @@ Forward (DateTime bound to a `datetime` term): Stamp = the float seconds since t
 
 Bidirectional ISO-8601 string conversion without a format argument:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/date_time_sigs.txt:iso"
 ```
 
@@ -251,13 +269,19 @@ Bidirectional ISO-8601 string conversion without a format argument:
 
 `date_between(Start, End, D)` — generates each date in the range [Start, End]:
 
-```seam
--import_from(date_time, [date, date_between])
+```clausal
+:- use_module(library(datetime), [date_between/3]).
 
-week_dates(START, END, D) <- date_between(START, END, D)
+week_dates(START, END, D) :-
+    date_between(START, END, D).
 
-march_16_to_18(D) <- date_between(date(2026, 3, 16), date(2026, 3, 18), D)
-# D = date(2026, 3, 16); date(2026, 3, 17); date(2026, 3, 18)
+% D = date(2026, 3, 16); date(2026, 3, 17); date(2026, 3, 18)
+march_16_to_18(D) :-
+    date_between(date(2026, 3, 16), date(2026, 3, 18), D).
+
+test("three dates") :-
+    findall(D, march_16_to_18(D), DS),
+    DS == [date(2026, 3, 16), date(2026, 3, 17), date(2026, 3, 18)].
 ```
 
 This is nondeterministic — it succeeds once for each date in the range via [backtracking](control.md).
@@ -284,4 +308,4 @@ This is nondeterministic — it succeeds once for each date in the range via [ba
 
 ---
 
-*See also: [I/O](io.md) — writing and formatting output · [Python Interop](python_integration.md) — `++()` escape for additional datetime operations.*
+*See also: [I/O](io.md) — writing and formatting output · [Python Interop](python_integration.md) — the seam's `++()` escape for additional datetime operations.*

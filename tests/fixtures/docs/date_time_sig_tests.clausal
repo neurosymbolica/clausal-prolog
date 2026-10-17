@@ -1,0 +1,167 @@
+% Companion tests for docs/date_time.md display snippets.
+
+:- use_module(library(datetime), [now/1, now_utc/1, today/1, time/4,
+                                  datetime/7, timedelta/3, date_add/3,
+                                  date_sub/3, date_diff/3, days_between/3,
+                                  datetime_string/3, date_of/2, weekday/2,
+                                  timestamp/2, datetime_string_iso/2,
+                                  date_string_iso/2, date_max/3, date_min/3,
+                                  ordinal/2]).
+
+% ── now/today ────────────────────────────────────────────────────────────────
+
+test("now") :-
+    now(_).
+
+test("now utc") :-
+    now_utc(_).
+
+test("today") :-
+    today(_).
+
+% ── date ─────────────────────────────────────────────────────────────────────
+
+% A date term is not validated when it is built; a predicate that reads
+% it is, so this checks the term names a real date.
+test("date construct") :-
+    D = date(2026, 3, 16),
+    date_add(D, timedelta(0, 0, 0), D).
+
+test("an impossible date is refused when read") :-
+    D = date(2025, 2, 29),
+    catch(date_add(D, timedelta(1, 0, 0), _), E, true),
+    E == error(domain_error(date, date(2025, 2, 29)), date_add/3).
+
+test("date decompose") :-
+    D = date(2026, 3, 16),
+    date(Y, M, DAY) = D,
+    Y == 2026,
+    M == 3,
+    DAY == 16.
+
+% ── time ─────────────────────────────────────────────────────────────────────
+
+test("time construct") :-
+    time(14, 30, 0, _).
+
+test("time decompose") :-
+    time(14, 30, 0, T),
+    time(H, M, S, T),
+    H == 14,
+    M == 30,
+    S == 0.
+
+% ── datetime ─────────────────────────────────────────────────────────────────
+
+test("datetime construct") :-
+    datetime(2026, 3, 16, 14, 30, 0, _).
+
+% ── timedelta ────────────────────────────────────────────────────────────────
+
+test("timedelta construct") :-
+    timedelta(7, 0, _).
+
+% ── Arithmetic ───────────────────────────────────────────────────────────────
+
+test("date add") :-
+    D = date(2026, 3, 16),
+    timedelta(7, 0, TD),
+    date_add(D, TD, R),
+    R == date(2026, 3, 23).
+
+test("date sub") :-
+    D = date(2026, 3, 23),
+    timedelta(7, 0, TD),
+    date_sub(D, TD, R),
+    R == date(2026, 3, 16).
+
+test("date diff") :-
+    D1 = date(2026, 3, 23),
+    D2 = date(2026, 3, 16),
+    date_diff(D1, D2, TD),
+    timedelta(7, 0, TD).
+
+% ── datetime_string ───────────────────────────────────────────────────────────
+
+test("format date") :-
+    D = date(2026, 3, 16),
+    datetime_string(D, S, "%Y-%m-%d"),
+    S == "2026-03-16".
+
+test("parse date") :-
+    datetime_string(DT, "2026-03-16", "%Y-%m-%d"),
+    DT == datetime(2026, 3, 16, 0, 0, 0, 0).
+
+% ── date_of (datetime → date) ─────────────────────────────────────────────────
+
+test("date of datetime") :-
+    datetime(2026, 3, 16, 14, 30, 0, DT),
+    date_of(DT, D),
+    D == date(2026, 3, 16).
+
+test("date of inverse midnight") :-
+    D = date(2026, 3, 16),
+    date_of(DT, D),
+    datetime(2026, 3, 16, 0, 0, 0, DT).
+
+% ── days_between (direct integer day count) ───────────────────────────────────
+
+test("days between") :-
+    A = date(2026, 3, 23),
+    B = date(2026, 3, 16),
+    days_between(A, B, N),
+    N == 7.
+
+% Rolling-window-style "parse ISO → date → diff".
+test("parse iso to date diff") :-
+    datetime_string(DT_A, "2026-03-23", "%Y-%m-%d"),
+    datetime_string(DT_B, "2026-03-16", "%Y-%m-%d"),
+    date_of(DT_A, A),
+    date_of(DT_B, B),
+    days_between(A, B, N),
+    N == 7.
+
+% ── date_max/date_min, ordinal ────────────────────────────────────────────────
+
+test("date max and min") :-
+    date_max(date(2026, 3, 16), date(2026, 3, 17), MAX),
+    MAX == date(2026, 3, 17),
+    date_min(date(2026, 3, 16), date(2026, 3, 17), MIN),
+    MIN == date(2026, 3, 16).
+
+test("ordinal both ways") :-
+    ordinal(date(2026, 3, 16), N),
+    N == 739691,
+    ordinal(D, 739691),
+    D == date(2026, 3, 16).
+
+% ── weekday ──────────────────────────────────────────────────────────────────
+
+test("day of week") :-
+    D = date(2026, 3, 16),
+    weekday(D, DOW),
+    DOW == 0.
+
+% ── timestamp ─────────────────────────────────────────────────────────────────
+
+test("timestamp roundtrip") :-
+    datetime(2026, 3, 16, 12, 0, 0, DT),
+    timestamp(DT, TS),
+    timestamp(DT2, TS),
+    DT == DT2.
+
+% ── ISO-8601 helpers ──────────────────────────────────────────────────────────
+
+test("datetime iso roundtrip") :-
+    datetime(2026, 3, 16, 14, 30, 0, DT),
+    datetime_string_iso(DT, S),
+    S == "2026-03-16T14:30:00",
+    datetime_string_iso(DT2, S),
+    DT == DT2.
+
+test("date iso roundtrip") :-
+    D = date(2026, 3, 16),
+    date_string_iso(D, S),
+    S == "2026-03-16",
+    date_string_iso(D2, S),
+    D == D2.

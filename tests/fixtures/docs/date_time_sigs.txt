@@ -1,77 +1,78 @@
-# Display snippets for docs/date_time.md
+% Display snippets for docs/date_time.md (Clausal Prolog; tested by
+% date_time_sig_tests.clausal)
 
---8<-- [start:now_today]
-now(DT)        # DT = datetime(2026, 3, 16, 14, 30, 5, 123456)  (local, naive)
-now_utc(DT)    # DT = datetime(2026, 3, 16, 13, 30, 5, 123456, 0)  (UTC offset 0)
-today(D)       # D = date(2026, 3, 16)
---8<-- [end:now_today]
+% --8<-- [start:now_today]
+now(DT)        % DT = datetime(2026, 3, 16, 14, 30, 5, 123456)  (local, naive)
+now_utc(DT)    % DT = datetime(2026, 3, 16, 13, 30, 5, 123456, 0)  (UTC offset 0)
+today(D)       % D = date(2026, 3, 16)
+% --8<-- [end:now_today]
 
---8<-- [start:date_examples]
-# Construct (unification with the validated term)
-D is date(2026, 3, 16)       # D = date(2026, 3, 16)
+% --8<-- [start:date_examples]
+% Construct (unification builds the term)
+D = date(2026, 3, 16)        % D = date(2026, 3, 16)
 
-# Decompose
-date(Y, M, DAY) is D         # Y = 2026, M = 3, DAY = 16
---8<-- [end:date_examples]
+% Decompose
+date(Y, M, DAY) = D          % Y = 2026, M = 3, DAY = 16
+% --8<-- [end:date_examples]
 
---8<-- [start:time_examples]
-time(14, 30, 0, T)      # T = time(14, 30, 0, 0)
-time(H, M, S, T)      # decompose T into components
---8<-- [end:time_examples]
+% --8<-- [start:time_examples]
+time(14, 30, 0, T)      % T = time(14, 30, 0, 0)
+time(H, M, S, T)        % decompose T into components
+% --8<-- [end:time_examples]
 
---8<-- [start:datetime_example]
+% --8<-- [start:datetime_example]
 datetime(2026, 3, 16, 14, 30, 0, DT)
-# DT = datetime(2026, 3, 16, 14, 30, 0, 0)
---8<-- [end:datetime_example]
+% DT = datetime(2026, 3, 16, 14, 30, 0, 0)
+% --8<-- [end:datetime_example]
 
---8<-- [start:timedelta_examples]
-timedelta(7, 0, TD)     # TD = timedelta(7, 0, 0)
-timedelta(D, S, TD)    # decompose TD into days and seconds
---8<-- [end:timedelta_examples]
+% --8<-- [start:timedelta_examples]
+timedelta(7, 0, TD)     % TD = timedelta(7, 0, 0)
+timedelta(D, S, TD)     % decompose TD into days and seconds
+% --8<-- [end:timedelta_examples]
 
---8<-- [start:date_add_sub]
-date_add(DATE, DELTA, RESULT)    # RESULT = DATE + DELTA
-date_sub(DATE, DELTA, RESULT)    # RESULT = DATE - DELTA
---8<-- [end:date_add_sub]
+% --8<-- [start:date_add_sub]
+date_add(DATE, DELTA, RESULT)    % RESULT = DATE + DELTA
+date_sub(DATE, DELTA, RESULT)    % RESULT = DATE - DELTA
+% --8<-- [end:date_add_sub]
 
---8<-- [start:date_diff]
-date_diff(D1, D2, TD)    # TD = D1 - D2 (timedelta)
---8<-- [end:date_diff]
+% --8<-- [start:date_diff]
+date_diff(D1, D2, TD)    % TD = D1 - D2 (timedelta)
+% --8<-- [end:date_diff]
 
---8<-- [start:days_between]
-days_between(A, B, N)    # N = (A - B).days (integer) — no date_diff+decompose
---8<-- [end:days_between]
+% --8<-- [start:days_between]
+days_between(A, B, N)    % N = (A - B).days (integer) — no date_diff+decompose
+% --8<-- [end:days_between]
 
---8<-- [start:date_of]
-date_of(DT, D)    # D = the calendar date of DT   (datetime → date)
-date_of(DT, D)    # DT = midnight of D   (date → datetime; DT unbound)
---8<-- [end:date_of]
+% --8<-- [start:date_of]
+date_of(DT, D)    % D = the calendar date of DT   (datetime → date)
+date_of(DT, D)    % DT = midnight of D   (date → datetime; DT unbound)
+% --8<-- [end:date_of]
 
---8<-- [start:datetime_string]
-datetime_string(DT, S, "%Y-%m-%d")    # format: S = "2026-03-16"
-datetime_string(DT, "2026-03-16", "%Y-%m-%d")    # parse: DT = datetime(2026, 3, 16, 0, 0, 0, 0)
---8<-- [end:datetime_string]
+% --8<-- [start:datetime_string]
+datetime_string(DT, S, "%Y-%m-%d")    % format: S = "2026-03-16"
+datetime_string(DT, "2026-03-16", "%Y-%m-%d")    % parse: DT = datetime(2026, 3, 16, 0, 0, 0, 0)
+% --8<-- [end:datetime_string]
 
---8<-- [start:date_max_min]
-date_max(D1, D2, M)    # M = the later of two dates — no ++max(D1, D2)
-date_min(D1, D2, M)    # M = the earlier of two dates
---8<-- [end:date_max_min]
+% --8<-- [start:date_max_min]
+date_max(D1, D2, M)    % M = the later of two dates
+date_min(D1, D2, M)    % M = the earlier of two dates
+% --8<-- [end:date_max_min]
 
---8<-- [start:ordinal]
-ordinal(D, N)    # date(2026, 3, 16) → N = 739691
-ordinal(D, N)    # N = 739691 → D = date(2026, 3, 16)   (D unbound)
---8<-- [end:ordinal]
+% --8<-- [start:ordinal]
+ordinal(D, N)    % date(2026, 3, 16) → N = 739691
+ordinal(D, N)    % N = 739691 → D = date(2026, 3, 16)   (D unbound)
+% --8<-- [end:ordinal]
 
---8<-- [start:weekday]
-weekday(D, DOW)    # DOW = 0 (Monday) through 6 (Sunday)
---8<-- [end:weekday]
+% --8<-- [start:weekday]
+weekday(D, DOW)    % DOW = 0 (Monday) through 6 (Sunday)
+% --8<-- [end:weekday]
 
---8<-- [start:timestamp]
-timestamp(DT, TS)    # forward: TS = DT.timestamp() (float epoch)
-timestamp(DT, 0)     # inverse: DT = the local datetime of epoch 0
---8<-- [end:timestamp]
+% --8<-- [start:timestamp]
+timestamp(DT, TS)    % forward: TS = DT.timestamp() (float epoch)
+timestamp(DT, 0)     % inverse: DT = the local datetime of epoch 0
+% --8<-- [end:timestamp]
 
---8<-- [start:iso]
-datetime_string_iso(DT, S)    # S = "2026-03-16T14:30:00" / inverse parses it
-date_string_iso(D, S)         # S = "2026-03-16" / inverse parses it
---8<-- [end:iso]
+% --8<-- [start:iso]
+datetime_string_iso(DT, S)    % S = "2026-03-16T14:30:00" / inverse parses it
+date_string_iso(D, S)         % S = "2026-03-16" / inverse parses it
+% --8<-- [end:iso]
