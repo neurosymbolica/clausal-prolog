@@ -16,16 +16,12 @@ rather than a second concurrency system to learn.
     [public API](public-api.md). It is built in: `pip install clausal` brings
     `greenlet`, the one runtime dependency, which `asolve` uses.
 
-!!! note "Seam vs Prolog syntax"
-
-    Some examples on this page are marked seam syntax (`.seam`), which
-    differs from Prolog's — for example, variables are `ALLCAPS`, rules
-    use `<-` instead of `:-`, and lists are Python-style. `++`/`--` Python
-    escapes exist only in `.seam`; Clausal Prolog imports modules and never
-    escapes into Python. Other examples on this
-    page are genuine [Clausal Prolog](clausal_prolog.md) (`.clausal`), which
-    uses ISO Prolog syntax directly. Keep this in mind when comparing with
-    Prolog resources.
+Examples on this page are [Clausal Prolog](clausal_prolog.md) (`.clausal`;
+the `naps` module below is the `naps.clausal` that the Python examples import),
+except the two that call Python: awaitables come from Python, and only the
+[seam](syntax.md) (`.seam`, Clausal's Python-syntax surface) can reach it
+with `++expr` or write an `async def`. Those two blocks are seam syntax and
+say so.
 
 ## The idea in one paragraph
 
@@ -154,7 +150,7 @@ nap(Name, done(Name)) :- sleep(0.1).
 ```
 
 Awaitables come from Python, so `await_value/2` and `await_each/2` are mostly
-useful in seam code, where `++expr` calls Python:
+useful in seam code, where `++expr` calls Python (this block is seam syntax):
 
 ```seam
 -module(ticker, [ticks/1])
@@ -230,7 +226,7 @@ is what `async_predicate` and `library(asyncio)` do.
 
 In a `.seam` file, a goal-position `--goal` inside an `async def` runs on the
 event loop. The enclosing function decides, as Python decides where `await`
-is legal:
+is legal (this block is seam syntax):
 
 ```seam
 -module(waits, [])
