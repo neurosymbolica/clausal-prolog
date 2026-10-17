@@ -1,26 +1,5 @@
 # Display snippets for miscellaneous Phase 7 doc files
 
-# === metainterpreters.md ===
-
---8<-- [start:metainterp_graph_test]
-test("tree path(a,c) transitive") <- (
-    graph_program(P),
-    tree_solve(P, path('a', 'c')),
-    TREE is solve_tree(P, path('a', 'c')),
-    nonvar(TREE)
-)
---8<-- [end:metainterp_graph_test]
-
---8<-- [start:metainterp_tree_display]
-TREE is [
-[natnum(succ(succ(0))), [
-  [natnum(succ(0)), [
-    [natnum(0), []]
-  ]]
-]]
-]
---8<-- [end:metainterp_tree_display]
-
 # === wfs.md ===
 
 --8<-- [start:wfs_example]

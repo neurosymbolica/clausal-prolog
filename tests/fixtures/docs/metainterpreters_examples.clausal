@@ -1,0 +1,240 @@
+% Doc snippet fixtures for docs/metainterpreters.md: the five
+% meta-interpreters of clausal/examples/metainterpreters.seam, in
+% Clausal Prolog, with the page's examples as tests.
+
+:- use_module(library(clpz)).
+
+% ── Object programs ──────────────────────────────────────────────────────
+
+% --8<-- [start:natnum_program]
+natnum_program([
+    [natnum(0), []],
+    [natnum(succ(X)), [natnum(X)]]
+]).
+% --8<-- [end:natnum_program]
+
+% --8<-- [start:graph_program]
+graph_program([
+    [edge(a, b), []],
+    [edge(b, c), []],
+    [edge(b, d), []],
+    [path(X, Y), [edge(X, Y)]],
+    [path(X, Y), [edge(X, Z), path(Z, Y)]]
+]).
+% --8<-- [end:graph_program]
+
+% --8<-- [start:cyclic_program]
+cyclic_program([
+    [edge(a, b), []],
+    [edge(b, a), []],
+    [path(X, Y), [edge(X, Z), path(Z, Y)]],   % recursive: tried first
+    [path(X, Y), [edge(X, Y)]]                % base: tried second
+]).
+% --8<-- [end:cyclic_program]
+
+% ── Clause matching ──────────────────────────────────────────────────────
+
+% --8<-- [start:match_clause]
+match_clause(GOAL, FRESH_BODY, PROGRAM) :-
+    in_(CLAUSE, PROGRAM),
+    copy_term(CLAUSE, [FRESH_HEAD, FRESH_BODY]),
+    GOAL = FRESH_HEAD.
+% --8<-- [end:match_clause]
+
+% ── 1. Vanilla ───────────────────────────────────────────────────────────
+
+% --8<-- [start:solve]
+solve([], _PROGRAM_UNUSED).
+solve([GOAL|GOALS], PROGRAM) :-
+    match_clause(GOAL, BODY, PROGRAM),
+    append(BODY, GOALS, ALL_GOALS),
+    solve(ALL_GOALS, PROGRAM).
+% --8<-- [end:solve]
+
+% --8<-- [start:solve_queries]
+% Does natnum(succ(succ(0))) hold?
+test("solve natnum(s(s(0)))") :-
+    natnum_program(P),
+    solve([natnum(succ(succ(0)))], P).
+
+% Is there a path from a to c?
+test("solve path(a,c) transitive") :-
+    graph_program(P),
+    solve([path(a, c)], P).
+
+% And none from c back to a.
+test("solve no path(c,a)") :-
+    graph_program(P),
+    \+ solve([path(c, a)], P).
+% --8<-- [end:solve_queries]
+
+test("solve natnum(0)") :-
+    natnum_program(P),
+    solve([natnum(0)], P).
+
+test("solve natnum(s(0))") :-
+    natnum_program(P),
+    solve([natnum(succ(0))], P).
+
+test("solve edge(a,b)") :-
+    graph_program(P),
+    solve([edge(a, b)], P).
+
+test("solve path(a,b) direct") :-
+    graph_program(P),
+    solve([path(a, b)], P).
+
+test("solve path(a,d) transitive") :-
+    graph_program(P),
+    solve([path(a, d)], P).
+
+% ── 2. Inference counting ────────────────────────────────────────────────
+
+% --8<-- [start:solve_count]
+solve_count([], _PROGRAM_UNUSED, 0).
+solve_count([GOAL|GOALS], PROGRAM, COUNT) :-
+    match_clause(GOAL, BODY, PROGRAM),
+    append(BODY, GOALS, ALL_GOALS),
+    solve_count(ALL_GOALS, PROGRAM, SUB_COUNT),
+    COUNT #= SUB_COUNT + 1.
+% --8<-- [end:solve_count]
+
+% The page's table of step counts.
+test("count natnum(0) = 1 step") :-
+    natnum_program(P),
+    solve_count([natnum(0)], P, 1).
+
+test("count natnum(s(0)) = 2 steps") :-
+    natnum_program(P),
+    solve_count([natnum(succ(0))], P, 2).
+
+test("count natnum(s(s(0))) = 3 steps") :-
+    natnum_program(P),
+    solve_count([natnum(succ(succ(0)))], P, 3).
+
+test("count edge(a,b) = 1 step") :-
+    graph_program(P),
+    solve_count([edge(a, b)], P, 1).
+
+test("count path(a,b) direct = 2 steps") :-
+    graph_program(P),
+    solve_count([path(a, b)], P, 2).
+
+test("count path(a,c) = 4 steps") :-
+    graph_program(P),
+    solve_count([path(a, c)], P, 4).
+
+% ── 3. Depth-limited ─────────────────────────────────────────────────────
+
+% --8<-- [start:solve_limit]
+solve_limit([], _PROGRAM_UNUSED, _MAX_UNUSED).
+solve_limit([GOAL|GOALS], PROGRAM, MAX) :-
+    MAX #> 0,
+    MAX1 #= MAX - 1,
+    match_clause(GOAL, BODY, PROGRAM),
+    append(BODY, GOALS, ALL_GOALS),
+    solve_limit(ALL_GOALS, PROGRAM, MAX1).
+% --8<-- [end:solve_limit]
+
+% --8<-- [start:solve_limit_tests]
+test("limit natnum(s(0)) depth 1 fails") :-
+    natnum_program(P),
+    \+ solve_limit([natnum(succ(0))], P, 1).    % needs 2 steps
+
+test("limit natnum(s(0)) depth 2 succeeds") :-
+    natnum_program(P),
+    solve_limit([natnum(succ(0))], P, 2).
+
+test("limit path(a,c) depth 3 fails") :-
+    graph_program(P),
+    \+ solve_limit([path(a, c)], P, 3).         % needs 4 steps
+
+test("limit path(a,c) depth 4 succeeds") :-
+    graph_program(P),
+    solve_limit([path(a, c)], P, 4).
+% --8<-- [end:solve_limit_tests]
+
+test("limit natnum(s(s(0))) depth 2 fails") :-
+    natnum_program(P),
+    \+ solve_limit([natnum(succ(succ(0)))], P, 2).
+
+test("limit natnum(s(s(0))) depth 3 succeeds") :-
+    natnum_program(P),
+    solve_limit([natnum(succ(succ(0)))], P, 3).
+
+% ── 4. Iterative deepening ───────────────────────────────────────────────
+
+% --8<-- [start:solve_iterative_deepening]
+solve_iterative_deepening(GOALS, PROGRAM) :-
+    between(0, 1000, DEPTH),
+    solve_limit(GOALS, PROGRAM, DEPTH).
+% --8<-- [end:solve_iterative_deepening]
+
+% --8<-- [start:iterative_deepening_tests]
+% A test collects every solution, and the proof is found again at each
+% larger limit, so once/1 keeps the first.
+test("iterative deepening on cyclic graph") :-
+    cyclic_program(P),
+    once(solve_iterative_deepening([path(a, b)], P)).
+% --8<-- [end:iterative_deepening_tests]
+
+test("iterative deepening path(a,c) acyclic") :-
+    graph_program(P),
+    once(solve_iterative_deepening([path(a, c)], P)).
+
+% ── 5. Proof trees ───────────────────────────────────────────────────────
+
+% --8<-- [start:solve_tree]
+solve_tree([], _PROGRAM_UNUSED, []).
+solve_tree([GOAL|GOALS], PROGRAM, [[GOAL, BODY_TREE]|GOALS_TREE]) :-
+    match_clause(GOAL, BODY, PROGRAM),
+    solve_tree(BODY, PROGRAM, BODY_TREE),
+    solve_tree(GOALS, PROGRAM, GOALS_TREE).
+% --8<-- [end:solve_tree]
+
+% --8<-- [start:tree_path_a_c]
+test("tree path(a,c) transitive") :-
+    graph_program(P),
+    solve_tree([path(a, c)], P, TREE),
+    TREE == [
+        [path(a, c), [
+            [edge(a, b), []],
+            [path(b, c), [
+                [edge(b, c), []]
+            ]]
+        ]]
+    ].
+% --8<-- [end:tree_path_a_c]
+
+% --8<-- [start:tree_natnum]
+test("tree natnum(s(s(0))) depth 2") :-
+    natnum_program(P),
+    solve_tree([natnum(succ(succ(0)))], P, TREE),
+    TREE == [
+        [natnum(succ(succ(0))), [
+            [natnum(succ(0)), [
+                [natnum(0), []]
+            ]]
+        ]]
+    ].
+% --8<-- [end:tree_natnum]
+
+test("tree natnum(0)") :-
+    natnum_program(P),
+    solve_tree([natnum(0)], P, TREE),
+    TREE == [[natnum(0), []]].
+
+test("tree natnum(s(0)) has nested proof") :-
+    natnum_program(P),
+    solve_tree([natnum(succ(0))], P, TREE),
+    TREE == [[natnum(succ(0)), [[natnum(0), []]]]].
+
+test("tree edge(a,b) is leaf") :-
+    graph_program(P),
+    solve_tree([edge(a, b)], P, TREE),
+    TREE == [[edge(a, b), []]].
+
+test("tree path(a,b) direct") :-
+    graph_program(P),
+    solve_tree([path(a, b)], P, TREE),
+    TREE == [[path(a, b), [[edge(a, b), []]]]].
