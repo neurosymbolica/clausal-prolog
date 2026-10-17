@@ -1,0 +1,15 @@
+% Doc snippet fixture for docs/term_expansion.md: imports the expansion
+% rules of term_expansion_provider.clausal.
+
+% --8<-- [start:importing_expansion_rules_ex2]
+% my_module.clausal — imports TE rules from the provider
+:- use_module(term_expansion_provider, [term_expansion/4]).
+
+color(red).
+color(green).
+% Each color fact is duplicated by the imported expansion rule
+% --8<-- [end:importing_expansion_rules_ex2]
+
+test("imported rules apply to the importing module") :-
+    findall(C, color(C), CS),
+    CS == [red, red, green, green].

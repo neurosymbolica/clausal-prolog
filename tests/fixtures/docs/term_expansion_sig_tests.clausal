@@ -1,0 +1,13 @@
+% Companion tests for docs/term_expansion.md display snippets.
+
+% Identity expansion: items pass through unchanged
+term_expansion(ITEM, ITEM, STATE, STATE).
+
+color("red").
+color("green").
+
+test("identity passthrough red") :-
+    color("red").
+
+test("identity passthrough green") :-
+    color("green").

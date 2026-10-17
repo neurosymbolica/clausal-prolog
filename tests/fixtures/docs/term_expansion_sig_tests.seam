@@ -1,18 +1,11 @@
 -double_quotes(chars)
-# Companion tests for docs/term_expansion.md display snippets.
+# Companion tests for docs/term_expansion.md display snippets that stay seam.
+# (The identity-expansion tests are in term_expansion_sig_tests.clausal.)
 
-# Identity expansion: items pass through unchanged
-term_expansion(ITEM, ITEM, STATE, STATE) <- True
-
-color("red"),
-color("green"),
-
-test("identity passthrough red") <- color("red")  # nv
-test("identity passthrough green") <- color("green")  # nv
-
-# Regex auto-binding via goal expansion. The group name resolves to a HEAD
-# argument (YEAR of year_of/2); binding a group named only in the body is a
-# separate, deferred capability (A10-F005).
+# Regex auto-binding via goal expansion, a seam feature: in a .clausal file
+# library(re)'s match/2 does not bind named groups. The group name resolves
+# to a HEAD argument (YEAR of year_of/2); binding a group named only in the
+# body is a separate, deferred capability (A10-F005).
 -import_from(regex, [match])
 
 # -allow_singletons: YEAR is a regex named-group name (?P<YEAR>...) referenced

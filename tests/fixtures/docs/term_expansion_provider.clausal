@@ -1,0 +1,19 @@
+% Doc snippet fixture for docs/term_expansion.md: a module that provides
+% term_expansion rules for import (imported by term_expansion_importer.clausal).
+
+% --8<-- [start:importing_expansion_rules]
+% term_expansion_provider.clausal
+:- module(term_expansion_provider, [term_expansion/4]).
+
+% Duplicate every item
+term_expansion(TERM, [TERM, TERM], STATE, STATE).
+% --8<-- [end:importing_expansion_rules]
+
+% The rules apply in the defining module too: this fact is duplicated.
+sample(x).
+
+test("the provider's own items are expanded") :-
+    findall(X, sample(X), XS),
+    XS == [x, x].
+
+:- end_module(term_expansion_provider).
