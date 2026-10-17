@@ -4,14 +4,16 @@ Clausal Prolog provides structured exception handling via `throw/1`, `catch/3`, 
 
 The implementation lives in `clausal/logic/exceptions.py`.
 
-!!! note "Seam vs Prolog syntax"
+!!! note "Clausal Prolog and the seam"
 
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+    Examples on this page are [Clausal Prolog](clausal_prolog.md)
+    (`.clausal`), ISO Prolog syntax, unless they say otherwise. Python
+    exceptions, `++` catchers and the Python-hosting examples belong to the
+    [seam](syntax.md), Clausal's Python-syntax surface: only the seam
+    escapes into Python, so those examples stay in seam syntax. So do the
+    `catch_error/2` and `catch_recover/3` examples: in a `.clausal` clause
+    body those two builtins do not load yet (see
+    [catch_error/2](#catch_error2)).
 
 ---
 
@@ -21,7 +23,7 @@ The implementation lives in `clausal/logic/exceptions.py`.
 
 Raises an exception with a structured error term:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/exceptions_sigs.txt:throw_1"
 ```
 
@@ -29,7 +31,8 @@ Any term can be thrown — strings, atoms, or structured error terms.
 
 ### catch_error/2
 
-Catches any exception and binds the error term to a variable or pattern:
+Catches any exception and binds the error term to a variable or pattern.
+This example is seam syntax:
 
 ```seam
 -private([boom(N)])
@@ -43,13 +46,13 @@ test("catch_error/2 binds the ball") <- (
 - **Goal** — the goal to execute; all solutions pass through if no exception
 - **ERROR** — unified against the thrown term on exception; may be a variable (catches all) or a structured pattern (selective catch with no re-raise on mismatch)
 
-`catch_error/2` never re-raises — it is equivalent to `catch(Goal, ERROR, true)` but with unified exception representation. Python exceptions appear as `ClassName(Message)` terms, identical in shape to logic `throw/1` terms. (It was spelled `Catch/2` before TitleCase names became a load-time error.)
+`catch_error/2` never re-raises — it is equivalent to `catch(Goal, ERROR, true)` but with unified exception representation. In Clausal Prolog, write `catch(Goal, ERROR, true)`: a `.clausal` clause whose body calls `catch_error/2` or `catch_recover/3` does not load yet (`NotImplementedError: terms_to_goalop: goal shape not yet supported`), although a top-level query such as `catch_error(throw(boom(42)), E)` answers `E = boom(42)`. Python exceptions appear as `ClassName(Message)` terms, identical in shape to logic `throw/1` terms. (It was spelled `Catch/2` before TitleCase names became a load-time error.)
 
 ### catch_recover/3
 
 Like `catch_error/2` but with an explicit recovery goal:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/exceptions_sigs.txt:catch_recover_3"
 ```
 
@@ -63,17 +66,24 @@ Like `catch_error/2` but with an explicit recovery goal:
 
 The standard form with selective matching and re-raise on mismatch:
 
-```seam
-safe_div(X, Y, R) <- catch(
-    eval_(X / Y, R),
-    error(evaluation_error('zero_divisor'), _),
-    R is 'undefined'
-)
+```clausal
+safe_div(X, Y, R) :-
+    catch(R is X / Y,
+          error(evaluation_error(zero_divisor), _),
+          R = undefined).
+
+test("safe_div by zero") :-
+    safe_div(1, 0, R),
+    R == undefined.
+
+test("safe_div") :-
+    safe_div(7, 2, R),
+    R == 3.5.
 ```
 
-`safe_div(1, 0, R)` gives `R = 'undefined'`; `safe_div(7, 2, R)` gives `R = 3.5`.
-The division is evaluated with `eval_/2`, which raises on a zero divisor. The
-same division posted as a constraint, `R == X / Y`, does **not** raise: a zero
+`safe_div(1, 0, R)` gives `R = undefined`; `safe_div(7, 2, R)` gives `R = 3.5`.
+The division is evaluated with `is/2`, which raises on a zero divisor. The
+same division posted as a [CLP(ℤ)](constraints.md) constraint, `R #= X / Y`, does **not** raise: a zero
 divisor inside a constraint makes it **fail**, so there is nothing to catch
 (see [Arithmetic](arithmetic.md) and [Operators](operators.md)).
 
@@ -83,7 +93,7 @@ divisor inside a constraint makes it **fail**, so there is nothing to catch
 - **Catcher** — a pattern unified against the thrown term; re-raises if no match
 - **Recovery** — the goal to execute if the exception matches
 
-`catch/3` also intercepts **plain Python exceptions** raised inside the goal
+In the seam, `catch/3` also intercepts **plain Python exceptions** raised inside the goal
 (including from [`++()` escapes](python_integration.md)). These are wrapped as `ClassName(Message)` — a
 term whose functor is the exception class name — so the catcher can match
 them the same way as logic throw terms:
@@ -102,8 +112,8 @@ never depends on how the engine chose to compile the call.
 succeeded, a ball thrown by the goals after the `catch/3` is not offered to its
 Catcher; it goes to an enclosing `catch/3`, or out to the caller:
 
-```seam
---8<-- "tests/fixtures/docs/exceptions_examples.seam:catch_3_goal_only"
+```clausal
+--8<-- "tests/fixtures/docs/exceptions_examples.clausal:catch_3_goal_only"
 ```
 
 When the goals after it fail back into Goal, the catch is active again while
@@ -114,7 +124,7 @@ runs outside.
 
 ### `++` catchers: matching the Python exception object
 
-The `ClassName(Message)` shape above matches by *spelling*. A catcher written
+This is a seam feature. The `ClassName(Message)` shape above matches by *spelling*. A catcher written
 as a [`++()` escape](python_integration.md) instead matches the **original
 Python exception object**:
 
@@ -151,12 +161,17 @@ Those are `BaseException`s and pass straight through any handler.
 
 ### halt/0, halt/1
 
-```seam
-done <- halt()
-done_with_code <- halt(1)
+```clausal
+done :-
+    halt.
+
+done_with_code :-
+    halt(1).
 ```
 
-`halt()` raises `SystemExit(0)`. `halt(N)` raises `SystemExit(N)`.
+`halt` raises `SystemExit(0)`. `halt(N)` raises `SystemExit(N)`: run as a
+program, `clausal -g 'halt(3).' f.clausal` exits with status 3. (The seam
+writes halt/0 as `halt()`.)
 
 ---
 
@@ -166,7 +181,8 @@ Both logic `throw/1` terms and Python exceptions are represented as plain
 terms during catch. Python exceptions become the term
 `ClassName(Message)` (the cell `('ClassName', message)` in Python) — the same
 structural shape as any predicate term — so there is
-no distinction between catching a logic throw and catching a Python exception:
+no distinction between catching a logic throw and catching a Python exception.
+This example is seam syntax, since only the seam raises Python exceptions:
 
 ```seam
 -private([my_error(N)])
@@ -230,22 +246,22 @@ exactly the Scryer term and carries no prose of its own; when it is thrown
 again the new exception recovers the prose on a best-effort basis (it is kept
 for the most recent error terms only).
 
-```seam
-test("the formal term and the culprit indicator") <- (
+```clausal
+test("the formal term and the culprit indicator") :-
     catch(atom_length(1, _), error(type_error(T, V), _), true),
-    T is 'atom',
-    V is 1,
+    T == atom,
+    V == 1,
     catch(atom_length(1, _), error(_, PI), true),
-    PI is '/'('atom_length', 2)
-)
+    PI == atom_length/2.
 ```
 
 The type, domain and kind names inside an error term are **atoms**. Under the
-default `-double_quotes(chars)`, `"atom"` is a string, so a pattern written
+default `double_quotes` flag, `chars`, `"atom"` is a string, so a pattern written
 `error(type_error("atom", _), _)` never matches and the error propagates past
-the catch. Write `'atom'` (or bare `atom`). A load-time
+the catch. Write bare `atom` (or `'atom'`). In the seam, a load-time
 `ClausalStringInCatchPatternWarning` flags a double-quoted string at those
-positions in the catcher of `catch/3`, `catch_recover/3` and `catch_error/2`.
+positions in the catcher of `catch/3`, `catch_recover/3` and `catch_error/2`;
+a `.clausal` file gets no such warning.
 The culprit (the last argument of `type_error/2` and its kin) is not judged:
 it is the offending term itself, and may be a string.
 
@@ -280,32 +296,33 @@ a plain `.py` caller of [`solve()`](python_integration.md#querying-from-python).
 ## Modifying a static predicate
 
 `assertz/1`, `asserta/1` and `retract/1` work only on predicates declared
-`-dynamic` — declare first, then modify. A clause for a predicate that is
-defined but not dynamic — or, for `assertz`/`asserta`, one nothing declares,
-which is static by default — raises ISO's `permission_error`; `retract` of a
-name nothing declares fails (ISO 8.9.3). The prose names the fix:
+dynamic (`:- dynamic(counter/1).`) — declare first, then modify. A clause for a predicate that is
+defined but not dynamic raises ISO's `permission_error`; `retract` of a
+name nothing declares fails (ISO 8.9.3). A procedure nothing declares or
+defines is the one difference between the surfaces: in a `.clausal` module
+`assertz` creates it, dynamic, as ISO's assert does; in the seam it is static
+by default and `assertz` raises `permission_error` (the
+[`assert_creates_dynamic`](flags.md#assert_creates_dynamic) flag). The prose names the fix:
 
 ```text
 Uncaught logic exception: error(permission_error(modify,static_procedure,fixed/1),assertz/1): fixed/1 is a static procedure — declare it -dynamic(fixed/1) to modify it at runtime
 ```
 
-```seam
--dynamic(counter/1)
+```clausal
+:- dynamic(counter/1).
 
-counter(0),
-fixed(1),
+counter(0).
+fixed(1).
 
-test("a dynamic predicate accepts assertz") <- (
+test("a dynamic predicate accepts assertz") :-
     assertz(counter(1)),
-    findall(C, counter(C), [0, 1])
-)
+    findall(C, counter(C), [0, 1]).
 
-test("a static one raises permission_error") <- (
+test("a static one raises permission_error") :-
     catch(assertz(fixed(2)), error(permission_error(M, T, PI), _), true),
-    M is 'modify',
-    T is 'static_procedure',
-    PI is '/'('fixed', 1)
-)
+    M == modify,
+    T == static_procedure,
+    PI == fixed/1.
 ```
 
 A name the module neither defines nor declares is refused before it gets that
@@ -327,28 +344,25 @@ Python-side exception reaches.
 No special primitive is needed: `throw/1` **already** does this, and an exception thrown
 inside a `findall` body propagates out of it rather than being swallowed as a logical
 failure. Write the guard as an ordinary clause that `throw`s when the input is
-malformed. Declare the error functor in `-private([...])` so it constructs a term under
+malformed. (In the seam, declare the error functor in `-private([...])` so it constructs a term under
 the [strict-atoms default](strict-atoms-migration.md) instead of tripping the
-undeclared-atom guard:
+undeclared-atom guard; a `.clausal` file needs no declaration.)
 
-```seam
--private([is_ymd_triple(REF), wf_bad_shape(MSG, CULPRIT)])
+```clausal
+is_ymd_triple([Y, M, D]) :-
+    integer(Y),
+    integer(M),
+    integer(D).
 
-is_ymd_triple([Y, M, D]) <- (integer(Y), integer(M), integer(D))
+window_days_used(REF_YMD, _DAYS_UNUSED) :-
+    \+ is_ymd_triple(REF_YMD),
+    throw(wf_bad_shape("window_days_used: REF_YMD must be [Y,M,D]", REF_YMD)).
+window_days_used([_Y_UNUSED, _M_UNUSED, _D_UNUSED], 7).
 
-window_days_used(REF_YMD, _DAYS_UNUSED) <- (
-    not is_ymd_triple(REF_YMD),
-    throw(wf_bad_shape("window_days_used: REF_YMD must be [Y,M,D]", REF_YMD))
-)
-window_days_used([_Y_UNUSED, _M_UNUSED, _D_UNUSED], 7),
-
-test("malformed input raises, not a silent empty findall") <- (
-    catch(
-        findall(D, window_days_used("2020-01-01", D), _DAYS_UNUSED),
-        wf_bad_shape(_MSG_UNUSED, CULPRIT),
-        CULPRIT == "2020-01-01"
-    )
-)  # nv
+test("malformed input raises, not a silent empty findall") :-
+    catch(findall(D, window_days_used("2020-01-01", D), _DAYS_UNUSED),
+          wf_bad_shape(_MSG_UNUSED, CULPRIT),
+          CULPRIT == "2020-01-01").
 ```
 
 The thrown term carries both a human-readable message and the offending term, so a test
@@ -356,8 +370,27 @@ report (or an outer `catch/3`) names the bad argument, not just the predicate. U
 it surfaces on the `raised:` line of the failure diagnostic, naming the `findall` the
 throw escaped from.
 
-To use the ISO `error(...)` taxonomy above instead of your own functor, import the
-constructor from `clausal.logic.exceptions` — the helper builds the nested `error(...)`
+To use the ISO `error(...)` taxonomy above instead of your own functor, throw
+the `error(Formal, Context)` term itself:
+
+```clausal
+is_ymd_triple([Y, M, D]) :-
+    integer(Y),
+    integer(M),
+    integer(D).
+
+window_days_used(REF_YMD, _DAYS_UNUSED) :-
+    \+ is_ymd_triple(REF_YMD),
+    throw(error(type_error(ymd_triple, REF_YMD), window_days_used/2)).
+window_days_used([_Y_UNUSED, _M_UNUSED, _D_UNUSED], 7).
+
+test("iso error term raises from a guard") :-
+    catch(findall(D, window_days_used("2020-01-01", D), _DAYS_UNUSED),
+          error(type_error(_T_UNUSED, CULPRIT), _CTX_UNUSED),
+          CULPRIT == "2020-01-01").
+```
+
+In the seam you can instead import the constructor from `clausal.logic.exceptions` — the helper builds the nested `error(...)`
 term for you, so no functor declaration is needed:
 
 ```seam
@@ -412,26 +445,26 @@ An uncaught `throw/1` surfaces as `LogicException` in Python code; `str(e)` is
 ??? example "Examples"
 
     **Catch a type error:**
-    ```seam
-    --8<-- "tests/fixtures/docs/exceptions_sigs.txt:logicexception"
+    ```clausal
+    --8<-- "tests/fixtures/docs/exceptions_examples.clausal:logicexception"
     ```
 
-    **Catch a Python exception (no recovery needed):**
+    **Catch a Python exception (no recovery needed; seam syntax):**
     ```seam
     --8<-- "tests/fixtures/docs/exceptions_sigs.txt:logicexception_ex2"
     ```
 
-    **catch_recover with error access:**
+    **catch_recover with error access (seam syntax):**
     ```seam
     --8<-- "tests/fixtures/docs/exceptions_sigs.txt:logicexception_ex3"
     ```
 
     **Re-throw after logging:**
-    ```seam
-    --8<-- "tests/fixtures/docs/exceptions_sigs.txt:logicexception_ex4"
+    ```clausal
+    --8<-- "tests/fixtures/docs/exceptions_examples.clausal:logicexception_ex4"
     ```
 
-    **Catch-all:**
+    **Catch-all (seam syntax):**
     ```seam
     --8<-- "tests/fixtures/docs/exceptions_sigs.txt:logicexception_ex5"
     ```
@@ -481,6 +514,7 @@ An uncaught `throw/1` surfaces as `LogicException` in Python code; `str(e)` is
     - **Halt**: exit code 0, exit code N, raises SystemExit
     - **Structured errors**: type_error, instantiation_error, existence_error, permission_error, evaluation_error
     - **Import integration**: `.seam` file with catch/throw patterns
+    - **Doc examples**: `tests/fixtures/docs/exceptions_examples.clausal`
 
 ---
 

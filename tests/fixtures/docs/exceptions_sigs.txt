@@ -45,14 +45,6 @@ catch(Goal, my_error(N), Recovery)   # selective: re-raises if no match
 
 # === Additional (indented blocks) ===
 
---8<-- [start:logicexception]
-check_int(X, R) <- catch(
-    (X > 0, R is "positive"),
-    error(type_error(_, _), _),
-    R is "not a number"
-)
---8<-- [end:logicexception]
-
 --8<-- [start:logicexception_ex2]
 safe_parse(S, R) <- (
     catch(++(int(S)), ++ValueError(_)),
@@ -67,14 +59,6 @@ logged_op(X, Y, R) <- catch_recover(
     (write_text(ERR), R is "error")
 )
 --8<-- [end:logicexception_ex3]
-
---8<-- [start:logicexception_ex4]
-logged_div(X, Y, R) <- catch(
-    (R == X / Y),
-    E,
-    (write_text(E), throw(E))
-)
---8<-- [end:logicexception_ex4]
 
 --8<-- [start:logicexception_ex5]
 safe_run(GOAL, R) <- (

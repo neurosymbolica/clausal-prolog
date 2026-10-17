@@ -1,0 +1,49 @@
+% Doc snippet fixtures for docs/exceptions.md
+
+% --8<-- [start:catch_3_goal_only]
+chk(Y) :- var(Y), throw(later).
+chk(Y) :- nonvar(Y).
+% w/1 raises later; Y is never bound
+w(Y) :- catch(true, E, Y = E), chk(Y).
+% --8<-- [end:catch_3_goal_only]
+
+% The ball chk(Y) throws after catch/3 has succeeded is not w's to catch: it
+% reaches the enclosing catch.  (w used to answer Y = later.)
+test("catch/3 protects its Goal only") :-
+    catch((w(_), fail), BALL, BALL == later).
+
+% Re-entered on backtracking, the Goal is protected again: Y == two rejects
+% gen's first answer, and the ball gen's second answer throws is caught.
+gen(1).
+gen(_) :- throw(two).
+
+test("catch/3 protects its Goal again on backtracking") :-
+    catch(gen(Y), E, Y = E),
+    Y == two.
+
+% --8<-- [start:logicexception]
+check_int(X, R) :-
+    catch((X > 0, R = "positive"),
+          error(type_error(_, _), _),
+          R = "not a number").
+% --8<-- [end:logicexception]
+
+test("check_int: a number") :-
+    check_int(5, R),
+    R == "positive".
+
+test("check_int: not a number") :-
+    check_int(foo, R),
+    R == "not a number".
+
+% --8<-- [start:logicexception_ex4]
+logged_div(X, Y, R) :-
+    catch(R is X / Y,
+          E,
+          (write_text(E), nl, throw(E))).
+% --8<-- [end:logicexception_ex4]
+
+test("logged_div: re-throws") :-
+    catch(logged_div(1, 0, _),
+          error(evaluation_error(zero_divisor), _),
+          true).
