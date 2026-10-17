@@ -1,0 +1,166 @@
+% Doc snippet fixtures for docs/coroutining.md
+
+:- dynamic(held/1).
+
+% --8<-- [start:freeze_2_ex2]
+% Guard: X must be positive when bound
+guarded(X) :-
+    freeze(X, X > 0),
+    X = 5.
+% succeeds — 5 > 0
+
+rejected(X) :-
+    freeze(X, X > 0),
+    X = -1.
+% fails — the unification X = -1 is rejected because -1 > 0 fails
+
+test("guarded") :-
+    guarded(X),
+    X == 5.
+
+test("rejected", fail) :-
+    rejected(_).
+% --8<-- [end:freeze_2_ex2]
+
+% --8<-- [start:freeze_2_ex3]
+% Deferred binding: the frozen goal Y = X fires when X is bound
+deferred(Y) :-
+    freeze(X, Y = X),
+    X = "hello".
+
+% Multiple freezes on the same variable
+multi(Y, Z) :-
+    freeze(X, Y = X),
+    freeze(X, Z = X),
+    X = 42.
+
+test("deferred") :-
+    deferred(Y),
+    Y == "hello".
+
+test("multi") :-
+    multi(Y, Z),
+    Y == 42,
+    Z == 42.
+% --8<-- [end:freeze_2_ex3]
+
+% --8<-- [start:supported_conditions]
+% equivalent to freeze(X, Goal)
+test("when nonvar") :-
+    when(nonvar(X), Y = X),
+    X = 42,
+    Y == 42.
+
+% Conjunction: fire when both X and Y are bound
+test("when conjunction") :-
+    when((nonvar(X), nonvar(Y)), R = done),
+    X = 1,
+    var(R),
+    Y = 2,
+    R == done.
+
+% ground: fire when term is fully ground
+test("when ground") :-
+    when(ground([X, Y]), R = 'all ground'),
+    X = 1,
+    Y = 2,
+    R == 'all ground'.
+% --8<-- [end:supported_conditions]
+
+% --8<-- [start:setup_call_cleanup_3_ex2]
+% Basic pattern: acquire, use, release
+with_lock(GOAL) :-
+    setup_call_cleanup(
+        assertz(held(lock)),
+        GOAL,
+        retract(held(lock))
+    ).
+
+% Cleanup runs once Call has no more solutions, so enumerate them all:
+test("cleanup releases the lock") :-
+    findall(L, with_lock(held(L)), LS),
+    LS == [lock],
+    \+ held(_).
+
+% Call fails — Cleanup still runs, overall fails
+test("scc call fails", fail) :-
+    with_lock(in_(_, [])).
+
+test("the lock is released after a failure") :-
+    \+ with_lock(in_(_, [])),
+    \+ held(_).
+% --8<-- [end:setup_call_cleanup_3_ex2]
+
+% --8<-- [start:call_cleanup_2_ex2]
+safe_query(GOAL) :-
+    call_cleanup(
+        call(GOAL),
+        (write('query finished'), nl)
+    ).
+
+test("safe query") :-
+    safe_query(in_(X, [1])),
+    X == 1.
+% --8<-- [end:call_cleanup_2_ex2]
+
+% --8<-- [start:call_nth_2_ex2]
+% Get the 3rd member
+test("third") :-
+    call_nth(in_(X, [10, 20, 30, 40, 50]), 3),
+    X == 30.
+
+% N exceeds available solutions — fails
+test("too few", fail) :-
+    call_nth(in_(_, [1, 2]), 5).
+% --8<-- [end:call_nth_2_ex2]
+
+% --8<-- [start:count_all_2_ex2]
+% Count members
+test("count") :-
+    count_all(in_(_, [a, b, c, d]), N),
+    N == 4.
+
+% No solutions — 0
+test("empty") :-
+    count_all(in_(_, []), N),
+    N == 0.
+
+% With filter
+test("filtered") :-
+    count_all((in_(X, [1, 2, 3, 4, 5]), X > 3), N),
+    N == 2.
+% --8<-- [end:count_all_2_ex2]
+
+% --8<-- [start:nesting_inside_meta_predicates]
+% findall wrapping call_nth
+test("findall+callnth") :-
+    findall(X, call_nth(in_(X, [10, 20, 30]), 2), BAG),
+    BAG == [20].
+
+% catch wrapping call_nth with bad N
+test("catch+callnth") :-
+    catch(
+        call_nth(in_(_, [1, 2, 3]), 0),
+        _,
+        R = caught
+    ),
+    R == caught.
+
+% freeze inside findall
+test("findall+freeze") :-
+    findall(
+        Y,
+        (freeze(X, Y = X), X = 99),
+        BAG
+    ),
+    BAG == [99].
+
+% count_all inside findall
+test("findall+countall") :-
+    findall(
+        N,
+        count_all(in_(_, [a, b, c]), N),
+        BAG
+    ),
+    BAG == [3].
+% --8<-- [end:nesting_inside_meta_predicates]

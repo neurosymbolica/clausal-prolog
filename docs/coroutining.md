@@ -6,13 +6,13 @@ Clausal Prolog provides coroutining primitives for delayed goal execution and de
 - **Resource cleanup** — guarantee cleanup runs regardless of success, failure, or exceptions (`setup_call_cleanup/3`, `call_cleanup/2`)
 - **Solution control** — skip to the Nth solution or count solutions efficiently (`call_nth/2`, `count_all/2`)
 
-All predicates in this module are **compiler special forms** — they are compiled inline at compile time (like `once/1`, `findall/3`, and `catch/3`), and can be freely nested inside any other meta-predicate.
+Examples on this page are [Clausal Prolog](clausal_prolog.md) (`.clausal`). All predicates in this module are **compiler special forms** — they are compiled inline at compile time (like `once/1`, `findall/3`, and `catch/3`), and can be freely nested inside any other meta-predicate.
 
 ---
 
 ## freeze/2
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/coroutining_sigs.txt:freeze_2"
 ```
 
@@ -34,16 +34,16 @@ As a builtin, `append/3` unifies its whole known prefix as one unification, so t
 
 Multiple freezes on the same variable accumulate. All fire when the variable is bound. Backtracking undoes the attribute (the freeze is removed if the trail is unwound).
 
-```seam
---8<-- "tests/fixtures/docs/coroutining_sigs.txt:freeze_2_ex2"
+```clausal
+--8<-- "tests/fixtures/docs/coroutining_examples.clausal:freeze_2_ex2"
 ```
 
-```seam
---8<-- "tests/fixtures/docs/coroutining_sigs.txt:freeze_2_ex3"
+```clausal
+--8<-- "tests/fixtures/docs/coroutining_examples.clausal:freeze_2_ex3"
 ```
 
 ??? info "Implementation"
-    freeze uses the attributed variable hook infrastructure (the same mechanism used by [`dif/2`](constraints.md), [CLP(ℤ)](constraints.md), and [CLP(B)](clpb.md)). The frozen goal is compiled as a closure (zero-arg generator factory) and stored under the `"freeze"` attribute key. When the variable is bound, the hook queues the goal on the trail (`trail.push_pending`); the engine runs the queue at the next goal boundary — after an inline unification or an inline comparison that can bind (`X == 3`, `X <= 3`), at the start of a clause body whose head unified, and at every answer of a called predicate or builtin — once per answer. The queue and every change to it are trailed, so backtracking restores it.
+    freeze uses the attributed variable hook infrastructure (the same mechanism used by [`dif/2`](constraints.md), [CLP(ℤ)](constraints.md), and [CLP(B)](clpb.md)). The frozen goal is compiled as a closure (zero-arg generator factory) and stored under the `"freeze"` attribute key. When the variable is bound, the hook queues the goal on the trail (`trail.push_pending`); the engine runs the queue at the next goal boundary — after an inline unification or an inline comparison that can bind (the seam's CLP(ℤ) `X == 3`, `X <= 3`), at the start of a clause body whose head unified, and at every answer of a called predicate or builtin — once per answer. The queue and every change to it are trailed, so backtracking restores it.
 
     A bare `unify(...)` called from Python with no driver owning the trail (`trail.defer` false) queues woken goals the same way, and runs the queue itself before it returns: after every hook of the unification has run, to the first answer. If the goals fail, the unification fails and binds nothing. Everything nested in that unification counts as part of it: a partial list or segment string unifying element by element, a hook that unifies, a woken goal that unifies. Those only queue, and the one drain runs their goals. Outside a driver, a `when/2` whose condition already holds runs its goal at once, to its first answer, because no unification would ever run it.
 
@@ -53,7 +53,7 @@ Multiple freezes on the same variable accumulate. All fire when the variable is 
 
 ## when/2
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/coroutining_sigs.txt:when_2"
 ```
 
@@ -68,8 +68,8 @@ Generalized coroutining: delay `Goal` until `Condition` is satisfied.
 | `(C1, C2)` | Conjunction: both C1 and C2 must be satisfied |
 | `(C1 ; C2)` | Disjunction: either C1 or C2 suffices |
 
-```seam
---8<-- "tests/fixtures/docs/coroutining_examples.seam:supported_conditions"
+```clausal
+--8<-- "tests/fixtures/docs/coroutining_examples.clausal:supported_conditions"
 ```
 
 ### How conditions decompose
@@ -89,7 +89,7 @@ Generalized coroutining: delay `Goal` until `Condition` is satisfied.
 
 ## setup_call_cleanup/3
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/coroutining_sigs.txt:setup_call_cleanup_3"
 ```
 
@@ -104,29 +104,34 @@ Deterministic resource management — the logic programming equivalent of `try/f
 
 If **Setup fails**, the whole goal fails and Cleanup does **not** run.
 
-```seam
---8<-- "tests/fixtures/docs/coroutining_examples.seam:setup_call_cleanup_3_ex2"
+The example takes and releases a lock fact. (In the seam, Setup can also open
+a Python file handle, `HANDLE is ++open(PATH)`, and Cleanup close it,
+`++HANDLE.close()`; Clausal Prolog has no ISO stream predicates: `open/4`
+is undefined in a `.clausal` file.)
+
+```clausal
+--8<-- "tests/fixtures/docs/coroutining_examples.clausal:setup_call_cleanup_3_ex2"
 ```
 
 ---
 
 ## call_cleanup/2
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/coroutining_sigs.txt:call_cleanup_2"
 ```
 
 Sugar for `setup_call_cleanup(true, Call, Cleanup)` — no setup step, just guaranteed cleanup.
 
-```seam
---8<-- "tests/fixtures/docs/coroutining_sigs.txt:call_cleanup_2_ex2"
+```clausal
+--8<-- "tests/fixtures/docs/coroutining_examples.clausal:call_cleanup_2_ex2"
 ```
 
 ---
 
 ## call_nth/2
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/coroutining_sigs.txt:call_nth_2"
 ```
 
@@ -138,15 +143,15 @@ Call `Goal` and succeed only on the **Nth solution**. The first N-1 solutions ar
 - If Goal has fewer than N solutions, `call_nth` fails.
 - Only the Nth solution's bindings are visible to the continuation.
 
-```seam
---8<-- "tests/fixtures/docs/coroutining_examples.seam:call_nth_2_ex2"
+```clausal
+--8<-- "tests/fixtures/docs/coroutining_examples.clausal:call_nth_2_ex2"
 ```
 
 ---
 
 ## count_all/2
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/coroutining_sigs.txt:count_all_2"
 ```
 
@@ -154,8 +159,8 @@ Count the number of solutions of `Goal` without collecting them. Unifies `Count`
 
 Unlike [findall](meta_predicates.md) + `length`, `count_all` does not build a list — it just counts. Bindings from the inner goal are **not** visible after counting (the trail is unwound).
 
-```seam
---8<-- "tests/fixtures/docs/coroutining_examples.seam:count_all_2_ex2"
+```clausal
+--8<-- "tests/fixtures/docs/coroutining_examples.clausal:count_all_2_ex2"
 ```
 
 ---
@@ -175,7 +180,7 @@ For constraint-library authors.  An attribute hook runs while the unification th
 The contract:
 
 - **Inside a hook** (`hooks_running > 0`) a library must not post a constraint in place, must not run another library's entry point, and must not drive a goal on the trail.  It queues the work as a goal with `trail.push_pending(goal)`, and the goal runs at the next goal boundary, after every hook of the unification has run.  `solve(..., trail=t)` and `call(..., trail=t)` on a trail whose hooks are running raise the ISO-shaped `error(permission_error(call, goal, Goal), Context)`: Context is `solve/2` for `solve`, and `call/N` for `call(F, A1, ..., Ak)`, where N = k + 1 and Goal is `F(A1, ..., Ak)`, or the atom `F` when k = 0 (so `call("p", X, trail=t)` reports `call/2` and the goal `p(X)`, and `call("p", trail=t)` reports `call/1` and the goal `p`).  A driver on a different, fresh trail is allowed, with a caveat: its bindings are on ITS trail, not the outer one.  If it binds a variable of the outer computation and the hook keeps that binding (it takes the first answer and stops), an undo of the outer trail does not undo it: the outer unification is undone and the variable stays bound.  Bind outer variables only through the hook's own trail (by unifying on it), or queue the goal.
-- **At a goal** (`hooks_running == 0`) a library may post in place.  A binding it makes wakes goals, which run at the goal boundary that follows, before the next goal and with every answer.  In compiled code that boundary comes after every unification, every inline comparison that can bind (`X == 3`, `X <= 3`, and the posts of a reified test in `if_/3`), and every answer of a call.  A goal that ends in such an op inside a construct with a scope of its own (`catch/3`, `findall/3`, `\+`, `once/1`, `forall/2`, `call_cleanup/2`, `setup_call_cleanup/3`) runs what it woke inside that scope, so `catch/3` catches a ball thrown by a woken goal.  A goal woken by a binding AFTER the `catch/3` runs outside it, and its ball escapes the catch (ISO 7.8.9).
+- **At a goal** (`hooks_running == 0`) a library may post in place.  A binding it makes wakes goals, which run at the goal boundary that follows, before the next goal and with every answer.  In compiled code that boundary comes after every unification, every inline comparison that can bind (the seam's CLP(ℤ) `X == 3`, `X <= 3`, and the posts of a reified test in `if_/3`), and every answer of a call.  A goal that ends in such an op inside a construct with a scope of its own (`catch/3`, `findall/3`, `\+`, `once/1`, `forall/2`, `call_cleanup/2`, `setup_call_cleanup/3`) runs what it woke inside that scope, so `catch/3` catches a ball thrown by a woken goal.  A goal woken by a binding AFTER the `catch/3` runs outside it, and its ball escapes the catch (ISO 7.8.9).
 
 The counter goes up when a unification starts dispatching the hooks of the attributed variables it bound, and back down when that dispatch ends, whether it succeeds, a hook fails, or a hook raises (`KeyboardInterrupt` and `RecursionError` included).  Woken goals that a bare `unify` runs itself (to their first answer) run after its dispatch has ended, so they see `0`.  The counter is read-only.  C extensions read the `hooks_running` field of `TrailObject` from `_variables_capi.h`.
 
@@ -205,8 +210,8 @@ The contract:
 
 All of these are compiler special forms that compile their goal arguments inline. They nest freely inside other meta-predicates — [findall](meta_predicates.md), [once](control.md), [catch](exceptions.md), [forall](meta_predicates.md), and each other:
 
-```seam
---8<-- "tests/fixtures/docs/coroutining_examples.seam:nesting_inside_meta_predicates"
+```clausal
+--8<-- "tests/fixtures/docs/coroutining_examples.clausal:nesting_inside_meta_predicates"
 ```
 
 ---
@@ -214,7 +219,8 @@ All of these are compiler special forms that compile their goal arguments inline
 ??? info "Test coverage"
 
     Tests are in `tests/test_coroutining.py` (51 tests) and
-    `tests/fixtures/coroutining.seam` (20 tests).
+    `tests/fixtures/coroutining.seam` (20 tests); this page's examples are
+    `tests/fixtures/docs/coroutining_examples.clausal` (20 tests).
 
     - **call_nth**: basic, first/last, too few solutions, N as variable, zero/negative/non-integer raises, fail goal, single solution
     - **count_all**: basic, empty, large range, already-bound correct/wrong, with filter, no side effects
