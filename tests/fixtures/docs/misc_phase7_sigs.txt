@@ -98,12 +98,6 @@ Phase A: Source -> EmbedTransformer -> module_items + Python AST bytecode
 Phase B: compile_module(predicate_nodes, module_items, module_dict) -> compiled predicates
 --8<-- [end:compiler_phases]
 
-# === dcg.md ===
-
---8<-- [start:dcg_phrase_example]
-phrase(digit(D), [5])    # D = 5
---8<-- [end:dcg_phrase_example]
-
 # === files.md ===
 
 --8<-- [start:directory_listing]
