@@ -302,7 +302,10 @@ name nothing declares fails (ISO 8.9.3). A procedure nothing declares or
 defines is the one difference between the surfaces: in a `.clausal` module
 `assertz` creates it, dynamic, as ISO's assert does; in the seam it is static
 by default and `assertz` raises `permission_error` (the
-[`assert_creates_dynamic`](flags.md#assert_creates_dynamic) flag). The prose names the fix:
+[`assert_creates_dynamic`](flags.md#assert_creates_dynamic) flag). Uncaught,
+the error prints the same on both surfaces. The hint at its end is in the
+seam's spelling; in a `.clausal` file the declaration is
+`:- dynamic(fixed/1).`
 
 ```text
 Uncaught logic exception: error(permission_error(modify,static_procedure,fixed/1),assertz/1): fixed/1 is a static procedure — declare it -dynamic(fixed/1) to modify it at runtime
@@ -325,8 +328,9 @@ test("a static one raises permission_error") :-
     PI == fixed/1.
 ```
 
-A name the module neither defines nor declares is refused before it gets that
-far: the goal cannot be built at all.
+In the seam, a name the module neither defines nor declares is refused
+before it gets that far: the goal cannot be built at all. In a `.clausal`
+file, `assertz(newp(1)), newp(1)` succeeds: the assert creates `newp/1`.
 
 ---
 

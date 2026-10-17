@@ -371,10 +371,12 @@ In Clausal Prolog (`.clausal`):
 - A module is `:- module(Name, [p/1, q/2]).` and must end with
   `:- end_module(Name).`; import with `:- use_module(Mod, [p/1])` or
   `:- use_module(library(Lib), [...])`.
-- `assertz`/`retract` need the predicate declared
-  `:- dynamic(name/arity).`
-- There is no lambda syntax: pass a named predicate to `maplist`, `foldl`
-  and the other higher-order predicates.
+- `assertz` on a name nothing defines creates it, dynamic (ISO). To
+  modify a predicate the file defines, declare it `:- dynamic(name/arity).`
+- Lambdas come from `:- use_module(library(lambda)).`: `\X^Goal` takes
+  one argument, `\X^Y^Goal` two, as in
+  `maplist(\X^Y^(Y is X*2), [1, 2], L)`. A named predicate works too. See
+  [Lambdas](lambdas.md); `Free+\X^Goal` shares `Free` with the clause.
 - Python is not reachable from a `.clausal` goal except through a library
   facade or an imported `.seam` module. A `.clausal` module may not import
   a `.pl` module.
