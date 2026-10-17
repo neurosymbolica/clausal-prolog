@@ -1,0 +1,11 @@
+% Companion tests for docs/regex.md display snippets.
+:- set_prolog_flag(double_quotes, chars).
+:- use_module(library(re), [match/2, match/3, search/2, search/3,
+                            replace/4, split/3]).
+
+test("match exists") :- match("\\d+", "123").  % nv
+test("search exists") :- search("\\d+", "abc123").  % nv
+test("replace exists") :- replace("\\s+", " ", "a  b", R), R == "a b".  % nv
+test("split exists") :- split(",", "a,b,c", F), F == ["a", "b", "c"].  % nv
+test("match/3 exists") :- match("(?P<d>\\d)", "1", G), get(G, d, D), D == "1".  % nv
+test("search/3 exists") :- search("(?P<d>\\d)", "a1", G), get(G, d, D), D == "1".  % nv
