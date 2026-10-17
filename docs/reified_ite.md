@@ -1,19 +1,12 @@
 # Clausal Prolog — Reified If-Then-Else
 
-!!! note "Seam vs Prolog syntax"
-
-    Some examples on this page are marked seam syntax (`.seam`), which
-    differs from Prolog's — for example, variables are `ALLCAPS`, rules
-    use `<-` instead of `:-`, and lists are Python-style. `++`/`--` Python
-    escapes exist only in `.seam`; Clausal Prolog imports modules and never
-    escapes into Python. Other examples on this
-    page are genuine [Clausal Prolog](clausal_prolog.md) (`.clausal`), which
-    uses ISO Prolog syntax directly. Keep this in mind when comparing with
-    Prolog resources.
+Examples on this page are [Clausal Prolog](clausal_prolog.md) (`.clausal`), with
+`if_/3` from `library(reif)`. Where the [seam](syntax.md) (Clausal's
+Python-syntax surface) differs, the page says so.
 
 ## Overview
 
-Clausal Prolog provides a **reified if-then-else** based on Neumerkel & Kral's `if_/3` ([arXiv:1607.01590](https://arxiv.org/abs/1607.01590)). Unlike Prolog's committed-choice `(->)/2`, reified ITE is **monotonic**: adding constraints can only restrict, never lose solutions. This is the same philosophy behind the use of [`dif/2`](constraints.md) instead of `\=`, and, in the seam, [CLP(ℤ)](constraints.md#clp-integer-constraints) (`==`) instead of ISO `'is'/2` arithmetic (see [Arithmetic](arithmetic.md)).
+Clausal Prolog provides a **reified if-then-else** based on Neumerkel & Kral's `if_/3` ([arXiv:1607.01590](https://arxiv.org/abs/1607.01590)). Unlike Prolog's committed-choice `(->)/2`, reified ITE is **monotonic**: adding constraints can only restrict, never lose solutions. This is the same philosophy behind the use of [`dif/2`](constraints.md) instead of `\=`, and of [CLP(ℤ)](constraints.md#clp-integer-constraints) (`#=`) instead of ISO `is/2` arithmetic (see [Arithmetic](arithmetic.md)).
 
 Clausal Prolog has no `!/0` (cut), no `(->)/2` (committed choice), and no `(*->)/2` (soft cut). The reified ITE is the only branching construct.
 
@@ -21,10 +14,9 @@ Clausal Prolog has no `!/0` (cut), no `(->)/2` (committed choice), and no `(*->)
 
 ## Syntax
 
-In seam (`.seam`) files, use the `if_` function call (in [Clausal Prolog](clausal_prolog.md),
-load `library(reif)` and write `if_(X = a, Then, Else)`):
+Load `library(reif)` and write `if_/3`:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:if_signature"
 ```
 
@@ -33,44 +25,60 @@ load `library(reif)` and write `if_(X = a, Then, Else)`):
 a constraint), never a plain goal that merely succeeds or fails.  A reifiable
 condition is one of:
 
-- a **reified comparison** -- `X is Y`, `X is not Y` (reif's `=/3`, `dif/3`),
-  `==`, `!=`, `<`, `<=`, `>`, `>=` (CLP(ℤ) reification) -- compiled to the
-  three-way branch below;
-- a **conjunction** `(A, B)` / `A and B` or **disjunction** `A or B` of
-  reifiable conditions (reif's `','/3` and `;/3`):
+- a **reified equality** `X = Y` or **disequality** `dif(X, Y)` (reif's
+  `=/3` and `dif/3`) -- compiled to the three-way branch below;
+- a **conjunction** `(A, B)` or **disjunction** `(A ; B)` of reifiable
+  conditions (reif's `','/3` and `;/3`):
   `if_(A, if_(B, Then, Else), Else)` and `if_(A, Then, if_(B, Then, Else))`;
 - a **closure** called with one more argument, the truth value: `p_t(X)`
-  when `p_t/2` exists (it binds its last argument to `True` or `False`),
-  `memberd_t(E, Es)`, `'='(X, Y)`, `call(C, X)`, or a variable bound to a
-  closure at run time.  It runs as reif's own body,
-  `p_t(X, T), must_be(boolean, T), if_(T is True, Then, Else)`, so every way
-  the closure answers is a solution:
+  when `p_t/2` exists (it binds its last argument to `true` or `false`),
+  `memberd_t(E, Es)`, `call(C, X)`, or a variable bound to a closure at run
+  time.  It runs as reif's own body, `p_t(X, T), if_(T = true, Then, Else)`
+  (checking that `T` is a boolean), so every way the closure answers is a
+  solution:
 
-```seam
--import_from(clausal.stdlib.reif, [memberd_t])
--private([a, b, yes, no])
-q(X, R) <- if_(memberd_t(X, [a, b]), R is yes, R is no)
-# X = a, R = yes ; X = b, R = yes ; dif(X, a), dif(X, b), R = no
+```clausal
+:- use_module(library(reif)).
+
+q(X, R) :-
+    if_(memberd_t(X, [a, b]), R = yes, R = no).
+
+% X = a, R = yes ; X = b, R = yes ; dif(X, a), dif(X, b), R = no
+test("three answers") :-
+    findall(X-R, q(X, R), [a-yes, b-yes, _-no]).
+
+test("the third answer is constrained") :-
+    q(X, no),
+    \+ X = a,
+    \+ X = b.
 ```
 
-Anything else -- a plain goal `p(X)` with no `p/2`, `not G`, `X in L`,
+A plain goal is not a condition: like Scryer, Clausal Prolog calls it with
+one more argument, the truth value, so `if_(atom(X), R = yes, R = no)` raises
+`existence_error(procedure, atom/2)`. When the plain goal is semidet, write
+it as two exclusive alternatives, `( atom(X), R = yes ; \+ atom(X), R = no )`,
+or define the reified `p_t/2`.
+
+The seam's `if_` takes the same conditions, spelled `X is Y`, `X is not Y`,
+`A and B` and `A or B`, and also reifies the [CLP(ℤ)](constraints.md)
+comparisons `==`, `!=`, `<`, `<=`, `>`, `>=` directly. A seam condition that
+is not reifiable -- a plain goal `p(X)` with no `p/2`, `not G`, `X in L`,
 `once(G)`, a type test such as `atom(X)`, a literal `True` -- is refused when
 the file loads, with a `SyntaxError` naming the predicate and line and the
 reified form to write instead.  (Until 2026-10-01 the seam ran such a
 condition as a soft cut: every solution of the condition, the else branch
-only when there were none.  That is not monotone, and it is gone.)  When the
-plain goal is semidet, write it as two exclusive alternatives,
-`(atom(X), R is yes) or (not atom(X), R is no)`, or define the reified
-`p_t/2`.
+only when there were none.  That is not monotone, and it is gone.)
 
-A unification with a partial list, `if_(X is [a, *T], ...)` (in a `.pl`
-file, `if_(X = [a|T], ...)`), is reif's `=/3`: with `X = [a, b]` it answers
-the then branch (`T = [b]`) and the else branch (`dif(T, [b])`), as Scryer
-does.
+A unification with a partial list, `if_(X = [a|T], ...)`, is reif's `=/3`:
+with `X = [a, b]` it answers the then branch (`T = [b]`) and the else branch
+(`dif(T, [b])`), as Scryer does.
 
-In a DCG or EDCG body the condition must be a `{Goal}` block (it consumes no
-input), with `Goal` reifiable: `if_({V == 1}, [y], [z])`.  A grammar body as
-the condition (`if_([x], ...)`) is refused for the same reason.
+In a seam DCG or EDCG body, `if_` also works as a grammar body; its condition
+must be a `{Goal}` block (it consumes no input), with `Goal` reifiable:
+`if_({V == 1}, [y], [z])`.  A grammar body as the condition (`if_([x], ...)`)
+is refused for the same reason. Clausal Prolog's `library(reif)` has no
+grammar-body `if_//3`: `g(V) --> if_({V = 1}, [y], [z]).` calls an undefined
+`if_/5`; put the `if_/3` inside `{...}` instead.
 
 All three arguments are required.
 
@@ -84,14 +92,15 @@ follows it (`instantiation_error` when it is unbound,
 `if_(X = Y, ...)` and `if_(dif(X, Y), ...)` compile to the reified branch
 above, and `if_((A, B), ...)`/`if_((A ; B), ...)` are unfolded as reif's
 `','/3` and `;/3`. Without the import `if_` is an ordinary (undefined) call,
-as in Scryer. The seam's `if_` has the same meaning (see above): a .pl
+as in Scryer. A `.clausal` file behaves the same way, and the seam's `if_` has
+the same meaning (see above): a .pl or .clausal
 `if_(memberd_t(X, [a, b]), R = yes, R = no)` and the seam
 `if_(memberd_t(X, [a, b]), R is yes, R is no)` give the same three answers.
 
 ### The old spelling, `If/3`
 
-`if_` was once spelled `If`.  That spelling is TitleCase, which has no role in
-seam code, so a file carrying it no longer loads: the TitleCase lint raises
+In the seam, `if_` was once spelled `If`.  That spelling is TitleCase, which has no role in
+seam code, so a seam file carrying it no longer loads: the TitleCase lint raises
 a located `SyntaxError` at the first `If(...)` naming the rewrite
 (`If` -> `if_`).  Nothing in the library emits it: the
 [reifier](reflection.md)'s renderer writes `if_`, so a round-trip through
@@ -99,17 +108,45 @@ a located `SyntaxError` at the first `If(...)` naming the rewrite
 
 ### Examples
 
-**Ground branching — deterministic:**
-```seam
-classify(X, L) <- if_(X >= 0, L is 'positive', L is 'negative')
+**Ground branching — one answer.** A comparison is not itself a
+condition here, so give it a reified closure, `ge_t/3`, whose last argument
+is the truth value. (The seam writes the condition directly, `X >= 0`.)
+
+```clausal
+:- use_module(library(reif)).
+:- use_module(library(clpz)).
+
+ge_t(X, Y, true) :- X #>= Y.
+ge_t(X, Y, false) :- X #< Y.
+
+classify(X, L) :-
+    if_(ge_t(X, 0), L = positive, L = negative).
+
+test("ground") :-
+    classify(5, P), P == positive,
+    classify(-2, N), N == negative.
+
+test("open: both branches, each under a constraint") :-
+    findall(L, classify(_, L), [positive, negative]).
 ```
 
 **Undetermined branching — explores both paths:**
-```seam
-check(X, R) <- if_(X is 1, R is 'equal', R is 'different')
+```clausal
+:- use_module(library(reif)).
+
+check(X, R) :-
+    if_(X = 1, R = equal, R = different).
+
+test("two answers") :-
+    findall(R, check(_, R), [equal, different]).
+
+test("the else answer carries dif(X, 1)") :-
+    check(X, different),
+    \+ X = 1.
 ```
 
-when `X` is unbound, this produces two solutions: `X=1, R='equal'` and `dif(X,1), R='different'`:
+when `X` is unbound, this produces two solutions: `X = 1, R = equal` and `dif(X, 1), R = different`.
+From Python, in a `.seam` file:
 
 ```python
 # in a .seam file
@@ -120,8 +157,20 @@ when `X` is unbound, this produces two solutions: `X=1, R='equal'` and `dif(X,1)
 seam export must be a value, and there `X` is unbound under `dif`.)
 
 **Nested ITE:**
-```seam
-grade(S, G) <- if_(S >= 90, G is 'A', if_(S >= 80, G is 'B', G is 'C'))
+```clausal
+:- use_module(library(reif)).
+:- use_module(library(clpz)).
+
+ge_t(X, Y, true) :- X #>= Y.
+ge_t(X, Y, false) :- X #< Y.
+
+grade(S, G) :-
+    if_(ge_t(S, 90), G = 'A', if_(ge_t(S, 80), G = 'B', G = 'C')).
+
+test("grades") :-
+    grade(95, A), A == 'A',
+    grade(85, B), B == 'B',
+    grade(10, C), C == 'C'.
 ```
 
 ---
@@ -147,12 +196,15 @@ This is a direct translation of Neumerkel's `(=)/3` and `if_/3`.
 
 ### Reified comparisons
 
-A reified comparison gets the three-way check:
+A reified comparison gets the three-way check. The first two rows are the
+Clausal Prolog conditions; the column shows the seam's spelling, and the
+CLP(ℤ) rows are seam-only conditions (Clausal Prolog writes those as a
+closure, like `ge_t/3` above):
 
-| Condition | Reified via | Undetermined: then path | Undetermined: else path |
+| Condition (seam spelling) | Reified via | Undetermined: then path | Undetermined: else path |
 |---|---|---|---|
-| `X is Y` | `reify_eq` | `unify(X, Y)` | `dif(X, Y)` |
-| `X is not Y` | `reify_eq` (inverted) | `dif(X, Y)` | `unify(X, Y)` |
+| `X = Y` (`X is Y`) | `reify_eq` | `unify(X, Y)` | `dif(X, Y)` |
+| `dif(X, Y)` (`X is not Y`) | `reify_eq` (inverted) | `dif(X, Y)` | `unify(X, Y)` |
 | `X == Y` | `reify_fd("eq")` | `fd_eq(X, Y)` | `fd_ne(X, Y)` |
 | `X != Y` | `reify_fd("ne")` | `fd_ne(X, Y)` | `fd_eq(X, Y)` |
 | `X < Y` | `reify_fd("lt")` | `fd_lt(X, Y)` | `fd_ge(X, Y)` |
@@ -161,7 +213,7 @@ A reified comparison gets the three-way check:
 | `X >= Y` | `reify_fd("ge")` | `fd_ge(X, Y)` | `fd_lt(X, Y)` |
 
 A closure condition compiles to the closure call with the truth value
-appended, `must_be(boolean, T)`, and this three-way check on `T is True`.
+appended, `must_be(boolean, T)`, and this three-way check on `T = true`.
 There is no other kind: a non-reifiable condition does not load.
 
 ---
@@ -199,7 +251,7 @@ The `if_(condition, then, else)` call syntax is parsed into an `IfExpr` AST node
 
 ### Generated code (reifiable equality condition)
 
-For `if_(X is 1, R is 'yes', R is 'no')`:
+For `if_(X = 1, R = yes, R = no)` (the seam's `if_(X is 1, R is 'yes', R is 'no')`):
 
 ```python
 _reif_0 = _reify_eq(X_, 1, trail)
@@ -234,7 +286,7 @@ else:
 ### Generated code (closure condition)
 
 For `if_(memberd_t(X, Es), then_goal, else_goal)` the compiler emits the code
-for `memberd_t(X, Es, T), must_be(boolean, T), if_(T is True, then_goal,
+for `memberd_t(X, Es, T), must_be(boolean, T), if_(T = true, then_goal,
 else_goal)`: the reified equality branch above, once per answer of the
 closure.
 
@@ -312,12 +364,12 @@ trail.undo(_m_0)
 ```
 
 Key properties:
-- **Bindings escape**: unlike `not`, bindings from the once'd goal are visible to the continuation.
-- **Continuation backtracks normally**: `(once(in_(X, [1, 2])), in_(Y, ['a', 'b']))` produces `(1, 'a'), (1, 'b')` — only `X` is committed, `Y` still backtracks.
+- **Bindings escape**: unlike `\+`, bindings from the once'd goal are visible to the continuation.
+- **Continuation backtracks normally**: `once(in_(X, [1, 2])), in_(Y, [a, b])` answers `X = 1, Y = a` and `X = 1, Y = b` — only `X` is committed, `Y` still backtracks.
 - **Failing goal = no solutions**: if the inner goal has no solutions, the continuation is never reached.
 - **Works in both simple and trampoline modes**: inner goal always compiles in simple mode (sub-generator pattern).
 
-`once()` is a **transition construct, supported but discouraged**, like `not` and `forall/2`: it is ISO's `once/1`, it keeps working while it is phased out, and it gives up monotonicity, so new code should prefer `if_/3` with a reifiable condition or a deterministic predicate. It is not an `if_` condition (it is a plain goal); commit inside a reified closure instead. See also [Control](control.md) for other control-flow predicates.
+`once()` is a **transition construct, supported but discouraged**, like `\+` and `forall/2`: it is ISO's `once/1`, it keeps working while it is phased out, and it gives up monotonicity, so new code should prefer `if_/3` with a reifiable condition or a deterministic predicate. It is not an `if_` condition (it is a plain goal); commit inside a reified closure instead. See also [Control](control.md) for other control-flow predicates.
 
 ---
 
