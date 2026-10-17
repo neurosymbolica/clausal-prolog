@@ -1,31 +1,39 @@
 # Style and Formatting
 
-Seam (`.seam`) source has one authoritative style, and one tool that produces it:
-`clausal-fmt`. The conventions below are not aspirational — they are exactly
-what the formatter emits, so a formatted tree never churns under it again
-(formatting is idempotent, comment-preserving, and AST-preserving).
+Clausal source has one house layout: **one goal per line**. For seam
+(`.seam`) source it is enforced by a tool, `clausal-fmt`; the conventions
+below are exactly what the formatter emits, so a formatted seam tree never
+churns under it again (formatting is idempotent, comment-preserving, and
+AST-preserving). `clausal-fmt` formats seam only: it refuses a Clausal
+Prolog (`.clausal`) file rather than mangle it. The examples on this page,
+like the rest of these docs, are Clausal Prolog written in the same layout.
 
 ## One goal per line
 
-A parenthesised clause body lists **exactly one goal per line**, indented one
-step, with the closing parenthesis on its own line:
+A clause body lists **exactly one goal per line**, indented one step under
+the head, and the clause ends with `.` after its last goal:
 
-```seam
-positive(1),
-positive(2),
+```clausal
+:- use_module(library(clpz)).
 
-doubled(X, V) <- (
+positive(1).
+positive(2).
+
+doubled(X, V) :-
     positive(X),
-    V == X * 2
-)
+    V #= X * 2.
+
+test("doubled") :-
+    doubled(2, V),
+    V == 4.
 ```
 
 Only **top-level** body conjunction commas break lines. Commas inside
-`findall(...)` arguments, list literals `[...]`, nested compounds, dict
-literals and strings stay where they are.
+`findall(...)` arguments, list literals `[...]`, nested compounds and
+strings stay where they are.
 
-The formatter normalises every rule body to the parenthesised form — a
-single-goal rule written `q(X) <- r(X)` is emitted as:
+In seam, the formatter normalises every rule body to the parenthesised
+form: a single-goal rule written `q(X) <- r(X)` is emitted as
 
 ```seam
 r(1),
@@ -35,15 +43,30 @@ q(X) <- (
 )
 ```
 
+and the same rule in Clausal Prolog reads
+
+```clausal
+r(1).
+
+q(X) :-
+    r(X).
+
+test("q") :-
+    q(1).
+```
+
 Why this is the standard: one goal per line reads top-to-bottom like the proof it is,
 keeps diffs minimal when a goal is inserted or removed, and is the easiest
 shape for code generators and language models to produce correctly.
 
 ## Clause separation
 
-- Facts end with a trailing comma: `positive(1),`
-- Rules end at the closing `)` with no trailing comma.
+- Every clause, fact or rule, ends with `.`: `positive(1).`
 - One blank line separates clause groups.
+
+In seam, where clauses are Python expressions, facts end with a trailing
+comma (`positive(1),`) and rules end at the closing `)` with no trailing
+comma; see [the seam](syntax.md).
 
 ## The formatter
 
@@ -52,6 +75,9 @@ clausal-fmt src/                 # rewrite every .seam file under src/
 clausal-fmt --check src/         # exit 1 if any file would change (CI gate)
 clausal-fmt --diff  src/         # print what would change, write nothing
 ```
+
+A directory walk picks up `.seam` files only. A `.clausal` or `.pl` file
+named on the command line is refused (exit 2), not reformatted.
 
 Properties worth relying on:
 
@@ -63,7 +89,7 @@ Properties worth relying on:
 - **Idempotent** — formatting formatted output is a no-op.
 
 There is no separate advisory lint for multi-goal lines: `clausal-fmt
---check` is that lint.
+--check` is that lint, for seam source.
 
 Deliberately deferred style calls (line-width wrapping, long export-list
 layout, and friends) are recorded in
@@ -71,6 +97,8 @@ layout, and friends) are recorded in
 
 ## See also
 
-- [Syntax](syntax.md) — the trailing-comma convention, logic-variable
-  spelling (ALL_CAPS preferred), clause syntax.
+- [Clausal Prolog](clausal_prolog.md) — the `.clausal` surface and how its
+  spellings differ from the seam's.
+- [Syntax](syntax.md) — the seam: the trailing-comma convention,
+  logic-variable spelling (ALL_CAPS preferred), clause syntax.
 - [Purity](purity.md) — the cut-free design the layout serves.
