@@ -6,14 +6,9 @@ from notebook cells and see results rendered with syntax colouring.  The
 terminal IPython; the difference is that solutions are rendered as styled HTML
 instead of a terminal-interactive keypress loop.
 
-!!! note "Seam vs Prolog syntax"
-
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+Notebook cells are Python. The logic programs they query are
+[Clausal Prolog](clausal_prolog.md) (`.clausal`) modules, which use ISO
+Prolog syntax; a notebook imports one like any Python module.
 
 ---
 
@@ -102,27 +97,29 @@ Solutions.DEFAULT_JUPYTER_LIMIT = 50
 
 ## Worked examples
 
-The following examples are written in seam syntax (`.seam`).  Each block
+The following examples are Clausal Prolog (`.clausal`). Each block
 is automatically tested by the documentation test runner.
 
 ### Family tree
 
-```seam
-parent('alice', 'bob'),
-parent('alice', 'carol'),
-parent('bob', 'dave'),
-parent('bob', 'eve'),
+```clausal
+parent(alice, bob).
+parent(alice, carol).
+parent(bob, dave).
+parent(bob, eve).
 
-grandparent(GP, GC) <- (
+grandparent(GP, GC) :-
     parent(GP, MID),
-    parent(MID, GC)
-)
+    parent(MID, GC).
 
-test("alice is grandparent of dave") <- (grandparent('alice', 'dave'))
-test("alice is grandparent of eve") <- (grandparent('alice', 'eve'))
+test("alice is grandparent of dave") :-
+    grandparent(alice, dave).
+
+test("alice is grandparent of eve") :-
+    grandparent(alice, eve).
 ```
 
-In a notebook you would query this as:
+Saved as `family.clausal`, in a notebook you would query this as:
 
 ```python
 import family
@@ -131,66 +128,81 @@ import family
 
 ### List membership and append
 
-```seam
-member(X, [X, *_]),
-member(X, [_, *REST]) <- member(X, REST)
+```clausal
+member(X, [X|_]).
+member(X, [_|REST]) :-
+    member(X, REST).
 
-my_append([], YS, YS),
-my_append([H, *XS], YS, [H, *ZS]) <- my_append(XS, YS, ZS)
+my_append([], YS, YS).
+my_append([H|XS], YS, [H|ZS]) :-
+    my_append(XS, YS, ZS).
 
-test("member finds element") <- (member(2, [1, 2, 3]))
-test("append two lists") <- (my_append([1, 2], [3, 4], [1, 2, 3, 4]))
+test("member finds element") :-
+    member(2, [1, 2, 3]).
+
+test("append two lists") :-
+    my_append([1, 2], [3, 4], [1, 2, 3, 4]).
 ```
 
 ### Recursive length
 
-```seam
-my_len([], 0),
-my_len([_, *T], N) <- (
-    my_len(T, N1),
-    N == N1 + 1
-)
+```clausal
+:- use_module(library(clpz)).
 
-test("length of empty list") <- (my_len([], 0))
-test("length of three-element list") <- (my_len(['a', 'b', 'c'], 3))
+my_len([], 0).
+my_len([_|T], N) :-
+    my_len(T, N1),
+    N #= N1 + 1.
+
+test("length of empty list") :-
+    my_len([], 0).
+
+test("length of three-element list") :-
+    my_len([a, b, c], 3).
 ```
 
 ### Accumulator pattern
 
-```seam
-sum_list([], 0),
-sum_list([H, *T], S) <- (
-    sum_list(T, S1),
-    S == S1 + H
-)
+```clausal
+:- use_module(library(clpz)).
 
-test("sum of 1..4 is 10") <- (
+sum_list([], 0).
+sum_list([H|T], S) :-
+    sum_list(T, S1),
+    S #= S1 + H.
+
+test("sum of 1..4 is 10") :-
     sum_list([1, 2, 3, 4], S),
-    S == 10
-)
-test("sum of empty is 0") <- (
+    S == 10.
+
+test("sum of empty is 0") :-
     sum_list([], S),
-    S == 0
-)
+    S == 0.
 ```
 
 ### Fibonacci
 
-```seam
-fib(0, 0),
-fib(1, 1),
-fib(N, F) <- (
-    N > 1,
-    N1 == N - 1,
-    N2 == N - 2,
+```clausal
+:- use_module(library(clpz)).
+
+fib(0, 0).
+fib(1, 1).
+fib(N, F) :-
+    N #> 1,
+    N1 #= N - 1,
+    N2 #= N - 2,
     fib(N1, F1),
     fib(N2, F2),
-    F == F1 + F2
-)
+    F #= F1 + F2.
 
-test("fib(0) = 0") <- (fib(0, 0))
-test("fib(5) = 5") <- (fib(5, 5))
-test("fib(8) = 21") <- (fib(8, 21))
+test("fib(0) = 0") :-
+    fib(0, 0).
+
+test("fib(5) = 5") :-
+    fib(5, 5).
+
+test("fib(8) = 21") :-
+    fib(8, 21).
 ```
 
 ---
