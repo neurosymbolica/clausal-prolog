@@ -278,7 +278,9 @@ while the adapter is allowed: `enable(allow_adapters=...)` without datetime
 refuses `date` too. Everything else the adapter module binds (its helpers,
 its own imports) stays a `non_export`, as does any attribute of the
 constructor (`date.year`). A `library(...)` facade re-exports no
-constructor. The function object is inert data: a bare `F is date` binds it,
+constructor. A query's `M:G` or `call/N` into a module that uses one
+passes the Python-bridge check by the same rule. The function object is
+inert data: a bare `F is date` binds it,
 but `call(F, ...)` refuses it as a Python object.
 
 Any adapter that is not engine-shipped is refused, including an optional

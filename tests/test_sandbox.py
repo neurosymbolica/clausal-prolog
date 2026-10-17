@@ -1193,6 +1193,60 @@ def test_a_constructor_follows_its_adapter_out_of_the_allowlist(sbx):
         "load"]["msg"], res["load"]
 
 
+DMOD_SEAM = """
+-module(dmod, [made/1, shift/2, span/3, day/4])
+-import_from(date_time, [date, date_add, timedelta])
+made(D) <- (D is date(2024, 2, 28))
+shift(D, R) <- (timedelta(1, 0, TD), date_add(D, TD, R))
+span(A, B, R) <- (R is date(A, B, 1))
+day(A, B, C, R) <- (R is date(A, B, C))
+"""
+
+
+def test_a_query_reaches_a_module_using_the_date_constructor(sbx):
+    """A sandboxed query is a Clausal Prolog frame, so ``M:G`` and
+    ``call/3..5`` into a ``.seam`` module pass the Python-bridge gate
+    (``clausal.python_bridges``).  That gate must judge an allowed
+    adapter's reviewed constructor as the load audit does, or it calls a
+    module that imports ``date`` a Python bridge."""
+    sbx.write("dmod.seam", DMOD_SEAM)
+    sbx.write("caller.seam", "-module(caller, [c/1])\n"
+              "-import_from(dmod, [made])\nc(D) <- made(D)\n")
+    res = sbx.run("""
+        import clausal.sandbox as sb
+        sb.enable()
+        from clausal import Var
+        c = load("caller")
+        X = Var()
+        Q = lambda g: (":", "dmod", g)
+        probe("colon", lambda: answers(Q(("made", X)), c, X))
+        probe("call3", lambda: answers(
+            ("call", Q("shift"), ("date", 2024, 2, 28), X), c, X))
+        probe("call4", lambda: answers(("call", Q("span"), 2024, 3, X), c, X))
+        probe("call5", lambda: answers(
+            ("call", Q("day"), 2024, 3, 9, X), c, X))
+    """)
+    assert ok(res, "colon") == "[('date', 2024, 2, 28)]"
+    assert ok(res, "call3") == "[('date', 2024, 2, 29)]"
+    assert ok(res, "call4") == "[('date', 2024, 3, 1)]"
+    assert ok(res, "call5") == "[('date', 2024, 3, 9)]"
+
+
+def test_the_bridge_gate_is_unchanged_for_date_without_the_sandbox(sbx):
+    """Outside the sandbox the default gate still calls a ``.seam`` that
+    imports ``date`` a Python bridge for a ``.clausal`` importer."""
+    sbx.write("dmod.seam", DMOD_SEAM)
+    sbx.write("impd.clausal", ":- module(impd, [m/1]).\n"
+              ":- use_module(dmod, [made/1]).\nm(D) :- made(D).\n"
+              ":- end_module(impd).\n")
+    res = sbx.run("""
+        import clausal
+        probe("load", lambda: load("impd"))
+    """)
+    r = res["load"]
+    assert not r["ok"] and "python_bridges" in r["msg"], r
+
+
 def test_every_sandbox_constructor_is_a_function_of_its_adapter():
     """The ``constructors`` allowlist names plain functions the adapter
     itself defines -- no predicate (judged as one), no denied name, no

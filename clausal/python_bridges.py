@@ -788,6 +788,19 @@ def _cached_exports(dotted: str, origin: str,
     return names
 
 
+def _sandbox_constructor(dotted: str, name: str) -> bool:
+    """In the sandbox only: True when *name* of the engine module *dotted*
+    is a reviewed pure term constructor of an adapter the sandbox allows
+    now (:func:`clausal.sandbox.sandbox_constructor`, the one rule the
+    sandbox's load audit uses too), so this gate does not call a module
+    that imports it a Python bridge.  Always False outside the sandbox."""
+    from clausal import _sandbox_state  # noqa: PLC0415
+    if not _sandbox_state.ACTIVE:
+        return False
+    from clausal.sandbox import sandbox_constructor  # noqa: PLC0415
+    return sandbox_constructor(dotted, name)
+
+
 def _non_export_kind(dotted: str, name: str) -> str:
     """``submodule_name`` when *name* is not an export of *dotted* because
     it is the package's SUBMODULE (ruling M3), else ``non_export``."""
@@ -1007,7 +1020,8 @@ def _check_refs(refs) -> "tuple[list, list]":
             _k, resolved, orig, _local, line = ref
             dotted = _module_path(resolved)
             ok, origin = module_ok(dotted, line)
-            if ok and orig not in _exports(dotted, origin):
+            if (ok and orig not in _exports(dotted, origin)
+                    and not _sandbox_constructor(dotted, orig)):
                 routes.append((_non_export_kind(dotted, orig), line))
         elif kind == "import_module":
             _k, resolved, name, line = ref
@@ -1036,7 +1050,8 @@ def _chain_ok(chain, line, module_ok, routes) -> bool:
             continue
         ok, origin = module_ok(dotted, line)
         if ok and (len(chain) - i != 1
-                   or chain[-1] not in _exports(dotted, origin)):
+                   or (chain[-1] not in _exports(dotted, origin)
+                       and not _sandbox_constructor(dotted, chain[-1]))):
             routes.append(("non_export", line))
             return False
         return ok
@@ -1080,7 +1095,8 @@ def audit_checker(routes: list, children: list):
         if kind == "name":
             dotted = _module_path(a)
             ok, origin = module_ok(dotted, line)
-            if ok and b not in _exports(dotted, origin):
+            if (ok and b not in _exports(dotted, origin)
+                    and not _sandbox_constructor(dotted, b)):
                 routes.append((_non_export_kind(dotted, b), line))
                 return False
             return ok

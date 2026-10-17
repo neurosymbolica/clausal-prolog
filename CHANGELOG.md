@@ -249,7 +249,10 @@ surface described in [docs/public-api.md](docs/public-api.md).
   reachable as the exact `module.name` chain, only while the adapter is
   allowed. Everything else the adapter module binds stays refused, and so
   do the clock readers. A `library(datetime)` facade still exports no
-  `date`. Outside the sandbox nothing changes.
+  `date`. The Python-bridge gate applies the same rule in the sandbox, so
+  a query's `M:G` or `call/N` into a module that uses `date` is no longer
+  refused as `permission_error(import, python_bridge, M)`. Outside the
+  sandbox nothing changes.
 
 - **In the sandbox, `op/3` and op directives cannot change the
   process-wide operator table.** `op(700, xfx, zz)` as a goal succeeded
