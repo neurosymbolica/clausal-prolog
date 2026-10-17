@@ -1,26 +1,25 @@
 # Clausal Prolog — Predicate Indexing
 
-!!! note "Seam vs Prolog syntax"
+!!! note "Clausal Prolog and the seam"
 
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+    Prolog examples on this page are [Clausal Prolog](clausal_prolog.md)
+    (`.clausal`), ISO Prolog syntax; the code shown as `python` is the
+    Python the compiler generates. The [seam](syntax.md), Clausal's
+    Python-syntax surface, writes the same facts with Python syntax
+    (`color('red', 'warm'),`).
 
 ## Problem
 
 Without indexing, every query against a predicate tries all clauses sequentially. For a predicate with N fact clauses, a ground lookup costs O(N) — each clause's `match` block is entered and compared. This is acceptable for small predicates but becomes a bottleneck for large fact tables (100+ clauses).
 
-```seam
-color('red',   [255,   0,   0]),
-color('green', [  0, 128,   0]),
-color('blue',  [  0,   0, 255]),
-...  # 200 more colors
+```clausal
+color(red,   [255,   0,   0]).
+color(green, [  0, 128,   0]).
+color(blue,  [  0,   0, 255]).
+% ... 200 more colors
 ```
 
-Querying `color('blue', X)` without indexing tries all 203 match blocks. With first-argument indexing, it jumps directly to the one clause whose first argument is `'blue'`.
+Querying `color(blue, X)` without indexing tries all 203 match blocks. With first-argument indexing, it jumps directly to the one clause whose first argument is `blue`.
 
 ---
 
@@ -55,11 +54,11 @@ Querying `color('blue', X)` without indexing tries all 203 match blocks. With fi
     A critical correctness requirement: **clause ordering must be preserved.** In Prolog and clausal, clause order determines solution order. Consider:
 
     ```
-    f(1, a),            # clause 0, key=1
-    f(X, b),            # clause 1, default
-    f(2, c),            # clause 2, key=2
-    f(3, d),            # clause 3, key=3
-    f(X, e),            # clause 4, default
+    f(1, a).            % clause 0, key=1
+    f(X, b).            % clause 1, default
+    f(2, c).            % clause 2, key=2
+    f(3, d).            % clause 3, key=3
+    f(X, e).            % clause 4, default
     ```
 
     when querying `f(1, Y)`, the expected solution order is `a`, `b`, `e` — clause 0 (matches key=1), clause 1 (default, matches anything), clause 4 (default, matches anything). Clause 2 and 3 are skipped because their first arg doesn't match 1.
@@ -178,7 +177,7 @@ Querying `color('blue', X)` without indexing tries all 203 match blocks. With fi
 
     ### Bucket head lifting
 
-    The `.seam` term rewriter normalises every clause head to all-Var arguments, moving ground values into body `Unify` goals. A fact `color('red', 'warm')` is stored as:
+    The `.seam` term rewriter normalises every clause head to all-Var arguments, moving ground values into body `Unify` goals. A fact `color(red, warm)` is stored as:
 
     ```
     head = ('color', Var(_5), Var(_6))
@@ -208,7 +207,7 @@ Querying `color('blue', X)` without indexing tries all 203 match blocks. With fi
         finally: trail.undo(_mark)
     ```
 
-    The **fallback function** (called for unbound first arguments) always uses the original, unlifted clauses — so output-mode queries (`color(NAME, 'warm')`) remain fully correct. Only bucket functions are affected.
+    The **fallback function** (called for unbound first arguments) always uses the original, unlifted clauses — so output-mode queries (`color(NAME, warm)`) remain fully correct. Only bucket functions are affected.
 
     ### Lazy recompile integration
 
@@ -251,11 +250,11 @@ Groundness-keyed dispatch generalises first-argument indexing to **multi-argumen
 
 First-argument indexing only helps when the first argument is ground. Many predicates are queried in multiple modes:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/indexing_sigs.txt:color_query_modes"
 ```
 
-With groundness-keyed dispatch, querying `color(NAME, 'warm')` uses a second-argument index and jumps directly to the clauses whose second arg is `'warm'`, skipping all others.
+With groundness-keyed dispatch, querying `color(NAME, warm)` uses a second-argument index and jumps directly to the clauses whose second arg is `warm`, skipping all others.
 
 ??? abstract "Design"
 
@@ -352,12 +351,19 @@ With groundness-keyed dispatch, querying `color(NAME, 'warm')` uses a second-arg
 
 ## Example: colour database
 
-```seam
-color('red',    'warm'),
-color('blue',   'cool'),
-color('green',  'cool'),
-color('yellow', 'warm'),
-color('white',  'neutral'),
+```clausal
+color(red,    warm).
+color(blue,   cool).
+color(green,  cool).
+color(yellow, warm).
+color(white,  neutral).
+
+test("second-argument query") :-
+    findall(X, color(X, cool), XS),
+    XS == [blue, green].
+
+test("both ground") :-
+    color(red, warm).
 ```
 
 Analysis finds both positions indexable:
@@ -369,9 +375,9 @@ Plans sorted by selectivity: position 0 first, then position 1.
 
 | Query | Selector path | Clauses tried |
 |---|---|---|
-| `color('blue', X)` | arg0 ground → pos-0 index → bucket[`('blue', 0)`] | 1 |
-| `color(X, 'cool')` | arg0 Var → skip; arg1 ground → pos-1 index → bucket[`('cool', 0)`] | 2 |
-| `color('red', 'warm')` | arg0 ground → pos-0 index → bucket[`('red', 0)`] | 1 |
+| `color(blue, X)` | arg0 ground → pos-0 index → bucket[`('blue', 0)`] | 1 |
+| `color(X, cool)` | arg0 Var → skip; arg1 ground → pos-1 index → bucket[`('cool', 0)`] | 2 |
+| `color(red, warm)` | arg0 ground → pos-0 index → bucket[`('red', 0)`] | 1 |
 | `color(X, Y)` | arg0 Var → skip; arg1 Var → skip; fallback | 5 |
 
 ## Interaction with first-argument indexing
@@ -421,7 +427,7 @@ Single-arg groundness-keyed dispatch picks the *best single position* that is gr
 
 Without compound-key indexing, compound heads fell into the default bucket.  A predicate like:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/indexing_sigs.txt:compound_keys"
 ```
 
@@ -429,7 +435,7 @@ had no indexing at all on `arg0`, even though the four clauses are perfectly dis
 
 With compound-key indexing, `_extract_arg_key` returns `("circle", 1)`, `("rect", 2)`, `("triangle", 3)`, `("sq", 1)` as bucket keys. The runtime dispatch uses `_runtime_arg_key` to extract the same tuple from the caller's argument before dict lookup. Scalar keys and `(name, arity)` tuple keys coexist safely in the same `idx_dict` because a tuple never equals a plain number or bytes value (an atom `circle` keys `("circle", 0)`, distinct from `circle(R)`'s `("circle", 1)`).
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/indexing_sigs.txt:compound_dispatch"
 ```
 
@@ -439,7 +445,7 @@ With compound-key indexing, `_extract_arg_key` returns `("circle", 1)`, `("rect"
 
 Some predicates have poor single-arg discrimination but perfect joint discrimination:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/indexing_sigs.txt:flat_joint_example"
 ```
 
@@ -451,7 +457,7 @@ Some predicates have poor single-arg discrimination but perfect joint discrimina
 
 when activated (joint coverage ≥ 80%, meaning ≥80% of clauses have both args ground), the dispatch uses a **flat joint dict**:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/indexing_sigs.txt:flat_joint_dispatch"
 ```
 
@@ -463,7 +469,7 @@ Single-arg fallbacks ensure correct behaviour for partial-groundness queries.
 
 when joint coverage < 80%, secondary (hierarchical) dispatch is preferred over flat joint key.  Secondary indexing builds a **two-level nested structure** that efficiently handles partial groundness:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/indexing_sigs.txt:secondary_structure"
 ```
 
@@ -471,7 +477,7 @@ Within each level-0 bucket (all clauses sharing a given `argI` key), a second `_
 
 **Level-1 default is all clauses in the level-0 bucket** (not just var-headed clauses). This is the key correctness requirement: when `argJ` is unbound at call time, every clause in the level-0 bucket is a potential match and must be tried.
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/indexing_sigs.txt:secondary_dispatch"
 ```
 

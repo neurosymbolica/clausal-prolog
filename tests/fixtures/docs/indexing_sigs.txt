@@ -1,16 +1,16 @@
 # === Predicate Indexing ===
 
 # --8<-- [start:color_query_modes]
-color('red', TEMP)       # first arg ground  -> first-arg index handles this
-color(NAME, 'warm')      # second arg ground -> first-arg index can't help
-color(NAME, TEMP)        # neither ground    -> full scan either way
+color(red, TEMP)         % first arg ground  -> first-arg index handles this
+color(NAME, warm)        % second arg ground -> first-arg index can't help
+color(NAME, TEMP)        % neither ground    -> full scan either way
 # --8<-- [end:color_query_modes]
 
 # --8<-- [start:compound_keys]
-shape(circle(R), R) <- true
-shape(rect(W, H), W) <- true
-shape(triangle(A, B, C), A) <- true
-shape(sq(S), S) <- true
+shape(circle(R), R).
+shape(rect(W, H), W).
+shape(triangle(A, B, C), A).
+shape(sq(S), S).
 # --8<-- [end:compound_keys]
 
 # --8<-- [start:compound_dispatch]
@@ -20,9 +20,9 @@ shape(circle(42), Q)  ->  _runtime_arg_key(circle(42)) = ("circle", 1)
 # --8<-- [end:compound_dispatch]
 
 # --8<-- [start:flat_joint_example]
-combo(fire, dry, hot)   combo(fire, wet, cold)
-combo(ice,  dry, cold)  combo(ice,  wet, hot)
-combo(wind, dry, hot)   combo(wind, wet, cold)
+combo(fire, dry, hot).   combo(fire, wet, cold).
+combo(ice,  dry, cold).  combo(ice,  wet, hot).
+combo(wind, dry, hot).   combo(wind, wet, cold).
 # --8<-- [end:flat_joint_example]
 
 # --8<-- [start:flat_joint_dispatch]
