@@ -1,13 +1,13 @@
 # Clausal Prolog — Crypto Modules (`hash`, `hmac`, `pbkdf2`)
 
-!!! note "Seam vs Prolog syntax"
+!!! note "Clausal Prolog and the seam"
 
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+    Examples on this page are [Clausal Prolog](clausal_prolog.md)
+    (`.clausal`, ISO Prolog syntax). It imports the Python modules `py.hash`,
+    `py.hmac` and `py.pbkdf2` through their facades `library(hash)`,
+    `library(hmac)` and `library(pbkdf2)` (see
+    [Importing Prolog](importing_prolog.md)); the [seam](syntax.md) imports
+    them directly, as `-import_from(py.hash, [...])`.
 
 ## Overview
 
@@ -15,51 +15,63 @@ Three small modules wrapping Python's `hashlib` and `hmac` stdlib for
 cryptographic hashing, message authentication, and key derivation. All modules
 use only the standard library — no third-party dependencies.
 
-```seam
--import_from(py.hash, [hash])
--import_from(py.hmac, [sign, verify])
--import_from(py.pbkdf2, [derive])
+```clausal
+:- use_module(library(hash), [hash/3]).
+:- use_module(library(hmac), [sign/3, verify/3]).
+:- use_module(library(pbkdf2), [derive/4]).
 
-check_integrity(DATA, EXPECTED) <- (
-    hash("sha256", DATA, COMPUTED),
-    COMPUTED == EXPECTED
-)
+check_integrity(Data, Expected) :-
+    hash("sha256", Data, Computed),
+    Computed == Expected.
 
-sign_message(KEY, MSG, SIG) <- sign(KEY, MSG, SIG)
+sign_message(Key, Msg, Sig) :-
+    sign(Key, Msg, Sig).
 
-verify_message(KEY, MSG, SIG) <- verify(KEY, MSG, SIG)
+verify_message(Key, Msg, Sig) :-
+    verify(Key, Msg, Sig).
+
+test("integrity") :-
+    check_integrity("abc", "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad").
+
+test("sign and verify") :-
+    sign_message("k", "hello", Sig),
+    verify_message("k", "hello", Sig),
+    \+ verify_message("k", "goodbye", Sig).
 ```
 
 ---
 
 ## `py.hash` — Cryptographic Hashing
 
-```seam
--import_from(py.hash, [hash, hash_bytes])
+```clausal
+:- use_module(library(hash), [hash/3, hash_bytes/3]).
 ```
 
 | Predicate | Mode | Description |
 |-----------|------|-------------|
 | `hash(Algorithm, Data, Hex)` | `+Algo, +Data, -Hex` | Hex digest via `hashlib`, as a string |
-| `hash_bytes(Algorithm, Data, Bytes)` | `+Algo, +Data, -Bytes` | Raw digest bytes |
+| `hash_bytes(Algorithm, Data, Bytes)` | `+Algo, +Data, -Bytes` | Raw digest bytes, as a list of byte values |
 
 **Supported algorithms:** `"sha256"`, `"sha512"`, `"md5"`, `"sha1"`, `"sha384"`,
 `"sha3_256"`, `"sha3_512"`, `"blake2b"`, `"blake2s"` (anything `hashlib.new()` accepts).
 
 **Data** can be a string (UTF-8 encoded) or `bytes`.
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/crypto_sigs.txt:hash_examples"
 ```
 
-Fails silently if the algorithm is unknown, or if `Algorithm` or `Data` is unbound.
+An unknown algorithm raises `domain_error(hash_algorithm, Algorithm)`
+(`hash("nope", "abc", H)` raises
+`error(domain_error(hash_algorithm, "nope"), hash/3)`), and an unbound
+`Algorithm` or `Data` raises `instantiation_error`.
 
 ---
 
 ## `py.hmac` — Message Authentication
 
-```seam
--import_from(py.hmac, [sign, verify])
+```clausal
+:- use_module(library(hmac), [sign/3, sign/4, verify/3, verify/4]).
 ```
 
 | Predicate | Mode | Description |
@@ -72,7 +84,7 @@ Fails silently if the algorithm is unknown, or if `Algorithm` or `Data` is unbou
 `Key` and `Data` can be strings (UTF-8 encoded) or `bytes`. `verify` uses
 `hmac.compare_digest` for constant-time comparison.
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/crypto_sigs.txt:hmac_examples"
 ```
 
@@ -80,8 +92,8 @@ Fails silently if the algorithm is unknown, or if `Algorithm` or `Data` is unbou
 
 ## `py.pbkdf2` — Key Derivation
 
-```seam
--import_from(py.pbkdf2, [derive])
+```clausal
+:- use_module(library(pbkdf2), [derive/4, derive/5]).
 ```
 
 | Predicate | Mode | Description |
@@ -92,7 +104,7 @@ Fails silently if the algorithm is unknown, or if `Algorithm` or `Data` is unbou
 `DerivedKey` is a hex string. `Password` and `Salt` can be strings, atoms or `bytes`.
 `Iterations` must be a positive integer.
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/crypto_sigs.txt:pbkdf2_examples"
 ```
 
@@ -102,24 +114,24 @@ Fails silently if the algorithm is unknown, or if `Algorithm` or `Data` is unbou
 
     ### File integrity check (using the [Files](files.md) module)
 
-    ```seam
-    --8<-- "tests/fixtures/docs/crypto_sigs.txt:file_integrity"
+    ```clausal
+    --8<-- "tests/fixtures/docs/crypto_examples.clausal:file_integrity"
     ```
 
     ### API request signing
 
-    ```seam
-    --8<-- "tests/fixtures/docs/crypto_sigs.txt:api_signing"
+    ```clausal
+    --8<-- "tests/fixtures/docs/crypto_examples.clausal:api_signing"
     ```
 
     ### Password hashing
 
-    ```seam
-    --8<-- "tests/fixtures/docs/crypto_sigs.txt:password_hashing"
+    ```clausal
+    --8<-- "tests/fixtures/docs/crypto_examples.clausal:password_hashing"
     ```
 
 ---
 
-*See also: [Python Interop](python_integration.md) — `++()` escape for
-additional cryptography operations · [UUID](uuid.md) — UUID generation with
+*See also: [Python Interop](python_integration.md) — the seam's `++()`
+escape for additional cryptography operations · [UUID](uuid.md) — UUID generation with
 hash-based variants (v3, v5).*

@@ -1,51 +1,27 @@
 # Display snippets for docs/crypto.md
 
 --8<-- [start:hash_examples]
-hash("sha256", "abc", HEX)
-# HEX = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+?- hash("sha256", "abc", Hex).
+   Hex = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad".
 
-hash("md5", "", HEX)
-# HEX = "d41d8cd98f00b204e9800998ecf8427e"
+?- hash("md5", "", Hex).
+   Hex = "d41d8cd98f00b204e9800998ecf8427e".
 
-hash_bytes("sha256", "abc", RAW)
-# RAW is 32 bytes
+?- hash_bytes("sha256", "abc", Raw).
+   Raw = [186, 120, 22, 191, 143, 1, 207, 234|...].   % the 32 digest bytes
 --8<-- [end:hash_examples]
 
 --8<-- [start:hmac_examples]
-sign("secret-key", "message", SIG)
-verify("secret-key", "message", SIG)   # succeeds
+?- sign("secret-key", "message", Sig), verify("secret-key", "message", Sig).
+   Sig = "287a3bd8a4fc7731a94c722079055323644d8798bd291bf9878abc9b8fd4b1d0".
 
-sign("sha512", "key", "data", SIG)     # SHA-512 HMAC
+?- sign("sha512", "key", "data", Sig).   % SHA-512 HMAC: 128 hex digits
 --8<-- [end:hmac_examples]
 
 --8<-- [start:pbkdf2_examples]
-derive("password", "salt", 100000, HASH)
-# HASH is a 64-character hex string (32 bytes)
+?- derive("password", "salt", 100000, Hash).
+   % Hash is a 64-character hex string (32 bytes)
 
-derive("password", "salt", 100000, 64, HASH)
-# HASH is a 128-character hex string (64 bytes)
+?- derive("password", "salt", 100000, 64, Hash).
+   % Hash is a 128-character hex string (64 bytes)
 --8<-- [end:pbkdf2_examples]
-
---8<-- [start:file_integrity]
--import_from(py.hash, [hash])
--import_from(py.files, [read_file_to_string])
-
-file_hash(PATH, HASH) <- (
-    read_file_to_string(PATH, CONTENT),
-    hash("sha256", CONTENT, HASH)
-)
---8<-- [end:file_integrity]
-
---8<-- [start:api_signing]
--import_from(py.hmac, [sign])
-
-signed_request(KEY, BODY, SIGNATURE) <- (
-    sign("sha256", KEY, BODY, SIGNATURE)
-)
---8<-- [end:api_signing]
-
---8<-- [start:password_hashing]
--import_from(py.pbkdf2, [derive])
-
-hash_password(PASSWORD, SALT, HASH) <- derive(PASSWORD, SALT, 100000, HASH)
---8<-- [end:password_hashing]

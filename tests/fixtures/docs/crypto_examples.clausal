@@ -1,0 +1,89 @@
+% Doc snippet fixtures for docs/crypto.md
+
+% --8<-- [start:file_integrity]
+:- use_module(library(hash), [hash/3]).
+:- use_module(library(py_files), [read_file_to_string/2]).
+
+file_hash(Path, Hash) :-
+    read_file_to_string(Path, Content),
+    hash("sha256", Content, Hash).
+% --8<-- [end:file_integrity]
+
+% --8<-- [start:api_signing]
+:- use_module(library(hmac), [sign/4]).
+
+signed_request(Key, Body, Signature) :-
+    sign("sha256", Key, Body, Signature).
+% --8<-- [end:api_signing]
+
+% --8<-- [start:password_hashing]
+:- use_module(library(pbkdf2), [derive/4]).
+
+hash_password(Password, Salt, Hash) :-
+    derive(Password, Salt, 100000, Hash).
+% --8<-- [end:password_hashing]
+
+% Validates the hash, hmac and pbkdf2 displays in crypto_sigs.txt
+:- use_module(library(hash), [hash_bytes/3]).
+:- use_module(library(hmac), [sign/3, sign/4, verify/3, verify/4]).
+:- use_module(library(pbkdf2), [derive/5]).
+
+test("sha256 of abc") :-
+    hash("sha256", "abc", Hex),
+    Hex == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad".
+
+test("md5 of the empty string") :-
+    hash("md5", "", Hex),
+    Hex == "d41d8cd98f00b204e9800998ecf8427e".
+
+test("hash_bytes gives the 32 digest bytes") :-
+    hash_bytes("sha256", "abc", Raw),
+    length(Raw, 32),
+    Raw = [186, 120, 22, 191, 143, 1, 207, 234|_].
+
+test("an unknown algorithm is a domain error") :-
+    catch(hash("nope", "abc", _), error(E, _), true),
+    E == domain_error(hash_algorithm, "nope").
+
+test("an unbound algorithm is an instantiation error") :-
+    catch(hash(_, "abc", _), error(E, _), true),
+    E == instantiation_error.
+
+test("sign then verify") :-
+    sign("secret-key", "message", Sig),
+    Sig == "287a3bd8a4fc7731a94c722079055323644d8798bd291bf9878abc9b8fd4b1d0",
+    verify("secret-key", "message", Sig),
+    \+ verify("secret-key", "another message", Sig).
+
+test("sha512 hmac") :-
+    sign("sha512", "key", "data", Sig),
+    length(Sig, 128),
+    verify("sha512", "key", "data", Sig).
+
+test("derive: 32 bytes by default") :-
+    derive("password", "salt", 100000, Hash),
+    length(Hash, 64).
+
+test("derive: custom key length") :-
+    derive("password", "salt", 100000, 64, Hash),
+    length(Hash, 128).
+
+% Validates the examples
+:- use_module(library(py_files), [temp_file/1, write_string_to_file/2,
+                                  delete_file/1]).
+
+test("file_hash") :-
+    temp_file(Path),
+    write_string_to_file(Path, "abc"),
+    file_hash(Path, Hash),
+    delete_file(Path),
+    Hash == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad".
+
+test("signed_request is sign/4 with sha256") :-
+    signed_request("key", "body", S1),
+    sign("key", "body", S2),
+    S1 == S2.
+
+test("hash_password") :-
+    hash_password("password", "salt", Hash),
+    derive("password", "salt", 100000, Hash).
