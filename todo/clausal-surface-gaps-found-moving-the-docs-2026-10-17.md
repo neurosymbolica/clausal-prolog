@@ -1,0 +1,118 @@
+# `.clausal` gaps found while moving the docs' examples off seam syntax
+
+Filed 2026-10-17 by iso-export-lane. While the docs' examples moved from
+seam syntax to Clausal Prolog (`.clausal`), each example was run in both
+surfaces. These are the places where the seam works and `.clausal` does not.
+Each docs page keeps the affected block as a ```seam block and says so. OPEN.
+
+**Verified** means re-run by the filer on main c84149fb. **Reported** means
+measured by the batch that converted the page, with its exact goal, and not
+re-run separately.
+
+## Engine bugs (the most important)
+
+1. **`catch_error/2` and `catch_recover/3` do not compile in a `.clausal`
+   clause body** (verified).
+   - `t(R) :- catch_error(throw(boom(42)), R).` fails to load with
+     `NotImplementedError: terms_to_goalop: goal shape not yet supported
+     (tuple): ('throw', ('boom', 42))`.
+   - The same goal works at the top level:
+     `-g "catch_error(throw(boom(42)), R)"` gives `R = boom(42)`.
+   - Page: exceptions.md.
+2. **`entailed/1` always fails, silently** (verified).
+   - `:- use_module(library(clpq)). t :- in_q(X, 0, 100), {X =< 4},
+     entailed(X =< 5).` answers `false`.
+   - The builtin reads only seam syntax-tree nodes; both CLP(Q) backends
+     behave the same.
+   - Page: clpq.md.
+3. **Regex named-group auto-binding binds nothing** (verified).
+   - With `:- use_module(library(re), [match/2])`, the clause
+     `parse_date(D, YEAR, MONTH) :- match("(?P<YEAR>\\d{4})-(?P<MONTH>\\d{2})", D).`
+     makes `parse_date("2024-03", Y, M)` succeed with `Y` and `M` unbound.
+   - Root cause (reported): a `.clausal` clause's head variables reach the
+     goal expansion renamed `arg_0`, `arg_1`, so no group finds its
+     variable.
+   - Pages: regex.md, compiler.md, term_expansion.md.
+4. **Python tuples cannot be taken apart** (reported). `G = (A, B)`,
+   `G = [A, B]`, `G =.. L`, `arg/3` and `functor/3` all fail on a Python
+   tuple. Two effects:
+   - regex positional groups;
+   - sqlite multi-column rows: `query("db1", "SELECT name, age FROM users",
+     (N, A))` fails although the row exists.
+5. **Importing `p/1` from one module and `p/2` from another keeps only the
+   later import** (reported, both surfaces). Calling `p(X)` then raises an
+   arity mismatch; ISO and Scryer keep both.
+6. **`nl()` crashes** with an internal `TypeError` ("the 1-tuple ('nl',) is
+   reserved") instead of raising an ISO syntax error (reported).
+
+## Missing from `.clausal`, present in the seam (reported)
+
+- **CLP(B):**
+  - `sat(X & Y)`, `sat(X | Y)` and `sat(~X)` are syntax errors.
+  - `sat(X * Y)`, `sat(X + Y)` and `sat(and(X, Y))` raise a Python
+    `TypeError` (`'TypeError'(Msg)`, not an ISO error).
+  - `:- use_module(library(clpb))` and `library(clpr)` are refused as
+    unknown libraries.
+  - `clpr:real((X =< 2.0))` raises `TypeError: clpr constraint block:
+    unsupported node str`.
+  - Pages: clpb.md, clpr.md, constraints.md.
+- **Z3:** `'z3.integer'([1 =< X, X =< 3])` raises `TypeError: Cannot
+  translate 'tuple' to Z3`. z3.md stays seam.
+- **`if_/3` (library(reif))** works only as a written body goal.
+  - `call(if_(...))`, `G = if_(...), G` and a lambda calling it all raise
+    `existence_error(procedure, if_/3)`.
+  - `if_(X #= 3, …)` raises `existence_error((#=)/3)`, and a comparison
+    as its condition is undefined (`>=/3`).
+  - `if_` as a grammar body calls an undefined `if_/5`.
+- **Regex `findall/3`** is unreachable.
+  - The call compiles as the meta-predicate `findall/3`.
+  - `call(re:findall, …)` raises `permission_error(access, python_module,
+    re)`, because `re` resolves to Python's module.
+- **Importing `get/2` from library(http)** hides the dict builtin `get/3`:
+  `get(P, scheme, S)` raises `type_error(text, …)`.
+- **No literal syntax** for dicts, sets, bytes (`b"abc"`), f-strings or
+  JSON `null` (`parse("null", N)` gives no atom `null`).
+- **No yall lambdas:** `[X]>>G` raises `existence_error((>>)/N)`.
+  `library(lambda)`'s `\X^G` works.
+- **No `format/3` or `with_output_to/2`**, so a writer's output cannot be
+  captured as text.
+- **No ISO streams** (`open/3,4`). This is already listed in the ISO
+  compatibility report.
+- **Directives:** 16 seam directives are "unknown directive" in `.clausal`:
+  `private/1`, `strict_atoms/0`, `implicit_atoms/0`, `implicit_functors/0`,
+  `hide/1`, `shallow/1`, `allow_singletons/0`, `specialize/3`, `edcg_acc/5`,
+  `edcg_pass/1`, `edcg_pred/3`, `double_quotes/1`, `tagged_terms/0`,
+  `backend/1`, `import_from/2`, `import_module/1`.
+- **Units:**
+  - `has_units(F, newton)` fails when given a unit name; it works when
+    given a quantity.
+  - `X is 5 * kilo` raises `type_error(evaluable, kilo/0)`.
+  - A qualified currency (`united_states:usd`) is refused in a declaration.
+  - The currency predicates refuse a bare currency name:
+    `money("7.89", euro, X)` raises `type_error(currency, euro)`.
+- **Reflection:** `reified_clause/2` arrow patterns
+  (`(H :- G1, G2)`) and the seam's short `Clause(H, G)` match nothing.
+- **Field names:** a functor without a `:- constructors(...)` declaration
+  has none in `.clausal`.
+
+## Smaller differences (reported)
+
+- `listing/1` prints seam syntax for `.clausal` code; `listing(digits//1)`
+  prints `StarUnpack(...)`.
+- `catch(X > 0, E, true)`, and a cross-unit comparison, report the context
+  `(is)/2` rather than `(>)/2`.
+- The `permission_error` message text says "declare it -dynamic(...)" even
+  when raised from `.clausal`.
+- `dict_pairs(D, [K-1])` with `K` unbound fails silently.
+- `module_constant(m, max_retries, V)` fails when the module is given by
+  name.
+- `py_os:pid(P)` raises `existence_error`.
+- `number/1` fails on the bare `Decimal` that `strip_units/2` returns (both
+  surfaces).
+- `clausal-fmt` refuses a `.clausal` file (exit 2), so it formats seam
+  only.
+- `:- use_module(regex, [match/2])` loads through the seam's `regex` alias,
+  outside the `library(re)` facade.
+- In both surfaces, ISO `is/2` in a clause body keeps a predicate from
+  tail-call optimisation, and so does the seam's prefix CLP `==`. The old
+  compiler.md example claimed otherwise.
