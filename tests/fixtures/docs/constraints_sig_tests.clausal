@@ -1,0 +1,50 @@
+% Companion tests for docs/constraints.md signature blocks.
+:- use_module(library(clpz)).
+
+test("dif exists") :- dif(1, 2).  % nv
+
+test("in_domain/label exist") :-
+    in_domain(X, 1, 5),
+    label([X]),
+    X == 1.  % nv
+
+test("all_different exists") :-
+    in_domain([A, B], 1, 2),
+    all_different([A, B]),
+    label([A, B]).  % nv
+
+% ── dif/2 semantics (semantics, semantics_ex2..4) ───────────────────────────
+
+test("dif: terms stay different") :-
+    dif(X, Y), X = 1, Y = 2.  % nv
+
+test("dif: terms become equal") :-
+    \+ (dif(X, Y), X = 1, Y = 1).  % nv
+
+test("dif: multiple constraints") :-
+    dif(X, 1), dif(X, 2), X = 3,
+    \+ (dif(Z, 1), dif(Z, 2), Z = 1).  % nv
+
+test("immediate check fails on two unbound variables") :-
+    \+ _ \= _.  % nv
+
+% ── CLP(R) unified dispatch (unified_dispatch) ──────────────────────────────
+
+sqrt2(X) :-
+    in_real(X, 0.0, 2.0),
+    X * X #= 2.0,
+    label_real([X], 1.0e-12).
+
+test("sqrt2 narrows to the root") :-
+    sqrt2(X),
+    \+ X #> 1.4142136,
+    \+ X #< 1.4142135.  % nv
+
+test("float operand in a real constraint") :-
+    in_real(X),
+    X #= 7.0 / 2,
+    \+ X #> 3.5000001,
+    \+ X #< 3.4999999.  % nv
+
+test("integer division in a real constraint fails") :-
+    \+ (in_real(X), X #= 7 / 2).  % nv

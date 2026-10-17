@@ -1,20 +1,20 @@
 # === dif/2 — Disequality constraint ===
 
 --8<-- [start:semantics]
-X is not Y, X is 1, Y is 2    # succeeds: 1 ≠ 2
+dif(X, Y), X = 1, Y = 2    % succeeds: 1 and 2 differ
 --8<-- [end:semantics]
 
 --8<-- [start:semantics_ex2]
-X is not Y, X is 1, Y is 1    # fails: dif violated when Y=1
+dif(X, Y), X = 1, Y = 1    % fails: dif violated when Y = 1
 --8<-- [end:semantics_ex2]
 
 --8<-- [start:semantics_ex3]
-X is not 1, X is not 2, X is 3    # succeeds: 3 ≠ 1 and 3 ≠ 2
-X is not 1, X is not 2, X is 1    # fails: dif(X, 1) violated
+dif(X, 1), dif(X, 2), X = 3    % succeeds: 3 differs from 1 and 2
+dif(X, 1), dif(X, 2), X = 1    % fails: dif(X, 1) violated
 --8<-- [end:semantics_ex3]
 
 --8<-- [start:semantics_ex4]
-not (X is Y)    # fails if X and Y are both unbound (they CAN unify)
+X \= Y    % fails if X and Y are both unbound (they CAN unify)
 --8<-- [end:semantics_ex4]
 
 
@@ -42,11 +42,12 @@ sat_count(X | Y, N)       # N = 3
 # === CLP(ℝ) — Real-domain Constraints ===
 
 --8<-- [start:unified_dispatch]
-# Float literal triggers CLP(ℝ)
-sqrt2(X) <- (
+% A float literal makes this a CLP(R) constraint
+:- use_module(library(clpz)).
+
+sqrt2(X) :-
     in_real(X, 0.0, 2.0),
-    X * X == 2.0,
-    label_real([X], 1.0e-12)
-)
-# → X ≈ 1.4142135623730951
+    X * X #= 2.0,
+    label_real([X], 1.0e-12).
+% X's interval is narrowed to 1.4142135623730951 (within 1.0e-12)
 --8<-- [end:unified_dispatch]

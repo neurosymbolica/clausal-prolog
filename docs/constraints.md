@@ -2,13 +2,16 @@
 
 Clausal Prolog supports constraint logic programming through attributed variables. The C extension provides `AttVar` (attributed variable), `put_attr`/`get_attr`/`del_attr` (all trailed), `register_attr_hook`, and a wakeup queue in `do_unify_and_wake`. Constraint solvers register hooks that fire when a constrained variable is unified.
 
-!!! note "Seam vs Prolog syntax"
+!!! note "Clausal Prolog examples"
 
-    Seam and Prolog syntax differ — for example, variables are
-    `ALLCAPS`, rules use `<-` instead of `:-`, and lists are Python-style.
-    `++`/`--` Python escapes exist only in `.seam`; Clausal Prolog imports
-    modules and never escapes into Python. Keep
-    this in mind when comparing with Prolog resources.
+    Examples on this page are [Clausal Prolog](clausal_prolog.md)
+    (`.clausal`), which uses ISO Prolog syntax: CLP(ℤ) is
+    `library(clpz)`'s `#=`, `#\=`, `#<`, ... as in Scryer. The
+    [seam](syntax.md) writes the same constraints with Python's bare
+    comparison operators (`==`, `!=`, `<`, ...); where its spelling or
+    behaviour differs, this page says so. CLP(B) is the exception: its
+    Boolean expressions can only be written in the seam (see
+    [CLP(B)](#clpb-boolean-constraints)).
     Prolog constraint programs using `library(clpfd)` or `library(clpz)` can be [imported directly](importing_prolog.md).
 
 Two constraint solvers are built in:
@@ -24,56 +27,49 @@ Two constraint solvers are built in:
 
 ### Syntax
 
-In seam (`.seam`) files, `is not` has dif semantics:
+`dif/2` is a builtin; no import is needed:
 
-```seam
-safe_assign(X, Y) <- (
-    X is not Y,
-    X is 1,
-    Y is 2
-)
-```
-
-This succeeds because X and Y end up with different values (1 and 2), even though at the time of `is not` they are both unbound.
-
-The builtin `dif/2` can also be called explicitly:
-
-```seam
-constrained(X, Y) <- (
+```clausal
+constrained(X, Y) :-
     dif(X, Y),
-    X is 1,
-    Y is 2
-)
+    X = 1,
+    Y = 2.
+
+test("constrained") :-
+    constrained(1, 2).
 ```
+
+This succeeds because X and Y end up with different values (1 and 2), even though at the time of `dif/2` they are both unbound. (The seam also spells `dif(X, Y)` as `X is not Y`.)
 
 ### Semantics
 
-| Seam syntax | Semantics | Prolog equivalent |
+| Clausal Prolog | Semantics | Seam spelling |
 |---|---|---|
-| `X is not Y` | Constraint: must end up different | `dif(X, Y)` |
-| `not (X is Y)` | Immediate: don't unify right now | `\=(X, Y)` |
+| `dif(X, Y)` | Constraint: must end up different | `X is not Y` |
+| `X \= Y` | Immediate: don't unify right now | `not (X is Y)` |
 
-The `is not` operator uses `dif/2` constraint semantics rather than immediate `\=`. The old immediate-check semantics are still available as `not (X is Y)` — negation-as-failure of unification — which already works via the existing `Not(Unify(...))` compilation path.
+`dif/2` is a constraint, posted now and checked whenever its terms are bound
+further; ISO `\=` is the immediate check, negation-as-failure of unification.
 
 ??? example "Examples"
 
     **Constraint succeeds — terms stay different:**
-    ```seam
+    ```text
     --8<-- "tests/fixtures/docs/constraints_sigs.txt:semantics"
     ```
 
     **Constraint fails — terms become equal:**
-    ```seam
+    ```text
     --8<-- "tests/fixtures/docs/constraints_sigs.txt:semantics_ex2"
     ```
 
     **Multiple constraints:**
-    ```seam
+    ```text
     --8<-- "tests/fixtures/docs/constraints_sigs.txt:semantics_ex3"
     ```
 
-    **Immediate check (old semantics):**
-    ```seam
+    **Immediate check:**
+    ```text
     --8<-- "tests/fixtures/docs/constraints_sigs.txt:semantics_ex4"
     ```
 
@@ -164,7 +160,7 @@ The `is not` operator uses `dif/2` constraint semantics rather than immediate `\
     - **Occurs check**: `dif(X, f(X))` → succeed (can never be equal)
     - **Constraint propagation**: same/different values, multiple constraints, compound args, transitive via shared var
     - **Backtracking**: constraint undone on trail undo, binding failure doesn't corrupt trail
-    - **Compiled integration**: `is not` with later binding (succeed/fail), ground terms, same var, `not (X is Y)` still works, multiple constraints
+    - **Compiled integration** (seam): `is not` with later binding (succeed/fail), ground terms, same var, `not (X is Y)` still works, multiple constraints
     - **Builtin `dif/2`**: callable from clausal code, with vars and ground terms
     - **Import hook**: `.seam` file with `is not` using proper dif semantics
 
@@ -172,42 +168,67 @@ The `is not` operator uses `dif/2` constraint semantics rather than immediate `\
 
 ## CLP(ℤ) — Integer constraints
 
-CLP(ℤ) is built into the language as the default way to reason about integers (per Markus Triska's recommendation). The comparison operators `==`, `!=`, `<`, `>`, `<=`, `>=` are CLP(ℤ) constraint operators. See also [Arithmetic](arithmetic.md) for relational arithmetic predicates like `plus/3`, `between/3`, and `divmod_/4`.
+CLP(ℤ) is built into the language as the default way to reason about integers (per Markus Triska's recommendation). In Clausal Prolog it is `library(clpz)`: `#=`, `#\=`, `#<`, `#>`, `#=<`, `#>=` are its constraint operators. (In the seam the bare comparison operators `==`, `!=`, `<`, `>`, `<=`, `>=` are these constraints.) See also [Arithmetic](arithmetic.md) for relational arithmetic predicates like `plus/3`, `between/3`, and `divmod_/4`.
 
 The implementation lives in `clausal.logic.clpfd`.
 
 ### Operator semantics
 
-| Operator | Meaning |
-|---|---|
-| `==` | CLP(ℤ) arithmetic equality |
-| `!=` | CLP(ℤ) arithmetic disequality |
-| `<` `>` `<=` `>=` | CLP(ℤ) comparison constraints |
-| `is` | Unification, no evaluation |
-| `is not` | `dif/2` constraint |
-| `eval_(Expr, X)` | Eager arithmetic eval + unify (builtin; ISO `is/2` is the quoted `'is'(X, Expr)`) |
+| Clausal Prolog | Meaning | Seam spelling |
+|---|---|---|
+| `X #= Y` | CLP(ℤ) arithmetic equality | `X == Y` |
+| `X #\= Y` | CLP(ℤ) arithmetic disequality | `X != Y` |
+| `#<` `#>` `#=<` `#>=` | CLP(ℤ) comparison constraints | `<` `>` `<=` `>=` |
+| `X = Y` | Unification, no evaluation | `X is Y` |
+| `dif(X, Y)` | `dif/2` constraint | `X is not Y` |
+| `X is Expr` | Eager ISO arithmetic evaluation + unify | `eval_(Expr, X)` |
+| `X == Y` | Structural equality (ISO `==/2`) | `'=='(X, Y)` or `structural_eq/2` |
 
-When both sides are ground (no unbound Vars), the comparison is decided at once. When at least one side is an unbound Var, a constraint is posted: CLP(ℤ) for integers, [CLP(ℚ)](clpq.md) when a rational is involved, [CLP(ℝ)](clpr.md) when a float is.
+When both sides are ground (no unbound variables), the comparison is decided at once. When at least one side is an unbound variable, a constraint is posted: CLP(ℤ) for integers, [CLP(ℝ)](clpr.md) when a float is involved. Exact rationals are [CLP(ℚ)](clpq.md), `library(clpq)`'s `{...}` constraints.
 
-For true structural equality (Prolog `==/2`) use the quoted `'=='(A, B)` or the builtin `structural_eq/2`.
+What an operator means is defined once in [Operators](operators.md); evaluation is in [Arithmetic](arithmetic.md). Three rules matter most for constraints:
 
-What an operator means, bare or quoted, is defined once in [Operators](operators.md); evaluation is in [Arithmetic](arithmetic.md). Three rules matter most for constraints:
+- **`/` inside a CLP(ℤ) constraint is exact integer division.** `X #= 6 / 2` gives `3`, and `X #= 7 / 2` has no solution, as in Scryer's clpz. In evaluation `X is 7 / 2` is the float `3.5`; for the exact rational write the CLP(ℚ) constraint `{X = 7/2}`, which answers `X = 7 rdiv 2`. (The seam's `X == 7 / 2` is the exact rational instead.)
+- **A zero divisor makes a constraint fail**, it does not raise. `X #= 1 // 0` has no solutions, and a divisor that becomes 0 during labeling fails only that branch. Evaluation (`X is 1 // 0`) raises `evaluation_error(zero_divisor)` instead.
+- **A non-arithmetic term is a domain error.** `X #= foo(1)` raises Scryer's clpz error `error(domain_error(clpz_expression, foo(1)), (#=)/2)`.
 
-- **`/` inside a constraint is exact.** `X == 7 / 2` gives `Fraction(7, 2)` and `X == 6 / 2` gives the integer `3` (Scryer's `{X = 7/2}`), while in evaluation `eval_(7 / 2, X)` is the float `3.5`. Write `rdiv(7, 2)` for the exact quotient anywhere.
-- **A zero divisor makes a constraint fail**, it does not raise. `X == 1 // 0` has no solutions, in every goal order, and a divisor that becomes 0 during labeling fails only that branch. Evaluation (`eval_(1 // 0, X)`) raises `evaluation_error(zero_divisor)` instead.
-- **A non-arithmetic term is a domain error.** `X == foo(1)` raises Scryer's clpz error `error(domain_error(clpz_expression, foo(1)), (==)/2)`.
+```clausal
+:- use_module(library(clpz)).
 
-```seam
--module(div_demo, [])
-
-half(X) <- (X == 7 / 2)                 # X = Fraction(7, 2)
-exact(X) <- (X == 6 / 2)                # X = 3 (an int)
-no_value(X) <- (X == 1 // 0)            # fails: no solutions
-quotients(X, Y) <- (                    # Y = 0 fails its branch only
+exact(X) :-
+    X #= 6 / 2.                         % X = 3
+no_half(X) :-
+    X #= 7 / 2.                         % fails: 7 is not a multiple of 2
+no_value(X) :-
+    X #= 1 // 0.                        % fails: no solutions
+quotients(X, Y) :-                      % Y = 0 fails its branch only
     in_domain(Y, 0, 3),
-    X == 12 // Y,
-    label([Y])
-)                                       # (12, 1), (6, 2), (4, 3)
+    X #= 12 // Y,
+    label([Y]).                         % 12-1, 6-2, 4-3
+
+test("exact") :-
+    exact(X),
+    X == 3.
+
+test("no half") :-
+    \+ no_half(_).
+
+test("zero divisor fails") :-
+    \+ no_value(_).
+
+test("quotients") :-
+    findall(X-Y, quotients(X, Y), PAIRS),
+    PAIRS == [12-1, 6-2, 4-3].
+
+test("not an expression") :-
+    catch(_ #= foo(1),
+          error(domain_error(clpz_expression, foo(1)), _),
+          true).
+
+test("eager division") :-
+    X is 7 / 2,
+    X == 3.5,
+    catch(_ is 1 // 0, error(evaluation_error(zero_divisor), _), true).
 ```
 
 ??? abstract "Domain representation"
@@ -239,14 +260,14 @@ quotients(X, Y) <- (                    # Y = 0 fails its branch only
 
 ??? abstract "Constraint types"
 
-    **Binary / unary constraints** (posted by `==`, `!=`, `<`, `<=`, `>`, `>=`):
+    **Binary / unary constraints** (posted by `#=`, `#\=`, `#<`, `#=<`, `#>`, `#>=`):
 
     | Constraint | Description |
     |---|---|
-    | `EqConstraint(lhs, rhs)` | X == Y — narrow both domains to intersection |
-    | `NeConstraint(lhs, rhs)` | X != Y — when one side is singleton, remove from other |
-    | `LtConstraint(lhs, rhs)` | X < Y — upper-bound X by max(Y)-1, lower-bound Y by min(X)+1 |
-    | `LeConstraint(lhs, rhs)` | X <= Y — upper-bound X by max(Y), lower-bound Y by min(X) |
+    | `EqConstraint(lhs, rhs)` | X #= Y — narrow both domains to intersection |
+    | `NeConstraint(lhs, rhs)` | X #\= Y — when one side is singleton, remove from other |
+    | `LtConstraint(lhs, rhs)` | X #< Y — upper-bound X by max(Y)-1, lower-bound Y by min(X)+1 |
+    | `LeConstraint(lhs, rhs)` | X #=< Y — upper-bound X by max(Y), lower-bound Y by min(X) |
     | `AllDiffConstraint(vars)` | all_different — when one var is ground, remove from all others |
 
     **Global constraints** (posted by `sum_/3`, `scalar_product/4`, `element/3`, `circuit/1`):
@@ -300,7 +321,7 @@ quotients(X, Y) <- (                    # Y = 0 fails its branch only
 | `in_domain` | 3 | `in_domain(Var_or_list, Lo, Hi)` — post domain [Lo, Hi] |
 | `label` | 1 | `label(Vars)` — enumerate values, first-fail strategy (see [labeling gotcha](#gotcha-generate-and-test-vs-constraint-and-label)) |
 | `all_different` | 1 | `all_different(Vars)` — pairwise disequality constraint |
-| `structural_eq` | 2 | `structural_eq(X, Y)` — true structural equality (Prolog `==/2`) |
+| `structural_eq` | 2 | `structural_eq(X, Y)` — true structural equality (Prolog `==/2`; in `.clausal`, just `X == Y`) |
 | `sum_` | 3 | `sum_(+Vars, +Op, +Value)` — bounds-consistency propagation for Σ Vars Op Value |
 | `scalar_product` | 4 | `scalar_product(+Coeffs, +Vars, +Op, +Value)` — bounds-consistency for Σ Cᵢ·Vᵢ Op Value |
 | `element` | 3 | `element(?Index, +List, ?Value)` — arc-consistency: Value = List[Index] (1-based) |
@@ -309,45 +330,68 @@ quotients(X, Y) <- (                    # Y = 0 fails its branch only
 ### Syntax examples
 
 **Domain declaration and labeling:**
-```seam
-solve(X) <- (
+```clausal
+:- use_module(library(clpz)).
+
+solve(X) :-
     in_domain(X, 1, 10),
-    label([X])
-)
+    label([X]).
+
+test("first value") :-
+    solve(X),
+    X == 1.
 ```
 
-**Chained comparison (natural Python syntax):**
-```seam
-bounded(X) <- (1 <= X, X <= 10, label([X]))
+(`X in 1..10`, Scryer's spelling, works too.)
+
+**Comparison constraints bound a domain:**
+```clausal
+:- use_module(library(clpz)).
+
+bounded(X) :-
+    1 #=< X,
+    X #=< 10,
+    label([X]).
+
+test("ten values") :-
+    findall(X, bounded(X), XS),
+    length(XS, 10).
 ```
 
-Since `<=` is CLP(ℤ), `1 <= X` and `X <= 10` naturally constrain X's domain.
+Since `#=<` is CLP(ℤ), `1 #=< X` and `X #=< 10` constrain X's domain. (The seam writes this as Python's chained comparison, `1 <= X, X <= 10`.)
 
 **N-Queens via all_different:**
-```seam
-queens(N, QS) <- (
+```clausal
+:- use_module(library(clpz)).
+
+queens(N, QS) :-
     in_domain(QS, 1, N),
     all_different(QS),
     label(QS),
-    check_diagonals(QS)
-)
+    check_diagonals(QS).
 ```
 
 **SEND + MORE = MONEY:**
-```seam
-sendmoney(S, E, N, D, M, O, R, Y) <- (
+```clausal
+:- use_module(library(clpz)).
+
+sendmoney(S, E, N, D, M, O, R, Y) :-
     in_domain([S, E, N, D, M, O, R, Y], 0, 9),
     all_different([S, E, N, D, M, O, R, Y]),
-    S != 0,
-    M != 0,
-    S * 1000 + E * 100 + N * 10 + D + (M * 1000 + O * 100 + R * 10 + E) == M * 10000 + O * 1000 + N * 100 + E * 10 + Y,
-    label([S, E, N, D, M, O, R, Y])
-)
+    S #\= 0,
+    M #\= 0,
+    S * 1000 + E * 100 + N * 10 + D + (M * 1000 + O * 100 + R * 10 + E) #=
+        M * 10000 + O * 1000 + N * 100 + E * 10 + Y,
+    label([S, E, N, D, M, O, R, Y]).
+
+test("send more money") :-
+    sendmoney(S, E, N, D, M, O, R, Y),
+    [S, E, N, D, M, O, R, Y] == [9, 5, 6, 7, 1, 0, 8, 2].
 ```
 
-The `==` constraint is posted *before* `label` so the solver propagates the equation across all eight domains before any labeling begins. See the gotcha below.
+The `#=` constraint is posted *before* `label` so the solver propagates the equation across all eight domains before any labeling begins. See the gotcha below.
 
-**Querying from Python.** In a `.seam` file, a goal in `for` position runs and hands back each answer; the goal's variables become ordinary locals:
+**Querying from Python.** This is seam-only, since Clausal Prolog never escapes into Python. In a `.seam` file, a goal in `for` position runs and hands back each answer; the goal's variables become ordinary locals (seam syntax):
 
 ```seam
 -module(puzzle, [])
@@ -372,40 +416,47 @@ Call `main()` after the module has loaded; a query at module top level runs befo
 
 A common mistake is to call `label` first and then check the arithmetic — this is **generate-and-test** and is extremely slow:
 
-```seam
-# SLOW -- generate-and-test: label runs before the equation is known
-sendmoney_slow(S, E, N, D, M, O, R, Y) <- (
+```clausal
+:- use_module(library(clpz)).
+
+% SLOW -- generate-and-test: label runs before the equation is known
+sendmoney_slow(S, E, N, D, M, O, R, Y) :-
     in_domain([S, E, N, D, M, O, R, Y], 0, 9),
     all_different([S, E, N, D, M, O, R, Y]),
-    S != 0,
-    M != 0,
-    label([S, E, N, D, M, O, R, Y]),        # labels all 8 vars with no arithmetic constraint
-    eval_(S * 1000 + E * 100 + N * 10 + D, SEND),
-    eval_(M * 1000 + O * 100 + R * 10 + E, MORE),
-    eval_(M * 10000 + O * 1000 + N * 100 + E * 10 + Y, MONEY),
-    SEND + MORE == MONEY                     # checked after the fact
-)
+    S #\= 0,
+    M #\= 0,
+    label([S, E, N, D, M, O, R, Y]),        % labels all 8 vars with no arithmetic constraint
+    SEND is S * 1000 + E * 100 + N * 10 + D,
+    MORE is M * 1000 + O * 100 + R * 10 + E,
+    MONEY is M * 10000 + O * 1000 + N * 100 + E * 10 + Y,
+    SEND + MORE =:= MONEY.                  % checked after the fact
 ```
 
-`eval_/2` is eager arithmetic evaluation (Prolog `is/2`), not a constraint — it requires its arguments to already be ground. Putting `label` before the `eval_` goals forces enumeration of all ~40,000 `all_different` permutations before any pruning from the equation can happen.
+`is/2` is eager arithmetic evaluation, not a constraint — it requires its arguments to already be ground. Putting `label` before the `is` goals forces enumeration of all ~40,000 `all_different` permutations before any pruning from the equation can happen.
 
-The fix is to post the equation as a `==` constraint *before* `label`:
+The fix is to post the equation as a `#=` constraint *before* `label`:
 
-```seam
-# FAST -- constraint-and-label: equation is propagated before any labeling
-sendmoney_fast(S, E, N, D, M, O, R, Y) <- (
+```clausal
+:- use_module(library(clpz)).
+
+% FAST -- constraint-and-label: equation is propagated before any labeling
+sendmoney_fast(S, E, N, D, M, O, R, Y) :-
     in_domain([S, E, N, D, M, O, R, Y], 0, 9),
     all_different([S, E, N, D, M, O, R, Y]),
-    S != 0,
-    M != 0,
-    S * 1000 + E * 100 + N * 10 + D + (M * 1000 + O * 100 + R * 10 + E) == M * 10000 + O * 1000 + N * 100 + E * 10 + Y,
-    label([S, E, N, D, M, O, R, Y])         # labels with equation already constraining domains
-)
+    S #\= 0,
+    M #\= 0,
+    S * 1000 + E * 100 + N * 10 + D + (M * 1000 + O * 100 + R * 10 + E) #=
+        M * 10000 + O * 1000 + N * 100 + E * 10 + Y,
+    label([S, E, N, D, M, O, R, Y]).        % labels with equation already constraining domains
+
+test("fast") :-
+    sendmoney_fast(9, E, N, D, 1, O, R, Y),
+    [E, N, D, O, R, Y] == [5, 6, 7, 0, 8, 2].
 ```
 
-`==` with unbound variables posts a CLP(ℤ) constraint. The equation is normalised to a `ScalarProductConstraint` and propagated via AC-3 before the first value is tried. This reduces the effective search space from ~40,000 to a handful of candidates, cutting solve time by ~70×.
+`#=` with unbound variables posts a CLP(ℤ) constraint. The equation is normalised to a `ScalarProductConstraint` and propagated via AC-3 before the first value is tried. This reduces the effective search space from ~40,000 to a handful of candidates, cutting solve time by ~70×.
 
-**Rule of thumb:** use `==` for arithmetic — it posts constraints that propagate before labeling. Reserve `eval_/2` for eager evaluation (Prolog `is/2`), and `is` with `++` for [Python interop](python_integration.md) (e.g., string operations).
+**Rule of thumb:** use `#=` for arithmetic — it posts constraints that propagate before labeling. Reserve `is/2` for eager evaluation of ground expressions. (In the seam: `==` for the constraint, `eval_/2` for eager evaluation, and `is` with `++` for [Python interop](python_integration.md).)
 
 ??? example "Python API"
 
@@ -438,11 +489,11 @@ sendmoney_fast(S, E, N, D, M, O, R, Y) <- (
     `ArithEq`/`ArithNeq` and `Lt`/`LtE`/`Gt`/`GtE` goal nodes compile to:
 
     ```python
-    if _fd_eq(l, r, trail):    # ==
+    if _fd_eq(l, r, trail):    # #=  (seam ==)
         k_stmts
-    if _fd_ne(l, r, trail):    # !=
+    if _fd_ne(l, r, trail):    # #\= (seam !=)
         k_stmts
-    if _fd_lt(l, r, trail):    # <
+    if _fd_lt(l, r, trail):    # #<  (seam <)
         k_stmts
     ```
 
@@ -474,6 +525,16 @@ sendmoney_fast(S, E, N, D, M, O, R, Y) <- (
 ## CLP(B) — Boolean Constraints
 
 CLP(B) provides constraint logic programming over Booleans via reduced ordered BDDs. See the dedicated [CLP(B)](clpb.md) page for full documentation including operators, builtins, BDD internals, and examples.
+
+!!! warning "CLP(B) expressions are seam-only"
+
+    A CLP(B) expression is built from Python's bitwise operators and the
+    `BoolEq`/`BoolImpl` classes, which only the seam can write. In a
+    `.clausal` file `sat/1` accepts a bare variable (`sat(X)` binds `X = 1`)
+    but no expression: `sat(X * Y)` and `sat(X + Y)` raise
+    `TypeError: CLP(B): unsupported expression type tuple`, `~X` is a syntax
+    error, and `library(clpb)` is not a library the native front end knows.
+    The examples in this section are therefore the seam spelling.
 
 Quick reference:
 
@@ -676,17 +737,20 @@ Quick reference:
 
 ### Unified dispatch
 
-The same comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) route to CLP(ℝ) automatically when either operand is a `float` literal or a variable declared with `in_real`. No separate operator set or brace syntax is needed.
+The same CLP(ℤ) operators (`#=`, `#\=`, `#<`, `#>`, `#=<`, `#>=`, with `library(clpz)` imported) route to CLP(ℝ) automatically when either operand is a `float` literal or a variable declared with `in_real`. No separate operator set or brace syntax is needed. (In the seam the bare `==`, `!=`, `<`, ... dispatch the same way.)
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/constraints_sigs.txt:unified_dispatch"
 ```
+
+`label_real/2` narrows `X`'s interval to the tolerance; `X` stays a
+constrained variable, so `X #> 1.5` and `X #< 1.4` both fail afterwards.
 
 ### Cross-domain notes
 
 - **FD + Real coexistence:** a variable can carry both an FD domain and a real interval. The FD domain enforces integrality; the real interval handles continuous narrowing. Both stay in sync.
-- **Rational and real do not mix:** `/` inside a constraint is exact, so `in_real(X), X == 7 / 2` raises `TypeError: cannot mix CLP(Q) rational and CLP(R) float in the same constraint`. Write a float operand (`X == 7.0 / 2`) in a real constraint.
-- **Booleans are not numbers:** Python's `True`/`False` are not valid in CLP(ℝ) or CLP(ℤ) expressions. Use `0`/`1` if you need numeric values. Booleans belong to CLP(B).
+- **Write a float operand in a real constraint:** `/` inside `#=` is integer division, so `in_real(X), X #= 7 / 2` fails; `in_real(X), X #= 7.0 / 2` narrows `X` to 3.5. (In the seam, `/` is exact, and `in_real(X), X == 7 / 2` raises `TypeError: cannot mix CLP(Q) rational and CLP(R) float in the same constraint`.)
+- **Booleans are not numbers:** Python's `True`/`False` are not valid in CLP(ℝ) or CLP(ℤ) expressions (in `.clausal`, `X #= true + 1` is `domain_error(clpz_expression, true)`). Use `0`/`1` if you need numeric values. Booleans belong to CLP(B).
 - **Labeling order:** for mixed-domain variables, use `label` (FD) first to fix integer values, then `label_real` for remaining real variables. `label_real` does not enforce integrality.
 - **Large integers:** integers beyond 2^53 lose precision when converted to IEEE doubles during interval propagation. Ground integer-integer comparisons are done exactly.
 
