@@ -1,29 +1,42 @@
 # Clausal Prolog — HTTP & URL Modules (`http`, `url`)
 
-!!! note "Seam vs Prolog syntax"
+!!! note "Clausal Prolog examples"
 
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+    Examples on this page are [Clausal Prolog](clausal_prolog.md)
+    (`.clausal`), which uses ISO Prolog syntax. Clausal Prolog reaches
+    Python only through a `.seam` module, so it imports these modules
+    through their facades `library(http)` and `library(url)`; the
+    [seam](syntax.md) imports `py.http` and `py.url` directly
+    (`-import_from(py.http, [...])`).
 
 ## Overview
 
 Two modules for HTTP requests and URL manipulation, wrapping Python's `urllib`
 stdlib. Zero third-party dependencies.
 
-```seam
--import_from(py.http, [get, json_get, post, request])
--import_from(py.url, [encode, decode, parse, join])
+```clausal
+:- use_module(library(http), [get/2, json_get/2, post/3, request/3]).
+:- use_module(library(url), [encode/2, decode/2, parse/2, join/2]).
 
-fetch_page(URL, BODY) <- get(URL, BODY)
+fetch_page(URL, BODY) :-
+    get(URL, BODY).
 
-fetch_api(URL, DATA) <- json_get(URL, DATA)
+fetch_api(URL, DATA) :-
+    json_get(URL, DATA).
 ```
 
-Or via [module import](import.md):
+Or import the whole module and qualify each call with the module name:
+
+```clausal
+:- use_module(library(http)).
+
+page(BODY) :-
+    http:get("http://example.com", BODY).
+```
+
+The seam can also drive such a predicate from Python code in the same file;
+that is seam-only (Clausal Prolog never escapes into Python), so this is
+the seam spelling:
 
 ```seam
 -import_module(py.http)
@@ -44,11 +57,26 @@ Python), and a parsed JSON object is a `DictTerm` whose keys are **atoms**.
 
 ---
 
-## `py.http` — HTTP Requests
+## `library(http)` — HTTP Requests
 
-```seam
--import_from(py.http, [get, post, request, json_get, json_post])
+```clausal
+:- use_module(library(http), [get/2, get/3, post/3, post/4, request/3,
+                              json_get/2, json_post/3]).
+
+% A string that is not a URL is the caller's error, raised before any
+% network access: domain_error(url, Url).
+test("not a url") :-
+    catch(get("notaurl", _), error(domain_error(url, URL), _), true),
+    URL == "notaurl".
 ```
+
+!!! warning "`get/2,3` here hides the dict `get/3`"
+
+    Importing `get/2` or `get/3` from `library(http)`, or the whole module,
+    makes every `get/3` call in the file the HTTP request, so the dict read
+    `get(Dict, Key, Value)` raises `type_error(text, Dict)` there. In such a
+    file read dicts with `get_strict/3`, or import only the HTTP predicates
+    you need and write `http:get(...)` for a request.
 
 ### Simple requests
 
@@ -59,7 +87,7 @@ Python), and a parsed JSON object is a `DictTerm` whose keys are **atoms**.
 | `post(Url, Data, Body)` | `+Url, +Data, -Body` | POST string data, response as string. |
 | `post(Url, Data, Headers, Body)` | `+Url, +Data, +Headers, -Body` | POST with custom headers. |
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/http_sigs.txt:simple_request_examples"
 ```
 
@@ -69,7 +97,7 @@ Python), and a parsed JSON object is a `DictTerm` whose keys are **atoms**.
 |-----------|------|-------------|
 | `request(Options, Status, Body)` | `+Options, -Status, -Body` | General HTTP request with full control. |
 
-`Options` is a [`DictTerm`](dicts_sets.md) with keys:
+`Options` is a [`DictTerm`](dicts_sets.md), built with `dict_pairs/2`, with keys:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -79,7 +107,7 @@ Python), and a parsed JSON object is a `DictTerm` whose keys are **atoms**.
 | `data` | string | `None` | request body |
 | `timeout` | number | `30` | Timeout in seconds |
 
-The keys are names: write them bare (declared) or single-quoted (`'url'`);
+The keys are names: write them as atoms (`url`, or quoted `'url'`);
 a double-quoted `"url"` is matched by its text too.
 
 Unlike `get` and `post`, `request` does **not** raise on 4xx/5xx — it
@@ -116,7 +144,7 @@ for bytes that are not UTF-8 on a text stream.
 Wrap a call in `catch/3` for the old failure:
 `catch(get(U, B), error(existence_error(source_sink, _), _), fail)`.
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/http_sigs.txt:general_request_example"
 ```
 
@@ -128,20 +156,25 @@ Wrap a call in `catch/3` for the old failure:
 | `json_post(Url, Term, Response)` | `+Url, +Term, -Response` | POST JSON + parse response |
 
 JSON objects are converted to [`DictTerm`](dicts_sets.md) (atom keys), arrays to lists and
-JSON strings to strings, using the same conversion as the [`py.json`](json.md) module.
-Read a field as `USER.name` or `py.json.get(USER, name, NAME)` (with `-import_module(py.json)`
-and `name` declared); a string key `"name"` does not match an atom key and the goal fails.
+JSON strings to strings, using the same conversion as the [JSON](json.md) module.
+Read a field with the dict builtin `get(USER, name, NAME)` (or `get_strict/3`
+in a file that imports HTTP `get`; the seam also writes `USER.name`); a
+string key `"name"` does not match an atom key and the goal fails.
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/http_sigs.txt:json_request_examples"
 ```
 
 ---
 
-## `py.url` — URL Utilities
+## `library(url)` — URL Utilities
 
-```seam
--import_from(py.url, [encode, decode, parse, join])
+```clausal
+:- use_module(library(url), [encode/2, decode/2, parse/2, join/2]).
+
+test("encode") :-
+    encode("hello world", E),
+    E == "hello%20world".
 ```
 
 | Predicate | Mode | Description |
@@ -153,7 +186,7 @@ and `name` declared); a string key `"name"` does not match an atom key and the g
 
 ### encode / decode
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/http_sigs.txt:url_encode_examples"
 ```
 
@@ -162,10 +195,12 @@ encode uses `safe=""` — all special characters are encoded.
 ### parse / join
 
 `parse` returns a DictTerm keyed by the atoms `scheme`, `host`, `port`, `path`,
-`query`, `fragment` — so `PARTS.scheme` reads a part, and `join` consumes the
-same dict unchanged. Port is an integer (0 if not specified).
+`query`, `fragment`, and `join` consumes the
+same dict unchanged. Port is an integer (0 if not specified). Read a part
+with the dict builtin `get/3`, e.g. `get(PARTS, scheme, S)` (the seam also
+writes `PARTS.scheme`).
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/http_sigs.txt:url_parse_examples"
 ```
 
@@ -175,13 +210,13 @@ same dict unchanged. Port is an integer (0 if not specified).
 
     ### Build a query URL
 
-    ```seam
+    ```text
     --8<-- "tests/fixtures/docs/http_sigs.txt:build_query_url"
     ```
 
     ### Check API health
 
-    ```seam
+    ```text
     --8<-- "tests/fixtures/docs/http_sigs.txt:health_check"
     ```
 
@@ -189,4 +224,4 @@ same dict unchanged. Port is an integer (0 if not specified).
 
 *See also: [JSON](json.md) — JSON parsing and DictTerm integration ·
 [Dicts & Sets](dicts_sets.md) — DictTerm construction and access ·
-[Python Interop](python_integration.md) — `++()` for advanced HTTP with `requests`.*
+[Python Interop](python_integration.md) — the seam's `++()` for advanced HTTP with `requests`.*

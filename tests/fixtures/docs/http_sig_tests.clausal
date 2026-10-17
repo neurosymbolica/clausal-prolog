@@ -1,0 +1,83 @@
+% Companion tests for docs/http.md display snippets.
+% HTTP predicates need network access, so the HTTP tests only check that
+% each predicate is reached: a string that is not a URL raises
+% domain_error(url, Url) before any network access.
+:- set_prolog_flag(double_quotes, chars).
+:- use_module(library(url), [encode/2, decode/2, parse/2, join/2]).
+:- use_module(library(http), [post/3, request/3, json_get/2, json_post/3]).
+
+test("url encode") :-
+    encode("hello world", E),
+    E == "hello%20world".  % nv
+
+test("url decode") :-
+    decode("hello%20world", S),
+    S == "hello world".  % nv
+
+test("url parse") :-
+    parse("https://example.com:8080/path?q=1#frag", PARTS),
+    get(PARTS, scheme, SCHEME), SCHEME == "https",
+    get(PARTS, host, HOST), HOST == "example.com",
+    get(PARTS, port, PORT), PORT == 8080,
+    get(PARTS, path, PATH), PATH == "/path",
+    get(PARTS, query, QUERY), QUERY == "q=1",
+    get(PARTS, fragment, FRAGMENT), FRAGMENT == "frag".  % nv
+
+test("url parse default port") :-
+    parse("https://example.com/x", PARTS),
+    get(PARTS, port, PORT),
+    PORT == 0.  % nv
+
+test("url join") :-
+    dict_pairs(PARTS, [scheme-"https", host-"example.com", path-"/api"]),
+    join(PARTS, URL),
+    URL == "https://example.com/api".  % nv
+
+test("url parse then join") :-
+    parse("https://example.com:8080/path?q=1#frag", PARTS),
+    join(PARTS, URL),
+    URL == "https://example.com:8080/path?q=1#frag".  % nv
+
+% ── HTTP predicates, offline ─────────────────────────────────────────────────
+
+test("http get/2 and get/3") :-
+    catch(http:get("notaurl", _), error(domain_error(url, U2), _), true),
+    U2 == "notaurl",
+    dict_pairs(HEADERS, ['Authorization'-"Bearer TOKEN"]),
+    catch(http:get("notaurl", HEADERS, _), error(domain_error(url, U3), _), true),
+    U3 == "notaurl".  % nv
+
+test("http post") :-
+    catch(post("notaurl", "key=value", _), error(domain_error(url, U), _), true),
+    U == "notaurl".  % nv
+
+test("http request") :-
+    dict_pairs(OPTIONS, [url-"notaurl", method-"HEAD"]),
+    catch(request(OPTIONS, _, _), error(domain_error(url, U), _), true),
+    U == "notaurl".  % nv
+
+test("json get and post") :-
+    catch(json_get("notaurl", _), error(domain_error(url, U1), _), true),
+    U1 == "notaurl",
+    dict_pairs(ITEM, [name-"Widget", price-9.99]),
+    catch(json_post("notaurl", ITEM, _), error(domain_error(url, U2), _), true),
+    U2 == "notaurl".  % nv
+
+% ── Examples: build_query_url, health_check ──────────────────────────────────
+
+search_url(QUERY, URL) :-
+    encode(QUERY, SAFE_QUERY),
+    append("https://api.example.com/search?q=", SAFE_QUERY, URL).
+
+health_check(URL) :-
+    dict_pairs(OPTIONS, [url-URL, timeout-5]),
+    request(OPTIONS, STATUS, _),
+    STATUS =:= 200.
+
+test("build query url") :-
+    search_url("a b", URL),
+    URL == "https://api.example.com/search?q=a%20b".  % nv
+
+test("health check reaches request") :-
+    catch(health_check("notaurl"), error(domain_error(url, U), _), true),
+    U == "notaurl".  % nv

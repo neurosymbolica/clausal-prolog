@@ -3,58 +3,56 @@
 --8<-- [start:simple_request_examples]
 get("http://example.com", BODY)
 
-get("http://api.example.com/data",
-    {"Authorization": "Bearer TOKEN"},
-    BODY)
+dict_pairs(HEADERS, ['Authorization'-"Bearer TOKEN"]),
+get("http://api.example.com/data", HEADERS, BODY)
 
 post("http://example.com/submit", "key=value", RESPONSE)
 --8<-- [end:simple_request_examples]
 
 --8<-- [start:general_request_example]
-request({"url": "http://example.com", "method": "HEAD"}, STATUS, BODY)
+dict_pairs(OPTIONS, [url-"http://example.com", method-"HEAD"]),
+request(OPTIONS, STATUS, BODY)
 --8<-- [end:general_request_example]
 
 --8<-- [start:json_request_examples]
 json_get("http://api.example.com/users/1", USER),
-NAME is USER.name              # JSON object keys are atoms: USER.name, or
-                               # py.json.get(USER, name, NAME) -- not "name"
+get_strict(USER, name, NAME)   % JSON object keys are atoms: name, not "name"
 
-json_post("http://api.example.com/items",
-         {"name": "Widget", "price": 9.99},
-         RESPONSE)
+dict_pairs(ITEM, [name-"Widget", price-9.99]),
+json_post("http://api.example.com/items", ITEM, RESPONSE)
 --8<-- [end:json_request_examples]
 
 --8<-- [start:url_encode_examples]
-encode("hello world", E)   # E = "hello%20world"
-decode("hello%20world", S) # S = "hello world"
+encode("hello world", E)   % E = "hello%20world"
+decode("hello%20world", S) % S = "hello world"
 --8<-- [end:url_encode_examples]
 
 --8<-- [start:url_parse_examples]
 parse("https://example.com:8080/path?q=1#frag", PARTS)
-# PARTS = {scheme: "https", host: "example.com", port: 8080,
-#          path: "/path", query: "q=1", fragment: "frag"}
-# (atom keys, string values)
+% PARTS: scheme "https", host "example.com", port 8080,
+%        path "/path", query "q=1", fragment "frag"
+% (atom keys, string values)
 
-join({scheme: "https", host: "example.com", path: "/api"}, URL)
-# URL = "https://example.com/api"
+dict_pairs(PARTS, [scheme-"https", host-"example.com", path-"/api"]),
+join(PARTS, URL)
+% URL = "https://example.com/api"
 --8<-- [end:url_parse_examples]
 
 --8<-- [start:build_query_url]
--import_from(py.url, [encode, join])
--import_from(py.http, [json_get])
+:- use_module(library(url), [encode/2]).
+:- use_module(library(http), [json_get/2]).
 
-search_api(QUERY, RESULTS) <- (
+search_api(QUERY, RESULTS) :-
     encode(QUERY, SAFE_QUERY),
-    append("https://api.example.com/search?q=", SAFE_QUERY, URL),   # strings are lists
-    json_get(URL, RESULTS)
-)
+    append("https://api.example.com/search?q=", SAFE_QUERY, URL),   % strings are lists
+    json_get(URL, RESULTS).
 --8<-- [end:build_query_url]
 
 --8<-- [start:health_check]
--import_from(py.http, [request])
+:- use_module(library(http), [request/3]).
 
-health_check(URL) <- (
-    request({"url": URL, "timeout": 5}, STATUS, _),
-    STATUS == 200
-)
+health_check(URL) :-
+    dict_pairs(OPTIONS, [url-URL, timeout-5]),
+    request(OPTIONS, STATUS, _),
+    STATUS =:= 200.
 --8<-- [end:health_check]
