@@ -2,14 +2,18 @@
 
 Clausal Prolog has first-class support for dictionaries and sets as logic terms. Unlike plain Python `dict` and `set`, `DictTerm` and `SetTerm` participate in unification — dict values can contain logic variables that bind during search, and sets unify by element equality.
 
-!!! note "Seam vs Prolog syntax"
+!!! note "Clausal Prolog and the seam"
 
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+    [Clausal Prolog](clausal_prolog.md) (`.clausal`) reaches dicts and sets
+    through **predicates only**: build a dict with `dict_pairs/2` and a set
+    with `set_list/2`, then use the `dict_*`, `set_*`, `get/3,4`,
+    `get_strict/3`, `tri_get/3` and `delete/3` builtins below. The
+    examples of those builtins are `.clausal`. The *literal* syntax —
+    `{k: v}` dicts, `{a, b}` sets, `P["k"]` subscripts, `D.k` dot access
+    and `{**old, k: v}` splats — belongs to the [seam](syntax.md),
+    Clausal's Python-syntax surface, and has no `.clausal` spelling; the
+    sections that describe it say so and keep the seam spelling. A dict
+    prints as `{a:1,b:2}` and a set as `{1,2,3}`.
 
 ---
 
@@ -23,10 +27,12 @@ Clausal Prolog has first-class support for dictionaries and sets as logic terms.
     the `py.*` wrappers return are keyed by **atoms**, so prefer atom keys
     (`{'x': 0}`, or a declared bare `x`) for record-like data. The examples
     below use string keys only where the point does not depend on the key kind.
+    (That is the seam's literal; in `.clausal`, `dict_pairs(D, ["x"-0])` is
+    the string-keyed dict and `dict_pairs(D, [x-0])` the atom-keyed one.)
 
 ### Syntax
 
-In [seam (`.seam`) files](syntax.md), Python dict literals `{k: v, ...}` are automatically wrapped as `DictTerm`:
+In [seam (`.seam`) files](syntax.md), Python dict literals `{k: v, ...}` are automatically wrapped as `DictTerm`. (In `.clausal`, `dict_pairs(D, [x-0, y-0])` builds the same dict; there is no literal.) The examples in this section and the next ones, up to [Backtracking](#backtracking), are seam:
 
 ```python
 # Fact with a ground dict
@@ -45,6 +51,27 @@ Two `DictTerm`s unify iff:
 
 1. They have the **same set of keys**
 2. Values for each key unify pairwise
+
+```clausal
+test("dicts unify key by key") :-
+    dict_pairs(D, [a-1, b-2]),
+    dict_pairs(E, [a-X, b-Y]),
+    D = E,
+    X == 1,
+    Y == 2.
+
+test("different key sets do not unify") :-
+    dict_pairs(D, [a-1]),
+    dict_pairs(E, [b-1]),
+    \+ D = E.
+
+test("a value mismatch does not unify") :-
+    dict_pairs(D, [a-1]),
+    dict_pairs(E, [a-2]),
+    \+ D = E.
+```
+
+In the seam, with literals:
 
 ```python
 # Succeeds: same keys, values unify
@@ -153,6 +180,8 @@ reader already knows:
 | default-merge | `P2 is {"k": Default, **P}` | `{k: default, **d}` | `P` wins if present |
 | delete (functional) | `delete(P, 'k', P2)` | `del d[k]` | **throws** |
 
+In the seam:
+
 ```seam
 role_of(PROFILE, R) <- (R is PROFILE['role'])
 
@@ -163,10 +192,45 @@ promote(PROFILE, P2) <- (P2 is {**PROFILE, 'role': 'admin'})
 drop_draft(PROFILE, P2) <- delete(PROFILE, 'draft', P2)
 ```
 
-In ISO syntax (a `.pl` file on the native front end) dicts have **predicate
-forms only** — no dict literal and no subscript: build with `dict_pairs/2`,
-read with `get/3` (soft) or `get_strict/3` (strict), update with
-`dict_put/4` and `dict_put_pairs/3`.
+In Clausal Prolog (`.clausal`), as in ISO syntax (a `.pl` file on the
+native front end), dicts have **predicate forms only** — no dict literal
+and no subscript: build with `dict_pairs/2`, read with `get/3` (soft),
+`get_strict/3` (strict), `get/4` (defaulted) or `tri_get/3`, update with
+`dict_put/4` and `dict_put_pairs/3`, delete with `delete/3`. The same four
+rules in `.clausal`:
+
+```clausal
+role_of(PROFILE, R) :-
+    get_strict(PROFILE, role, R).
+
+city_or_default(PROFILE, C) :-
+    get(PROFILE, city, C, unknown).
+
+promote(PROFILE, P2) :-
+    dict_put(role, admin, PROFILE, P2).
+
+drop_draft(PROFILE, P2) :-
+    delete(PROFILE, draft, P2).
+
+test("profile reads and updates") :-
+    dict_pairs(P, [draft-true, role-user]),
+    role_of(P, R),
+    R == user,
+    city_or_default(P, C),
+    C == unknown,
+    promote(P, P2),
+    get(P2, role, admin),
+    drop_draft(P, P3),
+    dict_pairs(P3, [role-user]).
+
+test("strict and soft reads of an absent key") :-
+    dict_pairs(P, [role-admin]),
+    catch(get_strict(P, city, _), error(existence_error(dict_key, K), _), true),
+    K == city,
+    \+ get(P, city, _),
+    tri_get(P, city, U),
+    U == undefined.
+```
 
 Choosing a read: the strict subscript (or `get_strict/3`) is for keys the clause is entitled to
 assume (a typo should be loud); `get/3` is for keys whose absence should just
@@ -183,6 +247,23 @@ head-position dict patterns above:
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:atom_vs_string_keys"
 ```
 
+The same in `.clausal`, where a bare `k` is an atom without a declaration:
+
+```clausal
+config(D) :-
+    dict_pairs(D, [k-1]).       % atom key
+
+labels(D) :-
+    dict_pairs(D, ["k"-1]).     % string key -- a DIFFERENT dict
+
+test("atom and string keys are distinct") :-
+    config(D),
+    \+ labels(D),
+    get(D, k, V),
+    V == 1,
+    \+ get(D, "k", _).
+```
+
 A `"k"` key is a string (under a module's temporary
 [`-double_quotes(atom)`](directives.md#-double_quotes) setting it is the atom
 instead); a bare `k` or a single-quoted `'k'` is always an atom. Dot access `D.k` looks
@@ -194,7 +275,7 @@ and `get(R, stdout, V)` work.
 All of these accept a plain Python `dict` argument wherever a `DictTerm` is
 accepted (the two unify and compare equal), as does the whole `dict_*`/`set_*`
 family below. `length/2` does **not** count dict keys — a dict is not a
-sequence; use `dict_size/2`.
+sequence (`length(D, N)` fails); use `dict_size/2`.
 
 ---
 
@@ -204,7 +285,7 @@ sequence; use `dict_size/2`.
 
 ### Syntax
 
-In seam (`.seam`) files, Python set literals `{a, b, c}` produce `SetTerm` objects when the elements are ground constants:
+In seam (`.seam`) files, Python set literals `{a, b, c}` produce `SetTerm` objects when the elements are ground constants. (In `.clausal`, `set_list(S, [1, 2, 3])` builds the set; there is no literal.)
 
 ```python
 colors({1, 2, 3}),
@@ -214,6 +295,20 @@ primary({"red", "green", "blue"}),
 ### Unification semantics
 
 Two `SetTerm`s unify iff they contain the **same elements** (order irrelevant, since they are sets):
+
+```clausal
+test("sets unify by elements") :-
+    set_list(A, [1, 2, 3]),
+    set_list(B, [3, 1, 2]),
+    A = B.
+
+test("different elements do not unify") :-
+    set_list(A, [1, 2]),
+    set_list(B, [1, 2, 3]),
+    \+ A = B.
+```
+
+In the seam, with literals:
 
 ```python
 # Succeeds: same elements regardless of order
@@ -233,145 +328,170 @@ A logic variable unifies with a `SetTerm` by binding to it.
 
 ## Dict builtins
 
-All dict builtins are in `clausal/logic/builtins/dict_set.py`. They accept a `DictTerm` or a plain Python `dict` (passed in with `++`) for any dict argument.
+All dict builtins are in `clausal/logic/builtins/dict_set.py`. They accept a `DictTerm` (or, from the seam, a plain Python `dict` passed in with `++`) for any dict argument.
 
 ### `is_dict/1`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:is_dict_1"
 ```
 Succeeds if `Term` is a `DictTerm`.
 
 ### `dict_size/2`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_size_2"
 ```
 `N` is the number of keys in `Dict`.
 
 ### `dict_keys/2`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_keys_2"
 ```
 `Keys` is the sorted list of keys. Keys are sorted by `repr` for determinism across key types.
 
 ### `dict_values/2`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_values_2"
 ```
 `Values` is the list of values in key-sorted order (same ordering as `dict_keys`).
 
 ### `dict_pairs/2`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_pairs_2"
 ```
 Bidirectional conversion between a `DictTerm` and a list of `Key-Value`
 pairs: the `'-'(Key, Value)` cell, as in the [pairs library](pairs.md). In the
 dict→pairs direction the pairs are sorted by key.
 
-```seam
-test("dict to pairs") <- (
-    dict_pairs({'a': 1, 'b': 2}, PAIRS),
-    PAIRS == ['-'('a', 1), '-'('b', 2)]
-)
+```clausal
+test("dict to pairs") :-
+    dict_pairs(D, [b-2, a-1]),
+    dict_pairs(D, PAIRS),
+    PAIRS == [a-1, b-2].
 
-test("pairs to dict") <- (
-    dict_pairs(DICT, ['-'('x', 10), '-'('y', 20)]),
-    dict_get('y', DICT, 20)
-)
+test("pairs to dict") :-
+    dict_pairs(DICT, [x-10, y-20]),
+    dict_get(y, DICT, 20).
 ```
 
 ### `dict_get/3`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_get_3"
 ```
 Semidet: succeeds if `Key` is in `Dict` and `Value` unifies with `Dict[Key]`. Fails if the key is absent or `Key` is unbound.
 
-```python
-dict_get("name", {"name": "Alice", "age": 30}, NAME)
-# NAME = "Alice"
+```clausal
+test("dict_get") :-
+    dict_pairs(D, [name-"Alice", age-30]),
+    dict_get(name, D, NAME),
+    NAME == "Alice".
 ```
 
 ### `dict_put/4`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_put_4"
 ```
 `NewDict` is `OldDict` with `Key → Value` inserted or overwritten. Returns a new `DictTerm`; the original is unchanged.
 
-```python
-dict_put("b", 99, {"a": 1, "b": 0}, NEW)
-# NEW = DictTerm({"a": 1, "b": 99})
+```clausal
+test("dict_put") :-
+    dict_pairs(D, [a-1, b-0]),
+    dict_put(b, 99, D, NEW),
+    dict_pairs(NEW, [a-1, b-99]),
+    dict_get(b, D, 0).
 ```
 
 ### `dict_put_pairs/3`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_put_pairs_3"
 ```
 Bulk update: `Pairs` is a list of `Key-Value` pairs, equivalent to calling
 `dict_put/4` for each pair in order.
 
-```seam
-test("bulk update") <- (
-    dict_put_pairs(['-'('b', 2), '-'('c', 3)], {'a': 1}, NEW),
-    dict_pairs(NEW, ['-'('a', 1), '-'('b', 2), '-'('c', 3)])
-)
+```clausal
+test("bulk update") :-
+    dict_pairs(D, [a-1]),
+    dict_put_pairs([b-2, c-3], D, NEW),
+    dict_pairs(NEW, [a-1, b-2, c-3]).
 ```
 
 ### `dict_remove/3`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_remove_3"
 ```
 `NewDict` is `OldDict` without `Key`. Fails if `Key` is not present.
 
-```python
-dict_remove("b", {"a": 1, "b": 2, "c": 3}, NEW)
-# NEW = DictTerm({"a": 1, "c": 3})
+```clausal
+test("dict_remove") :-
+    dict_pairs(D, [a-1, b-2, c-3]),
+    dict_remove(b, D, NEW),
+    dict_pairs(NEW, [a-1, c-3]).
+
+test("dict_remove of an absent key fails") :-
+    dict_pairs(D, [a-1]),
+    \+ dict_remove(b, D, _).
 ```
 
 ### `dict_merge/3`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_merge_3"
 ```
 `Merged` is the union of `D1` and `D2`. Where keys conflict, `D2`'s value wins.
 
-```python
-dict_merge({"a": 1, "b": 0}, {"b": 99, "c": 3}, MERGED)
-# MERGED = DictTerm({"a": 1, "b": 99, "c": 3})
+```clausal
+test("dict_merge") :-
+    dict_pairs(D1, [a-1, b-0]),
+    dict_pairs(D2, [b-99, c-3]),
+    dict_merge(D1, D2, MERGED),
+    dict_pairs(MERGED, [a-1, b-99, c-3]).
 ```
 
 ### `gen_dict/3`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:gen_dict_3"
 ```
 Nondeterministic: on backtracking, enumerates all key-value pairs in `Dict` (the dict analogue of `gen_assoc/3` in Scryer's `library(assoc)`).
 
-```python
-# Enumerate all pairs
-gen_dict(KEY, {"a": 1, "b": 2}, VALUE)
-# → KEY="a", VALUE=1
-# → KEY="b", VALUE=2 (on backtrack)
+```clausal
+% Enumerate all pairs: KEY = a, VALUE = 1; then KEY = b, VALUE = 2
+test("gen_dict enumerates") :-
+    dict_pairs(D, [a-1, b-2]),
+    findall(KEY-VALUE, gen_dict(KEY, D, VALUE), L),
+    L == [a-1, b-2].
 
-# include by key
-gen_dict("a", {"a": 1, "b": 2}, VALUE)
-# → VALUE=1 (only one solution)
+% Select by key: one solution
+test("gen_dict by key") :-
+    dict_pairs(D, [a-1, b-2]),
+    findall(VALUE, gen_dict(a, D, VALUE), L),
+    L == [1].
 ```
 
 ### `sub_dict/2`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:sub_dict_2"
 ```
 Partial dict matching: succeeds when every key in `Pattern` is also in `Dict`, and the corresponding values unify. Extra keys in `Dict` are ignored.
 
-```python
-sub_dict({"name": NAME}, {"name": "Alice", "age": 30})
-# → NAME = "Alice"
+```clausal
+test("sub_dict binds") :-
+    dict_pairs(P, [name-NAME]),
+    dict_pairs(D, [name-"Alice", age-30]),
+    sub_dict(P, D),
+    NAME == "Alice".
 
-sub_dict({"role": "admin"}, {"name": "Bob", "role": "admin", "dept": "eng"})
-# → succeeds
+test("sub_dict ignores extra keys") :-
+    dict_pairs(P, [role-admin]),
+    dict_pairs(D, [name-"Bob", role-admin, dept-eng]),
+    sub_dict(P, D).
 
-sub_dict({"role": "admin"}, {"name": "Alice", "role": "user"})
-# → fails (value mismatch)
+test("sub_dict fails on a value mismatch") :-
+    dict_pairs(P, [role-admin]),
+    dict_pairs(D, [name-"Alice", role-user]),
+    \+ sub_dict(P, D).
 
-sub_dict({"z": 1}, {"x": 1, "y": 2})
-# → fails (key absent)
+test("sub_dict fails on an absent key") :-
+    dict_pairs(P, [z-1]),
+    dict_pairs(D, [x-1, y-2]),
+    \+ sub_dict(P, D).
 ```
 
 ---
@@ -379,88 +499,109 @@ sub_dict({"z": 1}, {"x": 1, "y": 2})
 ## Set builtins
 
 ### `is_set/1`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:is_set_1"
 ```
 Succeeds if `Term` is a `SetTerm`.
 
 ### `set_size/2`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_size_2"
 ```
 `N` is the cardinality of `Set`.
 
 ### `set_list/2`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_list_2"
 ```
 Bidirectional conversion between a `SetTerm` and a sorted list.
 
-```python
-# Set → list (sorted)
-set_list({3, 1, 2}, LIST)  # LIST = [1, 2, 3]
-
-# List → set (duplicates removed)
-set_list(SET, [1, 1, 2])   # SET = SetTerm({1, 2})
+```clausal
+% List -> set (duplicates removed), set -> list (sorted)
+test("set_list") :-
+    set_list(SET, [3, 1, 2, 1]),
+    set_size(SET, 3),
+    set_list(SET, LIST),
+    LIST == [1, 2, 3].
 ```
 
 ### `set_union/3`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_union_3"
 ```
 `union` is the set union of `S1` and `S2`.
 
 ### `set_intersection/3`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_intersection_3"
 ```
 `Inter` is the set intersection of `S1` and `S2`.
 
 ### `set_subtract/3`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_subtract_3"
 ```
 `Diff` is `S1` minus `S2` (elements in `S1` not in `S2`).
 
 ### `set_sym_diff/3`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_sym_diff_3"
 ```
 `Sym` is the symmetric difference of `S1` and `S2` (elements in exactly one of the two sets).
 
 ### `set_subset/2`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_subset_2"
 ```
 Succeeds if every element of `Sub` is also in `Super`. An empty set is a subset of any set.
 
 ### `set_disjoint/2`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_disjoint_2"
 ```
 Succeeds if `S1` and `S2` have no elements in common.
 
 ### `set_add/3`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_add_3"
 ```
 `NewSet` is `OldSet` with `Elem` added. If `Elem` is already present, `NewSet = OldSet`.
 
 ### `set_remove/3`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:set_remove_3"
 ```
 `NewSet` is `OldSet` with `Elem` removed. If `Elem` is absent, `NewSet = OldSet`.
 
+```clausal
+test("set algebra") :-
+    set_list(A, [1, 2]),
+    set_list(B, [2, 3]),
+    set_union(A, B, U), set_list(U, [1, 2, 3]),
+    set_intersection(A, B, I), set_list(I, [2]),
+    set_subtract(A, B, D), set_list(D, [1]),
+    set_sym_diff(A, B, X), set_list(X, [1, 3]).
+
+test("set_add and set_remove") :-
+    set_list(A, [1]),
+    set_add(2, A, B), set_list(B, [1, 2]),
+    set_remove(1, B, C), set_list(C, [2]),
+    set_add(1, A, A2), A2 == A,
+    set_remove(5, A, A3), A3 == A.
+```
+
 ### `gen_set/2`
-```seam
+```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:gen_set_2"
 ```
 Nondeterministic: on backtracking, enumerates all elements of `Set` in a deterministic order (sorted by `repr`).
 
-```python
-gen_set(ELEM, {"a", "b", "c"})
-# → ELEM="a", ELEM="b", ELEM="c" (on backtrack)
+```clausal
+% ELEM = a; ELEM = b; ELEM = c (on backtracking)
+test("gen_set") :-
+    set_list(S, [c, a, b]),
+    findall(ELEM, gen_set(ELEM, S), L),
+    L == [a, b, c].
 ```
 
 ---
@@ -535,9 +676,9 @@ deref(x)  # 42
 
 ## Limitations
 
-- **Keys must be bound when the dict is built**: `(K is 'k', D is {K: 1})` works, but `{X: 1}` with `X` unbound raises `error(instantiation_error, '{key}'/1)`.
+- **Keys must be bound when the dict is built**: in the seam, `(K is 'k', D is {K: 1})` works, but `{X: 1}` with `X` unbound raises `error(instantiation_error, '{key}'/1)`. In `.clausal`, `dict_pairs(D, [K-1])` with `K` unbound fails.
 - **No variable set elements**: Set elements must be ground/hashable.
-- **Splat requires a bound dict**: `{**OLD, 'k': V}` requires `OLD` to be bound to a dict at runtime. Unbound `OLD` raises `error(instantiation_error, '{**}'/1)`.
+- **Splat requires a bound dict** (seam): `{**OLD, 'k': V}` requires `OLD` to be bound to a dict at runtime. Unbound `OLD` raises `error(instantiation_error, '{**}'/1)`.
 - **No mutable variants**: Mutable dict/set types were considered and rejected — the [`++()` Python escape](python_integration.md) covers accumulation patterns with idiomatic, explicit syntax. Use `trail.record()` directly if you need backtrackable undo of custom mutable state.
 
 ---
