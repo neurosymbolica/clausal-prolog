@@ -75,14 +75,14 @@ int_min(X, COST) :-
     in_q(X, 0, 10),
     {X >= 3/2},
     int_minimize([X], X, COST).
-% -> X = 2, COST = 2
+% -> COST = 2 (and X = 2 under the default solver; docs/clpq.md, int_minimize/3)
 
 % min(X) with X >= Y + Z, Y >= 2, Z >= 2, all integer
 resource_min(X, Y, Z, COST) :-
     in_q([X, Y, Z], 0, 100),
     {X >= Y + Z, Y >= 2, Z >= 2},
     int_minimize([X, Y, Z], X, COST).
-% -> X = 4, Y = 2, Z = 2, COST = 4
+% -> COST = 4 (and X = 4, Y = 2, Z = 2 under the default solver)
 % --8<-- [end:int_minimize_3]
 
 % --8<-- [start:dump_q_2]
@@ -91,7 +91,8 @@ show_constraints(X, Y, CS) :-
     {2*X + Y =< 16, X + 2*Y =< 11},
     dump_q([X, Y], CS).
 % CS = ['{_40 + 2*_41 =< 11}', '{2*_40 + _41 =< 16}', '{-_40 =< 0}', '{_40 =< 100}', ...]
-% (a list of atoms; the variables print as _N names)
+% (a list of atoms; the variables print as _N names; six constraints under
+% the default solver, four under CLAUSAL_CLPQ=holzbaur)
 % --8<-- [end:dump_q_2]
 
 

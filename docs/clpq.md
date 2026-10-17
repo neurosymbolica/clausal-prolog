@@ -256,9 +256,15 @@ Supported operators (seam): `<=`, `>=`, `<`, `>`, `==`, `!=`.
 
 ### int_minimize/3
 
-Minimize a linear expression subject to the current constraints **and** the requirement that specified variables take integer values. Uses LP relaxation with branch-and-bound internally. Binds all constrained variables to their optimal integer assignments.
+Minimize a linear expression subject to the current constraints **and** the requirement that specified variables take integer values. Uses LP relaxation with branch-and-bound internally. `Min` is bound to the optimum. Under the default solver, the constrained variables are also bound to their optimal integer assignments.
 
 `bb_inf/3` is accepted as an alias (SICStus compatibility).
+
+!!! note "Under `CLAUSAL_CLPQ=holzbaur`"
+    The opt-in port of clp(q,r) 1.3.3 binds `Min` alone and leaves the
+    variables unbound, as `bb_inf/3` does in SICStus and Scryer. In the
+    examples below, `COST` is the same under both solvers; `X`, `Y` and `Z`
+    are bound only under the default solver.
 
 ```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:int_minimize_3"
@@ -267,6 +273,8 @@ Minimize a linear expression subject to the current constraints **and** the requ
 ### dump_q/2
 
 Projects the constraint store onto a list of variables, eliminating all internal (slack) variables via Fourier-Motzkin elimination. Returns a list of constraints, each an atom.
+
+The default solver returns every bound in the store, including redundant ones (six in the example below). The opt-in port (`CLAUSAL_CLPQ=holzbaur`) projects as clp(q,r) 1.3.3's `dump/3` does and drops the redundant bounds (four in the example).
 
 ```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:dump_q_2"

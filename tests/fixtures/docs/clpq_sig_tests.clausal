@@ -72,14 +72,36 @@ resource_min(X, Y, Z, COST) :-
     {X >= Y + Z, Y >= 2, Z >= 2},
     int_minimize([X, Y, Z], X, COST).
 
+% The solver decides whether int_minimize/3 binds the variables: legacy
+% binds them to the optimum; the clp(q,r) 1.3.3 port (CLAUSAL_CLPQ=holzbaur)
+% binds COST alone, as bb_inf/3 does there. Its prolog flags name the port.
+clpq_port :-
+    current_prolog_flag(F, _),
+    F == clpq_max_nodes.
+
+bound_at_optimum(VS, OPT) :-
+    \+ clpq_port,
+    VS == OPT.
+bound_at_optimum(VS, _) :-
+    clpq_port,
+    maplist(var, VS).
+
 test("int_min: X = 2, COST = 2") :-
-    int_min(X, COST), X == 2, COST == 2.
+    int_min(X, COST),
+    COST == 2,
+    bound_at_optimum([X], [2]).
 
 test("resource_min: X = 4, Y = 2, Z = 2, COST = 4") :-
-    resource_min(X, Y, Z, COST), X == 4, Y == 2, Z == 2, COST == 4.
+    resource_min(X, Y, Z, COST),
+    COST == 4,
+    bound_at_optimum([X, Y, Z], [4, 2, 2]).
 
 test("bb_inf/3 is int_minimize/3") :-
-    in_q(X, 0, 10), {X >= 3/2}, bb_inf([X], X, COST), X == 2, COST == 2.
+    in_q(X, 0, 10),
+    {X >= 3/2},
+    bb_inf([X], X, COST),
+    COST == 2,
+    bound_at_optimum([X], [2]).
 
 % dump_q_2
 show_constraints(X, Y, CS) :-
@@ -87,9 +109,17 @@ show_constraints(X, Y, CS) :-
     {2*X + Y =< 16, X + 2*Y =< 11},
     dump_q([X, Y], CS).
 
+% legacy keeps all six input bounds; the port's projection drops the
+% redundant ones and keeps four.
+projection_length(6) :-
+    \+ clpq_port.
+projection_length(4) :-
+    clpq_port.
+
 test("dump_q: a list of atoms") :-
     show_constraints(_, _, CS),
-    length(CS, 6),
+    projection_length(N),
+    length(CS, N),
     maplist(atom, CS).
 
 % linear_equalities, _ex2, _ex3
