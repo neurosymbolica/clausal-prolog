@@ -1,0 +1,150 @@
+% Doc snippet fixtures for docs/strings_as_lists.md
+% "..." is a string here: double_quotes is chars, the default.
+
+% --8<-- [start:unification]
+% A string IS the list of its char atoms, so it unifies with that list.
+test("string equals its char list") :-
+    "abc" = [a, b, c].
+
+test("with vars unifies") :-
+    "abc" = [_X, _Y, _Z].
+
+test("partial unifies") :-
+    "hello" = [h, e, _X, _Y, o].
+% --8<-- [end:unification]
+
+% --8<-- [start:empty_string]
+% "" and [] are one term: the empty string is the empty list.
+test("empty unifies") :-
+    "" = [].
+% --8<-- [end:empty_string]
+
+% --8<-- [start:pattern_matching]
+starts_with(S, PREFIX) :-
+    append(PREFIX, _, S).
+
+ends_with(S, SUFFIX) :-
+    append(_, SUFFIX, S).
+
+contains(S, X) :-
+    append(_, [X|_], S).
+
+test("prefix") :-
+    starts_with("hello", "hel").
+
+test("suffix") :-
+    ends_with("hello", "lo").
+
+% contains(S, X) picks one ELEMENT out of the sequence, and an element
+% of a string is a CHAR ATOM -- l, not the one-element string "l".
+test("contains l") :-
+    contains("hello", l).
+% --8<-- [end:pattern_matching]
+
+% --8<-- [start:append_examples]
+test("concat") :-
+    append("hel", "lo", "hello").
+
+test("prefix match") :-
+    append("hel", X, "hello"),
+    X == "lo".
+
+test("suffix match") :-
+    append(X, "lo", "hello"),
+    X == "hel".
+% --8<-- [end:append_examples]
+
+% --8<-- [start:length_example]
+test("length") :-
+    length("hello", 5).
+% --8<-- [end:length_example]
+
+% --8<-- [start:member_examples]
+test("member") :-
+    in_(e, "hello").
+
+test("enumerate") :-
+    findall(C, in_(C, "abc"), CHARS),
+    CHARS == [a, b, c].
+% --8<-- [end:member_examples]
+
+% --8<-- [start:reverse_example]
+test("reverse") :-
+    reverse("hello", "olleh").
+% --8<-- [end:reverse_example]
+
+% --8<-- [start:take_drop_split]
+test("take") :-
+    take(3, "hello", "hel").
+
+test("drop") :-
+    drop(3, "hello", "lo").
+
+test("split") :-
+    split_at(3, "hello", "hel", "lo").
+% --8<-- [end:take_drop_split]
+
+% --8<-- [start:list_item_example]
+test("index") :-
+    list_item(1, "hello", C),
+    C == e.
+% --8<-- [end:list_item_example]
+
+% --8<-- [start:type_checking]
+test("is_chars string") :-
+    is_chars("hello").
+
+test("is_chars list") :-
+    is_chars([1, 2, 3]).
+
+% is_list/1 is polymorphic over list and string (audit 2026-05-25, F080):
+% a string is a character sequence, so is_list("hello") agrees with
+% maplist/length/append/reverse/member/take/drop/etc.
+test("is_list string succeeds") :-
+    is_list("hello").
+
+test("is_str list fails") :-
+    \+ is_str([1, 2, 3]).
+
+% is_str/1 answers for the TERM: a proper list of char atoms IS the string
+% it is equal to, and [] is "".  is_chars/1 is the wider union test, so it
+% also takes [1, 2, 3] above.
+test("is_str char list succeeds") :-
+    is_str([h, i]).
+
+test("is_str empty list succeeds") :-
+    is_str([]).
+% --8<-- [end:type_checking]
+
+% --8<-- [start:atom_family]
+% The atom position takes an ATOM and answers with atoms; a STRING there
+% raises type_error(atom, ...).  atom_chars/2 is the bridge between the
+% two kinds: it relates an atom to the string of its spelling.
+test("atom to text") :-
+    atom_chars(hello, S),
+    S == "hello".
+
+test("text to atom") :-
+    atom_chars(A, "hello"),
+    A == hello,
+    atom(A).
+
+test("length of an atom") :-
+    atom_length(hello, 5).
+
+test("concat gives an atom") :-
+    atom_concat(he, llo, X),
+    X == hello.
+
+test("upcase gives an atom") :-
+    upcase_atom(hello, U),
+    U == 'HELLO'.
+
+test("char_type takes a char atom") :-
+    char_type(a, alpha).
+
+test("a string is not an atom here") :-
+    catch(atom_length("hello", _),
+          error(type_error(atom, "hello"), _),
+          true).
+% --8<-- [end:atom_family]
