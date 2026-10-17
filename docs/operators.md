@@ -90,6 +90,26 @@ operand, an evaluable functor's argument); as data (`f(e)`, `T is e`) they
 are ordinary atoms that a module declares like any other. Evaluating a bound
 atom reads it as ISO does: `T is e, 'is'(X, T)` gives `X = 2.718...`.
 
+In [Clausal Prolog](clausal_prolog.md) no quoting is needed: every bare
+operator already has its ISO meaning, so `//` truncates and `div` floors.
+
+```clausal
+half_toward_zero(N, H) :-
+    H is N // 2.
+
+half_floored(N, H) :-
+    H is N div 2.
+
+test("toward zero") :-
+    half_toward_zero(-7, -3).
+
+test("floored") :-
+    half_floored(-7, -4).
+```
+
+In the seam the same predicate quotes the cell to get the ISO meaning, and
+the bare `//` floors as Python's does (seam syntax):
+
 ```seam
 half_toward_zero(N, H) <- 'is'(H, '//'(N, 2))
 
