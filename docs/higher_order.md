@@ -4,29 +4,31 @@ Higher-order predicates take a goal (predicate or lambda) as an argument and
 apply it to [list](lists.md) elements. Combined with [lambdas](lambdas.md), they give
 Clausal Prolog a functional programming feel.
 
-!!! note "Seam vs Prolog syntax"
+!!! note "Clausal Prolog and the seam"
 
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+    Examples on this page are [Clausal Prolog](clausal_prolog.md)
+    (`.clausal`), ISO Prolog syntax. An inline lambda is written with
+    `library(lambda)`: `\X^Goal` takes one argument, `\X^Y^Goal` two. The
+    [seam](syntax.md), Clausal's Python-syntax surface, writes the same
+    lambdas as anonymous clauses, `(X <- Goal)` and `((X, Y) <- Goal)`
+    (see [Lambdas](lambdas.md)).
 
 ---
 
 ## Quick Example
 
-```seam
-double(X, Y) <- (Y == X * 2)
+```clausal
+:- use_module(library(clpz)).
+:- use_module(library(lambda)).
 
-test("double all") <- (
-    maplist(double, [1, 2, 3], [2, 4, 6])
-)
+double(X, Y) :-
+    Y #= X * 2.
 
-test("keep evens") <- (
-    include((X <- (X % 2 == 0)), [1, 2, 3, 4, 5, 6], [2, 4, 6])
-)
+test("double all") :-
+    maplist(double, [1, 2, 3], [2, 4, 6]).
+
+test("keep evens") :-
+    include(\X^(X mod 2 =:= 0), [1, 2, 3, 4, 5, 6], [2, 4, 6]).
 ```
 
 ---
@@ -38,12 +40,15 @@ test("keep evens") <- (
 `call(Goal)` invokes a goal. `call(Goal, A1, ..., AN)` appends extra arguments.
 `call_goal` is an alias.
 
-```seam
-test("call/1") <- call((X <- (X == 42)), 42)
+```clausal
+:- use_module(library(clpz)).
+:- use_module(library(lambda)).
 
-test("call/2") <- (
-    call(((X, Y) <- (Y == X * 2)), 5, 10)
-)
+test("call/1") :-
+    call(\X^(X #= 42), 42).
+
+test("call/2") :-
+    call(\X^Y^(Y #= X * 2), 5, 10).
 ```
 
 The goal can be a lambda, a predicate name, or a partial goal term (a cell such as `add(1)`, which `call` extends with the extra arguments).
@@ -58,14 +63,16 @@ The goal can be a lambda, a predicate name, or a partial goal term (a cell such 
 goal succeeds for all elements, and backtracks into every call, as the ISO
 prologue's definition by `call/N` does: with `p(1), p(2), p(3)`,
 `maplist(p, [X, Y])` has nine answers. On an OPEN list (unbound, or a
-partial list `[a, *T]`) it enumerates as that definition does, depth first
+partial list `[a|T]`) it enumerates as that definition does, depth first
 and without end: `maplist(p, L)` answers `L = []`, `L = [1]`, `L = [1, 1]`,
 ...
 
-```seam
-positive(X) <- (X > 0)
+```clausal
+positive(X) :-
+    X > 0.
 
-test("all positive") <- maplist(positive, [1, 2, 3])
+test("all positive") :-
+    maplist(positive, [1, 2, 3]).
 ```
 
 ### maplist/3
@@ -73,20 +80,24 @@ test("all positive") <- maplist(positive, [1, 2, 3])
 `maplist(Goal, Xs, Ys)` — transform each element via `Goal(X, Y)`; like
 maplist/2 it backtracks into every call.
 
-```seam
-square(X, Y) <- (Y == X ** 2)
+```clausal
+:- use_module(library(clpz)).
 
-test("squares") <- (
-    maplist(square, [1, 2, 3, 4], [1, 4, 9, 16])
-)
+square(X, Y) :-
+    Y #= X ^ 2.
+
+test("squares") :-
+    maplist(square, [1, 2, 3, 4], [1, 4, 9, 16]).
 ```
 
 With an inline lambda:
 
-```seam
-test("squares inline") <- (
-    maplist(((X, Y) <- (Y == X ** 2)), [1, 2, 3, 4], [1, 4, 9, 16])
-)
+```clausal
+:- use_module(library(clpz)).
+:- use_module(library(lambda)).
+
+test("squares inline") :-
+    maplist(\X^Y^(Y #= X ^ 2), [1, 2, 3, 4], [1, 4, 9, 16]).
 ```
 
 ---
@@ -97,8 +108,11 @@ test("squares inline") <- (
 
 `include(Goal, List, Included)` — keep elements where `Goal(Elem)` succeeds.
 
-```seam
-test("filter") <- include((X <- (X > 3)), [1, 5, 2, 8, 3], [5, 8])
+```clausal
+:- use_module(library(lambda)).
+
+test("filter") :-
+    include(\X^(X > 3), [1, 5, 2, 8, 3], [5, 8]).
 ```
 
 ### exclude/3
@@ -106,8 +120,11 @@ test("filter") <- include((X <- (X > 3)), [1, 5, 2, 8, 3], [5, 8])
 `exclude(Goal, List, Kept)` — keep elements where `Goal(Elem)` *fails*.
 The inverse of include.
 
-```seam
-test("exclude") <- exclude((X <- (X > 3)), [1, 5, 2, 8, 3], [1, 2, 3])
+```clausal
+:- use_module(library(lambda)).
+
+test("exclude") :-
+    exclude(\X^(X > 3), [1, 5, 2, 8, 3], [1, 2, 3]).
 ```
 
 ### filter_map/3
@@ -115,10 +132,13 @@ test("exclude") <- exclude((X <- (X > 3)), [1, 5, 2, 8, 3], [1, 2, 3])
 `filter_map(Goal, List, Result)` — map and filter in one pass. Keep the output
 value when `Goal(Elem, Out)` succeeds; skip elements where it fails.
 
-```seam
-safe_sqrt(X, Y) <- (X >= 0, eval_(X ** 0.5, Y))
+```clausal
+safe_sqrt(X, Y) :-
+    X >= 0,
+    Y is X ** 0.5.
 
-test("filtermap") <- filter_map(safe_sqrt, [4, -1, 9, -2, 16], [2.0, 3.0, 4.0])
+test("filtermap") :-
+    filter_map(safe_sqrt, [4, -1, 9, -2, 16], [2.0, 3.0, 4.0]).
 ```
 
 ---
@@ -131,25 +151,28 @@ test("filtermap") <- filter_map(safe_sqrt, [4, -1, 9, -2, 16], [2.0, 3.0, 4.0])
 across the list, threading an accumulator from `V0` to `V`.
 `foldl(Goal, Xs, Ys, V0, V)` calls `Goal(X, Y, Acc, NewAcc)` over two lists
 of one length, and `foldl/6` over three, as Scryer's `library(lists)`.
-
 Like maplist, foldl backtracks into every call (each solution of the goal
 gives another fold), and an open list enumerates: `foldl(G, L, 0, S)` with
 `L` unbound answers `L = []` first, then longer lists.
 
-```seam
-add_step(X, ACC, OUT) <- (OUT == ACC + X)
+```clausal
+:- use_module(library(clpz)).
 
-test("sum") <- (
-    foldl(add_step, [1, 2, 3, 4], 0, 10)
-)
+add_step(X, ACC, OUT) :-
+    OUT #= ACC + X.
+
+test("sum") :-
+    foldl(add_step, [1, 2, 3, 4], 0, 10).
 ```
 
 With an inline lambda:
 
-```seam
-test("sum inline") <- (
-    foldl(((X, ACC, OUT) <- (OUT == ACC + X)), [1, 2, 3, 4], 0, 10)
-)
+```clausal
+:- use_module(library(clpz)).
+:- use_module(library(lambda)).
+
+test("sum inline") :-
+    foldl(\X^ACC^OUT^(OUT #= ACC + X), [1, 2, 3, 4], 0, 10).
 ```
 
 ---
@@ -160,26 +183,33 @@ test("sum inline") <- (
 
 `take_while(Goal, List, Prefix)` — longest prefix where `Goal(Elem)` succeeds.
 
-```seam
-test("takewhile") <- take_while((X <- (X < 5)), [1, 3, 7, 2, 4], [1, 3])
+```clausal
+:- use_module(library(lambda)).
+
+test("takewhile") :-
+    take_while(\X^(X < 5), [1, 3, 7, 2, 4], [1, 3]).
 ```
 
 ### drop_while/3
 
 `drop_while(Goal, List, Suffix)` — drop the prefix where `Goal(Elem)` succeeds.
 
-```seam
-test("dropwhile") <- drop_while((X <- (X < 5)), [1, 3, 7, 2, 4], [7, 2, 4])
+```clausal
+:- use_module(library(lambda)).
+
+test("dropwhile") :-
+    drop_while(\X^(X < 5), [1, 3, 7, 2, 4], [7, 2, 4]).
 ```
 
 ### span/4
 
 `span(Goal, List, Yes, No)` — take_while + drop_while in one pass.
 
-```seam
-test("span") <- (
-    span((X <- (X < 5)), [1, 3, 7, 2, 4], [1, 3], [7, 2, 4])
-)
+```clausal
+:- use_module(library(lambda)).
+
+test("span") :-
+    span(\X^(X < 5), [1, 3, 7, 2, 4], [1, 3], [7, 2, 4]).
 ```
 
 ---
@@ -191,12 +221,12 @@ test("span") <- (
 `group_by(Goal, List, Groups)` — group *consecutive* elements by key.
 `Goal(Elem, Key)` extracts the grouping key.
 
-```seam
-first_char(S, C) <- (C is ++S[0])
+```clausal
+first_char(S, C) :-
+    sub_atom(S, 0, 1, _, C).
 
-test("group by first char") <- (
-    group_by(first_char, ['apple', 'avocado', 'banana', 'blueberry', 'cherry'], [['apple', 'avocado'], ['banana', 'blueberry'], ['cherry']])
-)
+test("group by first char") :-
+    group_by(first_char, [apple, avocado, banana, blueberry, cherry], [[apple, avocado], [banana, blueberry], [cherry]]).
 ```
 
 Note: groups are consecutive runs, not global grouping. sort first if you need
@@ -206,12 +236,12 @@ global groups.
 
 `sort_by(Goal, List, Sorted)` — sort by projected key.
 
-```seam
-abs_key(X, K) <- (abs_(X, K))
+```clausal
+abs_key(X, K) :-
+    abs_(X, K).
 
-test("sort by abs") <- (
-    sort_by(abs_key, [3, -1, -4, 2], [-1, 2, 3, -4])
-)
+test("sort by abs") :-
+    sort_by(abs_key, [3, -1, -4, 2], [-1, 2, 3, -4]).
 ```
 
 ### max_by/3, min_by/3
@@ -219,13 +249,17 @@ test("sort by abs") <- (
 `max_by(Goal, List, max_)` / `min_by(Goal, List, min_)` — element with the
 largest/smallest projected key.
 
-```seam
-str_len(S, K) <- (K is ++len(S))    # see [Python interop](python_integration.md)
+```clausal
+str_len(S, K) :-
+    atom_length(S, K).
 
-test("longest") <- (
-    max_by(str_len, ['hi', 'hello', 'hey'], 'hello')
-)
+test("longest") :-
+    max_by(str_len, [hi, hello, hey], hello).
 ```
+
+(The key goals use the ISO builtins `sub_atom/5` and `atom_length/2`; the
+seam versions of these examples reach into Python instead, `C is ++S[0]`
+and `K is ++len(S)` — see [Python interop](python_integration.md).)
 
 ---
 
@@ -233,36 +267,42 @@ test("longest") <- (
 
 ### Map then filter (pipeline)
 
-```seam
-sq(X, Y) <- (Y == X * X)
+```clausal
+:- use_module(library(clpz)).
+:- use_module(library(lambda)).
 
-test("pipeline") <- (
+sq(X, Y) :-
+    Y #= X * X.
+
+test("pipeline") :-
     maplist(sq, [1, 2, 3, 4, 5], SQUARES),
-    include((X <- (X > 10)), SQUARES, BIG),
-    BIG == [16, 25]
-)
+    include(\X^(X > 10), SQUARES, BIG),
+    BIG == [16, 25].
 ```
 
 ### flatten via foldl
 
-```seam
-test("flat") <- (
-    foldl(((CHUNK, ACC, OUT) <- append(ACC, CHUNK, OUT)),
-        [[1, 2], [3], [4, 5]],
-        [],
-        [1, 2, 3, 4, 5])
-)
+```clausal
+:- use_module(library(lambda)).
+
+test("flat") :-
+    foldl(\CHUNK^ACC^OUT^append(ACC, CHUNK, OUT),
+          [[1, 2], [3], [4, 5]],
+          [],
+          [1, 2, 3, 4, 5]).
 ```
 
 ### Count occurrences
 
-```seam
-count(PRED, LIST, N) <- (
-    include(PRED, LIST, MATCHED),
-    length(MATCHED, N)
-)
+```clausal
+:- use_module(library(lambda)).
 
-test("count evens") <- count((X <- (X % 2 == 0)), [1, 2, 3, 4, 5, 6], 3)
+count(PRED, LIST, N) :-
+    include(PRED, LIST, MATCHED),
+    length(MATCHED, N).
+
+test("count evens") :-
+    count(\X^(X mod 2 =:= 0), [1, 2, 3, 4, 5, 6], 3).
 ```
 
 ---
@@ -272,14 +312,15 @@ test("count evens") <- count((X <- (X % 2 == 0)), [1, 2, 3, 4, 5, 6], 3)
 - **Goal argument order matters** — `maplist/3` calls `Goal(X, Y)` where X is
   input, Y is output. `foldl/4` calls `Goal(Elem, AccIn, AccOut)`.
 - **`^` is not a goal** — `Y^Goal` means something only as bagof/setof's
-  goal argument; `call(Y^p(Y))` is `existence_error(procedure, (^)/2)`, as
-  in ISO and Scryer.
+  goal argument, or as a lambda parameter after `\`; `call(Y^p(Y))` is
+  `existence_error(procedure, (^)/2)`, as in ISO and Scryer.
 - **`group_by` groups consecutive runs** — not global grouping. sort first if
   needed.
 - **`include`/`exclude` are committed-choice** — they test each element once
   (first solution only) and do not backtrack into the goal. `maplist` does.
-- **Lambda syntax** — single-arg: `(X <- (body))`. Multi-arg: `((X, Y) <- (body))`
-  with extra outer parens for the tuple. See [Lambdas](lambdas.md) for details.
+- **Lambda syntax** — load `library(lambda)`; single-arg: `\X^Body`,
+  multi-arg: `\X^Y^Body`. In the seam: `(X <- (body))` and
+  `((X, Y) <- (body))`. See [Lambdas](lambdas.md) for details.
 - **`call/N` appends arguments** — `call(foo, 1, 2)` calls `foo(1, 2)`.
 
 ---
