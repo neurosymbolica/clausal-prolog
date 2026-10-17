@@ -48,19 +48,6 @@ clausal/examples/fibonacci.seam::fib(0) = 0 PASSED
 clausal/examples/fibonacci.seam::fib(5) = 5 PASSED
 --8<-- [end:test_output]
 
-# === examples.md ===
-
---8<-- [start:fib_definition]
-fib(N=0, F=0),
-fib(N=1, F=1),
-fib(N, F) <- (N > 1, F is fib(N - 1) + fib(N - 2))
---8<-- [end:fib_definition]
-
---8<-- [start:fib_test]
-# in_ your .clausal file
-test("fib 10") <- fib(10, 55)
---8<-- [end:fib_test]
-
 # === architecture.md ===
 
 --8<-- [start:architecture_diagram]
