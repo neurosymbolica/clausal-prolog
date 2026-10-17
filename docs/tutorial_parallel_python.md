@@ -44,19 +44,29 @@ for t in threads:
 The simplest pattern. Multiple threads query the same compiled database
 concurrently; they share only the (read-only) clause database.
 
-Write the query in a `.seam` file, in
+The predicates are an ordinary [Clausal Prolog](clausal_prolog.md)
+module, `graph.clausal`:
+
+```clausal
+edge(a, b).
+edge(b, c).
+edge(c, d).
+
+path(X, Y) :-
+    edge(X, Y).
+path(X, Y) :-
+    edge(X, Z),
+    path(Z, Y).
+
+test("reachable from a") :-
+    findall(Y, path(a, Y), YS),
+    YS == [b, c, d].
+```
+
+Write the query in a `.seam` file, the Python-syntax surface, in
 [goal position](python_integration.md#goal-position-if-goal-for-in-goal).
 Every run of a `--` goal makes its own variables and its own Trail, so
-the function is safe to call from any thread. With `graph.seam`:
-
-```seam
-edge('a', 'b'),
-edge('b', 'c'),
-edge('c', 'd'),
-
-path(X, Y) <- edge(X, Y)
-path(X, Y) <- (edge(X, Z), path(Z, Y))
-```
+the function is safe to call from any thread:
 
 ```python
 # paths.seam
