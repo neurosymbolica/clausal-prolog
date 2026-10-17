@@ -4,14 +4,12 @@ This page introduces the most important idea in logic programming: **thinking
 in terms of relations**. If you absorb one thing from this documentation, let
 it be this.
 
-!!! note "Seam vs Prolog syntax"
+!!! note "Clausal Prolog examples"
 
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+    Examples on this page are [Clausal Prolog](clausal_prolog.md)
+    (`.clausal`), which uses ISO Prolog syntax. The [seam](syntax.md),
+    Clausal's Python-syntax surface, writes the same relations with `<-`
+    rules and Python-style lists.
 
 In Clausal Prolog, every predicate defines a relation between its arguments. A
 relation is not a function — it has no fixed inputs or outputs. A relation
@@ -25,10 +23,13 @@ relation hold?" — is what gives logic programming its extraordinary power.
 
 A relation is a set of tuples for which a statement is true.
 
-```seam
-parent('alice', 'bob'),
-parent('alice', 'carol'),
-parent('bob', 'dave'),
+```clausal
+parent(alice, bob).
+parent(alice, carol).
+parent(bob, dave).
+
+test("alice is a parent of bob") :-
+    parent(alice, bob).
 ```
 
 Each fact states that the `parent` relation holds between two people. This is
@@ -37,11 +38,16 @@ true that alice is a parent of bob."
 
 A predicate with a body extends the relation with conditions:
 
-```seam
-grandparent(X, Z) <- (
+```clausal
+parent(alice, bob).
+parent(bob, dave).
+
+grandparent(X, Z) :-
     parent(X, Y),
-    parent(Y, Z)
-)
+    parent(Y, Z).
+
+test("alice is a grandparent of dave") :-
+    grandparent(alice, dave).
 ```
 
 Read this as: "the grandparent relation holds between X and Z when there exists
@@ -61,19 +67,18 @@ arguments, it produces a result. A relation has no such restriction.
 
 Consider `append/3`, which relates three [lists](lists.md):
 
-```seam
-test("concatenate") <- append([1, 2], [3, 4], [1, 2, 3, 4])
+```clausal
+test("concatenate") :-
+    append([1, 2], [3, 4], [1, 2, 3, 4]).
 
-test("split") <- (
+test("split") :-
     append(LEFT, RIGHT, [1, 2, 3]),
     LEFT == [1],
-    RIGHT == [2, 3]
-)
+    RIGHT == [2, 3].
 
-test("suffix") <- (
+test("suffix") :-
     append([1, 2], REST, [1, 2, 3, 4, 5]),
-    REST == [3, 4, 5]
-)
+    REST == [3, 4, 5].
 ```
 
 The same definition of `append/3` can:
@@ -102,24 +107,28 @@ for its arguments?"**
 
 Consider `list_sum/2`:
 
-```seam
-list_sum([], 0),
-list_sum([HEAD, *TAIL], TOTAL) <- (
+```clausal
+:- use_module(library(clpz)).
+
+list_sum([], 0).
+list_sum([HEAD|TAIL], TOTAL) :-
     list_sum(TAIL, SUBTOTAL),
-    TOTAL == SUBTOTAL + HEAD
-)
+    TOTAL #= SUBTOTAL + HEAD.
+
+test("sum") :-
+    list_sum([1, 2, 3], 6).
 ```
 
 Read this declaratively:
 
 - The sum of the empty list is 0.
-- The sum of a list [HEAD, *TAIL] is TOTAL when the sum of TAIL is SUBTOTAL
+- The sum of a list [HEAD|TAIL] is TOTAL when the sum of TAIL is SUBTOTAL
   and TOTAL is SUBTOTAL + HEAD.
 
 These are **statements about when the relation holds**, not instructions for
 what to do. This way of reading the code does justice to its full generality —
-we can use it to compute a sum, to verify a sum, or (with [CLP(ℤ)](constraints.md) constraints)
-to reason about partially-known lists.
+we can use it to compute a sum, to verify a sum, or (because `#=` is a
+[CLP(ℤ)](constraints.md) constraint) to reason about partially-known lists.
 
 ---
 
@@ -132,7 +141,7 @@ query**. It asks: for which arguments does the predicate hold at all?
 # The most general query for list_sum
 from itertools import islice
 from clausal import Var, solve
-import list_sum_example   # the .seam file holding list_sum/2
+import list_sum_example   # the .clausal file holding list_sum/2
 
 goal = ("list_sum", LIST := Var(), SUM := Var())
 for trail in islice(solve(goal, module=list_sum_example), 3):
@@ -173,23 +182,32 @@ Every clause can be read as a logical statement. This is called the
 A fact is a clause with no body. It states something that is unconditionally
 true:
 
-```seam
-edge('a', 'b'),
+```clausal
+edge(a, b).
+
+test("edge") :-
+    edge(a, b).
 ```
 
-Read: "It is true that the edge relation holds between 'a' and 'b'."
+Read: "It is true that the edge relation holds between a and b."
 
 ### Rules
 
 A rule has a head and a body. The head holds when all conditions in the body
 hold:
 
-```seam
-reachable(X, Y) <- edge(X, Y)
-reachable(X, Y) <- (
+```clausal
+edge(a, b).
+edge(b, c).
+
+reachable(X, Y) :-
+    edge(X, Y).
+reachable(X, Y) :-
     edge(X, Z),
-    reachable(Z, Y)
-)
+    reachable(Z, Y).
+
+test("reachable in two steps") :-
+    reachable(a, c).
 ```
 
 Read the first clause: "X and Y are reachable if there is an edge from X to Y."
@@ -251,15 +269,19 @@ Tests for relational predicates are simply queries that should hold or not
 hold. No mock objects, no test scaffolding, no elaborate setup. A [test](testing.md) is just a
 fact about the relation:
 
-```seam
-list_sum([], 0),
-list_sum([HEAD, *TAIL], TOTAL) <- (
-    list_sum(TAIL, SUBTOTAL),
-    TOTAL == SUBTOTAL + HEAD
-)
+```clausal
+:- use_module(library(clpz)).
 
-test("sum of [1,2,3] is 6") <- list_sum([1, 2, 3], 6)
-test("sum of [] is 0") <- list_sum([], 0)
+list_sum([], 0).
+list_sum([HEAD|TAIL], TOTAL) :-
+    list_sum(TAIL, SUBTOTAL),
+    TOTAL #= SUBTOTAL + HEAD.
+
+test("sum of [1,2,3] is 6") :-
+    list_sum([1, 2, 3], 6).
+
+test("sum of [] is 0") :-
+    list_sum([], 0).
 ```
 
 ### Working with reasoning, not against it
@@ -333,9 +355,11 @@ in the clause head. This bidirectionality is what makes relations work in all
 directions.
 
 **Using eager evaluation when constraints would be more general.** Eager
-`eval_/2` requires its expression argument to be ground. Use `==` instead —
-it posts [CLP(ℤ)](constraints.md) constraints that work with unbound variables and preserve
-multi-directional use. Reserve `eval_/2` for ground expressions and `++` escapes for [Python interop](python_integration.md). [Arithmetic](arithmetic.md) has the details.
+ISO `is/2` requires its expression argument to be ground (an unbound one is
+an `instantiation_error`). Use `#=` from `library(clpz)` instead — it posts
+[CLP(ℤ)](constraints.md) constraints that work with unbound variables and preserve
+multi-directional use. Reserve `is/2` for ground expressions. (The seam spells
+the constraint `==` and the eager form `eval_/2`.) [Arithmetic](arithmetic.md) has the details.
 
 **Naming predicates with verbs that imply a direction.** "Find," "get,"
 "compute," "check," "remove" — all suggest a specific mode. Describe what the
