@@ -7,16 +7,12 @@ The implementation lives in `clausal/logic/clpq.py`.
 !!! note
     For CLP(Z) (integer constraints), see [Constraints](constraints.md). For CLP(R) (real constraints via interval arithmetic), see [CLP(R)](clpr.md). For CLP(B) (Boolean constraints), see [CLP(B)](clpb.md).
 
-!!! note "Seam vs Prolog syntax"
-
-    Some examples on this page are marked seam syntax (`.seam`), which
-    differs from Prolog's — for example, variables are `ALLCAPS`, rules
-    use `<-` instead of `:-`, and lists are Python-style. `++`/`--` Python
-    escapes exist only in `.seam`; Clausal Prolog imports modules and never
-    escapes into Python. Other examples on this
-    page are genuine [Clausal Prolog](clausal_prolog.md) (`.clausal`), which
-    uses ISO Prolog syntax directly. Keep this in mind when comparing with
-    Prolog resources.
+Examples on this page are [Clausal Prolog](clausal_prolog.md) (`.clausal`):
+ISO Prolog syntax, without cut, with `:- use_module(library(clpq)).` loading
+the solver. The [seam](syntax.md), Clausal's Python-syntax surface, writes
+the same constraints with Python's comparison operators; the page notes the
+seam spelling where it differs, and one predicate, `entailed/1`, works only
+from the seam.
 
 ---
 
@@ -42,77 +38,106 @@ CLP(R) uses IEEE 754 doubles with outward-rounded intervals. This is sound (the 
 
 ## The constraint set in goal position
 
-A **set literal in goal position** is a set of CLP(Q) constraints — the seam's twin of
-Prolog's clpq goal `{C}`. Each element is a comparison over rational arithmetic (`==`, `!=`,
-`<`, `<=`, `>`, `>=`, or a chain such as `0 <= X <= 10`); the elements are posted together,
-and `/` inside them is exact division.
+A **`{C}` goal** posts CLP(Q) constraints, as in Prolog's `library(clpq)`. `C` is
+one comparison over rational arithmetic (`=`, `=\=`, `<`, `=<`, `>`, `>=`) or several
+joined by commas; they are posted together, and `/` inside them is exact division.
 
-```seam
-two(N, Q) <- {Q == N * 2}
-within(X) <- {0 <= X <= 10}
-box(X, Y) <- {X + Y == 1, X - Y == 1/2}      # X = 3/4, Y = 1/4
-half(X) <- {2 * X == 3}                       # X = Fraction(3, 2)
+```clausal
+:- use_module(library(clpq)).
+
+two(N, Q) :-
+    {Q = N * 2}.
+
+within(X) :-
+    {0 =< X, X =< 10}.
+
+% X = 3 rdiv 4, Y = 1 rdiv 4
+box(X, Y) :-
+    {X + Y = 1, X - Y = 1/2}.
+
+% X = 3 rdiv 2
+half(X) :-
+    {2 * X = 3}.
+
+test("two, forwards and backwards") :-
+    two(3, Q),
+    Q == 6,
+    two(N, 8),
+    N == 4.
+
+test("two, bound later") :-
+    two(N, Q),
+    N = 5,
+    Q == 10.
+
+test("within") :-
+    within(5),
+    \+ within(11).
+
+test("box and half") :-
+    box(X, Y),
+    X =:= 3 rdiv 4,
+    Y =:= 1 rdiv 4,
+    half(H),
+    H =:= 3 rdiv 2.
 ```
 
 `two(3, Q)` gives `Q = 6`; `two(N, 8)` solves `N = 4`; `two(N, Q)` with both unbound leaves
-the constraint in the store and binds `Q` the moment `N` is known. The long spelling is the
-module predicate the set lowers to — `{C1, C2}` **is** `clpq.rational((C1, C2))`, one goal,
-so the two forms answer identically:
+the constraint in the store and binds `Q` the moment `N` is known. A rational answer prints
+as `3 rdiv 4`; compare it with `=:=`, or with `==` against an `rdiv` value you evaluated
+(`Q is rdiv(3, 4)`). Unifying it with the written term `3 rdiv 4` fails: that is a compound
+term, not the number.
 
-```seam
-two(N, Q) <- clpq.rational(Q == N * 2)
-box(X, Y) <- clpq.rational((X + Y == 1, X - Y == 1/2))
-```
-
-A unit-carrying operand is welcome: a `-constant_number_units` constant folded in with
+A unit-carrying operand is welcome: a `constant_number_units/3` constant folded in with
 `constant(Name)` keeps its unit through the solver (the units side channel), so
-`{Q == 100 * constant(one_euro)}` gives `100 euro` and `{F >= constant(max_fine)}` compares
+`{Q = 100 * constant(one_euro)}` gives `100 euro` and `{F >= constant(max_fine)}` compares
 against the declared `5000 euro`, throwing `system_error(units_mismatch)` if `F` is
-dimensionless.
+dimensionless (see [Units](#units)).
 
-Only **goal** position has this meaning. A set in **data** position — a head argument, a
-call argument, the right-hand side of `is` — is still a set (`colors({1, 2, 3})`), and `{}`
-is an empty dict, never a constraint set. An element that is not a comparison is a load-time
-error naming it: `{X + 1, X > 1}` is refused, because a set of *values* belongs in an
-argument, not in goal position.
-
-The bare comparison goals outside a set (`X == N * 2` on its own) are the CLP(Z)-style
-constraints described next; they route to CLP(Q) only when an operand is already rational.
-Write the set when you mean rational arithmetic.
+In the seam the same goal is a **set literal in goal position**, written with the seam's
+comparisons (`{Q == N * 2}`, `{0 <= X <= 10}` with a chained comparison), and it lowers to
+the module predicate `clpq.rational((C1, C2))`. A set in seam **data** position is still a
+set, and `{}` there is an empty dict, never a constraint set; an element that is not a
+comparison (`{X + 1, X > 1}`) is a load-time error. The seam's bare comparison goals outside
+a set (`X == N * 2` on its own) are the CLP(Z)-style constraints described next.
 
 ---
 
 ## Unified syntax
 
-Clausal Prolog's comparison operators are shared across CLP(Z), CLP(R), and CLP(Q). The domain is determined at runtime by what types are involved:
+The CLP comparison operators of `library(clpz)` (`#=`, `#\=`, `#<`, `#>`, `#=<`, `#>=`) are shared across CLP(Z), CLP(R), and CLP(Q). The domain is determined at runtime by what types are involved:
 
 | Operator | CLP(Z) | CLP(R) | CLP(Q) |
 |---|---|---|---|
-| `==` | integer equality | real equality | rational equality |
-| `!=` | integer disequality | real disequality | rational disequality |
-| `<` `>` `<=` `>=` | integer comparisons | real comparisons | rational comparisons |
+| `#=` | integer equality | real equality | rational equality |
+| `#\=` | integer disequality | real disequality | rational disequality |
+| `#<` `#>` `#=<` `#>=` | integer comparisons | real comparisons | rational comparisons |
 
-**Dispatch rule:** if either operand is a `Fraction` or a variable declared with `rational` (or `in_q`), the constraint goes to CLP(Q). If either operand is a `float` or declared with `in_real`, it goes to CLP(R). Otherwise it goes to CLP(Z).
+(The seam spells these `==`, `!=`, `<`, `>`, `<=`, `>=`.)
 
-Mixing a rational (CLP(Q)) and a `float` (CLP(R)) operand in the same constraint raises a Python `TypeError` (`cannot mix CLP(Q) rational and CLP(R) float in the same constraint`). Convert explicitly if you need to cross domains.
+**Dispatch rule:** if either operand is a rational (an `rdiv` value, a Python `Fraction`) or a variable declared with `rational` (or `in_q`), the constraint goes to CLP(Q). If either operand is a `float` or declared with `in_real`, it goes to CLP(R). Otherwise it goes to CLP(Z). So `in_q(X, 0, 10), X #= 3` is a CLP(Q) constraint, and `X #= 7 rdiv 2` binds `X = 7 rdiv 2`.
+
+Mixing a rational (CLP(Q)) and a `float` (CLP(R)) operand in the same constraint throws the Python `TypeError` `cannot mix CLP(Q) rational and CLP(R) float in the same constraint` (caught by `catch/3` as `'TypeError'(Message)`). Convert explicitly if you need to cross domains.
 
 ### `/` inside a constraint is exact
 
-Inside a constraint (`==`, `!=`, `<`, ...) `/` is **exact rational division**, as inside Scryer's `{...}`. A quotient that IS an integer is that integer: `X == 6 / 2` gives `3`, not `Fraction(3, 1)`. Only non-integral results are `Fraction`.
+Inside `{...}`, `/` is **exact rational division**, as in Scryer's `library(clpq)`. A quotient that IS an integer is that integer: `{X = 6/2}` gives `3`, not `3 rdiv 1`. Only non-integral results are rationals.
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:int_int_produces_fraction_ex2"
 ```
 
-In **evaluation** (`eval_/2`, `'is'/2`, the ISO comparisons) a bare `/` keeps Python's meaning, true division, so it is a float. Use `rdiv/2` when you want the exact quotient outside a constraint:
+Under `#=`, `/` is not rational division: `X #= 6/2` gives `3`, but `X #= 7/2` and `X #= 1/3` fail. Write `rdiv` there (`X #= 7 rdiv 2`), or use `{...}`. (In the seam, `/` inside any constraint, `X == 1/3` included, is exact.)
 
-```seam
+In **evaluation** (`is/2`, the ISO comparisons) `/` is float division. Use `rdiv/2` when you want the exact quotient outside a constraint:
+
+```text
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:int_int_produces_fraction"
 ```
 
-A zero divisor inside a constraint **fails** (`X == 1 / 0` has no solutions); in evaluation it raises `evaluation_error(zero_divisor)`. The full operator table is in [Operators](operators.md); evaluation is in [Arithmetic](arithmetic.md).
+In evaluation a zero divisor raises `evaluation_error(zero_divisor)`. Inside `{...}`, `{X = 1/0}` currently throws the Python `TypeError` `CLP(Q) requires linear constraints` rather than failing; under `#=`, `X #= 1/0` fails. The full operator table is in [Operators](operators.md); evaluation is in [Arithmetic](arithmetic.md).
 
-Integral rationals are presented as `int` by every binder — the arithmetic comparisons, `between/3`, CLP(Q) equalities and optima — because `2` and `Fraction(2, 1)` compare equal in Python but are different terms in the standard order (`'=='/2`, `compare/3`).
+Integral rationals are presented as integers by every binder — the arithmetic comparisons, `between/3`, CLP(Q) equalities and optima — because `2` and `2 rdiv 1` compare equal arithmetically but are different terms in the standard order (`'=='/2`, `compare/3`).
 
 ---
 
@@ -126,7 +151,7 @@ Integral rationals are presented as `int` by every binder — the arithmetic com
 | `minimize` | 2 | `minimize(Expr, Result)` — find minimum; binds all variables to optimal point |
 | `sup` | 2 | `sup(Expr, Sup)` — compute upper bound without committing (variables stay unbound) |
 | `inf` | 2 | `inf(Expr, Inf)` — compute lower bound without committing (variables stay unbound) |
-| `entailed` | 1 | `entailed(X <= 5)` — test if constraint is implied by current store |
+| `entailed` | 1 | `entailed(C)` — test if constraint `C` is implied by current store (seam only; see [below](#entailed1)) |
 | `int_minimize` | 3 | `int_minimize(IntVars, Expr, Min)` — minimize with integrality constraints |
 | `dump_q` | 2 | `dump_q(Vars, Constraints)` — project constraint store onto Vars (Fourier-Motzkin) |
 
@@ -134,19 +159,28 @@ Integral rationals are presented as `int` by every binder — the arithmetic com
 
 ### Module API
 
-CLP(Q) constraints are posted with a [constraint set in goal position](#the-constraint-set-in-goal-position);
-the optimisation and projection predicates live in the `clpq` module namespace:
+`:- use_module(library(clpq)).` brings the `{...}` goal and the builtins above. CLP(Q)
+constraints are posted with a [constraint set in goal position](#the-constraint-set-in-goal-position),
+then optimised or projected:
 
-```seam
-optimal(X, Y, COST) <- (
-    {0 <= X <= 1, 0 <= Y <= 1, X + Y == 3/4},
-    clpq.maximize(X, COST),
-)
-# -> X = Fraction(3, 4), Y = 0, COST = Fraction(3, 4)
+```clausal
+:- use_module(library(clpq)).
+
+% -> X = 3 rdiv 4, Y = 0, COST = 3 rdiv 4
+optimal(X, Y, COST) :-
+    {0 =< X, X =< 1, 0 =< Y, Y =< 1, X + Y = 3/4},
+    maximize(X, COST).
+
+test("optimal") :-
+    optimal(X, Y, COST),
+    X =:= 3 rdiv 4,
+    Y == 0,
+    COST =:= 3 rdiv 4.
 ```
 
-`clpq.rational((constraints))` is the long spelling of the same block — what the set lowers
-to:
+In the seam the optimisation and projection predicates also live in the `clpq` module
+namespace, and `clpq.rational((constraints))` is the long spelling of a constraint set —
+what the set lowers to:
 
 ```seam
 optimal(X, Y, COST) <- (
@@ -159,7 +193,7 @@ optimal(X, Y, COST) <- (
 )
 ```
 
-| Module Predicate | Arity | Description |
+| Seam module predicate | Arity | Description |
 |---|---|---|
 | `clpq.rational` | 1 | `clpq.rational((constraints))` — post rational constraints; the long spelling of `{constraints}` in goal position |
 | `clpq.maximize` | 2 | `clpq.maximize(Expr, Result)` — maximize over rationals |
@@ -169,13 +203,13 @@ optimal(X, Y, COST) <- (
 | `clpq.entailed` | 1 | `clpq.entailed(X <= 5)` — test if constraint is implied |
 | `clpq.dump` | 2 | `clpq.dump(Vars, Constraints)` — project constraint store |
 
-Inside the constraint block, standard Python operators (`+`, `-`, `*`, `<`, `<=`, `==`, `!=`, `>`, `>=`) are interpreted as rational constraints. Chained comparisons like `0 <= X <= 1` work naturally. Variables are auto-declared as rational.
+Inside `{...}`, the arithmetic operators (`+`, `-`, `*`, `/`) and the comparisons (`=`, `=\=`, `<`, `=<`, `>`, `>=`) are interpreted as rational constraints, and variables are auto-declared as rational. A chained comparison is not ISO syntax: write `{0 =< X, X =< 1}`. (In the seam the block uses Python's operators, and `0 <= X <= 1` chains.)
 
 ### rational/1
 
 Declares a variable as rational-domain (unbounded). This is the type declaration — it says "X is rational", nothing more.
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:rational_1"
 ```
 
@@ -183,17 +217,17 @@ Declares a variable as rational-domain (unbounded). This is the type declaration
 
 Declares a rational variable with explicit bounds. Equivalent to `rational(X), Lo <= X <= Hi`. If the variable already has bounds, intersects with the new ones. Fails if the intersection is empty.
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:in_q_3"
 ```
 
-When the bounds collapse to a point (`lo == hi`), the variable is automatically unified with that value.
+When the bounds collapse to a point (`Lo = Hi`), the variable is automatically unified with that value.
 
 ### maximize/2 and minimize/2
 
 Finds the optimum of a linear expression subject to all currently posted constraints. Unifies `Result` with the optimal objective value **and binds all constrained variables to their optimal assignments**. Fails if the problem is unbounded.
 
-```seam
+```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:maximize_2_and_minimize_2"
 ```
 
@@ -201,7 +235,7 @@ Finds the optimum of a linear expression subject to all currently posted constra
 
 Compute the upper or lower bound of a linear expression **without binding variables**. Useful for inspecting the feasible range or for implementing `entailed`.
 
-```seam
+```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:sup_2_and_inf_2"
 ```
 
@@ -209,11 +243,16 @@ Compute the upper or lower bound of a linear expression **without binding variab
 
 Tests whether a constraint is logically implied by the current store — i.e., whether it holds for **all** feasible points. Does not modify the store.
 
+!!! warning "Seam only"
+    `entailed/1` reads the seam's comparison terms, so this example is the seam spelling.
+    Called from a `.clausal` file, `entailed(X =< 5)` fails even when the store entails it
+    (after `in_q(X, 0, 100), {X =< 4}`, for example).
+
 ```seam
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:entailed_1"
 ```
 
-Supported operators: `<=`, `>=`, `<`, `>`, `==`, `!=`.
+Supported operators (seam): `<=`, `>=`, `<`, `>`, `==`, `!=`.
 
 ### int_minimize/3
 
@@ -221,15 +260,15 @@ Minimize a linear expression subject to the current constraints **and** the requ
 
 `bb_inf/3` is accepted as an alias (SICStus compatibility).
 
-```seam
+```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:int_minimize_3"
 ```
 
 ### dump_q/2
 
-Projects the constraint store onto a list of variables, eliminating all internal (slack) variables via Fourier-Motzkin elimination. Returns a list of constraint strings.
+Projects the constraint store onto a list of variables, eliminating all internal (slack) variables via Fourier-Motzkin elimination. Returns a list of constraints, each an atom.
 
-```seam
+```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:dump_q_2"
 ```
 
@@ -240,7 +279,7 @@ This is the feature that SWI-Prolog's CLP(Q) gets wrong — internal variables l
 A quantity (a number with units, see [units.md](units.md)) may stand
 anywhere in a constraint, on either front end:
 
-```prolog
+```clausal
 :- use_module(library(clpq)).
 :- use_module(european_union, [euro]).
 :- constant_number_units(one_euro, 1, euro).
@@ -250,7 +289,23 @@ price(Q)  :- {Q = 100 * constant(one_euro)}.        % Q = 100 euro
 fine(Q)   :- {Q >= constant(max_fine)}.             % posts; a later binding decides
 split(N)  :- {Q = N * constant(one_euro)}, Q is 300 * constant(one_euro).   % N = 300
 half(Q)   :- {2 * Q = 3 * constant(one_euro)}.      % Q = 3/2 euro
+
+test("price is 100 euro") :-
+    price(Q),
+    P is 100 * constant(one_euro),
+    Q == P.
+
+test("split is 300") :-
+    split(N),
+    N == 300.
+
+test("half is 3/2 euro") :-
+    half(Q),
+    H is 3 rdiv 2 * constant(one_euro),
+    Q == H.
 ```
+
+The seam spelling:
 
 ```seam
 -import_from(european_union, [euro])
@@ -299,31 +354,31 @@ currency amount is exact and must not be computed in floats.
 
 ### Linear equalities
 
-```seam
+```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:linear_equalities"
 ```
 
-```seam
+```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:linear_equalities_ex2"
 ```
 
-```seam
+```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:linear_equalities_ex3"
 ```
 
 ### Linear inequalities
 
-```seam
+```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:linear_inequalities"
 ```
 
-```seam
+```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:linear_inequalities_ex2"
 ```
 
 ### Optimization
 
-```seam
+```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:optimization"
 ```
 
@@ -337,11 +392,11 @@ CLP(Q) uses a fundamentally different solver from CLP(R). Where CLP(R) narrows i
 
 | Constraint type | Algorithm | Example |
 |---|---|---|
-| **Equality** `Σ aᵢXᵢ = c` | Gaussian elimination | `X + Y == 10` |
-| **Inequality** `Σ aᵢXᵢ <= c` | Revised simplex with slack variables | `2*X + Y <= 16` |
-| **Disequality** `X != Y` | Passive check (fires when both ground) | `X != 5` |
+| **Equality** `Σ aᵢXᵢ = c` | Gaussian elimination | `{X + Y = 10}` |
+| **Inequality** `Σ aᵢXᵢ <= c` | Revised simplex with slack variables | `{2*X + Y =< 16}` |
+| **Disequality** `X ≠ Y` | Passive check (fires when both ground) | `{X =\= 5}` |
 
-All constraints must be **linear** — each term is a constant times a variable, with no products of variables. `3*X + 5*Y <= 10` is linear. `X * Y == 10` over two rational variables is not, and raises a Python `TypeError` (`CLP(Q) requires linear constraints`).
+All constraints must be **linear** — each term is a constant times a variable, with no products of variables. `{3*X + 5*Y =< 10}` is linear. `{X * Y = 10}` over two rational variables is not, and raises a Python `TypeError` (`CLP(Q) requires linear constraints`).
 
 ### Why not interval arithmetic?
 
@@ -680,8 +735,8 @@ This is exactly the trade-off SICStus Prolog documents: "you may be out of space
 | MIP | `bb_inf/3`, `bb_inf/5` | Same | — | **`int_minimize/3`** |
 | Projection | Fourier-Motzkin | Broken | — | **`dump_q/2` (Fourier-Motzkin)** |
 | Non-linear | Deferred | Deferred | — | **Rejected (Python `TypeError`)** |
-| Syntax | `{X + Y =< 8}` | Same | — | **`X + Y <= 8`** (unified) |
-| `/` inside a constraint | Exact rational | Exact rational | — | **Exact rational; `int` when integral** |
+| Syntax | `{X + Y =< 8}` | Same | — | **`{X + Y =< 8}`**, or `X + Y #=< 8` (unified; seam `X + Y <= 8`) |
+| `/` inside a constraint | Exact rational | Exact rational | — | **Exact rational inside `{...}`; an integer when integral** |
 
 ### Historical context
 
@@ -720,7 +775,7 @@ A variable can have **both** FD and Q attributes simultaneously, just like FD an
 4. When FD narrows (via `_narrow`), Q bounds are tightened to match
 5. Integer-valued `Fraction` results (like `Fraction(3)`) are accepted by the FD hook
 
-```seam
+```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:fd_q_coexistence"
 ```
 
@@ -728,15 +783,20 @@ A variable can have **both** FD and Q attributes simultaneously, just like FD an
 
 | Situation | Behaviour |
 |---|---|
-| `in_q(X, 0, 10)` then `X == 3` | CLP(Q): X has `"clpq"` attribute, `3` is treated as `Fraction(3)` |
-| `in_domain(X, 1, 10)` then `X == 1/3` | **Fails**: `1/3` triggers Q dispatch, the FD var is promoted to Q with bounds `[1, 10]`, and `1/3` is outside them |
-| `in_domain(X, 1, 10)` then `X == 1/2` | **Fails**: `Fraction(1,2)` is not integer, FD hook rejects |
-| `X == 1/0` | **Fails**: a zero divisor inside a constraint has no solutions |
-| `in_real(X, 0.0, 10.0)` then `X == 1/3` | **TypeError**: cannot mix CLP(Q) rational and CLP(R) float |
-| `in_real(X, 0.0, 10.0)` then `in_q(X, ...)` | **TypeError**: cannot mix CLP(Q) rational and CLP(R) float |
-| `X == 5` (no declaration) | CLP(Z): both sides are `int` |
-| `X == 5.0` (no declaration) | CLP(R): float literal triggers R dispatch |
-| `X == 1/3` (no declaration) | CLP(Q): `1/3` is exact inside a constraint, so it triggers Q dispatch |
+| `in_q(X, 0, 10)` then `X #= 3` | CLP(Q): X has `"clpq"` attribute, `3` is treated as `Fraction(3)` |
+| `in_domain(X, 1, 10)` then `X #= 1 rdiv 3` | **Fails**: the rational triggers Q dispatch, the FD var is promoted to Q with bounds `[1, 10]`, and `1/3` is outside them |
+| `in_domain(X, 1, 10)` then `X #= 1 rdiv 2` | **Fails**: `1/2` is not an integer, FD hook rejects |
+| `X #= 1/0` | **Fails** |
+| `{X = 1/0}` | **TypeError**: `CLP(Q) requires linear constraints` |
+| `in_real(X, 0.0, 10.0)` then `X #= 1 rdiv 3` | **TypeError**: cannot mix CLP(Q) rational and CLP(R) float |
+| `in_real(X, 0.0, 10.0)` then `in_q(X, 0, 1)` | Accepted: no `TypeError` is raised |
+| `X #= 5` (no declaration) | CLP(Z): both sides are integers |
+| `X #= 5.0` (no declaration) | CLP(R): float literal triggers R dispatch |
+| `X #= 1 rdiv 3` (no declaration) | CLP(Q): the rational operand triggers Q dispatch |
+| `X #= 1/3` (no declaration) | **Fails**: `/` under `#=` is not rational division; write `rdiv` or `{X = 1/3}` |
+
+(The seam spells these with `==`; there `/` inside a constraint is exact, so seam
+`X == 1/3` is the CLP(Q) row, and seam `X == 1/0` fails.)
 
 ---
 
@@ -802,13 +862,13 @@ A variable can have **both** FD and Q attributes simultaneously, just like FD an
 
     **LP optimization:**
 
-    ```seam
+    ```clausal
     --8<-- "tests/fixtures/docs/clpq_sigs.txt:dispatch_table"
     ```
 
     **Backtracking (constraints are undone when a branch fails):**
 
-    ```seam
+    ```clausal
     --8<-- "tests/fixtures/docs/clpq_sigs.txt:dispatch_table_ex2"
     ```
 
