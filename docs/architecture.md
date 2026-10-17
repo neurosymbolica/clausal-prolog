@@ -2,7 +2,7 @@
 
 ## Layer stack
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/misc_phase7_sigs.txt:architecture_diagram"
 ```
 
