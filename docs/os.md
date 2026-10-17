@@ -2,33 +2,33 @@
 
 The `py.os` standard library module provides relational predicates for environment variables, working directory management, and system metadata. For running shell commands and subprocesses, see the [Process](process.md) module.
 
-The implementation lives in `clausal/modules/py/os.py`.
+The implementation lives in `clausal/modules/py/os.py`. Clausal Prolog
+imports it through its facade, `library(py_os)` (the name `library(os)` is
+Scryer's; see [Importing Prolog](importing_prolog.md)).
 
-!!! note "Seam vs Prolog syntax"
-
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+Examples on this page are [Clausal Prolog](clausal_prolog.md) (`.clausal`):
+ISO Prolog syntax, without cut. (The [seam](syntax.md), Clausal's
+Python-syntax surface, imports the module as `py.os`.)
 
 ---
 
 ## Import
 
-```seam
--import_from(py.os, [environment_variable, set_environment_variable,
-                     working_directory, change_directory,
-                     pid, argv, platform, cpu_count])
+```clausal
+:- use_module(library(py_os), [environment_variable/2,
+                               set_environment_variable/2,
+                               working_directory/1, change_directory/1,
+                               pid/1, argv/1, platform/1, cpu_count/1]).
 ```
 
-Or via [module import](import.md):
+Or import every predicate the module exports:
 
-```seam
--import_module(py.os)
-# then use py.os.environment_variable("HOME", H_), py.os.pid(P_), etc.
+```clausal
+:- use_module(library(py_os)).
 ```
+
+(The seam can also import the module whole, `-import_module(py.os)`, and
+call `py.os.pid(P)`; see [module import](import.md).)
 
 ---
 
@@ -48,16 +48,35 @@ a **string**; the platform is a symbolic name and comes back as an **atom**
 - **Name bound**: look up the value. Fails if the variable is not set.
 - **Name unbound**: enumerate all environment variables via backtracking.
 
-```seam
-home_directory(HOME) <- environment_variable("HOME", HOME)
+```clausal
+:- use_module(library(py_os), [environment_variable/2]).
+
+home_directory(HOME) :-
+    environment_variable("HOME", HOME).
+
+test("a set variable reads back as a string") :-
+    environment_variable(NAME, _),
+    environment_variable(NAME, VALUE),
+    string(VALUE).
 ```
 
 ### set_environment_variable/2
 
 `set_environment_variable(Name, Value)` — set an environment variable. Both arguments must be ground strings.
 
-```seam
-configure_env <- set_environment_variable("MY_APP_MODE", "production")
+```clausal
+:- use_module(library(py_os), [set_environment_variable/2,
+                               environment_variable/2,
+                               unset_environment_variable/1]).
+
+configure_env :-
+    set_environment_variable("MY_APP_MODE", "production").
+
+test("set, read back, unset") :-
+    configure_env,
+    environment_variable("MY_APP_MODE", "production"),
+    unset_environment_variable("MY_APP_MODE"),
+    \+ environment_variable("MY_APP_MODE", _).
 ```
 
 ### unset_environment_variable/1
@@ -68,63 +87,117 @@ configure_env <- set_environment_variable("MY_APP_MODE", "production")
 
 `working_directory(Path)` — unify Path with the current working directory.
 
-```seam
-show_cwd(CWD) <- working_directory(CWD)
+```clausal
+:- use_module(library(py_os), [working_directory/1]).
+
+show_cwd(CWD) :-
+    working_directory(CWD).
+
+test("the working directory is a string") :-
+    show_cwd(CWD),
+    string(CWD).
 ```
 
 ### change_directory/1
 
 `change_directory(Path)` — change the current working directory. Path must be ground. Fails if the path does not exist.
 
-```seam
-work_in_tmp <- change_directory("/tmp")
+```clausal
+:- use_module(library(py_os), [change_directory/1, working_directory/1]).
+
+work_in_tmp :-
+    change_directory("/tmp").
+
+test("change to the current directory") :-
+    working_directory(CWD),
+    change_directory(CWD).
 ```
 
 ### pid/1
 
 `pid(P)` — unify P with the current process ID (integer).
 
-```seam
-show_pid(P) <- pid(P)
+```clausal
+:- use_module(library(py_os), [pid/1]).
+
+show_pid(P) :-
+    pid(P).
+
+test("the pid is an integer") :-
+    show_pid(P),
+    integer(P).
 ```
 
 ### argv/1
 
 `argv(Args)` — unify Args with `sys.argv` as a list of strings.
 
-```seam
-get_args(ARGS) <- argv(ARGS)
+```clausal
+:- use_module(library(py_os), [argv/1]).
+
+get_args(ARGS) :-
+    argv(ARGS).
+
+test("argv is a list") :-
+    get_args(ARGS),
+    is_list(ARGS).
 ```
 
 ### platform/1
 
 `platform(P)` — unify P with `sys.platform` as an atom (e.g. `linux`, `darwin`, `win32`); a bound P may be the atom or the string.
 
-```seam
-is_linux <- platform('linux')
+```clausal
+:- use_module(library(py_os), [platform/1]).
+
+is_linux :-
+    platform(linux).
+
+test("the platform is an atom") :-
+    platform(P),
+    atom(P),
+    platform(P).
 ```
 
 ### cpu_count/1
 
 `cpu_count(N)` — unify N with the number of CPUs available.
 
-```seam
-show_cpus(N) <- cpu_count(N)
+```clausal
+:- use_module(library(py_os), [cpu_count/1]).
+
+show_cpus(N) :-
+    cpu_count(N).
+
+test("at least one cpu") :-
+    show_cpus(N),
+    N >= 1.
 ```
 
 ---
 
 ## Example
 
-```seam
--import_from(py.os, [environment_variable, working_directory, pid, platform])
+```clausal
+:- use_module(library(py_os), [environment_variable/2, working_directory/1,
+                               pid/1, platform/1]).
 
-show_info(INFO) <- (
+% A string is a list of characters, so append/2 joins the pieces.
+show_info(INFO) :-
     working_directory(CWD),
     pid(P),
     platform(PLAT),
-    INFO is f"PID {P} on {PLAT} in {CWD}"      # a string, like "..."
-)
+    write_to_string(P, P_TEXT),
+    write_to_string(PLAT, PLAT_TEXT),
+    append(["PID ", P_TEXT, " on ", PLAT_TEXT, " in ", CWD], INFO).
 
-home_directory(HOME) <- environment_variable("HOME", HOME)
+home_directory(HOME) :-
+    environment_variable("HOME", HOME).
+
+test("show_info is a string") :-
+    show_info(INFO),
+    string(INFO).
 ```
+
+(The seam builds `INFO` with a Python f-string,
+`INFO is f"PID {P} on {PLAT} in {CWD}"`.)
