@@ -1,8 +1,16 @@
 # === Meta-Interpreter Specialization ===
 
 # --8<-- [start:count_natnum_test]
-test("count natnum(s(s(0)))") <- solve_count_natnum([['natnum', ['s', ['s', 0]]]], 3)
+test("count natnum(s(s(0)))") :-
+    solve_count_natnum([[natnum, [s, [s, 0]]]], 3).
 # --8<-- [end:count_natnum_test]
+
+# --8<-- [start:clausal_caller]
+:- use_module(natnum_spec, [solve_count_natnum/2]).
+
+test("count natnum(s(s(0)))") :-
+    solve_count_natnum([[natnum, [s, [s, 0]]]], 3).
+# --8<-- [end:clausal_caller]
 
 # --8<-- [start:specialize_factorial]
 # Factorial uses gt, sub, mul — these are residual goals

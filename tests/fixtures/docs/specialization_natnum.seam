@@ -1,0 +1,15 @@
+# The natnum object program with its -specialize directive, as a seam
+# module, for docs/specialization.md: -specialize is a seam directive, and
+# specialization_sig_tests.clausal imports the predicate it makes.
+-module(specialization_natnum, [solve_count_natnum/2])
+
+-import_from(clausal.examples.metainterpreters, [solve_count])
+
+natnum_program(PROGRAM) <- (
+    PROGRAM is [
+        [['natnum', 0], []],
+        [['natnum', ['s', X]], [['natnum', X]]]
+    ]
+)
+
+-specialize(solve_count, natnum_program, alias=solve_count_natnum)

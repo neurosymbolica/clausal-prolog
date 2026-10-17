@@ -1,0 +1,21 @@
+% Companion tests for docs/specialization.md signature blocks.
+% -specialize is a seam directive, so the specialization itself is declared
+% in specialization_natnum.seam; this file calls the predicate it makes,
+% as the page's clausal_caller section shows.
+:- use_module(specialization_natnum, [solve_count_natnum/2]).
+:- use_module(clausal/examples/metainterpreters, [solve_count/3]).
+
+test("count natnum(s(s(0)))") :-
+    solve_count_natnum([[natnum, [s, [s, 0]]]], 3).  % nv
+
+natnum_program([
+    [[natnum, 0], []],
+    [[natnum, [s, X]], [[natnum, X]]]
+]).
+
+test("specialized agrees with the MI") :-
+    natnum_program(PROGRAM),
+    GOAL = [[natnum, [s, [s, [s, 0]]]]],
+    solve_count(GOAL, PROGRAM, COUNT),
+    solve_count_natnum(GOAL, SPECIALIZED),
+    COUNT == SPECIALIZED.  % nv

@@ -6,14 +6,16 @@
 
 The implementation lives in `clausal.logic.specialization`.
 
-!!! note "Seam vs Prolog syntax"
+!!! note "Clausal Prolog examples, and a seam-only directive"
 
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
+    Examples on this page are [Clausal Prolog](clausal_prolog.md)
+    (`.clausal`), which uses ISO Prolog syntax, except one: the
+    `-specialize` directive exists only in the [seam](syntax.md). A
+    `.clausal` file that writes `:- specialize(...)` is refused at load
+    (`unknown directive specialize/3`). Declare the specialization in a
+    `.seam` module and import the predicate it makes into `.clausal` (see
+    [Calling it from Clausal Prolog](#calling-it-from-clausal-prolog)). The
+    directive examples below are seam syntax.
 
 ---
 
@@ -21,8 +23,19 @@ The implementation lives in `clausal.logic.specialization`.
 
 Clausal Prolog ships five MIs ported from Triska's [acomip](https://www.metalevel.at/acomip/), all available via:
 
-```seam
--import_from(clausal.examples.metainterpreters, [solve, solve_count, solve_limit, solve_tree])
+```clausal
+:- use_module(clausal/examples/metainterpreters,
+              [solve/2, solve_count/3, solve_limit/3, solve_tree/3]).
+
+natnum_program([
+    [[natnum, 0], []],
+    [[natnum, [s, X]], [[natnum, X]]]
+]).
+
+test("solve_count counts inferences") :-
+    natnum_program(PROGRAM),
+    solve_count([[natnum, [s, [s, 0]]]], PROGRAM, COUNT),
+    COUNT == 3.
 ```
 
 | MI | signature | Extension |
@@ -33,13 +46,15 @@ Clausal Prolog ships five MIs ported from Triska's [acomip](https://www.metaleve
 | `solve_iterative_deepening` | `(GOALS, PROGRAM)` | Complete search via iterative deepening |
 | `solve_tree` | `(GOALS, PROGRAM, TREE)` | Builds proof trees |
 
-Object programs are represented as lists of `[Head, BodyGoals]` pairs, where terms use list form with an **atom** in first place: `f(A, B)` becomes `['f', A, B]` (a `"f"` would be a string, not an atom).
+Object programs are represented as lists of `[Head, BodyGoals]` pairs, where terms use list form with an **atom** in first place: `f(A, B)` becomes `[f, A, B]` (a `"f"` would be a string, not an atom).
 
 ---
 
 ## Using specialization
 
 ### The `-specialize` directive
+
+The directive is seam syntax (it has no `.clausal` form):
 
 ```seam
 -import_from(clausal.examples.metainterpreters, [solve_count])
@@ -62,13 +77,28 @@ This produces a new predicate `solve_count_natnum` that:
 
 Call it directly:
 
-```seam
+```text
 --8<-- "tests/fixtures/docs/specialization_sigs.txt:count_natnum_test"
 ```
 
+### Calling it from Clausal Prolog
+
+Put the object program and the directive in a `.seam` module that exports
+the specialized predicate, and import that from `.clausal` like any other
+predicate:
+
+```text
+--8<-- "tests/fixtures/docs/specialization_sigs.txt:clausal_caller"
+```
+
+Here `natnum_spec` is the seam module holding `natnum_program/1` and the
+`-specialize` directive above, with `-module(natnum_spec, [solve_count_natnum/2])`.
+
 ### Directive syntax
 
-```
+In the seam:
+
+```text
 -specialize(MI, Source, alias=Name)
 -specialize(MI, Source, alias=Name, depth=N)
 -specialize(MI, Source, alias=Name, cpd=True)
@@ -92,27 +122,25 @@ The MI pattern (goal-list arg, program arg, extra args, recursive style) is reco
 
 Given the natnum program, `solve` is specialized to:
 
-```
-solve_natnum([], )                                              # base case
-solve_natnum([['natnum', 0], *GOALS]) <- solve_natnum(GOALS)     # fact
-solve_natnum([['natnum', ['s', X]], *GOALS]) <-                  # rule
-    solve_natnum([['natnum', X], *GOALS])
+```text
+solve_natnum([]).                                               % base case
+solve_natnum([[natnum, 0]|GOALS]) :- solve_natnum(GOALS).       % fact
+solve_natnum([[natnum, [s, X]]|GOALS]) :-                       % rule
+    solve_natnum([[natnum, X]|GOALS]).
 ```
 
 The `match_clause`/`append` machinery is gone. One clause per object clause, plus the base case.
 
 ### Counting MI (solve_count)
 
-```
-solve_count_natnum([], 0)
-solve_count_natnum([['natnum', 0], *GOALS], COUNT) <- (
+```text
+solve_count_natnum([], 0).
+solve_count_natnum([[natnum, 0]|GOALS], COUNT) :-
     solve_count_natnum(GOALS, SUB_COUNT),
-    COUNT == SUB_COUNT + 1
-)
-solve_count_natnum([['natnum', ['s', X]], *GOALS], COUNT) <- (
-    solve_count_natnum([['natnum', X], *GOALS], SUB_COUNT),
-    COUNT == SUB_COUNT + 1
-)
+    COUNT #= SUB_COUNT + 1.
+solve_count_natnum([[natnum, [s, X]]|GOALS], COUNT) :-
+    solve_count_natnum([[natnum, X]|GOALS], SUB_COUNT),
+    COUNT #= SUB_COUNT + 1.
 ```
 
 The counting logic is woven into each clause. The program argument is gone.
@@ -157,19 +185,19 @@ With `cpd=True`, the specializer applies **deforestation** — eliminating inter
 
 ### Before CPD (Phase 1 output)
 
-```
-solve_graph([['path', X, Y], *GOALS]) <-
-    solve_graph([['edge', X, Z], ['path', Z, Y], *GOALS])
+```text
+solve_graph([[path, X, Y]|GOALS]) :-
+    solve_graph([[edge, X, Z], [path, Z, Y]|GOALS]).
 ```
 
 The body constructs a 3+ element list at runtime, only to immediately decompose it via pattern matching.
 
 ### After CPD
 
-```
-solve_graph([['path', 'a', Y], *GOALS]) <- solve_graph([['path', 'b', Y], *GOALS])
-solve_graph([['path', 'b', Y], *GOALS]) <- solve_graph([['path', 'c', Y], *GOALS])
-solve_graph([['path', 'b', Y], *GOALS]) <- solve_graph([['path', 'd', Y], *GOALS])
+```text
+solve_graph([[path, a, Y]|GOALS]) :- solve_graph([[path, b, Y]|GOALS]).
+solve_graph([[path, b, Y]|GOALS]) :- solve_graph([[path, c, Y]|GOALS]).
+solve_graph([[path, b, Y]|GOALS]) :- solve_graph([[path, d, Y]|GOALS]).
 ```
 
 The intermediate list is eliminated — edge matching is inlined directly into the clause heads.
@@ -178,8 +206,8 @@ The intermediate list is eliminated — edge matching is inlined directly into t
 
 CPD correctly preserves MI extensions:
 
-- **Counting MIs** (solve_count): each inlined step adds its own `COUNT == SUB_COUNT + 1` via post-match goal chaining.
-- **Depth-limited MIs** (solve_limit): each inlined step adds its own `MAX > 0, MAX1 == MAX - 1` via pre-match goal chaining.
+- **Counting MIs** (solve_count): each inlined step adds its own `COUNT #= SUB_COUNT + 1` via post-match goal chaining.
+- **Depth-limited MIs** (solve_limit): each inlined step adds its own `MAX #> 0, MAX1 #= MAX - 1` via pre-match goal chaining.
 
 ---
 
@@ -191,26 +219,24 @@ The specializer automatically recognizes two MI styles:
 
 Used by `solve`, `solve_count`, `solve_limit`:
 
-```
-MI([], ...)                                   # base
-MI([GOAL, *GOALS], PROGRAM, ...) <- (         # recursive
+```text
+MI([], ...).                                  % base
+MI([GOAL|GOALS], PROGRAM, ...) :-             % recursive
     match_clause(GOAL, BODY, PROGRAM),
     append(BODY, GOALS, ALL_GOALS),
-    MI(ALL_GOALS, PROGRAM, ...)
-)
+    MI(ALL_GOALS, PROGRAM, ...).
 ```
 
 ### Split / non-tail-recursive (Pattern B)
 
 Used by `solve_tree`:
 
-```
-MI([], ..., [])                               # base
-MI([GOAL, *GOALS], PROGRAM, ...) <- (         # recursive
+```text
+MI([], ..., []).                              % base
+MI([GOAL|GOALS], PROGRAM, ...) :-             % recursive
     match_clause(GOAL, BODY, PROGRAM),
     MI(BODY, PROGRAM, BODY_TREE),
-    MI(GOALS, PROGRAM, GOALS_TREE)
-)
+    MI(GOALS, PROGRAM, GOALS_TREE).
 ```
 
 ### Extra arguments
