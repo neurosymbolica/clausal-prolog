@@ -1,0 +1,130 @@
+% Doc snippet fixtures for docs/graphs.md
+
+% --8<-- [start:overview_import]
+:- use_module(library(graphs), [vertices/2, shortest_path/4]).
+
+route(V, P) :-
+    G = [[a, b], [b, c], [a, c]],
+    vertices(G, V),
+    shortest_path(G, a, c, P).
+
+test("route") :-
+    route(V, P),
+    V == [a, b, c],
+    P == [a, c].
+% --8<-- [end:overview_import]
+
+% --8<-- [start:overview_module]
+:- use_module(library(graphs)).
+
+connected_vertices(V) :-
+    G = [[a, b], [b, c]],
+    graphs:vertices(G, V),
+    graphs:is_connected(G).
+% --8<-- [end:overview_module]
+
+% Validates the displays in graphs_sigs.txt and the conventions in docs/graphs.md
+test("connected_vertices") :-
+    connected_vertices(V),
+    V == [a, b, c].
+
+test("vertices") :-
+    vertices([[a, b], [b, c]], V),
+    V == [a, b, c].
+
+test("neighbors") :-
+    neighbors([[a, b], [b, c]], b, N),
+    N == [a, c].
+
+test("degree") :-
+    degree([[a, b], [b, c]], b, D),
+    D == 2.
+
+test("breadth_first_nodes") :-
+    breadth_first_nodes([[a, b], [b, c], [c, d]], a, N),
+    N == [a, b, c, d].
+
+test("find_path enumerates") :-
+    findall(P, find_path([[a, b], [b, c], [a, c]], a, c, P), Ps),
+    Ps == [[a, b, c], [a, c]].
+
+test("weighted shortest_path") :-
+    shortest_path([[a, b, 1], [b, c, 2], [a, c, 10]], a, c, P),
+    P == [a, b, c].
+
+test("path_cost") :-
+    path_cost([[a, b, 3], [b, c, 5]], [a, b, c], C),
+    C == 8.
+
+test("connected_components") :-
+    connected_components([[a, b], [c, d]], C),
+    C == [[a, b], [c, d]].
+
+test("topological_sort") :-
+    topological_sort([[a, b], [b, c], [a, c]], O),
+    O == [a, b, c].
+
+test("min_spanning_tree") :-
+    min_spanning_tree([[a, b, 1], [b, c, 2], [a, c, 4]], T, C),
+    T == [[a, b, 1], [b, c, 2]],
+    C == 3.
+
+test("reverse_edges") :-
+    reverse_edges([[a, b], [c, d]], R),
+    R == [[b, a], [d, c]].
+
+test("a lone vertex") :-
+    vertices([[v]], V),
+    V == [v].
+
+test("malformed entries are skipped") :-
+    vertices([foo, [], [e, f]], V),
+    V == [e, f].
+
+test("string vertices stay strings") :-
+    vertices([["a", "b"]], V),
+    V == ["a", "b"],
+    V \== [a, b].
+
+test("has_edge is directed") :-
+    has_edge([[a, b]], a, b),
+    \+ has_edge([[a, b]], b, a).
+
+test("a self-loop counts once") :-
+    degree([[a, a]], a, D),
+    D == 1.
+
+test("path_cost needs two vertices") :-
+    \+ path_cost([[a, b, 3]], [a], _).
+
+test("an absent source") :-
+    breadth_first_nodes([[a, b]], z, N),
+    N == [z],
+    find_path([[a, b]], z, z, P),
+    P == [z],
+    \+ find_path([[a, b]], z, a, _).
+
+test("is_isolated") :-
+    is_isolated([[a, b]], zzz),
+    findall(X, is_isolated([[a, b], [v]], X), Xs),
+    Xs == [v].
+
+test("a negative weight is a domain error") :-
+    catch(shortest_path([[a, b, -1]], a, b, _), error(E, _), true),
+    E == domain_error(not_less_than_zero, -1).
+
+test("no spanning tree of a disconnected graph") :-
+    \+ spanning_tree([[a, b], [c, d]], _),
+    \+ min_spanning_tree([[a, b, 1], [c, d, 1]], _, _).
+
+test("merge_graphs keeps duplicates") :-
+    merge_graphs([[a, b]], [[a, b]], M),
+    M == [[a, b], [a, b]].
+
+test("is_connected of no edges") :-
+    is_connected([]).
+
+test("has_cycle is directed") :-
+    has_cycle([[a, b], [b, a]]),
+    \+ has_cycle([[a, b], [b, c]]),
+    \+ topological_sort([[a, b], [b, a]], _).

@@ -1,69 +1,49 @@
 # Display snippets for docs/graphs.md
-
---8<-- [start:overview_import]
--import_from(graphs, [vertices, shortest_path])
-
-route(V, P) <- (
-    G is [['a', 'b'], ['b', 'c'], ['a', 'c']],
-    vertices(G, V),
-    shortest_path(G, 'a', 'c', P)
-)
-
-def main():
-    for V, P in --route(V, P):
-        print(f"vertices: {V}")          # vertices: ['a', 'b', 'c']
-        print(f"shortest path: {P}")     # shortest path: ['a', 'c']
---8<-- [end:overview_import]
-
---8<-- [start:overview_module]
--import_module(graphs)
-
-connected_vertices(V) <- (
-    G is [['a', 'b'], ['b', 'c']],
-    graphs.vertices(G, V),
-    graphs.is_connected(G)
-)
---8<-- [end:overview_module]
+# (The answers are checked by tests/fixtures/docs/graphs_examples.clausal.)
 
 --8<-- [start:query_examples]
-vertices([['a', 'b'], ['b', 'c']], V)    % V = ['a', 'b', 'c']
-neighbors([['a', 'b'], ['b', 'c']], 'b', N)  % N = ['a', 'c']
-degree([['a', 'b'], ['b', 'c']], 'b', D)     % D = 2
+?- vertices([[a, b], [b, c]], V).
+   V = [a, b, c].
+?- neighbors([[a, b], [b, c]], b, N).
+   N = [a, c].
+?- degree([[a, b], [b, c]], b, D).
+   D = 2.
 --8<-- [end:query_examples]
 
 --8<-- [start:traversal_example]
-breadth_first_nodes([['a', 'b'], ['b', 'c'], ['c', 'd']], 'a', N)
-# N = ['a', 'b', 'c', 'd']
+?- breadth_first_nodes([[a, b], [b, c], [c, d]], a, N).
+   N = [a, b, c, d].
 --8<-- [end:traversal_example]
 
 --8<-- [start:pathfinding_examples]
-# Enumerate all paths
-find_path([['a', 'b'], ['b', 'c'], ['a', 'c']], 'a', 'c', P)
-# P = ['a', 'b', 'c']  then  P = ['a', 'c']
+% Enumerate all paths
+?- find_path([[a, b], [b, c], [a, c]], a, c, P).
+   P = [a, b, c]
+;  P = [a, c].
 
-# Shortest path in a weighted graph
-shortest_path([['a', 'b', 1], ['b', 'c', 2], ['a', 'c', 10]], 'a', 'c', P)
-# P = ['a', 'b', 'c']
+% Shortest path in a weighted graph
+?- shortest_path([[a, b, 1], [b, c, 2], [a, c, 10]], a, c, P).
+   P = [a, b, c].
 
-# Cost of a path
-path_cost([['a', 'b', 3], ['b', 'c', 5]], ['a', 'b', 'c'], C)
-# C = 8
+% Cost of a path
+?- path_cost([[a, b, 3], [b, c, 5]], [a, b, c], C).
+   C = 8.
 --8<-- [end:pathfinding_examples]
 
 --8<-- [start:component_examples]
-connected_components([['a', 'b'], ['c', 'd']], C)
-# C = [['a', 'b'], ['c', 'd']]
+?- connected_components([[a, b], [c, d]], C).
+   C = [[a, b], [c, d]].
 
-topological_sort([['a', 'b'], ['b', 'c'], ['a', 'c']], O)
-# O = ['a', 'b', 'c']
+?- topological_sort([[a, b], [b, c], [a, c]], O).
+   O = [a, b, c].
 --8<-- [end:component_examples]
 
 --8<-- [start:tree_example]
-min_spanning_tree([['a', 'b', 1], ['b', 'c', 2], ['a', 'c', 4]], T, C)
-# T = [['a', 'b', 1], ['b', 'c', 2]]   C = 3
+?- min_spanning_tree([[a, b, 1], [b, c, 2], [a, c, 4]], T, C).
+   T = [[a, b, 1], [b, c, 2]], C = 3.
 --8<-- [end:tree_example]
 
 --8<-- [start:transform_example]
-reverse_edges([['a', 'b'], ['c', 'd']], R)
-# R = [['b', 'a'], ['d', 'c']]
+?- reverse_edges([[a, b], [c, d]], R).
+   R = [[b, a], [d, c]].
 --8<-- [end:transform_example]
