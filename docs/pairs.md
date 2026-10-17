@@ -4,36 +4,30 @@ Pair predicates work with [lists](lists.md) of `Key-Value` pairs, as in Scryer's
 `library(pairs)`. For proper key-value mappings with unification support, see
 [Dicts & Sets](dicts_sets.md).
 
+Examples on this page are [Clausal Prolog](clausal_prolog.md) (`.clausal`),
+which uses ISO Prolog syntax.
+
 !!! note "How a pair is spelled"
-    A pair is the term `Key-Value`: the cell `'-'(Key, Value)`. The pair
-    predicates also read a pair written in source as `k - v`, but that spelling
-    is the arithmetic node, which `==` and unification do not identify with the
-    cell. A pair the predicates **build** is always the cell, so compare one
-    against `'-'(k, v)`, not `k - v`.
+    A pair is the term `Key-Value`: the compound `'-'(Key, Value)`. In
+    `.clausal` source, `k - v` and `'-'(k, v)` are the same term, so a pair
+    the predicates build compares `==` to one written either way. (In the
+    [seam](syntax.md), Clausal's Python-syntax surface, `k - v` is the
+    arithmetic node, which `==` and unification do not identify with the
+    cell, so seam code writes a pair it compares against as `'-'(k, v)`.)
 
 These predicates are Scryer's, clause for clause. They raise no errors: an
 argument that is not a list, or an element that is not a pair, makes them fail.
 An unbound argument or a partial list enumerates, as the Prolog definition does.
 
-!!! note "Seam vs Prolog syntax"
-
-    Examples on this page use seam syntax (`.seam`), which differs from
-    Prolog's — for example, variables are `ALLCAPS`, rules use `<-` instead
-    of `:-`, and lists are Python-style. `++`/`--` Python escapes exist only
-    in `.seam`; Clausal Prolog imports modules and never escapes into Python. Keep this in mind when comparing with Prolog
-    resources. [Clausal Prolog](clausal_prolog.md) (`.clausal`) uses ISO
-    Prolog syntax.
-
 ---
 
 ## Quick Example
 
-```seam
-test("unzip") <- (
-    pairs_keys_values([1 - 'a', 2 - 'b', 3 - 'c'], KEYS, VALUES),
+```clausal
+test("unzip") :-
+    pairs_keys_values([1-a, 2-b, 3-c], KEYS, VALUES),
     KEYS == [1, 2, 3],
-    VALUES == ['a', 'b', 'c']
-)
+    VALUES == [a, b, c].
 ```
 
 ---
@@ -47,44 +41,45 @@ its values, in every direction.
 
 **Decompose mode** (Pairs bound):
 
-```seam
-test("decompose") <- (
-    pairs_keys_values(['name' - 'alice', 'age' - 30], KS, VS),
-    KS == ['name', 'age'],
-    VS == ['alice', 30]
-)
+```clausal
+test("decompose") :-
+    pairs_keys_values([name-alice, age-30], KS, VS),
+    KS == [name, age],
+    VS == [alice, 30].
 ```
 
 **Construct mode** (Keys and Values bound):
 
-```seam
-test("construct") <- (
-    pairs_keys_values(PAIRS, ['x', 'y', 'z'], [1, 2, 3]),
-    PAIRS == ['-'('x', 1), '-'('y', 2), '-'('z', 3)]
-)
+```clausal
+test("construct") :-
+    pairs_keys_values(PAIRS, [x, y, z], [1, 2, 3]),
+    PAIRS == [x-1, y-2, z-3].
 ```
 
-Any one proper list fixes the length: `pairs_keys_values(P, ['x', 'y'], V)` gives
-`P = ['-'('x', _A), '-'('y', _B)]` and `V = [_A, _B]`.
+Any one proper list fixes the length: `pairs_keys_values(P, [x, y], V)` gives
+`P = [x-_A, y-_B]` and `V = [_A, _B]`.
 
-```seam
-test("not a pair fails") <- (not pairs_keys_values([1 - 'a', 'b'], _K, _V))
+```clausal
+test("not a pair fails") :-
+    \+ pairs_keys_values([1-a, b], _K, _V).
 ```
 
 ### pairs_keys/2
 
 `pairs_keys(Pairs, Keys)` — the keys: `pairs_keys_values(Pairs, Keys, _)`.
 
-```seam
-test("keys") <- pairs_keys([1 - 'a', 2 - 'b', 3 - 'c'], [1, 2, 3])
+```clausal
+test("keys") :-
+    pairs_keys([1-a, 2-b, 3-c], [1, 2, 3]).
 ```
 
 ### pairs_values/2
 
 `pairs_values(Pairs, Values)` — the values: `pairs_keys_values(Pairs, _, Values)`.
 
-```seam
-test("values") <- pairs_values([1 - 'a', 2 - 'b', 3 - 'c'], ['a', 'b', 'c'])
+```clausal
+test("values") :-
+    pairs_values([1-a, 2-b, 3-c], [a, b, c]).
 ```
 
 ### group_pairs_by_key/2
@@ -93,21 +88,19 @@ test("values") <- pairs_values([1 - 'a', 2 - 'b', 3 - 'c'], ['a', 'b', 'c'])
 identical (`==`). Each group is `Key-Values`. It does not sort, so a key that
 comes back after another key starts a new group:
 
-```seam
-test("adjacent groups") <- (
-    group_pairs_by_key(['a' - 1, 'a' - 2, 'b' - 3, 'a' - 4], GROUPS),
-    GROUPS == ['-'('a', [1, 2]), '-'('b', [3]), '-'('a', [4])]
-)
+```clausal
+test("adjacent groups") :-
+    group_pairs_by_key([a-1, a-2, b-3, a-4], GROUPS),
+    GROUPS == [a-[1, 2], b-[3], a-[4]].
 ```
 
 Sort the pairs first to collect every occurrence of a key:
 
-```seam
-test("sort then group") <- (
-    msort(['b' - 2, 'a' - 1, 'b' - 3], SORTED),
+```clausal
+test("sort then group") :-
+    msort([b-2, a-1, b-3], SORTED),
     group_pairs_by_key(SORTED, GROUPS),
-    GROUPS == ['-'('a', [1]), '-'('b', [2, 3])]
-)
+    GROUPS == [a-[1], b-[2, 3]].
 ```
 
 ### map_list_to_pairs/3
@@ -117,18 +110,16 @@ a key: `Pairs` is `[K1-E1, K2-E2, ...]` where `call(Goal, Ei, Ki)`. Every
 solution of each call is an answer on backtracking. With `msort/2` and
 `pairs_values/2` it sorts a list by a computed key:
 
-```seam
-test("pair with a key") <- (
+```clausal
+test("pair with a key") :-
     map_list_to_pairs(length, [[1, 2, 3], [4], [5, 6]], PAIRS),
-    PAIRS == ['-'(3, [1, 2, 3]), '-'(1, [4]), '-'(2, [5, 6])]
-)
+    PAIRS == [3-[1, 2, 3], 1-[4], 2-[5, 6]].
 
-test("sort by length") <- (
+test("sort by length") :-
     map_list_to_pairs(length, [[1, 2, 3], [4], [5, 6]], PAIRS),
     msort(PAIRS, SORTED),
     pairs_values(SORTED, BY_LENGTH),
-    BY_LENGTH == [[4], [5, 6], [1, 2, 3]]
-)
+    BY_LENGTH == [[4], [5, 6], [1, 2, 3]].
 ```
 
 ---
@@ -137,37 +128,37 @@ test("sort by length") <- (
 
 ### Lookup by key
 
-```seam
-lookup(KEY, PAIRS, VALUE) <- in_('-'(KEY, VALUE), PAIRS)
+```clausal
+lookup(KEY, PAIRS, VALUE) :-
+    in_(KEY-VALUE, PAIRS).
 
-test("lookup") <- lookup('b', ['-'('a', 1), '-'('b', 2), '-'('c', 3)], 2)
+test("lookup") :-
+    lookup(b, [a-1, b-2, c-3], 2).
 ```
 
-`in_/2` unifies, so the list holds cells here: a `k - v` element would not
-unify with `'-'(KEY, VALUE)`.
+`in_/2` unifies each element with the pattern `KEY-VALUE`.
 
 ### Sort pairs by key
 
 Standard order compares the key first, so `msort/2` sorts pairs by key (and
 by value within a key):
 
-```seam
-test("sort by key") <- (
-    msort(['-'('b', 2), '-'('a', 1), '-'('c', 3)], SORTED),
-    pairs_keys(SORTED, ['a', 'b', 'c'])
-)
+```clausal
+test("sort by key") :-
+    msort([b-2, a-1, c-3], SORTED),
+    pairs_keys(SORTED, [a, b, c]).
 ```
 
 ### Invert a mapping (using [maplist](higher_order.md))
 
-```seam
-swap_pair('-'(K, V), '-'(V, K)),
+```clausal
+swap_pair(K-V, V-K).
 
-invert(PAIRS, INVERTED) <- (
-    maplist(swap_pair, PAIRS, INVERTED)
-)
+invert(PAIRS, INVERTED) :-
+    maplist(swap_pair, PAIRS, INVERTED).
 
-test("invert") <- invert(['-'('a', 1), '-'('b', 2)], ['-'(1, 'a'), '-'(2, 'b')])
+test("invert") :-
+    invert([a-1, b-2], [1-a, 2-b]).
 ```
 
 ---
