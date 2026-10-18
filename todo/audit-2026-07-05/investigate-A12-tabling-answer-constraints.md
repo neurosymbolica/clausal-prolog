@@ -50,20 +50,84 @@ test_constrained_answers_pair_with_every_answer and
 RECORDED LIMITATION (provisional, pending ruling 2026-10-16, Q1).
 Resolving this todo (storing the residue) removes the stopgap.
 
-## Investigation
+## Can a table store constraints? Yes (plan, 2026-10-18)
 
-1. Decide semantics (A12-D001): (a) SLG(C)-style — store constraint residue
-   per answer, re-post on replay; (b) refuse to table answers carrying
-   attrs (clear error); (c) document. Recommendation: (b) as stopgap, (a)
-   folded into the `investigate-A04-slg-completion-architecture.md` rework
-   where answer representation is already on the table.
-2. Survey which attr families can reach answers today: dif (A05), FD
-   (A06), CLP(B) (A07); CLP(Q/R)/Z3/ortools have no hooks yet (A08-F013) —
-   the chosen contract must anticipate them.
-3. Check interaction with A04-F005 (unhashable answers) — the answer
-   representation fix should solve both.
+There is prior art: XSB tables answers that carry attributed variables,
+and runs CLP(Q) under tabling (Cui & Warren; Schrijvers & Warren on CHR
+with tabling; check the citations before quoting them). A table row
+becomes a pair: the answer term, and the constraints left on its unbound
+variables (its residue).
+
+1. **Store the residue with each answer.** In `add_answer`, take a
+   `copy_term/3`-style copy: a fresh copy of the term plus the goals that
+   rebuild its constraints (`dif(X, a)`, `X in 1..3`, `freeze(X, G)`).
+   This also fixes the shared-variable bug
+   (todo/tabled-answer-rows-share-their-unbound-variables-2026-10-16.md):
+   the row no longer holds the derivation's own variables.
+2. **Re-post the residue on replay.** Each replay takes a fresh copy of
+   the row and calls its goals. The caller's own constraints then filter
+   the answer through normal propagation; an incompatible answer fails.
+3. **Leave constraints out of the call key.** Today the call key ignores
+   the caller's constraints and replay filters through the caller's
+   hooks (`TestTablingReplayRespectsCallerConstraints`, correct). Keep
+   that. It is sound and simple; the cost is that a caller's constraint
+   cannot prune the table's evaluation.
+4. **Duplicate check.** Start with variance on the pair (term, normalised
+   residue goals). That is sound but incomplete: the same constraints
+   written two ways are kept as two answers. The better check is
+   entailment between residues, which needs the solver to answer "does
+   this imply that": CLP(Q) can, `dif` mostly, CLP(FD) only weakly. Make
+   it a later, optional step.
+
+### What is missing today
+
+- **No general `attribute_goals` / `copy_term/3` protocol.** Only the
+  CLP(Q) port can export its store as goals
+  (`clausal/logic/clpq/residual_constraints.py`
+  `all_attribute_goals`, `projection.py`). dif, freeze, CLP(FD) and
+  CLP(B) each need a projection hook.
+- **CLP(FD) projection is the hard case.** Domains are trivial;
+  propagators that run through variables outside the answer mean storing
+  goals over those existential variables too. That is sound but bulky,
+  and it weakens the variance check.
+- **Z3 and OR-Tools have no attribute hooks** (A08-F013). A table must
+  refuse their answers with a clear error, never drop the constraint.
+
+### Risks
+
+- **Termination.** A table can grow without end through ever-different
+  residues (`X #> 0`, `X #> 1`, ...) where today it would stop. Under
+  D68, an incomplete table never answers (D74 Q3), so this shows as a
+  hang.
+- **WFS.** A conditional answer then carries a residue as well as its
+  delays. More bookkeeping, no new idea.
+- **A04-F005 (unhashable answers).** The new row representation should
+  solve it too; check.
+
+### Phases
+
+1. A general `attribute_goals` hook per attribute family, and
+   `copy_term/3`. Useful on its own.
+2. Store the residue and re-post it for dif, freeze and CLP(FD) domains;
+   variance duplicate check. Remove the D68 stopgap
+   (`tabling._has_attributed_var` live hand-over and its cut-check
+   record): constrained answers then wait for completion like the rest.
+3. CLP(B) (BDD projection) and CLP(Q) (the port's projection).
+4. Refuse answers from families with no hook, with a clear error.
+5. Optional: entailment-based duplicate check.
+
+The fast path is unchanged: the copy runs only when an answer has an
+attributed variable.
 
 ## Acceptance
 
-- Both xfail tests flip (or, under option (b), are rewritten to assert the
-  explicit error) and first/second queries agree.
+- Both xfail tests in `TestF001TablingReplayDropsConstraints` flip, and
+  first and second queries agree.
+- The two D68 xfails flip:
+  `tests/iso_l3/test_l3_tabled_complete_first.py::
+  test_constrained_answers_pair_with_every_answer` (9 pairs, not 7) and
+  `::test_constrained_answers_pair_inside_a_table_once`.
+- A cut over a constrained tabled call no longer raises
+  `permission_error(cut, incomplete_table, _)`.
+- An answer from a family with no projection hook raises a clear error.
+- docs/tabling.md drops the "constrained answers" limitation (D74 Q1).
