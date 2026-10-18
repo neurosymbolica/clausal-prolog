@@ -58,3 +58,45 @@ writers do not use it. `op/3` called as a goal is refused with a
    than to accept it with a local effect only?
 4. Does ISO/IEC 13211-2 (modules) say anything about operator scope that
    applies here?
+
+## Q2. A `double_quotes` flag that cannot change at run time
+
+**The situation.** The `double_quotes` flag decides what a double-quoted
+token reads as: a list of chars, a list of codes, or an atom. Clausal Prolog
+compiles a whole file before it runs. If the flag could change while a
+program runs, the same `"..."` would mean different terms depending on when
+it was read, and text read before and after the change would not agree. We
+think that is a source of bugs, so the flag never changes at run time.
+
+**What the standard says.** As we read Part 1, `double_quotes` is a
+changeable flag (7.11.2.5) with the values `chars`, `codes` and `atom`, and
+`set_prolog_flag/2` (8.17.1) may set it at any time. The new value then
+governs the double-quoted tokens of everything read afterwards. Ulrich's
+conformity row #170, `set_prolog_flag(double_quotes, chars)`, expects
+success. *(The clause numbers are from memory and have not yet been checked
+against the standard text.)*
+
+**What Clausal Prolog does today** (ruled 2026-10-18).
+
+- `set_prolog_flag(double_quotes, V)` as a goal raises
+  `permission_error(modify, flag, double_quotes)` for every `V`, including
+  the value already in force. So row #170 fails.
+- In Clausal Prolog (`.clausal`), `"..."` always reads as chars. A
+  `:- set_prolog_flag(double_quotes, chars).` directive is accepted but
+  redundant. A directive asking for `codes` or `atom` is refused when the
+  file loads, with the same error term.
+- In an ISO Prolog (`.pl`) file, a `:- set_prolog_flag(double_quotes, V).`
+  directive works as ISO says for the text below it: `chars` (the default),
+  `codes` or `atom`.
+
+**The questions.**
+
+1. May a conforming processor treat `double_quotes` as fixed while a
+   program runs, and settable only by a directive that governs the rest of
+   the text being read? If it may, is `permission_error(modify, flag,
+   double_quotes)` the right error term for the refused goal?
+2. Should setting the flag to the value it already has succeed, as a no-op,
+   even where changing it is refused? Row #170 is exactly that case.
+3. May a dialect fix the flag at `chars` altogether, refusing even the
+   directive for the other values, while staying a conforming processor in
+   its ISO mode?

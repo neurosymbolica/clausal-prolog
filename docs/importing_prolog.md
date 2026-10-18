@@ -969,7 +969,10 @@ follows for `chars` and `atom` (`-double_quotes(atom)`), so
 module mode, so that directive becomes a comment while its literals are
 still emitted as codes. Any other value is refused, naming the line (Scryer:
 `domain_error(flag_value, double_quotes+Value)`). Until 2026-09-29 `codes`
-was only a comment and the strings below it stayed chars.
+was only a comment and the strings below it stayed chars. The mode is
+fixed once the program runs: `set_prolog_flag(double_quotes, _)` as a goal
+is refused ([Prolog Flags](flags.md)). A `.clausal` file has no modes at
+all: its `"…"` is always a string.
 
 Any other `:- set_prolog_flag(Flag, Value).` is carried across as the
 directive [`-set_prolog_flag(Flag, 'Value')`](directives.md#-set_prolog_flag)

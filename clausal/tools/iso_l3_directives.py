@@ -1376,6 +1376,14 @@ def _set_prolog_flag(ctx, args, spans, span):
                 f"{what}: ISO's double_quotes values are chars, codes and "
                 f"atom (domain_error(flag_value, double_quotes+"
                 f"{_show(value)}))", span)
+        if ctx.surface == _SURFACE_CLAUSAL_PROLOG and value != "chars":
+            # Mike 2026-10-18: in Clausal Prolog "..." is always chars; the
+            # three ISO modes are the ISO reader's (.pl). Naming chars
+            # stays accepted (redundant, deprecated).
+            raise _refused(
+                f"{what}: permission_error(modify,flag,double_quotes) -- in "
+                f"Clausal Prolog \"...\" is always chars; the double_quotes "
+                f"modes are an ISO Prolog (.pl) setting", span)
         ctx.dq_mode = value
         ctx._dq_explicit = True
         if value != "codes":

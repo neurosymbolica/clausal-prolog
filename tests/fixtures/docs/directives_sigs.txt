@@ -81,9 +81,9 @@ cited_ok(C) :-
 --8<-- [end:hide]
 
 --8<-- [start:double_quotes]
-:- set_prolog_flag(double_quotes, chars).   % "hello" is the string [h,e,l,l,o] (the default)
-% :- set_prolog_flag(double_quotes, atom).  % "hello" is the atom hello (the opt-out)
+:- set_prolog_flag(double_quotes, chars).   % redundant in .clausal: "hello" is always [h,e,l,l,o]
+% :- set_prolog_flag(double_quotes, atom).  % refused in .clausal; the seam's opt-out is -double_quotes(atom)
 
-greeting("hello").         % a string under chars, an atom under atom
-tag('hello').              % ALWAYS the atom hello, in either mode
+greeting("hello").         % the string "hello"
+tag('hello').              % ALWAYS the atom hello, in every mode
 --8<-- [end:double_quotes]

@@ -30,7 +30,7 @@ truth value is `true` / `false`.
 | `debug` | `off` | `on` / `off` | process | not a flag |
 | `max_arity` | `unbounded` | no | process | `255` |
 | `unknown` | `error` | `error` only | process | `error` (settable) |
-| `double_quotes` | `chars` | by directive | module | `chars` |
+| `double_quotes` | `chars` | `.clausal`: no (always `chars`); `.pl`: by directive | module | `chars` |
 | `assert_creates_dynamic` | `false` (`true` in a `.clausal` or imported `.pl` module) | yes | module | not a flag (ISO assert always creates) |
 | `require_end_module` | `default` | `true` / `false` / `default` | process (file-local as a `.pl` directive) | not a flag |
 
@@ -47,12 +47,20 @@ truth value is `true` / `false`.
   `existence_error(procedure, PI)`. The ISO values `fail` and `warning` are not
   implemented.
 - **`debug`** can be set, but changes nothing yet.
-- **`double_quotes`** is the module's double-quotes mode
-  (`:- set_prolog_flag(double_quotes, Mode).`; in the seam also
-  [`-double_quotes`](directives.md#-double_quotes)):
-  `chars` (the default: `"…"` is a string) or `atom`. It decides how the
-  compiler reads the module's `"…"` literals, so it is set by a directive, never
-  at run time. `codes` is not a mode: the seam spells codes `b"…"`.
+- **`double_quotes`** is the module's double-quotes mode. It decides how the
+  compiler reads the module's `"…"` literals, so it is never changed at run
+  time: `set_prolog_flag(double_quotes, _)` as a goal raises
+  `permission_error(modify,flag,double_quotes)`, even for the value already in
+  force (ruled 2026-10-18: a reading that changes while the program runs is
+  asking for trouble). In a `.clausal` file it is always `chars` (`"…"` is a
+  string); `:- set_prolog_flag(double_quotes, chars).` is accepted but
+  redundant, and any other mode is refused when the file loads. An ISO Prolog
+  (`.pl`) file sets it by directive, as ISO: `chars` (the default), `codes`
+  or `atom`. The seam has the transitional
+  [`-double_quotes`](directives.md#-double_quotes) (`chars` or `atom`; it
+  spells codes `b"…"`). Whether ISO permits the run-time refusal is
+  [Q2](iso_questions_for_ulrich.md#q2-a-double_quotes-flag-that-cannot-change-at-run-time)
+  for Ulrich.
 - **`assert_creates_dynamic`**: see [below](#assert_creates_dynamic).
 - **`require_end_module`**: whether a Prolog module file must end with
   `:- end_module(Name).` -- see

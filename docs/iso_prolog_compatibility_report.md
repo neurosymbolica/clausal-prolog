@@ -224,10 +224,13 @@ is correct (it fails).
 
 - `unknown` is always `error`: `fail` and `warning` are not implemented
   (setting one is `permission_error(modify, flag, unknown)`).
-- `double_quotes` (`chars`, `codes` or `atom`) is set by a directive only.
-  `set_prolog_flag(double_quotes, V)` as a goal gives
+- `double_quotes` is never changed at run time (a design choice, ruled
+  2026-10-18): `set_prolog_flag(double_quotes, V)` as a goal gives
   `permission_error(modify, flag, double_quotes)`, where ISO allows the
-  change (Ulrich #170).
+  change (Ulrich #170). A `.pl` file sets it by directive (`chars`, `codes`
+  or `atom`); in `.clausal` it is always `chars`. The question is
+  [Q2](iso_questions_for_ulrich.md#q2-a-double_quotes-flag-that-cannot-change-at-run-time)
+  for Ulrich.
 
 ### Missing builtins
 

@@ -328,6 +328,28 @@ def test_a_bad_double_quotes_value_is_refused(native):
     assert err.lineno == 2 and "domain_error(flag_value" in str(err)
 
 
+#: Mike 2026-10-18: in Clausal Prolog "..." always reads as chars; the ISO
+#: reader (.pl) keeps ISO's three modes (above). The directive naming chars
+#: stays accepted in .clausal (redundant, deprecated).
+@pytest.mark.parametrize("mode", ["atom", "codes"])
+def test_clausal_prolog_refuses_a_double_quotes_mode_other_than_chars(native, mode):
+    with pytest.raises(SyntaxError) as ei:
+        native.load(f"s2_cpdq_{mode}",
+                    f"a.\n:- set_prolog_flag(double_quotes, {mode}).\n",
+                    suffix=".clausal")
+    err = ei.value
+    assert err.lineno == 2
+    assert "permission_error(modify,flag,double_quotes)" in str(err)
+    assert "always chars" in str(err)
+
+
+def test_clausal_prolog_accepts_double_quotes_chars(native, ans):
+    mod = native.load("s2_cpdq_chars",
+                      ":- set_prolog_flag(double_quotes, chars).\n"
+                      "f(X) :- X = \"ab\".\n", suffix=".clausal")
+    assert ans(mod, "f") == [("$chars", "ab")]
+
+
 def test_another_flag_goes_through_the_seam_handler(native, ans):
     mod = native.load("s2_flag",
                       ":- set_prolog_flag(assert_creates_dynamic, false).\n"

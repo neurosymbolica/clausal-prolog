@@ -77,8 +77,15 @@ def _run(tmp_path, name, frontend, source, *argv):
         cwd=tmp_path, env=env, capture_output=True, text=True, timeout=120)
 
 
-@pytest.mark.parametrize("front", FRONT_ENDS, ids=lambda f: f[1] or "clausal")
-@pytest.mark.parametrize("dq", ["chars", "codes", "atom"])
+#: In .clausal "..." is always chars (Mike 2026-10-18): the codes and atom
+#: modes are the ISO reader's only, and .clausal refuses them at load
+#: (tests/iso_l3/test_l3_s2_directives.py).
+DQ_FRONT_ENDS = [pytest.param(dq, front, id=f"{dq}-{front[1] or 'clausal'}")
+                 for dq in ("chars", "codes", "atom") for front in FRONT_ENDS
+                 if dq == "chars" or front[0].endswith(".pl")]
+
+
+@pytest.mark.parametrize("dq, front", DQ_FRONT_ENDS)
 def test_a_hole_bound_to_a_non_list_is_the_tail(tmp_path, dq, front):
     r = _run(tmp_path, *front, PROGRAM.format(dq=dq))
     assert r.returncode == 0, r.stderr

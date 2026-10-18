@@ -8,10 +8,11 @@ nothing to convert.
 !!! note "Writing a string literal"
     A double-quoted literal `"hello"` is a **string** — the engine default
     since 2026-09-26, as in Scryer and Trealla. A single-quoted `'hello'` is
-    always an atom. A module that still needs the old reading can declare
-    `:- set_prolog_flag(double_quotes, atom).` (in the seam,
-    [`-double_quotes(atom)`](directives.md#-double_quotes)), a temporary
-    per-module setting; `chars` (the default) and `atom` are the only modes.
+    always an atom. In a `.clausal` file `"..."` is always a string: a
+    `double_quotes` mode other than `chars` is refused when the file loads.
+    A seam module that still needs the old reading can declare
+    [`-double_quotes(atom)`](directives.md#-double_quotes), a temporary
+    per-module setting; an ISO Prolog (`.pl`) file has ISO's three modes.
     Code lists have no mode: the seam writes them `b"..."`, a literal
     `.clausal` does not have (see
     [Bytes as Lists of Codes](bytes_as_lists.md)).

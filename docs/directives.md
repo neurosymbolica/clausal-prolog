@@ -784,8 +784,17 @@ Declares how many visible arguments a predicate has and which accumulators/passe
 
 **Seam directive, transitional — scheduled for removal.** It selects what a **double-quoted**
 literal means in the file, and it exists only so modules can migrate one at a
-time. Clausal Prolog spells it with ISO's flag, `:- set_prolog_flag(double_quotes, Mode).`
-(`:- double_quotes(chars).` is `unknown directive double_quotes/1` there):
+time.
+
+In Clausal Prolog (`.clausal`), `"…"` is **always** a string (chars). ISO's
+flag directive `:- set_prolog_flag(double_quotes, chars).` is accepted but
+redundant, and any other mode is refused when the file loads
+(`permission_error(modify,flag,double_quotes)`, ruled 2026-10-18).
+`:- double_quotes(chars).` is `unknown directive double_quotes/1` there. An
+ISO Prolog (`.pl`) file follows ISO: `chars`, `codes` or `atom` by directive
+([Importing Prolog](importing_prolog.md)). In every surface the mode is
+fixed once the program runs: `set_prolog_flag(double_quotes, _)` as a goal
+is refused ([Prolog Flags](flags.md)).
 
 ```text
 --8<-- "tests/fixtures/docs/directives_sigs.txt:double_quotes"
@@ -798,8 +807,8 @@ mode. In the seam, `b"…"`/`b'…'` are always [codes](bytes_as_lists.md); a
 | Mode | `"hello"` means | Status |
 |---|---|---|
 | `chars` | the string `"hello"`, which *is* the list `['h','e','l','l','o']`; `atom("hello")` is false, `string("hello")` is true | the engine **default** (since 2026-09-26, as in Scryer and Trealla) |
-| `atom` | the atom `hello` — the same term as bare `hello` and as `'hello'` | the **opt-out** for a module that still relies on the old reading |
-| `codes` | in `.clausal`, the code list `[104, 101, 108, 108, 111]`, as ISO | **refused** in the seam, where codes are spelled `b"…"`. Any other argument is likewise an error. |
+| `atom` | the atom `hello` — the same term as bare `hello` and as `'hello'` | the **opt-out** for a seam module that still relies on the old reading; ISO's mode in a `.pl` file; **refused** in `.clausal` |
+| `codes` | in a `.pl` file, the code list `[104, 101, 108, 108, 111]`, as ISO | **refused** in `.clausal`, and in the seam, where codes are spelled `b"…"`. Any other argument is likewise an error. |
 
 `-set_prolog_flag(double_quotes, Mode)` is the same directive in the seam, and
 `current_prolog_flag(double_quotes, M)` reports the module's mode
