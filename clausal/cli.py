@@ -139,14 +139,25 @@ def _read_goal(text: str, op_table):
     # Read as a .pl source file is: ISO block comments do not nest.
     reader = PrologReader(op_table=op_table,
                           nested_comments=PL_SOURCE_NESTED_COMMENTS)
-    reader.feed(f"?- {body}.\n")
+    # The goal is read as a whole term, as a toplevel reads it (priority
+    # 1201, ISO 6.2), not as the operand of ?- (at most 1199): a lone
+    # operator atom such as \ is a goal (Ulrich #224). The reader sorts
+    # the term into an item; a directive or query item gets back the
+    # prefix operator it was read with.
+    reader.feed(f"{body}.\n")
     reader.close()
     item = reader.read_term()
-    if item is EOF or type(item).__name__ != "Query":
+    kind = type(item).__name__
+    if item is EOF or kind not in ("Clause", "DCGRule", "Directive", "Query"):
         raise SyntaxError(getattr(item, "message", None)
                           or f"not a goal: {text}")
     if reader.read_term() is not EOF:
         raise SyntaxError(f"more than one goal in: {text}")
+    term = item.term
+    if kind == "Directive":
+        term = (":-", term)
+    elif kind == "Query":
+        term = ("?-", term)
     names = dict(item.var_names) if hasattr(item, "var_names") else {}
     variables: dict[int, Var] = {}
 
@@ -191,7 +202,7 @@ def _read_goal(text: str, op_table):
             out = (".", h, out)
         return out
 
-    goal = build(item.term)
+    goal = build(term)
     shown = [(names.get(i, f"_G{i}"), v) for i, v in variables.items()
              if not names.get(i, "_").startswith("_")]
     return goal, shown

@@ -137,6 +137,27 @@ def test_g_block_comments_do_not_nest(prog, goal):
     assert (r.returncode, r.stdout) == (0, "X = 7.\n"), r.stderr
 
 
+#: Ulrich's conformity row #224: a goal is read as a term, as a toplevel
+#: reads it (priority 1201, ISO 6.2), so a lone operator atom is a goal.
+#: Wrapping it as the operand of the prefix operator ?- refused it.
+def test_g_a_lone_prefix_operator_atom_is_a_goal(prog):
+    r = _clausal(prog, "-g", "\\ .", "prog.clausal")
+    assert r.returncode == 1, r.stderr
+    assert "existence_error(procedure,(\\)/0)" in r.stderr
+
+
+def test_g_an_operator_atom_is_still_no_operand(prog):
+    # ISO 6.3.4.3: a bare operator atom has priority 1201, above any operand.
+    r = _clausal(prog, "-g", "X = \\ .", "prog.clausal")
+    assert r.returncode == 2
+    assert "syntax error" in r.stderr
+
+
+def test_g_a_bracketed_operator_atom_is_an_operand(prog):
+    r = _clausal(prog, "-g", "X = (\\), atom(X)", "prog.clausal")
+    assert r.returncode == 0, r.stderr
+
+
 def test_g_an_unclosed_block_comment_is_still_a_syntax_error(prog):
     r = _clausal(prog, "-g", "X = /* 7", "prog.clausal")
     assert r.returncode == 2
