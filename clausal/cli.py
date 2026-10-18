@@ -89,10 +89,11 @@ def _goal_reader_ops(source: str):
     directives and the operators of the libraries it imports (so a goal can
     use ``#=`` after ``use_module(library(clpz))``)."""
     from clausal.tools.prolog_reader import PrologReader  # noqa: PLC0415
+    from clausal.tools.prolog_tokenizer import PL_SOURCE_NESTED_COMMENTS  # noqa: PLC0415
     from clausal.tools.iso_l3_directives import _LIBRARY_OPS  # noqa: PLC0415
     from clausal.tools.toklex import EOF  # noqa: PLC0415
 
-    reader = PrologReader()
+    reader = PrologReader(nested_comments=PL_SOURCE_NESTED_COMMENTS)
     reader.feed(source)
     reader.close()
     table = reader.op_table
@@ -129,12 +130,15 @@ def _read_goal(text: str, op_table):
     from clausal.pythonic_ast.nodes import StarUnpack  # noqa: PLC0415
     from clausal.logic.variables import Var  # noqa: PLC0415
     from clausal.tools.prolog_reader import PrologReader, VarRef  # noqa: PLC0415
+    from clausal.tools.prolog_tokenizer import PL_SOURCE_NESTED_COMMENTS  # noqa: PLC0415
     from clausal.tools.toklex import EOF  # noqa: PLC0415
 
     body = text.strip()
     if body.endswith("."):
         body = body[:-1]
-    reader = PrologReader(op_table=op_table)
+    # Read as a .pl source file is: ISO block comments do not nest.
+    reader = PrologReader(op_table=op_table,
+                          nested_comments=PL_SOURCE_NESTED_COMMENTS)
     reader.feed(f"?- {body}.\n")
     reader.close()
     item = reader.read_term()

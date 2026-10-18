@@ -128,6 +128,31 @@ def test_g_syntax_error_is_a_usage_error(prog):
     assert "syntax error" in r.stderr
 
 
+#: Ulrich's conformity rows #186 and #187: ISO block comments do not nest,
+#: so ``/*`` closes at the first ``*/``. A -g goal is read as a file is
+#: (``PL_SOURCE_NESTED_COMMENTS``), not with the reader's nesting default.
+@pytest.mark.parametrize("goal", ["X/* /*/=7", "X/*/*/=7"])
+def test_g_block_comments_do_not_nest(prog, goal):
+    r = _clausal(prog, "-g", goal, "prog.clausal")
+    assert (r.returncode, r.stdout) == (0, "X = 7.\n"), r.stderr
+
+
+def test_g_an_unclosed_block_comment_is_still_a_syntax_error(prog):
+    r = _clausal(prog, "-g", "X = /* 7", "prog.clausal")
+    assert r.returncode == 2
+    assert "unterminated block comment" in r.stderr
+
+
+def test_g_reads_the_programs_operators_past_a_comment_with_slash_star(tmp_path):
+    # The program is scanned for its op/3 directives with the file reader's
+    # comment rule too: a nesting scan would read the rest of the file as
+    # comment and miss the operator.
+    (tmp_path / "ops.pl").write_text(
+        "/* a /* b */\n:- op(200, xfx, ~~).\n")
+    r = _clausal(tmp_path, "-g", "_X = (a ~~ b), _X =.. L", "ops.pl")
+    assert (r.returncode, r.stdout) == (0, "L = [~~,a,b].\n"), r.stderr
+
+
 def test_argv_is_what_follows_the_double_dash(prog):
     r = _clausal(prog, "-g", "args(L)", "prog.clausal", "--", "one", "2")
     assert r.returncode == 0, r.stderr
