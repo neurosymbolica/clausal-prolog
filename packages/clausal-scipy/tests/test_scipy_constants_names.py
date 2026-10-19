@@ -113,8 +113,15 @@ def test_imported_by_the_new_names(probe):
 
 
 def _fixture_cases(rel):
+    # A test name is spelled 'name' (an atom) or "name" (a string).
     src = pathlib.Path(_FIXTURES, rel + SEAM_SUFFIX).read_text(encoding="utf-8")
-    return re.findall(r'^test\("([^"]+)"\)', src, re.M)
+    return [a or b for a, b in
+            re.findall(r"""^test\((?:'([^']+)'|"([^"]+)")\)""", src, re.M)]
+
+
+def test_the_doc_sig_tests_fixture_scan_finds_cases():
+    # An empty scan would turn the parametrized test below into one skip.
+    assert len(_fixture_cases(os.path.join("docs", "scipy_constants_sig_tests"))) >= 3
 
 
 @pytest.mark.parametrize("name", _fixture_cases(os.path.join("docs", "scipy_constants_sig_tests")))
