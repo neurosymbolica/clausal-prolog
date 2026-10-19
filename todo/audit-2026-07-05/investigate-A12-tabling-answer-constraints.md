@@ -47,7 +47,8 @@ tabled `tp(N)` over the same findall tables [7, 9], not [9]; pinned xfail in
 tests/iso_l3/test_l3_tabled_complete_first.py::
 test_constrained_answers_pair_with_every_answer and
 ::test_constrained_answers_pair_inside_a_table_once).  Shipped as a
-RECORDED LIMITATION (provisional, pending ruling 2026-10-16, Q1).
+RECORDED LIMITATION (Q1, operator ruling D74, 2026-10-19 (Mike: "all as recommended"):
+ships as a recorded limitation).
 Resolving this todo (storing the residue) removes the stopgap.
 
 ## Can a table store constraints? Yes (plan, 2026-10-18)

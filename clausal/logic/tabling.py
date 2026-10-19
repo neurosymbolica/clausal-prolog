@@ -1824,6 +1824,8 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     # program gives, with the side effects run once
                     # (tests/iso_l3/test_l3_tabled_complete_first.py::
                     # test_a_side_effect_runs_once_and_is_not_reread).
+                    # That is Q4, provisional under operator ruling D74,
+                    # 2026-10-19: accepted and documented, not yet final.
                     changed = False
                 entry._current_delays.clear()
                 # Consumers that suspended during this pass are re-derived by the

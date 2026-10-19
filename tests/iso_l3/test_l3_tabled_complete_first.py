@@ -203,10 +203,12 @@ def test_a_cut_over_a_constrained_answer_raises_and_says_why(native):
 
 # A leader whose pass read only complete tables runs no confirming pass (D68
 # review F3).  The one body that could tell: one that reads its OWN side
-# effects.  Ruled here: the single pass stands -- the answers are the
-# untabled program's, and the assertz runs once per answer (a second pass
-# would add 11 and 12 and assert both again).  Tabling with side effects is
-# undefined in XSB too.
+# effects.  Q4: the single pass stands -- the answers are the untabled
+# program's, and the assertz runs once per answer (a second pass would add
+# 11 and 12 and assert both again).  PROVISIONAL under operator ruling D74,
+# 2026-10-19 (Mike: "all as recommended"): accepted and documented
+# (docs/tabling.md), not yet final.  Tabling with side effects is undefined
+# in XSB too.
 SIDE_EFFECT = """\
 :- dynamic(seen/1).
 :- table(p/1).
@@ -283,7 +285,8 @@ def test_a_fresh_inner_call_through_call_n_and_findall_completes_first(native, a
     assert _t_table(mod).status == "complete"
 
 
-# RECORDED LIMITATION (provisional, pending ruling 2026-10-16, Q1): an
+# RECORDED LIMITATION (Q1; operator ruling D74, 2026-10-19, Mike: "all as
+# recommended" -- shipped as a recorded limitation): an
 # answer carrying a constraint is still handed over as it is derived, before
 # its table completes (a table cannot store the constraint: todo/audit-
 # 2026-07-05/investigate-A12-tabling-answer-constraints.md), so a second call
@@ -300,16 +303,16 @@ tp(N) :- findall(X-Y, (c(X), c(Y)), L), length(L, N).
 """
 
 
-@pytest.mark.xfail(strict=True, reason="recorded limitation (provisional, "
-                   "pending ruling 2026-10-16 Q1): constrained answers stream "
+@pytest.mark.xfail(strict=True, reason="recorded limitation (Q1, operator "
+                   "ruling D74, 2026-10-19): constrained answers stream "
                    "before their table completes; A12-F001")
 def test_constrained_answers_pair_with_every_answer(native, ans):
     mod = native.load("l3_cf_constrained_pairs", CONSTRAINED_PAIRS)
     assert ans(mod, "pairs") == [9]          # today: [7]
 
 
-@pytest.mark.xfail(strict=True, reason="recorded limitation (provisional, "
-                   "pending ruling 2026-10-16 Q1): constrained answers stream "
+@pytest.mark.xfail(strict=True, reason="recorded limitation (Q1, operator "
+                   "ruling D74, 2026-10-19): constrained answers stream "
                    "before their table completes; A12-F001")
 def test_constrained_answers_pair_inside_a_table_once(native, ans):
     mod = native.load("l3_cf_constrained_tp", CONSTRAINED_PAIRS)

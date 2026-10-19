@@ -171,8 +171,8 @@ surface described in [docs/public-api.md](docs/public-api.md).
   depends on a table that is still being computed (a recursive or mutually
   recursive call inside an SCC, which SLG still answers from the
   incomplete table, or an answer carrying a constraint, which a table
-  cannot store and is still handed over as it is derived: provisional,
-  below). Answers then come back in table order.
+  cannot store and is still handed over as it is derived: a recorded
+  limitation, below). Answers then come back in table order.
   Why: a table used to hand back answers while it was still being filled,
   so a second call of the same table in the caller's continuation joined
   against a partial table -- a silent wrong answer:
@@ -201,8 +201,11 @@ surface described in [docs/public-api.md](docs/public-api.md).
   - A leader whose pass read only complete tables, and no conditional
     answer, runs no confirming second pass; a body that reads its own
     `assertz` from the same pass therefore gives the untabled program's
-    answers, with the side effect run once.
-  - **Provisional, pending ruling 2026-10-16** (docs/tabling.md):
+    answers, with the side effect run once (Q4). Provisional under
+    operator ruling D74, 2026-10-19 (Mike: "all as recommended"): accepted
+    and documented, not yet final.
+  - **Ruled: operator ruling D74, 2026-10-19 (Mike: "all as
+    recommended")** (docs/tabling.md):
     (Q1) an answer carrying a constraint is still handed over as it is
     derived, before its table completes -- a recorded limitation: with
     `c(X) :- dif(X, a). c(1). c(2).` tabled, `findall(X-Y, (c(X), c(Y)),
@@ -211,7 +214,10 @@ surface described in [docs/public-api.md](docs/public-api.md).
     evaluation reaches the caller with no answers before it (XSB and SWI do
     the same; tabled Scryer swallows it); (Q3) a table that never completes
     never answers -- `once/1` over an unbounded tabled generator hangs, its
-    table growing (todo/tabled-streaming-mode-per-predicate-2026-10-16.md).
+    table growing; an opt-in streaming mode stays a todo
+    (todo/tabled-streaming-mode-per-predicate-2026-10-16.md).  Q1 ships as
+    a recorded limitation (xfail-pinned); Q2 and Q3 are accepted as
+    documented.
   - A first answer costs the whole table.
 
 - **`clausal.logic.variables.pending_or_once` yields `range(1)` when nothing

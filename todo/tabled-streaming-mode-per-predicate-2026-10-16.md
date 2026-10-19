@@ -16,8 +16,9 @@ nat(N) :- nat(M), N is M + 1.
 ?- once(nat(X)).      % before D68: X = 0; since D68: hangs
 ```
 
-The interim answer (provisional, pending ruling 2026-10-16, Q3) documents it
-(docs/tabling.md): bound the generator, or do not table it.
+Q3 is accepted and documented (operator ruling D74, 2026-10-19 (Mike: "all as recommended"); docs/tabling.md):
+bound the generator, or do not table it.  This todo stays open for the
+optional streaming mode.
 
 ## Candidate
 
