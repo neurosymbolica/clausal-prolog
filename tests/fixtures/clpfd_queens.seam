@@ -1,4 +1,3 @@
--double_quotes(atom)
 safe_queens(N, QUEENS) <- (
     in_domain(QUEENS, 1, N),
     all_different(QUEENS),
@@ -26,5 +25,5 @@ safe_from(QUEEN, [HEAD, *TAIL], DISTANCE) <- (
 )
 
 
-test("queens 1") <- (length(QUEENS, 1), safe_queens(1, QUEENS), length(QUEENS, 1))  # nv
-test("queens 4 valid") <- (length(QUEENS, 4), safe_queens(4, QUEENS), length(QUEENS, 4))  # nv
+test('queens 1') <- (length(QUEENS, 1), safe_queens(1, QUEENS), length(QUEENS, 1))  # nv
+test('queens 4 valid') <- (length(QUEENS, 4), safe_queens(4, QUEENS), length(QUEENS, 4))  # nv

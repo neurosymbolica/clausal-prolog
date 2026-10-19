@@ -1,4 +1,3 @@
--double_quotes(atom)
 -private([hello, th])
 -translations(th, {
     append(LIST, ELEMENT, NEWLIST): ต่อท้าย(รายการ, สมาชิก, รายการใหม่),
@@ -11,16 +10,16 @@
     hello: สวัสดี,
 })
 
-greeting(hello, "world"),
-greeting("Mike", "hi"),
+greeting(hello, 'world'),
+greeting('Mike', 'hi'),
 
-test("translate produces string") <- (
-    translate(th, greeting(hello, "world"), STRING),
+test('translate produces string') <- (
+    translate(th, greeting(hello, 'world'), STRING),
     is_str(STRING)
 )  # nv
 
-test("translate produces nonempty") <- (
-    translate(th, greeting(hello, "world"), STRING),
+test('translate produces nonempty') <- (
+    translate(th, greeting(hello, 'world'), STRING),
     length(STRING, LENGTH),
     LENGTH > 0
 )  # nv

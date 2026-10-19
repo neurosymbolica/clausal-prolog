@@ -1,4 +1,3 @@
--double_quotes(atom)
 -import_from(scipy_interpolate, [make_spline, make_cubic, make_pchip,
     make_akima, make_regular_grid,
     eval_spline, eval_regular_grid,
@@ -6,7 +5,7 @@
     free])
 
 # make_cubic + eval_spline: x^2 should pass through knots
-test("cubic spline eval at knots") <- (
+test('cubic spline eval at knots') <- (
     make_cubic([0.0, 1.0, 2.0, 3.0, 4.0], [0.0, 1.0, 4.0, 9.0, 16.0], H),
     eval_spline(H, [1.0, 2.0, 3.0], VALS),
     V1 is ++(float(VALS[0])),
@@ -18,7 +17,7 @@ test("cubic spline eval at knots") <- (
     free(H))  # nv
 
 # make_spline: BSpline through 5 points, eval at endpoints
-test("make interp spline eval endpoints") <- (
+test('make interp spline eval endpoints') <- (
     make_spline([0.0, 1.0, 2.0, 3.0, 4.0], [0.0, 1.0, 4.0, 9.0, 16.0], H),
     eval_spline(H, [0.0, 4.0], VALS),
     V0 is ++(float(VALS[0])),
@@ -28,7 +27,7 @@ test("make interp spline eval endpoints") <- (
     free(H))  # nv
 
 # make_spline with explicit k=3
-test("make interp spline with k") <- (
+test('make interp spline with k') <- (
     make_spline([0.0, 1.0, 2.0, 3.0, 4.0], [0.0, 1.0, 4.0, 9.0, 16.0], 3, H),
     eval_spline(H, [2.0], VALS),
     V2 is ++(float(VALS[0])),
@@ -36,7 +35,7 @@ test("make interp spline with k") <- (
     free(H))  # nv
 
 # make_pchip: monotone cubic through x^2, check endpoints
-test("pchip eval at endpoints") <- (
+test('pchip eval at endpoints') <- (
     make_pchip([0.0, 1.0, 2.0, 3.0, 4.0], [0.0, 1.0, 4.0, 9.0, 16.0], H),
     eval_spline(H, [0.0, 4.0], VALS),
     V0 is ++(float(VALS[0])),
@@ -46,7 +45,7 @@ test("pchip eval at endpoints") <- (
     free(H))  # nv
 
 # make_akima: eval at x=2, y should be 4
-test("akima eval at interior point") <- (
+test('akima eval at interior point') <- (
     make_akima([0.0, 1.0, 2.0, 3.0, 4.0], [0.0, 1.0, 4.0, 9.0, 16.0], H),
     eval_spline(H, [2.0], VALS),
     V2 is ++(float(VALS[0])),
@@ -54,7 +53,7 @@ test("akima eval at interior point") <- (
     free(H))  # nv
 
 # spline_integral: integral of x^2 from 0 to 3 = 9
-test("spline integral of x squared") <- (
+test('spline integral of x squared') <- (
     make_cubic([0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
               [0.0, 1.0, 4.0, 9.0, 16.0, 25.0], H),
     spline_integral(H, 0.0, 3.0, AREA),
@@ -63,7 +62,7 @@ test("spline integral of x squared") <- (
     free(H))  # nv
 
 # spline_integral: integral of constant 1 from 0 to 5 = 5
-test("spline integral of constant") <- (
+test('spline integral of constant') <- (
     make_cubic([0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
               [1.0, 1.0, 1.0, 1.0, 1.0, 1.0], H),
     spline_integral(H, 0.0, 5.0, AREA),
@@ -72,7 +71,7 @@ test("spline integral of constant") <- (
     free(H))  # nv
 
 # spline_derivative: d/dx x^2 at x=2 should be ~4
-test("spline derivative of x squared") <- (
+test('spline derivative of x squared') <- (
     make_cubic([0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
               [0.0, 1.0, 4.0, 9.0, 16.0, 25.0, 36.0, 49.0, 64.0, 81.0], H),
     spline_derivative(H, HD),
@@ -83,7 +82,7 @@ test("spline derivative of x squared") <- (
     free(HD))  # nv
 
 # spline_derivative with explicit order
-test("spline derivative order 1") <- (
+test('spline derivative order 1') <- (
     make_cubic([0.0, 1.0, 2.0, 3.0, 4.0],
               [0.0, 1.0, 4.0, 9.0, 16.0], H),
     spline_derivative(H, 1, HD),
@@ -94,7 +93,7 @@ test("spline derivative order 1") <- (
     free(HD))  # nv
 
 # spline_roots: y = x - 2, root at x=2
-test("spline roots linear") <- (
+test('spline roots linear') <- (
     make_cubic([0.0, 2.0, 4.0], [-2.0, 0.0, 2.0], H),
     spline_roots(H, ROOTS),
     NROOTS is ++(len(ROOTS)),
@@ -104,6 +103,6 @@ test("spline roots linear") <- (
     free(H))  # nv
 
 # free: handle is released (just checks it succeeds)
-test("free handle succeeds") <- (
+test('free handle succeeds') <- (
     make_spline([0.0, 1.0, 2.0, 3.0, 4.0], [0.0, 1.0, 4.0, 9.0, 16.0], H),
     free(H))  # nv

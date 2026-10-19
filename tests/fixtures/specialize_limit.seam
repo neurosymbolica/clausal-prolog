@@ -1,12 +1,11 @@
 # Test fixture: specialize solve_limit with natnum program.
--double_quotes(atom)
 
 -import_from(clausal.examples.metainterpreters, [solve_limit])
 
 natnum_program(PROGRAM) <- (
     PROGRAM is [
-        [["natnum", 0], []],
-        [["natnum", ["s", X]], [["natnum", X]]]
+        [['natnum', 0], []],
+        [['natnum', ['s', X]], [['natnum', X]]]
     ]
 )
 
@@ -14,22 +13,22 @@ natnum_program(PROGRAM) <- (
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
-test("limit natnum(0) depth 1 ok") <- (
-    solve_limit_natnum([["natnum", 0]], 1)
+test('limit natnum(0) depth 1 ok') <- (
+    solve_limit_natnum([['natnum', 0]], 1)
 )  # nv
 
-test("limit natnum(s(0)) depth 1 fails") <- (
-    not solve_limit_natnum([["natnum", ["s", 0]]], 1)
+test('limit natnum(s(0)) depth 1 fails') <- (
+    not solve_limit_natnum([['natnum', ['s', 0]]], 1)
 )  # nv
 
-test("limit natnum(s(0)) depth 2 ok") <- (
-    solve_limit_natnum([["natnum", ["s", 0]]], 2)
+test('limit natnum(s(0)) depth 2 ok') <- (
+    solve_limit_natnum([['natnum', ['s', 0]]], 2)
 )  # nv
 
-test("limit natnum(s(s(0))) depth 2 fails") <- (
-    not solve_limit_natnum([["natnum", ["s", ["s", 0]]]], 2)
+test('limit natnum(s(s(0))) depth 2 fails') <- (
+    not solve_limit_natnum([['natnum', ['s', ['s', 0]]]], 2)
 )  # nv
 
-test("limit natnum(s(s(0))) depth 3 ok") <- (
-    solve_limit_natnum([["natnum", ["s", ["s", 0]]]], 3)
+test('limit natnum(s(s(0))) depth 3 ok') <- (
+    solve_limit_natnum([['natnum', ['s', ['s', 0]]]], 3)
 )  # nv

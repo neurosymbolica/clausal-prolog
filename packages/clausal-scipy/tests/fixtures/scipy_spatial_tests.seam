@@ -1,4 +1,3 @@
--double_quotes(atom)
 -import_from(scipy_spatial, [
     cross_distance, pairwise_distance, square_form, point_distance,
     make_kd_tree, kd_tree_query, kd_tree_query_ball, kd_tree_query_pairs,
@@ -8,36 +7,36 @@
     free
 ])
 
-test("cross distance shape") <- (
+test('cross distance shape') <- (
     cross_distance([[0.0, 0.0], [1.0, 0.0]], [[0.0, 1.0]], D),
     ROWS is ++(D.shape[0]),
     COLS is ++(D.shape[1]),
     ROWS == 2,
     COLS == 1)  # nv
 
-test("cross distance euclidean known value") <- (
+test('cross distance euclidean known value') <- (
     cross_distance([[0.0, 0.0]], [[3.0, 4.0]], 'euclidean', D),
     V is ++(float(D[0, 0])),
     ++(abs(V - 5.0)) < 1e-10)  # nv
 
-test("cross distance with kwargs") <- (
+test('cross distance with kwargs') <- (
     cross_distance([[0.0, 0.0]], [[1.0, 0.0], [0.0, 1.0]], 'minkowski', {'p': 1}, D),
     V0 is ++(float(D[0, 0])),
     V1 is ++(float(D[0, 1])),
     ++(abs(V0 - 1.0)) < 1e-10,
     ++(abs(V1 - 1.0)) < 1e-10)  # nv
 
-test("pairwise distance length") <- (
+test('pairwise distance length') <- (
     pairwise_distance([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], D),
     LEN is ++(len(D)),
     LEN == 3)  # nv
 
-test("pairwise distance euclidean 3-4-5") <- (
+test('pairwise distance euclidean 3-4-5') <- (
     pairwise_distance([[0.0, 0.0], [3.0, 4.0]], 'euclidean', D),
     V is ++(float(D[0])),
     ++(abs(V - 5.0)) < 1e-10)  # nv
 
-test("squareform round-trip") <- (
+test('squareform round-trip') <- (
     pairwise_distance([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], 'euclidean', CONDENSED),
     square_form(CONDENSED, SQUARE),
     ROWS is ++(SQUARE.shape[0]),
@@ -45,89 +44,89 @@ test("squareform round-trip") <- (
     ROWS == 3,
     COLS == 3)  # nv
 
-test("point distance euclidean 3-4-5") <- (
+test('point distance euclidean 3-4-5') <- (
     point_distance('euclidean', [0.0, 0.0], [3.0, 4.0], D),
     ++(abs(D - 5.0)) < 1e-10)  # nv
 
-test("point distance cityblock") <- (
+test('point distance cityblock') <- (
     point_distance('cityblock', [0.0, 0.0], [1.0, 2.0], D),
     ++(abs(D - 3.0)) < 1e-10)  # nv
 
-test("kdtree make returns handle") <- (
+test('kdtree make returns handle') <- (
     make_kd_tree([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], H),
     ++(isinstance(H, int)),
     free(H))  # nv
 
-test("kdtree query nearest neighbour") <- (
+test('kdtree query nearest neighbour') <- (
     make_kd_tree([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], H),
     kd_tree_query(H, [[0.9, 0.0]], R),
     IDX is ++(int(R['indices'][0])),
     IDX == 1,
     free(H))  # nv
 
-test("kdtree query k=2") <- (
+test('kdtree query k=2') <- (
     make_kd_tree([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], H),
     kd_tree_query(H, [[0.0, 0.0]], 2, R),
     DISTS is ++(R['distances'][0]),
     ++(float(DISTS[0])) < 1e-10,
     free(H))  # nv
 
-test("kdtree query ball finds neighbours in radius") <- (
+test('kdtree query ball finds neighbours in radius') <- (
     make_kd_tree([[0.0, 0.0], [0.5, 0.0], [2.0, 0.0]], H),
     kd_tree_query_ball(H, [0.0, 0.0], 1.0, R),
     LEN is ++(len(R)),
     ++(LEN >= 2),
     free(H))  # nv
 
-test("convex hull make returns handle") <- (
+test('convex hull make returns handle') <- (
     make_convex_hull([[0.0,0.0],[1.0,0.0],[0.0,1.0],[1.0,1.0]], H),
     ++(isinstance(H, int)),
     free(H))  # nv
 
-test("convex hull vertices count") <- (
+test('convex hull vertices count') <- (
     make_convex_hull([[0.0,0.0],[1.0,0.0],[0.0,1.0],[1.0,1.0]], H),
     convex_hull_attr(H, 'vertices', V),
     ++(len(V) >= 3),
     free(H))  # nv
 
-test("convex hull area unit square") <- (
+test('convex hull area unit square') <- (
     make_convex_hull([[0.0,0.0],[1.0,0.0],[0.0,1.0],[1.0,1.0]], H),
     convex_hull_attr(H, 'area', A),
     ++(abs(A - 4.0)) < 1e-6,
     free(H))  # nv
 
-test("delaunay make returns handle") <- (
+test('delaunay make returns handle') <- (
     make_delaunay([[0.0,0.0],[1.0,0.0],[0.5,1.0]], H),
     ++(isinstance(H, int)),
     free(H))  # nv
 
-test("delaunay find simplex interior point") <- (
+test('delaunay find simplex interior point') <- (
     make_delaunay([[0.0,0.0],[1.0,0.0],[0.5,1.0]], H),
     delaunay_find_simplex(H, [[0.5, 0.3]], IDX),
     ++(int(IDX[0]) >= 0),
     free(H))  # nv
 
-test("delaunay find simplex exterior point returns -1") <- (
+test('delaunay find simplex exterior point returns -1') <- (
     make_delaunay([[0.0,0.0],[1.0,0.0],[0.5,1.0]], H),
     delaunay_find_simplex(H, [[5.0, 5.0]], IDX),
     ++(int(IDX[0]) == -1),
     free(H))  # nv
 
-test("rotation from rotvec apply identity") <- (
+test('rotation from rotvec apply identity') <- (
     make_rotation('rotvec', [0.0, 0.0, 0.0], H),
     rotation_apply(H, [1.0, 0.0, 0.0], OUT),
     ++(abs(float(OUT[0]) - 1.0)) < 1e-10,
     ++(abs(float(OUT[1]))) < 1e-10,
     free(H))  # nv
 
-test("rotation as quat from identity rotvec") <- (
+test('rotation as quat from identity rotvec') <- (
     make_rotation('rotvec', [0.0, 0.0, 0.0], H),
     rotation_as(H, 'quat', Q),
     LEN is ++(len(Q)),
     LEN == 4,
     free(H))  # nv
 
-test("rotation as matrix from identity") <- (
+test('rotation as matrix from identity') <- (
     make_rotation('rotvec', [0.0, 0.0, 0.0], H),
     rotation_as(H, 'matrix', M),
     ROWS is ++(M.shape[0]),
@@ -136,7 +135,7 @@ test("rotation as matrix from identity") <- (
     COLS == 3,
     free(H))  # nv
 
-test("rotation inverse of identity is identity") <- (
+test('rotation inverse of identity is identity') <- (
     make_rotation('rotvec', [0.0, 0.0, 0.0], H),
     rotation_inverse(H, HINV),
     rotation_apply(HINV, [1.0, 0.0, 0.0], OUT),
@@ -144,7 +143,7 @@ test("rotation inverse of identity is identity") <- (
     free(H),
     free(HINV))  # nv
 
-test("rotation compose two 90 degree z rotations") <- (
+test('rotation compose two 90 degree z rotations') <- (
     make_rotation('rotvec', [0.0, 0.0, 1.5707963267948966], H1),
     make_rotation('rotvec', [0.0, 0.0, 1.5707963267948966], H2),
     rotation_compose(H1, H2, HC),
@@ -154,6 +153,6 @@ test("rotation compose two 90 degree z rotations") <- (
     free(H2),
     free(HC))  # nv
 
-test("free handle succeeds") <- (
+test('free handle succeeds') <- (
     make_kd_tree([[0.0, 0.0], [1.0, 0.0]], H),
     free(H))  # nv

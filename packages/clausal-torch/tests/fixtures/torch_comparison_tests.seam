@@ -1,4 +1,3 @@
--double_quotes(atom)
 -import_from(torch, [
     tensor, zeros, ones, shape, tensor_list,
     eq, ne, gt, lt, ge, le, equal, allclose,
@@ -10,42 +9,42 @@
 
 # --- Element-wise comparisons ---
 
-test("eq element-wise") <- (
+test('eq element-wise') <- (
     tensor([1.0, 2.0, 3.0], A),
     tensor([1.0, 0.0, 3.0], B),
     eq(A, B, C),
     tensor_list(C, [True, False, True])
 )  # nv
 
-test("ne element-wise") <- (
+test('ne element-wise') <- (
     tensor([1.0, 2.0, 3.0], A),
     tensor([1.0, 0.0, 3.0], B),
     ne(A, B, C),
     tensor_list(C, [False, True, False])
 )  # nv
 
-test("gt element-wise") <- (
+test('gt element-wise') <- (
     tensor([1.0, 5.0, 3.0], A),
     tensor([2.0, 2.0, 3.0], B),
     gt(A, B, C),
     tensor_list(C, [False, True, False])
 )  # nv
 
-test("lt element-wise") <- (
+test('lt element-wise') <- (
     tensor([1.0, 5.0, 3.0], A),
     tensor([2.0, 2.0, 3.0], B),
     lt(A, B, C),
     tensor_list(C, [True, False, False])
 )  # nv
 
-test("ge element-wise") <- (
+test('ge element-wise') <- (
     tensor([1.0, 5.0, 3.0], A),
     tensor([2.0, 2.0, 3.0], B),
     ge(A, B, C),
     tensor_list(C, [False, True, True])
 )  # nv
 
-test("le element-wise") <- (
+test('le element-wise') <- (
     tensor([1.0, 5.0, 3.0], A),
     tensor([2.0, 2.0, 3.0], B),
     le(A, B, C),
@@ -54,31 +53,31 @@ test("le element-wise") <- (
 
 # --- Check predicates: equal, allclose ---
 
-test("equal check succeeds") <- (
+test('equal check succeeds') <- (
     tensor([1.0, 2.0], A),
     tensor([1.0, 2.0], B),
     equal(A, B)
 )  # nv
 
-test("equal check fails") <- (
+test('equal check fails') <- (
     tensor([1.0, 2.0], A),
     tensor([1.0, 3.0], B),
     not(equal(A, B))
 )  # nv
 
-test("allclose check succeeds") <- (
+test('allclose check succeeds') <- (
     tensor([1.0, 2.0], A),
     tensor([1.0, 2.0], B),
     allclose(A, B)
 )  # nv
 
-test("allclose check with tolerance") <- (
+test('allclose check with tolerance') <- (
     tensor([1.0, 2.0], A),
     tensor([1.01, 2.01], B),
     allclose(A, B, 0.1, 0.0)
 )  # nv
 
-test("allclose check fails") <- (
+test('allclose check fails') <- (
     tensor([1.0, 2.0], A),
     tensor([1.0, 3.0], B),
     not(allclose(A, B))
@@ -86,27 +85,27 @@ test("allclose check fails") <- (
 
 # --- Logical operations ---
 
-test("logical_and") <- (
+test('logical_and') <- (
     tensor([True, True, False, False], A),
     tensor([True, False, True, False], B),
     logical_and(A, B, C),
     tensor_list(C, [True, False, False, False])
 )  # nv
 
-test("logical_or") <- (
+test('logical_or') <- (
     tensor([True, True, False, False], A),
     tensor([True, False, True, False], B),
     logical_or(A, B, C),
     tensor_list(C, [True, True, True, False])
 )  # nv
 
-test("logical_not") <- (
+test('logical_not') <- (
     tensor([True, False, True], A),
     logical_not(A, B),
     tensor_list(B, [False, True, False])
 )  # nv
 
-test("logical_xor") <- (
+test('logical_xor') <- (
     tensor([True, True, False, False], A),
     tensor([True, False, True, False], B),
     logical_xor(A, B, C),
@@ -115,39 +114,39 @@ test("logical_xor") <- (
 
 # --- any / all check predicates ---
 
-test("any succeeds when some True") <- (
+test('any succeeds when some True') <- (
     tensor([False, True, False], T),
     any(T)
 )  # nv
 
-test("any fails when all False") <- (
+test('any fails when all False') <- (
     tensor([False, False, False], T),
     not(any(T))
 )  # nv
 
-test("all succeeds when all True") <- (
+test('all succeeds when all True') <- (
     tensor([True, True, True], T),
     all(T)
 )  # nv
 
-test("all fails when some False") <- (
+test('all fails when some False') <- (
     tensor([True, False, True], T),
     not(all(T))
 )  # nv
 
-test("any with dim") <- (
+test('any with dim') <- (
     tensor([[False, True], [False, False]], T),
     any(T, 1)
 )  # nv
 
-test("all with dim") <- (
+test('all with dim') <- (
     tensor([[True, True], [True, True]], T),
     all(T, 0)
 )  # nv
 
 # --- Selection ---
 
-test("where selects conditionally") <- (
+test('where selects conditionally') <- (
     tensor([1.0, 2.0, 3.0], X),
     tensor([10.0, 20.0, 30.0], Y),
     tensor([True, False, True], COND),
@@ -155,14 +154,14 @@ test("where selects conditionally") <- (
     tensor_list(R, [1.0, 20.0, 3.0])
 )  # nv
 
-test("masked_select") <- (
+test('masked_select') <- (
     tensor([1.0, 2.0, 3.0, 4.0], T),
     tensor([True, False, True, False], MASK),
     masked_select(T, MASK, R),
     tensor_list(R, [1.0, 3.0])
 )  # nv
 
-test("index_select") <- (
+test('index_select') <- (
     tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], T),
     tensor([0, 2], IDX),
     index_select(T, 0, IDX, R),
@@ -170,14 +169,14 @@ test("index_select") <- (
     tensor_list(R, [[1.0, 2.0], [5.0, 6.0]])
 )  # nv
 
-test("gather along dim") <- (
+test('gather along dim') <- (
     tensor([[1.0, 2.0], [3.0, 4.0]], T),
     tensor([[0, 1], [1, 0]], IDX),
     gather(T, 1, IDX, R),
     tensor_list(R, [[1.0, 2.0], [4.0, 3.0]])
 )  # nv
 
-test("scatter into zeros") <- (
+test('scatter into zeros') <- (
     zeros([2, 3], T),
     tensor([[0, 1, 2], [0, 1, 2]], IDX),
     tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], SRC),

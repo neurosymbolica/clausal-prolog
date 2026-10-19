@@ -1,5 +1,4 @@
 # Companion tests for docs/torch_distributions.md signature blocks.
--double_quotes(atom)
 -import_from(torch, [tensor, shape, tensor_list, allclose])
 -import_from(torch_distributions, [
     distribution, make_distribution,
@@ -8,47 +7,47 @@
     cdf, icdf
 ])
 
-test("distribution registry") <- (
+test('distribution registry') <- (
     findall(N, distribution(N, _), NS),
-    in_("Normal", NS)
+    in_('Normal', NS)
 )  # nv
 
-test("make_distribution normal") <- (
-    make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, _)
+test('make_distribution normal') <- (
+    make_distribution('Normal', {'loc': 0.0, 'scale': 1.0}, _)
 )  # nv
 
-test("make_distribution categorical") <- (
+test('make_distribution categorical') <- (
     tensor([0.25, 0.25, 0.25, 0.25], P),
-    make_distribution("Categorical", {"probs": P}, _)
+    make_distribution('Categorical', {'probs': P}, _)
 )  # nv
 
-test("mean property") <- (
-    make_distribution("Normal", {"loc": 2.0, "scale": 1.0}, D),
+test('mean property') <- (
+    make_distribution('Normal', {'loc': 2.0, 'scale': 1.0}, D),
     mean(D, M),
     tensor_list(M, 2.0)
 )  # nv
 
-test("entropy exists") <- (
-    make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
+test('entropy exists') <- (
+    make_distribution('Normal', {'loc': 0.0, 'scale': 1.0}, D),
     entropy(D, H),
     shape(H, [])
 )  # nv
 
-test("sample with shape") <- (
-    make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
+test('sample with shape') <- (
+    make_distribution('Normal', {'loc': 0.0, 'scale': 1.0}, D),
     sample(D, [100], S),
     shape(S, [100])
 )  # nv
 
-test("log_prob computation") <- (
-    make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
+test('log_prob computation') <- (
+    make_distribution('Normal', {'loc': 0.0, 'scale': 1.0}, D),
     tensor(0.0, V),
     log_prob(D, V, LP),
     shape(LP, [])
 )  # nv
 
-test("cdf icdf roundtrip") <- (
-    make_distribution("Normal", {"loc": 0.0, "scale": 1.0}, D),
+test('cdf icdf roundtrip') <- (
+    make_distribution('Normal', {'loc': 0.0, 'scale': 1.0}, D),
     tensor(0.5, V),
     cdf(D, V, P),
     icdf(D, P, V2),

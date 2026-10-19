@@ -1,17 +1,16 @@
--double_quotes(atom)
 -import_from(scipy_fft, [fft_transform, fft_transform2d, fft_transformnd,
                           real_fft, discrete_cosine_transform,
                           fft_frequencies, real_fft_frequencies, fft_shift])
 
 # fft_transform of constant signal [1,1,1,1] - DC component should be 4.0
-test("fft constant signal") <- (
+test('fft constant signal') <- (
     fft_transform([1.0, 1.0, 1.0, 1.0], RESULT),
     DC is ++(abs(complex(RESULT[0]))),
     DIFF is ++(abs(float(DC) - 4.0)),
     DIFF < 1e-10)  # nv
 
 # fft_transform round-trip: backward direction should recover original
-test("fft round trip") <- (
+test('fft round trip') <- (
     X is [1.0, 2.0, 3.0, 4.0],
     fft_transform(X, SPECTRUM),
     fft_transform(RECOVERED, SPECTRUM),
@@ -19,13 +18,13 @@ test("fft round trip") <- (
     ERR < 1e-10)  # nv
 
 # real_fft: output length for 4-point input is 3 (n//2+1)
-test("real fft output length") <- (
+test('real fft output length') <- (
     real_fft([1.0, 0.0, 0.0, 0.0], RESULT),
     LEN is ++(len(RESULT)),
     LEN == 3)  # nv
 
 # fft_frequencies: fftfreq(4) first element is 0.0, second is 0.25
-test("fft frequencies length 4") <- (
+test('fft frequencies length 4') <- (
     fft_frequencies(4, FREQS),
     F0 is ++(float(FREQS[0])),
     F1 is ++(float(FREQS[1])),
@@ -34,7 +33,7 @@ test("fft frequencies length 4") <- (
     DIFF < 1e-10)  # nv
 
 # real_fft_frequencies: 8-point real FFT gives 5 frequencies, first is 0.0
-test("real fft frequencies non negative") <- (
+test('real fft frequencies non negative') <- (
     real_fft_frequencies(8, FREQS),
     LEN is ++(len(FREQS)),
     LEN == 5,
@@ -42,7 +41,7 @@ test("real fft frequencies non negative") <- (
     F0 == 0.0)  # nv
 
 # fft_shift round-trip via backward direction
-test("fft shift and inverse") <- (
+test('fft shift and inverse') <- (
     X is [0.0, 1.0, 2.0, 3.0],
     fft_shift(X, SHIFTED),
     fft_shift(RECOVERED, SHIFTED),
@@ -53,7 +52,7 @@ test("fft shift and inverse") <- (
     DIFF < 1e-10)  # nv
 
 # discrete_cosine_transform round-trip via backward direction
-test("dct round trip") <- (
+test('dct round trip') <- (
     X is [1.0, 2.0, 3.0, 4.0],
     discrete_cosine_transform(X, COEFFS),
     discrete_cosine_transform(RECOVERED, COEFFS),

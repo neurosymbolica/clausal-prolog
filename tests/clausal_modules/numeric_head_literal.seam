@@ -1,7 +1,6 @@
 # Fixture for the numeric-head-literal var-binding bug.
 # A numeric literal in a ruled-clause head must bind into a caller's Var
 # (output mode), exactly like a string/atom literal or a bare fact.
--double_quotes(atom)
 
 fine_int(DAYS, 20000) <- (DAYS >= 40)
 
@@ -25,4 +24,4 @@ flag_n(N, None) <- (N >= 0)
 # control: bare fact (already worked) and string literal head (already worked)
 fact_int(50, 20000),
 
-elig_dq(P, "yes") <- (P == "alice")
+elig_dq(P, 'yes') <- (P == 'alice')

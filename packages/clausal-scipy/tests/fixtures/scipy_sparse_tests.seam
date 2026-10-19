@@ -1,4 +1,3 @@
--double_quotes(atom)
 -import_from(scipy_sparse, [
     make_csr, make_csc, make_coo, make_diagonals, make_eye,
     to_dense, from_dense, shape, nonzero_count,
@@ -6,7 +5,7 @@
     free
 ])
 
-test("makecsr returns handle") <- (
+test('makecsr returns handle') <- (
     DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
     IDX is [0, 2, 1, 0, 2],
     PTR is [0, 2, 3, 5],
@@ -14,7 +13,7 @@ test("makecsr returns handle") <- (
     ++(isinstance(H, int)),
     free(H))  # nv
 
-test("makecsr nnz correct") <- (
+test('makecsr nnz correct') <- (
     DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
     IDX is [0, 2, 1, 0, 2],
     PTR is [0, 2, 3, 5],
@@ -23,7 +22,7 @@ test("makecsr nnz correct") <- (
     NNZ == 5,
     free(H))  # nv
 
-test("makecsc returns handle") <- (
+test('makecsc returns handle') <- (
     DATA is [1.0, 4.0, 3.0, 2.0, 5.0],
     IDX is [0, 2, 1, 0, 2],
     PTR is [0, 2, 3, 5],
@@ -31,7 +30,7 @@ test("makecsc returns handle") <- (
     ++(isinstance(H, int)),
     free(H))  # nv
 
-test("makecoo returns handle") <- (
+test('makecoo returns handle') <- (
     DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
     ROW is [0, 0, 1, 2, 2],
     COL is [0, 2, 1, 0, 2],
@@ -39,7 +38,7 @@ test("makecoo returns handle") <- (
     ++(isinstance(H, int)),
     free(H))  # nv
 
-test("makecoo todense round-trip") <- (
+test('makecoo todense round-trip') <- (
     DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
     ROW is [0, 0, 1, 2, 2],
     COL is [0, 2, 1, 0, 2],
@@ -52,7 +51,7 @@ test("makecoo todense round-trip") <- (
     ++(abs(V11 - 3.0)) < 1e-10,
     free(H))  # nv
 
-test("makediags main diagonal") <- (
+test('makediags main diagonal') <- (
     DIAG is [1.0, 2.0, 3.0],
     make_diagonals(DIAG, H),
     to_dense(H, D),
@@ -64,7 +63,7 @@ test("makediags main diagonal") <- (
     ++(abs(V2 - 3.0)) < 1e-10,
     free(H))  # nv
 
-test("makeeye 3x3 identity") <- (
+test('makeeye 3x3 identity') <- (
     make_eye(3, H),
     to_dense(H, D),
     V00 is ++(float(D[0, 0])),
@@ -77,13 +76,13 @@ test("makeeye 3x3 identity") <- (
     ++(abs(V01)) < 1e-10,
     free(H))  # nv
 
-test("makeeye nnz equals n") <- (
+test('makeeye nnz equals n') <- (
     make_eye(4, H),
     nonzero_count(H, NNZ),
     NNZ == 4,
     free(H))  # nv
 
-test("todense correct shape") <- (
+test('todense correct shape') <- (
     DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
     IDX is [0, 2, 1, 0, 2],
     PTR is [0, 2, 3, 5],
@@ -96,7 +95,7 @@ test("todense correct shape") <- (
     COLS == 3,
     free(H))  # nv
 
-test("todense correct values") <- (
+test('todense correct values') <- (
     DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
     IDX is [0, 2, 1, 0, 2],
     PTR is [0, 2, 3, 5],
@@ -106,7 +105,7 @@ test("todense correct values") <- (
     ++(abs(V02 - 2.0)) < 1e-10,
     free(H))  # nv
 
-test("fromdense round-trip") <- (
+test('fromdense round-trip') <- (
     A is [[1.0, 0.0], [0.0, 2.0]],
     from_dense(A, H),
     to_dense(H, D),
@@ -116,7 +115,7 @@ test("fromdense round-trip") <- (
     ++(abs(V11 - 2.0)) < 1e-10,
     free(H))  # nv
 
-test("shape returns tuple") <- (
+test('shape returns tuple') <- (
     make_eye(3, H),
     shape(H, S),
     R is ++(S[0]),
@@ -125,7 +124,7 @@ test("shape returns tuple") <- (
     C == 3,
     free(H))  # nv
 
-test("nonzerocount correct") <- (
+test('nonzerocount correct') <- (
     DATA is [1.0, 2.0, 3.0, 4.0, 5.0],
     IDX is [0, 2, 1, 0, 2],
     PTR is [0, 2, 3, 5],
@@ -134,7 +133,7 @@ test("nonzerocount correct") <- (
     NNZ == 5,
     free(H))  # nv
 
-test("solve linear system") <- (
+test('solve linear system') <- (
     AD is [4.0, 1.0, 1.0, 3.0],
     AI is [0, 1, 0, 1],
     AP is [0, 2, 4],
@@ -148,7 +147,7 @@ test("solve linear system") <- (
     ++(abs(X1 - 1.0)) < 1e-8,
     free(AH))  # nv
 
-test("eigendecompose hermitian k2") <- (
+test('eigendecompose hermitian k2') <- (
     M is [[4.0, 1.0, 0.0, 0.0],
           [1.0, 3.0, 1.0, 0.0],
           [0.0, 1.0, 5.0, 1.0],
@@ -160,7 +159,7 @@ test("eigendecompose hermitian k2") <- (
     LEN == 2,
     free(H))  # nv
 
-test("svd k2 s positive") <- (
+test('svd k2 s positive') <- (
     M is [[1.0, 2.0, 0.0],
           [0.0, 3.0, 1.0],
           [1.0, 0.0, 4.0]],
@@ -172,6 +171,6 @@ test("svd k2 s positive") <- (
     ++(all(v > 0 for v in S)),
     free(H))  # nv
 
-test("free handle succeeds") <- (
+test('free handle succeeds') <- (
     make_eye(3, H),
     free(H))  # nv

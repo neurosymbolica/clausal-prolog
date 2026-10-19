@@ -1,9 +1,8 @@
 # classify/2: classify(X, LABEL)
 # Ground ITE: X >= 0 → 'positive', else 'negative'
--double_quotes(atom)
-classify(X, LABEL) <- if_(X >= 0, LABEL is "positive", LABEL is "negative")
+classify(X, LABEL) <- if_(X >= 0, LABEL is 'positive', LABEL is 'negative')
 
 
-test("classify positive") <- (classify(5, LABEL), LABEL == "positive")  # nv
-test("classify negative") <- (classify(-3, LABEL), LABEL == "negative")  # nv
-test("classify zero") <- (classify(0, LABEL), LABEL == "positive")  # nv
+test('classify positive') <- (classify(5, LABEL), LABEL == 'positive')  # nv
+test('classify negative') <- (classify(-3, LABEL), LABEL == 'negative')  # nv
+test('classify zero') <- (classify(0, LABEL), LABEL == 'positive')  # nv

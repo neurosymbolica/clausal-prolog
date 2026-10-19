@@ -3,7 +3,6 @@
 # copy_term/2, term_variables/2, numbervars/3
 
 # copy_fresh/2 — copy a term, returning the fresh copy
--double_quotes(atom)
 copy_fresh(TERM, COPY) <- copy_term(TERM, COPY)
 
 # has_no_vars/1 — succeed if term contains no unbound vars
@@ -34,39 +33,39 @@ var_list(LIST, VARS) <- term_variables(LIST, VARS)
 
 # ── Test clauses (migrated from test_term_inspection.py) ──────────────────
 
-test("copy_term: ground atom copies as-is") <- (
-    copy_term("hello", C),
-    C == "hello"
+test('copy_term: ground atom copies as-is') <- (
+    copy_term('hello', C),
+    C == 'hello'
 )  # nv
 
-test("copy_term: ground integer copies as-is") <- (
+test('copy_term: ground integer copies as-is') <- (
     copy_term(42, C),
     C == 42
 )  # nv
 
-test("copy_term: ground list copies as-is") <- (
+test('copy_term: ground list copies as-is') <- (
     copy_term([1, 2, 3], C),
     C == [1, 2, 3]
 )  # nv
 
-test("term_variables: ground integer has no vars") <- has_no_vars(42)  # nv
+test('term_variables: ground integer has no vars') <- has_no_vars(42)  # nv
 
-test("term_variables: ground atom has no vars") <- has_no_vars("hello")  # nv
+test('term_variables: ground atom has no vars') <- has_no_vars('hello')  # nv
 
-test("term_variables: ground list has no vars") <- has_no_vars([1, 2, 3])  # nv
+test('term_variables: ground list has no vars') <- has_no_vars([1, 2, 3])  # nv
 
-test("term_variables: single unbound var yields length 1") <- (
+test('term_variables: single unbound var yields length 1') <- (
     count_vars(X_UNUSED, N),
     N == 1
 )  # nv
 
-test("term_variables: bound var not collected") <- (
+test('term_variables: bound var not collected') <- (
     X is 42,
     count_vars(X, N),
     N == 0
 )  # nv
 
-test("term_variables: ground list with no vars") <- (
+test('term_variables: ground list with no vars') <- (
     count_vars([1, 2, 3], N),
     N == 0
 )  # nv

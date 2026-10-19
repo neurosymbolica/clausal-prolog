@@ -2,14 +2,13 @@
 # z3.exactly.
 
 # ── Basic boolean constraints ───────────────────────────────────────────────
--double_quotes(atom)
 
 or_solve(A, B) <- (
     z3.boolean(A | B),
     z3.label([A, B]),
 )
 
-test("boolean or has 3 solutions") <- (count_all(or_solve(_, _), N), N == 3)  # nv
+test('boolean or has 3 solutions') <- (count_all(or_solve(_, _), N), N == 3)  # nv
 
 # ── At most / at least / exactly ────────────────────────────────────────────
 
@@ -19,18 +18,18 @@ at_most_two(A, B, C) <- (
     z3.label([A, B, C]),
 )
 
-test("at_most 2 of 3") <- (count_all(at_most_two(_, _, _), N), N == 6)  # nv
+test('at_most 2 of 3') <- (count_all(at_most_two(_, _, _), N), N == 6)  # nv
 
 exactly_one(A, B, C) <- (
     z3.exactly([A, B, C], 1),
     z3.label([A, B, C]),
 )
 
-test("exactly 1 of 3") <- (count_all(exactly_one(_, _, _), N), N == 3)  # nv
+test('exactly 1 of 3') <- (count_all(exactly_one(_, _, _), N), N == 3)  # nv
 
 at_least_two(A, B, C) <- (
     z3.at_least([A, B, C], 2),
     z3.label([A, B, C]),
 )
 
-test("at_least 2 of 3") <- (count_all(at_least_two(_, _, _), N), N == 4)  # nv
+test('at_least 2 of 3') <- (count_all(at_least_two(_, _, _), N), N == 4)  # nv

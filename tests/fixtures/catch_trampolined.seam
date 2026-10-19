@@ -9,7 +9,6 @@
 #
 # Asserted from tests/test_catch_trampolined.py; the Test clauses below are the
 # surface-level half.
--double_quotes(atom)
 -module(catch_trampolined, [
     raise_value_error(X),
     catch_from_callee(E),
@@ -56,18 +55,18 @@ catch_from_callee(E) <- (catch(raise_value_error(_X), E, true)),
 catch_inline(E) <- (catch((_X is ++(int("nope"))), E, true)),
 
 # ── a catcher that cannot match must let the exception through ──────────────
-catch_wrong_catcher(R) <- (catch(raise_value_error(_X), "no_such_error", R is "recovered")),
+catch_wrong_catcher(R) <- (catch(raise_value_error(_X), 'no_such_error', R is 'recovered')),
 
 # ── nested catch across two predicates ──────────────────────────────────────
 # The inner catcher is an atom, so it never unifies with the ValueError term;
 # the inner handler re-raises and the OUTER one must see it.
-inner_declines(R) <- (catch(raise_value_error(_X), "no_such_error", R is "inner")),
-outer_catches(R) <- (catch(inner_declines(R), _E, R is "outer")),
+inner_declines(R) <- (catch(raise_value_error(_X), 'no_such_error', R is 'inner')),
+outer_catches(R) <- (catch(inner_declines(R), _E, R is 'outer')),
 
 # The inner catcher is a variable, so the inner handler absorbs it and the
 # outer recovery must NOT run.
-inner_absorbs(R) <- (catch(raise_value_error(_X), _E, R is "inner")),
-inner_catches(R) <- (catch(inner_absorbs(R), _E2, R is "outer")),
+inner_absorbs(R) <- (catch(raise_value_error(_X), _E, R is 'inner')),
+inner_catches(R) <- (catch(inner_absorbs(R), _E2, R is 'outer')),
 
 # ── the original repro: an undefined name in a trampolined callee ───────────
 undefined_in_callee(X) <- (X == {ground_a: cite(art_9)}),
@@ -89,7 +88,7 @@ catch_multi(N) <- (catch(counted(N), _E, true)),
 # driver is a fourth copy of the same loop, so a catch/3 *inside* the
 # trampolined predicate needs its exceptions routed there too — this held for
 # throw/1 as well, which the main drivers had always routed.
-throw_in_callee(_X) <- (throw("boom")),
+throw_in_callee(_X) <- (throw('boom')),
 catch_throw(E) <- (catch(throw_in_callee(_X), E, true)),
 
 catch_from_callee_via_once(E) <- (once(catch_from_callee(E))),
@@ -100,8 +99,8 @@ catch_throw_via_once(E) <- (once(catch_throw(E))),
 # catch/3 ABSORBS the ValueError, so catch_from_callee succeeds and each of
 # these must simply FAIL (`not` over a success) or succeed with the bound term —
 # never raise.  Unrouted, the exception escapes the mini-trampoline instead.
-catch_then_fail(TAG) <- (TAG is "t", catch(raise_value_error(_X), _E, "a" == "b")),
-naf_over_catch(R) <- (not catch_then_fail(_T), R is "absorbed_then_failed"),
+catch_then_fail(TAG) <- (TAG is 't', catch(raise_value_error(_X), _E, 'a' == 'b')),
+naf_over_catch(R) <- (not catch_then_fail(_T), R is 'absorbed_then_failed'),
 catch_from_callee_via_lambda(E) <- (call_goal((() <- catch_from_callee(E)))),
 
 # ── an exception raised by the RECOVERY goal itself ─────────────────────────
@@ -112,17 +111,17 @@ catch_from_callee_via_lambda(E) <- (call_goal((() <- catch_from_callee(E)))),
 recovery_raises(R) <- (catch(raise_value_error(_X), _E, R is ++(int("also_nope")))),
 outer_catches_a_raising_recovery(E) <- (catch(recovery_raises(_R), E, true)),
 
-test("an inner catch/3 absorbs it; the outer recovery does not run") <- (
+test('an inner catch/3 absorbs it; the outer recovery does not run') <- (
     inner_catches(R),
-    R == "inner",
+    R == 'inner',
 )
 
-test("an inner catch/3 that declines hands it to the outer one") <- (
+test('an inner catch/3 that declines hands it to the outer one') <- (
     outer_catches(R),
-    R == "outer",
+    R == 'outer',
 )
 
-test("catch/3 around a many-solution callee still yields every solution") <- (
+test('catch/3 around a many-solution callee still yields every solution') <- (
     findall(N, catch_multi(N), NS),
     NS == [1, 2, 3],
 )
@@ -137,14 +136,14 @@ test("catch/3 around a many-solution callee still yields every solution") <- (
 # observables through that call: a catch/3 inside the condition absorbs, a
 # declining/absent handler lets the error escape, and the then-branch runs
 # once per way the condition holds.
-cond_absorbs_t(R, T) <- (catch(raise_value_error(_X), _E, R is "absorbed"), T is True),
-ite_cond_catch(R) <- (if_(cond_absorbs_t(_C), R is "then", R is "else")),
+cond_absorbs_t(R, T) <- (catch(raise_value_error(_X), _E, R is 'absorbed'), T is True),
+ite_cond_catch(R) <- (if_(cond_absorbs_t(_C), R is 'then', R is 'else')),
 
-cond_declines_t(R, T) <- (catch(raise_value_error(_X), "no_such_error", R is "nope"), T is True),
-ite_cond_decline(R) <- (if_(cond_declines_t(_C), R is "then", R is "else")),
+cond_declines_t(R, T) <- (catch(raise_value_error(_X), 'no_such_error', R is 'nope'), T is True),
+ite_cond_decline(R) <- (if_(cond_declines_t(_C), R is 'then', R is 'else')),
 
 raise_value_error_t(X, T) <- (raise_value_error(X), T is True),
-ite_cond_raw(R) <- (if_(raise_value_error_t(_X), R is "then", R is "else")),
+ite_cond_raw(R) <- (if_(raise_value_error_t(_X), R is 'then', R is 'else')),
 
 counted_t(N, T) <- (counted(N), T is True),
 ite_multi(N) <- (if_(counted_t(N), true, N == 0)),

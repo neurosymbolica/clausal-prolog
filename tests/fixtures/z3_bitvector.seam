@@ -2,14 +2,13 @@
 # z3.concat, z3.zero_extend, z3.sign_extend.
 
 # ── Basic BV constraints ────────────────────────────────────────────────────
--double_quotes(atom)
 
 small_bv(X) <- (
     z3.bitvector(4, X < 3),
     z3.label([X]),
 )
 
-test("bv4 < 3 has 3 solutions") <- (count_all(small_bv(_), N), N == 3)  # nv
+test('bv4 < 3 has 3 solutions') <- (count_all(small_bv(_), N), N == 3)  # nv
 
 # ── Bitwise AND ─────────────────────────────────────────────────────────────
 
@@ -21,7 +20,7 @@ mask(X, R) <- (
     z3.label([R]),
 )
 
-test("bv mask 0xAB & 0xF0") <- (mask(_, R), R == 160)  # nv
+test('bv mask 0xAB & 0xF0') <- (mask(_, R), R == 160)  # nv
 
 # ── Arithmetic wraparound ───────────────────────────────────────────────────
 
@@ -34,7 +33,7 @@ wrap(R) <- (
     z3.label([R]),
 )
 
-test("bv8 wraparound 200+100") <- (wrap(R), R == 44)  # nv
+test('bv8 wraparound 200+100') <- (wrap(R), R == 44)  # nv
 
 # ── Extract ─────────────────────────────────────────────────────────────────
 
@@ -44,7 +43,7 @@ upper_nibble(R) <- (
     z3.label([R]),
 )
 
-test("bv extract upper nibble") <- (upper_nibble(R), R == 10)  # nv
+test('bv extract upper nibble') <- (upper_nibble(R), R == 10)  # nv
 
 # ── Concat ──────────────────────────────────────────────────────────────────
 
@@ -57,7 +56,7 @@ concat_nibbles(R) <- (
     z3.label([R]),
 )
 
-test("bv concat 0xA 0xB") <- (concat_nibbles(R), R == 171)  # nv
+test('bv concat 0xA 0xB') <- (concat_nibbles(R), R == 171)  # nv
 
 # ── Zero extend ─────────────────────────────────────────────────────────────
 
@@ -67,7 +66,7 @@ z_ext(R) <- (
     z3.label([R]),
 )
 
-test("bv zero extend 4->8") <- (z_ext(R), R == 5)  # nv
+test('bv zero extend 4->8') <- (z_ext(R), R == 5)  # nv
 
 # ── Sign extend ─────────────────────────────────────────────────────────────
 
@@ -77,4 +76,4 @@ s_ext(R) <- (
     z3.label([R]),
 )
 
-test("bv sign extend -1 to 8bit") <- (s_ext(R), R == 255)  # nv
+test('bv sign extend -1 to 8bit') <- (s_ext(R), R == 255)  # nv

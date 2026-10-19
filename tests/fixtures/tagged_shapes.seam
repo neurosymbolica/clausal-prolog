@@ -10,7 +10,6 @@
 # declared here.  (Compound data crossing a module boundary is fine post-P3-1
 # / R5 — functors are global by spelling — this fixture just doesn't need
 # it.)
--double_quotes(atom)
 -allow_singletons
 -module(tagged_shapes, [
     point(X, Y),
@@ -24,12 +23,12 @@
 ])
 
 # Multi-clause dispatch discriminating on functor name AND arity.
-kind(point(_X, _Y), "pt"),
-kind(circle(_C, _R), "circ"),
-kind(seg(_A, _B, _C), "seg3"),
-kind(nil, "empty"),
-kind(42, "num"),
-kind("s", "str"),
+kind(point(_X, _Y), 'pt'),
+kind(circle(_C, _R), 'circ'),
+kind(seg(_A, _B, _C), 'seg3'),
+kind(nil, 'empty'),
+kind(42, 'num'),
+kind('s', 'str'),
 
 # Recursive construction + recursive destructuring of the same functor.
 mk(0, nil),

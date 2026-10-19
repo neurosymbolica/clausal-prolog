@@ -1,5 +1,4 @@
 # Test passing builtin predicates as arguments to meta-predicates.
--double_quotes(atom)
 
 keep_numbers(XS, NS) <- (
     include(number, XS, NS)
@@ -17,25 +16,25 @@ keep_ints(XS, INTS) <- (
     include(integer, XS, INTS)
 )
 
-test("filter keeps numbers") <- (
-    keep_numbers([1, "a", 2, "b", 3.0], RESULT),
+test('filter keeps numbers') <- (
+    keep_numbers([1, 'a', 2, 'b', 3.0], RESULT),
     RESULT == [1, 2, 3.0],
 )  # nv
 
-test("map succ") <- (
+test('map succ') <- (
     incremented([0, 1, 2], RESULT),
     RESULT == [1, 2, 3],
 )  # nv
 
-test("map check all numbers") <- (
+test('map check all numbers') <- (
     all_numbers([1, 2, 3])
 )  # nv
 
-test("map check not all numbers fails") <- (
-    not all_numbers([1, "a", 3])
+test('map check not all numbers fails') <- (
+    not all_numbers([1, 'a', 3])
 )  # nv
 
-test("filter ints from mixed") <- (
-    keep_ints([1, 2.5, 3, "x"], RESULT),
+test('filter ints from mixed') <- (
+    keep_ints([1, 2.5, 3, 'x'], RESULT),
     RESULT == [1, 3],
 )  # nv

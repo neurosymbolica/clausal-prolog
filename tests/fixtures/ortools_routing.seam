@@ -1,7 +1,6 @@
 # OR-Tools routing integration tests
--double_quotes(atom)
 
-test("tsp 4 cities optimal tour") <- (
+test('tsp 4 cities optimal tour') <- (
     ortools.routing.tsp(
         [[0, 10, 15, 20],
          [10, 0, 35, 25],
@@ -12,7 +11,7 @@ test("tsp 4 cities optimal tour") <- (
     length(TOUR, 5)
 )  # nv
 
-test("tsp 3 cities triangle") <- (
+test('tsp 3 cities triangle') <- (
     ortools.routing.tsp(
         [[0, 1, 2],
          [1, 0, 3],
@@ -21,7 +20,7 @@ test("tsp 3 cities triangle") <- (
     DIST == 6
 )  # nv
 
-test("vrp 2 vehicles all customers served") <- (
+test('vrp 2 vehicles all customers served') <- (
     ortools.routing.vrp(
         [[0, 10, 15, 20, 25],
          [10, 0, 35, 25, 30],
@@ -34,7 +33,7 @@ test("vrp 2 vehicles all customers served") <- (
     length(ROUTES, 2)
 )  # nv
 
-test("vrptw 3 customers with time windows") <- (
+test('vrptw 3 customers with time windows') <- (
     ortools.routing.vrptw(
         [[0, 10, 15, 20],
          [10, 0, 25, 30],

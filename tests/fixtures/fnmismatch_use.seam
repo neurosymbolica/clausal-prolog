@@ -14,10 +14,9 @@
 # fixture showing that refusal -- not a field-name TypeError -- is what stops
 # it (tests/test_functor_import_ordering.py,
 # tests/test_functor_field_name_diagnostic.py).
--double_quotes(atom)
 -module(fnmismatch_use, [fnm_verdict(STATUS, CITATIONS), fnm_chk(RESULT)])
 -import_from(tests.fixtures.fnmismatch_schema, [fnm_verdict])
 
-fnm_verdict("ok", [])
+fnm_verdict('ok', [])
 
 fnm_chk(R) <- fnm_verdict(R, C_UNUSED)

@@ -1,4 +1,3 @@
--double_quotes(atom)
 -table(path/2)
 
 edge(1, 2),
@@ -15,10 +14,10 @@ path(X, Y) <- (
 # alternatives.  (It was an if_ with path(1, X) as the condition; if_/3 now
 # requires a reifiable condition, ruling 2026-10-01, and path/2 is a plain
 # goal.  For a bound X the answers are the same.)
-check_path(X, RESULT) <- ((path(1, X), RESULT is "reachable") or (not path(1, X), RESULT is "unreachable"))
+check_path(X, RESULT) <- ((path(1, X), RESULT is 'reachable') or (not path(1, X), RESULT is 'unreachable'))
 
 
-test("path 1 to 2") <- path(1, 2)  # nv
-test("path 1 to 3") <- path(1, 3)  # nv
-test("check reachable 2") <- (check_path(2, RESULT), RESULT == "reachable")  # nv
-test("check unreachable 99") <- (check_path(99, RESULT), RESULT == "unreachable")  # nv
+test('path 1 to 2') <- path(1, 2)  # nv
+test('path 1 to 3') <- path(1, 3)  # nv
+test('check reachable 2') <- (check_path(2, RESULT), RESULT == 'reachable')  # nv
+test('check unreachable 99') <- (check_path(99, RESULT), RESULT == 'unreachable')  # nv

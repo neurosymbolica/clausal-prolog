@@ -1,13 +1,12 @@
--double_quotes(atom)
 -table(win/1)
 
-move("a", "b"),
-move("b", "a"),
-move("a", "c"),
+move('a', 'b'),
+move('b', 'a'),
+move('a', 'c'),
 
 win(X) <- (move(X, Y), not win(Y))
 
 
-test("move a to b") <- move("a", "b")  # nv
-test("move b to a") <- move("b", "a")  # nv
-test("win a") <- win("a")  # nv
+test('move a to b') <- move('a', 'b')  # nv
+test('move b to a') <- move('b', 'a')  # nv
+test('win a') <- win('a')  # nv

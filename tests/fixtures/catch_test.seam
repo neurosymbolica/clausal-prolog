@@ -1,37 +1,36 @@
 # V2-14: catch/throw integration test fixture
 
 # safe_div: catches division-by-zero, returns "infinity" instead
--double_quotes(atom)
 safe_div(X, Y, RESULT) <- (
     catch(
         (eval_(X // Y, RESULT)),
         _,
-        RESULT is "infinity",
+        RESULT is 'infinity',
     )
 )
 
 # throw_if_neg: throws if argument is negative
 throw_if_neg(X) <- (X >= 0)
-throw_if_neg(X) <- (X < 0, throw("negative"))
+throw_if_neg(X) <- (X < 0, throw('negative'))
 
 # catch_neg: wraps throw_if_neg, catches "negative" error
 catch_neg(X, RESULT) <- (
     catch(
-        (throw_if_neg(X), RESULT is "ok"),
-        "negative",
-        RESULT is "caught_negative",
+        (throw_if_neg(X), RESULT is 'ok'),
+        'negative',
+        RESULT is 'caught_negative',
     )
 )
 
 # nested_catch: inner catch doesn't match, outer catches
-inner_throw() <- throw("outer_error")
+inner_throw() <- throw('outer_error')
 
 nested_catch(RESULT) <- (
     catch(
         catch(
             inner_throw(),
-            "inner_only",
-            RESULT is "inner_caught",
+            'inner_only',
+            RESULT is 'inner_caught',
         ),
         ERROR,
         RESULT is ERROR,
@@ -47,40 +46,40 @@ catch_all(RESULT) <- (
     )
 )
 
-test("safe div") <- (safe_div(10, 2, RESULT), RESULT == 5)  # nv
-test("safe div by zero") <- (safe_div(10, 0, RESULT), RESULT == "infinity")  # nv
-test("catch negative") <- (catch_neg(-5, RESULT), RESULT == "caught_negative")  # nv
-test("catch ok") <- (catch_neg(5, RESULT), RESULT == "ok")  # nv
-test("catch all") <- (catch_all(RESULT), RESULT == 42)  # nv
-test("nested catch") <- (nested_catch(RESULT), RESULT == "outer_error")  # nv
+test('safe div') <- (safe_div(10, 2, RESULT), RESULT == 5)  # nv
+test('safe div by zero') <- (safe_div(10, 0, RESULT), RESULT == 'infinity')  # nv
+test('catch negative') <- (catch_neg(-5, RESULT), RESULT == 'caught_negative')  # nv
+test('catch ok') <- (catch_neg(5, RESULT), RESULT == 'ok')  # nv
+test('catch all') <- (catch_all(RESULT), RESULT == 42)  # nv
+test('nested catch') <- (nested_catch(RESULT), RESULT == 'outer_error')  # nv
 
 # ── catch/3 additional semantic cases (migrated from test_exceptions.py) ───
 
-test("catch: no exception — passes through") <- (
+test('catch: no exception — passes through') <- (
     catch(X is 42, _, X is -1),
     X == 42
 )  # nv
 
-test("catch: variable catcher matches anything") <- (
-    catch(throw("any"), E, RESULT is E),
-    RESULT == "any"
+test('catch: variable catcher matches anything') <- (
+    catch(throw('any'), E, RESULT is E),
+    RESULT == 'any'
 )  # nv
 
-test("catch: specific catcher matches identical term") <- (
-    catch(throw("specific"), "specific", RESULT is "matched"),
-    RESULT == "matched"
+test('catch: specific catcher matches identical term') <- (
+    catch(throw('specific'), 'specific', RESULT is 'matched'),
+    RESULT == 'matched'
 )  # nv
 
-test("catch: findall around throw re-raises to outer catch") <- (
+test('catch: findall around throw re-raises to outer catch') <- (
     catch(
-        findall(X, (X in [1, 2, 3], throw("fa_err")), _),
+        findall(X, (X in [1, 2, 3], throw('fa_err')), _),
         E,
         RESULT is E
     ),
-    RESULT == "fa_err"
+    RESULT == 'fa_err'
 )  # nv
 
-test("catch: goal with multiple solutions — all pass through") <- (
+test('catch: goal with multiple solutions — all pass through') <- (
     findall(
         X,
         catch(X in [10, 20, 30], _, X is -1),

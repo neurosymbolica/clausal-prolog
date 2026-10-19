@@ -2,7 +2,6 @@
 #
 # Uses -specialize directive to produce solve_graph — a specialized vanilla
 # MI with MI overhead removed.
--double_quotes(atom)
 
 -import_from(clausal.examples.metainterpreters, [solve])
 
@@ -10,11 +9,11 @@
 
 graph_program(PROGRAM) <- (
     PROGRAM is [
-        [["edge", "a", "b"], []],
-        [["edge", "b", "c"], []],
-        [["edge", "b", "d"], []],
-        [["path", X, Y], [["edge", X, Y]]],
-        [["path", X, Y], [["edge", X, Z], ["path", Z, Y]]]
+        [['edge', 'a', 'b'], []],
+        [['edge', 'b', 'c'], []],
+        [['edge', 'b', 'd'], []],
+        [['path', X, Y], [['edge', X, Y]]],
+        [['path', X, Y], [['edge', X, Z], ['path', Z, Y]]]
     ]
 )
 
@@ -24,22 +23,22 @@ graph_program(PROGRAM) <- (
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
-test("specialized edge(a,b)") <- (
-    solve_graph([["edge", "a", "b"]])
+test('specialized edge(a,b)') <- (
+    solve_graph([['edge', 'a', 'b']])
 )  # nv
 
-test("specialized path(a,b) direct") <- (
-    solve_graph([["path", "a", "b"]])
+test('specialized path(a,b) direct') <- (
+    solve_graph([['path', 'a', 'b']])
 )  # nv
 
-test("specialized path(a,c) transitive") <- (
-    solve_graph([["path", "a", "c"]])
+test('specialized path(a,c) transitive') <- (
+    solve_graph([['path', 'a', 'c']])
 )  # nv
 
-test("specialized path(a,d) transitive") <- (
-    solve_graph([["path", "a", "d"]])
+test('specialized path(a,d) transitive') <- (
+    solve_graph([['path', 'a', 'd']])
 )  # nv
 
-test("specialized no path(c,a)") <- (
-    not solve_graph([["path", "c", "a"]])
+test('specialized no path(c,a)') <- (
+    not solve_graph([['path', 'c', 'a']])
 )  # nv

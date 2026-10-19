@@ -1,5 +1,4 @@
 # ISO clause/2 (13211-1 8.8.1) -- tests/test_clause_2_iso.py.
--double_quotes(atom)
 -module(clause_2_iso, [])
 -import_from(regex, [match])
 -private([a, b, f(A), pt(A, B), oops, caught, ok, m, nm])
@@ -92,8 +91,8 @@ mf(3, Y) <- catch(p(Y), E, True),
 mf(4, Y) <- catch(throw(oops), E, Y is caught),
 mf(5, Y) <- (forall(p(X), X > 0), Y is ok),
 mf(6, Y) <- (p(Y), not findall(X, once(s(X)), [])),
-mf(7, Y) <- (match(r"\d+", "123"), Y is m),
-mf(8, Y) <- (not match(r"\d+", "abc"), Y is nm),
+mf(7, Y) <- (match('\\d+', '123'), Y is m),
+mf(8, Y) <- (not match('\\d+', 'abc'), Y is nm),
 mf(9, Y) <- eval_(2 + 3, Y)
 
 rt_mf(X, Y) <- (clause(mf(X, Y), B), call(B))

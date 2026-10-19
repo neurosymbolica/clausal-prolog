@@ -2,11 +2,10 @@
 
 # Extract the 'name' key from any dict that has it.
 # TODO: Discuss syntax: PERSON["name"] is NAME
--double_quotes(atom)
-get_name(PERSON, NAME) <- sub_dict({"name": NAME}, PERSON)
+get_name(PERSON, NAME) <- sub_dict({'name': NAME}, PERSON)
 
 # Succeed if PERSON has role == "admin".
-is_admin(PERSON) <- sub_dict({"role": "admin"}, PERSON)
+is_admin(PERSON) <- sub_dict({'role': 'admin'}, PERSON)
 
 # Update a single field using dict_put.
 update_field(KEY, VALUE, OLD, NEW) <- dict_put(KEY, VALUE, OLD, NEW)
@@ -26,37 +25,37 @@ set_common(SET1, SET2, INTERSECTION) <- set_intersection(SET1, SET2, INTERSECTIO
 # Enumerate elements of a set.
 set_member(ELEMENT, SET) <- gen_set(ELEMENT, SET)
 
-test("get name") <- (get_name({"name": "Alice"}, NAME), NAME == "Alice")  # nv
-test("is admin") <- is_admin({"role": "admin"})  # nv
-test("dict member") <- (dict_member("x", {"x": 1, "y": 2}, VALUE), VALUE == 1)  # nv
-test("set member") <- set_member(2, {1, 2, 3})  # nv
-test("set common has 2") <- (set_common({1, 2, 3}, {2, 3, 4}, INTERSECTION), set_member(2, INTERSECTION))  # nv
-test("set common has 3") <- (set_common({1, 2, 3}, {2, 3, 4}, INTERSECTION), set_member(3, INTERSECTION))  # nv
+test('get name') <- (get_name({'name': 'Alice'}, NAME), NAME == 'Alice')  # nv
+test('is admin') <- is_admin({'role': 'admin'})  # nv
+test('dict member') <- (dict_member('x', {'x': 1, 'y': 2}, VALUE), VALUE == 1)  # nv
+test('set member') <- set_member(2, {1, 2, 3})  # nv
+test('set common has 2') <- (set_common({1, 2, 3}, {2, 3, 4}, INTERSECTION), set_member(2, INTERSECTION))  # nv
+test('set common has 3') <- (set_common({1, 2, 3}, {2, 3, 4}, INTERSECTION), set_member(3, INTERSECTION))  # nv
 
 # ── is_dict/1 ──────────────────────────────────────────────────────────────
 
-test("is_dict: empty dict") <- is_dict({})  # nv
-test("is_dict: populated dict") <- is_dict({"a": 1})  # nv
-test("is_dict: atom fails") <- (not is_dict("hello"))  # nv
-test("is_dict: set fails") <- (not is_dict({1, 2}))  # nv
-test("is_dict: var fails") <- (not is_dict(X_UNUSED))  # nv
+test('is_dict: empty dict') <- is_dict({})  # nv
+test('is_dict: populated dict') <- is_dict({'a': 1})  # nv
+test('is_dict: atom fails') <- (not is_dict('hello'))  # nv
+test('is_dict: set fails') <- (not is_dict({1, 2}))  # nv
+test('is_dict: var fails') <- (not is_dict(X_UNUSED))  # nv
 
 # ── dict_size/2 ────────────────────────────────────────────────────────────
 
-test("dict_size: empty") <- (dict_size({}, N), N == 0)  # nv
-test("dict_size: three") <- (
-    dict_size({"a": 1, "b": 2, "c": 3}, N),
+test('dict_size: empty') <- (dict_size({}, N), N == 0)  # nv
+test('dict_size: three') <- (
+    dict_size({'a': 1, 'b': 2, 'c': 3}, N),
     N == 3
 )  # nv
 
 # ── dict_keys/2, dict_values/2 ─────────────────────────────────────────────
 
-test("dict_keys: sorted order") <- (
-    dict_keys({"b": 2, "a": 1, "c": 3}, KS),
-    KS == ["a", "b", "c"]
+test('dict_keys: sorted order') <- (
+    dict_keys({'b': 2, 'a': 1, 'c': 3}, KS),
+    KS == ['a', 'b', 'c']
 )  # nv
-test("dict_values: in key order") <- (
-    dict_values({"b": 2, "a": 1, "c": 3}, VS),
+test('dict_values: in key order') <- (
+    dict_values({'b': 2, 'a': 1, 'c': 3}, VS),
     VS == [1, 2, 3]
 )  # nv
 
@@ -67,44 +66,44 @@ test("dict_values: in key order") <- (
 
 # ── dict_get/3 ─────────────────────────────────────────────────────────────
 
-test("dict_get: existing key") <- (
-    dict_get("a", {"a": 1, "b": 2}, V),
+test('dict_get: existing key') <- (
+    dict_get('a', {'a': 1, 'b': 2}, V),
     V == 1
 )  # nv
-test("dict_get: missing key fails") <- (
-    not dict_get("z", {"a": 1}, _)
+test('dict_get: missing key fails') <- (
+    not dict_get('z', {'a': 1}, _)
 )  # nv
 
 # ── dict_put/4 ─────────────────────────────────────────────────────────────
 
-test("dict_put: new key adds") <- (
-    dict_put("c", 3, {"a": 1, "b": 2}, NEW),
-    dict_get("c", NEW, V),
+test('dict_put: new key adds') <- (
+    dict_put('c', 3, {'a': 1, 'b': 2}, NEW),
+    dict_get('c', NEW, V),
     V == 3
 )  # nv
-test("dict_put: overwrites existing") <- (
-    dict_put("a", 99, {"a": 1, "b": 2}, NEW),
-    dict_get("a", NEW, V),
+test('dict_put: overwrites existing') <- (
+    dict_put('a', 99, {'a': 1, 'b': 2}, NEW),
+    dict_get('a', NEW, V),
     V == 99
 )  # nv
 
 # ── is_set/1, set_size/2 ──────────────────────────────────────────────────
 
-test("is_set: empty set constructed from list") <- (
+test('is_set: empty set constructed from list') <- (
     set_list(SET1, []),
     is_set(SET1)
 )  # nv
-test("is_set: populated") <- is_set({1, 2, 3})  # nv
-test("set_size: three") <- (set_size({1, 2, 3}, N), N == 3)  # nv
-test("set_size: duplicate-free") <- (set_size({1, 1, 2}, N), N == 2)  # nv
+test('is_set: populated') <- is_set({1, 2, 3})  # nv
+test('set_size: three') <- (set_size({1, 2, 3}, N), N == 3)  # nv
+test('set_size: duplicate-free') <- (set_size({1, 1, 2}, N), N == 2)  # nv
 
 # ── set_list/2 ─────────────────────────────────────────────────────────────
 
-test("set_list: set → sorted list") <- (
+test('set_list: set → sorted list') <- (
     set_list({3, 1, 2}, LIST),
     LIST == [1, 2, 3]
 )  # nv
-test("set_list: list → set") <- (
+test('set_list: list → set') <- (
     set_list(SET, [1, 2, 3]),
     set_size(SET, N),
     N == 3
@@ -112,17 +111,17 @@ test("set_list: list → set") <- (
 
 # ── set_union/3, set_intersection/3, set_subtract/3 ────────────────────────
 
-test("set_union: combines elements") <- (
+test('set_union: combines elements') <- (
     set_union({1, 2}, {2, 3}, U),
     set_list(U, L),
     L == [1, 2, 3]
 )  # nv
-test("set_intersection: common elements") <- (
+test('set_intersection: common elements') <- (
     set_intersection({1, 2, 3}, {2, 3, 4}, I),
     set_list(I, L),
     L == [2, 3]
 )  # nv
-test("set_subtract: removes second from first") <- (
+test('set_subtract: removes second from first') <- (
     set_subtract({1, 2, 3}, {2, 4}, D),
     set_list(D, L),
     L == [1, 3]
@@ -130,19 +129,19 @@ test("set_subtract: removes second from first") <- (
 
 # ── set_subset/2, set_disjoint/2 ───────────────────────────────────────────
 
-test("set_subset: true") <- set_subset({1, 2}, {1, 2, 3})  # nv
-test("set_subset: false") <- (not set_subset({1, 4}, {1, 2, 3}))  # nv
-test("set_disjoint: true") <- set_disjoint({1, 2}, {3, 4})  # nv
-test("set_disjoint: false") <- (not set_disjoint({1, 2}, {2, 3}))  # nv
+test('set_subset: true') <- set_subset({1, 2}, {1, 2, 3})  # nv
+test('set_subset: false') <- (not set_subset({1, 4}, {1, 2, 3}))  # nv
+test('set_disjoint: true') <- set_disjoint({1, 2}, {3, 4})  # nv
+test('set_disjoint: false') <- (not set_disjoint({1, 2}, {2, 3}))  # nv
 
 # ── set_add/3, set_remove/3 ────────────────────────────────────────────────
 
-test("set_add: adds element") <- (
+test('set_add: adds element') <- (
     set_add(4, {1, 2, 3}, NEW),
     set_list(NEW, L),
     L == [1, 2, 3, 4]
 )  # nv
-test("set_remove: removes element") <- (
+test('set_remove: removes element') <- (
     set_remove(2, {1, 2, 3}, NEW),
     set_list(NEW, L),
     L == [1, 3]

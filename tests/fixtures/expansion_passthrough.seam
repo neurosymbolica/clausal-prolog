@@ -1,12 +1,11 @@
 # Term expansion: identity pass-through
 # term_expansion that passes all items through unchanged.
--double_quotes(atom)
 term_expansion(TERM, TERM, STATE, STATE) <- True
 
-foo("a"),
-foo("b"),
-foo("c"),
+foo('a'),
+foo('b'),
+foo('c'),
 
-test("foo a") <- foo("a")  # nv
-test("foo b") <- foo("b")  # nv
-test("foo c") <- foo("c")  # nv
+test('foo a') <- foo('a')  # nv
+test('foo b') <- foo('b')  # nv
+test('foo c') <- foo('c')  # nv

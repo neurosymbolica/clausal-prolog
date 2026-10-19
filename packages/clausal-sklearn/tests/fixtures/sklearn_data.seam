@@ -1,86 +1,85 @@
--double_quotes(atom)
 -import_from(sklearn, [est, dataset, split, load_dataset, split_data, make_dataset,
                        fit, score, encode_labels, binarize, normalize,
                        polynomial_features])
 
 # ── dataset loading ──────────────────────────────────────────────────
 
-test("load diabetes dataset") <- (
-    load_dataset("diabetes", DATASET),
-    DATASET is ("dataset", X_UNUSED, Y_UNUSED)
+test('load diabetes dataset') <- (
+    load_dataset('diabetes', DATASET),
+    DATASET is ('dataset', X_UNUSED, Y_UNUSED)
 )  # nv
 
-test("load wine dataset") <- (
-    load_dataset("wine", DATASET),
-    DATASET is ("dataset", X_UNUSED, Y_UNUSED)
+test('load wine dataset') <- (
+    load_dataset('wine', DATASET),
+    DATASET is ('dataset', X_UNUSED, Y_UNUSED)
 )  # nv
 
-test("load breast cancer dataset") <- (
-    load_dataset("breast_cancer", DATASET),
-    DATASET is ("dataset", X_UNUSED, Y_UNUSED)
+test('load breast cancer dataset') <- (
+    load_dataset('breast_cancer', DATASET),
+    DATASET is ('dataset', X_UNUSED, Y_UNUSED)
 )  # nv
 
 # ── split_data ────────────────────────────────────────────────────────
 
-test("split iris data") <- (
-    load_dataset("iris", DATASET),
+test('split iris data') <- (
+    load_dataset('iris', DATASET),
     split_data(DATASET, 0.2, SPLIT),
-    SPLIT is ("split", TRAIN, TEST),
-    TRAIN is ("dataset", XTRAIN_UNUSED, YTRAIN_UNUSED),
-    TEST is ("dataset", XTEST_UNUSED, YTEST_UNUSED)
+    SPLIT is ('split', TRAIN, TEST),
+    TRAIN is ('dataset', XTRAIN_UNUSED, YTRAIN_UNUSED),
+    TEST is ('dataset', XTEST_UNUSED, YTEST_UNUSED)
 )  # nv
 
-test("split with seed is reproducible") <- (
-    load_dataset("iris", DATASET),
+test('split with seed is reproducible') <- (
+    load_dataset('iris', DATASET),
     split_data(DATASET, 0.3, 42, SPLIT1_UNUSED),
     split_data(DATASET, 0.3, 42, SPLIT2_UNUSED)
 )  # nv
 
 # ── Train/test workflow ──────────────────────────────────────────────
 
-test("split then fit then score") <- (
-    load_dataset("iris", DATASET),
+test('split then fit then score') <- (
+    load_dataset('iris', DATASET),
     split_data(DATASET, 0.2, 42, SPLIT),
-    SPLIT is ("split", TRAIN, TEST),
-    fit(est("logistic_regression", {"max_iter": 200}), TRAIN, FITTED),
+    SPLIT is ('split', TRAIN, TEST),
+    fit(est('logistic_regression', {'max_iter': 200}), TRAIN, FITTED),
     score(FITTED, TEST, SCORE),
     SCORE > 0.5
 )  # nv
 
 # ── make_dataset ──────────────────────────────────────────────────────
 
-test("make classification dataset") <- (
-    make_dataset("classification",
-                {"n_samples": 100, "n_features": 5, "n_classes": 2,
-                 "n_informative": 3, "random_state": 42},
+test('make classification dataset') <- (
+    make_dataset('classification',
+                {'n_samples': 100, 'n_features': 5, 'n_classes': 2,
+                 'n_informative': 3, 'random_state': 42},
                 DATASET),
-    DATASET is ("dataset", X_UNUSED, Y_UNUSED)
+    DATASET is ('dataset', X_UNUSED, Y_UNUSED)
 )  # nv
 
-test("make regression dataset") <- (
-    make_dataset("regression",
-                {"n_samples": 100, "n_features": 5, "random_state": 42},
+test('make regression dataset') <- (
+    make_dataset('regression',
+                {'n_samples': 100, 'n_features': 5, 'random_state': 42},
                 DATASET),
-    DATASET is ("dataset", X_UNUSED, Y_UNUSED)
+    DATASET is ('dataset', X_UNUSED, Y_UNUSED)
 )  # nv
 
-test("make blobs dataset") <- (
-    make_dataset("blobs",
-                {"n_samples": 100, "centers": 3, "random_state": 42},
+test('make blobs dataset') <- (
+    make_dataset('blobs',
+                {'n_samples': 100, 'centers': 3, 'random_state': 42},
                 DATASET),
-    DATASET is ("dataset", X_UNUSED, Y_UNUSED)
+    DATASET is ('dataset', X_UNUSED, Y_UNUSED)
 )  # nv
 
 # ── encode_labels ─────────────────────────────────────────────────────
 
-test("encode labels") <- (
-    encode_labels(["cat", "dog", "cat", "bird", "dog"], ENC_UNUSED, MAP_UNUSED)
+test('encode labels') <- (
+    encode_labels(['cat', 'dog', 'cat', 'bird', 'dog'], ENC_UNUSED, MAP_UNUSED)
 )  # nv
 
 # ── normalize ────────────────────────────────────────────────────────
 
-test("normalize l2") <- (
-    load_dataset("iris", DATASET),
-    DATASET is ("dataset", X, Y_UNUSED),
-    normalize(X, "l2", N_UNUSED)
+test('normalize l2') <- (
+    load_dataset('iris', DATASET),
+    DATASET is ('dataset', X, Y_UNUSED),
+    normalize(X, 'l2', N_UNUSED)
 )  # nv

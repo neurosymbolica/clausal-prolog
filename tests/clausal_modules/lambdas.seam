@@ -3,7 +3,6 @@
 # Arrow syntax, variable capture, conjunction bodies, predicate calls
 
 # apply_val/2 — basic lambda: identity via call_goal
--double_quotes(atom)
 apply_val(RESULT, VAL) <- call_goal((X <- (RESULT is X)), VAL)
 
 # add_one/2 — lambda with arithmetic
@@ -31,9 +30,9 @@ helper(X, Y) <- (Y == X * 10)
 apply_pred(X, Y) <- call_goal((V <- (helper(V, Y))), X)
 
 # all_colors/1 — findall with multi-solution predicate
-color("red"),
-color("green"),
-color("blue"),
+color('red'),
+color('green'),
+color('blue'),
 
 all_colors(COLORS) <- (
     findall(C, (color(C)), COLORS)
@@ -42,24 +41,24 @@ all_colors(COLORS) <- (
 
 # ── Test clauses (migrated from test_clausal_modules.py::TestLambda*) ─────
 
-test("apply_val: int") <- (apply_val(R, 42), R == 42)  # nv
-test("apply_val: string") <- (apply_val(R, "hello"), R == "hello")  # nv
+test('apply_val: int') <- (apply_val(R, 42), R == 42)  # nv
+test('apply_val: string') <- (apply_val(R, 'hello'), R == 'hello')  # nv
 
-test("add_one: 5+1=6") <- (add_one(5, R), R == 6)  # nv
-test("add_one: -1+1=0") <- (add_one(-1, R), R == 0)  # nv
+test('add_one: 5+1=6') <- (add_one(5, R), R == 6)  # nv
+test('add_one: -1+1=0') <- (add_one(-1, R), R == 0)  # nv
 
-test("add_z: 3 + 10 = 13") <- (add_z(3, 10, R), R == 13)  # nv
-test("add_z: 0 + 7 = 7") <- (add_z(0, 7, R), R == 7)  # nv
+test('add_z: 3 + 10 = 13') <- (add_z(3, 10, R), R == 13)  # nv
+test('add_z: 0 + 7 = 7') <- (add_z(0, 7, R), R == 7)  # nv
 
-test("double_val: 5 * 2 = 10") <- (double_val(5, R), R == 10)  # nv
+test('double_val: 5 * 2 = 10') <- (double_val(5, R), R == 10)  # nv
 
-test("zero_arg: returns 42") <- (zero_arg(R), R == 42)  # nv
+test('zero_arg: returns 42') <- (zero_arg(R), R == 42)  # nv
 
-test("transform: (5+1)*2 = 12") <- (transform(5, R), R == 12)  # nv
-test("transform: (0+1)*2 = 2") <- (transform(0, R), R == 2)  # nv
+test('transform: (5+1)*2 = 12') <- (transform(5, R), R == 12)  # nv
+test('transform: (0+1)*2 = 2') <- (transform(0, R), R == 2)  # nv
 
-test("capture_two: 5 + 10 + 20 = 35") <- (capture_two(10, 20, 5, R), R == 35)  # nv
+test('capture_two: 5 + 10 + 20 = 35') <- (capture_two(10, 20, 5, R), R == 35)  # nv
 
-test("apply_pred: 3 * 10 = 30") <- (apply_pred(3, R), R == 30)  # nv
+test('apply_pred: 3 * 10 = 30') <- (apply_pred(3, R), R == 30)  # nv
 
-test("all_colors") <- (all_colors(R), R == ["red", "green", "blue"])  # nv
+test('all_colors') <- (all_colors(R), R == ['red', 'green', 'blue'])  # nv

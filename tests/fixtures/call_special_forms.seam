@@ -2,7 +2,6 @@
 # tests/test_call_runs_special_form_cells.py.  For every row N: b(N, X, Y) is
 # the goal written as a clause BODY, and g(N, X, Y, G) builds the SAME text in
 # TERM position; run(N, X, Y) calls that term.  Both must answer alike.
--double_quotes(atom)
 -module(call_special_forms, [oops, boom(A), caught, done, foo])
 -import_from(py.re, [match, search])
 -allow_singletons
@@ -74,10 +73,10 @@ g(27, X, Y, G) <- (G is when(ground(X), Y is X))
 b(28, X, Y) <- (when((nonvar(X) or nonvar(Y)), True), Y is 5)
 g(28, X, Y, G) <- (G is (when((nonvar(X) or nonvar(Y)), True), Y is 5))
 # ModulePredicate goals (py.re)
-b(29, X, Y) <- (match("\\d+", "123"), Y is 1)
-g(29, X, Y, G) <- (G is (match("\\d+", "123"), Y is 1))
-b(30, X, Y) <- search("b", "abc", Y)
-g(30, X, Y, G) <- (G is search("b", "abc", Y))
+b(29, X, Y) <- (match('\\d+', '123'), Y is 1)
+g(29, X, Y, G) <- (G is (match('\\d+', '123'), Y is 1))
+b(30, X, Y) <- search('b', 'abc', Y)
+g(30, X, Y, G) <- (G is search('b', 'abc', Y))
 b(31, X, Y) <- findall(Z, (p(Z), not s(Z)), Y)
 g(31, X, Y, G) <- (G is findall(Z, (p(Z), not s(Z)), Y))
 b(32, X, Y) <- catch(throw(_), E, Y is E)

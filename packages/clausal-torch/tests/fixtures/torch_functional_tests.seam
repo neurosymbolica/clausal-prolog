@@ -1,4 +1,3 @@
--double_quotes(atom)
 -import_from(torch, [tensor, randn, shape, tensor_list, zeros, ones])
 -import_from(torch_functional, [
     leaky_relu, elu, selu, gelu, silu, mish, hardswish, hardsigmoid,
@@ -14,68 +13,68 @@
 # Activations
 # ═══════════════════════════════════════════════════════════════════════════
 
-test("leaky_relu default") <- (
+test('leaky_relu default') <- (
     tensor([-1.0, 0.0, 1.0], T),
     leaky_relu(T, R),
     shape(R, [3])
 )  # nv
 
-test("leaky_relu custom slope") <- (
+test('leaky_relu custom slope') <- (
     tensor([-1.0, 0.0, 1.0], T),
     leaky_relu(T, 0.2, R),
     shape(R, [3])
 )  # nv
 
-test("elu default") <- (
+test('elu default') <- (
     tensor([-1.0, 0.0, 1.0], T),
     elu(T, R),
     shape(R, [3])
 )  # nv
 
-test("elu custom alpha") <- (
+test('elu custom alpha') <- (
     tensor([-1.0, 0.0, 1.0], T),
     elu(T, 2.0, R),
     shape(R, [3])
 )  # nv
 
-test("selu") <- (
+test('selu') <- (
     tensor([-1.0, 0.0, 1.0], T),
     selu(T, R),
     shape(R, [3])
 )  # nv
 
-test("gelu") <- (
+test('gelu') <- (
     tensor([-1.0, 0.0, 1.0], T),
     gelu(T, R),
     shape(R, [3])
 )  # nv
 
-test("silu") <- (
+test('silu') <- (
     tensor([-1.0, 0.0, 1.0], T),
     silu(T, R),
     shape(R, [3])
 )  # nv
 
-test("mish") <- (
+test('mish') <- (
     tensor([-1.0, 0.0, 1.0], T),
     mish(T, R),
     shape(R, [3])
 )  # nv
 
-test("hardswish") <- (
+test('hardswish') <- (
     tensor([-1.0, 0.0, 1.0], T),
     hardswish(T, R),
     shape(R, [3])
 )  # nv
 
-test("hardsigmoid") <- (
+test('hardsigmoid') <- (
     tensor([-1.0, 0.0, 1.0], T),
     hardsigmoid(T, R),
     shape(R, [3])
 )  # nv
 
 # Activations preserve positive values
-test("gelu positive passthrough") <- (
+test('gelu positive passthrough') <- (
     tensor([2.0], T),
     gelu(T, R),
     tensor_list(R, [V]),
@@ -86,35 +85,35 @@ test("gelu positive passthrough") <- (
 # Convolutions
 # ═══════════════════════════════════════════════════════════════════════════
 
-test("conv1d shape") <- (
+test('conv1d shape') <- (
     randn([1, 1, 5], INPUT),
     randn([1, 1, 3], WEIGHT),
     conv1d(INPUT, WEIGHT, OUTPUT),
     shape(OUTPUT, [1, 1, 3])
 )  # nv
 
-test("conv2d shape") <- (
+test('conv2d shape') <- (
     randn([1, 1, 5, 5], INPUT),
     randn([1, 1, 3, 3], WEIGHT),
     conv2d(INPUT, WEIGHT, OUTPUT),
     shape(OUTPUT, [1, 1, 3, 3])
 )  # nv
 
-test("conv2d with padding") <- (
+test('conv2d with padding') <- (
     randn([1, 1, 5, 5], INPUT),
     randn([1, 1, 3, 3], WEIGHT),
-    conv2d(INPUT, WEIGHT, {"padding": 1}, OUTPUT),
+    conv2d(INPUT, WEIGHT, {'padding': 1}, OUTPUT),
     shape(OUTPUT, [1, 1, 5, 5])
 )  # nv
 
-test("conv2d with stride") <- (
+test('conv2d with stride') <- (
     randn([1, 1, 6, 6], INPUT),
     randn([1, 1, 3, 3], WEIGHT),
-    conv2d(INPUT, WEIGHT, {"stride": 2}, OUTPUT),
+    conv2d(INPUT, WEIGHT, {'stride': 2}, OUTPUT),
     shape(OUTPUT, [1, 1, 2, 2])
 )  # nv
 
-test("conv3d shape") <- (
+test('conv3d shape') <- (
     randn([1, 1, 5, 5, 5], INPUT),
     randn([1, 1, 3, 3, 3], WEIGHT),
     conv3d(INPUT, WEIGHT, OUTPUT),
@@ -125,43 +124,43 @@ test("conv3d shape") <- (
 # Pooling
 # ═══════════════════════════════════════════════════════════════════════════
 
-test("max_pool1d") <- (
+test('max_pool1d') <- (
     randn([1, 1, 6], INPUT),
     max_pool1d(INPUT, 2, OUTPUT),
     shape(OUTPUT, [1, 1, 3])
 )  # nv
 
-test("max_pool2d") <- (
+test('max_pool2d') <- (
     randn([1, 1, 4, 4], INPUT),
     max_pool2d(INPUT, 2, OUTPUT),
     shape(OUTPUT, [1, 1, 2, 2])
 )  # nv
 
-test("max_pool2d with stride") <- (
+test('max_pool2d with stride') <- (
     randn([1, 1, 6, 6], INPUT),
-    max_pool2d(INPUT, 3, {"stride": 2}, OUTPUT),
+    max_pool2d(INPUT, 3, {'stride': 2}, OUTPUT),
     shape(OUTPUT, [1, 1, 2, 2])
 )  # nv
 
-test("avg_pool1d") <- (
+test('avg_pool1d') <- (
     randn([1, 1, 6], INPUT),
     avg_pool1d(INPUT, 2, OUTPUT),
     shape(OUTPUT, [1, 1, 3])
 )  # nv
 
-test("avg_pool2d") <- (
+test('avg_pool2d') <- (
     randn([1, 1, 4, 4], INPUT),
     avg_pool2d(INPUT, 2, OUTPUT),
     shape(OUTPUT, [1, 1, 2, 2])
 )  # nv
 
-test("adaptive_avg_pool1d") <- (
+test('adaptive_avg_pool1d') <- (
     randn([1, 1, 10], INPUT),
     adaptive_avg_pool1d(INPUT, 5, OUTPUT),
     shape(OUTPUT, [1, 1, 5])
 )  # nv
 
-test("adaptive_avg_pool2d") <- (
+test('adaptive_avg_pool2d') <- (
     randn([1, 1, 10, 10], INPUT),
     adaptive_avg_pool2d(INPUT, [3, 3], OUTPUT),
     shape(OUTPUT, [1, 1, 3, 3])
@@ -171,7 +170,7 @@ test("adaptive_avg_pool2d") <- (
 # Normalization
 # ═══════════════════════════════════════════════════════════════════════════
 
-test("batch_norm shape preserved") <- (
+test('batch_norm shape preserved') <- (
     randn([2, 3, 4], INPUT),
     zeros([3], MEAN),
     ones([3], VAR),
@@ -179,27 +178,27 @@ test("batch_norm shape preserved") <- (
     shape(OUTPUT, [2, 3, 4])
 )  # nv
 
-test("layer_norm shape preserved") <- (
+test('layer_norm shape preserved') <- (
     randn([2, 3, 4], INPUT),
     layer_norm(INPUT, [4], OUTPUT),
     shape(OUTPUT, [2, 3, 4])
 )  # nv
 
-test("layer_norm multi-dim") <- (
+test('layer_norm multi-dim') <- (
     randn([2, 3, 4], INPUT),
     layer_norm(INPUT, [3, 4], OUTPUT),
     shape(OUTPUT, [2, 3, 4])
 )  # nv
 
-test("normalize default") <- (
+test('normalize default') <- (
     randn([3, 4], INPUT),
     normalize(INPUT, OUTPUT),
     shape(OUTPUT, [3, 4])
 )  # nv
 
-test("normalize with dim") <- (
+test('normalize with dim') <- (
     randn([3, 4], INPUT),
-    normalize(INPUT, {"dim": 0}, OUTPUT),
+    normalize(INPUT, {'dim': 0}, OUTPUT),
     shape(OUTPUT, [3, 4])
 )  # nv
 
@@ -207,21 +206,21 @@ test("normalize with dim") <- (
 # Loss functions
 # ═══════════════════════════════════════════════════════════════════════════
 
-test("cross_entropy") <- (
+test('cross_entropy') <- (
     randn([3, 5], LOGITS),
     tensor([0, 2, 1], TARGETS),
     cross_entropy(LOGITS, TARGETS, LOSS),
     shape(LOSS, [])
 )  # nv
 
-test("cross_entropy with reduction") <- (
+test('cross_entropy with reduction') <- (
     randn([3, 5], LOGITS),
     tensor([0, 2, 1], TARGETS),
-    cross_entropy(LOGITS, TARGETS, {"reduction": "none"}, LOSS),
+    cross_entropy(LOGITS, TARGETS, {'reduction': 'none'}, LOSS),
     shape(LOSS, [3])
 )  # nv
 
-test("mse_loss") <- (
+test('mse_loss') <- (
     tensor([1.0, 2.0, 3.0], PRED),
     tensor([1.0, 2.0, 3.0], TARGET),
     mse_loss(PRED, TARGET, LOSS),
@@ -229,7 +228,7 @@ test("mse_loss") <- (
     V < 0.001
 )  # nv
 
-test("mse_loss nonzero") <- (
+test('mse_loss nonzero') <- (
     tensor([1.0, 2.0, 3.0], PRED),
     tensor([2.0, 3.0, 4.0], TARGET),
     mse_loss(PRED, TARGET, LOSS),
@@ -237,7 +236,7 @@ test("mse_loss nonzero") <- (
     V > 0.9
 )  # nv
 
-test("l1_loss") <- (
+test('l1_loss') <- (
     tensor([1.0, 2.0, 3.0], PRED),
     tensor([1.0, 2.0, 3.0], TARGET),
     l1_loss(PRED, TARGET, LOSS),
@@ -245,14 +244,14 @@ test("l1_loss") <- (
     V < 0.001
 )  # nv
 
-test("nll_loss") <- (
+test('nll_loss') <- (
     tensor([[-0.5, -1.0, -2.0], [-0.3, -0.8, -1.5]], INPUT),
     tensor([0, 1], TARGET),
     nll_loss(INPUT, TARGET, LOSS),
     shape(LOSS, [])
 )  # nv
 
-test("binary_cross_entropy") <- (
+test('binary_cross_entropy') <- (
     tensor([0.5, 0.5, 0.5], PRED),
     tensor([1.0, 0.0, 1.0], TARGET),
     binary_cross_entropy(PRED, TARGET, LOSS),
@@ -263,15 +262,15 @@ test("binary_cross_entropy") <- (
 # Dropout
 # ═══════════════════════════════════════════════════════════════════════════
 
-test("dropout eval mode") <- (
+test('dropout eval mode') <- (
     tensor([1.0, 2.0, 3.0], T),
     dropout(T, R),
     # In eval mode (training=False), dropout is identity
     tensor_list(R, [1.0, 2.0, 3.0])
 )  # nv
 
-test("dropout with opts") <- (
+test('dropout with opts') <- (
     tensor([1.0, 2.0, 3.0], T),
-    dropout(T, {"p": 0.5, "training": False}, R),
+    dropout(T, {'p': 0.5, 'training': False}, R),
     tensor_list(R, [1.0, 2.0, 3.0])
 )  # nv

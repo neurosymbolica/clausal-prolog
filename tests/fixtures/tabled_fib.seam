@@ -2,7 +2,6 @@
 # kwargs goal against this predicate's registered signature.  They used
 # to come from a keyword head (`fib(N=0, RESULT=0)`); that spelling was
 # retired 2026-09-19, so the declaration carries them.
--double_quotes(atom)
 -private([fib(N, RESULT)])
 
 -table(fib/2)
@@ -19,7 +18,7 @@ fib(N, RESULT) <- (
 )
 
 
-test("fib 0") <- fib(0, 0)  # nv
-test("fib 1") <- fib(1, 1)  # nv
-test("fib 5") <- (fib(5, RESULT), RESULT == 5)  # nv
-test("fib 10") <- (fib(10, RESULT), RESULT == 55)  # nv
+test('fib 0') <- fib(0, 0)  # nv
+test('fib 1') <- fib(1, 1)  # nv
+test('fib 5') <- (fib(5, RESULT), RESULT == 5)  # nv
+test('fib 10') <- (fib(10, RESULT), RESULT == 55)  # nv

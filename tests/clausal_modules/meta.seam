@@ -3,7 +3,6 @@
 # findall/3, bagof/3, setof/3, forall/2 as compiler special forms
 
 # squares/2 — square each element via findall
--double_quotes(atom)
 squares(NS, SQUARES) <- (
     findall(
         SQ,
@@ -82,43 +81,43 @@ bag_positives(NS, POS) <- (
 
 # ── Test clauses (migrated from test_clausal_modules.py::TestMeta*) ──────
 
-test("squares basic") <- (squares([1, 2, 3], R), R == [1, 4, 9])  # nv
-test("squares empty") <- (squares([], R), R == [])  # nv
-test("squares single") <- (squares([5], R), R == [25])  # nv
-test("squares negative") <- (squares([-2, 3], R), R == [4, 9])  # nv
+test('squares basic') <- (squares([1, 2, 3], R), R == [1, 4, 9])  # nv
+test('squares empty') <- (squares([], R), R == [])  # nv
+test('squares single') <- (squares([5], R), R == [25])  # nv
+test('squares negative') <- (squares([-2, 3], R), R == [4, 9])  # nv
 
-test("positives mixed") <- (positives([-1, 2, -3, 4], R), R == [2, 4])  # nv
-test("positives all negative") <- (positives([-1, -2, -3], R), R == [])  # nv
-test("positives all positive") <- (positives([1, 2, 3], R), R == [1, 2, 3])  # nv
-test("positives with zero") <- (positives([0, 1, -1], R), R == [1])  # nv
+test('positives mixed') <- (positives([-1, 2, -3, 4], R), R == [2, 4])  # nv
+test('positives all negative') <- (positives([-1, -2, -3], R), R == [])  # nv
+test('positives all positive') <- (positives([1, 2, 3], R), R == [1, 2, 3])  # nv
+test('positives with zero') <- (positives([0, 1, -1], R), R == [1])  # nv
 
-test("unique dedup") <- (unique_members([1, 2, 1, 3, 2], R), R == [1, 2, 3])  # nv
-test("unique already unique") <- (unique_members([5, 10, 15], R), R == [5, 10, 15])  # nv
-test("unique single") <- (unique_members([7, 7, 7], R), R == [7])  # nv
+test('unique dedup') <- (unique_members([1, 2, 1, 3, 2], R), R == [1, 2, 3])  # nv
+test('unique already unique') <- (unique_members([5, 10, 15], R), R == [5, 10, 15])  # nv
+test('unique single') <- (unique_members([7, 7, 7], R), R == [7])  # nv
 
-test("all_positive succeeds") <- all_positive([1, 2, 3])  # nv
-test("all_positive fails") <- (not all_positive([1, -2, 3]))  # nv
-test("all_positive empty (vacuously true)") <- all_positive([])  # nv
+test('all_positive succeeds') <- all_positive([1, 2, 3])  # nv
+test('all_positive fails') <- (not all_positive([1, -2, 3]))  # nv
+test('all_positive empty (vacuously true)') <- all_positive([])  # nv
 
-test("sum_squares 1..3 = 14") <- (sum_squares([1, 2, 3], R), R == 14)  # nv
-test("sum_squares empty = 0") <- (sum_squares([], R), R == 0)  # nv
+test('sum_squares 1..3 = 14') <- (sum_squares([1, 2, 3], R), R == 14)  # nv
+test('sum_squares empty = 0') <- (sum_squares([], R), R == 0)  # nv
 
-test("evens 1..6") <- (evens([1, 2, 3, 4, 5, 6], R), R == [2, 4, 6])  # nv
-test("evens none") <- (evens([1, 3, 5], R), R == [])  # nv
+test('evens 1..6') <- (evens([1, 2, 3, 4, 5, 6], R), R == [2, 4, 6])  # nv
+test('evens none') <- (evens([1, 3, 5], R), R == [])  # nv
 
-test("count_solutions 3") <- (count_solutions([10, 20, 30], R), R == 3)  # nv
-test("count_solutions empty = 0") <- (count_solutions([], R), R == 0)  # nv
+test('count_solutions 3') <- (count_solutions([10, 20, 30], R), R == 3)  # nv
+test('count_solutions empty = 0') <- (count_solutions([], R), R == 0)  # nv
 
-test("pairs cartesian") <- (
-    pairs(["a", "b"], [1, 2], R),
-    R == [["a", 1], ["a", 2], ["b", 1], ["b", 2]]
+test('pairs cartesian') <- (
+    pairs(['a', 'b'], [1, 2], R),
+    R == [['a', 1], ['a', 2], ['b', 1], ['b', 2]]
 )  # nv
-test("pairs empty first") <- (pairs([], [1, 2], R), R == [])  # nv
-test("pairs empty second") <- (pairs(["a"], [], R), R == [])  # nv
+test('pairs empty first') <- (pairs([], [1, 2], R), R == [])  # nv
+test('pairs empty second') <- (pairs(['a'], [], R), R == [])  # nv
 
-test("all_members subset") <- all_members([1, 2], [1, 2, 3])  # nv
-test("all_members not subset") <- (not all_members([1, 4], [1, 2, 3]))  # nv
-test("all_members empty sub") <- all_members([], [1, 2, 3])  # nv
+test('all_members subset') <- all_members([1, 2], [1, 2, 3])  # nv
+test('all_members not subset') <- (not all_members([1, 4], [1, 2, 3]))  # nv
+test('all_members empty sub') <- all_members([], [1, 2, 3])  # nv
 
-test("bag_positives present") <- (bag_positives([-1, 2, -3, 4], R), R == [2, 4])  # nv
-test("bag_positives fails on none") <- (not bag_positives([-1, -2, -3], _))  # nv
+test('bag_positives present') <- (bag_positives([-1, 2, -3, 4], R), R == [2, 4])  # nv
+test('bag_positives fails on none') <- (not bag_positives([-1, -2, -3], _))  # nv

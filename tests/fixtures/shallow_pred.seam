@@ -1,11 +1,10 @@
--double_quotes(atom)
 -module(shallow_pred, [color(name, hue)])
 -shallow([color/2])
 
-color("sky", "blue"),
-color("grass", "green"),
-color("sun", "yellow"),
+color('sky', 'blue'),
+color('grass', 'green'),
+color('sun', 'yellow'),
 
-test("color sky") <- color("sky", "blue")  # nv
-test("color grass") <- color("grass", "green")  # nv
-test("color sun") <- color("sun", "yellow")  # nv
+test('color sky') <- color('sky', 'blue')  # nv
+test('color grass') <- color('grass', 'green')  # nv
+test('color sun') <- color('sun', 'yellow')  # nv

@@ -2,7 +2,6 @@
 # z3.entailed, z3.disentailed.
 
 # ── Basic real constraints ──────────────────────────────────────────────────
--double_quotes(atom)
 
 bounded(X) <- (
     z3.real((
@@ -11,11 +10,11 @@ bounded(X) <- (
     z3.label([X]),
 )
 
-test("real bounded sat") <- bounded(_)  # nv
+test('real bounded sat') <- bounded(_)  # nv
 
 # ── Minimize ────────────────────────────────────────────────────────────────
 
-test("real minimize") <- (
+test('real minimize') <- (
     z3.real((
         0 <= X <= 10,
         0 <= Y <= 10,
@@ -27,7 +26,7 @@ test("real minimize") <- (
 
 # ── Maximize ────────────────────────────────────────────────────────────────
 
-test("real maximize") <- (
+test('real maximize') <- (
     z3.real((
         0 <= X <= 10,
         0 <= Y <= 10,
@@ -38,17 +37,17 @@ test("real maximize") <- (
 
 # ── Entailment ──────────────────────────────────────────────────────────────
 
-test("real entailed") <- (
+test('real entailed') <- (
     z3.integer((5 <= X <= 10)),
     z3.entailed(X >= 5),
 )  # nv
 
-test("real not entailed") <- (
+test('real not entailed') <- (
     z3.integer((1 <= X <= 10)),
     not(z3.entailed(X >= 5)),
 )  # nv
 
-test("real disentailed") <- (
+test('real disentailed') <- (
     z3.integer((5 <= X <= 10)),
     z3.disentailed(X < 5),
 )  # nv

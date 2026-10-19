@@ -2,19 +2,18 @@
 # (todo/call-site-imported-ground-arg-4plus-clauses-runtime-error.md).
 # bucket_cat: >= _INDEX_THRESHOLD clauses with head constants at pos 1, so the
 # importing module's ground call sites compile to direct bucket refs.
--double_quotes(atom)
 -module(callsite_bucket_lib, [bucket_cat(P, C), bucket_steps(N, R)])
 
-bucket_cat(P, "a") <- (P == 1)
-bucket_cat(P, "b") <- (P == 2)
-bucket_cat(P, "c") <- (P == 3)
-bucket_cat(P, "d") <- (P == 4)
-bucket_cat(P, "e") <- (P == 5)
+bucket_cat(P, 'a') <- (P == 1)
+bucket_cat(P, 'b') <- (P == 2)
+bucket_cat(P, 'c') <- (P == 3)
+bucket_cat(P, 'd') <- (P == 4)
+bucket_cat(P, 'e') <- (P == 5)
 
 # bucket_steps: indexed on pos 1, with a tail-recursive default clause — a
 # ground "even" call site routes to a bucket whose TRO tail call must
 # re-dispatch (possibly to another bucket), not be dropped.
-bucket_steps(N, "even") <- (N == 0)
-bucket_steps(N, "odd") <- (N == 1)
-bucket_steps(N, "big") <- (N >= 10)
+bucket_steps(N, 'even') <- (N == 0)
+bucket_steps(N, 'odd') <- (N == 1)
+bucket_steps(N, 'big') <- (N >= 10)
 bucket_steps(N, R) <- (N > 1, N < 10, M is N - 2, bucket_steps(M, R))

@@ -1,7 +1,6 @@
 # Tests for constraint predicates: dif/2, eq/3, dif_t/3
 
 # dif/2 — disequality constraint
--double_quotes(atom)
 not_equal(X, Y) <- dif(X, Y)
 
 # Use dif inside a rule: pick an element different from a given value
@@ -17,15 +16,15 @@ reified_eq(X, Y, TRUTH) <- eq(X, Y, TRUTH)
 reified_dif(X, Y, TRUTH) <- dif_t(X, Y, TRUTH)
 
 # Use reified eq to categorize pairs
-same_or_diff(X, Y, "same") <- eq(X, Y, True)
-same_or_diff(X, Y, "different") <- eq(X, Y, False)
+same_or_diff(X, Y, 'same') <- eq(X, Y, True)
+same_or_diff(X, Y, 'different') <- eq(X, Y, False)
 
 
-test("not equal") <- not_equal(1, 2)  # nv
-test("pick different") <- (pick_different(1, [1, 2, 3], PICKED), PICKED == 2)  # nv
+test('not equal') <- not_equal(1, 2)  # nv
+test('pick different') <- (pick_different(1, [1, 2, 3], PICKED), PICKED == 2)  # nv
 # Can the TRUTH == ... be put into the reified_... goal? Then make it a single goal body (no enclosing ()).
-test("reified eq true") <- (reified_eq(1, 1, TRUTH), TRUTH == True)  # nv
-test("reified eq false") <- (reified_eq(1, 2, TRUTH), TRUTH == False)  # nv
-test("reified dif true") <- (reified_dif(1, 2, TRUTH), TRUTH == True)  # nv
-test("same or diff same") <- same_or_diff(1, 1, "same")  # nv
-test("same or diff different") <- same_or_diff(1, 2, "different")  # nv
+test('reified eq true') <- (reified_eq(1, 1, TRUTH), TRUTH == True)  # nv
+test('reified eq false') <- (reified_eq(1, 2, TRUTH), TRUTH == False)  # nv
+test('reified dif true') <- (reified_dif(1, 2, TRUTH), TRUTH == True)  # nv
+test('same or diff same') <- same_or_diff(1, 1, 'same')  # nv
+test('same or diff different') <- same_or_diff(1, 2, 'different')  # nv

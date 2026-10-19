@@ -1,4 +1,3 @@
--double_quotes(atom)
 -import_module(torch)
 -import_from(torch_nn, [layer, activation, loss_fn, optimizer_type,
                             named_parameter])
@@ -6,108 +5,108 @@
 
 # --- layer registry ---
 
-test("layer enumerates Linear") <- (
+test('layer enumerates Linear') <- (
     findall(N, layer(N, _), NS),
-    in_("Linear", NS)
+    in_('Linear', NS)
 )  # nv
 
-test("layer enumerates Conv2d") <- (
+test('layer enumerates Conv2d') <- (
     findall(N, layer(N, _), NS),
-    in_("Conv2d", NS)
+    in_('Conv2d', NS)
 )  # nv
 
-test("layer enumerates LSTM") <- (
+test('layer enumerates LSTM') <- (
     findall(N, layer(N, _), NS),
-    in_("LSTM", NS)
+    in_('LSTM', NS)
 )  # nv
 
-test("layer lookup by name returns usable class") <- (
-    layer("Linear", CLASS),
+test('layer lookup by name returns usable class') <- (
+    layer('Linear', CLASS),
     M is ++(CLASS(10, 5)),
-    named_parameter(M, "weight", _)
+    named_parameter(M, 'weight', _)
 )  # nv
 
-test("layer lookup is deterministic") <- (
-    layer("Conv2d", CLASS),
-    layer("Conv2d", CLASS)
+test('layer lookup is deterministic') <- (
+    layer('Conv2d', CLASS),
+    layer('Conv2d', CLASS)
 )  # nv
 
 # --- activation registry ---
 
-test("activation enumerates ReLU") <- (
+test('activation enumerates ReLU') <- (
     findall(N, activation(N, _), NS),
-    in_("ReLU", NS)
+    in_('ReLU', NS)
 )  # nv
 
-test("activation enumerates Sigmoid and Tanh") <- (
+test('activation enumerates Sigmoid and Tanh') <- (
     findall(N, activation(N, _), NS),
-    in_("Sigmoid", NS),
-    in_("Tanh", NS)
+    in_('Sigmoid', NS),
+    in_('Tanh', NS)
 )  # nv
 
-test("activation enumerates Softmax") <- (
+test('activation enumerates Softmax') <- (
     findall(N, activation(N, _), NS),
-    in_("Softmax", NS)
+    in_('Softmax', NS)
 )  # nv
 
 # --- loss_fn registry ---
 
-test("loss_fn enumerates CrossEntropyLoss") <- (
+test('loss_fn enumerates CrossEntropyLoss') <- (
     findall(N, loss_fn(N, _), NS),
-    in_("CrossEntropyLoss", NS)
+    in_('CrossEntropyLoss', NS)
 )  # nv
 
-test("loss_fn enumerates MSELoss") <- (
+test('loss_fn enumerates MSELoss') <- (
     findall(N, loss_fn(N, _), NS),
-    in_("MSELoss", NS)
+    in_('MSELoss', NS)
 )  # nv
 
-test("loss_fn lookup by name") <- (
-    loss_fn("CrossEntropyLoss", CLASS),
-    loss_fn("CrossEntropyLoss", CLASS)
+test('loss_fn lookup by name') <- (
+    loss_fn('CrossEntropyLoss', CLASS),
+    loss_fn('CrossEntropyLoss', CLASS)
 )  # nv
 
 # --- optimizer_type registry ---
 
-test("optimizer_type enumerates Adam") <- (
+test('optimizer_type enumerates Adam') <- (
     findall(N, optimizer_type(N, _), NS),
-    in_("Adam", NS)
+    in_('Adam', NS)
 )  # nv
 
-test("optimizer_type enumerates SGD") <- (
+test('optimizer_type enumerates SGD') <- (
     findall(N, optimizer_type(N, _), NS),
-    in_("SGD", NS)
+    in_('SGD', NS)
 )  # nv
 
-test("optimizer_type lookup by name") <- (
-    optimizer_type("Adam", _)
+test('optimizer_type lookup by name') <- (
+    optimizer_type('Adam', _)
 )  # nv
 
 # --- dtype_info ---
 
-test("dtype_info bits for float32") <- (
-    dtype_info(float32, "bits", BITS),
+test('dtype_info bits for float32') <- (
+    dtype_info(float32, 'bits', BITS),
     BITS == 32
 )  # nv
 
-test("dtype_info bits for float64") <- (
-    dtype_info(float64, "bits", BITS),
+test('dtype_info bits for float64') <- (
+    dtype_info(float64, 'bits', BITS),
     BITS == 64
 )  # nv
 
-test("dtype_info is_floating_point for float32") <- (
-    dtype_info(float32, "is_floating_point", V),
+test('dtype_info is_floating_point for float32') <- (
+    dtype_info(float32, 'is_floating_point', V),
     V == True
 )  # nv
 
-test("dtype_info is_floating_point for int64") <- (
-    dtype_info(int64, "is_floating_point", V),
+test('dtype_info is_floating_point for int64') <- (
+    dtype_info(int64, 'is_floating_point', V),
     V == False
 )  # nv
 
-test("dtype_info enumerate keys") <- (
+test('dtype_info enumerate keys') <- (
     findall(K, dtype_info(float32, K, _), KEYS),
-    in_("bits", KEYS),
-    in_("is_floating_point", KEYS),
-    in_("is_complex", KEYS)
+    in_('bits', KEYS),
+    in_('is_floating_point', KEYS),
+    in_('is_complex', KEYS)
 )  # nv

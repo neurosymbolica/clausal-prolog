@@ -1,8 +1,7 @@
 # first_member/2: like member but only returns the first match via once()
--double_quotes(atom)
 
 first_member(X, LIST) <- once(X in LIST)
 
 
-test("first member") <- (first_member(X, [1, 2, 3]), X == 1)  # nv
-test("first member string") <- (first_member(X, ["a", "b"]), X == "a")  # nv
+test('first member') <- (first_member(X, [1, 2, 3]), X == 1)  # nv
+test('first member string') <- (first_member(X, ['a', 'b']), X == 'a')  # nv

@@ -3,7 +3,6 @@
 # Defines its OWN p/1, tp/1 and home/1 with different facts from
 # t6_exporter.seam's, and imports the exporter as a module so the dotted
 # call-node spelling of a cross-module goal is available for the parity pin.
--double_quotes(atom)
 -import_module(tests.fixtures.t6_exporter)
 -table(tp/1)
 
@@ -13,7 +12,7 @@ p(2),
 tp(3),
 tp(4),
 
-home("importer"),
+home('importer'),
 
 # The dotted spelling of the same cross-module goal the qualified cell
 # ``(":", "tests.fixtures.t6_exporter", ("p", X))`` names — the parity oracle.

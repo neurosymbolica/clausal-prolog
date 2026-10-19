@@ -14,13 +14,12 @@
 # recompute path the fix targets. Compiling "a" then "b" back-to-back
 # gives the old bug its best chance: "a"'s lifted clauses are freed right
 # before "b"'s are built.
--double_quotes(atom)
 -module(tro_lift_recompute_cache, [cnt(K, N, X)])
 
-cnt("a", N, X) <- (N > 0, M is N - 1, cnt("a", M, X))
-cnt("a", N, X) <- (X is N)
-cnt("b", N, X) <- (N > 0, M is N - 1, cnt("b", M, X))
-cnt("b", N, X) <- (X is N)
-cnt("c", N, X) <- (X is N)
-cnt("d", N, X) <- (X is N)
-cnt("e", N, X) <- (X is N)
+cnt('a', N, X) <- (N > 0, M is N - 1, cnt('a', M, X))
+cnt('a', N, X) <- (X is N)
+cnt('b', N, X) <- (N > 0, M is N - 1, cnt('b', M, X))
+cnt('b', N, X) <- (X is N)
+cnt('c', N, X) <- (X is N)
+cnt('d', N, X) <- (X is N)
+cnt('e', N, X) <- (X is N)

@@ -1,4 +1,3 @@
--double_quotes(atom)
 -import_from(provenance, [bottom_up_, solve, boolean, add_mult_prob])
 
 -module(mnist_sum, [
@@ -21,7 +20,7 @@ sum_digits(IMG_A, IMG_B, TOTAL) <- (
 
 # ── Tests under the boolean semiring ────────────────────────────────
 
-test("boolean: digit-pair sum") <- (
+test('boolean: digit-pair sum') <- (
     FACTS is [
         (digit(0, 3), True),
         (digit(1, 5), True),
@@ -31,7 +30,7 @@ test("boolean: digit-pair sum") <- (
     R == [(sum_digits(0, 1, 8), True)]
 )
 
-test("boolean: enumerate possible sums when value uncertain") <- (
+test('boolean: enumerate possible sums when value uncertain') <- (
     FACTS is [
         (digit(0, 3), True),
         (digit(0, 4), True),
@@ -44,7 +43,7 @@ test("boolean: enumerate possible sums when value uncertain") <- (
 
 # ── test under add_mult_prob ────────────────────────────────────────
 
-test("add_mult_prob: confident pair multiplies cleanly") <- (
+test('add_mult_prob: confident pair multiplies cleanly') <- (
     FACTS is [
         (digit(0, 3), 0.7),
         (digit(1, 5), 0.9),

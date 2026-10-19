@@ -1,4 +1,3 @@
--double_quotes(atom)
 -import_from(clausal.logic.clpb, [BoolEq])  # the name must resolve at compile time; BoolEq(A, B) lowers to the cell ('BoolEq', A, B)
 # CLP(B) circuit integration fixture
 #
@@ -35,8 +34,8 @@ pigeon_hole() <- (
     bool_labeling([PIGEON_1_HOLE_1, PIGEON_1_HOLE_2, PIGEON_2_HOLE_1, PIGEON_2_HOLE_2, PIGEON_3_HOLE_1, PIGEON_3_HOLE_2])
 )
 
-test("half adder 0 0") <- (half_adder(0, 0, SUM, CARRY), SUM == 0, CARRY == 0)  # nv
-test("half adder 1 0") <- (half_adder(1, 0, SUM, CARRY), SUM == 1, CARRY == 0)  # nv
-test("half adder 1 1") <- (half_adder(1, 1, SUM, CARRY), SUM == 0, CARRY == 1)  # nv
-test("full adder 1 1 1") <- (full_adder(1, 1, 1, SUM, CARRY), SUM == 1, CARRY == 1)  # nv
-test("full adder 0 0 0") <- (full_adder(0, 0, 0, SUM, CARRY), SUM == 0, CARRY == 0)  # nv
+test('half adder 0 0') <- (half_adder(0, 0, SUM, CARRY), SUM == 0, CARRY == 0)  # nv
+test('half adder 1 0') <- (half_adder(1, 0, SUM, CARRY), SUM == 1, CARRY == 0)  # nv
+test('half adder 1 1') <- (half_adder(1, 1, SUM, CARRY), SUM == 0, CARRY == 1)  # nv
+test('full adder 1 1 1') <- (full_adder(1, 1, 1, SUM, CARRY), SUM == 1, CARRY == 1)  # nv
+test('full adder 0 0 0') <- (full_adder(0, 0, 0, SUM, CARRY), SUM == 0, CARRY == 0)  # nv

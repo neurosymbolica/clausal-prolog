@@ -1,33 +1,32 @@
--double_quotes(atom)
 -import_from(scipy_integrate, [quad, solve_initial_value_problem, trapezoid, simpson, cumulative_trapezoid, result_get])
 
 # quad: integral of sin(x) from 0 to pi ≈ 2.0
-test("quad sin 0 to pi") <- (
+test('quad sin 0 to pi') <- (
     quad(++(lambda x: __import__('math').sin(x)), 0.0, 3.14159265358979, RESULT),
     result_get(RESULT, 'value', V),
     DIFF is ++(abs(float(V) - 2.0)),
     DIFF < 1e-4)  # nv
 
 # solve_initial_value_problem: dy/dt = -y, y(0)=1, check success
-test("solve ivp exponential decay") <- (
+test('solve ivp exponential decay') <- (
     solve_initial_value_problem(++(lambda t, y: [-y[0]]), [0.0, 1.0], [1.0], RESULT),
     result_get(RESULT, 'success', S),
     S == True)  # nv
 
 # trapezoid: [1, 2, 3] dx=1 → 4.0
-test("trapezoid uniform") <- (
+test('trapezoid uniform') <- (
     trapezoid([1.0, 2.0, 3.0], RESULT),
     DIFF is ++(abs(float(RESULT) - 4.0)),
     DIFF < 1e-10)  # nv
 
 # simpson: [1, 4, 1] with h=1 → h/3*(1+16+1) = 6.0
-test("simpson parabola") <- (
+test('simpson parabola') <- (
     simpson([1.0, 4.0, 1.0], RESULT),
     DIFF is ++(abs(float(RESULT) - 6.0)),
     DIFF < 1e-10)  # nv
 
 # cumulative_trapezoid: [1, 2, 3] dx=1 → [1.5, 4.0]
-test("cumulative trapezoid") <- (
+test('cumulative trapezoid') <- (
     cumulative_trapezoid([1.0, 2.0, 3.0], RESULT),
     V0 is ++(float(RESULT[0])),
     DIFF is ++(abs(V0 - 1.5)),

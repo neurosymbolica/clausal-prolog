@@ -1,9 +1,8 @@
--double_quotes(atom)
 -import_from(tests.fixtures.importable_utils, [helper, double])
 
 use_helper(X, Y) <- helper(X, Y)
 use_double(X, RESULT) <- double(X, RESULT)
 
-test("use helper 2") <- (use_helper(2, Y), Y == 4)  # nv
-test("use double 3") <- (use_double(3, RESULT), RESULT == 6)  # nv
-test("use helper 0") <- (use_helper(0, Y), Y == 0)  # nv
+test('use helper 2') <- (use_helper(2, Y), Y == 4)  # nv
+test('use double 3') <- (use_double(3, RESULT), RESULT == 6)  # nv
+test('use helper 0') <- (use_helper(0, Y), Y == 0)  # nv

@@ -1,4 +1,3 @@
--double_quotes(atom)
 -import_from(py.units, [
     UnitsMismatch,
     bit, byte,
@@ -12,44 +11,44 @@
 
 # ── Base unit ─────────────────────────────────────────────────────────────────
 
-test("bit roundtrip") <- strip_units(1(bit), 1)  # nv
+test('bit roundtrip') <- strip_units(1(bit), 1)  # nv
 
-test("bit hasbits") <- has_units(1(bit), bit)  # nv
+test('bit hasbits') <- has_units(1(bit), bit)  # nv
 
 # ── byte = 8 bits ─────────────────────────────────────────────────────────────
 
-test("byte is 8 bits") <- (
+test('byte is 8 bits') <- (
     eval_(1(byte), B),
     has_units(B, bit),
     strip_units(B, 8.0)
 )  # nv
 
-test("byte n(byte) sugar") <- strip_units(10(byte), 80.0)  # nv
+test('byte n(byte) sugar') <- strip_units(10(byte), 80.0)  # nv
 
 # ── Decimal byte multiples ────────────────────────────────────────────────────
 
-test("kilobyte stores as bits") <- (
+test('kilobyte stores as bits') <- (
     eval_(1(kilobyte), D),
     has_units(D, bit),
     ERR is ++(abs(D.value - 8000.0)),
     ERR < 1.0e-9
 )  # nv
 
-test("megabyte stores as bits") <- (
+test('megabyte stores as bits') <- (
     eval_(1(megabyte), D),
     has_units(D, bit),
     ERR is ++(abs(D.value - 8000000.0)),
     ERR < 1.0
 )  # nv
 
-test("gigabyte stores as bits") <- (
+test('gigabyte stores as bits') <- (
     eval_(1(gigabyte), D),
     has_units(D, bit),
     ERR is ++(abs(D.value - 8000000000.0)),
     ERR < 1.0
 )  # nv
 
-test("terabyte stores as bits") <- (
+test('terabyte stores as bits') <- (
     eval_(1(terabyte), D),
     has_units(D, bit),
     ERR is ++(abs(D.value - 8.0e12)),
@@ -58,21 +57,21 @@ test("terabyte stores as bits") <- (
 
 # ── Decimal bit multiples ─────────────────────────────────────────────────────
 
-test("kilobit stores as bits") <- (
+test('kilobit stores as bits') <- (
     eval_(1(kilobit), D),
     has_units(D, bit),
     ERR is ++(abs(D.value - 1000.0)),
     ERR < 1.0e-9
 )  # nv
 
-test("megabit stores as bits") <- (
+test('megabit stores as bits') <- (
     eval_(100(megabit), D),
     has_units(D, bit),
     ERR is ++(abs(D.value - 100000000.0)),
     ERR < 1.0
 )  # nv
 
-test("gigabit stores as bits") <- (
+test('gigabit stores as bits') <- (
     eval_(1(gigabit), D),
     has_units(D, bit),
     ERR is ++(abs(D.value - 1000000000.0)),
@@ -81,25 +80,25 @@ test("gigabit stores as bits") <- (
 
 # ── Binary byte multiples ─────────────────────────────────────────────────────
 
-test("kibibyte is 8192 bits") <- (
+test('kibibyte is 8192 bits') <- (
     eval_(1(kibibyte), D),
     has_units(D, bit),
     strip_units(D, 8192)
 )  # nv
 
-test("mebibyte stores as bits") <- (
+test('mebibyte stores as bits') <- (
     eval_(1(mebibyte), D),
     has_units(D, bit),
     strip_units(D, ++(8 * 2**20))
 )  # nv
 
-test("gibibyte stores as bits") <- (
+test('gibibyte stores as bits') <- (
     eval_(1(gibibyte), D),
     has_units(D, bit),
     strip_units(D, ++(8 * 2**30))
 )  # nv
 
-test("tebibyte stores as bits") <- (
+test('tebibyte stores as bits') <- (
     eval_(1(tebibyte), D),
     has_units(D, bit),
     strip_units(D, ++(8 * 2**40))
@@ -107,19 +106,19 @@ test("tebibyte stores as bits") <- (
 
 # ── Binary bit multiples ──────────────────────────────────────────────────────
 
-test("kibibit stores as bits") <- (
+test('kibibit stores as bits') <- (
     eval_(1(kibibit), D),
     has_units(D, bit),
     strip_units(D, 1024)
 )  # nv
 
-test("mebibit stores as bits") <- (
+test('mebibit stores as bits') <- (
     eval_(1(mebibit), D),
     has_units(D, bit),
     strip_units(D, ++(2**20))
 )  # nv
 
-test("gibibit stores as bits") <- (
+test('gibibit stores as bits') <- (
     eval_(1(gibibit), D),
     has_units(D, bit),
     strip_units(D, ++(2**30))
@@ -127,19 +126,19 @@ test("gibibit stores as bits") <- (
 
 # ── Binary prefix constants used in ++ expressions ───────────────────────────
 
-test("4 gibibytes via prefix") <- (
+test('4 gibibytes via prefix') <- (
     D is ++(4 * gibi * byte),
     has_units(D, bit),
     strip_units(D, ++(4 * 2**30 * 8))
 )  # nv
 
-test("512 mebibytes via prefix") <- (
+test('512 mebibytes via prefix') <- (
     D is ++(512 * mebi * byte),
     has_units(D, bit),
     strip_units(D, ++(512 * 2**20 * 8))
 )  # nv
 
-test("2 tebibytes via prefix") <- (
+test('2 tebibytes via prefix') <- (
     D is ++(2 * tebi * byte),
     has_units(D, bit),
     strip_units(D, ++(2 * 2**40 * 8))
@@ -147,47 +146,47 @@ test("2 tebibytes via prefix") <- (
 
 # ── Arithmetic between information quantities ─────────────────────────────────
 
-test("add bytes and bits") <- (
+test('add bytes and bits') <- (
     eval_(1(byte) + 8(bit), SUM),
     has_units(SUM, bit),
     strip_units(SUM, 16.0)
 )  # nv
 
-test("kibibyte minus 1 byte") <- (
+test('kibibyte minus 1 byte') <- (
     eval_(1(kibibyte) - 1(byte), D),
     has_units(D, bit),
     strip_units(D, ++(8 * 1023))
 )  # nv
 
-test("kilobyte plus kilobyte") <- (
+test('kilobyte plus kilobyte') <- (
     eval_(1(kilobyte) + 1(kilobyte), D),
     has_units(D, bit),
     ERR is ++(abs(D.value - 16000.0)),
     ERR < 1.0e-9
 )  # nv
 
-test("dims cancel: byte over byte is dimensionless") <- (
+test('dims cancel: byte over byte is dimensionless') <- (
     eval_(16(byte) / 2(byte), R),
     strip_units(R, 8.0)
 )  # nv
 
 # ── has_units checks ───────────────────────────────────────────────────────────
 
-test("bit is not a length") <- (not has_units(1(bit), metre))  # nv
+test('bit is not a length') <- (not has_units(1(bit), metre))  # nv
 
-test("constraint accepts bit quantity") <- (
+test('constraint accepts bit quantity') <- (
     has_units(D, bit),
     D is 100(bit),
     has_units(D, bit)
 )  # nv
 
-test("constraint rejects length for bit slot") <- (
+test('constraint rejects length for bit slot') <- (
     not (has_units(D, bit), D is 1(metre))
 )  # nv
 
 # ── Catch mismatch: information vs physical ───────────────────────────────────
 
-test("catch bit plus metre mismatch") <- (
+test('catch bit plus metre mismatch') <- (
     catch(
         ++(bit(1) + metre(1)),
         ++UnitsMismatch,

@@ -6,7 +6,6 @@
 # tests/test_free_threading.py.
 
 # ── Pure list predicates ─────────────────────────────────────────────────────
--double_quotes(atom)
 
 my_append([], YS, YS),
 my_append([H, *XS], YS, [H, *ZS]) <- my_append(XS, YS, ZS)
@@ -29,10 +28,10 @@ my_fact(N, F) <- (
 
 # ── Graph traversal (acyclic — no tabling needed) ────────────────────────────
 
-g_edge("a", "b"),
-g_edge("b", "c"),
-g_edge("c", "d"),
-g_edge("b", "d")
+g_edge('a', 'b'),
+g_edge('b', 'c'),
+g_edge('c', 'd'),
+g_edge('b', 'd')
 
 g_path(X, Y) <- g_edge(X, Y)
 g_path(X, Y) <- (g_edge(X, Z) and g_path(Z, Y))
@@ -40,24 +39,24 @@ g_path(X, Y) <- (g_edge(X, Z) and g_path(Z, Y))
 # ── Tests ────────────────────────────────────────────────────────────────────
 
 # List operations
-test("append nil-nil") <- (my_append([], [], R) and R is [])  # nv
-test("append nil-list") <- (my_append([], [1, 2], R) and R is [1, 2])  # nv
-test("append list-list") <- (my_append([1, 2], [3, 4], R) and R is [1, 2, 3, 4])  # nv
-test("length empty") <- (my_length([], N) and N == 0)  # nv
-test("length three") <- (my_length([1, 2, 3], N) and N == 3)  # nv
-test("member first") <- my_member(1, [1, 2, 3])  # nv
-test("member last") <- my_member(3, [1, 2, 3])  # nv
-test("member all") <- (
+test('append nil-nil') <- (my_append([], [], R) and R is [])  # nv
+test('append nil-list') <- (my_append([], [1, 2], R) and R is [1, 2])  # nv
+test('append list-list') <- (my_append([1, 2], [3, 4], R) and R is [1, 2, 3, 4])  # nv
+test('length empty') <- (my_length([], N) and N == 0)  # nv
+test('length three') <- (my_length([1, 2, 3], N) and N == 3)  # nv
+test('member first') <- my_member(1, [1, 2, 3])  # nv
+test('member last') <- my_member(3, [1, 2, 3])  # nv
+test('member all') <- (
     findall(X, my_member(X, [10, 20, 30]), BAG) and BAG is [10, 20, 30]
 )  # nv
 
 # Arithmetic
-test("factorial 0") <- (my_fact(0, F) and F == 1)  # nv
-test("factorial 5") <- (my_fact(5, F) and F == 120)  # nv
-test("factorial 10") <- (my_fact(10, F) and F == 3628800)  # nv
+test('factorial 0') <- (my_fact(0, F) and F == 1)  # nv
+test('factorial 5') <- (my_fact(5, F) and F == 120)  # nv
+test('factorial 10') <- (my_fact(10, F) and F == 3628800)  # nv
 
 # Graph
-test("direct edge") <- g_path("a", "b")  # nv
-test("transitive path") <- g_path("a", "d")  # nv
-test("reachable b from a") <- g_path("a", "b")  # nv
-test("reachable c from a") <- g_path("a", "c")  # nv
+test('direct edge') <- g_path('a', 'b')  # nv
+test('transitive path') <- g_path('a', 'd')  # nv
+test('reachable b from a') <- g_path('a', 'b')  # nv
+test('reachable c from a') <- g_path('a', 'c')  # nv

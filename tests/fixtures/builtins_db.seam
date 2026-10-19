@@ -1,37 +1,36 @@
 # Tests for runtime database predicates: assertz/1, asserta/1, retract/1
--double_quotes(atom)
 
 -dynamic(colour/1)
 
-colour("red"), # Todo: all these colours should be atoms. 
-colour("green"),
-colour("blue"),
+colour('red'), # Todo: all these colours should be atoms. 
+colour('green'),
+colour('blue'),
 
 # AssertAndQuery/1: adds yellow dynamically then checks it exists
 assert_and_query(X) <- (
-    assertz(colour("yellow")),
+    assertz(colour('yellow')),
     colour(X)
 )
 
 # PrependColour/1: adds violet at front then queries first result
 prepend_colour(X) <- (
-    asserta(colour("violet")),
+    asserta(colour('violet')),
     colour(X)
 )
 
 # RetractRed: removes red then checks it's gone
 retract_red <- (
-    retract(colour("red")),
-    not colour("red")
+    retract(colour('red')),
+    not colour('red')
 )
 
 
-test("colour red") <- colour("red")  # v
-test("colour green") <- colour("green")  # v
-test("colour blue") <- colour("blue")  # v
+test('colour red') <- colour('red')  # v
+test('colour green') <- colour('green')  # v
+test('colour blue') <- colour('blue')  # v
 # Todo: need tests for asserting, prepending (check order), retracting
 
-test("three colors") <- (
+test('three colors') <- (
     findall(COLOUR, colour(COLOUR), COLOURS),
     length(COLOURS, 3),
 )  # v

@@ -1,10 +1,9 @@
 # Imports term_expansion rules from expansion_provider.
 # The imported TE rule duplicates each item.
--double_quotes(atom)
 -import_from(expansion_provider, [term_expansion])
 
-color("red"),
-color("green"),
+color('red'),
+color('green'),
 
-test("color red") <- color("red")  # nv
-test("color green") <- color("green")  # nv
+test('color red') <- color('red')  # nv
+test('color green') <- color('green')  # nv

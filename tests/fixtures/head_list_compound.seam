@@ -1,36 +1,35 @@
 # Regression: a compound nested in a head LIST must couple its inner var with a
 # body goal that binds it (structural head-arg normalization recurses into lists).
 # See todo/head-list-compound-bodybound-var.md.
--double_quotes(atom)
 -private([item2(S), pair(A, B), c(X), d(Y)])
 
-prov(K, V) <- (K is "x", V is "met")
+prov(K, V) <- (K is 'x', V is 'met')
 
 # CONTROL: bare compound in head, inner var body-bound (worked since 2026-06-23).
-ev_bare(item2(S)) <- (prov("x", S))
-test("bare head compound, body-bound inner var ground") <- (
-    ev_bare(item2(S)), ground(S), S == "met")
+ev_bare(item2(S)) <- (prov('x', S))
+test('bare head compound, body-bound inner var ground') <- (
+    ev_bare(item2(S)), ground(S), S == 'met')
 
 # list-nested compound, inner var bound by a PLAIN body goal.
-ev_plain([item2(S)]) <- (prov("x", S))
-test("list head compound, plain body-bound inner var ground") <- (
-    ev_plain([item2(S)]), ground(S), S == "met")
+ev_plain([item2(S)]) <- (prov('x', S))
+test('list head compound, plain body-bound inner var ground') <- (
+    ev_plain([item2(S)]), ground(S), S == 'met')
 
 # list-nested multi-arg compound, one var body-bound (multi-arg compound in a
 # list-nested head).
-mkpair([pair(A, B)]) <- (A is "k", call_goal(((K, V) <- prov(K, V)), "x", B))
-test("list multi-arg compound, body-bound inner var ground") <- (
-    mkpair([pair(A_UNUSED, B)]), ground(B), B == "met")
+mkpair([pair(A, B)]) <- (A is 'k', call_goal(((K, V) <- prov(K, V)), 'x', B))
+test('list multi-arg compound, body-bound inner var ground') <- (
+    mkpair([pair(A_UNUSED, B)]), ground(B), B == 'met')
 
 # deeper nesting: [c(d(S))].
-ev_deep([c(d(S))]) <- (prov("x", S))
-test("deeply nested list compound output mode") <- (
-    ev_deep([c(d(S))]), ground(S), S == "met")
+ev_deep([c(d(S))]) <- (prov('x', S))
+test('deeply nested list compound output mode') <- (
+    ev_deep([c(d(S))]), ground(S), S == 'met')
 
 # input mode: caller supplies a ground list-nested compound.
-test("list compound input mode succeeds") <- (ev_deep([c(d("met"))]))
-test("list compound input mode rejects mismatch") <- (not ev_deep([c(d("no"))]))
+test('list compound input mode succeeds') <- (ev_deep([c(d('met'))]))
+test('list compound input mode rejects mismatch') <- (not ev_deep([c(d('no'))]))
 
 # a head list of plain vars (no structural literal) must still head-to-head unify.
 echo2([A, B], A, B),
-test("plain list-of-vars head still unifies") <- (echo2([P, Q], 7, 8), P == 7, Q == 8)
+test('plain list-of-vars head still unifies') <- (echo2([P, Q], 7, 8), P == 7, Q == 8)

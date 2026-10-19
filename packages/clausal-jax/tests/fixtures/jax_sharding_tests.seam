@@ -1,4 +1,3 @@
--double_quotes(atom)
 -import_module(jax)
 -import_from(jax, [array, shape, array_list, null])
 -import_from(jax_sharding, [
@@ -13,58 +12,58 @@
 
 # --- Device enumeration ---
 
-test("jax_device finds at least one") <- (
+test('jax_device finds at least one') <- (
     findall(D, jax_device(D), DS),
     length(DS, N),
     N >= 1
 )  # nv
 
-test("device_count matches enumeration") <- (
+test('device_count matches enumeration') <- (
     findall(D, jax_device(D), DS),
     length(DS, N),
     device_count(M),
     N == M
 )  # nv
 
-test("local_device finds at least one") <- (
+test('local_device finds at least one') <- (
     findall(D, local_device(D), DS),
     length(DS, N),
     N >= 1
 )  # nv
 
-test("local_device_count matches") <- (
+test('local_device_count matches') <- (
     findall(D, local_device(D), DS),
     length(DS, N),
     local_device_count(M),
     N == M
 )  # nv
 
-test("jax_device check mode") <- (
+test('jax_device check mode') <- (
     jax_device(D),
     jax_device(D)         # second call checks D is a device
 )  # nv
 
-test("device_id forward") <- (
+test('device_id forward') <- (
     jax_device(D),
     device_id(D, ID),
     ID == 0
 )  # nv
 
-test("device_id reverse") <- (
+test('device_id reverse') <- (
     device_id(D, 0),
-    device_platform(D, "cpu")
+    device_platform(D, 'cpu')
 )  # nv
 
-test("device_id enumerates all pairs when unbound") <- (
+test('device_id enumerates all pairs when unbound') <- (
     findall(ID, device_id(_D_UNUSED, ID), IDS),
     device_count(N),
     length(IDS, N)
 )  # nv
 
-test("device_platform is cpu on CI") <- (
+test('device_platform is cpu on CI') <- (
     jax_device(D),
     device_platform(D, P),
-    P == "cpu"
+    P == 'cpu'
 )  # nv
 
 # A platform or a mesh axis name is a symbolic NAME and crosses as an ATOM
@@ -72,7 +71,7 @@ test("device_platform is cpu on CI") <- (
 
 # --- device_of on a freshly-made array ---
 
-test("device_of returns a Device") <- (
+test('device_of returns a Device') <- (
     array([1.0, 2.0, 3.0], A),
     device_of(A, D),
     device_id(D, 0)
@@ -80,26 +79,26 @@ test("device_of returns a Device") <- (
 
 # --- Mesh ---
 
-test("make_mesh creates 1x mesh") <- (
-    make_mesh([1], ["x"], MESH),
+test('make_mesh creates 1x mesh') <- (
+    make_mesh([1], ['x'], MESH),
     mesh_axis_names(MESH, NAMES),
-    NAMES == ["x"]
+    NAMES == ['x']
 )  # nv
 
-test("mesh_shape check mode with dict literal") <- (
-    make_mesh([1], ["x"], MESH),
-    mesh_shape(MESH, {"x": 1})
+test('mesh_shape check mode with dict literal') <- (
+    make_mesh([1], ['x'], MESH),
+    mesh_shape(MESH, {'x': 1})
 )  # nv
 
-test("mesh_shape reach-through by key") <- (
-    make_mesh([1], ["x"], MESH),
+test('mesh_shape reach-through by key') <- (
+    make_mesh([1], ['x'], MESH),
     mesh_shape(MESH, S),
     V is ++S["x"],
     V == 1
 )  # nv
 
-test("mesh_devices has length matching mesh size") <- (
-    make_mesh([1], ["x"], MESH),
+test('mesh_devices has length matching mesh size') <- (
+    make_mesh([1], ['x'], MESH),
     mesh_devices(MESH, DEVS),
     length(DEVS, 1)
 )  # nv
@@ -109,43 +108,43 @@ test("mesh_devices has length matching mesh size") <- (
 # On a single-device CI host the mesh has exactly one device, so [D] /
 # [D, *_REST] both match — prefer the splat form for portability to
 # multi-device hosts.
-test("mesh_devices list pattern match") <- (
-    make_mesh([1], ["x"], MESH),
+test('mesh_devices list pattern match') <- (
+    make_mesh([1], ['x'], MESH),
     mesh_devices(MESH, [D, *_REST_UNUSED]),
-    device_platform(D, "cpu")
+    device_platform(D, 'cpu')
 )  # nv
 
 # --- PartitionSpec and sharding construction ---
 
-test("partition_spec single axis") <- (
-    partition_spec(["x"], P),
+test('partition_spec single axis') <- (
+    partition_spec(['x'], P),
     partition_spec(AXES, P),
-    AXES == ["x"]
+    AXES == ['x']
 )  # nv
 
-test("partition_spec with None unsharded") <- (
-    partition_spec(["x", null], P),
+test('partition_spec with None unsharded') <- (
+    partition_spec(['x', null], P),
     partition_spec(AXES, P),
-    AXES == ["x", null]
+    AXES == ['x', null]
 )  # nv
 
-test("named_sharding construction succeeds") <- (
-    make_mesh([1], ["x"], MESH),
-    partition_spec(["x"], P),
+test('named_sharding construction succeeds') <- (
+    make_mesh([1], ['x'], MESH),
+    partition_spec(['x'], P),
     named_sharding(MESH, P, S),
     S != null
 )  # nv
 
-test("named_sharding equal when built from equal mesh/spec") <- (
-    make_mesh([1], ["x"], MESH1),
-    make_mesh([1], ["x"], MESH2),
-    partition_spec(["x"], P),
+test('named_sharding equal when built from equal mesh/spec') <- (
+    make_mesh([1], ['x'], MESH1),
+    make_mesh([1], ['x'], MESH2),
+    partition_spec(['x'], P),
     named_sharding(MESH1, P, S1),
     named_sharding(MESH2, P, S2),
     S1 == S2
 )  # nv
 
-test("single_device_sharding construction") <- (
+test('single_device_sharding construction') <- (
     jax_device(D),
     single_device_sharding(D, S),
     S != null
@@ -153,7 +152,7 @@ test("single_device_sharding construction") <- (
 
 # --- sharding/2 in query mode ---
 
-test("sharding query on fresh array") <- (
+test('sharding query on fresh array') <- (
     array([1.0, 2.0, 3.0], A),
     sharding(A, S),
     S != null
@@ -161,7 +160,7 @@ test("sharding query on fresh array") <- (
 
 # --- device_put ---
 
-test("device_put to specific device") <- (
+test('device_put to specific device') <- (
     array([1.0, 2.0, 3.0], A),
     jax_device(D),
     device_put(A, D, A2),
@@ -170,23 +169,23 @@ test("device_put to specific device") <- (
     device_id(D2, 0)
 )  # nv
 
-test("device_put preserves values") <- (
+test('device_put preserves values') <- (
     array([1.0, 2.0, 3.0], A),
     jax_device(D),
     device_put(A, D, A2),
     array_list(A2, [1.0, 2.0, 3.0])
 )  # nv
 
-test("device_put with named sharding") <- (
+test('device_put with named sharding') <- (
     array([[1.0, 2.0], [3.0, 4.0]], A),
-    make_mesh([1], ["x"], MESH),
-    partition_spec(["x"], P),
+    make_mesh([1], ['x'], MESH),
+    partition_spec(['x'], P),
     named_sharding(MESH, P, NS),
     device_put(A, NS, A2),
     shape(A2, [2, 2])
 )  # nv
 
-test("device_put with single-device sharding") <- (
+test('device_put with single-device sharding') <- (
     array([1.0, 2.0], A),
     jax_device(D),
     single_device_sharding(D, SDS),
@@ -196,19 +195,19 @@ test("device_put with single-device sharding") <- (
 
 # --- Check predicates ---
 
-test("is_fully_addressable on fresh array") <- (
+test('is_fully_addressable on fresh array') <- (
     array([1.0, 2.0, 3.0], A),
     is_fully_addressable(A)
 )  # nv
 
-test("is_committed after device_put") <- (
+test('is_committed after device_put') <- (
     array([1.0, 2.0, 3.0], A),
     jax_device(D),
     device_put(A, D, A2),
     is_committed(A2)
 )  # nv
 
-test("is_deleted false on live array") <- (
+test('is_deleted false on live array') <- (
     array([1.0, 2.0, 3.0], A),
     not is_deleted(A)
 )  # nv

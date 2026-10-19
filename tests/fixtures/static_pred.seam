@@ -1,9 +1,8 @@
--double_quotes(atom)
 -module(static_pred, [fact(X, Y)])
 -private([a, b])
 
 fact(a, 1),
 fact(b, 2),
 
-test("fact a") <- fact(a, 1)  # nv
-test("fact b") <- fact(b, 2)  # nv
+test('fact a') <- fact(a, 1)  # nv
+test('fact b') <- fact(b, 2)  # nv

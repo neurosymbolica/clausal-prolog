@@ -1,23 +1,22 @@
 # Companion tests for docs/scipy_spatial.md signature blocks.
--double_quotes(atom)
 -import_from(scipy_spatial, [cross_distance, pairwise_distance, point_distance,
     make_kd_tree, kd_tree_query, make_convex_hull, convex_hull_attr, free])
 
-test("cross distance exists") <- (
-    cross_distance([[0.0, 0.0]], [[3.0, 4.0]], "euclidean", D),
+test('cross distance exists') <- (
+    cross_distance([[0.0, 0.0]], [[3.0, 4.0]], 'euclidean', D),
     V is ++(float(D[0, 0])),
     ++(abs(V - 5.0)) < 1e-10)  # nv
 
-test("point distance exists") <- (
-    point_distance("euclidean", ++([0.0, 0.0]), ++([3.0, 4.0]), D),
+test('point distance exists') <- (
+    point_distance('euclidean', ++([0.0, 0.0]), ++([3.0, 4.0]), D),
     ++(abs(D - 5.0)) < 1e-10)  # nv
 
-test("kdtree exists") <- (
+test('kdtree exists') <- (
     make_kd_tree([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], KD),
     kd_tree_query(KD, ++([0.0, 0.0]), R_UNUSED),
     free(KD))  # nv
 
-test("convex hull exists") <- (
+test('convex hull exists') <- (
     make_convex_hull([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]], H),
-    convex_hull_attr(H, "volume", _),
+    convex_hull_attr(H, 'volume', _),
     free(H))  # nv

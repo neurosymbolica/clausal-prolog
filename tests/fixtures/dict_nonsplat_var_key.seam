@@ -3,22 +3,21 @@
 # literal.  Before the fix K reached dict construction as the Var object (the
 # DictTerm lowering, unlike the DictLiteral one, did not $dict_key-wrap it), so
 # the built dict was keyed by the variable and get(OUT, <value>) missed.
--double_quotes(atom)
 -module(dict_nonsplat_var_key, [nonsplat_var_key(GOT), nonsplat_literal_key(GOT),
                                 nonsplat_headarg_key(KEY, VAL, GOT),
                                 nonsplat_var_value(GOT), nonsplat_unbound_key(GOT)])
 
 # Same-frame bound var key (the bug shape).
 nonsplat_var_key(GOT) <- (
-    K is "age",
+    K is 'age',
     OUT is {K: 20},
-    get(OUT, "age", GOT)
+    get(OUT, 'age', GOT)
 )
 
 # Literal key (control — always worked).
 nonsplat_literal_key(GOT) <- (
-    OUT is {"age": 20},
-    get(OUT, "age", GOT)
+    OUT is {'age': 20},
+    get(OUT, 'age', GOT)
 )
 
 # Key arriving via a head arg (control — the pre-fix call-boundary workaround).
@@ -30,13 +29,13 @@ nonsplat_headarg_key(KEY, VAL, GOT) <- (
 # Var VALUE (control — always deferred correctly).
 nonsplat_var_value(GOT) <- (
     V is 20,
-    OUT is {"age": V},
-    get(OUT, "age", GOT)
+    OUT is {'age': V},
+    get(OUT, 'age', GOT)
 )
 
 # A never-bound key must raise a catchable instantiation error at CALL time —
 # this clause existing in the module must NOT break module load.
 nonsplat_unbound_key(GOT) <- (
     OUT is {K_UNUSED: 20},
-    get(OUT, "x", GOT)
+    get(OUT, 'x', GOT)
 )

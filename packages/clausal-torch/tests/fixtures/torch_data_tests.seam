@@ -1,18 +1,17 @@
--double_quotes(atom)
 -import_from(torch, [tensor, shape, tensor_list])
 -import_from(torch_data, [tensor_dataset, dataset_length,
                               dataset_item, dataset_element])
 
 # --- tensor_dataset/2: construction ---
 
-test("tensor_dataset creation") <- (
+test('tensor_dataset creation') <- (
     tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], X),
     tensor([0, 1, 0], Y),
     tensor_dataset([X, Y], DS),
     dataset_length(DS, 3)
 )  # nv
 
-test("tensor_dataset single tensor") <- (
+test('tensor_dataset single tensor') <- (
     tensor([[1.0], [2.0], [3.0], [4.0]], X),
     tensor_dataset([X], DS),
     dataset_length(DS, 4)
@@ -20,20 +19,20 @@ test("tensor_dataset single tensor") <- (
 
 # --- dataset_length/2: property query and check ---
 
-test("dataset_length query") <- (
+test('dataset_length query') <- (
     tensor([[1.0, 2.0], [3.0, 4.0]], X),
     tensor_dataset([X], DS),
     dataset_length(DS, N),
     N == 2
 )  # nv
 
-test("dataset_length check succeeds") <- (
+test('dataset_length check succeeds') <- (
     tensor([[1.0], [2.0], [3.0]], X),
     tensor_dataset([X], DS),
     dataset_length(DS, 3)
 )  # nv
 
-test("dataset_length check fails") <- (
+test('dataset_length check fails') <- (
     tensor([[1.0], [2.0], [3.0]], X),
     tensor_dataset([X], DS),
     not(dataset_length(DS, 5))
@@ -41,7 +40,7 @@ test("dataset_length check fails") <- (
 
 # --- dataset_item/3: indexed access ---
 
-test("dataset_item first") <- (
+test('dataset_item first') <- (
     tensor([[10.0], [20.0], [30.0]], X),
     tensor([1, 2, 3], Y),
     tensor_dataset([X, Y], DS),
@@ -51,7 +50,7 @@ test("dataset_item first") <- (
     tensor_list(X0, [10.0])
 )  # nv
 
-test("dataset_item last") <- (
+test('dataset_item last') <- (
     tensor([[10.0], [20.0], [30.0]], X),
     tensor([1, 2, 3], Y),
     tensor_dataset([X, Y], DS),
@@ -60,7 +59,7 @@ test("dataset_item last") <- (
     tensor_list(X2, [30.0])
 )  # nv
 
-test("dataset_item out of bounds fails") <- (
+test('dataset_item out of bounds fails') <- (
     tensor([[1.0], [2.0]], X),
     tensor_dataset([X], DS),
     not(dataset_item(DS, 5, _))
@@ -68,7 +67,7 @@ test("dataset_item out of bounds fails") <- (
 
 # --- dataset_element/2: enumerate items ---
 
-test("dataset_element enumerate all") <- (
+test('dataset_element enumerate all') <- (
     tensor([[1.0], [2.0], [3.0]], X),
     tensor_dataset([X], DS),
     findall(ITEM, dataset_element(DS, ITEM), ITEMS),
@@ -77,7 +76,7 @@ test("dataset_element enumerate all") <- (
 
 # --- dataset_element/3: enumerate (index, item) pairs ---
 
-test("dataset_element with indices") <- (
+test('dataset_element with indices') <- (
     tensor([[1.0], [2.0], [3.0]], X),
     tensor_dataset([X], DS),
     findall(I, dataset_element(DS, I, _), INDICES),
@@ -87,7 +86,7 @@ test("dataset_element with indices") <- (
     in_(2, INDICES)
 )  # nv
 
-test("dataset_element index and item match") <- (
+test('dataset_element index and item match') <- (
     tensor([[10.0], [20.0]], X),
     tensor_dataset([X], DS),
     dataset_element(DS, 0, ITEM),

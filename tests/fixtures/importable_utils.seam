@@ -1,4 +1,3 @@
--double_quotes(atom)
 -module(importable_utils, [double(X, R), helper(X, Y)])
 
 double(0, 0),
@@ -8,6 +7,6 @@ double(3, 6),
 
 helper(X, Y) <- double(X, Y)
 
-test("double 0") <- double(0, 0)  # nv
-test("double 2 is 4") <- double(2, 4)  # nv
-test("helper delegates") <- (helper(2, Y), Y == 4)  # nv
+test('double 0') <- double(0, 0)  # nv
+test('double 2 is 4') <- double(2, 4)  # nv
+test('helper delegates') <- (helper(2, Y), Y == 4)  # nv

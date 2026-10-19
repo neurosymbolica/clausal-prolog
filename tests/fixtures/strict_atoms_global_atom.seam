@@ -2,10 +2,9 @@
 # rather than a bare reference.  The string literal "phase3strict_global_red"
 # is not a Name node, so the strict-mode check never sees it as a bare atom.
 # Compiles successfully even though no -module/-private/-import_from lists it.
--double_quotes(atom)
 
 -strict_atoms
 
 lookup_strict_global(_atom) <- (
-    global_atom("phase3strict_global_red", _atom),
+    global_atom('phase3strict_global_red', _atom),
 )

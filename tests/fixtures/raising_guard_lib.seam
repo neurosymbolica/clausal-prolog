@@ -10,7 +10,6 @@
 # to raise — it is driven from tests/test_exceptions.py, which asserts the
 # raise reaches the RAISED diagnostic path.  Auto-collection would report it
 # as a spurious failure.
--double_quotes(atom)
 
 -private([is_ymd_triple(REF), wf_bad_shape(MSG, CULPRIT)])
 
@@ -25,7 +24,7 @@ is_ymd_triple([Y, M, D]) <- (integer(Y), integer(M), integer(D))
 # guard.
 window_days_used(REF_YMD, _DAYS_UNUSED) <- (
     not is_ymd_triple(REF_YMD),
-    throw(wf_bad_shape("window_days_used: REF_YMD must be [Y,M,D]", REF_YMD))
+    throw(wf_bad_shape('window_days_used: REF_YMD must be [Y,M,D]', REF_YMD))
 )
 # Well-formed input: return a real answer (a stand-in for the real count).
 window_days_used([_Y_UNUSED, _M_UNUSED, _D_UNUSED], 7),
@@ -34,14 +33,14 @@ window_days_used([_Y_UNUSED, _M_UNUSED, _D_UNUSED], 7),
 # passed through a findall.  Without the guard this findall would collapse to
 # [] and MAX would silently default; with the guard the throw propagates out
 # of the findall and this Test lands on the RAISED path.
-test("guard raises through findall on malformed REF_YMD") <- (
-    findall(D, window_days_used("2020-01-01", D), DAYS),
+test('guard raises through findall on malformed REF_YMD') <- (
+    findall(D, window_days_used('2020-01-01', D), DAYS),
     max_list(DAYS, MAX),
     MAX == 90
 )
 
 # Control: a well-formed REF_YMD does not raise; the findall collects normally.
-test("wellformed REF_YMD does not raise") <- (
+test('wellformed REF_YMD does not raise') <- (
     findall(D, window_days_used([2020, 1, 1], D), DAYS),
     DAYS == [7]
 ),

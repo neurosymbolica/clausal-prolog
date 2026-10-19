@@ -1,4 +1,3 @@
--double_quotes(atom)
 -module(dynamic_pred, [color(X, Y)])
 -dynamic(color/2)
 -private([sky, blue, grass, green])
@@ -6,5 +5,5 @@
 color(sky, blue),
 color(grass, green),
 
-test("color sky blue") <- color(sky, blue)  # nv
-test("color grass green") <- color(grass, green)  # nv
+test('color sky blue') <- color(sky, blue)  # nv
+test('color grass green') <- color(grass, green)  # nv

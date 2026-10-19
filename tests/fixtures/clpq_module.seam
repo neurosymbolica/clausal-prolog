@@ -2,14 +2,13 @@
 # clpq.minimize, clpq.supremum, clpq.infimum.
 
 # ── Basic rational constraints ──────────────────────────────────────────────
--double_quotes(atom)
 
-test("clpq rational equality") <- (
+test('clpq rational equality') <- (
     clpq.rational(X == 1/3),
     X == 1/3,
 )  # nv
 
-test("clpq rational bounds") <- (
+test('clpq rational bounds') <- (
     clpq.rational((
         0 <= X <= 1,
         X == 3/4,
@@ -17,7 +16,7 @@ test("clpq rational bounds") <- (
     X == 3/4,
 )  # nv
 
-test("clpq rational linear system") <- (
+test('clpq rational linear system') <- (
     clpq.rational((
         X + Y == 1,
         X - Y == 1/2,
@@ -28,13 +27,13 @@ test("clpq rational linear system") <- (
 
 # ── Infeasibility ───────────────────────────────────────────────────────────
 
-test("clpq infeasible") <- (
+test('clpq infeasible') <- (
     not(clpq.rational((X >= 10, X <= 5)))
 )  # nv
 
 # ── Maximize / minimize ────────────────────────────────────────────────────
 
-test("clpq maximize") <- (
+test('clpq maximize') <- (
     clpq.rational((
         0 <= X <= 10,
         0 <= Y <= 10,
@@ -46,7 +45,7 @@ test("clpq maximize") <- (
     OBJ == 310,
 )  # nv
 
-test("clpq minimize") <- (
+test('clpq minimize') <- (
     clpq.rational((
         0 <= X <= 100,
         0 <= Y <= 100,
@@ -58,7 +57,7 @@ test("clpq minimize") <- (
 
 # ── Supremum / infimum ─────────────────────────────────────────────────────
 
-test("clpq supremum") <- (
+test('clpq supremum') <- (
     clpq.rational((
         0 <= X <= 10,
         X <= 7,
@@ -67,7 +66,7 @@ test("clpq supremum") <- (
     HI == 7,
 )  # nv
 
-test("clpq infimum") <- (
+test('clpq infimum') <- (
     clpq.rational((
         0 <= X <= 10,
         X >= 3,

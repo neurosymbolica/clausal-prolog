@@ -1,4 +1,3 @@
--double_quotes(atom)
 -import_module(numpy)
 -import_from(opencv, [shape, free])
 -import_from(opencv_video, [
@@ -13,52 +12,52 @@
 # Capture open / close / properties
 # ──────────────────────────────────────────────────────────────────────────
 
-test("make_video_capture on tiny.mp4 returns an integer handle") <- (
-    make_video_capture("/tmp/clausal_opencv_tiny.mp4", CAP),
+test('make_video_capture on tiny.mp4 returns an integer handle') <- (
+    make_video_capture('/tmp/clausal_opencv_tiny.mp4', CAP),
     integer(CAP),
     release(CAP)
 )  # nv
 
-test("make_video_capture fails on missing file") <- (
-    not make_video_capture("/tmp/does_not_exist_clausal_opencv.mp4", _)
+test('make_video_capture fails on missing file') <- (
+    not make_video_capture('/tmp/does_not_exist_clausal_opencv.mp4', _)
 )  # nv
 
-test("is_open succeeds for an open capture") <- (
-    make_video_capture("/tmp/clausal_opencv_tiny.mp4", CAP),
+test('is_open succeeds for an open capture') <- (
+    make_video_capture('/tmp/clausal_opencv_tiny.mp4', CAP),
     is_open(CAP),
     release(CAP)
 )  # nv
 
-test("is_open fails after release") <- (
-    make_video_capture("/tmp/clausal_opencv_tiny.mp4", CAP),
+test('is_open fails after release') <- (
+    make_video_capture('/tmp/clausal_opencv_tiny.mp4', CAP),
     release(CAP),
     not is_open(CAP)
 )  # nv
 
-test("video_property frame_count is 2") <- (
-    make_video_capture("/tmp/clausal_opencv_tiny.mp4", CAP),
-    video_property(CAP, "frame_count", N),
+test('video_property frame_count is 2') <- (
+    make_video_capture('/tmp/clausal_opencv_tiny.mp4', CAP),
+    video_property(CAP, 'frame_count', N),
     N == 2.0,
     release(CAP)
 )  # nv
 
-test("video_property fps is positive") <- (
-    make_video_capture("/tmp/clausal_opencv_tiny.mp4", CAP),
-    video_property(CAP, "fps", FPS),
+test('video_property fps is positive') <- (
+    make_video_capture('/tmp/clausal_opencv_tiny.mp4', CAP),
+    video_property(CAP, 'fps', FPS),
     FPS > 0.0,
     release(CAP)
 )  # nv
 
-test("video_property width is 120") <- (
-    make_video_capture("/tmp/clausal_opencv_tiny.mp4", CAP),
-    video_property(CAP, "frame_width", W),
+test('video_property width is 120') <- (
+    make_video_capture('/tmp/clausal_opencv_tiny.mp4', CAP),
+    video_property(CAP, 'frame_width', W),
     W == 120.0,
     release(CAP)
 )  # nv
 
-test("video_property unknown name fails") <- (
-    make_video_capture("/tmp/clausal_opencv_tiny.mp4", CAP),
-    not video_property(CAP, "not_a_real_prop", _),
+test('video_property unknown name fails') <- (
+    make_video_capture('/tmp/clausal_opencv_tiny.mp4', CAP),
+    not video_property(CAP, 'not_a_real_prop', _),
     release(CAP)
 )  # nv
 
@@ -66,22 +65,22 @@ test("video_property unknown name fails") <- (
 # Frame iteration
 # ──────────────────────────────────────────────────────────────────────────
 
-test("read_frame returns a single frame") <- (
-    make_video_capture("/tmp/clausal_opencv_tiny.mp4", CAP),
+test('read_frame returns a single frame') <- (
+    make_video_capture('/tmp/clausal_opencv_tiny.mp4', CAP),
     read_frame(CAP, FRAME),
     shape(FRAME, [90, 120, 3]),
     release(CAP)
 )  # nv
 
-test("video_frame enumerates all frames") <- (
-    make_video_capture("/tmp/clausal_opencv_tiny.mp4", CAP),
+test('video_frame enumerates all frames') <- (
+    make_video_capture('/tmp/clausal_opencv_tiny.mp4', CAP),
     findall(I, video_frame(CAP, I, _), INDICES),
     INDICES == [0, 1],
     release(CAP)
 )  # nv
 
-test("video_frame yields frames with shape (H, W, 3)") <- (
-    make_video_capture("/tmp/clausal_opencv_tiny.mp4", CAP),
+test('video_frame yields frames with shape (H, W, 3)') <- (
+    make_video_capture('/tmp/clausal_opencv_tiny.mp4', CAP),
     findall(F, video_frame(CAP, _, F), FRAMES),
     length(FRAMES, 2),
     release(CAP)
@@ -89,8 +88,8 @@ test("video_frame yields frames with shape (H, W, 3)") <- (
 
 # Iteration commits the cursor — after findall consumes both frames,
 # a subsequent read_frame fails (stream exhausted).
-test("after video_frame exhausts, read_frame fails") <- (
-    make_video_capture("/tmp/clausal_opencv_tiny.mp4", CAP),
+test('after video_frame exhausts, read_frame fails') <- (
+    make_video_capture('/tmp/clausal_opencv_tiny.mp4', CAP),
     findall(I, video_frame(CAP, I, _), _),
     not read_frame(CAP, _),
     release(CAP)
@@ -98,19 +97,19 @@ test("after video_frame exhausts, read_frame fails") <- (
 
 # Explicit rewind via video_property_set: after iterating to EOF, set
 # pos_frames=0 and the next read works again.
-test("explicit rewind via video_property_set allows re-reading") <- (
-    make_video_capture("/tmp/clausal_opencv_tiny.mp4", CAP),
+test('explicit rewind via video_property_set allows re-reading') <- (
+    make_video_capture('/tmp/clausal_opencv_tiny.mp4', CAP),
     findall(I, video_frame(CAP, I, _), _),
-    video_property_set(CAP, "pos_frames", 0, _),
+    video_property_set(CAP, 'pos_frames', 0, _),
     read_frame(CAP, FRAME),
     shape(FRAME, [90, 120, 3]),
     release(CAP)
 )  # nv
 
 # video_property_set returns the same handle (state-threaded — same int)
-test("video_property_set returns the same handle") <- (
-    make_video_capture("/tmp/clausal_opencv_tiny.mp4", CAP),
-    video_property_set(CAP, "pos_frames", 1, CAP_OUT),
+test('video_property_set returns the same handle') <- (
+    make_video_capture('/tmp/clausal_opencv_tiny.mp4', CAP),
+    video_property_set(CAP, 'pos_frames', 1, CAP_OUT),
     CAP == CAP_OUT,
     release(CAP)
 )  # nv
@@ -119,76 +118,76 @@ test("video_property_set returns the same handle") <- (
 # video_prop_name registry
 # ──────────────────────────────────────────────────────────────────────────
 
-test("video_prop_name lookup frame_count") <- (
-    video_prop_name("frame_count", CODE),
+test('video_prop_name lookup frame_count') <- (
+    video_prop_name('frame_count', CODE),
     integer(CODE)
 )  # nv
 
-test("video_prop_name enumerates many properties") <- (
+test('video_prop_name enumerates many properties') <- (
     findall(N, video_prop_name(N, _), NAMES),
     length(NAMES, K),
     K >= 10
 )  # nv
 
-test("video_prop_name unknown name fails") <- (
-    not video_prop_name("not_a_real_property", _)
+test('video_prop_name unknown name fails') <- (
+    not video_prop_name('not_a_real_property', _)
 )  # nv
 
 # ──────────────────────────────────────────────────────────────────────────
 # fourcc bidirectional
 # ──────────────────────────────────────────────────────────────────────────
 
-test("fourcc forward: chars to int") <- (
-    fourcc("mp4v", CODE),
+test('fourcc forward: chars to int') <- (
+    fourcc('mp4v', CODE),
     integer(CODE),
     CODE > 0
 )  # nv
 
-test("fourcc backward: int to chars") <- (
-    fourcc("mp4v", CODE),
+test('fourcc backward: int to chars') <- (
+    fourcc('mp4v', CODE),
     fourcc(CHARS, CODE),
-    CHARS == "mp4v"
+    CHARS == 'mp4v'
 )  # nv
 
-test("fourcc round-trip") <- (
-    fourcc("MJPG", CODE),
+test('fourcc round-trip') <- (
+    fourcc('MJPG', CODE),
     fourcc(CHARS, CODE),
-    CHARS == "MJPG"
+    CHARS == 'MJPG'
 )  # nv
 
-test("fourcc rejects wrong-length string") <- (
-    not fourcc("toolong", _)
+test('fourcc rejects wrong-length string') <- (
+    not fourcc('toolong', _)
 )  # nv
 
 # ──────────────────────────────────────────────────────────────────────────
 # Write a video and read it back
 # ──────────────────────────────────────────────────────────────────────────
 
-test("write a 2-frame video then read it back") <- (
-    fourcc("mp4v", FOURCC),
-    make_video_writer("/tmp/clausal_opencv_video_test.mp4",
+test('write a 2-frame video then read it back') <- (
+    fourcc('mp4v', FOURCC),
+    make_video_writer('/tmp/clausal_opencv_video_test.mp4',
                        FOURCC, 30.0, [120, 90], WRITER),
     FRAME is ++(numpy.zeros((90, 120, 3), dtype=numpy.uint8)),
     write_frame(WRITER, FRAME),
     write_frame(WRITER, FRAME),
     release(WRITER),
-    make_video_capture("/tmp/clausal_opencv_video_test.mp4", CAP),
+    make_video_capture('/tmp/clausal_opencv_video_test.mp4', CAP),
     findall(I, video_frame(CAP, I, _), INDICES),
     length(INDICES, 2),
     release(CAP)
 )  # nv
 
-test("make_video_writer with is_color flag") <- (
-    fourcc("mp4v", FOURCC),
-    make_video_writer("/tmp/clausal_opencv_video_test_color.mp4",
+test('make_video_writer with is_color flag') <- (
+    fourcc('mp4v', FOURCC),
+    make_video_writer('/tmp/clausal_opencv_video_test_color.mp4',
                        FOURCC, 30.0, [120, 90], True, WRITER),
     integer(WRITER),
     release(WRITER)
 )  # nv
 
-test("make_video_writer with grayscale (is_color False)") <- (
-    fourcc("mp4v", FOURCC),
-    make_video_writer("/tmp/clausal_opencv_video_test_gray.mp4",
+test('make_video_writer with grayscale (is_color False)') <- (
+    fourcc('mp4v', FOURCC),
+    make_video_writer('/tmp/clausal_opencv_video_test_gray.mp4',
                        FOURCC, 30.0, [120, 90], False, WRITER),
     integer(WRITER),
     release(WRITER)
@@ -198,21 +197,21 @@ test("make_video_writer with grayscale (is_color False)") <- (
 # Handle lifecycle — release vs free interchangeable
 # ──────────────────────────────────────────────────────────────────────────
 
-test("free releases a capture handle") <- (
-    make_video_capture("/tmp/clausal_opencv_tiny.mp4", CAP),
+test('free releases a capture handle') <- (
+    make_video_capture('/tmp/clausal_opencv_tiny.mp4', CAP),
     free(CAP),
     not is_open(CAP)
 )  # nv
 
-test("release is idempotent — second call fails cleanly") <- (
-    make_video_capture("/tmp/clausal_opencv_tiny.mp4", CAP),
+test('release is idempotent — second call fails cleanly') <- (
+    make_video_capture('/tmp/clausal_opencv_tiny.mp4', CAP),
     release(CAP),
     not release(CAP)
 )  # nv
 
-test("free on a writer also works") <- (
-    fourcc("mp4v", FOURCC),
-    make_video_writer("/tmp/clausal_opencv_video_test_free.mp4",
+test('free on a writer also works') <- (
+    fourcc('mp4v', FOURCC),
+    make_video_writer('/tmp/clausal_opencv_video_test_free.mp4',
                        FOURCC, 30.0, [120, 90], WRITER),
     free(WRITER),
     not write_frame(WRITER, _)

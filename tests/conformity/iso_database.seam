@@ -14,7 +14,6 @@
 # does not always re-index).  These tests therefore verify state changes
 # via direct membership queries, which is a more faithful mirror of what
 # the Python test suite was asserting anyway.
--double_quotes(atom)
 
 -module(iso_database, [test(DESC)])
 
@@ -24,82 +23,82 @@
 -dynamic(letter/1)
 -dynamic(single/1)
 
-color("red"),
-color("green"),
+color('red'),
+color('green'),
 
-item("b"),
-item("c"),
+item('b'),
+item('c'),
 
-letter("a"),
-letter("b"),
-letter("c"),
+letter('a'),
+letter('b'),
+letter('c'),
 
 single(42),
 
-greet("__seed__"),
+greet('__seed__'),
 
 # ── assertz/1 — add then observe ───────────────────────────────────────────
 
-test("assertz adds and is visible") <- (
-    assertz(color("blue")),
-    color("blue"),
-    retract(color("blue"))
+test('assertz adds and is visible') <- (
+    assertz(color('blue')),
+    color('blue'),
+    retract(color('blue'))
 )  # nv
 
-test("assertz on fresh predicate") <- (
-    assertz(greet("hello")),
-    greet("hello"),
-    retract(greet("hello"))
+test('assertz on fresh predicate') <- (
+    assertz(greet('hello')),
+    greet('hello'),
+    retract(greet('hello'))
 )  # nv
 
-test("assertz multiple then query each") <- (
-    assertz(greet("one")),
-    assertz(greet("two")),
-    assertz(greet("three")),
-    greet("one"),
-    greet("two"),
-    greet("three"),
-    retract(greet("one")),
-    retract(greet("two")),
-    retract(greet("three"))
+test('assertz multiple then query each') <- (
+    assertz(greet('one')),
+    assertz(greet('two')),
+    assertz(greet('three')),
+    greet('one'),
+    greet('two'),
+    greet('three'),
+    retract(greet('one')),
+    retract(greet('two')),
+    retract(greet('three'))
 )  # nv
 
 # ── asserta/1 — prepended clause is reachable ─────────────────────────────
 
-test("asserta adds and is visible") <- (
-    asserta(item("a")),
-    item("a"),
-    retract(item("a"))
+test('asserta adds and is visible') <- (
+    asserta(item('a')),
+    item('a'),
+    retract(item('a'))
 )  # nv
 
 # ── retract/1 — removes a clause ──────────────────────────────────────────
 
-test("retract removes matching clause") <- (
-    retract(letter("b")),
-    not letter("b"),
-    letter("a"),
-    letter("c"),
-    assertz(letter("b"))
+test('retract removes matching clause') <- (
+    retract(letter('b')),
+    not letter('b'),
+    letter('a'),
+    letter('c'),
+    assertz(letter('b'))
 )  # nv
 
-test("retract first clause") <- (
-    retract(letter("a")),
-    not letter("a"),
-    letter("b"),
-    letter("c"),
-    asserta(letter("a"))
+test('retract first clause') <- (
+    retract(letter('a')),
+    not letter('a'),
+    letter('b'),
+    letter('c'),
+    asserta(letter('a'))
 )  # nv
 
-test("retract only clause leaves predicate empty") <- (
+test('retract only clause leaves predicate empty') <- (
     retract(single(42)),
     not single(42),
     assertz(single(42))
 )  # nv
 
-test("retract then re-assert restores fact") <- (
-    color("red"),
-    retract(color("red")),
-    not color("red"),
-    assertz(color("red")),
-    color("red")
+test('retract then re-assert restores fact') <- (
+    color('red'),
+    retract(color('red')),
+    not color('red'),
+    assertz(color('red')),
+    color('red')
 )  # nv

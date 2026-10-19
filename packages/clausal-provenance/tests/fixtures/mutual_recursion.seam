@@ -1,4 +1,3 @@
--double_quotes(atom)
 -import_from(provenance, [bottom_up_, solve, boolean])
 
 -module(mutual_recursion, [
@@ -20,7 +19,7 @@ odd(N) <- (pred(N, M), even(M))
 even(N) <- (pred(N, M), odd(M))
 
 
-test("mutual recursion across two predicates: even") <- (
+test('mutual recursion across two predicates: even') <- (
     FACTS is [
         (zero(0), True),
         (pred(1, 0), True), (pred(2, 1), True), (pred(3, 2), True),
@@ -30,7 +29,7 @@ test("mutual recursion across two predicates: even") <- (
     length(R, 3)
 )
 
-test("mutual recursion across two predicates: odd") <- (
+test('mutual recursion across two predicates: odd') <- (
     FACTS is [
         (zero(0), True),
         (pred(1, 0), True), (pred(2, 1), True), (pred(3, 2), True),
@@ -40,7 +39,7 @@ test("mutual recursion across two predicates: odd") <- (
     length(R, 3)
 )
 
-test("mutual recursion: even(4) is derived") <- (
+test('mutual recursion: even(4) is derived') <- (
     FACTS is [
         (zero(0), True),
         (pred(1, 0), True), (pred(2, 1), True), (pred(3, 2), True),
@@ -49,7 +48,7 @@ test("mutual recursion: even(4) is derived") <- (
     solve(boolean, FACTS, even(4), [(_, True)])
 )
 
-test("mutual recursion: odd(2) is not derived") <- (
+test('mutual recursion: odd(2) is not derived') <- (
     FACTS is [
         (zero(0), True),
         (pred(1, 0), True), (pred(2, 1), True),

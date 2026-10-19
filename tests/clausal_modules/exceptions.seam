@@ -5,7 +5,6 @@
 # ── Basic throw and catch ────────────────────────────────────────────────────
 
 # catch_all/2 — variable catcher matches any thrown term
--double_quotes(atom)
 catch_all(TERM, CAUGHT) <- (
     catch(
         throw(TERM),
@@ -19,19 +18,19 @@ safe_result(GOAL_VALUE, RESULT) <- (
     catch(
         (RESULT is GOAL_VALUE),
         _,
-        RESULT is "error",
+        RESULT is 'error',
     )
 )
 
 # throw_if_zero/1 — throws "division_by_zero" if input is 0
-throw_if_zero(0) <- throw("division_by_zero")
+throw_if_zero(0) <- throw('division_by_zero')
 throw_if_zero(N) <- (N is not 0)
 
 # safe_recip/2 — safe reciprocal with catch
 safe_recip(N, RESULT) <- (
     catch(
         (throw_if_zero(N) and eval_(1 / N, RESULT)),
-        "division_by_zero",
+        'division_by_zero',
         RESULT is 0,
     )
 )
@@ -42,9 +41,9 @@ safe_recip(N, RESULT) <- (
 inner_miss(RESULT) <- (
     catch(
         catch(
-            throw("outer_problem"),
-            "inner_only",
-            RESULT is "inner_caught",
+            throw('outer_problem'),
+            'inner_only',
+            RESULT is 'inner_caught',
         ),
         ERROR,
         RESULT is ERROR,
@@ -55,12 +54,12 @@ inner_miss(RESULT) <- (
 inner_hit(RESULT) <- (
     catch(
         catch(
-            throw("inner_problem"),
-            "inner_problem",
-            RESULT is "inner_caught",
+            throw('inner_problem'),
+            'inner_problem',
+            RESULT is 'inner_caught',
         ),
         _,
-        RESULT is "outer_caught",
+        RESULT is 'outer_caught',
     )
 )
 
@@ -73,14 +72,14 @@ inner_hit(RESULT) <- (
 # reuse.
 
 # risky/2 — fails on 0, succeeds on nonzero
-risky(0, _) <- throw("zero_error")
+risky(0, _) <- throw('zero_error')
 risky(INPUT, OUTPUT) <- ((INPUT is not 0) and (OUTPUT == INPUT * 10))
 
 # try_risky/2 — wraps risky in catch; on error, RESULT stays unbound (fails)
 try_risky(INPUT, RESULT) <- (
     catch(
         risky(INPUT, RESULT),
-        "zero_error",
+        'zero_error',
         False,
     )
 )
@@ -96,9 +95,9 @@ parent(RESULT) <- (
 # catch_no_throw/1 — goal succeeds without throwing; catch is transparent
 catch_no_throw(RESULT) <- (
     catch(
-        RESULT is "normal",
+        RESULT is 'normal',
         _,
-        RESULT is "recovery",
+        RESULT is 'recovery',
     )
 )
 
@@ -113,30 +112,30 @@ catch_multiple(RESULT) <- (
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 
-test("catch variable catcher") <- (catch_all(42, CAUGHT) and CAUGHT is 42)  # nv
-test("catch string term") <- (catch_all("oops", CAUGHT) and CAUGHT is "oops")  # nv
-test("safe reciprocal of 2") <- (safe_recip(2, R) and R == 0.5)  # nv
-test("safe reciprocal of 0") <- (safe_recip(0, R) and R is 0)  # nv
-test("throw if zero throws") <- (
-    catch(throw_if_zero(0), "division_by_zero", True)
+test('catch variable catcher') <- (catch_all(42, CAUGHT) and CAUGHT is 42)  # nv
+test('catch string term') <- (catch_all('oops', CAUGHT) and CAUGHT is 'oops')  # nv
+test('safe reciprocal of 2') <- (safe_recip(2, R) and R == 0.5)  # nv
+test('safe reciprocal of 0') <- (safe_recip(0, R) and R is 0)  # nv
+test('throw if zero throws') <- (
+    catch(throw_if_zero(0), 'division_by_zero', True)
 )  # nv
-test("throw if zero passes") <- throw_if_zero(1)  # nv
-test("inner catch misses - outer catches") <- (
-    inner_miss(R) and R is "outer_problem"
+test('throw if zero passes') <- throw_if_zero(1)  # nv
+test('inner catch misses - outer catches') <- (
+    inner_miss(R) and R is 'outer_problem'
 )  # nv
-test("inner catch hits") <- (inner_hit(R) and R is "inner_caught")  # nv
+test('inner catch hits') <- (inner_hit(R) and R is 'inner_caught')  # nv
 
 # The critical dead-child-generator test
-test("parent backtracks after catch failure") <- (
+test('parent backtracks after catch failure') <- (
     parent(RESULT) and RESULT is 10
 )  # nv
 
-test("catch is transparent when no throw") <- (
-    catch_no_throw(R) and R is "normal"
+test('catch is transparent when no throw') <- (
+    catch_no_throw(R) and R is 'normal'
 )  # nv
-test("catch with multiple solutions") <- (
+test('catch with multiple solutions') <- (
     findall(X, catch_multiple(X), BAG) and BAG is [10, 20, 30]
 )  # nv
-test("safe result passes through") <- (
+test('safe result passes through') <- (
     safe_result(42, R) and R is 42
 )  # nv

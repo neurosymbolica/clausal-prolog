@@ -1,4 +1,3 @@
--double_quotes(atom)
 -import_from(jax, [
     array, array_list, shape, allclose,
     median, std, var, percentile, quantile, cov, corrcoef,
@@ -9,19 +8,19 @@
 
 # --- Statistics: median ---
 
-test("median odd length") <- (
+test('median odd length') <- (
     array([1.0, 2.0, 3.0, 4.0, 5.0], A),
     median(A, M),
     array_list(M, 3.0)
 )  # nv
 
-test("median even length averages middle") <- (
+test('median even length averages middle') <- (
     array([1.0, 2.0, 3.0, 4.0], A),
     median(A, M),
     array_list(M, 2.5)
 )  # nv
 
-test("median along axis") <- (
+test('median along axis') <- (
     array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], A),
     median(A, 1, M),
     array_list(M, [2.0, 5.0])
@@ -29,19 +28,19 @@ test("median along axis") <- (
 
 # --- std / var ---
 
-test("std of [2,4,4,4,5,5,7,9] is 2.0") <- (
+test('std of [2,4,4,4,5,5,7,9] is 2.0') <- (
     array([2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0], A),
     std(A, S),
     array_list(S, 2.0)
 )  # nv
 
-test("var of [2,4,4,4,5,5,7,9] is 4.0") <- (
+test('var of [2,4,4,4,5,5,7,9] is 4.0') <- (
     array([2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0], A),
     var(A, V),
     array_list(V, 4.0)
 )  # nv
 
-test("std along axis 0") <- (
+test('std along axis 0') <- (
     array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], A),
     std(A, 0, S),
     array_list(S, [1.5, 1.5, 1.5])
@@ -49,19 +48,19 @@ test("std along axis 0") <- (
 
 # --- percentile / quantile ---
 
-test("percentile 50 is median") <- (
+test('percentile 50 is median') <- (
     array([1.0, 2.0, 3.0, 4.0, 5.0], A),
     percentile(A, 50.0, R),
     array_list(R, 3.0)
 )  # nv
 
-test("quantile 0.5 is median") <- (
+test('quantile 0.5 is median') <- (
     array([1.0, 2.0, 3.0, 4.0, 5.0], A),
     quantile(A, 0.5, R),
     array_list(R, 3.0)
 )  # nv
 
-test("percentile along axis") <- (
+test('percentile along axis') <- (
     array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], A),
     percentile(A, 25.0, 1, R),
     array_list(R, [1.5, 4.5])
@@ -69,7 +68,7 @@ test("percentile along axis") <- (
 
 # --- cov / corrcoef ---
 
-test("cov shape on 3-variable matrix") <- (
+test('cov shape on 3-variable matrix') <- (
     array([[1.0, 2.0, 3.0, 4.0],
            [4.0, 3.0, 2.0, 1.0],
            [1.0, 2.0, 1.0, 2.0]], A),
@@ -77,7 +76,7 @@ test("cov shape on 3-variable matrix") <- (
     shape(R, [3, 3])
 )  # nv
 
-test("corrcoef diagonal is ones") <- (
+test('corrcoef diagonal is ones') <- (
     array([[1.0, 2.0, 3.0, 4.0],
            [4.0, 3.0, 2.0, 1.0],
            [1.0, 2.0, 1.0, 2.0]], A),
@@ -87,25 +86,25 @@ test("corrcoef diagonal is ones") <- (
 
 # --- argmin / argmax ---
 
-test("argmin returns index of smallest") <- (
+test('argmin returns index of smallest') <- (
     array([3.0, 1.0, 4.0, 1.0, 5.0, 9.0, 2.0], A),
     argmin(A, I),
     array_list(I, 1)
 )  # nv
 
-test("argmax returns index of largest") <- (
+test('argmax returns index of largest') <- (
     array([3.0, 1.0, 4.0, 1.0, 5.0, 9.0, 2.0], A),
     argmax(A, I),
     array_list(I, 5)
 )  # nv
 
-test("argmin along axis 0 on 2d") <- (
+test('argmin along axis 0 on 2d') <- (
     array([[1, 5, 3], [7, 2, 6]], A),
     argmin(A, 0, I),
     array_list(I, [0, 1, 0])
 )  # nv
 
-test("argmax along axis 1 on 2d") <- (
+test('argmax along axis 1 on 2d') <- (
     array([[1, 5, 3], [7, 2, 6]], A),
     argmax(A, 1, I),
     array_list(I, [1, 0])
@@ -113,26 +112,26 @@ test("argmax along axis 1 on 2d") <- (
 
 # --- sort / argsort ---
 
-test("sort 1d ascending") <- (
+test('sort 1d ascending') <- (
     array([3, 1, 4, 1, 5], A),
     sort(A, R),
     array_list(R, [1, 1, 3, 4, 5])
 )  # nv
 
-test("argsort 1d gives permutation") <- (
+test('argsort 1d gives permutation') <- (
     array([3, 1, 2], A),
     argsort(A, I),
     array_list(I, [1, 2, 0])
 )  # nv
 
-test("sort along axis 1 of 2d") <- (
+test('sort along axis 1 of 2d') <- (
     array([[3, 1, 4], [6, 2, 5]], A),
     sort(A, 1, R),
     array_list(R, [[1, 3, 4], [2, 5, 6]])
 )  # nv
 
 # sort + argsort consistency — take(A, argsort(A), 0) equals sort(A)
-test("sort and argsort consistent via take") <- (
+test('sort and argsort consistent via take') <- (
     array([3.0, 1.0, 4.0, 1.0, 5.0], A),
     sort(A, SORTED),
     argsort(A, IDX),
@@ -143,7 +142,7 @@ test("sort and argsort consistent via take") <- (
 
 # --- topk ---
 
-test("topk returns (values, indices) tuple") <- (
+test('topk returns (values, indices) tuple') <- (
     array([1.0, 5.0, 3.0, 2.0, 4.0], A),
     topk(A, 2, RES),
     RES is (VS, IS),
@@ -151,7 +150,7 @@ test("topk returns (values, indices) tuple") <- (
     array_list(IS, [1, 4])
 )  # nv
 
-test("topk k=1 is argmax+value") <- (
+test('topk k=1 is argmax+value') <- (
     array([3.0, 1.0, 4.0, 1.0, 5.0], A),
     topk(A, 1, (VS, IS)),
     array_list(VS, [5.0]),
@@ -160,21 +159,21 @@ test("topk k=1 is argmax+value") <- (
 
 # --- nonzero ---
 
-test("nonzero 1d returns 1-tuple of indices") <- (
+test('nonzero 1d returns 1-tuple of indices') <- (
     array([0, 1, 0, 2, 3], A),
     nonzero(A, NZ),
     NZ is (I,),
     array_list(I, [1, 3, 4])
 )  # nv
 
-test("nonzero of all zeros returns empty indices") <- (
+test('nonzero of all zeros returns empty indices') <- (
     array([0, 0, 0], A),
     nonzero(A, NZ),
     NZ is (I,),
     shape(I, [0])
 )  # nv
 
-test("nonzero on 2d returns per-dim indices") <- (
+test('nonzero on 2d returns per-dim indices') <- (
     array([[0, 1], [2, 0]], A),
     nonzero(A, NZ),
     NZ is (ROWS, COLS),
@@ -184,13 +183,13 @@ test("nonzero on 2d returns per-dim indices") <- (
 
 # --- unique ---
 
-test("unique sorts and dedupes") <- (
+test('unique sorts and dedupes') <- (
     array([1, 2, 1, 3, 2, 3], A),
     unique(A, U),
     array_list(U, [1, 2, 3])
 )  # nv
 
-test("unique of single repeated value") <- (
+test('unique of single repeated value') <- (
     array([7, 7, 7], A),
     unique(A, U),
     array_list(U, [7])
@@ -202,7 +201,7 @@ test("unique of single repeated value") <- (
 # position `kth` gives the value that would sit at position kth in a
 # fully-sorted array. For A = [3, 1, 4, 1, 5, 9, 2, 6] (sorted: [1, 1,
 # 2, 3, 4, 5, 6, 9]) with kth=3, the pivot value is 3.
-test("argpartition pivot value matches sorted position") <- (
+test('argpartition pivot value matches sorted position') <- (
     array([3.0, 1.0, 4.0, 1.0, 5.0, 9.0, 2.0, 6.0], A),
     argpartition(A, 3, IDX),
     shape(IDX, [8]),

@@ -1,14 +1,13 @@
 # DCG predicates must be declared with their full signature (including the
 # two hidden state args) in the export list, so that -module generates a
 # PredicateMeta class rather than a bare atom string assignment.
--double_quotes(atom)
 -module(dcg_grammar, [sentence(_s0, _s), noun_phrase(_s0, _s), verb_phrase(_s0, _s), greeting(_s0, _s), digit(DIGIT, _s0, _s), ab(_s0, _s), look_ahead(TOKEN, _s0, _s), not_a(_s0, _s), expr_dcg(EXPRESSION, _s0, _s), valid_sentence(SENTENCE)])
 
-greeting >> (["hello", "world"])
+greeting >> (['hello', 'world'])
 
-noun_phrase >> (["the", "dog"] or ["the", "cat"] or ["a", "bird"])
+noun_phrase >> (['the', 'dog'] or ['the', 'cat'] or ['a', 'bird'])
 
-verb_phrase >> (["chases"] or ["sees"] or ["likes"])
+verb_phrase >> (['chases'] or ['sees'] or ['likes'])
 
 sentence >> (noun_phrase, verb_phrase, noun_phrase)
 
@@ -16,15 +15,15 @@ sentence >> (noun_phrase, verb_phrase, noun_phrase)
 digit(DIGIT) >> ([DIGIT], {DIGIT >= 0}, {DIGIT <= 9})
 
 # Recursive DCG: zero or more a's followed by zero or more b's
-ab >> (["a"], ab)
-ab >> (["b"], ab)
+ab >> (['a'], ab)
+ab >> (['b'], ab)
 ab >> ([])
 
 # Pushback / semicontext: peek at next token without consuming
 (look_ahead(TOKEN), [TOKEN]) >> ([TOKEN])
 
 # Negation in DCG
-not_a >> (not ["a"], [X_UNUSED])
+not_a >> (not ['a'], [X_UNUSED])
 
 # Regular predicate coexisting with DCG rules
 valid_sentence(SENTENCE) <- phrase(sentence, SENTENCE)
@@ -32,8 +31,8 @@ valid_sentence(SENTENCE) <- phrase(sentence, SENTENCE)
 # Expression parser with inline goal
 expr_dcg(EXPRESSION) >> ([EXPRESSION], {EXPRESSION is EXPRESSION + 0})
 
-test("valid sentence") <- valid_sentence(["the", "dog", "chases", "the", "cat"])  # nv
-test("greeting") <- phrase(greeting, ["hello", "world"])  # nv
-test("noun phrase dog") <- phrase(noun_phrase, ["the", "dog"])  # nv
-test("verb phrase chases") <- phrase(verb_phrase, ["chases"])  # nv
-test("digit 3") <- phrase(digit(3), [3])  # nv
+test('valid sentence') <- valid_sentence(['the', 'dog', 'chases', 'the', 'cat'])  # nv
+test('greeting') <- phrase(greeting, ['hello', 'world'])  # nv
+test('noun phrase dog') <- phrase(noun_phrase, ['the', 'dog'])  # nv
+test('verb phrase chases') <- phrase(verb_phrase, ['chases'])  # nv
+test('digit 3') <- phrase(digit(3), [3])  # nv

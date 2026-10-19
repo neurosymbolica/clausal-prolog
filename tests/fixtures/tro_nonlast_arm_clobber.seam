@@ -11,17 +11,16 @@
 # Padding clauses at key positions "p".."s" push the clause count over the
 # index threshold so signal-mode groundness dispatch (not loop-mode) is used
 # for the "k"/"w" buckets.
--double_quotes(atom)
 -module(tro_nonlast_arm_clobber, [prc(K, N, X), drv(X)])
 
-prc("k", N, X) <- (N > 0, M is N - 1, prc("k", M, X))
-prc("k", N, X) <- (X is N)
-prc("w", N, X) <- (X is N)
-prc("p", N, X) <- (X is N)
-prc("q", N, X) <- (X is N)
-prc("r", N, X) <- (X is N)
-prc("s", N, X) <- (X is N)
+prc('k', N, X) <- (N > 0, M is N - 1, prc('k', M, X))
+prc('k', N, X) <- (X is N)
+prc('w', N, X) <- (X is N)
+prc('p', N, X) <- (X is N)
+prc('q', N, X) <- (X is N)
+prc('r', N, X) <- (X is N)
+prc('s', N, X) <- (X is N)
 
 # Driver: the sibling prc("w", 0, _) re-enters dispatch while the first
 # goal's tail-call flag is still pending, triggering the clobber.
-drv(X) <- (prc("k", 2, X), prc("w", 0, _))
+drv(X) <- (prc('k', 2, X), prc('w', 0, _))

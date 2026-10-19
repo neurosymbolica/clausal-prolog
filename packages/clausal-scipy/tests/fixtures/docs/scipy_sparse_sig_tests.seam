@@ -1,8 +1,7 @@
 # Companion tests for docs/scipy_sparse.md signature blocks.
--double_quotes(atom)
 -import_from(scipy_sparse, [make_csr, make_eye, to_dense, shape, nonzero_count, free])
 
-test("makecsr exists") <- (
+test('makecsr exists') <- (
     DATA is [1.0, 2.0, 3.0],
     IDX is [0, 1, 2],
     PTR is [0, 1, 2, 3],
@@ -11,7 +10,7 @@ test("makecsr exists") <- (
     NNZ == 3,
     free(H))  # nv
 
-test("makeeye exists") <- (
+test('makeeye exists') <- (
     make_eye(3, H),
     nonzero_count(H, N),
     N == 3,

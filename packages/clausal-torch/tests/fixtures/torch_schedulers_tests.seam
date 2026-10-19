@@ -1,47 +1,46 @@
--double_quotes(atom)
 -import_from(torch_nn, [scheduler_type])
 
 # --- scheduler_type/2: registry enumeration ---
 
-test("enumerate schedulers") <- (
+test('enumerate schedulers') <- (
     findall(N, scheduler_type(N, _), NS),
-    in_("StepLR", NS),
-    in_("CosineAnnealingLR", NS),
-    in_("ExponentialLR", NS)
+    in_('StepLR', NS),
+    in_('CosineAnnealingLR', NS),
+    in_('ExponentialLR', NS)
 )  # nv
 
-test("scheduler lookup StepLR") <- (
-    scheduler_type("StepLR", _)
+test('scheduler lookup StepLR') <- (
+    scheduler_type('StepLR', _)
 )  # nv
 
-test("scheduler lookup MultiStepLR") <- (
-    scheduler_type("MultiStepLR", _)
+test('scheduler lookup MultiStepLR') <- (
+    scheduler_type('MultiStepLR', _)
 )  # nv
 
-test("scheduler lookup CyclicLR") <- (
-    scheduler_type("CyclicLR", _)
+test('scheduler lookup CyclicLR') <- (
+    scheduler_type('CyclicLR', _)
 )  # nv
 
-test("scheduler lookup OneCycleLR") <- (
-    scheduler_type("OneCycleLR", _)
+test('scheduler lookup OneCycleLR') <- (
+    scheduler_type('OneCycleLR', _)
 )  # nv
 
-test("scheduler lookup ReduceLROnPlateau") <- (
-    scheduler_type("ReduceLROnPlateau", _)
+test('scheduler lookup ReduceLROnPlateau') <- (
+    scheduler_type('ReduceLROnPlateau', _)
 )  # nv
 
-test("scheduler lookup LambdaLR") <- (
-    scheduler_type("LambdaLR", _)
+test('scheduler lookup LambdaLR') <- (
+    scheduler_type('LambdaLR', _)
 )  # nv
 
-test("scheduler lookup LinearLR") <- (
-    scheduler_type("LinearLR", _)
+test('scheduler lookup LinearLR') <- (
+    scheduler_type('LinearLR', _)
 )  # nv
 
-test("scheduler lookup ConstantLR") <- (
-    scheduler_type("ConstantLR", _)
+test('scheduler lookup ConstantLR') <- (
+    scheduler_type('ConstantLR', _)
 )  # nv
 
-test("scheduler lookup PolynomialLR") <- (
-    scheduler_type("PolynomialLR", _)
+test('scheduler lookup PolynomialLR') <- (
+    scheduler_type('PolynomialLR', _)
 )  # nv

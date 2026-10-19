@@ -3,7 +3,6 @@
 # ── Accumulator sum ──────────────────────────────────────────────────────────
 # sum_(List, Accumulator, Result): sum elements of List starting from Accumulator.
 # TRO-eligible: prefix is deterministic (eager `eval_/2`), tail call is self-recursive.
--double_quotes(atom)
 
 acc_sum([], ACC, ACC),
 acc_sum([H, *T], ACC, RESULT) <- (
@@ -11,10 +10,10 @@ acc_sum([H, *T], ACC, RESULT) <- (
     acc_sum(T, NEWACC, RESULT)
 )
 
-test("accsum empty") <- (acc_sum([], 0, R) and R == 0)  # nv
-test("accsum one") <- (acc_sum([5], 0, R) and R == 5)  # nv
-test("accsum three") <- (acc_sum([1, 2, 3], 0, R) and R == 6)  # nv
-test("accsum ten") <- (acc_sum([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 0, R) and R == 55)  # nv
+test('accsum empty') <- (acc_sum([], 0, R) and R == 0)  # nv
+test('accsum one') <- (acc_sum([5], 0, R) and R == 5)  # nv
+test('accsum three') <- (acc_sum([1, 2, 3], 0, R) and R == 6)  # nv
+test('accsum ten') <- (acc_sum([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 0, R) and R == 55)  # nv
 
 # ── Accumulator reverse ─────────────────────────────────────────────────────
 # acc_reverse builds a reversed list via accumulator pattern.
@@ -27,9 +26,9 @@ acc_reverse([H, *T], ACC, RESULT) <- (
     acc_reverse(T, ACC2, RESULT)
 )
 
-test("accrev empty") <- (acc_reverse([], [], R) and R == [])  # nv
-test("accrev one") <- (acc_reverse([1], [], R) and R == [1])  # nv
-test("accrev three") <- (acc_reverse([1, 2, 3], [], R) and R == [3, 2, 1])  # nv
+test('accrev empty') <- (acc_reverse([], [], R) and R == [])  # nv
+test('accrev one') <- (acc_reverse([1], [], R) and R == [1])  # nv
+test('accrev three') <- (acc_reverse([1, 2, 3], [], R) and R == [3, 2, 1])  # nv
 
 # ── Counter-based recursion ─────────────────────────────────────────────────
 # count_down(N, Accumulator, Result): count down from N, collecting values.
@@ -41,8 +40,8 @@ count_down(N, ACC, RESULT) <- (
     count_down(N1, [N, *ACC], RESULT)
 )
 
-test("countdown zero") <- (count_down(0, [], R) and R == [0])  # nv
-test("countdown three") <- (count_down(3, [], R) and R == [0, 1, 2, 3])  # nv
+test('countdown zero') <- (count_down(0, [], R) and R == [0])  # nv
+test('countdown three') <- (count_down(3, [], R) and R == [0, 1, 2, 3])  # nv
 
 # ── length with accumulator ─────────────────────────────────────────────────
 
@@ -52,8 +51,8 @@ acc_length([_, *T], ACC, N) <- (
     acc_length(T, ACC1, N)
 )
 
-test("acclen empty") <- (acc_length([], 0, N) and N == 0)  # nv
-test("acclen three") <- (acc_length([1, 2, 3], 0, N) and N == 3)  # nv
+test('acclen empty') <- (acc_length([], 0, N) and N == 0)  # nv
+test('acclen three') <- (acc_length([1, 2, 3], 0, N) and N == 3)  # nv
 
 # ── Factorial with accumulator ──────────────────────────────────────────────
 
@@ -65,9 +64,9 @@ acc_factorial(N, ACC, RESULT) <- (
     acc_factorial(N1, NEWACC, RESULT)
 )
 
-test("fact zero") <- (acc_factorial(0, 1, R) and R == 1)  # nv
-test("fact five") <- (acc_factorial(5, 1, R) and R == 120)  # nv
-test("fact ten") <- (acc_factorial(10, 1, R) and R == 3628800)  # nv
+test('fact zero') <- (acc_factorial(0, 1, R) and R == 1)  # nv
+test('fact five') <- (acc_factorial(5, 1, R) and R == 120)  # nv
+test('fact ten') <- (acc_factorial(10, 1, R) and R == 3628800)  # nv
 
 # ── Non-TRO predicate (nondeterministic prefix) for comparison ──────────────
 # This predicate has a predicate call before the tail call, so TRO must NOT apply.
