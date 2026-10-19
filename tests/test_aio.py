@@ -29,6 +29,20 @@ def run(coro):
     return asyncio.run(coro)
 
 
+@pytest.fixture
+def parked_loops():
+    """Event loops of queries parked live by _drop_mid_evaluation: kept open
+    for the test (closing one makes its query no longer live), closed at
+    teardown so no loop outlives its test."""
+    loops: list = []
+    yield loops
+    import gc
+    for loop in loops:
+        loop.close()
+    loops.clear()
+    gc.collect()        # the closed loops' parked queries go here, not later
+
+
 def _engine_state_clean():
     from clausal.logic import tabling
     return (not tabling._leader_ctx.stack and not tabling._leader_ctx.detached
@@ -668,7 +682,7 @@ _SWEEP_PROGRAM = (
 
 @pytest.mark.parametrize("second", ["sync", "async"])
 def test_an_unrelated_scc_sweep_leaves_a_dropped_querys_table_alone(
-        tmp_path, second):
+        tmp_path, second, parked_loops):
     # Sixth review 2026-10-06: any later leader exit swept the store for
     # dormant SCC members and completed a dropped query's self-recursive
     # path(1, _) with its one partial answer -- [2] instead of [2, 3, 4],
@@ -685,7 +699,7 @@ def test_an_unrelated_scc_sweep_leaves_a_dropped_querys_table_alone(
     gc.collect()
     gc.disable()
     try:
-        _drop_mid_evaluation(("hp", 1, Var()), mod)
+        _drop_mid_evaluation(("hp", 1, Var()), mod, keep_open=parked_loops)
         [hp] = [e for k, e in store.items() if k[0] == "hp"]
         assert hp.status == "evaluating" and [a[1] for a in hp.answers] == [2]
 
@@ -806,14 +820,16 @@ _DEAD_PROGRAM = (
     "caller(X) <- (other(X), path(X, _))\n")
 
 
-def _drop_mid_evaluation(goal, mod, *, close_loop=False):
+def _drop_mid_evaluation(goal, mod, *, close_loop=False, keep_open=None):
     """Start *goal* in a task, let it park at ``hang/1`` inside its tabled
     evaluation, and drop it unclosed -- its tables genuinely EVALUATING
     (since D68 a query holding an answer holds a complete table).  A query
     parked inside an evaluation is never reclaimed by the GC (see
     _park_until_loop_closes); with *close_loop* its loop is closed, which
     makes it no longer live (later queries re-lead its tables), else it
-    stays a live, suspended query."""
+    stays a live, suspended query, and its loop goes into *keep_open* (the
+    ``parked_loops`` fixture's list), which closes it at teardown."""
+    assert close_loop or keep_open is not None
     loop = asyncio.new_event_loop()
 
     async def park():
@@ -825,11 +841,8 @@ def _drop_mid_evaluation(goal, mod, *, close_loop=False):
     if close_loop:
         loop.close()
     else:
-        _OPEN_LOOPS.append(loop)
+        keep_open.append(loop)
     del task, loop
-
-
-_OPEN_LOOPS: list = []      # loops of live parked queries, kept open
 
 
 def _park_until_loop_closes(goal, mod, *, between_answers):
