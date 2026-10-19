@@ -1063,9 +1063,12 @@ answer `Undefined` (rulings D35/D47). The translator answers the atom
 `'undefined'` for both; Scryer answers the atom `undefined`. A file that needs
 the atom should use another name.
 
-The ISO directive `:- set_prolog_flag(double_quotes, Mode)` (or the short
-`:- double_quotes(Mode)`) governs every `"…"` below it, as in Scryer, and the
-translator applies it at each literal: under `chars` (the default) `"ab"` is
+The ISO directive `:- set_prolog_flag(double_quotes, Mode)` governs every
+`"…"` below it, as in Scryer, and the translator applies it at each literal.
+(The short `:- double_quotes(Mode)` is not ISO. The legacy translator
+(`CLAUSAL_PL_FRONTEND=translator`) accepts it; the native front end, the
+default, refuses it as an unknown directive, as Scryer does with
+`domain_error(directive, double_quotes/1)`.) Under `chars` (the default) `"ab"` is
 the string `"ab"` (the chars `[a, b]`), under `codes` it is the list
 `[97, 98]`, and under `atom` it is the atom `'ab'`. The module's own mode
 follows for `chars` and `atom` (`-double_quotes(atom)`), so
