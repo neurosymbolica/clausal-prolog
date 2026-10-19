@@ -132,7 +132,9 @@ class _LeaderContext(threading.local):
         self.open_tabled: list[list] = []
         # Bumped whenever a tabled frame hands out answers of an INCOMPLETE
         # table (a consumer of a table under evaluation; a leader streaming
-        # an SCC member's or a constrained answer).  A leader compares it
+        # an SCC member's or a constrained answer) -- except an SCC member's
+        # delivery after its fixpoint, which its consumer read already
+        # counted (see make_tabled_wrapper_trampoline).  A leader compares it
         # across a fixpoint pass: unchanged means the pass read only
         # complete tables, so it needs no confirming pass (D68 review F3).
         self.incomplete_reads: int = 0
@@ -1632,6 +1634,19 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             # XSB's run-time error (``cut_over_incomplete``).  The table is
             # incomplete because this very call is inside its evaluation.
             _rec = _open_tabled(entry, functor, arity, trail, entry.pi)
+            # Belt-and-braces, no pinning test: removing this bump fails no
+            # test, and none could be built.  The no-confirming-pass check
+            # (below, "No confirming pass") already sees every consumer
+            # read another way: ``cl.scc_deps.add(entry)`` just above runs
+            # before any answer is handed out, and ``cl`` is never None here
+            # (the ancestor is on the leader stack), so the leader making
+            # this call keeps ``scc_deps`` non-empty, and its own leaders get
+            # the edge by the transitive propagation at its exit, or, when
+            # the ancestor is that leader itself, see the SuspendedConsumer
+            # registered below in ``entry.suspended``.  Kept so the counter
+            # stays a complete record of incomplete reads (the final-delivery
+            # exception aside, see there), not one that leans on that
+            # propagation staying exact.
             _leader_ctx.incomplete_reads += 1
             try:
                 for i, stored in enumerate(entry.answers):
@@ -1807,6 +1822,19 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                                                  delay_set)
                             yield (_proceed, None)
                     _st = yield (_gen, None)
+                # ``not pass_delays`` is belt-and-braces, with no pinning test:
+                # removing it fails no test, and none could be built.  A
+                # delay arises from a negation over a table on the leader
+                # stack (``_delay_negation``: it succeeds conditionally
+                # however far that table has grown) or from a conditional
+                # row of a COMPLETE table; any read of an incomplete table
+                # on the way is caught by the other three tests.  So a
+                # re-run should derive the same answers with the same
+                # delays.  Kept because a conditional answer's delay
+                # bookkeeping (``_charge_delays``, ``_credit_consumer``,
+                # ``_resolve_conditions``) was written for a leader that
+                # runs its fixpoint to a confirming pass, and that pass is
+                # paid only by tables with conditional answers.
                 if (changed and not entry.suspended and not entry.scc_deps
                         and not pass_delays
                         and _leader_ctx.incomplete_reads == reads_at_start):
@@ -1816,7 +1844,15 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                     # an incomplete table anywhere beneath it (the
                     # ``incomplete_reads`` counter: a constrained answer
                     # streamed into the pass, say) -- and no answer is
-                    # conditional.  Every tabled call it made is complete,
+                    # conditional.  The counter sees every such hand-out
+                    # but one: the DELIVERY after an SCC member's fixpoint
+                    # (below, "Delivery") hands back rows of its incomplete
+                    # table without a bump.  That is safe: a table becomes
+                    # an SCC member only by consuming a still-evaluating
+                    # ancestor, and that consumer read, made inside the
+                    # same pass, already bumped the counter, registered a
+                    # suspended consumer on the ancestor and recorded an
+                    # ``scc_deps`` edge on the leader that made it.  Every tabled call it made is complete,
                     # so a re-run derives the same answers.  Only a
                     # body that reads its OWN side effects (an assertz in the
                     # pass, read by a clause that ran before it) could differ,
@@ -1898,7 +1934,9 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
         if entry.status != "complete":
             # An SCC member: its table is incomplete until the ancestor it
             # depends on completes, so a cut over this call is XSB's
-            # run-time error, naming that ancestor.
+            # run-time error, naming that ancestor.  These rows are NOT
+            # counted in ``incomplete_reads`` (the one exception; see the
+            # "No confirming pass" comment above for why that is safe).
             _rec = _open_tabled(entry, functor, arity, trail,
                                 _evaluating_ancestor(entry))
         try:
