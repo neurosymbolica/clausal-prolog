@@ -5,12 +5,3 @@ term_expansion(INPUT, OUTPUT, MODULE_STATE, NEW_STATE) :-
     % transform INPUT into OUTPUT
     ...
 --8<-- [end:writing_expansion_rules]
-
---8<-- [start:regex_auto_binding]
-# What you write:
-match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S)
-
-# What the compiler sees (after expansion):
-match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S, _G),
-YEAR is _G["YEAR"], MONTH is _G["MONTH"]
---8<-- [end:regex_auto_binding]

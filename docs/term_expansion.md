@@ -3,8 +3,7 @@
 Term expansion and goal expansion are compile-time transformation passes that rewrite [clauses](predicates.md) and goals before [compilation](compiler.md). They enable metaprogramming, syntactic sugar, and optimization — transforming what you write into what the compiler sees.
 
 Examples on this page are [Clausal Prolog](clausal_prolog.md) (`.clausal`),
-which uses ISO Prolog syntax, except the regex auto-binding examples: that
-goal expansion is a [seam](syntax.md) feature, and those examples are seam.
+which uses ISO Prolog syntax.
 
 ---
 
@@ -211,10 +210,27 @@ Goal expansion rewrites individual goals within clause bodies at compile time. U
 
 The goal expansion pass (`clausal/logic/goal_expansion.py`) applies these transformations automatically:
 
-**[Regex](regex.md) auto-binding** (seam): Named capture groups with ALLCAPS or leading-underscore names are automatically bound to clause variables. This is a seam feature: in a `.clausal` file, `match/2` from `library(re)` does not bind the group's variable, so the examples are seam syntax:
+**[Regex](regex.md) auto-binding**: Named capture groups with ALLCAPS or leading-underscore names are automatically bound to the clause variable of the same name. What you write, and what the compiler sees after expansion, in effect:
 
-```seam
---8<-- "tests/fixtures/docs/term_expansion_sigs.txt:regex_auto_binding"
+```clausal
+:- set_prolog_flag(double_quotes, chars).
+:- use_module(library(re), [match/2, match/3]).
+
+% What you write:
+parse(S, YEAR, MONTH) :-
+    match("(?P<YEAR>\\d{4})-(?P<MONTH>\\d{2})", S).
+
+% What the compiler sees (after expansion):
+parse_expanded(S, YEAR, MONTH) :-
+    match("(?P<YEAR>\\d{4})-(?P<MONTH>\\d{2})", S, G),
+    get(G, 'YEAR', YEAR),
+    get(G, 'MONTH', MONTH).
+
+test("auto-binding reads the groups") :-
+    parse("2026-03", Y, M),
+    parse_expanded("2026-03", Y, M),
+    Y == "2026",
+    M == "03".
 ```
 
 **Pattern precompilation**: String-literal regex patterns are compiled to `re.Pattern` objects at load time, avoiding runtime recompilation.
@@ -252,21 +268,18 @@ For a `.seam` file:
 
 ## Integration Example
 
-The goal expansion for regex auto-binding shows both systems working together. In the seam, when you write:
+The goal expansion for regex auto-binding shows both systems working together. When you write:
 
-```seam
--allow_singletons
-# Named-group auto-bind: YEAR's binding occurrence lives inside the
-# pattern STRING, invisible to the singleton counter's AST-Name check.
--import_from(regex, [match])
+```clausal
+:- set_prolog_flag(double_quotes, chars).
+:- use_module(library(re), [match/2]).
 
-test("auto-bind year") <- (
-    match(r"(?P<YEAR>\d{4})-\d{2}", '2026-03'),
-    YEAR is "2026"
-)
+test("auto-bind year") :-
+    match("(?P<YEAR>\\d{4})-\\d{2}", "2026-03"),
+    YEAR == "2026".
 ```
 
-The goal expansion pass detects the `(?P<YEAR>...)` group, rewrites `match/2` to `match/3` with group extraction, and binds `YEAR` automatically — to a **string** (`"2026"`, the `('$chars', '2026')` term), so compare it with unification (`is`), not with the CLP(ℤ) `==`, which raises `domain_error(clpz_expression, ...)` on text. The regex pattern is also precompiled at load time.
+The goal expansion pass detects the `(?P<YEAR>...)` group, rewrites `match/2` to `match/3` with group extraction, and binds `YEAR` automatically — to a **string** (`"2026"`, the `('$chars', '2026')` term), which ISO `==` compares structurally. (In the seam, `==` is CLP(ℤ) equality and raises `domain_error(clpz_expression, ...)` on text, so compare with `is` there.) The regex pattern is also precompiled at load time.
 
 ---
 

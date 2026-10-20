@@ -1,6 +1,6 @@
 # Regex Module
 
-The regex standard library module provides regular expression predicates. It wraps Python's `re` module with a relational interface. [Clausal Prolog](clausal_prolog.md) (`.clausal`), the ISO-syntax surface the examples on this page use, imports it through its facade `library(re)`. The [seam](syntax.md) names the same module `regex`, and in the seam alone named capture groups also bind logic variables automatically (see [Auto-Binding](#auto-binding)).
+The regex standard library module provides regular expression predicates. It wraps Python's `re` module with a relational interface. [Clausal Prolog](clausal_prolog.md) (`.clausal`), the ISO-syntax surface the examples on this page use, imports it through its facade `library(re)`. The [seam](syntax.md) names the same module `regex`. In both, a named capture group spelled like a variable also binds that variable automatically (see [Auto-Binding](#auto-binding)).
 
 Everything on this page is **text**: a pattern is text, a subject is text, and
 a captured group comes back as a **string** — never an atom. A `"…"`
@@ -38,8 +38,8 @@ test("parse date") :-
 ```
 
 `match/3` answers the named groups as a dict, and `get/3` reads each group by
-its name. (In the seam, a group named like a clause variable binds that
-variable directly; see [Auto-Binding](#auto-binding).)
+its name. (A group named like a clause variable can also bind that variable
+directly; see [Auto-Binding](#auto-binding).)
 
 ---
 
@@ -132,8 +132,8 @@ test("mixed groups") :-
 > **Gotcha — an unmatched optional named group is Python `None`.** An optional
 > named group that does not participate in the match (e.g.
 > `"(?P<tag>\\d+)?x"` against `"x"`) is Python `None` in `Groups`, mirroring
-> `Match.groupdict()`; it is neither an atom nor an unbound variable. In the
-> seam, auto-binding such a group binds `None` too. This differs from SWI,
+> `Match.groupdict()`; it is neither an atom nor an unbound variable.
+> Auto-binding such a group binds `None` too. This differs from SWI,
 > which omits the key entirely.
 
 ### search/2, search/3
@@ -228,60 +228,79 @@ test("findall single group is a string") <- (
 
 ## Auto-Binding
 
-**Auto-binding is seam-only.** In the seam, named groups whose names are spelled like clause [variables](syntax.md) — capital-initial (`YEAR`, `Year`) or leading-underscore (`_rest`) — are automatically bound to the same-named variable at compile time (via [goal expansion](term_expansion.md)). This is the key feature that makes regex feel native in seam source. A lowercase group name is an atom spelling, so it stays regex-only and binds nothing.
-
-A `.clausal` file does not auto-bind: a group named `YEAR` leaves the clause
-variable `YEAR` unbound, for literal and dynamic patterns alike. Use
-`match/3` or `search/3` and read each group with `get/3`, as in the
-[Quick Example](#quick-example). The examples in this section are the seam
-spelling.
+Named groups whose names are spelled like clause [variables](clausal_prolog.md) — capital-initial (`YEAR`, `Year`) or leading-underscore (`_rest`) — are automatically bound to the variable of exactly that name, at compile time (via [goal expansion](term_expansion.md)). The variable may occur in the head or only in the body. A lowercase group name is an atom spelling, so it stays regex-only and binds nothing; so does a group that names no variable of the clause. The seam (`.seam`) auto-binds the same way.
 
 ### Capital-Initial Groups
 
-```seam
--double_quotes(chars)
--allow_singletons
-# Named-group auto-bind: the head params' second occurrence lives
-# inside the pattern STRING, invisible to the singleton counter.
--import_from(regex, [match])
+```clausal
+:- set_prolog_flag(double_quotes, chars).
+:- use_module(library(re), [match/2]).
 
-parse_email(EMAIL, USER, DOMAIN) <- (
-    match(r"(?P<USER>[^@]+)@(?P<DOMAIN>.+)", EMAIL)
-)
+parse_email(EMAIL, USER, DOMAIN) :-
+    match("(?P<USER>[^@]+)@(?P<DOMAIN>.+)", EMAIL).
 
-test("parse email") <- (
+test("parse email") :-
     parse_email("alice@example.com", USER, DOMAIN),
     USER == "alice",
-    DOMAIN == "example.com"
-)
+    DOMAIN == "example.com".
+```
+
+A group may name a variable that occurs only in the body:
+
+```clausal
+:- set_prolog_flag(double_quotes, chars).
+:- use_module(library(re), [match/2]).
+
+year_label(DATE, LABEL) :-
+    match("(?P<YEAR>\\d{4})-\\d{2}", DATE),
+    LABEL = year(YEAR).
+
+test("body variable") :-
+    year_label("2026-03", LABEL),
+    LABEL == year("2026").
 ```
 
 ### Leading-Underscore Groups
 
-```seam
--double_quotes(chars)
--allow_singletons
-# Named-group auto-bind: _port's second occurrence lives inside the
-# pattern STRING, invisible to the singleton counter.
--import_from(regex, [search])
+```clausal
+:- set_prolog_flag(double_quotes, chars).
+:- use_module(library(re), [search/2]).
 
-extract_port(URL, _port) <- (
-    search(r":(?P<_port>\d+)", URL)
-)
+extract_port(URL, _port) :-
+    search(":(?P<_port>\\d+)", URL).
 
-test("extract port") <- (
+test("extract port") :-
     extract_port("http://localhost:8080/api", PORT),
-    PORT == "8080"
-)
+    PORT == "8080".
 ```
 
 ### How It Works
 
-The seam's goal expansion pass detects `(?P<NAME>...)` patterns where NAME matches a variable in scope. It rewrites the match/2 call into match/3 plus unification (seam syntax):
+The goal expansion pass detects `(?P<NAME>...)` groups whose NAME is a variable of the clause, and rewrites the `match/2` call into `match/3` plus one read of each group. The two predicates below answer the same:
 
-```seam
---8<-- "tests/fixtures/docs/regex_sigs.txt:expansion_example"
+```clausal
+:- set_prolog_flag(double_quotes, chars).
+:- use_module(library(re), [match/2, match/3]).
+
+% What you write:
+parse(S, YEAR, MONTH) :-
+    match("(?P<YEAR>\\d{4})-(?P<MONTH>\\d{2})", S).
+
+% What the compiler sees after expansion, in effect:
+parse_expanded(S, YEAR, MONTH) :-
+    match("(?P<YEAR>\\d{4})-(?P<MONTH>\\d{2})", S, G),
+    get(G, 'YEAR', YEAR),
+    get(G, 'MONTH', MONTH).
+
+test("both read the same groups") :-
+    parse("2026-03", Y1, M1),
+    parse_expanded("2026-03", Y2, M2),
+    Y1 == Y2,
+    M1 == M2,
+    Y1 == "2026".
 ```
+
+The singleton lint knows this: a variable named by a group of a literal `match/2` or `search/2` pattern is not reported as a singleton.
 
 You never see the expanded form — just use the variable names in your pattern.
 
@@ -429,29 +448,27 @@ test("dynamic prefix fail") :-
     \+ match_prefix("bye", "hello world").
 ```
 
-Dynamic patterns are compiled at runtime (no precompilation). In the seam,
-named-group auto-binding still applies: a group whose name (capital-initial or leading-underscore)
-matches an in-scope clause variable is bound at runtime when it participates in
+Dynamic patterns are compiled at runtime (no precompilation). Named-group
+auto-binding still applies: a group whose name (capital-initial or leading-underscore)
+is the name of a clause variable binds it at runtime when it participates in
 the match. Because the group names are unknown until the goal runs, a variable
 is only bound when its matching group is actually present — otherwise it is
 left untouched. This is one deliberate divergence from static (string-literal)
 patterns, where an optional group that did not participate in the match binds
-its variable to Python `None`: in dynamic mode every in-scope clause variable
-is a binding candidate, so a non-participating group leaves the variable
-unbound rather than clobbering it with `None`. Like all auto-binding, this is
-seam-only; the example is the seam spelling:
+its variable to Python `None`: in dynamic mode every clause variable is a
+binding candidate, so a non-participating group leaves the variable unbound
+rather than clobbering it with `None`. The singleton lint cannot see a dynamic
+pattern's groups, so the variable below is underscore-led:
 
-```seam
--double_quotes(chars)
--allow_singletons
-# Dynamic-pattern auto-bind: YEAR's binding happens at runtime from the
-# pattern's group name, which isn't visible to the singleton counter
-# (the pattern itself is a variable here, not a literal).
--import_from(regex, [match])
+```clausal
+:- set_prolog_flag(double_quotes, chars).
+:- use_module(library(re), [match/2]).
 
-find_year(PAT, S, YEAR) <- match(PAT, S)
+find_year(PAT, S, _YEAR) :- match(PAT, S).
 
-test("dynamic autobind") <- find_year(r"(?P<YEAR>\d+)", "2026", "2026")
+test("dynamic autobind") :-
+    find_year("(?P<_YEAR>\\d+)", "2026", Y),
+    Y == "2026".
 ```
 
 ---
@@ -460,7 +477,7 @@ test("dynamic autobind") <- find_year(r"(?P<YEAR>\d+)", "2026", "2026")
 
 - **match is anchored at start**; search is not. Use `search` when you want to find a pattern anywhere in the string.
 - **Double every backslash** in a `.clausal` pattern literal: `"\\d+"`, not `"\d+"`.
-- **Auto-binding is seam-only**, and requires a variable-shaped group name there: capital-initial (`(?P<YEAR>...)`, `(?P<Year>...)`) or leading-underscore (`(?P<_rest>...)`). A group named `(?P<year>...)` (lowercase) will NOT auto-bind. In `.clausal`, read groups with `match/3` and `get/3`.
+- **Auto-binding requires a variable-shaped group name**: capital-initial (`(?P<YEAR>...)`, `(?P<Year>...)`) or leading-underscore (`(?P<_rest>...)`), and binds the variable spelled exactly like it (`YEAR` is not `Year`). A group named `(?P<year>...)` (lowercase) will NOT auto-bind; read it with `match/3` and `get/3`.
 - **Regex findall vs [meta-predicate findall](meta_predicates.md)**: The regex `findall/3` is nondeterministic (yields one match at a time). The meta-predicate `findall/3` collects all solutions into a list. In the seam, use qualified names (`regex.findall`) if both are imported; in `.clausal`, `findall/3` is always the meta-predicate.
 - **Dynamic patterns skip precompilation**. For hot loops, prefer string literals so the pattern is compiled once at load time.
 

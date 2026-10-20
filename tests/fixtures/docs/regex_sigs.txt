@@ -9,12 +9,3 @@
 :- use_module(library(re)).
 % then use re:match(...), re:search(...), etc.
 --8<-- [end:import_module]
-
---8<-- [start:expansion_example]
-# Before expansion (what you write):
-match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S)
-
-# After expansion (what the compiler sees):
-match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S, _G),
-YEAR is _G["YEAR"], MONTH is _G["MONTH"]
---8<-- [end:expansion_example]

@@ -564,26 +564,30 @@ Phase A bytecode is cached by Python's `SourceLoader` machinery. On cache hit, `
 
 ### Regex auto-binding
 
-when a [`match/2` or `search/2`](regex.md) call has a static pattern string containing ALLCAPS or leading-underscore named groups, goal expansion rewrites it to `match/3` + `Unify` chains. The auto-binding is a seam feature, so this example is in seam syntax: in a `.clausal` file the same `match/2` call (from `library(re)`) succeeds but leaves `YEAR` and `MONTH` unbound.
+When a [`match/2` or `search/2`](regex.md) call has a static pattern string containing ALLCAPS or leading-underscore named groups, goal expansion rewrites it to `match/3` + `Unify` chains, one per group that names a variable of the clause:
 
-```seam
--allow_singletons
-# Named-group auto-bind (see regex.md): the second occurrence of YEAR
-# and MONTH lives inside the pattern STRING, invisible to the singleton
-# counter's AST-Name check — a known, documented lint gap for this
-# specific pattern, not a mistake in this example.
-# Source:
-parse(S, YEAR, MONTH) <- match(r"(?P<YEAR>\d{4})-(?P<MONTH>\d{2})", S)
+```clausal
+:- set_prolog_flag(double_quotes, chars).
+:- use_module(library(re), [match/2, match/3]).
 
-# After expansion (conceptual):
-parse(S, YEAR, MONTH) <- (
-    match(_re_0, S, _groups),
-    YEAR is ++_groups["YEAR"],
-    MONTH is ++_groups["MONTH"]
-)
+% Source:
+parse(S, YEAR, MONTH) :-
+    match("(?P<YEAR>\\d{4})-(?P<MONTH>\\d{2})", S).
+
+% After expansion (in effect; the pattern is the precompiled _re_0):
+parse_expanded(S, YEAR, MONTH) :-
+    match("(?P<YEAR>\\d{4})-(?P<MONTH>\\d{2})", S, GROUPS),
+    get(GROUPS, 'YEAR', YEAR),
+    get(GROUPS, 'MONTH', MONTH).
+
+test("the expansion answers the same") :-
+    parse("2026-03", Y, M),
+    parse_expanded("2026-03", Y, M),
+    Y == "2026",
+    M == "03".
 ```
 
-The compiled regex pattern is injected into `module_dict` as `_re_0`, `_re_1`, etc. Identical patterns are deduplicated. Group-to-variable mapping uses `_collect_vars_from_term()` to find clause variables by field name (lowercased, stripped of leading underscore).
+The compiled regex pattern is injected into `module_dict` as `_re_0`, `_re_1`, etc. Identical patterns are deduplicated. A group binds the clause variable spelled exactly like it, wherever in the clause it occurs: both front ends record each rule's variables by source name in `Predicate.var_names`, because a `Var` carries no name and a Clausal Prolog head's fields are positional (`arg_0`, ...). A clause without that table (built in Python, or by term expansion) falls back to the head's field names, lowercased and stripped of a leading underscore (`_collect_vars_from_term()`).
 
 Lowercase named groups are NOT auto-bound — they function as regex-only groups (useful for backreferences). This gives explicit control over which groups leak into the logic variable namespace.
 
