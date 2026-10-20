@@ -28,9 +28,9 @@ test('tail bound after construction') <- (
     dict_pairs(D, L),
     D == {'a': 1, 'c': 3}
 )
-test('unbound key in a built list fails') <- (
+test('unbound key in a built list fails', fail) <- (
     copy_list([_ - 1], L),
-    not dict_pairs(_, L)
+    dict_pairs(_, L)
 )
 test('dict_put_pairs reads a built list') <- (
     drop(['a' - 1, 'b' - 2], 'b', F),

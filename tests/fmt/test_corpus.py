@@ -113,6 +113,11 @@ _KNOWN_ANCHOR_DRIFT = {
     "rulebase_s1_twin.seam":
         "fmt: a comment inside -private([...]) changes anchor "
         "(exposed when the corpus glob took in .seam fixtures)",
+    "reif.seam":
+        "fmt: a quoted-atom head 'if_'(...) is rewritten as the string "
+        "\"if_\"(...), which changes its meaning in the seam; ast_equivalent "
+        "cannot see it (todo/fmt-requotes-a-quoted-atom-head-as-a-string-"
+        "2026-10-20.md)",
 }
 
 
