@@ -349,7 +349,7 @@ def test_a_constant_declared_below_its_use_is_refused(native):
     assert err.lineno == 1 and "nothing declares `later`" in str(err), err
 
 
-@pytest.mark.parametrize("arg", ["compute()", "f(a)", "Y", "1"])
+@pytest.mark.parametrize("arg", ["f(a)", "Y", "1"])
 def test_constant_takes_a_name_never_an_expression(native, arg):
     err = _refusal(native, "s6expr", f"""\
         :- constant_value(a, 1).

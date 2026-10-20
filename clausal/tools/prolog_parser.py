@@ -413,11 +413,21 @@ class PrologParser:
         self._bar_reserved = False
         try:
             args: list[PTerm] = []
-            if self._peek().type != TokenType.RPAREN:
-                args.append(self._parse_term(999, bare_op_atom=True))  # args: prec 999
-                while self._peek().type == TokenType.COMMA:
-                    self._advance()  # consume ,
-                    args.append(self._parse_term(999, bare_op_atom=True))
+            close = self._peek()
+            if close.type == TokenType.RPAREN:
+                # ISO 6.3.3: a compound term has at least one argument, so
+                # `f()` is a syntax error (Scryer: incomplete_reduction).
+                # Reading it as a zero-argument compound let `nl()` run as
+                # `nl` in a clause body and crash a `-g` goal.
+                raise ParseError(
+                    f"empty argument list in {functor}(): a compound term "
+                    f"needs at least one argument (write the atom "
+                    f"{functor} without parentheses)",
+                    close.line, close.col)
+            args.append(self._parse_term(999, bare_op_atom=True))  # args: prec 999
+            while self._peek().type == TokenType.COMMA:
+                self._advance()  # consume ,
+                args.append(self._parse_term(999, bare_op_atom=True))
         finally:
             self._bar_reserved = saved_bar_reserved
         rparen_tok = self._expect(TokenType.RPAREN)

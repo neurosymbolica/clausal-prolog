@@ -611,12 +611,11 @@ digit(D) -->
 
 
 class TestParseEdgeCases:
-    def test_zero_arity_compound(self):
-        # nv
-        t = parse_term("foo()")
-        assert isinstance(t, PCompound)
-        assert t.functor == "foo"
-        assert t.args == ()
+    def test_empty_argument_list_is_a_syntax_error(self):
+        # ISO 6.3.3: a compound term has at least one argument; `foo()` is
+        # a syntax error (Scryer: incomplete_reduction), not foo/0.
+        with pytest.raises(ParseError, match="empty argument list"):
+            parse_term("foo()")
 
     def test_operator_as_atom_in_compound(self):
         # nv

@@ -323,6 +323,15 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **`name()` is a syntax error, as in ISO** (2026-10-20). The ISO reader
+  read `f()` as a compound with no arguments. In a `.clausal` or `.pl`
+  clause body `nl()` then ran as `nl`, and a `-g` goal such as `nl()`
+  crashed with an internal `TypeError` ("the 1-tuple ('nl',) is
+  reserved"). A compound term has at least one argument (ISO 6.3.3;
+  Scryer reports `syntax_error(incomplete_reduction)`), so the reader now
+  reports "empty argument list in nl()" with the position of the `)`, on
+  every path: `.clausal`, `.pl` under both front ends, and `-g`.
+
 - **`catch_error/2` and `catch_recover/3` load in a `.clausal` clause
   body** (2026-10-20). `t(R) :- catch_error(throw(boom(42)), R).` failed
   to load with `NotImplementedError: terms_to_goalop: goal shape not yet
