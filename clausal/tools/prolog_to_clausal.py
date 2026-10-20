@@ -1948,8 +1948,14 @@ class _PrologToClausal:
         lo, hi = domain(one.args[1])
         return f"in_domain({targets.pop()}, {self._emit_term(lo)}, {self._emit_term(hi)})"
 
-    def _emit_compound(self, term: PCompound, goal: bool = False) -> str:
-        """Emit a compound term (*goal*: it stands in goal position)."""
+    def _emit_compound(self, term: PCompound, goal: bool = False,
+                       called: bool = False) -> str:
+        """Emit a compound term (*goal*: it stands in goal position;
+        *called*: it is a meta-call's goal argument, so it is run as a goal
+        but otherwise emitted as a term).  Only in those two positions is a
+        meta-call's own goal argument ``[]`` the goal ``[]/0``
+        (``_emit_goal_arg``); a ``catch([], ...)`` in a head or as data
+        keeps its ``[]``."""
         functor = term.functor
         args = term.args
 
@@ -1999,7 +2005,7 @@ class _PrologToClausal:
         if functor in ("bagof", "setof") and len(args) == 3:
             name = self._predicate_name(functor, 3)
             return (f"{name}({self._emit_term(args[0])}, "
-                    f"{self._emit_quantified(args[1])}, "
+                    f"{self._emit_quantified(args[1], goal or called)}, "
                     f"{self._emit_term(args[2])})")
 
         # A ``V^G`` in a GOAL argument of any other meta-predicate
@@ -2152,10 +2158,10 @@ class _PrologToClausal:
             self._data_functors.setdefault(name, set()).add(len(args))
         if not args:
             return f"{name}()"
-        arg_strs = self._emit_args(functor, args)
+        arg_strs = self._emit_args(functor, args, called=goal or called)
         return f"{name}({arg_strs})"
 
-    def _emit_args(self, functor: str, args) -> str:
+    def _emit_args(self, functor: str, args, called: bool = False) -> str:
         """The emitted argument list of a ``functor(args)`` head, goal or
         data term.
 
@@ -2163,8 +2169,12 @@ class _PrologToClausal:
         reads, so an atom option (``fail``, ``false``) stays the atom it
         spells rather than folding to the truth value ``False``.  Applied in
         every position -- head, goal and data alike -- so a ``test/2`` fact
-        and a call of it still unify."""
-        goal_ix = _NIL_GOAL_ARGS.get(functor, ())
+        and a call of it still unify.
+
+        *called*: the term is run as a goal (a body goal, or a meta-call's
+        goal argument), so its own goal arguments are emitted by
+        ``_emit_goal_arg``; in a head or as data they are terms."""
+        goal_ix = _NIL_GOAL_ARGS.get(functor, ()) if called else ()
         emitted = [self._emit_goal_arg(a) if i in goal_ix
                    else self._emit_term(a) for i, a in enumerate(args)]
         if (functor == "test" and len(args) == 2
@@ -2179,24 +2189,36 @@ class _PrologToClausal:
         ``call([])``, the predicate ``[]/0``.  Emitted bare it is the seam's
         empty list: as the whole argument it succeeded (``catch([], ...)``
         was true with no ``[]/0``), and inside ``(A, [])`` the seam's goal
-        compiler refused it.  A goal argument with no ``[]`` goal in it is
-        emitted exactly as a term, as before."""
+        compiler refused it.  The text is otherwise exactly what
+        ``_emit_term`` writes: ``,``, ``;`` and ``\\+`` are spelled as its
+        compound emitter spells them, and any other compound goes through
+        that emitter, flagged *called* so that a meta-call nested in it
+        (``findall(_, catch([], _, _), _)``) is treated the same way."""
         if self._is_nil(term):
             return "call([])"
-        if isinstance(term, PCompound) and self._has_nil_goal(term):
-            f, a = term.functor, term.args
-            if f == "," and len(a) == 2:
-                return "(" + ", ".join(
-                    self._emit_goal_arg(p)
-                    for p in self._flatten_conjunction(term)) + ")"
-            if f in (";", "|") and len(a) == 2 and not (
-                    isinstance(a[0], PCompound)
-                    and a[0].functor in ("->", "*->")):
-                return (f"({self._emit_goal_arg(a[0])} or "
-                        f"{self._emit_goal_arg(a[1])})")
-            if f == "\\+" and len(a) == 1:
-                return f"not {self._emit_goal_arg(a[0])}"
-        return self._emit_term(term)
+        if not isinstance(term, PCompound):
+            return self._emit_term(term)
+        f, a = term.functor, term.args
+        if f == "," and len(a) == 2:
+            return "(" + ", ".join(
+                self._emit_goal_arg(p)
+                for p in self._flatten_conjunction(term)) + ")"
+        if f == ";" and len(a) == 2 and f not in self._user_ops and not (
+                isinstance(a[0], PCompound)
+                and a[0].functor in ("->", "*->")):
+            return (f"{self._emit_goal_arg(a[0])} or "
+                    f"{self._emit_goal_arg(a[1])}")
+        if f == "|" and len(a) == 2 and self._has_nil_goal(term) and not (
+                isinstance(a[0], PCompound)
+                and a[0].functor in ("->", "*->")):
+            return (f"({self._emit_goal_arg(a[0])} or "
+                    f"{self._emit_goal_arg(a[1])})")
+        if f == "\\+" and len(a) == 1 and f not in self._user_ops:
+            if (isinstance(a[0], PCompound) and a[0].functor == "^"
+                    and len(a[0].args) == 2):
+                self._refuse_caret_goal()
+            return f"not {self._emit_goal_arg(a[0])}"
+        return self._emit_compound(term, called=True)
 
     def _has_nil_goal(self, term: PTerm) -> bool:
         """Whether *term*, read as a goal, calls ``[]`` -- itself, or through
@@ -2231,14 +2253,14 @@ class _PrologToClausal:
         inner = ", ".join(self._emit_term(a) for a in term.args)
         return f"{_quote_atom(term.functor)}({inner})"
 
-    def _emit_quantified(self, term: PTerm) -> str:
+    def _emit_quantified(self, term: PTerm, called: bool = False) -> str:
         """The goal argument of bagof/setof: ``V^G`` → ``V ^ (G)``, nested
         to the right; anything else is the goal term itself."""
         if (isinstance(term, PCompound) and term.functor == "^"
                 and len(term.args) == 2):
             witness = self._emit_term(term.args[0])
             inner = term.args[1]
-            inner_s = self._emit_quantified(inner)
+            inner_s = self._emit_quantified(inner, called)
             # Always parenthesised (a conjunction already is): Python's
             # ``^`` binds tighter than ``is``/comparison, so ``Y ^ X is Y``
             # would read as ``(Y ^ X) is Y``.
@@ -2246,7 +2268,7 @@ class _PrologToClausal:
                     and len(inner.args) == 2):
                 inner_s = f"({inner_s})"
             return f"{witness} ^ {inner_s}"
-        return self._emit_goal_arg(term)
+        return self._emit_goal_arg(term) if called else self._emit_term(term)
 
     # Python operator precedence (higher number = tighter binding).
     _EXPR_PREC: dict[str, int] = {

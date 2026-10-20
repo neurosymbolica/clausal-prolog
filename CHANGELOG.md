@@ -454,7 +454,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `[]/0`, and `catch([], E, true)` and `findall(x, [], L)` succeeded,
   where ISO, Scryer and the native front end raise
   `existence_error(procedure, []/0)`; a nested `(A, [])` failed to load.
-  `phrase/2,3`'s `[]` stays the terminal list there too. The translator
+  `phrase/2,3`'s `[]` stays the terminal list there too, and only a
+  CALLED `[]` changes: a meta-call written as data (`X = catch([], _,
+  true)`, a head `f(call([]))`, a term stored by `assertz/1`) keeps its
+  `[]`. So on the translator `once([])` and `catch([], C, R)` now raise
+  `existence_error(procedure, []/0)` where they used to succeed. A catcher
+  naming the predicate indicator (`catch([], error(existence_error(_,
+  []/0), _), true)`) does not match on the translator (a separate,
+  earlier gap), so such a program sees an uncaught error there. The translator
   still cannot DEFINE `[]` (its seam predicate names are Python
   identifiers), and now refuses every head `[]` with that reason, as it
   already refused `'[]'(a).`: newly refused are the fact `[].` and a rule

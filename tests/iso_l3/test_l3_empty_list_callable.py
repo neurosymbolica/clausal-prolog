@@ -250,3 +250,56 @@ def test_the_translator_refuses_a_head_empty_list(text):
                                                  prolog_to_clausal)
     with pytest.raises(PrologTranslationError, match=r"'\[\]'"):
         prolog_to_clausal(text)
+
+
+# Only a CALLED ``[]`` is the goal ``[]/0``.  A meta-call written as data --
+# unified, in a head, in a fact, or in a clause ``assertz/1`` stores -- keeps
+# its ``[]`` argument; the translator rewrote it to ``call([])`` there too
+# (``X = catch([], _, true)`` stored ``catch(call([]), _, true)``).  Every row
+# is true on Scryer and on both front ends.  (A RULE asserted at run time,
+# ``assertz((t :- catch([], _, true)))``, is refused by Clausal on both front
+# ends, permission_error(assert, rule, t); its emitted text is pinned below.)
+NIL_AS_DATA = """\
+:- discontiguous(r/1).
+d(X) :- X = catch([], _, true).
+e(A) :- d(X), arg(1, X, A).
+r(unified) :- e(A), A == [].
+f(call([])).
+h(Y) :- f(Y).
+r(head) :- h(Y), Y = call(Z), Z == [].
+g(catch([], e, true)).
+r(fact) :- g(catch(G, _, _)), G == [].
+r(findall_data) :- X = findall(a, [], _), X = findall(_, G, _), G == [].
+:- dynamic(stored/1).
+r(asserted_term) :- assertz(stored(catch([], _, true))),
+    stored(catch(G, _, _)), G == [].
+n(E) :- catch(findall(x, catch([], nomatch, true), _), error(E, _), true).
+"""
+
+NIL_AS_DATA_ROWS = ["unified", "head", "fact", "findall_data",
+                    "asserted_term"]
+
+
+@pytest.mark.parametrize("frontend", ["translator", "native"])
+def test_a_meta_call_written_as_data_keeps_its_empty_list(native, ans,
+                                                          frontend):
+    mod = native.load("nil_as_data_" + frontend, NIL_AS_DATA,
+                      frontend=frontend)
+    got = {row: len(ans(mod, "r", 1, row)) for row in NIL_AS_DATA_ROWS}
+    assert got == {row: 1 for row in NIL_AS_DATA_ROWS}
+    # A meta-call nested in a CALLED one is still called: its [] is []/0.
+    # (Compared here, not in the program: on the translator a written
+    # ``E == existence_error(procedure, []/0)`` fails, a separate gap.)
+    assert ans(mod, "n") == [("existence_error", "procedure", ("/", [], 0))]
+
+
+def test_the_translator_keeps_a_stored_rule_body_empty_list():
+    """``assertz/1``'s argument is a clause term, not a goal: a meta-call in
+    the stored body keeps its ``[]``.  The call ``catch([], ...)`` itself is
+    still the goal ``[]/0``."""
+    from clausal.tools.prolog_to_clausal import prolog_to_clausal
+    out = prolog_to_clausal("a :- assertz((t :- catch([], _, true))).\n"
+                            "b :- catch([], _, true).\n")
+    stored, called = out.split("b()")
+    assert "catch([], _, True)" in stored and "call([])" not in stored
+    assert "catch(call([]), _, True)" in called
