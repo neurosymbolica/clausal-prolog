@@ -11,7 +11,7 @@ re-run separately.
 
 ## Engine bugs (the most important)
 
-1. **FIXED 2026-10-20 (commit 92d39a47)** The native front end now lowers
+1. **FIXED 2026-10-20 (commit 9d1232d1)** The native front end now lowers
    their goal arguments as goals (`iso_l3._META_GOAL_ARGS`), as it does
    for `catch/3`. Pinned in tests/fixtures/catch_error_clausal_body.clausal
    and tests/iso_l3/test_l3_s1_bodies.py::test_catch_error_and_catch_recover_goal_arguments_are_goals;
@@ -24,7 +24,7 @@ re-run separately.
    - The same goal works at the top level:
      `-g "catch_error(throw(boom(42)), R)"` gives `R = boom(42)`.
    - Page: exceptions.md.
-2. **FIXED 2026-10-20 (commit 273e4d58)** `entailed/1` and `clpq.entailed/1`
+2. **FIXED 2026-10-20 (commit 55a37b9c)** `entailed/1` and `clpq.entailed/1`
    now read a relation cell as well as a seam node, on both solvers; docs/clpq.md
    shows the Clausal Prolog spelling. Pinned in
    tests/test_clpq_entailed_relation_cells.py::test_clausal_entailed_relation_holds
@@ -35,12 +35,12 @@ re-run separately.
    - The builtin reads only seam syntax-tree nodes; both CLP(Q) backends
      behave the same.
    - Page: clpq.md.
-3. **FIXED 2026-10-20 (commit e6161a94)** Both front ends now record each
+3. **FIXED 2026-10-20 (commit bfe07aa3)** Both front ends now record each
    rule's variables by source name (`Predicate.var_names`), and goal
    expansion binds a group to the variable spelled exactly like it, head
    or body. Pinned by tests/fixtures/regex_named_groups.clausal and
    tests/iso_l3/test_l3_regex_named_groups.py; the three pages' examples
-   are Clausal Prolog again (commit 24c09f93).
+   are Clausal Prolog again (commit 8b4c7daa).
    **Regex named-group auto-binding binds nothing** (verified).
    - With `:- use_module(library(re), [match/2])`, the clause
      `parse_date(D, YEAR, MONTH) :- match("(?P<YEAR>\\d{4})-(?P<MONTH>\\d{2})", D).`
@@ -55,7 +55,7 @@ re-run separately.
    - regex positional groups;
    - sqlite multi-column rows: `query("db1", "SELECT name, age FROM users",
      (N, A))` fails although the row exists.
-5. **FIXED 2026-10-20 (commit fae9628d)** `Database.get_dispatch` now
+5. **FIXED 2026-10-20 (commit 5b5dbf50)** `Database.get_dispatch` now
    answers from a row the module adopted at import, so both imports
    resolve, on both surfaces, for direct calls and meta-calls. Pinned in
    tests/test_import_same_name_different_arity.py.

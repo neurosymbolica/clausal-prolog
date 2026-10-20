@@ -1,6 +1,6 @@
 # fix(A10-F005): regex auto-binding silently loses bindings for body-only named groups
 
-**Status: FIXED 2026-10-20 (commit e6161a94).** Fix direction 1: both
+**Status: FIXED 2026-10-20 (commit bfe07aa3).** Fix direction 1: both
 front ends put a `{name: Var}` table on the Predicate node
 (`Predicate.var_names`), and `find_var_for_group` (and the dynamic-pattern
 path) bind a group to the variable spelled exactly like it, so a

@@ -3,7 +3,7 @@
 Found by tests/clpq_port/test_manual_examples.py (strict xfails), on the .pl surface with CLAUSAL_CLPQ=holzbaur.
 The oracle (our local clpq.pl port on Scryer) gives the manual's answer unless noted.
 
-1. **FIXED 2026-10-20 (commit 273e4d58)** the builtin reads a relation cell (and legacy's
+1. **FIXED 2026-10-20 (commit 55a37b9c)** the builtin reads a relation cell (and legacy's
    disequality no longer needs both sides bounded); test_entailed and test_not_entailed in
    tests/clpq_port/test_manual_examples.py pass without their xfails.
    **WRONG ANSWER, silent:** `{A=<4}, entailed(A=\=5)` gives `false`, and `entailed(A=<5)` is also false.

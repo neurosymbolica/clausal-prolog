@@ -3,7 +3,7 @@
 Found by the CLP(Q) port's Task 14 integration review. All four reproduce with the legacy solver and
 with the port, so they predate the port.
 
-1. **FIXED 2026-10-20 (commit 273e4d58)** the builtin reads a relation cell; pinned in
+1. **FIXED 2026-10-20 (commit 55a37b9c)** the builtin reads a relation cell; pinned in
    tests/test_clpq_entailed_relation_cells.py::test_prolog_entailed_relation.
    **In .pl, `entailed(X > 0)` is always false.** The builtin (`builtins/constraints.py:268-285`)
    matches only node classes, and the Prolog front end passes it a `('>', X, 0)` tuple. The Python
