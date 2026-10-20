@@ -84,7 +84,7 @@ re-run separately.
 - **Z3:** `'z3.integer'([1 =< X, X =< 3])` raises `TypeError: Cannot
   translate 'tuple' to Z3`. z3.md stays seam.
 - **`if_/3` (library(reif))** works only as a written body goal.
-  **FIXED 2026-10-20 (commit 9658f4fc)**: library(reif) also defines
+  **FIXED 2026-10-20 (commit f6f25f0d)**: library(reif) also defines
   `if_/3` as a predicate, and clpz's reified `#=/3` and `#</3` are
   builtins; `tests/iso_l3/test_l3_if_runtime_reif.py`. The other two
   points are Scryer's behaviour too, so they stay (ISO-shaped errors).
