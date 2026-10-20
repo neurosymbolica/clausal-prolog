@@ -1485,23 +1485,63 @@ def _key_subsumes(general: tuple, specific: tuple) -> bool:
     return len(general) == len(specific) and _match_keys(general, specific, {})
 
 
-def _match_keys(g, s, bound: dict) -> bool:
-    """One-way match of the sub-key *g* against *s* under the renaming
-    *bound* (a variable key of *g* -> the sub-key of *s* it stands for)."""
-    if _is_var_key(g):
-        seen = bound.get(g, _UNBOUND)
-        if seen is _UNBOUND:
-            bound[g] = s
-            return True
-        return seen == s
-    if type(g) is tuple:
-        if type(s) is not tuple or len(g) != len(s):
-            return False
-        for ge, se in zip(g, s):
-            if not _match_keys(ge, se, bound):
+def _match_keys(general, specific, bound: dict) -> bool:
+    """One-way match of the sub-key *general* against *specific* under the
+    renaming *bound* (a variable key of the general key -> the sub-key of
+    the specific key it stands for).
+
+    The two keys' variable numbers are different namespaces: a number of
+    the general key is only ever read through *bound*.  A hole ``(_HOLE,
+    n)`` (the open tail of a partial list) carries the number of its tail
+    variable, so it is matched as that variable and only against a hole:
+    ``(_VAR, n)`` binds to the specific hole's variable, in the same map,
+    so ``[X|X]`` does not cover ``[a|T]``.  A frozenset sub-key (a dict, a
+    set) must be equal, and then every variable or hole key inside it binds
+    to itself, as the equality says the specific key has that same number
+    there -- so ``p(X, {a: X})`` covers ``p(Y, {a: Y})`` and not
+    ``p(1, {a: Y})``.  Iterative (an explicit stack): a key is as deep as
+    the term, and this runs under negation and delay resolution."""
+    stack = [(general, specific)]
+    while stack:
+        g, s = stack.pop()
+        if type(g) is tuple:
+            if len(g) == 2 and (g[0] is _VAR or g[0] is _HOLE):
+                if g[0] is _HOLE:
+                    if not (type(s) is tuple and len(s) == 2 and s[0] is _HOLE):
+                        return False
+                    g, s = (_VAR, g[1]), (_VAR, s[1])
+                seen = bound.get(g, _UNBOUND)
+                if seen is _UNBOUND:
+                    bound[g] = s
+                elif seen != s:
+                    return False
+                continue
+            if type(s) is not tuple or len(g) != len(s):
                 return False
-        return True
-    return g == s
+            stack.extend(zip(g, s))
+            continue
+        if type(g) is frozenset:
+            if g != s:
+                return False
+            stack.extend((v, v) for v in _var_keys_in(g))
+            continue
+        if g != s:
+            return False
+    return True
+
+
+def _var_keys_in(key):
+    """The variable and hole keys inside *key*, at any depth (iterative)."""
+    stack = [key]
+    while stack:
+        k = stack.pop()
+        if type(k) is tuple:
+            if len(k) == 2 and (k[0] is _VAR or k[0] is _HOLE):
+                yield k
+            else:
+                stack.extend(k)
+        elif type(k) is frozenset:
+            stack.extend(k)
 
 
 _UNBOUND = object()

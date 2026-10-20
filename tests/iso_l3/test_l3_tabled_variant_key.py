@@ -408,6 +408,21 @@ def test_key_subsumes_recurses_into_the_sub_keys(key):
     assert not sub(key([x, y]), key([1, 2, 3]))             # a list of another length
     assert sub(key({"k": x}), key({"k": x}))                # a dict: equal only
     assert not sub(key({"k": x}), key({"k": 1}))
+    # The two keys' variable numbers are different namespaces: a hole
+    # carries its tail variable's number and a frozenset (dict, set)
+    # carries numbers inside it; both are read through the renaming.
+    xx = SegList([ConcreteSeg([x]), VarSeg(x)])             # [X|X]
+    at = SegList([ConcreteSeg(["a"]), VarSeg(x)])           # [a|X]
+    assert not sub(key(xx), key(SegList([ConcreteSeg(["a"]), VarSeg(y)])))   # [X|X] / [a|T]
+    assert not sub(key(x, at), key(1, SegList([ConcreteSeg(["a"]), VarSeg(y)])))  # p(X,[a|X]) / p(1,[a|T])
+    assert sub(key(at, x), key(SegList([ConcreteSeg(["a"]), VarSeg(y)]), y))      # p([a|X],X) / p([a|T],T)
+    assert not sub(key(x, {"a": x}), key(1, {"a": y}))      # p(X,{a:X}) / p(1,{a:Y})
+    assert not sub(key(x, {x}), key(1, {y}))                # p(X,{X}) / p(1,{Y})
+    assert sub(key(x, {"a": x}), key(y, {"a": y}))          # p(X,{a:X}) / p(Y,{a:Y})
+    # a frozenset is matched by equality, not renamed: p(X, {a: Y}) keys the
+    # value as variable 1 and p(1, {a: Y}) as variable 0, so no cover
+    # (sound, conservative)
+    assert not sub(key(x, {"a": y}), key(1, {"a": y}))
 
 
 def test_a_delayed_negation_finds_its_deciding_table_through_the_sub_keys():
@@ -423,6 +438,47 @@ def test_a_delayed_negation_finds_its_deciding_table_through_the_sub_keys():
     assert _delay_target_entry(dn, ts) is entry
     dn = DelayedNegation("p", 2, make_subgoal_key((1, ("g", z)), Trail()), (1, ("g", z)))
     assert _delay_target_entry(dn, ts) is None
+
+
+@pytest.mark.parametrize("general, specific", [
+    # p(X, [a|X]) does not decide the delayed p(1, [a|T]): the hole is X
+    (lambda x, y: (x, SegList([ConcreteSeg(["a"]), VarSeg(x)])),
+     lambda x, y: (1, SegList([ConcreteSeg(["a"]), VarSeg(y)]))),
+    # p(X, {a: X}) does not decide the delayed p(1, {a: Y})
+    (lambda x, y: (x, {"a": x}), lambda x, y: (1, {"a": y})),
+], ids=["hole", "dict"])
+def test_a_delay_is_not_decided_by_a_table_whose_variable_is_bound_twice(general, specific):
+    """``_delay_target_entry`` / ``_resolve_one_delay``: a complete table
+    whose key only coincides with the delayed call's in a hole's or a
+    dict's variable number is no cover; the delay stays undecided."""
+    from clausal.logic.tabling import (
+        DelayedNegation, TableEntry, _delay_target_entry, _resolve_one_delay,
+    )
+    x, y = Var(), Var()
+    entry = TableEntry()
+    entry.add_answer((1, ("f", "a")))     # no answer unifies with the call
+    entry.status = "complete"
+    ts = {("p", 2, make_subgoal_key(general(x, y), Trail())): entry}
+    args = specific(x, y)
+    dn = DelayedNegation("p", 2, make_subgoal_key(args, Trail()), args)
+    assert _delay_target_entry(dn, ts) is None
+    assert _resolve_one_delay(dn, ts) is None
+
+
+@pytest.mark.skipif(len(_TWINS) < 2, reason="C twin not built")
+def test_key_subsumes_a_key_1500_deep():
+    """``_match_keys`` is iterative: a key as deep as a 1500-nested term
+    (the C twin keys it) is matched without recursion."""
+    sub = tabling._key_subsumes
+    x, y, z = Var(), Var(), Var()
+    gen, spec, other = y, z, 2
+    for _ in range(1500):
+        gen, spec, other = ("f", gen), ("f", spec), ("f", other)
+    k = lambda *args: _c_key(args, Trail())  # noqa: E731
+    assert sub(k(x, gen), k(1, spec))
+    assert sub(k(x, gen), k(1, other))
+    assert not sub(k(x, ("g", gen)), k(1, ("h", spec)))
+    assert not sub(k(x, gen), k(1, 2))
 
 
 # ── A key walk started from inside a walk is its own ───────────────────────
