@@ -433,9 +433,33 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `existence_error(procedure, []/N)` naming the atom `[]`. `clause/2`,
   `assertz/1`, `asserta/1`, `retract/1`, `retractall/1`, `abolish/1`,
   `listing/1` and `current_predicate/1` accept `[]` as a head or
-  predicate-indicator name. Checked against Scryer row by row. The
-  `CLAUSAL_PL_FRONTEND=translator` path and a DCG head `[] --> ...` are
-  unchanged.
+  predicate-indicator name. Checked against Scryer row by row. (A DCG
+  head `[] --> ...` and the `CLAUSAL_PL_FRONTEND=translator` path: see
+  the next entry.)
+
+- **A grammar rule may be headed `[]`; the translator calls a goal `[]`**
+  (2026-10-20; follows the entry above). On the native front end (`.pl`
+  and `.clausal`), `[] --> [a].`, `'[]' --> ...`, `[](X) --> ...` and the
+  pushback `[], [p] --> ...` define the nonterminal `[]`, the procedure
+  `[]/N+2`, as Scryer does; before, they were refused ("the head [] is
+  not a nonterminal"). Only the head changes: in a grammar body and as
+  `phrase/2,3`'s first argument `[]` is still the empty terminal list, so
+  with `[] --> [a].` loaded `phrase([], [a])` fails, `phrase([], [])`
+  succeeds and `phrase([], [a], R)` gives `R = [a]`, while `'[]'([a], S)`
+  and `call([], [a], S)` run the rule (`S = []`) -- Scryer's answers, row
+  by row. On the legacy translator (`CLAUSAL_PL_FRONTEND=translator`) a
+  goal `[]` -- a body goal, or a meta-call's goal argument (`catch([],
+  ...)`, `findall(_, [], _)`, and under `,`/`;`/`\+` there) -- now calls
+  `[]/0`, as on the native front end: `t :- [].` was `true` with no
+  `[]/0`, and `catch([], E, true)` and `findall(x, [], L)` succeeded,
+  where ISO, Scryer and the native front end raise
+  `existence_error(procedure, []/0)`; a nested `(A, [])` failed to load.
+  `phrase/2,3`'s `[]` stays the terminal list there too. The translator
+  still cannot DEFINE `[]` (its seam predicate names are Python
+  identifiers), and now refuses every head `[]` with that reason, as it
+  already refused `'[]'(a).`: newly refused are the fact `[].` and a rule
+  `[] :- G.`, which loaded and defined nothing, and `[] --> ...`, which
+  failed with a Python `TypeError`. docs/importing_prolog.md says both.
 
 - **`entailed/1` answers in Clausal Prolog and ISO Prolog** (2026-10-20).
   `:- use_module(library(clpq)). t :- in_q(X, 0, 100), {X =< 4},

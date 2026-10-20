@@ -242,7 +242,7 @@
     "the_first_8_queens_placement": "pass"
    }
   },
-  "docs/importing_prolog.md#L1022": {
+  "docs/importing_prolog.md#L1034": {
    "collect_error": null,
    "error": null,
    "load": "ok",
@@ -2879,7 +2879,7 @@
   "docs/for_prolog_programmers.md#L314": "d0aaa6c6f92eac22",
   "docs/for_prolog_programmers.md#L54": "a17138887a920d25",
   "docs/for_prolog_programmers.md#L86": "d1598395083db33f",
-  "docs/importing_prolog.md#L1022": "c9dd3a3c1fc2df50",
+  "docs/importing_prolog.md#L1034": "c9dd3a3c1fc2df50",
   "docs/importing_prolog.md#L160": "6364c204ab15be05",
   "docs/importing_prolog.md#L185": "80cbfe211879457f",
   "docs/importing_prolog.md#L194": "8ab7c57d8935077d",

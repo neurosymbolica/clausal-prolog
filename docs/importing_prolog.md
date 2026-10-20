@@ -948,6 +948,11 @@ look(X), [X] --> [X].                  % pushback: X is left in the input
   (`representation_error(dcg_body)`); negate a goal inside `{...}`.
 * A partial or improper terminal list (`[a|T]`, `[a|b]`) is refused at
   load, where Scryer raises `instantiation_error` / `type_error(list, ...)`.
+* A head may be the nonterminal `[]` (`[] --> [a].` defines `[]/2`, as in
+  Scryer: `[]` is an atom). Only the head: in a grammar body and as
+  `phrase/2,3`'s first argument `[]` is still the empty terminal list, so
+  `phrase([], [a])` fails and `phrase([], [])` succeeds with that rule
+  loaded; call the rule itself as `'[]'(S0, S)` or `call([], S0, S)`.
 * `use_module(library(dcgs))` is accepted (phrase/2,3 are engine
   builtins) and, without an import list, installs Scryer's
   `op(1105, xfy, '|')`, so `A | B` reads only after it -- as in Scryer.
@@ -993,6 +998,13 @@ The legacy translator (`CLAUSAL_PL_FRONTEND=translator`) **rejects** programs co
   deterministic predicate instead. `once/1` is supported but discouraged.
 - **If-then-else (`(C -> T ; E)`)** — raises `SyntaxError`. Use reified
   if-then-else, separate clauses with `dif/2` guards, or constraints.
+
+- **A predicate named `[]`** — a fact, rule or grammar rule headed `[]` or
+  `'[]'` (`[].`, `'[]'(a).`, `[] --> [a].`) raises `SyntaxError`: the
+  translator writes seam text, whose predicate names are Python
+  identifiers. A goal `[]` (in a body or a meta-call's goal argument)
+  calls `[]/0` as on the native front end, so it raises
+  `existence_error(procedure, []/0)` unless `assertz/1` made one.
 
 These are rejected rather than silently mistranslated, because their semantics
 cannot be faithfully represented in the engine's cut-free core.
