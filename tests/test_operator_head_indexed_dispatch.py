@@ -179,8 +179,11 @@ def test_no_term_type_hides_a_semantic_field_behind_compare_false():
 
     # source_body / source_rewritten: clause/2 data on the Predicate (clause)
     # node -- never a head term, never unified by head matching
-    # (clause_ops.clause_terms reads them).
-    cosmetic = {"position", "_position", "source_body", "source_rewritten"}
+    # (clause_ops.clause_terms reads them).  var_names: the clause's variables
+    # by source name, also on the Predicate node, read only by goal expansion
+    # (regex named-group binding) -- never a head term either.
+    cosmetic = {"position", "_position", "source_body", "source_rewritten",
+                "var_names"}
     offenders = {}
     for module in (terms, nodes):
         for cls_name, obj in vars(module).items():
