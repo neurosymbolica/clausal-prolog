@@ -771,6 +771,21 @@ def _plant_imported_rows(db, mod, orig_name: str, local_name: str,
         row = exporter_db.row(orig_name, arity)
         if row is not None:
             db.adopt_row(local_name, arity, row)
+    # A RE-EXPORT: the exporter itself imported ``orig_name`` at an arity and
+    # lists it in its own exports.  ``arities_for`` counts only what the
+    # exporter owns, so those arities are planted from its adopted rows.  An
+    # adopted row is already the ULTIMATE owner's (``adopt_row`` stores the
+    # owner's row object, at every level of a chain), so its ``db`` is the
+    # real home and ``Database._adopted_dispatch`` asks the right database.
+    # No walk, so a cycle cannot loop; a row whose home is the importer
+    # itself (a module re-importing its own predicate through a cycle) is
+    # left to the importer's own row.
+    for arity in sorted(exporter_db.adopted_arities(orig_name)):
+        if selected is not None and arity not in selected:
+            continue
+        row = exporter_db.adopted_row(orig_name, arity)
+        if row is not None and row.db is not db:
+            db.adopt_row(local_name, arity, row)
 
 
 def _refuse_missing_indicators(item, mod, orig_name: str, selected,

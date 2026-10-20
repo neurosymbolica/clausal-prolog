@@ -204,3 +204,93 @@ class TestSeamTwoModules:
         assert _answers(mod, "t2", 2) == [("two", 2)]
         assert _answers(mod, "c1", 1) == [("one",)]
         assert _answers(mod, "c2", 2) == [("two", 2)]
+
+
+# ── Through a re-export chain ───────────────────────────────────────────────
+
+
+def _reexport_libs(tree, prefix, levels=1, dynamic=False):
+    """``{prefix}_own`` defines ``p/1``; each of *levels* modules re-exports
+    it from the one before; ``{prefix}_two`` defines ``p/2``.  Returns the
+    module name the importer takes ``p/1`` from."""
+    if dynamic:
+        tree.write(f"{prefix}_own", ".clausal", f"""
+            :- module({prefix}_own, [p/1, add/1]).
+            :- dynamic(p/1).
+            add(X) :- assertz(p(X)).
+            :- end_module({prefix}_own).
+        """)
+    else:
+        tree.write(f"{prefix}_own", ".clausal", f"""
+            :- module({prefix}_own, [p/1]).
+            p(one).
+            :- end_module({prefix}_own).
+        """)
+    source = f"{prefix}_own"
+    for level in range(1, levels + 1):
+        name = f"{prefix}_re{level}"
+        tree.write(name, ".clausal", f"""
+            :- module({name}, [p/1]).
+            :- use_module({source}, [p/1]).
+            :- end_module({name}).
+        """)
+        source = name
+    tree.write(f"{prefix}_two", ".clausal", f"""
+        :- module({prefix}_two, [p/2]).
+        p(two, 2).
+        :- end_module({prefix}_two).
+    """)
+    return source
+
+
+class TestThroughAReExport:
+
+    @pytest.mark.parametrize("order", ["p1_first", "p2_first"])
+    def test_a_re_exported_p1_and_a_p2_both_answer(self, tree, order):
+        src = _reexport_libs(tree, f"isda_re_{order}")
+        directives = [f"use_module({src}, [p/1])",
+                      f"use_module(isda_re_{order}_two, [p/2])"]
+        if order == "p2_first":
+            directives.reverse()
+        mod = _clausal_importer(tree, f"isda_re_{order}_main", directives)
+        assert _answers(mod, "t1", 1) == [("one",)]
+        assert _answers(mod, "t2", 2) == [("two", 2)]
+        assert _answers(mod, "c1", 1) == [("one",)]
+        assert _answers(mod, "c2", 2) == [("two", 2)]
+
+    @pytest.mark.parametrize("order", ["p1_first", "p2_first"])
+    def test_a_two_level_chain(self, tree, order):
+        src = _reexport_libs(tree, f"isda_re2_{order}", levels=2)
+        directives = [f"use_module({src}, [p/1])",
+                      f"use_module(isda_re2_{order}_two, [p/2])"]
+        if order == "p2_first":
+            directives.reverse()
+        mod = _clausal_importer(tree, f"isda_re2_{order}_main", directives)
+        assert _answers(mod, "t1", 1) == [("one",)]
+        assert _answers(mod, "c1", 1) == [("one",)]
+        assert _answers(mod, "t2", 2) == [("two", 2)]
+
+    def test_the_importer_adopts_the_ultimate_owner_s_row(self, tree):
+        src = _reexport_libs(tree, "isda_reo", levels=2)
+        mod = _clausal_importer(tree, "isda_reo_main", [
+            f"use_module({src}, [p/1])",
+            "use_module(isda_reo_two, [p/2])"])
+        owner = sys.modules["isda_reo_own"].__dict__["$module"].db
+        row = mod.__dict__["$module"].db.adopted_row("p", 1)
+        assert row is not None and row.db is owner
+
+    @pytest.mark.parametrize("order", ["p1_first", "p2_first"])
+    def test_a_re_exported_dynamic_predicate_sees_the_owner_s_assertz(
+            self, tree, order):
+        src = _reexport_libs(tree, f"isda_red_{order}", dynamic=True)
+        directives = [f"use_module({src}, [p/1])",
+                      f"use_module(isda_red_{order}_two, [p/2])"]
+        if order == "p2_first":
+            directives.reverse()
+        mod = _clausal_importer(tree, f"isda_red_{order}_main", directives)
+        owner = sys.modules[f"isda_red_{order}_own"]
+        assert _answers(mod, "t1", 1) == []
+        assert len(list(call("add", "fresh", module=owner))) == 1
+        assert _answers(mod, "t1", 1) == [("fresh",)]
+        assert _answers(mod, "c1", 1) == [("fresh",)]
+        assert _answers(mod, "t2", 2) == [("two", 2)]

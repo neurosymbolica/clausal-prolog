@@ -380,7 +380,12 @@ surface described in [docs/public-api.md](docs/public-api.md).
   builtins. `Database.get_dispatch` now also answers from a row the module
   adopted at import, asked of its owner, after its own rows and before the
   builtins. Direct calls and meta-calls (`call/N`, `maplist`) both resolve.
-  A call at an arity neither module exported is still refused. Pinned in
+  The same holds when one of the two is a re-export, at any depth of the
+  chain: the importer now records a re-exported predicate too, under the
+  row of the module that defines it, so an `assertz` there into a dynamic
+  predicate is seen through the chain (before, a re-export left no record
+  in the importer). A call at an arity neither module exported is still
+  refused. Pinned in
   `tests/test_import_same_name_different_arity.py`.
 
   The same lookup closes a recorded divergence: a META-called imported
