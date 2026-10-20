@@ -399,6 +399,10 @@ can_be(+Type, ?Term)
 is_dict(+Term)
 --8<-- [end:is_dict_1]
 
+--8<-- [start:is_dict_t_2]
+is_dict_t(+Term, -T)
+--8<-- [end:is_dict_t_2]
+
 --8<-- [start:dict_size_2]
 dict_size(+Dict, -N)
 --8<-- [end:dict_size_2]

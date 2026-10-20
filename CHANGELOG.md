@@ -95,6 +95,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Added
 
+- **`is_dict_t/2`, the reified `is_dict/1`.** `is_dict_t(Term, T)` binds `T`
+  to `true` when `Term` is a dict (a `DictTerm` or a plain `dict`, as
+  `is_dict/1` accepts) and to `false` for any other nonvar term, with one
+  answer and no choice point; an unbound `Term` is an `instantiation_error`.
+  A bound `T` is a test, and a `T` that is neither boolean fails, as it does
+  for `dif_t/3`. A builtin, so it is reached by name from `.clausal`, `.pl`
+  and the seam, and library(reif)'s `if_(is_dict_t(P), Then, Else)` calls it
+  with `T` appended. See docs/dicts_sets.md.
 - **The in-process `.pl` loader runs `!`, `->` and if-then-else** with ISO
   7.8 semantics, on the native front end (the default; the legacy
   translator, `CLAUSAL_PL_FRONTEND=translator`, still refuses them);

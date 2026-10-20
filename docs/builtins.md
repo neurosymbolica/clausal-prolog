@@ -85,7 +85,7 @@ so.
 | [CLP(ℤ) — Integer Constraints](#clpfd-integer-constraints) | in_domain/3, label/1, all_different/1, structural_eq/2, sum_/3, scalar_product/4, element/3, circuit/1 |
 | [CLP(B) — Boolean Constraints](#clpb-boolean-constraints) | sat/1, taut/2, sat_count/2, bool_labeling/1 |
 | [Type Checks](#type-checks) | var/1, nonvar/1, atom/1, string/1, is_str/1, atomic/1, number/1, integer/1, float_/1, compound/1, callable_/1, is_list/1, ground/1, must_be/2, can_be/2 |
-| [Dict and Set Predicates](#dict-and-set-predicates) | get/3,4, get_strict/3, tri_get/3, delete/3, is_dict/1, dict_get/3, dict_put/4, dict_merge/3, gen_dict/3, sub_dict/2, is_set/1, set_union/3, set_subset/2, gen_set/2 |
+| [Dict and Set Predicates](#dict-and-set-predicates) | get/3,4, get_strict/3, tri_get/3, delete/3, is_dict/1, is_dict_t/2, dict_get/3, dict_put/4, dict_merge/3, gen_dict/3, sub_dict/2, is_set/1, set_union/3, set_subset/2, gen_set/2 |
 | [Arithmetic](#arithmetic) | between/3, succ/2, plus/3, abs_/2, max_/3, min_/3, sign/2, gcd/3, divmod_/4, lcm/3, exp_mod/4, popcount/2, msb/2, lsb/2 |
 | [List Predicates](#list-predicates) | in_/2, append/3, length/2, reverse/2, sort/2, permutation/2, select/3, flatten/2, take/3, drop/3, zip_/3, map_list_to_pairs/3, split_with/3, numlist/2,3, same_length/2, transpose/2 |
 | [Higher-Order List Predicates](#higher-order-list-predicates) | maplist/2..9, include/3, exclude/3, partition/4, tfilter/3, tpartition/4, foldl/4,5,6, take_while/3, drop_while/3, span/4, group_by/3, sort_by/3, filter_map/3 |
@@ -1462,6 +1462,23 @@ it is an ordinary call, `get_strict(D, 'k', V)`; from `.clausal`, `get_strict(D,
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:is_dict_1"
 ```
 Succeeds if `Term` is a `DictTerm` or a plain `dict`.
+
+---
+
+### `is_dict_t/2` (reified)
+```text
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:is_dict_t_2"
+```
+Reified `is_dict/1`, in the manner of `dif_t/3`: `T` is `true` if `Term` is a
+dict (whatever `is_dict/1` accepts), `false` for any other nonvar term — one
+answer, no choice point. An unbound `Term` is an `instantiation_error`. A
+bound `T` makes it a test; a `T` that is neither `true` nor `false` fails, as
+it does for `dif_t/3`. It is a closure for library(reif)'s `if_/3`:
+`if_(is_dict_t(P), Then, Else)`. See
+[Dicts and sets](dicts_sets.md#is_dict_t2).
+
+??? info "Implementation & tests"
+    **Python tests:** `tests/test_is_dict_t.py`, `tests/iso_l3/test_l3_is_dict_t.py`
 
 ---
 

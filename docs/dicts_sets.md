@@ -336,6 +336,42 @@ All dict builtins are in `clausal/logic/builtins/dict_set.py`. They accept a `Di
 ```
 Succeeds if `Term` is a `DictTerm`.
 
+### `is_dict_t/2`
+```text
+--8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:is_dict_t_2"
+```
+The reified `is_dict/1`: `T` is `true` if `Term` is a dict (a `DictTerm`, or a
+plain Python `dict` from the seam), `false` for any other nonvar term, with
+one answer and no choice point. An unbound `Term` raises
+`instantiation_error`; a bound `T` makes it a test (a `T` that is neither
+`true` nor `false` fails, as it does for `dif_t/3`). `if_/3` from
+library(reif) calls it with `T` appended, so it can choose a branch:
+
+```clausal
+:- use_module(library(reif)).
+
+shape(P, S) :-
+    if_(is_dict_t(P), S = dict, S = other).
+
+test("a dict is true, anything else false") :-
+    dict_pairs(D, [a-1]),
+    is_dict_t(D, T),
+    T == true,
+    is_dict_t([], F),
+    F == false.
+
+test("is_dict_t/2 as an if_/3 condition") :-
+    dict_pairs(D, []),
+    shape(D, S1),
+    S1 == dict,
+    shape([a-1], S2),
+    S2 == other.
+
+test("one answer, no choice point") :-
+    findall(T, is_dict_t(a, T), Ts),
+    Ts == [false].
+```
+
 ### `dict_size/2`
 ```text
 --8<-- "tests/fixtures/docs/dicts_sets_sigs.txt:dict_size_2"

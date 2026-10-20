@@ -203,6 +203,13 @@ test("is_dict exists") :-
     dict_pairs(D, []),
     is_dict(D).
 
+test("is_dict_t reified exists") :-
+    dict_pairs(D, []),
+    is_dict_t(D, T),
+    T == true,
+    is_dict_t([], F),
+    F == false.
+
 test("dict_get exists") :-
     dict_pairs(D, [a-1]),
     dict_get(a, D, 1).
