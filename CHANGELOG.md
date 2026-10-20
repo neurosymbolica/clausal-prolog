@@ -368,6 +368,29 @@ surface described in [docs/public-api.md](docs/public-api.md).
   nothing and the variable is still reported. Pinned by `tests/fixtures/regex_named_groups.clausal` and
   `tests/iso_l3/test_l3_regex_named_groups.py`.
 
+- **Importing `p/1` from one module and `p/2` from another keeps both**
+  (2026-10-20). `:- use_module(m1, [p/1]). :- use_module(m2, [p/2]).` (or
+  two whole-module `use_module`s, or the seam's two `-import_from`s) kept
+  only the later import: a call `p(X)` raised "p takes 2 arguments, but
+  this call passes 1". A predicate is named by name and arity, and ISO,
+  Scryer and SWI keep both. The importing database had recorded both
+  imports (its adopted rows), but a module namespace holds one binding per
+  name and the later handle replaced the earlier one, so the call took the
+  "other arity" path, which asked only the module's own rows and the
+  builtins. `Database.get_dispatch` now also answers from a row the module
+  adopted at import, asked of its owner, after its own rows and before the
+  builtins. Direct calls and meta-calls (`call/N`, `maplist`) both resolve.
+  A call at an arity neither module exported is still refused. Pinned in
+  `tests/test_import_same_name_different_arity.py`.
+
+  The same lookup closes a recorded divergence: a META-called imported
+  predicate that shares a builtin's name now reaches the import, as a
+  compiled call does. After `use_module(library(clpz))`,
+  `G = label([X,Y]), call(G)` uses Scryer's `label/1` (leftmost), where it
+  reached the engine's first-fail `label/1` because call/N asked the
+  builtins before the module's imports
+  (`tests/iso_l3/test_l3_s5_clp.py::test_call_label_resolves_to_the_imported_label_as_in_scryer`).
+
 - **A sandboxed module may import the datetime adapter's `date`
   constructor** (2026-10-17). `-import_from(date_time, [date])` was refused
   at load under `CLAUSAL_SANDBOX=1` with `non_export`, at the import and at

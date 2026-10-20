@@ -125,15 +125,18 @@ def test_a_module_s_own_in_2_wins_over_the_builtin(native, ans):
     assert ans(mod, "t") == [("..", 1, 3)]
 
 
-def test_call_label_is_the_engine_s_OPEN_divergence(native, ans):
-    """Pinned, not blessed: a META-called ``label/1`` resolves to the
-    engine's global label/1 (first-fail), because call/N consults the
-    builtin registry before a module's imports; a compiled call gets
-    Scryer's (leftmost).  Scryer answers leftmost for both."""
+def test_call_label_resolves_to_the_imported_label_as_in_scryer(native, ans):
+    """A META-called ``label/1`` resolves to the ``label/1`` the module
+    imported from library(clpz) (leftmost), as a compiled call does and as
+    Scryer answers for both.  It used to reach the engine's global label/1
+    (first-fail): call/N consulted the builtin registry before the module's
+    imports.  Since 2026-10-20 ``Database.get_dispatch`` answers a row the
+    module adopted at import before the builtins
+    (tests/test_import_same_name_different_arity.py)."""
     mod = native.load("s5_lab4", ":- use_module(library(clpz)).\n"
                                  "t(L) :- X in 1..3, Y in 1..2, "
                                  "G = label([X,Y]), call(G), L = [X,Y].\n")
-    assert ans(mod, "t")[:2] == [[1, 1], [2, 1]]
+    assert ans(mod, "t")[:2] == [[1, 1], [1, 2]]
 
 
 def test_the_builtins_from_solve(tmp_path, monkeypatch):

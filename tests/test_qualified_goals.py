@@ -447,10 +447,13 @@ class TestQualifiedCallN:
 
     def test_a_qualified_goal_resolves_through_the_exporters_namespace(
             self, mods):
-        """``libp/1`` is ``-import_from``'d BY the exporter, so it is not in
-        the exporter's own dispatch table — the qualified call has to take the
-        ``_namespace_dispatch`` route in the exporting db."""
-        assert mods.exporter.db.get_dispatch("libp", 1) is None
+        """``libp/1`` is ``-import_from``'d BY the exporter, so the exporter
+        does not own it: the qualified call reaches the row the exporter
+        adopted at import (``Database.get_dispatch`` answers an adopted row
+        from its owner since 2026-10-20; before, this took the
+        ``_namespace_dispatch`` route)."""
+        assert not mods.exporter.db.owns("libp", 1)
+        assert mods.exporter.db.adopted_row("libp", 1) is not None
         X = Var()
         assert [deref(X) for _ in pcall(
             "call_host1", (":", EXPORTER, ("libp", X)),

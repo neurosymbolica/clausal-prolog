@@ -1521,8 +1521,40 @@ class Database:
                     self._dispatch[key] = fn
         if fn is not None:
             return fn
+        fn = self._adopted_dispatch(key)
+        if fn is not None:
+            return fn
         from clausal.logic.builtins import get_builtin_dispatch  # noqa: PLC0415
         return get_builtin_dispatch(functor, arity, self)
+
+    def _adopted_dispatch(self, key: "tuple[str, int]") -> Callable | None:
+        """The dispatch of the row this database ADOPTED for *key* at
+        ``-import_from`` / ``use_module``, asked of its OWNER; else ``None``.
+
+        A predicate is named by name AND arity, so a module may import
+        ``p/1`` from one module and ``p/2`` from another.  Its namespace,
+        though, holds one binding per NAME: the later import's handle
+        replaces the earlier one there, and a call at the earlier import's
+        arity finds a binding that does not grant it.  Every such call then
+        asks this database for ``name/arity`` -- the "other arity" fallback
+        (``compiler.globals_env._unqualified_other_arity_dispatch``,
+        ``solve.call``, ``predicate._UnqualifiedName``, ``call/N``) -- and
+        the adopted row is the import record that answers it, between this
+        database's own rows and the builtins (an import shadows a builtin at
+        the arity it imported, as it does through the binding).
+
+        Only when this database has no row of its own under *key*: a local
+        row is this module's, and ``adopt_row`` never displaces one.
+        """
+        if key in self._rows:
+            return None
+        row = self._adopted.get(key)
+        if row is None:
+            return None
+        owner = row._db
+        if owner is None or owner is self:
+            return None
+        return owner.get_dispatch(*row.key)
 
     # ── Directive metadata ──────────────────────────────────────────────────
 
