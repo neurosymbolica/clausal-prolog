@@ -45,4 +45,4 @@ have and use term and goal expansion?
 ## Related
 
 - todo/term-expansion-compile-time-predicate-synthesis.md
-- todo/term-expansion-whole-item-pattern-head-representation-2026-09-19.md
+- todo/done/term-expansion-whole-item-pattern-head-representation-2026-09-19.md

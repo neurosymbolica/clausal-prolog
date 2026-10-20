@@ -1,5 +1,7 @@
 # A term_expansion/4 rule cannot hand back a rule clause
 
+**Status: FIXED 2026-10-20 (commit 2e3fa10a).** A built `(H :- B)` / seam `(H <- B)` is lowered to the rule it denotes (`term_expansion._AnswerLowering`), a head pattern matches facts only, a whole-clause pattern matches a rule (`_clause_view`, `Predicate.__unify__`), and an imported name in seam data builds its cell (`terms_to_ast._resolve_functor_binding`). Built rules' regex groups still bind nothing (the decision asked for below: kept as documented). Pinned in tests/test_term_expansion.py::TestRuleClausesHandedBack.
+
 Found 2026-10-20, while checking whether regex named-group auto-binding can
 carry a clause's variable names through term expansion. Not fixed there: the
 only expanded clauses with a body that reach goal expansion today are the
@@ -44,7 +46,7 @@ ones handed back unchanged, which keep their names already.
 4. **A whole-item rule pattern never matches**: `term_expansion((H :- B),
    ..., S, S)` (or `C = (H :- B)` in the rule body) matches no clause,
    because the clause node has no `__unify__` and falls back to `==`. See
-   also todo/term-expansion-whole-item-pattern-head-representation-2026-09-19.md.
+   also todo/done/term-expansion-whole-item-pattern-head-representation-2026-09-19.md.
 
 ## Consequence for regex auto-binding
 

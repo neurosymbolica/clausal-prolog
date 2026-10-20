@@ -1015,7 +1015,7 @@ class TestHelperInTheSameModule:
 
 
 class TestRuleClausesHandedBack:
-    """todo/term-expansion-cannot-hand-back-a-rule-2026-10-20.md: a
+    """todo/done/term-expansion-cannot-hand-back-a-rule-2026-10-20.md: a
     term_expansion/4 rule hands back a RULE clause -- ``(H :- B)`` in
     ``.clausal``, ``(H <- B)`` in the seam, alone or in a list with facts --
     and it is compiled as that rule, body and all.  A bare head pattern

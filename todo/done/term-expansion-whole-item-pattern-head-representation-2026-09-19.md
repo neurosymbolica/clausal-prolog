@@ -1,5 +1,7 @@
 # A term_expansion WHOLE-ITEM pattern still matches the head instance, not its cell
 
+**Status: RESOLVED 2026-10-20 (commit 2e3fa10a).** W4a made every head a cell, and a rule is now matched as its clause term (`term_expansion._clause_view`; seam `(H <- B)` via `Predicate.__unify__`), so `term_expansion((key(K) <- Body), ...)` matches a rule of `key/1`. Pinned in tests/test_term_expansion.py::TestRuleClausesHandedBack::test_seam_a_whole_clause_pattern_matches_a_rule.
+
 Found while clearing the P2 Task 3 checkpoint's worklist (2026-09-19).
 
 ## What is fixed, and what is not
