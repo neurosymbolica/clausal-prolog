@@ -62,7 +62,7 @@ re-run separately.
    **Importing `p/1` from one module and `p/2` from another keeps only the
    later import** (reported, both surfaces). Calling `p(X)` then raises an
    arity mismatch; ISO and Scryer keep both.
-6. **FIXED 2026-10-20 (commit 58429bed)** The reader refuses an empty
+6. **FIXED 2026-10-20 (commit bf34aa5c)** The reader refuses an empty
    argument list (ISO 6.3.3; Scryer: `incomplete_reduction`), so `nl()` is
    a syntax error with its position in `.clausal`, `.pl` (both front ends)
    and `-g`. Pinned in
@@ -129,7 +129,7 @@ re-run separately.
   prints `StarUnpack(...)`.
 - `catch(X > 0, E, true)`, and a cross-unit comparison, report the context
   `(is)/2` rather than `(>)/2`.
-- **FIXED 2026-10-20 (commit f44b24ca)** The hint is spelled for the
+- **FIXED 2026-10-20 (commit 3acb7b5b)** The hint is spelled for the
   surface that defines the predicate (`:- dynamic(f/N).` for `.clausal` and
   `.pl`); pinned in tests/test_dynamic_hint_names_the_surface.py.
   The `permission_error` message text says "declare it -dynamic(...)" even

@@ -1,6 +1,6 @@
 # A tabled answer row with unbound variables is shared, not copied, on replay
 
-**Status: FIXED 2026-10-20 (commit 99b6200a).** `TableEntry.add_answer`
+**Status: FIXED 2026-10-20 (commit b1383607).** `TableEntry.add_answer`
 stores a non-ground row renamed apart (an attribute-free `copy_term`) and
 `TableEntry.row(i)` hands every replay a fresh copy; ground rows are stored
 and replayed as before. The first candidate below, with the groundness flag
