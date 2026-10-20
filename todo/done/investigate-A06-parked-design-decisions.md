@@ -1,5 +1,12 @@
 # investigate-A06: five parked CLP(FD) design decisions (needs USER, not Opus)
 
+**Status: RESOLVED 2026-10-20 (split).**
+- **A06-D001** still open: split out to todo/label-of-a-variable-with-no-domain-succeeds-unbound-2026-07-05.md.
+- **A06-D002** still open; it gates, and is tracked in, todo/sum-and-scalar-product-silently-ignore-python-spelled-ops-2026-07-05.md.
+- **A06-D003** settled 2026-09-30 by clpz's contract (every element of Vars is a Pairs key), commit 2a10ca72. Pinned in tests/audit_2026_07_05/test_06_clpfd.py::TestGlobalCardinality.
+- **A06-D004** still open: split out to todo/circuit-of-zero-or-one-variables-fails-2026-07-05.md.
+- **A06-D005** resolved by ruling D47 (a truth value is an atom), commit 4bb6a79e (todo/done/fix-A06-bool-hook-divergence.md). Pinned in tests/audit_2026_07_05/test_06_clpfd.py::TestBooleanHandling.
+
 **Parked per standing user mandate** (design questions go to a todo, never
 asked interactively). These are policy calls that shape fix todos; do not
 implement the affected fixes in a direction-sensitive way before they are
@@ -16,7 +23,7 @@ consistent); (b) documented silent-skip; (c) skip+warn.
 **Recommendation: (a)** — silently wrong solution counts are the worst
 failure mode for an enumeration primitive.
 
-## 2. A06-D002 — sum_/scalar_product op-string vocabulary (gates fix-A06-sum-op-strings)
+## 2. A06-D002 — sum_/scalar_product op-string vocabulary (gates todo/sum-and-scalar-product-silently-ignore-python-spelled-ops-2026-07-05.md)
 
 `_FD_OPS` accepts only Prolog spellings (`#=`, `=<`, `\=`); the language's
 own spellings (`==`, `<=`, `!=`) silently post nothing (A06-F011).

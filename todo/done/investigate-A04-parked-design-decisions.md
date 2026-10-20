@@ -1,5 +1,12 @@
 # investigate(A04): parked design decisions — freeze nondeterminism, tabling invalidation granularity, misc hardening [Opus]
 
+**Status: RESOLVED 2026-10-20 (split).** Each item is settled or split out:
+- **A04-D001** resolved 2026-10-09 (see the note below; commit abbf536b).
+- **A04-D002** still open: split out to todo/tables-over-a-dynamic-dependency-go-stale-after-assertz-2026-07-05.md.
+- **`_query_cache` id(module) keying**: fixed by commit 080d4271 (2026-09-30), entries hold a weak reference to their module. Pinned in tests/test_query_cache_transient_module.py.
+- **retract on a tabled predicate minting table entries**: no longer reproduces (probed 2026-10-20: a failed `retract(tz(99))` leaves `table_store` empty).
+- **Dead `make_tabled_wrapper_simple`** and **`_naf_tabled` full scan**: split out to todo/tabling-leftovers-simple-wrapper-dead-code-and-naf-full-scan-2026-07-05.md. (`continuation_search.py` was deleted 2026-10-06.)
+
 **Source:** `docs/superpowers/audits/2026-07-05-fable-partition/04-runtime-tabling/design-questions.md` (A04-D001, A04-D002) + minor notes from the A04 findings ledger.
 Parked per user preference (A01 precedent): decide unhurried, not mid-audit.
 

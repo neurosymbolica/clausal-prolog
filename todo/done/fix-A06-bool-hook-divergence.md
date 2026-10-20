@@ -8,12 +8,12 @@
 > todo, never asked interactively. All other A05–A06 audit findings in this pass
 > are done; this one waits on the policy call before its two xfails can be
 > flipped in the decided direction. See
-> `todo/audit-2026-07-05/investigate-A06-parked-design-decisions.md` §5.
+> `todo/done/investigate-A06-parked-design-decisions.md` §5.
 
 **Finding:** docs/superpowers/audits/2026-07-05-fable-partition/06-clpfd/findings.md A06-F009
 **Tests:** tests/audit_2026_07_05/test_06_clpfd.py::TestBooleanHandling (2 xfail — flip to pass)
 **Gated by:** A06-D005 / A01-D001 (bool-int conflation policy) — see
-todo/audit-2026-07-05/investigate-A06-parked-design-decisions.md §5.
+todo/done/investigate-A06-parked-design-decisions.md §5.
 
 ## Bug
 

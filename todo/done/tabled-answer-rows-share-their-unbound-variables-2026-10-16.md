@@ -54,5 +54,5 @@ too, not only cache hits.
 - Store rows with variable sentinels (the subgoal key already maps unbound
   variables to `_VAR`) and build fresh variables on replay.
 
-Related: todo/audit-2026-07-05/investigate-A12-tabling-answer-constraints.md
+Related: todo/tabled-answers-drop-their-constraints-on-replay-2026-07-05.md
 (the same rows lose their attributes).

@@ -1,5 +1,9 @@
 # investigate-A05: two parked constraints-core design decisions (needs USER, not Opus)
 
+**Status: RESOLVED 2026-10-20 (split).**
+- **A05-D001**: the bool half is closed by rulings D35/D47 (a truth value is an atom: `dif(1, true)` holds, probed 2026-10-20). The int/float half (`dif(1, 1.0)` fails, `structural_eq(1, 1.0)` holds) follows `unify` and is tracked in todo/iso-unify-conflates-int-and-float-2026-09-09.md, which names structural_eq; whatever is ruled there, dif and reify_eq inherit it.
+- **A05-D002** still open: split out to todo/engine-attribute-keys-are-user-writable-2026-07-05.md.
+
 **Parked per the standing user instruction 2026-07-05** (design questions are
 recorded, not asked interactively). These are policy calls that shape fix
 todos; do not implement the affected fixes in a direction-sensitive way

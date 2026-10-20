@@ -1,4 +1,14 @@
-# fix(A08): clpq entry points silently accept floats / R-vars (docs promise TypeError)
+# CLP(Q) entry points silently accept floats and CLP(R) variables; the docs promise a TypeError (A08-F007, A08-D003)
+
+**Status: open, gated on design decision A08-D003 (unruled).** Triaged
+2026-10-20, moved from the 2026-07-05 audit folder (was
+`fix-A08-clpq-float-mixing-enforcement.md`). Both pinning tests still XFAIL
+on the default solver and under `CLAUSAL_CLPQ=holzbaur`:
+tests/audit_2026_07_05/test_08_clpqr_z3.py::TestClpqSemanticsVsReference::test_q_eq_float_raises_typeerror
+and ::test_in_q_after_in_real_raises. The code moved: `_linearize` is now
+in `clausal/logic/clpq/legacy.py` (float branch near :1016).
+
+The original audit text follows.
 
 > **DEFERRED (2026-07-07):** intentionally not implemented — gated on the parked
 > design decision A08-D003 (float literals in CLP(Q): raise TypeError vs silently

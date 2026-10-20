@@ -1,5 +1,10 @@
 # investigate-A07: three parked CLP(B)/SAT design decisions (needs USER, not Opus)
 
+**Status: RESOLVED 2026-10-20 (split).**
+- **A07-D001** still open: split out to todo/taut-and-sat-count-ignore-the-clpb-store-2026-07-05.md.
+- **A07-D002** settled as recommended (reject a Python bool in the CLP(B) domain) by commit fa196561 (2026-07-07), consistent with the later rulings D35/D47. Pinned in tests/audit_2026_07_05/test_07_clpb_sat.py::TestSuspectedBugs::test_A07_F010_python_bool_binding.
+- **A07-D003** settled as recommended (option (a), the assumption bridge) by commit 282e414f (todo/done/fix-A07-clpsat-bindings-invisible.md). Pinned in tests/audit_2026_07_05/test_07_clpb_sat.py::TestSuspectedBugs::test_A07_F005_label_sat_respects_clausal_bindings (needs python-sat).
+
 **Parked by standing user instruction 2026-07-05** (A07 ran non-interactively;
 design questions are recorded, never asked). These are policy calls that gate
 fix direction; do not implement the affected fixes in a direction-sensitive

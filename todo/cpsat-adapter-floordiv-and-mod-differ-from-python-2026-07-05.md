@@ -1,9 +1,20 @@
-# fix(A08): CP-SAT adapter `//`/`%` diverge from Python; negative-numerator `%` is infeasible
+# The CP-SAT adapter's `//` truncates and its `%` with a negative numerator is infeasible (A08-F015, A08-D001)
+
+**Status: open, gated on design decision A08-D001 (unruled).** Triaged
+2026-10-20, moved from the 2026-07-05 audit folder (was
+`fix-A08-ortools-floordiv-mod-translation.md`). The pinning tests could not
+be re-run here (ortools not installed; they skip), but the code is
+unchanged: `clausal/logic/clportools.py:454-475` still uses
+`AddDivisionEquality`/`AddModuloEquality` with the `rem` helper's domain
+`[0, 10**9]`. Twin:
+todo/z3-adapter-translates-floordiv-and-mod-with-smt-semantics-2026-07-05.md.
+
+The original audit text follows.
 
 > **DEFERRED (2026-07-07):** intentionally not implemented — direction-sensitive
 > and gated on the parked design decision A08-D001 (`//`/`%` semantics across
 > backends), still open in DESIGN-DECISIONS.md. Same gate as the Z3 twin
-> (fix-A08-z3-floordiv-mod-translation). Flip once D001 lands.
+> (todo/z3-adapter-translates-floordiv-and-mod-with-smt-semantics-2026-07-05.md). Flip once D001 lands.
 
 **Finding:** A08-F015 (correctness, medium); design question A08-D001 (parked)
 **Tests:** `tests/audit_2026_07_05/test_08_clpqr_z3.py::TestCpsatTranslationFidelity::test_floordiv_negative_numerator`, `::test_mod_negative_numerator`

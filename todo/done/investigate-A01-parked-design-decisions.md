@@ -1,5 +1,10 @@
 # investigate-A01: three parked term-layer design decisions (needs USER, not Opus)
 
+**Status: RESOLVED 2026-10-20 (split).** Each decision is ruled, overtaken or split out:
+- **A01-D001** ruled by the operator 2026-07-07, option (c) split (DESIGN-DECISIONS.md, "Resolved by user"); the bool half then closed by rulings D35/D47 (a truth value is an atom, never a number). Pinned in tests/audit_2026_07_05/test_01_term_layer.py::TestPriorArtAndCharacterization::test_d001_cross_type_numeric_unification_characterization. The int/float half (`1 = 1.0`) is still open in todo/iso-unify-conflates-int-and-float-2026-09-09.md and todo/a01-d001-tabling-half-2026-09-09.md.
+- **A01-D002** still open: split out to todo/dimensionless-quantity-is-not-equal-to-its-number-2026-07-05.md.
+- **A01-D004** overtaken: the `Compound` class was deleted (commit 09d77d93, Compound retirement slice 8, 2026-09-28) and a cell's functor slot holds only a `str` or the tuple tag (commit 10f6784e, 2026-09-05), so a Var functor is no term at all. The deref-only floor had landed first (ec8a4a34, todo/done/fix-A01-compound-var-functor.md).
+
 **Parked by the user 2026-07-05** during the A01 audit ("This is a tricky
 decision. Park it in a todo, I'll get to it."). These are policy calls that
 shape fix todos; do not implement the affected fixes in a direction-sensitive

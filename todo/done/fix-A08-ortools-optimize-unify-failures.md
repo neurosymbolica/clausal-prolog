@@ -8,7 +8,7 @@
 loop over `rev_map` binding every registered var to its model value but
 discard the `unify(...)` return value. If a Clausal var is already bound to a
 conflicting value (possible because there is no OR/LP attr hook — see
-A08-F013 / investigate-A08-solver-store-sync-hooks.md), the optimizer still
+A08-F013 / todo/z3-and-ortools-variables-ignore-clausal-bindings-2026-07-05.md), the optimizer still
 yields an "optimal" solution inconsistent with the substitution.
 
 ## Fix sketch

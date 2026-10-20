@@ -1,5 +1,7 @@
 # investigate(A08, Opus): no Prolog CLP(Q) oracle runnable — differential classes untested
 
+**Status: RESOLVED 2026-10-20 (commits 5bf74404, d6adc770, 232fa1fd).** A CLP(Q) oracle now runs: Scryer built with library(clpq) (tests/_oracles.py `SCRYER`), driven by tests/clpq_oracle.py, which compares answer sets, inf/sup and residual constraints by z3 equivalence. The port of clp(q,r) 1.3.3 (`CLAUSAL_CLPQ=holzbaur`) is checked against it, and the random-store classes below are fuzzed (tests/clpq_port/fuzz/: LP against scipy, projection, strictness against z3, undo with replay). Pinned in tests/clpq_port/test_against_oracle.py and tests/clpq_port/fuzz/test_fuzz_strictness_against_z3.py (216 passed 2026-10-20). Gaps the oracle found are in todo/clpq-port-vs-sicstus-manual-23-gaps-2026-10-16.md.
+
 **Context:** A08 audit oracle gap (2026-07-05).
 
 `scryer-prolog` is on PATH but ships no `library(clpq)` (only clpz/clpb);

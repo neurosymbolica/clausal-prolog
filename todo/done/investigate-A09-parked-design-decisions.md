@@ -1,5 +1,11 @@
 # investigate(A09): parked design decisions — for Opus / user session
 
+**Status: RESOLVED 2026-10-20 (split).**
+- **A09-D001** fixed: maplist/foldl backtrack into every call (operator rulings R5/R6, commits 8f85c27f, 94e7dada; todo/done/investigate-A09-ho-committed-choice.md).
+- **A09-D002** and **A09-D003** ruled by the operator 2026-07-07 (DESIGN-DECISIONS.md, "Resolved by user").
+- **A09-D004**: dif/2 is copied since commit 09ec3467 (2026-09-30); the rest is tracked in todo/copy-term-attributes-freeze-clpz-and-copy-term-3-2026-09-30.md (see todo/done/investigate-A09-copy-term-attrs.md).
+- **A09-D005**: the A09-F022 sites are closed (sort/2 2026-09-09, group_pairs_by_key by ruling R4 2026-09-28, subtract by the D47 review 2026-09-30); pinned in tests/audit_2026_07_05/test_09_builtins.py::test_F022_*. The int/float residue is tracked in todo/iso-unify-conflates-int-and-float-2026-09-09.md.
+
 Parked per standing user preference (design questions go to todos, not
 interactive prompts). Full statements + options:
 `docs/superpowers/audits/2026-07-05-fable-partition/09-builtins/design-questions.md`.

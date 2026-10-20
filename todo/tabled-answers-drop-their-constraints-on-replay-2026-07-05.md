@@ -1,4 +1,13 @@
-# investigate(A12-F001): tabled answer replay discards dif/CLP(FD) constraints — pick a sound semantics (Opus)
+# A replayed tabled answer drops its dif/CLP(FD) constraints (A12-F001, A12-D001)
+
+**Status: open (plan below, 2026-10-18).** Triaged 2026-10-20, moved from
+the 2026-07-05 audit folder (was
+`investigate-A12-tabling-answer-constraints.md`). Re-ran the pins: both
+tests/audit_2026_07_05/test_12_seams.py::TestF001TablingReplayDropsConstraints
+tests and both D68 tests in tests/iso_l3/test_l3_tabled_complete_first.py
+(`test_constrained_answers_pair_with_every_answer`,
+`test_constrained_answers_pair_inside_a_table_once`) still XFAIL. The
+renamed-apart row prerequisite landed 2026-10-20 (see below).
 
 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition/12-seams/findings.md` A12-F001
 **Tests:** `tests/audit_2026_07_05/test_12_seams.py::TestF001TablingReplayDropsConstraints` (2 xfail — flip to pass)

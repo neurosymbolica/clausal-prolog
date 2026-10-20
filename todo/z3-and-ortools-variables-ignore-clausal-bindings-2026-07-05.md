@@ -1,4 +1,17 @@
-# investigate(A08, Opus): Z3/ortools adapters — no attr hooks, solver/store desync
+# Z3 and OR-Tools adapters register no attribute hooks, so a binding never reaches the solver (A08-F013, A08-D002)
+
+**Status: open.** Triaged 2026-10-20, moved from the 2026-07-05 audit
+folder (was `investigate-A08-solver-store-sync-hooks.md`). Both
+`TestZ3StoreSync` tests in tests/audit_2026_07_05/test_08_clpqr_z3.py still
+XFAIL (`test_binding_out_of_domain_fails`, `test_label_respects_bindings`).
+The OR-Tools half could not be re-run here (ortools not installed); no hook
+is registered for `OR_KEY`/`LP_KEY` in `clausal/logic/clportools.py` /
+`clportools_lp.py`. Design decision A08-D002 (register hooks?) is still
+unruled. The A04-D001 hook-protocol limit mentioned below is gone: since
+2026-10-09 a hook may queue a goal that runs with every answer
+(`clausal/logic/pending.py`).
+
+The original audit text follows.
 
 **Findings:** A08-F013 (high); related A08-F016; design question A08-D002 (parked)
 **Tests:** `tests/audit_2026_07_05/test_08_clpqr_z3.py::TestZ3StoreSync` (2 xfails)

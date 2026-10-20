@@ -1,5 +1,7 @@
 # investigate(A02, Opus): parked design decision — cross-type numeric index keys
 
+**Status: RESOLVED 2026-10-20 (folded).** **A02-D002**: option (1), fallback scan, is in place and correct under any cross-type ruling: a `Decimal(1)` caller of an int-keyed predicate takes the all-clauses path and finds its answers (tests/audit_2026_07_05/test_02_compiler_heads.py, the `kind3`/`kind4` Decimal cases). The bool half is closed by D35 (`TestIndexedDispatchGuards::test_bool_and_float_callers_share_int_bucket` now asserts `True` misses the `1` bucket). What is left, keying exotic numerics into int buckets, waits on the same int/float ruling as todo/iso-unify-conflates-int-and-float-2026-09-09.md and todo/a01-d001-tabling-half-2026-09-09.md, and is tracked there.
+
 Parked per user preference (2026-07-05: "park it in a todo, I'll get to
 it" — precedent `investigate-A01-parked-design-decisions.md`). Recorded as
 **A02-D002** in

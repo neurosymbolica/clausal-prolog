@@ -1,4 +1,26 @@
-# investigate(A08, Opus): CLP(Q) bound enforcement through Gaussian elimination + B&B on parametric vars
+# Legacy CLP(Q): branch-and-bound cannot branch on a Gaussian-eliminated variable (A08-F002, A08-F006)
+
+**Status: open on the default (legacy) solver; fixed under `CLAUSAL_CLPQ=holzbaur`.**
+Triaged 2026-10-20, moved from the 2026-07-05 audit folder (was
+`investigate-A08-clpq-bound-enforcement.md`). Re-ran the pinning tests in
+tests/audit_2026_07_05/test_08_clpqr_z3.py::TestClpqSoundness:
+
+| test | legacy (default) | `CLAUSAL_CLPQ=holzbaur` |
+|---|---|---|
+| `test_parametric_bounds_infeasible_eq_fails` (F002) | XPASS | XPASS |
+| `test_bb_inf_parametric_int_var` (F006) | **XFAIL** | XPASS |
+
+So the F002 half (`X,Y in [0,10], X+Y == 100` accepted) no longer
+reproduces on legacy (the 2026-10-11 series, 025e62e9 "kept bounds", and
+73c3ac38 for `fix_variable` intersecting bounds). What is left on legacy is
+F006: `bb_inf` branching on a parametric integer variable, plus
+`_BB_MAX_DEPTH = 50` (now `clausal/logic/clpq/legacy.py:2012`) silently
+truncating the search. The solver file moved: `clpq.py` is now
+`clausal/logic/clpq/legacy.py` (`add_equality` :277, `_propagate_determined`
+:360, `fix_variable` :712). Closing options: fix legacy, or close this when
+the port becomes the default solver.
+
+The original audit text follows.
 
 **Findings:** A08-F002 (critical), A08-F006 (high); related: A08-F001
 **Tests:** `tests/audit_2026_07_05/test_08_clpqr_z3.py::TestClpqSoundness::test_parametric_bounds_infeasible_eq_fails`, `::test_bb_inf_parametric_int_var`

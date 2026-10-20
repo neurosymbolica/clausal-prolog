@@ -1,4 +1,13 @@
-# fix(A08): Z3 adapter translates `//` and `%` with SMT semantics, not Python's
+# The Z3 adapter translates `//` and `%` with SMT semantics, not Python's (A08-F014, A08-D001)
+
+**Status: open, gated on design decision A08-D001 (unruled).** Triaged
+2026-10-20, moved from the 2026-07-05 audit folder (was
+`fix-A08-z3-floordiv-mod-translation.md`). The three
+tests/audit_2026_07_05/test_08_clpqr_z3.py::TestZ3TranslationFidelity
+tests still XFAIL. The translation is now at `clausal/logic/clpz3.py:243-247`.
+Twin: todo/cpsat-adapter-floordiv-and-mod-differ-from-python-2026-07-05.md.
+
+The original audit text follows.
 
 > **DEFERRED (2026-07-07):** intentionally not implemented — direction-sensitive
 > and gated on the parked design decision A08-D001 (`//`/`%` semantics across

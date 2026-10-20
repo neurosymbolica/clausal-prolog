@@ -156,11 +156,11 @@ and its own tests.
 
 ## Relation to the A09-D002 / A11-D001 error-protocol cluster
 
-`todo/audit-2026-07-05/README.md` §1 wanted "one boundary-conversion fix at the
+`todo/done/audit-2026-07-05-index.md` §1 wanted "one boundary-conversion fix at the
 ModulePredicate/trampoline layer + a narrowed drive-loop catch". The narrowing
 half landed as A04-F009; the per-builtin conversions landed as the A09/A11 fixes.
 This change closes the structural remainder those point-fixes could not reach:
 an exception raised in a *callee's own frame* has no builtin boundary to convert
 at, and now needs none — the driver hands it to the handler and the handler
 converts, exactly as the shallow route always did. Every listed member of that
-cluster is already in `todo/audit-2026-07-05/done/`; nothing there re-opens.
+cluster is already in `todo/done/`; nothing there re-opens.

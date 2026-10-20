@@ -1,5 +1,12 @@
 # investigate(A03): parked design decisions (Opus)
 
+**Status: RESOLVED 2026-10-20 (split).** Each item is settled, overtaken or split out:
+- **A03-D001** overtaken: `Compound` is deleted (09d77d93, 2026-09-28) and terms are tuples, so a catcher and a thrown term are the same kind of object; the tactical fix had landed earlier (todo/done/fix-A03-catch-functor-catcher.md). Pinned in tests/audit_2026_07_05/test_03_compiler_goals.py::TestF004CatchFunctorCatcher.
+- **A03-D002** settled as recommended (ISO copy) by commit 4851e69e (todo/done/fix-A03-findall-template-sharing.md). Pinned in tests/audit_2026_07_05/test_03_compiler_goals.py::TestF005F006FindallFamily.
+- **A03-D003** settled as recommended (refuse loudly) by commit 44ad6f02; docs/specialization.md lists the recognised MI patterns. Pinned in tests/audit_2026_07_05/test_03_compiler_goals.py::TestF007SpecializationDropsMidBodyGoals::test_midbody_goal_specialize_refused.
+- **`_DETERMINISTIC_BUILTINS` governance** and the **`_tro_state` free-threading** note: split out to todo/tro-determinism-table-is-hand-written-2026-07-05.md.
+- **Zero-arity predicates queried from Python**: fixed; `solve("fal", m)` and `solve("yes", m)` on user 0-arity predicates answer as `call/1` does (probed 2026-10-20). Pinned in tests/test_solve_zero_arity_control_atoms.py.
+
 **Source:** `docs/superpowers/audits/2026-07-05-fable-partition/03-compiler-goals/design-questions.md`
 Parked per standing user preference (A01/A02 precedent).
 
