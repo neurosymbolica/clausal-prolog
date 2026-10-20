@@ -83,7 +83,7 @@ the culprit: disabling **`call_site` alone** fixes it; disabling `tro`,
 ## Likely history
 
 Probably predates but was SURFACED by the A04 fix (commit `8027e88d`,
-`todo/audit-2026-07-05/done/fix-A04-drive-until-yield-runtime-error.md`): before
+`todo/done/fix-A04-drive-until-yield-runtime-error.md`): before
 that fix, C `_drive_until_yield` swallowed every `RuntimeError` and reported
 "search exhausted" — so this same defect would previously have manifested as a
 silent **0-solutions wrong answer** on ground-argument call sites (arguably

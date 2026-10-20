@@ -176,7 +176,7 @@ Fixing 2d honestly forced the parked A04-F003 design (the docs-order guard
 test is only satisfiable with it): answer conditions are now a DISJUNCTION of
 per-derivation delay sets, ground negated subgoals with no table are SPAWNED
 (`$naf_db` seam), and resolution runs globally at root exit. See
-`todo/audit-2026-07-05/investigate-A04-wfs-variant-resolution.md`
+`todo/done/investigate-A04-wfs-variant-resolution.md`
 §IMPLEMENTED for the full design. Net: `wfs_win_asym` and fact-in-cycle
 programs now compute their true/false values exactly (docs/wfs.md truth
 tables reproduce in any order and mode) — the design this todo said was

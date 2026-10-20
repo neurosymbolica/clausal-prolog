@@ -764,7 +764,7 @@ def _iso_identical(a, b) -> bool:
 
     `structural_eq` treats `1` and `1.0` as equal — a deliberately PARKED
     decision (A05-D001/A01-D001,
-    todo/audit-2026-07-05/done/fix-A05-structural-eq-asymmetry-consistency.md:
+    todo/done/fix-A05-structural-eq-asymmetry-consistency.md:
     "do not change direction here, only keep it consistent with whatever
     unify does") that this function must not disturb, because `structural_eq`
     has existing callers depending on it. `'=='`/2 is a BRAND NEW predicate

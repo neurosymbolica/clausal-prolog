@@ -2,7 +2,7 @@
 
 Status: resolved-from-docs (cite) | resolved-by-user (record) | open.
 Per standing user preference, open questions are parked in
-`todo/audit-2026-07-05/investigate-A11-parked-design-decisions.md`, not asked
+`todo/done/investigate-A11-parked-design-decisions.md`, not asked
 interactively. D001/D002 are cross-cutting and appended to DESIGN-DECISIONS.md.
 
 | ID | Status | Title | Conflicting sources | Options considered | Decision + rationale | Follow-up |

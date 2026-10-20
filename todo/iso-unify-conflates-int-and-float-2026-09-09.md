@@ -35,7 +35,7 @@ operator's call, not a comparison-builtins branch's.
 It is also entangled with two decisions already parked in the same direction:
 
 * `structural_eq`'s int/float conflation (A05-D001 / A01-D001,
-  `todo/audit-2026-07-05/done/fix-A05-structural-eq-asymmetry-consistency.md`:
+  `todo/done/fix-A05-structural-eq-asymmetry-consistency.md`:
   "do not change direction here, only keep it consistent with whatever unify
   does"). Narrowing `unify` without `structural_eq` breaks that consistency
   rule; narrowing both is a much bigger change again.

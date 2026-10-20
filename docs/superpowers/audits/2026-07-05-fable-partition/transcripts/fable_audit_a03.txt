@@ -346,8 +346,8 @@
 
   Read 1 file (ctrl+o to expand)
 
-● Write(todo/audit-2026-07-05/fix-A03-tro-nondet-prefix.md)
-  ⎿  Wrote 54 lines to todo/audit-2026-07-05/fix-A03-tro-nondet-prefix.md
+● Write(todo/done/fix-A03-tro-nondet-prefix.md)
+  ⎿  Wrote 54 lines to todo/done/fix-A03-tro-nondet-prefix.md
        1 # fix(A03-F001): TRO drops solutions behind nondeterministic pre
        2 
        3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
@@ -360,8 +360,8 @@
       10 shared determinism classifier says True for goals that are NOT:
      … +70 lines (ctrl+o to expand)
 
-● Write(todo/audit-2026-07-05/fix-A03-dr-nondet-prefix.md)
-  ⎿  Wrote 34 lines to todo/audit-2026-07-05/fix-A03-dr-nondet-prefix.md
+● Write(todo/done/fix-A03-dr-nondet-prefix.md)
+  ⎿  Wrote 34 lines to todo/done/fix-A03-dr-nondet-prefix.md
        1 # fix(A03-F002): destructive reuse corrupts containers behind no
        2 
        3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
@@ -374,9 +374,9 @@
          on_issue.md`
      … +39 lines (ctrl+o to expand)
 
-● Write(todo/audit-2026-07-05/fix-A03-tro-signal-bucket-not-generator.md)
+● Write(todo/done/fix-A03-tro-signal-bucket-not-generator.md)
   ⎿  Wrote 37 lines to
-     todo/audit-2026-07-05/fix-A03-tro-signal-bucket-not-generator.md
+     todo/done/fix-A03-tro-signal-bucket-not-generator.md
        1 # fix(A03-F003): signal-mode TRO-only index bucket compiles to a
        2 
        3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
@@ -389,9 +389,9 @@
          m contains
      … +41 lines (ctrl+o to expand)
 
-● Write(todo/audit-2026-07-05/fix-A03-catch-functor-catcher.md)
+● Write(todo/done/fix-A03-catch-functor-catcher.md)
   ⎿  Wrote 43 lines to
-     todo/audit-2026-07-05/fix-A03-catch-functor-catcher.md
+     todo/done/fix-A03-catch-functor-catcher.md
        1 # fix(A03-F004): catch/3 never matches declared-functor exceptio
        2 
        3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
@@ -404,8 +404,8 @@
          `. The
      … +53 lines (ctrl+o to expand)
 
-● Write(todo/audit-2026-07-05/fix-A03-setof-not-sorted.md)
-  ⎿  Wrote 28 lines to todo/audit-2026-07-05/fix-A03-setof-not-sorted.md
+● Write(todo/done/fix-A03-setof-not-sorted.md)
+  ⎿  Wrote 28 lines to todo/done/fix-A03-setof-not-sorted.md
        1 # fix(A03-F005): setof/3 returns insertion order — docs and ISO 
        2 
          /03-compiler-goals/findings.md` A03-F005
@@ -418,9 +418,9 @@
          tof:
      … +26 lines (ctrl+o to expand)
 
-● Write(todo/audit-2026-07-05/fix-A03-findall-template-sharing.md)
+● Write(todo/done/fix-A03-findall-template-sharing.md)
   ⎿  Wrote 32 lines to
-     todo/audit-2026-07-05/fix-A03-findall-template-sharing.md
+     todo/done/fix-A03-findall-template-sharing.md
        1 # fix(A03-F006): findall/bagof/setof share free template variabl
        2 
          /03-compiler-goals/findings.md` A03-F006
@@ -433,9 +433,9 @@
          dings but
      … +36 lines (ctrl+o to expand)
 
-● Write(todo/audit-2026-07-05/fix-A03-specialize-midbody-goals.md)
+● Write(todo/done/fix-A03-specialize-midbody-goals.md)
   ⎿  Wrote 37 lines to
-     todo/audit-2026-07-05/fix-A03-specialize-midbody-goals.md
+     todo/done/fix-A03-specialize-midbody-goals.md
        1 # fix(A03-F007): specialization silently drops MI goals between 
        2 
        3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
@@ -448,9 +448,9 @@
          +1, …)`).
      … +42 lines (ctrl+o to expand)
 
-● Write(todo/audit-2026-07-05/fix-A03-deep-unfold-const-args.md)
+● Write(todo/done/fix-A03-deep-unfold-const-args.md)
   ⎿  Wrote 33 lines to
-     todo/audit-2026-07-05/fix-A03-deep-unfold-const-args.md
+     todo/done/fix-A03-deep-unfold-const-args.md
        1 # fix(A03-F008): deep unfolding inlines single-clause functors w
        2 
        3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
@@ -463,9 +463,9 @@
          ).
      … +35 lines (ctrl+o to expand)
 
-● Write(todo/audit-2026-07-05/fix-A03-cpd-extension-chaining.md)
+● Write(todo/done/fix-A03-cpd-extension-chaining.md)
   ⎿  Wrote 45 lines to
-     todo/audit-2026-07-05/fix-A03-cpd-extension-chaining.md
+     todo/done/fix-A03-cpd-extension-chaining.md
        1 # fix(A03-F009): CPD extension chaining emits duplicate Evaluate
        2 
        3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition
@@ -478,8 +478,8 @@
       10 variable as LHS twice (dump of `CountGraphCPD` clauses [7]/[8]):
      … +54 lines (ctrl+o to expand)
 
-● Write(todo/audit-2026-07-05/fix-A03-readme-ctco-drift.md)
-  ⎿  Wrote 19 lines to todo/audit-2026-07-05/fix-A03-readme-ctco-drift.md
+● Write(todo/done/fix-A03-readme-ctco-drift.md)
+  ⎿  Wrote 19 lines to todo/done/fix-A03-readme-ctco-drift.md
        1 # fix(A03-F010): compiler README §5 says continuation-TCO doesn'
        2 
        3 **Finding:** `docs/superpowers/audits/2026-07-05-fable-partition

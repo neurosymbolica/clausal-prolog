@@ -337,9 +337,9 @@
 
   Ran 1 shell command (ctrl+o to expand)
 
-● Write(todo/audit-2026-07-05/fix-A06-alldiff-int64-sentinel.md)
+● Write(todo/done/fix-A06-alldiff-int64-sentinel.md)
   ⎿  Wrote 36 lines to
-     todo/audit-2026-07-05/fix-A06-alldiff-int64-sentinel.md
+     todo/done/fix-A06-alldiff-int64-sentinel.md
        1 # fix(A06): all_different ground-value propagation shares the IN
        2 
        3 **Findings:** A06-F007 sibling (medium — C-only unsound; latent)

@@ -12,6 +12,6 @@ Rule: "-" + optional layout + a bare number token gives the negative literal. "-
 
 Fix shape: the negative-literal checks in prolog_parser.py (`_parse_prefix` and the other site) are gated on `self._adjacent(tok, nxt)`. Loosen that to allow optional layout for this literal-collapse branch only. The `nxt.type in (INTEGER, FLOAT)` check already excludes "(". Audit the other `_adjacent` call sites before touching them.
 
-History: F037 (todo/audit-2026-07-05/done/fix-A11-prolog-token-spans.md, citing ISO 6.3.1.2) required adjacency to fix a write/read round trip. WDCor4 supersedes that reading. Re-run F037's round-trip test after the change.
+History: F037 (todo/done/fix-A11-prolog-token-spans.md, citing ISO 6.3.1.2) required adjacency to fix a write/read round trip. WDCor4 supersedes that reading. Re-run F037's round-trip test after the change.
 
 Consequence: number_chars(- 1,"- 1") succeeds (number_chars_cont #91). Also check the native ISO reader (toklex/Pratt), not only the translator's parser.

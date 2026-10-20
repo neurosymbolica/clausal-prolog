@@ -425,7 +425,7 @@
   remains parked. I'll add a short status note (this one has a genuine residual)
   and move it.
 
-● Update(todo/audit-2026-07-05/fix-A01-compound-var-functor.md)
+● Update(todo/done/fix-A01-compound-var-functor.md)
   ⎿  Added 12 lines
        1  # fix-A01: Compound Var-functor broken across the layer (A01-F0
           03)
@@ -1056,7 +1056,7 @@ completed (exit code 0)
 
 ● Now archive the F008 investigate todo to done/ with a completion note:
 
-● Update(todo/audit-2026-07-05/investigate-A01-walk-vs-deref-walk-split.md)
+● Update(todo/done/investigate-A01-walk-vs-deref-walk-split.md)
   ⎿  Added 17 lines
        1  # investigate-A01: two deep-walkers with disjoint blind spots (
           A01-F008) — Opus
@@ -1617,7 +1617,7 @@ code 0)
 
 ● Now archive the F009 fix todo to done/ with a completion note:
 
-● Update(todo/audit-2026-07-05/fix-A03-cpd-extension-chaining.md)
+● Update(todo/done/fix-A03-cpd-extension-chaining.md)
   ⎿  Added 14 lines
        1  # fix(A03-F009): CPD extension chaining emits duplicate Evaluat
           e targets — deep solutions lost
@@ -4941,7 +4941,7 @@ code 0)
 
   Read 1 file (ctrl+o to expand)
 
-● Update(todo/audit-2026-07-05/investigate-A04-wfs-variant-resolution.md)
+● Update(todo/done/investigate-A04-wfs-variant-resolution.md)
   ⎿  Added 54 lines, removed 1 line
        2  
        3  **Finding:** `docs/superpowers/audits/2026-07-05-fable-partitio

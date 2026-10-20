@@ -271,7 +271,7 @@
           yptic ValueError (A10-F002) | Recommendation: unbox `.value` in
            Load context only (skip Store/Del) — unbreaks ordinary Python 
           (`MAX = 5`, `_tmp`) while preserving documented Load-unboxing. 
-          `todo/audit-2026-07-05/fix-A10-embed-visitname-store-context.md
+          `todo/done/fix-A10-embed-visitname-store-context.md
           ` | A10 | A10 EmbedTransformer; any .clausal file mixing Python
            code; docs/syntax.md conventions |
       30  | A10-D002 | open — parked by user preference | Stdlib shadowin
