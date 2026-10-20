@@ -615,3 +615,26 @@ def test_once_on_a_closed_goal_in_a_table_blind_module_is_not_checked():
     assert commit_check(pl, nodes.And(left=call("p"), right=call("call", Var()))) != ([], [])
     assert commit_check(pl, nodes.And(left=call("p"), right=call("q", Var()))) == ([], [])
     assert commit_check(ctx(None), Var()) == ([], [])
+
+
+# -- every special form in call/N's literal goal (2026-10-20) ----------------
+
+@pytest.mark.parametrize("clause", [
+    "c(X) :- call(catch_error(tf(X), _)), !.",
+    "c(X) :- call(catch_recover(fail, _, tf(X))), !.",
+    "c(X) :- call(call_cleanup(tf(X), true)), !.",
+    "c(X) :- call(call_nth(tf(X), 1)), !.",
+    "c(N) :- call(count_all((tf(_), !), N)).",
+    "c(X) :- catch_error(tf(X), _), !.",
+], ids=["catch_error", "catch_recover", "call_cleanup", "call_nth",
+        "count_all_inner", "catch_error_in_the_body"])
+def test_the_scan_descends_into_a_literal_call_goals_meta_call(native, clause):
+    """call/N's literal goal term is read as the MetaCall the compiler makes
+    of the same goal in a body (the last row), for EVERY special form: the
+    cut is refused over the tabled call inside it.  Before, catch_error/2,
+    catch_recover/3, call_cleanup/2, call_nth/2 and count_all/2 cells were
+    opaque calls and the file loaded.  The table they agree on is
+    clausal/logic/special_forms.py (tests/test_meta_goal_tables_agree.py)."""
+    src = ":- table(tf/1).\ntf(1). tf(2).\n" + clause + "\n"
+    with pytest.raises(SyntaxError, match=r"tabled.*tf/1"):
+        native.load("l3_tab_meta_lit", src)

@@ -25,6 +25,7 @@ from typing import Any
 from clausal.logic.atoms import demangle, is_mangled, mint as _mint
 from clausal.logic.database import Module as LogicModule, Clause, head_key
 from clausal.logic.compiler import compile_predicate_trampoline
+from clausal.logic.special_forms import GOAL_POSITIONS
 from clausal.logic.variables import Var as _Var
 from clausal.logic.predicate import (
     _db_for_module_name, predicate_owner_module,
@@ -66,18 +67,28 @@ def _head_name_arity(pred_node):
     return None
 
 
-#: Meta-calls whose arguments at these positions are GOALS.
-_META_GOAL_ARGS = {
-    "call": (0,), "once": (0,), "ignore": (0,), "not": (0,), "\\+": (0,),
-    "findall": (1,), "bagof": (1,), "setof": (1,), "forall": (0, 1),
-    "catch": (0, 2), "aggregate_all": (1,),
+#: Goal-taking builtins that are not special forms, by ``(name, arity)``:
+#: their goal argument is a goal too.  (call/N is handled by name.)
+_EXTRA_GOAL_ARGS = {
+    ("ignore", 1): (0,), ("not", 1): (0,), ("\\+", 1): (0,),
+    ("aggregate_all", 3): (1,),
 }
+
+
+def _goal_positions(name: str, arity: int) -> tuple:
+    """The 0-based positions of a ``name/arity`` call that are GOALS: call/N's
+    closure, a special form's goals (``clausal/logic/special_forms.py``), or
+    :data:`_EXTRA_GOAL_ARGS`'s."""
+    if name == "call" and arity:
+        return (0,)
+    return (GOAL_POSITIONS.get((name, arity))
+            or _EXTRA_GOAL_ARGS.get((name, arity), ()))
 
 
 def _goal_names(goal, out: set) -> None:
     """Add to *out* the names of the predicates *goal* calls (a clause-body
     node): through And/Or/Not/if-then-else, conjunction tuples and the goal
-    arguments of ``_META_GOAL_ARGS``."""
+    arguments of the meta-calls (:func:`_goal_positions`)."""
     from clausal.pythonic_ast import nodes  # noqa: PLC0415
     from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
     if isinstance(goal, nodes.And) or isinstance(goal, nodes.Or):
@@ -101,7 +112,7 @@ def _goal_names(goal, out: set) -> None:
     elif isinstance(goal, nodes.Call) and isinstance(goal.func, nodes.LoadName):
         name = goal.func.name
         out.add(name)
-        for i in _META_GOAL_ARGS.get(name, ()):
+        for i in _goal_positions(name, len(goal.args)):
             if i < len(goal.args):
                 _goal_names(goal.args[i], out)
     elif isinstance(goal, nodes.LoadName):
@@ -112,7 +123,7 @@ def _goal_names(goal, out: set) -> None:
         is_cell, functor = compound_cell_shape(goal)
         if is_cell:
             out.add(functor)
-            for i in _META_GOAL_ARGS.get(functor, ()):
+            for i in _goal_positions(functor, len(goal) - 1):
                 if i + 1 < len(goal):
                     _goal_names(goal[i + 1], out)
 

@@ -389,6 +389,26 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `bagof/3` and `setof/3` included). Pinned in
   `tests/test_imported_special_form_names.py`.
 
+- **Every meta-call goal argument is treated as a goal by every pass**
+  (2026-10-20). Which arguments of `catch_error/2`, `catch_recover/3`,
+  `call_nth/2`, `count_all/2`, `call_cleanup/2`, `freeze/2`, `when/2` and
+  the rest are goals was written in several hand-kept tables that had
+  drifted; they now come from one, `clausal/logic/special_forms.py`, or are
+  tested against it by name, arity and position. What changes: a
+  `term_expansion/4` body that calls its
+  own file's helper only inside `catch_error/2` (or `catch_recover/3`,
+  `call_cleanup/2`, ...) now compiles the helper instead of failing with
+  an unbound expansion; in a `.pl` file, a cut after `call(catch_error(T,
+  _))` (or the same with `catch_recover/3`, `call_cleanup/2`, `call_nth/2`,
+  or a cut inside `count_all/2`) over a tabled `T` is now refused at load
+  like the same goal written in the body; the `.pl` exporter infers
+  `:- meta_predicate` through `catch/2` (the export of `catch_error/2`),
+  `catch_recover/3`, `call_cleanup/2`, `setup_call_cleanup/3`, `freeze/2`,
+  `when/2`, `call_nth/2` and `count_all/2`; and its plain-layout dict
+  literal in a `once/1` or `catch/2` goal is built inside that goal.
+  Unchanged, by decision: goal expansion (regex auto-binding) still stops
+  at every meta-call, `catch_error/2` included.
+
 - **`catch_error/2` and `catch_recover/3` load in a `.clausal` clause
   body** (2026-10-20). `t(R) :- catch_error(throw(boom(42)), R).` failed
   to load with `NotImplementedError: terms_to_goalop: goal shape not yet

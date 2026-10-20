@@ -1,6 +1,10 @@
 """Where a cut lands (ISO 7.8.4 scope rules on the GoalOp IR)."""
 from __future__ import annotations
 
+import functools
+
+from clausal.logic.special_forms import GOAL_POSITIONS
+
 from .ir import Alternate, Branch, Cut, GoalOp, IfThenElse, Sequence
 
 
@@ -130,10 +134,11 @@ def may_reach_a_table(db) -> bool:
 
 #: Callees that run a goal argument at run time when they are reached as
 #: an ordinary call rather than compiled inline.
+#: Every special form with a goal argument (``clausal/logic/special_forms.py``)
+#: plus call/N, the control constructs and the goal-taking builtins.
 _RUN_TIME_META = frozenset({
-    "call", ",", ";", "->", "*->", "\\+", "not", "once", "ignore", "findall",
-    "bagof", "setof", "forall", "catch", "call_cleanup", "setup_call_cleanup",
-    ":", "aggregate_all", "call_nth", "phrase"})
+    "call", ",", ";", "->", "*->", "\\+", "not", "ignore", ":",
+    "aggregate_all", "phrase"}) | frozenset(name for name, _ in GOAL_POSITIONS)
 
 
 def _goal_is_open(goal, db) -> bool:
@@ -274,18 +279,28 @@ def _literal_call_goal(op, db):
     return None if goal is None else _body_term_ir(goal)
 
 
-_META_TERMS = {
-    # functor/arity -> (MetaKind, the goal-argument positions as arg keys)
-    ("once", 1): ("once", {1: "inner"}),
-    ("findall", 3): ("findall", {2: "inner"}),
-    ("findall", 4): ("findall", {2: "inner"}),
-    ("bagof", 3): ("bagof", {2: "inner"}),
-    ("setof", 3): ("setof", {2: "inner"}),
-    ("forall", 2): ("forall", {1: "cond", 2: "action"}),
-    ("catch", 3): ("catch", {1: "inner", 3: "recovery"}),
-    ("setup_call_cleanup", 3): ("setup_call_cleanup",
-                                {1: "setup", 2: "call", 3: "cleanup"}),
-}
+@functools.cache
+def _meta_terms() -> dict:
+    """``(functor, arity)`` -> ``(MetaKind, {1-based position: arg key})`` of
+    every special form with a goal argument (``clausal/logic/special_forms.
+    py``), read off the compiler: the MetaCall ``terms_to_goalop`` makes of
+    the same goal in a clause body, so a literal call/N term is scanned
+    exactly as that body goal is."""
+    from clausal.logic.special_forms import GOAL_POSITIONS
+    from clausal.logic.variables import Var
+    from clausal.pythonic_ast import nodes
+    from .ir import META_GOAL_POSITIONS, MetaCall
+    from .terms_to_goalop import _convert
+    table = {}
+    for (name, arity) in GOAL_POSITIONS:
+        probes = [Var() for _ in range(arity)]
+        op = _convert(nodes.Call(func=nodes.LoadName(name=name), args=probes,
+                                 kwargs=[]), None)
+        assert isinstance(op, MetaCall), (name, arity)
+        table[(name, arity)] = (op.kind, {
+            i + 1: key for key in META_GOAL_POSITIONS.get(op.kind, ())
+            for i, p in enumerate(probes) if op.args.get(key) is p})
+    return table
 
 
 def _body_term_ir(t) -> GoalOp:
@@ -325,7 +340,7 @@ def _body_term_ir(t) -> GoalOp:
             if type(g) is tuple and g and type(g[0]) is str and g[0] not in (",", ";", "->", "\\+", ":"):
                 return SubCall(fname=f"{m}.{g[0]}", arity=len(g) - 1, args=list(g[1:]))
         return _body_term_ir(g)
-    meta = _META_TERMS.get((f, n))
+    meta = _meta_terms().get((f, n))
     if meta is not None:
         kind, positions = meta
         margs = {}

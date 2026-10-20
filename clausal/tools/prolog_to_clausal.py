@@ -786,13 +786,17 @@ def _own_predicate_names(pmodule: PModule) -> set[str]:
 
 
 #: argument positions (0-based) that hold a GOAL (or a clause, for the
-#: database builtins) in the meta-predicates a ``.pl`` file commonly calls
+#: database builtins) in the meta-predicates a ``.pl`` file commonly calls,
+#: by ``.pl`` name across arities (``catch``'s also serves catch/2, the
+#: spelling of Clausal's catch_error/2).  Covers every special form of
+#: ``clausal/logic/special_forms.py`` (tests/test_meta_goal_tables_agree.py).
 _META_GOAL_ARGS: dict[str, tuple[int, ...]] = {
     "call": (0,), "once": (0,), "ignore": (0,), "\\+": (0,), "not": (0,),
     "findall": (1,), "bagof": (1,), "setof": (1,), "aggregate_all": (1,),
     "forall": (0, 1), "catch": (0, 2), "call_cleanup": (0, 1),
     "setup_call_cleanup": (0, 1, 2), "freeze": (1,), "when": (1,),
-    "call_nth": (0,), "time": (0,), "phrase": (0,),
+    "call_nth": (0,), "count_all": (0,), "catch_recover": (0, 2),
+    "time": (0,), "phrase": (0,),
     "maplist": (0,), "foldl": (0,), "include": (0,), "exclude": (0,),
     "partition": (0,),
     "assert": (0,), "asserta": (0,), "assertz": (0,), "retract": (0,),

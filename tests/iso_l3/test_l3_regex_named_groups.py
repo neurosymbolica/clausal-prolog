@@ -108,6 +108,7 @@ f(D, YEAR, OTHER) :- match("(?P<YEAR>\\\\d{4})", D).
 @pytest.mark.parametrize("name, body", [
     ("once_group", 'once(match("(?P<X>\\\\d+)", S))'),
     ("catch_group", 'catch(match("(?P<X>\\\\d+)", S), _, true)'),
+    ("catch_error_group", 'catch_error(match("(?P<X>\\\\d+)", S), _)'),
     ("forall_group", 'forall(match("(?P<X>\\\\d+)", S), true)'),
     ("naf_group", '\\+ match("(?P<X>\\\\d+)x", S)'),
     ("once_qualified", 'once(re:match("(?P<X>\\\\d+)", S))'),

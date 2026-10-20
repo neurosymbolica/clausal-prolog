@@ -1777,11 +1777,10 @@ class _ClausalToProlog:
 
     # ── D6: dict literals become dict_pairs/2 goals (plain layout) ────
     #
-    # Goal-argument positions the walk treats as GOALS rather than terms:
-    # a literal there is built inside that goal, never hoisted out of it
-    # (its values may use variables bound inside).
-    _META_GOAL_ARGS = {("findall", 3): (1,), ("bagof", 3): (1,), ("setof", 3): (1,),
-                       ("forall", 2): (0, 1), ("\\+", 1): (0,), ("call", 1): (0,)}
+    # Goal-argument positions the walk treats as GOALS rather than terms
+    # are GOAL_TRANSPARENT's (the meta-mode walk's, below): a literal there
+    # is built inside that goal, never hoisted out of it (its values may use
+    # variables bound inside).
 
     def _hoist_dict_literals(self, clause: PClause) -> PClause:
         """Replace every dict-literal marker in *clause* with a fresh variable
@@ -1851,8 +1850,8 @@ class _ClausalToProlog:
             before: list[PTerm] = []
             result = self._extract_dict_literals(goal.args[2], before)
             return _conjoin(before + [PCompound(goal.functor, (template, inner, result))])
-        if key in self._META_GOAL_ARGS:
-            positions = self._META_GOAL_ARGS[key]
+        if key in GOAL_TRANSPARENT:
+            positions = GOAL_TRANSPARENT[key]
             before = []
             args = tuple(self._hoist_goal(a) if i in positions
                          else self._extract_dict_literals(a, before)
@@ -4115,7 +4114,9 @@ MODE_MODULE_SENSITIVE = ":"
 #: *module_signatures*' shape and is keyed the same way.
 MetaModeMap = dict[str, dict[tuple[str, int], tuple[int | str | None, ...]]]
 
-#: Goal combinators, as ``(functor, arity) -> indexes of the arguments that are GOALS``.
+#: Goal combinators, as ``(functor, arity) -> indexes of the arguments that are GOALS``,
+#: in the EXPORTED spelling: every special form of ``clausal/logic/special_forms.py``
+#: (``tests/test_meta_goal_tables_agree.py``), plus the control constructs.
 #: Used to walk a clause body through goal positions only. Everything absent from this
 #: table is a leaf as far as the walk is concerned: it is itself a goal, but its
 #: arguments are DATA and are never descended into.
@@ -4131,10 +4132,18 @@ GOAL_TRANSPARENT: dict[tuple[str, int], tuple[int, ...]] = {
     ("call", 1): (0,),
     ("forall", 2): (0, 1),
     ("catch", 3): (0, 2),
+    ("catch", 2): (0,),                 # Clausal's catch_error/2, as exported
+    ("catch_recover", 3): (0, 2),
     ("findall", 3): (1,),
     ("findall", 4): (1,),
     ("bagof", 3): (1,),
     ("setof", 3): (1,),
+    ("call_nth", 2): (0,),
+    ("count_all", 2): (0,),
+    ("call_cleanup", 2): (0, 1),
+    ("setup_call_cleanup", 3): (0, 1, 2),
+    ("freeze", 2): (1,),
+    ("when", 2): (1,),
     ("aggregate_all", 3): (1,),
     ("^", 2): (1,),
 }
