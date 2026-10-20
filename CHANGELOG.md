@@ -306,6 +306,16 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **`catch_error/2` and `catch_recover/3` load in a `.clausal` clause
+  body** (2026-10-20). `t(R) :- catch_error(throw(boom(42)), R).` failed
+  to load with `NotImplementedError: terms_to_goalop: goal shape not yet
+  supported`, though the same goal worked as a top-level query. The
+  native front end (also used for `.pl` by default) lowered their goal
+  arguments as data, not goals: unlike `catch/3`, they were missing from
+  its table of meta-predicate goal positions. That table is now checked
+  against the compiler's for every meta kind. docs/exceptions.md's
+  `catch_error`/`catch_recover` examples are now Clausal Prolog.
+
 - **A sandboxed module may import the datetime adapter's `date`
   constructor** (2026-10-17). `-import_from(date_time, [date])` was refused
   at load under `CLAUSAL_SANDBOX=1` with `non_export`, at the import and at

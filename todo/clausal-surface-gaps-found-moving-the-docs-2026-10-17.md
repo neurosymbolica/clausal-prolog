@@ -11,7 +11,12 @@ re-run separately.
 
 ## Engine bugs (the most important)
 
-1. **`catch_error/2` and `catch_recover/3` do not compile in a `.clausal`
+1. **FIXED 2026-10-20 (commit 92d39a47)** The native front end now lowers
+   their goal arguments as goals (`iso_l3._META_GOAL_ARGS`), as it does
+   for `catch/3`. Pinned in tests/fixtures/catch_error_clausal_body.clausal
+   and tests/iso_l3/test_l3_s1_bodies.py::test_catch_error_and_catch_recover_goal_arguments_are_goals;
+   exceptions.md's examples are Clausal Prolog now.
+   **`catch_error/2` and `catch_recover/3` do not compile in a `.clausal`
    clause body** (verified).
    - `t(R) :- catch_error(throw(boom(42)), R).` fails to load with
      `NotImplementedError: terms_to_goalop: goal shape not yet supported
