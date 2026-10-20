@@ -16,8 +16,12 @@ lists a different spelling (the exported ``.pl`` names) is mapped first.
 Goal expansion reads no such table, by decision: see
 test_goal_expansion_intentionally_stops_at_a_meta_call.
 
-Every goal position of every special form has exactly one cut-scope rule
-in ``compiler/cut_scope`` (transparent, commits or opaque).
+The goal-taking callees that are NOT special forms (aggregate_all/3,
+time_goal, phrase, maplist & co.; ``\\+``/not/ignore; call/N) are the
+second table, ``special_forms.GOAL_BUILTINS`` / ``GOAL_CONTROLS`` /
+``CLOSURE_CALLERS``, held to their readers the same way.  And every goal
+position of every special form has exactly one cut-scope rule in
+``compiler/cut_scope`` (transparent, commits or opaque).
 """
 from __future__ import annotations
 
@@ -25,7 +29,10 @@ import typing
 
 import pytest
 
-from clausal.logic.special_forms import GOAL_POSITIONS, SPECIAL_FORMS
+from clausal.logic.special_forms import (
+    BUILTIN_GOAL_POSITIONS, CLOSURE_CALLERS, GOAL_BUILTINS, GOAL_CONTROLS,
+    GOAL_FIRST_LIST_BUILTINS, GOAL_POSITIONS, SPECIAL_FORMS,
+)
 from clausal.logic.variables import Var, deref
 from clausal.pythonic_ast import nodes
 
@@ -117,10 +124,13 @@ def test_the_cut_scope_scanner_reads_a_literal_term_like_the_compiler(key):
 
 def test_the_cut_scope_run_time_meta_names_cover_the_table():
     """A goal reached as an ordinary call to one of these names runs a goal
-    argument at run time.  Extras: call/N, control constructs and the
-    goal-taking builtins that are not special forms."""
+    argument at run time.  Extras: the control constructs, and every
+    goal-taking callee of the second table."""
     from clausal.logic.compiler.cut_scope import _RUN_TIME_META
     assert {name for name, _ in GOAL_POSITIONS} <= _RUN_TIME_META
+    assert CLOSURE_CALLERS <= _RUN_TIME_META
+    assert {name for name, _ in GOAL_BUILTINS} <= _RUN_TIME_META
+    assert {name for name, _ in GOAL_CONTROLS} <= _RUN_TIME_META
 
 
 # ── every goal position has one scoping rule ───────────────────────────────
@@ -198,14 +208,24 @@ def test_tro_classifies_every_meta_kind():
 
 
 def test_term_expansion_helper_reachability_covers_the_table():
-    """Extras: call/N's closure, ``\\+``/not/ignore and aggregate_all/3,
-    goal-taking builtins that are not special forms."""
-    from clausal.logic.term_expansion import _goal_positions
+    """Extras: call/N's closure, ``\\+``/not/ignore and every goal-taking
+    builtin (``_called_positions``).  The seam body's TERM view
+    (``_goal_positions``, ``_seam_body_term``) converts the special forms',
+    ``\\+``/not/ignore's and aggregate_all/3's only, as it always has."""
+    from clausal.logic.term_expansion import (
+        _EXTRA_GOAL_ARGS, _called_positions, _goal_positions)
     for (name, arity), positions in GOAL_POSITIONS.items():
         assert _goal_positions(name, arity) == positions, (name, arity)
+        assert _called_positions(name, arity) == positions, (name, arity)
+    for key, positions in BUILTIN_GOAL_POSITIONS.items():
+        assert _called_positions(*key) == positions, key
     assert _goal_positions("call", 3) == (0,)
+    assert _called_positions("call_goal", 2) == (0,)
     assert _goal_positions("\\+", 1) == (0,)
     assert _goal_positions("once", 2) == ()       # another arity is a call
+    assert _EXTRA_GOAL_ARGS == {
+        **{k: (0,) for k in GOAL_CONTROLS},
+        ("aggregate_all", 3): BUILTIN_GOAL_POSITIONS[("aggregate_all", 3)]}
 
 
 def _pl_name(name: str) -> str:
@@ -251,6 +271,95 @@ def test_the_translators_goal_names_cover_the_table():
     for (name, arity), positions in GOAL_POSITIONS.items():
         listed = _META_GOAL_ARGS.get(_pl_name(name), ())
         assert tuple(i for i in listed if i < arity) == positions, (name, arity)
+
+
+#: The goal-taking builtins a ``.pl`` file calls by the same name (ISO,
+#: SWI library(apply)/library(aggregate), Scryer): the translator lists
+#: these.  The rest of GOAL_BUILTINS (take_while, group_by, tfilter ...) are
+#: Clausal's own names, which a ``.pl`` file may define for itself with
+#: other arguments, so the translator does not read them as goals.
+_PL_GOAL_BUILTIN_NAMES = {"aggregate_all", "time", "phrase", "maplist",
+                          "foldl", "include", "exclude", "partition"}
+#: The database builtins' CLAUSE argument: a translator-only extra (a goal
+#: NAME is collected from it, but it is not called).
+_PL_CLAUSE_ARG_NAMES = {"assert", "asserta", "assertz", "retract",
+                        "retractall", "clause"}
+
+
+def test_the_translators_other_goal_names_are_the_second_table():
+    """Every non-special-form entry of ``prolog_to_clausal._META_GOAL_ARGS``
+    is call/N, a GOAL_CONTROLS name, a ``.pl`` name of GOAL_BUILTINS with
+    exactly its positions (at every arity of it the engine has), or a
+    database builtin's clause argument -- and every such name is there."""
+    from clausal.tools.prolog_to_clausal import _META_GOAL_ARGS, _NIL_GOAL_ARGS
+    special = {_pl_name(name) for name, _ in GOAL_POSITIONS}
+    builtins: dict = {}
+    for (name, arity), positions in BUILTIN_GOAL_POSITIONS.items():
+        builtins.setdefault(_pl_name(name), set()).add(positions)
+    extras = set(_META_GOAL_ARGS) - special
+    assert extras == ({"call"} | {n for n, _ in GOAL_CONTROLS}
+                      | _PL_GOAL_BUILTIN_NAMES | _PL_CLAUSE_ARG_NAMES)
+    for name in {"call"} | {n for n, _ in GOAL_CONTROLS}:
+        assert _META_GOAL_ARGS[name] == (0,), name
+    for name in _PL_GOAL_BUILTIN_NAMES:
+        assert builtins[name] == {_META_GOAL_ARGS[name]}, name
+    # A [] there is the goal []/0 only where the argument is a GOAL, not a
+    # closure (C), a DCG body (D) or a clause term.
+    not_goal = {_pl_name(name) for (name, _), roles in GOAL_BUILTINS.items()
+                if set(roles) & {"C", "D"}}
+    assert set(_META_GOAL_ARGS) - set(_NIL_GOAL_ARGS) == (
+        (not_goal & set(_META_GOAL_ARGS)) | _PL_CLAUSE_ARG_NAMES)
+
+
+# ── the second table: goal-taking callees that are not special forms ───────
+
+
+def test_the_second_table_is_well_formed():
+    for table in (SPECIAL_FORMS, GOAL_BUILTINS, GOAL_CONTROLS):
+        for (name, arity), roles in table.items():
+            assert len(roles) == arity, (name, arity)
+    assert not set(GOAL_BUILTINS) & set(SPECIAL_FORMS)
+    assert not set(GOAL_CONTROLS) & set(SPECIAL_FORMS)
+    assert not set(GOAL_BUILTINS) & set(GOAL_CONTROLS)
+    assert not CLOSURE_CALLERS & {name for name, _ in SPECIAL_FORMS}
+    assert all(BUILTIN_GOAL_POSITIONS.values())
+
+
+def test_every_goal_builtin_is_an_engine_builtin():
+    import clausal.logic.builtins  # noqa: F401 - registers them
+    from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
+    missing = [k for k in GOAL_BUILTINS
+               if k not in _BUILTINS and k not in _DB_BUILTINS]
+    assert missing == []
+
+
+def test_the_list_builtins_are_the_tables_closure_rows():
+    from clausal.logic.builtins import higher_order
+    assert higher_order._GOAL_FIRST_LIST_BUILTINS is GOAL_FIRST_LIST_BUILTINS
+    assert len(GOAL_FIRST_LIST_BUILTINS) == 25
+    assert all(BUILTIN_GOAL_POSITIONS[k] == (0,) for k in GOAL_FIRST_LIST_BUILTINS)
+
+
+@pytest.mark.parametrize("key", sorted(GOAL_BUILTINS), ids=lambda k: f"{k[0]}/{k[1]}")
+def test_clause_2s_goal_positions_are_the_tables(key):
+    """clause/2's goal-thunk refusal reads every goal-taking builtin
+    (aggregate_all/3's goal was missing until 2026-10-20)."""
+    from clausal.logic.builtins import clause_ops
+    assert clause_ops._BUILTIN_GOAL_ARGS is BUILTIN_GOAL_POSITIONS
+    assert clause_ops._goal_positions(*key, None) == BUILTIN_GOAL_POSITIONS[key]
+
+
+@pytest.mark.parametrize("key", sorted(GOAL_BUILTINS), ids=lambda k: f"{k[0]}/{k[1]}")
+def test_a_dotted_goal_argument_of_every_goal_builtin_is_qualified(key):
+    """meta_predicate.builtin_goal_positions marks exactly the table's goal
+    positions ``:`` (a dotted ``lib.p`` there is the goal ``lib:p``)."""
+    from clausal.logic.meta_predicate import QUALIFIED, builtin_goal_positions
+    name, arity = key
+    want = tuple(QUALIFIED if i in BUILTIN_GOAL_POSITIONS[key] else "?"
+                 for i in range(arity))
+    assert builtin_goal_positions(None, name, arity) == want
+    assert builtin_goal_positions(None, "call", 3) == (QUALIFIED, "?", "?")
+    assert builtin_goal_positions(None, "not_a_goal_builtin", 1) is None
 
 
 # ── what the agreement changes ─────────────────────────────────────────────
@@ -312,6 +421,34 @@ def test_a_term_expansion_helper_called_only_inside_catch_error_is_compiled(tmp_
     x = Var()
     assert [deref(x) for _ in call("logged_fact", x,
                                    module=m.__dict__["$module"])] == [1, 2]
+
+
+@pytest.mark.parametrize("ext", [".pl", ".clausal"])
+@pytest.mark.parametrize("body", [
+    "maplist(step, [I], [O])",
+    "phrase(step2(I, O), [], [])",
+    "aggregate_all(count, step(I, O), 1), step(I, O)",
+    "call(step, I, O)",
+], ids=["maplist", "phrase", "aggregate_all", "call3"])
+def test_a_term_expansion_helper_reached_through_a_goal_builtin_is_compiled(
+        tmp_path, body, ext):
+    """Helper reachability reads every goal-taking builtin of
+    ``special_forms.GOAL_BUILTINS``: step/2 reached only as maplist's
+    closure, or step2//2 only through phrase/3, is compiled into the
+    expansion module.  Before (2026-10-20) its own short table listed
+    aggregate_all/3 but not maplist & co. or phrase, and the load failed
+    (``step does not accept 2 arguments``; ``no procedure step2/4``)."""
+    from clausal.import_hook import _load_module
+    from clausal.logic.solve import call
+    name = f"te_goal_builtin_{body.split('(')[0]}_{ext[1:]}"
+    p = tmp_path / f"{name}{ext}"
+    p.write_text(f"term_expansion(I, O, S, S) :- {body}.\n"
+                 "step(fact(X), [fact(X), logged_fact(X)]).\n"
+                 "step2(I, O) --> [], {step(I, O)}.\n"
+                 "fact(1).\nfact(2).\n")
+    m = _load_module(name, str(p))
+    x = Var()
+    assert [deref(x) for _ in call("logged_fact", x, module=m)] == [1, 2]
 
 
 # The cut-scope scan's half is tests/iso_l3/test_l3_cut_tabling.py

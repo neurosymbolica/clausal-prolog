@@ -105,7 +105,8 @@ fx(3) <- once(++print("z")),
 fx(4) <- (Y is ++len("ab"), Y == 2),
 fx(5) <- time_goal(++print("t")),
 fx(6) <- maplist(++print("m"), [1]),
-fx(7) <- twice(++print("w"))
+fx(7) <- twice(++print("w")),
+fx(8) <- aggregate_all('count', ++print("a"), _)
 
 twice(G) <- (call(G), call(G))
 

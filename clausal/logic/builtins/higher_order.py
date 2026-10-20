@@ -1742,14 +1742,10 @@ def _tpartition__4(this_generator, _proceed, _fail, _catcher, goal, lst, include
 # paths (``_BUILTIN_CLASSES``, a db-less ``BuiltinPredicate``) keep working;
 # the same arrangement ``call/N``, ``phrase`` and ``time_goal`` already use.
 
-_GOAL_FIRST_LIST_BUILTINS = (
-    ("maplist", 2), ("maplist", 3), ("maplist", 4), ("maplist", 5),
-    ("maplist", 6), ("maplist", 7), ("maplist", 8), ("maplist", 9),
-    ("include", 3), ("exclude", 3),
-    ("foldl", 4), ("foldl", 5), ("foldl", 6), ("map_list_to_pairs", 3),
-    ("take_while", 3), ("drop_while", 3), ("span", 4),
-    ("group_by", 3), ("sort_by", 3), ("max_by", 3), ("min_by", 3),
-    ("filter_map", 3), ("partition", 4), ("tfilter", 3), ("tpartition", 4),
+# The table is ``clausal/logic/special_forms.GOAL_BUILTINS``' closure rows
+# (tests/test_meta_goal_tables_agree.py).
+from clausal.logic.special_forms import (  # noqa: E402
+    GOAL_FIRST_LIST_BUILTINS as _GOAL_FIRST_LIST_BUILTINS,
 )
 
 

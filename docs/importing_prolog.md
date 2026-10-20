@@ -857,7 +857,9 @@ may not import a `.pl` one.
   * **`once/1`, `call_nth/2`, a Setup and a Cleanup** are checked only in
     `.pl` modules, and there in two cases:
     * the goal written inside is itself a variable, or contains a
-      `call/N` (or a control construct called as a predicate), e.g.
+      `call/N`, a control construct called as a predicate, or a builtin
+      that runs a goal argument (`maplist/2..9` and the other list
+      builtins, `aggregate_all/3`, `phrase/2,3`), e.g.
       `first(G) :- once(G).` in a library;
     * any goal, in a module that can see a tabled predicate when it is
       compiled: one it tables, or one it imports, directly or through the

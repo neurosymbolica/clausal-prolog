@@ -25,6 +25,20 @@ Goal expansion does NOT descend into these goal arguments, by decision
 The compiler's own key-named manifest, ``compiler/ir.META_GOAL_POSITIONS``,
 is held to :data:`GOAL_POSITIONS` position by position by that test.
 
+A second table, :data:`GOAL_BUILTINS`, lists the goal-taking callees that
+are NOT special forms -- builtins that receive their goal as a TERM and run
+it (aggregate_all/3, time_goal/1,2, phrase/2,3, maplist & co.), with
+:data:`GOAL_CONTROLS` (``\\+``, not, ignore) and :data:`CLOSURE_CALLERS`
+(call/N, call_goal/N) beside it.  Its readers derive
+from it or are held to it by the same test:
+
+- ``builtins/higher_order._GOAL_FIRST_LIST_BUILTINS`` and
+  ``builtins/clause_ops._BUILTIN_GOAL_ARGS`` ARE slices of it;
+- ``meta_predicate.builtin_goal_positions`` (a dotted goal argument is the
+  qualified goal) and ``compiler/cut_scope._RUN_TIME_META`` read it;
+- ``term_expansion``'s helper reachability reads it;
+- the ``.pl`` translator's ``_META_GOAL_ARGS`` lists its ``.pl`` names.
+
 Pure data with no imports of its own, so nothing here pulls in an engine
 module; importing it still runs ``clausal/__init__.py``, which does.  Of the
 readers, only the native front end (``iso_l3``) runs while CACHED bytecode
@@ -82,3 +96,79 @@ for _name, _arity in SPECIAL_FORMS:
     if _arity > SPECIAL_FORM_MAX_ARITY.get(_name, -1):
         SPECIAL_FORM_MAX_ARITY[_name] = _arity
 del _name, _arity
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Goal-taking callees that are not special forms
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: ``(name, arity)`` -> one ROLE letter per argument, for each engine BUILTIN
+#: that is not a special form but receives a goal as a TERM and runs it:
+#:
+#: ``G``  a goal, run as call/1 runs it;
+#: ``C``  a closure: a goal call/N extends with the list elements (maplist &
+#:        co.: the first argument of each goal-first list builtin);
+#: ``D``  a DCG body (phrase/2,3's first: ``[]`` there is the empty list of
+#:        terminals, not the goal ``[]``);
+#: ``A``  a term argument.
+#:
+#: call/N and call_goal/N are :data:`CLOSURE_CALLERS` (every arity); the
+#: negations and ignore/1 are :data:`GOAL_CONTROLS`.  The order of the C
+#: rows is the registration order of
+#: ``higher_order._GOAL_FIRST_LIST_BUILTINS``.
+GOAL_BUILTINS: dict[tuple[str, int], str] = {
+    ("aggregate_all", 3): "AGA",
+    ("time_goal", 1): "G",
+    ("time_goal", 2): "GA",
+    ("phrase", 2): "DA",
+    ("phrase", 3): "DAA",
+    **{("maplist", n): "C" + "A" * (n - 1) for n in range(2, 10)},
+    ("include", 3): "CAA",
+    ("exclude", 3): "CAA",
+    ("foldl", 4): "CAAA",
+    ("foldl", 5): "CAAAA",
+    ("foldl", 6): "CAAAAA",
+    ("map_list_to_pairs", 3): "CAA",
+    ("take_while", 3): "CAA",
+    ("drop_while", 3): "CAA",
+    ("span", 4): "CAAA",
+    ("group_by", 3): "CAA",
+    ("sort_by", 3): "CAA",
+    ("max_by", 3): "CAA",
+    ("min_by", 3): "CAA",
+    ("filter_map", 3): "CAA",
+    ("partition", 4): "CAAA",
+    ("tfilter", 3): "CAA",
+    ("tpartition", 4): "CAAA",
+}
+
+#: The goal-taking callees that are neither special forms nor engine
+#: builtins, ``(name, arity)`` -> roles: ``\+``/1 (and its spelling
+#: ``not``/1) lowers to a ``Negate`` node, never a call, and
+#: ``ignore``/1 is the library spelling of ``( G -> true ; true )`` a ``.pl``
+#: file calls (no engine definition).  Walks that read call-shaped goals
+#: (term_expansion's reachability, the ``.pl`` exporter and translator)
+#: list them.
+GOAL_CONTROLS: dict[tuple[str, int], str] = {
+    ("\\+", 1): "G",
+    ("not", 1): "G",
+    ("ignore", 1): "G",
+}
+
+#: Names whose FIRST argument is a goal (a closure) at every arity >= 1.
+CLOSURE_CALLERS: frozenset[str] = frozenset({"call", "call_goal"})
+
+
+def _positions(roles: str, kinds: str) -> tuple[int, ...]:
+    return tuple(i for i, role in enumerate(roles) if role in kinds)
+
+
+#: ``(name, arity)`` -> 0-based positions of every goal argument (``G``,
+#: ``C`` or ``D``) of :data:`GOAL_BUILTINS`.
+BUILTIN_GOAL_POSITIONS: dict[tuple[str, int], tuple[int, ...]] = {
+    key: _positions(roles, "GCD") for key, roles in GOAL_BUILTINS.items()
+}
+
+#: The goal-first list builtins (maplist & co.), in registration order.
+GOAL_FIRST_LIST_BUILTINS: tuple[tuple[str, int], ...] = tuple(
+    key for key, roles in GOAL_BUILTINS.items() if roles[0] == "C")

@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import functools
 
-from clausal.logic.special_forms import GOAL_POSITIONS
+from clausal.logic.special_forms import (
+    CLOSURE_CALLERS, GOAL_BUILTINS, GOAL_CONTROLS, GOAL_POSITIONS,
+)
 
 from .ir import Alternate, Branch, Cut, GoalOp, IfThenElse, Sequence
 
@@ -133,12 +135,15 @@ def may_reach_a_table(db) -> bool:
 
 
 #: Callees that run a goal argument at run time when they are reached as
-#: an ordinary call rather than compiled inline.
-#: Every special form with a goal argument (``clausal/logic/special_forms.py``)
-#: plus call/N, the control constructs and the goal-taking builtins.
-_RUN_TIME_META = frozenset({
-    "call", ",", ";", "->", "*->", "\\+", "not", "ignore", ":",
-    "aggregate_all", "phrase"}) | frozenset(name for name, _ in GOAL_POSITIONS)
+#: an ordinary call rather than compiled inline: the control constructs,
+#: and from ``clausal/logic/special_forms.py`` every special form with a
+#: goal argument, call/N and call_goal/N, ``\+``/not/ignore, and every
+#: goal-taking builtin (aggregate_all, time_goal, phrase, maplist & co.).
+_RUN_TIME_META = (
+    frozenset({",", ";", "->", "*->", ":"}) | CLOSURE_CALLERS
+    | frozenset(name for name, _ in GOAL_POSITIONS)
+    | frozenset(name for name, _ in GOAL_CONTROLS)
+    | frozenset(name for name, _ in GOAL_BUILTINS))
 
 
 def _goal_is_open(goal, db) -> bool:

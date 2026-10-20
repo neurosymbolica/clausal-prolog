@@ -113,6 +113,7 @@ from clausal.logic.atoms import NIL_SPELLING
 from clausal.logic.builtins._helpers import _is_empty_list
 
 from clausal.logic.special_forms import (
+    BUILTIN_GOAL_POSITIONS, CLOSURE_CALLERS,
     GOAL_POSITIONS as _SPECIAL_FORM_GOALS, SPECIAL_FORMS as _SPECIAL_FORM_ROLES,
 )
 from clausal.logic.builtins._registry import (
@@ -367,30 +368,24 @@ _GOAL_ARGS = _SPECIAL_FORM_GOALS     # clausal/logic/special_forms.py
 
 
 # Goal-taking BUILTINS that are not special forms: their goal argument is
-# run, so a thunk there is code.  (call/N is handled by name.)
-_BUILTIN_GOAL_ARGS = {
-    ("time_goal", 1): (0,), ("time_goal", 2): (0,),
-    ("phrase", 2): (0,), ("phrase", 3): (0,),
-}
+# run, so a thunk there is code.  (call/N is handled by name.)  THE table:
+# ``special_forms.GOAL_BUILTINS`` (aggregate_all/3, time_goal/1,2,
+# phrase/2,3, maplist & co.).
+_BUILTIN_GOAL_ARGS = BUILTIN_GOAL_POSITIONS
 
 
 def _goal_positions(name: str, n: int, db) -> tuple:
     """The argument positions of a ``name/n`` call that are GOALS: call/N
-    and call_goal/N's first, a special form's (``_GOAL_ARGS``), a goal-first
-    list builtin's first (``higher_order._GOAL_FIRST_LIST_BUILTINS``: maplist
-    & co.), time_goal / phrase, and a user predicate's ``-meta_predicate``
-    positions whose spec qualifies (``:`` or an integer, Scryer's
-    ``qualified_spec``)."""
-    if n and name in ("call", "call_goal"):
+    and call_goal/N's first (``CLOSURE_CALLERS``), a special form's
+    (``_GOAL_ARGS``), a goal-taking builtin's (``_BUILTIN_GOAL_ARGS``:
+    aggregate_all, time_goal, phrase, maplist & co.), and a user
+    predicate's ``-meta_predicate`` positions whose spec qualifies (``:`` or
+    an integer, Scryer's ``qualified_spec``)."""
+    if n and name in CLOSURE_CALLERS:
         return (0,)
     hit = _GOAL_ARGS.get((name, n)) or _BUILTIN_GOAL_ARGS.get((name, n))
     if hit:
         return hit
-    from clausal.logic.builtins.higher_order import (  # noqa: PLC0415
-        _GOAL_FIRST_LIST_BUILTINS,
-    )
-    if (name, n) in _GOAL_FIRST_LIST_BUILTINS:
-        return (0,)
     specs = db.meta_predicate_specs(name, n) if db is not None else None
     if specs:
         from clausal.logic.meta_predicate import is_qualifying_spec  # noqa: PLC0415

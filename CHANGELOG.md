@@ -360,6 +360,22 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **The goal-taking builtins are one table** (2026-10-20):
+  `clausal/logic/special_forms.py`'s `GOAL_BUILTINS` (aggregate_all/3,
+  time_goal/1,2, phrase/2,3, maplist & co.), held to its readers by
+  `tests/test_meta_goal_tables_agree.py`. Three readers had drifted:
+  a `term_expansion/4` helper reached only as maplist's closure or
+  through `phrase/3` was not compiled into the expansion module, so the
+  load failed; `clause/2` ran a goal-position `++` thunk inside
+  `aggregate_all/3`'s goal (and handed back `None` for it) instead of
+  refusing the clause; and `once(maplist(G, [Y]))` in a `.pl` library
+  that tables nothing committed unchecked over a caller's incomplete
+  table, where `once(G)` is checked. Pinned by
+  `::test_a_term_expansion_helper_reached_through_a_goal_builtin_is_compiled`,
+  `tests/test_clause_2_iso.py::test_a_goal_position_thunk_is_refused_without_running`
+  (fx(8)) and
+  `tests/iso_l3/test_l3_cut_tabling.py::test_once_over_a_goal_builtins_closure_argument_is_checked`.
+
 - **`dict_pairs/2`, `dict_put_pairs/3` and `set_list/2` read a list built
   by recursion** (2026-10-20). A list that a recursive predicate builds in
   its clause heads (`filter([K-V|T], D, [K-V|R]) :- ..., filter(T, D, R)`)

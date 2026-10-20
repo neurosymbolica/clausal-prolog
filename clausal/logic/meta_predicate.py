@@ -200,11 +200,6 @@ def meta_specs_for_call(db: Any, fname: str, arity: int) -> "tuple | None":
     return row.db._meta_specs.get(row.key)
 
 
-#: ``aggregate_all/3``'s goal: the one builtin meta-caller whose goal
-#: position ``clause_ops._goal_positions`` does not list.
-_AGGREGATE_GOAL_POSITIONS = {("aggregate_all", 3): (1,)}
-
-
 def builtin_goal_positions(db: Any, fname: str, arity: int) -> "tuple | None":
     """Specs for a compiled call of the BUILTIN meta-caller ``fname/arity``
     -- ``:`` at each position the builtin runs as a goal, ``?`` elsewhere --
@@ -212,10 +207,10 @@ def builtin_goal_positions(db: Any, fname: str, arity: int) -> "tuple | None":
     has its own (or an imported) predicate of that name and arity.
 
     The builtin meta-callers are those whose goal reaches them as a TERM:
-    call/N and call_goal/N, time_goal/1,2, phrase/2,3 and the goal-first list
-    builtins (maplist & co.) -- the builtin half of
-    ``clause_ops._goal_positions``, one source of truth -- and
-    aggregate_all/3.  (The control constructs -- findall/3, once/1, forall/2,
+    call/N and call_goal/N, aggregate_all/3, time_goal/1,2, phrase/2,3 and
+    the goal-first list builtins (maplist & co.) -- ``special_forms.
+    CLOSURE_CALLERS`` and ``GOAL_BUILTINS``, one source of truth.  (The
+    control constructs -- findall/3, once/1, forall/2,
     catch/3, ... -- compile their goal inline and never get here.)
 
     A builtin needs no caller qualification (it resolves a plain goal in the
@@ -230,19 +225,13 @@ def builtin_goal_positions(db: Any, fname: str, arity: int) -> "tuple | None":
     arity: a dotted argument's qualification names ``lib`` itself."""
     if "." in fname:
         return None
-    if arity and fname in ("call", "call_goal"):
+    from clausal.logic.special_forms import (  # noqa: PLC0415
+        BUILTIN_GOAL_POSITIONS, CLOSURE_CALLERS,
+    )
+    if arity and fname in CLOSURE_CALLERS:
         positions: "tuple[int, ...] | None" = (0,)
     else:
-        from clausal.logic.builtins.clause_ops import (  # noqa: PLC0415
-            _BUILTIN_GOAL_ARGS,
-        )
-        from clausal.logic.builtins.higher_order import (  # noqa: PLC0415
-            _GOAL_FIRST_LIST_BUILTINS,
-        )
-        key = (fname, arity)
-        positions = (_BUILTIN_GOAL_ARGS.get(key)
-                     or _AGGREGATE_GOAL_POSITIONS.get(key)
-                     or ((0,) if key in _GOAL_FIRST_LIST_BUILTINS else None))
+        positions = BUILTIN_GOAL_POSITIONS.get((fname, arity))
     if positions is None:
         return None
     row_of = getattr(db, "row", None)

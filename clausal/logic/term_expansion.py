@@ -30,7 +30,9 @@ from typing import Any
 from clausal.logic.atoms import demangle, is_mangled, mint as _mint
 from clausal.logic.database import Module as LogicModule, Clause, head_key
 from clausal.logic.compiler import compile_predicate_trampoline
-from clausal.logic.special_forms import GOAL_POSITIONS
+from clausal.logic.special_forms import (
+    BUILTIN_GOAL_POSITIONS, CLOSURE_CALLERS, GOAL_CONTROLS, GOAL_POSITIONS,
+)
 from clausal.logic.variables import Var as _Var
 from clausal.logic.predicate import (
     _db_for_module_name, predicate_owner_module,
@@ -72,11 +74,14 @@ def _head_name_arity(pred_node):
     return None
 
 
-#: Goal-taking builtins that are not special forms, by ``(name, arity)``:
-#: their goal argument is a goal too.  (call/N is handled by name.)
+#: Goal-taking callees that are not special forms, by ``(name, arity)``,
+#: whose goal argument a seam clause body's TERM view converts as a goal
+#: (:func:`_seam_body_term`): ``\+``/not/ignore and aggregate_all/3, from
+#: ``special_forms``.  (call/N is handled by name.)
 _EXTRA_GOAL_ARGS = {
-    ("ignore", 1): (0,), ("not", 1): (0,), ("\\+", 1): (0,),
-    ("aggregate_all", 3): (1,),
+    **{key: tuple(i for i, r in enumerate(roles) if r == "G")
+       for key, roles in GOAL_CONTROLS.items()},
+    ("aggregate_all", 3): BUILTIN_GOAL_POSITIONS[("aggregate_all", 3)],
 }
 
 
@@ -90,10 +95,22 @@ def _goal_positions(name: str, arity: int) -> tuple:
             or _EXTRA_GOAL_ARGS.get((name, arity), ()))
 
 
+def _called_positions(name: str, arity: int) -> tuple:
+    """:func:`_goal_positions`, plus every goal-taking builtin's
+    (``special_forms.GOAL_BUILTINS``: time_goal, phrase, maplist & co.) and
+    call_goal/N's: the arguments whose predicate names a body CALLS, for
+    helper reachability."""
+    if arity and name in CLOSURE_CALLERS:
+        return (0,)
+    return (_goal_positions(name, arity)
+            or BUILTIN_GOAL_POSITIONS.get((name, arity), ()))
+
+
 def _goal_names(goal, out: set) -> None:
     """Add to *out* the names of the predicates *goal* calls (a clause-body
     node): through And/Or/Not/if-then-else, conjunction tuples and the goal
-    arguments of the meta-calls (:func:`_goal_positions`)."""
+    arguments of the meta-calls and goal-taking builtins
+    (:func:`_called_positions`)."""
     from clausal.pythonic_ast import nodes  # noqa: PLC0415
     from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
     if isinstance(goal, nodes.And) or isinstance(goal, nodes.Or):
@@ -117,7 +134,7 @@ def _goal_names(goal, out: set) -> None:
     elif isinstance(goal, nodes.Call) and isinstance(goal.func, nodes.LoadName):
         name = goal.func.name
         out.add(name)
-        for i in _goal_positions(name, len(goal.args)):
+        for i in _called_positions(name, len(goal.args)):
             if i < len(goal.args):
                 _goal_names(goal.args[i], out)
     elif isinstance(goal, nodes.LoadName):
@@ -128,7 +145,7 @@ def _goal_names(goal, out: set) -> None:
         is_cell, functor = compound_cell_shape(goal)
         if is_cell:
             out.add(functor)
-            for i in _goal_positions(functor, len(goal) - 1):
+            for i in _called_positions(functor, len(goal) - 1):
                 if i + 1 < len(goal):
                     _goal_names(goal[i + 1], out)
 

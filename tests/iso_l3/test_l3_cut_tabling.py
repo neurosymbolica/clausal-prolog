@@ -644,6 +644,35 @@ def test_once_on_a_goal_argument_inside_the_tables_own_evaluation_is_refused(nat
     assert ans(mod, "r") == [_INCOMPLETE("path", 2)]
 
 
+LIB_MAPLIST = """\
+:- module(rt_util_m, [first_each/2]).
+:- meta_predicate(first_each(1, ?)).
+first_each(G, Y) :- once(maplist(G, [Y])).
+"""
+
+LIB_MAPLIST_USER_IN_TABLE = """\
+:- use_module(rt_util_m).
+:- table(path/2).
+e(a, b). e(b, a).
+path(X, Y) :- e(X, Y).
+path(X, Y) :- path(X, Z), e(Z, Y), first_each(path(Z), _).
+r(E) :- catch((findall(Y, path(a, Y), _), E = none), error(E0, _), E = E0).
+"""
+
+
+def test_once_over_a_goal_builtins_closure_argument_is_checked(native, ans, tmp_path):
+    """once(maplist(G, [Y])) runs the run-time goal G as surely as
+    once(G): the open-goal test reads every goal-taking builtin of
+    special_forms.GOAL_BUILTINS (maplist & co., time_goal), not only
+    aggregate_all/3 and phrase/2,3.  The check raises over path/2's
+    incomplete table as test_once_on_a_goal_argument_inside_the_tables_own_
+    evaluation_is_refused's once(G) does; before (2026-10-20) it committed
+    unchecked."""
+    (tmp_path / "rt_util_m.pl").write_text(LIB_MAPLIST)
+    mod = native.load("l3_tab_rt_lib_maplist", LIB_MAPLIST_USER_IN_TABLE)
+    assert ans(mod, "r") == [_INCOMPLETE("path", 2)]
+
+
 def test_once_on_a_closed_goal_in_a_table_blind_module_is_not_checked():
     """The other side of N-2's rule: once/1 over a literal goal with no
     call/N, in a .pl module that cannot see a table, compiles as it did

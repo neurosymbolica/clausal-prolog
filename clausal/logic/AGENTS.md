@@ -38,7 +38,7 @@ repo-root `tests/`. Up: [../AGENTS.md](../AGENTS.md)
 | `database.py` | `Clause`, `PredRow`, `Database`, `Module`: the clause store and write gates. |
 | `predicate.py` | Predicates as `Database` rows named by handles (`mint_predicate_handle`, `_dispatch_at`). Not the same as `compiler/predicate.py`. |
 | `term_expansion.py`, `goal_expansion.py` | `term_expansion/4` and body goal-expansion passes before compilation. |
-| `special_forms.py` | THE table of the compiler's meta-call special forms and which of their arguments are goals; every other goal-position table derives from it or is held to it by `tests/test_meta_goal_tables_agree.py`. |
+| `special_forms.py` | THE table of the compiler's meta-call special forms and which of their arguments are goals, and a second one of the goal-taking builtins that are not special forms (`GOAL_BUILTINS`: aggregate_all, time_goal, phrase, maplist & co.); every other goal-position table derives from them or is held to them by `tests/test_meta_goal_tables_agree.py`. |
 | `meta_predicate.py`, `constants.py`, `stratification.py`, `specialization.py`, `translations.py` | `-meta_predicate`, `-constants`, negation-cycle analysis, meta-interpreter partial deduction, `-translations`. |
 | `dialect_edge.py` | The one-way gate: `.pl` may call `.clausal`, never the reverse; Clausal Prolog reaches Python only via `.seam`. |
 

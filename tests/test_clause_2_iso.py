@@ -754,7 +754,10 @@ def test_a_goal_position_thunk_is_refused_without_running(lm, capsys):
     from tests.fixtures import clause2_bump
     before = clause2_bump.COUNT[0]
     capsys.readouterr()
-    for n in (1, 2, 3, 5, 6, 7):     # 5 time_goal, 6 maplist, 7 -meta_predicate
+    # 5 time_goal, 6 maplist, 7 -meta_predicate, 8 aggregate_all (its goal
+    # thunk ran, and the Body held None, until 2026-10-20: clause/2's table
+    # of goal-taking builtins missed it; now special_forms.GOAL_BUILTINS)
+    for n in (1, 2, 3, 5, 6, 7, 8):
         assert _pi(_error(lm, ("fx", n))) == ("fx", 1), n
     assert capsys.readouterr().out == ""
     assert clause2_bump.COUNT[0] == before
