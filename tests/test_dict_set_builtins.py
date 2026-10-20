@@ -168,7 +168,65 @@ class TestDictPairs:
         assert sols[0][0] == DictTerm({"a": 1, "b": 2})
 
 
-# ── dict_get ───────────────────────────────────────────────────────────────────
+def _filled_partial_list(head, rest):
+    """``[*head | T]`` with ``T`` then bound to ``rest``: the SegList a
+    recursive predicate leaves behind when it builds ``[X|R]`` in a clause
+    head, not a plain ``list``."""
+    from clausal.terms import SegList, ConcreteSeg, VarSeg  # noqa: PLC0415
+    tail = Var()
+    built = SegList([ConcreteSeg(list(head)), VarSeg(tail)])
+    assert unify(tail, list(rest), Trail())
+    return built
+
+
+def _direct(name, *args):
+    """Run builtin *name* on *args* as compiled code calls it -- straight
+    through its registered trampoline function, so the arguments arrive
+    unwalked (``solve`` normalises a goal's arguments first).  The deref'd
+    arguments of each solution."""
+    from clausal.logic.builtins._registry import _BUILTINS  # noqa: PLC0415
+    fn = _BUILTINS[(name, len(args))]
+    proceed, fail = object(), object()
+    t = Trail()
+    out = []
+    for target, _value in fn(None, proceed, fail, None, *args, t):
+        if target is fail:
+            break
+        out.append([deref(a) for a in args])
+    return out
+
+
+class TestBuiltPairList:
+    """A list of pairs that a recursive predicate built in its clause heads
+    is a SegList whose holes are all filled; it reads the same as the plain
+    list (it failed: every Pairs→Dict reader asked ``isinstance(_, list)``)."""
+
+    def test_dict_pairs_reads_a_filled_partial_list(self):
+        # nv
+        pairs = _filled_partial_list([("-", "a", 1)], [("-", "c", 3)])
+        sols = _direct("dict_pairs", Var(), pairs)
+        assert [d for d, _ in sols] == [DictTerm({"a": 1, "c": 3})]
+
+    def test_dict_pairs_open_partial_list_fails(self):
+        # nv
+        from clausal.terms import SegList, ConcreteSeg, VarSeg  # noqa: PLC0415
+        pairs = SegList([ConcreteSeg([("-", "a", 1)]), VarSeg(Var())])
+        assert _direct("dict_pairs", Var(), pairs) == []
+
+    def test_dict_put_pairs_reads_a_filled_partial_list(self):
+        # nv
+        pairs = _filled_partial_list([("-", "a", 1)], [("-", "c", 3)])
+        sols = _direct("dict_put_pairs", pairs, DictTerm({"z": 0}), Var())
+        assert [d for _, _, d in sols] == [DictTerm({"a": 1, "c": 3, "z": 0})]
+
+    def test_set_list_reads_a_filled_partial_list(self):
+        # nv
+        elems = _filled_partial_list(["b"], ["a", "b"])
+        sols = _direct("set_list", Var(), elems)
+        assert [st for st, _ in sols] == [SetTerm({"a", "b"})]
+
+
+# ── dict_get───────────────────────────────────────────────────────────────────
 
 
 class TestDictGet:

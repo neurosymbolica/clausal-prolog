@@ -1,0 +1,44 @@
+# dict_pairs/2, dict_put_pairs/3 and set_list/2 read a list that a
+# recursive predicate built in its clause heads: a partial list whose holes
+# are all filled, not a plain Python list. The seam twin of
+# dict_pairs_built_list.clausal. Collected by the root conftest.
+-module(dict_pairs_built_list_seam, [])
+
+drop([], _, []),
+drop([K - V, *T], D, [K - V, *R]) <- (dif(K, D), drop(T, D, R))
+drop([D - _, *T], D, R) <- drop(T, D, R)
+
+copy_list([], []),
+copy_list([X, *T], [X, *R]) <- copy_list(T, R)
+
+test('dif filter, bound keys') <- (
+    drop(['a' - 1, 'b' - 2, 'c' - 3], 'b', F),
+    dict_pairs(D, F),
+    D == {'a': 1, 'c': 3}
+)
+test('findall copy control') <- (
+    drop(['a' - 1, 'b' - 2, 'c' - 3], 'b', F),
+    findall(P, member(P, F), C),
+    dict_pairs(D, C),
+    D == {'a': 1, 'c': 3}
+)
+test('tail bound after construction') <- (
+    L is ['a' - 1, *T],
+    T is ['c' - 3],
+    dict_pairs(D, L),
+    D == {'a': 1, 'c': 3}
+)
+test('unbound key in a built list fails') <- (
+    copy_list([_ - 1], L),
+    not dict_pairs(_, L)
+)
+test('dict_put_pairs reads a built list') <- (
+    drop(['a' - 1, 'b' - 2], 'b', F),
+    dict_put_pairs(F, {'z': 0}, D),
+    D == {'a': 1, 'z': 0}
+)
+test('set_list reads a built list') <- (
+    copy_list(['b', 'a', 'b'], L),
+    set_list(S, L),
+    S == {'a', 'b'}
+)

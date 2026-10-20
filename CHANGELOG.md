@@ -331,6 +331,21 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **`dict_pairs/2`, `dict_put_pairs/3` and `set_list/2` read a list built
+  by recursion** (2026-10-20). A list that a recursive predicate builds in
+  its clause heads (`filter([K-V|T], D, [K-V|R]) :- ..., filter(T, D, R)`)
+  is held as a partial list whose holes are all filled, not as a plain
+  list, and a list of chars built that way becomes text. These three
+  builtins accepted only a plain list, so `dict_pairs(D, Filtered)`
+  failed while `findall(P, member(P, Filtered), C), dict_pairs(D, C)`
+  succeeded. dif/2 had nothing to do with it: the same failure happens
+  with no constraint at all, e.g. `L = [a-1|T], T = [c-3], dict_pairs(D, L)`.
+  They now read their list argument as the list builtins do, so
+  `set_list(S, "ab")` also builds `{a, b}` now (a string is a list of
+  chars, as `length/2` and `msort/2` already read it). An unbound key still
+  fails, unbound values are stored as they are, and an open list still
+  fails.
+
 - **`name()` is a syntax error, as in ISO** (2026-10-20). The ISO reader
   read `f()` as a compound with no arguments. In a `.clausal` or `.pl`
   clause body `nl()` then ran as `nl`, and a `-g` goal such as `nl()`

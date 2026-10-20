@@ -115,6 +115,24 @@ def _set_input(v):
     return None
 
 
+def _list_input(v):
+    """The elements of a list-valued term, or ``None`` -- the list twin of
+    ``_dict_input``, for the builtins that read a list of pairs or elements
+    (``dict_pairs/2``'s Pairs->Dict arm, ``dict_put_pairs/3``, ``set_list/2``).
+
+    A plain ``list`` is not the only spelling of a list.  One a recursive
+    predicate builds in its clause heads (``[K-V|R]``, ``R`` bound by the
+    recursive call) is a ``SegList`` whose holes are all filled, and one
+    whose elements are all chars is promoted to the chars carrier (F018).
+    These builtins asked ``isinstance(_, list)``, so they FAILED on such a
+    list while a ``findall/3`` copy of it (a plain ``list``) worked.  Read
+    it as every list builtin does, through ``lists._as_items``; an open or
+    improper list is still ``None`` (the caller fails, as before).  Callers
+    must not mutate the result: for a plain list it IS the caller's."""
+    from clausal.logic.builtins.lists import _as_items  # noqa: PLC0415
+    return _as_items(v)
+
+
 # ── Dict builtins ─────────────────────────────────────────────────────────────
 
 
@@ -216,11 +234,11 @@ def _dict_pairs__2(this_generator, _proceed, _fail, _catcher, d, pairs, trail):
             yield (_proceed, None)
         trail.undo(mark)
 
-    elif isinstance(pairs_val, list):
+    elif (pair_items := _list_input(pairs_val)) is not None:
         # Pairs → Dict
         data = {}
         ok = True
-        for pair in pairs_val:
+        for pair in pair_items:
             kv = _kv_parts(pair)
             if kv is not None:
                 # The nil key is legal and has a canonical (hashable) form
@@ -309,10 +327,11 @@ def _dict_put_pairs__3(this_generator, _proceed, _fail, _catcher, pairs, old_dic
     ``Key-Value`` pairs (RULED 2026-09-28; it was ``[[Key, Value], ...]``)."""
     pairs_val = deref(pairs)
     old_data = _dict_input(deref(old_dict))
-    if isinstance(pairs_val, list) and old_data is not None:
+    pair_items = _list_input(pairs_val)
+    if pair_items is not None and old_data is not None:
         new_data = dict(old_data)
         ok = True
-        for pair in pairs_val:
+        for pair in pair_items:
             kv = _kv_parts(pair)
             if kv is not None:
                 # Fix round 4, item 3 — the mirror of ``dict_pairs/2``'s
@@ -583,8 +602,8 @@ def _set_list__2(this_generator, _proceed, _fail, _catcher, s, lst, trail):
             yield (_proceed, None)
         trail.undo(mark)
 
-    elif isinstance(lst_val, list):
-        elems = [deref(e) for e in lst_val]
+    elif (lst_items := _list_input(lst_val)) is not None:
+        elems = [deref(e) for e in lst_items]
         if all(not is_var(e) for e in elems):
             try:
                 set_term = SetTerm(elems)

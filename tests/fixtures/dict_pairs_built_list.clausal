@@ -1,0 +1,119 @@
+% dict_pairs/2, dict_put_pairs/3 and set_list/2 read a list that a
+% recursive predicate built in its clause heads ([K-V|R], R bound by the
+% recursive call). That list is a partial list whose holes are all filled
+% (a SegList), not a plain Python list; it must read the same as the
+% list a findall/3 copy produces. Collected by the root conftest.
+:- module(dict_pairs_built_list, []).
+
+% The reporter's probe: a filter that posts dif/2, and one that does not.
+pw([], _, []).
+pw([K-_|R], K, Out) :- pw(R, K, Out).
+pw([O-V|R], K, [O-V|Out]) :- dif(O, K), pw(R, K, Out).
+pn([], _, []).
+pn([K-_|R], K, Out) :- pn(R, K, Out).
+pn([O-V|R], K, [O-V|Out]) :- O \== K, pn(R, K, Out).
+test(findall) :- P = [a-1,b-2], findall(K-V, (member(K-V, P), dif(K, a)), R), dict_pairs(E, R), write(E), nl.
+test(nodif) :- pn([a-1,b-2], a, R), dict_pairs(E, R), write(E), nl.
+test(dif_then_copy) :- pw([a-1,b-2], a, R), copy_term(R, R2), dict_pairs(E, R2), write(E), nl.
+test(dif_simple) :- X = b, dif(X, a), dict_pairs(E, [X-2]), write(E), nl.
+test(dif_var_later) :- dif(X, a), X = b, dict_pairs(E, [X-2]), write(E), nl.
+
+% The filter from the report, and a plain element-by-element copy.
+drop([], _, []).
+drop([K-V|T], D, [K-V|R]) :- dif(K, D), drop(T, D, R).
+drop([D-_|T], D, R) :- drop(T, D, R).
+copy_list([], []).
+copy_list([X|T], [X|R]) :- copy_list(T, R).
+
+test(dif_filter_bound_keys) :-
+    drop([a-1, b-2, c-3], b, F),
+    dict_pairs(D, F),
+    dict_pairs(D0, [a-1, c-3]),
+    D == D0.
+test(reporter_dif_filter) :-
+    pw([a-1, b-2, c-3], b, F),
+    dict_pairs(D, F),
+    dict_keys(D, [a, c]).
+test(no_dif_at_all) :-
+    copy_list([a-1, b-2], L),
+    dict_pairs(D, L),
+    dict_values(D, [1, 2]).
+test(tail_bound_after_construction) :-
+    L = [a-1|T], T = [c-3],
+    dict_pairs(D, L),
+    dict_keys(D, [a, c]).
+test(findall_copy_control) :-
+    drop([a-1, b-2, c-3], b, F),
+    findall(P, member(P, F), C),
+    dict_pairs(D, C),
+    dict_keys(D, [a, c]).
+test(same_dict_as_the_findall_copy) :-
+    drop([a-1, b-2, c-3], b, F),
+    findall(P, member(P, F), C),
+    dict_pairs(D1, F),
+    dict_pairs(D2, C),
+    D1 == D2.
+
+% Values: an unbound value is stored as itself, today and here; one that
+% carries a dif/2 attribute keeps its constraint.
+test(unbound_value_plain_list) :-
+    dict_pairs(D, [a-V]),
+    get(D, a, W),
+    W == V.
+test(unbound_attributed_value_in_built_list) :-
+    dif(V, 0),
+    copy_list([a-V], L),
+    dict_pairs(D, L),
+    get(D, a, W),
+    W == V,
+    \+ W = 0,
+    W = 1.
+
+% Keys: an unbound key fails (docs/dicts_sets.md), in a built list too.
+test(unbound_key_plain_list_fails) :-
+    \+ dict_pairs(_, [_-1]).
+test(unbound_key_built_list_fails) :-
+    copy_list([K-1], L),
+    \+ dict_pairs(_, L),
+    var(K).
+test(dif_constrained_unbound_key_fails) :-
+    dif(K, a),
+    copy_list([K-1], L),
+    \+ dict_pairs(_, L).
+
+% The Dict -> Pairs direction against a built list.
+test(dict_to_built_pairs) :-
+    dict_pairs(D, [a-1, b-2]),
+    copy_list([X, Y], L),
+    dict_pairs(D, L),
+    X == a-1,
+    Y == b-2.
+
+% The other builtins that read a list of pairs or elements.
+test(dict_put_pairs_built_list) :-
+    dict_pairs(D0, [z-0]),
+    drop([a-1, b-2, c-3], b, F),
+    dict_put_pairs(F, D0, D),
+    dict_keys(D, [a, c, z]).
+test(set_list_built_list) :-
+    copy_list([b, a, b], L),
+    set_list(S, L),
+    set_list(S, [a, b]).
+test(set_list_built_list_unbound_element_fails) :-
+    copy_list([a, _], L),
+    \+ set_list(_, L).
+
+% A list of chars is promoted to the chars carrier, so a built one of single
+% characters arrives as text: set_list/2 reads it as the list it is, and
+% dict_pairs/2 still fails on it (a char is not a pair).
+test(set_list_built_char_list) :-
+    copy_list([b, a, b], L),
+    set_list(S, L),
+    set_size(S, 2),
+    set_list(S, X),
+    X == [a, b].
+test(dict_pairs_char_list_fails) :-
+    copy_list([a, b], L),
+    \+ dict_pairs(_, L).
+
+:- end_module(dict_pairs_built_list).
