@@ -62,7 +62,12 @@ re-run separately.
    **Importing `p/1` from one module and `p/2` from another keeps only the
    later import** (reported, both surfaces). Calling `p(X)` then raises an
    arity mismatch; ISO and Scryer keep both.
-6. **`nl()` crashes** with an internal `TypeError` ("the 1-tuple ('nl',) is
+6. **FIXED 2026-10-20 (commit 58429bed)** The reader refuses an empty
+   argument list (ISO 6.3.3; Scryer: `incomplete_reduction`), so `nl()` is
+   a syntax error with its position in `.clausal`, `.pl` (both front ends)
+   and `-g`. Pinned in
+   tests/iso_l3/test_l3_empty_argument_list_syntax_error.py.
+   **`nl()` crashes** with an internal `TypeError` ("the 1-tuple ('nl',) is
    reserved") instead of raising an ISO syntax error (reported).
 
 ## Missing from `.clausal`, present in the seam (reported)
@@ -121,7 +126,10 @@ re-run separately.
   prints `StarUnpack(...)`.
 - `catch(X > 0, E, true)`, and a cross-unit comparison, report the context
   `(is)/2` rather than `(>)/2`.
-- The `permission_error` message text says "declare it -dynamic(...)" even
+- **FIXED 2026-10-20 (commit f44b24ca)** The hint is spelled for the
+  surface that defines the predicate (`:- dynamic(f/N).` for `.clausal` and
+  `.pl`); pinned in tests/test_dynamic_hint_names_the_surface.py.
+  The `permission_error` message text says "declare it -dynamic(...)" even
   when raised from `.clausal`.
 - `dict_pairs(D, [K-1])` with `K` unbound fails silently.
 - `module_constant(m, max_retries, V)` fails when the module is given by
