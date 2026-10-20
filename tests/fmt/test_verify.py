@@ -21,6 +21,47 @@ def test_ast_equivalent_catches_code_change():
     assert not ast_equivalent("p(X) <- (q(X))\n", "p(X) <- (r(X))\n")
 
 
+def test_ast_equivalent_sees_a_requoted_atom():
+    # In the seam ``'f'`` is an atom and ``"f"`` a string; the Python tree
+    # is the same Constant, so the quote character is compared from the
+    # source itself.  todo/done/fmt-requotes-a-quoted-atom-head-as-a-string-
+    # 2026-10-20.md.
+    assert not ast_equivalent("'f'(X) <- (q(X))\n", '"f"(X) <- (q(X))\n')
+    assert not ast_equivalent("p(X) <- ('=='(X, a))\n", 'p(X) <- ("=="(X, a))\n')
+    assert not ast_equivalent("p(X) <- (q(X, 'a'))\n", 'p(X) <- (q(X, "a"))\n')
+    assert not ast_equivalent("op(1, 'a'),\n", 'op(1, "a"),\n')
+    assert ast_equivalent("p(X) <- (q(X, 'a'))\n", "p(X) <- (\n    q(X, 'a')\n)\n")
+    assert ast_equivalent('p(X) <- (q(X, "a"))\n', 'p(X) <- (\n    q(X, "a")\n)\n')
+
+
+def test_ast_equivalent_sees_a_requoted_concatenation_end():
+    # The seam reads both ends of an implicitly concatenated literal.
+    assert not ast_equivalent("p(X) <- (q('a' 'b'))\n", "p(X) <- (q('a' \"b\"))\n")
+
+
+def test_ast_equivalent_ignores_spellings_the_seam_does_not_read():
+    # Raw prefixes and triple quotes change no term: the quote character is
+    # what the seam reads, nothing else.
+    assert ast_equivalent("p(X) <- (q('a'))\n", "p(X) <- (q('''a'''))\n")
+    assert ast_equivalent("p(X) <- (q('a'))\n", "p(X) <- (q(r'a'))\n")
+
+
+def test_a_requoting_formatter_is_refused(monkeypatch):
+    # The fence the verifier exists for: a formatter that writes "f" for 'f'
+    # changes the program, and ``comments_only_change`` must say so.
+    from clausal.fmt import verify as V
+
+    def requoting(source):
+        return V.format_source(source).replace("'", '"')
+
+    before = "-private([f(_)])\n'f'(X) <- (q(X))\n"
+    after = requoting(before)
+    assert after == '-private([f(_)])\n\n"f"(X) <- (\n    q(X)\n)\n'
+    assert not ast_equivalent(before, after)
+    monkeypatch.setattr(V, "format_source", requoting)
+    assert not comments_only_change(before, after)
+
+
 def test_check_idempotent_passes_on_formatted_source():
     check_idempotent("p(X) <- (q(X), r(X))\n")
 

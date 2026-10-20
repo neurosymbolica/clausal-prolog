@@ -28,6 +28,14 @@ and mean different things -- a clause or lambda arrow versus a less-than
 against a negation -- and the engine reads the difference from the source
 spacing.  Since that is not in the AST, it has to be captured alongside the
 comments, for the same reason and by the same means.
+
+And one more of the same kind: :attr:`CommentTable.literals`, each string
+literal node mapped to the text the source spelled it with.  ``ast`` keeps a
+literal's VALUE and throws its spelling away, and in the seam the spelling is
+the term -- ``'f'`` is an atom and ``"f"`` a string (and never a functor, ISO
+6.3.3).  The emitter writes the captured text back verbatim, so single or
+double quotes, raw and bytes prefixes, triple quotes, f-strings and implicit
+concatenation all come out as they went in.
 """
 
 from __future__ import annotations
@@ -129,6 +137,94 @@ def arrow_nodes(tree: ast.Module, source: str) -> set[ast.AST]:
         if adjacent:
             found.add(node)
     return found
+
+
+#: The literal nodes whose source spelling the emitter copies back: string
+#: and bytes constants, f-strings, and (3.14+) t-strings.
+_LITERAL_TYPES: tuple[type, ...] = tuple(
+    t for t in (ast.Constant, ast.JoinedStr, getattr(ast, "TemplateStr", None))
+    if t is not None
+)
+
+
+def literal_spellings(tree: ast.AST, source: str) -> dict[ast.AST, str]:
+    """Each string literal node in ``tree`` mapped to its spelling in ``source``.
+
+    The spelling is the node's source span, verbatim -- quote character,
+    prefix, triple quotes, escapes, implicit concatenation and all.  Two
+    cases get no verbatim entry: a node with no position in this text (built
+    by a transform), and a literal with a ``#`` comment inside its span (a
+    comment between the parts of a multi-line concatenation, or inside an
+    f-string's braces), because that comment is already captured as a
+    comment and copying the span would write it twice.  The second case is
+    respelled from its value in the quote character the source used, which
+    is the part of the spelling the seam reads -- so even the fallback never
+    turns an atom into a string.
+    """
+    lines = source.splitlines(keepends=True)
+    comment_spans = _comment_positions(source)
+    found: dict[ast.AST, str] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, _LITERAL_TYPES):
+            continue
+        if isinstance(node, ast.Constant) and not isinstance(node.value, (str, bytes)):
+            continue
+        start, end = _span(node)
+        if start is None or end is None:
+            continue
+        if any(start <= at < end for at in comment_spans):
+            if isinstance(node, ast.Constant):
+                quote = _quote_at(lines, start)
+                if quote is not None:
+                    found[node] = _spell(node.value, quote)
+            continue
+        segment = ast.get_source_segment(source, node)
+        if segment is not None:
+            found[node] = segment
+    return found
+
+
+def _span(node: ast.AST) -> tuple[tuple[int, int] | None, tuple[int, int] | None]:
+    """``((lineno, byte col), (end_lineno, end byte col))`` or ``None``s."""
+    lineno = getattr(node, "lineno", None)
+    col = getattr(node, "col_offset", None)
+    end_lineno = getattr(node, "end_lineno", None)
+    end_col = getattr(node, "end_col_offset", None)
+    start = (lineno, col) if lineno is not None and col is not None else None
+    end = (end_lineno, end_col) if end_lineno is not None and end_col is not None else None
+    return start, end
+
+
+def _comment_positions(source: str) -> list[tuple[int, int]]:
+    """``(row, byte col)`` of every comment, in ``ast``'s own coordinates."""
+    lines = source.splitlines(keepends=True)
+    out = []
+    for comment in _harvest(source):
+        if 1 <= comment.row <= len(lines):
+            byte_col = len(lines[comment.row - 1][: comment.col].encode("utf-8"))
+            out.append((comment.row, byte_col))
+    return out
+
+
+def _quote_at(lines: list[str], start: tuple[int, int]) -> str | None:
+    """The quote character of the literal token beginning at ``start``."""
+    row, byte_col = start
+    if not 1 <= row <= len(lines):
+        return None
+    text = lines[row - 1].encode("utf-8")[byte_col:].decode("utf-8", "replace")
+    text = text.lstrip("bBrRuUfFtT")
+    return text[0] if text[:1] in ("'", '"') else None
+
+
+def _spell(value: str | bytes, quote: str) -> str:
+    """``repr(value)`` rewritten to use ``quote`` as its delimiter."""
+    text = repr(value)
+    prefix = text[: len(text) - len(text.lstrip("bBrRuU"))]
+    body, other = text[len(prefix) + 1 : -1], text[len(prefix)]
+    if other == quote:
+        return text
+    body = body.replace("\\" + other, other).replace(quote, "\\" + quote)
+    return f"{prefix}{quote}{body}{quote}"
 
 
 def statement_items(stmt: ast.AST) -> tuple[list[ast.AST], bool]:
@@ -242,6 +338,12 @@ class CommentTable:
         #: ``A < -B``); filled by capture, consulted by the emitter's unparse.
         #: A transform that BUILDS an arrow node must add it here.
         self.arrows: set[ast.AST] = set()
+        #: String literal nodes mapped to their source spelling (quote
+        #: character included); filled by capture, written back verbatim by
+        #: the emitter.  A node absent here is rendered by ``ast.unparse``.
+        #: A transform that parses new source should add its literals here
+        #: (:func:`literal_spellings`), or its atoms may come out as strings.
+        self.literals: dict[ast.AST, str] = {}
 
     # -- capture ---------------------------------------------------------
 
@@ -251,6 +353,7 @@ class CommentTable:
         tree = ast.parse(source)
         table = cls(tree)
         table.arrows = arrow_nodes(tree, source)
+        table.literals = literal_spellings(tree, source)
         table._fill(source, tree)
         return tree, table
 

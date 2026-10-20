@@ -42,6 +42,7 @@ from clausal.fmt.comments import (
     clause_body,
     goal_sequence,
     is_clause,
+    literal_spellings,
     statement_items,
 )
 from clausal.fmt.emit import format_source
@@ -371,6 +372,11 @@ def _render_goal_node(table, goal, position):
             f"{text!r}: {error}"
         ) from error
     table.arrows.update(arrow_nodes(node, text))
+    # The same for the quote character: the renderer writes an atom
+    # single-quoted and a string double-quoted, and the emitter copies a
+    # ledgered spelling back verbatim, so the rendered term is the term
+    # that comes out.
+    table.literals.update(literal_spellings(node, text))
     return ast.fix_missing_locations(node)
 
 

@@ -141,17 +141,130 @@ def test_one_goal_nested_group_keeps_its_comma():
     assert format_source(src) == src
 
 
-def test_strings_are_written_with_double_quotes():
+# ─── String literals keep their source spelling ──────────────────────────────
+#
+# In the seam the quote character is meaning: ``'f'`` is an atom and ``"f"``
+# is a string (and never a functor, ISO 6.3.3).  ``ast.unparse`` writes every
+# string with the quotes it likes, so the emitter must put the source token
+# back.  todo/done/fmt-requotes-a-quoted-atom-head-as-a-string-2026-10-20.md.
+
+
+def test_a_single_quoted_atom_argument_stays_single_quoted():
     src = "p(X) <- (q('text', X))\n"
+    assert format_source(src) == "p(X) <- (\n    q('text', X)\n)\n"
+
+
+def test_a_double_quoted_string_argument_stays_double_quoted():
+    src = 'p(X) <- (q("text", X))\n'
     assert format_source(src) == 'p(X) <- (\n    q("text", X)\n)\n'
 
 
-def test_strings_needing_escapes_keep_their_quotes():
-    for literal in ["'say \"hi\"'", "'back\\\\slash'"]:
-        src = f"p(X) <- (q({literal}))\n"
-        out = format_source(src)
-        assert format_source(out) == out  # whatever it chose, it is stable
-        assert '"say \\"hi\\""' not in out
+def test_a_quoted_atom_head_functor_stays_an_atom():
+    src = "-private([f(_)])\n'f'(X) <- (X is 1)\n"
+    assert format_source(src) == "-private([f(_)])\n\n'f'(X) <- (\n    X is 1\n)\n"
+
+
+def test_a_quoted_atom_body_goal_stays_an_atom():
+    src = "-private([p(_), a])\np(X) <- ('=='(X, a), '=..'(X, [f, 1]))\n"
+    assert format_source(src) == (
+        "-private([p(_), a])\n\np(X) <- (\n    '=='(X, a),\n    '=..'(X, [f, 1])\n)\n"
+    )
+
+
+def test_a_quoted_atom_in_a_directive_stays_an_atom():
+    src = "-meta_predicate(tfilter(2, '?', '?'))\n"
+    assert format_source(src) == src
+
+
+def test_a_quoted_atom_in_a_fact_stays_an_atom():
+    src = "op(700, xfx, '=='),\nop(200, xfy, '^'),\n"
+    assert format_source(src) == src
+
+
+@pytest.mark.parametrize(
+    "literal",
+    [
+        "'say \"hi\"'",
+        "'back\\\\slash'",
+        '"it\'s"',
+        "r'raw\\d+'",
+        'R"raw\\d+"',
+        "b'bytes'",
+        'b"bytes"',
+        "u'legacy'",
+        "'''triple single'''",
+        '"""triple double"""',
+        "'a' 'b'",
+        '"a" "b"',
+        "f'{X} atom-ish'",
+        'f"{X} string-ish"',
+        "'café'",
+        '"café"',
+    ],
+)
+def test_every_string_literal_is_written_exactly_as_the_source_spelled_it(literal):
+    src = f"p(X) <- (q({literal}, X))\n"
+    out = format_source(src)
+    assert out == f"p(X) <- (\n    q({literal}, X)\n)\n"
+    assert format_source(out) == out
+
+
+def test_a_multi_line_triple_quoted_string_is_kept_verbatim():
+    src = 'p(X) <- (q("""first\n  second\nthird""", X))\n'
+    out = format_source(src)
+    assert out == 'p(X) <- (\n    q("""first\n  second\nthird""", X)\n)\n'
+    assert format_source(out) == out
+
+
+def test_an_implicit_concatenation_across_lines_is_kept_verbatim():
+    src = "p(X) <- (q('first '\n      'second', X))\n"
+    out = format_source(src)
+    assert out == "p(X) <- (\n    q('first '\n      'second', X)\n)\n"
+    assert format_source(out) == out
+
+
+def test_a_literal_with_a_comment_inside_its_span_keeps_its_quote_character():
+    # A comment between the parts of an implicit concatenation is captured
+    # as a comment, so the span cannot be copied verbatim (the comment would
+    # be written twice).  The literal is then respelled -- in the quote
+    # character the source used, which is the part the seam reads.
+    src = "p(X) <- (q('first '  # halves\n      'second', X))\n"
+    out = format_source(src)
+    assert "'first second'" in out
+    assert out.count("# halves") == 1
+    assert format_source(out) == out
+    src = 'p(X) <- (q("first "  # halves\n      "second", X))\n'
+    assert '"first second"' in format_source(src)
+
+
+def test_a_non_ascii_line_does_not_shift_the_literal_spelling():
+    # ast columns are byte offsets and tokenize columns are character
+    # offsets; a literal after a non-ASCII character must still be found.
+    src = "p(X) <- (q('café', 'atom', \"string\"))\n"
+    assert format_source(src) == "p(X) <- (\n    q('café', 'atom', \"string\")\n)\n"
+
+
+def test_a_string_in_an_exploded_dict_keeps_its_quotes():
+    long_key = "k" * 40
+    src = f"p(X) <- (q({{'{long_key}': 'atom', \"{long_key}\": \"string\"}}, X))\n"
+    out = format_source(src)
+    assert f"'{long_key}': 'atom'" in out
+    assert f'"{long_key}": "string"' in out
+    assert format_source(out) == out
+
+
+def test_a_literal_node_built_without_source_is_written_double_quoted():
+    # A transform may build a string Constant with no source spelling; the
+    # emitter has no token to copy, and writes it double-quoted (a string in
+    # every mode, and refused loudly if it lands in functor position).
+    import ast
+
+    from clausal.fmt import CommentTable, format_tree
+
+    tree, table = CommentTable.capture("p(X) <- (q(X))\n")
+    goal = tree.body[0].value.comparators[0].operand
+    goal.args.append(ast.Constant("new"))
+    assert format_tree(tree, table) == 'p(X) <- (\n    q(X, "new")\n)\n'
 
 
 def test_clause_with_a_trailing_comma_keeps_it():

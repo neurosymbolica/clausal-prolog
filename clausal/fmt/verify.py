@@ -35,14 +35,47 @@ def _parse(source: str | ast.AST) -> ast.AST:
 
 
 def ast_equivalent(a: str | ast.AST, b: str | ast.AST) -> bool:
-    """Do these two sources (or trees) hold the same code?"""
+    """Do these two sources (or trees) hold the same code?
+
+    The trees are compared without positions, and then -- when both sides
+    are source text -- the quote character of every string literal is
+    compared from the source itself, start and end token both.  The Python
+    tree cannot see that one: ``'f'`` and ``"f"`` are the same ``Constant``,
+    while in the seam the first is an atom and the second a string (and never
+    a functor), so a formatter that requoted a literal has changed the
+    program and must be refused.  The seam reads the quote character and
+    nothing else of the spelling, so a raw prefix, triple quotes or an
+    escape are still invisible here, as layout and comments are.
+    """
     try:
         left, right = _parse(a), _parse(b)
     except SyntaxError:
         return False
-    return ast.dump(left, include_attributes=False) == ast.dump(
+    if ast.dump(left, include_attributes=False) != ast.dump(
         right, include_attributes=False
-    )
+    ):
+        return False
+    if isinstance(a, str) and isinstance(b, str):
+        return _quote_styles(left, a) == _quote_styles(right, b)
+    return True
+
+
+def _quote_styles(tree: ast.AST, source: str) -> list[tuple[str | None, str | None]]:
+    """The (start, end) quote character of each string literal, in tree order.
+
+    Two structurally equal trees walk in the same order, so the lists pair up
+    element by element.  ``None`` is an unknown (a node without a position).
+    """
+    from clausal.templating.quote_map import build_quote_map
+
+    quote_map = build_quote_map(source.splitlines(keepends=True))
+    styles = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, (str, bytes)):
+            start = quote_map.get((node.lineno, node.col_offset))
+            end = quote_map.get((node.end_lineno, node.end_col_offset))
+            styles.append((start, end))
+    return styles
 
 
 def check_idempotent(source: str) -> None:

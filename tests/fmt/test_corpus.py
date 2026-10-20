@@ -73,6 +73,64 @@ def test_fmt_is_ast_equivalent_conserving_and_idempotent(path):
     assert format_source(formatted) == formatted, "the formatter is not idempotent"
 
 
+@pytest.mark.parametrize("path", CORPUS, ids=_ids(CORPUS))
+def test_fmt_keeps_the_compiled_module(path):
+    """The formatted file compiles to the SAME program as the original.
+
+    ``ast_equivalent`` compares the Python tree plus the quote character of
+    each string literal; this asks the seam compiler itself, which is what
+    the quote character (atom vs string, ISO 6.3.3) and the arrow spacing
+    actually mean to.  Each file is run through ``transform_seam_source``
+    before and after formatting -- parsed and transformed, never executed --
+    and the two generated modules must match once their source positions
+    are stripped.  This is what caught a quoted functor ``'if_'(...)`` being
+    written as the string ``"if_"(...)`` (todo/done/fmt-requotes-a-quoted-
+    atom-head-as-a-string-2026-10-20.md); roughly 25 ms per file.
+    """
+    import warnings
+
+    from clausal.import_hook import transform_seam_source
+
+    source = path.read_text()
+    try:
+        ast.parse(source)
+    except SyntaxError:
+        pytest.skip("fixture is deliberately unparsable")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            before = _compiled_shape(transform_seam_source(source, str(path))[0])
+        except SyntaxError:
+            pytest.skip("fixture is deliberately uncompilable")
+        after = _compiled_shape(
+            transform_seam_source(format_source(source), str(path))[0]
+        )
+    assert before == after, "the formatter changed the compiled program"
+
+
+class _StripPositions(ast.NodeTransformer):
+    """Drop the source positions the generated module carries as data:
+    ``SourcePosition(...)`` calls, ``position=`` / ``_position=`` tuples,
+    and the line number of an ``$unterminated_fact_error`` call."""
+
+    def visit_Call(self, node):
+        self.generic_visit(node)
+        name = node.func.id if isinstance(node.func, ast.Name) else None
+        if name == "SourcePosition":
+            return ast.Name(id="POSITION", ctx=ast.Load())
+        if name == "$unterminated_fact_error" and len(node.args) >= 2:
+            node.args[1] = ast.Name(id="LINE", ctx=ast.Load())
+        node.keywords = [
+            k for k in node.keywords
+            if not (k.arg in ("position", "_position") and isinstance(k.value, ast.Tuple))
+        ]
+        return node
+
+
+def _compiled_shape(tree: ast.Module) -> str:
+    return ast.dump(_StripPositions().visit(tree), include_attributes=False)
+
+
 def _anchors(text: str) -> dict[str, str]:
     """Each standalone comment mapped to the first code line below it.
 
@@ -113,11 +171,6 @@ _KNOWN_ANCHOR_DRIFT = {
     "rulebase_s1_twin.seam":
         "fmt: a comment inside -private([...]) changes anchor "
         "(exposed when the corpus glob took in .seam fixtures)",
-    "reif.seam":
-        "fmt: a quoted-atom head 'if_'(...) is rewritten as the string "
-        "\"if_\"(...), which changes its meaning in the seam; ast_equivalent "
-        "cannot see it (todo/fmt-requotes-a-quoted-atom-head-as-a-string-"
-        "2026-10-20.md)",
 }
 
 

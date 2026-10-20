@@ -86,6 +86,10 @@ Properties worth relying on:
   never silently drop one.
 - **AST-preserving** — the parse tree before and after formatting is
   identical; only whitespace and layout change.
+- **Spelling-preserving** — every string literal is written back exactly as
+  the source spelled it. In seam the quote character is the term (`'f'` is
+  an atom, `"f"` a string, and never a functor), so the formatter never
+  requotes, and its own check refuses a result that does.
 - **Idempotent** — formatting formatted output is a no-op.
 
 There is no separate advisory lint for multi-goal lines: `clausal-fmt

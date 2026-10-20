@@ -376,6 +376,34 @@ surface described in [docs/public-api.md](docs/public-api.md).
   (fx(8)) and
   `tests/iso_l3/test_l3_cut_tabling.py::test_once_over_a_goal_builtins_closure_argument_is_checked`.
 
+- **`clausal-fmt` keeps every string literal's quote character**
+  (2026-10-20). In the seam `'f'` is an atom and `"f"` a string (and never a
+  functor, ISO 6.3.3), but the formatter rendered terms through
+  `ast.unparse` and then preferred double quotes, so a quoted functor in a
+  head or a body goal (`'if_'(...)`, `'=='(X, a)`, `'=..'(L, ...)`), a
+  quoted atom argument (`'?'` in `-meta_predicate`), and every other
+  single-quoted literal came out as a string: formatting
+  `clausal/stdlib/reif.seam` broke `library(reif)`, and a sweep of the
+  repository's 660 compilable `.seam` files found 270 whose formatted
+  output compiled to a different program or did not compile at all. The
+  emitter now writes every string literal back exactly as the source
+  spelled it (quote character, prefix, triple quotes, escapes, f-strings,
+  implicit concatenation); only a literal a transform built with no source
+  spelling is still rendered by `ast.unparse`, double-quoted. A goal the
+  rewriter re-renders registers its spellings the same way. And
+  `clausal.fmt.verify.ast_equivalent`, which answered True for the pair
+  because both spellings are the same Python `Constant`, now compares the
+  quote character of every string literal from the source, start and end
+  token both, so a formatter that requotes is refused rather than written.
+  The sweep is a test: every `.seam` in the repository compiles to the
+  same module before and after formatting
+  (`tests/fmt/test_corpus.py::test_fmt_keeps_the_compiled_module`); pinned
+  in `tests/fmt/test_emit.py::test_a_quoted_atom_head_functor_stays_an_atom`,
+  `test_a_quoted_atom_body_goal_stays_an_atom`,
+  `test_every_string_literal_is_written_exactly_as_the_source_spelled_it`
+  and `tests/fmt/test_verify.py::test_a_requoting_formatter_is_refused`.
+  Closes `todo/done/fmt-requotes-a-quoted-atom-head-as-a-string-2026-10-20.md`.
+
 - **`dict_pairs/2`, `dict_put_pairs/3` and `set_list/2` read a list built
   by recursion** (2026-10-20). A list that a recursive predicate builds in
   its clause heads (`filter([K-V|T], D, [K-V|R]) :- ..., filter(T, D, R)`)

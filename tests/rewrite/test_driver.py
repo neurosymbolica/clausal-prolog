@@ -295,6 +295,22 @@ def test_modified_goal_keeps_a_genuine_less_than_negative(tmp_path):
     assert "<- B" not in result.text.replace("p(A, B) <- (", "")
 
 
+def test_modified_goal_keeps_a_quoted_atom_argument(tmp_path):
+    """A modified goal is rendered to text and re-parsed: the renderer writes
+    an atom single-quoted and a string double-quoted, and the formatter must
+    write each back as rendered -- the quote character is the term."""
+    src = "-double_quotes(chars)\np(X) <- (old(X, '=..', \"text\"))\n"
+    result = rewrite_source(src, _rename_rule(tmp_path))
+    assert "new(X, '=..', \"text\")" in result.text
+
+
+def test_a_surviving_quoted_atom_goal_is_not_requoted(tmp_path):
+    src = "-private([p(_)])\np(X) <- ('=='(X, a), old(X, 5))\n"
+    result = rewrite_source(src, _rename_rule(tmp_path))
+    assert "'=='(X, a)" in result.text
+    assert '"=="' not in result.text
+
+
 def test_equal_count_reorder_is_refused(tmp_path):
     """Swapping two goals keeps the count; the positional correspondence must
     not read the swap as two modifications and shuffle their comments."""

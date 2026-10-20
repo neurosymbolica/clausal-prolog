@@ -4,8 +4,9 @@
 — ``'foo'`` and ``"foo"`` are the same node.  The strings program needs the
 distinction (single quotes are always an atom; double quotes follow the
 module's ``-double_quotes`` mode), so the compiler rebuilds it from the token
-stream, keyed by source position.  ``clausal/fmt/emit.py``'s
-``_prefer_double_quotes`` is the precedent for tokenize-based quote recovery.
+stream, keyed by source position.  ``clausal/fmt/comments.py``'s
+``literal_spellings`` is the formatter's counterpart, keeping whole spellings
+by node.
 
 Positions are the join: ``tokenize`` reports CHARACTER columns while
 ``ast.col_offset`` is a UTF-8 BYTE offset, so the map stores byte columns.

@@ -18,7 +18,12 @@ shapes -- ``head <- (...)`` and the trailing-comma fact -- so those are written
 here.  Nor does it know that ``<-`` is one token: it writes every such node as
 ``< -``, which is a comparison, so an inline lambda inside a goal would decay
 into a less-than.  Emission repairs exactly the nodes the capture-time arrow
-ledger vouches for, and leaves every other ``< -`` alone.
+ledger vouches for, and leaves every other ``< -`` alone.  Nor does it know
+that a string literal's QUOTE CHARACTER is meaning in the seam -- ``'f'`` is
+an atom, ``"f"`` a string -- it writes every string with the quotes it likes.
+So every string literal is written back from the capture-time spelling
+ledger, verbatim; only a literal a transform built without a source spelling
+is rendered by ``ast.unparse``.
 
 v1 does not wrap long goals.  A goal too long for the line stays too long; a
 line-width engine is a separate decision from comment survival, and mixing the
@@ -28,8 +33,6 @@ two would make every layout bug look like a comment bug.
 from __future__ import annotations
 
 import ast
-import io
-import tokenize
 
 from clausal.fmt.comments import (
     CommentTable,
@@ -163,10 +166,10 @@ class Emitter:
             # A comma-separated series stays on one line: splitting it across
             # lines would end the statement at the first newline and turn one
             # statement into several.
-            rendered = ", ".join(_item_text(item, self.table.arrows) for item in items)
+            rendered = ", ".join(_item_text(item, self.table) for item in items)
             self._write("", rendered + suffix)
         else:
-            self._write("", unparse(statement, self.table.arrows))
+            self._write("", unparse(statement, self.table.arrows, self.table.literals))
         self._append_trailing(statement)
         self.table.mark_emitted(statement)
 
@@ -176,7 +179,7 @@ class Emitter:
         A collapsed export list is unreadable and evicts its section comments
         (operator conventions, 2026-08-15 trial); the closing ``])`` sits on
         its own line, last element without a separator, matching the corpus."""
-        one_line = unparse(statement, self.table.arrows)
+        one_line = unparse(statement, self.table.arrows, self.table.literals)
         commented = any(self.table.above(e) or self.table.trailing(e)
                         for e in lst.elts)
         if len(one_line) <= WIDTH and not commented:
@@ -185,8 +188,8 @@ class Emitter:
             self._write("", one_line)
             return
         call = statement.value.operand
-        leading = ", ".join(unparse(a, self.table.arrows) for a in call.args[:-1])
-        opener = f"-{unparse(call.func, self.table.arrows)}({leading}{', ' if leading else ''}["
+        leading = ", ".join(unparse(a, self.table.arrows, self.table.literals) for a in call.args[:-1])
+        opener = f"-{unparse(call.func, self.table.arrows, self.table.literals)}({leading}{', ' if leading else ''}["
         self._write("", opener)
         for i, element in enumerate(lst.elts):
             # A commented element opens a section: a blank line above its
@@ -195,13 +198,13 @@ class Emitter:
                 self._blank()
             self._emit_above(element, INDENT)
             separator = "," if i < len(lst.elts) - 1 else ""
-            self._write(INDENT, unparse(element, self.table.arrows) + separator)
+            self._write(INDENT, unparse(element, self.table.arrows, self.table.literals) + separator)
             self._append_trailing(element)
             self.table.mark_emitted(element)
         self._write("", "])")
 
     def _emit_clause(self, clause: ast.AST, suffix: str) -> None:
-        head = unparse(clause.left, self.table.arrows)
+        head = unparse(clause.left, self.table.arrows, self.table.literals)
         self._write("", f"{head} <- (")
         self._emit_goals(*_goals_of(clause_body(clause)), INDENT)
         self._write("", ")" + suffix)
@@ -230,9 +233,9 @@ class Emitter:
         displays (profile fixtures, wide-interface queries) explode one key per
         line -- the open braces keep the term a single statement.  Anything
         still over-wide with no dict to explode stays long (v1 no-wrap)."""
-        text = unparse(node, self.table.arrows)
+        text = unparse(node, self.table.arrows, self.table.literals)
         if len(indent) + len(text) + len(separator) > WIDTH:
-            exploded = _explode_dicts(node, indent, self.table.arrows)
+            exploded = _explode_dicts(node, indent, self.table)
             if exploded is not None:
                 text = exploded
         self._write(indent, text + separator)
@@ -270,34 +273,66 @@ def _goals_of(body: ast.AST) -> tuple[list[ast.AST], bool]:
     return [body], False
 
 
-def unparse(node: ast.AST, arrows: set | frozenset = frozenset()) -> str:
-    """``ast.unparse`` with the house quote preference and the arrows restored.
+def unparse(
+    node: ast.AST,
+    arrows: set | frozenset = frozenset(),
+    literals: dict | None = None,
+) -> str:
+    """``ast.unparse`` with the source's string spellings and arrows restored.
 
-    ``ast.unparse`` writes ``'single'``; the corpus and the surrounding Python
-    are written ``"double"``.  Since the formatter re-renders every term, that
-    difference would otherwise rewrite the quoting of every string in the
-    language on the first run.  Strings that would need escaping to change stay
-    exactly as ``ast.unparse`` wrote them.
+    ``literals`` is the CommentTable's spelling ledger: string literal nodes
+    mapped to the text the source wrote them with.  ``ast.unparse`` writes
+    every string with the quotes it likes, and in the seam the quote
+    character is the term -- ``'f'`` is an atom and ``"f"`` a string, never a
+    functor (ISO 6.3.3) -- so a literal in the ledger is written back
+    verbatim.  A string literal NOT in the ledger (built by a transform, with
+    no source spelling) is written double-quoted where that costs no escapes:
+    a string in every ``-double_quotes`` mode, and refused loudly by the
+    loader if it lands in functor position, rather than silently read as an
+    atom.
 
     ``arrows`` is the CommentTable's arrow ledger: Compare nodes the source
     spells ``<-``.  ``ast.unparse`` would print them ``< -``, which the engine
     reads as a genuine less-than-negative -- an inline lambda silently becomes
     a comparison.  Arrow nodes render ``(left <- operand)``, parenthesised,
-    matching the corpus's inline-lambda style."""
-    if arrows:
-        up = _ArrowUnparser(arrows)
-        return _prefer_double_quotes(up.visit(node))
-    return _prefer_double_quotes(ast.unparse(node))
+    matching the hand-written inline-lambda style."""
+    return _SeamUnparser(arrows, literals or {}).visit(node)
 
 
-class _ArrowUnparser(ast._Unparser):
-    """``ast._Unparser`` that preserves source-spelled arrows."""
+class _SeamUnparser(ast._Unparser):
+    """``ast._Unparser`` that preserves source-spelled literals and arrows."""
 
     # ast._Unparser spawns a bare type(self)() for f-string internals, so
-    # arrows must default; an arrow cannot occur inside an f-string anyway.
-    def __init__(self, arrows=frozenset()):
+    # both ledgers must default; an arrow cannot occur inside an f-string
+    # anyway, and a literal nested in one is rendered as its f-string is.
+    def __init__(self, arrows=frozenset(), literals=None):
         super().__init__()
         self._arrows = arrows
+        self._literals = literals or {}
+
+    def visit_Constant(self, node):
+        spelling = self._literals.get(node)
+        if spelling is not None:
+            self.write(spelling)
+            return
+        mark = len(self._source)
+        super().visit_Constant(node)
+        if isinstance(node.value, (str, bytes)):
+            self._source[mark:] = [_requote("".join(self._source[mark:]))]
+
+    def visit_JoinedStr(self, node):
+        spelling = self._literals.get(node)
+        if spelling is not None:
+            self.write(spelling)
+        else:
+            super().visit_JoinedStr(node)
+
+    def visit_TemplateStr(self, node):  # Python 3.14+
+        spelling = self._literals.get(node)
+        if spelling is not None:
+            self.write(spelling)
+        else:
+            super().visit_TemplateStr(node)
 
     def visit_Compare(self, node):
         if node not in self._arrows:
@@ -317,30 +352,11 @@ class _ArrowUnparser(ast._Unparser):
         self.write(")")
 
 
-def _prefer_double_quotes(text: str) -> str:
-    """Re-quote single-quoted string literals where that costs no escapes."""
-    if "'" not in text:
-        return text
-    try:
-        tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
-    except (tokenize.TokenError, SyntaxError, IndentationError):
-        return text
-    lines = text.splitlines(keepends=True)
-    edits = []
-    for token in tokens:
-        if token.type != tokenize.STRING or token.start[0] != token.end[0]:
-            continue
-        requoted = _requote(token.string)
-        if requoted != token.string:
-            edits.append((token.start, token.end, requoted))
-    for (row, start), (_end_row, end), replacement in reversed(edits):
-        line = lines[row - 1]
-        lines[row - 1] = line[:start] + replacement + line[end:]
-    return "".join(lines)
-
-
 def _requote(literal: str) -> str:
-    """``'text'`` -> ``"text"`` when the body holds no quote and no backslash."""
+    """``'text'`` -> ``"text"`` when the body holds no quote and no backslash.
+
+    Only for a literal with no source spelling (see :func:`unparse`); a
+    literal the source spelled is never requoted."""
     prefix = literal[: len(literal) - len(literal.lstrip("bBfFrRuU"))]
     rest = literal[len(prefix) :]
     for quote in ("'''", "'"):
@@ -353,13 +369,12 @@ def _requote(literal: str) -> str:
     return literal
 
 
-def _explode_dicts(
-    node: ast.AST, indent: str, arrows: set | frozenset
-) -> str | None:
+def _explode_dicts(node: ast.AST, indent: str, table: CommentTable) -> str | None:
     """Render ``node`` with each dict display of two or more entries exploded
     one key per line, or ``None`` when the node holds nothing to explode.
     Recursion follows call arguments only -- the shape fixtures actually use."""
     changed = False
+    arrows, literals = table.arrows, table.literals
 
     def render(n: ast.AST, ind: str) -> str:
         nonlocal changed
@@ -374,30 +389,32 @@ def _explode_dicts(
             for i, (key, value) in enumerate(zip(n.keys, n.values)):
                 separator = "," if i < len(n.keys) - 1 else ""
                 entries.append(
-                    f"{inner}{unparse(key, arrows)}: {unparse(value, arrows)}{separator}"
+                    f"{inner}{unparse(key, arrows, literals)}: "
+                    f"{unparse(value, arrows, literals)}{separator}"
                 )
             return "{\n" + "\n".join(entries) + f"\n{ind}}}"
         if isinstance(n, ast.Call) and not n.keywords:
             args = ", ".join(render(a, ind) for a in n.args)
-            return f"{unparse(n.func, arrows)}({args})"
-        return unparse(n, arrows)
+            return f"{unparse(n.func, arrows, literals)}({args})"
+        return unparse(n, arrows, literals)
 
     text = render(node, indent)
     return text if changed else None
 
 
-def _item_text(item: ast.AST, arrows: set | frozenset = frozenset()) -> str:
+def _item_text(item: ast.AST, table: CommentTable) -> str:
     """One item of a comma-separated statement, on one line.
 
     A clause in that position renders inline -- ``head <- (g1, g2)`` -- because
     the series has to stay on a single line to remain a single statement.
     """
+    arrows, literals = table.arrows, table.literals
     body = clause_body(item)
     if body is None:
-        return unparse(item, arrows)
+        return unparse(item, arrows, literals)
     goals, comma = _goals_of(body)
-    rendered = ", ".join(unparse(goal, arrows) for goal in goals)
-    return f"{unparse(item.left, arrows)} <- ({rendered}{',' if comma else ''})"
+    rendered = ", ".join(unparse(goal, arrows, literals) for goal in goals)
+    return f"{unparse(item.left, arrows, literals)} <- ({rendered}{',' if comma else ''})"
 
 
 def _fact_functor(statement: ast.AST) -> str | None:

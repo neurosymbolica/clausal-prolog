@@ -6,9 +6,9 @@ strings design (spec §7) needs the two apart — a single-quoted literal is an
 atom in every mode, a double-quoted one follows the module's
 ``-double_quotes`` mode, and a double-quoted literal is never a functor
 (ISO 6.3.3) — so the compiler rebuilds the distinction from the token
-stream and keys it by source position.  ``clausal/fmt/emit.py``'s
-``_prefer_double_quotes`` is the existing precedent for tokenize-based
-quote recovery in this tree.
+stream and keys it by source position.  ``clausal/fmt/comments.py``'s
+``literal_spellings`` is the formatter's counterpart: it keeps the whole
+spelling, by node, so the emitter can write it back verbatim.
 
 The join between the two views is the column, and the two views count
 columns differently:
