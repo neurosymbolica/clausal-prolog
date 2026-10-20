@@ -71,7 +71,7 @@ Up: [../AGENTS.md](../AGENTS.md)
 ## Gotchas
 
 - Two `.pl` front ends coexist. Library tables exist in both (`iso_l3_directives._BUILTIN_LIBRARIES`/`_LIBRARY_MODULES` and `prolog_to_clausal._BUILTIN_LIBRARIES`/`_LIBRARY_TO_MODULE`); `tests/iso_l3/test_l3_library_facades.py` reads both. Change both.
-- Bytecode cache keys hash engine sources: the translator files and `toklex/specs/iso.toklex.pl` are in `_COMPILATION_FILES`, and `iso_l3.py`, `iso_l3_directives.py`, `prolog_reader.py` are in `_NATIVE_FRONTEND_FILES` (both in `clausal/import_hook.py`). Moving or renaming one of these files means updating those lists.
+- Bytecode cache keys hash engine sources: the translator files and `toklex/specs/iso.toklex.pl` are in `_COMPILATION_FILES`, and `iso_l3.py`, `iso_l3_directives.py`, `prolog_reader.py` and `logic/special_forms.py` (its goal-position table) are in `_NATIVE_FRONTEND_FILES` (both in `clausal/import_hook.py`). Moving or renaming one of these files means updating those lists.
 - Names say "clausal" where they mean **seam**: `prolog_to_clausal`, `clausal_to_prolog`, `clausal_source_to_prolog`, `--to clausal`. These predate the 2026-10-02 extension flip.
 - Refusal is the rule in the native front end: an unsupported construct must raise `LoweringRefused`/`DirectiveRefused` with a span, never be dropped.
 - `prolog_reader.py` must stay engine-free (no `clausal.logic` imports); it builds atom/string cells inline.

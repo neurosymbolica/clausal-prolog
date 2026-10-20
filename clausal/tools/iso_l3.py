@@ -67,6 +67,7 @@ import bisect
 import re
 from typing import Any
 
+from clausal.logic.special_forms import GOAL_POSITIONS
 from clausal.tools.prolog_reader import VarRef
 
 #: The front end's id: the value ``CLAUSAL_PL_FRONTEND`` selects it by, and the
@@ -101,28 +102,11 @@ _REFUSED_CONTROL = {
 #: turns these calls into a ``MetaCall``; ``ir.META_GOAL_POSITIONS``), by
 #: ``(name, arity)`` -> 0-based argument indexes.  A variable there is
 #: refused at compile time (``BareGoalVariableError``), so it is lowered as
-#: ``call(G)`` -- the ISO body conversion of a variable goal.
-_META_GOAL_ARGS: dict[tuple[str, int], tuple[int, ...]] = {
-    ("once", 1): (0,),
-    ("call_nth", 2): (0,),
-    ("count_all", 2): (0,),
-    ("setup_call_cleanup", 3): (0, 1, 2),
-    ("call_cleanup", 2): (0, 1),
-    ("freeze", 2): (1,),
-    ("when", 2): (1,),
-    ("findall", 3): (1,),
-    ("findall", 4): (1,),
-    ("bagof", 3): (1,),
-    ("setof", 3): (1,),
-    ("catch", 3): (0, 2),
-    # The engine's catch/3 variants (not ISO names; the compiler makes the
-    # same MetaCall of them on every surface).  Without these rows their
-    # goal arguments lowered as DATA, and the compiler refused the cell
-    # (``terms_to_goalop: goal shape not yet supported``), 2026-10-20.
-    ("catch_error", 2): (0,),
-    ("catch_recover", 3): (0, 2),
-    ("forall", 2): (0, 1),
-}
+#: ``call(G)`` -- the ISO body conversion of a variable goal.  The table is
+#: ``clausal/logic/special_forms.py`` (it lists the engine's catch/3 variants
+#: catch_error/2 and catch_recover/3 too: without them their goal arguments
+#: lowered as DATA and the compiler refused the cell, 2026-10-20).
+_META_GOAL_ARGS: dict[tuple[str, int], tuple[int, ...]] = GOAL_POSITIONS
 
 #: clpq's ``{C}``: each comparison -> the seam's node for it (``=`` and
 #: ``=:=`` are both equality in library(clpq)).

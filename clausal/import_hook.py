@@ -712,6 +712,7 @@ _NATIVE_FRONTEND_FILES = (
     "tools/iso_l3.py",
     "tools/iso_l3_directives.py",
     "tools/prolog_reader.py",
+    "logic/special_forms.py",   # iso_l3._META_GOAL_ARGS: which args lower as goals
 )
 
 _NATIVE_SALT_CACHE: "int | None" = None

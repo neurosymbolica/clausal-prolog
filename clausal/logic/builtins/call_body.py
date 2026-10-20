@@ -412,27 +412,9 @@ class _Converter:
 # ``tests/test_call_runs_special_form_cells.py`` holds this table to
 # ``terms_to_goalop`` in both directions, so a new special form cannot be
 # added to the compiler without being made callable here.
-SPECIAL_FORMS: dict[tuple[str, int], str] = {
-    ("findall", 3): "AGA",
-    ("findall", 4): "AGAA",
-    ("bagof", 3): "AGA",
-    ("setof", 3): "AGA",
-    ("once", 1): "G",
-    ("forall", 2): "GG",
-    ("catch", 3): "GAG",
-    ("catch_error", 2): "GA",
-    ("catch_recover", 3): "GAG",
-    ("throw", 1): "A",
-    ("call_nth", 2): "GA",
-    ("count_all", 2): "GA",
-    ("setup_call_cleanup", 3): "GGG",
-    ("call_cleanup", 2): "GG",
-    ("freeze", 2): "AG",
-    ("when", 2): "WG",
-    ("eval_", 2): "AA",
-    ("halt", 0): "",
-    ("halt", 1): "A",
-}
+# The table itself is ``clausal/logic/special_forms.py``, which every other
+# goal-position table derives from or is tested against.
+from clausal.logic.special_forms import SPECIAL_FORMS  # noqa: E402
 
 
 def is_special_form(functor: Any, arity: int) -> bool:

@@ -144,15 +144,16 @@ def test_a_repeated_variable_is_no_singleton(native):
 
 
 def test_the_meta_goal_table_matches_the_compilers(native):
-    """_META_GOAL_ARGS is index-keyed; ir.META_GOAL_POSITIONS is field-keyed.
-    Every compiler meta kind must be listed, with as many goal positions, so
-    a new one cannot drift in silently.  The engine's own catch_error/2 and
-    catch_recover/3 are not ISO names but are listed too: leaving them out
-    made a .clausal body calling them fail to load (2026-10-20)."""
-    from clausal.logic.compiler.ir import META_GOAL_POSITIONS
-    ours = {name: len(ix) for (name, _), ix in L3._META_GOAL_ARGS.items()}
-    theirs = {k: len(v) for k, v in META_GOAL_POSITIONS.items()}
-    assert ours == theirs
+    """_META_GOAL_ARGS is clausal/logic/special_forms.py's GOAL_POSITIONS,
+    which tests/test_meta_goal_tables_agree.py holds to the compiler's
+    ir.META_GOAL_POSITIONS by (name, arity) and exact position.  The
+    engine's own catch_error/2 and catch_recover/3 are not ISO names but are
+    listed too: leaving them out made a .clausal body calling them fail to
+    load (2026-10-20)."""
+    from clausal.logic.special_forms import GOAL_POSITIONS
+    assert L3._META_GOAL_ARGS is GOAL_POSITIONS
+    assert L3._META_GOAL_ARGS[("catch_error", 2)] == (0,)
+    assert L3._META_GOAL_ARGS[("catch_recover", 3)] == (0, 2)
 
 
 def test_catch_error_and_catch_recover_goal_arguments_are_goals(native, ans):

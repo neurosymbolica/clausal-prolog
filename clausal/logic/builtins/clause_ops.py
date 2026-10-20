@@ -112,6 +112,9 @@ from clausal.pythonic_ast import nodes
 from clausal.logic.atoms import NIL_SPELLING
 from clausal.logic.builtins._helpers import _is_empty_list
 
+from clausal.logic.special_forms import (
+    GOAL_POSITIONS as _SPECIAL_FORM_GOALS, SPECIAL_FORMS as _SPECIAL_FORM_ROLES,
+)
 from clausal.logic.builtins._registry import (
     _BUILTINS, _DB_BUILTINS, _db_builtin, BuiltinTerm as _BuiltinTerm,
 )
@@ -120,17 +123,10 @@ _CONTEXT = "clause/2"
 
 # The compiler's meta-call special forms: goals ``terms_to_goalop`` lowers by
 # NAME and ARITY to a MetaCall/ArithEval, which have no term class and no
-# runtime builtin.  Kept in step with the ``case nodes.Call(func=nodes.
-# LoadName(name=...))`` arms there; a name at another arity is an ordinary
-# call (it falls through those arms), so the arity is part of the key.
-SPECIAL_FORMS = frozenset({
-    ("throw", 1), ("halt", 0), ("halt", 1), ("once", 1), ("call_nth", 2),
-    ("count_all", 2), ("setup_call_cleanup", 3), ("call_cleanup", 2),
-    ("freeze", 2), ("when", 2), ("findall", 3), ("findall", 4), ("bagof", 3),
-    ("setof", 3),
-    ("catch", 3), ("catch_error", 2), ("catch_recover", 3), ("forall", 2),
-    ("eval_", 2),
-})
+# runtime builtin.  A name at another arity is an ordinary call (it falls
+# through those arms), so the arity is part of the key.  The table is
+# ``clausal/logic/special_forms.py``.
+SPECIAL_FORMS = frozenset(_SPECIAL_FORM_ROLES)
 
 # The zero-arity control constructs (``higher_order._ZERO_ARITY_CONTROL_GOALS``).
 _ZERO_ARITY_CONTROL = frozenset({"true", "fail", "false", "!"})
@@ -367,15 +363,7 @@ def _capturing_thunk(t: Any) -> Any:
 
 # The GOAL-position arguments of each meta-call special form (the rest are
 # data): a thunk there is code the goal runs, not a value.
-_GOAL_ARGS = {
-    ("once", 1): (0,), ("call_nth", 2): (0,), ("count_all", 2): (0,),
-    ("findall", 3): (1,), ("findall", 4): (1,), ("bagof", 3): (1,),
-    ("setof", 3): (1,),
-    ("forall", 2): (0, 1), ("catch", 3): (0, 2), ("catch_error", 2): (0,),
-    ("catch_recover", 3): (0, 2), ("call_cleanup", 2): (0, 1),
-    ("setup_call_cleanup", 3): (0, 1, 2), ("freeze", 2): (1,),
-    ("when", 2): (1,),
-}
+_GOAL_ARGS = _SPECIAL_FORM_GOALS     # clausal/logic/special_forms.py
 
 
 # Goal-taking BUILTINS that are not special forms: their goal argument is
