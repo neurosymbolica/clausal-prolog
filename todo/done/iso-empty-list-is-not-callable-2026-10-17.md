@@ -1,7 +1,9 @@
 # `[]` is not callable as a clause head or goal (ISO: it is an atom)
 
+**Status: FIXED 2026-10-20 (commit e719d761).** A head or body goal `[]` now names the predicate keyed `"[]"` (the native front end, call/N, solve/1, clause/2, the assert/retract head gate, abolish/1, listing/1, current_predicate/1 and the directives' indicators), so `[].`, `'[]'.` and `call([])` work and an undefined `[]` is `existence_error(procedure, []/0)`. Pinned in tests/iso_l3/test_l3_empty_list_callable.py::test_a_text_may_define_and_call_the_empty_list (and the file's other tests, .pl and .clausal).
+
 Filed 2026-10-17 by iso-export-lane, from engine-lane's review of the D70
-reader change (option B, `'[]'` and `[]` are one atom). OPEN.
+reader change (option B, `'[]'` and `[]` are one atom).
 
 ## The gap
 
