@@ -3,7 +3,10 @@
 Found by tests/clpq_port/test_manual_examples.py (strict xfails), on the .pl surface with CLAUSAL_CLPQ=holzbaur.
 The oracle (our local clpq.pl port on Scryer) gives the manual's answer unless noted.
 
-1. **WRONG ANSWER, silent:** `{A=<4}, entailed(A=\=5)` gives `false`, and `entailed(A=<5)` is also false.
+1. **FIXED 2026-10-20 (commit 273e4d58)** the builtin reads a relation cell (and legacy's
+   disequality no longer needs both sides bounded); test_entailed and test_not_entailed in
+   tests/clpq_port/test_manual_examples.py pass without their xfails.
+   **WRONG ANSWER, silent:** `{A=<4}, entailed(A=\=5)` gives `false`, and `entailed(A=<5)` is also false.
    `_entailed__1` matches only the seam's comparison nodes, so a Prolog-term constraint never matches and fails.
    Highest priority. test_not_entailed currently passes only because entailed/1 always fails.
 2. `maximize/1` and `minimize/1` are missing (existence_error); only the /2 form exists (DEVIATIONS D20).

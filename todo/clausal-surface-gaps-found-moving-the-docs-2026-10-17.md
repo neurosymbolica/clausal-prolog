@@ -24,7 +24,12 @@ re-run separately.
    - The same goal works at the top level:
      `-g "catch_error(throw(boom(42)), R)"` gives `R = boom(42)`.
    - Page: exceptions.md.
-2. **`entailed/1` always fails, silently** (verified).
+2. **FIXED 2026-10-20 (commit 273e4d58)** `entailed/1` and `clpq.entailed/1`
+   now read a relation cell as well as a seam node, on both solvers; docs/clpq.md
+   shows the Clausal Prolog spelling. Pinned in
+   tests/test_clpq_entailed_relation_cells.py::test_clausal_entailed_relation_holds
+   and ::test_clausal_program_under_each_solver.
+   **`entailed/1` always fails, silently** (verified).
    - `:- use_module(library(clpq)). t :- in_q(X, 0, 100), {X =< 4},
      entailed(X =< 5).` answers `false`.
    - The builtin reads only seam syntax-tree nodes; both CLP(Q) backends
