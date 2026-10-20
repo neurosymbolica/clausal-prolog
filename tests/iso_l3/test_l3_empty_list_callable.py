@@ -152,3 +152,50 @@ def test_solve_from_python_runs_the_empty_list_goal(native):
     with pytest.raises(LogicException) as exc:
         list(solve([], bare))
     assert exc.value.term[1] == ("existence_error", "procedure", ("/", [], 0))
+
+
+# ── A grammar rule whose head is the nonterminal ``[]`` ─────────────────────
+#
+# ``[] --> [a].`` defines ``[]/2`` (ISO 7.14: the head is a callable term, and
+# ``[]`` is an atom).  It is the HEAD only: as phrase/2's first argument and in
+# a grammar body, ``[]`` is still the empty terminal list, which consumes
+# nothing -- so ``phrase([], [a])`` fails even with that rule loaded.  Every
+# row was measured on Scryer (v0.10.0-137-g9acba77a), 2026-10-20, with this
+# program and ``use_module(library(dcgs))``: all ``ok``.
+
+GRAMMAR = """\
+:- use_module(library(dcgs)).
+[] --> [a].
+'[]' --> [b].
+[], [p] --> [c].
+[](X) --> [X, X].
+x --> [], [b].
+y --> [].
+z --> [](q).
+t(phrase_nil_empty) :- phrase([], []).
+t(phrase_nil_not_a) :- \\+ phrase([], [a]).
+t(phrase3_nil) :- findall(R, phrase([], [a], R), Rs), Rs == [[a]].
+t(phrase_nil_open) :- findall(L, phrase([], L), Ls), Ls == [[]].
+t(direct) :- findall(S, '[]'([a], S), Ss), Ss == [[]].
+t(direct_all) :- findall(S0-S, '[]'(S0, S), Ps), Ps = [_, _, _].
+t(direct_quoted_rule) :- '[]'([b], []).
+t(pushback) :- findall(S, '[]'([c], S), Ss), Ss == [[p]].
+t(call3) :- findall(S, call([], [a,c], S), Ss), Ss == [[c]].
+t(body_nil) :- phrase(x, [b]), \\+ phrase(x, [a, b]).
+t(body_only_nil) :- phrase(y, []), \\+ phrase(y, [a]).
+t(body_compound) :- phrase(z, [q, q]).
+t(phrase_compound) :- phrase([](r), [r, r]).
+"""
+
+GRAMMAR_ROWS = ["phrase_nil_empty", "phrase_nil_not_a", "phrase3_nil",
+                "phrase_nil_open", "direct", "direct_all",
+                "direct_quoted_rule", "pushback", "call3", "body_nil",
+                "body_only_nil", "body_compound", "phrase_compound"]
+
+
+@pytest.mark.parametrize("suffix", SURFACES)
+def test_a_grammar_rule_may_have_the_head_empty_list(native, ans, suffix):
+    mod = native.load("nil_grammar" + suffix[1:], GRAMMAR, suffix=suffix)
+    got = {row: len(ans(mod, "t", 1, row)) for row in GRAMMAR_ROWS}
+    assert got == {row: 1 for row in GRAMMAR_ROWS}
+

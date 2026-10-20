@@ -1226,6 +1226,13 @@ class _DcgTranslation:
         if type(lhs) is VarRef:
             raise _dcg_refused("the head is a variable (ISO "
                                "instantiation_error)", l_sp or spans)
+        if type(lhs) is list and not lhs:
+            # ``[] --> ...``: ``[]`` is an atom (ISO 6.3.5, D70), so the head
+            # is the nonterminal ``[]//0``, the procedure ``[]/2`` -- keyed
+            # by the spelling "[]", as a clause head ``[]`` is.  Only the
+            # HEAD: as a body or phrase/2's first argument ``[]`` is still
+            # the empty terminal list (Scryer agrees).
+            lhs = "[]"
         if (type(lhs) is tuple and len(lhs) == 3 and lhs[0] == ":") or not (
                 type(lhs) is str or (type(lhs) is tuple and lhs
                                      and type(lhs[0]) is str
