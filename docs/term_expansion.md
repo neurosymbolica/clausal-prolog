@@ -58,17 +58,21 @@ test("passes through") :-
 
 ### Suppressing Items
 
-Return an empty list to remove an item from the module:
+Return an empty list to remove an item from the module. A head pattern
+matches facts, so removing a predicate's rules takes the clause pattern
+too (see [Matching Rules](#matching-rules)):
 
 ```clausal
-% Remove all facts for the "debug" predicate
+% Remove every debug/1 clause: the facts, and the rules
 term_expansion(debug(_), [], STATE, STATE).
+term_expansion((debug(_) :- _), [], STATE, STATE).
 
 debug(trace_on).
+debug(X) :- X = verbose.
 keep(a).
 
 % No debug/1 clause is left, so calling it is an existence error
-test("debug facts are gone") :-
+test("debug clauses are gone") :-
     catch((debug(_), fail),
           error(existence_error(procedure, debug/1), _),
           true),
@@ -149,12 +153,18 @@ test("the unit's rule") :-
     B =:= 2000.
 ```
 
-The body is converted as a written body is (ISO 7.6.2): `,`, `;` and `\+`
-are control constructs, a variable goal is `call(G)`, `true` alone makes
-the clause a fact, and a goal imported with `use_module/2` calls the
-import. `!`, `->` and `*->` are refused, as everywhere in Clausal Prolog,
-and a number in a goal position is `type_error(callable, Body)`. In the
-seam the rule is `(H <- B)`.
+The clause is lowered by the same front end, under the same directives, as
+a clause written at the end of the file: `,`, `;` and `\+` are control
+constructs, a variable goal is `call(G)`, `true` alone makes the clause a
+fact, a goal imported with `use_module/2` calls the import, and
+`library(reif)`'s `if_/3` and `library(clpq)`'s `{}/1` work as they do
+written. What the front end refuses in a written clause -- `!`, `->`,
+`*->`, a number, string or list as a goal, a `$`-prefixed name -- it
+refuses at load here too, with the same message.
+
+In the seam the rule is `(H <- B)`, and its body follows the seam's body
+rules the same way: a bare variable goal (`(b(G) <- G)`) is refused at
+load, as `b(G) <- G` written is; write `call(G)`.
 
 A grammar rule `(H --> B)` handed back is refused: term expansion runs after
 grammar rules are translated, so hand back the clauses it stands for.

@@ -9,6 +9,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Breaking
 
+- **A `term_expansion/4` head pattern matches facts only** (2026-10-20).
+  A bare head pattern such as `p(X)` was also tried on a RULE's head, and
+  its answer wrapped into facts: `term_expansion(p(X), [p(X)], S, S)`
+  silently replaced every `p/1` rule by a bodiless fact. As in ISO, where
+  a rule reads as `(p(X) :- B)` and does not unify with `p(X)`, it now
+  matches facts only and leaves rules as written. So suppression changes
+  too: `term_expansion(debug(_), [], S, S)` used to drop `debug(X) :- ...`
+  rules along with the facts, and now lets the rules through; add
+  `term_expansion((debug(_) :- _), [], S, S)` to drop them (seam:
+  `(debug(_) <- _)`). Pinned by
+  `tests/test_term_expansion.py::TestRuleClausesHandedBack::test_clausal_a_head_pattern_does_not_drop_a_rule_body`.
+
 - **In `.clausal`, `"..."` is always chars** (Mike, 2026-10-18).
   `:- set_prolog_flag(double_quotes, atom)` or `codes` in a `.clausal` file
   is now refused at load with `permission_error(modify,flag,double_quotes)`,
@@ -413,30 +425,37 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 - **A `term_expansion/4` rule can hand back a rule clause** (2026-10-20).
   An expansion `(H :- B)` in `.clausal`, or `(H <- B)` in the seam, alone
-  or in a list with facts, is now compiled as that rule, its body converted
-  as a written body is (ISO 7.6.2: `,`, `;`, `\+`, `call(V)` for a variable
-  goal, special-form goal arguments, imported names calling the import).
-  Before, `.clausal` stored it silently as a fact of `(:-)/2`, and the seam
-  failed the load with `NotImplementedError` (or `TypeError: 'ModulePredicate'
-  object is not callable` when the body called an imported predicate).
-  `!`, `->` and `*->` in a built body are refused, a number in a goal
-  position is `type_error(callable, Body)`, and a grammar rule `(H --> B)`
-  handed back is refused (expansion runs after DCG translation) rather than
-  stored as a `(-->)/2` fact. A head term is a fact on every path, as in
-  ISO. Matching changes with it: a bare head pattern such as `p(X)`
-  matches FACTS only, as in ISO, where a rule reads as `(p(X) :- B)`; it
-  used to match a rule's head too and wrap the answer into facts, silently
-  dropping the rule's body. A whole-clause pattern `(p(X) :- B)` (seam:
-  `(p(X) <- B)`, which also matches a seam fact with `B = True`) now
-  matches a rule; it matched nothing. A clause handed back unchanged is the
-  clause as written and keeps its variable names; a clause a rule builds
-  still has none, so its regex named groups bind nothing (documented).
-  Also fixed on the way, outside term expansion: in the seam, a term
-  `match(P, S)` built in data position with `match` imported from a module
-  found by its bare name (`-import_from(regex, [match])`) raised the same
-  `TypeError`; it builds the cell `match(P, S)`, as with `py.re`. Pinned by
-  `tests/test_term_expansion.py::TestRuleClausesHandedBack`; docs in
-  docs/term_expansion.md (Handing Back Rules, Matching Rules).
+  or in a list with facts, is now compiled as that rule. A `.clausal` or
+  `.pl` one goes through the front end's own clause lowering, under the
+  file's directives, so it compiles exactly as the same clause written at
+  the end of the file: imports, `library(reif)`'s `if_/3`,
+  `library(clpq)`'s `{}/1`, `.pl` cuts, and call-time conversion of a
+  variable goal inside a meta-call all behave as written, and what a
+  written clause is refused for (`!`, `->` or `*->` in `.clausal`, a
+  number, string or list as a goal, a `$`-prefixed or unrepresentable
+  name) is refused at load with the same message. A seam one follows the
+  seam's body rules the same way (a bare variable goal is refused, as
+  written). Before, `.clausal` stored it silently as a fact of `(:-)/2`,
+  and the seam failed the load with `NotImplementedError` (or `TypeError:
+  'ModulePredicate' object is not callable` when the body called an
+  imported predicate). A grammar rule `(H --> B)` handed back is refused
+  (expansion runs after DCG translation) rather than stored as a `(-->)/2`
+  fact, and a head term is a fact on every path, as in ISO. A whole-clause
+  pattern `(p(X) :- B)` (seam: `(p(X) <- B)`, which also matches a seam
+  fact with `B = True`) now matches a rule; it matched nothing. For that,
+  a seam `(H <- B)` data term now unifies structurally with another
+  (`Predicate.__unify__`: heads, then bodies) where it used to compare
+  with `==`. A clause handed back unchanged is the clause as written and
+  keeps its variable names; a clause a rule builds still has none, so its
+  regex named groups bind nothing (documented). Also fixed on the way,
+  outside term expansion: in the seam, a term `match(P, S)` built in data
+  position with `match` imported from a module found by its bare name
+  (`-import_from(regex, [match])`) raised the same `TypeError`; it builds
+  the cell `match(P, S)`, as with `py.re`. Pinned by
+  `tests/test_term_expansion.py::TestRuleClausesHandedBack` and
+  `TestWrittenAndBuiltClausesAgree` (the same body shapes written and
+  built, compared answer by answer); docs in docs/term_expansion.md
+  (Handing Back Rules, Matching Rules).
 
 - **`name()` is a syntax error, as in ISO** (2026-10-20). The ISO reader
   read `f()` as a compound with no arguments. In a `.clausal` or `.pl`
