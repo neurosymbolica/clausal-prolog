@@ -1150,6 +1150,25 @@ class Predicate(Node):
     source_rewritten: bool = field(default=False, compare=False, repr=False)
     var_names: Any = opaque_field(default=None, compare=False, repr=False)
 
+    def __unify__(self, other, trail):
+        """Structural unification of two clause TERMS: heads, then bodies.
+
+        A seam ``(H <- B)`` written in argument position builds this node as
+        DATA, so a ``term_expansion/4`` whole-clause pattern is one, and the
+        rule it is matched against is presented as one too (the clause's
+        head and its body as a term, ``term_expansion._clause_view``).
+        Without this the C ``do_unify`` fell back to ``==``, which binds no
+        variable, so such a pattern matched nothing.  The metadata fields are
+        not compared (``compare=False``)."""
+        if not isinstance(other, Predicate):
+            return NotImplemented
+        from clausal.logic.variables import unify
+        mark = trail.mark()
+        if unify(self.head, other.head, trail) and unify(self.body, other.body, trail):
+            return True
+        trail.undo(mark)
+        return False
+
 
 # ── Module-level items (pipeline split) ──────────────────────────────────────
 

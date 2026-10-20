@@ -470,7 +470,18 @@ def _resolve_functor_binding(
     prefix, _, leaf = name.rpartition(".")
     owner = _resolve_module_path(prefix, namespace)
     if owner is None:
-        return None
+        # No module object answers to the prefix -- an ``-import_from`` of a
+        # module found by its bare name (``regex``, a ``clausal.modules``
+        # resident) binds no ``regex`` module anywhere -- but the import
+        # wrote the whole dotted spelling as ONE key of the referring
+        # namespace.  Without this, ``X is match(P, S)`` there called the
+        # ``ModulePredicate`` (TypeError: not callable) instead of building
+        # its cell (todo/done/term-expansion-cannot-hand-back-a-rule-
+        # 2026-10-20.md).
+        binding = namespace.get(name)
+        if binding is None:
+            return None
+        return binding, leaf, namespace
     leaf_namespace = getattr(owner, "__dict__", None)
     if leaf_namespace is None:
         return None

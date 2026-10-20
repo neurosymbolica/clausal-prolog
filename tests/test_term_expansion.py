@@ -1012,3 +1012,263 @@ class TestHelperInTheSameModule:
         helpers = _expansion_helpers(te, rest)
         assert [_head_functor(h.head) if not isinstance(h.head, str) else h.head
                 for h in helpers] == ["step"]
+
+
+class TestRuleClausesHandedBack:
+    """todo/term-expansion-cannot-hand-back-a-rule-2026-10-20.md: a
+    term_expansion/4 rule hands back a RULE clause -- ``(H :- B)`` in
+    ``.clausal``, ``(H <- B)`` in the seam, alone or in a list with facts --
+    and it is compiled as that rule, body and all.  A bare head pattern
+    matches a FACT only, as ISO's ``term_expansion/2`` matches the term read
+    (a rule reads as ``(H :- B)``); a whole-clause pattern matches a rule."""
+
+    def _load(self, tmp_path, name, src, suffix=".clausal"):
+        path = tmp_path / f"{name}{suffix}"
+        path.write_text(src)
+        return _load_module(name, str(path))
+
+    def _rows(self, mod, pred, arity, *fixed):
+        """Every answer of ``pred(*fixed, V...)`` as a list of tuples of the
+        free arguments' values (dereferenced; an unbound one stays a Var)."""
+        free = [Var() for _ in range(arity - len(fixed))]
+        lm = mod.__dict__["$module"]
+        return [tuple(deref(v) for v in free)
+                for _ in call(pred, *fixed, *free, module=lm)]
+
+    def _defined(self, mod, pred, arity):
+        db = mod.__dict__["$module"].db
+        return bool(db.clauses_for(pred, arity))
+
+    # ── repro 1 / 2: a built rule is a rule, not a (:-)/2 fact ──────────
+
+    def test_clausal_a_built_rule_is_compiled_with_its_body(self, tmp_path):
+        m = self._load(tmp_path, "te_rule_clausal", (
+            "term_expansion(pd(D, Y, M), (pd2(D, Y, M) :- helper(D)), S, S).\n"
+            "helper(a).\nhelper(b).\n"
+            "pd(_, 2, 3).\n"))
+        assert [r[0] for r in self._rows(m, "pd2", 3)] == ["a", "b"]
+        assert all(r[1:] == (2, 3) for r in self._rows(m, "pd2", 3))
+        assert not self._defined(m, ":-", 2)
+        assert not self._defined(m, "pd", 3)       # replaced, not kept
+
+    def test_seam_a_built_rule_is_compiled_with_its_body(self, tmp_path):
+        m = self._load(tmp_path, "te_rule_seam", (
+            "-private([pd(_a, _b, _c), pd2(_a, _b, _c), helper(_), a, b])\n"
+            "term_expansion(pd(D, Y, M), (pd2(D, Y, M) <- helper(D)), S, S) <- True\n"
+            "helper(a),\nhelper(b),\n"
+            "pd(a, 2, 3),\n"), suffix=SEAM)
+        assert self._rows(m, "pd2", 3) == [("a", 2, 3)]
+        assert self._rows(m, "pd2", 3, "b") == []
+
+    def test_clausal_a_rule_with_true_body_is_a_fact(self, tmp_path):
+        m = self._load(tmp_path, "te_rule_true_body", (
+            "term_expansion(pd(X), (pd2(X) :- true), S, S).\n"
+            "pd(1).\n"))
+        assert self._rows(m, "pd2", 1) == [(1,)]
+
+    # ── the body's control constructs ───────────────────────────────────
+
+    def test_clausal_a_list_mixing_facts_and_rules(self, tmp_path):
+        m = self._load(tmp_path, "te_rule_mixed_list", (
+            "term_expansion(gen(N), [count(N),\n"
+            "                        (double(N, D) :- D is N * 2),\n"
+            "                        (small(N) :- N > 0, \\+ N > 100),\n"
+            "                        (either(N, W) :- (W = left ; W = right)),\n"
+            "                        (all(N, L) :- findall(X, member(X, [N, N]), L))],\n"
+            "               S, S).\n"
+            "gen(3).\n"))
+        assert self._rows(m, "count", 1) == [(3,)]
+        assert self._rows(m, "double", 2) == [(3, 6)]
+        assert self._rows(m, "small", 1) == [(3,)]
+        assert self._rows(m, "either", 2) == [(3, "left"), (3, "right")]
+        assert self._rows(m, "all", 2) == [(3, [3, 3])]
+
+    def test_seam_a_list_mixing_facts_and_rules(self, tmp_path):
+        m = self._load(tmp_path, "te_rule_mixed_seam", (
+            "-private([gen(_), count(_), double(_a, _b), small(_)])\n"
+            "term_expansion(gen(N), [count(N), (double(N, D) <- (D == N * 2)),\n"
+            "                        (small(N) <- (N > 0, not N > 100))], S, S) <- True\n"
+            "gen(3),\n"), suffix=SEAM)
+        assert self._rows(m, "count", 1) == [(3,)]
+        assert self._rows(m, "double", 2) == [(3, 6)]
+        assert self._rows(m, "small", 1) == [(3,)]
+
+    def test_clausal_meta_goals_in_a_built_body(self, tmp_path):
+        """Special-form goal arguments are goals (``setof/3`` with its
+        ``^`` prefix, ``once/1``), a variable goal is ``call/1``, and a
+        built-in library's qualified goal is the builtin."""
+        m = self._load(tmp_path, "te_rule_meta_goals", (
+            "term_expansion(gen(N), [\n"
+            "    (s(L) :- setof(X, Y^member(X-Y, [N-a, 1-b]), L)),\n"
+            "    (o(X) :- once(member(X, [N, 9]))),\n"
+            "    (a(L) :- lists:append([N], [N], L)),\n"
+            "    (v(G) :- G),\n"
+            "    (n(X) :- \\+ X = N)], S, S).\n"
+            "gen(3).\n"))
+        assert self._rows(m, "s", 1) == [([1, 3],)]
+        assert self._rows(m, "o", 1) == [(3,)]
+        assert self._rows(m, "a", 1) == [([3, 3],)]
+        assert len(self._rows(m, "v", 1, True)) == 1
+        assert len(self._rows(m, "n", 1, 4)) == 1
+        assert self._rows(m, "n", 1, 3) == []
+
+    def test_clausal_variables_shared_between_head_and_body(self, tmp_path):
+        m = self._load(tmp_path, "te_rule_shared_vars", (
+            "term_expansion(wrap(F), (wrapped(X, Y) :- Y = F-X), S, S).\n"
+            "wrap(f).\n"))
+        assert self._rows(m, "wrapped", 2, 1) == [(("-", "f", 1),)]
+
+    def test_clausal_a_rule_built_with_univ(self, tmp_path):
+        """The ISO idiom: an alias predicate made from data."""
+        m = self._load(tmp_path, "te_rule_univ", (
+            "term_expansion(alias_of(New, Old), (H :- B), S, S) :-\n"
+            "    H =.. [New, X], B =.. [Old, X].\n"
+            "p(1).\np(2).\n"
+            "alias_of(q, p).\n"))
+        assert self._rows(m, "q", 1) == [(1,), (2,)]
+
+    def test_clausal_an_if_then_in_a_built_rule_is_refused(self, tmp_path):
+        with pytest.raises(LogicException, match="cut-free"):
+            self._load(tmp_path, "te_rule_if_then", (
+                "term_expansion(pd(X), (pd2(X) :- (X > 0 -> true ; fail)), S, S).\n"
+                "pd(1).\n"))
+
+    def test_clausal_a_number_in_a_built_body_is_a_type_error(self, tmp_path):
+        with pytest.raises(LogicException) as exc:
+            self._load(tmp_path, "te_rule_number_goal", (
+                "term_expansion(pd(X), (pd2(X) :- true, 7), S, S).\n"
+                "pd(1).\n"))
+        formal = cell_args(exc.value.term)[0]
+        assert cell_functor(formal) == "type_error"
+        # ISO 7.6.2: the culprit is the whole body, as assertz/1 names it.
+        assert cell_args(formal)[1] == (",", True, 7)
+
+    def test_clausal_an_unbound_built_head_is_an_instantiation_error(self, tmp_path):
+        with pytest.raises(LogicException) as exc:
+            self._load(tmp_path, "te_rule_unbound_head", (
+                "term_expansion(pd(_), (_ :- true), S, S).\n"
+                "pd(1).\n"))
+        assert cell_args(exc.value.term)[0] == mint("instantiation_error")
+
+    def test_clausal_a_returned_grammar_rule_is_refused(self, tmp_path):
+        """Expansion runs after DCG translation, so a grammar rule handed
+        back is not translated; it is refused, never stored as a (-->)/2
+        fact."""
+        with pytest.raises(LogicException, match="grammar rule"):
+            self._load(tmp_path, "te_rule_dcg", (
+                "term_expansion(word(W), (greeting --> [W]), S, S).\n"
+                "word(hello).\n"))
+
+    # ── imported predicates in the body ─────────────────────────────────
+
+    def test_clausal_a_built_body_calls_an_imported_predicate(self, tmp_path):
+        m = self._load(tmp_path, "te_rule_import_clausal", (
+            ":- use_module(library(re), [match/2]).\n"
+            "term_expansion(pattern(P), (ok(S) :- match(P, S)), St, St).\n"
+            'pattern("a+").\n'))
+        assert len(self._rows(m, "ok", 1, ("$chars", "aaa"))) == 1
+        assert self._rows(m, "ok", 1, ("$chars", "b")) == []
+
+    def test_seam_a_built_body_calls_an_imported_predicate(self, tmp_path):
+        m = self._load(tmp_path, "te_rule_import_seam", (
+            "-private([pattern(_), ok(_)])\n"
+            "-import_from(regex, [match])\n"
+            "term_expansion(pattern(P), (ok(S) <- match(P, S)), St, St) <- True\n"
+            'pattern("a+"),\n'), suffix=SEAM)
+        assert len(self._rows(m, "ok", 1, ("$chars", "aaa"))) == 1
+        assert self._rows(m, "ok", 1, ("$chars", "b")) == []
+
+    def test_seam_an_imported_name_builds_its_cell_in_data_position(self, tmp_path):
+        """Not term-expansion only: ``X is match(..)`` with ``match``
+        imported from a bare-named module (``regex``, not ``py.re``) built
+        nothing -- TypeError: 'ModulePredicate' object is not callable."""
+        m = self._load(tmp_path, "te_imported_name_data", (
+            "-private([p(_)])\n"
+            "-import_from(regex, [match])\n"
+            'p(X) <- (X is match("a", "b"))\n'), suffix=SEAM)
+        assert self._rows(m, "p", 1) == [
+            (("match", ("$chars", "a"), ("$chars", "b")),)]
+
+    # ── repro 3: a head pattern matches a fact, not a rule's head ────────
+
+    def test_clausal_a_head_pattern_does_not_drop_a_rule_body(self, tmp_path):
+        m = self._load(tmp_path, "te_head_pattern_rule", (
+            "term_expansion(pd(D, Y, M), [pd(D, Y, M), seen(D)], S, S).\n"
+            "pd(D, Y, M) :- D = x, Y = 1, M = 2.\n"
+            "pd(q, 3, 4).\n"))
+        assert self._rows(m, "pd", 3) == [("x", 1, 2), ("q", 3, 4)]
+        assert self._rows(m, "seen", 1) == [("q",)]     # the fact only
+
+    def test_seam_a_head_pattern_does_not_drop_a_rule_body(self, tmp_path):
+        m = self._load(tmp_path, "te_head_pattern_rule_seam", (
+            "-private([pd(_a, _b), seen(_), x, q])\n"
+            "term_expansion(pd(D, Y), [pd(D, Y), seen(D)], S, S) <- True\n"
+            "pd(D, Y) <- (D is x, Y is 1)\n"
+            "pd(q, 3),\n"), suffix=SEAM)
+        assert self._rows(m, "pd", 2) == [("x", 1), ("q", 3)]
+        assert self._rows(m, "seen", 1) == [("q",)]
+
+    # ── repro 4: a whole-clause pattern matches a rule ──────────────────
+
+    def test_clausal_a_whole_clause_pattern_matches_a_rule(self, tmp_path):
+        m = self._load(tmp_path, "te_whole_clause", (
+            "term_expansion((p(X) :- B), [(p(X) :- B), (q(X) :- B)], S, S).\n"
+            "p(X) :- X = 1.\n"
+            "p(2).\n"))
+        assert self._rows(m, "p", 1) == [(1,), (2,)]
+        assert self._rows(m, "q", 1) == [(1,)]           # the rule only
+
+    def test_clausal_a_whole_clause_pattern_with_any_head(self, tmp_path):
+        m = self._load(tmp_path, "te_whole_clause_any", (
+            "term_expansion((H :- B), [(H :- B), traced(H)], S, S).\n"
+            "p(X) :- X = 1.\n"
+            "r(_) :- fail.\n"))
+        assert self._rows(m, "p", 1) == [(1,)]
+        assert sorted(cell_functor(r[0]) for r in self._rows(m, "traced", 1)) \
+            == ["p", "r"]
+
+    def test_seam_a_whole_clause_pattern_matches_a_rule(self, tmp_path):
+        """In the seam a fact is the clause ``H <- True``, so the pattern
+        matches the fact too, with ``B = True``."""
+        m = self._load(tmp_path, "te_whole_clause_seam", (
+            "-private([p(_), twin(_), r(_)])\n"
+            "term_expansion((p(X) <- B), [(p(X) <- B), (twin(X) <- B)], S, S) <- True\n"
+            "p(X) <- (X is 1)\n"
+            "p(2),\n"
+            "r(X) <- (X is 3, p(X))\n"), suffix=SEAM)
+        assert self._rows(m, "p", 1) == [(1,), (2,)]
+        assert self._rows(m, "twin", 1) == [(1,), (2,)]
+        assert self._rows(m, "r", 1) == []
+
+    def test_seam_a_whole_clause_pattern_on_a_conjunction_body(self, tmp_path):
+        m = self._load(tmp_path, "te_whole_clause_seam_conj", (
+            "-private([p(_), twin(_), r(_)])\n"
+            "term_expansion((p(X) <- (A, B)), [(p(X) <- (A, B)), (twin(X) <- (B, A))],\n"
+            "               S, S) <- True\n"
+            "r(1),\nr(2),\n"
+            "p(X) <- (r(X), X > 1)\n"), suffix=SEAM)
+        assert self._rows(m, "p", 1) == [(2,)]
+        assert self._rows(m, "twin", 1) == [(2,)]
+
+    def test_clausal_a_rule_in_the_final_list_is_a_rule(self, tmp_path):
+        m = self._load(tmp_path, "te_rule_in_final", (
+            "term_expansion(color(C), color(C),\n"
+            "               module_expansion_state(I, F, S),\n"
+            "               module_expansion_state(I, [(named(C, N) :- N = C) | F], S)).\n"
+            "color(red).\n"))
+        assert self._rows(m, "named", 2, "red") == [("red",)]
+
+    # ── regex named groups: a built rule's groups do not bind ───────────
+
+    def test_regex_groups_bind_in_the_clause_handed_back_not_in_the_copy(
+            self, tmp_path):
+        """docs/term_expansion.md (Gotchas): a clause handed back unchanged
+        keeps its variable names, so its named groups bind; a clause the rule
+        builds has none -- documented limitation, kept."""
+        m = self._load(tmp_path, "te_rule_regex_groups", (
+            ":- use_module(library(re), [match/2]).\n"
+            "term_expansion((year(Y) :- B), [(year(Y) :- B), (copy(Y) :- B)], S, S).\n"
+            'year(YEAR) :- match("(?P<YEAR>\\\\d{4})", "2026").\n'))
+        assert self._rows(m, "year", 1) == [(("$chars", "2026"),)]
+        [(copied,)] = self._rows(m, "copy", 1)
+        assert isinstance(copied, Var)                  # not bound

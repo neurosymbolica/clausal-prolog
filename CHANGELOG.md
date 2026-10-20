@@ -411,6 +411,33 @@ surface described in [docs/public-api.md](docs/public-api.md).
   instance's field property) is numbered on its own. The internal `_VAR`
   sentinel is now the tag of a variable's key `(_VAR, n)`.
 
+- **A `term_expansion/4` rule can hand back a rule clause** (2026-10-20).
+  An expansion `(H :- B)` in `.clausal`, or `(H <- B)` in the seam, alone
+  or in a list with facts, is now compiled as that rule, its body converted
+  as a written body is (ISO 7.6.2: `,`, `;`, `\+`, `call(V)` for a variable
+  goal, special-form goal arguments, imported names calling the import).
+  Before, `.clausal` stored it silently as a fact of `(:-)/2`, and the seam
+  failed the load with `NotImplementedError` (or `TypeError: 'ModulePredicate'
+  object is not callable` when the body called an imported predicate).
+  `!`, `->` and `*->` in a built body are refused, a number in a goal
+  position is `type_error(callable, Body)`, and a grammar rule `(H --> B)`
+  handed back is refused (expansion runs after DCG translation) rather than
+  stored as a `(-->)/2` fact. A head term is a fact on every path, as in
+  ISO. Matching changes with it: a bare head pattern such as `p(X)`
+  matches FACTS only, as in ISO, where a rule reads as `(p(X) :- B)`; it
+  used to match a rule's head too and wrap the answer into facts, silently
+  dropping the rule's body. A whole-clause pattern `(p(X) :- B)` (seam:
+  `(p(X) <- B)`, which also matches a seam fact with `B = True`) now
+  matches a rule; it matched nothing. A clause handed back unchanged is the
+  clause as written and keeps its variable names; a clause a rule builds
+  still has none, so its regex named groups bind nothing (documented).
+  Also fixed on the way, outside term expansion: in the seam, a term
+  `match(P, S)` built in data position with `match` imported from a module
+  found by its bare name (`-import_from(regex, [match])`) raised the same
+  `TypeError`; it builds the cell `match(P, S)`, as with `py.re`. Pinned by
+  `tests/test_term_expansion.py::TestRuleClausesHandedBack`; docs in
+  docs/term_expansion.md (Handing Back Rules, Matching Rules).
+
 - **`name()` is a syntax error, as in ISO** (2026-10-20). The ISO reader
   read `f()` as a compound with no arguments. In a `.clausal` or `.pl`
   clause body `nl()` then ran as `nl`, and a `-g` goal such as `nl()`

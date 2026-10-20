@@ -8,8 +8,12 @@ Protocol::
 
     term_expansion(TERM, EXPANSION, MODULE_BEFORE, MODULE_AFTER)
 
-- TERM: runtime Predicate node being expanded
-- EXPANSION: single Predicate, list of Predicates, or the atom ``none`` (suppress)
+- TERM: runtime Predicate node being expanded -- matched as the node, then a
+  RULE as its clause term ``(H :- B)`` (seam: a ``(H <- B)`` node), a FACT
+  as its head term (``_expand_item``)
+- EXPANSION: a clause -- a Predicate node, a ``(H :- B)`` term, or a head
+  term (a fact) -- a list of them, or the atom ``none`` (suppress); a built
+  rule's body term is lowered to goals (``_AnswerLowering``)
 - MODULE_BEFORE: ``module_expansion_state(InitList, FinalList, UserState)``
 - MODULE_AFTER: same, updated
 
@@ -244,9 +248,11 @@ def run_term_expansion(
     module_state = mod_cls([], [], "nil")
 
     # Step 5: Expand each regular item.
+    answers = _AnswerLowering(db, module_dict)
     expanded = []
     for item in regular_items:
-        result, module_state = _expand_item(item, expansion_module, module_state)
+        result, module_state = _expand_item(item, expansion_module, module_state,
+                                            answers)
         if result is None:
             # Suppressed (expansion returned "none").
             continue
@@ -265,10 +271,12 @@ def run_term_expansion(
     # retry -- a rule that matched a head and consed ``bar(X)`` into Init
     # meant a fact -- so the check is the head-wrapping one.
     init_items = [_validated_expansion(i, True, slot="the Init list of "
-                                       "module_expansion_state/3")
+                                       "module_expansion_state/3",
+                                       answers=answers)
                   for i in init_items]
     final_items = [_validated_expansion(i, True, slot="the Final list of "
-                                        "module_expansion_state/3")
+                                        "module_expansion_state/3",
+                                        answers=answers)
                    for i in final_items]
 
     return init_items + expanded + final_items
@@ -539,7 +547,7 @@ def _compile_expansion_rules(expansion_clauses, module_dict, helpers=()):
     return lm
 
 
-def _expand_item(item, expansion_module, module_state):
+def _expand_item(item, expansion_module, module_state, answers=None):
     """Try to expand a single item using term_expansion rules.
 
     Returns (expanded_result, new_module_state).
@@ -548,27 +556,53 @@ def _expand_item(item, expansion_module, module_state):
     - A list of Predicate nodes (one-to-many)
     - None (suppressed)
     - The original item (no match)
+
+    Three attempts, the first match wins:
+
+    1. the Predicate NODE itself -- what a variable pattern binds, so a rule
+       handing back what it matched (``term_expansion(T, [T, T], S, S)``)
+       hands back the very clause, variable names and all;
+    2. a RULE (a body other than ``true``) as the clause TERM ISO's
+       ``term_expansion/2`` sees: ``(H :- B)`` in ``.clausal`` (and ``.pl``),
+       a ``(H <- B)`` node in the seam (``_clause_view``) -- what a
+       whole-clause pattern matches;
+    3. a FACT's head -- what a bare head pattern (``fact(X)``) matches.
+
+    A head pattern used to be tried on a RULE's head as well, and its answer
+    wrapped into facts, so ``term_expansion(p(X), [p(X)], S, S)`` silently
+    dropped the body of every ``p/1`` rule.  As in ISO, where a rule reads as
+    ``(H :- B)`` and does not unify with ``p(X)``, it matches facts only
+    (todo/done/term-expansion-cannot-hand-back-a-rule-2026-10-20.md).
     """
-    # First try matching the whole Predicate item (var / Predicate patterns).
+    if answers is None:
+        answers = _AnswerLowering(None, {})
     result = _try_te_match(item, item, expansion_module, module_state,
-                           wrap_head=False)
+                           wrap_head=False, answers=answers)
     if result is not None:
         return result
 
-    # A10-F008 / A10-D004(a): a bare-term pattern like ``fact(X)`` never
-    # unifies with the whole Predicate item (which is Predicate(head=fact(..),
-    # body=..)). Retry against the item's HEAD; the expansion terms are then
-    # head terms, so wrap each back into a fact Predicate.
+    body = getattr(item, "body", True)
     head = getattr(item, "head", None)
-    if head is not None:
+    if body is not True and head is not None:
+        view = _clause_view(item, answers.seam)
+        if view is not None:
+            result = _try_te_match(item, view, expansion_module, module_state,
+                                   wrap_head=False, answers=answers,
+                                   view=view)
+            if result is not None:
+                return result
+    elif head is not None:
+        # A10-F008 / A10-D004(a): a bare-term pattern like ``fact(X)`` never
+        # unifies with the whole Predicate item (which is
+        # Predicate(head=fact(..), body=True)).  Retry against the FACT's
+        # head; a head term in the answer is a fact again.
         result = _try_te_match(item, head, expansion_module, module_state,
-                               wrap_head=True)
+                               wrap_head=True, answers=answers)
         if result is not None:
             return result
 
     # No match: pass through unchanged.
     return item, module_state
-
 
 
 def _head_as_cell(term: Any) -> Any:
@@ -601,24 +635,28 @@ def _head_as_cell(term: Any) -> Any:
     return term
 
 
-def _try_te_match(item, match_target, expansion_module, module_state, wrap_head):
+def _try_te_match(item, match_target, expansion_module, module_state, wrap_head,
+                  answers=None, view=None):
     """Solve term_expansion(match_target, Expansion, S0, S) once.
 
     Returns (expanded_result, new_state) on a match, or None if no clause
     matched *match_target*. When *wrap_head* is True the expansion terms are
     head terms (the pattern matched item.head) and are wrapped into fact
-    Predicate nodes.
+    Predicate nodes.  *view* is the clause term *match_target* presents a
+    rule as (``_clause_view``): an answer that rebuilds exactly it is the
+    original *item*, unchanged.
     """
     from clausal.logic.solve import call
 
-    # P2 Task 4: the patterns are cells, a head is still an instance.  Only
+    # P2 Task 4: the patterns are cells, a head was still an instance.  Only
     # the HEAD-pattern retry is lowered: a whole-item pattern binds the
     # Predicate NODE, and rebuilding that node with a lowered head hands the
     # rules a copy -- the identity and pass-through expansions return the term
-    # they matched, and three of them went red on the copy.  A RULE
-    # pattern (``key(K) <- Body``) would want the same lowering one level
-    # in; no fixture or corpus file writes one, and it is parked in
-    # todo/term-expansion-whole-item-pattern-head-representation-2026-09-19.md.
+    # they matched, and three of them went red on the copy.  A RULE pattern
+    # (``key(K) <- Body``) is matched against the clause VIEW
+    # (``_clause_view``), whose head is the item's own cell head (W4a made
+    # every head a cell, so nothing is left to lower there):
+    # todo/done/term-expansion-whole-item-pattern-head-representation-2026-09-19.md.
     if wrap_head:
         match_target = _head_as_cell(match_target)
 
@@ -643,25 +681,49 @@ def _try_te_match(item, match_target, expansion_module, module_state, wrap_head)
     if expansion == _NONE_ATOM:
         return None, new_state
     if isinstance(expansion, list):
-        return ([_validated_expansion(e, wrap_head) for e in expansion],
+        return ([_validated_expansion(e, wrap_head, answers=answers,
+                                      item=item, view=view)
+                 for e in expansion],
                 new_state)
-    return _validated_expansion(expansion, wrap_head), new_state
+    return (_validated_expansion(expansion, wrap_head, answers=answers,
+                                 item=item, view=view),
+            new_state)
 
 
-def _validated_expansion(term, wrap_head, slot=None):
-    """One item of a term_expansion/4 answer, checked against the protocol.
+def _validated_expansion(term, wrap_head, slot=None, answers=None,
+                         item=None, view=None):
+    """One item of a term_expansion/4 answer, checked against the protocol
+    and made the clause it denotes.
 
-    An answer item is a clause (a ``Predicate`` node) or, on the head-pattern
-    retry (*wrap_head*), a head TERM that becomes a fact.  Anything else --
-    a string, a number -- is refused HERE with an ISO ``type_error(callable,
-    Culprit)`` that names the rule's contract; an UNBOUND item is ISO's
-    ``instantiation_error``.  *slot* names where the item came from when it
-    is not the answer itself (the Init/Final lists).
+    An answer item is a CLAUSE:
+
+    - a ``Predicate`` node -- the item a variable pattern matched, handed
+      back as it is; or a seam ``(H <- B)`` the rule BUILT, whose body is a
+      term (data), lowered here to the goals a written body is;
+    - a ``(H :- B)`` term (``.clausal``, or any surface), lowered the same
+      way; ``(H :- true)`` is the fact ``H``;
+    - a head TERM (an atom or a compound), which is the fact it names, as
+      in ISO, where every clause term that is not ``(H :- B)`` is a fact.
+
+    Anything else -- a string, a number -- is refused HERE with an ISO
+    ``type_error(callable, Culprit)`` that names the rule's contract; an
+    UNBOUND item is ISO's ``instantiation_error``.  *slot* names where the
+    item came from when it is not the answer itself (the Init/Final lists).
     Measured 2026-09-26: without this, a chars-mode module writing the
     suppression sentinel as ``"none"`` (a STRING under
     ``-double_quotes(chars)``) sailed through and crashed goal expansion
     with ``'tuple' object has no attribute 'body'``, naming neither the rule
     nor the fix; the message below says to write the ATOM ``none``.
+
+    Before 2026-10-20 a built rule was not lowered: a ``(H :- B)`` became a
+    FACT of ``(:-)/2`` (no warning), and a seam ``(H <- B)`` reached the
+    compiler with a data body (``NotImplementedError``)
+    (todo/done/term-expansion-cannot-hand-back-a-rule-2026-10-20.md).
+
+    *item* and *view* (``_try_te_match``): an answer that rebuilds exactly
+    the clause term *view* presented *item* as is *item* itself, so a
+    whole-clause pattern handing back what it matched keeps the clause as
+    written -- its variable names among it (regex auto-binding).
     """
     from clausal.logic.exceptions import (  # noqa: PLC0415
         LogicException, instantiation_error, type_error,
@@ -674,16 +736,43 @@ def _validated_expansion(term, wrap_head, slot=None):
     term = deref(term)
     where = f"term_expansion/4: {slot}" if slot else "term_expansion/4: the expansion"
     if slot:
-        what = "a clause (`H <- Body`, or a fact `H <- True`) or a head term"
+        what = ("a clause (`H :- B`, `H <- B`, or a fact `H <- True`) or a "
+                "head term")
     elif wrap_head:
-        what = "a head term, a list of head terms, or the atom `none` (suppress)"
+        what = ("a head term, a clause (`H :- B`, `H <- B`), a list of "
+                "them, or the atom `none` (suppress)")
     else:
-        what = "a clause, a list of clauses, or the atom `none` (suppress)"
+        what = ("a clause (`H :- B`, `H <- B`), a head term, a list of "
+                "them, or the atom `none` (suppress)")
     if is_var(term):
         raise LogicException(instantiation_error(
             f"{where} is unbound; a rule must bind it to {what}"))
+    if answers is None:
+        answers = _AnswerLowering(None, {})
+    if item is not None and term is item:
+        return item
     if isinstance(term, PredicateItem):
-        return term
+        if (term.body is True or term.var_names is not None
+                or term.source_body is not None):
+            # A clause as a front end built it (a fact, or a rule with its
+            # source tables): nothing to lower.
+            return term
+        if _rebuilds(item, view, term.head, term.body):
+            return item
+        return answers.clause(term.head, term.body, where)
+    is_cell, functor = compound_cell_shape(term)
+    if is_cell and functor == ":-" and len(term) == 3:
+        if _rebuilds(item, view, term[1], term[2]):
+            return item
+        return answers.clause(term[1], term[2], where)
+    if is_cell and functor == "-->" and len(term) == 3:
+        raise LogicException(type_error(
+            "callable", term,
+            f"{where} is a grammar rule: term expansion runs after grammar "
+            f"rules are translated, so a grammar rule it hands back is never "
+            f"translated -- hand back the clauses it stands for instead "
+            f"(a `H --> B` rule is a clause of H with two extra list "
+            f"arguments)"))
     if slot and term == _NONE_ATOM:
         # ``none`` suppresses an ANSWER; inside Init/Final it would wrap into
         # a stray ``none/0`` fact with no diagnostic, so it is refused by name.
@@ -694,8 +783,7 @@ def _validated_expansion(term, wrap_head, slot=None):
     # A chars carrier is a 2-tuple headed by CHARS_TAG: compound_cell_shape
     # answers False for it, and it is neither an atom nor a term instance,
     # so no separate guard is needed to keep a STRING out of a fact head.
-    if wrap_head and (compound_cell_shape(term)[0] or is_atom(term)
-                      or is_term_instance(term)):
+    if is_cell or is_atom(term) or is_term_instance(term):
         return PredicateItem(head=term, body=True)
     hint = ""
     if is_chars(term) and not slot:
@@ -705,6 +793,351 @@ def _validated_expansion(term, wrap_head, slot=None):
     raise LogicException(type_error(
         "callable", term,
         f"{where} must be {what}, got {term!r}{hint}"))
+
+
+def _rebuilds(item, view, head, body) -> bool:
+    """*head* and *body* are the clause *item* -- its own head and body, or
+    the parts of the clause term *view* presented it as (``_clause_view``)
+    -- rebuilt: the answer hands back the clause it matched.  Compared term
+    by term down to the variables, which must be the clause's very own (a
+    rule that writes ``(p(X) :- B)`` rebuilds the head cell, not the
+    object)."""
+    if item is None:
+        return False
+    if _same_term(head, item.head) and _same_term(body, item.body):
+        return True
+    if view is None:
+        return False
+    if isinstance(view, PredicateItem):
+        view_head, view_body = view.head, view.body
+    else:
+        view_head, view_body = view[1], view[2]
+    return _same_term(head, view_head) and _same_term(body, view_body)
+
+
+def _same_term(a, b) -> bool:
+    """*a* and *b* are the same term: identical, or the same cell or list
+    of the same terms, with every variable the same Var."""
+    from clausal.logic.variables import is_var  # noqa: PLC0415
+    a, b = deref(a), deref(b)
+    if a is b:
+        return True
+    if is_var(a) or is_var(b) or type(a) is not type(b):
+        return False
+    if type(a) in (tuple, list):
+        return len(a) == len(b) and all(map(_same_term, a, b))
+    if type(a) in (str, int, float):
+        return a == b
+    return False
+
+
+def _clause_view(item, seam: bool):
+    """A RULE *item* as the clause TERM a whole-clause pattern is matched
+    against, or None when it has none.
+
+    ``.clausal`` (and ``.pl``): ``(Head :- Body)``, the body as READ --
+    ``item.source_body``, the ISO term the native front end records for
+    ``clause/2`` over the clause's own variables.  The seam: the node
+    ``Predicate(head=Head, body=Body)`` a ``(H <- B)`` in argument position
+    builds, the body as the term its text builds there (``_seam_body_term``);
+    ``Predicate.__unify__`` matches the two."""
+    if seam:
+        body = _seam_body_term(item.body)
+        return PredicateItem(head=item.head, body=body)
+    if item.source_body is None:
+        return None
+    return (":-", item.head, item.source_body)
+
+
+def _seam_body_term(goal):
+    """A seam clause body (goal nodes) as the TERM the same text builds in
+    argument position: a ``Call`` is its cell (the bare leaf name of an
+    imported, dotted spelling, as data cells carry it), a conjunction a
+    plain tuple, an atom goal the atom; the control nodes keep their type
+    with their goals converted, and every other node (a comparison, ``is``)
+    is the same node in both positions."""
+    from clausal.pythonic_ast import nodes  # noqa: PLC0415
+    from clausal.logic.builtins.call_body import is_special_form  # noqa: PLC0415
+    tt = type(goal)
+    if tt is nodes.TupleLiteral:
+        return tuple(_seam_body_term(e) for e in goal.elements)
+    if tt in (nodes.And, nodes.Or):
+        return tt(left=_seam_body_term(goal.left),
+                  right=_seam_body_term(goal.right))
+    if tt is nodes.Not:
+        return nodes.Not(operand=_seam_body_term(goal.operand))
+    if tt is nodes.IfExpr:
+        return nodes.IfExpr(test=_seam_body_term(goal.test),
+                            body=_seam_body_term(goal.body),
+                            orelse=_seam_body_term(goal.orelse))
+    if (tt is nodes.Call and isinstance(goal.func, nodes.LoadName)
+            and not goal.kwargs):
+        name = goal.func.name
+        arity = len(goal.args)
+        leaf = name.rpartition(".")[2]
+        if leaf != name and not is_special_form(leaf, arity):
+            name = leaf
+        positions = _goal_positions(name, arity) if name != "call" else ()
+        args = [_seam_body_term(a) if i in positions else a
+                for i, a in enumerate(goal.args)]
+        return (name, *args) if args else _mint(name)
+    return goal
+
+
+class _NotCallable(Exception):
+    """A goal position of a built body holds a non-callable term."""
+
+
+class _AnswerLowering:
+    """Lowers a clause a term_expansion/4 rule BUILT -- its body a term --
+    to the ``Predicate`` node a written clause is: the body's goals as the
+    nodes the front ends emit for the same text (``iso_l3``'s body
+    conversion, ISO 7.6.2), so the compiler meets nothing new.
+
+    - ``,``/2 is a conjunction, ``;``/2 a disjunction, ``\\+``/1 a negation
+      (the seam's ``TupleLiteral`` / plain tuple, ``Or``, ``Not``);
+      ``true`` is ``True``, ``fail``/``false`` ``False``;
+    - a variable goal is ``call(V)``; ``M:G`` is ``call(M:G)``, which runs G
+      in M; a list (or a string) is called, and named a missing ``'.'/2``
+      when it runs, as ``call/1`` does;
+    - every other compound or atom is the call of its predicate, its
+      special-form goal arguments (``findall/3``'s goal ...) converted the
+      same way and the rest kept as data; a name an import rewrote
+      (``match`` from ``library(re)``) is called by the import's dotted
+      spelling, exactly as the same goal written in this file;
+    - ``!``, ``->`` and ``*->`` are refused (cut-free) except in a ``.pl``
+      module (D59), as everywhere else;
+    - a goal position holding a number is ``type_error(callable, Body)``.
+
+    A clause it builds has no variable-name table: the rule's variables are
+    renamed for each expansion, so its regex groups bind nothing
+    (docs/term_expansion.md, Gotchas)."""
+
+    _CONTEXT = "term_expansion/4: a clause the rule built"
+
+    def __init__(self, db, module_dict):
+        from clausal.end_module import SURFACE_SEAM, surface_of  # noqa: PLC0415
+        from clausal.logic.builtins.call_body import cut_allowed  # noqa: PLC0415
+        surface = getattr(db, "surface", None) or surface_of(
+            (module_dict or {}).get("__file__") or "")
+        # No surface (a Python-made module, the tests' bare transformer): the
+        # seam, the surface the Python API compiles.
+        self.seam = surface in (SURFACE_SEAM, None)
+        self.cut_allowed = cut_allowed(db)
+        self._module_dict = module_dict or {}
+        self._dotted = None
+
+    # ── the clause ──────────────────────────────────────────────────────
+
+    def clause(self, head, body, where):
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            LogicException, instantiation_error, type_error,
+        )
+        from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+        from clausal.logic.atoms import is_atom, is_truth_atom  # noqa: PLC0415
+        from clausal.logic.variables import is_var  # noqa: PLC0415
+        head = deref(head)
+        if is_var(head):
+            raise LogicException(instantiation_error(
+                f"{where}: the head of a clause it built is unbound"))
+        if is_truth_atom(head) or not (compound_cell_shape(head)[0]
+                                       or is_atom(head)):
+            raise LogicException(type_error(
+                "callable", head,
+                f"{where}: the head of a clause it built must be an atom or "
+                f"a compound, got {head!r}"))
+        body = deref(body)
+        if body is True or (type(body) is str and body == "true"):
+            return PredicateItem(head=head, body=True)
+        try:
+            lowered = self.goal(body)
+        except _NotCallable:
+            raise LogicException(type_error(
+                "callable", body,
+                f"{where}: the body of a clause it built is not callable: "
+                f"{body!r}")) from None
+        return PredicateItem(head=head, body=lowered)
+
+    # ── goal positions ──────────────────────────────────────────────────
+
+    def _call(self, name, args):
+        from clausal.pythonic_ast import nodes  # noqa: PLC0415
+        return nodes.Call(func=nodes.LoadName(name=name), args=list(args),
+                          kwargs=[])
+
+    def _resolved(self, name: str) -> str:
+        """The spelling the goal ``name(...)`` has when written in this
+        file: the dotted key an ``-import_from`` / ``use_module/2`` rewrote
+        an imported name into (``clausal.library.re.match``), else *name*."""
+        if self._dotted is None:
+            from clausal.logic.atoms import is_mangled as _mangled  # noqa: PLC0415
+            md = self._module_dict
+            dotted = {}
+            for key, value in md.items():
+                if (type(key) is not str or "." not in key
+                        or key.startswith("$") or value is None):
+                    continue
+                leaf = key.rpartition(".")[2]
+                # The import binds the local spelling to the very object the
+                # dotted key holds.  An ATOM never counts (an imported atom
+                # is data, and a local name/N of its spelling means local),
+                # a predicate handle does.
+                if (md.get(leaf) is value
+                        and (type(value) is not str or _mangled(value))):
+                    dotted.setdefault(leaf, key)
+            self._dotted = dotted
+        return self._dotted.get(name, name)
+
+    def goal(self, raw):
+        from clausal.pythonic_ast import nodes  # noqa: PLC0415
+        from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+        from clausal.logic.builtins.call_body import (  # noqa: PLC0415
+            cut_refusal_error, is_conjunction_tuple, is_non_callable_term,
+        )
+        from clausal.logic.cells import compound_cell_shape, is_chars  # noqa: PLC0415
+        from clausal.logic.variables import is_var  # noqa: PLC0415
+        t = deref(raw)
+        if is_var(t):
+            return self._call("call", [t])     # ISO 7.6.2: call(V)
+        if t is True or t is False:
+            return t
+        if type(t) is str:
+            if t == "true":
+                return True
+            if t in ("fail", "false"):
+                return False
+            if t == "!":
+                if self.cut_allowed:
+                    return nodes.Cut()
+                raise LogicException(cut_refusal_error(self._CONTEXT))
+            return self._call(self._resolved(t), [])
+        if type(t) is list or is_chars(t):
+            # ``[]`` is the atom '[]' (D70): the call of '[]'/0; a non-empty
+            # list or a string is '.'/2, which call/1 names when it runs.
+            return self._call("[]", []) if t == [] else self._call("call", [t])
+        if isinstance(t, nodes.Node):
+            return self._node_goal(t)
+        if is_conjunction_tuple(t):
+            return nodes.TupleLiteral(elements=[self.goal(e) for e in t])
+        is_cell, functor = compound_cell_shape(t)
+        if is_cell:
+            return self._cell_goal(t, functor)
+        if is_non_callable_term(t, lists=False):
+            raise _NotCallable(t)
+        return self._call("call", [t])         # a goal object: call/1's
+
+    def _refuse_if_then(self, functor):
+        from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+        from clausal.logic.builtins.call_body import if_then_refusal_error  # noqa: PLC0415
+        raise LogicException(if_then_refusal_error(functor, self._CONTEXT))
+
+    def _node_goal(self, t):
+        from clausal.pythonic_ast import nodes  # noqa: PLC0415
+        from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+        from clausal.logic.builtins.call_body import cut_refusal_error  # noqa: PLC0415
+        tt = type(t)
+        if tt is nodes.TupleLiteral:
+            return nodes.TupleLiteral(elements=[self.goal(e) for e in t.elements])
+        if tt in (nodes.And, nodes.Or):
+            return tt(left=self.goal(t.left), right=self.goal(t.right))
+        if tt is nodes.Not:
+            return nodes.Not(operand=self.goal(t.operand))
+        if tt is nodes.IfExpr:
+            return nodes.IfExpr(test=self.goal(t.test), body=self.goal(t.body),
+                                orelse=self.goal(t.orelse))
+        if tt is nodes.IfThenElse:
+            if not self.cut_allowed:
+                self._refuse_if_then("->")
+            return nodes.IfThenElse(
+                test=self.goal(t.test), body=self.goal(t.body),
+                orelse=None if t.orelse is None else self.goal(t.orelse))
+        if tt is nodes.Cut and not self.cut_allowed:
+            raise LogicException(cut_refusal_error(self._CONTEXT))
+        if tt is PredicateItem:
+            raise _NotCallable(t)
+        # A Call, a comparison, ``is``, a Python escape ...: a goal node
+        # already, as written.
+        return t
+
+    def _cell_goal(self, t, functor):
+        from clausal.pythonic_ast import nodes  # noqa: PLC0415
+        from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+        n = len(t) - 1
+        if functor == "," and n == 2:
+            elements = []
+            while True:
+                elements.append(self.goal(t[1]))
+                rest = deref(t[2])
+                ok, f = compound_cell_shape(rest)
+                if not (ok and f == "," and len(rest) == 3):
+                    elements.append(self.goal(rest))
+                    break
+                t = rest
+            return nodes.TupleLiteral(elements=elements)
+        if functor == ";" and n == 2:
+            left = deref(t[1])
+            ok, lf = compound_cell_shape(left)
+            if ok and len(left) == 3 and lf in ("->", "*->"):
+                if lf == "->" and self.cut_allowed:
+                    return nodes.IfThenElse(test=self.goal(left[1]),
+                                            body=self.goal(left[2]),
+                                            orelse=self.goal(t[2]))
+                self._refuse_if_then(lf)
+            return nodes.Or(left=self.goal(t[1]), right=self.goal(t[2]))
+        if functor in ("->", "*->") and n == 2:
+            if functor == "->" and self.cut_allowed:
+                return nodes.IfThenElse(test=self.goal(t[1]),
+                                        body=self.goal(t[2]), orelse=None)
+            self._refuse_if_then(functor)
+        if functor == "\\+" and n == 1:
+            return nodes.Not(operand=self.goal(t[1]))
+        if functor == ":" and n == 2:
+            module = deref(t[1])
+            if type(module) is str and module in _builtin_library_names():
+                # ``lists:append(..)``: a built-in library's predicate is
+                # the builtin, as the front end lowers the written goal.
+                return self.goal(t[2])
+            return self._call("call", [t])     # M:G runs G in M
+        name = self._resolved(functor)
+        # An IMPORTED name is the import's predicate, not the special form
+        # it may share a name with: its arguments are data (as iso_l3).
+        positions = (() if name != functor
+                     else _GOAL_POSITIONS.get((functor, n), ()))
+        args = []
+        for i, a in enumerate(t[1:]):
+            if i not in positions:
+                args.append(a)
+            elif (functor, n) in _ITERATED_GOAL:
+                args.append(self._iterated(a))
+            else:
+                args.append(self.goal(a))
+        return self._call(name, args)
+
+    def _iterated(self, raw):
+        """``V1^V2^G`` in bagof/setof: the ``BitXor`` chain the compiler
+        strips the existential prefix from."""
+        from clausal.pythonic_ast import nodes  # noqa: PLC0415
+        from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+        t = deref(raw)
+        if type(t) is nodes.BitXor:
+            return nodes.BitXor(left=t.left, right=self._iterated(t.right))
+        ok, f = compound_cell_shape(t)
+        if ok and f == "^" and len(t) == 3:
+            return nodes.BitXor(left=t[1], right=self._iterated(t[2]))
+        return self.goal(t)
+
+
+def _builtin_library_names() -> frozenset:
+    """The ``library(...)`` names whose predicates are builtins
+    (``iso_l3_directives._BUILTIN_LIBRARIES``)."""
+    from clausal.tools.iso_l3_directives import _BUILTIN_LIBRARIES  # noqa: PLC0415
+    return _BUILTIN_LIBRARIES
+
+
+#: A special form's goal arguments (``findall/3``'s ...), by (name, arity).
+_GOAL_POSITIONS = GOAL_POSITIONS
+#: The special forms whose goal takes an existential ``V^`` prefix.
+_ITERATED_GOAL = frozenset({("bagof", 3), ("setof", 3)})
 
 
 def _extract_init_final(module_state):

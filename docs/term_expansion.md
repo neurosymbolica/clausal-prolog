@@ -116,6 +116,76 @@ Variables are shared between the pattern and the replacement. In the example abo
 
 `q()` quasi-quotation was retired on 2026-09-25: `q` is an ordinary name now, and `q(fact(X))` is the term `q(fact(X))`. A `q(...)` left in a `term_expansion/4` clause (or in a clause of a helper its body calls) would match nothing, so loading one emits a `ClausalRetiredQuasiQuoteWarning` naming the line. Drop the wrapper.
 
+### Handing Back Rules
+
+An expansion may be a rule as well as a fact: write it `(H :- B)`, alone or
+in a list with facts. It is compiled as the same clause written in the
+file would be, body and all, and a variable shared between `H` and `B` is
+one variable of the clause:
+
+```clausal
+% Every alias(New, Old) fact makes New answer as Old does
+term_expansion(alias(New, Old), (H :- B), S, S) :-
+    H =.. [New, X],
+    B =.. [Old, X].
+
+% One declaration, a fact and a rule
+term_expansion(unit(Name, Factor),
+               [unit_name(Name), (to_base(Name, V, Base) :- Base is V * Factor)],
+               S, S).
+
+color(red).
+color(green).
+alias(colour, color).
+unit(km, 1000).
+
+test("the alias is a rule") :-
+    findall(C, colour(C), CS),
+    CS == [red, green].
+
+test("the unit's rule") :-
+    unit_name(km),
+    to_base(km, 2, B),
+    B =:= 2000.
+```
+
+The body is converted as a written body is (ISO 7.6.2): `,`, `;` and `\+`
+are control constructs, a variable goal is `call(G)`, `true` alone makes
+the clause a fact, and a goal imported with `use_module/2` calls the
+import. `!`, `->` and `*->` are refused, as everywhere in Clausal Prolog,
+and a number in a goal position is `type_error(callable, Body)`. In the
+seam the rule is `(H <- B)`.
+
+A grammar rule `(H --> B)` handed back is refused: term expansion runs after
+grammar rules are translated, so hand back the clauses it stands for.
+
+### Matching Rules
+
+A bare head pattern such as `p(X)` matches a FACT only. A rule reads as the
+term `(p(X) :- Body)`, which does not unify with `p(X)`, so it passes
+through, body intact, as in ISO. To match a rule, write the whole clause:
+
+```clausal
+% Give every rule of p/1 a twin of q/1 with the same body
+term_expansion((p(X) :- B), [(p(X) :- B), (q(X) :- B)], S, S).
+
+p(X) :- X = 1.
+p(2).
+
+test("only the rule is twinned") :-
+    findall(X, q(X), XS),
+    XS == [1].
+
+test("both p clauses stay") :-
+    findall(X, p(X), XS),
+    XS == [1, 2].
+```
+
+The body `B` is the clause's body as written, so `(p(X) :- B)` handed back
+is the very clause matched. In the seam the pattern is `(p(X) <- B)`, and a
+seam fact is the clause `p(2) <- True`, so it matches facts too, with
+`B = True`.
+
 ### Module State Threading
 
 The STATE arguments thread a value through all expansions in order. Use this to count items, collect metadata, or coordinate between rules.
@@ -290,13 +360,14 @@ The goal expansion pass detects the `(?P<YEAR>...)` group, rewrites `match/2` to
 - **Write patterns as plain terms** — `term_expansion(fact(X), ...)`, not `term_expansion(q(fact(X)), ...)`. `q()` was retired 2026-09-25; an old `q(...)` pattern matches nothing and warns at load.
 - **Module state starts as `module_expansion_state([], [], nil)`**: the user slot is the atom `nil`, not a number. Handle `nil` before doing arithmetic on it.
 - **One-to-many expansion returns a list** — make sure OUTPUT is `[item1, item2, ...]`, not a bare term, when you want multiple outputs.
+- **A head pattern matches facts, not rules** — `term_expansion(p(X), ...)` leaves a rule `p(X) :- ...` alone; match a rule with `(p(X) :- B)` (see [Matching Rules](#matching-rules)).
 - **A clause a rule builds has no variable names** — goal expansion runs after term expansion, and [regex auto-binding](regex.md#term-expansion) binds a group to the variable it names. A clause handed back unchanged (`term_expansion(T, T, S, S)`, or `T` inside `[T, T]`) is the clause as written and keeps its names, so its groups bind. A clause the rule *builds* has only the rule's variables, renamed for each expansion, so no name reaches it: in `.clausal` its groups bind nothing.
 
 ---
 
 ??? info "Test coverage"
 
-    - `tests/test_term_expansion.py` (25 tests): pass-through, detection, identity, suppression, one-to-many, module state, init/final injection, imported TE rules, new functors, plain-term patterns (and the retired-q() warning), full pipeline integration
+    - `tests/test_term_expansion.py`: pass-through, detection, identity, suppression, one-to-many, module state, init/final injection, imported TE rules, new functors, plain-term patterns (and the retired-q() warning), rules handed back and whole-clause patterns on both surfaces (`TestRuleClausesHandedBack`), full pipeline integration
     - `tests/test_regex.py` (93 tests): goal expansion for regex auto-binding and precompilation
 
 ---
