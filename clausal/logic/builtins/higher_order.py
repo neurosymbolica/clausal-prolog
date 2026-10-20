@@ -6,7 +6,7 @@ max_by/3, min_by/3, filter_map/3."""
 from __future__ import annotations
 
 from clausal.logic.variables import Var, deref, is_var, unify
-from clausal.logic.atoms import demangle, is_mangled
+from clausal.logic.atoms import NIL_SPELLING, demangle, is_mangled
 from clausal.logic.exceptions import (
     LogicException, existence_error, instantiation_error, string_goal_error,
 )
@@ -206,12 +206,14 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         goal_args = list(goal_val[1:])
     elif _is_empty_list(goal_val):
         # The EMPTY LIST in goal position, in any spelling (fix round 2,
-        # item 4): ``call("")`` raised while ``call([])`` failed silently,
-        # for one and the same term.  Both raise now -- ``[]`` is the atom
-        # ``'[]'``, which is callable and names no procedure, so it is
-        # ``existence_error(procedure, '[]'/N)``, exactly what Scryer
-        # answers for ``call([])``.
-        raise LogicException(string_goal_error("", len(extra_args), "call/N"))
+        # item 4: ``call("")`` and ``call([])`` are one and the same term).
+        # ``[]`` is the atom ``'[]'`` (ISO 6.3.5, D70), so it is callable:
+        # it names the procedure ``[]/N``, keyed by the spelling ``"[]"``
+        # as a ``.pl``/``.clausal`` text defines it (``[].``,
+        # ``'[]'(X) :- ...``).  With no such procedure the name lookup
+        # below raises ``existence_error(procedure, []/N)``, Scryer's
+        # answer for ``call([])``.
+        functor, goal_args = NIL_SPELLING, []
     elif type(goal_val) is str:
         functor, goal_args = goal_val, []   # STAGE 2: an atom is the 0-arity goal of its name
     elif is_chars(goal_val):
@@ -401,8 +403,11 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # catchable -- where it used to fail silently (the old §4.2
         # "a non-callable goal fails" contract, retired for this case).
         _where = getattr(_calling_module(db), "name", None)
+        # The name ``[]/N`` is keyed by its spelling; the indicator holds
+        # the atom ``[]`` itself, the empty list (D70).
         raise LogicException(existence_error(
-            "procedure", ("/", functor, arity),
+            "procedure",
+            ("/", [] if functor == NIL_SPELLING else functor, arity),
             f"{context}: no procedure {functor}/{arity} is defined in "
             + (f"module {_where}" if _where else "the calling module")))
     return dispatch, _meta_qualified(db, functor, arity, call_args)

@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 from clausal.logic.variables import Var, Trail, deref, is_var, unify
-from clausal.logic.atoms import is_atom as _term_is_atom, is_truth_atom, spelling as _spelling
+from clausal.logic.atoms import NIL_SPELLING, is_atom as _term_is_atom, is_truth_atom, spelling as _spelling
 from clausal.logic.exceptions import (
     LogicException, instantiation_error, permission_error,
 )
@@ -333,6 +333,10 @@ def _resolve_cell_head(term_val: Any, context: str, db,
     from clausal.logic.cells import compound_cell_shape, make_cell  # noqa: PLC0415
     from clausal.logic.exceptions import existence_error  # noqa: PLC0415
 
+    if type(term_val) is list and not term_val:
+        # The atom ``[]`` (ISO 6.3.5, D70) as a head: its procedure is keyed
+        # by the spelling, the head a loaded ``[].`` clause stores.
+        return NIL_SPELLING, False
     ok, functor = compound_cell_shape(term_val)
     if not ok:
         return term_val, False
@@ -1131,7 +1135,8 @@ def _pi_parts(pi):
         parts = (t.left, t.right)
     if parts is not None:
         name, arity = deref(parts[0]), deref(parts[1])
-        if (is_var(name) or _term_is_atom(name)) and (
+        if (is_var(name) or _term_is_atom(name)
+                or (type(name) is list and not name)) and (   # [] is an atom
                 is_var(arity) or (type(arity) is int and arity >= 0)):
             return parts
     from clausal.logic.exceptions import type_error  # noqa: PLC0415
@@ -1189,8 +1194,8 @@ def _abolish_pi(pi) -> "tuple[str, int]":
         raise LogicException(type_error("predicate_indicator", t, ctx))
     if is_var(name) or is_var(arity):
         raise LogicException(instantiation_error(ctx))
-    if not _term_is_atom(name):
-        raise LogicException(type_error("atom", name, ctx))
+    if not (_term_is_atom(name) or (type(name) is list and not name)):
+        raise LogicException(type_error("atom", name, ctx))   # [] is an atom
     if type(arity) is not int:
         raise LogicException(type_error("integer", arity, ctx))
     if arity < 0:

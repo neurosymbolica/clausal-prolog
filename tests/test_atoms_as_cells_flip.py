@@ -738,12 +738,15 @@ class TestTheNilAtomInAKeyPosition:
 
     def test_the_nil_goal_error_is_worded_for_nil(self, builtins_mod):
         """Fix round 3, item 6: the shared message said "a string goal is the
-        list of its characters" for ``[]``, which has no characters."""
+        list of its characters" for ``[]``, which has no characters.  Since
+        ``[]`` became callable (ISO 6.3.5; todo/done/
+        iso-empty-list-is-not-callable-2026-10-17.md) it is the goal
+        ``[]/0``, worded as any procedure no module defines."""
         from clausal.logic.solve import call
         with pytest.raises(LogicException) as exc:
             list(call("call_goal", [], module=builtins_mod))
         context = exc.value.message
-        assert "the empty list is not a callable term" in context
+        assert "no procedure []/0 is defined" in context
         assert "list of its characters" not in context
         # …and a real string still gets the string wording, at call/1 and
         # with an extra argument.  (Round 2 had made call/1 of a string a

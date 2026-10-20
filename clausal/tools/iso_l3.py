@@ -235,6 +235,18 @@ def _is_callable_name(f) -> bool:
     return type(f) is str
 
 
+#: The predicate name the atom ``[]`` calls.  ISO 6.3.5 makes ``[]`` an atom,
+#: so it is callable (``[].``, ``call([])``); the reader gives it as the
+#: Python empty list (D70: ``'[]'`` is the same term), and the predicate it
+#: names is keyed by its spelling, as ``'[]'(X)``'s functor already is.
+_NIL_NAME = "[]"
+
+
+def _is_nil(t) -> bool:
+    """*t* is the atom ``[]`` -- the empty list, in the reader's term."""
+    return type(t) is list and not t
+
+
 # ── one clause ───────────────────────────────────────────────────────────────
 
 
@@ -469,6 +481,8 @@ class _ClauseLowering:
         pos = self._pos.of(_top_span(sp))
         if type(g) is VarRef:
             return self._call("call", [self.var(g)], pos, pos)
+        if _is_nil(g):
+            g = _NIL_NAME
         if type(g) is str:
             if g == "!" and self._cut_allowed:
                 return _node("Cut", position=_pos_expr(pos))
@@ -580,6 +594,8 @@ class _ClauseLowering:
             whole = (":", m, g)
             self._refuse_control_in(g, g_sp)
             return self._call("call", [self.term(whole, sp)], pos, pos)
+        if _is_nil(g):
+            g = _NIL_NAME
         if type(g) is str:
             gname, gargs, gspans = g, (), []
         elif (type(g) is tuple and g and type(g[0]) is str
@@ -970,7 +986,9 @@ def lower_clause(term: Any, spans=None, var_names=None,
     if type(head) is VarRef:
         raise LoweringRefused(
             "a clause head is a variable (ISO instantiation_error)", whole_span)
-    if type(head) is str:
+    if _is_nil(head):
+        name, args = _NIL_NAME, ()
+    elif type(head) is str:
         name, args = head, ()
     elif type(head) is tuple and head and type(head[0]) is str \
             and head[0] != "$chars":

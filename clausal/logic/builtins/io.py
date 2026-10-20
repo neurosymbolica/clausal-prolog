@@ -972,8 +972,8 @@ def _checked_indicator(parts, db):
         name = name._functor
     elif _is_predicate_handle(name, arity, db):
         binding, name = name, demangle(name)[1]
-    elif _term_is_atom(name):
-        name = spelling(name)
+    elif _term_is_atom(name) or (type(name) is list and not name):
+        name = spelling(name)           # [] is the atom spelled "[]"
     elif isinstance(name, _numbers.Number) and not isinstance(name, bool):
         raise LogicException(type_error(
             "atom" if arity > 0 else "callable", name, "listing/1"))

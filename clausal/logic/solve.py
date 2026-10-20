@@ -55,6 +55,7 @@ from clausal.logic.variables import Var, Trail, deref, is_var, unify
 from clausal.logic.to_python import strip_atom_tags as _strip_atom_tags, has_atom_tag as _has_atom_tag
 from clausal.logic.atoms import (
     is_atom as _term_is_atom, mint as _mint_atom, spelling as _spelling, is_mangled, demangle,
+    NIL_SPELLING,
 )
 from clausal.logic.database import Clause, Database, Module
 from clausal.logic.predicate import (
@@ -305,13 +306,15 @@ def _term_to_goal(term: Any, db: Any = None) -> Any:
     term = qualify_mangled_goal(term, db)
     from clausal.pythonic_ast.nodes import Call as AstCall, LoadName
 
-    if type(term) in (list, bytes, tuple) and len(term) == 0:
+    if (type(term) in (list, bytes, tuple) and len(term) == 0) or (
+            is_chars(term) and not chars_text(term)):
         # The EMPTY LIST in goal position, in any spelling (fix round 2,
-        # item 4): ``solve("", m)`` raised while ``solve([], m)`` fell
-        # through, for one and the same term.  ``[]`` is the atom ``'[]'``,
-        # so the answer is ``existence_error(procedure, '[]'/0)``.
-        from clausal.logic.exceptions import LogicException, string_goal_error
-        raise LogicException(string_goal_error("", 0, "solve/1"))
+        # item 4: ``solve("", m)`` and ``solve([], m)`` are one term).
+        # ``[]`` is the atom ``'[]'`` (ISO 6.3.5, D70), so it is the goal
+        # ``[]/0``, keyed by its spelling as call/1 keys it: it runs a
+        # defined ``[]/0`` and is ``existence_error(procedure, []/0)``
+        # otherwise.
+        term = NIL_SPELLING
     if is_chars(term):                       # a STRING in goal position: no procedure '.'/2
         # THE FLIP (spec §6.4): a ``str`` is a STRING, not an atom.
         # ``solve("z0", m)`` used to be the same call as ``solve(("z0",), m)``;

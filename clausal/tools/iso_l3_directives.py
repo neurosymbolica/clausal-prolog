@@ -2109,10 +2109,14 @@ def _module_has(module: str, name: str) -> bool:
 
 
 def _indicator(e) -> "tuple[str, int] | None":
-    """``name/N`` -> (name, N); ``name//N`` (a nonterminal) -> (name, N+2)."""
+    """``name/N`` -> (name, N); ``name//N`` (a nonterminal) -> (name, N+2).
+    The atom ``[]`` (read as the empty list) names the predicate spelled
+    ``"[]"``, the one ``[].`` defines (ISO 6.3.5: ``[]`` is an atom)."""
     if (type(e) is tuple and len(e) == 3 and e[0] in ("/", "//")
-            and type(e[1]) is str and type(e[2]) is int and e[2] >= 0):
-        return e[1], e[2] + (2 if e[0] == "//" else 0)
+            and type(e[2]) is int and e[2] >= 0):
+        name = "[]" if (type(e[1]) is list and not e[1]) else e[1]
+        if type(name) is str:
+            return name, e[2] + (2 if e[0] == "//" else 0)
     return None
 
 

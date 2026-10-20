@@ -109,6 +109,8 @@ from clausal.logic.exceptions import (
 )
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.pythonic_ast import nodes
+from clausal.logic.atoms import NIL_SPELLING
+from clausal.logic.builtins._helpers import _is_empty_list
 
 from clausal.logic.builtins._registry import (
     _BUILTINS, _DB_BUILTINS, _db_builtin, BuiltinTerm as _BuiltinTerm,
@@ -1104,8 +1106,12 @@ def _resolve(db, head):
     elif is_term_instance(head):
         cell = _as_cell(head)
         name, arity = (cell, 0) if type(cell) is str else (cell[0], len(cell) - 1)
+    elif _is_empty_list(head):
+        # [] or "": the atom '[]' (ISO 6.3.5, D70), whose procedure is keyed
+        # by its spelling -- the head a ``[].`` clause stores.
+        name, arity, cell = NIL_SPELLING, 0, NIL_SPELLING
     else:
-        return None          # [] or "": the atom '[]', which nothing defines
+        return None
     if name in CELL_GOAL_CONTROL_FUNCTORS or (
             arity == 0 and name in _ZERO_ARITY_CONTROL):
         raise _private(name, arity, "is a control construct")

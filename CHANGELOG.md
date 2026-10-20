@@ -20,8 +20,8 @@ surface described in [docs/public-api.md](docs/public-api.md).
   loaded before and now gives "a clause head is not callable: [] (ISO
   type_error(callable))", the same refusal unquoted `[].` already had. In
   ISO `[]` is an atom and so callable (Scryer loads both), so both
-  refusals are a gap, tracked in
-  todo/iso-empty-list-is-not-callable-2026-10-17.md.
+  refusals were a gap, since fixed (see Fixed below;
+  todo/done/iso-empty-list-is-not-callable-2026-10-17.md).
 
 - **The reader follows ISO 6.4's escape, quoted-character and number
   rules exactly** (operator ruling D60, 2026-10-16). These used to read
@@ -315,6 +315,24 @@ surface described in [docs/public-api.md](docs/public-api.md).
   its table of meta-predicate goal positions. That table is now checked
   against the compiler's for every meta kind. docs/exceptions.md's
   `catch_error`/`catch_recover` examples are now Clausal Prolog.
+
+- **`[]` is callable, as ISO's atom `[]` is** (2026-10-20; follows D70).
+  A `.pl` or `.clausal` text may now define `[]/0` and `[]/N`: the facts
+  `[].` and `'[]'.`, a rule `[] :- G.`, `'[]'(X) :- ...`, and
+  `:- dynamic([]/0)`. Before, every head and body goal `[]` was refused at
+  load ("a clause head is not callable: []", "[] is not callable"), and
+  `call([])` raised `existence_error(procedure, []/0)` even when `[]/0`
+  had clauses. The empty list is still the Python empty list; the
+  predicate it names is keyed by the spelling `"[]"`, as `'[]'(X)`'s
+  functor already was, so `[]` and `'[]'` call one procedure. A body goal
+  `[]`, `call([])`, `call([], X)`, Python `solve([], m)` and a goal `[]`
+  bound at run time all run it, and with no clauses raise
+  `existence_error(procedure, []/N)` naming the atom `[]`. `clause/2`,
+  `assertz/1`, `asserta/1`, `retract/1`, `retractall/1`, `abolish/1`,
+  `listing/1` and `current_predicate/1` accept `[]` as a head or
+  predicate-indicator name. Checked against Scryer row by row. The
+  `CLAUSAL_PL_FRONTEND=translator` path and a DCG head `[] --> ...` are
+  unchanged.
 
 - **A sandboxed module may import the datetime adapter's `date`
   constructor** (2026-10-17). `-import_from(date_time, [date])` was refused
