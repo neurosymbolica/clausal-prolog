@@ -9,7 +9,7 @@ tests/iso_l3/test_l3_tabled_rows_fresh_variables.py (both repros, in `.pl`,
 `.clausal` and from Python). A constrained answer still loses its
 constraint on replay (the A12 todo, whose plan this was the prerequisite
 of). Found on the way: the variant key conflates `f(_, _)` with `f(X, X)`
-(todo/tabled-variant-key-conflates-repeated-variables-2026-10-20.md).
+(todo/done/tabled-variant-key-conflates-repeated-variables-2026-10-20.md).
 
 Filed 2026-10-16, from the D68 review (F2).
 Pre-existing (main e7a59c8f behaves the same); independent of D68.

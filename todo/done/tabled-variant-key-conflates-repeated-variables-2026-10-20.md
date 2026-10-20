@@ -1,5 +1,7 @@
 # The tabling variant key maps every variable to one sentinel, so f(_, _) and f(X, X) are one answer
 
+**Status: FIXED 2026-10-20 (commit ab1571fa).** The key numbers variables by first occurrence across the whole call or answer, in `_norm_py` / `do_normalize` (both twins, one per-thread numbering shared with the `_seg_key` re-entry, holes numbered too), in `_key_subsumes` and in the seam's `_structural_key`. Pinned in tests/iso_l3/test_l3_tabled_variant_key.py (the repro on `.pl`, `.clausal` and from Python, answer dedup, call variance, lists/compounds, attributed variables, WFS rows, a 3000-row table, both twins' keys).
+
 Filed 2026-10-20, found while fixing
 todo/done/tabled-answer-rows-share-their-unbound-variables-2026-10-16.md.
 Pre-existing; independent of that fix.  Severity: WRONG ANSWERS, not only
