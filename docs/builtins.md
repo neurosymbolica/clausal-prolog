@@ -133,7 +133,7 @@ For tabled predicates, uses well-founded semantics (delayed negation); see [WFS]
 ```text
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:if_3"
 ```
-The reified if-then-else, library(reif)'s `if_/3` (see [Reified if-then-else](reified_ite.md)); Clausal Prolog has no cut and no `->`. A `.clausal` file loads it with `:- use_module(library(reif)).` (without it, `if_/3` is `existence_error(procedure, if_/3)`), and it is compiled where it is written: a goal built at run time and passed to `call/N` does not reach it. `Cond` must be **reifiable**: `X = Y` (library(reif)'s `=/3`), `dif(X, Y)` (`dif/3`), a conjunction `(C1, C2)` or disjunction `(C1 ; C2)` of them, or a closure called with the truth value appended (`memberd_t(E, Es)` runs `memberd_t(E, Es, T)`). With `X` unbound, `if_(X = 1, ...)` explores both branches, the `Else` branch under `dif(X, 1)`; a closure's every answer is explored. A plain goal as the condition is called with the truth value appended, so `if_(atom(X), ...)` raises `existence_error(procedure, atom/2)`. The seam also reifies its comparisons (`X is 1`, `X is not Y`, `==`, `!=`, `<`, `<=`, `>`, `>=`), and refuses a plain goal (`if_(in_(Y, [1, 2]), ...)`, `if_(atom(X), ...)`) at load time -- it used to run as a soft cut, which is not monotone (ruling 2026-10-01).
+The reified if-then-else, library(reif)'s `if_/3` (see [Reified if-then-else](reified_ite.md)); Clausal Prolog has no cut and no `->`. A `.clausal` file loads it with `:- use_module(library(reif)).` (without it, `if_/3` is `existence_error(procedure, if_/3)`), and a written `if_` goal is compiled where it is written. The import also defines `if_/3` as a predicate with the same meaning, so a goal built at run time reaches it too: `call(if_(...))`, `G = if_(...), G`, `call(if_, C, T, E)` and a lambda body. `Cond` must be **reifiable**: `X = Y` (library(reif)'s `=/3`), `dif(X, Y)` (`dif/3`), a conjunction `(C1, C2)` or disjunction `(C1 ; C2)` of them, or a closure called with the truth value appended (`memberd_t(E, Es)` runs `memberd_t(E, Es, T)`). With `X` unbound, `if_(X = 1, ...)` explores both branches, the `Else` branch under `dif(X, 1)`; a closure's every answer is explored. A plain goal as the condition is called with the truth value appended, so `if_(atom(X), ...)` raises `existence_error(procedure, atom/2)`. Of the comparisons, clpz's reified `X #= Y` and `X #< Y` (`#=/3`, `#</3`, the two Scryer's clpz exports) are conditions; `X >= Y`, `X #> Y` and the rest name no procedure (`existence_error(procedure, (>=)/3)`), as in Scryer. The seam also reifies its comparisons (`X is 1`, `X is not Y`, `==`, `!=`, `<`, `<=`, `>`, `>=`), and refuses a plain goal (`if_(in_(Y, [1, 2]), ...)`, `if_(atom(X), ...)`) at load time -- it used to run as a soft cut, which is not monotone (ruling 2026-10-01).
 
 ??? info "Implementation & tests"
     **Seam tests:** `tests/fixtures/reified_memberd.seam`, `tests/fixtures/tabled_ite.seam`, `tests/fixtures/reified_max.seam`
@@ -1093,8 +1093,12 @@ negation in the SAME answer order (`T = false` first; `dif_t/3` answers
 `if_('='(X, Y), ...)`. `if_/3`'s library(reif) meaning is described in
 [Reified if-then-else](reified_ite.md).
 
+`#=(X, Y, T)` and `#<(X, Y, T)` are clpz's reified comparisons (Scryer's
+`clpz_t/2`: `X #= Y #<==> B`, then `T = false` for `B = 0` and `T = true`
+for `B = 1`, in that order), so `if_(X #= 3, ...)` takes a CLP(ℤ) condition.
+
 ??? info "Implementation & tests"
-    **Python tests:** `tests/iso_l3/test_l3_s4_constructs.py`
+    **Python tests:** `tests/iso_l3/test_l3_s4_constructs.py`, `tests/iso_l3/test_l3_if_runtime_reif.py`
 
 ---
 

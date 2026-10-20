@@ -1,6 +1,7 @@
 """clpz's predicates under Scryer's names, as engine builtins (ruling D9(a)):
 ``in/2``, ``ins/2``, ``labeling/2`` and the reified connectives ``#<==>/2``,
-``#==>/2``, ``#<==/2``, ``#\\//2``, ``#/\\/2``, ``#\\/1`` and ``#\\/2``.
+``#==>/2``, ``#<==/2``, ``#\\//2``, ``#/\\/2``, ``#\\/1`` and ``#\\/2``, and the
+reified comparisons ``#=/3`` and ``#</3`` library(reif) conditions use.
 
 Usable from every front end and from ``query()``; from the seam in quoted
 form (``'in'(X, '..'(1, 3))``, ``'#<==>'(B, '#='(X, 1))``).  The
@@ -58,6 +59,44 @@ for _n in ("#<==>", "#==>", "#<==", "#\\/", "#/\\", "#\\"):
     _connective(_n, 2)
 _connective("#\\", 1)
 del _n
+
+
+# ── clpz's reified comparisons for library(reif) ────────────────────────────
+#
+# Scryer's clpz exports exactly two, for if_/3 and the other reif
+# predicates:
+#
+#   clpz_t(Expr, T) :- Expr #<==> #B, zo_t(B, T).
+#   #=(X, Y, T) :- clpz_t(X #= Y, T).
+#   #<(X, Y, T) :- clpz_t(X #< Y, T).
+#   zo_t(0, false).
+#   zo_t(1, true).
+#
+# The others (#\=/3, #>/3, ...) are not Scryer's, and stay existence errors.
+
+
+def _clpz_t(rel: str):
+    def run(x, y, truth, trail, k):
+        from clausal.logic.clpz_surface import post_connective  # noqa: PLC0415
+        from clausal.logic.variables import Var, unify  # noqa: PLC0415
+        b = Var()
+        mark = trail.mark()
+        if post_connective("#<==>", (b, (rel, x, y)), trail):
+            # zo_t/2's clauses, in order: false before true.
+            for bv, tv in ((0, False), (1, True)):
+                m = trail.mark()
+                if unify(b, bv, trail) and unify(truth, tv, trail):
+                    yield None
+                trail.undo(m)
+        trail.undo(mark)
+    run.__name__ = f"_clpz_t_{rel}"
+    run.__doc__ = (f"{rel}(X, Y, T) -- clpz's reified {rel}: T is true when "
+                   f"X {rel} Y holds, false when it does not.")
+    return _builtin(rel, 3, fields=("x", "y", "truth"))(run)
+
+
+_clpz_t("#=")
+_clpz_t("#<")
 
 
 # ── clpz's reflection predicates and global constraints ─────────────────────

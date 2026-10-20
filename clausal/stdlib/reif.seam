@@ -15,15 +15,16 @@
 # 2026-10-01 ruling (a closure condition is called with T appended); the
 # bodies below predate it and spell the reified call and the check out,
 # then branch on the (now ground) truth value -- the same thing.  (=)/3 and
-# dif/3 are engine builtins; if_/3, (',')/3 and (;)/3 in a .pl if_
-# condition are lowered by the native .pl front end
-# (clausal/tools/iso_l3.py).
+# dif/3 are engine builtins; a WRITTEN if_/3 goal, and (',')/3 and (;)/3
+# in its condition, are lowered by the native front end
+# (clausal/tools/iso_l3.py); if_/3 at the end of this file is the same
+# meaning as a predicate, for a meta-called if_.
 #
 # tfilter/3 and tpartition/4 are ALSO engine builtins, committed to each
 # call's first truth value.  A .pl file that imports library(reif) takes
 # these (Scryer's, every answer) instead.
 
--private([boolean])
+-private([boolean, conj, disj, qual, leaf])
 
 # The closures belong to the CALLER (Scryer's meta_predicate declarations):
 # a closure is resolved in the module that passed it, not here.
@@ -32,6 +33,7 @@
 -meta_predicate(tmember(2, '?'))
 -meta_predicate(tmember_t(2, '?', '?'))
 -meta_predicate(cond_t(1, 0, '?'))
+-meta_predicate(if_(1, 0, 0))
 
 memberd_t(_x, _es, _t) <- l_memberd_t(_es, _x, _t)
 
@@ -77,4 +79,70 @@ tmember_t(P, [X, *XS], T) <- (
 cond_t(C, G, T) <- (
     call(C, T0), must_be(boolean, T0),
     if_(T0 is True, (call(G), T is True), T is False)
+)
+
+# if_/3 as a PREDICATE, for the goals the compiler never sees: call(if_(...)),
+# G = if_(...), G, call(if_, C, T, E), a lambda whose body is an if_.  A
+# written if_ goal is still compiled in place (clausal/tools/iso_l3.py,
+# ``_if``); this is the same meaning, Scryer's reif.pl:
+#
+#   if_(If_1, Then_0, Else_0) :-
+#       call(If_1, T),
+#       ( T == true -> call(Then_0) ; T == false -> call(Else_0)
+#       ; nonvar(T) -> throw(error(type_error(boolean, T), _))
+#       ; throw(error(instantiation_error, _)) ).
+#   ','(A_1, B_1, T) :- if_(A_1, call(B_1, T), T = false).
+#   ;(A_1, B_1, T) :- if_(A_1, T = true, call(B_1, T)).
+#
+# The engine cannot export (',')/3 and (;)/3 (a name that is no identifier
+# is not importable), so reif_truth/2 unfolds a conjunction and a
+# disjunction itself, as those two clauses do; a module-qualified condition
+# (the meta_predicate declaration qualifies it with the caller's module)
+# carries the module down to each conjunct.  Undetermined truth values give
+# every answer in the condition's own order, as in Scryer.
+
+'if_'(IF, THEN, ELSE) <- (
+    reif_truth(IF, T), must_be(boolean, T),
+    if_(T is True, call(THEN), call(ELSE))
+)
+
+reif_truth(C, T) <- (reif_shape(C, S), reif_truth(S, C, T))
+
+reif_truth(conj, C, T) <- (arg(1, C, A), arg(2, C, B), reif_and(A, B, T))
+reif_truth(disj, C, T) <- (arg(1, C, A), arg(2, C, B), reif_or(A, B, T))
+reif_truth(qual, C, T) <- (arg(1, C, M), arg(2, C, G), reif_qualified(M, G, T))
+reif_truth(leaf, C, T) <- call(C, T)
+
+reif_qualified(M, G, T) <- (reif_shape(G, S), reif_qualified(S, M, G, T))
+
+reif_qualified(conj, M, G, T) <- (
+    arg(1, G, A), arg(2, G, B), reif_and(':'(M, A), ':'(M, B), T)
+)
+reif_qualified(disj, M, G, T) <- (
+    arg(1, G, A), arg(2, G, B), reif_or(':'(M, A), ':'(M, B), T)
+)
+reif_qualified(qual, _, G, T) <- reif_truth(G, T)
+reif_qualified(leaf, M, G, T) <- call(':'(M, G), T)
+
+reif_and(A, B, T) <- (
+    reif_truth(A, T0), must_be(boolean, T0),
+    if_(T0 is True, reif_truth(B, T), T is False)
+)
+
+reif_or(A, B, T) <- (
+    reif_truth(A, T0), must_be(boolean, T0),
+    if_(T0 is True, T is True, reif_truth(B, T))
+)
+
+# The shape of a condition, decided without binding it: an unbound one is a
+# leaf (call/2 then raises instantiation_error, as Scryer's if_ does).
+reif_shape(C, leaf) <- var(C)
+reif_shape(C, S) <- (nonvar(C), functor(C, N, A), reif_functor_shape(N, A, S))
+
+reif_functor_shape(N, A, S) <- (
+    if_(A is 2,
+        if_(N is ',', S is conj,
+            if_(N is ';', S is disj,
+                if_(N is ':', S is qual, S is leaf))),
+        S is leaf)
 )

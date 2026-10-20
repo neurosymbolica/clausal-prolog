@@ -346,6 +346,26 @@ surface described in [docs/public-api.md](docs/public-api.md).
   fails, unbound values are stored as they are, and an open list still
   fails.
 
+- **library(reif)'s `if_/3` is a predicate, and clpz's `#=/3` and `#</3`
+  are reified conditions** (2026-10-20). `if_/3` worked only as a goal
+  written in a clause body, which the native front end compiles in place;
+  every goal the compiler never sees raised
+  `existence_error(procedure, if_/3)`: `call(if_(...))`,
+  `G = if_(...), G`, `call(if_, C, T, E)` and a lambda calling it.
+  `use_module(library(reif))` (or an import list naming `if_/3`) now also
+  imports a runtime `if_/3` with Scryer's meaning: the condition is called
+  for its truth value, `(A, B)` and `(A ; B)` are reif's `(',')/3` and
+  `(;)/3`, an unbound truth value is `instantiation_error` and a
+  non-boolean one `type_error(boolean, T)`. A written `if_` still compiles
+  as before, and without the import `if_/3` is still undefined.
+  `if_(X #= 3, ...)` raised `existence_error(procedure, (#=)/3)`; `#=/3`
+  and `#</3`, the reified comparisons Scryer's clpz exports, are now
+  builtins (`T = false` before `T = true`, as Scryer orders them).
+  Unchanged, as in Scryer: `X >= 3` or `X #> 3` as a condition raises
+  `existence_error(procedure, (>=)/3)` (`(#>)/3`), and `if_` as a grammar
+  body calls the undefined `if_/5`. On `.clausal` and `.pl` (native front
+  end); pinned in `tests/iso_l3/test_l3_if_runtime_reif.py`.
+
 - **`name()` is a syntax error, as in ISO** (2026-10-20). The ISO reader
   read `f()` as a compound with no arguments. In a `.clausal` or `.pl`
   clause body `nl()` then ran as `nl`, and a `-g` goal such as `nl()`

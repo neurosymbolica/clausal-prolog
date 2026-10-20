@@ -258,9 +258,9 @@ with no value — a zero divisor, or `2 ^ -1` — it has no solutions and
 `(X #= 1 // Y, Y = 0)` and `X #\= 1 // 0` all fail; in a search
 (`X #= 10 // Y, Y in 0..2, label([Y])`) the branch Y = 0 fails and
 the search goes on to Y = 1 and Y = 2; reified, `B #<==> (X #= 1 // 0)`
-gives `B = 0`. (The seam also reifies it as the test of `if_/3`,
-`if_(X == 1 // 0, ...)`; in Clausal Prolog `library(reif)`'s `if_/3` does
-not take a clpz comparison as its test.)
+gives `B = 0`. (So does the test of `if_/3`: the seam's
+`if_(X == 1 // 0, ...)`, and in Clausal Prolog clpz's reified
+`if_(X #= 1 // 0, ...)`, take the else branch.)
 
 In a CLP(ℤ) constraint (`#=`, `#\=`, `#<`, ...), a term that is not
 arithmetic raises Scryer's `domain_error(clpz_expression, T)`:

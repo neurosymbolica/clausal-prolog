@@ -35,7 +35,10 @@ condition is one of:
   `memberd_t(E, Es)`, `call(C, X)`, or a variable bound to a closure at run
   time.  It runs as reif's own body, `p_t(X, T), if_(T = true, Then, Else)`
   (checking that `T` is a boolean), so every way the closure answers is a
-  solution:
+  solution. clpz's reified comparisons are such closures: with
+  `library(clpz)` loaded, `if_(X #= 3, ...)` and `if_(X #< 3, ...)` run
+  `#=/3` and `#</3` (Scryer's clpz exports these two; `X #> 3`, like
+  `X >= 3`, names no procedure and raises `existence_error`):
 
 ```clausal
 :- use_module(library(reif)).
@@ -81,6 +84,28 @@ grammar-body `if_//3`: `g(V) --> if_({V = 1}, [y], [z]).` calls an undefined
 `if_/5`; put the `if_/3` inside `{...}` instead.
 
 All three arguments are required.
+
+`if_/3` is also a predicate. A written `if_` goal is compiled in place, and
+the import defines `if_/3` with the same meaning for the goals the compiler
+never sees: `call(if_(C, T, E))`, `G = if_(C, T, E), G`,
+`call(if_, C, T, E)`, or a lambda whose body is an `if_`. Its arms run in
+the caller's module, like the compiled form's.
+
+```clausal
+:- use_module(library(reif)).
+:- use_module(library(lambda)).
+
+flags(Xs, Ks) :-
+    maplist(\X^K^if_(X = a, K = yes, K = no), Xs, Ks).
+
+test("if_ in a lambda") :-
+    flags([a, b], [yes, no]).
+
+test("a called if_") :-
+    G = if_(b = a, R = yes, R = no),
+    call(G),
+    R == no.
+```
 
 ### In a `.pl` file: library(reif)'s `if_/3`
 

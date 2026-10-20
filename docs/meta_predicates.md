@@ -399,10 +399,10 @@ test("group_by") :-
 ```
 
 (The seam writes the key as a lambda over `if_/3`,
-`((X, K) <- if_(X > 0, K is 'pos', K is 'neg'))`. In Clausal Prolog
-`library(reif)`'s `if_/3` is not callable through `call/N`, so not from
-inside a lambda, and `>` is not a reified condition; a named key
-predicate does the job.)
+`((X, K) <- if_(X > 0, K is 'pos', K is 'neg'))`. In Clausal Prolog a
+lambda can call `library(reif)`'s `if_/3` too, but `>` is not a reified
+condition; with `library(clpz)` loaded, `\X^K^if_(0 #< X, K = pos, K = neg)`
+is the same key.)
 
 ### sort_by/3
 

@@ -100,10 +100,17 @@ _LIBRARY_MODULES: dict[str, "str | None"] = {
 _LIBRARY_EXPORTS: dict[str, tuple[str, ...]] = {
     # Scryer's reif.pl exports if_/3, (=)/3, (',')/3, (;)/3, cond_t/3,
     # dif/3, memberd_t/3, tfilter/3, tmember/2, tmember_t/3, tpartition/4:
-    # if_ and the (,)/(;) conditions are lowered here (iso_l3), =/3 and dif/3
-    # are engine builtins, tfilter/tpartition are overrides (below).
-    "reif": ("memberd_t", "tmember", "tmember_t", "cond_t"),
+    # A written if_ and the (,)/(;) conditions are lowered here (iso_l3);
+    # if_/3 is ALSO imported, as the predicate a meta-call reaches
+    # (call(if_(...)), G = if_(...), G).  =/3 and dif/3 are engine
+    # builtins, tfilter/tpartition are overrides (below).
+    "reif": ("memberd_t", "tmember", "tmember_t", "cond_t", "if_"),
 }
+
+#: Compiler goals a library ALSO defines as a predicate, for the goals the
+#: compiler never sees (a meta-call): an import names them like any other
+#: library predicate.
+_LIBRARY_RUNTIME_TWINS: dict[str, frozenset] = {"reif": frozenset({"if_"})}
 
 #: Names a library's import list may give that the COMPILER lowers itself
 #: (they are no registered builtin, so ``_engine_has_goal`` does not see
@@ -1295,6 +1302,9 @@ def _use_library(ctx, lib, entries, span, what, listed_ops=()):
         for n, arity in entries:
             if n in over_names:
                 overridden.append((n, arity))
+                continue
+            if n in _LIBRARY_RUNTIME_TWINS.get(name, ()):
+                wanted.append((n, arity))
                 continue
             if _engine_goal(n):
                 continue
