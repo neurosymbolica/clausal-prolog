@@ -349,6 +349,23 @@ surface described in [docs/public-api.md](docs/public-api.md).
   strict bound (`{X > 2}, entailed(X > 2)`), see
   todo/clpq-strict-bounds-closed-by-inequalities-2026-10-11.md.
 
+- **A regex named group binds the clause variable it names, in Clausal
+  Prolog too** (2026-10-20). With `:- use_module(library(re), [match/2])`,
+  `parse_date(D, YEAR, MONTH) :- match("(?P<YEAR>\\d{4})-(?P<MONTH>\\d{2})", D).`
+  made `parse_date("2024-03", Y, M)` succeed with `Y` and `M` unbound: goal
+  expansion looked a group's variable up by the head's field names, and a
+  `.clausal` head's fields are positional (`arg_0`, ...). Both front ends
+  now record each rule's variables by source name (`Predicate.var_names`),
+  and a group of a `match/2` or `search/2` pattern, literal or dynamic,
+  binds the variable spelled exactly like it. In both surfaces this also
+  binds a variable that occurs only in the body (audit A10-F005), where the
+  binding was lost before. One seam change: the name must match exactly, so
+  a group `YEAR` no longer binds a head variable `Year` or `_year`, which the
+  old lowercased field-name lookup treated as the same. The `.clausal`
+  singleton lint no longer reports a variable that a literal pattern's group
+  names. Pinned by `tests/fixtures/regex_named_groups.clausal` and
+  `tests/iso_l3/test_l3_regex_named_groups.py`.
+
 - **A sandboxed module may import the datetime adapter's `date`
   constructor** (2026-10-17). `-import_from(date_time, [date])` was refused
   at load under `CLAUSAL_SANDBOX=1` with `non_export`, at the import and at
