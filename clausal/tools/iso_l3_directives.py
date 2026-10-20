@@ -1598,10 +1598,19 @@ class Embedded:
     """A data-term slot whose lowering is a ready-made Python AST (a table
     row's quantity cell).  ``iso_l3``'s term lowering emits ``.expr``."""
 
-    __slots__ = ("expr",)
+    __slots__ = ("expr", "term")
 
-    def __init__(self, expr: ast.expr):
+    def __init__(self, expr: ast.expr, term=None):
         self.expr = expr
+        # The term the slot stands for, when there is one (a run-time value
+        # spliced into a clause a term_expansion/4 rule built): what a
+        # refusal names, never this object's repr.
+        self.term = term
+
+    def __repr__(self) -> str:
+        if self.term is not None:
+            return repr(self.term)
+        return ast.unparse(self.expr)
 
 
 def _table_rows(rows, span, what) -> list:

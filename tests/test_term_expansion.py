@@ -1513,3 +1513,110 @@ class TestWrittenAndBuiltClausesAgree:
             R = Var()
             assert [deref(R) for _ in call("r", 2, R, module=lm)] == ["n"]
         assert list((tmp_path / "__pycache__").iterdir())
+
+
+class _Deadline:
+    """Fail, rather than hang, when the block runs past *seconds*: a
+    partial-list head whose tail is not a clause variable loops forever."""
+
+    def __init__(self, seconds):
+        self.seconds = seconds
+
+    def _expired(self, signum, frame):
+        raise TimeoutError(f"no answer within {self.seconds}s (a loop)")
+
+    def __enter__(self):
+        import signal
+        if not hasattr(signal, "SIGALRM"):
+            pytest.skip("needs SIGALRM")
+        self._old = signal.signal(signal.SIGALRM, self._expired)
+        signal.setitimer(signal.ITIMER_REAL, self.seconds)
+        return self
+
+    def __exit__(self, *exc):
+        import signal
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, self._old)
+        return False
+
+
+class TestBuiltPartialListHeads:
+    """A built rule's ``[H|T]`` (a SegList at run time) is a list pattern
+    whose tail is a clause variable, fresh at every call -- as written.
+    Spliced in as the run-time SegList, the rule's own ``T`` was shared by
+    every call and ``len([a, b, c], N)`` never answered."""
+
+    def _answers(self, mod, pred, *args):
+        lm = mod.__dict__["$module"]
+        free = [a for a in args if isinstance(a, Var)]
+        with _Deadline(10):
+            return [tuple(_normal(v) for v in free)
+                    for _ in call(pred, *args, module=lm)]
+
+    def _both(self, tmp_path, name, suffix, written, built, *queries):
+        path = tmp_path / f"{name}{suffix}"
+        path.write_text(written + built)
+        mod = _load_module(name, str(path))
+        for pred, args in queries:
+            w = self._answers(mod, "w_" + pred, *args())
+            b = self._answers(mod, "b_" + pred, *args())
+            assert w == b and w, (pred, w, b)
+
+    _QUERIES = (("len", lambda: (["a", "b", "c"], Var())),
+                ("app", lambda: ([1, 2], [3], Var())),
+                ("app", lambda: (Var(), Var(), [1, 2])))
+
+    def test_clausal(self, tmp_path):
+        self._both(tmp_path, "te_partial_heads", ".clausal", (
+            "w_len([], 0).\n"
+            "w_len([_|T], N) :- w_len(T, M), N is M + 1.\n"
+            "w_app([], L, L).\n"
+            "w_app([H|T], L, [H|R]) :- w_app(T, L, R).\n"), (
+            "term_expansion(gen, [b_len([], 0),\n"
+            "                     (b_len([_|T], N) :- b_len(T, M), N is M + 1),\n"
+            "                     b_app([], L, L),\n"
+            "                     (b_app([H|T2], L2, [H|R]) :- b_app(T2, L2, R))],\n"
+            "               S, S).\n"
+            "gen.\n"), *self._QUERIES)
+
+    def test_seam(self, tmp_path):
+        self._both(tmp_path, "te_partial_heads_seam", SEAM, (
+            "-private([gen, w_len(_a, _b), b_len(_a, _b),\n"
+            "          w_app(_a, _b, _c), b_app(_a, _b, _c)])\n"
+            "w_len([], 0),\n"
+            "w_len([_, *T], N) <- (w_len(T, M), N == M + 1)\n"
+            "w_app([], L, L),\n"
+            "w_app([H, *T], L, [H, *R]) <- w_app(T, L, R)\n"), (
+            "term_expansion(gen, [b_len([], 0),\n"
+            "                     (b_len([_, *T], N) <- (b_len(T, M), N == M + 1)),\n"
+            "                     b_app([], L, L),\n"
+            "                     (b_app([H, *T2], L2, [H, *R]) <- b_app(T2, L2, R))],\n"
+            "               S, S) <- True\n"
+            "gen,\n"), *self._QUERIES)
+
+    def test_clausal_a_list_goal_loads_as_written(self, tmp_path):
+        """``[a|T]`` as a GOAL: written, the call of '.'/2; built, the same
+        -- not a refusal naming an internal object."""
+        path = tmp_path / "te_list_goal.clausal"
+        path.write_text("w(T) :- [a|T].\n"
+                        "term_expansion(mk, (b(T) :- [a|T]), S, S).\nmk.\n")
+        mod = _load_module("te_list_goal", str(path))
+        rows = {}
+        for which in ("w", "b"):
+            try:
+                rows[which] = self._answers(mod, which, Var())
+            except LogicException as e:
+                rows[which] = _normal(e.term)
+        assert rows["w"] == rows["b"], rows
+
+    def test_a_refused_spliced_value_is_named_by_its_term(self):
+        """A run-time value the reader has no spelling for, in a goal
+        position, is refused by its term -- never ``<... Embedded object at
+        0x...>``."""
+        from fractions import Fraction
+        from clausal.logic.term_expansion import _AnswerLowering
+        lowering = _AnswerLowering(None, {"__file__": "x.clausal"})
+        with pytest.raises(SyntaxError) as exc:
+            lowering.clause("b", Fraction(1, 2), "term_expansion/4")
+        assert "Fraction(1, 2) is not callable" in str(exc.value)
+        assert "Embedded" not in str(exc.value)

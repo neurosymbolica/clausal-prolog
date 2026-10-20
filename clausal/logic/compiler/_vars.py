@@ -14,8 +14,12 @@ from typing import Any
 
 from clausal.logic.variables import Var, is_var, deref
 from clausal.terms import (
+    ConcreteSeg,
     DictTerm,
+    SegList,
+    SegString,
     SetTerm,
+    VarSeg,
     And,
     Unify,
     Evaluate,
@@ -78,6 +82,21 @@ def _collect_vars(term: Any, seen: set[int] | None = None,
 
     if isinstance(term, StarUnpack):
         return pre + _collect_vars(term.value, seen, include_bound)
+
+    if isinstance(term, (SegList, SegString)):
+        # A partial list / string held by a term (``[H|T]`` a clause got
+        # from a term_expansion/4 answer, or an assert): its holes are clause
+        # variables like any other.  Without this branch ``T`` was never
+        # registered, so the compiled head and body did not share it --
+        # a built ``len([_|T], N) :- len(T, M), ...`` looped forever.
+        result = pre
+        for seg in term.segments:
+            if isinstance(seg, VarSeg):
+                result.extend(_collect_vars(seg.var, seen, include_bound))
+            elif isinstance(seg, ConcreteSeg):
+                for e in seg.elements:
+                    result.extend(_collect_vars(e, seen, include_bound))
+        return result
 
     if isinstance(term, list):
         result: list[Var] = pre

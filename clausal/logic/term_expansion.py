@@ -945,7 +945,7 @@ class _AnswerLowering:
         values: list = []
         seen: dict = {}
         ctx = self._module_dict.get(LOWERING_CONTEXT_KEY)
-        reader = _ReaderTerm(values, seen,
+        reader = _AsReaderTerm(values, seen,
                              chars=getattr(ctx, "dq_mode", "chars") == "chars")
         if body is True or (type(body) is str and body == "true"):
             term = reader(head)
@@ -954,7 +954,7 @@ class _AnswerLowering:
         try:
             stmts = iso_l3.lower_clause(
                 term, positions=iso_l3._Positions(None),
-                ctx=ctx, var_table=_BUILT_VALUES_KEY)
+                ctx=ctx, values_global=_BUILT_VALUES_KEY)
         except iso_l3.LoweringRefused as e:
             raise SyntaxError(
                 f"{where}: the clause it built is refused, as the same "
@@ -1000,9 +1000,14 @@ class _AnswerLowering:
                 "callable", head,
                 f"{where}: the head of a clause it built must be an atom or "
                 f"a compound, got {head!r}"))
+        # A partial list (``[_, *T]``, a SegList at run time) as the
+        # compiler's source form, its holes clause variables, as assertz/1
+        # spells it -- the reader route's ``_partial_list``.
+        from clausal.logic.builtins.database_ops import _seglists_as_source  # noqa: PLC0415
+        head = _seglists_as_source(head)
         if body is True:
             return PredicateItem(head=head, body=True)
-        return PredicateItem(head=head, body=_seam_goal(body))
+        return PredicateItem(head=head, body=_seam_goal(_seglists_as_source(body)))
 
 
 def _seam_goal(raw):
@@ -1055,7 +1060,7 @@ def _seam_iterated(raw):
     return _seam_goal(t)
 
 
-class _ReaderTerm:
+class _AsReaderTerm:
     """A run-time term as the ISO reader's term (``prolog_reader``): each
     distinct unbound Var a ``VarRef`` indexing *values*, which holds the Var
     itself; a list, a number, an atom and a compound as the reader gives
@@ -1084,14 +1089,15 @@ class _ReaderTerm:
         from clausal.tools.iso_l3_directives import Embedded  # noqa: PLC0415
         return Embedded(ast.Subscript(
             value=ast.Name(id=_BUILT_VALUES_KEY, ctx=ast.Load()),
-            slice=ast.Constant(value=self._slot(value)), ctx=ast.Load()))
+            slice=ast.Constant(value=self._slot(value)), ctx=ast.Load()),
+            term=value)
 
     def __call__(self, raw):
         from clausal.tools.prolog_reader import VarRef  # noqa: PLC0415
         from clausal.logic.variables import is_var  # noqa: PLC0415
         from clausal.logic.cells import (  # noqa: PLC0415
-            chars_text, compound_cell_shape, is_chars)
-        from clausal.terms import Undefined  # noqa: PLC0415
+            chars, chars_text, compound_cell_shape, is_chars)
+        from clausal.terms import SegList, SegString, Undefined  # noqa: PLC0415
         t = deref(raw)
         if is_var(t):
             index = self._seen.get(id(t))
@@ -1108,13 +1114,49 @@ class _ReaderTerm:
             return t
         if type(t) is list:
             return [self(e) for e in t]
+        if isinstance(t, SegList):            # SegListView too
+            return self._partial_list(t)
+        if isinstance(t, SegString):
+            walked = t._walk_raw()
+            if type(walked) is str:
+                return self(chars(walked))
+            return self._embedded(t)
         if self._chars and is_chars(t):
             return ("$chars", chars_text(t))
         is_cell, functor = compound_cell_shape(t)
-        if (is_cell and not (functor == "." and len(t) == 3)
-                and not (functor == "constant" and len(t) == 2)):
+        if is_cell and functor == "." and len(t) == 3:
+            # A cons cell: the reader's own, which the front end lowers to
+            # the list it is (``[H, *T]`` over a variable tail) or keeps as
+            # the improper list it is.
+            return (".", self(t[1]), self(t[2]))
+        if is_cell and not (functor == "constant" and len(t) == 2):
             return (functor, *(self(a) for a in t[1:]))
         return self._embedded(t)
+
+    def _partial_list(self, t):
+        """A partial list ``[E1, ..., En | T]`` (a ``SegList``) as the
+        reader's cons chain ending in ``T``'s VarRef, which the front end
+        lowers to ``[E1, ..., *T]`` with ``T`` a clause variable, fresh at
+        every call, as for the written list.  Spliced in verbatim, the
+        SegList kept the rule's own hole variable out of the clause's
+        variables, and a built ``len([_|T], N) :- len(T, M), ...`` looped
+        forever.  Holes before the end have no reader spelling (a seam
+        shape): the compiler's own source form ``[E, *A, F, *B]`` is
+        spliced, as assertz/1 does (``_seglists_as_source``)."""
+        from clausal.terms import ConcreteSeg, SegList, VarSeg  # noqa: PLC0415
+        walked = t._walk_raw()
+        if not isinstance(walked, SegList):
+            return self(walked)               # a list, or a cons chain, now
+        *front, last = walked.segments
+        if (isinstance(last, VarSeg)
+                and all(isinstance(seg, ConcreteSeg) for seg in front)):
+            elements = [e for seg in front for e in seg.elements]
+            out = self(last.var)
+            for e in reversed(elements):
+                out = (".", self(e), out)
+            return out
+        from clausal.logic.builtins.database_ops import _seglists_as_source  # noqa: PLC0415
+        return self._embedded(_seglists_as_source(walked))
 
 
 def _extract_init_final(module_state):
