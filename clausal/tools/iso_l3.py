@@ -64,6 +64,7 @@ from __future__ import annotations
 
 import ast
 import bisect
+import re
 from typing import Any
 
 from clausal.tools.prolog_reader import VarRef
@@ -268,6 +269,10 @@ class _ClauseLowering:
         # lowering adds, duplicates or swaps goals, so the compiled body is
         # not the term the text writes
         self.reordered = False
+        # The group names of the static library(re) match/2 / search/2
+        # patterns in this clause: each binds the variable it names
+        # (``goal_expansion``), so that variable is not a singleton.
+        self.regex_group_names: set[str] = set()
 
     # ── variables ──
 
@@ -554,7 +559,10 @@ class _ClauseLowering:
             lowered = self._goal_args(name, args, spans)
             head_pos = self._pos.of(_functor_span(sp, name, self._pos.source))
             remap = self._ctx.import_remap if self._ctx is not None else {}
-            return self._call(remap.get(name, name), lowered, head_pos, pos)
+            resolved = remap.get(name, name)
+            if len(args) == 2 and resolved in _REGEX_AUTOBIND_GOALS:
+                self.regex_group_names |= _regex_group_names(args[0])
+            return self._call(resolved, lowered, head_pos, pos)
         # ISO 7.6.2: a number (or anything else) is not callable.
         raise LoweringRefused(
             f"{g!r} is not callable (ISO type_error(callable, {g!r}))",
@@ -834,6 +842,27 @@ class _ClauseLowering:
             position=_pos_expr(pos))
 
 
+#: The library(re) goals whose static pattern's named groups bind the clause
+#: variables they name (``clausal/logic/goal_expansion.py``), as the import
+#: remap resolves them.
+_REGEX_AUTOBIND_GOALS = frozenset({"clausal.library.re.match",
+                                   "clausal.library.re.search"})
+
+
+def _regex_group_names(pattern: Any) -> set:
+    """The named groups of a pattern literal (``"..."`` under any
+    double_quotes mode but codes, or an atom); none for anything else or a
+    pattern that does not compile."""
+    if type(pattern) is tuple and len(pattern) == 2 and pattern[0] == "$chars":
+        pattern = pattern[1]
+    if type(pattern) is not str:
+        return set()
+    try:
+        return set(re.compile(pattern).groupindex)
+    except re.error:
+        return set()
+
+
 def _var_inside_body(g: Any) -> bool:
     """True when a variable sits in a goal position of *g* reached through
     ISO body conversion's constructs (``,``, ``;``, ``->``: 7.6.2) -- not
@@ -962,6 +991,22 @@ def _source_body_kw(lw: "_ClauseLowering", body: Any, body_sp) -> dict:
     return kw
 
 
+def _var_names_kw(lw: "_ClauseLowering") -> "ast.expr | None":
+    """The ``Predicate.var_names`` keyword: ``{"YEAR": $v_YEAR, ...}``, each
+    variable of the clause by its SOURCE name, for goal expansion (a regex
+    named group binds the variable it names, and a ``Var`` has no name).
+    Only variables this clause has already bound (walrus) are listed, so
+    the dict, evaluated after the head and body, never reads a name left
+    over from another clause.  Engine-made variables (a DCG state, ``$``
+    in the name) are left out.  ``None`` when the clause has none."""
+    names = sorted({lw._var_names[i] for i in lw._bound
+                    if "$" not in lw._var_names.get(i, "$")})
+    if not names:
+        return None
+    return ast.Dict(keys=[_const(n) for n in names],
+                    values=[_name(lw.py_name(n)) for n in names])
+
+
 def lower_clause(term: Any, spans=None, var_names=None,
                  positions: "_Positions | None" = None,
                  singletons: "list | None" = None, ctx=None) -> list[ast.stmt]:
@@ -1026,6 +1071,9 @@ def lower_clause(term: Any, spans=None, var_names=None,
     pred_kw = {}
     if body is not None:
         pred_kw = _source_body_kw(lw, body, body_sp)
+        names = _var_names_kw(lw)
+        if names is not None:
+            pred_kw["var_names"] = names
     define = ast.Expr(value=ast.Call(
         func=_name(_DOLLAR + "define_predicate"),
         args=[_node("Predicate", head=head_ast, body=body_ast,
@@ -1035,7 +1083,8 @@ def lower_clause(term: Any, spans=None, var_names=None,
         keywords=[]))
     if singletons is not None:
         for vname, count in lw.occurrences.items():
-            if count == 1 and not vname.startswith("_"):
+            if (count == 1 and not vname.startswith("_")
+                    and vname not in lw.regex_group_names):
                 singletons.append((vname, whole_span))
     return [decl, define]
 

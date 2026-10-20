@@ -244,10 +244,10 @@ def test_F004_guard_plain_import_does_not_disturb_source(tmp_path):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-@pytest.mark.xfail(strict=False, reason="A10-F005: find_var_for_group only "
-                   "resolves head FIELD names; a group naming a body-only var "
-                   "binds a fresh Var and the binding is silently lost")
 def test_F005_regex_body_only_group_binds(tmp_path):
+    """Was xfail: the group's variable was looked up among the head's FIELD
+    names only, so a body-only variable got a fresh Var.  Goal expansion now
+    reads the clause's variable names (``Predicate.var_names``)."""
     m = _load(tmp_path, """
         -double_quotes(atom)
         -import_from(regex, [match])
@@ -271,6 +271,38 @@ def test_F005_guard_regex_head_var_group_binds(tmp_path):
     """)
     y = Var()
     assert _values(("year_of", chars("2026-03"), y), y, module=m) == [chars("2026")]
+
+
+def test_F005_regex_group_names_match_variable_names_exactly(tmp_path):
+    """The group ``YEAR`` binds the variable ``YEAR``, not ``_year``, which
+    the old field-name lookup (lowered, underscore-stripped) conflated."""
+    m = _load(tmp_path, """
+        -double_quotes(atom)
+        -import_from(regex, [match])
+        year_of(S, _year, YEAR) <- (
+            match(r"(?P<YEAR>\\d{4})-\\d{2}", S)
+        )
+    """)
+    other, y = Var(), Var()
+    assert _values(("year_of", chars("2026-03"), other, y), y, module=m) \
+        == [chars("2026")]
+    from clausal.logic.variables import deref, is_var
+    assert is_var(deref(other))
+
+
+def test_F005_regex_operand_field_name_is_not_a_variable(tmp_path):
+    """A group named after an operator node's field (LEFT) binds nothing:
+    the clause has no variable LEFT."""
+    m = _load(tmp_path, """
+        -double_quotes(atom)
+        -import_from(regex, [match])
+        grab(S, X, R) <- (
+            match(r"(?P<LEFT>\\d+)x", S),
+            R == X + 1
+        )
+    """)
+    r = Var()
+    assert _values(("grab", chars("42x"), 1, r), r, module=m) == [2]
 
 
 def test_F005_guard_regex_pattern_precompiled(tmp_path):

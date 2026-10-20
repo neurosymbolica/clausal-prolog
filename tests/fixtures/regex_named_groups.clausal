@@ -1,0 +1,64 @@
+% Regex named groups bind the clause variable of the same name, in Clausal
+% Prolog as in the seam: a static match/2 or search/2 pattern whose group
+% names are spelled like variables (YEAR, Year, _port) binds each group to
+% the variable with exactly that name, wherever in the clause it occurs.
+% Python-level checks (front end, singleton lint) are in
+% tests/iso_l3/test_l3_regex_named_groups.py.
+:- set_prolog_flag(double_quotes, chars).
+:- use_module(library(re), [match/2, search/2]).
+
+% Groups named after HEAD variables.
+parse_date(D, YEAR, MONTH) :- match("(?P<YEAR>\\d{4})-(?P<MONTH>\\d{2})", D).
+
+% A group named after a variable that occurs only in the BODY.
+body_year(D, Y) :- match("(?P<YEAR>\\d{4})", D), Y = YEAR.
+
+% A group that names no variable of the clause binds nothing.
+has_year(D) :- match("(?P<YEAR>\\d{4})", D).
+has_year_keeps(D, _OTHER) :- match("(?P<YEAR>\\d{4})", D).
+
+% search/2, and a leading-underscore group name.
+extract_port(URL, _port) :- search(":(?P<_port>\\d+)", URL).
+
+% The variable's name is matched exactly: a group YEAR is not the variable
+% _Year.
+case_exact(D, _Year, YEAR) :- match("(?P<YEAR>\\d{4})", D).
+
+% A group inside a disjunction branch.
+either_number(S, N) :- ( match("(?P<N>\\d+)", S) ; N = none ).
+
+test("head variables bind") :-
+    parse_date("2024-03", Y, M),
+    Y == "2024",
+    M == "03".
+
+test("a bound head variable must agree") :-
+    parse_date("2024-03", "2024", M),
+    M == "03".
+
+test("a disagreeing bound head variable fails", fail) :-
+    parse_date("2024-03", "1999", _).
+
+test("body variable binds") :-
+    body_year("2024", Y),
+    Y == "2024".
+
+test("a group with no matching variable still matches") :-
+    has_year("2024 AD").
+
+test("a group with no matching variable binds nothing") :-
+    has_year_keeps("2024", X),
+    var(X).
+
+test("search binds a leading-underscore group") :-
+    extract_port("http://localhost:8080/api", PORT),
+    PORT == "8080".
+
+test("group names match variable names exactly") :-
+    case_exact("2024", Year, YEAR),
+    var(Year),
+    YEAR == "2024".
+
+test("a group in a disjunction branch binds") :-
+    either_number("42", N),
+    N == "42".

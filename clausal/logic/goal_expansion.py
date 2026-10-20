@@ -49,14 +49,19 @@ from clausal.logic.cells import compound_cell_shape as _cell_shape_of
 class _ExpansionContext:
     """Carries state across goal expansion for a module."""
 
-    __slots__ = ("module_dict", "_counter", "_pattern_cache", "_clause_vars")
+    __slots__ = ("module_dict", "_counter", "_pattern_cache", "_clause_vars",
+                 "_named_vars")
 
     def __init__(self, module_dict: dict) -> None:
         self.module_dict = module_dict
         self._counter = 0
         self._pattern_cache: dict[str, str] = {}
-        # field_name → Var mapping for current clause (set per-predicate).
+        # field_name → Var mapping for current clause (set per-predicate):
+        # the fallback for a clause without a name table.
         self._clause_vars: dict[str, Any] = {}
+        # source name → Var for the current clause (``Predicate.var_names``,
+        # from the front end), or None when the clause has no table.
+        self._named_vars: dict[str, Any] | None = None
 
     def next_id(self) -> int:
         n = self._counter
@@ -80,11 +85,28 @@ class _ExpansionContext:
     def find_var_for_group(self, group_name: str) -> Any | None:
         """Find the clause Var matching a regex group name.
 
-        Group names follow logic-var convention (ALLCAPS or _leading).
-        Field names are derived by lowering + stripping leading underscore.
+        Group names follow logic-var convention (ALLCAPS or _leading).  With
+        the clause's name table (``Predicate.var_names``) the group binds the
+        variable spelled EXACTLY like it, wherever in the clause it occurs:
+        ``YEAR`` is not ``Year`` or ``_year``, which are other variables.
+        Without one (a Python-built or term-expanded clause), the fallback
+        is the head's field names, derived by lowering + stripping a leading
+        underscore.
         """
+        if self._named_vars is not None:
+            return self._named_vars.get(group_name)
         field_name = group_name.lstrip("_").lower()
         return self._clause_vars.get(field_name)
+
+    def autobind_candidates(self) -> list[tuple[Any, Any]]:
+        """``(names_it, Var)`` for each clause variable a DYNAMIC pattern's
+        group may bind: ``names_it(group_name)`` is true when the group names
+        that variable, by the same rule as :meth:`find_var_for_group`."""
+        if self._named_vars is not None:
+            return [(name.__eq__, var)
+                    for name, var in self._named_vars.items()]
+        return [((lambda g, _f=field: g.lstrip("_").lower() == _f), var)
+                for field, var in self._clause_vars.items()]
 
 
 def run_goal_expansion(
@@ -184,10 +206,15 @@ def _expand_predicate(pred: Predicate, ctx: _ExpansionContext) -> Predicate:
     if pred.body is None or pred.body is True:
         return pred
 
-    # Collect field_name → Var mapping from the head for auto-binding.
+    # The clause's variables by source name, from the front end: what a
+    # regex named group binds.  A clause without the table (Python-built,
+    # term-expanded) falls back to the head's field_name → Var mapping.
+    named = getattr(pred, "var_names", None)
+    ctx._named_vars = dict(named) if named is not None else None
     clause_vars: dict[str, Any] = {}
-    _collect_vars_from_term(pred.head, clause_vars, ctx.module_dict)
-    _collect_vars_from_term(pred.body, clause_vars, ctx.module_dict)
+    if named is None:
+        _collect_vars_from_term(pred.head, clause_vars, ctx.module_dict)
+        _collect_vars_from_term(pred.body, clause_vars, ctx.module_dict)
     ctx._clause_vars = clause_vars
 
     new_body = _expand_goal(pred.body, ctx)
@@ -424,8 +451,9 @@ def _dynamic_autobind_chain(goal: Call, ctx: _ExpansionContext) -> Any:
 
     The pattern is not a literal, so its group names are unknown until the goal
     runs. Rewrite ``match(P, S)`` to ``match(P, S, G)`` and append one Unify per
-    clause variable: a thunk scans the runtime groups dict for a key whose
-    lowered/underscore-stripped name equals the variable's field name. When a
+    clause variable: a thunk scans the runtime groups dict for a key that
+    names the variable (its exact source name, or for a clause without a name
+    table its lowered/underscore-stripped field name). When a
     matching, non-None group value is present it binds; otherwise the thunk
     returns the variable itself so the Unify is a harmless no-op. The goal's own
     top-level argument variables (pattern, subject) are excluded so a group can
@@ -453,7 +481,7 @@ def _dynamic_autobind_chain(goal: Call, ctx: _ExpansionContext) -> Any:
 
     arg_vars = {id(deref(a)) for a in goal.args if is_var(deref(a))}
 
-    def _bind_if_present(g, _field):
+    def _bind_if_present(g, names_it):
         if isinstance(g, dict):
             for key, val in g.items():
                 # Same naming gate as static expansion: a group name that
@@ -470,7 +498,7 @@ def _dynamic_autobind_chain(goal: Call, ctx: _ExpansionContext) -> Any:
                 # EVERY clause variable is a candidate, and binding None to a
                 # variable that merely shares a group's name would clobber it.
                 if isinstance(key, str) and _is_logic_var_name(key) \
-                        and key.lstrip("_").lower() == _field \
+                        and names_it(key) \
                         and val is not None:
                     return val
         # No group of that name: a FRESH variable, so the Unify succeeds and
@@ -478,11 +506,11 @@ def _dynamic_autobind_chain(goal: Call, ctx: _ExpansionContext) -> Any:
         return Var()
 
     chain = match_goal
-    for field_name, target_var in ctx._clause_vars.items():
+    for names_it, target_var in ctx.autobind_candidates():
         if id(deref(target_var)) in arg_vars:
             continue
         thunk = PyThunk(
-            lambda g, _f=field_name: _bind_if_present(g, _f),
+            lambda g, _n=names_it: _bind_if_present(g, _n),
             (groups_var,),
         )
         chain = And(left=chain, right=Unify(left=target_var, right=thunk))

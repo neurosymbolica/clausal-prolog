@@ -4742,6 +4742,37 @@ def _dollar_plumbing_builtins(block):
     return block
 
 
+def _clause_var_names_ast(source, *clause_asts):
+    """The ``Predicate.var_names`` value for a rule: ``{"YEAR": YEAR, ...}``,
+    each logic variable of the clause by its source name (goal expansion
+    binds a regex named group to the variable it names, and a ``Var`` has no
+    name), or ``None`` when there is none.
+
+    The names are the clause-scope walrus targets of the clause's own
+    transformed head and body -- ``(YEAR := $Var())`` outside any lambda or
+    comprehension -- so the dict, evaluated after them, never reads a name a
+    nested scope bound or another clause left behind.
+    """
+    names = set()
+    stack = list(clause_asts)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (Lambda, ListComp, SetComp, DictComp,
+                             GeneratorExp)):
+            continue
+        if (isinstance(node, NamedExpr) and isinstance(node.target, Name)
+                and _is_logic_var_name(node.target.id)):
+            names.add(node.target.id)
+        stack.extend(_ast_module.iter_child_nodes(node))
+    if not names:
+        return None
+    ordered = sorted(names)
+    return replace(Dict(
+        keys=[replace(Constant(value=n), source) for n in ordered],
+        values=[replace(Name(id=n, ctx=load), source) for n in ordered],
+    ), source)
+
+
 def _head_ctor_ast(head_ast):
     """A clause HEAD is constructed like any other term: ``<cls>(...)``.
 
@@ -9270,8 +9301,14 @@ class EmbedTransformer(NodeTransformer):
                     left,
                 )
 
+                predicate_fields = {"head": _head_ctor_ast(head_ast),
+                                    "body": body_ast}
+                var_names_ast = _clause_var_names_ast(
+                    expr_stmt.value, head_ast, body_ast)
+                if var_names_ast is not None:
+                    predicate_fields["var_names"] = var_names_ast
                 predicate_ast = node_ast(
-                    "Predicate", expr_stmt.value, head=_head_ctor_ast(head_ast), body=body_ast
+                    "Predicate", expr_stmt.value, **predicate_fields
                 )
                 define_stmt = replace(
                     Expr(
@@ -11508,9 +11545,12 @@ class EmbedTransformer(NodeTransformer):
             lhs,
         )
 
-        predicate_ast = node_ast(
-            "Predicate", src, head=_head_ctor_ast(head_ast), body=body_ast
-        )
+        predicate_fields = {"head": _head_ctor_ast(head_ast),
+                            "body": body_ast}
+        var_names_ast = _clause_var_names_ast(src, head_ast, body_ast)
+        if var_names_ast is not None:
+            predicate_fields["var_names"] = var_names_ast
+        predicate_ast = node_ast("Predicate", src, **predicate_fields)
         define_stmt = replace(
             Expr(
                 value=replace(

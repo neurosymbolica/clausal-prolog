@@ -1130,11 +1130,19 @@ class Predicate(Node):
     lowered ``body``.  ``None`` (the default): no source term (a seam or
     Python-built clause, a fact).  ``source_rewritten``: the lowering
     turned the body into goals the text does not show (reif's ``if_/3``),
-    so the compiled clause is not the term; such a clause fails closed."""
+    so the compiled clause is not the term; such a clause fails closed.
+
+    ``var_names`` is the clause's variables BY SOURCE NAME (``{"YEAR":
+    Var}``), from either front end, never read by the compiler: a ``Var``
+    carries no name, and a Clausal Prolog head's fields are positional
+    (``arg_0``..), so this is how goal expansion finds the variable a regex
+    named group ``(?P<YEAR>..)`` binds (``goal_expansion``).  ``None``: no
+    table (a fact, a Python-built or term-expanded clause)."""
     head: Node = None  # type: ignore[assignment]
     body: Node = None  # type: ignore[assignment]
     source_body: Any = opaque_field(default=None, compare=False, repr=False)
     source_rewritten: bool = field(default=False, compare=False, repr=False)
+    var_names: Any = opaque_field(default=None, compare=False, repr=False)
 
 
 # ── Module-level items (pipeline split) ──────────────────────────────────────
