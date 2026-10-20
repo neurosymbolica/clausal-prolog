@@ -51,18 +51,3 @@ safe_parse(S, R) <- (
     R is "parse error"
 )
 --8<-- [end:logicexception_ex2]
-
---8<-- [start:logicexception_ex3]
-logged_op(X, Y, R) <- catch_recover(
-    (R == X / Y),
-    ERR,
-    (write_text(ERR), R is "error")
-)
---8<-- [end:logicexception_ex3]
-
---8<-- [start:logicexception_ex5]
-safe_run(GOAL, R) <- (
-    catch(call_goal(GOAL), _),
-    R is "ok"
-)
---8<-- [end:logicexception_ex5]

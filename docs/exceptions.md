@@ -10,10 +10,7 @@ The implementation lives in `clausal/logic/exceptions.py`.
     (`.clausal`), ISO Prolog syntax, unless they say otherwise. Python
     exceptions, `++` catchers and the Python-hosting examples belong to the
     [seam](syntax.md), Clausal's Python-syntax surface: only the seam
-    escapes into Python, so those examples stay in seam syntax. So do the
-    `catch_error/2` and `catch_recover/3` examples: in a `.clausal` clause
-    body those two builtins do not load yet (see
-    [catch_error/2](#catch_error2)).
+    escapes into Python, so those examples stay in seam syntax.
 
 ---
 
@@ -31,22 +28,18 @@ Any term can be thrown — strings, atoms, or structured error terms.
 
 ### catch_error/2
 
-Catches any exception and binds the error term to a variable or pattern.
-This example is seam syntax:
+Catches any exception and binds the error term to a variable or pattern:
 
-```seam
--private([boom(N)])
-
-test("catch_error/2 binds the ball") <- (
+```clausal
+test("catch_error/2 binds the ball") :-
     catch_error(throw(boom(42)), ERROR),
-    ERROR is boom(42)
-)
+    ERROR == boom(42).
 ```
 
 - **Goal** — the goal to execute; all solutions pass through if no exception
 - **ERROR** — unified against the thrown term on exception; may be a variable (catches all) or a structured pattern (selective catch with no re-raise on mismatch)
 
-`catch_error/2` never re-raises — it is equivalent to `catch(Goal, ERROR, true)` but with unified exception representation. In Clausal Prolog, write `catch(Goal, ERROR, true)`: a `.clausal` clause whose body calls `catch_error/2` or `catch_recover/3` does not load yet (`NotImplementedError: terms_to_goalop: goal shape not yet supported`), although a top-level query such as `catch_error(throw(boom(42)), E)` answers `E = boom(42)`. Python exceptions appear as `ClassName(Message)` terms, identical in shape to logic `throw/1` terms. (It was spelled `Catch/2` before TitleCase names became a load-time error.)
+`catch_error/2` never re-raises — it is equivalent to `catch(Goal, ERROR, true)` but with unified exception representation. Python exceptions appear as `ClassName(Message)` terms, identical in shape to logic `throw/1` terms. (It was spelled `Catch/2` before TitleCase names became a load-time error.)
 
 ### catch_recover/3
 
@@ -458,9 +451,9 @@ An uncaught `throw/1` surfaces as `LogicException` in Python code; `str(e)` is
     --8<-- "tests/fixtures/docs/exceptions_sigs.txt:logicexception_ex2"
     ```
 
-    **catch_recover with error access (seam syntax):**
-    ```seam
-    --8<-- "tests/fixtures/docs/exceptions_sigs.txt:logicexception_ex3"
+    **catch_recover with error access:**
+    ```clausal
+    --8<-- "tests/fixtures/docs/exceptions_examples.clausal:logicexception_ex3"
     ```
 
     **Re-throw after logging:**
@@ -468,9 +461,9 @@ An uncaught `throw/1` surfaces as `LogicException` in Python code; `str(e)` is
     --8<-- "tests/fixtures/docs/exceptions_examples.clausal:logicexception_ex4"
     ```
 
-    **Catch-all (seam syntax):**
-    ```seam
-    --8<-- "tests/fixtures/docs/exceptions_sigs.txt:logicexception_ex5"
+    **Catch-all:**
+    ```clausal
+    --8<-- "tests/fixtures/docs/exceptions_examples.clausal:logicexception_ex5"
     ```
 
     ---
