@@ -21,7 +21,7 @@ every finding below reproduces).
 | A01-F011 | doc-drift | `terms.__all__` omits public names its own docstrings/exceptions reference: `SegList`, `ConcreteSeg`, `VarSeg`, `Quantity`, `UnitsMismatch`, `PartialTermError` | `terms.py:2220-2260` | `from clausal.terms import *` | names importable vs absent | `TestF011AllExports` | `todo/done/fix-A01-terms-all-exports.md` |
 
 Open design questions (parked by user 2026-07-05 — see
-`design-questions.md` and `todo/audit-2026-07-05/investigate-A01-parked-design-decisions.md`):
+`design-questions.md` and `todo/done/investigate-A01-parked-design-decisions.md`):
 A01-D001 cross-type numeric unification (`1`/`True`/`1.0`/`Decimal(1)` all
 unify via Python `==`), A01-D002 Quantity dimensionless eq/unify vs
 comparison asymmetry, A01-D004 intended support level for Compound Var

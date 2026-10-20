@@ -28,7 +28,7 @@ Prior art cited, not re-reported:
 
 Open design questions (parked by standing user instruction — see
 `design-questions.md` and
-`todo/audit-2026-07-05/investigate-A05-parked-design-decisions.md`):
+`todo/done/investigate-A05-parked-design-decisions.md`):
 A05-D001 cross-type truth values in the dif/reify layer (blocked on A01-D001),
 A05-D002 user-writable engine-reserved attribute keys.
 

@@ -59,7 +59,7 @@
   (the 8085-test lesson; CLP labeling, string/regex, term-inspection, and
   bagof/setof/aggregate_all sweeps still open — relevant to A09),
   DUPLICATE_TESTS.md, and the audit_2026_05_25 class-test layout. Plus ~140
-  queued fix-*/investigate-* todos from A01–A08 in todo/audit-2026-07-05/.
+  queued fix-*/investigate-* todos from A01–A08 in todo/done/.
 
   State of the partition: A01–A08 are done (90 findings total); remaining
   sessions are A09 builtins, A10 rewriting-import, A11 modules-interop, A12 
@@ -176,7 +176,7 @@
        1 # Design questions — A11 modules, interop & Prolog tools
        3 Status: resolved-from-docs (cite) | resolved-by-user (record) | 
        4 Per standing user preference, open questions are parked in
-       5 `todo/audit-2026-07-05/investigate-A11-parked-design-decisions.m
+       5 `todo/done/investigate-A11-parked-design-decisions.m
        6 interactively. D001/D002 are cross-cutting and appended to DESIG
        7 
           | Decision + rationale | Follow-up |
@@ -231,7 +231,7 @@
           nequalities: passive diseq is unsound (A08-F004) vs Holzbaur ε-
           augmented rationals; docs claim Holzbaur fidelity | Recommendat
           ion: ε-rationals staged with the F002 bound-enforcement rework;
-           interim aliasing fixes first. `todo/audit-2026-07-05/investiga
+           interim aliasing fixes first. `todo/done/investiga
           te-A08-clpq-strict-inequalities.md` | A08 | A08 clpq Tableau; e
           ntailed semantics; docs/clpq.md comparison table |
       26  | A08-D005 | open — parked by user preference | Optimization re
@@ -261,7 +261,7 @@
          + Liskov char-list→str join + instantiation/type errors for rege
          +x (chars.py house style); reject fractional floats in datetime 
          +ctors. `str(term)`/`int(term)` of arbitrary terms is never what
-         + a logic program means. `todo/audit-2026-07-05/investigate-A11-
+         + a logic program means. `todo/done/investigate-A11-
          +parked-design-decisions.md` | A11 | modules/py/* argument handl
          +ing; A01 strings-as-lists contract; docs/regex.md, date_time.md
          + |                                                             

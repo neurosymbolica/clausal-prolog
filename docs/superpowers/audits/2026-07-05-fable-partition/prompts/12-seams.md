@@ -11,7 +11,7 @@ contracts, method, and rules.
 - `tests/audit_2026_07_05/test_12_seams.py` — adversarial tests. Suspected-bug tests
   use `@pytest.mark.xfail(strict=False)`; confirmed-correct behavior is a plain
   regression guard. The file must be **green** on a per-file run.
-- Todos under `todo/audit-2026-07-05/`: `fix-A12-<slug>.md` (clear remediation)
+- Todos under `todo/`: `fix-A12-<slug>.md` (clear remediation)
   or `investigate-A12-<slug>.md` (Opus). Every confirmed finding needing a fix
   has exactly one; its ledger "Todo ref" points to it.
 - Update this audit's row in
@@ -41,7 +41,7 @@ read (not edit) any subsystem file for seam work.
   no longer reproduces (note it).
 - **Roll up** design questions into `DESIGN-DECISIONS.md` with a single triage-
   ready ordering.
-- **Master index:** (re)write `todo/audit-2026-07-05/README.md` — fix vs
+- **Master index:** (re)write `todo/done/audit-2026-07-05-index.md` — fix vs
   investigate, severity, owning subsystem.
 - **Memory:** capture confirmed standing design decisions into project memory
   (`/home/node/.claude/projects/-workspace-clausal/memory/`) per the memory

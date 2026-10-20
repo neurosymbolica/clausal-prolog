@@ -263,7 +263,7 @@ tests/audit_2026_07_05/
   ...
   test_11_modules_interop.py
   test_12_seams.py              # session 12: boundary-crossing tests
-todo/audit-2026-07-05/
+todo/
   README.md                        # index of fix + investigation todos by finding ID
   fix-A01-seglist-str-promotion.md
   investigate-A08-clpq-simplex-correctness.md
@@ -301,7 +301,7 @@ todo/audit-2026-07-05/
 
 ### Fix & investigation todos
 
-The audit **queues** remediation as todos under `todo/audit-2026-07-05/` (the
+The audit **queues** remediation as todos under `todo/` (the
 project's existing `todo/` convention; completed ones later move to
 `todo/done/`). Two kinds, distinguished by filename prefix:
 
@@ -365,7 +365,7 @@ no single partition audit can:
   cross-cutting fix filed by several subsystems into one todo), cull false
   positives (re-run the repro; downgrade what doesn't reproduce), and merge the
   cross-cutting design questions into `DESIGN-DECISIONS.md` with a single
-  triage-ready ordering. Produce `todo/audit-2026-07-05/README.md` as the master
+  triage-ready ordering. Produce `todo/done/audit-2026-07-05-index.md` as the master
   index (fix vs investigate, severity, owning subsystem).
 - **Memory:** capture confirmed design decisions that are now standing contracts
   into project memory (`/home/node/.claude/projects/-workspace-clausal/memory/`)
@@ -397,7 +397,7 @@ file.
 - Every confirmed correctness finding has a reproducing test reference; C
   findings use the C toolkit (or are flagged `unconfirmed — needs 3.14t` for FT).
 - Every confirmed finding needing remediation has a `fix-*` or `investigate-*`
-  todo under `todo/audit-2026-07-05/`; no fixes are applied to production code.
+  todo under `todo/`; no fixes are applied to production code.
 - Session 12 has deduped across ledgers, culled false positives, and captured
   standing design decisions into project memory.
 - 12 ready-to-paste agent prompts delivered (11 subsystem + 1 seams/synthesis)

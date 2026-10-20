@@ -15,7 +15,7 @@
 
 ❯ /clear                                                                        
 
-❯ in todo/audit-2026-07-05 there is a load of todos. They are grouped by the    
+❯ in todo/done there is a load of todos. They are grouped by the    
   initial number, which indicates the part of Clausal the audit targeted. Start 
   with the fix-A01 todos. Scan through and see which can be done together, and  
   which need to be done first. Then start tackling them, one by one.            

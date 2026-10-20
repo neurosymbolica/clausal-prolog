@@ -15,7 +15,7 @@ every finding below reproduces).
 | A02-F005 | doc-drift | Dispatch-impl docstrings say the trampoline `arg_offset` is **2** ("positions 0/1 are self_generator/parent") but every trampoline caller passes **4** (Phase-2 split-continuation layout `(this_generator, _proceed, _fail, _catcher, arg0, …)`); misleading for anyone re-deriving the arg layout | `arg_index.py:641-646` (`_make_secondary_dispatch_impl`), `:727-733` (`_make_indexed_dispatch_impl`), `:814-817` (`_groundness_dispatch_body_multi`) vs callers `:714-716`, `:775-779`, `:954-959` | read | docstrings match the Phase-2 layout vs say "2" | — (doc-only) | `todo/done/fix-A02-dispatch-docstring-arg-offsets.md` |
 
 Open design question (parked per user preference — see `design-questions.md`
-and `todo/audit-2026-07-05/investigate-A02-parked-design-decisions.md`):
+and `todo/done/investigate-A02-parked-design-decisions.md`):
 A02-D002 — how exotic numeric types should participate in index keys once
 A01-D001 (cross-type numeric unification) is decided.
 

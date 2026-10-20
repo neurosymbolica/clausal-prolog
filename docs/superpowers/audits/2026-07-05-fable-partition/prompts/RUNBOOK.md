@@ -19,6 +19,6 @@ you can attend to (each may block on a question). Landing wave-1 decisions in
 
 ## After all sessions
 - Session 12 has deduped findings/todos, culled false positives, and rolled
-  design decisions into `DESIGN-DECISIONS.md` + `todo/audit-2026-07-05/README.md`.
-- Triage `todo/audit-2026-07-05/`: `fix-*` (any implementer) vs `investigate-*`
+  design decisions into `DESIGN-DECISIONS.md` + `todo/done/audit-2026-07-05-index.md`.
+- Triage `todo/`: `fix-*` (any implementer) vs `investigate-*`
   (Opus). Fixes are a separate, later effort — this round applied none.

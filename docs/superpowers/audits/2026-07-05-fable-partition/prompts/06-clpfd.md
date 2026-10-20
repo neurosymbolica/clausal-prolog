@@ -11,7 +11,7 @@ contracts, method, and rules.
 - `tests/audit_2026_07_05/test_06_clpfd.py` — adversarial tests. Suspected-bug tests
   use `@pytest.mark.xfail(strict=False)`; confirmed-correct behavior is a plain
   regression guard. The file must be **green** on a per-file run.
-- Todos under `todo/audit-2026-07-05/`: `fix-A06-<slug>.md` (clear remediation)
+- Todos under `todo/`: `fix-A06-<slug>.md` (clear remediation)
   or `investigate-A06-<slug>.md` (Opus). Every confirmed finding needing a fix
   has exactly one; its ledger "Todo ref" points to it.
 - Update this audit's row in

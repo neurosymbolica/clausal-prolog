@@ -96,7 +96,7 @@ it. Pattern write-up:
 
 - `superpowers/` — dated `specs/`, `plans/` and `audits/` (e.g. the
   2026-07-05 fable-partition audit, whose `DESIGN-DECISIONS.md` the
-  `../todo/audit-2026-07-05/` todos cite). Design rationale; often stale.
+  audit's todos cite; index: `../todo/done/audit-2026-07-05-index.md`). Design rationale; often stale.
 - `design-records/` — long-form HTML records ([README](design-records/README.md)
   says how to republish them); a summary, not an authority.
 

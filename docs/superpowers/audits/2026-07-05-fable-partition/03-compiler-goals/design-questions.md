@@ -4,7 +4,7 @@ Status: resolved-from-docs (cite) | resolved-by-user (record) | open.
 
 Per standing user preference (A01/A02 precedent, memory
 `park-design-questions-in-todos`), open questions are parked with a
-recommendation in `todo/audit-2026-07-05/investigate-A03-parked-design-decisions.md`
+recommendation in `todo/done/investigate-A03-parked-design-decisions.md`
 rather than asked interactively.
 
 | ID | Status | Title | Conflicting sources | Options considered | Decision + rationale | Follow-up |

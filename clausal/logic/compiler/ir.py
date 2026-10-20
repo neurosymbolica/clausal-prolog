@@ -416,8 +416,8 @@ def cut_over_incomplete_table_message(called: "tuple[str, int]",
                 f"pick from the list), or make {pi}'s answers ground (bind "
                 f"the constrained variable before it returns, e.g. with "
                 f"label/1), so that its table completes first and may be "
-                f"cut. (A known limitation: todo/audit-2026-07-05/"
-                f"investigate-A12-tabling-answer-constraints.md.)")
+                f"cut. (A known limitation: todo/tabled-answers-drop-"
+                f"their-constraints-on-replay-2026-07-05.md.)")
     if within is None:
         why = ("the call is made inside the evaluation of another tabled "
                "predicate, which this table depends on")

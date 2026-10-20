@@ -3,7 +3,7 @@
 Raw Claude Code conversation logs from the Fable audit work, kept for
 provenance. The findings, tests, and todos they produced live in the
 partition dirs (`../NN-*/`), `../DESIGN-DECISIONS.md`, and
-`todo/audit-2026-07-05/`; these transcripts are the working record, not
+`todo/`; these transcripts are the working record, not
 the deliverables.
 
 | File | Session |

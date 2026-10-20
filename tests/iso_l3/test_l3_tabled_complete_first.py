@@ -166,8 +166,8 @@ def test_mutual_recursion_completes_with_every_answer(native, ans):
 
 # The one exception to complete-first: an answer that carries a constraint
 # (an attributed variable) is still handed over as it is derived, since the
-# table cannot store the constraint (todo/audit-2026-07-05/investigate-A12-
-# tabling-answer-constraints.md).  It comes from an incomplete table, so a
+# table cannot store the constraint (todo/tabled-answers-drop-their-
+# constraints-on-replay-2026-07-05.md).  It comes from an incomplete table, so a
 # cut over it raises, and the message says why.
 CONSTRAINED = """\
 :- table(cd/1).
@@ -288,8 +288,8 @@ def test_a_fresh_inner_call_through_call_n_and_findall_completes_first(native, a
 # RECORDED LIMITATION (Q1; operator ruling D74, 2026-10-19, Mike: "all as
 # recommended" -- shipped as a recorded limitation): an
 # answer carrying a constraint is still handed over as it is derived, before
-# its table completes (a table cannot store the constraint: todo/audit-
-# 2026-07-05/investigate-A12-tabling-answer-constraints.md), so a second call
+# its table completes (a table cannot store the constraint: todo/
+# tabled-answers-drop-their-constraints-on-replay-2026-07-05.md), so a second call
 # of the same table in the continuation joins against a partial table --
 # the pre-D68 wrong answer, for constrained answers only.  The review's F1.
 CONSTRAINED_PAIRS = """\

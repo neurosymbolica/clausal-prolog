@@ -338,7 +338,7 @@
        4 
        5 Per standing user preference (A01/A02 precedent, memory
          h a
-       7 recommendation in `todo/audit-2026-07-05/investigate-A03-parked-
+       7 recommendation in `todo/done/investigate-A03-parked-
        8 rather than asked interactively.
        9 
           | Decision + rationale | Follow-up |
@@ -492,9 +492,9 @@
          pass, run
      … +20 lines (ctrl+o to expand)
 
-● Write(todo/audit-2026-07-05/investigate-A03-parked-design-decisions.md)
+● Write(todo/done/investigate-A03-parked-design-decisions.md)
   ⎿  Wrote 37 lines to
-     todo/audit-2026-07-05/investigate-A03-parked-design-decisions.md
+     todo/done/investigate-A03-parked-design-decisions.md
        1 # investigate(A03): parked design decisions (Opus)
        3 **Source:** `docs/superpowers/audits/2026-07-05-fable-partition/
          03-compiler-goals/design-questions.md`
@@ -511,7 +511,7 @@
 
   Read 1 file (ctrl+o to expand)
 
-● Update(todo/audit-2026-07-05/README.md)
+● Update(todo/done/audit-2026-07-05-index.md)
   ⎿  File must be read first
 
 ● Update(docs/superpowers/audits/2026-07-05-fable-partition/README.md)
@@ -540,7 +540,7 @@
 
   Read 1 file (ctrl+o to expand)
 
-● Update(todo/audit-2026-07-05/README.md)
+● Update(todo/done/audit-2026-07-05-index.md)
   ⎿  Added 11 lines
       28  | `fix-A02-multistar-trailing-fixed.md` | fix | correctness | A
           02-F004 | A02 compiler-heads | queued |
@@ -601,7 +601,7 @@
          +sses? | Recommendation: fix locally in `_catcher_to_structural`
          + (resolve term class from module env, Compound only as fallback
          +) — no unification change; global Compound↔instance unification
-         + belongs to A01-D004. `todo/audit-2026-07-05/investigate-A03-pa
+         + belongs to A01-D004. `todo/done/investigate-A03-pa
          +rked-design-decisions.md` | A03 | A03 catch/3 (F004); A01 unify
          +/term identity; A02 index keys; A04 tabling keys |             
       11 +| A03-D002 | open — parked by user preference | findall/bagof/s

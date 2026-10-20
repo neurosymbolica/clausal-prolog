@@ -246,8 +246,8 @@ surface described in [docs/public-api.md](docs/public-api.md).
     (Q1) an answer carrying a constraint is still handed over as it is
     derived, before its table completes -- a recorded limitation: with
     `c(X) :- dif(X, a). c(1). c(2).` tabled, `findall(X-Y, (c(X), c(Y)),
-    L)` gives 7 pairs, not 9 (todo/audit-2026-07-05/investigate-A12-
-    tabling-answer-constraints.md); (Q2) an error raised during a table's
+    L)` gives 7 pairs, not 9 (todo/tabled-answers-drop-their-
+    constraints-on-replay-2026-07-05.md); (Q2) an error raised during a table's
     evaluation reaches the caller with no answers before it (XSB and SWI do
     the same; tabled Scryer swallows it); (Q3) a table that never completes
     never answers -- `once/1` over an unbounded tabled generator hangs, its

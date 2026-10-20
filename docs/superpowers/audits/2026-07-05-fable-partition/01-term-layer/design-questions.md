@@ -4,7 +4,7 @@ Status: resolved-from-docs (cite) | resolved-by-user (record) | open.
 
 All `open` items below were explicitly **parked by the user on 2026-07-05**
 ("This is a tricky decision. Park it in a todo, I'll get to it.") — see
-`todo/audit-2026-07-05/investigate-A01-parked-design-decisions.md`. Do not
+`todo/done/investigate-A01-parked-design-decisions.md`. Do not
 re-ask; pick up from that todo.
 
 | ID | Status | Title | Conflicting sources | Options considered | Decision + rationale | Follow-up |

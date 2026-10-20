@@ -258,8 +258,8 @@ STREAMED_CONSTRAINED = "$constrained"
 def _has_attributed_var(answer) -> bool:
     """Whether a frozen answer holds an unbound variable with attributes (a
     ``dif/2``, CLP or ``freeze/2`` constraint).  The table cannot store the
-    constraint (todo/audit-2026-07-05/investigate-A12-tabling-answer-
-    constraints.md: a replayed answer loses it), so such an answer is the
+    constraint (todo/tabled-answers-drop-their-constraints-on-replay-
+    2026-07-05.md: a replayed answer loses it), so such an answer is the
     one a leader still hands over live, mid-fixpoint, instead of from the
     completed table (D68)."""
     global _collect_vars

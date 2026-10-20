@@ -45,7 +45,6 @@ ROOTS = ("clausal/", "tests/", "docs/", "todo/", "scripts/",
 SKIP_PREFIXES = (
     "tests/audit_2026_07_05/",
     "docs/superpowers/audits/2026-07-05-fable-partition/",
-    "todo/audit-2026-07-05/",
 )
 # directories excluded when indexing repo basenames (vendored / generated)
 PRUNE_DIRS = {

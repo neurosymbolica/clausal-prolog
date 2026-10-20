@@ -3,7 +3,7 @@
 Status: resolved-from-docs (cite) | resolved-by-user (record) | open.
 All `open` questions below are **open (parked)** per the user's standing
 instruction (park in todos, do not block); consolidated in
-`todo/audit-2026-07-05/investigate-A07-parked-design-decisions.md`.
+`todo/done/investigate-A07-parked-design-decisions.md`.
 
 | ID | Status | Title | Conflicting sources | Options considered | Decision + rationale | Follow-up |
 |----|--------|-------|---------------------|--------------------|----------------------|-----------|

@@ -18,7 +18,7 @@
 - pytest is run **per-file** only — `pytest tests/` OOM-SIGKILLs on this box.
 - This box is a **3.13 GIL build**; free-threading claims can only be *executed* on the `.cpython-314t` build, else logged `unconfirmed — needs 3.14t`.
 - Finding IDs are namespaced per subsystem: `A<NN>-F<NNN>` (findings), `A<NN>-D<NNN>` (design questions).
-- Output roots: `docs/superpowers/audits/2026-07-05-fable-partition/`, `tests/audit_2026_07_05/`, `todo/audit-2026-07-05/`.
+- Output roots: `docs/superpowers/audits/2026-07-05-fable-partition/`, `tests/audit_2026_07_05/`, `todo/`.
 - Spec: `docs/superpowers/specs/2026-07-05-fable-partition-audit-design.md` (authoritative; this plan implements it).
 
 ---
@@ -61,7 +61,7 @@ tests/audit_2026_07_05/
   test_00_smoke.py                       # library self-test (Task 1)
 scripts/audit_2026_07_05/
   check_prompt_paths.py                  # asserts every path named in a prompt exists (Task 1)
-todo/audit-2026-07-05/
+todo/
   README.md                              # todo master index, seeded (Task 1)
 ```
 
@@ -80,7 +80,7 @@ Each prompt file is **self-contained** (preamble text is embedded at assembly ti
 - Create: `tests/audit_2026_07_05/conftest.py`
 - Create: `tests/audit_2026_07_05/test_00_smoke.py`
 - Create: `scripts/audit_2026_07_05/check_prompt_paths.py`
-- Create: `todo/audit-2026-07-05/README.md`
+- Create: `todo/done/audit-2026-07-05-index.md`
 
 **Interfaces:**
 - Produces: the directory roots and templates every later task and every audit session writes into; `check_prompt_paths.py` (a CLI: `python scripts/audit_2026_07_05/check_prompt_paths.py <prompt.md>...`) that Tasks 4–7 use as their gate.
@@ -209,7 +209,7 @@ def refcount_stable():
     return _run
 ```
 
-Write `todo/audit-2026-07-05/README.md`:
+Write `todo/done/audit-2026-07-05-index.md`:
 
 ```markdown
 # Audit 2026-07-05 — queued todos
@@ -261,7 +261,6 @@ ROOTS = ("clausal/", "tests/", "docs/", "todo/", "scripts/",
 SKIP_PREFIXES = (
     "tests/audit_2026_07_05/",
     "docs/superpowers/audits/2026-07-05-fable-partition/",
-    "todo/audit-2026-07-05/",
 )
 BACKTICK = re.compile(r"`([^`]+)`")
 
@@ -324,7 +323,7 @@ def test_scaffolding_exists():
 
 
 def test_todo_index_exists():
-    assert (REPO / "todo/audit-2026-07-05/README.md").exists()
+    assert (REPO / "todo/done/audit-2026-07-05-index.md").exists()
 
 
 def test_conftest_fixtures_import():
@@ -351,7 +350,7 @@ Expected: `test_scaffolding_exists`, `test_todo_index_exists`, `test_conftest_fi
 - [ ] **Step 8: Commit**
 
 ```bash
-git add docs/superpowers/audits/2026-07-05-fable-partition tests/audit_2026_07_05 scripts/audit_2026_07_05 todo/audit-2026-07-05
+git add docs/superpowers/audits/2026-07-05-fable-partition tests/audit_2026_07_05 scripts/audit_2026_07_05 todo
 git commit -m "test(audit): scaffold 2026-07-05 Fable partition audit library"
 ```
 
@@ -448,7 +447,7 @@ todos.
 - `tests/audit_2026_07_05/{{TEST_FILE}}` — adversarial tests. Suspected-bug tests
   use `@pytest.mark.xfail(strict=False)`; confirmed-correct behavior is a plain
   regression guard. The file must be **green** on a per-file run.
-- Todos under `todo/audit-2026-07-05/`: `fix-{{ID}}-<slug>.md` (clear remediation)
+- Todos under `todo/`: `fix-{{ID}}-<slug>.md` (clear remediation)
   or `investigate-{{ID}}-<slug>.md` (Opus). Every confirmed finding needing a fix
   has exactly one; its ledger "Todo ref" points to it.
 - Update this audit's row in
@@ -510,8 +509,8 @@ you can attend to (each may block on a question). Landing wave-1 decisions in
 
 ## After all sessions
 - Session 12 has deduped findings/todos, culled false positives, and rolled
-  design decisions into `DESIGN-DECISIONS.md` + `todo/audit-2026-07-05/README.md`.
-- Triage `todo/audit-2026-07-05/`: `fix-*` (any implementer) vs `investigate-*`
+  design decisions into `DESIGN-DECISIONS.md` + `todo/done/audit-2026-07-05-index.md`.
+- Triage `todo/`: `fix-*` (any implementer) vs `investigate-*`
   (Opus). Fixes are a separate, later effort — this round applied none.
 ```
 
@@ -989,7 +988,7 @@ read (not edit) any subsystem file for seam work.
   no longer reproduces (note it).
 - **Roll up** design questions into `DESIGN-DECISIONS.md` with a single triage-
   ready ordering.
-- **Master index:** (re)write `todo/audit-2026-07-05/README.md` — fix vs
+- **Master index:** (re)write `todo/done/audit-2026-07-05-index.md` — fix vs
   investigate, severity, owning subsystem.
 - **Memory:** capture confirmed standing design decisions into project memory
   (`/home/node/.claude/projects/-workspace-clausal/memory/`) per the memory
@@ -1027,5 +1026,5 @@ git commit -m "docs(audit): seams & synthesis Fable prompt (A12)"
 - `docs/superpowers/audits/2026-07-05-fable-partition/` has README status board, DESIGN-DECISIONS.md, `_templates/`, and `prompts/` with `_shared-preamble.md`, `RUNBOOK.md`, and 12 self-contained prompts.
 - `tests/audit_2026_07_05/` has `__init__.py`, `conftest.py` (with `clear_query_cache` + `refcount_stable`), and `test_00_smoke.py` (green per-file).
 - `scripts/audit_2026_07_05/check_prompt_paths.py` passes on all 12 prompts.
-- `todo/audit-2026-07-05/README.md` seeded.
+- `todo/done/audit-2026-07-05-index.md` seeded.
 - The user can open a Fable session and paste any `prompts/NN-slug.md` to run that audit; RUNBOOK gives the order.
