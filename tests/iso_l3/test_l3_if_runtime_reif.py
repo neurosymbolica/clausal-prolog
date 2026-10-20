@@ -231,3 +231,82 @@ def test_an_import_list_decides_too(native, ans, suffix):
                                   ("/", "if_", 3))]
     assert ans(with_if, "c") == ["y"]
     assert ans(with_if, "w") == ["n"]
+
+
+# ── a cut in an if_ branch is local to the branch (.pl only) ──
+#
+# Scryer's if_/3 calls its branches (call/1 makes a cut opaque), so a cut
+# there prunes the branch's own choice points and nothing past the if_.
+# The written if_ is compiled in place; a branch holding a cut is lowered
+# as call(Branch) so that it means the same.  .clausal refuses ! anyway.
+
+
+def _called(clause):
+    """*clause* with its (first) ``if_(...)`` goal wrapped in ``call/1``."""
+    i = clause.index("if_(")
+    depth = 0
+    for j in range(i + 3, len(clause)):
+        depth += {"(": 1, ")": -1}.get(clause[j], 0)
+        if depth == 0:
+            return clause[:i] + "call(" + clause[i:j + 1] + ")" + clause[j + 1:]
+    raise AssertionError(clause)
+
+
+def _shape(rows):
+    """``X-R`` answers with X unbound read as R alone."""
+    return [r[2] if type(r) is tuple and isinstance(r[1], Var) else r
+            for r in rows]
+
+
+@pytest.mark.parametrize("goal, want", [
+    # the then branch: the clause's other answer survives
+    ("w10(X-R) :- if_(X = a, (member(R, [1, 2, 3]), !), R = no).",
+     [("-", "a", 1), "no"]),
+    # ... and so does the caller's alternative
+    ("w11(R) :- ( if_(1 = 1, (!, R = cut), R = no) ; R = alt ).",
+     ["cut", "alt"]),
+    # the else branch
+    ("w12(R) :- ( if_(1 = 2, R = no, (member(R, [x, y]), !)) ; R = alt ).",
+     ["x", "alt"]),
+    # a closure, a conjunction and a disjunction as the condition
+    ("w13(R) :- ( if_(t, (!, R = cut), R = no) ; R = alt ).",
+     ["cut", "alt"]),
+    ("w14(R) :- ( if_((1 = 1, 2 = 2), (member(R, [p, q]), !), R = no)"
+     " ; R = alt ).", ["p", "alt"]),
+    ("w15(R) :- ( if_((1 = 2 ; 2 = 2), (member(R, [p, q]), !), R = no)"
+     " ; R = alt ).", ["p", "alt"]),
+    # a cut under a disjunction and under -> in the branch
+    ("w17(R) :- ( if_(1 = 1, ((member(R, [p, q]) ; R = r), !), R = no)"
+     " ; R = alt ).", ["p", "alt"]),
+    ("w18(R) :- ( if_(1 = 1, ( true -> !, R = c ; R = d ), R = no)"
+     " ; R = alt ).", ["c", "alt"]),
+])
+def test_a_cut_in_a_written_branch_is_local_as_in_scryer(native, ans, goal,
+                                                         want):
+    name = goal.split("(", 1)[0]
+    body = goal.replace(f"{name}(", "w(", 1)
+    written = _load(native, ".pl", f"ifr_cut_{name}", "t(true).\n" + body + "\n")
+    via_call = _load(native, ".pl", f"ifr_cutc_{name}",
+                     "t(true).\n" + _called(body) + "\n")
+    assert _shape(ans(written, "w")) == want
+    assert _shape(ans(via_call, "w")) == want
+
+
+def test_a_cut_as_the_condition_is_scryers_existence_error(native, ans):
+    mod = _load(native, ".pl", "ifr_cut_cond", """\
+        w(E) :- catch(if_(!, true, true), error(E, _), true).
+        """)
+    assert ans(mod, "w") == [("existence_error", "procedure", ("/", "!", 1))]
+
+
+def test_a_file_defining_its_own_if_beside_reifs_is_refused(native, suffix):
+    """The import binds reif's if_/3, and a predicate has one defining module
+    (no multifile), so a local if_/3 clause is refused at load.  (Scryer
+    warns and lets the local definition win.)  Before the runtime if_/3 the
+    file loaded, and a written if_ reached reif's while call(if_(...))
+    reached the local one."""
+    with pytest.raises(SyntaxError, match="defines a clause for if_/3"):
+        _load(native, suffix, _name("ifr_own", suffix), """\
+            if_(_, _, local).
+            p(R) :- if_(1 = 1, R = y, R = n).
+            """, header=":- use_module(library(reif)).\n")

@@ -116,7 +116,10 @@ follows it (`instantiation_error` when it is unbound,
 `type_error(boolean, T)` when it is neither `true` nor `false`).
 `if_(X = Y, ...)` and `if_(dif(X, Y), ...)` compile to the reified branch
 above, and `if_((A, B), ...)`/`if_((A ; B), ...)` are unfolded as reif's
-`','/3` and `;/3`. Without the import `if_` is an ordinary (undefined) call,
+`','/3` and `;/3`. A cut in a branch is local to that branch, as in
+Scryer: reif's `if_/3` calls its branches, so
+`( if_(1 = 1, (!, R = cut), R = no) ; R = alt )` answers `cut`, then `alt`.
+Without the import `if_` is an ordinary (undefined) call,
 as in Scryer. A `.clausal` file behaves the same way, and the seam's `if_` has
 the same meaning (see above): a .pl or .clausal
 `if_(memberd_t(X, [a, b]), R = yes, R = no)` and the seam

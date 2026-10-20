@@ -366,6 +366,26 @@ surface described in [docs/public-api.md](docs/public-api.md).
   body calls the undefined `if_/5`. On `.clausal` and `.pl` (native front
   end); pinned in `tests/iso_l3/test_l3_if_runtime_reif.py`.
 
+  Newly refused: a `.pl` or `.clausal` file that does
+  `use_module(library(reif))` and also defines its own `if_/3` (the rule
+  that a predicate has one defining module; Clausal has no multifile). It
+  used to load, and was inconsistent: a written `if_` reached reif's, and
+  `call(if_(...))` the local one. Scryer warns and lets the local
+  definition win. An import list that leaves `if_/3` out still allows a
+  local one.
+
+- **A cut in a branch of a written `if_/3` is local to the branch**
+  (`.pl`, 2026-10-20). The native front end compiled the branches in
+  place, so a `!` there cut the clause:
+  `w(X, R) :- if_(X = a, (member(R, [1, 2, 3]), !), R = no).` gave only
+  `X = a, R = 1`, and `( if_(1 = 1, (!, R = cut), R = no) ; R = alt )`
+  lost `alt`. reif's `if_/3` calls its branches, and `call/1` makes a cut
+  opaque, so Scryer gives both answers in each case, as `call(if_(...))`
+  already did. A branch holding a cut (through `,`, `;` or `->`) is now
+  lowered as `call(Branch)`; a branch without one compiles in place as
+  before. A cut as the condition stays `existence_error(procedure, !/1)`,
+  as in Scryer. Pinned in `tests/iso_l3/test_l3_if_runtime_reif.py`.
+
 - **`name()` is a syntax error, as in ISO** (2026-10-20). The ISO reader
   read `f()` as a compound with no arguments. In a `.clausal` or `.pl`
   clause body `nl()` then ran as `nl`, and a `-g` goal such as `nl()`

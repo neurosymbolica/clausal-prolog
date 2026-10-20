@@ -779,7 +779,8 @@ class _ClauseLowering:
 
         The arms are lowered in the order the built AST evaluates them, so a
         variable's first occurrence (the walrus) is the one evaluated
-        first."""
+        first.  An arm holding a cut (a ``.pl`` file) is called, see
+        :meth:`_if_arm`."""
         c, th, el = args
         c_sp, th_sp, el_sp = spans
         self.reordered = True
@@ -800,10 +801,10 @@ class _ClauseLowering:
                          right=self.term(c[2], r_sp),
                          position=_pos_expr(self._pos.of(_top_span(c_sp))))
             if c[0] == "=":
-                body, orelse = self.goal(th, th_sp), self.goal(el, el_sp)
+                body, orelse = self._if_arm(th, th_sp), self._if_arm(el, el_sp)
             else:
-                body = self.goal(el, el_sp)
-                orelse = self.goal(th, th_sp)
+                body = self._if_arm(el, el_sp)
+                orelse = self._if_arm(th, th_sp)
             return _node("IfExpr", test=test, body=body, orelse=orelse,
                          position=ppos)
         self._refuse_control_in(c, c_sp)
@@ -817,12 +818,28 @@ class _ClauseLowering:
         branch = _node("IfExpr",
                        test=_node("Unify", left=_name(t_ident),
                                   right=_const(True), position=ppos),
-                       body=self.goal(th, th_sp), orelse=self.goal(el, el_sp),
+                       body=self._if_arm(th, th_sp), orelse=self._if_arm(el, el_sp),
                        position=ppos)
         return _node("TupleLiteral",
                      elements=ast.List(elts=[call_c, check, branch],
                                        ctx=ast.Load()),
                      position=ppos)
+
+    def _if_arm(self, g: Any, sp) -> ast.expr:
+        """An if_/3 branch.  reif's if_ CALLS its branches, and call/1 makes
+        a cut opaque (ISO 7.8.3): a ``!`` in a branch prunes the branch's
+        own choice points, not the clause's (Scryer, measured: ``( if_(1 =
+        1, (!, R = cut), R = no) ; R = alt )`` answers cut, then alt).
+        Lowered inline, the cut would be the clause's, so a branch that
+        holds one -- reached through ``,``/``;``/``->``, which are
+        transparent to it -- is lowered as ``call(Branch)``, as the runtime
+        if_/3 runs it.  Only a ``.pl`` file can hold one (``.clausal``
+        refuses ``!``); every other branch compiles in place."""
+        if self._cut_allowed and _cut_inside(g):
+            self._refuse_control_in(g, sp)
+            pos = self._pos.of(_top_span(sp))
+            return self._call("call", [self.term(g, sp)], pos, pos)
+        return self.goal(g, sp)
 
     def _iterated_goal(self, g: Any, sp) -> ast.expr:
         """``V1^V2^G`` in bagof/setof -> ``$BitXor(left=V1, right=...)``, the
@@ -916,6 +933,17 @@ def _regex_group_names(pattern: Any) -> set:
         return set(re.compile(pattern).groupindex)
     except re.error:
         return set()
+
+
+def _cut_inside(g: Any) -> bool:
+    """True when *g* is ``!`` or holds one in a goal position reached
+    through ``,``, ``;`` or ``->`` -- the constructs a cut is transparent
+    to (ISO 7.8.4); a cut under any other goal (``\\+``, findall/3, a
+    nested if_) is that goal's own."""
+    if g == "!":
+        return True
+    return (type(g) is tuple and len(g) == 3 and g[0] in (",", ";", "->")
+            and (_cut_inside(g[1]) or _cut_inside(g[2])))
 
 
 def _var_inside_body(g: Any) -> bool:
