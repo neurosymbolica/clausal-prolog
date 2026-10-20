@@ -793,16 +793,6 @@ class SuspendedConsumer:
 # ── Key computation (variant checking) ────────────────────────────────────
 
 
-# The variable numbering of the key walk in progress on this thread
-# (``varmap``: the dereferenced ``Var`` -> its number), or None between
-# walks.  A walk opens it, and a re-entry from inside the walk -- the C twin
-# hands a partial list to ``_seg_key``, which keys the elements through
-# ``_normalize_for_key`` again -- continues the SAME numbering, so a
-# variable shared between a partial list and the rest of the term keeps one
-# number.  The C twin keeps its own per-thread map for the same reason.
-_key_ctx = threading.local()
-
-
 def _var_key(n):
     return _VAR_KEYS[n] if n < _VAR_KEY_CACHE else (_VAR, n)
 
@@ -811,8 +801,14 @@ def _normalize_for_key_py(term):
     """Deref term into a hashable, type-distinguishing canonical key.
 
     An unbound variable keys as ``(_VAR, n)``, numbered by first occurrence
-    in the walk (see ``_VAR``): one numbering per call of this function or
-    of ``make_subgoal_key``, shared with any re-entry from ``_seg_key``.
+    in the walk (see ``_VAR``): a fresh numbering per call of this function
+    or of ``make_subgoal_key`` -- always fresh, so a key walk started from
+    Python code a walk runs (a term instance's field property, a dict key's
+    ``__lt__``) is its own, canonical key and leaves the outer numbering
+    alone.  The walk itself is ``_norm_py``, which carries the numbering
+    explicitly; a partial list's elements are keyed by ``_seg_key`` with
+    the same numbering passed in.  The C twin does the same with a map per
+    entry and a continuing entry for ``_seg_key``.
     Exact ``int`` stays canonical (the fast path). Other numeric leaves
     (``bool``/``float``/``complex``) are type-tagged as ``(type, value)`` so
     ``1``/``True``/``1.0`` do not conflate in variant keys or answer dedup
@@ -831,14 +827,7 @@ def _normalize_for_key_py(term):
     ``Decimal``/``Fraction`` are intentionally left raw in BOTH (they still
     conflate with ``int`` — a documented residual pending A01-D001).
     """
-    vm = getattr(_key_ctx, "varmap", None)
-    if vm is not None:
-        return _norm_py(term, vm)
-    _key_ctx.varmap = vm = {}
-    try:
-        return _norm_py(term, vm)
-    finally:
-        _key_ctx.varmap = None
+    return _norm_py(term, {})
 
 
 def _norm_py(term, vm):
@@ -886,7 +875,7 @@ def _norm_py(term, vm):
     if isinstance(term, (set, frozenset)):
         return ("__set__", frozenset(_norm_py(e, vm) for e in term))
     if isinstance(term, _SEG_TYPES):
-        return _seg_key(term, _normalize_for_key_py)
+        return _seg_key(term, lambda e: _norm_py(e, vm))
     if is_term_instance(term):
         return (type(term).__name__,) + tuple(
             _norm_py(getattr(term, f), vm) for f in term_field_names(term)
@@ -933,11 +922,12 @@ def _seg_key(term, norm=None):
     ``"a"||T`` and ``[a|T]`` key alike) with a hole per open tail, numbered
     as the tail's variable is (``[T|T]`` is not ``[X|T]``) but tagged apart
     from an element (``[*A, x]`` is not ``[X, x]``).  The C twin calls this
-    function (registered below), so both produce it; *norm* is the twin that
-    keys the elements -- the C twin's own entry point by default, which
-    continues the numbering of the walk in progress."""
+    function (registered below), so both produce it; *norm* keys the
+    elements with the numbering of the walk in progress -- the Python twin
+    passes its own, the C twin leaves it to ``_seg_norm``, its continuing
+    entry."""
     if norm is None:
-        norm = _normalize_for_key
+        norm = _seg_norm
     w = term.__walk__()
     if not isinstance(w, _SEG_TYPES):
         return norm(w)
@@ -957,33 +947,16 @@ def _seg_key(term, norm=None):
 
 
 def _make_subgoal_key_py(args, trail):
-    """Compute variant key for a tabled call's arguments: one numbering
-    across all of them, so ``p(X, X)`` and ``p(X, Y)`` key apart."""
-    vm = getattr(_key_ctx, "varmap", None)
-    if vm is not None:
-        return tuple([_norm_py(a, vm) for a in args])
-    _key_ctx.varmap = vm = {}
-    try:
-        return tuple([_norm_py(a, vm) for a in args])
-    finally:
-        _key_ctx.varmap = None
+    """Compute variant key for a tabled call's arguments: one (fresh)
+    numbering across all of them, so ``p(X, X)`` and ``p(X, Y)`` key apart."""
+    vm: dict = {}
+    return tuple([_norm_py(a, vm) for a in args])
 
 
-class _key_scope_py:
-    """``with _key_scope_py():`` -- one variable numbering for every
-    ``_normalize_for_key_py`` call made inside (the seam's structural answer
-    key, which keys an unhashable answer piece by piece)."""
-    __slots__ = ("opened",)
-
-    def __enter__(self):
-        self.opened = getattr(_key_ctx, "varmap", None) is None
-        if self.opened:
-            _key_ctx.varmap = {}
-
-    def __exit__(self, *exc):
-        if self.opened:
-            _key_ctx.varmap = None
-
+# What ``_seg_key`` keys a partial list's elements with when its caller
+# passes nothing -- the C twin, whose continuing entry this is rebound to
+# below.  Nothing else calls it bare; the Python twin passes its own walk.
+_seg_norm = _normalize_for_key_py
 
 make_subgoal_key = _make_subgoal_key_py
 
@@ -1056,8 +1029,11 @@ try:
         _register_var_sentinel,
     )
     _register_var_sentinel(_VAR)
-    from clausal.logic._tabling_core import _register_seg_key  # noqa: PLC0415
+    from clausal.logic._tabling_core import (  # noqa: PLC0415
+        _normalize_for_key_continue, _register_seg_key,
+    )
     _register_seg_key(_SEG_TYPES, _seg_key)
+    _seg_norm = _normalize_for_key_continue
     _normalize_for_key = _normalize_for_key_c
     make_subgoal_key = _make_subgoal_key_c
     freeze_args = _freeze_args_c
@@ -1497,26 +1473,35 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
 
 def _key_subsumes(general: tuple, specific: tuple) -> bool:
     """True if variant key ``general`` is at least as general as ``specific``
-    — each position is a variable key or structurally identical, and one
-    variable of ``general`` stands for ONE sub-key of ``specific`` (so
-    ``p(X, X)`` covers ``p(1, 1)`` and not ``p(1, 2)``).  Only the argument
-    positions themselves are matched: a variable nested in an argument is
-    not generalised (``p(f(X))`` does not cover ``p(f(1))``), as before.
+    -- a one-way match: each variable of ``general`` stands for ONE sub-key
+    of ``specific`` (any sub-key, a variable of ``specific`` included),
+    consistently, and everything else is structurally identical.  So
+    ``p(X, Y)`` covers ``p(1, f(Z))`` and ``p(f(A), g(A))``, ``p(X, f(Y))``
+    covers ``p(1, f(Z))``, and ``p(X, X)`` covers ``p(1, 1)`` but not
+    ``p(1, 2)``.  The match recurses into the tuple sub-keys (cells, lists,
+    term instances); a frozenset sub-key (a dict or a set) must be equal.
     A complete table under ``general`` then covers every instance of a call
     whose key is ``specific`` (A04-F002 subsuming-variant NAF)."""
-    if len(general) != len(specific):
-        return False
-    bound: dict = {}
-    for g, s in zip(general, specific):
-        if _is_var_key(g):
-            seen = bound.get(g, _UNBOUND)
-            if seen is _UNBOUND:
-                bound[g] = s
-            elif seen != s:
-                return False
-        elif g != s:
+    return len(general) == len(specific) and _match_keys(general, specific, {})
+
+
+def _match_keys(g, s, bound: dict) -> bool:
+    """One-way match of the sub-key *g* against *s* under the renaming
+    *bound* (a variable key of *g* -> the sub-key of *s* it stands for)."""
+    if _is_var_key(g):
+        seen = bound.get(g, _UNBOUND)
+        if seen is _UNBOUND:
+            bound[g] = s
+            return True
+        return seen == s
+    if type(g) is tuple:
+        if type(s) is not tuple or len(g) != len(s):
             return False
-    return True
+        for ge, se in zip(g, s):
+            if not _match_keys(ge, se, bound):
+                return False
+        return True
+    return g == s
 
 
 _UNBOUND = object()

@@ -814,42 +814,41 @@ def _answer_key(make_subgoal_key, answer) -> Any:
         hash(key)
         return key
     except TypeError:
-        from clausal.logic.tabling import _key_scope_py  # noqa: PLC0415
-        with _key_scope_py():      # one variable numbering over the answer
-            return ("$structural",) + tuple(_structural_key(a) for a in answer)
+        vm: dict = {}             # one variable numbering over the answer
+        return ("$structural",) + tuple(_structural_key(a, vm) for a in answer)
 
 
-def _structural_key(term: Any) -> Any:
+def _structural_key(term: Any, vm: dict) -> Any:
     """A hashable variant key for *term*: variables are numbered by first
-    occurrence, as the tabling key numbers them (the caller opens the
-    numbering), and the containers the tabling key cannot hash are rebuilt."""
-    from clausal.logic.tabling import _normalize_for_key_py  # noqa: PLC0415
+    occurrence, as the tabling key numbers them (*vm* is the numbering, the
+    caller's), and the containers the tabling key cannot hash are rebuilt."""
+    from clausal.logic.tabling import _norm_py  # noqa: PLC0415
     from clausal.logic.variables import deref, is_var  # noqa: PLC0415
     from clausal.terms import (  # noqa: PLC0415
         ConcreteSeg, DictTerm, SegList, SetTerm,
     )
     term = deref(term)
     if is_var(term):
-        return _normalize_for_key_py(term)
+        return _norm_py(term, vm)
     if isinstance(term, SegList):
         return ("$seglist",) + tuple(
-            ("c",) + tuple(_structural_key(e) for e in seg.elements)
-            if isinstance(seg, ConcreteSeg) else ("v", _structural_key(seg.var))
+            ("c",) + tuple(_structural_key(e, vm) for e in seg.elements)
+            if isinstance(seg, ConcreteSeg) else ("v", _structural_key(seg.var, vm))
             for seg in term.segments)
     if isinstance(term, DictTerm):
         return ("$dict", frozenset(
-            (_structural_key(k), _structural_key(v))
+            (_structural_key(k, vm), _structural_key(v, vm))
             for k, v in term._data.items()))
     if isinstance(term, SetTerm):
-        return ("$set", frozenset(_structural_key(e) for e in term))
+        return ("$set", frozenset(_structural_key(e, vm) for e in term))
     if isinstance(term, list):
-        return ("$list",) + tuple(_structural_key(e) for e in term)
+        return ("$list",) + tuple(_structural_key(e, vm) for e in term)
     if isinstance(term, tuple):
-        return ("$tuple",) + tuple(_structural_key(e) for e in term)
+        return ("$tuple",) + tuple(_structural_key(e, vm) for e in term)
     if isinstance(term, dict):
         return ("$pydict", frozenset(
-            (_structural_key(k), _structural_key(v)) for k, v in term.items()))
-    key = _normalize_for_key_py(term)
+            (_structural_key(k, vm), _structural_key(v, vm)) for k, v in term.items()))
+    key = _norm_py(term, vm)
     try:
         hash(key)
         return key

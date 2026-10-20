@@ -9,6 +9,8 @@ call -- through negation, a proof of a falsehood
 (todo/done/tabled-variant-key-conflates-repeated-variables-2026-10-20.md)."""
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import pytest
 
 from clausal.logic import tabling
@@ -365,3 +367,92 @@ def test_the_seam_structural_key_numbers_variables():
     sl = SegList([ConcreteSeg([x]), VarSeg(y)])
     assert k(sl, x) != k(sl, y)
     assert k(sl, x, y) == k(SegList([ConcreteSeg([y]), VarSeg(x)]), y, x)
+
+
+# ── Subsumption recurses into the arguments ────────────────────────────────
+
+NESTED = """\
+:- table(p/2).
+p(1, f(a)).
+p(2, f(b)).
+warm :- p(_, f(_)).
+wrong_nested :- warm, \\+ p(1, f(_)).
+right_nested :- warm, \\+ p(3, f(_)).
+"""
+
+
+def test_a_complete_general_table_covers_a_nested_nonground_call(native, ans):
+    """A complete ``p(X, f(Y))`` table decides the negated ``p(1, f(Z))``:
+    the variable of the table's key stands for the sub-key ``1``, and
+    ``f(Y)`` matches ``f(Z)`` with ``Y`` standing for ``Z``.  ``p(1, f(a))``
+    holds, so ``\\+ p(1, f(_))`` fails; ``\\+ p(3, f(_))`` holds.  (The call
+    is non-ground, so without the covering table the negation would
+    succeed conservatively -- a wrong answer.)"""
+    mod = native.load("l3_vk_nested", NESTED)
+    assert ans(mod, "warm", 0) == [(), ()]          # one per fact
+    assert ans(mod, "wrong_nested", 0) == []
+    assert ans(mod, "right_nested", 0) == [(), ()]
+
+
+def test_key_subsumes_recurses_into_the_sub_keys(key):
+    sub = tabling._key_subsumes
+    x, y, z, a = Var(), Var(), Var(), Var()
+    assert sub(key(x, ("f", y)), key(1, ("f", z)))          # p(X, f(Y)) covers p(1, f(Z))
+    assert sub(key(x, ("f", x)), key(1, ("f", 1)))          # p(X, f(X)) covers p(1, f(1))
+    assert not sub(key(x, ("f", x)), key(1, ("f", 2)))      # ... not p(1, f(2))
+    assert sub(key(x, y), key(("f", a), ("g", a)))          # p(X, Y) covers p(f(A), g(A))
+    assert sub(key(x, ("f", y)), key(1, ("f", [z, 2])))     # a variable stands for any sub-key
+    assert not sub(key(x, ("f", y)), key(1, ("g", z)))      # the functor must match
+    assert not sub(key(1, ("f", y)), key(x, ("f", z)))      # one-way: 1 does not cover X
+    assert sub(key([x, y]), key([1, ("f", z)]))             # into a list
+    assert not sub(key([x, y]), key([1, 2, 3]))             # a list of another length
+    assert sub(key({"k": x}), key({"k": x}))                # a dict: equal only
+    assert not sub(key({"k": x}), key({"k": 1}))
+
+
+def test_a_delayed_negation_finds_its_deciding_table_through_the_sub_keys():
+    """``_delay_target_entry``: the delay recorded for ``p(1, f(Z))`` is
+    decided by the complete ``p(X, f(Y))`` table."""
+    from clausal.logic.tabling import DelayedNegation, TableEntry, _delay_target_entry
+    x, y, z = Var(), Var(), Var()
+    entry = TableEntry()
+    entry.add_answer((1, ("f", "a")))
+    entry.status = "complete"
+    ts = {("p", 2, make_subgoal_key((x, ("f", y)), Trail())): entry}
+    dn = DelayedNegation("p", 2, make_subgoal_key((1, ("f", z)), Trail()), (1, ("f", z)))
+    assert _delay_target_entry(dn, ts) is entry
+    dn = DelayedNegation("p", 2, make_subgoal_key((1, ("g", z)), Trail()), (1, ("g", z)))
+    assert _delay_target_entry(dn, ts) is None
+
+
+# ── A key walk started from inside a walk is its own ───────────────────────
+
+@dataclass
+class Probing:
+    """A term instance whose field ``b`` keys ``g(A, B, A)`` when read."""
+    a: object
+    b: object = None
+
+
+_PROBED: list = []     # the keys the property computed
+
+
+def _probe(self):
+    a, b = Var(), Var()
+    _PROBED.append(make_subgoal_key((("g", a, b, a),), Trail()))
+    return 7
+
+
+Probing.b = property(_probe, lambda self, value: None)
+
+
+def test_a_key_walk_started_inside_a_walk_is_its_own(key):
+    """Python code a key walk runs (a term instance's field property) can
+    start a key walk of its own: that key is canonical, numbered from 0,
+    and the outer numbering is not shifted by it."""
+    x, y = Var(), Var()
+    _PROBED.clear()
+    outer = key(x, Probing(x), y)
+    v = tabling._VAR
+    assert _PROBED == [(("__tuple__", "g", (v, 0), (v, 1), (v, 0)),)]
+    assert outer == ((v, 0), ("Probing", (v, 0), 7), (v, 1))

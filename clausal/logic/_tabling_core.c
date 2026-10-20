@@ -82,15 +82,20 @@ is_var_unbound(PyObject *term)
  * -- so two terms key alike iff they are variants: f(X, X) keys apart from
  * f(_, _), and f(X, Y) as f(Y, X).  Lock-step with tabling._norm_py.
  *
- * The map lives per thread for the walk in progress.  An entry point
- * (py_normalize_for_key, py_make_subgoal_key) opens it, and a RE-ENTRY from
- * inside the walk -- a partial list is keyed by tabling._seg_key, which
- * keys its elements through _normalize_for_key again -- continues the same
- * numbering, so a variable shared between the partial list and the rest of
- * the term keeps one number.  The first VM_INLINE variables sit in an
- * array (a pointer scan; most keys hold a handful), the rest in a dict
- * (a Var hashes by identity).  A ground term never touches the map: the
- * fast path costs one counter per entry.
+ * The map is a stack object of the public entry point that opened it
+ * (py_normalize_for_key, py_make_subgoal_key: always a FRESH numbering,
+ * the outer one -- if Python code the walk runs, a term instance's field
+ * property say, starts a key walk of its own -- saved and restored around
+ * it, so that inner key is canonical and the outer numbering unshifted),
+ * reached through a per-thread pointer by the walk.  The one re-entry that
+ * must CONTINUE the numbering -- a partial list is keyed by
+ * tabling._seg_key, which keys its elements through the C twin again --
+ * has its own entry, py_normalize_for_key_continue, so a variable shared
+ * between the partial list and the rest of the term keeps one number.
+ * The first VM_INLINE variables sit in an array (a pointer scan; most keys
+ * hold a handful), the rest in a dict (a Var hashes by identity).  A
+ * ground term never touches the map: the fast path costs two pointer
+ * stores per entry.
  * ================================================================ */
 
 #define VAR_KEY_CACHE 32
@@ -104,34 +109,25 @@ typedef struct {
     PyObject *vars[VM_INLINE];   /* the first variables, owned, by number */
     Py_ssize_t n;                /* variables numbered so far */
     PyObject *overflow;          /* Var -> number, past VM_INLINE (or NULL) */
-    int active;                  /* walks in progress (re-entries nest) */
 } VarMap;
-static _Thread_local VarMap vm;
+/* The numbering of the walk in progress on this thread, or NULL. */
+static _Thread_local VarMap *vm_cur = NULL;
 
-/* Open the numbering unless a walk is in progress; returns whether this
- * call opened it (and so must close it with vm_leave). */
-static int
-vm_enter(void)
+static inline void
+vm_init(VarMap *m)
 {
-    if (vm.active++ == 0) {
-        vm.n = 0;
-        vm.overflow = NULL;
-        return 1;
-    }
-    return 0;
+    m->n = 0;
+    m->overflow = NULL;
 }
 
 static void
-vm_leave(int opened)
+vm_release(VarMap *m)
 {
-    vm.active--;
-    if (!opened)
-        return;
-    Py_ssize_t lim = vm.n < VM_INLINE ? vm.n : VM_INLINE;
+    Py_ssize_t lim = m->n < VM_INLINE ? m->n : VM_INLINE;
     for (Py_ssize_t i = 0; i < lim; i++)
-        Py_CLEAR(vm.vars[i]);
-    vm.n = 0;
-    Py_CLEAR(vm.overflow);
+        Py_CLEAR(m->vars[i]);
+    m->n = 0;
+    Py_CLEAR(m->overflow);
 }
 
 static PyObject *
@@ -147,13 +143,19 @@ make_var_key(Py_ssize_t n)
 static PyObject *
 var_key(PyObject *var)
 {
-    Py_ssize_t lim = vm.n < VM_INLINE ? vm.n : VM_INLINE;
+    VarMap *m = vm_cur;
+    if (!m) {
+        PyErr_SetString(PyExc_SystemError,
+                        "_normalize_for_key: a variable keyed outside a walk");
+        return NULL;
+    }
+    Py_ssize_t lim = m->n < VM_INLINE ? m->n : VM_INLINE;
     for (Py_ssize_t i = 0; i < lim; i++) {
-        if (vm.vars[i] == var)
+        if (m->vars[i] == var)
             return make_var_key(i);
     }
-    if (vm.n > VM_INLINE) {
-        PyObject *got = PyDict_GetItemWithError(vm.overflow, var);  /* borrowed */
+    if (m->n > VM_INLINE) {
+        PyObject *got = PyDict_GetItemWithError(m->overflow, var);  /* borrowed */
         if (got) {
             Py_ssize_t i = PyLong_AsSsize_t(got);
             if (i < 0 && PyErr_Occurred()) return NULL;
@@ -161,21 +163,21 @@ var_key(PyObject *var)
         }
         if (PyErr_Occurred()) return NULL;
     }
-    Py_ssize_t n = vm.n;
+    Py_ssize_t n = m->n;
     if (n < VM_INLINE) {
-        vm.vars[n] = Py_NewRef(var);
+        m->vars[n] = Py_NewRef(var);
     } else {
-        if (!vm.overflow) {
-            vm.overflow = PyDict_New();
-            if (!vm.overflow) return NULL;
+        if (!m->overflow) {
+            m->overflow = PyDict_New();
+            if (!m->overflow) return NULL;
         }
         PyObject *num = PyLong_FromSsize_t(n);
         if (!num) return NULL;
-        int rc = PyDict_SetItem(vm.overflow, var, num);
+        int rc = PyDict_SetItem(m->overflow, var, num);
         Py_DECREF(num);
         if (rc < 0) return NULL;
     }
-    vm.n = n + 1;
+    m->n = n + 1;
     return make_var_key(n);
 }
 
@@ -557,10 +559,25 @@ py_normalize_for_key(PyObject *Py_UNUSED(module), PyObject *term)
                         "_normalize_for_key: _VAR sentinel not registered");
         return NULL;
     }
-    int opened = vm_enter();
+    VarMap local;
+    vm_init(&local);
+    VarMap *saved = vm_cur;
+    vm_cur = &local;
     PyObject *key = do_normalize(term, seg_depth_base);
-    vm_leave(opened);
+    vm_cur = saved;
+    vm_release(&local);
     return key;
+}
+
+/* _normalize_for_key_continue(term): the key of *term* under the numbering
+ * of the walk in progress (the entry tabling._seg_key keys a partial
+ * list's elements through); a fresh numbering when no walk is in progress. */
+static PyObject *
+py_normalize_for_key_continue(PyObject *module, PyObject *term)
+{
+    if (!vm_cur)
+        return py_normalize_for_key(module, term);
+    return do_normalize(term, seg_depth_base);
 }
 
 /* ================================================================
@@ -590,18 +607,23 @@ py_make_subgoal_key(PyObject *Py_UNUSED(module), PyObject *args)
     PyObject *result = PyTuple_New(n);
     if (!result) { Py_DECREF(snap); return NULL; }
 
-    /* one numbering across all the arguments: p(X, X) is not p(X, Y) */
-    int opened = vm_enter();
+    /* one fresh numbering across all the arguments: p(X, X) is not p(X, Y) */
+    VarMap local;
+    vm_init(&local);
+    VarMap *saved = vm_cur;
+    vm_cur = &local;
     for (Py_ssize_t i = 0; i < n; i++) {
         PyObject *normed = do_normalize(PyTuple_GET_ITEM(snap, i), seg_depth_base);
         if (!normed) {
-            vm_leave(opened);
+            vm_cur = saved;
+            vm_release(&local);
             Py_DECREF(result); Py_DECREF(snap);
             return NULL;
         }
         PyTuple_SET_ITEM(result, i, normed);
     }
-    vm_leave(opened);
+    vm_cur = saved;
+    vm_release(&local);
     Py_DECREF(snap);
     return result;
 }
@@ -957,6 +979,8 @@ py_register_var_sentinel(PyObject *Py_UNUSED(module), PyObject *sentinel)
 static PyMethodDef module_methods[] = {
     {"_normalize_for_key", py_normalize_for_key, METH_O,
      "Deref term into its variant key: unbound Vars numbered by first occurrence."},
+    {"_normalize_for_key_continue", py_normalize_for_key_continue, METH_O,
+     "The key of a term under the numbering of the key walk in progress."},
     {"make_subgoal_key", (PyCFunction)py_make_subgoal_key, METH_VARARGS,
      "Compute variant key for a tabled call's arguments."},
     {"_deref_walk", py_deref_walk, METH_O,

@@ -401,10 +401,15 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `w(T)` has the two answers, `w(f(A, B))` and `w(f(A, A))` are two
   tables, and `w(f(X, Y))`, `w(f(Y, X))` stay one answer. The open tail of
   a partial list is numbered with the other variables (`[T|T]` is not
-  `[X|T]`), and a complete `p(X, X)` table no longer decides a negated
-  `p(1, 2)` (it covers `p(1, 1)` only). An attributed variable is a
-  variable to the key, as before. A ground key is unchanged. The
-  internal `_VAR` sentinel is now the tag of a variable's key `(_VAR, n)`.
+  `[X|T]`). Which complete table decides a negated call (A04-F002) is
+  now a one-way match of the table's key against the call's, into the
+  arguments: a complete `p(X, X)` table no longer decides `\+ p(1, 2)`
+  (it covers `p(1, 1)`), and a complete `p(X, f(Y))` table decides
+  `\+ p(1, f(Z))`, as `p(X, Y)` decides `\+ p(f(A), g(A))`. An
+  attributed variable is a variable to the key, as before. A ground key
+  is unchanged. A key walk started by Python code a walk runs (a term
+  instance's field property) is numbered on its own. The internal `_VAR`
+  sentinel is now the tag of a variable's key `(_VAR, n)`.
 
 - **`name()` is a syntax error, as in ISO** (2026-10-20). The ISO reader
   read `f()` as a compound with no arguments. In a `.clausal` or `.pl`
