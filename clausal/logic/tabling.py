@@ -616,8 +616,8 @@ def _simplify_disjuncts(disjuncts: frozenset) -> frozenset:
 class TableEntry:
     """Stores status, answers, and suspended consumers for one subgoal."""
     __slots__ = ("status", "answers", "answer_set", "_answer_index",
-                 "suspended", "conditions", "_current_delays", "scc_deps",
-                 "_sources", "owner", "lead", "pi")
+                 "nonground", "suspended", "conditions", "_current_delays",
+                 "scc_deps", "_sources", "owner", "lead", "pi")
 
     def __init__(self, pi: "tuple[str, int] | None" = None):
         self.status: str = "evaluating"       # "evaluating" | "complete"
@@ -632,6 +632,10 @@ class TableEntry:
         self.answers: list[tuple] = []
         self.answer_set: set = set()   # canonical answer keys (A04-F005/F006)
         self._answer_index: dict = {}  # canonical key → index into answers
+        # Indices of the rows that leave a variable unbound: each is stored
+        # renamed apart and replayed as a fresh copy (``row``).  Empty for
+        # the common all-ground table, so the replay check is one truth test.
+        self.nonground: set[int] = set()
         self.suspended: list = []             # list of SuspendedConsumer
         # Parallel to answers. Each element is a DISJUNCTION of delay sets —
         # frozenset[frozenset[DelayedNegation]] — one inner set per derivation
@@ -681,6 +685,17 @@ class TableEntry:
         structurally-equal ground cell answers land as the SAME object.
         Non-cell args (class terms, atoms, scalars) are left exactly as
         received -- they never reach ``intern_cell`` at all.
+
+        A row that leaves a variable unbound is stored RENAMED APART (an
+        attribute-free ``copy_term``), never as the frozen tuple itself:
+        ``freeze_args`` is a deref-walk, so the frozen answer holds the
+        derivation's own ``Var`` objects, which the caller's continuation
+        can still bind (``v(X), X = b``) -- and which, replayed as they
+        are, made every replay of the row one shared variable
+        (todo/done/tabled-answer-rows-share-their-unbound-variables-
+        2026-10-16.md).  ``row`` hands each replay its own copy.  A ground
+        row (the common case) is stored as received, so interning keeps
+        its identity and a replay costs nothing extra.
         """
         if is_intern_enabled():
             answer = tuple(
@@ -704,9 +719,22 @@ class TableEntry:
         self.answer_set.add(key)
         idx = len(self.answers)
         self._answer_index[key] = idx
+        if not _is_ground(answer):
+            answer = _rename_row(answer)
+            self.nonground.add(idx)
         self.answers.append(answer)
         self.conditions.append(_simplify_disjuncts(frozenset({ds})))
         return idx
+
+    def row(self, i: int) -> tuple:
+        """The i-th answer as a replay unifies it: the stored tuple itself
+        for a ground row, a fresh attribute-free copy (its variables renamed
+        apart, their sharing within the row kept) for one that leaves a
+        variable unbound -- so no two replays, and no replay and the table,
+        share a variable."""
+        if self.nonground and i in self.nonground:
+            return _rename_row(self.answers[i])
+        return self.answers[i]
 
     def truth_value(self, i: int):
         """Return the i-th answer's WFS truth value: True, False, or ``Undefined``.
@@ -879,6 +907,32 @@ def _freeze_args_py(args, trail):
 freeze_args = _freeze_args_py
 
 
+def _is_ground(answer) -> bool:
+    """Whether a frozen answer leaves no variable unbound (the C walker
+    behind ``ground/1``; bound on first use, as ``_collect_vars`` is)."""
+    global _is_ground_impl
+    if _is_ground_impl is None:
+        from clausal.logic.builtins._helpers import _is_ground as impl  # noqa: PLC0415
+        _is_ground_impl = impl
+    return _is_ground_impl(answer)
+
+
+def _rename_row(answer: tuple) -> tuple:
+    """A copy of a frozen answer with its unbound variables renamed apart:
+    fresh, attribute-free variables, one per distinct variable of the row,
+    so the sharing within the row (``f(X, X)``) is kept.  The ground parts
+    are the same objects (``copy_term`` returns a ground cell as it is)."""
+    global _copy_term
+    if _copy_term is None:
+        from clausal.logic.builtins.inspection import _copy_term_impl  # noqa: PLC0415
+        _copy_term = _copy_term_impl
+    return _copy_term(answer, {})
+
+
+_is_ground_impl = None   # builtins._helpers._is_ground, bound on first use
+_copy_term = None        # inspection._copy_term_impl, bound on first use
+
+
 # ── Answer unification ───────────────────────────────────────────────────
 
 
@@ -934,11 +988,11 @@ def _scan_complete_answers(entry, args):
     from clausal.logic.variables import Trail as _Trail
     scratch = _Trail()
     has_conditional = False
-    for i, stored in enumerate(entry.answers):
+    for i in range(len(entry.answers)):
         if entry.conditions[i] is _FAILED:
             continue
         mark = scratch.mark()
-        matched = _unify_answer(list(args), list(stored), scratch)
+        matched = _unify_answer(list(args), list(entry.row(i)), scratch)
         scratch.undo(mark)
         if matched:
             if entry.truth_value(i) is True:
@@ -1499,11 +1553,11 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
 
         # ── COMPLETE: cache hit ──
         if entry is not None and entry.status == "complete":
-            for i, stored in enumerate(entry.answers):
+            for i in range(len(entry.answers)):
                 if entry.conditions[i] is _FAILED:
                     continue
                 mark = trail.mark()
-                if _unify_answer(args, stored, trail):
+                if _unify_answer(args, entry.row(i), trail):
                     _propagate_answer_delays(entry, i, table_store, trail)
                     yield None
                 trail.undo(mark)
@@ -1515,7 +1569,7 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
             while i < len(entry.answers):
                 if entry.conditions[i] is not _FAILED:
                     mark = trail.mark()
-                    if _unify_answer(args, entry.answers[i], trail):
+                    if _unify_answer(args, entry.row(i), trail):
                         _propagate_answer_delays(entry, i, table_store, trail)
                         yield None
                     trail.undo(mark)
@@ -1570,11 +1624,11 @@ def make_tabled_wrapper_simple(original_dispatch, functor, arity, table_store):
         entry.status = "complete"
         if not _leader_ctx.stack:
             _resolve_all_conditions(table_store)  # A04-F003 root-exit pass
-        for i, stored in enumerate(entry.answers):
+        for i in range(len(entry.answers)):
             if entry.conditions[i] is _FAILED:
                 continue
             mark = trail.mark()
-            if _unify_answer(args, stored, trail):
+            if _unify_answer(args, entry.row(i), trail):
                 _propagate_answer_delays(entry, i, table_store, trail)
                 yield None
             trail.undo(mark)
@@ -1606,11 +1660,11 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
 
         # ── COMPLETE: yield cached answers ──
         if entry is not None and entry.status == "complete":
-            for i, stored in enumerate(entry.answers):
+            for i in range(len(entry.answers)):
                 if entry.conditions[i] is _FAILED:
                     continue
                 mark = trail.mark()
-                if _unify_answer(args, stored, trail):
+                if _unify_answer(args, entry.row(i), trail):
                     _propagate_answer_delays(entry, i, table_store, trail)
                     yield (_proceed, None)
                 trail.undo(mark)
@@ -1649,11 +1703,11 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             # propagation staying exact.
             _leader_ctx.incomplete_reads += 1
             try:
-                for i, stored in enumerate(entry.answers):
+                for i in range(len(entry.answers)):
                     if entry.conditions[i] is _FAILED:
                         continue
                     mark = trail.mark()
-                    if _unify_answer(args, stored, trail):
+                    if _unify_answer(args, entry.row(i), trail):
                         _propagate_answer_delays(entry, i, table_store, trail)
                         yield (_proceed, None)
                     trail.undo(mark)
@@ -1758,7 +1812,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                         continue
                     streamed.add(i)
                     mark = trail.mark()
-                    if _unify_answer(args, entry.answers[i], trail):
+                    if _unify_answer(args, entry.row(i), trail):
                         if consumer is not None and c is not _UNCONDITIONAL:
                             delays = entry.delays_for(i)
                             if delays:
@@ -1945,7 +1999,7 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                 c = entry.conditions[i]
                 if c is not _FAILED and i not in streamed:
                     mark = trail.mark()
-                    if _unify_answer(args, entry.answers[i], trail):
+                    if _unify_answer(args, entry.row(i), trail):
                         if consumer is not None and c is not _UNCONDITIONAL:
                             delays = entry.delays_for(i)
                             if delays:

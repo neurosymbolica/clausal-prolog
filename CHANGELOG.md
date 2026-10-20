@@ -341,6 +341,27 @@ surface described in [docs/public-api.md](docs/public-api.md).
   surface. The error term is unchanged
   (`error(permission_error(modify, static_procedure, fixed/1), assertz/1)`).
 
+- **A tabled answer that leaves a variable unbound is replayed with fresh
+  variables** (2026-10-20). With `:- table(v/1). v(_). v(1).`,
+  `findall(X-Y, (v(X), v(Y)), L)` now gives `[_A-_B, _C-1, 1-_D, 1-1]`
+  (ISO/XSB variant tabling) where it gave `[_A-_A, _B-1, 1-1, 1-1]`, and
+  `v(X), X = b, findall(Y, v(Y), L)` gives `L = [_, 1]`, not `[b, 1]`.
+  The table stored the frozen answer itself, which held the derivation's
+  own variables, and every replay unified the caller's arguments with
+  those same objects: a binding made through one replay was seen by the
+  next until backtracking undid it, and a binding in the caller's
+  continuation reached the table. Now a non-ground row is stored renamed
+  apart and each replay gets its own attribute-free copy; the sharing
+  within a row (`v(f(X, X))`) is kept. Ground rows, the common case, are
+  stored and replayed as before (an interned cell keeps its identity),
+  and the tabled fib/path workloads are unchanged within noise. An answer
+  carrying a constraint is still handed over live on its first delivery,
+  and a replay from the completed table still drops the constraint
+  (the recorded A12 limitation; the fix was its plan's prerequisite:
+  rows are now copies).
+  (todo/done/tabled-answer-rows-share-their-unbound-variables-2026-10-16.md;
+  tests/iso_l3/test_l3_tabled_rows_fresh_variables.py)
+
 - **`catch_error/2` and `catch_recover/3` load in a `.clausal` clause
   body** (2026-10-20). `t(R) :- catch_error(throw(boom(42)), R).` failed
   to load with `NotImplementedError: terms_to_goalop: goal shape not yet

@@ -153,7 +153,7 @@ From Python, in a `.seam` file, the same builtins run in goal position: `if --ab
 
     ### Answer freezing
 
-    when a solution is found, the current arg bindings are *frozen* — fully dereferenced into a ground tuple — and stored in the `TableEntry`. Duplicate answers (by value) are suppressed via a set. Later consumers unify the original query args against each frozen answer.
+    when a solution is found, the current arg bindings are *frozen* — fully dereferenced into a tuple — and stored in the `TableEntry`. Duplicate answers (by value) are suppressed via a set. Later consumers unify the original query args against each stored answer. An answer that leaves a variable unbound (`v(_)`) is stored renamed apart and every replay gets a fresh copy of it (`TableEntry.row`), as a clause is renamed apart on each call: a binding made through one replay is never seen by the next, and `findall(X-Y, (v(X), v(Y)), L)` gives `[_A-_B, _C-1, 1-_D, 1-1]` for `v(_). v(1).`. The sharing within one answer (`f(X, X)`) is kept. Ground answers, the common case, are stored and replayed as they are.
 
     ### TableEntry
 

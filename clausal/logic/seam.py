@@ -774,7 +774,7 @@ def judged_answers(goal: Any, module, exported_vars, trail) -> "Iterator[tuple]"
             if _answer_key(make_subgoal_key, leader.answers[i]) in streamed:
                 continue          # a definite derivation already delivered it
             mark = trail.mark()
-            if _unify_answer(judge_vars, leader.answers[i], trail):
+            if _unify_answer(judge_vars, leader.row(i), trail):
                 seg = detach()
                 try:
                     if truth is Undefined:

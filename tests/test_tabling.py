@@ -228,7 +228,14 @@ class TestAddAnswerCellInterning:
         e = TableEntry()
 
         assert e.add_answer((c1,)) == 0
-        assert e.answers[0][0] is c1  # untouched -- never passed to intern_cell
+        # Not interned -- but not the object passed in either: the row
+        # leaves a variable unbound, so ``add_answer`` stores it renamed
+        # apart (tests/iso_l3/test_l3_tabled_rows_fresh_variables.py).  The
+        # copy keeps the tuple's shape, with a fresh variable in slot 0.
+        stored = e.answers[0][0]
+        assert stored is not c1 and is_var(stored[0]) and stored[0] is not f
+        assert stored[1:] == (1, 2)
+        assert e.nonground == {0}
         assert is_intern_enabled() is True  # sanity: the switch really was on
 
 
