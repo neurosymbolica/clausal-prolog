@@ -18,13 +18,14 @@
   meaning.
 
 The stored answer is the normalized skeleton (`tabling.py` `add_answer` /
-`_normalize_for_key` path); attributes never make it into the table, and
-replay does NOT build fresh vars (corrected 2026-10-16, D68 review F2): the
-frozen row keeps the answer's own unbound Var objects (`freeze_args` is a
-deref-walk), whose attributes were trailed and undone when the derivation
-backtracked, so replay unifies the caller with the SAME, now attribute-free,
-variables -- every replay of the row shares them (todo/tabled-answer-rows-
-share-their-unbound-variables-2026-10-16.md).
+`_normalize_for_key` path); attributes never make it into the table. Since
+2026-10-20 a non-ground row IS stored renamed apart and replayed as a fresh,
+attribute-free copy (`TableEntry.row`; todo/done/tabled-answer-rows-share-
+their-unbound-variables-2026-10-16.md) -- before that the frozen row kept
+the answer's own unbound Var objects (`freeze_args` is a deref-walk), whose
+attributes were trailed and undone when the derivation backtracked, and
+every replay of the row shared them. Either way the constraint is gone on
+replay: the copy carries no attribute.
 
 Note the converse direction is CORRECT and regression-pinned: a
 *caller*-constrained var filters replayed answers through its hooks
@@ -62,9 +63,13 @@ variables (its residue).
 1. **Store the residue with each answer.** In `add_answer`, take a
    `copy_term/3`-style copy: a fresh copy of the term plus the goals that
    rebuild its constraints (`dif(X, a)`, `X in 1..3`, `freeze(X, G)`).
-   This also fixes the shared-variable bug
-   (todo/tabled-answer-rows-share-their-unbound-variables-2026-10-16.md):
-   the row no longer holds the derivation's own variables.
+   The prerequisite is DONE (2026-10-20): `add_answer` already stores a
+   non-ground row renamed apart (an attribute-free `copy_term`) and
+   `TableEntry.row` hands each replay a fresh copy, so the row no longer
+   holds the derivation's own variables
+   (todo/done/tabled-answer-rows-share-their-unbound-variables-2026-10-16.md).
+   What remains here is the residue: the goals, copied under the same
+   variable map, stored beside the row.
 2. **Re-post the residue on replay.** Each replay takes a fresh copy of
    the row and calls its goals. The caller's own constraints then filter
    the answer through normal propagation; an incompatible answer fails.

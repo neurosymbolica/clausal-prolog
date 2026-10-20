@@ -1,6 +1,17 @@
 # A tabled answer row with unbound variables is shared, not copied, on replay
 
-Filed 2026-10-16, from the D68 review (F2), by the engine lane.
+**Status: FIXED 2026-10-20 (commit 99b6200a).** `TableEntry.add_answer`
+stores a non-ground row renamed apart (an attribute-free `copy_term`) and
+`TableEntry.row(i)` hands every replay a fresh copy; ground rows are stored
+and replayed as before. The first candidate below, with the groundness flag
+(`TableEntry.nonground`). Pinned in
+tests/iso_l3/test_l3_tabled_rows_fresh_variables.py (both repros, in `.pl`,
+`.clausal` and from Python). A constrained answer still loses its
+constraint on replay (the A12 todo, whose plan this was the prerequisite
+of). Found on the way: the variant key conflates `f(_, _)` with `f(X, X)`
+(todo/tabled-variant-key-conflates-repeated-variables-2026-10-20.md).
+
+Filed 2026-10-16, from the D68 review (F2).
 Pre-existing (main e7a59c8f behaves the same); independent of D68.
 
 ## What / Repro
