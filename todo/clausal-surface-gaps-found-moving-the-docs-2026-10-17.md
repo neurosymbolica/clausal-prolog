@@ -55,7 +55,11 @@ re-run separately.
    - regex positional groups;
    - sqlite multi-column rows: `query("db1", "SELECT name, age FROM users",
      (N, A))` fails although the row exists.
-5. **Importing `p/1` from one module and `p/2` from another keeps only the
+5. **FIXED 2026-10-20 (commit fae9628d)** `Database.get_dispatch` now
+   answers from a row the module adopted at import, so both imports
+   resolve, on both surfaces, for direct calls and meta-calls. Pinned in
+   tests/test_import_same_name_different_arity.py.
+   **Importing `p/1` from one module and `p/2` from another keeps only the
    later import** (reported, both surfaces). Calling `p(X)` then raises an
    arity mismatch; ISO and Scryer keep both.
 6. **`nl()` crashes** with an internal `TypeError` ("the 1-tuple ('nl',) is
