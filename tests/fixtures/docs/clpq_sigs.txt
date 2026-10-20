@@ -1,5 +1,5 @@
 % Display snippets for docs/clpq.md (Clausal Prolog). The program sections
-% are tested by clpq_sig_tests.clausal; entailed_1 is the seam spelling.
+% are tested by clpq_sig_tests.clausal.
 
 % === Unified syntax ===
 
@@ -61,12 +61,11 @@ bounds(X, LO, HI) :-
 % --8<-- [end:sup_2_and_inf_2]
 
 % --8<-- [start:entailed_1]
-test_entailed(X) <- (
+test_entailed(X) :-
     in_q(X, 0, 100),
-    X <= 4,
-    entailed(X <= 5),          # true: X <= 4 implies X <= 5
-    not entailed(X <= 3)       # false: X could be 4, which is > 3
-)
+    {X =< 4},
+    entailed(X =< 5),          % true: X =< 4 implies X =< 5
+    \+ entailed(X =< 3).       % false: X could be 4, which is > 3
 % --8<-- [end:entailed_1]
 
 % --8<-- [start:int_minimize_3]

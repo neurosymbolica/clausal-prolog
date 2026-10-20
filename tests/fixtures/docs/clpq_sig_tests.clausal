@@ -1,6 +1,5 @@
 % Companion tests for docs/clpq.md: each program section of
 % clpq_sigs.txt, as shown, with the answers its comments state.
-% (entailed_1 is the seam spelling and is not repeated here.)
 :- use_module(library(clpq)).
 
 % int_int_produces_fraction
@@ -60,6 +59,25 @@ bounds(X, LO, HI) :-
 
 test("bounds: LO = 3, HI = 10, X unbound") :-
     bounds(X, LO, HI), LO == 3, HI == 10, var(X).
+
+% entailed_1
+test_entailed(X) :-
+    in_q(X, 0, 100),
+    {X =< 4},
+    entailed(X =< 5),
+    \+ entailed(X =< 3).
+
+test("entailed: X =< 4 implies X =< 5, not X =< 3") :-
+    test_entailed(X), var(X).
+
+test("entailed: X =< 4 implies X =\\= 5") :-
+    {X =< 4}, entailed(X =\= 5).
+
+test("entailed: a relation built at run time") :-
+    {X =< 4}, C = (X =< 5), entailed(C).
+
+test("entailed: the store is left as it was") :-
+    {X =< 4}, entailed(X =< 5), sup(X, S), S == 4.
 
 % int_minimize_3
 int_min(X, COST) :-

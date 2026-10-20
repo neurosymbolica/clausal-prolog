@@ -248,10 +248,6 @@ q_dump(A, B, Vs, Cs, Bp, Cb) :-
 _SOLVER_ORACLE = _SOLVER.replace("maximize(Z, _)", "maximize(Z)")
 
 
-@_disagrees("entailed/1 fails on every constraint written as a Prolog term: "
-            "builtins/constraints.py _entailed__1 matches only the seam's "
-            "comparison nodes, so ('=\\\\=', A, 5) falls through and fails "
-            "silently (entailed(A =< 5) fails too); the oracle answers yes")
 def test_entailed():
     # {A =< 4}, entailed(A =\= 5): yes, with {A =< 4} left.
     answer = _one(port(_SOLVER, "q_entailed", ["A"]))
@@ -263,13 +259,9 @@ def test_entailed_on_the_oracle():
     _is(answer, {}, ["A=<4"])
 
 
-@_disagrees("entailed/1 fails on every constraint written as a Prolog term "
-            "(see test_entailed), so a `no` from the port means nothing until "
-            "the positive control, {A =< 4}, entailed(A =\\= 5), answers yes")
 def test_not_entailed():
-    # {A =< 4}, entailed(A =\= 3): no.  The port's `no` counts only once
-    # its entailed/1 can say yes: the positive control comes first.  When
-    # entailed/1 is fixed this flips to XPASS and fails, forcing a revisit.
+    # {A =< 4}, entailed(A =\= 3): no.  The port's `no` counts only
+    # because its entailed/1 can say yes: the positive control comes first.
     assert len(port(_SOLVER, "q_entailed", ["A"])) == 1
     assert port(_SOLVER, "q_not_entailed", ["A"]) == []
 

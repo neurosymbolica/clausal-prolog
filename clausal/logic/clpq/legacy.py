@@ -1599,12 +1599,14 @@ def entailed(constraint_type: str, l: Any, r: Any, trail: Trail) -> bool:
         return (s is not None and i is not None
                 and s + offset == ZERO and i + offset == ZERO)
     elif constraint_type in ('\\=', '=\\='):
-        # l != r ⟺ NOT(l = r) ⟺ inf(l-r) > 0 OR sup(l-r) < 0
+        # l != r ⟺ NOT(l = r) ⟺ inf(l-r) > 0 OR sup(l-r) < 0.  One side
+        # unbounded (None) does not stop the other deciding: {A =< 4}
+        # entails A =\= 5 though A has no lower bound.
         s = _sup_of_diff()
+        if s is not None and s + offset < ZERO:
+            return True
         i = _inf_of_diff()
-        if s is None or i is None:
-            return False
-        return (s + offset < ZERO) or (i + offset > ZERO)
+        return i is not None and i + offset > ZERO
     else:
         raise ValueError(f"Unknown constraint type: {constraint_type!r}")
 

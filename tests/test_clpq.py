@@ -576,6 +576,18 @@ class TestEntailed:
         q_le(x, F(4), trail)
         assert entailed('\\=', x, F(5), trail)
 
+    def test_entailed_ne_true_unbounded_below(self):
+        """X <= 4 entails X != 5 though X has no lower bound (the SICStus
+        manual's {A =< 4}, entailed(A =\\= 5)): one unbounded side does not
+        stop the other deciding."""
+        # nv
+        trail = Trail()
+        x = Var()
+        q_le(x, F(4), trail)
+        assert entailed('\\=', x, F(5), trail)
+        assert entailed('=\\=', x, F(5), trail)
+        assert not entailed('=\\=', x, F(3), trail)
+
     def test_entailed_ne_false(self):
         """X in [0, 10] does NOT entail X != 5 (X could be 5)."""
         # nv

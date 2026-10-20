@@ -334,6 +334,21 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `CLAUSAL_PL_FRONTEND=translator` path and a DCG head `[] --> ...` are
   unchanged.
 
+- **`entailed/1` answers in Clausal Prolog and ISO Prolog** (2026-10-20).
+  `:- use_module(library(clpq)). t :- in_q(X, 0, 100), {X =< 4},
+  entailed(X =< 5).` answered `false`, on both CLP(Q) solvers: the builtin
+  (and `clpq.entailed/1`) matched only the seam's comparison nodes, and a
+  `.clausal` or `.pl` program passes the relation as a compound cell
+  (`('=<', X, 5)`), so every call failed silently. Both now read a cell
+  whose functor is `=<`, `<`, `>=`, `>`, `=:=`, `=` or `=\=`, including
+  one built at run time (`C = (X =< 5), entailed(C)`); anything else still
+  fails, as before. The legacy solver also answered `false` for a
+  disequality when one side of the store was unbounded:
+  `{A =< 4}, entailed(A =\= 5)` (the SICStus manual's example) now holds.
+  Still open on the legacy solver only: a strict relation implied by a
+  strict bound (`{X > 2}, entailed(X > 2)`), see
+  todo/clpq-strict-bounds-closed-by-inequalities-2026-10-11.md.
+
 - **A sandboxed module may import the datetime adapter's `date`
   constructor** (2026-10-17). `-import_from(date_time, [date])` was refused
   at load under `CLAUSAL_SANDBOX=1` with `non_export`, at the import and at

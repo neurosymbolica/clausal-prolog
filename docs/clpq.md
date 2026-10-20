@@ -11,8 +11,7 @@ Examples on this page are [Clausal Prolog](clausal_prolog.md) (`.clausal`):
 ISO Prolog syntax, without cut, with `:- use_module(library(clpq)).` loading
 the solver. The [seam](syntax.md), Clausal's Python-syntax surface, writes
 the same constraints with Python's comparison operators; the page notes the
-seam spelling where it differs, and one predicate, `entailed/1`, works only
-from the seam.
+seam spelling where it differs.
 
 ---
 
@@ -151,7 +150,7 @@ Integral rationals are presented as integers by every binder — the arithmetic 
 | `minimize` | 2 | `minimize(Expr, Result)` — find minimum; binds all variables to optimal point |
 | `sup` | 2 | `sup(Expr, Sup)` — compute upper bound without committing (variables stay unbound) |
 | `inf` | 2 | `inf(Expr, Inf)` — compute lower bound without committing (variables stay unbound) |
-| `entailed` | 1 | `entailed(C)` — test if constraint `C` is implied by current store (seam only; see [below](#entailed1)) |
+| `entailed` | 1 | `entailed(C)` — test if constraint `C` is implied by current store |
 | `int_minimize` | 3 | `int_minimize(IntVars, Expr, Min)` — minimize with integrality constraints |
 | `dump_q` | 2 | `dump_q(Vars, Constraints)` — project constraint store onto Vars (Fourier-Motzkin) |
 
@@ -243,16 +242,13 @@ Compute the upper or lower bound of a linear expression **without binding variab
 
 Tests whether a constraint is logically implied by the current store — i.e., whether it holds for **all** feasible points. Does not modify the store.
 
-!!! warning "Seam only"
-    `entailed/1` reads the seam's comparison terms, so this example is the seam spelling.
-    Called from a `.clausal` file, `entailed(X =< 5)` fails even when the store entails it
-    (after `in_q(X, 0, 100), {X =< 4}`, for example).
-
-```seam
+```clausal
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:entailed_1"
 ```
 
-Supported operators (seam): `<=`, `>=`, `<`, `>`, `==`, `!=`.
+Supported relations: `=<`, `>=`, `<`, `>`, `=:=` (or `=`), `=\=`. The relation
+may also be built at run time (`C = (X =< 5), entailed(C)`). In the seam they
+are `<=`, `>=`, `<`, `>`, `==`, `!=`: `entailed(X <= 5)`.
 
 ### int_minimize/3
 

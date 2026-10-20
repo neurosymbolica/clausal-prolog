@@ -266,23 +266,54 @@ def _dump_q__2(vars_list, result, trail, k):
 
 
 
+#: The comparison nodes a seam relation arrives as, by the relation they
+#: name in entailed/4 of either CLP(Q) solver.
+_ENTAILED_NODE_RELATIONS = None
+
+#: The relation functors a compound cell names: what a .clausal or .pl
+#: program writes, a relation built at run time, a cell from Python.  These
+#: are the comparisons nf.pl's entailed/1 negates.
+_ENTAILED_CELL_RELATIONS = frozenset(
+    ("=<", "<", ">=", ">", "=:=", "=", "=\\="))
+
+
+def _entailed_relation(term):
+    """``(relation, left, right)`` of an entailed/1 argument, or None.
+
+    The argument is a seam comparison node (``X <= 5`` in the seam) or a
+    compound cell (``('=<', X, 5)``: ``X =< 5`` in Clausal Prolog and
+    ISO Prolog, or a relation built at run time).  Matching only the nodes
+    made every Clausal Prolog call fail (todo/clausal-surface-gaps-found-
+    moving-the-docs-2026-10-17.md, engine bugs, item 2)."""
+    global _ENTAILED_NODE_RELATIONS
+    if _ENTAILED_NODE_RELATIONS is None:
+        from clausal.pythonic_ast.nodes import (  # noqa: PLC0415
+            ArithEq, ArithNeq, Gt, GtE, Lt, LtE)
+        _ENTAILED_NODE_RELATIONS = {
+            LtE: "=<", Lt: "<", GtE: ">=", Gt: ">", ArithEq: "=",
+            ArithNeq: "\\="}
+    relation = _ENTAILED_NODE_RELATIONS.get(type(term))
+    if relation is not None:
+        return relation, term.left, term.right
+    if (type(term) is tuple and len(term) == 3
+            and term[0] in _ENTAILED_CELL_RELATIONS):
+        return term
+    return None
+
+
 @_builtin("entailed", 1)
 def _entailed__1(constraint_expr, trail, k):
-    """entailed(X <= 5) — test if constraint is implied (Pythonic form).
+    """entailed(X =< 5) — test if constraint is implied by the store.
 
-    The comparison expression is in argument position, so it arrives as
-    an AST node (e.g., LtE), not as an evaluated goal.
+    The relation is in argument position, so it arrives as data: a seam
+    comparison node (``LtE``) or a compound cell (``('=<', X, 5)``), not
+    as an evaluated goal (see :func:`_entailed_relation`).
     """
     from clausal.logic.clpq import entailed as _entailed_fn  # noqa: PLC0415
     from clausal.logic.variables import deref as _deref  # noqa: PLC0415
-    from clausal.pythonic_ast.nodes import LtE, Lt, GtE, Gt, ArithEq, ArithNeq  # noqa: PLC0415
-    expr = _deref(constraint_expr)
-    op_map = {LtE: '=<', Lt: '<', GtE: '>=', Gt: '>', ArithEq: '=', ArithNeq: '\\='}
-    for cls, op_str in op_map.items():
-        if isinstance(expr, cls):
-            if _entailed_fn(op_str, expr.left, expr.right, trail):
-                yield None
-            return
+    relation = _entailed_relation(_deref(constraint_expr))
+    if relation is not None and _entailed_fn(*relation, trail):
+        yield None
 
 
 @_builtin("sup", 2)
@@ -364,11 +395,8 @@ def _clpq_mod_entailed(constraint, trail, k):
     """clpq.entailed(Constraint) — succeed if constraint is implied."""
     from clausal.logic.clpq import entailed as _fn
     from clausal.logic.variables import deref as _deref
-    from clausal.pythonic_ast.nodes import LtE, Lt, GtE, Gt, ArithEq, ArithNeq
-    node = _deref(constraint)
-    op_map = {LtE: "=<", Lt: "<", GtE: ">=", Gt: ">", ArithEq: "=", ArithNeq: "\\="}
-    op = op_map.get(type(node))
-    if op and _fn(op, node.left, node.right, trail):
+    relation = _entailed_relation(_deref(constraint))
+    if relation is not None and _fn(*relation, trail):
         yield None
 
 @_builtin("clpq.dump", 2)
