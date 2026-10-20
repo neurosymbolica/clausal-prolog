@@ -277,8 +277,9 @@ test("extract port") :-
 ### Qualified Calls
 
 A module-qualified call binds its groups exactly like the unqualified one, and
-the singleton lint counts them the same way. In the seam, a qualified
-`regex.match(...)` binds the same way too:
+the `.clausal` singleton lint counts them the same way (the seam lint does not
+see groups, qualified or not). In the seam, a qualified `regex.match(...)`
+binds the same way too:
 
 ```clausal
 :- set_prolog_flag(double_quotes, chars).
@@ -335,7 +336,7 @@ test("both read the same groups") :-
     Y1 == "2026".
 ```
 
-The singleton lint knows this: a variable named by a group of a literal `match/2` or `search/2` pattern is not reported as a singleton. Auto-binding applies to the goals of the clause body, not inside a meta-call argument: in `once(match(...))`, `catch(match(...), _, true)` or `forall(match(...), true)` a group binds nothing (and the lint still reports its variable).
+The `.clausal` singleton lint knows this (the seam lint does not see groups, qualified or not): a variable named by a group of a literal `match/2` or `search/2` pattern is not reported as a singleton. Auto-binding applies to the goals of the clause body, not inside a meta-call argument: in `once(match(...))`, `catch(match(...), _, true)` or `forall(match(...), true)` a group binds nothing (and the lint still reports its variable).
 
 You never see the expanded form — just use the variable names in your pattern.
 

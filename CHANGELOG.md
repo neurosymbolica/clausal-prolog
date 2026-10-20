@@ -412,7 +412,10 @@ surface described in [docs/public-api.md](docs/public-api.md).
   qualified call binds exactly like the unqualified one, for literal and
   dynamic patterns; another module's `match/2` is still that module's
   predicate, whatever the module is called. The `.clausal` singleton lint
-  counts a qualified call's groups as it does an unqualified one's. A clause
+  counts a qualified call's groups as it does an unqualified one's, when the
+  qualifier is a module name a `use_module` of `library(re)` recorded (a
+  spelled-out `'clausal.library.re':match` imports nothing and is not
+  counted). A clause
   term expansion hands back unchanged keeps its variable names, so its
   groups bind; a clause a `term_expansion/4` rule builds has none to carry
   (its variables are the rule's, renamed for each expansion), now documented

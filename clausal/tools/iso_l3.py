@@ -639,10 +639,15 @@ class _ClauseLowering:
         else:
             dotted = m
         self._check_goal_name(gname, g_sp)
-        if (len(gargs) == 2 and f"{dotted}.{gname}" in _REGEX_AUTOBIND_GOALS
+        if (len(gargs) == 2 and aliases.get(m) == dotted
+                and f"{dotted}.{gname}" in _REGEX_AUTOBIND_GOALS
                 and not self._meta_depth):
             # ``re:match(P, S)`` is the dotted call goal expansion binds the
-            # groups of exactly as it does the unqualified one's
+            # groups of exactly as it does the unqualified one's.  Only
+            # through an alias a use_module of library(re) recorded: that
+            # import loads the module, so the binder resolves the callee.
+            # A spelled-out ``'clausal.library.re':match`` imports nothing,
+            # and binds only if something else loaded the module first.
             self.regex_group_names |= _regex_group_names(gargs[0])
         mpos = _pos_expr(self._pos.of(_top_span(m_sp)))
         parts = dotted.split(".")

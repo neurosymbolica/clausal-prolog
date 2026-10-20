@@ -185,6 +185,18 @@ other(D, YEAR) :- rx_other_re:match("(?P<YEAR>x)", D).
     assert any("`YEAR`" in m for m in singles), singles
 
 
+def test_a_spelled_out_qualifier_without_an_import_is_still_a_singleton(
+        native):
+    """The lint counts a qualified call's groups only through a module
+    alias a use_module of library(re) recorded: a spelled-out module path
+    imports nothing, so whether its groups bind depends on what loaded
+    first, and the lint does not vouch for it."""
+    _, singles = _load(native, "rx_qual_spelled", """\
+fqdate(D, YEAR) :- 'clausal.library.re':match("(?P<YEAR>\\\\d{4})", D).
+""", head=":- set_prolog_flag(double_quotes, chars).\n")
+    assert any("`YEAR`" in m for m in singles), singles
+
+
 # ── term expansion ──────────────────────────────────────────────────────────
 #
 # A clause term expansion hands back unchanged (the identity rule, or the

@@ -2753,3 +2753,30 @@ def test_without_the_sandbox_op_changes_the_operator_table(sbx):
     """)
     for name in ("goal", "opn", "ope", "opn_c", "ope_c", "opz_c"):
         assert int(ok(res, name)) > 0, (name, res[name])
+
+
+def test_a_qualified_regex_call_binds_its_groups_in_the_sandbox(sbx):
+    """``re:match`` resolves its dotted callee for goal expansion through
+    the sandbox's own walk, and binds the groups as with the sandbox off."""
+    sbx.write("qre.clausal", r"""
+        :- set_prolog_flag(double_quotes, chars).
+        :- use_module(library(re)).
+        qdate(D, YEAR, MONTH) :-
+            re:match("(?P<YEAR>\\d{4})-(?P<MONTH>\\d{2})", D).
+    """)
+    body = """
+        from clausal.logic.solve import call
+        from clausal.logic.variables import Var, deref, walk
+        from clausal.logic.cells import chars
+        def run():
+            m = load("qre")
+            y, mo = Var(), Var()
+            return [(walk(deref(y)), walk(deref(mo)))
+                    for _ in call("qdate", chars("2024-03"), y, mo, module=m)]
+        probe("q", run)
+    """
+    on = sbx.run(body, env={"CLAUSAL_SANDBOX": "1"})
+    off = sbx.run(body, env={"CLAUSAL_SANDBOX": "0"})
+    want = repr([(("$chars", "2024"), ("$chars", "03"))])
+    assert ok(on, "q") == want
+    assert ok(off, "q") == want
