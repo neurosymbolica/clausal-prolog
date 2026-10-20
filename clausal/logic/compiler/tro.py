@@ -387,7 +387,7 @@ _DETERMINISTIC_BUILTINS: frozenset[tuple[str, int]] = frozenset({
     ("subtract", 3), ("intersection", 3), ("union", 3),
     ("list_to_set", 2),
     # dict builtins (dict_set.py)
-    ("is_dict", 1), ("dict_size", 2), ("dict_keys", 2), ("dict_values", 2),
+    ("is_dict", 1), ("is_dict_t", 2), ("dict_size", 2), ("dict_keys", 2), ("dict_values", 2),
     ("dict_pairs", 2), ("dict_get", 3), ("dict_put", 4),
     ("dict_put_pairs", 3), ("dict_remove", 3), ("dict_merge", 3),
     # set builtins (dict_set.py)

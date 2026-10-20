@@ -2,6 +2,7 @@
 
 Dict builtins:
   is_dict/1         — type check
+  is_dict_t/2       — reified type check (T = true / false)
   dict_size/2       — number of keys
   dict_keys/2       — extract key list (sorted for determinism)
   dict_values/2     — extract value list (in key order)
@@ -122,6 +123,23 @@ def _is_dict__1(term, trail, k):
     """is_dict(Term) — succeeds if Term is a DictTerm or a plain dict."""
     if _dict_input(deref(term)) is not None:
         yield None
+
+
+@_builtin("is_dict_t", 2)
+def _is_dict_t__2(term, t, trail, k):
+    """is_dict_t(Term, T) — reified is_dict/1: T is True if Term is a dict
+    (a DictTerm or a plain dict, as is_dict/1 accepts), False for any other
+    nonvar term.  One answer, no choice point; instantiation_error for an
+    unbound Term.  A bound T is a test, and a T that is neither boolean
+    fails, as dif_t/3's does.  As a closure, ``if_(is_dict_t(P), A, B)``
+    calls it with T appended (library(reif))."""
+    term = deref(term)
+    if is_var(term):
+        raise LogicException(instantiation_error("is_dict_t/2"))
+    mark = trail.mark()
+    if unify(t, _dict_input(term) is not None, trail):
+        yield None
+    trail.undo(mark)
 
 
 @_trampoline_builtin("dict_size", 2)
