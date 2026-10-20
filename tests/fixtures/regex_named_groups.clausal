@@ -27,6 +27,11 @@ case_exact(D, _Year, YEAR) :- match("(?P<YEAR>\\d{4})", D).
 % A group inside a disjunction branch.
 either_number(S, N) :- ( match("(?P<N>\\d+)", S) ; N = none ).
 
+% A module-qualified call binds exactly like the unqualified one.
+qualified_date(D, YEAR, MONTH) :-
+    re:match("(?P<YEAR>\\d{4})-(?P<MONTH>\\d{2})", D).
+qualified_port(URL, PORT) :- re:search(":(?P<PORT>\\d+)", URL).
+
 test("head variables bind") :-
     parse_date("2024-03", Y, M),
     Y == "2024",
@@ -62,3 +67,12 @@ test("group names match variable names exactly") :-
 test("a group in a disjunction branch binds") :-
     either_number("42", N),
     N == "42".
+
+test("a qualified match binds") :-
+    qualified_date("2024-03", Y, M),
+    Y == "2024",
+    M == "03".
+
+test("a qualified search binds") :-
+    qualified_port("http://localhost:8080/api", PORT),
+    PORT == "8080".

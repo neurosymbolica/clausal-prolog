@@ -403,6 +403,24 @@ surface described in [docs/public-api.md](docs/public-api.md).
   nothing and the variable is still reported. Pinned by `tests/fixtures/regex_named_groups.clausal` and
   `tests/iso_l3/test_l3_regex_named_groups.py`.
 
+- **A module-qualified regex call binds its named groups too** (2026-10-20).
+  `re:match(P, S)` and `re:search(P, S)` in `.clausal`, and the seam's
+  `regex.match(P, S)` / `py.re.search(P, S)`, bound no group: goal expansion
+  recognised only a plain or import-remapped call name, and a qualified call
+  arrives as a dotted callee. It now resolves that callee the way the
+  compiler does and expands it when it is the regex predicate itself, so a
+  qualified call binds exactly like the unqualified one, for literal and
+  dynamic patterns; another module's `match/2` is still that module's
+  predicate, whatever the module is called. The `.clausal` singleton lint
+  counts a qualified call's groups as it does an unqualified one's. A clause
+  term expansion hands back unchanged keeps its variable names, so its
+  groups bind; a clause a `term_expansion/4` rule builds has none to carry
+  (its variables are the rule's, renamed for each expansion), now documented
+  in docs/regex.md and docs/term_expansion.md. Pinned by
+  `tests/fixtures/regex_named_groups.clausal`,
+  `tests/iso_l3/test_l3_regex_named_groups.py` and
+  `tests/test_regex.py::TestQualifiedAutoBinding`.
+
 - **Importing `p/1` from one module and `p/2` from another keeps both**
   (2026-10-20). `:- use_module(m1, [p/1]). :- use_module(m2, [p/2]).` (or
   two whole-module `use_module`s, or the seam's two `-import_from`s) kept

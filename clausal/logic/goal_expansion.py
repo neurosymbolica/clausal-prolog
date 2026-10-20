@@ -89,7 +89,8 @@ class _ExpansionContext:
         the clause's name table (``Predicate.var_names``) the group binds the
         variable spelled EXACTLY like it, wherever in the clause it occurs:
         ``YEAR`` is not ``Year`` or ``_year``, which are other variables.
-        Without one (a Python-built or term-expanded clause), the fallback
+        Without one (a Python-built clause, or one a term_expansion rule
+        built -- a clause expansion returns unchanged keeps it), the fallback
         is the head's field names, derived by lowering + stripping a leading
         underscore.
         """
@@ -208,7 +209,8 @@ def _expand_predicate(pred: Predicate, ctx: _ExpansionContext) -> Predicate:
 
     # The clause's variables by source name, from the front end: what a
     # regex named group binds.  A clause without the table (Python-built,
-    # term-expanded) falls back to the head's field_name → Var mapping.
+    # or built by a term_expansion rule) falls back to the head's
+    # field_name → Var mapping.
     named = getattr(pred, "var_names", None)
     ctx._named_vars = dict(named) if named is not None else None
     clause_vars: dict[str, Any] = {}
@@ -345,22 +347,57 @@ def _get_call_name(goal: Call) -> str | None:
     return None
 
 
+def _resolved_callee(name: str, module_dict: dict) -> Any:
+    """The object the call name *name* resolves to in this module, or None.
+
+    A plain or import-remapped name is the module's own binding.  A dotted
+    name the imports did not bind -- a module-qualified call, the seam's
+    ``regex.match(..)`` or Clausal Prolog's ``re:match(..)`` (lowered to
+    ``clausal.library.re.match``) -- is resolved as the compiler resolves it
+    (``globals_env._dotted_base``): its qualifier walked from this module's
+    binding of the first segment, else ``sys.modules``.  The last segment is
+    read from the qualifier module's namespace, never by ``getattr``, so no
+    Python runs here; what it finds is only ever compared by identity.
+    """
+    bound = module_dict.get(name)
+    if bound is not None or "." not in name:
+        return bound
+    from clausal import _sandbox_state  # noqa: PLC0415
+    from clausal.logic.compiler.globals_env import _dotted_base  # noqa: PLC0415
+    parts = name.split(".")
+    base = _dotted_base(parts, module_dict)
+    if base is None:
+        return None
+    if _sandbox_state.ACTIVE:
+        from clausal.sandbox import walkable  # noqa: PLC0415
+        if not walkable(base):
+            return None
+    try:
+        namespace = object.__getattribute__(base, "__dict__")
+    except AttributeError:
+        return None
+    return namespace.get(parts[-1])
+
+
 def _is_regex_goal(goal: Any, ctx: _ExpansionContext) -> bool:
     """True iff *goal* calls the regex ``match``/``search`` predicate.
 
     Verified by identity against ``clausal.modules.py.re`` through the module's
     own binding (mirrors :func:`_is_reflection_goal`), so a same-named
     user predicate — ``match(A, B) <- (A is B)`` — is never hijacked (F003).
+    A module-qualified call is the same goal when its qualifier resolves to
+    the regex module (:func:`_resolved_callee`); another module's ``match``
+    is that module's predicate, whatever the module is called.
     """
     if not isinstance(goal, Call):
         return False
-    name = _get_call_name(goal)
+    name = _functor_name(goal.func)
     if name is None:
         return False
     short_name = name.rsplit(".", 1)[-1]
     if short_name not in ("match", "search"):
         return False
-    bound = ctx.module_dict.get(name)
+    bound = _resolved_callee(name, ctx.module_dict)
     if bound is None:
         return False
     from clausal.modules.py import re as _regex_mod

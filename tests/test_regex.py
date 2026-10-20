@@ -827,3 +827,57 @@ is_year(S, Year) <- match(r"(?P<Year>\d{4})-\d{2}", S)
 parse_year(S, Out) <- (match(r"(?P<year>\d{4})", S), Out is 0)
 """, tmp_path)
         assert _first("parse_year", chars("2026"), module=mod) == 0
+
+
+class TestQualifiedAutoBinding:
+    """A module-qualified call binds its groups exactly like the unqualified
+    one: goal expansion resolves the dotted callee (``regex.match``,
+    ``py.re.search``) as the compiler does, and expands it only when it IS
+    the regex predicate."""
+
+    @staticmethod
+    def _load_header(name, header, src_text, tmp_path):
+        p = tmp_path / f"{name}{SEAM}"
+        p.write_text("-double_quotes(chars)\n" + header + src_text)
+        return _load_module(name, str(p)).__dict__["$module"]
+
+    @pytest.mark.parametrize("header, qual", [
+        ("-import_module(regex)\n", "regex"),
+        ("-import_module(py.re)\n", "py.re"),
+    ], ids=["regex", "py_re"])
+    def test_qualified_static_match_and_search_bind(self, tmp_path, header,
+                                                    qual):
+        mod = self._load_header("qab_" + qual.replace(".", "_"), header, rf"""
+parse_date(S, YEAR, MONTH) <- {qual}.match(r"(?P<YEAR>\d{{4}})-(?P<MONTH>\d{{2}})", S)
+find_port(URL, PORT) <- {qual}.search(r":(?P<PORT>\d+)", URL)
+body_year(S, Y) <- ({qual}.match(r"(?P<YEAR>\d{{4}})", S), Y is YEAR)
+""", tmp_path)
+        assert _call_multi("parse_date", chars("2026-03"), module=mod,
+                           out_names=["y", "m"]) == [
+            {"y": chars("2026"), "m": chars("03")}]
+        assert _first("find_port", chars("http://h:8080/"),
+                      module=mod) == chars("8080")
+        assert _first("body_year", chars("2026"), module=mod) == chars("2026")
+
+    def test_qualified_dynamic_pattern_binds(self, tmp_path):
+        mod = self._load_header("qab_dyn", "-import_module(regex)\n", r"""
+try_year(PAT, S, YEAR) <- regex.match(PAT, S)
+""", tmp_path)
+        assert _first("try_year", chars(r"(?P<YEAR>\d{4})"), chars("2026"),
+                      module=mod) == chars("2026")
+
+    def test_another_modules_match_is_not_expanded(self, tmp_path,
+                                                   monkeypatch):
+        """``other.match(P, S)`` of a module that is not the regex module is
+        that module's predicate: called with its two arguments, untouched."""
+        monkeypatch.syspath_prepend(str(tmp_path))
+        (tmp_path / f"qab_other{SEAM}").write_text(
+            "-double_quotes(chars)\n"
+            "match(P, S) <- (P is S)\n")
+        mod = self._load_header("qab_user", "-import_module(qab_other)\n", r"""
+same(S, YEAR) <- qab_other.match(r"(?P<YEAR>\d{4})", S)
+""", tmp_path)
+        out = _first("same", chars(r"(?P<YEAR>\d{4})"), module=mod)
+        from clausal.logic.variables import is_var
+        assert is_var(out)
+        assert not _succeeds("same", chars("2026"), Var(), module=mod)

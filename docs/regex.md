@@ -274,6 +274,41 @@ test("extract port") :-
     PORT == "8080".
 ```
 
+### Qualified Calls
+
+A module-qualified call binds its groups exactly like the unqualified one, and
+the singleton lint counts them the same way. In the seam, a qualified
+`regex.match(...)` binds the same way too:
+
+```clausal
+:- set_prolog_flag(double_quotes, chars).
+:- use_module(library(re)).
+
+parse_version(TEXT, MAJOR, MINOR) :-
+    re:search("(?P<MAJOR>\\d+)\\.(?P<MINOR>\\d+)", TEXT).
+
+test("qualified search") :-
+    parse_version("release 3.12", MAJOR, MINOR),
+    MAJOR == "3",
+    MINOR == "12".
+```
+
+The qualifier must resolve to the regex module (`re` as `library(re)` names
+it). Another module's `match/2` is that module's own predicate, whatever the
+module is called, and its arguments are passed through untouched.
+
+### Term Expansion
+
+Auto-binding runs after [term expansion](term_expansion.md). A clause that
+term expansion hands back unchanged (an identity rule, or the clause itself
+inside a one-to-many list such as `[T, T]`) keeps its variable names, so its
+groups bind as written. A clause that a `term_expansion/4` rule *builds*
+carries no variable names: its variables are the rule's, renamed for each
+expansion, and nothing maps them back to the names the rule's text spells.
+A group in such a clause binds no variable in `.clausal` (in the seam it falls
+back to the head's field names), and the singleton lint does not count it,
+because the pattern is data in the rule.
+
 ### How It Works
 
 The goal expansion pass detects `(?P<NAME>...)` groups whose NAME is a variable of the clause, and rewrites the `match/2` call into `match/3` plus one read of each group. The two predicates below answer the same:

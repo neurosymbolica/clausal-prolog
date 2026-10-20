@@ -639,6 +639,11 @@ class _ClauseLowering:
         else:
             dotted = m
         self._check_goal_name(gname, g_sp)
+        if (len(gargs) == 2 and f"{dotted}.{gname}" in _REGEX_AUTOBIND_GOALS
+                and not self._meta_depth):
+            # ``re:match(P, S)`` is the dotted call goal expansion binds the
+            # groups of exactly as it does the unqualified one's
+            self.regex_group_names |= _regex_group_names(gargs[0])
         mpos = _pos_expr(self._pos.of(_top_span(m_sp)))
         parts = dotted.split(".")
         obj = _node("LoadName", name=_const(parts[0]), position=mpos)
@@ -854,7 +859,8 @@ class _ClauseLowering:
 
 #: The library(re) goals whose static pattern's named groups bind the clause
 #: variables they name (``clausal/logic/goal_expansion.py``), as the import
-#: remap resolves them.
+#: remap resolves them -- and as a qualified ``re:match(..)`` resolves its
+#: module (``_qualified``).
 _REGEX_AUTOBIND_GOALS = frozenset({"clausal.library.re.match",
                                    "clausal.library.re.search"})
 

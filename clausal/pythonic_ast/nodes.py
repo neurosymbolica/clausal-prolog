@@ -1137,9 +1137,13 @@ class Predicate(Node):
     carries no name, and a Clausal Prolog head's fields are positional
     (``arg_0``..), so this is how goal expansion finds the variable a regex
     named group ``(?P<YEAR>..)`` binds (``goal_expansion``).  ``None``: no
-    table (a fact, a Python-built or term-expanded clause).  A clause that
-    term expansion rewrites loses its table, so in ``.clausal``, whose head
-    fields are positional, its regex groups bind nothing."""
+    table (a fact, a Python-built clause, or one a ``term_expansion/4`` rule
+    built).  A clause term expansion hands back unchanged is this very
+    node, so it keeps its table.  A clause a rule builds cannot have one:
+    its variables are the rule's, renamed for each expansion, and nothing
+    maps them back to the names the rule's text spells -- so in
+    ``.clausal``, whose head fields are positional, its regex groups bind
+    nothing (docs/regex.md, Auto-Binding)."""
     head: Node = None  # type: ignore[assignment]
     body: Node = None  # type: ignore[assignment]
     source_body: Any = opaque_field(default=None, compare=False, repr=False)

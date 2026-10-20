@@ -290,6 +290,7 @@ The goal expansion pass detects the `(?P<YEAR>...)` group, rewrites `match/2` to
 - **Write patterns as plain terms** — `term_expansion(fact(X), ...)`, not `term_expansion(q(fact(X)), ...)`. `q()` was retired 2026-09-25; an old `q(...)` pattern matches nothing and warns at load.
 - **Module state starts as `module_expansion_state([], [], nil)`**: the user slot is the atom `nil`, not a number. Handle `nil` before doing arithmetic on it.
 - **One-to-many expansion returns a list** — make sure OUTPUT is `[item1, item2, ...]`, not a bare term, when you want multiple outputs.
+- **A clause a rule builds has no variable names** — goal expansion runs after term expansion, and [regex auto-binding](regex.md#term-expansion) binds a group to the variable it names. A clause handed back unchanged (`term_expansion(T, T, S, S)`, or `T` inside `[T, T]`) is the clause as written and keeps its names, so its groups bind. A clause the rule *builds* has only the rule's variables, renamed for each expansion, so no name reaches it: in `.clausal` its groups bind nothing.
 
 ---
 
