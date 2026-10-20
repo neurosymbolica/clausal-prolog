@@ -13,7 +13,8 @@ Protocol::
   as its head term (``_expand_item``)
 - EXPANSION: a clause -- a Predicate node, a ``(H :- B)`` term, or a head
   term (a fact) -- a list of them, or the atom ``none`` (suppress); a built
-  rule's body term is lowered to goals (``_AnswerLowering``)
+  rule's body term is lowered as the same clause written would be
+  (``_AnswerLowering``: the native front end's own clause lowering)
 - MODULE_BEFORE: ``module_expansion_state(InitList, FinalList, UserState)``
 - MODULE_AFTER: same, updated
 
@@ -884,59 +885,112 @@ def _seam_body_term(goal):
     return goal
 
 
-class _NotCallable(Exception):
-    """A goal position of a built body holds a non-callable term."""
+#: The module-dict key under which the import hook hands over the native
+#: front end's directive state for the file being compiled
+#: (``iso_l3_directives.DirectiveContext``, ``NativePrologLoader``): a clause
+#: a rule builds is lowered under it.
+LOWERING_CONTEXT_KEY = "$lowering_context"
+
+#: The global the lowered code of a built clause reads its run-time
+#: variables (and its opaque data values) from, by index.
+_BUILT_VALUES_KEY = "$term_expansion_values"
 
 
 class _AnswerLowering:
-    """Lowers a clause a term_expansion/4 rule BUILT -- its body a term --
-    to the ``Predicate`` node a written clause is: the body's goals as the
-    nodes the front ends emit for the same text (``iso_l3``'s body
-    conversion, ISO 7.6.2), so the compiler meets nothing new.
+    """Turns a clause a term_expansion/4 rule BUILT -- a ``(Head, Body)``
+    pair of run-time terms -- into the ``Predicate`` node the same clause
+    WRITTEN in the file compiles to.  There is no lowering of its own here:
 
-    - ``,``/2 is a conjunction, ``;``/2 a disjunction, ``\\+``/1 a negation
-      (the seam's ``TupleLiteral`` / plain tuple, ``Or``, ``Not``);
-      ``true`` is ``True``, ``fail``/``false`` ``False``;
-    - a variable goal is ``call(V)``; ``M:G`` is ``call(M:G)``, which runs G
-      in M; a list (or a string) is called, and named a missing ``'.'/2``
-      when it runs, as ``call/1`` does;
-    - every other compound or atom is the call of its predicate, its
-      special-form goal arguments (``findall/3``'s goal ...) converted the
-      same way and the rest kept as data; a name an import rewrote
-      (``match`` from ``library(re)``) is called by the import's dotted
-      spelling, exactly as the same goal written in this file;
-    - ``!``, ``->`` and ``*->`` are refused (cut-free) except in a ``.pl``
-      module (D59), as everywhere else;
-    - a goal position holding a number is ``type_error(callable, Body)``.
+    - ``.clausal`` / ``.pl``: the clause is handed to the native front end's
+      own clause lowering (``iso_l3.lower_clause``), under the file's
+      directive state (imports, ``library(reif)``'s ``if_/3``,
+      ``library(clpq)``'s ``{}/1``, the surface, so ``.pl`` alone may cut).
+      A run-time term is the reader's term but for its variables, so each
+      Var becomes a ``VarRef`` indexing the run-time Var itself, and a value
+      the reader never produces (a string carrier, a cons cell, a
+      ``constant/1`` cell, a Python object) is passed through as it is.
+      Whatever the front end refuses in a written clause is refused here,
+      with its words.
+    - the seam: the body's data shapes are turned into the goal nodes its
+      text compiles to in a clause body (``_seam_goal``) -- a cell is the
+      ``Call`` node, a conjunction tuple a ``TupleLiteral`` -- and nothing
+      else, so the compiler meets what a written body gives it and refuses
+      what it refuses there (a bare variable goal: ``BareGoalVariableError``).
 
     A clause it builds has no variable-name table: the rule's variables are
     renamed for each expansion, so its regex groups bind nothing
     (docs/term_expansion.md, Gotchas)."""
 
-    _CONTEXT = "term_expansion/4: a clause the rule built"
-
     def __init__(self, db, module_dict):
         from clausal.end_module import SURFACE_SEAM, surface_of  # noqa: PLC0415
-        from clausal.logic.builtins.call_body import cut_allowed  # noqa: PLC0415
+        module_dict = module_dict if module_dict is not None else {}
         surface = getattr(db, "surface", None) or surface_of(
-            (module_dict or {}).get("__file__") or "")
+            module_dict.get("__file__") or "")
         # No surface (a Python-made module, the tests' bare transformer): the
         # seam, the surface the Python API compiles.
         self.seam = surface in (SURFACE_SEAM, None)
-        self.cut_allowed = cut_allowed(db)
-        self._module_dict = module_dict or {}
-        self._dotted = None
-
-    # ── the clause ──────────────────────────────────────────────────────
+        self._module_dict = module_dict
 
     def clause(self, head, body, where):
+        head, body = deref(head), deref(body)
+        if self.seam:
+            return self._seam_clause(head, body, where)
+        return self._iso_clause(head, body, where)
+
+    # ── .clausal / .pl: the front end's own clause lowering ──────────────
+
+    def _iso_clause(self, head, body, where):
+        import ast  # noqa: PLC0415
+        from clausal.tools import iso_l3  # noqa: PLC0415
+        values: list = []
+        seen: dict = {}
+        ctx = self._module_dict.get(LOWERING_CONTEXT_KEY)
+        reader = _ReaderTerm(values, seen,
+                             chars=getattr(ctx, "dq_mode", "chars") == "chars")
+        if body is True or (type(body) is str and body == "true"):
+            term = reader(head)
+        else:
+            term = (":-", reader(head), reader(body))
+        try:
+            stmts = iso_l3.lower_clause(
+                term, positions=iso_l3._Positions(None),
+                ctx=ctx, var_table=_BUILT_VALUES_KEY)
+        except iso_l3.LoweringRefused as e:
+            raise SyntaxError(
+                f"{where}: the clause it built is refused, as the same "
+                f"clause written in the file would be: {e}") from None
+        code = compile(ast.fix_missing_locations(
+            ast.Module(body=stmts, type_ignores=[])),
+            "<term_expansion/4>", "exec")
+        built: list = []
+        md = self._module_dict
+        missing = object()
+        saved = md.get("$define_predicate", missing)
+        md["$define_predicate"] = lambda pred, _lm: built.append(pred)
+        md[_BUILT_VALUES_KEY] = values
+        try:
+            exec(code, md)  # noqa: S102 -- the front end's own lowering
+        finally:
+            del md[_BUILT_VALUES_KEY]
+            if saved is missing:
+                del md["$define_predicate"]
+            else:
+                md["$define_predicate"] = saved
+        node = built[0]
+        # The front end records the body AS READ for clause/2; a built
+        # clause has no variable names to give (see the class docstring).
+        node.var_names = None
+        return node
+
+    # ── the seam: data shapes -> the goal nodes the text compiles to ─────
+
+    def _seam_clause(self, head, body, where):
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, instantiation_error, type_error,
         )
         from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
         from clausal.logic.atoms import is_atom, is_truth_atom  # noqa: PLC0415
         from clausal.logic.variables import is_var  # noqa: PLC0415
-        head = deref(head)
         if is_var(head):
             raise LogicException(instantiation_error(
                 f"{where}: the head of a clause it built is unbound"))
@@ -946,198 +1000,121 @@ class _AnswerLowering:
                 "callable", head,
                 f"{where}: the head of a clause it built must be an atom or "
                 f"a compound, got {head!r}"))
-        body = deref(body)
-        if body is True or (type(body) is str and body == "true"):
+        if body is True:
             return PredicateItem(head=head, body=True)
-        try:
-            lowered = self.goal(body)
-        except _NotCallable:
-            raise LogicException(type_error(
-                "callable", body,
-                f"{where}: the body of a clause it built is not callable: "
-                f"{body!r}")) from None
-        return PredicateItem(head=head, body=lowered)
+        return PredicateItem(head=head, body=_seam_goal(body))
 
-    # ── goal positions ──────────────────────────────────────────────────
 
-    def _call(self, name, args):
-        from clausal.pythonic_ast import nodes  # noqa: PLC0415
-        return nodes.Call(func=nodes.LoadName(name=name), args=list(args),
-                          kwargs=[])
+def _seam_goal(raw):
+    """A seam body built in argument position, as the goal nodes the same
+    text compiles to in a clause body.  Only the shapes that DIFFER between
+    the two positions are rewritten -- a compound is a cell in data and a
+    ``Call`` in a body, a conjunction a plain tuple in data and a
+    ``TupleLiteral`` in a body, and the control nodes hold data shapes in
+    their goal fields -- so everything else (a comparison, ``is``, an atom,
+    a variable, a number) reaches the compiler as it would written, and
+    meets the same acceptance or refusal there."""
+    from clausal.pythonic_ast import nodes  # noqa: PLC0415
+    from clausal.logic.builtins.call_body import is_conjunction_tuple  # noqa: PLC0415
+    from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
+    t = deref(raw)
+    tt = type(t)
+    if tt is nodes.TupleLiteral:
+        return nodes.TupleLiteral(elements=[_seam_goal(e) for e in t.elements])
+    if tt in (nodes.And, nodes.Or):
+        return tt(left=_seam_goal(t.left), right=_seam_goal(t.right))
+    if tt is nodes.Not:
+        return nodes.Not(operand=_seam_goal(t.operand))
+    if tt is nodes.IfExpr:
+        return nodes.IfExpr(test=_seam_goal(t.test), body=_seam_goal(t.body),
+                            orelse=_seam_goal(t.orelse))
+    if is_conjunction_tuple(t):
+        return nodes.TupleLiteral(elements=[_seam_goal(e) for e in t])
+    is_cell, functor = compound_cell_shape(t)
+    if not is_cell:
+        return t
+    n = len(t) - 1
+    positions = GOAL_POSITIONS.get((functor, n), ())
+    args = []
+    for i, a in enumerate(t[1:]):
+        if i not in positions:
+            args.append(a)
+        elif (functor, n) in (("bagof", 3), ("setof", 3)):
+            args.append(_seam_iterated(a))
+        else:
+            args.append(_seam_goal(a))
+    return nodes.Call(func=nodes.LoadName(name=functor), args=args, kwargs=[])
 
-    def _resolved(self, name: str) -> str:
-        """The spelling the goal ``name(...)`` has when written in this
-        file: the dotted key an ``-import_from`` / ``use_module/2`` rewrote
-        an imported name into (``clausal.library.re.match``), else *name*."""
-        if self._dotted is None:
-            from clausal.logic.atoms import is_mangled as _mangled  # noqa: PLC0415
-            md = self._module_dict
-            dotted = {}
-            for key, value in md.items():
-                if (type(key) is not str or "." not in key
-                        or key.startswith("$") or value is None):
-                    continue
-                leaf = key.rpartition(".")[2]
-                # The import binds the local spelling to the very object the
-                # dotted key holds.  An ATOM never counts (an imported atom
-                # is data, and a local name/N of its spelling means local),
-                # a predicate handle does.
-                if (md.get(leaf) is value
-                        and (type(value) is not str or _mangled(value))):
-                    dotted.setdefault(leaf, key)
-            self._dotted = dotted
-        return self._dotted.get(name, name)
 
-    def goal(self, raw):
-        from clausal.pythonic_ast import nodes  # noqa: PLC0415
-        from clausal.logic.exceptions import LogicException  # noqa: PLC0415
-        from clausal.logic.builtins.call_body import (  # noqa: PLC0415
-            cut_refusal_error, is_conjunction_tuple, is_non_callable_term,
-        )
-        from clausal.logic.cells import compound_cell_shape, is_chars  # noqa: PLC0415
+def _seam_iterated(raw):
+    """``V^G`` in a seam bagof/setof: the ``BitXor`` chain, its goal a goal."""
+    from clausal.pythonic_ast import nodes  # noqa: PLC0415
+    t = deref(raw)
+    if type(t) is nodes.BitXor:
+        return nodes.BitXor(left=t.left, right=_seam_iterated(t.right))
+    return _seam_goal(t)
+
+
+class _ReaderTerm:
+    """A run-time term as the ISO reader's term (``prolog_reader``): each
+    distinct unbound Var a ``VarRef`` indexing *values*, which holds the Var
+    itself; a list, a number, an atom and a compound as the reader gives
+    them; the truth values as the atoms they are read from; a string as
+    ``"..."`` when ``double_quotes`` is chars.  Every value the reader
+    would read DIFFERENTLY from the run-time term -- a string under another
+    ``double_quotes`` mode, a cons cell or a
+    ``constant/1`` cell (both rewritten there), tuple data, a Python object
+    -- goes in *values* too, and is spliced back verbatim
+    (``iso_l3_directives.Embedded``)."""
+
+    def __init__(self, values: list, seen: dict, chars: bool = True):
+        self._values = values
+        self._seen = seen
+        # Under ``double_quotes`` chars (always, in .clausal) the reader's
+        # ``"..."`` IS the string carrier, so it is given as read: in a goal
+        # position the front end then refuses it in its own words.
+        self._chars = chars
+
+    def _slot(self, value) -> int:
+        self._values.append(value)
+        return len(self._values) - 1
+
+    def _embedded(self, value):
+        import ast  # noqa: PLC0415
+        from clausal.tools.iso_l3_directives import Embedded  # noqa: PLC0415
+        return Embedded(ast.Subscript(
+            value=ast.Name(id=_BUILT_VALUES_KEY, ctx=ast.Load()),
+            slice=ast.Constant(value=self._slot(value)), ctx=ast.Load()))
+
+    def __call__(self, raw):
+        from clausal.tools.prolog_reader import VarRef  # noqa: PLC0415
         from clausal.logic.variables import is_var  # noqa: PLC0415
+        from clausal.logic.cells import (  # noqa: PLC0415
+            chars_text, compound_cell_shape, is_chars)
+        from clausal.terms import Undefined  # noqa: PLC0415
         t = deref(raw)
         if is_var(t):
-            return self._call("call", [t])     # ISO 7.6.2: call(V)
-        if t is True or t is False:
+            index = self._seen.get(id(t))
+            if index is None:
+                index = self._seen[id(t)] = self._slot(t)
+            return VarRef(index)
+        if t is True:
+            return "true"
+        if t is False:
+            return "false"
+        if t is Undefined:
+            return "undefined"
+        if type(t) in (int, float, str):
             return t
-        if type(t) is str:
-            if t == "true":
-                return True
-            if t in ("fail", "false"):
-                return False
-            if t == "!":
-                if self.cut_allowed:
-                    return nodes.Cut()
-                raise LogicException(cut_refusal_error(self._CONTEXT))
-            return self._call(self._resolved(t), [])
-        if type(t) is list or is_chars(t):
-            # ``[]`` is the atom '[]' (D70): the call of '[]'/0; a non-empty
-            # list or a string is '.'/2, which call/1 names when it runs.
-            return self._call("[]", []) if t == [] else self._call("call", [t])
-        if isinstance(t, nodes.Node):
-            return self._node_goal(t)
-        if is_conjunction_tuple(t):
-            return nodes.TupleLiteral(elements=[self.goal(e) for e in t])
+        if type(t) is list:
+            return [self(e) for e in t]
+        if self._chars and is_chars(t):
+            return ("$chars", chars_text(t))
         is_cell, functor = compound_cell_shape(t)
-        if is_cell:
-            return self._cell_goal(t, functor)
-        if is_non_callable_term(t, lists=False):
-            raise _NotCallable(t)
-        return self._call("call", [t])         # a goal object: call/1's
-
-    def _refuse_if_then(self, functor):
-        from clausal.logic.exceptions import LogicException  # noqa: PLC0415
-        from clausal.logic.builtins.call_body import if_then_refusal_error  # noqa: PLC0415
-        raise LogicException(if_then_refusal_error(functor, self._CONTEXT))
-
-    def _node_goal(self, t):
-        from clausal.pythonic_ast import nodes  # noqa: PLC0415
-        from clausal.logic.exceptions import LogicException  # noqa: PLC0415
-        from clausal.logic.builtins.call_body import cut_refusal_error  # noqa: PLC0415
-        tt = type(t)
-        if tt is nodes.TupleLiteral:
-            return nodes.TupleLiteral(elements=[self.goal(e) for e in t.elements])
-        if tt in (nodes.And, nodes.Or):
-            return tt(left=self.goal(t.left), right=self.goal(t.right))
-        if tt is nodes.Not:
-            return nodes.Not(operand=self.goal(t.operand))
-        if tt is nodes.IfExpr:
-            return nodes.IfExpr(test=self.goal(t.test), body=self.goal(t.body),
-                                orelse=self.goal(t.orelse))
-        if tt is nodes.IfThenElse:
-            if not self.cut_allowed:
-                self._refuse_if_then("->")
-            return nodes.IfThenElse(
-                test=self.goal(t.test), body=self.goal(t.body),
-                orelse=None if t.orelse is None else self.goal(t.orelse))
-        if tt is nodes.Cut and not self.cut_allowed:
-            raise LogicException(cut_refusal_error(self._CONTEXT))
-        if tt is PredicateItem:
-            raise _NotCallable(t)
-        # A Call, a comparison, ``is``, a Python escape ...: a goal node
-        # already, as written.
-        return t
-
-    def _cell_goal(self, t, functor):
-        from clausal.pythonic_ast import nodes  # noqa: PLC0415
-        from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
-        n = len(t) - 1
-        if functor == "," and n == 2:
-            elements = []
-            while True:
-                elements.append(self.goal(t[1]))
-                rest = deref(t[2])
-                ok, f = compound_cell_shape(rest)
-                if not (ok and f == "," and len(rest) == 3):
-                    elements.append(self.goal(rest))
-                    break
-                t = rest
-            return nodes.TupleLiteral(elements=elements)
-        if functor == ";" and n == 2:
-            left = deref(t[1])
-            ok, lf = compound_cell_shape(left)
-            if ok and len(left) == 3 and lf in ("->", "*->"):
-                if lf == "->" and self.cut_allowed:
-                    return nodes.IfThenElse(test=self.goal(left[1]),
-                                            body=self.goal(left[2]),
-                                            orelse=self.goal(t[2]))
-                self._refuse_if_then(lf)
-            return nodes.Or(left=self.goal(t[1]), right=self.goal(t[2]))
-        if functor in ("->", "*->") and n == 2:
-            if functor == "->" and self.cut_allowed:
-                return nodes.IfThenElse(test=self.goal(t[1]),
-                                        body=self.goal(t[2]), orelse=None)
-            self._refuse_if_then(functor)
-        if functor == "\\+" and n == 1:
-            return nodes.Not(operand=self.goal(t[1]))
-        if functor == ":" and n == 2:
-            module = deref(t[1])
-            if type(module) is str and module in _builtin_library_names():
-                # ``lists:append(..)``: a built-in library's predicate is
-                # the builtin, as the front end lowers the written goal.
-                return self.goal(t[2])
-            return self._call("call", [t])     # M:G runs G in M
-        name = self._resolved(functor)
-        # An IMPORTED name is the import's predicate, not the special form
-        # it may share a name with: its arguments are data (as iso_l3).
-        positions = (() if name != functor
-                     else _GOAL_POSITIONS.get((functor, n), ()))
-        args = []
-        for i, a in enumerate(t[1:]):
-            if i not in positions:
-                args.append(a)
-            elif (functor, n) in _ITERATED_GOAL:
-                args.append(self._iterated(a))
-            else:
-                args.append(self.goal(a))
-        return self._call(name, args)
-
-    def _iterated(self, raw):
-        """``V1^V2^G`` in bagof/setof: the ``BitXor`` chain the compiler
-        strips the existential prefix from."""
-        from clausal.pythonic_ast import nodes  # noqa: PLC0415
-        from clausal.logic.cells import compound_cell_shape  # noqa: PLC0415
-        t = deref(raw)
-        if type(t) is nodes.BitXor:
-            return nodes.BitXor(left=t.left, right=self._iterated(t.right))
-        ok, f = compound_cell_shape(t)
-        if ok and f == "^" and len(t) == 3:
-            return nodes.BitXor(left=t[1], right=self._iterated(t[2]))
-        return self.goal(t)
-
-
-def _builtin_library_names() -> frozenset:
-    """The ``library(...)`` names whose predicates are builtins
-    (``iso_l3_directives._BUILTIN_LIBRARIES``)."""
-    from clausal.tools.iso_l3_directives import _BUILTIN_LIBRARIES  # noqa: PLC0415
-    return _BUILTIN_LIBRARIES
-
-
-#: A special form's goal arguments (``findall/3``'s ...), by (name, arity).
-_GOAL_POSITIONS = GOAL_POSITIONS
-#: The special forms whose goal takes an existential ``V^`` prefix.
-_ITERATED_GOAL = frozenset({("bagof", 3), ("setof", 3)})
+        if (is_cell and not (functor == "." and len(t) == 3)
+                and not (functor == "constant" and len(t) == 2)):
+            return (functor, *(self(a) for a in t[1:]))
+        return self._embedded(t)
 
 
 def _extract_init_final(module_state):

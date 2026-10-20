@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import ast
 import os
+import re
 import sys
 import warnings
 
@@ -1127,28 +1128,28 @@ class TestRuleClausesHandedBack:
             "alias_of(q, p).\n"))
         assert self._rows(m, "q", 1) == [(1,), (2,)]
 
+    # A built clause is lowered by the front end's own clause lowering, so
+    # what it refuses in a written clause it refuses here, at load, with the
+    # same words.
+
     def test_clausal_an_if_then_in_a_built_rule_is_refused(self, tmp_path):
-        with pytest.raises(LogicException, match="cut-free"):
+        with pytest.raises(SyntaxError, match="cut-free"):
             self._load(tmp_path, "te_rule_if_then", (
                 "term_expansion(pd(X), (pd2(X) :- (X > 0 -> true ; fail)), S, S).\n"
                 "pd(1).\n"))
 
-    def test_clausal_a_number_in_a_built_body_is_a_type_error(self, tmp_path):
-        with pytest.raises(LogicException) as exc:
+    def test_clausal_a_number_in_a_built_body_is_refused(self, tmp_path):
+        with pytest.raises(SyntaxError,
+                           match=r"7 is not callable \(ISO type_error\(callable, 7\)\)"):
             self._load(tmp_path, "te_rule_number_goal", (
                 "term_expansion(pd(X), (pd2(X) :- true, 7), S, S).\n"
                 "pd(1).\n"))
-        formal = cell_args(exc.value.term)[0]
-        assert cell_functor(formal) == "type_error"
-        # ISO 7.6.2: the culprit is the whole body, as assertz/1 names it.
-        assert cell_args(formal)[1] == (",", True, 7)
 
-    def test_clausal_an_unbound_built_head_is_an_instantiation_error(self, tmp_path):
-        with pytest.raises(LogicException) as exc:
+    def test_clausal_an_unbound_built_head_is_refused(self, tmp_path):
+        with pytest.raises(SyntaxError, match="instantiation_error"):
             self._load(tmp_path, "te_rule_unbound_head", (
-                "term_expansion(pd(_), (_ :- true), S, S).\n"
+                "term_expansion(pd(_), (_ :- true, true), S, S).\n"
                 "pd(1).\n"))
-        assert cell_args(exc.value.term)[0] == mint("instantiation_error")
 
     def test_clausal_a_returned_grammar_rule_is_refused(self, tmp_path):
         """Expansion runs after DCG translation, so a grammar rule handed
@@ -1207,6 +1208,33 @@ class TestRuleClausesHandedBack:
             "pd(q, 3),\n"), suffix=SEAM)
         assert self._rows(m, "pd", 2) == [("x", 1), ("q", 3)]
         assert self._rows(m, "seen", 1) == [("q",)]
+
+    def test_clausal_suppressing_by_head_pattern_keeps_rules(self, tmp_path):
+        m = self._load(tmp_path, "te_suppress_head_only", (
+            "term_expansion(debug(_), [], S, S).\n"
+            "debug(trace_on).\n"
+            "debug(X) :- X = verbose.\n"))
+        assert self._rows(m, "debug", 1) == [("verbose",)]
+
+    def test_clausal_suppressing_rules_takes_the_clause_pattern(self, tmp_path):
+        m = self._load(tmp_path, "te_suppress_rules", (
+            "term_expansion(debug(_), [], S, S).\n"
+            "term_expansion((debug(_) :- _), [], S, S).\n"
+            "debug(trace_on).\n"
+            "debug(X) :- X = verbose.\n"
+            "keep(a).\n"))
+        assert not self._defined(m, "debug", 1)
+        assert self._rows(m, "keep", 1) == [("a",)]
+
+    def test_seam_suppressing_with_the_clause_pattern(self, tmp_path):
+        m = self._load(tmp_path, "te_suppress_seam", (
+            "-private([debug(_), keep(_), trace_on, verbose, a])\n"
+            "term_expansion((debug(_) <- _), [], S, S) <- True\n"
+            "debug(trace_on),\n"
+            "debug(X) <- (X is verbose)\n"
+            "keep(a),\n"), suffix=SEAM)
+        assert not self._defined(m, "debug", 1)
+        assert self._rows(m, "keep", 1) == [("a",)]
 
     # ── repro 4: a whole-clause pattern matches a rule ──────────────────
 
@@ -1272,3 +1300,216 @@ class TestRuleClausesHandedBack:
         assert self._rows(m, "year", 1) == [(("$chars", "2026"),)]
         [(copied,)] = self._rows(m, "copy", 1)
         assert isinstance(copied, Var)                  # not bound
+
+
+# ── Written vs built: the same body, as text and as a term_expansion/4 answer ─
+#
+# A clause a rule builds is lowered by the very lowering a written clause
+# gets (the native front end's for .clausal/.pl, the seam's body shapes for
+# the seam), so each shape below must answer the same both ways.  A new
+# body construct that one route lowers and the other does not fails here.
+
+#: (id, body text over X and R, inputs for X).  ``.clausal``.
+_EQUIVALENT_BODIES_CLAUSAL = [
+    ("unify", "R = X", [1, "a"]),
+    ("disjunction", "(R = a ; R = b)", [1]),
+    ("comparison", "X > 0, R = pos", [1, -1]),
+    ("negation", "\\+ X = 1, R = not_one", [1, 2]),
+    ("findall", "findall(Y, member(Y, [X, X]), R)", [1]),
+    ("setof", "setof(Y-Z, member(Y-Z, [2-b, 1-a]), R)", [1]),
+    ("bagof_caret", "bagof(Y, Z^member(Y-Z, [1-a, 2-b]), R)", [1]),
+    ("once", "once(member(R, [X, z]))", [1]),
+    ("call_var", "G = (R = X), call(G)", [1]),
+    ("var_goal", "G = (R = X), G", [1]),
+    ("catch", "catch(throw(oops), E, R = caught(E))", [1]),
+    ("forall", "forall(member(Y, [1, 2]), Y > X), R = all", [0, 1]),
+    ("if_reif", "if_(X = 1, R = one, R = other)", [1, 2]),
+    ("if_reif_or", "if_((X = 1 ; X = 2), R = small, R = big)", [1, 3]),
+    ("clpq", "{R = X + 1}", [1]),
+    ("string", 'R = "abc"', [1]),
+    ("partial_list", "R = [X | T], T = [y]", [1]),
+    ("builtin", "atom_length(abc, N), R = N", [1]),
+    ("library_qualified", "lists:append([X], [z], R)", [1]),
+    ("arith", "R is X * 2 + 1", [3]),
+    ("nil_goal", "catch([], error(F, _), R = F)", [1]),
+    ("call_n", "call(member(R), [X, q])", [1]),
+    ("true_fail", "(fail ; true), R = t", [1]),
+    ("nested_meta", "findall(Y, (member(Y, [1, 2, 3]), \\+ Y = X), R)", [2]),
+]
+
+#: ``.pl``: what may cut, and a special-form goal holding a variable
+#: (converted when it is CALLED, ISO 7.6.2).
+_EQUIVALENT_BODIES_PL = [
+    ("cut", "member(R, [X, b]), !", [1]),
+    ("if_then_else", "( X > 0 -> R = pos ; R = neg )", [1, -1]),
+    ("cut_in_var_goal", "G = !, findall(Y, (member(Y, [1, 2]), G), R)", [1]),
+    ("unify", "R = X", [1]),
+]
+
+#: The seam: (id, body text over X and R, inputs).
+_EQUIVALENT_BODIES_SEAM = [
+    ("s_unify", "(R is X)", [1]),
+    ("s_conjunction", "(X > 0, R is pos)", [1, -1]),
+    ("s_disjunction", "(R is a or R is b)", [1]),
+    ("s_negation", "(not X == 1, R is not_one)", [1, 2]),
+    ("s_findall", "findall(Y, member(Y, [X, X]), R)", [1]),
+    ("s_once", "once(member(R, [X, z]))", [1]),
+    ("s_arith", "(R == X * 2 + 1)", [3]),
+    ("s_call", "(G is (R is X), call(G))", [1]),
+]
+
+
+def _normal(term, names=None):
+    """*term* with each unbound variable numbered by first occurrence, and
+    an error term reduced to its formal (the context names the predicate)."""
+    from clausal.logic.variables import is_var
+    names = {} if names is None else names
+    t = deref(term)
+    if is_var(t):
+        return ("$VAR", names.setdefault(id(t), len(names)))
+    if type(t).__name__ == "SegList":         # a list built with an open tail
+        t = list(t)
+    if isinstance(t, list):
+        out = []
+        for e in t:
+            if type(e).__name__ == "StarUnpack":     # an open tail [... | T]
+                tail = _normal(e.value, names)
+                if isinstance(tail, list):
+                    out.extend(tail)
+                else:
+                    out.append(("$TAIL", tail))
+            else:
+                out.append(_normal(e, names))
+        return out
+    if isinstance(t, tuple):
+        if len(t) == 3 and t[0] == "error":
+            return ("error", _normal(t[1], names))
+        return tuple(_normal(e, names) for e in t)
+    return t
+
+
+def _equivalence_rows(mod, shapes):
+    lm = mod.__dict__["$module"]
+    rows = {}
+    for sid, _body, inputs in shapes:
+        for x in inputs:
+            for which in ("w", "b"):
+                R = Var()
+                try:
+                    out = [_normal(R) for _ in call(which, sid, x, R, module=lm)]
+                except LogicException as e:
+                    out = ("raised", _normal(e.term))
+                rows.setdefault((sid, x), {})[which] = out
+    return rows
+
+
+def _equivalence_source(shapes, written, built, prelude=""):
+    lines = [prelude]
+    for sid, body, _inputs in shapes:
+        lines.append(written.format(sid=sid, body=body))
+    for sid, body, _inputs in shapes:
+        lines.append(built.format(sid=sid, body=body))
+    return "\n".join(lines) + "\n"
+
+
+class TestWrittenAndBuiltClausesAgree:
+    """Each body shape, written as text and built by a rule, answers the
+    same.  The table is the gate against drift between the two routes."""
+
+    def _check(self, tmp_path, name, suffix, shapes, source):
+        path = tmp_path / f"{name}{suffix}"
+        path.write_text(source)
+        mod = _load_module(name, str(path))
+        rows = _equivalence_rows(mod, shapes)
+        differ = {k: v for k, v in rows.items() if v["w"] != v["b"]}
+        assert not differ, differ
+        return rows
+
+    def test_clausal(self, tmp_path):
+        source = _equivalence_source(
+            _EQUIVALENT_BODIES_CLAUSAL,
+            "w({sid}, X, R) :- {body}.",
+            "shape({sid}, X, R, ({body})).",
+            prelude=(":- use_module(library(reif)).\n"
+                     ":- use_module(library(clpq)).\n"
+                     "term_expansion(shape(K, X, R, B), (b(K, X, R) :- B), S, S).\n"))
+        rows = self._check(tmp_path, "te_agree_clausal", ".clausal",
+                           _EQUIVALENT_BODIES_CLAUSAL, source)
+        # A few rows read in full, so the table cannot pass by both routes
+        # failing alike.
+        assert rows[("if_reif", 1)]["b"] == ["one"]
+        assert rows[("clpq", 1)]["b"] != []
+        assert rows[("var_goal", 1)]["b"] == [1]
+        assert rows[("library_qualified", 1)]["b"] == [[1, "z"]]
+
+    def test_pl(self, tmp_path):
+        source = _equivalence_source(
+            _EQUIVALENT_BODIES_PL,
+            "w({sid}, X, R) :- {body}.",
+            "shape({sid}, X, R, ({body})).",
+            prelude="term_expansion(shape(K, X, R, B), (b(K, X, R) :- B), S, S).\n")
+        rows = self._check(tmp_path, "te_agree_pl", ".pl",
+                           _EQUIVALENT_BODIES_PL, source)
+        assert rows[("cut", 1)]["b"] == [1]
+        assert rows[("cut_in_var_goal", 1)]["b"] == [[1]]
+
+    def test_seam(self, tmp_path):
+        source = _equivalence_source(
+            _EQUIVALENT_BODIES_SEAM,
+            "w({sid}, X, R) <- {body}",
+            "shape({sid}, X, R, ({body})),",
+            prelude=("-private([w(_k, _x, _r), b(_k, _x, _r), shape(_k, _x, _r, _b),\n"
+                     "          {ids}, pos, a, b, z, not_one])\n"
+                     "term_expansion(shape(K, X, R, B), (b(K, X, R) <- B), S, S) <- True\n"
+                     ).format(ids=", ".join(s for s, _b, _i in _EQUIVALENT_BODIES_SEAM)))
+        rows = self._check(tmp_path, "te_agree_seam", SEAM,
+                           _EQUIVALENT_BODIES_SEAM, source)
+        assert rows[("s_disjunction", 1)]["b"] == ["a", "b"]
+
+    def test_seam_a_bare_variable_goal_is_refused_both_ways(self, tmp_path):
+        from clausal.logic.compiler.terms_to_goalop import BareGoalVariableError
+        for name, src in (
+                ("te_bare_var_written", "-private([w(_)])\nw(G) <- G\n"),
+                ("te_bare_var_built",
+                 "-private([mk, b(_)])\n"
+                 "term_expansion(mk, (b(G) <- G), S, S) <- True\nmk,\n")):
+            path = tmp_path / f"{name}{SEAM}"
+            path.write_text(src)
+            with pytest.raises(BareGoalVariableError):
+                _load_module(name, str(path))
+
+    def test_clausal_refusals_agree(self, tmp_path):
+        """What the front end refuses written, it refuses built, at load:
+        a string or list goal, a cut in a call/1 argument, a ``$`` name,
+        an unrepresentable name."""
+        for i, body in enumerate(['"ab"', "[a]", "call((true, !))",
+                                  "'$foo'(1)", "'True'"]):
+            written = tmp_path / f"te_refuse_w{i}.clausal"
+            written.write_text(f"w :- {body}.\n")
+            with pytest.raises(SyntaxError) as w_exc:
+                _load_module(f"te_refuse_w{i}", str(written))
+            built = tmp_path / f"te_refuse_b{i}.clausal"
+            built.write_text(
+                f"term_expansion(mk, (b :- {body}), S, S).\nmk.\n")
+            with pytest.raises(SyntaxError) as b_exc:
+                _load_module(f"te_refuse_b{i}", str(built))
+            # The written refusal, without its ``(file, line N)`` suffix.
+            written_reason = re.sub(r" \([^()]*, line \d+\)$", "",
+                                    str(w_exc.value))
+            written_reason = re.split(r"\.clausal:\d+: ", written_reason)[-1]
+            assert written_reason in str(b_exc.value), (body, w_exc.value, b_exc.value)
+
+    def test_clausal_the_directives_reach_a_bytecode_cache_hit(self, tmp_path):
+        """The second load reads the cached bytecode and re-lowers only the
+        directives; a built ``if_/3`` still needs library(reif)'s."""
+        path = tmp_path / "te_agree_cached.clausal"
+        path.write_text(
+            ":- use_module(library(reif)).\n"
+            "term_expansion(gen(N), (r(X, R) :- if_(X = N, R = y, R = n)), S, S).\n"
+            "gen(1).\n")
+        for _ in range(2):
+            mod = _load_module("te_agree_cached", str(path))
+            lm = mod.__dict__["$module"]
+            R = Var()
+            assert [deref(R) for _ in call("r", 2, R, module=lm)] == ["n"]
+        assert list((tmp_path / "__pycache__").iterdir())

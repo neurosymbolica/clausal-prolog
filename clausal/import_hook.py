@@ -327,6 +327,7 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
     # The body's ``$declare_head`` record (W4b-3 slice 5): started empty for
     # every run, and retired at compile_module's step 4a-bis -- or here, if
     # the load fails before it gets there.
+    from clausal.logic.term_expansion import LOWERING_CONTEXT_KEY  # noqa: PLC0415
     begin_loading_declarations(module_dict)
     try:
         exec_with_import_diagnostics(code, module_dict, module_items, filename)
@@ -334,10 +335,14 @@ def _run_v2_pipeline(loader, module, module_dict, filename, recover_module_items
         # rewrites them (the transition counter below reads these).
         source_nodes = list(predicate_nodes)
 
+        lowering_context = getattr(loader, "lowering_context", None)
+        if lowering_context is not None:
+            module_dict[LOWERING_CONTEXT_KEY] = lowering_context
         logic_module = compile_module(
             predicate_nodes, module_items, module_dict, module.__name__,
         )
     finally:
+        module_dict.pop(LOWERING_CONTEXT_KEY, None)
         end_loading_declarations(module_dict)
     if isinstance(loader, PredicateLoader):
         _count_seam_transition_constructs(loader, source_nodes,
@@ -1224,6 +1229,13 @@ class NativePrologLoader(PrologLoader):
         # list, a declared module name): the cache key covers this file
         # only, so such a module is not cached (it is re-lowered each load).
         self._uncacheable = bool(low.context.depends_on)
+        # The file's directive state at its end (imports, library(reif),
+        # library(clpq), double_quotes, the surface): a clause a
+        # term_expansion/4 rule builds is lowered under it, as a clause
+        # written at the end of the file would be (``_run_v2_pipeline``
+        # hands it to ``term_expansion`` under ``LOWERING_CONTEXT_KEY``).
+        # Set on the cache-hit path too.
+        self.lowering_context = low.context
         iso_l3.warn_singletons(low.singletons, pl_source, path)
         low.context.warn_bare_atom_imports()
         iso_l3.log_auto_declared(low.context, path)

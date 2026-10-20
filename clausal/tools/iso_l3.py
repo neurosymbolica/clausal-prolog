@@ -240,8 +240,14 @@ class _ClauseLowering:
     seam's walrus ``(X := $Var())``, in Python's evaluation order, which is
     the order the AST is built in) and its singleton census."""
 
-    def __init__(self, var_names: dict, positions: _Positions, ctx=None):
+    def __init__(self, var_names: dict, positions: _Positions, ctx=None,
+                 var_table: "str | None" = None):
         self._var_names = var_names
+        # A clause term BUILT at load (a ``term_expansion/4`` answer,
+        # ``clausal.logic.term_expansion``) holds the run-time variables
+        # themselves: VarRef ``i`` is then ``<var_table>[i]``, that very
+        # Var, never a fresh one, and the clause has no names to record.
+        self._var_table = var_table
         self._pos = positions
         # The file's directive state (``iso_l3_directives.DirectiveContext``):
         # the double_quotes mode in force, the import remap, module aliases.
@@ -272,6 +278,9 @@ class _ClauseLowering:
         return f"{_DOLLAR}v_{iso_name}"
 
     def var(self, ref: VarRef) -> ast.expr:
+        if self._var_table is not None:
+            return ast.Subscript(value=_name(self._var_table),
+                                 slice=_const(ref.i), ctx=ast.Load())
         name = self._var_names.get(ref.i, "_")
         if name == "_":
             return _node("Var")
@@ -1092,9 +1101,14 @@ def _var_names_kw(lw: "_ClauseLowering") -> "ast.expr | None":
 
 def lower_clause(term: Any, spans=None, var_names=None,
                  positions: "_Positions | None" = None,
-                 singletons: "list | None" = None, ctx=None) -> list[ast.stmt]:
+                 singletons: "list | None" = None, ctx=None,
+                 var_table: "str | None" = None) -> list[ast.stmt]:
     """A clause term (a fact, or ``(H :- B)``) -> ``[$declare_head(...),
     $define_predicate(...)]``.
+
+    *var_table*: the clause was built at load, not read (a
+    ``term_expansion/4`` answer): its VarRefs index the run-time variables
+    held in that global list (:class:`_ClauseLowering`).
 
     The declaration is the ``$declare_head`` statement the seam rewriter
     emits for a predicate name (``term_rewriting._make_predicate_decl_ast``),
@@ -1138,7 +1152,7 @@ def lower_clause(term: Any, spans=None, var_names=None,
             f"permission_error(modify, static_procedure, {name}/{len(args)}))",
             whole_span)
 
-    lw = _ClauseLowering(var_names, positions, ctx)
+    lw = _ClauseLowering(var_names, positions, ctx, var_table=var_table)
     fields = tuple(f"arg_{i}" for i in range(len(args)))
     decl = ast.Expr(value=ast.Call(
         func=_name(_DOLLAR + "declare_head"),
