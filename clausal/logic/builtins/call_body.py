@@ -424,12 +424,10 @@ def is_special_form(functor: Any, arity: int) -> bool:
 
 #: The highest arity of each special form's name: a name written with fewer
 #: arguments is a call/N CLOSURE of it (``catch(G)`` in ``call(catch(G), C,
-#: R)``).
-_SPECIAL_FORM_MAX_ARITY: dict[str, int] = {}
-for _name, _arity in SPECIAL_FORMS:
-    if _arity > _SPECIAL_FORM_MAX_ARITY.get(_name, -1):
-        _SPECIAL_FORM_MAX_ARITY[_name] = _arity
-del _name, _arity
+#: R)``).  Derived in ``clausal/logic/special_forms.py``.
+from clausal.logic.special_forms import (  # noqa: E402
+    SPECIAL_FORM_MAX_ARITY as _SPECIAL_FORM_MAX_ARITY,
+)
 
 
 def is_special_form_closure(functor: Any, arity: int) -> bool:

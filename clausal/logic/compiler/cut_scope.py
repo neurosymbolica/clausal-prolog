@@ -286,7 +286,6 @@ def _meta_terms() -> dict:
     py``), read off the compiler: the MetaCall ``terms_to_goalop`` makes of
     the same goal in a clause body, so a literal call/N term is scanned
     exactly as that body goal is."""
-    from clausal.logic.special_forms import GOAL_POSITIONS
     from clausal.logic.variables import Var
     from clausal.pythonic_ast import nodes
     from .ir import META_GOAL_POSITIONS, MetaCall

@@ -254,3 +254,10 @@ def test_the_exporter_infers_a_meta_argument_through_the_engines_forms(src, mode
         clausal_source_to_prolog_ast, collect_local_meta_modes)
     modes = collect_local_meta_modes(clausal_source_to_prolog_ast(src, strict=True))
     assert list(modes.values()) == [mode]
+
+
+def test_call_body_reads_the_closure_arities_from_the_table():
+    from clausal.logic import special_forms
+    from clausal.logic.builtins import call_body
+    assert call_body._SPECIAL_FORM_MAX_ARITY is special_forms.SPECIAL_FORM_MAX_ARITY
+    assert special_forms.SPECIAL_FORM_MAX_ARITY["findall"] == 4

@@ -25,7 +25,13 @@ Goal expansion does NOT descend into these goal arguments, by decision
 The compiler's own key-named manifest, ``compiler/ir.META_GOAL_POSITIONS``,
 is held to :data:`GOAL_POSITIONS` position by position by that test.
 
-Pure data: no imports, so a front end can read it without the engine.
+Pure data with no imports of its own, so nothing here pulls in an engine
+module; importing it still runs ``clausal/__init__.py``, which does.  Of the
+readers, only the native front end (``iso_l3``) runs while CACHED bytecode
+is produced, so the file is in ``import_hook._NATIVE_FRONTEND_FILES``; the
+seam compiler reads it (``compiler/terms_to_ast`` via
+``call_body.is_special_form``) only when predicates are compiled at load,
+after the cached module code runs.
 """
 from __future__ import annotations
 
@@ -67,3 +73,12 @@ GOAL_POSITIONS: dict[tuple[str, int], tuple[int, ...]] = {
     for key, roles in SPECIAL_FORMS.items()
     if "G" in roles
 }
+
+#: The highest arity of each special form's NAME: written with fewer
+#: arguments it is a call/N closure of the form (``catch(G)`` in
+#: ``call(catch(G), C, R)``, ISO 8.15.4).
+SPECIAL_FORM_MAX_ARITY: dict[str, int] = {}
+for _name, _arity in SPECIAL_FORMS:
+    if _arity > SPECIAL_FORM_MAX_ARITY.get(_name, -1):
+        SPECIAL_FORM_MAX_ARITY[_name] = _arity
+del _name, _arity
