@@ -422,6 +422,10 @@ class DirectiveContext:
         self.dead_stmts: set[int] = set()
         self.load_only: dict[int, ast.stmt] = {}
         self.dropped_keys: set[str] = set()
+        #: id(args list) -> (that list, the arguments as the special form
+        #: of the same name lowers them, or its LoweringRefused): each goal
+        #: of an imported special-form name, for a later drop of the import.
+        self.special_form_args: dict[int, tuple] = {}
         #: A constant's declaring directive span, and each predicate a
         #: constants table defines (the constant-name clash check).
         self.constant_spans: dict = {}

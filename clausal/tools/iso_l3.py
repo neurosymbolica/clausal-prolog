@@ -566,8 +566,16 @@ class _ClauseLowering:
             # An IMPORTED name is the import's predicate, not the special
             # form it may share a name with: its arguments are data, as
             # call/N passes them (the seam's -import_from does the same).
-            lowered = self._goal_args(name, args, spans,
-                                      imported=resolved != name)
+            imported = resolved != name
+            as_special_form = (self._special_form_args(name, args, spans)
+                               if imported else None)
+            lowered = self._goal_args(name, args, spans, imported=imported)
+            if as_special_form is not None:
+                # Kept for a later ``use_module(M, [])`` that drops the
+                # import: the goal is then the special form again
+                # (``_drop_removed_imports``).
+                self._ctx.special_form_args[id(lowered)] = (
+                    lowered, as_special_form)
             head_pos = self._pos.of(_functor_span(sp, name, self._pos.source))
             if (len(args) == 2 and resolved in _REGEX_AUTOBIND_GOALS
                     and not self._meta_depth):
@@ -589,6 +597,13 @@ class _ClauseLowering:
         ``call(X)``."""
         key = (name, len(args))
         goal_args = () if imported else _META_GOAL_ARGS.get(key, ())
+        if imported:
+            # What is visible of a goal there is still refused at load, as
+            # for call/N's goal: the cut-free rule does not depend on which
+            # predicate the name reaches.
+            for i in _META_GOAL_ARGS.get(key, ()):
+                if i < len(args):
+                    self._refuse_control_in(args[i], spans[i])
         lowered = []
         for i, (a, s) in enumerate(zip(args, spans)):
             if i in goal_args:
@@ -601,6 +616,30 @@ class _ClauseLowering:
                     self._refuse_control_in(a, s)
                 lowered.append(self.term(a, s))
         return lowered
+
+    def _special_form_args(self, name: str, args: tuple, spans: list):
+        """The arguments of an imported *name* lowered as the SPECIAL FORM
+        of that name lowers them (goals at its goal positions, ``V^G`` for
+        bagof/setof), or the ``LoweringRefused`` that lowering raises; None
+        when *name* is no special form.  The clause's lowering state is
+        restored afterwards, so the arguments lowered next (as the import's
+        data) bind the same variables first."""
+        if (self._ctx is None or not hasattr(self._ctx, "special_form_args")
+                or not _META_GOAL_ARGS.get((name, len(args)))):
+            return None
+        saved = (set(self._bound), dict(self.occurrences),
+                 set(self.regex_group_names), self.reordered)
+        try:
+            return self._goal_args(name, args, spans)
+        except LoweringRefused as e:
+            return e
+        finally:
+            # (``_if_n`` is not rewound: a truth variable minted here keeps
+            # its name if these arguments are used after all.)
+            (self._bound, occurrences, self.regex_group_names,
+             self.reordered) = saved
+            self.occurrences.clear()
+            self.occurrences.update(occurrences)
 
     def _qualified(self, args: tuple, spans: list, sp, pos) -> ast.expr:
         """``m:G`` (D10) -> the seam's qualified call ``a.b.g(...)``: a name
@@ -1553,7 +1592,7 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
     if clash is not None:
         refuse(*clash)
     if ctx.dead_stmts or ctx.dropped_keys:
-        body = _drop_removed_imports(body, ctx)
+        body = _drop_removed_imports(body, ctx, refuse)
     try:
         body.extend(ctx.auto_declare(uses))
     except DirectiveRefused as e:
@@ -1642,18 +1681,20 @@ def _constant_clash(ctx, heads: dict):
             f"same spelling is fine)", span)
 
 
-def _drop_removed_imports(body: list, ctx) -> list:
+def _drop_removed_imports(body: list, ctx, refuse=None) -> list:
     """``use_module(M, [])`` (D27): drop M's import statements, and re-spell
     every goal lowered through a dropped import (``$LoadName('m.p')``) as
     the plain local name, which no longer resolves -- Scryer's
-    existence_error when it is called."""
+    existence_error when it is called.  A goal whose plain name is a special
+    form gets the arguments that special form lowers (*refuse* reports one
+    that could not be lowered so)."""
     body = [ctx.load_only.get(id(s), s) for s in body
             if id(s) not in ctx.dead_stmts or id(s) in ctx.load_only]
     # The goals first, while their names are still the dotted keys.
     for node in list(ast.walk(ast.Module(body=body, type_ignores=[]))):
         if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
                 and node.func.id == _DOLLAR + "Call"):
-            _rewrap_dropped_meta_goals(node, ctx)
+            _restore_special_form_args(node, ctx, refuse)
     for node in ast.walk(ast.Module(body=body, type_ignores=[])):
         if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
                 and node.func.id == _DOLLAR + "LoadName"):
@@ -1664,12 +1705,14 @@ def _drop_removed_imports(body: list, ctx) -> list:
     return body
 
 
-def _rewrap_dropped_meta_goals(call: ast.Call, ctx) -> None:
+def _restore_special_form_args(call: ast.Call, ctx, refuse) -> None:
     """A goal lowered through a dropped import whose plain name is a special
     form (``once(X)`` with once/1 imported, then ``use_module(m, [])``): its
-    arguments were lowered as DATA, the import's; the special form takes
-    goals there, so each such argument becomes ``call(Arg)`` -- the ISO body
-    conversion :meth:`_ClauseLowering._meta_goal` also lowers to."""
+    arguments were lowered as DATA, the import's.  The goal is the special
+    form now, so they are replaced by the lowering the special form gives
+    them, made when the clause was lowered
+    (``_ClauseLowering._special_form_args``): a goal at each goal position,
+    ``V^G`` for bagof/setof."""
     kws = {kw.arg: kw for kw in call.keywords}
     func, args = kws.get("func"), kws.get("args")
     if func is None or args is None or not isinstance(args.value, ast.List):
@@ -1682,16 +1725,17 @@ def _rewrap_dropped_meta_goals(call: ast.Call, ctx) -> None:
     if (name_kw is None or not isinstance(name_kw.value, ast.Constant)
             or name_kw.value.value not in ctx.dropped_keys):
         return
-    local = name_kw.value.value.rsplit(".", 1)[1]
     elts = args.value.elts
-    position = kws["position"].value if "position" in kws else _const(None)
-    for i in _META_GOAL_ARGS.get((local, len(elts)), ()):
-        elts[i] = _node(
-            "Call",
-            func=_node("LoadName", name=_const("call"), position=position),
-            args=ast.List(elts=[elts[i]], ctx=ast.Load()),
-            kwargs=ast.List(elts=[], ctx=ast.Load()),
-            position=position)
+    entry = getattr(ctx, "special_form_args", {}).get(id(elts))
+    if entry is None or entry[0] is not elts:
+        return
+    alt = entry[1]
+    if isinstance(alt, LoweringRefused):
+        if refuse is None:
+            raise alt
+        refuse(str(alt), getattr(alt, "span", None))
+        return
+    elts[:] = alt
 
 
 def _has_chars(t) -> bool:

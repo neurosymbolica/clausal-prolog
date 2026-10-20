@@ -79,3 +79,13 @@ call the import with `call(X)` (the special form's goal lowering), while
 call/N passed `X`; `iso_l3._goal_args` now lowers an imported or qualified
 name's arguments as data (`tests/test_imported_special_form_names.py`).
 Items 1 and 2 above are untouched by that.
+
+## 3. An import placed after the clause does not apply to it
+
+Reported 2026-10-20 in review. The ISO front end resolves a body goal's
+name against the imports in force when the clause is lowered. With
+`t(X) :- forall(X, true).` followed by `:- use_module(m, [forall/2]).`,
+the body stays the special form, on main and on the fix above. Scryer
+resolves the name when the predicate runs, so there the body calls m's
+forall/2. (For once/1, findall/3 and catch/3 Scryer refuses the defining
+module, so only non-ISO names like forall/2 show the difference.)

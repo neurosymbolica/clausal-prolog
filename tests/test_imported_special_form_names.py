@@ -198,3 +198,49 @@ def test_a_dropped_import_gives_the_special_form_its_goals_back(
     assert len(list(call("t", "true", module=mod))) == 1
     with pytest.raises(Exception, match="instantiation_error"):
         list(call("t", Var(), module=mod))
+
+
+@pytest.mark.parametrize("suffix", SURFACES)
+@pytest.mark.parametrize("name, expected", [("bagof", [[1, 2]]),
+                                            ("setof", [[1, 2]])])
+def test_a_dropped_import_gives_an_iterated_goal_back(
+        tree, suffix, name, expected):
+    """bagof/setof's ``Y^G``: the special form strips the existential
+    prefix, so after the drop the goal must be lowered as that special form
+    lowers it (``Y^p(X, Y)``), not as ``call(Y^p(X, Y))``, which raised
+    ``existence_error(procedure, (^)/2)``."""
+    tag = f"isi_{name}_{suffix[1:]}"
+    tree.write(f"{tag}_m", suffix, f"""
+        :- module({tag}_m, [{name}/3]).
+        {name}(_, _, mine).
+        {_end(suffix, f"{tag}_m")}""")
+    tree.write(f"{tag}_u", suffix, f"""
+        :- module({tag}_u, [t/1]).
+        :- use_module({tag}_m, [{name}/3]).
+        p(2, b).
+        p(1, a).
+        t(L) :- {name}(X, Y^p(X, Y), L).
+        :- use_module({tag}_m, []).
+        {_end(suffix, f"{tag}_u")}""")
+    mod = tree.load(f"{tag}_u")
+    got = _xs(mod, "t")
+    assert sorted(map(sorted, got)) == expected
+
+
+def test_a_control_construct_in_an_imported_goal_position_is_refused(tree):
+    """``->`` is refused in a .clausal goal at load, whichever predicate
+    the name reaches: with once/1 imported, ``once((true -> true ; fail))``
+    is refused as it is without the import."""
+    tree.write("isc_m", ".clausal", """
+        :- module(isc_m, [once/1]).
+        once(_).
+        :- end_module(isc_m).
+        """)
+    tree.write("isc_u", ".clausal", """
+        :- module(isc_u, [t/0]).
+        :- use_module(isc_m, [once/1]).
+        t :- once((true -> true ; fail)).
+        :- end_module(isc_u).
+        """)
+    with pytest.raises(SyntaxError, match="refused"):
+        tree.load("isc_u")

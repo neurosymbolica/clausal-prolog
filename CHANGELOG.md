@@ -364,7 +364,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 - **A predicate imported under a special form's name gets its arguments
   as written** (2026-10-20). In a `.pl` or `.clausal` file, with
-  `:- use_module(m, [once/1]).` the body `once(X)` called `m`'s `once/1`
+  `:- use_module(m, [once/1]).` in force at the clause (an import placed
+  after the clause does not apply to it, and the special form stays), the
+  body `once(X)` called `m`'s `once/1`
   with `call(X)`, while `call(once, X)` and `G = once(X), call(G)` passed
   `X`; `once(foo(1))` raised `existence_error(procedure, foo/1)` instead of
   calling the import. The same held for `findall/3`, `forall/2`,
@@ -379,8 +381,12 @@ surface described in [docs/public-api.md](docs/public-api.md).
   One result: `:- use_module(library(re), [findall/3]).`, the usage line
   of library(re)'s facade, followed by `findall("\\d", "a1b2", L)`, now
   loads and runs the regex predicate. Before, the file was refused
-  (`"a1b2"` is not callable). A later `use_module(m, [])` that drops the
-  import gives the special form its goal arguments back. Pinned in
+  (`"a1b2"` is not callable). A sandboxed module that imports a special
+  form's name runs the import too. A `->` or `!` visible in such an
+  argument is still refused at load in `.clausal`, as before. A later
+  `use_module(m, [])` that drops the import gives the special form its goal
+  arguments back, lowered as the special form lowers them (`Y^G` in
+  `bagof/3` and `setof/3` included). Pinned in
   `tests/test_imported_special_form_names.py`.
 
 - **`catch_error/2` and `catch_recover/3` load in a `.clausal` clause
