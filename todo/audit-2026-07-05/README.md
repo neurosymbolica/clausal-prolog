@@ -16,13 +16,13 @@ finding was culled as a false positive, no regression guard broke.
 
 ## Status (2026-07-30)
 
-**165 of 185 closed; 20 open** (2026-10-05, counted from `done/`: four more verified done and moved to `done/` -- `fix-A06-bool-hook-divergence`, `investigate-A04-wfs-variant-resolution`, `investigate-A09-ho-committed-choice`, `investigate-A10-parked-design-decisions`; each carries its fixing commits and pinning tests; the earlier count missed `investigate-A10-imported-head-clobber`, closed 2026-08-25). Before that: **160 of 185 closed; 25 open.** The Status column below was regenerated from
+**166 of 185 closed; 19 open** (2026-10-20: `fix-A10-regex-autobind-body-vars` fixed and moved to `done/`). Before that: **165 of 185 closed; 20 open** (2026-10-05, counted from `done/`: four more verified done and moved to `done/` -- `fix-A06-bool-hook-divergence`, `investigate-A04-wfs-variant-resolution`, `investigate-A09-ho-committed-choice`, `investigate-A10-parked-design-decisions`; each carries its fixing commits and pinning tests; the earlier count missed `investigate-A10-imported-head-clobber`, closed 2026-08-25). Before that: **160 of 185 closed; 25 open.** The Status column below was regenerated from
 `done/` on 2026-07-30 — until then every row still read `queued`/`parked`,
 including 159 whose files had already moved, so the table read as though nothing
 had been fixed. One row was missing entirely (`fix-A06-alldiff-int64-sentinel.md`,
 added by the 2026-07-10 fix-review) and has been added.
 
-The 20 open items are 5 `fix-*` and 15 `investigate-*` (before 2026-10-05 the count read 25 = 6 + 19). Almost all are open *by
+The 19 open items are 4 `fix-*` and 15 `investigate-*` (20 = 5 + 15 before 2026-10-20; before 2026-10-05 the count read 25 = 6 + 19). Almost all are open *by
 decision*, not by neglect: the `fix-*` ones are gated on parked design questions
 (A06-D002/D005, A08-D001/D003), and the `investigate-*` ones are either the
 parked questions themselves or Opus-tagged design work. One exception worth
@@ -194,7 +194,7 @@ to delete; the clusters above are the collapse points.
 | `fix-A10-pl-cut-emitted-as-dead-goal.md` | fix | correctness | A10-F001 | A10 rewriting-import | done |
 | `fix-A10-pyc-transformer-version-tag.md` | fix | design (unconfirmed) | A10-F018 | A10 rewriting-import | done |
 | `fix-A10-pythonic-ast-traversal-exports.md` | fix | doc-drift | A10-F016 | A10 rewriting-import | done |
-| `fix-A10-regex-autobind-body-vars.md` | fix | correctness | A10-F005 | A10 rewriting-import | queued |
+| `fix-A10-regex-autobind-body-vars.md` | fix | correctness | A10-F005 | A10 rewriting-import | done |
 | `fix-A10-stdlib-shadowing-docs-guard.md` | fix | correctness | A10-F010 | A10 rewriting-import | done |
 | `fix-A10-term-expansion-doc-examples.md` | fix | doc-drift | A10-F008 | A10 rewriting-import | done |
 | `fix-A10-zero-arity-fact-silent-noop.md` | fix | correctness | A10-F011 | A10 rewriting-import | done |

@@ -35,7 +35,13 @@ re-run separately.
    - The builtin reads only seam syntax-tree nodes; both CLP(Q) backends
      behave the same.
    - Page: clpq.md.
-3. **Regex named-group auto-binding binds nothing** (verified).
+3. **FIXED 2026-10-20 (commit e6161a94)** Both front ends now record each
+   rule's variables by source name (`Predicate.var_names`), and goal
+   expansion binds a group to the variable spelled exactly like it, head
+   or body. Pinned by tests/fixtures/regex_named_groups.clausal and
+   tests/iso_l3/test_l3_regex_named_groups.py; the three pages' examples
+   are Clausal Prolog again (commit 24c09f93).
+   **Regex named-group auto-binding binds nothing** (verified).
    - With `:- use_module(library(re), [match/2])`, the clause
      `parse_date(D, YEAR, MONTH) :- match("(?P<YEAR>\\d{4})-(?P<MONTH>\\d{2})", D).`
      makes `parse_date("2024-03", Y, M)` succeed with `Y` and `M` unbound.

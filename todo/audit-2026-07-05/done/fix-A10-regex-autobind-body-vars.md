@@ -1,5 +1,15 @@
 # fix(A10-F005): regex auto-binding silently loses bindings for body-only named groups
 
+**Status: FIXED 2026-10-20 (commit e6161a94).** Fix direction 1: both
+front ends put a `{name: Var}` table on the Predicate node
+(`Predicate.var_names`), and `find_var_for_group` (and the dynamic-pattern
+path) bind a group to the variable spelled exactly like it, so a
+body-only variable binds and the operand field names (`left`, `right`)
+are no longer candidates. A clause without the table (built in Python, or
+by term expansion) keeps the old field-name lookup. Pinned in
+tests/audit_2026_07_05/test_10_rewriting_import.py::test_F005_regex_body_only_group_binds
+(no longer xfail) and ::test_F005_regex_group_names_match_variable_names_exactly.
+
 **Problem.** `goal_expansion._expand_regex` binds each ALLCAPS named group via
 `Unify(target_var, thunk)` where `target_var = ctx.find_var_for_group(name)`.
 `find_var_for_group` (goal_expansion.py:75-83) resolves `YEAR` → field name
