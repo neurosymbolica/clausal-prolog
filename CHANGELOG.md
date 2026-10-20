@@ -363,7 +363,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
   a group `YEAR` no longer binds a head variable `Year` or `_year`, which the
   old lowercased field-name lookup treated as the same. The `.clausal`
   singleton lint no longer reports a variable that a literal pattern's group
-  names. Pinned by `tests/fixtures/regex_named_groups.clausal` and
+  names, when the regex goal is a goal of the clause body; inside a
+  meta-argument (`once/1`, `catch/3`, `forall/2`, `\+`, ...) the group binds
+  nothing and the variable is still reported. Pinned by `tests/fixtures/regex_named_groups.clausal` and
   `tests/iso_l3/test_l3_regex_named_groups.py`.
 
 - **A sandboxed module may import the datetime adapter's `date`

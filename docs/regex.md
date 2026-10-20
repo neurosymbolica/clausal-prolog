@@ -300,7 +300,7 @@ test("both read the same groups") :-
     Y1 == "2026".
 ```
 
-The singleton lint knows this: a variable named by a group of a literal `match/2` or `search/2` pattern is not reported as a singleton.
+The singleton lint knows this: a variable named by a group of a literal `match/2` or `search/2` pattern is not reported as a singleton. Auto-binding applies to the goals of the clause body, not inside a meta-call argument: in `once(match(...))`, `catch(match(...), _, true)` or `forall(match(...), true)` a group binds nothing (and the lint still reports its variable).
 
 You never see the expanded form — just use the variable names in your pattern.
 

@@ -98,3 +98,24 @@ def test_a_variable_no_group_names_is_still_a_singleton(native):
 f(D, YEAR, OTHER) :- match("(?P<YEAR>\\\\d{4})", D).
 """)
     assert len(singles) == 1 and "`OTHER`" in singles[0], singles
+
+
+# A group binds only where goal expansion reaches it: the clause body's
+# control constructs.  It never descends into a meta-argument (once/1,
+# catch/3, forall/2, findall/3 ...), and a binding under \+ never escapes
+# it, so a group there binds nothing, and the singleton lint must not count
+# it either.
+@pytest.mark.parametrize("name, body", [
+    ("once_group", 'once(match("(?P<X>\\\\d+)", S))'),
+    ("catch_group", 'catch(match("(?P<X>\\\\d+)", S), _, true)'),
+    ("forall_group", 'forall(match("(?P<X>\\\\d+)", S), true)'),
+    ("naf_group", '\\+ match("(?P<X>\\\\d+)x", S)'),
+])
+def test_a_group_inside_a_meta_argument_binds_nothing_and_is_a_singleton(
+        native, ans, name, body):
+    from clausal.logic.variables import is_var
+    mod, singles = _load(native, "rx_" + name,
+                         f"{name}(S, X) :- {body}.\n")
+    assert any("`X`" in m for m in singles), singles
+    [answer] = ans(mod, name, 2, chars("42"))
+    assert is_var(answer)

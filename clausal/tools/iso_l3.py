@@ -271,8 +271,13 @@ class _ClauseLowering:
         self.reordered = False
         # The group names of the static library(re) match/2 / search/2
         # patterns in this clause: each binds the variable it names
-        # (``goal_expansion``), so that variable is not a singleton.
+        # (``goal_expansion``), so that variable is not a singleton.  Only a
+        # goal of the clause body itself counts: goal expansion walks the
+        # body's control constructs but never a meta-argument (once/1,
+        # catch/3, findall/3 ...), and a binding under \+ never escapes it,
+        # so a group there binds nothing.
         self.regex_group_names: set[str] = set()
+        self._meta_depth = 0    # > 0 while lowering a meta-argument goal
 
     # ── variables ──
 
@@ -560,7 +565,8 @@ class _ClauseLowering:
             head_pos = self._pos.of(_functor_span(sp, name, self._pos.source))
             remap = self._ctx.import_remap if self._ctx is not None else {}
             resolved = remap.get(name, name)
-            if len(args) == 2 and resolved in _REGEX_AUTOBIND_GOALS:
+            if (len(args) == 2 and resolved in _REGEX_AUTOBIND_GOALS
+                    and not self._meta_depth):
                 self.regex_group_names |= _regex_group_names(args[0])
             return self._call(resolved, lowered, head_pos, pos)
         # ISO 7.6.2: a number (or anything else) is not callable.
@@ -798,7 +804,11 @@ class _ClauseLowering:
             self._refuse_control_in(g, sp)
             pos = self._pos.of(_top_span(sp))
             return self._call("call", [self.term(g, sp)], pos, pos)
-        return self.goal(g, sp)
+        self._meta_depth += 1
+        try:
+            return self.goal(g, sp)
+        finally:
+            self._meta_depth -= 1
 
     def _refuse_control_in(self, g: Any, sp) -> None:
         """A goal written as ``call/N``'s first argument is still a goal: the
