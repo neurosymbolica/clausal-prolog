@@ -803,6 +803,15 @@ _META_GOAL_ARGS: dict[str, tuple[int, ...]] = {
     "retractall": (0,), "clause": (0,),
 }
 
+#: The arguments of _META_GOAL_ARGS that are CALLED as goals, where a ``[]``
+#: is the goal ``[]/0``.  Not phrase/2's (there ``[]`` is the empty terminal
+#: list), nor a closure (maplist/2...) or a clause term (assertz/1...).
+_NIL_GOAL_ARGS: dict[str, tuple[int, ...]] = {
+    f: ix for f, ix in _META_GOAL_ARGS.items()
+    if f not in ("phrase", "maplist", "foldl", "include", "exclude",
+                 "partition", "assert", "asserta", "assertz", "retract",
+                 "retractall", "clause")}
+
 _CONTROL_FUNCTORS = frozenset({",", ";", "->", "*->", "\\+", ":-", "|"})
 
 
@@ -1078,8 +1087,34 @@ class _PrologToClausal:
         body = self._emit_body(clause.body)
         return f"{head} <- ({body})"
 
+    @staticmethod
+    def _is_nil(term: PTerm) -> bool:
+        """The atom ``[]``, spelled ``[]`` or ``'[]'`` (D70: one atom)."""
+        return ((isinstance(term, PList) and not term.elements
+                 and term.tail is None)
+                or (isinstance(term, PAtom) and term.name == "[]"))
+
+    @staticmethod
+    def _nil_head_refused() -> PrologTranslationError:
+        # ISO makes ``[]`` an atom, so a text may define ``[]/N`` -- the
+        # native front end does.  This translator writes seam text, whose
+        # predicate names are Python identifiers, so it cannot: refuse,
+        # rather than drop the clause (``[].`` used to load and define
+        # nothing) or emit a ``[] >> ...`` that dies with a TypeError.
+        return PrologTranslationError(
+            "Prolog functor '[]' cannot be translated to a Clausal "
+            "predicate name: the translator writes seam text, whose "
+            "predicate names are Python identifiers, so it cannot define "
+            "the predicate [] (a clause, fact or grammar rule headed [] or "
+            "'[]').\nLoad the file with the native front end (the default; "
+            "unset CLAUSAL_PL_FRONTEND), which defines it, or rename the "
+            "predicate.")
+
     def _emit_head(self, term: PTerm) -> str:
         """Emit a clause head as a clausal predicate call."""
+        if self._is_nil(term) or (isinstance(term, PCompound)
+                                  and term.functor == "[]"):
+            raise self._nil_head_refused()
         # A ','/2 head is a DCG pushback (`Head, [Tokens] --> Body`), not a
         # callable predicate — emitting it bare produced invalid Python
         # silently (F039). Reject with a clear message.
@@ -1121,6 +1156,13 @@ class _PrologToClausal:
         # PrologTranslationError (the cut-free contract, docs/import.md).
         if isinstance(goal, PAtom) and goal.name == "!":
             return self._emit_atom(goal)
+        # A body goal ``[]`` CALLS the predicate ``[]/0`` (ISO: ``[]`` is
+        # an atom), as on the native front end.  Emitted bare it was the
+        # seam's empty list, which as a goal succeeded: ``t :- [].`` was
+        # true with no ``[]/0`` defined, where ISO raises
+        # existence_error(procedure, []/0).
+        if self._is_nil(goal):
+            return "call([])"
         # D21: the forward translator's in_domain/3 type dispatch folds back.
         folded = self._fold_in_domain(goal)
         if folded is not None:
@@ -1244,6 +1286,10 @@ class _PrologToClausal:
         # Clausal expresses as `(Head, [Tokens]) >> (Body)`; translate it
         # faithfully rather than mangling it into invalid Python (F039).
         if isinstance(rule.head, PCompound) and rule.head.functor == ",":
+            base = rule.head.args[0]
+            if self._is_nil(base) or (isinstance(base, PCompound)
+                                      and base.functor == "[]"):
+                raise self._nil_head_refused()
             parts = ", ".join(
                 self._emit_term(p) for p in self._flatten_conjunction(rule.head)
             )
@@ -2118,11 +2164,56 @@ class _PrologToClausal:
         spells rather than folding to the truth value ``False``.  Applied in
         every position -- head, goal and data alike -- so a ``test/2`` fact
         and a call of it still unify."""
-        emitted = [self._emit_term(a) for a in args]
+        goal_ix = _NIL_GOAL_ARGS.get(functor, ())
+        emitted = [self._emit_goal_arg(a) if i in goal_ix
+                   else self._emit_term(a) for i, a in enumerate(args)]
         if (functor == "test" and len(args) == 2
                 and isinstance(args[1], PAtom)):
             emitted[1] = _quote_atom(args[1].name)
         return ", ".join(emitted)
+
+    def _emit_goal_arg(self, term: PTerm) -> str:
+        """A meta-call's goal argument (``catch(G, ...)``, ``findall(_, G,
+        _)``): a term, except that a ``[]`` called as a goal -- the whole
+        argument, or a conjunct, disjunct or negated goal of it -- is
+        ``call([])``, the predicate ``[]/0``.  Emitted bare it is the seam's
+        empty list: as the whole argument it succeeded (``catch([], ...)``
+        was true with no ``[]/0``), and inside ``(A, [])`` the seam's goal
+        compiler refused it.  A goal argument with no ``[]`` goal in it is
+        emitted exactly as a term, as before."""
+        if self._is_nil(term):
+            return "call([])"
+        if isinstance(term, PCompound) and self._has_nil_goal(term):
+            f, a = term.functor, term.args
+            if f == "," and len(a) == 2:
+                return "(" + ", ".join(
+                    self._emit_goal_arg(p)
+                    for p in self._flatten_conjunction(term)) + ")"
+            if f in (";", "|") and len(a) == 2 and not (
+                    isinstance(a[0], PCompound)
+                    and a[0].functor in ("->", "*->")):
+                return (f"({self._emit_goal_arg(a[0])} or "
+                        f"{self._emit_goal_arg(a[1])})")
+            if f == "\\+" and len(a) == 1:
+                return f"not {self._emit_goal_arg(a[0])}"
+        return self._emit_term(term)
+
+    def _has_nil_goal(self, term: PTerm) -> bool:
+        """Whether *term*, read as a goal, calls ``[]`` -- itself, or through
+        ``,``/``;``/``|``/``\\+`` (the constructs ``_emit_goal_arg`` walks)."""
+        if self._is_nil(term):
+            return True
+        if not isinstance(term, PCompound):
+            return False
+        f, a = term.functor, term.args
+        if f in (",", ";", "|") and len(a) == 2:
+            if f != "," and isinstance(a[0], PCompound) \
+                    and a[0].functor in ("->", "*->"):
+                return False
+            return self._has_nil_goal(a[0]) or self._has_nil_goal(a[1])
+        if f == "\\+" and len(a) == 1:
+            return self._has_nil_goal(a[0])
+        return False
 
     @staticmethod
     def _refuse_caret_goal() -> None:
@@ -2155,7 +2246,7 @@ class _PrologToClausal:
                     and len(inner.args) == 2):
                 inner_s = f"({inner_s})"
             return f"{witness} ^ {inner_s}"
-        return self._emit_term(term)
+        return self._emit_goal_arg(term)
 
     # Python operator precedence (higher number = tighter binding).
     _EXPR_PREC: dict[str, int] = {

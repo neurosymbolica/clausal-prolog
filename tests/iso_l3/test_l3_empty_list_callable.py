@@ -199,3 +199,54 @@ def test_a_grammar_rule_may_have_the_head_empty_list(native, ans, suffix):
     got = {row: len(ans(mod, "t", 1, row)) for row in GRAMMAR_ROWS}
     assert got == {row: 1 for row in GRAMMAR_ROWS}
 
+
+# ── The legacy translator (CLAUSAL_PL_FRONTEND=translator) ──────────────────
+#
+# The translator writes seam text, and a seam predicate name is a Python
+# identifier, so it cannot DEFINE ``[]`` -- it refuses ``'[]'(a).`` already,
+# and now refuses every head ``[]`` the same way (a fact, a rule, a grammar
+# rule) instead of dropping it (``[].`` loaded and defined nothing) or failing
+# with a Python TypeError (``[] --> [a].``).  A body goal ``[]`` CALLS the
+# predicate ``[]/0``, as on the native front end, instead of succeeding as an
+# empty list: with none defined it is the ISO existence error.  So does a
+# ``[]`` in a meta-call's goal argument (``catch([], ...)``,
+# ``findall(_, [], _)``, and under ``,``/``;``/``\+`` there), which succeeded
+# (as the whole argument) or failed to load (nested); phrase/2's ``[]`` stays
+# the empty terminal list.  Every row matches the native front end and Scryer.
+
+TRANSLATOR_CALLS = """\
+u(goal, E) :- catch([], error(E, _), true).
+u(call, E) :- catch(call([]), error(E, _), true).
+u(asserted, ok) :- assertz([]), [].
+u(nested, E) :- catch((true, [], true), error(E, _), true).
+u(or, E) :- catch((fail ; []), error(E, _), true).
+u(naf, E) :- catch(\\+ [], error(E, _), true).
+u(findall, E) :- catch(findall(x, [], _), error(E, _), true).
+u(setof, E) :- catch(setof(X, Y^(X-Y = 1-a, []), _), error(E, _), true).
+u(phrase, ok) :- phrase([], []), \\+ phrase([], [a]).
+"""
+
+
+@pytest.mark.parametrize("frontend", ["translator", "native"])
+def test_the_translator_calls_a_body_goal_empty_list(native, ans, frontend):
+    mod = native.load("nil_tr_calls_" + frontend, TRANSLATOR_CALLS,
+                      frontend=frontend)
+    pi0 = ("existence_error", "procedure", ("/", [], 0))
+    assert ans(mod, "u", 2, "goal") == [pi0]
+    assert ans(mod, "u", 2, "call") == [pi0]
+    for row in ("nested", "or", "naf", "findall", "setof"):
+        assert ans(mod, "u", 2, row) == [pi0], row
+    assert ans(mod, "u", 2, "phrase") == ["ok"]
+    # Last: it defines []/0, which every row above relies on being absent.
+    assert ans(mod, "u", 2, "asserted") == ["ok"]
+
+
+@pytest.mark.parametrize("text", [
+    "[].\n", "'[]'.\n", "[] :- true.\n", "'[]'(a).\n", "[] --> [a].\n",
+    "[](X) --> [X].\n", "[], [p] --> [c].\n",
+])
+def test_the_translator_refuses_a_head_empty_list(text):
+    from clausal.tools.prolog_to_clausal import (PrologTranslationError,
+                                                 prolog_to_clausal)
+    with pytest.raises(PrologTranslationError, match=r"'\[\]'"):
+        prolog_to_clausal(text)
