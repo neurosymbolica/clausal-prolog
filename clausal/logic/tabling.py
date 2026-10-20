@@ -44,7 +44,20 @@ from clausal.logic.cells import is_cell, intern_cell, is_intern_enabled, is_char
 
 # ── Sentinels ──────────────────────────────────────────────────────────────
 
-_VAR = object()              # unbound Var placeholder in subgoal keys
+# The tag of an unbound variable in a variant key.  A variable keys as
+# ``(_VAR, n)``, n its number in order of FIRST OCCURRENCE in the keyed term
+# (the whole call, or the whole answer): ``f(X, X)`` keys as
+# ``f((_VAR, 0), (_VAR, 0))`` and ``f(_, _)`` as ``f((_VAR, 0), (_VAR, 1))``,
+# so two terms key alike iff they are variants -- equal up to a consistent
+# renaming of their variables (ISO/XSB variant checking).  One sentinel for
+# every variable took those two for one answer, and ``w(f(A, B))`` for a
+# variant of ``w(f(A, A))``, which through negation proved a falsehood
+# (todo/done/tabled-variant-key-conflates-repeated-variables-2026-10-20.md).
+_VAR = object()
+# The keys of the first variables, built once: a key walk hands them out
+# without allocating.  The C twin keeps the same cache (``var_keys``).
+_VAR_KEY_CACHE = 32
+_VAR_KEYS = tuple((_VAR, n) for n in range(_VAR_KEY_CACHE))
 _TABLING_SUSPEND = object()  # consumer → trampoline: park me
 _TABLING_RESUME = object()   # legacy: nothing sends this since the A04-F001
                              # fixpoint rework; kept only because external
@@ -780,27 +793,64 @@ class SuspendedConsumer:
 # ── Key computation (variant checking) ────────────────────────────────────
 
 
+# The variable numbering of the key walk in progress on this thread
+# (``varmap``: the dereferenced ``Var`` -> its number), or None between
+# walks.  A walk opens it, and a re-entry from inside the walk -- the C twin
+# hands a partial list to ``_seg_key``, which keys the elements through
+# ``_normalize_for_key`` again -- continues the SAME numbering, so a
+# variable shared between a partial list and the rest of the term keeps one
+# number.  The C twin keeps its own per-thread map for the same reason.
+_key_ctx = threading.local()
+
+
+def _var_key(n):
+    return _VAR_KEYS[n] if n < _VAR_KEY_CACHE else (_VAR, n)
+
+
 def _normalize_for_key_py(term):
     """Deref term into a hashable, type-distinguishing canonical key.
 
+    An unbound variable keys as ``(_VAR, n)``, numbered by first occurrence
+    in the walk (see ``_VAR``): one numbering per call of this function or
+    of ``make_subgoal_key``, shared with any re-entry from ``_seg_key``.
     Exact ``int`` stays canonical (the fast path). Other numeric leaves
     (``bool``/``float``/``complex``) are type-tagged as ``(type, value)`` so
     ``1``/``True``/``1.0`` do not conflate in variant keys or answer dedup
     (A04-F006 — semantics-neutral; unification is untouched, see A01-D001).
     Containers (``list``/``tuple``/``dict``/``set``, term
     instances) are rebuilt into hashable forms so answers/keys holding them
-    can live in the dedup set (A04-F005).
+    can live in the dedup set (A04-F005).  A dict's values are numbered in
+    the order of its keys when those sort, so the key is free of the dict's
+    insertion order; the elements of a set are numbered in the set's own
+    order, so a set holding a variable that also occurs outside it may key
+    differently from a variant (sets of unbound variables are no part of
+    any supported workload).
 
     Keep this in exact lock-step with the C twin ``do_normalize``
     (``_tabling_core.c``) — the two must produce identical keys (P52).
     ``Decimal``/``Fraction`` are intentionally left raw in BOTH (they still
     conflate with ``int`` — a documented residual pending A01-D001).
     """
+    vm = getattr(_key_ctx, "varmap", None)
+    if vm is not None:
+        return _norm_py(term, vm)
+    _key_ctx.varmap = vm = {}
+    try:
+        return _norm_py(term, vm)
+    finally:
+        _key_ctx.varmap = None
+
+
+def _norm_py(term, vm):
+    """The walk of ``_normalize_for_key_py``; *vm* is its numbering."""
     term = deref(term)
     if type(term) is int:
         return term
     if is_var(term):
-        return _VAR
+        n = vm.get(term)
+        if n is None:
+            n = vm[term] = len(vm)
+        return _var_key(n)
     if term is None:
         return term
     if isinstance(term, bool):
@@ -815,7 +865,7 @@ def _normalize_for_key_py(term):
         # A code list: b"ab" and [97, 98] are one term, so one key.
         return term if term else _NIL_KEY
     if isinstance(term, list):
-        elems = tuple(_normalize_for_key_py(e) for e in term)
+        elems = tuple(_norm_py(e, vm) for e in term)
         return _seq_key(elems) or ("__list__",) + elems
     if type(term) is tuple and not term:
         return _NIL_KEY                 # () is nil: the key [] has
@@ -824,20 +874,29 @@ def _normalize_for_key_py(term):
         text = chars_text(term)
         return ("__chars__", text) if text else _NIL_KEY
     if isinstance(term, tuple):
-        return ("__tuple__",) + tuple(_normalize_for_key_py(e) for e in term)
+        return ("__tuple__",) + tuple(_norm_py(e, vm) for e in term)
     if isinstance(term, dict):
+        pairs = [(_norm_py(k, vm), v) for k, v in term.items()]
+        try:
+            pairs = sorted(pairs, key=_pair_key)
+        except TypeError:
+            pass                        # keys of mixed types: insertion order
         return ("__dict__", frozenset(
-            (_normalize_for_key_py(k), _normalize_for_key_py(v))
-            for k, v in term.items()))
+            (nk, _norm_py(v, vm)) for nk, v in pairs))
     if isinstance(term, (set, frozenset)):
-        return ("__set__", frozenset(_normalize_for_key_py(e) for e in term))
+        return ("__set__", frozenset(_norm_py(e, vm) for e in term))
     if isinstance(term, _SEG_TYPES):
-        return _seg_key(term)
+        return _seg_key(term, _normalize_for_key_py)
     if is_term_instance(term):
         return (type(term).__name__,) + tuple(
-            _normalize_for_key_py(getattr(term, f)) for f in term_field_names(term)
+            _norm_py(getattr(term, f), vm) for f in term_field_names(term)
         )
     return term
+
+
+def _pair_key(pair):
+    return pair[0]
+
 
 _NIL_KEY = ("__list__",)
 
@@ -863,35 +922,68 @@ def _seq_key(elems):
 _normalize_for_key = _normalize_for_key_py
 
 _SEG_TYPES = (SegList, SegString, SegBytes)
-_HOLE = ("__hole__",)
+_HOLE = object()      # the tag of an open tail in a partial list's key
 
 
-def _seg_key(term):
+def _seg_key(term, norm=None):
     """The key of a ``SegList``/``SegString``/``SegBytes``.  A ground one
     walks to its list, carrier or bytes and keys as that.  A partial one keys
-    as ``("__partial__", e0, e1, ..., _HOLE, ...)``: its known elements in
-    order (a string segment as its chars, a bytes segment as its codes, so
-    ``"a"||T`` and ``[a|T]`` key alike) with a ``_HOLE`` per open tail.  The
-    C twin calls this function (registered below), so both produce it."""
+    as ``("__partial__", e0, e1, ..., (_HOLE, n), ...)``: its known elements
+    in order (a string segment as its chars, a bytes segment as its codes, so
+    ``"a"||T`` and ``[a|T]`` key alike) with a hole per open tail, numbered
+    as the tail's variable is (``[T|T]`` is not ``[X|T]``) but tagged apart
+    from an element (``[*A, x]`` is not ``[X, x]``).  The C twin calls this
+    function (registered below), so both produce it; *norm* is the twin that
+    keys the elements -- the C twin's own entry point by default, which
+    continues the numbering of the walk in progress."""
+    if norm is None:
+        norm = _normalize_for_key
     w = term.__walk__()
     if not isinstance(w, _SEG_TYPES):
-        return _normalize_for_key(w)
+        return norm(w)
     elems = []
     for seg in w._segments:
         if isinstance(seg, VarSeg):
-            elems.append(_HOLE)
+            vk = norm(seg.var)
+            elems.append((_HOLE, vk[1]) if type(vk) is tuple and vk[0] is _VAR
+                         else vk)
         elif isinstance(seg, ConcreteSeg):
-            elems.extend(_normalize_for_key(e) for e in seg.elements)
+            elems.extend(norm(e) for e in seg.elements)
         elif isinstance(seg, (str, bytes)):
             elems.extend(seg)            # chars, or codes
         else:
-            elems.append(_normalize_for_key(seg))
+            elems.append(norm(seg))
     return ("__partial__",) + tuple(elems)
 
 
 def _make_subgoal_key_py(args, trail):
-    """Compute variant key for a tabled call's arguments."""
-    return tuple([_normalize_for_key(a) for a in args])
+    """Compute variant key for a tabled call's arguments: one numbering
+    across all of them, so ``p(X, X)`` and ``p(X, Y)`` key apart."""
+    vm = getattr(_key_ctx, "varmap", None)
+    if vm is not None:
+        return tuple([_norm_py(a, vm) for a in args])
+    _key_ctx.varmap = vm = {}
+    try:
+        return tuple([_norm_py(a, vm) for a in args])
+    finally:
+        _key_ctx.varmap = None
+
+
+class _key_scope_py:
+    """``with _key_scope_py():`` -- one variable numbering for every
+    ``_normalize_for_key_py`` call made inside (the seam's structural answer
+    key, which keys an unhashable answer piece by piece)."""
+    __slots__ = ("opened",)
+
+    def __enter__(self):
+        self.opened = getattr(_key_ctx, "varmap", None) is None
+        if self.opened:
+            _key_ctx.varmap = {}
+
+    def __exit__(self, *exc):
+        if self.opened:
+            _key_ctx.varmap = None
+
 
 make_subgoal_key = _make_subgoal_key_py
 
@@ -1177,10 +1269,15 @@ def _delay_negation(functor, arity, key, args, trail, store=None):
         _charge_delays(leader, (dn,), trail)
 
 
+def _is_var_key(k) -> bool:
+    """Whether *k* is the key of an unbound variable, ``(_VAR, n)``."""
+    return type(k) is tuple and len(k) == 2 and k[0] is _VAR
+
+
 def _key_has_var(k) -> bool:
-    """True if a normalized subgoal key contains the ``_VAR`` sentinel
+    """True if a normalized subgoal key contains a variable key or a hole
     anywhere — i.e. the call it keys is nonground."""
-    if k is _VAR:
+    if k is _VAR or k is _HOLE:
         return True
     if isinstance(k, (tuple, frozenset)):
         return any(_key_has_var(x) for x in k)
@@ -1400,12 +1497,29 @@ def _naf_tabled(functor, arity, args, trail, table_store, db=None):
 
 def _key_subsumes(general: tuple, specific: tuple) -> bool:
     """True if variant key ``general`` is at least as general as ``specific``
-    — each position is the unbound ``_VAR`` sentinel or structurally identical.
+    — each position is a variable key or structurally identical, and one
+    variable of ``general`` stands for ONE sub-key of ``specific`` (so
+    ``p(X, X)`` covers ``p(1, 1)`` and not ``p(1, 2)``).  Only the argument
+    positions themselves are matched: a variable nested in an argument is
+    not generalised (``p(f(X))`` does not cover ``p(f(1))``), as before.
     A complete table under ``general`` then covers every instance of a call
     whose key is ``specific`` (A04-F002 subsuming-variant NAF)."""
     if len(general) != len(specific):
         return False
-    return all(g is _VAR or g == s for g, s in zip(general, specific))
+    bound: dict = {}
+    for g, s in zip(general, specific):
+        if _is_var_key(g):
+            seen = bound.get(g, _UNBOUND)
+            if seen is _UNBOUND:
+                bound[g] = s
+            elif seen != s:
+                return False
+        elif g != s:
+            return False
+    return True
+
+
+_UNBOUND = object()
 
 
 # ── Conditional answer resolution (WFS) ─────────────────────────────────

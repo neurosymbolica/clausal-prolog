@@ -142,12 +142,14 @@ From Python, in a `.seam` file, the same builtins run in goal position: `if --ab
 
     ### Variant checking
 
-    Subgoal identity is determined by *variant checking*: two calls are the same subgoal if their arguments match after replacing all unbound variables with a common placeholder. `make_subgoal_key(args, trail)` normalises each argument via `_normalize_for_key`, which:
+    Subgoal identity is determined by *variant checking*: two calls are the same subgoal if they are variants, equal up to a consistent renaming of their variables (ISO/XSB). `p(X, Y)` and `p(Y, X)` are one subgoal; `p(X, X)` is another. `make_subgoal_key(args, trail)` normalises the arguments via `_normalize_for_key`, which:
 
     - derefs bound variables
-    - replaces unbound `Var` with the `_VAR` sentinel
+    - replaces an unbound `Var` with `(_VAR, n)`, `n` its number in order of first occurrence across the whole call (so `p(X, X)` keys as `((_VAR, 0), (_VAR, 0))` and `p(X, Y)` as `((_VAR, 0), (_VAR, 1))`); an attributed variable is a variable
     - type-tags `bool`/`float`/`complex` leaves so `1`, `True` and `1.0` stay distinct keys
     - recursively normalises lists, cells (plain tuples), dicts and sets
+
+    The same key tells answers apart: `w(f(_, _))` and `w(f(X, X))` are two answers of a tabled `w/1`, and `w(f(X, Y))`, `w(f(Y, X))` one.
 
     The table store maps `(functor, arity, variant_key)` → `TableEntry`.
 

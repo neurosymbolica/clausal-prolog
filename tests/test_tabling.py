@@ -255,7 +255,9 @@ class TestKeyComputation:
     def test_unbound_var(self):
         # nv
         v = Var()
-        assert _normalize_for_key(v) is _VAR
+        # a variable keys as (_VAR, n), n its first-occurrence number
+        assert _normalize_for_key(v) == (_VAR, 0)
+        assert _normalize_for_key(("f", v, Var(), v)) == ("__tuple__", "f", (_VAR, 0), (_VAR, 1), (_VAR, 0))
 
     def test_bound_var(self):
         # nv
@@ -287,7 +289,10 @@ class TestKeyComputation:
         trail = Trail()
         v = Var()
         key = make_subgoal_key((1, v), trail)
-        assert key == (1, _VAR)
+        assert key == (1, (_VAR, 0))
+        # one numbering across the arguments: p(X, X) is not p(X, Y)
+        assert make_subgoal_key((v, v), trail) == ((_VAR, 0), (_VAR, 0))
+        assert make_subgoal_key((v, Var()), trail) == ((_VAR, 0), (_VAR, 1))
 
     def test_variant_keys_match(self):
         # nv
@@ -369,7 +374,7 @@ class TestDataclassTerms:
         v = Var()
         p = Point(v, 42)
         result = _normalize_for_key(p)
-        assert result == ("Point", _VAR, 42)
+        assert result == ("Point", (_VAR, 0), 42)
 
     def test_normalize_dataclass_with_bound_var(self):
         # nv
@@ -400,7 +405,7 @@ class TestDataclassTerms:
         v = Var()
         p = Point(v, 10)
         key = make_subgoal_key((p,), trail)
-        assert key == (("Point", _VAR, 10),)
+        assert key == (("Point", (_VAR, 0), 10),)
 
     def test_freeze_dataclass_ground(self):
         # nv
@@ -761,8 +766,8 @@ class TestDatabaseTabling:
     def test_abolish_table(self):
         # nv
         db = Database()
-        db._table_store[("foo", 2, (1, _VAR))] = TableEntry()
-        db._table_store[("foo", 2, (2, _VAR))] = TableEntry()
+        db._table_store[("foo", 2, (1, (_VAR, 0)))] = TableEntry()
+        db._table_store[("foo", 2, (2, (_VAR, 0)))] = TableEntry()
         db._table_store[("bar", 1, (1,))] = TableEntry()
         db.abolish_table("foo", 2)
         assert len(db._table_store) == 1

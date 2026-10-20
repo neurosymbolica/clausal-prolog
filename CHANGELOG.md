@@ -386,6 +386,26 @@ surface described in [docs/public-api.md](docs/public-api.md).
   before. A cut as the condition stays `existence_error(procedure, !/1)`,
   as in Scryer. Pinned in `tests/iso_l3/test_l3_if_runtime_reif.py`.
 
+- **The tabling variant key tells `f(X, X)` from `f(_, _)`** (2026-10-20).
+  The key under which a tabled call finds its table, and under which an
+  answer is checked for a duplicate, mapped every unbound variable to one
+  placeholder, so two terms that differ only in which variables are the
+  same were one key. With `:- table(w/1). w(f(_, _)). w(f(X, X)).`,
+  `findall(T, w(T), L)` gave `[f(_A, _B)]`; and the calls `w(f(A, B))`
+  and `w(f(A, A))` were one subgoal, so after `first(X) :- w(f(X, X))`
+  had run, `first(_), \+ (w(f(A, B)), A = a, B = b)` succeeded although
+  `w(f(a, b))` is provable. The key now numbers the variables by first
+  occurrence across the whole call or answer (ISO/XSB variant checking:
+  two terms key alike iff they are equal up to a consistent renaming), in
+  both the Python and the C twin and in the seam's structural answer key:
+  `w(T)` has the two answers, `w(f(A, B))` and `w(f(A, A))` are two
+  tables, and `w(f(X, Y))`, `w(f(Y, X))` stay one answer. The open tail of
+  a partial list is numbered with the other variables (`[T|T]` is not
+  `[X|T]`), and a complete `p(X, X)` table no longer decides a negated
+  `p(1, 2)` (it covers `p(1, 1)` only). An attributed variable is a
+  variable to the key, as before. A ground key is unchanged. The
+  internal `_VAR` sentinel is now the tag of a variable's key `(_VAR, n)`.
+
 - **`name()` is a syntax error, as in ISO** (2026-10-20). The ISO reader
   read `f()` as a compound with no arguments. In a `.clausal` or `.pl`
   clause body `nl()` then ran as `nl`, and a `-g` goal such as `nl()`

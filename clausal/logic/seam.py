@@ -814,12 +814,15 @@ def _answer_key(make_subgoal_key, answer) -> Any:
         hash(key)
         return key
     except TypeError:
-        return ("$structural",) + tuple(_structural_key(a) for a in answer)
+        from clausal.logic.tabling import _key_scope_py  # noqa: PLC0415
+        with _key_scope_py():      # one variable numbering over the answer
+            return ("$structural",) + tuple(_structural_key(a) for a in answer)
 
 
 def _structural_key(term: Any) -> Any:
-    """A hashable variant key for *term*: variables are one marker, and the
-    containers the tabling key cannot hash are rebuilt."""
+    """A hashable variant key for *term*: variables are numbered by first
+    occurrence, as the tabling key numbers them (the caller opens the
+    numbering), and the containers the tabling key cannot hash are rebuilt."""
     from clausal.logic.tabling import _normalize_for_key_py  # noqa: PLC0415
     from clausal.logic.variables import deref, is_var  # noqa: PLC0415
     from clausal.terms import (  # noqa: PLC0415
@@ -827,7 +830,7 @@ def _structural_key(term: Any) -> Any:
     )
     term = deref(term)
     if is_var(term):
-        return ("$var",)
+        return _normalize_for_key_py(term)
     if isinstance(term, SegList):
         return ("$seglist",) + tuple(
             ("c",) + tuple(_structural_key(e) for e in seg.elements)

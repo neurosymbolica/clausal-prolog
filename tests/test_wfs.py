@@ -242,9 +242,9 @@ class TestNafTabled:
         entry = TableEntry()
         entry.add_answer((42,))
         entry.status = "complete"
-        # Key for Var args uses _VAR sentinel
+        # A Var arg keys as (_VAR, 0): its first-occurrence number
         from clausal.logic.tabling import _VAR
-        ts[("p", 1, (_VAR,))] = entry
+        ts[("p", 1, ((_VAR, 0),))] = entry
 
         trail = Trail()
         x = Var()
@@ -577,7 +577,7 @@ class TestNafTabledConditionalMatch:
         entry.add_answer((1,), frozenset({dn}))
         entry.add_answer((2,))
         entry.status = "complete"
-        ts[("p", 1, (_VAR,))] = entry
+        ts[("p", 1, ((_VAR, 0),))] = entry
 
         def check(leader):
             trail = Trail()
@@ -595,7 +595,7 @@ class TestNafTabledConditionalMatch:
         dn = DelayedNegation("q", 1, (9,), (9,))
         entry.add_answer((1,), frozenset({dn}))
         entry.status = "complete"
-        ts[("p", 1, (_VAR,))] = entry
+        ts[("p", 1, ((_VAR, 0),))] = entry
 
         def check(leader):
             trail = Trail()
@@ -907,7 +907,7 @@ class TestResolutionMatchesNafSemantics:
         target.add_answer((Var(),))  # universal answer p(_)
         target.status = "complete"
         from clausal.logic.tabling import _VAR
-        ts[("p", 1, (_VAR,))] = target
+        ts[("p", 1, ((_VAR, 0),))] = target
         dn = DelayedNegation("p", 1, (1,), (1,))
         assert _resolve_one_delay(dn, ts) is False
 

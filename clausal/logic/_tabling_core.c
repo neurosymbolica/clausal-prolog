@@ -75,6 +75,111 @@ is_var_unbound(PyObject *term)
 }
 
 /* ================================================================
+ * Variable numbering (variant checking)
+ *
+ * An unbound variable keys as (VAR_sentinel, n), n its number in order of
+ * FIRST OCCURRENCE in the keyed term -- the whole call or the whole answer
+ * -- so two terms key alike iff they are variants: f(X, X) keys apart from
+ * f(_, _), and f(X, Y) as f(Y, X).  Lock-step with tabling._norm_py.
+ *
+ * The map lives per thread for the walk in progress.  An entry point
+ * (py_normalize_for_key, py_make_subgoal_key) opens it, and a RE-ENTRY from
+ * inside the walk -- a partial list is keyed by tabling._seg_key, which
+ * keys its elements through _normalize_for_key again -- continues the same
+ * numbering, so a variable shared between the partial list and the rest of
+ * the term keeps one number.  The first VM_INLINE variables sit in an
+ * array (a pointer scan; most keys hold a handful), the rest in a dict
+ * (a Var hashes by identity).  A ground term never touches the map: the
+ * fast path costs one counter per entry.
+ * ================================================================ */
+
+#define VAR_KEY_CACHE 32
+#define VM_INLINE 16
+
+/* (VAR_sentinel, n) for n < VAR_KEY_CACHE, built by _register_var_sentinel;
+ * lock-step with tabling._VAR_KEYS. */
+static PyObject *var_keys[VAR_KEY_CACHE];
+
+typedef struct {
+    PyObject *vars[VM_INLINE];   /* the first variables, owned, by number */
+    Py_ssize_t n;                /* variables numbered so far */
+    PyObject *overflow;          /* Var -> number, past VM_INLINE (or NULL) */
+    int active;                  /* walks in progress (re-entries nest) */
+} VarMap;
+static _Thread_local VarMap vm;
+
+/* Open the numbering unless a walk is in progress; returns whether this
+ * call opened it (and so must close it with vm_leave). */
+static int
+vm_enter(void)
+{
+    if (vm.active++ == 0) {
+        vm.n = 0;
+        vm.overflow = NULL;
+        return 1;
+    }
+    return 0;
+}
+
+static void
+vm_leave(int opened)
+{
+    vm.active--;
+    if (!opened)
+        return;
+    Py_ssize_t lim = vm.n < VM_INLINE ? vm.n : VM_INLINE;
+    for (Py_ssize_t i = 0; i < lim; i++)
+        Py_CLEAR(vm.vars[i]);
+    vm.n = 0;
+    Py_CLEAR(vm.overflow);
+}
+
+static PyObject *
+make_var_key(Py_ssize_t n)
+{
+    if (n < VAR_KEY_CACHE)
+        return Py_NewRef(var_keys[n]);
+    return Py_BuildValue("(On)", VAR_sentinel, n);
+}
+
+/* The key of the unbound (dereferenced) variable *var*: its number if it
+ * has one, else the next. */
+static PyObject *
+var_key(PyObject *var)
+{
+    Py_ssize_t lim = vm.n < VM_INLINE ? vm.n : VM_INLINE;
+    for (Py_ssize_t i = 0; i < lim; i++) {
+        if (vm.vars[i] == var)
+            return make_var_key(i);
+    }
+    if (vm.n > VM_INLINE) {
+        PyObject *got = PyDict_GetItemWithError(vm.overflow, var);  /* borrowed */
+        if (got) {
+            Py_ssize_t i = PyLong_AsSsize_t(got);
+            if (i < 0 && PyErr_Occurred()) return NULL;
+            return make_var_key(i);
+        }
+        if (PyErr_Occurred()) return NULL;
+    }
+    Py_ssize_t n = vm.n;
+    if (n < VM_INLINE) {
+        vm.vars[n] = Py_NewRef(var);
+    } else {
+        if (!vm.overflow) {
+            vm.overflow = PyDict_New();
+            if (!vm.overflow) return NULL;
+        }
+        PyObject *num = PyLong_FromSsize_t(n);
+        if (!num) return NULL;
+        int rc = PyDict_SetItem(vm.overflow, var, num);
+        Py_DECREF(num);
+        if (rc < 0) return NULL;
+    }
+    vm.n = n + 1;
+    return make_var_key(n);
+}
+
+/* ================================================================
  * _normalize_for_key — recursive variant-key normalisation
  * ================================================================ */
 
@@ -95,10 +200,9 @@ do_normalize(PyObject *term, int depth)
         return term;
     }
 
-    /* Unbound Var → _VAR sentinel */
+    /* Unbound Var → (_VAR, n), numbered by first occurrence */
     if (is_var_unbound(term)) {
-        Py_INCREF(VAR_sentinel);
-        return VAR_sentinel;
+        return var_key(term);
     }
 
     /* None */
@@ -293,21 +397,49 @@ do_normalize(PyObject *term, int depth)
          * borrowed references */
         PyObject *items = PyDict_Items(term);
         if (!items) return NULL;
-        PyObject *pairs = PySet_New(NULL);
-        if (!pairs) { Py_DECREF(items); return NULL; }
-        for (Py_ssize_t i = 0; i < PyList_GET_SIZE(items); i++) {
+        Py_ssize_t n = PyList_GET_SIZE(items);
+        /* The values are numbered in the order of the normalised keys when
+         * those sort (an order free of the dict's insertion order), else in
+         * insertion order: a list of (nk, i), sorted on a copy so a failed
+         * sort leaves the insertion order intact.  Lock-step with _norm_py. */
+        PyObject *order = PyList_New(n);
+        if (!order) { Py_DECREF(items); return NULL; }
+        for (Py_ssize_t i = 0; i < n; i++) {
             PyObject *kv = PyList_GET_ITEM(items, i);   /* items owns it */
             PyObject *nk = do_normalize(PyTuple_GET_ITEM(kv, 0), depth + 1);
-            if (!nk) { Py_DECREF(pairs); Py_DECREF(items); return NULL; }
+            if (!nk) { Py_DECREF(order); Py_DECREF(items); return NULL; }
+            PyObject *pair = Py_BuildValue("(Nn)", nk, i);
+            if (!pair) { Py_DECREF(order); Py_DECREF(items); return NULL; }
+            PyList_SET_ITEM(order, i, pair);
+        }
+        PyObject *sorted = PyList_GetSlice(order, 0, n);
+        if (!sorted) { Py_DECREF(order); Py_DECREF(items); return NULL; }
+        if (PyList_Sort(sorted) < 0) {
+            if (!PyErr_ExceptionMatches(PyExc_TypeError)) {
+                Py_DECREF(sorted); Py_DECREF(order); Py_DECREF(items);
+                return NULL;
+            }
+            PyErr_Clear();
+            Py_SETREF(sorted, Py_NewRef(order));
+        }
+        Py_DECREF(order);
+        PyObject *pairs = PySet_New(NULL);
+        if (!pairs) { Py_DECREF(sorted); Py_DECREF(items); return NULL; }
+        for (Py_ssize_t i = 0; i < n; i++) {
+            PyObject *ni = PyList_GET_ITEM(sorted, i);
+            PyObject *nk = PyTuple_GET_ITEM(ni, 0);
+            Py_ssize_t at = PyLong_AsSsize_t(PyTuple_GET_ITEM(ni, 1));
+            PyObject *kv = PyList_GET_ITEM(items, at);
             PyObject *nv = do_normalize(PyTuple_GET_ITEM(kv, 1), depth + 1);
-            if (!nv) { Py_DECREF(nk); Py_DECREF(pairs); Py_DECREF(items); return NULL; }
+            if (!nv) { Py_DECREF(pairs); Py_DECREF(sorted); Py_DECREF(items); return NULL; }
             PyObject *pair = PyTuple_Pack(2, nk, nv);
-            Py_DECREF(nk); Py_DECREF(nv);
-            if (!pair) { Py_DECREF(pairs); Py_DECREF(items); return NULL; }
+            Py_DECREF(nv);
+            if (!pair) { Py_DECREF(pairs); Py_DECREF(sorted); Py_DECREF(items); return NULL; }
             int rc = PySet_Add(pairs, pair);
             Py_DECREF(pair);
-            if (rc < 0) { Py_DECREF(pairs); Py_DECREF(items); return NULL; }
+            if (rc < 0) { Py_DECREF(pairs); Py_DECREF(sorted); Py_DECREF(items); return NULL; }
         }
+        Py_DECREF(sorted);
         Py_DECREF(items);
         PyObject *frozen = PyFrozenSet_New(pairs);
         Py_DECREF(pairs);
@@ -425,7 +557,10 @@ py_normalize_for_key(PyObject *Py_UNUSED(module), PyObject *term)
                         "_normalize_for_key: _VAR sentinel not registered");
         return NULL;
     }
-    return do_normalize(term, seg_depth_base);
+    int opened = vm_enter();
+    PyObject *key = do_normalize(term, seg_depth_base);
+    vm_leave(opened);
+    return key;
 }
 
 /* ================================================================
@@ -455,11 +590,18 @@ py_make_subgoal_key(PyObject *Py_UNUSED(module), PyObject *args)
     PyObject *result = PyTuple_New(n);
     if (!result) { Py_DECREF(snap); return NULL; }
 
+    /* one numbering across all the arguments: p(X, X) is not p(X, Y) */
+    int opened = vm_enter();
     for (Py_ssize_t i = 0; i < n; i++) {
         PyObject *normed = do_normalize(PyTuple_GET_ITEM(snap, i), seg_depth_base);
-        if (!normed) { Py_DECREF(result); Py_DECREF(snap); return NULL; }
+        if (!normed) {
+            vm_leave(opened);
+            Py_DECREF(result); Py_DECREF(snap);
+            return NULL;
+        }
         PyTuple_SET_ITEM(result, i, normed);
     }
+    vm_leave(opened);
     Py_DECREF(snap);
     return result;
 }
@@ -797,6 +939,11 @@ py_register_seg_key(PyObject *Py_UNUSED(module), PyObject *args)
 static PyObject *
 py_register_var_sentinel(PyObject *Py_UNUSED(module), PyObject *sentinel)
 {
+    for (Py_ssize_t n = 0; n < VAR_KEY_CACHE; n++) {
+        PyObject *key = Py_BuildValue("(On)", sentinel, n);
+        if (!key) return NULL;
+        Py_XSETREF(var_keys[n], key);
+    }
     Py_XDECREF(VAR_sentinel);
     Py_INCREF(sentinel);
     VAR_sentinel = sentinel;
@@ -809,7 +956,7 @@ py_register_var_sentinel(PyObject *Py_UNUSED(module), PyObject *sentinel)
 
 static PyMethodDef module_methods[] = {
     {"_normalize_for_key", py_normalize_for_key, METH_O,
-     "Deref term and replace unbound Vars with _VAR sentinel for variant key."},
+     "Deref term into its variant key: unbound Vars numbered by first occurrence."},
     {"make_subgoal_key", (PyCFunction)py_make_subgoal_key, METH_VARARGS,
      "Compute variant key for a tabled call's arguments."},
     {"_deref_walk", py_deref_walk, METH_O,
@@ -821,7 +968,7 @@ static PyMethodDef module_methods[] = {
     {"_register_seg_key", py_register_seg_key, METH_VARARGS,
      "Register the Seg* classes and the Python key function for them."},
     {"_register_var_sentinel", py_register_var_sentinel, METH_O,
-     "Register the _VAR sentinel object from tabling.py."},
+     "Register the _VAR tag object from tabling.py and build the variable-key cache."},
     {NULL, NULL, 0, NULL}
 };
 
