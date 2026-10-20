@@ -225,3 +225,34 @@ def test_a_stored_row_holds_no_derivation_variable():
     assert shape(r1) == shape(r2) == (("f", "_", "_"), 3)
     assert r1[0][1] is r1[0][2]
     assert r1[0][1] is not r2[0][1] and r1[0][1] is not stored[0][1]
+
+
+CHAIN = """\
+:- table(path/2).
+edge(X, Y) :- between(1, {n}, X), Y is X + 1.
+path(X, Y) :- edge(X, Y).
+path(X, Y) :- path(X, Z), edge(Z, Y).
+"""
+
+
+def test_a_left_recursive_closure_reads_rows_appended_mid_pass(native, ans, monkeypatch):
+    """The consumer of an evaluating ancestor's table hands over the rows
+    the ancestor's pass appends WHILE it is iterating (SLG: every answer
+    found so far), so an N-chain left-recursive closure is derived in one
+    pass plus a confirming one: 2N add_answer calls.  A loop over a
+    snapshot of the length read one level per pass: O(N) passes, 31,624
+    calls for N = 250 (the review of the fresh-row fix)."""
+    from clausal.logic import tabling
+    n = 250
+    calls = 0
+    original = tabling.TableEntry.add_answer
+
+    def counting(self, answer, delay_set=None):
+        nonlocal calls
+        calls += 1
+        return original(self, answer, delay_set)
+
+    monkeypatch.setattr(tabling.TableEntry, "add_answer", counting)
+    mod = native.load("l3_rows_chain", CHAIN.format(n=n))
+    assert ans(mod, "path", 2, 1) == list(range(2, n + 2))
+    assert calls <= 3 * n, calls

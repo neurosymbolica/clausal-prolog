@@ -1703,14 +1703,24 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
             # propagation staying exact.
             _leader_ctx.incomplete_reads += 1
             try:
-                for i in range(len(entry.answers)):
-                    if entry.conditions[i] is _FAILED:
-                        continue
-                    mark = trail.mark()
-                    if _unify_answer(args, entry.row(i), trail):
-                        _propagate_answer_delays(entry, i, table_store, trail)
-                        yield (_proceed, None)
-                    trail.undo(mark)
+                # LIVE iteration: the ancestor's pass appends rows while
+                # this consumer is handing them over (its continuation
+                # derives them), and SLG hands over every answer found so
+                # far.  A snapshot of the length (``range(len(...))``) read
+                # one level per fixpoint pass: O(N) passes for an N-chain
+                # left-recursive closure, 40x slower.  Pinned in
+                # tests/iso_l3/test_l3_tabled_rows_fresh_variables.py::
+                # test_a_left_recursive_closure_reads_rows_appended_mid_pass.
+                i = 0
+                while i < len(entry.answers):
+                    if entry.conditions[i] is not _FAILED:
+                        mark = trail.mark()
+                        if _unify_answer(args, entry.row(i), trail):
+                            _propagate_answer_delays(entry, i, table_store,
+                                                     trail)
+                            yield (_proceed, None)
+                        trail.undo(mark)
+                    i += 1
             finally:
                 _close_tabled(_rec)
 
@@ -1806,20 +1816,27 @@ def make_tabled_wrapper_trampoline(original_dispatch, functor, arity, table_stor
                 _srec = _open_tabled(entry, functor, arity, trail,
                                      _evaluating_ancestor(entry))
                 _leader_ctx.incomplete_reads += 1
-                for i in range(len(entry.answers)):
+                # LIVE iteration (see the consumer loop above): a row the
+                # caller's continuation appends while a known row is being
+                # handed over is streamed here too, not left for a later
+                # pass; ``streamed`` keeps the delivery below from repeating
+                # it.
+                i = 0
+                while i < len(entry.answers):
                     c = entry.conditions[i]
-                    if c is _FAILED:
-                        continue
-                    streamed.add(i)
-                    mark = trail.mark()
-                    if _unify_answer(args, entry.row(i), trail):
-                        if consumer is not None and c is not _UNCONDITIONAL:
-                            delays = entry.delays_for(i)
-                            if delays:
-                                _credit_consumer(consumer, entry, i,
-                                                 table_store, trail, delays)
-                        yield (_proceed, None)
-                    trail.undo(mark)
+                    if c is not _FAILED:
+                        streamed.add(i)
+                        mark = trail.mark()
+                        if _unify_answer(args, entry.row(i), trail):
+                            if consumer is not None and c is not _UNCONDITIONAL:
+                                delays = entry.delays_for(i)
+                                if delays:
+                                    _credit_consumer(consumer, entry, i,
+                                                     table_store, trail,
+                                                     delays)
+                            yield (_proceed, None)
+                        trail.undo(mark)
+                    i += 1
             # A04-F001: drive the dispatch to a FIXPOINT by re-running it until
             # no new answer appears, rather than a single pass followed by the
             # (broken) consumer-resume completion phase. On each re-run a

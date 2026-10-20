@@ -2,7 +2,14 @@
 
 Filed 2026-10-20, found while fixing
 todo/done/tabled-answer-rows-share-their-unbound-variables-2026-10-16.md.
-Pre-existing; independent of that fix.
+Pre-existing; independent of that fix.  Severity: WRONG ANSWERS, not only
+a lost solution.  Through negation it proves a falsehood: with the program
+below and `first(X) :- w(f(X, X)).`, the goal
+`first(_), \+ (w(f(A, B)), A = a, B = b)` succeeds although `w(f(a, b))`
+is provable (`\+ (w(f(A, B)), A = a, B = b)` alone fails, correctly).  The
+first call tables the subgoal `w(f(X, X))`, whose only answer is
+`f(V, V)`; the second call `w(f(A, B))` has the same key, so it is taken
+for a variant and replays that table (verified 2026-10-20).
 
 ## What / Repro
 
