@@ -418,9 +418,10 @@ def _resolve_cell_head(term_val: Any, context: str, db,
                 why=(f"no predicate {functor}/{arity} is declared here, and "
                      f"a cell argument does not create one — a cell is "
                      f"indistinguishable from a plain data tuple — so "
-                     f"declare it -dynamic({functor}/{arity}) first, or set "
-                     f"the flag assert_creates_dynamic to true in this "
-                     f"module"))
+                     f"declare it "
+                     f"{_dynamic_declaration(functor, arity, module_dict, db)}"
+                     f" first, or set the flag assert_creates_dynamic to "
+                     f"true in this module"))
             # No ``name``: the solve-time undefined-name enrichment would
             # replace this with a plain NameError and lose the ISO term, and
             # the name is not undefined -- the procedure is.
@@ -439,7 +440,8 @@ def _resolve_cell_head(term_val: Any, context: str, db,
                f"{context}: no predicate {functor}/{arity} is declared here, "
                f"and a cell argument does not create one — a cell is "
                f"indistinguishable from a plain data tuple — so declare it "
-               f"-dynamic({functor}/{arity}) first")
+               f"{_dynamic_declaration(functor, arity, module_dict, db)} "
+               f"first")
         raise LogicException(permission_error(
             "modify", "static_procedure", ("/", functor, arity), why))
     # THE REMEDY NAMES THE RIGHT MODULE (roborev job 78, finding 4).  For a
@@ -457,15 +459,21 @@ def _resolve_cell_head(term_val: Any, context: str, db,
     if owner is None and row is not None:
         named = row.db.module_name()
         owner = None if named.startswith("<") else named
-    remedy = (f" — declare it -dynamic({functor}/{arity}) to modify it at "
-              f"runtime")
+    # The declaration is spelled for the surface the predicate is DEFINED
+    # in: the module whose load wrote its clauses, else the row's own
+    # module, else this one.
+    declaration = _dynamic_declaration(
+        functor, arity,
+        row.source[1] if row is not None and row.source else None,
+        row.db if row is not None else None, module_dict, db)
+    remedy = (f" — declare it {declaration} to modify it at runtime")
     if foreign:
-        remedy = (f" — it belongs to {owner}, so the -dynamic({functor}/"
-                  f"{arity}) declaration that would permit this write "
+        remedy = (f" — it belongs to {owner}, so the {declaration} "
+                  f"declaration that would permit this write "
                   f"belongs there, not here"
                   if owner else
                   f" — it belongs to another module, so the "
-                  f"-dynamic({functor}/{arity}) declaration that would permit "
+                  f"{declaration} declaration that would permit "
                   f"this write belongs there, not here")
     raise LogicException(permission_error(
         "modify", "static_procedure",
@@ -476,6 +484,32 @@ def _resolve_cell_head(term_val: Any, context: str, db,
            "so its terms compile to cells and it has no clause list")
         + remedy,
     ))
+
+
+def _dynamic_declaration(functor: str, arity: int, *where) -> str:
+    """The ``dynamic`` declaration for *functor*/*arity*, spelled for the
+    surface of the first of *where* that names a source file: a source
+    path, a module dict, or a Database.  ``:- dynamic(f/N).`` for Clausal
+    Prolog and ``.pl``; the seam's ``-dynamic(f/N)`` otherwise, including
+    when nothing names a file (a Database built from Python)."""
+    from clausal.end_module import (  # noqa: PLC0415
+        SURFACE_CLAUSAL_PROLOG, SURFACE_PL, surface_of,
+    )
+    for place in where:
+        if place is None:
+            continue
+        if not isinstance(place, (str, dict)):
+            place = getattr(place, "module_dict", None)
+        path = place.get("__file__") if isinstance(place, dict) else place
+        if not isinstance(path, str) or not path:
+            continue
+        surface = surface_of(path)
+        if surface is None:
+            continue
+        if surface in (SURFACE_CLAUSAL_PROLOG, SURFACE_PL):
+            return f":- dynamic({functor}/{arity})."
+        break
+    return f"-dynamic({functor}/{arity})"
 
 
 def _declared_here_at_arity(module_dict: "dict | None", functor: str,

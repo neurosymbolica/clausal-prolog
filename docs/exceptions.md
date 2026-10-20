@@ -296,12 +296,13 @@ defines is the one difference between the surfaces: in a `.clausal` module
 `assertz` creates it, dynamic, as ISO's assert does; in the seam it is static
 by default and `assertz` raises `permission_error` (the
 [`assert_creates_dynamic`](flags.md#assert_creates_dynamic) flag). Uncaught,
-the error prints the same on both surfaces. The hint at its end is in the
-seam's spelling; in a `.clausal` file the declaration is
-`:- dynamic(fixed/1).`
+the error is the same term on both surfaces. The hint at the end of its
+message names the declaration in the spelling of the surface the predicate
+is defined in: `:- dynamic(fixed/1).` for a `.clausal` or `.pl` file,
+`-dynamic(fixed/1)` for the seam. From a `.clausal` file:
 
 ```text
-Uncaught logic exception: error(permission_error(modify,static_procedure,fixed/1),assertz/1): fixed/1 is a static procedure — declare it -dynamic(fixed/1) to modify it at runtime
+Uncaught logic exception: error(permission_error(modify,static_procedure,fixed/1),assertz/1): fixed/1 is a static procedure — declare it :- dynamic(fixed/1). to modify it at runtime
 ```
 
 ```clausal

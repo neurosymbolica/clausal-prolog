@@ -332,6 +332,15 @@ surface described in [docs/public-api.md](docs/public-api.md).
   reports "empty argument list in nl()" with the position of the `)`, on
   every path: `.clausal`, `.pl` under both front ends, and `-g`.
 
+- **Writing a static predicate: the hint is spelled for its surface**
+  (2026-10-20). The `permission_error` message for `assertz`/`asserta` on
+  a static predicate said "declare it -dynamic(fixed/1)", the seam's
+  spelling, even for a predicate a `.clausal` or `.pl` file defines. It
+  now names `:- dynamic(fixed/1).` for those and keeps `-dynamic(fixed/1)`
+  for the seam; for a name nothing declares, it uses the calling module's
+  surface. The error term is unchanged
+  (`error(permission_error(modify, static_procedure, fixed/1), assertz/1)`).
+
 - **`catch_error/2` and `catch_recover/3` load in a `.clausal` clause
   body** (2026-10-20). `t(R) :- catch_error(throw(boom(42)), R).` failed
   to load with `NotImplementedError: terms_to_goalop: goal shape not yet
