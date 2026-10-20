@@ -4,6 +4,13 @@ Findings + adversarial tests + queued todos for the `clausal` package,
 partitioned into 11 subsystems + a seams/synthesis session. See the design
 spec: `docs/superpowers/specs/2026-07-05-fable-partition-audit-design.md`.
 
+**2026-10-20: the audit's todo folder is retired.** Its todos now live with
+the rest: closed ones in `todo/done/` under their audit names
+(`fix-A06-...md`, `investigate-A04-...md`), open ones at the top of `todo/`
+under new names that keep the audit ID in the title. The old folder index
+is `todo/done/audit-2026-07-05-index.md`. Paths in these records (prompts,
+plan, spec, transcripts) that named the old folder were updated to match.
+
 ## Status board
 
 | ID | Subsystem | Session status | Findings | Design Qs | Todos | Test file |
@@ -27,5 +34,5 @@ Each session updates its own row on completion.
 every recorded pass/xfail count reproduced exactly (no false positives culled,
 no regression guards broken). Design questions rolled into
 `DESIGN-DECISIONS.md` §"Triage order" (9 decision clusters);
-`todo/audit-2026-07-05/README.md` is the master todo index (161 fix +
+`todo/done/audit-2026-07-05-index.md` is the master todo index (161 fix +
 23 investigate, cross-cutting collapse clusters at top).

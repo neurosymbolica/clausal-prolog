@@ -22,7 +22,7 @@ def test_scaffolding_exists():
 
 
 def test_todo_index_exists():
-    assert (REPO / "todo/audit-2026-07-05/README.md").exists()
+    assert (REPO / "todo/done/audit-2026-07-05-index.md").exists()
 
 
 def test_conftest_fixtures_import():

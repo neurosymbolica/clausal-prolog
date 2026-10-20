@@ -1,5 +1,14 @@
 # Audit 2026-07-05 — queued todos
 
+**Status: RESOLVED 2026-10-20 (folder retired).** This was the `README.md` of the `audit-2026-07-05/` subfolder of `todo/`, the index of the
+2026-07-05 audit's own todo folder, kept here as the record of all 185 audit todos. The folder is gone:
+its 166 closed todos and the 2 closed during the triage moved to `todo/done/` under their own names
+(so the bare names in the table below are siblings of this file), the 9 parked-design-decision files (A01-A09)
+were split (moved to `todo/done/` too, with each still-open decision in its own top-level todo), and the 8 still open
+moved to `todo/` under new names, shown in the table. See
+todo/done/triage-the-2026-07-05-audit-todos-into-todo-2026-10-18.md for the verdicts. The text below,
+including "completed todos move to this directory's own done/", describes the folder as it was.
+
 Fixes are QUEUED here, never applied by the audit sessions.
 
 - `fix-<ID>-<slug>.md` — remediation understood; any implementer.
@@ -58,11 +67,11 @@ Triage these against `docs/superpowers/audits/2026-07-05-fable-partition/DESIGN-
    `fix-A05-dif-collect-free-vars-container-blindness.md`,
    `fix-A05-term-attvars-container-blindness.md`, `fix-A09-sort-msort-deref.md`.
    A unified term-traversal API is the single fix these all want.
-4. **`//` and `%` semantics (A08-D001)**: `fix-A08-z3-floordiv-mod-translation.md`
-   (also cited by A06-F014), `fix-A08-ortools-floordiv-mod-translation.md`,
+4. **`//` and `%` semantics (A08-D001)**: `todo/z3-adapter-translates-floordiv-and-mod-with-smt-semantics-2026-07-05.md`
+   (also cited by A06-F014), `todo/cpsat-adapter-floordiv-and-mod-differ-from-python-2026-07-05.md`,
    `fix-A11-prolog-mod-semantics.md`, `fix-A11-prolog-floordiv-export.md`.
 5. **Tabling answer representation**: `fix-A04-tabled-answer-hashability.md`,
-   `investigate-A12-tabling-answer-constraints.md`,
+   `todo/tabled-answers-drop-their-constraints-on-replay-2026-07-05.md`,
    `investigate-A04-slg-completion-architecture.md` — one re-architecture covers
    hashability, constraint residue and completion.
 6. **Directive robustness (A10-F012 family)**: `fix-A10-malformed-directive-silent-noop.md`,
@@ -90,13 +99,13 @@ to delete; the clusters above are the collapse points.
 | `fix-A01-segstring-scalar-varseg-guard.md` | fix | error-path | A01-F009 | A01 term-layer | done |
 | `fix-A01-seg-getitem-slice-in-prefix.md` | fix | design (low) | A01-F010 | A01 term-layer | done |
 | `fix-A01-terms-all-exports.md` | fix | doc-drift | A01-F011 | A01 term-layer | done |
-| `investigate-A01-parked-design-decisions.md` | investigate (**USER**, not Opus) | design | A01-D001 / A01-D002 / A01-D004 | A01 (D001 cross-cuts A02/A04) | parked by user 2026-07-05 |
+| `investigate-A01-parked-design-decisions.md` | investigate (**USER**, not Opus) | design | A01-D001 / A01-D002 / A01-D004 | A01 (D001 cross-cuts A02/A04) | split 2026-10-20: each decision ruled or moved to its own todo (see the file's status line) |
 | `fix-A02-dispatch-partial-term-fallback.md` | fix | correctness | A02-F001 | A02 compiler-heads | done |
 | `fix-A02-list-dispatch-fallthrough.md` | fix | correctness | A02-F002 | A02 compiler-heads | done |
 | `fix-A02-head-wildcard-accept-all.md` | fix | correctness | A02-F003 | A02 compiler-heads (assertz seam → A09) | done |
 | `fix-A02-multistar-trailing-fixed.md` | fix | correctness | A02-F004 | A02 compiler-heads | done |
 | `fix-A02-dispatch-docstring-arg-offsets.md` | fix | doc-drift | A02-F005 | A02 compiler-heads | done |
-| `investigate-A02-parked-design-decisions.md` | investigate (**USER**, not Opus) | design | A02-D002 (depends on A01-D001) | A02 (cross-cuts A04 tabling keys) | parked by user preference 2026-07-05 |
+| `investigate-A02-parked-design-decisions.md` | investigate (**USER**, not Opus) | design | A02-D002 (depends on A01-D001) | A02 (cross-cuts A04 tabling keys) | split 2026-10-20: each decision ruled or moved to its own todo (see the file's status line) |
 | `fix-A03-tro-nondet-prefix.md` | fix | correctness (solution loss) | A03-F001 | A03 compiler-goals | done |
 | `fix-A03-dr-nondet-prefix.md` | fix | correctness (data corruption; same root as F001) | A03-F002 | A03 compiler-goals | done |
 | `fix-A03-tro-signal-bucket-not-generator.md` | fix | correctness (crash) | A03-F003 | A03 compiler-goals | done |
@@ -107,7 +116,7 @@ to delete; the clusters above are the collapse points.
 | `fix-A03-deep-unfold-const-args.md` | fix | correctness | A03-F008 | A03 specialization | done |
 | `fix-A03-cpd-extension-chaining.md` | fix | correctness (solution loss) | A03-F009 | A03 specialization | done |
 | `fix-A03-readme-ctco-drift.md` | fix | doc-drift | A03-F010 | A03 compiler-goals | done |
-| `investigate-A03-parked-design-decisions.md` | investigate (**USER**, not Opus) | design | A03-D001 / A03-D002 / A03-D003 (+ determinism-table governance) | A03 (D001 cross-cuts A01) | parked by user preference 2026-07-05 |
+| `investigate-A03-parked-design-decisions.md` | investigate (**USER**, not Opus) | design | A03-D001 / A03-D002 / A03-D003 (+ determinism-table governance) | A03 (D001 cross-cuts A01) | split 2026-10-20: each decision ruled or moved to its own todo (see the file's status line) |
 | `fix-A04-drive-until-yield-runtime-error.md` | fix | correctness | A04-F009 | A04 runtime-tabling | done |
 | `fix-A04-naf-tabled-no-entry.md` | fix | correctness | A04-F002 | A04 runtime-tabling | done |
 | `fix-A04-poisoned-evaluating-tables.md` | fix | correctness | A04-F007 | A04 runtime-tabling | done |
@@ -134,7 +143,7 @@ to delete; the clusters above are the collapse points.
 | `fix-A06-plus-type-check.md` | fix | correctness | A06-F015 | A06 clpfd | done |
 | `fix-A06-rational-subexpr-typeerror.md` | fix | correctness | A06-F006 | A06 clpfd | done |
 | `fix-A06-scalar-bignum-float-division.md` | fix | correctness | A06-F004 | A06 clpfd | done |
-| `fix-A06-sum-op-strings.md` | fix | design | A06-F011 | A06 clpfd | queued |
+| `todo/sum-and-scalar-product-silently-ignore-python-spelled-ops-2026-07-05.md` | fix | design | A06-F011 | A06 clpfd | open; moved to todo/ 2026-10-20 |
 | `fix-A06-sum-scalar-double-rounding.md` | fix | correctness | A06-F003 | A06 clpfd | done |
 | `fix-A06-sum-type-check.md` | fix | correctness | — | A06 clpfd | done |
 | `fix-A06-zcompare-weak-propagation.md` | fix | correctness | A06-F012 | A06 clpfd | done |
@@ -149,15 +158,15 @@ to delete; the clusters above are the collapse points.
 | `fix-A07-collect-bdd-var-ids-exponential.md` | fix | correctness/perf | A07-F001 | A07 clpb-sat | done |
 | `fix-A08-clpq-empty-domain-check.md` | fix | correctness | A08-F003 | A08 clpqr-z3 | done |
 | `fix-A08-clpq-fix-variable-bound-overwrite.md` | fix | correctness | A08-F001 | A08 clpqr-z3 | done |
-| `fix-A08-clpq-float-mixing-enforcement.md` | fix | correctness | A08-F007 | A08 clpqr-z3 | queued |
+| `todo/clpq-silently-accepts-floats-and-real-variables-2026-07-05.md` | fix | correctness | A08-F007 | A08 clpqr-z3 | open; moved to todo/ 2026-10-20 |
 | `fix-A08-clpq-tableau-weakref-lifecycle.md` | fix | memory | A08-F005 | A08 clpqr-z3 | done |
 | `fix-A08-clpr-imod-interval.md` | fix | correctness | A08-F009 | A08 clpqr-z3 | done |
 | `fix-A08-clpr-pyfallback-nan-corners.md` | fix | correctness | A08-F012 | A08 clpqr-z3 | done |
 | `fix-A08-clpr-strict-and-ne-aliasing.md` | fix | correctness | A08-F010 / A08-F011 | A08 clpqr-z3 | done |
-| `fix-A08-ortools-floordiv-mod-translation.md` | fix | correctness | A08-F015 | A08 clpqr-z3 | queued |
+| `todo/cpsat-adapter-floordiv-and-mod-differ-from-python-2026-07-05.md` | fix | correctness | A08-F015 | A08 clpqr-z3 | open; moved to todo/ 2026-10-20 |
 | `fix-A08-ortools-lp-strict-epsilon-doc.md` | fix | design | A08-F017 | A08 clpqr-z3 | done |
 | `fix-A08-ortools-optimize-unify-failures.md` | fix | correctness | A08-F016 | A08 clpqr-z3 | done |
-| `fix-A08-z3-floordiv-mod-translation.md` | fix | correctness | A06-F014 / A08-F014 | A08 clpqr-z3 | queued |
+| `todo/z3-adapter-translates-floordiv-and-mod-with-smt-semantics-2026-07-05.md` | fix | correctness | A06-F014 / A08-F014 | A08 clpqr-z3 | open; moved to todo/ 2026-10-20 |
 | `fix-A09-arith-type-checks.md` | fix | correctness | A09-F011 | A09 builtins | done |
 | `fix-A09-assertz-rule-lowering.md` | fix | correctness | A09-F005 | A09 builtins | done |
 | `fix-A09-atom-chars-str-args.md` | fix | correctness | A09-F017 | A09 builtins | done |
@@ -245,22 +254,22 @@ to delete; the clusters above are the collapse points.
 | `fix-A12-dynamic-forward-declaration.md` | fix | correctness | A12-F005 | A12 seams | done |
 | `fix-A12-engine-namespace-leak.md` | fix | design | A12-F004 | A12 seams | done |
 | `fix-A12-eq-nonnumeric-operand.md` | fix | correctness | A12-F002 | A12 seams | done |
-| `investigate-A04-parked-design-decisions.md` | investigate (Opus) | design | A04-F011 | A04 runtime-tabling | queued |
+| `investigate-A04-parked-design-decisions.md` | investigate (Opus) | design | A04-F011 | A04 runtime-tabling | split 2026-10-20: each decision ruled or moved to its own todo (see the file's status line) |
 | `investigate-A04-slg-completion-architecture.md` | investigate (Opus) | correctness | A04-F001 | A04 runtime-tabling | done |
 | `investigate-A04-wfs-variant-resolution.md` | investigate (Opus) | correctness | A04-F003 | A04 runtime-tabling | done |
-| `investigate-A05-parked-design-decisions.md` | investigate (USER) | design | A05-D001 / A05-D002 | A05 constraints-core | parked by user preference |
-| `investigate-A06-parked-design-decisions.md` | investigate (Opus) | design | A06-F018 | A06 clpfd | queued |
-| `investigate-A07-parked-design-decisions.md` | investigate (Opus) | correctness (design-gated) | A07-F003 / A07-F004 | A07 clpb-sat | queued |
-| `investigate-A08-clpq-bound-enforcement.md` | investigate (Opus) | correctness | A08-F002 / A08-F006 | A08 clpqr-z3 | queued |
-| `investigate-A08-clpq-prolog-oracle.md` | investigate (Opus) | infrastructure | — | A08 clpqr-z3 | queued |
-| `investigate-A08-clpq-strict-inequalities.md` | investigate (Opus) | correctness; design | A08-F004 / A08-F008 | A08 clpqr-z3 | queued |
-| `investigate-A08-parked-design-decisions.md` | investigate (Opus) | design (unconfirmed impact) | A08-F018 | A08 clpqr-z3 | queued |
-| `investigate-A08-solver-store-sync-hooks.md` | investigate (Opus) | correctness | A08-F013 | A08 clpqr-z3 | queued |
-| `investigate-A09-copy-term-attrs.md` | investigate (Opus) | correctness (design-gated) | A09-F010 | A09 builtins | queued |
+| `investigate-A05-parked-design-decisions.md` | investigate (USER) | design | A05-D001 / A05-D002 | A05 constraints-core | split 2026-10-20: each decision ruled or moved to its own todo (see the file's status line) |
+| `investigate-A06-parked-design-decisions.md` | investigate (Opus) | design | A06-F018 | A06 clpfd | split 2026-10-20: each decision ruled or moved to its own todo (see the file's status line) |
+| `investigate-A07-parked-design-decisions.md` | investigate (Opus) | correctness (design-gated) | A07-F003 / A07-F004 | A07 clpb-sat | split 2026-10-20: each decision ruled or moved to its own todo (see the file's status line) |
+| `todo/legacy-clpq-bb-inf-cannot-branch-on-an-eliminated-variable-2026-07-05.md` | investigate (Opus) | correctness | A08-F002 / A08-F006 | A08 clpqr-z3 | open; moved to todo/ 2026-10-20 |
+| `investigate-A08-clpq-prolog-oracle.md` | investigate (Opus) | infrastructure | — | A08 clpqr-z3 | done 2026-10-20 |
+| `todo/legacy-clpq-strict-inequality-is-a-passive-disequality-2026-07-05.md` | investigate (Opus) | correctness; design | A08-F004 / A08-F008 | A08 clpqr-z3 | open; moved to todo/ 2026-10-20 |
+| `investigate-A08-parked-design-decisions.md` | investigate (Opus) | design (unconfirmed impact) | A08-F018 | A08 clpqr-z3 | split 2026-10-20: each decision ruled or moved to its own todo (see the file's status line) |
+| `todo/z3-and-ortools-variables-ignore-clausal-bindings-2026-07-05.md` | investigate (Opus) | correctness | A08-F013 | A08 clpqr-z3 | open; moved to todo/ 2026-10-20 |
+| `investigate-A09-copy-term-attrs.md` | investigate (Opus) | correctness (design-gated) | A09-F010 | A09 builtins | done 2026-10-20 |
 | `investigate-A09-ho-committed-choice.md` | investigate (Opus) | correctness (design-gated) | A09-F004 | A09 builtins | done |
-| `investigate-A09-parked-design-decisions.md` | investigate (USER) | design | A09-D001..D005 (+F022) | A09 builtins | parked by user preference |
+| `investigate-A09-parked-design-decisions.md` | investigate (USER) | design | A09-D001..D005 (+F022) | A09 builtins | split 2026-10-20: each decision ruled or moved to its own todo (see the file's status line) |
 | `investigate-A09-runtimeerror-swallow.md` | investigate (Opus) | correctness (design-gated) | A09-F007 | A09 builtins | done |
 | `done/investigate-A10-imported-head-clobber.md` | investigate (Opus) | correctness (design-gated) | A10-F004 | A10 rewriting-import | **DONE 2026-08-25** — A10-D003 answered (load-time error); `fix/imported-functor-clause-list-2026-08-25` |
 | `investigate-A10-parked-design-decisions.md` | investigate (USER) | design | A10-D001..D004 | A10 rewriting-import | done |
 | `investigate-A11-parked-design-decisions.md` | investigate (USER) | design | A11-D001..D011 | A11 modules-interop | done |
-| `investigate-A12-tabling-answer-constraints.md` | investigate (Opus) | correctness | A12-F001 | A12 seams | queued |
+| `todo/tabled-answers-drop-their-constraints-on-replay-2026-07-05.md` | investigate (Opus) | correctness | A12-F001 | A12 seams | open; moved to todo/ 2026-10-20 |
