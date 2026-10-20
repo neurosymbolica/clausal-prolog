@@ -817,8 +817,10 @@ cut-free: the same constructs are refused there, and a `.clausal` module
 may not import a `.pl` one.
 
 * **A cut over a tabled call is refused** (XSB's rule): a `!`, an
-  if-then-else condition, `once/1` or `setup_call_cleanup/3`'s Setup whose
-  scope holds a call to a tabled predicate. Scryer runs such a cut; the
+  if-then-else condition, or a meta-call that commits to a solution of its
+  goal -- `once/1`, `call_nth/2`, `setup_call_cleanup/3`'s Setup, a Cleanup
+  of `setup_call_cleanup/3` or `call_cleanup/2` (run for its first
+  solution only) -- whose scope holds a call to a tabled predicate. Scryer runs such a cut; the
   answer it would give depends on the fixpoint's pass order, which this
   engine cannot promise. The refusal comes at load where the compiler can
   see the call, otherwise at run time when the cut would prune an
@@ -852,11 +854,11 @@ may not import a `.pl` one.
     message names the tabled predicate and the evaluation it is inside,
     and suggests collecting the answers first with `findall/3` or moving
     the commit out of the recursion.
-  * **`once/1` and setup_call_cleanup's Setup** are checked only in `.pl`
-    modules, and there in two cases:
-    * the goal written inside `once/1` or the Setup is itself a variable,
-      or contains a `call/N` (or a control construct called as a
-      predicate), e.g. `first(G) :- once(G).` in a library;
+  * **`once/1`, `call_nth/2`, a Setup and a Cleanup** are checked only in
+    `.pl` modules, and there in two cases:
+    * the goal written inside is itself a variable, or contains a
+      `call/N` (or a control construct called as a predicate), e.g.
+      `first(G) :- once(G).` in a library;
     * any goal, in a module that can see a tabled predicate when it is
       compiled: one it tables, or one it imports, directly or through the
       modules it imports.

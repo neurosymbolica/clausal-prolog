@@ -140,13 +140,24 @@ def _is_deterministic_op_ir(op: Any) -> bool:
     return False
 
 
-# Subset of ``MetaKind`` that the legacy ``_is_deterministic_goal``
-# treats as at-most-one-solution.  The remaining kinds (``catch``,
-# ``forall``, ``freeze``, ``when``, ``setup_call_cleanup``,
-# ``call_cleanup``, ``call_nth``, ``count_all``) are non-deterministic.
+# Every ``MetaKind`` is in exactly one of these two sets
+# (tests/test_meta_goal_tables_agree.py): a TRO prefix goal must be proved
+# at-most-one-solution, so a kind left out would silently be the safe
+# "nondeterministic" -- now a new kind fails that test until it is placed.
+#: The kinds the legacy ``_is_deterministic_goal`` treats as
+#: at-most-one-solution.
 _DETERMINISTIC_META_KINDS: frozenset[str] = frozenset({
-    # (not bagof/setof: they backtrack over the free-variable bags)
     "once", "findall", "throw", "halt",
+})
+#: The rest.  bagof/setof backtrack over the free-variable bags; catch,
+#: freeze, when and the cleanup forms keep their goal's choice points.
+#: count_all, forall, call_nth and naf_tabled (tabled \+) answer at most
+#: once but are listed here as the legacy test had them: conservative (a
+#: TRO opportunity missed), not wrong.
+_NONDETERMINISTIC_META_KINDS: frozenset[str] = frozenset({
+    "bagof", "setof", "catch", "catch_error", "catch_recover", "freeze",
+    "when", "setup_call_cleanup", "call_cleanup", "count_all", "forall",
+    "call_nth", "naf_tabled",
 })
 
 

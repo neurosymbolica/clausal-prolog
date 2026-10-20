@@ -142,7 +142,8 @@ _RUN_TIME_META = frozenset({
 
 
 def _goal_is_open(goal, db) -> bool:
-    """Can *goal* (a once/1 or Setup argument, as written) run a goal that
+    """Can *goal* (the goal of a commit: once/1's, call_nth/2's, a Setup or
+    a Cleanup, as written) run a goal that
     is only known at run time: a variable, or a call/N anywhere in its goal
     positions?  Conservative: a goal the converter cannot read counts."""
     from clausal.logic.variables import deref, is_var
@@ -187,7 +188,8 @@ def _goal_is_open(goal, db) -> bool:
 
 def commit_check(ctx, goal=None) -> "tuple[list, list]":
     """``(before, at_commit)`` statements for a committing construct of a
-    ``.pl`` body (once/1, setup_call_cleanup's Setup, its *goal*): mark
+    ``.pl`` body (once/1, call_nth/2, setup_call_cleanup's Setup or Cleanup;
+    every goal of :data:`_COMMITS`), whose goal is *goal*: mark
     before the sub-search, check at its first solution.
 
     ``([], [])`` for any other db (``.clausal``, ``.seam``: cut-free code
@@ -229,23 +231,53 @@ def commit_check(ctx, goal=None) -> "tuple[list, list]":
 #: ``tabling.cut_over_incomplete`` (run time) are its only readers.
 CUT_OVER_TABLED_CALL = "refuse"
 
-# Meta-calls whose goal's choice points SURVIVE the meta-call (ISO: catch/3
-# is call/1 for its Goal; call_cleanup's Goal, call_nth, freeze/when's
-# delayed goal likewise): a later cut in the enclosing scope cuts over them.
+# How each goal argument of each meta-call special form scopes a cut and the
+# choice points of the goal it runs: EXACTLY ONE of the three sets below
+# holds every ``(MetaKind, arg key)`` of ``ir.META_GOAL_POSITIONS``, so
+# every goal position of ``clausal/logic/special_forms.py`` is classified
+# (tests/test_meta_goal_tables_agree.py, test_every_goal_position_has_one_
+# cut_scope).  A cut INSIDE any of them is local to that goal: each is
+# defined on call/1 of it (ISO 7.8.3.1 call/1 is opaque to cut).
+
+#: Its goal's choice points SURVIVE the meta-call, so a later cut in the
+#: enclosing scope cuts over them: ISO 7.8.9 catch/3 is call/1 for its Goal
+#: and for its Recovery (catch_error/2 and catch_recover/3 likewise);
+#: setup_call_cleanup's and call_cleanup's Goal; freeze/when's delayed goal.
 _TRANSPARENT_TO_CHOICE_POINTS = frozenset({
     ("catch", "inner"), ("catch", "recovery"), ("catch_error", "inner"),
     ("catch_recover", "inner"), ("catch_recover", "recovery"),
     ("call_cleanup", "call"), ("setup_call_cleanup", "call"),
-    ("call_nth", "inner"), ("freeze", "inner"), ("when", "inner"),
+    ("freeze", "inner"), ("when", "inner"),
 })
-# Meta-calls that COMMIT to their goal's first solution by definition --
-# ISO 8.15.2: once(G) is call((G, !)) -- so they cut over its tabled calls
-# (coordinator ruling on Task 7 I-3; part of Mike's Q1).  \+ and findall
-# are not defined through cut and stay allowed.
-_COMMITS = frozenset({("once", "inner"),
-                      # setup_call_cleanup runs Setup as once/1 (Scryer;
-                      # coordinator ruling, with once/1's)
-                      ("setup_call_cleanup", "setup")})
+#: The meta-call COMMITS to a solution of its goal by definition, so it cuts
+#: over the goal's tabled calls -- ISO 8.15.2: once(G) is call((G, !))
+#: (coordinator ruling on Task 7 I-3; part of Mike's Q1).
+_COMMITS = frozenset({
+    ("once", "inner"),
+    # setup_call_cleanup runs Setup as once/1 (Scryer; coordinator ruling,
+    # with once/1's)
+    ("setup_call_cleanup", "setup"),
+    # Cleanup runs for its first solution only (SWI: "choice points it
+    # created are destroyed"; Scryer; the lowering breaks out of its
+    # sub-search), with once/1's ruling (2026-10-20).
+    ("setup_call_cleanup", "cleanup"), ("call_cleanup", "cleanup"),
+    # call_nth(G, N) stops at G's Nth solution: call_nth(G, 1) is once(G)
+    # (2026-10-20; an unbound N raises today, todo/once-strict-atoms-and-
+    # call-nth-unbound-2026-10-13.md -- when it enumerates, that case keeps
+    # its choice points).
+    ("call_nth", "inner"),
+})
+#: Neither: the meta-call runs its goal to EXHAUSTION or to its first
+#: failure and leaves none of its choice points behind, and is not defined
+#: through cut -- findall/bagof/setof (ISO 8.10: every solution, then the
+#: bag; bagof/setof's own choice points are over the bags, not the goal's),
+#: count_all, and forall(C, A), which is \+ (C, \+ A).  A cut inside is
+#: checked against the tabled calls inside (the goal is a barrier scope of
+#: its own); none join the enclosing scope.
+_OPAQUE_TO_CHOICE_POINTS = frozenset({
+    ("findall", "inner"), ("bagof", "inner"), ("setof", "inner"),
+    ("count_all", "inner"), ("forall", "cond"), ("forall", "action"),
+})
 
 
 def _literal_call_goal(op, db):
@@ -391,8 +423,10 @@ def tabled_calls_in_cut_scope(ir: GoalOp, db) -> list[tuple[str, int]]:
     list, so a cut inside it is checked against the tabled calls in IT.  The
     tabled calls of a barrier whose choice points survive it (call/N,
     catch/3's goal, ...) then join the enclosing scope's list.  ``once/1``
-    commits like ``( G -> true )``.  ``\\+`` and findall/bagof/setof/
-    forall/count_all are not cuts and leave no choice points behind.
+    commits like ``( G -> true )``, and so does every goal in
+    :data:`_COMMITS`.  ``\\+`` and the goals in
+    :data:`_OPAQUE_TO_CHOICE_POINTS` (findall/bagof/setof/forall/count_all)
+    are not cuts and leave no choice points behind.
 
     Goals built at run time (``G = (tf(X), !), call(G)``), and tabled
     predicates reached through an untabled one, are not seen: no static rule
@@ -456,6 +490,7 @@ def tabled_calls_in_cut_scope(ir: GoalOp, db) -> list[tuple[str, int]]:
                         report(sub)
                     elif (kind, key) in _TRANSPARENT_TO_CHOICE_POINTS:
                         join(left, sub)
+                    # else _OPAQUE_TO_CHOICE_POINTS: the barrier alone
             case SubCall(fname="call"):
                 inner = _literal_call_goal(op, db)
                 if inner is not None:
@@ -474,10 +509,12 @@ def tabled_calls_in_cut_scope(ir: GoalOp, db) -> list[tuple[str, int]]:
 
 
 #: The names a construct that commits can be spelled with, in any shape
-#: the scan converts: ``!`` and ``->`` cells, once/setup_call_cleanup
-#: (as a ``LoadName``, a ``MetaCall`` kind, a cell functor or a call/N
-#: closure atom).
-_COMMIT_NAMES = frozenset({"!", "->", "once", "setup_call_cleanup"})
+#: the scan converts: ``!`` and ``->`` cells, and every meta-call with a
+#: goal in :data:`_COMMITS` -- once, call_nth, setup_call_cleanup,
+#: call_cleanup (as a ``LoadName``, a ``MetaCall`` kind, a cell functor or a
+#: call/N closure atom; each kind is spelled as its special form's name,
+#: tests/test_meta_goal_tables_agree.py).
+_COMMIT_NAMES = frozenset({"!", "->"}) | frozenset(kind for kind, _ in _COMMITS)
 
 
 def _raw_may_commit(t) -> bool:
@@ -509,8 +546,9 @@ def _raw_may_commit(t) -> bool:
 
 def _may_commit(ir) -> bool:
     """Cheap pre-check for :func:`tabled_calls_in_cut_scope`: can anything
-    in *ir* commit -- a ``Cut``, an ``IfThenElse``, once/1 or
-    setup_call_cleanup/3?  The scan reports only at such a commit, so False
+    in *ir* commit -- a ``Cut``, an ``IfThenElse``, or a meta-call with a
+    goal in :data:`_COMMITS` (once/1, call_nth/2, setup_call_cleanup/3,
+    call_cleanup/2)?  The scan reports only at such a commit, so False
     proves it would report nothing.  It walks exactly the goal positions
     the scan walks, with no conversion and no table lookups; a raw goal
     term (a meta-call's goal, call/N's arguments) counts if it holds a

@@ -250,6 +250,26 @@ def test_setup_call_cleanups_setup_commits_like_once(native, ans):
     assert sorted(ans(mod, "c")) == [1, 2]                    # Scryer: [1,2]
 
 
+@pytest.mark.parametrize("clause", [
+    "c(X) :- call_nth(tf(X), 2).",
+    "c(X) :- call(call_nth(tf(X), 1)).",
+    "c(X) :- setup_call_cleanup(true, X = 1, tf(_)).",
+    "c(X) :- call_cleanup(X = 1, tf(_)).",
+    "c(X) :- call(call_cleanup(X = 1, tf(_))).",
+], ids=["call_nth", "call_nth_literal", "scc_cleanup", "call_cleanup_cleanup",
+        "call_cleanup_cleanup_literal"])
+def test_call_nth_and_a_cleanup_commit_like_once(native, clause):
+    """call_nth(G, N) stops at G's Nth answer (call_nth(G, 1) is once(G))
+    and a Cleanup is run for its first solution only (as once/1, SWI and
+    Scryer alike), so a tabled call in either is refused like once(tf(X)).
+    Both used to count as letting their goal's choice points survive:
+    call_nth's tabled calls joined the enclosing scope (refused only before
+    a later ``!``) and a Cleanup's were not looked at.  2026-10-20."""
+    src = ":- table(tf/1).\ntf(1). tf(2).\n" + clause + "\n"
+    with pytest.raises(SyntaxError, match=r"tabled call\(s\) tf/1"):
+        native.load("l3_tab_commit_kin", src)
+
+
 SELF_QUALIFIED = {
     "user_direct": "t(X) :- user:tf(X), !.",
     "self_direct": "t(X) :- {mod}:tf(X), !.",
@@ -397,6 +417,36 @@ r(E) :- catch((findall(X, p(X), _), E = none), error(E0, _), E = E0).
 """
 
 
+MUTUAL_COMMITS = """\
+:- table(p/1).
+:- table(q/1).
+p(X) :- COMMIT.
+p(5).
+qq(X) :- q(X).
+q(X) :- p(Y), X is Y + 1, X < 3.
+q(0).
+r(E) :- catch((findall(X, p(X), _), E = none), error(E0, _), E = E0).
+"""
+
+
+@pytest.mark.parametrize("commit", [
+    "call_nth(qq(X), 1)",
+    "setup_call_cleanup(true, X = 9, qq(_))",
+    "call_cleanup(X = 9, qq(_))",
+], ids=["call_nth", "setup_call_cleanup_cleanup", "call_cleanup_cleanup"])
+def test_every_commit_over_an_scc_members_incomplete_table_raises(native, ans, commit):
+    """call_nth/2 stops at its Nth answer and a Cleanup runs once/1-style
+    (the lowering breaks out of its sub-search at the first solution), so
+    each commits like once/1 (MUTUAL above) and is checked like it.
+    call_nth(qq(X), 1) is once(qq(X)): it answered [0, 5] silently from
+    q/1's incomplete table, where once/1 raises (Scryer answers
+    [0, 1, 2, 5] for once/1 and panics for call_nth/2; for the Cleanup rows
+    it answers [5, 9]).  2026-10-20."""
+    mod = native.load("l3_tab_rt_mutual_commit",
+                      MUTUAL_COMMITS.replace("COMMIT", commit))
+    assert ans(mod, "r") == [_INCOMPLETE("q", 1)]
+
+
 def test_a_cut_over_an_scc_members_incomplete_table_names_the_ancestor(native, ans):
     """The refused case that remains after D68: q/1 is a fresh call made
     inside p/1's evaluation, and q/1 calls p/1 back, so q/1's table cannot
@@ -454,6 +504,9 @@ w2(X) :- tq(X), X > 1, !.
 o1(X) :- once(tq(X)).
 o2(X) :- ( tq(X) -> true ; X = 0 ).
 o3(X) :- setup_call_cleanup(tq(X), true, true).
+o4(X) :- call_nth(tq(X), 2).
+o5(X) :- setup_call_cleanup(true, X = 1, tq(_)).
+o6(X) :- call_cleanup(X = 1, tq(_)).
 n1(X) :- \\+ \\+ tq(_), p(X), !.
 n2(X) :- catch((tq(Y), Y > 1, throw(oops)), oops, true), p(X), !.
 n3(X) :- tq(X), \\+ (p(Y), !, Y > 5).
@@ -476,17 +529,19 @@ def test_a_cut_after_its_tables_completed_runs(native, ans):
 
 @pytest.mark.parametrize("name,want", [
     ("w", [1]), ("w2", [2]), ("o1", [1]), ("o2", [1]), ("o3", [1]),
-    ("fa", [[1]]), ("nf", [["x"]])])
+    ("o4", [2]), ("o5", [1]), ("o6", [1]), ("fa", [[1]]), ("nf", [["x"]])])
 def test_every_commit_over_a_fresh_table_runs_over_a_complete_table(native, ans, name, want):
     """D68 (operator ruling 2026-10-16, option B; XSB's local scheduling):
     a ``!``, an if-then-else commit, once/1 and setup_call_cleanup's Setup,
-    each over t/1 reached through the untabled tq/1 (w2/1 commits on its
+    call_nth/2 (o4/1 commits on the SECOND answer) and a Cleanup (o5/1,
+    o6/1), each over t/1 reached through the untabled tq/1 (w2/1 commits on its
     SECOND answer); fa/1 and nf/1 cut inside findall's goal and inside a
     \\+ nested in it.  t/1 is called outside any table's evaluation, so it
     completes its table before its first answer and every commit prunes a
     COMPLETE table, with the answer the untabled program gives.  Each
     raised permission_error(cut, incomplete_table, t/1) before D68.
-    Scryer answers [1], [2], [1], [1], [1], [[1]], [[x]] -- the same
+    Scryer answers [1], [2], [1], [1], [1], [2], [1], [1], [[1]], [[x]] --
+    the same (o4..o6 with library(iso_ext), 2026-10-20)
     (nf/1's ``(tq(_), !, fail)`` fails, so its \\+ succeeds and findall/3
     collects one x; Scryer, /opt/scryer-prolog-clpq, 2026-10-16)."""
     mod = native.load("l3_tab_rt_" + name, INDIRECT)

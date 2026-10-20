@@ -13,3 +13,9 @@ Test: maplist/call with each bare special-form name.
 
 Clausal raises `type_error(positive_integer, _)`, at full arity as well. Scryer and Trealla
 enumerate instead: N = 1, then N = 2, … over G's answers. Make an unbound N enumerate.
+
+When N enumerates, call_nth(G, N) with N unbound keeps G's choice points: the
+cut-over-a-table rule then needs a run-time-N case. Today
+`compiler/cut_scope._COMMITS` lists `("call_nth", "inner")` (every call_nth
+stops at its Nth answer, 2026-10-20), and the lowering's commit check
+(`control_constructs._compile_call_nth`) sits on that stop.

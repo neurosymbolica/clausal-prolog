@@ -259,13 +259,18 @@ def _compile_call_nth(ctx: CompilationContext, inner, n_arg, k_stmts):
         op=ast.Add(),
         value=ast.Constant(value=1),
     )
+    # Stopping at the Nth solution commits like once/1 (call_nth(G, 1) is
+    # once(G)): in a .pl body it is checked like a cut's (D61 Q1);
+    # elsewhere both lists are empty.
+    from .cut_scope import commit_check
+    before, at_commit = commit_check(ctx, inner)
     nth_check = ast.If(
         test=ast.Compare(
             left=_name(count_var),
             ops=[ast.Eq()],
             comparators=[_name(n_var)],
         ),
-        body=k_stmts + [ast.Break()],
+        body=at_commit + k_stmts + [ast.Break()],
         orelse=[],
     )
     goal_loop = ast.For(
@@ -281,6 +286,7 @@ def _compile_call_nth(ctx: CompilationContext, inner, n_arg, k_stmts):
         type_check,
         _assign_mark(mark_var, trail_name),
         gen_fn,
+        *before,
         goal_loop,
         _undo_stmt(mark_var, trail_name),
     ]
@@ -402,10 +408,12 @@ def _compile_setup_call_cleanup(ctx: CompilationContext, setup, call, cleanup, k
         orelse=[],
     )
 
+    # Cleanup runs for its first solution only, a commit like Setup's.
+    cleanup_before, cleanup_commit = commit_check(ctx, cleanup)
     cleanup_loop = ast.For(
         target=_name("_", ast.Store()),
         iter=_call(_name(cleanup_gen)),
-        body=[ast.Break()],
+        body=cleanup_commit + [ast.Break()],
         orelse=[],
     )
 
@@ -429,7 +437,7 @@ def _compile_setup_call_cleanup(ctx: CompilationContext, setup, call, cleanup, k
         body=[call_loop],
         handlers=[handler],
         orelse=[],
-        finalbody=[cleanup_fn, cleanup_loop, reraise],
+        finalbody=[cleanup_fn, *cleanup_before, cleanup_loop, reraise],
     )
 
     if_ok = ast.If(

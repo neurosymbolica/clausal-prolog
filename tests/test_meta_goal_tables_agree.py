@@ -15,6 +15,9 @@ A table that lists MORE than the special forms (``call/N``, ``\\+``,
 lists a different spelling (the exported ``.pl`` names) is mapped first.
 Goal expansion reads no such table, by decision: see
 test_goal_expansion_intentionally_stops_at_a_meta_call.
+
+Every goal position of every special form has exactly one cut-scope rule
+in ``compiler/cut_scope`` (transparent, commits or opaque).
 """
 from __future__ import annotations
 
@@ -118,6 +121,80 @@ def test_the_cut_scope_run_time_meta_names_cover_the_table():
     goal-taking builtins that are not special forms."""
     from clausal.logic.compiler.cut_scope import _RUN_TIME_META
     assert {name for name, _ in GOAL_POSITIONS} <= _RUN_TIME_META
+
+
+# ── every goal position has one scoping rule ───────────────────────────────
+
+
+def _cut_scope_sets():
+    from clausal.logic.compiler import cut_scope
+    return {"transparent": cut_scope._TRANSPARENT_TO_CHOICE_POINTS,
+            "commits": cut_scope._COMMITS,
+            "opaque": cut_scope._OPAQUE_TO_CHOICE_POINTS}
+
+
+@pytest.mark.parametrize("key", sorted(GOAL_POSITIONS), ids=lambda k: f"{k[0]}/{k[1]}")
+def test_every_goal_position_has_one_cut_scope(key):
+    """Each goal of each special form is in EXACTLY ONE of cut_scope's
+    sets: its choice points survive the meta-call (transparent), the
+    meta-call commits to a solution of it (commits), or it is run to
+    exhaustion or first failure and leaves nothing (opaque).  A special
+    form added without a rule fails here instead of silently being
+    "opaque" by absence (count_all, findall, forall and the Cleanups were,
+    before 2026-10-20)."""
+    from clausal.logic.compiler.cut_scope import _meta_terms
+    kind, at = _meta_terms()[key]
+    assert sorted(at) == [i + 1 for i in GOAL_POSITIONS[key]]
+    for pos, arg_key in at.items():
+        hits = [n for n, rows in _cut_scope_sets().items()
+                if (kind, arg_key) in rows]
+        assert len(hits) == 1, (key, pos, arg_key, hits)
+
+
+def test_the_cut_scope_sets_name_only_real_goal_positions():
+    from clausal.logic.compiler.ir import META_GOAL_POSITIONS
+    real = {(k, a) for k, keys in META_GOAL_POSITIONS.items() for a in keys}
+    sets = _cut_scope_sets()
+    assert set().union(*sets.values()) == real
+    assert sum(map(len, sets.values())) == len(real)          # disjoint
+
+
+def test_the_cut_scope_classification_is_isos():
+    """Spot rows, against ISO 7.8.9 (catch/3 is call/1 of Goal and of
+    Recovery), 8.15.2 (once(G) is call((G, !))), 8.10 (findall/bagof/setof
+    collect every solution) and forall(C, A) = \\+ (C, \\+ A)."""
+    sets = _cut_scope_sets()
+    assert ("catch", "inner") in sets["transparent"]
+    assert ("catch", "recovery") in sets["transparent"]
+    assert ("once", "inner") in sets["commits"]
+    assert ("call_nth", "inner") in sets["commits"]
+    assert ("setup_call_cleanup", "cleanup") in sets["commits"]
+    assert ("findall", "inner") in sets["opaque"]
+    assert ("forall", "action") in sets["opaque"]
+
+
+def test_every_commit_is_a_commit_name():
+    """The pre-check (cut_scope._may_commit) spots a commit by NAME: each
+    meta-call kind with a committing goal is spelled as its special form,
+    and is one of the commit names."""
+    from clausal.logic.compiler.cut_scope import (
+        _COMMIT_NAMES, _COMMITS, _meta_terms)
+    kinds = {kind for kind, _ in _COMMITS}
+    names = {name for (name, _a), (kind, _at) in _meta_terms().items()
+             if kind in kinds}
+    assert names == kinds
+    assert _COMMIT_NAMES == {"!", "->"} | kinds
+
+
+def test_tro_classifies_every_meta_kind():
+    """A TRO prefix goal must be proved at-most-one-solution: every
+    MetaKind is in exactly one of tro's two sets."""
+    from clausal.logic.compiler.ir import MetaKind
+    from clausal.logic.compiler.tro import (
+        _DETERMINISTIC_META_KINDS, _NONDETERMINISTIC_META_KINDS)
+    kinds = set(typing.get_args(MetaKind))
+    assert _DETERMINISTIC_META_KINDS | _NONDETERMINISTIC_META_KINDS == kinds
+    assert not _DETERMINISTIC_META_KINDS & _NONDETERMINISTIC_META_KINDS
 
 
 def test_term_expansion_helper_reachability_covers_the_table():

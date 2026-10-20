@@ -203,6 +203,23 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Changed
 
+- **`call_nth/2` and a Cleanup commit like `once/1` over a tabled call**
+  (2026-10-20). `call_nth(G, N)` stops at G's Nth answer (`call_nth(G, 1)`
+  is `once(G)`), and the Cleanup of `setup_call_cleanup/3` and
+  `call_cleanup/2` runs for its first solution only, so in a `.pl` file
+  each is now refused at load over a tabled call it holds, and checked at
+  run time, as `once/1` and the Setup already were. Before, a tabled call
+  in call_nth's goal counted only if a later `!` followed, a Cleanup's
+  were not looked at, and `p(X) :- call_nth(qq(X), 1).` over a mutually
+  recursive table answered `[0, 5]` silently from the incomplete table,
+  where `once(qq(X))` raises `permission_error(cut, incomplete_table,
+  q/1)`. Every goal position of every special form now has one explicit
+  cut-scope rule (`compiler/cut_scope.py`; transparent, commits or opaque),
+  held by `tests/test_meta_goal_tables_agree.py::test_every_goal_position_has_one_cut_scope`;
+  the refusals are pinned by
+  `tests/iso_l3/test_l3_cut_tabling.py::test_call_nth_and_a_cleanup_commit_like_once`
+  and `::test_every_commit_over_an_scc_members_incomplete_table_raises`.
+
 - **A tabled call completes its table before its first answer** (operator
   ruling 2026-10-16 (D68), option B; XSB's local scheduling), unless it
   depends on a table that is still being computed (a recursive or mutually
