@@ -114,6 +114,12 @@ _META_GOAL_ARGS: dict[tuple[str, int], tuple[int, ...]] = {
     ("bagof", 3): (1,),
     ("setof", 3): (1,),
     ("catch", 3): (0, 2),
+    # The engine's catch/3 variants (not ISO names; the compiler makes the
+    # same MetaCall of them on every surface).  Without these rows their
+    # goal arguments lowered as DATA, and the compiler refused the cell
+    # (``terms_to_goalop: goal shape not yet supported``), 2026-10-20.
+    ("catch_error", 2): (0,),
+    ("catch_recover", 3): (0, 2),
     ("forall", 2): (0, 1),
 }
 

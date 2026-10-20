@@ -1,0 +1,89 @@
+% catch_error/2 and catch_recover/3 written in a Clausal Prolog clause body.
+% Each goal argument is a goal: the front end lowers it as one, as it does
+% for catch/3's (todo/clausal-surface-gaps-found-moving-the-docs-2026-10-17.md,
+% engine bugs, item 1: this file did not load before 2026-10-20).
+
+% The repro from the todo, as a predicate of its own.
+caught(R) :- catch_error(throw(boom(42)), R).
+
+recovered(M) :- catch_recover(throw(boom(3)), boom(N), M is N * 2).
+
+two(1).
+two(2).
+
+% ── catch_error/2 ──
+
+test("catch_error/2: the ball is caught and bound") :-
+    caught(R),
+    R == boom(42).
+
+test("catch_error/2: a pattern catcher binds its variables") :-
+    catch_error(throw(boom(7)), boom(N)),
+    N == 7.
+
+test("catch_error/2: an ISO error term is caught") :-
+    catch_error(_ is 1 / 0, E),
+    E = error(evaluation_error(zero_divisor), _).
+
+test("catch_error/2: no error, the goal's bindings stay, the catcher is unbound") :-
+    catch_error(X = 1, E),
+    X == 1,
+    var(E).
+
+test("catch_error/2: every answer of the goal passes through") :-
+    findall(X, catch_error(two(X), _), L),
+    L == [1, 2].
+
+test("catch_error/2: a conjunction as the goal") :-
+    catch_error((X = 1, throw(nested(X))), E),
+    E == nested(1).
+
+test("catch_error/2: a disjunction as the goal") :-
+    findall(X, catch_error((X = a ; X = b), _), L),
+    L == [a, b].
+
+test("catch_error/2: nested in its own goal") :-
+    catch_error(catch_error(throw(inner), I), O),
+    I == inner,
+    var(O).
+
+test("catch_error/2: a negation inside the goal") :-
+    catch_error((\+ two(3), throw(negated)), E),
+    E == negated.
+
+test("catch_error/2: a variable goal") :-
+    G = throw(v(1)),
+    catch_error(G, E),
+    E == v(1).
+
+test("catch_error/2: a variable goal that succeeds") :-
+    G = two(X),
+    findall(X, catch_error(G, _), L),
+    L == [1, 2].
+
+% ── catch_recover/3 ──
+
+test("catch_recover/3: the recovery sees the catcher's bindings") :-
+    recovered(M),
+    M == 6.
+
+test("catch_recover/3: no error, the recovery does not run") :-
+    catch_recover(X = 1, _, Y = ran),
+    X == 1,
+    var(Y).
+
+test("catch_recover/3: a conjunction as the goal and as the recovery") :-
+    catch_recover((X = 2, throw(b(X))), b(N), (M is N + 1, K = done)),
+    M == 3,
+    K == done.
+
+test("catch_recover/3: variable goal and variable recovery") :-
+    G = throw(x),
+    R = (Y = got),
+    catch_recover(G, B, R),
+    B == x,
+    Y == got.
+
+test("catch_recover/3: nested in catch_error/2") :-
+    catch_error(catch_recover(throw(one), one, throw(two)), E),
+    E == two.

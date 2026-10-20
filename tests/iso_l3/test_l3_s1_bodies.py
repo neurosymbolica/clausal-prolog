@@ -145,13 +145,28 @@ def test_a_repeated_variable_is_no_singleton(native):
 
 def test_the_meta_goal_table_matches_the_compilers(native):
     """_META_GOAL_ARGS is index-keyed; ir.META_GOAL_POSITIONS is field-keyed.
-    Every compiler meta kind that a .pl program can name must be listed, with
-    as many goal positions, so a new one cannot drift in silently."""
+    Every compiler meta kind must be listed, with as many goal positions, so
+    a new one cannot drift in silently.  The engine's own catch_error/2 and
+    catch_recover/3 are not ISO names but are listed too: leaving them out
+    made a .clausal body calling them fail to load (2026-10-20)."""
     from clausal.logic.compiler.ir import META_GOAL_POSITIONS
     ours = {name: len(ix) for (name, _), ix in L3._META_GOAL_ARGS.items()}
-    theirs = {k: len(v) for k, v in META_GOAL_POSITIONS.items()
-              if k not in ("catch_error", "catch_recover")}   # not ISO names
+    theirs = {k: len(v) for k, v in META_GOAL_POSITIONS.items()}
     assert ours == theirs
+
+
+def test_catch_error_and_catch_recover_goal_arguments_are_goals(native, ans):
+    """Their goal arguments lower as goals, not data terms, as catch/3's do:
+    ``throw(boom(42))`` used to reach the compiler as a data cell
+    (``NotImplementedError: terms_to_goalop: goal shape not yet supported``).
+    The .clausal twin is tests/fixtures/catch_error_clausal_body.clausal."""
+    mod = native.load("s1_catch_error",
+                      "t(R) :- catch_error(throw(boom(42)), R).\n"
+                      "u(M) :- catch_recover(throw(b(3)), b(N), M is N * 2).\n"
+                      "v(E) :- G = throw(g), catch_error(G, E).\n")
+    assert ans(mod, "t") == [("boom", 42)]
+    assert ans(mod, "u") == [6]
+    assert ans(mod, "v") == ["g"]
 
 
 def test_an_operator_goal_position_is_the_whole_goal():
