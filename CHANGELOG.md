@@ -9,6 +9,23 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Breaking
 
+- **In `.clausal`, `"..."` is always chars** (Mike, 2026-10-18).
+  `:- set_prolog_flag(double_quotes, atom)` or `codes` in a `.clausal` file
+  is now refused at load with `permission_error(modify,flag,double_quotes)`,
+  naming the line; naming `chars` is accepted (redundant). An ISO Prolog
+  (`.pl`) file keeps ISO's three modes by directive.
+  `set_prolog_flag(double_quotes, _)` as a goal stays refused in every
+  surface (Ulrich's row #170; the question is Q2 in
+  docs/iso_questions_for_ulrich.md).
+
+- **A `-g` goal is read as a whole term** (Ulrich's rows #186, #187, #224;
+  Mike 2026-10-18). Block comments in it no longer nest, as in a file; a
+  lone operator atom is a goal (`clausal -g '\ .'` raises
+  `existence_error(procedure,(\)/0)`); `H :- B`, `:- G`, `?- G` and
+  `H --> B` given as goals are calls to `(:-)/2` and so on, as in Scryer,
+  where they were syntax errors. Syntax-error columns no longer carry the
+  old `?- ` prefix's offset of 3.
+
 - **`'[]'` and `[]` are the same atom everywhere** (operator ruling D70,
   2026-10-16, after Markus Triska confirmed ISO's reading). The reader now
   reads the quoted atom `'[]'` as the empty list in every path. Before,
