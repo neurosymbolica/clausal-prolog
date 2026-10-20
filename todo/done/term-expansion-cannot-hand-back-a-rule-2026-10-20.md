@@ -1,6 +1,6 @@
 # A term_expansion/4 rule cannot hand back a rule clause
 
-**Status: FIXED 2026-10-20 (commit 2e3fa10a).** A built `(H :- B)` / seam `(H <- B)` is lowered to the rule it denotes (`term_expansion._AnswerLowering`), a head pattern matches facts only, a whole-clause pattern matches a rule (`_clause_view`, `Predicate.__unify__`), and an imported name in seam data builds its cell (`terms_to_ast._resolve_functor_binding`). Built rules' regex groups still bind nothing (the decision asked for below: kept as documented). Pinned in tests/test_term_expansion.py::TestRuleClausesHandedBack.
+**Status: FIXED 2026-10-20 (commit 2e3fa10a).** A built `(H :- B)` / seam `(H <- B)` is lowered to the rule it denotes (`term_expansion._AnswerLowering`), a head pattern matches facts only, a whole-clause pattern matches a rule (`_clause_view`, `Predicate.__unify__`), and an imported name in seam data builds its cell (`terms_to_ast._resolve_functor_binding`). Built rules' regex groups still bind nothing (the decision asked for below: kept as documented). Pinned in tests/test_term_expansion.py::TestRuleClausesHandedBack. Reworked in 71668e0a: a built `.clausal`/`.pl` clause is lowered by the front end's own `iso_l3.lower_clause` under the file's directives (no second lowering), held to the written clause by tests/test_term_expansion.py::TestWrittenAndBuiltClausesAgree.
 
 Found 2026-10-20, while checking whether regex named-group auto-binding can
 carry a clause's variable names through term expansion. Not fixed there: the
