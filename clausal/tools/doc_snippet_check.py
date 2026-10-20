@@ -14,7 +14,9 @@ compose their own error messages and add per-tree context (such as a
 
 from __future__ import annotations
 
+import contextlib
 import re
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -207,6 +209,44 @@ CLAUSAL_PROLOG_FENCE_RE = re.compile(r"^[ \t]*```clausal[ \t]*\n(.*?)^[ \t]*```"
                                      re.DOTALL | re.MULTILINE)
 
 
+_SQLITE_MODULE = "clausal.modules.py.sqlite"
+
+
+def sqlite_aliases() -> frozenset:
+    """The sqlite connection aliases open now (none if the sqlite module
+    was never imported)."""
+    mod = sys.modules.get(_SQLITE_MODULE)
+    return frozenset(mod._CONNECTIONS) if mod is not None else frozenset()
+
+
+def close_sqlite_connections_since(before: frozenset) -> None:
+    """Close and forget every sqlite connection opened since *before*.
+
+    The sqlite module keeps its connections in one process-wide table keyed
+    by alias, and ``connect/2`` on a connected alias reuses the open
+    database: two doc examples that ``connect(":memory:", "mydb")`` and
+    create a table would otherwise share it, so whichever ran second failed
+    with "table ... already exists"."""
+    mod = sys.modules.get(_SQLITE_MODULE)
+    if mod is None:
+        return
+    for alias in [a for a in mod._CONNECTIONS if a not in before]:
+        conn = mod._CONNECTIONS.pop(alias, None)
+        if conn is not None:
+            with contextlib.suppress(Exception):
+                conn.close()
+
+
+@contextlib.contextmanager
+def isolated_sqlite_connections():
+    """Close, on exit, the sqlite connections opened inside the block."""
+    before = sqlite_aliases()
+    try:
+        yield
+    finally:
+        close_sqlite_connections_since(before)
+
+
 def check_clausal_blocks(
     docs_dir: Path,
     *,
@@ -234,7 +274,10 @@ def check_clausal_blocks(
             lineno = text[: m.start()].count("\n") + 1
             if (md.name, lineno) in allowed:
                 continue
-            with tempfile.TemporaryDirectory() as d:
+            # Each block is its own program: it gets its own sqlite
+            # connections, as it does when docs/<page>.md is collected.
+            with tempfile.TemporaryDirectory() as d, \
+                    isolated_sqlite_connections():
                 stem = re.sub(r"\W", "_", f"doc_{md.stem}_{lineno}")
                 path = Path(d) / f"{stem}.clausal"
                 path.write_text(content)

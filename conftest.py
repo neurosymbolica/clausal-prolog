@@ -36,7 +36,12 @@ from clausal.testing import (
     run_test,
 )
 from clausal.tools.clear_pycache import clear_pycache
-from clausal.tools.doc_snippet_check import CLAUSAL_PROLOG_FENCE_RE, SEAM_FENCE_RE
+from clausal.tools.doc_snippet_check import (
+    CLAUSAL_PROLOG_FENCE_RE,
+    SEAM_FENCE_RE,
+    close_sqlite_connections_since,
+    sqlite_aliases,
+)
 
 # Ensure test fixtures directory is importable (for -import_from directives
 # between fixture files, e.g. expansion_importer.seam).
@@ -274,6 +279,17 @@ def _is_snippet_block(content: str) -> bool:
 
 
 class DocMdFile(pytest.File):
+    # A page's examples share its sqlite connections (one test may use the
+    # table an earlier one created), but no page sees another's, nor what
+    # tests/test_doc_clausal_blocks.py left: the page closes, after its
+    # last item, every connection opened while it ran.
+    def setup(self):
+        self._sqlite_before = sqlite_aliases()
+
+    def teardown(self):
+        close_sqlite_connections_since(getattr(self, "_sqlite_before",
+                                               frozenset()))
+
     def collect(self):
         blocks = _extract_clausal_blocks(self.path)
         for lineno, content, suffix in blocks:
