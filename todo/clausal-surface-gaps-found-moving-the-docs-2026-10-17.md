@@ -84,11 +84,20 @@ re-run separately.
 - **Z3:** `'z3.integer'([1 =< X, X =< 3])` raises `TypeError: Cannot
   translate 'tuple' to Z3`. z3.md stays seam.
 - **`if_/3` (library(reif))** works only as a written body goal.
+  **FIXED 2026-10-20 (commit 9658f4fc)**: library(reif) also defines
+  `if_/3` as a predicate, and clpz's reified `#=/3` and `#</3` are
+  builtins; `tests/iso_l3/test_l3_if_runtime_reif.py`. The other two
+  points are Scryer's behaviour too, so they stay (ISO-shaped errors).
+  Left: `call((A, B), T)` itself is still `existence_error((',')/3)`
+  (Scryer's reif exports `(',')/3` and `(;)/3`; a name that is no
+  identifier cannot be imported here), though `if_((A, B), ...)` works
+  on every route.
   - `call(if_(...))`, `G = if_(...), G` and a lambda calling it all raise
-    `existence_error(procedure, if_/3)`.
-  - `if_(X #= 3, …)` raises `existence_error((#=)/3)`, and a comparison
-    as its condition is undefined (`>=/3`).
-  - `if_` as a grammar body calls an undefined `if_/5`.
+    `existence_error(procedure, if_/3)`. (Fixed.)
+  - `if_(X #= 3, …)` raises `existence_error((#=)/3)` (fixed), and a
+    comparison as its condition is undefined (`>=/3`): Scryer's too, kept.
+  - `if_` as a grammar body calls an undefined `if_/5`: Scryer's reif has
+    no `if_//3` either, kept.
 - **Regex `findall/3`** is unreachable.
   - The call compiles as the meta-predicate `findall/3`.
     (2026-10-20: fixed. After `:- use_module(library(re), [findall/3]).`
