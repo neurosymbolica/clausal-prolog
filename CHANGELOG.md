@@ -362,6 +362,27 @@ surface described in [docs/public-api.md](docs/public-api.md).
   (todo/done/tabled-answer-rows-share-their-unbound-variables-2026-10-16.md;
   tests/iso_l3/test_l3_tabled_rows_fresh_variables.py)
 
+- **A predicate imported under a special form's name gets its arguments
+  as written** (2026-10-20). In a `.pl` or `.clausal` file, with
+  `:- use_module(m, [once/1]).` the body `once(X)` called `m`'s `once/1`
+  with `call(X)`, while `call(once, X)` and `G = once(X), call(G)` passed
+  `X`; `once(foo(1))` raised `existence_error(procedure, foo/1)` instead of
+  calling the import. The same held for `findall/3`, `forall/2`,
+  `catch/3` and the other goals whose arguments the compiler takes as
+  goals, and for the qualified `m:once(X)`. The native front end lowered
+  those arguments as goals by the name alone; for an imported or
+  qualified name it now lowers them as data, as `call/N` and the seam's
+  `-import_from` already did. Scryer agrees for `forall/2`. For `once/1`,
+  `findall/3` and `catch/3` it refuses the defining module instead
+  (`permission_error(modify, static_procedure, PI)`), which Clausal does
+  not do yet (`todo/iso-a-file-can-redefine-a-builtin-2026-10-16.md`).
+  One result: `:- use_module(library(re), [findall/3]).`, the usage line
+  of library(re)'s facade, followed by `findall("\\d", "a1b2", L)`, now
+  loads and runs the regex predicate. Before, the file was refused
+  (`"a1b2"` is not callable). A later `use_module(m, [])` that drops the
+  import gives the special form its goal arguments back. Pinned in
+  `tests/test_imported_special_form_names.py`.
+
 - **`catch_error/2` and `catch_recover/3` load in a `.clausal` clause
   body** (2026-10-20). `t(R) :- catch_error(throw(boom(42)), R).` failed
   to load with `NotImplementedError: terms_to_goalop: goal shape not yet

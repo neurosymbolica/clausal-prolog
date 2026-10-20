@@ -91,6 +91,9 @@ re-run separately.
   - `if_` as a grammar body calls an undefined `if_/5`.
 - **Regex `findall/3`** is unreachable.
   - The call compiles as the meta-predicate `findall/3`.
+    (2026-10-20: fixed. After `:- use_module(library(re), [findall/3]).`
+    the body `findall(P, S, M)` and `re:findall(P, S, M)` run the regex
+    predicate; `tests/test_imported_special_form_names.py`.)
   - `call(re:findall, …)` raises `permission_error(access, python_module,
     re)`, because `re` resolves to Python's module.
 - **Importing `get/2` from library(http)** hides the dict builtin `get/3`:

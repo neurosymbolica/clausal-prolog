@@ -501,7 +501,9 @@ def _import_shadows_special_form(db, functor) -> bool:
     predicate of that name is not rewritten, and its body still lowers the
     special form.  ``call/N`` of the cell answers the same way: the import
     wins, and the resolution below reaches it (the goal-object arm, or the
-    adopted row).
+    adopted row).  On every surface the import gets its arguments as
+    written: the ISO front end lowers the arguments of an imported name as
+    data, not as the special form's goals (``iso_l3._goal_args``).
     """
     module_dict = getattr(db, "module_dict", None)
     if not isinstance(module_dict, dict):

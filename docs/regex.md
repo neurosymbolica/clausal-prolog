@@ -55,10 +55,11 @@ Or import the whole module and qualify each call with the module name `re`:
 --8<-- "tests/fixtures/docs/regex_sigs.txt:import_module"
 ```
 
-The regex `findall/3` is not in either list: in a `.clausal` file the goal
-`findall(P, S, M)`, qualified as `re:findall(P, S, M)` too, is the
-[`findall/3` meta-predicate](meta_predicates.md), so the regex `findall/3` is
-reachable only from the seam (see [findall/3 (Regex)](#findall3-regex)).
+The regex `findall/3` is not in the first list, because importing it hides
+the [`findall/3` meta-predicate](meta_predicates.md) in that file: the goal
+`findall(P, S, M)` is then the regex predicate (see
+[findall/3 (Regex)](#findall3-regex)). The whole-module import brings it in
+too.
 
 ---
 
@@ -196,12 +197,25 @@ test("split whitespace") :-
 
 `findall(Pattern, String, Match)` — nondeterministic; succeeds once for each non-overlapping match.
 
-This predicate is **seam-only**. In a `.clausal` file the goal `findall(P, S, M)`
-is always the [`findall/3` meta-predicate](meta_predicates.md), and so is the
-qualified `re:findall(P, S, M)`; `call(re:findall, P, S, M)` is refused, because
-at run time `re` names Python's `re` module
-(`permission_error(access, python_module, re)`). The examples are the seam
-spelling:
+In a `.clausal` file, `findall(P, S, M)` is the regex predicate once
+`:- use_module(library(re), [findall/3]).` (or the whole-module
+`:- use_module(library(re)).`) imports it, and the
+[`findall/3` meta-predicate](meta_predicates.md) is then hidden in that file.
+Without the import, `findall/3` is the meta-predicate. The qualified
+`re:findall(P, S, M)` is the regex predicate too, but
+`call(re:findall, P, S, M)` is refused, because at run time `re` names
+Python's `re` module (`permission_error(access, python_module, re)`):
+
+```clausal
+:- set_prolog_flag(double_quotes, chars).
+:- use_module(library(re), [findall/3]).
+
+test("findall each digit") :-
+    findall("\\d", "a1b2", D),
+    D == "1".
+```
+
+In the seam:
 
 ```seam
 -double_quotes(chars)

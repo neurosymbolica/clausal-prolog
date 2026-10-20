@@ -72,3 +72,10 @@ binding, so the two do not interact.  A ModulePredicate has no handle
 spelling, and the dotted name is how the cell tells py.re's findall/3 apart
 from the special form.  Decide whether that is acceptable or whether
 ModulePredicates need a handle.
+
+2026-10-20: the ISO front end (`.pl`, `.clausal`) now agrees with this
+rule for the ARGUMENTS too. The body `once(X)` of an imported once/1 used to
+call the import with `call(X)` (the special form's goal lowering), while
+call/N passed `X`; `iso_l3._goal_args` now lowers an imported or qualified
+name's arguments as data (`tests/test_imported_special_form_names.py`).
+Items 1 and 2 above are untouched by that.

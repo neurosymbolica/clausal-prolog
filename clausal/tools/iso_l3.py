@@ -561,10 +561,14 @@ class _ClauseLowering:
             self._check_goal_name(name, sp)
             if name == "constant_number_units" and len(args) == 3:
                 return self._constant_units_goal(args, spans, sp, pos)
-            lowered = self._goal_args(name, args, spans)
-            head_pos = self._pos.of(_functor_span(sp, name, self._pos.source))
             remap = self._ctx.import_remap if self._ctx is not None else {}
             resolved = remap.get(name, name)
+            # An IMPORTED name is the import's predicate, not the special
+            # form it may share a name with: its arguments are data, as
+            # call/N passes them (the seam's -import_from does the same).
+            lowered = self._goal_args(name, args, spans,
+                                      imported=resolved != name)
+            head_pos = self._pos.of(_functor_span(sp, name, self._pos.source))
             if (len(args) == 2 and resolved in _REGEX_AUTOBIND_GOALS
                     and not self._meta_depth):
                 self.regex_group_names |= _regex_group_names(args[0])
@@ -574,11 +578,17 @@ class _ClauseLowering:
             f"{g!r} is not callable (ISO type_error(callable, {g!r}))",
             _top_span(sp))
 
-    def _goal_args(self, name: str, args: tuple, spans: list) -> list:
+    def _goal_args(self, name: str, args: tuple, spans: list,
+                   imported: bool = False) -> list:
         """A goal's arguments: a meta-argument position is a goal (ISO body
-        conversion), every other one a data term."""
+        conversion), every other one a data term.  *imported*: the goal
+        calls another module's predicate (an import, or ``m:G``), so the
+        meta-argument positions of a special form of the same name do not
+        apply and every argument is data -- what ``call/N`` hands the same
+        predicate.  Before, ``once(X)`` with once/1 imported called it with
+        ``call(X)``."""
         key = (name, len(args))
-        goal_args = _META_GOAL_ARGS.get(key, ())
+        goal_args = () if imported else _META_GOAL_ARGS.get(key, ())
         lowered = []
         for i, (a, s) in enumerate(zip(args, spans)):
             if i in goal_args:
@@ -658,7 +668,8 @@ class _ClauseLowering:
                      position=_pos_expr(pos))
         return _node(
             "Call", func=func,
-            args=ast.List(elts=self._goal_args(gname, gargs, gspans),
+            args=ast.List(elts=self._goal_args(gname, gargs, gspans,
+                                               imported=True),
                           ctx=ast.Load()),
             kwargs=ast.List(elts=[], ctx=ast.Load()),
             position=_pos_expr(pos))
@@ -1638,6 +1649,11 @@ def _drop_removed_imports(body: list, ctx) -> list:
     existence_error when it is called."""
     body = [ctx.load_only.get(id(s), s) for s in body
             if id(s) not in ctx.dead_stmts or id(s) in ctx.load_only]
+    # The goals first, while their names are still the dotted keys.
+    for node in list(ast.walk(ast.Module(body=body, type_ignores=[]))):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == _DOLLAR + "Call"):
+            _rewrap_dropped_meta_goals(node, ctx)
     for node in ast.walk(ast.Module(body=body, type_ignores=[])):
         if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
                 and node.func.id == _DOLLAR + "LoadName"):
@@ -1646,6 +1662,36 @@ def _drop_removed_imports(body: list, ctx) -> list:
                         and kw.value.value in ctx.dropped_keys):
                     kw.value = _const(kw.value.value.rsplit(".", 1)[1])
     return body
+
+
+def _rewrap_dropped_meta_goals(call: ast.Call, ctx) -> None:
+    """A goal lowered through a dropped import whose plain name is a special
+    form (``once(X)`` with once/1 imported, then ``use_module(m, [])``): its
+    arguments were lowered as DATA, the import's; the special form takes
+    goals there, so each such argument becomes ``call(Arg)`` -- the ISO body
+    conversion :meth:`_ClauseLowering._meta_goal` also lowers to."""
+    kws = {kw.arg: kw for kw in call.keywords}
+    func, args = kws.get("func"), kws.get("args")
+    if func is None or args is None or not isinstance(args.value, ast.List):
+        return
+    f = func.value
+    if not (isinstance(f, ast.Call) and isinstance(f.func, ast.Name)
+            and f.func.id == _DOLLAR + "LoadName"):
+        return
+    name_kw = next((kw for kw in f.keywords if kw.arg == "name"), None)
+    if (name_kw is None or not isinstance(name_kw.value, ast.Constant)
+            or name_kw.value.value not in ctx.dropped_keys):
+        return
+    local = name_kw.value.value.rsplit(".", 1)[1]
+    elts = args.value.elts
+    position = kws["position"].value if "position" in kws else _const(None)
+    for i in _META_GOAL_ARGS.get((local, len(elts)), ()):
+        elts[i] = _node(
+            "Call",
+            func=_node("LoadName", name=_const("call"), position=position),
+            args=ast.List(elts=[elts[i]], ctx=ast.Load()),
+            kwargs=ast.List(elts=[], ctx=ast.Load()),
+            position=position)
 
 
 def _has_chars(t) -> bool:
