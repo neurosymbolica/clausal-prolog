@@ -9,6 +9,17 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Breaking
 
+- **`entailed/1` with an argument that is no relation raises, instead of
+  failing** (2026-10-20). Behaviour change, on both CLP(Q) solvers and in
+  every surface (also `clpq.entailed/1`): `entailed(X)` with `X` unbound
+  raises `instantiation_error`, and `entailed(foo)`, `entailed(f(a, b))`
+  or `{X =< 1}, entailed(X \= 2)` raise `type_error(constraint, T)`, as
+  SICStus and clp(q,r) 1.3.3's `entailed/1` do. They used to fail
+  silently, so a misspelt relation read as "not entailed". A conjunction
+  or disjunction of relations, which SICStus reads, still fails. Pinned
+  by `tests/test_clpq_error_terms.py` (`test_clausal_case[entailed_*]`,
+  `test_seam_entailed_of_*`).
+
 - **A `term_expansion/4` head pattern matches facts only** (2026-10-20).
   A bare head pattern such as `p(X)` was also tried on a RULE's head, and
   its answer wrapped into facts: `term_expansion(p(X), [p(X)], S, S)`
@@ -723,8 +734,8 @@ surface described in [docs/public-api.md](docs/public-api.md).
   (`('=<', X, 5)`), so every call failed silently. Both now read a cell
   whose functor is `=<`, `<`, `>=`, `>`, `=:=`, `=` or `=\=`, including
   one built at run time (`C = (X =< 5), entailed(C)`); anything else still
-  fails, as before. The legacy solver also answered `false` for a
-  disequality when one side of the store was unbounded:
+  failed (it now raises: see Breaking). The legacy solver also answered
+  `false` for a disequality when one side of the store was unbounded:
   `{A =< 4}, entailed(A =\= 5)` (the SICStus manual's example) now holds.
   Still open on the legacy solver only: a strict relation implied by a
   strict bound (`{X > 2}, entailed(X > 2)`), see

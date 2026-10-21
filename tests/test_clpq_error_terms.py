@@ -1,13 +1,19 @@
 """CLP(Q) errors are ISO error terms, and the legacy solver answers as the
 port does where it used to raise a Python exception.
 
-The legacy solver raised bare Python exceptions (TypeError, ValueError)
-that ``catch/3`` saw as Python objects.  Each case now answers what the
-port (``CLAUSAL_CLPQ=holzbaur``) answers: a non-linear relation is not
-entailed, a zero divisor fails a post and an optimum and makes
-``entailed`` hold (its negation cannot be posted), and in_q/3's bounds,
-a float binding and a block node that is no constraint raise the port's
-error terms.
+Two groups:
+
+- ``entailed/1`` (and ``clpq.entailed/1``) with an argument that is not a
+  relation: an unbound argument raises ``instantiation_error`` and any other
+  non-relation ``type_error(constraint, T)``, as nf.pl's negate/2 does in
+  clp(q,r) 1.3.3 (and SICStus).  It used to fail silently on both solvers.
+- The legacy solver raised bare Python exceptions (TypeError, ValueError)
+  that ``catch/3`` saw as Python objects.  Each case now answers what the
+  port (``CLAUSAL_CLPQ=holzbaur``) answers: a non-linear relation is not
+  entailed, a zero divisor fails a post and an optimum and makes
+  ``entailed`` hold (its negation cannot be posted), and in_q/3's bounds,
+  a float binding and a block node that is no constraint raise the port's
+  error terms.
 
 The in-process tests run under the solver CLAUSAL_CLPQ selects (run the
 file under both); ``test_clausal_program_under_each_solver`` runs the
@@ -37,6 +43,23 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 #: case name -> the outcome expected, as Clausal Prolog source: true, false
 #: or caught(Error).  outcome/2 below computes each.
 EXPECTED = {
+    # entailed/1 of a term that is not a relation.
+    "entailed_unbound": "caught(error(instantiation_error, _))",
+    "entailed_unbound_built_at_run_time":
+        "caught(error(instantiation_error, _))",
+    "entailed_atom": "caught(error(type_error(constraint, foo), _))",
+    "entailed_number": "caught(error(type_error(constraint, 1), _))",
+    "entailed_compound": "caught(error(type_error(constraint, f(a, b)), _))",
+    "entailed_three_argument_compound":
+        "caught(error(type_error(constraint, f(a, b, c)), _))",
+    "entailed_term_inequality":
+        "caught(error(type_error(constraint, _ \\= 2), _))",
+    "entailed_structural_equality":
+        "caught(error(type_error(constraint, _ == 2), _))",
+    "entailed_is": "caught(error(type_error(constraint, _ is 2), _))",
+    "entailed_list": "caught(error(type_error(constraint, [_ =< 1]), _))",
+    "module_entailed_unbound": "caught(error(instantiation_error, _))",
+    "module_entailed_atom": "caught(error(type_error(constraint, foo), _))",
     # A relation is still read.
     "entailed_relation_holds": "true",
     "entailed_relation_built_at_run_time": "true",
@@ -73,6 +96,18 @@ EXPECTED = {
 }
 
 CASES = r"""
+case(entailed_unbound) :- entailed(_).
+case(entailed_unbound_built_at_run_time) :- C = _, entailed(C).
+case(entailed_atom) :- entailed(foo).
+case(entailed_number) :- entailed(1).
+case(entailed_compound) :- entailed(f(a, b)).
+case(entailed_three_argument_compound) :- entailed(f(a, b, c)).
+case(entailed_term_inequality) :- {X =< 1}, entailed(X \= 2).
+case(entailed_structural_equality) :- {X =< 1}, entailed(X == 2).
+case(entailed_is) :- {X =< 1}, entailed(X is 2).
+case(entailed_list) :- {X =< 1}, entailed([X =< 1]).
+case(module_entailed_unbound) :- clpq:entailed(_).
+case(module_entailed_atom) :- clpq:entailed(foo).
 case(entailed_relation_holds) :- {X =< 1}, entailed(X =< 2).
 case(entailed_relation_built_at_run_time) :- {X =< 1}, C = (X =< 2), entailed(C).
 case(entailed_nonlinear_disequality) :- {A =< 4}, entailed(A*A =\= 5).
@@ -174,6 +209,20 @@ def _raised(call_):
     with pytest.raises(LogicException) as caught:
         call_()
     return caught.value.term
+
+
+@pytest.mark.parametrize("predicate", ["holds", "module_holds"])
+def test_seam_entailed_of_an_unbound_argument_raises(seam_module, predicate):
+    assert _raised(lambda: _succeeds(predicate, Var(), module=seam_module)) \
+        == instantiation_error("entailed/1")
+
+
+@pytest.mark.parametrize("predicate", ["holds", "module_holds"])
+@pytest.mark.parametrize("term", ["foo", 1, ("f", "a", "b"),
+                                  ("f", "a", "b", "c"), ("$chars", "abc")])
+def test_seam_entailed_of_a_non_relation_raises(seam_module, predicate, term):
+    assert _raised(lambda: _succeeds(predicate, term, module=seam_module)) \
+        == type_error("constraint", term, "entailed/1")
 
 
 def test_seam_entailed_of_a_nonlinear_relation_is_false(seam_module):

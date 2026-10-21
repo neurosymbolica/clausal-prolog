@@ -7,6 +7,9 @@ in_q/1, in_q/3, maximize/2, minimize/2."""
 from __future__ import annotations
 
 from clausal.logic.builtins._registry import _builtin
+from clausal.logic.exceptions import (
+    LogicException, instantiation_error, type_error)
+from clausal.logic.variables import is_var
 
 
 @_builtin("dif", 2)
@@ -284,7 +287,13 @@ def _entailed_relation(term):
     compound cell (``('=<', X, 5)``: ``X =< 5`` in Clausal Prolog and
     ISO Prolog, or a relation built at run time).  Matching only the nodes
     made every Clausal Prolog call fail (todo/clausal-surface-gaps-found-
-    moving-the-docs-2026-10-17.md, engine bugs, item 2)."""
+    moving-the-docs-2026-10-17.md, engine bugs, item 2).
+
+    An unbound argument raises ``instantiation_error`` and any other term
+    that is no relation ``type_error(constraint, T)``, as nf.pl's negate/2
+    does (clauses 1 and 11); both used to fail silently.  A conjunction or
+    disjunction (``,``/``;``, a seam chain) is a constraint nf.pl reads but
+    these builtins do not yet: it still answers None, not an error."""
     global _ENTAILED_NODE_RELATIONS
     if _ENTAILED_NODE_RELATIONS is None:
         from clausal.pythonic_ast.nodes import (  # noqa: PLC0415
@@ -298,7 +307,24 @@ def _entailed_relation(term):
     if (type(term) is tuple and len(term) == 3
             and term[0] in _ENTAILED_CELL_RELATIONS):
         return term
+    if is_var(term):
+        raise LogicException(instantiation_error("entailed/1"))
+    if not _is_entailed_conjunction(term):
+        raise LogicException(type_error("constraint", term, "entailed/1"))
     return None
+
+
+def _is_entailed_conjunction(term):
+    """True for a ``,``/``;`` cell or a seam chain or goal tuple: nf.pl's
+    negate/2 clauses 2 and 3, left failing rather than refused."""
+    from clausal.pythonic_ast.nodes import CompareChain  # noqa: PLC0415
+    if type(term) is CompareChain:
+        return True
+    if type(term) is tuple and term:
+        if type(term[0]) is not str:
+            return True
+        return len(term) == 3 and term[0] in (",", ";")
+    return False
 
 
 @_builtin("entailed", 1)

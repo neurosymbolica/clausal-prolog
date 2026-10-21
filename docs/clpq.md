@@ -250,8 +250,11 @@ Supported relations: `=<`, `>=`, `<`, `>`, `=:=` (or `=`), `=\=`. The relation
 may also be built at run time (`C = (X =< 5), entailed(C)`). In the seam they
 are `<=`, `>=`, `<`, `>`, `==`, `!=`: `entailed(X <= 5)`.
 
-A non-linear relation (`entailed(A*A =\= 5)`) is not entailed: the call
-fails.
+As in SICStus, an unbound argument raises `instantiation_error` and a term that
+is no relation (`entailed(foo)`, or `entailed(X \= 2)` in Clausal Prolog) raises
+`type_error(constraint, T)`. A non-linear relation (`entailed(A*A =\= 5)`) is
+not entailed: the call fails. A conjunction or disjunction of relations
+(`entailed((X =< 2, X =< 3))`), which SICStus reads, is not read yet: it fails.
 
 ### int_minimize/3
 
