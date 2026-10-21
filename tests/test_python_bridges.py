@@ -1621,6 +1621,125 @@ def test_mark_directives_carry_only_constants():
         assert _audit(other), attr
 
 
+# ── the audit memo: one audit per (file, content, engine), replayed ─────────
+#
+# A module retried after a failed import re-lowers its use_module
+# directives, and each one re-audits its ``.seam`` dependency from scratch
+# (the seam compile plus the plumbing shapes); at thousands of clauses that
+# is seconds per retry.  ``audit_routes`` now memoises the audit per file
+# content, replaying the module questions it asked against the live
+# environment, so a cached verdict is exactly a fresh one's.
+
+
+def _transform_counter(monkeypatch):
+    from clausal import import_hook
+    real = import_hook.transform_seam_source
+    calls = []
+
+    def counted(source, filename, *a, **k):
+        calls.append(filename)
+        return real(source, filename, *a, **k)
+
+    monkeypatch.setattr(import_hook, "transform_seam_source", counted)
+    return calls
+
+
+def test_an_unchanged_seam_is_compiled_for_the_audit_once(proj, monkeypatch):
+    from clausal import python_bridges as pb
+    calls = _transform_counter(monkeypatch)
+    path = str(proj.seam("lib", "-module(@lib, [p/1])\np(1),\np(2),\n"))
+    first = pb.audit_routes(path)
+    second = pb.audit_routes(path)
+    assert first == second == ([], [])
+    assert calls == [path]
+
+
+def test_an_edited_seam_is_re_audited_whatever_its_timestamps(proj):
+    """Content, not mtime, keys the memo: the same length, written back
+    with the original mtime_ns (a coarse or skewed clock), is seen."""
+    from clausal import python_bridges as pb
+    clean = "-module(@lib, [p/1])\np(X) <- (X is   abs(-1))\n"
+    dirty = "-module(@lib, [p/1])\np(X) <- (X is ++abs(-1))\n"
+    assert len(clean) == len(dirty)
+    path = proj.seam("lib", clean)
+    before = pb.audit_routes(str(path))
+    assert before == ([], [])
+    st = path.stat()
+    path.write_text(dirty.replace("@", proj.prefix + "_"))
+    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns))
+    assert path.stat().st_size == st.st_size
+    assert path.stat().st_mtime_ns == st.st_mtime_ns
+    after = pb.audit_routes(str(path))
+    assert after != before
+    assert ("python_call", 2) in after[0]
+    # and back: the old content's verdict again, not the new one's
+    path.write_text(clean.replace("@", proj.prefix + "_"))
+    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns))
+    assert pb.audit_routes(str(path)) == before
+
+
+def test_a_memoised_verdict_follows_the_modules_it_asked_about(
+        proj, monkeypatch):
+    """The audit's module questions (is X a module, is p its export) are
+    answered by OTHER files; a memo hit replays them live, and falls back
+    to a fresh audit when an answer changed."""
+    from clausal import python_bridges as pb
+    calls = _transform_counter(monkeypatch)
+    proj.seam("lib", "-module(@lib, [p/1])\np(1),\n")
+    user = str(proj.seam("user", "-module(@user, [t/1])\n"
+                                 "-import_from(@lib, [p])\nt(X) <- (p(X))\n"))
+    assert pb.audit_routes(user)[0] == []
+    children = pb.audit_routes(user)[1]
+    assert [c[0] for c in children] == [proj.n("lib")]
+    assert calls == [user]
+    # lib stops exporting p: user is unchanged, its verdict is not
+    proj.seam("lib", "-module(@lib, [r/1])\nr(1),\n")
+    routes, _ = pb.audit_routes(user)
+    assert ("non_export", 2) in routes
+    pb._AUDITS.clear()
+    assert pb.audit_routes(user) == (routes, children)
+    # lib exports p again: the first verdict, replayed
+    proj.seam("lib", "-module(@lib, [p/1])\np(1),\n")
+    assert pb.audit_routes(user) == ([], children)
+
+
+def test_the_audit_memo_is_bounded(proj, monkeypatch):
+    from clausal import python_bridges as pb
+    monkeypatch.setattr(pb, "_AUDITS_LIMIT", 3)
+    pb._AUDITS.clear()
+    for i in range(5):
+        pb.audit_routes(str(proj.seam(f"m{i}", f"-module(@m{i}, [p/1])\n"
+                                               f"p({i}),\n")))
+    assert len(pb._AUDITS) == 3
+
+
+def test_a_module_retried_after_a_failed_import_does_not_recompile_its_dependency(
+        proj, monkeypatch):
+    """The reported case: a Clausal Prolog module whose import fails after
+    its use_module (a top-level ``t(a), t(b).`` defines ,/2) is retried;
+    each retry re-lowers use_module, and the dependency's audit comes from
+    the memo, with the same error every time."""
+    from clausal.python_bridges import _AUDITS
+    _AUDITS.clear()
+    calls = _transform_counter(monkeypatch)
+    lib = str(proj.seam("lib", "-module(@lib, [q/1])\nq(1),\nq(2),\n"))
+    proj.clausal("main", ":- use_module(@lib, [q/1]).\n",
+                 "t(X) :- q(X).\nt(a), t(b).\n")
+    first = _refused(proj, "main")
+    assert "permission_error(modify, static_procedure, ,/2)" in first
+    n = calls.count(lib)
+    assert n >= 1
+    second = _refused(proj, "main")
+    assert second == first
+    assert calls.count(lib) == n
+    # Not the bridge audit's memo but the dependency's edit: a retry
+    # after the dependency turned into a bridge is refused for that.
+    proj.seam("lib", "import os\n-module(@lib, [q/1])\n"
+                     "q(X) <- (X is ++os.getcwd())\n")
+    third = _refused(proj, "main")
+    assert REFUSAL.format(m=proj.n("lib")) in third
+
+
 def test_plumbing_is_recognised_by_its_head_before_its_shape():
     """``_Audit.plumbing`` compares a statement's full canonical shape
     with the compiler builders' only when its outermost callee matches

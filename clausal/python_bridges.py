@@ -38,11 +38,13 @@ module" means; a sandbox mode reuses it.
 from __future__ import annotations
 
 import ast
+import collections
 import hashlib
 import importlib.machinery
 import os
 import re
 import sys
+import threading
 from dataclasses import dataclass, field
 
 __all__ = [
@@ -1087,9 +1089,7 @@ def audit_checker(routes: list, children: list):
     modules to walk into *routes* / *children*."""
     module_ok = _module_checker(routes, children)
 
-    def check_module(kind, a, b, node) -> bool:
-        from clausal.seam_audit import node_line  # noqa: PLC0415
-        line = node_line(node)
+    def check(kind, a, b, line) -> bool:
         if kind == "module":
             return module_ok(_module_path(a), line)[0]
         if kind == "name":
@@ -1102,21 +1102,73 @@ def audit_checker(routes: list, children: list):
             return ok
         return _chain_ok(tuple(a.split(".")), line, module_ok, routes)
 
+    def check_module(kind, a, b, node) -> bool:
+        from clausal.seam_audit import node_line  # noqa: PLC0415
+        return check(kind, a, b, node_line(node))
+
+    # The same question by its line alone: what a memoised audit replays.
+    check_module.by_line = check
     return check_module
+
+
+#: (path, sha256 of its text, the audit's engine tables) -> (the audit's
+#: own routes, the module questions it asked, in order, with their
+#: answers): a memo of :func:`audit_routes`, bounded, most recent last.
+_AUDITS: "collections.OrderedDict" = collections.OrderedDict()
+_AUDITS_LIMIT = 128
+_AUDITS_LOCK = threading.Lock()
 
 
 def audit_routes(path: str) -> "tuple[list, list]":
     """THE DECIDER: ``(routes, seam children)`` of the audit of the FINAL
     generated Python of the ``.seam`` file at *path*
     (:mod:`clausal.seam_audit`), its module questions answered by the
-    allow-list rules here.  No routes = Python-free."""
+    allow-list rules here.  No routes = Python-free.
+
+    Memoised per CONTENT (:data:`_AUDITS`; a rewrite with the same size
+    and timestamps is still a new file), and replayed, never trusted: the
+    audit's own verdict is a function of the generated tree (the seam
+    compiler's, a function of the source and the engine), the engine
+    tables (:func:`clausal.seam_audit.audit_tables`, in the key) and the
+    answers to the module questions it asked (is ``m`` a module, is ``p``
+    its export -- other files' content).  A hit asks those questions
+    again, in order, of a fresh checker: the same answers give the same
+    run, so its verdict and the checker's routes and children are exactly
+    a fresh audit's; a different answer discards the memo and audits
+    afresh.  A source that does not compile is never memoised."""
     from clausal import seam_audit  # noqa: PLC0415
-    routes: list = []
-    children: list = []
-    check_module = audit_checker(routes, children)
     with open(path, encoding="utf-8", errors="replace") as f:
         source = f.read()
-    found, _ = seam_audit.audit_source(source, path, check_module)
+    key = (path, hashlib.sha256(source.encode("utf-8")).hexdigest(),
+           seam_audit.audit_tables())
+    with _AUDITS_LOCK:
+        hit = _AUDITS.get(key)
+    if hit is not None:
+        found, asked = hit
+        routes, children = [], []
+        check = audit_checker(routes, children).by_line
+        if all(check(kind, a, b, line) == answer
+               for kind, a, b, line, answer in asked):
+            with _AUDITS_LOCK:
+                if key in _AUDITS:
+                    _AUDITS.move_to_end(key)
+            return routes + list(found), children
+    routes, children = [], []
+    check_module = audit_checker(routes, children)
+    asked: list = []
+
+    def recording(kind, a, b, node):
+        answer = check_module(kind, a, b, node)
+        asked.append((kind, a, b, seam_audit.node_line(node), answer))
+        return answer
+
+    found, _ = seam_audit.audit_source(source, path, recording)
+    if found != [("uncompilable", 0)]:
+        with _AUDITS_LOCK:
+            _AUDITS[key] = (tuple(found), tuple(asked))
+            _AUDITS.move_to_end(key)
+            while len(_AUDITS) > _AUDITS_LIMIT:
+                _AUDITS.popitem(last=False)
     return routes + found, children
 
 

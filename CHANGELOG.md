@@ -374,6 +374,31 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A module retried after a failed import no longer recompiles its
+  `.seam` dependencies for the Python-bridge audit** (2026-10-21,
+  performance). A failed import is not cached, so every retry of a
+  `.clausal` module re-lowers its `use_module` directives, and each one
+  re-ran the bridge audit of its `.seam` dependency from scratch: a seam
+  compile plus a deep copy of every top-level statement (the plumbing
+  shape test), 0.3 s per retry at 400 clauses and 2.5 s at 3000. The
+  audit's verdict is now memoised per file content
+  (`python_bridges.audit_routes`: sha256 of the text, so an edit with the
+  same size and timestamps is still seen; the engine tables it reads are in
+  the key; bounded, process-local) and *replayed*, never trusted: the
+  module questions the audit asked (is `m` a module, is `p` its export,
+  answered by other files) are asked again of a fresh checker, and a
+  different answer audits afresh, so a hit returns exactly what a fresh
+  audit would. The plumbing shape test also settles a clause statement by
+  its callee alone before deep-copying it. Measured on a module that
+  imports a 3000-clause `.seam` library and fails after the import: of
+  500 retries, 23 completed in 60 s before; all 500 take 19 s after. The
+  valid module (one compile, then cache hits) and a single cold import are
+  unchanged (median 11.7 s → 10.6 s, the callee test's saving). Pinned by
+  `tests/test_python_bridges.py::test_an_edited_seam_is_re_audited_whatever_its_timestamps`,
+  `::test_a_memoised_verdict_follows_the_modules_it_asked_about`,
+  `::test_a_module_retried_after_a_failed_import_does_not_recompile_its_dependency`
+  and `::test_plumbing_is_recognised_by_its_head_before_its_shape`.
+
 - **The goal-taking builtins are one table** (2026-10-20):
   `clausal/logic/special_forms.py`'s `GOAL_BUILTINS` (aggregate_all/3,
   time_goal/1,2, phrase/2,3, maplist & co.), held to its readers by

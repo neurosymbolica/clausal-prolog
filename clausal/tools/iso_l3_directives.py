@@ -947,7 +947,9 @@ def _use_module(ctx: DirectiveContext, args, spans, span):
         # in the importer's project allowlist (clausal.python_bridges).
         # Asked on every load -- the cache-hit path re-lowers the
         # directives -- and from the FILE, so a module some .seam importer
-        # loaded first is judged the same.
+        # loaded first is judged the same.  (The audit of an unchanged
+        # file is memoised and replayed, python_bridges.audit_routes: a
+        # module retried after a failed import does not recompile it.)
         from clausal.python_bridges import bridge_refusal  # noqa: PLC0415
         refusal = bridge_refusal(ctx.source_path, dotted, found, record=True)
         if refusal is not None:
