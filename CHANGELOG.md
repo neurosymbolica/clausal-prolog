@@ -416,13 +416,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
   undeclared `'a'` a load error. Reification now records each atom's quote
   character beside the terms (`clausal.reflection.AtomSpellings`, via
   `reify_source(..., spellings=)`) and the renderer writes it back
-  (`render_source(term, spellings)`); an atom a rule built is bare only when
-  the bare name reads back as that atom (`score`, `a.b`) and quoted otherwise
-  (`'Foo'`, `'None'`, `'if'`). The driver also proves the result: every
-  rewritten statement is read back out of the formatted output and compared,
-  atom spellings included, with the term the rule produced, and a difference
-  refuses the file (`RewriteError: ... does not read back as the term the
-  rule produced`). Over the repository's 662 `.seam` files the shipped rules
+  (`render_source(term, spellings)`), the driver keeping each passed-through
+  cell so an item that writes both `'a'` and `a` gets each back as written;
+  an atom a rule built is bare only where the item itself spells that name
+  bare (the callee of an eta-reduced lambda) or it is a dotted name that
+  reads back bare, quoted otherwise (`'Foo'`, `'None'`, `'if'`, and an
+  unseen `'score'`: whether bare `score` is a predicate, a declared atom, an
+  imported module or a load error is the file's decision), and refused
+  inside a lambda with a parameter of that name. The driver also proves the
+  result: every rewritten statement is read back out of the formatted output
+  and compared with the term the rule produced, each passed-through atom's
+  quote by cell, and a difference refuses the file (`RewriteError: ... does
+  not read back as the term the rule produced`). Over the repository's 662 `.seam` files the shipped rules
   fire in 36; before the fix 24 of those came back with 141 quoted atoms
   written bare, now none. Pinned by `tests/rewrite/test_driver.py`
   (`test_a_passed_through_literal_keeps_its_spelling`,

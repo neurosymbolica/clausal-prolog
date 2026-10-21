@@ -476,17 +476,111 @@ def test_an_atom_mode_double_quoted_atom_keeps_its_quotes(unnecessary_lambda_rul
 
 def test_a_rule_built_atom_is_spelled_to_read_back_as_itself(tmp_path):
     """An atom the rule's template built has no source spelling.  It is bare
-    exactly when the bare name reads back as that atom (``score``, the
-    qualified ``a.b``) and quoted when it would read as something else."""
+    only where the item itself spells that name bare (``m``, the goal's own
+    functor) or it is a dotted name that reads back bare (``a.b``, a
+    qualified reference); every other one is quoted -- ``'score'`` as much
+    as ``'Foo'``, because whether a bare ``score`` is an atom, a predicate,
+    an imported module or a load error is the file's decision -- and a name
+    whose NFKC form differs (``ǅx`` would read back as the variable
+    ``Džx``) is never bare."""
     builder = tmp_path / f"builder{SEAM}"
     builder.write_text(textwrap.dedent("""\
         -double_quotes(chars)
         -import_from(reflection, [Clause, Goal, Atom])
 
-        rewrite_clause(Clause(H, [Goal('m', [_], KW)], P), Clause(H, [Goal('m', [Atom('Foo'), Atom('None'), Atom('if'), Atom('score'), Atom('a.b')], KW)], P)),
+        rewrite_clause(Clause(H, [Goal('m', [_], KW)], P), Clause(H, [Goal('m', [Atom('Foo'), Atom('None'), Atom('if'), Atom('score'), Atom('a.b'), Atom('m'), Atom('ǅx'), Atom('a.ǅx')], KW)], P)),
         """))
     result = rewrite_source("p(X) <- (m(X))\n", [builder])
-    assert "m('Foo', 'None', 'if', score, a.b)" in result.text
+    assert "m('Foo', 'None', 'if', 'score', a.b, m, 'ǅx', 'a.ǅx')" in result.text
+
+
+def test_a_callee_the_body_spells_bare_comes_out_bare(unnecessary_lambda_rules):
+    """``Atom(CALLEE)`` is rule-built, and bare because the lambda body
+    spelled the callee bare as a functor; a dotted callee likewise."""
+    result = rewrite_source("t(L) <- (maplist(((X) <- add_one(X)), L))\n", unnecessary_lambda_rules)
+    assert "maplist(add_one, L)" in result.text
+    result = rewrite_source("t(L) <- (maplist(((X) <- mod.add_one(X)), L))\n", unnecessary_lambda_rules)
+    assert "maplist(mod.add_one, L)" in result.text
+
+
+# The four shapes where the by-name table alone is of two minds -- the item
+# spells one name both ways -- and only the CELL can say which is which.
+# ``_resolved`` keeps the cell a rule passed through, so each comes back as
+# written; before, every one of these came out as the bare name twice.
+
+def test_a_mixed_spelling_item_keeps_each_spelling(unnecessary_lambda_rules):
+    src = "p(R) <- (pass_through(((X) <- q(X)), 'a', a, R))\n"
+    assert "pass_through(q, 'a', a, R)" in rewrite_source(src, unnecessary_lambda_rules).text
+
+
+def test_a_mixed_spelling_atom_mode_item_keeps_each_spelling(unnecessary_lambda_rules):
+    src = '-double_quotes(atom)\np(R) <- (pass_through(((X) <- q(X)), \'a\', R), m("a"))\n'
+    result = rewrite_source(src, unnecessary_lambda_rules).text
+    assert "pass_through(q, 'a', R)" in result
+    assert 'm("a")' in result
+
+
+def test_a_folded_atom_beside_its_bare_twin_keeps_its_quotes(head_fold_rules):
+    src = "r('a', S) <- (m(S2, M, a), S is 'a')\n"
+    assert rewrite_source(src, head_fold_rules).text == "r('a', 'a') <- (\n    m(S2, M, a)\n)\n"
+
+
+def test_a_folded_compound_keeps_the_spelling_of_each_atom_inside(head_fold_rules):
+    src = "r(S) <- (m(M), S is g('Foo', [a, 'a']))\n"
+    assert rewrite_source(src, head_fold_rules).text == "r(g('Foo', [a, 'a'])) <- (\n    m(M)\n)\n"
+
+
+def test_a_lambda_kept_beside_the_rewrite_keeps_its_atom_and_its_parameter(unnecessary_lambda_rules):
+    """``Y`` is the parameter and ``'Y'`` the atom; both ride through by cell."""
+    src = "p(R) <- (pass_through(((X) <- q(X)), ((Y) <- r(Y, 'Y')), R))\n"
+    assert "pass_through(q, ((Y,) <- r(Y, 'Y')), R)" in rewrite_source(src, unnecessary_lambda_rules).text
+
+
+def test_an_imported_module_name_and_its_atom_stay_apart(unnecessary_lambda_rules):
+    """Bare ``reflection`` is the module under ``-import_module``; the
+    quoted one is the atom.  Neither may become the other."""
+    src = "-import_module(reflection)\np(R) <- (pass_through(((X) <- q(X)), reflection, 'reflection', R))\n"
+    assert "pass_through(q, reflection, 'reflection', R)" in rewrite_source(src, unnecessary_lambda_rules).text
+
+
+def test_nfkc_sensitive_atoms_stay_quoted(unnecessary_lambda_rules):
+    """Bare ``ǅx`` would read back as the variable ``Džx`` and bare ``ﬁle``
+    as ``file``: the parser normalises identifiers."""
+    src = "p(R) <- (pass_through(((X) <- q(X)), 'ǅx', 'ﬁle', R))\n"
+    assert "pass_through(q, 'ǅx', 'ﬁle', R)" in rewrite_source(src, unnecessary_lambda_rules).text
+
+
+def test_a_rule_built_atom_named_like_a_lambda_parameter_is_refused():
+    """Inside ``((Y) <- r(Y))`` the parameter reference and the atom ``Y``
+    reify alike.  One the source wrote is spelled by its cell; one a rule
+    built is ambiguous, and refused rather than guessed."""
+    import dataclasses
+    from clausal.reflection import Atom, AtomSpellings, RenderError, reify_source, render_source, vfield
+    spellings = AtomSpellings()
+    (clause,) = reify_source("p(R) <- (pass_through(((Y) <- r(Y)), R))\n", spellings=spellings)
+    (goal,) = vfield(clause, "goals")
+    lam = vfield(goal, "args")[0]
+    assert "r(Y)" in render_source(goal, spellings)       # the source's own reference
+    rebuilt = dataclasses.replace(lam, body=("Goal", "r", [Atom("Y")], []))
+    with pytest.raises(RenderError, match="may be the parameter or the atom"):
+        render_source(("Goal", "pass_through", [rebuilt, vfield(goal, "args")[1]], []), spellings)
+
+
+def test_resolved_keeps_the_cells_a_rule_passed_through():
+    """``_deref_walk`` rebuilds every tuple; the driver's walk returns an
+    unchanged tuple itself, so a passed-through atom still answers by cell."""
+    from clausal.logic.solve import _deref_walk
+    from clausal.logic.variables import Trail, Var, unify
+    from clausal.reflection import Atom, Goal
+    from clausal.rewrite.driver import _resolved
+    atom = Atom("a")
+    bound = Var()
+    unify(bound, atom, Trail())
+    answer = Goal("p", [bound, atom, [atom]], [])
+    resolved = _resolved(answer)
+    assert resolved == Goal("p", [atom, atom, [atom]], [])
+    assert all(cell is atom for cell in (resolved[2][0], resolved[2][1], resolved[2][2][0]))
+    assert _deref_walk(answer)[2][1] is not atom
 
 
 def test_a_rebuilt_atom_is_spelled_as_the_clause_spells_it(tmp_path):

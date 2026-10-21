@@ -3,13 +3,20 @@
 **Status: FIXED 2026-10-21 (branch fix/rewrite-keeps-quoted-atoms-2026-10-21).**
 Candidate 2, as a side table rather than a flag: `clausal.reflection.AtomSpellings`
 records each atom's quote character beside the terms (`reify_source(...,
-spellings=)`, keyed by the Atom cell, then by name within the item), and
-`render_source(term, spellings)` writes it back; an atom a rule built is bare
-only when the bare name reads back as that atom (`_reads_back_bare`). The
-driver reifies each clause with its table, renders through it, and then reads
-every rewritten statement back out of the formatted output and compares it,
-spellings included, with the rule's term (`driver._assert_reads_back`), refusing
-the file on any difference. Not a flag on `Atom` because the engine tests "is
+spellings=)`, keyed by the Atom cell, then by name within the item -- atoms and
+functors), and `render_source(term, spellings)` writes it back. The driver
+resolves a rule's answer with a walk that keeps an unchanged tuple
+(`driver._resolved`; `_deref_walk` rebuilds every tuple and would lose the
+cell), so a passed-through atom is spelled by its cell even in an item that
+writes `'a'` and `a` both. An atom a rule built is bare only where the item
+itself spells that name bare (`Atom(CALLEE)` for a callee the lambda body
+spelled bare), quoted where the item spells it two ways or never (a bare
+`score` may be a predicate, a declared atom, an imported module or a load
+error, and `ǅx` normalises to the variable `Džx`), bare for an unseen dotted
+name that reads back bare, and refused inside a lambda with a parameter of that
+name. The driver then reads every rewritten statement back out of the formatted
+output and compares it with the rule's term (`driver._assert_reads_back`), each
+passed-through atom's quote by cell, refusing the file on any difference. Not a flag on `Atom` because the engine tests "is
 this an atom" by exact `str` type (a `str` subclass name a rule handed to
 `atom_length/2` would stop being an atom) and a third field would break every
 `Atom("a") == reified` comparison. Pinned in
@@ -22,9 +29,10 @@ this an atom" by exact `str` type (a `str` subclass name a rule handed to
 quoted atoms respelled before, 0 after). The dotted case is confirmed: `'a.b'`
 came back as the qualified reference `a.b`; it now stays `'a.b'`. Still open,
 and now REFUSED by the read-back check rather than written: a quoted atom KEY
-of an all-constant dict literal (`p({'a': 1})`) reifies as the raw key string
-and renders as the string `{"a": 1}` -- the dict representation, not the
-renderer, decides that one.
+of a dict literal whose keys are all constants (`{'a': 1}`, and `{'a': R}` too:
+the value does not matter) reifies as the raw key string and renders as the
+string `{"a": 1}` -- the dict representation, not the renderer, decides that
+one.
 
 Filed 2026-10-21, found while reviewing the clausal-fmt quote-spelling fix
 (`fix/fmt-keeps-quote-style-2026-10-20`). Pre-existing: it reproduces the same

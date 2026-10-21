@@ -59,9 +59,10 @@ from clausal.fmt.comments import (
 )
 from clausal.fmt.emit import format_source
 from clausal.import_hook import _load_module
-from clausal.logic.cells import chars_text, is_chars
-from clausal.logic.solve import _deref_walk, call
-from clausal.logic.variables import Var, deref
+from clausal.logic.cells import chars_text, flat_carrier, is_chars
+from clausal.logic.predicate import is_term_instance, term_field_names
+from clausal.logic.solve import call
+from clausal.logic.variables import Var, deref, is_var
 from clausal.reflection import (
     _LAMBDA_ARROW_MARKER,
     Atom,
@@ -239,8 +240,10 @@ def _reads_back_as(meant, read, meant_spellings, read_spellings):
     Structural equality, with three allowances for what a re-read cannot
     reproduce: item and escape positions (the clause moved), the numbering
     of anonymous variables (per clause, by encounter -- a dropped ``_``
-    renumbers the rest), and an atom spelling the rule's term never had
-    (a rule-built atom; one it passed through must come back as written).
+    renumbers the rest), and the spelling of an atom the rule BUILT.  An
+    atom the rule passed through -- the very cell the reifier recorded,
+    which ``_resolved`` preserves -- must come back with the quote it was
+    read with, whatever the item's other spellings of that name say.
     Everything else must be the same: an atom read back as a variable, a
     Python constant or a string is exactly what this exists to catch.
 
@@ -257,11 +260,10 @@ def _reads_back_as(meant, read, meant_spellings, read_spellings):
     if is_v(meant, Atom) or is_v(read, Atom):
         if not (is_v(meant, Atom) and is_v(read, Atom)):
             return meant, read
-        name = vfield(meant, "name")
-        if name != vfield(read, "name"):
+        if vfield(meant, "name") != vfield(read, "name"):
             return meant, read
-        quote = meant_spellings.quote_of(meant, name)
-        if quote is not None and quote != read_spellings.quote_of(read, name):
+        quote = meant_spellings.cell_quote(meant)
+        if quote is not None and quote != read_spellings.cell_quote(read):
             return meant, read
         return None
     if is_v(meant, Variable) or is_v(read, Variable):
@@ -353,8 +355,48 @@ def _first_rewrite(rules, reified_clause):
     for rule, module in rules:
         out = Var()
         for _ in call("rewrite_clause", reified_clause, out, module=module):
-            return _deref_walk(out), rule
+            return _resolved(out), rule
     return None
+
+
+def _resolved(term):
+    """The rule's answer with every bound variable replaced by its value --
+    ``solve._deref_walk``, except that a tuple nothing changed inside is
+    returned AS IS.
+
+    ``_deref_walk`` (and its C twin) rebuild every tuple, which would make
+    every ``Atom`` cell the rule passed through a new object and leave the
+    ``AtomSpellings`` table nothing to answer by identity for: each
+    passed-through atom would fall to the by-name layer, which cannot tell
+    the ``'a'`` from the ``a`` of an item that writes both.  Keeping the
+    object is what makes "the rule did not touch this atom" knowable.
+    """
+    term = deref(term)
+    if is_var(term):
+        return term
+    if isinstance(term, list):
+        return [_resolved(item) for item in term]
+    if isinstance(term, tuple):
+        if is_chars(term):
+            return flat_carrier(term)
+        items = [_resolved(item) for item in term]
+        if all(new is old for new, old in zip(items, term)):
+            return term
+        return tuple(items)
+    if isinstance(term, dict):
+        return {_resolved(key): _resolved(value) for key, value in term.items()}
+    if isinstance(term, (set, frozenset)):
+        return type(term)(_resolved(item) for item in term)
+    hook = getattr(term, "__walk__", None)
+    if hook is not None:
+        return hook()
+    if is_term_instance(term):
+        # A ``pythonic_ast`` node (an operator, ``Or``/``Not``, a lambda):
+        # rebuilt from its resolved fields, as ``_deref_walk`` does.
+        return type(term)(**{
+            name: _resolved(getattr(term, name)) for name in term_field_names(term)
+        })
+    return term
 
 
 def _splice(table, old_statement, reified_in, reified_out, position, spellings):
