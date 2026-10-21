@@ -180,9 +180,11 @@ outcome(N, R) :-
            (L == [], R = false ; L \== [], R = true)),
           E, R = caught(E)).
 
-check(N) :- expected(N, Want), outcome(N, Got), Got = Want.
+check(N) :-
+    expected(N, Want), outcome(N, Got),
+    (Got = Want ; Got \= Want, write(failed(N, Got)), nl, fail).
 
-all_cases :- forall(expected(N, _), check(N)).
+all_cases :- findall(N, (expected(N, _), \+ check(N)), []).
 """)
 
 
@@ -215,8 +217,10 @@ def test_clausal_program_under_each_solver(solver, tmp_path):
         [sys.executable, "-W", "ignore", "-m", "clausal", str(path),
          "-g", "all_cases"],
         cwd=ROOT, env=env, capture_output=True, text=True, timeout=120)
-    assert result.stdout.strip().splitlines()[-1:] == ["true."], (
-        result.stdout + result.stderr)
+    lines = result.stdout.strip().splitlines()
+    failed = [line for line in lines if line.startswith("failed(")]
+    assert lines[-1:] == ["true."] and not failed, (
+        "\n".join(failed) or result.stdout + result.stderr)
 
 
 # ---------------------------------------------------------------- the seam
