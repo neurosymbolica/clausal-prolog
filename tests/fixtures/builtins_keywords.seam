@@ -24,8 +24,8 @@ vec(1, 2),
 vec(3, 4),
 
 # THE FLIP (spec §6.4): the name positions of signature/3 and
-# unbound_keys/2 speak ATOMS, so the literals here are atoms — this file
-# is in the default `-double_quotes(atom)` mode on purpose.
+# unbound_keys/2 speak ATOMS, so the literals here are quoted atoms on
+# purpose.
 test('signature vec fields') <- (pred_params('vec', 2, PARAMS), PARAMS == ['x', 'y'])  # nv
 test('free fields unbound y') <- (free_fields(vec(1, Y_UNUSED), KEYS), 'y' in KEYS)  # nv
 test('vary vec x') <- (

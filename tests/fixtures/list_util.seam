@@ -30,10 +30,9 @@ test('zip empty') <- (zip_([], [1, 2], RESULT), RESULT == [])  # nv
 # ── replicate/3 ──────────────────────────────────────────────────────────────
 
 # F053 (C9 audit, option A): a list of CHAR elements promotes to a str
-# result.  THE FLIP (2026-09-06-atoms-as-cells-strings): "x" is the char ATOM
-# x in this ``-double_quotes(atom)`` module, and the promoted
-# result is the STRING "xxx" — which is the list ["x", "x", "x"] of char
-# atoms, and that is how this module can spell it.  The comparison is ``is``
+# result.  THE FLIP (2026-09-06-atoms-as-cells-strings): 'x' is the char
+# ATOM x, and the promoted result is the STRING "xxx" — which is the list
+# ['x', 'x', 'x'] of char atoms, and that is how this file spells it.  The comparison is ``is``
 # (unification), not ``==``: ``==`` is ARITHMETIC equality (ISO =:=), whose
 # ground non-numeric fallback is Python ``==``, and Python does not know
 # that a str and its char list are one term.
