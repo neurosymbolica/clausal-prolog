@@ -214,9 +214,11 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
                "plan exclusion #9: CPython-ast site"),
     AllowEntry("clausal/templating/*.py", None, "plan exclusion #9: CPython-ast site"),
     AllowEntry("clausal/tools/prolog_ast.py", None, "plan exclusion #9: CPython-ast site"),
-    AllowEntry("clausal/reflection.py", (1011, 1049),
+    AllowEntry("clausal/reflection.py", (1624, 1662),
                "plan exclusion #9: CPython-ast site (Embedded Python "
-               "classification, ~1027; note this is clausal/reflection.py, "
+               "classification, _PY_KINDS/_python_code_item; re-anchored "
+               "2026-10-21 when the atom-spelling table was added above it; "
+               "note this is clausal/reflection.py, "
                "NOT clausal/modules/reflection.py -- exclusion #13 below is "
                "the modules/ one)"),
     # 10. type(x).__name__-in-error-message sites (functor_fallback pattern

@@ -962,3 +962,66 @@ class TestRawCellRendering:
 
         node = render_ast(("point", 1, 2))
         assert reify_ast(node) == Goal("point", [1, 2], [])
+
+
+# ── Atom spellings ───────────────────────────────────────────────────────────
+# ``'a'``, an atom-mode ``"a"`` and bare ``a`` reify to one ``Atom("a")``; the
+# renderer writes each back as it was read when it is given the
+# ``AtomSpellings`` the reifier filled, and otherwise spells an atom so that
+# it reads back as that atom -- bare ``Foo`` is a variable, bare ``None`` is
+# Python's (todo/done/rewrite-rerender-spells-a-quoted-atom-bare-2026-10-21.md).
+
+
+class TestAtomSpellings:
+    @pytest.mark.parametrize("name, expected", [
+        ("score", "score"), ("a.b", "a.b"), ("fooBar", "fooBar"),
+        ("Foo", "'Foo'"), ("X", "'X'"), ("_x", "'_x'"), ("_", "'_'"),
+        ("None", "'None'"), ("True", "'True'"), ("False", "'False'"),
+        ("if", "'if'"), ("foo bar", "'foo bar'"), ("a.Foo", "'a.Foo'"),
+    ])
+    def test_a_rule_built_atom_is_bare_only_when_that_reads_back(self, name, expected):
+        from clausal.reflection import reify_ast
+        import ast
+        rendered = render_source(Atom(name))
+        assert rendered == expected
+        assert reify_ast(ast.parse(rendered, mode="eval").body, source=rendered) == Atom(name)
+
+    @pytest.mark.parametrize("literal", [
+        "'a'", "a", "'Foo'", "'_x'", "'None'", "'if'", "'a.b'", "a.b", "'foo bar'",
+    ])
+    def test_a_reified_atom_renders_with_the_quote_it_was_read_with(self, literal):
+        from clausal.reflection import AtomSpellings
+        spellings = AtomSpellings()
+        (fact,) = reify_source(f"p({literal}),", spellings=spellings)
+        assert render_source(fact, spellings) == f"p({literal}),"
+
+    def test_an_atom_mode_double_quoted_atom_renders_double_quoted(self):
+        from clausal.reflection import AtomSpellings
+        spellings = AtomSpellings()
+        fact = reify_source('-double_quotes(atom)\np("a"),', spellings=spellings)[-1]
+        assert vfield(vfield(fact, "head"), "args") == [Atom("a")]
+        assert render_source(fact, spellings) == 'p("a"),'
+        assert render_source(fact) == "p(a),"     # no table: the fallback spelling
+
+    def test_a_string_is_never_an_atom_spelling(self):
+        from clausal.reflection import AtomSpellings
+        spellings = AtomSpellings()
+        (fact,) = reify_source('p("s", \'s\'),', spellings=spellings)
+        assert vfield(vfield(fact, "head"), "args") == ["s", Atom("s")]
+        assert render_source(fact, spellings) == 'p("s", \'s\'),'
+        assert len(spellings) == 1
+
+    def test_a_lambda_parameter_reference_stays_bare_without_a_table(self):
+        """``add_one(X)`` in a lambda body reifies as ``Atom("X")`` -- the
+        parameter, not an atom -- and must not come back as ``'X'``."""
+        (clause,) = reify_source("t(L) <- (maplist(((X) <- add_one(X)), L))\n")
+        assert "add_one(X)" in render_source(clause)
+
+    def test_reify_ast_reads_an_expression_s_quotes_from_its_source(self):
+        from clausal.reflection import AtomSpellings, reify_ast
+        import ast
+        text = "f('Foo', x, \"s\")"
+        spellings = AtomSpellings()
+        term = reify_ast(ast.parse(text, mode="eval").body, source=text, spellings=spellings)
+        assert term == Goal("f", [Atom("Foo"), Atom("x"), "s"], [])
+        assert render_source(term, spellings) == text

@@ -61,7 +61,7 @@ Inside clauses:
 |---|---|
 | `Goal(NAME, ARGS, KWARGS)` | A predicate call *and* any compound term — heads, body goals, and structured arguments share this shape. `NAME` is the functor's spelling, a plain Python `str` — which is the atom (dotted for qualified calls, e.g. `'mod.pred'`); `KWARGS` is a list of `[name, value]` pairs. It is the same value `goal_functor/3` answers. |
 | `Variable(NAME)` | A logic variable, as a *ground* term — matchers inspect structure without binding anything. Anonymous variables are numbered `_1`, `_2`, … per clause. |
-| `Atom(NAME)` | A bare lowercase name. |
+| `Atom(NAME)` | An atom: a bare lowercase name, a quoted `'name'`, or a `"name"` under `-double_quotes(atom)` — all three spellings reify to the same term, so a rule matches the atom and not its typography. The spelling is kept beside the terms (`AtomSpellings`, filled by `reify_source(..., spellings=)` and written back by `render_source(term, spellings)`), so a tool that re-renders a clause into its own file writes each atom as it was read; without the table, an atom renders bare only when the bare name reads back as that atom (`score`), and quoted otherwise (`'Foo'`, `'None'`, `'if'`). |
 | `Escape(CODE, VARS, POSITION)` | A `++` Python escape. `CODE` is the escaped expression's source text; it is never evaluated. |
 | `FormatString(CODE, VARS, POSITION)` | A deferred f-string. |
 | `IfThenElse(CONDITION, THEN, OTHERWISE)` | A reified `If/3`. |

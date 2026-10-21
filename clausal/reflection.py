@@ -36,6 +36,15 @@ are numbered ``_1``, ``_2``, … per clause), so matchers can inspect clause
 structure without accidentally binding anything.  This differs from the
 runtime clause store, where heads hold real unbound ``Var`` objects.
 
+``'a'``, an atom-mode ``"a"`` and bare ``a`` all reify to ``Atom("a")``: one
+atom, one term.  How each was spelled is kept BESIDE the terms, in an
+``AtomSpellings`` table the reifier fills on request (``reify_source(...,
+spellings=)``) and the renderer writes back through (``render_source(term,
+spellings)``), so a tool that re-renders a clause into its own file writes
+every atom as it was read.  Without the table an atom is spelled so that it
+reads back as that atom: bare only when a bare name does (``score``), else
+``'Foo'`` / ``'None'`` / ``'if'``.
+
 ``Goal`` deliberately has no ``position`` field: goals are compared whole
 (``==``/unification) far more often than clauses, and an always-present
 position would make structurally identical goals compare unequal.  Item
@@ -49,6 +58,7 @@ import ast
 import copy
 import dataclasses
 import functools
+import keyword
 import types
 import typing
 import warnings
@@ -57,6 +67,7 @@ from clausal.logic.generated_names import bare_name_of
 from clausal.logic.cells import TUPLE_TAG as _CELL_TUPLE_TAG, CHARS_TAG as _CHARS_TAG, is_chars as _is_chars, chars_text as _chars_text
 from clausal.logic.variables import Var as _Var, deref, is_var
 from clausal.pythonic_ast import nodes as simple_ast
+from clausal.templating.quote_map import quote_of
 
 
 # Sentinel wrapping a rendered lambda body so nested clause arrows can be
@@ -66,6 +77,7 @@ _LAMBDA_ARROW_MARKER = "__clausal_lambda_arrow__"
 
 __all__ = [
     "Atom",
+    "AtomSpellings",
     "Clause",
     "Escape",
     "FormatString",
@@ -186,6 +198,94 @@ FormatString = _vocab_ctor("FormatString", _VOCAB_FIELDS["FormatString"])
 IfThenElse = _vocab_ctor("IfThenElse", _VOCAB_FIELDS["IfThenElse"])
 ModuleDirective = _vocab_ctor("ModuleDirective", _VOCAB_FIELDS["ModuleDirective"])
 PythonCode = _vocab_ctor("PythonCode", _VOCAB_FIELDS["PythonCode"])
+
+
+# ── Atom spellings ───────────────────────────────────────────────────────────
+# ``'a'``, ``"a"`` (under ``-double_quotes(atom)``) and bare ``a`` all reify to
+# ``Atom("a")``: the vocabulary spells ONE atom one way, so a rule matches the
+# term and not its typography (THE FLIP, ``_ClauseReifier.term``).  Rendering
+# needs the typography back, and "identifier-shaped" is not "reads back as this
+# atom": bare ``Foo`` and ``_x`` read as variables, bare ``None`` as Python's
+# ``None``, bare ``if`` does not parse, and a bare undeclared ``a`` is a load
+# error (todo/done/rewrite-rerender-spells-a-quoted-atom-bare-2026-10-21.md).
+#
+# The spelling is NOT carried on the term.  A ``str`` subclass for the name
+# would survive unification, but the engine tests "is this an atom" by EXACT
+# type (``cells.py``, ~200 sites), so a name a rule pulled out of an ``Atom``
+# and handed to ``atom_length/2`` or ``functor/3`` would stop being an atom.
+# A third ``Atom`` field would make every ``Atom("a") == reified`` in a rule's
+# tests and in the driver's goal correspondence compare unequal.  So it is a
+# SIDE TABLE, filled by the reifier and read by the renderer, keyed first by
+# the Atom CELL itself (a ground cell a rule passes through its variables
+# keeps its identity -- unification binds the object, ``_deref_walk`` keeps
+# leaves) and then by NAME within the reified item, for a cell a rule rebuilt
+# (``Atom(N)`` from a bound ``N``) when the item spells that name one way.
+
+
+class AtomSpellings:
+    """The quote character each ``Atom`` of one reified item was read with.
+
+    A recorded spelling is ``"'"``, ``'"'`` (an atom-mode ``"…"`` literal) or
+    ``""`` (a bare name, which is also how a lambda parameter reference and a
+    qualified ``mod.pred`` reify).  :meth:`quote_of` answers ``None`` for an
+    atom this table never saw -- one a rule built from its template -- and
+    the renderer then spells it so that it reads back as that atom
+    (:func:`_reads_back_bare`).
+    """
+
+    def __init__(self):
+        self._by_cell: dict[int, tuple] = {}
+        self._by_name: dict[str, set] = {}
+
+    def record(self, atom, quote):
+        """Remember that *atom* (an ``Atom`` cell) was spelled with *quote*."""
+        # The cell is kept alive by the entry, so its id() cannot be reused
+        # for as long as this table can answer for it.
+        self._by_cell[id(atom)] = (atom, quote)
+        self._by_name.setdefault(vfield(atom, "name"), set()).add(quote)
+
+    def quote_of(self, atom, name):
+        """*atom*'s recorded spelling, or ``None`` when it has none.
+
+        By identity first; then by *name* (the atom's raw name), when every
+        atom of that name in the item was spelled the same way, so a cell a
+        rule rebuilt from a name it took out of the item is written as the
+        item writes it.
+        """
+        entry = self._by_cell.get(id(atom))
+        if entry is not None and entry[0] is atom:
+            return entry[1]
+        try:
+            quotes = self._by_name.get(name)
+        except TypeError:  # an unhashable name is a rule bug the renderer reports
+            return None
+        if quotes is not None and len(quotes) == 1:
+            return next(iter(quotes))
+        return None
+
+    def __len__(self):
+        return len(self._by_cell)
+
+
+def _reads_back_bare(name: str) -> bool:
+    """Does the bare spelling *name* read back as the atom *name*?
+
+    The fallback for an atom with no recorded spelling.  Every dotted segment
+    must be an identifier that the seam reads as a NAME: not a keyword
+    (``if``, and ``None``/``True``/``False``, which read as Python constants),
+    not a logic-variable spelling (``Foo``, ``_x``: an uppercase or
+    underscore-led name is a variable wherever a value goes), and not the
+    ``_`` wildcard.  A dotted name that passes is a qualified reference,
+    which is what a dotted ``Atom`` a rule built stands for.
+    """
+    from clausal.templating.term_rewriting import _is_logic_var_name  # noqa: PLC0415
+
+    if not _is_dotted_identifier(name):
+        return False
+    return not any(
+        keyword.iskeyword(part) or part == "_" or _is_logic_var_name(part)
+        for part in name.split(".")
+    )
 
 
 # The vocabulary's field order, DERIVED from the declarations above so it
@@ -410,13 +510,27 @@ class _ClauseReifier:
     walrus-bound variable names and anonymous-variable numbering are scoped
     to the clause, mirroring logic-variable scope."""
 
-    def __init__(self, field_order=None):
+    def __init__(self, field_order=None, quote_map=None, spellings=None):
         self._vars = {}
         self._anon_count = 0
         # (functor, arity) → canonical field-name order (first definition wins),
         # shared across the clauses of one source so keyword heads canonicalize
         # to the runtime's field order (F010).
         self._field_order = {} if field_order is None else field_order
+        # The source's quote map (``quote_map.build_quote_map``) and the
+        # :class:`AtomSpellings` table to fill from it.  Without the map a
+        # literal's quote is unknown and nothing is recorded; without the
+        # table nothing is kept.  A bare name needs no map: its spelling is
+        # the absence of a quote.
+        self._quote_map = {} if quote_map is None else quote_map
+        self._spellings = spellings
+
+    def _atom(self, name, quote):
+        """``Atom(name)``, its spelling recorded when known and wanted."""
+        atom = Atom(name)
+        if quote is not None and self._spellings is not None:
+            self._spellings.record(atom, quote)
+        return atom
 
     # -- variables ----------------------------------------------------------
 
@@ -484,7 +598,11 @@ class _ClauseReifier:
             # one atom reified to two different vocabulary terms and the
             # renderer had no atom to render.
             if type(value) is str:
-                return Atom(value)         # STAGE 2: a str constant is the ATOM
+                # STAGE 2: a str constant is the ATOM.  Its quote character
+                # (the map answers None for a literal the compiler built,
+                # which has no position in this source) is recorded beside
+                # the term, never on it -- see ``AtomSpellings``.
+                return self._atom(value, quote_of(self._quote_map, node))
             if _is_chars(value):
                 return _chars_text(value)  # the carrier is the STRING: a str in the vocabulary
             return value
@@ -543,7 +661,7 @@ class _ClauseReifier:
             # runtime reference (defensively treated as an atom).
             if node.id in self._vars:
                 return self._vars[node.id]
-            return Atom(bare_name_of(node.id))
+            return self._atom(bare_name_of(node.id), "")
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
             return _const_value(node)
         if isinstance(node, ast.Call):
@@ -607,9 +725,9 @@ class _ClauseReifier:
         if name == "Call":
             return self._goal_call(kwargs)
         if name == "LoadName":
-            return Atom(_const_value(kwargs["name"]))
+            return self._atom(_const_value(kwargs["name"]), "")
         if name == "LoadAttr":
-            return Atom(_dotted_name(node))
+            return self._atom(_dotted_name(node), "")
         if name == "IfExpr":
             return IfThenElse(
                 self.term(kwargs["test"]),
@@ -829,6 +947,15 @@ class _ClauseRenderer:
     inverse of :class:`_ClauseReifier`.  Building fresh nodes; positions are
     filled by :func:`ast.fix_missing_locations` before unparse."""
 
+    def __init__(self, spellings=None):
+        # The :class:`AtomSpellings` the term was reified with, when the
+        # caller kept them; an atom it does not answer for is spelled so it
+        # reads back as itself (``_reads_back_bare``).
+        self._spellings = spellings
+        # The parameter names of each enclosing lambda being rendered,
+        # innermost last (``_lambda_ast``).
+        self._lambda_params: list = []
+
     # -- clause entry ---------------------------------------------------------
 
     def clause(self, term):
@@ -886,6 +1013,32 @@ class _ClauseRenderer:
             node = ast.Attribute(value=node, attr=part, ctx=ast.Load())
         return node
 
+    def _atom_ast(self, atom, name, display):
+        """An atom cell with raw *name* and *display* text, written the way it was read.
+
+        The spelling comes from the :class:`AtomSpellings` the term was
+        reified with: bare, ``'…'`` or (an atom-mode literal) ``"…"``, so the
+        output re-reads as the atom it rendered in the file it came from.
+        An atom with no recorded spelling -- one a rule built -- is bare
+        exactly when a bare name reads back as that atom
+        (:func:`_reads_back_bare`, or it names a parameter of an enclosing
+        lambda) and single-quoted otherwise: ``'foo bar'`` and ``'Foo'``
+        and ``'None'`` are that atom in every ``-double_quotes`` mode,
+        where bare ``Foo`` is a variable and bare ``None`` is Python's.
+        """
+        quote = (self._spellings.quote_of(atom, name)
+                 if self._spellings is not None else None)
+        if quote is None:
+            if any(display in params for params in self._lambda_params):
+                quote = ""      # a lambda parameter reference
+            else:
+                quote = "" if _reads_back_bare(display) else "'"
+        if quote == "" and _is_dotted_identifier(display):
+            return self._name_ast(display)
+        if quote == '"':
+            return _raw_source(_double_quoted(display))
+        return _raw_source(_single_quoted(display))
+
     def _parse_code(self, code, kind):
         """Re-parse an ``Escape``/``FormatString`` code string to an expression.
 
@@ -928,16 +1081,11 @@ class _ClauseRenderer:
             # prints via ``_name_ast``'s dotted-chain support) while the
             # RAW str keeps the separator everywhere else.
             from clausal.logic.atoms import demangle_for_display
-            display = demangle_for_display(vfield(value, "name"))
+            name = vfield(value, "name")
+            display = demangle_for_display(name)
             if not isinstance(display, str):
                 raise RenderError(f"cannot render non-string name: {display!r}")
-            if _is_dotted_identifier(display):
-                return self._name_ast(display)
-            # THE FLIP (spec §6.7/§7): an atom whose spelling is not an
-            # identifier renders SINGLE-quoted -- ``'foo bar'`` is an atom in
-            # every ``-double_quotes`` mode, so the output re-reads as the
-            # atom it rendered.  (Before this it was a ``RenderError``.)
-            return _raw_source(_single_quoted(display))
+            return self._atom_ast(value, name, display)
         if is_v(value, Goal):
             return self._goal_ast(value)
         if value is None or value is Ellipsis:
@@ -1019,10 +1167,10 @@ class _ClauseRenderer:
             from clausal.logic.atoms import demangle_for_display
             if len(value) == 1:
                 # An ATOM -- an arity-0 cell (spec §6.7).  It is a name, not
-                # a zero-argument call, so it renders as the bare name,
-                # exactly as the ``Atom`` case above renders a str atom;
-                # without this it came out as ``flag()``.
-                return self._name_ast(demangle_for_display(value[0]))
+                # a zero-argument call, so it renders as the ``Atom`` case
+                # above renders a str atom (bare only when that reads back
+                # as the atom); without this it came out as ``flag()``.
+                return self._atom_ast(value, value[0], demangle_for_display(value[0]))
             return ast.Call(
                 func=self._name_ast(demangle_for_display(value[0])),
                 args=[self.term(item) for item in value[1:]],
@@ -1291,9 +1439,18 @@ class _ClauseRenderer:
             elts=[ast.Name(id=n, ctx=ast.Load()) for n in param_names],
             ctx=ast.Load(),
         )
+        # A param reference in the body reifies as ``Atom(P)`` and is the
+        # PARAM only when written bare: with the names in scope, an atom of
+        # that name with no recorded spelling renders bare rather than
+        # ``'P'`` (which would be the atom P, a different term).
+        self._lambda_params.append(frozenset(param_names))
+        try:
+            body = self.term(node.body)
+        finally:
+            self._lambda_params.pop()
         marked_body = ast.Call(
             func=ast.Name(id=_LAMBDA_ARROW_MARKER, ctx=ast.Load()),
-            args=[self.term(node.body)],
+            args=[body],
             keywords=[],
         )
         return ast.Compare(
@@ -1515,7 +1672,8 @@ def _is_directive_stmt(stmt):
 # ── Public API ───────────────────────────────────────────────────────────────
 
 
-def reify_source(text, filename="<reflected>", double_quotes=None):
+def reify_source(text, filename="<reflected>", double_quotes=None,
+                 spellings=None):
     """Parse ``.seam`` source text and reify every top-level item.
 
     Pure: no directive execution, no imports of the target's dependencies,
@@ -1529,6 +1687,11 @@ def reify_source(text, filename="<reflected>", double_quotes=None):
     reifies one clause SEGMENT at a time -- the rewriter -- and whose
     segments therefore never contain the file's own directive.  ``None``
     means the engine default, as for a whole file that declares nothing.
+
+    *spellings* is an :class:`AtomSpellings` to fill with the quote
+    character each atom was read with, for a caller that will render the
+    terms back into the same file (:func:`render_source` takes it).  The
+    terms themselves do not change.
     """
     from clausal.templating.term_rewriting import EmbedTransformer
 
@@ -1575,7 +1738,10 @@ def reify_source(text, filename="<reflected>", double_quotes=None):
             and isinstance(call.func, ast.Name)
             and call.func.id == "$define_predicate"
         ):
-            clause = _ClauseReifier(field_order=field_order).clause(call.args[0])
+            clause = _ClauseReifier(
+                field_order=field_order, quote_map=transformer._quote_map,
+                spellings=spellings,
+            ).clause(call.args[0])
             items.append(clause)
             pos = vfield(clause, "position")
             if pos is not None:
@@ -1710,39 +1876,54 @@ def _tighten_nested_arrows(text):
     return text
 
 
-def reify_ast(node, source=None, double_quotes=None):
+def reify_ast(node, source=None, double_quotes=None, spellings=None):
     """Reify a single parsed Python AST node of ``.seam`` surface syntax.
 
     Statements round-trip through ``ast.unparse`` + :func:`reify_source`
     (``unparse`` renders the ``<-`` arrow as ``< -``, which is repaired);
     expressions reify directly in term context.  *double_quotes* is the
-    file's mode at the node (see :func:`reify_source`)."""
+    file's mode at the node and *spellings* an :class:`AtomSpellings` to
+    fill (see :func:`reify_source`).  *source* is the text *node* was
+    parsed from: for a statement it is reified instead of the unparse, and
+    for an expression it is where the quote characters are read from --
+    without it every text literal's spelling is unknown."""
     if isinstance(node, ast.Module):
         node = node.body[0]
     if isinstance(node, ast.Expression):
         node = node.body
     if isinstance(node, ast.stmt):
         text = source if source is not None else _unparse_clause(node)
-        items = reify_source(text, double_quotes=double_quotes)
+        items = reify_source(text, double_quotes=double_quotes,
+                             spellings=spellings)
         if not items:
             raise ReifyError(f"no reifiable item in: {text}")
         return items[0]
 
+    from clausal.templating.quote_map import build_quote_map
     from clausal.templating.term_rewriting import TermTransformer
 
-    ctor = TermTransformer(reify=True).visit(node)
-    return _ClauseReifier().term(ctor)
+    source_lines = source.splitlines(keepends=True) if source is not None else None
+    quote_map = build_quote_map(source_lines) if source_lines else None
+    transformer = TermTransformer(
+        reify=True, source_lines=source_lines, quote_map=quote_map,
+        double_quotes_mode=double_quotes if double_quotes is not None else "chars",
+    )
+    ctor = transformer.visit(node)
+    return _ClauseReifier(quote_map=quote_map, spellings=spellings).term(ctor)
 
 
-def render_ast(term):
+def render_ast(term, spellings=None):
     """Render a reified term back to a Python surface ``ast`` node — the
     inverse of :func:`reify_ast`.
 
     A ``Clause`` renders to an ``ast.Expr`` statement; any other reified term
     renders to an expression node.  Raises :class:`RenderError` for any node
-    kind the renderer does not handle (never emits malformed source)."""
+    kind the renderer does not handle (never emits malformed source).
+    *spellings* is the :class:`AtomSpellings` the term was reified with,
+    when the output goes back into the file it came from: each atom is then
+    written with the quote character it was read with."""
     term = deref(term)  # a top-level var bound to a Clause must take the clause path
-    renderer = _ClauseRenderer()
+    renderer = _ClauseRenderer(spellings)
     if is_v(term, Clause):
         node = renderer.clause(term)
     else:
@@ -1750,17 +1931,20 @@ def render_ast(term):
     return ast.fix_missing_locations(node)
 
 
-def render_source(term):
+def render_source(term, spellings=None):
     """Render a reified term to ``.seam`` source text — :func:`render_ast`
     followed by ``ast.unparse`` with the ``<-`` arrow repair.
 
     The renderer writes each text literal with the quote character its TERM
-    requires (spec §6.7/§7): an atom is a bare name when its spelling is an
-    identifier and ``'…'`` when it is not, and a string is always ``"…"`` —
-    single quotes would re-read as an atom in every mode.  Both are written
-    at the node, not by a re-quoting pass over the unparsed text: such a pass
-    cannot tell a string from a quoted atom, and the one that used to run
-    here also rewrote ``b'…'`` bytes literals by mistake.
+    requires (spec §6.7/§7): an atom is written as it was read when
+    *spellings* (the :class:`AtomSpellings` it was reified with) says how,
+    else bare when the bare name reads back as that atom and ``'…'`` when
+    it does not (``'Foo'``, ``'None'``, ``'if'``, ``'foo bar'``); a string
+    is always ``"…"`` — single quotes would re-read as an atom in every
+    mode.  Both are written at the node, not by a re-quoting pass over the
+    unparsed text: such a pass cannot tell a string from a quoted atom, and
+    the one that used to run here also rewrote ``b'…'`` bytes literals by
+    mistake.
 
     The directive itself is NOT prepended here, and that is deliberate
     (Task 11 ruling): this function renders ONE clause or term, not a
@@ -1771,7 +1955,7 @@ def render_source(term):
     carries a string — otherwise the module's ``"…"`` literals re-read as
     atoms.
     """
-    node = render_ast(term)
+    node = render_ast(term, spellings)
     if isinstance(node, ast.Expr):
         return _unparse_clause(node)
     return _tighten_nested_arrows(ast.unparse(node))
