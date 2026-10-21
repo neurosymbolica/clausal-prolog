@@ -1022,6 +1022,15 @@ class TestAtomSpellings:
         built = Goal("q", [Atom("m"), Atom("x"), Atom("y"), Atom("score"), Atom("a.b"), Atom("a.Foo")], [])
         assert render_source(built, spellings) == "q(m, x, 'y', 'score', a.b, 'a.Foo')"
 
+    def test_a_parameter_reference_is_not_the_item_spelling_the_atom_bare(self):
+        from clausal.reflection import AtomSpellings
+        spellings = AtomSpellings()
+        (clause,) = reify_source("t(L) <- (maplist(((X) <- q(X, 1)), L))\n", spellings=spellings)
+        assert spellings.name_quotes("X") == frozenset()
+        assert render_source(Goal("p", [Atom("X")], []), spellings) == "p('X')"
+        (goal,) = vfield(clause, "goals")
+        assert "q(X, 1)" in render_source(goal, spellings)
+
     def test_a_lambda_parameter_reference_stays_bare_without_a_table(self):
         """``add_one(X)`` in a lambda body reifies as ``Atom("X")`` -- the
         parameter, not an atom -- and must not come back as ``'X'``."""

@@ -427,7 +427,12 @@ surface described in [docs/public-api.md](docs/public-api.md).
   result: every rewritten statement is read back out of the formatted output
   and compared with the term the rule produced, each passed-through atom's
   quote by cell, and a difference refuses the file (`RewriteError: ... does
-  not read back as the term the rule produced`). Over the repository's 662 `.seam` files the shipped rules
+  not read back as the term the rule produced`). Bare is the reference the
+  item uses, which for an imported or dotted name is not the plain atom.
+  Also: `clause_source/2`, and `render_source` with no spelling table, now
+  quote `Atom('Foo')`, `'None'`, `'if'`, `'_'`, `'X'` and an NFKC-sensitive
+  name such as `'ǅx'`, where they used to write them bare and the text
+  re-read as a variable or a Python constant. Over the repository's 662 `.seam` files the shipped rules
   fire in 36; before the fix 24 of those came back with 141 quoted atoms
   written bare, now none. Pinned by `tests/rewrite/test_driver.py`
   (`test_a_passed_through_literal_keeps_its_spelling`,

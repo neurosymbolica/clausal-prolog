@@ -566,18 +566,35 @@ def test_a_rule_built_atom_named_like_a_lambda_parameter_is_refused():
         render_source(("Goal", "pass_through", [rebuilt, vfield(goal, "args")[1]], []), spellings)
 
 
+def test_a_rule_built_atom_named_like_a_parameter_outside_its_lambda_is_quoted(tmp_path):
+    """The parameter reference ``X`` inside the lambda is spelled by its cell
+    only; it is not the item spelling the atom ``X`` bare, so a rule-built
+    ``Atom('X')`` OUTSIDE the lambda is written ``'X'`` and not refused."""
+    builder = tmp_path / f"builder{SEAM}"
+    builder.write_text(textwrap.dedent("""\
+        -double_quotes(chars)
+        -import_from(reflection, [Clause, Goal, Atom, Variable])
+
+        rewrite_clause(Clause(H, [Goal('m', [Variable(_)], KW), G], P), Clause(H, [Goal('m', [Atom('X')], KW), G], P)),
+        """))
+    src = "p(L) <- (m(L), maplist(((X) <- q(X, 1)), L))\n"
+    result = rewrite_source(src, [builder])
+    assert "m('X')" in result.text
+    assert "maplist((X <- q(X, 1)), L)" in result.text     # the kept lambda, as the formatter writes it
+
+
 def test_resolved_keeps_the_cells_a_rule_passed_through():
     """``_deref_walk`` rebuilds every tuple; the driver's walk returns an
     unchanged tuple itself, so a passed-through atom still answers by cell."""
     from clausal.logic.solve import _deref_walk
     from clausal.logic.variables import Trail, Var, unify
     from clausal.reflection import Atom, Goal
-    from clausal.rewrite.driver import _resolved
+    from clausal.rewrite.driver import _resolved_keeping_cells
     atom = Atom("a")
     bound = Var()
     unify(bound, atom, Trail())
     answer = Goal("p", [bound, atom, [atom]], [])
-    resolved = _resolved(answer)
+    resolved = _resolved_keeping_cells(answer)
     assert resolved == Goal("p", [atom, atom, [atom]], [])
     assert all(cell is atom for cell in (resolved[2][0], resolved[2][1], resolved[2][2][0]))
     assert _deref_walk(answer)[2][1] is not atom

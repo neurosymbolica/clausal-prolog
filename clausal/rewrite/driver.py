@@ -242,10 +242,11 @@ def _reads_back_as(meant, read, meant_spellings, read_spellings):
     of anonymous variables (per clause, by encounter -- a dropped ``_``
     renumbers the rest), and the spelling of an atom the rule BUILT.  An
     atom the rule passed through -- the very cell the reifier recorded,
-    which ``_resolved`` preserves -- must come back with the quote it was
+    which ``_resolved_keeping_cells`` preserves -- must come back with the quote it was
     read with, whatever the item's other spellings of that name say.
     Everything else must be the same: an atom read back as a variable, a
     Python constant or a string is exactly what this exists to catch.
+    (``_resolved_keeping_cells`` is what keeps the cell to compare by.)
 
     A list of one-char atoms IS a text to the engine, which hands a rule's
     answer back with such a list -- an argument list ``['t']`` included --
@@ -355,11 +356,11 @@ def _first_rewrite(rules, reified_clause):
     for rule, module in rules:
         out = Var()
         for _ in call("rewrite_clause", reified_clause, out, module=module):
-            return _resolved(out), rule
+            return _resolved_keeping_cells(out), rule
     return None
 
 
-def _resolved(term):
+def _resolved_keeping_cells(term):
     """The rule's answer with every bound variable replaced by its value --
     ``solve._deref_walk``, except that a tuple nothing changed inside is
     returned AS IS.
@@ -369,24 +370,28 @@ def _resolved(term):
     ``AtomSpellings`` table nothing to answer by identity for: each
     passed-through atom would fall to the by-name layer, which cannot tell
     the ``'a'`` from the ``a`` of an item that writes both.  Keeping the
-    object is what makes "the rule did not touch this atom" knowable.
+    object is what makes "the rule did not touch this atom" knowable.  In
+    practice only LEAF cells (``Atom``, ``Variable``) survive: a goal's
+    argument list is a Python list, which a rule's list pattern always
+    rebuilds, so the ``Goal`` around it is rebuilt too.
     """
     term = deref(term)
     if is_var(term):
         return term
     if isinstance(term, list):
-        return [_resolved(item) for item in term]
+        return [_resolved_keeping_cells(item) for item in term]
     if isinstance(term, tuple):
         if is_chars(term):
             return flat_carrier(term)
-        items = [_resolved(item) for item in term]
+        items = [_resolved_keeping_cells(item) for item in term]
         if all(new is old for new, old in zip(items, term)):
             return term
         return tuple(items)
     if isinstance(term, dict):
-        return {_resolved(key): _resolved(value) for key, value in term.items()}
+        return {_resolved_keeping_cells(key): _resolved_keeping_cells(value)
+                for key, value in term.items()}
     if isinstance(term, (set, frozenset)):
-        return type(term)(_resolved(item) for item in term)
+        return type(term)(_resolved_keeping_cells(item) for item in term)
     hook = getattr(term, "__walk__", None)
     if hook is not None:
         return hook()
@@ -394,7 +399,8 @@ def _resolved(term):
         # A ``pythonic_ast`` node (an operator, ``Or``/``Not``, a lambda):
         # rebuilt from its resolved fields, as ``_deref_walk`` does.
         return type(term)(**{
-            name: _resolved(getattr(term, name)) for name in term_field_names(term)
+            name: _resolved_keeping_cells(getattr(term, name))
+            for name in term_field_names(term)
         })
     return term
 

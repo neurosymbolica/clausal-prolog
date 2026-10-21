@@ -223,7 +223,7 @@ PythonCode = _vocab_ctor("PythonCode", _VOCAB_FIELDS["PythonCode"])
 # rule's variable to that object, but a walk that REBUILDS tuples
 # (``solve._deref_walk`` and its C twin both do) loses it, so a caller that
 # wants the cell layer must resolve the rule's answer with a walk that keeps
-# an unchanged tuple (``rewrite.driver._resolved``).  The name layer records
+# an unchanged tuple (``rewrite.driver._resolved_keeping_cells``).  The name layer records
 # every spelling the item uses for a name -- as an atom or as a functor -- so
 # an atom the rule built from a name it took out of the item is written the
 # one way the item writes it, and quoted when the item is of two minds.
@@ -244,12 +244,18 @@ class AtomSpellings:
         self._by_cell: dict[int, tuple] = {}
         self._by_name: dict[str, set] = {}
 
-    def record(self, atom, quote):
-        """Remember that *atom* (an ``Atom`` cell) was spelled with *quote*."""
+    def record(self, atom, quote, item_wide=True):
+        """Remember that *atom* (an ``Atom`` cell) was spelled with *quote*.
+
+        *item_wide* is False for a lambda parameter reference: it is the
+        parameter, not a spelling of the atom of that name, so it is kept by
+        cell only and says nothing about how the item writes that name
+        elsewhere."""
         # The cell is kept alive by the entry, so its id() cannot be reused
         # for as long as this table can answer for it.
         self._by_cell[id(atom)] = (atom, quote)
-        self.record_name(vfield(atom, "name"), quote)
+        if item_wide:
+            self.record_name(vfield(atom, "name"), quote)
 
     def record_name(self, name, quote):
         """Remember that the item spells *name* with *quote* somewhere -- as
@@ -269,15 +275,6 @@ class AtomSpellings:
             return self._by_name.get(name, frozenset())
         except TypeError:  # an unhashable name is a rule bug the renderer reports
             return frozenset()
-
-    def quote_of(self, atom, name):
-        """*atom*'s cell spelling, else the one spelling the item gives
-        *name*, else ``None``."""
-        quote = self.cell_quote(atom)
-        if quote is not None:
-            return quote
-        quotes = self.name_quotes(name)
-        return next(iter(quotes)) if len(quotes) == 1 else None
 
     def __len__(self):
         return len(self._by_cell)
@@ -548,13 +545,25 @@ class _ClauseReifier:
         # the absence of a quote.
         self._quote_map = {} if quote_map is None else quote_map
         self._spellings = spellings
+        # The parameter names of each enclosing lambda being reified,
+        # innermost last (``_raw_node``).
+        self._lambda_params: list = []
 
-    def _atom(self, name, quote):
+    def _atom(self, name, quote, item_wide=True):
         """``Atom(name)``, its spelling recorded when known and wanted."""
         atom = Atom(name)
         if quote is not None and self._spellings is not None:
-            self._spellings.record(atom, quote)
+            self._spellings.record(atom, quote, item_wide)
         return atom
+
+    def _bare_reference(self, name):
+        """A bare *name* in term position: the atom, spelled bare -- unless
+        it is a parameter of an enclosing lambda, which is the PARAMETER:
+        spelled by its cell, but not a spelling of the atom of that name for
+        the rest of the item (a rule-built ``Atom('X')`` outside the lambda
+        is still written ``'X'``)."""
+        in_lambda = any(name in params for params in self._lambda_params)
+        return self._atom(name, "", item_wide=not in_lambda)
 
     def _functor(self, name):
         """A goal's *name*, which the item spells bare, recorded as such."""
@@ -691,7 +700,7 @@ class _ClauseReifier:
             # runtime reference (defensively treated as an atom).
             if node.id in self._vars:
                 return self._vars[node.id]
-            return self._atom(bare_name_of(node.id), "")
+            return self._bare_reference(bare_name_of(node.id))
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
             return _const_value(node)
         if isinstance(node, ast.Call):
@@ -755,7 +764,7 @@ class _ClauseReifier:
         if name == "Call":
             return self._goal_call(kwargs)
         if name == "LoadName":
-            return self._atom(_const_value(kwargs["name"]), "")
+            return self._bare_reference(_const_value(kwargs["name"]))
         if name == "LoadAttr":
             return self._atom(_dotted_name(node), "")
         if name == "IfExpr":
@@ -845,20 +854,32 @@ class _ClauseReifier:
         cls = getattr(simple_ast, name)
         str_fields = _str_typed_fields(cls)
         fields = {}
-        for key, value in kwargs.items():
-            if key in ("position", "_position"):
-                fields["position"] = _const_value(value)
-            elif key in str_fields and isinstance(value, ast.Constant) and type(value.value) is str:
-                fields[key] = value.value
-            elif (name == "DictLiteral" and key == "keys"
-                  and isinstance(value, (ast.List, ast.Tuple))):
-                # The SPLAT dict form arrives here as a ``DictLiteral(...)``
-                # constructor call rather than through the ``ast.Dict`` branch
-                # of ``term``, so it needs the same key normalisation -- an
-                # atom key must reify identically with and without a splat.
-                fields[key] = [self._dict_key(elt) for elt in value.elts]
-            else:
-                fields[key] = self.term(value)
+        if name == "Lambda" and "params" in kwargs:
+            # The parameters first, and in scope while the body is reified:
+            # a reference to one in the body is the parameter, not an atom
+            # the item spells (see ``term``'s ``ast.Name`` branch).
+            fields["params"] = self.term(kwargs["params"])
+            self._lambda_params.append(frozenset(_lambda_param_names(fields["params"])))
+        try:
+            for key, value in kwargs.items():
+                if key in fields:
+                    continue
+                if key in ("position", "_position"):
+                    fields["position"] = _const_value(value)
+                elif key in str_fields and isinstance(value, ast.Constant) and type(value.value) is str:
+                    fields[key] = value.value
+                elif (name == "DictLiteral" and key == "keys"
+                      and isinstance(value, (ast.List, ast.Tuple))):
+                    # The SPLAT dict form arrives here as a ``DictLiteral(...)``
+                    # constructor call rather than through the ``ast.Dict`` branch
+                    # of ``term``, so it needs the same key normalisation -- an
+                    # atom key must reify identically with and without a splat.
+                    fields[key] = [self._dict_key(elt) for elt in value.elts]
+                else:
+                    fields[key] = self.term(value)
+        finally:
+            if name == "Lambda" and "params" in kwargs:
+                self._lambda_params.pop()
         return cls(**fields)
 
     # -- clause entry ---------------------------------------------------------
@@ -935,6 +956,18 @@ def _deref_seq_field(value, what):
     if not isinstance(value, (list, tuple)):
         raise RenderError(f"cannot render {what}: expected a sequence, got {value!r}")
     return value
+
+
+def _lambda_param_names(params_node):
+    """The plain names of a reified ``Params`` node's parameters."""
+    names = []
+    for param in getattr(params_node, "params", None) or ():
+        name = getattr(param, "name", None)
+        if is_v(name, Atom):
+            name = vfield(name, "name")      # STAGE 2: a param NAME constant reifies as an Atom
+        if isinstance(name, str):
+            names.append(name)
+    return names
 
 
 def _is_dotted_identifier(dotted: str) -> bool:
@@ -1063,6 +1096,11 @@ class _ClauseRenderer:
            vouches for it, because whether a bare name is an atom, a
            predicate, a declared constant, an imported module or a load
            error is decided by the file, which the renderer cannot see.
+           Bare = the REFERENCE the item uses, which for an imported or
+           dotted name is not the plain atom: a rule-built ``Atom(N)`` where
+           the item only calls an imported ``N`` renders as that reference
+           (the hidden atom, or the module predicate), which is exactly what
+           the shipped rules intend by it.
 
         Without the table the vocabulary's own reading applies: a parameter
         reference is bare, and an atom is bare exactly when a bare name

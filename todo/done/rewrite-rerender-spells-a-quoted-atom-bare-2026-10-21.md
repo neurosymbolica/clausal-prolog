@@ -6,15 +6,18 @@ records each atom's quote character beside the terms (`reify_source(...,
 spellings=)`, keyed by the Atom cell, then by name within the item -- atoms and
 functors), and `render_source(term, spellings)` writes it back. The driver
 resolves a rule's answer with a walk that keeps an unchanged tuple
-(`driver._resolved`; `_deref_walk` rebuilds every tuple and would lose the
-cell), so a passed-through atom is spelled by its cell even in an item that
+(`driver._resolved_keeping_cells`; `_deref_walk` rebuilds every tuple and
+would lose the cell), so a passed-through atom is spelled by its cell even in an item that
 writes `'a'` and `a` both. An atom a rule built is bare only where the item
 itself spells that name bare (`Atom(CALLEE)` for a callee the lambda body
 spelled bare), quoted where the item spells it two ways or never (a bare
 `score` may be a predicate, a declared atom, an imported module or a load
 error, and `ǅx` normalises to the variable `Džx`), bare for an unseen dotted
 name that reads back bare, and refused inside a lambda with a parameter of that
-name. The driver then reads every rewritten statement back out of the formatted
+name. Bare = the reference the item uses, which for an imported or dotted name
+is not the plain atom: a rule-built `Atom(N)` where the item only calls an
+imported `N` renders as that reference (the hidden atom or the module
+predicate), which is what the shipped rules intend. The driver then reads every rewritten statement back out of the formatted
 output and compares it with the rule's term (`driver._assert_reads_back`), each
 passed-through atom's quote by cell, refusing the file on any difference. Not a flag on `Atom` because the engine tests "is
 this an atom" by exact `str` type (a `str` subclass name a rule handed to
