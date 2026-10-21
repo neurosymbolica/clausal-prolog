@@ -7,6 +7,13 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+## 1.1.0 (2026-10-21)
+
+A minor release by operator ruling (D83, 2026-10-21): the entries under
+Breaking correct 1.0.0 behaviour that was wrong or unintended rather than
+change a designed surface, and nothing outside this repository depends on
+the old behaviour. Read them before upgrading.
+
 ### Breaking
 
 - **`entailed/1` with an argument that is no relation raises, instead of

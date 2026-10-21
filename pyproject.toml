@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clausal"
-version = "1.0.0"
+version = "1.1.0"
 description = "Prolog in Python for neurosymbolic AI: an ISO-directed, cut-free Prolog that runs inside the Python process"
 keywords = ["prolog", "logic programming", "constraint programming", "clp", "neurosymbolic", "symbolic ai"]
 classifiers = [
