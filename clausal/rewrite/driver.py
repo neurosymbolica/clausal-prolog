@@ -27,6 +27,18 @@ are the same tree and only the ledger knows which one this is.  And a rewritten
 head is rendered by :func:`clausal.reflection.render_ast`, whose output is
 checked for the lambda sentinel that renderer uses -- a head carrying one would
 emit corrupt source, and no shipped rule can produce it.
+
+Re-rendering is where an atom's SPELLING is at stake.  ``'Foo'``, ``"Foo"`` and
+``Foo`` are three different terms in the seam (an atom, a string, a variable)
+and ``Atom("Foo")`` is one vocabulary term, so each clause is reified with an
+``AtomSpellings`` table -- the quote character every atom was read with, kept
+beside the term -- and a rendered goal or head is written back through it: an
+atom the rule passed through keeps its quote, and one the rule built is spelled
+so it reads back as that atom (``reflection._reads_back_bare``).  The output is
+then PROVED to say what the rules meant: every rewritten statement is read back
+out of the formatted text and compared, atom spelling included, with the term
+the last rule produced for it (:func:`_assert_reads_back`).  A difference is a
+driver bug and the file is refused, never written.
 """
 
 from __future__ import annotations
@@ -47,11 +59,18 @@ from clausal.fmt.comments import (
 )
 from clausal.fmt.emit import format_source
 from clausal.import_hook import _load_module
+from clausal.logic.cells import chars_text, is_chars
 from clausal.logic.solve import _deref_walk, call
-from clausal.logic.variables import Var
+from clausal.logic.variables import Var, deref
 from clausal.reflection import (
     _LAMBDA_ARROW_MARKER,
+    Atom,
+    AtomSpellings,
+    Clause,
+    Escape,
+    FormatString,
     Goal,
+    Variable,
     is_v,
     vfield,
     ReifyError,
@@ -115,6 +134,10 @@ def rewrite_source(source, rule_paths):
     rules = load_rules(rule_paths)
     tree, table = CommentTable.capture(source)
     fired = []
+    # statement index -> (the term the last rule produced for it, the
+    # spellings it was rendered through, the -double_quotes mode there);
+    # what ``_assert_reads_back`` holds the output to.
+    intended = {}
     # The file's ``-double_quotes`` mode at the statement being reified.
     # Each clause is reified from its own SEGMENT, which never contains the
     # directive, so the mode is tracked here and handed to the reifier --
@@ -137,9 +160,11 @@ def rewrite_source(source, rule_paths):
             # predicate's interface.  Leave the clause alone.
             continue
         segment = ast.get_source_segment(source, statement)
+        spellings = AtomSpellings()
         try:
             reified = reify_ast(statement, source=segment,
-                                double_quotes=double_quotes)
+                                double_quotes=double_quotes,
+                                spellings=spellings)
         except (ReifyError, SyntaxError):
             # A shape reification does not model is a shape the rules cannot
             # have an opinion about.  Leaving it byte-stable is the honest
@@ -157,11 +182,130 @@ def rewrite_source(source, rule_paths):
                     f"{rule} was still firing after {FIXPOINT_BOUND} rounds "
                     f"at {position}: the rule set does not reach a fixpoint"
                 )
-            current = _splice(table, current, reified, replacement, position)
+            current = _splice(table, current, reified, replacement, position,
+                              spellings)
             fired.append((position, rule))
             reified = replacement
+            intended[index] = (reified, spellings, double_quotes, position)
         tree.body[index] = current
-    return RewriteResult(text=format_source(source, (tree, table)), fired=fired)
+    text = format_source(source, (tree, table))
+    _assert_reads_back(text, intended)
+    return RewriteResult(text=text, fired=fired)
+
+
+def _assert_reads_back(text, intended):
+    """Refuse the output unless each rewritten statement reads back as the
+    term the rule produced for it.
+
+    The rendered goal and head went through a renderer, a parse, a splice and
+    the emitter, and the term is compared at the far end of all four: the
+    statement at the same index of the formatted *text* (the formatter keeps
+    statements in place) is reified under the same ``-double_quotes`` mode
+    and matched structurally, atom spellings included, against what the last
+    rule said (``_reads_back_as``).  Cheap -- one reification per rewritten
+    statement -- and the check that makes "the rewrite changed a term's
+    class" a refusal instead of a silent edit.
+    """
+    if not intended:
+        return
+    statements = ast.parse(text).body
+    for index, (term, spellings, double_quotes, position) in intended.items():
+        statement = statements[index]
+        segment = ast.get_source_segment(text, statement)
+        reread_spellings = AtomSpellings()
+        try:
+            reread = reify_ast(statement, source=segment,
+                               double_quotes=double_quotes,
+                               spellings=reread_spellings)
+        except (ReifyError, SyntaxError) as error:
+            raise RewriteError(
+                f"the rewritten clause at {position} does not read back: "
+                f"{error}"
+            ) from error
+        mismatch = _reads_back_as(term, reread, spellings, reread_spellings)
+        if mismatch is not None:
+            meant, read = mismatch
+            raise RewriteError(
+                f"the rewritten clause at {position} does not read back as "
+                f"the term the rule produced: the rule meant {meant!r} and "
+                f"the output reads {read!r}"
+            )
+
+
+def _reads_back_as(meant, read, meant_spellings, read_spellings):
+    """``None`` when *read* is the term *meant*, else the first differing
+    pair ``(meant_part, read_part)``.
+
+    Structural equality, with three allowances for what a re-read cannot
+    reproduce: item and escape positions (the clause moved), the numbering
+    of anonymous variables (per clause, by encounter -- a dropped ``_``
+    renumbers the rest), and an atom spelling the rule's term never had
+    (a rule-built atom; one it passed through must come back as written).
+    Everything else must be the same: an atom read back as a variable, a
+    Python constant or a string is exactly what this exists to catch.
+
+    A list of one-char atoms IS a text to the engine, which hands a rule's
+    answer back with such a list -- an argument list ``['t']`` included --
+    promoted to the chars carrier; a carrier is read as that list here.
+    """
+    meant = deref(meant)
+    read = deref(read)
+    if is_chars(meant):
+        meant = list(chars_text(meant))
+    if is_chars(read):
+        read = list(chars_text(read))
+    if is_v(meant, Atom) or is_v(read, Atom):
+        if not (is_v(meant, Atom) and is_v(read, Atom)):
+            return meant, read
+        name = vfield(meant, "name")
+        if name != vfield(read, "name"):
+            return meant, read
+        quote = meant_spellings.quote_of(meant, name)
+        if quote is not None and quote != read_spellings.quote_of(read, name):
+            return meant, read
+        return None
+    if is_v(meant, Variable) or is_v(read, Variable):
+        if not (is_v(meant, Variable) and is_v(read, Variable)):
+            return meant, read
+        left, right = vfield(meant, "name"), vfield(read, "name")
+        anonymous = left.startswith("#") and right.startswith("#")
+        return None if anonymous or left == right else (meant, read)
+    if is_v(meant, (Clause, Escape, FormatString)):
+        if not is_v(read, (Clause, Escape, FormatString)) or meant[0] != read[0]:
+            return meant, read
+        # The last field is the position; everything before it is compared.
+        return _parts_read_back_as(meant[1:-1], read[1:-1],
+                                   meant_spellings, read_spellings)
+    if isinstance(meant, (list, tuple)) and type(meant) is type(read):
+        if len(meant) != len(read):
+            return meant, read
+        return _parts_read_back_as(meant, read, meant_spellings, read_spellings)
+    if isinstance(meant, dict) and isinstance(read, dict):
+        if list(meant) != list(read):
+            return meant, read
+        return _parts_read_back_as(list(meant.values()), list(read.values()),
+                                   meant_spellings, read_spellings)
+    if dataclasses.is_dataclass(meant) and type(meant) is type(read):
+        # A ``pythonic_ast`` node (an operator, ``Or``/``Not``, a lambda):
+        # its fields hold terms, so they are walked rather than compared
+        # with ``==``, which would see through no allowance above.
+        fields = [field.name for field in dataclasses.fields(meant)
+                  if field.compare]
+        return _parts_read_back_as(
+            [getattr(meant, name) for name in fields],
+            [getattr(read, name) for name in fields],
+            meant_spellings, read_spellings)
+    if type(meant) is not type(read) or meant != read:
+        return meant, read
+    return None
+
+
+def _parts_read_back_as(meant, read, meant_spellings, read_spellings):
+    for left, right in zip(meant, read):
+        mismatch = _reads_back_as(left, right, meant_spellings, read_spellings)
+        if mismatch is not None:
+            return mismatch
+    return None
 
 
 def _head_has_keywords(clause):
@@ -213,7 +357,7 @@ def _first_rewrite(rules, reified_clause):
     return None
 
 
-def _splice(table, old_statement, reified_in, reified_out, position):
+def _splice(table, old_statement, reified_in, reified_out, position, spellings):
     """Build the replacement statement, reusing every matched goal's node."""
     old_goals = _top_level_goal_nodes(old_statement)
     # P2: a reified Clause is a CELL, so its fields are read by name through
@@ -255,7 +399,7 @@ def _splice(table, old_statement, reified_in, reified_out, position):
                     f"another input goal -- the rule REORDERED goals, which "
                     f"the positional correspondence does not model"
                 )
-            new_node = _render_goal_node(table, out_goal, position)
+            new_node = _render_goal_node(table, out_goal, position, spellings)
             table.move(old_goals[index], new_node)
             new_goals.append(new_node)
     else:
@@ -278,7 +422,7 @@ def _splice(table, old_statement, reified_in, reified_out, position):
     if vfield(reified_out, "head") == vfield(reified_in, "head"):
         head_node = _head_node(old_statement)
     else:
-        head_node = _render_head(vfield(reified_out, "head"), position)
+        head_node = _render_head(vfield(reified_out, "head"), position, spellings)
 
     new_statement = _build_statement(old_statement, head_node, new_goals, table)
 
@@ -314,9 +458,9 @@ def _head_node(statement):
     return items[0].left if is_clause(items[0]) else items[0]
 
 
-def _render_head(head, position):
+def _render_head(head, position, spellings):
     try:
-        node = render_ast(head)
+        node = render_ast(head, spellings)
     except RenderError as error:
         # A rule may bind a head argument to something with no source form at
         # all -- a Python callable built by an escape, say.  That is a rule
@@ -334,7 +478,7 @@ def _render_head(head, position):
     return node
 
 
-def _render_goal_node(table, goal, position):
+def _render_goal_node(table, goal, position, spellings):
     """Render a MODIFIED goal to a fresh ``ast`` node, arrows registered.
 
     Rendering goes to SOURCE text and back through a parse, because that is the
@@ -359,7 +503,7 @@ def _render_goal_node(table, goal, position):
             f"renders as a list literal, not a group)"
         )
     try:
-        text = render_source(goal)
+        text = render_source(goal, spellings)
     except RenderError as error:
         raise RewriteError(
             f"the modified goal at {position} cannot be rendered: {error}"
@@ -372,10 +516,10 @@ def _render_goal_node(table, goal, position):
             f"{text!r}: {error}"
         ) from error
     table.arrows.update(arrow_nodes(node, text))
-    # The same for the quote character: the renderer writes an atom
-    # single-quoted and a string double-quoted, and the emitter copies a
-    # ledgered spelling back verbatim, so the rendered term is the term
-    # that comes out.
+    # The same for the quote character: the renderer writes each atom with
+    # the quote it was read with (``spellings``) and a string double-quoted,
+    # and the emitter copies a ledgered spelling back verbatim, so the
+    # rendered term is the term that comes out.
     table.literals.update(literal_spellings(node, text))
     return ast.fix_missing_locations(node)
 

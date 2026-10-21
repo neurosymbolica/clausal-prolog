@@ -364,9 +364,11 @@ def test_modified_goal_rewrite_is_idempotent(tmp_path):
 
 def test_folds_a_single_char_atom(head_fold_rules):
     # The file pins ``-double_quotes(atom)`` explicitly: ``"t"`` is the
-    # ATOM ("t",), so the folded head renders as the bare name.
+    # ATOM ("t",), and the folded head writes it back as the file spelled
+    # it.  (It used to render as the bare name ``t``, which is the same
+    # atom only where ``t`` is declared, and a load error elsewhere.)
     result = rewrite_source('-double_quotes(atom)\np(TAG) <- (TAG is "t", m(1))\n', head_fold_rules)
-    assert result.text == '-double_quotes(atom)\n\np(t) <- (\n    m(1)\n)\n'
+    assert result.text == '-double_quotes(atom)\n\np("t") <- (\n    m(1)\n)\n'
     assert len(result.fired) == 1
 
 
@@ -380,7 +382,9 @@ def test_the_file_mode_reaches_each_clause_segment(head_fold_rules):
     result = rewrite_source('-double_quotes(chars)\np(TAG) <- (TAG is "t", m(1))\n', head_fold_rules)
     assert result.text == '-double_quotes(chars)\n\np("t") <- (\n    m(1)\n)\n'
     result = rewrite_source('-double_quotes(atom)\np(TAG) <- (TAG is "t", m(1))\n', head_fold_rules)
-    assert result.text == '-double_quotes(atom)\n\np(t) <- (\n    m(1)\n)\n'
+    # The atom-mode ``"t"`` is written back as spelled: the same atom, and
+    # not the bare ``t`` that only a declaration makes loadable.
+    assert result.text == '-double_quotes(atom)\n\np("t") <- (\n    m(1)\n)\n'
 
 
 def test_a_mid_file_directive_governs_only_the_clauses_below_it(head_fold_rules):
@@ -392,7 +396,7 @@ def test_a_mid_file_directive_governs_only_the_clauses_below_it(head_fold_rules)
            'q(TAG) <- (TAG is "u", m(2))\n')
     result = rewrite_source(src, head_fold_rules)
     assert 'p("t") <- (' in result.text
-    assert 'q(u) <- (' in result.text
+    assert 'q("u") <- (' in result.text     # the atom "u", spelled as the file spells it
 
 
 def test_reify_ast_reads_a_segment_under_the_mode_it_is_handed():
@@ -430,3 +434,147 @@ def test_folds_a_single_char_string(head_fold_rules):
     from clausal.reflection import Clause, Goal, render_source
     folded = Clause(Goal("p", ["t"], []), [Goal("m", [1], [])], None)
     assert render_source(folded) == 'p("t") <- (m(1))'
+
+
+# ---- atom spellings: a rewrite keeps 'Foo' an atom ------------------------
+#
+# ``'Foo'``, ``"Foo"`` and ``Foo`` are three terms in the seam and ONE
+# vocabulary term, ``Atom("Foo")``.  The re-render used to write any
+# identifier-shaped atom bare, so a rewrite that touched the goal turned
+# ``'Foo'`` into a variable and ``'None'`` into Python's ``None``
+# (todo/done/rewrite-rerender-spells-a-quoted-atom-bare-2026-10-21.md).  Each
+# clause is now reified with its atoms' spellings and rendered back through
+# them, and the output is read back and compared with what the rule meant.
+
+_LITERALS = ["'a'", "'Foo'", "'_x'", "'None'", "'True'", "'if'", "'a.b'",
+             "'foo bar'", '"a"']
+
+
+@pytest.mark.parametrize("literal", _LITERALS)
+def test_a_passed_through_literal_keeps_its_spelling(literal, unnecessary_lambda_rules):
+    """The rule rewrites the lambda beside the literal and never touches the
+    literal, which still has to be re-rendered with the goal."""
+    src = f"p(R) <- (pass_through(((X) <- q(X)), {literal}, R))\n"
+    result = rewrite_source(src, unnecessary_lambda_rules)
+    assert len(result.fired) == 1
+    assert f"pass_through(q, {literal}, R)" in result.text
+
+
+@pytest.mark.parametrize("literal", ["'Foo'", "'None'", "'a.b'", "'a'"])
+def test_a_folded_literal_keeps_its_spelling(literal, head_fold_rules):
+    """head_fold moves the literal into a re-rendered HEAD."""
+    src = f"r(K, S) <- (m(K, M), S is {literal})\n"
+    result = rewrite_source(src, head_fold_rules)
+    assert result.text == f"r(K, {literal}) <- (\n    m(K, M)\n)\n"
+
+
+def test_an_atom_mode_double_quoted_atom_keeps_its_quotes(unnecessary_lambda_rules):
+    src = '-double_quotes(atom)\n\np(R) <- (pass_through(((X) <- q(X)), "a", R))\n'
+    result = rewrite_source(src, unnecessary_lambda_rules)
+    assert 'pass_through(q, "a", R)' in result.text
+
+
+def test_a_rule_built_atom_is_spelled_to_read_back_as_itself(tmp_path):
+    """An atom the rule's template built has no source spelling.  It is bare
+    exactly when the bare name reads back as that atom (``score``, the
+    qualified ``a.b``) and quoted when it would read as something else."""
+    builder = tmp_path / f"builder{SEAM}"
+    builder.write_text(textwrap.dedent("""\
+        -double_quotes(chars)
+        -import_from(reflection, [Clause, Goal, Atom])
+
+        rewrite_clause(Clause(H, [Goal('m', [_], KW)], P), Clause(H, [Goal('m', [Atom('Foo'), Atom('None'), Atom('if'), Atom('score'), Atom('a.b')], KW)], P)),
+        """))
+    result = rewrite_source("p(X) <- (m(X))\n", [builder])
+    assert "m('Foo', 'None', 'if', score, a.b)" in result.text
+
+
+def test_a_rebuilt_atom_is_spelled_as_the_clause_spells_it(tmp_path):
+    """``Atom(N)`` rebuilt from a name the rule took out of the clause is a
+    NEW cell, so it has no spelling by identity; it is spelled the way the
+    clause spells that name when the clause spells it one way."""
+    doubler = tmp_path / f"doubler{SEAM}"
+    doubler.write_text(textwrap.dedent("""\
+        -double_quotes(chars)
+        -import_from(reflection, [Clause, Goal, Atom])
+
+        rewrite_clause(Clause(H, [Goal('m', [Atom(N)], KW)], P), Clause(H, [Goal('m', [Atom(N), Atom(N)], KW)], P)),
+        """))
+    assert "m('a', 'a')" in rewrite_source("p(1) <- (m('a'))\n", [doubler]).text
+    assert "m(a, a)" in rewrite_source("p(1) <- (m(a))\n", [doubler]).text
+    assert "m('Foo', 'Foo')" in rewrite_source("p(1) <- (m('Foo'))\n", [doubler]).text
+
+
+def test_the_output_must_read_back_as_the_rule_meant(monkeypatch, unnecessary_lambda_rules):
+    """The driver's own fence: the formatted output is reified again and held
+    to the rule's term, so a renderer that respelled an atom -- here the old
+    one, which wrote every identifier-shaped atom bare -- is refused rather
+    than written.  Nothing short of this notices a bug in the splice or the
+    emitter either."""
+    import clausal.rewrite.driver as driver
+    from clausal import reflection
+
+    render = driver.render_source
+    monkeypatch.setattr(driver, "render_source",
+                        lambda term, spellings=None: render(term, None))
+    monkeypatch.setattr(reflection, "_reads_back_bare",
+                        reflection._is_dotted_identifier)
+    src = "p(R) <- (pass_through(((X) <- q(X)), 'Foo', R))\n"
+    with pytest.raises(RewriteError, match="does not read back") as caught:
+        rewrite_source(src, unnecessary_lambda_rules)
+    assert "('Atom', 'Foo')" in str(caught.value)
+    assert "('Variable', 'Foo')" in str(caught.value)
+
+
+class TestReadsBackAs:
+    """The comparison behind the fence, on the pairs it must tell apart."""
+
+    @staticmethod
+    def _run(meant, read, meant_spellings=None, read_spellings=None):
+        from clausal.reflection import AtomSpellings
+        from clausal.rewrite.driver import _reads_back_as
+        return _reads_back_as(meant, read,
+                              meant_spellings or AtomSpellings(),
+                              read_spellings or AtomSpellings())
+
+    def test_an_atom_read_as_a_variable_a_constant_or_a_string_differs(self):
+        from clausal.reflection import Atom, Goal, Variable
+        for read in (Variable("Foo"), None, "Foo", Goal("Foo", [], [])):
+            assert self._run(Goal("p", [Atom("Foo")], []),
+                             Goal("p", [read], [])) == (Atom("Foo"), read)
+
+    def test_a_passed_through_atom_must_keep_its_quote(self):
+        from clausal.reflection import Atom, AtomSpellings
+        meant, read = Atom("a"), Atom("a")
+        meant_spellings, read_spellings = AtomSpellings(), AtomSpellings()
+        meant_spellings.record(meant, "'")
+        read_spellings.record(read, "")
+        assert self._run(meant, read, meant_spellings, read_spellings) == (meant, read)
+        read_spellings.record(read, "'")
+        assert self._run(meant, read, meant_spellings, read_spellings) is None
+
+    def test_a_rule_built_atom_accepts_whatever_spelling_read_back(self):
+        from clausal.reflection import Atom, AtomSpellings
+        read = Atom("score")
+        read_spellings = AtomSpellings()
+        read_spellings.record(read, "")
+        assert self._run(Atom("score"), read, None, read_spellings) is None
+
+    def test_positions_and_anonymous_numbering_are_not_differences(self):
+        from clausal.reflection import Clause, Escape, Goal, Variable, vfield
+        meant = Clause(Goal("p", [Variable("#anon1")], []),
+                       [Escape("X + 1", [Variable("X")], (1, 5, 1, 9))], (1, 0, 1, 20))
+        read = Clause(Goal("p", [Variable("#anon7")], []),
+                      [Escape("X + 1", [Variable("X")], (3, 4, 3, 8))], (2, 0, 4, 1))
+        assert self._run(meant, read) is None
+        assert self._run(meant, Clause(Goal("p", [Variable("Y")], []),
+                                       vfield(read, "goals"), None)) is not None
+
+    def test_operator_nodes_are_walked_not_compared_whole(self):
+        from clausal.reflection import Atom, AtomSpellings, reify_source
+        meant_spellings, read_spellings = AtomSpellings(), AtomSpellings()
+        (meant,) = reify_source("p(X) <- (X is 'a')\n", spellings=meant_spellings)
+        (read,) = reify_source("p(X) <- (X is a)\n", spellings=read_spellings)
+        assert self._run(meant, read, meant_spellings, read_spellings) == (Atom("a"), Atom("a"))
+        (read,) = reify_source("p(X) <- (X is 'a')\n", spellings=read_spellings)
+        assert self._run(meant, read, meant_spellings, read_spellings) is None
