@@ -1798,6 +1798,41 @@ def test_the_memo_follows_the_python_builtins_under_implicit_functors(
     assert pb.audit_routes(str(f)) == ([], [])
 
 
+def test_a_verdict_is_stored_under_the_snapshot_it_was_computed_under(
+        tmp_path, monkeypatch):
+    """The key's snapshot of the process state is the one the audit then
+    reads: taken once in audit_routes and threaded through to the
+    _Audit, never taken again after the compile.  Simulated interleaving:
+    another thread unbinds a builtin for the length of the compile and
+    rebinds it after.  Without the threading the verdict ("zorp is data")
+    was stored under the "zorp bound" key, where a fresh audit refuses."""
+    import builtins
+    from clausal import python_bridges as pb, seam_audit as sa
+    f = tmp_path / "implf.seam"
+    f.write_text("-implicit_functors\n-module(implf, [t/1])\n"
+                 "t(X) <- (X is zorp(1))\n")
+    real = sa.audit_source
+
+    def interleaved(source, filename, check_module=None, **kw):
+        delattr(builtins, "zorp")
+        try:
+            return real(source, filename, check_module, **kw)
+        finally:
+            builtins.zorp = lambda x: x
+
+    monkeypatch.setattr(builtins, "zorp", lambda x: x, raising=False)
+    monkeypatch.setattr(sa, "audit_source", interleaved)
+    pb._AUDITS.clear()
+    stored = pb.audit_routes(str(f))
+    monkeypatch.setattr(sa, "audit_source", real)
+    memo = pb.audit_routes(str(f))
+    pb._AUDITS.clear()
+    fresh = pb.audit_routes(str(f))
+    assert fresh == ([("python_name", 3)], [])
+    assert stored == fresh
+    assert memo == fresh
+
+
 def test_audit_tables_carry_the_switches_the_verdict_reads():
     """The memo key names every process-level input of the audit's own
     verdict: the loader's name tables, the sandbox switch and Python's

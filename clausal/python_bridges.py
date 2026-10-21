@@ -1141,8 +1141,13 @@ def audit_routes(path: str) -> "tuple[list, list]":
     from clausal import seam_audit  # noqa: PLC0415
     with open(path, encoding="utf-8", errors="replace") as f:
         source = f.read()
-    key = (path, hashlib.sha256(source.encode("utf-8")).hexdigest(),
-           seam_audit.audit_tables())
+    # The tables are taken ONCE, here, and the audit reads this snapshot
+    # (threaded through audit_source): a verdict is stored under the state
+    # it was computed under, whatever another thread does meanwhile.  The
+    # sandbox element needs no more: ACTIVE is monotonic, and enable()
+    # empties the memo before flipping it.
+    tables = seam_audit.audit_tables()
+    key = (path, hashlib.sha256(source.encode("utf-8")).hexdigest(), tables)
     with _AUDITS_LOCK:
         hit = _AUDITS.get(key)
     if hit is not None:
@@ -1164,7 +1169,8 @@ def audit_routes(path: str) -> "tuple[list, list]":
         asked.append((kind, a, b, seam_audit.node_line(node), answer))
         return answer
 
-    found, _ = seam_audit.audit_source(source, path, recording)
+    found, _ = seam_audit.audit_source(source, path, recording,
+                                       tables=tables)
     if found != [("uncompilable", 0)]:
         with _AUDITS_LOCK:
             _AUDITS[key] = (tuple(found), tuple(asked))

@@ -174,9 +174,12 @@ def generated_tree(source: str, filename: str) -> ast.Module:
     return transform_seam_source(source, filename)[0]
 
 
-def audit_source(source: str, filename: str, check_module=None):
+def audit_source(source: str, filename: str, check_module=None, *,
+                 tables=None):
     """:func:`audit_tree` of the generated tree for *source*; a source that
-    does not compile is ``[("uncompilable", 0)]``."""
+    does not compile is ``[("uncompilable", 0)]``.  *tables*: the
+    :func:`audit_tables` the audit reads, when the caller took them (a
+    memo key) -- threaded through, never taken again after the compile."""
     import warnings  # noqa: PLC0415
     from clausal.import_hook import transform_seam_source  # noqa: PLC0415
     try:
@@ -188,7 +191,8 @@ def audit_source(source: str, filename: str, check_module=None):
     return audit_tree(
         tree, check_module,
         translations=getattr(transformer, "_emitted_translations", ()) or (),
-        module_items=getattr(transformer, "_module_items", ()) or ())
+        module_items=getattr(transformer, "_module_items", ()) or (),
+        tables=tables)
 
 
 # ── plumbing shapes (the compiler's own builders, canonicalised) ───────────
@@ -292,7 +296,14 @@ def audit_tables(cut_surface: bool = False) -> tuple:
     reads (a ``-set_prolog_flag`` the sandbox refuses makes the source
     uncompilable); and the names Python's builtins bind, which
     ``bare_name_ok`` consults under ``-implicit_functors``.  A memo of a
-    verdict is keyed by them."""
+    verdict is keyed by them, and the audit reads the SAME snapshot the
+    key was built from (threaded through :func:`audit_source`), so a
+    verdict is never stored under state it was not computed under.
+
+    Not inputs: three first-use caches read live state once per process
+    (``term_rewriting._MODULE_NAMESPACE_CLASS_NAMES`` and
+    ``_PYTHON_CLASS_NAMES``, :data:`_ENGINE_MEANING` here); a memo hit
+    and a fresh audit see the same cached value."""
     import builtins  # noqa: PLC0415
     from clausal import _sandbox_state  # noqa: PLC0415
     return (_engine_names(), _allowed_callees(cut_surface),
@@ -340,11 +351,14 @@ def node_line(node) -> int:
 
 
 class _Audit:
-    def __init__(self, check_module, cut_surface: bool = False):
+    def __init__(self, check_module, cut_surface: bool = False,
+                 tables=None):
         self.routes: list = []
         self.children: list = []
+        if tables is None:
+            tables = audit_tables(cut_surface)
         (self.engine, self.callees, self.reserved, _sandbox,
-         self.builtin_names) = audit_tables(cut_surface)
+         self.builtin_names) = tables
         self.imported_modules: dict = {}    # guarded import -> names
         self.implicit_functors = False      # set from the tree
         self.check_module = check_module
@@ -693,7 +707,7 @@ class _Audit:
 
 def audit_tree(tree: ast.Module, check_module, *, translations=(),
                module_items=(), prolog_surface=False,
-               cut_surface=False) -> "tuple[list, list]":
+               cut_surface=False, tables=None) -> "tuple[list, list]":
     """``(routes, [])`` of the generated module *tree*: every node that is
     not on the allow-list is a route.  *check_module(kind, a, b, node)*
     answers the module questions (``"module"``: may module *a* be imported;
@@ -708,8 +722,11 @@ def audit_tree(tree: ast.Module, check_module, *, translations=(),
 
     *cut_surface*: the tree is a ``.pl`` file's -- the only surface whose
     clause bodies may hold the cut nodes (D59).  A ``.clausal`` tree is
-    *prolog_surface* but never *cut_surface*."""
-    audit = _Audit(check_module, cut_surface=bool(cut_surface))
+    *prolog_surface* but never *cut_surface*.  *tables*: the
+    :func:`audit_tables` to read, when the caller took them (else taken
+    here)."""
+    audit = _Audit(check_module, cut_surface=bool(cut_surface),
+                   tables=tables)
     audit.implicit_functors = bool(prolog_surface)
     # *translations*: the dumps of the statements the -translations lowering
     # emitted (``EmbedTransformer._emitted_translations``); each matches one

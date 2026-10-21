@@ -386,8 +386,10 @@ surface described in [docs/public-api.md](docs/public-api.md).
   same size and timestamps is still seen; the process state the audit
   reads is in the key -- the loader's name tables, the sandbox switch,
   which the seam compile consults, and the names Python's builtins bind,
-  which `-implicit_functors` consults -- and `sandbox.enable()` empties
-  the memo besides; bounded, process-local) and *replayed*, never trusted: the
+  which `-implicit_functors` consults -- taken once and read by that same
+  audit, so a verdict is stored under the state it was computed under
+  whatever another thread does meanwhile; `sandbox.enable()` empties the
+  memo besides; bounded, process-local) and *replayed*, never trusted: the
   module questions the audit asked (is `m` a module, is `p` its export,
   answered by other files) are asked again of a fresh checker, and a
   different answer audits afresh, so a hit returns exactly what a fresh
@@ -401,7 +403,8 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `::test_a_memoised_verdict_follows_the_modules_it_asked_about`,
   `::test_a_module_retried_after_a_failed_import_does_not_recompile_its_dependency`,
   `::test_the_memo_follows_the_sandbox_switch`,
-  `::test_the_memo_follows_the_python_builtins_under_implicit_functors`
+  `::test_the_memo_follows_the_python_builtins_under_implicit_functors`,
+  `::test_a_verdict_is_stored_under_the_snapshot_it_was_computed_under`
   and `::test_plumbing_is_recognised_by_its_head_before_its_shape`.
 
 - **The goal-taking builtins are one table** (2026-10-20):
