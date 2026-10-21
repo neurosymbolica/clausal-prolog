@@ -1,6 +1,6 @@
 # clausal-fmt rewrites a quoted atom as a string, changing the program
 
-**Status: FIXED 2026-10-20 (commit 6b0ea5f5).** The emitter writes every string literal back as the source spelled it (a spelling ledger captured next to the arrow ledger, `CommentTable.literals`), and `ast_equivalent` compares the quote character of every string literal from the source, so a requoting result is refused. Pinned in `tests/fmt/test_emit.py::test_a_quoted_atom_head_functor_stays_an_atom`, `tests/fmt/test_emit.py::test_a_quoted_atom_body_goal_stays_an_atom`, `tests/fmt/test_verify.py::test_a_requoting_formatter_is_refused` and, for every `.seam` in the repository, `tests/fmt/test_corpus.py::test_fmt_keeps_the_compiled_module`.
+**Status: FIXED 2026-10-20 (commit 2ec866c7).** The emitter writes every string literal back as the source spelled it (a spelling ledger captured next to the arrow ledger, `CommentTable.literals`), and `ast_equivalent` compares the quote character of every string literal from the source, so a requoting result is refused. Pinned in `tests/fmt/test_emit.py::test_a_quoted_atom_head_functor_stays_an_atom`, `tests/fmt/test_emit.py::test_a_quoted_atom_body_goal_stays_an_atom`, `tests/fmt/test_verify.py::test_a_requoting_formatter_is_refused` and, for every `.seam` in the repository, `tests/fmt/test_corpus.py::test_fmt_keeps_the_compiled_module`.
 
 Filed 2026-10-20, found by the full-suite gate when clausal/stdlib/reif.seam
 (the runtime `if_/3`) joined the files the formatter's comment-anchor test reads.
