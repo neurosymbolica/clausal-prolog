@@ -1619,3 +1619,52 @@ def test_mark_directives_carry_only_constants():
                                                  ctx=_ast.Load()),
                             attr="clear", ctx=_ast.Load()))
         assert _audit(other), attr
+
+
+def test_plumbing_is_recognised_by_its_head_before_its_shape():
+    """``_Audit.plumbing`` compares a statement's full canonical shape
+    with the compiler builders' only when its outermost callee matches
+    one of theirs: a clause statement never pays the full comparison, and
+    every builder's statement is still recognised."""
+    import ast as _ast
+    from clausal import seam_audit as sa
+    from clausal.templating import term_rewriting as tr
+    anchor = _ast.parse("x").body[0]
+    imp = _ast.parse("from m import a").body[0]
+    built = {
+        "import_guard": tr._wrap_import_for_pl_data(
+            imp, "m", {"a": "a"}, ["a"], anchor),
+        "import_signatures": tr._make_import_signatures_update_ast(
+            "m", [("a", "a")], anchor),
+        "import_arities": tr._make_import_arities_record_ast(
+            {"a": {1}}, anchor),
+        "functor_signatures": tr._make_functor_signatures_update_ast(
+            [("f", ("x",))], anchor),
+    }
+    for kind, stmt in built.items():
+        assert sa._plumbing_kind(stmt) == kind
+    tree = _clean_generated_tree()
+    # the same classification as the full shape's, on every statement
+    kinds = [sa._plumbing_kind(s) for s in tree.body]
+    assert kinds == [sa._plumbing_shapes().get(sa._shape(s))
+                     for s in tree.body]
+    assert "import_signatures" in kinds
+    clause = [s for s in tree.body
+              if isinstance(s, _ast.Expr) and isinstance(s.value, _ast.Call)
+              and isinstance(s.value.func, _ast.Name)
+              and s.value.func.id == "$define_predicate"]
+    assert clause
+    shapes = []
+    real = sa._shape
+
+    def counting(node):
+        shapes.append(node)
+        return real(node)
+
+    sa._shape = counting
+    try:
+        for s in clause:
+            assert sa._plumbing_kind(s) is None
+    finally:
+        sa._shape = real
+    assert not any(n is s for n in shapes for s in clause)

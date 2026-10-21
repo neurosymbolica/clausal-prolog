@@ -224,11 +224,13 @@ def _shape(node) -> str:
 
 
 _PLUMBING_SHAPES: "dict | None" = None
+#: The heads (:func:`_head`) of the builders' statements, with it.
+_PLUMBING_HEADS: "frozenset | None" = None
 
 
 def _plumbing_shapes() -> dict:
     """shape -> plumbing kind, built by CALLING the compiler's builders."""
-    global _PLUMBING_SHAPES
+    global _PLUMBING_SHAPES, _PLUMBING_HEADS
     if _PLUMBING_SHAPES is not None:
         return _PLUMBING_SHAPES
     from clausal.templating import term_rewriting as tr  # noqa: PLC0415
@@ -236,18 +238,54 @@ def _plumbing_shapes() -> dict:
     imp = ast.parse("from m import a").body[0]
     # _shape erases an ImportFrom's module and names, never its kind: only
     # the import guard's one ImportFrom position takes one.
-    shapes = {
-        _shape(tr._wrap_import_for_pl_data(imp, "m", {"a": "a"}, ["a"],
-                                           anchor)): "import_guard",
-        _shape(tr._make_import_signatures_update_ast(
-            "m", [("a", "a")], anchor)): "import_signatures",
-        _shape(tr._make_import_arities_record_ast({"a": {1}}, anchor)):
-            "import_arities",
-        _shape(tr._make_functor_signatures_update_ast(
-            [("f", ("x",))], anchor)): "functor_signatures",
+    built = {
+        "import_guard": tr._wrap_import_for_pl_data(
+            imp, "m", {"a": "a"}, ["a"], anchor),
+        "import_signatures": tr._make_import_signatures_update_ast(
+            "m", [("a", "a")], anchor),
+        "import_arities": tr._make_import_arities_record_ast(
+            {"a": {1}}, anchor),
+        "functor_signatures": tr._make_functor_signatures_update_ast(
+            [("f", ("x",))], anchor),
     }
+    shapes = {_shape(stmt): kind for kind, stmt in built.items()}
+    _PLUMBING_HEADS = frozenset(_head(stmt) for stmt in built.values())
     _PLUMBING_SHAPES = shapes
     return shapes
+
+
+def _head(node) -> str:
+    """The cheap part of a statement's :func:`_shape`: an ``Expr`` whose
+    value is a call gives the canonical shape of the CALLEE alone, every
+    other statement its node kind.  Two statements with one shape have one
+    head (a call is never a constant subtree, so the canonicalisation of
+    the callee is the same inside the whole), so a statement whose head is
+    no builder's cannot have a builder's shape."""
+    if isinstance(node, ast.Expr):
+        if isinstance(node.value, ast.Call):
+            return "Expr:" + _shape(node.value.func)
+        return "Expr:other"
+    return type(node).__name__
+
+
+def _plumbing_kind(node) -> "str | None":
+    """The plumbing builder whose template statement *node* has the shape
+    of, or None.  The full shape (a deep copy of the statement, dumped) is
+    taken only for a statement whose head is a builder's: a clause
+    statement, the common case, is settled by its callee."""
+    shapes = _plumbing_shapes()
+    if _head(node) not in _PLUMBING_HEADS:
+        return None
+    return shapes.get(_shape(node))
+
+
+def audit_tables(cut_surface: bool = False) -> tuple:
+    """The engine tables an audit reads (:class:`_Audit`): the engine
+    plumbing names, the allowed callees and the loader's bare names.  With
+    the generated tree they are everything the audit's own verdict depends
+    on, so a memo of a verdict is keyed by them."""
+    return (_engine_names(), _allowed_callees(cut_surface),
+            _runtime_bare_names())
 
 
 def _import_constants(node) -> "list[str]":
@@ -293,9 +331,7 @@ class _Audit:
     def __init__(self, check_module, cut_surface: bool = False):
         self.routes: list = []
         self.children: list = []
-        self.engine = _engine_names()
-        self.callees = _allowed_callees(cut_surface)
-        self.reserved = _runtime_bare_names()
+        self.engine, self.callees, self.reserved = audit_tables(cut_surface)
         self.imported_modules: dict = {}    # guarded import -> names
         self.implicit_functors = False      # set from the tree
         self.check_module = check_module
@@ -366,7 +402,7 @@ class _Audit:
         the statement must then be EXACTLY what that builder emits for the
         constants it carries (rebuilt and compared), those constants
         checked against this file's own imports and declarations."""
-        kind = _plumbing_shapes().get(_shape(node))
+        kind = _plumbing_kind(node)
         if kind is None:
             return False
         from clausal.templating import term_rewriting as tr  # noqa: PLC0415
