@@ -83,11 +83,11 @@ READ_OK = [
 
 #: Rows the TRANSLATOR front end still gets wrong, for reasons other than the
 #: literal (each reproduces at the base commit): `{...}` over a `-` term
-#: builds a Python set of operator nodes (TypeError: unhashable), a `(a,b)`
-#: data term is emitted as a call, and the seam's `-Y` is an operator node
-#: that does not unify with the ISO compound '-'(1).  Strict, so a fix
-#: flips them.
-TRANSLATOR_OPEN = {"#81 {- - c}", "#139", "-(1) = -(Y)"}
+#: builds a Python set of operator nodes (TypeError: unhashable), and a
+#: `(a,b)` data term is emitted as a call.  Strict, so a fix flips them.
+#: (`-(1) = -(Y)` left this set when the translator began writing `-` in
+#: data position as the ISO compound '-'(Y), not an operator node.)
+TRANSLATOR_OPEN = {"#81 {- - c}", "#139"}
 
 #: Rows Scryer gets wrong: in a CONSULTED clause
 #: `1.0e-323 =:= 10.0** -323` fails, while the same goal at its toplevel

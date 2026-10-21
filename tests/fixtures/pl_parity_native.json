@@ -242,7 +242,7 @@
     "the_first_8_queens_placement": "pass"
    }
   },
-  "docs/importing_prolog.md#L1034": {
+  "docs/importing_prolog.md#L1038": {
    "collect_error": null,
    "error": null,
    "load": "ok",
@@ -394,7 +394,7 @@
    },
    "tests": null
   },
-  "docs/importing_prolog.md#L912": {
+  "docs/importing_prolog.md#L916": {
    "collect_error": null,
    "error": null,
    "load": "ok",
@@ -2879,7 +2879,7 @@
   "docs/for_prolog_programmers.md#L314": "d0aaa6c6f92eac22",
   "docs/for_prolog_programmers.md#L54": "a17138887a920d25",
   "docs/for_prolog_programmers.md#L86": "d1598395083db33f",
-  "docs/importing_prolog.md#L1034": "c9dd3a3c1fc2df50",
+  "docs/importing_prolog.md#L1038": "c9dd3a3c1fc2df50",
   "docs/importing_prolog.md#L160": "6364c204ab15be05",
   "docs/importing_prolog.md#L185": "80cbfe211879457f",
   "docs/importing_prolog.md#L194": "8ab7c57d8935077d",
@@ -2891,7 +2891,7 @@
   "docs/importing_prolog.md#L486": "57b9d1766ac5ee1c",
   "docs/importing_prolog.md#L718": "808de0f6e0dc161f",
   "docs/importing_prolog.md#L767": "44bbc956b49e7cc7",
-  "docs/importing_prolog.md#L912": "cf328a2677953c18",
+  "docs/importing_prolog.md#L916": "c9153ed0660c0d7b",
   "docs/index.md#L94": "72604ff11fb53c41",
   "docs/prolog_translation.md#L33": "8848f32154e44b13",
   "docs/python_integration.md#L536": "499dfb388eedb3e8",
