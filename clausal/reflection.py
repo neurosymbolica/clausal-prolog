@@ -41,8 +41,9 @@ atom, one term.  How each was spelled is kept BESIDE the terms, in an
 ``AtomSpellings`` table the reifier fills on request (``reify_source(...,
 spellings=)``) and the renderer writes back through (``render_source(term,
 spellings)``), so a tool that re-renders a clause into its own file writes
-every atom as it was read.  Without the table an atom is spelled so that it
-reads back as that atom: bare only when a bare name does (``score``), else
+every atom as it was read, and an atom a rule built only bare where the item
+itself spells that name bare.  Without the table an atom is spelled so that
+it reads back as that atom: bare only when a bare name does (``score``), else
 ``'Foo'`` / ``'None'`` / ``'if'``.
 
 ``Goal`` deliberately has no ``position`` field: goals are compared whole
@@ -60,6 +61,7 @@ import dataclasses
 import functools
 import keyword
 import types
+import unicodedata
 import typing
 import warnings
 
@@ -216,21 +218,26 @@ PythonCode = _vocab_ctor("PythonCode", _VOCAB_FIELDS["PythonCode"])
 # A third ``Atom`` field would make every ``Atom("a") == reified`` in a rule's
 # tests and in the driver's goal correspondence compare unequal.  So it is a
 # SIDE TABLE, filled by the reifier and read by the renderer, keyed first by
-# the Atom CELL itself (a ground cell a rule passes through its variables
-# keeps its identity -- unification binds the object, ``_deref_walk`` keeps
-# leaves) and then by NAME within the reified item, for a cell a rule rebuilt
-# (``Atom(N)`` from a bound ``N``) when the item spells that name one way.
+# the Atom CELL itself and then by NAME within the reified item.  The cell key
+# answers only for the very object the reifier built: unification binds a
+# rule's variable to that object, but a walk that REBUILDS tuples
+# (``solve._deref_walk`` and its C twin both do) loses it, so a caller that
+# wants the cell layer must resolve the rule's answer with a walk that keeps
+# an unchanged tuple (``rewrite.driver._resolved``).  The name layer records
+# every spelling the item uses for a name -- as an atom or as a functor -- so
+# an atom the rule built from a name it took out of the item is written the
+# one way the item writes it, and quoted when the item is of two minds.
 
 
 class AtomSpellings:
     """The quote character each ``Atom`` of one reified item was read with.
 
     A recorded spelling is ``"'"``, ``'"'`` (an atom-mode ``"…"`` literal) or
-    ``""`` (a bare name, which is also how a lambda parameter reference and a
-    qualified ``mod.pred`` reify).  :meth:`quote_of` answers ``None`` for an
-    atom this table never saw -- one a rule built from its template -- and
-    the renderer then spells it so that it reads back as that atom
-    (:func:`_reads_back_bare`).
+    ``""`` (a bare name, which is also how a lambda parameter reference, a
+    qualified ``mod.pred`` and every functor reify).  :meth:`cell_quote` is
+    the exact spelling of an atom the reifier built; :meth:`name_quotes` is
+    every spelling the item gives a name.  The renderer's policy over the two
+    is :meth:`_ClauseRenderer._atom_ast`.
     """
 
     def __init__(self):
@@ -242,26 +249,35 @@ class AtomSpellings:
         # The cell is kept alive by the entry, so its id() cannot be reused
         # for as long as this table can answer for it.
         self._by_cell[id(atom)] = (atom, quote)
-        self._by_name.setdefault(vfield(atom, "name"), set()).add(quote)
+        self.record_name(vfield(atom, "name"), quote)
 
-    def quote_of(self, atom, name):
-        """*atom*'s recorded spelling, or ``None`` when it has none.
+    def record_name(self, name, quote):
+        """Remember that the item spells *name* with *quote* somewhere -- as
+        an atom, or as a functor (always bare)."""
+        self._by_name.setdefault(name, set()).add(quote)
 
-        By identity first; then by *name* (the atom's raw name), when every
-        atom of that name in the item was spelled the same way, so a cell a
-        rule rebuilt from a name it took out of the item is written as the
-        item writes it.
-        """
+    def cell_quote(self, atom):
+        """The spelling *atom* -- this very cell -- was read with, or ``None``."""
         entry = self._by_cell.get(id(atom))
         if entry is not None and entry[0] is atom:
             return entry[1]
-        try:
-            quotes = self._by_name.get(name)
-        except TypeError:  # an unhashable name is a rule bug the renderer reports
-            return None
-        if quotes is not None and len(quotes) == 1:
-            return next(iter(quotes))
         return None
+
+    def name_quotes(self, name):
+        """Every spelling the item gives *name*: a (possibly empty) set."""
+        try:
+            return self._by_name.get(name, frozenset())
+        except TypeError:  # an unhashable name is a rule bug the renderer reports
+            return frozenset()
+
+    def quote_of(self, atom, name):
+        """*atom*'s cell spelling, else the one spelling the item gives
+        *name*, else ``None``."""
+        quote = self.cell_quote(atom)
+        if quote is not None:
+            return quote
+        quotes = self.name_quotes(name)
+        return next(iter(quotes)) if len(quotes) == 1 else None
 
     def __len__(self):
         return len(self._by_cell)
@@ -274,9 +290,16 @@ def _reads_back_bare(name: str) -> bool:
     must be an identifier that the seam reads as a NAME: not a keyword
     (``if``, and ``None``/``True``/``False``, which read as Python constants),
     not a logic-variable spelling (``Foo``, ``_x``: an uppercase or
-    underscore-led name is a variable wherever a value goes), and not the
-    ``_`` wildcard.  A dotted name that passes is a qualified reference,
-    which is what a dotted ``Atom`` a rule built stands for.
+    underscore-led name is a variable wherever a value goes), not the ``_``
+    wildcard, and its own NFKC form -- the parser normalises an identifier,
+    so ``ǅx`` reads back as the variable ``Džx`` and ``ﬁle`` as ``file``.
+    A dotted name that passes is a qualified reference, which is what a
+    dotted ``Atom`` a rule built stands for.
+
+    What this cannot know is the FILE: whether a bare name is declared, or
+    shadowed by an import (``-import_module(reflection)`` makes bare
+    ``reflection`` the module).  That is why, with the source at hand, the
+    renderer spells an unseen non-dotted name quoted (``_atom_ast``).
     """
     from clausal.templating.term_rewriting import _is_logic_var_name  # noqa: PLC0415
 
@@ -284,6 +307,7 @@ def _reads_back_bare(name: str) -> bool:
         return False
     return not any(
         keyword.iskeyword(part) or part == "_" or _is_logic_var_name(part)
+        or unicodedata.normalize("NFKC", part) != part
         for part in name.split(".")
     )
 
@@ -532,6 +556,12 @@ class _ClauseReifier:
             self._spellings.record(atom, quote)
         return atom
 
+    def _functor(self, name):
+        """A goal's *name*, which the item spells bare, recorded as such."""
+        if self._spellings is not None:
+            self._spellings.record_name(name, "")
+        return name
+
     # -- variables ----------------------------------------------------------
 
     def _named_var(self, name):
@@ -774,11 +804,11 @@ class _ClauseReifier:
             else len(canonical),
         )
         args += [self.term(value) for _, value in ordered]
-        return Goal(name, args, [])
+        return Goal(self._functor(name), args, [])
 
     def _goal_call(self, kwargs):
         """simple_ast Call constructor → Goal(name, args, kwargs)."""
-        name = _dotted_name(kwargs["func"])
+        name = self._functor(_dotted_name(kwargs["func"]))
         args = [self.term(arg) for arg in kwargs["args"].elts]
         kw_pairs = []
         keyword_ctors = kwargs["kwargs"].elts if "kwargs" in kwargs else []
@@ -1014,25 +1044,51 @@ class _ClauseRenderer:
         return node
 
     def _atom_ast(self, atom, name, display):
-        """An atom cell with raw *name* and *display* text, written the way it was read.
+        """An atom cell with raw *name* and *display* text, written so that
+        it reads back as that atom.
 
-        The spelling comes from the :class:`AtomSpellings` the term was
-        reified with: bare, ``'…'`` or (an atom-mode literal) ``"…"``, so the
-        output re-reads as the atom it rendered in the file it came from.
-        An atom with no recorded spelling -- one a rule built -- is bare
-        exactly when a bare name reads back as that atom
-        (:func:`_reads_back_bare`, or it names a parameter of an enclosing
-        lambda) and single-quoted otherwise: ``'foo bar'`` and ``'Foo'``
-        and ``'None'`` are that atom in every ``-double_quotes`` mode,
-        where bare ``Foo`` is a variable and bare ``None`` is Python's.
+        With the :class:`AtomSpellings` the term was reified with -- the
+        source at hand -- the policy is:
+
+        1. an atom the reifier built (the cell is in the table) is written
+           as it was read: bare, ``'…'`` or an atom-mode ``"…"``;
+        2. any other atom was built by a rule.  Named like a parameter of an
+           enclosing lambda it is ambiguous -- the parameter reference and
+           the atom reify alike -- and is REFUSED; otherwise it is written
+           the one way the item spells that name (as an atom or a functor:
+           ``Atom(CALLEE)`` for a callee the body spells bare comes out
+           bare), quoted when the item spells it two ways, and when the item
+           never spells it, quoted unless it is dotted and reads back bare
+           (a qualified reference).  Bare is kept only where the item itself
+           vouches for it, because whether a bare name is an atom, a
+           predicate, a declared constant, an imported module or a load
+           error is decided by the file, which the renderer cannot see.
+
+        Without the table the vocabulary's own reading applies: a parameter
+        reference is bare, and an atom is bare exactly when a bare name
+        reads back as that atom (:func:`_reads_back_bare`) -- ``'foo bar'``,
+        ``'Foo'`` and ``'None'`` are that atom in every ``-double_quotes``
+        mode, where bare ``Foo`` is a variable and bare ``None`` is Python's.
         """
-        quote = (self._spellings.quote_of(atom, name)
-                 if self._spellings is not None else None)
-        if quote is None:
-            if any(display in params for params in self._lambda_params):
-                quote = ""      # a lambda parameter reference
-            else:
-                quote = "" if _reads_back_bare(display) else "'"
+        in_lambda = any(display in params for params in self._lambda_params)
+        if self._spellings is None:
+            quote = "" if in_lambda or _reads_back_bare(display) else "'"
+        else:
+            quote = self._spellings.cell_quote(atom)
+            if quote is None:
+                if in_lambda:
+                    raise RenderError(
+                        f"cannot render the atom {display!r} inside a lambda "
+                        f"with a parameter of that name: the source did not "
+                        f"write it, so it may be the parameter or the atom"
+                    )
+                quotes = self._spellings.name_quotes(name)
+                if len(quotes) == 1:
+                    quote = next(iter(quotes))
+                elif quotes or "." not in display or not _reads_back_bare(display):
+                    quote = "'"
+                else:
+                    quote = ""
         if quote == "" and _is_dotted_identifier(display):
             return self._name_ast(display)
         if quote == '"':

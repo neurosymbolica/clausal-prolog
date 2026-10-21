@@ -978,6 +978,7 @@ class TestAtomSpellings:
         ("Foo", "'Foo'"), ("X", "'X'"), ("_x", "'_x'"), ("_", "'_'"),
         ("None", "'None'"), ("True", "'True'"), ("False", "'False'"),
         ("if", "'if'"), ("foo bar", "'foo bar'"), ("a.Foo", "'a.Foo'"),
+        ("ǅx", "'ǅx'"), ("ﬁle", "'ﬁle'"), ("a.ﬁle", "'a.ﬁle'"),
     ])
     def test_a_rule_built_atom_is_bare_only_when_that_reads_back(self, name, expected):
         from clausal.reflection import reify_ast
@@ -1010,6 +1011,16 @@ class TestAtomSpellings:
         assert vfield(vfield(fact, "head"), "args") == ["s", Atom("s")]
         assert render_source(fact, spellings) == 'p("s", \'s\'),'
         assert len(spellings) == 1
+
+    def test_with_the_source_at_hand_an_unseen_atom_is_quoted(self):
+        """With a table, a rule-built atom is bare only where the item spells
+        that name bare (``m`` is the functor), quoted where the item spells
+        it two ways, and for an unseen name quoted unless dotted."""
+        from clausal.reflection import AtomSpellings
+        spellings = AtomSpellings()
+        (fact,) = reify_source("p(m(x), 'y', y),", spellings=spellings)
+        built = Goal("q", [Atom("m"), Atom("x"), Atom("y"), Atom("score"), Atom("a.b"), Atom("a.Foo")], [])
+        assert render_source(built, spellings) == "q(m, x, 'y', 'score', a.b, 'a.Foo')"
 
     def test_a_lambda_parameter_reference_stays_bare_without_a_table(self):
         """``add_one(X)`` in a lambda body reifies as ``Atom("X")`` -- the
