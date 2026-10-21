@@ -1101,6 +1101,70 @@ def _zero_divisor(*exprs: Any) -> bool:
     return False
 
 
+#: :func:`_expression_culprit`'s answer when every leaf is arithmetic (None
+#: cannot be it: a culprit may be any term).
+_NO_CULPRIT = object()
+
+
+def _expression_culprit(*exprs: Any) -> Any:
+    """The first leaf of *exprs*, left to right, that is no arithmetic
+    expression -- what nf.pl's normal form refuses as ``type_error(
+    expression, Culprit)`` -- or :data:`_NO_CULPRIT`.  The strict post
+    boundary (``_cells_as_nodes``) refuses an atom and a non-evaluable cell
+    already; a list (under a node or bare) gets through to here.  A
+    non-finite Decimal raises the port's ``evaluation_error``."""
+    from clausal.logic.clpfd import _arith_leaf  # noqa: PLC0415
+    from clausal.logic.clpq.arithmetic import from_number  # noqa: PLC0415
+    from clausal.logic.exact_arith import (  # noqa: PLC0415
+        EVALUABLE, cell_key_args, node_key_args)
+    stack = list(reversed(exprs))
+    while stack:
+        expr = deref(stack.pop())
+        key_args = node_key_args(expr)
+        if key_args is None:
+            key_args = cell_key_args(expr)
+            if key_args is not None and key_args[0] not in EVALUABLE:
+                key_args = None
+        if key_args is not None:
+            stack.extend(reversed(key_args[1]))
+        elif not _arith_leaf(expr):
+            return expr
+        elif type(expr) is Decimal and not expr.is_finite():
+            from_number(expr)   # the port's evaluation_error (ruling R19)
+    return _NO_CULPRIT
+
+
+def _nonlinear(*exprs: Any) -> bool:
+    """True when one of *exprs* is non-linear: a product or a quotient of
+    variables, or a function the linear form has no term for (``^``,
+    ``abs``, ...).  With no zero divisor and no :func:`_expression_culprit`,
+    that is why :func:`_linearize` gave None."""
+    _ensure_term_imports()
+    stack = list(exprs)
+    while stack:
+        expr = deref(stack.pop())
+        if is_var(expr) or isinstance(expr, (int, float, Fraction, Decimal)):
+            continue
+        if isinstance(expr, _Mult):
+            left = _linearize(expr.left, None)
+            right = _linearize(expr.right, None)
+            if left is not None and right is not None and left[0] and right[0]:
+                return True
+            stack.extend((expr.left, expr.right))
+        elif isinstance(expr, _Div):
+            divisor = _linearize(expr.right, None)
+            if divisor is not None and divisor[0]:
+                return True
+            stack.extend((expr.left, expr.right))
+        elif isinstance(expr, (_Add, _Sub)):
+            stack.extend((expr.left, expr.right))
+        elif isinstance(expr, _Negate):
+            stack.append(expr.operand)
+        else:
+            return True
+    return False
+
+
 # ── Domain posting ───────────────────────────────────────────────────────────
 
 
@@ -1610,11 +1674,21 @@ def entailed(constraint_type: str, l: Any, r: Any, trail: Trail) -> bool:
     lc = _linearize(l, trail)
     rc = _linearize(r, trail)
     if lc is None or rc is None:
-        # As the port answers: with a zero divisor the negation cannot be
-        # posted, so the relation holds; a non-linear relation is not
-        # entailed (its negation is delayed, so it is consistent).  Both
-        # raised a Python TypeError.
-        return _zero_divisor(l, r)
+        # As the port answers: an operand that is no arithmetic expression
+        # (a list) is nf.pl's type_error(expression, Culprit); with a zero
+        # divisor the negation cannot be posted, so the relation holds; a
+        # non-linear relation is not entailed (its negation is delayed, so
+        # it is consistent).  The last two raised a Python TypeError.
+        culprit = _expression_culprit(l, r)
+        if culprit is not _NO_CULPRIT:
+            raise LogicException(type_error(
+                "expression", culprit, "normal_form/2"))
+        if _zero_divisor(l, r):
+            return True
+        if _nonlinear(l, r):
+            return False
+        # Unreachable: _linearize has no other None.
+        raise TypeError(f"entailed/1: no linear form for {l!r}, {r!r}")
     lk, lv = lc
     rk, rv = rc
     # Compute l - r as a linear expression
@@ -2178,10 +2252,34 @@ def clpq_constraint_answers(constraints: Any, trail: Trail):
         yield None
 
 
+#: A relation cell a block holds -> the comparison node it posts as: the
+#: comparisons nf.pl's {}/1 reads (``=`` is ``=:=`` there).  A relation built
+#: at run time (``C = (X =< 5), clpq:rational(C)``) arrives as a cell; the
+#: braces of a .clausal or seam block are compiled to the nodes.  Filled by
+#: :func:`_block_cell_as_node` on first use.
+_BLOCK_CELL_NODES: dict = {}
+
+
+def _block_cell_as_node(term: Any) -> Any:
+    """*term* as its comparison node when it is a relation cell
+    (``('=<', X, 5)``), else *term* unchanged."""
+    if type(term) is not tuple or len(term) != 3:
+        return term
+    if not _BLOCK_CELL_NODES:
+        _ensure_term_imports()
+        _BLOCK_CELL_NODES.update({
+            "=<": _LtE, "<": _Lt, ">=": _GtE, ">": _Gt,
+            "=:=": _ArithEq, "=": _ArithEq, "=\\=": _ArithNeq})
+    node_class = _BLOCK_CELL_NODES.get(term[0])
+    if node_class is None:
+        return term
+    return node_class(left=term[1], right=term[2])
+
+
 def _post_q_constraint_node(node: Any, trail: Trail) -> bool:
     """Post a single AST constraint node to CLP(Q).  A list, a tuple of
     nodes, a chain and a ``,`` cell are conjunctions, posted in the order
-    written (the port's ``_block_tree``)."""
+    written (the port's ``_block_tree``); a relation cell is its node."""
     _ensure_term_imports()
     node = deref(node)
     kind = type(node)
@@ -2201,6 +2299,8 @@ def _post_q_constraint_node(node: Any, trail: Trail) -> bool:
     if kind is tuple and len(node) == 3 and node[0] == ",":
         return (_post_q_constraint_node(node[1], trail)
                 and _post_q_constraint_node(node[2], trail))
+
+    node = _block_cell_as_node(node)
 
     for node_class, post, context in _Q_BLOCK_POSTERS:
         if isinstance(node, node_class):

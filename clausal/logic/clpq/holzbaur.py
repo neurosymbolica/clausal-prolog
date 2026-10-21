@@ -79,8 +79,8 @@ from clausal.logic.clpq.arithmetic import (
 from clausal.logic.clpq.attributes import (
     CLPQ_KEY, culprit_argument, refuse_inside_attribute_hooks, state_of)
 from clausal.logic.clpq.legacy import (
-    _cell_as_node, _cells_as_nodes, _units_result, _units_strip,
-    _units_strip_expr)
+    _block_cell_as_node, _cell_as_node, _cells_as_nodes, _units_result,
+    _units_strip, _units_strip_expr)
 from clausal.logic.clpz_surface import _proper_list
 from clausal.logic.exceptions import (
     LogicException, instantiation_error, type_error)
@@ -647,8 +647,9 @@ def ordering(spec, trail):
 # conjunction nests no frames.
 
 def _block_tree(constraints):
-    """(tree, holds a `;`) for the block *constraints*: a comparison node, a
-    tuple or list of them, a CompareChain, or `,`/`;` cells."""
+    """(tree, holds a `;`) for the block *constraints*: a comparison node or
+    relation cell, a tuple or list of them, a CompareChain, or `,`/`;`
+    cells."""
     disjunctive = False
     _normal_form.refuse_cyclic_term(constraints)
     root = [deref(constraints)]
@@ -672,6 +673,8 @@ def _block_tree(constraints):
         else:
             if is_var(term):                    # nf.pl {}/1 clause 1
                 raise LogicException(instantiation_error("{}/1"))
+            term = _block_cell_as_node(term)    # a relation built at run time
+            kind = type(term)
             context = _BLOCK_CONTEXTS.get(kind)
             if context is None:                 # nf.pl {}/1 clause 13
                 raise LogicException(type_error("constraint", term, "{}/1"))

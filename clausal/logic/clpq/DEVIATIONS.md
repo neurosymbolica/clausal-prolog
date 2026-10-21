@@ -1095,7 +1095,12 @@ differently from 1.3.3 itself:
   binding (2026-10-20; they were Python TypeError/ValueError), and
   answers as the port does where linearisation fails on a zero divisor
   (a post or an optimum fails, `entailed` holds) or in `entailed` on a
-  non-linear relation (false).  A non-linear post or optimum still
+  non-linear relation (false); `entailed` with an operand that is no
+  expression (a list) raises the port's `type_error(expression,
+  Culprit)` from `normal_form/2`, and one with an infinite Decimal the
+  port's `evaluation_error(float_overflow)` (2026-10-21).  Both solvers
+  post a relation cell (`('=<', X, 5)`, built at run time) in a block
+  as its comparison node.  A non-linear post or optimum still
   raises a Python TypeError under legacy, which cannot delay it
   (`tests/test_clpq_error_terms.py`).
   `bb_inf/3` and `dump_q/2` take a proper list: a variable or a partial

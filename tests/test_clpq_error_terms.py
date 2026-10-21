@@ -24,6 +24,7 @@ import os
 import pathlib
 import subprocess
 import sys
+from decimal import Decimal
 from fractions import Fraction
 
 import pytest
@@ -35,6 +36,7 @@ from clausal.logic.exceptions import (
 from clausal.logic.solve import call
 from clausal.logic.variables import Trail, Var, deref, unify
 from clausal.pythonic_ast.nodes import LtE
+from clausal.terms import Add
 from clausal.testing import load_clausal_module
 from tests._suffix import SEAM
 
@@ -73,6 +75,18 @@ EXPECTED = {
     "entailed_nonlinear_unbound": "false",
     "entailed_division_by_a_variable": "false",
     "module_entailed_nonlinear": "false",
+    "entailed_function_of_a_variable": "false",
+    # An operand that is no arithmetic expression is refused, as the port
+    # and nf.pl refuse it; legacy answered false (not entailed).
+    "entailed_list_operand":
+        "caught(error(type_error(expression, [1]), _))",
+    "entailed_nonlinear_list_operand":
+        "caught(error(type_error(expression, [1]), _))",
+    # Under an operator cell, the post boundary refuses it first (ruling R9
+    # A1), as it refuses a string.
+    "entailed_list_operand_under_an_operator":
+        "caught(error(type_error(evaluable, _), _))",
+    "entailed_string_operand": "caught(error(type_error(evaluable, _), _))",
     # A zero divisor: the negation cannot be posted, so the relation holds.
     "entailed_zero_divisor_le": "true",
     "entailed_zero_divisor_equality": "true",
@@ -93,6 +107,11 @@ EXPECTED = {
     "in_q_atom_bound": "caught(error(type_error(rational, a), _))",
     "in_q_unbound_bound": "caught(error(instantiation_error, _))",
     "bind_a_float": "caught(error(type_error(rational, 1.5), _))",
+    # A relation cell built at run time is posted, as nf.pl's {}/1 reads it.
+    "block_of_a_relation_cell_built_at_run_time": "true",
+    "block_of_a_conjunction_cell_built_at_run_time": "true",
+    "block_of_an_equality_cell_built_at_run_time": "true",
+    "block_of_an_unsatisfiable_cell_built_at_run_time": "false",
 }
 
 CASES = r"""
@@ -119,6 +138,11 @@ case(entailed_nonlinear_equality) :- {A =< 4}, entailed(A*A =:= 4).
 case(entailed_nonlinear_unbound) :- entailed(_A*_B =:= 4).
 case(entailed_division_by_a_variable) :- {A =< 4, B >= 1}, entailed(A/B =< 100).
 case(module_entailed_nonlinear) :- {A =< 4}, clpq:entailed(A*A =\= 5).
+case(entailed_function_of_a_variable) :- {A =< 4}, entailed(abs(A) =< 5).
+case(entailed_list_operand) :- {A =< 4}, entailed(A =< [1]).
+case(entailed_list_operand_under_an_operator) :- {A =< 4}, entailed(A + [1] =< 3).
+case(entailed_nonlinear_list_operand) :- {A =< 4}, entailed(A*A =< [1]).
+case(entailed_string_operand) :- {A =< 4}, entailed(A =< "ab").
 case(entailed_zero_divisor_le) :- {A =< 4}, Z = 0, entailed(A =< 1/Z).
 case(entailed_zero_divisor_equality) :- {A =< 4}, Z = 0, entailed(A =:= 1/Z).
 case(entailed_zero_divisor_disequality) :- {A =< 4}, Z = 0, entailed(A =\= 1/Z).
@@ -136,6 +160,14 @@ case(bb_inf_zero_divisor) :- {X >= 4}, Z = 0, bb_inf([X], X + 1/Z, _).
 case(in_q_atom_bound) :- in_q(_, a, 3).
 case(in_q_unbound_bound) :- in_q(_, _, 3).
 case(bind_a_float) :- {X =< 4}, X = 1.5.
+case(block_of_a_relation_cell_built_at_run_time) :-
+    C = (X =< 5), clpq:rational(C), sup(X, 5).
+case(block_of_a_conjunction_cell_built_at_run_time) :-
+    C = (X =< 5, X > 1), clpq:rational(C), sup(X, 5), inf(X, 1).
+case(block_of_an_equality_cell_built_at_run_time) :-
+    C = (2*X =:= Y + 1), clpq:rational(C), Y = 3, X =:= 2.
+case(block_of_an_unsatisfiable_cell_built_at_run_time) :-
+    C = (X >= 5, X < 5), clpq:rational(C).
 """
 
 
@@ -277,6 +309,32 @@ def test_api_entailed_of_a_nonlinear_relation_is_false(solver):
 
 
 @SOLVERS
+@pytest.mark.parametrize("operand", [[1], Add(left=1, right=[1])],
+                         ids=["list", "list_under_an_operator_node"])
+def test_api_entailed_of_a_non_expression_operand_raises(solver, operand):
+    t, x = Trail(), Var()
+    assert solver.q_le(x, 4, t)
+    assert _raised(lambda: solver.entailed("=<", x, operand, t)) == \
+        type_error("expression", [1], "normal_form/2")
+
+
+@SOLVERS
+def test_api_entailed_of_an_infinite_decimal_raises(solver):
+    t, x = Trail(), Var()
+    assert solver.q_le(x, 4, t)
+    term = _raised(lambda: solver.entailed("=<", x, Decimal("Infinity"), t))
+    assert term[1] == ("evaluation_error", "float_overflow")
+
+
+@SOLVERS
+def test_api_entailed_of_a_string_operand_raises(solver):
+    t, x = Trail(), Var()
+    assert solver.q_le(x, 4, t)
+    term = _raised(lambda: solver.entailed("=<", x, ("$chars", "ab"), t))
+    assert term[1][:2] == ("type_error", "evaluable")
+
+
+@SOLVERS
 def test_api_zero_divisor(solver):
     t, x = Trail(), Var()
     assert solver.q_le(x, 4, t)
@@ -322,3 +380,29 @@ def test_api_block_of_a_conjunction_cell_posts_both(solver):
     block = (",", LtE(left=x, right=4), LtE(left=1, right=x))
     assert solver.clpq_constraint_block(block, t)
     assert solver.sup(x, s, t) and deref(s) == Fraction(4)
+
+
+@SOLVERS
+@pytest.mark.parametrize("functor, inside, outside", [
+    ("=<", 5, 6), ("<", 4, 5), (">=", 5, 4), (">", 6, 5), ("=:=", 5, 4),
+    ("=", 5, 4), ("=\\=", 4, 5)])
+def test_api_block_of_a_relation_cell_posts_it(solver, functor, inside,
+                                               outside):
+    for value, consistent in ((inside, True), (outside, False)):
+        t, x = Trail(), Var()
+        assert solver.clpq_constraint_block((functor, x, 5), t)
+        assert bool(unify(x, value, t)) is consistent, (functor, value)
+
+
+@SOLVERS
+def test_api_block_of_nested_relation_cells_posts_each(solver):
+    t, x, s = Trail(), Var(), Var()
+    block = (",", ("=<", x, 4), [("<", 1, x)])
+    assert solver.clpq_constraint_block(block, t)
+    assert solver.sup(x, s, t) and deref(s) == Fraction(4)
+    assert not unify(x, 1, t)
+
+
+def test_seam_block_of_a_relation_cell_posts_it(seam_module):
+    x = Var()
+    assert _succeeds("block", ("=<", x, 5), module=seam_module)

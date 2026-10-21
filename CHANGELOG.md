@@ -462,7 +462,12 @@ surface described in [docs/public-api.md](docs/public-api.md).
   block node that is no constraint raises `type_error(constraint, N)` from
   `{}/1`, an unbound one `instantiation_error`; and the API's
   `entailed/4` with an unknown relation raises `type_error(constraint,
-  Rel)`. A `,` cell inside a block is posted as a conjunction. Still a
+  Rel)`; `entailed` with an operand that is no expression (`{A =< 4},
+  entailed(A =< [1])`, which legacy answered `false`) raises the port's
+  `type_error(expression, [1])`. A block posts a relation cell built at
+  run time (`C = (X =< 5), clpq:rational(C)`, or `,` cells of them), on
+  both solvers, as nf.pl's `{}/1` and Scryer do; both raised
+  `type_error(constraint, _ =< 5)`. Still a
   Python `TypeError` under legacy only: posting or optimising a non-linear
   expression, which the port delays and legacy cannot. Pinned by
   `tests/test_clpq_error_terms.py`, run under both solvers.
