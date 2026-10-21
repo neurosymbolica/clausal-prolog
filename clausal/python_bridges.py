@@ -1128,14 +1128,16 @@ def audit_routes(path: str) -> "tuple[list, list]":
     Memoised per CONTENT (:data:`_AUDITS`; a rewrite with the same size
     and timestamps is still a new file), and replayed, never trusted: the
     audit's own verdict is a function of the generated tree (the seam
-    compiler's, a function of the source and the engine), the engine
-    tables (:func:`clausal.seam_audit.audit_tables`, in the key) and the
-    answers to the module questions it asked (is ``m`` a module, is ``p``
-    its export -- other files' content).  A hit asks those questions
+    compiler's, a function of the source and the engine), the process
+    state it reads (:func:`clausal.seam_audit.audit_tables`, in the key:
+    the loader's name tables, the sandbox switch, Python's builtins) and
+    the answers to the module questions it asked (is ``m`` a module, is
+    ``p`` its export -- other files' content).  A hit asks those questions
     again, in order, of a fresh checker: the same answers give the same
     run, so its verdict and the checker's routes and children are exactly
     a fresh audit's; a different answer discards the memo and audits
-    afresh.  A source that does not compile is never memoised."""
+    afresh.  A source that does not compile is never memoised, and
+    :func:`clausal.sandbox.enable` empties the memo besides."""
     from clausal import seam_audit  # noqa: PLC0415
     with open(path, encoding="utf-8", errors="replace") as f:
         source = f.read()

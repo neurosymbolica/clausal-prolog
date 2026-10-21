@@ -223,16 +223,22 @@ def _shape(node) -> str:
                     include_attributes=False)
 
 
-_PLUMBING_SHAPES: "dict | None" = None
-#: The heads (:func:`_head`) of the builders' statements, with it.
-_PLUMBING_HEADS: "frozenset | None" = None
+#: ``(shape -> plumbing kind, the heads of those statements)``: one
+#: derived pair, built together by :func:`_plumbing`.
+_PLUMBING: "tuple[dict, frozenset] | None" = None
 
 
 def _plumbing_shapes() -> dict:
     """shape -> plumbing kind, built by CALLING the compiler's builders."""
-    global _PLUMBING_SHAPES, _PLUMBING_HEADS
-    if _PLUMBING_SHAPES is not None:
-        return _PLUMBING_SHAPES
+    return _plumbing()[0]
+
+
+def _plumbing() -> "tuple[dict, frozenset]":
+    """:data:`_PLUMBING`, built on first use: the shape of each builder's
+    statement and (:func:`_head`) the heads of those statements."""
+    global _PLUMBING
+    if _PLUMBING is not None:
+        return _PLUMBING
     from clausal.templating import term_rewriting as tr  # noqa: PLC0415
     anchor = ast.parse("x").body[0]
     imp = ast.parse("from m import a").body[0]
@@ -248,10 +254,9 @@ def _plumbing_shapes() -> dict:
         "functor_signatures": tr._make_functor_signatures_update_ast(
             [("f", ("x",))], anchor),
     }
-    shapes = {_shape(stmt): kind for kind, stmt in built.items()}
-    _PLUMBING_HEADS = frozenset(_head(stmt) for stmt in built.values())
-    _PLUMBING_SHAPES = shapes
-    return shapes
+    _PLUMBING = ({_shape(stmt): kind for kind, stmt in built.items()},
+                 frozenset(_head(stmt) for stmt in built.values()))
+    return _PLUMBING
 
 
 def _head(node) -> str:
@@ -273,19 +278,26 @@ def _plumbing_kind(node) -> "str | None":
     of, or None.  The full shape (a deep copy of the statement, dumped) is
     taken only for a statement whose head is a builder's: a clause
     statement, the common case, is settled by its callee."""
-    shapes = _plumbing_shapes()
-    if _head(node) not in _PLUMBING_HEADS:
+    shapes, heads = _plumbing()
+    if _head(node) not in heads:
         return None
     return shapes.get(_shape(node))
 
 
 def audit_tables(cut_surface: bool = False) -> tuple:
-    """The engine tables an audit reads (:class:`_Audit`): the engine
-    plumbing names, the allowed callees and the loader's bare names.  With
-    the generated tree they are everything the audit's own verdict depends
-    on, so a memo of a verdict is keyed by them."""
+    """Every process-level input of an audit's own verdict
+    (:class:`_Audit`), beyond the generated tree: the engine plumbing
+    names, the allowed callees and the loader's bare names (the loader's
+    ``runtime_builtins``); the sandbox switch, which the seam compile
+    reads (a ``-set_prolog_flag`` the sandbox refuses makes the source
+    uncompilable); and the names Python's builtins bind, which
+    ``bare_name_ok`` consults under ``-implicit_functors``.  A memo of a
+    verdict is keyed by them."""
+    import builtins  # noqa: PLC0415
+    from clausal import _sandbox_state  # noqa: PLC0415
     return (_engine_names(), _allowed_callees(cut_surface),
-            _runtime_bare_names())
+            _runtime_bare_names(), _sandbox_state.ACTIVE,
+            frozenset(vars(builtins)))
 
 
 def _import_constants(node) -> "list[str]":
@@ -331,7 +343,8 @@ class _Audit:
     def __init__(self, check_module, cut_surface: bool = False):
         self.routes: list = []
         self.children: list = []
-        self.engine, self.callees, self.reserved = audit_tables(cut_surface)
+        (self.engine, self.callees, self.reserved, _sandbox,
+         self.builtin_names) = audit_tables(cut_surface)
         self.imported_modules: dict = {}    # guarded import -> names
         self.implicit_functors = False      # set from the tree
         self.check_module = check_module
@@ -638,8 +651,8 @@ class _Audit:
         if _is_logic_var_name(name):
             return True
         if self.implicit_functors:
-            import builtins  # noqa: PLC0415
-            return not hasattr(builtins, name)
+            # The builtins namespace as audit_tables() keyed it.
+            return name not in self.builtin_names
         return False
 
     def load_attr(self, node) -> bool:

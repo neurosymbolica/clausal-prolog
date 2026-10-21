@@ -15,8 +15,10 @@ from __future__ import annotations
 import ast
 import hashlib
 import importlib
+import json
 import os
 import shutil
+import subprocess
 import sys
 import textwrap
 
@@ -1740,14 +1742,84 @@ def test_a_module_retried_after_a_failed_import_does_not_recompile_its_dependenc
     assert REFUSAL.format(m=proj.n("lib")) in third
 
 
-def test_plumbing_is_recognised_by_its_head_before_its_shape():
+def test_the_memo_follows_the_sandbox_switch(tmp_path):
+    """The seam compile reads the sandbox switch: a ``-set_prolog_flag``
+    of a flag the sandbox refuses compiles before ``sandbox.enable()``
+    and is uncompilable (fail closed) after it.  A verdict memoised before
+    the switch turned is not answered after it."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    f = tmp_path / "flg.seam"
+    f.write_text("-module(flg, [t/1])\n-set_prolog_flag(debug, on)\n"
+                 "t(1),\n")
+    script = textwrap.dedent(f"""
+        import json, clausal
+        from clausal import python_bridges as pb, sandbox
+        p = {str(f)!r}
+        before = pb.audit_routes(p)
+        sandbox.enable()
+        memo = pb.audit_routes(p)
+        pb._AUDITS.clear()
+        fresh = pb.audit_routes(p)
+        print("@@RES@@" + json.dumps([before, memo, fresh]))
+    """)
+    env = dict(os.environ, PYTHONPATH=root, PYTHONDONTWRITEBYTECODE="1")
+    env.pop("CLAUSAL_SANDBOX", None)
+    proc = subprocess.run([sys.executable, "-c", script], cwd=str(tmp_path),
+                          env=env, capture_output=True, text=True,
+                          timeout=600)
+    assert proc.returncode == 0, proc.stderr[-3000:]
+    line = [ln for ln in proc.stdout.splitlines() if ln.startswith("@@RES@@")]
+    before, memo, fresh = json.loads(line[-1][len("@@RES@@"):])
+    assert before == [[], []]
+    assert fresh == [[["uncompilable", 0]], []]
+    assert memo == fresh
+
+
+def test_the_memo_follows_the_python_builtins_under_implicit_functors(
+        tmp_path, monkeypatch):
+    """Under ``-implicit_functors`` a bare lowercase name is data unless
+    Python's builtins bind it (``bare_name_ok``): that namespace is an
+    input of the verdict, so a name bound after the audit is seen."""
+    import builtins
+    from clausal import python_bridges as pb
+    f = tmp_path / "implf.seam"
+    f.write_text("-implicit_functors\n-module(implf, [t/1])\n"
+                 "t(X) <- (X is zorp(1))\n")
+    assert not hasattr(builtins, "zorp")
+    pb._AUDITS.clear()
+    assert pb.audit_routes(str(f)) == ([], [])
+    monkeypatch.setattr(builtins, "zorp", lambda x: x, raising=False)
+    memo = pb.audit_routes(str(f))
+    pb._AUDITS.clear()
+    fresh = pb.audit_routes(str(f))
+    assert fresh != ([], [])
+    assert memo == fresh
+    monkeypatch.delattr(builtins, "zorp")
+    assert pb.audit_routes(str(f)) == ([], [])
+
+
+def test_audit_tables_carry_the_switches_the_verdict_reads():
+    """The memo key names every process-level input of the audit's own
+    verdict: the loader's name tables, the sandbox switch and Python's
+    builtins namespace (``bare_name_ok`` under -implicit_functors)."""
+    import builtins
+    from clausal import _sandbox_state, seam_audit as sa
+    tables = sa.audit_tables()
+    assert _sandbox_state.ACTIVE in tables[3:]
+    assert frozenset(vars(builtins)) in tables[3:]
+    assert all(isinstance(t, frozenset) for t in tables[:3])
+
+
+def test_plumbing_is_recognised_by_its_head_before_its_shape(monkeypatch):
     """``_Audit.plumbing`` compares a statement's full canonical shape
     with the compiler builders' only when its outermost callee matches
     one of theirs: a clause statement never pays the full comparison, and
-    every builder's statement is still recognised."""
+    every builder's statement is still recognised.  The shapes and the
+    heads are one derived pair: reset together, rebuilt together."""
     import ast as _ast
     from clausal import seam_audit as sa
     from clausal.templating import term_rewriting as tr
+    monkeypatch.setattr(sa, "_PLUMBING", None)
     anchor = _ast.parse("x").body[0]
     imp = _ast.parse("from m import a").body[0]
     built = {

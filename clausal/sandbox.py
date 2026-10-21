@@ -1562,6 +1562,11 @@ def halt_refusal_term(arity: int):
 
 
 def _clear_query_caches() -> None:
-    """Compiled queries made before the sandbox was on are not reused."""
+    """Compiled queries made before the sandbox was on are not reused,
+    nor are the Python-bridge audits (their key carries the switch, so
+    this is belt and braces)."""
     from clausal.logic import solve as _solve  # noqa: PLC0415
+    from clausal import python_bridges as _pb  # noqa: PLC0415
     _solve._query_cache.clear()
+    with _pb._AUDITS_LOCK:
+        _pb._AUDITS.clear()
