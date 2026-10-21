@@ -1230,22 +1230,22 @@ class TestFDQPromotion:
         assert not unify(x, F(7, 2), trail)
 
     def test_float_still_rejected_in_q(self):
-        """Regression: float in Q context still raises TypeError."""
+        """Regression: float in Q context still raises type_error."""
         # nv
         trail = Trail()
         x = Var()
         in_q(x, 0, 10, trail)
         # Task 14, output spelling: the port raises the ISO
         # type_error(rational, 3.14) 1.3.3's arith_normalize test gives
-        # (DEVIATIONS.md D3), legacy a Python TypeError.
-        with pytest.raises(LogicException if HOLZBAUR else TypeError,
-                           match=("type_error\\(rational,3.14\\)" if HOLZBAUR
-                                  else "Cannot unify CLP\\(Q\\)")):
+        # (DEVIATIONS.md D3); legacy raises the same term (it raised a
+        # Python TypeError before 2026-10-20).
+        with pytest.raises(LogicException,
+                           match="type_error\\(rational,3.14\\)"):
             unify(x, 3.14, trail)
 
 
 class TestA5FloatTypeError:
-    """Issue #9: unifying a Q-var with float must raise TypeError."""
+    """Issue #9: unifying a Q-var with float must raise type_error."""
 
     def test_unify_q_var_with_float_raises(self):
         # nv
@@ -1254,10 +1254,10 @@ class TestA5FloatTypeError:
         in_q(x, 0, 10, trail)
         # Task 14, output spelling: the port raises the ISO
         # type_error(rational, 3.14) 1.3.3's arith_normalize test gives
-        # (DEVIATIONS.md D3), legacy a Python TypeError.
-        with pytest.raises(LogicException if HOLZBAUR else TypeError,
-                           match=("type_error\\(rational,3.14\\)" if HOLZBAUR
-                                  else "Cannot unify CLP\\(Q\\)")):
+        # (DEVIATIONS.md D3); legacy raises the same term (it raised a
+        # Python TypeError before 2026-10-20).
+        with pytest.raises(LogicException,
+                           match="type_error\\(rational,3.14\\)"):
             unify(x, 3.14, trail)
 
     def test_float_literal_does_not_reach_q(self):

@@ -16,19 +16,16 @@ from clausal.pythonic_ast.nodes import ArithEq, LtE, CompareChain
 class TestClpqErrorPaths:
     def test_unsupported_node_raises(self):
         # nv
-        from clausal.logic.clpq import SOLVER, clpq_constraint_block
+        # nf.pl {}/1 clause 13's ISO error, on both solvers (ruling R19,
+        # Task 16; DEVIATIONS.md D20).  Legacy raised a Python TypeError
+        # before 2026-10-20.
+        from clausal.logic.clpq import clpq_constraint_block
+        from clausal.logic.exceptions import LogicException, type_error
         trail = Trail()
-        if SOLVER == "holzbaur":
-            # The port raises nf.pl {}/1 clause 13's ISO error (ruling R19,
-            # Task 16; DEVIATIONS.md D20); legacy raises TypeError.
-            from clausal.logic.exceptions import LogicException, type_error
-            with pytest.raises(LogicException) as caught:
-                clpq_constraint_block(("not_a_constraint",), trail)
-            assert caught.value.term == type_error(
-                "constraint", ("not_a_constraint",), "{}/1")
-            return
-        with pytest.raises(TypeError, match="unsupported node"):
+        with pytest.raises(LogicException) as caught:
             clpq_constraint_block(("not_a_constraint",), trail)
+        assert caught.value.term == type_error(
+            "constraint", ("not_a_constraint",), "{}/1")
 
     def test_disequality_conflict(self):
         """ArithNeq + ArithEq on same value fails."""

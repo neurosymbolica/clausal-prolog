@@ -33,6 +33,9 @@ from clausal.logic.variables import (
     get_attr,
     register_attr_hook,
 )
+from clausal.logic.exceptions import (
+    LogicException, instantiation_error, type_error)
+from clausal.logic.clpq.arithmetic import is_number
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -1076,6 +1079,28 @@ def _linearize(expr: Any, trail: Trail,
     return None
 
 
+def _zero_divisor(*exprs: Any) -> bool:
+    """True when one of *exprs* divides by a constant zero: the reason
+    :func:`_linearize` gave None, when it is not a product of variables.
+    The port's normal form fails on it (nf.pl evaluates the quotient), so
+    a post or an optimum fails and ``entailed`` holds (its negation cannot
+    be posted).  Before, the caller raised a Python TypeError."""
+    _ensure_term_imports()
+    stack = list(exprs)
+    while stack:
+        expr = deref(stack.pop())
+        if isinstance(expr, _Div):
+            divisor = _linearize(expr.right, None)
+            if divisor is not None and not divisor[0] and divisor[1] == ZERO:
+                return True
+            stack.extend((expr.left, expr.right))
+        elif isinstance(expr, (_Add, _Sub, _Mult)):
+            stack.extend((expr.left, expr.right))
+        elif isinstance(expr, _Negate):
+            stack.append(expr.operand)
+    return False
+
+
 # ── Domain posting ───────────────────────────────────────────────────────────
 
 
@@ -1150,11 +1175,10 @@ def _q_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
         return tableau.check_implied_bindings(trail)
 
     if isinstance(bound_to, float):
-        raise TypeError(
-            f"Cannot unify CLP(Q) variable with float {bound_to!r}. "
-            "Use Fraction for exact rationals, or declare the variable "
-            "with in_real instead of in_q."
-        )
+        # A float is no rational: the port's type_error (attribute_hooks'
+        # arith_normalize check; it was a Python TypeError).  Fraction
+        # gives an exact rational, in_real a CLP(R) variable.
+        raise LogicException(type_error("rational", bound_to, "=/2"))
 
     if is_var(bound_to):
         other = get_attr(bound_to, Q_KEY)
@@ -1214,14 +1238,27 @@ def in_q(var_or_list: Any, lo: Any = None, hi: Any = None,
     united = _in_q_units(targets, deref(lo), deref(hi), trail)
     if united is not None:
         return united
-    lo_val = Fraction(deref(lo)) if lo is not None else None
-    hi_val = Fraction(deref(hi)) if hi is not None else None
+    lo_val = _bound(deref(lo))
+    hi_val = _bound(deref(hi))
     if isinstance(targets, list):
         for v in targets:
             if not _post_q_domain(deref(v), lo_val, hi_val, trail):
                 return False
         return True
     return _post_q_domain(targets, lo_val, hi_val, trail)
+
+
+def _bound(value: Any) -> Fraction | None:
+    """An in_q/3 bound as a Fraction, None when absent.  As the port reads
+    one: a variable is ``instantiation_error``, a term that is no number
+    ``type_error(rational, X)`` (both were Python exceptions)."""
+    if value is None:
+        return None
+    if is_var(value):
+        raise LogicException(instantiation_error("in_q/3"))
+    if not is_number(value):
+        raise LogicException(type_error("rational", value, "in_q/3"))
+    return Fraction(value)
 
 
 def _in_q_units(targets, lo, hi, trail):
@@ -1374,6 +1411,8 @@ def q_eq(l: Any, r: Any, trail: Trail) -> bool:
     lc = _linearize(l, trail)
     rc = _linearize(r, trail)
     if lc is None or rc is None:
+        if _zero_divisor(l, r):
+            return False
         raise TypeError("CLP(Q) requires linear constraints")
     lk, lv = lc
     rk, rv = rc
@@ -1414,6 +1453,8 @@ def _post_ne(l: Any, r: Any, trail: Trail, tag: str) -> bool:
     lc = _linearize(l, trail)
     rc = _linearize(r, trail)
     if lc is None or rc is None:
+        if _zero_divisor(l, r):
+            return False
         raise TypeError("CLP(Q) requires linear constraints")
     lk, lv = lc
     rk, rv = rc
@@ -1446,6 +1487,8 @@ def q_le(l: Any, r: Any, trail: Trail) -> bool:
     lc = _linearize(l, trail)
     rc = _linearize(r, trail)
     if lc is None or rc is None:
+        if _zero_divisor(l, r):
+            return False
         raise TypeError("CLP(Q) requires linear constraints")
     lk, lv = lc
     rk, rv = rc
@@ -1503,6 +1546,8 @@ def sup(expr: Any, result_var: Any, trail: Trail) -> bool:
     result_var = deref(result_var)
     lc = _linearize(expr, trail)
     if lc is None:
+        if _zero_divisor(expr):
+            return False
         raise TypeError("sup requires a linear expression")
     coeffs, const = lc
     tableau = _get_tableau(trail)
@@ -1525,6 +1570,8 @@ def inf(expr: Any, result_var: Any, trail: Trail) -> bool:
     result_var = deref(result_var)
     lc = _linearize(expr, trail)
     if lc is None:
+        if _zero_divisor(expr):
+            return False
         raise TypeError("inf requires a linear expression")
     coeffs, const = lc
     tableau = _get_tableau(trail)
@@ -1555,10 +1602,19 @@ def entailed(constraint_type: str, l: Any, r: Any, trail: Trail) -> bool:
     # (it just uses var._id as the key), but optimize won't know about
     # them unless they're registered. For unregistered vars, the result
     # is "not entailed" (the var could be anything).
+    if constraint_type not in _ENTAILED_RELATIONS:
+        # nf.pl negate/2's last clause, as the port raises it: the culprit
+        # is the relation as a cell (it was a Python ValueError).
+        raise LogicException(type_error(
+            "constraint", (constraint_type, l, r), "entailed/1"))
     lc = _linearize(l, trail)
     rc = _linearize(r, trail)
     if lc is None or rc is None:
-        raise TypeError("entailed requires linear constraints")
+        # As the port answers: with a zero divisor the negation cannot be
+        # posted, so the relation holds; a non-linear relation is not
+        # entailed (its negation is delayed, so it is consistent).  Both
+        # raised a Python TypeError.
+        return _zero_divisor(l, r)
     lk, lv = lc
     rk, rv = rc
     # Compute l - r as a linear expression
@@ -1607,8 +1663,12 @@ def entailed(constraint_type: str, l: Any, r: Any, trail: Trail) -> bool:
             return True
         i = _inf_of_diff()
         return i is not None and i + offset > ZERO
-    else:
-        raise ValueError(f"Unknown constraint type: {constraint_type!r}")
+    raise AssertionError(constraint_type)   # _ENTAILED_RELATIONS is exhaustive
+
+
+#: The relations :func:`entailed` reads (the port's ``_ENTAILED_NODES``).
+_ENTAILED_RELATIONS = frozenset(
+    ("=<", "<=", ">=", "=>", "<", ">", "=", "=:=", "\\=", "=\\="))
 
 
 def _bind_optimal(tableau: Tableau, trail: Trail) -> bool:
@@ -1648,6 +1708,8 @@ def maximize(expr: Any, result_var: Any, trail: Trail) -> bool:
     result_var = deref(result_var)
     lc = _linearize(expr, trail)
     if lc is None:
+        if _zero_divisor(expr):
+            return False
         raise TypeError("maximize requires a linear expression")
     coeffs, const = lc
     tableau = _get_tableau(trail)
@@ -1672,6 +1734,8 @@ def minimize(expr: Any, result_var: Any, trail: Trail) -> bool:
     result_var = deref(result_var)
     lc = _linearize(expr, trail)
     if lc is None:
+        if _zero_divisor(expr):
+            return False
         raise TypeError("minimize requires a linear expression")
     coeffs, const = lc
     tableau = _get_tableau(trail)
@@ -1993,6 +2057,8 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
 
     lc = _linearize(expr, trail)
     if lc is None:
+        if _zero_divisor(expr):
+            return False
         raise TypeError("bb_inf requires a linear expression")
     obj_coeffs, obj_const = lc
 
@@ -2102,17 +2168,7 @@ def clpq_constraint_block(constraints: Any, trail: Trail) -> bool:
     ``1 <= X <= 10``).  Variables are auto-registered as rational.
     """
     _ensure_term_imports()
-    constraints = deref(constraints)
-    if isinstance(constraints, (list, tuple)):
-        elements = constraints
-    else:
-        elements = [constraints]
-
-    for elem in elements:
-        elem = deref(elem)
-        if not _post_q_constraint_node(elem, trail):
-            return False
-    return True
+    return _post_q_constraint_node(deref(constraints), trail)
 
 
 def clpq_constraint_answers(constraints: Any, trail: Trail):
@@ -2123,8 +2179,18 @@ def clpq_constraint_answers(constraints: Any, trail: Trail):
 
 
 def _post_q_constraint_node(node: Any, trail: Trail) -> bool:
-    """Post a single AST constraint node to CLP(Q)."""
+    """Post a single AST constraint node to CLP(Q).  A list, a tuple of
+    nodes, a chain and a ``,`` cell are conjunctions, posted in the order
+    written (the port's ``_block_tree``)."""
     _ensure_term_imports()
+    node = deref(node)
+    kind = type(node)
+
+    if kind is list or (kind is tuple and node and type(node[0]) is not str):
+        for elem in node:
+            if not _post_q_constraint_node(elem, trail):
+                return False
+        return True
 
     if isinstance(node, _CompareChain):
         for cmp in node.comparisons:
@@ -2132,13 +2198,20 @@ def _post_q_constraint_node(node: Any, trail: Trail) -> bool:
                 return False
         return True
 
+    if kind is tuple and len(node) == 3 and node[0] == ",":
+        return (_post_q_constraint_node(node[1], trail)
+                and _post_q_constraint_node(node[2], trail))
+
     for node_class, post, context in _Q_BLOCK_POSTERS:
         if isinstance(node, node_class):
             return _post_q_stripped(post, node.left, node.right, context, trail)
 
-    raise TypeError(
-        f"clpq constraint block: unsupported node {type(node).__name__}: {node}"
-    )
+    # As the port raises them (nf.pl {}/1 clauses 1 and 13); they were a
+    # Python TypeError.  A `;` cell is refused whole: this solver posts one
+    # answer, and the port's clpq_constraint_block refuses it too.
+    if is_var(node):
+        raise LogicException(instantiation_error("{}/1"))
+    raise LogicException(type_error("constraint", node, "{}/1"))
 
 
 

@@ -1090,6 +1090,14 @@ differently from 1.3.3 itself:
   names `clpq_constraint_answers`; legacy refuses the same node.
   `entailed/4` with a relation it does not know raises negate/2's
   `type_error(constraint, Rel)`, with Rel the cell `(Type, L, R)`.
+  Legacy raises the same terms for an unknown relation, a block node
+  that is no constraint, an unbound block, in_q/3's bounds and a float
+  binding (2026-10-20; they were Python TypeError/ValueError), and
+  answers as the port does where linearisation fails on a zero divisor
+  (a post or an optimum fails, `entailed` holds) or in `entailed` on a
+  non-linear relation (false).  A non-linear post or optimum still
+  raises a Python TypeError under legacy, which cannot delay it
+  (`tests/test_clpq_error_terms.py`).
   `bb_inf/3` and `dump_q/2` take a proper list: a variable or a partial
   list is `instantiation_error`, anything else `type_error(list, X)`
   (Scryer's `must_be(list, X)`, clpz_surface's `_proper_list`); legacy
@@ -1099,7 +1107,8 @@ differently from 1.3.3 itself:
 - `in_q/3`'s bounds are engine numbers only: an unbound bound is
   `instantiation_error`, any other term `type_error(rational, X)` (the
   atom `'1/3'` and the string "1" included; legacy and the port before
-  Task 16 read them through `Fraction(...)`).  A bound is read as nf.pl
+  Task 16 read them through `Fraction(...)`; legacy
+  raises the same errors since 2026-10-20).  A bound is read as nf.pl
   reads the number in `{Lo =< X}`, so a float is its short convergent
   (`in_q(X, 0.1, 1)` gives inf 1/10; `Fraction(0.1)` before).
 - The Decimal-scale fast path above also holds in a block that holds `;`

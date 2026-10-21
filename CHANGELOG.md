@@ -434,6 +434,28 @@ surface described in [docs/public-api.md](docs/public-api.md).
   "it belongs to module owner (/path/to/owner.seam)". Pinned by
   `tests/test_mutation_gate.py`.
 
+- **The default CLP(Q) solver raises ISO errors, not Python exceptions,
+  and answers as the port does** (2026-10-20). Under the legacy (default)
+  solver, `{A =< 4}, entailed(A*A =\= 5)` raised a bare Python
+  `TypeError("entailed requires linear constraints")` that `catch/3` saw
+  as `'TypeError'(...)`; `CLAUSAL_CLPQ=holzbaur` (the clp(q,r) 1.3.3 port)
+  answers `false`, as SICStus does, and now so does legacy. Surveying the
+  solver's other Python exceptions, each now matches the port: a zero
+  divisor inside a constraint (`Z = 0, {X =< 1/Z}`, `sup(X + 1/Z, S)`,
+  `maximize/2`, `minimize/2`, `bb_inf/3`) fails, and `entailed` of a
+  relation with one holds (its negation cannot be posted); in_q/3 with an
+  unbound bound raises `instantiation_error`, with a bound that is no
+  number `type_error(rational, B)` (so the atom `'1/3'`, which legacy read
+  through `Fraction`, is refused as the port refuses it); binding a
+  constrained variable to a float raises `type_error(rational, F)`; a
+  block node that is no constraint raises `type_error(constraint, N)` from
+  `{}/1`, an unbound one `instantiation_error`; and the API's
+  `entailed/4` with an unknown relation raises `type_error(constraint,
+  Rel)`. A `,` cell inside a block is posted as a conjunction. Still a
+  Python `TypeError` under legacy only: posting or optimising a non-linear
+  expression, which the port delays and legacy cannot. Pinned by
+  `tests/test_clpq_error_terms.py`, run under both solvers.
+
 - **`dict_pairs/2`, `dict_put_pairs/3` and `set_list/2` read a list built
   by recursion** (2026-10-20). A list that a recursive predicate builds in
   its clause heads (`filter([K-V|T], D, [K-V|R]) :- ..., filter(T, D, R)`)

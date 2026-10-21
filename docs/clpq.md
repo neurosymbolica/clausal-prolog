@@ -134,7 +134,7 @@ In **evaluation** (`is/2`, the ISO comparisons) `/` is float division. Use `rdiv
 --8<-- "tests/fixtures/docs/clpq_sigs.txt:int_int_produces_fraction"
 ```
 
-In evaluation a zero divisor raises `evaluation_error(zero_divisor)`. Inside `{...}`, `{X = 1/0}` currently throws the Python `TypeError` `CLP(Q) requires linear constraints` rather than failing; under `#=`, `X #= 1/0` fails. The full operator table is in [Operators](operators.md); evaluation is in [Arithmetic](arithmetic.md).
+In evaluation a zero divisor raises `evaluation_error(zero_divisor)`. Inside `{...}` a zero divisor makes the constraint fail: `{X = 1/0}` fails, as `X #= 1/0` does. The full operator table is in [Operators](operators.md); evaluation is in [Arithmetic](arithmetic.md).
 
 Integral rationals are presented as integers by every binder — the arithmetic comparisons, `between/3`, CLP(Q) equalities and optima — because `2` and `2 rdiv 1` compare equal arithmetically but are different terms in the standard order (`'=='/2`, `compare/3`).
 
@@ -249,6 +249,9 @@ Tests whether a constraint is logically implied by the current store — i.e., w
 Supported relations: `=<`, `>=`, `<`, `>`, `=:=` (or `=`), `=\=`. The relation
 may also be built at run time (`C = (X =< 5), entailed(C)`). In the seam they
 are `<=`, `>=`, `<`, `>`, `==`, `!=`: `entailed(X <= 5)`.
+
+A non-linear relation (`entailed(A*A =\= 5)`) is not entailed: the call
+fails.
 
 ### int_minimize/3
 
@@ -402,7 +405,7 @@ CLP(Q) uses a fundamentally different solver from CLP(R). Where CLP(R) narrows i
 | **Inequality** `Σ aᵢXᵢ <= c` | Revised simplex with slack variables | `{2*X + Y =< 16}` |
 | **Disequality** `X ≠ Y` | Passive check (fires when both ground) | `{X =\= 5}` |
 
-All constraints must be **linear** — each term is a constant times a variable, with no products of variables. `{3*X + 5*Y =< 10}` is linear. `{X * Y = 10}` over two rational variables is not, and raises a Python `TypeError` (`CLP(Q) requires linear constraints`).
+All constraints must be **linear** — each term is a constant times a variable, with no products of variables. `{3*X + 5*Y =< 10}` is linear. `{X * Y = 10}` over two rational variables is not, and raises a Python `TypeError` (`CLP(Q) requires linear constraints`) under the default solver; `CLAUSAL_CLPQ=holzbaur` delays it, as SICStus does. `entailed/1` of a non-linear relation answers false on both solvers.
 
 ### Why not interval arithmetic?
 
@@ -594,7 +597,7 @@ The `_linearize` function walks the expression tree:
 | `Div(expr, var)` | **rejected** — non-linear |
 | `Negate(expr)` | negate all coefficients and constant |
 
-If linearization fails (non-linear expression), a `TypeError` is raised with a clear message.
+If linearization fails (non-linear expression), posting or optimising raises a `TypeError` with a clear message, a zero divisor (`1/0`) fails, and `entailed/1` answers false (true for a zero divisor: its negation cannot be posted).
 
 ---
 
@@ -765,7 +768,7 @@ Our implementation is a **clean-room** design based on the published papers (Hol
 ```
 int ──→ Fraction  (exact, via Fraction(n))
 int ──→ float     (lossy for large ints, via float(n))
-float ──✗──→ Fraction  (BLOCKED — lossy, raises TypeError)
+float ──✗──→ Fraction  (BLOCKED — lossy, raises type_error(rational, F))
 Fraction ──✗──→ float   (BLOCKED — loses exactness)
 ```
 
@@ -793,7 +796,7 @@ A variable can have **both** FD and Q attributes simultaneously, just like FD an
 | `in_domain(X, 1, 10)` then `X #= 1 rdiv 3` | **Fails**: the rational triggers Q dispatch, the FD var is promoted to Q with bounds `[1, 10]`, and `1/3` is outside them |
 | `in_domain(X, 1, 10)` then `X #= 1 rdiv 2` | **Fails**: `1/2` is not an integer, FD hook rejects |
 | `X #= 1/0` | **Fails** |
-| `{X = 1/0}` | **TypeError**: `CLP(Q) requires linear constraints` |
+| `{X = 1/0}` | **Fails** |
 | `in_real(X, 0.0, 10.0)` then `X #= 1 rdiv 3` | **TypeError**: cannot mix CLP(Q) rational and CLP(R) float |
 | `in_real(X, 0.0, 10.0)` then `in_q(X, 0, 1)` | Accepted: no `TypeError` is raised |
 | `X #= 5` (no declaration) | CLP(Z): both sides are integers |
@@ -913,7 +916,7 @@ A variable can have **both** FD and Q attributes simultaneously, just like FD an
     - **Integer optimization**: `int_minimize` (bb_inf) simple integer, LP integer, no integer constraint, infeasible, already integer, mixed integer, multi-level branching, variable binding
     - **Linearization**: constants, ints, vars, add, scalar mult, non-linear rejection, negate
     - **Coefficient growth**: Newton sqrt(2) to 12-digit fractions, large coefficient constraints
-    - **Float type safety**: `TypeError` raised when Q-variable unified with float
+    - **Float type safety**: `type_error(rational, F)` raised when Q-variable unified with float
     - **Snapshot dedup**: multi-step operation undoable as single unit
     - **End-to-end seam**: all doc examples compiled and run through full pipeline (7 integration tests)
 
