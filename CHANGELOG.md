@@ -404,6 +404,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
   and `tests/fmt/test_verify.py::test_a_requoting_formatter_is_refused`.
   Closes `todo/done/fmt-requotes-a-quoted-atom-head-as-a-string-2026-10-20.md`.
 
+- **The remedy for a write to another module's predicate names that
+  module** (2026-10-20). `assertz/1` of a clause for a static predicate
+  that this module reaches through an import said "it belongs to
+  /path/to/owner.seam, so the -dynamic(f/N) declaration ... belongs there":
+  it read the source path where it meant the module name. It now says
+  "it belongs to module owner (/path/to/owner.seam)". Pinned by
+  `tests/test_mutation_gate.py`.
+
 - **`dict_pairs/2`, `dict_put_pairs/3` and `set_list/2` read a list built
   by recursion** (2026-10-20). A list that a recursive predicate builds in
   its clause heads (`filter([K-V|T], D, [K-V|R]) :- ..., filter(T, D, R)`)

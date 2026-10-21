@@ -455,10 +455,18 @@ def _resolve_cell_head(term_val: Any, context: str, db,
     # for a Database with no module dict, which names nothing a reader can act
     # on — prefer the load that supplied the clauses, and say "another module"
     # rather than print a placeholder.
-    owner = row.source[1] if row is not None and row.source else None
+    # ``row.source`` is ``(module_name, source_path)`` (``predicate.
+    # record_clause_source``): the module goes in "it belongs to", the path
+    # after it.  Slot 1 used to fill the module's place, so the remedy said
+    # "it belongs to /path/to/owner.seam".
+    owner = row.source[0] if row is not None and row.source else None
+    owner_path = row.source[1] if row is not None and row.source else None
+    if owner is not None and owner.startswith("<"):
+        owner = None
     if owner is None and row is not None:
         named = row.db.module_name()
         owner = None if named.startswith("<") else named
+    where = f" ({owner_path})" if owner and owner_path else ""
     # The declaration is spelled for the surface the predicate is DEFINED
     # in: the module whose load wrote its clauses, else the row's own
     # module, else this one.
@@ -468,7 +476,8 @@ def _resolve_cell_head(term_val: Any, context: str, db,
         row.db if row is not None else None, module_dict, db)
     remedy = (f" — declare it {declaration} to modify it at runtime")
     if foreign:
-        remedy = (f" — it belongs to {owner}, so the {declaration} "
+        remedy = (f" — it belongs to module {owner}{where}, so the "
+                  f"{declaration} "
                   f"declaration that would permit this write "
                   f"belongs there, not here"
                   if owner else

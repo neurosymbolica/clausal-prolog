@@ -607,5 +607,33 @@ def test_a_permitted_write_to_a_foreign_row_is_told_where_to_declare_it():
                                     importer.module_dict)
     text = _refusal_text(exc_info.value)
     assert "vp/1 is a static procedure" in text
-    assert "it belongs to gate_vocab_owner" in text, text
+    assert "it belongs to module gate_vocab_owner" in text, text
     assert "belongs there, not here" in text, text
+
+
+def test_the_foreign_write_remedy_names_the_owner_module_not_its_path():
+    """``row.source`` is ``(module_name, source_path)``: the remedy's "it
+    belongs to ..." names the MODULE, and gives the file separately.  It used
+    to read the path slot, so the message said "it belongs to
+    /.../owner.seam" -- a file, where the sentence promises a module."""
+    from clausal.logic.builtins.database_ops import _check_cell_head_permission
+
+    owner, importer = Database(), Database()
+    owner.module_dict = {"__name__": "gate_vocab_owner_db"}
+    row = owner.row("vq", 1, create=True)
+    row.ensure_clauses().append(_clause("vq", 1))
+    owner._clauses[("vq", 1)] = row.clauses
+    row.source = ("gate_src_owner", "/somewhere/gate_src_owner.seam")
+    assert not row.locked and not row.dynamic, "the gate must PERMIT this one"
+
+    assert importer.adopt_row("vq", 1, row) is True
+    importer.module_dict = {"$module": types.SimpleNamespace(db=importer)}
+
+    with pytest.raises(LogicException) as exc_info:
+        _check_cell_head_permission(("vq", 2), "assertz/1", importer,
+                                    importer.module_dict)
+    text = _refusal_text(exc_info.value)
+    assert ("vq/1 is a static procedure — it belongs to module "
+            "gate_src_owner (/somewhere/gate_src_owner.seam), so the "
+            "-dynamic(vq/1) declaration that would permit this write belongs "
+            "there, not here") in text, text
