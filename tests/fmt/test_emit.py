@@ -244,6 +244,35 @@ def test_a_non_ascii_line_does_not_shift_the_literal_spelling():
     assert format_source(src) == "p(X) <- (\n    q('café', 'atom', \"string\")\n)\n"
 
 
+def test_literal_spellings_cut_the_same_text_as_get_source_segment():
+    # literal_spellings slices lines it splits once instead of calling
+    # ast.get_source_segment per literal (which re-splits the whole source).
+    # Pin that the slices agree where they could drift: byte columns on
+    # non-ASCII lines, literals spanning lines, and a form feed, which
+    # str.splitlines breaks on but ast's line numbering does not.
+    import ast
+
+    from clausal.fmt.comments import literal_spellings
+
+    src = (
+        "# \x0c form feed\n"
+        "p(X) <- (q('é'\n"
+        "      'à ü', \"\"\"ß\n"
+        "  ∀ x\"\"\", f'{X}ö', X))\n"
+    )
+    tree = ast.parse(src)
+    spellings = literal_spellings(tree, src)
+    expected = {
+        node: ast.get_source_segment(src, node)
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.Constant, ast.JoinedStr))
+        and isinstance(getattr(node, "value", ""), str)
+        and hasattr(node, "end_col_offset")
+    }
+    assert spellings == expected
+    assert "\"\"\"ß\n  ∀ x\"\"\"" in spellings.values()
+
+
 def test_a_string_in_an_exploded_dict_keeps_its_quotes():
     long_key = "k" * 40
     src = f"p(X) <- (q({{'{long_key}': 'atom', \"{long_key}\": \"string\"}}, X))\n"

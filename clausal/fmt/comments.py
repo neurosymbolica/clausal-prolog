@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import ast
 import io
+import re
 import tokenize
 from dataclasses import dataclass, field
 
@@ -147,7 +148,9 @@ _LITERAL_TYPES: tuple[type, ...] = tuple(
 )
 
 
-def literal_spellings(tree: ast.AST, source: str) -> dict[ast.AST, str]:
+def literal_spellings(
+    tree: ast.AST, source: str, comments: list[_Comment] | None = None
+) -> dict[ast.AST, str]:
     """Each string literal node in ``tree`` mapped to its spelling in ``source``.
 
     The spelling is the node's source span, verbatim -- quote character,
@@ -160,9 +163,15 @@ def literal_spellings(tree: ast.AST, source: str) -> dict[ast.AST, str]:
     respelled from its value in the quote character the source used, which
     is the part of the spelling the seam reads -- so even the fallback never
     turns an atom into a string.
+
+    ``comments`` is ``source``'s :func:`_harvest`, when the caller already
+    has it -- tokenizing is the expensive part, so capture does it once.
     """
     lines = source.splitlines(keepends=True)
-    comment_spans = _comment_positions(source)
+    if comments is None:
+        comments = _harvest(source)
+    comment_spans = _comment_positions(lines, comments)
+    ast_lines: list[str] | None = None  # split as ``ast`` numbers lines, on demand
     found: dict[ast.AST, str] = {}
     for node in ast.walk(tree):
         if not isinstance(node, _LITERAL_TYPES):
@@ -178,7 +187,9 @@ def literal_spellings(tree: ast.AST, source: str) -> dict[ast.AST, str]:
                 if quote is not None:
                     found[node] = _spell(node.value, quote)
             continue
-        segment = ast.get_source_segment(source, node)
+        if ast_lines is None:
+            ast_lines = _ast_lines(source)
+        segment = _segment(ast_lines, start, end)
         if segment is not None:
             found[node] = segment
     return found
@@ -195,11 +206,51 @@ def _span(node: ast.AST) -> tuple[tuple[int, int] | None, tuple[int, int] | None
     return start, end
 
 
-def _comment_positions(source: str) -> list[tuple[int, int]]:
+#: Where ``ast`` breaks lines: ``\r\n``, ``\r`` and ``\n`` only, not the
+#: form feeds and Unicode separators :meth:`str.splitlines` also breaks on.
+_AST_LINE_BREAK = re.compile(r"(?<=\n)|(?<=\r)(?!\n)")
+
+
+def _ast_lines(source: str) -> list[str]:
+    """``source`` split into lines (ends kept) the way ``ast`` numbers them."""
+    lines = _AST_LINE_BREAK.split(source)
+    if lines and not lines[-1]:
+        lines.pop()
+    return lines
+
+
+def _segment(
+    lines: list[str], start: tuple[int, int], end: tuple[int, int]
+) -> str | None:
+    """The source text between two ``(lineno, byte col)`` positions.
+
+    What :func:`ast.get_source_segment` returns, cut from lines split once
+    rather than re-splitting the whole source for every node.  Columns are
+    UTF-8 byte offsets, so a line with non-ASCII text is sliced as bytes.
+    """
+    (row, col), (end_row, end_col) = start, end
+    if not 1 <= row <= end_row <= len(lines):
+        return None
+
+    def cut(line: str, lo: int, hi: int | None) -> str:
+        if line.isascii():
+            return line[lo:hi]
+        return line.encode("utf-8")[lo:hi].decode("utf-8")
+
+    if row == end_row:
+        return cut(lines[row - 1], col, end_col)
+    return "".join(
+        [cut(lines[row - 1], col, None), *lines[row:end_row - 1],
+         cut(lines[end_row - 1], 0, end_col)]
+    )
+
+
+def _comment_positions(
+    lines: list[str], comments: list[_Comment]
+) -> list[tuple[int, int]]:
     """``(row, byte col)`` of every comment, in ``ast``'s own coordinates."""
-    lines = source.splitlines(keepends=True)
     out = []
-    for comment in _harvest(source):
+    for comment in comments:
         if 1 <= comment.row <= len(lines):
             byte_col = len(lines[comment.row - 1][: comment.col].encode("utf-8"))
             out.append((comment.row, byte_col))
@@ -352,13 +403,13 @@ class CommentTable:
         """Parse ``source`` and file every comment in it against a node."""
         tree = ast.parse(source)
         table = cls(tree)
+        comments = _harvest(source)
         table.arrows = arrow_nodes(tree, source)
-        table.literals = literal_spellings(tree, source)
-        table._fill(source, tree)
+        table.literals = literal_spellings(tree, source, comments)
+        table._fill(comments, tree)
         return tree, table
 
-    def _fill(self, source: str, tree: ast.Module) -> None:
-        comments = _harvest(source)
+    def _fill(self, comments: list[_Comment], tree: ast.Module) -> None:
         self._ledger = list(comments)
         if not comments:
             return
