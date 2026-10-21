@@ -206,20 +206,6 @@
    "native_sha": "c48b5b1a9776c846"
   },
   {
-   "key": "docs/for_prolog_programmers.md#L144::tests::a_static_procedure_cannot_be_modified",
-   "class": "a",
-   "note": "oracle: scryer: pass, as native. Translator: fail; native: pass",
-   "translator_sha": "34e382cfb94027bb",
-   "native_sha": "fedce8e8af485c25"
-  },
-  {
-   "key": "docs/for_prolog_programmers.md#L144::tests::iso_error_terms_in_scryer_s_form",
-   "class": "a",
-   "note": "oracle: scryer: pass, as native. Translator: fail; native: pass",
-   "translator_sha": "34e382cfb94027bb",
-   "native_sha": "fedce8e8af485c25"
-  },
-  {
    "key": "docs/for_prolog_programmers.md#L242::load::",
    "class": "a",
    "note": "oracle: scryer loads it, as native does. Translator: Cannot import <work>/docs/doc_for_prolog_programmers_L242.pl: Expected '.', got 'atom' ('#=') at 7:22 (doc_for_prolog_programmers_L242.pl, line 0)",

@@ -363,6 +363,10 @@ _ISO_QUOTED_BINARY_OPS = frozenset({
 })
 _ISO_QUOTED_UNARY_OPS = frozenset({"\\"})
 
+# The arithmetic comparisons: their operands are expressions wherever the
+# comparison stands, goal or term position.
+_ARITH_COMPARISONS = frozenset({"<", ">", "=<", ">=", "=:=", "=\\="})
+
 # ISO evaluable constants (functors of arity 0 in arithmetic context).
 # Emitted as math.* attribute references — emit_module adds the matching
 # -import_module(math) preamble. epsilon has no math.* name, so it is
@@ -975,6 +979,11 @@ class _PrologToClausal:
         self._surface = surface
         self._user_ops = operator_mappings or {}
         self._data_atoms: set[str] = set()  # atoms used as data values
+        # > 0 while emitting text the seam reads as SOURCE, not as a term:
+        # a generic directive's arguments and a ``{...}`` term.  There
+        # ``+ - * /`` keep their seam spelling (``foo / 0``); elsewhere a
+        # data operator term is the ISO cell ``'/'(foo, 0)`` (2026-10-20).
+        self._seam_operators = 0
         # THE FLIP (2026-09-06-atoms-as-cells-strings §7): a Prolog
         # ``"..."`` is a STRING and is emitted as a double-quoted literal,
         # which only MEANS a string under ``-double_quotes(chars)``.  The
@@ -1144,8 +1153,8 @@ class _PrologToClausal:
     def _emit_clpq_constraint(self, c: PTerm) -> str:
         if (isinstance(c, PCompound) and c.functor in ("=", "=:=")
                 and len(c.args) == 2):
-            return (f"{self._emit_term(c.args[0])} == "
-                    f"{self._emit_term(c.args[1])}")
+            return (f"{self._emit_expr(c.args[0])} == "
+                    f"{self._emit_expr(c.args[1])}")
         return self._emit_term(c)
 
     def _emit_goal(self, goal: PTerm) -> str:
@@ -1434,8 +1443,15 @@ class _PrologToClausal:
             return (f"# operator: op({_plain_term(body.args[0])}, "
                     f"{_plain_term(body.args[1])}, {_plain_term(body.args[2])}) "
                     "-- applied by the reader to the terms below")
-        # Generic directive
-        return f"-{self._emit_term(body)}"
+        # Generic directive: the seam's directive handlers read their
+        # arguments as SOURCE (``-constants_number_currency(snap_max/2,
+        # ...)`` wants the written ``name/arity``), so the operators keep
+        # their seam spelling here (``_seam_operators``).
+        self._seam_operators += 1
+        try:
+            return f"-{self._emit_term(body)}"
+        finally:
+            self._seam_operators -= 1
 
     def _emit_module_directive(self, body: PCompound) -> str:
         name = self._emit_atom_name(body.args[0])
@@ -1781,7 +1797,14 @@ class _PrologToClausal:
         if isinstance(term, PList):
             return self._emit_list(term)
         if isinstance(term, PCurly):
-            return "{" + self._emit_term(term.body) + "}"
+            # A ``{...}`` term may be library(clpq)'s constraint set run by a
+            # meta-call (``findall(X, {X > 1}, L)``): its operators stay the
+            # seam's arithmetic, as before (``_seam_operators``).
+            self._seam_operators += 1
+            try:
+                return "{" + self._emit_term(term.body) + "}"
+            finally:
+                self._seam_operators -= 1
         if isinstance(term, PCompound):
             return self._emit_compound(term)
         return str(term)
@@ -2045,6 +2068,12 @@ class _PrologToClausal:
         if functor == ":" and len(args) == 2 and isinstance(args[0], PAtom):
             module = args[0].name
             goal = args[1]
+            # ``m:foo/1`` -- a qualified predicate indicator, or any operator
+            # term after the colon -- names no predicate: it is the data cell
+            # ``':'(m, '/'(foo, 1))``.  (``_predicate_name`` refused it.)
+            if (isinstance(goal, PCompound)
+                    and not goal.functor.isidentifier()):
+                return self._emit_quoted_op_term(term)
             if isinstance(goal, PCompound):
                 goal_name = self._predicate_name(goal.functor,
                                                  len(goal.args))
@@ -2118,9 +2147,26 @@ class _PrologToClausal:
             expr = self._emit_expr(args[1])
             return f"eval_({expr}, {result})"
 
-        # Arithmetic operators (precedence-aware)
+        # ``+ - * /`` in DATA position are the ISO cells ``'/'(foo, 0)``
+        # (2026-10-20).  The seam's ``foo / 0`` is its arithmetic ``Div``
+        # node, not the cell ('/', foo, 0) the engine's error terms and the
+        # native front end build, so a catcher ``error(existence_error(
+        # procedure, foo/0), _)`` never matched, ``functor(foo/0, N, A)``
+        # answered 'Div'/3 and a ``K-V`` pattern missed library(pairs)'
+        # pairs.  Arithmetic positions (``is``, the comparisons below,
+        # ``#=``, ``{...}``) emit through ``_emit_expr``, which keeps the
+        # Python operators; the engine evaluates the cells as well.
         if functor in self._EXPR_PREC and len(args) == 2:
-            return self._emit_expr(term)
+            if self._seam_operators:
+                return self._emit_expr(term)
+            return self._emit_quoted_op_term(term)
+
+        # Arithmetic comparison in term position (a meta-call's goal
+        # argument): its operands are expressions, as in goal position.
+        if functor in _ARITH_COMPARISONS and len(args) == 2:
+            left = self._emit_expr(args[0])
+            right = self._emit_expr(args[1])
+            return f"{left} {_INFIX_MAP[functor]} {right}"
 
         # Comparison operators
         if functor in _INFIX_MAP and len(args) == 2:
@@ -2142,6 +2188,11 @@ class _PrologToClausal:
             # `- (1)` reach here.)
             if (functor == "-" and isinstance(args[0], PNumber)
                     and args[0].unit is None):
+                return self._emit_quoted_op_term(term)
+            # Prefix ``-``/``+`` as DATA is the cell ``'-'(a)``, not the
+            # seam's ``Negate``/``UAdd`` node -- as for the binary
+            # operators above.
+            if functor in ("-", "+") and not self._seam_operators:
                 return self._emit_quoted_op_term(term)
             clausal_op = _PREFIX_MAP[functor]
             operand = self._emit_term(args[0])

@@ -404,6 +404,27 @@ surface described in [docs/public-api.md](docs/public-api.md).
   and `tests/fmt/test_verify.py::test_a_requoting_formatter_is_refused`.
   Closes `todo/done/fmt-requotes-a-quoted-atom-head-as-a-string-2026-10-20.md`.
 
+- **The `.pl` translator builds `foo/0`, `a-b`, `a+b`, `a*b` and `-a` in
+  data position as the ISO cell** (2026-10-20). Under
+  `CLAUSAL_PL_FRONTEND=translator`, an arithmetic operator term written as a
+  term argument was emitted as the seam's `foo / 0`, the seam's arithmetic
+  node, not the cell `'/'(foo, 0)` that the engine's error terms and the
+  native front end build. So
+  `catch(call(foo), error(existence_error(procedure, foo/0), _), true)`
+  raised instead of catching, `E == existence_error(procedure, []/0)` failed
+  for an `E` with exactly that value, `functor(foo/0, N, A)` answered
+  `'Div'/3`, and a `K-V` pattern did not match the pairs library(pairs)
+  builds. These terms are now emitted as `'/'(foo, 0)`, `'-'(a, b)`, ...;
+  in arithmetic position (`is`, `=:=`, `<`, `#=`, `{...}`, also inside a
+  meta-call's goal argument) they are still expressions. A qualified
+  indicator `m:foo/1` as data, which the translator refused as a predicate
+  name, is now the cell `':'(m, '/'(foo, 1))`. A generic directive's
+  arguments keep the seam spelling, which its handler reads as source
+  (`-dynamic(foo/1)`). The two ISO error-term tests in
+  `docs/for_prolog_programmers.md` now pass on the translator too, so the
+  `.pl` parity fixture drops their rows. Pinned by
+  `tests/test_pl_translator_operator_terms_as_data.py`, on both front ends.
+
 - **The remedy for a write to another module's predicate names that
   module** (2026-10-20). `assertz/1` of a clause for a static predicate
   that this module reaches through an import said "it belongs to

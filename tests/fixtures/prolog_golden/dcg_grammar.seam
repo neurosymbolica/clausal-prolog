@@ -24,7 +24,7 @@ not_a() >> (not [a], [_X_UNUSED])
 
 valid_sentence(SENTENCE) <- (phrase('sentence', SENTENCE))
 
-expr_dcg(EXPRESSION) >> ([EXPRESSION], {EXPRESSION is EXPRESSION + 0})
+expr_dcg(EXPRESSION) >> ([EXPRESSION], {EXPRESSION is '+'(EXPRESSION, 0)})
 
 test('valid sentence') <- (valid_sentence([the, dog, chases, the, cat]))
 
