@@ -1115,7 +1115,11 @@ differently from 1.3.3 itself:
   Task 16 read them through `Fraction(...)`; legacy
   raises the same errors since 2026-10-20).  A bound is read as nf.pl
   reads the number in `{Lo =< X}`, so a float is its short convergent
-  (`in_q(X, 0.1, 1)` gives inf 1/10; `Fraction(0.1)` before).
+  (`in_q(X, 0.1, 1)` gives inf 1/10; `Fraction(0.1)` before).  Legacy
+  matches the port's errors only: it still reads a float bound as
+  `Fraction(F)`, so `in_q(X, 0.1, 1), inf(X, I)` gives
+  `I = 3602879701896397 rdiv 36028797018963968` under legacy and
+  `1 rdiv 10` under the port.
 - The Decimal-scale fast path above also holds in a block that holds `;`
   (Fable M5): each `X = N` branch is posted through
   `_post_comparison_keeping_scale`, which `post_constraint_with_choices`

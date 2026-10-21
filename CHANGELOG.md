@@ -14,7 +14,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
   every surface (also `clpq.entailed/1`): `entailed(X)` with `X` unbound
   raises `instantiation_error`, and `entailed(foo)`, `entailed(f(a, b))`
   or `{X =< 1}, entailed(X \= 2)` raise `type_error(constraint, T)`, as
-  SICStus and clp(q,r) 1.3.3's `entailed/1` do. They used to fail
+  SICStus and clp(q,r) 1.3.3's `entailed/1` do, except that the culprit
+  is the bare term (DEVIATIONS.md D20, ruling R19) where SICStus wraps it
+  as `entailed(T)`. They used to fail
   silently, so a misspelt relation read as "not entailed". A conjunction
   or disjunction of relations, which SICStus reads, still fails. Pinned
   by `tests/test_clpq_error_terms.py` (`test_clausal_case[entailed_*]`,
