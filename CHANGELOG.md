@@ -120,7 +120,8 @@ surface described in [docs/public-api.md](docs/public-api.md).
   translator, `CLAUSAL_PL_FRONTEND=translator`, still refuses them);
   `.clausal` stays cut-free. A cut
   whose scope holds a tabled call is refused (XSB's rule), including
-  `once/1` and `setup_call_cleanup/3`'s Setup (in `.pl` modules): at load
+  `once/1` and `setup_call_cleanup/3`'s Setup (in `.pl` modules; since
+  2026-10-20 also `call_nth/2` and a Cleanup, see Changed): at load
   where the compiler can see the call, otherwise at run time when the cut
   would prune an incomplete table (`permission_error(cut, incomplete_table,
   F/N)`). A commit on the first answer of a fresh table runs: the table
