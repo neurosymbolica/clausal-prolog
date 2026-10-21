@@ -1,5 +1,31 @@
 # The rewrite driver's re-render spells an identifier-shaped quoted atom bare
 
+**Status: FIXED 2026-10-21 (branch fix/rewrite-keeps-quoted-atoms-2026-10-21).**
+Candidate 2, as a side table rather than a flag: `clausal.reflection.AtomSpellings`
+records each atom's quote character beside the terms (`reify_source(...,
+spellings=)`, keyed by the Atom cell, then by name within the item), and
+`render_source(term, spellings)` writes it back; an atom a rule built is bare
+only when the bare name reads back as that atom (`_reads_back_bare`). The
+driver reifies each clause with its table, renders through it, and then reads
+every rewritten statement back out of the formatted output and compares it,
+spellings included, with the rule's term (`driver._assert_reads_back`), refusing
+the file on any difference. Not a flag on `Atom` because the engine tests "is
+this an atom" by exact `str` type (a `str` subclass name a rule handed to
+`atom_length/2` would stop being an atom) and a third field would break every
+`Atom("a") == reified` comparison. Pinned in
+`tests/rewrite/test_driver.py::test_a_passed_through_literal_keeps_its_spelling`,
+`::test_a_folded_literal_keeps_its_spelling`,
+`::test_a_rule_built_atom_is_spelled_to_read_back_as_itself`,
+`::test_the_output_must_read_back_as_the_rule_meant`, `::TestReadsBackAs`,
+`tests/test_reflection_render.py::TestAtomSpellings`, and the literal census in
+`tests/rewrite/test_corpus.py` (662 files, 36 with a firing: 24 files / 141
+quoted atoms respelled before, 0 after). The dotted case is confirmed: `'a.b'`
+came back as the qualified reference `a.b`; it now stays `'a.b'`. Still open,
+and now REFUSED by the read-back check rather than written: a quoted atom KEY
+of an all-constant dict literal (`p({'a': 1})`) reifies as the raw key string
+and renders as the string `{"a": 1}` -- the dict representation, not the
+renderer, decides that one.
+
 Filed 2026-10-21, found while reviewing the clausal-fmt quote-spelling fix
 (`fix/fmt-keeps-quote-style-2026-10-20`). Pre-existing: it reproduces the same
 way on `main` before that branch. Severity: high when it fires. A rewrite can

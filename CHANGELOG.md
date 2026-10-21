@@ -407,6 +407,31 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `::test_a_verdict_is_stored_under_the_snapshot_it_was_computed_under`
   and `::test_plumbing_is_recognised_by_its_head_before_its_shape`.
 
+- **`clausal-rewrite` keeps every atom's spelling** (2026-10-21). When a
+  rule fired, the modified goal (or folded head) was re-rendered with any
+  identifier-shaped atom written bare, so a literal the rule never touched
+  changed meaning: `fold(((X, V) <- score(X, V)), 'a', "a", R)` became
+  `fold(score, a, "a", R)`, where `'Foo'`/`'_x'` became variables,
+  `'None'`/`'True'` Python constants, `'a.b'` a qualified reference and an
+  undeclared `'a'` a load error. Reification now records each atom's quote
+  character beside the terms (`clausal.reflection.AtomSpellings`, via
+  `reify_source(..., spellings=)`) and the renderer writes it back
+  (`render_source(term, spellings)`); an atom a rule built is bare only when
+  the bare name reads back as that atom (`score`, `a.b`) and quoted otherwise
+  (`'Foo'`, `'None'`, `'if'`). The driver also proves the result: every
+  rewritten statement is read back out of the formatted output and compared,
+  atom spellings included, with the term the rule produced, and a difference
+  refuses the file (`RewriteError: ... does not read back as the term the
+  rule produced`). Over the repository's 662 `.seam` files the shipped rules
+  fire in 36; before the fix 24 of those came back with 141 quoted atoms
+  written bare, now none. Pinned by `tests/rewrite/test_driver.py`
+  (`test_a_passed_through_literal_keeps_its_spelling`,
+  `test_a_folded_literal_keeps_its_spelling`,
+  `test_a_rule_built_atom_is_spelled_to_read_back_as_itself`,
+  `test_the_output_must_read_back_as_the_rule_meant`, `TestReadsBackAs`),
+  `tests/test_reflection_render.py::TestAtomSpellings` and the literal
+  census in `tests/rewrite/test_corpus.py`.
+
 - **The goal-taking builtins are one table** (2026-10-20):
   `clausal/logic/special_forms.py`'s `GOAL_BUILTINS` (aggregate_all/3,
   time_goal/1,2, phrase/2,3, maplist & co.), held to its readers by
