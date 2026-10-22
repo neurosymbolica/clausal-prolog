@@ -550,6 +550,71 @@ def test_nfkc_sensitive_atoms_stay_quoted(unnecessary_lambda_rules):
     assert "pass_through(q, 'ǅx', 'ﬁle', R)" in rewrite_source(src, unnecessary_lambda_rules).text
 
 
+# ---- dict-literal keys keep their spelling --------------------------------
+#
+# A dict whose keys are all constants reifies as a RAW dict, keyed by the
+# atom's str (``'a'``) or the string's carrier (``"a"`` under
+# ``-double_quotes(chars)``) -- not by an ``Atom`` cell, which the renderer
+# could have spelled.  The re-render wrote an atom key as the string
+# ``"a"`` and could not write a string key at all, and a bare key
+# (``{a: 1}``) came back quoted, which reads back as the raw dict rather than
+# the ``DictLiteral`` it was.  The read-back check refused each of these: a
+# false refusal, never a silent edit.
+
+_DICT_LITERALS = [
+    "{'a': 1}",                    # constant
+    "{'a': R}",                    # non-constant value, still a raw dict
+    "{'Foo': 1, 'None': 2, 'a.b': 3, 'foo bar': 4}",
+    '{"a": 1}',                    # a STRING key stays a string
+    "{'a': 1, \"a\": 2}",          # the atom and the string of one name
+    "{a: 1}",                      # a bare key: the DictLiteral form
+    "{'a': R, b: 2}",              # quoted and bare keys in one DictLiteral
+    "{'a': 1, K: 2}",              # a variable key
+    "{'a': {'b': R}}",             # nested
+]
+
+
+@pytest.mark.parametrize("literal", _DICT_LITERALS)
+def test_a_passed_through_dict_keeps_its_key_spellings(literal, unnecessary_lambda_rules):
+    src = f"p(R, K) <- (pass_through(((X) <- q(X)), {literal}, R, K))\n"
+    result = rewrite_source(src, unnecessary_lambda_rules)
+    assert len(result.fired) == 1
+    assert f"pass_through(q, {literal}, R, K)" in result.text
+
+
+@pytest.mark.parametrize("literal", ['{"a": 1}', "{'a': 1}", '{"a": 1, \'b\': 2}'])
+def test_an_atom_mode_dict_keeps_its_key_spellings(literal, unnecessary_lambda_rules):
+    src = f"-double_quotes(atom)\n\np(R) <- (pass_through(((X) <- q(X)), {literal}, R))\n"
+    result = rewrite_source(src, unnecessary_lambda_rules)
+    assert f"pass_through(q, {literal}, R)" in result.text
+
+
+def test_an_atom_mode_item_spelling_one_key_two_ways_keeps_each(unnecessary_lambda_rules):
+    """By name alone ``a`` is spelled two ways here; only the dict the rule
+    passed through can say which key was which."""
+    src = ("-double_quotes(atom)\n\n"
+           "p(R) <- (pass_through(((X) <- q(X)), {\"a\": 1}, {'a': 2}, R))\n")
+    result = rewrite_source(src, unnecessary_lambda_rules)
+    assert "pass_through(q, {\"a\": 1}, {'a': 2}, R)" in result.text
+
+
+@pytest.mark.parametrize("clause", ["p(X) <- (m(X))\n", "p(X) <- (m(X), n(a, 'b', b))\n"])
+def test_a_rule_built_dict_keeps_its_key_kinds(clause, tmp_path):
+    """A dict the rule's template builds arrives as a runtime ``DictTerm``
+    with an atom key ``'a'`` and a string key ``"b"``.  Its atom key is
+    always written quoted, whatever the item spells bare: a bare key would
+    read back as a ``DictLiteral``, not as this dict."""
+    builder = tmp_path / f"builder{SEAM}"
+    builder.write_text(textwrap.dedent("""\
+        -double_quotes(chars)
+        -import_from(reflection, [Clause, Goal, Variable])
+
+        rewrite_clause(Clause(H, [Goal('m', [Variable(N)], KW), *GS], P), Clause(H, [Goal('m', [{'a': Variable(N), "b": 2}], KW), *GS], P)),
+        """))
+    result = rewrite_source(clause, [builder])
+    assert "m({'a': X, \"b\": 2})" in result.text
+
+
 def test_a_rule_built_atom_named_like_a_lambda_parameter_is_refused():
     """Inside ``((Y) <- r(Y))`` the parameter reference and the atom ``Y``
     reify alike.  One the source wrote is spelled by its cell; one a rule

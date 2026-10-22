@@ -30,12 +30,22 @@ this an atom" by exact `str` type (a `str` subclass name a rule handed to
 `tests/test_reflection_render.py::TestAtomSpellings`, and the literal census in
 `tests/rewrite/test_corpus.py` (662 files, 36 with a firing: 24 files / 141
 quoted atoms respelled before, 0 after). The dotted case is confirmed: `'a.b'`
-came back as the qualified reference `a.b`; it now stays `'a.b'`. Still open,
-and now REFUSED by the read-back check rather than written: a quoted atom KEY
-of a dict literal whose keys are all constants (`{'a': 1}`, and `{'a': R}` too:
-the value does not matter) reifies as the raw key string and renders as the
-string `{"a": 1}` -- the dict representation, not the renderer, decides that
-one.
+came back as the qualified reference `a.b`; it now stays `'a.b'`. The dict-key
+case left open here (a quoted atom KEY of an all-constant dict literal,
+`{'a': 1}` or `{'a': R}`, rendered as the string `{"a": 1}` and was refused by
+the read-back check) is **FIXED 2026-10-22 (branch
+fix/fmt-anchor-and-dict-key-2026-10-22)**: the raw dict keeps its
+representation, and `AtomSpellings.record_key`/`key_quote` spell its keys by
+the dict object, which the driver now keeps when the rule passes it through.
+A raw dict's atom key a rule built is single-quoted (never bare: `{a: 1}` is
+the `DictLiteral` surface), a string key stays a string, a bare `DictLiteral`
+key stays bare, and a rule-built `DictTerm` renders as its dict. Pinned in
+`tests/rewrite/test_driver.py::test_a_passed_through_dict_keeps_its_key_spellings`,
+`::test_an_atom_mode_dict_keeps_its_key_spellings`,
+`::test_an_atom_mode_item_spelling_one_key_two_ways_keeps_each`,
+`::test_a_rule_built_dict_keeps_its_key_kinds` and
+`tests/test_reflection_render.py::TestAtomSpellings::test_a_dict_key_renders_with_the_quote_it_was_read_with`,
+`::test_a_raw_dict_atom_key_is_quoted_and_a_string_key_double_quoted`.
 
 Filed 2026-10-21, found while reviewing the clausal-fmt quote-spelling fix
 (`fix/fmt-keeps-quote-style-2026-10-20`). Pre-existing: it reproduces the same

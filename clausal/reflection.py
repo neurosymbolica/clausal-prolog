@@ -243,6 +243,7 @@ class AtomSpellings:
     def __init__(self):
         self._by_cell: dict[int, tuple] = {}
         self._by_name: dict[str, set] = {}
+        self._by_dict: dict[int, tuple] = {}
 
     def record(self, atom, quote, item_wide=True):
         """Remember that *atom* (an ``Atom`` cell) was spelled with *quote*.
@@ -267,6 +268,26 @@ class AtomSpellings:
         entry = self._by_cell.get(id(atom))
         if entry is not None and entry[0] is atom:
             return entry[1]
+        return None
+
+    def record_key(self, mapping, key, quote):
+        """Remember that the atom *key* of the raw dict *mapping* -- an
+        all-constant dict literal, keyed by the atom's ``str`` rather than by
+        an ``Atom`` cell -- was spelled with *quote*.  Kept by the dict
+        object, the only identity a raw key has, and as an item-wide
+        spelling of that name."""
+        entry = self._by_dict.get(id(mapping))
+        if entry is None or entry[0] is not mapping:
+            entry = self._by_dict[id(mapping)] = (mapping, {})
+        entry[1][key] = quote
+        self.record_name(key, quote)
+
+    def key_quote(self, mapping, key):
+        """The spelling the atom *key* of this very dict was read with, or
+        ``None`` (a dict a rule built, or a key the source did not write)."""
+        entry = self._by_dict.get(id(mapping))
+        if entry is not None and entry[0] is mapping:
+            return entry[1].get(key)
         return None
 
     def name_quotes(self, name):
@@ -677,12 +698,21 @@ class _ClauseReifier:
             # holds, so the two still unify.  Mixed literals take the
             # ``DictLiteral`` branch above, where ``Atom`` is the right shape
             # and hashability is not required.
-            return {
+            mapping = {
                 key.value if isinstance(key, ast.Constant) else self.term(key):
                     self.term(value)
                 for key, value in zip(node.keys, node.values)
                 if key is not None
             }
+            # The key is the bare str, which has no cell to spell it by, so
+            # its quote is recorded against the dict (``record_key``).
+            if self._spellings is not None:
+                for key in node.keys:
+                    if isinstance(key, ast.Constant) and type(key.value) is str:
+                        quote = quote_of(self._quote_map, key)
+                        if quote is not None:
+                            self._spellings.record_key(mapping, key.value, quote)
+            return mapping
         if isinstance(node, ast.NamedExpr):
             # (X := Var()) — a named logic variable's first occurrence.
             name = node.target.id
@@ -723,7 +753,14 @@ class _ClauseReifier:
         if is_v(reified, Goal) and vfield(reified, "name") == "$intern_atom":
             args = vfield(reified, "args")
             if len(args) == 1 and is_v(args[0], Atom):
-                return args[0]             # STAGE 2: the str constant reified as the Atom already
+                # STAGE 2: the str constant reified as the Atom already.  The
+                # constant is the compiler's, with no quote of its own; the
+                # source wrote this key BARE, and the renderer must too, or
+                # a quoted key turns this ``DictLiteral`` into a raw dict.
+                if (self._spellings is not None
+                        and self._spellings.cell_quote(args[0]) is None):
+                    self._spellings.record(args[0], "")
+                return args[0]
             if len(args) == 1 and isinstance(args[0], str):
                 return Atom(args[0])
         return reified
@@ -1284,10 +1321,13 @@ class _ClauseRenderer:
             return ast.Tuple(
                 elts=[self.term(item) for item in value], ctx=ast.Load()
             )
+        from clausal.terms import DictTerm  # noqa: PLC0415
+        if isinstance(value, DictTerm):
+            value = value.data   # a dict a rule's template built: the raw dict
         if isinstance(value, dict):
             key_nodes, seen = [], set()
             for key in value:
-                key_node = self.term(key)
+                key_node = self._raw_dict_key_ast(value, key)
                 # re-reification is textual, so keys that *unparse* the same
                 # collide and would silently drop a key — refuse instead.
                 surface = ast.unparse(key_node)
@@ -1302,6 +1342,34 @@ class _ClauseRenderer:
         if dataclasses.is_dataclass(value) and not isinstance(value, type):
             return self._operator_ast(value)
         raise RenderError(f"cannot render term: {value!r}")
+
+    def _raw_dict_key_ast(self, mapping, key):
+        """A key of a RAW dict (an all-constant dict literal), which is keyed
+        by the runtime's own spelling of the term, not the vocabulary's: a
+        ``str`` key is the ATOM and the chars carrier is the STRING.
+
+        The atom is written as it was read (``'a'``, or an atom-mode
+        ``"a"``), and otherwise single-quoted -- never bare, because a bare
+        key is the ``{a: 1}`` surface, which reads back as a ``DictLiteral``
+        rather than as this dict.  A dict a rule built has no recorded
+        spelling: its atom keys take the item's one spelling of that name
+        when that is the atom-mode ``"…"``, else ``'…'``, which is the atom
+        in every ``-double_quotes`` mode."""
+        key = _deref_field(key)
+        if type(key) is str:
+            from clausal.logic.atoms import demangle_for_display  # noqa: PLC0415
+            quote = None
+            if self._spellings is not None:
+                quote = self._spellings.key_quote(mapping, key)
+                if quote is None and self._spellings.name_quotes(key) == {'"'}:
+                    quote = '"'
+            display = demangle_for_display(key)
+            if quote == '"':
+                return _raw_source(_double_quoted(display))
+            return _raw_source(_single_quoted(display))
+        if _is_chars(key):
+            return _raw_source(_double_quoted(_chars_text(key)))
+        return self.term(key)
 
     def _operator_ast(self, node):
         """Raw ``simple_ast`` operator node → Python ``ast`` operator expr."""

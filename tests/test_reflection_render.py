@@ -1012,6 +1012,29 @@ class TestAtomSpellings:
         assert render_source(fact, spellings) == 'p("s", \'s\'),'
         assert len(spellings) == 1
 
+    @pytest.mark.parametrize("literal", [
+        "{'a': 1}", '{"a": 1}', "{'a': 1, \"a\": 2}", "{'Foo': X}", "{a: 1}",
+        "{'a': 1, b: X}",
+    ])
+    def test_a_dict_key_renders_with_the_quote_it_was_read_with(self, literal):
+        from clausal.reflection import AtomSpellings
+        spellings = AtomSpellings()
+        (fact,) = reify_source(f"p({literal}, X),", spellings=spellings)
+        assert render_source(fact, spellings) == f"p({literal}, X),"
+
+    def test_a_raw_dict_atom_key_is_quoted_and_a_string_key_double_quoted(self):
+        """Without a table, or for a dict a rule built: an atom key of a raw
+        dict is single-quoted (bare would read back as a ``DictLiteral``) and
+        a string key, the chars carrier, is a string."""
+        from clausal.reflection import AtomSpellings
+        from clausal.terms import DictTerm
+        built = {"a": 1, ("$chars", "a"): 2}
+        assert render_source(built) == "{'a': 1, \"a\": 2}"
+        assert render_source(DictTerm(built)) == "{'a': 1, \"a\": 2}"
+        spellings = AtomSpellings()
+        reify_source("p(a, {'a': 1}),", spellings=spellings)
+        assert render_source(built, spellings) == "{'a': 1, \"a\": 2}"
+
     def test_with_the_source_at_hand_an_unseen_atom_is_quoted(self):
         """With a table, a rule-built atom is bare only where the item spells
         that name bare (``m`` is the functor), quoted where the item spells

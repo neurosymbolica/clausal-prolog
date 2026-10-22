@@ -80,6 +80,7 @@ from clausal.reflection import (
     render_ast,
     render_source,
 )
+from clausal.terms import DictTerm
 
 FIXPOINT_BOUND = 20
 
@@ -286,6 +287,11 @@ def _reads_back_as(meant, read, meant_spellings, read_spellings):
     if isinstance(meant, dict) and isinstance(read, dict):
         if list(meant) != list(read):
             return meant, read
+        # A key of the very dict the rule passed through keeps its quote.
+        for key, read_key in zip(meant, read):
+            quote = meant_spellings.key_quote(meant, key)
+            if quote is not None and quote != read_spellings.key_quote(read, read_key):
+                return meant, read
         return _parts_read_back_as(list(meant.values()), list(read.values()),
                                    meant_spellings, read_spellings)
     if dataclasses.is_dataclass(meant) and type(meant) is type(read):
@@ -387,9 +393,21 @@ def _resolved_keeping_cells(term):
         if all(new is old for new, old in zip(items, term)):
             return term
         return tuple(items)
+    if isinstance(term, DictTerm):
+        # A dict the rule's template built: the raw dict a dict literal
+        # reifies to, so it renders and reads back as one.
+        term = term.data
     if isinstance(term, dict):
-        return {_resolved_keeping_cells(key): _resolved_keeping_cells(value)
-                for key, value in term.items()}
+        # An unchanged dict is kept for the same reason as an unchanged
+        # tuple: an all-constant dict literal is keyed by bare strs, and the
+        # dict itself is the only identity ``AtomSpellings.key_quote`` can
+        # spell those keys by.
+        items = [(_resolved_keeping_cells(key), _resolved_keeping_cells(value))
+                 for key, value in term.items()]
+        if all(new_key is key and new_value is value
+               for (new_key, new_value), (key, value) in zip(items, term.items())):
+            return term
+        return dict(items)
     if isinstance(term, (set, frozenset)):
         return type(term)(_resolved_keeping_cells(item) for item in term)
     hook = getattr(term, "__walk__", None)

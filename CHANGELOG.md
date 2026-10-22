@@ -339,6 +339,32 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `test_pl_translator_data_terms_followups.py::TestInDomainBounds` and the
   `in_*_bound` rows of its program.
 
+### Fixed
+
+- **`clausal-rewrite` keeps the spelling of a dict literal's keys**
+  (2026-10-22). A dict whose keys are all constants reifies as a raw dict
+  keyed by the atom's `str` or the string's chars carrier, with no `Atom`
+  cell to record a quote on, so when a rule re-rendered the goal around it
+  `{'a': 1}` and `{'a': R}` came out as `{"a": 1}` (a string key), a string
+  key `{"a": 1}` could not be rendered at all, a bare key `{a: 1}` came out
+  quoted, an atom-mode `{"a": 1}` could come out `{'a': 1}`, and a dict a
+  rule's template built (a runtime `DictTerm`) could not be rendered. The
+  read-back check refused the file each time, so nothing was written wrong,
+  but the rewrite was lost. `AtomSpellings` now records a raw dict's key
+  quotes against the dict (`record_key`/`key_quote`) and a bare
+  `DictLiteral` key as bare; the renderer writes a raw dict's atom key as
+  it was read and single-quoted otherwise (never bare, which would read back
+  as a `DictLiteral`), its string key as a string, and a `DictTerm` as its
+  dict; the driver keeps a dict the rule passed through unchanged and checks
+  its keys' quotes on read-back. Pinned by `tests/rewrite/test_driver.py`
+  (`test_a_passed_through_dict_keeps_its_key_spellings`,
+  `test_an_atom_mode_dict_keeps_its_key_spellings`,
+  `test_an_atom_mode_item_spelling_one_key_two_ways_keeps_each`,
+  `test_a_rule_built_dict_keeps_its_key_kinds`) and
+  `tests/test_reflection_render.py::TestAtomSpellings`
+  (`test_a_dict_key_renders_with_the_quote_it_was_read_with`,
+  `test_a_raw_dict_atom_key_is_quoted_and_a_string_key_double_quoted`).
+
 ## 1.1.0 (2026-10-21)
 
 A minor release by operator ruling (D83, 2026-10-21): the entries under
