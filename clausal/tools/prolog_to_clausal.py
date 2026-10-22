@@ -836,6 +836,25 @@ _NIL_GOAL_ARGS: dict[str, tuple[int, ...]] = {
                  "partition", "assert", "asserta", "assertz", "retract",
                  "retractall", "clause")}
 
+#: library(reif)'s if_/3, which the translator has built in (without
+#: library(reif)): its condition and both branches are goals.  Not in
+#: _META_GOAL_ARGS, which tests/test_meta_goal_tables_agree.py holds to
+#: clausal.logic.special_forms (if_/3 is a compiler goal of its own).
+_REIF_GOAL_ARGS: dict[str, tuple[int, ...]] = {"if_": (0, 1, 2)}
+
+#: The arguments emitted as GOALS when their meta-call is a goal: every
+#: goal, closure or DCG-body position of _META_GOAL_ARGS except the
+#: database builtins' clause argument (a clause TERM, built as data), and
+#: if_/3's.  A control construct there keeps the seam's goal spelling
+#: (``(a, b)``, ``a or b``, ``X is 1``); as DATA it would be the ISO cell,
+#: which the seam compiles as a call of ``','/2`` rather than inline.
+_GOAL_EMIT_ARGS: dict[str, tuple[int, ...]] = {
+    **{f: ix for f, ix in _META_GOAL_ARGS.items()
+       if f not in ("assert", "asserta", "assertz", "retract", "retractall",
+                    "clause")},
+    **_REIF_GOAL_ARGS,
+}
+
 _CONTROL_FUNCTORS = frozenset({",", ";", "->", "*->", "\\+", ":-", "|"})
 
 
@@ -2314,15 +2333,17 @@ class _PrologToClausal:
         *called*: the term is run as a goal (a body goal, or a meta-call's
         goal argument), so its own goal arguments are emitted by
         ``_emit_goal_arg``; in a head or as data they are terms."""
-        goal_ix = _NIL_GOAL_ARGS.get(functor, ()) if called else ()
-        emitted = [self._emit_goal_arg(a) if i in goal_ix
+        nil_ix = _NIL_GOAL_ARGS.get(functor, ()) if called else ()
+        goal_ix = _GOAL_EMIT_ARGS.get(functor, ()) if called else ()
+        emitted = [self._emit_goal_arg(a, nil_is_goal=i in nil_ix)
+                   if i in goal_ix or i in nil_ix
                    else self._emit_term(a) for i, a in enumerate(args)]
         if (functor == "test" and len(args) == 2
                 and isinstance(args[1], PAtom)):
             emitted[1] = _quote_atom(args[1].name)
         return ", ".join(emitted)
 
-    def _emit_goal_arg(self, term: PTerm) -> str:
+    def _emit_goal_arg(self, term: PTerm, nil_is_goal: bool = True) -> str:
         """A meta-call's goal argument (``catch(G, ...)``, ``findall(_, G,
         _)``): a term, except that a ``[]`` called as a goal -- the whole
         argument, or a conjunct, disjunct or negated goal of it -- is
@@ -2333,31 +2354,35 @@ class _PrologToClausal:
         ``_emit_term`` writes: ``,``, ``;`` and ``\\+`` are spelled as its
         compound emitter spells them, and any other compound goes through
         that emitter, flagged *called* so that a meta-call nested in it
-        (``findall(_, catch([], _, _), _)``) is treated the same way."""
+        (``findall(_, catch([], _, _), _)``) is treated the same way.
+
+        *nil_is_goal* False: a closure or DCG-body argument (maplist's,
+        phrase's), where ``[]`` is the empty list; the rest is the same."""
         if self._is_nil(term):
-            return "call([])"
+            return "call([])" if nil_is_goal else self._emit_term(term)
         if not isinstance(term, PCompound):
             return self._emit_term(term)
         f, a = term.functor, term.args
         if f == "," and len(a) == 2:
             return "(" + ", ".join(
-                self._emit_goal_arg(p)
+                self._emit_goal_arg(p, nil_is_goal)
                 for p in self._flatten_conjunction(term)) + ")"
         if f == ";" and len(a) == 2 and f not in self._user_ops and not (
                 isinstance(a[0], PCompound)
                 and a[0].functor in ("->", "*->")):
-            return (f"{self._emit_goal_arg(a[0])} or "
-                    f"{self._emit_goal_arg(a[1])}")
-        if f == "|" and len(a) == 2 and self._has_nil_goal(term) and not (
+            return (f"{self._emit_goal_arg(a[0], nil_is_goal)} or "
+                    f"{self._emit_goal_arg(a[1], nil_is_goal)}")
+        if f == "|" and len(a) == 2 and nil_is_goal \
+                and self._has_nil_goal(term) and not (
                 isinstance(a[0], PCompound)
                 and a[0].functor in ("->", "*->")):
-            return (f"({self._emit_goal_arg(a[0])} or "
-                    f"{self._emit_goal_arg(a[1])})")
+            return (f"({self._emit_goal_arg(a[0], nil_is_goal)} or "
+                    f"{self._emit_goal_arg(a[1], nil_is_goal)})")
         if f == "\\+" and len(a) == 1 and f not in self._user_ops:
             if (isinstance(a[0], PCompound) and a[0].functor == "^"
                     and len(a[0].args) == 2):
                 self._refuse_caret_goal()
-            return f"not {self._emit_goal_arg(a[0])}"
+            return f"not {self._emit_goal_arg(a[0], nil_is_goal)}"
         return self._emit_compound(term, called=True)
 
     def _has_nil_goal(self, term: PTerm) -> bool:

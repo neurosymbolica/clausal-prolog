@@ -345,3 +345,104 @@ def test_relation_closures_run_under_call_n(tmp_path, frontend):
         env=env, capture_output=True, text=True, timeout=120)
     assert r.returncode == 0, r.stdout + r.stderr
     assert r.stdout.splitlines() == CLOSURE_EXPECTED, r.stdout
+
+
+#: A conjunction, disjunction or unification in each GOAL position of each
+#: meta-predicate the translator knows stays a goal (2026-10-22): if_/3's
+#: three arguments, call/N, findall/bagof/setof, forall, catch/3's goal
+#: and recovery, once, \+, (;), freeze/2, when/2, setup_call_cleanup/3,
+#: call_cleanup/2, the closures of maplist/foldl/tfilter/tpartition and
+#: reif's =/3 and dif/3 conditions.  Emitting a data-position cell there
+#: made the seam call ``','/2`` (``Predicate ,/2 not found`` in if_/3's
+#: else branch).  The translator has if_/3 built in and knows no
+#: library(reif); the native front end imports it, as ISO code must.  The
+#: expected lines are the native front end's (Scryer agrees on the rows it
+#: runs).  Not here, failing the same way before this branch: aggregate_all
+#: over member/2 and phrase/2 of a control construct on the translator,
+#: catch(fail, _, true) inside a disjunction and ignore/1 on both
+#: (todo/translator-meta-call-goal-gaps-2026-10-22.md).
+AUDIT_PROGRAM = """\
+:- use_module(library(lists)).
+w(T) :- writeq(T), nl.
+g --> [a], [b].
+k(X, Y) :- Y is X * 10.
+
+k3(X, A0, A) :- A is A0 + X.
+m01 :- if_(1 = 1, (A = 1, B = 2), (A = 3, B = 4)), w(A/B).
+m02 :- if_(1 = 2, (A = 1, B = 2), (A = 3, B = 4)), w(A/B).
+m03 :- if_(dif(a, b), (A = 1 ; A = 2), A = 3), w(A).
+m04 :- call((A = 1, B = A)), w(B).
+m05 :- call((A = 1 ; A = 2)), w(A).
+m06 :- findall(A-B, (member(A, [1,2]), B = A), L), w(L).
+m07 :- bagof(A, (member(A, [2,1]), A > 0), L), w(L).
+m08 :- setof(A, (member(A, [2,1,2]), \\+ A = 3), L), w(L).
+m10 :- forall((member(A, [1,2]), B = A), (B > 0, A =:= B)), w(ok).
+m11 :- catch((A = 1, throw(e(A))), e(E), (F = E, G = F)), w(G).
+m12 :- once((member(A, [1,2]), A > 1)), w(A).
+m14 :- \\+ (A = 1, A = 2), w(ok14).
+m15 :- ( A = 1, B = 2 ; A = 3, B = 4 ), w(A/B).
+m18 :- freeze(V, (W = V, w(W))), V = 7.
+m19 :- when(nonvar(V), (W = V, w(W))), V = 8.
+m20 :- setup_call_cleanup((A = 1, B = A), (C = B, w(C)), (true, true)).
+m21 :- call_cleanup((A = 2, w(A)), (true, true)).
+m22 :- maplist(k, [1,2], L), foldl(k3, [1,2], 0, S), w(L/S).
+m23 :- tfilter(=(a), [a,b,a], L), w(L).
+m24 :- tpartition(=(a), [a,b], I, E), w(I/E).
+m25 :- if_((X = 1), Y = yes, Y = no), w(X/Y).
+m26 :- findall(X, (member(X, [1,2,3]), if_(X = 2, true, fail)), L), w(L).
+m27 :- call(k, 3, R), w(R).
+main :- m01, m02, m03, m04, m05, m06, m07, m08, m10, m11, m12, m14, m15, m18, m19, m20, m21, m22, m23, m24, m25, m26, m27.
+"""
+
+AUDIT_EXPECTED = [
+    '1/2',
+    '3/4',
+    '1',
+    '1',
+    '1',
+    '[1-1,2-2]',
+    '[2,1]',
+    '[1,2]',
+    'ok',
+    '1',
+    '2',
+    'ok14',
+    '1/2',
+    '7',
+    '8',
+    '1',
+    '2',
+    '[10,20]/3',
+    '[a,a]',
+    '[a]/[b]',
+    '1/yes',
+    '[2]',
+    '30',
+]
+
+
+@pytest.mark.parametrize("frontend", ["translator", "native"])
+def test_goal_positions_of_meta_predicates_stay_goals(tmp_path, frontend):
+    header = ":- use_module(library(reif)).\n" if frontend == "native" else ""
+    (tmp_path / "audit.pl").write_text(header + AUDIT_PROGRAM)
+    env = dict(os.environ)
+    env["CLAUSAL_PL_FRONTEND"] = frontend
+    env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+    r = subprocess.run(
+        [sys.executable, "-m", "clausal", "audit.pl"], cwd=tmp_path,
+        env=env, capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout.splitlines() == AUDIT_EXPECTED, r.stdout
+
+
+@pytest.mark.parametrize("source, emitted", [
+    ("t :- if_(X = 1, (a, b), (c ; d)), p(X).", "if_(X is 1, (a, b), c or d)"),
+    ("t :- freeze(V, (a, b)), p(V).", "freeze(V, ('a', 'b'))"),
+    ("t :- phrase((a, b), L), p(L).", "phrase(('a', 'b'), L)"),
+    ("t :- phrase([], L), p(L).", "phrase([], L)"),
+    # a clause argument is a clause TERM, built as data
+    ("t :- assertz((h :- a, b)).", "assertz(':-'('h', ','('a', 'b')))"),
+])
+def test_goal_arguments_keep_the_goal_spelling(source, emitted):
+    text = _translate(source)
+    assert emitted in text, text
