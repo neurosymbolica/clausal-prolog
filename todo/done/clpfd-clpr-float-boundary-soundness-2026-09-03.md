@@ -1,5 +1,13 @@
 # clpfd<->clpr float-boundary soundness: in-range one-ULP inward rounding + finite out-of-int64 UB
 
+**Status: FIXED 2026-10-22 (commit 0c7d250e).** `_safe_float_lo`/`_safe_float_hi` round an inexact
+bignum bound outward with clpr's `_dn`/`_up` (and clpr's `_get_var_interval`/`_promote_fd_to_real`
+use them); the C `fd_hook` casts a real bound only when it lies strictly inside (-2^63, 2^63) and
+otherwise takes the exact Python path `clpfd._narrow_by_real`, shared with the Python hook and
+`_post_domain`. Pinned in tests/test_clpfd_clpr_float_boundary.py (TestFdBoundToFloat,
+TestSyncRealFromFd, TestClprReadsFdBounds, TestFdFromRealBound; parametrised over the C and Python
+hooks).
+
 Two related gaps at the FD->real sync seam, found by review 2026-09-03 (phase2-prereq Task 1):
 1. _sync_real applies no OUTWARD rounding for in-range bignum bounds: float(2**60+1) rounds to
    nearest, which for a HI bound is inward — unsound by one ULP. clpr has _dn/_up for exactly
