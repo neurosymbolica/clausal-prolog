@@ -1,6 +1,6 @@
 # The `.pl` translator mis-emits some meta-call goal arguments the native front end runs
 
-**Status: FIXED 2026-10-22 (commit 028b0ffa).** member/2 keeps its ISO name (no more `in_` node), data terms take no builtin rename, phrase/2,3's first argument is the ISO grammar body term, variable goals are `call(G)`, and the catch-fail row is fixed in the compiler; ignore/1 stays undefined (see below). Pinned in tests/test_pl_translator_data_terms_followups.py::test_member_and_phrase_bodies_in_meta_and_data_positions (both front ends; the first program's lines are Scryer's).
+**Status: FIXED 2026-10-22 (commit 03c535c7).** member/2 keeps its ISO name (no more `in_` node), data terms take no builtin rename, phrase/2,3's first argument is the ISO grammar body term, variable goals are `call(G)`, and the catch-fail row is fixed in the compiler; ignore/1 stays undefined (see below). Pinned in tests/test_pl_translator_data_terms_followups.py::test_member_and_phrase_bodies_in_meta_and_data_positions (both front ends; the first program's lines are Scryer's).
 
 Filed: 2026-10-22, while auditing every goal position of the meta-predicates
 the translator knows (`tests/test_pl_translator_data_terms_followups.py::
