@@ -347,9 +347,6 @@ def _check_dump_nonlinear(answer):
     assert _equivalent(_dumped(answer, "V", "C", ["X"]), ["X>=10"]) == (True, "")
 
 
-@_disagrees("sin/1 in {}: the .pl front end lowers only + - * / "
-            "(iso_l3.py _clpq_expr) and refuses the program at load",
-            error=r"is not a linear arithmetic expression")
 def test_dump_3_of_a_nonlinear_store():
     answer = _one(port(_DUMP_NONLINEAR, "q_dump_nonlinear", ["X", "V", "C"]))
     _check_dump_nonlinear(answer)
@@ -484,10 +481,6 @@ def _nonlinear_program(goal, variables):
     "goal, variables, check",
     [pytest.param(goal, variables, check, id=name) for name, goal, variables, check
      in _NONLINEAR])
-@_disagrees("sin/cos/pow/exp in {}: the .pl front end lowers only + - * / "
-            "(iso_l3.py _clpq_expr) and refuses the program at load; the "
-            "oracle answers each",
-            error=r"is not a linear arithmetic expression")
 def test_nonlinear(goal, variables, check):
     answer = _one(port(_nonlinear_program(goal, variables), "q_nonlinear", variables))
     check(answer, "port")

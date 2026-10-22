@@ -234,13 +234,29 @@ def test_clpq_braces_lower_to_the_seams_clpq_rational():
 
 @pytest.mark.parametrize("body, what", [
     ("{X ; Y}", "is not a constraint"),
-    ("{X = foo(1)}", "is not a linear arithmetic expression"),
+    ("{X = foo(1)}", "is not an arithmetic expression"),
+    ("{X = sin(1, 2)}", "is not an arithmetic expression"),
 ])
 def test_a_clpq_brace_goal_it_cannot_lower_is_refused(native, body, what):
     with pytest.raises(SyntaxError) as ei:
         native.load("s5_qbad", f":- use_module(library(clpq)).\n"
                                f"t(X, Y) :- {body}.\n")
     assert what in str(ei.value) and ":2:" in str(ei.value)
+
+
+def test_a_nonlinear_function_in_braces_lowers_to_its_cell():
+    # nf.pl's functions pass through as cells, pow/2 and exp/2 spelt ^
+    # (one power to nf.pl; ^/2 is the evaluable the post boundary lets
+    # through).  The solver reads them: the port delays, the default
+    # solver refuses the post (tests/test_clpq_prolog_surface_builtins.py).
+    mod, _stats, _ = L3.lower_module(":- use_module(library(clpq)).\n"
+                                     "t(X, Y) :- {sin(X) = cos(Y), 12 = pow(2, X),"
+                                     " exp(X + 1, 2) = abs(Y)}.\n")
+    import ast
+    text = ast.unparse(mod)
+    assert "$ArithEq(left=('sin', $v_X), right=('cos', $v_Y)" in text
+    assert "$ArithEq(left=12, right=('^', 2, $v_X)" in text
+    assert "$ArithEq(left=('^', ('+', $v_X, 1), 2), right=('abs', $v_Y)" in text
 
 
 def test_braces_as_data_stay_data(native, ans):

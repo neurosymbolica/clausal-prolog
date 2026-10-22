@@ -113,6 +113,16 @@ _META_GOAL_ARGS: dict[tuple[str, int], tuple[int, ...]] = GOAL_POSITIONS
 _CLPQ_COMPARISONS = {"=": "ArithEq", "=:=": "ArithEq", "=\\=": "ArithNeq",
                      "<": "Lt", ">": "Gt", "=<": "LtE", ">=": "GtE"}
 _CLPQ_BINARY = {"+": "Add", "-": "Sub", "*": "Mult", "/": "Div"}
+#: clpq's non-linear functions, nf.pl's nonlin_1/4 and nonlin_2/6: passed
+#: through as compound cells, which the solver reads.  ``pow/2`` and
+#: ``exp/2`` are spelt ``^``: nf.pl reads all three as one power, and the
+#: engine's post boundary (ruling R9 A1) lets an evaluable functor
+#: through, which ``^/2`` is and the other two are not.  The port delays
+#: a non-linear constraint, as SICStus does; the default solver refuses it
+#: when posted (docs/clpq.md).
+_CLPQ_FUNCTIONS = {("abs", 1), ("sin", 1), ("cos", 1), ("tan", 1),
+                   ("min", 2), ("max", 2), ("exp", 2), ("pow", 2), ("^", 2)}
+_CLPQ_POWERS = {"exp", "pow"}
 
 #: Goals whose second argument is an ISO iterated goal term, ``V^G``.
 _ITERATED_GOAL = {("bagof", 3), ("setof", 3)}
@@ -765,9 +775,18 @@ class _ClauseLowering:
             # D8's compile-time fold, as in any other term position (the
             # seam's ``{Q == 100 * constant(one_euro)}`` folds it too).
             return self._constant(e[1], sp)
+        if (type(e) is tuple and len(e) >= 2 and type(e[0]) is str
+                and (e[0], len(e) - 1) in _CLPQ_FUNCTIONS):
+            # ``sin(X)``, ``pow(2, X)``, ``exp(X+Y+1, 2)``: the cell as
+            # written, its arguments as terms (``+`` inside is a cell too,
+            # which the solver's normal form reads like the node).
+            if e[0] in _CLPQ_POWERS:
+                e = ("^",) + e[1:]
+            return self.term(e, sp)
         raise LoweringRefused(
-            f"{{}}/1 (clpq): {e!r} is not a linear arithmetic expression "
-            f"(numbers, variables, + - * /)", _top_span(sp))
+            f"{{}}/1 (clpq): {e!r} is not an arithmetic expression "
+            f"(numbers, variables, + - * /, abs sin cos tan min max exp pow ^)",
+            _top_span(sp))
 
     # ── library(reif)'s if_/3 ──
 

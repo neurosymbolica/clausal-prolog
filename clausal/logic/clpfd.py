@@ -1771,8 +1771,17 @@ def _arith_cells_to_nodes(x, strict=None):
                     # a key-value pair ``-(a, 1)`` from =.. or keysort -- is
                     # left exactly as it was: ``==`` on two ground pairs
                     # keeps its ground fallback (roborev job 273).  Strict
-                    # posts refuse the offending leaf instead.
+                    # posts refuse the offending leaf instead -- unless it
+                    # is an evaluable with no operator node that is not
+                    # ground (``cos(X)`` under ``sin``), which stays the
+                    # cell it is at the top level, for the solver to read
+                    # (CLP(Q)'s port delays ``{sin(cos(X)) = 1/2}``;
+                    # 2026-10-22).
                     if strict is not None:
+                        inner = _cell_key_args(a)
+                        if inner is not None and inner[0] in _EVALUABLE:
+                            args.append(a)
+                            continue
                         raise _not_evaluable(a, strict)
                     return None
                 c = a

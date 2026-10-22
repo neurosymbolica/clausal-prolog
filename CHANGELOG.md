@@ -178,6 +178,28 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `test_dump_3*`, `test_ordering`, `test_flugpl_bb_inf_5`, no longer
   xfail). See docs/clpq.md.
 
+### Fixed
+
+- **A non-linear function inside `{}` in a `.pl` file loads** (2026-10-22).
+  The native front end lowered only `+ - * /` inside clpq's braces and
+  refused `{sin(X) = cos(X)}` or `{12 = pow(2, X)}` at load, though the
+  port delays non-linear constraints as SICStus does (item 4 of the todo
+  above). nf.pl's functions `abs/1`, `sin/1`, `cos/1`, `tan/1`, `min/2`,
+  `max/2`, `exp/2`, `pow/2` and `^/2` now pass through as the cells they
+  are, `pow/2` and `exp/2` spelt `^` (one power to nf.pl; the evaluable
+  the post boundary of ruling R9 A1 admits). The default solver still
+  refuses the post with its `TypeError`, at run time now. Pinned by
+  `tests/clpq_port/test_manual_examples.py::test_nonlinear` (the chapter's
+  ten queries, no longer xfail) and
+  `tests/iso_l3/test_l3_s5_clp.py::test_a_nonlinear_function_in_braces_lowers_to_its_cell`.
+- **A non-ground evaluable with no operator node nested in another
+  (`sin(cos(X))`) reaches the CLP(Q) post** (2026-10-22). The strict
+  post-boundary rewrite (ruling R9 A1) kept such a cell at the top level
+  but refused it one level down as `type_error(evaluable, cos/1)`; it now
+  stays the cell for the solver to read, so `{sin(cos(X)) = 1/2}` answers
+  under the port. Pinned by
+  `tests/test_clpq_prolog_surface_builtins.py::test_a_nested_nonlinear_function_reaches_the_port`.
+
 ## 1.1.0 (2026-10-21)
 
 A minor release by operator ruling (D83, 2026-10-21): the entries under
