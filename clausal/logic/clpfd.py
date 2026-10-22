@@ -3036,9 +3036,16 @@ def in_domain(var_or_list, lo, hi, trail: Trail) -> bool:
     lo = deref(lo)
     hi = deref(hi)
     _fd_reject_truth_atoms((lo, hi))               # D47: true is not 1
-    if not isinstance(lo, int) or not isinstance(hi, int):
-        raise TypeError(f"in_domain bounds must be integers, got {lo!r}, {hi!r}")
-    new_domain = domain_from_range(lo, hi)
+    if isinstance(lo, int) and isinstance(hi, int):
+        new_domain = domain_from_range(lo, hi)
+    else:
+        # Anything else is the domain ``Lo..Hi`` as clpz reads it: ``inf``
+        # and ``sup`` are the open ends, an unbound part is
+        # instantiation_error and any other bound (``N-1``, ``foo``, a
+        # float) domain_error(clpz_domain, Lo..Hi) -- clpz does not evaluate
+        # a bound.  It was a raw Python TypeError.
+        from clausal.logic.clpz_surface import parse_domain  # noqa: PLC0415
+        new_domain = parse_domain(("..", lo, hi), "in_domain/3")
     if not new_domain:
         return False
 

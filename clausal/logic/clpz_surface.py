@@ -148,6 +148,11 @@ def parse_domain(drep, context: str):
         if type(d) is tuple and len(d) == 3 and d[0] == "\\/":
             return _union(walk_d(d[1]), walk_d(d[2]))
         raise _BadDomain
+    # Scryer's drep_to_domain/2 starts with must_be(ground, Drep): an
+    # unbound part ANYWHERE is instantiation_error, even beside a part that
+    # is no domain (``1..(_-1)``, ``foo\\/_``).
+    if _term_vars(drep):
+        _raise(instantiation_error(context))
     try:
         return walk_d(drep)
     except _BadDomain:
