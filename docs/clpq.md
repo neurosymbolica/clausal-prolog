@@ -146,13 +146,16 @@ Integral rationals are presented as integers by every binder — the arithmetic 
 |---|---|---|
 | `rational` | 1 | `rational(X)` — declare X as a rational variable |
 | `in_q` | 3 | `in_q(X, Lo, Hi)` — declare rational variable with bounds `[Lo, Hi]` |
-| `maximize` | 2 | `maximize(Expr, Result)` — find maximum; binds all variables to optimal point |
-| `minimize` | 2 | `minimize(Expr, Result)` — find minimum; binds all variables to optimal point |
+| `maximize` | 1, 2 | `maximize(Expr, Result)` — find maximum; binds all variables to optimal point. `maximize(Expr)` is clp(Q,R)'s form, without `Result` |
+| `minimize` | 1, 2 | `minimize(Expr, Result)` — find minimum; binds all variables to optimal point. `minimize(Expr)` is clp(Q,R)'s form |
 | `sup` | 2 | `sup(Expr, Sup)` — compute upper bound without committing (variables stay unbound) |
 | `inf` | 2 | `inf(Expr, Inf)` — compute lower bound without committing (variables stay unbound) |
 | `entailed` | 1 | `entailed(C)` — test if constraint `C` is implied by current store |
 | `int_minimize` | 3 | `int_minimize(IntVars, Expr, Min)` — minimize with integrality constraints |
+| `bb_inf` | 3, 5 | `bb_inf(IntVars, Expr, Inf)` is `int_minimize/3`; `bb_inf(IntVars, Expr, Inf, Vertex, Eps)` also gives the integral values of `IntVars` at the infimum |
 | `dump_q` | 2 | `dump_q(Vars, Constraints)` — project constraint store onto Vars (Fourier-Motzkin) |
+| `dump` | 3 | `dump(Vars, NewVars, Constraints)` — clp(Q,R)'s dump/3: the projection as terms over `NewVars` (fresh variables, or atoms to name them) |
+| `ordering` | 1 | `ordering(Spec)` — clp(Q,R)'s ordering/1: which variables an answer defines in terms of which (a list, or `A < B`); accepted without effect by the default solver |
 
 `in_q/1` is also accepted as an alias for `rational/1`.
 
@@ -267,7 +270,13 @@ not entailed: the call fails. A conjunction or disjunction of relations
 
 Minimize a linear expression subject to the current constraints **and** the requirement that specified variables take integer values. Uses LP relaxation with branch-and-bound internally. `Min` is bound to the optimum. Under the default solver, the constrained variables are also bound to their optimal integer assignments.
 
-`bb_inf/3` is accepted as an alias (SICStus compatibility).
+`bb_inf/3` is accepted as an alias (SICStus compatibility), and `bb_inf/5`
+(`bb_inf(IntVars, Expr, Inf, Vertex, Eps)`) unifies `Vertex` with the values
+of `IntVars` at the infimum; `bb_inf/3` is `bb_inf/5` with `Eps = 0.001`,
+the distance from an integer within which the port's search takes a value
+as integral. The default solver's integrality test is exact; it reads
+`Eps` (an expression that is no constant fails, as in SICStus) and leaves
+it at that.
 
 !!! note "Under `CLAUSAL_CLPQ=holzbaur`"
     The opt-in port of clp(q,r) 1.3.3 binds `Min` alone and leaves the
@@ -290,6 +299,23 @@ The default solver returns every bound in the store, including redundant ones (s
 ```
 
 This is the feature that SWI-Prolog's CLP(Q) gets wrong — internal variables leak into answers. Clausal Prolog eliminates them correctly via Fourier-Motzkin.
+
+### dump/3 and ordering/1
+
+`dump(Vars, NewVars, Constraints)` is clp(Q,R)'s form of the projection:
+`Constraints` is a list of constraint terms (`a>=4`, `a+b=<10`) over
+`NewVars`, which is unified with fresh variables, or with the atoms a
+program names them with (`dump([A, B], [a, b], Cs)`); the store is left
+as it was. `Vars` is a proper list of unbound variables. Under the default
+solver each term holds dump_q/2's bounds; under the port, 1.3.3's.
+
+`ordering(Spec)` says which variables an answer defines in terms of which
+(`Spec` a list, the first defined by the rest, or `A < B` / `A > B`); the
+port's projection honours it, the default solver accepts it without
+effect, and an unbound `Spec` fails. The residual a `-g` goal prints is
+dump/3 over the goal's variables in the order it lists them, which is an
+ordering too: an `ordering/1` that contradicts it raises
+`system_error(unsatisfiable_ordering)` on the port.
 
 ## Units
 
@@ -415,7 +441,7 @@ CLP(Q) uses a fundamentally different solver from CLP(R). Where CLP(R) narrows i
 | **Inequality** `Σ aᵢXᵢ <= c` | Revised simplex with slack variables | `{2*X + Y =< 16}` |
 | **Disequality** `X ≠ Y` | Passive check (fires when both ground) | `{X =\= 5}` |
 
-All constraints must be **linear** — each term is a constant times a variable, with no products of variables. `{3*X + 5*Y =< 10}` is linear. `{X * Y = 10}` over two rational variables is not, and raises a Python `TypeError` (`CLP(Q) requires linear constraints`) under the default solver; `CLAUSAL_CLPQ=holzbaur` delays it, as SICStus does. `entailed/1` of a non-linear relation answers false on both solvers.
+All constraints must be **linear** — each term is a constant times a variable, with no products of variables. `{3*X + 5*Y =< 10}` is linear. `{X * Y = 10}` over two rational variables is not, and raises a Python `TypeError` (`CLP(Q) requires linear constraints`) under the default solver; `CLAUSAL_CLPQ=holzbaur` delays it, as SICStus does, and so the functions clp(Q,R) knows inside `{}` — `abs/1`, `sin/1`, `cos/1`, `tan/1`, `min/2`, `max/2`, `pow/2`, `exp/2` and `^/2` — which the `.pl` front end passes through (`{sin(cos(X)) = 1/2}` answers under the port; `pow/2` and `exp/2` are read as `^`). `entailed/1` of a non-linear relation answers false on both solvers.
 
 ### Why not interval arithmetic?
 
@@ -748,12 +774,12 @@ This is exactly the trade-off SICStus Prolog documents: "you may be out of space
 | Correctness | Reference impl | Orphaned, bugs | No CLP(Q) | **Clean-room from papers** |
 | Algorithm | Holzbaur Gaussian+simplex | Port of SICStus | — | **Holzbaur Gaussian+simplex** |
 | Arithmetic | GMP rationals | SWI rationals | — | **Python `Fraction`** |
-| Optimization | `maximize/1`, `minimize/1` | Same (buggy) | — | **`maximize/2`, `minimize/2`** |
+| Optimization | `maximize/1`, `minimize/1` | Same (buggy) | — | **`maximize/2`, `minimize/2`**, and the `/1` forms |
 | Bounds query | `sup/1`, `inf/1` | Same | — | **`sup/2`, `inf/2`** |
 | Entailment | `entailed/1` | Same | — | **`entailed/1`** |
-| MIP | `bb_inf/3`, `bb_inf/5` | Same | — | **`int_minimize/3`** |
-| Projection | Fourier-Motzkin | Broken | — | **`dump_q/2` (Fourier-Motzkin)** |
-| Non-linear | Deferred | Deferred | — | **Rejected (Python `TypeError`)** |
+| MIP | `bb_inf/3`, `bb_inf/5` | Same | — | **`int_minimize/3`**, `bb_inf/3`, `bb_inf/5` |
+| Projection | Fourier-Motzkin | Broken | — | **`dump_q/2` (Fourier-Motzkin)**, `dump/3`, `ordering/1` |
+| Non-linear | Deferred | Deferred | — | **Rejected (Python `TypeError`)**; deferred under `CLAUSAL_CLPQ=holzbaur` |
 | Syntax | `{X + Y =< 8}` | Same | — | **`{X + Y =< 8}`**, or `X + Y #=< 8` (unified; seam `X + Y <= 8`) |
 | `/` inside a constraint | Exact rational | Exact rational | — | **Exact rational inside `{...}`; an integer when integral** |
 

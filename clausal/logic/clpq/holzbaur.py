@@ -541,18 +541,27 @@ def _bind_optimum(value, result_var, dims, trail):
     return unify(result_var, _units_result(Fraction(number), dims), trail)
 
 
-def bb_inf(int_vars, expr, result_var, trail):
-    """bb.pl bb_inf/3: the infimum of *expr* with every variable of
-    *int_vars* integral.  Binds *result_var* alone; the store is as it was
-    (1.3.3's shape, Task 13).  A united variable's shadow is the integer."""
-    refuse_inside_attribute_hooks(
-        trail, ("bb_inf", int_vars, expr, result_var), "bb_inf", 3)
-    int_vars = _proper_list(int_vars, "bb_inf/3")
-    expr, dims = _objective(expr, "bb_inf/3", trail)
-    integers = _labels(int_vars, "bb_inf/3")
+def bb_inf(int_vars, expr, result_var, trail, vertex=None, epsilon=None):
+    """bb.pl bb_inf/3, and bb_inf/5 with *vertex* and *epsilon*: the
+    infimum of *expr* with every variable of *int_vars* integral.  Binds
+    *result_var* alone (and *vertex*, the integral values of *int_vars*
+    there); the store is as it was (1.3.3's shape, Task 13).  A united
+    variable's shadow is the integer."""
+    if vertex is None and epsilon is None:
+        context = "bb_inf/3"
+        refuse_inside_attribute_hooks(
+            trail, ("bb_inf", int_vars, expr, result_var), "bb_inf", 3)
+    else:
+        context = "bb_inf/5"
+        refuse_inside_attribute_hooks(
+            trail, ("bb_inf", int_vars, expr, result_var, vertex, epsilon),
+            "bb_inf", 5)
+    int_vars = _proper_list(int_vars, context)
+    expr, dims = _objective(expr, context, trail)
+    integers = _labels(int_vars, context)
     return _optimum(
         lambda objective, value, trail: _branch_and_bound.bb_inf(
-            integers, objective, value, trail),
+            integers, objective, value, trail, vertex, epsilon),
         expr, deref(result_var), dims, trail)
 
 
@@ -614,6 +623,19 @@ def dump_q(target_vars, trail, name_of=None, *, toplevel=False):
     return _without_a_queue(
         trail, lambda: _residual_constraints.residual_strings(
             shadows, trail, name))
+
+
+def dump(target_vars, names, trail):
+    """dump.pl dump/3 on *target_vars*: the projected constraints as terms
+    (compound cells over engine numbers, D16), each target replaced by the
+    element of *names* at its position; None where dump/3 fails.  The
+    builtin dump/3 checks the targets are unbound variables first."""
+    refuse_inside_attribute_hooks(
+        trail, ("dump", target_vars, names, Var()), "dump", 3)
+    target_vars = _proper_list(target_vars, "dump/3")
+    shadows = _labels(target_vars, "dump/3")
+    return _without_a_queue(
+        trail, lambda: _residual_constraints.dump(shadows, list(names), trail))
 
 
 def residual_q(target_vars, trail, name_of):

@@ -157,6 +157,27 @@ surface described in [docs/public-api.md](docs/public-api.md).
   never compared; the port succeeds), and `bb_inf([0.5], X, I)` ignored
   the number and succeeded (the port fails: it is no integer).
 
+### Added
+
+- **clp(Q,R)'s `maximize/1`, `minimize/1`, `bb_inf/5`, `ordering/1` and
+  `dump/3` are builtins** (2026-10-22), on both CLP(Q) solvers and every
+  surface, so a program written for the SICStus 3.7.1 clp(Q,R) manual runs
+  as written (todo/clpq-port-vs-sicstus-manual-23-gaps-2026-10-16.md items
+  2, 3, 5, 6). `maximize(Z)` is `maximize(Z, _)`; `bb_inf(Is, Obj, Inf,
+  Vertex, Eps)` unifies `Vertex` with the integral values of `Is` at the
+  infimum (the default solver reads `Eps` and keeps its exact integrality
+  test); `dump(Vars, NewVars, Cs)` gives the projection as terms over
+  `NewVars`, fresh variables or the atoms given (`dump([A, B], [a, b],
+  Cs)` binds `Cs = [a>=4, a+b=<10]`), and raised `type_error(callable,
+  <function dump ...>)` before, the name resolving to a Python function;
+  `ordering(Spec)` is honoured by the port's projection and accepted
+  without effect by the default solver, which has no variable ordering.
+  Pinned by `tests/test_clpq_prolog_surface_builtins.py` (both solvers)
+  and the manual's own queries in
+  `tests/clpq_port/test_manual_examples.py` (`test_maximize_1_as_documented`,
+  `test_dump_3*`, `test_ordering`, `test_flugpl_bb_inf_5`, no longer
+  xfail). See docs/clpq.md.
+
 ## 1.1.0 (2026-10-21)
 
 A minor release by operator ruling (D83, 2026-10-21): the entries under

@@ -26,7 +26,7 @@ for _name in dir(_legacy):
 HOLZBAUR_API = (
     "Q_KEY", "q_eq", "q_ne", "q_le", "q_lt", "q_gt", "q_ge", "in_q", "sup",
     "inf", "maximize", "minimize", "entailed", "dump_q", "residual_q",
-    "bb_inf", "clpq_constraint_block", "clpq_constraint_answers",
+    "dump", "bb_inf", "clpq_constraint_block", "clpq_constraint_answers",
     "sync_fd_bounds", "ordering")
 
 if SOLVER == "holzbaur":

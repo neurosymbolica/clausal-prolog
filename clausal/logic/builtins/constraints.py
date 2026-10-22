@@ -2,7 +2,8 @@
 all_different/1, structural_eq/2, sum_/3, scalar_product/4, element/3, circuit/1,
 sat/1, taut/2, sat_count/2, bool_labeling/1,
 in_real/1, in_real/3, label_real/1, label_real/2,
-in_q/1, in_q/3, maximize/2, minimize/2."""
+in_q/1, in_q/3, maximize/1,2, minimize/1,2, bb_inf/3,5, ordering/1,
+dump/3."""
 
 from __future__ import annotations
 
@@ -238,6 +239,26 @@ def _minimize__2(expr, result, trail, k):
         yield None
 
 
+@_builtin("maximize", 1)
+def _maximize__1(expr, trail, k):
+    """maximize(Expr) — clp(Q,R)'s form: Expr is at its maximum and the
+    variables it implies are bound; maximize/2 hands the maximum back too.
+    An unbounded objective fails."""
+    from clausal.logic.clpq import maximize as _maximize_fn  # noqa: PLC0415
+    from clausal.logic.variables import Var  # noqa: PLC0415
+    if _maximize_fn(expr, Var(), trail):
+        yield None
+
+
+@_builtin("minimize", 1)
+def _minimize__1(expr, trail, k):
+    """minimize(Expr) — clp(Q,R)'s form: Expr is at its minimum."""
+    from clausal.logic.clpq import minimize as _minimize_fn  # noqa: PLC0415
+    from clausal.logic.variables import Var  # noqa: PLC0415
+    if _minimize_fn(expr, Var(), trail):
+        yield None
+
+
 @_builtin("int_minimize", 3)
 def _int_minimize__3(int_vars, expr, result, trail, k):
     """int_minimize(IntVars, Expr, Min) — minimize with integrality constraints."""
@@ -254,6 +275,56 @@ def _bb_inf__3(int_vars, expr, result, trail, k):
     from clausal.logic.clpq import bb_inf as _bb_inf_fn  # noqa: PLC0415
     from clausal.logic.variables import deref as _deref  # noqa: PLC0415
     if _bb_inf_fn(_deref(int_vars), expr, result, trail):
+        yield None
+
+
+@_builtin("bb_inf", 5)
+def _bb_inf__5(int_vars, expr, result, vertex, eps, trail, k):
+    """bb_inf(IntVars, Expr, Inf, Vertex, Eps) — bb_inf/3 with the values
+    of IntVars at the infimum unified with Vertex, and Eps the distance
+    from an integer a value may have to count as integral (bb_inf/3 is
+    bb_inf/5 with Eps = 0.001).  The default solver's integrality test is
+    exact; it reads Eps (an expression that is no constant fails, as in
+    bb.pl) and leaves it at that."""
+    from clausal.logic.clpq import bb_inf as _bb_inf_fn  # noqa: PLC0415
+    from clausal.logic.variables import deref as _deref  # noqa: PLC0415
+    if _bb_inf_fn(_deref(int_vars), expr, result, trail, vertex=vertex,
+                  epsilon=eps):
+        yield None
+
+
+@_builtin("ordering", 1)
+def _ordering__1(spec, trail, k):
+    """ordering(Spec) — clp(Q,R)'s ordering/1: which variables an answer
+    defines in terms of which, a list (the first is defined by the rest)
+    or ``A < B`` / ``A > B``.  The default solver has no variable ordering
+    and accepts the hint without effect; an unbound Spec fails."""
+    from clausal.logic.clpq import ordering as _ordering_fn  # noqa: PLC0415
+    if _ordering_fn(spec, trail):
+        yield None
+
+
+@_builtin("dump", 3)
+def _dump__3(targets, new_vars, coded, trail, k):
+    """dump(Target, NewVars, CodedAnswer) — clp(Q,R)'s dump/3: the
+    constraints on the variables of Target, as terms over NewVars (fresh
+    variables, or the atoms a program names them with), the store left as
+    it was.  Target is a proper list of unbound variables."""
+    from clausal.logic.clpq import dump as _dump_fn  # noqa: PLC0415
+    from clausal.logic.clpz_surface import _proper_list  # noqa: PLC0415
+    from clausal.logic.exceptions import _error  # noqa: PLC0415
+    from clausal.logic.variables import (  # noqa: PLC0415
+        Var, deref as _deref, unify as _unify)
+    targets = _proper_list(targets, "dump/3")
+    for target in targets:
+        if not is_var(_deref(target)):
+            raise LogicException(_error(("uninstantiation_error", target),
+                                        "dump/3"))
+    names = [Var() for _ in targets]
+    if not _unify(new_vars, names, trail):
+        return
+    goals = _dump_fn(targets, names, trail)
+    if goals is not None and _unify(coded, goals, trail):
         yield None
 
 

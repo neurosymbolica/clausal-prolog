@@ -1955,19 +1955,32 @@ def dump_q(target_vars: list, trail: Trail, name_of=None, *,
     writes a constraint whose coefficients are all negative the other way
     round (``{X >= 2}``, not ``{-X =< -2}``), as an answer is printed.
     """
-    tableau = _get_tableau(trail)
-    target_ids = set()
     id_to_name: dict[int, str] = {}
+    for v, s in _target_shadows(target_vars, "dump_q/2"):
+        id_to_name[s._id] = str(v) if name_of is None else name_of(v)
+    constraints = _projected_constraints(set(id_to_name), trail)
+    return _format_constraints(constraints, id_to_name, toplevel=toplevel)
+
+
+def _target_shadows(target_vars: list, context: str) -> list:
+    """``(variable, shadow)`` for each unbound target: a united variable's
+    constraints sit on its shadow, so the projection is onto the shadow,
+    named as the variable the program wrote (it answered [] before)."""
     if _label_targets is None:
         _ensure_units_imports()
-    # A united variable's constraints sit on its shadow: project onto the
-    # shadow, named as the variable the program wrote (it answered [] before).
-    for v, s in zip(target_vars, _label_targets(target_vars, "dump_q/2")):
+    pairs = []
+    for v, s in zip(target_vars, _label_targets(target_vars, context)):
         v, s = deref(v), deref(s)
         if is_var(s):
-            target_ids.add(s._id)
-            id_to_name[s._id] = str(v) if name_of is None else name_of(v)
+            pairs.append((v, s))
+    return pairs
 
+
+def _projected_constraints(target_ids: set, trail: Trail) -> list:
+    """The store projected onto *target_ids*, as triples ``(coeffs, rel,
+    rhs)``: Fourier-Motzkin over the connected constraints, then the
+    disequalities over targets only (dump_q/2's and dump/3's answer)."""
+    tableau = _get_tableau(trail)
     constraints = _connected(_collect_constraints(tableau, target_ids),
                              target_ids)
     projected = _project(constraints, target_ids)
@@ -1991,8 +2004,46 @@ def dump_q(target_vars: list, trail: Trail, name_of=None, *,
                 break
         else:
             constraints.append((dict(coeffs), '=\\=', constant))
+    return constraints
 
-    return _format_constraints(constraints, id_to_name, toplevel=toplevel)
+
+def dump(target_vars: list, names: list, trail: Trail) -> list | None:
+    """clp(Q,R)'s dump/3 with the default solver: dump_q/2's projection as
+    terms (compound cells over engine numbers), each target replaced by
+    the element of *names* at its position, any other variable by a fresh
+    one; None where the lengths differ.  The store is as it was."""
+    if len(names) != len(target_vars):
+        return None
+    id_to_name: dict[int, Any] = {}
+    for (v, s), name in zip(_target_shadows(target_vars, "dump/3"), names):
+        id_to_name.setdefault(s._id, name)
+    constraints = _projected_constraints(set(id_to_name), trail)
+    goals: list = []
+    for coeffs, rel, rhs in constraints:
+        if not coeffs:
+            continue
+        lhs = None
+        for vid in sorted(coeffs):
+            if vid not in id_to_name:
+                id_to_name[vid] = Var()
+            name = id_to_name[vid]
+            c = coeffs[vid]
+            term = name if abs(c) == ONE else ('*', present_number(abs(c)), name)
+            if lhs is None:
+                lhs = ('-', term) if c < ZERO else term
+            else:
+                lhs = ('-' if c < ZERO else '+', lhs, term)
+        goal = (rel, lhs, present_number(rhs))
+        if goal not in goals:       # the same bound can reach the answer
+            goals.append(goal)      # twice, through linked columns
+    return goals
+
+
+def ordering(spec: Any, trail: Trail) -> bool:
+    """clp(Q,R)'s ordering/1 with the default solver, which has no variable
+    ordering: the hint is accepted without effect.  An unbound Spec fails,
+    as ordering.pl's first clause does."""
+    return not is_var(deref(spec))
 
 
 def residual_q(target_vars: list, trail: Trail, name_of) -> list[str]:
@@ -2217,7 +2268,7 @@ def _format_constraints(constraints: list[tuple[dict[int, Fraction], str, Fracti
 
 
 def bb_inf(int_vars: list, expr: Any, result_var: Any,
-           trail: Trail) -> bool:
+           trail: Trail, vertex: Any = None, epsilon: Any = None) -> bool:
     """Branch-and-bound mixed-integer optimization.
 
     Finds the infimum (minimum) of *expr* subject to the current
@@ -2229,15 +2280,26 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
 
     Uses LP relaxation at each node and branches on the most fractional
     integer variable.
+
+    bb_inf/5's *vertex* is unified with the values of *int_vars* at the
+    optimum; its *epsilon* must evaluate to a number (``1/1000``, as the
+    port reads it) and is otherwise unused: the integrality test here is
+    exact.  An *epsilon* that is no constant fails, as bb.pl's does.
     """
+    context = "bb_inf/3" if vertex is None and epsilon is None else "bb_inf/5"
+    if epsilon is not None:
+        epsilon = _linearize(_cell_as_node(deref(epsilon), context), trail)
+        if epsilon is None or epsilon[0]:
+            return False
     expr = deref(expr)
-    expr = _cell_as_node(expr, "bb_inf/3")   # ruling R9 A1: a cell objective is its node
-    expr, dims = _units_strip_expr(expr, "bb_inf/3", trail)
+    expr = _cell_as_node(expr, context)   # ruling R9 A1: a cell objective is its node
+    expr, dims = _units_strip_expr(expr, context, trail)
     result_var = deref(result_var)
     if _label_targets is None:
         _ensure_units_imports()
     int_ids = set()
-    for v in _label_targets(int_vars, "bb_inf/3"):   # a united var: its shadow is the integer
+    shadows = _label_targets(int_vars, context)   # a united var: its shadow is the integer
+    for v in shadows:
         v = deref(v)
         if is_var(v):
             int_ids.add(v._id)
@@ -2262,6 +2324,9 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
     tid = id(trail)
     _tableaux[tid] = best_tab
     if not _bind_optimal(best_tab, trail):
+        return False
+    if vertex is not None and not unify(
+            vertex, [deref(v) for v in shadows], trail):
         return False
     return unify(result_var, _units_result(best_val, dims), trail)
 

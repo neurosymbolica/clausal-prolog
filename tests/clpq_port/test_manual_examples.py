@@ -288,9 +288,6 @@ def test_maximize():
     _agree([answer], oracle(_SOLVER_ORACLE, "q_maximize", variables))
 
 
-@_disagrees("maximize/1 is not a .pl builtin: existence_error(procedure, "
-            "maximize/1); only Clausal's maximize/2 exists (DEVIATIONS.md D20)",
-            error=r"existence_error\(procedure,maximize/1\)")
 def test_maximize_1_as_documented():
     answer = _one(port(_SOLVER, "q_maximize_1", ["X", "Y", "Z"]))
     _is(answer, {"X": 7, "Y": 2, "Z": 310}, [])
@@ -331,9 +328,6 @@ def _check_dump(answer):
     assert _equivalent(_dumped(answer, "Bp", "Cb", ["B"]), ["B=<6"]) == (True, "")
 
 
-@_disagrees("dump/3 raises type_error(callable, <function dump>) in a .pl "
-            "program: the name resolves to a Python function, not a builtin",
-            error=r"type_error\(callable,<function dump")
 def test_dump_3():
     answer = _one(port(_SOLVER, "q_dump", ["A", "B", "Vs", "Cs", "Bp", "Cb"]))
     _check_dump(answer)
@@ -584,9 +578,6 @@ _ORDERINGS = [
 
 @pytest.mark.parametrize("query, variables, defined, documented",
                          [pytest.param(*row, id=row[0][2:]) for row in _ORDERINGS])
-@_disagrees("ordering/1 is not a .pl builtin: existence_error(procedure, "
-            "ordering/1) (holzbaur.ordering exists, unregistered)",
-            error=r"existence_error\(procedure,ordering/1\)")
 def test_ordering(query, variables, defined, documented):
     # The relation, and which variable it defines: ordering/1's effect.
     answer = _one(port(_mg(), query, variables))
@@ -636,9 +627,6 @@ def _check_dump_names(answer):
                        [c.lower() for c in _STORE]) == (True, "")
 
 
-@_disagrees("dump/3 raises type_error(callable, <function dump>) in a .pl "
-            "program: the name resolves to a Python function, not a builtin",
-            error=r"type_error\(callable,<function dump")
 def test_dump_3_with_atoms_for_names():
     answer = _one(port(_TERMS, "q_dump_names", ["A", "B", "C", "D", "E", "Cs"]))
     _check_dump_names(answer)
@@ -901,10 +889,6 @@ def _check_bb_inf_5(answer):
         == _FLUGPL_VERTEX
 
 
-@_disagrees("bb_inf/5 is not a .pl builtin: existence_error(procedure, "
-            "bb_inf/5); only bb_inf/3 is registered (builtins/constraints.py), "
-            "though branch_and_bound.py implements the /5 form",
-            error=r"existence_error\(procedure,bb_inf/5\)")
 def test_flugpl_bb_inf_5():
     answer = _one(port(_flugpl(), "q_bb_inf_5", ["Inf", "Vertex"]))
     _check_bb_inf_5(answer)
