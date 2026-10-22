@@ -17,7 +17,6 @@ import sys
 
 import pytest
 
-from clausal.logic.clpq import SOLVER
 from clausal.logic.solve import call
 from clausal.logic.variables import Var, deref
 from clausal.testing import load_clausal_module
@@ -89,11 +88,6 @@ def test_clausal_entailed_relation_holds(clausal_module, goal):
     assert _succeeds(goal, module=clausal_module)
 
 
-@pytest.mark.xfail(
-    SOLVER == "legacy", strict=True,
-    reason="the legacy solver keeps X > 2 as X >= 2 plus a passive X =\\= 2 "
-           "that entailed/4 does not read: "
-           "todo/clpq-strict-bounds-closed-by-inequalities-2026-10-11.md")
 def test_clausal_entailed_strict_relation_holds(clausal_module):
     assert _succeeds("implied_strict", module=clausal_module)
 

@@ -250,6 +250,10 @@ Supported relations: `=<`, `>=`, `<`, `>`, `=:=` (or `=`), `=\=`. The relation
 may also be built at run time (`C = (X =< 5), entailed(C)`). In the seam they
 are `<=`, `>=`, `<`, `>`, `==`, `!=`: `entailed(X <= 5)`.
 
+A strict relation or a disequality in the store counts, on both solvers: after
+`{X < 5}`, both `entailed(X < 5)` and `entailed(X =\= 5)` hold, and after
+`{X < Y, Y =< Z}`, `entailed(X < Z)` holds.
+
 As in SICStus, an unbound argument raises `instantiation_error` and a term that
 is no relation (`entailed(foo)`, or `entailed(X \= 2)` in Clausal Prolog) raises
 `type_error(constraint, T)`. A non-linear relation (`entailed(A*A =\= 5)`) is

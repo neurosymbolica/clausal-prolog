@@ -200,9 +200,6 @@ class TestClpqSoundness:
 class TestClpqSemanticsVsReference:
     """Divergences from SICStus/Holzbaur semantics and from docs/clpq.md."""
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F008: entailed ignores stored disequalities "
-                              "(SICStus: entailed(A=\\=5) after {A=\\=5} is true)")
     def test_entailed_diseq_after_ne(self):
         t = Trail()
         a = Var()
@@ -210,9 +207,6 @@ class TestClpqSemanticsVsReference:
         assert q_ne(a, 5, t)
         assert entailed('\\=', a, 5, t)
 
-    @pytest.mark.xfail(strict=False,
-                       reason="A08-F004/F008: entailed('<') false after q_lt "
-                              "store (strict stored as non-strict)")
     def test_entailed_strict_after_strict(self):
         t = Trail()
         x = Var()

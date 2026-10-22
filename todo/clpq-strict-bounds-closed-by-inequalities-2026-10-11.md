@@ -19,8 +19,13 @@ solution exists, and are only caught later, when a variable is bound:
 A z3 fuzz (2026-10-11) counted 54 such stores in 6,000, and 46 in
 12,000 with bindings mixed in; none wrongly failed.  On the parent of this series, 667 of 1,500 were wrong.
 
-Related, and older: `entailed/2` ignores disequalities.  After `{X < Y}`,
-neither `entailed(X < Y)` nor `entailed(X =\= Y)` holds.
+Related, and older, fixed 2026-10-22: `entailed/1` ignored disequalities
+(after `{X < Y}`, neither `entailed(X < Y)` nor `entailed(X =\= Y)` held);
+pinned in tests/test_clpq_entailed_strict.py.  Also fixed then: an `in_q/3`
+that closes a strict bound on one variable to a point (`{X > 0}, in_q(X,
+-1, 0)`) binds the variable, so it fails; the two-variable stores above
+still succeed.  A fuzz against the port (2026-10-22, about 16,000 stores)
+found 28 such accepted stores, every one with a strict relation in it.
 
 The general fix is strict bounds inside the simplex.  SMT solvers do this
 with delta-rationals (Dutertre and de Moura): a strict bound `x < c` is

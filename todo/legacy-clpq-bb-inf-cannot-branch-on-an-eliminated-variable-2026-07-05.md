@@ -14,11 +14,18 @@ So the F002 half (`X,Y in [0,10], X+Y == 100` accepted) no longer
 reproduces on legacy (the 2026-10-11 series, 025e62e9 "kept bounds", and
 73c3ac38 for `fix_variable` intersecting bounds). What is left on legacy is
 F006: `bb_inf` branching on a parametric integer variable, plus
-`_BB_MAX_DEPTH = 50` (now `clausal/logic/clpq/legacy.py:2012`) silently
+`_BB_MAX_DEPTH = 50` (now `clausal/logic/clpq/legacy.py:2250`) silently
 truncating the search. The solver file moved: `clpq.py` is now
-`clausal/logic/clpq/legacy.py` (`add_equality` :277, `_propagate_determined`
-:360, `fix_variable` :712). Closing options: fix legacy, or close this when
+`clausal/logic/clpq/legacy.py` (`add_equality` :304, `_propagate_determined`
+:387, `fix_variable` :739). Closing options: fix legacy, or close this when
 the port becomes the default solver.
+
+Re-checked 2026-10-22: the status above still holds (F006 XFAIL on legacy,
+XPASS under holzbaur; F002 XPASS on both). Since then `in_q/3` on a
+parametric variable posts its bound on the expression that replaced it
+(`Tableau.restrict`, :247, the same transfer `add_equality` does for a
+pivot's bounds); `_bb_solve`'s `set_bound` on a parametric variable is
+still the no-op described in item 3 below.
 
 The original audit text follows.
 

@@ -114,6 +114,36 @@ surface described in [docs/public-api.md](docs/public-api.md).
   interval. Pinned by `tests/test_clpfd_clpr_float_boundary.py` (closes
   `todo/done/clpfd-clpr-float-boundary-soundness-2026-09-03.md`).
 
+- **Legacy CLP(Q): `entailed/1` reads strict relations and
+  disequalities** (2026-10-22). The default solver keeps `X < c` as
+  `X =< c` plus a disequality and its `entailed/1` read only the closed
+  bounds, so `{X < 5}, entailed(X < 5)`, `{X > 2}, entailed(X > 2)`,
+  `{X =\= 5}, entailed(X =\= 5)`, `{X < Y, Y =< Z}, entailed(X < Z)` and
+  `{X < 5, Y = X + 1}, entailed(Y < 6)` answered `false`. SICStus, clp(q,r)
+  1.3.3 (`CLAUSAL_CLPQ=holzbaur`) and Scryer's clpq answer `true`, and now
+  so does legacy: a strict relation or `=\=` whose bound the store reaches
+  only where a disequality excludes it is entailed. A fuzz of legacy against
+  the port over random small systems found no other `entailed/1`
+  disagreement. Pinned in `tests/test_clpq_entailed_strict.py` on both
+  solvers; the strict xfail in `tests/test_clpq_entailed_relation_cells.py`
+  and two audit xfails now pass.
+- **Legacy CLP(Q): `in_q/3` on a variable an equality eliminated**
+  (2026-10-22). The bound was stored but the simplex never read it:
+  `{X + Y/2 = -4}, in_q(Y, 1, 2)` left `sup(X, S)` failing as unbounded and
+  `entailed(X =\= 0)` false, and `in_q/3` could not fail on such a
+  variable. The bound is now posted on the expression that replaced the
+  variable, as an equality already does for a bound it eliminates.
+- **Legacy CLP(Q): `in_q/3` closing a strict bound** (2026-10-22).
+  `{X > 0}, in_q(X, -1, 0)` succeeded; `in_q/3` now binds a variable its
+  bounds close to a point, as `{X =< 0}` does, so the strict bound fails it.
+- **Legacy CLP(Q): a NaN or infinite float operand raises an ISO error**
+  (2026-10-22). `entailed/1`, the constraint posts, `in_q/3` bounds,
+  `sup/2`, `inf/2`, `maximize/2`, `minimize/2` and `bb_inf/3` raised a
+  bare Python `ValueError` (NaN) or `OverflowError` (an infinity); they
+  now raise `evaluation_error(undefined)` and
+  `evaluation_error(float_overflow)`, as the port does (and as both do for
+  a non-finite decimal, ruling R19). A finite float is unchanged.
+
 ## 1.1.0 (2026-10-21)
 
 A minor release by operator ruling (D83, 2026-10-21): the entries under

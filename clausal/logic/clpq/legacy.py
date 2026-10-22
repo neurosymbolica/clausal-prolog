@@ -17,6 +17,7 @@ each modification.  On backtrack the snapshot is restored automatically.
 
 from __future__ import annotations
 
+import math
 import weakref
 from decimal import Decimal
 from fractions import Fraction
@@ -242,6 +243,29 @@ class Tableau:
         if vid not in self.rows:
             return self._update_nonbasic(vid)
         return self._check_basic(vid)
+
+    def restrict(self, vid: int, lo: Fraction | None,
+                 hi: Fraction | None) -> bool:
+        """:meth:`set_bound` for a variable of the store, eliminated or
+        not.  An eliminated (parametric) variable's bounds become
+        inequalities on the expression that replaced it, as
+        :meth:`add_equality` keeps a pivot's bounds: the simplex never
+        reads a parametric variable's own ``lo``/``hi``, so
+        ``{X + Y/2 = -4}, in_q(Y, 1, 2)`` left ``sup(X)`` unbounded."""
+        if vid not in self.parametric:
+            return self.set_bound(vid, lo, hi)
+        new_lo = _max_none(self.lo.get(vid), lo)
+        new_hi = _min_none(self.hi.get(vid), hi)
+        if new_lo is not None and new_hi is not None and new_lo > new_hi:
+            return False
+        self.lo[vid] = new_lo
+        self.hi[vid] = new_hi
+        if hi is not None and not self.add_inequality({vid: ONE}, hi, '<='):
+            return False
+        if lo is not None and not self.add_inequality({vid: ONE}, lo, '>='):
+            return False
+        self._propagate_determined()
+        return True
 
     def _update_nonbasic(self, vid: int) -> bool:
         """Snap a non-basic variable to its nearest bound if violated."""
@@ -843,6 +867,34 @@ class Tableau:
                 return False
         return True
 
+    def face_removed(self, coeffs: dict[int, Fraction],
+                     constant: Fraction) -> bool:
+        """True when the disequalities leave no point of the store on the
+        hyperplane ``Σ coeffs[v]*v = constant`` (for :func:`entailed`).
+
+        The face F, the store's polyhedron cut by the hyperplane, is
+        convex; a finite union of hyperplanes covers it only when one of
+        them contains it, so it is removed exactly when some disequality's
+        expression is constant at its value over F (or F is empty).  An LP
+        pair per disequality, screened by the value at a point of F.
+        """
+        if not self.diseqs:
+            return False
+        work = self.copy()
+        diseqs, work.diseqs = work.diseqs, []
+        if not work.add_equality(dict(coeffs), constant):
+            return True   # the store has no point on the hyperplane
+        for _tag, dcoeffs, dconstant in diseqs:
+            if sum(c * work._value(v) for v, c in dcoeffs.items()) != dconstant:
+                continue
+            hi = work.optimize(dict(dcoeffs), 'max')
+            if hi is None or hi != dconstant:
+                continue
+            lo = work.optimize(dict(dcoeffs), 'min')
+            if lo is not None and lo == dconstant:
+                return True
+        return False
+
     # ── Implied bindings ─────────────────────────────────────────────────
 
     def check_implied_bindings(self, trail: Trail) -> bool:
@@ -997,6 +1049,20 @@ def _ensure_q_for_expr(expr: Any, trail: Trail) -> None:
 # ── Linearization ────────────────────────────────────────────────────────────
 
 
+def _float_fraction(value: float) -> Fraction:
+    """A finite float as its exact Fraction.  NaN raises
+    ``evaluation_error(undefined)`` and an infinity
+    ``evaluation_error(float_overflow)``, as the port's
+    ``float_to_rational`` does (and a non-finite Decimal, ruling R19); they
+    raised a bare Python ValueError / OverflowError.  A finite float stays
+    exact here (the port reads it through a continued fraction): that
+    choice is todo/clpq-silently-accepts-floats-and-real-variables."""
+    if not math.isfinite(value):
+        from clausal.logic.clpq.arithmetic import float_to_rational  # noqa: PLC0415
+        float_to_rational(value)   # raises
+    return Fraction(value)
+
+
 def _linearize(expr: Any, trail: Trail,
                ) -> tuple[dict[int, Fraction], Fraction] | None:
     """Flatten an expression tree to ``{var_id: coeff, …}, constant``.
@@ -1017,7 +1083,7 @@ def _linearize(expr: Any, trail: Trail,
             return None
         return {}, Fraction(expr)         # exact; scale is not carried
     if isinstance(expr, float):
-        return {}, Fraction(expr)
+        return {}, _float_fraction(expr)
     if is_var(expr):
         return {expr._id: ONE}, ZERO
 
@@ -1194,19 +1260,35 @@ def _post_q_domain(target: Any, lo: Fraction | None,
     _snapshot_tableau(trail)
 
     state = get_attr(target, Q_KEY)
+    eliminated = False
     if state is None:
         tab_id = tableau.register_var(target, lo, hi)
         new_state = QVar(lo, hi, tab_id)
     else:
+        eliminated = state.tab_id in tableau.parametric
         new_lo = _max_none(state.lo, lo)
         new_hi = _min_none(state.hi, hi)
         if new_lo is not None and new_hi is not None and new_lo > new_hi:
             return False
-        if not tableau.set_bound(state.tab_id, new_lo, new_hi):
+        if not tableau.restrict(state.tab_id, new_lo, new_hi):
             return False
         new_state = QVar(new_lo, new_hi, state.tab_id)
 
     put_attr(target, Q_KEY, new_state, trail)
+    # A bound can close the store's own bound on a variable to a point
+    # ({X > 0}, in_q(X, -1, 0)): bind it, as q_le does, so the binding
+    # checks the disequalities (here the strict half X =\= 0).  Only the
+    # target's bounds moved, unless it was eliminated: then the new rows
+    # can fix others.
+    if eliminated:
+        if not tableau.check_implied_bindings(trail):
+            return False
+    else:
+        tlo = tableau.lo.get(new_state.tab_id)
+        if (tlo is not None and tlo == tableau.hi.get(new_state.tab_id)
+                and is_var(deref(target))
+                and not unify(target, present_number(tlo), trail)):
+            return False
 
     flo, fhi = new_state.lo, new_state.hi
     if flo is not None and fhi is not None and flo == fhi:
@@ -1322,6 +1404,8 @@ def _bound(value: Any) -> Fraction | None:
         raise LogicException(instantiation_error("in_q/3"))
     if not is_number(value):
         raise LogicException(type_error("rational", value, "in_q/3"))
+    if isinstance(value, float):
+        return _float_fraction(value)
     return Fraction(value)
 
 
@@ -1708,6 +1792,13 @@ def entailed(constraint_type: str, l: Any, r: Any, trail: Trail) -> bool:
         tab_copy = tableau.copy()
         return tab_copy.optimize(coeffs, 'min')
 
+    # The store is a closed polyhedron P (the tableau) less the hyperplanes
+    # of its disequalities, a strict ``<`` among them (stored as ``=<``
+    # plus ``=\=``).  Removing finitely many hyperplanes changes neither
+    # the supremum nor the infimum of l - r, so the non-strict relations
+    # read P alone.  A strict relation, or ``=\=``, whose bound P only
+    # reaches on the face l - r = 0 still holds when the disequalities
+    # remove that whole face: tableau.face_removed.
     if constraint_type in ('=<', '<='):
         # l <= r ⟺ l - r <= 0 ⟺ sup(l - r) <= 0
         s = _sup_of_diff()
@@ -1718,10 +1809,14 @@ def entailed(constraint_type: str, l: Any, r: Any, trail: Trail) -> bool:
         return i is not None and i + offset >= ZERO
     elif constraint_type == '<':
         s = _sup_of_diff()
-        return s is not None and s + offset < ZERO
+        if s is None or s + offset > ZERO:
+            return False
+        return s + offset < ZERO or tableau.face_removed(coeffs, -offset)
     elif constraint_type == '>':
         i = _inf_of_diff()
-        return i is not None and i + offset > ZERO
+        if i is None or i + offset < ZERO:
+            return False
+        return i + offset > ZERO or tableau.face_removed(coeffs, -offset)
     elif constraint_type in ('=', '=:='):
         # l = r ⟺ sup(l-r) = inf(l-r) = 0
         s = _sup_of_diff()
@@ -1729,14 +1824,17 @@ def entailed(constraint_type: str, l: Any, r: Any, trail: Trail) -> bool:
         return (s is not None and i is not None
                 and s + offset == ZERO and i + offset == ZERO)
     elif constraint_type in ('\\=', '=\\='):
-        # l != r ⟺ NOT(l = r) ⟺ inf(l-r) > 0 OR sup(l-r) < 0.  One side
-        # unbounded (None) does not stop the other deciding: {A =< 4}
-        # entails A =\= 5 though A has no lower bound.
+        # l != r ⟺ NOT(l = r) ⟺ inf(l-r) > 0 OR sup(l-r) < 0, or the
+        # disequalities remove the face l - r = 0.  One side unbounded
+        # (None) does not stop the other deciding: {A =< 4} entails
+        # A =\= 5 though A has no lower bound.
         s = _sup_of_diff()
         if s is not None and s + offset < ZERO:
             return True
         i = _inf_of_diff()
-        return i is not None and i + offset > ZERO
+        if i is not None and i + offset > ZERO:
+            return True
+        return tableau.face_removed(coeffs, -offset)
     raise AssertionError(constraint_type)   # _ENTAILED_RELATIONS is exhaustive
 
 
@@ -2164,8 +2262,6 @@ def _bb_solve(tableau: Tableau, obj_coeffs: dict[int, Fraction],
     if infeasible.  The tableau holds the variable assignments at the
     optimal integer point.
     """
-    import math
-
     if depth > _BB_MAX_DEPTH:
         return best_so_far, best_tab
 
