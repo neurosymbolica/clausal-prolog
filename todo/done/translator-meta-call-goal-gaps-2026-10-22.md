@@ -61,10 +61,13 @@ Also seen, on BOTH front ends (not translator gaps):
 
 Remaining, not this todo's (pre-existing, seen while testing):
 
-- The translator declares a data atom equal to a module it also qualifies
-  goals with (`X = lists, lists:member(a, L)`) as `-private([lists])`,
-  which shadows the module: "terms_to_goalop: goal shape not yet supported
-  (Call): LoadAttr(object='lists', ...)" at load.
+- (Fixed in the review follow-up, same day.) The translator declared a
+  data atom equal to a module it also qualifies goals with
+  (`X = lists, lists:member(a, L)`, and `phrase(m:g, L)` beside
+  `r --> m:g`) as `-private([lists])`, which shadowed the module. A name
+  written as the module of any `M:G` is now a quoted atom with no
+  declaration. Pinned in
+  tests/test_pl_translator_data_terms_followups.py::test_module_qualifiers_and_own_meta_signatures.
 - The translator's writeq does not know library(clpz)'s operators:
   `writeq(X #= 1)` prints `#=(_,1)` (native: `_ #= 1`).
 - The translator stores body goals written as data in its lowered form

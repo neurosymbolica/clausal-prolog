@@ -795,6 +795,87 @@ def _names_not_data_functors(pmodule: PModule) -> set[str]:
     return names
 
 
+def _module_qualifiers(pmodule: PModule) -> set[str]:
+    """Every atom *pmodule* writes as the module of an ``M:G`` -- in a goal,
+    a grammar body or data alike.  The seam's qualified call ``m.g(...)``
+    reads ``m`` as the MODULE, so a ``-private([m])`` data atom of that
+    name shadows it ("goal shape not yet supported (Call):
+    LoadAttr(object='m', ...)" at load)."""
+    names: set[str] = set()
+    stack: list = []
+    for item in pmodule.items:
+        for attr in ("head", "body"):
+            t = getattr(item, attr, None)
+            if t is not None:
+                stack.append(t)
+    while stack:
+        t = stack.pop()
+        if isinstance(t, PCompound):
+            if (t.functor == ":" and len(t.args) == 2
+                    and isinstance(t.args[0], PAtom)):
+                names.add(t.args[0].name)
+            stack.extend(t.args)
+        elif isinstance(t, PList):
+            stack.extend(t.elements)
+            if t.tail is not None:
+                stack.append(t.tail)
+        elif isinstance(t, PCurly):
+            stack.append(t.body)
+    return names
+
+
+def _own_signatures(pmodule: PModule) -> set[tuple[str, int | None]]:
+    """``(name, arity)`` of each predicate *pmodule* defines, declares or
+    imports from a non-library module (the items _own_predicate_names
+    reads); a grammar rule's nonterminal ``name//N`` is ``name/(N+2)``, and
+    an import or declaration with no arity is ``(name, None)``, every
+    arity.  A program's own ``forall/1`` leaves forall/2 a meta-call."""
+    sigs: set[tuple[str, int | None]] = set()
+
+    def head(h, extra) -> None:
+        if isinstance(h, PCompound) and h.functor == ",":
+            h = h.args[0]                  # DCG pushback head
+        if isinstance(h, PCompound):
+            sigs.add((h.functor, len(h.args) + extra))
+        elif isinstance(h, PAtom):
+            sigs.add((h.name, extra))
+
+    def indicators(term) -> None:
+        if isinstance(term, PCompound) and term.functor == "," \
+                and len(term.args) == 2:
+            indicators(term.args[0])
+            indicators(term.args[1])
+        elif isinstance(term, PCompound) and term.functor in ("/", "//") \
+                and len(term.args) == 2 and isinstance(term.args[0], PAtom):
+            n = _indicator_arity(term.args[1])
+            if n is not None and term.functor == "//":
+                n += 2
+            sigs.add((term.args[0].name, n))
+        elif isinstance(term, PList):
+            for e in term.elements:
+                indicators(e)
+        elif isinstance(term, PAtom):
+            sigs.add((term.name, None))
+        elif isinstance(term, PCompound) and term.functor == "as" \
+                and len(term.args) == 2 and isinstance(term.args[1], PAtom):
+            sigs.add((term.args[1].name, None))
+
+    for item in pmodule.items:
+        if isinstance(item, PClause):
+            head(item.head, 0)
+        elif isinstance(item, PDCGRule):
+            head(item.head, 2)
+        elif isinstance(item, PDirective) and isinstance(item.body, PCompound):
+            body = item.body
+            if body.functor in ("dynamic", "discontiguous", "table"):
+                for a in body.args:
+                    indicators(a)
+            elif (body.functor == "use_module" and len(body.args) >= 2
+                  and not _is_library(body.args[0])):
+                indicators(body.args[1])
+    return sigs
+
+
 def _own_predicate_names(pmodule: PModule) -> set[str]:
     """Names *pmodule* gives a predicate meaning of its own: clause and DCG
     head functors, ``dynamic``/``discontiguous``/``table`` declarations, and
@@ -1072,6 +1153,10 @@ class _PrologToClausal:
         # module: they mean the program's own predicate, so no builtin
         # rename applies to them.  Populated by emit_module.
         self._own_names: set[str] = set()
+        self._own_sigs: set[tuple[str, int | None]] = set()
+        self._own_any: set[str] = set()
+        # Atoms written as the module of an ``M:G`` (_module_qualifiers).
+        self._qualifiers: set[str] = set()
         # Names this module uses in GOAL position (a body goal, or a goal
         # argument of a meta-predicate).  Populated by emit_module.
         self._goal_names: set[str] = set()
@@ -1080,6 +1165,11 @@ class _PrologToClausal:
         """Emit a complete module as clausal source text."""
         self._predicate_names = _collect_predicate_names(pmodule)
         self._own_names = _own_predicate_names(pmodule)
+        self._own_sigs = _own_signatures(pmodule)
+        self._qualifiers = _module_qualifiers(pmodule)
+        # Names an import adds to _own_names while emitting (a .pl module's
+        # export list): arity unknown here, so every arity.
+        self._own_any: set[str] = set()
         self._goal_names = _collect_goal_names(pmodule)
         lines: list[str] = []
         for item in pmodule.items:
@@ -1664,6 +1754,7 @@ class _PrologToClausal:
             exports = self._pl_exports(clausal_mod, directive)
             if exports:
                 self._own_names.update(exports)
+                self._own_any.update(exports)
                 return (f"-import_module({clausal_mod})\n"
                         f"-import_from({clausal_mod}, [{', '.join(exports)}])")
             return f"-import_module({clausal_mod})"
@@ -1740,6 +1831,7 @@ class _PrologToClausal:
         if not names:
             return f"# {directive}: {dotted} offers no predicates to import"
         self._own_names.update(names)
+        self._own_any.update(names)
         return (f"-import_from({dotted}, "
                 f"[{', '.join(self._predicate_name(n) for n in names)}])")
 
@@ -1991,6 +2083,11 @@ class _PrologToClausal:
         # ``-private([g])`` and the private DATA atom shadowed the imported
         # predicate -- the goal raised existence_error(procedure, g/0).
         if name in self._goal_names or name in self._own_names:
+            return _quote_atom(name)
+        # And a name the module qualifies goals with (``r --> m:g`` beside
+        # ``phrase(m:g, L)``, ``X = lists`` beside ``lists:member(...)``):
+        # ``-private([m])`` would shadow the module ``m``.
+        if name in self._qualifiers:
             return _quote_atom(name)
         # A name the engine RESERVES: bare ``undefined`` is the truth value
         # Undefined, and ``-private([undefined])`` is a load error.  The
@@ -2413,9 +2510,12 @@ class _PrologToClausal:
         goal_ix = _GOAL_EMIT_ARGS.get(functor, ()) if called else ()
         dcg_ix = _DCG_BODY_ARGS.get(functor, ()) if called else ()
         # A program's own time/1 is no meta-call (tests/
-        # test_pl_translator_honest.py::TestNoStaleRenames).
-        var_goal = (_is_goal_arity(functor, len(args))
-                    and functor not in self._own_names)
+        # test_pl_translator_honest.py::TestNoStaleRenames) -- by SIGNATURE:
+        # its own forall/1 leaves forall/2 the meta-call.  call/N needs no
+        # wrap: call(G) already calls G (it was call(call(G))).
+        var_goal = (functor != "call"
+                    and _is_goal_arity(functor, len(args))
+                    and not self._is_own_signature(functor, len(args)))
         emitted = [self._emit_goal_arg(a, nil_is_goal=i in nil_ix,
                                        var_is_goal=i in nil_ix and var_goal)
                    if i in goal_ix or i in nil_ix
@@ -2425,6 +2525,11 @@ class _PrologToClausal:
                 and isinstance(args[1], PAtom)):
             emitted[1] = _quote_atom(args[1].name)
         return ", ".join(emitted)
+
+    def _is_own_signature(self, name: str, arity: int) -> bool:
+        """The program defines, declares or imports ``name/arity`` itself."""
+        return ((name, arity) in self._own_sigs
+                or (name, None) in self._own_sigs or name in self._own_any)
 
     def _emit_goal_arg(self, term: PTerm, nil_is_goal: bool = True,
                        var_is_goal: bool | None = None) -> str:

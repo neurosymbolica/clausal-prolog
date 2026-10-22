@@ -107,7 +107,12 @@ surface described in [docs/public-api.md](docs/public-api.md).
   existence_error(procedure, g/3), `phrase(([x] ; [y], []), L)`
   type_error(callable, ...), and `|` did not translate. A variable called
   as a goal (`G = p(X), findall(X, G, L)`, `\+ G`, a body goal `G`) is
-  `call(G)`; bare, the seam refused it at load. In a grammar rule an atom
+  `call(G)`; bare, the seam refused it at load (keyed on the program's own
+  signatures: its `forall/1` leaves `forall/2` a meta-call). An atom
+  written as the module of an `M:G` anywhere in the file is no `-private`
+  data atom: it shadowed the module, so `X = lists` beside
+  `lists:member(...)`, or `phrase(m:g, L)` beside `r --> m:g`, did not
+  load. In a grammar rule an atom
   nonterminal (`r --> g`) read as the terminals of its characters
   (`phrase(r, L)` gave `L = [g]`), a `;` branch's `[]` was the goal `[]/2`,
   and a pushback rule with an atom head (`pb, [p] --> [q]`) did not load.
@@ -123,7 +128,8 @@ surface described in [docs/public-api.md](docs/public-api.md).
   classed). In the seam, a quoted `'{}'(T)` in term position builds the ISO curly
   cell `{T}` (it was existence_error(procedure, {}/1)). Pinned against
   Scryer on both front ends by
-  `tests/test_pl_translator_data_terms_followups.py::test_member_and_phrase_bodies_in_meta_and_data_positions`.
+  `tests/test_pl_translator_data_terms_followups.py::test_member_and_phrase_bodies_in_meta_and_data_positions`
+  and `::test_module_qualifiers_and_own_meta_signatures`.
 
 - **`catch(fail, C, R)` loads** (2026-10-22, both `.pl` front ends and the
   seam). The goal `fail` lowers to no statements and the inline catch put

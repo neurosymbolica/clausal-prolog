@@ -590,6 +590,60 @@ def test_member_and_phrase_bodies_in_meta_and_data_positions(
     assert r.stdout.splitlines() == expected, r.stdout
 
 
+#: Review follow-ups (2026-10-22):
+#:
+#: - A module written as the qualifier of ``M:G`` is no data atom: with
+#:   ``phrase(p7_qnt:g, L)`` emitting the data cell ``':'(p7_qnt, g)``, the
+#:   atom ``p7_qnt`` was declared ``-private``, which shadowed the module,
+#:   so a rule ``r --> p7_qnt:g, [c]`` in the same file did not load
+#:   ("goal shape not yet supported (Call): LoadAttr(object='p7_qnt',
+#:   ...)"); ``X = lists`` beside ``lists:member(...)`` failed the same way
+#:   (before this branch too).
+#: - The ``call(G)`` wrap of a variable goal keys on the program's own
+#:   SIGNATURES: a program's ``forall/1`` left ``forall(G, X > 0)`` with a
+#:   bare G (BareGoalVariableError at load).
+#:
+#: The expected lines are Scryer's, which both front ends match.
+QUALIFIER_MODULE = """\
+:- module(p7_qnt, [g/2]).
+:- use_module(library(dcgs)).
+g --> [a], [b].
+"""
+
+QUALIFIER_PROGRAM = """\
+:- use_module(library(dcgs)).
+:- use_module(library(lists)).
+:- use_module(library(iso_ext)).
+:- use_module(p7_qnt).
+w(T) :- writeq(T), nl.
+r --> p7_qnt:g, [c].
+s1 :- phrase(p7_qnt:g, L), w(L).
+s2 :- phrase(r, L), w(L).
+s3 :- X = lists, lists:member(a, [a]), w(X).
+forall(G) :- call(G).
+p(1). p(2).
+s4 :- G = p(X), forall(G, X > 0), forall(true), w(s4).
+s5 :- G = p(X), findall(X, call(G), L), w(L).
+main :- s1, s2, s3, s4, s5.
+"""
+
+QUALIFIER_EXPECTED = ['[a,b]', '[a,b,c]', 'lists', 's4', '[1,2]']
+
+
+@pytest.mark.parametrize("frontend", ["translator", "native"])
+def test_module_qualifiers_and_own_meta_signatures(tmp_path, frontend):
+    (tmp_path / "p7_qnt.pl").write_text(QUALIFIER_MODULE)
+    (tmp_path / "quals.pl").write_text(QUALIFIER_PROGRAM)
+    env = dict(os.environ)
+    env["CLAUSAL_PL_FRONTEND"] = frontend
+    env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+    r = subprocess.run(
+        [sys.executable, "-m", "clausal", "quals.pl"], cwd=tmp_path,
+        env=env, capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout.splitlines() == QUALIFIER_EXPECTED, r.stdout
+
+
 @pytest.mark.parametrize("source, emitted", [
     ("t :- if_(X = 1, (a, b), (c ; d)), p(X).", "if_(X is 1, (a, b), c or d)"),
     ("t :- freeze(V, (a, b)), p(V).", "freeze(V, ('a', 'b'))"),
@@ -601,6 +655,8 @@ def test_member_and_phrase_bodies_in_meta_and_data_positions(
     # a variable called as a goal is call(G) (the seam refuses a bare one)
     ("t :- G = p(X), findall(X, G, L), q(L).", "findall(X, call(G), L)"),
     ("t :- G = p, G.", "call(G)"),
+    # call/N itself needs no wrap (it was call(call(G)))
+    ("t :- G = p, call(G), call(G, 1), q(G).", "(G is p, call(G), call(G, 1)"),
     ("t :- maplist(C, [1]), q(C).", "maplist(C, [1])"),
     ("t :- phrase([], L), p(L).", "phrase([], L)"),
     # a clause argument is a clause TERM, built as data
