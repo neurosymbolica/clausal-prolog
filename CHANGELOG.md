@@ -85,6 +85,28 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `::test_a_walrus_that_rebinds_a_runtime_name_stays_refused` and
   `tests/test_dollar_runtime_names.py::TestDollarTwinsAreBound::test_node_class_twins_are_the_simple_ast_classes`.
 
+- **An FD bound shared with a CLP(R) interval is rounded outward, and a
+  real bound past int64 narrows the FD domain exactly** (2026-10-22).
+  Two gaps at the CLP(Z)<->CLP(R) seam. An integer a double cannot hold
+  (`X in 0..2^60+1` on a variable with a real interval; also when CLP(R)
+  reads an FD domain for its own interval, which besides raised
+  `OverflowError` on a bound past the float range) was converted with
+  `float()`, which rounds to nearest -- for an upper bound that is
+  inward, so the interval excluded the bound itself by one ULP. The
+  conversion now rounds outward with clpr's `_dn`/`_up` (only when
+  inexact; an exact bound is unchanged) and saturates past the float
+  range. In the other direction the C `fd_hook` cast a real bound with
+  `(int64_t)ceil(x)` guarding only +/-inf, so a FINITE bound beyond int64
+  (`[1e300, inf]`, `sys.float_info.max`) was undefined behaviour -- on
+  x86-64 it read as "unbounded" (an admitted 5 where only values at or
+  above 1e300 are) or as an empty domain; a bignum FD bound in the same
+  hook raised `OverflowError`. The C hook now casts only a bound strictly
+  inside (-2^63, 2^63) and otherwise takes the Python twin's exact
+  `math.ceil`/`math.floor` path (`clpfd._narrow_by_real`), which both
+  Python sites share, so the twins agree and no feasible integer is cut.
+  Pinned by `tests/test_clpfd_clpr_float_boundary.py` (closes
+  `todo/done/clpfd-clpr-float-boundary-soundness-2026-09-03.md`).
+
 ## 1.1.0 (2026-10-21)
 
 A minor release by operator ruling (D83, 2026-10-21): the entries under

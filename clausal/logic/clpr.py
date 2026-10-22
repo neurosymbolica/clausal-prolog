@@ -292,11 +292,15 @@ def _get_var_interval(var: Var) -> tuple[float, float]:
     state = get_attr(var, REAL_KEY)
     if state is not None:
         lo, hi = state.lo, state.hi
-    from clausal.logic.clpfd import FD_KEY, domain_min, domain_max
+    from clausal.logic.clpfd import (  # noqa: PLC0415 -- clpfd imports this module lazily
+        FD_KEY, domain_min, domain_max, _safe_float_lo, _safe_float_hi)
     fd_state = get_attr(var, FD_KEY)
     if fd_state is not None:
-        fd_lo = float(domain_min(fd_state.domain))
-        fd_hi = float(domain_max(fd_state.domain))
+        # outward, and saturating past the float range: an FD bound is an
+        # integer a double may not hold (todo/done/clpfd-clpr-float-
+        # boundary-soundness-2026-09-03.md)
+        fd_lo = _safe_float_lo(domain_min(fd_state.domain))
+        fd_hi = _safe_float_hi(domain_max(fd_state.domain))
         lo = max(lo, fd_lo)
         hi = min(hi, fd_hi)
     return lo, hi
@@ -685,12 +689,14 @@ def _promote_fd_to_real(var: Var, trail: Trail) -> None:
     unification — the FD hook continues to enforce integrality and domain
     holes while the real hook handles continuous narrowing.
     """
-    from clausal.logic.clpfd import FD_KEY, domain_min, domain_max
+    from clausal.logic.clpfd import (  # noqa: PLC0415 -- clpfd imports this module lazily
+        FD_KEY, domain_min, domain_max, _safe_float_lo, _safe_float_hi)
     fd_state = get_attr(var, FD_KEY)
     if fd_state is None:
         return
-    lo = float(domain_min(fd_state.domain))
-    hi = float(domain_max(fd_state.domain))
+    # outward rounding, saturating: as in _get_var_interval
+    lo = _safe_float_lo(domain_min(fd_state.domain))
+    hi = _safe_float_hi(domain_max(fd_state.domain))
     real_state = RealVar(lo, hi, ())
     put_attr(var, REAL_KEY, real_state, trail)
 

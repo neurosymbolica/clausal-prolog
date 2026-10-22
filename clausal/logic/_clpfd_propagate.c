@@ -41,6 +41,21 @@ static PyObject *fn_scalar_propagate_bignum = NULL;
 /* Exact-int domain_remove reference impl — used by alldiff_propagate for a
  * ground member at the INT64_MIN/MAX sentinel or beyond int64 (A06-F007). */
 static PyObject *fn_py_domain_remove = NULL;
+/* clpfd._narrow_by_real(domain, real_state): the exact (bignum-capable)
+ * cut of an FD domain to a CLP(R) interval -- the fd_hook's path for a real
+ * bound outside the int64 fast range or a bignum FD bound. */
+static PyObject *fn_narrow_by_real = NULL;
+
+/* A CLP(R) bound the fd_hook may cast to int64_t: +/-inf (the sentinels),
+ * or finite and strictly inside (-2^63, 2^63) -- then ceil/floor of it is
+ * an int64 off the INT64_MIN/MAX sentinels (the nearest doubles to 2^63
+ * are 1024 apart).  A finite double at or beyond 2^63, or NaN, is not. */
+static inline int
+real_bound_in_i64_range(double r)
+{
+    return r == -HUGE_VAL || r == HUGE_VAL
+        || (r > -9223372036854775808.0 && r < 9223372036854775808.0);
+}
 /* clpfd._fd_reject_truth_atom: raises type_error(integer, T) for a truth
  * atom (D47), returns None otherwise -- shared with the Python twins. */
 static PyObject *fn_fd_reject_truth_atom = NULL;
@@ -3028,25 +3043,52 @@ py_fd_hook(PyObject *self, PyObject *args)
                 if (real_state != Py_None) {
                     PyObject *r_lo_obj = PyObject_GetAttrString(real_state, "lo");
                     PyObject *r_hi_obj = PyObject_GetAttrString(real_state, "hi");
-                    Py_DECREF(real_state);
                     if (!r_lo_obj || !r_hi_obj) {
                         Py_XDECREF(r_lo_obj); Py_XDECREF(r_hi_obj);
+                        Py_DECREF(real_state);
                         Py_DECREF(narrowed_domain); Py_DECREF(narrowed_constraints);
                         goto hook_error;
                     }
                     double r_lo = PyFloat_AsDouble(r_lo_obj);
                     double r_hi = PyFloat_AsDouble(r_hi_obj);
                     Py_DECREF(r_lo_obj); Py_DECREF(r_hi_obj);
-
-                    int64_t rlo_i = (r_lo == -HUGE_VAL) ? INT64_MIN : (int64_t)ceil(r_lo);
-                    int64_t rhi_i = (r_hi == HUGE_VAL) ? INT64_MAX : (int64_t)floor(r_hi);
-                    PyObject *rng = domain_from_range_i64(rlo_i, rhi_i);
-                    if (!rng) {
+                    if ((r_lo == -1.0 || r_hi == -1.0) && PyErr_Occurred()) {
+                        Py_DECREF(real_state);
                         Py_DECREF(narrowed_domain); Py_DECREF(narrowed_constraints);
                         goto hook_error;
                     }
-                    PyObject *intersected = domain_intersection_c(narrowed_domain, rng);
-                    Py_DECREF(rng); Py_DECREF(narrowed_domain);
+
+                    PyObject *intersected;
+                    if (has_bignum_bound(narrowed_domain)
+                        || !real_bound_in_i64_range(r_lo)
+                        || !real_bound_in_i64_range(r_hi)) {
+                        /* A FINITE real bound past int64 (1e300, DBL_MAX)
+                         * would make the casts below undefined behaviour,
+                         * and a bignum FD bound cannot be unpacked: the
+                         * Python twin's exact math.ceil/floor builds the
+                         * bignum domain and intersects it (todo/done/
+                         * clpfd-clpr-float-boundary-soundness-2026-09-03.md;
+                         * a NaN bound takes this path too and raises in
+                         * Python, as the twin does). */
+                        intersected = PyObject_CallFunctionObjArgs(
+                            fn_narrow_by_real, narrowed_domain, real_state, NULL);
+                        Py_DECREF(narrowed_domain);
+                    } else {
+                        /* Both bounds are +/-inf or lie strictly inside
+                         * (-2^63, 2^63): ceil/floor of them fit int64 and
+                         * never land on the INT64_MIN/MAX sentinels. */
+                        int64_t rlo_i = (r_lo == -HUGE_VAL) ? INT64_MIN : (int64_t)ceil(r_lo);
+                        int64_t rhi_i = (r_hi == HUGE_VAL) ? INT64_MAX : (int64_t)floor(r_hi);
+                        PyObject *rng = domain_from_range_i64(rlo_i, rhi_i);
+                        if (!rng) {
+                            Py_DECREF(real_state);
+                            Py_DECREF(narrowed_domain); Py_DECREF(narrowed_constraints);
+                            goto hook_error;
+                        }
+                        intersected = domain_intersection_c(narrowed_domain, rng);
+                        Py_DECREF(rng); Py_DECREF(narrowed_domain);
+                    }
+                    Py_DECREF(real_state);
                     if (!intersected) {
                         Py_DECREF(narrowed_constraints);
                         goto hook_error;
@@ -3356,6 +3398,7 @@ PyInit__clpfd_propagate(void)
     fn_sum_propagate_bignum = PyObject_GetAttrString(clpfd_mod, "_sum_propagate_bignum");
     fn_scalar_propagate_bignum = PyObject_GetAttrString(clpfd_mod, "_scalar_propagate_bignum");
     fn_py_domain_remove = PyObject_GetAttrString(clpfd_mod, "_py_domain_remove");
+    fn_narrow_by_real = PyObject_GetAttrString(clpfd_mod, "_narrow_by_real");
     fn_fd_reject_truth_atom = PyObject_GetAttrString(clpfd_mod, "_fd_reject_truth_atom");
     Py_DECREF(clpfd_mod);
 
@@ -3365,7 +3408,7 @@ PyInit__clpfd_propagate(void)
         !fn_eq_propagate_bignum || !fn_ne_propagate_bignum ||
         !fn_lt_propagate_bignum || !fn_le_propagate_bignum ||
         !fn_sum_propagate_bignum || !fn_scalar_propagate_bignum ||
-        !fn_py_domain_remove || !fn_fd_reject_truth_atom)
+        !fn_py_domain_remove || !fn_narrow_by_real || !fn_fd_reject_truth_atom)
         return NULL;
 
     /* Try to import CLP(R) functions (optional) */

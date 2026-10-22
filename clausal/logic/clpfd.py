@@ -313,11 +313,34 @@ def _safe_float_lo(x: int | float) -> float:
     degenerate ``[inf, inf]`` interval that reads as a spurious wipeout
     downstream.  ``sys.float_info.max`` is the tightest float that is
     still <= any such ``x``, so it is the correct saturation target.
+
+    An in-range integer past 2**53 need not be a double: ``float(x)``
+    rounds to NEAREST, which for a lower bound may land ABOVE ``x``
+    (``float(2**60 - 1) == 2**60``).  That float is rounded down one ULP
+    with clpr's ``_dn`` (``todo/done/clpfd-clpr-float-boundary-soundness
+    -2026-09-03.md``); an exact conversion is never loosened.
     """
     try:
-        return float(x)
+        f = float(x)
     except OverflowError:
         return sys.float_info.max if x > 0 else -math.inf
+    if f > x:                 # int/float comparison is exact in Python
+        return _clpr_outward()[0](f)
+    return f
+
+
+def _clpr_outward():
+    """clpr's one-ULP outward rounders ``(_dn, _up)``, bound lazily: clpr
+    imports this module back, and the pair is only needed for an FD bound
+    a double cannot hold exactly."""
+    global _clpr_dn_up
+    if _clpr_dn_up is None:
+        from clausal.logic.clpr import _dn, _up  # noqa: PLC0415
+        _clpr_dn_up = (_dn, _up)
+    return _clpr_dn_up
+
+
+_clpr_dn_up = None
 
 
 def _safe_float_hi(x: int | float) -> float:
@@ -331,11 +354,39 @@ def _safe_float_hi(x: int | float) -> float:
     ``-sys.float_info.max``, not ``-inf`` — ``-inf`` would be *less* than
     the true (finite, very negative) bignum ``x``, unsoundly excluding
     admissible values between ``-sys.float_info.max`` and ``x``.
+
+    An in-range integer that is no double is rounded UP one ULP when
+    ``float(x)`` landed below it (``float(2**60 + 1) == 2**60``), the
+    mirror of ``_safe_float_lo``.
     """
     try:
-        return float(x)
+        f = float(x)
     except OverflowError:
         return math.inf if x > 0 else -sys.float_info.max
+    if f < x:
+        return _clpr_outward()[1](f)
+    return f
+
+
+def _real_bounds_domain(real_state) -> Domain:
+    """The FD domain a CLP(R) interval ``[lo, hi]`` admits: the integers in
+    ``[ceil(lo), floor(hi)]``, EXACT over the whole double range (a finite
+    bound past int64, such as ``1e300`` or ``sys.float_info.max``, becomes
+    the bignum it denotes; the FD domain holds bignum bounds).  The C hook
+    takes this path for any bound outside its int64 fast range, so both
+    twins agree bit for bit (``todo/done/clpfd-clpr-float-boundary-
+    soundness-2026-09-03.md``)."""
+    lo, hi = real_state.lo, real_state.hi
+    return domain_from_range(
+        _NEG_INF if lo == _NEG_INF else math.ceil(lo),
+        _POS_INF if hi == _POS_INF else math.floor(hi))
+
+
+def _narrow_by_real(domain: Domain, real_state) -> Domain:
+    """*domain* cut to the integers a CLP(R) interval admits (exact; see
+    ``_real_bounds_domain``).  Shared by the Python hook, ``_post_domain``
+    and the C hook's out-of-int64 fallback."""
+    return domain_intersection(domain, _real_bounds_domain(real_state))
 
 
 def _sync_real(var, fd_lo: int | float, fd_hi: int | float, trail):
@@ -2902,12 +2953,7 @@ def _fd_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
             from clausal.logic.clpr import REAL_KEY
             real_state = get_attr(bound_to, REAL_KEY)
             if real_state is not None:
-                import math
-                r_lo = _NEG_INF if real_state.lo == -math.inf else math.ceil(real_state.lo)
-                r_hi = _POS_INF if real_state.hi == math.inf else math.floor(real_state.hi)
-                narrowed = domain_intersection(
-                    state.domain, domain_from_range(r_lo, r_hi)
-                )
+                narrowed = _narrow_by_real(state.domain, real_state)
                 if not narrowed:
                     return False
                 state = FDVar(narrowed, state.constraints)
@@ -3012,10 +3058,7 @@ def _post_domain(target, new_domain: Domain, trail: Trail, queue: deque) -> bool
     from clausal.logic.clpr import REAL_KEY
     real_state = get_attr(target, REAL_KEY)
     if real_state is not None:
-        import math
-        r_lo = _NEG_INF if real_state.lo == -math.inf else math.ceil(real_state.lo)
-        r_hi = _POS_INF if real_state.hi == math.inf else math.floor(real_state.hi)
-        final_domain = domain_intersection(final_domain, domain_from_range(r_lo, r_hi))
+        final_domain = _narrow_by_real(final_domain, real_state)
         if not final_domain:
             return False
     # Route the narrow through _narrow_if_changed (queues the var and runs the
