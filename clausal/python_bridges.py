@@ -825,8 +825,24 @@ def _module_bound_names(origin: str) -> frozenset:
 #: from the package's own modules.
 REEXPORTS_FROM_OUTSIDE_PACKAGE = True
 
-#: Realpaths whose listless exports are being computed (re-import cycles).
-_LISTLESS_IN_PROGRESS: set = set()
+#: This thread's walk of listless packages (:func:`listless_exports`):
+#: ``stack`` -- the realpaths whose exports are being computed, outermost
+#: first (a re-import cycle is a path back onto it); ``memo`` -- realpath
+#: -> the entries of a package this walk has answered, kept only while
+#: the outermost call runs (one answer, one reading of the files); ``cut``
+#: -- the stack depth of the shallowest package a cycle came back to,
+#: while that package is still being computed.  A package at or below the
+#: cut answers for the path it was reached by (the cycle's names are no
+#: export there), so it is not memoised; one above it, and one no cycle
+#: came back through, answers the same from any path.
+_LISTLESS_WALK = threading.local()
+
+
+def _listless_walk():
+    walk = _LISTLESS_WALK
+    if not hasattr(walk, "stack"):
+        walk.stack, walk.memo, walk.cut = [], {}, None
+    return walk
 
 
 def is_listless_package_init(path: str) -> bool:
@@ -863,15 +879,39 @@ def listless_exports(path: str) -> "list[tuple[str, int | None]]":
       there).  A name that is also a SUBMODULE is dropped where it is asked
       (:func:`_exports`), since that depends on other files.
 
-    Re-import cycles answer the cycle's names as no export."""
+    Re-import cycles answer the cycle's names as no export.
+
+    One answer reads each file once (:data:`_LISTLESS_WALK`): a package
+    re-exporting N names from a listless package used to read that package
+    again for each of the N -- a seam compile of it, and a read of each of
+    its sources per name it re-exports -- a product over a chain of such
+    packages, so a test module over two of them (136 names through 136)
+    did not finish in 600 s."""
     real = os.path.realpath(path)
-    if real in _LISTLESS_IN_PROGRESS:
+    walk = _listless_walk()
+    stack = walk.stack
+    if real in stack:
+        # a re-import cycle: the cycle's names are no export
+        head = stack.index(real)
+        if walk.cut is None or head < walk.cut:
+            walk.cut = head
         return []
-    _LISTLESS_IN_PROGRESS.add(real)
+    hit = walk.memo.get(real)
+    if hit is not None:
+        return list(hit)
+    depth = len(stack)
+    stack.append(real)
     try:
-        return _listless_entries(path, real)
+        entries = _listless_entries(path, real)
+        if walk.cut is None or walk.cut > depth:
+            walk.memo[real] = tuple(entries)
     finally:
-        _LISTLESS_IN_PROGRESS.discard(real)
+        stack.pop()
+        if walk.cut is not None and walk.cut >= depth:
+            walk.cut = None
+        if not stack:
+            walk.memo.clear()
+    return entries
 
 
 def _listless_entries(path: str, real: str) -> list:
@@ -904,6 +944,16 @@ def _listless_entries(path: str, real: str) -> list:
             except ValueError:
                 pass
     pkg_dir = os.path.dirname(real)
+    # The record names a source once per name taken from it; each source
+    # is read once for this answer.
+    declared: dict = {}     # source origin -> its declared (name, arity)s
+    exported: dict = {}     # (module, origin) -> its exports
+
+    def exports_of(source, src_origin) -> frozenset:
+        if (source, src_origin) not in exported:
+            exported[source, src_origin] = _exports(source, src_origin)
+        return exported[source, src_origin]
+
     for ref in compiler_record(path) or ():
         if ref[0] != "import_from":
             continue
@@ -917,12 +967,13 @@ def _listless_entries(path: str, real: str) -> list:
                 and not src_real.startswith(pkg_dir + os.sep)):
             continue
         if _is_source(src_origin):
-            entries = _declared_exports(src_origin)[1] or ()
-            arities = {a for n, a in entries if n == orig}
-            if not arities or orig not in _exports(source, src_origin):
+            if src_origin not in declared:
+                declared[src_origin] = _declared_exports(src_origin)[1] or ()
+            arities = {a for n, a in declared[src_origin] if n == orig}
+            if not arities or orig not in exports_of(source, src_origin):
                 continue
         elif is_engine_shipped(source, src_origin):
-            if orig not in _exports(source, src_origin):
+            if orig not in exports_of(source, src_origin):
                 continue
             import importlib  # noqa: PLC0415
             from clausal.logic.solve import module_signatures  # noqa: PLC0415

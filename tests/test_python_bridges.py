@@ -2016,3 +2016,145 @@ def test_a_currency_table_unit_is_audited_like_any_helper_argument(
     assert [r for r in _audit(mutated) if r[0] == "python_call"]
 
 
+def _listless_tree(tmp_path, files: dict) -> str:
+    """Write the package files (relative paths -> text) under a fresh root
+    and return the root."""
+    root = tmp_path / "lt"
+    for rel, text in files.items():
+        p = root / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(textwrap.dedent(text).lstrip("\n"))
+    return str(root)
+
+
+def _leaf(names) -> str:
+    return (f"-module(leaf, [{', '.join(f'{p}/1' for p in names)}])\n"
+            + "".join(f"{p}(1),\n" for p in names))
+
+
+@pytest.fixture
+def listless_reads(monkeypatch):
+    """Counters of the seam compiles and the export-declaration reads
+    the listless-package rule performs, per file."""
+    import collections
+    from clausal import seam_audit as sa
+    from clausal.tools import iso_l3_directives as d
+    compiles: dict = collections.Counter()
+    reads: dict = collections.Counter()
+    real_tree, real_decl = sa.generated_tree, d._declared_exports
+
+    def tree(text, filename):
+        compiles[os.path.basename(os.path.dirname(filename)) + "/"
+                 + os.path.basename(filename)] += 1
+        return real_tree(text, filename)
+
+    def decl(path):
+        reads[os.path.basename(os.path.dirname(path)) + "/"
+              + os.path.basename(path)] += 1
+        return real_decl(path)
+
+    monkeypatch.setattr(sa, "generated_tree", tree)
+    monkeypatch.setattr(d, "_declared_exports", decl)
+    return compiles, reads
+
+
+def _chain_exports(tmp_path, monkeypatch, n, counters):
+    """``pk`` (listless) re-imports *n* names from ``pk.inner``
+    (listless), which re-imports them from ``pk.inner.leaf``."""
+    from clausal import python_bridges as pb
+    names = [f"p{i}" for i in range(n)]
+    root = _listless_tree(tmp_path / str(n), {
+        "pk/__init__.seam":
+            f"-import_from(pk.inner, [{', '.join(names)}])\n",
+        "pk/inner/__init__.seam":
+            f"-import_from(pk.inner.leaf, [{', '.join(names)}])\n",
+        "pk/inner/leaf.seam": _leaf(names),
+    })
+    monkeypatch.setattr(sys, "path", [root, *sys.path])
+    importlib.invalidate_caches()
+    monkeypatch.setattr(pb, "_EXPORTS", {})
+    for c in counters:
+        c.clear()
+    assert pb._exports("pk", pb._find("pk")) == frozenset(names)
+    return tuple(dict(c) for c in counters)
+
+
+def test_a_listless_package_chain_is_read_once_per_file_not_once_per_name(
+        tmp_path, monkeypatch, listless_reads):
+    """A listless package's re-exports were read again for EVERY name an
+    importer takes from it -- a seam compile of the package and a read of
+    each of its sources per name, a product over a chain of listless
+    packages: a real test module over two such packages (136 names
+    through 136) did not finish in 600 s.  Within one answer each file is
+    read a bounded number of times, whatever the name count."""
+    small = _chain_exports(tmp_path, monkeypatch, 2, listless_reads)
+    large = _chain_exports(tmp_path, monkeypatch, 9, listless_reads)
+    assert small == large, (small, large)
+    compiles, reads = large
+    assert compiles["inner/__init__.seam"] == 1
+    assert reads["inner/leaf.seam"] <= 2
+
+
+def test_a_diamond_of_listless_packages_is_read_once_per_answer(
+        tmp_path, monkeypatch, listless_reads):
+    """``pk`` re-imports through two listless packages that both re-import
+    from a third: the third is compiled once for the answer."""
+    from clausal import python_bridges as pb
+    root = _listless_tree(tmp_path, {
+        "pk/__init__.seam": "-import_from(pk.a, [p0])\n"
+                            "-import_from(pk.b, [p1])\n",
+        "pk/a/__init__.seam": "-import_from(pk.c, [p0, p1])\n",
+        "pk/b/__init__.seam": "-import_from(pk.c, [p0, p1])\n",
+        "pk/c/__init__.seam": "-import_from(pk.c.leaf, [p0, p1])\n",
+        "pk/c/leaf.seam": _leaf(["p0", "p1"]),
+    })
+    monkeypatch.setattr(sys, "path", [root, *sys.path])
+    importlib.invalidate_caches()
+    monkeypatch.setattr(pb, "_EXPORTS", {})
+    compiles, reads = listless_reads
+    assert pb._exports("pk", pb._find("pk")) == {"p0", "p1"}
+    assert compiles["c/__init__.seam"] == 1, dict(compiles)
+
+
+def test_a_listless_answer_outlives_no_call(tmp_path, monkeypatch):
+    """What one answer remembers is that answer's: a file edited after it
+    is read afresh by the next (the content-keyed export cache aside)."""
+    from clausal import python_bridges as pb
+    root = _listless_tree(tmp_path, {
+        "pk/__init__.seam": "-import_from(pk.inner, [p0, p1])\n",
+        "pk/inner/__init__.seam": "-import_from(pk.inner.leaf, [p0, p1])\n",
+        "pk/inner/leaf.seam": _leaf(["p0", "p1"]),
+    })
+    monkeypatch.setattr(sys, "path", [root, *sys.path])
+    importlib.invalidate_caches()
+    monkeypatch.setattr(pb, "_EXPORTS", {})
+    origin = pb._find("pk")
+    assert pb._exports("pk", origin) == {"p0", "p1"}
+    (tmp_path / "lt" / "pk" / "inner" / "leaf.seam").write_text(_leaf(["p0"]))
+    monkeypatch.setattr(pb, "_EXPORTS", {})
+    assert pb._exports("pk", origin) == {"p0"}
+
+
+def test_a_listless_re_import_cycle_still_answers_the_cycles_names_as_none(
+        tmp_path, monkeypatch, listless_reads):
+    """Two listless packages re-importing from each other: each answers
+    its own re-exports, the cycle's names are no export, and the walk
+    ends."""
+    from clausal import python_bridges as pb
+    root = _listless_tree(tmp_path, {
+        "pk/__init__.seam": "",
+        "pk/a/__init__.seam": "-import_from(pk.a.pa, [p])\n"
+                              "-import_from(pk.b, [q])\n",
+        "pk/a/pa.seam": "-module(pa, [p/1])\np(1),\n",
+        "pk/b/__init__.seam": "-import_from(pk.b.qb, [q])\n"
+                              "-import_from(pk.a, [p])\n",
+        "pk/b/qb.seam": "-module(qb, [q/1])\nq(1),\n",
+    })
+    monkeypatch.setattr(sys, "path", [root, *sys.path])
+    importlib.invalidate_caches()
+    monkeypatch.setattr(pb, "_EXPORTS", {})
+    a = pb._exports("pk.a", pb._find("pk.a"))
+    monkeypatch.setattr(pb, "_EXPORTS", {})
+    b = pb._exports("pk.b", pb._find("pk.b"))
+    assert "p" in a and "q" in b
+    assert a == {"p", "q"} and b == {"p", "q"}

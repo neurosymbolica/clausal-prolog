@@ -9,6 +9,30 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **The Python-bridge audit of a module importing through listless
+  packages finishes** (2026-10-22). A listless package `__init__.seam`
+  exports what it re-imports (rulings E1/M3), read from its sources;
+  the compiler record names a source once per NAME taken from it, and
+  each such reference read the source again -- for a listless source a
+  seam compile of it and, in turn, a read of each of ITS sources per
+  name -- a product over a chain of listless packages. A test module
+  over two such packages (136 names re-exported through 136) did not
+  finish in 600 s under `CLAUSAL_SANDBOX=1` (the bridge gate walks
+  dependencies there) and `python_bridges.file_python_routes` alone did
+  not finish in 240 s; the same on the pre-memo engine, so round 5's
+  memo was not the cause. One answer now reads each file once
+  (`python_bridges.listless_exports`: the sources of one package are
+  read once per answer, and a package already answered in this walk is
+  not computed again -- a thread-local memo that lives only while the
+  outermost call runs, so no answer outlives the files it was read
+  from, and a package a re-import cycle came back through, whose answer
+  depends on the path it was reached by, is never memoised: the cycle's
+  names stay no export). The test module audits in under 3 s; verdicts
+  are unchanged. Pinned by
+  `tests/test_python_bridges.py::test_a_listless_package_chain_is_read_once_per_file_not_once_per_name`,
+  `::test_a_diamond_of_listless_packages_is_read_once_per_answer`,
+  `::test_a_listless_answer_outlives_no_call` and
+  `::test_a_listless_re_import_cycle_still_answers_the_cycles_names_as_none`.
 - **A `-constants_number_currency(...)` table no longer makes its module a
   Python bridge** (2026-10-22). The table expansion places ONE unit gate,
   `$check_currency_unit('p/N', unit, '-constants_number_currency')`, at
