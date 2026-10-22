@@ -1271,17 +1271,26 @@ def _remove_module(ctx, spec, span, what):
     return []
 
 
+def library_reader_ops(name: str, listed) -> list:
+    """The ``(priority, type, name)`` operators ``use_module(library(name))``
+    installs: all the library's operators for ``use_module/1`` (*listed*
+    None); for ``use_module/2``, those of its operators the import list
+    names (*listed*: its ``op/3`` entries as triples) plus the sticky ones
+    (the same rule as for a module file, see ``_use_module``).  Shared with
+    the ``.pl`` translator's reader (``prolog_parser.parse(library_ops=)``)."""
+    lib_ops = _LIBRARY_OPS.get(name, ())
+    if listed is None:
+        return list(lib_ops)
+    return ([op for op in listed if op in _op_triples(lib_ops)]
+            + list(_LIBRARY_STICKY_OPS.get(name, ())))
+
+
 def _use_library(ctx, lib, entries, span, what, listed_ops=()):
     name = _slash_path(lib)
     if name is None:
         raise _refused(f"{what}: the library name is not an atom", span)
-    lib_ops = _LIBRARY_OPS.get(name, ())
-    if entries is None:
-        install = list(lib_ops)
-    else:
-        # The same rule as for a module file (see _use_module).
-        install = (_op_triples(listed_ops, _op_triples(lib_ops))
-                   + list(_LIBRARY_STICKY_OPS.get(name, ())))
+    install = library_reader_ops(
+        name, None if entries is None else _op_triples(listed_ops))
     for op in install:
         ctx.apply_op(*op, span, what)
     if name in ("clpq", "clpr"):

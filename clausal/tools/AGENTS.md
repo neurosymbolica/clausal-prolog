@@ -26,7 +26,7 @@ Up: [../AGENTS.md](../AGENTS.md)
 | `toklex/` | Spec-driven lexer generator; `specs/iso.toklex.pl` *is* the ISO token grammar. See [toklex/AGENTS.md](toklex/AGENTS.md). |
 | `prolog_tokenizer.py` | `tokenize()`: thin shim mapping toklex tokens to `Token`/`TokenType` via `_KIND_MAP`. No lexical rules live here. |
 | `prolog_operators.py` | `OperatorTable`: ISO defaults plus SWI/Scryer/GNU/Trealla tables (`scryer_builtin_default()` is the reader's default). |
-| `prolog_parser.py` | Pratt parser: tokens -> `prolog_ast` P-nodes; applies `op/3` mid-file. `parse()`, `parse_term()`, `PrologParser`. |
+| `prolog_parser.py` | Pratt parser: tokens -> `prolog_ast` P-nodes; applies `op/3` mid-file, and with `library_ops=` the operators a `use_module(library(L))` brings (the translator passes `iso_l3_directives.library_reader_ops`). `parse()`, `parse_term()`, `PrologParser`. |
 | `prolog_ast.py` | Frozen-dataclass Prolog AST (`PAtom`, `PCompound`, `PClause`, `PModule`, ...), visitors, builders. |
 | `prolog_reader.py` | The "§1c contract": `PrologReader` (incremental, item-at-a-time over toklex) and `transform_term` (P-tree -> functor-first tuple cells, `VarRef`s, spans). Items: `Clause`, `Directive`, `DCGRule`, `Query`, `SyntaxIssue`. Must not import the engine (`clausal.logic.*`). |
 
@@ -35,7 +35,7 @@ Up: [../AGENTS.md](../AGENTS.md)
 | File | What it is |
 |---|---|
 | `iso_l3.py` | Lowers reader items to the seam's transformed AST: clauses, control constructs, `m:G`, `if_/3`, `{C}`, DCG rules. `lower_source()` is what the loader calls. Refuses (raises `LoweringRefused`) `!`, `->`, `*->`, `initialization/1`, queries, unknown directives — never skips. |
-| `iso_l3_directives.py` | ISO directives -> the seam's own directive handlers (`module/2`, `use_module/1,2`, `dynamic`, `table`, `op`, `set_prolog_flag`, `end_module`, `constructors`, constants). Holds `_BUILTIN_LIBRARIES` / `_LIBRARY_MODULES` (what `library(L)` means), library operators (`CLPZ_OPS`, ...), the `library(...)` facade lookup (`_library_facade`) and the Python-import refusals. |
+| `iso_l3_directives.py` | ISO directives -> the seam's own directive handlers (`module/2`, `use_module/1,2`, `dynamic`, `table`, `op`, `set_prolog_flag`, `end_module`, `constructors`, constants). Holds `_BUILTIN_LIBRARIES` / `_LIBRARY_MODULES` (what `library(L)` means), library operators (`CLPZ_OPS`, ...; `library_reader_ops`, which the translator's reader shares), the `library(...)` facade lookup (`_library_facade`) and the Python-import refusals. |
 
 **Translators and exporter**
 

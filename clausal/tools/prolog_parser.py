@@ -67,7 +67,8 @@ class ParseError(Exception):
 
 def parse(source: str, *, dialect: Dialect | None = None,
           op_table: OperatorTable | None = None,
-          nested_comments: bool = True) -> PModule:
+          nested_comments: bool = True,
+          library_ops=None) -> PModule:
     """Parse Prolog source text into a PModule AST.
 
     Parameters
@@ -82,6 +83,14 @@ def parse(source: str, *, dialect: Dialect | None = None,
     nested_comments : bool
         Whether ``/* /* */ */`` nests (see ``tokenize()``). A ``.pl`` file
         is read with ``PL_SOURCE_NESTED_COMMENTS`` (False: ISO, Scryer).
+    library_ops : callable, optional
+        ``library_ops(name, listed)`` -> the ``(priority, type, name)``
+        operators a ``:- use_module(library(name))`` directive installs
+        from that point on (*listed*: the ``op/3`` entries of a
+        ``use_module/2`` import list, or None for ``use_module/1``).  The
+        ``.pl`` translator passes the native front end's rule
+        (``iso_l3_directives.library_reader_ops``), so ``library(clpz)``
+        makes ``#=`` and ``in`` operators as it does there and in Scryer.
     """
     if op_table is None:
         if dialect is not None:
@@ -100,7 +109,7 @@ def parse(source: str, *, dialect: Dialect | None = None,
         if msg.endswith(suffix):
             msg = msg[:-len(suffix)]
         raise ParseError(msg, e.line, e.col) from e
-    parser = PrologParser(tokens, op_table)
+    parser = PrologParser(tokens, op_table, library_ops=library_ops)
     return parser.parse_program()
 
 
@@ -116,6 +125,17 @@ def parse_term(source: str, *, op_table: OperatorTable | None = None) -> PTerm:
     return parser.parse_term_public(1200)
 
 
+def _slash_name(t: PTerm) -> str | None:
+    """``clpz`` / ``a/b`` -> ``"clpz"`` / ``"a/b"``; None for anything else."""
+    if isinstance(t, PAtom):
+        return t.name
+    if isinstance(t, PCompound) and t.functor == "/" and len(t.args) == 2:
+        left, right = _slash_name(t.args[0]), _slash_name(t.args[1])
+        if left is not None and right is not None:
+            return f"{left}/{right}"
+    return None
+
+
 # ── Parser ───────────────────────────────────────────────────────────
 
 
@@ -128,7 +148,7 @@ class PrologParser:
     })
 
     def __init__(self, tokens: list[Token], op_table: OperatorTable, *,
-                 operator_atom_operands: bool = False):
+                 operator_atom_operands: bool = False, library_ops=None):
         """*operator_atom_operands* keeps the pre-ISO reading in which a bare
         operator atom has priority 0 and may be an operand (`'*' then x`).
         Only the toklex spec DSL, which is not Prolog text, asks for it."""
@@ -136,6 +156,8 @@ class PrologParser:
         self._pos = 0
         self._ops = op_table
         self._operator_atom_operands = operator_atom_operands
+        # ``library_ops(name, listed)``: see :func:`parse`.
+        self._library_ops = library_ops
         # True while parsing the direct items/tail of a `[...]` list, where
         # `|` is the fixed list-syntax head/tail separator (ISO 6.3.5) and
         # must never be read as the general infix/postfix operator, no
@@ -172,6 +194,7 @@ class PrologParser:
             body = term.args[0]
             # Check for op/3 directive — apply immediately
             self._maybe_apply_op_directive(body)
+            self._maybe_apply_library_ops(body)
             return PDirective(body)
 
         # Query: ?-(Body)
@@ -215,6 +238,45 @@ class PrologParser:
             return
         for n in names:
             self._ops.define(prec_t.value, spec_t.name, n)
+
+    def _maybe_apply_library_ops(self, body: PTerm) -> None:
+        """If *body* is ``use_module(library(L))`` or ``use_module(
+        library(L), Imports)``, apply the operators the library brings
+        (``self._library_ops``) to the operator table."""
+        if self._library_ops is None or not isinstance(body, PCompound):
+            return
+        if body.functor != "use_module" or len(body.args) not in (1, 2):
+            return
+        spec = body.args[0]
+        if not (isinstance(spec, PCompound) and spec.functor == "library"
+                and len(spec.args) == 1):
+            return
+        name = _slash_name(spec.args[0])
+        if name is None:
+            return
+        listed = None
+        if len(body.args) == 2:
+            imports = body.args[1]
+            if not isinstance(imports, PList):
+                return
+            listed = []
+            for e in imports.elements:
+                if not (isinstance(e, PCompound) and e.functor == "op"
+                        and len(e.args) == 3):
+                    continue
+                prec_t, spec_t, name_t = e.args
+                if not (isinstance(prec_t, PNumber)
+                        and isinstance(prec_t.value, int)
+                        and isinstance(spec_t, PAtom)):
+                    continue
+                names = ([name_t] if isinstance(name_t, PAtom)
+                         else list(name_t.elements)
+                         if isinstance(name_t, PList) else [])
+                listed.extend((prec_t.value, spec_t.name, n.name)
+                              for n in names if isinstance(n, PAtom))
+        for prec, typ, op in self._library_ops(name, listed):
+            if op_error(self._ops, prec, typ, [op]) is None:
+                self._ops.define(prec, typ, op)
 
     # ── Term parsing (Pratt) ─────────────────────────────────────────
 

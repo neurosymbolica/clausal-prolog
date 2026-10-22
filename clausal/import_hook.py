@@ -634,6 +634,9 @@ _COMPILATION_FILES = (
     "tools/prolog_operators.py",
     "tools/prolog_dialect.py",
     "tools/prolog_ast.py",
+    # library_reader_ops: the operators use_module(library(L)) brings to
+    # the translator's reader (shared with the native front end)
+    "tools/iso_l3_directives.py",
     "tools/toklex/specs/iso.toklex.pl",  # the spec load_lexer() compiles
 )
 

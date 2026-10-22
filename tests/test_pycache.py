@@ -634,6 +634,7 @@ def _control_terms(monkeypatch):
 
 
 _PL_SAMPLE = (b":- op(700, xfx, ===>).\n"
+              b":- use_module(library(lists)).\n"
               b"p(X) :- X = 'a b', q([1|_]), \"s\" = _.\nq(_).\n")
 
 
@@ -689,6 +690,7 @@ _TRANSLATOR_FILES = (
     "tools/prolog_to_clausal.py", "tools/prolog_parser.py",
     "tools/prolog_tokenizer.py", "tools/prolog_operators.py",
     "tools/prolog_dialect.py", "tools/prolog_ast.py",
+    "tools/iso_l3_directives.py",
     "tools/toklex/specs/iso.toklex.pl",
 )
 
