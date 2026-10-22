@@ -41,9 +41,6 @@
    "error": null,
    "load": "ok",
    "preds": {
-    "constant_number_currency/3": [],
-    "constant_number_units/3": [],
-    "constant_value/2": [],
     "term_expansion/2": {
      "after": [],
      "error": "PredicateNotFoundError: Predicate prolog_load_context/2 not found"
@@ -2861,7 +2858,7 @@
   "README.md#L100": "c48f4dec8c407748",
   "README.md#L177": "3a500e03a3c420eb",
   "README.md#L273": "c07d2fd5682cc0ce",
-  "clausal/tools/prolog_preludes/clausal_constants_scryer.pl": "0977b6a764bbc999",
+  "clausal/tools/prolog_preludes/clausal_constants_scryer.pl": "a66b8f63b2c54eff",
   "clausal/tools/prolog_preludes/clausal_constants_trealla.pl": "2c6654aacd571b8a",
   "clausal/tools/toklex/specs/clausal.toklex.pl": "04d67a9b0c9775ee",
   "clausal/tools/toklex/specs/iso.toklex.pl": "a5472da790702be3",

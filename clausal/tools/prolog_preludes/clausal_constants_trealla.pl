@@ -40,9 +40,12 @@ user:term_expansion((:- constant_number_units(N, Num, U)),
                     [ constant_number_units(N, Num, U),
                       module_constant_units(M, N, Num, U) ]) :-
     prolog_load_context(module, M).
+% A currency constant is recorded exactly as a units one: the engine has no
+% constant_number_currency/3 predicate, and `constant_number_units/3` answers
+% a -constant_number_currency declaration.
 user:term_expansion((:- constant_number_currency(N, Num, U)),
-                    [ constant_number_currency(N, Num, U),
-                      module_constant_currency(M, N, Num, U) ]) :-
+                    [ constant_number_units(N, Num, U),
+                      module_constant_units(M, N, Num, U) ]) :-
     prolog_load_context(module, M).
 user:term_expansion((:- constant_value(N, V)),
                     [ constant_value(N, V), module_constant(M, N, V) ]) :-

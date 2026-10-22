@@ -67,17 +67,30 @@ surface described in [docs/public-api.md](docs/public-api.md).
   keeps the later binding across two. A qualified unit in a constant
   declaration (`united_states.usd`) now exports as `usd`, where it was
   the quoted atom `'united_states:usd'`, as every other unit position
-  already read it. `tests/test_exporter_unit_import_alias.py`.
-- **An exported currency constant loads in Scryer and Trealla**
+  already read it. One difference remains, by design of the export: for a
+  constant declared in an aliased unit, the engine's
+  `constant_number_units/3` reports the unit as written (`us_dollar`),
+  the export's reports the source unit (`usd`).
+  `tests/test_exporter_unit_import_alias.py`.
+- **An exported currency constant loads in Scryer and Trealla, and the
+  constants accessors answer from inside the declaring module**
   (2026-10-22). The `expansion` dialects' constants preludes expanded
   `constant_number_units/3` and `constant_value/2` but not
   `constant_number_currency/3`, so Scryer refused the exported directive
   (`domain_error(directive, constant_number_currency/3)`) and the rest of
-  the module did not load; Trealla ran it as an unknown directive. Both
-  preludes now expand it to `module_constant_currency/4` (with the
-  `constant_number_currency/3` accessor), and the exporter declares the
-  pair discontiguous beside the others.
-  `tests/test_prolog_constants_prelude.py`.
+  the module did not load; Trealla ran it as an unknown directive. The
+  engine records a `-constant_number_currency` declaration for
+  `constant_number_units/3` (it has no currency accessor), so both
+  preludes now expand it exactly as a units declaration, and
+  `constant_number_units/3` answers it as the engine does. Separately,
+  Scryer's prelude defined `constant_number_units/3` and
+  `constant_value/2` as rules in its own module, reading its own empty
+  tables, so from inside a named module -- the normal use -- every
+  accessor answered false; the expansion now writes the accessor fact in
+  the declaring module, as the Trealla prelude already did.
+  `tests/test_prolog_constants_prelude.py`. Still open: the exported
+  declaration pairs the base magnitude with the declared unit
+  (`todo/exported-constant-declaration-carries-the-base-magnitude-with-the-declared-unit-2026-10-22.md`).
 - **The Python-bridge audit of a module importing through listless
   packages finishes** (2026-10-22). A listless package `__init__.seam`
   exports what it re-imports (rulings E1/M3), read from its sources;

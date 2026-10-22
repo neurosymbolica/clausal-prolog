@@ -186,29 +186,57 @@ def test_the_exporters_own_output_runs_unmodified(system):
     assert "1550" in res and "155000" not in res, res
 
 
-# ── constant_number_currency: its own directive, its own pair ────────────────
+# ── constant_number_currency, and the accessors inside a named module ─────
 
 
 @pytest.mark.parametrize("system", sorted(BINARIES))
-def test_a_currency_constant_expands_too(system):
-    """`-constant_number_currency` exports as its own directive, which the
-    preludes did not expand: Scryer refused it --
+def test_a_currency_constant_is_answered_by_constant_number_units(system):
+    """The engine has no constant_number_currency/3: a -constant_number_currency
+    declaration is recorded for constant_number_units/3, so the prelude
+    expands it exactly as a units one. Before, Scryer refused the directive --
     domain_error(directive, constant_number_currency/3) -- and the rest of the
     module did not load."""
     out = _run_with_prelude(system, (
-        ":- discontiguous(constant_number_currency/3).\n"
-        ":- discontiguous(module_constant_currency/4).\n"
         ":- constant_number_currency(lim, 23, usd).\n"
-        "main :- ( constant_number_currency(N, V, U) -> write(got(N,V,U)) "
+        "main :- ( constant_number_units(N, V, U) -> write(got(N,V,U)) "
         "; write(not_expanded) ), nl, halt.\n"))
     assert "got(lim,23,usd)" in out.replace(" ", ""), out
 
 
+# The accessors are called from INSIDE the declaring module, the normal use.
+# Scryer's prelude used to define them in its own module, reading its own
+# empty tables, so every one answered false there (units and currency alike)
+# while the facts sat in the declaring module.
+LOOK = """\
+-module(look_cur, [look(N, U), look_len(N, U)])
+-import_from(united_states, [usd])
+-import_from(units, [metre])
+-constant_number_currency(lim, 23, usd)
+-constant_number_units(len, 5, metre)
+look(N, U) <- constant_number_units(lim, N, U)
+look_len(N, U) <- constant_number_units(len, N, U)
+"""
+LOOK_ANSWERS = ["look(23,usd)", "look_len(5,metre)"]
+
+
+def test_the_engine_answers_the_look_predicates(tmp_path):
+    from clausal.import_hook import _load_module
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var
+    from tests._suffix import SEAM
+
+    path = tmp_path / f"look_cur{SEAM}"
+    path.write_text(LOOK)
+    m = _load_module("prelude_look_cur", str(path))
+    n, u = Var(), Var()
+    assert [(str(n), str(u)) for _ in call(m.look, n, u)] == [("23", "usd")]
+    assert [(str(n), str(u)) for _ in call(m.look_len, n, u)] == [("5", "metre")]
+
+
 @pytest.mark.parametrize("system", sorted(BINARIES))
-def test_an_exported_currency_module_loads_and_answers(system):
-    """The exporter's own output for a currency constant, run as-is: the
-    module loads (its other predicates answer) and the declaration is
-    recorded under the declaring module."""
+def test_the_exported_module_answers_its_constants_from_inside(system):
+    """The exporter's own output, run as-is under the real binary, answers
+    what the engine answers (the test above), from inside the module."""
     import shutil
     from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
     from clausal.tools.prolog_dialect import Dialect
@@ -216,28 +244,42 @@ def test_an_exported_currency_module_loads_and_answers(system):
     binary = BINARIES[system]
     if not os.path.exists(binary):
         pytest.skip(f"{system} not built at {binary}")
-    out = clausal_source_to_prolog(
-        "-module(cur, [lim_cents(C)])\n"
-        "-import_from(united_states, [usd, usd_cent])\n"
-        "-constant_number_currency(lim, 23, usd)\n"
-        "lim_cents(C) <- (C == constant(lim) / usd_cent)\n",
-        dialect=getattr(Dialect, system)())
+    out = clausal_source_to_prolog(LOOK, dialect=getattr(Dialect, system)())
     assert ":- constant_number_currency(lim, 23, usd)." in out, out
     d = tempfile.mkdtemp()
     shutil.copy(os.path.join(PRELUDE_DIR, f"clausal_constants_{system}.pl"), d)
+    # The jurisdiction and units imports are Clausal modules with no Prolog
+    # counterpart here; everything else is verbatim.
     body = "\n".join(l for l in out.splitlines()
-                     if "use_module('united_states'" not in l)
-    prog = os.path.join(d, "cur.pl")
+                     if not l.startswith(":- use_module('"))
+    prog = os.path.join(d, "look_cur.pl")
     with open(prog, "w") as fh:
-        # `cur:main`, qualified: Trealla runs an unqualified initialization
-        # goal in `user` once the module imports library(clpz) -- an
-        # existence_error for main/0 that says nothing about constants.
-        fh.write(body + "\n:- initialization(cur:main).\n"
-                 "main :- ( module_constant_currency(M, lim, N, U) -> "
-                 "write(got(M,N,U)) ; write(no_answer) ), nl, "
-                 "lim_cents(C), write(cents(C)), nl, halt.\n")
+        # `look_cur:main`, qualified: Trealla runs an unqualified
+        # initialization goal in `user` once a module imports a library.
+        fh.write(body + "\n:- initialization(look_cur:main).\n"
+                 "main :- look(N, U), write(look(N,U)), nl, "
+                 "look_len(L, M), write(look_len(L,M)), nl, "
+                 "( module_constant_units(look_cur, lim, _, _) -> "
+                 "write(recorded) ; write(not_recorded) ), nl, halt.\n")
     proc = _run_program(system, binary, prog, d)
     res = proc.stdout + proc.stderr
-    assert "domain_error" not in res, res
-    assert "got(cur,23,usd)" in res.replace(" ", ""), res
-    assert "cents(2300)" in res, res
+    assert "domain_error" not in res and "Warning" not in res, res
+    for answer in LOOK_ANSWERS:
+        assert answer in res.replace(" ", ""), res
+    assert "recorded" in res and "not_recorded" not in res, res
+
+
+@pytest.mark.parametrize("system", sorted(BINARIES))
+@pytest.mark.parametrize("directive, query, answer", [
+    ("constant_number_units(fee, 5000, euro)", "constant_number_units(fee, V, U)",
+     "got(5000,euro)"),
+    ("constant_value(pi_approx, 3)", "constant_value(pi_approx, V)", "got(3)"),
+])
+def test_an_accessor_answers_inside_a_named_module(system, directive, query, answer):
+    """Every accessor, asked from inside the module that declared it."""
+    shape = answer[len("got("):-1].split(",")
+    out = _run_with_prelude(system, (
+        f":- {directive}.\n"
+        f"main :- ( {query} -> write(got({', '.join(['V', 'U'][:len(shape)])})) "
+        "; write(no_answer) ), nl, halt.\n"), module_name="a_named_module")
+    assert answer in out.replace(" ", ""), out

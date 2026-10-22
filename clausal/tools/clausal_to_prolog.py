@@ -1528,8 +1528,6 @@ class _ClausalToProlog:
                 PDirective(PCompound(load, (PAtom(prelude_module),))))
             for functor, arity in (("constant_number_units", 3),
                                    ("module_constant_units", 4),
-                                   ("constant_number_currency", 3),
-                                   ("module_constant_currency", 4),
                                    ("constant_value", 2),
                                    ("module_constant", 3)):
                 prelude_directives.append(PDirective(PCompound(
@@ -4681,6 +4679,8 @@ def _unit_import_aliases(tree) -> dict[str, str]:
                 # silently keeps the later binding (measured 2026-10-22), so
                 # which unit a use means depends on directive order -- and a
                 # wrong unit is a wrong number in an exported legal program.
+                # See todo/a-local-import-name-bound-in-two-directives-keeps-
+                # the-later-2026-10-22.md for the engine side.
                 raise NotImplementedError(
                     f"clausal_to_prolog: -import_from binds the local name "
                     f"{local} to both {previous[0]}.{previous[1]} and "
