@@ -43,10 +43,25 @@ INJECTED_TITLECASE_NAMES: frozenset[str] = frozenset({
 
 from clausal.pythonic_ast import nodes as _simple_ast  # noqa: E402
 
+#: The ``simple_ast`` names generated code reaches, bound in every module
+#: namespace (``import_hook.runtime_builtins``) and twinned: the node
+#: classes and helper functions -- every CALLABLE ``nodes.__all__`` names.
+#: Not the node transform's sentinel ``REMOVED``: an object the transform
+#: reads from its own module, never from a module namespace.  Injected, it
+#: was the one ALL_CAPS runtime name, and a seam program's variable
+#: ``REMOVED`` (lowered ``REMOVED := $Var()`` in the module namespace, by
+#: its own spelling) rebound a "runtime name" and could not be Python-free
+#: (``clausal.seam_audit``: a walrus target that is a loader-injected bare
+#: name is a route).  Pinned by tests/test_python_bridges.py::
+#: test_no_injected_runtime_name_is_a_seam_variable_spelling.
+NODE_RUNTIME_NAMES: tuple[str, ...] = tuple(
+    name for name in _simple_ast.__all__
+    if callable(getattr(_simple_ast, name)))
+
 #: Every bare name that HAS a twin -- complete at import, no compiler needed.
 #: This is what :func:`bare_name_of` (the readers) consults.
 _TWIN_NAMES: frozenset[str] = (
-    frozenset(_simple_ast.__all__) | INJECTED_TITLECASE_NAMES
+    frozenset(NODE_RUNTIME_NAMES) | INJECTED_TITLECASE_NAMES
 ) - BARE_ONLY
 
 # The OBJECT each twinned name binds -- what :func:`dollar_ref` (the
@@ -56,7 +71,7 @@ _TWIN_NAMES: frozenset[str] = (
 # compiler's table is built (the emitters live in the compiler, so they
 # never run before that).
 _TWIN_OBJECTS: dict[str, Any] = {
-    name: getattr(_simple_ast, name) for name in _simple_ast.__all__
+    name: getattr(_simple_ast, name) for name in NODE_RUNTIME_NAMES
     if name not in BARE_ONLY
 }
 
@@ -193,7 +208,8 @@ def bare_name_of(name: str) -> str:
 
 
 __all__ = [
-    "BARE_ONLY", "INJECTED_TITLECASE_NAMES", "dollar_name",
+    "BARE_ONLY", "INJECTED_TITLECASE_NAMES", "NODE_RUNTIME_NAMES",
+    "dollar_name",
     "with_dollar_twins", "register_generated_names", "dollar_ref",
     "has_twin", "bare_name_of", "GENERATED_CODE_BUILTINS",
     "MODULE_CODE_BUILTINS",

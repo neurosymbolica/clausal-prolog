@@ -119,8 +119,17 @@ class TestDollarTwinsAreBound:
         assert runtime_builtins[f"${name}"] is runtime_builtins[name]
 
     def test_node_class_twins_are_the_simple_ast_classes(self):
-        for name in simple_ast.__all__:
+        from clausal.logic.generated_names import NODE_RUNTIME_NAMES
+        for name in NODE_RUNTIME_NAMES:
             assert runtime_builtins[f"${name}"] is getattr(simple_ast, name), name
+        # The node transform's sentinel is read from its own module, never
+        # from a module namespace: not a runtime name, so not injected (it
+        # was the one ALL_CAPS runtime name, and a seam variable spelled so
+        # could not be Python-free).
+        assert "REMOVED" in simple_ast.__all__
+        assert "REMOVED" not in NODE_RUNTIME_NAMES
+        assert "REMOVED" not in runtime_builtins
+        assert "$REMOVED" not in runtime_builtins
 
     def test_undefined_stays_bare_only(self):
         # The canonical Kleene value: bare by ruling, no twin.
@@ -336,8 +345,9 @@ class TestReificationNeverNeedsTheCompiler:
             register_generated_names({"NotInTheStaticList": object()})
 
     def test_bare_name_of_knows_every_twin_without_the_compiler(self):
-        from clausal.logic.generated_names import bare_name_of
-        for name in _INJECTED_BARE + list(simple_ast.__all__):
+        from clausal.logic.generated_names import (
+            NODE_RUNTIME_NAMES, bare_name_of)
+        for name in _INJECTED_BARE + list(NODE_RUNTIME_NAMES):
             assert bare_name_of(f"${name}") == name
         assert bare_name_of("$unify") == "$unify"
         assert bare_name_of("$Undefined") == "$Undefined"

@@ -432,8 +432,9 @@ def _count_seam_transition_constructs(loader, source_nodes, db, filename):
 # ``$`` twin (``$Predicate``, ``$Call``, ``$Add``, ...) so a user predicate
 # spelled like one can never shadow it; the bare aliases stay bound for the
 # deprecation window.  ONE table -- ``clausal/logic/generated_names.py``.
+from clausal.logic.generated_names import NODE_RUNTIME_NAMES  # noqa: E402
 runtime_builtins = with_dollar_twins(
-    {name: getattr(simple_ast, name) for name in simple_ast.__all__}
+    {name: getattr(simple_ast, name) for name in NODE_RUNTIME_NAMES}
 )
 
 # '$'-prefixed names cannot be typed as normal Python identifiers, so user code

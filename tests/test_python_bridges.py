@@ -1894,3 +1894,67 @@ def test_plumbing_is_recognised_by_its_head_before_its_shape(monkeypatch):
     finally:
         sa._shape = real
     assert not any(n is s for n in shapes for s in clause)
+
+
+# ── round 6: three false refusals from real modules ─────────────────────────
+
+
+def _seam_file(tmp_path, name, text) -> str:
+    f = tmp_path / f"{name}.seam"
+    f.write_text(textwrap.dedent(text).lstrip("\n"))
+    return str(f)
+
+
+def test_a_logic_variable_spelled_like_the_transform_sentinel_is_no_route(
+        tmp_path):
+    """A seam variable ``REMOVED`` (ALL_CAPS: a variable) is lowered as
+    ``REMOVED := $Var()`` in the module namespace, under its own spelling.
+    The node transform's sentinel ``REMOVED`` is read by the transform
+    alone, from its own module, never from a module namespace -- it is no
+    runtime name, so the loader must not inject it and the audit must not
+    reserve it."""
+    path = _seam_file(tmp_path, "diffs", """
+        -module(diffs, [what_if/3, delta_nonempty/2])
+        what_if(PROFILE, ADDED, REMOVED) <- (ADDED is PROFILE, REMOVED is [])
+        delta_nonempty(ADDED, _) <- (ADDED is not [])
+        delta_nonempty([], REMOVED) <- (REMOVED is not [])
+    """)
+    assert file_python_routes(path) == []
+    from clausal import import_hook, seam_audit as sa
+    assert "REMOVED" not in import_hook.runtime_builtins
+    assert "$REMOVED" not in import_hook.runtime_builtins
+    assert "REMOVED" not in sa.audit_tables()[2]
+
+
+def test_no_injected_runtime_name_is_a_seam_variable_spelling():
+    """The seam reads an ALL_CAPS or ``_x`` name as a logic variable and
+    binds it, by that spelling, in the module namespace: no bare runtime
+    name the loader injects may be spelled so, or a program could not name
+    that variable and stay Python-free.  (A TitleCase runtime class --
+    ``Var``, ``Call`` -- is no variable spelling: TitleCase has no role in
+    Clausal code, ruling 2026-09-09, and rebinding one stays a route.)"""
+    from clausal import import_hook
+    from clausal.templating.term_rewriting import (
+        _is_logic_var_name, _is_titlecase_identifier)
+    clash = sorted(
+        n for n in import_hook.runtime_builtins
+        if not n.startswith("$") and _is_logic_var_name(n)
+        and not _is_titlecase_identifier(n))
+    assert clash == []
+
+
+def test_a_walrus_that_rebinds_a_runtime_name_stays_refused():
+    """The lowering's walrus binds a fresh logic variable; one whose
+    target is a bare runtime name (``Var``: bound beside its ``$`` twin
+    for the deprecation window) rebinds that name in the module namespace
+    and stays a route, whatever its value."""
+    import ast as _ast
+    tree = _clean_generated_tree()
+    assert not [r for r in _audit(tree) if r[0] == "python_statement"]
+    mutated = _mutate(
+        tree, lambda n: isinstance(n, _ast.NamedExpr),
+        lambda n: _ast.NamedExpr(
+            target=_ast.Name(id="Var", ctx=_ast.Store()), value=n.value))
+    assert [r for r in _audit(mutated) if r[0] == "python_statement"]
+
+

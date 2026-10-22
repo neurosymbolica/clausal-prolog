@@ -7,6 +7,29 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Fixed
+
+- **A seam variable named `REMOVED` no longer makes its module a Python
+  bridge** (2026-10-22). The node transform's sentinel
+  `pythonic_ast.nodes.REMOVED` was injected into every module namespace
+  with the node classes (`nodes.__all__` lists it), so it was a loader
+  "runtime name" -- the one spelled ALL_CAPS -- and the Python-bridge
+  audit, which refuses a walrus that rebinds a runtime name, refused the
+  lowering `REMOVED := $Var()` of a program's variable `REMOVED` as a
+  `python_statement`. The sentinel is read by the transform from its own
+  module, never from a module namespace, so it is no runtime name: the
+  injected node names are now `generated_names.NODE_RUNTIME_NAMES` (every
+  callable `nodes.__all__` names -- the classes and helpers -- and no
+  sentinel), used by the loader's `runtime_builtins` and the `$`-twin
+  tables alike; `$REMOVED` is gone with it. No bare runtime name is an
+  ALL_CAPS or `_x` spelling now (a seam variable can never clash with
+  one), and rebinding a TitleCase runtime class (`Var := $Var()`, bound
+  beside its twin for the deprecation window) stays a route. Pinned by
+  `tests/test_python_bridges.py::test_a_logic_variable_spelled_like_the_transform_sentinel_is_no_route`,
+  `::test_no_injected_runtime_name_is_a_seam_variable_spelling`,
+  `::test_a_walrus_that_rebinds_a_runtime_name_stays_refused` and
+  `tests/test_dollar_runtime_names.py::TestDollarTwinsAreBound::test_node_class_twins_are_the_simple_ast_classes`.
+
 ## 1.1.0 (2026-10-21)
 
 A minor release by operator ruling (D83, 2026-10-21): the entries under
