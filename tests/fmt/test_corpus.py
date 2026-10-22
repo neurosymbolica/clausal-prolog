@@ -158,9 +158,23 @@ def _anchors(text: str) -> dict[str, str]:
 
 
 def _head(line: str) -> str:
-    """The leading identifier of a code line, for a loose comparison."""
-    match = re.match(r"[(]*\s*([A-Za-z_][\w.]*)", line)
-    return match.group(1) if match else line[:12]
+    """The leading identifier of a code line, for a loose comparison.
+
+    A directive's leading ``-`` is skipped with any opening parentheses, so
+    ``-dynamic(sp/1)`` and the formatter's ``-dynamic(sp / 1)`` both head as
+    ``-dynamic``.  Without that the match failed on the ``-`` and fell back to
+    the first twelve raw characters, which compared operator spacing inside the
+    directive rather than which code the comment sits above.
+    """
+    match = re.match(r"[(]*\s*(-?)\s*([A-Za-z_][\w.]*)", line)
+    return match.group(1) + match.group(2) if match else line[:12]
+
+
+def test_head_reads_a_directive_by_its_name_not_its_spacing():
+    assert _head("-dynamic(sp/1)") == _head("-dynamic(sp / 1)") == "-dynamic"
+    assert _head("-dynamic(sp/1)") != _head("-module(m, [sp/1])")
+    assert _head("-dynamic(sp/1)") != _head("dynamic(sp)")
+    assert _head("sp(X) <- (") == "sp"
 
 
 # Seam fixtures spelled `.seam` joined the corpus when its glob moved to every
