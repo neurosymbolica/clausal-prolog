@@ -435,7 +435,7 @@ def test_goal_positions_of_meta_predicates_stay_goals(tmp_path, frontend):
     assert r.stdout.splitlines() == AUDIT_EXPECTED, r.stdout
 
 
-#: The rows todo/translator-meta-call-goal-gaps-2026-10-22.md recorded
+#: The rows todo/done/translator-meta-call-goal-gaps-2026-10-22.md recorded
 #: (2026-10-22), each failing on the translator only:
 #:
 #: - ``member/2`` was renamed to the seam's ``in_``, which is also the class
