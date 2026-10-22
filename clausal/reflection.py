@@ -244,6 +244,7 @@ class AtomSpellings:
         self._by_cell: dict[int, tuple] = {}
         self._by_name: dict[str, set] = {}
         self._by_dict: dict[int, tuple] = {}
+        self._collapsed: dict[int, dict] = {}
 
     def record(self, atom, quote, item_wide=True):
         """Remember that *atom* (an ``Atom`` cell) was spelled with *quote*.
@@ -297,8 +298,19 @@ class AtomSpellings:
         except TypeError:  # an unhashable name is a rule bug the renderer reports
             return frozenset()
 
+    def record_collapsed(self, mapping):
+        """Remember that the source wrote a key of the raw dict *mapping*
+        more than once: the dict kept one value and one spelling of it, so
+        it no longer says what the source wrote."""
+        self._collapsed[id(mapping)] = mapping
+
+    def is_collapsed(self, mapping):
+        return self._collapsed.get(id(mapping)) is mapping
+
     def __len__(self):
-        return len(self._by_cell)
+        """The spellings recorded: atom cells and raw-dict keys."""
+        return len(self._by_cell) + sum(
+            len(keys) for _, keys in self._by_dict.values())
 
 
 def _reads_back_bare(name: str) -> bool:
@@ -705,8 +717,14 @@ class _ClauseReifier:
                 if key is not None
             }
             # The key is the bare str, which has no cell to spell it by, so
-            # its quote is recorded against the dict (``record_key``).
+            # its quote is recorded against the dict (``record_key``).  A key
+            # written twice (``{'a': 1, 'a': 2}``, or atom-mode
+            # ``{'a': 1, "a": 2}``) collapsed into one entry above; such a
+            # dict is marked so the renderer refuses it rather than write
+            # the collapsed form as if the source had said that.
             if self._spellings is not None:
+                if len(mapping) != sum(key is not None for key in node.keys):
+                    self._spellings.record_collapsed(mapping)
                 for key in node.keys:
                     if isinstance(key, ast.Constant) and type(key.value) is str:
                         quote = quote_of(self._quote_map, key)
@@ -757,6 +775,12 @@ class _ClauseReifier:
                 # constant is the compiler's, with no quote of its own; the
                 # source wrote this key BARE, and the renderer must too, or
                 # a quoted key turns this ``DictLiteral`` into a raw dict.
+                # Recorded ITEM-WIDE, unlike ``_bare_reference``'s lambda
+                # parameter (``item_wide=False``): a bare dict key is always
+                # the atom -- the loader refuses an undeclared one
+                # ("strict_atoms: undeclared atom 'foo' used as a dict key")
+                # -- so an item that loads vouches for bare ``foo`` as the
+                # atom everywhere in it.
                 if (self._spellings is not None
                         and self._spellings.cell_quote(args[0]) is None):
                     self._spellings.record(args[0], "")
@@ -1325,6 +1349,12 @@ class _ClauseRenderer:
         if isinstance(value, DictTerm):
             value = value.data   # a dict a rule's template built: the raw dict
         if isinstance(value, dict):
+            if self._spellings is not None and self._spellings.is_collapsed(value):
+                raise RenderError(
+                    "cannot render a dict literal whose source wrote a "
+                    "duplicate key: it reified to one entry, and rendering "
+                    "that would silently drop a literal"
+                )
             key_nodes, seen = [], set()
             for key in value:
                 key_node = self._raw_dict_key_ast(value, key)

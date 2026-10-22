@@ -1035,6 +1035,19 @@ class TestAtomSpellings:
         reify_source("p(a, {'a': 1}),", spellings=spellings)
         assert render_source(built, spellings) == "{'a': 1, \"a\": 2}"
 
+    def test_the_table_counts_dict_keys_too(self):
+        from clausal.reflection import AtomSpellings
+        spellings = AtomSpellings()
+        reify_source("p({'a': 1, 'b': 2}),", spellings=spellings)
+        assert len(spellings) == 2
+
+    def test_a_dict_literal_with_a_duplicate_key_is_not_rendered(self):
+        from clausal.reflection import AtomSpellings
+        spellings = AtomSpellings()
+        (fact,) = reify_source("p({'a': 1, 'a': 2}),", spellings=spellings)
+        with pytest.raises(RenderError, match="duplicate key"):
+            render_source(fact, spellings)
+
     def test_with_the_source_at_hand_an_unseen_atom_is_quoted(self):
         """With a table, a rule-built atom is bare only where the item spells
         that name bare (``m`` is the functor), quoted where the item spells

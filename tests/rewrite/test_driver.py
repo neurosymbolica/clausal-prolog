@@ -598,6 +598,17 @@ def test_an_atom_mode_item_spelling_one_key_two_ways_keeps_each(unnecessary_lamb
     assert "pass_through(q, {\"a\": 1}, {'a': 2}, R)" in result.text
 
 
+@pytest.mark.parametrize("src", [
+    "p(R) <- (pass_through(((X) <- q(X)), {'a': 1, 'a': 2}, R))\n",
+    "-double_quotes(atom)\n\np(R) <- (pass_through(((X) <- q(X)), {'a': 1, \"a\": 2}, R))\n",
+])
+def test_a_dict_literal_with_a_duplicate_key_is_refused(src, unnecessary_lambda_rules):
+    """The raw dict keeps the last value and one spelling of a key the
+    source wrote twice; re-rendering it would silently drop a literal."""
+    with pytest.raises(RewriteError, match="duplicate key"):
+        rewrite_source(src, unnecessary_lambda_rules)
+
+
 @pytest.mark.parametrize("clause", ["p(X) <- (m(X))\n", "p(X) <- (m(X), n(a, 'b', b))\n"])
 def test_a_rule_built_dict_keeps_its_key_kinds(clause, tmp_path):
     """A dict the rule's template builds arrives as a runtime ``DictTerm``

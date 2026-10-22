@@ -356,8 +356,12 @@ surface described in [docs/public-api.md](docs/public-api.md).
   it was read and single-quoted otherwise (never bare, which would read back
   as a `DictLiteral`), its string key as a string, and a `DictTerm` as its
   dict; the driver keeps a dict the rule passed through unchanged and checks
-  its keys' quotes on read-back. Pinned by `tests/rewrite/test_driver.py`
+  its keys' quotes on read-back. A dict literal whose source writes a key
+  twice (`{'a': 1, 'a': 2}`, or atom-mode `{'a': 1, "a": 2}`) reifies to one
+  entry, so re-rendering it is refused rather than written collapsed.
+  Pinned by `tests/rewrite/test_driver.py`
   (`test_a_passed_through_dict_keeps_its_key_spellings`,
+  `test_a_dict_literal_with_a_duplicate_key_is_refused`,
   `test_an_atom_mode_dict_keeps_its_key_spellings`,
   `test_an_atom_mode_item_spelling_one_key_two_ways_keeps_each`,
   `test_a_rule_built_dict_keeps_its_key_kinds`) and
