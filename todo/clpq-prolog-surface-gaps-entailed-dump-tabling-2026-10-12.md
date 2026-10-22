@@ -8,7 +8,10 @@ with the port, so they predate the port.
    **In .pl, `entailed(X > 0)` is always false.** The builtin (`builtins/constraints.py:268-285`)
    matches only node classes, and the Prolog front end passes it a `('>', X, 0)` tuple. The Python
    API `entailed('>', x, 0, t)` gives True.
-2. **`maximize/1`, `minimize/1` and `dump/3` do not exist on the Prolog surfaces.**
+2. **FIXED 2026-10-22 (commit 9b4e15fa)** the three are builtins on both solvers; pinned in
+   tests/test_clpq_prolog_surface_builtins.py (see also
+   todo/clpq-port-vs-sicstus-manual-23-gaps-2026-10-16.md items 2 and 3).
+   **`maximize/1`, `minimize/1` and `dump/3` do not exist on the Prolog surfaces.**
    `dump([X], [x], C)` leaks `type_error(callable, <function dump at ...>)`.
 3. **A tabled predicate loses its CLP(Q) constraints.** With `p(X) <- {X >= 1, X <= 5}` tabled,
    `(p(X), sup(X, S))` fails: the table copy drops the store.
