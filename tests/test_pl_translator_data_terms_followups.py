@@ -357,10 +357,10 @@ def test_relation_closures_run_under_call_n(tmp_path, frontend):
 #: else branch).  The translator has if_/3 built in and knows no
 #: library(reif); the native front end imports it, as ISO code must.  The
 #: expected lines are the native front end's (Scryer agrees on the rows it
-#: runs).  Not here, failing the same way before this branch: aggregate_all
-#: over member/2 and phrase/2 of a control construct on the translator,
-#: catch(fail, _, true) inside a disjunction and ignore/1 on both
-#: (todo/translator-meta-call-goal-gaps-2026-10-22.md).
+#: runs).  aggregate_all over member/2, phrase/2 of a control construct
+#: and catch(fail, _, true) are test_member_and_phrase_bodies_in_meta_and_
+#: data_positions' rows; ignore/1 is no engine predicate on either front
+#: end (todo/done/translator-meta-call-goal-gaps-2026-10-22.md).
 AUDIT_PROGRAM = """\
 :- use_module(library(lists)).
 w(T) :- writeq(T), nl.
@@ -435,10 +435,173 @@ def test_goal_positions_of_meta_predicates_stay_goals(tmp_path, frontend):
     assert r.stdout.splitlines() == AUDIT_EXPECTED, r.stdout
 
 
+#: The rows todo/translator-meta-call-goal-gaps-2026-10-22.md recorded
+#: (2026-10-22), each failing on the translator only:
+#:
+#: - ``member/2`` was renamed to the seam's ``in_``, which is also the class
+#:   of the seam's ``in`` operator node (fields position/left/right): as DATA
+#:   (``t(l13, X, member(X, L))``) or in a goal argument a builtin receives
+#:   as a term (aggregate_all/3's) the file did not load ("functor in_/3 was
+#:   constructed with 2 positional argument(s)").  Every other rename of the
+#:   reverse builtin map did the same harm as data: ``memberchk(a, L)``
+#:   printed ``in_check(a, L)``, ``time(foo)`` ``time_goal(foo)``,
+#:   ``zip(a, b)`` raised existence_error(procedure, zip_/2).  As data a
+#:   term keeps its own name now; ``member`` keeps it everywhere (the engine
+#:   has member/2).
+#: - phrase/2,3's first argument was emitted in the seam's GOAL spelling,
+#:   which phrase does not read as a grammar body: ``phrase((g, [c]), L)``
+#:   raised existence_error(procedure, g/3), ``phrase(([x] ; [y], []), L)``
+#:   type_error(callable, <class Or>), and ``|`` did not translate.  It is
+#:   the ISO body term now, as on the native front end.
+#: - A variable in the goal argument of a meta-call (``G = p(X),
+#:   findall(X, G, L)``, ``\\+ G``, ``forall(G, ...)``, ``once(G)``) or as a
+#:   body goal was emitted bare, which the seam refuses at load
+#:   (BareGoalVariableError).  It is call(G) now.
+#: - A grammar rule with a pushback and an atom head (``pb, [p] --> [q]``)
+#:   wrote the head as the atom ``'pb'``, which the seam's ``>>`` did not
+#:   read ("unsupported operand type(s) for >>").
+#: - In a grammar RULE body, an atom nonterminal (``r5 --> g``) was the
+#:   quoted atom ``'g'``, which a seam grammar body reads as the terminals
+#:   of its characters (``phrase(r5, L)`` gave ``L = [g]``); and a branch of
+#:   ``;`` went through the goal emitter, so ``[]`` there was the goal
+#:   ``[]/2`` and ``|`` did not translate.
+#: - ``catch(fail, _, true)`` did not load on either front end ("empty body
+#:   on Try"): the goal ``fail`` lowers to no statements, and the inline
+#:   catch put that empty list into a Python ``try`` body
+#:   (todo/done/catch-fail-goal-compiles-to-an-empty-try-2026-10-16.md).
+#: - library(clpz)'s ``X in 1..2 \\/ 5`` (no in_domain/3 fold) took the
+#:   keyword rename to ``in_`` too: list membership as a goal (``[]``), a
+#:   load error as a term.  And a qualified ``m:g`` as data was the call
+#:   ``m.g()``, and ``M:P`` with a variable module was refused.
+#:
+#: The expected lines are Scryer's (writeq/1), which both front ends match.
+META_GAPS_PROGRAM = """\
+:- use_module(library(dcgs)).
+:- use_module(library(lists)).
+:- use_module(library(iso_ext)).
+:- use_module(library(clpz)).
+w(T) :- writeq(T), nl.
+g --> [a], [b].
+k2(X) --> [X].
+pb, [p] --> [q].
+r1 --> [x] ; [y], [].
+r2 --> ([x] | [y]), {true}.
+r3 --> {X = 1 ; X = 2}, {X > 1}.
+r5 --> g.
+r6 --> call(g), k2(c).
+t(l13, X, member(X, [a, b, c])).
+p(1). p(2).
+kc(X) :- catch(fail, _, true), X = 1.
+d01 :- phrase((g, [c]), [a,b,c]), w(d01).
+d02 :- phrase(([x] ; [y], []), [y]), w(d02).
+d03 :- phrase(([x] | [y]), [y]), w(d03).
+d04 :- phrase(({X = 1}, [a]), [a]), w(X).
+d05 :- phrase((call(k2, z), g), [z,a,b]), w(d05).
+d06 :- phrase(("ab", [c]), [a,b,c]), w(d06).
+d07 :- phrase((pb, [p]), [q]), w(d07).
+d08 :- phrase(([], g ; []), [a, b]), w(d08).
+d09 :- phrase(((g ; [x]), {true}), [x], R), w(R).
+d10 :- findall(L, phrase(([a] ; [b]), L), Ls), w(Ls).
+d11 :- phrase(({X = 1 ; X = 2}, {X > 1}), []), w(X).
+d12 :- findall(X, phrase(({member(X, [a,b])}, [X]), [b]), L), w(L).
+d13 :- findall(X-Y, phrase((k2(X), k2(Y) ; [X]), [1, 2]), L), w(L).
+d14 :- phrase([], []), phrase("", []), w(d14).
+m01 :- w(member(a, [a, b, c])).
+m02 :- w(f(memberchk(a, [a]), time(foo), zip(a, b), fd_domain(a, b, c))).
+m03 :- G = member(Q, [1, 2]), findall(Q, G, L), w(L).
+m04 :- lists:member(a, [a]), w(m04).
+m05 :- findall(X, member(X, [1,2]), L), w(L).
+m06 :- findall(X, (member(X, [1,2,3]), \\+ memberchk(X, [2])), L), w(L).
+m07 :- X = [member(A, [b]), memberchk(A, [b])], A = b, w(X).
+m08 :- t(l13, X, G), findall(X, G, L), w(L).
+v01 :- G = p(Q), findall(Q, G, L), w(L).
+v02 :- G = p(1), \\+ \\+ G, w(v02).
+v03 :- G = p(Q), forall(G, Q > 0), w(v03).
+v04 :- G = p(Q), bagof(Q, G, L), w(L).
+v05 :- G = p(Q), G, w(Q).
+v06 :- G = p(Q), (G, Q > 1), w(Q).
+v07 :- G = member(Q, [a]), once(G), w(Q).
+v08 :- G = p(Q), catch(G, _, true), w(Q).
+v09 :- C = p, maplist(C, [1, 2]), w(v09).
+v10 :- G = p(Q), (fail ; G), w(Q).
+e01 :- phrase(r1, [y]), phrase(r2, [y]), phrase(r3, []), w(e01).
+e02 :- phrase(r5, L), w(L).
+e03 :- phrase(r6, L), w(L).
+c01 :- catch(fail, _, true) ; w(c01).
+c02 :- \\+ kc(_), w(c02).
+c03 :- catch((fail, w(no)), _, w(no)) ; catch(fail, e, true) ; w(c03).
+q01 :- findall(X, (X in 1..2 \\/ 5, label([X])), L), w(L).
+q02 :- G = (X in 1..2), call(G), findall(X, label([X]), L), w(L).
+q03 :- T = t(mm:append, m:f(x)), T = t(M:P, Q), w(M/P/Q).
+main :- d01, d02, d03, d04, d05, d06, d07, d08, d09, d10, d11, d12, d13, d14,
+    m01, m02, m03, m04, m05, m06, m07, m08,
+    v01, v02, v03, v04, v05, v06, v07, v08, v09, v10, e01, e02, e03,
+    c01, c02, c03, q01, q02, q03.
+"""
+
+META_GAPS_EXPECTED = [
+    'd01', 'd02', 'd03', '1', 'd05', 'd06', 'd07', 'd08', '[]',
+    '[[a],[b]]', '2', '[b]', '[1-2]', 'd14',
+    'member(a,[a,b,c])',
+    'f(memberchk(a,[a]),time(foo),zip(a,b),fd_domain(a,b,c))',
+    '[1,2]', 'm04', '[1,2]', '[1,3]',
+    '[member(b,[b]),memberchk(b,[b])]',
+    '[a,b,c]',
+    '[1,2]', 'v02', 'v03', '[1,2]', '1', '2', 'a', '1', 'v09', '1',
+    'e01', '[a,b]', '[a,b,c]',
+    'c01', 'c02', 'c03',
+    '[1,2,5]', '[1,2]', 'mm/append/(m:f(x))',
+]
+
+
+#: Rows with no Scryer answer to compare: Scryer has no aggregate_all/3
+#: (no library(aggregate)), and refuses ``\+`` in a grammar body
+#: (representation_error(dcg_body)) where Clausal's phrase runs it as
+#: ``\+ phrase(B, S0, _), S0 = S``.  The expected lines are the native
+#: front end's.
+META_GAPS_NATIVE_PROGRAM = """\
+:- use_module(library(dcgs)).
+:- use_module(library(lists)).
+w(T) :- writeq(T), nl.
+a1 :- aggregate_all(count, (member(A, [1,2,3]), A > 1), N), w(N).
+a2 :- aggregate_all(count, member(_, [a, b]), N), w(N).
+a3 :- phrase((\\+ [a], [b]), [b]), w(a3).
+main :- a1, a2, a3.
+"""
+
+META_GAPS_NATIVE_EXPECTED = ['2', '2', 'a3']
+
+
+@pytest.mark.parametrize("frontend", ["translator", "native"])
+@pytest.mark.parametrize("program, expected", [
+    (META_GAPS_PROGRAM, META_GAPS_EXPECTED),
+    (META_GAPS_NATIVE_PROGRAM, META_GAPS_NATIVE_EXPECTED),
+], ids=["scryer", "native"])
+def test_member_and_phrase_bodies_in_meta_and_data_positions(
+        tmp_path, frontend, program, expected):
+    (tmp_path / "gaps.pl").write_text(program)
+    env = dict(os.environ)
+    env["CLAUSAL_PL_FRONTEND"] = frontend
+    env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+    r = subprocess.run(
+        [sys.executable, "-m", "clausal", "gaps.pl"],
+        cwd=tmp_path, env=env, capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout.splitlines() == expected, r.stdout
+
+
 @pytest.mark.parametrize("source, emitted", [
     ("t :- if_(X = 1, (a, b), (c ; d)), p(X).", "if_(X is 1, (a, b), c or d)"),
     ("t :- freeze(V, (a, b)), p(V).", "freeze(V, ('a', 'b'))"),
-    ("t :- phrase((a, b), L), p(L).", "phrase(('a', 'b'), L)"),
+    # phrase/2's grammar body is the ISO body term the runtime phrase
+    # translates, not the seam's goal spelling (2026-10-22)
+    ("t :- phrase((a, b), L), p(L).", "phrase(','('a', 'b'), L)"),
+    ("t :- phrase(({a}, [b] ; [c]), L), p(L).",
+     "phrase(';'(','('{}'(a), [b]), [c]), L)"),
+    # a variable called as a goal is call(G) (the seam refuses a bare one)
+    ("t :- G = p(X), findall(X, G, L), q(L).", "findall(X, call(G), L)"),
+    ("t :- G = p, G.", "call(G)"),
+    ("t :- maplist(C, [1]), q(C).", "maplist(C, [1])"),
     ("t :- phrase([], L), p(L).", "phrase([], L)"),
     # a clause argument is a clause TERM, built as data
     ("t :- assertz((h :- a, b)).", "assertz(':-'('h', ','('a', 'b')))"),

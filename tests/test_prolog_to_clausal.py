@@ -540,8 +540,10 @@ class TestCatchArity:
     def test_two_arg_catch_still_maps_to_catch_error(self):
         # The 2-arg form is what clausal catch_error/2 forward-translates to;
         # the reverse leg must keep round-tripping it.
+        # A variable goal is call(G): the seam refuses a bare one in
+        # catch_error/2's goal position (2026-10-22).
         out = prolog_to_clausal("p(G, E) :- catch(G, E).\n")
-        assert "catch_error(G, E)" in out, out
+        assert "catch_error(call(G), E)" in out, out
 
 
 class TestPredicateCollidingAtomIsNotDeclaredPrivate:

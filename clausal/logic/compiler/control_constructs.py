@@ -1044,7 +1044,11 @@ def _compile_catch_impl(
     )
 
     try_block = ast.Try(
-        body=goal_body_stmts,
+        # A Goal that lowers to no statements (``fail``, which drops its
+        # continuation) runs nothing and so throws nothing; ``pass`` keeps
+        # the try well formed -- an empty body was "empty body on Try" at
+        # load (todo/done/catch-fail-goal-compiles-to-an-empty-try-...).
+        body=goal_body_stmts or [ast.Pass()],
         handlers=[handler],
         orelse=[],
         finalbody=[],

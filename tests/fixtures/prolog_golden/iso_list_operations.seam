@@ -150,11 +150,11 @@ test('not permutation: different lengths') <- (not is_permutation([1, 2], [1, 2,
 
 test('is_permutation: empty') <- (is_permutation([], []))
 
-test('in_ enumerates [1,2,3]') <- (findall(X, in_(X, [1, 2, 3]), L), '=='(L, [1, 2, 3]))
+test('in_ enumerates [1,2,3]') <- (findall(X, member(X, [1, 2, 3]), L), '=='(L, [1, 2, 3]))
 
-test('in_ with duplicates [a,b,a]') <- (findall(X, in_(X, [a, b, a]), L), '=='(L, [a, b, a]))
+test('in_ with duplicates [a,b,a]') <- (findall(X, member(X, [a, b, a]), L), '=='(L, [a, b, a]))
 
-test('in enumerates [1,2,3]') <- (findall(X, in_(X, [1, 2, 3]), L), '=='(L, [1, 2, 3]))
+test('in enumerates [1,2,3]') <- (findall(X, member(X, [1, 2, 3]), L), '=='(L, [1, 2, 3]))
 
 test('append split mode') <- (findall([X, Y], append(X, Y, [1, 2, 3]), L), '=='(L, [[[], [1, 2, 3]], [[1], [2, 3]], [[1, 2], [3]], [[1, 2, 3], []]]))
 

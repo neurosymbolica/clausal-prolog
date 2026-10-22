@@ -38,11 +38,11 @@
    "native_sha": "3e3141afd0c28b5c"
   },
   {
-   "key": "tests/iso_diff/allsol.pl::load::",
+   "key": "tests/iso_diff/allsol.pl::answers::t/3",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: functor in_/3 was constructed with 2 positional argument(s) but its class was registered with 3 field(s) ('position', 'left', 'right')",
-   "translator_sha": "5a918e78662eb2bd",
-   "native_sha": "c48b5b1a9776c846"
+   "note": "oracle: scryer prints the stored goals as native does. Translator: the file loads since 2026-10-22 (member/2 as data keeps its name); 2 of 39 rows differ because the translator stores body goals as data in its own lowered form: fail as false (f08) and X is E as eval_(E, X) (f38), as in arith.pl's row",
+   "translator_sha": "152402e80911fd7b",
+   "native_sha": "073b58d5e703c225"
   },
   {
    "key": "tests/iso_diff/arith.pl::answers::t/3",
@@ -52,31 +52,24 @@
    "native_sha": "55758b17495756c4"
   },
   {
-   "key": "tests/iso_diff/except.pl::load::",
+   "key": "tests/iso_diff/except.pl::answers::t/3",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: functor in_/3 was constructed with 2 positional argument(s) but its class was registered with 3 field(s) ('position', 'left', 'right')",
-   "translator_sha": "5a918e78662eb2bd",
-   "native_sha": "c48b5b1a9776c846"
+   "note": "oracle: scryer prints the stored goals as native does. Translator: the file loads since 2026-10-22 (member/2 and m:g as data); 5 of 60 rows differ because the translator stores body goals as data in its own lowered form: fail as false (x17, x43, x44) and X is E as eval_(E, X) (x11, x35)",
+   "translator_sha": "33c906d065d26290",
+   "native_sha": "7c65409a926895b3"
   },
   {
-   "key": "tests/iso_diff/lists.pl::load::",
+   "key": "tests/iso_diff/lists.pl::answers::add/3",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: member(X, L) written as DATA (t(l13, X, member(X, [a, b, c]))) is emitted as the seam's `X in L` node, which fails to load (functor in_/3 constructed with 2 positional arguments); before 2026-10-22 it stopped earlier, at the closure =(...) on line 61",
-   "translator_sha": "5a918e78662eb2bd",
-   "native_sha": "c48b5b1a9776c846"
+   "note": "oracle: scryer names (is)/2 as the context, as native does. Translator: the file loads since 2026-10-22 (member/2 as data); its X is E is eval_/2, so the instantiation_error's context is eval_/2",
+   "translator_sha": "75084a4dc7e71efe",
+   "native_sha": "b9fae87c905d004d"
   },
   {
    "key": "tests/iso_diff/prelude.pl::load::",
    "class": "a",
    "note": "oracle: scryer loads it, as native does. Translator: Cannot import <root>/tests/iso_diff/prelude.pl: line 19: Prolog functor '_' is underscore-led (variable-shaped), which has no role as a Clausal predicate or functor name (those are lo",
    "translator_sha": "9fecf30aa383b256",
-   "native_sha": "c48b5b1a9776c846"
-  },
-  {
-   "key": "tests/iso_l3/rulebase_s1.pl::load::",
-   "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: AttVar(_53) is not a callable goal: a bare variable appears in goal position in predicate goal_var/2. If a meta-call was intended, wrap it as call/1 (e.g. call(R)).",
-   "translator_sha": "d378089bd81083f3",
    "native_sha": "c48b5b1a9776c846"
   },
   {
@@ -129,11 +122,18 @@
    "native_sha": "c48b5b1a9776c846"
   },
   {
-   "key": "tests/iso_l3/s5/s5_clpz_exit.pl::load::",
+   "key": "tests/iso_l3/s5/s5_clpz_exit.pl::answers::case/2",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: it now reads the clpz operators, and refuses a bare variable goal (`catch(G, ...)`): BareGoalVariableError in err/2, the translator's call/1 rule",
-   "translator_sha": "52a61f07aafec20b",
-   "native_sha": "c48b5b1a9776c846"
+   "note": "oracle: scryer answers every row as native does. Translator: the file loads since 2026-10-22 (variable goals are call(G), clpz in/2 is 'in'/2); its library(clpz) is the legacy CLP(FD), whose labeling raises a Python ValueError on an unbounded domain ([4, inf]) where clpz raises instantiation_error",
+   "translator_sha": "9654bc5e50e8402b",
+   "native_sha": "0f4a1e66f9089f1b"
+  },
+  {
+   "key": "tests/iso_l3/s5/s5_clpz_exit.pl::answers::label_err/1",
+   "class": "a",
+   "note": "oracle: scryer answers instantiation_error, instantiation_error, type_error-list, as native. Translator: label/1 on an unbounded domain raises the legacy CLP(FD)'s Python ValueError, which err/2's catch of error(E, _) does not catch",
+   "translator_sha": "8e7eb732c3206b10",
+   "native_sha": "13b48b67609400de"
   },
   {
    "key": "README.md#L177::load::",

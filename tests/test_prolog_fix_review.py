@@ -291,19 +291,22 @@ class TestF036CutRejected:
 
 
 class TestF033QualifiedBuiltinNames:
-    """`lists:member(X, L)` must emit `lists.in_(X, L)` (the documented
-    mapping); `lists.member` does not exist on the Clausal side.  The
-    unqualified path already special-cases `member/2` into infix `X in L`,
-    so the reverse builtin map's `member` entry must point at `in_`.
+    """Qualified goals resolve builtin names like the unqualified path:
+    `lists:memberchk(X, L)` is `lists.in_check(X, L)`.  `member/2` keeps
+    its ISO name wherever a NAME is emitted (2026-10-22): the engine has
+    member/2, and its old spelling `in_` is also the class of the seam's
+    `in` operator node, so `in_(X, L)` built as a term (data, or
+    aggregate_all/3's goal) did not load.  A body goal `member(X, L)` is
+    still the seam's infix `X in L`.
     """
 
-    def test_qualified_member_maps_to_in_(self):
+    def test_qualified_member_keeps_its_iso_name(self):
         import ast
 
         out = prolog_to_clausal("r(X, L) :- lists:member(X, L).\n")
         ast.parse(out)
-        assert "lists.in_(X, L)" in out
-        assert "lists.member" not in out
+        assert "lists.member(X, L)" in out
+        assert "in_" not in out
 
     def test_qualified_memberchk_maps_to_in_check(self):
         out = prolog_to_clausal("r(X, L) :- lists:memberchk(X, L).\n")
@@ -320,8 +323,9 @@ class TestF033QualifiedBuiltinNames:
         out = prolog_to_clausal("r(X, L) :- member(X, L).\n")
         assert "X in L" in out
 
-    def test_member_in_metacall_position_maps_to_in_(self):
+    def test_member_in_metacall_position_keeps_its_iso_name(self):
         # member/2 inside findall goes through _emit_term, not the infix
-        # special case; it must also land on a predicate that exists.
+        # special case; it lands on the engine's member/2, not on `in_`
+        # (the seam's operator node class when built as a term).
         out = prolog_to_clausal("r(L, Xs) :- findall(X, member(X, L), Xs).\n")
-        assert "in_(X, L)" in out
+        assert "findall(X, member(X, L), Xs)" in out

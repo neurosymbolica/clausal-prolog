@@ -70,15 +70,18 @@ class PrologTranslationError(Exception):
 # prolog_name -> clausal_name, built from BUILTIN_NAME_MAP
 
 # Prolog builtins whose Clausal predicate name cannot be derived from
-# BUILTIN_NAME_MAP alone.  Bare `member/2` in goal position is rendered as
-# infix `X in L`, so BUILTIN_NAME_MAP has no clausal-side name for it; but
-# wherever a predicate *name* is required (qualified goals like
-# `lists:member(X, L)`, metacall arguments like `findall(X, member(X, L), Xs)`)
-# the underlying Clausal builtin is `in_/2` (F033).  The engine now also
-# registers `member/2` and `memberchk/2` under their ISO names; both renames
-# stay so the translation keeps the Clausal spelling of membership.
+# BUILTIN_NAME_MAP alone.  ``memberchk/2`` keeps the Clausal spelling of
+# membership, ``in_check/2``, wherever it is called (F033).  ``member/2`` is
+# NOT renamed (2026-10-22): its Clausal spelling ``in_`` is also the class of
+# the seam's ``in`` operator node (fields position/left/right), so a
+# ``member(X, L)`` built as a term -- data, or the goal argument of a builtin
+# that receives it as a term, aggregate_all/3's -- was that node, and the
+# file did not load ("functor in_/3 was constructed with 2 positional
+# argument(s)").  The engine has member/2 under its ISO name; a body goal
+# ``member(X, L)`` is still the seam's infix ``X in L``.  Renames apply to
+# called names only: as DATA every term keeps its own name
+# (``_emit_compound``).
 _REVERSE_OVERRIDES: dict[str, str] = {
-    "member": "in_",
     "memberchk": "in_check",
 }
 
@@ -836,6 +839,20 @@ _NIL_GOAL_ARGS: dict[str, tuple[int, ...]] = {
                  "partition", "assert", "asserta", "assertz", "retract",
                  "retractall", "clause")}
 
+def _is_goal_arity(name: str, arity: int) -> bool:
+    """Whether ``name/arity`` is a meta-call whose _NIL_GOAL_ARGS positions
+    ARE goals: a special form or goal control at that arity (by its ``.pl``
+    name: ``catch/2`` is Clausal's catch_error/2, ``time/1`` its
+    time_goal/1), aggregate_all/3, or call/N.  _META_GOAL_ARGS keys on the
+    name alone, and ``time(H, M, S, T)`` is a date term, not time/1."""
+    from clausal.logic.special_forms import (  # noqa: PLC0415
+        GOAL_CONTROLS, GOAL_POSITIONS,
+    )
+    return (name == "call" and arity >= 1) or (name, arity) in GOAL_POSITIONS \
+        or (name, arity) in GOAL_CONTROLS \
+        or (name, arity) in (("catch", 2), ("time", 1), ("aggregate_all", 3))
+
+
 #: library(reif)'s if_/3, which the translator has built in (without
 #: library(reif)): its condition and both branches are goals.  Not in
 #: _META_GOAL_ARGS, which tests/test_meta_goal_tables_agree.py holds to
@@ -843,17 +860,26 @@ _NIL_GOAL_ARGS: dict[str, tuple[int, ...]] = {
 _REIF_GOAL_ARGS: dict[str, tuple[int, ...]] = {"if_": (0, 1, 2)}
 
 #: The arguments emitted as GOALS when their meta-call is a goal: every
-#: goal, closure or DCG-body position of _META_GOAL_ARGS except the
-#: database builtins' clause argument (a clause TERM, built as data), and
-#: if_/3's.  A control construct there keeps the seam's goal spelling
-#: (``(a, b)``, ``a or b``, ``X is 1``); as DATA it would be the ISO cell,
-#: which the seam compiles as a call of ``','/2`` rather than inline.
+#: goal or closure position of _META_GOAL_ARGS except the database
+#: builtins' clause argument (a clause TERM, built as data), and if_/3's.
+#: A control construct there keeps the seam's goal spelling (``(a, b)``,
+#: ``a or b``, ``X is 1``); as DATA it would be the ISO cell, which the seam
+#: compiles as a call of ``','/2`` rather than inline.  Not phrase/2,3's
+#: grammar body: see _DCG_BODY_ARGS.
 _GOAL_EMIT_ARGS: dict[str, tuple[int, ...]] = {
     **{f: ix for f, ix in _META_GOAL_ARGS.items()
        if f not in ("assert", "asserta", "assertz", "retract", "retractall",
-                    "clause")},
+                    "clause", "phrase")},
     **_REIF_GOAL_ARGS,
 }
+
+#: The GRAMMAR BODY arguments (phrase/2,3's first), emitted as the ISO body
+#: term the runtime phrase translates (``_emit_dcg_body_term``), as the
+#: native front end passes it (2026-10-22).  In the seam's goal spelling
+#: phrase did not read it as a grammar body: ``phrase((g, [c]), L)`` raised
+#: existence_error(procedure, g/3), ``phrase(([x] ; [y], []), L)``
+#: type_error(callable, <class Or>).
+_DCG_BODY_ARGS: dict[str, tuple[int, ...]] = {"phrase": (0,)}
 
 _CONTROL_FUNCTORS = frozenset({",", ";", "->", "*->", "\\+", ":-", "|"})
 
@@ -1216,6 +1242,10 @@ class _PrologToClausal:
         # existence_error(procedure, []/0).
         if self._is_nil(goal):
             return "call([])"
+        # A variable goal is call(G) (ISO 7.6.2); the seam refuses a bare
+        # variable in goal position (BareGoalVariableError at load).
+        if isinstance(goal, PVar):
+            return f"call({self._emit_term(goal)})"
         # D21: the forward translator's in_domain/3 type dispatch folds back.
         folded = self._fold_in_domain(goal)
         if folded is not None:
@@ -1343,10 +1373,13 @@ class _PrologToClausal:
             if self._is_nil(base) or (isinstance(base, PCompound)
                                       and base.functor == "[]"):
                 raise self._nil_head_refused()
-            parts = ", ".join(
-                self._emit_term(p) for p in self._flatten_conjunction(rule.head)
-            )
-            head = f"({parts})"
+            # The nonterminal is a HEAD (``pb()``, not the atom ``'pb'``,
+            # which the seam's ``>>`` did not read as one: "unsupported
+            # operand type(s) for >>"); the pushback is its terminal list.
+            parts = [self._emit_head(base)] + [
+                self._emit_term(p)
+                for p in self._flatten_conjunction(rule.head.args[1])]
+            head = "(" + ", ".join(parts) + ")"
         else:
             head = self._emit_head(rule.head)
         body = self._emit_dcg_body(rule.body)
@@ -1392,12 +1425,32 @@ class _PrologToClausal:
         if isinstance(goal, PCompound) and goal.functor == "\\+" and len(goal.args) == 1:
             inner = self._emit_dcg_goal(goal.args[0])
             return f"not {inner}"
-        # Disjunction in DCG
-        if isinstance(goal, PCompound) and goal.functor == ";":
-            return self._emit_disjunction(goal)
+        # Disjunction in DCG: each branch is a grammar body (``|`` is
+        # ``;``, ISO 7.14.2).  Through the goal emitter a branch's terminal
+        # list ``[]`` was the goal ``call([])`` (existence_error(procedure,
+        # []/2) for ``r --> [x] ; [y], []``), and ``|`` did not translate.
+        if (isinstance(goal, PCompound) and goal.functor in (";", "|")
+                and len(goal.args) == 2 and goal.functor not in self._user_ops):
+            left, right = goal.args
+            if isinstance(left, PCompound) and left.functor in ("->", "*->"):
+                return self._emit_disjunction(goal)     # refused
+            def branch(b: PTerm) -> str:
+                text = self._emit_dcg_body(b)
+                return (f"({text})" if len(self._flatten_conjunction(b)) > 1
+                        else text)
+            return f"({branch(left)} or {branch(right)})"
         # Regular non-terminal
         if isinstance(goal, PCompound):
             return self._emit_compound(goal, goal=True)
+        # An atom nonterminal ``r --> s.`` is the call ``s()``: the quoted
+        # atom ``'s'`` the term emitter writes is, in a seam grammar body,
+        # the TERMINALS of its characters (``phrase(r, L)`` answered
+        # ``L = [s]``, and ``[r, '1']`` for ``r1``).  ``true``/``fail``
+        # keep the seam's truth values; ``!`` and ``[]`` are the term
+        # emitter's (refused / the empty terminal list).
+        if (isinstance(goal, PAtom) and not self._is_nil(goal)
+                and goal.name not in ("!", "true", "fail", "false")):
+            return f"{self._predicate_name(goal.name, 0)}()"
         return self._emit_term(goal)
 
     # ── Directives ───────────────────────────────────────────────────
@@ -2027,9 +2080,22 @@ class _PrologToClausal:
         args = term.args
 
         # D21, in TERM position too (a meta-call's goal argument), like `#=`.
-        folded = self._fold_in_domain(term)
-        if folded is not None:
-            return folded
+        # Not as DATA: ``G = (X in 1..2)`` is the term ``X in 1..2``.
+        if not self._is_data(goal, called):
+            folded = self._fold_in_domain(term)
+            if folded is not None:
+                return folded
+
+        # library(clpz)'s in/2 (unfolded: a domain with ``\/``, or not
+        # known at translation time) is the quoted builtin ``'in'(X, D)``
+        # in every position.  Through the keyword rename it was ``in_``,
+        # the class of the seam's ``in`` operator node: as a goal it was
+        # LIST membership (``X in 1..2 \/ 5`` failed), and built as a term
+        # it did not load ("functor in_/3 was constructed with 2 positional
+        # argument(s)").
+        if functor == "in" and len(args) == 2 and functor not in self._user_ops \
+                and functor not in self._own_names:
+            return self._emit_quoted_op_term(term)
 
         # Control constructs in term/metacall position (e.g. inside findall's
         # goal argument) are rejected the same way as in goal position — the
@@ -2125,23 +2191,31 @@ class _PrologToClausal:
             right = self._emit_term(args[1])
             return f"unpack({left}, {right})"
 
+        # As DATA ``M:G`` is the cell ``':'(M, G)``, as the native front end
+        # builds it (``t(x36, E, catch(call(foo:bar), E, true))``): the
+        # qualified call ``foo.bar()`` built as a term did not load (a
+        # TypeError in the functor lookup), and with a variable module
+        # (``T = t(M:P)``) the functor was refused.
+        if functor == ":" and len(args) == 2 and self._is_data(goal, called):
+            return self._emit_quoted_op_term(term)
+
         # Module-qualified goal: Module:Goal → Module.Goal(...) (F033).
         if functor == ":" and len(args) == 2 and isinstance(args[0], PAtom):
             module = args[0].name
-            goal = args[1]
+            qualified = args[1]
             # ``m:foo/1`` -- a qualified predicate indicator, or any operator
             # term after the colon -- names no predicate: it is the data cell
             # ``':'(m, '/'(foo, 1))``.  (``_predicate_name`` refused it.)
-            if (isinstance(goal, PCompound)
-                    and not goal.functor.isidentifier()):
+            if (isinstance(qualified, PCompound)
+                    and not qualified.functor.isidentifier()):
                 return self._emit_quoted_op_term(term)
-            if isinstance(goal, PCompound):
-                goal_name = self._predicate_name(goal.functor,
-                                                 len(goal.args))
-                inner = ", ".join(self._emit_term(a) for a in goal.args)
+            if isinstance(qualified, PCompound):
+                goal_name = self._predicate_name(qualified.functor,
+                                                 len(qualified.args))
+                inner = ", ".join(self._emit_term(a) for a in qualified.args)
                 return f"{module}.{goal_name}({inner})"
-            if isinstance(goal, PAtom):
-                return f"{module}.{goal.name}()"
+            if isinstance(qualified, PAtom):
+                return f"{module}.{qualified.name}()"
 
         # Check user-defined operator mappings
         if functor in self._user_ops:
@@ -2311,8 +2385,10 @@ class _PrologToClausal:
                 return f"-({operand})"
             return f"{clausal_op}{operand}"
 
-        # Regular compound: functor(args) → functor(args), name unchanged
-        name = self._predicate_name(functor, len(args))
+        # Regular compound: functor(args) → functor(args); a called name
+        # through the builtin renames, a DATA term under its own name.
+        name = self._predicate_name(functor, len(args),
+                                    rename=not self._is_data(goal, called))
         if not goal and args and name == functor and _is_plain_atom_name(name):
             self._data_functors.setdefault(name, set()).add(len(args))
         if not args:
@@ -2335,15 +2411,23 @@ class _PrologToClausal:
         ``_emit_goal_arg``; in a head or as data they are terms."""
         nil_ix = _NIL_GOAL_ARGS.get(functor, ()) if called else ()
         goal_ix = _GOAL_EMIT_ARGS.get(functor, ()) if called else ()
-        emitted = [self._emit_goal_arg(a, nil_is_goal=i in nil_ix)
+        dcg_ix = _DCG_BODY_ARGS.get(functor, ()) if called else ()
+        # A program's own time/1 is no meta-call (tests/
+        # test_pl_translator_honest.py::TestNoStaleRenames).
+        var_goal = (_is_goal_arity(functor, len(args))
+                    and functor not in self._own_names)
+        emitted = [self._emit_goal_arg(a, nil_is_goal=i in nil_ix,
+                                       var_is_goal=i in nil_ix and var_goal)
                    if i in goal_ix or i in nil_ix
+                   else self._emit_dcg_body_term(a) if i in dcg_ix
                    else self._emit_term(a) for i, a in enumerate(args)]
         if (functor == "test" and len(args) == 2
                 and isinstance(args[1], PAtom)):
             emitted[1] = _quote_atom(args[1].name)
         return ", ".join(emitted)
 
-    def _emit_goal_arg(self, term: PTerm, nil_is_goal: bool = True) -> str:
+    def _emit_goal_arg(self, term: PTerm, nil_is_goal: bool = True,
+                       var_is_goal: bool | None = None) -> str:
         """A meta-call's goal argument (``catch(G, ...)``, ``findall(_, G,
         _)``): a term, except that a ``[]`` called as a goal -- the whole
         argument, or a conjunct, disjunct or negated goal of it -- is
@@ -2357,33 +2441,64 @@ class _PrologToClausal:
         (``findall(_, catch([], _, _), _)``) is treated the same way.
 
         *nil_is_goal* False: a closure or DCG-body argument (maplist's,
-        phrase's), where ``[]`` is the empty list; the rest is the same."""
+        phrase's), where ``[]`` is the empty list; the rest is the same.
+
+        *var_is_goal* (default: *nil_is_goal*): a variable there is the goal
+        ``call(V)``; False where the meta-call's arity is not one whose
+        argument is a goal (``time/4`` is no time/1)."""
+        if var_is_goal is None:
+            var_is_goal = nil_is_goal
         if self._is_nil(term):
             return "call([])" if nil_is_goal else self._emit_term(term)
+        # A variable called as a goal is call(G), as in a clause body: bare,
+        # the seam refused it at load (``G = p(X), findall(X, G, L)``,
+        # BareGoalVariableError).  A closure stays the variable call/N
+        # extends.
+        if isinstance(term, PVar) and var_is_goal:
+            return f"call({self._emit_term(term)})"
         if not isinstance(term, PCompound):
             return self._emit_term(term)
         f, a = term.functor, term.args
         if f == "," and len(a) == 2:
             return "(" + ", ".join(
-                self._emit_goal_arg(p, nil_is_goal)
+                self._emit_goal_arg(p, nil_is_goal, var_is_goal)
                 for p in self._flatten_conjunction(term)) + ")"
         if f == ";" and len(a) == 2 and f not in self._user_ops and not (
                 isinstance(a[0], PCompound)
                 and a[0].functor in ("->", "*->")):
-            return (f"{self._emit_goal_arg(a[0], nil_is_goal)} or "
-                    f"{self._emit_goal_arg(a[1], nil_is_goal)}")
+            return (
+                f"{self._emit_goal_arg(a[0], nil_is_goal, var_is_goal)} or "
+                f"{self._emit_goal_arg(a[1], nil_is_goal, var_is_goal)}")
         if f == "|" and len(a) == 2 and nil_is_goal \
                 and self._has_nil_goal(term) and not (
                 isinstance(a[0], PCompound)
                 and a[0].functor in ("->", "*->")):
-            return (f"({self._emit_goal_arg(a[0], nil_is_goal)} or "
-                    f"{self._emit_goal_arg(a[1], nil_is_goal)})")
+            return (
+                f"({self._emit_goal_arg(a[0], nil_is_goal, var_is_goal)} or "
+                f"{self._emit_goal_arg(a[1], nil_is_goal, var_is_goal)})")
         if f == "\\+" and len(a) == 1 and f not in self._user_ops:
             if (isinstance(a[0], PCompound) and a[0].functor == "^"
                     and len(a[0].args) == 2):
                 self._refuse_caret_goal()
-            return f"not {self._emit_goal_arg(a[0], nil_is_goal)}"
+            return f"not {self._emit_goal_arg(a[0], nil_is_goal, var_is_goal)}"
         return self._emit_compound(term, called=True)
+
+    def _emit_dcg_body_term(self, term: PTerm) -> str:
+        """A grammar body passed to phrase/2,3, as the ISO term the runtime
+        phrase translates (ISO 7.14.2, ``dcg._dcg_translate``): ``,``,
+        ``;``, ``|`` and ``\\+`` are their ISO cells over grammar bodies,
+        ``{G}`` is ``'{}'(G)`` with G a goal term (call/1 runs it), and a
+        list, string or nonterminal (``call(G, A)`` is call//N) is the term
+        itself.  ``->`` is refused by the compound emitter, as everywhere
+        (the translator is cut-free)."""
+        if isinstance(term, PCurly):
+            return f"{_quote_atom('{}')}({self._emit_term(term.body)})"
+        if isinstance(term, PCompound) and term.functor not in self._user_ops \
+                and ((term.functor in (",", ";", "|") and len(term.args) == 2)
+                     or (term.functor == "\\+" and len(term.args) == 1)):
+            inner = ", ".join(self._emit_dcg_body_term(a) for a in term.args)
+            return f"{_quote_atom(term.functor)}({inner})"
+        return self._emit_term(term)
 
     def _has_nil_goal(self, term: PTerm) -> bool:
         """Whether *term*, read as a goal, calls ``[]`` -- itself, or through
@@ -2544,7 +2659,8 @@ class _PrologToClausal:
 
     # ── Name conversion helpers ──────────────────────────────────────
 
-    def _predicate_name(self, prolog_name: str, arity: int | None = None) -> str:
+    def _predicate_name(self, prolog_name: str, arity: int | None = None,
+                        rename: bool = True) -> str:
         """Convert a Prolog predicate/functor name to its Clausal spelling.
 
         Clausal predicate names are lowercase like Prolog's, so an unmapped
@@ -2554,8 +2670,14 @@ class _PrologToClausal:
 
         ``arity`` disambiguates Prolog names shared by Clausal predicates of
         different arity (``catch/3`` vs ``catch_error/2``); pass it wherever
-        the call site knows it."""
-        if arity is not None and prolog_name not in self._own_names:
+        the call site knows it.
+
+        *rename* False: the name of a DATA term, which keeps its Prolog
+        spelling -- the builtin renames below name the predicate a CALL
+        runs (as data ``time(foo)`` printed ``time_goal(foo)`` and
+        ``zip(a, b)`` raised existence_error(procedure, zip_/2))."""
+        if (rename and arity is not None
+                and prolog_name not in self._own_names):
             override = _REVERSE_ARITY_OVERRIDES.get((prolog_name, arity))
             if override is not None:
                 return override
@@ -2568,7 +2690,7 @@ class _PrologToClausal:
         # max_/2).  The expression emitter keeps evaluables by itself;
         # float/1 is the exception here, being ISO's type test too, which
         # Clausal spells float_/1.
-        if prolog_name not in self._own_names and not (
+        if rename and prolog_name not in self._own_names and not (
                 prolog_name != "float" and _is_evaluable(prolog_name, arity)):
             clausal_name = _reverse_builtin_map().get(prolog_name)
             if clausal_name is not None:

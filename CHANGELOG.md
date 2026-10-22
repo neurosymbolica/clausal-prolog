@@ -91,6 +91,46 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `tests/test_prolog_constants_prelude.py`. Still open: the exported
   declaration pairs the base magnitude with the declared unit
   (`todo/exported-constant-declaration-carries-the-base-magnitude-with-the-declared-unit-2026-10-22.md`).
+
+- **The `.pl` translator runs `member/2` in a meta-call and as data,
+  phrase/2,3 of a control construct, and variable goals** (2026-10-22;
+  `CLAUSAL_PL_FRONTEND=translator`). `member/2` was renamed to the seam's
+  `in_`, also the class of its `in` operator node, so a `member(X, L)`
+  built as a term (data, as in `t(l13, X, member(X, L))`, or
+  aggregate_all/3's goal) did not load ("functor in_/3 was constructed
+  with 2 positional argument(s)"); it keeps its ISO name now (`lists:member`
+  is `lists.member`). As DATA no term takes a builtin rename any more:
+  `memberchk(a, L)` printed `in_check(a, L)`, `time(foo)` `time_goal(foo)`,
+  and `zip(a, b)` raised existence_error(procedure, zip_/2). phrase/2,3's
+  grammar body is the ISO body term the runtime phrase translates, as on
+  the native front end: `phrase((g, [c]), L)` raised
+  existence_error(procedure, g/3), `phrase(([x] ; [y], []), L)`
+  type_error(callable, ...), and `|` did not translate. A variable called
+  as a goal (`G = p(X), findall(X, G, L)`, `\+ G`, a body goal `G`) is
+  `call(G)`; bare, the seam refused it at load. In a grammar rule an atom
+  nonterminal (`r --> g`) read as the terminals of its characters
+  (`phrase(r, L)` gave `L = [g]`), a `;` branch's `[]` was the goal `[]/2`,
+  and a pushback rule with an atom head (`pb, [p] --> [q]`) did not load.
+  library(clpz)'s `in/2` with a domain that does not fold to in_domain/3
+  (`X in 1..2 \/ 5`) went through the keyword rename to `in_` as well: as
+  a goal it was LIST membership (`findall(X, (X in 1..2 \/ 5, label([X])),
+  L)` gave `[]`), and as a term it did not load; it is the builtin
+  `'in'/2` now, and `G = (X in 1..2)` stays that term. A qualified `m:g`
+  as DATA is the cell `m:g` (it was the call `m.g()`, which did not load
+  inside a fact). With these, `tests/iso_diff/{allsol,except,lists}.pl`,
+  `tests/iso_l3/rulebase_s1.pl` and `tests/iso_l3/s5/s5_clpz_exit.pl` load
+  on the translator (pl_parity re-pinned: 5 load rows gone, 5 answer rows
+  classed). In the seam, a quoted `'{}'(T)` in term position builds the ISO curly
+  cell `{T}` (it was existence_error(procedure, {}/1)). Pinned against
+  Scryer on both front ends by
+  `tests/test_pl_translator_data_terms_followups.py::test_member_and_phrase_bodies_in_meta_and_data_positions`.
+
+- **`catch(fail, C, R)` loads** (2026-10-22, both `.pl` front ends and the
+  seam). The goal `fail` lowers to no statements and the inline catch put
+  that empty list into a Python `try` body: "ValueError: empty body on
+  Try" at load. The try body is `pass` now; the catch fails, as in Scryer.
+  Pinned by the same test's `c01`-`c03` rows.
+
 - **The Python-bridge audit of a module importing through listless
   packages finishes** (2026-10-22). A listless package `__init__.seam`
   exports what it re-imports (rulings E1/M3), read from its sources;

@@ -272,10 +272,12 @@ def _implicit_functors_active(namespace: "dict | None") -> bool:
 #: can be declared (``-private([':-'])`` declares the ATOM, and
 #: ``-private([':-'(_, _)])`` is no signature), so that in term position the
 #: quoted ``':-'(H, B)`` can only be the cell ``(':-', H, B)`` (see
-#: ``_goal_cell_functor``): ISO's clause and control punctuation, and
+#: ``_goal_cell_functor``): ISO's clause and control punctuation, the curly
+#: term ``'{}'(T)`` (``{T}``: a grammar body's ``{G}``, which the ``.pl``
+#: translator passes to phrase/2,3 as that cell, 2026-10-22), and
 #: library(clpz)'s domain ``Lo..Hi``.
 QUOTED_CELL_FUNCTORS = frozenset({
-    ":-", "-->", "?-", ",", ";", "|", "->", "*->", "\\+", ".."})
+    ":-", "-->", "?-", ",", ";", "|", "->", "*->", "\\+", "{}", ".."})
 
 #: The comparison, unification and clpz relation builtins: a quoted
 #: ``'<'(A, B)`` in term position already builds the cell through the

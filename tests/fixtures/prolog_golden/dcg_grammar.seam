@@ -8,13 +8,13 @@ noun_phrase() >> (([the, dog] or ([the, cat] or [a, bird])))
 
 verb_phrase() >> (([chases] or ([sees] or [likes])))
 
-sentence() >> ('noun_phrase', 'verb_phrase', 'noun_phrase')
+sentence() >> (noun_phrase(), verb_phrase(), noun_phrase())
 
 digit(DIGIT) >> ([DIGIT], {DIGIT >= 0}, {DIGIT <= 9})
 
-ab() >> ([a], 'ab')
+ab() >> ([a], ab())
 
-ab() >> ([b], 'ab')
+ab() >> ([b], ab())
 
 ab() >> ([])
 

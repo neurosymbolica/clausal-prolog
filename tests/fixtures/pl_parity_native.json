@@ -2923,7 +2923,7 @@
   "tests/_scryer_end_module.pl": "c8887292f4d345c1",
   "tests/_scryer_toplevel.pl": "0b18ae392ae4d276",
   "tests/fixtures/prolog_golden/clpfd_queens.pl": "553626386ff4dec0",
-  "tests/fixtures/prolog_golden/dcg_grammar.pl": "62bb11ead8864c26",
+  "tests/fixtures/prolog_golden/dcg_grammar.pl": "65331c4cd2a50d8f",
   "tests/fixtures/prolog_golden/edge_graph.pl": "717ced6f560ae378",
   "tests/fixtures/prolog_golden/fibonacci.pl": "c0b4495c90e86f99",
   "tests/fixtures/prolog_golden/iso_arithmetic.pl": "832ee52afa302b31",
@@ -2933,16 +2933,16 @@
   "tests/fixtures/prolog_golden/iso_type_checking.pl": "6665a46b7bd03131",
   "tests/fixtures/prolog_golden/iso_unification.pl": "b8417820af77b62e",
   "tests/fixtures/prolog_golden/meta_test.pl": "302440ea3baab24b",
-  "tests/iso_diff/allsol.pl": "ad2e75998221a004",
+  "tests/iso_diff/allsol.pl": "c43fc8370f03ff9c",
   "tests/iso_diff/arith.pl": "c4fe5264a522e8a3",
   "tests/iso_diff/atoms.pl": "53ca738d8b66fff7",
   "tests/iso_diff/between.pl": "cf19fc2f5a764847",
-  "tests/iso_diff/except.pl": "ad2e75998221a004",
-  "tests/iso_diff/lists.pl": "ad2e75998221a004",
+  "tests/iso_diff/except.pl": "2a8606f4a2d04d77",
+  "tests/iso_diff/lists.pl": "551a457f09525023",
   "tests/iso_diff/prelude.pl": "57ab34f31ac2ad2c",
   "tests/iso_diff/sorting.pl": "596a108ec03a80a2",
   "tests/iso_diff/terms.pl": "f2a6df47733d5a80",
-  "tests/iso_l3/rulebase_s1.pl": "47264e04f3086524",
+  "tests/iso_l3/rulebase_s1.pl": "6a5d664f89f1ec95",
   "tests/iso_l3/s2/native/s2lib/facts.pl": "6129058970db2fc3",
   "tests/iso_l3/s2/native/s2main.pl": "8a77f656d55fb5fe",
   "tests/iso_l3/s2/oracle/s2lib/shapes.pl": "121e4c3673294544",
@@ -2951,6 +2951,6 @@
   "tests/iso_l3/s3/native/s3pkg/kinds.pl": "7c52dcaf578972b9",
   "tests/iso_l3/s4/s4_exit.pl": "2d5ba653e883ff9d",
   "tests/iso_l3/s5/s5_clpq_exit.pl": "fec5cee1e7e944ec",
-  "tests/iso_l3/s5/s5_clpz_exit.pl": "ae033f84573864bd"
+  "tests/iso_l3/s5/s5_clpz_exit.pl": "2dcd2b3b1f2be494"
  }
 }
