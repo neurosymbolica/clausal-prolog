@@ -120,8 +120,11 @@ class Tableau:
         Variables eliminated by equality constraints.
         ``parametric[x] = ({j: coeff_j, …}, constant)`` means
         ``x = Σ coeff_j·var_j + constant``.
-    diseqs : list[tuple[int, int]]
-        Passive disequality pairs.
+    diseqs : list[tuple[str, dict[int, Fraction], Fraction]]
+        Passive disequalities ``(tag, coeffs, constant)``, meaning
+        ``Σ coeffs[v]*v =\\= constant``; *tag* is ``'strict'`` for the
+        strict half of ``<`` (the expression is also ``=<`` the constant),
+        else ``'linear'``.  See :meth:`_check_diseqs`.
     _var_map : dict[int, Var]
         Maps tableau variable IDs → original ``Var`` objects.
     """
@@ -133,7 +136,7 @@ class Tableau:
         self.hi: dict[int, Fraction | None] = {}
         self.assign: dict[int, Fraction] = {}
         self.parametric: dict[int, tuple[dict[int, Fraction], Fraction]] = {}
-        self.diseqs: list[tuple[int, int]] = []
+        self.diseqs: list[tuple[str, dict[int, Fraction], Fraction]] = []
         self._next_slack: int = 0
         self._var_map: dict[int, Var] = {}
 
@@ -875,8 +878,15 @@ class Tableau:
         The face F, the store's polyhedron cut by the hyperplane, is
         convex; a finite union of hyperplanes covers it only when one of
         them contains it, so it is removed exactly when some disequality's
-        expression is constant at its value over F (or F is empty).  An LP
-        pair per disequality, screened by the value at a point of F.
+        expression is constant at its value over F (or F is empty).
+
+        Cost: a copy of the tableau, the equality pivoted in, and up to two
+        LPs per disequality whose value at a point of F is its constant
+        (the others are screened out without an LP).  It runs only when the
+        bound is reached exactly; then, on a store with many rows and
+        disequalities, ``entailed`` costs two to three and a half times
+        what it did (a 100-variable chain with 100 disequalities: 532 ms
+        against 265 ms in review).  A store of bounds alone stays cheap.
         """
         if not self.diseqs:
             return False
@@ -1049,17 +1059,26 @@ def _ensure_q_for_expr(expr: Any, trail: Trail) -> None:
 # ── Linearization ────────────────────────────────────────────────────────────
 
 
-def _float_fraction(value: float) -> Fraction:
-    """A finite float as its exact Fraction.  NaN raises
-    ``evaluation_error(undefined)`` and an infinity
-    ``evaluation_error(float_overflow)``, as the port's
-    ``float_to_rational`` does (and a non-finite Decimal, ruling R19); they
-    raised a bare Python ValueError / OverflowError.  A finite float stays
-    exact here (the port reads it through a continued fraction): that
-    choice is todo/clpq-silently-accepts-floats-and-real-variables."""
-    if not math.isfinite(value):
-        from clausal.logic.clpq.arithmetic import float_to_rational  # noqa: PLC0415
-        float_to_rational(value)   # raises
+def _exact_number(value: Any) -> Fraction:
+    """An engine number (int, Fraction, float or Decimal) as a Fraction.
+
+    NaN raises ``evaluation_error(undefined)`` and an infinity
+    ``evaluation_error(float_overflow)``, a float as the port's
+    ``float_to_rational`` and a Decimal as its ``from_number`` (ruling
+    R19), which also refuses a Decimal exponent past
+    ``DECIMAL_EXPONENT_LIMIT`` with ``representation_error(max_integer)``.
+    They raised a bare Python ValueError / OverflowError (or, for a huge
+    exponent, built the integer).  A finite float stays exact here (the
+    port reads it through a continued fraction): that choice is
+    todo/clpq-silently-accepts-floats-and-real-variables."""
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            from clausal.logic.clpq.arithmetic import float_to_rational  # noqa: PLC0415
+            float_to_rational(value)   # raises
+        return Fraction(value)
+    if isinstance(value, Decimal):
+        from clausal.logic.clpq.arithmetic import from_number  # noqa: PLC0415
+        return Fraction(*from_number(value))
     return Fraction(value)
 
 
@@ -1078,12 +1097,8 @@ def _linearize(expr: Any, trail: Trail,
         return {}, Fraction(expr)
     if isinstance(expr, Fraction):
         return {}, expr
-    if isinstance(expr, Decimal):
-        if not expr.is_finite():
-            return None
-        return {}, Fraction(expr)         # exact; scale is not carried
-    if isinstance(expr, float):
-        return {}, _float_fraction(expr)
+    if isinstance(expr, (Decimal, float)):
+        return {}, _exact_number(expr)    # exact; scale is not carried
     if is_var(expr):
         return {expr._id: ONE}, ZERO
 
@@ -1240,8 +1255,10 @@ def _post_q_domain(target: Any, lo: Fraction | None,
     target = deref(target)
     if isinstance(target, bool):
         return False
-    if isinstance(target, (int, Fraction, Decimal)):
-        val = Fraction(target)
+    if isinstance(target, (int, Fraction, Decimal, float)):
+        # A number is in the domain or not; a float is read as a bound is
+        # (in_q(0.5, 0, 1) holds, in_q(nan, 0, 1) raises), as the port does.
+        val = _exact_number(target)
         if lo is not None and val < lo:
             return False
         if hi is not None and val > hi:
@@ -1309,7 +1326,7 @@ def _q_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
         return False
 
     if isinstance(bound_to, (int, Fraction, Decimal)):
-        val = Fraction(bound_to)
+        val = _exact_number(bound_to)
         if state.lo is not None and val < state.lo:
             return False
         if state.hi is not None and val > state.hi:
@@ -1404,9 +1421,7 @@ def _bound(value: Any) -> Fraction | None:
         raise LogicException(instantiation_error("in_q/3"))
     if not is_number(value):
         raise LogicException(type_error("rational", value, "in_q/3"))
-    if isinstance(value, float):
-        return _float_fraction(value)
-    return Fraction(value)
+    return _exact_number(value)
 
 
 def _in_q_units(targets, lo, hi, trail):
@@ -1546,7 +1561,7 @@ def q_eq(l: Any, r: Any, trail: Trail) -> bool:
     l, r = _cells_as_nodes(l, r, "(==)/2")   # ruling R9 A1
     l, r = _units_strip(l, r, "(==)/2", trail)
     if _is_ground_q(l) and _is_ground_q(r):
-        return Fraction(l) == Fraction(r)
+        return _exact_number(l) == _exact_number(r)
     # If one side is ground and other is a bare var, use unify for speed
     if _is_ground_q(r) and is_var(l):
         _ensure_q_for_expr(l, trail)
@@ -1595,7 +1610,7 @@ def _post_ne(l: Any, r: Any, trail: Trail, tag: str) -> bool:
     l, r = _cells_as_nodes(l, r, "(!=)/2")   # ruling R9 A1
     l, r = _units_strip(l, r, "(!=)/2", trail)
     if _is_ground_q(l) and _is_ground_q(r):
-        return Fraction(l) != Fraction(r)
+        return _exact_number(l) != _exact_number(r)
     _ensure_q_for_expr(l, trail)
     _ensure_q_for_expr(r, trail)
     lc = _linearize(l, trail)
@@ -1629,7 +1644,7 @@ def q_le(l: Any, r: Any, trail: Trail) -> bool:
     l, r = _cells_as_nodes(l, r, "(=<)/2")   # ruling R9 A1
     l, r = _units_strip(l, r, "(=<)/2", trail)
     if _is_ground_q(l) and _is_ground_q(r):
-        return Fraction(l) <= Fraction(r)
+        return _exact_number(l) <= _exact_number(r)
     _ensure_q_for_expr(l, trail)
     _ensure_q_for_expr(r, trail)
     lc = _linearize(l, trail)
@@ -2226,6 +2241,10 @@ def bb_inf(int_vars: list, expr: Any, result_var: Any,
         v = deref(v)
         if is_var(v):
             int_ids.add(v._id)
+        elif is_number(v) and _exact_number(v).denominator != 1:
+            # A number must be an integer, as for the port; NaN or an
+            # infinity raises (bb_inf([nan], X, I) used to succeed).
+            return False
 
     lc = _linearize(expr, trail)
     if lc is None:

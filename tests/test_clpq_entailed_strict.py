@@ -13,11 +13,14 @@ variable an equality had eliminated was never read by the simplex
 that closed a strict one to a point was accepted (``{X > 0}, in_q(X, -1,
 0)`` succeeded).
 
-A non-finite float operand raises ``evaluation_error(undefined)`` (NaN) or
-``evaluation_error(float_overflow)`` (an infinity) on every legacy entry
-point, as the port's ``float_to_rational`` does; legacy raised a bare
-Python ValueError / OverflowError.
+A non-finite float or decimal operand raises ``evaluation_error(undefined)``
+(NaN) or ``evaluation_error(float_overflow)`` (an infinity) on the legacy
+entry points pinned below, as the port does; legacy raised a bare Python
+ValueError / OverflowError, or answered.  A number where in_q/3 or bb_inf/3
+takes a variable is checked as the port checks it (in_q(0.5, 0, 1) holds,
+bb_inf([0.5], X, I) fails).
 """
+from decimal import Decimal
 from fractions import Fraction
 
 import pytest
@@ -25,7 +28,7 @@ import pytest
 from clausal.logic.clpq import holzbaur as _holzbaur
 from clausal.logic.clpq import legacy as _legacy
 from clausal.logic.exceptions import LogicException
-from clausal.logic.variables import Trail, Var, deref
+from clausal.logic.variables import Trail, Var, deref, unify
 
 SOLVERS = pytest.mark.parametrize("solver", [_legacy, _holzbaur],
                                   ids=["legacy", "holzbaur"])
@@ -208,6 +211,9 @@ ENTRY_POINTS = {
     "maximize": lambda s, t, x, y, v: s.q_le(x, 4, t) and s.maximize(("+", x, v), y, t),
     "minimize": lambda s, t, x, y, v: s.q_ge(x, 4, t) and s.minimize(("+", x, v), y, t),
     "bb_inf": lambda s, t, x, y, v: s.q_ge(x, 4, t) and s.bb_inf([x], ("+", x, v), y, t),
+    "bb_inf_integer_list": lambda s, t, x, y, v: s.q_ge(x, 4, t) and s.bb_inf([v], x, y, t),
+    "in_q_target": lambda s, t, x, y, v: s.in_q(v, 0, 1, t),
+    "in_q_target_in_list": lambda s, t, x, y, v: s.in_q([x, v], 0, 1, t),
 }
 
 
@@ -220,3 +226,50 @@ def test_non_finite_float_operand_raises_evaluation_error(solver, value, error,
     raised = _evaluation_error(
         lambda: ENTRY_POINTS[entry](solver, trail, x, y, value))
     assert raised.lower() == error
+
+
+DECIMAL_ENTRY_POINTS = {
+    "bind": lambda s, t, x, v: s.q_ge(x, 1, t) and unify(x, v, t),
+    "in_q_bound": lambda s, t, x, v: s.in_q(x, v, None, t),
+    "in_q_target": lambda s, t, x, v: s.in_q(v, 0, 1, t),
+    "q_eq_ground": lambda s, t, x, v: s.q_eq(1, v, t),
+    "q_le": lambda s, t, x, v: s.q_le(x, v, t),
+    "bb_inf_integer_list": lambda s, t, x, v: s.q_ge(x, 1, t) and s.bb_inf([v], x, Var(), t),
+}
+
+
+@SOLVERS
+@pytest.mark.parametrize("value, error", [
+    (Decimal("NaN"), "undefined"), (Decimal("Infinity"), "float_overflow")],
+    ids=["nan", "inf"])
+@pytest.mark.parametrize("entry", sorted(DECIMAL_ENTRY_POINTS))
+def test_non_finite_decimal_operand_raises_evaluation_error(solver, value,
+                                                            error, entry):
+    trail, x = Trail(), Var()
+    raised = _evaluation_error(
+        lambda: DECIMAL_ENTRY_POINTS[entry](solver, trail, x, value))
+    assert raised.lower() == error
+
+
+# ---------------------------------------- a number where a variable may be
+
+@SOLVERS
+@pytest.mark.parametrize("value, expected", [
+    (0.5, True), (1.5, False), (-0.25, False), (Decimal("0.5"), True),
+    (Fraction(1, 2), True), (2, False)])
+def test_in_q_of_a_number_checks_it(solver, value, expected):
+    # in_q(0.5, 0, 1) failed on legacy: a float target was never compared.
+    assert solver.in_q(value, 0, 1, Trail()) is expected
+    assert solver.in_q([Var(), value], 0, 1, Trail()) is expected
+
+
+@SOLVERS
+@pytest.mark.parametrize("value, integral", [
+    (0.5, False), (Decimal("0.5"), False), (Fraction(1, 2), False),
+    (2, True), (2.0, True), (Fraction(4, 2), True)])
+def test_bb_inf_of_a_number_requires_an_integer(solver, value, integral):
+    # Legacy ignored a number in the integer list: bb_inf([0.5], X, I)
+    # succeeded where the port fails.
+    trail, x, low = Trail(), Var(), Var()
+    assert solver.q_ge(x, 1, trail)
+    assert bool(solver.bb_inf([value], x, low, trail)) is integral

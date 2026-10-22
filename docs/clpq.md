@@ -252,7 +252,10 @@ are `<=`, `>=`, `<`, `>`, `==`, `!=`: `entailed(X <= 5)`.
 
 A strict relation or a disequality in the store counts, on both solvers: after
 `{X < 5}`, both `entailed(X < 5)` and `entailed(X =\= 5)` hold, and after
-`{X < Y, Y =< Z}`, `entailed(X < Z)` holds.
+`{X < Y, Y =< Z}`, `entailed(X < Z)` holds. Under the default solver such a
+strict relation, or `=\=`, whose bound the store reaches exactly costs up to
+two more LPs per stored disequality: on a store with many constraints and
+disequalities that call can take two to three times as long.
 
 As in SICStus, an unbound argument raises `instantiation_error` and a term that
 is no relation (`entailed(foo)`, or `entailed(X \= 2)` in Clausal Prolog) raises

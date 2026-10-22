@@ -122,7 +122,12 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `{X < 5, Y = X + 1}, entailed(Y < 6)` answered `false`. SICStus, clp(q,r)
   1.3.3 (`CLAUSAL_CLPQ=holzbaur`) and Scryer's clpq answer `true`, and now
   so does legacy: a strict relation or `=\=` whose bound the store reaches
-  only where a disequality excludes it is entailed. A fuzz of legacy against
+  only where a disequality excludes it is entailed. That case costs up to
+  two more LPs per stored disequality not screened out by a sample point:
+  on a store with many rows and disequalities such an `entailed/1` call
+  takes two to three and a half times as long (a 100-variable chain with
+  100 disequalities: 532 ms against 265 ms); a store of bounds alone stays
+  cheap. A fuzz of legacy against
   the port over random small systems found no other `entailed/1`
   disagreement. Pinned in `tests/test_clpq_entailed_strict.py` on both
   solvers; the strict xfail in `tests/test_clpq_entailed_relation_cells.py`
@@ -136,13 +141,21 @@ surface described in [docs/public-api.md](docs/public-api.md).
 - **Legacy CLP(Q): `in_q/3` closing a strict bound** (2026-10-22).
   `{X > 0}, in_q(X, -1, 0)` succeeded; `in_q/3` now binds a variable its
   bounds close to a point, as `{X =< 0}` does, so the strict bound fails it.
-- **Legacy CLP(Q): a NaN or infinite float operand raises an ISO error**
-  (2026-10-22). `entailed/1`, the constraint posts, `in_q/3` bounds,
-  `sup/2`, `inf/2`, `maximize/2`, `minimize/2` and `bb_inf/3` raised a
-  bare Python `ValueError` (NaN) or `OverflowError` (an infinity); they
-  now raise `evaluation_error(undefined)` and
-  `evaluation_error(float_overflow)`, as the port does (and as both do for
-  a non-finite decimal, ruling R19). A finite float is unchanged.
+- **Legacy CLP(Q): a NaN or infinite float or decimal raises an ISO error**
+  (2026-10-22). `entailed/1`, the constraint posts, `in_q/3` (bound or
+  target), binding a constrained variable to a decimal, `sup/2`, `inf/2`,
+  `maximize/2`, `minimize/2` and `bb_inf/3` (objective or integer list)
+  raised a bare Python `ValueError` (NaN) or `OverflowError` (an
+  infinity), or for some a `TypeError`, or succeeded (`bb_inf([nan], X,
+  I)`) or failed (`in_q(nan, 0, 1)`); they now raise
+  `evaluation_error(undefined)` and `evaluation_error(float_overflow)`, as
+  the port does (ruling R19 for a decimal, whose exponent past 100,000 is
+  now also `representation_error(max_integer)` as in the port). A finite
+  float is still read exactly.
+- **Legacy CLP(Q): a number where `in_q/3` or `bb_inf/3` takes a variable
+  is checked** (2026-10-22). `in_q(0.5, 0, 1)` failed (a float target was
+  never compared; the port succeeds), and `bb_inf([0.5], X, I)` ignored
+  the number and succeeded (the port fails: it is no integer).
 
 ## 1.1.0 (2026-10-21)
 
