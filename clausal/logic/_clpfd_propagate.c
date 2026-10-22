@@ -46,15 +46,20 @@ static PyObject *fn_py_domain_remove = NULL;
  * bound outside the int64 fast range or a bignum FD bound. */
 static PyObject *fn_narrow_by_real = NULL;
 
-/* A CLP(R) bound the fd_hook may cast to int64_t: +/-inf (the sentinels),
- * or finite and strictly inside (-2^63, 2^63) -- then ceil/floor of it is
- * an int64 off the INT64_MIN/MAX sentinels (the nearest doubles to 2^63
- * are 1024 apart).  A finite double at or beyond 2^63, or NaN, is not. */
+/* CLP(R) bounds the fd_hook may cast to int64_t: a lower bound of -inf or
+ * an upper bound of +inf (the sentinels), or a finite bound strictly
+ * inside (-2^63, 2^63) -- then ceil/floor of it is an int64 off the
+ * INT64_MIN/MAX sentinels (the nearest doubles to 2^63 are 1024 apart).
+ * A finite double at or beyond 2^63, a lower bound of +inf, an upper
+ * bound of -inf (an empty interval) and NaN are not: those take the exact
+ * Python path, which answers the empty domain for the last three. */
 static inline int
-real_bound_in_i64_range(double r)
+real_bounds_cast_to_i64(double r_lo, double r_hi)
 {
-    return r == -HUGE_VAL || r == HUGE_VAL
-        || (r > -9223372036854775808.0 && r < 9223372036854775808.0);
+    return (r_lo == -HUGE_VAL
+            || (r_lo > -9223372036854775808.0 && r_lo < 9223372036854775808.0))
+        && (r_hi == HUGE_VAL
+            || (r_hi > -9223372036854775808.0 && r_hi < 9223372036854775808.0));
 }
 /* clpfd._fd_reject_truth_atom: raises type_error(integer, T) for a truth
  * atom (D47), returns None otherwise -- shared with the Python twins. */
@@ -3050,9 +3055,15 @@ py_fd_hook(PyObject *self, PyObject *args)
                         goto hook_error;
                     }
                     double r_lo = PyFloat_AsDouble(r_lo_obj);
+                    Py_DECREF(r_lo_obj);
+                    if (r_lo == -1.0 && PyErr_Occurred()) {
+                        Py_DECREF(r_hi_obj); Py_DECREF(real_state);
+                        Py_DECREF(narrowed_domain); Py_DECREF(narrowed_constraints);
+                        goto hook_error;
+                    }
                     double r_hi = PyFloat_AsDouble(r_hi_obj);
-                    Py_DECREF(r_lo_obj); Py_DECREF(r_hi_obj);
-                    if ((r_lo == -1.0 || r_hi == -1.0) && PyErr_Occurred()) {
+                    Py_DECREF(r_hi_obj);
+                    if (r_hi == -1.0 && PyErr_Occurred()) {
                         Py_DECREF(real_state);
                         Py_DECREF(narrowed_domain); Py_DECREF(narrowed_constraints);
                         goto hook_error;
@@ -3060,23 +3071,22 @@ py_fd_hook(PyObject *self, PyObject *args)
 
                     PyObject *intersected;
                     if (has_bignum_bound(narrowed_domain)
-                        || !real_bound_in_i64_range(r_lo)
-                        || !real_bound_in_i64_range(r_hi)) {
+                        || !real_bounds_cast_to_i64(r_lo, r_hi)) {
                         /* A FINITE real bound past int64 (1e300, DBL_MAX)
                          * would make the casts below undefined behaviour,
                          * and a bignum FD bound cannot be unpacked: the
                          * Python twin's exact math.ceil/floor builds the
                          * bignum domain and intersects it (todo/done/
-                         * clpfd-clpr-float-boundary-soundness-2026-09-03.md;
-                         * a NaN bound takes this path too and raises in
-                         * Python, as the twin does). */
+                         * clpfd-clpr-float-boundary-soundness-2026-09-03.md).
+                         * An empty interval (lo +inf, hi -inf, NaN) takes
+                         * this path too and comes back as the empty domain. */
                         intersected = PyObject_CallFunctionObjArgs(
                             fn_narrow_by_real, narrowed_domain, real_state, NULL);
                         Py_DECREF(narrowed_domain);
                     } else {
-                        /* Both bounds are +/-inf or lie strictly inside
-                         * (-2^63, 2^63): ceil/floor of them fit int64 and
-                         * never land on the INT64_MIN/MAX sentinels. */
+                        /* lo is -inf or hi is +inf, or the bound lies
+                         * strictly inside (-2^63, 2^63): ceil/floor of it
+                         * fits int64 off the INT64_MIN/MAX sentinels. */
                         int64_t rlo_i = (r_lo == -HUGE_VAL) ? INT64_MIN : (int64_t)ceil(r_lo);
                         int64_t rhi_i = (r_hi == HUGE_VAL) ? INT64_MAX : (int64_t)floor(r_hi);
                         PyObject *rng = domain_from_range_i64(rlo_i, rhi_i);

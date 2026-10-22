@@ -375,8 +375,15 @@ def _real_bounds_domain(real_state) -> Domain:
     the bignum it denotes; the FD domain holds bignum bounds).  The C hook
     takes this path for any bound outside its int64 fast range, so both
     twins agree bit for bit (``todo/done/clpfd-clpr-float-boundary-
-    soundness-2026-09-03.md``)."""
+    soundness-2026-09-03.md``).
+
+    An interval that admits nothing -- a lower bound of ``+inf``, an upper
+    bound of ``-inf``, a NaN bound (``_narrow_real`` fails on these too) --
+    is the empty domain, so the hook fails rather than raising from
+    ``math.ceil``."""
     lo, hi = real_state.lo, real_state.hi
+    if lo != lo or hi != hi or lo == _POS_INF or hi == _NEG_INF:
+        return ()
     return domain_from_range(
         _NEG_INF if lo == _NEG_INF else math.ceil(lo),
         _POS_INF if hi == _POS_INF else math.floor(hi))

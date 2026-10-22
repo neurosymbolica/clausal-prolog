@@ -104,7 +104,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
   inside (-2^63, 2^63) and otherwise takes the Python twin's exact
   `math.ceil`/`math.floor` path (`clpfd._narrow_by_real`), which both
   Python sites share, so the twins agree and no feasible integer is cut.
-  Pinned by `tests/test_clpfd_clpr_float_boundary.py` (closes
+  An interval that admits nothing (a lower bound of `+inf`, an upper
+  bound of `-inf`, a NaN bound) is the empty FD domain in both twins, so
+  the hook fails where the C hook used to cast `ceil(+inf)` (undefined
+  behaviour; it answered `[1, 5]` for `[inf, 5.0]`) and the Python hook
+  raised `OverflowError`/`ValueError`. `in_real(X, Lo, Hi)` on a fresh
+  variable now fails for `Lo > Hi` or a NaN bound, as narrowing an
+  existing interval to one already did, instead of storing the empty
+  interval. Pinned by `tests/test_clpfd_clpr_float_boundary.py` (closes
   `todo/done/clpfd-clpr-float-boundary-soundness-2026-09-03.md`).
 
 ## 1.1.0 (2026-10-21)

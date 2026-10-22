@@ -786,6 +786,10 @@ def _post_real_domain(target, lo: float, hi: float, trail: Trail) -> bool:
         return False
     state = get_attr(target, REAL_KEY)
     if state is None:
+        # an empty interval (lo > hi, or a NaN bound) admits nothing: fail,
+        # as narrowing an existing interval to it does (_narrow_real)
+        if lo != lo or hi != hi or lo > hi:
+            return False
         final_lo, final_hi = lo, hi
         new_state = RealVar(final_lo, final_hi)
         put_attr(target, REAL_KEY, new_state, trail)

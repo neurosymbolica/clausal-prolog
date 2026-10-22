@@ -20,9 +20,11 @@ from clausal.logic.clpfd import (
     _safe_float_lo, domain_from_range, domain_max, domain_min, in_domain,
 )
 from clausal.logic.clpr import (
-    REAL_KEY, _get_var_interval, _promote_fd_to_real, in_real,
+    REAL_KEY, RealVar, _get_var_interval, _promote_fd_to_real, in_real,
 )
-from clausal.logic.variables import Trail, Var, deref, get_attr, unify
+from clausal.logic.variables import (
+    Trail, Var, deref, get_attr, put_attr, unify,
+)
 
 FLOAT_MAX = sys.float_info.max
 INF = math.inf
@@ -205,6 +207,39 @@ class TestFdFromRealBound:
         x = fresh_real(-edge, edge, trail)
         assert hook(state, x, trail) is True
         assert fd_domain(x) == ((-(2 ** 63), 2 ** 63),)
+
+    @pytest.mark.parametrize("hook", HOOKS)
+    @pytest.mark.parametrize("lo, hi", [
+        (INF, 5.0), (INF, INF), (-INF, -INF), (3.0, -INF),
+        (math.nan, 5.0), (0.0, math.nan), (math.nan, math.nan),
+    ], ids=repr)
+    def test_an_empty_interval_wipes_the_domain(self, hook, lo, hi):
+        """An interval that admits nothing (a lower bound of +inf, an
+        upper bound of -inf, a NaN bound) is the empty FD domain in both
+        twins: the hook fails, raising nothing and keeping no value."""
+        trail = Trail()
+        y = Var()
+        assert in_domain(y, 1, 10, trail)
+        x = Var()
+        put_attr(x, REAL_KEY, RealVar(lo, hi), trail)
+        assert hook(get_attr(y, FD_KEY), x, trail) is False
+
+    @pytest.mark.parametrize("lo, hi", [
+        (INF, 5.0), (3.0, -INF), (2.0, 1.0), (math.nan, 5.0), (0.0, math.nan),
+    ], ids=repr)
+    def test_in_real_fails_on_an_empty_interval(self, lo, hi):
+        trail = Trail()
+        x = Var()
+        assert in_real(x, lo, hi, trail) is False
+        assert real(x) is None
+
+    def test_in_real_accepts_a_point_and_an_unbounded_interval(self):
+        trail = Trail()
+        x, z = Var(), Var()
+        assert in_real(x, 2.0, 2.0, trail)
+        assert deref(x) == 2.0
+        assert in_real(z, -INF, INF, trail)
+        assert (real(z).lo, real(z).hi) == (-INF, INF)
 
     def test_post_domain_on_a_real_var_beyond_int64(self):
         trail = Trail()
