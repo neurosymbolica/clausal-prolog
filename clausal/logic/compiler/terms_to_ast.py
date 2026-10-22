@@ -268,12 +268,25 @@ def _implicit_functors_active(namespace: "dict | None") -> bool:
 # ``position`` had no callers left.)
 
 
-#: Functors no name can bind and no predicate stands behind, so that in
-#: term position the quoted ``':-'(H, B)`` can only be the cell ``(':-', H,
-#: B)`` (see ``_goal_cell_functor``): ISO's clause and control punctuation,
-#: and library(clpz)'s domain ``Lo..Hi``.
+#: Functors no predicate stands behind and for which no functor signature
+#: can be declared (``-private([':-'])`` declares the ATOM, and
+#: ``-private([':-'(_, _)])`` is no signature), so that in term position the
+#: quoted ``':-'(H, B)`` can only be the cell ``(':-', H, B)`` (see
+#: ``_goal_cell_functor``): ISO's clause and control punctuation, and
+#: library(clpz)'s domain ``Lo..Hi``.
 QUOTED_CELL_FUNCTORS = frozenset({
     ":-", "-->", "?-", ",", ";", "|", "->", "*->", "\\+", ".."})
+
+#: The comparison, unification and clpz relation builtins: a quoted
+#: ``'<'(A, B)`` in term position already builds the cell through the
+#: builtin's binding, but a call/N CLOSURE with fewer arguments (``'>'(2)``
+#: for ``include(>(2), Xs, Ys)``, ``'='(1)`` for ``maplist(=(1), L)``)
+#: raised existence_error(procedure, (>)/1).  Their quoted construction is
+#: the ISO cell at every arity (see ``_goal_cell_functor``).
+QUOTED_RELATION_FUNCTORS = frozenset({
+    "=", "\\=", "==", "\\==", "@<", "@>", "@=<", "@>=",
+    "<", ">", "=<", ">=", "=:=", "=\\=",
+    "#=", "#\\=", "#<", "#>", "#=<", "#>="})
 
 
 def _goal_cell_functor(fname: str, arity: int, namespace) -> "str | None":
@@ -302,10 +315,11 @@ def _goal_cell_functor(fname: str, arity: int, namespace) -> "str | None":
     callable binding keeps being called (out-of-tree ``_get_dispatch``
     implementors may construct their term that way).
     """
-    if fname in QUOTED_CELL_FUNCTORS:
+    if fname in QUOTED_CELL_FUNCTORS or fname in QUOTED_RELATION_FUNCTORS:
         # ``':-'(H, B)``, ``';'(A, B)``, ``'..'(1, N)`` ... written QUOTED
-        # in term position: no name can bind them (none is an identifier)
-        # and the only thing they can build is the ISO cell, which is what
+        # in term position: no functor signature can be declared for them
+        # and no predicate stands behind them, so the only thing they can
+        # build is the ISO cell, which is what
         # the native front end builds for the same term.  They raised
         # existence_error(procedure, (:-)/2) (NameError for ``..``) at run
         # time.

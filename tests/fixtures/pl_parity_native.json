@@ -2940,7 +2940,7 @@
   "tests/iso_diff/atoms.pl": "53ca738d8b66fff7",
   "tests/iso_diff/between.pl": "cf19fc2f5a764847",
   "tests/iso_diff/except.pl": "ad2e75998221a004",
-  "tests/iso_diff/lists.pl": "972696ba78f3c7e9",
+  "tests/iso_diff/lists.pl": "ad2e75998221a004",
   "tests/iso_diff/prelude.pl": "57ab34f31ac2ad2c",
   "tests/iso_diff/sorting.pl": "596a108ec03a80a2",
   "tests/iso_diff/terms.pl": "f2a6df47733d5a80",
@@ -2951,7 +2951,7 @@
   "tests/iso_l3/s3/native/s3main.pl": "7c52dcaf578972b9",
   "tests/iso_l3/s3/native/s3pkg/__init__.pl": "7c52dcaf578972b9",
   "tests/iso_l3/s3/native/s3pkg/kinds.pl": "7c52dcaf578972b9",
-  "tests/iso_l3/s4/s4_exit.pl": "0d57ac0010de9777",
+  "tests/iso_l3/s4/s4_exit.pl": "2d5ba653e883ff9d",
   "tests/iso_l3/s5/s5_clpq_exit.pl": "fec5cee1e7e944ec",
   "tests/iso_l3/s5/s5_clpz_exit.pl": "ae033f84573864bd"
  }

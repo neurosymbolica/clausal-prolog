@@ -61,8 +61,8 @@
   {
    "key": "tests/iso_diff/lists.pl::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: Cannot import <root>/tests/iso_diff/lists.pl: line 61: Prolog functor '=' cannot be translated to a Clausal predicate name ('=' is not a valid Python identifier).",
-   "translator_sha": "ae02f65f8cfff370",
+   "note": "oracle: scryer loads it, as native does. Translator: member(X, L) written as DATA (t(l13, X, member(X, [a, b, c]))) is emitted as the seam's `X in L` node, which fails to load (functor in_/3 constructed with 2 positional arguments); before 2026-10-22 it stopped earlier, at the closure =(...) on line 61",
+   "translator_sha": "5a918e78662eb2bd",
    "native_sha": "c48b5b1a9776c846"
   },
   {
@@ -117,8 +117,8 @@
   {
    "key": "tests/iso_l3/s4/s4_exit.pl::load::",
    "class": "a",
-   "note": "oracle: scryer loads it, as native does. Translator: Cannot import <root>/tests/iso_l3/s4/s4_exit.pl: line 66: Prolog functor '=' cannot be translated to a Clausal predicate name ('=' is not a valid Python identifier).",
-   "translator_sha": "b5c1a5d38b266539",
+   "note": "oracle: scryer loads it, as native does. Translator: library(reif)'s =/3 (`=(_, a, T1)`, line 73) is refused ('=' is not a valid Python identifier); before 2026-10-22 it stopped earlier, at an arity-1 closure on line 66",
+   "translator_sha": "93b6d116d0f1045b",
    "native_sha": "c48b5b1a9776c846"
   },
   {

@@ -7,6 +7,19 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Changed
+
+- **`X in Dom` with an unbound part anywhere in `Dom` raises
+  `instantiation_error`** (2026-10-22). clpz's `in/2` and `ins/2` (the
+  native front end's) raised, for `X in 1..(_-1)` and `X in foo\/_`,
+  `domain_error(clpz_domain, ...)`, because the domain was walked before
+  its groundness was checked. Scryer's `drep_to_domain/2` begins with
+  `must_be(ground, Drep)`, so the error a program catches is now Scryer's.
+  A ground non-domain (`1..foo`, `1..(3-1)`) is still
+  `domain_error(clpz_domain, Dom)`. Pinned by the `in_unbound_bound` row of
+  `tests/test_pl_translator_data_terms_followups.py`, run on both front
+  ends.
+
 ### Fixed
 
 - **The Python-bridge audit of a module importing through listless
@@ -288,6 +301,17 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `tests/iso_diff/terms.pl` and `tests/iso_diff/between.pl`; the `.pl`
   parity fixture drops those eleven rows (37 differences to 26). `emit_clausal_term` renders a term, so it now
   gives these cells (`'\\+'(foo)`, `'='(X, 1)`).
+- **The `.pl` translator runs a comparison, unification or clpz relation
+  closure under call/N** (2026-10-22). `maplist(=(1), L)`,
+  `maplist(<(0), L)`, `include(>(2), [1,2,3], L)`, `call(>(2), 1)` and
+  `maplist(#=(X), [2])` were refused at load ("Prolog functor '>' cannot
+  be translated"), where the native front end and Scryer run them: the
+  translator handled these functors only at arity 2. An arity-1 closure is
+  now the quoted cell `'>'(2)`, which call/N completes; the seam builds
+  that cell at any arity for the comparison, unification and clpz relation
+  builtins (it raised `existence_error(procedure, (>)/1)`). Pinned by
+  `test_pl_translator_data_terms_followups.py::test_relation_closures_run_under_call_n`,
+  on both front ends against Scryer's output.
 - **A quoted `':-'(H, B)`, `';'(A, B)`, `'\\+'(G)`, `','(A, B)`,
   `'-->'(A, B)`, `'|'(A, B)`, `'->'(A, B)`, `'*->'(A, B)`, `'?-'(G)` or
   `'..'(L, H)` in seam term position builds the ISO cell.** No name can
@@ -311,10 +335,7 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `TypeError: in_domain bounds must be integers`; it now reads the bounds
   as clpz reads `Lo..Hi`, which does not evaluate a bound:
   `domain_error(clpz_domain, 1..(3-1))`, and `instantiation_error` when any
-  part is unbound. `in_domain(X, inf, sup)` is accepted. On both front ends
-  `X in 1..(_-1)` and `X in foo\/_` are now `instantiation_error`, as
-  Scryer's `must_be(ground, Drep)` gives; they were
-  `domain_error(clpz_domain, ...)`. Pinned by
+  part is unbound. `in_domain(X, inf, sup)` is accepted. Pinned by
   `test_pl_translator_data_terms_followups.py::TestInDomainBounds` and the
   `in_*_bound` rows of its program.
 

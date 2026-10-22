@@ -203,6 +203,8 @@ _CLPZ = ":- use_module(library(clpz)).\n"
     (_CLPZ + "t :- X #= 1+1, p(X).", "X == 1 + 1"),
     (_CLPZ + "t :- X #< 1+1, p(X).", "'#<'(X, '+'(1, 1))"),
     ("t :- {X > 1, Y < X}, p(X, Y).", "{X > 1, Y < X}"),
+    ("t :- maplist(=(1), L), p(L).", "maplist('='(1), L)"),
+    ("t :- include(>(2), [1], L), p(L).", "include('>'(2), [1], L)"),
 ])
 def test_the_translator_text(source, emitted):
     text = _translate(source)
@@ -291,3 +293,55 @@ def test_quoted_iso_punctuation_builds_cells_in_the_seam(tmp_path):
     assert answers == [[(":-", "a", "b"), ("-->", "a", "b"), (";", "a", "b"),
                         ("|", "a", "b"), ("\\+", "a"), (",", "a", "b"),
                         ("..", 1, 3)]]
+
+
+#: Comparison, unification and clpz relation CLOSURES applied by call/N
+#: (2026-10-22): the translator refused ``maplist(=(1), L)``,
+#: ``call(>(2), 1)``, ``include(>(2), Xs, Ys)`` as "Prolog functor '>'
+#: cannot be translated", and the seam could not build the arity-1 cell
+#: ``'>'(2)`` (existence_error(procedure, (>)/1)).  Lines t1..t10 are what
+#: Scryer prints; t11 is not run there (this Scryer build has no
+#: include/3), its answer is the one native gives.
+CLOSURE_PROGRAM = """\
+:- use_module(library(clpz)).
+:- use_module(library(lists)).
+t1 :- length(L, 2), maplist(=(1), L), writeq(L), nl.
+t2 :- maplist(<(0), [1,2]), \\+ maplist(<(1), [1,2]), write(ok2), nl.
+t3 :- call(>(2), 1), \\+ call(>(2), 3), write(ok3), nl.
+t4 :- maplist(==(a), [a,a]), \\+ maplist(\\==(a), [a]), write(ok4), nl.
+t5 :- maplist(=<(2), [2,3]), maplist(>=(2), [1,2]), write(ok5), nl.
+t6 :- maplist(=:=(2), [2, 1+1]), maplist(=\\=(2), [1,3]), write(ok6), nl.
+t7 :- maplist(\\=(a), [b,c]), maplist(@<(a), [b,c]), write(ok7), nl.
+t8 :- G = >(2), call(G, 1), writeq(G), nl.
+t9 :- X in 0..5, maplist(#<(3), [X]), X #< 5, writeq(X), nl.
+t10 :- maplist(#=(X), [2]), writeq(X), nl.
+t11 :- include(>(2), [1,2,3], L), exclude(>=(2), [1,2,3], M), writeq(L/M), nl.
+main :- t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11.
+"""
+
+CLOSURE_EXPECTED = [
+    '[1,1]',
+    'ok2',
+    'ok3',
+    'ok4',
+    'ok5',
+    'ok6',
+    'ok7',
+    '>(2)',
+    '4',
+    '2',
+    '[1]/[3]',
+]
+
+
+@pytest.mark.parametrize("frontend", ["translator", "native"])
+def test_relation_closures_run_under_call_n(tmp_path, frontend):
+    (tmp_path / "closures.pl").write_text(CLOSURE_PROGRAM)
+    env = dict(os.environ)
+    env["CLAUSAL_PL_FRONTEND"] = frontend
+    env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+    r = subprocess.run(
+        [sys.executable, "-m", "clausal", "closures.pl"], cwd=tmp_path,
+        env=env, capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout.splitlines() == CLOSURE_EXPECTED, r.stdout

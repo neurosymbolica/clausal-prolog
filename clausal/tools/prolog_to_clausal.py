@@ -367,6 +367,11 @@ _ISO_QUOTED_UNARY_OPS = frozenset({"\\"})
 # comparison stands, goal or term position.
 _ARITH_COMPARISONS = frozenset({"<", ">", "=<", ">=", "=:=", "=\\="})
 
+#: The comparison and unification builtins whose arity-1 closure
+#: (``=(1)``, ``>(2)``) is emitted as the quoted cell for call/N to complete.
+_COMPARISON_CLOSURE_FUNCTORS = _ARITH_COMPARISONS | frozenset({
+    "=", "\\=", "==", "\\==", "@<", "@>", "@=<", "@>=", "#="})
+
 #: library(clpz)'s operators other than ``#=`` (the seam's ``==``) and the
 #: identifiers ``in``/``ins`` (folded to in_domain/3, D21): the relations,
 #: the reification connectives and the domain ``..``
@@ -2027,6 +2032,13 @@ class _PrologToClausal:
             left = self._emit_term(args[0])
             right = self._emit_term(args[1])
             return f"{_quote_atom(functor)}({left}, {right})"
+
+        # A comparison or unification CLOSURE (``maplist(=(1), L)``,
+        # ``include(>(2), Xs, Ys)``, ``call(<(0), X)``): fewer arguments
+        # than the builtin, which call/N completes.  It is the quoted cell
+        # ``'>'(2)``; it was refused as "not a valid Python identifier".
+        if functor in _COMPARISON_CLOSURE_FUNCTORS and len(args) == 1:
+            return self._emit_quoted_op_term(term)
 
         # Variant equality has no Clausal equivalent (F041 — the designed
         # rejection promised when =@=/\=@= were added to the parser tables).
