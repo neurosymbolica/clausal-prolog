@@ -184,3 +184,60 @@ def test_the_exporters_own_output_runs_unmodified(system):
     # version of this assertion looked for "1550.00" and failed on a correct
     # result, which is the right way round for an assertion to be wrong.
     assert "1550" in res and "155000" not in res, res
+
+
+# ── constant_number_currency: its own directive, its own pair ────────────────
+
+
+@pytest.mark.parametrize("system", sorted(BINARIES))
+def test_a_currency_constant_expands_too(system):
+    """`-constant_number_currency` exports as its own directive, which the
+    preludes did not expand: Scryer refused it --
+    domain_error(directive, constant_number_currency/3) -- and the rest of the
+    module did not load."""
+    out = _run_with_prelude(system, (
+        ":- discontiguous(constant_number_currency/3).\n"
+        ":- discontiguous(module_constant_currency/4).\n"
+        ":- constant_number_currency(lim, 23, usd).\n"
+        "main :- ( constant_number_currency(N, V, U) -> write(got(N,V,U)) "
+        "; write(not_expanded) ), nl, halt.\n"))
+    assert "got(lim,23,usd)" in out.replace(" ", ""), out
+
+
+@pytest.mark.parametrize("system", sorted(BINARIES))
+def test_an_exported_currency_module_loads_and_answers(system):
+    """The exporter's own output for a currency constant, run as-is: the
+    module loads (its other predicates answer) and the declaration is
+    recorded under the declaring module."""
+    import shutil
+    from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
+    from clausal.tools.prolog_dialect import Dialect
+
+    binary = BINARIES[system]
+    if not os.path.exists(binary):
+        pytest.skip(f"{system} not built at {binary}")
+    out = clausal_source_to_prolog(
+        "-module(cur, [lim_cents(C)])\n"
+        "-import_from(united_states, [usd, usd_cent])\n"
+        "-constant_number_currency(lim, 23, usd)\n"
+        "lim_cents(C) <- (C == constant(lim) / usd_cent)\n",
+        dialect=getattr(Dialect, system)())
+    assert ":- constant_number_currency(lim, 23, usd)." in out, out
+    d = tempfile.mkdtemp()
+    shutil.copy(os.path.join(PRELUDE_DIR, f"clausal_constants_{system}.pl"), d)
+    body = "\n".join(l for l in out.splitlines()
+                     if "use_module('united_states'" not in l)
+    prog = os.path.join(d, "cur.pl")
+    with open(prog, "w") as fh:
+        # `cur:main`, qualified: Trealla runs an unqualified initialization
+        # goal in `user` once the module imports library(clpz) -- an
+        # existence_error for main/0 that says nothing about constants.
+        fh.write(body + "\n:- initialization(cur:main).\n"
+                 "main :- ( module_constant_currency(M, lim, N, U) -> "
+                 "write(got(M,N,U)) ; write(no_answer) ), nl, "
+                 "lim_cents(C), write(cents(C)), nl, halt.\n")
+    proc = _run_program(system, binary, prog, d)
+    res = proc.stdout + proc.stderr
+    assert "domain_error" not in res, res
+    assert "got(cur,23,usd)" in res.replace(" ", ""), res
+    assert "cents(2300)" in res, res

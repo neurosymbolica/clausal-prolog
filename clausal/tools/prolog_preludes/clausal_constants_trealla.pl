@@ -40,6 +40,10 @@ user:term_expansion((:- constant_number_units(N, Num, U)),
                     [ constant_number_units(N, Num, U),
                       module_constant_units(M, N, Num, U) ]) :-
     prolog_load_context(module, M).
+user:term_expansion((:- constant_number_currency(N, Num, U)),
+                    [ constant_number_currency(N, Num, U),
+                      module_constant_currency(M, N, Num, U) ]) :-
+    prolog_load_context(module, M).
 user:term_expansion((:- constant_value(N, V)),
                     [ constant_value(N, V), module_constant(M, N, V) ]) :-
     prolog_load_context(module, M).

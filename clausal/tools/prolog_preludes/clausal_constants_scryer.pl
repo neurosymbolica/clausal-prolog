@@ -1,8 +1,9 @@
 % clausal: no-collect
 % Constants prelude for SCRYER PROLOG.
 %
-% Expands the `:- constant_number_units(Name, Number, Units)` directives the
-% exporter emits for an `expansion` dialect into facts carrying the declaring
+% Expands the `:- constant_number_units(Name, Number, Units)`,
+% `:- constant_number_currency(Name, Number, Currency)` and
+% `:- constant_value(Name, Value)` directives the exporter emits for an `expansion` dialect into facts carrying the declaring
 % MODULE, obtained from `prolog_load_context/2` inside the hook -- the same
 % compile-time module insertion the Clausal engine performs, done on this side.
 %
@@ -29,15 +30,27 @@
 % See docs/superpowers/specs/2026-09-13-exporter-option-3-design.md
 
 :- module(cc_scryer, [constant_value/2, constant_number_units/3,
-                      module_constant/3, module_constant_units/4]).
+                      constant_number_currency/3,
+                      module_constant/3, module_constant_units/4,
+                      module_constant_currency/4]).
 :- dynamic(module_constant_units/4).
+:- dynamic(module_constant_currency/4).
 :- dynamic(module_constant/3).
 
 term_expansion((:- constant_number_units(N, Num, U)),
                [module_constant_units(M, N, Num, U)]) :-
     prolog_load_context(module, M).
+% A currency constant is its own directive in the engine (the unit must be
+% a currency), so it crosses as its own pair rather than as a units one.
+% Without this clause Scryer refused the directive --
+% domain_error(directive, constant_number_currency/3) -- and the rest of the
+% module did not load.
+term_expansion((:- constant_number_currency(N, Num, U)),
+               [module_constant_currency(M, N, Num, U)]) :-
+    prolog_load_context(module, M).
 term_expansion((:- constant_value(N, V)), [module_constant(M, N, V)]) :-
     prolog_load_context(module, M).
 
 constant_number_units(N, Num, U) :- module_constant_units(_, N, Num, U).
+constant_number_currency(N, Num, U) :- module_constant_currency(_, N, Num, U).
 constant_value(N, V) :- module_constant(_, N, V).

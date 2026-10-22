@@ -54,13 +54,30 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `-constant_number_currency(..., us_dollar)` (or table form) with "a
   unit the exporter cannot resolve", and an inline `5(us_dollar_cent)`
   slipped past the scaled-unit refusal and exported as `5`. The alias now
-  resolves to its source unit before conversion, so the module exports
-  exactly as its plain twin (`[usd]`, bare `usd`) in every unit position.
-  Only an alias of a unit is resolved; a predicate alias is still refused
-  (no import renaming, ruling 2026-09-29). A qualified unit in a constant
-  declaration (`united_states.usd`) now exports as `usd` too, where it
-  was the quoted atom `'united_states:usd'`, as every other unit position
+  resolves to its source unit in UNIT positions only -- a declaration's
+  unit, a quantity literal, a unit divisor -- and only for an import from
+  a unit vocabulary module (`units`, `py.units`, a jurisdiction module):
+  the exported unit positions are the plain twin's (`[usd]`, bare `usd`),
+  every other occurrence of the local name is emitted as written (so a
+  module's own `usd` atom stays distinct from the aliased unit, as in the
+  engine), and a predicate alias -- even one whose name is a unit word
+  such as `day` -- is still refused (no import renaming, ruling
+  2026-09-29). One local name bound to two units (or a unit and another
+  import) is refused: the engine refuses it within one directive and
+  keeps the later binding across two. A qualified unit in a constant
+  declaration (`united_states.usd`) now exports as `usd`, where it was
+  the quoted atom `'united_states:usd'`, as every other unit position
   already read it. `tests/test_exporter_unit_import_alias.py`.
+- **An exported currency constant loads in Scryer and Trealla**
+  (2026-10-22). The `expansion` dialects' constants preludes expanded
+  `constant_number_units/3` and `constant_value/2` but not
+  `constant_number_currency/3`, so Scryer refused the exported directive
+  (`domain_error(directive, constant_number_currency/3)`) and the rest of
+  the module did not load; Trealla ran it as an unknown directive. Both
+  preludes now expand it to `module_constant_currency/4` (with the
+  `constant_number_currency/3` accessor), and the exporter declares the
+  pair discontiguous beside the others.
+  `tests/test_prolog_constants_prelude.py`.
 - **The Python-bridge audit of a module importing through listless
   packages finishes** (2026-10-22). A listless package `__init__.seam`
   exports what it re-imports (rulings E1/M3), read from its sources;

@@ -822,7 +822,7 @@ def _lambda_parameter_names(node) -> list[str] | None:
     return names or None
 
 
-def _unit_divisor_factor(node):
+def _unit_divisor_factor(node, aliases: dict[str, str] | None = None):
     """The factor for a `/ <unit>` DIVISOR, or None if it is not a unit at all.
 
     :func:`_unit_factor` answers 1 for an EMPTY name list, by design: a
@@ -847,7 +847,10 @@ def _unit_divisor_factor(node):
         if unit is None:
             return None
         names = [unit]
-    return _unit_factor(names)
+    # *aliases*: a unit imported under an alias is read as its source unit
+    # (`/ us_dollar_cent` is `/ usd_cent`), see _unit_import_aliases.
+    aliases = aliases or {}
+    return _unit_factor([aliases.get(n, n) for n in names])
 
 
 def _quantity_divisor_unit(node) -> str | None:
@@ -1003,8 +1006,14 @@ class _ClausalToProlog:
                  module_signatures: dict[str, set[tuple[str, int]]] | None = None,
                  meta_modes: MetaModeMap | None = None,
                  source_lines: list[str] | None = None,
-                 module_specs: str = "relative"):
+                 module_specs: str = "relative",
+                 unit_aliases: dict[str, str] | None = None):
         self.dialect = dialect
+        #: ``{local: source unit}`` for the units this module imports under an
+        #: alias (:func:`_unit_import_aliases`). Consulted ONLY in unit
+        #: positions (:meth:`_unit_name`); every other occurrence of the local
+        #: name is emitted as written.
+        self._unit_aliases: dict[str, str] = dict(unit_aliases or {})
         self.strict = strict
         if module_specs not in _MODULE_SPECS:
             raise ValueError(f"module_specs must be one of {sorted(_MODULE_SPECS)}, "
@@ -1249,6 +1258,11 @@ class _ClausalToProlog:
             # under a bogus "compound unit expression" refusal -- a working
             # quantity silently exported as something else.
             return None
+        # An import alias of a unit IS that unit (`5(us_dollar_cent)` is
+        # 0.05 usd); read under its local name it is unknown, and the scaled
+        # unit refusal below would let it through with its factor dropped.
+        unit = python_ast.Name(id=self._unit_name(unit.id),
+                               ctx=python_ast.Load())
         func = node.func
         if isinstance(func, python_ast.Constant) and isinstance(
                 func.value, (int, float)) and not isinstance(func.value, bool):
@@ -1314,8 +1328,12 @@ class _ClausalToProlog:
             elif isinstance(func, python_ast.Name) and _is_var_in_name_position(func.id):
                 self._unit_atoms.add(unit.id)
 
-    @staticmethod
-    def _quantity_unit(node) -> str | None:
+    def _unit_name(self, name: str) -> str:
+        """*name* read in a UNIT position: an import alias of a unit is its
+        source unit (:func:`_unit_import_aliases`); any other name is itself."""
+        return self._unit_aliases.get(name, name)
+
+    def _quantity_unit(self, node) -> str | None:
         """The unit atom of a Quantity literal, else None."""
         if not isinstance(node, python_ast.Call) or node.keywords \
                 or len(node.args) != 1:
@@ -1327,9 +1345,9 @@ class _ClausalToProlog:
         if (isinstance(func, python_ast.Constant)
                 and isinstance(func.value, (int, float))
                 and not isinstance(func.value, bool)):
-            return unit.id
+            return self._unit_name(unit.id)
         if isinstance(func, python_ast.Name) and _is_var_in_name_position(func.id):
-            return unit.id
+            return self._unit_name(unit.id)
         return None
 
     def _check_unit_mixing(self, stmt) -> None:
@@ -1510,6 +1528,8 @@ class _ClausalToProlog:
                 PDirective(PCompound(load, (PAtom(prelude_module),))))
             for functor, arity in (("constant_number_units", 3),
                                    ("module_constant_units", 4),
+                                   ("constant_number_currency", 3),
+                                   ("module_constant_currency", 4),
                                    ("constant_value", 2),
                                    ("module_constant", 3)):
                 prelude_directives.append(PDirective(PCompound(
@@ -2198,6 +2218,13 @@ class _ClausalToProlog:
         """
         requested: list[tuple[str, int | None]] = []
         for elt in elts:
+            unit = self._unit_alias_entry(elt)
+            if unit is not None:
+                # A UNIT imported under an alias: nothing is renamed in the
+                # output (the alias is resolved in unit positions), so the
+                # entry imports exactly what the plain `[usd]` entry does.
+                requested.append((resolve_name(unit, self.dialect), None))
+                continue
             if (isinstance(elt, python_ast.Call) and isinstance(elt.func, python_ast.Name)
                     and elt.func.id == "alias"):
                 # An aliased import binds a LOCAL name to the exporter's
@@ -2265,6 +2292,16 @@ class _ClausalToProlog:
                     seen.add((name, a))
                     imports.append(PCompound("/", (PAtom(name), PNumber(a))))
         return imports
+
+    def _unit_alias_entry(self, elt) -> str | None:
+        """The source unit of an ``alias(Unit, Local)`` import entry that
+        :func:`_unit_import_aliases` resolved, else None."""
+        if (isinstance(elt, python_ast.Call) and isinstance(elt.func, python_ast.Name)
+                and elt.func.id == "alias" and len(elt.args) == 2
+                and all(isinstance(a, python_ast.Name) for a in elt.args)
+                and self._unit_aliases.get(elt.args[1].id) == elt.args[0].id):
+            return elt.args[0].id
+        return None
 
     def _plain_signature(self, mod_path: str) -> set[tuple[str, int]] | None:
         """*mod_path*'s export set for the plain layout: the caller's
@@ -2350,12 +2387,21 @@ class _ClausalToProlog:
         # site, so importing one leaves a symbol the emitted program never
         # mentions -- and the unit's home is an engine module the export does
         # not stage, so the directive would not resolve at all.
-        kept = [e for e in elts
-                if not (isinstance(e, python_ast.Name) and e.id in self._unit_atoms)]
+        def dropped_unit(e) -> str | None:
+            # The name a dropped unit entry imports, else None. A unit alias
+            # is dropped when its LOCAL name is used as a unit, exactly as the
+            # plain entry is when ITS name is; it is reported by its source
+            # unit, the name the plain entry would report.
+            if isinstance(e, python_ast.Name) and e.id in self._unit_atoms:
+                return e.id
+            unit = self._unit_alias_entry(e)
+            if unit is not None and e.args[1].id in self._unit_atoms:
+                return unit
+            return None
+        kept = [e for e in elts if dropped_unit(e) is None]
         if len(kept) != len(elts):
-            dropped = sorted({e.id for e in elts
-                              if isinstance(e, python_ast.Name)
-                              and e.id in self._unit_atoms})
+            dropped = sorted({u for e in elts
+                              if (u := dropped_unit(e)) is not None})
             self._add_lossy(
                 f"unit import dropped: -import_from({mod_path}, {dropped})")
             if not kept:
@@ -2736,7 +2782,8 @@ class _ClausalToProlog:
                     f"a constant declaration (constants capability 'none'). "
                     f"Refusing rather than emitting something that parses and "
                     f"does not run.")
-            factor = _unit_factor(_unit_leaf_names(unit))
+            factor = _unit_factor([self._unit_name(n)
+                                   for n in _unit_leaf_names(unit)])
             if factor is None:
                 raise NotImplementedError(
                     f"clausal_to_prolog: -{directive}({name}, ..., "
@@ -3111,7 +3158,7 @@ class _ClausalToProlog:
         base = self._fold_constant_call(node.left)
         if base is None:
             return None
-        factor = _unit_divisor_factor(node.right)
+        factor = _unit_divisor_factor(node.right, self._unit_aliases)
         if factor is None:
             # A divisor the unit vocabulary does not hold is not a unit at all
             # -- `constant(c) / COUNT` is division, and so is `constant(c) /
@@ -3147,7 +3194,7 @@ class _ClausalToProlog:
         """
         if not isinstance(node.op, python_ast.Div):
             return None
-        factor = _unit_divisor_factor(node.right)
+        factor = _unit_divisor_factor(node.right, self._unit_aliases)
         if factor is None:
             return None
         left = self._convert_expr(node.left)
@@ -4491,7 +4538,8 @@ def clausal_source_to_prolog_ast(source: str, *,
     if dialect is None:
         dialect = Dialect.iso()
     tree = python_ast.parse(source)
-    _resolve_unit_spellings(tree)
+    unit_aliases = _unit_import_aliases(tree)
+    _resolve_declared_units(tree, unit_aliases)
     _expand_table_directives(tree)
     # keepends=True is load-bearing, not style. build_quote_map feeds tokenize
     # through readline, which reads a bare "" -- any blank line without its
@@ -4505,7 +4553,8 @@ def clausal_source_to_prolog_ast(source: str, *,
                                  module_signatures=module_signatures,
                                  meta_modes=meta_modes,
                                  source_lines=source.splitlines(keepends=True),
-                                 module_specs=module_specs)
+                                 module_specs=module_specs,
+                                 unit_aliases=unit_aliases)
     return converter.convert_module(tree)
 
 
@@ -4528,77 +4577,154 @@ def _directive_call(stmt):
     return node.operand
 
 
-def _is_engine_unit_name(name: str) -> bool:
-    """True when *name* is a unit the exporter resolves from static data --
-    the same lookup the declaration path makes (:func:`_unit_factor`)."""
-    return _unit_factor([name]) is not None
+def _module_path_text(node) -> str | None:
+    """The dotted module path an ``-import_from`` names, or None."""
+    if isinstance(node, python_ast.Constant) and isinstance(node.value, str):
+        return node.value
+    parts = []
+    while isinstance(node, python_ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if not isinstance(node, python_ast.Name):
+        return None
+    parts.append(node.id)
+    return ".".join(reversed(parts))
 
 
-def _resolve_unit_spellings(tree) -> None:
-    """Rewrite every spelling of a unit to the one name it resolves to, in
-    place, BEFORE the converter walks the tree.
+@functools.lru_cache(maxsize=None)
+def _unit_vocabulary_names(mod_path: str) -> frozenset[str] | None:
+    """The unit names *mod_path* binds, when it is a UNIT VOCABULARY module;
+    None for every other module.
 
-    AN IMPORT ALIAS. ``-import_from(united_states, [alias(usd, us_dollar)])``
-    binds the local name ``us_dollar`` to the currency ``usd`` -- the seam
-    compiler maps it to ``united_states.usd`` (``_import_remap``), so in the
-    engine every occurrence of ``us_dollar`` IS that unit. The exporter
-    resolves units by NAME from static data, and ``us_dollar`` names nothing
-    there: a module importing a currency unit under an alias was refused at
-    its first ``-constant_number_currency(..., us_dollar)`` ("a unit the
-    exporter cannot resolve"), a ``/ us_dollar_cent`` divisor stayed an
-    unevaluable atom, and an inline ``5(us_dollar_cent)`` slipped past the
-    scaled-unit refusal and dropped its factor. Renaming the local name back to
-    the source unit, and the ``alias(usd, us_dollar)`` entry to a plain
-    ``usd``, makes the module the one written with a plain import -- which
-    every unit position already handles. Only an alias whose SOURCE name is a
-    unit is resolved: a predicate alias stays the refusal in
-    ``_import_list`` (no import renaming, ruling 2026-09-29).
+    The vocabularies are the units module (``units``, ``py.units``) and the
+    jurisdiction modules (``united_states``, ``countries.australia``...),
+    whose bindings are read from ``countries._data`` -- static data, the same
+    tables :func:`_currency_factor` reads. Deciding by MODULE and not by word
+    is the point: the unit vocabulary holds ``day``, ``second``, ``mark``,
+    ``gold``, ``m``, so a word test would read a user module's
+    ``alias(day, helper_day)`` predicate import as a unit.
+    """
+    from clausal.modules import units as _units                 # noqa: PLC0415
+    from clausal.modules.countries import _data                 # noqa: PLC0415
+    from clausal.terms import Quantity                          # noqa: PLC0415
+    path = mod_path.removeprefix("clausal.modules.")
+    if path in ("units", "py.units"):
+        return frozenset(
+            n for n, v in vars(_units).items()
+            if not n.startswith("_")
+            and isinstance(v, (_units._UnitsPredicate, Quantity)))
+    jurisdiction = path.removeprefix("countries.")
+    if jurisdiction not in _data.JURISDICTIONS:
+        return None
+    names = set()
+    for row in _data.CURRENCIES:
+        if row["jurisdiction"] != jurisdiction:
+            continue
+        names.add(_data.CURRENCY_BINDINGS[row["code"]])
+        minor = _data.MINOR_UNITS.get(row["code"])
+        if minor is not None:
+            names.add(minor)
+    return frozenset(names)
 
-    A QUALIFIED unit in a declaration. ``united_states.usd`` as the unit of a
-    ``-constant_number_*`` declaration lowered to the quoted atom
-    ``'united_states:usd'`` where the plain spelling gives ``usd``. Every
-    other unit position already reads the qualified name by its leaf
-    (``_unit_leaf_names``, ``_try_quantity``), so the declaration does too.
+
+def _unit_import_aliases(tree) -> dict[str, str]:
+    """``{local: source unit}`` for each ``alias(Unit, Local)`` entry of an
+    ``-import_from`` from a unit vocabulary module.
+
+    ``-import_from(united_states, [alias(usd, us_dollar)])`` binds the local
+    name ``us_dollar`` to the currency ``usd`` (the seam compiler maps it to
+    ``united_states.usd``). The exporter resolves units by NAME from static
+    data, and ``us_dollar`` names nothing there. The map is consulted only in
+    UNIT positions -- a declaration's unit, a quantity literal, a unit
+    divisor -- never module-wide: everywhere else the local name is emitted as
+    written, so a module's own ``usd`` atom is never captured, and a
+    predicate alias keeps its refusal (no import renaming, ruling
+    2026-09-29).
+
+    A local name bound to two different targets, one of them a unit alias, is
+    refused: the engine refuses it within one directive (a ``SyntaxError`` at
+    load) and keeps the later binding across two, and the exporter does not
+    pick one.
     """
     aliases: dict[str, str] = {}
+    bound: dict[str, tuple[str, str]] = {}
     for stmt in tree.body:
         call = _directive_call(stmt)
         if (call is None or call.func.id != "import_from"
                 or len(call.args) != 2
                 or not isinstance(call.args[1], python_ast.List)):
             continue
-        elts = call.args[1].elts
-        for i, elt in enumerate(elts):
-            if (isinstance(elt, python_ast.Call)
+        mod_path = _module_path_text(call.args[0])
+        if mod_path is None:
+            continue
+        for elt in call.args[1].elts:
+            if isinstance(elt, python_ast.Name):
+                orig, local = elt.id, elt.id
+            elif (isinstance(elt, python_ast.Call)
                     and isinstance(elt.func, python_ast.Name)
                     and elt.func.id == "alias" and len(elt.args) == 2
-                    and not elt.keywords
-                    and all(isinstance(a, python_ast.Name) for a in elt.args)
-                    and _is_engine_unit_name(elt.args[0].id)):
+                    and all(isinstance(a, python_ast.Name) for a in elt.args)):
                 orig, local = elt.args[0].id, elt.args[1].id
+            else:
+                continue
+            target = (mod_path, orig)
+            vocabulary = _unit_vocabulary_names(mod_path)
+            is_unit_alias = (orig != local and vocabulary is not None
+                             and orig in vocabulary)
+            previous = bound.get(local)
+            if previous is not None and previous != target and (
+                    is_unit_alias or local in aliases):
+                # Only a clash involving a UNIT alias is this function's
+                # business; the others keep the import path's handling.
+                # REFUSED, never last-wins: within one directive the engine
+                # refuses it (SyntaxError at load); across two directives it
+                # silently keeps the later binding (measured 2026-10-22), so
+                # which unit a use means depends on directive order -- and a
+                # wrong unit is a wrong number in an exported legal program.
+                raise NotImplementedError(
+                    f"clausal_to_prolog: -import_from binds the local name "
+                    f"{local} to both {previous[0]}.{previous[1]} and "
+                    f"{mod_path}.{orig}. One local name names one import "
+                    f"(the engine refuses this within one directive); "
+                    f"import the units under different names.")
+            bound[local] = target
+            if is_unit_alias:
                 aliases[local] = orig
-                elts[i] = python_ast.copy_location(
-                    python_ast.Name(id=orig, ctx=python_ast.Load()), elt)
-    if aliases:
-        for node in python_ast.walk(tree):
-            if isinstance(node, python_ast.Name) and node.id in aliases:
-                node.id = aliases[node.id]
+    return aliases
 
-    def leaf(node):
+
+def _resolve_declared_units(tree, aliases: dict[str, str]) -> None:
+    """Spell the unit of every ``-constant_number_*`` declaration by the name
+    it resolves to, in place, BEFORE the table directives expand.
+
+    The unit argument is a unit position by syntax, so the rewrite is scoped
+    to it: an import alias (``us_dollar``) becomes its source unit (``usd``),
+    and a qualified unit (``united_states.usd``) its leaf -- which lowered to
+    the quoted atom ``'united_states:usd'`` where the plain spelling gives
+    ``usd``; every other unit position already read a qualified name by its
+    leaf (``_unit_leaf_names``, ``_try_quantity``). Done before expansion so
+    the table form's ``$check_currency_unit`` fact and its rows get the
+    resolved name too.
+    """
+    def resolve(node):
         if isinstance(node, python_ast.Attribute):
             return python_ast.copy_location(
                 python_ast.Name(id=node.attr, ctx=python_ast.Load()), node)
+        if isinstance(node, python_ast.Name) and node.id in aliases:
+            return python_ast.copy_location(
+                python_ast.Name(id=aliases[node.id], ctx=python_ast.Load()),
+                node)
         if isinstance(node, python_ast.BinOp):
-            node.left, node.right = leaf(node.left), leaf(node.right)
+            node.left, node.right = resolve(node.left), resolve(node.right)
         elif isinstance(node, python_ast.UnaryOp):
-            node.operand = leaf(node.operand)
+            node.operand = resolve(node.operand)
         return node
 
     for stmt in tree.body:
         call = _directive_call(stmt)
         if (call is not None and call.func.id in _UNIT_DECLARATIONS
                 and len(call.args) >= 3):
-            call.args[2] = leaf(call.args[2])
+            call.args[2] = resolve(call.args[2])
 
 
 def _expand_table_directives(tree) -> None:
