@@ -669,6 +669,39 @@ def _cons_key(element_keys: tuple) -> tuple:
     return (_ORD_COMPOUND, 2, _ORD_CONS_NAME_KEY, _CF_POSITIONAL, element_keys)
 
 
+def _cons_chain_key(term) -> tuple:
+    """The key of the cons cell ``'.'(H, T)`` -- an IMPROPER list
+    ``[H1, ..., Hn|Tail]`` as its cells -- built along the tail spine by a
+    loop: the same nested key as keying the cell as a compound, which
+    recursed once per cell and overflowed at about 500 cells (compare/3,
+    sort/2, msort/2 on a hole-built improper list).  A spine that comes
+    back to a cell already on it (a cyclic list) raises ``RecursionError``,
+    as the recursion did, rather than looping."""
+    from clausal.terms import SegList  # noqa: PLC0415
+    heads: list = []
+    seen: set = set()
+    keep: list = []
+    t = term
+    while True:
+        heads.append(t[1])
+        t = deref(t[2])
+        if isinstance(t, SegList):
+            # A hole-built cyclic list closes its cycle through a hole,
+            # whose binding is the same SegList object every lap.
+            if id(t) in seen:
+                raise RecursionError("term_key: cyclic term")
+            seen.add(id(t))
+            keep.append(t)
+            from clausal.logic.runtime._seg_helpers import walk_seg  # noqa: PLC0415
+            t = walk_seg(t)
+        if not (type(t) is tuple and len(t) == 3 and t[0] == "."):
+            break
+    key = term_key(t)
+    for h in reversed(heads):
+        key = (_ORD_COMPOUND, 2, (0, "."), _CF_POSITIONAL, (term_key(h), key))
+    return key
+
+
 class _OpaqueOrder:
     """Order key for a value with no term shape of its own.
 
@@ -795,6 +828,8 @@ def term_key(term: Any) -> tuple:
         # Arity > 0 keys as a compound — arity first, then name
         # (ISO 7.2.1), positional flavour — never as a sequence.
         refuse_reserved_1tuple(term)   # STAGE 2: the arity-0 cell is RESERVED
+        if len(term) == 3 and term[0] == ".":
+            return _cons_chain_key(term)
         return (_ORD_COMPOUND, len(term) - 1, (0, term[0]), _CF_POSITIONAL,
                 tuple(term_key(a) for a in term[1:]))
     if type(term) is tuple and term and term[0] == TUPLE_TAG:
