@@ -9,23 +9,23 @@ The oracle (our local clpq.pl port on Scryer) gives the manual's answer unless n
    **WRONG ANSWER, silent:** `{A=<4}, entailed(A=\=5)` gives `false`, and `entailed(A=<5)` is also false.
    `_entailed__1` matches only the seam's comparison nodes, so a Prolog-term constraint never matches and fails.
    Highest priority. test_not_entailed currently passes only because entailed/1 always fails.
-2. **FIXED 2026-10-22 (commit 57834f49)** builtins `maximize/1` and `minimize/1` (`maximize(Z, _)`
+2. **FIXED 2026-10-22 (commit 3dead4ac)** builtins `maximize/1` and `minimize/1` (`maximize(Z, _)`
    with a fresh result), both solvers; test_maximize_1_as_documented passes without its xfail, and
    tests/test_clpq_prolog_surface_builtins.py pins both solvers. D20 did not rule the /1 form out;
    it records the test adaptation only.
    `maximize/1` and `minimize/1` are missing (existence_error); only the /2 form exists (DEVIATIONS D20).
-3. **FIXED 2026-10-22 (commit 57834f49)** the builtin `dump/3` (the port's dump.pl dump/3 as terms;
+3. **FIXED 2026-10-22 (commit 3dead4ac)** the builtin `dump/3` (the port's dump.pl dump/3 as terms;
    under the default solver dump_q/2's projection as terms, `legacy.dump`); test_dump_3,
    test_dump_3_with_atoms_for_names and test_dump_3_of_a_nonlinear_store pass without their xfails.
    The leak was `pythonic_ast.nodes.dump` in every module's globals, found before any builtin.
    `dump/3` raises `type_error(callable, <function dump ...>)`: a Python function leaks as a goal.
-4. **FIXED 2026-10-22 (commit 05dedc0a)** the front end passes nf.pl's functions through as cells
+4. **FIXED 2026-10-22 (commit 51757403)** the front end passes nf.pl's functions through as cells
    (`pow/2` and `exp/2` spelt `^`, which the R9 A1 post boundary admits), and that boundary keeps a
    non-ground evaluable with no node (`cos(X)` under `sin`) instead of refusing it; all ten
    test_nonlinear queries pass without their xfail.
    Nonlinear `sin/cos/pow/exp` inside `{}` are refused at load: the .pl front end (iso_l3 _clpq_constraint) lowers only + - * /.
    The port's nonlinear delay exists, so this is a front-end gap. 10 queries plus a dump of a nonlinear store.
-5. **FIXED 2026-10-22 (commit 57834f49)** the builtin `ordering/1` (the port's ordering.pl; the
+5. **FIXED 2026-10-22 (commit 3dead4ac)** the builtin `ordering/1` (the port's ordering.pl; the
    default solver accepts the hint without effect, it has no variable ordering); the four
    test_ordering queries pass without their xfail.
    NEEDS RULING (printing): the `-g` residual printer runs dump/3 over the goal's variables in the
@@ -38,7 +38,7 @@ The oracle (our local clpq.pl port on Scryer) gives the manual's answer unless n
    projects onto the query variables without the chain (itf3.pl project_attributes/2, not ported,
    D14). Recommendation: (b), once the hook is ported; until then (a).
    `ordering/1` is missing (4 queries).
-6. **FIXED 2026-10-22 (commit 57834f49)** the builtin `bb_inf/5`: the port's bb.pl bb_inf/5 (Vertex
+6. **FIXED 2026-10-22 (commit 3dead4ac)** the builtin `bb_inf/5`: the port's bb.pl bb_inf/5 (Vertex
    and Eps); the default solver's bb_inf binds the variables and reads Vertex off them, and reads
    Eps without using it (its integrality test is exact). test_flugpl_bb_inf_5 passes without its
    xfail: Inf=1201500 and the manual's Vertex.

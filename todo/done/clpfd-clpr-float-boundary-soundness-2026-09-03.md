@@ -1,6 +1,6 @@
 # clpfd<->clpr float-boundary soundness: in-range one-ULP inward rounding + finite out-of-int64 UB
 
-**Status: FIXED 2026-10-22 (commit 7fd19aae).** `_safe_float_lo`/`_safe_float_hi` round an inexact
+**Status: FIXED 2026-10-22 (commit 97c68e62).** `_safe_float_lo`/`_safe_float_hi` round an inexact
 bignum bound outward with clpr's `_dn`/`_up` (and clpr's `_get_var_interval`/`_promote_fd_to_real`
 use them); the C `fd_hook` casts a real bound only when it lies strictly inside (-2^63, 2^63) and
 otherwise takes the exact Python path `clpfd._narrow_by_real`, shared with the Python hook and
