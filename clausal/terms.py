@@ -671,7 +671,7 @@ def _hole_is_nil(v) -> bool:
     return _is_nil(v) or (type(v) is str and v == "[]")
 
 
-def not_a_list(culprit):
+def _not_a_list(culprit):
     """The ``type_error(list, Culprit)`` a star raises when it holds a
     non-list and something follows it (ruling 2026-10-14: a hole bound to a
     non-list is the IMPROPER TAIL, never spliced as characters, and a star
@@ -684,17 +684,42 @@ def not_a_list(culprit):
     return LogicException(type_error("list", culprit))
 
 
+def _unbound_hole_before_tail(tail):
+    """The ``instantiation_error`` for a partial list with an unbound hole
+    BEFORE its improper tail (``[*A, x|foo]``): neither a SegList (a hole
+    holds a list) nor cons cells (A has no length) can spell it, but it is
+    a term once A is bound -- so instantiation, not type, semantics
+    (provisional ruling 2026-10-22).  Raised by the SegList walk and the
+    multi-star builder alike."""
+    from .logic.exceptions import LogicException, instantiation_error
+    return LogicException(instantiation_error(
+        f"a list with an unbound hole before its improper tail "
+        f"{term_writeq(tail)} cannot be spelled; bind the hole first"))
+
+
 def _rational_eq(a, b) -> bool:
     """Python equality of two terms either of which may be an IMPROPER or
     CYCLIC list (the cons cells a SegList walks to, a SegList that closes a
-    cycle), decided as the bisimulation Scryer's ``==/2`` decides: ``X =
-    [a|X], Y = [a,a|Y]`` are one rational tree.  A pair met again is assumed
+    cycle), decided as a bisimulation: ``X = [a|X], Y = [a,a|Y]`` are one
+    rational tree, as Scryer's ``==/2`` says.  A pair met again is assumed
     equal (coinduction); the pairs are kept alive while they are keyed, so
-    an id is never that of an object already freed.  Leaves keep Python
-    equality, as :meth:`SegList.__eq__` always did."""
+    an id is never that of an object already freed, and each SegList is
+    walked ONCE per call (``walked``), so its cells are stable positions
+    that recur -- re-walking it on every lap made fresh cells, and two
+    cycles whose SegLists are never reached in phase (``T = [a,b|T], X =
+    [b|T]`` against ``Y = [b,a|Y]``) never met a pair twice.  Leaves keep
+    Python equality, as :meth:`SegList.__eq__` always did (``1 == 1.0``)."""
     seen: set = set()
     keep: list = []
+    walked: dict = {}        # id(SegList) -> (the SegList, its one walk)
     todo = [(a, b)]
+
+    def walk_once(s):
+        entry = walked.get(id(s))
+        if entry is None:
+            entry = walked[id(s)] = (s, s._walk_once())
+        return entry[1]
+
     while todo:
         x, y = todo.pop()
         x, y = deref(x), deref(y)
@@ -708,14 +733,14 @@ def _rational_eq(a, b) -> bool:
         seen.add(key)
         keep.append((x, y))
         if isinstance(x, SegList):
-            w = x._walk_once()
+            w = walk_once(x)
             if w is None or isinstance(w, SegList):
                 if not (x == y):
                     return False
                 continue
             x = w
         if isinstance(y, SegList):
-            w = y._walk_once()
+            w = walk_once(y)
             if w is None or isinstance(w, SegList):
                 if not (x == y):
                     return False
@@ -818,11 +843,13 @@ class SegList:
         holes bound to nil in any spelling, SegLists that walk to nothing
         -- and ``[*A, *B]`` with ``A = [b|foo]`` and ``B = []`` is
         ``[b|foo]``.  Anything else after it (an element, a non-empty or an
-        unbound hole, a second non-list) is :func:`not_a_list`:
+        unbound hole, a second non-list) is :func:`_not_a_list`:
         ``type_error(list, S)`` for the star S that holds the non-list,
         the same error whenever the holes were bound.  An unbound hole
         BEFORE it (``[*A, x|foo]``) has no spelling here and raises
-        ``PartialTermError``."""
+        ``instantiation_error`` (provisional ruling 2026-10-22: the term
+        exists once the hole is bound, so this is instantiation, not
+        type, semantics)."""
         # Iterative, with one flat accumulator: a partial list built forward
         # through its open tail (a DCG, ``Hole = [a|Hole1]`` in a loop) is a
         # chain of SegLists, one link per step, and walking it recursively
@@ -854,7 +881,7 @@ class SegList:
                 if not seg.elements:
                     continue
                 if tail is not _NO_TAIL:
-                    raise not_a_list(culprit)
+                    raise _not_a_list(culprit)
                 run.extend(walk(e) for e in seg.elements)
                 continue
             # One step, not ``walk``: a hole bound to the next link of the
@@ -867,7 +894,7 @@ class SegList:
             elif tv is list:
                 if v:                      # a hole bound to a list: its elements
                     if tail is not _NO_TAIL:
-                        raise not_a_list(culprit)
+                        raise _not_a_list(culprit)
                     run.extend(v)
                 continue
             elif tv is SegListView:
@@ -876,7 +903,7 @@ class SegList:
                 continue                   # nothing, in any spelling
             elif _is_improper_tail(v):
                 if tail is not _NO_TAIL:
-                    raise not_a_list(culprit)
+                    raise _not_a_list(culprit)
                 tail = culprit = v
                 tail_depth = len(stack)
                 continue
@@ -887,12 +914,12 @@ class SegList:
             if isinstance(v, str):
                 if v:
                     if tail is not _NO_TAIL:
-                        raise not_a_list(culprit)
+                        raise _not_a_list(culprit)
                     run.extend(char_atom(c) for c in v)   # text (a walked SegString): its CHARS
             elif isinstance(v, list):
                 if v:
                     if tail is not _NO_TAIL:
-                        raise not_a_list(culprit)
+                        raise _not_a_list(culprit)
                     run.extend(v)
             elif isinstance(v, SegList):
                 if id(v) in open_ids:
@@ -901,7 +928,7 @@ class SegList:
                     # binding is the cycle -- so the walk is ``'.'(a, X)``,
                     # one lap, as the cyclic term ISO's ``X = [a|X]`` is.
                     if tail is not _NO_TAIL:
-                        raise not_a_list(culprit)
+                        raise _not_a_list(culprit)
                     tail = seg.var
                     culprit = v
                     tail_depth = len(stack)
@@ -922,7 +949,7 @@ class SegList:
                         f"must bind to list/str."
                     )
                 if tail is not _NO_TAIL:
-                    raise not_a_list(culprit)   # an open hole after the tail
+                    raise _not_a_list(culprit)   # an open hole after the tail
                 if run:
                     segs.append(ConcreteSeg(run))
                     run = []
@@ -934,10 +961,7 @@ class SegList:
                 # length), so it has no term here.
                 if cyclic:
                     raise _CyclicPartialList("cyclic partial list")
-                raise PartialTermError(
-                    f"SegList with an unbound hole before its improper tail "
-                    f"{_improper_tail(tail)!r} cannot be spelled; bind the "
-                    f"hole first.")
+                raise _unbound_hole_before_tail(_improper_tail(tail))
             for e in reversed(run):
                 tail = (".", e, tail)
             return tail

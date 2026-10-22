@@ -39,8 +39,8 @@ from ._seg_helpers import (
 )
 from .list_unify import _cons_star, _head_list_unify_input, _head_list_unify_output
 from clausal.terms import (
-    PartialTermError, _hole_is_nil, _is_cons_cell, _is_improper_tail,
-    _walked_nil, not_a_list,
+    _hole_is_nil, _is_cons_cell, _is_improper_tail, _not_a_list,
+    _unbound_hole_before_tail, _walked_nil,
 )
 
 
@@ -264,7 +264,7 @@ def _multi_star_tail(segments):
     That star is the improper TAIL (D50), so everything after it must hold
     nothing (an empty fixed run, a star bound to nil or walking to nothing);
     an element, an unbound star or a second non-list after it is
-    :func:`clausal.terms.not_a_list`, ``type_error(list, S)`` -- the reading
+    :func:`clausal.terms._not_a_list`, ``type_error(list, S)`` -- the reading
     the SegList walk gives when the stars are bound after the build."""
     for i, (kind, val) in enumerate(segments):
         if kind != "star":
@@ -284,11 +284,11 @@ def _multi_star_tail(segments):
         for kind2, val2 in segments[i + 1:]:
             if kind2 == "fixed":
                 if val2:
-                    raise not_a_list(culprit)
+                    raise _not_a_list(culprit)
             else:
                 d2 = deref(val2)
                 if is_var(d2) or not _holds_nothing(d2):
-                    raise not_a_list(culprit)
+                    raise _not_a_list(culprit)
         return i, tail, culprit
     return None
 
@@ -315,8 +315,8 @@ def _build_multi_star_list(segments):
     improper = _multi_star_tail(segments)
     if improper is not None:
         # [*before|S] with S the first non-list star: the cons cells.  An
-        # unbound star before it ([*A|foo]) has no term here, as in the
-        # SegList walk.
+        # unbound star before it ([*A|foo]) has no spelling here, as in the
+        # SegList walk: instantiation_error.
         i, tail, _culprit = improper
         prefix = _unwrap(_build_multi_star_list(segments[:i])) if i else []
         if isinstance(prefix, str):
@@ -324,9 +324,7 @@ def _build_multi_star_list(segments):
         elif isinstance(prefix, bytes):
             prefix = list(prefix)
         if not isinstance(prefix, list):
-            raise PartialTermError(
-                f"list with an unbound star before its improper tail "
-                f"{tail!r} cannot be spelled; bind the star first.")
+            raise _unbound_hole_before_tail(tail)
         return _cons_star(prefix, tail)
     # First pass: do we have any non-string-compatible content?
     # If every star derefs to a str / ground-SegString / non-ground

@@ -675,14 +675,20 @@ def _cons_chain_key(term) -> tuple:
     loop: the same nested key as keying the cell as a compound, which
     recursed once per cell and overflowed at about 500 cells (compare/3,
     sort/2, msort/2 on a hole-built improper list).  A spine that comes
-    back to a cell already on it (a cyclic list) raises ``RecursionError``,
-    as the recursion did, rather than looping."""
+    back to a cell or a SegList already on it (a cyclic list, whether the
+    cycle closes through a hole or through a cell bound to itself) raises
+    ``RecursionError``, as the recursion did, rather than looping; the
+    objects are kept alive while their ids are recorded."""
     from clausal.terms import SegList  # noqa: PLC0415
     heads: list = []
     seen: set = set()
     keep: list = []
     t = term
     while True:
+        if id(t) in seen:
+            raise RecursionError("term_key: cyclic term")
+        seen.add(id(t))
+        keep.append(t)
         heads.append(t[1])
         t = deref(t[2])
         if isinstance(t, SegList):

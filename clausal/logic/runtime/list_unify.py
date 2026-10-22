@@ -84,7 +84,7 @@ from clausal.logic.variables import is_var, deref, unify
 from clausal.terms import (
     SegList, SegListView, ConcreteSeg, VarSeg, list_rest,
     SegString, SegBytes, _is_cons_cell, _unify_seglist_cons,
-    _hole_is_nil, not_a_list,
+    _hole_is_nil, _not_a_list,
 )
 from ._seg_helpers import (
     maybe_promote_to_str, maybe_promote_to_bytes, seq_getitem, str_chars,
@@ -261,12 +261,12 @@ def _cons_star(before, tail, after=(), culprit=None):
 
     With *after* non-empty -- ``[*S, x]`` where S holds the non-list *tail*
     (an atom, a number, a compound, an improper list) -- there is no such
-    term: ``type_error(list, S)`` (:func:`clausal.terms.not_a_list`), never
+    term: ``type_error(list, S)`` (:func:`clausal.terms._not_a_list`), never
     a silent failure.  *culprit* is S's own value when it is not *tail*
     itself (a SegList that walks to *tail*).  Shared with the C twin, which
     hands it ``after_vals``."""
     if after:
-        raise not_a_list(tail if culprit is None else culprit)
+        raise _not_a_list(tail if culprit is None else culprit)
     for e in reversed(before):
         tail = (".", deref(e), tail)
     return tail

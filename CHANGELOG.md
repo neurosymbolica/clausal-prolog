@@ -218,8 +218,11 @@ surface described in [docs/public-api.md](docs/public-api.md).
   being the star's value (`foo`, `[b|foo]`). A star bound to nil in any
   spelling (`()`, the atom `'[]'`) is nothing, where `()` used to leave a
   hole bound to it and `'[]'` spliced as two characters. An unbound star
-  before the tail (`[*A, x|foo]`) has no spelling and raises
-  PartialTermError, as a number tail there always did. A cyclic star
+  before the tail (`[*A, x|foo]`, `Q = [*A, x, *T], T = foo`) has no
+  spelling yet and raises `instantiation_error` -- provisional, pending
+  ruling 2026-10-22: the term exists once the hole is bound, so this is
+  instantiation rather than type semantics; it used to raise a raw
+  PartialTermError that `catch/3` saw as a Python object. A cyclic star
   before an element (`[*X, x]`, `X = [a|X]`) raises the same catchable type
   error instead of RecursionError while formatting its message (a cyclic
   SegList's `repr` now terminates). Pinned in
@@ -230,12 +233,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `SegList.__eq__` compared the walked cons cells by Python equality, whose
   cyclic tails are two distinct variables); Scryer says yes, and
   `X = [a|X], Y = [a,a|Y]` are one rational tree too. `SegList.__eq__` on
-  an improper or cyclic walk now decides the bisimulation
-  (`terms._rational_eq`): pairs keyed by the dereferenced objects of the
-  terms themselves and kept alive while keyed -- the requirements the
-  2026-10-13 ruling set when it removed an earlier, unsound coinductive
-  fallback -- so `X = [a|X], Y = [b|Y]` and `f(X, [1,2,3])` against
-  `f(Y, [1,2,4])` stay unequal. The ISO `==/2` path is untouched and still
+  an improper or cyclic walk now decides a bisimulation
+  (`terms._rational_eq`), with the Python leaf equality the seam `==`
+  always had (`[1] == [1.0]` stays true, unlike ISO `==/2`): pairs keyed
+  by the dereferenced objects of the terms themselves and kept alive
+  while keyed, each SegList walked once per comparison so cycles reached
+  out of phase (`T = [a,b|T], X = [b|T]` against `Y = [b,a|Y]`) meet the
+  same cells again -- the requirements the 2026-10-13 ruling set when it
+  removed an earlier, unsound coinductive fallback -- so `X = [a|X],
+  Y = [b|Y]` and `f(X, [1,2,3])` against `f(Y, [1,2,4])` stay unequal.
+  Checked against Scryer's `==/2` on random prefixed cycles
+  (`test_rational_eq_agrees_with_scryer_on_random_cycles`). The ISO `==/2`
+  path is untouched and still
   raises on two distinct cyclic terms (see
   `todo/deep-and-cyclic-terms-overflow-the-recursive-walkers-2026-10-22.md`).
   Pinned in `tests/test_star_splice_readings.py::test_seam_eq_on_cyclic_lists`
@@ -245,8 +254,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
   500 cells or more** (2026-10-22). The standard-order key recursed once per
   cons cell and raised RecursionError at about 500 cells of a hole-built
   `[1, 2, ...|foo]`; it now builds the same key along the tail spine by a
-  loop. On a cyclic list it raises a clean RecursionError, as before, rather
-  than looping. Pinned in
+  loop. On a cyclic list -- through a hole or through a cell bound to
+  itself -- it raises a clean RecursionError, as before, rather than
+  looping. Pinned in
   `tests/test_star_splice_readings.py::test_compare_and_sort_on_a_500_cell_improper_list`.
 
 ## 1.1.0 (2026-10-21)
