@@ -259,6 +259,65 @@ surface described in [docs/public-api.md](docs/public-api.md).
   looping. Pinned in
   `tests/test_star_splice_readings.py::test_compare_and_sort_on_a_500_cell_improper_list`.
 
+- **The `.pl` translator builds a comparison, a clpz relation, a clause and
+  a control construct in data position as the ISO cell** (2026-10-22).
+  Under `CLAUSAL_PL_FRONTEND=translator`, `G = (1+1 < 3), call(G)` became
+  the seam's chained comparison `G is 1 + 1 < 3` and raised
+  `type_error(callable, 1+1)`; `G = (X #= 1+1)` raised
+  `type_error(callable, 2)`; `X = (a :- b, c)` raised
+  `domain_error(clpz_expression, b(c))`; `X = (a ; b)` read as
+  `(X is a) or b` and `X = (\+ a)` as `X is not a`; a parenthesised
+  conjunction argument `f((b, c))` was `f(b(c))`; `X = (A = b)` read as
+  the chained comparison `X is A is b`; a stored univ `A =.. L` was the
+  term `unpack(A, L)`; and `assertz((H :- Y = X+1))` did not load ("clause
+  body must be parenthesized"). In data position (not a goal, not a
+  meta-call's goal argument) these are now the cells `'<'('+'(1, 1), 3)`, `'#='(X, '+'(1, 1))`, `':-'(a, ','(b, c))`,
+  `';'(a, b)`, `'\\+'(a)`, `'='(A, b)`, `'=..'(A, L)`, `'-->'(a, b)`, as
+  on the native front end and in Scryer. `assertz((H :- B))` now raises
+  the runtime rule refusal `permission_error(assert, rule, H)` that the native front end raises
+  (`H :- true` asserts the fact). clpz's `#\=`, `#<`, `#>`, `#=<`, `#>=`,
+  the reification connectives and `..`, which the translator refused as
+  "not a valid Python identifier", are the cells in every position (as a
+  goal, the call of the quoted builtin `'#<'/2`). Goals and meta-call goal
+  arguments keep the seam's spelling (`X == 1 + 1`, `X > 1 + 1`,
+  `a or b`), as do `{...}` constraint sets. Pinned by
+  `tests/test_pl_translator_data_terms_followups.py`, on both front ends
+  against Scryer's output. With the clpz operators below, the translator
+  now loads nine more of the repository's `.pl` sources and doc examples
+  the native front end loads, and agrees with it on every answer of
+  `tests/iso_diff/terms.pl` and `tests/iso_diff/between.pl`; the `.pl`
+  parity fixture drops those eleven rows (37 differences to 26). `emit_clausal_term` renders a term, so it now
+  gives these cells (`'\\+'(foo)`, `'='(X, 1)`).
+- **A quoted `':-'(H, B)`, `';'(A, B)`, `'\\+'(G)`, `','(A, B)`,
+  `'-->'(A, B)`, `'|'(A, B)`, `'->'(A, B)`, `'*->'(A, B)`, `'?-'(G)` or
+  `'..'(L, H)` in seam term position builds the ISO cell.** No name can
+  bind these functors and none can be declared, so they raised
+  `existence_error(procedure, (:-)/2)` (a `NameError` for `..`) at run
+  time. Pinned by
+  `test_pl_translator_data_terms_followups.py::test_quoted_iso_punctuation_builds_cells_in_the_seam`.
+- **`use_module(library(clpz))` brings clpz's operators to the `.pl`
+  translator's reader.** `#=`, `in`, `..` and the rest were syntax errors
+  after it under `CLAUSAL_PL_FRONTEND=translator`. The reader now applies
+  the native front end's rule (`iso_l3_directives.library_reader_ops`):
+  `use_module/1` brings the library's operators, `use_module/2` those its
+  import list names plus clpz's, which Scryer installs whatever the list
+  says. As before for the translator's `op/3`, they reach only the reader,
+  not the run-time operator table, so `writeq/1` still prints
+  `#=(X,1)` there. Pinned by
+  `test_use_module_clpz_brings_its_operators_to_the_reader`.
+- **A clpz domain bound that is not an integer, `inf` or `sup` raises
+  clpz's error instead of a Python `TypeError`.** `in_domain/3` (the
+  translator's `X in 1..(N-1)` and `Xs ins 0..(1+1)`) raised
+  `TypeError: in_domain bounds must be integers`; it now reads the bounds
+  as clpz reads `Lo..Hi`, which does not evaluate a bound:
+  `domain_error(clpz_domain, 1..(3-1))`, and `instantiation_error` when any
+  part is unbound. `in_domain(X, inf, sup)` is accepted. On both front ends
+  `X in 1..(_-1)` and `X in foo\/_` are now `instantiation_error`, as
+  Scryer's `must_be(ground, Drep)` gives; they were
+  `domain_error(clpz_domain, ...)`. Pinned by
+  `test_pl_translator_data_terms_followups.py::TestInDomainBounds` and the
+  `in_*_bound` rows of its program.
+
 ## 1.1.0 (2026-10-21)
 
 A minor release by operator ruling (D83, 2026-10-21): the entries under

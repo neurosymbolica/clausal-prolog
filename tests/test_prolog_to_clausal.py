@@ -86,13 +86,16 @@ class TestEmitTerm:
 
     def test_negation(self):
         # nv
+        # A TERM (data position) is the ISO cell (2026-10-22); as a goal it
+        # is still ``not foo`` (TestPrologToClausal.test_negation).
         result = emit_clausal_term(PCompound("\\+", (PAtom("foo"),)))
-        assert result == "not foo"
+        assert result == "'\\\\+'(foo)"
 
     def test_unification(self):
         # nv
+        # As a term, the cell; as a goal ``X is 1``.
         result = emit_clausal_term(PCompound("=", (PVar("X"), PNumber(1))))
-        assert result == "X is 1"
+        assert result == "'='(X, 1)"
 
     def test_arithmetic_is(self):
         # nv

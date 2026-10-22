@@ -268,6 +268,14 @@ def _implicit_functors_active(namespace: "dict | None") -> bool:
 # ``position`` had no callers left.)
 
 
+#: Functors no name can bind and no predicate stands behind, so that in
+#: term position the quoted ``':-'(H, B)`` can only be the cell ``(':-', H,
+#: B)`` (see ``_goal_cell_functor``): ISO's clause and control punctuation,
+#: and library(clpz)'s domain ``Lo..Hi``.
+QUOTED_CELL_FUNCTORS = frozenset({
+    ":-", "-->", "?-", ",", ";", "|", "->", "*->", "\\+", ".."})
+
+
 def _goal_cell_functor(fname: str, arity: int, namespace) -> "str | None":
     """The functor of the goal CELL ``fname(A1 ... An)`` builds in TERM
     position although nothing declares *fname* as a functor -- or None, for
@@ -294,6 +302,14 @@ def _goal_cell_functor(fname: str, arity: int, namespace) -> "str | None":
     callable binding keeps being called (out-of-tree ``_get_dispatch``
     implementors may construct their term that way).
     """
+    if fname in QUOTED_CELL_FUNCTORS:
+        # ``':-'(H, B)``, ``';'(A, B)``, ``'..'(1, N)`` ... written QUOTED
+        # in term position: no name can bind them (none is an identifier)
+        # and the only thing they can build is the ISO cell, which is what
+        # the native front end builds for the same term.  They raised
+        # existence_error(procedure, (:-)/2) (NameError for ``..``) at run
+        # time.
+        return fname
     resolved = _resolve_functor_binding(fname, namespace) if namespace else None
     binding, leaf = (resolved[0], resolved[1]) if resolved else (None, fname)
     if binding is not None and is_declared_predicate_name(

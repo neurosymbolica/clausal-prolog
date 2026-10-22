@@ -367,6 +367,15 @@ _ISO_QUOTED_UNARY_OPS = frozenset({"\\"})
 # comparison stands, goal or term position.
 _ARITH_COMPARISONS = frozenset({"<", ">", "=<", ">=", "=:=", "=\\="})
 
+#: library(clpz)'s operators other than ``#=`` (the seam's ``==``) and the
+#: identifiers ``in``/``ins`` (folded to in_domain/3, D21): the relations,
+#: the reification connectives and the domain ``..``
+#: (``iso_l3_directives.CLPZ_OPS``).  The seam has no operator for them, so
+#: they are emitted as ISO cells.
+_CLPZ_CELL_OPERATORS = frozenset({
+    "#\\=", "#<", "#>", "#=<", "#>=", "#<==>", "#==>", "#<==", "#\\/",
+    "#\\", "#/\\", "..", "#"})
+
 # ISO evaluable constants (functors of arity 0 in arithmetic context).
 # Emitted as math.* attribute references — emit_module adds the matching
 # -import_module(math) preamble. epsilon has no math.* name, so it is
@@ -451,8 +460,14 @@ def prolog_to_clausal(source: str, *, dialect: Dialect | None = None,
     """
     if dialect is None:
         dialect = Dialect.scryer_reader()
+    # ``use_module(library(clpz))`` brings clpz's operators (``#=``,
+    # ``in``, ``..``) into the reader from that directive on, as on the
+    # native front end and in Scryer.
+    from clausal.tools.iso_l3_directives import (  # noqa: PLC0415
+        library_reader_ops)
     pmodule = parse(source, dialect=dialect,
-                    nested_comments=PL_SOURCE_NESTED_COMMENTS)
+                    nested_comments=PL_SOURCE_NESTED_COMMENTS,
+                    library_ops=library_reader_ops)
     return prolog_ast_to_clausal(pmodule, dialect=dialect,
                                  source_path=source_path,
                                  module_name=module_name, surface=surface)
@@ -1155,7 +1170,12 @@ class _PrologToClausal:
                 and len(c.args) == 2):
             return (f"{self._emit_expr(c.args[0])} == "
                     f"{self._emit_expr(c.args[1])}")
-        return self._emit_term(c)
+        # A constraint, not data: the seam's comparison operators.
+        self._seam_operators += 1
+        try:
+            return self._emit_term(c)
+        finally:
+            self._seam_operators -= 1
 
     def _emit_goal(self, goal: PTerm) -> str:
         """Emit a single goal in body context."""
@@ -2052,6 +2072,13 @@ class _PrologToClausal:
 
         # ','/2 in term position is a tuple, NOT a flattened argument list:
         # emitting it bare turned foo(a, (b, c)) into a foo/3 call (F023).
+        #
+        # As DATA it is the quoted cell ``','(b, c)``: the seam reads a
+        # parenthesised ``(b, c)`` in ARGUMENT position as the call
+        # ``b(c)`` (``f((b, c))`` was ``f(b(c))``, and ``X = (a :- b, c)``
+        # raised domain_error(clpz_expression, b(c))).
+        if functor == "," and len(args) == 2 and self._is_data(goal, called):
+            return self._emit_quoted_op_term(term)
         if functor == "," and len(args) == 2:
             parts = ", ".join(
                 self._emit_term(p) for p in self._flatten_conjunction(term)
@@ -2059,6 +2086,9 @@ class _PrologToClausal:
             return f"({parts})"
 
         # Univ: T =.. L → unpack(T, L) (=.. is not valid Clausal syntax) — F033.
+        # As DATA it is the cell ``'=..'(T, L)``, not a ``unpack/2`` term.
+        if functor == "=.." and len(args) == 2 and self._is_data(goal, called):
+            return self._emit_quoted_op_term(term)
         if functor == "=.." and len(args) == 2:
             left = self._emit_term(args[0])
             right = self._emit_term(args[1])
@@ -2094,6 +2124,16 @@ class _PrologToClausal:
                 operand = self._emit_term(args[0])
                 return f"{clausal_name}({operand})"
 
+        # A disjunction or negation in DATA position is the ISO cell
+        # (``X = (a ; b)`` -> ``X is ';'(a, b)``): the seam's ``a or b`` and
+        # ``not a`` after ``X is`` read as ``(X is a) or b`` and ``X is not
+        # a``.  As a goal, or a meta-call's goal argument, they keep the
+        # seam's own spelling.
+        if (((functor in (";", "|") and len(args) == 2)
+                or (functor == "\\+" and len(args) == 1))
+                and self._is_data(goal, called)):
+            return self._emit_quoted_op_term(term)
+
         # Negation prefix: \+(X) → not X
         if functor == "\\+" and len(args) == 1:
             inner = self._emit_term(args[0])
@@ -2108,6 +2148,13 @@ class _PrologToClausal:
         #
         # `#=(X, Y)` → `X == Y`: unquoted `==` in Clausal IS the CLP
         # arithmetic constraint, and `#=` is what it emits.
+        #
+        # In DATA position (neither a goal nor a meta-call's goal argument)
+        # it is the ISO cell ``'#='(X, '+'(1, 1))``, like the other clpz
+        # relations below: the bare ``X == 1 + 1`` after ``G is`` read as
+        # the Python chained comparison ``G is X == 1 + 1``.
+        if functor == "#=" and len(args) == 2 and self._is_data(goal, called):
+            return self._emit_quoted_op_term(term)
         if functor == "#=" and len(args) == 2:
             left = self._emit_expr(args[0])
             right = self._emit_expr(args[1])
@@ -2122,7 +2169,11 @@ class _PrologToClausal:
             right = self._emit_term(args[1])
             return f"'=='({left}, {right})"
 
-        # Unification: X = Y → X is Y
+        # Unification: X = Y → X is Y; as DATA the cell ``'='(X, Y)`` (the
+        # bare ``G is X is Y`` read as a chained comparison, and a stored
+        # body ``(p, X = 1)`` printed as the seam's Unify node).
+        if functor == "=" and len(args) == 2 and self._is_data(goal, called):
+            return self._emit_quoted_op_term(term)
         if functor == "=" and len(args) == 2:
             left = self._emit_term(args[0])
             right = self._emit_term(args[1])
@@ -2159,6 +2210,32 @@ class _PrologToClausal:
         if functor in self._EXPR_PREC and len(args) == 2:
             if self._seam_operators:
                 return self._emit_expr(term)
+            return self._emit_quoted_op_term(term)
+
+        # library(clpz)'s other relations and its reification connectives
+        # have no seam operator spelling: the ISO cell in every position
+        # (as a goal it is the call of the quoted builtin ``'#<'/2``).  It
+        # used to be refused as "not a valid Python identifier".
+        if functor in _CLPZ_CELL_OPERATORS and len(args) in (1, 2):
+            return self._emit_quoted_op_term(term)
+
+        # A comparison in DATA position is the ISO cell ``'<'('+'(1, 1),
+        # 3)``.  Emitted bare, ``G = (1+1 < 3)`` became ``G is 1 + 1 < 3``,
+        # which the seam reads as the Python chained comparison ``G is 1 +
+        # 1 and 1 + 1 < 3`` (so call(G) raised type_error(callable, 1+1)).
+        if (functor in _ARITH_COMPARISONS and len(args) == 2
+                and self._is_data(goal, called)):
+            return self._emit_quoted_op_term(term)
+
+        # A clause or grammar rule in DATA position (``X = (a :- b, c)``,
+        # ``assertz((H :- B))``) is the ISO cell ``':-'(a, (b, c))``: the
+        # seam's ``a <- (b, c)`` after ``X is`` read as ``X is a < -(b,
+        # c)``, and as assertz's argument its unparenthesised body was a
+        # load error.  assertz/retract take the cell (``Head :- true`` is
+        # the fact; a rule body is the runtime refusal, as on the native
+        # front end).
+        if (functor in (":-", "-->") and len(args) in (1, 2)
+                and not goal and not self._seam_operators):
             return self._emit_quoted_op_term(term)
 
         # Arithmetic comparison in term position (a meta-call's goal
@@ -2296,6 +2373,12 @@ class _PrologToClausal:
             "goal (directly, or in a goal argument of findall/forall/\\+/"
             "...) cannot be translated."
         )
+
+    def _is_data(self, goal: bool, called: bool) -> bool:
+        """The term being emitted is DATA: not a goal, not a meta-call's
+        goal argument, and not where the seam's own operators are wanted
+        (a directive argument, a ``{...}`` constraint set)."""
+        return not goal and not called and not self._seam_operators
 
     def _emit_quoted_op_term(self, term: PCompound) -> str:
         """An ISO operator term in DATA position: the quoted functor over
