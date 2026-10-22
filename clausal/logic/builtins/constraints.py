@@ -311,6 +311,8 @@ def _dump__3(targets, new_vars, coded, trail, k):
     variables, or the atoms a program names them with), the store left as
     it was.  Target is a proper list of unbound variables."""
     from clausal.logic.clpq import dump as _dump_fn  # noqa: PLC0415
+    # The engine's must_be(list) check, the one holzbaur.py uses too; the
+    # clpq package has no helper of its own.
     from clausal.logic.clpz_surface import _proper_list  # noqa: PLC0415
     from clausal.logic.exceptions import _error  # noqa: PLC0415
     from clausal.logic.variables import (  # noqa: PLC0415
@@ -323,7 +325,9 @@ def _dump__3(targets, new_vars, coded, trail, k):
     names = [Var() for _ in targets]
     if not _unify(new_vars, names, trail):
         return
-    goals = _dump_fn(targets, names, trail)
+    # The names as given (the atoms, where NewVars named them), not the
+    # variables they were unified through: a Python caller reads the terms.
+    goals = _dump_fn(targets, [_deref(name) for name in names], trail)
     if goals is not None and _unify(coded, goals, trail):
         yield None
 

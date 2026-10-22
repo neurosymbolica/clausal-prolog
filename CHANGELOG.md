@@ -167,8 +167,10 @@ surface described in [docs/public-api.md](docs/public-api.md).
   Vertex, Eps)` unifies `Vertex` with the integral values of `Is` at the
   infimum (the default solver reads `Eps` and keeps its exact integrality
   test); `dump(Vars, NewVars, Cs)` gives the projection as terms over
-  `NewVars`, fresh variables or the atoms given (`dump([A, B], [a, b],
-  Cs)` binds `Cs = [a>=4, a+b=<10]`), and raised `type_error(callable,
+  `NewVars`, fresh variables or the atoms given (`{A + B =< 10, A >= 4},
+  dump([A, B], [a, b], Cs)` binds `Cs = [a>=4, a+b=<10]` on the port and
+  `Cs = [a+b=<10, a>=4]` on the default solver, each in its projection's
+  order and a bound the readable way round), and raised `type_error(callable,
   <function dump ...>)` before, the name resolving to a Python function;
   `ordering(Spec)` is honoured by the port's projection and accepted
   without effect by the default solver, which has no variable ordering.

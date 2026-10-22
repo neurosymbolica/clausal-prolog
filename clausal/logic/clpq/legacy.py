@@ -2011,17 +2011,28 @@ def dump(target_vars: list, names: list, trail: Trail) -> list | None:
     """clp(Q,R)'s dump/3 with the default solver: dump_q/2's projection as
     terms (compound cells over engine numbers), each target replaced by
     the element of *names* at its position, any other variable by a fresh
-    one; None where the lengths differ.  The store is as it was."""
+    one; a row whose coefficients are all negative is written the other
+    way round (``a >= 4``, not ``-a =< -4``), as dump_q/2 writes an
+    answer.  None where the lengths differ, or where a target listed
+    twice has names that do not unify (dump.pl's unification of NewVars
+    with the copied targets).  The store is as it was."""
     if len(names) != len(target_vars):
         return None
     id_to_name: dict[int, Any] = {}
     for (v, s), name in zip(_target_shadows(target_vars, "dump/3"), names):
-        id_to_name.setdefault(s._id, name)
+        if s._id in id_to_name:
+            if not unify(id_to_name[s._id], name, trail):
+                return None
+            continue
+        id_to_name[s._id] = name
     constraints = _projected_constraints(set(id_to_name), trail)
     goals: list = []
     for coeffs, rel, rhs in constraints:
         if not coeffs:
             continue
+        if all(c < ZERO for c in coeffs.values()):
+            coeffs = {v: -c for v, c in coeffs.items()}
+            rel, rhs = _FLIPPED[rel], -rhs
         lhs = None
         for vid in sorted(coeffs):
             if vid not in id_to_name:

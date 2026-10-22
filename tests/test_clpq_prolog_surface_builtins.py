@@ -38,6 +38,9 @@ q_ordering_lt(X, Y) :- ordering(X < Y), {X + Y = 10}.
 q_dump_names(A, B, Cs) :- {A + B =< 10, A >= 4}, dump([A, B], [a, b], Cs).
 q_dump_fresh(A, B, Vs, Cs) :- {A + B =< 10, A >= 4}, dump([A, B], Vs, Cs).
 q_dump_none(A, Vs, Cs) :- dump([A], Vs, Cs).
+q_dump_twice(A, Cs) :- {A >= 4}, dump([A, A], [a, b], Cs).
+q_dump_twice_one_name(A, Cs) :- {A >= 4}, dump([A, A], [a, a], Cs).
+q_dump_twice_fresh(A, Vs, Cs) :- {A >= 4}, dump([A, A], Vs, Cs).
 """
 
 
@@ -172,24 +175,51 @@ def test_dump_3_with_atoms_for_names(solver):
     assert set(answer.bindings) == {"Cs"}
     # The store is as it was ...
     assert _equivalent(answer.residual, ["A>=4", "A+B=<10"]) == (True, "")
-    # ... and CodedAnswer is its projection over the names.
-    assert _equivalent(_items(answer.bindings["Cs"]),
-                       ["a>=4", "a+b=<10"]) == (True, "")
+    # ... and CodedAnswer is its projection over the names, exactly: each
+    # solver in its projection's order, a bound the readable way round
+    # (a>=4, never -a=< -4).
+    assert answer.bindings["Cs"] == {"holzbaur": "[a>=4,a+b=<10]",
+                                     "legacy": "[a+b=<10,a>=4]"}[solver]
 
 
 @pytest.mark.parametrize("solver", SOLVERS)
-def test_dump_3_with_fresh_variables(solver):
-    answer = _one(solver, "q_dump_fresh(A, B, Vs, Cs)", ["A", "B", "Vs", "Cs"])
-    assert set(answer.bindings) == {"Vs", "Cs"}
-    names = _items(answer.bindings["Vs"])
-    assert len(names) == 2 and all(n.startswith("_") for n in names), names
-    assert _equivalent(_renamed(_items(answer.bindings["Cs"]), names, ["A", "B"]),
-                       ["A>=4", "A+B=<10"]) == (True, "")
-    assert _equivalent(answer.residual, ["A>=4", "A+B=<10"]) == (True, "")
+def test_dump_3_of_a_target_listed_twice(solver):
+    # dump.pl unifies NewVars with the copied targets: two names for one
+    # target must unify, so [a, b] fails, [a, a] holds, and fresh
+    # variables come back as one.
+    assert _answers(solver, "q_dump_twice(A, Cs)", ["A", "Cs"]) == []
+    answer = _one(solver, "q_dump_twice_one_name(A, Cs)", ["A", "Cs"])
+    assert answer.bindings["Cs"] == "[a>=4]"
+    answer = _one(solver, "q_dump_twice_fresh(A, Vs, Cs)", ["A", "Vs", "Cs"])
+    [first, second] = _items(answer.bindings["Vs"])
+    assert first == second and first.startswith("_"), answer
+    assert _items(answer.bindings["Cs"]) == [f"{first}>=4"]
 
 
-@pytest.mark.parametrize("solver", SOLVERS)
-def test_dump_3_without_a_store_is_empty(solver):
-    answer = _one(solver, "q_dump_none(A, Vs, Cs)", ["A", "Vs", "Cs"])
-    assert answer.bindings["Cs"] == "[]"
-    assert answer.residual == []
+def test_dump_3_hands_a_python_caller_the_atoms(tmp_path):
+    # The terms carry the names as given (the atoms), not the variables
+    # NewVars was unified through: a Python caller reads them directly.
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var, deref
+    from clausal.testing import load_clausal_module
+
+    path = tmp_path / "dump_atoms.pl"
+    path.write_text(":- use_module(library(clpq)).\n"
+                    "project(A, B, Cs) :- {A + B =< 10, A >= 4}, "
+                    "dump([A, B], [a, b], Cs).\n")
+    module = load_clausal_module(path)
+    coded = Var()
+    assert any(True for _ in call("project", Var(), Var(), coded, module=module))
+    goals = deref(coded)
+    assert goals and all(type(goal) is tuple for goal in goals), goals
+    leaves, stack = set(), list(goals)
+    while stack:
+        term = deref(stack.pop())
+        if type(term) is tuple:
+            stack.extend(term[1:])
+        else:
+            leaves.add(term)
+    assert {"a", "b"} <= leaves, goals
+    assert all(type(leaf) in (str, int) for leaf in leaves), goals
+
+
