@@ -7,6 +7,30 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+
+### Added
+
+- **clp(Q,R)'s `maximize/1`, `minimize/1`, `bb_inf/5`, `ordering/1` and
+  `dump/3` are builtins** (2026-10-22), on both CLP(Q) solvers and every
+  surface, so a program written for the SICStus 3.7.1 clp(Q,R) manual runs
+  as written (todo/clpq-port-vs-sicstus-manual-23-gaps-2026-10-16.md items
+  2, 3, 5, 6). `maximize(Z)` is `maximize(Z, _)`; `bb_inf(Is, Obj, Inf,
+  Vertex, Eps)` unifies `Vertex` with the integral values of `Is` at the
+  infimum (the default solver reads `Eps` and keeps its exact integrality
+  test); `dump(Vars, NewVars, Cs)` gives the projection as terms over
+  `NewVars`, fresh variables or the atoms given (`{A + B =< 10, A >= 4},
+  dump([A, B], [a, b], Cs)` binds `Cs = [a>=4, a+b=<10]` on the port and
+  `Cs = [a+b=<10, a>=4]` on the default solver, each in its projection's
+  order and a bound the readable way round), and raised `type_error(callable,
+  <function dump ...>)` before, the name resolving to a Python function;
+  `ordering(Spec)` is honoured by the port's projection and accepted
+  without effect by the default solver, which has no variable ordering.
+  Pinned by `tests/test_clpq_prolog_surface_builtins.py` (both solvers)
+  and the manual's own queries in
+  `tests/clpq_port/test_manual_examples.py` (`test_maximize_1_as_documented`,
+  `test_dump_3*`, `test_ordering`, `test_flugpl_bb_inf_5`, no longer
+  xfail). See docs/clpq.md.
+
 ### Changed
 
 - **`X in Dom` with an unbound part anywhere in `Dom` raises
@@ -170,31 +194,6 @@ surface described in [docs/public-api.md](docs/public-api.md).
   never compared; the port succeeds), and `bb_inf([0.5], X, I)` ignored
   the number and succeeded (the port fails: it is no integer).
 
-### Added
-
-- **clp(Q,R)'s `maximize/1`, `minimize/1`, `bb_inf/5`, `ordering/1` and
-  `dump/3` are builtins** (2026-10-22), on both CLP(Q) solvers and every
-  surface, so a program written for the SICStus 3.7.1 clp(Q,R) manual runs
-  as written (todo/clpq-port-vs-sicstus-manual-23-gaps-2026-10-16.md items
-  2, 3, 5, 6). `maximize(Z)` is `maximize(Z, _)`; `bb_inf(Is, Obj, Inf,
-  Vertex, Eps)` unifies `Vertex` with the integral values of `Is` at the
-  infimum (the default solver reads `Eps` and keeps its exact integrality
-  test); `dump(Vars, NewVars, Cs)` gives the projection as terms over
-  `NewVars`, fresh variables or the atoms given (`{A + B =< 10, A >= 4},
-  dump([A, B], [a, b], Cs)` binds `Cs = [a>=4, a+b=<10]` on the port and
-  `Cs = [a+b=<10, a>=4]` on the default solver, each in its projection's
-  order and a bound the readable way round), and raised `type_error(callable,
-  <function dump ...>)` before, the name resolving to a Python function;
-  `ordering(Spec)` is honoured by the port's projection and accepted
-  without effect by the default solver, which has no variable ordering.
-  Pinned by `tests/test_clpq_prolog_surface_builtins.py` (both solvers)
-  and the manual's own queries in
-  `tests/clpq_port/test_manual_examples.py` (`test_maximize_1_as_documented`,
-  `test_dump_3*`, `test_ordering`, `test_flugpl_bb_inf_5`, no longer
-  xfail). See docs/clpq.md.
-
-### Fixed
-
 - **A non-linear function inside `{}` in a `.pl` file loads** (2026-10-22).
   The native front end lowered only `+ - * /` inside clpq's braces and
   refused `{sin(X) = cos(X)}` or `{12 = pow(2, X)}` at load, though the
@@ -338,8 +337,6 @@ surface described in [docs/public-api.md](docs/public-api.md).
   part is unbound. `in_domain(X, inf, sup)` is accepted. Pinned by
   `test_pl_translator_data_terms_followups.py::TestInDomainBounds` and the
   `in_*_bound` rows of its program.
-
-### Fixed
 
 - **`clausal-rewrite` keeps the spelling of a dict literal's keys**
   (2026-10-22). A dict whose keys are all constants reifies as a raw dict
