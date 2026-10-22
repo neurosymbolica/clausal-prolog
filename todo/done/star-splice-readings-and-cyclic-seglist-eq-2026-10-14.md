@@ -1,6 +1,6 @@
 # Star splices give different readings for one term; seam == on cyclic lists
 
-**Status: FIXED 2026-10-22 (commits 05897908, a05d77dd).** I1, I2, M4, M5
+**Status: FIXED 2026-10-22 (commits 7c6a4e54, 201c05f2).** I1, I2, M4, M5
 and M6: a star bound to a non-list is the improper tail when only emptiness
 follows it and `type_error(list, S)` otherwise, in the SegList walk and in
 every builder (both twins), whenever the hole was bound; `SegList.__eq__`
