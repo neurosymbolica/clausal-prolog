@@ -4491,6 +4491,7 @@ def clausal_source_to_prolog_ast(source: str, *,
     if dialect is None:
         dialect = Dialect.iso()
     tree = python_ast.parse(source)
+    _resolve_unit_spellings(tree)
     _expand_table_directives(tree)
     # keepends=True is load-bearing, not style. build_quote_map feeds tokenize
     # through readline, which reads a bare "" -- any blank line without its
@@ -4506,6 +4507,98 @@ def clausal_source_to_prolog_ast(source: str, *,
                                  source_lines=source.splitlines(keepends=True),
                                  module_specs=module_specs)
     return converter.convert_module(tree)
+
+
+#: Declaration directives whose THIRD argument is a unit expression.
+_UNIT_DECLARATIONS = frozenset({
+    "constant_number_units", "constant_number_currency",
+    "constants_number_units", "constants_number_currency"})
+
+
+def _directive_call(stmt):
+    """The Call of a ``-name(...)`` directive statement, or None."""
+    if not isinstance(stmt, python_ast.Expr):
+        return None
+    node = stmt.value
+    if not (isinstance(node, python_ast.UnaryOp)
+            and isinstance(node.op, python_ast.USub)
+            and isinstance(node.operand, python_ast.Call)
+            and isinstance(node.operand.func, python_ast.Name)):
+        return None
+    return node.operand
+
+
+def _is_engine_unit_name(name: str) -> bool:
+    """True when *name* is a unit the exporter resolves from static data --
+    the same lookup the declaration path makes (:func:`_unit_factor`)."""
+    return _unit_factor([name]) is not None
+
+
+def _resolve_unit_spellings(tree) -> None:
+    """Rewrite every spelling of a unit to the one name it resolves to, in
+    place, BEFORE the converter walks the tree.
+
+    AN IMPORT ALIAS. ``-import_from(united_states, [alias(usd, us_dollar)])``
+    binds the local name ``us_dollar`` to the currency ``usd`` -- the seam
+    compiler maps it to ``united_states.usd`` (``_import_remap``), so in the
+    engine every occurrence of ``us_dollar`` IS that unit. The exporter
+    resolves units by NAME from static data, and ``us_dollar`` names nothing
+    there: a module importing a currency unit under an alias was refused at
+    its first ``-constant_number_currency(..., us_dollar)`` ("a unit the
+    exporter cannot resolve"), a ``/ us_dollar_cent`` divisor stayed an
+    unevaluable atom, and an inline ``5(us_dollar_cent)`` slipped past the
+    scaled-unit refusal and dropped its factor. Renaming the local name back to
+    the source unit, and the ``alias(usd, us_dollar)`` entry to a plain
+    ``usd``, makes the module the one written with a plain import -- which
+    every unit position already handles. Only an alias whose SOURCE name is a
+    unit is resolved: a predicate alias stays the refusal in
+    ``_import_list`` (no import renaming, ruling 2026-09-29).
+
+    A QUALIFIED unit in a declaration. ``united_states.usd`` as the unit of a
+    ``-constant_number_*`` declaration lowered to the quoted atom
+    ``'united_states:usd'`` where the plain spelling gives ``usd``. Every
+    other unit position already reads the qualified name by its leaf
+    (``_unit_leaf_names``, ``_try_quantity``), so the declaration does too.
+    """
+    aliases: dict[str, str] = {}
+    for stmt in tree.body:
+        call = _directive_call(stmt)
+        if (call is None or call.func.id != "import_from"
+                or len(call.args) != 2
+                or not isinstance(call.args[1], python_ast.List)):
+            continue
+        elts = call.args[1].elts
+        for i, elt in enumerate(elts):
+            if (isinstance(elt, python_ast.Call)
+                    and isinstance(elt.func, python_ast.Name)
+                    and elt.func.id == "alias" and len(elt.args) == 2
+                    and not elt.keywords
+                    and all(isinstance(a, python_ast.Name) for a in elt.args)
+                    and _is_engine_unit_name(elt.args[0].id)):
+                orig, local = elt.args[0].id, elt.args[1].id
+                aliases[local] = orig
+                elts[i] = python_ast.copy_location(
+                    python_ast.Name(id=orig, ctx=python_ast.Load()), elt)
+    if aliases:
+        for node in python_ast.walk(tree):
+            if isinstance(node, python_ast.Name) and node.id in aliases:
+                node.id = aliases[node.id]
+
+    def leaf(node):
+        if isinstance(node, python_ast.Attribute):
+            return python_ast.copy_location(
+                python_ast.Name(id=node.attr, ctx=python_ast.Load()), node)
+        if isinstance(node, python_ast.BinOp):
+            node.left, node.right = leaf(node.left), leaf(node.right)
+        elif isinstance(node, python_ast.UnaryOp):
+            node.operand = leaf(node.operand)
+        return node
+
+    for stmt in tree.body:
+        call = _directive_call(stmt)
+        if (call is not None and call.func.id in _UNIT_DECLARATIONS
+                and len(call.args) >= 3):
+            call.args[2] = leaf(call.args[2])
 
 
 def _expand_table_directives(tree) -> None:
