@@ -2153,8 +2153,44 @@ def test_a_listless_re_import_cycle_still_answers_the_cycles_names_as_none(
     monkeypatch.setattr(sys, "path", [root, *sys.path])
     importlib.invalidate_caches()
     monkeypatch.setattr(pb, "_EXPORTS", {})
+    # Asking a computes b INSIDE the cycle (a in progress: b's re-export of
+    # p is no export there).  That answer is a's to use, not the cache's
+    # to keep: the next ask of b is a fresh one and sees p.
     a = pb._exports("pk.a", pb._find("pk.a"))
-    monkeypatch.setattr(pb, "_EXPORTS", {})
     b = pb._exports("pk.b", pb._find("pk.b"))
-    assert "p" in a and "q" in b
     assert a == {"p", "q"} and b == {"p", "q"}
+    assert pb._exports("pk.a", pb._find("pk.a")) == {"p", "q"}
+    assert pb._exports("pk.b", pb._find("pk.b")) == {"p", "q"}
+
+
+def test_a_currency_table_records_its_unit_as_the_single_value_form_does(
+        tmp_path):
+    """Record parity: the two forms of one unit leave the same ``attr``
+    reference in the compiler record -- the single-value directive's
+    through ``_record_python_body``, the table's through the ordinary
+    visit of its gate's arguments and of its rows (so more than once) --
+    so a ruling on ``module.export`` units through the record's attr
+    route reaches both alike."""
+    from clausal import python_bridges as pb
+    single = _seam_file(tmp_path, "single", """
+        -module(single, [v/1])
+        -import_module(united_states)
+        -constant_number_currency(cap, 5, united_states.usd)
+        v(X) <- (X is constant(cap))
+    """)
+    table = _seam_file(tmp_path, "table", """
+        -module(table, [t/2])
+        -import_module(united_states)
+        -constants_number_currency(t/2, [(1, 5), (2, 7)],
+            united_states.usd, money_at(2))
+    """)
+    attrs = {}
+    for path in (single, table):
+        refs = pb.compiler_record(path) or ()
+        attrs[path] = {r[1:4] for r in refs if r[0] == "attr"}
+        assert not [r for r in refs if r[0] == "python"]
+    assert attrs[single] == attrs[table] == {
+        ("united_states", None, ("usd",))}
+    bare = _seam_file(tmp_path, "bare", CURRENCY_TABLE)
+    assert not [r for r in (pb.compiler_record(bare) or ())
+                if r[0] == "attr"]

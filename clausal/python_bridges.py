@@ -752,6 +752,12 @@ def _cached_exports(dotted: str, origin: str,
     hit = _EXPORTS.get(key)
     if hit is not None:
         return hit
+    # A listless package's answer taken inside a re-import cycle (asked
+    # while a package of the cycle is being computed) is the answer for
+    # that path -- the cycle's names left out -- not the one a fresh ask
+    # gives: it is used, never kept (the same rule as the walk's memo).
+    walk = _listless_walk()
+    incomplete = walk.incomplete
     names: frozenset = frozenset()
     try:
         if _is_source(origin):
@@ -786,7 +792,8 @@ def _cached_exports(dotted: str, origin: str,
                 if not n.startswith("_") and n not in sig and is_value(v))
     except Exception:  # noqa: BLE001 -- unreadable: nothing is exported
         names = frozenset()
-    _EXPORTS[key] = names
+    if walk.incomplete == incomplete:
+        _EXPORTS[key] = names
     return names
 
 
@@ -842,6 +849,10 @@ def _listless_walk():
     walk = _LISTLESS_WALK
     if not hasattr(walk, "stack"):
         walk.stack, walk.memo, walk.cut = [], {}, None
+        # Answers given for the path they were reached by (under a cut, or
+        # a cycle's own "no export"), counted so :func:`_cached_exports`
+        # never keeps one process-wide.
+        walk.incomplete = 0
     return walk
 
 
@@ -895,6 +906,7 @@ def listless_exports(path: str) -> "list[tuple[str, int | None]]":
         head = stack.index(real)
         if walk.cut is None or head < walk.cut:
             walk.cut = head
+        walk.incomplete += 1
         return []
     hit = walk.memo.get(real)
     if hit is not None:
@@ -905,6 +917,8 @@ def listless_exports(path: str) -> "list[tuple[str, int | None]]":
         entries = _listless_entries(path, real)
         if walk.cut is None or walk.cut > depth:
             walk.memo[real] = tuple(entries)
+        else:
+            walk.incomplete += 1
     finally:
         stack.pop()
         if walk.cut is not None and walk.cut >= depth:

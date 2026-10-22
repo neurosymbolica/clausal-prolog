@@ -27,8 +27,15 @@ surface described in [docs/public-api.md](docs/public-api.md).
   outermost call runs, so no answer outlives the files it was read
   from, and a package a re-import cycle came back through, whose answer
   depends on the path it was reached by, is never memoised: the cycle's
-  names stay no export). The test module audits in under 3 s; verdicts
-  are unchanged. Pinned by
+  names stay no export). For the same reason the process-wide export
+  cache (`python_bridges._EXPORTS`) no longer keeps an answer taken
+  inside a re-import cycle: asking package `a` computed its partner `b`
+  with `a` in progress and cached that path's answer, so `b` kept
+  answering without the names it re-imports from `a` until the cache was
+  cleared -- a false refusal of every importer of those names; such an
+  answer is used by the ask that needed it and never stored. The test
+  module audits in under 3 s; no verdict of a module without a listless
+  re-import cycle changes. Pinned by
   `tests/test_python_bridges.py::test_a_listless_package_chain_is_read_once_per_file_not_once_per_name`,
   `::test_a_diamond_of_listless_packages_is_read_once_per_answer`,
   `::test_a_listless_answer_outlives_no_call` and
@@ -47,9 +54,16 @@ surface described in [docs/public-api.md](docs/public-api.md).
   arguments visited as any call's, and the audit reads it as the helper
   call it is -- the unit must be a name the module binds, as before.
   Single-value `-constant_number_currency` was never affected (its gate
-  is an expression, not a statement). Pinned by
-  `tests/test_python_bridges.py::test_a_currency_table_directive_is_the_engines_own_statement`
-  and `::test_a_currency_table_unit_is_audited_like_any_helper_argument`.
+  is an expression, not a statement). Record parity holds: the plain
+  gate's arguments are visited as any call's, so the table form leaves
+  its unit's qualified chain in the compiler record (`united_states.usd`
+  -> an `attr` reference) as the single-value form does, and the two
+  forms of one unit answer alike to the bridge gate; a `module.export`
+  unit is a `non_export` route in either form (whether that spelling
+  should be admitted is an open question, unchanged here). Pinned by
+  `tests/test_python_bridges.py::test_a_currency_table_directive_is_the_engines_own_statement`,
+  `::test_a_currency_table_unit_is_audited_like_any_helper_argument` and
+  `::test_a_currency_table_records_its_unit_as_the_single_value_form_does`.
 - **A seam variable named `REMOVED` no longer makes its module a Python
   bridge** (2026-10-22). The node transform's sentinel
   `pythonic_ast.nodes.REMOVED` was injected into every module namespace
