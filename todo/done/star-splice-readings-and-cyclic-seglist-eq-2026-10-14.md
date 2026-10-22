@@ -1,5 +1,17 @@
 # Star splices give different readings for one term; seam == on cyclic lists
 
+**Status: FIXED 2026-10-22 (commits 05897908, a05d77dd).** I1, I2, M4, M5
+and M6: a star bound to a non-list is the improper tail when only emptiness
+follows it and `type_error(list, S)` otherwise, in the SegList walk and in
+every builder (both twins), whenever the hole was bound; `SegList.__eq__`
+decides the bisimulation on cyclic lists (`terms._rational_eq`). M1
+(compare/sort on a 500-cell improper list) fixed by `_cons_chain_key`.
+Pinned in tests/test_star_splice_readings.py (seam fixtures, walk, builders,
+equality fuzz, deep improper lists). What remains of M1-M3 -- assertz of an
+IMPROPER list of ~1500 cells, and ==/=/compare/copy_term/findall/ground/writeq
+on two distinct CYCLIC lists -- moved to
+todo/deep-and-cyclic-terms-overflow-the-recursive-walkers-2026-10-22.md.
+
 Found in the Fable review of the front-end series (a3a62e67..018c18c8). A fix brief is ready; see the star-splice candidate.
 
 **Prior ruling:** a hole bound to a non-list is the IMPROPER TAIL. It is never spliced as characters, and a star element must be a list.

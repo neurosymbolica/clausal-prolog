@@ -202,6 +202,53 @@ surface described in [docs/public-api.md](docs/public-api.md).
   under the port. Pinned by
   `tests/test_clpq_prolog_surface_builtins.py::test_a_nested_nonlinear_function_reaches_the_port`.
 
+- **A seam star bound to a non-list reads one way, whenever it was bound**
+  (2026-10-22). Ruling 2026-10-14: a hole bound to a non-list is the
+  IMPROPER TAIL, never spliced as characters, and a star element must be a
+  list. `[*A, x]` with `A = foo` used to read three ways -- `[foo, x]`
+  when `A` was bound before the list was built, the chars `"foox"` when
+  bound after it, `type_error(list, foo)` from a SegList -- and `[*A, *B]`
+  with `A = [b|foo]` spliced `foo`'s characters even when `B = []`
+  (`"bfoo"`), while a number or cons tail there raised a raw
+  PartialTermError. Now, in the walk and in every builder (Python and C
+  twins alike): a non-list star is the tail when only emptiness follows it
+  (`[*A, *B]` with `B = []` is `[b|foo]`, `[*A]` is `foo`, `[x, *A]` is
+  `[x|foo]`), and `type_error(list, S)` when anything follows it -- an
+  element, a non-empty or unbound star, a second non-list -- the culprit
+  being the star's value (`foo`, `[b|foo]`). A star bound to nil in any
+  spelling (`()`, the atom `'[]'`) is nothing, where `()` used to leave a
+  hole bound to it and `'[]'` spliced as two characters. An unbound star
+  before the tail (`[*A, x|foo]`) has no spelling and raises
+  PartialTermError, as a number tail there always did. A cyclic star
+  before an element (`[*X, x]`, `X = [a|X]`) raises the same catchable type
+  error instead of RecursionError while formatting its message (a cyclic
+  SegList's `repr` now terminates). Pinned in
+  `tests/test_star_splice_readings.py`.
+
+- **The seam `==` answers for two identical cyclic lists** (2026-10-22).
+  `X = [a|X], Y = [a|Y], X == Y` answered FALSE (a regression of 018c18c8:
+  `SegList.__eq__` compared the walked cons cells by Python equality, whose
+  cyclic tails are two distinct variables); Scryer says yes, and
+  `X = [a|X], Y = [a,a|Y]` are one rational tree too. `SegList.__eq__` on
+  an improper or cyclic walk now decides the bisimulation
+  (`terms._rational_eq`): pairs keyed by the dereferenced objects of the
+  terms themselves and kept alive while keyed -- the requirements the
+  2026-10-13 ruling set when it removed an earlier, unsound coinductive
+  fallback -- so `X = [a|X], Y = [b|Y]` and `f(X, [1,2,3])` against
+  `f(Y, [1,2,4])` stay unequal. The ISO `==/2` path is untouched and still
+  raises on two distinct cyclic terms (see
+  `todo/deep-and-cyclic-terms-overflow-the-recursive-walkers-2026-10-22.md`).
+  Pinned in `tests/test_star_splice_readings.py::test_seam_eq_on_cyclic_lists`
+  and the `_rational_eq` fuzz there.
+
+- **`compare/3`, `sort/2`, `msort/2` and `@</2` on an improper list of
+  500 cells or more** (2026-10-22). The standard-order key recursed once per
+  cons cell and raised RecursionError at about 500 cells of a hole-built
+  `[1, 2, ...|foo]`; it now builds the same key along the tail spine by a
+  loop. On a cyclic list it raises a clean RecursionError, as before, rather
+  than looping. Pinned in
+  `tests/test_star_splice_readings.py::test_compare_and_sort_on_a_500_cell_improper_list`.
+
 ## 1.1.0 (2026-10-21)
 
 A minor release by operator ruling (D83, 2026-10-21): the entries under
