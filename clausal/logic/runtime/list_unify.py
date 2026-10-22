@@ -84,6 +84,7 @@ from clausal.logic.variables import is_var, deref, unify
 from clausal.terms import (
     SegList, SegListView, ConcreteSeg, VarSeg, list_rest,
     SegString, SegBytes, _is_cons_cell, _unify_seglist_cons,
+    _hole_is_nil, not_a_list,
 )
 from ._seg_helpers import (
     maybe_promote_to_str, maybe_promote_to_bytes, seq_getitem, str_chars,
@@ -255,15 +256,17 @@ def _improper_star(before, star_val):
     return _cons_star(before, s)
 
 
-def _cons_star(before, tail, after=()):
+def _cons_star(before, tail, after=(), culprit=None):
     """``[*before|tail]`` as the cons cells ``'.'(H, T)`` (D50).
 
-    With *after* non-empty -- ``[*S, x]`` where S is the improper list
-    *tail* -- there is no such term: ``type_error(list, S)``, never a
-    silent failure.  Shared with the C twin, which hands it ``after_vals``."""
+    With *after* non-empty -- ``[*S, x]`` where S holds the non-list *tail*
+    (an atom, a number, a compound, an improper list) -- there is no such
+    term: ``type_error(list, S)`` (:func:`clausal.terms.not_a_list`), never
+    a silent failure.  *culprit* is S's own value when it is not *tail*
+    itself (a SegList that walks to *tail*).  Shared with the C twin, which
+    hands it ``after_vals``."""
     if after:
-        from clausal.logic.exceptions import LogicException, type_error  # noqa: PLC0415
-        raise LogicException(type_error("list", tail))
+        raise not_a_list(tail if culprit is None else culprit)
     for e in reversed(before):
         tail = (".", deref(e), tail)
     return tail
@@ -386,7 +389,7 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
                 # A bare ``str`` here is an ATOM tail (``[*T]`` with
                 # ``T = foo``), never text: a char list walks to the carrier.
                 # ``[*S, x]`` with S improper is a type_error (``_cons_star``).
-                return unify(d, _cons_star(result, walked, after_vals), trail)
+                return unify(d, _cons_star(result, walked, after_vals, s), trail)
             else:
                 # Still partially unbound: build a new SegList
                 after_result = [deref(v) for v in after_vals]
@@ -437,12 +440,14 @@ def _head_list_unify_output_py(target, var_vals, star_val, after_vals, trail):
             if after_result:
                 segs.append(ConcreteSeg(after_result))
             return unify(d, SegList(segs), trail)
-        elif _is_cons_cell(s):
-            # [*S, x] with S the improper list [b|foo]: no term, so
-            # type_error(list, S) (``_cons_star``), never S as an element.
-            return unify(d, _cons_star(result, s, after_vals), trail)
+        elif _hole_is_nil(s):
+            pass                       # ``()`` or the atom nil: nothing
         else:
-            result.append(s)
+            # A non-list star (an atom, a number, a compound, a cons cell):
+            # the LAST star is the tail (``_improper_star`` above); before
+            # an element, ``[*S, x]`` has no term, so type_error(list, S)
+            # (``_cons_star``), never S as an element (ruling 2026-10-14).
+            return unify(d, _cons_star(result, s, after_vals), trail)
     result.extend(deref(v) for v in after_vals)
     # A list of chars IS a string (§6.2), so the compact representation is
     # always the right one to build — see the note where ``star_was_str``

@@ -38,7 +38,10 @@ from ._seg_helpers import (
     maybe_promote_to_str, join_chars, seq_getitem, str_chars,
 )
 from .list_unify import _cons_star, _head_list_unify_input, _head_list_unify_output
-from clausal.terms import _is_cons_cell, _is_improper_tail
+from clausal.terms import (
+    PartialTermError, _hole_is_nil, _is_cons_cell, _is_improper_tail,
+    _walked_nil, not_a_list,
+)
 
 
 def _body_star_unify(target, before_vals, star_val, after_vals, trail):
@@ -98,7 +101,10 @@ def _build_star_list(before, star, after):
     when star is the TAIL (nothing after it) and is bound to a non-list --
     an atom (a bare ``str``: text is the chars carrier), a number, a
     compound -- the result is the IMPROPER list ``[*before|star]``, the cons
-    cells ``'.'(H, T)`` (D50), as ISO's ``T = foo, X = [a|T]`` gives.
+    cells ``'.'(H, T)`` (D50), as ISO's ``T = foo, X = [a|T]`` gives.  With
+    something after it, ``[*S, x]`` has no term: ``type_error(list, S)``
+    (ruling 2026-10-14), the reading the SegList walk gives when S is
+    bound after the build.
     """
     raw = deref(star)
     if is_var(raw):
@@ -111,11 +117,10 @@ def _build_star_list(before, star, after):
         if after:
             segs.append(ConcreteSeg(list(after)))
         return SegList(segs)
-    if not after and _is_improper_tail(raw):
-        out = raw
-        for e in reversed(list(before)):
-            out = (".", e, out)
-        return out
+    if _hole_is_nil(raw):
+        raw = []                       # nil in any spelling: nothing
+    elif _is_improper_tail(raw):
+        return _cons_star(list(before), raw, list(after))
     d = _unwrap(raw)
     if isinstance(d, str):
         # Check if all before/after elements are chars
@@ -150,7 +155,7 @@ def _build_star_list(before, star, after):
         if not isinstance(walked, SegList):
             # It walks to an IMPROPER (or cyclic) list, cons cells (D50).
             # [*S, x] with S improper has no term: type_error(list, S).
-            return _cons_star(list(before), walked, list(after))
+            return _cons_star(list(before), walked, list(after), d)
         # non-ground SegList — wrap into a new SegList
         segs = []
         if before:
@@ -237,6 +242,57 @@ def _build_star_list(before, star, after):
     return SegList(segs)
 
 
+def _holds_nothing(d) -> bool:
+    """Whether the bound star value *d* contributes no element: nil in any
+    spelling, or a Seg* that walks to nothing."""
+    if _hole_is_nil(d):
+        return True
+    if isinstance(d, (SegList, SegString, SegBytes)):
+        try:
+            w = d.__walk__()
+        except Exception:  # noqa: BLE001 - its own walk reports it later
+            return False
+        return _walked_nil(w) or (is_chars(w) and chars_text(w) == "")
+    return False
+
+
+def _multi_star_tail(segments):
+    """The first star of a multi-star build that holds a NON-LIST -- an
+    atom, a number, a compound, a cons cell, or a SegList that walks to an
+    improper or cyclic list -- as ``(index, tail, culprit)``, or None.
+
+    That star is the improper TAIL (D50), so everything after it must hold
+    nothing (an empty fixed run, a star bound to nil or walking to nothing);
+    an element, an unbound star or a second non-list after it is
+    :func:`clausal.terms.not_a_list`, ``type_error(list, S)`` -- the reading
+    the SegList walk gives when the stars are bound after the build."""
+    for i, (kind, val) in enumerate(segments):
+        if kind != "star":
+            continue
+        d = deref(val)
+        if is_var(d) or _hole_is_nil(d):
+            continue
+        if _is_improper_tail(d):
+            tail = culprit = d
+        elif isinstance(d, SegList):
+            w = d._walk_once()
+            if w is None or isinstance(w, (list, SegList)):
+                continue
+            tail, culprit = w, d
+        else:
+            continue
+        for kind2, val2 in segments[i + 1:]:
+            if kind2 == "fixed":
+                if val2:
+                    raise not_a_list(culprit)
+            else:
+                d2 = deref(val2)
+                if is_var(d2) or not _holds_nothing(d2):
+                    raise not_a_list(culprit)
+        return i, tail, culprit
+    return None
+
+
 def _build_multi_star_list(segments):
     """Build a SegList from a sequence of (kind, value) segments.
 
@@ -252,6 +308,26 @@ def _build_multi_star_list(segments):
     SegList; instead the segments preserve their string identity and
     the build returns a SegString.
     """
+    # A star bound to nil in any spelling (``()``, the atom nil) is the
+    # empty list, so the passes below see one spelling of it.
+    segments = [("star", []) if kind == "star" and _hole_is_nil(deref(val))
+                else (kind, val) for kind, val in segments]
+    improper = _multi_star_tail(segments)
+    if improper is not None:
+        # [*before|S] with S the first non-list star: the cons cells.  An
+        # unbound star before it ([*A|foo]) has no term here, as in the
+        # SegList walk.
+        i, tail, _culprit = improper
+        prefix = _unwrap(_build_multi_star_list(segments[:i])) if i else []
+        if isinstance(prefix, str):
+            prefix = str_chars(prefix)
+        elif isinstance(prefix, bytes):
+            prefix = list(prefix)
+        if not isinstance(prefix, list):
+            raise PartialTermError(
+                f"list with an unbound star before its improper tail "
+                f"{tail!r} cannot be spelled; bind the star first.")
+        return _cons_star(prefix, tail)
     # First pass: do we have any non-string-compatible content?
     # If every star derefs to a str / ground-SegString / non-ground
     # SegString and every fixed element is a char, we can build

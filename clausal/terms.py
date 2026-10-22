@@ -15,6 +15,7 @@ statement.
 from __future__ import annotations
 
 import re as _re
+import reprlib as _reprlib
 import dataclasses as _dataclasses
 from dataclasses import dataclass
 from fractions import Fraction
@@ -662,17 +663,86 @@ def as_improper(v):
     return w
 
 
-def _splice_non_list(v, run: list) -> None:
-    """The pre-D50 reading of a non-list a hole holds where it cannot be the
-    tail (an interior hole, ``[*A, x]``): a ``str`` splices as its chars,
-    anything else is out of contract."""
-    if type(v) is str:
-        run.extend(char_atom(c) for c in v)
-        return
-    raise PartialTermError(
-        f"SegList VarSeg bound to non-sequence value: "
-        f"{type(v).__name__} ({v!r}); VarSegs of a SegList "
-        f"must bind to list/str.")
+def _hole_is_nil(v) -> bool:
+    """Whether *v*, the dereferenced value of a hole, is the empty list in
+    any spelling (``[]``, ``()``, ``b""``, the empty carrier) -- or the bare
+    ``str`` ``"[]"``, the atom nil, which :func:`_is_improper_tail` already
+    reads as the empty list."""
+    return _is_nil(v) or (type(v) is str and v == "[]")
+
+
+def not_a_list(culprit):
+    """The ``type_error(list, Culprit)`` a star raises when it holds a
+    non-list and something follows it (ruling 2026-10-14: a hole bound to a
+    non-list is the IMPROPER TAIL, never spliced as characters, and a star
+    element must be a list).  ``[*A, x]`` with ``A = foo`` has no term, and
+    neither has ``[*A, *B]`` with ``A = [b|foo]`` and ``B = [x]``: the
+    culprit is the star's value, ``foo`` or ``[b|foo]``.  One raise site
+    for the walk and every builder, so a term reads the same whenever its
+    holes were bound."""
+    from .logic.exceptions import LogicException, type_error
+    return LogicException(type_error("list", culprit))
+
+
+def _rational_eq(a, b) -> bool:
+    """Python equality of two terms either of which may be an IMPROPER or
+    CYCLIC list (the cons cells a SegList walks to, a SegList that closes a
+    cycle), decided as the bisimulation Scryer's ``==/2`` decides: ``X =
+    [a|X], Y = [a,a|Y]`` are one rational tree.  A pair met again is assumed
+    equal (coinduction); the pairs are kept alive while they are keyed, so
+    an id is never that of an object already freed.  Leaves keep Python
+    equality, as :meth:`SegList.__eq__` always did."""
+    seen: set = set()
+    keep: list = []
+    todo = [(a, b)]
+    while todo:
+        x, y = todo.pop()
+        x, y = deref(x), deref(y)
+        if x is y:
+            continue
+        if is_var(x) or is_var(y):
+            return False
+        key = (id(x), id(y))
+        if key in seen:
+            continue
+        seen.add(key)
+        keep.append((x, y))
+        if isinstance(x, SegList):
+            w = x._walk_once()
+            if w is None or isinstance(w, SegList):
+                if not (x == y):
+                    return False
+                continue
+            x = w
+        if isinstance(y, SegList):
+            w = y._walk_once()
+            if w is None or isinstance(w, SegList):
+                if not (x == y):
+                    return False
+                continue
+            y = w
+        xc, yc = _is_cons_cell(x), _is_cons_cell(y)
+        if xc and yc:
+            todo.append((x[2], y[2]))
+            todo.append((x[1], y[1]))
+        elif xc and type(y) is list or yc and type(x) is list:
+            cell, lst = (x, y) if xc else (y, x)
+            if not lst:
+                return False
+            todo.append((cell[2], lst[1:]))
+            todo.append((cell[1], lst[0]))
+        elif type(x) is list and type(y) is list:
+            if len(x) != len(y):
+                return False
+            todo.extend(zip(x, y))
+        elif (type(x) is tuple and type(y) is tuple
+              and not is_chars(x) and not is_chars(y)):
+            if len(x) != len(y):
+                return False
+            todo.extend(zip(x, y))
+        elif not (x == y):
+            return False
+    return True
 
 
 def _improper_tail(t):
@@ -743,9 +813,16 @@ class SegList:
         ``X = [a|T], T = foo``.  A bare ``str`` in a hole is an ATOM
         (atoms-as-str): text is the chars carrier.
 
-        A non-list held by a hole that is NOT the last (``[*A, x]``, which
-        ISO cannot write) keeps the old reading: a ``str`` splices its
-        chars, anything else raises ``PartialTermError``."""
+        A non-list is only ever the TAIL (ruling 2026-10-14).  Once a hole
+        holds one, nothing but emptiness may follow it -- empty segments,
+        holes bound to nil in any spelling, SegLists that walk to nothing
+        -- and ``[*A, *B]`` with ``A = [b|foo]`` and ``B = []`` is
+        ``[b|foo]``.  Anything else after it (an element, a non-empty or an
+        unbound hole, a second non-list) is :func:`not_a_list`:
+        ``type_error(list, S)`` for the star S that holds the non-list,
+        the same error whenever the holes were bound.  An unbound hole
+        BEFORE it (``[*A, x|foo]``) has no spelling here and raises
+        ``PartialTermError``."""
         # Iterative, with one flat accumulator: a partial list built forward
         # through its open tail (a DCG, ``Hole = [a|Hole1]`` in a loop) is a
         # chain of SegLists, one link per step, and walking it recursively
@@ -755,81 +832,115 @@ class SegList:
         from .logic.variables import walk, deref, is_var
         segs: list = []          # finished segments: ConcreteSeg / VarSeg
         run: list = []           # the concrete elements since the last hole
-        stack = [(iter(self._segments), id(self))]
+        stack = [(iter(self._segments), self)]
         open_ids = {id(self)}    # SegLists being walked, to stop on a cycle
-        tail = _NO_TAIL          # a non-list a hole holds, while it is last
+        tail = _NO_TAIL          # a non-list a hole holds (D50)
+        culprit = None           # the star holding it, should content follow
+        tail_depth = 0           # len(stack) where the tail was found
         cyclic = False           # that tail closes a cycle
         while stack:
             seg = next(stack[-1][0], _WALK_END)
             if seg is _WALK_END:
-                open_ids.discard(stack.pop()[1])
+                done = stack.pop()[1]
+                open_ids.discard(id(done))
+                if tail is not _NO_TAIL and len(stack) < tail_depth:
+                    # The SegList that walks to the improper list ended:
+                    # the star holding IT is the culprit if content follows
+                    # in the frame below (``[*A, x]`` with ``A = [b|foo]``).
+                    culprit = done
+                    tail_depth = len(stack)
                 continue
-            if tail is not _NO_TAIL:
-                if isinstance(seg, ConcreteSeg) and not seg.elements:
-                    continue
-                # Something follows it: it was no tail after all.
-                if cyclic:
-                    raise _CyclicPartialList("cyclic partial list")
-                _splice_non_list(tail, run)
-                tail = _NO_TAIL
             if isinstance(seg, ConcreteSeg):
+                if not seg.elements:
+                    continue
+                if tail is not _NO_TAIL:
+                    raise not_a_list(culprit)
                 run.extend(walk(e) for e in seg.elements)
                 continue
             # One step, not ``walk``: a hole bound to the next link of the
             # chain is walked HERE, on the stack.  ``walk`` would resolve it
             # through that link's ``__walk__``, which is the recursion.
             v = deref(seg.var)
-            if type(v) is SegList:
+            tv = type(v)
+            if tv is SegList:
                 pass                       # the next link of a chain: the common case
-            elif type(v) is SegListView:
+            elif tv is list:
+                if v:                      # a hole bound to a list: its elements
+                    if tail is not _NO_TAIL:
+                        raise not_a_list(culprit)
+                    run.extend(v)
+                continue
+            elif tv is SegListView:
                 v = v.elements()           # its elements, walked below as a list's
+            elif _hole_is_nil(v):
+                continue                   # nothing, in any spelling
             elif _is_improper_tail(v):
-                tail = v
+                if tail is not _NO_TAIL:
+                    raise not_a_list(culprit)
+                tail = culprit = v
+                tail_depth = len(stack)
                 continue
             if not isinstance(v, SegList):
                 v = walk(v)
             if is_chars(v):
                 v = chars_text(v)          # stage 1: a hole bound to the carrier is a str-bound hole
             if isinstance(v, str):
-                run.extend(char_atom(c) for c in v)   # text (a walked SegString): its CHARS
+                if v:
+                    if tail is not _NO_TAIL:
+                        raise not_a_list(culprit)
+                    run.extend(char_atom(c) for c in v)   # text (a walked SegString): its CHARS
             elif isinstance(v, list):
-                run.extend(v)
+                if v:
+                    if tail is not _NO_TAIL:
+                        raise not_a_list(culprit)
+                    run.extend(v)
             elif isinstance(v, SegList):
                 if id(v) in open_ids:
                     # A CYCLIC list (``X = [a|X]``): the hole closes the
                     # cycle.  It is the tail -- the hole's VARIABLE, whose
                     # binding is the cycle -- so the walk is ``'.'(a, X)``,
                     # one lap, as the cyclic term ISO's ``X = [a|X]`` is.
+                    if tail is not _NO_TAIL:
+                        raise not_a_list(culprit)
                     tail = seg.var
+                    culprit = v
+                    tail_depth = len(stack)
                     cyclic = True
                     continue
-                stack.append((iter(v._segments), id(v)))
+                stack.append((iter(v._segments), v))
                 open_ids.add(id(v))
             else:
                 # Either still an unbound Var (keep the hole) or bound to an
-                # out-of-contract scalar. The latter left the term in silent
-                # limbo — non-ground forever, every unify quietly failing
-                # (A01-F009, mirroring the F024 char-list guard).
+                # out-of-contract value (a non-ground SegString, bytes). The
+                # latter left the term in silent limbo — non-ground forever,
+                # every unify quietly failing (A01-F009, mirroring the F024
+                # char-list guard).
                 if not is_var(v):
                     raise PartialTermError(
                         f"SegList VarSeg bound to non-sequence value: "
                         f"{type(v).__name__} ({v!r}); VarSegs of a SegList "
                         f"must bind to list/str."
                     )
+                if tail is not _NO_TAIL:
+                    raise not_a_list(culprit)   # an open hole after the tail
                 if run:
                     segs.append(ConcreteSeg(run))
                     run = []
                 segs.append(VarSeg(v))
         if tail is not _NO_TAIL:
-            if segs and cyclic:
-                raise _CyclicPartialList("cyclic partial list")
             if segs:
-                # An unbound hole before it: ``[*A, x|foo]`` has no term.
-                _splice_non_list(tail, run)
-            else:
-                for e in reversed(run):
-                    tail = (".", e, tail)
-                return tail
+                # An unbound hole before it: ``[*A, x|foo]`` is neither a
+                # SegList (a hole holds a list) nor cons cells (A has no
+                # length), so it has no term here.
+                if cyclic:
+                    raise _CyclicPartialList("cyclic partial list")
+                raise PartialTermError(
+                    f"SegList with an unbound hole before its improper tail "
+                    f"{_improper_tail(tail)!r} cannot be spelled; bind the "
+                    f"hole first.")
+            for e in reversed(run):
+                tail = (".", e, tail)
+            return tail
         # If no VarSegs remain, return a plain Python list of the elements.
         if not segs:
             return run
@@ -1119,7 +1230,12 @@ class SegList:
     def __eq__(self, other):
         w = self._walk_once()
         if w is not None and not isinstance(w, (list, SegList)):
-            return w == other                   # an improper list (D50)
+            # An improper or cyclic list (D50).  ``w == other`` compared the
+            # cons cells by Python equality, which met the cyclic tails as
+            # two distinct Var objects and answered FALSE for ``X = [a|X],
+            # Y = [a|Y]`` (Scryer: yes); the bisimulation answers as
+            # Scryer does.
+            return _rational_eq(w, other)
         # The empty TUPLE is the empty LIST (fix round 3, item 3), and the
         # arms below accept list/str/bytes only.
         if _is_nil(other) and _walked_nil(self._walk_raw()):
@@ -1175,7 +1291,11 @@ class SegList:
         # can convert via ``to_list()`` / ``list(...)`` first.
         raise TypeError("unhashable type: 'SegList'")
 
+    @_reprlib.recursive_repr("[...]")
     def __repr__(self) -> str:
+        # ``recursive_repr``: a cyclic list (``X = [a|X]``) reprs its hole,
+        # whose binding is this SegList again; the error that names a cyclic
+        # star (``[*X, x]``) must be able to spell its culprit.
         parts = []
         for seg in self._segments:
             if isinstance(seg, ConcreteSeg):

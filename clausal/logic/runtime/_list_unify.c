@@ -279,6 +279,17 @@ is_cons_cell(PyObject *t)
     return PyUnicode_Check(f) && PyUnicode_CompareWithASCIIString(f, ".") == 0;
 }
 
+/* The empty tuple, or the bare str "[]" (the atom nil): a star bound to
+ * either holds nothing.  Twin of ``clausal.terms._hole_is_nil`` for the
+ * spellings the arms above it do not already take (list, bytes, carrier). */
+static inline int
+is_hole_nil(PyObject *s)
+{
+    if (PyTuple_CheckExact(s))
+        return PyTuple_GET_SIZE(s) == 0;
+    return PyUnicode_Check(s) && PyUnicode_CompareWithASCIIString(s, "[]") == 0;
+}
+
 /* Get length of a list or string. */
 static inline Py_ssize_t
 seq_length(PyObject *seq)
@@ -1185,13 +1196,34 @@ py_head_list_unify_output(PyObject *Py_UNUSED(module), PyObject *args)
                 if (ok < 0) return NULL;
                 if (ok) Py_RETURN_TRUE;
                 Py_RETURN_FALSE;
-            } else {
-                /* Non-list, non-Var: just append */
-                if (PyList_Append(result, s) < 0) {
-                    Py_DECREF(s);
-                    goto error;
-                }
+            } else if (is_hole_nil(s)) {
+                /* () or the atom nil: nothing (twin of _hole_is_nil) */
                 Py_DECREF(s);
+            } else {
+                /* A non-list star -- an atom, a number, a compound (the
+                 * last-star case was handled by _improper_star above, so
+                 * an element follows it): [*S, x] has no term, and
+                 * list_unify._cons_star raises type_error(list, S)
+                 * (ruling 2026-10-14), never S as one more element. */
+                if (!fn_cons_star) {
+                    PyObject *mod = PyImport_ImportModule(
+                        "clausal.logic.runtime.list_unify");
+                    if (!mod) { Py_DECREF(s); goto error; }
+                    fn_cons_star = PyObject_GetAttrString(mod, "_cons_star");
+                    Py_DECREF(mod);
+                    if (!fn_cons_star) { Py_DECREF(s); goto error; }
+                }
+                PyObject *cons = PyObject_CallFunctionObjArgs(
+                    fn_cons_star, result, s, after_vals, NULL);
+                Py_DECREF(s);
+                if (!cons) goto error;
+                int ok = call_unify(d, cons, trail);
+                Py_DECREF(cons);
+                Py_DECREF(d);
+                Py_DECREF(result);
+                if (ok < 0) return NULL;
+                if (ok) Py_RETURN_TRUE;
+                Py_RETURN_FALSE;
             }
         }
     }

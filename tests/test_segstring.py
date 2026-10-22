@@ -7,6 +7,8 @@ Tests cover:
 4. _build_star_list / _build_multi_star_list string support
 """
 
+import pytest
+
 from clausal.logic.atoms import char_atom
 from clausal.logic.cells import chars, is_chars
 from clausal.logic.variables import Var, Trail, unify, deref
@@ -539,10 +541,21 @@ class TestBuildStarListString:
         from clausal.logic.runtime.body_star_unify import _build_star_list
         trail = Trail()
         X = Var()
-        unify(X, "ell", trail)
+        unify(X, chars("ell"), trail)     # text is the chars carrier
         result = _build_star_list([char_atom("h")], X, [char_atom("o")])
         assert result == chars("hello")
         assert is_chars(result)
+
+    def test_star_atom_with_after_is_a_type_error(self):
+        # A bare str is an ATOM, and a star must hold a list: before an
+        # element it is type_error(list, ell), never the chars e, l, l
+        # (ruling 2026-10-14, tests/test_star_splice_readings.py).
+        from clausal.logic.exceptions import LogicException
+        from clausal.logic.runtime.body_star_unify import _build_star_list
+        X = Var()
+        unify(X, "ell", Trail())
+        with pytest.raises(LogicException):
+            _build_star_list([char_atom("h")], X, [char_atom("o")])
 
     def test_star_list_returns_list(self):
         """Non-string star still returns a list."""
@@ -591,8 +604,8 @@ class TestBuildMultiStarListString:
         from clausal.logic.runtime.body_star_unify import _build_multi_star_list
         trail = Trail()
         A, B = Var(), Var()
-        unify(A, "hel", trail)
-        unify(B, "ld", trail)
+        unify(A, chars("hel"), trail)      # text is the chars carrier
+        unify(B, chars("ld"), trail)
         result = _build_multi_star_list([
             ("star", A), ("fixed", ["lo wor"]), ("star", B),
         ])
@@ -604,8 +617,8 @@ class TestBuildMultiStarListString:
         from clausal.logic.runtime.body_star_unify import _build_multi_star_list
         trail = Trail()
         A, B = Var(), Var()
-        unify(A, "he", trail)
-        unify(B, "lo", trail)
+        unify(A, chars("he"), trail)       # text is the chars carrier
+        unify(B, chars("lo"), trail)
         result = _build_multi_star_list([
             ("star", A), ("fixed", [char_atom("l")]), ("star", B),
         ])
