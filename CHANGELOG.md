@@ -9,6 +9,23 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A `-constants_number_currency(...)` table no longer makes its module a
+  Python bridge** (2026-10-22). The table expansion places ONE unit gate,
+  `$check_currency_unit('p/N', unit, '-constants_number_currency')`, at
+  module level before the ordinary visit, and that visit read the
+  engine's own statement as an undeclared bare call of the author's: it
+  wrapped it in the missing-comma guard (`try: $check_currency_unit
+  except $NameError: ... else: <the gate>`) and recorded the line as
+  hosted Python, so the audit refused every such module as a
+  `python_statement` at the directive's line, in and out of the sandbox.
+  A `$` name cannot be written in source, so a `$`-spelled statement is
+  never an undeclared functor: it is now emitted plain, unrecorded, its
+  arguments visited as any call's, and the audit reads it as the helper
+  call it is -- the unit must be a name the module binds, as before.
+  Single-value `-constant_number_currency` was never affected (its gate
+  is an expression, not a statement). Pinned by
+  `tests/test_python_bridges.py::test_a_currency_table_directive_is_the_engines_own_statement`
+  and `::test_a_currency_table_unit_is_audited_like_any_helper_argument`.
 - **A seam variable named `REMOVED` no longer makes its module a Python
   bridge** (2026-10-22). The node transform's sentinel
   `pythonic_ast.nodes.REMOVED` was injected into every module namespace

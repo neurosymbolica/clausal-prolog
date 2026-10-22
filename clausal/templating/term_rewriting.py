@@ -9361,6 +9361,18 @@ class EmbedTransformer(NodeTransformer):
                 transformer._lint_titlecase(*expr_stmt.value.args)
                 return expr_stmt
             case Call(func=Name(id=functor_name)) if (
+                functor_name.startswith("$")
+            ):
+                # An engine-emitted helper statement: the unit gate
+                # ``$check_currency_unit(...)`` the currency-table expansion
+                # places at module level before this visit
+                # (``_expand_currency_tables``).  A ``$`` name cannot be
+                # written in source, so it is never an undeclared functor:
+                # not guarded as one (a ``try`` the Python-bridge audit
+                # could only read as hosted Python) and not recorded as a
+                # Python route; its arguments are visited as any call's.
+                return transformer.generic_visit(expr_stmt)
+            case Call(func=Name(id=functor_name)) if (
                 transformer._scope_depth == 0
                 and transformer._is_module_compile()
             ):

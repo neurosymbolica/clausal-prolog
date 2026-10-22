@@ -1958,3 +1958,61 @@ def test_a_walrus_that_rebinds_a_runtime_name_stays_refused():
     assert [r for r in _audit(mutated) if r[0] == "python_statement"]
 
 
+CURRENCY_TABLE = """
+    -module(money, [threshold/2])
+    -import_from(australia, [aud])
+    -constants_number_currency(threshold/2,
+        [(1, 25000000), (2, 50000000)], aud, money_at(2))
+"""
+
+
+def _unit_gates(tree):
+    import ast as _ast
+    return [s for s in tree.body if isinstance(s, _ast.Expr)
+            and isinstance(s.value, _ast.Call)
+            and isinstance(s.value.func, _ast.Name)
+            and s.value.func.id == "$check_currency_unit"]
+
+
+def test_a_currency_table_directive_is_the_engines_own_statement(tmp_path):
+    """``-constants_number_currency`` lowers to its fact clauses and ONE
+    unit gate, ``$check_currency_unit(...)``, placed at module level by the
+    table expansion before the ordinary visit.  A ``$`` name cannot be
+    written in source, so that statement is the engine's own: not the
+    undeclared bare call the visit guards (a ``try`` the audit cannot
+    read) and records as hosted Python.  The audit reads it as any helper
+    call -- its unit must be a name the module binds."""
+    import ast as _ast
+    from clausal import python_bridges as pb
+    from clausal.seam_audit import generated_tree
+    path = _seam_file(tmp_path, "money", CURRENCY_TABLE)
+    assert file_python_routes(path) == []
+    with open(path) as f:
+        tree = generated_tree(f.read(), path)
+    assert len(_unit_gates(tree)) == 1
+    assert not any(isinstance(s, _ast.Try)
+                   and "$check_currency_unit" in _ast.dump(s)
+                   for s in tree.body)
+    assert not [r for r in pb.compiler_record(path) if r[0] == "python"]
+
+
+def test_a_currency_table_unit_is_audited_like_any_helper_argument(
+        tmp_path):
+    """The other direction: a unit the module does not bind does not
+    compile (fail closed, a route), and the gate's unit is audited as the
+    argument of a helper call -- a call put in its place is a route."""
+    import ast as _ast
+    from clausal.seam_audit import generated_tree
+    unbound = CURRENCY_TABLE.replace(
+        "-import_from(australia, [aud])\n", "").replace("aud,", "zzz,")
+    path = _seam_file(tmp_path, "money2", unbound)
+    assert ("uncompilable", 0) in file_python_routes(path)
+    with open(_seam_file(tmp_path, "money", CURRENCY_TABLE)) as f:
+        tree = generated_tree(f.read(), path)
+    assert _audit(tree) == []
+    mutated = _mutate(
+        tree, lambda n: isinstance(n, _ast.Name) and n.id == "aud"
+        and isinstance(n.ctx, _ast.Load), lambda n: _call("exec", _ast.Constant("print(1)")))
+    assert [r for r in _audit(mutated) if r[0] == "python_call"]
+
+
