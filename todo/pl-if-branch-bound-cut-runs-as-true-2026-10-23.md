@@ -1,7 +1,7 @@
 # In a .pl file, a cut bound into an if_/3 branch runs as true
 
 Filed: 2026-10-23, found while refusing a cut bound into a `.clausal`
-meta-argument (commit fec4890b). Severity: wrong answers vs Scryer, `.pl`
+meta-argument (commit 6231e39e). Severity: wrong answers vs Scryer, `.pl`
 only, for a rare shape.
 
 ## What / Repro
@@ -30,5 +30,5 @@ Pinned as a strict xfail:
 - Fix with a run-time check that dispatches to `call(Branch)` only when
   the branch holds a cut, and otherwise runs the in-place code.
 - Rejected: lowering every such branch as `call(Branch)` (tried in
-  fec4890b's draft): about 3.6x slower (29 -> 104 us) for every `.pl`
+  6231e39e's draft): about 3.6x slower (29 -> 104 us) for every `.pl`
   branch of that shape, cut or not.
