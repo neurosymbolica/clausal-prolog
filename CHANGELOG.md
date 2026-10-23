@@ -351,9 +351,10 @@ surface described in [docs/public-api.md](docs/public-api.md).
   spelling (`()`, the atom `'[]'`) is nothing, where `()` used to leave a
   hole bound to it and `'[]'` spliced as two characters. An unbound star
   before the tail (`[*A, x|foo]`, `Q = [*A, x, *T], T = foo`) has no
-  spelling yet and raises `instantiation_error` -- provisional, pending
-  ruling 2026-10-22: the term exists once the hole is bound, so this is
-  instantiation rather than type semantics; it used to raise a raw
+  spelling yet and raises `instantiation_error` (operator ruling
+  2026-10-23, final; provisional since 2026-10-22): the term exists once
+  the hole is bound, so this is instantiation rather than type semantics;
+  it used to raise a raw
   PartialTermError that `catch/3` saw as a Python object. A cyclic star
   before an element (`[*X, x]`, `X = [a|X]`) raises the same catchable type
   error instead of RecursionError while formatting its message (a cyclic

@@ -689,7 +689,7 @@ def _unbound_hole_before_tail(tail):
     BEFORE its improper tail (``[*A, x|foo]``): neither a SegList (a hole
     holds a list) nor cons cells (A has no length) can spell it, but it is
     a term once A is bound -- so instantiation, not type, semantics
-    (provisional ruling 2026-10-22).  Raised by the SegList walk and the
+    (operator ruling 2026-10-23).  Raised by the SegList walk and the
     multi-star builder alike."""
     from .logic.exceptions import LogicException, instantiation_error
     return LogicException(instantiation_error(
@@ -847,7 +847,7 @@ class SegList:
         ``type_error(list, S)`` for the star S that holds the non-list,
         the same error whenever the holes were bound.  An unbound hole
         BEFORE it (``[*A, x|foo]``) has no spelling here and raises
-        ``instantiation_error`` (provisional ruling 2026-10-22: the term
+        ``instantiation_error`` (operator ruling 2026-10-23: the term
         exists once the hole is bound, so this is instantiation, not
         type, semantics)."""
         # Iterative, with one flat accumulator: a partial list built forward

@@ -249,8 +249,8 @@ def _instantiation_error(exc_info):
 def test_walk_an_unbound_hole_before_the_tail_is_an_instantiation_error():
     # [*A, x|foo] with A unbound cannot be spelled yet: neither a SegList
     # (its holes hold lists) nor cons cells (A has no length), but a term
-    # once A is bound -- instantiation_error (provisional ruling
-    # 2026-10-22; it was a raw PartialTermError), never "x, f, o, o".
+    # once A is bound -- instantiation_error (operator ruling 2026-10-23;
+    # it was a raw PartialTermError), never "x, f, o, o".
     seg = SegList([VarSeg(Var()), ConcreteSeg(["x"]), VarSeg(_bound("foo"))])
     with pytest.raises(LogicException) as exc:
         seg._walk_raw()
