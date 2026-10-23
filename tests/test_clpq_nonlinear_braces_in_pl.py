@@ -3,7 +3,7 @@
 ``^``.
 
 The native front end lowered only ``+ - * /`` inside the braces and refused
-the program at load (todo/clpq-port-vs-sicstus-manual-23-gaps-2026-10-16.md
+the program at load (todo/done/clpq-port-vs-sicstus-manual-23-gaps-2026-10-16.md
 item 4); the port delays a non-linear constraint as SICStus does, the
 default solver refuses it when posted.  The manual's ten queries are in
 tests/clpq_port/test_manual_examples.py::test_nonlinear; these run without

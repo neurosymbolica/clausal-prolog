@@ -13,7 +13,7 @@ surface described in [docs/public-api.md](docs/public-api.md).
 - **clp(Q,R)'s `maximize/1`, `minimize/1`, `bb_inf/5`, `ordering/1` and
   `dump/3` are builtins** (2026-10-22), on both CLP(Q) solvers and every
   surface, so a program written for the SICStus 3.7.1 clp(Q,R) manual runs
-  as written (todo/clpq-port-vs-sicstus-manual-23-gaps-2026-10-16.md items
+  as written (todo/done/clpq-port-vs-sicstus-manual-23-gaps-2026-10-16.md items
   2, 3, 5, 6). `maximize(Z)` is `maximize(Z, _)`; `bb_inf(Is, Obj, Inf,
   Vertex, Eps)` unifies `Vertex` with the integral values of `Is` at the
   infimum (the default solver reads `Eps` and keeps its exact integrality
@@ -29,7 +29,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
   and the manual's own queries in
   `tests/clpq_port/test_manual_examples.py` (`test_maximize_1_as_documented`,
   `test_dump_3*`, `test_ordering`, `test_flugpl_bb_inf_5`, no longer
-  xfail). See docs/clpq.md.
+  xfail). See docs/clpq.md. Left out by operator ruling 2026-10-23: the
+  manual's `call_residue/2` (SICStus 3's; `call_residue_vars/2` only if a
+  residue collector is ever wanted), and keeping attributed-variable
+  constraints through `assertz` (an asserted clause drops them, as in
+  Scryer, for every solver); the `-g` residual printer keeps reading the
+  goal's variable order as an `ordering/1` chain until itf3.pl's toplevel
+  hook is ported
+  (`todo/clpq-g-printer-should-project-through-itf3-project-attributes-2026-10-23.md`).
 
 ### Changed
 

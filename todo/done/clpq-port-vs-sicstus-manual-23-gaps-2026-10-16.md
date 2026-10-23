@@ -1,5 +1,13 @@
 # CLP(Q) port vs the SICStus 3.7.1 clp(Q,R) manual: 23 documented answers we do not give (2026-10-15)
 
+**Status: RESOLVED 2026-10-23 (commits 55a37b9c, 51757403, 3dead4ac; rulings recorded with this status line).**
+Items 1-6 are fixed; items 7 and 8 and item 5's printing question were ruled by
+the operator on 2026-10-23 ("all as recommended", below); item 9 was ruled not
+a bug. The two ruled-out examples stay strict xfails, citing the ruling, in
+tests/clpq_port/test_manual_examples.py::test_call_residue and
+::test_asserting_with_constraints. The printer follow-up is
+todo/clpq-g-printer-should-project-through-itf3-project-attributes-2026-10-23.md.
+
 Found by tests/clpq_port/test_manual_examples.py (strict xfails), on the .pl surface with CLAUSAL_CLPQ=holzbaur.
 The oracle (our local clpq.pl port on Scryer) gives the manual's answer unless noted.
 
@@ -37,6 +45,9 @@ The oracle (our local clpq.pl port on Scryer) gives the manual's answer unless n
    variables listed in the answer's order); (b) print through 1.3.3's toplevel hook instead, which
    projects onto the query variables without the chain (itf3.pl project_attributes/2, not ported,
    D14). Recommendation: (b), once the hook is ported; until then (a).
+   **RULED 2026-10-23** (operator ruling 2026-10-23): keep the printer as it is now, (a);
+   porting itf3.pl's project_attributes/2 toplevel hook is a later item, filed as
+   todo/clpq-g-printer-should-project-through-itf3-project-attributes-2026-10-23.md.
    `ordering/1` is missing (4 queries).
 6. **FIXED 2026-10-22 (commit 3dead4ac)** the builtin `bb_inf/5`: the port's bb.pl bb_inf/5 (Vertex
    and Eps); the default solver's bb_inf binds the variables and reads Vertex off them, and reads
@@ -47,7 +58,10 @@ The oracle (our local clpq.pl port on Scryer) gives the manual's answer unless n
    the legacy solver is unchanged by ruling.
    `bb_inf/5` (with Vertex and Eps) is missing; only bb_inf/3 is registered.
    flugpl: the oracle gives Inf=1201500 and Vertex=[75,70,70,60,60,0,12,7,16,6,6], exactly as the manual.
-7. NEEDS RULING. `call_residue/2` is a SICStus 3 builtin of the engine, not of clp(Q,R)
+7. **RULED 2026-10-23: not added** (operator ruling 2026-10-23, option (a)); SICStus 4's
+   `call_residue_vars/2`, option (c), only if a residue collector is ever wanted. test_call_residue
+   stays a strict xfail, its reason citing the ruling.
+   `call_residue/2` is a SICStus 3 builtin of the engine, not of clp(Q,R)
    (`call_residue(Goal, Residue)` runs Goal and collects the residual goals on its variables as
    `[Vars-Goal, ...]`); SICStus 4 replaced it with `call_residue_vars/2`, ISO has neither, and
    Scryer has neither. Options: (a) leave it out (the test stays a strict xfail documenting the
@@ -56,7 +70,10 @@ The oracle (our local clpq.pl port on Scryer) gives the manual's answer unless n
    (the variables alone) instead. Recommendation: (a) for the manual's sake, (c) if a residual
    collector is wanted, since it is the form SICStus still ships and SWI has it too.
    `call_residue/2` is missing. Scryer has none either; decide whether to add it.
-8. NEEDS RULING (engine-wide, not CLP(Q)'s). ISO's assertz/1 copies the clause; what a copy of an
+8. **RULED 2026-10-23: not done** (operator ruling 2026-10-23, option (a)): asserted clauses keep
+   dropping attributed-variable constraints, as Scryer does, for every solver.
+   test_asserting_with_constraints stays a strict xfail, its reason citing the ruling.
+   (Engine-wide, not CLP(Q)'s.) ISO's assertz/1 copies the clause; what a copy of an
    attributed variable carries is implementation-defined. SICStus 3.7.1 keeps the constraints
    (the manual's section), Scryer drops them (the oracle), and Clausal drops them for every
    attribute (dif/2, clpz, clpb, CLP(Q)). Options: (a) keep dropping (Scryer, and ISO's letter);

@@ -3,7 +3,7 @@ surface, under each CLP(Q) solver.
 
 ``maximize/1``, ``minimize/1``, ``bb_inf/5``, ``ordering/1`` and ``dump/3``
 raised existence_error (dump/3 a type_error: the name resolved to a Python
-function); see todo/clpq-port-vs-sicstus-manual-23-gaps-2026-10-16.md.  The manual's own
+function); see todo/done/clpq-port-vs-sicstus-manual-23-gaps-2026-10-16.md.  The manual's own
 queries are in tests/clpq_port/test_manual_examples.py (they need the
 example files); these run without them, under both solvers through the
 CLI, which is where a .pl program's answer is printed.

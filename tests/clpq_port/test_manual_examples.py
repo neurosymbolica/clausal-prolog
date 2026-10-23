@@ -632,7 +632,8 @@ def test_dump_3_with_atoms_for_names_on_the_oracle():
 
 @_disagrees("call_residue/2 does not exist: existence_error(procedure, "
             "call_residue/2) (Scryer has no call_residue/2 either, so there is "
-            "no oracle answer)",
+            "no oracle answer). Not added, by operator ruling 2026-10-23; "
+            "call_residue_vars/2 only if a residue collector is ever wanted",
             error=r"existence_error\(procedure,call_residue/2\)")
 def test_call_residue():
     # [[A]-{A<10.0}, [B]-{B=10.0-2.0*A-C}, [D]-{D=C-E}]: together, the
@@ -896,7 +897,8 @@ def test_flugpl_bb_inf_5_on_the_oracle():
 
 @_disagrees("an asserted clause loses the constraint on its variable: "
             "{A < 10}, assertz(p(A)), p(X) answers true with X unconstrained "
-            "(Scryer's oracle does the same)")
+            "(Scryer's oracle does the same). Kept, for every solver, by "
+            "operator ruling 2026-10-23")
 def test_asserting_with_constraints():
     # {A < 10}, assert(p(A)), then p(X): {X < 10} (exact).
     program = ":- dynamic(p/1).\nq_assert(X) :- {A < 10}, assertz(p(A)), p(X).\n"

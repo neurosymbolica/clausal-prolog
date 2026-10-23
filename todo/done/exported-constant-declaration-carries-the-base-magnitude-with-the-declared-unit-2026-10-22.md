@@ -1,6 +1,6 @@
 # An exported constant declaration pairs the BASE magnitude with the DECLARED unit
 
-**Status: FIXED 2026-10-23 (commit on fix/operator-rulings-2026-10-23).** Operator ruling
+**Status: FIXED 2026-10-23 (commit 5fbfcdc7).** Operator ruling
 2026-10-23 ("all as recommended"): option 1, the export declares the pair as written
 (`155000, usd_cent`), as the engine's constant_number_units/3 reports it; use sites still fold
 to the base value. The ISO `facts` form now writes `constant_number_units/3` and
