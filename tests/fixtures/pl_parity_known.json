@@ -164,7 +164,7 @@
    "native_sha": "c48b5b1a9776c846"
   },
   {
-   "key": "docs/for_prolog_programmers.md#L242::load::",
+   "key": "docs/for_prolog_programmers.md#L246::load::",
    "class": "a",
    "note": "oracle: scryer loads it, as native does. Translator: it now reads the clpz operators, and has no library(reif) mapping (No module named 'reif')",
    "translator_sha": "6b74fbd2b8a70880",

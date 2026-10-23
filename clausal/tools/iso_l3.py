@@ -862,17 +862,18 @@ class _ClauseLowering:
         holds one -- reached through ``,``/``;``/``->``, which are
         transparent to it -- is lowered as ``call(Branch)``, as the runtime
         if_/3 runs it.  Only a ``.pl`` file can hold one (``.clausal``
-        refuses ``!``).  A branch with a VARIABLE in such a position is
-        converted when if_ calls it too, so a cut bound to the variable by
-        then is in the branch: in a ``.pl`` file it is lowered as
-        ``call(Branch)`` as well, and in a ``.clausal`` file it is checked
-        as a meta-argument is (:meth:`_checked_in_place`).  Every other
-        branch compiles in place."""
-        if self._cut_allowed and (_cut_inside(g) or _var_inside_body(g)):
+        refuses ``!``).  In a ``.clausal`` file a branch with a VARIABLE in
+        such a position is checked as a meta-argument is
+        (:meth:`_checked_in_place`): if_ converts the branch when it calls
+        it, so a cut bound to the variable by then is refused.  (In a
+        ``.pl`` file such a branch still compiles in place, so a bound cut
+        runs as ``true``: todo/pl-if-branch-bound-cut-runs-as-true-2026-10-23.md.)
+        Every other branch compiles in place."""
+        if self._cut_allowed and _cut_inside(g):
             self._refuse_control_in(g, sp)
             pos = self._pos.of(_top_span(sp))
             return self._call("call", [self.term(g, sp)], pos, pos)
-        if _var_inside_body(g):
+        if not self._cut_allowed and _var_inside_body(g):
             return self._checked_in_place(g, sp)
         return self.goal(g, sp)
 

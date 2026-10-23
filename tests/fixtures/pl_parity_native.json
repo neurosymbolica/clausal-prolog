@@ -201,7 +201,7 @@
    "preds": null,
    "tests": null
   },
-  "docs/for_prolog_programmers.md#L242": {
+  "docs/for_prolog_programmers.md#L246": {
    "collect_error": null,
    "error": null,
    "load": "ok",
@@ -215,9 +215,9 @@
     "sign_general": "pass"
    }
   },
-  "docs/for_prolog_programmers.md#L314": {
+  "docs/for_prolog_programmers.md#L318": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <work>/docs/doc_for_prolog_programmers_L314.pl: doc_for_prolog_programmers_L314.pl:4: directive: use_module(helpers, [...]): no module helpers on sys.path (a slash path a/b names the dotted module a.b) (doc_for_prolog_programmers_L314.pl, line 4)",
+   "error": "SyntaxError: Cannot import <work>/docs/doc_for_prolog_programmers_L318.pl: doc_for_prolog_programmers_L318.pl:4: directive: use_module(helpers, [...]): no module helpers on sys.path (a slash path a/b names the dotted module a.b) (doc_for_prolog_programmers_L318.pl, line 4)",
    "load": "refused",
    "preds": null,
    "tests": null
@@ -2873,8 +2873,8 @@
   "docs/for_prolog_programmers.md#L144": "3400eba0608f2e2b",
   "docs/for_prolog_programmers.md#L181": "8b4d21e95fcf32ce",
   "docs/for_prolog_programmers.md#L191": "487e1b89035e5ad5",
-  "docs/for_prolog_programmers.md#L242": "421f52234df0668b",
-  "docs/for_prolog_programmers.md#L314": "d0aaa6c6f92eac22",
+  "docs/for_prolog_programmers.md#L246": "421f52234df0668b",
+  "docs/for_prolog_programmers.md#L318": "d0aaa6c6f92eac22",
   "docs/for_prolog_programmers.md#L54": "a17138887a920d25",
   "docs/for_prolog_programmers.md#L86": "a5c77a4777f5a847",
   "docs/importing_prolog.md#L1038": "c9dd3a3c1fc2df50",

@@ -120,18 +120,17 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `;`. Such a goal still compiles in place, behind a check run when the
   meta-call starts that raises what ISO's conversion would, so the bound
   cut is refused (a `.pl` file lowers it as `call(Term)`, and there the
-  cut still runs, local to the meta-call). In a `.pl` file an `if_/3`
-  branch holding such a variable is now lowered as `call(Branch)` too, so
-  a cut bound into it prunes the branch as Scryer's does
-  (`G = !, findall(X, if_(1 = 1, (p(X), G), true), L)` is `L = [1]`; it
-  was `[1, 2]`). The check costs about 2 us per meta-call of that shape;
-  other goals are unchanged. For the same reason a non-callable bound
-  there is `type_error(callable, Whole)` in a `.clausal` file, naming the
-  whole goal as ISO does (`G = 1, once((X = 8 ; G))` named `1`). Unchanged: a cut that is the
-  whole goal of a call succeeds (`call(!)`, `G = !, call(G)`, a clause-body
-  variable goal bound to `!`, ISO 7.8.3), and a goal with no variable in
-  those positions compiles as before. Pinned in
-  `tests/test_meta_call_cut_refused.py`
+  cut still runs, local to the meta-call; a cut bound into a `.pl`
+  `if_/3` branch still runs as `true`, a known gap:
+  todo/pl-if-branch-bound-cut-runs-as-true-2026-10-23.md). The check
+  costs about 3-4 us per meta-call of that shape; other goals are
+  unchanged. For the same reason a non-callable bound there is
+  `type_error(callable, Whole)` in a `.clausal` file, naming the whole
+  goal as ISO does (`G = 1, once((X = 8 ; G))` named `1`). Unchanged: a
+  cut that is the whole goal of a call succeeds (`call(!)`,
+  `G = !, call(G)`, a clause-body variable goal bound to `!`, ISO 7.8.3),
+  and a goal with no variable in those positions compiles as before.
+  Pinned in `tests/test_meta_call_cut_refused.py`
   (`test_a_cut_bound_before_the_meta_call_is_refused`, with `.pl` controls
   holding Scryer's answers).
 - **An exported constant declaration carries the pair as written**
