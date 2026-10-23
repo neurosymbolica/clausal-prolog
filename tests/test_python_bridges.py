@@ -2163,14 +2163,30 @@ def test_a_listless_re_import_cycle_still_answers_the_cycles_names_as_none(
     assert pb._exports("pk.b", pb._find("pk.b")) == {"p", "q"}
 
 
+@pytest.mark.parametrize("imports, unit, routes", [
+    ("-import_module(united_states)", "united_states.usd", [("non_export", 3)]),
+    ("-import_from(united_states, [usd])", "usd", []),
+    ("-import_from(united_states, [alias(usd, dollar)])", "dollar", []),
+])
+def test_a_module_qualified_currency_unit_stays_a_route(
+        proj, imports, unit, routes):
+    """A raw ``module.export`` currency unit under ``-import_module`` stays
+    REFUSED (a ``non_export`` route); ``-import_from`` with a bare or an
+    aliased name is the supported spelling (operator ruling 2026-10-23)."""
+    path = proj.seam("helper", f"-module(@helper, [v/1])\n{imports}\n"
+                               f"-constant_number_currency(cap, 5, {unit})\n"
+                               "v(X) <- (X is constant(cap))\n")
+    assert file_python_routes(str(path)) == routes
+
+
 def test_a_currency_table_records_its_unit_as_the_single_value_form_does(
         tmp_path):
     """Record parity: the two forms of one unit leave the same ``attr``
     reference in the compiler record -- the single-value directive's
     through ``_record_python_body``, the table's through the ordinary
     visit of its gate's arguments and of its rows (so more than once) --
-    so a ruling on ``module.export`` units through the record's attr
-    route reaches both alike."""
+    so the ruling on ``module.export`` units through the record's attr
+    route (refused, operator ruling 2026-10-23) reaches both alike."""
     from clausal import python_bridges as pb
     single = _seam_file(tmp_path, "single", """
         -module(single, [v/1])

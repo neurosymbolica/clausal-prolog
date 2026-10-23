@@ -117,6 +117,10 @@ own files are exempt.
    - an f-string slot that evaluates Python;
    - an import of a Python module the engine does not ship;
    - a dotted reference that is not exactly `module.export`;
+     a unit or currency is not a module export here, so `united_states.usd`
+     after `-import_module(united_states)` is refused: import it by name,
+     `-import_from(united_states, [usd])` or `[alias(usd, dollar)]`
+     (operator ruling 2026-10-23);
    - an engine adapter outside the allowlist, or a denied predicate of an
      allowed one;
    - a name an allowed adapter binds that is neither one of its

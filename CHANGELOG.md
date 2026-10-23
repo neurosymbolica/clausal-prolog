@@ -223,8 +223,11 @@ surface described in [docs/public-api.md](docs/public-api.md).
   its unit's qualified chain in the compiler record (`united_states.usd`
   -> an `attr` reference) as the single-value form does, and the two
   forms of one unit answer alike to the bridge gate; a `module.export`
-  unit is a `non_export` route in either form (whether that spelling
-  should be admitted is an open question, unchanged here). Pinned by
+  unit is a `non_export` route in either form, and stays one: operator
+  ruling 2026-10-23 keeps a raw `module.export` currency unit under
+  `-import_module` (`united_states.usd`) refused, `-import_from` with a
+  bare or aliased name being the supported spelling
+  (`::test_a_module_qualified_currency_unit_stays_a_route`). Pinned by
   `tests/test_python_bridges.py::test_a_currency_table_directive_is_the_engines_own_statement`,
   `::test_a_currency_table_unit_is_audited_like_any_helper_argument` and
   `::test_a_currency_table_records_its_unit_as_the_single_value_form_does`.
