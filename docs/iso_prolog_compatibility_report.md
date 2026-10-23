@@ -250,9 +250,9 @@ These are from the [syntax](#syntax) measurement:
 
 - The answer printer leaves operator terms unbracketed: `T = a,b` where ISO
   display is `T = (a,b)`, and `F = '.'` where it is `F = ('.')`.
-- `[]` and `'[]'` are different terms, but `writeq('[]')` prints `[]`, so it
-  does not read back as itself. ISO makes them the same atom; whether to
-  follow ISO or keep them distinct and quote `'[]'` is an open decision.
+- `[]` and `'[]'` are the same atom, as ISO says (ruling D70, 2026-10-17):
+  `X = '[]', X == []` succeeds and `writeq('[]')` prints `[]`, which reads
+  back as itself.
 - A bare prefix-operator atom as a whole term (`\ .`) is a syntax error
   instead of the atom `\`.
 

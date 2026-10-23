@@ -78,11 +78,12 @@ language boundary too: `.clausal` may never import a `.pl` module, since
 arbitrary Prolog is assumed to use cut — cut-freedom is transitive by
 construction, not just a parsing-time check.
 
-The native `.pl` loader itself is still **experimental**, and does not yet
-accept cut (that support is in progress). Today, the way to run Prolog code
-that genuinely needs cut is to embed a real external ISO engine — Scryer or
-Trealla — as a separate package running alongside Clausal Prolog, not
-through the native `.pl` reader.
+The native `.pl` loader runs `!`, `->` and if-then-else with ISO 7.8
+semantics (a cut over a tabled call is refused, as in XSB; see
+[Importing Prolog](importing_prolog.md#cut-and-if-then-else-native-front-end)).
+`*->` is refused. The legacy translator (`CLAUSAL_PL_FRONTEND=translator`)
+still refuses cut. For a whole external ISO engine, Scryer and Trealla
+embeddings are available as separate packages.
 
 For a detailed list of what conforms and what doesn't, see the
 [ISO Prolog Compatibility Report](iso_prolog_compatibility_report.md) — that
