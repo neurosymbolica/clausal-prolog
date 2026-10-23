@@ -258,27 +258,23 @@ def test_iso_unify_binds(run_clausal):
     assert got == ["42"]
 
 
-def test_iso_unify_conflates_int_and_float_OPEN_iso_divergence(run_clausal):
-    """OPEN, UNFIXED divergence from ISO. Documents, does not bless.
-
-    ISO unification of `1` and `1.0` FAILS (different types are never
-    unifiable): measured directly, Scryer answers 'no' for `1 = 1.0` (see the
-    oracle half below). Clausal's `'='`/2 is
-    `clausal.logic.variables.unify` verbatim, and `unify` — unlike `'=='`/2
-    — was NOT given a type-strict wrapper: it has a huge number of existing
-    callers throughout the engine (every clause-head match, every
-    `is`-as-unification site, `'\\='`/2's own trial-unify, …), so narrowing
-    its cross-type numeric behaviour is an engine-wide change and is the
-    operator's call, not this branch's.
-
-    Deferred deliberately; the durable record is
-    todo/iso-unify-conflates-int-and-float-2026-09-09.md, which covers this
-    pin AND its `'is'` twin below."""
-    assert _engine_yesno(run_clausal, "'='(1, 1.0)") == [_YES], \
-        "current (diverging) Clausal behavior: '='(1, 1.0) succeeds"
+def test_iso_unify_int_float_distinct_CLOSED_2026_10_23(run_clausal):
+    """CLOSED 2026-10-23 (operator ruling, ISO 7.3).  Formerly
+    `test_iso_unify_conflates_int_and_float_OPEN_iso_divergence`, which
+    pinned the OLD behaviour: `'='(1, 1.0)` succeeded because
+    `clausal.logic.variables.unify` fell back to Python `==` for two
+    numbers.  `unify` itself now refuses a number against a number of
+    another kind (`_variables.c::numeric_kind`), so every caller -- clause
+    heads, `dif`/2, `retract`/1, the seam's `is` -- answers as Scryer does
+    (oracle half below).  The fuller matrix, on all three surfaces, is
+    `tests/test_iso_int_float_unify.py` and
+    `tests/iso/test_int_float_unify_scryer.py`; the durable record is
+    todo/done/iso-unify-conflates-int-and-float-2026-09-09.md."""
+    assert _engine_yesno(run_clausal, "'='(1, 1.0)") == [_NO], \
+        "ISO 7.3: '='(1, 1.0) fails"
 
 
-def test_iso_unify_conflates_int_and_float_OPEN_iso_divergence_oracle(scryer):
+def test_iso_unify_int_float_distinct_CLOSED_2026_10_23_oracle(scryer):
     assert scryer("(1 = 1.0 -> write(yes) ; write(no)), nl, halt.") == "no", \
         "ISO/Scryer: 1 = 1.0 fails"
 
@@ -289,7 +285,7 @@ def test_iso_is_type_sensitive_int_float_CLOSED_2026_10_15(run_clausal):
     `test_iso_is_conflates_int_and_float_OPEN_iso_divergence`: `'is'`/2 used
     to end in the same int/float-conflating `unify` as `'='`/2 above, so
     `'is'(7.0, 3 + 4)` SUCCEEDED where Scryer answers no. That half of
-    todo/iso-unify-conflates-int-and-float-2026-09-09.md is now fixed —
+    todo/done/iso-unify-conflates-int-and-float-2026-09-09.md is now fixed —
     `_iso_is` (clausal/logic/builtins/iso_compare.py) guards its own final
     unification with `_numeric_types_agree` before calling `unify`, so
     `is`/2 is now type-sensitive WITHOUT narrowing the shared `unify` the
@@ -518,39 +514,40 @@ def _identity_table():
     from clausal.logic.cells import chars
     return [
         # (a, b, structural_eq, iso '==')
-        (1, 1.0, True, False),                 # the ISO case
+        # Since 2026-10-23 (ISO 7.3, operator ruling) the unifier keeps every
+        # numeric kind apart, and `structural_eq` -- unify with no bindings --
+        # follows it: the two columns agree on every number pair below.
+        (1, 1.0, False, False),                # the ISO case
         (1, 1, True, True),
         (1.0, 1.0, True, True),
         (True, 1, False, False),               # ``true`` is an ATOM (D35 closed): not even structurally equal to 1
-        ([1], [1.0], True, False),             # strictness survives nesting
+        ([1], [1.0], False, False),            # strictness survives nesting
         ([1, 2], [1, 2], True, True),
-        ((1, 2), (1, 2.0), True, False),
-        (("f", 1), ("f", 1.0), True, False),
-        ({"a": 1}, {"a": 1.0}, True, False),
-        ({1}, {1.0}, True, False),
+        ((1, 2), (1, 2.0), False, False),
+        (("f", 1), ("f", 1.0), False, False),
         # Representation, not type: these must stay identical.
         (chars("ab"), ["a", "b"], True, True),  # a string IS its char list
         (b"ab", [97, 98], True, True),         # bytes IS the code list
-        # Decimal IS tagged now (spec §4a): leaving it untagged made `==`
-        # non-transitive once `1.0 == 1` correctly became false, and
-        # order-equality is necessarily transitive. `structural_eq` still says
-        # True — it is the numeric-kind conjunct that separates them.
-        (Decimal(1), 1, True, False),
-        (Fraction(1), 1, True, False),
+        # Decimal and Fraction are kinds of their own (spec §4a), to `==` since
+        # 2026-09-09 and to unify / `structural_eq` since 2026-10-23.
+        (Decimal(1), 1, False, False),
+        (Fraction(1), 1, False, False),
+        (Decimal("1.0"), Decimal("1.00"), False, False),   # scale is part of the term
+        (b"\x01", [1.0], False, False),       # bytes vs float code list: the code 1 is not 1.0
         # --- Recorded HOLES, not endorsements. -----------------------------
+        # A plain Python ``dict``/``set`` (not the DictTerm/SetTerm term
+        # types) unifies by Python ``==``, which pairs ``1`` with ``1.0``;
         # `_numeric_types_agree` descends only through shapes that line up on
         # BOTH sides and answers "no numeric objection" on any mismatch, so
-        # its strictness is representation-dependent. Measured 2026-09-09:
-        # each row below is a pair that the plain-list/plain-set control two
-        # blocks up DOES tighten (`{1}` vs `{1.0}` is False, `[1]` vs `[1.0]`
-        # is False) and that these shapes do NOT. They sit on the safe side of
-        # the one-way property — failing to tighten, never wrongly rejecting —
-        # and I could not reach any of them from ordinary `.clausal` source
-        # (`[1, *T], T = []` resolves to a plain list and answers False
-        # correctly). They are pinned so the gap is a checked fact rather than
-        # a claim in a report. A future change that TIGHTENS any of them will
-        # fail here: that is the alert, and the fix is to update the row.
-        (b"\x01", [1.0], True, True),          # bytes vs float code list
+        # its strictness is representation-dependent.  Measured 2026-09-09
+        # and re-measured 2026-10-23: none of these is reachable from
+        # ordinary `.clausal` source (`[1, *T], T = []` resolves to a plain
+        # list and answers False correctly).  They are pinned so the gap is a
+        # checked fact rather than a claim in a report.  A future change that
+        # TIGHTENS any of them will fail here: that is the alert, and the fix
+        # is to update the row.
+        ({"a": 1}, {"a": 1.0}, True, False),
+        ({1}, {1.0}, True, False),
         ({1, 2.0}, {1.0, 2}, True, True),      # sets compare as a MULTISET of
                                                # numeric types; elements cannot
                                                # be paired positionally

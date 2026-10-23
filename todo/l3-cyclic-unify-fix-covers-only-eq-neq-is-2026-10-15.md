@@ -83,7 +83,7 @@ the gap, not a correction of history.
 
 Either (a) teach the ENGINE's `unify`/`do_unify` (the C extension) a
 seen-pairs cycle memo directly — an engine-wide change, the operator's
-call, matching the scope boundary `todo/iso-unify-conflates-int-and-float-
+call, matching the scope boundary `todo/done/iso-unify-conflates-int-and-float-
 2026-09-09.md` already draws for narrowing `unify` itself — which would
 also close the compiled-head-unification and `member`/2 gaps for free
 (both bottom out in the same C function), or (b) give the clause compiler

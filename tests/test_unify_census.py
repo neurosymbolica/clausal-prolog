@@ -36,7 +36,7 @@ def _by_type():
 
 
 def test_positive_control_int_float_counts_one(census):
-    assert unify(1, 1.0, Trail())
+    assert not unify(1, 1.0, Trail())   # refused since 2026-10-23 (ISO 7.3); the census counts the refusal
     report = unify_census()
     assert report["conflations"] == 1, report
     assert _by_type() == {"int/float": 1}, report
@@ -53,8 +53,8 @@ def test_key_is_order_insensitive(census):
     """``unify(2, Fraction(2, 1))`` and ``unify(Fraction(2, 1), 2)`` are ONE
     phenomenon; a total over the report must sum them under one key."""
     t = Trail()
-    assert unify(2, Fraction(2, 1), t)
-    assert unify(Fraction(2, 1), 2, t)
+    assert not unify(2, Fraction(2, 1), t)
+    assert not unify(Fraction(2, 1), 2, t)
     by_type = _by_type()
     assert unify_census()["conflations"] == 2
     assert len(by_type) == 1, by_type
@@ -65,6 +65,6 @@ def test_key_is_order_insensitive(census):
 
 def test_int_float_key_is_the_same_both_ways(census):
     t = Trail()
-    assert unify(1.0, 1, t)
-    assert unify(1, 1.0, t)
+    assert not unify(1.0, 1, t)
+    assert not unify(1, 1.0, t)
     assert _by_type() == {"int/float": 2}, _by_type()

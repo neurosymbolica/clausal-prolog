@@ -9,6 +9,10 @@ import operator as _o
 from decimal import Decimal as _Decimal
 from fractions import Fraction as _Fraction
 
+from clausal.logic.number_kinds import (
+    decimal_scale as _decimal_scale_kind, numeric_kind as _numeric_kind,
+)
+
 from clausal.logic.atoms import is_atom, mint, spelling
 from clausal.logic.variables import deref as _deref, is_var as _is_var
 from clausal.logic.builtins._helpers import _arity as _term_arity
@@ -237,7 +241,7 @@ def _cycle_unify(a, b, trail) -> bool:
     (and the `except` branch is never entered for an acyclic term, so its
     cost there is the `try` setup only) — not a parallel reimplementation
     that merely resembles `unify`'s behaviour, so trail effects, hook
-    firing and every documented divergence (int/float conflation, …) are
+    firing and every documented divergence are
     `unify`'s own, by construction, for every term this does not need the
     walk for.
 
@@ -396,8 +400,8 @@ def _cycle_unify_walk(a, b, trail) -> bool:
     side is a dataclass term instance, a compound CELL, or a plain `list`
     — to the engine's own `unify`, so atoms, numbers, strings, SegLists,
     DictTerms, SetTerms, bytes and Quantities keep its EXACT existing
-    semantics, including the documented, separately-OPEN int/float
-    conflation (todo/iso-unify-conflates-int-and-float-2026-09-09.md) that
+    semantics (since 2026-10-23 that includes refusing an int against a
+    float, todo/done/iso-unify-conflates-int-and-float-2026-09-09.md) that
     this function does not touch. A cycle folded entirely inside one of
     those delegated shapes (e.g. a cyclic SegList reached only through a
     dict value) is a narrower, pre-existing gap this does not close — none
@@ -487,18 +491,17 @@ def _iso_is(result, expr, trail, k):
     implicit unification of Result against the evaluated expression is
     `=`/2's unification, which is type-sensitive between numeric kinds —
     `3` and `3.0` do not unify even though `3 =:= 3.0` — the same way
-    `3 == 3.0` is false. The engine's shared `unify` deliberately still
-    conflates int/float for its many OTHER callers (clause-head matching,
-    `'='`/2 itself, `dif`/2, …; narrowing that is an engine-wide,
-    operator-level call — todo/iso-unify-conflates-int-and-float-2026-09-09.md),
-    so this guards ONLY is/2's own final step: `_numeric_types_agree`
-    (already used by `'=='`/2 for the identical question) is run first and,
-    when Result is already bound to a numeric leaf of a DIFFERENT numeric
-    kind than the evaluated expression, is/2 fails before ever reaching
-    `unify` — matching what a type-sensitive unify would have done — while
-    an unbound Result (`X is 3.0`) is untouched (`_numeric_types_agree`
-    raises no objection to an unbound variable) and binds exactly as before.
-    `'='`/2 itself is intentionally NOT changed; see the todo file.
+    `3 == 3.0` is false. When this was fixed the engine's shared `unify`
+    still conflated int/float for its other callers, so this guarded ONLY
+    is/2's own final step: `_numeric_types_agree` (`'=='`/2's check for the
+    identical question) runs first and, when Result is already bound to a
+    numeric leaf of a DIFFERENT numeric kind than the evaluated expression,
+    is/2 fails before ever reaching `unify`, while an unbound Result
+    (`X is 3.0`) is untouched and binds exactly as before.  Since
+    2026-10-23 `unify` itself refuses the cross-kind pair (ISO 7.3, see
+    `_iso_unify`), so the guard is now an early answer to the same
+    question, kept because it costs nothing on the common unbound-Result
+    path and documents the ruling at the site it was first applied.
     """
     value = _iso_eval(expr, "is/2")
     # The evaluated value is a number, never a cyclic term, so the engine's
@@ -516,9 +519,11 @@ def _iso_is(result, expr, trail, k):
 def _iso_unify(a, b, trail, k):
     """ISO =/2: unification.
 
-    Clausal's `unify` conflates int and float, so `'='(1, 1.0)` succeeds
-    where Scryer says no — OPEN and deferred, see
-    todo/iso-unify-conflates-int-and-float-2026-09-09.md.
+    Type-sensitive between numeric kinds since 2026-10-23 (operator ruling,
+    ISO 7.3): `'='(1, 1.0)` fails, as Scryer answers, because the shared
+    `unify` itself refuses a number against a number of another kind (see
+    `variables/_variables.c::numeric_kind`;
+    todo/done/iso-unify-conflates-int-and-float-2026-09-09.md).
 
     Cyclic-term safe since 2026-10-15 via `_cycle_unify` (see its docstring)
     — previously a term built to contain itself, e.g. through a third
@@ -556,38 +561,30 @@ def _numeric_tag(x):
     by construction. Returns a TYPE OBJECT: nothing is wrapped, no term
     representation changes, and arithmetic never sees this.
 
-    `Decimal`/`Fraction` used to be left untagged to mirror
-    `clausal/logic/tabling.py::_normalize_for_key_py` (the A01-D001 residual).
-    That was harmless while `1.0 == 1` was also true, but once that correctly
-    became false the relation stopped being transitive: measured 2026-09-09,
-    `1.0 == Decimal(1)` and `Decimal(1) == 1` were both true while
-    `1.0 == 1` was false.
+    The ONE spelling is `clausal.logic.number_kinds.numeric_kind`, which the
+    unifier (`_variables.c::numeric_kind`, since the 2026-10-23 ruling that
+    `1 = 1.0` fails, ISO 7.3), `structural_eq`, tabling's variant keys and
+    setof/3's dedup share, so every mechanism counts the same number of
+    terms.  `Decimal`/`Fraction` used to be left untagged here to mirror
+    tabling (the A01-D001 residual); measured 2026-09-09 that made `==`
+    non-transitive (`1.0 == Decimal(1)` and `Decimal(1) == 1` while
+    `1.0 == 1` was false), so they were tagged here first, and tabling
+    followed on 2026-10-23.
 
-    This is the COMPARISON site ONLY. `_normalize_for_key_py` and its C twin
-    `do_normalize` keep the residual deliberately — a C rebuild and P52
-    lock-step do not belong here — so tabled answer dedup still collapses
-    `Decimal(1)` with `1` while this says they differ. Filed as
-    todo/a01-d001-tabling-half-2026-09-09.md. Spec §4a.
+    An exact-number CELL (``('decimal', M, S)``, ``('rdiv', N, D)``) is NOT
+    tagged, deliberately: ``structural_eq`` already separates a cell from
+    its object and two cells of different spelling, so a tag for cells would
+    change no answer -- measured 2026-09-17 by mutation (disabling such a
+    tag failed 0 of 11 guard tests).  The cell is handled where it IS
+    observable: the order key (``_helpers._standard_order_key``) and the
+    evaluator leaf (``clpfd._eval_ground``).  Spec §4a.
     """
-    if type(x) is int:
-        return int
-    if isinstance(x, bool):
-        return None                     # a truth ATOM (D35), not a number kind
-    if isinstance(x, (float, complex, _Decimal, _Fraction)):
-        return type(x)
-    # An exact-number CELL (``('decimal', M, S)``, ``('rdiv', N, D)``) is NOT
-    # tagged here, deliberately: ``structural_eq`` already separates a cell
-    # from its object and two cells of different spelling, so a tag for cells
-    # would change no answer -- measured 2026-09-17 by mutation (disabling
-    # such a tag failed 0 of 11 guard tests).  The cell is handled where it
-    # IS observable: the order key (``_helpers._standard_order_key``) and the
-    # evaluator leaf (``clpfd._eval_ground``).
-    return None
+    return _numeric_kind(x)
 
 
 def _decimal_scale(x: _Decimal) -> int:
-    """Decimal places of a Decimal object (``1.00`` -> 2)."""
-    return -x.as_tuple().exponent
+    """Decimal places of a Decimal object (``1.00`` -> 2); `number_kinds`'s."""
+    return _decimal_scale_kind(x)
 
 
 def _numeric_types_agree(a, b) -> bool:

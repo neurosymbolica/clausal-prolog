@@ -42,7 +42,7 @@ Out of scope, decide later:
 3. **Tabling answer keys.** `_normalize_for_key_py` / `do_normalize` keep the
    A01-D001 residual (Fraction/Decimal untagged, so `Fraction(2, 1)` and `2` dedup
    together while `'=='` says they differ). Filed separately as
-   todo/a01-d001-tabling-half-2026-09-09.md; with binders presenting ints the residual
+   todo/done/a01-d001-tabling-half-2026-09-09.md; with binders presenting ints the residual
    is reached only by case 2 above.
 4. **Input direction.** `clpz3.py` builds `Fraction(val).limit_denominator(...)` to
    FEED Z3 (`python_to_z3`); that is not a binder and needs nothing.

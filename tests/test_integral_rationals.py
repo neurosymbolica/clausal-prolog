@@ -167,7 +167,7 @@ class TestConstraintEqualityBindsInt:
         mod = _module(tmp_path, _QUARTER_SRC)
         unify_census_start()
         try:
-            assert unify(1, 1.0, Trail())
+            assert not unify(1, 1.0, Trail())   # refused since 2026-10-23; the census counts it
             control = unify_census()
             assert control["conflations"] == 1, control
             assert control["by_type_pair"] == {"int/float": 1}, control
@@ -494,7 +494,7 @@ def test_no_path_binds_an_integral_fraction(tmp_path, path):
     runner, want = ABSENCE_PATHS[path]
     unify_census_start()
     try:
-        assert unify(1, 1.0, Trail())
+        assert not unify(1, 1.0, Trail())   # refused since 2026-10-23; the census counts it
         control = unify_census()
         assert control["conflations"] == 1, control       # the census is live
         assert control["by_type_pair"] == {"int/float": 1}, control

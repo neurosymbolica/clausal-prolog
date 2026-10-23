@@ -13,7 +13,8 @@ The tests below pin the four ways they could differ:
   to the scan, not raise ``TypeError``;
 * **unification vs equality** — a set answers ``hash``/``__eq__`` where
   the scan answers ``unify()``; for the whitelisted types those must
-  agree, including across the numeric tower (``1`` vs ``1.0``).
+  agree, including across the numeric tower (``1`` vs ``1.0`` are
+  DISTINCT terms since 2026-10-23, ISO 7.3, to both).
 
 Every case is asserted against **both** builds — with the ``const_set``
 optimisation on and off — so the tests establish that the fast path
@@ -194,31 +195,40 @@ def test_duplicate_element_yields_two_solutions_when_ground(build):
     assert len(_solutions(build, "dup_ground", _atom(build, "a"))) == 2
 
 
-def test_hash_equal_duplicates_count_as_duplicates(build):
-    """``1 in [1.0, 1]`` succeeds twice, because ``unify(1, 1.0)`` succeeds.
+def test_hash_equal_elements_are_not_duplicates(build):
+    """``1 in [1.0, 1]`` succeeds ONCE: ``unify(1, 1.0)`` fails (ISO 7.3,
+    ruling 2026-10-23), so only the ``1`` element answers.
 
-    ``1.0`` and ``1`` are distinct list elements but a single set element,
-    so the duplicate check has to be by hash-equality, not by surface form.
+    ``1.0`` and ``1`` are hash-equal to Python and would be one element of a
+    plain ``frozenset``; the set keys them as ``(type, value)`` so they stay
+    two, and the duplicate check -- by KEY -- does not refuse the list.
+    Until 2026-10-23 this succeeded twice and the list was refused.
     """
-    assert len(_solutions(build, "dup_numeric", 1)) == 2
+    assert len(_solutions(build, "dup_numeric", 1)) == 1
+    assert len(_solutions(build, "dup_numeric", 1.0)) == 1
 
 
 # ── Unification vs equality ───────────────────────────────────────────────────
 
-def test_int_matches_float_element(build):
-    """``1 in [1, 2.5, 3]``: ints and floats unify by ``==``, and so does
-    the set, so the two agree."""
+def test_int_matches_int_element_in_a_mixed_list(build):
+    """``1 in [1, 2.5, 3]``: the int element answers; ``2.5`` and ``3.0``
+    do not match ``3`` (a float is not an integer, ISO 7.3)."""
     assert len(_solutions(build, "numeric", 1)) == 1
+    assert len(_solutions(build, "numeric", 3.0)) == 0
+    assert len(_solutions(build, "numeric", 2.5)) == 1
 
 
-def test_float_matches_int_element(build):
-    """``20.0 in [10, 20, 30]`` — cross-type, in the direction the set
-    lookup has to hash the *float* and find the *int*."""
-    assert len(_solutions(build, "tower", 20.0)) == 1
+def test_float_does_not_match_an_int_element(build):
+    """``20.0 in [10, 20, 30]`` — cross-kind, in the direction the set
+    lookup hashes the *float* and WOULD find the *int* under Python's
+    ``hash``: the ``(type, value)`` key keeps it out, as the scan's
+    ``unify(20.0, 20)`` fails since 2026-10-23."""
+    assert len(_solutions(build, "tower", 20.0)) == 0
+    assert len(_solutions(build, "tower", 20)) == 1
 
 
 def test_bool_matches_int_element(build):
-    """``True`` is ``1`` to both ``unify()`` and ``hash``; ``7`` is neither."""
+    """``True`` is the ATOM ``true`` (D35), never ``7``; ``7`` matches itself."""
     assert len(_solutions(build, "bools", True)) == 0
     assert len(_solutions(build, "bools", 7)) == 1
 
@@ -338,7 +348,9 @@ class TestConstSetBuilder:
     Its refusals are what the fallback tests above rely on."""
 
     def test_accepts_distinct_scalars(self):
-        assert _const_set([1, 2, 3]) == frozenset({1, 2, 3})
+        # A mixed (non-atom) set keys by ``(type, value)``: ``1`` and ``1.0``
+        # are distinct terms to the unifier since 2026-10-23 (ISO 7.3).
+        assert _const_set([1, 2, 3]) == frozenset({(int, 1), (int, 2), (int, 3)})
 
     def test_an_all_atom_list_builds_a_set_of_SPELLINGS(self):
         """An atom is the arity-0 cell ``("a",)``, whose ``==``/``hash`` are
@@ -355,10 +367,12 @@ class TestConstSetBuilder:
         """The spellings trick is only safe when nothing in the list can
         collide with a spelling.  A STRING is exactly that collision — after
         the flip ``"a"`` and ``a`` are different terms that must not unify —
-        so a list holding both keeps the atom CELL in the set."""
+        so a list holding both keeps the atom (the str) in the set, keyed
+        by its type like every other element of a mixed set."""
         built = _const_set([mint("a"), chars("a"), 1, None])
         assert built.__class__ is frozenset
-        assert built == frozenset({mint("a"), chars("a"), 1, None})
+        assert built == frozenset({(str, mint("a")), (tuple, chars("a")),
+                                   (int, 1), (type(None), None)})
 
     def test_duplicate_atoms_are_caught_through_their_spellings(self):
         assert _const_set([mint("a"), mint("a"), mint("b")]) is False
@@ -381,8 +395,11 @@ class TestConstSetBuilder:
         assert _const_set([char_atom("a"), char_atom("a"), char_atom("b")]) is False
 
     def test_refuses_hash_equal_duplicates(self):
-        assert _const_set([1, 1.0]) is False
-        assert _const_set([0, False]) is False
+        assert _const_set([1, 1.0]) == frozenset({(int, 1), (float, 1.0)})   # two kinds, two keys (2026-10-23)
+        assert _const_set([1, 1]) is False
+        # ``false`` is the ATOM (D35), keyed by its spelling: not a duplicate of 0
+        assert _const_set([0, False]) == frozenset({(int, 0), (str, "false")})
+        assert _const_set([False, mint("false")]) is False   # one atom, two spellings
 
     def test_refuses_unhashable_element(self):
         assert _const_set([[1], [2]]) is False
@@ -405,11 +422,14 @@ class TestConstSetBuilder:
         """Every whitelisted type must have a total ``hash``; otherwise the
         runtime guard would let a membership test raise."""
         from fractions import Fraction
-        samples = [0, 0.0, float("nan"), True, complex(1, 2), "s", b"s",
+        samples = [0, 0.0, float("nan"), complex(1, 2), "s", b"s",
                    None, Fraction(1, 3)]
         for value in samples:
             assert value.__class__ in _CONST_SET_TYPES
             hash(value)  # must not raise
+        # A truth value is an ATOM (D35): as an operand it takes the scan,
+        # which unifies it with its str spelling; it is not on the list.
+        assert bool not in _CONST_SET_TYPES
 
 
 def _compiled_dispatch(pymod, mod, name, arity):
@@ -475,7 +495,8 @@ def test_a_mixed_callsite_fires_too_and_keeps_whole_terms():
     assert list(call("mixed_kinds", mint("a"), module=mod))
     built = fn.__globals__[cells[0]][0]
     assert built.__class__ is frozenset
-    assert mint("a") in built and chars("a") not in built
+    assert (str, mint("a")) in built and (tuple, chars("a")) not in built
+    assert mint("a") not in built     # keyed by (type, value), never bare
 
 
 def test_const_set_is_a_registered_optimisation():

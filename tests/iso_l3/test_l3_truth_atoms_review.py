@@ -116,17 +116,18 @@ TABLE = {
     "h3": ([["x"]], "[[x]]"),
     "h4": ([["x"]], "[[x]]"),
     "h5": ([[True, 1, False, 0, "a"]], "[[true,1,false,0,a]]"),
-    # 1 = 1.0 unifies in the engine (parked, A01-D001 / todo
-    # iso-unify-conflates-int-and-float): the guard answers what unify does
-    "h6": ([["x"]], "[[]]  -- the parked int/float unify residual"),
+    # 1 = 1.0 FAILS since 2026-10-23 (ISO 7.3): the head guard answers what
+    # unify does, and p(f(1)) does not match f(1.0)
+    "h6": ([[]], "[[]]"),
     "h7": ([[["x"], ["x"]]], "[[[x],[x]]]"),
     # 3. setof/3
     "s1": ([[0, 1, False, True]], "[[0,1,false,true]]"),
     "s2": ([[("-", "a", 1), ("-", "a", True), ("-", "b", 0), ("-", "b", False)]],
            "[[a-1,a-true,b-0,b-false]]"),
-    # f(1) and f(1.0) stay merged: A01-D001 (c) keeps 1 == 1.0 in setof
-    "s3": ([[("f", 1.0), ("f", True)]], "[[f(1.0),f(1),f(true)]]  -- A01-D001 residual"),
-    "s4": ([[1.0, 2]], "[[1.0,1,2]]  -- A01-D001 residual"),
+    # f(1) and f(1.0) are two terms (ISO 7.3, ruling 2026-10-23): setof keeps
+    # both, float before int in the standard order
+    "s3": ([[("f", 1.0), ("f", 1), ("f", True)]], "[[f(1.0),f(1),f(true)]]"),
+    "s4": ([[1.0, 1, 2]], "[[1.0,1,2]]"),
     # 4. lists (no subtract/3 etc. in Scryer's library(lists): ==/2 membership)
     "l1": ([[True, 0, False]], "(n/a)"),
     "l2": ([[1, False]], "(n/a)"),

@@ -5,7 +5,7 @@ Neumerkel presentation (2026-10-15):
   `is`/2 is `=`/2's unification, which is type-sensitive between numeric
   kinds, so `3 is 3.0` must FAIL even though `3 =:= 3.0`.  Clausal's shared
   engine `unify` conflates int/float for its many other callers (an OPEN,
-  deliberately deferred decision — todo/iso-unify-conflates-int-and-float-
+  deliberately deferred decision — todo/done/iso-unify-conflates-int-and-float-
   2026-09-09.md), so the fix lives in `is`/2's own builtin
   (`clausal/logic/builtins/iso_compare.py::_iso_is`), guarded by
   `_numeric_types_agree` (already used by `'=='`/2 for the same question),
@@ -221,11 +221,12 @@ def test_unify_still_binds_a_fresh_variable(run_clausal):
     assert got == ["('foo', 1, 2)"]
 
 
-def test_unify_int_float_conflation_still_open(run_clausal):
-    """`'='`/2 itself is DELIBERATELY left conflating int/float — this fix
-    only closed the `is`/2 half of todo/iso-unify-conflates-int-and-float-
-    2026-09-09.md. If this starts failing, `'='`/2's engine-wide semantics
-    changed and the todo file (plus its two surviving
-    `*_OPEN_iso_divergence` pins in test_iso_compare_scryer.py) needs an
-    update, not this test."""
-    assert _engine_yesno(run_clausal, "'='(1, 1.0)") == ["'yes'"]
+def test_unify_int_float_distinct_closed_2026_10_23(run_clausal):
+    """Formerly `test_unify_int_float_conflation_still_open`: when the `is`/2
+    half of todo/done/iso-unify-conflates-int-and-float-2026-09-09.md was
+    fixed (2026-10-15), `'='`/2 itself was deliberately left conflating
+    int/float, and this pinned that.  The operator ruling of 2026-10-23
+    closed the `'='`/2 half too (ISO 7.3): the shared `unify` refuses a
+    number against a number of another kind, so `'='(1, 1.0)` fails -- the
+    `is`/2 guard below is now an early answer to the same question."""
+    assert _engine_yesno(run_clausal, "'='(1, 1.0)") == ["'no'"]

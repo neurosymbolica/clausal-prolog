@@ -282,17 +282,38 @@ def _is_atom_inline(elem_local: str) -> ast.expr:
 
 
 def _const_set_lookup(set_local: str, mode_local: str, elem_local: str) -> ast.expr:
-    """``elem in set_local``.
+    """``elem in set_local if mode else (elem.__class__, elem) in set_local``.
 
     STAGE 2: in spellings mode the set holds the atoms themselves (an atom IS
-    its spelling), and in mixed mode it holds whole terms -- the operand is
-    looked up as it stands in both, so *mode_local* no longer selects a
-    slot-0 read.  It stays in the signature for the guard's sake.
+    its spelling), so the operand is looked up as it stands.  A MIXED set
+    holds ``(type, value)`` keys (``runtime/const_set._mixed_key``): since
+    the 2026-10-23 ruling ``1`` and ``1.0`` are distinct terms to the
+    unifier while equal and hash-equal to Python, so the operand's key is
+    built the same way and ``1`` cannot find ``1.0``.  The guard has already
+    ruled out a truth-atom operand (``bool`` is not in ``$CSET_TYPES``), so
+    no spelling normalisation is needed on this side.
     """
-    return _locate(ast.Compare(
-        left=_name(elem_local),
-        ops=[ast.In()],
-        comparators=[_name(set_local)],
+    mixed_key = _locate(ast.Tuple(
+        elts=[
+            _locate(ast.Attribute(
+                value=_name(elem_local), attr="__class__", ctx=ast.Load(),
+            )),
+            _name(elem_local),
+        ],
+        ctx=ast.Load(),
+    ))
+    return _locate(ast.IfExp(
+        test=_name(mode_local),
+        body=_locate(ast.Compare(
+            left=_name(elem_local),
+            ops=[ast.In()],
+            comparators=[_name(set_local)],
+        )),
+        orelse=_locate(ast.Compare(
+            left=mixed_key,
+            ops=[ast.In()],
+            comparators=[_name(set_local)],
+        )),
     ))
 
 

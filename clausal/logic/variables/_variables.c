@@ -36,6 +36,7 @@
 #include <Python.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <limits.h>
 #include "_ft_compat.h"
 
 /* ================================================================
@@ -1421,6 +1422,99 @@ static unsigned long long unify_census_count = 0;
 static PyObject *unify_census_sites = NULL;   /* {"int/float": n, ...}, unordered pair */
 
 
+/* ---- numeric kinds (operator ruling 2026-10-23: ISO 7.3, `1 = 1.0` fails) ----
+ *
+ * A number unifies only with a number of the SAME KIND: ISO says an integer
+ * and a float are distinct terms however equal their values, and Clausal's
+ * `'=='`/2 and `compare/3` already keep every numeric type its own kind
+ * (`builtins/iso_compare._numeric_tag`, `_helpers._NUMERIC_RANK`).  This is
+ * the unify half of the same rule, so `X = Y` and `X == Y` agree on ground
+ * numbers.  The kinds mirror `clausal.logic.number_kinds.numeric_kind`
+ * (the Python twin): an EXACT int (a bool is a truth ATOM and never reaches
+ * here; an int SUBCLASS is untagged and falls through to `==`), float,
+ * complex, `decimal.Decimal` and `fractions.Fraction`.  Two Decimals must
+ * also agree on SCALE (`1.0` vs `1.00`, ruling 2026-09-17 Q2) -- Python's
+ * `Decimal.__eq__` ignores it, so the exponent is compared explicitly.
+ *
+ * The Decimal/Fraction types are fetched at module init (PyInit__variables):
+ * compiled clause code runs under an `__import__` that refuses every import
+ * (`compiler/predicate._engine_only_import`), so a lazy PyImport from inside
+ * a unify reached from such code would raise.  numkind_types_ready() stays
+ * as the guard the kind test consults; the atom-vs-atom and int-vs-int
+ * fallbacks (the hot ones) decide before it is reached. */
+#define NUMKIND_NONE     0
+#define NUMKIND_INT      1
+#define NUMKIND_FLOAT    2
+#define NUMKIND_COMPLEX  3
+#define NUMKIND_DECIMAL  4
+#define NUMKIND_FRACTION 5
+
+static PyObject *numkind_decimal_type = NULL;
+static PyObject *numkind_fraction_type = NULL;
+
+static int
+numkind_types_ready(void)
+{
+    if (numkind_decimal_type && numkind_fraction_type) return 1;
+    PyObject *mod = PyImport_ImportModule("decimal");
+    if (!mod) return 0;
+    numkind_decimal_type = PyObject_GetAttrString(mod, "Decimal");
+    Py_DECREF(mod);
+    if (!numkind_decimal_type) return 0;
+    mod = PyImport_ImportModule("fractions");
+    if (!mod) return 0;
+    numkind_fraction_type = PyObject_GetAttrString(mod, "Fraction");
+    Py_DECREF(mod);
+    return numkind_fraction_type != NULL;
+}
+
+/* The numeric kind of a dereferenced, non-variable, non-container term, or
+ * NUMKIND_NONE.  -1 on error (the lazy type import failed). */
+static int
+numeric_kind(PyObject *t)
+{
+    if (PyLong_CheckExact(t)) return NUMKIND_INT;
+    if (PyFloat_Check(t)) return NUMKIND_FLOAT;
+    /* The common non-numbers leave before any import: atoms, None, bytes,
+     * the truth atoms (handled by their own arm anyway). */
+    if (PyUnicode_Check(t) || t == Py_None || PyBytes_Check(t) || PyBool_Check(t))
+        return NUMKIND_NONE;
+    if (PyComplex_Check(t)) return NUMKIND_COMPLEX;
+    if (PyLong_Check(t)) return NUMKIND_NONE;      /* an int subclass: untagged, as _numeric_tag */
+    if (!numkind_types_ready()) return -1;
+    PyTypeObject *tp = Py_TYPE(t);
+    if (tp == (PyTypeObject *)numkind_decimal_type
+            || PyType_IsSubtype(tp, (PyTypeObject *)numkind_decimal_type))
+        return NUMKIND_DECIMAL;
+    if (tp == (PyTypeObject *)numkind_fraction_type
+            || PyType_IsSubtype(tp, (PyTypeObject *)numkind_fraction_type))
+        return NUMKIND_FRACTION;
+    return NUMKIND_NONE;
+}
+
+/* `t.as_tuple().exponent` of a Decimal into *out; -1 with an error set on
+ * failure, else 0.  A non-finite Decimal has a str exponent ('n', 'N', 'F'):
+ * it gets a scale of its own, LONG_MIN, so `NaN` and `Infinity` never match
+ * a finite Decimal on scale (they already differ on value). */
+static int
+decimal_exponent(PyObject *t, long *out)
+{
+    PyObject *tup = PyObject_CallMethod(t, "as_tuple", NULL);
+    if (!tup) return -1;
+    PyObject *exp = PyObject_GetAttrString(tup, "exponent");
+    Py_DECREF(tup);
+    if (!exp) return -1;
+    if (PyLong_Check(exp)) {
+        *out = PyLong_AsLong(exp);
+        if (*out == -1 && PyErr_Occurred()) { Py_DECREF(exp); return -1; }
+    } else {
+        *out = LONG_MIN;
+    }
+    Py_DECREF(exp);
+    return 0;
+}
+
+
 /* THE CHARS CARRIER (stage 1 of the atoms-as-str flip, spec 2026-09-18):
  * ('$chars', "abc") is the compact form of the char list and EQUAL to it.
  * Unwrapped to its str right before the str<->list arms, and only there --
@@ -1883,46 +1977,67 @@ hooks:
         return 0;
     }
 
+    /* ---- numbers: same KIND, then equal value (ISO 7.3; ruling 2026-10-23) ----
+     *
+     * `1 = 1.0` FAILS: an integer and a float are distinct terms however
+     * equal their values, and so are a Decimal, a Fraction and a complex
+     * against any other kind -- the kinds `'=='`/2 already keeps apart (see
+     * numeric_kind above).  Until 2026-10-23 this arm was a bare
+     * `PyObject_RichCompareBool(Py_EQ)`, i.e. Python `==`, which conflated
+     * them (todo/done/iso-unify-conflates-int-and-float-2026-09-09.md).
+     *
+     * Cost: for the hot fallbacks (two exact ints, two atoms) numeric_kind
+     * is one or two inlined type checks before the same `==` as before. */
+    int k1 = numeric_kind(t1);
+    if (k1 < 0) return -1;
+    int k2 = numeric_kind(t2);
+    if (k2 < 0) return -1;
+    if (k1 && k2 && k1 != k2) {
+        /* ---- numeric-kind census (default off) ----
+         * Counts the pairs this arm REFUSES that Python `==` would have
+         * accepted -- the population the 2026-10-23 ruling changed, kept so
+         * a program can measure how often it relied on the old conflation.
+         * Keyed by the UNORDERED type pair: unify(2, Fraction(2, 1)) and
+         * unify(Fraction(2, 1), 2) are one phenomenon and must sum under one
+         * key, whichever side each term arrived on. The two names go in
+         * descending strcmp order, which keeps the documented "int/float"
+         * spelling.  Only reached when the census is on, so the refusal
+         * itself costs no compare. */
+        if (unify_census_on) {
+            int eq = PyObject_RichCompareBool(t1, t2, Py_EQ);
+            if (eq < 0) PyErr_Clear();   /* census must never perturb the caller */
+            if (eq == 1) {
+                unify_census_count++;
+                if (unify_census_sites) {
+                    const char *n1 = Py_TYPE(t1)->tp_name;
+                    const char *n2 = Py_TYPE(t2)->tp_name;
+                    if (strcmp(n1, n2) < 0) { const char *tmp = n1; n1 = n2; n2 = tmp; }
+                    PyObject *key = PyUnicode_FromFormat("%s/%s", n1, n2);
+                    if (key) {
+                        PyObject *cur = PyDict_GetItemWithError(unify_census_sites, key);
+                        long n = (cur && PyLong_Check(cur)) ? PyLong_AsLong(cur) : 0;
+                        PyObject *nv = PyLong_FromLong(n + 1);
+                        if (nv) { PyDict_SetItem(unify_census_sites, key, nv); Py_DECREF(nv); }
+                        Py_DECREF(key);
+                    }
+                    PyErr_Clear();
+                }
+            }
+        }
+        return 0;
+    }
+
     int cmp = PyObject_RichCompareBool(t1, t2, Py_EQ);
     if (cmp < 0) return -1;
 
-    /* ---- numeric-type census (spec: todo/iso-unify-conflates-int-and-float) ----
-     *
-     * ISO says 1 and 1.0 are DISTINCT terms; `PyObject_RichCompareBool` says
-     * they are equal, so unification conflates them. Before changing that on
-     * the hottest path in the engine, count how often it actually happens.
-     *
-     * Cost when disabled: one load of a global int and a predictable
-     * not-taken branch, on the FALLBACK path only — reached solely for two
-     * dereferenced, non-variable, non-container ground terms. Variable
-     * binding and structure walking never arrive here.
-     *
-     * Counted: the comparison SUCCEEDED but the two terms have different
-     * Python types and both are numbers. That is exactly the population a
-     * type-strict unify would start rejecting.
-     */
-    if (unify_census_on && cmp == 1 && Py_TYPE(t1) != Py_TYPE(t2)
-            && PyNumber_Check(t1) && PyNumber_Check(t2)) {
-        unify_census_count++;
-        if (unify_census_sites) {
-            /* Keyed by the UNORDERED type pair: unify(2, Fraction(2, 1)) and
-             * unify(Fraction(2, 1), 2) are one phenomenon and must sum under
-             * one key, whichever side each term arrived on. The two names go
-             * in descending strcmp order, which keeps the documented
-             * "int/float" spelling. */
-            const char *n1 = Py_TYPE(t1)->tp_name;
-            const char *n2 = Py_TYPE(t2)->tp_name;
-            if (strcmp(n1, n2) < 0) { const char *tmp = n1; n1 = n2; n2 = tmp; }
-            PyObject *key = PyUnicode_FromFormat("%s/%s", n1, n2);
-            if (key) {
-                PyObject *cur = PyDict_GetItemWithError(unify_census_sites, key);
-                long n = (cur && PyLong_Check(cur)) ? PyLong_AsLong(cur) : 0;
-                PyObject *nv = PyLong_FromLong(n + 1);
-                if (nv) { PyDict_SetItem(unify_census_sites, key, nv); Py_DECREF(nv); }
-                Py_DECREF(key);
-            }
-            PyErr_Clear();   /* census must never perturb the caller */
-        }
+    /* Two Decimals of equal value are one term only at one SCALE: `1.0` and
+     * `1.00` are distinct (ruling 2026-09-17 Q2, the analogue of `1` vs
+     * `1.0`), as `'=='`/2 and the standard order already hold. */
+    if (cmp == 1 && k1 == NUMKIND_DECIMAL) {
+        long e1, e2;
+        if (decimal_exponent(t1, &e1) < 0 || decimal_exponent(t2, &e2) < 0)
+            return -1;
+        return e1 == e2;
     }
     return cmp;
 }
@@ -4214,9 +4329,10 @@ static PyMethodDef module_methods[] = {
      "_set_pending_drain(fn) -> None\n\nRegister fn(trail) -> generator."},
     {"unify_census_start", py_unify_census_start, METH_NOARGS,
      "unify_census_start() -> None\n\n"
-     "Begin counting unifications that succeed ONLY because two numbers of\n"
-     "different Python types compare equal (1 vs 1.0, Decimal(1) vs 1).\n"
-     "ISO treats those as distinct terms. Resets any previous count.\n"
+     "Begin counting unifications of two numbers of different KINDS whose\n"
+     "values compare equal (1 vs 1.0, Decimal(1) vs 1): the pairs unify\n"
+     "REFUSES since 2026-10-23 (ISO 7.3) and accepted before. Resets any\n"
+     "previous count.\n"
      "Off by default; costs a not-taken branch on the fallback path."},
     {"unify_census_stop", py_unify_census_stop, METH_NOARGS,
      "unify_census_stop() -> None\n\nStop counting. Results are retained."},
@@ -4383,6 +4499,11 @@ PyInit__variables(void)
     /* Interned before any unify can run — do_unify's hook probe uses it. */
     str_dunder_unify = PyUnicode_InternFromString("__unify__");
     if (!str_dunder_unify) return NULL;
+
+    /* decimal.Decimal / fractions.Fraction for the numeric-kind arm of
+     * do_unify; resolved here, never lazily from inside a unify (see
+     * numeric_kind). */
+    if (!numkind_types_ready()) return NULL;
 
     /* The term-inspection helpers' interned names + dataclasses.fields. */
     if (init_term_inspection_cache() < 0) return NULL;

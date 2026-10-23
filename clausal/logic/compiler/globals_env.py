@@ -38,9 +38,6 @@ from clausal.logic.builtins import (
 )
 
 from clausal.logic.cells import _cell_shape, is_chars, is_pool_seeded_atom
-from clausal.logic.builtins._helpers import (   # the standard-order bands (setof)
-    _ORD_NUM, _ORD_COMPOUND, _ORD_DICT, _ORD_SET,
-)
 from clausal.logic.atoms import is_atom as _term_is_atom, is_nil
 
 from ._ast_helpers import _name, _call, _assign
@@ -87,49 +84,31 @@ def _set_of_sort_dedup(items: list) -> list:
     # Otherwise each item's standard-order key is computed ONCE and serves
     # both the sort and the dedup.  Two items are one term when their keys
     # are equal -- the relation sort/2 dedups by, and ISO 8.10.3 has setof
-    # sort as sort/2 does -- with ONE widening, at the key level: numbers
-    # of equal VALUE are one (``1`` and ``1.0``, the ruled A01-D001 split:
-    # "keep 1==1.0", the relation unify has).  It used to be Python ``==``
-    # (``dict.fromkeys``), which ALSO merged ``true`` with ``1`` and
-    # ``false`` with ``0`` (``1 == True``), where the truth values are
-    # ATOMS (D47) and the ruling rejects the bool/int conflation.
-    # Sorted by key, the first of a merged class survives.
+    # sort as sort/2 does.  Until 2026-10-23 the key was widened here so
+    # that numbers of equal VALUE were one (``1`` and ``1.0``, the ruled
+    # A01-D001 split: "keep 1==1.0", the relation unify had); the unifier
+    # now keeps every numeric kind apart (ISO 7.3, ``1 = 1.0`` fails), so
+    # the plain key -- which already did -- is the relation unify has.  It
+    # used to be Python ``==`` (``dict.fromkeys``), which ALSO merged
+    # ``true`` with ``1`` and ``false`` with ``0`` (``1 == True``), where the
+    # truth values are ATOMS (D47).  Sorted by key, the first of a merged
+    # class survives.
     keyed = [(_standard_order_key(x), x) for x in items]
     keyed.sort(key=lambda pair: pair[0])
     out: list = []
     seen: set = set()
     seen_unhashable: list = []
     for key, item in keyed:
-        mkey = _setof_merge_key(key)
         try:
-            if mkey in seen:
+            if key in seen:
                 continue
-            seen.add(mkey)
+            seen.add(key)
         except TypeError:                       # an opaque value's key
-            if mkey in seen_unhashable:
+            if key in seen_unhashable:
                 continue
-            seen_unhashable.append(mkey)
+            seen_unhashable.append(key)
         out.append(item)
     return out
-
-
-def _setof_merge_key(key):
-    """*key* (a standard-order key) with every plain NUMBER's key cut to
-    ``(band, dims, value, cell)`` -- the numeric type rank and the decimal
-    scale dropped -- so numbers of equal value compare equal, at any depth,
-    and nothing else changes.  A truth atom keys in the ATOM band, so it
-    never meets a number here."""
-    band = key[0]
-    if band == _ORD_NUM:
-        return (band, key[1], key[2], key[5]) if len(key) == 6 else key
-    if band == _ORD_COMPOUND:
-        return key[:4] + (tuple(_setof_merge_key(a) for a in key[4]),)
-    if band == _ORD_DICT:
-        return (band, tuple((_setof_merge_key(k), _setof_merge_key(v))
-                            for k, v in key[1]))
-    if band == _ORD_SET:
-        return (band, tuple(_setof_merge_key(e) for e in key[1]))
-    return key
 
 
 # ── bagof/3 and setof/3: free variables (ISO 8.10.2, 8.10.3) ────────────────

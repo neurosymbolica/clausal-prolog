@@ -24,6 +24,7 @@ from clausal.logic.variables import (
     Trail,
 )
 from clausal.logic.atoms import truth_spelling as _truth_spelling
+from clausal.logic.number_kinds import same_number
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.terms import (
     SegList,
@@ -94,7 +95,11 @@ def structural_eq(left: Any, right: Any) -> bool:
             return type(right) is str and _truth_spelling(left) == right
         if type(right) is bool:
             return type(left) is str and _truth_spelling(right) == left
-        return left == right
+        # Two numbers are one term only in one KIND (ISO 7.3: ``1`` is not
+        # ``1.0``; a Decimal keeps its scale) -- the rule the unifier holds
+        # since 2026-10-23, so this fast path answers what the general
+        # ``reify_eq`` path below would.
+        return left == right and same_number(left, right)
     if left is _Undefined:
         return type(right) is str and right == "undefined"
     if right is _Undefined:

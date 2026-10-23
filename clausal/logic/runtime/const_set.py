@@ -24,18 +24,24 @@ the following hold.
 
 **Every element's type is on the whitelist.**  ``x in frozenset`` answers
 ``hash``/``__eq__``; the scan answers ``unify()``.  For the types in
-:data:`_CONST_SET_TYPES` those coincide:
+:data:`_CONST_SET_TYPES` those coincide WITHIN a type:
 
-* ``int``/``float``/``bool``/``complex``/``Fraction`` — ``unify()`` on two
-  ground non-container terms bottoms out in ``PyObject_RichCompareBool(…,
-  Py_EQ)``, i.e. exactly Python ``==``; and Python's numeric tower
-  guarantees ``x == y ⇒ hash(x) == hash(y)`` across those types.  So
-  ``unify(1, 1.0)`` succeeds *and* ``1 in {1.0}`` is True — the two
-  agree, including on the cross-type cases.  ``hash()`` is total on all
-  of them (``float('nan')`` included — CPython ≥3.10 hashes it by
-  identity, which keeps ``nan`` out of a set that holds a *different*
-  ``nan``, matching ``unify``'s ``==``-based failure).
+* ``int``/``float``/``complex``/``Fraction`` — ``unify()`` on two ground
+  non-container numbers of ONE kind bottoms out in
+  ``PyObject_RichCompareBool(…, Py_EQ)``, i.e. Python ``==``; ACROSS kinds
+  it refuses (ISO 7.3, ruling 2026-10-23: ``1 = 1.0`` fails) where Python's
+  numeric tower says ``1 == 1.0`` and ``hash(1) == hash(1.0)``.  So a mixed
+  set keys every element by ``(type, value)`` and looks the operand up the
+  same way: ``1`` finds ``(int, 1)`` and not ``(float, 1.0)``, exactly as
+  the scan would.  ``hash()`` is total on all of them (``float('nan')``
+  included — CPython ≥3.10 hashes it by identity, which keeps ``nan`` out
+  of a set that holds a *different* ``nan``, matching ``unify``'s
+  ``==``-based failure).
 * ``str``/``bytes``/``NoneType`` — value equality, hash total.
+* ``bool`` is NOT on the list: ``True`` is the truth ATOM ``true`` (D35),
+  which unifies with the str spelling ``"true"`` and with nothing else.  As
+  an ELEMENT it is keyed by its spelling (an atom is its spelling); as an
+  OPERAND it takes the scan, which answers ``unify``.
 
 **An atom is eligible too, and is not a type test.**  After the
 atoms-as-cells flip an atom is the arity-0 cell ``("bar",)`` — a ``tuple``,
@@ -61,8 +67,9 @@ the scan.
 **No duplicates.**  Membership is a choice point, so ``a in [a, a, b]``
 succeeds *twice* today — verified by execution, not assumed.  A set
 collapses that to one solution and would silently drop a solution from
-the enclosing conjunction, so a list with any hash-equal pair (``[1,
-1.0]`` counts) is refused.
+the enclosing conjunction, so a list with any key-equal pair is refused
+(``[1, 1.0]`` is NOT one since 2026-10-23: two kinds, two keys, and the
+scan too gives ``1`` one solution there).
 
 **Nothing unhashable.**  Caught both by the type whitelist and by a
 ``try``/``except TypeError`` around the ``frozenset`` build, so a list
@@ -80,7 +87,10 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from clausal.logic.atoms import is_atom as _term_is_atom
+from clausal.logic.atoms import (
+    is_atom as _term_is_atom, is_truth_atom as _is_truth_atom,
+    truth_spelling as _truth_spelling,
+)
 from clausal.logic.cells import is_chars
 
 __all__ = [
@@ -145,19 +155,31 @@ class _AtomSpellings(frozenset):
 
 
 #: Types for which ``hash``/``__eq__`` provably answer the same question as
-#: ``unify()``, and for which ``hash()`` cannot raise.  Used twice: to vet
-#: the list elements when the set is built, and — from generated code — to
-#: vet the left operand on every call.
+#: ``unify()`` WITHIN the type, and for which ``hash()`` cannot raise.  Used
+#: twice: to vet the list elements when the set is built, and — from
+#: generated code — to vet the left operand on every call.  A mixed set is
+#: keyed by ``(type, value)`` (:func:`_mixed_key`), so two whitelisted types
+#: never meet in a comparison.  ``bool`` is absent: see the module docstring.
 _CONST_SET_TYPES: frozenset[type] = frozenset({
     int,
     float,
-    bool,
     complex,
     str,
     bytes,
     type(None),
     Fraction,
 })
+
+
+def _mixed_key(element):
+    """The key of *element* in a MIXED const-set: ``(type, value)``, so that
+    ``1`` and ``1.0`` -- equal and hash-equal to Python, distinct terms to
+    the unifier -- are two keys.  A truth atom is keyed as the str atom it
+    is one term with.  The emitted lookup builds the operand's key the same
+    way (``_lower_goalop_shared._const_set_lookup``)."""
+    if _is_truth_atom(element):
+        return (str, _truth_spelling(element))
+    return (element.__class__, element)
 
 
 def _const_set(elements):
@@ -178,12 +200,15 @@ def _const_set(elements):
     if all_atoms:
         # Every element is an atom, so nothing in the set can collide with a
         # string of the same text — key on the spelling and let CPython's
-        # cached str hash do the work.  Duplicate atoms are duplicate
-        # spellings, so the count check below still catches them.
-        as_set = _AtomSpellings(elements)   # STAGE 2: an atom IS its spelling
+        # cached str hash do the work.  A truth atom (``True`` is the atom
+        # ``true``) is keyed by its spelling too.  Duplicate atoms are
+        # duplicate spellings, so the count check below still catches them.
+        as_set = _AtomSpellings(
+            _truth_spelling(e) if _is_truth_atom(e) else e for e in elements
+        )   # STAGE 2: an atom IS its spelling
     else:
         try:
-            as_set = frozenset(elements)
+            as_set = frozenset(_mixed_key(e) for e in elements)
         except TypeError:
             return False
     # Duplicates would each yield their own solution under the scan.

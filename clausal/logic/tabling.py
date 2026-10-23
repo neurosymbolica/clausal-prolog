@@ -35,6 +35,8 @@ After SLG completion, a simplification pass resolves delayed negations:
 
 from __future__ import annotations
 import threading
+from decimal import Decimal as _Decimal
+from fractions import Fraction as _Fraction
 from typing import Any, Callable
 
 from clausal.logic.variables import Var, deref, is_var, unify
@@ -824,8 +826,11 @@ def _normalize_for_key_py(term):
 
     Keep this in exact lock-step with the C twin ``do_normalize``
     (``_tabling_core.c``) — the two must produce identical keys (P52).
-    ``Decimal``/``Fraction`` are intentionally left raw in BOTH (they still
-    conflate with ``int`` — a documented residual pending A01-D001).
+    ``Decimal`` keys as ``(Decimal, value, scale)`` and ``Fraction`` as
+    ``(Fraction, value)`` since 2026-10-23, when the unifier stopped
+    conflating numeric kinds (ISO 7.3, ``1 = 1.0`` fails; a Decimal keeps
+    its scale): a variant key counts the terms the unifier counts
+    (todo/done/a01-d001-tabling-half-2026-09-09.md).
     """
     return _norm_py(term, {})
 
@@ -850,6 +855,12 @@ def _norm_py(term, vm):
         return (type(term), term)          # A04-F006
     if isinstance(term, str):
         return term
+    if isinstance(term, _Decimal):
+        # Scale is part of the term (``1.0`` is not ``1.00``); Python's
+        # ``Decimal`` hashes and compares by value only.
+        return (_Decimal, term, term.as_tuple().exponent)
+    if isinstance(term, _Fraction):
+        return (_Fraction, term)
     if isinstance(term, bytes):
         # A code list: b"ab" and [97, 98] are one term, so one key.
         return term if term else _NIL_KEY

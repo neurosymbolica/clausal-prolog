@@ -142,6 +142,7 @@ a zero divisor makes the constraint fail, as in Scryer's clpz. See
 | Goal | Result |
 |---|---|
 | `1 == 1.0` | fails |
+| `1 = 1.0` | fails (an integer and a float are distinct terms, ISO 7.3; so do `f(1) = f(1.0)`, `[1] = [1.0]` and `X = 1, X = 1.0`) |
 | `a \== b` | succeeds |
 | `compare(O, 1, 1.0)` | `O = (>)` (a float precedes an equal integer) |
 | `compare(O, 1, a)` | `O = (<)` |
@@ -213,12 +214,6 @@ A `.clausal` or `.pl` file that defines a clause for an ISO builtin, such as
 `atom_length(_, 5).`, loads, and its definition replaces the builtin for
 that file. A built-in predicate is static in ISO, and Scryer refuses such a
 file with `permission_error(modify, static_procedure, atom_length/2)`.
-
-### Unification conflates integers and floats
-
-`1 = 1.0` succeeds, and so does `X is 1, X = 1.0`. In ISO, unification
-never unifies terms of different types, so both fail in Scryer. `1 == 1.0`
-is correct (it fails).
 
 ### Flags
 

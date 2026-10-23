@@ -5,6 +5,26 @@ Filed 2026-09-09, from the ISO canonical comparison builtins branch
 2026-10-15 (see "`'is'`/2 half: CLOSED 2026-10-15" below); the `'='`/2 half
 remains OPEN, deliberately deferred.
 
+
+**Status: FIXED 2026-10-23 (operator ruling 2026-10-23, ISO 7.3).** The `'='`/2
+half is closed: `unify` itself (`clausal/logic/variables/_variables.c`,
+`numeric_kind` and the arm before its `==` fallback) refuses a number against a
+number of another kind -- int, float, complex, Decimal (with its scale) and
+Fraction, the kinds `'=='`/2 already kept apart, spelled once in
+`clausal/logic/number_kinds.py` -- so `'='(1, 1.0)`, `f(1) = f(1.0)`,
+`X = 1, X = 1.0`, `[1] = [1.0]`, `p(1.0)` against `p(1)`, `retract(q(1.0))` of
+`q(1)` and `X #= 1, X = 1.0` fail and `dif(X, 1.0), X = 1` succeeds, as Scryer
+answers, on `.pl`, `.clausal` and the seam alike. `structural_eq`'s atomic fast
+path, the constant-list membership set, setof/3's dedup, Decimal head literals
+and the tabling variant keys follow the same rule (the "one change" this file
+asked for). The former OPEN pin is
+`tests/iso/test_iso_compare_scryer.py::test_iso_unify_int_float_distinct_CLOSED_2026_10_23`;
+the matrix is `tests/test_iso_int_float_unify.py` (three surfaces, the API,
+the keys) and `tests/iso/test_int_float_unify_scryer.py` (against Scryer).
+This supersedes the A01-D001 (c) split of 2026-07-07 ("keep `1 == 1.0`"); the
+`'#='` pin `test_hash_eq_int_float_OPEN_iso_divergence` is a separate question
+(`fd_eq` routing a float operand to CLP(R)) and stays open.
+
 ## The divergence
 
 ISO unification never unifies terms of different types, so `1 = 1.0` fails and

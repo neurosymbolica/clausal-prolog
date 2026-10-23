@@ -139,12 +139,21 @@ def test_continuation_tco_marks_tail_calls_in_then_and_else():
 def test_an_opaque_value_in_an_if_then_else_node_is_parameterised(native):
     """solve's ``_parameterize_opaque`` rebuilds an IfThenElse node whose
     arms hold an opaque value (a Decimal), keeping ``orelse=None`` for the
-    no-else form; the query then runs on a ``.pl`` module."""
+    no-else form; the query then runs on a ``.pl`` module.
+
+    The fact the Decimal must match holds a Decimal itself, asserted from
+    Python: since 2026-10-23 ``Decimal('2')`` and ``2`` are distinct terms
+    (ISO 7.3, every numeric kind its own), so a source fact ``w(2)`` would
+    no longer answer it."""
     from decimal import Decimal
-    from clausal.logic.solve import _deref_walk, _parameterize_opaque, solve
+    from clausal.logic.solve import _deref_walk, _parameterize_opaque, solve, call
     from clausal.logic.variables import Var
     from clausal.pythonic_ast.nodes import IfThenElse
-    mod = native.load("l3_ite_opaque", "w(2).\nok(1).\n")
+    mod = native.load("l3_ite_opaque", ":- dynamic(w/1).\nw(2).\nok(1).\n")
+    for _ in call("assertz", ("w", Decimal("2")), module=mod):
+        break
+    else:
+        pytest.fail("assertz(w(Decimal('2'))) failed")
     y = Var()
     ite = IfThenElse(test=("w", Decimal("2")), body=("ok", y), orelse=None)
     params: list = []

@@ -53,6 +53,38 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **`1 = 1.0` fails: a number unifies only with a number of its own kind**
+  (2026-10-23, operator ruling 2026-10-23; ISO 7.3). Unification of two
+  ground non-container terms fell back to Python `==`, so an integer and a
+  float of equal value were one term to `=`/2 and to every site that
+  unifies: `1 = 1.0`, `f(1) = f(1.0)`, `X = 1, X = 1.0` and `[1] = [1.0]`
+  succeeded, a fact `p(1)` answered `p(1.0)`, `retract(q(1.0))` removed
+  `q(1)`, `X #= 1, X = 1.0` succeeded, `dif(X, 1.0), X = 1` failed, the
+  seam's `1 in [1.0]` succeeded (and `1 in [1.0, 1]` twice), and setof/3
+  merged `1` with `1.0` — where `1 == 1.0` already failed and Scryer
+  answers `no` to each. The unifier (`variables/_variables.c`) now refuses a
+  number against a number of another kind, on every surface and for every
+  caller; the kinds are the ones `'=='`/2 and `compare/3` already kept
+  apart — `int`, `float`, `complex`, `Decimal`, `Fraction` — spelled once in
+  `clausal/logic/number_kinds.py`, with two Decimals one term only at one
+  scale (`Decimal('1.0') = Decimal('1.00')` fails, as `==` already had it;
+  ruling 2026-09-17 Q2). The same rule now reaches `structural_eq`'s atomic
+  fast path, the constant-list membership set (`X in [1.0, 2.0]` keys by
+  kind), setof/3's dedup (`setof(X, member(X, [1, 1.0, 2]), L)` gives
+  `[1.0, 1, 2]`), a Decimal head literal (no scale-blind `==` short-circuit),
+  and the tabling variant keys, where `Decimal` and `Fraction` were still
+  raw (`todo/done/a01-d001-tabling-half-2026-09-09.md`): a tabled predicate
+  answering `1` and `Decimal('1')` keeps both. `is`/2 was already
+  type-sensitive (2026-10-15); its guard stays as an early answer. A truth
+  value is unchanged: an atom, never a number (D35/D47). The `unify_census`
+  helpers keep counting the population this changed — cross-kind pairs of
+  equal value, now refusals — so a program can measure how often it leaned
+  on the old conflation (`unify_census_start()`, run, `unify_census()`).
+  This supersedes the A01-D001 (c) split of 2026-07-07 ("keep `1 == 1.0`").
+  Pinned on all three surfaces by `tests/test_iso_int_float_unify.py`, and
+  against the Scryer oracle by `tests/iso/test_int_float_unify_scryer.py`
+  (`tests/iso/test_iso_compare_scryer.py::test_iso_unify_int_float_distinct_CLOSED_2026_10_23`
+  is the former OPEN pin).
 - **An exported constant declaration carries the pair as written**
   (2026-10-23, operator ruling 2026-10-23). The `.pl` exporter scaled a
   declared constant's number to the base unit but kept the declared unit,

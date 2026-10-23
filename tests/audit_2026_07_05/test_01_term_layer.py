@@ -331,14 +331,20 @@ class TestPriorArtAndCharacterization:
         assert unify(SegString([VarSeg(Var())]), SegString([VarSeg(Var())]), trail) is False
 
     def test_d001_cross_type_numeric_unification_characterization(self, trail):
-        """A01-D001 (design question): unify falls back to Python ==."""
+        """A01-D001, CLOSED 2026-10-23: a number unifies only with a number of
+        its own KIND (ISO 7.3) -- the (c) split of 2026-07-07 kept ``1 = 1.0``
+        as Python ``==``; the operator ruling of 2026-10-23 ended that
+        (todo/done/iso-unify-conflates-int-and-float-2026-09-09.md).  The
+        bool half (D35/D47: a truth value is an ATOM) is unchanged."""
         import decimal
         import fractions
         assert not unify(1, True, trail)     # D35 closed: a truth value is an ATOM -- never a number
-        assert unify(1, 1.0, trail)
+        assert not unify(1, 1.0, trail)      # ISO 7.3: an integer and a float are distinct terms
         assert not unify(0, False, trail)    # D35 closed: a truth value is an ATOM
-        assert unify(decimal.Decimal(1), 1, trail)
-        assert unify(fractions.Fraction(1, 2), 0.5, trail)
+        assert not unify(decimal.Decimal(1), 1, trail)          # a Decimal is its own kind
+        assert not unify(fractions.Fraction(1, 2), 0.5, trail)  # and so is a Fraction
+        assert unify(decimal.Decimal("1.0"), decimal.Decimal("1.0"), trail)
+        assert not unify(decimal.Decimal("1.0"), decimal.Decimal("1.00"), trail)  # scale is part of the term
         assert not unify(1, "1", trail)
 
     def test_d002_quantity_dimensionless_characterization(self, trail):

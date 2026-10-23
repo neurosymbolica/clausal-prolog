@@ -19,6 +19,7 @@ so head_match never reaches back into goal compilation.
 from __future__ import annotations
 
 import ast
+from decimal import Decimal as _Decimal
 import dataclasses
 import sys
 from typing import Any
@@ -1756,25 +1757,30 @@ def compile_head_to_match_case(
     headlit_guards = [g for g in list_guards if g and g[0] == "headlit"]
     for _tag, cap_name, literal in headlit_guards:
         lit_key = headlit_global_key(literal)
-        inner = [ast.If(
-            test=ast.BoolOp(
+        unify_call = _call(
+            # $-prefixed like every sibling guard: the public
+            # "unify" key in the module dict is shadowable by a
+            # user predicate of that name (A12-F004).
+            _name("$unify"),
+            _name(cap_name),
+            _name(lit_key),
+            _name(trail_name),
+        )
+        # A Decimal literal gets NO same-type ``==`` short-circuit: Python's
+        # ``Decimal.__eq__`` ignores scale, while two Decimals are one term
+        # only at one scale (``1.0`` vs ``1.00``, ruling 2026-09-17 Q2) --
+        # ``$unify`` holds that rule, so it alone decides here.
+        if isinstance(literal, _Decimal):
+            test = unify_call
+        else:
+            test = ast.BoolOp(
                 op=ast.Or(),
                 values=[
                     _same_type_eq(_name(cap_name), _name(lit_key)),
-                    _call(
-                        # $-prefixed like every sibling guard: the public
-                        # "unify" key in the module dict is shadowable by a
-                        # user predicate of that name (A12-F004).
-                        _name("$unify"),
-                        _name(cap_name),
-                        _name(lit_key),
-                        _name(trail_name),
-                    ),
+                    unify_call,
                 ],
-            ),
-            body=inner,
-            orelse=[],
-        )]
+            )
+        inner = [ast.If(test=test, body=inner, orelse=[])]
 
     # Emit atom guards (R1): wildcard capture + unify guard. Atoms compare by
     # identity/equality; unify() binds an unbound caller arg to the atom and

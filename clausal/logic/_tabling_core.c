@@ -38,6 +38,29 @@ static PyObject *str___set__ = NULL;     /* A04-F005 */
 static PyObject *str___chars__ = NULL;   /* char-list key */
 static PyObject *str_chars_tag = NULL;   /* "$chars", the carrier's tag */
 static PyObject *nil_key = NULL;         /* ("__list__",), the key of [] */
+
+/* decimal.Decimal and fractions.Fraction, resolved in PyInit__tabling_core
+ * for do_normalize (they key as (type, value[, scale]); see there).  Never
+ * imported lazily: a key may be computed from compiled clause code, whose
+ * `__import__` refuses every import (compiler/predicate._engine_only_import). */
+static PyObject *decimal_type = NULL;
+static PyObject *fraction_type = NULL;
+
+static int
+exact_types_ready(void)
+{
+    if (decimal_type && fraction_type) return 1;
+    PyObject *mod = PyImport_ImportModule("decimal");
+    if (!mod) return 0;
+    decimal_type = PyObject_GetAttrString(mod, "Decimal");
+    Py_DECREF(mod);
+    if (!decimal_type) return 0;
+    mod = PyImport_ImportModule("fractions");
+    if (!mod) return 0;
+    fraction_type = PyObject_GetAttrString(mod, "Fraction");
+    Py_DECREF(mod);
+    return fraction_type != NULL;
+}
 /* Seg* classes and tabling._seg_key -- set by _register_seg_key() */
 static PyObject *seg_types = NULL;
 static PyObject *seg_key_fn = NULL;
@@ -213,11 +236,12 @@ do_normalize(PyObject *term, int depth)
         return term;
     }
 
-    /* A04-F006: type-tag numeric leaves (bool/float/complex) as (type, value)
-     * so 1/True/1.0 do not conflate in variant keys or answer dedup. Exact int
+    /* A04-F006: type-tag numeric leaves (float/complex, and since 2026-10-23
+     * Decimal with its scale and Fraction) as (type, value[, scale]) so 1,
+     * 1.0, Decimal(1) and Fraction(1) do not conflate in variant keys or
+     * answer dedup -- the terms the unifier keeps apart (ISO 7.3). Exact int
      * is canonical (the fast path above); non-exact int, str and bytes stay
-     * raw. Keep in lock-step with _normalize_for_key_py. Decimal/Fraction are
-     * intentionally left raw in BOTH (documented residual, A01-D001). */
+     * raw. Keep in lock-step with _normalize_for_key_py. */
     if (PyBool_Check(term)) {
         /* A truth ATOM (D35): keyed as its spelling, the key the str
          * spelling of the same atom already has -- one atom, one variant.
@@ -236,6 +260,28 @@ do_normalize(PyObject *term, int depth)
     if (PyLong_Check(term) || PyUnicode_Check(term) || PyBytes_Check(term)) {
         Py_INCREF(term);
         return term;
+    }
+    if (!PyList_Check(term) && !PyTuple_Check(term)) {
+        /* Decimal -> (Decimal, value, exponent); Fraction -> (Fraction,
+         * value).  The hot leaves (int, var, str, list, cell) have all
+         * returned above. */
+        if (!exact_types_ready()) return NULL;
+        PyTypeObject *tp = Py_TYPE(term);
+        if (tp == (PyTypeObject *)decimal_type
+                || PyType_IsSubtype(tp, (PyTypeObject *)decimal_type)) {
+            PyObject *tup = PyObject_CallMethod(term, "as_tuple", NULL);
+            if (!tup) return NULL;
+            PyObject *exp = PyObject_GetAttrString(tup, "exponent");
+            Py_DECREF(tup);
+            if (!exp) return NULL;
+            PyObject *key = PyTuple_Pack(3, decimal_type, term, exp);
+            Py_DECREF(exp);
+            return key;
+        }
+        if (tp == (PyTypeObject *)fraction_type
+                || PyType_IsSubtype(tp, (PyTypeObject *)fraction_type)) {
+            return PyTuple_Pack(2, fraction_type, term);
+        }
     }
 
     /* List → ("__list__", elem0, elem1, ...); a char list keys as the
@@ -1016,6 +1062,7 @@ PyInit__tabling_core(void)
 
     PyObject *m = PyModule_Create(&moduledef);
     if (!m) return NULL;
+    if (!exact_types_ready()) { Py_DECREF(m); return NULL; }
 
 #ifdef Py_GIL_DISABLED
     PyUnstable_Module_SetGIL(m, Py_MOD_GIL_NOT_USED);

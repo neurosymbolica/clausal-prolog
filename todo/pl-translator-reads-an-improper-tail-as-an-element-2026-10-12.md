@@ -122,7 +122,7 @@ with Y bound later to a non-list.
   opaque band, so `compare(O, [0.0|T], [0|T])` gives `=` while `==` says no (corrected by the
   round-4 review; todo/compare-on-partial-seglist-keys-opaque-band-2026-10-13.md). dif/2, `\=`,
   subsumes_term/2 and memberchk/2 conflate 1 with 1.0 for the LITERAL as well, because `=` does:
-  todo/iso-unify-conflates-int-and-float-2026-09-09.md, not this family.
+  todo/done/iso-unify-conflates-int-and-float-2026-09-09.md, not this family.
 - Seam: `A is [*T], T is foo, R is [x, *A]` gave `"xfoo"` (the twins read the bare str a
   hole-only SegList walks to as text; an atom is a str since atoms-as-str, text is the carrier).
   It is `[x|foo]`. `R is [*A, x]` with A improper (hole-built or a cons cell) failed silently, or

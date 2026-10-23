@@ -16,6 +16,7 @@ repo-root `tests/`. Up: [../AGENTS.md](../AGENTS.md)
 |---|---|
 | `variables/` | `Var`/`AttVar`, `Trail`, `unify`, `deref`, attribute hooks. `__init__.py` re-exports the C extension `_variables.c` (no Python fallback; `Var` is `AttVar`). `_variables_capi.h` is the capsule API other C extensions include; `_ft_compat.h` holds free-threading shims. |
 | `atoms.py` | Atoms are `str`: `mint`, `spelling`, `is_atom`, char atoms, truth atoms, `-hide` mangling. |
+| `number_kinds.py` | The numeric KINDS (`int`, `float`, `complex`, `Decimal` with its scale, `Fraction`): a number unifies, `==`s and keys only with its own kind (ISO 7.3, `1 = 1.0` fails). The C twin is `numeric_kind` in `variables/_variables.c`. |
 | `cells.py` | Compound terms as plain tuples `(functor, *args)`: `make_cell`, `is_cell`, the `('$chars', text)` string carrier, the reserved 1-tuple, cell interning. |
 | `python_terms.py`, `to_python.py` | Python object <-> term conversion (registered per class; no generic converter) and term -> Python outbound. |
 | `generated_names.py` | The `$`-prefixed runtime names generated code binds. |
