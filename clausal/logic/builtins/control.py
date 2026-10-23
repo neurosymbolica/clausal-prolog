@@ -20,7 +20,7 @@ from clausal.logic.predicate import (
 )
 
 from clausal.logic.builtins._registry import (
-    _BUILTIN_FIELDS, _builtin, _DB_BUILTINS,
+    BuiltinPredicate, _BUILTIN_FIELDS, _builtin, _DB_BUILTINS,
     _trampoline_builtin, _ensure_trampoline_dispatch,
 )
 from clausal.logic.cells import compound_cell_shape
@@ -249,7 +249,6 @@ def _plain_meta_body(t) -> bool:
     return tt is bool or is_var(t)      # ``true``/``false`` are the bools
 
 
-@_trampoline_builtin("$meta_body_check", 1)
 def _meta_body_check__1(this_generator, _proceed, _fail, _catcher, goal,
                         trail):
     """The run-time half of a ``.clausal`` meta-argument compiled in place
@@ -260,6 +259,16 @@ def _meta_body_check__1(this_generator, _proceed, _fail, _catcher, goal,
         check_meta_body(goal, "a meta-call")
     yield (_proceed, None)
     yield (_fail, DONE)
+
+
+#: ``$meta_body_check/1`` -- an INTERNAL goal, not a builtin: it is NOT in
+#: ``_BUILTINS``/``_DB_BUILTINS`` (the public registry, which tools list as
+#: the engine's builtins; tests/test_builtin_registry_has_no_internal_names.py).
+#: The compiler binds it as a global of every compiled clause set
+#: (``compiler/predicate.py``'s ``base_globals``), which is how the goal
+#: ``iso_l3`` emits resolves; a ``$`` name cannot be written in source.
+META_BODY_CHECK = BuiltinPredicate("$meta_body_check", 1,
+                                   dispatch_fn=_meta_body_check__1)
 
 
 @_builtin("current_time", 1)

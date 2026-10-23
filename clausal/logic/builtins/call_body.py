@@ -205,7 +205,8 @@ def check_meta_body(goal: Any, context: str) -> None:
 
     The native front end compiles a ``.clausal`` meta-argument that has a
     VARIABLE in such a position in place, behind this check
-    (``$meta_body_check/1``, run when the meta-call starts): ISO converts
+    (``$meta_body_check/1``, an internal goal bound in the compiled code's
+    globals, run when the meta-call starts): ISO converts
     the goal then (8.10.1, 8.15.2, 7.8.9 ...), so a cut bound to the
     variable by then is a cut INSIDE the body -- refused, as ``call/1``'s
     converter refuses it -- where the compiled ``call(G)`` ran it as

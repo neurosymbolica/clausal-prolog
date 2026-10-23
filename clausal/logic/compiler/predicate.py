@@ -311,6 +311,10 @@ _install_when_ground_fn_s = _install_when_ground_fn
 _install_when_disjunction_fn_s = _install_when_disjunction_fn
 _install_when_condition_fn_s = _install_when_condition_fn
 
+from clausal.logic.builtins.control import (  # noqa: E402
+    META_BODY_CHECK as _META_BODY_CHECK,
+)
+
 from clausal.logic.tabling import (  # noqa: F401
     _naf_tabled as _naf_tabled_fn,
     _TABLING_SUSPEND,
@@ -1348,6 +1352,10 @@ def _compile_predicate_trampoline_impl(
     base_globals["$install_when_ground"] = _install_when_ground_fn
     base_globals["$install_when_disjunction"] = _install_when_disjunction_fn
     base_globals["$install_when_condition"] = _install_when_condition_fn
+    # The internal goal a ``.clausal`` meta-argument is checked by
+    # (``iso_l3._checked_in_place``); bound here, never registered as a
+    # builtin.
+    base_globals["$meta_body_check"] = _META_BODY_CHECK
     # WFS: inject $naf_tabled, $table_store, and $TABLING_SUSPEND for tabled NAF
     if db is not None:
         base_globals["$naf_tabled"] = _naf_tabled_fn
