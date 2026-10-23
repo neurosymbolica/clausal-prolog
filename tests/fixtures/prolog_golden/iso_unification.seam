@@ -50,7 +50,7 @@ test('var unifies with var (aliasing)') <- (X is Y, '=='(X, Y))
 
 test('different integers fail to unify') <- (not (X is 1, X is 2))
 
-test('int and float are distinct terms (ISO 7.3)') <- (not (X is 1, X is 1.0))
+test('int and float are distinct terms (ISO 7.3)') <- (dif(1, 1.0))
 
 test('list unify with var') <- (X is [1, 2, 3], '=='(X, [1, 2, 3]))
 

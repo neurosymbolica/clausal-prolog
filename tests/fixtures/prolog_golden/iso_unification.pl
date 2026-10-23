@@ -85,7 +85,7 @@ test('different integers fail to unify') :-
     \+ (X = 1, X = 2).
 
 test('int and float are distinct terms (ISO 7.3)') :-
-    \+ (X = 1, X = 1.0).
+    dif(1, 1.0).
 
 test('list unify with var') :-
     X = [1, 2, 3],
