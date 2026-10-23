@@ -24,7 +24,8 @@ terms exist (``todo/done/a01-d001-tabling-half-2026-09-09.md``):
 
 A truth atom (``True``/``False``, D35) is an ATOM, not a number, and an int
 SUBCLASS is untagged (falls back to ``==``), exactly as ``_numeric_tag``
-has always had it.
+has always had it; a float/complex/Decimal/Fraction subclass has its base's
+kind.
 """
 
 from __future__ import annotations
@@ -36,15 +37,27 @@ __all__ = ["numeric_kind", "decimal_scale", "same_number"]
 
 
 def numeric_kind(x):
-    """The numeric kind of *x* -- a TYPE object -- or ``None`` when *x* is not a
-    tagged number (a bool, an int subclass, anything that is not a number)."""
+    """The numeric kind of *x* -- the BASE type object ``int``, ``float``,
+    ``complex``, ``Decimal`` or ``Fraction`` -- or ``None`` when *x* is not a
+    tagged number (a bool, an int subclass, anything that is not a number).
+
+    A SUBCLASS of float/complex/Decimal/Fraction has its base's kind
+    (``np.float64(1.0)`` is a float, as the C twin's ``PyFloat_Check`` has
+    it), so ``np.float64(1.0) = 1.0`` and ``== 1.0`` agree.  An int subclass
+    (``IntEnum``, ``np.int64``) stays UNTAGGED on both sides, so it unifies
+    with an equal number of any kind by ``==``; only an exact ``int`` is the
+    integer kind."""
     if type(x) is int:
         return int
     if isinstance(x, bool):
         return None                     # a truth ATOM (D35), not a number kind
-    if isinstance(x, (float, complex, _Decimal, _Fraction)):
-        return type(x)
+    for base in _BASES:
+        if isinstance(x, base):
+            return base
     return None
+
+
+_BASES = (float, complex, _Decimal, _Fraction)
 
 
 def decimal_scale(x: _Decimal) -> int:

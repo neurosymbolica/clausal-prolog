@@ -400,9 +400,9 @@ def _cycle_unify_walk(a, b, trail) -> bool:
     side is a dataclass term instance, a compound CELL, or a plain `list`
     — to the engine's own `unify`, so atoms, numbers, strings, SegLists,
     DictTerms, SetTerms, bytes and Quantities keep its EXACT existing
-    semantics (since 2026-10-23 that includes refusing an int against a
-    float, todo/done/iso-unify-conflates-int-and-float-2026-09-09.md) that
-    this function does not touch. A cycle folded entirely inside one of
+    semantics, which this function does not touch (since 2026-10-23 those
+    include refusing an int against a float,
+    todo/done/iso-unify-conflates-int-and-float-2026-09-09.md). A cycle folded entirely inside one of
     those delegated shapes (e.g. a cyclic SegList reached only through a
     dict value) is a narrower, pre-existing gap this does not close — none
     of the ISO suite's current cases need it, so it is left as a known

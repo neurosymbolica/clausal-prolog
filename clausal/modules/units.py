@@ -609,7 +609,14 @@ def _quantity_number_impl(term, number, trail):
     exporter's per-dialect prelude, not here.
 
     Modes: (-T, +Q) emits, ratio 1; (+T, -Q) reads, ratio multiplied
-    through; (+T, +Q) compares by value; (-, -) instantiation_error; a
+    through; (+T, +Q) compares BY VALUE -- the same dimensions and
+    numerically equal magnitudes, so ``quantity(3, unit(decimal(1, 2),
+    dimensionless))`` holds against the ``Decimal('0.0300')`` that
+    ``eval_(300(basis_point), Q)`` computes (a units-arithmetic builtin,
+    not term identity: since 2026-10-23 unification keeps numeric kinds
+    and Decimal scales apart, and this is the one place a quantity's
+    value is meant to be read as a number; ruling 2026-10-23);
+    (-, -) instantiation_error; a
     bound but malformed T is a type_error -- RAISED, because a malformed
     term that failed quietly would be the "goal just stops holding" shape.
 
@@ -640,7 +647,13 @@ def _quantity_number_impl(term, number, trail):
         built = from_transfer(walked)
         if not isinstance(built, Quantity):
             raise LogicException(type_error("quantity", walked, "quantity_number/2"))
-    if unify(n, built, trail):
+    if is_var(n):
+        if unify(n, built, trail):
+            yield None
+        return
+    # (+T, +Q): by value.  A bound non-Quantity fails (spec §4).
+    if (isinstance(n, Quantity) and dict(n.dims) == dict(built.dims)
+            and n.value == built.value):
         yield None
 
 

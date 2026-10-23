@@ -348,3 +348,74 @@ def test_decimal_head_literal_keeps_its_scale(tmp_path):
     assert _count(("amount", 2.5), mod) == 0
     v = Var()
     assert _answers(("amount", v), v, mod) == [Decimal("2.50")]
+
+
+# ── subclasses and Quantities (review round 2, 2026-10-23) ───────────────────
+
+def test_an_int_subclass_is_untagged_in_both_orders():
+    """An int SUBCLASS (``IntEnum``, ``np.int64``) is not the integer kind:
+    untagged on both sides, it unifies with an equal number of ANY kind by
+    ``==``, in either argument order -- and never raises (a Decimal against
+    one used to read the Decimal scale of the non-Decimal side)."""
+    from enum import IntEnum
+    from clausal.logic.constraints import structural_eq
+    from clausal.logic.builtins.iso_compare import _iso_identical
+
+    class Kind(IntEnum):
+        ONE = 1
+
+    t = Trail()
+    for a, b in ((Decimal("1"), Kind.ONE), (Kind.ONE, Decimal("1")),
+                 (1.0, Kind.ONE), (Kind.ONE, 1.0), (1, Kind.ONE), (Kind.ONE, 1)):
+        assert bool(unify(a, b, t)) is True, (a, b)
+        assert structural_eq(a, b) is True, (a, b)
+        assert _iso_identical(a, b) is True, (a, b)
+    assert not unify(Kind.ONE, 2, t)
+    assert not unify(Decimal("1.0"), Decimal("1.00"), t)   # still two Decimals
+
+
+def test_a_float_subclass_has_the_float_kind():
+    """``np.float64(1.0)`` is a float to unify (C ``PyFloat_Check``), to
+    ``==``/``structural_eq`` and to the standard order alike -- the BASE
+    kind, not ``type(x)``; ``np.int64`` is an int subclass: untagged."""
+    np = pytest.importorskip("numpy")
+    from clausal.logic.constraints import structural_eq
+    from clausal.logic.builtins.iso_compare import _iso_identical
+    from clausal.logic.builtins._helpers import _standard_order_key as key
+    from clausal.logic.number_kinds import numeric_kind
+    t = Trail()
+    f = np.float64(1.0)
+    assert numeric_kind(f) is float
+    assert unify(f, 1.0, t) and unify(1.0, f, t)
+    assert structural_eq(f, 1.0) and _iso_identical(f, 1.0) and key(f) == key(1.0)
+    assert not unify(f, 1, t) and not _iso_identical(f, 1) and key(f) != key(1)
+    i = np.int64(1)
+    assert numeric_kind(i) is None
+    assert unify(i, 1.0, t) and unify(i, 1, t)
+    assert _iso_identical(i, 1.0) and _iso_identical(i, 1)
+
+
+def test_quantity_standard_order_keeps_kind_and_scale():
+    """``100 m`` and ``100.0 m`` are two terms to ``=`` and ``==``, so
+    compare/3 must not say ``=`` for them (nor for ``10.00`` and ``10.0``
+    euro), or sort/2 and setof/3 would drop one.  Float before int and
+    ``10.0`` before ``10.00``, as for bare numbers."""
+    from clausal.terms import Quantity
+    from clausal.modules import units
+    from clausal.modules.countries.european_union import euro
+    from clausal.logic.builtins.iso_compare import _iso_identical
+    from clausal.logic.builtins._helpers import _standard_order_key as key
+    from clausal.logic.compiler.globals_env import _set_of_sort_dedup
+    t = Trail()
+    m_int, m_float = Quantity(100, units.metre), Quantity(100.0, units.metre)
+    e_2dp, e_1dp = Quantity(Decimal("10.00"), euro), Quantity(Decimal("10.0"), euro)
+    for a, b in ((m_int, m_float), (e_2dp, e_1dp)):
+        assert not unify(a, b, t) and not _iso_identical(a, b), (a, b)
+        assert key(a) != key(b), (a, b)
+        assert _set_of_sort_dedup([a, b, a]) in ([a, b], [b, a])
+    assert key(m_float) < key(m_int)                 # float before int
+    assert key(e_1dp) < key(e_2dp)                   # value first, then scale
+    assert key(Quantity(100, units.metre)) == key(m_int)
+    assert unify(Quantity(100, units.metre), m_int, t) and _iso_identical(Quantity(100, units.metre), m_int)
+    # a dimensionless quantity's key stays comparable with a bare number's
+    assert (key(Quantity(5, {})) < key(5)) or (key(5) < key(Quantity(5, {})))

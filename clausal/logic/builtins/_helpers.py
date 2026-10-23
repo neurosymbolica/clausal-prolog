@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from decimal import Decimal as _Decimal
 from fractions import Fraction as _Fraction
+
+from clausal.logic.number_kinds import numeric_kind as _numeric_kind
 from numbers import Real as _Real
 from typing import Any
 
@@ -611,7 +613,7 @@ _ORD_OTHER = 6
 # `compare(=, X, Y) <=> X == Y` hold by construction rather than by luck.
 # Spec §4b. An extension never interleaves between two ISO terms (§2), which
 # is why Quantity ranks after every ISO numeric type rather than beside them.
-_NUMERIC_RANK = {float: 0, int: 1, _Decimal: 3, _Fraction: 4}   # bool is an ATOM (D35); rank 2 retired
+_NUMERIC_RANK = {float: 0, int: 1, _Decimal: 3, _Fraction: 4}   # bool is an ATOM (D35); rank 2 retired; keyed by number_kinds.numeric_kind (the BASE kind)
 _NUMERIC_RANK_QUANTITY = 5
 
 # Flavours within _ORD_COMPOUND.  A cell and a declared term that render
@@ -660,8 +662,14 @@ def _number_key(x, cell: int = 0) -> tuple:
     # not tell them apart would let ``compare(=)`` hold where ``'=='`` says
     # no.  Both components are here, in the ONE number-key constructor, so
     # the shape stays uniform across the band (see the docstring above).
-    scale = -x.as_tuple().exponent if type(x) is _Decimal else 0
-    return (_ORD_NUM, (), x, _NUMERIC_RANK.get(type(x), 90), scale, cell)
+    scale = _number_scale(x)
+    return (_ORD_NUM, (), x, _NUMERIC_RANK.get(_numeric_kind(x), 90), scale, cell)
+
+
+def _number_scale(x) -> int:
+    """The Decimal scale of a number term (``1.00`` -> 2); 0 for every other
+    kind.  A subclass of Decimal is a Decimal (``numeric_kind``)."""
+    return -x.as_tuple().exponent if isinstance(x, _Decimal) else 0
 
 
 def _cons_key(element_keys: tuple) -> tuple:
@@ -788,8 +796,18 @@ def term_key(term: Any) -> tuple:
         # The dimension signature is sorted, so it is total and stable and
         # cross-dimension comparison neither raises nor falls back to repr —
         # which the opaque band did, via a `<` that rejects its own type.
-        return (_ORD_NUM, tuple(sorted(term.dims.items())), term.value,
-                _NUMERIC_RANK_QUANTITY)
+        # Value, then the magnitude's Decimal scale, then its numeric KIND
+        # (float before int, as for a bare number): ``100.0 m`` and
+        # ``100 m`` are two terms to ``=`` and ``==`` (2026-10-23), and so
+        # are ``10.0`` and ``10.00`` euro, so the key keeps them apart too,
+        # or compare/3 says ``=`` where ``==`` says no and sort/2 and
+        # setof/3 drop one.  The shape stays comparable with a bare number's
+        # key (``_number_key``): the rank slot is the Quantity rank, which
+        # never ties with a bare number's, and the extra slot comes last.
+        v = term.value
+        return (_ORD_NUM, tuple(sorted(term.dims.items())), v,
+                _NUMERIC_RANK_QUANTITY, _number_scale(v), 0,
+                _NUMERIC_RANK.get(_numeric_kind(v), 90))
     if term is True or term is False or term is _Undefined:
         # True/False/Undefined ARE the atoms true/false/undefined (D35,
         # ``atoms.is_truth_atom``, inlined: this is the hot path of every

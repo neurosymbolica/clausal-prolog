@@ -1474,13 +1474,13 @@ static int
 numeric_kind(PyObject *t)
 {
     if (PyLong_CheckExact(t)) return NUMKIND_INT;
-    if (PyFloat_Check(t)) return NUMKIND_FLOAT;
+    if (PyFloat_Check(t)) return NUMKIND_FLOAT;    /* a float SUBCLASS (np.float64) is a float: the BASE kind */
     /* The common non-numbers leave before any import: atoms, None, bytes,
      * the truth atoms (handled by their own arm anyway). */
     if (PyUnicode_Check(t) || t == Py_None || PyBytes_Check(t) || PyBool_Check(t))
         return NUMKIND_NONE;
     if (PyComplex_Check(t)) return NUMKIND_COMPLEX;
-    if (PyLong_Check(t)) return NUMKIND_NONE;      /* an int subclass: untagged, as _numeric_tag */
+    if (PyLong_Check(t)) return NUMKIND_NONE;      /* an int subclass: untagged, as numeric_kind */
     if (!numkind_types_ready()) return -1;
     PyTypeObject *tp = Py_TYPE(t);
     if (tp == (PyTypeObject *)numkind_decimal_type
@@ -2032,8 +2032,11 @@ hooks:
 
     /* Two Decimals of equal value are one term only at one SCALE: `1.0` and
      * `1.00` are distinct (ruling 2026-09-17 Q2, the analogue of `1` vs
-     * `1.0`), as `'=='`/2 and the standard order already hold. */
-    if (cmp == 1 && k1 == NUMKIND_DECIMAL) {
+     * `1.0`), as `'=='`/2 and the standard order already hold.  BOTH sides
+     * must be Decimals: a Decimal against an UNTAGGED number (an int
+     * subclass such as an IntEnum) is decided by `==` alone, in either
+     * order, as the Python twin `same_number` has it. */
+    if (cmp == 1 && k1 == NUMKIND_DECIMAL && k2 == NUMKIND_DECIMAL) {
         long e1, e2;
         if (decimal_exponent(t1, &e1) < 0 || decimal_exponent(t2, &e2) < 0)
             return -1;

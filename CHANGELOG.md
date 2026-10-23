@@ -81,6 +81,27 @@ surface described in [docs/public-api.md](docs/public-api.md).
   equal value, now refusals — so a program can measure how often it leaned
   on the old conflation (`unify_census_start()`, run, `unify_census()`).
   This supersedes the A01-D001 (c) split of 2026-07-07 ("keep `1 == 1.0`").
+  Idioms this changes, each as Scryer answers: `X is 2 ** 2, X = 4` and
+  `X is 2 / 2, X = 1` fail (`**` and `/` evaluate to the floats `4.0` and
+  `1.0`, which are not the integers; `X =:= 4` still holds);
+  `in_real(X), X #= 1, X = 1` fails (a real variable's value is the float
+  `1.0`); `{X = 1/2}, X = 0.5` fails (a rational is not a float; `{X = 1},
+  X = 1` holds, the solution being the integer); and a currency division's
+  result no longer unifies with a
+  declared scaled literal (`constant(ten) / 2 * 2` is `Decimal('10')`,
+  which is not the two-place `10.00`: compare it with `=:=`, or read it
+  with `quantity_number/2`, below). An int SUBCLASS (`IntEnum`,
+  `np.int64`) is untagged on both sides and still unifies with an equal
+  float or Decimal by `==`, in either order; a float/Decimal/Fraction
+  subclass (`np.float64`) has its base's kind. The standard order keys a
+  `Quantity` by its magnitude's kind and Decimal scale too, so `100 m` and
+  `100.0 m` (and `10.00` and `10.0` euro) are two terms to `compare/3`,
+  `sort/2` and `setof/3` as they are to `=` and `==`. `quantity_number/2`
+  with both arguments bound compares BY VALUE (same dimensions, numerically
+  equal magnitudes; ruling 2026-10-23): `eval_(300(basis_point), Q),
+  quantity_number(quantity(3, unit(decimal(1, 2), dimensionless)), Q)`
+  holds although `Q` carries `Decimal('0.0300')` and the term reads as
+  `Decimal('0.03')` -- it is a units-arithmetic builtin, not term identity.
   Pinned on all three surfaces by `tests/test_iso_int_float_unify.py`, and
   against the Scryer oracle by `tests/iso/test_int_float_unify_scryer.py`
   (`tests/iso/test_iso_compare_scryer.py::test_iso_unify_int_float_distinct_CLOSED_2026_10_23`
