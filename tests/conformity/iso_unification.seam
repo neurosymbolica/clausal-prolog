@@ -91,7 +91,7 @@ test('integer unifies with itself') <- (X is 1, X == 1)  # nv
 test('float unifies with itself') <- (X is 1.0, X == 1.0)  # nv
 test('var unifies with var (aliasing)') <- (X is Y, '=='(X, Y))  # nv
 test('different integers fail to unify') <- (not (X is 1, X is 2))  # nv
-test('int vs float (clausal quirk): 1 is 1.0') <- (X is 1, X is 1.0)  # nv
+test('int and float are distinct terms (ISO 7.3)') <- (not (X is 1, X is 1.0))  # nv
 test('list unify with var') <- (X is [1, 2, 3], '=='(X, [1, 2, 3]))  # nv
 test('arithmetic term is structural: 1+2 != 3 in unify') <- (
     not (X is 1 + 2, X is 3)

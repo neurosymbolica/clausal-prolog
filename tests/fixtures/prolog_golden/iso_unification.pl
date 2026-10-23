@@ -84,9 +84,8 @@ test('var unifies with var (aliasing)') :-
 test('different integers fail to unify') :-
     \+ (X = 1, X = 2).
 
-test('int vs float (clausal quirk): 1 is 1.0') :-
-    X = 1,
-    X = 1.0.
+test('int and float are distinct terms (ISO 7.3)') :-
+    \+ (X = 1, X = 1.0).
 
 test('list unify with var') :-
     X = [1, 2, 3],
