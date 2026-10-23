@@ -224,9 +224,9 @@ run time inside a goal that a meta-call runs raises
 call(G)`, and `G = !, findall(X, (p(X), G), L)`, whose goal holds the cut
 by the time findall/3 calls it. A `!` that is the WHOLE goal of a call
 (`call(!)`, or `G = !, call(G)`) succeeds, as in ISO Prolog: it is local to
-that call, so there is nothing for it to cut. The design philosophy is that cut destroys monotonicity, separability, and
-multi-directional use — all the properties that make logic programming
-worthwhile.
+that call, so there is nothing for it to cut. The design philosophy is
+that cut destroys monotonicity, separability, and multi-directional use —
+all the properties that make logic programming worthwhile.
 
 Where you would use a cut or `->`, Clausal Prolog offers:
 
