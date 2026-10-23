@@ -106,6 +106,34 @@ surface described in [docs/public-api.md](docs/public-api.md).
   against the Scryer oracle by `tests/iso/test_int_float_unify_scryer.py`
   (`tests/iso/test_iso_compare_scryer.py::test_iso_unify_int_float_distinct_CLOSED_2026_10_23`
   is the former OPEN pin).
+
+- **A cut bound to a variable before a meta-call converts its goal is
+  refused in a `.clausal` file** (2026-10-23). A meta-argument goal is
+  converted to a body when the meta-call calls it (ISO 8.10.1, 8.15.2,
+  7.8.9), so in `G = !, findall(X, (p(X), G), L)` the body is `(p(X), !)`,
+  a cut inside a meta-called body, which Clausal refuses with
+  `existence_error(procedure, !/0)`. The Clausal Prolog front end compiled
+  the goal as written, with `G` as `call(G)`, so the cut ran as `true` and
+  `L = [1, 2]` (Scryer: `[1]`). The same held for `findall/4`, `bagof/3`,
+  `setof/3`, `once/1`, `forall/2`, `\+`, `catch/3`, `setup_call_cleanup/3`,
+  `call_cleanup/2` and an `if_/3` branch, with the variable under `,` or
+  `;`. Such a goal still compiles in place, behind a check run when the
+  meta-call starts that raises what ISO's conversion would, so the bound
+  cut is refused (a `.pl` file lowers it as `call(Term)`, and there the
+  cut still runs, local to the meta-call). In a `.pl` file an `if_/3`
+  branch holding such a variable is now lowered as `call(Branch)` too, so
+  a cut bound into it prunes the branch as Scryer's does
+  (`G = !, findall(X, if_(1 = 1, (p(X), G), true), L)` is `L = [1]`; it
+  was `[1, 2]`). The check costs about 2 us per meta-call of that shape;
+  other goals are unchanged. For the same reason a non-callable bound
+  there is `type_error(callable, Whole)` in a `.clausal` file, naming the
+  whole goal as ISO does (`G = 1, once((X = 8 ; G))` named `1`). Unchanged: a cut that is the
+  whole goal of a call succeeds (`call(!)`, `G = !, call(G)`, a clause-body
+  variable goal bound to `!`, ISO 7.8.3), and a goal with no variable in
+  those positions compiles as before. Pinned in
+  `tests/test_meta_call_cut_refused.py`
+  (`test_a_cut_bound_before_the_meta_call_is_refused`, with `.pl` controls
+  holding Scryer's answers).
 - **An exported constant declaration carries the pair as written**
   (2026-10-23, operator ruling 2026-10-23). The `.pl` exporter scaled a
   declared constant's number to the base unit but kept the declared unit,

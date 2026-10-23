@@ -197,6 +197,42 @@ def check_callable_body(goal: Any, context: str, ite: bool = False) -> None:
             "callable", culprit, f"{context}: {culprit} is not a callable body"))
 
 
+def check_meta_body(goal: Any, context: str) -> None:
+    """What converting *goal* to a body raises (ISO 7.6.2), on a db that may
+    not cut, without converting it: ``type_error(callable, Goal)`` for a
+    non-callable reached through ``,``/``;`` (:func:`check_callable_body`),
+    then the cut refusal for a ``!`` reached the same way.
+
+    The native front end compiles a ``.clausal`` meta-argument that has a
+    VARIABLE in such a position in place, behind this check
+    (``$meta_body_check/1``, run when the meta-call starts): ISO converts
+    the goal then (8.10.1, 8.15.2, 7.8.9 ...), so a cut bound to the
+    variable by then is a cut INSIDE the body -- refused, as ``call/1``'s
+    converter refuses it -- where the compiled ``call(G)`` ran it as
+    ``true``.  Everything else the conversion would see (``->`` is refused
+    when it is reached, as the converter's own ``call(Leaf)`` does) is what
+    the compiled body already does."""
+    check_callable_body(goal, context)
+
+    def has_cut(t):
+        t = deref(t)
+        if t == "!" or type(t) is nodes.Cut:
+            return True
+        if is_conjunction_tuple(t):
+            return any(has_cut(e) for e in t)
+        if type(t) is nodes.TupleLiteral:
+            return any(has_cut(e) for e in t.elements)
+        if type(t) in (nodes.And, nodes.Or):
+            return has_cut(t.left) or has_cut(t.right)
+        is_cell, functor = compound_cell_shape(t)
+        return (is_cell and len(t) == 3 and functor in (",", ";")
+                and (has_cut(t[1]) or has_cut(t[2])))
+
+    if has_cut(goal):
+        from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+        raise LogicException(cut_refusal_error(context))
+
+
 class _Converter:
     """One conversion: the goal-node tree plus its run-time parameters."""
 
@@ -832,7 +868,8 @@ def _compiled_node_dispatch(db, conv, node):
 
 
 __all__ = [
-    "is_body_term", "check_callable_body", "body_goal_dispatch",
+    "is_body_term", "check_callable_body", "check_meta_body",
+    "body_goal_dispatch",
     "body_with_extras_error", "non_callable_goal_error",
     "iso_control_cell_dispatch", "folded_existence_error",
     "cut_refusal_error", "cut_allowed", "if_then_refusal_error",

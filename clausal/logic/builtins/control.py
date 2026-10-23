@@ -233,6 +233,35 @@ _BUILTIN_FIELDS[("time_goal", 2)] = ("goal", "elapsed")
 _start_wall = _time.monotonic()
 
 
+def _plain_meta_body(t) -> bool:
+    """True when *t* (a goal term) holds, through ``,``/``;``, only
+    variables, atoms other than ``!``, truth values and compound goals: the
+    common case, which converting it would accept as written.  False sends
+    it to the full check, which raises or accepts."""
+    t = deref(t)
+    tt = type(t)
+    if tt is tuple:
+        if len(t) == 3 and (t[0] == "," or t[0] == ";") and type(t[0]) is str:
+            return _plain_meta_body(t[1]) and _plain_meta_body(t[2])
+        return len(t) > 1 and type(t[0]) is str and t[0] != "$chars"
+    if tt is str:
+        return t != "!"
+    return tt is bool or is_var(t)      # ``true``/``false`` are the bools
+
+
+@_trampoline_builtin("$meta_body_check", 1)
+def _meta_body_check__1(this_generator, _proceed, _fail, _catcher, goal,
+                        trail):
+    """The run-time half of a ``.clausal`` meta-argument compiled in place
+    (``iso_l3._checked_in_place``): raises what converting *goal* would
+    (``call_body.check_meta_body``), else succeeds once."""
+    if not _plain_meta_body(goal):
+        from clausal.logic.builtins.call_body import check_meta_body  # noqa: PLC0415
+        check_meta_body(goal, "a meta-call")
+    yield (_proceed, None)
+    yield (_fail, DONE)
+
+
 @_builtin("current_time", 1)
 def _current_time__1(t, trail, k):
     """current_time(T) — unify T with the current Unix timestamp (float)."""

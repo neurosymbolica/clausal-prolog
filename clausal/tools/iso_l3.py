@@ -862,11 +862,18 @@ class _ClauseLowering:
         holds one -- reached through ``,``/``;``/``->``, which are
         transparent to it -- is lowered as ``call(Branch)``, as the runtime
         if_/3 runs it.  Only a ``.pl`` file can hold one (``.clausal``
-        refuses ``!``); every other branch compiles in place."""
-        if self._cut_allowed and _cut_inside(g):
+        refuses ``!``).  A branch with a VARIABLE in such a position is
+        converted when if_ calls it too, so a cut bound to the variable by
+        then is in the branch: in a ``.pl`` file it is lowered as
+        ``call(Branch)`` as well, and in a ``.clausal`` file it is checked
+        as a meta-argument is (:meth:`_checked_in_place`).  Every other
+        branch compiles in place."""
+        if self._cut_allowed and (_cut_inside(g) or _var_inside_body(g)):
             self._refuse_control_in(g, sp)
             pos = self._pos.of(_top_span(sp))
             return self._call("call", [self.term(g, sp)], pos, pos)
+        if _var_inside_body(g):
+            return self._checked_in_place(g, sp)
         return self.goal(g, sp)
 
     def _iterated_goal(self, g: Any, sp) -> ast.expr:
@@ -887,17 +894,50 @@ class _ClauseLowering:
         the converted body, and a non-callable it holds is
         ``type_error(callable, Whole)``.  In a ``.pl`` file such a goal is
         lowered as ``call(Term)``, which is that conversion (call/1's
-        converter); every other goal compiles as written, so cut-free code
-        is unchanged.  A bare variable is ``call(G)`` either way."""
-        if self._cut_allowed and _var_inside_body(g):
-            self._refuse_control_in(g, sp)
-            pos = self._pos.of(_top_span(sp))
-            return self._call("call", [self.term(g, sp)], pos, pos)
+        converter), so the bound cut runs local to the meta-call.  In a
+        ``.clausal`` file it compiles in place behind the check that
+        conversion makes (:meth:`_checked_in_place`), so the bound cut is
+        refused.  A goal with no variable there compiles as written, so
+        its code is unchanged.  A bare variable is ``call(G)`` either way."""
+        if _var_inside_body(g):
+            if self._cut_allowed:
+                self._refuse_control_in(g, sp)
+                pos = self._pos.of(_top_span(sp))
+                return self._call("call", [self.term(g, sp)], pos, pos)
+            return self._checked_in_place(g, sp)
         self._meta_depth += 1
         try:
             return self.goal(g, sp)
         finally:
             self._meta_depth -= 1
+
+    def _checked_in_place(self, g: Any, sp) -> ast.expr:
+        """``('$meta_body_check'(Term), Goal)``: a ``.clausal`` goal with a
+        variable under ``,``/``;`` that ISO converts only when it is called
+        (a meta-argument, an if_/3 branch).  Compiled as written, the
+        variable is ``call(G)``, so a cut bound to it by then ran as
+        ``true``; the check, run first, raises what the conversion would --
+        the cut refusal (a cut inside a meta-called body), or
+        ``type_error(callable, Term)`` -- and otherwise the compiled goal
+        runs unchanged, without converting the term at run time
+        (tests/test_meta_call_cut_refused.py).  The term is lowered first,
+        so it binds the clause variables it shares with the goal; its
+        variable occurrences are not counted twice, so a singleton is still
+        reported."""
+        pos = self._pos.of(_top_span(sp))
+        counted = dict(self.occurrences)
+        whole = self.term(g, sp)
+        self.occurrences.clear()
+        self.occurrences.update(counted)
+        self._meta_depth += 1
+        try:
+            body = self.goal(g, sp)
+        finally:
+            self._meta_depth -= 1
+        check = self._call("$meta_body_check", [whole], pos, pos)
+        return _node("TupleLiteral",
+                     elements=ast.List(elts=[check, body], ctx=ast.Load()),
+                     position=_pos_expr(pos))
 
     def _refuse_control_in(self, g: Any, sp) -> None:
         """A goal written as ``call/N``'s first argument is still a goal: the
