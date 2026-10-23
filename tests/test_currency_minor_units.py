@@ -996,7 +996,17 @@ def test_the_exporter_knows_the_currency_directive():
     # Was: the LOSSY note names the directive. There is no LOSSY note on this
     # path since 2026-09-13 -- the declaration is EMITTED, so the directive
     # name appears as a clause rather than in a comment about what was lost.
-    assert "constant_number_currency(" in out, out
+    # Under the ISO (`facts`) default it is recorded as constant_number_units/3,
+    # as the engine records it (operator ruling 2026-10-23); an expansion
+    # dialect keeps the directive for its prelude.
+    assert "constant_number_units(cap, 5000, usd)." in out, out
+    from clausal.tools.prolog_dialect import Dialect
+    from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
+    scryer = clausal_source_to_prolog(
+        "-import_from(united_states, [usd])\n"
+        "-constant_number_currency(cap, 5000, usd)\n"
+        "fine(constant(cap)),\n", dialect=Dialect.scryer())
+    assert ":- constant_number_currency(cap, 5000, usd)." in scryer, scryer
 
 
 def test_the_currency_directive_is_listed_as_known():

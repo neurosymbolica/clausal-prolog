@@ -46,6 +46,34 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **An exported constant declaration carries the pair as written**
+  (2026-10-23, operator ruling 2026-10-23). The `.pl` exporter scaled a
+  declared constant's number to the base unit but kept the declared unit,
+  so `-constant_number_currency(cap, 155000, usd_cent)` exported as
+  `constant_number_currency(cap, 1550.00, usd_cent)` and the exported
+  program's `constant_number_units(cap, N, U)` answered `1550.0, usd_cent`,
+  100x too small. The declaration now crosses as `155000, usd_cent`, the
+  pair the engine's `constant_number_units/3` reports (the 2026-09-11
+  ruling), in every dialect (iso, swi, scryer, trealla) and for
+  `-constant_number_units` and `-constant_number_currency` alike; use
+  sites still fold to the base value themselves (`constant(cap)` is
+  `1550`, `constant(cap) / usd_cent` is `155000`). The ISO dialect, which
+  writes the declaration as facts, wrote one 4-ary fact
+  (`constant_number_units(m, cap, N, U)`, or `constant_number_currency/4`
+  for currency) that no accessor read, so a call to
+  `constant_number_units/3` raised `existence_error`; it now writes the
+  two facts the Scryer/Trealla preludes expand the directive into,
+  `constant_number_units(cap, N, U)` and `module_constant_units(m, cap,
+  N, U)`, so `constant_number_units/3` answers there too, and a currency
+  declaration is recorded under `constant_number_units` as the engine
+  records it. The table forms (`-constants_number_*`) are unchanged: they
+  expand to ordinary facts and declare no constant. Pinned by
+  `tests/test_prolog_constants_prelude.py::test_the_exported_program_answers_what_the_engine_answers`
+  (engine vs the exported program under Scryer and Trealla, for the ISO
+  and expansion forms: `constant_number_units/3` answers and arithmetic
+  over a `usd_cent`, a `kilometre` and a `metre` constant),
+  `::test_every_dialect_declares_the_pair_as_written` and
+  `::test_the_exporters_own_output_runs_unmodified`.
 - **The `.pl` exporter resolves a unit imported under an alias**
   (2026-10-22). `-import_from(united_states, [alias(usd, us_dollar)])`
   binds `us_dollar` to the currency `usd`, but the exporter resolves
@@ -88,9 +116,10 @@ surface described in [docs/public-api.md](docs/public-api.md).
   tables, so from inside a named module -- the normal use -- every
   accessor answered false; the expansion now writes the accessor fact in
   the declaring module, as the Trealla prelude already did.
-  `tests/test_prolog_constants_prelude.py`. Still open: the exported
-  declaration pairs the base magnitude with the declared unit
-  (`todo/exported-constant-declaration-carries-the-base-magnitude-with-the-declared-unit-2026-10-22.md`).
+  `tests/test_prolog_constants_prelude.py`. The exported declaration's
+  pairing of the base magnitude with the declared unit is fixed (see
+  "An exported constant declaration carries the pair as written")
+  (`todo/done/exported-constant-declaration-carries-the-base-magnitude-with-the-declared-unit-2026-10-22.md`).
 
 - **The `.pl` translator runs `member/2` in a meta-call and as data,
   phrase/2,3 of a control construct, and variable goals** (2026-10-22;

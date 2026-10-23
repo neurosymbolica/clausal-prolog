@@ -177,13 +177,13 @@ def test_the_exporters_own_output_runs_unmodified(system):
     res = proc.stdout + proc.stderr
     assert "got(fees," in res.replace(" ", ""), res
     assert "usd_cent" in res, res         # the unit crossed
-    # The BASE magnitude, not the declared 155000. Asserted as a VALUE, not a
-    # spelling: the exporter writes `1550.00` and Prolog reads it as a float and
-    # prints `1550.0`. The magnitude survives; the decimal SCALE does not,
-    # because Prolog has no decimal type. Measured 2026-09-13 -- an earlier
-    # version of this assertion looked for "1550.00" and failed on a correct
-    # result, which is the right way round for an assertion to be wrong.
-    assert "1550" in res and "155000" not in res, res
+    # The DECLARED pair, `155000, usd_cent`, as the engine's
+    # constant_number_units/3 reports it (operator ruling 2026-10-23). This
+    # used to assert the BASE magnitude (`1550.0`) beside the declared unit --
+    # a pair that was neither, and 100x too small through the accessor. The
+    # use site `pay(constant(sga))` still folds to the base 1550 on its own.
+    assert "got(fees,155000,usd_cent)" in res.replace(" ", ""), res
+    assert "pay(1550)." in out and "1550.0" not in out, out
 
 
 # ── constant_number_currency, and the accessors inside a named module ─────
@@ -283,3 +283,133 @@ def test_an_accessor_answers_inside_a_named_module(system, directive, query, ans
         f"main :- ( {query} -> write(got({', '.join(['V', 'U'][:len(shape)])})) "
         "; write(no_answer) ), nl, halt.\n"), module_name="a_named_module")
     assert answer in out.replace(" ", ""), out
+
+
+# ── the declared pair, engine vs export (operator ruling 2026-10-23) ──────
+#
+# An exported declaration carries the pair AS WRITTEN -- `155000, usd_cent`,
+# as the engine's constant_number_units/3 reports it (the 2026-09-11 ruling) --
+# while every USE SITE still folds to the base magnitude on its own. Before,
+# the declaration paired the BASE magnitude with the DECLARED unit
+# (`1550.00, usd_cent`): 100x too small through the accessor. The ISO `facts`
+# form now records the same two facts the expansion preludes write, so
+# constant_number_units/3 answers in every dialect.
+
+CMP = """\
+-module(cmp, [cap_pair(N, U), dist_pair(N, U), len_pair(N, U), in_cents(X), in_km(X), cap_base(X), dist_base(X), len_base(X), cap_doubled(X)])
+-import_from(united_states, [usd, usd_cent])
+-import_from(units, [kilometre, metre])
+-constant_number_currency(cap, 155000, usd_cent)
+-constant_number_units(dist, 3, kilometre)
+-constant_number_units(len, 5, metre)
+cap_pair(N, U) <- constant_number_units(cap, N, U)
+dist_pair(N, U) <- constant_number_units(dist, N, U)
+len_pair(N, U) <- constant_number_units(len, N, U)
+in_cents(X) <- (X == constant(cap) / usd_cent)
+in_km(X) <- (X == constant(dist) / kilometre)
+cap_base(X) <- (X == constant(cap))
+dist_base(X) <- (X == constant(dist))
+len_base(X) <- (X == constant(len))
+cap_doubled(X) <- (X == constant(cap) * 2)
+"""
+CMP_PAIRS = ["cap_pair", "dist_pair", "len_pair"]
+CMP_VALUES = ["in_cents", "in_km", "cap_base", "dist_base", "len_base",
+              "cap_doubled"]
+
+
+def _engine_text(value):
+    """An engine answer spelled as a Prolog system prints it: a quantity by
+    its (base-unit) magnitude, an integral number without a decimal point."""
+    from decimal import Decimal
+    from clausal.terms import Quantity
+    if isinstance(value, Quantity):
+        value = value.value
+    if isinstance(value, Decimal) and value == value.to_integral_value():
+        value = int(value)
+    return str(value)
+
+
+def _cmp_engine_answers(tmp_path):
+    from clausal.import_hook import _load_module
+    from clausal.logic.solve import call
+    from clausal.logic.variables import Var, deref
+    from tests._suffix import SEAM
+
+    path = tmp_path / f"cmp{SEAM}"
+    path.write_text(CMP)
+    m = _load_module("prelude_cmp_engine", str(path))
+    answers = []
+    for name in CMP_PAIRS:
+        n, u = Var(), Var()
+        answers += [f"{name}({_engine_text(deref(n))},{deref(u)})"
+                    for _ in call(getattr(m, name), n, u)]
+    for name in CMP_VALUES:
+        x = Var()
+        answers += [f"{name}({_engine_text(deref(x))})"
+                    for _ in call(getattr(m, name), x)]
+    return answers
+
+
+def test_the_engine_reports_the_declared_pair_and_base_arithmetic(tmp_path):
+    """The reference the exported programs are held to below."""
+    assert _cmp_engine_answers(tmp_path) == [
+        "cap_pair(155000,usd_cent)", "dist_pair(3,kilometre)",
+        "len_pair(5,metre)", "in_cents(155000)", "in_km(3)",
+        "cap_base(1550)", "dist_base(3000)", "len_base(5)",
+        "cap_doubled(3100)"]
+
+
+@pytest.mark.parametrize("dialect", ["iso", "swi", "scryer", "trealla"])
+def test_every_dialect_declares_the_pair_as_written(dialect):
+    from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
+    from clausal.tools.prolog_dialect import Dialect
+    out = clausal_source_to_prolog(CMP, dialect=getattr(Dialect, dialect)())
+    for pair in ("cap, 155000, usd_cent", "dist, 3, kilometre",
+                 "len, 5, metre"):
+        assert f"({pair})" in out or f", {pair})" in out, out
+    assert "1550.0" not in out and "3000, kilometre" not in out, out
+    # the use sites still fold to the BASE magnitude themselves
+    import re
+    clauses = out.split("cap_base(X) :-", 1)[1]
+    assert re.search(r"\b1550\b", clauses), out
+    assert re.search(r"\b3000\b", clauses), out
+
+
+@pytest.mark.parametrize("system", sorted(BINARIES))
+@pytest.mark.parametrize("dialect", ["iso", "expansion"])
+def test_the_exported_program_answers_what_the_engine_answers(
+        tmp_path, system, dialect):
+    """Run the exporter's output under the real binary -- the `facts` form
+    (Dialect.iso) and the system's own `expansion` dialect -- and compare
+    every answer, the accessor's pairs AND the arithmetic over the constants,
+    with the engine's."""
+    import shutil
+    from clausal.tools.clausal_to_prolog import clausal_source_to_prolog
+    from clausal.tools.prolog_dialect import Dialect
+
+    binary = BINARIES[system]
+    if not os.path.exists(binary):
+        pytest.skip(f"{system} not built at {binary}")
+    expected = _cmp_engine_answers(tmp_path)
+    factory = "iso" if dialect == "iso" else system
+    out = clausal_source_to_prolog(CMP, dialect=getattr(Dialect, factory)())
+    d = tempfile.mkdtemp()
+    shutil.copy(os.path.join(PRELUDE_DIR, f"clausal_constants_{system}.pl"), d)
+    # The jurisdiction and units imports are Clausal modules with no Prolog
+    # counterpart here; everything else is verbatim.
+    body = "\n".join(l for l in out.splitlines()
+                     if not l.startswith(":- use_module('"))
+    # fresh variables per goal: `show/1` leaves each one bound
+    goals = ([f"{n}(A{i}, B{i})" for i, n in enumerate(CMP_PAIRS)]
+             + [f"{n}(X{i})" for i, n in enumerate(CMP_VALUES)])
+    prog = os.path.join(d, "cmp.pl")
+    with open(prog, "w") as fh:
+        fh.write(body + "\n:- initialization(cmp:main).\n"
+                 "show(G) :- ( call(G) -> write(G) ; write(no(G)) ), nl.\n"
+                 "main :- " + ", ".join(f"show({g})" for g in goals)
+                 + ", halt.\n")
+    proc = _run_program(system, binary, prog, d)
+    res = proc.stdout + proc.stderr
+    got = [l.replace(" ", "") for l in res.splitlines()
+           if l.split("(")[0] in CMP_PAIRS + CMP_VALUES]
+    assert got == expected, res

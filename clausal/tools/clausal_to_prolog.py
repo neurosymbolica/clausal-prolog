@@ -2718,29 +2718,43 @@ class _ClausalToProlog:
                                PNumber(denominator)))
 
     def _constant_declaration(self, directive, name, value, unit, cap):
-        """The declaration item for this dialect: a directive or a fact."""
+        """The declaration items for this dialect: a directive, or facts.
+
+        *value* is the DECLARED magnitude, paired with the declared unit, as
+        the engine's `constant_number_units/3` reports it (operator ruling
+        2026-10-23, after the 2026-09-11 one). Use sites fold to the base
+        magnitude separately, in :meth:`_collect_constant`.
+
+        The `facts` form writes exactly what the expansion preludes expand the
+        directive into -- the module-local `constant_number_units/3` accessor
+        fact and `module_constant_units/4` carrying the module -- so
+        `constant_number_units/3` answers in every dialect, and a currency
+        declaration is recorded under `constant_number_units` there too, as
+        the engine records it (operator ruling 2026-10-23). It used to be a
+        lone 4-ary `constant_number_units/4` or `constant_number_currency/4`
+        fact, which no accessor read.
+        """
         unit_term = self._convert_expr(unit)
         args = (PAtom(name), self._declared_magnitude_term(value), unit_term)
         if cap == "expansion":
-            return PDirective(PCompound(directive, args))
+            return [PDirective(PCompound(directive, args))]
         module = (self._module_name
                   or (posixpath.basename(self.module_path or "").split(".")[0]
                       if self.module_path else None)
                   or "user")
-        return PClause(PCompound(directive, (PAtom(module),) + args))
+        return [PClause(PCompound("constant_number_units", args)),
+                PClause(PCompound("module_constant_units",
+                                  (PAtom(module),) + args))]
 
     def _collect_constant(self, directive: str, call: python_ast.Call) -> None:
         """Record a ``-constant_value`` / ``-constant_number_units`` declaration.
 
         The value is converted NOW, in file order, so a later declaration may
         refer to an earlier one and every use site gets a fully resolved term.
-        Nothing is emitted: a constant exists in the exported program only as
-        the literal it folds to.
-
-        The units form loses its unit. Prolog has no unit system, and the
-        exporter already discards units from an inline ``5000(euro)`` literal
-        the same way -- this follows that precedent rather than inventing a
-        policy, but it is recorded as LOSSY so it is never silent.
+        A use site folds to the literal (for a units/currency constant, the
+        BASE magnitude). A units/currency declaration also crosses, as
+        written, for the dialect's `constants` capability to carry
+        (:meth:`_constant_declaration`); a ``-constant_value`` one does not.
         """
         args = call.args if isinstance(call, python_ast.Call) else ()
         united = directive in ("constant_number_units",
@@ -2790,28 +2804,27 @@ class _ClausalToProlog:
                     f"the magnitude to the one the engine holds. Refusing "
                     f"rather than guessing: a wrong factor is a wrong number "
                     f"in an exported legal program.")
-            # The BASE magnitude -- the one the engine actually holds. Emitting
-            # the DECLARED magnitude is the defect this path existed for:
-            # `155000 usd_cent` is 1550.00 dollars, and `155000` was a 100x
-            # money error announced only by a comment.
-            value = _scale_constant_value(value, factor)
-            # The declaration CROSSES now, carrying its unit, so nothing is
-            # discarded and there is no LOSSY note to write. How it crosses is
-            # the dialect's business: a system with `prolog_load_context/2`
-            # takes the directive and expands it; one without gets the module
-            # filled in here, by the exporter, which knows it statically --
-            # exactly as the engine's transformer does for
-            # `constant_number_units/3`.
-            self._items.append(
+            # The declaration CROSSES AS WRITTEN: the declared magnitude with
+            # the declared unit, `155000, usd_cent`, the pair the engine's
+            # `constant_number_units/3` answers (operator ruling 2026-10-23).
+            # It used to carry the BASE magnitude with the DECLARED unit,
+            # `1550.00, usd_cent` -- neither the declared pair nor the base
+            # one, and 100x too small read back through the accessor. How it
+            # crosses is the dialect's business: a system with
+            # `prolog_load_context/2` takes the directive and expands it; one
+            # without gets the module filled in here, by the exporter, which
+            # knows it statically -- exactly as the engine's transformer does
+            # for `constant_number_units/3`.
+            self._items.extend(
                 self._constant_declaration(directive, name, value, unit, cap))
             self._emitted_constant_declaration = True
-            # Use sites want the EXACT number; the declaration wants the SCALE.
-            # They differ, and folding them was the bug: `155000 aud_cent` is
-            # Decimal('1550.00'), so a declaration should be able to render
-            # `1_550_00/100` while a use site must read as exact `1550` rather
-            # than the float `1550.00`. Integralising in the shared scaler broke
-            # the declaration's scale; integralising here does not.
-            value = _integral_if_whole(value)
+            # USE SITES fold to the BASE magnitude -- the one the engine holds
+            # in arithmetic. Emitting the declared magnitude there is the
+            # defect this path existed for: `155000 usd_cent` is 1550.00
+            # dollars, and `155000` was a 100x money error. Exact: an integral
+            # result such as Decimal('1550.00') reads as the integer `1550`,
+            # never the float `1550.00`.
+            value = _integral_if_whole(_scale_constant_value(value, factor))
         self._constants[name] = value
 
     #: Arithmetic that folds over numeric literals. Deliberately NOT a general

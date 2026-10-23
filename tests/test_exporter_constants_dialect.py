@@ -14,7 +14,9 @@ See docs/superpowers/specs/2026-09-13-exporter-option-3-design.md.
 
 Unchanged in every dialect: a use site folds to the BASE magnitude, never the
 declared one. `155000 usd_cent` is `1550.00`, and emitting `155000` was the
-100x defect this whole todo existed for.
+100x defect this whole todo existed for. The DECLARATION, in contrast, crosses
+as written, `155000, usd_cent`, the pair the engine's constant_number_units/3
+reports (operator ruling 2026-10-23).
 """
 from decimal import Decimal
 
@@ -174,8 +176,11 @@ def test_the_iso_FACTS_form_runs_and_answers_the_pair(binary, name):
     body = "\n".join(l for l in out.splitlines()
                      if not l.strip().startswith(":- module")
                      and not l.strip().startswith(":- use_module"))
+    # The same two facts the expansion preludes write: the 3-ary accessor
+    # and the module-carrying fact (operator ruling 2026-10-23).
     program = body + "\n:- initialization(main).\nmain :- " \
-        "( constant_number_units(M, fee, N, U) -> " \
+        "( module_constant_units(M, fee, N, U), " \
+        "constant_number_units(fee, N, U) -> " \
         "write(got(M,N,U)) ; write(no_answer) ), nl, halt.\n"
     res = _run(binary, program, "")
     assert "got(" in res, res
@@ -208,10 +213,25 @@ def test_float_is_the_default_so_existing_output_is_unchanged():
 def test_the_rational_form_keeps_the_SCALE_a_float_loses():
     """THE test. `1550.00` is read as a float by every Prolog and prints as
     `1550.0`; `1_550_00/100` keeps both halves, so two decimal places are
-    recoverable from the denominator."""
+    recoverable from the denominator.
+
+    Asked of the renderer directly: since a declaration crosses AS WRITTEN
+    (operator ruling 2026-10-23), a minor-unit declaration is the integer
+    `155000` and needs no rational form (pinned below), so the form is
+    reached only by a declared magnitude that is itself an exact decimal."""
+    from clausal.tools.clausal_to_prolog import _ClausalToProlog
+    from clausal.tools.prolog_ast import PCompound, PNumber
+    term = _ClausalToProlog(_rational())._declared_magnitude_term(
+        PNumber(Decimal("1550.00")))
+    assert isinstance(term, PCompound) and term.functor == "/", term
+    assert [a.value for a in term.args] == ["1_550_00", 100], term
+
+
+def test_a_minor_unit_declaration_crosses_as_written_under_rational():
+    """The declared pair, so an integer: nothing for the rational form to do."""
     out = _clauses_only(_export(MINOR, _rational()))
-    assert "1_550_00/100" in out, out
-    assert "1550.00," not in out, out
+    assert "constant_number_units(sga, 155000, usd_cent)" in out, out
+    assert "/100" not in out, out
 
 
 def test_the_use_site_stays_a_NUMBER_under_rational():
@@ -279,9 +299,10 @@ def test_a_scaled_fold_that_lands_on_a_whole_unit_stays_an_INTEGER():
                   'v(constant(cap)),\n')
     use_site = [l for l in out.splitlines() if l.startswith("v(")]
     assert use_site == ["v(1550)."], out
-    # scoped to the USE SITE: the declaration legitimately carries 1550.00,
-    # which is where the scale lives and what decimal_repr="rational" renders.
+    # scoped to the USE SITE: the declaration carries the declared pair,
+    # `155000, aud_cent` (operator ruling 2026-10-23).
     assert "1550.0" not in use_site[0], out
+    assert "constant_number_units(cap, 155000, aud_cent)" in out, out
 
 
 def test_a_genuinely_fractional_fold_is_still_a_float_and_that_is_KNOWN():

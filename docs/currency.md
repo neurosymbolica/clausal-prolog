@@ -706,8 +706,9 @@ than from a list written beside them.
 unit](#asserting-a-unit-compatible_units2) — once ratios are dimensionless, a bare `0.03`
 would otherwise satisfy every ratio claim there is. And the Prolog exporter treats a
 ratio unit like every scaled unit (see [below](#the-prolog-exporter-and-scaled-units)): a
-**declaration** exports its base magnitude (`-constant_number_units(min_margin, 300,
-basis_point)` exports `0.0300`, never `300`), while an **inline** `300(basis_point)` is
+**declared constant** exports its base magnitude at every use site
+(`constant(min_margin)` after `-constant_number_units(min_margin, 300, basis_point)` exports
+`0.0300`, never `300`), while an **inline** `300(basis_point)` is
 refused, because units are discarded on export and dropping `basis_point` would emit `300`
 against a stored `0.03`, a 10000x error.
 
@@ -867,16 +868,23 @@ currency, `metre`, `second`, or a factor-1 derived unit like `newton`) and wrong
 **scaled** one unless the magnitude is converted first. The two shapes are handled
 differently:
 
-* A **declaration** exports the magnitude the engine holds, converted exactly to the base
-  unit:
+* A **declared constant** exports, at each use site, the magnitude the engine holds,
+  converted exactly to the base unit:
 
   ```text
-  -constant_number_units(monthly_limit, 155000, usd_cent)   exports   1550
-  -constant_number_units(min_margin, 300, basis_point)      exports   0.0300
+  -constant_number_units(monthly_limit, 155000, usd_cent)   constant(monthly_limit)   exports   1550
+  -constant_number_units(min_margin, 300, basis_point)      constant(min_margin)      exports   0.0300
   ```
 
   An integral result is emitted as an integer; a fractional amount stays a decimal number,
   which Prolog reads as a float (Prolog has no decimal type).
+
+  The **declaration itself** crosses as written, `constant_number_units(monthly_limit, 155000,
+  usd_cent)`, so `constant_number_units/3` in the exported program answers the pair the engine
+  answers (operator ruling 2026-10-23). Every dialect that can receive a declaration answers it:
+  Scryer, Trealla and SWI expand the directive through a load-time prelude, and the ISO dialect
+  writes the same facts itself. A `-constant_number_currency` declaration is answered by
+  `constant_number_units/3` there too, as in the engine.
 
 * An **inline** quantity in a scaled unit, `pay(155000(usd_cent))`, is still **refused**:
 

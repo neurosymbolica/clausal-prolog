@@ -1,5 +1,16 @@
 # An exported constant declaration pairs the BASE magnitude with the DECLARED unit
 
+**Status: FIXED 2026-10-23 (commit on fix/operator-rulings-2026-10-23).** Operator ruling
+2026-10-23 ("all as recommended"): option 1, the export declares the pair as written
+(`155000, usd_cent`), as the engine's constant_number_units/3 reports it; use sites still fold
+to the base value. The ISO `facts` form now writes `constant_number_units/3` and
+`module_constant_units/4` facts, the same two the Scryer/Trealla preludes expand the directive
+into, with currency recorded under `constant_number_units`, so the accessor answers in every
+dialect. Pinned in tests/test_prolog_constants_prelude.py::test_the_exported_program_answers_what_the_engine_answers,
+::test_every_dialect_declares_the_pair_as_written and
+::test_the_exporters_own_output_runs_unmodified, and
+tests/test_exporter_constants_dialect.py::test_the_iso_FACTS_form_runs_and_answers_the_pair.
+
 Filed 2026-10-22, found fixing the expansion preludes so that
 `constant_number_units/3` answers in an exported module. Severity: high once
 the accessor is used (a 100x wrong pair for a minor unit); needs a ruling.
