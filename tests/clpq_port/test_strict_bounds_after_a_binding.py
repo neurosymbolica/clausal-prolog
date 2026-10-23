@@ -130,8 +130,12 @@ def check_case(seed, defer):
                 value = _optimum(bv.inf if value == "inf" else bv.sup,
                                  expression, trail)
             if how == "unify":
+                # The value is a Fraction for z3's sake (`_value`); a user
+                # writes the integer, and since 2026-10-23 (ISO 7.3) an
+                # integral Fraction no longer unifies with the int the port
+                # bound, so present it as every binder does.
                 accepted = _step(trail, lambda: unify(variables[terms[0][1]],
-                                                      value, trail))
+                                                      _present(value), trail))
             else:
                 accepted = _step(trail, lambda: nf.post_constraint(
                     ("=", expression, value), trail))
@@ -253,6 +257,13 @@ def test_the_check_runs_where_its_invariant_holds(monkeypatch):
 def _value(term):
     term = deref(term)
     return None if is_var(term) else Fraction(term)
+
+
+def _present(value):
+    """An integral Fraction as the int a program would write (the engine's
+    binders present whole rationals as ints; `1 = Fraction(1, 1)` fails
+    since 2026-10-23)."""
+    return int(value) if isinstance(value, Fraction) and value.denominator == 1 else value
 
 
 @pytest.mark.parametrize("defer", [False, True], ids=["bare", "driver"])

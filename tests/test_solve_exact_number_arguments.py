@@ -56,8 +56,13 @@ def test_nested_in_a_list_and_a_cell(mod):
     assert _one(mod, "idn", ("f", Fraction(1, 2))) == [("f", Fraction(1, 2))]
 
 
-def test_unifies_by_value(mod):
-    assert len(list(solve(("idn", Decimal("7.5"), Decimal("7.50")), mod))) == 1
+def test_unifies_by_identity_not_value(mod):
+    """Formerly `test_unifies_by_value`: Decimal('7.5') and Decimal('7.50')
+    are two terms (scale is part of a Decimal, ruling 2026-09-17 Q2; held by
+    unify since 2026-10-23, ISO 7.3), so the arguments must be the same
+    term, not merely equal in value."""
+    assert len(list(solve(("idn", Decimal("7.5"), Decimal("7.5")), mod))) == 1
+    assert len(list(solve(("idn", Decimal("7.5"), Decimal("7.50")), mod))) == 0
     assert len(list(solve(("idn", Decimal("7.5"), Decimal("7.6")), mod))) == 0
 
 

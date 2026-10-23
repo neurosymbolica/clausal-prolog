@@ -39,11 +39,13 @@ class TestBytesElementDomainEdges:
         assert unify(b"a", [[97]], Trail()) is False
 
     def test_float_equal_to_code_matches_engine_consistent(self):
-        # nv  — NOT a bytes quirk: the engine unifies 97 == 97.0 for plain
-        # scalars/lists too (`unify(97, 97.0)` is True). A byte IS the int,
-        # so a float numerically equal to the code unifies, consistently.
-        assert unify(b"abc", [97.0, 98.0, 99.0], Trail()) is True
-        assert unify([97], [97.0], Trail()) is True  # the general behaviour
+        # nv  — NOT a bytes quirk: a byte IS the int code, and since
+        # 2026-10-23 (ISO 7.3) an int and an equal float are distinct terms
+        # for plain scalars/lists too (`unify(97, 97.0)` is False), so a
+        # float numerically equal to the code does not unify, consistently.
+        assert unify(b"abc", [97.0, 98.0, 99.0], Trail()) is False
+        assert unify([97], [97.0], Trail()) is False  # the general behaviour
+        assert unify(b"abc", [97, 98, 99], Trail()) is True
 
     def test_bool_equal_to_code_matches_engine_consistent(self):
         # nv  — D35 closed: a truth value is an ATOM, never a code: b"\x01" is [1], not [true]

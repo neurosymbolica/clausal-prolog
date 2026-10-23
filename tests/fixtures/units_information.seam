@@ -20,10 +20,10 @@ test('bit hasbits') <- has_units(1(bit), bit)  # nv
 test('byte is 8 bits') <- (
     eval_(1(byte), B),
     has_units(B, bit),
-    strip_units(B, 8.0)
+    strip_units(B, 8)        # a byte is the integer 8 bits; 8.0 is not 8 (ISO 7.3, ruling 2026-10-23)
 )  # nv
 
-test('byte n(byte) sugar') <- strip_units(10(byte), 80.0)  # nv
+test('byte n(byte) sugar') <- strip_units(10(byte), 80)  # nv (integer magnitude, ruling 2026-10-23)
 
 # ── Decimal byte multiples ────────────────────────────────────────────────────
 
@@ -149,7 +149,7 @@ test('2 tebibytes via prefix') <- (
 test('add bytes and bits') <- (
     eval_(1(byte) + 8(bit), SUM),
     has_units(SUM, bit),
-    strip_units(SUM, 16.0)
+    strip_units(SUM, 16)     # integer magnitude (ruling 2026-10-23)
 )  # nv
 
 test('kibibyte minus 1 byte') <- (
@@ -167,7 +167,7 @@ test('kilobyte plus kilobyte') <- (
 
 test('dims cancel: byte over byte is dimensionless') <- (
     eval_(16(byte) / 2(byte), R),
-    strip_units(R, 8.0)
+    strip_units(R, 8)        # exact division: the integer 8 (ruling 2026-10-23)
 )  # nv
 
 # ── has_units checks ───────────────────────────────────────────────────────────

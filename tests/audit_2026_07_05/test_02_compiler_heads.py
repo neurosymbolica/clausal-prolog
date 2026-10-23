@@ -298,8 +298,14 @@ class TestF001IndexedDispatchPartialTerms:
         assert collect(mod, "strs3", sl, R, outv=[A, R]) == []
 
     def test_control_decimal_unindexed(self, mod):
+        # A Decimal(1) caller reaches the int head kind3(1, ...) by the full
+        # scan and the HEAD then refuses it: Decimal(1) and 1 are distinct
+        # terms (ISO 7.3, operator ruling 2026-10-23; it matched until then,
+        # when unify fell back to Python ==). The int caller is the control.
         R = Var()
-        assert collect(mod, "kind3", Decimal(1), R, outv=[R]) == [(mint("one"),)]
+        assert collect(mod, "kind3", Decimal(1), R, outv=[R]) == []
+        R = Var()
+        assert collect(mod, "kind3", 1, R, outv=[R]) == [(mint("one"),)]
 
     def test_partial_charlist_indexed_no_longer_reaches_str_head(self, mod):
         X, R = Var(), Var()
@@ -324,8 +330,14 @@ class TestF001IndexedDispatchPartialTerms:
         assert collect(mod, "strs4", sl, R, outv=[A, R]) == []
 
     def test_decimal_indexed(self, mod):
+        # The uncomputable Decimal key takes the all-clauses fallback (the
+        # dispatch-layer contract, A02-D001) and the head answers what unify
+        # answers: nothing, since 2026-10-23 (ISO 7.3). The int caller is the
+        # control that the bucket itself still works.
         R = Var()
-        assert collect(mod, "kind4", Decimal(1), R, outv=[R]) == [(mint("one"),)]
+        assert collect(mod, "kind4", Decimal(1), R, outv=[R]) == []
+        R = Var()
+        assert collect(mod, "kind4", 1, R, outv=[R]) == [(mint("one"),)]
 
     def test_joint_partial_container_no_longer_reaches_str_head(self, mod):
         X, R = Var(), Var()
@@ -394,8 +406,12 @@ class TestF001TrampolineTRODispatchUncomputableKeys:
 
     # multi-plan TRO loop
     def test_multi_plan_decimal_key(self, mod):
+        # Fallback plan reached, head refuses Decimal(2) against 2 (ISO 7.3,
+        # ruling 2026-10-23); the int caller is the control.
         R = Var()
-        assert collect(mod, "mp5", Decimal(2), R, outv=[R]) == [(mint("two"),)]
+        assert collect(mod, "mp5", Decimal(2), R, outv=[R]) == []
+        R = Var()
+        assert collect(mod, "mp5", 2, R, outv=[R]) == [(mint("two"),)]
 
     def test_multi_plan_partial_charlist_no_longer_reaches_str_heads(self, mod):
         # P3-1 Task 5 (§1b): retired, same rationale as the single-plan case.
@@ -416,8 +432,13 @@ class TestF001TrampolineTRODispatchUncomputableKeys:
         assert collect(mod, "jt3", [X], 2, R, outv=[X, R]) == []
 
     def test_joint_decimal_component(self, mod):
+        # One component uncomputable: single-position dispatch on the other
+        # still reaches the clause, whose head refuses Decimal(2) against 2
+        # (ISO 7.3, ruling 2026-10-23); the int caller is the control.
         R = Var()
-        assert collect(mod, "jt3", mint("a"), Decimal(2), R, outv=[R]) == [([mint("ja2")],)]
+        assert collect(mod, "jt3", mint("a"), Decimal(2), R, outv=[R]) == []
+        R = Var()
+        assert collect(mod, "jt3", mint("a"), 2, R, outv=[R]) == [([mint("ja2")],)]
 
     def test_joint_both_components_uncomputable_no_longer_reaches_str_heads(self, mod):
         # P3-1 Task 5 (§1b): retired, same rationale as above (the Decimal
@@ -577,13 +598,18 @@ class TestF004MultiStarTrailingFixed:
 
 class TestIndexedDispatchGuards:
     def test_bool_and_float_callers_share_int_bucket(self, mod):
-        # hash-equal cross-type keys (1.0 vs 1) stay consistent with unify;
-        # a bool no longer shares the bucket (D35 closed: a truth value is an ATOM, keyed as
-        # the atom's ("true", 0), and it does not unify with 1 either)
+        # hash-equal cross-type keys (1.0 vs 1) share the bucket and stay
+        # consistent with unify: since 2026-10-23 (ISO 7.3) 1.0 does not
+        # unify with 1, so the float caller reaches the bucket and the head
+        # guard refuses it; a bool no longer shares the bucket (D35 closed: a
+        # truth value is an ATOM, keyed as the atom's ("true", 0), and it
+        # does not unify with 1 either)
         R = Var()
         assert collect(mod, "kind4", True, R, outv=[R]) == []
         R = Var()
-        assert collect(mod, "kind4", 1.0, R, outv=[R]) == [(mint("one"),)]
+        assert collect(mod, "kind4", 1.0, R, outv=[R]) == []
+        R = Var()
+        assert collect(mod, "kind4", 1, R, outv=[R]) == [(mint("one"),)]
 
     def test_ground_charlist_no_longer_reaches_str_bucket(self, mod):
         # P3-1 Task 5 (§1b): a GROUND char-list caller no longer reaches

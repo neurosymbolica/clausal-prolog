@@ -59,8 +59,6 @@ KNOWN = {
     "x52": "c",
     # sum_list/2 on a non-number: type_error(number) vs Scryer's evaluable
     "x59": "d", "l56": "d",
-    # setof/3 merges 1 and 1.0 (parked decision A01-D001)
-    "f21": "d",
     # setof/3 with a Bag [a|b]: see the [a|b] rows
     "f36": "a",
     # select/3 does not run in the (-, ?, +) mode; sum_list/2 does not

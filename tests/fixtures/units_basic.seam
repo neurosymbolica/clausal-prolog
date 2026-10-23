@@ -56,7 +56,7 @@ test('velocity from distance over time') <- (
     eval_(100(metre), D),
     eval_(10(second), T),
     eval_(D / T, V),
-    strip_units(V, 10.0),
+    strip_units(V, 10),      # exact: 100/10 is the integer 10, and 10.0 is not 10 (ISO 7.3, ruling 2026-10-23)
     has_units(V, metre/second)
 )  # nv
 
@@ -65,7 +65,7 @@ test('acceleration from velocity over time') <- (
     eval_(2(second), T),
     eval_(D / T, V),
     eval_(V / T, A),
-    strip_units(A, 5.0),
+    strip_units(A, 5),       # exact integer magnitude (ruling 2026-10-23)
     has_units(A, metre/second**2)
 )  # nv
 

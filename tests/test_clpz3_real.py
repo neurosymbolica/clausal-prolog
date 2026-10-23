@@ -375,14 +375,24 @@ class TestOptimize:
         assert state.solver.num_scopes() == before
 
     def test_result_unifies(self):
-        """If result_var is already bound to the optimal value, succeeds."""
+        """If result_var is already bound to the optimal value, succeeds.
+        The optimum is PRESENTED (`z3_to_python`: a whole Real is the int
+        5), and the bound value must be that term: `Fraction(5)` is not
+        `5` since 2026-10-23 (ISO 7.3) -- no binder hands out an integral
+        Fraction, and a program writes the integer."""
         # nv
         trail = Trail()
         x = Var()
         in_z3_real(x, 5, 5, trail)
         r = Var()
-        unify(r, Fraction(5), trail)
+        unify(r, 5, trail)
         assert maximize_z3(x, r, trail)
+        trail2 = Trail()
+        y = Var()
+        in_z3_real(y, 5, 5, trail2)
+        s = Var()
+        unify(s, Fraction(5), trail2)
+        assert not maximize_z3(y, s, trail2)
 
     def test_result_wrong_value_fails(self):
         """If result_var is bound to a wrong value, unify fails."""
