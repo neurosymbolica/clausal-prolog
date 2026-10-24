@@ -271,6 +271,22 @@ META_BODY_CHECK = BuiltinPredicate("$meta_body_check", 1,
                                    dispatch_fn=_meta_body_check__1)
 
 
+@_trampoline_builtin("repeat", 0)
+def _repeat__0(this_generator, _proceed, _fail, _catcher, trail):
+    """repeat (ISO 8.15.3) -- succeeds, and succeeds again on every
+    backtrack, forever.
+
+    Monotone nondeterminism (an infinite disjunction of ``true``), not
+    committed choice, so it is a builtin on every surface.  Each retry is a
+    resume of this one generator: it binds nothing, so the trail does not
+    grow, and the trampoline drives it, so the Python stack does not either.
+    It used to be ``existence_error(procedure, repeat/0)`` although the ISO
+    builtin table lists it (operator ruling 2026-10-24).
+    """
+    while True:
+        yield (_proceed, None)
+
+
 @_builtin("current_time", 1)
 def _current_time__1(t, trail, k):
     """current_time(T) — unify T with the current Unix timestamp (float)."""
