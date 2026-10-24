@@ -114,6 +114,15 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **`print/1` is refused under the sandbox, as every other writer is; `print/2`
+  writes to a stream** (2026-10-24). `print/1` arrived without an entry in
+  the sandbox's denied builtins, so a sandboxed program could write to
+  stdout through it; it is now `permission_error(access, private_procedure,
+  print/1)`. `print/1` writes to the current output (it wrote to Python's
+  stdout directly, past `set_output/1`), and `print(Stream, Term)` is
+  `writeq/2`'s twin. `read_term/2,3` raises the shared syntax-error term
+  (Scryer's formal atom and the located context).
+
 - **A `.pl` or `.clausal` file may not define an ISO built-in**
   (2026-10-24, operator ruling 2026-10-24; ISO 7.5.1). A clause for an ISO
   built-in predicate, such as `atom_length(_, 5).` or `once(G) :- call(G).`,

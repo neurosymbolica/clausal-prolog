@@ -19,7 +19,9 @@ Options (each ``domain_error(read_option, O)`` otherwise):
   included, ``_`` not);
 * ``singletons(Ps)``: the named variables that occur once.
 
-A syntax error is ``error(syntax_error(Why), read_term/3)``; the stream is
+A syntax error is ``error(syntax_error(Kind), context(read_term/3, Details))``,
+with Scryer's ``Kind`` and the line, column, expected and found token in
+``Details`` (operator ruling 2026-10-24, ``exceptions.syntax_error_exception``); the stream is
 left after the offending item's end token (the reader resyncs on it), so the
 next read goes on with the next term.  A term that is not a term -- the
 stream's remaining text without an end token -- is a syntax error too, and
@@ -37,7 +39,8 @@ from __future__ import annotations
 from clausal.logic import streams as _st
 from clausal.logic.atoms import mint
 from clausal.logic.exceptions import (
-    LogicException, _error, domain_error, instantiation_error,
+    LogicException, domain_error, instantiation_error,
+    syntax_error_exception,
 )
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.builtins._registry import _db_builtin
@@ -208,8 +211,7 @@ def _read_term(db, stream_term, term, options, trail):
         names: dict = {}
         counts: dict = {}
     elif type(item).__name__ == "SyntaxIssue":
-        raise LogicException(_error(
-            ("syntax_error", mint(item.message)), _READ))
+        raise syntax_error_exception(item, _READ)
     else:
         cell = _item_term(item)
         variables = {}

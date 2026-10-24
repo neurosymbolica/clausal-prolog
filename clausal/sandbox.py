@@ -229,6 +229,7 @@ DENIED_BUILTINS: "dict[str, str]" = {
     "writeq": "writes to stdout",
     "write_canonical": "writes to stdout",
     "write_term": "writes to stdout",
+    "print": "writes to stdout",
     "print_term": "writes to stdout",
     "portray_clause": "writes to stdout",
     "listing": "writes to stdout",

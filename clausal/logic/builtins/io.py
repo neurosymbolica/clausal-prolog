@@ -732,8 +732,17 @@ def _print__1(term, trail, k):
     prints as its char list).  No newline.  It did not exist
     (``existence_error(procedure, print/1)``)."""
     from clausal.logic.solve import _deref_walk
-    _sys.stdout.write(_format_term_iso(_deref_walk(term), quoted=True))
-    _sys.stdout.flush()
+    _emit("print/1", _current_output_text("print/1"),
+          _format_term_iso(_deref_walk(term), quoted=True))
+    yield None
+
+
+@_builtin("print", 2)
+def _print__2(stream, term, trail, k):
+    """print(Stream, Term) -- ``print/1`` on Stream, as ``writeq/2``."""
+    from clausal.logic.solve import _deref_walk
+    out = _output_text(deref(stream), "print/2")
+    _emit("print/2", out, _format_term_iso(_deref_walk(term), quoted=True))
     yield None
 
 
