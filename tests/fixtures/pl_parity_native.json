@@ -62,14 +62,14 @@
   },
   "clausal/tools/toklex/specs/clausal.toklex.pl": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <root>/clausal/tools/toklex/specs/clausal.toklex.pl: clausal.toklex.pl:97: syntax error (SyntaxIssue): Expected ')', got 'atom' ('then') at 97:22 (clausal.toklex.pl, line 97)",
+   "error": "PrologSyntaxError: Cannot import <root>/clausal/tools/toklex/specs/clausal.toklex.pl: clausal.toklex.pl:97: syntax error (SyntaxIssue): Expected ')', got 'atom' ('then') at 97:22 (clausal.toklex.pl, line 97)",
    "load": "refused",
    "preds": null,
    "tests": null
   },
   "clausal/tools/toklex/specs/iso.toklex.pl": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <root>/clausal/tools/toklex/specs/iso.toklex.pl: iso.toklex.pl:49: syntax error (SyntaxIssue): Expected ')', got 'atom' ('then') at 49:22 (iso.toklex.pl, line 49)",
+   "error": "PrologSyntaxError: Cannot import <root>/clausal/tools/toklex/specs/iso.toklex.pl: iso.toklex.pl:49: syntax error (SyntaxIssue): Expected ')', got 'atom' ('then') at 49:22 (iso.toklex.pl, line 49)",
    "load": "refused",
    "preds": null,
    "tests": null
@@ -259,7 +259,7 @@
   },
   "docs/importing_prolog.md#L160": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <work>/docs/doc_importing_prolog_L160.pl: doc_importing_prolog_L160.pl:1: syntax error (SyntaxIssue): unterminated item (missing end token) (doc_importing_prolog_L160.pl, line 1)",
+   "error": "PrologSyntaxError: Cannot import <work>/docs/doc_importing_prolog_L160.pl: doc_importing_prolog_L160.pl:1: syntax error (SyntaxIssue): unterminated item (missing end token) at 1:59 (doc_importing_prolog_L160.pl, line 1)",
    "load": "refused",
    "preds": null,
    "tests": null
@@ -982,14 +982,14 @@
   },
   "docs/tutorial.md#L253": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <work>/docs/doc_tutorial_L253.pl: doc_tutorial_L253.pl:2: syntax error (SyntaxIssue): Expected '.', got 'atom' ('#=') at 4:11 (doc_tutorial_L253.pl, line 2)",
+   "error": "PrologSyntaxError: Cannot import <work>/docs/doc_tutorial_L253.pl: doc_tutorial_L253.pl:2: syntax error (SyntaxIssue): Expected '.', got 'atom' ('#=') at 4:11 (doc_tutorial_L253.pl, line 4)",
    "load": "refused",
    "preds": null,
    "tests": null
   },
   "docs/tutorial.md#L264": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <work>/docs/doc_tutorial_L264.pl: doc_tutorial_L264.pl:2: syntax error (SyntaxIssue): Expected '.', got 'atom' ('#=') at 3:13 (doc_tutorial_L264.pl, line 2)",
+   "error": "PrologSyntaxError: Cannot import <work>/docs/doc_tutorial_L264.pl: doc_tutorial_L264.pl:2: syntax error (SyntaxIssue): Expected '.', got 'atom' ('#=') at 3:13 (doc_tutorial_L264.pl, line 3)",
    "load": "refused",
    "preds": null,
    "tests": null
@@ -1016,7 +1016,7 @@
   },
   "docs/tutorial.md#L333": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <work>/docs/doc_tutorial_L333.pl: doc_tutorial_L333.pl:1: syntax error (SyntaxIssue): Expected '.', got 'atom' ('#>') at 1:18 (doc_tutorial_L333.pl, line 1)",
+   "error": "PrologSyntaxError: Cannot import <work>/docs/doc_tutorial_L333.pl: doc_tutorial_L333.pl:1: syntax error (SyntaxIssue): Expected '.', got 'atom' ('#>') at 1:18 (doc_tutorial_L333.pl, line 1)",
    "load": "refused",
    "preds": null,
    "tests": null

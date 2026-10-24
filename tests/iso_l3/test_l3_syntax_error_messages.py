@@ -16,6 +16,9 @@ The native front end refuses a reader ``SyntaxIssue`` with a
   context(read_term/3, [line(L), column(C), expected(E), found(F)]))``,
   the same term ``read_term/3`` raises for the text (pinned against Scryer
   row by row in ``tests/iso/test_syntax_error_terms_scryer.py``).
+
+A refusal that is not a syntax error (a construct the front end does not
+lower, a directive it cannot carry out) stays a plain ``SyntaxError``.
 """
 
 from __future__ import annotations
@@ -112,10 +115,11 @@ def test_clausal_surface_gets_the_same_term(tmp_path, monkeypatch):
                                     "expected": ")", "found": "b"}
 
 
-def test_a_refusal_that_is_no_syntax_error_has_no_term(tmp_path, monkeypatch):
+def test_a_refusal_that_is_no_syntax_error_is_a_plain_syntax_error(
+        tmp_path, monkeypatch):
     err = _import_failure(tmp_path, monkeypatch, "l3_syn_f",
                           "f(1).\n:- initialization(f(1)).\n")
-    assert isinstance(err, PrologSyntaxError) and err.term is None
+    assert type(err) is SyntaxError
     assert err.lineno == 2 and err.offset == 1
 
 
