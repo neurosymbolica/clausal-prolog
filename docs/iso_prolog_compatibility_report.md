@@ -263,10 +263,6 @@ Not provided (calling one raises `existence_error(procedure, PI)`):
   of the writers (`write/2`, `writeq/2`, `write_canonical/2`,
   `write_term/3`);
 - **ISO term reading (8.14.1):** `read/1,2`, `read_term/2,3`;
-- **common non-ISO extras:** `term_to_atom/2`, `atom_to_term/3`,
-  `atom_string/2`, `sort/4`, `predsort/3`, `ignore/1`, `print/1`.
-- **ISO character conversion (8.14.5–8.14.6):** `char_conversion/2`,
-  `current_char_conversion/2`;
 - **common non-ISO extras:** `ignore/1`, left out by design: it is
   committed choice (ruling D13).
 
