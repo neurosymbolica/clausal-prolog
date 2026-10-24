@@ -3857,8 +3857,10 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
     ``write_canonical/1`` does not come through here at all — it has its own
     renderer (:func:`term_canonical`).
     """
-    if not isinstance(t, (str, bytes, int, float)):
-        t = deref(t)
+    # No deref here: the display writer prints a Var -- bound or not -- as
+    # ``_`` (``_term_str_body``), and the test runner's failure reports pin
+    # that spelling (``tests/golden/runner_unchanged_*``).  The cycle guard
+    # below keys on the object exactly as it is handed in.
     if not ((type(t) is tuple and len(t) > 1 and not is_chars(t))
             or (isinstance(t, list) and t) or isinstance(t, (SegList, SegString))
             or hasattr(type(t), "__dataclass_fields__")):

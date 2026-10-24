@@ -258,6 +258,21 @@ class TestTermStr:
             s = term_str(NodeClass(left=1, right=2))
             assert expected in s, f"{NodeClass.__name__}: expected {expected!r} in {s!r}"
 
+    def test_bound_var_still_prints_anonymous(self):
+        # The display writer does not read through a binding: a Var, bound
+        # or not, prints ``_``.  The cycle guard added on 2026-10-24 once
+        # dereferenced its argument first, which turned the test runner's
+        # descent leaf ``(_ < 3)`` into ``(5 < 3)`` (the goldens
+        # ``tests/golden/runner_unchanged_*`` pin the ``_`` spelling).
+        from clausal.logic.variables import Trail, unify
+
+        n = Var()
+        trail = Trail()
+        assert unify(n, 5, trail)
+        assert term_str(n) == "_"
+        assert term_str(Lt(left=n, right=3)) == "(_ < 3)"
+        assert term_str(("f", n)) == "f(_)"
+
 
 class TestCellTermStr:
     """P3-2 Task 7: cells (the tagged-tuple compound representation,
