@@ -448,14 +448,14 @@
    },
    "tests": null
   },
-  "docs/python_integration.md#L536": {
+  "docs/python_integration.md#L560": {
    "collect_error": null,
    "error": null,
    "load": "ok",
    "preds": {
     "name_of/1": {
      "after": [],
-     "error": "LogicException: Uncaught logic exception: error(existence_error(procedure,greeting/2),greeting/2): phrase/2: no procedure greeting/2 is defined in module _clausal_test_doc_python_integration_L536"
+     "error": "LogicException: Uncaught logic exception: error(existence_error(procedure,greeting/2),greeting/2): phrase/2: no procedure greeting/2 is defined in module _clausal_test_doc_python_integration_L560"
     }
    },
    "tests": null
@@ -2892,7 +2892,7 @@
   "docs/importing_prolog.md#L916": "c9153ed0660c0d7b",
   "docs/index.md#L94": "40946e3752c3cd9a",
   "docs/prolog_translation.md#L33": "8848f32154e44b13",
-  "docs/python_integration.md#L536": "499dfb388eedb3e8",
+  "docs/python_integration.md#L560": "25bd7948ff849051",
   "docs/reified_ite.md#L362": "4d7ea54cae7f00d3",
   "docs/testing.md#L92": "6ece34f4b33a3ac9",
   "docs/tutorial.md#L114": "5b617cd00de4c21f",
