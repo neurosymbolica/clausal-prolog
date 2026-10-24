@@ -560,13 +560,22 @@ class TestCToolkitGuards:
         _deref_walk(x)  # must not segfault
 
     def test_deref_walk_depth_guard_graceful(self):
+        # Past its depth cap the C walker used to raise RecursionError; since
+        # the 2026-10-24 cyclic-term work it falls back to the iterative
+        # walker (``clausal.logic.rational_walk``) and returns the whole
+        # term.  Graceful still means no crash -- and now a complete copy.
         import clausal.logic.tabling
         from clausal.logic.solve import _deref_walk
         x = []
         for _ in range(60000):
             x = [x]
-        with pytest.raises(RecursionError):
-            _deref_walk(x)
+        y = _deref_walk(x)
+        depth = 0
+        while y:
+            assert type(y) is list and len(y) == 1
+            y = y[0]
+            depth += 1
+        assert depth == 60000 and y == []
 
     def test_subgoal_key_depth_guard_graceful(self):
         from clausal.logic.tabling import _normalize_for_key

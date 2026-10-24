@@ -14,8 +14,11 @@ import sys
 import textwrap
 import threading
 import weakref
+from pathlib import Path
 
 import pytest
+
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
 
 from clausal.logic.atoms import char_atom, mint
 from clausal.logic.cells import chars
@@ -517,43 +520,45 @@ class TestUnifyModes:
 
 
 class TestDepthAndCycles:
-    def test_max_depth_recursion_error_is_clean(self):
-        """Nesting past MAX_DEPTH raises RecursionError — no crash (subprocess)."""
-        code = textwrap.dedent("""
-            from clausal.logic.variables import Trail, unify
-            l1, l2 = 0, 0
-            for _ in range(51000):
-                l1 = [l1]; l2 = [l2]
-            t = Trail()
-            try:
-                unify(l1, l2, t)
-                print("NO-ERROR")
-            except RecursionError:
-                print("CLEAN")
-        """)
+    # Both cases used to pin a RecursionError at the C depth guard.  Since
+    # the 2026-10-24 cyclic-term work, unification past depth 1000 hands
+    # over to the rational-tree unify in ``variables/_variables.c``, so a
+    # deep pair and a cyclic pair both get an ANSWER.  The guarding intent
+    # stays: each runs in a subprocess under a timeout, so a crash, a hang
+    # or an unbounded walk fails the test instead of the session.
+
+    def _run(self, code):
         p = subprocess.run(
-            [sys.executable, "-c", code], capture_output=True, text=True,
-            timeout=180, env={"PYTHONPATH": "/workspace/clausal-bug-fix"},
+            [sys.executable, "-c", textwrap.dedent(code)],
+            capture_output=True, text=True, timeout=180,
+            env={"PYTHONPATH": _REPO_ROOT},
         )
-        assert p.returncode == 0 and p.stdout.strip() == "CLEAN"
+        assert p.returncode == 0, p.stderr
+        return p.stdout.split()
+
+    def test_max_depth_recursion_error_is_clean(self):
+        """Nesting past MAX_DEPTH unifies (2026-10-24) -- no crash, and the
+        answer is right both ways."""
+        out = self._run("""
+            from clausal.logic.variables import Trail, unify
+            l1, l2, l3 = 0, 0, 1
+            for _ in range(51000):
+                l1 = [l1]; l2 = [l2]; l3 = [l3]
+            print(unify(l1, l2, Trail()), unify(l1, l3, Trail()))
+        """)
+        assert out == ["True", "False"]
 
     def test_cyclic_unify_raises_cleanly(self):
-        code = textwrap.dedent("""
+        """Two cyclic lists unify as rational trees (2026-10-24): equal
+        ones succeed, different ones fail, and both terminate."""
+        out = self._run("""
             from clausal.logic.variables import Trail, unify
-            t = Trail()
             l1 = [1]; l1.append(l1)
             l2 = [1]; l2.append(l2)
-            try:
-                unify(l1, l2, t)
-                print("NO-ERROR")
-            except RecursionError:
-                print("CLEAN")
+            l3 = [2]; l3.append(l3)
+            print(unify(l1, l2, Trail()), unify(l1, l3, Trail()))
         """)
-        p = subprocess.run(
-            [sys.executable, "-c", code], capture_output=True, text=True,
-            timeout=180, env={"PYTHONPATH": "/workspace/clausal-bug-fix"},
-        )
-        assert p.returncode == 0 and p.stdout.strip() == "CLEAN"
+        assert out == ["True", "False"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
