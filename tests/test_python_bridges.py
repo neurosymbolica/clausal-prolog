@@ -1555,7 +1555,10 @@ def test_clause_code_runs_on_the_engine_builtins_only(proj):
                     ("clausal", {"fromlist": ["pb_no_such_submodule"]})):
         with pytest.raises(ImportError):
             imp(bad, None, None, kw.get("fromlist", ()), kw.get("level", 0))
-    code = compile("open('/etc/hostname')", "<t>", "eval")
+    # `exec`, not `open`: open/3,4 is a Clausal builtin (2026-10-24), so
+    # the bare name resolves to the builtin's goal term in a clause's
+    # globals -- a term constructor, not Python's open.
+    code = compile("exec('1')", "<t>", "eval")
     with pytest.raises(NameError):
         eval(code, dict(fn.__globals__))
 
@@ -1563,14 +1566,16 @@ def test_clause_code_runs_on_the_engine_builtins_only(proj):
 #: Item 4: each lowering path not yet reviewed, with an attempt to reach
 #: non-allowlisted Python through it.
 PATH_EXPLOITS = {
-    "comprehension_iter": "v(M) <- (M is [x for x in open('/etc/hostname')])",
+    # `exec` stands for the Python builtin here (open/3,4 is a Clausal
+    # builtin since 2026-10-24, so a bare `open` is its goal term).
+    "comprehension_iter": "v(M) <- (M is [x for x in exec('1')])",
     "comprehension_elt": "v(M) <- (M is [getattr(x, 'a') for x in [1]])",
     "comprehension_if": "v(M) <- (M is [x for x in [1] if eval('1')])",
     "comprehension_module": "v(M) <- (M is [units.os for x in [1]])",
     "fstring_call": "v(S) <- (S is f\"{len([1])}\")",
     "fstring_attr": "v(S) <- (S is f\"{S.__class__}\")",
     "fstring_spec": "v(S) <- (S is f\"{S:{len([1])}}\")",
-    "lambda_goal": "v(F) <- (F is ((X) <- (open(X))))",
+    "lambda_goal": "v(F) <- (F is ((X) <- (exec(X))))",
     "lambda_module": "v(F) <- (F is ((X) <- (X is units.os)))",
     "lambda_nested": "v(F) <- (F is ((X) <- (call((Y) <- (eval(Y)), X))))",
 }

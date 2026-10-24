@@ -38,6 +38,7 @@ In the sandbox every predicate here is refused (``clausal.sandbox``'s
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from clausal.logic import streams as _st
@@ -53,6 +54,42 @@ from clausal.logic.builtins.chars import _atom_to_str
 
 
 # ── argument helpers ────────────────────────────────────────────────────────
+
+
+@contextlib.contextmanager
+def io_errors(ctx: str):
+    """THE place an OS-level failure of a stream operation becomes a Prolog
+    error: ``OSError`` (a full disk, a closed descriptor), ``ValueError``
+    (a Python file closed underneath the stream, stdin captured by a test
+    harness) and ``AttributeError`` (``sys.stdin`` set to None) raise
+    ``error(system_error(io), PI)`` with the builtin as the context."""
+    try:
+        yield
+    except LogicException:
+        raise
+    except (OSError, ValueError, AttributeError) as e:
+        raise LogicException(system_error(
+            "io", f"{ctx}: {type(e).__name__}: {e}")) from None
+
+
+def source_sink_name(term) -> "str | None":
+    """The file name a source/sink argument denotes: an atom's spelling,
+    or (as Scryer accepts) the text of a string, a list of one-char atoms
+    or a list of character codes; None for anything else."""
+    name = _atom_to_str(term)
+    if name is not None and term != []:
+        return name
+    from clausal.logic.cells import is_chars, chars_text  # noqa: PLC0415
+    if is_chars(term):
+        return chars_text(term)
+    if type(term) is list and term:
+        items = [deref(x) for x in term]
+        if all(type(x) is str and len(x) == 1 for x in items):
+            return "".join(items)
+        if all(type(x) is int and not isinstance(x, bool)
+               and 0 <= x <= 0x10FFFF for x in items):
+            return "".join(map(chr, items))
+    return None
 
 
 def resolve_stream(term, ctx: str) -> _st.Stream:
@@ -253,7 +290,7 @@ def _open(source, mode, stream, options, trail):
     mode_name = _atom_to_str(mode)
     if mode_name is None:
         raise LogicException(type_error("atom", mode, _OPEN))
-    file_name = _atom_to_str(source)
+    file_name = source_sink_name(source)
     if file_name is None:
         raise LogicException(domain_error("source_sink", source, _OPEN))
     if mode_name not in _st.MODES:
@@ -267,6 +304,9 @@ def _open(source, mode, stream, options, trail):
     for o in opts:
         if type(o) is tuple and len(o) == 2:
             name, arg = o[0], deref(o[1])
+            if is_var(arg) and name in ("type", "alias", "eof_action", "reposition"):
+                # ISO 8.11.5.3 a (a partial option): Scryer and SWI agree.
+                raise LogicException(instantiation_error(_OPEN))
             if name == "type" and arg in ("text", "binary"):
                 kind = arg
                 continue
@@ -282,13 +322,12 @@ def _open(source, mode, stream, options, trail):
                 reposition = _bool_atom(arg)
                 continue
         raise LogicException(domain_error("stream_option", o, _OPEN))
-    for alias in aliases:
-        if _st.alias_in_use(alias):
-            raise LogicException(permission_error(
-                "open", "source_sink", ("alias", alias), _OPEN))
     try:
         s = _st.open_stream(file_name, mode_name, kind=kind, aliases=aliases,
                             eof_action=eof_action, reposition=reposition)
+    except _st.AliasInUse as e:
+        raise LogicException(permission_error(
+            "open", "source_sink", ("alias", e.alias), _OPEN)) from None
     except _st.OpenFailed as e:
         if e.why == "existence":
             raise LogicException(existence_error(
@@ -334,10 +373,8 @@ def _close(stream, options):
                 continue
         raise LogicException(domain_error("close_option", o, _CLOSE))
     s = resolve_stream(stream, _CLOSE)
-    try:
+    with io_errors(_CLOSE):
         _st.close_stream(s, force=force)
-    except OSError as e:
-        raise LogicException(system_error("io", f"{_CLOSE}: {e}")) from None
     yield None
 
 
@@ -406,8 +443,10 @@ def _set_output__1(stream, trail, k):
 
 @_builtin("flush_output", 0)
 def _flush_output__0(trail, k):
-    """flush_output -- ISO 8.11.7: flush the current output stream."""
-    _st.current_output().flush()
+    """flush_output -- ISO 8.11.7: flush the current output stream; an OS
+    error (a full disk) is ``system_error(io)``."""
+    with io_errors("flush_output/0"):
+        _st.current_output().flush()
     yield None
 
 
@@ -419,14 +458,17 @@ def _flush_output__1(stream, trail, k):
     if not s.is_output:
         raise LogicException(permission_error(
             "output", "stream", stream, "flush_output/1"))
-    s.flush()
+    with io_errors("flush_output/1"):
+        s.flush()
     yield None
 
 
 @_builtin("at_end_of_stream", 0)
 def _at_end_of_stream__0(trail, k):
     """at_end_of_stream -- ISO 8.11.8, of the current input stream."""
-    if _st.current_input().end_of_stream() != "not":
+    with io_errors("at_end_of_stream/0"):
+        at_end = _st.current_input().end_of_stream() != "not"
+    if at_end:
         yield None
 
 
@@ -436,7 +478,9 @@ def _at_end_of_stream__1(stream, trail, k):
     property ``end_of_stream(at)`` or ``end_of_stream(past)`` (so it fails
     for an output stream, which has neither)."""
     s = resolve_stream(deref(stream), "at_end_of_stream/1")
-    if s.is_input and s.end_of_stream() != "not":
+    with io_errors("at_end_of_stream/1"):
+        at_end = s.is_input and s.end_of_stream() != "not"
+    if at_end:
         yield None
 
 
@@ -459,8 +503,10 @@ def _set_stream_position__2(stream, position, trail, k):
         raise LogicException(permission_error("reposition", "stream", stream, ctx))
     try:
         s.seek_to(position)
-    except (OSError, ValueError) as e:
-        raise LogicException(system_error("io", f"{ctx}: {e}")) from None
+    except (OSError, ValueError):
+        # A well-shaped position the file refuses (a hand-built cookie):
+        # ISO 8.11.9.3 b, not a position of this stream.
+        raise LogicException(domain_error("stream_position", position, ctx)) from None
     yield None
 
 
@@ -520,7 +566,9 @@ def _stream_property__2(stream, prop, trail, k):
             raise LogicException(domain_error("stream", stream, ctx))
         candidates = [resolve_stream(stream, ctx)]
     for s in candidates:
-        for p in _properties(s):
+        with io_errors(ctx):
+            props = _properties(s)
+        for p in props:
             mark = trail.mark()
             # A given stream (a term or an alias) is left as given.
             if (not is_var(stream) or unify(stream, s.term, trail)) \
@@ -536,7 +584,8 @@ def _get_char(stream_term, char, trail, ctx, *, peek: bool):
     s = input_text(stream_term, ctx)
     _char_of(char, ctx, allow_eof=True)
     check_past_eof(s, stream_term, ctx)
-    c = s.peek() if peek else s.get()
+    with io_errors(ctx):
+        c = s.peek() if peek else s.get()
     return _unify_yield(char, "end_of_file" if c is None else c, trail)
 
 
@@ -570,7 +619,8 @@ def _get_code(stream_term, code, trail, ctx, *, peek: bool):
     s = input_text(stream_term, ctx)
     _check_in_code(code, ctx)
     check_past_eof(s, stream_term, ctx)
-    c = s.peek() if peek else s.get()
+    with io_errors(ctx):
+        c = s.peek() if peek else s.get()
     return _unify_yield(code, -1 if c is None else ord(c), trail)
 
 
@@ -603,7 +653,8 @@ def _peek_code__1(code, trail, k):
 def _put_char(stream_term, char, ctx):
     s = output_text(stream_term, ctx)
     _char_of(char, ctx, allow_eof=False)
-    s.write(char)
+    with io_errors(ctx):
+        s.write(char)
     yield None
 
 
@@ -622,7 +673,8 @@ def _put_char__1(char, trail, k):
 def _put_code(stream_term, code, ctx):
     s = output_text(stream_term, ctx)
     c = _check_out_code(code, ctx)
-    s.write(chr(c))
+    with io_errors(ctx):
+        s.write(chr(c))
     yield None
 
 
@@ -641,7 +693,9 @@ def _put_code__1(code, trail, k):
 @_builtin("nl", 1)
 def _nl__1(stream, trail, k):
     """nl(Stream) -- ISO 8.12.3: a newline on Stream."""
-    output_text(deref(stream), "nl/1").write("\n")
+    s = output_text(deref(stream), "nl/1")
+    with io_errors("nl/1"):
+        s.write("\n")
     yield None
 
 
@@ -654,7 +708,8 @@ def _tab__2(stream, n, trail, k):
         raise LogicException(instantiation_error("tab/2"))
     if type(n_val) is not int or isinstance(n_val, bool):
         raise LogicException(type_error("integer", n_val, "tab/2"))
-    s.write(" " * n_val)
+    with io_errors("tab/2"):
+        s.write(" " * n_val)
     yield None
 
 
@@ -665,7 +720,8 @@ def _get_byte(stream_term, byte, trail, ctx, *, peek: bool):
     s = input_binary(stream_term, ctx)
     _check_in_byte(byte, ctx)
     check_past_eof(s, stream_term, ctx)
-    b = s.peek() if peek else s.get()
+    with io_errors(ctx):
+        b = s.peek() if peek else s.get()
     return _unify_yield(byte, -1 if b is None else b, trail)
 
 
@@ -698,7 +754,8 @@ def _peek_byte__1(byte, trail, k):
 def _put_byte(stream_term, byte, ctx):
     s = output_binary(stream_term, ctx)
     b = _check_out_byte(byte, ctx)
-    s.write_bytes(bytes((b,)))
+    with io_errors(ctx):
+        s.write_bytes(bytes((b,)))
     yield None
 
 
@@ -717,4 +774,5 @@ def _put_byte__1(byte, trail, k):
 __all__ = [
     "resolve_stream", "output_text", "output_binary", "input_text",
     "input_binary", "check_past_eof", "current_output_text", "option_items",
+    "io_errors", "source_sink_name",
 ]

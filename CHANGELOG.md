@@ -175,7 +175,11 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `user_output` has `mode(append)`, `set_output(user_output)` switches
   back, closing the current stream restores the standard one, and layout
   or comments before the end of the stream read as `end_of_file`). Unit
-  tests: `tests/test_streams.py`, `tests/test_read_term.py`. In the
+  tests: `tests/test_streams.py`, `tests/test_read_term.py`. A source/sink
+  may also be a string or a char/code list (as Scryer); an OS failure after
+  the open (a full disk on `flush_output`, a file closed underneath) is
+  `error(system_error(io), PI)`; a standard stream is flushed after each
+  write only on a terminal. In the
   sandbox every stream builtin is refused like the writers
   (`permission_error(access, private_procedure, PI)`). Not provided:
   `read_term`'s non-ISO `syntax_errors/1` option, `char_conversion/2`,

@@ -15,9 +15,17 @@ or binary file.  Input keeps a small push-back buffer for ``peek_char/2``
 and for the term reader's read-ahead; positions are the opaque term
 ``'$stream_position'(Chars, Lines, LinePos, Cookie)`` where *Cookie* is the
 Python file's ``tell()`` cookie, so ``set_stream_position/2`` is one
-``seek``.  This module raises no Prolog errors: the builtins in
+``seek``.  The current input and output are PROCESS-GLOBAL (as ISO has
+them), not thread-local: two threads that ``set_output/1`` share one
+setting.  This module raises no Prolog errors of its own: the builtins in
 ``clausal/logic/builtins/streams_io.py`` check the arguments and the
-stream's mode and turn a failed open into the ISO error term.
+stream's mode, turn a failed open into the ISO error term, and wrap an
+OS error from a stream operation (``OSError``/``ValueError``/
+``AttributeError`` -- a file closed underneath, a stdin that is None, a
+full disk) into ``error(system_error(io), PI)`` in one place
+(``io_errors``).  A standard stream is flushed after each write only when
+it is a terminal; a file stream is flushed by ``flush_output`` and
+``close``.
 """
 
 from __future__ import annotations
@@ -45,7 +53,7 @@ class Stream:
     __slots__ = ("id", "term", "mode", "kind", "file_name", "aliases",
                  "eof_action", "reposition", "std", "_f", "_buf",
                  "past_eof", "char_count", "line_count", "line_pos",
-                 "_anchor", "closed")
+                 "_anchor", "closed", "_tty")
 
     def __init__(self, ident: int, f, *, mode: str, kind: str = "text",
                  file_name=None, aliases=(), eof_action: str = "eof_code",
@@ -66,6 +74,7 @@ class Stream:
         self.line_count = 0
         self.line_pos = 0
         self.closed = False
+        self._tty = None             # (file object, is a terminal) cache
         cookie = 0
         if std is None and f is not None:
             try:
@@ -113,28 +122,50 @@ class Stream:
 
     # ── output ────────────────────────────────────────────────────────────
 
+    def _is_tty(self, f) -> bool:
+        """Whether the standard stream's current file object is a terminal
+        (cached per object: ``sys.stdout`` may be replaced at any time)."""
+        cache = self._tty
+        if cache is not None and cache[0] is f:
+            return cache[1]
+        isatty = getattr(f, "isatty", None)
+        try:
+            tty = bool(isatty()) if isatty is not None else False
+        except (OSError, ValueError):
+            tty = False
+        self._tty = (f, tty)
+        return tty
+
     def write(self, text: str) -> None:
-        """Write *text* (a str) to a text stream.  Standard streams are
-        flushed after each write, as the writers always did."""
+        """Write *text* (a str) to a text stream.  A standard stream on a
+        terminal is flushed after each write (so a prompt appears); a
+        standard stream on a pipe or file is left to its own buffering,
+        and a file stream is counted for its position."""
         f = self.fileobj
         f.write(text)
-        if self.std is not None:
-            f.flush()
-        self._count(text)
+        if self.std is None:
+            self._count(text)
+        elif self._is_tty(f):
+            flush = getattr(f, "flush", None)
+            if flush is not None:
+                flush()
 
     def write_bytes(self, data: bytes) -> None:
         f = self.fileobj
         f.write(data)
-        if self.std is not None:
-            f.flush()
-        self.char_count += len(data)
+        if self.std is None:
+            self.char_count += len(data)
+        elif self._is_tty(f):
+            flush = getattr(f, "flush", None)
+            if flush is not None:
+                flush()
 
     def flush(self) -> None:
-        f = self.fileobj
-        try:
-            f.flush()
-        except (OSError, ValueError, AttributeError):
-            pass
+        """Flush the stream; an OS error propagates (``flush_output/1``
+        reports it as ``system_error(io)``)."""
+        flush = getattr(self.fileobj, "flush", None)
+        if flush is not None:
+            flush()
 
     # ── input ─────────────────────────────────────────────────────────────
 
@@ -346,39 +377,54 @@ class OpenFailed(Exception):
         self.why = why
 
 
+class AliasInUse(Exception):
+    """``open/4`` asked for an alias another open stream has (checked and
+    registered under the table's lock, so two openers cannot both win)."""
+
+    def __init__(self, alias: str):
+        super().__init__(alias)
+        self.alias = alias
+
+
 def open_stream(file_name: str, mode: str, *, kind: str = "text",
                 aliases=(), eof_action: str = "eof_code",
                 reposition=None) -> Stream:
     """Open *file_name* and register the stream.  *reposition* None means
     "if the file allows it" (a seekable file not opened for append).
-    Raises :class:`OpenFailed`, or ``ValueError("reposition")`` when
-    ``reposition(true)`` was asked of a stream that cannot be repositioned
-    (the caller's ``permission_error(open, source_sink, reposition(true))``).
+    Raises :class:`OpenFailed`, :class:`AliasInUse`, or
+    ``ValueError("reposition")`` when ``reposition(true)`` was asked of a
+    stream that cannot be repositioned (the caller's
+    ``permission_error(open, source_sink, reposition(true))``).
     """
     pymode = {"read": "r", "write": "w", "append": "a"}[mode]
-    try:
-        if kind == "binary":
-            f = open(file_name, pymode + "b")
-        else:
-            f = open(file_name, pymode, encoding="utf-8", newline="")
-    except (FileNotFoundError, NotADirectoryError):
-        raise OpenFailed("existence") from None
-    except IsADirectoryError:
-        raise OpenFailed("existence" if mode == "read" else "permission") from None
-    except OSError:
-        raise OpenFailed("permission") from None
-    try:
-        seekable = bool(f.seekable())
-    except (OSError, ValueError):
-        seekable = False
-    if reposition is None:
-        # An append stream is not repositioned unless asked (Scryer).
-        reposition = seekable and mode != "append"
-    elif reposition and not seekable:
-        f.close()
-        raise ValueError("reposition")
     global _next_id
     with _lock:
+        # The alias check and the registration under ONE lock: a second
+        # opener of the same alias sees it taken, not a race.
+        for a in aliases:
+            if a in _aliases:
+                raise AliasInUse(a)
+        try:
+            if kind == "binary":
+                f = open(file_name, pymode + "b")
+            else:
+                f = open(file_name, pymode, encoding="utf-8", newline="")
+        except (FileNotFoundError, NotADirectoryError):
+            raise OpenFailed("existence") from None
+        except IsADirectoryError:
+            raise OpenFailed("existence" if mode == "read" else "permission") from None
+        except OSError:
+            raise OpenFailed("permission") from None
+        try:
+            seekable = bool(f.seekable())
+        except (OSError, ValueError):
+            seekable = False
+        if reposition is None:
+            # An append stream is not repositioned unless asked (Scryer).
+            reposition = seekable and mode != "append"
+        elif reposition and not seekable:
+            f.close()
+            raise ValueError("reposition")
         ident = _next_id
         _next_id += 1
         s = Stream(ident, f, mode=mode, kind=kind, file_name=file_name,
@@ -428,7 +474,7 @@ def reset_for_tests() -> None:
 
 __all__ = [
     "STREAM_TAG", "POSITION_TAG", "MODES", "EOF_ACTIONS", "Stream",
-    "OpenFailed", "USER_INPUT", "USER_OUTPUT", "USER_ERROR",
+    "OpenFailed", "AliasInUse", "USER_INPUT", "USER_OUTPUT", "USER_ERROR",
     "current_input", "current_output", "set_current_input",
     "set_current_output", "by_term", "by_alias", "is_stream_term",
     "alias_in_use", "open_streams", "is_position_term", "open_stream",

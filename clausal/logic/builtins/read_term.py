@@ -42,7 +42,7 @@ from clausal.logic.exceptions import (
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.builtins._registry import _db_builtin
 from clausal.logic.builtins.streams_io import (
-    _culprit, check_past_eof, input_text, option_items,
+    _culprit, check_past_eof, input_text, io_errors, option_items,
 )
 
 _READ = "read_term/3"
@@ -125,8 +125,10 @@ def _string(text: str, dq: str):
 
 def _cons(cell, variables: dict, dq: str):
     """``'.'(H, T)`` chains as the engine spells them: a list when the tail
-    is one, a partial list when it is a variable, cons cells for any other
-    tail (an improper list, D50)."""
+    is one, a partial list when it is a variable, and for any other tail
+    (``[a|b]``) the cons cells ``'.'(H, T)`` themselves -- the engine's
+    spelling of an improper list, as the native front end lowers one
+    (``iso_l3._cons``; ``clausal/terms.py`` "an IMPROPER list")."""
     from clausal.tools.prolog_reader import VarRef  # noqa: PLC0415
     from clausal.terms import SegList, ConcreteSeg, VarSeg  # noqa: PLC0415
     heads = []
@@ -197,7 +199,8 @@ def _read_term(db, stream_term, term, options, trail):
     opts = _read_options(options)
     check_past_eof(s, stream_term, _READ)
     dq = flag_value(db, "double_quotes") if db is not None else "chars"
-    item = read_item(s)
+    with io_errors(_READ):
+        item = read_item(s)
     if item is EOF:
         s.past_eof = True
         value = "end_of_file"

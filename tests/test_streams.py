@@ -414,8 +414,9 @@ def test_open_option_shapes(mod, tmp_path):
     assert run(mod, ("open", f, "read", Var(), [("alias", "b1"), "junk"])) == \
         ("ERR", ("domain_error", "stream_option", "junk"))
     assert run(mod, ("open", f, "read", Var(), [Var()])) == ("ERR", "instantiation_error")
-    r = run(mod, ("open", f, "read", Var(), [("alias", Var())]))
-    assert r[0] == "ERR" and r[1][:2] == ("domain_error", "stream_option")
+    # an option with an unbound argument: ISO 8.11.5.3 a, as Scryer and SWI
+    assert run(mod, ("open", f, "read", Var(), [("alias", Var())])) == ("ERR", "instantiation_error")
+    assert run(mod, ("open", f, "read", Var(), [("type", Var())])) == ("ERR", "instantiation_error")
 
 
 def test_byte_predicates(mod, tmp_path):
@@ -470,6 +471,127 @@ def test_open_errors(mod, tmp_path):
     assert run(mod, ("open", Var(), "read", Var())) == ("ERR", "instantiation_error")
 
 
+def test_source_sink_as_string_or_code_list(mod, tmp_path):
+    f = tmp_path / "named.txt"
+    f.write_text("x", encoding="utf-8")
+    c = Var()
+    for name in (("$chars", os.fspath(f)), list(os.fspath(f)),
+                 [ord(ch) for ch in os.fspath(f)]):
+        r = opened(mod, name, "read")
+        assert run(mod, ("get_char", r, c), c) == ["x"]
+        fn = Var()
+        assert run(mod, ("stream_property", r, ("file_name", fn)), fn) == [os.fspath(f)]
+        run(mod, ("close", r))
+    assert run(mod, ("open", [], "read", Var())) == ("ERR", ("domain_error", "source_sink", []))
+    assert run(mod, ("open", [1, "a"], "read", Var())) == \
+        ("ERR", ("domain_error", "source_sink", [1, "a"]))
+
+
+def test_flush_output_reports_an_os_error(mod):
+    if not os.path.exists("/dev/full"):
+        pytest.skip("no /dev/full")
+    w = opened(mod, "/dev/full", "write")
+    assert run(mod, ("write", w, "x")) is True
+    r = run(mod, ("flush_output", w))
+    assert r[0] == "ERR" and r[1] == ("system_error", "io"), r
+    assert run(mod, ("set_output", w)) is True
+    r = run(mod, "flush_output")
+    assert r[0] == "ERR" and r[1] == ("system_error", "io"), r
+    run(mod, ("set_output", "user_output"))
+    assert run(mod, ("close", w, [("force", True)])) is True
+
+
+def test_a_file_closed_underneath_is_a_system_error(mod, tmp_path):
+    f = tmp_path / "t.txt"
+    f.write_text("ab", encoding="utf-8")
+    r = opened(mod, os.fspath(f), "read")
+    st.by_term(r)._f.close()                      # the Python file, not the stream
+    c = Var()
+    for goal in (("get_char", r, c), ("peek_char", r, c), ("read", r, c),
+                 ("at_end_of_stream", r)):
+        res = run(mod, goal)
+        assert res[0] == "ERR" and res[1] == ("system_error", "io"), (goal, res)
+    assert run(mod, ("close", r, [("force", True)])) is True
+    w = opened(mod, os.fspath(f), "write")
+    st.by_term(w)._f.close()
+    for goal in (("write", w, "x"), ("nl", w), ("put_char", w, "x"), ("flush_output", w),
+                 ("write_term", w, "x", []), ("format", w, ("$chars", "x"), [])):
+        res = run(mod, goal)
+        assert res[0] == "ERR" and res[1] == ("system_error", "io"), (goal, res)
+    assert run(mod, ("close", w, [("force", True)])) is True
+
+
+def test_standard_streams_that_cannot_be_read_or_written(mod, monkeypatch):
+    monkeypatch.setattr(sys, "stdin", None)
+    c = Var()
+    for goal in (("get_char", "user_input", c), ("get_char", c), ("read", c)):
+        res = run(mod, goal)
+        assert res[0] == "ERR" and res[1] == ("system_error", "io"), (goal, res)
+
+    class Closed:
+        def write(self, text):
+            raise ValueError("I/O operation on closed file")
+    monkeypatch.setattr(sys, "stdout", Closed())
+    res = run(mod, ("write", "x"))
+    assert res[0] == "ERR" and res[1] == ("system_error", "io"), res
+
+
+def test_writers_accept_a_flushless_stdout(mod, monkeypatch):
+    class Sink:
+        def __init__(self):
+            self.parts = []
+
+        def write(self, text):
+            self.parts.append(text)
+    sink = Sink()
+    monkeypatch.setattr(sys, "stdout", sink)
+    for goal in (("write", "a"), ("writeln", "b"), "nl", ("print_term", "c"),
+                 ("portray_clause", "d"), ("write_text", ("$chars", "e")),
+                 ("format", ("$chars", "f"), [])):
+        assert run(mod, goal) is True, goal
+    assert "".join(sink.parts) == "ab\n\nc\nd\nef"
+
+
+def test_standard_streams_flush_only_a_terminal(mod, monkeypatch):
+    class Sink:
+        def __init__(self, tty):
+            self.tty = tty
+            self.flushes = 0
+
+        def write(self, text):
+            pass
+
+        def flush(self):
+            self.flushes += 1
+
+        def isatty(self):
+            return self.tty
+    for tty, flushes in ((False, 0), (True, 2)):
+        sink = Sink(tty)
+        monkeypatch.setattr(sys, "stdout", sink)
+        run(mod, ("write", "x"))
+        run(mod, "nl")
+        assert sink.flushes == flushes
+
+
+def test_a_hand_built_position_is_a_domain_error(mod, tmp_path):
+    f = tmp_path / "t.txt"
+    f.write_text("abc", encoding="utf-8")
+    r = opened(mod, os.fspath(f), "read")
+    bad = ("$stream_position", 1, 0, 1, -7)
+    assert run(mod, ("set_stream_position", r, bad)) == \
+        ("ERR", ("domain_error", "stream_position", bad))
+    run(mod, ("close", r))
+
+
+def test_alias_check_and_registration_are_one_step(tmp_path):
+    f = os.fspath(tmp_path / "a.txt")
+    s = st.open_stream(f, "write", aliases=["one"])
+    with pytest.raises(st.AliasInUse):
+        st.open_stream(f, "write", aliases=["one"])
+    st.close_stream(s)
+
+
 # ── surfaces ────────────────────────────────────────────────────────────────
 
 
@@ -515,7 +637,7 @@ def test_clausal_program_uses_streams(tmp_path, capsys):
         main :-
             open('{f}', write, W), write(W, hello(world)), write(W, '.'), nl(W), close(W),
             open('{f}', read, R), copy_chars(R, user_output), close(R),
-            open('{f}', read, R2), read(R2, T), close(R2), T = hello(X), write(X), nl.
+            open("{f}", read, R2), read(R2, T), close(R2), T = hello(X), write(X), nl.
         :- end_module(clausal_streams).
         """)
     for _ in solve("main", mod, Trail()):
