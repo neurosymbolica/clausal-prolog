@@ -142,6 +142,44 @@ surface described in [docs/public-api.md](docs/public-api.md).
   is read with. Pinned row by row against Scryer's toplevel in
   `tests/iso/test_answer_printer_brackets_scryer.py`.
 
+- **ISO stream I/O and term reading (ISO 13211-1 §8.11–8.14.1) are
+  builtins** (2026-10-24; operator ruling 2026-10-24: an ISO non-conformity
+  is a bug). Every one of these raised `existence_error(procedure, PI)`
+  before. Streams: `open/3,4` (modes `read`/`write`/`append`; options
+  `type(text|binary)`, `alias(A)`, `eof_action(error|eof_code|reset)`,
+  `reposition(Bool)`), `close/1,2` (`force(Bool)`), `current_input/1`,
+  `current_output/1`, `set_input/1`, `set_output/1`, `flush_output/0,1`,
+  `at_end_of_stream/0,1`, `set_stream_position/2`, `stream_property/2`
+  (`file_name`, `mode`, `input`, `output`, `alias`, `position`,
+  `end_of_stream(at|past|not)`, `eof_action`, `reposition`, `type`),
+  `get_char/1,2`, `get_code/1,2`, `peek_char/1,2`, `peek_code/1,2`,
+  `put_char/1,2`, `put_code/1,2`, `get_byte/1,2`, `peek_byte/1,2`,
+  `put_byte/1,2`, `nl/1`, and the writers' stream forms `write/2`,
+  `writeq/2`, `write_canonical/2`, `write_term/3` (plus the extras `tab/2`
+  and `format/3`). Reading: `read/1,2` and `read_term/2,3` with
+  `variables/1`, `variable_names/1` and `singletons/1`, through the native
+  ISO reader, honouring the run-time operator table and the reading
+  module's `double_quotes` flag; `end_of_file` at the end of the stream,
+  `error(syntax_error(_), _)` for a term that does not read, resyncing on
+  the end token. A stream term is the opaque `'$stream'(N)`; `user_input`,
+  `user_output` and `user_error` are predefined and stand for the
+  process's `sys.stdin`/`sys.stdout`/`sys.stderr` *at each use*, so the
+  one-argument writers write to the current output, by default the
+  process's stdout, exactly as before (`write/1` on a large term measured
+  within noise of its old time). Error terms are ISO's, checked row by
+  row against Scryer (`tests/iso/test_streams_scryer.py`,
+  `tests/iso/test_read_term_scryer.py`); where the Scryer build departs
+  from the standard's text the ISO answer is kept and pinned
+  (`ISO_ROWS` there: `domain_error(stream_or_alias, f(x))` for a compound,
+  `permission_error(input, stream, S)` naming the stream given,
+  `user_output` has `mode(append)`, `set_output(user_output)` switches
+  back, closing the current stream restores the standard one, and layout
+  or comments before the end of the stream read as `end_of_file`). Unit
+  tests: `tests/test_streams.py`, `tests/test_read_term.py`. In the
+  sandbox every stream builtin is refused like the writers
+  (`permission_error(access, private_procedure, PI)`). Not provided:
+  `read_term`'s non-ISO `syntax_errors/1` option, `char_conversion/2`,
+  `print/1,2`. See docs/builtins.md "I/O".
 - **`1 = 1.0` fails: a number unifies only with a number of its own kind**
   (2026-10-23, operator ruling 2026-10-23; ISO 7.3). Unification of two
   ground non-container terms fell back to Python `==`, so an integer and a

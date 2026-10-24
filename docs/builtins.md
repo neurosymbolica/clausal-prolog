@@ -2740,7 +2740,7 @@ Print `Term` to stdout under an ISO **write-option list** (ISO 8.14.2), without 
 | `write_term([a, b], [])` | `[a,b]` |
 | `write_term('a b', [quoted(true)])` | `'a b'` |
 
-`write_term(Term, [])` is exactly `write/1` and `write_term(Term, [quoted(true)])` is exactly `writeq/1`. `write_term(Term, [quoted(true), double_quotes(true)])` gives a string the *spelling* `print_term/1` and `term_to_string/2` give it; those two additionally keep the display comma spacing, which this writer, being ISO, does not. An unrecognised option raises `domain_error(write_option, Opt)`; a non-list `Options` raises `type_error(list, Options)`; an unbound or partial `Options` (`[quoted(true) | _]`) raises `instantiation_error`. Streams are out of scope, so there is no `write_term/3`, and `max_depth(N)` is not supported.
+`write_term(Term, [])` is exactly `write/1` and `write_term(Term, [quoted(true)])` is exactly `writeq/1`. `write_term(Term, [quoted(true), double_quotes(true)])` gives a string the *spelling* `print_term/1` and `term_to_string/2` give it; those two additionally keep the display comma spacing, which this writer, being ISO, does not. An unrecognised option raises `domain_error(write_option, Opt)`; a non-list `Options` raises `type_error(list, Options)`; an unbound or partial `Options` (`[quoted(true) | _]`) raises `instantiation_error`. `write_term/3` takes the output stream first (see [ISO streams](#iso-streams-open4-close2-stream_property2-and-the-stream-forms)); `max_depth(N)` is not supported.
 
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/io.py` (`write_term/2`)
@@ -2919,6 +2919,50 @@ Pretty-print a term with indentation for multi-line display using `term_pformat`
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/io.py` (`portray_clause/1`)
     **Python tests:** `tests/test_listing.py`
+
+---
+
+### ISO streams: `open/4`, `close/2`, `stream_property/2` and the stream forms
+```text
+open(+SourceSink, +Mode, -Stream)          open(+SourceSink, +Mode, -Stream, +Options)
+close(+Stream)                             close(+Stream, +Options)
+current_input(?Stream)                     current_output(?Stream)
+set_input(+Stream)                         set_output(+Stream)
+flush_output                               flush_output(+Stream)
+at_end_of_stream                           at_end_of_stream(+Stream)
+set_stream_position(+Stream, +Position)    stream_property(?Stream, ?Property)
+get_char(?Char)      get_char(+Stream, ?Char)        peek_char(?Char)   peek_char(+Stream, ?Char)
+get_code(?Code)      get_code(+Stream, ?Code)        peek_code(?Code)   peek_code(+Stream, ?Code)
+put_char(+Char)      put_char(+Stream, +Char)        put_code(+Code)    put_code(+Stream, +Code)
+get_byte(?Byte)      get_byte(+Stream, ?Byte)        peek_byte(?Byte)   peek_byte(+Stream, ?Byte)
+put_byte(+Byte)      put_byte(+Stream, +Byte)        nl(+Stream)        tab(+Stream, +N)
+write(+Stream, +Term)   writeq(+Stream, +Term)   write_canonical(+Stream, +Term)
+write_term(+Stream, +Term, +Options)   format(+Stream, +Format, +Args)
+```
+ISO 13211-1 §8.11–8.13 stream selection, control and character/byte I/O (since 2026-10-24). A stream term is the opaque `'$stream'(N)`; a stream may also be named by an **alias** atom. `user_input`, `user_output` and `user_error` are predefined and stand for the Python process's `sys.stdin`, `sys.stdout` and `sys.stderr` at each use (a captured or replaced `sys.stdout` is honoured), so `write/1` and the other one-argument writers write to the **current output**, by default `user_output`, exactly as before; `set_output/1` redirects them and closing the current output stream makes `user_output` current again (likewise `set_input/1`, `user_input`).
+
+`open(F, Mode, S, Options)` opens the file named by the atom `F` in mode `read`, `write` or `append`, UTF-8 for text. Options: `type(text)` (default) or `type(binary)`; `alias(A)`; `eof_action(error | eof_code | reset)` (default `eof_code`: reading past the end keeps answering `end_of_file`/`-1`; `error` raises `permission_error(input, past_end_of_stream, S)`; `reset` tries the file again, for one that grows); `reposition(Bool)` (default: true for a seekable file not opened for append). Positions are opaque terms from `stream_property(S, position(P))`; `set_stream_position(S, P)` needs `reposition(true)` (else `permission_error(reposition, stream, S)`). `stream_property/2` enumerates `file_name(F)`, `mode(M)`, `input`, `output`, `alias(A)`, `position(P)`, `end_of_stream(not | at | past)`, `eof_action(A)`, `reposition(B)` and `type(T)`; `user_input` has `mode(read)`, `eof_action(reset)`; `user_output` and `user_error` have `mode(append)` (ISO 7.10.2.11).
+
+`get_char/2` answers a one-char atom or `end_of_file`; `get_code/2` a code or `-1`; `get_byte/2` a byte or `-1` (binary streams only); the `peek_` forms leave the item in the stream. Closing a standard stream has no effect; closing any other invalidates its term and aliases (`existence_error(stream, S)` afterwards). The error terms are ISO's: an unbound stream is `instantiation_error`; neither an atom nor a stream term `domain_error(stream_or_alias, S)` (`current_input/1`, `current_output/1` and `stream_property/2` take no alias in that position and say `domain_error(stream, S)`); an unknown alias or a closed stream `existence_error(stream, S)`; the wrong direction `permission_error(input | output, stream, S)`; the wrong kind `permission_error(input | output, binary_stream | text_stream, S)`; `open/4`'s `domain_error(source_sink, F)`, `domain_error(io_mode, M)`, `domain_error(stream_option, O)`, `uninstantiation_error(S)`, `existence_error(source_sink, F)` and `permission_error(open, source_sink, F | alias(A) | reposition(true))`; `close/2`'s `domain_error(close_option, O)`; the character arguments' `type_error(in_character, C)`, `type_error(character, C)`, `type_error(integer, C)`, `representation_error(in_character_code | character_code)`, `type_error(in_byte, B)`, `type_error(byte, B)`. In the sandbox every one of these is refused like the writers (see [sandbox](sandbox.md)).
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/streams.py` (the table), `clausal/logic/builtins/streams_io.py`, the stream forms in `clausal/logic/builtins/io.py`
+    **Python tests:** `tests/test_streams.py`; against Scryer row by row: `tests/iso/test_streams_scryer.py`
+
+---
+
+### `read/1,2`, `read_term/2,3`
+```text
+read(?Term)                      read(+Stream, ?Term)
+read_term(?Term, +Options)       read_term(+Stream, ?Term, +Options)
+```
+ISO 8.14.1 term input (since 2026-10-24). Reads one term -- up to and including its end token `.` -- from a text input stream (the current input for the short forms) with the native ISO reader and unifies it with `Term`; the layout character after the end token stays in the stream. The term is read with the run-time operator table (`op/3` as a goal and a file's global `op/3` directives count; an `:- op(...)` *read as data* changes nothing) and `"..."` under the reading module's `double_quotes` flag (`chars`, `codes` or `atom`). The result is an ordinary term: `read(T), T = foo(X)` works, `[a,b|T]` reads as a partial list.
+
+Options: `variables(Vs)` (every variable, anonymous ones included, in first-occurrence order), `variable_names(Ps)` (`Name = Var` for each named variable, `_X` included, `_` not), `singletons(Ps)` (the named variables occurring once). At the end of the stream `Term` is `end_of_file` and the three lists are `[]`. A term that does not read is `error(syntax_error(Why), read_term/3)` and the stream is left after that item's end token, so the next read goes on with the next term; text without an end token at the end of the stream is a syntax error too, then `end_of_file`. An unbound or partial option list, or an unbound element, is `instantiation_error`; a non-list `type_error(list, L)`; anything else `domain_error(read_option, O)`. The stream errors are the stream predicates' (above); a binary stream is `permission_error(input, binary_stream, S)`. The non-ISO `syntax_errors/1` option is not provided.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/read_term.py`
+    **Python tests:** `tests/test_read_term.py`; against Scryer: `tests/iso/test_read_term_scryer.py`
 
 ---
 

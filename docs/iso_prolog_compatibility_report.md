@@ -195,8 +195,24 @@ Lists and sorting: `length/2`, `member/2`, `memberchk/2`, `append/3`,
 `nth0/3`, `nth1/3`, `between/3`, `sort/2`, `msort/2`, `keysort/2`,
 `compare/3`.
 Operators: `op/3`, `current_op/3`.
-Output: `write/1`, `writeq/1`, `write_canonical/1`, `write_term/2`, `nl/0`.
+Output: `write/1,2`, `writeq/1,2`, `write_canonical/1,2`, `write_term/2,3`,
+`nl/0,1`.
 `write_canonical([a])` writes `'.'(a,[])`, as Ulrich's tables expect.
+Streams (8.11–8.13, since 2026-10-24): `open/3,4`, `close/1,2`,
+`current_input/1`, `current_output/1`, `set_input/1`, `set_output/1`,
+`flush_output/0,1`, `at_end_of_stream/0,1`, `set_stream_position/2`,
+`stream_property/2`, `get_char/1,2`, `get_code/1,2`, `peek_char/1,2`,
+`peek_code/1,2`, `put_char/1,2`, `put_code/1,2`, `get_byte/1,2`,
+`peek_byte/1,2`, `put_byte/1,2`, with ISO's error terms (checked against
+Scryer in `tests/iso/test_streams_scryer.py`; where that build departs from
+the standard -- a compound stream argument, the culprit of `set_input/1`'s
+permission error, `user_output`'s mode, `set_output(user_output)`, closing
+the current stream -- the ISO answer is kept).
+Reading (8.14.1): `read/1,2`, `read_term/2,3` with `variables/1`,
+`variable_names/1`, `singletons/1`, honouring the operator table and the
+reading module's `double_quotes` flag (`tests/iso/test_read_term_scryer.py`;
+Scryer raises a syntax error for layout before the end of a stream, where
+ISO reads `end_of_file`).
 Database: `asserta/1`, `assertz/1`, `retract/1`, `retractall/1`,
 `abolish/1`, `clause/2`, `current_predicate/1` (a static predicate raises
 `permission_error(modify, static_procedure, PI)`).
@@ -281,6 +297,10 @@ Not provided (calling one raises `existence_error(procedure, PI)`):
 - **ISO term reading (8.14.1):** `read/1,2`, `read_term/2,3`;
 - **common non-ISO extras:** `ignore/1`, left out by design: it is
   committed choice (ruling D13).
+- **ISO character conversion (8.14.5–8.14.6):** `char_conversion/2`,
+  `current_char_conversion/2`;
+- **common non-ISO extras:** `term_to_atom/2`, `atom_to_term/3`,
+  `atom_string/2`, `sort/4`, `predsort/3`, `ignore/1`, `print/1`.
 
 ### Reading and writing
 
