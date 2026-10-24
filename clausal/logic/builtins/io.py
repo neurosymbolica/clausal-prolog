@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import numbers as _numbers
 from fractions import Fraction as _Fraction
-import sys as _sys
 
 from clausal.logic.atoms import (
     demangle,
@@ -51,6 +50,10 @@ from clausal.logic.builtins._helpers import _is_empty_list
 from clausal.logic.builtins._registry import (
     _builtin, _db_builtin, _DB_BUILTINS, BuiltinPredicate, BuiltinTerm,
 )
+from clausal.logic.builtins.streams_io import (
+    current_output_text as _current_output_text,
+    output_text as _output_text,
+)
 
 
 # ── The three writer families (spec §6.7, Task 15 item 4 as amended) ─────────
@@ -75,6 +78,12 @@ from clausal.logic.builtins._registry import (
 # (fix round 1, item 0, operator-ruled 2026-09-07).  The display family
 # keeps ``", "``.  Both come out of ``term_str``'s ``sep`` keyword;
 # ``write_canonical/1`` has its own renderer and is unaffected.
+
+
+def _out_println(ctx: str, text: str) -> None:
+    """*text* and a newline on the current output stream (``listing/1``,
+    ``portray_clause/1``)."""
+    _current_output_text(ctx).write(text + "\n")
 
 
 def _format_term_as_text(val):
@@ -222,8 +231,17 @@ def _write__1(term, trail, k):
     item 4 as amended, 2026-09-07).
     """
     from clausal.logic.solve import _deref_walk
-    _sys.stdout.write(_format_term_iso(_deref_walk(term), quoted=False))
-    _sys.stdout.flush()
+    _current_output_text("write/1").write(
+        _format_term_iso(_deref_walk(term), quoted=False))
+    yield None
+
+
+@_builtin("write", 2)
+def _write__2(stream, term, trail, k):
+    """write(Stream, Term) -- ``write/1`` on Stream (ISO 8.14.2)."""
+    from clausal.logic.solve import _deref_walk
+    out = _output_text(deref(stream), "write/2")
+    out.write(_format_term_iso(_deref_walk(term), quoted=False))
     yield None
 
 
@@ -235,7 +253,8 @@ def _writeln__1(term, trail, k):
     list.  ``writeln_text/1`` is the text form.
     """
     from clausal.logic.solve import _deref_walk
-    print(_format_term_iso(_deref_walk(term), quoted=False))
+    _current_output_text("writeln/1").write(
+        _format_term_iso(_deref_walk(term), quoted=False) + "\n")
     yield None
 
 
@@ -251,8 +270,8 @@ def _write_text__1(term, trail, k):
     a string as ``[a,b,c]``.
     """
     from clausal.logic.solve import _deref_walk
-    _sys.stdout.write(_format_term_as_text(_deref_walk(term)))
-    _sys.stdout.flush()
+    _current_output_text("write_text/1").write(
+        _format_term_as_text(_deref_walk(term)))
     yield None
 
 
@@ -263,7 +282,8 @@ def _writeln_text__1(term, trail, k):
     Works naturally with f-strings: ``writeln_text(f"X is {X_}")``.
     """
     from clausal.logic.solve import _deref_walk
-    print(_format_term_as_text(_deref_walk(term)))
+    _current_output_text("writeln_text/1").write(
+        _format_term_as_text(_deref_walk(term)) + "\n")
     yield None
 
 
@@ -297,8 +317,17 @@ def _writeq__1(term, trail, k):
     DISPLAY form, which prints ``"abc"`` and keeps ``", "``.
     """
     from clausal.logic.solve import _deref_walk
-    _sys.stdout.write(_format_term_iso(_deref_walk(term), quoted=True))
-    _sys.stdout.flush()
+    _current_output_text("writeq/1").write(
+        _format_term_iso(_deref_walk(term), quoted=True))
+    yield None
+
+
+@_builtin("writeq", 2)
+def _writeq__2(stream, term, trail, k):
+    """writeq(Stream, Term) -- ``writeq/1`` on Stream (ISO 8.14.2)."""
+    from clausal.logic.solve import _deref_walk
+    out = _output_text(deref(stream), "writeq/2")
+    out.write(_format_term_iso(_deref_walk(term), quoted=True))
     yield None
 
 
@@ -310,8 +339,17 @@ def _write_canonical__1(term, trail, k):
     ``'.'(h,'.'(e,'.'(l,'.'(l,'.'(o,[])))))``).
     """
     from clausal.logic.solve import _deref_walk
-    _sys.stdout.write(_term_canonical(_deref_walk(term)))
-    _sys.stdout.flush()
+    _current_output_text("write_canonical/1").write(
+        _term_canonical(_deref_walk(term)))
+    yield None
+
+
+@_builtin("write_canonical", 2)
+def _write_canonical__2(stream, term, trail, k):
+    """write_canonical(Stream, Term) -- ``write_canonical/1`` on Stream."""
+    from clausal.logic.solve import _deref_walk
+    out = _output_text(deref(stream), "write_canonical/2")
+    out.write(_term_canonical(_deref_walk(term)))
     yield None
 
 
@@ -578,14 +616,33 @@ def _write_term__2(term, options, trail, k):
     (fix round 1, item 0).
     """
     from clausal.logic.solve import _deref_walk
+    out = _current_output_text("write_term/2")
     quoted, double_quotes, ignore_ops, numbervars, variable_names = \
         _write_term_options(options)
-    _sys.stdout.write(_format_term_iso(_deref_walk(term), quoted=quoted,
-                                       double_quotes=double_quotes,
-                                       ignore_ops=ignore_ops,
-                                       numbervars=numbervars,
-                                       var_names=variable_names))
-    _sys.stdout.flush()
+    out.write(_format_term_iso(_deref_walk(term), quoted=quoted,
+                               double_quotes=double_quotes,
+                               ignore_ops=ignore_ops,
+                               numbervars=numbervars,
+                               var_names=variable_names))
+    yield None
+
+
+@_builtin("write_term", 3)
+def _write_term__3(stream, term, options, trail, k):
+    """write_term(Stream, Term, Options) -- ``write_term/2`` on Stream
+    (ISO 8.14.2).  The stream is checked first (``instantiation_error``,
+    ``domain_error(stream_or_alias, S)``, ``existence_error(stream, S)``,
+    ``permission_error(output, stream | binary_stream, S)``), then the
+    options as ``write_term/2`` checks them."""
+    from clausal.logic.solve import _deref_walk
+    out = _output_text(deref(stream), "write_term/3")
+    quoted, double_quotes, ignore_ops, numbervars, variable_names = \
+        _write_term_options(options)
+    out.write(_format_term_iso(_deref_walk(term), quoted=quoted,
+                               double_quotes=double_quotes,
+                               ignore_ops=ignore_ops,
+                               numbervars=numbervars,
+                               var_names=variable_names))
     yield None
 
 
@@ -602,14 +659,14 @@ def _print_term__1(term, trail, k):
     """
     from clausal.logic.solve import _deref_walk
     val = _deref_walk(term)
-    print(_term_str(val))
+    _current_output_text("print_term/1").write(_term_str(val) + "\n")
     yield None
 
 
 @_builtin("nl", 0)
 def _nl__0(trail, k):
-    """nl — print a newline."""
-    print()
+    """nl — a newline on the current output stream (ISO 8.12.3)."""
+    _current_output_text("nl/0").write("\n")
     yield None
 
 
@@ -619,8 +676,7 @@ def _tab__1(n, trail, k):
     n_val = deref(n)
     if is_var(n_val) or not isinstance(n_val, int):
         return
-    _sys.stdout.write(" " * n_val)
-    _sys.stdout.flush()
+    _current_output_text("tab/1").write(" " * n_val)
     yield None
 
 
@@ -1227,11 +1283,11 @@ def _make_listing__1(db):
         if bare is not None:
             for _name, _arity, _clauses in bare:
                 if not _clauses:
-                    print(f"% {_name}/{_arity} — no clauses")
+                    _out_println("listing/1", f"% {_name}/{_arity} — no clauses")
                 else:
-                    print(f"% {_name}/{_arity} — {len(_clauses)} clause(s)")
+                    _out_println("listing/1", f"% {_name}/{_arity} — {len(_clauses)} clause(s)")
                     for clause in _clauses:
-                        print(_format_clause(clause))
+                        _out_println("listing/1", _format_clause(clause))
             yield None
             return
 
@@ -1251,7 +1307,7 @@ def _make_listing__1(db):
             if not _term_is_atom(val) and is_term_instance(val):
                 val = type(val)
             if isinstance(val, BuiltinPredicate):
-                print(f"% {val._functor}/{val._arity} — builtin")
+                _out_println("listing/1", f"% {val._functor}/{val._arity} — builtin")
                 yield None
                 return
             if isinstance(val, BuiltinTerm):
@@ -1260,7 +1316,7 @@ def _make_listing__1(db):
                 # "no clauses".  It is a builtin, and says so, one line per
                 # registered arity.
                 for _a in val.arities:
-                    print(f"% {val._functor}/{_a} — builtin")
+                    _out_println("listing/1", f"% {val._functor}/{_a} — builtin")
                 yield None
                 return
             # (A ``PredicateMeta`` class listed its own clauses here until
@@ -1269,11 +1325,11 @@ def _make_listing__1(db):
                 "predicate_indicator", culprit, "listing/1"))
 
         if not clauses:
-            print(f"% {name}/{arity} — no clauses")
+            _out_println("listing/1", f"% {name}/{arity} — no clauses")
         else:
-            print(f"% {name}/{arity} — {len(clauses)} clause(s)")
+            _out_println("listing/1", f"% {name}/{arity} — {len(clauses)} clause(s)")
             for clause in clauses:
-                print(_format_clause(clause))
+                _out_println("listing/1", _format_clause(clause))
         yield None
     return _listing__1
 
@@ -1330,7 +1386,7 @@ def _portray_clause__1(term, trail, k):
     """portray_clause(Term) — pretty-print a term with indentation."""
     from clausal.logic.solve import _deref_walk
     val = _deref_walk(term)
-    print(_term_pformat(val))
+    _out_println("portray_clause/1", _term_pformat(val))
     yield None
 
 
@@ -1654,8 +1710,17 @@ def _format__2(fs, args, trail, k):
     list, or atom).  See ``format_to_text`` for the directives; it did not
     exist before (``existence_error(procedure, format/2)``)."""
     text = format_to_text(fs, args)
-    _sys.stdout.write(text)
-    _sys.stdout.flush()
+    _current_output_text("format/2").write(text)
+    yield None
+
+
+@_builtin("format", 3)
+def _format__3(stream, fs, args, trail, k):
+    """format(Stream, Format, Args) -- ``format/2`` on Stream (not ISO;
+    Scryer/SWI have it)."""
+    out = _output_text(deref(stream), "format/3")
+    text = format_to_text(fs, args)
+    out.write(text)
     yield None
 
 
@@ -1663,6 +1728,5 @@ def _format__2(fs, args, trail, k):
 def _format__1(fs, trail, k):
     """format(Format) -- ``format(Format, [])``."""
     text = format_to_text(fs, [])
-    _sys.stdout.write(text)
-    _sys.stdout.flush()
+    _current_output_text("format/1").write(text)
     yield None

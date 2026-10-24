@@ -1235,8 +1235,11 @@ EXPLOITS = {
                              "-translations(th, {v: ok})\n"
                              "y = _reg_atom('th', 'other', 'x')\n"
                              "v(1),\n",
-    # task 342: a bare clause-data name the module does not bind
-    "r9_bare_open": "-module(@helper, [v/1])\nv(X) <- (X is open)\n",
+    # task 342: a bare clause-data name the module does not bind.  (It was
+    # `open` until open/3,4 became a Clausal builtin, 2026-10-24: the bare
+    # name then denotes the builtin's goal term, not Python's open, and the
+    # sandbox refuses the builtin at run time instead.)
+    "r9_bare_exec": "-module(@helper, [v/1])\nv(X) <- (X is exec)\n",
     "r9_bare_getattr_goal": "-module(@helper, [v/1])\n"
                             "v(X) <- (getattr(X, a, 1))\n",
     "r9_bare_eval_goal": "-module(@helper, [v/1])\nv(X) <- (eval(X))\n",

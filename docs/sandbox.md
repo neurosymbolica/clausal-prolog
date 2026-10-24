@@ -212,7 +212,8 @@ raises `error(permission_error(access, private_procedure, Name/Arity), _)`:
 | `global_atom/2` | writes the atom pool every module is seeded from |
 | `gensym/2` | a process-wide counter |
 | `current_time/1`, `statistics/2`, `time_goal/1,2` | read the clock (`time_goal/1` writes to stderr) |
-| `write/1`, `writeln/1`, `write_text/1`, `writeln_text/1`, `writeq/1`, `write_canonical/1`, `write_term/2`, `print_term/1`, `portray_clause/1`, `listing/1`, `format/1,2`, `nl/0`, `tab/1` | write to stdout |
+| `write/1,2`, `writeln/1`, `write_text/1`, `writeln_text/1`, `writeq/1,2`, `write_canonical/1,2`, `write_term/2,3`, `print_term/1`, `portray_clause/1`, `listing/1`, `format/1,2,3`, `nl/0,1`, `tab/1,2` | write to stdout or a stream |
+| `open/3,4`, `close/1,2`, `current_input/1`, `current_output/1`, `set_input/1`, `set_output/1`, `flush_output/0,1`, `at_end_of_stream/0,1`, `set_stream_position/2`, `stream_property/2`, `get_char/1,2`, `get_code/1,2`, `peek_char/1,2`, `peek_code/1,2`, `put_char/1,2`, `put_code/1,2`, `get_byte/1,2`, `peek_byte/1,2`, `put_byte/1,2`, `read/1,2`, `read_term/2,3` | the ISO stream table: file access, the standard streams |
 | `z3_set_option/2`, `z3.set_option/2` | solver options include trace files |
 | `z3_stats/1`, `z3.statistics/1` | process-wide solver counters |
 
