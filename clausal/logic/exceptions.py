@@ -258,6 +258,19 @@ def python_error_term(exc: Exception) -> tuple:
         return _with_prose(
             ("error", ("system_error", mint("units_mismatch")), Var()),
             str(exc))
+    if isinstance(exc, RecursionError):
+        # A walk that ran out of stack -- the engine's own depth caps
+        # (``MAX_DEPTH`` in the C walkers), CPython's recursion limit, a
+        # cyclic term an operation has no answer for -- is the ISO
+        # ``resource_error(stack)`` (7.12.2 h), the term the ``.pl``
+        # if-then-else lowering already raised for a condition's overflow
+        # (``ite_condition_overflow``).  No raw Python RecursionError
+        # reaches a Prolog program any more (2026-10-24): a catch-all
+        # ``catch(G, error(E, _), R)`` sees it, and the walker's message
+        # stays as the prose.  No culprit indicator is known here, so the
+        # context is unbound.
+        return _with_prose(
+            ("error", ("resource_error", mint("stack")), Var()), str(exc))
     return (type(exc).__name__, str(exc))
 
 
@@ -267,10 +280,13 @@ def _is_python_error_term_of(term: Any, cause: BaseException) -> bool:
     functor is the cause's class name, never a bare atom -- or, for a
     ``UnitsMismatch``, ``error(system_error(units_mismatch), _)``."""
     fa = term_functor_args(term)
-    if isinstance(cause, UnitsMismatch):
+    if isinstance(cause, (UnitsMismatch, RecursionError)):
         if fa is None or fa[0] != "error" or len(fa[1]) != 2:
             return False
         formal = term_functor_args(fa[1][0])
+        if isinstance(cause, RecursionError):
+            return (formal is not None and formal[0] == "resource_error"
+                    and len(formal[1]) == 1 and formal[1][0] == "stack")
         return (formal is not None and formal[0] == "system_error"
                 and len(formal[1]) == 1 and formal[1][0] == "units_mismatch")
     return (fa is not None and len(fa[1]) == 1

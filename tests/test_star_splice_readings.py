@@ -431,12 +431,13 @@ def test_assertz_of_a_1500_cell_list(deep):
     assert _first(deep, "m1d") == "1500"
 
 
-def test_compare_on_two_distinct_cyclic_lists_raises_rather_than_loops(deep):
-    # A clean RecursionError, as before the spine loop; never a hang.  (The
-    # answer Scryer gives, ``=``, needs cycle-aware comparison; see
-    # todo/deep-and-cyclic-terms-overflow-the-recursive-walkers-2026-10-22.md.)
-    with pytest.raises(RecursionError):
-        _first(deep, "m3c")
+def test_compare_on_two_distinct_cyclic_lists_answers_as_scryer(deep):
+    # Scryer: ``=`` -- two cyclic lists that are one rational tree.  Until
+    # 2026-10-24 this raised a clean RecursionError (the spine loop had no
+    # cycle-aware comparison); compare/3 now falls back to the pairwise
+    # order (``_helpers.term_compare``) when the key cannot be built.  See
+    # tests/iso/test_cyclic_terms_scryer.py for the row against the oracle.
+    assert _first(deep, "m3c") == "="
 
 
 # ── _rational_eq: a fuzz over acyclic and cyclic shapes ─────────────────────

@@ -22,6 +22,9 @@
 #include "variables/_variables_capi.h"
 
 #define MAX_DEPTH 50000
+/* The depth past which c_structural_unify_oc hands a pair to the engine's
+ * unify (twin: constraints._STRUCTURAL_DEEP). */
+#define STRUCTURAL_DEEP 1000
 
 /* ── Cached references (set during module init) ─────────────────────── */
 
@@ -354,14 +357,22 @@ done:
 static int
 c_structural_unify_oc(PyObject *t1, PyObject *t2, TrailObject *trail, int depth)
 {
-    if (depth > MAX_DEPTH) {
-        PyErr_SetString(PyExc_RecursionError,
-                        "_structural_unify_oc: term nesting too deep");
-        return -1;
-    }
-
     PyObject *d1 = VarAPI->deref(t1);  /* borrowed */
     PyObject *d2 = VarAPI->deref(t2);  /* borrowed */
+
+    if (depth > STRUCTURAL_DEEP) {
+        /* A cyclic term (``X = f(X)``: ``==``/2 and dif/2 read it through
+         * this walk) or a list nested deeper than any program's data: the
+         * engine's own unify from here, whose rational-tree walk
+         * terminates on a cycle (``unify_rational`` in _variables.c,
+         * 2026-10-24).  The partial-list reading above this depth is a
+         * convenience for the trial unify, not a semantic difference. */
+        PyObject *r = VarAPI->unify_oc(d1, d2, trail);
+        if (!r) return -1;
+        int truthy = PyObject_IsTrue(r);
+        Py_DECREF(r);
+        return truthy;
+    }
 
     /* Both term instances? */
     int ti1 = call_is_term_instance(d1);

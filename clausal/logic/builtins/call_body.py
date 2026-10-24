@@ -241,6 +241,7 @@ class _Converter:
         self.db = db
         self.params: list[tuple[Var, Any]] = []
         self._by_var: dict[int, Var] = {}
+        self._active: set[int] = set()    # the containers ``arg`` is inside of, by id
 
     def _param(self, value, raw=None):
         if raw is not None:
@@ -275,6 +276,22 @@ class _Converter:
         memo = raw if isinstance(raw, Var) else None
         if type(t) is str and is_mangled(t):
             return t
+        if type(t) is list or type(t) is tuple or isinstance(t, nodes.Node):
+            # A CYCLIC data term (``X = f(X), call(p(X))``; ISO ``=/2``
+            # builds one with no occurs check) comes back to a container
+            # this walk is inside of: that occurrence is data, lifted whole
+            # as a parameter -- the compiled body keeps the structure down
+            # to it and the run-time value is the cyclic term itself.
+            if id(t) in self._active:
+                return self._param(t, memo)
+            self._active.add(id(t))
+            try:
+                return self._arg_container(t, memo)
+            finally:
+                self._active.discard(id(t))
+        return self._param(t, memo)
+
+    def _arg_container(self, t, memo):
         if type(t) is list:
             return [self.arg(e) for e in t]
         if type(t) is tuple:
@@ -285,11 +302,9 @@ class _Converter:
                 # Slot 0 is the functor -- structure, never a parameter.
                 return (t[0],) + tuple(self.arg(e) for e in t[1:])
             return tuple(self.arg(e) for e in t)
-        if isinstance(t, nodes.Node):
-            if type(t) in _NODE_FIELDS:
-                return self._rebuild(t, self.arg)
-            return t                      # code (a Call, a Lambda ...): as is
-        return self._param(t, memo)
+        if type(t) in _NODE_FIELDS:
+            return self._rebuild(t, self.arg)
+        return t                          # code (a Call, a Lambda ...): as is
 
     def _rebuild(self, node, fn):
         kw = {}

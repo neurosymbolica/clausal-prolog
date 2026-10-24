@@ -13,6 +13,7 @@ from fractions import Fraction as _Fraction
 from clausal.logic.number_kinds import numeric_kind as _numeric_kind
 from numbers import Real as _Real
 from typing import Any
+import functools as _functools
 
 from clausal.logic.variables import deref, is_var, exact_cell_number
 from clausal.logic.predicate import (
@@ -286,7 +287,14 @@ try:
     # ``tests/test_python_fallbacks.py``.
     _is_ground = _c_is_ground
 except ImportError:
-    pass
+    def _is_ground(term: Any) -> bool:
+        """The twin without C: the same iterative fallback the C wrapper
+        takes past its depth cap (``clausal.logic.rational_walk``)."""
+        try:
+            return _is_ground_py(term)
+        except RecursionError:
+            from clausal.logic.rational_walk import is_ground_iterative  # noqa: PLC0415
+            return is_ground_iterative(term)
 
 
 # ── Cell awareness (Phase 2 bridge Task 1, additive) ─────────────────────────
@@ -895,6 +903,141 @@ def term_key(term: Any) -> tuple:
 _standard_order_key = term_key
 
 
+# ── The standard order decided pairwise (cyclic and very deep terms) ─────────
+#
+# ``term_key`` builds a term's whole key, one nested tuple per level: there
+# is no finite key for a CYCLIC term (``X = f(X)``, which ISO ``=/2`` builds
+# with no occurs check), and a term nested deeper than Python's stack
+# overflows while keying -- or while CPython compares two keys that deep.
+# ``term_compare`` decides the same order pairwise, by an explicit stack,
+# and takes a compound pair it meets again as equal (the coinductive
+# reading, the 2026-10-13 ruling's requirements: keyed by the dereferenced
+# objects themselves, kept alive while keyed), which is how Scryer orders
+# rational trees: ``compare(=, X, Y)`` for ``X = f(X), Y = f(f(Y))``,
+# ``<`` for ``X = f(X, a), Y = f(Y, b)``.  compare/3, the ``@<`` family and
+# the sorts call it only when ``term_key`` raises RecursionError, so an
+# ordinary term's order and speed are untouched.
+#
+# For an acyclic term it decides as the keys do -- band, arity, name, then
+# the arguments left to right, the first difference deciding -- with one
+# corner where the two deliberately differ: a proper list meets an improper
+# one (``[a, b]`` against ``[a|foo]``) as the cons cells both denote, where
+# the flat list key compares the element ``b`` against the tail ``foo``.
+# Only a term too deep to key reaches that corner here.
+
+_LEN = object()    # a stack marker: decide two lists' lengths after their common prefix
+
+
+def _shallow_compound_key(t):
+    """The first four components of ``term_key``'s compound-band key for
+    *t* -- ``(band, arity, name, flavour)`` -- or None when *t* keys in
+    another band (a variable, a number, an atom, ``[]``, a dict, a set, an
+    opaque value) and ``term_key`` is the thing to call."""
+    if isinstance(t, list):
+        return (_ORD_COMPOUND, 2, _ORD_CONS_NAME_KEY, _CF_POSITIONAL) if t else None
+    if type(t) is tuple and t and type(t[0]) is str and t[0] != TUPLE_TAG:
+        if len(t) == 1 or exact_cell_number(t) is not None:
+            return None
+        return (_ORD_COMPOUND, len(t) - 1, (0, t[0]), _CF_POSITIONAL)
+    if type(t) is tuple and t and t[0] == TUPLE_TAG:
+        return (_ORD_COMPOUND, len(t) - 1, (1, ""), _CF_POSITIONAL)
+    if is_term_instance(t):
+        return (_ORD_COMPOUND, len(term_field_names(t)), (0, type(t).__name__),
+                _CF_DECLARED)
+    return None
+
+
+def _compound_view(t):
+    """*t* (dereferenced) as the shape ``term_compare`` walks: text and a
+    code list as the list of their elements (the cons compound ``term_key``
+    keys them as), a Seg* as what it walks to, a plain tuple that is neither
+    a cell nor tuple-data as the list ``term_key`` reads it as."""
+    if isinstance(t, bytes):
+        return list(t)
+    if is_chars(t):
+        return list(chars_text(t))
+    if isinstance(t, (SegList, SegString, SegBytes)):
+        from clausal.logic.runtime._seg_helpers import walk_seg  # noqa: PLC0415
+        walked = walk_seg(t)
+        if not isinstance(walked, (SegList, SegString, SegBytes)):
+            return _compound_view(walked)
+        return t
+    if (type(t) is tuple and t and not (type(t[0]) is str and t[0] != TUPLE_TAG)
+            and t[0] != TUPLE_TAG):
+        return list(t)
+    return t
+
+
+def _cons_children(t):
+    """The head and tail of *t* read as the cons cell ``'.'(H, T)``: a
+    non-empty list or the cell itself."""
+    if isinstance(t, list):
+        return t[0], t[1:]
+    return t[1], t[2]
+
+
+def term_compare(a, b) -> int:
+    """The standard order of *a* against *b*, decided pairwise: -1, 0 or 1.
+    See the block comment above."""
+    stack: list = [(a, b)]
+    seen: set = set()
+    keep: list = []
+    while stack:
+        item = stack.pop()
+        if item[0] is _LEN:
+            if item[1] != item[2]:
+                return -1 if item[1] < item[2] else 1
+            continue
+        ox, oy = deref(item[0]), deref(item[1])
+        if ox is oy:
+            continue
+        x, y = _compound_view(ox), _compound_view(oy)
+        sx, sy = _shallow_compound_key(x), _shallow_compound_key(y)
+        if sx is None and sy is None:
+            kx, ky = term_key(x), term_key(y)
+            if kx != ky:
+                return -1 if kx < ky else 1
+            continue
+        if sx is None:
+            return -1 if term_key(x) < sy else 1
+        if sy is None:
+            return -1 if sx < term_key(y) else 1
+        if sx != sy:
+            return -1 if sx < sy else 1
+        # Keyed by the ORIGINAL objects (a Seg* walks to fresh cells every
+        # time; the SegList itself is what a cycle comes back to).
+        key = (id(ox), id(oy))
+        if key in seen:
+            continue
+        seen.add(key)
+        keep.append((ox, oy, x, y))
+        if isinstance(x, list) and isinstance(y, list):
+            n = min(len(x), len(y))
+            stack.append((_LEN, len(x), len(y)))
+            for i in range(n - 1, -1, -1):
+                stack.append((x[i], y[i]))
+        elif sx[2] == _ORD_CONS_NAME_KEY and sx[3] == _CF_POSITIONAL and (
+                isinstance(x, list) or isinstance(y, list)):
+            hx, tx = _cons_children(x)
+            hy, ty = _cons_children(y)
+            stack.append((tx, ty))
+            stack.append((hx, hy))
+        elif is_term_instance(x):
+            names = term_field_names(x)
+            for name in reversed(names):
+                stack.append((getattr(x, name), getattr(y, name)))
+        else:
+            for i in range(len(x) - 1, 0, -1):
+                stack.append((x[i], y[i]))
+    return 0
+
+
+def _term_compare_key(x):
+    """``functools.cmp_to_key(term_compare)``'s key for *x*: the sort key
+    the sorts fall back to when ``term_key`` cannot key an element."""
+    return _functools.cmp_to_key(term_compare)(x)
+
+
 # Exact types whose native ``<`` is KNOWN to agree with
 # :func:`_standard_order_key`, each verified by measurement 2026-09-09.
 # Membership is a POSITIVE claim and needs evidence; absence costs only speed,
@@ -940,7 +1083,11 @@ def _standard_order_sorted(items: list) -> list:
     types = set(map(type, items))
     if len(types) == 1 and types.pop() in _NATIVE_ORDER_SAFE:
         return sorted(items)
-    return sorted(items, key=_standard_order_key)
+    try:
+        return sorted(items, key=_standard_order_key)
+    except RecursionError:
+        # A cyclic or very deep element: no key, the pairwise order instead.
+        return sorted(items, key=_term_compare_key)
 
 
 def _check_nonneg_int_arg(val: Any, who: str) -> None:

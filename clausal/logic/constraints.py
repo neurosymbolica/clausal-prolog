@@ -178,7 +178,15 @@ def _collect_free_vars(term: Any) -> list:
 # ── Structural unify with occurs check ───────────────────────────────────────
 
 
-def _structural_unify_oc(t1: Any, t2: Any, trail: Trail) -> bool:
+#: The depth past which ``_structural_unify_oc`` hands a pair to the
+#: engine's unify (twin of ``STRUCTURAL_DEEP`` in ``_constraints_dif.c``):
+#: a cyclic term, or a list nested deeper than any program's data.  The
+#: engine's rational-tree walk terminates on a cycle (``unify_rational`` in
+#: ``variables/_variables.c``, 2026-10-24).
+_STRUCTURAL_DEEP = 1000
+
+
+def _structural_unify_oc(t1: Any, t2: Any, trail: Trail, _depth: int = 0) -> bool:
     """Unify t1 and t2 structurally with occurs check.
 
     Handles term (dataclass) instances that the C extension's
@@ -186,6 +194,9 @@ def _structural_unify_oc(t1: Any, t2: Any, trail: Trail) -> bool:
     """
     t1 = deref(t1)
     t2 = deref(t2)
+
+    if _depth > _STRUCTURAL_DEEP:
+        return unify_with_occurs_check(t1, t2, trail)
 
     # Let the C extension handle Var, tuple, list, scalars.
     # But if both are term instances, recurse.
@@ -197,7 +208,8 @@ def _structural_unify_oc(t1: Any, t2: Any, trail: Trail) -> bool:
             return False
         fields = term_field_names(t1)
         for fname in fields:
-            if not _structural_unify_oc(getattr(t1, fname), getattr(t2, fname), trail):
+            if not _structural_unify_oc(getattr(t1, fname), getattr(t2, fname),
+                                        trail, _depth + 1):
                 return False
         return True
 
@@ -205,7 +217,7 @@ def _structural_unify_oc(t1: Any, t2: Any, trail: Trail) -> bool:
         if len(t1) != len(t2):
             return False
         for e1, e2 in zip(t1, t2):
-            if not _structural_unify_oc(e1, e2, trail):
+            if not _structural_unify_oc(e1, e2, trail, _depth + 1):
                 return False
         return True
 

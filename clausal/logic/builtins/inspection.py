@@ -221,7 +221,25 @@ try:
     _copy_term_impl = _c_copy_term_impl
     _collect_vars_impl = _c_collect_vars_impl
 except ImportError:
-    pass
+    # The twins without C take the same iterative fallback the C wrappers
+    # take past their depth cap (``clausal.logic.rational_walk``).
+    def _copy_term_impl(term: Any, var_map: dict, attvars: list | None = None) -> Any:
+        try:
+            return _copy_term_py(term, var_map, attvars)
+        except RecursionError:
+            from clausal.logic.rational_walk import copy_term_iterative  # noqa: PLC0415
+            if attvars is not None:
+                del attvars[:]
+            return copy_term_iterative(term, var_map, attvars)
+
+    def _collect_vars_impl(term: Any, result: list) -> None:
+        before = len(result)
+        try:
+            _collect_vars_py(term, result)
+        except RecursionError:
+            from clausal.logic.rational_walk import collect_vars_iterative  # noqa: PLC0415
+            del result[before:]
+            collect_vars_iterative(term, result)
 
 # Re-export for callers that import _copy_term directly (e.g. specialization.py)
 _copy_term = _copy_term_impl

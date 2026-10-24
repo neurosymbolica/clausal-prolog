@@ -226,20 +226,24 @@ def test_cut_free_catch_and_a_catch_whose_goal_cuts_are_not_bounded(native, ans)
     assert ans(mod, "rk", 1, 2000) == [()]
 
 
-def test_once_and_a_cutting_recovery_still_overflow_as_a_python_error(native, ans):
+def test_once_and_a_cutting_recovery_still_overflow_as_a_resource_error(native, ans):
     """PINNED, not a target: recursion through once/1 (pre-existing, cut or
-    no cut) and through a catch/3 Recovery that cuts still leaves Python's
-    RecursionError, transliterated ``'RecursionError'(Message)``.  once/1's
-    lowering is shared with cut-free code, whose codegen is pinned
-    byte-identical (tests/test_cut_codegen.py).  Scryer: none, none."""
+    no cut) and through a catch/3 Recovery that cuts still overflows
+    Python's stack.  Since 2026-10-24 the RecursionError reaches the
+    program as the ISO ``error(resource_error(stack), _)`` (the term the
+    condition's own overflow always had; ``python_error_term``), never as
+    the transliterated ``'RecursionError'(Message)``.  once/1's lowering is
+    shared with cut-free code, whose codegen is pinned byte-identical
+    (tests/test_cut_codegen.py).  Scryer: none, none."""
     mod = native.load("l3_ite_deep_once", DEEP)
+    stack = ("error", ("resource_error", "stack"))
     [e] = ans(mod, "o_err", 2, 2000)
-    assert e[0] == "RecursionError"
+    assert e[:2] == stack, e
     # The condition's try covers the CONDITION only: an if-then-else before
     # the recursion, or around it in Then, does not reclassify it.
     [e] = ans(mod, "o_after_ite", 2, 2000)
-    assert e[0] == "RecursionError"
+    assert e[:2] == stack, e
     [e] = ans(mod, "o_in_then", 2, 2000)
-    assert e[0] == "RecursionError"
+    assert e[:2] == stack, e
     [e] = ans(mod, "rec_err", 2, 2000)
-    assert e[0] == "RecursionError"
+    assert e[:2] == stack, e

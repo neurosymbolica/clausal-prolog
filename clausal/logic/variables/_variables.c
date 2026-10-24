@@ -1524,14 +1524,222 @@ decimal_exponent(PyObject *t, long *out)
 static int walk_types_ready(void);           /* defined with the walkers below */
 static inline int is_seg_object(PyObject *o);
 
+/* ================================================================
+ * Rational-tree unification (2026-10-24)
+ *
+ * do_unify recurses, one C frame per level: the fast path every ordinary
+ * term takes, unchanged.  Past UNIFY_DEEP levels -- a CYCLIC term (ISO
+ * 7.3.2 lets ``=/2`` build one, no occurs check: ``X = f(X), Y = f(Y),
+ * X = Y`` re-enters the pair (f(X), f(Y)) forever) or an acyclic term
+ * nested deeper than any program's data normally is -- it hands the pair
+ * to unify_rational, an explicit-stack walk that remembers every compound
+ * PAIR it has started.  A pair met again is taken as unified: the
+ * coinductive reading under which two rational trees unify when a
+ * bisimulation relates them, which is what Scryer answers (``X = f(X),
+ * X = f(f(X))`` succeeds, ``X = f(X, a), Y = f(Y, b), X = Y`` fails on the
+ * second argument).  The 2026-10-13 ruling's requirements hold: keys are
+ * the dereferenced objects themselves, kept alive while keyed.
+ *
+ * Every LEAF pair -- a variable to bind, atoms, numbers, text, a term with
+ * its own __unify__ -- goes back to do_unify at depth 0, so leaf semantics
+ * (binding direction, hooks, the numeric kinds) are do_unify's own by
+ * construction, and the walk itself knows only two shapes: a compound
+ * cell against a compound cell (two tuples that are not the chars carrier)
+ * and a list against a list, the shapes a cycle can run through.  Both
+ * walkers visit children left to right, so the bindings and the hooks
+ * fire in the order the recursion fired them.
+ *
+ * The threshold is a trade, not a limit: a term 1000 levels deep is
+ * correct either way, and only pays the pair set from there on.
+ * ================================================================ */
+
+#define UNIFY_DEEP 1000
+
+static int do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc);
+
+typedef struct { PyObject *a, *b; } ObjPair;
+
+/* An open-addressing set of (a, b) object pairs.  Members are OWNED
+ * (INCREF on insert) so an address is never that of an object already
+ * freed while it is keyed. */
+typedef struct {
+    ObjPair *slots;        /* a == NULL: empty slot */
+    Py_ssize_t cap, count;
+} PairSet;
+
+static int
+pair_set_init(PairSet *s)
+{
+    s->cap = 64;
+    s->count = 0;
+    s->slots = (ObjPair *)PyMem_Calloc((size_t)s->cap, sizeof(ObjPair));
+    if (!s->slots) { PyErr_NoMemory(); return -1; }
+    return 0;
+}
+
+static void
+pair_set_free(PairSet *s)
+{
+    if (!s->slots) return;
+    for (Py_ssize_t i = 0; i < s->cap; i++) {
+        if (s->slots[i].a) {
+            Py_DECREF(s->slots[i].a);
+            Py_DECREF(s->slots[i].b);
+        }
+    }
+    PyMem_Free(s->slots);
+    s->slots = NULL;
+}
+
+static inline size_t
+pair_hash(PyObject *a, PyObject *b)
+{
+    uintptr_t x = (uintptr_t)a >> 4, y = (uintptr_t)b >> 4;
+    return (size_t)((x * (uintptr_t)0x9E3779B1u) ^ (y * (uintptr_t)0x85EBCA77u));
+}
+
+/* 0: newly added (the pair is now owned by the set); 1: already present;
+ * -1: out of memory. */
+static int
+pair_set_add(PairSet *s, PyObject *a, PyObject *b)
+{
+    if (s->count * 10 >= s->cap * 7) {
+        Py_ssize_t new_cap = s->cap * 2;
+        ObjPair *fresh = (ObjPair *)PyMem_Calloc((size_t)new_cap, sizeof(ObjPair));
+        if (!fresh) { PyErr_NoMemory(); return -1; }
+        for (Py_ssize_t i = 0; i < s->cap; i++) {
+            if (!s->slots[i].a) continue;
+            size_t j = pair_hash(s->slots[i].a, s->slots[i].b) % (size_t)new_cap;
+            while (fresh[j].a)
+                j = (j + 1) % (size_t)new_cap;
+            fresh[j] = s->slots[i];
+        }
+        PyMem_Free(s->slots);
+        s->slots = fresh;
+        s->cap = new_cap;
+    }
+    size_t i = pair_hash(a, b) % (size_t)s->cap;
+    while (s->slots[i].a) {
+        if (s->slots[i].a == a && s->slots[i].b == b) return 1;
+        i = (i + 1) % (size_t)s->cap;
+    }
+    Py_INCREF(a);
+    Py_INCREF(b);
+    s->slots[i].a = a;
+    s->slots[i].b = b;
+    s->count++;
+    return 0;
+}
+
+/* A growable stack of OWNED pairs still to unify. */
+typedef struct { ObjPair *items; Py_ssize_t len, cap; } PairStack;
+
+/* Pushes *a* and *b*, taking one reference to each (the caller's, when it
+ * owns them, else they are INCREF'd first by the caller). */
+static int
+pair_stack_push(PairStack *st, PyObject *a, PyObject *b)
+{
+    if (st->len == st->cap) {
+        Py_ssize_t new_cap = st->cap ? st->cap * 2 : 256;
+        ObjPair *grown = (ObjPair *)PyMem_Realloc(st->items,
+                                                  (size_t)new_cap * sizeof(ObjPair));
+        if (!grown) { PyErr_NoMemory(); return -1; }
+        st->items = grown;
+        st->cap = new_cap;
+    }
+    st->items[st->len].a = a;
+    st->items[st->len].b = b;
+    st->len++;
+    return 0;
+}
+
+static int
+unify_rational(PyObject *t1, PyObject *t2, TrailObject *trail, int oc)
+{
+    PairSet seen;
+    PairStack st = {NULL, 0, 0};
+    int result = -1;
+    if (pair_set_init(&seen) < 0) return -1;
+    Py_INCREF(t1);
+    Py_INCREF(t2);
+    if (pair_stack_push(&st, t1, t2) < 0) {
+        Py_DECREF(t1); Py_DECREF(t2);
+        goto done;
+    }
+    while (st.len) {
+        ObjPair top = st.items[--st.len];           /* owned */
+        PyObject *a = var_deref(top.a), *b = var_deref(top.b);
+        int r;
+        if (a == b) {
+            r = 1;
+        } else if (PyTuple_Check(a) && PyTuple_Check(b)
+                   && !is_chars_carrier(a) && !is_chars_carrier(b)) {
+            Py_ssize_t n = PyTuple_GET_SIZE(a);
+            if (n != PyTuple_GET_SIZE(b)) {
+                r = 0;
+            } else {
+                r = pair_set_add(&seen, a, b);
+                if (r == 0) {
+                    /* Children pushed last-first, so they pop left to right. */
+                    for (Py_ssize_t i = n - 1; i >= 0 && r == 0; i--) {
+                        PyObject *ca = PyTuple_GET_ITEM(a, i);
+                        PyObject *cb = PyTuple_GET_ITEM(b, i);
+                        Py_INCREF(ca); Py_INCREF(cb);
+                        if (pair_stack_push(&st, ca, cb) < 0) {
+                            Py_DECREF(ca); Py_DECREF(cb);
+                            r = -1;
+                        }
+                    }
+                    if (r == 0) r = 1;
+                }
+                /* r == 1: the pair is already being unified -- assumed. */
+            }
+        } else if (PyList_Check(a) && PyList_Check(b)) {
+            Py_ssize_t n = PyList_GET_SIZE(a);
+            if (n != PyList_GET_SIZE(b)) {
+                r = 0;
+            } else {
+                r = pair_set_add(&seen, a, b);
+                if (r == 0) {
+                    for (Py_ssize_t i = n - 1; i >= 0 && r == 0; i--) {
+                        PyObject *ca = PyList_GetItemRef(a, i);   /* new ref */
+                        if (!ca) { r = -1; break; }
+                        PyObject *cb = PyList_GetItemRef(b, i);
+                        if (!cb) { Py_DECREF(ca); r = -1; break; }
+                        if (pair_stack_push(&st, ca, cb) < 0) {
+                            Py_DECREF(ca); Py_DECREF(cb);
+                            r = -1;
+                        }
+                    }
+                    if (r == 0) r = 1;
+                }
+            }
+        } else {
+            /* A leaf pair (or a shape with its own protocol): do_unify's
+             * own semantics, from depth 0. */
+            r = do_unify(a, b, trail, 0, oc);
+        }
+        Py_DECREF(top.a);
+        Py_DECREF(top.b);
+        if (r != 1) { result = r; goto done; }
+    }
+    result = 1;
+done:
+    while (st.len) {
+        ObjPair left = st.items[--st.len];
+        Py_DECREF(left.a);
+        Py_DECREF(left.b);
+    }
+    PyMem_Free(st.items);
+    pair_set_free(&seen);
+    return result;
+}
+
 static int
 do_unify(PyObject *t1, PyObject *t2, TrailObject *trail, int depth, int oc)
 {
-    if (depth > MAX_DEPTH) {
-        PyErr_SetString(PyExc_RecursionError,
-                        "unify: term nesting too deep");
-        return -1;
-    }
+    if (depth > UNIFY_DEEP)
+        return unify_rational(t1, t2, trail, oc);
 
     t1 = var_deref(t1);
     t2 = var_deref(t2);
@@ -3131,11 +3339,40 @@ c_is_ground(PyObject *term, int depth)
     return 1;
 }
 
+
+/* ================================================================
+ * The iterative twins (2026-10-24)
+ *
+ * Each recursive walker below -- c_is_ground, c_copy_term, c_collect_vars
+ * -- raises RecursionError past MAX_DEPTH: a CYCLIC term (``X = f(X)``,
+ * which ISO ``=/2`` builds with no occurs check) or one nested deeper than
+ * the cap.  The Python-callable wrapper then answers with the iterative,
+ * cycle-aware twin in clausal.logic.rational_walk instead, so no raw
+ * RecursionError leaves these entry points and a cyclic term gets
+ * Scryer's answer (ground, a copy that is itself cyclic, no variables).
+ * The recursion stays the fast path: a term of ordinary depth never gets
+ * here.
+ * ================================================================ */
+static PyObject *
+rational_walk_fallback(const char *name, PyObject *a1, PyObject *a2, PyObject *a3)
+{
+    if (!PyErr_ExceptionMatches(PyExc_RecursionError)) return NULL;
+    PyErr_Clear();
+    PyObject *mod = PyImport_ImportModule("clausal.logic.rational_walk");
+    if (!mod) return NULL;
+    PyObject *fn = PyObject_GetAttrString(mod, name);
+    Py_DECREF(mod);
+    if (!fn) return NULL;
+    PyObject *r = PyObject_CallFunctionObjArgs(fn, a1, a2, a3, NULL);
+    Py_DECREF(fn);
+    return r;
+}
+
 static PyObject *
 py_is_ground(PyObject *Py_UNUSED(module), PyObject *arg)
 {
     int r = c_is_ground(arg, 0);
-    if (r < 0) return NULL;
+    if (r < 0) return rational_walk_fallback("is_ground_iterative", arg, NULL, NULL);
     return PyBool_FromLong(r);
 }
 
@@ -3702,7 +3939,17 @@ py_copy_term_impl(PyObject *Py_UNUSED(module), PyObject *args)
     if (!PyArg_ParseTuple(args, "OO!|O!", &term, &PyDict_Type, &var_map,
                           &PyList_Type, &attvars))
         return NULL;
-    return c_copy_term(term, var_map, 0, attvars);
+    PyObject *r = c_copy_term(term, var_map, 0, attvars);
+    if (!r) {
+        /* The aborted descent may have reported attributed variables
+         * already; the twin reports them all again.  (var_map keeps its
+         * fresh variables: the same originals map to the same copies.) */
+        if (attvars && PyErr_ExceptionMatches(PyExc_RecursionError)
+                && PyList_SetSlice(attvars, 0, PY_SSIZE_T_MAX, NULL) < 0)
+            return NULL;
+        return rational_walk_fallback("copy_term_iterative", term, var_map, attvars);
+    }
+    return r;
 }
 
 
@@ -3911,9 +4158,17 @@ py_collect_vars_impl(PyObject *Py_UNUSED(module), PyObject *args)
         return NULL;
     UIntSet seen;
     if (uint_set_init(&seen) < 0) return NULL;
+    Py_ssize_t before = PyList_GET_SIZE(result);
     int ok = c_collect_vars(term, &seen, result, 0);
     uint_set_free(&seen);
-    if (ok < 0) return NULL;
+    if (ok < 0) {
+        /* The aborted descent appended some variables; the twin collects
+         * them all again, in order. */
+        if (PyErr_ExceptionMatches(PyExc_RecursionError)
+                && PyList_SetSlice(result, before, PY_SSIZE_T_MAX, NULL) < 0)
+            return NULL;
+        return rational_walk_fallback("collect_vars_iterative", term, result, NULL);
+    }
     Py_RETURN_NONE;
 }
 

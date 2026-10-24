@@ -168,7 +168,17 @@ def _deref_walk_py(term: Any) -> Any:
 answer_deref = _plain_deref
 
 
-_deref_walk = _deref_walk_py
+def _deref_walk_fallback(term: Any) -> Any:
+    """The twin without C: the same iterative fallback the C wrapper takes
+    past its depth cap (``clausal.logic.rational_walk``)."""
+    try:
+        return _deref_walk_py(term)
+    except RecursionError:
+        from clausal.logic.rational_walk import deref_walk_iterative  # noqa: PLC0415
+        return deref_walk_iterative(term)
+
+
+_deref_walk = _deref_walk_fallback
 
 try:
     from clausal.logic._tabling_core import _deref_walk as _deref_walk_c

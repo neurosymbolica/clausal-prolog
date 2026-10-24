@@ -618,6 +618,14 @@ class _CyclicPartialList(RecursionError):
 
 _NO_TAIL = object()    # SegList._walk_raw: no improper tail seen yet
 
+#: The SegList pairs whose unification is in progress on this thread
+#: (``SegList.__unify__``): ``(id(a), id(b))`` for each pair, held while the
+#: pair is on the call stack, so a cyclic partial list meets itself and
+#: stops.  None outside any SegList unification.
+import contextvars as _cv_seg
+_SEG_UNIFY_ACTIVE: _cv_seg.ContextVar = _cv_seg.ContextVar(
+    "_SEG_UNIFY_ACTIVE", default=None)
+
 
 def _is_improper_tail(v) -> bool:
     """Whether *v*, the dereferenced value of a SegList hole, ends the list
@@ -1042,7 +1050,38 @@ class SegList:
         """Called by C do_unify.  Against a list or text, unifies the holes
         through :func:`_drive_seg_unify` (see "Seg* __unify__ against a list
         or text" above :func:`_seg_split_gen`): exact for one hole; every
-        split, as a pending goal, for two or more."""
+        split, as a pending goal, for two or more.
+
+        Two SegLists are unified coinductively (2026-10-24): a pair of
+        SegLists whose unification is already IN PROGRESS further up the
+        call stack is taken as unified, which is what makes two cyclic
+        partial lists terminate -- ``X = [1|X], Y = [1|Y], X = Y`` walks
+        X to the cons cells ``'.'(1, X)``, unifies them with Y, reaches the
+        pair (Y, X) again through the tails, and stops there: the same
+        rational-tree reading the engine's ``unify_rational`` gives two
+        cyclic cells (``variables/_variables.c``), and Scryer's answer.
+        Only a pair that is an ANCESTOR counts (the entry is removed when
+        its unification returns, success or not), so a pair recorded by a
+        trial a hook later undoes never speaks for a later attempt."""
+        if not isinstance(other, SegList):
+            return self._unify_impl(other, trail)
+        key = (id(self), id(other))
+        active = _SEG_UNIFY_ACTIVE.get()
+        token = None
+        if active is None:
+            active = set()
+            token = _SEG_UNIFY_ACTIVE.set(active)
+        elif key in active or (key[1], key[0]) in active:
+            return True
+        active.add(key)
+        try:
+            return self._unify_impl(other, trail)
+        finally:
+            active.discard(key)
+            if token is not None:
+                _SEG_UNIFY_ACTIVE.reset(token)
+
+    def _unify_impl(self, other, trail):
         walked = self._walk_once()
         if walked is not None and not isinstance(walked, (list, SegList)):
             # An IMPROPER list (D50): unify the cons cells it denotes.
@@ -3817,6 +3856,33 @@ def term_str(t: Any, style: TermStyle | None = None, _bd: int = 0,
     ``write_canonical/1`` does not come through here at all — it has its own
     renderer (:func:`term_canonical`).
     """
+    if not isinstance(t, (str, bytes, int, float)):
+        t = deref(t)
+    if not ((type(t) is tuple and len(t) > 1 and not is_chars(t))
+            or (isinstance(t, list) and t) or isinstance(t, (SegList, SegString))
+            or hasattr(type(t), "__dataclass_fields__")):
+        return _term_str_body(t, style, _bd, quoted=quoted, double_quotes=double_quotes, sep=sep)
+    # A cyclic term (``X = f(X)``) comes back to a compound being written:
+    # ``...``, as the ISO writers write it (see ``_wq``).
+    active = _WQ_ACTIVE.get()
+    token = None
+    if active is None:
+        active = set()
+        token = _WQ_ACTIVE.set(active)
+    elif id(t) in active:
+        return "..."
+    active.add(id(t))
+    try:
+        return _term_str_body(t, style, _bd, quoted=quoted, double_quotes=double_quotes, sep=sep)
+    finally:
+        active.discard(id(t))
+        if token is not None:
+            _WQ_ACTIVE.reset(token)
+
+
+def _term_str_body(t: Any, style: TermStyle | None = None, _bd: int = 0,
+                   *, quoted: bool = True, double_quotes: bool = True,
+                   sep: str = ", ") -> str:
     if style is None:
         style = _current_style
     if t is None:
@@ -4021,6 +4087,29 @@ def term_canonical(t: Any) -> str:
         return str(t)
     if type(t) is Fraction:
         return term_canonical(_rdiv_term(t))       # rdiv(N,D), as Scryer
+    if ((type(t) is tuple and len(t) > 1 and not is_chars(t))
+            or (isinstance(t, list) and t) or isinstance(t, (SegList, SegString))):
+        # A cyclic term (``X = f(X)``) comes back to a compound being
+        # written: ``...``, as the ISO writers write it (see ``_wq``).
+        active = _WQ_ACTIVE.get()
+        token = None
+        if active is None:
+            active = set()
+            token = _WQ_ACTIVE.set(active)
+        elif id(t) in active:
+            return "..."
+        active.add(id(t))
+        try:
+            return _term_canonical_rest(t)
+        finally:
+            active.discard(id(t))
+            if token is not None:
+                _WQ_ACTIVE.reset(token)
+    return _term_canonical_rest(t)
+
+
+def _term_canonical_rest(t: Any) -> str:
+    """:func:`term_canonical` below the cycle guard."""
     if isinstance(t, (int, float, complex)):
         return repr(t)
     if is_chars(t):
@@ -4073,7 +4162,7 @@ def term_canonical(t: Any) -> str:
     if op is not None and hasattr(t, "operand"):
         head = _quoted_atom_spelling(_iso_op_functor(cls))
         return head + "(" + term_canonical(t.operand) + ")"
-    return term_str(t)
+    return _term_str_body(t)      # the same object: term_canonical holds the cycle guard
 
 
 def _canonical_var(v) -> str:
@@ -4359,6 +4448,18 @@ def _wq_is_postfix_form(t, ops) -> bool:
             and ops.lookup_infix(name) is None)
 
 
+def _wq_spine_returns_to(w, seg) -> bool:
+    """Whether the cons spine of *w* (a SegList's walk) leads back to the
+    SegList *seg* itself -- the walk of a cyclic partial list, whose cells
+    end in the hole bound to *seg*."""
+    seen: set = set()
+    t = w
+    while type(t) is tuple and len(t) == 3 and t[0] == "." and id(t) not in seen:
+        seen.add(id(t))
+        t = deref(t[2])
+    return t is seg
+
+
 def _wq_list(elems: list, tail) -> str:
     quoted, double_quotes, ignore_ops, _nv = _WQ_OPTS.get()
     if (double_quotes and tail is None and elems
@@ -4441,8 +4542,45 @@ def _wq_local_names(text: str, seen: dict) -> str:
 
 _WQ_PLACEHOLDER = _re.compile("\x00(\\d+)\x00")
 
+#: The compounds the writer is inside of right now, by id: a sub-term that
+#: is one of them is a CYCLE (``X = f(X)``; ISO ``=/2`` builds it with no
+#: occurs check) and is written as ``...``, which is how Scryer writes it
+#: (``f(...)``, ``[a|...]``, ``g(f(...),f(f(...)))``: only a cell already
+#: being written, not every repeated sub-term).  None outside a write.
+_WQ_ACTIVE: _contextvars.ContextVar = _contextvars.ContextVar(
+    "_WQ_ACTIVE", default=None)
+
+_WQ_ELLIPSIS = object()    # the tail of a cyclic list, written ``...``
+
 
 def _wq(t: Any, prec: int, operand: bool = False) -> str:
+    """:func:`_wq_term`, with the cycle guard: a compound already being
+    written prints as ``...``."""
+    if t is _WQ_ELLIPSIS:
+        return "..."
+    if not isinstance(t, (str, bytes, int, float, tuple, list)):
+        t = deref(t)
+    if not ((type(t) is tuple and len(t) > 1) or (isinstance(t, list) and t)
+            or isinstance(t, (SegList, SegString))
+            or hasattr(type(t), "__dataclass_fields__")):   # a term instance (an operator node, a Seg segment)
+        return _wq_term(t, prec, operand)
+    active = _WQ_ACTIVE.get()
+    token = None
+    if active is None:
+        active = set()
+        token = _WQ_ACTIVE.set(active)
+    elif id(t) in active:
+        return "..."
+    active.add(id(t))
+    try:
+        return _wq_term(t, prec, operand)
+    finally:
+        active.discard(id(t))
+        if token is not None:
+            _WQ_ACTIVE.reset(token)
+
+
+def _wq_term(t: Any, prec: int, operand: bool = False) -> str:
     if not isinstance(t, (str, bytes, int, float, tuple, list)):
         t = deref(t)
     if isinstance(t, Var):
@@ -4495,8 +4633,10 @@ def _wq(t: Any, prec: int, operand: bool = False) -> str:
         return str(t)
     cell = _wq_cell(t)
     if cell is None:
-        return term_str(t, quoted=quoted, double_quotes=double_quotes,
-                        sep=",")
+        # The same object handed to the display writer: ``_wq`` already
+        # holds it in the cycle guard, so the body is entered directly.
+        return _term_str_body(t, quoted=quoted, double_quotes=double_quotes,
+                              sep=",")
     name, args = cell
     ops = _WQ_TABLE.get()
     if ignore_ops:
@@ -4511,10 +4651,33 @@ def _wq(t: Any, prec: int, operand: bool = False) -> str:
         # writes it in list notation, ``[a,b|c]``.
         elems = [args[0]]
         tail = deref(args[1])
+        spine = {id(t)}
+        active = _WQ_ACTIVE.get() or ()
         while True:
+            if type(tail) is SegList:
+                # A hole-built tail (the cells a cyclic partial list walks
+                # to end in the hole, whose binding is the SegList): the
+                # cells IT walks to continue the spine -- unless they come
+                # back to it, in which case it is the list being written.
+                if id(tail) in spine or id(tail) in active:
+                    tail = _WQ_ELLIPSIS
+                    break
+                spine.add(id(tail))
+                w = tail.__walk__()
+                if _wq_spine_returns_to(w, tail):
+                    tail = _WQ_ELLIPSIS
+                    break
+                if isinstance(w, (SegList, SegString)):
+                    break
+                tail = w
+                continue
             c = _wq_cell(tail) if type(tail) is tuple else None
             if c is None or c[0] != "." or len(c[1]) != 2:
                 break
+            if id(tail) in spine or id(tail) in active:
+                tail = _WQ_ELLIPSIS       # the spine comes back to a cell being written
+                break
+            spine.add(id(tail))
             elems.append(c[1][0])
             tail = deref(c[1][1])
         if _is_nil(tail):

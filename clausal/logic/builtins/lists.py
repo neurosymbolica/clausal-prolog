@@ -1162,8 +1162,20 @@ def sorted_set(items: list) -> list:
     seen: list = []
     hashable_keys: set = set()
     opaque_keys: list = []
-    for x in items:
-        key = _standard_order_key(x)
+    try:
+        keys = [_standard_order_key(x) for x in items]
+    except RecursionError:
+        # A cyclic or very deep element has no key: sort pairwise and drop
+        # the neighbours the pairwise order calls equal (2026-10-24).
+        from clausal.logic.builtins._helpers import term_compare  # noqa: PLC0415
+        import functools  # noqa: PLC0415
+        ordered = sorted(items, key=functools.cmp_to_key(term_compare))
+        out: list = []
+        for x in ordered:
+            if not out or term_compare(out[-1], x) != 0:
+                out.append(x)
+        return out
+    for x, key in zip(items, keys):
         try:
             duplicate = key in hashable_keys
             if not duplicate:

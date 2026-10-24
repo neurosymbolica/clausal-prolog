@@ -862,7 +862,22 @@ do_deref_walk(PyObject *term, int depth)
 static PyObject *
 py_deref_walk(PyObject *Py_UNUSED(module), PyObject *term)
 {
-    return do_deref_walk(term, 0);
+    PyObject *r = do_deref_walk(term, 0);
+    if (!r && PyErr_ExceptionMatches(PyExc_RecursionError)) {
+        /* A cyclic term (``X = f(X)``) or one nested past MAX_DEPTH: the
+         * iterative, cycle-aware twin answers instead (2026-10-24; see
+         * clausal/logic/rational_walk.py).  The recursion above stays the
+         * fast path for every term of ordinary depth. */
+        PyErr_Clear();
+        PyObject *mod = PyImport_ImportModule("clausal.logic.rational_walk");
+        if (!mod) return NULL;
+        PyObject *fn = PyObject_GetAttrString(mod, "deref_walk_iterative");
+        Py_DECREF(mod);
+        if (!fn) return NULL;
+        r = PyObject_CallOneArg(fn, term);
+        Py_DECREF(fn);
+    }
+    return r;
 }
 
 /* ================================================================

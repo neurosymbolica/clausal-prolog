@@ -84,6 +84,12 @@ def _describe(exc: BaseException) -> str:
         caret = " " * max((exc.offset or 1) - 1, 0) + "^"
         return (f"{type(exc).__name__}: {exc}\n"
                 f"    {line}\n    {caret}")
+    if isinstance(exc, RecursionError):
+        # The ISO term a program's catch/3 sees for it (``python_error_term``:
+        # ``error(resource_error(stack), _)``), then the walker's message.
+        from clausal.terms import term_writeq  # noqa: PLC0415
+        from clausal.logic.exceptions import python_error_term  # noqa: PLC0415
+        return f"{term_writeq(python_error_term(exc))}: {exc}"
     return f"{type(exc).__name__}: {exc}"
 
 
