@@ -2066,6 +2066,16 @@ def call(
         dispatch_fn = _refuse_unqualified_other_arity(
             other_arity_binding, functor, arity, module.db)
 
+    if dispatch_fn is None and (module is not None or _handle_name is not None):
+        # No procedure answers: the ``unknown`` flag (ISO 7.11.2.4) decides,
+        # as for a call from Prolog -- under fail/warning the call fails.
+        from clausal.logic.builtins.flags import (  # noqa: PLC0415
+            UNKNOWN_PROCEDURE_DISPATCH, unknown_procedure_fails,
+        )
+        if unknown_procedure_fails(
+                _handle_name if _handle_name is not None else functor, arity):
+            dispatch_fn = UNKNOWN_PROCEDURE_DISPATCH
+
     if dispatch_fn is None:
         if _handle_name is not None:
             # *functor* arrived as a MANGLED predicate handle -- module

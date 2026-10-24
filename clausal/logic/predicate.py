@@ -1060,7 +1060,13 @@ def _dispatch_at(obj: Any, arity: int, db: Any = None) -> Callable:
         from clausal.logic.exceptions import (  # noqa: PLC0415
             LogicException, string_goal_error,
         )
-        raise LogicException(string_goal_error(chars_text(obj), arity, "call/N"))
+        err = string_goal_error(chars_text(obj), arity, "call/N")
+        from clausal.logic.builtins.flags import (  # noqa: PLC0415
+            UNKNOWN_PROCEDURE_DISPATCH, unknown_procedure_term_fails,
+        )
+        if unknown_procedure_term_fails(err):   # ISO 7.11.2.4
+            return UNKNOWN_PROCEDURE_DISPATCH
+        raise LogicException(err)
     if type(obj) is str:   # STAGE 2: the atom (was the arity-0 cell)
         from clausal.logic.cells import qualify_mangled_goal  # noqa: PLC0415
         _q = qualify_mangled_goal(obj, db=db)

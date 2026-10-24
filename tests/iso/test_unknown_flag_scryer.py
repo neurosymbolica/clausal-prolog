@@ -71,6 +71,11 @@ ROWS = [
     ("phrase(nosuch, [])", _ex("nosuch/2"), "false", "nosuch/2"),
     # call/N's fold makes ','/3, a procedure that does not exist
     ("call((true, true), x)", _ex("(',')/3"), "false", ",/3"),
+    # a list (a string is the list of its chars) is the compound '.'/2, and
+    # call/N's fold makes '.'/3: a procedure that does not exist
+    ("call([a], x)", _ex("'.'/3"), "false", "./3"),
+    ("G = [a], call(G, x)", _ex("'.'/3"), "false", "./3"),
+    ('call("foo", _)', _ex("'.'/3"), "false", "./3"),
     # negation and the all-solutions builtins see the failure
     ("\\+ nosuch", _ex("nosuch/0"), "true", "nosuch/0"),
     ("findall(X, nosuch(X), L), L == []", _ex("nosuch/1"), "true",
@@ -265,3 +270,40 @@ def test_the_refusals_of_committed_choice_stay_errors(two_modules, tmp_path,
     with pytest.raises(LogicException) as info:
         list(solve(("call", ("*->", "true", "true")), a, Trail()))
     assert "*->" in str(_deref_walk(info.value.term))
+
+
+def test_a_clausal_prolog_meta_called_cut_stays_an_error(tmp_path,
+                                                         monkeypatch):
+    # Clausal Prolog refuses a cut in a meta-called goal, however the goal
+    # is built, with existence_error(procedure, !/0); that is a refusal,
+    # not a missing procedure, so unknown = fail leaves it an error.  (A
+    # .pl caller runs the cut, as Scryer does: no error to keep.)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    path = tmp_path / "unknown_flag_cut.clausal"
+    path.write_text(textwrap.dedent("""\
+        :- module(unknown_flag_cut, [t/1, u/1]).
+        pk(1).
+        pk(2).
+        t(R) :- catch((char_code(C, 33), G =.. [',', pk(_), C], call(G),
+                       R = ran), E, R = E).
+        u(R) :- catch((G = (pk(_), !), call(G), R = ran), E, R = E).
+        :- end_module(unknown_flag_cut).
+    """))
+    lm = _lm(_load_module("unknown_flag_cut", str(path)))
+    assert _answers(("set_prolog_flag", "unknown", "fail"), lm) == [()]
+    R = Var()
+    cut = ("error", ("existence_error", "procedure", ("/", "!", 0)),
+           ("/", "!", 0))
+    assert _answers(("t", R), lm, R) == [(cut,)]
+    assert _answers(("u", R), lm, R) == [(cut,)]
+
+
+def test_the_python_call_api_honours_it(two_modules):
+    from clausal.logic.solve import call
+    from clausal.predicate_diagnostics import PredicateNotFoundError
+    a, _ = two_modules
+    with pytest.raises(PredicateNotFoundError):
+        list(call("nosuch", 1, module=a))
+    assert _answers(("set_prolog_flag", "unknown", "fail"), a) == [()]
+    assert list(call("nosuch", 1, module=a)) == []
+    assert list(call("t", 1, 2, module=a)) == []      # t/2 does not exist

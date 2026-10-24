@@ -199,8 +199,10 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # call/N's extras fold onto the construct, and the folded goal names
         # no procedure (operator ruling 2026-09-25, follow Scryer):
         # ``call((A, B), X)`` -> existence_error(procedure, ','/3).
-        raise LogicException(body_with_extras_error(
-            goal_val, len(extra_args), context))
+        err = body_with_extras_error(goal_val, len(extra_args), context)
+        if _unknown_term_fails(err):
+            return _unknown_dispatch(), []
+        raise LogicException(err)
     is_cell, functor = compound_cell_shape(goal_val)
     if is_cell:
         goal_args = list(goal_val[1:])
@@ -225,8 +227,13 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # silently (the treatment a non-callable goal otherwise gets) because
         # a string here is always a mistake about representation, and a
         # silent failure is exactly how that mistake stays invisible.
-        raise LogicException(
-            string_goal_error(chars_text(goal_val), len(extra_args), "call/N"))
+        err = string_goal_error(chars_text(goal_val), len(extra_args),
+                                "call/N")
+        # The procedure '.'/N does not exist: the ``unknown`` flag (ISO
+        # 7.11.2.4) may make that a failure, as Scryer's does.
+        if _unknown_term_fails(err):
+            return _unknown_dispatch(), []
+        raise LogicException(err)
     elif type(goal_val) is list:
         # A non-empty list is the callable compound '.'/2 (ISO), and no
         # procedure '.'/N+2 exists: ``call([1, 2])`` -> existence_error(
@@ -235,8 +242,10 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # LITERAL ``call([a])`` is existence_error, a RUN-TIME ``G = [a],
         # call(G)`` type_error), reversing round 2's type_error.  A string
         # is the same list, answered by ``string_goal_error`` above.
-        raise LogicException(folded_existence_error(
-            ".", 2 + len(extra_args), context))
+        err = folded_existence_error(".", 2 + len(extra_args), context)
+        if _unknown_term_fails(err):
+            return _unknown_dispatch(), []
+        raise LogicException(err)
     else:
         # Not a callable term (operator ruling 2026-09-25, retiring the
         # translator's "section 4.2" silent-failure contract): a number,
@@ -436,6 +445,22 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
             f"{context}: no procedure {functor}/{arity} is defined in "
             + (f"module {_where}" if _where else "the calling module")))
     return dispatch, _meta_qualified(db, functor, arity, call_args)
+
+
+def _unknown_term_fails(term) -> bool:
+    """Whether the ``unknown`` flag turns the missing procedure *term*
+    names into a failure (``flags.unknown_procedure_term_fails``)."""
+    from clausal.logic.builtins.flags import (  # noqa: PLC0415
+        unknown_procedure_term_fails,
+    )
+    return unknown_procedure_term_fails(term)
+
+
+def _unknown_dispatch():
+    from clausal.logic.builtins.flags import (  # noqa: PLC0415
+        UNKNOWN_PROCEDURE_DISPATCH,
+    )
+    return UNKNOWN_PROCEDURE_DISPATCH
 
 
 def _meta_qualified(db, functor, arity, call_args):

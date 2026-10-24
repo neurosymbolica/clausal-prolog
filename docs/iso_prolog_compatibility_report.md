@@ -213,7 +213,9 @@ takes `error`, `fail` and `warning` (ISO 7.11.2.4), process-wide.
 `char_conversion/2` and `current_char_conversion/2` (ISO 8.14.5–8.14.6, the
 directive too) keep the process-wide conversion table with ISO's errors;
 no reader applies it, so the `char_conversion` flag stays `off` (Scryer has
-none of the three).
+none of the three). ISO 7.11.2.1 makes `on` the flag's default; Clausal
+keeps it `off` and refuses `on` because its reader does not convert, so a
+program that tests `current_prolog_flag(char_conversion, on)` fails here.
 
 ---
 

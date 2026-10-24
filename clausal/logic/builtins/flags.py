@@ -94,9 +94,10 @@ would raise ``existence_error(procedure, PI)`` for a missing procedure asks
 never looks at it.  ``error`` raises the existence error; ``fail`` fails
 the call; ``warning`` writes ``% Warning: predicate PI is undefined`` (the
 line Scryer prints) to standard error, the ``user_error`` stream, and fails
-the call.  A deliberate REFUSAL that is reported with the same error term
-(``*->``, a cut inside a meta-called body: Clausal is cut-free) is not a
-missing procedure and stays an error whatever the flag says.  So is a
+the call.  The deliberate REFUSALS of committed choice reported with the
+same error term -- ``*->`` on every surface, and on the Clausal Prolog
+surface a cut in a meta-called goal (a ``.pl`` caller runs it) -- are not
+missing procedures and stay errors whatever the flag says.  So is a
 module that does not exist, when no procedure is named (``call(nomod:X)``
 with ``X`` unbound).
 """
@@ -373,7 +374,9 @@ def flag_value(db, name: str):
 
 
 def unknown_procedure_fails(name, arity) -> bool:
-    """What a call to the missing procedure *name*/*arity* does under the
+    """Ask the ``unknown`` flag about a call to the missing procedure
+    *name*/*arity*; under ``warning`` this WRITES the warning (to standard
+    error) before answering True.  What the call does under the
     ``unknown`` flag (ISO 7.11.2.4): False under ``error`` (the default) --
     the caller raises its ``existence_error(procedure, PI)`` -- and True
     under ``fail`` and ``warning``, where the caller FAILS the call instead,
@@ -385,6 +388,24 @@ def unknown_procedure_fails(name, arity) -> bool:
     if mode == "warning":
         _warn_unknown(name, arity)
     return True
+
+
+def unknown_procedure_term_fails(term) -> bool:
+    """:func:`unknown_procedure_fails` for the procedure an
+    ``error(existence_error(procedure, Name/Arity), _)`` *term* names --
+    for a site that has built the ISO term already (a string or a list
+    called as a goal names '.'/N).  False for any other term."""
+    try:
+        formal = term[1]
+        pi = formal[2]
+        if formal[0] != "existence_error" or formal[1] != "procedure":
+            return False
+        if pi[0] == ":":
+            pi = pi[2]
+        name, arity = pi[1], pi[2]
+    except (TypeError, IndexError, KeyError):
+        return False
+    return unknown_procedure_fails(name, arity)
 
 
 def unknown_procedure_of(exc):
@@ -481,8 +502,8 @@ def _current_prolog_flag_factory(db):
 #: In_char -> Out_char, each a one-char atom.
 _CHAR_CONVERSION: dict[str, str] = {}
 
-_CC = "char_conversion/2"
-_CURRENT_CC = "current_char_conversion/2"
+_CHAR_CONVERSION_PI = "char_conversion/2"
+_CURRENT_CHAR_CONVERSION_PI = "current_char_conversion/2"
 
 
 def _is_char(v) -> bool:
@@ -506,15 +527,15 @@ def char_conversion__2(in_char, out_char, trail, k):
     i, o = deref(in_char), deref(out_char)
     if is_var(i) or is_var(o):
         raise LogicException(instantiation_error(
-            f"{_CC}: both characters must be bound"))
-    _check_char(i, _CC, "In_char")
-    _check_char(o, _CC, "Out_char")
+            f"{_CHAR_CONVERSION_PI}: both characters must be bound"))
+    _check_char(i, _CHAR_CONVERSION_PI, "In_char")
+    _check_char(o, _CHAR_CONVERSION_PI, "Out_char")
     from clausal import _sandbox_state  # noqa: PLC0415
     if _sandbox_state.ACTIVE:           # backstop: the goal is refused there
         from clausal.sandbox import refusal_load_error  # noqa: PLC0415
         raise refusal_load_error(permission_error(
             "access", "private_procedure", ("/", "char_conversion", 2),
-            f"{_CC}: the character conversion table is process-wide"))
+            f"{_CHAR_CONVERSION_PI}: the character conversion table is process-wide"))
     if i == o:
         _CHAR_CONVERSION.pop(i, None)
     else:
@@ -528,9 +549,9 @@ def current_char_conversion__2(in_char, out_char, trail, k):
     converted to the different character Out_char by the table."""
     i, o = deref(in_char), deref(out_char)
     if not is_var(i):
-        _check_char(i, _CURRENT_CC, "In_char")
+        _check_char(i, _CURRENT_CHAR_CONVERSION_PI, "In_char")
     if not is_var(o):
-        _check_char(o, _CURRENT_CC, "Out_char")
+        _check_char(o, _CURRENT_CHAR_CONVERSION_PI, "Out_char")
     if not is_var(i):
         pairs = [(i, _CHAR_CONVERSION[i])] if i in _CHAR_CONVERSION else []
     else:

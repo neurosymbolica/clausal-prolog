@@ -99,11 +99,14 @@ surface described in [docs/public-api.md](docs/public-api.md).
   the sandbox refuses setting it. Every site that raised
   `existence_error(procedure, PI)` for a missing procedure asks the flag on
   its miss path only (a body call, `call/N` and the meta-calls, `phrase/2,3`,
-  a call at another arity, `M:G` into a module that does not exist), so a
-  call that finds its procedure does not read it. The refusals of committed
-  choice that report the same term (`*->`, a cut in a meta-called body) stay
-  errors. Pinned by `tests/iso/test_unknown_flag_scryer.py` (21 rows under
-  each value, Clausal and Scryer).
+  a call at another arity, `M:G` into a module that does not exist, a list
+  or string called as a goal, which names `'.'/N`, and the Python
+  `clausal.call(Name, ...)` API at an unknown name or arity), so a call that
+  finds its procedure does not read it. The refusals of committed choice
+  that report the same term (`*->`; in Clausal Prolog a cut in a
+  meta-called goal) stay errors. Pinned by
+  `tests/iso/test_unknown_flag_scryer.py` (24 rows under each value,
+  Clausal and Scryer).
 
 - **`1 = 1.0` fails: a number unifies only with a number of its own kind**
   (2026-10-23, operator ruling 2026-10-23; ISO 7.3). Unification of two

@@ -52,9 +52,11 @@ truth value is `true` / `false`.
   meta-calls, `phrase/2,3`, a call at an arity the predicate does not have,
   and `M:G` into a module that does not exist. The flag is process-wide, as
   ISO makes every flag global, and a call that finds its procedure never
-  reads it. A refusal of committed choice (`*->`, a cut in a meta-called
-  body), reported with the same error term, is not a missing procedure and
-  stays an error. In the [sandbox](sandbox.md) a program cannot set it.
+  reads it. The refusals of committed choice that report the same error
+  term -- `*->` on every surface, and in Clausal Prolog a cut in a
+  meta-called goal -- are not missing procedures and stay errors (a `.pl`
+  caller runs that cut, as Scryer does). The flag
+  also governs the Python `clausal.call(...)` API. In the [sandbox](sandbox.md) a program cannot set it.
 - **`char_conversion`** is `off`. The table `char_conversion/2` and
   `current_char_conversion/2` keep (ISO 8.14.5–8.14.6) exists, process-wide,
   but no reader applies it: there is no `read_term/2`, and a source file is
