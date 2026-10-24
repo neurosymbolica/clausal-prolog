@@ -737,11 +737,15 @@ def _print__1(term, trail, k):
     yield None
 
 
-def _syntax_error(kind: str, message: str, who: str):
-    from clausal.logic.exceptions import _error  # noqa: PLC0415
-    from clausal.logic.atoms import mint  # noqa: PLC0415
-    return LogicException(_error(("syntax_error", mint(kind)),
-                                 f"{who}: {message}"))
+def _syntax_error(kind: str, message: str, who: str, *, line=None,
+                  column=None, found=None):
+    """``error(syntax_error(Kind), context(PI, Details))`` with the
+    reader's context shape (``prolog_reader.syntax_error_term``) for the
+    two kinds SWI's text-reading predicates add to the vocabulary
+    (``end_of_string``, ``end_of_clause_expected``)."""
+    from clausal.tools.prolog_reader import syntax_error_term  # noqa: PLC0415
+    return LogicException(syntax_error_term(kind, who, line=line, column=column,
+                                            found=found), message)
 
 
 def read_term_from_text(text: str, db, who: str):
@@ -751,7 +755,13 @@ def read_term_from_text(text: str, db, who: str):
     read_term/2's ``variable_names``).  The end ``.`` is optional; a second
     term is a syntax error, and so is text of layout only
     (``syntax_error(end_of_string)``, as SWI's).  A ``"..."`` is read as
-    the module's ``double_quotes`` flag says."""
+    the module's ``double_quotes`` flag says.
+
+    A syntax error is ``error(syntax_error(Kind), context(PI, [line(L),
+    column(C), ...]))``: the reader's own kind and details for text that
+    does not read (``syntax_error_exception``), SWI's ``end_of_string`` for
+    text with no term in it and ``end_of_clause_expected`` for a second
+    term, located where the text ends / the second term starts."""
     import copy as _copy  # noqa: PLC0415
     from clausal.logic.atoms import mint  # noqa: PLC0415
     from clausal.logic.builtins.lists import _cons_onto  # noqa: PLC0415
@@ -772,6 +782,13 @@ def read_term_from_text(text: str, db, who: str):
         reader.close()
         return reader, reader.read_term()
 
+    from clausal.logic.exceptions import syntax_error_exception  # noqa: PLC0415
+
+    def end_of_string(reader):
+        line, column = reader.position(len(text))
+        return _syntax_error("end_of_string", "no term in the text", who,
+                             line=line, column=column, found="end_of_file")
+
     reader, item = read(text)
     kind = type(item).__name__
     if kind == "SyntaxIssue" and not item.resumable:
@@ -780,14 +797,31 @@ def read_term_from_text(text: str, db, who: str):
         reader, item = read(text + "\n.")
         kind = type(item).__name__
         if item is EOF:
-            raise _syntax_error("end_of_string", "no term in the text", who)
+            raise end_of_string(reader)
+        if kind == "SyntaxIssue" and item.line is not None \
+                and item.line > text.count("\n") + 1:
+            # The fault is the appended end token: for the caller the text
+            # simply ended (``term_to_atom(T, 'foo(')``), at its own end.
+            import dataclasses  # noqa: PLC0415
+            line, column = reader.position(len(text))
+            item = dataclasses.replace(item, line=line, column=column,
+                                       found="end_of_file")
     if item is EOF:
-        raise _syntax_error("end_of_string", "no term in the text", who)
+        raise end_of_string(reader)
     if kind == "SyntaxIssue":
-        raise _syntax_error("incomplete_reduction", item.message, who)
-    if reader.read_term() is not EOF:
+        raise syntax_error_exception(item, who)
+    second = reader.read_term()
+    if second is not EOF:
+        # A SyntaxIssue has its span; an item's span tree leads with the
+        # item's own (start, end) pair (iso_l3._top_span's contract).
+        span = getattr(second, "span", None) or getattr(second, "spans", None)
+        while type(span) is tuple and span and type(span[0]) is tuple:
+            span = span[0]
+        start = span[0] if type(span) is tuple and len(span) == 2 and span[0] >= 0 else None
+        line, column = reader.position(start)
         raise _syntax_error("end_of_clause_expected",
-                            "more than one term in the text", who)
+                            "more than one term in the text", who,
+                            line=line, column=column)
     term = item.term
     if kind == "Directive":
         term = (":-", term)

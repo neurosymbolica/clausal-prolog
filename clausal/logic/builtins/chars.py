@@ -647,21 +647,22 @@ _SYMBOL_CHARS = frozenset("+-*/\\^<>=~:.?@#&$")
 
 class _NumberSyntax(Exception):
     """A number text that is not one: *kind* is Scryer's syntax_error
-    formal (``unexpected_end_of_file``, ``unexpected_char``, ...) and
-    *located* whether Scryer's context carries a position (``PI:0``)."""
+    formal (``unexpected_end_of_file``, ``unexpected_char``, ...) and *at*
+    the offset in the text where the reader gave up (the offending
+    character, or the text's length for its end)."""
 
-    def __init__(self, kind: str, located: bool):
+    def __init__(self, kind: str, at: int):
         super().__init__(kind)
         self.kind = kind
-        self.located = located
+        self.at = at
 
 
-def _eof():
-    return _NumberSyntax("unexpected_end_of_file", False)
+def _eof(at: int):
+    return _NumberSyntax("unexpected_end_of_file", at)
 
 
-def _bad_char():
-    return _NumberSyntax("unexpected_char", True)
+def _bad_char(at: int):
+    return _NumberSyntax("unexpected_char", at)
 
 
 def _skip_layout(s: str, i: int) -> int:
@@ -678,7 +679,7 @@ def _skip_layout(s: str, i: int) -> int:
         elif c == "/" and s.startswith("/*", i):
             j = s.find("*/", i + 2)
             if j < 0:
-                raise _eof()
+                raise _eof(n)
             i = j + 2
         else:
             break
@@ -700,17 +701,17 @@ def _char_code_token(s: str, j: int):
     """``0'c`` from its character at *j*: ``(code, end)``."""
     n = len(s)
     if j >= n:
-        raise _eof()
+        raise _eof(n)
     ch = s[j]
     if ch == "'":
         if j + 1 >= n:
-            raise _eof()
+            raise _eof(n)
         if s[j + 1] == "'":
             return 39, j + 2
-        raise _bad_char()
+        raise _bad_char(j + 1)
     if ch == "\\":
         if j + 1 >= n:
-            raise _eof()
+            raise _eof(n)
         e = s[j + 1]
         # "0" is a key in _CHAR_ESCAPES too (atom_number/2's single-char
         # shorthand), but here it must fall through to the octal-digit-run
@@ -727,16 +728,16 @@ def _char_code_token(s: str, j: int):
             while m < n and ok(s[m]):
                 m += 1
             if m == k or m >= n:
-                raise _eof() if m >= n else _bad_char()
+                raise _eof(n) if m >= n else _bad_char(m)
             if s[m] != "\\":
-                raise _bad_char()
+                raise _bad_char(m)
             code = int(s[k:m], base)
             if code >= 0x110000:
-                raise _bad_char()
+                raise _bad_char(k)
             return code, m + 1
-        raise _bad_char()
+        raise _bad_char(j + 1)
     if ch == "\n":
-        raise _bad_char()
+        raise _bad_char(j)
     return ord(ch), j + 1
 
 
@@ -758,7 +759,7 @@ def _number_token_at(s: str, i: int):
             if j > i + 2:
                 return int(s[i + 2:j], radix), j
             if i + 2 >= n:
-                raise _eof()
+                raise _eof(n)
             return 0, i + 1          # ``0`` then garbage
     j = _digits(s, i, lambda c: "0" <= c <= "9")
     if j + 1 < n and s[j] == "." and "0" <= s[j + 1] <= "9":
@@ -775,7 +776,7 @@ def _number_token_at(s: str, i: int):
                 k = m
         value = float(s[i:k].replace("_", ""))
         if value in (float("inf"), float("-inf")):
-            raise _NumberSyntax("infinite_float", True)
+            raise _NumberSyntax("infinite_float", i)
         return value, k
     text = s[i:j].replace("_", "")
     # through Decimal: CPython caps int(str) at ~4300 digits
@@ -802,16 +803,16 @@ def _other_token_end(s: str, i: int) -> int:
         while True:
             k = s.find("'", j)
             if k < 0:
-                raise _eof()
+                raise _eof(n)
             if k + 1 < n and s[k + 1] == "'":
                 j = k + 2
                 continue
             return k + 1
     if c in "!;":
         if i + 1 == n:
-            raise _NumberSyntax("cannot_parse_big_int", True)
-        raise _bad_char()
-    raise _bad_char()                # a variable, punctuation, a quote ...
+            raise _NumberSyntax("cannot_parse_big_int", i)
+        raise _bad_char(i + 1)
+    raise _bad_char(i)               # a variable, punctuation, a quote ...
 
 
 def _read_number_text(s: str):
@@ -825,13 +826,13 @@ def _read_number_text(s: str):
     n = len(s)
     i = _skip_layout(s, 0)
     if i == n:
-        raise _eof()
+        raise _eof(n)
     neg = False
     if s[i] == "-" and (i + 1 == n or s[i + 1] not in _SYMBOL_CHARS):
         neg = True
         i = _skip_layout(s, i + 1)
         if i == n:
-            raise _eof()
+            raise _eof(n)
     elif s[i] == "'" and s[i + 1:i + 3] == "-'":
         # the quoted-atom spelling of the same name "-" forms the negative
         # sign too (ruled 2026-10-13, Ulrich's number_chars_cont #54: Scryer
@@ -839,31 +840,37 @@ def _read_number_text(s: str):
         neg = True
         i = _skip_layout(s, i + 3)
         if i == n:
-            raise _eof()
+            raise _eof(n)
     if "0" <= s[i] <= "9":
         value, end = _number_token_at(s, i)
         if end < n:
-            raise _bad_char()
+            raise _bad_char(end)
         # ``-0.0`` reads as 0.0, as the reader has it (operator ruling
         # 2026-10-24); present_number is the one spelling of that rule.
         return present_number(-value) if neg else value
     end = _other_token_end(s, i)
-    raise _eof() if end == n else _bad_char()
+    raise _eof(n) if end == n else _bad_char(end)
 
 
 def _parse_number_chars(s: str, who: str):
-    """*s* read as a number, or ``syntax_error(Kind)`` in Scryer's shape:
-    the context is ``who`` (``number_chars/2``), or ``who:0`` for an error
-    Scryer locates."""
+    """*s* read as a number, or ``error(syntax_error(Kind), context(PI,
+    [line(L), column(C), found(F)]))``: Scryer's formal (its
+    ``unexpected_end_of_file`` / ``unexpected_char`` / ``infinite_float`` /
+    ``cannot_parse_big_int``), and the context every syntax error of the
+    engine has (``prolog_reader.syntax_error_term``, operator ruling
+    2026-10-24) -- it used to be Scryer's own ``who`` or ``who:0``.  *F* is
+    the offending character, or ``end_of_file``."""
     try:
         return _read_number_text(s)
     except _NumberSyntax as exc:
-        from clausal.logic.exceptions import _error  # noqa: PLC0415
-        name, _, arity = who.rpartition("/")
-        pi = ("/", mint(name), int(arity))
-        context = (":", pi, 0) if exc.located else pi
-        raise LogicException(
-            _error(("syntax_error", mint(exc.kind)), context)) from None
+        from clausal.tools.prolog_reader import syntax_error_term  # noqa: PLC0415
+        at = min(exc.at, len(s))
+        line = s.count("\n", 0, at) + 1
+        column = at - (s.rfind("\n", 0, at) + 1) + 1
+        found = s[at] if at < len(s) else "end_of_file"
+        raise LogicException(syntax_error_term(
+            mint(exc.kind), who, line=line, column=column,
+            found=mint(found))) from None
 
 
 def _ground_items(v):

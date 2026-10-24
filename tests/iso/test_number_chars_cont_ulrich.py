@@ -65,8 +65,11 @@ ROWS = [
     ("#87 self-referential [C|C]", "number_chars(1,[C|C]), R = C", []),
     # The \0 escape, backwards.
     ("#89 0'\\0 with no closing backslash -- incomplete, must raise",
-     r"catch(number_chars(N, ['0', '\'', '\\', '0']), error(F, C), R = [F, C])",
-     ["[syntax_error(unexpected_end_of_file),number_chars/2]"]),
+     # The formal alone: ISO leaves the context implementation defined
+     # (Scryer's number_chars/2, Clausal's context(number_chars/2, [...]),
+     # operator ruling 2026-10-24).
+     r"catch(number_chars(N, ['0', '\'', '\\', '0']), error(F, _), R = F)",
+     ["syntax_error(unexpected_end_of_file)"]),
     ("#86 0'\\0\\ complete escape -- must read as NUL",
      r"number_chars(R, ['0', '\'', '\\', '0', '\\'])",
      ["0"]),
