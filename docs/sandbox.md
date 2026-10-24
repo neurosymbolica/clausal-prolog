@@ -207,6 +207,7 @@ raises `error(permission_error(access, private_procedure, Name/Arity), _)`:
 |---|---|
 | `halt/0,1` | ends the process |
 | `set_prolog_flag/2` | changes process-wide flags and later loads |
+| `char_conversion/2` | changes the process-wide character conversion table (the directive is refused too) |
 | `op/3` | changes the process-wide operator table |
 | `global_atom/2` | writes the atom pool every module is seeded from |
 | `gensym/2` | a process-wide counter |
