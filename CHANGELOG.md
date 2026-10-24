@@ -128,8 +128,10 @@ surface described in [docs/public-api.md](docs/public-api.md).
   goal that is itself cyclic (`G = (G, true)`) or too deep to compile raises
   `error(resource_error(stack), _)`, as `call(G)` does in a program.
   `to_python` and `term_key` raise `error(resource_error(finite_memory), _)`
-  on a cycle (a Python value and a sort key are finite; the error the engine
-  raises where it knows it saw a cycle, ruling 2026-10-24, provisional) and
+  on a cycle (operator ruling 2026-10-24: the converters raise on a cycle,
+  since a Python value and a sort key are finite; the error term is the one
+  the engine raises where it knows it saw a cycle, ruling 2026-10-24,
+  provisional) and
   `error(resource_error(stack), _)` on a term too deep to convert, as a
   `LogicException`; so does every `py.*` wrapper that converts its
   argument with `to_python` (`py.json`'s generator has its own converter and
