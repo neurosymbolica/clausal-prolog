@@ -4644,7 +4644,8 @@ def term_write(t: Any, *, quoted: bool, double_quotes: bool = False,
 
 
 def term_writeq(t: Any, *, local_vars: bool = False,
-                var_names: "dict[int, str] | None" = None) -> str:
+                var_names: "dict[int, str] | None" = None,
+                priority: int = 1200) -> str:
     """Render *t* as Scryer prints an uncaught error term.
 
     ``writeq``-style with operators: ``error(type_error(evaluable,(+)/2),
@@ -4665,11 +4666,16 @@ def term_writeq(t: Any, *, local_vars: bool = False,
 
     *var_names* (``id(var) -> name``) spells those variables by name, as a
     toplevel prints an answer's variables.
+
+    *priority* below 1200 writes *t* as an operand of that priority: an
+    operator term above it is bracketed, and so is a bare operator atom
+    (``(-)``), as an operand of an operator is.  A toplevel writes an
+    answer's value at 699, the right operand of ``=``.
     """
     token = _WQ_LOCAL_VARS.set({} if local_vars else None)
     names_token = _WQ_VAR_NAMES.set(var_names)
     try:
-        text = _wq(t, 1200)
+        text = _wq(t, priority, priority < 1200)
         return _wq_local_names(text, _WQ_LOCAL_VARS.get()) if local_vars else text
     finally:
         _WQ_VAR_NAMES.reset(names_token)

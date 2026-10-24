@@ -107,6 +107,17 @@ surface described in [docs/public-api.md](docs/public-api.md).
   meta-called goal) stay errors. Pinned by
   `tests/iso/test_unknown_flag_scryer.py` (24 rows under each value,
   Clausal and Scryer).
+- **The `-g` answer printer brackets an operator value, as Scryer does**
+  (2026-10-24, operator ruling 2026-10-24). `clausal FILE -g GOAL` wrote
+  each binding at priority 1200, so `T = (a,b)` answered `T = a,b` (which
+  reads back as `(T = a), b`) and `X = (:-)` answered `X = :-`. A binding
+  is now written as writeq/1 writes the right operand of `=` (priority
+  699): `T = (a,b)`, `X = (a:-b)`, `X = (a=b)`, `X = (\+a)`, and a bare
+  operator atom bracketed, `X = (-)`. An answer that ends in a graphic
+  character gets its full stop after a space (`X = $ .`), and a `-g` goal
+  that ends in one (`-g 'X = $'`) is no longer glued to the end token it
+  is read with. Pinned row by row against Scryer's toplevel in
+  `tests/iso/test_answer_printer_brackets_scryer.py`.
 
 - **`1 = 1.0` fails: a number unifies only with a number of its own kind**
   (2026-10-23, operator ruling 2026-10-23; ISO 7.3). Unification of two

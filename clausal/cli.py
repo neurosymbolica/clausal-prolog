@@ -144,7 +144,9 @@ def _read_goal(text: str, op_table):
     # operator atom such as \ is a goal (Ulrich #224). The reader sorts
     # the term into an item; a directive or query item gets back the
     # prefix operator it was read with.
-    reader.feed(f"{body}.\n")
+    # The end token is set off by a space: glued to a goal that ends in a
+    # graphic character (``X = $``) it would read as part of one atom.
+    reader.feed(f"{body} .\n")
     reader.close()
     item = reader.read_term()
     kind = type(item).__name__
@@ -239,7 +241,11 @@ def _answer(shown, trail) -> str:
     for name, w in values:
         if isinstance(w, Var) and names[id(w)] == name:
             continue                    # X = X: nothing to say
-        parts.append(f"{name} = {term_writeq(w, var_names=names)}")
+        # The value is the right operand of = (xfx 700): written as
+        # writeq writes an operand of priority 699, so (a,b) and a bare
+        # operator atom such as (-) are bracketed, as Scryer prints them.
+        parts.append(f"{name} = "
+                     f"{term_writeq(w, var_names=names, priority=699)}")
     free: dict = {}
     for _, w in values:
         _term_vars(w, free)
@@ -250,6 +256,13 @@ def _answer(shown, trail) -> str:
     return ", ".join(parts) if parts else "true"
 
 
+def _end_answer(text: str) -> str:
+    """*text* and its full stop, set off by a space when *text* ends in a
+    graphic character (``X = $ .``): ``$.`` would read as one token."""
+    from clausal.terms import _GRAPHIC_CHARS  # noqa: PLC0415
+    return text + (" ." if text[-1:] in _GRAPHIC_CHARS else ".")
+
+
 def _run_goal(module, text: str, op_table, once: bool) -> bool:
     """Run one ``-g`` goal, printing its answers.  True iff it had one."""
     from clausal import solve  # noqa: PLC0415
@@ -258,7 +271,7 @@ def _run_goal(module, text: str, op_table, once: bool) -> bool:
     found = False
     for trail in solve(("call", goal), module=module):
         found = True
-        print(_answer(shown, trail) + ".")
+        print(_end_answer(_answer(shown, trail)))
         sys.stdout.flush()
         if once:
             break
