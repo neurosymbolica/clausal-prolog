@@ -46,7 +46,6 @@ PROG = textwrap.dedent("""\
 def _clausal(tmp_path, *argv, **extra_env):
     env = dict(os.environ)
     env.pop("CLAUSAL_PL_FRONTEND", None)
-    env.pop("CLAUSAL_ALLOW_PL", None)
     env.update(extra_env)
     env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
     return subprocess.run(
@@ -171,7 +170,7 @@ def test_g_reads_the_programs_operators_past_a_comment_with_slash_star(tmp_path)
     # comment and miss the operator.
     (tmp_path / "ops.pl").write_text(
         "/* a /* b */\n:- op(200, xfx, ~~).\n")
-    r = _clausal(tmp_path, "--prolog", "-g", "_X = (a ~~ b), _X =.. L", "ops.pl")
+    r = _clausal(tmp_path, "-g", "_X = (a ~~ b), _X =.. L", "ops.pl")
     assert (r.returncode, r.stdout) == (0, "L = [~~,a,b].\n"), r.stderr
 
 
@@ -196,29 +195,8 @@ def test_an_iso_prolog_program_runs(tmp_path):
     (tmp_path / "count.pl").write_text(
         "len([], 0).\nlen([_|T], N) :- len(T, M), N is M + 1.\n"
         "main :- len([a, b, c], N), write(N), nl.\n")
-    r = _clausal(tmp_path, "--prolog", "count.pl")
-    assert (r.returncode, r.stdout) == (0, "3\n"), r.stderr
-
-
-def test_pl_file_without_prolog_flag_exits_with_an_explanation(tmp_path):
-    (tmp_path / "count.pl").write_text("main :- write(hi), nl.\n")
     r = _clausal(tmp_path, "count.pl")
-    assert r.returncode == 2 and r.stdout == ""
-    assert "--prolog" in r.stderr and "CLAUSAL_ALLOW_PL" in r.stderr
-
-
-@pytest.mark.parametrize("value", ["1", "true", "True", "yes"])
-def test_clausal_allow_pl_spellings_load_a_pl_file(tmp_path, value):
-    (tmp_path / "count.pl").write_text("main :- write(hi), nl.\n")
-    r = _clausal(tmp_path, "count.pl", CLAUSAL_ALLOW_PL=value)
-    assert (r.returncode, r.stdout) == (0, "hi\n"), r.stderr
-
-
-@pytest.mark.parametrize("value", ["TRUE", "0", "", "no", "on"])
-def test_clausal_allow_pl_other_values_do_not(tmp_path, value):
-    (tmp_path / "count.pl").write_text("main :- write(hi), nl.\n")
-    r = _clausal(tmp_path, "count.pl", CLAUSAL_ALLOW_PL=value)
-    assert r.returncode == 2 and r.stdout == ""
+    assert (r.returncode, r.stdout) == (0, "3\n"), r.stderr
 
 
 @pytest.mark.parametrize("argv, says", [
@@ -311,6 +289,6 @@ def test_a_pl_program_imports_library_clpq(tmp_path, frontend):
     # named 'clpq'"), and `{A = B, C = D}` as one set-goal element.
     (tmp_path / "lin.pl").write_text(CLPQ)
     r = _clausal(tmp_path, "-g", "dependent(X, Y)", "-g", "between_1_3(X)",
-                 "lin.pl", CLAUSAL_PL_FRONTEND=frontend, CLAUSAL_ALLOW_PL="1")
+                 "lin.pl", CLAUSAL_PL_FRONTEND=frontend)
     assert (r.returncode, r.stdout) == (
         0, DEPENDENT + "\n{X > 1}, {X < 3}.\n"), r.stderr

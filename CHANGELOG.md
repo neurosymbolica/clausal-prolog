@@ -19,9 +19,7 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `~/.clausal_history`, and run `consult/1`, `[File]` and `halt/0,1`. Bare
   `clausal` used to open the Python/seam REPL, which is now `clausal
   --python`. A query refuses `!`, `->` and `*->` unless `--prolog` is given.
-  **A `.pl` file now loads only with `--prolog` or `CLAUSAL_ALLOW_PL` set to
-  `1`, `true`, `True` or `yes`**, otherwise `clausal` exits 2 with an
-  explanation. `-g` answers now print `dif/2` and CLP(FD) domain residuals
+  `-g` answers now print `dif/2` and CLP(FD) domain residuals
   instead of `true.`. Pinned in `tests/test_toplevel.py` (a pseudo-terminal).
 
 - **`sort/4`, `predsort/3`, `print/1`, `atom_string/2`, `term_to_atom/2`

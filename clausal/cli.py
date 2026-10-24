@@ -20,9 +20,7 @@ FILE is a Clausal Prolog (``.clausal``) or ISO Prolog (``.pl``) program.
 
 Without FILE, ``clausal`` opens the interactive ``?-`` top-level
 (``clausal.toplevel``; ``--prolog`` lets queries use ``!`` and ``->``);
-``clausal --python`` starts the Python/seam REPL.  A ``.pl`` FILE needs
-``--prolog`` or ``CLAUSAL_ALLOW_PL`` set to ``1``, ``true``, ``True`` or
-``yes``.  Exit statuses: 0 success, 1 a goal failed or raised or the
+``clausal --python`` starts the Python/seam REPL.  Exit statuses: 0 success, 1 a goal failed or raised or the
 program did not load, 2 a usage error.
 """
 from __future__ import annotations
@@ -36,11 +34,6 @@ from clausal._suffixes import CLAUSAL_PROLOG_SUFFIXES, PROLOG_SUFFIX
 EXIT_OK = 0
 EXIT_FAILED = 1
 EXIT_USAGE = 2
-
-#: A ``.pl`` file loads only under ``--prolog`` or with this variable set to
-#: one of these exact spellings (operator ruling 2026-10-24).
-ALLOW_PL_ENV = "CLAUSAL_ALLOW_PL"
-ALLOW_PL_VALUES = ("1", "true", "True", "yes")
 
 #: The program files the CLI runs: Clausal Prolog, then ISO Prolog.
 PROGRAM_SUFFIXES: tuple[str, ...] = (*CLAUSAL_PROLOG_SUFFIXES, PROLOG_SUFFIX)
@@ -154,47 +147,15 @@ def _goal_reader_ops(source: str):
     return table
 
 
-def _read_goal(text: str, op_table):
-    """``text`` -> ``(goal_cell, [(name, Var), ...])``: the named variables
-    in first-occurrence order, ``_``-led names left out (a toplevel does not
-    report them).  A syntax error raises ``SyntaxError``."""
+def _lower_term(term):
+    """A reader term -> ``(goal, {index: Var})``: ``VarRef`` s become fresh
+    ``Var`` s and a list spelled with cons cells becomes a Python list
+    (as the native front end lowers it).  Shared by ``-g``, the top-level
+    and the quad runner."""
     from clausal.pythonic_ast.nodes import StarUnpack  # noqa: PLC0415
     from clausal.logic.variables import Var  # noqa: PLC0415
-    from clausal.tools.prolog_reader import PrologReader, VarRef  # noqa: PLC0415
-    from clausal.tools.prolog_tokenizer import PL_SOURCE_NESTED_COMMENTS  # noqa: PLC0415
-    from clausal.tools.toklex import EOF  # noqa: PLC0415
+    from clausal.tools.prolog_reader import VarRef  # noqa: PLC0415
 
-    body = text.strip()
-    if body.endswith("."):
-        body = body[:-1]
-    # Read as a .pl source file is: ISO block comments do not nest.
-    reader = PrologReader(op_table=op_table,
-                          nested_comments=PL_SOURCE_NESTED_COMMENTS)
-    # The goal is read as a whole term, as a toplevel reads it (priority
-    # 1201, ISO 6.2), not as the operand of ?- (at most 1199): a lone
-    # operator atom such as \ is a goal (Ulrich #224). The reader sorts
-    # the term into an item; a directive or query item gets back the
-    # prefix operator it was read with.
-    # The end token is set off by a space: glued to a goal that ends in a
-    # graphic character (``X = $``) it would read as part of one atom.
-    reader.feed(f"{body} .\n")
-    reader.close()
-    item = reader.read_term()
-    kind = type(item).__name__
-    if item is EOF or kind not in ("Clause", "DCGRule", "Directive", "Query"):
-        from clausal.import_hook import PrologSyntaxError  # noqa: PLC0415
-        if kind == "SyntaxIssue":
-            # The term a program reading the same text would catch.
-            raise PrologSyntaxError(item.message, term=item.error_term())
-        raise SyntaxError(f"not a goal: {text}")
-    if reader.read_term() is not EOF:
-        raise SyntaxError(f"more than one goal in: {text}")
-    term = item.term
-    if kind == "Directive":
-        term = (":-", term)
-    elif kind == "Query":
-        term = ("?-", term)
-    names = dict(item.var_names) if hasattr(item, "var_names") else {}
     variables: dict[int, Var] = {}
 
     def build(t):
@@ -238,7 +199,51 @@ def _read_goal(text: str, op_table):
             out = (".", h, out)
         return out
 
-    goal = build(term)
+    return build(term), variables
+
+
+def _read_goal(text: str, op_table):
+    """``text`` -> ``(goal_cell, [(name, Var), ...])``: the named variables
+    in first-occurrence order, ``_``-led names left out (a toplevel does not
+    report them).  A syntax error raises ``SyntaxError``."""
+    from clausal.pythonic_ast.nodes import StarUnpack  # noqa: PLC0415
+    from clausal.logic.variables import Var  # noqa: PLC0415
+    from clausal.tools.prolog_reader import PrologReader, VarRef  # noqa: PLC0415
+    from clausal.tools.prolog_tokenizer import PL_SOURCE_NESTED_COMMENTS  # noqa: PLC0415
+    from clausal.tools.toklex import EOF  # noqa: PLC0415
+
+    body = text.strip()
+    if body.endswith("."):
+        body = body[:-1]
+    # Read as a .pl source file is: ISO block comments do not nest.
+    reader = PrologReader(op_table=op_table,
+                          nested_comments=PL_SOURCE_NESTED_COMMENTS)
+    # The goal is read as a whole term, as a toplevel reads it (priority
+    # 1201, ISO 6.2), not as the operand of ?- (at most 1199): a lone
+    # operator atom such as \ is a goal (Ulrich #224). The reader sorts
+    # the term into an item; a directive or query item gets back the
+    # prefix operator it was read with.
+    # The end token is set off by a space: glued to a goal that ends in a
+    # graphic character (``X = $``) it would read as part of one atom.
+    reader.feed(f"{body} .\n")
+    reader.close()
+    item = reader.read_term()
+    kind = type(item).__name__
+    if item is EOF or kind not in ("Clause", "DCGRule", "Directive", "Query"):
+        from clausal.import_hook import PrologSyntaxError  # noqa: PLC0415
+        if kind == "SyntaxIssue":
+            # The term a program reading the same text would catch.
+            raise PrologSyntaxError(item.message, term=item.error_term())
+        raise SyntaxError(f"not a goal: {text}")
+    if reader.read_term() is not EOF:
+        raise SyntaxError(f"more than one goal in: {text}")
+    term = item.term
+    if kind == "Directive":
+        term = (":-", term)
+    elif kind == "Query":
+        term = ("?-", term)
+    names = dict(item.var_names) if hasattr(item, "var_names") else {}
+    goal, variables = _lower_term(term)
     shown = [(names.get(i, f"_G{i}"), v) for i, v in variables.items()
              if not names.get(i, "_").startswith("_")]
     return goal, shown
@@ -384,13 +389,6 @@ def main(argv: list[str] | None = None) -> int:
                      f"{' or '.join(PROGRAM_SUFFIXES)} file")
     if not os.path.isfile(path):
         parser.error(f"{path}: no such file")
-    if path.endswith(PROLOG_SUFFIX) and not (
-            args.prolog or os.environ.get(ALLOW_PL_ENV) in ALLOW_PL_VALUES):
-        _error(f"{path}: an ISO Prolog (.pl) file loads only with --prolog "
-               f"(full Prolog syntax: !, ->, *->), or with {ALLOW_PL_ENV} "
-               f"set to one of {', '.join(ALLOW_PL_VALUES)}.  Clausal Prolog "
-               f"is the .clausal surface.")
-        return EXIT_USAGE
     if args.test and (args.goal or args.once):
         parser.error("--test runs the program's tests; it takes no -g")
     if args.once and not args.goal:

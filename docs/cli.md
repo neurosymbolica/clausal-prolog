@@ -77,9 +77,7 @@ History is kept in `~/.clausal_history`. When stdin is not a terminal there is
 no prompt and no key prompt: the first answer of each query is printed.
 
 Queries use the restricted Clausal Prolog surface: `!`, `->` and `*->` are
-refused. `--prolog` accepts them. A `.pl` file loads only with `--prolog`, or
-with the environment variable `CLAUSAL_ALLOW_PL` set to `1`, `true`, `True` or
-`yes`; otherwise `clausal` exits with status 2 and says so. The Python/seam
+refused. `--prolog` accepts them. The Python/seam
 REPL that bare `clausal` used to open is `clausal --python`.
 
 ## Running goals: `-g`

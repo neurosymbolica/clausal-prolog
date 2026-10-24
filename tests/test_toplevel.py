@@ -37,7 +37,6 @@ def _env(home):
     env.pop("CLAUSAL_PL_FRONTEND", None)
     env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
     env["HOME"] = str(home)
-    env["CLAUSAL_ALLOW_PL"] = "1"       # prog.pl loads only with this or --prolog
     return env
 
 
