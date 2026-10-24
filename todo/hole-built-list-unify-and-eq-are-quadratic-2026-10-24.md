@@ -41,19 +41,21 @@ link without walking past the current link, would make it linear.
 
 ## Related
 
-`solve(("p", DEEP), m)` from Python with a 100k-nested GROUND argument still
-raises a raw `RecursionError` to the Python caller: the query compiler's
-`_collect_vars(goal, include_bound=True)` recurses before the clause
-rewrite (`compiler/deep_literals.py`) can see the goal.  A program's own
-`call/1` lifts such an argument as a parameter and is fine; this is the
-Python entry only.
+**The Python-entry part is FIXED 2026-10-24** (pinned by
+`tests/test_python_entry_cyclic_deep.py`): a cyclic or 100k-deep argument
+handed to `solve`/`once`/`call`/`query` from Python is passed as a run-time
+parameter when the query compiler's recursive walks overflow on it, as a
+program's `call/1` passes it, so `solve(("acyclic_term", X), m)` fails,
+`solve(("=", X, X), m)` and `solve(("=", DEEP, V), m)` succeed.  A goal that
+is itself cyclic (`G = (G, true)`) or too deep to compile raises
+`error(resource_error(stack), _)`.  `to_python` and `term_key` raise
+`error(resource_error(finite_memory), _)` on a cycle and
+`error(resource_error(stack), _)` on a term too deep to convert, as a
+`LogicException` (ruling 2026-10-24).
 
-The same holds for a CYCLIC term at the Python entry, and for the two
-converters (checked 2026-10-24): with `X` bound by `cyc(X) :- X = f(X)`,
-`solve(("acyclic_term", X), m)`, `solve(("=", X, X), m)`,
-`to_python(X.value)` and `term_key(X.value)` each raise a raw
-`RecursionError` (as they did before the rational-tree work; it is loud,
-not silent).  Reading the answer with `Var.value` / `deref`, one step at a
-time, is fine.  Under ruling 2026-10-24 the entry should raise
-`resource_error(finite_memory)` for a known cycle and
-`resource_error(stack)` for depth, as the engine does inside a program.
+Still open, outside this file's subject: a Python exception raised DURING a
+search started from Python (not at the compile) still reaches the Python
+caller raw -- `solve(("call", G), m)` with `G = (G, true)` raises
+`RecursionError` out of the drive loop, where a program's `catch/3` sees
+`resource_error(stack)`.  That is the general top-level policy for an
+uncaught Python exception, not a cyclic-term walker.

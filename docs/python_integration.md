@@ -121,11 +121,19 @@ and a Python tuple cannot contain itself, so the cycle reaches Python through a
 **bound** variable: with `cyc(X) :- X = f(X)`, `X.value` is `('f', K)` where
 `K` is a `Var` and `clausal.deref(K)` is that same tuple. `K` is not an unbound
 hole; deref every argument before testing for `Var`, as for any answer.
-`str(X)` writes the cycle as `('f', AttVar(_1=(...)))`. To refuse a cycle
-loudly, test for it in the goal with `acyclic_term/1`. Today the converters
-(`to_python`, `term_key`) and a `solve()` call whose goal holds the cyclic
-term raise a raw `RecursionError` (a recorded gap,
-`todo/hole-built-list-unify-and-eq-are-quadratic-2026-10-24.md`).
+`str(X)` writes the cycle as `('f', AttVar(_1=(...)))`. Handing the cyclic
+term back in works as it does inside a program: `solve(("acyclic_term", X),
+module=m)` fails, `solve(("=", X, X), module=m)` succeeds, and so does a
+clause head or `compare/3` on it (an argument the query compiler cannot walk
+is passed as a run-time parameter, as `call/1` passes it). The same goes for
+an acyclic argument nested deeper than Python's recursion limit. A cycle has
+no Python value and no finite sort key, so `to_python` and `term_key` raise
+`LogicException` with `error(resource_error(finite_memory), _)` on one (and
+`error(resource_error(stack), _)` on an acyclic term too deep to convert),
+never a raw `RecursionError`. A GOAL that is itself cyclic, `G = (G, true)`,
+raises `resource_error(stack)` at `solve()`, the error `call(G)` raises
+inside a program. To refuse a cycle loudly, test for it in the goal with
+`acyclic_term/1`.
 
 ### `once` — first solution only
 
@@ -531,7 +539,12 @@ tuple; a look-alike whose components do not rebuild stays a cell). A
 `SetTerm` is a `frozenset`; a `DictTerm` is a
 `dict` with keys converted and normalised — an atom key and the string of its
 spelling become **one** Python key. A non-ground `Seg*` crosses raw (there is
-no text yet). This is what every `py.*` wrapper argument gets.
+no text yet). This is what every `py.*` wrapper argument gets. A **cyclic**
+term (`X = f(X)`) has no Python value — a tuple cannot contain itself, and a
+cyclic Python list is not built for you — so it raises `LogicException` with
+`error(resource_error(finite_memory), _)`; an acyclic term nested deeper than
+Python's recursion limit raises `error(resource_error(stack), _)`. Read
+such a term with `clausal.deref`, one step at a time.
 
 **A char list has two Python shapes, and only here.** The engine builds one
 char list as the chars carrier (a string under `-double_quotes(chars)`, a DCG
@@ -563,7 +576,11 @@ every value a term can hold (a mixed list never raises), the same order
 keys as the string/list/code list it walks to — so `compare/3` answers `=`
 for a ground `SegString` against its string, and `sort/2` keeps one of them;
 one that still holds an unbound hole keys in an opaque band after everything
-else.
+else. A cyclic term has no finite key: `term_key` raises
+`error(resource_error(finite_memory), _)` for one (and
+`error(resource_error(stack), _)` for a term too deep to key), as a
+`LogicException`. `compare/3` and `msort/2` still order cyclic terms, so
+solve `compare/3` to order them from Python.
 
 `to_python` and `to_clausal` are NOT what `++`/`--` do. The seams have their
 own, narrower rules — a `++` argument is unwrapped one level, a goal-position

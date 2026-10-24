@@ -114,6 +114,27 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A cyclic or deep term handed in from Python works, or raises the
+  engine's ISO error; never a raw `RecursionError`** (2026-10-24, operator
+  ruling 2026-10-24: a non-conformity is a bug).  With `X` bound by
+  `cyc(X) :- X = f(X)`, `solve(("acyclic_term", X), m)` and `solve(("=", X,
+  X), m)` raised `RecursionError` from the query compiler's variable
+  collector, and `solve(("=", T, V), m)` with a 100k-nested ground `T` from
+  its opaque-value walk, where the same goals inside a program answer.
+  `_compile_as_query` now catches the walks' overflow and compiles the goal
+  again with each compound argument lifted to a parameter bound before the
+  search -- how a program's `call/1` passes it -- so they fail, succeed and
+  succeed as in a program (the `try` costs the ordinary path nothing).  A
+  goal that is itself cyclic (`G = (G, true)`) or too deep to compile raises
+  `error(resource_error(stack), _)`, as `call(G)` does in a program.
+  `to_python` and `term_key` raise `error(resource_error(finite_memory), _)`
+  on a cycle (a Python value and a sort key are finite; the error the engine
+  raises where it knows it saw a cycle, ruling 2026-10-24, provisional) and
+  `error(resource_error(stack), _)` on a term too deep to convert, as a
+  `LogicException`; so does every `py.*` wrapper handed such a term.  The
+  in-tree sort key (`_standard_order_key`) still raises `RecursionError`,
+  which `compare/3` and `msort/2` catch to order cyclic terms pairwise.
+  Pinned by `tests/test_python_entry_cyclic_deep.py`.
 - **`print/1` is refused under the sandbox, as every other writer is; `print/2`
   writes to a stream** (2026-10-24). `print/1` arrived without an entry in
   the sandbox's denied builtins, so a sandboxed program could write to

@@ -317,7 +317,10 @@ no answer for a cyclic term raises an ISO error, never a raw Python
 RecursionError: `resource_error(finite_memory)` where the engine saw the
 cycle (`assertz` of a cyclic term, where Scryer panics; ruling 2026-10-24,
 provisional), `resource_error(stack)` for a depth overflow.  Pinned row by
-row against Scryer in `tests/iso/test_cyclic_terms_scryer.py`.
+row against Scryer in `tests/iso/test_cyclic_terms_scryer.py`.  The same
+holds at the Python entry: a cyclic or deep term handed to `solve()` works
+as inside a program, and `to_python`/`term_key` raise those two errors
+(`tests/test_python_entry_cyclic_deep.py`).
 
 One standard-order difference from Scryer: with `X = [a|X]`,
 `compare(R, [a|foo], X)` gives `<` here and `>` in Scryer.  This engine
