@@ -131,7 +131,13 @@ surface described in [docs/public-api.md](docs/public-api.md).
   on a cycle (a Python value and a sort key are finite; the error the engine
   raises where it knows it saw a cycle, ruling 2026-10-24, provisional) and
   `error(resource_error(stack), _)` on a term too deep to convert, as a
-  `LogicException`; so does every `py.*` wrapper handed such a term.  The
+  `LogicException`; so does every `py.*` wrapper that converts its
+  argument with `to_python` (`py.json`'s generator has its own converter and
+  answers `type_error(json_term, ...)`).  The fallback lifts a cell, list,
+  dict or set argument, but never one holding a `++` escape or an f-string,
+  which the compiler must evaluate.  `acyclic_term/1` (and the cycle test
+  behind the two errors) now follows a `DictTerm`'s values and a set's
+  elements, so a cycle through one is a cycle.  The
   in-tree sort key (`_standard_order_key`) still raises `RecursionError`,
   which `compare/3` and `msort/2` catch to order cyclic terms pairwise.
   Pinned by `tests/test_python_entry_cyclic_deep.py`.

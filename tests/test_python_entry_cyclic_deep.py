@@ -149,6 +149,8 @@ def test_a_deep_term_with_a_hole_binds_it(m):
 
 
 def test_call_takes_a_deep_argument(m):
+    """Coverage, not a regression pin: ``call()`` dispatches without
+    compiling a query, so it already passed before 2026-10-24."""
     assert sum(1 for _ in call("p", _deep(), module=m)) == 1
 
 
@@ -176,12 +178,51 @@ def test_a_conjunction_too_deep_to_compile_is_a_stack_error(m):
     _stack_error(c, m)
 
 
-def test_an_ordinary_goal_still_compiles_and_caches(m):
+def test_an_ordinary_goal_still_compiles_and_caches(m, monkeypatch):
+    """An ordinary goal takes the fast path: the fallback lifter is never
+    called, and the query is cached under its own structure (the ``f``
+    cell, not a lifted parameter in its place)."""
     from clausal.logic import solve as solve_mod
+
+    def no_lift(*_a, **_k):
+        raise AssertionError("the fallback ran on an ordinary goal")
+
+    monkeypatch.setattr(solve_mod, "_lift_compound_arguments", no_lift)
+    monkeypatch.setattr(solve_mod, "_query_cache", {})
     X = Var()
-    assert _count(("=", X, ("f", ("g", 1))), m) == 1
-    assert _count(("p", ("f", ("g", 1))), m) == 1
-    assert solve_mod._query_cache, "an ordinary goal keeps the cache"
+    assert _count(("p", ("f", X, ("g", 1))), m) == 1
+    assert len(solve_mod._query_cache) == 1
+    (key,) = solve_mod._query_cache
+    assert "'f'" in repr(key[0]) and "'g'" in repr(key[0])
+    assert _count(("p", ("f", X, ("g", 1))), m) == 1
+    assert len(solve_mod._query_cache) == 1, "the second solve hits the cache"
+
+
+# ── the fallback keeps what only the compiler can evaluate ──────────────────
+
+def test_a_thunk_beside_a_deep_argument_is_still_evaluated(m):
+    """On the fallback path an argument holding a ``++`` escape (a
+    PyThunk) is NOT lifted as data: the compiler evaluates the thunk, as
+    it does for the same goal at ordinary depth."""
+    from clausal.terms import PyThunk
+    for t in (("f", "a"), _deep()):
+        V = Var()
+        goal = (",", ("p", t), ("=", V, ("g", PyThunk(lambda: 42, []))))
+        for _ in solve(goal, module=m):
+            assert deref(V) == ("g", 42), deref(V)
+            break
+        else:
+            pytest.fail("no solution")
+
+
+def test_a_deep_or_cyclic_value_inside_a_dict_argument(m):
+    """A dict or set argument is lifted like a cell or a list."""
+    from clausal.terms import DictTerm, SetTerm
+    x = _cyclic()
+    for arg in (DictTerm({"k": _deep()}), DictTerm({"k": x}),
+                {"k": _deep()}, SetTerm([_deep()])):
+        assert _count(("p", arg), m) == 1, arg
+    assert _count(("acyclic_term", DictTerm({"k": x})), m) == 0
 
 
 # ── the converters ──────────────────────────────────────────────────────────
@@ -206,6 +247,16 @@ def test_term_key_of_a_cycle_is_finite_memory():
     with pytest.raises(LogicException) as info:
         clausal.term_key(x)
     assert _formal(info.value) == ("resource_error", "finite_memory")
+
+
+def test_a_cycle_inside_a_dict_or_set_is_finite_memory():
+    from clausal.terms import DictTerm, SetTerm
+    x = _cyclic()
+    for t in (DictTerm({"k": x}), SetTerm([("h", x)]), {"k": x}):
+        for convert in (clausal.to_python, clausal.term_key):
+            with pytest.raises(LogicException) as info:
+                convert(t)
+            assert _formal(info.value) == ("resource_error", "finite_memory"), (t, convert)
 
 
 def test_term_key_of_a_deep_term_is_stack():

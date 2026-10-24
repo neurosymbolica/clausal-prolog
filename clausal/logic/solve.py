@@ -83,6 +83,8 @@ from clausal.terms import (
 )
 from clausal.terms import PyThunk as _PyThunk
 from clausal.terms import DictTerm as _DictTerm, SetTerm as _SetTerm
+from clausal.terms import (
+    SegBytes as _SegBytes, SegList as _SegList, SegString as _SegString)
 from clausal.terms import plain_deref as _plain_deref
 from clausal.pythonic_ast.nodes import Lambda as _Lambda, Node as _GoalNode, Cut as _CutNode
 from clausal import _sandbox_state
@@ -918,10 +920,54 @@ def _lift_goal(goal: Any, params: list, active: set) -> Any:
         active.discard(id(goal))
 
 
+#: The argument shapes the fallback lifts: the term containers.
+_LIFTABLE_TYPES = (tuple, list, dict, _DictTerm, set, frozenset, _SetTerm,
+                   _SegList)
+
+_PLAIN_ATOMIC = frozenset({bool, int, float, complex, str, bytes,
+                           type(None)})
+
+
+def _is_plain_data(term: Any) -> bool:
+    """True when *term* holds nothing the query compiler would EVALUATE
+    rather than pass as data -- no ``++`` escape or f-string (a
+    ``PyThunk``), no syntax or arithmetic node -- only variables, atomic
+    values, the term containers, declared compounds and the opaque values
+    ``_parameterize_opaque`` passes by reference anyway.  Iterative and
+    cycle-safe (a container is visited once), so it answers for the very
+    term the recursive walks overflowed on.  An argument that is not plain
+    data is left in place for the compiler; if it overflows too, the
+    fallback's error path applies."""
+    from clausal.logic.rational_walk import _children  # noqa: PLC0415
+    stack = [term]
+    seen: set = set()
+    keep: list = []
+    while stack:
+        d = deref(stack.pop())
+        if type(d) in _PLAIN_ATOMIC or is_var(d):
+            continue
+        if id(d) in seen:
+            continue
+        seen.add(id(d))
+        keep.append(d)
+        t = type(d)
+        if t is tuple or t is list:
+            stack.extend(d)
+        elif t is dict or t is _DictTerm:
+            stack.extend(d.values())
+        elif t is set or t is frozenset or t is _SetTerm:
+            stack.extend(d)
+        elif isinstance(d, (_SegList, _SegString, _SegBytes)) or is_term_instance(d):
+            stack.extend(_children(d) or ())
+        elif not _is_opaque_value(d):
+            return False
+    return True
+
+
 def _lift_cell_arguments(goal: tuple, params: list) -> tuple:
     args = []
     for a in goal[1:]:
-        if type(deref(a)) in (tuple, list):
+        if isinstance(deref(a), _LIFTABLE_TYPES) and _is_plain_data(a):
             pv = Var()
             params.append((pv, a))
             args.append(pv)
@@ -954,7 +1000,9 @@ def _compile_as_query(goal: Any, module: Module) -> Any:
         dispatch_fn, param_pairs = _compile_query(goal, module)
     except RecursionError:
         from clausal.logic.rational_walk import unwalkable_term_error  # noqa: PLC0415
-        raise unwalkable_term_error(goal, "solve/2", "query") from None
+        # The overflow stays the __cause__: a compiler bug that recurses
+        # on an ordinary goal must remain debuggable.
+        raise unwalkable_term_error(goal, "solve/2", "query")
     return dispatch_fn, lifted + param_pairs
 
 

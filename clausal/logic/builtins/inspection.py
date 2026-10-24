@@ -21,7 +21,7 @@ from clausal.logic.atoms import (
     mint,
     spelling,
 )
-from clausal.terms import SegList, SegString, SegBytes, VarSeg, ConcreteSeg, DictTerm
+from clausal.terms import SegList, SegString, SegBytes, VarSeg, ConcreteSeg, DictTerm, SetTerm
 
 from clausal.logic.builtins._registry import _builtin
 from clausal.logic.builtins._helpers import (
@@ -1270,6 +1270,13 @@ def _acyclic_children(t):
             else:
                 out.extend(seg.elements)
         return out
+    if type(t) is DictTerm or type(t) is dict:
+        # Its VALUES (the keys are ground), as the rational walkers read a
+        # dict (``rational_walk._children``): a cycle through a dict value
+        # is a cycle (2026-10-24).
+        return list(t.data.values() if type(t) is DictTerm else t.values())
+    if type(t) in (set, frozenset, SetTerm):
+        return list(t)
     if is_term_instance(t):
         return [getattr(t, f) for f in term_field_names(t)]
     import dataclasses  # noqa: PLC0415
