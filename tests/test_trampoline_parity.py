@@ -680,3 +680,176 @@ def test_cut_shaped_early_exhaustion(impl):
     sg = root(impl, cut_exit_fn(impl))
     assert impl._drive_until_yield(sg) is True
     assert impl._drive_until_yield(sg) is None
+
+
+# ── A FINAL speaks for its producer alone ────────────────────────────────────
+# Under continuation-TCO a child's ``proceed`` skips the frame that called it
+# (its ``fail``), and that frame may still hold choice points.  The drive core
+# keeps a FINAL only when every skipped frame set ``tail_final``; otherwise
+# the consumer -- the root driver or a mid-chain frame -- sees a plain None.
+
+
+def _tco_chain(impl, *, frame_tail_final, child_final=True, values=("a",)):
+    """Root R calls frame F; F tail-calls leaf C (C.proceed = R's proceed,
+    C.fail = F).  C yields *values*, the last one as FINAL when
+    *child_final*.  F has one alternative of its own after C ("alt") unless
+    *frame_tail_final*, in which case it has none and says so."""
+    log = []
+
+    def leaf(this, proceed, fail, catcher):
+        for i, v in enumerate(values):
+            log.append(v)
+            last = i == len(values) - 1
+            yield (proceed, impl.FINAL if (last and child_final) else None)
+        yield (fail, impl.DONE)
+
+    def frame(this, proceed, fail, catcher):
+        if frame_tail_final:
+            this.tail_final = True
+        c = impl.StepGenerator(leaf, proceed, this, this)
+        st = yield (c, None)
+        while st is not impl.DONE:
+            st = yield (c, None)
+        if not frame_tail_final:
+            log.append("alt")
+            yield (proceed, None)
+        yield (fail, impl.DONE)
+
+    def root_fn(this, proceed, fail, catcher):
+        this.tail_final = True
+        f = impl.StepGenerator(frame, proceed, this, this)
+        st = yield (f, None)
+        while st is not impl.DONE:
+            st = yield (f, None)
+        yield (fail, impl.DONE)
+
+    return root(impl, root_fn), log
+
+
+def test_tail_final_is_a_writable_slot_defaulting_false(impl):
+    sg = root(impl, enum_fn([], impl.DONE))
+    assert sg.tail_final is False
+    sg.tail_final = True
+    assert sg.tail_final is True
+
+
+def test_a_tail_callee_final_skipping_a_frame_with_alternatives_is_downgraded(impl):
+    sg, log = _tco_chain(impl, frame_tail_final=False)
+    assert impl._drive_until_yield(sg) is True
+    assert sg.retired is False                    # NOT the last answer
+    assert impl._drive_until_yield(sg) is True    # "alt" is still there
+    assert impl._drive_until_yield(sg) is None
+    assert log == ["a", "alt"]
+
+
+def test_a_tail_callee_final_holds_when_every_skipped_frame_is_tail_final(impl):
+    sg, log = _tco_chain(impl, frame_tail_final=True)
+    assert impl._drive_until_yield(sg) is True
+    assert sg.retired is True                     # the last answer
+    assert impl._drive_until_yield(sg) is None
+    assert log == ["a"]
+
+
+def test_solutions_does_not_stop_at_a_downgraded_final(impl):
+    sg, log = _tco_chain(impl, frame_tail_final=False, values=("a", "b"))
+    assert impl.solutions(sg, snapshot=lambda: log[-1]) == ["a", "b", "alt"]
+
+
+def test_a_mid_chain_consumer_sees_a_downgraded_final_as_none(impl):
+    seen = []
+
+    def leaf(this, proceed, fail, catcher):
+        yield (proceed, impl.FINAL)
+        yield (fail, impl.DONE)
+
+    def frame(this, proceed, fail, catcher, holds):
+        this.tail_final = holds
+        c = impl.StepGenerator(leaf, proceed, this, this)
+        st = yield (c, None)
+        while st is not impl.DONE:
+            st = yield (c, None)
+        yield (fail, impl.DONE)
+
+    def consumer(this, proceed, fail, catcher):
+        for holds in (False, True):
+            f = impl.StepGenerator(frame, this, this, this, holds)
+            st = yield (f, None)
+            while st is not impl.DONE:
+                seen.append(st)
+                st = yield (f, None)
+        yield (proceed, None)
+        yield (fail, impl.DONE)
+
+    assert impl._drive_until_yield(root(impl, consumer)) is True
+    assert seen == [None, impl.FINAL]
+
+
+def test_a_direct_child_final_reaches_its_consumer_unchanged(impl):
+    seen = []
+
+    def leaf(this, proceed, fail, catcher):
+        yield (proceed, impl.FINAL)
+        yield (fail, impl.DONE)
+
+    def consumer(this, proceed, fail, catcher):
+        c = impl.StepGenerator(leaf, this, this, this)
+        st = yield (c, None)
+        while st is not impl.DONE:
+            seen.append(st)
+            st = yield (c, None)
+        yield (proceed, None)
+        yield (fail, impl.DONE)
+
+    impl._drive_until_yield(root(impl, consumer))
+    assert seen == [impl.FINAL]
+
+
+def test_a_final_from_a_step_a_catcher_resumed_into_is_downgraded(impl):
+    """After a throw is routed, the step comes from some catcher on the
+    chain: its producer is not known, so a FINAL there is not trusted."""
+    def thrower(this, proceed, fail, catcher):
+        raise ValueError("x")
+        yield  # pragma: no cover
+
+    def root_fn(this, proceed, fail, catcher):
+        try:
+            c = impl.StepGenerator(thrower, this, this, this)
+            yield (c, None)
+        except ValueError:
+            yield (proceed, impl.FINAL)
+        yield (fail, impl.DONE)
+
+    sg = root(impl, root_fn)
+    assert impl._drive_until_yield(sg) is True
+    assert sg.retired is False
+    assert impl._drive_until_yield(sg) is None
+
+
+def test_a_final_step_with_queued_goals_is_answered_as_a_plain_solution(impl):
+    """Goals woken at a FINAL step may have several answers: the step is
+    re-answered once per answer, so it is no longer the last."""
+    from clausal.logic.variables import Trail
+    trail = Trail()
+    marker = object()
+    log = []
+
+    def fn(this, proceed, fail, catcher, trail):
+        _queued(trail, _answers(2, log))
+        yield (proceed, impl.FINAL)
+        yield (fail, impl.DONE)
+    sg = impl.StepGenerator(fn, marker, marker, marker, trail)
+    assert sg.send(None) == (marker, None)
+    assert sg.send(None) == (marker, None)
+    assert sg.send(None) == (marker, impl.DONE)
+
+
+def test_a_final_step_with_no_queued_goals_is_unchanged(impl):
+    from clausal.logic.variables import Trail
+    trail = Trail()
+    marker = object()
+
+    def fn(this, proceed, fail, catcher, trail):
+        yield (proceed, impl.FINAL)
+        yield (fail, impl.DONE)
+    sg = impl.StepGenerator(fn, marker, marker, marker, trail)
+    assert sg.send(None) == (marker, impl.FINAL)

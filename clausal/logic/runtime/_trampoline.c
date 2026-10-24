@@ -123,6 +123,10 @@ typedef struct {
     int       retired;      /* 1 = a pull-driver saw this root yield FINAL
                              * ("solution AND retiring"): later pulls answer
                              * exhaustion without resuming the generator. */
+    int       tail_final;   /* 1 = set by the frame itself: it has no
+                             * alternative of its own left, so once the
+                             * child it waits on is exhausted, so is it
+                             * (read by final_holds). */
     PyObject *trail;        /* the Trail passed as the last argument, or NULL */
     PyObject *drain;        /* running pending-goal drain, or NULL */
     PyObject *drain_step;   /* the solution step being re-answered by it */
@@ -250,6 +254,7 @@ StepGen_init(StepGenObject *self, PyObject *args, PyObject *kwds)
     self->gen = gen;
     self->started = 0;
     self->retired = 0;
+    self->tail_final = 0;
     return 0;
 }
 
@@ -397,7 +402,17 @@ StepGen_send(StepGenObject *self, PyObject *value)
                 && PyTuple_CheckExact(result)
                 && PyTuple_GET_SIZE(result) == 2
                 && PyTuple_GET_ITEM(result, 0) == self->proceed
-                && PyTuple_GET_ITEM(result, 1) == Py_None) {
+                && (PyTuple_GET_ITEM(result, 1) == Py_None
+                    || PyTuple_GET_ITEM(result, 1) == g_FINAL)) {
+            if (PyTuple_GET_ITEM(result, 1) == g_FINAL) {
+                /* The woken goals may have several answers: the step is
+                 * answered once per answer, so it is not the last one. */
+                PyObject *plain = PyTuple_Pack(2, self->proceed, Py_None);
+                Py_DECREF(result);
+                if (!plain)
+                    return NULL;
+                result = plain;
+            }
             PyObject *drain = pending_drain_for(self->trail);
             if (!drain) {
                 Py_DECREF(result);
@@ -525,6 +540,26 @@ StepGen_get_retired(StepGenObject *self, void *Py_UNUSED(closure))
     return PyBool_FromLong(self->retired);
 }
 
+static PyObject *
+StepGen_get_tail_final(StepGenObject *self, void *Py_UNUSED(closure))
+{
+    return PyBool_FromLong(self->tail_final);
+}
+
+static int
+StepGen_set_tail_final(StepGenObject *self, PyObject *value,
+                       void *Py_UNUSED(closure))
+{
+    if (!value) {
+        PyErr_SetString(PyExc_TypeError, "cannot delete tail_final");
+        return -1;
+    }
+    int truth = PyObject_IsTrue(value);
+    if (truth < 0) return -1;
+    self->tail_final = truth;
+    return 0;
+}
+
 static int
 StepGen_set_retired(StepGenObject *self, PyObject *value,
                     void *Py_UNUSED(closure))
@@ -549,6 +584,11 @@ static PyGetSetDef StepGen_getset[] = {
     {"retired", (getter)StepGen_get_retired, (setter)StepGen_set_retired,
      "True once a root-level FINAL was delivered: pull-drivers answer\n"
      "exhaustion without resuming the generator (policy Q3).", NULL},
+    {"tail_final", (getter)StepGen_get_tail_final,
+     (setter)StepGen_set_tail_final,
+     "Set by the frame itself when it has no alternative of its own left:\n"
+     "a FINAL from a tail-called child that skips this frame stays FINAL\n"
+     "only if this is True.", NULL},
     {NULL}
 };
 
@@ -767,9 +807,52 @@ drive_to_root_yield(PyObject *root, int stopiteration_is_exhaustion,
     return r;
 }
 
+/* True when a FINAL that *producer* yielded to *target* is final for
+ * *target* too: every frame on producer's ``fail`` chain below target (the
+ * frames a tail call skipped, each of which target's next pull resumes)
+ * has set tail_final.  An unknown producer (NULL: a step a catch/3 handler
+ * resumed into) never holds.  Below a None target the walk stops at
+ * *root*.  Borrowed references throughout.  KEEP IN SYNC with
+ * _final_holds in logic/_trampoline_py.py. */
+static int
+final_holds(PyObject *producer, PyObject *target, PyObject *root)
+{
+    if (producer == NULL)
+        return 0;
+    PyObject *f = StepGen_CAST(producer)->fail;
+    while (f != target) {
+        if (!StepGen_Check(f) || !StepGen_CAST(f)->tail_final)
+            return 0;
+        if (f == root)
+            return target == Py_None;
+        f = StepGen_CAST(f)->fail;
+    }
+    return 1;
+}
+
+static inline drive_result
+drive_to_root_yield_loop(PyObject *root, int stopiteration_is_exhaustion,
+                         const char *who, PyObject **out_value,
+                         PyObject **producer_slot);
+
+/* The loop below keeps a STRONG reference to the generator that yielded
+ * the step being routed (*producer_slot): a child referenced only by the
+ * step tuple can be freed as soon as its send returns. */
 static inline drive_result
 drive_to_root_yield_core(PyObject *root, int stopiteration_is_exhaustion,
                          const char *who, PyObject **out_value)
+{
+    PyObject *producer = NULL;
+    drive_result r = drive_to_root_yield_loop(
+        root, stopiteration_is_exhaustion, who, out_value, &producer);
+    Py_XDECREF(producer);
+    return r;
+}
+
+static inline drive_result
+drive_to_root_yield_loop(PyObject *root, int stopiteration_is_exhaustion,
+                         const char *who, PyObject **out_value,
+                         PyObject **producer_slot)
 {
     /* Retirement (policy Q3) lives here, once: a retired root answers
      * without being resumed; each wrapper maps DRIVE_RETIRED to its own
@@ -786,6 +869,9 @@ drive_to_root_yield_core(PyObject *root, int stopiteration_is_exhaustion,
     if (!get_TABLING_SUSPEND())
         return DRIVE_ERROR;
 
+    /* The generator that yielded ``step`` (owned through *producer_slot),
+     * NULL when unknown. */
+    *producer_slot = Py_NewRef(root);
     PyObject *step = StepGen_send(StepGen_CAST(root), Py_None);
     if (!step) {
         if (stopiteration_is_exhaustion &&
@@ -808,6 +894,11 @@ drive_to_root_yield_core(PyObject *root, int stopiteration_is_exhaustion,
 
         PyObject *gen   = PyTuple_GET_ITEM(step, 0);  /* borrowed */
         PyObject *value = PyTuple_GET_ITEM(step, 1);  /* borrowed */
+
+        /* A FINAL speaks for its producer alone: final for gen only if no
+         * frame a tail call skipped still has alternatives. */
+        if (value == g_FINAL && !final_holds(*producer_slot, gen, root))
+            value = Py_None;
 
         if (gen == Py_None) {
             /* Root-level FINAL: "here is a solution AND I am retiring" —
@@ -863,6 +954,8 @@ drive_to_root_yield_core(PyObject *root, int stopiteration_is_exhaustion,
                 Py_DECREF(gen);
                 if (r == 1) {
                     step = new_step;   /* loop top re-validates its shape */
+                    /* resumed in some catcher on the chain: unknown */
+                    Py_CLEAR(*producer_slot);
                     continue;
                 }
                 /* r == 0: uncaught (re-raised), r == -1: different error */
@@ -871,7 +964,7 @@ drive_to_root_yield_core(PyObject *root, int stopiteration_is_exhaustion,
             Py_DECREF(gen);
             return DRIVE_ERROR;
         }
-        Py_DECREF(gen);
+        Py_XSETREF(*producer_slot, gen);   /* owned: gen's reference */
     }
 }
 

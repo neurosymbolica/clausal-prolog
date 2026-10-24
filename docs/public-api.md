@@ -123,6 +123,7 @@ All of these import from `clausal`:
 ```python
 from clausal import (
     solve, call, once, query,            # the query API
+    solve_with_last, call_with_last,     # ... with "this is the last answer"
     query_wfs, Solutions,
     declared_atoms, imported_atoms,      # module introspection
     module_signatures, has_predicate, defines_predicate, module_binds,
@@ -139,6 +140,8 @@ from clausal import (
 |---|---|---|
 | `solve` | `solve(goal, module=None, trail=None) -> Iterator[Trail]` | `goal` is a cell; `module=` is required for an unqualified cell. Read bindings inside the loop. |
 | `call` | `call(functor, *args, module=None, trail=None) -> Iterator[Trail]` | Drives one predicate directly. `module=` and `trail=` are keyword-only. |
+| `solve_with_last` | `solve_with_last(goal, module=None, trail=None) -> Iterator[tuple[Trail, bool]]` | **Added to the 1.x surface (Unreleased).** `solve`, each solution paired with `last`: `True` only when the engine knows no further solution exists (it never answers a false `True`), `False` when it does not know. Which goals report `True` is coverage and may grow in a minor release. See [Python integration](python_integration.md#solve_with_last-call_with_last-knowing-an-answer-is-the-last). |
+| `call_with_last` | `call_with_last(functor, *args, module=None, trail=None) -> Iterator[tuple[Trail, bool]]` | **Added to the 1.x surface (Unreleased).** `call` with the same `last` flag. |
 | `once` | `once(goal, module=None, trail=None) -> Trail \| None` | The first solution, or `None`. |
 | `query` | `query(goal, variables, module=None, trail=None) -> Iterator[dict]` | **Deprecated** (`DeprecationWarning`). Covered through 1.x, removed in 2.0. |
 | `query_wfs` | `query_wfs(goal, variables, module=None, trail=None) -> list[dict]` | Well-founded semantics: each answer dict carries `"_truth"` (`True` or `Undefined`) and `"_delays"`. See [WFS](wfs.md). |

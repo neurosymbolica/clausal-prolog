@@ -212,18 +212,31 @@ def _refuse_inside_attribute_hook(trail: Trail, culprit: Any, who: str) -> None:
             f"hooks are running; queue it with trail.push_pending(goal)"))
 
 
-def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any) -> Iterator[Trail]:
-    """Drive a trampoline-protocol dispatch function, yielding trail per solution."""
+def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any,
+                      with_last: bool = False) -> Iterator[Trail]:
+    """Drive a trampoline-protocol dispatch function, yielding trail per solution.
+
+    With *with_last*, yield ``(trail, last)`` instead: *last* is True when
+    the solution reached the root as ``FINAL`` -- the engine KNOWS no choice
+    point is left -- and False when it does not know (see
+    ``solve_with_last``).
+    """
     from clausal.logic.tabling import begin_drive_episode, end_drive_episode
 
     sg = StepGenerator(dispatch_fn, None, None, None, *args, trail)
+    # A root retired by a FINAL is not resumed, so its frames never undo
+    # the last solution's bindings on the way out: undo them here, as the
+    # exhausted search would have.
+    mark = trail.mark()
     begin_drive_episode()
     try:
         while True:
             result = _drive_until_yield(sg)
             if result is None:
+                if sg.retired:
+                    trail.undo(mark)
                 return
-            yield trail
+            yield (trail, sg.retired) if with_last else trail
     except NameError as exc:
         # Failure-only seam, and the only one solve time needs: this is the
         # outermost driver, so a NameError arriving here has already escaped
@@ -2055,6 +2068,33 @@ def call(
               ``.term`` is ISO ``existence_error(procedure, Name/Arity)``)
               if the predicate is not defined in module.
     """
+    dispatch_fn, trail, args = _prepare_call(functor, args, module, trail)
+    yield from _drive_trampoline(dispatch_fn, trail, *args)
+
+
+def call_with_last(
+    functor,
+    *args: Any,
+    module: Module | None = None,
+    trail: Trail | None = None,
+) -> Iterator[tuple[Trail, bool]]:
+    """``call``, with each solution paired with whether it is the last.
+
+    Yields ``(trail, last)`` per solution.  *last* is True only when the
+    engine KNOWS no choice point is left (the solution reached the root
+    as ``FINAL``), so pulling again would find nothing; False means it
+    does not know -- there may or may not be another solution.  Everything
+    else, arguments and errors included, is ``call``'s.  See
+    ``solve_with_last``.
+    """
+    dispatch_fn, trail, args = _prepare_call(functor, args, module, trail)
+    yield from _drive_trampoline(dispatch_fn, trail, *args, with_last=True)
+
+
+def _prepare_call(functor, args, module, trail):
+    """The body of ``call``/``call_with_last`` up to the drive: the dispatch
+    function, the trail and the arguments to drive it with (raising what
+    ``call`` raises, when it is first advanced)."""
     # W4: a module-qualified NAME (the mangled handle) is its own module
     # designator -- switch to that module and continue with the bare name.
     # ``_handle_module_name``/``_handle_name`` remember the DEMANGLED halves
@@ -2104,8 +2144,7 @@ def call(
         dispatch_fn = functor._get_dispatch()
         if trail is None:
             trail = Trail()
-        yield from _drive_trampoline(dispatch_fn, trail, *args)
-        return
+        return dispatch_fn, trail, args
 
     if module is not None:
         module = _coerce_module(module)
@@ -2287,7 +2326,7 @@ def call(
             from clausal.logic.meta_predicate import qualify_args  # noqa: PLC0415
             args = tuple(qualify_args(_specs, list(args), module.db))
 
-    yield from _drive_trampoline(dispatch_fn, trail, *args)
+    return dispatch_fn, trail, args
 
 
 def _python_entry(value):
@@ -2336,6 +2375,48 @@ def solve(
     ------
     Trail after each solution (bindings are live on the trail).
     """
+    dispatch_fn, trail = _prepare_solve(goal, module, trail)
+    # Fast paths for trivial goals — avoid the compiler entirely.
+    if dispatch_fn is True:
+        yield trail
+        return
+    if dispatch_fn is False:
+        return
+    yield from _drive_trampoline(dispatch_fn, trail)
+
+
+def solve_with_last(
+    goal: Any,
+    module=None,
+    trail: Trail | None = None,
+) -> Iterator[tuple[Trail, bool]]:
+    """``solve``, with each solution paired with whether it is the last.
+
+    Yields ``(trail, last)`` per solution.  *last* is True only when the
+    engine KNOWS no choice point is left -- pulling again would find no
+    solution -- so a top-level can print ``X = c.`` for
+    ``member(X, [a,b,c])`` without asking for, or computing, another one.
+    False means the engine does not know: there may or may not be another
+    solution (soundness over coverage: never a false True).  After a last
+    solution the iterator is exhausted, and its bindings are undone when it
+    is advanced again, as after any exhausted search.
+
+    Everything else -- *goal*, *module*, *trail*, the errors -- is
+    ``solve``'s.  ``call_with_last`` is the same pairing for ``call``.
+    """
+    dispatch_fn, trail = _prepare_solve(goal, module, trail)
+    if dispatch_fn is True:
+        yield (trail, True)
+        return
+    if dispatch_fn is False:
+        return
+    yield from _drive_trampoline(dispatch_fn, trail, with_last=True)
+
+
+def _prepare_solve(goal, module, trail):
+    """The body of ``solve``/``solve_with_last`` up to the drive:
+    ``(dispatch_fn, trail)``, or ``(True, trail)`` / ``(False, trail)`` for
+    the goals that need no compiling."""
     if trail is not None:
         _refuse_inside_attribute_hook(trail, goal, "solve/2")
     _sandbox_entry(goal, "solve/2")
@@ -2344,20 +2425,15 @@ def solve(
     _sandbox_module(module, "solve/2")
     if trail is None:
         trail = Trail()
-
-    # Fast paths for trivial goals — avoid the compiler entirely.
-    if goal is True:
-        yield trail
-        return
-    if goal is False:
-        return
+    if goal is True or goal is False:
+        return goal, trail
 
     dispatch_fn, param_pairs = _compile_as_query(goal, module)
     # Bind parameterized ground args to their values before driving so the
     # value-independent compiled query sees the concrete arguments.
     for param_var, value in param_pairs:
         unify(param_var, value, trail)
-    yield from _drive_trampoline(dispatch_fn, trail)
+    return dispatch_fn, trail
 
 
 def query(
@@ -2666,7 +2742,9 @@ def _tabled_entry_for_goal(goal, module, trail):
 
 __all__ = [
     "call",
+    "call_with_last",
     "solve",
+    "solve_with_last",
     "query",
     "query_wfs",
     "once",

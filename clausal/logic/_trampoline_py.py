@@ -108,9 +108,13 @@ def _unwind_to_catcher(failed_gen: Any, exc: Exception) -> tuple:
 #
 # See ``implementation_plans/compiler/CONTINUATION_TCO_PLAN.md`` §4.1 / Phase 4
 # (historically called the ``commit`` variant in design docs).
-# Phase 4a (this commit) lands the sentinel and root-driver handling
-# only; no producer emits ``FINAL`` yet, so the new branches are cold
-# and existing call sites pay zero overhead.
+#
+# A ``FINAL`` speaks for its producer alone.  Under continuation-TCO a
+# producer's ``proceed`` skips the frames between it and its consumer, and
+# those frames may still hold choice points, so the drive core passes a
+# FINAL on only when every skipped frame has said, through its
+# ``tail_final`` slot, that it has no alternative of its own left
+# (``_final_holds``); otherwise the consumer is sent a plain ``None``.
 DONE: object = object()
 FINAL: object = object()
 
@@ -143,7 +147,7 @@ class StepGenerator:
     ``inner_gen.send(value)``.
     """
     __slots__ = ('_gen', '_started', 'proceed', 'fail', 'catcher', 'retired',
-                 '_trail', '_drain', '_drain_step', '_draining')
+                 'tail_final', '_trail', '_drain', '_drain_step', '_draining')
 
     def __init__(
         self,
@@ -162,6 +166,11 @@ class StepGenerator:
         # solution AND I am retiring"): later pulls answer exhaustion
         # without resuming the retired generator.
         self.retired = False
+        # Set by the frame itself (compiled code, a builtin) when it has no
+        # alternative of its own left: once the child it is waiting on is
+        # exhausted, so is it.  The drive core reads it when a FINAL from a
+        # tail-called child skips this frame (``_final_holds``).
+        self.tail_final = False
         # Forward all three continuation slots to the generator body.
         # Compiled-predicate signature is
         # (this_generator, _proceed, _fail, _catcher, *args, trail).
@@ -214,7 +223,13 @@ class StepGenerator:
                 trail = self._trail
                 if (trail is not None and trail.pending is not None
                         and type(step) is tuple and len(step) == 2
-                        and step[0] is self.proceed and step[1] is None):
+                        and step[0] is self.proceed
+                        and (step[1] is None or step[1] is FINAL)):
+                    if step[1] is FINAL:
+                        # The woken goals may have several answers: the
+                        # step is answered once per answer, so it is not
+                        # the last one (C≡Py: StepGen_send).
+                        step = (step[0], None)
                     drain = pending_or_once(trail)
                     if not isinstance(drain, Generator):
                         raise RuntimeError(
@@ -302,6 +317,26 @@ def _drive_to_root_yield(root, *, stopiteration_is_exhaustion, who):
         trail.defer = saved
 
 
+def _final_holds(producer, target, root) -> bool:
+    """True when a FINAL that *producer* yielded to *target* is final for
+    *target* too: every frame on *producer*'s ``fail`` chain below *target*
+    -- the frames a tail call skipped, each of which *target*'s next pull
+    would resume -- has set ``tail_final``.  An unknown producer (a step a
+    catch/3 handler resumed into) never holds.  Below a ``None`` target the
+    walk stops at *root*: what lies above the root is not this drive's.
+    KEEP IN SYNC with ``final_holds`` in ``runtime/_trampoline.c``."""
+    if producer is None:
+        return False
+    f = producer.fail
+    while f is not target:
+        if not isinstance(f, StepGenerator) or not f.tail_final:
+            return False
+        if f is root:
+            return target is None
+        f = f.fail
+    return True
+
+
 def _drive_to_root_yield_core(root, *, stopiteration_is_exhaustion, who):
     from clausal.logic.tabling import _TABLING_SUSPEND
 
@@ -312,6 +347,7 @@ def _drive_to_root_yield_core(root, *, stopiteration_is_exhaustion, who):
     if root.retired:
         return (_RETIRED, None)
 
+    producer = root          # the generator that yielded ``step``
     try:
         step = root.send(None)
     except StopIteration:
@@ -330,6 +366,8 @@ def _drive_to_root_yield_core(root, *, stopiteration_is_exhaustion, who):
         if type(step) is not tuple or len(step) != 2:
             raise TypeError(f"{who}: generator must yield 2-tuples")
         gen, value = step
+        if value is FINAL and not _final_holds(producer, gen, root):
+            value = None         # final for its producer only
         if gen is None:
             if value is FINAL:
                 root.retired = True
@@ -338,6 +376,7 @@ def _drive_to_root_yield_core(root, *, stopiteration_is_exhaustion, who):
             raise TypeError(
                 f"{who}: step target must be StepGenerator or None, "
                 f"got {type(gen).__name__}")
+        producer = gen
         try:
             if value is _TABLING_SUSPEND:
                 step = gen.send(DONE)
@@ -355,6 +394,7 @@ def _drive_to_root_yield_core(root, *, stopiteration_is_exhaustion, who):
             if not _is_routable(exc):
                 raise
             step = _unwind_to_catcher(gen, exc)
+            producer = None      # some catcher on the chain: unknown
 
 
 # ── Trampoline ────────────────────────────────────────────────────────

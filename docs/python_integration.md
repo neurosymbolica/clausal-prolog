@@ -163,6 +163,37 @@ for trail in call("fib", 7, N := Var(), module=fibonacci):
     print(N.value)  # 13
 ```
 
+### `solve_with_last`, `call_with_last` — knowing an answer is the last
+
+A caller that shows answers one at a time, like an interactive `?-`
+top-level, wants to know whether the answer it just got is the last one
+*without* asking for another: asking runs the goal further (side effects,
+a slow next answer, `repeat`). `solve_with_last` is `solve` with each
+solution paired with that knowledge, and `call_with_last` is the same for
+`call`:
+
+```python
+for trail, last in solve_with_last(goal, module=m):
+    ...   # last is True: this is the last solution
+```
+
+`last` is `True` only when the engine **knows** no choice point is left, so
+pulling again would find no solution; the iterator then ends. `False` means
+the engine does not know: there may or may not be another solution. It is
+never a false `True`. Which goals report a last answer is a matter of
+coverage, which may grow in any release; a `False` becoming `True` for some
+goal is not a breaking change.
+
+Today a solution is reported last when every goal still open on the way to
+it says so: the deterministic builtins, `member/2` at the last element of a
+proper list, `between/3` at its upper bound, a conjunction of such goals,
+and a predicate whose last candidate clause produced the answer with no
+choice left in its body. Disjunctions, tabled predicates, goals woken by a
+constraint at that answer, `catch/3` recovery and every goal the engine has
+no proof for answer `False`.
+After the last solution the bindings are undone when the iterator is
+advanced again, as after any exhausted search.
+
 ### Driving Clausal from a test suite
 
 Plain-Python code that runs many goals — a pytest suite around a rulebase,

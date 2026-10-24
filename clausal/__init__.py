@@ -13,7 +13,7 @@ for _sp in _site.getsitepackages():
         __path__.append(_candidate)
 
 from clausal.logic.solve import (
-    call, solve, query, once, query_wfs, _deref_walk, declared_atoms,
+    call, solve, solve_with_last, call_with_last, query, once, query_wfs, _deref_walk, declared_atoms,
     answer_deref as deref,
     imported_atoms, module_signatures, has_predicate, defines_predicate, module_binds,
 )
@@ -71,6 +71,8 @@ __all__ = [
     # Query API
     "call",
     "solve",
+    "solve_with_last",
+    "call_with_last",
     "query",
     "once",
     # Module introspection
