@@ -93,7 +93,13 @@ def test_to_python_inverts_to_clausal_on_registered_values():
 def test_term_key_is_the_standard_order_key():
     from clausal.logic.builtins import _helpers
     assert clausal.term_key is _helpers.term_key
-    assert _helpers._standard_order_key is _helpers.term_key   # in-tree alias kept
+    # The in-tree alias is the RAW key (a cycle raises RecursionError, which
+    # the sorts catch to compare pairwise); the public one wraps it and maps
+    # that overflow to the ISO error (2026-10-24), keying everything else
+    # identically.
+    assert _helpers._standard_order_key is _helpers._term_key
+    for t in (("f", 1, [2, "a"]), "a", 1.5, [], chars("ab")):
+        assert _helpers.term_key(t) == _helpers._standard_order_key(t)
 
 
 def test_term_key_orders_var_number_atom_compound():

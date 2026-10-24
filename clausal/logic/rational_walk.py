@@ -319,3 +319,26 @@ def collect_vars_iterative(term: Any, result: list) -> None:
         children = _children(d)
         if children:
             stack.extend(reversed(children))
+
+
+def unwalkable_term_error(term: Any, what: str, answer: str = "answer"):
+    """The ISO error for a term a RECURSIVE walk at the Python boundary
+    could not descend (it raised RecursionError), as a ``LogicException``
+    to raise: ``resource_error(finite_memory)`` when *term* is cyclic --
+    the engine KNOWS it saw a cycle and *what* has no finite answer for
+    one (ruling 2026-10-24, provisional, Scryer's idiom, as for
+    ``assertz`` of a cyclic term) -- and ``resource_error(stack)`` for an
+    acyclic term merely nested too deep, as ``python_error_term`` maps any
+    other depth overflow.  The cycle test is iterative, so it answers for
+    the very term that overflowed."""
+    from clausal.logic.builtins.inspection import _is_acyclic  # noqa: PLC0415
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, resource_error)
+    if not _is_acyclic(term):
+        return LogicException(resource_error(
+            "finite_memory",
+            f"{what}: a cyclic term (one built with no occurs check, "
+            f"X = f(X)) has no finite {answer}"))
+    return LogicException(resource_error(
+        "stack",
+        f"{what}: the term is nested deeper than Python's recursion limit"))

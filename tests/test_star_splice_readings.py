@@ -561,13 +561,21 @@ def test_rational_eq_agrees_with_scryer_on_random_cycles(seed, tmp_path):
 
 def test_term_key_on_a_cons_cell_bound_to_itself_raises_rather_than_loops():
     # X = '.'(a, X) with no SegList on the spine: the spine loop recorded
-    # only SegLists and looped (base: RecursionError).
-    from clausal.logic.builtins._helpers import term_key
+    # only SegLists and looped (base: RecursionError).  The raw in-tree key
+    # raises RecursionError (the sorts catch it and compare pairwise); the
+    # public ``term_key`` maps it to resource_error(finite_memory)
+    # (2026-10-24).
+    from clausal.logic.builtins._helpers import _standard_order_key, term_key
+    from clausal.logic.exceptions import LogicException
     x = Var()
     unify(x, (".", "a", x), Trail())
     with pytest.raises(RecursionError):
-        term_key(deref(x))
+        _standard_order_key(deref(x))
     y = Var()
     unify(y, (".", "a", (".", "b", y)), Trail())
     with pytest.raises(RecursionError):
-        term_key(y)
+        _standard_order_key(y)
+    for t in (x, y):
+        with pytest.raises(LogicException) as info:
+            term_key(t)
+        assert info.value.term[1] == ("resource_error", "finite_memory")

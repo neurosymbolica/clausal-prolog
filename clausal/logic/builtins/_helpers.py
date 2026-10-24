@@ -718,9 +718,9 @@ def _cons_chain_key(term) -> tuple:
             t = walk_seg(t)
         if not (type(t) is tuple and len(t) == 3 and t[0] == "."):
             break
-    key = term_key(t)
+    key = _term_key(t)
     for h in reversed(heads):
-        key = (_ORD_COMPOUND, 2, (0, "."), _CF_POSITIONAL, (term_key(h), key))
+        key = (_ORD_COMPOUND, 2, (0, "."), _CF_POSITIONAL, (_term_key(h), key))
     return key
 
 
@@ -764,7 +764,7 @@ class _OpaqueOrder:
             return repr(self.value) < repr(other.value)
 
 
-def term_key(term: Any) -> tuple:
+def _term_key(term: Any) -> tuple:
     """Sort key implementing the standard order of terms.
 
     Total over every value a term can hold, so ``sorted(xs, key=...)`` never
@@ -863,28 +863,28 @@ def term_key(term: Any) -> tuple:
         if len(term) == 3 and term[0] == ".":
             return _cons_chain_key(term)
         return (_ORD_COMPOUND, len(term) - 1, (0, term[0]), _CF_POSITIONAL,
-                tuple(term_key(a) for a in term[1:]))
+                tuple(_term_key(a) for a in term[1:]))
     if type(term) is tuple and term and term[0] == TUPLE_TAG:
         return (_ORD_COMPOUND, len(term) - 1, (1, ""), _CF_POSITIONAL,
-                tuple(term_key(a) for a in term[1:]))
+                tuple(_term_key(a) for a in term[1:]))
     if isinstance(term, (list, tuple)):
         # A LIST — the ``'.'/2`` compound it denotes, or the atom ``'[]'``
         # when empty (Task 15 item 1).  A plain ``tuple`` that is neither a
         # cell nor tuple-data keeps the list treatment it has always shared.
         if not term:
             return _ORD_EMPTY_LIST_KEY
-        return _cons_key(tuple(term_key(e) for e in term))
+        return _cons_key(tuple(_term_key(e) for e in term))
     if is_term_instance(term):
         names = term_field_names(term)
         return (_ORD_COMPOUND, len(names), (0, type(term).__name__), _CF_DECLARED,
-                tuple(term_key(getattr(term, n)) for n in names))
+                tuple(_term_key(getattr(term, n)) for n in names))
     if isinstance(term, (dict, DictTerm)):
         # DictTerm and a plain dict compare equal, so they share one key shape.
-        pairs = [(term_key(k), term_key(v))
+        pairs = [(_term_key(k), _term_key(v))
                  for k, v in term.items()]
         return (_ORD_DICT, tuple(sorted(pairs)))
     if isinstance(term, (set, frozenset, SetTerm)):
-        return (_ORD_SET, tuple(sorted(term_key(e) for e in term)))
+        return (_ORD_SET, tuple(sorted(_term_key(e) for e in term)))
     if isinstance(term, (SegList, SegString, SegBytes)):
         # A Seg* that walks to something else IS that string / list / bytes
         # (the type checks already answer for the walked form), so it keys
@@ -895,12 +895,34 @@ def term_key(term: Any) -> tuple:
         from clausal.logic.runtime._seg_helpers import walk_seg  # noqa: PLC0415
         walked = walk_seg(term)
         if not isinstance(walked, (SegList, SegString, SegBytes)):
-            return term_key(walked)
+            return _term_key(walked)
     return (_ORD_OTHER, _OpaqueOrder(term))
 
 
-#: In-tree alias; every builtin that sorts imports this name.
-_standard_order_key = term_key
+#: In-tree alias; every builtin that sorts imports this name.  It is the
+#: RAW key: a cyclic term, or one too deep to key, raises RecursionError,
+#: which the sorts catch to compare that pair by ``term_compare``.
+_standard_order_key = _term_key
+
+
+def term_key(term: Any) -> tuple:
+    """The PUBLIC standard-order sort key (``clausal.term_key``): the key
+    :func:`_term_key` builds, for a Python caller.
+
+    A sort key is a finite Python value, so a CYCLIC term (``X = f(X)``)
+    has none: it raises ``error(resource_error(finite_memory), _)``, the
+    error the engine raises where it knows it saw a cycle (ruling
+    2026-10-24, provisional), and an acyclic term nested too deep to key
+    raises ``error(resource_error(stack), _)`` -- both as a
+    ``LogicException``, never a raw RecursionError (2026-10-24).
+    ``compare/3`` and ``msort/2`` still order such terms: they catch the
+    raw key's overflow and compare the pair by ``term_compare``; a Python
+    caller orders cyclic terms by solving ``compare/3``."""
+    try:
+        return _term_key(term)
+    except RecursionError:
+        from clausal.logic.rational_walk import unwalkable_term_error  # noqa: PLC0415
+        raise unwalkable_term_error(term, "term_key/1", "sort key") from None
 
 
 # ── The standard order decided pairwise (cyclic and very deep terms) ─────────
@@ -991,14 +1013,14 @@ def term_compare(a, b) -> int:
         x, y = _compound_view(ox), _compound_view(oy)
         sx, sy = _shallow_compound_key(x), _shallow_compound_key(y)
         if sx is None and sy is None:
-            kx, ky = term_key(x), term_key(y)
+            kx, ky = _term_key(x), _term_key(y)
             if kx != ky:
                 return -1 if kx < ky else 1
             continue
         if sx is None:
-            return -1 if term_key(x) < sy else 1
+            return -1 if _term_key(x) < sy else 1
         if sy is None:
-            return -1 if sx < term_key(y) else 1
+            return -1 if sx < _term_key(y) else 1
         if sx != sy:
             return -1 if sx < sy else 1
         # Keyed by the ORIGINAL objects (a Seg* walks to fresh cells every

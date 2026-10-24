@@ -97,7 +97,28 @@ def to_python(val):
     values all the way down calls this function by name; code that wants the
     engine's rendering asks for it with ``term_to_string(D, S)`` (or
     ``print_term/1``) and interpolates ``S``.
+
+    A CYCLIC term (``X = f(X)``: ISO has no occurs check) has no Python
+    value -- a tuple cannot contain itself -- so it raises
+    ``error(resource_error(finite_memory), _)``, the engine's error where it
+    knows it saw a cycle (ruling 2026-10-24, provisional), and an acyclic
+    term nested past Python's recursion limit raises
+    ``error(resource_error(stack), _)``: both a ``LogicException``, never a
+    raw RecursionError (2026-10-24).  Read such a term with ``deref``, one
+    step at a time.
     """
+    if type(val) is str:
+        return val
+    try:
+        return _to_python(val)
+    except RecursionError:
+        from clausal.logic.rational_walk import unwalkable_term_error  # noqa: PLC0415
+        raise unwalkable_term_error(val, "to_python/1", "Python value") from None
+
+
+def _to_python(val):
+    """:func:`to_python`'s recursive descent (a cycle or a term too deep
+    for it raises RecursionError, which the public entry maps)."""
     # A str is an ATOM whose Python form is itself, and it can never be a
     # bound Var, so it needs neither the deref nor the atom branch.  It is
     # the hot case on the thunk path (f-strings), hence the short-circuit.
@@ -114,7 +135,7 @@ def to_python(val):
     if t is tuple:
         if is_chars(val):
             return chars_text(val)     # stage 1: a chars string crosses out as its text
-        items = tuple([to_python(x) for x in val])
+        items = tuple([_to_python(x) for x in val])
         if items and type(items[0]) is str:
             # THE ONE REGISTRY: a registered functor rebuilds its Python
             # object from the ALREADY-CONVERTED elements -- a from_fn is
@@ -130,7 +151,7 @@ def to_python(val):
                     pass
         return items
     if t is list:
-        return [to_python(x) for x in val]
+        return [_to_python(x) for x in val]
     # A Var BOUND to an atom: the ``type(val) is str`` hot case above ran
     # before the deref, so the dereferenced str arrives here.
     if _term_is_atom(val):
@@ -145,22 +166,22 @@ def to_python(val):
             return chars_text(walked)  # stage 1: a ground text Seg* walks to the carrier
         if isinstance(walked, _SEG_TYPES):
             return val
-        return to_python(walked)
+        return _to_python(walked)
     if isinstance(val, tuple):
         # NamedTuple — preserve subclass so attribute access survives.
-        items = tuple(to_python(x) for x in val)
+        items = tuple(_to_python(x) for x in val)
         try:
             return t(*items)
         except TypeError:
             return items
     if isinstance(val, list):
-        return [to_python(x) for x in val]
+        return [_to_python(x) for x in val]
     if isinstance(val, (DictTerm, dict)):
-        return {_as_dict_key(to_python(k)): to_python(v) for k, v in val.items()}
+        return {_as_dict_key(_to_python(k)): _to_python(v) for k, v in val.items()}
     if isinstance(val, SetTerm):
-        return frozenset(to_python(e) for e in val)
+        return frozenset(_to_python(e) for e in val)
     if isinstance(val, (set, frozenset)):
-        return t(to_python(e) for e in val)
+        return t(_to_python(e) for e in val)
     if is_term_instance(val):
         # A dataclass term class is rebuilt with converted fields (dumb seam
         # step (c), 2026-09-26; before that it crossed unchanged, insides
@@ -174,7 +195,7 @@ def to_python(val):
         # ``Linear(in_features, out_features, key=...)``) refuses its fields,
         # so it is copied and the converted fields set on the copy.
         old = {n: getattr(val, n) for n in term_field_names(val)}
-        new = {n: to_python(v) for n, v in old.items()}
+        new = {n: _to_python(v) for n, v in old.items()}
         if all(new[n] is old[n] for n in old):
             return val
         try:

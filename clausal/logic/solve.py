@@ -868,7 +868,97 @@ def _special_form_cell_as_call(goal: Any) -> Any:
     return goal
 
 
+#: The control constructs whose arguments are GOALS the fallback below
+#: descends into (to lift their data arguments) rather than lifts whole.
+_LIFT_THROUGH_CONTROL = frozenset({(",", 2), (";", 2), ("->", 2), ("*->", 2),
+                                   ("\\+", 1)})
+
+
+def _lift_compound_arguments(goal: Any, params: list) -> Any:
+    """*goal* with every compound or list ARGUMENT of its cell (or of the
+    cells a control construct holds) replaced by a fresh Var, ``(Var,
+    value)`` appended to *params* for the caller to bind before the search.
+
+    The fallback of :func:`_compile_as_query` for a goal whose arguments
+    the query compiler's recursive walks cannot descend: a CYCLIC term
+    (``X = f(X)`` from an earlier answer) or one nested past Python's
+    recursion limit.  A parameter is exactly how a program's ``call/1``
+    passes such an argument -- the compiled query holds a variable, the
+    search unifies it with the term, and every builtin and clause head
+    below sees the term itself, cyclic or deep, as inside a program.  A
+    goal argument of a special form (``findall/3``'s second) lifted this
+    way runs through call/1 (``_special_form_cell_as_call``).
+
+    A goal that is ITSELF cyclic through its control constructs (``G = (G,
+    true)``) is the one shape a parameter cannot help: it raises
+    ``resource_error(stack)``, the error a program's ``call(G)`` of it
+    raises (Scryer runs out of memory)."""
+    return _lift_goal(goal, params, set())
+
+
+def _lift_goal(goal: Any, params: list, active: set) -> Any:
+    is_cell, functor = compound_cell_shape(goal)
+    control = type(goal) is tuple and goal and (
+        not is_cell or (functor, len(goal) - 1) in _LIFT_THROUGH_CONTROL)
+    if not control:
+        return _lift_cell_arguments(goal, params) if is_cell else goal
+    if id(goal) in active:
+        from clausal.logic.exceptions import (  # noqa: PLC0415
+            LogicException, resource_error)
+        raise LogicException(resource_error(
+            "stack", "solve/2: the goal is cyclic (G = (G, true)): its "
+            "conjunction never ends"))
+    active.add(id(goal))
+    try:
+        if not is_cell:                      # a conjunction tuple
+            return tuple(_lift_goal(deref(g), params, active) for g in goal)
+        return (goal[0],) + tuple(_lift_goal(deref(g), params, active)
+                                  for g in goal[1:])
+    finally:
+        active.discard(id(goal))
+
+
+def _lift_cell_arguments(goal: tuple, params: list) -> tuple:
+    args = []
+    for a in goal[1:]:
+        if type(deref(a)) in (tuple, list):
+            pv = Var()
+            params.append((pv, a))
+            args.append(pv)
+        else:
+            args.append(a)
+    return (goal[0], *args)
+
+
 def _compile_as_query(goal: Any, module: Module) -> Any:
+    """:func:`_compile_query` of *goal*; a goal whose arguments its
+    recursive walks cannot descend is compiled with those arguments
+    lifted to parameters (:func:`_lift_compound_arguments`).
+
+    The compile walks (the variable collector, the opaque-value lifter,
+    the key) are recursive descents -- the fast path every ordinary goal
+    takes, and this ``try`` costs it nothing.  A cyclic or 100k-deep
+    argument handed in from Python made them raise a raw RecursionError
+    where the same goal inside a program answers (2026-10-24).  A goal
+    that still cannot be compiled -- a cyclic or too-deep GOAL, not an
+    argument -- raises the engine's ISO error: ``resource_error(
+    finite_memory)`` for a cycle, ``resource_error(stack)`` for depth."""
+    try:
+        return _compile_query(goal, module)
+    except RecursionError:
+        pass
+    goal, module = _strip_module_qualification(goal, module)
+    lifted: list = []
+    try:
+        goal = _lift_compound_arguments(deref(goal), lifted)
+        dispatch_fn, param_pairs = _compile_query(goal, module)
+    except RecursionError:
+        from clausal.logic.rational_walk import unwalkable_term_error  # noqa: PLC0415
+        raise unwalkable_term_error(goal, "solve/2", "query") from None
+    return dispatch_fn, lifted + param_pairs
+
+
+def _compile_query(goal: Any, module: Module) -> Any:
     """Compile goal as a zero-arity query predicate and return its dispatch fn.
 
     Vars embedded in the goal are injected into the compiled function's globals
