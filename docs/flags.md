@@ -55,6 +55,12 @@ truth value is `true` / `false`.
   reads it. A refusal of committed choice (`*->`, a cut in a meta-called
   body), reported with the same error term, is not a missing procedure and
   stays an error. In the [sandbox](sandbox.md) a program cannot set it.
+- **`char_conversion`** is `off`. The table `char_conversion/2` and
+  `current_char_conversion/2` keep (ISO 8.14.5–8.14.6) exists, process-wide,
+  but no reader applies it: there is no `read_term/2`, and a source file is
+  read before its directives run, so a conversion could not reach the text
+  after it. `on` is therefore refused, `permission_error(modify, flag,
+  char_conversion)`. Scryer has neither the flag nor the builtins.
 - **`debug`** can be set, but changes nothing yet.
 - **`double_quotes`** is the module's double-quotes mode. It decides how the
   compiler reads the module's `"…"` literals, so it is never changed at run

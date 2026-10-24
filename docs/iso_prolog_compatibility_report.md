@@ -210,6 +210,10 @@ flag and ISO's error terms ([Prolog Flags](flags.md)). A read-only flag gives
 `max_arity` is `unbounded`. `assert_creates_dynamic` (implementation-defined)
 selects ISO 7.5.2(2)'s assert, and is on in a `.pl` module. `unknown`
 takes `error`, `fail` and `warning` (ISO 7.11.2.4), process-wide.
+`char_conversion/2` and `current_char_conversion/2` (ISO 8.14.5–8.14.6, the
+directive too) keep the process-wide conversion table with ISO's errors;
+no reader applies it, so the `char_conversion` flag stays `off` (Scryer has
+none of the three).
 
 ---
 
@@ -237,8 +241,6 @@ Not provided (calling one raises `existence_error(procedure, PI)`):
   of the writers (`write/2`, `writeq/2`, `write_canonical/2`,
   `write_term/3`);
 - **ISO term reading (8.14.1):** `read/1,2`, `read_term/2,3`;
-- **ISO character conversion (8.14.5–8.14.6):** `char_conversion/2`,
-  `current_char_conversion/2`;
 - **common non-ISO extras:** `term_to_atom/2`, `atom_to_term/3`,
   `atom_string/2`, `sort/4`, `predsort/3`, `ignore/1`, `print/1`.
 

@@ -1477,6 +1477,38 @@ def _op(ctx, args, spans, span):
     return []
 
 
+def _char_conversion(ctx, args, spans, span):
+    """``:- char_conversion(In, Out).`` (ISO 7.4.2.5, 8.14.5): updates the
+    process-wide character conversion table when the directive is read, as
+    op/3 updates the run-time operator table.  The char_conversion flag is
+    off (and cannot be set on here), so, as ISO has it for the flag off, the
+    text read after the directive is not converted.  Refused in the
+    sandbox: the table is process-wide."""
+    a, b = args
+    what = f"char_conversion({_show(a)}, {_show(b)})"
+    if type(a) is VarRef or type(b) is VarRef:
+        raise _refused(f"{what}: both characters must be bound (ISO "
+                       f"error(instantiation_error, char_conversion/2))", span)
+    for c in (a, b):
+        if not (type(c) is str and len(c) == 1):
+            raise _refused(
+                f"{what}: {_show(c)} is not a one-char atom (ISO "
+                f"error(representation_error(character), "
+                f"char_conversion/2))", span)
+    if _sandbox_state.ACTIVE:
+        raise _refused(
+            f"{what}: the character conversion table is process-wide, so the "
+            f"sandbox does not let a program change it (ISO error("
+            f"permission_error(access, private_procedure, char_conversion/2)"
+            f", char_conversion/2))", span)
+    from clausal.logic.builtins.flags import _CHAR_CONVERSION  # noqa: PLC0415
+    if a == b:
+        _CHAR_CONVERSION.pop(a, None)
+    else:
+        _CHAR_CONVERSION[a] = b
+    return []
+
+
 def _initialization(ctx, args, spans, span):
     raise _refused(
         f"initialization/{len(args)} is refused (ruling D12): a rulebase has "
@@ -1817,6 +1849,7 @@ _DIRECTIVES = {
     ("meta_predicate", 1): _meta_predicate,
     ("set_prolog_flag", 2): _set_prolog_flag,
     ("op", 3): _op,
+    ("char_conversion", 2): _char_conversion,
     ("constructors", 1): _constructors,
     ("initialization", 1): _initialization,
     ("initialization", 2): _initialization,

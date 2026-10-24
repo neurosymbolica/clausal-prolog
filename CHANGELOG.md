@@ -73,6 +73,21 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `assertz`/`retract` of a builtin already raised the error. Pinned by
   `tests/iso/test_builtin_redefinition_scryer.py`, each row under Clausal
   and Scryer.
+- **`char_conversion/2` and `current_char_conversion/2` exist** (2026-10-24,
+  operator ruling 2026-10-24; ISO 8.14.5–8.14.6). Calling either raised
+  `existence_error(procedure, ...)`, and `:- char_conversion(a, b).` was an
+  unknown directive. They now keep ISO's character conversion table,
+  process-wide: `char_conversion(In, Out)` adds `In -> Out`, or removes
+  `In` when the two are the same; `current_char_conversion/2` enumerates the
+  pairs. Errors are ISO's: `instantiation_error`, and
+  `representation_error(character)` for an argument that is not a one-char
+  atom. No reader applies the table (there is no `read_term/2`, and a file is
+  read before its directives run), so the `char_conversion` flag stays `off`
+  and `on` is still `permission_error(modify, flag, char_conversion)`; with
+  the flag off ISO reads text unconverted too. The sandbox refuses both the
+  goal and the directive. Scryer has none of them. Pinned by
+  `tests/iso/test_char_conversion_scryer.py`.
+
 - **The `unknown` flag takes `fail` and `warning`** (2026-10-24, operator
   ruling 2026-10-24; ISO 7.11.2.4). It was always `error`, and setting
   another value raised `permission_error(modify, flag, unknown)`. Now

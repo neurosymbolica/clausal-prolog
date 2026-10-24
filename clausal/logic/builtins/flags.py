@@ -111,7 +111,7 @@ from clausal.logic.exceptions import (
     LogicException, domain_error, instantiation_error, permission_error,
     type_error,
 )
-from clausal.logic.builtins._registry import _db_builtin
+from clausal.logic.builtins._registry import _builtin, _db_builtin
 from clausal.logic.trampoline import DONE
 
 _SET = "set_prolog_flag/2"
@@ -467,3 +467,76 @@ def _current_prolog_flag_factory(db):
             trail.undo(mark)
 
     return current_prolog_flag__2
+
+
+# ── character conversion (ISO 8.14.5, 8.14.6) ───────────────────────────────
+#
+# The table is process-wide, as ISO makes it: In -> Out for In \== Out (an
+# identity pair is never stored).  No reader applies it: there is no
+# read_term/2, and each source front end reads a whole file before its
+# directives run, so a mid-file char_conversion directive could not reach
+# the text after it.  That is why the char_conversion flag cannot be set to
+# on (permission_error, as for any ISO value not implemented here).
+
+#: In_char -> Out_char, each a one-char atom.
+_CHAR_CONVERSION: dict[str, str] = {}
+
+_CC = "char_conversion/2"
+_CURRENT_CC = "current_char_conversion/2"
+
+
+def _is_char(v) -> bool:
+    return type(v) is str and len(v) == 1
+
+
+def _check_char(v, context: str, which: str) -> None:
+    if not _is_char(v):
+        from clausal.logic.exceptions import representation_error  # noqa: PLC0415
+        raise LogicException(representation_error(
+            "character",
+            f"{context}: {which} must be a one-char atom (ISO 8.14.5.3, "
+            f"8.14.6.3)"))
+
+
+@_builtin("char_conversion", 2)
+def char_conversion__2(in_char, out_char, trail, k):
+    """char_conversion(In_char, Out_char) -- ISO 8.14.5: put In_char ->
+    Out_char in the process-wide table, or take In_char out of it when the
+    two are the same character."""
+    i, o = deref(in_char), deref(out_char)
+    if is_var(i) or is_var(o):
+        raise LogicException(instantiation_error(
+            f"{_CC}: both characters must be bound"))
+    _check_char(i, _CC, "In_char")
+    _check_char(o, _CC, "Out_char")
+    from clausal import _sandbox_state  # noqa: PLC0415
+    if _sandbox_state.ACTIVE:           # backstop: the goal is refused there
+        from clausal.sandbox import refusal_load_error  # noqa: PLC0415
+        raise refusal_load_error(permission_error(
+            "access", "private_procedure", ("/", "char_conversion", 2),
+            f"{_CC}: the character conversion table is process-wide"))
+    if i == o:
+        _CHAR_CONVERSION.pop(i, None)
+    else:
+        _CHAR_CONVERSION[i] = o
+    yield None
+
+
+@_builtin("current_char_conversion", 2)
+def current_char_conversion__2(in_char, out_char, trail, k):
+    """current_char_conversion(In_char, Out_char) -- ISO 8.14.6: In_char is
+    converted to the different character Out_char by the table."""
+    i, o = deref(in_char), deref(out_char)
+    if not is_var(i):
+        _check_char(i, _CURRENT_CC, "In_char")
+    if not is_var(o):
+        _check_char(o, _CURRENT_CC, "Out_char")
+    if not is_var(i):
+        pairs = [(i, _CHAR_CONVERSION[i])] if i in _CHAR_CONVERSION else []
+    else:
+        pairs = sorted(_CHAR_CONVERSION.items())
+    for a, b in pairs:
+        mark = trail.mark()
+        if unify(in_char, a, trail) and unify(out_char, b, trail):
+            yield None
+        trail.undo(mark)

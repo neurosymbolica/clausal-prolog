@@ -215,6 +215,7 @@ _FACADES = "clausal.library."
 DENIED_BUILTINS: "dict[str, str]" = {
     "halt": "ends the process",
     "set_prolog_flag": "changes process-wide flags and later loads",
+    "char_conversion": "changes the process-wide character conversion table",
     "op": "changes the process-wide operator table",
     "global_atom": "writes the atom pool every module is seeded from",
     "gensym": "a process-wide counter",

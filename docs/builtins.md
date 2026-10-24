@@ -88,7 +88,7 @@ may define its own. A seam module is not ISO text and is not checked.
 | [DCG (Definite Clause Grammars)](#dcg-definite-clause-grammars) | phrase/2, phrase/3 |
 | [Term Inspection](#term-inspection) | functor/3, arg/3, unpack/2, copy_term/2, term_variables/2, numbervars/3, gensym/2, module_constant/3 |
 | [Runtime Database](#runtime-database) | assertz/1, asserta/1, retract/1, clause/2, abolish_table/2, abolish_all_tables/0 |
-| [Prolog Flags](#prolog-flags) | set_prolog_flag/2, current_prolog_flag/2 |
+| [Prolog Flags](#prolog-flags) | set_prolog_flag/2, current_prolog_flag/2, char_conversion/2, current_char_conversion/2 |
 | [Operators](#operators) | op/3, current_op/3 |
 | [Keyword-Term Introspection](#keyword-term-introspection) | vary/3, unbound_keys/2, signature/3 |
 | [Attributed Variables](#attributed-variables) | put_attr/3, get_attr/3, del_attr/2, get_attrs/2, put_attrs/2, attvar/1, term_attvars/2 |
@@ -909,6 +909,39 @@ module's value. With `Flag` unbound it enumerates every flag that has a value
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/flags.py`
     **Python tests:** `tests/iso/test_prolog_flags_scryer.py`
+
+---
+
+### `char_conversion/2`
+```text
+char_conversion(+InChar, +OutChar)
+```
+Put the pair `InChar -> OutChar` in the character conversion table (ISO
+8.14.5), or take `InChar` out of it when the two are the same character. The
+table is process-wide; also a directive, `:- char_conversion(a, b).` Errors are
+ISO's: `instantiation_error` for an unbound argument,
+`representation_error(character)` for one that is not a one-char atom. No
+reader applies the table: the `char_conversion` flag is `off` and cannot be set
+`on` ([Prolog Flags](flags.md)), so text is read as written. Refused in the
+[sandbox](sandbox.md).
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/flags.py`
+    **Python tests:** `tests/iso/test_char_conversion_scryer.py`
+
+---
+
+### `current_char_conversion/2`
+```text
+current_char_conversion(?InChar, ?OutChar)
+```
+`InChar` is converted to the different character `OutChar` by the table (ISO
+8.14.6); with `InChar` unbound it enumerates the table. An argument bound to
+anything but a one-char atom is `representation_error(character)`.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/flags.py`
+    **Python tests:** `tests/iso/test_char_conversion_scryer.py`
 
 ---
 

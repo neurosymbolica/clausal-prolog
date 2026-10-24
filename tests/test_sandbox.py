@@ -829,6 +829,7 @@ def test_side_effect_builtins_are_private_procedures(sbx):
         "nl": ("call", "nl"),
         "set_flag": ("set_prolog_flag", "sandbox", "false"),
         "flag_debug": ("set_prolog_flag", "debug", "true"),
+        "char_conversion": ("char_conversion", "a", "b"),
         "gensym": ("gensym", "a", X),
         "time": ("current_time", X),
         "global_atom": ("global_atom", "zz", X),
@@ -837,7 +838,7 @@ def test_side_effect_builtins_are_private_procedures(sbx):
         "catchable": ("catch", ("write", "x"), ("error", X, Var()), "true"),
     }""")
     for name in ("halt", "halt1", "write", "format", "nl", "set_flag",
-                 "flag_debug", "gensym", "time", "global_atom", "z3",
+                 "flag_debug", "char_conversion", "gensym", "time", "global_atom", "z3",
                  "z3_stats"):
         refused(res, name, PRIVATE)
     assert "private_procedure" in ok(res, "catchable")

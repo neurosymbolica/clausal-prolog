@@ -1165,7 +1165,7 @@
   },
   "tests/_scryer_end_module.pl": {
    "collect_error": null,
-   "error": "SyntaxError: Cannot import <root>/tests/_scryer_end_module.pl: _scryer_end_module.pl:7: directive: unknown directive multifile/1: the native front end handles constant_number_currency/3, constant_number_units/3, constant_value/2, constants_number_currency/4, constants_number_units/4, constructors/1, discontiguous/1, dynamic/1, end_module/1, meta_predicate/1, module/2, op/3, set_prolog_flag/2, table/1, use_module/1, use_module/2 (_scryer_end_module.pl, line 7)",
+   "error": "SyntaxError: Cannot import <root>/tests/_scryer_end_module.pl: _scryer_end_module.pl:7: directive: unknown directive multifile/1: the native front end handles char_conversion/2, constant_number_currency/3, constant_number_units/3, constant_value/2, constants_number_currency/4, constants_number_units/4, constructors/1, discontiguous/1, dynamic/1, end_module/1, meta_predicate/1, module/2, op/3, set_prolog_flag/2, table/1, use_module/1, use_module/2 (_scryer_end_module.pl, line 7)",
    "load": "refused",
    "preds": null,
    "tests": null
