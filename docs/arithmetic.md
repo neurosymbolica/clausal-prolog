@@ -495,6 +495,10 @@ test("digit sum") :-
   `div` floors (-4). In the seam the bare `//` floors like Python's.
   `/` is a float in evaluation (`X is 7 / 2` is 3.5) and exact integer
   division inside a CLP(ℤ) constraint; `rdiv` is exact everywhere.
+- **There is no negative zero** — `-0.0` reads as `0.0`, and an evaluation
+  whose IEEE result is `-0.0` (`X is 0.0 * -1`) gives `0.0`, as in Scryer
+  (operator ruling 2026-10-24). Only the result is normalised: an inner step
+  keeps its sign, so `X is atan2(-(0.0), -1)` is `-pi` in both.
 
 ---
 

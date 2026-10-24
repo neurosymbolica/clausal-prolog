@@ -151,6 +151,7 @@ Every one of them now raises the ISO error.
 | `pi`, `e` | `3.141592653589793`, `2.718281828459045` | ISO / Scryer |
 | `-7 >> 1`, `1 << 3`, `12 /\ 10`, `12 \/ 10`, `\ 5`, `xor(12, 10)` | `-4`, `8`, `8`, `14`, `-6`, `6` | ISO / Scryer |
 | a zero divisor | `evaluation_error(zero_divisor)` naming the operator | ISO |
+| `-0.0`, `X is 0.0 * -1`, `X is -(0.0)` | `0.0` (negative zero reads and evaluates as `0.0`; an inner step keeps its sign, so `atan2(-(0.0), -1)` is `-pi`) | Scryer (operator ruling 2026-10-24) |
 
 Scryer's non-ISO evaluables (`msb/1`, `log/2`, `max_tagged_integer`, …) are
 not provided: they raise `type_error(evaluable, F/N)`. An evaluation error

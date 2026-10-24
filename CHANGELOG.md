@@ -184,6 +184,28 @@ surface described in [docs/public-api.md](docs/public-api.md).
   (`permission_error(access, private_procedure, PI)`). Not provided:
   `read_term`'s non-ISO `syntax_errors/1` option, `char_conversion/2`,
   `print/1,2`. See docs/builtins.md "I/O".
+- **Negative zero is `0.0`, as Scryer has it** (2026-10-24, operator ruling
+  2026-10-24 that negative zero normalises to `0.0` at read time and in every
+  float result; Ulrich's syntax table #364). The engine kept IEEE 754's `-0.0`:
+  `-0.0`, `- 0.0` and `'-' 0.0` read as `-0.0`, `X is 0.0 * -1`,
+  `X is -(0.0)`, `X is -1.0e-300 * 1.0e-300` and `X is sin(-(0.0))` gave
+  `-0.0`, `number_chars(X, ['-','0','.','0'])` and `atom_number('-0.0', X)`
+  gave `-0.0`, a CLP(R) variable bound to a point (`X #= 0.0 * -1.0`) was
+  `-0.0`, and `writeq/1` printed every one of them as `-0.0` -- so
+  `Z is 0.0 * -1, X is atan2(Z, -1)` answered `-pi` where Scryer answers
+  `pi`, though `-0.0 == 0.0` already held. Now the reader's negative numeric
+  literal (`prolog_parser`), the seam's folded `-0.0` literal, the number
+  parsers of `number_chars/2`, `number_codes/2` and `atom_number/2`, the value
+  every evaluation hands to unify (`present_number`, which `is/2`, the seam's
+  `==` and the CLP binders already share) and CLP(R)'s point bindings and
+  `inf/2`/`sup/2` give `0.0`, on every surface. As in Scryer it is the RESULT
+  that is normalised, not each step: `X is atan2(-(0.0), -1)` is still `-pi`
+  in both, and `float_integer_part(-0.5)` keeps IEEE's `-0.0` inside an
+  expression as Scryer's does. A `-0.0` made in Python and never evaluated
+  is written as it is. Pinned by `tests/iso/test_negative_zero_scryer.py`
+  (each row under Clausal and Scryer, on `.pl` and `.clausal`, and the
+  seam).
+
 - **`1 = 1.0` fails: a number unifies only with a number of its own kind**
   (2026-10-23, operator ruling 2026-10-23; ISO 7.3). Unification of two
   ground non-container terms fell back to Python `==`, so an integer and a
