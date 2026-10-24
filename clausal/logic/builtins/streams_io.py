@@ -61,7 +61,7 @@ def io_errors(ctx: str):
     """THE place an OS-level failure of a stream operation becomes a Prolog
     error: ``OSError`` (a full disk, a closed descriptor), ``ValueError``
     (a Python file closed underneath the stream, stdin captured by a test
-    harness) and ``AttributeError`` (``sys.stdin`` set to None) raise
+    runner) and ``AttributeError`` (``sys.stdin`` set to None) raise
     ``error(system_error(io), PI)`` with the builtin as the context."""
     try:
         yield
