@@ -19,9 +19,12 @@ Scryer, for the names that are no ISO builtin (``forall/2``, ``ignore/1``),
 loads such a module and runs the import with the arguments as written, in
 the body and through ``call/N`` alike.  It refuses a module that DEFINES an
 ISO builtin (``once/1``, ``findall/3``, ``catch/3``) with
-``permission_error(modify, static_procedure, PI)``; Clausal does not refuse
-that yet (``todo/iso-a-file-can-redefine-a-builtin-2026-10-16.md``), and
-until it does, the import is what runs on every route.
+``permission_error(modify, static_procedure, PI)``, and so does Clausal's
+loader for a ``.pl`` or ``.clausal`` module
+(``tests/iso/test_builtin_redefinition_scryer.py``).  A seam module may
+still define such a name (the seam is not ISO text), and a ``.pl`` or
+``.clausal`` module may import it: so the module that defines an ISO name
+here is a ``.seam`` one, and the import is what runs on every route.
 """
 
 from __future__ import annotations
@@ -36,6 +39,7 @@ import pytest
 from clausal import Var
 from clausal.logic.solve import call
 from clausal.logic.solve import _deref_walk
+from clausal.tools.iso_builtins import is_iso_builtin
 
 SURFACES = (".pl", ".clausal")
 
@@ -93,16 +97,34 @@ def _args(name, x):
     return ", ".join(x if i == at else "_" for i in range(arity))
 
 
+def _definer(tree, suffix, m, name, arity, args, fact=False):
+    """Module *m* defines and exports *name*/*arity*: ``name(args) :- X =
+    mine`` (or the fact ``name(args)``).  An ISO built-in's name is defined
+    in a ``.seam`` module, since a ``.pl`` or ``.clausal`` one may not
+    define it (ISO 7.5.1); any other name on the surface under test."""
+    if is_iso_builtin(name, arity):
+        body = "," if fact else " <- (X is mine)"
+        tree.write(m, ".seam", f"""
+            -module({m}, [{name}/{arity}])
+            -private([mine])
+
+            {name}({args}){body}
+            """)
+        return
+    body = "." if fact else " :- X = mine."
+    tree.write(m, suffix, f"""
+        :- module({m}, [{name}/{arity}]).
+        {name}({args}){body}
+        {_end(suffix, m)}""")
+
+
 def _importer(tree, suffix, tag, name):
     """Module ``<tag>_m`` defines and exports *name*; ``<tag>_u`` imports
     it and calls it four ways, each with an unbound argument at a position
     the special form takes as a goal."""
     export = f"{name}/{IMPORTS[name][0]}"
     m, u = f"{tag}_m", f"{tag}_u"
-    tree.write(m, suffix, f"""
-        :- module({m}, [{export}]).
-        {name}({_args(name, "X")}) :- X = mine.
-        {_end(suffix, m)}""")
+    _definer(tree, suffix, m, name, IMPORTS[name][0], _args(name, "X"))
     a = _args(name, "X")
     tree.write(u, suffix, f"""
         :- module({u}, [body/1, calln/1, univ/1, qualified/1, ground/0]).
@@ -184,10 +206,7 @@ def test_a_dropped_import_gives_the_special_form_its_goals_back(
     is converted back to a goal (``call(X)``), not refused as a bare
     variable in goal position."""
     tag = f"isd_{suffix[1:]}"
-    tree.write(f"{tag}_m", suffix, f"""
-        :- module({tag}_m, [once/1]).
-        once(X) :- X = mine.
-        {_end(suffix, f"{tag}_m")}""")
+    _definer(tree, suffix, f"{tag}_m", "once", 1, "X")
     tree.write(f"{tag}_u", suffix, f"""
         :- module({tag}_u, [t/1]).
         :- use_module({tag}_m, [once/1]).
@@ -210,10 +229,7 @@ def test_a_dropped_import_gives_an_iterated_goal_back(
     lowers it (``Y^p(X, Y)``), not as ``call(Y^p(X, Y))``, which raised
     ``existence_error(procedure, (^)/2)``."""
     tag = f"isi_{name}_{suffix[1:]}"
-    tree.write(f"{tag}_m", suffix, f"""
-        :- module({tag}_m, [{name}/3]).
-        {name}(_, _, mine).
-        {_end(suffix, f"{tag}_m")}""")
+    _definer(tree, suffix, f"{tag}_m", name, 3, "_, _, mine", fact=True)
     tree.write(f"{tag}_u", suffix, f"""
         :- module({tag}_u, [t/1]).
         :- use_module({tag}_m, [{name}/3]).
@@ -231,11 +247,7 @@ def test_a_control_construct_in_an_imported_goal_position_is_refused(tree):
     """``->`` is refused in a .clausal goal at load, whichever predicate
     the name reaches: with once/1 imported, ``once((true -> true ; fail))``
     is refused as it is without the import."""
-    tree.write("isc_m", ".clausal", """
-        :- module(isc_m, [once/1]).
-        once(_).
-        :- end_module(isc_m).
-        """)
+    _definer(tree, ".clausal", "isc_m", "once", 1, "_", fact=True)
     tree.write("isc_u", ".clausal", """
         :- module(isc_u, [t/0]).
         :- use_module(isc_m, [once/1]).

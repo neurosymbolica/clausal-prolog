@@ -71,6 +71,7 @@ from typing import Any
 
 from clausal import _sandbox_state
 from clausal.end_module import SURFACE_CLAUSAL_PROLOG as _SURFACE_CLAUSAL_PROLOG
+from clausal.tools.iso_builtins import is_iso_builtin
 from clausal.tools.prolog_operators import op_error, op_lock, runtime_op_table
 from clausal.tools.prolog_reader import VarRef
 
@@ -1371,6 +1372,14 @@ def _predspec(directive: str):
             if pi is None:
                 raise _refused(f"{what}: {_show(e)} is not a predicate "
                                f"indicator name/N", _top(s) or span)
+            if directive == "dynamic" and is_iso_builtin(*pi):
+                # A built-in is static (ISO 7.5.1); making one dynamic is the
+                # modification 8.9 refuses (as Trealla and SWI-Prolog do;
+                # Scryer ignores the directive and keeps the builtin static).
+                raise _refused(
+                    f"{what}: cannot make the ISO built-in predicate "
+                    f"{pi[0]}/{pi[1]} dynamic (ISO permission_error(modify, "
+                    f"static_procedure, {pi[0]}/{pi[1]}))", _top(s) or span)
             pis.append(_pi_ast(*pi))
         return ctx.seam(directive, pis, span, what)
     return lower

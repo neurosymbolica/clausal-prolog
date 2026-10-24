@@ -454,22 +454,22 @@ def test_the_source_body_survives_the_bytecode_cache(tmp_path, monkeypatch):
 
 SRC5 = """\
 :- use_module(library(lists)).
-:- use_module(qh_once).
+:- use_module(qh_first).
 :- use_module(qh_forall).
 :- dynamic(mm/1).
 :- meta_predicate(mm(0)).
 mm(G) :- call(G).
 
 :- dynamic(c0/1).
-c0(1) :- call(false), qh_once:once(fail).
-c0(2) :- maplist(false, []), qh_once:once(fail).
-c0(3) :- mm(false), qh_once:once(fail).
-c0(4) :- qh_once:once(fail), call(false).
+c0(1) :- call(false), qh_first:first(fail).
+c0(2) :- maplist(false, []), qh_first:first(fail).
+c0(3) :- mm(false), qh_first:first(fail).
+c0(4) :- qh_first:first(fail), call(false).
 c0(5) :- call((false, true)), qh_forall:forall(fail, true).
 c0(6) :- lists:member(_, [1]), fail.
-c0(7) :- call(fail), qh_once:once(false).
-c0(8) :- qh_once:once((nl, X = 1)), X = 1.
-c0(9) :- qh_once:once(nl(_)).
+c0(7) :- call(fail), qh_first:first(false).
+c0(8) :- qh_first:first((nl, X = 1)), X = 1.
+c0(9) :- qh_first:first(nl(_)).
 c0(10) :- lists:once((X = 1, X > 0)).
 c0(11) :- call(\\+ (X = 1, X = 2)).
 c0(12) :- call((X = 1 ; X = 2)).
@@ -477,15 +477,15 @@ c0(13) :- mm(\\+ (X = 1, X = 2)).
 c0(14) :- mm((X = 1 ; X = 2)).
 n00(L) :- findall(N, retract((c0(N) :- (call(fail), _))), L).
 :- dynamic(c1/1).
-c1(1) :- call(false), qh_once:once(fail).
-c1(2) :- maplist(false, []), qh_once:once(fail).
-c1(3) :- mm(false), qh_once:once(fail).
-c1(4) :- qh_once:once(fail), call(false).
+c1(1) :- call(false), qh_first:first(fail).
+c1(2) :- maplist(false, []), qh_first:first(fail).
+c1(3) :- mm(false), qh_first:first(fail).
+c1(4) :- qh_first:first(fail), call(false).
 c1(5) :- call((false, true)), qh_forall:forall(fail, true).
 c1(6) :- lists:member(_, [1]), fail.
-c1(7) :- call(fail), qh_once:once(false).
-c1(8) :- qh_once:once((nl, X = 1)), X = 1.
-c1(9) :- qh_once:once(nl(_)).
+c1(7) :- call(fail), qh_first:first(false).
+c1(8) :- qh_first:first((nl, X = 1)), X = 1.
+c1(9) :- qh_first:first(nl(_)).
 c1(10) :- lists:once((X = 1, X > 0)).
 c1(11) :- call(\\+ (X = 1, X = 2)).
 c1(12) :- call((X = 1 ; X = 2)).
@@ -493,15 +493,15 @@ c1(13) :- mm(\\+ (X = 1, X = 2)).
 c1(14) :- mm((X = 1 ; X = 2)).
 n01(L) :- findall(N, retract((c1(N) :- (maplist(fail, _), _))), L).
 :- dynamic(c2/1).
-c2(1) :- call(false), qh_once:once(fail).
-c2(2) :- maplist(false, []), qh_once:once(fail).
-c2(3) :- mm(false), qh_once:once(fail).
-c2(4) :- qh_once:once(fail), call(false).
+c2(1) :- call(false), qh_first:first(fail).
+c2(2) :- maplist(false, []), qh_first:first(fail).
+c2(3) :- mm(false), qh_first:first(fail).
+c2(4) :- qh_first:first(fail), call(false).
 c2(5) :- call((false, true)), qh_forall:forall(fail, true).
 c2(6) :- lists:member(_, [1]), fail.
-c2(7) :- call(fail), qh_once:once(false).
-c2(8) :- qh_once:once((nl, X = 1)), X = 1.
-c2(9) :- qh_once:once(nl(_)).
+c2(7) :- call(fail), qh_first:first(false).
+c2(8) :- qh_first:first((nl, X = 1)), X = 1.
+c2(9) :- qh_first:first(nl(_)).
 c2(10) :- lists:once((X = 1, X > 0)).
 c2(11) :- call(\\+ (X = 1, X = 2)).
 c2(12) :- call((X = 1 ; X = 2)).
@@ -509,15 +509,15 @@ c2(13) :- mm(\\+ (X = 1, X = 2)).
 c2(14) :- mm((X = 1 ; X = 2)).
 n02(L) :- findall(N, retract((c2(N) :- (mm(fail), _))), L).
 :- dynamic(c3/1).
-c3(1) :- call(false), qh_once:once(fail).
-c3(2) :- maplist(false, []), qh_once:once(fail).
-c3(3) :- mm(false), qh_once:once(fail).
-c3(4) :- qh_once:once(fail), call(false).
+c3(1) :- call(false), qh_first:first(fail).
+c3(2) :- maplist(false, []), qh_first:first(fail).
+c3(3) :- mm(false), qh_first:first(fail).
+c3(4) :- qh_first:first(fail), call(false).
 c3(5) :- call((false, true)), qh_forall:forall(fail, true).
 c3(6) :- lists:member(_, [1]), fail.
-c3(7) :- call(fail), qh_once:once(false).
-c3(8) :- qh_once:once((nl, X = 1)), X = 1.
-c3(9) :- qh_once:once(nl(_)).
+c3(7) :- call(fail), qh_first:first(false).
+c3(8) :- qh_first:first((nl, X = 1)), X = 1.
+c3(9) :- qh_first:first(nl(_)).
 c3(10) :- lists:once((X = 1, X > 0)).
 c3(11) :- call(\\+ (X = 1, X = 2)).
 c3(12) :- call((X = 1 ; X = 2)).
@@ -525,15 +525,15 @@ c3(13) :- mm(\\+ (X = 1, X = 2)).
 c3(14) :- mm((X = 1 ; X = 2)).
 n03(L) :- findall(N, retract((c3(N) :- (_, call(fail)))), L).
 :- dynamic(c4/1).
-c4(1) :- call(false), qh_once:once(fail).
-c4(2) :- maplist(false, []), qh_once:once(fail).
-c4(3) :- mm(false), qh_once:once(fail).
-c4(4) :- qh_once:once(fail), call(false).
+c4(1) :- call(false), qh_first:first(fail).
+c4(2) :- maplist(false, []), qh_first:first(fail).
+c4(3) :- mm(false), qh_first:first(fail).
+c4(4) :- qh_first:first(fail), call(false).
 c4(5) :- call((false, true)), qh_forall:forall(fail, true).
 c4(6) :- lists:member(_, [1]), fail.
-c4(7) :- call(fail), qh_once:once(false).
-c4(8) :- qh_once:once((nl, X = 1)), X = 1.
-c4(9) :- qh_once:once(nl(_)).
+c4(7) :- call(fail), qh_first:first(false).
+c4(8) :- qh_first:first((nl, X = 1)), X = 1.
+c4(9) :- qh_first:first(nl(_)).
 c4(10) :- lists:once((X = 1, X > 0)).
 c4(11) :- call(\\+ (X = 1, X = 2)).
 c4(12) :- call((X = 1 ; X = 2)).
@@ -541,15 +541,15 @@ c4(13) :- mm(\\+ (X = 1, X = 2)).
 c4(14) :- mm((X = 1 ; X = 2)).
 n04(L) :- findall(N, retract((c4(N) :- (call((fail, true)), _))), L).
 :- dynamic(c5/1).
-c5(1) :- call(false), qh_once:once(fail).
-c5(2) :- maplist(false, []), qh_once:once(fail).
-c5(3) :- mm(false), qh_once:once(fail).
-c5(4) :- qh_once:once(fail), call(false).
+c5(1) :- call(false), qh_first:first(fail).
+c5(2) :- maplist(false, []), qh_first:first(fail).
+c5(3) :- mm(false), qh_first:first(fail).
+c5(4) :- qh_first:first(fail), call(false).
 c5(5) :- call((false, true)), qh_forall:forall(fail, true).
 c5(6) :- lists:member(_, [1]), fail.
-c5(7) :- call(fail), qh_once:once(false).
-c5(8) :- qh_once:once((nl, X = 1)), X = 1.
-c5(9) :- qh_once:once(nl(_)).
+c5(7) :- call(fail), qh_first:first(false).
+c5(8) :- qh_first:first((nl, X = 1)), X = 1.
+c5(9) :- qh_first:first(nl(_)).
 c5(10) :- lists:once((X = 1, X > 0)).
 c5(11) :- call(\\+ (X = 1, X = 2)).
 c5(12) :- call((X = 1 ; X = 2)).
@@ -557,15 +557,15 @@ c5(13) :- mm(\\+ (X = 1, X = 2)).
 c5(14) :- mm((X = 1 ; X = 2)).
 n05(L) :- findall(N, retract((c5(N) :- (member(_, _), fail))), L).
 :- dynamic(c6/1).
-c6(1) :- call(false), qh_once:once(fail).
-c6(2) :- maplist(false, []), qh_once:once(fail).
-c6(3) :- mm(false), qh_once:once(fail).
-c6(4) :- qh_once:once(fail), call(false).
+c6(1) :- call(false), qh_first:first(fail).
+c6(2) :- maplist(false, []), qh_first:first(fail).
+c6(3) :- mm(false), qh_first:first(fail).
+c6(4) :- qh_first:first(fail), call(false).
 c6(5) :- call((false, true)), qh_forall:forall(fail, true).
 c6(6) :- lists:member(_, [1]), fail.
-c6(7) :- call(fail), qh_once:once(false).
-c6(8) :- qh_once:once((nl, X = 1)), X = 1.
-c6(9) :- qh_once:once(nl(_)).
+c6(7) :- call(fail), qh_first:first(false).
+c6(8) :- qh_first:first((nl, X = 1)), X = 1.
+c6(9) :- qh_first:first(nl(_)).
 c6(10) :- lists:once((X = 1, X > 0)).
 c6(11) :- call(\\+ (X = 1, X = 2)).
 c6(12) :- call((X = 1 ; X = 2)).
@@ -573,15 +573,15 @@ c6(13) :- mm(\\+ (X = 1, X = 2)).
 c6(14) :- mm((X = 1 ; X = 2)).
 n06(L) :- findall(N, retract((c6(N) :- (call(false), _))), L).
 :- dynamic(c7/1).
-c7(1) :- call(false), qh_once:once(fail).
-c7(2) :- maplist(false, []), qh_once:once(fail).
-c7(3) :- mm(false), qh_once:once(fail).
-c7(4) :- qh_once:once(fail), call(false).
+c7(1) :- call(false), qh_first:first(fail).
+c7(2) :- maplist(false, []), qh_first:first(fail).
+c7(3) :- mm(false), qh_first:first(fail).
+c7(4) :- qh_first:first(fail), call(false).
 c7(5) :- call((false, true)), qh_forall:forall(fail, true).
 c7(6) :- lists:member(_, [1]), fail.
-c7(7) :- call(fail), qh_once:once(false).
-c7(8) :- qh_once:once((nl, X = 1)), X = 1.
-c7(9) :- qh_once:once(nl(_)).
+c7(7) :- call(fail), qh_first:first(false).
+c7(8) :- qh_first:first((nl, X = 1)), X = 1.
+c7(9) :- qh_first:first(nl(_)).
 c7(10) :- lists:once((X = 1, X > 0)).
 c7(11) :- call(\\+ (X = 1, X = 2)).
 c7(12) :- call((X = 1 ; X = 2)).
@@ -589,15 +589,15 @@ c7(13) :- mm(\\+ (X = 1, X = 2)).
 c7(14) :- mm((X = 1 ; X = 2)).
 n07(L) :- findall(N, retract((c7(N) :- (_, once(fail)))), L).
 :- dynamic(c8/1).
-c8(1) :- call(false), qh_once:once(fail).
-c8(2) :- maplist(false, []), qh_once:once(fail).
-c8(3) :- mm(false), qh_once:once(fail).
-c8(4) :- qh_once:once(fail), call(false).
+c8(1) :- call(false), qh_first:first(fail).
+c8(2) :- maplist(false, []), qh_first:first(fail).
+c8(3) :- mm(false), qh_first:first(fail).
+c8(4) :- qh_first:first(fail), call(false).
 c8(5) :- call((false, true)), qh_forall:forall(fail, true).
 c8(6) :- lists:member(_, [1]), fail.
-c8(7) :- call(fail), qh_once:once(false).
-c8(8) :- qh_once:once((nl, X = 1)), X = 1.
-c8(9) :- qh_once:once(nl(_)).
+c8(7) :- call(fail), qh_first:first(false).
+c8(8) :- qh_first:first((nl, X = 1)), X = 1.
+c8(9) :- qh_first:first(nl(_)).
 c8(10) :- lists:once((X = 1, X > 0)).
 c8(11) :- call(\\+ (X = 1, X = 2)).
 c8(12) :- call((X = 1 ; X = 2)).
@@ -605,15 +605,15 @@ c8(13) :- mm(\\+ (X = 1, X = 2)).
 c8(14) :- mm((X = 1 ; X = 2)).
 n08(L) :- findall(N, retract((c8(N) :- (_, forall(fail, _)))), L).
 :- dynamic(c9/1).
-c9(1) :- call(false), qh_once:once(fail).
-c9(2) :- maplist(false, []), qh_once:once(fail).
-c9(3) :- mm(false), qh_once:once(fail).
-c9(4) :- qh_once:once(fail), call(false).
+c9(1) :- call(false), qh_first:first(fail).
+c9(2) :- maplist(false, []), qh_first:first(fail).
+c9(3) :- mm(false), qh_first:first(fail).
+c9(4) :- qh_first:first(fail), call(false).
 c9(5) :- call((false, true)), qh_forall:forall(fail, true).
 c9(6) :- lists:member(_, [1]), fail.
-c9(7) :- call(fail), qh_once:once(false).
-c9(8) :- qh_once:once((nl, X = 1)), X = 1.
-c9(9) :- qh_once:once(nl(_)).
+c9(7) :- call(fail), qh_first:first(false).
+c9(8) :- qh_first:first((nl, X = 1)), X = 1.
+c9(9) :- qh_first:first(nl(_)).
 c9(10) :- lists:once((X = 1, X > 0)).
 c9(11) :- call(\\+ (X = 1, X = 2)).
 c9(12) :- call((X = 1 ; X = 2)).
@@ -621,15 +621,15 @@ c9(13) :- mm(\\+ (X = 1, X = 2)).
 c9(14) :- mm((X = 1 ; X = 2)).
 n09(L) :- findall(N, retract((c9(N) :- (once(nl(_)), _))), L).
 :- dynamic(c10/1).
-c10(1) :- call(false), qh_once:once(fail).
-c10(2) :- maplist(false, []), qh_once:once(fail).
-c10(3) :- mm(false), qh_once:once(fail).
-c10(4) :- qh_once:once(fail), call(false).
+c10(1) :- call(false), qh_first:first(fail).
+c10(2) :- maplist(false, []), qh_first:first(fail).
+c10(3) :- mm(false), qh_first:first(fail).
+c10(4) :- qh_first:first(fail), call(false).
 c10(5) :- call((false, true)), qh_forall:forall(fail, true).
 c10(6) :- lists:member(_, [1]), fail.
-c10(7) :- call(fail), qh_once:once(false).
-c10(8) :- qh_once:once((nl, X = 1)), X = 1.
-c10(9) :- qh_once:once(nl(_)).
+c10(7) :- call(fail), qh_first:first(false).
+c10(8) :- qh_first:first((nl, X = 1)), X = 1.
+c10(9) :- qh_first:first(nl(_)).
 c10(10) :- lists:once((X = 1, X > 0)).
 c10(11) :- call(\\+ (X = 1, X = 2)).
 c10(12) :- call((X = 1 ; X = 2)).
@@ -637,47 +637,47 @@ c10(13) :- mm(\\+ (X = 1, X = 2)).
 c10(14) :- mm((X = 1 ; X = 2)).
 n10(L) :- findall(N, retract((c10(N) :- once(nl(_)))), L).
 :- dynamic(c11/1).
-c11(1) :- call(false), qh_once:once(fail).
-c11(2) :- maplist(false, []), qh_once:once(fail).
-c11(3) :- mm(false), qh_once:once(fail).
-c11(4) :- qh_once:once(fail), call(false).
+c11(1) :- call(false), qh_first:first(fail).
+c11(2) :- maplist(false, []), qh_first:first(fail).
+c11(3) :- mm(false), qh_first:first(fail).
+c11(4) :- qh_first:first(fail), call(false).
 c11(5) :- call((false, true)), qh_forall:forall(fail, true).
 c11(6) :- lists:member(_, [1]), fail.
-c11(7) :- call(fail), qh_once:once(false).
-c11(8) :- qh_once:once((nl, X = 1)), X = 1.
-c11(9) :- qh_once:once(nl(_)).
+c11(7) :- call(fail), qh_first:first(false).
+c11(8) :- qh_first:first((nl, X = 1)), X = 1.
+c11(9) :- qh_first:first(nl(_)).
 c11(10) :- lists:once((X = 1, X > 0)).
 c11(11) :- call(\\+ (X = 1, X = 2)).
 c11(12) :- call((X = 1 ; X = 2)).
 c11(13) :- mm(\\+ (X = 1, X = 2)).
 c11(14) :- mm((X = 1 ; X = 2)).
-n11(L) :- findall(N, retract((c11(N) :- (qh_once:once((_, _)), _))), L).
+n11(L) :- findall(N, retract((c11(N) :- (qh_first:first((_, _)), _))), L).
 :- dynamic(c12/1).
-c12(1) :- call(false), qh_once:once(fail).
-c12(2) :- maplist(false, []), qh_once:once(fail).
-c12(3) :- mm(false), qh_once:once(fail).
-c12(4) :- qh_once:once(fail), call(false).
+c12(1) :- call(false), qh_first:first(fail).
+c12(2) :- maplist(false, []), qh_first:first(fail).
+c12(3) :- mm(false), qh_first:first(fail).
+c12(4) :- qh_first:first(fail), call(false).
 c12(5) :- call((false, true)), qh_forall:forall(fail, true).
 c12(6) :- lists:member(_, [1]), fail.
-c12(7) :- call(fail), qh_once:once(false).
-c12(8) :- qh_once:once((nl, X = 1)), X = 1.
-c12(9) :- qh_once:once(nl(_)).
+c12(7) :- call(fail), qh_first:first(false).
+c12(8) :- qh_first:first((nl, X = 1)), X = 1.
+c12(9) :- qh_first:first(nl(_)).
 c12(10) :- lists:once((X = 1, X > 0)).
 c12(11) :- call(\\+ (X = 1, X = 2)).
 c12(12) :- call((X = 1 ; X = 2)).
 c12(13) :- mm(\\+ (X = 1, X = 2)).
 c12(14) :- mm((X = 1 ; X = 2)).
-n12(L) :- findall(N, retract((c12(N) :- qh_once:once(nl(_)))), L).
+n12(L) :- findall(N, retract((c12(N) :- qh_first:first(nl(_)))), L).
 :- dynamic(c13/1).
-c13(1) :- call(false), qh_once:once(fail).
-c13(2) :- maplist(false, []), qh_once:once(fail).
-c13(3) :- mm(false), qh_once:once(fail).
-c13(4) :- qh_once:once(fail), call(false).
+c13(1) :- call(false), qh_first:first(fail).
+c13(2) :- maplist(false, []), qh_first:first(fail).
+c13(3) :- mm(false), qh_first:first(fail).
+c13(4) :- qh_first:first(fail), call(false).
 c13(5) :- call((false, true)), qh_forall:forall(fail, true).
 c13(6) :- lists:member(_, [1]), fail.
-c13(7) :- call(fail), qh_once:once(false).
-c13(8) :- qh_once:once((nl, X = 1)), X = 1.
-c13(9) :- qh_once:once(nl(_)).
+c13(7) :- call(fail), qh_first:first(false).
+c13(8) :- qh_first:first((nl, X = 1)), X = 1.
+c13(9) :- qh_first:first(nl(_)).
 c13(10) :- lists:once((X = 1, X > 0)).
 c13(11) :- call(\\+ (X = 1, X = 2)).
 c13(12) :- call((X = 1 ; X = 2)).
@@ -685,15 +685,15 @@ c13(13) :- mm(\\+ (X = 1, X = 2)).
 c13(14) :- mm((X = 1 ; X = 2)).
 n13(L) :- findall(N, retract((c13(N) :- once((_, _)))), L).
 :- dynamic(c14/1).
-c14(1) :- call(false), qh_once:once(fail).
-c14(2) :- maplist(false, []), qh_once:once(fail).
-c14(3) :- mm(false), qh_once:once(fail).
-c14(4) :- qh_once:once(fail), call(false).
+c14(1) :- call(false), qh_first:first(fail).
+c14(2) :- maplist(false, []), qh_first:first(fail).
+c14(3) :- mm(false), qh_first:first(fail).
+c14(4) :- qh_first:first(fail), call(false).
 c14(5) :- call((false, true)), qh_forall:forall(fail, true).
 c14(6) :- lists:member(_, [1]), fail.
-c14(7) :- call(fail), qh_once:once(false).
-c14(8) :- qh_once:once((nl, X = 1)), X = 1.
-c14(9) :- qh_once:once(nl(_)).
+c14(7) :- call(fail), qh_first:first(false).
+c14(8) :- qh_first:first((nl, X = 1)), X = 1.
+c14(9) :- qh_first:first(nl(_)).
 c14(10) :- lists:once((X = 1, X > 0)).
 c14(11) :- call(\\+ (X = 1, X = 2)).
 c14(12) :- call((X = 1 ; X = 2)).
@@ -701,15 +701,15 @@ c14(13) :- mm(\\+ (X = 1, X = 2)).
 c14(14) :- mm((X = 1 ; X = 2)).
 n14(L) :- findall(N, retract((c14(N) :- lists:once((_, _)))), L).
 :- dynamic(c15/1).
-c15(1) :- call(false), qh_once:once(fail).
-c15(2) :- maplist(false, []), qh_once:once(fail).
-c15(3) :- mm(false), qh_once:once(fail).
-c15(4) :- qh_once:once(fail), call(false).
+c15(1) :- call(false), qh_first:first(fail).
+c15(2) :- maplist(false, []), qh_first:first(fail).
+c15(3) :- mm(false), qh_first:first(fail).
+c15(4) :- qh_first:first(fail), call(false).
 c15(5) :- call((false, true)), qh_forall:forall(fail, true).
 c15(6) :- lists:member(_, [1]), fail.
-c15(7) :- call(fail), qh_once:once(false).
-c15(8) :- qh_once:once((nl, X = 1)), X = 1.
-c15(9) :- qh_once:once(nl(_)).
+c15(7) :- call(fail), qh_first:first(false).
+c15(8) :- qh_first:first((nl, X = 1)), X = 1.
+c15(9) :- qh_first:first(nl(_)).
 c15(10) :- lists:once((X = 1, X > 0)).
 c15(11) :- call(\\+ (X = 1, X = 2)).
 c15(12) :- call((X = 1 ; X = 2)).
@@ -717,15 +717,15 @@ c15(13) :- mm(\\+ (X = 1, X = 2)).
 c15(14) :- mm((X = 1 ; X = 2)).
 n15(L) :- findall(N, retract((c15(N) :- call(\\+ (_, _)))), L).
 :- dynamic(c16/1).
-c16(1) :- call(false), qh_once:once(fail).
-c16(2) :- maplist(false, []), qh_once:once(fail).
-c16(3) :- mm(false), qh_once:once(fail).
-c16(4) :- qh_once:once(fail), call(false).
+c16(1) :- call(false), qh_first:first(fail).
+c16(2) :- maplist(false, []), qh_first:first(fail).
+c16(3) :- mm(false), qh_first:first(fail).
+c16(4) :- qh_first:first(fail), call(false).
 c16(5) :- call((false, true)), qh_forall:forall(fail, true).
 c16(6) :- lists:member(_, [1]), fail.
-c16(7) :- call(fail), qh_once:once(false).
-c16(8) :- qh_once:once((nl, X = 1)), X = 1.
-c16(9) :- qh_once:once(nl(_)).
+c16(7) :- call(fail), qh_first:first(false).
+c16(8) :- qh_first:first((nl, X = 1)), X = 1.
+c16(9) :- qh_first:first(nl(_)).
 c16(10) :- lists:once((X = 1, X > 0)).
 c16(11) :- call(\\+ (X = 1, X = 2)).
 c16(12) :- call((X = 1 ; X = 2)).
@@ -733,15 +733,15 @@ c16(13) :- mm(\\+ (X = 1, X = 2)).
 c16(14) :- mm((X = 1 ; X = 2)).
 n16(L) :- findall(N, retract((c16(N) :- call((_ ; _)))), L).
 :- dynamic(c17/1).
-c17(1) :- call(false), qh_once:once(fail).
-c17(2) :- maplist(false, []), qh_once:once(fail).
-c17(3) :- mm(false), qh_once:once(fail).
-c17(4) :- qh_once:once(fail), call(false).
+c17(1) :- call(false), qh_first:first(fail).
+c17(2) :- maplist(false, []), qh_first:first(fail).
+c17(3) :- mm(false), qh_first:first(fail).
+c17(4) :- qh_first:first(fail), call(false).
 c17(5) :- call((false, true)), qh_forall:forall(fail, true).
 c17(6) :- lists:member(_, [1]), fail.
-c17(7) :- call(fail), qh_once:once(false).
-c17(8) :- qh_once:once((nl, X = 1)), X = 1.
-c17(9) :- qh_once:once(nl(_)).
+c17(7) :- call(fail), qh_first:first(false).
+c17(8) :- qh_first:first((nl, X = 1)), X = 1.
+c17(9) :- qh_first:first(nl(_)).
 c17(10) :- lists:once((X = 1, X > 0)).
 c17(11) :- call(\\+ (X = 1, X = 2)).
 c17(12) :- call((X = 1 ; X = 2)).
@@ -749,15 +749,15 @@ c17(13) :- mm(\\+ (X = 1, X = 2)).
 c17(14) :- mm((X = 1 ; X = 2)).
 n17(L) :- findall(N, retract((c17(N) :- mm(\\+ (_, _)))), L).
 :- dynamic(c18/1).
-c18(1) :- call(false), qh_once:once(fail).
-c18(2) :- maplist(false, []), qh_once:once(fail).
-c18(3) :- mm(false), qh_once:once(fail).
-c18(4) :- qh_once:once(fail), call(false).
+c18(1) :- call(false), qh_first:first(fail).
+c18(2) :- maplist(false, []), qh_first:first(fail).
+c18(3) :- mm(false), qh_first:first(fail).
+c18(4) :- qh_first:first(fail), call(false).
 c18(5) :- call((false, true)), qh_forall:forall(fail, true).
 c18(6) :- lists:member(_, [1]), fail.
-c18(7) :- call(fail), qh_once:once(false).
-c18(8) :- qh_once:once((nl, X = 1)), X = 1.
-c18(9) :- qh_once:once(nl(_)).
+c18(7) :- call(fail), qh_first:first(false).
+c18(8) :- qh_first:first((nl, X = 1)), X = 1.
+c18(9) :- qh_first:first(nl(_)).
 c18(10) :- lists:once((X = 1, X > 0)).
 c18(11) :- call(\\+ (X = 1, X = 2)).
 c18(12) :- call((X = 1 ; X = 2)).
@@ -765,15 +765,15 @@ c18(13) :- mm(\\+ (X = 1, X = 2)).
 c18(14) :- mm((X = 1 ; X = 2)).
 n18(L) :- findall(N, retract((c18(N) :- mm((_ ; _)))), L).
 :- dynamic(c19/1).
-c19(1) :- call(false), qh_once:once(fail).
-c19(2) :- maplist(false, []), qh_once:once(fail).
-c19(3) :- mm(false), qh_once:once(fail).
-c19(4) :- qh_once:once(fail), call(false).
+c19(1) :- call(false), qh_first:first(fail).
+c19(2) :- maplist(false, []), qh_first:first(fail).
+c19(3) :- mm(false), qh_first:first(fail).
+c19(4) :- qh_first:first(fail), call(false).
 c19(5) :- call((false, true)), qh_forall:forall(fail, true).
 c19(6) :- lists:member(_, [1]), fail.
-c19(7) :- call(fail), qh_once:once(false).
-c19(8) :- qh_once:once((nl, X = 1)), X = 1.
-c19(9) :- qh_once:once(nl(_)).
+c19(7) :- call(fail), qh_first:first(false).
+c19(8) :- qh_first:first((nl, X = 1)), X = 1.
+c19(9) :- qh_first:first(nl(_)).
 c19(10) :- lists:once((X = 1, X > 0)).
 c19(11) :- call(\\+ (X = 1, X = 2)).
 c19(12) :- call((X = 1 ; X = 2)).
@@ -788,8 +788,9 @@ n19(L) :- findall(N, retract((c19(N) :- (lists:member(_, _), fail))), L).
 # module's or a builtin library's: lists:member), and \\+ / ; inside a
 # call's argument.  Each procedure c<k> holds the 14 clauses; row n<k>
 # retracts with pattern k.  Expected: pure unification against the bodies
-# as written, in Scryer (2026-10-16) -- its own retract cannot run this
-# program (it refuses a module defining once/1).
+# as written, in Scryer (2026-10-16).  The user module's procedure is
+# first/1: it was once/1, which ISO 7.5.1 makes a static built-in no file
+# may define (Scryer refuses such a module, and so does the loader now).
 ROWS5 = [
     ("n00", [7]),
     ("n01", []),
@@ -814,8 +815,8 @@ ROWS5 = [
 ]
 
 HELPERS = {
-    "qh_once": ":- module(qh_once, [once/1]).\nonce(G) :- call(G).\n"
-               ":- end_module(qh_once).\n",
+    "qh_first": ":- module(qh_first, [first/1]).\nfirst(G) :- call(G).\n"
+               ":- end_module(qh_first).\n",
     "qh_forall": ":- module(qh_forall, [forall/2]).\n"
                  "forall(C, A) :- \\+ (C, \\+ A).\n"
                  ":- end_module(qh_forall).\n",

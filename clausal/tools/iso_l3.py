@@ -69,6 +69,7 @@ from typing import Any
 
 from clausal.logic.special_forms import GOAL_POSITIONS
 from clausal.tools.prolog_reader import VarRef
+from clausal.tools.iso_builtins import is_iso_builtin
 
 #: The front end's id: the value ``CLAUSAL_PL_FRONTEND`` selects it by, and the
 #: salt that keeps its cached bytecode apart from the translator's.
@@ -1211,6 +1212,15 @@ def lower_clause(term: Any, spans=None, var_names=None,
             f"cannot define the control construct {name}/{len(args)} (ISO "
             f"permission_error(modify, static_procedure, {name}/{len(args)}))",
             whole_span)
+    if is_iso_builtin(name, len(args)):
+        # ISO 7.5.1: a built-in predicate is static, and a Prolog text that
+        # defines one is refused (Scryer: from load/1, the whole file).  A
+        # library predicate (append/3, length/2 ...) is no ISO built-in and
+        # stays the file's to define (clausal/tools/iso_builtins.py).
+        raise LoweringRefused(
+            f"cannot define the ISO built-in predicate {name}/{len(args)} "
+            f"(ISO permission_error(modify, static_procedure, "
+            f"{name}/{len(args)}))", whole_span)
 
     lw = _ClauseLowering(var_names, positions, ctx, values_global=values_global)
     fields = tuple(f"arg_{i}" for i in range(len(args)))

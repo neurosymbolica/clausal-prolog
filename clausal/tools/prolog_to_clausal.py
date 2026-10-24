@@ -32,6 +32,7 @@ from clausal.tools.prolog_ast import (
     PClause, PDCGRule, PDirective, PQuery, PComment, PModule,
     PTerm, PItem,
 )
+from clausal.tools.iso_builtins import is_iso_builtin
 from clausal.tools.prolog_operators import OperatorTable
 from clausal.tools.prolog_dialect import (
     Dialect,
@@ -1274,8 +1275,19 @@ class _PrologToClausal:
             "unset CLAUSAL_PL_FRONTEND), which defines it, or rename the "
             "predicate.")
 
-    def _emit_head(self, term: PTerm) -> str:
-        """Emit a clause head as a clausal predicate call."""
+    def _emit_head(self, term: PTerm, extra_args: int = 0) -> str:
+        """Emit a clause head as a clausal predicate call.  *extra_args* is
+        2 for a grammar rule's head (the nonterminal ``s//N`` is ``s/N+2``)."""
+        if isinstance(term, (PCompound, PAtom)):
+            name = term.functor if isinstance(term, PCompound) else term.name
+            arity = (len(term.args) if isinstance(term, PCompound) else 0) \
+                + extra_args
+            if is_iso_builtin(name, arity):
+                # ISO 7.5.1, as the native front end (iso_l3.lower_clause).
+                raise PrologTranslationError(
+                    f"cannot define the ISO built-in predicate {name}/{arity} "
+                    f"(ISO permission_error(modify, static_procedure, "
+                    f"{name}/{arity}))")
         if self._is_nil(term) or (isinstance(term, PCompound)
                                   and term.functor == "[]"):
             raise self._nil_head_refused()
@@ -1466,12 +1478,12 @@ class _PrologToClausal:
             # The nonterminal is a HEAD (``pb()``, not the atom ``'pb'``,
             # which the seam's ``>>`` did not read as one: "unsupported
             # operand type(s) for >>"); the pushback is its terminal list.
-            parts = [self._emit_head(base)] + [
+            parts = [self._emit_head(base, 2)] + [
                 self._emit_term(p)
                 for p in self._flatten_conjunction(rule.head.args[1])]
             head = "(" + ", ".join(parts) + ")"
         else:
-            head = self._emit_head(rule.head)
+            head = self._emit_head(rule.head, 2)
         body = self._emit_dcg_body(rule.body)
         return f"{head} >> ({body})"
 

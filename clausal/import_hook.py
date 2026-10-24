@@ -637,6 +637,8 @@ _COMPILATION_FILES = (
     # library_reader_ops: the operators use_module(library(L)) brings to
     # the translator's reader (shared with the native front end)
     "tools/iso_l3_directives.py",
+    # the ISO built-ins a clause head may not name (both front ends refuse)
+    "tools/iso_builtins.py",
     "tools/toklex/specs/iso.toklex.pl",  # the spec load_lexer() compiles
 )
 
