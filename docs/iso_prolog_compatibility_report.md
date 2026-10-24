@@ -315,22 +315,17 @@ program that tests `current_prolog_flag(char_conversion, on)` fails here.
 
 ### Missing builtins
 
-Not provided (calling one raises `existence_error(procedure, PI)`):
+Every builtin this report used to list here is provided now: the ISO
+stream predicates (8.11–8.13, including `get_char/1,2`, `peek_char/1,2`,
+`put_char/1,2`, their `_code` and `_byte` versions, `nl/1` and the stream
+arguments of the writers), term reading (`read/1,2`, `read_term/2,3`),
+character conversion (`char_conversion/2`, `current_char_conversion/2`),
+and the common extras `term_to_atom/2`, `atom_to_term/3`, `atom_string/2`,
+`sort/4`, `predsort/3` and `print/1,2`.
 
-- **ISO stream input and output (8.11–8.13):** `open/3,4`, `close/1,2`,
-  `set_input/1`, `set_output/1`, `current_input/1`, `current_output/1`,
-  `flush_output/0,1`, `at_end_of_stream/0,1`, `set_stream_position/2`,
-  `stream_property/2`, `get_char/1,2`, `peek_char/1,2`, `put_char/1,2`, the
-  `_code` and `_byte` versions of those, `nl/1`, and the stream arguments
-  of the writers (`write/2`, `writeq/2`, `write_canonical/2`,
-  `write_term/3`);
-- **ISO term reading (8.14.1):** `read/1,2`, `read_term/2,3`;
-- **common non-ISO extras:** `ignore/1`, left out by design: it is
-  committed choice (ruling D13).
-- **ISO character conversion (8.14.5–8.14.6):** `char_conversion/2`,
-  `current_char_conversion/2`;
-- **common non-ISO extras:** `term_to_atom/2`, `atom_to_term/3`,
-  `atom_string/2`, `sort/4`, `predsort/3`, `ignore/1`, `print/1`.
+One common non-ISO extra is left out by design: `ignore/1`, which is
+committed choice (ruling D13). Calling it raises
+`existence_error(procedure, ignore/1)`.
 
 ### Reading and writing
 
