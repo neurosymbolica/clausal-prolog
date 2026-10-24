@@ -801,6 +801,14 @@ def _validated_expansion(term, wrap_head, slot=None, answers=None,
     # A chars carrier is a 2-tuple headed by CHARS_TAG: compound_cell_shape
     # answers False for it, and it is neither an atom nor a term instance,
     # so no separate guard is needed to keep a STRING out of a fact head.
+    if (is_cell or is_atom(term)) and not answers.seam:
+        # A fact on .clausal / .pl is the clause ``term`` lowered by the
+        # front end, as a ``(H :- B)`` answer is: it meets every refusal a
+        # fact written in the file meets (an ISO built-in's or a control
+        # construct's head, ISO 7.5.1).
+        if _rebuilds(item, view, term, True):
+            return item
+        return answers.clause(term, True, where)
     if is_cell or is_atom(term) or is_term_instance(term):
         return PredicateItem(head=term, body=True)
     hint = ""

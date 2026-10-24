@@ -691,6 +691,7 @@ _TRANSLATOR_FILES = (
     "tools/prolog_tokenizer.py", "tools/prolog_operators.py",
     "tools/prolog_dialect.py", "tools/prolog_ast.py",
     "tools/iso_l3_directives.py",
+    "tools/iso_builtins.py",
     "tools/toklex/specs/iso.toklex.pl",
 )
 

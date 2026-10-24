@@ -92,3 +92,13 @@ def is_iso_builtin(name: str, arity: int) -> bool:
     """True when *name*/*arity* is an ISO 13211-1 built-in predicate or
     control construct."""
     return (name, arity) in ISO_BUILTINS
+
+
+def static_procedure_refusal(name: str, arity: int) -> str:
+    """The loader's message for a definition of *name*/*arity*, an ISO
+    built-in (both ``.pl`` front ends and ``.clausal`` say the same)."""
+    what = ("control construct" if name == "call"
+            or (name, arity) in ISO_CONTROL_CONSTRUCTS
+            else "ISO built-in predicate")
+    return (f"cannot define the {what} {name}/{arity} (ISO "
+            f"permission_error(modify, static_procedure, {name}/{arity}))")

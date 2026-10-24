@@ -69,7 +69,7 @@ from typing import Any
 
 from clausal.logic.special_forms import GOAL_POSITIONS
 from clausal.tools.prolog_reader import VarRef
-from clausal.tools.iso_builtins import is_iso_builtin
+from clausal.tools.iso_builtins import is_iso_builtin, static_procedure_refusal
 
 #: The front end's id: the value ``CLAUSAL_PL_FRONTEND`` selects it by, and the
 #: salt that keeps its cached bytecode apart from the translator's.
@@ -1189,6 +1189,20 @@ def lower_clause(term: Any, spans=None, var_names=None,
     if type(head) is VarRef:
         raise LoweringRefused(
             "a clause head is a variable (ISO instantiation_error)", whole_span)
+    inner = head
+    while type(inner) is tuple and len(inner) == 3 and inner[0] == ":":
+        inner = inner[2]
+    if inner is not head:
+        # ``M:H`` with H an ISO built-in: Scryer refuses it as it refuses
+        # ``H`` (7.5.1).  Any other qualified head is not checked here
+        # (todo/a-module-qualified-clause-head-defines-colon-2-2026-10-24.md).
+        q_name = inner if type(inner) is str else (
+            inner[0] if type(inner) is tuple and inner
+            and type(inner[0]) is str else None)
+        q_arity = len(inner) - 1 if type(inner) is tuple else 0
+        if q_name is not None and is_iso_builtin(q_name, q_arity):
+            raise LoweringRefused(
+                static_procedure_refusal(q_name, q_arity), whole_span)
     if _is_nil(head):
         name, args = _NIL_NAME, ()
     elif type(head) is str:
@@ -1218,9 +1232,7 @@ def lower_clause(term: Any, spans=None, var_names=None,
         # library predicate (append/3, length/2 ...) is no ISO built-in and
         # stays the file's to define (clausal/tools/iso_builtins.py).
         raise LoweringRefused(
-            f"cannot define the ISO built-in predicate {name}/{len(args)} "
-            f"(ISO permission_error(modify, static_procedure, "
-            f"{name}/{len(args)}))", whole_span)
+            static_procedure_refusal(name, len(args)), whole_span)
 
     lw = _ClauseLowering(var_names, positions, ctx, values_global=values_global)
     fields = tuple(f"arg_{i}" for i in range(len(args)))

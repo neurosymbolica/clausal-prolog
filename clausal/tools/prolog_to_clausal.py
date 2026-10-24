@@ -32,7 +32,7 @@ from clausal.tools.prolog_ast import (
     PClause, PDCGRule, PDirective, PQuery, PComment, PModule,
     PTerm, PItem,
 )
-from clausal.tools.iso_builtins import is_iso_builtin
+from clausal.tools.iso_builtins import is_iso_builtin, static_procedure_refusal
 from clausal.tools.prolog_operators import OperatorTable
 from clausal.tools.prolog_dialect import (
     Dialect,
@@ -1278,16 +1278,18 @@ class _PrologToClausal:
     def _emit_head(self, term: PTerm, extra_args: int = 0) -> str:
         """Emit a clause head as a clausal predicate call.  *extra_args* is
         2 for a grammar rule's head (the nonterminal ``s//N`` is ``s/N+2``)."""
-        if isinstance(term, (PCompound, PAtom)):
-            name = term.functor if isinstance(term, PCompound) else term.name
-            arity = (len(term.args) if isinstance(term, PCompound) else 0) \
+        inner = term
+        while (isinstance(inner, PCompound) and inner.functor == ":"
+               and len(inner.args) == 2):
+            inner = inner.args[1]      # M:H names H, as in Scryer
+        if isinstance(inner, (PCompound, PAtom)):
+            name = inner.functor if isinstance(inner, PCompound) else inner.name
+            arity = (len(inner.args) if isinstance(inner, PCompound) else 0) \
                 + extra_args
             if is_iso_builtin(name, arity):
                 # ISO 7.5.1, as the native front end (iso_l3.lower_clause).
                 raise PrologTranslationError(
-                    f"cannot define the ISO built-in predicate {name}/{arity} "
-                    f"(ISO permission_error(modify, static_procedure, "
-                    f"{name}/{arity}))")
+                    static_procedure_refusal(name, arity))
         if self._is_nil(term) or (isinstance(term, PCompound)
                                   and term.functor == "[]"):
             raise self._nil_head_refused()
@@ -1960,6 +1962,15 @@ class _PrologToClausal:
 
     def _emit_meta_directive(self, kind: str, body: PCompound) -> str:
         """Emit -dynamic(pred/N), -discontiguous(pred/N), -table(pred/N)."""
+        if kind == "dynamic":
+            for name, arity in _indicators_named(body.args):
+                if is_iso_builtin(name, arity):
+                    # ISO 7.5.1, as the native front end's dynamic/1.
+                    raise PrologTranslationError(
+                        f"dynamic(...): cannot make the ISO built-in "
+                        f"predicate {name}/{arity} dynamic (ISO "
+                        f"permission_error(modify, static_procedure, "
+                        f"{name}/{arity}))")
         if len(body.args) == 1:
             indicator = self._emit_pred_indicator(body.args[0])
             return f"-{kind}({indicator})"
@@ -2980,3 +2991,25 @@ def _main() -> None:
 
 if __name__ == "__main__":
     _main()
+
+
+def _indicators_named(terms) -> list:
+    """The ``(name, arity)`` of each ``name/N`` (``name//N``: arity N+2) in
+    a directive's arguments, through ``,``-sequences and lists."""
+    out: list = []
+    stack = list(terms)
+    while stack:
+        t = stack.pop()
+        if isinstance(t, PList):
+            stack.extend(t.elements)
+            if t.tail is not None:
+                stack.append(t.tail)
+        elif isinstance(t, PCompound) and t.functor == "," and len(t.args) == 2:
+            stack.extend(t.args)
+        elif (isinstance(t, PCompound) and t.functor in ("/", "//")
+              and len(t.args) == 2 and isinstance(t.args[0], PAtom)
+              and isinstance(t.args[1], PNumber)
+              and isinstance(t.args[1].value, int)):
+            out.append((t.args[0].name,
+                        t.args[1].value + (2 if t.functor == "//" else 0)))
+    return out

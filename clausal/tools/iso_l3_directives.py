@@ -1374,8 +1374,9 @@ def _predspec(directive: str):
                                f"indicator name/N", _top(s) or span)
             if directive == "dynamic" and is_iso_builtin(*pi):
                 # A built-in is static (ISO 7.5.1); making one dynamic is the
-                # modification 8.9 refuses (as Trealla and SWI-Prolog do;
-                # Scryer ignores the directive and keeps the builtin static).
+                # modification 8.9 refuses (SICStus and GNU Prolog document
+                # this permission_error; Scryer ignores the directive and
+                # keeps the builtin static).
                 raise _refused(
                     f"{what}: cannot make the ISO built-in predicate "
                     f"{pi[0]}/{pi[1]} dynamic (ISO permission_error(modify, "

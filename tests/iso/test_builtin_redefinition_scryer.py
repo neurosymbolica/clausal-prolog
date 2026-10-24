@@ -9,8 +9,18 @@ refuses the module.  A library predicate (``append/3``, ``length/2``,
 ``between/3``, ``forall/2`` ...) is no ISO built-in, so a file may define
 it, and its own calls then run that definition, as in Scryer.
 
-At run time ``assertz``/``retract`` of an ISO built-in is the same
-permission error, with the builtin as context.
+The same holds for a module-qualified head (``user:atom_length(_, 5).``)
+and for a fact a ``term_expansion`` rule hands back (``term_expansion/4``
+in the engine, ``term_expansion/2`` in Scryer).  ``:- dynamic(PI)`` of a
+built-in is refused too, where Scryer ignores it (see
+``test_dynamic_of_a_builtin_oracle``).  At run time ``assertz``/``retract``
+of an ISO built-in is the same permission error, with the builtin as
+context.
+
+The set is ISO's, not Scryer's: Scryer lets a file define
+``char_conversion/2`` and ``current_char_conversion/2``, which it does not
+implement, while the engine refuses them, as ISO 7.5.1 says (8.14.5,
+8.14.6).
 
 The ISO set is ``clausal/tools/iso_builtins.py``; todo/done/iso-a-file-can-
 redefine-a-builtin-2026-10-16.md is the record.
@@ -33,8 +43,8 @@ from clausal.logic.solve import solve
 from clausal.logic.variables import Trail
 from tests._oracles import SCRYER, run_scryer
 
-# (id, a clause or directive, the PI refused as the engine names it, and as
-# Scryer writes it).  Each row's file is ``p(1).`` then the row's text then
+# (id, a clause, the refused PI as the engine's message names it, and as
+# Scryer's error term writes it).  Each row's file is ``p(1).`` then the row's text then
 # ``q(2).``: the refusal must take the whole file, the clause before it too.
 REFUSED = [
     ("fact_atom_length_2", "atom_length(_, 5).", "atom_length/2", "atom_length/2"),
@@ -58,6 +68,19 @@ REFUSED = [
     ("fact_comma_2", "','(a, b).", ",/2", "(',')/2"),
     ("fact_true_0", "true.", "true/0", "true/0"),
     ("fact_catch_3", "catch(_, _, _).", "catch/3", "catch/3"),
+    # a module-qualified head
+    ("qualified_user_atom_length_2", "user:atom_length(_, 5).",
+     "atom_length/2", "atom_length/2"),
+    ("qualified_m_call_1", "m:call(_).", "call/1", "call/1"),
+]
+
+# A fact a term_expansion rule hands back for ``foo(zz).``: (id, the
+# expansion, the refused PI as the engine names it, and as Scryer writes it).
+EXPANDED = [
+    ("expanded_atom_length_2", "atom_length(X, 5)", "atom_length/2",
+     "atom_length/2"),
+    ("expanded_call_1", "call(X)", "call/1", "call/1"),
+    ("expanded_true_0", "true", "true/0", "true/0"),
 ]
 
 # Library predicates, not ISO built-ins: the file loads and the goal runs
@@ -96,7 +119,8 @@ def _file(tmp_path, stem: str, suffix: str, text: str) -> str:
     return str(path)
 
 
-def _refused_pi(tmp_path, stem: str, suffix: str, text: str) -> "str | None":
+def _refused_indicator(tmp_path, stem: str, suffix: str,
+                       text: str) -> "str | None":
     """Load *text*; -> the PI of its static_procedure refusal, or None when
     the module loads."""
     try:
@@ -149,19 +173,55 @@ def _program(row: str) -> str:
 
 # --- a clause for an ISO built-in refuses the file --------------------------
 
-@pytest.mark.parametrize("name, text, pi, _spi", REFUSED, ids=[r[0] for r in REFUSED])
-def test_refused_engine(tmp_path, surface, name, text, pi, _spi):
-    got = _refused_pi(tmp_path, f"_bir_{name}", surface, _program(text))
-    assert got == pi, (name, got)
-
-
-@pytest.mark.parametrize("name, text, _pi, spi", REFUSED, ids=[r[0] for r in REFUSED])
-def test_refused_oracle(oracle, name, text, _pi, spi):
-    out = oracle(_program(text), "p(X)")
-    assert out[0] == (f"error(permission_error(modify,static_procedure,{spi}),"
-                      f"load/1)."), (name, out)
+def _assert_scryer_refused_the_file(out, name, scryer_indicator):
+    assert out[0] == ("error(permission_error(modify,static_procedure,"
+                      f"{scryer_indicator}),load/1)."), (name, out)
     # Nothing of the file loaded: not even the clause before the refused one.
     assert "existence_error(procedure,p/1)" in out[-1], (name, out)
+
+
+@pytest.mark.parametrize("name, text, indicator, _scryer_indicator", REFUSED,
+                         ids=[r[0] for r in REFUSED])
+def test_refused_engine(tmp_path, surface, name, text, indicator,
+                        _scryer_indicator):
+    got = _refused_indicator(tmp_path, f"_builtin_refused_{name}", surface,
+                             _program(text))
+    assert got == indicator, (name, got)
+
+
+@pytest.mark.parametrize("name, text, _indicator, scryer_indicator", REFUSED,
+                         ids=[r[0] for r in REFUSED])
+def test_refused_oracle(oracle, name, text, _indicator, scryer_indicator):
+    _assert_scryer_refused_the_file(oracle(_program(text), "p(X)"), name,
+                                    scryer_indicator)
+
+
+# --- a fact a term_expansion rule hands back --------------------------------
+
+@pytest.mark.parametrize("name, expansion, indicator, _scryer_indicator",
+                         EXPANDED, ids=[r[0] for r in EXPANDED])
+def test_expanded_fact_refused_engine(tmp_path, surface, name, expansion,
+                                      indicator, _scryer_indicator):
+    text = (f"p(1).\nterm_expansion(foo(X), {expansion}, S, S).\n"
+            f"foo(zz).\nq(2).\n")
+    try:
+        _load_module(f"_builtin_expanded_{name}",
+                     _file(tmp_path, f"_builtin_expanded_{name}", surface, text))
+    except SyntaxError as e:
+        m = _PI_IN_MESSAGE.search(str(e))
+        assert m and m.group(1) == indicator, str(e)
+    else:
+        pytest.fail(f"{name}: the expanded fact was installed")
+
+
+@pytest.mark.parametrize("name, expansion, _indicator, scryer_indicator",
+                         EXPANDED, ids=[r[0] for r in EXPANDED])
+def test_expanded_fact_refused_oracle(oracle, name, expansion, _indicator,
+                                      scryer_indicator):
+    text = (f"p(1).\nterm_expansion(foo(X), {expansion}) :- X = X.\n"
+            f"foo(zz).\nq(2).\n")
+    _assert_scryer_refused_the_file(oracle(text, "p(X)"), name,
+                                    scryer_indicator)
 
 
 # --- a library predicate is the user's to define ----------------------------
@@ -170,7 +230,8 @@ def test_refused_oracle(oracle, name, text, _pi, spi):
                          ids=[r[0] for r in ALLOWED])
 def test_allowed_engine(tmp_path, surface, name, text, goal, expected):
     src = f"{text}\nt(1) :- {goal}, L == {expected}.\n"
-    mod = _load_module(f"_bia_{name}", _file(tmp_path, f"_bia_{name}", surface, src))
+    stem = f"_builtin_allowed_{name}"
+    mod = _load_module(stem, _file(tmp_path, stem, surface, src))
     assert _answers(mod, "t") == 1, name
 
 
@@ -183,18 +244,24 @@ def test_allowed_oracle(oracle, name, text, goal, expected):
 
 # --- dynamic/1 of an ISO built-in -------------------------------------------
 
-@pytest.mark.parametrize("suffix", [PL, CLAUSAL], ids=["pl", "clausal"])
-def test_dynamic_of_a_builtin_engine(tmp_path, suffix):
-    got = _refused_pi(tmp_path, "_bid_dynamic", suffix, _program(DYNAMIC_ROW))
-    assert got == "atom_length/2"
+@pytest.mark.parametrize("directive, indicator", [
+    (":- dynamic(atom_length/2).", "atom_length/2"),
+    (":- dynamic(call/1).", "call/1"),
+    (":- dynamic([foo/1, atom_length/2]).", "atom_length/2"),
+    (":- dynamic((foo/1, call/1)).", "call/1"),
+], ids=["atom_length_2", "call_1", "in_a_list", "in_a_sequence"])
+def test_dynamic_of_a_builtin_engine(tmp_path, surface, directive, indicator):
+    got = _refused_indicator(tmp_path, "_builtin_dynamic", surface,
+                             _program(directive))
+    assert got == indicator
 
 
-@pytest.mark.parametrize("suffix", [PL, CLAUSAL], ids=["pl", "clausal"])
-def test_dynamic_of_a_library_name_engine(tmp_path, suffix):
+def test_dynamic_of_a_library_name_engine(tmp_path, surface):
     """``dynamic(append/3)`` stays the user's own procedure."""
     src = (":- dynamic(append/3).\n"
            "t(1) :- assertz(append(a, b, c)), append(a, b, c).\n")
-    mod = _load_module("_bid_dyn_lib", _file(tmp_path, "_bid_dyn_lib", suffix, src))
+    stem = "_builtin_dynamic_library_name"
+    mod = _load_module(stem, _file(tmp_path, stem, surface, src))
     assert _answers(mod, "t") == 1
 
 
@@ -202,9 +269,10 @@ def test_dynamic_of_a_builtin_oracle(oracle):
     """Scryer DIVERGES here: it ignores ``dynamic(atom_length/2)`` without a
     word, loads the file, and the builtin stays static (an assertz of it is
     still the permission error).  The engine refuses the directive with the
-    error ISO 7.5.2 gives every other modification of a builtin, as Trealla
-    and SWI-Prolog do; this row pins what Scryer does so a change there is
-    seen."""
+    error ISO gives every other modification of a builtin, as SICStus and
+    GNU Prolog document for dynamic/1 of a builtin (Trealla stops loading
+    the file at the directive, without a message); this row pins what
+    Scryer does so a change there is seen."""
     out = oracle(_program(DYNAMIC_ROW),
                  "p(X), catch(assertz(atom_length(a, 1)), E, true), "
                  "write(E), nl")
@@ -214,11 +282,11 @@ def test_dynamic_of_a_builtin_oracle(oracle):
 
 # --- run time: assert and retract -------------------------------------------
 
-@pytest.mark.parametrize("suffix", [PL, CLAUSAL], ids=["pl", "clausal"])
 @pytest.mark.parametrize("name, goal, expected", RUNTIME, ids=[r[0] for r in RUNTIME])
-def test_runtime_engine(tmp_path, suffix, name, goal, expected):
+def test_runtime_engine(tmp_path, surface, name, goal, expected):
     src = (f"t(1) :- catch({goal}, E, true), E = {expected}.\n")
-    mod = _load_module(f"_birt_{name}", _file(tmp_path, f"_birt_{name}", suffix, src))
+    stem = f"_builtin_runtime_{name}"
+    mod = _load_module(stem, _file(tmp_path, stem, surface, src))
     assert _answers(mod, "t") == 1, name
 
 
