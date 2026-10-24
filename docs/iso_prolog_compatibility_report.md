@@ -313,10 +313,23 @@ lists built through their tail are rational trees too (`X = [1|X], Y =
 [1,1|Y], X = Y, X == Y`).  A term too deep for the recursive walkers (a
 100k-element list, a 100k-nested `f(f(...))`) unifies, compares, copies,
 and can be asserted and read back with `clause/2`.  An operation that has
-no answer for a cyclic term raises `error(resource_error(stack), _)`, never
-a raw Python RecursionError (`assertz` of a cyclic term, where Scryer
-panics).  Pinned row by row against Scryer in
-`tests/iso/test_cyclic_terms_scryer.py`.
+no answer for a cyclic term raises an ISO error, never a raw Python
+RecursionError: `resource_error(finite_memory)` where the engine saw the
+cycle (`assertz` of a cyclic term, where Scryer panics; ruling 2026-10-24,
+provisional), `resource_error(stack)` for a depth overflow.  Pinned row by
+row against Scryer in `tests/iso/test_cyclic_terms_scryer.py`.
+
+One standard-order difference from Scryer: with `X = [a|X]`,
+`compare(R, [a|foo], X)` gives `<` here and `>` in Scryer.  This engine
+reads the cyclic list as the cons cells it is -- `'.'(a, X)`, whose tail
+is a compound, after the atom `foo` -- consistently with `f(a, foo)`
+against `X = f(a, X)`, where both engines say `<`; Scryer appears to
+flatten the cyclic list before ordering it.  Two open gaps are filed:
+`dif/2` that must SUSPEND on a cyclic or 100k-deep pair raises
+`resource_error(stack)` where Scryer suspends
+(todo/dif-on-a-cyclic-or-deep-pair-that-must-suspend-raises-2026-10-24.md),
+and `=`/2 and `==`/2 on two hole-built lists are quadratic
+(todo/hole-built-list-unify-and-eq-are-quadratic-2026-10-24.md).
 
 ---
 
