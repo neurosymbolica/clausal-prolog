@@ -47,3 +47,13 @@ raises a raw `RecursionError` to the Python caller: the query compiler's
 rewrite (`compiler/deep_literals.py`) can see the goal.  A program's own
 `call/1` lifts such an argument as a parameter and is fine; this is the
 Python entry only.
+
+The same holds for a CYCLIC term at the Python entry, and for the two
+converters (checked 2026-10-24): with `X` bound by `cyc(X) :- X = f(X)`,
+`solve(("acyclic_term", X), m)`, `solve(("=", X, X), m)`,
+`to_python(X.value)` and `term_key(X.value)` each raise a raw
+`RecursionError` (as they did before the rational-tree work; it is loud,
+not silent).  Reading the answer with `Var.value` / `deref`, one step at a
+time, is fine.  Under ruling 2026-10-24 the entry should raise
+`resource_error(finite_memory)` for a known cycle and
+`resource_error(stack)` for depth, as the engine does inside a program.

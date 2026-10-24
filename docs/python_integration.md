@@ -116,6 +116,17 @@ own, so `solve` without `module=` refuses an unqualified cell with an ISO
 Read a binding **inside** the loop: each iteration yields the `Trail` with that
 solution's bindings live, and they are undone before the next one.
 
+**A cyclic answer.** `X = f(X)` is a legal binding (ISO has no occurs check),
+and a Python tuple cannot contain itself, so the cycle reaches Python through a
+**bound** variable: with `cyc(X) :- X = f(X)`, `X.value` is `('f', K)` where
+`K` is a `Var` and `clausal.deref(K)` is that same tuple. `K` is not an unbound
+hole; deref every argument before testing for `Var`, as for any answer.
+`str(X)` writes the cycle as `('f', AttVar(_1=(...)))`. To refuse a cycle
+loudly, test for it in the goal with `acyclic_term/1`. Today the converters
+(`to_python`, `term_key`) and a `solve()` call whose goal holds the cyclic
+term raise a raw `RecursionError` (a recorded gap,
+`todo/hole-built-list-unify-and-eq-are-quadratic-2026-10-24.md`).
+
 ### `once` — first solution only
 
 ```python

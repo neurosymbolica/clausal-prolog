@@ -314,8 +314,8 @@ surface described in [docs/public-api.md](docs/public-api.md).
       list, and the call that reads it back, work.
     - Whatever still overflows by DEPTH -- a 100k-nested asserted term that
       holds a variable (only a ground deep argument compiles as a constant),
-      `write/1` of a 100k-nested term, a deep term handed to `solve()` from
-      Python -- raises the ISO `error(resource_error(stack), _)` (7.12.2 h),
+      `write/1` of a 100k-nested term -- raises the ISO
+      `error(resource_error(stack), _)` (7.12.2 h),
       the term the `.pl` if-then-else lowering already raised for a
       condition's overflow: `python_error_term` maps every `RecursionError`
       to it, with the walker's message as the prose.  Where the engine KNOWS
