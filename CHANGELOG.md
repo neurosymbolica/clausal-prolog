@@ -61,9 +61,13 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `permission_error(modify, static_procedure, PI)` for a clause or
   grammar-rule head that names an ISO 13211-1 built-in (the control
   constructs and clause 8, with Cor.1-3: `clausal/tools/iso_builtins.py`),
-  as Scryer's `load/1` does, on both `.pl` front ends and `.clausal`.
-  `:- dynamic(atom_length/2).` is refused the same way (Scryer ignores it;
-  Trealla and SWI-Prolog refuse it). Library predicates (`append/3`,
+  as Scryer's `load/1` does, on both `.pl` front ends and `.clausal`; also
+  for a module-qualified head (`user:atom_length(_, 5).`) and for a fact a
+  `term_expansion/4` rule hands back, which was installed.
+  `:- dynamic(atom_length/2).` is refused the same way, on both front ends
+  (under the translator it replaced the builtin). Scryer ignores that
+  directive; SICStus and GNU Prolog document this permission error, and
+  Trealla stops loading the file at it without a message. Library predicates (`append/3`,
   `length/2`, `between/3`, `forall/2`, `msort/2`, `numbervars/3` ...) are no
   ISO built-ins and stay definable, as in Scryer; the seam is unchanged.
   `assertz`/`retract` of a builtin already raised the error. Pinned by
