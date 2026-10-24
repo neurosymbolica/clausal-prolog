@@ -51,7 +51,9 @@ Span tree (locked, mirrors the cell shape exactly):
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+from typing import NamedTuple
 import sys as _sys
 
 from clausal.tools.prolog_ast import (
@@ -75,6 +77,7 @@ __all__ = [
     "DCGRule",
     "Query",
     "SyntaxIssue",
+    "syntax_error_term",
     "transform_term",
     "PrologReader",
     "read_module",
@@ -120,9 +123,70 @@ class Query:  # term = query body
 
 @dataclass(frozen=True, slots=True)
 class SyntaxIssue:
+    """A syntax error the reader recovered from (or, ``resumable=False``,
+    one at the end of the text).  *message* is the human text, with the
+    fault's ``line:col`` and, where one is cheap and certain, a hint;
+    *kind* is the formal ``syntax_error(Kind)`` atom, Scryer's vocabulary
+    for the same input (operator ruling 2026-10-24: ``incomplete_reduction``,
+    ``invalid_single_quoted_character``, ``missing_quote``,
+    ``unexpected_char``, ``back_quoted_string``, ``infinite_float``,
+    ``cannot_parse_big_int``, ``utf8_conversion_error``); *line*/*column*
+    locate the fault (1-based) and *expected*/*found*, when the parser
+    knows them, say what it wanted and what it saw (atoms, numbers, or
+    ``priority(N)``).  :meth:`error_term` is the ISO term."""
+
     span: tuple
     message: str
     resumable: bool
+    kind: str = "incomplete_reduction"
+    line: "int | None" = None
+    column: "int | None" = None
+    expected: object = None
+    found: object = None
+
+    def error_term(self, who: str = "read_term/3") -> tuple:
+        """``error(syntax_error(Kind), context(PI, Details))`` for this
+        issue, read by the predicate *who* (``"read_term/3"``)."""
+        return syntax_error_term(self.kind, who, line=self.line,
+                                 column=self.column, expected=self.expected,
+                                 found=self.found)
+
+
+def _indicator_cell(who: str) -> tuple:
+    name, _, arity = who.rpartition("/")
+    return ("/", name, int(arity))
+
+
+def syntax_error_term(kind: str, who: str, *, line=None, column=None,
+                      expected=None, found=None) -> tuple:
+    """The ISO term of a syntax error, as plain cells (atoms are ``str``,
+    compounds tuples, so this stays engine-free)::
+
+        error(syntax_error(Kind), context(Name/Arity, Details))
+
+    *Kind* is Scryer's atom for the situation (ISO 7.12.2 h leaves it
+    implementation dependent; Scryer's vocabulary is followed for
+    portability).  The context is ISO's implementation-defined slot
+    (operator ruling 2026-10-24): ``context(PI, Details)`` where *Details*
+    is a list of ``line(L)``, ``column(C)`` (1-based, when the position is
+    known), ``expected(What)`` and ``found(Token)`` (when the parser knows
+    them), in that order -- richer than Scryer's ``read_term/3:Line`` while
+    portable code matching ``error(syntax_error(_), _)`` sees no
+    difference.  Every syntax error the engine raises -- the reader's
+    (loading a file, ``read_term/2,3``, ``term_to_atom/2``,
+    ``atom_to_term/3``) and ``number_chars/2``'s family -- has this shape.
+    """
+    details = []
+    if line is not None:
+        details.append(("line", line))
+    if column is not None:
+        details.append(("column", column))
+    if expected is not None:
+        details.append(("expected", expected))
+    if found is not None:
+        details.append(("found", found))
+    return ("error", ("syntax_error", kind),
+            ("context", _indicator_cell(who), details))
 
 
 # ── P-tree -> (cell, span_tree, var_names) transformer ───────────────
@@ -281,18 +345,69 @@ def _joined_span(a, b):
     return (a_span[0], b_span[1])
 
 
-def _lex_error_message(t, text: str | None = None, pos=None) -> str:
-    """A human-readable message for an L0 ``error`` Tok, mirroring
-    ``prolog_tokenizer.tokenize()``'s ``TokenizeError`` text (same
-    reasons, message-only rather than raised).
+class _LexFault(NamedTuple):
+    """A lexical error, diagnosed: the message, Scryer's formal atom, the
+    fault's position and what was expected / found (see ``SyntaxIssue``)."""
+    message: str
+    kind: str
+    line: "int | None"
+    column: "int | None"
+    expected: object
+    found: object
+
+
+#: Scryer's formal for a fault inside a quoted token, by the token's kind
+#: (``diagnose.quoted_fault_detail``'s) and the fault's code.  Measured
+#: 2026-10-24 (tests/iso/test_syntax_error_terms_scryer.py): a raw
+#: newline, a bad escape or a raw control character is
+#: ``invalid_single_quoted_character`` in a quoted atom and
+#: ``missing_quote`` in a string, ``unexpected_char`` after ``0'``; an
+#: octal or hex escape with no closing backslash, or ``\x`` with no digit,
+#: is ``incomplete_reduction`` everywhere.
+_QUOTED_FAULT_KIND = {
+    "quoted atom": "invalid_single_quoted_character",
+    "string": "missing_quote",
+    "0' character code": "unexpected_char",
+}
+
+#: A quoted token's escape whose code is no character: ``\777777777\``,
+#: ``\xFFFFFFFF\`` (Scryer: ``utf8_conversion_error``).
+_ESCAPE_CODE = re.compile(r"\\(x[0-9a-fA-F]+|[0-7]+)\\")
+
+
+def _escape_out_of_range(lexeme: str) -> bool:
+    for m in _ESCAPE_CODE.finditer(lexeme):
+        digits = m.group(1)
+        code = int(digits[1:], 16) if digits[0] == "x" else int(digits, 8)
+        if code >= 0x110000:
+            return True
+    return False
+
+
+def _lex_error(t, text: str | None = None, pos=None) -> _LexFault:
+    """An L0 ``error`` Tok diagnosed: the human message (mirroring
+    ``prolog_tokenizer.tokenize()``'s ``TokenizeError`` text, message-only
+    rather than raised), Scryer's formal atom for the same input, the
+    fault's line:col, and what was expected and found.
 
     With the lexer's *text*, a refused quoted token is diagnosed
-    (``toklex.diagnose.quoted_fault``): the message names the offending
-    escape or character and its line:col. *pos* maps an offset to
-    ``(offset, line, col)`` (the lexer's ``_pos_tuple``, a bisect over its
-    line starts); without it the line is counted, which is linear in the
-    text, so a reader diagnosing many errors must pass it."""
+    (``toklex.diagnose.quoted_fault_detail``): the message names the
+    offending escape or character and its line:col. *pos* maps an offset
+    to ``(offset, line, col)`` (the lexer's ``_pos_tuple``, a bisect over
+    its line starts); without it the line is counted, which is linear in
+    the text, so a reader diagnosing many errors must pass it."""
     reason, culprit = t.value
+    _, line, col = t.start
+
+    def at(off):
+        if pos is not None:
+            _, l, c = pos(off)
+            return l, c
+        if text is None:
+            return None, None
+        return (text.count("\n", 0, off) + 1,
+                off - (text.rfind("\n", 0, off) + 1) + 1)
+
     if text is not None:
         off = None
         if reason == "no_token" and culprit in ("'", '"'):
@@ -302,32 +417,67 @@ def _lex_error_message(t, text: str | None = None, pos=None) -> str:
         elif reason == "unterminated" and t.lexeme.startswith("0'"):
             off = t.start[0] + 1
         if off is not None:
-            from clausal.tools.toklex.diagnose import quoted_fault
-            fault = quoted_fault(text, off)
+            from clausal.tools.toklex.diagnose import quoted_fault_detail
+            fault = quoted_fault_detail(text, off)
             if fault is not None:
-                msg, at = fault
-                if pos is not None:
-                    _, line, col = pos(at)
+                fline, fcol = at(fault.at)
+                if fault.code == "escape_unclosed":
+                    kind, expected = "incomplete_reduction", "\\"
+                elif fault.code == "escape_nodigits":
+                    kind, expected = "incomplete_reduction", "hex_digit"
                 else:
-                    line = text.count("\n", 0, at) + 1
-                    col = at - (text.rfind("\n", 0, at) + 1) + 1
-                return f"{msg} at {line}:{col}"
+                    kind, expected = _QUOTED_FAULT_KIND[fault.kind], None
+                if fault.code == "newline":
+                    expected = text[off]       # the closing quote
+                return _LexFault(f"{fault.message} at {fline}:{fcol}", kind,
+                                 fline, fcol, expected, fault.found)
     if reason == "unterminated":
         if t.lexeme.startswith("/*"):
             # ISO: an unclosed block comment is a syntax error; Scryer's
             # formal for it is incomplete_reduction (ruled 2026-09-30).
             # The opener's line is named here because an issue's span
             # starts at its ITEM, which may begin lines earlier.
-            return (f"unterminated block comment opened at line {t.start[1]} "
-                    f"(syntax_error(incomplete_reduction))")
+            return _LexFault(
+                f"unterminated block comment opened at line {t.start[1]} "
+                f"(syntax_error(incomplete_reduction))",
+                "incomplete_reduction", line, col, "*/", "end_of_file")
+        # A quote still open at the end of the text: Scryer reads on to
+        # the end and reports incomplete_reduction (not missing_quote,
+        # which it keeps for a string broken by a newline or escape).
         if t.lexeme.startswith('"'):
-            return "unterminated string"
-        return "unterminated quoted atom"
+            return _LexFault(f"unterminated string at {line}:{col}",
+                             "incomplete_reduction", line, col, '"',
+                             "end_of_file")
+        if t.lexeme.startswith("0'"):
+            return _LexFault(f"unterminated quoted atom at {line}:{col}",
+                             "incomplete_reduction", line, col, None,
+                             "end_of_file")
+        return _LexFault(f"unterminated quoted atom at {line}:{col}",
+                         "incomplete_reduction", line, col, "'", "end_of_file")
     if reason == "no_token":
-        return f"unexpected character {culprit!r}"
+        if culprit == "`":
+            # ISO 6.4.7's back quoted string: no meaning as a term.
+            # Scryer: back_quoted_string when the string closes,
+            # incomplete_reduction when it runs to the end of the text.
+            closed = text is not None and "`" in text[t.start[0] + 1:]
+            return _LexFault(f"unexpected character {culprit!r} at {line}:{col}",
+                             "back_quoted_string" if closed
+                             else "incomplete_reduction",
+                             line, col, None, culprit)
+        return _LexFault(f"unexpected character {culprit!r} at {line}:{col}",
+                         "unexpected_char", line, col, None, culprit)
     if reason == "bad_token":
-        return f"malformed token {culprit!r}"
-    return f"invalid input {culprit!r}"  # 'invalid_encoding'
+        kind = ("utf8_conversion_error" if _escape_out_of_range(culprit)
+                else "incomplete_reduction")
+        return _LexFault(f"malformed token {culprit!r} at {line}:{col}", kind,
+                         line, col, None, culprit)
+    return _LexFault(f"invalid input {culprit!r} at {line}:{col}",  # 'invalid_encoding'
+                     "utf8_conversion_error", line, col, None, culprit)
+
+
+def _lex_error_message(t, text: str | None = None, pos=None) -> str:
+    """The message of :func:`_lex_error` alone."""
+    return _lex_error(t, text, pos).message
 
 
 def _classify_pitem(pitem):
@@ -414,11 +564,11 @@ class PrologReader:
         # progress (real Toks AND error Toks alike -- an error can be the
         # very first thing in an item, e.g. an unterminated quote), so a
         # SyntaxIssue's span is always available whether the item ends via
-        # a clean 'end' token, a lexical error, or EOF. item_error holds
-        # the first lexical-error message seen for the item, if any.
+        # a clean 'end' token, a lexical error, or EOF. _item_fault holds
+        # the first lexical fault diagnosed for the item, if any.
         self._item_start = None
         self._item_end = None
-        self._item_error = None
+        self._item_fault = None
         self._eof = False
         #: The offset (into everything fed so far) just past the end token
         #: of the item the last ``read_term()`` returned -- what a reader
@@ -449,7 +599,7 @@ class PrologReader:
         self._item_buf = []
         self._item_start = None
         self._item_end = None
-        self._item_error = None
+        self._item_fault = None      # the item's first _LexFault, if any
 
     def read_term(self):
         """-> ReaderItem | SyntaxIssue | NEED_MORE | EOF.
@@ -486,8 +636,8 @@ class PrologReader:
     def _handle_error_tok(self, t):
         """Handle one L0 ``error`` Tok. Returns a ``SyntaxIssue`` to
         return from ``read_term()`` now, or ``None`` to keep looping."""
-        message = _lex_error_message(t, getattr(self._lexer, "_text", None),
-                                     getattr(self._lexer, "_pos_tuple", None))
+        fault = _lex_error(t, getattr(self._lexer, "_text", None),
+                           getattr(self._lexer, "_pos_tuple", None))
         reason, _culprit = t.value
         if reason == "unterminated":
             # Terminal: the driver has consumed all remaining input and
@@ -497,8 +647,8 @@ class PrologReader:
             self._touch_item(t)
             # Keep an earlier diagnosis of this item: an unclosed quote at
             # the end of the text follows the fault that left it unclosed.
-            if self._item_error is None:
-                self._item_error = message
+            if self._item_fault is None:
+                self._item_fault = fault
             return None
         # no_token / bad_token / invalid_encoding: a single skippable bad
         # token; lexing continues normally afterward.
@@ -506,32 +656,53 @@ class PrologReader:
             # Between items (nothing buffered yet for a new item) -- a
             # standalone lexical error, not attributable to any item.
             self.last_item_end = t.end[0]
-            return SyntaxIssue(span=(t.start[0], t.end[0]), message=message,
-                                resumable=True)
+            return self._issue((t.start[0], t.end[0]), fault, resumable=True)
         # Mid-item: keep buffering: the item's 'end' token still resyncs
         # this later, once it arrives.
         self._touch_item(t)
-        if self._item_error is None:
-            self._item_error = message
+        if self._item_fault is None:
+            self._item_fault = fault
         return None
+
+    @staticmethod
+    def _issue(span, fault: _LexFault, *, resumable: bool) -> "SyntaxIssue":
+        return SyntaxIssue(span=span, message=fault.message, resumable=resumable,
+                           kind=fault.kind, line=fault.line, column=fault.column,
+                           expected=fault.expected, found=fault.found)
+
+    def position(self, offset: int) -> tuple:
+        """``(line, column)`` of a character *offset* in the text fed so
+        far (1-based), or ``(None, None)`` when the lexer cannot say."""
+        pos = getattr(self._lexer, "_pos_tuple", None)
+        if pos is None or offset is None:
+            return None, None
+        _, line, col = pos(offset)
+        return line, col
 
     def _eof_issue(self) -> "SyntaxIssue":
         span = (self._item_start, self._item_end)
-        message = self._item_error or "unterminated item (missing end token)"
+        fault = self._item_fault
+        if fault is None:
+            # The text ended inside an item: Scryer's incomplete_reduction.
+            line, col = self.position(self._item_end)
+            where = f" at {line}:{col}" if line is not None else ""
+            fault = _LexFault(f"unterminated item (missing end token){where}",
+                              "incomplete_reduction", line, col, "end",
+                              "end_of_file")
         self._reset_item_state()
         self.last_item_end = span[1]
         self._eof = True  # no more content will ever follow this issue
-        return SyntaxIssue(span=span, message=message, resumable=False)
+        return self._issue(span, fault, resumable=False)
 
     def _finish_item(self, end_tok):
         span = (self._item_start, self._item_end)
-        pending_error = self._item_error
+        pending_fault = self._item_fault
         tokens_buf = self._item_buf
         self._reset_item_state()
         self.last_item_end = span[1]
 
-        if pending_error is not None:
-            return SyntaxIssue(span=span, message=pending_error, resumable=True)
+        if pending_fault is not None:
+            return self._issue(span, pending_fault, resumable=True)
 
         from clausal.tools.prolog_parser import ParseError, PrologParser
         from clausal.tools.prolog_tokenizer import Token, TokenType
@@ -546,7 +717,10 @@ class PrologReader:
         except ParseError as exc:
             # The 'end' token already bounds this item -- resync is
             # inherent, so drop it and keep reading (F5 recovery).
-            return SyntaxIssue(span=span, message=str(exc), resumable=True)
+            return SyntaxIssue(span=span, message=str(exc), resumable=True,
+                               kind=exc.kind, line=exc.line or None,
+                               column=exc.col or None, expected=exc.expected,
+                               found=exc.found)
         assert len(module.items) == 1, (
             f"expected exactly one item, got {len(module.items)}")
         return _classify_pitem(module.items[0])

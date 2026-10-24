@@ -49,13 +49,13 @@ class TestDiagnosedQuotedFaults:
         # made a file with many faults quadratic to read.
         import clausal.tools.prolog_reader as pr
         seen = []
-        real = pr._lex_error_message
+        real = pr._lex_error
 
         def spy(t, text=None, pos=None):
             seen.append(pos)
             return real(t, text, pos)
 
-        monkeypatch.setattr(pr, "_lex_error_message", spy)
+        monkeypatch.setattr(pr, "_lex_error", spy)
         read_module("a.\np('\\z').\n")
         assert seen and all(callable(p) for p in seen)
 

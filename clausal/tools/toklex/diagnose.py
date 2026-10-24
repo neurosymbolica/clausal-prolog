@@ -35,6 +35,37 @@ def quoted_fault(text: str, off: int) -> tuple[str, int] | None:
     unterminated, at the opening quote: a quote left open at the end of a
     line is the usual cause.
     """
+    detail = quoted_fault_detail(text, off)
+    if detail is None:
+        return None
+    return detail.message, detail.at
+
+
+class QuotedFault:
+    """What :func:`quoted_fault_detail` found: the *message* and the
+    *at* offset :func:`quoted_fault` returns, and besides them *code* --
+    ``newline`` (a raw newline before the closing quote), ``bad_escape``
+    (an escape outside the ISO set), ``escape_nodigits`` (``\\x`` with no
+    hex digit), ``escape_unclosed`` (an octal or hex escape without its
+    closing backslash), ``control`` (a raw control character) -- *found*,
+    the offending text itself (the escape, the
+    character), and *kind*, the token's kind as the message names it
+    (``quoted atom``, ``string`` or ``0' character code``)."""
+
+    __slots__ = ("message", "at", "code", "found", "kind")
+
+    def __init__(self, message, at, code, found, kind):
+        self.message = message
+        self.at = at
+        self.code = code
+        self.found = found
+        self.kind = kind
+
+
+def quoted_fault_detail(text: str, off: int) -> QuotedFault | None:
+    """:func:`quoted_fault` with the fault's code, offending text and the
+    token's kind (a :class:`QuotedFault`), for a caller that maps the
+    fault to an error term as well as to a message."""
     q = text[off:off + 1]
     kind = _KIND.get(q)
     if kind is None:
@@ -42,15 +73,20 @@ def quoted_fault(text: str, off: int) -> tuple[str, int] | None:
     fault = _scan(text, off, q, kind)
     if fault is None:
         return None
-    msg, at = fault
-    if (at == off + 1 and q == "'" and off >= 1 and text[off - 1] == "0"
+    msg, at, code, found = fault
+    first = at == off + 1 or (code == "newline" and text[off + 1:off + 2] == "\n")
+    if (first and q == "'" and off >= 1 and text[off - 1] == "0"
             and (off < 2 or not (text[off - 2].isalnum() or text[off - 2] in "_."))):
         # `0'` + a bad first character: the lexer backed up to the integer
         # `0` and the quote opened an atom, but the writer meant a char
         # code. (A fault further in is in a real quoted atom: `0'\<newline>`
-        # starts one, Ulrich #213.)
-        msg = msg.replace(kind, "0' character code")
-    return msg, at
+        # starts one, Ulrich #213.)  A newline right after `0'` keeps the
+        # "unterminated quoted atom" message -- that is what the lexer saw
+        # -- but is a char code's fault for the error term.
+        if code != "newline":
+            msg = msg.replace(kind, "0' character code")
+        kind = "0' character code"
+    return QuotedFault(msg, at, code, found, kind)
 
 
 def _show_escape(seq: str) -> str:
@@ -62,7 +98,8 @@ def _show_escape(seq: str) -> str:
     return f"\\ followed by U+{ord(c):04X}"
 
 
-def _scan(text: str, off: int, q: str, kind: str) -> tuple[str, int] | None:
+def _scan(text: str, off: int, q: str, kind: str) -> tuple | None:
+    """``(message, at, code, found)`` of the first fault, or None."""
     i, n = off + 1, len(text)
     while i < n:
         c = text[i]
@@ -72,7 +109,7 @@ def _scan(text: str, off: int, q: str, kind: str) -> tuple[str, int] | None:
                 continue
             return None
         if c == "\n":
-            return f"unterminated {kind}", off
+            return f"unterminated {kind}", off, "newline", "\n"
         if c == "\\":
             if i + 1 >= n:
                 return None
@@ -87,16 +124,21 @@ def _scan(text: str, off: int, q: str, kind: str) -> tuple[str, int] | None:
                 while k < n and text[k] in digits:
                     k += 1
                 if k == j:
-                    return f"invalid escape sequence {_show_escape(text[i:i + 2])} in {kind}", i
+                    # `\x` with no hex digit: an escape left incomplete
+                    # rather than one outside the set (`\0`-`\7` cannot
+                    # get here: the digit itself is the first octal digit).
+                    return (f"invalid escape sequence {_show_escape(text[i:i + 2])} in {kind}",
+                            i, "escape_nodigits", text[i:i + 2])
                 if k < n and text[k] == "\\":
                     i = k + 1
                     continue
                 name = "hex" if e == "x" else "octal"
-                return (f"{name} escape '{text[i:k]}' needs a closing backslash "
-                        f"in {kind}"), i
-            return f"invalid escape sequence {_show_escape(text[i:i + 2])} in {kind}", i
+                return ((f"{name} escape '{text[i:k]}' needs a closing backslash "
+                         f"in {kind}"), i, "escape_unclosed", text[i:k])
+            return (f"invalid escape sequence {_show_escape(text[i:i + 2])} in {kind}",
+                    i, "bad_escape", text[i:i + 2])
         if unicodedata.category(c) == "Cc":
-            return (f"raw control character U+{ord(c):04X} in {kind} "
-                    f"(write it as an escape)"), i
+            return ((f"raw control character U+{ord(c):04X} in {kind} "
+                     f"(write it as an escape)"), i, "control", c)
         i += 1
     return None

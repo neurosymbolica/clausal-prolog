@@ -569,6 +569,19 @@ def _error(formal: Any, context: Any) -> tuple:
 # ── Structured error term helpers ─────────────────────────────────────────────
 
 
+def syntax_error_exception(issue: Any, who: str,
+                           message: str | None = None) -> LogicException:
+    """The exception for a reader ``SyntaxIssue`` raised by the predicate
+    *who* (``"read_term/3"``, ``"term_to_atom/2"``): its term is
+    ``error(syntax_error(Kind), context(PI, Details))``
+    (``prolog_reader.SyntaxIssue.error_term``) and its prose the issue's
+    message.  The one place a reader error becomes a run-time error, so
+    every reading builtin raises the same shape (operator ruling
+    2026-10-24)."""
+    return LogicException(issue.error_term(who),
+                          message if message is not None else issue.message)
+
+
 def _name_atom(name: Any) -> Any:
     """*name* as an ATOM when it is a spelling, unchanged otherwise.
 

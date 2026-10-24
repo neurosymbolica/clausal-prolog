@@ -54,12 +54,55 @@ def _span_join(*items) -> tuple | None:
 
 
 class ParseError(Exception):
-    """Raised when the parser encounters a syntax error."""
+    """Raised when the parser encounters a syntax error.
 
-    def __init__(self, message: str, line: int = 0, col: int = 0):
+    Besides the message and the fault's *line*/*col*, it carries what the
+    ISO error term needs (``prolog_reader.SyntaxIssue``, operator ruling
+    2026-10-24): *kind*, Scryer's ``syntax_error(Kind)`` atom for the same
+    input -- ``incomplete_reduction`` for every grammar fault, as Scryer
+    reports them, ``infinite_float`` for a float literal no double holds --
+    and *expected* / *found*, what the parser wanted and what it saw, as
+    atoms or numbers (``')'``, ``term``, ``end`` for the end token, or
+    ``priority(N)`` for an operator priority clash).  A *hint* that is
+    cheap and certain (``a float needs a fraction: write 1.0e+9``) follows
+    the position in the message.
+    """
+
+    def __init__(self, message: str, line: int = 0, col: int = 0, *,
+                 kind: str = "incomplete_reduction", expected=None,
+                 found=None, hint: str | None = None):
         self.line = line
         self.col = col
-        super().__init__(f"{message} at {line}:{col}")
+        self.kind = kind
+        self.expected = expected
+        self.found = found
+        self.hint = hint
+        text = f"{message} at {line}:{col}"
+        if hint:
+            text = f"{text} ({hint})"
+        super().__init__(text)
+
+
+def _found_of(tok: Token):
+    """What the parser found, as the error term spells it: the end token
+    is the atom ``end``; a name, variable, string or punctuation its text;
+    a number itself."""
+    if tok.type in (TokenType.END, TokenType.DOT):
+        return "end"
+    return tok.value
+
+
+def _token_text(tok: Token) -> str:
+    """The token's text as the source spelled it, near enough for a hint
+    (a quoted atom loses its quotes, a string its double quotes)."""
+    if tok.type == TokenType.END:
+        return "."
+    return str(tok.value)
+
+
+_RADIX_NAMES = {"x": "a hexadecimal", "o": "an octal", "b": "a binary"}
+#: The hint for ``0''`` (Ulrich #117: the integer 0 and the atom '').
+_QUOTE_CODE_HINT = "the code of a quote is written 0''' (or 0'\\')"
 
 
 # ── Public API ───────────────────────────────────────────────────────
@@ -365,6 +408,8 @@ class PrologParser:
                     f"operator priority clash: {name!r} cannot take a "
                     f"left operand of priority {left_prec}",
                     tok.line, tok.col,
+                    expected=("priority", self._left_prec(entry)),
+                    found=("priority", left_prec),
                 )
 
             if entry.specifier in ("xfx", "xfy", "yfx"):
@@ -386,6 +431,7 @@ class PrologParser:
                 f"operator priority clash: operator atom {left.name!r} "
                 f"cannot be an operand",
                 first_tok.line, first_tok.col,
+                expected="term", found=left.name,
             )
         return left
 
@@ -404,7 +450,7 @@ class PrologParser:
 
         if tok.type == TokenType.FLOAT:
             self._advance()
-            return PNumber(tok.value, span=(tok.offset, tok.end_offset))
+            return PNumber(self._float_value(tok), span=(tok.offset, tok.end_offset))
 
         if tok.type == TokenType.STRING:
             self._advance()
@@ -433,8 +479,73 @@ class PrologParser:
 
         raise ParseError(
             f"Unexpected token {tok.type.value} ({tok.value!r})",
-            tok.line, tok.col,
+            tok.line, tok.col, expected="term", found=_found_of(tok),
+            hint=self._number_hint(tok),
         )
+
+    def _literal_value(self, tok: Token):
+        """An INTEGER or FLOAT token's value (see :meth:`_float_value`)."""
+        return self._float_value(tok) if tok.type == TokenType.FLOAT else tok.value
+
+    @staticmethod
+    def _float_value(tok: Token) -> float:
+        """The float a FLOAT token denotes; a literal too large for a
+        double (``1.0e400``) is a syntax error, Scryer's ``infinite_float``
+        (number_chars/2 refuses the same text the same way)."""
+        value = tok.value
+        if value in (float("inf"), float("-inf")):
+            raise ParseError(
+                f"float literal {tok.value!r} is too large for a double",
+                tok.line, tok.col, kind="infinite_float", found=value,
+                hint="the largest double is about 1.8e308")
+        return value
+
+    def _number_hint(self, tok: Token) -> str | None:
+        """A hint for a number that was written wrongly, when *tok* (the
+        token the parser cannot place) is glued to a number token before it
+        and the shape is certain: ``1e+9`` (a float needs a fraction),
+        ``1.e2``, ``.5``, ``0x`` / ``0xG`` (radix digits), ``0''`` (the
+        quote's code).  None otherwise."""
+        i = self._pos
+        if i == 0 or tok.offset < 0:
+            return None
+        prev = self._tokens[i - 1]
+        if prev.end_offset != tok.offset:
+            return None             # layout between them: not one number
+        if prev.type == TokenType.INTEGER:
+            if tok.type == TokenType.ATOM and not tok.quoted:
+                v = tok.value
+                if v[:1] in ("e", "E") and (v[1:].isdigit() or len(v) == 1):
+                    return (f"a float needs a fraction: write "
+                            f"{prev.value}.0{self._glued_run(i)}")
+                if v == ".":
+                    return (f"a float needs a digit after the point: write "
+                            f"{prev.value}.0{self._glued_run(i + 1)}")
+                if prev.value == 0 and v[:1] in _RADIX_NAMES:
+                    radix = _RADIX_NAMES[v[0]]
+                    if len(v) == 1:
+                        return f"0{v} needs at least one {radix[2:]} digit"
+                    return f"{v[1]!r} is not {radix} digit"
+            if (tok.type == TokenType.ATOM and tok.quoted and tok.value == ""
+                    and prev.value == 0):
+                return _QUOTE_CODE_HINT
+        if (prev.type == TokenType.ATOM and prev.value == "."
+                and tok.type == TokenType.INTEGER):
+            return f"a float needs a digit before the point: write 0.{tok.value}"
+        return None
+
+    def _glued_run(self, start: int) -> str:
+        """The text of the tokens from index *start* on, as long as each
+        is glued to the one before it (``e``, ``+``, ``9`` of ``1e+9``)."""
+        out = []
+        prev = self._tokens[start - 1]
+        for t in self._tokens[start:]:
+            if (t.type in (TokenType.END, TokenType.DOT) or t.offset < 0
+                    or t.offset != prev.end_offset):
+                break
+            out.append(_token_text(t))
+            prev = t
+        return "".join(out)
 
     def _parse_atom_or_compound(self, context_prec: int = 1200) -> tuple[PTerm, int]:
         """Parse an atom, possibly followed by (...) arguments, or a prefix
@@ -458,7 +569,7 @@ class PrologParser:
         # `- (1)` stays the compound -(1) -- the form writeq/1 prints.
         if name == "-" and nxt.type in (TokenType.INTEGER, TokenType.FLOAT):
             self._advance()
-            return PNumber(_negative_literal(nxt.value), span=_span_join(tok, nxt)), 0
+            return PNumber(_negative_literal(self._literal_value(nxt)), span=_span_join(tok, nxt)), 0
 
         # Check for prefix operator
         prefix_entry = self._ops.lookup_prefix(name)
@@ -495,7 +606,7 @@ class PrologParser:
                     f"empty argument list in {functor}(): a compound term "
                     f"needs at least one argument (write the atom "
                     f"{functor} without parentheses)",
-                    close.line, close.col)
+                    close.line, close.col, expected="term", found=")")
             args.append(self._parse_term(999, bare_op_atom=True))  # args: prec 999
             while self._peek().type == TokenType.COMMA:
                 self._advance()  # consume ,
@@ -612,7 +723,7 @@ class PrologParser:
         if (name == "-"
                 and nxt.type in (TokenType.INTEGER, TokenType.FLOAT)):
             self._advance()
-            return PNumber(_negative_literal(nxt.value), span=_span_join(tok, nxt))
+            return PNumber(_negative_literal(self._literal_value(nxt)), span=_span_join(tok, nxt))
 
         r_prec = self._prefix_right_prec(entry)
         operand = self._parse_term(r_prec)
@@ -663,9 +774,24 @@ class PrologParser:
         if tok.type != tt:
             raise ParseError(
                 f"Expected {tt.value!r}, got {tok.type.value!r} ({tok.value!r})",
-                tok.line, tok.col,
+                tok.line, tok.col, kind=self._unexpected_kind(tok),
+                expected="end" if tt in (TokenType.END, TokenType.DOT) else tt.value,
+                found=_found_of(tok), hint=self._number_hint(tok),
             )
         return self._advance()
+
+    def _unexpected_kind(self, tok: Token) -> str:
+        """Scryer's formal for a token the parser cannot place: a digit
+        group separator with no digit after it (``1_000_``, ``1__000``, an
+        integer glued to an ``_``-led variable) is its number reader's
+        ``cannot_parse_big_int``; anything else ``incomplete_reduction``."""
+        i = self._pos
+        if (i > 0 and tok.type == TokenType.VAR and tok.value[:1] == "_"
+                and tok.offset >= 0):
+            prev = self._tokens[i - 1]
+            if prev.type == TokenType.INTEGER and prev.end_offset == tok.offset:
+                return "cannot_parse_big_int"
+        return "incomplete_reduction"
 
     def _operator_name_from_token(self, tok: Token) -> str | None:
         """Extract operator name from a token, if it could be an operator."""
