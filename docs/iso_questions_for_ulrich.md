@@ -135,7 +135,7 @@ is `context(PI, Details)` with `Details` a list of `line(L)`, `column(C)`
 | `foo(a,` then the end of the text | `error(syntax_error(incomplete_reduction), context(read_term/3, [line(1), column(7), expected(end), found(end_of_file)]))` |
 | `a :- b :- c.` | `error(syntax_error(incomplete_reduction), context(read_term/3, [line(1), column(8), expected(priority(1199)), found(priority(1200))]))` |
 | `X = 'abc` then a newline | `error(syntax_error(invalid_single_quoted_character), context(read_term/3, [line(1), column(5), expected('\''), found('\n')]))` |
-| `X = 1.0e400.` | `error(syntax_error(infinite_float), context(read_term/3, [line(1), column(5), found(inf)]))` |
+| `X = 1.0e400.` | `error(syntax_error(infinite_float), context(read_term/3, [line(1), column(5), found('1.0e400')]))` |
 | `number_chars(N, [a])` | `error(syntax_error(unexpected_end_of_file), context(number_chars/2, [line(1), column(2), found(end_of_file)]))` |
 
 A file that fails to load reports the same term (and a message with the

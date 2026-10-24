@@ -494,9 +494,12 @@ class PrologParser:
         (number_chars/2 refuses the same text the same way)."""
         value = tok.value
         if value in (float("inf"), float("-inf")):
+            # found(Text): the literal as written -- an infinity is no
+            # ISO term, so the float itself may not go in the error term.
+            text = tok.lexeme or repr(value)
             raise ParseError(
-                f"float literal {tok.value!r} is too large for a double",
-                tok.line, tok.col, kind="infinite_float", found=value,
+                f"float literal {text} is too large for a double",
+                tok.line, tok.col, kind="infinite_float", found=text,
                 hint="the largest double is about 1.8e308")
         return value
 

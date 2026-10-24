@@ -74,7 +74,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
   (a raw newline, control character or bad escape in a quoted atom),
   `missing_quote` (the same in a string), `unexpected_char` (a character
   that starts no token; a bad `0'` character), `back_quoted_string`,
-  `infinite_float` (`1.0e400`, which used to read as `inf`),
+  `infinite_float` (`1.0e400`, which used to read as `inf`; its
+  `found/1` names the literal as written, and `atom_number('1.0e400', N)`
+  now fails as it does on any non-number instead of giving `inf`),
   `cannot_parse_big_int` and `utf8_conversion_error` (an escape no
   character has). The context, which ISO leaves implementation defined,
   is `context(PI, Details)` with `Details` a list of `line(L)`,

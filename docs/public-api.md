@@ -101,6 +101,15 @@ They are removed in 2.0.
   `Culprit` is the predicate indicator of the culprit, or an unbound
   variable when there is no single culprit. The names inside `Formal` are
   atoms. Both the `Formal` and the `Culprit` are covered.
+- **A syntax error's term** is `error(syntax_error(Kind), context(PI,
+  Details))`: `Kind` is Scryer's atom for the same input
+  (`incomplete_reduction`, `missing_quote`, `unexpected_char`, ...) and
+  `Details` a list whose entries are `line(L)`, `column(C)`,
+  `expected(What)` and `found(Token)`, in that order, the first two always
+  present when the position is known and the last two when the reader
+  knows them (see [Exceptions](exceptions.md)). The `Kind` atoms and the
+  entry names are covered; new entry names may be added at the end in a
+  minor release, so match the entries with `member/2`, not by position.
 - The explanatory prose that accompanies an error is **not** part of the
   term. It is `LogicException.message` (or `None`) and is printed after the
   term. Its text is not covered: messages can improve in a minor release.
@@ -268,6 +277,12 @@ which loaded before is refused, needs a major release.
   `Module`.
 - Bytecode is cached in `__pycache__/`. The cache **format** is internal
   (see 3).
+- A `.pl` or `.clausal` file that does not read raises
+  `clausal.import_hook.PrologSyntaxError`, a `SyntaxError` whose `.term`
+  is the syntax error's term above (its context's indicator is
+  `read_term/3`) and whose `lineno`/`offset` are the fault's. The class,
+  its `SyntaxError` base and `.term` are covered; the message text is not
+  (see 1.2 on prose). Any other load-time refusal is a plain `SyntaxError`.
 - `CLAUSAL_IPYTHON=1` enables the IPython integration eagerly.
 
 ---

@@ -32,6 +32,8 @@ n24(L) :- atom_number('-0x1A', L).
 n25(L) :- atom_number('0''\\n', L).
 n26(N) :- X is 10.0**22, atom_number(A, X), atom_number(A, N).
 n27(A) :- X is 10.0**22, atom_number(A, X).
+n28(L) :- atom_number('1.0e400', L).
+n29(L) :- atom_number('-1.0e400', L).
 """
 
 
@@ -50,6 +52,9 @@ def test_atom_number(native, ans):
         "n15": ["y"], "n16": [], "n17": [1.0e10], "n19": [], "n20": ["-3"],
         "n21": [], "n22": [5], "n23": [15], "n24": [-26], "n25": [10],
         "n26": [1.0e22], "n27": ["1.0e+22"],
+        # a float too large for a double is not a number: it fails, as
+        # non-number text does (it used to give inf, 2026-10-24)
+        "n28": [], "n29": [],
     }
     for name, expected in want.items():
         assert ans(mod, name) == expected, name

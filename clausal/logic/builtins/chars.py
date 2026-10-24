@@ -651,10 +651,11 @@ class _NumberSyntax(Exception):
     the offset in the text where the reader gave up (the offending
     character, or the text's length for its end)."""
 
-    def __init__(self, kind: str, at: int):
+    def __init__(self, kind: str, at: int, found: "str | None" = None):
         super().__init__(kind)
         self.kind = kind
         self.at = at
+        self.found = found      # the text named instead of the char at *at*
 
 
 def _eof(at: int):
@@ -776,7 +777,7 @@ def _number_token_at(s: str, i: int):
                 k = m
         value = float(s[i:k].replace("_", ""))
         if value in (float("inf"), float("-inf")):
-            raise _NumberSyntax("infinite_float", i)
+            raise _NumberSyntax("infinite_float", i, found=s[i:k])
         return value, k
     text = s[i:j].replace("_", "")
     # through Decimal: CPython caps int(str) at ~4300 digits
@@ -859,7 +860,8 @@ def _parse_number_chars(s: str, who: str):
     ``cannot_parse_big_int``), and the context every syntax error of the
     engine has (``prolog_reader.syntax_error_term``, operator ruling
     2026-10-24) -- it used to be Scryer's own ``who`` or ``who:0``.  *F* is
-    the offending character, or ``end_of_file``."""
+    the offending character, the float literal as written for
+    ``infinite_float``, or ``end_of_file``."""
     try:
         return _read_number_text(s)
     except _NumberSyntax as exc:
@@ -867,7 +869,7 @@ def _parse_number_chars(s: str, who: str):
         at = min(exc.at, len(s))
         line = s.count("\n", 0, at) + 1
         column = at - (s.rfind("\n", 0, at) + 1) + 1
-        found = s[at] if at < len(s) else "end_of_file"
+        found = exc.found or (s[at] if at < len(s) else "end_of_file")
         raise LogicException(syntax_error_term(
             mint(exc.kind), who, line=line, column=column,
             found=mint(found))) from None
@@ -1104,6 +1106,8 @@ def _parse_number_token(text: str):
         value = int(body[2:], {"0x": 16, "0o": 8, "0b": 2}[body[:2]])
     elif "." in body:
         value = float(body)
+        if value in (float("inf"), float("-inf")):
+            return None         # `1.0e400`: no double, so not a number
     else:
         # through Decimal: CPython caps int(str) at ~4300 digits
         value = int(_Decimal(body)) if len(body) > 4000 else int(body)
@@ -1131,7 +1135,8 @@ def _atom_number__2(atom, number, trail, k):
 
     Atom bound: it must be an atom, and it is read as a Prolog number token
     (an optional ``-`` directly before it; ``0x1A``, ``0'a``; a float needs
-    its fraction).  Text that is not a number FAILS -- the predicate asks
+    its fraction, and one too large for a double, ``'1.0e400'``, is not a
+    number).  Text that is not a number FAILS -- the predicate asks
     whether the atom is a number, it does not raise a syntax error -- and so
     does surrounding layout.  Atom unbound: Number must be a number, and
     Atom is its text (as number_codes/2 writes it).  Both unbound is

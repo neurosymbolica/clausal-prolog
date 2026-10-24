@@ -331,7 +331,7 @@ def _to_compat_token(t):
         _KIND_MAP[t.kind], t.value, t.start[1], t.start[2],
         quoted=(t.kind == "quoted_atom"),
         end_line=t.end[1], end_col=t.end[2],
-        offset=t.start[0], end_offset=t.end[0],
+        offset=t.start[0], end_offset=t.end[0], lexeme=t.lexeme,
     )
 
 
@@ -397,16 +397,16 @@ def _lex_error(t, text: str | None = None, pos=None) -> _LexFault:
     its line starts); without it the line is counted, which is linear in
     the text, so a reader diagnosing many errors must pass it."""
     reason, culprit = t.value
-    _, line, col = t.start
+    _, line, column = t.start
 
-    def at(off):
+    def position_of(offset):
         if pos is not None:
-            _, l, c = pos(off)
-            return l, c
+            _, position_line, position_column = pos(offset)
+            return position_line, position_column
         if text is None:
             return None, None
-        return (text.count("\n", 0, off) + 1,
-                off - (text.rfind("\n", 0, off) + 1) + 1)
+        return (text.count("\n", 0, offset) + 1,
+                offset - (text.rfind("\n", 0, offset) + 1) + 1)
 
     if text is not None:
         off = None
@@ -420,7 +420,7 @@ def _lex_error(t, text: str | None = None, pos=None) -> _LexFault:
             from clausal.tools.toklex.diagnose import quoted_fault_detail
             fault = quoted_fault_detail(text, off)
             if fault is not None:
-                fline, fcol = at(fault.at)
+                fault_line, fault_column = position_of(fault.at)
                 if fault.code == "escape_unclosed":
                     kind, expected = "incomplete_reduction", "\\"
                 elif fault.code == "escape_nodigits":
@@ -429,8 +429,9 @@ def _lex_error(t, text: str | None = None, pos=None) -> _LexFault:
                     kind, expected = _QUOTED_FAULT_KIND[fault.kind], None
                 if fault.code == "newline":
                     expected = text[off]       # the closing quote
-                return _LexFault(f"{fault.message} at {fline}:{fcol}", kind,
-                                 fline, fcol, expected, fault.found)
+                return _LexFault(f"{fault.message} at {fault_line}:{fault_column}",
+                                 kind, fault_line, fault_column, expected,
+                                 fault.found)
     if reason == "unterminated":
         if t.lexeme.startswith("/*"):
             # ISO: an unclosed block comment is a syntax error; Scryer's
@@ -440,39 +441,39 @@ def _lex_error(t, text: str | None = None, pos=None) -> _LexFault:
             return _LexFault(
                 f"unterminated block comment opened at line {t.start[1]} "
                 f"(syntax_error(incomplete_reduction))",
-                "incomplete_reduction", line, col, "*/", "end_of_file")
+                "incomplete_reduction", line, column, "*/", "end_of_file")
         # A quote still open at the end of the text: Scryer reads on to
         # the end and reports incomplete_reduction (not missing_quote,
         # which it keeps for a string broken by a newline or escape).
         if t.lexeme.startswith('"'):
-            return _LexFault(f"unterminated string at {line}:{col}",
-                             "incomplete_reduction", line, col, '"',
+            return _LexFault(f"unterminated string at {line}:{column}",
+                             "incomplete_reduction", line, column, '"',
                              "end_of_file")
         if t.lexeme.startswith("0'"):
-            return _LexFault(f"unterminated quoted atom at {line}:{col}",
-                             "incomplete_reduction", line, col, None,
+            return _LexFault(f"unterminated quoted atom at {line}:{column}",
+                             "incomplete_reduction", line, column, None,
                              "end_of_file")
-        return _LexFault(f"unterminated quoted atom at {line}:{col}",
-                         "incomplete_reduction", line, col, "'", "end_of_file")
+        return _LexFault(f"unterminated quoted atom at {line}:{column}",
+                         "incomplete_reduction", line, column, "'", "end_of_file")
     if reason == "no_token":
         if culprit == "`":
             # ISO 6.4.7's back quoted string: no meaning as a term.
             # Scryer: back_quoted_string when the string closes,
             # incomplete_reduction when it runs to the end of the text.
             closed = text is not None and "`" in text[t.start[0] + 1:]
-            return _LexFault(f"unexpected character {culprit!r} at {line}:{col}",
+            return _LexFault(f"unexpected character {culprit!r} at {line}:{column}",
                              "back_quoted_string" if closed
                              else "incomplete_reduction",
-                             line, col, None, culprit)
-        return _LexFault(f"unexpected character {culprit!r} at {line}:{col}",
-                         "unexpected_char", line, col, None, culprit)
+                             line, column, None, culprit)
+        return _LexFault(f"unexpected character {culprit!r} at {line}:{column}",
+                         "unexpected_char", line, column, None, culprit)
     if reason == "bad_token":
         kind = ("utf8_conversion_error" if _escape_out_of_range(culprit)
                 else "incomplete_reduction")
-        return _LexFault(f"malformed token {culprit!r} at {line}:{col}", kind,
-                         line, col, None, culprit)
-    return _LexFault(f"invalid input {culprit!r} at {line}:{col}",  # 'invalid_encoding'
-                     "utf8_conversion_error", line, col, None, culprit)
+        return _LexFault(f"malformed token {culprit!r} at {line}:{column}", kind,
+                         line, column, None, culprit)
+    return _LexFault(f"invalid input {culprit!r} at {line}:{column}",  # 'invalid_encoding'
+                     "utf8_conversion_error", line, column, None, culprit)
 
 
 def _lex_error_message(t, text: str | None = None, pos=None) -> str:
@@ -676,18 +677,18 @@ class PrologReader:
         pos = getattr(self._lexer, "_pos_tuple", None)
         if pos is None or offset is None:
             return None, None
-        _, line, col = pos(offset)
-        return line, col
+        _, line, column = pos(offset)
+        return line, column
 
     def _eof_issue(self) -> "SyntaxIssue":
         span = (self._item_start, self._item_end)
         fault = self._item_fault
         if fault is None:
             # The text ended inside an item: Scryer's incomplete_reduction.
-            line, col = self.position(self._item_end)
-            where = f" at {line}:{col}" if line is not None else ""
+            line, column = self.position(self._item_end)
+            where = f" at {line}:{column}" if line is not None else ""
             fault = _LexFault(f"unterminated item (missing end token){where}",
-                              "incomplete_reduction", line, col, "end",
+                              "incomplete_reduction", line, column, "end",
                               "end_of_file")
         self._reset_item_state()
         self.last_item_end = span[1]

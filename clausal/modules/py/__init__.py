@@ -739,8 +739,15 @@ def raise_http_status(status, culprit, pred, *, reason=None):
 # - ``invalid_yaml``  -- text that is not YAML.
 
 
-def syntax_error_term(kind, pred, reason=None):
-    """``error(syntax_error(Kind), Pred)`` with *reason* as the prose."""
+def adapter_syntax_error_term(kind, pred, reason=None):
+    """``error(syntax_error(Kind), Pred)`` with *reason* as the prose: the
+    term of a Python-module adapter (json, yaml, uuid, url, datetime ...)
+    for data text it cannot parse.  Its context is the bare indicator, as
+    every other adapter error's.  The reader's syntax errors -- Prolog text
+    that does not read -- are built by
+    ``clausal.tools.prolog_reader.syntax_error_term``, whose context is
+    ``context(PI, [line(L), column(C), ...])`` (operator ruling
+    2026-10-24); the two are different shapes on purpose."""
     from clausal.logic.exceptions import _error  # noqa: PLC0415
     from clausal.logic.atoms import mint as _mint  # noqa: PLC0415
     context = f"{pred}: {reason}" if reason else pred
@@ -748,9 +755,9 @@ def syntax_error_term(kind, pred, reason=None):
 
 
 def raise_syntax_error(kind, pred, reason=None, *, cause=None):
-    """Raise :func:`syntax_error_term` (RULED 2026-10-02)."""
+    """Raise :func:`adapter_syntax_error_term` (RULED 2026-10-02)."""
     from clausal.logic.exceptions import LogicException  # noqa: PLC0415
-    raise LogicException(syntax_error_term(kind, pred, reason)) from cause
+    raise LogicException(adapter_syntax_error_term(kind, pred, reason)) from cause
 
 
 

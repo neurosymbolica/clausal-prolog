@@ -56,6 +56,9 @@ class Token:
     # Character offsets in source (0-based). Populated by shim from toklex Tok objects.
     offset: int = field(default=-1, compare=False, repr=False)
     end_offset: int = field(default=-1, compare=False, repr=False)
+    # The source text of the token, as written (``1.0e400``, ``0x1F``); the
+    # error terms name a literal by it.  Empty for a synthetic token.
+    lexeme: str = field(default="", compare=False, repr=False)
 
     def __repr__(self) -> str:
         return f"Token({self.type.value!r}, {self.value!r}, {self.line}:{self.col})"
@@ -202,7 +205,7 @@ def tokenize(source: str, *, nested_comments: bool = True) -> list[Token]:
             _KIND_MAP[t.kind], t.value, t.start[1], t.start[2],
             quoted=(t.kind == "quoted_atom"),
             end_line=t.end[1], end_col=t.end[2],
-            offset=t.start[0], end_offset=t.end[0],
+            offset=t.start[0], end_offset=t.end[0], lexeme=t.lexeme,
         ))
 
     end_line, end_col = _end_of_source_pos(source)

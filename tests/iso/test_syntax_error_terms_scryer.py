@@ -179,6 +179,15 @@ def _read(text: str):
     return items[0] if items else EOF
 
 
+def test_infinite_float_names_the_literal():
+    """found/1 carries the literal's text: a float infinity is no ISO term."""
+    item = _read("X = 1.0e400.\n")
+    assert isinstance(item, SyntaxIssue) and item.kind == "infinite_float"
+    assert item.found == "1.0e400" and item.column == 5
+    item = _read("X = -1.0e400.\n")
+    assert isinstance(item, SyntaxIssue) and item.found == "1.0e400"
+
+
 def test_rows_are_well_formed():
     assert len(ROWS) >= 60 and len(set(_IDS)) == len(ROWS)
     for _, _, atom in ROWS:
@@ -366,9 +375,11 @@ def test_number_chars_context(tmp_path, monkeypatch):
         "error", ("syntax_error", "unexpected_end_of_file"),
         ("context", ("/", "number_codes", 2),
          [("line", 1), ("column", 3), ("found", "end_of_file")]))
-    n4 = _answer(mod, "n4")
-    assert n4[1] == ("syntax_error", "infinite_float")
-    assert n4[2][1] == ("/", "number_chars", 2)
+    # the literal as written is named, not the infinity (no ISO term)
+    assert _answer(mod, "n4") == (
+        "error", ("syntax_error", "infinite_float"),
+        ("context", ("/", "number_chars", 2),
+         [("line", 1), ("column", 1), ("found", "1.0e400")]))
     # a comment line before the fault: the position is on line 2 (the name
     # `x` is consumed to the end of the text, as Scryer consumes it)
     assert _answer(mod, "n5") == (
