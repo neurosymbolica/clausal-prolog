@@ -48,8 +48,8 @@ and is not measured against ISO; see [Syntax](syntax.md).
 
 Measured against Ulrich Neumerkel's
 [Conformity Testing I: Syntax](https://www.complang.tuwien.ac.at/ulrich/iso-prolog/conformity_testing)
-on 2026-10-24, on commit 16b700ae. Of its 366 numbered rows, judged against
-the expected-answer ("Codex") column: **357 pass, 6 fail, 3 untestable**
+on 2026-10-24, on commit 51d0c64e. Of its 366 numbered rows, judged against
+the expected-answer ("Codex") column: **358 pass, 5 fail, 3 untestable**
 (#3, #126 and #214, whose expected answer is that `read/1` waits for more
 input). Each row ran in its own session through the `.pl` native front end:
 its goals were read one at a time with the operators in force when each is
@@ -58,27 +58,40 @@ ran the entry it stands for. Any `syntax_error(_)` counts as a syntax
 error; variable names and error contexts are not compared; where the Codex
 gives an example ("e.g."), an equivalent answer counts.
 
-The six failures:
+The five failures:
 
 - `set_prolog_flag(double_quotes, chars)` as a goal (#170) raises
   `permission_error`, by design (see [Flags](#flags)).
-- `get_char/1` (#270, #271) is not provided (see
-  [Missing builtins](#missing-builtins)).
 - The NUL character is written `'\x0\'` (#225, #250), where the Codex lists
   `'\0\'` or a representation error. It is the same atom, and Scryer writes
   it the same way.
-- `writeq(-0.0)` (#364) writes `-0.0`; the Codex writes `0.0`.
+- `get_char(C)` (#270, #271) answers `C = end_of_file`, where the Codex
+  expects the character after the end token (`' '` and `'%'`). `get_char/1`
+  exists now, but in this measurement current input is not the rest of the
+  row's text, so these two rows test the toplevel's input handling rather
+  than `get_char/1`.
+
+Since the measurement on commit 16b700ae (357 pass, 6 fail, 3 untestable,
+the same morning), one row has passed and none has regressed:
+`writeq(-0.0)` (#364) now writes `0.0`, as the Codex does. Fourteen other
+rows answer differently but keep their verdict: #270 and #271 now answer
+`C = end_of_file` instead of raising `existence_error` (still failures),
+and twelve syntax errors now carry a position or a hint in their message
+(#3, #44, #46, #48, #107, #111, #112, #113, #117, #126, #214, #297; #3,
+#126 and #214 stay untestable). The same row-by-row run on 16b700ae reproduces that
+commit's answers on all 366 rows.
 
 On the 2026-10-16 measurement (323 pass, 40 fail, 3 untestable, re-run the
-same way on that commit) 34 rows have since passed and none has regressed:
+same way on that commit) 35 rows have since passed and none has regressed:
 the ISO lexer was tightened (unknown escapes, raw control characters in
 quoted tokens, bare-exponent floats, uppercase radix prefixes and `0''`:
-28 rows), `[]` and `'[]'` became the same atom (#302), and the answer
-printer brackets operator atoms and terms (#45, #119, #122, #262, #299).
+28 rows), `[]` and `'[]'` became the same atom (#302), the answer
+printer brackets operator atoms and terms (#45, #119, #122, #262, #299),
+and negative zero reads as `0.0` (#364).
 
-Re-run row by row against Scryer on 2026-10-24 (each row's goals in one
-session, through the `.pl` native front end and Scryer's own toplevel):
-every row answers as Scryer does except `get_char/1` (#270, #271),
+Re-run row by row against Scryer on 2026-10-24, on commit 16b700ae (each
+row's goals in one session, through the `.pl` native front end and
+Scryer's own toplevel): every row answers as Scryer does except `get_char/1` (#270, #271),
 `writeq(-0.0)` (#364: Clausal keeps the sign, Scryer writes `0.0`), and
 eight rows where Scryer departs from the Codex and Clausal follows it
 (#348, #352, #353, #357, #358, #360, #361, #362 are syntax errors).
