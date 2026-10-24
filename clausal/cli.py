@@ -238,6 +238,41 @@ def _term_vars(t, out: dict) -> None:
             stack.extend(reversed(x))
 
 
+def _fd_domain_text(domain) -> str:
+    """A CLP(FD) domain as ``1..3\\/5..7`` (``inf``/``sup`` for open ends)."""
+    def end(x, low):
+        if x in (float("-inf"), float("inf")):
+            return "inf" if low else "sup"
+        return str(x)
+    parts = []
+    for lo, hi in domain:
+        parts.append(end(lo, True) if lo == hi
+                     else f"{end(lo, True)}..{end(hi, False)}")
+    return "\\/".join(parts)
+
+
+def _fd_dif_residuals(variables, spell) -> list[str]:
+    """The ``dif/2`` and CLP(FD) domain goals on *variables*, in plain form
+    (``dif(X,a)``, ``X in 4..5``): what a toplevel prints for a constraint
+    left on an answer (operator ruling 2026-10-24: not module-qualified)."""
+    from clausal.logic.constraints import DIF_KEY  # noqa: PLC0415
+    from clausal.logic.variables import get_attr  # noqa: PLC0415
+
+    goals: list[str] = []
+    seen: set[int] = set()
+    for v in variables:
+        for x, y in get_attr(v, DIF_KEY) or ():
+            if id(x) ^ id(y) in seen:
+                continue
+            seen.add(id(x) ^ id(y))
+            goals.append(f"dif({spell(x)},{spell(y)})")
+    for v in variables:
+        state = get_attr(v, "fd")
+        if state is not None and state.domain:
+            goals.append(f"{spell(v)} in {_fd_domain_text(state.domain)}")
+    return goals
+
+
 def _answer(shown, trail) -> str:
     """One answer as a toplevel prints it: ``Name = Value`` for each bound
     answer variable, an unbound one by its own name (``S = f(X)``), then
@@ -269,6 +304,10 @@ def _answer(shown, trail) -> str:
     for _, w in values:
         _term_vars(w, free)
     if free:
+        def spell(x):
+            from clausal.logic.solve import _deref_walk as walk  # noqa: PLC0415
+            return term_writeq(walk(x), var_names=names, priority=699, ops=ops)
+        parts += _fd_dif_residuals(list(free.values()), spell)
         parts += clpq.residual_q(
             list(free.values()), trail,
             lambda v: names.get(id(v)) or term_writeq(v))
