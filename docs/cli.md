@@ -5,8 +5,9 @@ The `clausal` command runs a Clausal Prolog (`.clausal`) or ISO Prolog
 `python -m clausal` is the same command.
 
 ```text
-clausal [-g GOAL]... [--once] [--test] FILE [-- ARGS...]
-clausal                      # no FILE: the interactive REPL
+clausal [-g GOAL]... [--once] [--test] [--prolog] FILE [-- ARGS...]
+clausal [--prolog]           # no FILE: the interactive ?- top-level
+clausal --python             # the Python/seam REPL
 ```
 
 ## Running a program
@@ -34,6 +35,52 @@ error and exits 1, or exits 0.
 
 Clausal Prolog refuses `:- initialization(...)`, so `main/0` is the entry
 point by name.
+
+## The interactive top-level: `?-`
+
+`clausal` with no FILE opens a Prolog top-level; `clausal --toplevel FILE`
+loads FILE first and then opens it (a FILE with no `main/0`, run from a
+terminal, does the same). Queries are read up to their closing `.`, across
+lines. Answers print as `-g` prints them, one at a time, and the next
+solution is computed only when you ask for it:
+
+```text
+?- member(X, [a,b,c]).
+   X = a
+;  X = b
+;  X = c
+;  false.
+?- X = f(Y,Z), Y = Z, dif(W, a).
+   X = f(Y,Y), Z = Y, dif(W,a).
+```
+
+| Key | Action |
+|---|---|
+| `;`, Space, `n` | the next solution |
+| `f`, `#` *N* Enter | five, or *N*, more |
+| `a` | all the rest |
+| `w`, `p` | print answers in full, or with lists past 100 elements elided (`[1,2,...\|...]`) |
+| `h`, `?` | help |
+| Enter, `.`, Ctrl-C | stop |
+
+The engine does not tell the top-level that an answer was the last, so an
+answer is printed with its full stop at once only for goals that cannot leave
+a choice (`=`, `is`, comparisons, constraint posting, a goal with a `!`);
+for any other goal the top-level asks, and a requested next solution that
+does not exist prints `false.` Residual `dif/2` and CLP(FD) domain
+constraints print in plain form (`dif(X,a)`, `X in 4..5`).
+
+An error is one line, `error(Formal,Context).`; Ctrl-C during a search
+returns to `?-`. `consult(File)` and `[File]` load a `.clausal` or `.pl` file
+and make it the module queries run in; `halt.` and `halt(N)` and Ctrl-D exit.
+History is kept in `~/.clausal_history`. When stdin is not a terminal there is
+no prompt and no key prompt: the first answer of each query is printed.
+
+Queries use the restricted Clausal Prolog surface: `!`, `->` and `*->` are
+refused. `--prolog` accepts them. A `.pl` file loads only with `--prolog`, or
+with the environment variable `CLAUSAL_ALLOW_PL` set to `1`, `true`, `True` or
+`yes`; otherwise `clausal` exits with status 2 and says so. The Python/seam
+REPL that bare `clausal` used to open is `clausal --python`.
 
 ## Running goals: `-g`
 

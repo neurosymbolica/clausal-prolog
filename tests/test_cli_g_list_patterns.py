@@ -37,6 +37,7 @@ def _clausal(tmp_path, front, *goals):
     (tmp_path / name).write_text(SOURCE)
     env = dict(os.environ)
     env.pop("CLAUSAL_PL_FRONTEND", None)
+    env["CLAUSAL_ALLOW_PL"] = "1"       # a .pl file loads only with this or --prolog
     if frontend:
         env["CLAUSAL_PL_FRONTEND"] = frontend
     env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")

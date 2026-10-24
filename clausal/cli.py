@@ -18,8 +18,11 @@ FILE is a Clausal Prolog (``.clausal``) or ISO Prolog (``.pl``) program.
 * Arguments after ``--`` reach the program as
   ``current_prolog_flag(argv, Args)``, a list of atoms.
 
-Without FILE, ``clausal`` starts the interactive REPL (``python -m
-clausal``).  Exit statuses: 0 success, 1 a goal failed or raised or the
+Without FILE, ``clausal`` opens the interactive ``?-`` top-level
+(``clausal.toplevel``; ``--prolog`` lets queries use ``!`` and ``->``);
+``clausal --python`` starts the Python/seam REPL.  A ``.pl`` FILE needs
+``--prolog`` or ``CLAUSAL_ALLOW_PL`` set to ``1``, ``true``, ``True`` or
+``yes``.  Exit statuses: 0 success, 1 a goal failed or raised or the
 program did not load, 2 a usage error.
 """
 from __future__ import annotations
@@ -33,6 +36,11 @@ from clausal._suffixes import CLAUSAL_PROLOG_SUFFIXES, PROLOG_SUFFIX
 EXIT_OK = 0
 EXIT_FAILED = 1
 EXIT_USAGE = 2
+
+#: A ``.pl`` file loads only under ``--prolog`` or with this variable set to
+#: one of these exact spellings (operator ruling 2026-10-24).
+ALLOW_PL_ENV = "CLAUSAL_ALLOW_PL"
+ALLOW_PL_VALUES = ("1", "true", "True", "yes")
 
 #: The program files the CLI runs: Clausal Prolog, then ISO Prolog.
 PROGRAM_SUFFIXES: tuple[str, ...] = (*CLAUSAL_PROLOG_SUFFIXES, PROLOG_SUFFIX)
@@ -55,6 +63,16 @@ def _parser() -> argparse.ArgumentParser:
                    help="with -g, print only the first answer")
     p.add_argument("--test", action="store_true",
                    help="run the program's test/1 and test/2 clauses")
+    p.add_argument("--prolog", action="store_true",
+                   help="in the ?- top-level, accept full Prolog syntax in "
+                        "queries (!, ->, *->); the default is the restricted "
+                        "Clausal Prolog surface")
+    p.add_argument("--python", action="store_true",
+                   help="without FILE, start the Python/seam REPL instead of "
+                        "the ?- top-level")
+    p.add_argument("--toplevel", action="store_true",
+                   help="with FILE and no -g, load it and open ?- "
+                        "(the default; --toplevel is accepted for symmetry)")
     return p
 
 
@@ -350,9 +368,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.file is None:
         if args.goal or args.test or args.once or program_args:
             parser.error("-g, --once, --test and -- ARGS need a FILE")
-        from clausal.python_repl import main as repl  # noqa: PLC0415
-        repl()
-        return EXIT_OK
+        if args.python:
+            from clausal.python_repl import main as repl  # noqa: PLC0415
+            repl()
+            return EXIT_OK
+        import clausal  # noqa: F401,PLC0415 -- installs the import hook
+        from clausal.toplevel import main as toplevel, user_module  # noqa: PLC0415
+        return toplevel(user_module(), None, args.prolog)
+    if args.python:
+        parser.error("--python takes no FILE")
 
     path = args.file
     if not path.endswith(PROGRAM_SUFFIXES):
@@ -360,6 +384,13 @@ def main(argv: list[str] | None = None) -> int:
                      f"{' or '.join(PROGRAM_SUFFIXES)} file")
     if not os.path.isfile(path):
         parser.error(f"{path}: no such file")
+    if path.endswith(PROLOG_SUFFIX) and not (
+            args.prolog or os.environ.get(ALLOW_PL_ENV) in ALLOW_PL_VALUES):
+        _error(f"{path}: an ISO Prolog (.pl) file loads only with --prolog "
+               f"(full Prolog syntax: !, ->, *->), or with {ALLOW_PL_ENV} "
+               f"set to one of {', '.join(ALLOW_PL_VALUES)}.  Clausal Prolog "
+               f"is the .clausal surface.")
+        return EXIT_USAGE
     if args.test and (args.goal or args.once):
         parser.error("--test runs the program's tests; it takes no -g")
     if args.once and not args.goal:
@@ -399,7 +430,10 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_OK
 
     from clausal import has_predicate, solve  # noqa: PLC0415
-    if not has_predicate(module, "main", 0):
+    if args.toplevel or not has_predicate(module, "main", 0):
+        if args.toplevel or sys.stdin.isatty():
+            from clausal.toplevel import main as toplevel  # noqa: PLC0415
+            return toplevel(module, path, args.prolog)
         return EXIT_OK                     # loaded: a load check
     try:
         for _ in solve("main", module=module):
