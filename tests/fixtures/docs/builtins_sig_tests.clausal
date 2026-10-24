@@ -22,6 +22,9 @@ test("if_ exists") :-
 test("catch/3 exists") :-
     catch(true, _, true).
 
+test("repeat exists") :-
+    findall(x, (between(1, 3, _), once(repeat)), [x, x, x]).
+
 % ── Coroutining ──────────────────────────────────────────────────────────────
 
 test("freeze exists") :-

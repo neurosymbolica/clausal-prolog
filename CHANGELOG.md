@@ -169,6 +169,18 @@ surface described in [docs/public-api.md](docs/public-api.md).
   in-tree sort key (`_standard_order_key`) still raises `RecursionError`,
   which `compare/3` and `msort/2` catch to order cyclic terms pairwise.
   Pinned by `tests/test_python_entry_cyclic_deep.py`.
+- **`repeat/0` exists** (2026-10-24, operator ruling 2026-10-24: an ISO
+  non-conformity is a bug). ISO 8.15.3 lists it, and so did
+  `clausal/tools/iso_builtins.py`, but calling it raised
+  `existence_error(procedure, repeat/0)` on every surface. It now succeeds,
+  and succeeds again on every backtrack, on `.pl`, `.clausal` and the seam.
+  It is monotone (an endless disjunction of `true`), not committed choice.
+  A retry resumes the same generator and binds nothing, so 200000 retries
+  use no trail and no Python stack. `between(1, inf, X)` still raises
+  `type_error(integer, inf)`: Scryer and Trealla take no `inf` bound
+  (SWI-Prolog does), and the operator ruled to follow them. Rows checked
+  against both in `tests/iso/test_repeat_between_bounds_scryer.py`.
+
 - **`print/1` is refused under the sandbox, as every other writer is; `print/2`
   writes to a stream** (2026-10-24). `print/1` arrived without an entry in
   the sandbox's denied builtins, so a sandboxed program could write to

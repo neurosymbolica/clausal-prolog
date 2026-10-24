@@ -220,7 +220,8 @@ Atoms and characters: `atom_length/2`, `atom_chars/2`, `atom_codes/2`,
 `atom_concat/3`, `sub_atom/5`, `char_code/2`, `number_chars/2`,
 `number_codes/2`, `atom_number/2`, `upcase_atom/2`.
 Control and all-solutions: `call/1..8`, `once/1`, `\+/1`, `catch/3`,
-`throw/1`, `findall/3`, `bagof/3`, `setof/3`, `forall/2`, `halt/0,1`.
+`throw/1`, `findall/3`, `bagof/3`, `setof/3`, `forall/2`, `halt/0,1`,
+`repeat/0` (since 2026-10-24; it used to be an existence error).
 Lists and sorting: `length/2`, `member/2`, `memberchk/2`, `append/3`,
 `nth0/3`, `nth1/3`, `between/3`, `sort/2`, `msort/2`, `keysort/2`,
 `compare/3`.

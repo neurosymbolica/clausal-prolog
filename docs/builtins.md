@@ -81,7 +81,7 @@ may define its own. A seam module is not ISO text and is not checked.
 
 | Category | Predicates |
 |---|---|
-| [Control Flow](#control-flow) | once/1, `\+` (seam `not`), if_/3, throw/1, catch_recover/3, catch/3, halt/0,1, setup_call_cleanup/3, call_cleanup/2 |
+| [Control Flow](#control-flow) | once/1, `\+` (seam `not`), if_/3, throw/1, catch_recover/3, catch/3, halt/0,1, repeat/0, setup_call_cleanup/3, call_cleanup/2 |
 | [Coroutining](#coroutining) | freeze/2, when/2 |
 | [Meta-Predicates](#meta-predicates) | findall/3,4, bagof/3, setof/3, forall/2, call_nth/2, count_all/2 |
 | [Higher-Order Call](#higher-order-call) | call/1..8, call_goal/1..8 |
@@ -199,6 +199,17 @@ A 0-arity predicate in goal position is written bare, as in ISO Prolog — `halt
 
 ??? info "Implementation & tests"
     **Python tests:** `tests/test_exceptions.py`
+
+---
+
+### `repeat/0`
+```text
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:repeat_0"
+```
+ISO 8.15.3: succeeds, and succeeds again on every backtrack, forever. It is an endless disjunction of `true`, which is monotone, so it is available on every surface. Bound it with `once/1`, `call_nth/2` or a goal after it that eventually succeeds. It binds nothing, so each retry uses no trail and no Python stack. A registered builtin, not a special form.
+
+??? info "Implementation & tests"
+    **Python tests:** `tests/iso/test_repeat_between_bounds_scryer.py` (rows checked against Scryer and Trealla, and a 200000-retry run in bounded space)
 
 ---
 
@@ -1729,9 +1740,11 @@ Arithmetic posts CLP(ℤ) constraints with `library(clpz)`'s `#=` (e.g., `Y #= X
 ```
 Check or enumerate integers in `[Low, High]` inclusive. In check mode (X bound) succeeds iff `Low ≤ X ≤ High`. In generate mode (X unbound) backtracks over each integer.
 
+Both bounds must be integers. `High` cannot be the atom `inf` or `infinite`, which SWI-Prolog accepts: `between(1, inf, X)` raises `type_error(integer, inf)`, as in Scryer and Trealla. For an unbounded count, use `length(_, N)` or `repeat/0` with a counter.
+
 ??? info "Implementation & tests"
     **Seam tests:** `tests/fixtures/builtins_arith.seam`
-    **Python tests:** `tests/test_builtins.py`, `tests/test_search.py`
+    **Python tests:** `tests/test_builtins.py`, `tests/test_search.py`, `tests/iso/test_repeat_between_bounds_scryer.py`
 
 ---
 

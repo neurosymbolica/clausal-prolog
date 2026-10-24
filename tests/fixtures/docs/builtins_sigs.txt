@@ -34,6 +34,10 @@ halt
 halt(+Code)
 --8<-- [end:halt_0]
 
+--8<-- [start:repeat_0]
+repeat
+--8<-- [end:repeat_0]
+
 --8<-- [start:setup_call_cleanup_3]
 setup_call_cleanup(+Setup, +Call, +Cleanup)
 --8<-- [end:setup_call_cleanup_3]
