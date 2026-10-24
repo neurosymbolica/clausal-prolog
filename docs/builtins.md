@@ -98,10 +98,10 @@ may define its own. A seam module is not ISO text and is not checked.
 | [Type Checks](#type-checks) | var/1, nonvar/1, atom/1, string/1, is_str/1, atomic/1, number/1, integer/1, float_/1, compound/1, callable_/1, is_list/1, ground/1, must_be/2, can_be/2 |
 | [Dict and Set Predicates](#dict-and-set-predicates) | get/3,4, get_strict/3, tri_get/3, delete/3, is_dict/1, is_dict_t/2, dict_get/3, dict_put/4, dict_merge/3, gen_dict/3, sub_dict/2, is_set/1, set_union/3, set_subset/2, gen_set/2 |
 | [Arithmetic](#arithmetic) | between/3, succ/2, plus/3, abs_/2, max_/3, min_/3, sign/2, gcd/3, divmod_/4, lcm/3, exp_mod/4, popcount/2, msb/2, lsb/2 |
-| [List Predicates](#list-predicates) | in_/2, append/3, length/2, reverse/2, sort/2, permutation/2, select/3, flatten/2, take/3, drop/3, zip_/3, map_list_to_pairs/3, split_with/3, numlist/2,3, same_length/2, transpose/2 |
-| [Higher-Order List Predicates](#higher-order-list-predicates) | maplist/2..9, include/3, exclude/3, partition/4, tfilter/3, tpartition/4, foldl/4,5,6, take_while/3, drop_while/3, span/4, group_by/3, sort_by/3, filter_map/3 |
-| [Character/String](#characterstring) | char_type/2, char_code/2, upcase_atom/2, downcase_atom/2, atom_length/2, atom_chars/2, atom_codes/2, atom_concat/3, sub_atom/5, number_chars/2, number_codes/2 |
-| [I/O](#io) | write/1, writeq/1, write_canonical/1, write_term/2, writeln/1, write_text/1, writeln_text/1, print_term/1, nl/0, tab/1, write_to_string/2, write_text_to_string/2, term_to_string/2, listing/1, portray_clause/1 |
+| [List Predicates](#list-predicates) | in_/2, append/3, length/2, reverse/2, sort/2, sort/4, permutation/2, select/3, flatten/2, take/3, drop/3, zip_/3, map_list_to_pairs/3, split_with/3, numlist/2,3, same_length/2, transpose/2 |
+| [Higher-Order List Predicates](#higher-order-list-predicates) | maplist/2..9, include/3, exclude/3, partition/4, tfilter/3, tpartition/4, foldl/4,5,6, take_while/3, drop_while/3, span/4, group_by/3, sort_by/3, predsort/3, filter_map/3 |
+| [Character/String](#characterstring) | char_type/2, char_code/2, upcase_atom/2, downcase_atom/2, atom_length/2, atom_chars/2, atom_codes/2, atom_concat/3, sub_atom/5, number_chars/2, number_codes/2, atom_string/2 |
+| [I/O](#io) | write/1, writeq/1, print/1, write_canonical/1, write_term/2, writeln/1, write_text/1, writeln_text/1, print_term/1, nl/0, tab/1, write_to_string/2, write_text_to_string/2, term_to_string/2, term_to_atom/2, atom_to_term/3, listing/1, portray_clause/1 |
 | [Logging (`log` module)](#logging-log-module) | get_logger, debug, info, warning, error, critical, log, set_level, get_level, stream_handler, file_handler |
 | [Date & Time (`date_time` module)](#date--time-date_time-module) | now, now_utc, today, date, time, datetime, timedelta, date_add, date_sub, date_diff, datetime_string, timestamp, datetime_string_iso, date_string_iso, date_of, days_between, weekday, date_between, date_max, date_min, ordinal |
 | [Time & statistics](#time--statistics) | current_time/1, statistics/2 |
@@ -1983,6 +1983,18 @@ sort `List` removing duplicate elements.
 
 ---
 
+### `sort/4`
+```text
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:sort_4"
+```
+SWI-Prolog's `sort/4` (Scryer has none). `Key` is `0` (the whole element), `N` (its N-th argument), an atom (a dict's value for that key) or a list of these (a path: `[1, 2]` is argument 2 of argument 1). `Order` is `@<` (ascending, duplicate keys removed), `@=<` (ascending, all kept), `@>` or `@>=` (descending); the bare `<`, `=<`, `>`, `>=` are accepted too. The sort is stable, and where duplicates are removed the first is kept: `sort(1, @<, [f(2,a), f(1,b), f(2,c)], S)` gives `S = [f(1,b), f(2,a)]`. `sort(0, @<, L, S)` is `sort/2`, `sort(0, @=<, L, S)` `msort/2`, `sort(1, @=<, Pairs, S)` `keysort/2`. Errors as SWI's, checked Key, then Order, then List: an unbound one or a partial list is an instantiation error; `domain_error(not_less_than_one, K)` for a negative key, `type_error(sort_key, K)` for another non-key, `type_error(atom, O)` / `domain_error(order, O)`, `type_error(list, L)`, and for an element without the key `type_error(compound, E)` or `existence_error(argument, N, E)`.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/lists.py` (`_sort__4`)
+    **Python tests:** `tests/iso/test_common_extras_scryer.py`
+
+---
+
 ### `permutation/2`
 ```text
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:permutation_2"
@@ -2462,6 +2474,18 @@ sort `List` by key projected via `Goal(Elem, Key)`. Stable sort (preserves order
 
 ---
 
+### `predsort/3`
+```text
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:predsort_3"
+```
+SWI-Prolog's `predsort/3`: sort `List` as `sort/2` does, but order two elements by calling `call(Pred, Delta, E1, E2)`, which binds `Delta` to `<`, `>` or `=`; on `=` the second element is dropped, so elements `Pred` calls equal collapse to one. With `compare` it is `sort/2`. The comparisons are SWI's merge sort's, in its order. Every answer of `Pred` is tried, as `maplist/2` tries every answer of its goal, so the predicate is cut-free (SWI commits to the first answer of each merge comparison; for a comparator with one answer per pair, such as `compare/3`, the two agree); an answer whose `Delta` is something else is no answer. A partial `List` is an instantiation error, a non-list `type_error(list, L)`.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/higher_order.py` (`_predsort__3`)
+    **Python tests:** `tests/iso/test_common_extras_scryer.py`
+
+---
+
 ### `max_by/3`
 ```text
 --8<-- "tests/fixtures/docs/builtins_sigs.txt:max_by_3"
@@ -2641,6 +2665,18 @@ Bidirectional number ↔ code-point-list conversion. Like `number_chars/2` but u
 
 ---
 
+### `atom_string/2`
+```text
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:atom_string_2"
+```
+SWI-Prolog's `atom_string/2`: `String` is the string of `Atom`'s text, or `Atom` the atom of `String`'s. Either side may be any text: an atom, a number, a string, or a list of characters or codes (`atom_string(A, 42)` gives `A = '42'`). A string is the chars carrier, so `atom_string(abc, S)` gives `S = "abc"`, the list `[a,b,c]`. With both bound the texts are compared (`atom_string(1, "1")` holds). Neither side text: `type_error(string, S)` for a bound `String`, else `type_error(atom, A)` for a bound `Atom`, else an instantiation error.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/chars.py` (`_atom_string__2`)
+    **Python tests:** `tests/iso/test_common_extras_scryer.py`
+
+---
+
 ## I/O
 
 ### `write/1`
@@ -2667,6 +2703,18 @@ Print `Term` to stdout **quoted**, without a trailing newline — ISO 8.14.2's `
 ??? info "Implementation & tests"
     **Implementation:** `clausal/logic/builtins/io.py` (`writeq/1`)
     **Python tests:** `tests/test_writers_atoms_strings.py`
+
+---
+
+### `print/1`
+```text
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:print_1"
+```
+SWI-Prolog's `print/1`: `write_term(Term, [portray(true), numbervars(true), quoted(true)])`. There is no `portray/1` hook, so it prints exactly what `writeq/1` prints, with no newline.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/io.py` (`_print__1`)
+    **Python tests:** `tests/iso/test_common_extras_scryer.py`
 
 ---
 
@@ -2823,6 +2871,30 @@ Unify `String` with the Clausal Prolog **display** rendering of `Term`, as a str
 
 ??? info "Implementation & tests"
     **Python tests:** `tests/test_io.py`
+
+---
+
+### `term_to_atom/2`
+```text
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:term_to_atom_2"
+```
+SWI-Prolog's `term_to_atom/2`. With `Atom` unbound, `Atom` is `Term` written with `write_term(Term, [quoted(true)])`: `term_to_atom(f(X, 'A'), A)` gives `A = 'f(_123,\'A\')'`. With `Atom` bound to text (an atom, a number, a string, a char or code list), the text is read as one term and unified with `Term`: the native ISO reader, the operators in force, the module's `double_quotes` flag, the end `.` optional. A bound `Atom` that is not text raises `type_error(string, A)`; text that does not read as one term raises a `syntax_error` (layout only: `syntax_error(end_of_string)`).
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/io.py` (`read_term_from_text`)
+    **Python tests:** `tests/iso/test_common_extras_scryer.py`
+
+---
+
+### `atom_to_term/3`
+```text
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:atom_to_term_3"
+```
+SWI-Prolog's `atom_to_term/3`: `Atom`'s text read as `term_to_atom/2` reads it, and `Bindings` the list of `Name = Var` for its named variables in order of first occurrence (read_term/2's `variable_names`; `_` is left out): `atom_to_term('foo(X, Y, X)', T, B)` gives `T = foo(_A, _B, _A), B = ['X' = _A, 'Y' = _B]`. An unbound `Atom` is an instantiation error, a non-text one `type_error(string, A)`, and a `Bindings` that is not a list `type_error(list, B)`.
+
+??? info "Implementation & tests"
+    **Implementation:** `clausal/logic/builtins/io.py` (`read_term_from_text`)
+    **Python tests:** `tests/iso/test_common_extras_scryer.py`
 
 ---
 

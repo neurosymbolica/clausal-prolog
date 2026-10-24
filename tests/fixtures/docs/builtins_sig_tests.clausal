@@ -317,6 +317,18 @@ test("sort exists") :-
     sort([3, 1, 2], S),
     S == [1, 2, 3].
 
+test("sort/4 exists") :-
+    sort(1, @>=, [f(1, a), f(2, b), f(1, c)], S),
+    S == [f(2, b), f(1, a), f(1, c)].
+
+test("predsort exists") :-
+    predsort(compare, [b, a, b], S),
+    S == [a, b].
+
+test("atom_string exists") :-
+    atom_string(abc, S),
+    S == "abc".
+
 test("select exists") :-
     select(2, [1, 2, 3], [1, 3]).
 
@@ -433,6 +445,20 @@ test("write_to_string exists") :-
 test("term_to_string exists") :-
     term_to_string(42, S),
     is_str(S).
+
+test("print exists") :-
+    print(x).
+
+test("term_to_atom exists") :-
+    term_to_atom(f(X, 'A'), A),
+    term_to_atom(T, A),
+    T = f(Y, 'A'),
+    var(X), var(Y).
+
+test("atom_to_term exists") :-
+    atom_to_term('p(X, Y)', T, B),
+    B = ['X' = X, 'Y' = Y],
+    T == p(X, Y).
 
 % The three string forms are the three writer FAMILIES (docs/builtins.md,
 % docs/io.md): write_to_string is ISO (unquoted, a string spells itself out

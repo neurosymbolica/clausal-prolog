@@ -598,6 +598,10 @@ msort(+List, -Sorted)
 sort(+List, -Sorted)
 --8<-- [end:sort_2]
 
+--8<-- [start:sort_4]
+sort(+Key, +Order, +List, -Sorted)
+--8<-- [end:sort_4]
+
 --8<-- [start:permutation_2]
 permutation(+List, -Perm)
 --8<-- [end:permutation_2]
@@ -778,6 +782,10 @@ group_by(+Goal, +List, -Groups)
 sort_by(+Goal, +List, -Sorted)
 --8<-- [end:sort_by_3]
 
+--8<-- [start:predsort_3]
+predsort(+Pred, +List, -Sorted)
+--8<-- [end:predsort_3]
+
 --8<-- [start:max_by_3]
 max_by(+Goal, +List, -max_)
 --8<-- [end:max_by_3]
@@ -871,6 +879,10 @@ number_codes(42, [52, 50])          % succeeds (char_code('4', 52), char_code('2
 number_codes(N, [52, 50])           % N = 42
 --8<-- [end:number_codes_2_ex2]
 
+--8<-- [start:atom_string_2]
+atom_string(?Atom, ?String)
+--8<-- [end:atom_string_2]
+
 
 % === I/O ===
 
@@ -885,6 +897,10 @@ writeln(+Term)
 --8<-- [start:writeq_1]
 writeq(+Term)
 --8<-- [end:writeq_1]
+
+--8<-- [start:print_1]
+print(+Term)
+--8<-- [end:print_1]
 
 --8<-- [start:write_canonical_1]
 write_canonical(+Term)
@@ -925,6 +941,14 @@ write_text_to_string(+Term, -String)
 --8<-- [start:term_to_string_2]
 term_to_string(+Term, -String)
 --8<-- [end:term_to_string_2]
+
+--8<-- [start:term_to_atom_2]
+term_to_atom(?Term, ?Atom)
+--8<-- [end:term_to_atom_2]
+
+--8<-- [start:atom_to_term_3]
+atom_to_term(+Atom, -Term, -Bindings)
+--8<-- [end:atom_to_term_3]
 
 --8<-- [start:listing_1]
 listing(+PredicateIndicator)

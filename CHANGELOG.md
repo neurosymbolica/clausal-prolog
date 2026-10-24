@@ -10,6 +10,27 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Added
 
+- **`sort/4`, `predsort/3`, `print/1`, `atom_string/2`, `term_to_atom/2`
+  and `atom_to_term/3`** (2026-10-24), on `.pl` and `.clausal`; each
+  raised `existence_error(procedure, PI)`. Scryer has none of them, so
+  they are SWI-Prolog's, errors included (its manual, and its source where
+  the manual is silent). `sort(Key, Order, List, Sorted)`: Key `0`, `N`, a
+  dict key or a key path, Order `@<`, `@=<`, `@>`, `@>=` (or `<` ...),
+  stable, the first of equal keys kept. `predsort/3` sorts as SWI's merge
+  sort does, `=` dropping the right element; it tries every answer of the
+  comparator instead of committing to the first (SWI commits in its merge
+  step), so it stays cut-free; for a comparator with one answer per pair
+  the two agree. `print/1` is `write_term(T, [portray(true),
+  numbervars(true), quoted(true)])`, which with no portray hook is
+  `writeq/1`. `atom_string/2` gives a string as the chars carrier, and
+  with both arguments bound compares their texts. `term_to_atom/2` writes
+  with `quoted(true)` or reads the text as one term (the native reader,
+  the operators in force, the module's `double_quotes`, the end `.`
+  optional); `atom_to_term/3` also gives the `Name = Var` bindings.
+  `ignore/1` stays out: it is committed choice (ruling D13). Pinned by
+  `tests/iso/test_common_extras_scryer.py`, whose rows that Scryer can
+  compute through ISO builtins are checked against it.
+
 - **clp(Q,R)'s `maximize/1`, `minimize/1`, `bb_inf/5`, `ordering/1` and
   `dump/3` are builtins** (2026-10-22), on both CLP(Q) solvers and every
   surface, so a program written for the SICStus 3.7.1 clp(Q,R) manual runs

@@ -191,6 +191,10 @@ refuses it (Scryer ignores `dynamic/1` of a builtin instead). A library
 predicate such as `append/3` or `length/2` is no ISO built-in and a file may
 define it.
 Grammar rules: `phrase/2,3`.
+Common non-ISO extras, as SWI-Prolog defines them (Scryer has none):
+`sort/4`, `predsort/3`, `print/1`, `atom_string/2`, `term_to_atom/2`,
+`atom_to_term/3`, errors included (`tests/iso/test_common_extras_scryer.py`).
+`predsort/3` tries every answer of its comparator, so it is cut-free.
 Constraints: [`dif/2`, CLP(ℤ)](constraints.md), [CLP(B)](clpb.md),
 [CLP(ℚ)](clpq.md).
 
@@ -261,6 +265,10 @@ Not provided (calling one raises `existence_error(procedure, PI)`):
 - **ISO term reading (8.14.1):** `read/1,2`, `read_term/2,3`;
 - **common non-ISO extras:** `term_to_atom/2`, `atom_to_term/3`,
   `atom_string/2`, `sort/4`, `predsort/3`, `ignore/1`, `print/1`.
+- **ISO character conversion (8.14.5–8.14.6):** `char_conversion/2`,
+  `current_char_conversion/2`;
+- **common non-ISO extras:** `ignore/1`, left out by design: it is
+  committed choice (ruling D13).
 
 ### Reading and writing
 
