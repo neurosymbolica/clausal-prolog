@@ -282,7 +282,8 @@ surface described in [docs/public-api.md](docs/public-api.md).
       `X = [1|X], Y = [1,1|Y], X = Y` succeeds (`SegList.__unify__` keeps
       the pair in progress).  A term of ordinary depth never pays: the fast
       path only changed its depth-check constant (A/B on the engine
-      benchmarks, 7 interleaved rounds, within noise).
+      benchmarks, 5 interleaved rounds: nrev 1.004, unif 1.012, dcg 1.023,
+      q 0.984, look 1.008, tak 0.979).
     - `compare/3`, the `@<` family, `sort/2` and `msort/2` decide a pair
       whose key cannot be built (cyclic, or too deep to key) by a pairwise,
       memoised walk of the same order (`_helpers.term_compare`):
