@@ -113,7 +113,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
   reads back as `(T = a), b`) and `X = (:-)` answered `X = :-`. A binding
   is now written as writeq/1 writes the right operand of `=` (priority
   699): `T = (a,b)`, `X = (a:-b)`, `X = (a=b)`, `X = (\+a)`, and a bare
-  operator atom bracketed, `X = (-)`. An answer that ends in a graphic
+  operator atom bracketed, `X = (-)`, with the operators in force (a
+  program's or the goal's `op/3`: `op(100,xfx,.), functor(3 .2,F,A)`
+  answers `F = ('.'), A = 2`, Ulrich's #45). An answer that ends in a graphic
   character gets its full stop after a space (`X = $ .`), and a `-g` goal
   that ends in one (`-g 'X = $'`) is no longer glued to the end token it
   is read with. Pinned row by row against Scryer's toplevel in

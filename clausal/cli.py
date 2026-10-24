@@ -230,13 +230,16 @@ def _answer(shown, trail) -> str:
     from clausal.logic import clpq  # noqa: PLC0415
     from clausal.logic.solve import _deref_walk  # noqa: PLC0415
     from clausal.logic.variables import Var  # noqa: PLC0415
-    from clausal.terms import term_writeq  # noqa: PLC0415
+    from clausal.terms import term_writeq, writer_op_table  # noqa: PLC0415
 
     values = [(name, _deref_walk(v)) for name, v in shown]
     names: dict[int, str] = {}
     for name, w in values:
         if isinstance(w, Var):
             names.setdefault(id(w), name)
+    # The operators in force now (op/3 run by the program or the goal), as
+    # writeq/1 writes with them.
+    ops = writer_op_table()
     parts = []
     for name, w in values:
         if isinstance(w, Var) and names[id(w)] == name:
@@ -245,7 +248,7 @@ def _answer(shown, trail) -> str:
         # writeq writes an operand of priority 699, so (a,b) and a bare
         # operator atom such as (-) are bracketed, as Scryer prints them.
         parts.append(f"{name} = "
-                     f"{term_writeq(w, var_names=names, priority=699)}")
+                     f"{term_writeq(w, var_names=names, priority=699, ops=ops)}")
     free: dict = {}
     for _, w in values:
         _term_vars(w, free)

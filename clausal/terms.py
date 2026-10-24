@@ -4645,7 +4645,8 @@ def term_write(t: Any, *, quoted: bool, double_quotes: bool = False,
 
 def term_writeq(t: Any, *, local_vars: bool = False,
                 var_names: "dict[int, str] | None" = None,
-                priority: int = 1200) -> str:
+                priority: int = 1200,
+                ops: "_OperatorTable | None" = None) -> str:
     """Render *t* as Scryer prints an uncaught error term.
 
     ``writeq``-style with operators: ``error(type_error(evaluable,(+)/2),
@@ -4671,13 +4672,21 @@ def term_writeq(t: Any, *, local_vars: bool = False,
     operator term above it is bracketed, and so is a bare operator atom
     (``(-)``), as an operand of an operator is.  A toplevel writes an
     answer's value at 699, the right operand of ``=``.
+
+    *ops* is the operator table to write with, as for :func:`term_write`
+    (default: Scryer's, with no library loaded).
     """
     token = _WQ_LOCAL_VARS.set({} if local_vars else None)
     names_token = _WQ_VAR_NAMES.set(var_names)
+    table = None
+    if ops is not None and ops is not _WQ_OPS:
+        table = _WQ_TABLE.set(ops)
     try:
         text = _wq(t, priority, priority < 1200)
         return _wq_local_names(text, _WQ_LOCAL_VARS.get()) if local_vars else text
     finally:
+        if table is not None:
+            _WQ_TABLE.reset(table)
         _WQ_VAR_NAMES.reset(names_token)
         _WQ_LOCAL_VARS.reset(token)
 

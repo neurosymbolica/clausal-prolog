@@ -95,11 +95,23 @@ ROWS = [
     ("X = (a,b), Y = (-), Z = 1", "X = (a,b), Y = (-), Z = 1."),
 ]
 
+#: The operators in force when the answer is printed: the program's own
+#: op/3 directives, and op/3 run by the goal itself (ISO 8.14.3: one table).
+OPS_PROGRAM = ":- op(200, xfx, foo).\np.\n"
+OPS_ROWS = [
+    ("X = (foo)", "X = (foo)."),
+    ("X = f(foo)", "X = f(foo)."),
+    ("op(100, xfx, '.'), F = '.'", "F = ('.')."),
+    ("op(9, fy, fy), X = (fy)", "X = (fy)."),
+    ("op(9, fy, fz), X = - fz", "X = - (fz)."),
+    ("op(0, xfx, foo), X = (foo)", "X = foo."),
+]
+
 FRONT_ENDS = ["translator", "native"]
 
 
-def _clausal(tmp_path, frontend, goals):
-    (tmp_path / "prog.pl").write_text("p.\n")
+def _clausal(tmp_path, frontend, goals, program="p.\n"):
+    (tmp_path / "prog.pl").write_text(program)
     env = dict(os.environ)
     env["CLAUSAL_PL_FRONTEND"] = frontend
     env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
@@ -128,3 +140,21 @@ def test_rows_match_scryers_toplevel(tmp_path, scryer):
     wrong = [(g, want, got) for (g, want), got in zip(ROWS, lines)
              if got != want]
     assert not wrong, wrong
+
+
+# Native front end only: the translator does not apply a file's op/3
+# directives to the run-time table, so writeq/1 there misses them as well
+# (todo/translator-pl-op-directives-miss-the-run-time-table-2026-10-24.md).
+@pytest.mark.parametrize("goal, want", OPS_ROWS, ids=[g for g, _ in OPS_ROWS])
+def test_answer_uses_the_operators_in_force(tmp_path, goal, want):
+    lines, err = _clausal(tmp_path, "native", [goal], OPS_PROGRAM)
+    assert lines == [want], err
+
+
+@pytest.mark.parametrize("goal, want", OPS_ROWS, ids=[g for g, _ in OPS_ROWS])
+def test_operator_rows_match_scryers_toplevel(tmp_path, scryer, goal, want):
+    prog = tmp_path / "prog.pl"
+    prog.write_text(OPS_PROGRAM)
+    proc = _oracles.run_scryer(str(prog), [goal], timeout=60)
+    lines = [ln.strip() for ln in proc.stdout.splitlines() if ln.strip()]
+    assert lines == [want], proc.stdout + proc.stderr

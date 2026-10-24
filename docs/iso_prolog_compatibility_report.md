@@ -55,9 +55,17 @@ more interactive input).
 - 27 of the 40 come from lexer leniency (unknown escapes, bare-exponent
   floats, uppercase radix prefixes, raw tabs in quotes, `0''`). A change
   that tightens the lexer to ISO is under review.
-- The rest are listed under [Known gaps](#known-gaps): the answer printer's
-  brackets, `[]` and `'[]'`, a bare prefix-operator atom, the
-  `double_quotes` flag at run time, and `get_char/1`.
+- The rest are listed under [Known gaps](#known-gaps): `[]` and `'[]'`,
+  the `double_quotes` flag at run time, and `get_char/1`. The answer
+  printer's brackets and a bare prefix-operator atom are fixed (see
+  [What conforms](#reading-and-writing-terms)).
+
+Re-run row by row against Scryer on 2026-10-24 (each row's goals in one
+session, through the `.pl` native front end and Scryer's own toplevel):
+every row answers as Scryer does except `get_char/1` (#270, #271),
+`writeq(-0.0)` (#364: Clausal keeps the sign, Scryer writes `0.0`), and
+eight rows where Scryer departs from the Codex and Clausal follows it
+(#348, #352, #353, #357, #358, #360, #361, #362 are syntax errors).
 
 ---
 
@@ -186,6 +194,14 @@ Grammar rules: `phrase/2,3`.
 Constraints: [`dif/2`, CLP(ℤ)](constraints.md), [CLP(B)](clpb.md),
 [CLP(ℚ)](clpq.md).
 
+### Reading and writing terms
+
+The `-g` answer printer writes a binding as `writeq/1` writes the right
+operand of `=`, as Scryer's toplevel does: `T = (a,b)`, `X = (-)`, and
+`F = ('.')` while `.` is an operator. A prefix operator followed by a token
+that cannot start a term is an atom (ISO 6.3.4.2): `- .` and `\ .` read as
+`-` and `\`, and `- (1)` and `-(1)` are both `-(1)`.
+
 ### Procedures and modules
 
 A procedure is a name **and** an arity, as in ISO: `p/1` and `p/2` in one
@@ -250,13 +266,9 @@ Not provided (calling one raises `existence_error(procedure, PI)`):
 
 These are from the [syntax](#syntax) measurement:
 
-- The answer printer leaves operator terms unbracketed: `T = a,b` where ISO
-  display is `T = (a,b)`, and `F = '.'` where it is `F = ('.')`.
 - `[]` and `'[]'` are the same atom, as ISO says (ruling D70, 2026-10-17):
   `X = '[]', X == []` succeeds and `writeq('[]')` prints `[]`, which reads
   back as itself.
-- A bare prefix-operator atom as a whole term (`\ .`) is a syntax error
-  instead of the atom `\`.
 
 ---
 

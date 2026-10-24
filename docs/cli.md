@@ -57,6 +57,9 @@ false.
   answers (`S = f(X)`).
 - A rational prints as Scryer prints it: `X is 1 rdiv 2` answers
   `X = 1 rdiv 2.`
+- A value is written as `writeq/1` writes the right operand of `=`, with
+  the operators in force: an operator term above priority 699 and a bare
+  operator atom are bracketed, as in Scryer (`T = (a,b).`, `X = (-).`).
 - CLP(Q) constraints left on the answer's variables are printed after the
   bindings, projected onto those variables:
 
