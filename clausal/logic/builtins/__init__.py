@@ -70,6 +70,7 @@ from clausal.logic.builtins import higher_order    # noqa: F401
 from clausal.logic.builtins import lambda_lib      # noqa: F401  (library(lambda))
 from clausal.logic.builtins import io              # noqa: F401
 from clausal.logic.builtins import streams_io      # noqa: F401  (ISO 8.11-8.13 streams)
+from clausal.logic.builtins import read_term       # noqa: F401  (ISO 8.14.1 read/1,2, read_term/2,3)
 from clausal.logic.builtins import dcg             # noqa: F401
 from clausal.logic.builtins import dict_set        # noqa: F401
 from clausal.logic.builtins import control           # noqa: F401

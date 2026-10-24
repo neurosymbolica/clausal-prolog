@@ -420,6 +420,10 @@ class PrologReader:
         self._item_end = None
         self._item_error = None
         self._eof = False
+        #: The offset (into everything fed so far) just past the end token
+        #: of the item the last ``read_term()`` returned -- what a reader
+        #: over a stream has consumed (``read/1`` pushes the rest back).
+        self.last_item_end = 0
 
     def feed(self, text: str) -> None:
         self._lexer.feed(text)
@@ -501,6 +505,7 @@ class PrologReader:
         if self._item_start is None:
             # Between items (nothing buffered yet for a new item) -- a
             # standalone lexical error, not attributable to any item.
+            self.last_item_end = t.end[0]
             return SyntaxIssue(span=(t.start[0], t.end[0]), message=message,
                                 resumable=True)
         # Mid-item: keep buffering: the item's 'end' token still resyncs
@@ -514,6 +519,7 @@ class PrologReader:
         span = (self._item_start, self._item_end)
         message = self._item_error or "unterminated item (missing end token)"
         self._reset_item_state()
+        self.last_item_end = span[1]
         self._eof = True  # no more content will ever follow this issue
         return SyntaxIssue(span=span, message=message, resumable=False)
 
@@ -522,6 +528,7 @@ class PrologReader:
         pending_error = self._item_error
         tokens_buf = self._item_buf
         self._reset_item_state()
+        self.last_item_end = span[1]
 
         if pending_error is not None:
             return SyntaxIssue(span=span, message=pending_error, resumable=True)

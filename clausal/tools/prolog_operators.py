@@ -31,6 +31,17 @@ class OperatorTable:
         #: what it computed from it and recompute only when this moves.
         self.version = 0
 
+    def copy(self) -> "OperatorTable":
+        """An independent table with the same operators (a reader that
+        must not change this one -- ``read/1`` of an ``op/3`` directive --
+        reads with a copy)."""
+        with op_lock:
+            new = OperatorTable()
+            new._ops = {k: list(v) for k, v in self._ops.items()}
+            new._default_names = set(self._default_names)
+            new.version = self.version
+        return new
+
     def define(self, prec: int, spec: str, name: str) -> None:
         """Set *name*'s operator of *spec*'s class (prefix, infix or
         postfix) to *prec*, or remove it when *prec* is 0.  Unchecked: the

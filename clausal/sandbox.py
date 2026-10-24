@@ -256,6 +256,8 @@ DENIED_BUILTINS: "dict[str, str]" = {
     "get_byte": "reads a stream",
     "peek_byte": "reads a stream",
     "put_byte": "writes to a stream",
+    "read": "reads a stream",
+    "read_term": "reads a stream",
     "z3_set_option": "solver options include trace files",
     "z3.set_option": "solver options include trace files",
     "z3_stats": "process-wide solver counters",
