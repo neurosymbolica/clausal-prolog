@@ -1166,6 +1166,29 @@ class PrologLoader(_ClausalSourceLoader):
             clausal_source, path, prolog_singletons=True)
 
 
+class PrologSyntaxError(SyntaxError):
+    """A ``.pl`` or ``.clausal`` file the native ISO reader cannot read.
+
+    A ``SyntaxError`` -- ``import`` reports it as one, with the file, the
+    line and a caret at the fault -- that also carries the ISO error term
+    the same text raises when it is read at run time, as ``.term``::
+
+        error(syntax_error(Kind), context(read_term/3,
+              [line(L), column(C), expected(What), found(Token)]))
+
+    (``clausal.tools.prolog_reader.syntax_error_term``; operator ruling
+    2026-10-24), so a host can match the formal term instead of parsing the
+    message.  ``.term`` is None for a refusal that is not a syntax error.
+    """
+
+    def __init__(self, msg, details=None, *, term=None):
+        if details is None:
+            super().__init__(msg)
+        else:
+            super().__init__(msg, details)
+        self.term = term
+
+
 class _NativeItems:
     """What ``_run_v2_pipeline`` reads off ``_last_transformer``: the module
     items.  The native front end has no transformer to hand over."""
@@ -1224,12 +1247,19 @@ class NativePrologLoader(PrologLoader):
                 module_name=self._fullname)
         except iso_l3.LoweringRefused as e:
             line = iso_l3.line_of(pl_source, e.span) or 0
+            col = 1
+            if e.position is not None:
+                # A syntax error: the caret goes on the fault itself,
+                # which may be lines below the item's first line.
+                line, col = e.position
             # Split on "\n" only: _Positions numbers lines that way, and
             # splitlines() also breaks on \f, \x85, \u2028 ...
             lines = pl_source.split("\n")
             text = lines[line - 1] if 0 < line <= len(lines) else ""
-            raise SyntaxError(f"Cannot import {path}: {e}",
-                              (path, line, 1, text)) from e
+            raise PrologSyntaxError(
+                f"Cannot import {path}: {e}",
+                (path, line, col, text, line, col + 1),
+                term=e.term) from e
         self.l3_stats = low.stats
         # The bytecode baked in other files' content (a use_module/1 export
         # list, a declared module name): the cache key covers this file

@@ -71,12 +71,19 @@ def _error(msg: str) -> None:
 
 
 def _describe(exc: BaseException) -> str:
-    """An exception as a reader sees it: a LogicException's ball as a term."""
+    """An exception as a reader sees it: a LogicException's ball as a term;
+    a SyntaxError with a source line as the message, the line and a caret
+    under the fault (as Python's own traceback renders one)."""
     from clausal.logic.exceptions import LogicException  # noqa: PLC0415
     if isinstance(exc, LogicException):
         from clausal.terms import term_writeq  # noqa: PLC0415
         from clausal.logic.solve import _deref_walk  # noqa: PLC0415
         return term_writeq(_deref_walk(exc.term))
+    if isinstance(exc, SyntaxError) and exc.text and exc.lineno:
+        line = exc.text.rstrip("\n")
+        caret = " " * max((exc.offset or 1) - 1, 0) + "^"
+        return (f"{type(exc).__name__}: {exc}\n"
+                f"    {line}\n    {caret}")
     return f"{type(exc).__name__}: {exc}"
 
 
@@ -151,8 +158,11 @@ def _read_goal(text: str, op_table):
     item = reader.read_term()
     kind = type(item).__name__
     if item is EOF or kind not in ("Clause", "DCGRule", "Directive", "Query"):
-        raise SyntaxError(getattr(item, "message", None)
-                          or f"not a goal: {text}")
+        from clausal.import_hook import PrologSyntaxError  # noqa: PLC0415
+        if kind == "SyntaxIssue":
+            # The term a program reading the same text would catch.
+            raise PrologSyntaxError(item.message, term=item.error_term())
+        raise SyntaxError(f"not a goal: {text}")
     if reader.read_term() is not EOF:
         raise SyntaxError(f"more than one goal in: {text}")
     term = item.term

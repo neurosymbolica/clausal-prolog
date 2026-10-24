@@ -80,11 +80,20 @@ class LoweringRefused(Exception):
     """A construct the native front end does not lower.  Raised, never skipped
     -- a silently dropped clause is the failure mode the plan's §8.4 ('print
     the denominator') exists for.  *span* is the ``(start, end)`` character
-    offset of the refused item in the ``.pl`` text, when known."""
+    offset of the refused item in the ``.pl`` text, when known.
 
-    def __init__(self, message: str, span=None):
+    A reader syntax error carries besides them *term*, the ISO error term
+    ``error(syntax_error(Kind), context(read_term/3, Details))``
+    (``prolog_reader.SyntaxIssue.error_term``), and *position*, the fault's
+    ``(line, column)`` -- so the loader's ``SyntaxError`` can point its
+    caret at the fault and hand the term on (operator ruling 2026-10-24).
+    """
+
+    def __init__(self, message: str, span=None, *, term=None, position=None):
         super().__init__(message)
         self.span = span
+        self.term = term
+        self.position = position
 
 
 # ── cut-free ruling ──────────────────────────────────────────────────────────
@@ -1628,9 +1637,10 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
             return f"{where_file}:{line}: "
         return f"at {span}: " if span else ""
 
-    def refuse(msg: str, span) -> None:
+    def refuse(msg: str, span, *, term=None, position=None) -> None:
         if strict:
-            raise LoweringRefused(where(span) + msg, span)
+            raise LoweringRefused(where(span) + msg, span, term=term,
+                                  position=position)
         stats["refused"] += 1
         stats["refusals"].append(where(span) + msg)
 
@@ -1641,7 +1651,9 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
         kind = type(it).__name__
         span = _item_span(it)
         if kind == "SyntaxIssue":
-            refuse(_syntax_issue_message(it, source), span)
+            position = (it.line, it.column) if it.line else None
+            refuse(_syntax_issue_message(it, source), span,
+                   term=it.error_term(), position=position)
             continue
         if not (kind == "Directive" and _is_end_module(it.term)):
             # end_module/1 is the file's last item (ISO 13211-2): nothing
