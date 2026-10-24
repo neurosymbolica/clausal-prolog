@@ -223,7 +223,17 @@ this engine's error terms: where Scryer and SWI-Prolog differ, follow Scryer.
   Scryer's own library code throws `error(E, _)`.
 
 It is not SWI-Prolog's `context(Culprit, Message)`. Explanatory text stays off
-the term. Every builder takes the context as text: `"atom_length/2"` gives
+the term. The one richer context is a syntax error's: text that does not
+read (a `.pl` or `.clausal` file, `read_term/2,3`'s stream,
+`term_to_atom/2`'s text, `number_chars/2`'s list) raises
+`error(syntax_error(Kind), context(PI, Details))`, where `Kind` is Scryer's
+atom for the same input (`incomplete_reduction`, `missing_quote`,
+`unexpected_char`, ...) and `Details` lists `line(L)`, `column(C)` and,
+when the reader knows them, `expected(What)` and `found(Token)` (operator
+ruling 2026-10-24; see the [compatibility
+report](iso_prolog_compatibility_report.md#error-terms) and Q3 of the
+[open questions](iso_questions_for_ulrich.md)). Every builder takes the
+context as text: `"atom_length/2"` gives
 `atom_length/2`, `"solve/1: the goal is unbound"` gives `solve/1` with the
 prose `the goal is unbound`, and text without a leading `Name/Arity` gives an
 unbound variable with the whole text as prose. The prose is the Python

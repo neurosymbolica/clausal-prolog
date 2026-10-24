@@ -100,3 +100,59 @@ against the standard text.)*
 3. May a dialect fix the flag at `chars` altogether, refusing even the
    directive for the other values, while staying a conforming processor in
    its ISO mode?
+
+## Q3. The argument of `syntax_error/1`, and what the context may carry
+
+**The situation.** When text does not read as a term, the error is
+`error(syntax_error(Why), Context)`. Programs that read user input catch
+it, and tools that load files report it. Clausal Prolog reads `.pl` and
+`.clausal` files, `read_term/2,3`'s stream, `term_to_atom/2`'s text and
+`number_chars/2`'s list with the same reader, so the question of what goes
+in `Why` and in `Context` comes up on every surface at once.
+
+**What the standard says.** 7.12.2 h makes the argument of `syntax_error/1`
+implementation dependent, and 7.12.2 leaves the context implementation
+defined. 8.14.1.3 e and 8.16.7.3 e only say that a syntax error is raised.
+So the standard settles neither the vocabulary nor the context's shape.
+*(These clause numbers have not yet been checked against the standard
+text.)* Systems differ: Scryer has a small fixed vocabulary
+(`incomplete_reduction`, `invalid_single_quoted_character`,
+`missing_quote`, `unexpected_char`, `unexpected_end_of_file`,
+`back_quoted_string`, `infinite_float`, `cannot_parse_big_int`,
+`utf8_conversion_error`, ...) and a context `read_term/3:Line`; SWI-Prolog
+uses descriptive atoms (`operator_clash`, `end_of_clause_expected`, ...) and
+`context(PI, Message)`; SICStus and GNU Prolog have their own.
+
+**What Clausal Prolog does today** (operator ruling 2026-10-24). The formal
+term follows Scryer: for the same input, the same atom, measured row by row
+against Scryer (`tests/iso/test_syntax_error_terms_scryer.py`). The context
+is `context(PI, Details)` with `Details` a list of `line(L)`, `column(C)`
+(1-based), and where the reader knows them `expected(What)` and
+`found(Token)`:
+
+| Text read | Clausal Prolog raises |
+|---|---|
+| `foo(a,` then the end of the text | `error(syntax_error(incomplete_reduction), context(read_term/3, [line(1), column(7), expected(end), found(end_of_file)]))` |
+| `a :- b :- c.` | `error(syntax_error(incomplete_reduction), context(read_term/3, [line(1), column(8), expected(priority(1199)), found(priority(1200))]))` |
+| `X = 'abc` then a newline | `error(syntax_error(invalid_single_quoted_character), context(read_term/3, [line(1), column(5), expected('\''), found('\n')]))` |
+| `X = 1.0e400.` | `error(syntax_error(infinite_float), context(read_term/3, [line(1), column(5), found(inf)]))` |
+| `number_chars(N, [a])` | `error(syntax_error(unexpected_end_of_file), context(number_chars/2, [line(1), column(2), found(end_of_file)]))` |
+
+A file that fails to load reports the same term (and a message with the
+line, a caret, the expected token and, where it is certain, a hint such as
+`a float needs a fraction: write 1.0e+9`).
+
+**The questions.**
+
+1. Is there a recommended or common vocabulary for `syntax_error/1`'s
+   argument beyond Scryer's? Clausal follows Scryer's atoms, for
+   portability of programs that match them, even where another atom
+   would be more descriptive (`incomplete_reduction` for an operator
+   priority clash or for `f()`).
+2. May the context of a syntax error carry a position and the expected
+   and found tokens, as above, while a conforming program is expected to
+   match only `error(syntax_error(_), _)`? Is `context(PI, Details)` a
+   reasonable shape, or is a bare predicate indicator preferable?
+3. For a syntax error raised while a file is being loaded, which predicate
+   indicator belongs in the context? Clausal and Scryer both say
+   `read_term/3`, the predicate the loader reads with.

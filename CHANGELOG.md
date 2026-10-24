@@ -61,6 +61,44 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Changed
 
+- **Syntax errors: Scryer's formal term, a located context** (2026-10-24,
+  operator ruling 2026-10-24: "follow Scryer, and be more useful than
+  Scryer, with each in a different slot"). ISO 7.12.2 h leaves the
+  argument of `syntax_error/1` implementation dependent, so for
+  portability Clausal now gives Scryer's atom for the same input, on every
+  surface the native ISO reader serves (loading a `.pl` or `.clausal`
+  file, `term_to_atom/2`, `atom_to_term/3`, and `read_term/2,3` when it
+  lands): `incomplete_reduction` for a grammar fault (a missing end token,
+  unbalanced brackets, an operator priority clash, `f()`, `1e+9`, `0x`, a
+  quote still open at the end of the text), `invalid_single_quoted_character`
+  (a raw newline, control character or bad escape in a quoted atom),
+  `missing_quote` (the same in a string), `unexpected_char` (a character
+  that starts no token; a bad `0'` character), `back_quoted_string`,
+  `infinite_float` (`1.0e400`, which used to read as `inf`),
+  `cannot_parse_big_int` and `utf8_conversion_error` (an escape no
+  character has). The context, which ISO leaves implementation defined,
+  is `context(PI, Details)` with `Details` a list of `line(L)`,
+  `column(C)` and, where the parser knows them, `expected(What)` and
+  `found(Token)` -- richer than Scryer's `read_term/3:Line`; portable
+  code matching `error(syntax_error(_), _)` is unaffected.
+  `number_chars/2` and `number_codes/2` keep their Scryer atoms and get
+  the same context (it was Scryer's own `number_chars/2` or
+  `number_chars/2:0`); `term_to_atom/2`'s `end_of_string` and
+  `end_of_clause_expected` are located the same way. A file that fails to
+  load raises `clausal.import_hook.PrologSyntaxError`, a `SyntaxError`
+  whose caret is on the fault (which may be lines below the item's first
+  line) and whose `.term` is the ISO term; its message keeps the expected
+  token and adds a hint where one is certain (`a float needs a fraction:
+  write 1.0e+9`; `'G' is not a hexadecimal digit`; the quote's code is
+  written with three quotes), and the `clausal` command prints the source
+  line with a caret under the fault. Pinned row by row against Scryer in
+  `tests/iso/test_syntax_error_terms_scryer.py` (96 malformed texts) and
+  `tests/iso_l3/test_l3_syntax_error_messages.py`; the two digit-group
+  rows Scryer refuses and the lexer accepts are recorded in
+  `todo/reader-digit-group-trailing-underscore-2026-10-24.md`. Q3 of
+  `docs/iso_questions_for_ulrich.md` asks whether a common vocabulary
+  exists beyond Scryer's.
+
 - **`X in Dom` with an unbound part anywhere in `Dom` raises
   `instantiation_error`** (2026-10-22). clpz's `in/2` and `ins/2` (the
   native front end's) raised, for `X in 1..(_-1)` and `X in foo\/_`,

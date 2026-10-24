@@ -113,7 +113,9 @@ is any, is `LogicException.message`. See [Exceptions](exceptions.md).
 | `X =.. Y` | `error(instantiation_error, (=..)/2)` |
 | `sort(a, L)`, `msort(a, L)` | `error(type_error(list, a), sort/2)`, `… msort/2)` |
 | `length(L, -1)` | `error(domain_error(not_less_than_zero, -1), length/2)` |
-| `number_chars(X, [a])`, `number_codes(X, [])` | `error(syntax_error(…), number_chars/2)`, `… number_codes/2)` |
+| `number_chars(X, [a])`, `number_codes(X, [])` | `error(syntax_error(unexpected_end_of_file), context(number_chars/2, [line(1), column(2), found(end_of_file)]))`, `… number_codes/2 …` |
+| `term_to_atom(T, 'foo(')`; a file with `foo(a,` at its end | `error(syntax_error(incomplete_reduction), context(term_to_atom/2, [line(1), column(5), expected(term), found(end_of_file)]))`; `… context(read_term/3, …)` |
+| a file or text with `X = 'abc` and then a newline | `error(syntax_error(invalid_single_quoted_character), context(read_term/3, [line(1), column(5), expected('\''), found('\n')]))` |
 | `between(1, a, X)` | `error(type_error(integer, a), between/3)` |
 | `X is foo + 1` | `error(type_error(evaluable, foo/0), (is)/2)` |
 | `X is Y + 1` | `error(instantiation_error, (is)/2)` |
@@ -124,6 +126,20 @@ is any, is `LogicException.message`. See [Exceptions](exceptions.md).
 
 The earlier edition listed thirteen of these goals as failing silently.
 Every one of them now raises the ISO error.
+
+A syntax error's formal term is Scryer's atom for the same input, on every
+surface the native reader serves (ISO 7.12.2 h leaves it implementation
+dependent; Scryer's vocabulary is followed for portability): measured row
+by row against Scryer on 96 malformed texts
+(`tests/iso/test_syntax_error_terms_scryer.py`). Its context, which ISO
+leaves implementation defined, is `context(PI, Details)` with the fault's
+`line(L)` and `column(C)` and, where the parser knows them,
+`expected(What)` and `found(Token)` (operator ruling 2026-10-24; Q3 of the
+[open questions](iso_questions_for_ulrich.md)). Portable code matching
+`error(syntax_error(_), _)` sees no difference. A file that fails to load
+raises a `SyntaxError` carrying the same term (`PrologSyntaxError.term`),
+with its caret on the fault and a hint in the message where one is
+certain (`a float needs a fraction: write 1.0e+9`).
 
 ### Arithmetic
 
@@ -310,6 +326,9 @@ These are from the [syntax](#syntax) measurement:
 - `[]` and `'[]'` are the same atom, as ISO says (ruling D70, 2026-10-17):
   `X = '[]', X == []` succeeds and `writeq('[]')` prints `[]`, which reads
   back as itself.
+- A digit group separator with nothing after it (`1_000_`, `1__000`)
+  reads as `1000`; Scryer refuses it (`syntax_error(cannot_parse_big_int)`).
+  See `todo/reader-digit-group-trailing-underscore-2026-10-24.md`.
 
 ---
 
