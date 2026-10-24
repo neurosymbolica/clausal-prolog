@@ -273,9 +273,13 @@ surface described in [docs/public-api.md](docs/public-api.md).
       coinductive reading under which two rational trees unify when a
       bisimulation relates them, so `X = f(X), X = f(f(X))` and `X = f(X),
       Y = f(Y), X = Y` succeed and `X = f(X, a), Y = f(Y, b), X = Y` fails
-      on the second argument.  Every unification site is covered -- clause
-      heads, `member/2`, `==/2`'s trial unify (the dif extension's walk
-      hands a deep pair to the same unify) -- and the Python `_cycle_unify`
+      on the second argument.  Past the threshold the recursion unwinds to
+      its root and the walk runs on the whole pair (deciding in place
+      explored 2^1000 paths on a branching cycle such as `X = f(X, Y),
+      Y = f(Y, X)`; a shared sub-term is met once).  Every unification site
+      is covered -- clause heads, `member/2`, `==/2`'s trial unify (the dif
+      extension's walk unwinds the same way), `unify_with_occurs_check/2`
+      against an already-cyclic term -- and the Python `_cycle_unify`
       fallback that only `'='/2`, `'\='/2` and `is/2` had since 2026-10-15
       is retired (todo/done/l3-cyclic-unify-fix-covers-only-eq-neq-is-2026-10-15.md).
       Two partial lists built through their tails are rational trees too:
@@ -308,19 +312,25 @@ surface described in [docs/public-api.md](docs/public-api.md).
       name; the stored clause is as written, so `clause/2` reads it back),
       so `assertz(big(T))` with a 100k-nested `T` or a 5000-cell improper
       list, and the call that reads it back, work.
-    - Whatever still overflows -- `assertz` of a CYCLIC term (Scryer
-      panics), a cyclic term through `length/2` -- raises the ISO
-      `error(resource_error(stack), _)` (7.12.2 h), the term the `.pl`
-      if-then-else lowering already raised for a condition's overflow:
-      `python_error_term` maps every `RecursionError` to it, with the
-      walker's message as the prose.  A `catch(G, error(E, _), R)` sees it;
-      the transliterated `'RecursionError'(Message)` is gone
+    - Whatever still overflows by DEPTH -- a 100k-nested asserted term that
+      holds a variable (only a ground deep argument compiles as a constant),
+      `write/1` of a 100k-nested term, a deep term handed to `solve()` from
+      Python -- raises the ISO `error(resource_error(stack), _)` (7.12.2 h),
+      the term the `.pl` if-then-else lowering already raised for a
+      condition's overflow: `python_error_term` maps every `RecursionError`
+      to it, with the walker's message as the prose.  Where the engine KNOWS
+      it saw a cycle and the operation is undefined -- `assertz` of a cyclic
+      term, where Scryer panics -- it raises `resource_error(finite_memory)`,
+      Scryer's idiom (ruling 2026-10-24, provisional, by the follow-Scryer
+      principle).  A `catch(G, error(E, _), R)` sees either; the
+      transliterated `'RecursionError'(Message)` is gone
       (`tests/iso_l3/test_l3_ite.py` pins the new term for once/1 and a
       cutting recovery too).
   Pinned, each row under Clausal and Scryer, in
   `tests/iso/test_cyclic_terms_scryer.py`; the engine's unify in
   `tests/iso/test_rational_tree_unify.py` (replacing the fallback's own test
-  file), the compile-time twin in `tests/test_deep_literals.py`.
+  file), the compile-time twin in `tests/test_deep_literals.py`, the one
+  order of the two compare paths in `tests/test_term_compare_order.py`.
   Closes todo/done/deep-and-cyclic-terms-overflow-the-recursive-walkers-2026-10-22.md.
 
 - **`1 = 1.0` fails: a number unifies only with a number of its own kind**

@@ -918,12 +918,17 @@ _standard_order_key = term_key
 # the sorts call it only when ``term_key`` raises RecursionError, so an
 # ordinary term's order and speed are untouched.
 #
-# For an acyclic term it decides as the keys do -- band, arity, name, then
-# the arguments left to right, the first difference deciding -- with one
-# corner where the two deliberately differ: a proper list meets an improper
-# one (``[a, b]`` against ``[a|foo]``) as the cons cells both denote, where
-# the flat list key compares the element ``b`` against the tail ``foo``.
-# Only a term too deep to key reaches that corner here.
+# For an acyclic term it decides exactly as the keys do -- band, arity,
+# name, then the arguments left to right, the first difference deciding --
+# including the one corner where that takes care: a proper list keys as
+# the flat tuple of its element keys, a cons chain ``[a, b|foo]`` as the
+# nested pair ``(key(a), key('.'(b, foo)))``, so a proper list against a
+# cons cell is a sequence of n elements against the sequence (head, tail)
+# -- the element at position 2 against the REST of the chain as a
+# compound -- and the shorter sequence, when equal so far, is first.  One
+# order for both paths, so the sorts (keys) and compare/3's fallback agree
+# and the order stays transitive across mixed triples
+# (tests/test_term_compare_order.py).
 
 _LEN = object()    # a stack marker: decide two lists' lengths after their common prefix
 
@@ -968,14 +973,6 @@ def _compound_view(t):
     return t
 
 
-def _cons_children(t):
-    """The head and tail of *t* read as the cons cell ``'.'(H, T)``: a
-    non-empty list or the cell itself."""
-    if isinstance(t, list):
-        return t[0], t[1:]
-    return t[1], t[2]
-
-
 def term_compare(a, b) -> int:
     """The standard order of *a* against *b*, decided pairwise: -1, 0 or 1.
     See the block comment above."""
@@ -1011,17 +1008,15 @@ def term_compare(a, b) -> int:
             continue
         seen.add(key)
         keep.append((ox, oy, x, y))
-        if isinstance(x, list) and isinstance(y, list):
-            n = min(len(x), len(y))
-            stack.append((_LEN, len(x), len(y)))
+        if isinstance(x, list) or isinstance(y, list):
+            # Two lists element by element; a list against a cons cell as
+            # its n elements against (head, tail); then the lengths.
+            seq_x = x if isinstance(x, list) else [x[1], x[2]]
+            seq_y = y if isinstance(y, list) else [y[1], y[2]]
+            n = min(len(seq_x), len(seq_y))
+            stack.append((_LEN, len(seq_x), len(seq_y)))
             for i in range(n - 1, -1, -1):
-                stack.append((x[i], y[i]))
-        elif sx[2] == _ORD_CONS_NAME_KEY and sx[3] == _CF_POSITIONAL and (
-                isinstance(x, list) or isinstance(y, list)):
-            hx, tx = _cons_children(x)
-            hy, ty = _cons_children(y)
-            stack.append((tx, ty))
-            stack.append((hx, hy))
+                stack.append((seq_x[i], seq_y[i]))
         elif is_term_instance(x):
             names = term_field_names(x)
             for name in reversed(names):

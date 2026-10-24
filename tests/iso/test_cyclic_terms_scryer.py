@@ -46,6 +46,7 @@ DEEP_N = 100_000
 _PRELUDE = """\
 :- use_module(library(lists)).
 :- use_module(library(between)).
+:- use_module(library(dif)).
 :- dynamic(bign2/1).
 :- dynamic(bign3/1).
 
@@ -59,7 +60,11 @@ mk(0, L, L).
 mk(N, L, [N|T]) :- N > 0, N1 is N-1, mk(N1, L, T).
 nest(0, T, T).
 nest(N, T, f(R)) :- N > 0, N1 is N-1, nest(N1, T, R).
+dag(0, T, T).
+dag(N, T, f(R, R)) :- N > 0, N1 is N-1, dag(N1, T, R).
 """
+
+IMPROPER_N = 5_000     # see the deep rows
 
 UNIFY_ROWS = [
     ("u1", "yn((X = f(X)), R)", "yes"),
@@ -77,6 +82,20 @@ UNIFY_ROWS = [
     ("u13", "yn((X = f(X), Y = f(a), X = Y), R)", "no"),
     ("u14", "yn((X = f(X), Y = f(Y), unify_with_occurs_check(X, Y)), R)", "yes"),
     ("u15", "yn((X = f(X), Y = f(Y), X \\= Y), R)", "no"),
+    # Branching cycles: a walk that decided IN PLACE past its depth
+    # threshold explored 2^1000 paths here (review of the first cut).
+    ("u16", "yn((X = f(X, Y), Y = f(Y, X), X = Y), R)", "yes"),
+    ("u17", "yn((X = f(X, X), Y = f(Y, Y), X = Y), R)", "yes"),
+    ("u18", "yn((X = f(X, Y), Y = f(Y, X), \\+ X \\= Y), R)", "yes"),
+    ("u19", "yn((X = f(X, Y), Y = f(Y, X), member(X, [Y])), R)", "yes"),
+    ("u20", "yn((X = f(X, Y), Y = f(Y, X), dif(X, Y)), R)", "no"),
+    # A shared DAG past the threshold: f(T, T) 1100 levels deep, once per
+    # level (the memo sees the shared sub-term once).
+    ("u21", "yn((dag(1100, a, T1), dag(1100, a, T2), T1 = T2), R)", "yes"),
+    ("u22", "yn((dag(1100, a, T1), dag(1100, b, T2), T1 = T2), R)", "no"),
+    # The occurs check against an already-cyclic term (Scryer: yes).
+    ("u23", "yn((X = f(X), unify_with_occurs_check(Y, X)), R)", "yes"),
+    ("u24", "yn((X = f(X, Y), Y = f(Y, X), unify_with_occurs_check(Z, g(X, Z))), R)", "no"),
 ]
 
 IDENTITY_ROWS = [
@@ -89,6 +108,9 @@ IDENTITY_ROWS = [
     ("e7", "yn((X = f(X), Y = f(Y), X \\== Y), R)", "no"),
     ("e8", "yn((X = f(X), copy_term(X, Y), X == Y), R)", "yes"),
     ("e9", "yn((X = [1,2|X], Y = [1|Z], Z = [2|Y], X == Y), R)", "yes"),
+    ("e10", "yn((X = f(X, Y), Y = f(Y, X), X == Y), R)", "yes"),
+    ("e11", "yn((X = f(X, X), Y = f(Y, Y), X \\== Y), R)", "no"),
+    ("e12", "yn((dag(1100, a, T1), dag(1100, a, T2), T1 == T2), R)", "yes"),
 ]
 
 COMPARE_ROWS = [
@@ -116,6 +138,13 @@ WALK_ROWS = [
     ("g7", "X = f(X), X =.. [R|_]", "f"),
     ("g8", "X = f(X), functor(X, N, A), R = N/A", "f/1"),
     ("g9", "yn((X = f(X), Y = g(X), copy_term(Y, Z), Z = g(W), W = f(W2), W == W2), R)", "yes"),
+    # An attributed variable copied before the walk fell back kept no
+    # attribute on its copy (review of the first cut); both orders, and a
+    # deep acyclic term past the recursive walker's cap.
+    ("g10", "yn((dif(V, a), X = f(X, V), copy_term(g(V, X), g(V2, _)), \\+ V2 = a), R)", "yes"),
+    ("g11", "yn((dif(V, a), X = f(X, V), copy_term(g(X, V), g(_, V2)), \\+ V2 = a), R)", "yes"),
+    ("g12", "yn((dif(V, a), X = f(X, V), copy_term(g(V, X), g(V2, _)), V2 = b), R)", "yes"),
+    ("g13", f"yn((dif(V, a), nest({DEEP_N}, V, T), copy_term(g(V, T), g(V2, _)), \\+ V2 = a), R)", "yes"),
 ]
 
 WRITE_ROWS = [
@@ -139,7 +168,6 @@ WRITE_ROWS = [
 # whose pairwise walks are quadratic in this engine today (32k elements take
 # 20 s), so the improper-list row -- the one shape that needs ``mk`` -- is
 # shorter.  Both nest far past the walkers' recursion threshold (1000).
-IMPROPER_N = 5_000
 
 DEEP_ROWS = [
     ("d1", f"yn((findall(I, between(1, {DEEP_N}, I), L), findall(I, between(1, {DEEP_N}, I), L2), L = L2), R)", "yes"),
@@ -168,9 +196,12 @@ DEEP_ENGINE_ONLY_ROWS = [
 
 ERROR_ROWS = [
     # The one cyclic operation that stays undefined: a cyclic term has no
-    # clause.  ISO-shaped (resource_error), never a raw RecursionError.
+    # clause.  The engine saw the cycle, so it is Scryer's
+    # resource_error(finite_memory) (ruling 2026-10-24, provisional); a
+    # mere depth overflow is resource_error(stack).  Never a raw
+    # RecursionError.
     ("x1", "X = f(X), catch(assertz(cyc(X)), error(R, _), true)",
-     "resource_error(stack)"),
+     "resource_error(finite_memory)"),
 ]
 
 YN_ROWS = UNIFY_ROWS + IDENTITY_ROWS + COMPARE_ROWS + WALK_ROWS

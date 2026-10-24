@@ -112,10 +112,16 @@ def rewrite_term(term: Any) -> Any:
                 continue
             if id(c) in active:
                 # A CYCLIC term (``X = f(X)``, no occurs check) has no
-                # clause: the same overflow the recursive walks raised,
-                # which reaches the program as error(resource_error(stack), _)
-                # (python_error_term); Scryer panics here.
-                raise RecursionError("assert: a cyclic term has no clause")
+                # clause.  The engine KNOWS it saw a cycle, so this is
+                # resource_error(finite_memory), Scryer's idiom (ruling
+                # 2026-10-24, provisional), not the stack error a mere
+                # depth overflow raises; Scryer itself panics here.
+                from clausal.logic.exceptions import (  # noqa: PLC0415
+                    LogicException, resource_error)
+                raise LogicException(resource_error(
+                    "finite_memory",
+                    "a cyclic term (one built with no occurs check, "
+                    "X = f(X)) has no clause"))
             active.add(id(c))
             frames.append(_Frame(c, kids, type(c) is list))
         else:

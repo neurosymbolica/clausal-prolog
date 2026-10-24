@@ -86,36 +86,36 @@ def _rebuild(root: Any, opener, leaf_var) -> Any:
     active = {id(d): top}
     result = None
     while frames:
-        f = frames[-1]
-        if f.i < len(f.children):
-            c = deref(f.children[f.i])
-            f.i += 1
-            if is_var(c):
-                f.built.append(leaf_var(c))
+        frame = frames[-1]
+        if frame.i < len(frame.children):
+            child = deref(frame.children[frame.i])
+            frame.i += 1
+            if is_var(child):
+                frame.built.append(leaf_var(child))
                 continue
-            if c is None or isinstance(c, _ATOMIC):
-                f.built.append(c)
+            if child is None or isinstance(child, _ATOMIC):
+                frame.built.append(child)
                 continue
-            g = active.get(id(c))
-            if g is not None:
+            open_frame = active.get(id(child))
+            if open_frame is not None:
                 # A cycle: back into a compound whose copy is in progress.
-                if g.knot is None:
-                    g.knot = Var()
-                f.built.append(g.knot)
+                if open_frame.knot is None:
+                    open_frame.knot = Var()
+                frame.built.append(open_frame.knot)
                 continue
-            opened = opener(c)
+            opened = opener(child)
             if opened[0] is _LEAF:
-                f.built.append(opened[1])
+                frame.built.append(opened[1])
                 continue
-            nf = _Frame(c, opened[1], opened[2])
-            active[id(c)] = nf
-            frames.append(nf)
+            child_frame = _Frame(child, opened[1], opened[2])
+            active[id(child)] = child_frame
+            frames.append(child_frame)
         else:
             frames.pop()
-            del active[id(f.orig)]
-            value = f.finish(f.built)
-            if f.knot is not None:
-                _tie(f.knot, value)
+            del active[id(frame.orig)]
+            value = frame.finish(frame.built)
+            if frame.knot is not None:
+                _tie(frame.knot, value)
             if frames:
                 frames[-1].built.append(value)
             else:
@@ -176,16 +176,25 @@ def deref_walk_iterative(term: Any) -> Any:
 def copy_term_iterative(term: Any, var_map: dict, attvars: list | None = None) -> Any:
     """``_copy_term_py`` / ``c_copy_term`` for a term too deep or cyclic for
     them: every unbound variable fresh (shared through *var_map*, keyed by
-    the original's id; one with attributes reported to *attvars*), a cycle
-    copied as a cycle."""
+    the original's id), a cycle copied as a cycle.
+
+    Every attributed variable met is reported to *attvars* once per call,
+    whether or not *var_map* already held its copy: this walk runs after a
+    recursive attempt that may have mapped (and reported) some variables
+    and then been undone, and the caller drops that attempt's reports.  A
+    variable the caller mapped in an EARLIER call may be reported again;
+    ``_copy_attributes`` tolerates a repeat (its ``seen`` set)."""
+    reported: set = set()
 
     def fresh(v):
         vid = id(v)
         got = var_map.get(vid)
         if got is None:
             got = var_map[vid] = Var()
-            if attvars is not None and getattr(v, "attrs", None):
-                attvars.append((v, got))
+        if (attvars is not None and vid not in reported
+                and getattr(v, "attrs", None)):
+            reported.add(vid)
+            attvars.append((v, got))
         return got
 
     def opener(d):

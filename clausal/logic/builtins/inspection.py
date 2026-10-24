@@ -224,12 +224,15 @@ except ImportError:
     # The twins without C take the same iterative fallback the C wrappers
     # take past their depth cap (``clausal.logic.rational_walk``).
     def _copy_term_impl(term: Any, var_map: dict, attvars: list | None = None) -> Any:
+        before = len(attvars) if attvars is not None else 0
         try:
             return _copy_term_py(term, var_map, attvars)
         except RecursionError:
+            # The aborted attempt's reports go; the iterative walk reports
+            # every attributed variable again (var_map keeps the copies).
             from clausal.logic.rational_walk import copy_term_iterative  # noqa: PLC0415
             if attvars is not None:
-                del attvars[:]
+                del attvars[before:]
             return copy_term_iterative(term, var_map, attvars)
 
     def _collect_vars_impl(term: Any, result: list) -> None:

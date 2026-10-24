@@ -14,6 +14,7 @@ statement.
 
 from __future__ import annotations
 
+import contextvars as _contextvars
 import re as _re
 import reprlib as _reprlib
 import dataclasses as _dataclasses
@@ -622,8 +623,7 @@ _NO_TAIL = object()    # SegList._walk_raw: no improper tail seen yet
 #: (``SegList.__unify__``): ``(id(a), id(b))`` for each pair, held while the
 #: pair is on the call stack, so a cyclic partial list meets itself and
 #: stops.  None outside any SegList unification.
-import contextvars as _cv_seg
-_SEG_UNIFY_ACTIVE: _cv_seg.ContextVar = _cv_seg.ContextVar(
+_SEG_UNIFY_ACTIVE: _contextvars.ContextVar = _contextvars.ContextVar(
     "_SEG_UNIFY_ACTIVE", default=None)
 
 
@@ -4247,7 +4247,6 @@ def _seg_canonical(seg) -> str:
 # objects) are handed to ``term_str`` in its ISO spelling.
 
 import collections as _collections
-import contextvars as _contextvars
 import functools as _functools
 import unicodedata as _unicodedata
 

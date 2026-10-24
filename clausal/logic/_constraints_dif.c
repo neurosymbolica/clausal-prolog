@@ -22,9 +22,16 @@
 #include "variables/_variables_capi.h"
 
 #define MAX_DEPTH 50000
-/* The depth past which c_structural_unify_oc hands a pair to the engine's
- * unify (twin: constraints._STRUCTURAL_DEEP). */
+/* The depth past which c_structural_unify_oc stops descending and answers
+ * STRUCTURAL_DEEP_CODE, which unwinds to the depth-0 entry
+ * (structural_unify_oc_root); that entry then hands the ROOT pair to the
+ * engine's unify, whose rational-tree walk terminates on a cycle
+ * (``unify_rational`` in _variables.c).  In place it would be exponential
+ * on a branching cycle; see UNIFY_RATIONAL there.  Twin:
+ * constraints._STRUCTURAL_DEEP.  (2 is unify_partial_lists_oc's own
+ * "not two lists" answer.) */
 #define STRUCTURAL_DEEP 1000
+#define STRUCTURAL_DEEP_CODE 3
 
 /* ── Cached references (set during module init) ─────────────────────── */
 
@@ -306,7 +313,7 @@ unify_partial_lists_oc(PyObject *d1, PyObject *d2, TrailObject *trail,
         int r = c_structural_unify_oc(PySequence_Fast_GET_ITEM(e1, i),
                                       PySequence_Fast_GET_ITEM(e2, i),
                                       trail, depth + 1);
-        if (r <= 0) { result = r; goto done; }
+        if (r != 1) { result = r; goto done; }
     }
     if (n1 != n2) {
         /* The shorter side's tail takes [rest of the longer|its tail]. */
@@ -360,19 +367,8 @@ c_structural_unify_oc(PyObject *t1, PyObject *t2, TrailObject *trail, int depth)
     PyObject *d1 = VarAPI->deref(t1);  /* borrowed */
     PyObject *d2 = VarAPI->deref(t2);  /* borrowed */
 
-    if (depth > STRUCTURAL_DEEP) {
-        /* A cyclic term (``X = f(X)``: ``==``/2 and dif/2 read it through
-         * this walk) or a list nested deeper than any program's data: the
-         * engine's own unify from here, whose rational-tree walk
-         * terminates on a cycle (``unify_rational`` in _variables.c,
-         * 2026-10-24).  The partial-list reading above this depth is a
-         * convenience for the trial unify, not a semantic difference. */
-        PyObject *r = VarAPI->unify_oc(d1, d2, trail);
-        if (!r) return -1;
-        int truthy = PyObject_IsTrue(r);
-        Py_DECREF(r);
-        return truthy;
-    }
+    if (depth > STRUCTURAL_DEEP)
+        return STRUCTURAL_DEEP_CODE;
 
     /* Both term instances? */
     int ti1 = call_is_term_instance(d1);
@@ -395,7 +391,7 @@ c_structural_unify_oc(PyObject *t1, PyObject *t2, TrailObject *trail, int depth)
             int r = c_structural_unify_oc(v1, v2, trail, depth + 1);
             Py_DECREF(v1);
             Py_DECREF(v2);
-            if (r <= 0) { Py_DECREF(fields); return r; }
+            if (r != 1) { Py_DECREF(fields); return r; }
         }
         Py_DECREF(fields);
         return 1;
@@ -410,7 +406,7 @@ c_structural_unify_oc(PyObject *t1, PyObject *t2, TrailObject *trail, int depth)
             int r = c_structural_unify_oc(
                 PyList_GET_ITEM(d1, i), PyList_GET_ITEM(d2, i),
                 trail, depth + 1);
-            if (r <= 0) return r;
+            if (r != 1) return r;
         }
         return 1;
     }
@@ -438,6 +434,20 @@ c_structural_unify_oc(PyObject *t1, PyObject *t2, TrailObject *trail, int depth)
     }
 }
 
+/* The depth-0 entry: the recursion, and past STRUCTURAL_DEEP the engine's
+ * unify on the ROOT pair.  Returns 1 / 0 / -1. */
+static int
+structural_unify_oc_root(PyObject *t1, PyObject *t2, TrailObject *trail)
+{
+    int r = c_structural_unify_oc(t1, t2, trail, 0);
+    if (r != STRUCTURAL_DEEP_CODE) return r;
+    PyObject *res = VarAPI->unify_oc(t1, t2, trail);
+    if (!res) return -1;
+    int truthy = PyObject_IsTrue(res);
+    Py_DECREF(res);
+    return truthy;
+}
+
 /*
  * py_structural_unify_oc(t1, t2, trail) → bool
  */
@@ -451,7 +461,7 @@ py_structural_unify_oc(PyObject *Py_UNUSED(module), PyObject *args)
         PyErr_SetString(PyExc_TypeError, "_structural_unify_oc: third arg must be a Trail");
         return NULL;
     }
-    int r = c_structural_unify_oc(t1, t2, Trail_CAST(trail), 0);
+    int r = structural_unify_oc_root(t1, t2, Trail_CAST(trail));
     if (r < 0) return NULL;
     return PyBool_FromLong(r);
 }
@@ -574,7 +584,7 @@ py_dif(PyObject *Py_UNUSED(module), PyObject *args)
 
     Py_ssize_t mark = VarAPI->trail_mark(trail);
 
-    int unified = c_structural_unify_oc(dx, dy, trail, 0);
+    int unified = structural_unify_oc_root(dx, dy, trail);
     if (unified < 0) return NULL;
 
     if (!unified) {
@@ -643,7 +653,7 @@ py_dif_hook(PyObject *Py_UNUSED(module), PyObject *args)
 
         Py_ssize_t mark = VarAPI->trail_mark(trail);
 
-        int unified = c_structural_unify_oc(dx, dy, trail, 0);
+        int unified = structural_unify_oc_root(dx, dy, trail);
         if (unified < 0) return NULL;
 
         if (!unified) {
@@ -696,7 +706,7 @@ py_reify_eq(PyObject *Py_UNUSED(module), PyObject *args)
 
     Py_ssize_t mark = VarAPI->trail_mark(trail);
 
-    int unified = c_structural_unify_oc(dx, dy, trail, 0);
+    int unified = structural_unify_oc_root(dx, dy, trail);
     if (unified < 0) return NULL;
 
     int grew = 0;

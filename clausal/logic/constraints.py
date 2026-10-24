@@ -178,25 +178,38 @@ def _collect_free_vars(term: Any) -> list:
 # ── Structural unify with occurs check ───────────────────────────────────────
 
 
-#: The depth past which ``_structural_unify_oc`` hands a pair to the
-#: engine's unify (twin of ``STRUCTURAL_DEEP`` in ``_constraints_dif.c``):
-#: a cyclic term, or a list nested deeper than any program's data.  The
-#: engine's rational-tree walk terminates on a cycle (``unify_rational`` in
-#: ``variables/_variables.c``, 2026-10-24).
+#: The depth past which ``_structural_unify_oc`` stops descending (twin of
+#: ``STRUCTURAL_DEEP`` in ``_constraints_dif.c``): a cyclic term, or a list
+#: nested deeper than any program's data.  The walk unwinds to its entry,
+#: which hands the ROOT pair to the engine's unify, whose rational-tree
+#: walk terminates on a cycle (``unify_rational`` in
+#: ``variables/_variables.c``, 2026-10-24); deciding in place where the
+#: depth was exceeded would be exponential on a branching cycle.
 _STRUCTURAL_DEEP = 1000
 
 
-def _structural_unify_oc(t1: Any, t2: Any, trail: Trail, _depth: int = 0) -> bool:
+class _StructuralDeep(Exception):
+    """The walk reached ``_STRUCTURAL_DEEP``: the root pair goes to unify."""
+
+
+def _structural_unify_oc(t1: Any, t2: Any, trail: Trail) -> bool:
     """Unify t1 and t2 structurally with occurs check.
 
     Handles term (dataclass) instances that the C extension's
     ``unify_with_occurs_check`` does not (it falls through to ``==``).
     """
+    try:
+        return _structural_unify_oc_walk(t1, t2, trail, 0)
+    except _StructuralDeep:
+        return unify_with_occurs_check(t1, t2, trail)
+
+
+def _structural_unify_oc_walk(t1: Any, t2: Any, trail: Trail, _depth: int) -> bool:
     t1 = deref(t1)
     t2 = deref(t2)
 
     if _depth > _STRUCTURAL_DEEP:
-        return unify_with_occurs_check(t1, t2, trail)
+        raise _StructuralDeep()
 
     # Let the C extension handle Var, tuple, list, scalars.
     # But if both are term instances, recurse.
@@ -208,8 +221,8 @@ def _structural_unify_oc(t1: Any, t2: Any, trail: Trail, _depth: int = 0) -> boo
             return False
         fields = term_field_names(t1)
         for fname in fields:
-            if not _structural_unify_oc(getattr(t1, fname), getattr(t2, fname),
-                                        trail, _depth + 1):
+            if not _structural_unify_oc_walk(getattr(t1, fname), getattr(t2, fname),
+                                             trail, _depth + 1):
                 return False
         return True
 
@@ -217,7 +230,7 @@ def _structural_unify_oc(t1: Any, t2: Any, trail: Trail, _depth: int = 0) -> boo
         if len(t1) != len(t2):
             return False
         for e1, e2 in zip(t1, t2):
-            if not _structural_unify_oc(e1, e2, trail, _depth + 1):
+            if not _structural_unify_oc_walk(e1, e2, trail, _depth + 1):
                 return False
         return True
 
@@ -229,13 +242,13 @@ def _structural_unify_oc(t1: Any, t2: Any, trail: Trail, _depth: int = 0) -> boo
         if p1 is not None:
             p2 = _partial_list_parts(t2)
             if p2 is not None:
-                return _unify_partial_lists_oc(p1, p2, trail)
+                return _unify_partial_lists_oc(p1, p2, trail, _depth)
 
     # Fall through to C extension for Var/scalar/tuple.
     return unify_with_occurs_check(t1, t2, trail)
 
 
-def _unify_partial_lists_oc(p1, p2, trail: Trail) -> bool:
+def _unify_partial_lists_oc(p1, p2, trail: Trail, _depth: int = 0) -> bool:
     """Unify two lists read by ``_partial_list_parts`` (``(elements, tail)``,
     tail an unbound Var or None for ``[]``), as ISO unifies ``[E1..En|T]``:
     pair the elements, then the shorter side's tail takes the rest of the
@@ -244,20 +257,20 @@ def _unify_partial_lists_oc(p1, p2, trail: Trail) -> bool:
     (e1, t1), (e2, t2) = p1, p2
     n = min(len(e1), len(e2))
     for i in range(n):
-        if not _structural_unify_oc(e1[i], e2[i], trail):
+        if not _structural_unify_oc_walk(e1[i], e2[i], trail, _depth + 1):
             return False
     if len(e1) > n:
         if t2 is None:
             return False
-        return _structural_unify_oc(t2, _partial_list_build(e1[n:], t1), trail)
+        return _structural_unify_oc_walk(t2, _partial_list_build(e1[n:], t1), trail, _depth + 1)
     if len(e2) > n:
         if t1 is None:
             return False
-        return _structural_unify_oc(t1, _partial_list_build(e2[n:], t2), trail)
+        return _structural_unify_oc_walk(t1, _partial_list_build(e2[n:], t2), trail, _depth + 1)
     if t1 is None and t2 is None:
         return True
-    return _structural_unify_oc([] if t1 is None else t1,
-                                [] if t2 is None else t2, trail)
+    return _structural_unify_oc_walk([] if t1 is None else t1,
+                                     [] if t2 is None else t2, trail, _depth + 1)
 
 
 # ── Core dif ─────────────────────────────────────────────────────────────────
