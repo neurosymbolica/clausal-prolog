@@ -136,10 +136,12 @@ class TestSingleArityConstruction:
         """A 0-arity builtin builds its 0-arity cell, the ATOM (W4b-3 slice
         3; the class era handed back the class itself, which is no term)."""
         # nv
-        nl = get_builtin_class("nl")
-        assert not isinstance(nl, type)
-        assert nl.arities == (0,)
-        assert nl() == "nl"
+        # (nl/1 arrived with the ISO streams, 2026-10-24, so nl is no
+        # longer 0-arity only; abolish_all_tables is.)
+        abolish = get_builtin_class("abolish_all_tables")
+        assert not isinstance(abolish, type)
+        assert abolish.arities == (0,)
+        assert abolish() == "abolish_all_tables"
 
     def test_no_args_is_the_atom(self):
         """No arguments is the WRITTEN arity 0: the atom, never an all-Var

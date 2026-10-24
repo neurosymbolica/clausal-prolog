@@ -754,6 +754,11 @@ def adapter_syntax_error_term(kind, pred, reason=None):
     return _error(("syntax_error", _mint(kind)), context)
 
 
+
+# The name the optional packages import (clausal-acl2 and others), kept
+# after the 2026-10-24 rename so an installed package keeps loading.
+syntax_error_term = adapter_syntax_error_term
+
 def raise_syntax_error(kind, pred, reason=None, *, cause=None):
     """Raise :func:`adapter_syntax_error_term` (RULED 2026-10-02)."""
     from clausal.logic.exceptions import LogicException  # noqa: PLC0415
