@@ -49,8 +49,6 @@ KNOWN = {
     # the Scryer build: a list inside sort/2's list is a type_error, and
     # [a] @> [a, c] (both are Scryer defects)
     "t58": "o", "t71": "o", "s09": "o", "s12": "o", "s13": "o", "s28": "o",
-    # -0.0 and 0.0 are equal in standard order; sort/2 keeps a different one
-    "s16": "c",
     # atan/2 is a Clausal evaluable (Scryer has atan2/2 only)
     "e77": "c",
     # log(0): Scryer says float_overflow, ISO undefined (Clausal)

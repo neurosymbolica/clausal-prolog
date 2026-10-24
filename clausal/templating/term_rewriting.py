@@ -4188,12 +4188,17 @@ class TermTransformer(NodeTransformer):
             return transformer.visit(folded)
 
         # Fold negative numeric literals: -3 → Constant(-3), not Negate(3).
+        # ``-0.0`` folds to 0.0 (operator ruling 2026-10-24: negative zero
+        # is 0.0 at read time, as the ISO reader and Scryer have it).
         if (
             isinstance(unary_op.op, USub)
             and isinstance(unary_op.operand, Constant)
             and isinstance(unary_op.operand.value, (int, float))
         ):
-            return replace(Constant(value=-unary_op.operand.value), unary_op)
+            value = -unary_op.operand.value
+            if type(value) is float:
+                value = value or 0.0
+            return replace(Constant(value=value), unary_op)
         class_name = UNARYOP_CLS[type(unary_op.op)]
         return node_ast(
             class_name,

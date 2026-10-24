@@ -31,6 +31,7 @@ from clausal.logic.variables import (
     Trail,
     deref,
     is_var,
+    present_number,
     unify,
     put_attr,
     get_attr,
@@ -802,7 +803,7 @@ def _post_real_domain(target, lo: float, hi: float, trail: Trail) -> bool:
         put_attr(target, REAL_KEY, new_state, trail)
     # Bind if already a point
     if final_lo == final_hi:
-        if not unify(target, final_lo, trail):
+        if not unify(target, present_number(final_lo), trail):
             return False
     return True
 
@@ -881,9 +882,9 @@ def real_eq(l, r, trail: Trail) -> bool:
     # NaN is excluded — == with NaN has no solution, which the
     # constraint path establishes via interval wipeout.
     if is_var(l) and _is_ground_real_scalar(r):
-        return unify(l, float(r), trail)
+        return unify(l, present_number(float(r)), trail)   # -0.0 is 0.0
     if is_var(r) and _is_ground_real_scalar(l):
-        return unify(r, float(l), trail)
+        return unify(r, present_number(float(l)), trail)
     _ensure_real_for_expr(l, trail)
     _ensure_real_for_expr(r, trail)
     return _post_real_constraint(RealEqConstraint(l, r), trail)
@@ -1019,6 +1020,7 @@ def real_bound(expr, result, trail: Trail, which: str) -> bool:
     bound = lo if which == "inf" else hi
     if math.isinf(bound) or math.isnan(bound):
         return False
+    bound = present_number(bound)   # -0.0 is 0.0 (operator ruling 2026-10-24)
     return unify(result, reattach(bound, dims) if dims else bound, trail)
 
 

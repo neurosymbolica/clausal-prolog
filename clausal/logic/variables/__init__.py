@@ -79,10 +79,22 @@ def present_number(x):
     check is one pointer compare. A ``Fraction`` SUBCLASS is therefore
     passed through untouched — none exists in the engine, and a subclass
     that wanted presenting would have to say so here.
+
+    A float NEGATIVE ZERO presents as ``0.0`` (operator ruling 2026-10-24,
+    as Scryer: there is no ``-0.0`` term; Ulrich's syntax table #364,
+    ``writeq(-0.0)`` prints ``0.0``).  This is the RESULT of an evaluation,
+    not each step of it: ``atan2(-(0.0), -1)`` is ``-pi`` here and in
+    Scryer, because the inner ``-(0.0)`` is never presented.  ``x or 0.0``
+    is the whole test: ``-0.0`` and ``0.0`` are the only falsy floats.
     """
-    if type(x) is _Fraction and x.denominator == 1:
+    t = type(x)
+    if t is int:
+        return x
+    if t is float:
+        return x or 0.0
+    if t is _Fraction and x.denominator == 1:
         return x.numerator
-    if type(x) is _Decimal:
+    if t is _Decimal:
         # A Decimal with NO decimal places presents as an int -- the same
         # rule the transfer form applies (``_decimal_to_term``: scale <= 0 is
         # an int), applied at the binder so the engine and the wire agree

@@ -139,6 +139,16 @@ def _slash_name(t: PTerm) -> str | None:
 # ── Parser ───────────────────────────────────────────────────────────
 
 
+def _negative_literal(value):
+    """The value of the negative numeric literal ``- Value``.  Negative zero
+    reads as ``0.0`` (operator ruling 2026-10-24, as Scryer: ``-0.0``,
+    ``- 0.0`` and ``'-' 0.0`` all read as ``0.0``; Ulrich's syntax table
+    #364).  ``-0.0`` and ``0.0`` are the only falsy floats."""
+    if type(value) is float:
+        return -value or 0.0
+    return -value
+
+
 class PrologParser:
     """Pratt parser for Prolog terms."""
 
@@ -448,7 +458,7 @@ class PrologParser:
         # `- (1)` stays the compound -(1) -- the form writeq/1 prints.
         if name == "-" and nxt.type in (TokenType.INTEGER, TokenType.FLOAT):
             self._advance()
-            return PNumber(-nxt.value, span=_span_join(tok, nxt)), 0
+            return PNumber(_negative_literal(nxt.value), span=_span_join(tok, nxt)), 0
 
         # Check for prefix operator
         prefix_entry = self._ops.lookup_prefix(name)
@@ -602,7 +612,7 @@ class PrologParser:
         if (name == "-"
                 and nxt.type in (TokenType.INTEGER, TokenType.FLOAT)):
             self._advance()
-            return PNumber(-nxt.value, span=_span_join(tok, nxt))
+            return PNumber(_negative_literal(nxt.value), span=_span_join(tok, nxt))
 
         r_prec = self._prefix_right_prec(entry)
         operand = self._parse_term(r_prec)

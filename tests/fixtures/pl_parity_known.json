@@ -46,10 +46,10 @@
   },
   {
    "key": "tests/iso_diff/arith.pl::answers::t/3",
-   "class": "c",
-   "note": "oracle: scryer agrees with neither (native differs in 1 of 170 rows, the translator in 170); native's rows that differ are -0.0, which Scryer and Trealla both read and print as 0.0; the translator stores body goals as data in its own lowered form (eval_/2, Python node reprs)",
+   "class": "a",
+   "note": "oracle: scryer agrees with native (all 170 rows since 2026-10-24, when -0.0 began to read and evaluate as 0.0, as Scryer and Trealla have it); the translator differs in 170 because it stores body goals as data in its own lowered form (eval_/2, Python node reprs)",
    "translator_sha": "db2c5d76a8dea4dd",
-   "native_sha": "55758b17495756c4"
+   "native_sha": "08c060061eaf9026"
   },
   {
    "key": "tests/iso_diff/except.pl::answers::t/3",

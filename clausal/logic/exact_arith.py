@@ -668,7 +668,11 @@ def iso_float_integer_part(x):
     (float_integer_part(-3.7) is -3.0; of 3 is 3.0)."""
     v = _num(x, "float_integer_part")
     if type(v) is float:
-        return float(_math.trunc(_float_to_int(v, "float_integer_part")))
+        _float_to_int(v, "float_integer_part")      # NaN/inf: undefined
+        # IEEE truncation keeps the sign of a zero part (-0.5 gives -0.0),
+        # as Scryer's: an inner step keeps it, ``is/2``'s result presents
+        # it as 0.0 (operator ruling 2026-10-24).
+        return _math.modf(v)[1]
     return _to_float(_math.trunc(_exact(v)), "float_integer_part")
 
 

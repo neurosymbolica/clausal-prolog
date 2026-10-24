@@ -21,7 +21,7 @@ import re as _re
 from decimal import Decimal as _Decimal
 from typing import Any
 
-from clausal.logic.variables import deref, is_var, unify
+from clausal.logic.variables import deref, is_var, present_number, unify
 from clausal.logic.atoms import (
     char_atom,
     is_atom as _term_is_atom,
@@ -844,7 +844,9 @@ def _read_number_text(s: str):
         value, end = _number_token_at(s, i)
         if end < n:
             raise _bad_char()
-        return -value if neg else value
+        # ``-0.0`` reads as 0.0, as the reader has it (operator ruling
+        # 2026-10-24); present_number is the one spelling of that rule.
+        return present_number(-value) if neg else value
     end = _other_token_end(s, i)
     raise _eof() if end == n else _bad_char()
 
@@ -1098,7 +1100,7 @@ def _parse_number_token(text: str):
     else:
         # through Decimal: CPython caps int(str) at ~4300 digits
         value = int(_Decimal(body)) if len(body) > 4000 else int(body)
-    return -value if neg else value
+    return present_number(-value) if neg else value   # -0.0 is 0.0
 
 
 def _number_text(n) -> str:
