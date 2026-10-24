@@ -53,6 +53,23 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A `.pl` or `.clausal` file may not define an ISO built-in**
+  (2026-10-24, operator ruling 2026-10-24; ISO 7.5.1). A clause for an ISO
+  built-in predicate, such as `atom_length(_, 5).` or `once(G) :- call(G).`,
+  loaded and replaced the builtin inside its module; only the control
+  constructs were refused. The loader now refuses the whole file with
+  `permission_error(modify, static_procedure, PI)` for a clause or
+  grammar-rule head that names an ISO 13211-1 built-in (the control
+  constructs and clause 8, with Cor.1-3: `clausal/tools/iso_builtins.py`),
+  as Scryer's `load/1` does, on both `.pl` front ends and `.clausal`.
+  `:- dynamic(atom_length/2).` is refused the same way (Scryer ignores it;
+  Trealla and SWI-Prolog refuse it). Library predicates (`append/3`,
+  `length/2`, `between/3`, `forall/2`, `msort/2`, `numbervars/3` ...) are no
+  ISO built-ins and stay definable, as in Scryer; the seam is unchanged.
+  `assertz`/`retract` of a builtin already raised the error. Pinned by
+  `tests/iso/test_builtin_redefinition_scryer.py`, each row under Clausal
+  and Scryer.
+
 - **`1 = 1.0` fails: a number unifies only with a number of its own kind**
   (2026-10-23, operator ruling 2026-10-23; ISO 7.3). Unification of two
   ground non-container terms fell back to Python `==`, so an integer and a
@@ -1287,7 +1304,7 @@ the old behaviour. Read them before upgrading.
   `-import_from` already did. Scryer agrees for `forall/2`. For `once/1`,
   `findall/3` and `catch/3` it refuses the defining module instead
   (`permission_error(modify, static_procedure, PI)`), which Clausal does
-  not do yet (`todo/iso-a-file-can-redefine-a-builtin-2026-10-16.md`).
+  not do yet (`todo/done/iso-a-file-can-redefine-a-builtin-2026-10-16.md`).
   One result: `:- use_module(library(re), [findall/3]).`, the usage line
   of library(re)'s facade, followed by `findall("\\d", "a1b2", L)`, now
   loads and runs the regex predicate. Before, the file was refused

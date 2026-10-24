@@ -35,6 +35,7 @@ Up: [../AGENTS.md](../AGENTS.md)
 | File | What it is |
 |---|---|
 | `iso_l3.py` | Lowers reader items to the seam's transformed AST: clauses, control constructs, `m:G`, `if_/3`, `{C}`, DCG rules. `lower_source()` is what the loader calls. Refuses (raises `LoweringRefused`) `!`, `->`, `*->`, `initialization/1`, queries, unknown directives — never skips. |
+| `iso_builtins.py` | THE table of ISO 13211-1's built-in predicates and control constructs (`ISO_BUILTINS`, `is_iso_builtin`): the heads a `.pl`/`.clausal` file may not define and may not declare `dynamic` (ISO 7.5.1). Library predicates (`append/3` ...) are not in it. Pure data. |
 | `iso_l3_directives.py` | ISO directives -> the seam's own directive handlers (`module/2`, `use_module/1,2`, `dynamic`, `table`, `op`, `set_prolog_flag`, `end_module`, `constructors`, constants). Holds `_BUILTIN_LIBRARIES` / `_LIBRARY_MODULES` (what `library(L)` means), library operators (`CLPZ_OPS`, ...; `library_reader_ops`, which the translator's reader shares), the `library(...)` facade lookup (`_library_facade`) and the Python-import refusals. |
 
 **Translators and exporter**

@@ -17,6 +17,17 @@ Clausal's Python-syntax surface, calls the same builtins; where it spells
 one differently, or where an entry works only from the seam, the entry says
 so.
 
+**The ISO built-ins are static** (ISO 7.5.1). A `.pl` or `.clausal` file
+that defines a clause for one (`atom_length(_, 5).`, `once(G) :- ...`, a
+grammar rule `atom_length --> []`), or declares one `dynamic`, is refused at
+load with `permission_error(modify, static_procedure, Name/Arity)`, as
+Scryer refuses it; `assertz`/`asserta`/`retract` of one raise the same
+error at run time. The ISO built-ins are the control constructs and the
+predicates of ISO 13211-1 clause 8 (`clausal/tools/iso_builtins.py`). The
+library predicates on this page (`append/3`, `length/2`, `between/3`,
+`forall/2`, `msort/2`, `numbervars/3`, ...) are no ISO built-ins, and a file
+may define its own. A seam module is not ISO text and is not checked.
+
 ---
 
 ??? abstract "Builtin term constructors (Python)"

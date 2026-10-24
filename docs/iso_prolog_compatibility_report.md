@@ -176,6 +176,12 @@ Output: `write/1`, `writeq/1`, `write_canonical/1`, `write_term/2`, `nl/0`.
 Database: `asserta/1`, `assertz/1`, `retract/1`, `retractall/1`,
 `abolish/1`, `clause/2`, `current_predicate/1` (a static predicate raises
 `permission_error(modify, static_procedure, PI)`).
+The ISO built-ins are static (7.5.1): a `.pl` or `.clausal` file with a
+clause for one, or `dynamic/1` of one, is refused at load with
+`permission_error(modify, static_procedure, PI)`, the whole file, as Scryer
+refuses it (Scryer ignores `dynamic/1` of a builtin instead). A library
+predicate such as `append/3` or `length/2` is no ISO built-in and a file may
+define it.
 Grammar rules: `phrase/2,3`.
 Constraints: [`dif/2`, CLP(ℤ)](constraints.md), [CLP(B)](clpb.md),
 [CLP(ℚ)](clpq.md).
@@ -207,13 +213,6 @@ selects ISO 7.5.2(2)'s assert, and is on in a `.pl` module.
 ---
 
 ## Known gaps
-
-### A file can redefine a builtin
-
-A `.clausal` or `.pl` file that defines a clause for an ISO builtin, such as
-`atom_length(_, 5).`, loads, and its definition replaces the builtin for
-that file. A built-in predicate is static in ISO, and Scryer refuses such a
-file with `permission_error(modify, static_procedure, atom_length/2)`.
 
 ### Flags
 

@@ -1,6 +1,19 @@
 # A `.pl` or `.clausal` file can define a clause for an ISO builtin
 
-Filed 2026-10-16 by iso-export-lane, found while re-measuring the
+**Status: FIXED 2026-10-24 (commit a20bc84d).** The loader refuses a clause
+or grammar-rule head naming an ISO 13211-1 built-in, and `dynamic/1` of one,
+with `permission_error(modify, static_procedure, PI)` (the whole file, as
+Scryer), on the native front end, the translator and `.clausal`; the ISO set
+is `clausal/tools/iso_builtins.py`, library predicates stay definable.
+Pinned in tests/iso/test_builtin_redefinition_scryer.py (test_refused_engine,
+test_refused_oracle, test_allowed_engine, test_dynamic_of_a_builtin_engine,
+test_runtime_engine). The census found no clause head with an ISO
+built-in's name in the repository's `.pl`/`.clausal` files or the
+downstream rule bases. What remains, a module's own definition of a
+non-ISO special-form name (`forall/2`) ignored in its bodies, is
+`todo/a-module-own-forall-definition-is-ignored-in-its-bodies-2026-10-24.md`.
+
+Filed 2026-10-16, found while re-measuring the
 [ISO compatibility report](../docs/iso_prolog_compatibility_report.md)
 (it is listed there under "Known gaps"). OPEN.
 
