@@ -556,9 +556,11 @@ class RetiredStateError(Exception):
 # ── Arity-aware dispatch resolution ──────────────────────────────────────────
 
 
-def _refuse_if_known_at_another_arity(db: "Database", functor: str, arity: int) -> None:  # noqa: F821
+def _refuse_if_known_at_another_arity(db: "Database", functor: str, arity: int):  # noqa: F821
     """Raise ``PredicateArityMismatchError`` if *db* knows *functor* as a
-    predicate at some arity OTHER than *arity* -- the handle-dispatch twin
+    predicate at some arity OTHER than *arity* (or, when the ``unknown``
+    flag makes the call fail, return the failing dispatch for the caller to
+    return; None otherwise) -- the handle-dispatch twin
     of ``PredicateMeta._refuse_call_at``.  F7 (2026-09-24) first called it
     BEFORE ``Database.get_dispatch``'s builtin-registry fallback; the name +
     ARITY ruling (operator, 2026-09-24) moved it AFTER: a same-named builtin
@@ -597,6 +599,13 @@ def _refuse_if_known_at_another_arity(db: "Database", functor: str, arity: int) 
         return
     if not db.is_predicate_name(functor):
         return
+    from clausal.logic.builtins.flags import (  # noqa: PLC0415
+        UNKNOWN_PROCEDURE_DISPATCH, unknown_procedure_fails,
+    )
+    if unknown_procedure_fails(functor, arity):
+        # functor/arity does not exist; the ``unknown`` flag fails the call
+        # (ISO 7.11.2.4).  The caller returns this dispatch.
+        return UNKNOWN_PROCEDURE_DISPATCH
     from clausal.predicate_diagnostics import predicate_arity_mismatch  # noqa: PLC0415
     others = sorted(a for a in db.arities_for(functor) if a != arity)
     defined = others[0] if len(others) == 1 else None
@@ -686,6 +695,13 @@ def _refuse_unqualified_other_arity(binding: Any, name: str, arity: int,
     (A class-era exception -- a LOCAL class with stale ``_fields`` whose
     clause heads were at *arity* -- went with the class at W4b-3 slice 7.)
     """
+    # ISO: name/arity is a procedure that does not exist (the ``unknown``
+    # flag, 7.11.2.4, decides what the call does).
+    from clausal.logic.builtins.flags import (  # noqa: PLC0415
+        UNKNOWN_PROCEDURE_DISPATCH, unknown_procedure_fails,
+    )
+    if unknown_procedure_fails(name, arity):
+        return UNKNOWN_PROCEDURE_DISPATCH
     from clausal.predicate_diagnostics import (  # noqa: PLC0415
         PredicateArityMismatchError, predicate_arity_mismatch,
     )
@@ -1096,7 +1112,9 @@ def _dispatch_at(obj: Any, arity: int, db: Any = None) -> Callable:
             _fn = _hdb.get_dispatch(_name, arity)
             if _fn is not None:
                 return _fn
-            _refuse_if_known_at_another_arity(_hdb, _name, arity)
+            _fn = _refuse_if_known_at_another_arity(_hdb, _name, arity)
+            if _fn is not None:
+                return _fn
             _bound = (_hmd or {}).get(_name)
             if _bound is not None:
                 from clausal.logic.cells import is_pool_seeded_atom  # noqa: PLC0415
@@ -1123,6 +1141,11 @@ def _dispatch_at(obj: Any, arity: int, db: Any = None) -> Callable:
             # Ruling 2026-09-25: raised as ``PredicateNotFoundError`` -- the
             # SAME ISO term, now also the ``KeyError`` an unqualified unknown
             # call raises, so one condition has one Python type.
+            from clausal.logic.builtins.flags import (  # noqa: PLC0415
+                UNKNOWN_PROCEDURE_DISPATCH, unknown_procedure_fails,
+            )
+            if unknown_procedure_fails(_name, arity):
+                return UNKNOWN_PROCEDURE_DISPATCH
             _indicator, why = dangling_handle_indicator_and_why(
                 _mod_name, _name, arity, loaded=True,
             )
@@ -1161,12 +1184,22 @@ def _dispatch_at(obj: Any, arity: int, db: Any = None) -> Callable:
                 PredicateNotFoundError,
             )
             _mod_name, _name = demangle(obj)
+            from clausal.logic.builtins.flags import (  # noqa: PLC0415
+                UNKNOWN_PROCEDURE_DISPATCH, unknown_procedure_fails,
+            )
+            if unknown_procedure_fails(_name, arity):
+                return UNKNOWN_PROCEDURE_DISPATCH
             _indicator, why = dangling_handle_indicator_and_why(
                 _mod_name, _name, arity, loaded=False,
             )
             raise PredicateNotFoundError(why, _name, arity)
         name = obj
         indicator = ("/", name, arity)
+        from clausal.logic.builtins.flags import (  # noqa: PLC0415
+            UNKNOWN_PROCEDURE_DISPATCH, unknown_procedure_fails,
+        )
+        if unknown_procedure_fails(name, arity):
+            return UNKNOWN_PROCEDURE_DISPATCH
         raise LogicException(
             existence_error(
                 "procedure", indicator,

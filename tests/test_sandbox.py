@@ -2528,6 +2528,9 @@ def test_python_inside_a_dict_or_set_term_is_refused(shape):
 _FLAG_DIRECTIVES = {
     "pl_debug": ("fpd.pl", ":- module(fpd, [p/1]).\n"
                            ":- set_prolog_flag(debug, on).\np(1).\n"),
+    # unknown (ISO 7.11.2.4) is process-wide, as ISO makes every flag
+    "pl_unknown": ("fpu.pl", ":- module(fpu, [p/1]).\n"
+                             ":- set_prolog_flag(unknown, fail).\np(1).\n"),
     "pl_cap": ("fpc.pl", ":- module(fpc, [p/1]).\n"
                          ":- set_prolog_flag(clpq_max_nodes, 1000000000).\n"
                          "p(1).\n"),
@@ -2570,6 +2573,7 @@ def test_a_sandboxed_directive_sets_no_process_flag(sbx):
         for key, (path, _) in {_FLAG_DIRECTIVES!r}.items():
             probe(key, lambda path=path: load(path.split(".")[0]))
         probe("debug", lambda: flags.flag_value(None, "debug"))
+        probe("unknown", lambda: flags.flag_value(None, "unknown"))
         # The backstop: a setting that skipped check_setting is refused
         # where it would be written.
         probe("apply_debug", lambda: flags.apply_setting(None, "debug", "on"))
@@ -2591,6 +2595,7 @@ def test_a_sandboxed_directive_sets_no_process_flag(sbx):
     for key in ("apply_debug", "apply_cap"):
         refused(res, key, PRIVATE)
     assert ok(res, "debug") == "'off'"
+    assert ok(res, "unknown") == "'error'"
     assert ok(res, "caps_unchanged") == "True"
 
 

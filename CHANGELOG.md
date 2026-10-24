@@ -73,6 +73,22 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `assertz`/`retract` of a builtin already raised the error. Pinned by
   `tests/iso/test_builtin_redefinition_scryer.py`, each row under Clausal
   and Scryer.
+- **The `unknown` flag takes `fail` and `warning`** (2026-10-24, operator
+  ruling 2026-10-24; ISO 7.11.2.4). It was always `error`, and setting
+  another value raised `permission_error(modify, flag, unknown)`. Now
+  `set_prolog_flag(unknown, fail)` makes a call to a procedure that does
+  not exist fail, and `warning` writes
+  `% Warning: predicate PI is undefined` to standard error (Scryer's line;
+  Scryer writes it to standard output) and fails. `error` stays the
+  default. The flag is process-wide, as ISO makes every flag global, and
+  the sandbox refuses setting it. Every site that raised
+  `existence_error(procedure, PI)` for a missing procedure asks the flag on
+  its miss path only (a body call, `call/N` and the meta-calls, `phrase/2,3`,
+  a call at another arity, `M:G` into a module that does not exist), so a
+  call that finds its procedure does not read it. The refusals of committed
+  choice that report the same term (`*->`, a cut in a meta-called body) stay
+  errors. Pinned by `tests/iso/test_unknown_flag_scryer.py` (21 rows under
+  each value, Clausal and Scryer).
 
 - **`1 = 1.0` fails: a number unifies only with a number of its own kind**
   (2026-10-23, operator ruling 2026-10-23; ISO 7.3). Unification of two

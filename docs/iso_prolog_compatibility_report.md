@@ -208,7 +208,8 @@ flag and ISO's error terms ([Prolog Flags](flags.md)). A read-only flag gives
 `domain_error(prolog_flag, unknown)`). `char_conversion` is `off`;
 `max_integer` and `min_integer` have no value (integers are unbounded), and
 `max_arity` is `unbounded`. `assert_creates_dynamic` (implementation-defined)
-selects ISO 7.5.2(2)'s assert, and is on in a `.pl` module.
+selects ISO 7.5.2(2)'s assert, and is on in a `.pl` module. `unknown`
+takes `error`, `fail` and `warning` (ISO 7.11.2.4), process-wide.
 
 ---
 
@@ -216,8 +217,6 @@ selects ISO 7.5.2(2)'s assert, and is on in a `.pl` module.
 
 ### Flags
 
-- `unknown` is always `error`: `fail` and `warning` are not implemented
-  (setting one is `permission_error(modify, flag, unknown)`).
 - `double_quotes` is never changed at run time (a design choice, ruled
   2026-10-18): `set_prolog_flag(double_quotes, V)` as a goal gives
   `permission_error(modify, flag, double_quotes)`, where ISO allows the

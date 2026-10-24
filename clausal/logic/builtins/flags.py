@@ -13,7 +13,7 @@ integer_rounding_function  toward_zero   no          process
 char_conversion            off           off only    process
 debug                      off           yes         process
 max_arity                  unbounded     no          process
-unknown                    error         error only  process
+unknown                    error         yes         process
 double_quotes              chars         directive   module
 assert_creates_dynamic     false         yes         module
 require_end_module         default       yes         process (goal)
@@ -80,13 +80,25 @@ Errors follow ISO 8.17.1.3 / 8.17.2.3, with ``set_prolog_flag/2`` /
 * an atom that is not a flag: ``domain_error(prolog_flag, F)``;
 * a value ISO does not admit for the flag: ``domain_error(flag_value, F+V)``;
 * an admissible value the flag cannot take here -- a read-only flag, or an
-  ISO value this engine does not implement (``unknown`` = ``fail``,
-  ``char_conversion`` = ``on``, ``double_quotes`` = ``codes``):
-  ``permission_error(modify, flag, F)``.
+  ISO value this engine does not implement (``char_conversion`` = ``on``,
+  ``double_quotes`` = ``codes``): ``permission_error(modify, flag, F)``.
 
 Scryer differs on the last two: it reports a read-only flag and a bad
 ``unknown`` value as ``domain_error(prolog_flag, F)``, and it implements
 neither ``char_conversion`` nor ``debug``.  Here ISO decides.
+
+``unknown`` (ISO 7.11.2.4) is process-wide, as ISO makes every flag
+global.  It is read only where a call finds NO procedure -- every site that
+would raise ``existence_error(procedure, PI)`` for a missing procedure asks
+:func:`unknown_procedure_fails` first -- so a call that finds its procedure
+never looks at it.  ``error`` raises the existence error; ``fail`` fails
+the call; ``warning`` writes ``% Warning: predicate PI is undefined`` (the
+line Scryer prints) to standard error, the ``user_error`` stream, and fails
+the call.  A deliberate REFUSAL that is reported with the same error term
+(``*->``, a cut inside a meta-called body: Clausal is cut-free) is not a
+missing procedure and stays an error whatever the flag says.  So is a
+module that does not exist, when no procedure is named (``call(nomod:X)``
+with ``X`` unbound).
 """
 
 from __future__ import annotations
@@ -100,6 +112,7 @@ from clausal.logic.exceptions import (
     type_error,
 )
 from clausal.logic.builtins._registry import _db_builtin
+from clausal.logic.trampoline import DONE
 
 _SET = "set_prolog_flag/2"
 _CURRENT = "current_prolog_flag/2"
@@ -149,7 +162,7 @@ FLAGS: dict[str, _Flag] = {f.name: f for f in (
     _Flag("max_arity", "unbounded",
           lambda v: v == "unbounded" or (_is_int(v) and v > 0)),
     _Flag("unknown", "error", lambda v: v in ("error", "fail", "warning"),
-          supported=("error",)),
+          supported=("error", "fail", "warning")),
     _Flag("double_quotes", "chars",
           lambda v: v in ("chars", "codes", "atom"),
           supported=("chars", "atom"), scope="directive"),
@@ -357,6 +370,53 @@ def flag_value(db, name: str):
                 return v
         return spec.default
     return _PROCESS.get(name, spec.default)
+
+
+def unknown_procedure_fails(name, arity) -> bool:
+    """What a call to the missing procedure *name*/*arity* does under the
+    ``unknown`` flag (ISO 7.11.2.4): False under ``error`` (the default) --
+    the caller raises its ``existence_error(procedure, PI)`` -- and True
+    under ``fail`` and ``warning``, where the caller FAILS the call instead,
+    after the warning is written.  Called only where a procedure was not
+    found, never on a call that finds one."""
+    mode = _PROCESS.get("unknown")
+    if mode is None or mode == "error":
+        return False
+    if mode == "warning":
+        _warn_unknown(name, arity)
+    return True
+
+
+def unknown_procedure_of(exc):
+    """``(name, arity)`` of the missing procedure a resolver's
+    ``LogicException`` *exc* reports, or None: set only where the error IS
+    a missing procedure (``cells.resolve_qualified_goal_cell`` for a module
+    that does not exist), never on a refusal or another error."""
+    return getattr(exc, "unknown_procedure", None)
+
+
+def _warn_unknown(name, arity) -> None:
+    import sys  # noqa: PLC0415
+    from clausal.logic.atoms import demangle, is_mangled  # noqa: PLC0415
+    if type(name) is str and is_mangled(name):
+        name = demangle(name)[1]
+    try:
+        from clausal.terms import term_write  # noqa: PLC0415
+        shown = f"{term_write(name, quoted=False)}/{arity}"
+    except Exception:  # noqa: BLE001 - a warning must never be what fails
+        shown = f"{name}/{arity}"
+    sys.stderr.write(f"% Warning: predicate {shown} is undefined\n")
+    sys.stderr.flush()
+
+
+def _fails_unknown(this_generator, _proceed, _fail, _catcher, *args):
+    """The trampoline dispatch of a call that :func:`unknown_procedure_fails`
+    turned into a failure."""
+    yield (_fail, DONE)
+
+
+#: Returned by a lookup in place of the missing procedure's dispatch.
+UNKNOWN_PROCEDURE_DISPATCH = _fails_unknown
 
 
 def set_argv(args) -> None:

@@ -770,6 +770,13 @@ def iso_control_cell_dispatch(db, cell, functor, arity, context):
         return body_goal_dispatch(db, cell, context)
     if functor in ("->", "*->") and arity == 2:
         raise LogicException(if_then_refusal_error(functor, context))
+    # A procedure that does not exist: the ``unknown`` flag decides (ISO
+    # 7.11.2.4) -- not for the refusal above, which is no missing procedure.
+    from clausal.logic.builtins.flags import (  # noqa: PLC0415
+        UNKNOWN_PROCEDURE_DISPATCH, unknown_procedure_fails,
+    )
+    if unknown_procedure_fails(functor, arity):
+        return UNKNOWN_PROCEDURE_DISPATCH, []
     raise LogicException(existence_error(
         "procedure", _indicator(functor, arity),
         f"{context}: {functor}/{arity} is no procedure -- the control "

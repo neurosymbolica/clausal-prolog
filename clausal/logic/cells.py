@@ -894,7 +894,14 @@ def resolve_qualified_goal_cell(
                     qualified=qualified_culprit)
                 if missing is None:
                     raise
-                raise LogicException(missing) from exc
+                err = LogicException(missing)
+                # The procedure that does not exist, for a caller that asks
+                # the ``unknown`` flag (``flags.unknown_procedure_of``).
+                pi = missing[1][2]
+                if pi[0] == QUALIFIED_GOAL_FUNCTOR:
+                    pi = pi[2]
+                err.unknown_procedure = (pi[1], pi[2])
+                raise err from exc
         calling_module = module
         goal = deref(goal[2])
     else:

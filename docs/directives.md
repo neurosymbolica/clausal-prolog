@@ -411,8 +411,8 @@ test("assert creates a dynamic predicate") :-
 
 A setting that `set_prolog_flag/2` would refuse is a load-time error
 carrying the ISO error term, e.g.
-`error(permission_error(modify,flag,unknown),set_prolog_flag/2)` for
-`:- set_prolog_flag(unknown, fail).`
+`error(permission_error(modify,flag,bounded),set_prolog_flag/2)` for
+`:- set_prolog_flag(bounded, true).`
 
 ### -table
 

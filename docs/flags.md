@@ -29,7 +29,7 @@ truth value is `true` / `false`.
 | `char_conversion` | `off` | `off` only | process | not a flag |
 | `debug` | `off` | `on` / `off` | process | not a flag |
 | `max_arity` | `unbounded` | no | process | `255` |
-| `unknown` | `error` | `error` only | process | `error` (settable) |
+| `unknown` | `error` | `error` / `fail` / `warning` | process | `error` (settable) |
 | `double_quotes` | `chars` | `.clausal`: no (always `chars`); `.pl`: by directive | module | `chars` |
 | `assert_creates_dynamic` | `false` (`true` in a `.clausal` or imported `.pl` module) | yes | module | not a flag (ISO assert always creates) |
 | `require_end_module` | `default` | `true` / `false` / `default` | process (file-local as a `.pl` directive) | not a flag |
@@ -43,9 +43,18 @@ truth value is `true` / `false`.
   `'//'(-7, 2)` is. See [Operators](operators.md).)
 - **`max_arity`** is `unbounded`: a compound term is a Python tuple, and there
   is no arity limit.
-- **`unknown`** is always `error`: calling an unknown procedure raises
-  `existence_error(procedure, PI)`. The ISO values `fail` and `warning` are not
-  implemented.
+- **`unknown`** (ISO 7.11.2.4) says what a call to a procedure that does not
+  exist does. `error` (the default) raises `existence_error(procedure, PI)`;
+  `fail` fails the call; `warning` writes
+  `% Warning: predicate PI is undefined` to standard error (the `user_error`
+  stream; Scryer writes the same line to standard output) and fails the call.
+  It governs every call: a clause body, `call/N`, `maplist/N` and the other
+  meta-calls, `phrase/2,3`, a call at an arity the predicate does not have,
+  and `M:G` into a module that does not exist. The flag is process-wide, as
+  ISO makes every flag global, and a call that finds its procedure never
+  reads it. A refusal of committed choice (`*->`, a cut in a meta-called
+  body), reported with the same error term, is not a missing procedure and
+  stays an error. In the [sandbox](sandbox.md) a program cannot set it.
 - **`debug`** can be set, but changes nothing yet.
 - **`double_quotes`** is the module's double-quotes mode. It decides how the
   compiler reads the module's `"…"` literals, so it is never changed at run
@@ -102,6 +111,12 @@ test("bounded") :-
 
 test("unknown is error") :-
     current_prolog_flag(unknown, error).
+
+test("unknown = fail makes a missing procedure fail") :-
+    set_prolog_flag(unknown, fail),
+    findall(X, call(no_such_procedure, X), L),
+    set_prolog_flag(unknown, error),
+    L == [].
 
 test("no max_integer") :-
     \+ current_prolog_flag(max_integer, _M).
@@ -162,7 +177,7 @@ The errors are ISO's (8.17.1.3, 8.17.2.3). The context is
 | `Flag` not an atom | `type_error(atom, Flag)` |
 | `Flag` not a flag | `domain_error(prolog_flag, Flag)` |
 | `Value` not a value ISO allows for the flag | `domain_error(flag_value, Flag+Value)` |
-| a read-only flag, or an ISO value this engine does not implement (`unknown` = `fail`, `char_conversion` = `on`, `double_quotes` = `codes`), or `double_quotes` set at run time | `permission_error(modify, flag, Flag)` |
+| a read-only flag, or an ISO value this engine does not implement (`char_conversion` = `on`, `double_quotes` = `codes`), or `double_quotes` set at run time | `permission_error(modify, flag, Flag)` |
 
 Scryer departs from ISO on two rows. It reports a read-only flag
 (`set_prolog_flag(max_arity, 5)`) and a bad `unknown` value as

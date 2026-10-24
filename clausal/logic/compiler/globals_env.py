@@ -532,6 +532,13 @@ class _DbDispatchAdapter:
             # the hunt for what the author could have called instead — which
             # reads and parses sibling source files — costs nothing on the
             # call path.  See todo/predicate-not-found-should-list-candidates.
+            # The ``unknown`` flag (ISO 7.11.2.4) is asked here, on the miss
+            # only: under ``fail``/``warning`` the call fails.
+            from clausal.logic.builtins.flags import (  # noqa: PLC0415
+                UNKNOWN_PROCEDURE_DISPATCH, unknown_procedure_fails,
+            )
+            if unknown_procedure_fails(self._functor, self._arity):
+                return UNKNOWN_PROCEDURE_DISPATCH
             from clausal.predicate_diagnostics import (  # noqa: PLC0415
                 predicate_not_found,
             )
@@ -1232,6 +1239,11 @@ def _unresolved_qualified_dispatch(dotted: str, arity: int, globals_, db):
         builtin = _BUILTINS.get((name, arity))
         if builtin is not None:
             return builtin(*args)
+        from clausal.logic.builtins.flags import (  # noqa: PLC0415
+            UNKNOWN_PROCEDURE_DISPATCH, unknown_procedure_fails,
+        )
+        if unknown_procedure_fails(name, arity):
+            return UNKNOWN_PROCEDURE_DISPATCH(*args)
         from clausal.logic.exceptions import (  # noqa: PLC0415
             dangling_handle_indicator_and_why,
         )

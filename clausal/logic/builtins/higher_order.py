@@ -278,9 +278,21 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
     if functor == QUALIFIED_GOAL_FUNCTOR and len(call_args) >= 2:
         # Slots 1 and 2 are the qualification; everything past them is an
         # extra the fold has not placed yet, and it belongs to the INNER goal.
-        target, inner = resolve_qualified_goal_cell(
-            (QUALIFIED_GOAL_FUNCTOR, call_args[0], call_args[1]),
-            context, _calling_module(db), call_extra=len(call_args) - 2)
+        try:
+            target, inner = resolve_qualified_goal_cell(
+                (QUALIFIED_GOAL_FUNCTOR, call_args[0], call_args[1]),
+                context, _calling_module(db), call_extra=len(call_args) - 2)
+        except LogicException as exc:
+            # ``call(nomod:p, X)``: the procedure does not exist, and the
+            # ``unknown`` flag (ISO 7.11.2.4) may make that a failure.
+            from clausal.logic.builtins.flags import (  # noqa: PLC0415
+                UNKNOWN_PROCEDURE_DISPATCH, unknown_procedure_fails,
+                unknown_procedure_of,
+            )
+            missing = unknown_procedure_of(exc)
+            if missing is not None and unknown_procedure_fails(*missing):
+                return UNKNOWN_PROCEDURE_DISPATCH, []
+            raise
         # One level only: the resolver unwraps nesting itself, so ``inner`` is
         # never another ``:``/2 and this recursion cannot repeat.  It restarts
         # the WHOLE resolution — the control-construct refusal included, so
@@ -332,6 +344,11 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # control construct with extra arguments, which no database defines
         # (Scryer: existence_error(procedure, true/1)) -- the same answer the
         # ``True``/``False`` object gets (operator ruling 2026-09-25).
+        from clausal.logic.builtins.flags import (  # noqa: PLC0415
+            UNKNOWN_PROCEDURE_DISPATCH, unknown_procedure_fails,
+        )
+        if unknown_procedure_fails(functor, len(call_args)):
+            return UNKNOWN_PROCEDURE_DISPATCH, call_args
         raise LogicException(folded_existence_error(
             functor, len(call_args), context))
     if not call_args and functor in _ZERO_ARITY_CONTROL_GOALS:
@@ -402,6 +419,14 @@ def _resolve_named_goal(db, goal_val, extra_args, context):
         # an UNKNOWN procedure raises ISO existence_error(procedure, N/A) --
         # catchable -- where it used to fail silently (the old §4.2
         # "a non-callable goal fails" contract, retired for this case).
+        # The ``unknown`` flag (ISO 7.11.2.4) first: under fail/warning the
+        # meta-call fails.
+        from clausal.logic.builtins.flags import (  # noqa: PLC0415
+            UNKNOWN_PROCEDURE_DISPATCH, unknown_procedure_fails,
+        )
+        if unknown_procedure_fails(
+                [] if functor == NIL_SPELLING else functor, arity):
+            return UNKNOWN_PROCEDURE_DISPATCH, call_args
         _where = getattr(_calling_module(db), "name", None)
         # The name ``[]/N`` is keyed by its spelling; the indicator holds
         # the atom ``[]`` itself, the empty list (D70).

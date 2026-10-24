@@ -151,8 +151,6 @@ SET_ERRORS = [
     ("integer_rounding_function", "down",
      ("permission_error", "modify", "flag", "integer_rounding_function")),
     # an ISO value this engine does not implement
-    ("unknown", "fail", ("permission_error", "modify", "flag", "unknown")),
-    ("unknown", "warning", ("permission_error", "modify", "flag", "unknown")),
     ("char_conversion", "on", ("permission_error", "modify", "flag", "char_conversion")),
     # double_quotes is fixed when the module is compiled: never as a goal
     ("double_quotes", "atom", ("permission_error", "modify", "flag", "double_quotes")),
@@ -179,8 +177,8 @@ def test_current_prolog_flag_errors(plain, flag, formal):
 
 
 @pytest.mark.parametrize("flag, value", [
-    ("unknown", "error"), ("char_conversion", "off"), ("debug", "on"),
-    ("debug", "off"),
+    ("unknown", "error"), ("unknown", "fail"), ("unknown", "warning"),
+    ("char_conversion", "off"), ("debug", "on"), ("debug", "off"),
 ])
 def test_the_settable_values_are_accepted(plain, flag, value):
     V = Var()
@@ -229,7 +227,6 @@ def test_the_directive_sets_the_flag_for_its_module(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("directive, formal", [
-    ("-set_prolog_flag(unknown, fail)", "permission_error(modify,flag,unknown)"),
     ("-set_prolog_flag(unknown, bogus)", "domain_error(flag_value,unknown+bogus)"),
     ("-set_prolog_flag(bounded, true)", "permission_error(modify,flag,bounded)"),
     ("-set_prolog_flag(nosuch, 1)", "domain_error(prolog_flag,nosuch)"),

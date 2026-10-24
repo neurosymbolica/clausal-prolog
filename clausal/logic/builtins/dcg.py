@@ -421,10 +421,23 @@ def _resolve_nonterminal(db, rule_val, extra_args, context):
         # A module that does not exist is the missing procedure NT/(A+2),
         # reported qualified, M:NT/(A+2), as Scryer's phrase/2,3 does
         # (operator rulings 2026-09-30 and 2026-10-01).
-        target, inner = resolve_qualified_goal_cell(
-            rule_val, context, _calling_module(db),
-            call_extra=len(extra_args), qualified_culprit=True,
-            phrase_args=tuple(extra_args))
+        from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+        try:
+            target, inner = resolve_qualified_goal_cell(
+                rule_val, context, _calling_module(db),
+                call_extra=len(extra_args), qualified_culprit=True,
+                phrase_args=tuple(extra_args))
+        except LogicException as exc:
+            # The nonterminal's procedure does not exist: the ``unknown``
+            # flag (ISO 7.11.2.4) may make that a failure.
+            from clausal.logic.builtins.flags import (  # noqa: PLC0415
+                UNKNOWN_PROCEDURE_DISPATCH, unknown_procedure_fails,
+                unknown_procedure_of,
+            )
+            missing = unknown_procedure_of(exc)
+            if missing is not None and unknown_procedure_fails(*missing):
+                return UNKNOWN_PROCEDURE_DISPATCH, []
+            raise
         inner = deref(inner)
         from clausal.logic.meta_predicate import is_goal_object  # noqa: PLC0415
         if is_goal_object(inner):
