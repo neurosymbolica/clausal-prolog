@@ -67,6 +67,12 @@ ping(1, 2),
 holds(secret),
 greeting >> (["hi"])
 go <- is_pos(3)
+ord('<', -1, 1),
+ord('>', 1, -1),
+ord('<', -1, 2),
+ord('>', 2, -1),
+ord('<', 1, 2),
+ord('>', 2, 1),
 """
 
 _counter = itertools.count()
@@ -345,6 +351,8 @@ _LIST_CASES = [
     ("partition", "is_pos", (L,), 2),
     ("tfilter", "pos_t", (L,), 1),
     ("tpartition", "pos_t", (L,), 2),
+    # predsort/3 (2026-10-24): ord/3 orders L's three elements
+    ("predsort", "ord", (L,), 1),
 ]
 
 
@@ -379,19 +387,21 @@ _CLASS_ERA_LIST_ANSWERS = {
     'maplist/7': [([15],)],
     'maplist/8': [([21],)],
     'maplist/9': [([28],)],
+    # predsort/3 arrived 2026-10-24, after the class era: the handle's answer.
+    'predsort/3': [([-1, 1, 2],)],
 }
 
 
 def test_the_list_case_table_covers_all_nineteen_builtins():
-    """Positive control on the population: 25 distinct builtin/arity pairs
-    (19, and maplist/4..9 since slice 4),
+    """Positive control on the population: 26 distinct builtin/arity pairs
+    (19, maplist/4..9 since slice 4, and predsort/3 since 2026-10-24),
     each a registered builtin.  Since the aliased-import ruling (2026-09-24)
     they are db-receiving (``_DB_BUILTINS``, ``_db_optional``): the caller's
     database is what says which unqualified name a goal arrived under."""
     from clausal.logic.builtins._registry import _BUILTINS, _DB_BUILTINS
     from clausal.logic.builtins.higher_order import _GOAL_FIRST_LIST_BUILTINS
     keys = {(b, 1 + len(a) + n) for b, _, a, n in _LIST_CASES}
-    assert len(keys) == 25
+    assert len(keys) == 26
     assert keys == set(_GOAL_FIRST_LIST_BUILTINS)
     assert keys <= set(_DB_BUILTINS), keys - set(_DB_BUILTINS)
     assert not keys & set(_BUILTINS)
@@ -412,7 +422,7 @@ def test_list_builtin_answers_the_same_for_a_handle(lm, builtin, goal, inputs, n
 def test_the_pinned_class_answers_cover_every_list_case():
     """Positive control on the pinned population: one answer per case."""
     keys = {f"{b}/{1 + len(a) + n}" for b, _, a, n in _LIST_CASES}
-    assert len(keys) == 25 and keys == set(_CLASS_ERA_LIST_ANSWERS)
+    assert len(keys) == 26 and keys == set(_CLASS_ERA_LIST_ANSWERS)
 
 
 def test_a_data_atom_is_still_not_a_list_goal(lm):
