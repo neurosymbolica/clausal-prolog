@@ -1211,6 +1211,157 @@ def _sort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
     yield (_fail, DONE)
 
 
+# ── sort/4 (SWI-Prolog; Scryer has none) ─────────────────────────────────────
+#
+# Defined as SWI's src/pl-list.c defines it: the checks run Key, then Order,
+# then List, then each element's key; Sorted is only unified.
+
+#: Order -> (descending, remove duplicates).  SWI accepts the bare
+#: comparison atoms as well as the standard-order ones.
+_SORT4_ORDERS = {
+    "@<": (False, True), "<": (False, True),
+    "@=<": (False, False), "=<": (False, False),
+    "@>": (True, True), ">": (True, True),
+    "@>=": (True, False), ">=": (True, False),
+}
+
+
+def _sort4_key_step(k, zero_ok: bool):
+    """One sort/4 key: an integer (``0`` only at the top), or an atom (a
+    dict key).  Returns the key, or None when SWI fails without an error
+    (a non-integer, non-atom inside a key list)."""
+    from clausal.logic.atoms import is_atom  # noqa: PLC0415
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, domain_error)
+    if type(k) is int:
+        if k > 0 or (k == 0 and zero_ok):
+            return k
+        raise LogicException(domain_error("not_less_than_one", k, "sort/4"))
+    if is_atom(k) and type(k) is not list:
+        return k
+    return None
+
+
+def _sort4_key_path(key_val) -> "list | None":
+    """The key path sort/4's *Key* names: ``[]`` for the whole term, else a
+    list of argument numbers / dict keys followed from the element down.
+    None: the goal fails (SWI's answer for a key list holding a non-key)."""
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, instantiation_error, type_error)
+    if is_var(key_val):
+        raise LogicException(instantiation_error("sort/4"))
+    step = (None if type(key_val) is list
+            else _sort4_key_step(key_val, True))
+    if step is not None:
+        return [] if step == 0 else [step]
+    items = _as_items(key_val)
+    if items is None:
+        raise LogicException(type_error("sort_key", key_val, "sort/4"))
+    path = []
+    for k in items:
+        k = deref(k)
+        step = _sort4_key_step(k, False)
+        if step is None:
+            return None
+        path.append(step)
+    return path
+
+
+def _sort4_extract(elem, path):
+    """The part of *elem* the key *path* selects (an ISO error if a step
+    does not exist)."""
+    from clausal.terms import DictTerm  # noqa: PLC0415
+    from clausal.logic.builtins._helpers import _nth_arg  # noqa: PLC0415
+    from clausal.logic.builtins.type_checks import _is_atomic_term  # noqa: PLC0415
+    from clausal.logic.runtime._seg_helpers import walk_seg  # noqa: PLC0415
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, _error, type_error)
+    from clausal.logic.atoms import mint  # noqa: PLC0415
+    t = elem
+    for k in path:
+        t = walk_seg(deref(t))
+        if isinstance(t, DictTerm):
+            try:
+                t = t[k]
+                continue
+            except (KeyError, TypeError):
+                pass
+            raise LogicException(_error(
+                ("existence_error", mint("key"), k, t), "sort/4"))
+        if is_var(t) or _is_atomic_term(t):
+            raise LogicException(type_error("compound", t, "sort/4"))
+        if type(k) is not int:
+            raise LogicException(type_error("dict", t, "sort/4"))
+        try:
+            t = _nth_arg(t, k)
+        except IndexError:
+            raise LogicException(_error(
+                ("existence_error", mint("argument"), k, t), "sort/4")) from None
+    return deref(t)
+
+
+@_trampoline_builtin("sort", 4)
+def _sort__4(this_generator, _proceed, _fail, _catcher, key, order, lst,
+             sorted_lst, trail):
+    """sort(Key, Order, List, Sorted) -- SWI-Prolog's sort/4.
+
+    *Key* ``0`` sorts on the whole element, ``N`` on its N-th argument, an
+    atom on a dict's value for that key, and a list of these on the path
+    they name (``[1, 2]``: argument 2 of argument 1).  *Order* is ``@<``
+    (ascending, duplicates by key removed), ``@=<`` (ascending, all kept),
+    ``@>`` or ``@>=`` (descending), or the bare ``<``, ``=<``, ``>``,
+    ``>=``.  The sort is stable: elements with equal keys keep their order,
+    and where duplicates are removed the first one is kept.  So
+    ``sort(0, @<, L, S)`` is sort/2, ``sort(0, @=<, L, S)`` msort/2 and
+    ``sort(1, @=<, Pairs, S)`` keysort/2.
+
+    Errors, in SWI's order: an unbound Key or Order, or a partial List, is
+    an instantiation error; a negative key ``domain_error(not_less_than_one,
+    K)``; another non-key ``type_error(sort_key, K)``; a non-atom Order
+    ``type_error(atom, O)``, an unknown one ``domain_error(order, O)``; a
+    List that is not one ``type_error(list, L)``; an element without the
+    key ``type_error(compound, E)`` (``type_error(dict, E)`` for an atom
+    key), or ``existence_error(argument, N, E)`` when E has fewer than N
+    arguments (``existence_error(key, K, Dict)`` on a dict).  It did not
+    exist (``existence_error(procedure, sort/4)``).
+    """
+    from clausal.logic.atoms import is_atom  # noqa: PLC0415
+    from clausal.logic.exceptions import (  # noqa: PLC0415
+        LogicException, domain_error, instantiation_error, type_error)
+    path = _sort4_key_path(deref(key))
+    order_val = deref(order)
+    if is_var(order_val):
+        raise LogicException(instantiation_error("sort/4"))
+    if not is_atom(order_val):
+        raise LogicException(type_error("atom", order_val, "sort/4"))
+    mode = _SORT4_ORDERS.get(spelling(order_val))
+    if mode is None:
+        raise LogicException(domain_error("order", order_val, "sort/4"))
+    if path is None:
+        yield (_fail, DONE)
+        return
+    descending, dedup = mode
+    lst_val = _ld(lst)
+    items = _sort_items(lst_val, Var(), "sort/4")
+    items = [deref(x) for x in items]
+    keys = [_standard_order_key(_sort4_extract(x, path)) if path
+            else _standard_order_key(x) for x in items]
+    idx = sorted(range(len(items)), key=keys.__getitem__, reverse=descending)
+    result = []
+    last = None
+    for n, i in enumerate(idx):
+        if dedup and n and keys[i] == last:
+            continue
+        last = keys[i]
+        result.append(items[i])
+    out = _seq_result(result, _was_string(lst_val), _was_bytes(lst_val))
+    mark = trail.mark()
+    if unify(sorted_lst, out, trail):
+        yield (_proceed, None)
+    trail.undo(mark)
+    yield (_fail, DONE)
+
+
 @_trampoline_builtin("permutation", 2)
 def _permutation__2(this_generator, _proceed, _fail, _catcher, lst, perm, trail):
     """permutation(List, Perm) — Perm is a permutation of List.  Either

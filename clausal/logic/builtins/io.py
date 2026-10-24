@@ -1,7 +1,8 @@
 """I/O builtins (V2-15 + Phase 2): write/1, writeln/1, writeq/1,
 write_canonical/1, write_term/2, write_text/1, writeln_text/1, print_term/1,
 nl/0, tab/1, write_to_string/2, write_text_to_string/2, term_to_string/2,
-listing/1, portray_clause/1."""
+listing/1, portray_clause/1; SWI-Prolog's print/1, term_to_atom/2 and
+atom_to_term/3."""
 
 from __future__ import annotations
 
@@ -654,6 +655,188 @@ def _term_to_string__2(term, result, trail, k):
     if unify(result, s, trail):
         yield None
     trail.undo(mark)
+
+
+# ── print/1, term_to_atom/2, atom_to_term/3 (SWI-Prolog; Scryer has none) ───
+
+
+@_builtin("print", 1)
+def _print__1(term, trail, k):
+    """print(Term) -- SWI-Prolog's print/1: ``write_term(Term,
+    [portray(true), numbervars(true), quoted(true)])``.  Clausal has no
+    portray/1 hook, so that is exactly ``writeq/1`` (and, as there, a string
+    prints as its char list).  No newline.  It did not exist
+    (``existence_error(procedure, print/1)``)."""
+    from clausal.logic.solve import _deref_walk
+    _sys.stdout.write(_format_term_iso(_deref_walk(term), quoted=True))
+    _sys.stdout.flush()
+    yield None
+
+
+def _syntax_error(kind: str, message: str, who: str):
+    from clausal.logic.exceptions import _error  # noqa: PLC0415
+    from clausal.logic.atoms import mint  # noqa: PLC0415
+    return LogicException(_error(("syntax_error", mint(kind)),
+                                 f"{who}: {message}"))
+
+
+def read_term_from_text(text: str, db, who: str):
+    """*text* read as ONE Prolog term with the native ISO reader and the
+    operators in force: ``(term, [(name, var), ...])``, the named variables
+    in order of first occurrence (``_`` left out, ``_Name`` kept, as
+    read_term/2's ``variable_names``).  The end ``.`` is optional; a second
+    term is a syntax error, and so is text of layout only
+    (``syntax_error(end_of_string)``, as SWI's).  A ``"..."`` is read as
+    the module's ``double_quotes`` flag says."""
+    import copy as _copy  # noqa: PLC0415
+    from clausal.logic.atoms import mint  # noqa: PLC0415
+    from clausal.logic.builtins.lists import _cons_onto  # noqa: PLC0415
+    from clausal.tools.prolog_operators import runtime_op_table  # noqa: PLC0415
+    from clausal.tools.prolog_reader import PrologReader, VarRef  # noqa: PLC0415
+    from clausal.tools.prolog_tokenizer import PL_SOURCE_NESTED_COMMENTS  # noqa: PLC0415
+    from clausal.tools.toklex import EOF  # noqa: PLC0415
+
+    def read(source):
+        # A copy: an ``op/3`` directive in the text must not define an
+        # operator for the whole process.
+        table = _copy.copy(runtime_op_table())
+        table._ops = {name: list(es) for name, es in table._ops.items()}
+        table._default_names = set(table._default_names)
+        reader = PrologReader(op_table=table,
+                              nested_comments=PL_SOURCE_NESTED_COMMENTS)
+        reader.feed(source)
+        reader.close()
+        return reader, reader.read_term()
+
+    reader, item = read(text)
+    kind = type(item).__name__
+    if kind == "SyntaxIssue" and not item.resumable:
+        # No end token: read it again with one (a ``.`` on its own line, so
+        # a trailing ``% comment`` cannot swallow it).
+        reader, item = read(text + "\n.")
+        kind = type(item).__name__
+        if item is EOF:
+            raise _syntax_error("end_of_string", "no term in the text", who)
+    if item is EOF:
+        raise _syntax_error("end_of_string", "no term in the text", who)
+    if kind == "SyntaxIssue":
+        raise _syntax_error("incomplete_reduction", item.message, who)
+    if reader.read_term() is not EOF:
+        raise _syntax_error("end_of_clause_expected",
+                            "more than one term in the text", who)
+    term = item.term
+    if kind == "Directive":
+        term = (":-", term)
+    elif kind == "Query":
+        term = ("?-", term)
+    names = dict(getattr(item, "var_names", {}) or {})
+    from clausal.logic.builtins.flags import flag_value  # noqa: PLC0415
+    double_quotes = flag_value(db, "double_quotes")
+    variables: dict[int, Var] = {}
+
+    def build(t):
+        if type(t) is VarRef:
+            v = variables.get(t.i)
+            if v is None:
+                v = variables[t.i] = Var()
+            return v
+        if type(t) is str:
+            return mint(t)
+        if type(t) is tuple and t:
+            if t[0] == "$chars" and len(t) == 2 and type(t[1]) is str:
+                if double_quotes == "atom":
+                    return mint(t[1])
+                if double_quotes == "codes":
+                    return [ord(c) for c in t[1]]
+                return chars(t[1])
+            if t[0] == "." and len(t) == 3:
+                heads = []
+                while type(t) is tuple and len(t) == 3 and t[0] == ".":
+                    heads.append(build(t[1]))
+                    t = t[2]
+                return _cons_onto(heads, build(t))
+            return (t[0], *(build(a) for a in t[1:]))
+        if type(t) is list:
+            return [build(a) for a in t]
+        return t
+
+    out = build(term)
+    bindings = [(names[i], variables[i]) for i in sorted(variables)
+                if names.get(i, "_") != "_"]
+    return out, bindings
+
+
+def _text_argument(val, who: str) -> str:
+    """The text of term_to_atom/2's and atom_to_term/3's atom argument (any
+    text, as SWI's ``CVT_ALL``), or the ISO error SWI raises."""
+    from clausal.logic.builtins.chars import any_text  # noqa: PLC0415
+    text = any_text(val, nil_is_atom=True)
+    if text is None:
+        v = deref(val)
+        if is_var(v) or _is_partial_list(v):
+            raise LogicException(instantiation_error(who))
+        raise LogicException(type_error("string", v, who))
+    return text
+
+
+def _is_partial_list(v) -> bool:
+    from clausal.logic.builtins.lists import _open_skeleton  # noqa: PLC0415
+    return _open_skeleton(v) is not None
+
+
+@_db_builtin("term_to_atom", 2, fields=("term", "atom"), db_optional=True)
+def _term_to_atom_factory(db):
+    def _term_to_atom__2(term, atom, trail, k):
+        """term_to_atom(Term, Atom) -- SWI-Prolog's: with Atom unbound, Atom
+        is the text ``writeq/1`` without numbervars writes for Term
+        (``write_term(Term, [quoted(true)])``); with Atom bound to text it
+        is read as one term (the native ISO reader, the operators in force,
+        the end ``.`` optional) and unified with Term.  A bound Atom that is
+        not text is ``type_error(string, A)``; text that does not read is a
+        ``syntax_error``.  It did not exist."""
+        from clausal.logic.atoms import mint  # noqa: PLC0415
+        from clausal.logic.solve import _deref_walk  # noqa: PLC0415
+        who = "term_to_atom/2"
+        mark = trail.mark()
+        if is_var(deref(atom)):
+            text = _format_term_iso(_deref_walk(term), quoted=True,
+                                    numbervars=False)
+            ok = unify(atom, mint(text), trail)
+        else:
+            value, _names = read_term_from_text(
+                _text_argument(atom, who), db, who)
+            ok = unify(term, value, trail)
+        if ok:
+            yield None
+        trail.undo(mark)
+    return _term_to_atom__2
+
+
+@_db_builtin("atom_to_term", 3, fields=("atom", "term", "bindings"),
+             db_optional=True)
+def _atom_to_term_factory(db):
+    def _atom_to_term__3(atom, term, bindings, trail, k):
+        """atom_to_term(Atom, Term, Bindings) -- SWI-Prolog's: Atom's text
+        read as one term (as term_to_atom/2 reads it), and Bindings the list
+        of ``Name = Var`` for its named variables in order of first
+        occurrence (read_term/2's ``variable_names``; ``_`` left out).
+        Atom unbound is an instantiation error, not text
+        ``type_error(string, A)``; Bindings neither a list nor a partial
+        list ``type_error(list, B)``.  It did not exist."""
+        from clausal.logic.atoms import mint  # noqa: PLC0415
+        from clausal.logic.builtins.lists import _as_items  # noqa: PLC0415
+        who = "atom_to_term/3"
+        text = _text_argument(atom, who)
+        b = deref(bindings)
+        if not (is_var(b) or _as_items(b) is not None or _is_partial_list(b)):
+            raise LogicException(type_error("list", b, who))
+        value, names = read_term_from_text(text, db, who)
+        pairs = [("=", mint(n), v) for n, v in names]
+        mark = trail.mark()
+        if unify(term, value, trail) and unify(bindings, pairs, trail):
+            yield None
+        trail.undo(mark)
+    return _atom_to_term__3
 
 
 # ── Clause formatting helpers ────────────────────────────────────────────────

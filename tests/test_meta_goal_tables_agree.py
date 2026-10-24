@@ -336,7 +336,7 @@ def test_every_goal_builtin_is_an_engine_builtin():
 def test_the_list_builtins_are_the_tables_closure_rows():
     from clausal.logic.builtins import higher_order
     assert higher_order._GOAL_FIRST_LIST_BUILTINS is GOAL_FIRST_LIST_BUILTINS
-    assert len(GOAL_FIRST_LIST_BUILTINS) == 25
+    assert len(GOAL_FIRST_LIST_BUILTINS) == 26     # predsort/3 joined (2026-10-24)
     assert all(BUILTIN_GOAL_POSITIONS[k] == (0,) for k in GOAL_FIRST_LIST_BUILTINS)
 
 

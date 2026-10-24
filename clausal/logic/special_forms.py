@@ -128,6 +128,7 @@ GOAL_BUILTINS: dict[tuple[str, int], str] = {
     ("foldl", 4): "CAAA",
     ("foldl", 5): "CAAAA",
     ("foldl", 6): "CAAAAA",
+    ("predsort", 3): "CAA",
     ("map_list_to_pairs", 3): "CAA",
     ("take_while", 3): "CAA",
     ("drop_while", 3): "CAA",

@@ -1,7 +1,7 @@
 """Higher-order builtins: call_goal/1..8, call/1..8, maplist/2,3,
 include/3, exclude/3, partition/4, tfilter/3, tpartition/4, foldl/4,5,6,
 take_while/3, drop_while/3, span/4, group_by/3, sort_by/3,
-max_by/3, min_by/3, filter_map/3."""
+max_by/3, min_by/3, filter_map/3, predsort/3."""
 
 from __future__ import annotations
 
@@ -1220,6 +1220,146 @@ def _foldl__5(this_generator, _proceed, _fail, _catcher, goal, xs, ys, v0, v, tr
 def _foldl__6(this_generator, _proceed, _fail, _catcher, goal, xs, ys, zs, v0, v, trail):
     """foldl(Goal, Xs, Ys, Zs, V0, V) — Goal(X, Y, Z, Acc0, Acc1) over three lists."""
     yield from _foldl(this_generator, _proceed, _fail, goal, [xs, ys, zs], v0, v, trail)
+
+
+# ── predsort/3 (SWI-Prolog library(sort); Scryer has none) ──────────────────
+#
+# SWI's merge sort, comparison for comparison: a run of two is compared
+# once, a longer run is split at N // 2 and the halves merged, ``=`` keeping
+# the left element and dropping the right.  The order of the comparisons
+# is therefore SWI's, which is what a comparator with side effects (or one
+# that binds its arguments) sees.
+#
+# No comparison is committed to: EVERY answer of the comparator is a branch,
+# as maplist/foldl run every answer of their calls (operator ruling R5/R6,
+# 2026-09-28), and an unbound Delta takes ``<``, ``=``, ``>`` in turn (SWI's
+# clause order).  For a comparator with one answer per pair -- compare/3
+# and its like -- this is SWI's predsort exactly; SWI commits to the first
+# answer of each merge comparison, which Clausal, being cut-free, does not.
+#
+# The sort itself is a pure function of the Deltas, so a branch is resumed
+# by REPLAYING it: the run is restarted with the Deltas decided so far, and
+# stops at the first comparison it has no Delta for.
+
+_PREDSORT_DELTAS = ("<", "=", ">")
+
+
+class _NeedDelta(Exception):
+    def __init__(self, a, b):
+        self.a, self.b = a, b
+
+
+def _predsort_replay(items: list, deltas: list) -> list:
+    """SWI's predsort/5 + predmerge/4 on *items*, comparison ``i`` answered
+    by ``deltas[i]``; raises :class:`_NeedDelta` at the first one past the
+    end of *deltas*."""
+    used = [0]
+
+    def delta(a, b):
+        i = used[0]
+        if i == len(deltas):
+            raise _NeedDelta(a, b)
+        used[0] = i + 1
+        return deltas[i]
+
+    def merge(r1, r2):
+        out, i, j = [], 0, 0
+        while i < len(r1) and j < len(r2):
+            d = delta(r1[i], r2[j])
+            if d == "<":
+                out.append(r1[i])
+                i += 1
+            elif d == "=":
+                out.append(r1[i])
+                i += 1
+                j += 1
+            else:
+                out.append(r2[j])
+                j += 1
+        return out + r1[i:] + r2[j:]
+
+    def run(xs):
+        n = len(xs)
+        if n == 2:
+            d = delta(xs[0], xs[1])
+            return ([xs[0], xs[1]] if d == "<" else [xs[0]] if d == "="
+                    else [xs[1], xs[0]])
+        if n < 2:
+            return list(xs)
+        half = n // 2
+        return merge(run(xs[:half]), run(xs[half:]))
+
+    return run(items)
+
+
+@_trampoline_builtin("predsort", 3)
+def _predsort__3(this_generator, _proceed, _fail, _catcher, goal, lst, sorted_lst, trail):
+    """predsort(Pred, List, Sorted) -- SWI-Prolog's library(sort) predsort/3.
+
+    Sorts as sort/2 does, but orders two elements by calling
+    ``call(Pred, Delta, E1, E2)``, which must bind Delta to ``<``, ``>`` or
+    ``=``; ``=`` keeps E1 and drops E2, so the elements Pred calls equal
+    collapse to one.  With ``compare`` it is sort/2.  A comparator answer
+    whose Delta is anything else is no answer (SWI fails there); every
+    answer of the comparator is tried (see the block comment above).  A
+    partial List is an instantiation error, a non-list ``type_error(list,
+    L)``.  It did not exist (``existence_error(procedure, predsort/3)``)."""
+    from clausal.logic.atoms import is_atom, spelling  # noqa: PLC0415
+    from clausal.logic.builtins.lists import _ld, _sort_items, _was_bytes  # noqa: PLC0415
+    lst_val = _ld(lst)
+    items = [deref(x) for x in _sort_items(lst_val, Var(), "predsort/3")]
+    was_str, was_bytes = _was_string(lst_val), _was_bytes(lst_val)
+    goal_val = deref(goal)
+    dispatch = None
+    deltas: list = []
+    # one entry per comparison asked: [step generator, mark, Delta var,
+    # pending alternatives for an unbound Delta, mark before the alternative]
+    stack: list = []
+    while True:
+        try:
+            result = _predsort_replay(items, deltas)
+        except _NeedDelta as need:
+            if dispatch is None:
+                dispatch = _ensure_trampoline_dispatch(goal_val, 3)
+            d_var = Var()
+            stack.append([StepGenerator(dispatch, this_generator, this_generator,
+                                        this_generator, d_var, need.a, need.b,
+                                        trail),
+                          trail.mark(), d_var, None, None])
+        else:
+            mark = trail.mark()
+            if unify(sorted_lst, _seq_result(result, was_str, was_bytes), trail):
+                yield (_proceed, None)
+            trail.undo(mark)
+        # the next Delta of the deepest comparison that has one left
+        while stack:
+            top = stack[-1]
+            if top[3]:
+                trail.undo(top[4])
+                d = top[3].pop(0)
+                unify(top[2], d, trail)
+                break
+            if top[4] is not None:
+                trail.undo(top[4])      # the last alternative's binding
+                top[4] = None
+            _st = yield (top[0], None)
+            if _st is DONE:
+                trail.undo(top[1])
+                stack.pop()
+                continue
+            d = deref(top[2])
+            if is_var(d):
+                top[4] = trail.mark()
+                top[3] = list(_PREDSORT_DELTAS)
+                continue
+            if is_atom(d) and spelling(d) in _PREDSORT_DELTAS:
+                d = spelling(d)
+                break
+        else:
+            yield (_fail, DONE)
+            return
+        del deltas[len(stack) - 1:]
+        deltas.append(d)
 
 
 def _maplist_n(this_generator, _proceed, _fail, goal, lists, trail):

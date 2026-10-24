@@ -1150,3 +1150,78 @@ def _atom_number__2(atom, number, trail, k):
     if unify(number, value, trail):
         yield None
     trail.undo(mark)
+
+
+# ── atom_string/2 (SWI-Prolog; Scryer has none) ──────────────────────────────
+
+
+def any_text(val, *, nil_is_atom: bool) -> "str | None":
+    """The text SWI's ``PL_get_text(T, CVT_ALL)`` reads from *val*: an
+    atom's spelling, a number's text (as number_codes/2 writes it), a
+    string, or a proper list of characters or of character codes.  None for
+    anything else (a variable, a partial list, a compound, ...).
+
+    *nil_is_atom* decides the empty list: the atom ``'[]'`` (text ``[]``,
+    as atom_length/2 reads it) or the empty list of characters (``''``)."""
+    from clausal.logic.cells import chars_text, is_chars  # noqa: PLC0415
+    v = deref(val)
+    if is_var(v):
+        return None
+    if is_chars(v):
+        return chars_text(v)
+    if _is_empty_list(v):
+        return NIL_SPELLING if nil_is_atom else ""
+    if type(v) in (int, float) or isinstance(v, (_Decimal,)):
+        return _number_text(v)
+    if _term_is_atom(v):
+        return spelling(v)
+    items = _as_items(v)
+    if items is None:
+        return None
+    items = [deref(e) for e in items]
+    if all(is_char_atom(e) for e in items):
+        return "".join(spelling(e) for e in items)
+    if all(type(e) is int and 0 <= e <= 0x10FFFF for e in items):
+        try:
+            return "".join(chr(e) for e in items)
+        except ValueError:
+            return None
+    return None
+
+
+@_builtin("atom_string", 2)
+def _atom_string__2(atom, string, trail, k):
+    """atom_string(Atom, String) -- SWI-Prolog's: String is the string (in
+    Clausal, the chars carrier) of Atom's text, or Atom the atom of String's.
+
+    As SWI's ``src/pl-string.c``: a String that is text (a string, an atom,
+    a number, a char or code list) gives the atom of that text, unified with
+    Atom -- and if Atom is bound to other text, the two TEXTS are compared,
+    so ``atom_string(1, "1")`` holds ("the types are not enforced").
+    Otherwise Atom's text gives String.  Neither text: a bound String is
+    ``type_error(string, S)``, a bound Atom ``type_error(atom, A)``, and two
+    unbound arguments an instantiation error.  It did not exist
+    (``existence_error(procedure, atom_string/2)``)."""
+    from clausal.logic.cells import chars  # noqa: PLC0415
+    who = "atom_string/2"
+    text = any_text(string, nil_is_atom=False)
+    if text is not None:
+        target, value = atom, mint(text)
+    else:
+        text = any_text(atom, nil_is_atom=True)
+        if text is None:
+            if not is_var(deref(string)):
+                raise LogicException(type_error("string", deref(string), who))
+            if not is_var(deref(atom)):
+                raise LogicException(type_error("atom", deref(atom), who))
+            raise LogicException(instantiation_error(who))
+        target, value = string, chars(text)
+    mark = trail.mark()
+    if unify(target, value, trail):
+        yield None
+        trail.undo(mark)
+        return
+    trail.undo(mark)
+    bound = deref(target)
+    if not is_var(bound) and any_text(bound, nil_is_atom=target is atom) == text:
+        yield None
