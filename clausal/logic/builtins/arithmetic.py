@@ -14,6 +14,7 @@ from clausal.logic.variables import deref, is_var, unify, present_number
 from clausal.terms import Quantity
 
 from clausal.logic.builtins._registry import _builtin
+from clausal.logic.trampoline import FINAL
 from clausal.logic.exceptions import ARITH_OPERATOR_TERMS
 
 
@@ -215,13 +216,13 @@ def _between__3_py(low, high, x, trail, k):
         # Check mode
         if isinstance(x_val, int) and not isinstance(x_val, bool) \
                 and low_val <= x_val <= high_val:
-            yield None
+            yield FINAL
     else:
-        # Generate mode
+        # Generate mode: the answer at High is the last (FINAL).
         for i in range(low_val, high_val + 1):
             mark = trail.mark()
             if unify(x, i, trail):
-                yield None
+                yield FINAL if i == high_val else None
             trail.undo(mark)
 
 
@@ -517,15 +518,15 @@ if _USE_C_ARITH:
             for i in range(lo, hi + 1):
                 mark = trail.mark()
                 if unify(x, i, trail):
-                    yield None
+                    yield FINAL if i == hi else None
                 trail.undo(mark)
             return
         if ret is True:
             # Check mode — x was already bound and in range, no trail to undo
-            yield None
+            yield FINAL
             return
         # Check mode with unification — ret is the mark
-        yield None
+        yield FINAL
         trail.undo(ret)
 
     def _succ__2_c(x, y, trail, k):

@@ -11,7 +11,7 @@ from clausal.logic.exceptions import (
     LogicException, existence_error, instantiation_error, string_goal_error,
 )
 from clausal.logic.meta_predicate import is_goal_object as _is_goal_object
-from clausal.logic.trampoline import DONE, StepGenerator
+from clausal.logic.trampoline import DONE, FINAL, StepGenerator
 from clausal.logic.builtins.lists import _as_items, _open_skeleton, _partial, _seq_result, _was_string
 from clausal.logic.builtins._helpers import _is_empty_list, _standard_order_key
 from clausal.logic.predicate import (
@@ -734,7 +734,8 @@ def _make_call_goal_factory(extra_n: int):
                 sg = StepGenerator(dispatch, this_generator, this_generator, this_generator, *call_args, trail)
                 _st = yield (sg, None)
                 while _st is not DONE:
-                    yield (_proceed, None)
+                    # the goal's own FINAL is ours: nothing follows it here
+                    yield (_proceed, FINAL if _st is FINAL else None)
                     _st = yield (sg, None)
             yield (_fail, DONE)
         return _call_goal_n

@@ -12,7 +12,7 @@ from typing import Any
 from clausal.logic.atoms import char_atom, is_char_atom, is_truth_atom, spelling
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.terms import as_improper as _as_improper
-from clausal.logic.trampoline import DONE
+from clausal.logic.trampoline import DONE, FINAL
 
 from clausal.logic.builtins._registry import _trampoline_builtin, _builtin
 from clausal.logic.builtins._helpers import _standard_order_key, _standard_order_sorted
@@ -329,6 +329,11 @@ def _member__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
     if items is None:
         items = _as_membership_items(lst_val)
     if items is not None:
+        # The answer at the last element is the last answer (FINAL): a
+        # proper list has nothing after it, as the prologue's member/2 has
+        # no clause left for [] (Scryer: ``member(X, [a,b,c])`` ends
+        # ``X = c.``).
+        last = len(items)
         if _c_member_find is not None:
             idx = 0
             while True:
@@ -336,13 +341,13 @@ def _member__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
                 if result is None:
                     break
                 idx, mark = result
-                yield (_proceed, None)
+                yield (_proceed, FINAL if idx == last else None)
                 trail.undo(mark)
         else:
-            for item in items:
+            for i, item in enumerate(items, 1):
                 mark = trail.mark()
                 if unify(elem, item, trail):
-                    yield (_proceed, None)
+                    yield (_proceed, FINAL if i == last else None)
                 trail.undo(mark)
     else:
         skel = _open_skeleton(lst_val)
@@ -392,7 +397,7 @@ def _memberchk__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
             mark = trail.mark()
             if _c_memberchk_find(items, elem, trail):
                 if trail.pending is None:
-                    yield (_proceed, None)
+                    yield (_proceed, FINAL)
                     yield (_fail, DONE)
                     return
                 # It woke goals.  memberchk is once(member) and the woken
@@ -405,7 +410,7 @@ def _memberchk__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
             for item in items:
                 mark = trail.mark()
                 if unify(elem, item, trail) and run_first(trail):
-                    yield (_proceed, None)
+                    yield (_proceed, FINAL)
                     yield (_fail, DONE)
                     return
                 trail.undo(mark)
@@ -420,14 +425,14 @@ def _memberchk__2(this_generator, _proceed, _fail, _catcher, elem, lst, trail):
             for item in prefix:
                 mark = trail.mark()
                 if unify(elem, item, trail) and run_first(trail):
-                    yield (_proceed, None)
+                    yield (_proceed, FINAL)
                     trail.undo(mark)
                     yield (_fail, DONE)
                     return
                 trail.undo(mark)
             mark = trail.mark()
             if unify(tail, _partial([elem], Var()), trail) and run_first(trail):
-                yield (_proceed, None)
+                yield (_proceed, FINAL)
             trail.undo(mark)
     yield (_fail, DONE)
 
@@ -454,7 +459,7 @@ def _append_dr__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
             l1_val.extend(l2_items)
             mark = trail.mark()
             if unify(l3, l1_val, trail):
-                yield (_proceed, None)
+                yield (_proceed, FINAL)
             trail.undo(mark)
             yield (_fail, DONE)
             return
@@ -494,7 +499,7 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
         if is_chars(l2_val):
             mark = trail.mark()
             if unify(l3, chars_concat(l1_val, l2_val), trail):   # a rope when long: no copy
-                yield (_proceed, None)
+                yield (_proceed, FINAL)
             trail.undo(mark)
             yield (_fail, DONE)
             return
@@ -507,7 +512,7 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
                 k = len(t1)
                 rest = text_slice(p3, k, len(p3)) if type(p3) is str else p3[k:]
                 if unify(l2, (CHARS_TAG, rest), trail):
-                    yield (_proceed, None)
+                    yield (_proceed, FINAL)
                 trail.undo(mark)
             yield (_fail, DONE)
             return
@@ -535,7 +540,7 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
                 else:
                     ok = unify(l1_items, head[:n], trail)
                 if ok and unify(l2, rest_of(), trail):
-                    yield (_proceed, None)
+                    yield (_proceed, FINAL)
                 trail.undo(mark)
             yield (_fail, DONE)
             return
@@ -547,7 +552,7 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
         result = _seq_result(l1_items + l2_items, _out_str, _out_bytes)
         mark = trail.mark()
         if unify(l3, result, trail):
-            yield (_proceed, None)
+            yield (_proceed, FINAL)
         trail.undo(mark)
     elif l1_items is not None and l3_items is not None:
         # L1 and L3 known, L3 not one _prefix_window reads (bytes, a closed
@@ -566,7 +571,7 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
             else:
                 ok = unify(l1_items, l3_items[:n], trail)
             if ok and unify(l2, _seq_result(l3_items[n:], _out_str, _out_bytes), trail):
-                yield (_proceed, None)
+                yield (_proceed, FINAL)
             trail.undo(mark)
     elif l3_items is not None:
         # Only L3 known: enumerate all splits. The C accelerator only knows the
@@ -579,7 +584,8 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
                 if result is None:
                     break
                 idx, mark = result
-                yield (_proceed, None)
+                # The split with L1 = L3 is the last one.
+                yield (_proceed, FINAL if idx > len(l3_items) else None)
                 trail.undo(mark)
         else:
             for i in range(len(l3_items) + 1):
@@ -587,7 +593,7 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
                 suffix = _seq_result(l3_items[i:], _out_str, _out_bytes)
                 mark = trail.mark()
                 if unify(l1, prefix, trail) and unify(l2, suffix, trail):
-                    yield (_proceed, None)
+                    yield (_proceed, FINAL if i == len(l3_items) else None)
                 trail.undo(mark)
     elif l1_items is not None:
         # L1 proper, L3 not a proper list: L3 is L1 followed by L2 -- one
@@ -595,7 +601,7 @@ def _append__3(this_generator, _proceed, _fail, _catcher, l1, l2, l3, trail):
         # term: ``append([x], foo, L)`` is ``L = [x|foo]``, as in ISO.
         mark = trail.mark()
         if unify(l3, _cons_onto(list(l1_items), l2_val), trail):
-            yield (_proceed, None)
+            yield (_proceed, FINAL)
         trail.undo(mark)
     else:
         # L1 open and L3 not a proper list: the prologue enumerates L1's
@@ -789,7 +795,7 @@ def _length__2(this_generator, _proceed, _fail, _catcher, lst, n, trail):
             _length_n_error(n_val)
         mark = trail.mark()
         if unify(n, len(items), trail):
-            yield (_proceed, None)
+            yield (_proceed, FINAL)
         trail.undo(mark)
         yield (_fail, DONE)
         return
@@ -800,7 +806,7 @@ def _length__2(this_generator, _proceed, _fail, _catcher, lst, n, trail):
             # the generating mode: N fresh elements
             mark = trail.mark()
             if unify(lst, [Var() for _ in range(n_val)], trail):
-                yield (_proceed, None)
+                yield (_proceed, FINAL)
             trail.undo(mark)
             yield (_fail, DONE)
             return
@@ -816,7 +822,7 @@ def _length__2(this_generator, _proceed, _fail, _catcher, lst, n, trail):
         if n_val >= len(prefix):
             mark = trail.mark()
             if unify(tail, [Var() for _ in range(n_val - len(prefix))], trail):
-                yield (_proceed, None)
+                yield (_proceed, FINAL)
             trail.undo(mark)
         yield (_fail, DONE)
         return
@@ -848,7 +854,7 @@ def _last__2(this_generator, _proceed, _fail, _catcher, lst, elem, trail):
     if items is not None and len(items) > 0:
         mark = trail.mark()
         if unify(elem, items[-1], trail):
-            yield (_proceed, None)
+            yield (_proceed, FINAL)
         trail.undo(mark)
     yield (_fail, DONE)
 
@@ -906,7 +912,7 @@ def _reverse__2(this_generator, _proceed, _fail, _catcher, lst, rev, trail):
         result = _seq_result(list(reversed(items)), was_str, was_bytes)
         mark = trail.mark()
         if unify(rev, result, trail):
-            yield (_proceed, None)
+            yield (_proceed, FINAL)
         trail.undo(mark)
     else:
         # Backward mode: first arg not a usable sequence (e.g. unbound Var);
@@ -920,7 +926,7 @@ def _reverse__2(this_generator, _proceed, _fail, _catcher, lst, rev, trail):
             result = _seq_result(list(reversed(rev_items)), was_str, was_bytes)
             mark = trail.mark()
             if unify(lst, result, trail):
-                yield (_proceed, None)
+                yield (_proceed, FINAL)
             trail.undo(mark)
     yield (_fail, DONE)
 
@@ -942,9 +948,10 @@ def _nth0__3(this_generator, _proceed, _fail, _catcher, n, lst, elem, trail):
             if _is_int(n_val) and 0 <= n_val < len(items):
                 mark = trail.mark()
                 if unify(elem, items[n_val], trail):
-                    yield (_proceed, None)
+                    yield (_proceed, FINAL)
                 trail.undo(mark)
         else:
+            # Enumerating: the answer at the last element is the last one.
             if _c_nth0_find is not None:
                 idx = 0
                 while True:
@@ -952,13 +959,13 @@ def _nth0__3(this_generator, _proceed, _fail, _catcher, n, lst, elem, trail):
                     if result is None:
                         break
                     idx, mark = result
-                    yield (_proceed, None)
+                    yield (_proceed, FINAL if idx == len(items) else None)
                     trail.undo(mark)
             else:
                 for i, item in enumerate(items):
                     mark = trail.mark()
                     if unify(n, i, trail) and unify(elem, item, trail):
-                        yield (_proceed, None)
+                        yield (_proceed, FINAL if i == len(items) - 1 else None)
                     trail.undo(mark)
     yield (_fail, DONE)
 
@@ -1014,7 +1021,7 @@ def _flatten__2(this_generator, _proceed, _fail, _catcher, lst, flat, trail):
             result.append(lst_val)
         mark = trail.mark()
         if unify(flat, result, trail):
-            yield (_proceed, None)
+            yield (_proceed, FINAL)
         trail.undo(mark)
     yield (_fail, DONE)
 
@@ -1064,7 +1071,7 @@ def _msort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail)
         out = _seq_result(result, _was_string(lst_val), _was_bytes(lst_val))
         mark = trail.mark()
         if unify(sorted_lst, out, trail):
-            yield (_proceed, None)
+            yield (_proceed, FINAL)
         trail.undo(mark)
     yield (_fail, DONE)
 
@@ -1150,7 +1157,7 @@ def _keysort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trai
             _unify_pair(o, *_pair_key_value(r), trail)
             for o, r in zip(out_items, result))
     if ok:
-        yield (_proceed, None)
+        yield (_proceed, FINAL)
     trail.undo(mark)
     yield (_fail, DONE)
 
@@ -1218,7 +1225,7 @@ def _sort__2(this_generator, _proceed, _fail, _catcher, lst, sorted_lst, trail):
         out = _seq_result(result, _was_string(lst_val), _was_bytes(lst_val))
         mark = trail.mark()
         if unify(sorted_lst, out, trail):
-            yield (_proceed, None)
+            yield (_proceed, FINAL)
         trail.undo(mark)
     yield (_fail, DONE)
 
@@ -1424,14 +1431,15 @@ def _select__3(this_generator, _proceed, _fail, _catcher, elem, lst, rest, trail
                 if result is None:
                     break
                 idx, mark = result
-                yield (_proceed, None)
+                # The answer at the last element is the last one.
+                yield (_proceed, FINAL if idx == len(items) else None)
                 trail.undo(mark)
         else:
             for i, item in enumerate(items):
                 mark = trail.mark()
                 remainder = _seq_result(items[:i] + items[i + 1:], was_str, was_bytes)
                 if unify(elem, item, trail) and unify(rest, remainder, trail):
-                    yield (_proceed, None)
+                    yield (_proceed, FINAL if i == len(items) - 1 else None)
                 trail.undo(mark)
     elif _is_cons(lst_val):
         # An IMPROPER list (D50): Scryer's select/3 recursion takes each
@@ -1446,7 +1454,7 @@ def _select__3(this_generator, _proceed, _fail, _catcher, elem, lst, rest, trail
             if (unify(elem, item, trail)
                     and unify(rest, _cons_onto(heads[:i] + heads[i + 1:], end),
                               trail)):
-                yield (_proceed, None)
+                yield (_proceed, FINAL if i == len(heads) - 1 else None)
             trail.undo(mark)
     yield (_fail, DONE)
 
@@ -1585,7 +1593,7 @@ def _list_to_set__2(this_generator, _proceed, _fail, _catcher, lst, set_out, tra
         out = _seq_result(seen, _was_string(lst_val), _was_bytes(lst_val))
         mark = trail.mark()
         if unify(set_out, out, trail):
-            yield (_proceed, None)
+            yield (_proceed, FINAL)
         trail.undo(mark)
     yield (_fail, DONE)
 
@@ -1646,7 +1654,7 @@ def _sum_list__2(this_generator, _proceed, _fail, _catcher, lst, total, trail):
             ) from exc
         mark = trail.mark()
         if unify(total, s, trail):
-            yield (_proceed, None)
+            yield (_proceed, FINAL)
         trail.undo(mark)
     yield (_fail, DONE)
 
@@ -1686,7 +1694,7 @@ def _max_list__2(this_generator, _proceed, _fail, _catcher, lst, maximum, trail)
             ) from exc
         mark = trail.mark()
         if unify(maximum, m, trail):
-            yield (_proceed, None)
+            yield (_proceed, FINAL)
         trail.undo(mark)
     yield (_fail, DONE)
 
@@ -1712,7 +1720,7 @@ def _min_list__2(this_generator, _proceed, _fail, _catcher, lst, minimum, trail)
             ) from exc
         mark = trail.mark()
         if unify(minimum, m, trail):
-            yield (_proceed, None)
+            yield (_proceed, FINAL)
         trail.undo(mark)
     yield (_fail, DONE)
 
@@ -2071,7 +2079,9 @@ def _nth_index_check(n_val, who):
 
 
 def _nth_solutions(base, index, lst, elem, rest, trail, who):
-    """Yield once per solution of nthB(Index, List, Elem[, Rest])."""
+    """Yield once per solution of nthB(Index, List, Elem[, Rest]): ``FINAL``
+    for an answer known to be the last (a bound index; an unbound one at
+    the last element of a proper list), else None."""
     n_val = deref(index)
     _nth_index_check(n_val, who)
     lst_val = _ld(lst)
@@ -2112,7 +2122,7 @@ def _nth_solutions(base, index, lst, elem, rest, trail, who):
                 if ok and rest is not None:
                     ok = unify(rest, _cons_onto(list(prefix), nxt), trail)
                 if ok:
-                    yield None
+                    yield FINAL if target is not None else None
                 trail.undo(mark)
                 if target is not None:
                     return
@@ -2154,7 +2164,7 @@ def _nth_solutions(base, index, lst, elem, rest, trail, who):
             if ok and rest is not None:
                 ok = unify(rest, _partial(list(prefix) + fresh, shared), trail)
         if ok:
-            yield None
+            yield FINAL
         trail.undo(mark)
         return
     if is_var(n_val):
@@ -2164,6 +2174,7 @@ def _nth_solutions(base, index, lst, elem, rest, trail, who):
         if pos < 0 or pos >= len(items):
             return
         indices = (pos,)
+    last = indices[-1] if indices else None
     for i in indices:
         mark = trail.mark()
         ok = unify(elem, items[i], trail)
@@ -2172,7 +2183,7 @@ def _nth_solutions(base, index, lst, elem, rest, trail, who):
         if ok and rest is not None:
             ok = unify(rest, list(items[:i]) + list(items[i + 1:]), trail)
         if ok:
-            yield None
+            yield FINAL if i == last else None
         trail.undo(mark)
 
 
@@ -2182,13 +2193,13 @@ def _nth_builtin(base, arity):
 
     if arity == 3:
         def fn(this_generator, _proceed, _fail, _catcher, index, lst, elem, trail):
-            for _ in _nth_solutions(base, index, lst, elem, None, trail, who):
-                yield (_proceed, None)
+            for v in _nth_solutions(base, index, lst, elem, None, trail, who):
+                yield (_proceed, v)
             yield (_fail, DONE)
     else:
         def fn(this_generator, _proceed, _fail, _catcher, index, lst, elem, rest, trail):
-            for _ in _nth_solutions(base, index, lst, elem, rest, trail, who):
-                yield (_proceed, None)
+            for v in _nth_solutions(base, index, lst, elem, rest, trail, who):
+                yield (_proceed, v)
             yield (_fail, DONE)
     fn.__name__ = f"_{name}__{arity}"
     fn.__doc__ = (f"{name}(Index, List, Elem{', Rest' if arity == 4 else ''}) "

@@ -7,7 +7,7 @@ from clausal.logic.predicate import (
     is_term_instance, term_field_names, _dispatch_at,
     is_declared_predicate_name, localize_goal,
 )
-from clausal.logic.trampoline import DONE, StepGenerator
+from clausal.logic.trampoline import DONE, FINAL, StepGenerator
 
 from clausal.logic.builtins._registry import (
     _trampoline_builtin, _DB_BUILTINS, _BUILTIN_FIELDS,
@@ -537,7 +537,8 @@ def _phrase__2(db, this_generator, _proceed, _fail, _catcher, rule_body, list_ar
 
     _st = yield (sg, None)
     while _st is not DONE:
-        yield (_proceed, None)
+        # the goal's own FINAL is ours: nothing follows it here
+        yield (_proceed, FINAL if _st is FINAL else None)
         _st = yield (sg, None)
     yield (_fail, DONE)
 
@@ -584,7 +585,8 @@ def _phrase__3(db, this_generator, _proceed, _fail, _catcher, rule_body, list_ar
 
     _st = yield (sg, None)
     while _st is not DONE:
-        yield (_proceed, None)
+        # the goal's own FINAL is ours: nothing follows it here
+        yield (_proceed, FINAL if _st is FINAL else None)
         _st = yield (sg, None)
     yield (_fail, DONE)
 

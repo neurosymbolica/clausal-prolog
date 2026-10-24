@@ -83,7 +83,7 @@ from typing import Any
 from clausal.logic.variables import Var, deref, is_var, unify
 from clausal.logic.atoms import is_mangled
 from clausal.logic.cells import _cell_shape, compound_cell_shape, is_chars
-from clausal.logic.trampoline import DONE, StepGenerator
+from clausal.logic.trampoline import DONE, FINAL, StepGenerator
 from clausal.pythonic_ast import nodes
 from clausal.end_module import SURFACE_PL as _SURFACE_PL
 
@@ -883,7 +883,8 @@ def _compiled_node_dispatch(db, conv, node):
         sg = StepGenerator(fn, this_generator, this_generator, this_generator, trail)
         _st = yield (sg, None)
         while _st is not DONE:
-            yield (_proceed, None)
+            # the goal's own FINAL is ours: nothing follows it here
+            yield (_proceed, FINAL if _st is FINAL else None)
             _st = yield (sg, None)
         yield (_fail, DONE)
 

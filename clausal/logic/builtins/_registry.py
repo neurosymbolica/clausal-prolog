@@ -14,7 +14,7 @@ from clausal.logic.predicate import (
     is_term_instance, term_field_names,
     _dispatch_at, is_declared_predicate_name,
 )
-from clausal.logic.trampoline import DONE, StepGenerator
+from clausal.logic.trampoline import DONE, FINAL, StepGenerator
 from clausal.terms import DictTerm, SetTerm
 from clausal import _sandbox_state
 
@@ -22,18 +22,66 @@ from clausal import _sandbox_state
 # ── Simple → trampoline adapter ──────────────────────────────────────────────
 
 
-def _simple_to_trampoline(simple_fn):
+def _simple_to_trampoline(simple_fn, semidet=False):
     """Wrap a simple-mode dispatch function as a trampoline-protocol function.
 
     Simple-mode signature:  ``fn(*args, trail, k)`` → yields ``None``
     Trampoline signature:   ``fn(this_gen, parent, *args, trail)`` → yields ``(parent, None)`` / ``(parent, DONE)``
+
+    A simple-mode function that knows an answer is its last may yield
+    ``FINAL`` for it instead of ``None`` (``between/3`` at its upper bound);
+    the adapter passes that on as the step value, and anything else as
+    ``None``.  With *semidet* -- the builtin has at most one answer in every
+    mode (``_SEMIDET_SIMPLE``) -- every answer is its last and goes out as
+    ``FINAL``.
     """
-    def trampoline_fn(this_generator, _proceed, _fail, _catcher, *args):
-        # args = (*pred_args, trail)  — trail is always last
-        for _ in simple_fn(*args, None):
-            yield (_proceed, None)
-        yield (_fail, DONE)
+    final = FINAL
+    if semidet:
+        def trampoline_fn(this_generator, _proceed, _fail, _catcher, *args):
+            for _ in simple_fn(*args, None):
+                yield (_proceed, final)
+            yield (_fail, DONE)
+    else:
+        def trampoline_fn(this_generator, _proceed, _fail, _catcher, *args):
+            # args = (*pred_args, trail)  — trail is always last
+            for v in simple_fn(*args, None):
+                yield (_proceed, final if v is final else None)
+            yield (_fail, DONE)
+    trampoline_fn._simple_fn = simple_fn
     return trampoline_fn
+
+
+#: The simple-mode builtins with AT MOST ONE answer in every mode: their
+#: adapter answers with ``FINAL`` (the answer is the last one), so a caller
+#: can tell without pulling again.  A builtin that can enumerate in some mode
+#: (``arg/3`` with N unbound, ``atom_concat/3`` splitting, ``char_type/2``,
+#: ``current_op/3``, ``sub_atom/5``, the reified ``=/3``) must NOT be listed:
+#: a FINAL on its first answer would lose the rest.
+#: ``tests/test_solve_with_last.py`` pulls again after each of them.
+_SEMIDET_SIMPLE: frozenset = frozenset({
+    # unification and comparison
+    ("=", 2), ("\\=", 2), ("==", 2), ("\\==", 2), ("is", 2), ("compare", 3),
+    ("@<", 2), ("@>", 2), ("@=<", 2), ("@>=", 2),
+    ("<", 2), (">", 2), ("=<", 2), (">=", 2), ("=:=", 2), ("=\\=", 2),
+    ("subsumes_term", 2),
+    # type checks
+    ("var", 1), ("nonvar", 1), ("atom", 1), ("number", 1), ("integer", 1),
+    ("float", 1), ("float_", 1), ("atomic", 1), ("compound", 1),
+    ("is_list", 1), ("ground", 1), ("string", 1), ("is_str", 1),
+    ("is_chars", 1), ("is_codes", 1), ("acyclic_term", 1),
+    ("must_be", 2), ("can_be", 2),
+    # atoms, chars, numbers
+    ("atom_length", 2), ("atom_chars", 2), ("atom_codes", 2),
+    ("char_code", 2), ("number_chars", 2), ("number_codes", 2),
+    ("atom_number", 2), ("upcase_atom", 2), ("downcase_atom", 2),
+    # term inspection
+    ("functor", 3), ("=..", 2), ("copy_term", 2), ("term_variables", 2),
+    # arithmetic helpers
+    ("succ", 2), ("plus", 3), ("gcd", 3), ("lcm", 3), ("msb", 2),
+    # output
+    ("nl", 0), ("write", 1), ("writeq", 1), ("print", 1),
+    ("write_canonical", 1), ("writeln", 1),
+})
 
 
 def _wrap_db_factory(factory):
@@ -109,7 +157,8 @@ def _extract_fields_trampoline(fn: Callable) -> tuple[str, ...]:
 def _builtin(functor: str, arity: int, *, fields: tuple[str, ...] | None = None):
     """Decorator: register a function as a stateless built-in (auto-wrapped to trampoline)."""
     def decorator(fn: Callable) -> Callable:
-        _BUILTINS[(functor, arity)] = _simple_to_trampoline(fn)
+        _BUILTINS[(functor, arity)] = _simple_to_trampoline(
+            fn, semidet=(functor, arity) in _SEMIDET_SIMPLE)
         _BUILTIN_FIELDS[(functor, arity)] = fields or _extract_fields_simple(fn)
         return fn
     return decorator
