@@ -1,11 +1,25 @@
 # Deep improper lists and cyclic terms overflow the engine's recursive walkers
 
+**Status: FIXED 2026-10-24 (commits f8d2d427 and the deep-literal commit that follows it).**
+The engine's `unify` unifies rational trees past a depth of 1000
+(`unify_rational`, `variables/_variables.c`), `==`/2, `compare/3`, the sorts,
+`copy_term/2`, `ground/1`, `term_variables/2`, `findall/3` and the writers
+fall back to iterative, cycle-aware walks (`_helpers.term_compare`,
+`clausal/logic/rational_walk.py`, the `...` of `terms._wq`), a deep ground
+argument of an asserted clause compiles as a constant
+(`compiler/deep_literals.py`), and every remaining RecursionError reaches a
+program as `error(resource_error(stack), _)`.  Every `m2i`/`m3a`-`m3g` row
+below answers as Scryer does.  Pinned in
+`tests/iso/test_cyclic_terms_scryer.py` (each row under Clausal and Scryer),
+`tests/iso/test_rational_tree_unify.py`, `tests/test_deep_literals.py` and
+`tests/test_star_splice_readings.py::test_compare_on_two_distinct_cyclic_lists_answers_as_scryer`.
+
 Filed 2026-10-22, split out of
 `todo/done/star-splice-readings-and-cyclic-seglist-eq-2026-10-14.md` (its
 M1-M3, "pre-existing recursion limits") when that todo's star-splice and
 seam-`==` items were fixed. Each item below is a recursive walk, one frame
 per cons cell or per lap of a cycle; fixing one does not fix the next.
-Related: `todo/l3-cyclic-unify-fix-covers-only-eq-neq-is-2026-10-15.md`
+Related: `todo/done/l3-cyclic-unify-fix-covers-only-eq-neq-is-2026-10-15.md`
 (the engine's C `unify` has the same depth-capped recursion) and the "Still
 open" ledgers in `todo/pl-translator-reads-an-improper-tail-as-an-element-2026-10-12.md`.
 

@@ -1046,7 +1046,7 @@ class SegList:
                     return True
         return False
 
-    def __unify__(self, other, trail):
+    def __unify__(self, other, trail, _guarded=None):
         """Called by C do_unify.  Against a list or text, unifies the holes
         through :func:`_drive_seg_unify` (see "Seg* __unify__ against a list
         or text" above :func:`_seg_split_gen`): exact for one hole; every
@@ -1063,25 +1063,26 @@ class SegList:
         Only a pair that is an ANCESTOR counts (the entry is removed when
         its unification returns, success or not), so a pair recorded by a
         trial a hook later undoes never speaks for a later attempt."""
-        if not isinstance(other, SegList):
-            return self._unify_impl(other, trail)
-        key = (id(self), id(other))
-        active = _SEG_UNIFY_ACTIVE.get()
-        token = None
-        if active is None:
-            active = set()
-            token = _SEG_UNIFY_ACTIVE.set(active)
-        elif key in active or (key[1], key[0]) in active:
-            return True
-        active.add(key)
-        try:
-            return self._unify_impl(other, trail)
-        finally:
-            active.discard(key)
-            if token is not None:
-                _SEG_UNIFY_ACTIVE.reset(token)
-
-    def _unify_impl(self, other, trail):
+        if _guarded is None and isinstance(other, SegList):
+            # Two SegLists: the pair is recorded while it is unified, and
+            # the body runs as the guarded re-entry below.  Every other
+            # target (a list, text, a cons cell: the common DCG step) goes
+            # straight on, one type test and no extra frame.
+            key = (id(self), id(other))
+            active = _SEG_UNIFY_ACTIVE.get()
+            token = None
+            if active is None:
+                active = set()
+                token = _SEG_UNIFY_ACTIVE.set(active)
+            elif key in active or (key[1], key[0]) in active:
+                return True
+            active.add(key)
+            try:
+                return self.__unify__(other, trail, True)
+            finally:
+                active.discard(key)
+                if token is not None:
+                    _SEG_UNIFY_ACTIVE.reset(token)
         walked = self._walk_once()
         if walked is not None and not isinstance(walked, (list, SegList)):
             # An IMPROPER list (D50): unify the cons cells it denotes.

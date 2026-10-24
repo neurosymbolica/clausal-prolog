@@ -45,8 +45,13 @@ DEEP_N = 100_000
 # A yn-row binds R; an out-row prints.
 _PRELUDE = """\
 :- use_module(library(lists)).
+:- use_module(library(between)).
+:- dynamic(bign2/1).
+:- dynamic(bign3/1).
 
 same(A, A).
+
+throw_cyclic :- X = f(X), throw(X).
 
 yn(G, R) :- ( catch(G, E, R = error(E)) -> ( var(R) -> R = yes ; true ) ; R = no ).
 
@@ -128,7 +133,8 @@ WRITE_ROWS = [
     ("w12", "X = f(X), findall(X, true, L), writeq(L)", "[f(...)]"),
 ]
 
-# ``numlist/3`` builds the 100k-element list as one flat list; ``mk/3``
+# ``findall/3`` over ``between/3`` builds the 100k-element list as one flat list
+# in both engines (Scryer has no ``numlist/3``); ``mk/3``
 # builds a list through its open tail, one partial-list link per element,
 # whose pairwise walks are quadratic in this engine today (32k elements take
 # 20 s), so the improper-list row -- the one shape that needs ``mk`` -- is
@@ -136,10 +142,10 @@ WRITE_ROWS = [
 IMPROPER_N = 5_000
 
 DEEP_ROWS = [
-    ("d1", f"yn((numlist(1, {DEEP_N}, L), numlist(1, {DEEP_N}, L2), L = L2), R)", "yes"),
-    ("d2", f"yn((numlist(1, {DEEP_N}, L), numlist(1, {DEEP_N}, L2), L == L2), R)", "yes"),
-    ("d3", f"numlist(1, {DEEP_N}, L), numlist(1, {DEEP_N}, L2), compare(R, L, L2)", "="),
-    ("d4", f"yn((numlist(1, {DEEP_N}, L), copy_term(L, L2), L == L2), R)", "yes"),
+    ("d1", f"yn((findall(I, between(1, {DEEP_N}, I), L), findall(I, between(1, {DEEP_N}, I), L2), L = L2), R)", "yes"),
+    ("d2", f"yn((findall(I, between(1, {DEEP_N}, I), L), findall(I, between(1, {DEEP_N}, I), L2), L == L2), R)", "yes"),
+    ("d3", f"findall(I, between(1, {DEEP_N}, I), L), findall(I, between(1, {DEEP_N}, I), L2), compare(R, L, L2)", "="),
+    ("d4", f"yn((findall(I, between(1, {DEEP_N}, I), L), copy_term(L, L2), L == L2), R)", "yes"),
     ("d6", f"yn((nest({DEEP_N}, a, T), nest({DEEP_N}, a, T2), T = T2), R)", "yes"),
     ("d7", f"yn((nest({DEEP_N}, a, T), nest({DEEP_N}, a, T2), T == T2), R)", "yes"),
     ("d8", f"nest({DEEP_N}, a, T), nest({DEEP_N}, a, T2), compare(R, T, T2)", "="),
@@ -151,9 +157,13 @@ DEEP_ROWS = [
 
 # Engine-only: Scryer overflows its own stack (deep) or panics (cyclic) here.
 DEEP_ENGINE_ONLY_ROWS = [
-    ("d5", f"yn((numlist(1, {DEEP_N}, L), assertz(big(L)), big(X), X == L), R)", "yes"),
+    ("d5", f"yn((findall(I, between(1, {DEEP_N}, I), L), assertz(big(L)), big(X), X == L), R)", "yes"),
     ("d10", f"yn((nest({DEEP_N}, a, T), assertz(bign(T)), bign(X), X == T), R)", "yes"),
     ("d14", f"yn((mk({IMPROPER_N}, foo, L), assertz(bigi(L)), bigi(X), X == L), R)", "yes"),
+    # The deep argument compiles as a constant (compiler/deep_literals.py);
+    # clause/2 still reads the clause as written.
+    ("d15", f"yn((nest({DEEP_N}, a, T), assertz(bign2(T)), clause(bign2(X), B), X == T, B == true), R)", "yes"),
+    ("d17", f"yn((nest({DEEP_N}, a, T), assertz(bign3(T)), bign3(g(_))), R)", "no"),
 ]
 
 ERROR_ROWS = [
@@ -280,6 +290,27 @@ def test_deep_answer_scryer(scryer, scryer_program, name, _body, expected):
 @pytest.mark.parametrize("name,_body,expected", ERROR_ROWS, ids=[r[0] for r in ERROR_ROWS])
 def test_undefined_cyclic_operation_raises_an_iso_error(mod, name, _body, expected):
     assert _engine_answer(mod, name) == expected
+
+
+def test_an_uncaught_cyclic_ball_renders(mod):
+    """A thrown cyclic term reaches Python as a LogicException whose text
+    writes the cycle as Scryer's ``f(...)`` (the writers' cycle guard), where
+    rendering it used to overflow (todo/assorted-findings-2026-10-14-to-16.md
+    item 4)."""
+    from clausal.logic.exceptions import render_error_term
+    from clausal.logic.variables import Trail, Var, unify
+    x = Var()
+    assert unify(x, ("f", x), Trail())
+    exc = LogicException(x)
+    assert render_error_term(exc.term) == "f(...)"
+    assert "f(...)" in str(exc)
+    # Thrown by a clause (``throw_cyclic``): the ball reaches Python as
+    # the same text.  (A cyclic term handed to ``solve()`` from Python is
+    # the open Python-entry gap of
+    # todo/hole-built-list-unify-and-eq-are-quadratic-2026-10-24.md.)
+    with pytest.raises(LogicException) as info:
+        list(solve("throw_cyclic", mod))
+    assert render_error_term(info.value.term) == "f(...)"
 
 
 def test_the_program_text_is_one_clause_per_row():

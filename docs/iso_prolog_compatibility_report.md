@@ -299,6 +299,25 @@ none of the three). ISO 7.11.2.1 makes `on` the flag's default; Clausal
 keeps it `off` and refuses `on` because its reader does not convert, so a
 program that tests `current_prolog_flag(char_conversion, on)` fails here.
 
+### Cyclic terms (rational trees) and deep terms
+
+`=/2` has no occurs check (ISO 7.3.2), so `X = f(X)` builds a cyclic term,
+and every later question about it is answered as Scryer answers it, as a
+question about a rational tree: `X = f(X), X = f(f(X))` succeeds; two cyclic
+terms unify, are `==` and `compare(=, X, Y)` exactly when they are one tree
+(`X = f(X, a), Y = f(Y, b)` fails on the second argument, `compare(<, X, Y)`);
+`copy_term/2` copies the cycle; `ground/1` is true; `term_variables/2` gives
+`[]`; `findall/3` collects it; `writeq/1` prints `f(...)`, `[a|...]`,
+`g(f(...),f(f(...)))` -- a cell already being written is `...`.  Partial
+lists built through their tail are rational trees too (`X = [1|X], Y =
+[1,1|Y], X = Y, X == Y`).  A term too deep for the recursive walkers (a
+100k-element list, a 100k-nested `f(f(...))`) unifies, compares, copies,
+and can be asserted and read back with `clause/2`.  An operation that has
+no answer for a cyclic term raises `error(resource_error(stack), _)`, never
+a raw Python RecursionError (`assertz` of a cyclic term, where Scryer
+panics).  Pinned row by row against Scryer in
+`tests/iso/test_cyclic_terms_scryer.py`.
+
 ---
 
 ## Known gaps

@@ -76,7 +76,7 @@ with Y bound later to a non-list.
   - `compare/3`, `@<` and `msort` on a cyclic term, or on a cons chain of about 500 cells,
     raise RecursionError (`_helpers.term_key`); Scryer gives `=`. (2026-10-22: the 500-cell
     cons chain is fixed, `term_key` loops the spine; the cyclic case still raises -- see
-    todo/deep-and-cyclic-terms-overflow-the-recursive-walkers-2026-10-22.md.)
+    todo/done/deep-and-cyclic-terms-overflow-the-recursive-walkers-2026-10-22.md.)
   - `findall(Z, member(Z, [X, Y]), L)` with X and Y cyclic raises
     `RecursionError: _is_ground: term nesting too deep` (copying a cyclic term).
   - `_seglists_as_source` (assertz) scans only tuples and lists, so a hole inside a DictTerm in

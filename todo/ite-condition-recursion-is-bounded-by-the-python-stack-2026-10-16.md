@@ -31,3 +31,4 @@ The if-then-else lowering catches `RecursionError` at the condition's boundary a
 
 1. Lower an if-then-else condition, and once/1's goal, through the trampoline (a StepGenerator the drive loop runs, as the cutting catch/3 Goal already is), so the depth is the heap's, not Python's stack's.
 2. Until then, decide whether a stray `RecursionError` should be `error(resource_error(stack), _)` everywhere. The cheap place is `exceptions.python_error_term`, but that is a global change of the `'RecursionError'(Message)` term shape, which `.clausal` code and downstream trees may match.
+   **Decided 2026-10-24:** yes -- `python_error_term` maps every RecursionError to `error(resource_error(stack), _)` (commit f8d2d427; the CHANGELOG entry "No raw Python RecursionError reaches a program"), so `o(2000)` and `rec(2000)` above now answer that term too (`tests/iso_l3/test_l3_ite.py`). Item 1 stays open.

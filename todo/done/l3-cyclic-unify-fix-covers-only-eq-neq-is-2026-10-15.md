@@ -1,6 +1,16 @@
 # L3: cyclic unify is fixed only for `=`/2, `\=`/2, `is`/2 — not for
 # partial-list cycles, compiled head unification, or `member`/2
 
+**Status: FIXED 2026-10-24 (commit f8d2d427).** Option (a) below: the
+engine's C `do_unify` itself switches, past a depth of 1000, to a
+pair-memoising walk (`unify_rational` in `variables/_variables.c`), so a
+clause head, `member/2`, `==`/2's trial unify and every other unification
+terminate on a cyclic pair with Scryer's answer; `SegList.__unify__` keeps
+the pair of partial lists in progress, so `X = [a|X], Y = [a|Y], X = Y`
+succeeds too.  The Python `_cycle_unify` fallback is retired.  Pinned in
+`tests/iso/test_rational_tree_unify.py` and the `u` rows of
+`tests/iso/test_cyclic_terms_scryer.py`.
+
 Filed 2026-10-15, from the design review of `fix/is-type-check-and-cyclic-
 unify-2026-10-15` (`clausal/logic/builtins/iso_compare.py::_cycle_unify`).
 OPEN, not fixed by this branch.

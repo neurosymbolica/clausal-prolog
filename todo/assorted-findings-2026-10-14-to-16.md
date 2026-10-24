@@ -5,7 +5,7 @@ Collected during the batch 1–4 reviews. Each needs a repro written down before
 1. **Seam head with a SET containing a variable never matches** (silent wrong "no").
 2. **Variable dict keys fail loudly** in seam heads (error instead of matching).
 3. **`++Rec(...)` records in a seam head never match.**
-4. **`LogicException.__repr__` is not cycle-safe** (a cyclic culprit can recurse when the exception is printed; raise-time copy falls back to the uncopied term).
+4. **FIXED 2026-10-24 (commit f8d2d427):** the writers print a compound already being written as `...`, so a cyclic ball renders as `f(...)` (`tests/iso/test_cyclic_terms_scryer.py::test_an_uncaught_cyclic_ball_renders`). ~~**`LogicException.__repr__` is not cycle-safe** (a cyclic culprit can recurse when the exception is printed; raise-time copy falls back to the uncopied term).~~
 5. **dump/3's type_error prints a Python repr** of the culprit.
 6. **Printing huge integers is slow** (quadratic str conversion path).
 7. **Parser test gaps** noted by the batch-1 reviewer (operand priority, yf, `{}`/`[]` functors): cover the remaining edge rows.

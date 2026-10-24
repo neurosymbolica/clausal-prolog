@@ -168,6 +168,7 @@ from .globals_env import (
     _merge_builtin, _inject_resolved_targets,
     _collect_globals_info, _preallocate_body_vars,
 )
+from clausal.logic.compiler.deep_literals import rewrite_clauses
 try:  # the C twin; the Python one (terms.as_cells_for_match) is the fallback
     from clausal.logic.variables._variables import (
         as_cells_for_match as _as_cells_for_match_c,
@@ -1362,6 +1363,10 @@ def _compile_predicate_trampoline_impl(
         base_globals["$table_store"] = db.table_store
         base_globals["$naf_db"] = db  # A04-F003: negative-subgoal spawning
         base_globals["$TABLING_SUSPEND"] = _TABLING_SUSPEND
+    # A deep ground sub-term compiles as a constant (deep_literals.py): the
+    # twins below are what this compile reads; the database keeps the
+    # clauses as written.
+    clauses = rewrite_clauses(clauses)
     # Phase 6: single combined traversal replacing three separate walks.
     _head_types, _py_thunks, _call_targets = _collect_globals_info(clauses)
     base_globals.update(_head_types)
@@ -2262,6 +2267,10 @@ def _compile_predicate_shallow_impl(
         base_globals["$naf_tabled"] = _naf_tabled_fn_s
         base_globals["$table_store"] = db.table_store
         base_globals["$naf_db"] = db  # A04-F003: negative-subgoal spawning
+    # A deep ground sub-term compiles as a constant (deep_literals.py): the
+    # twins below are what this compile reads; the database keeps the
+    # clauses as written.
+    clauses = rewrite_clauses(clauses)
     # Phase 6: single combined traversal replacing three separate walks.
     _head_types, _py_thunks, _call_targets = _collect_globals_info(clauses)
     base_globals.update(_head_types)

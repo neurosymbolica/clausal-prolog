@@ -598,6 +598,12 @@ def _goal_cache_key(goal: Any, module: Module, thunks: list | None = None):
         return (_structural_key(goal, {}, thunks), id(module))
     except _Uncacheable:
         return None
+    except RecursionError:
+        # A goal holding a cyclic or very deep data term has no finite
+        # structural key (2026-10-24): compiled uncached.
+        if thunks is not None:
+            del thunks[:]
+        return None
 
 
 

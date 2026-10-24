@@ -517,6 +517,11 @@ Constructed compounds are **cells** (plain tuples) — Python code tests a const
 ```
 Unify `Copy` with a deep copy of `Original` where every unbound `Var` is replaced by a fresh one. Structural sharing is preserved: if the same `Var` appears in multiple positions in `Original`, the same fresh `Var` appears in all corresponding positions of `Copy`. Already-bound variables are followed and their values are copied rather than replaced.
 
+A cyclic term (`X = f(X)`, which `=/2` builds with no occurs check) is
+copied as a cycle, and a term nested too deep for the recursive walker is
+copied by an iterative one (`clausal/logic/rational_walk.py`); the same holds
+for `ground/1`, `term_variables/2` and the copies `findall/3` makes.
+
 ??? info "Implementation & tests"
     **Seam tests:** `tests/clausal_modules/term_inspection.seam`
     **Python tests:** `tests/test_term_inspection.py`

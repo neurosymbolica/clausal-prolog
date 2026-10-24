@@ -69,6 +69,7 @@ from clausal.logic.cells import (
 from clausal.logic.generated_names import dollar_ref
 from ._ast_helpers import _name, _call, _attr
 from ._vars import _var_python_name
+from .deep_literals import DeepLiteral
 
 
 # ── Parsing helpers (used here and by .star_segments) ────────────────────────
@@ -1257,6 +1258,11 @@ def term_to_ast_expr(
             term = [x for seg in term.segments
                     for x in (seg.elements if isinstance(seg, ConcreteSeg)
                               else (StarUnpack(value=seg.var),))]
+
+    if type(term) is DeepLiteral:
+        # A deep ground sub-term (deep_literals.py): the term itself, by the
+        # name the globals collector injected it under.
+        return _name(headlit_global_key(term))
 
     if type(term) is _MetaArg and term.module is not None:
         # A dotted ``lib.p(...)`` / ``lib.p`` in a qualifying meta position:

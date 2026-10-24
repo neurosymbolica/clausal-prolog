@@ -523,13 +523,24 @@ _PLAIN = (int, float, str, bool, bytes, type(None))
 
 def _plain(v: Any) -> bool:
     """Data that is its own term: an atomic value, or a list / tuple of
-    them.  Anything else -- a ``Call`` node, a ``PyThunk``, a Var -- goes
-    through the compiled construction."""
-    if type(v) in _PLAIN:
-        return True
-    if type(v) in (list, tuple):
-        return all(_plain(e) for e in v)
-    return False
+    them, read through bound variables (a term a program built, ``f(R)``
+    with ``R`` bound to the next cell, is as plain as the literal).
+    Anything else -- a ``Call`` node, a ``PyThunk``, an unbound Var -- goes
+    through the compiled construction.  Iterative: a 100k-nested asserted
+    term is plain data too (2026-10-24)."""
+    stack = [v]
+    seen: set = set()
+    while stack:
+        d = deref(stack.pop())
+        if type(d) in _PLAIN:
+            continue
+        if type(d) in (list, tuple):
+            if id(d) not in seen:        # a shared or cyclic sub-term is read once
+                seen.add(id(d))
+                stack.extend(d)
+            continue
+        return False
+    return True
 
 
 def _split_lead(lead: list) -> tuple:

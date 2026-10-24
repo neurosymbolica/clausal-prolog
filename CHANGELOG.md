@@ -254,6 +254,73 @@ surface described in [docs/public-api.md](docs/public-api.md).
   is written as it is. Pinned by `tests/iso/test_negative_zero_scryer.py`
   (each row under Clausal and Scryer, on `.pl` and `.clausal`, and the
   seam).
+- **Cyclic terms are rational trees: `=`/2, `==`/2, `compare/3`,
+  `copy_term/2`, `ground/1`, `term_variables/2`, `findall/3` and the
+  writers answer as Scryer does, and no raw Python `RecursionError` reaches
+  a program** (2026-10-24, operator ruling 2026-10-24: a non-conformity is
+  a bug, so this is a fix).  ISO 7.3.2 lets `=/2` build a cyclic term
+  (`X = f(X)`: no occurs check).  Every walker in this engine was a
+  recursive descent with a depth cap, so `X = f(X), Y = f(Y)` followed by
+  `X = Y`, `same(X, Y)` (a clause head), `member(X, [Y])`, `X == Y`,
+  `compare(O, X, Y)`, `copy_term(X, C)`, `ground(X)`, `term_variables(X,
+  Vs)`, `findall(X, true, L)` or `writeq(X)` raised `RecursionError`, which
+  `catch/3` saw as the Python term `'RecursionError'(Message)`, and so did
+  an acyclic term nested past the cap (a 100k-nested `f(f(...))`, a
+  5000-cell improper list).  Now:
+    - The engine's C `unify` switches past a depth of 1000 to a walk that
+      remembers the compound pairs it has started (`unify_rational` in
+      `variables/_variables.c`): a pair met again is unified, the
+      coinductive reading under which two rational trees unify when a
+      bisimulation relates them, so `X = f(X), X = f(f(X))` and `X = f(X),
+      Y = f(Y), X = Y` succeed and `X = f(X, a), Y = f(Y, b), X = Y` fails
+      on the second argument.  Every unification site is covered -- clause
+      heads, `member/2`, `==/2`'s trial unify (the dif extension's walk
+      hands a deep pair to the same unify) -- and the Python `_cycle_unify`
+      fallback that only `'='/2`, `'\='/2` and `is/2` had since 2026-10-15
+      is retired (todo/done/l3-cyclic-unify-fix-covers-only-eq-neq-is-2026-10-15.md).
+      Two partial lists built through their tails are rational trees too:
+      `X = [1|X], Y = [1,1|Y], X = Y` succeeds (`SegList.__unify__` keeps
+      the pair in progress).  A term of ordinary depth never pays: the fast
+      path only changed its depth-check constant (A/B on the engine
+      benchmarks, 7 interleaved rounds, within noise).
+    - `compare/3`, the `@<` family, `sort/2` and `msort/2` decide a pair
+      whose key cannot be built (cyclic, or too deep to key) by a pairwise,
+      memoised walk of the same order (`_helpers.term_compare`):
+      `compare(=, X, Y)` for `X = f(X), Y = f(f(Y))`, `<` for `X = f(X, a),
+      Y = f(Y, b)`, `>` for `X = f(a, X), Y = f(a, b)`, as Scryer orders
+      them.
+    - `copy_term/2`, `ground/1`, `term_variables/2` and the walk behind an
+      answer and a `findall/3` row fall back, from their C wrappers and
+      their pure-Python twins alike, to iterative cycle-aware walkers
+      (`clausal/logic/rational_walk.py`); a cycle is copied as a cycle,
+      tied with a knot variable bound through a trail nobody keeps, so the
+      copy outlives the goal that built the original.
+    - `write/1`, `writeq/1`, `print/1`, `write_canonical/1` and the answer
+      printer write a compound already being written as `...`, Scryer's
+      form: `f(...)`, `[a|...]`, `f(...,_)`, `g(f(...),f(f(...)))`; a
+      cyclic ball renders the same way when uncaught.
+    - `call/1` lifts a cyclic data argument as a run-time parameter instead
+      of recursing into it.
+    - A deep ground argument of an asserted clause compiles as a constant
+      (`compiler/deep_literals.py`: a ground sub-term nested past 200 levels
+      becomes a leaf of the compile-time twin of the clause, referenced by
+      name; the stored clause is as written, so `clause/2` reads it back),
+      so `assertz(big(T))` with a 100k-nested `T` or a 5000-cell improper
+      list, and the call that reads it back, work.
+    - Whatever still overflows -- `assertz` of a CYCLIC term (Scryer
+      panics), a cyclic term through `length/2` -- raises the ISO
+      `error(resource_error(stack), _)` (7.12.2 h), the term the `.pl`
+      if-then-else lowering already raised for a condition's overflow:
+      `python_error_term` maps every `RecursionError` to it, with the
+      walker's message as the prose.  A `catch(G, error(E, _), R)` sees it;
+      the transliterated `'RecursionError'(Message)` is gone
+      (`tests/iso_l3/test_l3_ite.py` pins the new term for once/1 and a
+      cutting recovery too).
+  Pinned, each row under Clausal and Scryer, in
+  `tests/iso/test_cyclic_terms_scryer.py`; the engine's unify in
+  `tests/iso/test_rational_tree_unify.py` (replacing the fallback's own test
+  file), the compile-time twin in `tests/test_deep_literals.py`.
+  Closes todo/done/deep-and-cyclic-terms-overflow-the-recursive-walkers-2026-10-22.md.
 
 - **`1 = 1.0` fails: a number unifies only with a number of its own kind**
   (2026-10-23, operator ruling 2026-10-23; ISO 7.3). Unification of two
@@ -671,7 +738,7 @@ surface described in [docs/public-api.md](docs/public-api.md).
   (`test_rational_eq_agrees_with_scryer_on_random_cycles`). The ISO `==/2`
   path is untouched and still
   raises on two distinct cyclic terms (see
-  `todo/deep-and-cyclic-terms-overflow-the-recursive-walkers-2026-10-22.md`).
+  `todo/done/deep-and-cyclic-terms-overflow-the-recursive-walkers-2026-10-22.md`).
   Pinned in `tests/test_star_splice_readings.py::test_seam_eq_on_cyclic_lists`
   and the `_rational_eq` fuzz there.
 

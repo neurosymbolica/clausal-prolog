@@ -46,6 +46,7 @@ from ._ast_helpers import (
     _MARK_PREFIX, _TRAIL_PARAM_NAME,
 )
 from ._vars import _var_python_name, _collect_vars
+from .deep_literals import DeepLiteral
 from .terms_to_ast import (
     term_to_ast_expr,
     _is_star_list, _parse_star_segments, _count_stars,
@@ -1770,7 +1771,10 @@ def compile_head_to_match_case(
         # ``Decimal.__eq__`` ignores scale, while two Decimals are one term
         # only at one scale (``1.0`` vs ``1.00``, ruling 2026-09-17 Q2) --
         # ``$unify`` holds that rule, so it alone decides here.
-        if isinstance(literal, _Decimal):
+        if isinstance(literal, _Decimal) or type(literal) is DeepLiteral:
+            # A DeepLiteral gets none either: Python's ``==`` recurses once
+            # per level of the deep term (deep_literals.py); ``$unify``'s
+            # rational-tree walk does not.
             test = unify_call
         else:
             test = ast.BoolOp(

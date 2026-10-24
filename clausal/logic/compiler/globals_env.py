@@ -42,6 +42,7 @@ from clausal.logic.atoms import is_atom as _term_is_atom, is_nil
 
 from ._ast_helpers import _name, _call, _assign
 from ._vars import _var_python_name, _collect_vars
+from .deep_literals import DeepLiteral
 from .terms_to_ast import (
     _dotted_name_from_loadattr,
     _is_opaque_head_literal, headlit_global_key,
@@ -882,7 +883,10 @@ def _collect_globals_info(
             # A02-F003: inject opaque ground head literals (date, Decimal,
             # tuple, set, …) so head_to_match_pattern's capture+unify guard can
             # reference them by $headlit_<id>. Keyed to match the guard emitter.
-            types[headlit_global_key(term)] = term
+            # A DeepLiteral (deep_literals.py) is keyed by the leaf and
+            # injects the deep term it stands for.
+            types[headlit_global_key(term)] = (
+                term.term if type(term) is DeepLiteral else term)
 
     def _walk_body(term: Any, in_data: bool = False) -> None:
         # Call-target detection runs on the raw (pre-deref) term so that
@@ -913,7 +917,11 @@ def _collect_globals_info(
             targets.add((term.name, -1))
         # Deref for type/thunk collection and recursive descent.
         dterm = deref(term)
-        if isinstance(dterm, _PyThunk):
+        if type(dterm) is DeepLiteral:
+            # A deep ground argument (deep_literals.py): the compiled body
+            # reads the term by its ``$headlit_<id>`` name.
+            types[headlit_global_key(dterm)] = dterm.term
+        elif isinstance(dterm, _PyThunk):
             thunks[f"_pyt_{id(dterm)}"] = dterm.fn
         elif isinstance(dterm, list):
             for e in dterm:
