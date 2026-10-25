@@ -343,3 +343,17 @@ def test_quads_run_off_the_main_thread_without_a_timer(tmp_path):
     t.join(60)
     assert "exc" not in box, box.get("exc")
     assert box["s"].count("passed") == 1
+
+
+@pytest.mark.parametrize("query", ["a(X), !", "(a(X) -> true ; fail)"])
+def test_a_clausal_file_quad_with_control_is_refused_clearly(tmp_path, query):
+    (tmp_path / "m.clausal").write_text(
+        ":- module(m, [a/1]).\na(1).\n\n?- " + query + ".\n   X = 1.\n\n"
+        ":- end_module(m).\n")
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+    r = subprocess.run([sys.executable, "-m", "clausal", "m.clausal", "--quads"],
+                       cwd=tmp_path, env=env, capture_output=True, text=True,
+                       timeout=120)
+    assert r.returncode == 1
+    assert "not Clausal Prolog" in r.stdout and "existence_error" not in r.stdout

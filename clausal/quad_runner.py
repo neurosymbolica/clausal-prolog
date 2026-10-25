@@ -484,8 +484,18 @@ def run_quads(module, source: str, op_table, filename: str = "<quads>",
     summary line to *out*."""
     out = out or sys.stdout
     summary = Summary()
+    from clausal._suffixes import CLAUSAL_PROLOG_SUFFIXES  # noqa: PLC0415
+    from clausal.toplevel import _uses_control  # noqa: PLC0415
+
+    clausal_file = filename.endswith(CLAUSAL_PROLOG_SUFFIXES)
     for quad in extract_quads(source, op_table):
-        res = run_quad(module, quad, timeout=timeout)
+        if clausal_file and _uses_control(quad.query):
+            # as the ?- top-level refuses them against a .clausal file
+            res = Result(quad, "failed",
+                         "error(syntax_error(cut_free),read_term/3): !, -> "
+                         "and *-> are not Clausal Prolog")
+        else:
+            res = run_quad(module, quad, timeout=timeout)
         summary.results.append(res)
         if res.status == "failed":
             label = f" ({quad.label})" if quad.label else ""
