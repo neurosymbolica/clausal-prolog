@@ -45,6 +45,8 @@ from ._variables import (
     unify_iter,
     _set_pending_drain,
     hook_dispatch_depth,
+    gc_phase_note,
+    gc_collecting,
 )
 
 # All logic variables are AttVars so constraints (dif, etc.) can be attached.

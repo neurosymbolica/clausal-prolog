@@ -4676,7 +4676,47 @@ py_hook_dispatch_depth(PyObject *Py_UNUSED(mod), PyObject *Py_UNUSED(arg))
     return PyLong_FromLong(g_hook_dispatch_depth);
 }
 
+/* Whether the cyclic garbage collector is running in this thread, for
+ * clausal.aio (an await from a finaliser the collector runs belongs to no
+ * query).  Kept by gc_phase_note, a gc.callbacks entry, which is C on
+ * purpose: a Python callback runs bytecode, so a signal handler can run in
+ * it, and whatever the handler raises there is "unraisable" -- printed and
+ * dropped -- so the one SIGINT or SIGALRM is lost and the search it was
+ * meant to stop runs on.  A C function runs no bytecode, so no handler runs
+ * here; the pending signal is handled at the next bytecode boundary of the
+ * code the collection interrupted, where its exception propagates. */
+static _Thread_local int g_gc_collecting = 0;
+
+static PyObject *
+py_gc_phase_note(PyObject *Py_UNUSED(mod), PyObject *const *args,
+                 Py_ssize_t nargs)
+{
+    if (nargs != 2 || !PyUnicode_Check(args[0])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "gc_phase_note(phase: str, info: dict)");
+        return NULL;
+    }
+    g_gc_collecting = PyUnicode_CompareWithASCIIString(args[0], "start") == 0;
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+py_gc_collecting(PyObject *Py_UNUSED(mod), PyObject *Py_UNUSED(arg))
+{
+    return PyBool_FromLong(g_gc_collecting);
+}
+
 static PyMethodDef module_methods[] = {
+    {"gc_phase_note", (PyCFunction)(void (*)(void))py_gc_phase_note,
+     METH_FASTCALL,
+     "gc_phase_note(phase, info) -> None\n\n"
+     "A gc.callbacks entry: records whether a collection is running in the\n"
+     "calling thread (read it with gc_collecting()).  C, so no signal\n"
+     "handler can run inside it and lose its exception."},
+    {"gc_collecting", py_gc_collecting, METH_NOARGS,
+     "gc_collecting() -> bool\n\n"
+     "True while the cyclic garbage collector runs in the calling thread\n"
+     "(as far as gc_phase_note, once registered, has seen)."},
     {"hook_dispatch_depth", py_hook_dispatch_depth, METH_NOARGS,
      "hook_dispatch_depth() -> int\n\n"
      "The attribute-hook dispatches in progress in the calling thread, on\n"

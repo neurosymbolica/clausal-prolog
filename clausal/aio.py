@@ -59,6 +59,8 @@ import greenlet as _greenlet
 from clausal.logic.exceptions import LogicException, permission_error
 from clausal.logic.solve import solve
 from clausal.logic.variables import deref, unify
+from clausal.logic.variables import (gc_collecting as _gc_collecting,
+                                     gc_phase_note as _gc_phase_note)
 
 __all__ = ["asolve", "aonce", "acall", "adrive", "await_only", "async_predicate"]
 
@@ -145,15 +147,13 @@ def _close_loop(loop):
 # True (per thread) while the cyclic garbage collector is running.  Code it
 # runs then -- finalisers, e.g. an abandoned query's setup_call_cleanup
 # cleanup -- belongs to no running query, even when the collection happens
-# to start inside one query's greenlet.
-_collecting = threading.local()
-
-
-def _note_gc_phase(phase, info):
-    _collecting.now = phase == "start"
-
-
-gc.callbacks.append(_note_gc_phase)
+# to start inside one query's greenlet.  The callback is C, never a Python
+# function: one runs at every collection, and a signal handler that ran in
+# a Python callback would have its KeyboardInterrupt (or timeout) reported
+# as unraisable and dropped, leaving the search it was meant to stop running
+# (tests/test_async_exception_propagation.py).
+if _gc_phase_note not in gc.callbacks:
+    gc.callbacks.append(_gc_phase_note)
 
 
 async def _as_coroutine(awaitable):
@@ -178,7 +178,7 @@ def await_only(awaitable):
     whatever the awaitable raises.
     """
     if _in_query_greenlet():
-        if getattr(_collecting, "now", False):
+        if _gc_collecting():
             # Waiting would suspend the query whose greenlet the GC happens
             # to be running in, on a finaliser's behalf -- and a cancellation
             # aimed at that query would land in the finaliser and be lost.

@@ -23,7 +23,7 @@ from clausal.logic.builtins._registry import _builtin
 from clausal.logic.builtins.inspection import _univ__2 as _iso_univ_impl
 from clausal.logic.constraints import structural_eq as _structural_eq
 from clausal.logic.exceptions import (
-    LogicException, instantiation_error, term_functor_args,
+    LogicException, instantiation_error, resource_error, term_functor_args,
     type_error,
 )
 from clausal.logic.predicate import is_term_instance, term_field_names
@@ -167,10 +167,27 @@ def _iso_eval(term, context: str):
             raise
         raise LogicException(
             type_error("evaluable", _evaluable_culprit(leaf), context)) from None
-    except Exception:
-        # Same culprit shape as the reconciled branch above: an ISO
+    except MemoryError:
+        # ISO 13211-1 7.12.2 h.  It used to fall into ``except Exception``
+        # below, so a search that ran out of memory reported
+        # type_error(evaluable, (+)/2).
+        raise LogicException(resource_error("memory", context)) from None
+    except RecursionError:
+        # An expression nested deeper than the evaluator's stack: also
+        # 7.12.2 h, the term python_error_term gives a RecursionError.
+        raise LogicException(resource_error("stack", context)) from None
+    except (TypeError, ValueError, AttributeError, ArithmeticError):
+        # A Python value meeting an operator it does not support (a leaf
+        # that is no term passes through to Python's operators).  Same
+        # culprit shape as the reconciled branch above: an ISO
         # `type_error(evaluable, …)` culprit is a Name/Arity indicator, so
         # this fallback must not hand back a raw term either.
+        #
+        # Only these.  This was ``except Exception``, which also turned an
+        # exception that merely happened to be raised here into a type
+        # error -- a signal handler's timeout, a host callback's own error
+        # -- so a SIGALRM landing in the evaluator stopped the search with
+        # type_error(evaluable, (+)/2).  Anything else propagates unchanged.
         raise LogicException(
             type_error("evaluable", _evaluable_culprit(t), context)) from None
 

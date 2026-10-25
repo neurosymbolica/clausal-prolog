@@ -271,6 +271,12 @@ def python_error_term(exc: Exception) -> tuple:
         # context is unbound.
         return _with_prose(
             ("error", ("resource_error", mint("stack")), Var()), str(exc))
+    if isinstance(exc, MemoryError):
+        # Out of memory: ISO's resource_error(memory) (7.12.2 h), as a
+        # RecursionError is resource_error(stack) (2026-10-25).
+        return _with_prose(
+            ("error", ("resource_error", mint("memory")), Var()),
+            str(exc) or "out of memory")
     return (type(exc).__name__, str(exc))
 
 
@@ -280,13 +286,14 @@ def _is_python_error_term_of(term: Any, cause: BaseException) -> bool:
     functor is the cause's class name, never a bare atom -- or, for a
     ``UnitsMismatch``, ``error(system_error(units_mismatch), _)``."""
     fa = term_functor_args(term)
-    if isinstance(cause, (UnitsMismatch, RecursionError)):
+    if isinstance(cause, (UnitsMismatch, RecursionError, MemoryError)):
         if fa is None or fa[0] != "error" or len(fa[1]) != 2:
             return False
         formal = term_functor_args(fa[1][0])
-        if isinstance(cause, RecursionError):
+        if isinstance(cause, (RecursionError, MemoryError)):
+            resource = "stack" if isinstance(cause, RecursionError) else "memory"
             return (formal is not None and formal[0] == "resource_error"
-                    and len(formal[1]) == 1 and formal[1][0] == "stack")
+                    and len(formal[1]) == 1 and formal[1][0] == resource)
         return (formal is not None and formal[0] == "system_error"
                 and len(formal[1]) == 1 and formal[1][0] == "units_mismatch")
     return (fa is not None and len(fa[1]) == 1

@@ -1539,7 +1539,11 @@ def _expr_domain(expr, trail: Trail) -> Domain:
             if _no_value_in_propagation(exc):
                 return ()          # no value: the propagator fails
             raise  # a garbage leaf deeper in the node — keep it catchable
-        except Exception:
+        except (TypeError, ValueError, AttributeError, ArithmeticError):
+            # Not a ground integer after all: the default domain.  Only
+            # evaluation's own failures -- an exception that just happened
+            # to be raised here (a signal handler's, MemoryError) is not
+            # "no value" and propagates.
             pass
         return domain_from_range(DEFAULT_MIN, DEFAULT_MAX)
     # An unrecognized LEAF: not an int, not a Var, not an expression node.

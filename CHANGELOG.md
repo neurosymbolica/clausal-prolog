@@ -114,6 +114,32 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Fixed
 
+- **A Ctrl-C or a signal handler's exception during a search reaches the
+  caller; it is no longer lost, nor turned into a type error**
+  (2026-10-25).  Once `clausal.aio` was imported (the library facades
+  import it), a single SIGINT or SIGALRM was often dropped and the search
+  ran on until memory ran out: `clausal.aio` kept a Python function in
+  `gc.callbacks`, called at every collection, and a signal handler that ran
+  inside it had its exception reported as "unraisable" and discarded
+  (measured: 11 of 30 alarms lost under the C trampoline; the pure-Python
+  one too).  The callback is now a C function (`gc_phase_note` in
+  `clausal.logic.variables`), which runs no bytecode, so the handler runs
+  in the search and its exception propagates.  Separately, `is/2` and the
+  arithmetic comparisons turned ANY Python exception out of evaluation
+  into `type_error(evaluable, F/N)`, so an alarm landing in the evaluator
+  came back as `error(type_error(evaluable,(+)/2),(is)/2)` (5 of 30), and
+  running out of memory did too; they now convert only evaluation's own
+  failures (`TypeError`, `ValueError`, `AttributeError`,
+  `ArithmeticError`), give `resource_error(memory)` for a `MemoryError`
+  and `resource_error(stack)` for a `RecursionError` (ISO 7.12.2 h), and
+  let anything else through unchanged.  CLP(Z)'s fold of a ground
+  expression node had the same catch-all.  `catch/3` sees a `MemoryError`
+  as `error(resource_error(memory), _)`, as a `RecursionError` is
+  `resource_error(stack)`.  Pinned by
+  `tests/test_async_exception_propagation.py` (Exception, BaseException and
+  KeyboardInterrupt alarms under both trampolines, and after the facades
+  test file).
+
 - **A cyclic or deep term handed in from Python works, or raises the
   engine's ISO error; never a raw `RecursionError`** (2026-10-24, operator
   ruling 2026-10-24: a non-conformity is a bug).  With `X` bound by
