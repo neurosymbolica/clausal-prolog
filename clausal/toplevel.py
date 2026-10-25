@@ -307,6 +307,15 @@ class TopLevel:
             return text
         return toplevel_colour.SCHEMES[self.colour].paint(text)
 
+    def _redraw(self, prefix: str, text: str) -> None:
+        """The answer line again in the current scheme, over the old one: the
+        rows a long answer wrapped onto are cleared too."""
+        import shutil  # noqa: PLC0415
+        cols = max(shutil.get_terminal_size((80, 24)).columns, 1)
+        rows = max((len(prefix) + len(text) - 1) // cols + 1, 1)
+        up = f"\x1b[{rows - 1}A" if rows > 1 else ""
+        self._write("\r" + up + "\x1b[J" + prefix + self._paint(text))
+
     def cycle_colour(self) -> str:
         """Switch to the next colour scheme; its name."""
         self.colour = (self.colour + 1) % len(toplevel_colour.SCHEMES)
@@ -377,6 +386,12 @@ class TopLevel:
             return
         if not self._bound:
             self._bound = True
+            if "libedit" in (readline.__doc__ or ""):
+                # libedit (macOS's Python) takes other binding syntax and
+                # may not run these macros: the colour key at ?- needs GNU
+                # readline; `c` at the answer prompt works with either.
+                readline.set_startup_hook(None)
+                return
             # F2 and Ctrl-X c type the mark at the end of the line and
             # accept it (read_query then switches scheme and prompts again).
             for seq in (r'"\eOQ"', r'"\e[12~"', r'"\C-xc"'):
@@ -579,14 +594,14 @@ class TopLevel:
                 if k == "w":
                     self.elide = False
                     self._write("\n" + INDENT + "% printing in full\n")
-                    self._write(INDENT + self._paint(
-                        format_answer(shown, trail, False)))
+                    prefix, text = INDENT, format_answer(shown, trail, False)
+                    self._write(prefix + self._paint(text))
                     continue
                 if k == "p":
                     self.elide = True
                     self._write("\n" + INDENT + "% eliding long lists\n")
-                    self._write(INDENT + self._paint(
-                        format_answer(shown, trail, True)))
+                    prefix, text = INDENT, format_answer(shown, trail, True)
+                    self._write(prefix + self._paint(text))
                     continue
                 if k in ("h", "?"):
                     self._write("\n" + HELP)
@@ -594,8 +609,7 @@ class TopLevel:
                     continue
                 if k == "c":
                     self.cycle_colour()
-                    # the answer line again, in the new scheme
-                    self._write("\r\x1b[K" + prefix + self._paint(text))
+                    self._redraw(prefix, text)
                     continue
                 # anything else: ignored, the prompt stays
 

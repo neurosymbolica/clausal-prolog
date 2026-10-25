@@ -87,7 +87,7 @@ in `~/.clausal_history` (Up recalls it); Ctrl-C at the prompt drops the line. Wh
 no prompt and no key prompt: the first answer of each query is printed.
 
 Colour: `c` at the answer prompt, or F2 or Ctrl-X c at `?-` (the line typed so
-far is kept), cycles the colour scheme of answers. `off` (the start, or the
+far is kept; those two need GNU readline, not macOS's libedit), cycles the colour scheme of answers. `off` (the start, or the
 scheme `CLAUSAL_COLOUR` names) prints plain text; `variables` paints each
 variable name in a colour taken from a hash of the name, so a variable has the
 same colour wherever it appears, in this answer and in every later one. A

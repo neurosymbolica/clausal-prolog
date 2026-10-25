@@ -755,3 +755,31 @@ def test_clausal_colour_names_the_starting_scheme(tmp_path):
 def test_piped_output_is_never_coloured(tmp_path):
     r = _piped(tmp_path, "Y = f(Z).\n")
     assert "\x1b" not in r.stdout
+
+
+def test_c_after_w_redraws_the_full_answer_not_the_elided_one(tl):
+    s = tl()
+    s.send("numlist(1, 150, L).\n")
+    s.expect("100|...]")
+    s.send("w")
+    s.expect("150]")
+    n_before = s.raw.count("150]")
+    s.send("c")
+    deadline = time.time() + 10
+    while s.raw.count("150]") <= n_before and time.time() < deadline:
+        s._read(0.2)
+    assert s.raw.count("150]") > n_before, "the redraw lost the full list"
+    tail = s.raw.rsplit("\x1b[J", 1)[-1]
+    assert "150]" in tail and "|...]" not in tail, tail[-200:]
+
+
+def test_c_clears_the_rows_a_long_answer_wrapped_onto(tl):
+    s = tl()
+    s.send("numlist(1, 60, L), member(X, [a,b]).\n")
+    s.expect("X = a")
+    s.send("c")
+    deadline = time.time() + 10
+    while "\x1b[J" not in s.raw and time.time() < deadline:
+        s._read(0.2)
+    # the answer is longer than a row (80 columns): the redraw moves up
+    assert re.search(r"\x1b\[\d+A\x1b\[J", s.raw), s.raw[-300:]
