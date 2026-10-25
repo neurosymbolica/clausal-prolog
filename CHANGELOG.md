@@ -7,6 +7,13 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+## 1.2.0 (2026-10-25)
+
+A minor release (operator ruling 2026-10-25): the interactive ISO `?-`
+top-level, and ISO conformity fixes, among them cyclic terms as rational
+trees, Scryer's syntax-error terms, the stream and `read_term` builtins and
+`repeat/0`. Bare `clausal` now opens `?-`, not the Python REPL (`clausal
+--python` does); read Breaking before upgrading.
 
 ### Breaking
 
