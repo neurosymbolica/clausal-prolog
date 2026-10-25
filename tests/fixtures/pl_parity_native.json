@@ -118,7 +118,7 @@
     "which_fib_is_55": "pass"
    }
   },
-  "docs/cli.md#L107": {
+  "docs/cli.md#L157": {
    "collect_error": null,
    "error": null,
    "load": "ok",
@@ -129,7 +129,7 @@
    },
    "tests": null
   },
-  "docs/cli.md#L16": {
+  "docs/cli.md#L17": {
    "collect_error": null,
    "error": null,
    "load": "ok",
@@ -2866,8 +2866,8 @@
   "docs/clausal_prolog.md#L170": "421f52234df0668b",
   "docs/clausal_prolog.md#L226": "d0aaa6c6f92eac22",
   "docs/clausal_prolog.md#L36": "45fdef1759218870",
-  "docs/cli.md#L107": "c1230bf772c2d31b",
-  "docs/cli.md#L16": "c1230bf772c2d31b",
+  "docs/cli.md#L157": "c1230bf772c2d31b",
+  "docs/cli.md#L17": "c1230bf772c2d31b",
   "docs/coroutining.md#L26": "0d3d867f596c51b2",
   "docs/for_prolog_programmers.md#L119": "cc7da0876c8fc29b",
   "docs/for_prolog_programmers.md#L144": "3400eba0608f2e2b",
