@@ -1955,16 +1955,42 @@ def iter_iso(source: str, op_table=None):
     reader.feed(source)
     reader.close()
 
+    import collections  # noqa: PLC0415
+    buf: collections.deque = collections.deque()    # read ahead, not yielded
+
+    def pull():
+        return buf.popleft() if buf else reader.read_term()
+
+    def description_follows() -> bool:
+        """The next item is an answer description (read ahead, and put back
+        re-read as one if it needed the quad operators)."""
+        if not buf:
+            buf.append(reader.read_term())
+        nxt = buf[0]
+        if type(nxt).__name__ == "SyntaxIssue":
+            nxt = _read_as_quad_text(source, nxt, table, True)
+            if nxt is None:
+                return False
+            buf[0] = nxt
+        return (type(nxt).__name__ == "Clause"
+                and is_answer_description(nxt.term))
+
     def items():
         in_quad = False         # the last item was a quad's query or description
         while True:
-            it = reader.read_term()
+            it = pull()
             if it is EOF:
                 return
             if it is NEED_MORE:
                 raise RuntimeError("lexer returned NEED_MORE after close()")
             if type(it).__name__ == "SyntaxIssue":
                 alt = _read_as_quad_text(source, it, table, in_quad)
+                # ``label ?- Query.`` counts only with a description after
+                # it: a mistyped ``main ?- p.`` (for ``main :- p.``) stays
+                # the syntax error it is.
+                if alt is not None and is_labelled_query(alt) \
+                        and not description_follows():
+                    alt = None
                 if alt is not None:
                     it = alt
             kind = type(it).__name__

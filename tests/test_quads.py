@@ -308,3 +308,13 @@ def test_quads_needs_a_file_and_takes_no_toplevel(tmp_path):
             env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
             capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
         assert r.returncode == 2, (argv, r.stderr)
+
+
+def test_a_labelled_query_needs_a_description_after_it(tmp_path):
+    # `main ?- p.` (for `main :- p.`) is a syntax error, as in Scryer, even
+    # in a file that has a quad
+    r = _g(tmp_path, "p(1).\n?- p(1).\n   true.\nmain ?- p(1).\nq(2).\n",
+           "q(X)")
+    assert r.returncode != 0 and "syntax" in (r.stderr + r.stdout).lower()
+    ok = _g(tmp_path, "p(1).\nmain ?- p(1).\n   true.\nq(2).\n", "q(X)")
+    assert (ok.returncode, ok.stdout) == (0, "X = 2.\n"), ok.stderr
