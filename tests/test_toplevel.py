@@ -37,6 +37,7 @@ def _env(home):
     env.pop("CLAUSAL_PL_FRONTEND", None)
     env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
     env["HOME"] = str(home)
+    env["TERM"] = "xterm"
     return env
 
 
@@ -372,6 +373,8 @@ def test_consult_and_bracket_load(tl, tmp_path):
     s = tl()
     s.query("consult(extra).", "   true.")
     s.query("r(X).", "   X = 42")
+    s.send("\r")
+    s.expect(";  ... .")
     s.query("[extra].", "   true.")
     s.query("consult(nonesuch).", "existence_error(source_sink,nonesuch)")
 
@@ -406,32 +409,172 @@ def test_history_file_is_written(tl, tmp_path):
     assert (tmp_path / ".clausal_history").exists()
 
 
-# ── the restricted surface and --prolog (operator ruling 2026-10-24) ────
+# ── cut, ->, *-> in queries (operator ruling 2026-10-24) ─────────────────
 
 
-def test_default_surface_refuses_cut_arrow_and_softcut(tl):
-    s = tl()
-    s.query("p(X), !.", "syntax_error(cut_free)")
-    s.query("(p(X) -> true ; fail).", "syntax_error(cut_free)")
-    s.query("X = 1.", "   X = 1.")
+def _clausal_file(tmp_path):
+    (tmp_path / "m.clausal").write_text(
+        ":- module(m, [a/1]).\na(1). a(2).\n:- end_module(m).\n")
 
 
-def test_prolog_flag_accepts_cut_and_if_then_else(tl):
-    s = tl("prog.pl", "--toplevel", "--prolog")
+def test_pl_file_accepts_cut_and_if_then_else(tl):
+    s = tl()                            # prog.pl, no --prolog
     s.query("p(X), !.", "   X = 1.")
     s.query("(p(X) -> true ; fail).", "   X = 1")
 
 
-def test_clausal_module_default_surface(tmp_path):
-    (tmp_path / "m.clausal").write_text(
-        ":- module(m, [a/1]).\na(1).\n:- end_module(m).\n")
+def test_clausal_file_refuses_cut_arrow_and_softcut(tmp_path):
+    _clausal_file(tmp_path)
     s = Pty(tmp_path, "m.clausal", "--toplevel")
     try:
         s.expect("?- ")
         s.query("a(X), !.", "syntax_error(cut_free)")
-        s.query("a(X).", "   X = 1")
+        s.query("(a(X) -> true ; fail).", "syntax_error(cut_free)")
+        s.query("X = 1.", "   X = 1.")
     finally:
         s.close()
+
+
+def test_prolog_flag_accepts_them_with_no_file(tmp_path):
+    s = Pty(tmp_path, "--prolog")
+    try:
+        s.expect("?- ")
+        s.query("true, !.", "   true.")
+    finally:
+        s.close()
+
+
+def test_no_file_refuses_cut(tmp_path):
+    s = Pty(tmp_path)
+    try:
+        s.expect("?- ")
+        s.query("true, !.", "syntax_error(cut_free)")
+    finally:
+        s.close()
+
+
+def test_control_symbols_as_data_are_not_refused(tmp_path):
+    _clausal_file(tmp_path)
+    s = Pty(tmp_path, "m.clausal", "--toplevel")
+    try:
+        s.expect("?- ")
+        s.query("X = '!'.", "   X = !.")
+        s.query("X = (a -> b).", "   X = (a->b).")
+        s.query("X = [!, foo].", "   X = [!,foo].")
+    finally:
+        s.close()
+
+
+def test_a_cut_commits_only_the_goals_before_it(tl):
+    s = tl()
+    s.send("!, member(X, [a,b,c]).\n")
+    s.expect("   X = a")
+    s.send(";")
+    s.expect(";  X = b")
+    s.send("\r")
+    s.query("X = 1, !, member(Y, [p,q]).", "   X = 1, Y = p")
+    s.send(";")
+    s.expect(";  X = 1, Y = q")
+
+
+# ── review fixes (engine-lane, 2026-10-24) ───────────────────────────────
+
+
+def test_ctrl_c_at_the_prompt_drops_the_line_and_stays(tl):
+    s = tl()
+    s.send("foo(")
+    time.sleep(0.3)
+    s.send("\x03")
+    time.sleep(0.5)
+    assert "Traceback" not in s.text
+    s.query("X = 1.", "   X = 1.")
+
+
+def test_consult_errors_are_one_line(tl, tmp_path):
+    (tmp_path / "bad.pl").write_text("p(.\n")
+    s = tl()
+    s.query("consult(nonexist).",
+            "error(existence_error(source_sink,nonexist),consult/1).")
+    s.query("[X].", "error(instantiation_error,consult/1).")
+    s.query("consult(bad).", "   error(")
+    s.query("consult(1).", "error(type_error(atom,1),consult/1).")
+    assert "Traceback" not in s.text
+    s.query("X = 1.", "   X = 1.")
+
+
+def test_history_recalls_a_query(tl, tmp_path):
+    s = tl()
+    s.query("X = 12345.", "   X = 12345.")
+    s.send("\x1b[A")
+    time.sleep(0.5)
+    s.send("\n")
+    deadline = time.time() + 10
+    while s.text.count("   X = 12345.") < 2 and time.time() < deadline:
+        s._read(0.2)
+    # the query echo, its answer, the recalled echo, its answer
+    assert s.text.count("   X = 12345.") == 2, s.text
+    s.send("halt.\n")
+    s.finish()
+    assert "X = 12345." in (tmp_path / ".clausal_history").read_text()
+
+
+def test_relational_clpfd_constraints_are_printed(tl):
+    s = tl()
+    s.query("X #> Y.", "   Y #< X.")
+
+
+def test_dif_on_an_underscore_variable_is_shown(tl):
+    s = tl()
+    s.query("dif(_A, a).", "   dif(_A,a).")
+
+
+def test_a_ball_that_is_no_error_prints_as_throw(tl):
+    s = tl()
+    s.query("throw(foo).", "   throw(foo).")
+
+
+def test_trailing_comment_after_the_end_does_not_continue(tl):
+    s = tl()
+    s.send("X = 1. % a comment\n")
+    s.expect("   X = 1.\n?- ")
+    assert "|    " not in s.text
+
+
+def test_halt_with_a_non_integer_is_an_error(tl):
+    s = tl()
+    s.query("halt(foo).", "error(type_error(integer,foo),halt/1).")
+    s.query("X = 1.", "   X = 1.")
+
+
+def test_e_leaves_the_top_level(tl):
+    s = tl()
+    s.send("p(X).\n")
+    s.expect("   X = 1")
+    s.send("e")
+    assert s.finish() == 0
+
+
+def test_cyclic_list_is_not_unrolled(tl):
+    s = tl()
+    s.query("X = [1,2|X].", "   X = [1,2|...].")
+
+
+def test_bracket_prefers_clausal_over_pl(tl, tmp_path):
+    (tmp_path / "both.pl").write_text("w(from_pl).\n")
+    (tmp_path / "both.clausal").write_text(
+        ":- module(both, [w/1]).\nw(from_clausal).\n:- end_module(both).\n")
+    s = tl()
+    s.query("[both].", "   true.")
+    s.query("w(X).", "   X = from_clausal")
+
+
+def test_toplevel_flag_conflicts_exit_2(tmp_path):
+    for argv in (["--toplevel", "-g", "true", "prog.pl"],
+                 ["--toplevel", "--python"]):
+        r = subprocess.run(
+            [sys.executable, "-m", "clausal", *argv], cwd=tmp_path,
+            env=_env(tmp_path), capture_output=True, text=True, timeout=60)
+        assert r.returncode == 2, (argv, r.stderr)
 
 
 # ── piped stdin ───────────────────────────────────────────────────────────

@@ -8,6 +8,15 @@ surface described in [docs/public-api.md](docs/public-api.md).
 ## Unreleased
 
 
+### Breaking
+
+- **Bare `clausal` opens the `?-` top-level, not the Python REPL**
+  (2026-10-24, operator ruling), and **`clausal FILE` with no `main/0`, run
+  from a terminal, opens `?-`** instead of loading and exiting (piped stdin
+  still gives the load check). Migration: the Python/seam REPL is `clausal
+  --python` (or `clausal-repl`); a load check from a script is `clausal FILE
+  < /dev/null`.
+
 ### Added
 
 - **An interactive ISO `?-` top-level** (2026-10-24, operator ruling): bare
@@ -18,9 +27,10 @@ surface described in [docs/public-api.md](docs/public-api.md).
   errors as one line, return to `?-` on Ctrl-C, keep history in
   `~/.clausal_history`, and run `consult/1`, `[File]` and `halt/0,1`. Bare
   `clausal` used to open the Python/seam REPL, which is now `clausal
-  --python`. A query refuses `!`, `->` and `*->` unless `--prolog` is given.
-  `-g` answers now print `dif/2` and CLP(FD) domain residuals
-  instead of `true.`. Pinned in `tests/test_toplevel.py` (a pseudo-terminal).
+  --python`. A query may use `!`, `->` and `*->` against a `.pl` file or with
+  `--prolog`; against a `.clausal` file or no file they are refused.
+  `-g` answers now print `dif/2` and CLP(FD) constraints (domains and
+  relations between variables) instead of `true.`. Pinned in `tests/test_toplevel.py` (a pseudo-terminal).
 
 - **`sort/4`, `predsort/3`, `print/1`, `atom_string/2`, `term_to_atom/2`
   and `atom_to_term/3`** (2026-10-24), on `.pl` and `.clausal`; each

@@ -19,7 +19,7 @@ enable_python_repl (partial, existing session)
 
 Entry points
 ------------
-``clausal-repl`` / ``python -m clausal``
+``clausal-repl`` / ``clausal --python``
     Tries ptpython; falls back to ClausalConsole.
 """
 
@@ -297,7 +297,7 @@ def enable_python_repl(user_globals: dict) -> None:
     but **not** the ``*(goals)`` query syntax (which requires a custom REPL
     with AST transformation).
 
-    Use ``clausal-repl`` / ``python -m clausal`` for the full experience.
+    Use ``clausal-repl`` / ``clausal --python`` for the full experience.
     Useful in ``$PYTHONSTARTUP`` for partial setup::
 
         from clausal.python_repl import enable_python_repl
@@ -312,7 +312,7 @@ def enable_python_repl(user_globals: dict) -> None:
 
 
 def main() -> None:
-    """Launch the Clausal REPL (``clausal-repl`` / ``python -m clausal``)."""
+    """Launch the Clausal REPL (``clausal-repl`` / ``clausal --python``)."""
     try:
         launch_ptpython()
     except ImportError:

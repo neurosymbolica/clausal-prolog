@@ -202,6 +202,12 @@ def _lower_term(term):
     return build(term), variables
 
 
+class _Shown(list):
+    """The ``(name, Var)`` pairs a toplevel reports, plus ``hidden``: the
+    ``_``-led ones it does not report but whose constraints it shows."""
+    hidden: tuple = ()
+
+
 def _read_goal(text: str, op_table):
     """``text`` -> ``(goal_cell, [(name, Var), ...])``: the named variables
     in first-occurrence order, ``_``-led names left out (a toplevel does not
@@ -244,8 +250,11 @@ def _read_goal(text: str, op_table):
         term = ("?-", term)
     names = dict(item.var_names) if hasattr(item, "var_names") else {}
     goal, variables = _lower_term(term)
-    shown = [(names.get(i, f"_G{i}"), v) for i, v in variables.items()
-             if not names.get(i, "_").startswith("_")]
+    shown = _Shown((names.get(i, f"_G{i}"), v) for i, v in variables.items()
+                   if not names.get(i, "_").startswith("_"))
+    shown.hidden = tuple((names.get(i, f"_G{i}"), v)
+                         for i, v in variables.items()
+                         if names.get(i, "_").startswith("_"))
     return goal, shown
 
 
@@ -274,25 +283,64 @@ def _fd_domain_text(domain) -> str:
     return "\\/".join(parts)
 
 
+_RELATIONS = {"EqConstraint": "#=", "NeConstraint": "#\\=",
+              "LtConstraint": "#<", "LeConstraint": "#=<"}
+
+
+def _fd_constraint_text(c, spell) -> str:
+    """One pending CLP(FD) propagator as a goal, or ``pending(Kind, Vars)``
+    for a kind not spelled yet (so an answer never claims more freedom than
+    it has)."""
+    kind = type(c).__name__
+    if kind in _RELATIONS:
+        return f"{spell(c.lhs)} {_RELATIONS[kind]} {spell(c.rhs)}"
+    if kind == "AllDiffConstraint":
+        return "all_different([" + ",".join(spell(v) for v in c.vars) + "])"
+    if kind == "SumConstraint":
+        return ("sum([" + ",".join(spell(v) for v in c.sum_vars)
+                + f"],#=,{spell(c.total)})")
+    if kind == "ScalarProductConstraint":
+        return ("scalar_product([" + ",".join(spell(v) for v in c.coeffs)
+                + "],[" + ",".join(spell(v) for v in c.sum_vars)
+                + f"],#=,{spell(c.total)})")
+    return (f"pending({kind.removesuffix('Constraint').lower()},["
+            + ",".join(spell(v) for v in getattr(c, "vars", ())) + "])")
+
+
 def _fd_dif_residuals(variables, spell) -> list[str]:
-    """The ``dif/2`` and CLP(FD) domain goals on *variables*, in plain form
-    (``dif(X,a)``, ``X in 4..5``): what a toplevel prints for a constraint
-    left on an answer (operator ruling 2026-10-24: not module-qualified)."""
+    """The ``dif/2`` and CLP(FD) goals on *variables*, in plain form
+    (``dif(X,a)``, ``X in 4..5``, ``Y #< X``): what a toplevel prints for a
+    constraint left on an answer (operator ruling 2026-10-24: not
+    module-qualified).  A domain with no bound is not printed."""
     from clausal.logic.constraints import DIF_KEY  # noqa: PLC0415
-    from clausal.logic.variables import get_attr  # noqa: PLC0415
+    from clausal.logic.variables import deref, get_attr, is_var  # noqa: PLC0415
 
     goals: list[str] = []
     seen: set[int] = set()
     for v in variables:
-        for x, y in get_attr(v, DIF_KEY) or ():
-            if id(x) ^ id(y) in seen:
+        for pair in get_attr(v, DIF_KEY) or ():
+            if id(pair) in seen:
                 continue
-            seen.add(id(x) ^ id(y))
-            goals.append(f"dif({spell(x)},{spell(y)})")
+            seen.add(id(pair))
+            goals.append(f"dif({spell(pair[0])},{spell(pair[1])})")
+    inf = float("inf")
     for v in variables:
         state = get_attr(v, "fd")
-        if state is not None and state.domain:
+        if state is None or not state.domain:
+            continue
+        if state.domain != ((-inf, inf),):
             goals.append(f"{spell(v)} in {_fd_domain_text(state.domain)}")
+    for v in variables:
+        state = get_attr(v, "fd")
+        for c in (state.constraints if state is not None else ()):
+            if id(c) in seen:
+                continue
+            seen.add(id(c))
+            # one with a single variable is what its domain already says
+            open_vars = {id(deref(x)) for x in getattr(c, "vars", ())
+                         if is_var(deref(x))}
+            if len(open_vars) >= 2:
+                goals.append(_fd_constraint_text(c, spell))
     return goals
 
 
@@ -325,6 +373,11 @@ def _answer(shown, trail) -> str:
                      f"{term_writeq(w, var_names=names, priority=699, ops=ops)}")
     free: dict = {}
     for _, w in values:
+        _term_vars(w, free)
+    for name, v in getattr(shown, "hidden", ()):
+        w = _deref_walk(v)
+        if isinstance(w, Var):
+            names.setdefault(id(w), name)
         _term_vars(w, free)
     if free:
         def spell(x):
@@ -370,6 +423,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(options)
 
+    if args.toplevel and (args.goal or args.test or args.quads or args.python):
+        parser.error("--toplevel opens ?-; it takes no -g, --test, --quads "
+                     "or --python")
     if args.file is None:
         if args.goal or args.test or args.once or program_args:
             parser.error("-g, --once, --test and -- ARGS need a FILE")

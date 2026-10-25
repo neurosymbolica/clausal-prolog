@@ -29,9 +29,10 @@ Hello, world
 ```
 
 The exit status is 0 when `main` succeeds and 1 when it fails or raises.
-`main/0` need not be exported. A program with no `main/0` is only loaded, so
-`clausal lib.clausal` is a quick load check: it reports a syntax or load
-error and exits 1, or exits 0.
+`main/0` need not be exported. A program with no `main/0` is only loaded when
+stdin is not a terminal, so `clausal lib.clausal < /dev/null` is a quick load
+check: it reports a syntax or load error and exits 1, or exits 0. From a
+terminal it opens the `?-` top-level (see below; `--toplevel` forces that).
 
 Clausal Prolog refuses `:- initialization(...)`, so `main/0` is the entry
 point by name.
@@ -61,11 +62,13 @@ solution is computed only when you ask for it:
 | `a` | all the rest |
 | `w`, `p` | print answers in full, or with lists past 100 elements elided (`[1,2,...\|...]`) |
 | `h`, `?` | help |
-| Enter, `.`, Ctrl-C | stop |
+| Enter, `.`, Ctrl-C | stop this query |
+| `e` | leave the top-level |
 
 The engine does not tell the top-level that an answer was the last, so an
 answer is printed with its full stop at once only for goals that cannot leave
-a choice (`=`, `is`, comparisons, constraint posting, a goal with a `!`);
+a choice (`=`, `is`, comparisons, constraint posting; the goals after a `!`
+count);
 for any other goal the top-level asks, and a requested next solution that
 does not exist prints `false.` Residual `dif/2` and CLP(FD) domain
 constraints print in plain form (`dif(X,a)`, `X in 4..5`).
@@ -73,12 +76,14 @@ constraints print in plain form (`dif(X,a)`, `X in 4..5`).
 An error is one line, `error(Formal,Context).`; Ctrl-C during a search
 returns to `?-`. `consult(File)` and `[File]` load a `.clausal` or `.pl` file
 and make it the module queries run in; `halt.` and `halt(N)` and Ctrl-D exit.
-History is kept in `~/.clausal_history`. When stdin is not a terminal there is
+Lines are edited with readline, and each query is added to the history kept
+in `~/.clausal_history` (Up recalls it); Ctrl-C at the prompt drops the line. When stdin is not a terminal there is
 no prompt and no key prompt: the first answer of each query is printed.
 
-Queries use the restricted Clausal Prolog surface: `!`, `->` and `*->` are
-refused. `--prolog` accepts them. The Python/seam
-REPL that bare `clausal` used to open is `clausal --python`.
+A query may use `!`, `->` and `*->` (in goal position, not as data) when the
+loaded file is a `.pl` file, or with `--prolog`; against a `.clausal` file, or
+with no file, they are refused, as `.clausal` source refuses them. The
+Python/seam REPL that bare `clausal` used to open is `clausal --python`.
 
 ## Running goals: `-g`
 

@@ -37,6 +37,7 @@ HISTORY_FILE = "~/.clausal_history"
 HELP = """\
 Action:
 \tENTER,.     stop         - stop this query
+\te           exit         - leave the top-level
 \t;,SPACE,n   next         - display next solution
 \tf           digit        - display 5 solutions
 \t#           digit        - display # solutions (digits, then ENTER)
@@ -144,40 +145,46 @@ _DETERMINISTIC = {
 }
 
 
-def _has_cut(goal) -> bool:
-    """A ``!`` among the conjuncts of *goal* (not inside a disjunction)."""
+def _conjuncts(goal) -> list:
+    out = []
     while type(goal) is tuple and goal[0] == "," and len(goal) == 3:
-        if goal[1] == "!" or _has_cut(goal[1]):
-            return True
+        out.append(goal[1])
         goal = goal[2]
-    return goal == "!"
+    out.append(goal)
+    return out
 
 
 def surely_deterministic(goal) -> bool:
     """True when *goal* is a conjunction of goals that cannot leave a choice
-    (the table above), so its answer is the last one."""
-    if goal in ("true", "fail", "false", "nl", "!"):
+    (the table above), so its answer is the last one.  A top-level ``!``
+    commits the goals before it: only those after the last one count."""
+    parts = _conjuncts(goal)
+    cuts = [i for i, g in enumerate(parts) if g == "!"]
+    if cuts:
+        parts = parts[cuts[-1] + 1:]
+    return all(_deterministic_goal(g) for g in parts)
+
+
+def _deterministic_goal(goal) -> bool:
+    if goal in ("true", "fail", "false", "nl"):
         return True
-    if type(goal) is tuple:
-        if goal[0] == "," and len(goal) == 3:
-            # a cut in the conjunction commits the goals before it
-            return (_has_cut(goal) or surely_deterministic(goal[1])
-                    and surely_deterministic(goal[2]))
-        return (goal[0], len(goal) - 1) in _DETERMINISTIC
-    return False
+    return (type(goal) is tuple and bool(goal)
+            and (goal[0], len(goal) - 1) in _DETERMINISTIC)
 
 
 # ── printing an answer ────────────────────────────────────────────────────
 
 
-def _elide(t, depth=0):
+def _elide(t, depth=0, path=()):
     """*t* with each list past ``ELIDE_AFTER`` elements cut to its head and a
     ``|...`` tail, down a few levels of nesting.  A term with no long list
     is returned itself, so a cyclic answer keeps its shape."""
-    if depth > 6:
-        return t
+    if depth > 6 or id(t) in path:
+        return t                        # too deep, or a cycle: left as is
+    if type(t) in (list, tuple):
+        path = path + (id(t),)
     if type(t) is list:
-        items = [_elide(x, depth + 1) for x in t[:ELIDE_AFTER]]
+        items = [_elide(x, depth + 1, path) for x in t[:ELIDE_AFTER]]
         if len(t) > ELIDE_AFTER:
             out = "$elided"
             for x in reversed(items):
@@ -187,7 +194,7 @@ def _elide(t, depth=0):
             return t
         return items
     if type(t) is tuple and t and t[0] != "$chars":
-        args = [_elide(x, depth + 1) for x in t[1:]]
+        args = [_elide(x, depth + 1, path) for x in t[1:]]
         if all(a is b for a, b in zip(args, t[1:])):
             return t
         return (t[0], *args)
@@ -200,7 +207,14 @@ def format_answer(shown, trail, elide: bool = True) -> str:
     from clausal.logic.solve import _deref_walk  # noqa: PLC0415
 
     if elide:
-        shown = [(name, _elide(_deref_walk(v))) for name, v in shown]
+        hidden = getattr(shown, "hidden", ())
+        out = cli._Shown()
+        for name, v in shown:
+            w = _deref_walk(v)
+            e = _elide(w)
+            out.append((name, v if e is w else e))   # unchanged: as -g prints
+        out.hidden = hidden
+        shown = out
     text = cli._answer(shown, trail)
     return text.replace("|'$elided']", "|...]")
 
@@ -284,23 +298,58 @@ class TopLevel:
     # -- input
 
     def read_query(self) -> str | None:
-        """The text of the next query, or None at end of input."""
+        """The text of the next query, or None at end of input.  On a
+        terminal the lines come through ``input`` (line editing, history);
+        Ctrl-C drops the partial query and prompts again."""
         text = self._pending
         self._pending = ""
+        if _layout_only(text):
+            text = ""
         while True:
             if text.strip():
                 end = query_end(text)
                 if end is not None:
                     self._pending = text[end:]
+                    self._remember(text[:end])
                     return text[:end]
-            if self.interactive:
-                self._write(PROMPT if not text.strip() else CONTINUATION)
-            line = self.stdin.readline()
-            if line == "":
-                if self.interactive:
-                    self._write("\n")
+            try:
+                line = self._read_line(
+                    PROMPT if not text.strip() else CONTINUATION)
+            except KeyboardInterrupt:
+                self._write("\n")
+                text = ""
+                continue
+            if line is None:
                 return None
             text = text + line if text.strip() else line
+
+    def _read_line(self, prompt: str) -> str | None:
+        if self.interactive and self.stdin is sys.stdin:
+            try:
+                return input(prompt) + "\n"
+            except EOFError:
+                self._write("\n")
+                return None
+        if self.interactive:
+            self._write(prompt)
+        line = self.stdin.readline()
+        if line == "":
+            if self.interactive:
+                self._write("\n")
+            return None
+        return line
+
+    def _remember(self, query: str) -> None:
+        """A completed query, on one line, into the readline history."""
+        if not self.interactive:
+            return
+        try:
+            import readline  # noqa: PLC0415
+            one = " ".join(query.split())
+            if one:
+                readline.add_history(one)
+        except ImportError:
+            pass
 
     def _key(self) -> str:
         try:
@@ -312,12 +361,20 @@ class TopLevel:
 
     def _builtin(self, goal) -> bool:
         """halt/0,1 and consult/1 (``[File]``); True when handled."""
+        from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+        from clausal.logic.solve import _deref_walk  # noqa: PLC0415
+        from clausal.logic.variables import Var  # noqa: PLC0415
         if goal == "halt":
             raise Halt(0)
         if type(goal) is tuple and goal[0] == "halt" and len(goal) == 2:
-            from clausal.logic.solve import _deref_walk  # noqa: PLC0415
             n = _deref_walk(goal[1])
-            raise Halt(n if type(n) is int else 0)
+            if isinstance(n, Var):
+                raise LogicException(("error", "instantiation_error",
+                                      ("/", "halt", 1)))
+            if type(n) is not int:
+                raise LogicException(("error", ("type_error", "integer", n),
+                                      ("/", "halt", 1)))
+            raise Halt(n)
         files = None
         if type(goal) is tuple and goal[0] == "consult" and len(goal) == 2:
             files = goal[1]
@@ -326,7 +383,7 @@ class TopLevel:
         if files is None:
             return False
         for f in (files if type(files) is list else [files]):
-            self.consult(f)
+            self.consult(_deref_walk(f))
         self._write(INDENT + "true.\n")
         return True
 
@@ -335,39 +392,36 @@ class TopLevel:
         the module queries run in."""
         from clausal.testing import load_clausal_module  # noqa: PLC0415
         from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+        from clausal.logic.variables import Var  # noqa: PLC0415
+        context = ("/", "consult", 1)
+        if isinstance(name, Var):
+            raise LogicException(("error", "instantiation_error", context))
         if type(name) is not str:
             raise LogicException(("error", ("type_error", "atom", name),
-                                  ("consult", 1)))
+                                  context))
         candidates = [name] + [name + s for s in
-                               (PROLOG_SUFFIX, *CLAUSAL_PROLOG_SUFFIXES)]
+                               (*CLAUSAL_PROLOG_SUFFIXES, PROLOG_SUFFIX)]
         path = next((c for c in candidates if os.path.isfile(c)), None)
         if path is None:
             raise LogicException(("error",
                                   ("existence_error", "source_sink", name),
-                                  ("consult", 1)))
-        self.module = load_clausal_module(path)
+                                  context))
+        module = load_clausal_module(path)      # a load error is the caller's
+        self.module = module
         self.path = path
         self.op_table = self._ops_of(path)
-        sys.path.insert(0, os.path.dirname(os.path.abspath(path)))
+        here = os.path.dirname(os.path.abspath(path))
+        if here not in sys.path:
+            sys.path.insert(0, here)
 
     def _refused(self, goal) -> bool:
-        """A query on the restricted Clausal Prolog surface (the default) may
-        not use ``!``, ``->`` or ``*->``, as a ``.clausal`` source may not;
-        ``--prolog`` accepts them (operator ruling 2026-10-24)."""
-        if self.prolog:
+        """A query may not use ``!``, ``->`` or ``*->`` in a goal position
+        (not as data: ``X = '!'``) when the loaded file is Clausal Prolog or
+        there is none; a ``.pl`` file, or ``--prolog``, accepts them
+        (operator ruling 2026-10-24)."""
+        if self.prolog or (self.path or "").endswith(PROLOG_SUFFIX):
             return False
-        stack = [goal]
-        while stack:
-            t = stack.pop()
-            if t == "!":
-                return True
-            if type(t) is tuple:
-                if t[0] in ("->", "*->") and len(t) == 3:
-                    return True
-                stack.extend(t[1:])
-            elif type(t) is list:
-                stack.extend(t)
-        return False
+        return _uses_control(goal)
 
     # -- running one query
 
@@ -378,15 +432,16 @@ class TopLevel:
         except SyntaxError as exc:
             self._write(INDENT + _end(_syntax_line(exc)) + "\n")
             return
-        if self._builtin(goal):
-            return
-        if self._refused(goal):
-            self._write(INDENT + _end(
-                "error(syntax_error(cut_free),read_term/3)")
-                + "\n% !, -> and *-> are not Clausal Prolog; "
-                  "start with --prolog to accept them\n")
-            return
         try:
+            if self._builtin(goal):
+                return
+            if self._refused(goal):
+                self._write(INDENT + _end(
+                    "error(syntax_error(cut_free),read_term/3)")
+                    + "\n% !, -> and *-> are not accepted here; "
+                      "start with --prolog (or load a .pl file) to accept "
+                      "them\n")
+                return
             self._answers(solve(("call", goal), module=self.module), shown,
                           surely_deterministic(goal))
         except Halt:
@@ -396,7 +451,7 @@ class TopLevel:
         except BaseException as exc:  # noqa: BLE001 -- one line, not a traceback
             if isinstance(exc, (SystemExit, GeneratorExit)):
                 raise
-            self._write(INDENT + _end(self._cli._describe(exc)) + "\n")
+            self._write(INDENT + _end(_describe_error(exc)) + "\n")
             if os.environ.get("CLAUSAL_DEBUG"):
                 import traceback  # noqa: PLC0415
                 traceback.print_exc()
@@ -442,7 +497,10 @@ class TopLevel:
             self._asking = True
             while True:
                 k = self._key()
-                if k in ("\n", "\r", ".", "\x03", "\x04", "e", "\x1b"):
+                if k == "e":
+                    self._write("\n")
+                    raise Halt(0)
+                if k in ("\n", "\r", ".", "\x03", "\x04", "\x1b"):
                     self._write("\n;  ... .\n")
                     return
                 if k in (";", " ", "n"):
@@ -501,6 +559,66 @@ class TopLevel:
             return h.status
         finally:
             _save_history(self.interactive)
+
+
+def _describe_error(exc) -> str:
+    """An uncaught exception as one line: ``error(Formal,Context)``, or
+    ``throw(Ball)`` for a ball that is no error term (as Scryer prints it)."""
+    from clausal import cli  # noqa: PLC0415
+    from clausal.logic.exceptions import LogicException  # noqa: PLC0415
+    text = cli._describe(exc)
+    if isinstance(exc, LogicException):
+        from clausal.logic.solve import _deref_walk  # noqa: PLC0415
+        ball = _deref_walk(exc.term)
+        if not (type(ball) is tuple and len(ball) == 3 and ball[0] == "error"):
+            return f"throw({text})"
+    return text
+
+
+#: Goals whose arguments (by position) are goals, for ``_uses_control``.
+_GOAL_ARGS = {
+    (",", 2): (0, 1), (";", 2): (0, 1), ("\\+", 1): (0,), ("call", 1): (0,),
+    ("once", 1): (0,), ("ignore", 1): (0,), ("findall", 3): (1,),
+    ("findall", 4): (1,), ("forall", 2): (0, 1), ("catch", 3): (0, 2),
+    ("bagof", 3): (1,), ("setof", 3): (1,), ("aggregate_all", 3): (1,),
+}
+
+
+def _uses_control(goal) -> bool:
+    """``!``, ``->`` or ``*->`` in a goal position of *goal*."""
+    if goal == "!":
+        return True
+    if type(goal) is not tuple or not goal:
+        return False
+    if goal[0] in ("->", "*->") and len(goal) == 3:
+        return True
+    if goal[0] == "^" and len(goal) == 3:       # V^Goal under bagof/setof
+        return _uses_control(goal[2])
+    for i in _GOAL_ARGS.get((goal[0], len(goal) - 1), ()):
+        if _uses_control(goal[1 + i]):
+            return True
+    return False
+
+
+def _layout_only(text: str) -> bool:
+    """*text* is only layout and ``%`` comments (what follows a query's end
+    on its line)."""
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if c.isspace():
+            i += 1
+        elif c == "%":
+            while i < n and text[i] != "\n":
+                i += 1
+        elif text.startswith("/*", i):
+            j = text.find("*/", i + 2)
+            if j < 0:
+                return False
+            i = j + 2
+        else:
+            return False
+    return True
 
 
 def _dot(text: str) -> str:
