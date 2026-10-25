@@ -224,17 +224,19 @@ def _drive_trampoline(dispatch_fn: Any, trail: Trail, *args: Any,
     from clausal.logic.tabling import begin_drive_episode, end_drive_episode
 
     sg = StepGenerator(dispatch_fn, None, None, None, *args, trail)
-    # A root retired by a FINAL is not resumed, so its frames never undo
-    # the last solution's bindings on the way out: undo them here, as the
-    # exhausted search would have.
+    # When the search ends, undo what it bound.  Its frames undo their own
+    # bindings on the way out, but not all of them: a retired root is not
+    # resumed at all, and a frame that skips re-pulling a child after the
+    # child's FINAL answer leaves that answer's bindings for an enclosing
+    # mark -- here the outermost one.  The caller's variables are unbound
+    # after exhaustion and can be reused.
     mark = trail.mark()
     begin_drive_episode()
     try:
         while True:
             result = _drive_until_yield(sg)
             if result is None:
-                if sg.retired:
-                    trail.undo(mark)
+                trail.undo(mark)
                 return
             yield (trail, sg.retired) if with_last else trail
     except NameError as exc:

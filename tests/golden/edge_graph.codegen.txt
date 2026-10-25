@@ -13,7 +13,7 @@ def edge__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                     _m1 = trail.mark()
                     _fin_it2 = $unify_iter(_v1, 2, trail)
                     for _ in _fin_it2:
-                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_0) and _fin_it1 is $ONCE and (_fin_it2 is $ONCE) else None)
+                        yield (_proceed, $FINAL if (_d0.__class__ is $int and _d0 not in $final_keys_0) and _fin_it1 is $ONCE and (_fin_it2 is $ONCE) else None)
                     trail.undo(_m1)
                 trail.undo(_m0)
             except $GeneratorExit:
@@ -33,7 +33,7 @@ def edge__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                     _m3 = trail.mark()
                     _fin_it4 = $unify_iter(_v3, 3, trail)
                     for _ in _fin_it4:
-                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_1) and _fin_it3 is $ONCE and (_fin_it4 is $ONCE) else None)
+                        yield (_proceed, $FINAL if (_d0.__class__ is $int and _d0 not in $final_keys_1) and _fin_it3 is $ONCE and (_fin_it4 is $ONCE) else None)
                     trail.undo(_m3)
                 trail.undo(_m2)
             except $GeneratorExit:

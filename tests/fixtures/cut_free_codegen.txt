@@ -7,7 +7,7 @@ def p__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             _mark_cl = False
             try:
                 if _ncap0.__class__ is 1 .__class__ and _ncap0 == 1 or $unify(_ncap0, 1, trail):
-                    yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_0) else None)
+                    yield (_proceed, $FINAL if _d0.__class__ is $int and _d0 not in $final_keys_0 else None)
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -20,7 +20,7 @@ def p__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             _mark_cl = False
             try:
                 if _ncap0.__class__ is 2 .__class__ and _ncap0 == 2 or $unify(_ncap0, 2, trail):
-                    yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_1) else None)
+                    yield (_proceed, $FINAL if _d0.__class__ is $int and _d0 not in $final_keys_1 else None)
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -474,7 +474,7 @@ def col__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             try:
                 if $unify(_acap0, 'red', trail):
                     if _ncap1.__class__ is 1 .__class__ and _ncap1 == 1 or $unify(_ncap1, 1, trail):
-                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_0) else None)
+                        yield (_proceed, $FINAL if _d0.__class__ is $str and _d0 not in $final_keys_0 else None)
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -488,7 +488,7 @@ def col__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             try:
                 if $unify(_acap0, 'green', trail):
                     if _ncap1.__class__ is 2 .__class__ and _ncap1 == 2 or $unify(_ncap1, 2, trail):
-                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_1) else None)
+                        yield (_proceed, $FINAL if _d0.__class__ is $str and _d0 not in $final_keys_1 else None)
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -502,7 +502,7 @@ def col__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             try:
                 if $unify(_acap0, 'blue', trail):
                     if _ncap1.__class__ is 3 .__class__ and _ncap1 == 3 or $unify(_ncap1, 3, trail):
-                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_2) else None)
+                        yield (_proceed, $FINAL if _d0.__class__ is $str and _d0 not in $final_keys_2 else None)
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -516,7 +516,7 @@ def col__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             try:
                 if $unify(_acap0, 'red', trail):
                     if _ncap1.__class__ is 4 .__class__ and _ncap1 == 4 or $unify(_ncap1, 4, trail):
-                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_3) else None)
+                        yield (_proceed, $FINAL if _d0.__class__ is $str and _d0 not in $final_keys_3 else None)
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -604,7 +604,7 @@ def col__p0_b0__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             try:
                 if $unify(_acap0, 'red', trail):
                     if _ncap1.__class__ is 1 .__class__ and _ncap1 == 1 or $unify(_ncap1, 1, trail):
-                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_4) else None)
+                        yield (_proceed, $FINAL if _d0.__class__ is $str and _d0 not in $final_keys_4 else None)
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -729,8 +729,6 @@ def cc__0(this_generator, _proceed, _fail, _catcher, trail):
                         _catch_in1 = False
                         yield (_proceed, None)
                         _catch_in1 = True
-                    if _st3 is $FINAL:
-                        break
                     _st3 = (yield (_gen2, None))
             except $Exception as _exc7:
                 if not _catch_in1:
@@ -770,8 +768,6 @@ def cc2__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                             _catch_in1 = False
                             yield (_proceed, None)
                             _catch_in1 = True
-                        if _st3 is $FINAL:
-                            break
                         _st3 = (yield (_gen2, None))
                 except $Exception as _exc6:
                     if not _catch_in1:

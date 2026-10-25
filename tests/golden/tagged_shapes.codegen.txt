@@ -153,7 +153,7 @@ def kind__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                     _m12 = trail.mark()
                     _fin_it10 = $unify_iter(_v23, 'num', trail)
                     for _ in _fin_it10:
-                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_4) and _fin_it9 is $ONCE and (_fin_it10 is $ONCE) else None)
+                        yield (_proceed, $FINAL if (_d0.__class__ is $str and _d0 not in $final_keys_4) and _fin_it9 is $ONCE and (_fin_it10 is $ONCE) else None)
                     trail.undo(_m12)
                 trail.undo(_m11)
             except $GeneratorExit:

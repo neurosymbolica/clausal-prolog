@@ -840,11 +840,36 @@ def _later_clauses_excluded(clauses, matches, arity, env):
         n = env.get("$final_keys_count", 0)
         env["$final_keys_count"] = n + 1
         name = f"$final_keys_{n}"
-        env[name] = later_set
-        out[id(matches[i])] = ast.Call(
-            func=_name("$first_arg_excludes"),
-            args=[_name("_d0"), _name("arg0"), _name(name)], keywords=[])
+        out[id(matches[i])] = _exclusion_test(later_set, name, env)
     return out, frozenset(id(m) for m in matches)
+
+
+def _exclusion_test(later_keys, name, env):
+    """The test that the call's first argument keys outside *later_keys*.
+
+    Inline for the usual tables -- every later head's first argument an
+    integer, or every one a (non-empty) atom: ``_d0``, the argument as
+    dereferenced at entry, of that very type and not among them.  (An
+    entry value of any other type -- unbound, a float, a compound -- fails
+    the type test and excludes nothing.)  Otherwise the general runtime
+    key, ``$first_arg_excludes``, a Python call made only at the answer."""
+    from .arg_index import _INDEX_VAR  # noqa: F401
+    ints = all(type(k) is int for k in later_keys)
+    atoms = all(type(k) is tuple and len(k) == 2 and k[1] == 0
+                and type(k[0]) is str and k[0] for k in later_keys)
+    if ints or atoms:
+        raw = frozenset(later_keys) if ints else frozenset(k[0] for k in later_keys)
+        env[name] = raw
+        return ast.BoolOp(op=ast.And(), values=[
+            ast.Compare(left=ast.Attribute(value=_name("_d0"), attr="__class__",
+                                           ctx=ast.Load()),
+                        ops=[ast.Is()],
+                        comparators=[_name("$int" if ints else "$str")]),
+            ast.Compare(left=_name("_d0"), ops=[ast.NotIn()],
+                        comparators=[_name(name)])])
+    env[name] = later_keys
+    return ast.Call(func=_name("$first_arg_excludes"),
+                    args=[_name("_d0"), _name("arg0"), _name(name)], keywords=[])
 
 
 def _build_predicate_trampoline_funcdef(

@@ -2214,7 +2214,7 @@ def _trampoline_to_simple_adapter(trampoline_dispatch, arity):
     This adapter creates a StepGenerator and drives it via a mini-trampoline
     that yields per solution while bindings are still live.
     """
-    from clausal.logic.trampoline import StepGenerator, DONE
+    from clausal.logic.trampoline import StepGenerator, DONE, FINAL
 
     def adapted(*args_trail_k):
         args = args_trail_k[:arity]
@@ -2234,7 +2234,10 @@ def _trampoline_to_simple_adapter(trampoline_dispatch, arity):
                     if value is _TABLING_SUSPEND:
                         gen, value = gen.send(DONE)
                     else:
-                        gen, value = gen.send(value)
+                        # This loop does not check the frames a tail call
+                        # skipped (the drive core's final_holds): a FINAL
+                        # is passed on as a plain answer.
+                        gen, value = gen.send(None if value is FINAL else value)
         finally:
             try:
                 root.close()

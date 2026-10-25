@@ -43,13 +43,17 @@ _GOAL_BOUNDARY_ITERS = frozenset({"$unify_iter", "$pending"})
 
 class _Names:
     __slots__ = ("self_name", "proceed", "fail", "fresh", "later_excluded",
-                 "later_excluded_arms", "child_loops")
+                 "later_excluded_arms", "child_loops", "undo_follows")
 
     def __init__(self, self_name, proceed, fail, later_excluded=None):
         self.self_name, self.proceed, self.fail = self_name, proceed, fail
         self.fresh = 0
         # The loops over a direct child's answers: ``(loop, status)``.
         self.child_loops = []
+        # True inside a clause arm's ``try`` whose ``finally`` undoes the
+        # arm's mark, and no catch/3 handler in between: what a skipped
+        # child leaves bound is undone there before the frame moves on.
+        self.undo_follows = False
         # ({id(clause arm Match): test that no later arm can match the
         # call}, {id(every clause arm Match)})
         self.later_excluded, self.later_excluded_arms = (
@@ -180,6 +184,21 @@ def _inert_block(stmts, n: _Names) -> bool:
     return True
 
 
+def _undoes(stmts) -> bool:
+    """A ``finally`` that undoes the trail: ``trail.undo(m)``, possibly under
+    the ``if not _mark_cl:`` guard (which is False only when the generator
+    is being closed, when nothing resumes it)."""
+    for s in stmts:
+        if type(s) is ast.If:
+            if _undoes(s.body):
+                return True
+        elif (type(s) is ast.Expr and type(s.value) is ast.Call
+              and type(s.value.func) is ast.Attribute
+              and s.value.func.attr == "undo"):
+            return True
+    return False
+
+
 def _generator_exit_only(handlers) -> bool:
     """The ``except $GeneratorExit: _mark_cl = True; raise`` bookkeeping
     every clause arm carries, and nothing else."""
@@ -228,7 +247,8 @@ def _walk_block(stmts, conds, ok, n: _Names, out: list, end=None) -> None:
                 if here:
                     out.append(_Site("tail", stmts, st, conds))
             elif _is_name(args[1], n.self_name):
-                n.child_loops.append((loop, status))
+                if n.undo_follows:
+                    n.child_loops.append((loop, status))
                 # The continuation runs once per child answer; it is final
                 # only after the child's own last answer.
                 cond = ast.Compare(left=_name(status), ops=[ast.Is()],
@@ -254,9 +274,17 @@ def _walk_stmt(st, block, conds, ok, n: _Names, out: list) -> None:
         for case in st.cases:
             _walk_block(case.body, conds, ok, n, out)
     elif t is ast.Try:
-        body_ok = (ok and _generator_exit_only(st.handlers) and not st.orelse
-                   and _inert_block(st.finalbody, n))
-        _walk_block(st.body, conds, body_ok, n, out)
+        plain = _generator_exit_only(st.handlers) and not st.orelse
+        body_ok = ok and plain and _inert_block(st.finalbody, n)
+        saved = n.undo_follows
+        if not plain:
+            n.undo_follows = False
+        elif _undoes(st.finalbody):
+            n.undo_follows = True
+        try:
+            _walk_block(st.body, conds, body_ok, n, out)
+        finally:
+            n.undo_follows = saved
     elif t is ast.For and not st.orelse:
         it = st.iter
         if (type(it) is ast.Call and type(it.func) is ast.Name
@@ -387,8 +415,9 @@ def mark_final_yields(func_def: ast.FunctionDef, *, self_name: str,
             site.block.insert(idx, mark)
     for loop, status in n.child_loops:
         # The hop FINAL saves: after the child's last answer, do not pull
-        # it again to hear it fail.  The bindings it leaves are undone by
-        # the next backtrack point out (an earlier goal's own undo, the
+        # it again to hear it fail.  Only inside an arm whose ``finally``
+        # undoes its mark (undo_follows); the bindings it leaves are undone
+        # by the next backtrack point out (an earlier goal's own undo, the
         # arm's mark), as every compiled frame undoes to its mark first.
         stop = ast.If(
             test=ast.Compare(left=_name(status), ops=[ast.Is()],

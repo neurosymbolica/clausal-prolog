@@ -196,7 +196,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                             _st3 = (yield (_gen3, None))
                             while _st3 is not $DONE:
                                 if $fd_eq(_v13, 'met', trail):
-                                    yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_0) and _fin_it1 is $ONCE and (_st2 is $FINAL) and (_st3 is $FINAL) else None)
+                                    yield (_proceed, $FINAL if (_d0.__class__ is $str and _d0 not in $final_keys_0) and _fin_it1 is $ONCE and (_st2 is $FINAL) and (_st3 is $FINAL) else None)
                                 if _st3 is $FINAL:
                                     break
                                 _st3 = (yield (_gen3, None))
@@ -225,7 +225,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                             _st5 = (yield (_gen5, None))
                             while _st5 is not $DONE:
                                 if $fd_eq(_v14, 'met', trail):
-                                    yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_1) and _fin_it2 is $ONCE and (_st4 is $FINAL) and (_st5 is $FINAL) else None)
+                                    yield (_proceed, $FINAL if (_d0.__class__ is $str and _d0 not in $final_keys_1) and _fin_it2 is $ONCE and (_st4 is $FINAL) and (_st5 is $FINAL) else None)
                                 if _st5 is $FINAL:
                                     break
                                 _st5 = (yield (_gen5, None))
@@ -255,7 +255,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                             _st7 = (yield (_gen7, None))
                             while _st7 is not $DONE:
                                 if $fd_eq(_v16, 'met', trail):
-                                    yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_2) and _fin_it3 is $ONCE and (_st6 is $FINAL) and (_st7 is $FINAL) else None)
+                                    yield (_proceed, $FINAL if (_d0.__class__ is $str and _d0 not in $final_keys_2) and _fin_it3 is $ONCE and (_st6 is $FINAL) and (_st7 is $FINAL) else None)
                                 if _st7 is $FINAL:
                                     break
                                 _st7 = (yield (_gen7, None))
@@ -284,7 +284,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                             _st9 = (yield (_gen9, None))
                             while _st9 is not $DONE:
                                 if $fd_eq(_v17, 'met', trail):
-                                    yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_3) and _fin_it4 is $ONCE and (_st8 is $FINAL) and (_st9 is $FINAL) else None)
+                                    yield (_proceed, $FINAL if (_d0.__class__ is $str and _d0 not in $final_keys_3) and _fin_it4 is $ONCE and (_st8 is $FINAL) and (_st9 is $FINAL) else None)
                                 if _st9 is $FINAL:
                                     break
                                 _st9 = (yield (_gen9, None))
@@ -305,7 +305,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                 if $unify(_acap0, 'list compound input mode succeeds', trail):
                     _fin_it5 = $pending(trail)
                     for _ in _fin_it5:
-                        if $first_arg_excludes(_d0, arg0, $final_keys_4) and _fin_it5 is $ONCE:
+                        if (_d0.__class__ is $str and _d0 not in $final_keys_4) and _fin_it5 is $ONCE:
                             this_generator.tail_final = True
                         _gen10 = $StepGenerator($dispatch_at(ev_deep, 1), _proceed, this_generator, this_generator, [('c', ('d', 'met'))], trail)
                         _st10 = (yield (_gen10, None))
@@ -338,7 +338,7 @@ def test__all__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                         _naf76 = not $naf_has_solution(_naf_sg77)
                         trail.undo(_m5)
                         if _naf76:
-                            yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_5) and _fin_it6 is $ONCE else None)
+                            yield (_proceed, $FINAL if (_d0.__class__ is $str and _d0 not in $final_keys_5) and _fin_it6 is $ONCE else None)
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -391,11 +391,7 @@ def test__p0_b0__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                         while _st14 is not $DONE:
                             if $fd_eq(_v13, 'met', trail):
                                 yield (_proceed, $FINAL if _fin_it1 is $ONCE and _st13 is $FINAL and (_st14 is $FINAL) else None)
-                            if _st14 is $FINAL:
-                                break
                             _st14 = (yield (_gen14, None))
-                        if _st13 is $FINAL:
-                            break
                         _st13 = (yield (_gen13, None))
 
 # ----
@@ -416,11 +412,7 @@ def test__p0_b1__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                         while _st16 is not $DONE:
                             if $fd_eq(_v14, 'met', trail):
                                 yield (_proceed, $FINAL if _fin_it1 is $ONCE and _st15 is $FINAL and (_st16 is $FINAL) else None)
-                            if _st16 is $FINAL:
-                                break
                             _st16 = (yield (_gen16, None))
-                        if _st15 is $FINAL:
-                            break
                         _st15 = (yield (_gen15, None))
 
 # ----
@@ -442,11 +434,7 @@ def test__p0_b2__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                         while _st18 is not $DONE:
                             if $fd_eq(_v16, 'met', trail):
                                 yield (_proceed, $FINAL if _fin_it1 is $ONCE and _st17 is $FINAL and (_st18 is $FINAL) else None)
-                            if _st18 is $FINAL:
-                                break
                             _st18 = (yield (_gen18, None))
-                        if _st17 is $FINAL:
-                            break
                         _st17 = (yield (_gen17, None))
 
 # ----
@@ -467,11 +455,7 @@ def test__p0_b3__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                         while _st20 is not $DONE:
                             if $fd_eq(_v17, 'met', trail):
                                 yield (_proceed, $FINAL if _fin_it1 is $ONCE and _st19 is $FINAL and (_st20 is $FINAL) else None)
-                            if _st20 is $FINAL:
-                                break
                             _st20 = (yield (_gen20, None))
-                        if _st19 is $FINAL:
-                            break
                         _st19 = (yield (_gen19, None))
 
 # ----
@@ -533,8 +517,6 @@ def test__p0_b6__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                             for _ in _fin_it2:
                                 if $fd_eq(_v19, 8, trail):
                                     yield (_proceed, $FINAL if _fin_it1 is $ONCE and _st23 is $FINAL and (_fin_it2 is $ONCE) else None)
-                        if _st23 is $FINAL:
-                            break
                         _st23 = (yield (_gen23, None))
 
 # ----

@@ -23,7 +23,7 @@ from clausal.logic.runtime.list_unify import (
     _head_list_unify_output,
 )
 from clausal.logic.database import Clause, Database
-from clausal.logic.trampoline import StepGenerator, DONE
+from clausal.logic.trampoline import StepGenerator, DONE, FINAL
 from clausal.logic.solve import call
 from clausal.logic.cells import chars
 from clausal.logic.variables import Var, Trail, deref, unify, is_var
@@ -34,18 +34,28 @@ from tests._suffix import SEAM
 # ── Trampoline dispatch driver ────────────────────────────────────────────────
 
 
-def _run_dispatch(fn, *args_and_trail):
-    """Drive a trampoline-protocol fn, yield per solution."""
+def _run_dispatch(fn, *args_and_trail, finals=None):
+    """Drive a trampoline-protocol fn, yield the root value per solution.
+
+    A ``FINAL`` root answer (a solution known to be the last) is a solution
+    like ``None`` and is yielded as ``None``.  The root is pulled again after a FINAL
+    too, so a test also checks that a FINAL answer really was the last
+    (the generator answers DONE).  *finals*, a list, records per answer
+    whether it was FINAL.  Mid-chain this hand-rolled loop does not check
+    the frames a tail call skipped (the drive core's ``final_holds``), so it
+    passes a FINAL on as a plain answer."""
     root = StepGenerator(fn, None, None, None, *args_and_trail)
     gen, value = root.send(None)
     while True:
         if gen is None:
             if value is DONE:
                 return
-            yield value
+            if finals is not None:
+                finals.append(value is FINAL)
+            yield None if value is FINAL else value
             gen, value = root.send(None)
         else:
-            gen, value = gen.send(value)
+            gen, value = gen.send(None if value is FINAL else value)
 
 
 # ── Synthetic functor dataclasses ─────────────────────────────────────────────
@@ -553,7 +563,10 @@ class TestCompilePredicate:
         db.assertz(Clause(head=("x", 2), body=[]))
         clauses = db.clauses_for("x", 1)
         fn = compile_predicate("x", 1, clauses, db)
-        assert list(_run_dispatch(fn, 1, _trail())) == [None]   # matches clause 1 only
+        finals = []
+        assert list(_run_dispatch(fn, 1, _trail(), finals=finals)) == [None]   # matches clause 1 only
+        # ... and is known to: x(2)'s first argument cannot match 1.
+        assert finals == [True]
 
     # ── Database dispatch wiring ──
 

@@ -36,11 +36,11 @@ def _tramp_call(dispatch_fn, args, trail):
     mark = trail.mark()
     while _drive_until_yield(sg):
         yield None
-    if sg.retired:
-        # A root retired by a FINAL is not resumed, so its frames never
-        # undid the last solution's bindings: undo them, as a simple-mode
-        # generator does after its last answer.
-        trail.undo(mark)
+    # Undo what the drive bound, as a simple-mode generator does after its
+    # last answer: a root retired by a FINAL is not resumed, and a frame
+    # that skips re-pulling a child after its FINAL answer leaves that
+    # answer's bindings for an enclosing mark.
+    trail.undo(mark)
 
 
 def _naf_has_solution(sg) -> bool:
