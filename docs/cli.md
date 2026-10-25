@@ -6,6 +6,7 @@ The `clausal` command runs a Clausal Prolog (`.clausal`) or ISO Prolog
 
 ```text
 clausal [-g GOAL]... [--once] [--test] [--prolog] FILE [-- ARGS...]
+clausal --quads FILE         # run the file's quads as tests
 clausal [--prolog]           # no FILE: the interactive ?- top-level
 clausal --python             # the Python/seam REPL
 ```
@@ -110,6 +111,46 @@ A query may use `!`, `->` and `*->` (in goal position, not as data) when the
 loaded file is a `.pl` file, or with `--prolog`; against a `.clausal` file, or
 with no file, they are refused, as `.clausal` source refuses them. The
 Python/seam REPL that bare `clausal` used to open is `clausal --python`.
+
+## Quads: queries with answer descriptions: `--quads`
+
+A *quad* (Ulrich Neumerkel's "queries using answer descriptions") is a
+`?- Query.` in a source file followed by the answers it gives, written as
+terms: a copy of a top-level interaction that doubles as a test. The loader
+ignores them, in `.pl` and `.clausal` files alike (the query is no clause, nor
+are the descriptions after it), so they also serve as documentation.
+`clausal --quads FILE` runs each one in the file's module and exits 1 if any
+fails:
+
+```text
+?- member(X, [a,b]).
+   X = a
+;  X = b.
+
+?- atom_length(1, N).
+   type_error(atom, 1).
+
+?- length(L, N).
+   L = [], N = 0
+;  L = [_A], N = 1
+;  ..., ad_infinitum.
+
+positive ?- X #> 3.
+   maybe.
+```
+
+A description is `true`, `false`, `V = T` (a variant of `T`: variables spell
+sharing; a query variable not listed stays unbound), an error term
+(`instantiation_error`, `type_error(T, C)`, `error(E, Imp)`, `throw(Ball)`;
+variables match anything), joined by `,` and `;` (the next answer), with `...`
+or `ad_infinitum` for any further answers. `V ~~ '14.2000'` accepts a float
+equal up to the digits written, `D1 | D2` either description (it needs
+`library(dcgs)` for the bar, as in Scryer), `name ?- Query.` labels a quad, and
+`maybe` accepts the `dif/2` or CLP(FD) constraints left on the answer, which
+otherwise fail it. `sto` is accepted unchecked. A quad with `loops`,
+`unexpected`, `other_answer_sequence`, `waits` or a stream annotation
+(`outputs/1`, `inputs/1`, `peeks/1`), and one with no description, is
+*skipped*. A query with no answer in ten seconds fails.
 
 ## Running goals: `-g`
 

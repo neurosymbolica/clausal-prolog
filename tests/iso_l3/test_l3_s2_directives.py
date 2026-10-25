@@ -249,11 +249,19 @@ def test_bare_atoms_in_import_lists_give_one_counted_warning_per_file(
     (":- ensure_loaded(foo).", "unknown directive ensure_loaded/1"),
     (":- foo.", "unknown directive foo/0"),
     (":- dynamic d/1.", "syntax error"),     # D2: Scryer's prefix-free table
-    ("?- a.", "Query is not lowered"),
 ])
 def test_refused_directives_name_their_line(native, text, fragment):
     err = _refusal(native, "s2_refd", "a.\n\n" + text + "\n")
     assert err.lineno == 3 and fragment in str(err), str(err)
+
+
+def test_a_query_is_a_quad_not_a_refusal(native):
+    # ``?- a.`` and the answer descriptions after it are documentation
+    # (tools/quads.py); the file loads and defines only its own clauses.
+    mod = native.load("s2_quad", "a.\n\n?- a.\n   true.\n\n"
+                                 "?- b(X).\n   X = 1\n;  X = 2.\n"
+                                 "b(1).\n")
+    assert mod is not None
 
 
 # ── dynamic, discontiguous, table, meta_predicate ──

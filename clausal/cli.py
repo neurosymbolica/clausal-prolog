@@ -60,6 +60,9 @@ def _parser() -> argparse.ArgumentParser:
                    help="in the ?- top-level, accept full Prolog syntax in "
                         "queries (!, ->, *->); the default is the restricted "
                         "Clausal Prolog surface")
+    p.add_argument("--quads", action="store_true",
+                   help="run the quads of FILE (a ?- query and the answer "
+                        "description after it) as tests")
     p.add_argument("--python", action="store_true",
                    help="without FILE, start the Python/seam REPL instead of "
                         "the ?- top-level")
@@ -535,6 +538,9 @@ def main(argv: list[str] | None = None) -> int:
                      f"{' or '.join(PROGRAM_SUFFIXES)} file")
     if not os.path.isfile(path):
         parser.error(f"{path}: no such file")
+    if args.quads and (args.goal or args.once or args.test):
+        parser.error("--quads runs the file's quads; it takes no -g, "
+                     "--once or --test")
     if args.test and (args.goal or args.once):
         parser.error("--test runs the program's tests; it takes no -g")
     if args.once and not args.goal:
@@ -557,6 +563,13 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:  # noqa: BLE001 -- reported, not swallowed
         _error(f"{path} did not load: {_describe(exc)}")
         return EXIT_FAILED
+
+    if args.quads:
+        with open(path, encoding="utf-8") as f:
+            source = f.read()
+        from clausal.quad_runner import run_quads  # noqa: PLC0415
+        summary = run_quads(module, source, _goal_reader_ops(source), path)
+        return EXIT_OK if summary.ok else EXIT_FAILED
 
     if args.goal:
         with open(path, encoding="utf-8") as f:

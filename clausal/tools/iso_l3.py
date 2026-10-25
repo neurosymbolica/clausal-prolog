@@ -1550,6 +1550,9 @@ def lower_arg(t: Any, span=None) -> ast.expr:
 # ── modules ──────────────────────────────────────────────────────────────────
 
 
+from clausal.tools.quads import is_answer_description, is_labelled_query  # noqa: E402
+
+
 def _item_span(it):
     span = getattr(it, "span", None)
     if span is not None:
@@ -1646,10 +1649,24 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
 
     defined: set = set()    # (name, arity) of each procedure defined here
     heads: dict = {}        # predicate name -> its first clause's span
+    after_query = False     # a quad's query was the last item (tools/quads.py)
     for it in items:
         stats["read"] += 1
         kind = type(it).__name__
         span = _item_span(it)
+        # A quad: ``?- Query.`` and the answer descriptions that follow it
+        # are documentation (Neumerkel; Trealla #1063), not clauses.
+        # (Not counted in ``read``, which is the denominator of program items.)
+        if kind == "Query" or is_labelled_query(it):
+            after_query = True
+            stats["read"] -= 1
+            stats["quads"] = stats.get("quads", 0) + 1
+            continue
+        if (after_query and kind == "Clause"
+                and is_answer_description(it.term)):
+            stats["read"] -= 1
+            continue
+        after_query = False
         if kind == "SyntaxIssue":
             position = (it.line, it.column) if it.line else None
             refuse(_syntax_issue_message(it, source), span,
@@ -1916,6 +1933,9 @@ def iter_iso(source: str, op_table=None):
     from clausal.tools.prolog_reader import EOF, NEED_MORE, PrologReader  # noqa: PLC0415
     from clausal.tools.prolog_tokenizer import PL_SOURCE_NESTED_COMMENTS  # noqa: PLC0415
     table = op_table if op_table is not None else reader_op_table()
+    # ``name ?- Query.``: a labelled quad (tools/quads.py) needs ?- infix.
+    table.define(1200, "xfx", "?-")
+    table.define(700, "xfx", "~~")      # ``X ~~ '14.2000'`` in a description
     reader = PrologReader(op_table=table,
                           nested_comments=PL_SOURCE_NESTED_COMMENTS)
     reader.feed(source)

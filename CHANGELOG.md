@@ -226,6 +226,12 @@ trees, Scryer's syntax-error terms, the stream and `read_term` builtins and
 
 ### Added
 
+- **Quads** (2026-10-24): a `?- Query.` in a `.pl` or `.clausal` file, and the
+  answer descriptions after it (`X = 1 ; X = 2.`, `type_error(atom, 1).`,
+  `..., ad_infinitum.`), no longer refuse the load: the loader skips them
+  (Neumerkel; Trealla #1063), and the reader takes `name ?- Query.` and
+  `X ~~ '14.2000'` (`?-` infix, `~~` at 700). `clausal --quads FILE` runs each
+  quad as a test (`clausal/quad_runner.py`, `tests/test_quads.py`).
 - **An interactive ISO `?-` top-level** (2026-10-24, operator ruling): bare
   `clausal` and `clausal --toplevel FILE` read queries up to `.`, print
   answers as `-g` does (sharing, cycles, strings, operators, `dif/2` and
