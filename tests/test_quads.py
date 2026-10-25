@@ -318,3 +318,28 @@ def test_a_labelled_query_needs_a_description_after_it(tmp_path):
     assert r.returncode != 0 and "syntax" in (r.stderr + r.stdout).lower()
     ok = _g(tmp_path, "p(1).\nmain ?- p(1).\n   true.\nq(2).\n", "q(X)")
     assert (ok.returncode, ok.stdout) == (0, "X = 2.\n"), ok.stderr
+
+
+def test_quads_run_off_the_main_thread_without_a_timer(tmp_path):
+    import io
+    import threading
+    from clausal import cli
+    from clausal.quad_runner import run_quads
+    from clausal.testing import load_clausal_module
+    src = PROGRAM + "?- p(X).\n   X = 1\n;  X = 2.\n"
+    (tmp_path / "t.pl").write_text(src)
+    module = load_clausal_module(str(tmp_path / "t.pl"))
+    out, box = io.StringIO(), {}
+
+    def work():
+        try:
+            box["s"] = run_quads(module, src, cli._goal_reader_ops(src),
+                                 "t.pl", out=out)
+        except BaseException as exc:    # noqa: BLE001
+            box["exc"] = exc
+
+    t = threading.Thread(target=work)
+    t.start()
+    t.join(60)
+    assert "exc" not in box, box.get("exc")
+    assert box["s"].count("passed") == 1

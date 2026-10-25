@@ -35,6 +35,7 @@ import contextlib
 import io
 import signal
 import sys
+import threading
 from dataclasses import dataclass, field
 
 from clausal.tools.quads import Quad, extract_quads
@@ -418,22 +419,32 @@ def _unexpected(item, wanted: str) -> str:
 
 
 def run_quad(module, quad: Quad, timeout: float = 10.0) -> Result:
+    """Run one quad; the limit *timeout* is for this quad alone."""
+    try:
+        return _run_quad(module, quad, timeout)
+    except _Timeout:        # an alarm in the unwinding of _run_quad itself
+        return Result(quad, "failed", f"no answer within {timeout:g} s")
+
+
+def _run_quad(module, quad: Quad, timeout: float) -> Result:
     if not quad.descriptions:
         return Result(quad, "skipped", "no answer description")
     descriptions = _alternatives(quad)
 
     # SIGALRM bounds a query that never answers; where the platform has
-    # none (Windows) the query runs without a limit.
-    timed = hasattr(signal, "SIGALRM") and hasattr(signal, "setitimer")
+    # none (Windows), or off the main thread, the query runs without a limit.
+    timed = (hasattr(signal, "SIGALRM") and hasattr(signal, "setitimer")
+             and threading.current_thread() is threading.main_thread())
     old = None
 
     def alarm(signum, frame):
+        signal.setitimer(signal.ITIMER_REAL, 0)     # once: nothing fires again
         raise _Timeout()
 
     try:
         if timed:
             old = signal.signal(signal.SIGALRM, alarm)
-            signal.setitimer(signal.ITIMER_REAL, timeout, 0.25)
+            signal.setitimer(signal.ITIMER_REAL, timeout)
         actual = _Actual(module, quad)
         skipped = ""
         for alts in descriptions:           # every description must hold

@@ -159,7 +159,9 @@ or `ad_infinitum` for any further answers.
 - `sto` is accepted and not checked.
 - A quad with `loops`, `other_answer_sequence`, `waits`, `inputs/1` or
   `peeks/1`, and one with no description, is *skipped*.
-- A query with no answer in ten seconds fails.
+- A quad's query that gives no answer within ten seconds fails (the limit is
+  per quad; it needs the main thread and a platform with `SIGALRM`, else a
+  quad runs without one).
 
 The semantics follow Trealla's `library/quads.pl` (v3.14).
 
