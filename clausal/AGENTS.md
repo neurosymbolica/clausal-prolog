@@ -48,6 +48,7 @@ their files are few and their module docstrings serve as the map.
 | `_transition_constructs.py` | The keys of the counted "transition constructs" (`\+`, `once/1`, ...) that `tools/transition_census.py` ratchets. |
 | `cli.py`, `__main__.py` | The `clausal` command: `clausal FILE`, `-g GOAL`, `--test`, or the `?-` top-level (no FILE; `--python` for the Python REPL). See [cli](../docs/cli.md). |
 | `toplevel.py` | The interactive ISO `?-` top-level: query reading, lazy stepping keys, answers via `cli._answer`. Tests: `tests/test_toplevel.py` (a pty). |
+| `toplevel_colour.py` | The top-level's colour schemes (`SCHEMES`: off, variables-by-hash); the key that cycles them is in `toplevel.py`. |
 | `testing.py` | The test runner for `test/1`/`test/2` clauses (seam, `.clausal`, `.pl`), including the goal-level failure diagnostics. Run it with `python -m clausal.testing`. See [testing](../docs/testing.md). |
 | `reflection.py` | Reifies seam source into terms (`reify_source`, `reify_file`) and renders them back. It never executes the source. Used by `rewrite/`, `fmt/verify.py`, `testing.py`. See [reflection](../docs/reflection.md). |
 | `terms.py` | The term layer: value and functor types, `Quantity`, atom/string quoting. |

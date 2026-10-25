@@ -64,6 +64,7 @@ solution is computed only when you ask for it:
 | `f`, `#` *N* Enter | five, or *N*, more |
 | `a` | all the rest |
 | `w`, `p` | print answers in full, or with lists past 100 elements elided (`[1,2,...\|...]`) |
+| `c` | cycle the colour scheme (off, variables) |
 | `h`, `?` | help |
 | Enter, `.`, Ctrl-C | stop this query |
 | `e` | leave the top-level |
@@ -84,6 +85,13 @@ and make it the module queries run in; `halt.` and `halt(N)` and Ctrl-D exit.
 Lines are edited with readline, and each query is added to the history kept
 in `~/.clausal_history` (Up recalls it); Ctrl-C at the prompt drops the line. When stdin is not a terminal there is
 no prompt and no key prompt: the first answer of each query is printed.
+
+Colour: `c` at the answer prompt, or F2 or Ctrl-X c at `?-` (the line typed so
+far is kept), cycles the colour scheme of answers. `off` (the start, or the
+scheme `CLAUSAL_COLOUR` names) prints plain text; `variables` paints each
+variable name in a colour taken from a hash of the name, so a variable has the
+same colour wherever it appears, in this answer and in every later one. A
+pipe is never coloured.
 
 A query may use `!`, `->` and `*->` (in goal position, not as data) when the
 loaded file is a `.pl` file, or with `--prolog`; against a `.clausal` file, or

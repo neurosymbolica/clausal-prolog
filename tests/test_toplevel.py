@@ -79,6 +79,10 @@ class Pty:
         assert text in self.text, f"{text!r} not in {self.text!r}"
 
     @property
+    def raw(self):
+        return self.buf
+
+    @property
     def text(self):
         return _ANSI.sub("", self.buf).replace("\r\n", "\n").replace("\r", "")
 
@@ -672,3 +676,82 @@ def test_piped_bare_clausal(tmp_path):
         cwd=tmp_path, env=_env(tmp_path), capture_output=True, text=True,
         timeout=120)
     assert r.stdout == "   X = 1.\n"
+
+
+# ── colour schemes ────────────────────────────────────────────────────────
+
+COLOURED = re.compile(r"\x1b\[38;5;(\d+)m([A-Za-z_0-9]+)\x1b\[0m")
+
+
+def test_no_colour_by_default(tl):
+    s = tl()
+    s.query("Y = f(Z, Z).", "   Y = f(Z,Z).")
+    assert "\x1b[38;5" not in s.raw
+
+
+def test_c_at_the_answer_prompt_cycles_the_scheme(tl):
+    s = tl()
+    s.send("Y = f(Z, Z), member(X, [a,b]).\n")
+    s.expect("   Y = f(Z,Z), X = a")
+    s.send("c")
+    deadline = time.time() + 10
+    while len(COLOURED.findall(s.raw)) < 3 and time.time() < deadline:
+        s._read(0.2)
+    got = COLOURED.findall(s.raw)
+    by_name = {}
+    for colour, name in got:
+        assert by_name.setdefault(name, colour) == colour, got
+    assert {"Y", "Z", "X"} <= set(by_name), got
+    assert by_name["Y"] != by_name["Z"]
+    n = len(got)
+    s.send("c")                      # round again: back to off
+    time.sleep(0.5)
+    s._read(0.5)
+    assert len(COLOURED.findall(s.raw)) == n
+    s.send(";")
+    s.expect("X = b")                # stepping still works
+
+
+def test_the_colour_key_at_the_prompt_keeps_the_typed_line(tl):
+    s = tl()
+    s.send("Y = f(Z, Z)")
+    time.sleep(0.3)
+    s.send("\x18c")                  # Ctrl-X c
+    s.expect("% colour: variables")
+    time.sleep(0.3)
+    s.send(".\n")
+    s.expect("Y = f(")
+    deadline = time.time() + 10
+    while len(COLOURED.findall(s.raw)) < 3 and time.time() < deadline:
+        s._read(0.2)
+    assert {n for _, n in COLOURED.findall(s.raw)} >= {"Y", "Z"}, s.raw
+
+
+def test_f2_is_the_colour_key_too(tl):
+    s = tl()
+    s.send("\x1bOQ")
+    s.expect("% colour: variables")
+    s.query("X = 1.", "   X = 1.")
+
+
+def test_clausal_colour_names_the_starting_scheme(tmp_path):
+    (tmp_path / "prog.pl").write_text(PROG)
+    env_extra = {"CLAUSAL_COLOUR": "variables"}
+    old = dict(os.environ)
+    os.environ.update(env_extra)
+    try:
+        s = Pty(tmp_path, "prog.pl", "--toplevel")
+        s.expect("?- ")
+        s.query("Y = f(Z).", "   Y = f(")
+        time.sleep(0.5)
+        s._read(0.5)
+        assert COLOURED.findall(s.raw)
+        s.close()
+    finally:
+        os.environ.clear()
+        os.environ.update(old)
+
+
+def test_piped_output_is_never_coloured(tmp_path):
+    r = _piped(tmp_path, "Y = f(Z).\n")
+    assert "\x1b" not in r.stdout

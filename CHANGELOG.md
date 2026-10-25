@@ -37,6 +37,13 @@ surface described in [docs/public-api.md](docs/public-api.md).
   programs: an answer reported last is the last one, compared with a run
   with it off) and `tests/test_final_leaves_no_bindings.py`.
 
+- **Colour schemes for the `?-` top-level's answers** (2026-10-25): `c` at the
+  answer prompt, or F2 / Ctrl-X c at `?-`, cycles `off` and `variables` (each
+  variable name in a colour from a stable hash of the name, from a palette of
+  24 ANSI-256 colours); `CLAUSAL_COLOUR` names the starting scheme
+  (`clausal/toplevel_colour.py`, `tests/test_toplevel_colour.py`, pty tests in
+  `tests/test_toplevel.py`).
+
 ### Changed
 
 - **The `?-` top-level ends an answer it knows is the last with `.`**

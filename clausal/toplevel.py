@@ -26,11 +26,14 @@ from __future__ import annotations
 import os
 import sys
 
+from clausal import toplevel_colour
 from clausal._suffixes import CLAUSAL_PROLOG_SUFFIXES, PROLOG_SUFFIX
 
 PROMPT = "?- "
 CONTINUATION = "|    "
 INDENT = "   "
+#: What the colour key types into the line (read_query takes it out).
+COLOUR_MARK = "\x1f"
 #: Lists longer than this are elided as ``[1,2,...|...]`` (Trealla: 100).
 ELIDE_AFTER = 100
 HISTORY_FILE = "~/.clausal_history"
@@ -45,6 +48,7 @@ Action:
 \ta           all          - display all solutions
 \tw           write        - print answers in full
 \tp           print        - elide long lists (the default)
+\tc           colour       - cycle the colour scheme (also F2 or Ctrl-X c at ?-)
 \th,?         help         - display this help
 """
 
@@ -274,6 +278,10 @@ class TopLevel:
         self._keys = None
         self._pending = ""
         self._asking = False
+        self._prefill = ""
+        self._bound = False
+        self.colour = toplevel_colour.scheme_named(
+            os.environ.get("CLAUSAL_COLOUR", "off"))
         self.elide = True
         self._cli = cli
         self.op_table = self._ops_of(path)
@@ -291,6 +299,18 @@ class TopLevel:
             with open(path, encoding="utf-8") as f:
                 source = f.read()
         return self._cli._goal_reader_ops(source)
+
+    # -- colour
+
+    def _paint(self, text: str) -> str:
+        if not self.interactive:
+            return text
+        return toplevel_colour.SCHEMES[self.colour].paint(text)
+
+    def cycle_colour(self) -> str:
+        """Switch to the next colour scheme; its name."""
+        self.colour = (self.colour + 1) % len(toplevel_colour.SCHEMES)
+        return toplevel_colour.SCHEMES[self.colour].name
 
     def _write(self, s: str) -> None:
         self.out.write(s)
@@ -322,10 +342,18 @@ class TopLevel:
                 continue
             if line is None:
                 return None
+            if COLOUR_MARK in line:
+                # the colour key: switch scheme, then prompt again with the
+                # line typed so far still in the editor
+                name = self.cycle_colour()
+                self._write(f"% colour: {name}\n")
+                self._prefill = line.replace(COLOUR_MARK, "").rstrip("\n")
+                continue
             text = text + line if text.strip() else line
 
     def _read_line(self, prompt: str) -> str | None:
         if self.interactive and self.stdin is sys.stdin:
+            self._start_editing()
             try:
                 return input(prompt) + "\n"
             except EOFError:
@@ -339,6 +367,23 @@ class TopLevel:
                 self._write("\n")
             return None
         return line
+
+    def _start_editing(self) -> None:
+        """Readline's keys for the colour switch, and the line typed before
+        it was pressed."""
+        try:
+            import readline  # noqa: PLC0415
+        except ImportError:
+            return
+        if not self._bound:
+            self._bound = True
+            # F2 and Ctrl-X c type the mark at the end of the line and
+            # accept it (read_query then switches scheme and prompts again).
+            for seq in (r'"\eOQ"', r'"\e[12~"', r'"\C-xc"'):
+                readline.parse_and_bind(seq + r': "\C-e\C-v\x1f\C-m"')
+        prefill, self._prefill = self._prefill, ""
+        readline.set_startup_hook(
+            (lambda: readline.insert_text(prefill)) if prefill else None)
 
     def _remember(self, query: str) -> None:
         """A completed query, on one line, into the readline history."""
@@ -488,7 +533,8 @@ class TopLevel:
                 self._write((";  " if n else INDENT) + "false.\n")
                 return
             text = format_answer(shown, trail, self.elide)
-            self._write((";  " if n else INDENT) + text)
+            prefix = ";  " if n else INDENT
+            self._write(prefix + self._paint(text))
             n += 1
             if last or det or not self.interactive:
                 self._write(_dot(text) + "\n")
@@ -533,16 +579,23 @@ class TopLevel:
                 if k == "w":
                     self.elide = False
                     self._write("\n" + INDENT + "% printing in full\n")
-                    self._write(INDENT + format_answer(shown, trail, False))
+                    self._write(INDENT + self._paint(
+                        format_answer(shown, trail, False)))
                     continue
                 if k == "p":
                     self.elide = True
                     self._write("\n" + INDENT + "% eliding long lists\n")
-                    self._write(INDENT + format_answer(shown, trail, True))
+                    self._write(INDENT + self._paint(
+                        format_answer(shown, trail, True)))
                     continue
                 if k in ("h", "?"):
                     self._write("\n" + HELP)
-                    self._write(INDENT + text)
+                    self._write(prefix + self._paint(text))
+                    continue
+                if k == "c":
+                    self.cycle_colour()
+                    # the answer line again, in the new scheme
+                    self._write("\r\x1b[K" + prefix + self._paint(text))
                     continue
                 # anything else: ignored, the prompt stays
 
