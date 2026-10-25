@@ -141,6 +141,16 @@ def _open_walk(d: Any):
         return (_FRAME, children, _as_dict)
     if isinstance(d, (set, frozenset)):
         return (_FRAME, list(d), type(d))
+    if type(d) is SegList:
+        # Its holes resolved here, its ELEMENTS walked by this walk: the
+        # hook (``__walk__``) walks them recursively, which is what failed
+        # for an element too deep or cyclic for it (``[Y]``, ``Y = f(Y)``).
+        shallow = d._walk_raw(deep=False)
+        if isinstance(shallow, list):
+            return (_FRAME, shallow, _promoted_list)
+        if isinstance(shallow, SegList):
+            return (_FRAME, list(shallow.segments), SegList)
+        return _open_walk(shallow)          # an improper list's cons cells
     hook = getattr(d, "__walk__", None)
     if hook is not None:
         return (_LEAF, hook())
@@ -148,6 +158,13 @@ def _open_walk(d: Any):
         names = term_field_names(d)
         return (_FRAME, [getattr(d, n) for n in names], _term_builder(type(d), names))
     return (_LEAF, d)
+
+
+def _promoted_list(built: list):
+    """A closed SegList's elements, as its ``__walk__`` gives them: a char
+    list promoted to its ``str`` (F018)."""
+    from clausal.logic.runtime._seg_helpers import maybe_promote_to_str  # noqa: PLC0415
+    return maybe_promote_to_str(built)
 
 
 def _as_list(built: list) -> list:

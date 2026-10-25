@@ -822,7 +822,7 @@ class SegList:
             f"{type(_improper_tail(w)).__name__} "
             f"{_improper_tail(w)!r}), not a list")
 
-    def _walk_raw(self):
+    def _walk_raw(self, deep: bool = True):
         """``__walk__`` WITHOUT the F018 str promotion: a ground SegList
         normalises to its plain element ``list``, a non-ground one to a
         ``SegList`` (or ``[]``).
@@ -857,7 +857,17 @@ class SegList:
         BEFORE it (``[*A, x|foo]``) has no spelling here and raises
         ``instantiation_error`` (operator ruling 2026-10-23: the term
         exists once the hole is bound, so this is instantiation, not
-        type, semantics)."""
+        type, semantics).
+
+        Every ELEMENT is walked (``walk``), whichever way it reached the
+        list: written in it (``[X|T]``) or in the list a hole was bound to
+        (``T = [c(X), d]``).  An element left unwalked kept a bound
+        variable that ``findall/3``'s copy (``_deref_walk`` through
+        ``__walk__``) then held live, unbound again on backtracking:
+        ``[[a,c(_),d]]`` (2026-10-25).  *deep* False leaves the elements as
+        they are, for a caller that walks them itself: the iterative,
+        cycle-aware ``_deref_walk`` (``clausal.logic.rational_walk``), for
+        an element too deep or cyclic for ``walk``."""
         # Iterative, with one flat accumulator: a partial list built forward
         # through its open tail (a DCG, ``Hole = [a|Hole1]`` in a loop) is a
         # chain of SegLists, one link per step, and walking it recursively
@@ -890,7 +900,10 @@ class SegList:
                     continue
                 if tail is not _NO_TAIL:
                     raise _not_a_list(culprit)
-                run.extend(walk(e) for e in seg.elements)
+                if deep:
+                    run.extend(walk(e) for e in seg.elements)
+                else:
+                    run.extend(seg.elements)
                 continue
             # One step, not ``walk``: a hole bound to the next link of the
             # chain is walked HERE, on the stack.  ``walk`` would resolve it
@@ -900,10 +913,13 @@ class SegList:
             if tv is SegList:
                 pass                       # the next link of a chain: the common case
             elif tv is list:
-                if v:                      # a hole bound to a list: its elements
+                if v:                      # a hole bound to a list: its elements, walked
                     if tail is not _NO_TAIL:
                         raise _not_a_list(culprit)
-                    run.extend(v)
+                    if deep:
+                        run.extend(walk(e) for e in v)
+                    else:
+                        run.extend(v)
                 continue
             elif tv is SegListView:
                 v = v.elements()           # its elements, walked below as a list's

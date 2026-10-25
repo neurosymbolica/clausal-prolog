@@ -143,6 +143,25 @@ trees, Scryer's syntax-error terms, the stream and `read_term` builtins and
 
 ### Fixed
 
+- **findall/3, bagof/3, setof/3 and aggregate_all/3 copy a list built
+  through its open tail with its elements' bindings** (2026-10-25; a
+  regression after 1.1.0, never released).  `findall(L, (L = [a|T],
+  kk(3, X), T = [c(X), d]), Ls)` answered `Ls = [[a,c(_),d]]` where 1.0.0,
+  1.1.0 and Scryer answer `[[a,c(yes),d]]`, and a `setof/3` over two such
+  answers collapsed them into one.  Closing a partial list
+  (`SegList._walk_raw`, which the answer copy reaches through `__walk__`)
+  took the list its hole was bound to without walking that list's
+  elements, so the copy kept the live variable `X`, unbound again once
+  findall backtracked.  Every element is walked again, whichever way it
+  reached the list.  The iterative, cycle-aware `_deref_walk`
+  (`clausal/logic/rational_walk.py`) now walks a partial list's elements
+  itself instead of through the recursive `__walk__`, so a cyclic element
+  (`L = [Y|T], Y = f(Y), T = []`) is copied as the cyclic term instead of
+  raising `resource_error(stack)`.  Pinned by
+  `tests/iso/test_findall_partial_list_scryer.py` (each row against Scryer)
+  and `tests/test_findall_partial_list_snapshot.py` (`.pl` and `.clausal`,
+  the C and the Python trampoline, the Python `solve` entry).
+
 - **The C extensions build with MSVC again, so there is a Windows wheel**
   (2026-10-25).  Four per-thread counters (the attribute-hook dispatch
   depth, the garbage-collector flag, and two in the tabling key walker)
