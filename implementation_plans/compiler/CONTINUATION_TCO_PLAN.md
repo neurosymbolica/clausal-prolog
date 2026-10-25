@@ -441,7 +441,34 @@ the recursion structure above is reusable for the commit rule.
 ## 10. Status
 
 Phases 1–3 landed (protocol split, codegen split, TCO emission at
-eligible sites).  Phase 4 stopped after the `FINAL` sentinel +
-root-driver handling — the structural analysis and lowering that
-would emit `yield (_proceed, FINAL)` remain unimplemented.  Phase 5
-(LLVM alignment) waits on the LLVM-backend design resuming.
+eligible sites).  Phase 4 landed 2026-10-24, driven by the caller-facing
+signal (`solve_with_last` / `call_with_last`: "this answer is the last"):
+
+- Producers emit `FINAL`: the builtins that know their last answer
+  (`builtins/_registry.py` `_SEMIDET_SIMPLE`, `member/2`, `between/3`,
+  `select/3`, `nth0/3`, `nth1/3`, `append/3`, `length/2`, ...), and
+  compiled predicates through a post-pass over the finished
+  `FunctionDef` (`compiler/final_yields.py`, not part of lowering) that
+  marks a leaf `yield (_proceed, None)` FINAL -- under the runtime
+  conditions `_st is $FINAL` (each enclosing sub-call's answer was its
+  last), `_it is $ONCE` (no woken goal is draining at a goal boundary) and,
+  for a clause arm with later arms, a first-argument key test -- when
+  everything that would run after it is inert.  TRO functions are left
+  alone.
+- §3.2's hazard made concrete: a tail callee's FINAL skips the frame
+  holding the earlier choice points.  The answer is a frame slot rather
+  than a fourth continuation: `StepGenerator.tail_final`, set by a frame
+  (the same pass, at a tail-call site) that has no alternative of its own
+  left; the drive core keeps a FINAL only when every frame on the
+  producer's `fail` chain below its target set it (`final_holds`, C and
+  Python twins), and downgrades it to `None` otherwise.  A step resumed by
+  a catch/3 handler, and a solution step with woken goals, are plain.
+- The root drivers (`solve._drive_trampoline`, `_tramp_call`) report
+  retirement and undo a retired root's bindings themselves.
+
+Not taken: the mid-chain hop saving (a consumer that breaks out of its
+sub-call loop on FINAL) -- a broken-out child never undoes its own
+bindings, and the enclosing marks are not uniformly placed to do it.  Open
+coverage gaps are in
+`todo/final-answer-not-known-through-catch-ite-else-and-cleanup-2026-10-24.md`.
+Phase 5 (LLVM alignment) waits on the LLVM-backend design resuming.

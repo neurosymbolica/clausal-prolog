@@ -7,6 +7,44 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Added
+
+- **`solve_with_last` / `call_with_last`: knowing an answer is the last**
+  (2026-10-24), an addition to the 1.x API surface
+  (`docs/public-api.md` 1.3). Each yields `(trail, last)`: `last` is True
+  only when the engine knows no choice point is left, so a caller -- an
+  interactive top-level -- can print `X = c.` for `member(X, [a,b,c])` and
+  `X = 1.` for `X = 1` without asking for, or computing, another answer;
+  False means it does not know (never a false True). The engine side is
+  CONTINUATION_TCO_PLAN Phase 4 (the "commit" yield): producers now answer
+  `FINAL` on an answer they know is their last -- the builtins with one
+  answer, `member/2`, `between/3`, `select/3`, `nth0/3`, `nth1/3`,
+  `append/3`, `length/2` at theirs, and compiled clauses whose answer
+  leaves no choice in the frame (a new pass, `compiler/final_yields.py`,
+  including a runtime first-argument test for a predicate too small to be
+  indexed). A FINAL holds past a tail call only when every skipped frame
+  set its new `tail_final` slot, and a goal woken at that answer, a catch
+  frame, a tabled call, an if-then-else with an else branch make it a
+  plain answer. `CLAUSAL_DISABLE_OPT=final_yield` (or
+  `clausal.logic.trampoline.set_final_enabled(False)`) turns it all off.
+  Pinned by `tests/test_solve_with_last.py`,
+  `tests/iso/test_last_answer_scryer.py` (each query against Scryer's
+  top-level determinism, `setup_call_cleanup/3`'s `Det`) and
+  `tests/test_solve_with_last_property.py` (over the test programs: an
+  answer reported last is the last one, compared with a run with FINAL
+  off).
+
+### Changed
+
+- **A search whose last answer is known is not resumed after it**
+  (2026-10-24). `solve`, `call` and the engine's inner drives stop at an
+  answer that reached them as `FINAL` instead of pulling once more to see
+  the search fail; the bindings are undone when the iterator is advanced,
+  as before. Nothing a program can observe runs in that skipped pull (the
+  compiler marks an answer final only when what would follow is a trail
+  undo), so answers, their order and side effects are unchanged; the
+  generated code differs (`tests/golden/*.codegen.txt` regenerated).
+
 ## 1.2.0 (2026-10-25)
 
 A minor release (operator ruling 2026-10-25): the interactive ISO `?-`

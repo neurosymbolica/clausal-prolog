@@ -105,6 +105,15 @@ bypasses me."
 
 ## Status
 
+**Landed 2026-10-24** (CONTINUATION_TCO_PLAN §10, Phase 4): `FINAL` is
+emitted by builtins and by compiled predicates (structural, plus the
+dynamic `_st is FINAL` / goal-boundary / first-argument tests), held
+across tail calls by `StepGenerator.tail_final`, and reported to callers
+by `solve_with_last` / `call_with_last`.  The consumer-side break (the
+saved hop) is taken only at the root drivers; see §10 for why.
+
+The history below is kept as written.
+
 Parked.  Sequence with respect to continuation-TCO and LLVM:
 
 1. Continuation-TCO / split-continuation protocol should land first
