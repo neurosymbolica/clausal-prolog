@@ -23,6 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PROG = textwrap.dedent("""\
     :- use_module(library(clpz)).
     p(1). p(2). p(3).
+    q(1). q(2).
     s("abc").
     side(X) :- member(X, [a, b]), write(side(X)), nl.
     spin(N) :- N1 is N + 1, spin(N1).
@@ -182,16 +183,67 @@ def test_true_and_false(tl):
 
 
 def test_member_steps_with_semicolon(tl):
+    """The last element's answer is known to be the last: ``X = c.`` and
+    back to the prompt, with no key asked for (Scryer and Trealla print the
+    same)."""
     s = tl()
     s.send("member(X, [a,b,c]).\n")
     s.expect("   X = a")
     s.send(";")
     s.expect(";  X = b")
     s.send(";")
-    s.expect(";  X = c")
+    s.expect(";  X = c.\n")
+    s.expect("?- ")
+    assert "X = a\n;  X = b\n;  X = c.\n" in s.text
+    assert "false." not in after_banner(s)
+
+
+def test_between_ends_with_its_upper_bound(tl):
+    s = tl()
+    s.send("between(1, 3, X).\n")
+    s.expect("   X = 1")
     s.send(";")
-    s.expect(";  false.")
-    assert "X = a\n;  X = b\n;  X = c\n;  false.\n" in s.text
+    s.expect(";  X = 2")
+    s.send(";")
+    s.expect(";  X = 3.\n")
+    s.expect("?- ")
+
+
+def test_a_fact_whose_later_clauses_cannot_match_is_true_dot(tl):
+    s = tl()
+    s.query("q(1).", "   true.\n")
+    s.query("q(2).", "   true.\n")
+    s.send("q(X).\n")
+    s.expect("   X = 1")
+    s.send(";")
+    s.expect(";  X = 2.\n")
+
+
+def test_an_answer_not_known_last_still_asks_then_false(tl):
+    """catch/3 keeps its answers open (the engine does not prove them
+    last): the top-level asks, and the next request finds no answer."""
+    s = tl()
+    s.send("catch(member(X, [a,b]), _, true).\n")
+    s.expect("   X = a")
+    s.send(";")
+    s.expect(";  X = b")
+    assert "X = b." not in s.text
+    s.send(";")
+    s.expect(";  false.\n")
+
+
+def test_a_last_answer_runs_no_side_effect_early(tl):
+    """Knowing an answer is the last never runs the goal further: side(X)
+    writes side(b) only when b's answer is asked for, and that answer is
+    then known last."""
+    s = tl()
+    s.send("side(X).\n")
+    s.expect("   X = a")
+    time.sleep(0.3)
+    assert "side(b)" not in s.text
+    s.send(";")
+    s.expect(";  X = b.\n")
+    assert s.text.index("side(b)") < s.text.index(";  X = b.")
 
 
 def test_space_and_n_are_next(tl):
@@ -299,9 +351,7 @@ def test_sharing_cycles_strings_operators(tl):
     s = tl()
     s.query("X = f(Y,Z), Y = Z, W = V.", "   X = f(Y,Y), Z = Y, V = W.")
     s.query("X = f(X).", "   X = f(...).")
-    s.query("s(S).", '   S = "abc"')
-    s.send("\r")
-    s.expect(";  ... .")
+    s.query("s(S).", '   S = "abc".\n')    # one fact: known last
     s.query("X = 1+2*3.", "   X = 1+2*3.")
     s.query("X = 1+2*3, Y = (a:-b,c).", "   X = 1+2*3, Y = (a:-b,c).")
 
@@ -380,9 +430,7 @@ def test_consult_and_bracket_load(tl, tmp_path):
     (tmp_path / "extra.pl").write_text("r(42).\n")
     s = tl()
     s.query("consult(extra).", "   true.")
-    s.query("r(X).", "   X = 42")
-    s.send("\r")
-    s.expect(";  ... .")
+    s.query("r(X).", "   X = 42.\n")       # one fact: known last
     s.query("[extra].", "   true.")
     s.query("consult(nonesuch).", "existence_error(source_sink,nonesuch)")
 

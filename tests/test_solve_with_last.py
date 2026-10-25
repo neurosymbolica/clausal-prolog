@@ -188,3 +188,12 @@ def test_a_dif_checked_at_the_last_element_keeps_it_last():
     got = [(deref(x), last) for _t, last in
            call_with_last("member", x, _a("a", "b"), module=m, trail=trail)]
     assert got == [(mint("b"), True)]
+
+
+def test_repeat_is_never_last():
+    """repeat/0 always has another answer: none of its answers is last."""
+    import itertools
+    m = clausal.Module("b_repeat")
+    got = [last for _t, last in itertools.islice(
+        call_with_last("repeat", module=m), 5)]
+    assert got == [False] * 5

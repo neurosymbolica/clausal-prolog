@@ -49,7 +49,10 @@ solution is computed only when you ask for it:
 ?- member(X, [a,b,c]).
    X = a
 ;  X = b
-;  X = c
+;  X = c.
+?- catch(member(X, [a,b]), _, true).
+   X = a
+;  X = b
 ;  false.
 ?- X = f(Y,Z), Y = Z, dif(W, a).
    X = f(Y,Y), Z = Y, dif(W,a).
@@ -65,12 +68,14 @@ solution is computed only when you ask for it:
 | Enter, `.`, Ctrl-C | stop this query |
 | `e` | leave the top-level |
 
-The engine does not tell the top-level that an answer was the last, so an
-answer is printed with its full stop at once only for goals that cannot leave
-a choice (`=`, `is`, comparisons, constraint posting; the goals after a `!`
-count);
-for any other goal the top-level asks, and a requested next solution that
-does not exist prints `false.` Residual `dif/2` and CLP(FD) domain
+An answer the engine knows is the last is printed with its full stop at
+once and the prompt returns, as Scryer's top-level does: `member/2` at the
+last element, `between/3` at its upper bound, a fact whose later clauses
+cannot match (`q(1)` against `q(1). q(2).`), and the other cases listed
+under [`solve_with_last`](python_integration.md#solve_with_last-call_with_last-knowing-an-answer-is-the-last)
+(the goals after a top-level `!` also count). Knowing this never runs the
+goal further. For any other answer the top-level asks, and a requested next
+solution that does not exist prints `false.` Residual `dif/2` and CLP(FD) domain
 constraints print in plain form (`dif(X,a)`, `X in 4..5`).
 
 An error is one line, `error(Formal,Context).`; Ctrl-C during a search

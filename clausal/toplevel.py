@@ -12,9 +12,10 @@ user asks for it.  The layout and keys follow Trealla's top-level::
     ;  X = c.
 
 ``;`` (or space, ``n``) next, ``f`` five more, ``#`` N more, ``a`` all, ``w``
-/ ``p`` full / elided lists, ``h`` or ``?`` help, Enter or ``.`` stop.  When a
-requested next solution does not exist the answer is ``false.``: the engine
-does not tell the top-level that the shown answer was the last.
+/ ``p`` full / elided lists, ``h`` or ``?`` help, Enter or ``.`` stop.  An
+answer the engine knows is the last (``solve_with_last``) ends with its full
+stop at once, as ``X = c.`` above; otherwise the user is asked, and when a
+requested next solution does not exist the answer is ``false.``.
 
 Not a terminal (piped stdin): no prompt and no key prompt; the first answer
 of each query is printed.  An uncaught error is one line,
@@ -126,9 +127,9 @@ def _syntax_line(exc: BaseException) -> str:
 # ── knowing an answer is the last ─────────────────────────────────────────
 
 #: Goals with at most one solution, whatever their arguments.  The engine
-#: does not report determinism to a caller (its FINAL step is not emitted by
-#: any producer yet), so these are the only goals whose answer is printed
-#: with its full stop at once; for any other the user is asked.
+#: says itself when an answer is the last (``solve_with_last``); this table is
+#: the fallback for what it does not prove, such as the goals after a
+#: top-level ``!``.
 _DETERMINISTIC = {
     ("=", 2), ("\\=", 2), ("==", 2), ("\\==", 2), ("is", 2),
     ("=:=", 2), ("=\\=", 2), ("<", 2), (">", 2), ("=<", 2), (">=", 2),
@@ -426,7 +427,7 @@ class TopLevel:
     # -- running one query
 
     def run_query(self, text: str) -> None:
-        from clausal import solve  # noqa: PLC0415
+        from clausal import solve_with_last  # noqa: PLC0415
         try:
             goal, shown = self._cli._read_goal(text, self.op_table)
         except SyntaxError as exc:
@@ -442,8 +443,8 @@ class TopLevel:
                       "start with --prolog (or load a .pl file) to accept "
                       "them\n")
                 return
-            self._answers(solve(("call", goal), module=self.module), shown,
-                          surely_deterministic(goal))
+            self._answers(solve_with_last(("call", goal), module=self.module),
+                          shown, surely_deterministic(goal))
         except Halt:
             raise
         except KeyboardInterrupt:
@@ -456,15 +457,15 @@ class TopLevel:
                 import traceback  # noqa: PLC0415
                 traceback.print_exc()
 
-    def _answers(self, solutions, shown, last: bool = False) -> None:
+    def _answers(self, solutions, shown, det: bool = False) -> None:
         if not self.interactive:
-            return self._answer_loop(solutions, shown, last)
+            return self._answer_loop(solutions, shown, det)
         if self._keys is None:
             self._keys = _Keys(self.stdin.fileno())
         self._keys.enter()
         self._asking = False
         try:
-            self._answer_loop(solutions, shown, last)
+            self._answer_loop(solutions, shown, det)
         except KeyboardInterrupt:
             if not self._asking:
                 raise
@@ -472,21 +473,24 @@ class TopLevel:
         finally:
             self._keys.leave()
 
-    def _answer_loop(self, solutions, shown, last: bool) -> None:
+    def _answer_loop(self, solutions, shown, det: bool) -> None:
+        """*solutions* yields ``(trail, last)`` (``solve_with_last``); an
+        answer is printed with its full stop when the engine knows it is the
+        last, or when the goal can have at most one (*det*)."""
         it = iter(solutions)
         n = 0                           # answers shown so far
         want = 1                        # answers to show before asking
         eager = False
         while True:
             try:
-                trail = next(it)
+                trail, last = next(it)
             except StopIteration:
                 self._write((";  " if n else INDENT) + "false.\n")
                 return
             text = format_answer(shown, trail, self.elide)
             self._write((";  " if n else INDENT) + text)
             n += 1
-            if last or not self.interactive:
+            if last or det or not self.interactive:
                 self._write(_dot(text) + "\n")
                 return
             want -= 1

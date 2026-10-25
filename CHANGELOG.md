@@ -38,6 +38,15 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Changed
 
+- **The `?-` top-level ends an answer it knows is the last with `.`**
+  (2026-10-25), as Scryer's does: `member(X, [a,b,c])` ends `X = c.`,
+  `between(1, 3, X)` ends `X = 3.`, `q(1)` against `q(1). q(2).` is
+  `true.`, with no key asked for and nothing computed ahead. It reads
+  `solve_with_last` (above); the table of goals that cannot leave a choice
+  stays as a fallback (the goals after a top-level `!`). An answer the
+  engine does not prove last is asked about as before, and a next request
+  that finds none prints `false.`. Pinned in `tests/test_toplevel.py`.
+
 - **A goal whose last answer is known is not resumed after it**
   (2026-10-24). `solve`, `call`, the engine's inner drives and a compiled
   clause stop at an answer known to be a goal's last instead of asking the
