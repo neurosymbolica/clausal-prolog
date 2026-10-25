@@ -467,10 +467,13 @@ signal (`solve_with_last` / `call_with_last`: "this answer is the last"):
   retirement and undo a retired root's bindings themselves.
 
 - The hop saving: a compiled loop over a direct child's answers ends with
-  `if _st is $FINAL: break` before its re-pull.  The abandoned child's
-  bindings are undone by the next backtrack point out (every frame and
-  builtin undoes to its own, earlier, mark before another answer; the
-  arm's `finally` undoes to the clause mark).  Tail-call loops cannot take
+  `if _st is $FINAL: break` before its re-pull -- only inside a clause arm
+  whose `finally` undoes the arm's mark, never in a catch/3 try body or an
+  arm without a mark (a single-clause index bucket), since the abandoned
+  child never undoes its own bindings.  The drivers (`solve`, `call`,
+  `_tramp_call`) undo to their mark whenever a search ends.  Measured, the
+  saved pull is about what the bookkeeping costs (q_bench +1-3% with
+  FINAL on, with or without the break).  Tail-call loops cannot take
   it: the callee's FINAL does not come back through them.
 
 Open coverage gaps are in
