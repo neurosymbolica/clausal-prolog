@@ -853,3 +853,17 @@ def test_a_final_step_with_no_queued_goals_is_unchanged(impl):
         yield (fail, impl.DONE)
     sg = impl.StepGenerator(fn, marker, marker, marker, trail)
     assert sg.send(None) == (marker, impl.FINAL)
+
+
+def test_with_final_disabled_a_final_is_a_plain_answer(impl):
+    """The kill switch (CLAUSAL_DISABLE_OPT=final_yield): nothing retires,
+    the search runs on to its exhaustion."""
+    sg, log = _tco_chain(impl, frame_tail_final=True)
+    impl._set_final_enabled(False)
+    try:
+        assert impl._drive_until_yield(sg) is True
+        assert sg.retired is False
+        assert impl._drive_until_yield(sg) is None
+    finally:
+        impl._set_final_enabled(True)
+    assert log == ["a"]

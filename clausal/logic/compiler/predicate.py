@@ -20,9 +20,16 @@ import warnings
 from typing import Any, Callable
 
 from clausal.logic.variables import pending_or_once, unify_iter
+from clausal.logic.variables import Trail as _OnceTrail
+
+# The ``range(1)`` every goal boundary with no woken goal loops over (one
+# shared object, ``pending_or_once`` in variables/_variables.c).  A FINAL
+# answer under a goal boundary asks ``it is $ONCE``; were it ever not shared,
+# the test would just fail and the answer stay non-final.
+_ONCE_RANGE = pending_or_once(_OnceTrail())
 from clausal.logic.pending import run_first as _pending_run_first
 from clausal.logic.variables import Var, is_var, deref, unify  # noqa: F401
-from clausal.logic.trampoline import Step, DONE, StepGenerator, _drive_until_yield
+from clausal.logic.trampoline import Step, DONE, FINAL, StepGenerator, _drive_until_yield
 from clausal.logic import cells as _cells_module
 from clausal.logic.cells import CELLS_NAMESPACE_KEY as _CELLS_NAMESPACE_KEY
 from clausal.terms import (
@@ -187,6 +194,7 @@ from .list_dispatch import (
     _lifted_head_arg_needs_deep_gate,
 )
 from .arg_index import (
+    first_arg_excludes as _first_arg_excludes,
     _INDEX_VAR, _INDEXABLE_TYPES, _INDEX_THRESHOLD, _JOINT_COVERAGE_THRESHOLD,
     _extract_arg_key, _extract_first_arg_key,
     _build_arg_index, _build_first_arg_index,
@@ -526,6 +534,12 @@ INJECTED_RUNTIME_BUILTINS: dict = {
     # ``range(1)`` when it woke none; clausal/logic/pending.py).
     "$pending": pending_or_once,
     "$unify_iter": unify_iter,
+    # A known-last answer (compiler/final_yields.py): ``yield (_proceed,
+    # $FINAL)``, and the shared ``range(1)`` a goal boundary loops over when
+    # it woke no goal, which such an answer under it tests for.
+    "$FINAL": FINAL,
+    "$ONCE": _ONCE_RANGE,
+    "$first_arg_excludes": _first_arg_excludes,
     # A test that only asks whether a unification succeeds (``not in``) runs
     # the goals it woke to a first answer (clausal/logic/pending.py).
     "$run_first": _pending_run_first,
@@ -802,6 +816,37 @@ def _empty_predicate_funcdef(
     return func_def
 
 
+def _later_clauses_excluded(clauses, matches, arity, env):
+    """``({id(match): cond}, {id(match)})``: for each clause arm, the runtime test under
+    which no LATER clause can match the call -- every later head's first
+    argument has a key (``arg_index.head_first_arg_key``) and the call's
+    first argument, bound at entry, keys outside them all.  The first-
+    argument indexing a predicate too small to be indexed does not get,
+    asked only at an answer the FINAL pass would otherwise leave open."""
+    from .arg_index import _INDEX_VAR, head_first_arg_key
+    if arity == 0 or env is None or len(matches) != len(clauses) \
+            or any(m is None for m in matches):
+        return None
+    keys = [head_first_arg_key(c, arity, env) for c in clauses]
+    out = {}
+    for i in range(len(clauses) - 1):
+        later = keys[i + 1:]
+        if any(k is _INDEX_VAR for k in later):
+            continue
+        try:
+            later_set = frozenset(later)
+        except TypeError:
+            continue
+        n = env.get("$final_keys_count", 0)
+        env["$final_keys_count"] = n + 1
+        name = f"$final_keys_{n}"
+        env[name] = later_set
+        out[id(matches[i])] = ast.Call(
+            func=_name("$first_arg_excludes"),
+            args=[_name("_d0"), _name("arg0"), _name(name)], keywords=[])
+    return out, frozenset(id(m) for m in matches)
+
+
 def _build_predicate_trampoline_funcdef(
     functor: str,
     arity: int,
@@ -983,6 +1028,10 @@ def _build_predicate_trampoline_funcdef(
     # clause loop only and restore them after, so no other build or body
     # compile through the same template ever reads a stale value.
     _saved_cut_fields = (ctx_template.clause_mark_name, ctx_template.cut_tro_restart)
+    # The clause arms in order (the plain, non-list-dispatch shape), for the
+    # FINAL pass: an arm's answer is final when every later arm's first-
+    # argument key excludes the call (see _later_clauses_excluded).
+    _clause_matches: list = []
     # Only a predicate whose clauses can cut at predicate scope needs the
     # restart check in its cut exits (and, in signal mode, the per-
     # activation tail locals the check reads), so cut-free TRO code is
@@ -1004,6 +1053,7 @@ def _build_predicate_trampoline_funcdef(
             # A ``skip_trail`` arm (single-clause index bucket) emits no mark.
             ctx_template.clause_mark_name = None if skip_trail else "_mark"
             for ci, clause in enumerate(clauses):
+                _clause_matches.append(None)
                 var_context: dict[int, str] = {}
                 _head_arg_patterns(clause.head, var_context, arity, globals_=_head_globals)
 
@@ -1025,7 +1075,8 @@ def _build_predicate_trampoline_funcdef(
                     )
                 finally:
                     _pop_position()
-                loop_stmts.append(ast.Match(subject=subject, cases=[case_arm]))
+                _clause_matches[-1] = ast.Match(subject=subject, cases=[case_arm])
+                loop_stmts.append(_clause_matches[-1])
     finally:
         ctx_template.clause_mark_name, ctx_template.cut_tro_restart = _saved_cut_fields
 
@@ -1147,6 +1198,16 @@ def _build_predicate_trampoline_funcdef(
     # trampoline funcdef built with emit_done=True but missing the
     # terminal ``yield (parent, DONE)`` — without it the driver
     # loop never sees the termination signal and hangs.
+    if not use_tro and "final_yield" in ctx_template.enabled_optimisations:
+        # Answers known to be the last go out as FINAL (CONTINUATION_TCO_PLAN
+        # Phase 4).  Never in a TRO function: its body restarts in place.
+        from .final_yields import mark_final_yields
+        mark_final_yields(
+            func_def, self_name=ctx_template.self_name,
+            proceed_name=ctx_template.proceed_name,
+            fail_name=ctx_template.fail_name,
+            later_excluded=_later_clauses_excluded(
+                clauses, _clause_matches, arity, ctx_template.base_globals))
     from .invariants import (
         assert_mark_undo_paired,
         assert_trampoline_done_yield_present,

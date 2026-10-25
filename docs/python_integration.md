@@ -173,9 +173,15 @@ solution paired with that knowledge, and `call_with_last` is the same for
 `call`:
 
 ```python
-for trail, last in solve_with_last(goal, module=m):
-    ...   # last is True: this is the last solution
+from clausal import Module, Var, solve_with_last
+
+m = Module("answers")
+for trail, last in solve_with_last(("member", X := Var(), ["a", "b", "c"]), module=m):
+    print(X.value, "." if last else ";")
 ```
+
+prints `a ;`, `b ;` and `c .`: the answer at the last element is known to be
+the last, as Scryer's top-level knows it (`X = c.`).
 
 `last` is `True` only when the engine **knows** no choice point is left, so
 pulling again would find no solution; the iterator then ends. `False` means
@@ -185,12 +191,25 @@ coverage, which may grow in any release; a `False` becoming `True` for some
 goal is not a breaking change.
 
 Today a solution is reported last when every goal still open on the way to
-it says so: the deterministic builtins, `member/2` at the last element of a
-proper list, `between/3` at its upper bound, a conjunction of such goals,
-and a predicate whose last candidate clause produced the answer with no
-choice left in its body. Disjunctions, tabled predicates, goals woken by a
-constraint at that answer, `catch/3` recovery and every goal the engine has
-no proof for answer `False`.
+it says so:
+
+- the builtins with one answer (`=/2`, `is/2`, comparisons, type checks,
+  `atom_length/2`, `functor/3`, `dif/2`, posting a CLP(Z) constraint, ...);
+- the enumerating builtins at their last answer: `member/2` at the last
+  element of a proper list, `between/3` at its upper bound, `select/3`,
+  `nth0/3`, `nth1/3` at the last element, `append/3` at its last split;
+- `once/1`, `\+`, `findall/3`, `forall/2`, `call/N`;
+- a conjunction whose earlier goals had already given their last answer;
+- the last arm of a disjunction;
+- a user predicate whose clause gave the answer with no choice left in its
+  body, when no later clause can match: it is the last clause, first-argument
+  indexing ruled the others out, or the later clauses' first arguments
+  (`q(1). q(2).` called as `q(1)`) cannot match the call's.
+
+Tabled predicates, a goal woken by a constraint at that answer (it may have
+answers of its own), `catch/3`, an if-then-else with an else branch,
+`setup_call_cleanup/3`, `time_goal/1`, and every goal the engine has no
+proof for answer `False`.
 After the last solution the bindings are undone when the iterator is
 advanced again, as after any exhausted search.
 

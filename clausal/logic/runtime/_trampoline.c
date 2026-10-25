@@ -814,6 +814,18 @@ drive_to_root_yield(PyObject *root, int stopiteration_is_exhaustion,
  * resumed into) never holds.  Below a None target the walk stops at
  * *root*.  Borrowed references throughout.  KEEP IN SYNC with
  * _final_holds in logic/_trampoline_py.py. */
+/* Off (_set_final_enabled(False)): every FINAL is read as a plain answer. */
+static int g_final_enabled = 1;
+
+static PyObject *
+set_final_enabled_func(PyObject *Py_UNUSED(module), PyObject *flag)
+{
+    int truth = PyObject_IsTrue(flag);
+    if (truth < 0) return NULL;
+    g_final_enabled = truth;
+    Py_RETURN_NONE;
+}
+
 static int
 final_holds(PyObject *producer, PyObject *target, PyObject *root)
 {
@@ -897,7 +909,8 @@ drive_to_root_yield_loop(PyObject *root, int stopiteration_is_exhaustion,
 
         /* A FINAL speaks for its producer alone: final for gen only if no
          * frame a tail call skipped still has alternatives. */
-        if (value == g_FINAL && !final_holds(*producer_slot, gen, root))
+        if (value == g_FINAL
+                && !(g_final_enabled && final_holds(*producer_slot, gen, root)))
             value = Py_None;
 
         if (gen == Py_None) {
@@ -1214,6 +1227,9 @@ static PyMethodDef module_methods[] = {
     {"solutions", (PyCFunction)(void(*)(void))solutions_func, METH_VARARGS | METH_KEYWORDS,
      "solutions(root: StepGenerator, snapshot: callable = None) -> list\n\n"
      "Drive a search, calling snapshot() at each solution."},
+    {"_set_final_enabled", set_final_enabled_func, METH_O,
+     "_set_final_enabled(flag) -> None\n\n"
+     "Off, every FINAL is read as a plain answer (nothing retires)."},
     {"_drive_until_yield", drive_until_yield_func, METH_O,
      "_drive_until_yield(sg: StepGenerator) -> bool | None\n\n"
      "Inner loop of _drive_trampoline.  Calls sg.send(None) and loops\n"

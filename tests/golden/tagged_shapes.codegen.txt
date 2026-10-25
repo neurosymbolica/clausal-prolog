@@ -8,10 +8,12 @@ def depth__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             _mark_cl = False
             try:
                 _m0 = trail.mark()
-                for _ in $unify_iter(_v0, 'nil', trail):
+                _fin_it1 = $unify_iter(_v0, 'nil', trail)
+                for _ in _fin_it1:
                     _m1 = trail.mark()
-                    for _ in $unify_iter(_v1, 0, trail):
-                        yield (_proceed, None)
+                    _fin_it2 = $unify_iter(_v1, 0, trail)
+                    for _ in _fin_it2:
+                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_0) and _fin_it1 is $ONCE and (_fin_it2 is $ONCE) else None)
                     trail.undo(_m1)
                 trail.undo(_m0)
             except $GeneratorExit:
@@ -29,12 +31,13 @@ def depth__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _v5 = $Var()
                 _v6 = $Var()
                 _m2 = trail.mark()
-                for _ in $unify_iter(_v2, ('point', _v4, _v5), trail):
+                _fin_it3 = $unify_iter(_v2, ('point', _v4, _v5), trail)
+                for _ in _fin_it3:
                     _gen0 = $StepGenerator($dispatch_at(depth, 2), this_generator, this_generator, this_generator, _v5, _v6, trail)
                     _st0 = (yield (_gen0, None))
                     while _st0 is not $DONE:
                         if $fd_eq(_v3, $Add(left=_v6, right=1), trail):
-                            yield (_proceed, None)
+                            yield (_proceed, $FINAL if _fin_it3 is $ONCE and _st0 is $FINAL else None)
                         _st0 = (yield (_gen0, None))
                 trail.undo(_m2)
             except $GeneratorExit:
@@ -58,10 +61,12 @@ def kind__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _v9 = $Var()
                 _v10 = $Var()
                 _m3 = trail.mark()
-                for _ in $unify_iter(_v7, ('point', _v9, _v10), trail):
+                _fin_it1 = $unify_iter(_v7, ('point', _v9, _v10), trail)
+                for _ in _fin_it1:
                     _m4 = trail.mark()
-                    for _ in $unify_iter(_v8, 'pt', trail):
-                        yield (_proceed, None)
+                    _fin_it2 = $unify_iter(_v8, 'pt', trail)
+                    for _ in _fin_it2:
+                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_0) and _fin_it1 is $ONCE and (_fin_it2 is $ONCE) else None)
                     trail.undo(_m4)
                 trail.undo(_m3)
             except $GeneratorExit:
@@ -78,10 +83,12 @@ def kind__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _v13 = $Var()
                 _v14 = $Var()
                 _m5 = trail.mark()
-                for _ in $unify_iter(_v11, ('circle', _v13, _v14), trail):
+                _fin_it3 = $unify_iter(_v11, ('circle', _v13, _v14), trail)
+                for _ in _fin_it3:
                     _m6 = trail.mark()
-                    for _ in $unify_iter(_v12, 'circ', trail):
-                        yield (_proceed, None)
+                    _fin_it4 = $unify_iter(_v12, 'circ', trail)
+                    for _ in _fin_it4:
+                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_1) and _fin_it3 is $ONCE and (_fin_it4 is $ONCE) else None)
                     trail.undo(_m6)
                 trail.undo(_m5)
             except $GeneratorExit:
@@ -99,10 +106,12 @@ def kind__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _v18 = $Var()
                 _v19 = $Var()
                 _m7 = trail.mark()
-                for _ in $unify_iter(_v15, ('seg', _v17, _v18, _v19), trail):
+                _fin_it5 = $unify_iter(_v15, ('seg', _v17, _v18, _v19), trail)
+                for _ in _fin_it5:
                     _m8 = trail.mark()
-                    for _ in $unify_iter(_v16, 'seg3', trail):
-                        yield (_proceed, None)
+                    _fin_it6 = $unify_iter(_v16, 'seg3', trail)
+                    for _ in _fin_it6:
+                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_2) and _fin_it5 is $ONCE and (_fin_it6 is $ONCE) else None)
                     trail.undo(_m8)
                 trail.undo(_m7)
             except $GeneratorExit:
@@ -117,10 +126,12 @@ def kind__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             _mark_cl = False
             try:
                 _m9 = trail.mark()
-                for _ in $unify_iter(_v20, 'nil', trail):
+                _fin_it7 = $unify_iter(_v20, 'nil', trail)
+                for _ in _fin_it7:
                     _m10 = trail.mark()
-                    for _ in $unify_iter(_v21, 'empty', trail):
-                        yield (_proceed, None)
+                    _fin_it8 = $unify_iter(_v21, 'empty', trail)
+                    for _ in _fin_it8:
+                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_3) and _fin_it7 is $ONCE and (_fin_it8 is $ONCE) else None)
                     trail.undo(_m10)
                 trail.undo(_m9)
             except $GeneratorExit:
@@ -135,10 +146,12 @@ def kind__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             _mark_cl = False
             try:
                 _m11 = trail.mark()
-                for _ in $unify_iter(_v22, 42, trail):
+                _fin_it9 = $unify_iter(_v22, 42, trail)
+                for _ in _fin_it9:
                     _m12 = trail.mark()
-                    for _ in $unify_iter(_v23, 'num', trail):
-                        yield (_proceed, None)
+                    _fin_it10 = $unify_iter(_v23, 'num', trail)
+                    for _ in _fin_it10:
+                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_4) and _fin_it9 is $ONCE and (_fin_it10 is $ONCE) else None)
                     trail.undo(_m12)
                 trail.undo(_m11)
             except $GeneratorExit:
@@ -153,10 +166,12 @@ def kind__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             _mark_cl = False
             try:
                 _m13 = trail.mark()
-                for _ in $unify_iter(_v24, 's', trail):
+                _fin_it11 = $unify_iter(_v24, 's', trail)
+                for _ in _fin_it11:
                     _m14 = trail.mark()
-                    for _ in $unify_iter(_v25, 'str', trail):
-                        yield (_proceed, None)
+                    _fin_it12 = $unify_iter(_v25, 'str', trail)
+                    for _ in _fin_it12:
+                        yield (_proceed, $FINAL if _fin_it11 is $ONCE and _fin_it12 is $ONCE else None)
                     trail.undo(_m14)
                 trail.undo(_m13)
             except $GeneratorExit:
@@ -174,8 +189,9 @@ def kind__p0_b0__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     match (_d0, _d1):
         case [['point', _v9, _v10], _v8]:
             _m15 = trail.mark()
-            for _ in $unify_iter(_v8, 'pt', trail):
-                yield (_proceed, None)
+            _fin_it1 = $unify_iter(_v8, 'pt', trail)
+            for _ in _fin_it1:
+                yield (_proceed, $FINAL if _fin_it1 is $ONCE else None)
             trail.undo(_m15)
 
 # ----
@@ -186,8 +202,9 @@ def kind__p0_b1__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     match (_d0, _d1):
         case [['circle', _v13, _v14], _v12]:
             _m16 = trail.mark()
-            for _ in $unify_iter(_v12, 'circ', trail):
-                yield (_proceed, None)
+            _fin_it1 = $unify_iter(_v12, 'circ', trail)
+            for _ in _fin_it1:
+                yield (_proceed, $FINAL if _fin_it1 is $ONCE else None)
             trail.undo(_m16)
 
 # ----
@@ -198,8 +215,9 @@ def kind__p0_b2__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     match (_d0, _d1):
         case [['seg', _v17, _v18, _v19], _v16]:
             _m17 = trail.mark()
-            for _ in $unify_iter(_v16, 'seg3', trail):
-                yield (_proceed, None)
+            _fin_it1 = $unify_iter(_v16, 'seg3', trail)
+            for _ in _fin_it1:
+                yield (_proceed, $FINAL if _fin_it1 is $ONCE else None)
             trail.undo(_m17)
 
 # ----
@@ -210,10 +228,12 @@ def kind__p0_b3__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     match (_d0, _d1):
         case [_acap0, _v21]:
             if $unify(_acap0, 'nil', trail):
-                for _ in $pending(trail):
+                _fin_it1 = $pending(trail)
+                for _ in _fin_it1:
                     _m18 = trail.mark()
-                    for _ in $unify_iter(_v21, 'empty', trail):
-                        yield (_proceed, None)
+                    _fin_it2 = $unify_iter(_v21, 'empty', trail)
+                    for _ in _fin_it2:
+                        yield (_proceed, $FINAL if _fin_it1 is $ONCE and _fin_it2 is $ONCE else None)
                     trail.undo(_m18)
 
 # ----
@@ -224,10 +244,12 @@ def kind__p0_b4__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     match (_d0, _d1):
         case [_ncap0, _v23]:
             if _ncap0.__class__ is 42 .__class__ and _ncap0 == 42 or $unify(_ncap0, 42, trail):
-                for _ in $pending(trail):
+                _fin_it1 = $pending(trail)
+                for _ in _fin_it1:
                     _m19 = trail.mark()
-                    for _ in $unify_iter(_v23, 'num', trail):
-                        yield (_proceed, None)
+                    _fin_it2 = $unify_iter(_v23, 'num', trail)
+                    for _ in _fin_it2:
+                        yield (_proceed, $FINAL if _fin_it1 is $ONCE and _fin_it2 is $ONCE else None)
                     trail.undo(_m19)
 
 # ----
@@ -238,10 +260,12 @@ def kind__p0_b5__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     match (_d0, _d1):
         case [_acap0, _v25]:
             if $unify(_acap0, 's', trail):
-                for _ in $pending(trail):
+                _fin_it1 = $pending(trail)
+                for _ in _fin_it1:
                     _m20 = trail.mark()
-                    for _ in $unify_iter(_v25, 'str', trail):
-                        yield (_proceed, None)
+                    _fin_it2 = $unify_iter(_v25, 'str', trail)
+                    for _ in _fin_it2:
+                        yield (_proceed, $FINAL if _fin_it1 is $ONCE and _fin_it2 is $ONCE else None)
                     trail.undo(_m20)
 
 # ----
@@ -258,12 +282,14 @@ def kind__p1_b0__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     match (_d0, _d1):
         case [_v7, _acap0]:
             if $unify(_acap0, 'pt', trail):
-                for _ in $pending(trail):
+                _fin_it1 = $pending(trail)
+                for _ in _fin_it1:
                     _v9 = $Var()
                     _v10 = $Var()
                     _m21 = trail.mark()
-                    for _ in $unify_iter(_v7, ('point', _v9, _v10), trail):
-                        yield (_proceed, None)
+                    _fin_it2 = $unify_iter(_v7, ('point', _v9, _v10), trail)
+                    for _ in _fin_it2:
+                        yield (_proceed, $FINAL if _fin_it1 is $ONCE and _fin_it2 is $ONCE else None)
                     trail.undo(_m21)
 
 # ----
@@ -274,12 +300,14 @@ def kind__p1_b1__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     match (_d0, _d1):
         case [_v11, _acap0]:
             if $unify(_acap0, 'circ', trail):
-                for _ in $pending(trail):
+                _fin_it1 = $pending(trail)
+                for _ in _fin_it1:
                     _v13 = $Var()
                     _v14 = $Var()
                     _m22 = trail.mark()
-                    for _ in $unify_iter(_v11, ('circle', _v13, _v14), trail):
-                        yield (_proceed, None)
+                    _fin_it2 = $unify_iter(_v11, ('circle', _v13, _v14), trail)
+                    for _ in _fin_it2:
+                        yield (_proceed, $FINAL if _fin_it1 is $ONCE and _fin_it2 is $ONCE else None)
                     trail.undo(_m22)
 
 # ----
@@ -290,13 +318,15 @@ def kind__p1_b2__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     match (_d0, _d1):
         case [_v15, _acap0]:
             if $unify(_acap0, 'seg3', trail):
-                for _ in $pending(trail):
+                _fin_it1 = $pending(trail)
+                for _ in _fin_it1:
                     _v17 = $Var()
                     _v18 = $Var()
                     _v19 = $Var()
                     _m23 = trail.mark()
-                    for _ in $unify_iter(_v15, ('seg', _v17, _v18, _v19), trail):
-                        yield (_proceed, None)
+                    _fin_it2 = $unify_iter(_v15, ('seg', _v17, _v18, _v19), trail)
+                    for _ in _fin_it2:
+                        yield (_proceed, $FINAL if _fin_it1 is $ONCE and _fin_it2 is $ONCE else None)
                     trail.undo(_m23)
 
 # ----
@@ -307,10 +337,12 @@ def kind__p1_b3__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     match (_d0, _d1):
         case [_v20, _acap0]:
             if $unify(_acap0, 'empty', trail):
-                for _ in $pending(trail):
+                _fin_it1 = $pending(trail)
+                for _ in _fin_it1:
                     _m24 = trail.mark()
-                    for _ in $unify_iter(_v20, 'nil', trail):
-                        yield (_proceed, None)
+                    _fin_it2 = $unify_iter(_v20, 'nil', trail)
+                    for _ in _fin_it2:
+                        yield (_proceed, $FINAL if _fin_it1 is $ONCE and _fin_it2 is $ONCE else None)
                     trail.undo(_m24)
 
 # ----
@@ -321,10 +353,12 @@ def kind__p1_b4__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     match (_d0, _d1):
         case [_v22, _acap0]:
             if $unify(_acap0, 'num', trail):
-                for _ in $pending(trail):
+                _fin_it1 = $pending(trail)
+                for _ in _fin_it1:
                     _m25 = trail.mark()
-                    for _ in $unify_iter(_v22, 42, trail):
-                        yield (_proceed, None)
+                    _fin_it2 = $unify_iter(_v22, 42, trail)
+                    for _ in _fin_it2:
+                        yield (_proceed, $FINAL if _fin_it1 is $ONCE and _fin_it2 is $ONCE else None)
                     trail.undo(_m25)
 
 # ----
@@ -335,10 +369,12 @@ def kind__p1_b5__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail)
     match (_d0, _d1):
         case [_v24, _acap0]:
             if $unify(_acap0, 'str', trail):
-                for _ in $pending(trail):
+                _fin_it1 = $pending(trail)
+                for _ in _fin_it1:
                     _m26 = trail.mark()
-                    for _ in $unify_iter(_v24, 's', trail):
-                        yield (_proceed, None)
+                    _fin_it2 = $unify_iter(_v24, 's', trail)
+                    for _ in _fin_it2:
+                        yield (_proceed, $FINAL if _fin_it1 is $ONCE and _fin_it2 is $ONCE else None)
                     trail.undo(_m26)
 
 # ----
@@ -378,11 +414,16 @@ def mk__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _v30 = $Var()
                 _v31 = $Var()
                 _m2 = trail.mark()
-                for _ in $unify_iter(_v29, ('point', _v28, _v30), trail):
+                _fin_it1 = $unify_iter(_v29, ('point', _v28, _v30), trail)
+                for _ in _fin_it1:
                     if $fd_gt(_v28, 0, trail):
-                        for _ in $pending(trail):
+                        _fin_it2 = $pending(trail)
+                        for _ in _fin_it2:
                             if $fd_eq(_v31, $Sub(left=_v28, right=1), trail):
-                                for _ in $pending(trail):
+                                _fin_it3 = $pending(trail)
+                                for _ in _fin_it3:
+                                    if _fin_it1 is $ONCE and _fin_it2 is $ONCE and (_fin_it3 is $ONCE):
+                                        this_generator.tail_final = True
                                     _gen0 = $StepGenerator($dispatch_at(mk, 2), _proceed, this_generator, this_generator, _v31, _v30, trail)
                                     _st0 = (yield (_gen0, None))
                                     while _st0 is not $DONE:
@@ -408,8 +449,9 @@ def pair_up__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trai
             _mark_cl = False
             try:
                 _m27 = trail.mark()
-                for _ in $unify_iter(_v34, ('seg', _v32, _v33, 'nil'), trail):
-                    yield (_proceed, None)
+                _fin_it1 = $unify_iter(_v34, ('seg', _v32, _v33, 'nil'), trail)
+                for _ in _fin_it1:
+                    yield (_proceed, $FINAL if _fin_it1 is $ONCE else None)
                 trail.undo(_m27)
             except $GeneratorExit:
                 _mark_cl = True

@@ -317,6 +317,17 @@ def _drive_to_root_yield(root, *, stopiteration_is_exhaustion, who):
         trail.defer = saved
 
 
+_FINAL_ENABLED = True
+
+
+def _set_final_enabled(flag) -> None:
+    """Turn the acceptance of FINAL on or off (C≡Py: _set_final_enabled).
+    Off, every FINAL is read as a plain answer: nothing retires, and every
+    search runs to its exhaustion as it did before FINAL had producers."""
+    global _FINAL_ENABLED
+    _FINAL_ENABLED = bool(flag)
+
+
 def _final_holds(producer, target, root) -> bool:
     """True when a FINAL that *producer* yielded to *target* is final for
     *target* too: every frame on *producer*'s ``fail`` chain below *target*
@@ -366,7 +377,8 @@ def _drive_to_root_yield_core(root, *, stopiteration_is_exhaustion, who):
         if type(step) is not tuple or len(step) != 2:
             raise TypeError(f"{who}: generator must yield 2-tuples")
         gen, value = step
-        if value is FINAL and not _final_holds(producer, gen, root):
+        if value is FINAL and not (_FINAL_ENABLED
+                                   and _final_holds(producer, gen, root)):
             value = None         # final for its producer only
         if gen is None:
             if value is FINAL:

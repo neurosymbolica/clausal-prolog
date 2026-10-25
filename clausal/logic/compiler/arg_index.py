@@ -661,6 +661,79 @@ def _make_call_site_bucket_trampoline(bucket_fn, dispatch_fn, done,
     return call_site_fn
 
 
+def _head_arg(clause: Clause, pos: int, arity: int) -> Any:
+    """The head's argument at *pos*, or ``_INDEX_VAR`` when there is none."""
+    if arity == 0 or pos >= arity:
+        return _INDEX_VAR
+    head = clause.head
+    if isinstance(head, Call) and isinstance(head.func, LoadName):
+        return head.args[pos] if len(head.args) > pos else _INDEX_VAR
+    if _cell_shape(head)[0]:                        # P2: a head is a cell
+        cargs = cell_args(head)
+        return cargs[pos] if len(cargs) > pos else _INDEX_VAR
+    if is_term_instance(head):
+        fields = term_field_names(head)
+        return getattr(head, fields[pos]) if len(fields) > pos else _INDEX_VAR
+    return _INDEX_VAR
+
+
+def head_first_arg_key(clause: Clause, arity: int,
+                       env: "dict | None" = None) -> Any:
+    """The index key of the head's FIRST argument itself -- not one read off
+    a body unification as :func:`_extract_arg_key` also does -- or
+    ``_INDEX_VAR``.  A call whose first argument keys differently cannot
+    unify with this head at all (the property indexing relies on)."""
+    arg = _head_arg(clause, 0, arity)
+    if arg is _INDEX_VAR:
+        return _INDEX_VAR
+    key = _arg_to_index_key(arg, env)
+    if key is not _INDEX_VAR or not is_var(arg):
+        return key
+    # ``p(X) :- X = k, ...`` (how the native front end writes ``p(k)``): the
+    # first goal fails, before anything else runs, for a call whose first
+    # argument keys otherwise -- provided X is nowhere else in the head,
+    # where unifying it could already have woken a goal.
+    body = clause.body or []
+    if not body or not isinstance(body[0], Unify):
+        return _INDEX_VAR
+    goal = body[0]
+    other = goal.right if goal.left is arg else (
+        goal.left if goal.right is arg else None)
+    if other is None:
+        return _INDEX_VAR
+    for pos in range(1, arity):
+        if _mentions_var(_head_arg(clause, pos, arity), arg):
+            return _INDEX_VAR
+    return _arg_to_index_key(other, env)
+
+
+def _mentions_var(term, var, _depth=0) -> bool:
+    """True when *var* (by identity) may occur in *term*; unsure is True."""
+    if term is var:
+        return True
+    if _depth > 50:
+        return True
+    if isinstance(term, (list, tuple)):
+        return any(_mentions_var(t, var, _depth + 1) for t in term)
+    if isinstance(term, (int, float, str, bytes)) or term is None:
+        return False
+    if is_var(term):
+        return False
+    return True
+
+
+def first_arg_excludes(entry, arg, keys) -> bool:
+    """Runtime: the first argument was bound at the call (*entry* is its
+    deref then) and keys outside *keys*, so no clause headed by one of
+    those keys can match it.  An unbound or unkeyable argument excludes
+    nothing.  (compiler/final_yields.py: the later clauses of a predicate
+    too small to be indexed.)"""
+    if is_var(entry) or isinstance(entry, Var):
+        return False
+    k = _runtime_arg_key(deref(arg))
+    return k is not _INDEX_VAR and k not in keys
+
+
 def _extract_arg_key(
     clause: Clause, pos: int, arity: int, env: "dict | None" = None,
 ) -> Any:
@@ -673,25 +746,8 @@ def _extract_arg_key(
     hoisted cross-module atom reference (``LoadName``/``LoadAttr``) can be
     resolved to its runtime value instead of guessed at from its spelling.
     """
-    if arity == 0 or pos >= arity:
-        return _INDEX_VAR
-    head = clause.head
-    # Get arg at position pos from head
-    if isinstance(head, Call) and isinstance(head.func, LoadName):
-        if len(head.args) <= pos:
-            return _INDEX_VAR
-        arg = head.args[pos]
-    elif _cell_shape(head)[0]:                      # P2: a head is a cell
-        cargs = cell_args(head)
-        if len(cargs) <= pos:
-            return _INDEX_VAR
-        arg = cargs[pos]
-    elif is_term_instance(head):
-        fields = term_field_names(head)
-        if len(fields) <= pos:
-            return _INDEX_VAR
-        arg = getattr(head, fields[pos])
-    else:
+    arg = _head_arg(clause, pos, arity)
+    if arg is _INDEX_VAR:
         return _INDEX_VAR
     # Direct ground term (scalar or compound) — Phase 9a extends to compounds.
     key = _arg_to_index_key(arg, env)

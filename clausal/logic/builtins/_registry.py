@@ -78,6 +78,10 @@ _SEMIDET_SIMPLE: frozenset = frozenset({
     ("functor", 3), ("=..", 2), ("copy_term", 2), ("term_variables", 2),
     # arithmetic helpers
     ("succ", 2), ("plus", 3), ("gcd", 3), ("lcm", 3), ("msb", 2),
+    # posting a constraint (its propagation's woken goals, if any, make
+    # the answer non-final at the step: StepGenerator's drain)
+    ("dif", 2), ("#=", 2), ("#\\=", 2), ("#<", 2), ("#>", 2), ("#=<", 2),
+    ("#>=", 2), ("in", 2), ("ins", 2),
     # output
     ("nl", 0), ("write", 1), ("writeq", 1), ("print", 1),
     ("write_canonical", 1), ("writeln", 1),

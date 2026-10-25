@@ -68,6 +68,31 @@ except ImportError:
     )
 
 
+def set_final_enabled(flag: bool) -> None:
+    """Accept FINAL (the default), or not: off, every FINAL is read as a
+    plain answer, so no answer is reported last and every search runs to
+    its exhaustion.  The kill switch for the determinism signal, in both
+    trampolines; ``CLAUSAL_DISABLE_OPT=final_yield`` starts with it off
+    (and turns off the compiler pass that marks answers)."""
+    from clausal.logic import _trampoline_py
+    _trampoline_py._set_final_enabled(flag)
+    try:
+        from clausal.logic.runtime import _trampoline as _c
+    except ImportError:
+        return
+    _c._set_final_enabled(flag)
+
+
+def _disabled_at_start() -> bool:
+    import os
+    raw = os.environ.get("CLAUSAL_DISABLE_OPT", "")
+    return "final_yield" in {s.strip() for s in raw.split(",")}
+
+
+if _disabled_at_start():
+    set_final_enabled(False)
+
+
 # ── Minimal test problem: n! ─────────────────────────────────────────────────
 #
 # Uses all three targets in one small program:

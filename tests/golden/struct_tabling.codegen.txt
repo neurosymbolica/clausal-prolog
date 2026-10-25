@@ -28,11 +28,16 @@ def nats__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _v4 = $Var()
                 _v5 = $Var()
                 _m2 = trail.mark()
-                for _ in $unify_iter(_v3, ('cons', _v2, _v4), trail):
+                _fin_it1 = $unify_iter(_v3, ('cons', _v2, _v4), trail)
+                for _ in _fin_it1:
                     if $fd_gt(_v2, 0, trail):
-                        for _ in $pending(trail):
+                        _fin_it2 = $pending(trail)
+                        for _ in _fin_it2:
                             if $fd_eq(_v5, $Sub(left=_v2, right=1), trail):
-                                for _ in $pending(trail):
+                                _fin_it3 = $pending(trail)
+                                for _ in _fin_it3:
+                                    if _fin_it1 is $ONCE and _fin_it2 is $ONCE and (_fin_it3 is $ONCE):
+                                        this_generator.tail_final = True
                                     _gen0 = $StepGenerator($dispatch_at(nats, 2), _proceed, this_generator, this_generator, _v5, _v4, trail)
                                     _st0 = (yield (_gen0, None))
                                     while _st0 is not $DONE:

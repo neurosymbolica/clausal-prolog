@@ -92,6 +92,8 @@ _CASES = [
      {"fibonacci": _example("fibonacci")}, "", ["55"]),
     ("pi-call", "python_integration.md", 'call("fib", 7',
      {"fibonacci": _example("fibonacci")}, "", ["13"]),
+    ("pi-solve-with-last", "python_integration.md", 'solve_with_last(("member"',
+     {}, "", ["a ;", "b ;", "c ."]),
     ("pi-harness", "python_integration.md", "def answers(",
      {"fibonacci": _example("fibonacci")},
      "test_fib_10(); print('harness ok')", ["harness ok"]),

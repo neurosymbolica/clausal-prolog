@@ -993,6 +993,9 @@ ENTRY_POINTS = {
                        "fromlist=['x']).judged_answers(g, dom.__clausal_module__, [X], "
                        "clausal.Trail()))"),
     "call": "lambda g: list(clausal.call(g[0], *g[1:], module=dom))",
+    "solve_with_last": "lambda g: list(clausal.solve_with_last(g, module=dom))",
+    "call_with_last": ("lambda g: list(clausal.call_with_last("
+                       "g[0], *g[1:], module=dom))"),
     # clausal.aio, the async twins (driven on an event loop):
     "asolve": ("lambda g: asyncio.run(_alist(clausal.aio.asolve("
                "g, module=dom)))"),
@@ -1057,7 +1060,8 @@ def test_the_entry_point_list_is_complete():
     """Every public name of clausal.logic.solve that runs a goal is in
     ENTRY_POINTS (a new one must be added there, and gated)."""
     import clausal.logic.solve as s
-    runs_goals = {"call", "solve", "query", "query_wfs", "once"}
+    runs_goals = {"call", "solve", "query", "query_wfs", "once",
+                  "solve_with_last", "call_with_last"}
     assert set(s.__all__) - {"resolve_module", "_deref_walk"} == runs_goals
     assert runs_goals <= set(ENTRY_POINTS)
     # clausal.aio: every public goal driver is pinned (await_only waits on

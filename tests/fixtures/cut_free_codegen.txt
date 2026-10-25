@@ -7,7 +7,7 @@ def p__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             _mark_cl = False
             try:
                 if _ncap0.__class__ is 1 .__class__ and _ncap0 == 1 or $unify(_ncap0, 1, trail):
-                    yield (_proceed, None)
+                    yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_0) else None)
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -20,7 +20,7 @@ def p__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             _mark_cl = False
             try:
                 if _ncap0.__class__ is 2 .__class__ and _ncap0 == 2 or $unify(_ncap0, 2, trail):
-                    yield (_proceed, None)
+                    yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_1) else None)
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -33,7 +33,7 @@ def p__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             _mark_cl = False
             try:
                 if _ncap0.__class__ is 3 .__class__ and _ncap0 == 3 or $unify(_ncap0, 3, trail):
-                    yield (_proceed, None)
+                    yield (_proceed, $FINAL)
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -58,7 +58,7 @@ def app__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail):
                         if _lr0 is not False:
                             if $unify(_v0, _v0__dup0, trail):
                                 if _lr0 is not None or $head_list_unify_output(_lcap0, [], None, [], trail):
-                                    yield (_proceed, None)
+                                    yield (_proceed, $FINAL)
                     except $GeneratorExit:
                         _mark_cl = True
                         raise
@@ -77,12 +77,13 @@ def app__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail):
                         _lr0 = $head_list_unify_input(_lcap0, [_v1], _v2, [], trail)
                         _lr1 = $head_list_unify_input(_lcap1, [_v1], _v3, [], trail)
                         if _lr0 is not False and _lr1 is not False:
-                            for _ in $pending(trail):
+                            _fin_it1 = $pending(trail)
+                            for _ in _fin_it1:
                                 _gen1 = $StepGenerator($dispatch_at(app, 3), this_generator, this_generator, this_generator, _v2, _v0, _v3, trail)
                                 _st2 = (yield (_gen1, None))
                                 while _st2 is not $DONE:
                                     if (_lr0 is not None or $head_list_unify_output(_lcap0, [_v1], _v2, [], trail)) and (_lr1 is not None or $head_list_unify_output(_lcap1, [_v1], _v3, [], trail)):
-                                        yield (_proceed, None)
+                                        yield (_proceed, $FINAL if _fin_it1 is $ONCE and _st2 is $FINAL else None)
                                     _st2 = (yield (_gen1, None))
                     except $GeneratorExit:
                         _mark_cl = True
@@ -118,12 +119,13 @@ def app__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail):
                     _lr0 = $head_list_unify_input(_lcap0, [_v1], _v2, [], trail)
                     _lr1 = $head_list_unify_input(_lcap1, [_v1], _v3, [], trail)
                     if _lr0 is not False and _lr1 is not False:
-                        for _ in $pending(trail):
+                        _fin_it2 = $pending(trail)
+                        for _ in _fin_it2:
                             _gen3 = $StepGenerator($dispatch_at(app, 3), this_generator, this_generator, this_generator, _v2, _v0, _v3, trail)
                             _st4 = (yield (_gen3, None))
                             while _st4 is not $DONE:
                                 if (_lr0 is not None or $head_list_unify_output(_lcap0, [_v1], _v2, [], trail)) and (_lr1 is not None or $head_list_unify_output(_lcap1, [_v1], _v3, [], trail)):
-                                    yield (_proceed, None)
+                                    yield (_proceed, $FINAL if _fin_it2 is $ONCE and _st4 is $FINAL else None)
                                 _st4 = (yield (_gen3, None))
                 except $GeneratorExit:
                     _mark_cl = True
@@ -159,12 +161,13 @@ def app__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail):
                     _lr0 = $head_list_unify_input(_lcap0, [_v1], _v2, [], trail)
                     _lr1 = $head_list_unify_input(_lcap1, [_v1], _v3, [], trail)
                     if _lr0 is not False and _lr1 is not False:
-                        for _ in $pending(trail):
+                        _fin_it3 = $pending(trail)
+                        for _ in _fin_it3:
                             _gen5 = $StepGenerator($dispatch_at(app, 3), this_generator, this_generator, this_generator, _v2, _v0, _v3, trail)
                             _st6 = (yield (_gen5, None))
                             while _st6 is not $DONE:
                                 if (_lr0 is not None or $head_list_unify_output(_lcap0, [_v1], _v2, [], trail)) and (_lr1 is not None or $head_list_unify_output(_lcap1, [_v1], _v3, [], trail)):
-                                    yield (_proceed, None)
+                                    yield (_proceed, $FINAL if _fin_it3 is $ONCE and _st6 is $FINAL else None)
                                 _st6 = (yield (_gen5, None))
                 except $GeneratorExit:
                     _mark_cl = True
@@ -189,7 +192,7 @@ def nrev__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                         _lr1 = $head_list_unify_input(_lcap1, [], None, [], trail)
                         if _lr0 is not False and _lr1 is not False:
                             if (_lr0 is not None or $head_list_unify_output(_lcap0, [], None, [], trail)) and (_lr1 is not None or $head_list_unify_output(_lcap1, [], None, [], trail)):
-                                yield (_proceed, None)
+                                yield (_proceed, $FINAL)
                     except $GeneratorExit:
                         _mark_cl = True
                         raise
@@ -206,7 +209,8 @@ def nrev__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                         _v6 = $Var()
                         _lr0 = $head_list_unify_input(_lcap0, [_v5], _v6, [], trail)
                         if _lr0 is not False:
-                            for _ in $pending(trail):
+                            _fin_it1 = $pending(trail)
+                            for _ in _fin_it1:
                                 _v7 = $Var()
                                 _gen3 = $StepGenerator($dispatch_at(nrev, 2), this_generator, this_generator, this_generator, _v6, _v7, trail)
                                 _st4 = (yield (_gen3, None))
@@ -215,7 +219,7 @@ def nrev__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                                     _st2 = (yield (_gen1, None))
                                     while _st2 is not $DONE:
                                         if _lr0 is not None or $head_list_unify_output(_lcap0, [_v5], _v6, [], trail):
-                                            yield (_proceed, None)
+                                            yield (_proceed, $FINAL if _fin_it1 is $ONCE and _st4 is $FINAL and (_st2 is $FINAL) else None)
                                         _st2 = (yield (_gen1, None))
                                     _st4 = (yield (_gen3, None))
                     except $GeneratorExit:
@@ -250,7 +254,8 @@ def nrev__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                     _v6 = $Var()
                     _lr0 = $head_list_unify_input(_lcap0, [_v5], _v6, [], trail)
                     if _lr0 is not False:
-                        for _ in $pending(trail):
+                        _fin_it2 = $pending(trail)
+                        for _ in _fin_it2:
                             _v7 = $Var()
                             _gen7 = $StepGenerator($dispatch_at(nrev, 2), this_generator, this_generator, this_generator, _v6, _v7, trail)
                             _st8 = (yield (_gen7, None))
@@ -259,7 +264,7 @@ def nrev__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                                 _st6 = (yield (_gen5, None))
                                 while _st6 is not $DONE:
                                     if _lr0 is not None or $head_list_unify_output(_lcap0, [_v5], _v6, [], trail):
-                                        yield (_proceed, None)
+                                        yield (_proceed, $FINAL if _fin_it2 is $ONCE and _st8 is $FINAL and (_st6 is $FINAL) else None)
                                     _st6 = (yield (_gen5, None))
                                 _st8 = (yield (_gen7, None))
                 except $GeneratorExit:
@@ -294,7 +299,8 @@ def nrev__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                     _v6 = $Var()
                     _lr0 = $head_list_unify_input(_lcap0, [_v5], _v6, [], trail)
                     if _lr0 is not False:
-                        for _ in $pending(trail):
+                        _fin_it3 = $pending(trail)
+                        for _ in _fin_it3:
                             _v7 = $Var()
                             _gen11 = $StepGenerator($dispatch_at(nrev, 2), this_generator, this_generator, this_generator, _v6, _v7, trail)
                             _st12 = (yield (_gen11, None))
@@ -303,7 +309,7 @@ def nrev__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                                 _st10 = (yield (_gen9, None))
                                 while _st10 is not $DONE:
                                     if _lr0 is not None or $head_list_unify_output(_lcap0, [_v5], _v6, [], trail):
-                                        yield (_proceed, None)
+                                        yield (_proceed, $FINAL if _fin_it3 is $ONCE and _st12 is $FINAL and (_st10 is $FINAL) else None)
                                     _st10 = (yield (_gen9, None))
                                 _st12 = (yield (_gen11, None))
                 except $GeneratorExit:
@@ -343,12 +349,13 @@ def mem__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _v12 = $Var()
                 _lr0 = $head_list_unify_input(_lcap0, [_v11], _v12, [], trail)
                 if _lr0 is not False:
-                    for _ in $pending(trail):
+                    _fin_it1 = $pending(trail)
+                    for _ in _fin_it1:
                         _gen1 = $StepGenerator($dispatch_at(mem, 2), this_generator, this_generator, this_generator, _v10, _v12, trail)
                         _st2 = (yield (_gen1, None))
                         while _st2 is not $DONE:
                             if _lr0 is not None or $head_list_unify_output(_lcap0, [_v11], _v12, [], trail):
-                                yield (_proceed, None)
+                                yield (_proceed, $FINAL if _fin_it1 is $ONCE and _st2 is $FINAL else None)
                             _st2 = (yield (_gen1, None))
             except $GeneratorExit:
                 _mark_cl = True
@@ -372,7 +379,7 @@ def z__0(this_generator, _proceed, _fail, _catcher, trail):
                 yield None
             _m2 = trail.mark()
             for _ in _once_gen1():
-                yield (_proceed, None)
+                yield (_proceed, $FINAL)
                 break
             trail.undo(_m2)
     yield (_fail, $DONE)
@@ -406,7 +413,7 @@ def w__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                 $charge_conditions(trail, _fa_cl3, _fa_cond2)
                 _fa_um6 = trail.mark()
                 if $unify(_fa_bag7, _fa_results1, trail):
-                    yield (_proceed, None)
+                    yield (_proceed, $FINAL)
                 trail.undo(_fa_um6)
             except $GeneratorExit:
                 _mark_cl = True
@@ -433,7 +440,7 @@ def k__0(this_generator, _proceed, _fail, _catcher, trail):
             _naf2 = not $naf_has_solution(_naf_sg3)
             trail.undo(_m8)
             if _naf2:
-                yield (_proceed, None)
+                yield (_proceed, $FINAL)
     yield (_fail, $DONE)
 
 ### col/2 trampoline #0
@@ -447,7 +454,7 @@ def col__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             try:
                 if $unify(_acap0, 'red', trail):
                     if _ncap1.__class__ is 1 .__class__ and _ncap1 == 1 or $unify(_ncap1, 1, trail):
-                        yield (_proceed, None)
+                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_0) else None)
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -461,7 +468,7 @@ def col__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             try:
                 if $unify(_acap0, 'green', trail):
                     if _ncap1.__class__ is 2 .__class__ and _ncap1 == 2 or $unify(_ncap1, 2, trail):
-                        yield (_proceed, None)
+                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_1) else None)
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -475,7 +482,7 @@ def col__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             try:
                 if $unify(_acap0, 'blue', trail):
                     if _ncap1.__class__ is 3 .__class__ and _ncap1 == 3 or $unify(_ncap1, 3, trail):
-                        yield (_proceed, None)
+                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_2) else None)
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -489,7 +496,7 @@ def col__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             try:
                 if $unify(_acap0, 'red', trail):
                     if _ncap1.__class__ is 4 .__class__ and _ncap1 == 4 or $unify(_ncap1, 4, trail):
-                        yield (_proceed, None)
+                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_3) else None)
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -503,7 +510,7 @@ def col__all__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             try:
                 if $unify(_acap0, 'black', trail):
                     if _ncap1.__class__ is 5 .__class__ and _ncap1 == 5 or $unify(_ncap1, 5, trail):
-                        yield (_proceed, None)
+                        yield (_proceed, $FINAL)
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -519,7 +526,7 @@ def col__p1_b0__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
         case [_acap0, _ncap1]:
             if $unify(_acap0, 'red', trail):
                 if _ncap1.__class__ is 1 .__class__ and _ncap1 == 1 or $unify(_ncap1, 1, trail):
-                    yield (_proceed, None)
+                    yield (_proceed, $FINAL)
 
 ### col/2 trampoline #2
 def col__p1_b1__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
@@ -529,7 +536,7 @@ def col__p1_b1__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
         case [_acap0, _ncap1]:
             if $unify(_acap0, 'green', trail):
                 if _ncap1.__class__ is 2 .__class__ and _ncap1 == 2 or $unify(_ncap1, 2, trail):
-                    yield (_proceed, None)
+                    yield (_proceed, $FINAL)
 
 ### col/2 trampoline #3
 def col__p1_b2__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
@@ -539,7 +546,7 @@ def col__p1_b2__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
         case [_acap0, _ncap1]:
             if $unify(_acap0, 'blue', trail):
                 if _ncap1.__class__ is 3 .__class__ and _ncap1 == 3 or $unify(_ncap1, 3, trail):
-                    yield (_proceed, None)
+                    yield (_proceed, $FINAL)
 
 ### col/2 trampoline #4
 def col__p1_b3__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
@@ -549,7 +556,7 @@ def col__p1_b3__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
         case [_acap0, _ncap1]:
             if $unify(_acap0, 'red', trail):
                 if _ncap1.__class__ is 4 .__class__ and _ncap1 == 4 or $unify(_ncap1, 4, trail):
-                    yield (_proceed, None)
+                    yield (_proceed, $FINAL)
 
 ### col/2 trampoline #5
 def col__p1_b4__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
@@ -559,7 +566,7 @@ def col__p1_b4__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
         case [_acap0, _ncap1]:
             if $unify(_acap0, 'black', trail):
                 if _ncap1.__class__ is 5 .__class__ and _ncap1 == 5 or $unify(_ncap1, 5, trail):
-                    yield (_proceed, None)
+                    yield (_proceed, $FINAL)
 
 ### col/2 trampoline #6
 def col__p1_dflt__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
@@ -577,7 +584,7 @@ def col__p0_b0__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             try:
                 if $unify(_acap0, 'red', trail):
                     if _ncap1.__class__ is 1 .__class__ and _ncap1 == 1 or $unify(_ncap1, 1, trail):
-                        yield (_proceed, None)
+                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_4) else None)
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -591,7 +598,7 @@ def col__p0_b0__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             try:
                 if $unify(_acap0, 'red', trail):
                     if _ncap1.__class__ is 4 .__class__ and _ncap1 == 4 or $unify(_ncap1, 4, trail):
-                        yield (_proceed, None)
+                        yield (_proceed, $FINAL)
             except $GeneratorExit:
                 _mark_cl = True
                 raise
@@ -607,7 +614,7 @@ def col__p0_b1__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
         case [_acap0, _ncap1]:
             if $unify(_acap0, 'green', trail):
                 if _ncap1.__class__ is 2 .__class__ and _ncap1 == 2 or $unify(_ncap1, 2, trail):
-                    yield (_proceed, None)
+                    yield (_proceed, $FINAL)
 
 ### col/2 trampoline #9
 def col__p0_b2__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
@@ -617,7 +624,7 @@ def col__p0_b2__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
         case [_acap0, _ncap1]:
             if $unify(_acap0, 'blue', trail):
                 if _ncap1.__class__ is 3 .__class__ and _ncap1 == 3 or $unify(_ncap1, 3, trail):
-                    yield (_proceed, None)
+                    yield (_proceed, $FINAL)
 
 ### col/2 trampoline #10
 def col__p0_b3__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
@@ -627,7 +634,7 @@ def col__p0_b3__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
         case [_acap0, _ncap1]:
             if $unify(_acap0, 'black', trail):
                 if _ncap1.__class__ is 5 .__class__ and _ncap1 == 5 or $unify(_ncap1, 5, trail):
-                    yield (_proceed, None)
+                    yield (_proceed, $FINAL)
 
 ### col/2 trampoline #11
 def col__p0_dflt__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
@@ -784,7 +791,10 @@ def d__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
                 trail.undo(_m4)
                 trail.undo(_m3)
                 _m5 = trail.mark()
-                for _ in $unify_iter(_v22, 2, trail):
+                _fin_it1 = $unify_iter(_v22, 2, trail)
+                for _ in _fin_it1:
+                    if _fin_it1 is $ONCE:
+                        this_generator.tail_final = True
                     _gen1 = $StepGenerator($dispatch_at(p, 1), _proceed, this_generator, this_generator, _v22, trail)
                     _st2 = (yield (_gen1, None))
                     while _st2 is not $DONE:
@@ -809,6 +819,7 @@ def zo__0(this_generator, _proceed, _fail, _catcher, trail):
             while _st3 is not $DONE:
                 _st3 = (yield (_gen2, None))
             trail.undo(_m1)
+            this_generator.tail_final = True
             _gen4 = $StepGenerator($dispatch_at(p, 1), _proceed, this_generator, this_generator, 2, trail)
             _st5 = (yield (_gen4, None))
             while _st5 is not $DONE:

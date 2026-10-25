@@ -8,10 +8,12 @@ def edge__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             _mark_cl = False
             try:
                 _m0 = trail.mark()
-                for _ in $unify_iter(_v0, 1, trail):
+                _fin_it1 = $unify_iter(_v0, 1, trail)
+                for _ in _fin_it1:
                     _m1 = trail.mark()
-                    for _ in $unify_iter(_v1, 2, trail):
-                        yield (_proceed, None)
+                    _fin_it2 = $unify_iter(_v1, 2, trail)
+                    for _ in _fin_it2:
+                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_0) and _fin_it1 is $ONCE and (_fin_it2 is $ONCE) else None)
                     trail.undo(_m1)
                 trail.undo(_m0)
             except $GeneratorExit:
@@ -26,10 +28,12 @@ def edge__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             _mark_cl = False
             try:
                 _m2 = trail.mark()
-                for _ in $unify_iter(_v2, 2, trail):
+                _fin_it3 = $unify_iter(_v2, 2, trail)
+                for _ in _fin_it3:
                     _m3 = trail.mark()
-                    for _ in $unify_iter(_v3, 3, trail):
-                        yield (_proceed, None)
+                    _fin_it4 = $unify_iter(_v3, 3, trail)
+                    for _ in _fin_it4:
+                        yield (_proceed, $FINAL if $first_arg_excludes(_d0, arg0, $final_keys_1) and _fin_it3 is $ONCE and (_fin_it4 is $ONCE) else None)
                     trail.undo(_m3)
                 trail.undo(_m2)
             except $GeneratorExit:
@@ -44,10 +48,12 @@ def edge__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
             _mark_cl = False
             try:
                 _m4 = trail.mark()
-                for _ in $unify_iter(_v4, 1, trail):
+                _fin_it5 = $unify_iter(_v4, 1, trail)
+                for _ in _fin_it5:
                     _m5 = trail.mark()
-                    for _ in $unify_iter(_v5, 3, trail):
-                        yield (_proceed, None)
+                    _fin_it6 = $unify_iter(_v5, 3, trail)
+                    for _ in _fin_it6:
+                        yield (_proceed, $FINAL if _fin_it5 is $ONCE and _fin_it6 is $ONCE else None)
                     trail.undo(_m5)
                 trail.undo(_m4)
             except $GeneratorExit:
@@ -87,6 +93,8 @@ def reach__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                 _gen1 = $StepGenerator($dispatch_at(edge, 2), this_generator, this_generator, this_generator, _v8, _v10, trail)
                 _st1 = (yield (_gen1, None))
                 while _st1 is not $DONE:
+                    if _st1 is $FINAL:
+                        this_generator.tail_final = True
                     _gen2 = $StepGenerator($dispatch_at(reach, 2), _proceed, this_generator, this_generator, _v10, _v9, trail)
                     _st2 = (yield (_gen2, None))
                     while _st2 is not $DONE:
@@ -178,7 +186,10 @@ def test__1(this_generator, _proceed, _fail, _catcher, arg0, trail):
             _mark_cl = False
             try:
                 if _scap0 == ('$chars', 'reach 2 3') or $unify(_scap0, ('$chars', 'reach 2 3'), trail):
-                    for _ in $pending(trail):
+                    _fin_it1 = $pending(trail)
+                    for _ in _fin_it1:
+                        if _fin_it1 is $ONCE:
+                            this_generator.tail_final = True
                         _gen6 = $StepGenerator($dispatch_at(reach, 2), _proceed, this_generator, this_generator, 2, 3, trail)
                         _st6 = (yield (_gen6, None))
                         while _st6 is not $DONE:
