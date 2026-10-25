@@ -99,8 +99,6 @@ def reach__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                     _st2 = (yield (_gen2, None))
                     while _st2 is not $DONE:
                         _st2 = (yield (_gen2, None))
-                    if _st1 is $FINAL:
-                        break
                     _st1 = (yield (_gen1, None))
             except $GeneratorExit:
                 _mark_cl = True

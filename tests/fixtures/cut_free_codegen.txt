@@ -84,8 +84,6 @@ def app__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail):
                                 while _st2 is not $DONE:
                                     if (_lr0 is not None or $head_list_unify_output(_lcap0, [_v1], _v2, [], trail)) and (_lr1 is not None or $head_list_unify_output(_lcap1, [_v1], _v3, [], trail)):
                                         yield (_proceed, $FINAL if _fin_it1 is $ONCE and _st2 is $FINAL else None)
-                                    if _st2 is $FINAL:
-                                        break
                                     _st2 = (yield (_gen1, None))
                     except $GeneratorExit:
                         _mark_cl = True
@@ -128,8 +126,6 @@ def app__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail):
                             while _st4 is not $DONE:
                                 if (_lr0 is not None or $head_list_unify_output(_lcap0, [_v1], _v2, [], trail)) and (_lr1 is not None or $head_list_unify_output(_lcap1, [_v1], _v3, [], trail)):
                                     yield (_proceed, $FINAL if _fin_it2 is $ONCE and _st4 is $FINAL else None)
-                                if _st4 is $FINAL:
-                                    break
                                 _st4 = (yield (_gen3, None))
                 except $GeneratorExit:
                     _mark_cl = True
@@ -172,8 +168,6 @@ def app__3(this_generator, _proceed, _fail, _catcher, arg0, arg1, arg2, trail):
                             while _st6 is not $DONE:
                                 if (_lr0 is not None or $head_list_unify_output(_lcap0, [_v1], _v2, [], trail)) and (_lr1 is not None or $head_list_unify_output(_lcap1, [_v1], _v3, [], trail)):
                                     yield (_proceed, $FINAL if _fin_it3 is $ONCE and _st6 is $FINAL else None)
-                                if _st6 is $FINAL:
-                                    break
                                 _st6 = (yield (_gen5, None))
                 except $GeneratorExit:
                     _mark_cl = True
@@ -226,11 +220,7 @@ def nrev__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                                     while _st2 is not $DONE:
                                         if _lr0 is not None or $head_list_unify_output(_lcap0, [_v5], _v6, [], trail):
                                             yield (_proceed, $FINAL if _fin_it1 is $ONCE and _st4 is $FINAL and (_st2 is $FINAL) else None)
-                                        if _st2 is $FINAL:
-                                            break
                                         _st2 = (yield (_gen1, None))
-                                    if _st4 is $FINAL:
-                                        break
                                     _st4 = (yield (_gen3, None))
                     except $GeneratorExit:
                         _mark_cl = True
@@ -275,11 +265,7 @@ def nrev__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                                 while _st6 is not $DONE:
                                     if _lr0 is not None or $head_list_unify_output(_lcap0, [_v5], _v6, [], trail):
                                         yield (_proceed, $FINAL if _fin_it2 is $ONCE and _st8 is $FINAL and (_st6 is $FINAL) else None)
-                                    if _st6 is $FINAL:
-                                        break
                                     _st6 = (yield (_gen5, None))
-                                if _st8 is $FINAL:
-                                    break
                                 _st8 = (yield (_gen7, None))
                 except $GeneratorExit:
                     _mark_cl = True
@@ -324,11 +310,7 @@ def nrev__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                                 while _st10 is not $DONE:
                                     if _lr0 is not None or $head_list_unify_output(_lcap0, [_v5], _v6, [], trail):
                                         yield (_proceed, $FINAL if _fin_it3 is $ONCE and _st12 is $FINAL and (_st10 is $FINAL) else None)
-                                    if _st10 is $FINAL:
-                                        break
                                     _st10 = (yield (_gen9, None))
-                                if _st12 is $FINAL:
-                                    break
                                 _st12 = (yield (_gen11, None))
                 except $GeneratorExit:
                     _mark_cl = True
@@ -374,8 +356,6 @@ def mem__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                         while _st2 is not $DONE:
                             if _lr0 is not None or $head_list_unify_output(_lcap0, [_v11], _v12, [], trail):
                                 yield (_proceed, $FINAL if _fin_it1 is $ONCE and _st2 is $FINAL else None)
-                            if _st2 is $FINAL:
-                                break
                             _st2 = (yield (_gen1, None))
             except $GeneratorExit:
                 _mark_cl = True

@@ -466,15 +466,14 @@ signal (`solve_with_last` / `call_with_last`: "this answer is the last"):
 - The root drivers (`solve._drive_trampoline`, `_tramp_call`) report
   retirement and undo a retired root's bindings themselves.
 
-- The hop saving: a compiled loop over a direct child's answers ends with
-  `if _st is $FINAL: break` before its re-pull -- only inside a clause arm
-  whose `finally` undoes the arm's mark, never in a catch/3 try body or an
-  arm without a mark (a single-clause index bucket), since the abandoned
-  child never undoes its own bindings.  The drivers (`solve`, `call`,
-  `_tramp_call`) undo to their mark whenever a search ends.  Measured, the
-  saved pull is about what the bookkeeping costs (q_bench +1-3% with
-  FINAL on, with or without the break).  Tail-call loops cannot take
-  it: the callee's FINAL does not come back through them.
+- The hop saving is taken only by the root drivers.  A compiled frame
+  that broke out of its loop over a child after the child's FINAL answer
+  (tried 2026-10-24, then removed) left the child suspended: generator
+  frame and StepGenerator refer to each other, so it became cyclic garbage
+  (q_bench ~8% slower over a few repetitions from the extra collections),
+  and its bindings had to be undone by the frame or driver around it.  The
+  drivers (`solve`, `call`, `_tramp_call`) undo to their mark whenever a
+  search ends.
 
 Open coverage gaps are in
 `todo/final-answer-not-known-through-catch-ite-else-and-cleanup-2026-10-24.md`.

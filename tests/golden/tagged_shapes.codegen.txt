@@ -38,8 +38,6 @@ def depth__2(this_generator, _proceed, _fail, _catcher, arg0, arg1, trail):
                     while _st0 is not $DONE:
                         if $fd_eq(_v3, $Add(left=_v6, right=1), trail):
                             yield (_proceed, $FINAL if _fin_it3 is $ONCE and _st0 is $FINAL else None)
-                        if _st0 is $FINAL:
-                            break
                         _st0 = (yield (_gen0, None))
                 trail.undo(_m2)
             except $GeneratorExit:
