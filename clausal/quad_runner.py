@@ -405,7 +405,7 @@ def run_quad(module, quad: Quad, timeout: float = 10.0) -> Result:
     try:
         if timed:
             old = signal.signal(signal.SIGALRM, alarm)
-            signal.setitimer(signal.ITIMER_REAL, timeout)
+            signal.setitimer(signal.ITIMER_REAL, timeout, 0.25)
         actual = _Actual(module, quad)
         skipped = ""
         for alts in descriptions:           # every description must hold
