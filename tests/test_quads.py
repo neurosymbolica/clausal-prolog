@@ -185,7 +185,7 @@ def test_quads_takes_no_goal(tmp_path):
     assert r.returncode == 2
 
 
-# ── review fixes (engine-lane, 2026-10-24) ───────────────────────────────
+# ── review fixes (2026-10-24) ──────────────────────────────────────────
 
 
 def _g(tmp_path, source, *goals, name="g.pl"):
