@@ -228,12 +228,40 @@ def _has_residual(shown) -> bool:
 # ── comparing ─────────────────────────────────────────────────────────────
 
 
+def _normalise(t, depth=0):
+    """*t* with each partial list, however spelled (the engine's ``SegList``,
+    or the ``[a, *Tail]`` the reader lowers ``[a|Tail]`` to), as the same
+    ``('$partial', Element..., ('$hole', Var))``, so two terms compare as
+    text."""
+    from clausal.pythonic_ast.nodes import StarUnpack  # noqa: PLC0415
+    from clausal.terms import SegList, VarSeg  # noqa: PLC0415
+    if depth > 200:
+        return t
+    if isinstance(t, SegList):
+        parts = []
+        for seg in t.segments:
+            if isinstance(seg, VarSeg):
+                parts.append(("$hole", seg.var))
+            else:
+                parts.extend(_normalise(e, depth + 1) for e in seg.elements)
+        return ("$partial", *parts)
+    if type(t) is list:
+        if any(isinstance(x, StarUnpack) for x in t):
+            return ("$partial", *[
+                ("$hole", x.value) if isinstance(x, StarUnpack)
+                else _normalise(x, depth + 1) for x in t])
+        return [_normalise(x, depth + 1) for x in t]
+    if type(t) is tuple and t and t[0] != "$chars":
+        return (t[0], *(_normalise(x, depth + 1) for x in t[1:]))
+    return t
+
+
 def _canon(values: list) -> str:
     """*values* written with their variables named by first occurrence, so
     two terms are variants exactly when their texts are equal."""
     from clausal import cli  # noqa: PLC0415
     from clausal.terms import term_writeq  # noqa: PLC0415
-    tup = ("v", 0, *values)
+    tup = ("v", 0, *(_normalise(v) for v in values))
     free: dict = {}
     cli._term_vars(tup, free)
     names = {k: f"_V{n}" for n, k in enumerate(free)}

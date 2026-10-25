@@ -110,6 +110,9 @@ PASSING = [
     # the bar is an operator once library(dcgs) is loaded, as in Scryer
     ("alternatives", ":- use_module(library(dcgs)).\n?- atom_length(1, N).\n   false | type_error(atom, 1).\n"),
     ("a labelled quad", "ok ?- p(1).\n   true.\n"),
+    ("a partial list", "?- append([a], T, L).\n   L = [a|T].\n"),
+    ("a partial list with a fresh tail", "?- X = [a|_].\n   X = [a|_A].\n"),
+    ("a partial list, two heads", "?- X = [a,b|T].\n   X = [a,b|T].\n"),
     ("an answer then an error", "?- p(X), atom_length(X, N).\n   type_error(atom, 1).\n"),
 ]
 
@@ -133,6 +136,12 @@ FAILING = [
     ("too few answers", "?- p(X).\n   X = 1\n;  X = 2\n;  X = 3.\n", "an answer"),
     ("outside the approximation", "?- X is 2/3.0.\n   X ~~ '0.8'.\n", "is not ~~"),
 ]
+
+
+def test_a_fresh_variable_is_not_the_querys_variable(tmp_path):
+    # as in Trealla: T is a variable of the query, so `_A` does not name it
+    r = _run(tmp_path, "?- X = [a,b|T].\n   X = [a,b|_A].\n")
+    assert r.returncode == 1 and "the bindings differ" in r.stdout
 
 
 @pytest.mark.parametrize("name, body, why", FAILING, ids=[n for n, _, _ in FAILING])
