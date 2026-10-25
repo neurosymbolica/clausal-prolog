@@ -36,3 +36,10 @@ Scryer loads the clauses and prints nothing for the query.
 ## Expected
 
 Native's message should show the goal as the user wrote it (`?- p(X)`) and say what to do, as the translator's does: a query in program text is not run on load; remove it, or write the goal as a `test/1` clause. Whether to keep refusing, rather than load the clauses and ignore the query as Scryer does, is a separate question for a ruling.
+
+
+**Status: FIXED 2026-10-24 (the quads commit).** The native front end no longer
+refuses a `?-` query: it skips it and the answer descriptions after it as a
+quad (Neumerkel; Trealla #1063), so there is no message left to word. Pinned
+by `tests/iso_l3/test_l3_s2_directives.py::test_a_query_is_a_quad_not_a_refusal`
+and `tests/test_quads.py`. The translator front end still refuses, as before.

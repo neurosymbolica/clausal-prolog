@@ -16,7 +16,7 @@ functor a file uses (slice 3), and DCG grammar rules (translated to their
 ISO 7.14 clause, then lowered as one: ``translate_dcg_rule``).  clpz's
 predicates need nothing here: they are engine builtins under Scryer's names
 (``clausal.logic.builtins.clpz_names``).  Whatever is outside that scope
--- an unknown directive, ``initialization/1``, a query, a reader
+-- an unknown directive, ``initialization/1``, a reader
 ``SyntaxIssue``, a grammar body Scryer refuses (``\\+``), and by design
 ``!``, ``->`` and ``*->`` (in a clause or a grammar body) -- is REFUSED,
 never half-handled, so a gap is a loud import error and not a silently
@@ -1553,6 +1553,23 @@ def lower_arg(t: Any, span=None) -> ast.expr:
 from clausal.tools.quads import is_answer_description, is_labelled_query  # noqa: E402
 
 
+def _warn_if_directive(item, where_text: str) -> None:
+    """A skipped query that is a directive's goal (``?- dynamic(f/1).``):
+    DEC-10 Prolog ran those, this loader does not."""
+    from clausal.tools.quads import directive_lookalike  # noqa: PLC0415
+    term = item.term
+    if is_labelled_query(item):
+        term = term[2]
+    name = directive_lookalike(term)
+    if name:
+        import warnings  # noqa: PLC0415
+        from clausal.lint_warnings import ClausalLintWarning  # noqa: PLC0415
+        warnings.warn(
+            f"{where_text}?- {name}(...) is a query, skipped (a quad), not "
+            f"run as a directive; write `:- {name}(...)`.",
+            ClausalLintWarning, stacklevel=2)
+
+
 def _item_span(it):
     span = getattr(it, "span", None)
     if span is not None:
@@ -1592,7 +1609,7 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
     table) governs the items after it, as in Scryer.
 
     *strict* (the default) raises :class:`LoweringRefused` on the first item
-    it cannot lower -- an unknown or refused directive, a query, a refused
+    it cannot lower -- an unknown or refused directive, a refused
     control construct or grammar body, or a reader ``SyntaxIssue`` -- so a
     module never imports with a clause missing.  ``strict=False`` is the explicit counting
     mode for tooling that surveys many files: it skips and counts every
@@ -1661,6 +1678,7 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
             after_query = True
             stats["read"] -= 1
             stats["quads"] = stats.get("quads", 0) + 1
+            _warn_if_directive(it, where(span))
             continue
         if (after_query and kind == "Clause"
                 and is_answer_description(it.term)):
@@ -1701,8 +1719,7 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
                 continue
             kind = "Clause"
         if kind != "Clause":
-            refuse(f"{kind} is not lowered (a query `?-` is no clause): "
-                   f"{it.term!r}", span)
+            refuse(f"{kind} is not lowered: {it.term!r}", span)
             continue
         defined.add(_head_indicator(it.term))
         uses.reif = ctx.reif
@@ -1933,23 +1950,56 @@ def iter_iso(source: str, op_table=None):
     from clausal.tools.prolog_reader import EOF, NEED_MORE, PrologReader  # noqa: PLC0415
     from clausal.tools.prolog_tokenizer import PL_SOURCE_NESTED_COMMENTS  # noqa: PLC0415
     table = op_table if op_table is not None else reader_op_table()
-    # ``name ?- Query.``: a labelled quad (tools/quads.py) needs ?- infix.
-    table.define(1200, "xfx", "?-")
-    table.define(700, "xfx", "~~")      # ``X ~~ '14.2000'`` in a description
     reader = PrologReader(op_table=table,
                           nested_comments=PL_SOURCE_NESTED_COMMENTS)
     reader.feed(source)
     reader.close()
 
     def items():
+        in_quad = False         # the last item was a quad's query or description
         while True:
             it = reader.read_term()
             if it is EOF:
                 return
             if it is NEED_MORE:
                 raise RuntimeError("lexer returned NEED_MORE after close()")
+            if type(it).__name__ == "SyntaxIssue":
+                alt = _read_as_quad_text(source, it, table, in_quad)
+                if alt is not None:
+                    it = alt
+            kind = type(it).__name__
+            in_quad = (kind == "Query" or is_labelled_query(it)
+                       or (in_quad and kind == "Clause"
+                           and is_answer_description(it.term)))
             yield it
     return items(), table
+
+
+def _read_as_quad_text(source, issue, table, in_quad):
+    """A ``SyntaxIssue`` item re-read with the two operators of a quad
+    (infix ``?-`` for ``label ?- Query``, ``~~`` for ``X ~~ '14.2000'``),
+    which stay out of the program's own table: the item it gives if it is a
+    labelled query, or an answer description right after a quad's query;
+    else None (the issue stands)."""
+    import copy  # noqa: PLC0415
+    from clausal.tools.prolog_reader import PrologReader  # noqa: PLC0415
+    from clausal.tools.prolog_tokenizer import PL_SOURCE_NESTED_COMMENTS  # noqa: PLC0415
+    if not issue.resumable or not issue.span or "?-" not in source and not in_quad:
+        return None
+    start, end = issue.span
+    extra = copy.deepcopy(table)
+    extra.define(1200, "xfx", "?-")
+    extra.define(700, "xfx", "~~")
+    reader = PrologReader(op_table=extra,
+                          nested_comments=PL_SOURCE_NESTED_COMMENTS)
+    reader.feed(" " * start + source[start:end] + "\n")   # offsets stay aligned
+    reader.close()
+    item = reader.read_term()
+    if type(item).__name__ != "Clause":
+        return None
+    if is_labelled_query(item) or (in_quad and is_answer_description(item.term)):
+        return item
+    return None
 
 
 def lower_source(source: str, filename: "str | None" = None, *,

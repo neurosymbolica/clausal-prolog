@@ -255,13 +255,28 @@ def test_refused_directives_name_their_line(native, text, fragment):
     assert err.lineno == 3 and fragment in str(err), str(err)
 
 
-def test_a_query_is_a_quad_not_a_refusal(native):
+def test_a_query_is_a_quad_not_a_refusal(native, ans):
     # ``?- a.`` and the answer descriptions after it are documentation
     # (tools/quads.py); the file loads and defines only its own clauses.
     mod = native.load("s2_quad", "a.\n\n?- a.\n   true.\n\n"
                                  "?- b(X).\n   X = 1\n;  X = 2.\n"
                                  "b(1).\n")
-    assert mod is not None
+    assert ans(mod, "b") == [1]             # exactly b(1): no description clause
+    assert mod.__loader__.l3_stats["quads"] == 2
+
+
+@pytest.mark.parametrize("hazard", [
+    # a description-shaped fact right after a query is skipped with it
+    "a.\n?- a.\nloops.\n",
+    # a residual description is no clause: dif/2 stays the library's
+    "a.\n?- dif(X, a).\n   dif(X, a).\n",
+])
+def test_quad_skip_boundary(native, hazard):
+    mod = native.load("s2_quad_hazard", hazard)
+    assert mod.__loader__.l3_stats["quads"] == 1
+    from clausal import has_predicate
+    assert not has_predicate(mod, "loops", 0)
+    assert not has_predicate(mod, "dif", 2)
 
 
 # ── dynamic, discontiguous, table, meta_predicate ──

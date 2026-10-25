@@ -100,7 +100,7 @@ PASSING = [
     ("true", "?- p(1).\n   true.\n"),
     ("instantiation_error", "?- between(I, I, 0).\n   instantiation_error.\n"),
     ("type_error", "?- atom_length(1, N).\n   type_error(atom, 1).\n"),
-    ("error/2 with a wildcard", "?- atom_length(1, N).\n   error(type_error(_, _), _).\n"),
+    ("error/2 with a wildcard", "?- atom_length(1, N).\n   error(type_error(atom, 1), _).\n"),
     ("throw/1", "?- throw(oops).\n   throw(oops).\n"),
     ("infinite", "?- length(L, N).\n   L = [], N = 0\n;  L = [_A], N = 1\n;  ..., ad_infinitum.\n"),
     ("a variant with sharing", "?- q(A, B).\n   A = f(_X, B, _X).\n"),
@@ -153,7 +153,7 @@ def test_a_residual_constraint_needs_maybe(tmp_path):
 
 
 @pytest.mark.parametrize("annotation", ["loops", "other_answer_sequence",
-                                        "outputs(foo)", "unexpected"])
+                                        "waits", "inputs(foo)"])
 def test_unchecked_annotations_skip(tmp_path, annotation):
     r = _run(tmp_path, f"?- p(X).\n   X = 1, {annotation}.\n")
     assert r.returncode == 0, r.stdout
@@ -183,3 +183,119 @@ def test_a_query_that_never_answers_times_out(tmp_path):
 def test_quads_takes_no_goal(tmp_path):
     r = _run(tmp_path, "", "-g", "true")
     assert r.returncode == 2
+
+
+# ── review fixes (engine-lane, 2026-10-24) ───────────────────────────────
+
+
+def _g(tmp_path, source, *goals, name="g.pl"):
+    (tmp_path / name).write_text(source)
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
+    argv = [sys.executable, "-m", "clausal", name]
+    for g in goals:
+        argv += ["-g", g]
+    return subprocess.run(argv, cwd=tmp_path, env=env, capture_output=True,
+                          text=True, timeout=120)
+
+
+@pytest.mark.parametrize("description", [
+    "dif(X, a).", "freeze(X, true).", "X = 1 ; dif(X, a).",
+])
+def test_a_residual_description_is_not_loaded_as_a_clause(tmp_path, description):
+    # dif/2 must stay the library's: the description after the query is
+    # skipped, not defined as a fact that would shadow it
+    r = _g(tmp_path, "p(1).\n?- dif(X, a).\n   " + description + "\n",
+           "dif(1, 1)", "dif(1, 2)")
+    assert r.returncode == 1 and r.stdout == "false.\n", (r.stdout, r.stderr)
+
+
+def test_a_clpz_description_is_not_loaded_as_a_clause(tmp_path):
+    src = ("p(1).\n:- use_module(library(clpz)).\n?- X in 4..5.\n"
+           "   X in 4..5.\n")
+    r = _g(tmp_path, src, "3 in 4..5")
+    assert (r.returncode, r.stdout) == (1, "false.\n"), (r.stdout, r.stderr)
+
+
+def test_the_quad_operators_do_not_leak_into_the_program(tmp_path):
+    # the user's own op/3 for ~~ and ?- loads, and in a file with no quad
+    # ``a ~~ b`` is a syntax error without that op, as in Scryer
+    ok = _g(tmp_path, ":- op(100, xf, ~~).\n:- op(100, xf, ?-).\np(1).\n",
+            "p(X)")
+    assert (ok.returncode, ok.stdout) == (0, "X = 1.\n"), ok.stderr
+    bad = _g(tmp_path, "p(X) :- X = (a ~~ b).\n", "true")
+    assert bad.returncode != 0
+    bad = _g(tmp_path, "f(x) ?- p(1).\n", "true")
+    assert bad.returncode != 0
+
+
+def test_infix_query_operators_work_after_a_quad(tmp_path):
+    r = _g(tmp_path, "p(1).\nlab ?- p(1).\n   true.\n"
+                     "?- X is 2/3.0.\n   X ~~ '0.6667'.\n", "p(X)")
+    assert (r.returncode, r.stdout) == (0, "X = 1.\n"), r.stderr
+
+
+def test_a_skipped_directive_lookalike_warns(tmp_path):
+    r = _g(tmp_path, "?- dynamic(foo/1).\np(1).\n", "p(X)")
+    assert r.returncode == 0
+    assert "skipped" in r.stderr and "dynamic" in r.stderr, r.stderr
+
+
+def test_a_description_shaped_fact_after_a_query_is_skipped(tmp_path):
+    # the documented boundary: right after a query, these are descriptions
+    r = _g(tmp_path, "p(1).\n?- p(1).\nloops.\nerror(a, b).\nq(2).\n",
+           "q(X)", "loops")
+    assert r.stdout.startswith("X = 2."), r.stdout
+    assert "existence_error" in r.stdout or "false" in r.stdout or r.returncode
+
+
+def test_a_description_binding_a_variable_not_in_the_query_fails(tmp_path):
+    r = _run(tmp_path, "?- true.\n   Y = 1.\n")
+    assert r.returncode == 1 and "no variable of the query" in r.stdout
+
+
+def test_maybe_needs_something_pending(tmp_path):
+    r = _run(tmp_path, "?- X = 1.\n   X = 1, maybe.\n")
+    assert r.returncode == 1 and "nothing is pending" in r.stdout
+
+
+def test_all_descriptions_of_a_quad_must_hold(tmp_path):
+    ok = _run(tmp_path, "?- p(X).\n   X = 1\n;  X = 2.\n   X = 1\n;  ... .\n")
+    assert ok.returncode == 0, ok.stdout
+    bad = _run(tmp_path, "?- p(X).\n   X = 1\n;  X = 2.\n   X = 2\n;  ... .\n")
+    assert bad.returncode == 1
+
+
+def test_unexpected_marks_an_answer_that_must_not_occur(tmp_path):
+    ok = _run(tmp_path, "?- X = 1.\n   X = 2, unexpected.\n")
+    assert ok.returncode == 0, ok.stdout
+    bad = _run(tmp_path, "?- X = 1.\n   X = 1, unexpected.\n")
+    assert bad.returncode == 1 and "unexpected" in bad.stdout
+
+
+def test_outputs_matches_what_the_query_wrote(tmp_path):
+    ok = _run(tmp_path, '?- write(abc), nl.\n   outputs("abc\\n"), true.\n')
+    assert ok.returncode == 0, ok.stdout
+    bad = _run(tmp_path, '?- write(abc).\n   outputs("xyz"), true.\n')
+    assert bad.returncode == 1 and "wrote" in bad.stdout
+
+
+def test_dots_in_a_binding_is_any_subterm(tmp_path):
+    ok = _run(tmp_path, "?- X = f(1, 2).\n   X = f(..., 2).\n")
+    assert ok.returncode == 0, ok.stdout
+    bad = _run(tmp_path, "?- X = g(1).\n   X = f(..., 2).\n")
+    assert bad.returncode == 1
+
+
+def test_sto_is_accepted_unchecked(tmp_path):
+    r = _run(tmp_path, "?- X = 1.\n   sto, X = 1.\n")
+    assert r.returncode == 0, r.stdout
+
+
+def test_quads_needs_a_file_and_takes_no_toplevel(tmp_path):
+    for argv in (["--quads"], ["--quads", "--toplevel", "t.pl"]):
+        r = subprocess.run(
+            [sys.executable, "-m", "clausal", *argv], cwd=tmp_path,
+            env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
+            capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
+        assert r.returncode == 2, (argv, r.stderr)

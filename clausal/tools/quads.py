@@ -7,9 +7,16 @@ pair as a test (:mod:`clausal.quad_runner`).
 This module is the pure syntax half: what an answer description is, and the
 quads of a text.  It does not import the engine.
 
-The grammar is the one of Trealla issue #1063 plus the annotations
-``library(quads)`` of Trealla accepts, and a labelled quad
-(``name ?- Query.``).
+The grammar is the one of Trealla issue #1063 plus the annotations and
+residual goals Trealla's ``library/quads.pl`` (v3.14) documents, and a
+labelled quad (``name ?- Query.``).
+
+What a loader skips, exactly: a ``?- Query.`` (or ``label ?- Query.``), and
+then each following clause-shaped item that :func:`is_answer_description`
+accepts, up to the first item that is not one.  So a user fact written right
+after a query that has the shape of a description (``loops.``,
+``error(a, b).``, ``dif(X, Y).``) is dropped with them.  ``?- dynamic(f/1).``
+and the like are skipped as queries too, with a warning.
 """
 from __future__ import annotations
 
@@ -33,6 +40,15 @@ DESCRIPTION_COMPOUNDS = frozenset({
     ("existence_error", 2), ("permission_error", 3),
     ("evaluation_error", 1), ("outputs", 1), ("inputs", 1), ("peeks", 1)})
 
+#: Residual goals a description may list instead of ``maybe`` (the pending
+#: ``dif/2``, ``freeze/2``, ``when/2`` and CLP(FD) goals of the answer).
+RESIDUAL_GOALS = frozenset({
+    ("dif", 2), ("freeze", 2), ("when", 2), ("in", 2), ("ins", 2),
+    ("#=", 2), ("#\\=", 2), ("#<", 2), ("#>", 2), ("#=<", 2), ("#>=", 2),
+    ("#<==>", 2), ("#==>", 2), ("#<==", 2), ("#\\/", 2), ("#/\\", 2),
+    ("all_different", 1), ("all_distinct", 1), ("sum", 3), ("{}", 1),
+    (":", 2)})
+
 #: ``_V = _T``, ``V ~~ T`` (an approximate float), and the connectives.
 _CONNECTIVES = frozenset({",", ";", "|"})
 
@@ -50,7 +66,28 @@ def is_answer_description(t) -> bool:
         return is_answer_description(t[1]) and is_answer_description(t[2])
     if arity == 2 and name in ("=", "~~"):
         return isinstance(t[1], VarRef)
-    return (name, arity) in DESCRIPTION_COMPOUNDS
+    return (name, arity) in DESCRIPTION_COMPOUNDS or (name, arity) in RESIDUAL_GOALS
+
+
+#: Directives a ``?- Directive.`` skipped as a query looks like: the loader
+#: warns, since DEC-10 Prolog ran them.
+DIRECTIVE_LOOKALIKES = frozenset({
+    "dynamic", "discontiguous", "multifile", "op", "initialization",
+    "ensure_loaded", "use_module", "module", "set_prolog_flag", "table",
+    "consult", "include"})
+
+
+def directive_lookalike(query) -> "str | None":
+    """The name of a directive *query* (a reader term) is the goal of, else
+    None -- looking through ``,``."""
+    while type(query) is tuple and len(query) == 3 and query[0] == ",":
+        found = directive_lookalike(query[1])
+        if found:
+            return found
+        query = query[2]
+    name = query if type(query) is str else (
+        query[0] if type(query) is tuple and query else None)
+    return name if name in DIRECTIVE_LOOKALIKES else None
 
 
 def is_labelled_query(item) -> bool:

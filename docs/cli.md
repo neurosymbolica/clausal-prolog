@@ -140,17 +140,38 @@ positive ?- X #> 3.
 ```
 
 A description is `true`, `false`, `V = T` (a variant of `T`: variables spell
-sharing; a query variable not listed stays unbound), an error term
+sharing; a query variable not listed stays unbound; a variable that is not the
+query's fails; `...` inside `T` is any subterm), an error term
 (`instantiation_error`, `type_error(T, C)`, `error(E, Imp)`, `throw(Ball)`;
-variables match anything), joined by `,` and `;` (the next answer), with `...`
-or `ad_infinitum` for any further answers. `V ~~ '14.2000'` accepts a float
-equal up to the digits written, `D1 | D2` either description (it needs
-`library(dcgs)` for the bar, as in Scryer), `name ?- Query.` labels a quad, and
-`maybe` accepts the `dif/2` or CLP(FD) constraints left on the answer, which
-otherwise fail it. `sto` is accepted unchecked. A quad with `loops`,
-`unexpected`, `other_answer_sequence`, `waits` or a stream annotation
-(`outputs/1`, `inputs/1`, `peeks/1`), and one with no description, is
-*skipped*. A query with no answer in ten seconds fails.
+the context of `error/2` matches anything), joined by `,` and `;` (the next answer), with `...`
+or `ad_infinitum` for any further answers.
+
+- `V ~~ '14.2000'` accepts a float equal up to the digits written.
+- `D1 | D2` accepts either description (the bar needs `library(dcgs)`, as in
+  Scryer). A quad with several descriptions needs all of them to hold.
+- `name ?- Query.` labels a quad.
+- `maybe`, or the pending goals themselves (`dif(X, a)`, `X in 4..5`), say a
+  constraint is pending: an answer with a pending `dif/2` or CLP(FD)
+  constraint matches only a description that says so, and one that says so
+  needs one pending.
+- `unexpected` marks an answer that must not be the one given at that point.
+- `outputs(Text)` is what the query wrote while computing that answer.
+- `sto` is accepted and not checked.
+- A quad with `loops`, `other_answer_sequence`, `waits`, `inputs/1` or
+  `peeks/1`, and one with no description, is *skipped*.
+- A query with no answer in ten seconds fails.
+
+The semantics follow Trealla's `library/quads.pl` (v3.14).
+
+What the loader skips, exactly: a `?- Query.` (or `label ?- Query.`) and then
+each following clause-shaped item that is an answer description, up to the
+first item that is not one. A user fact shaped like a description, written
+right after a query (`loops.`, `error(a, b).`, `dif(X, Y).`), is dropped with
+them. A query that is a directive's goal (`?- dynamic(f/1).`, `?- op(...)`) is
+skipped too, with a warning, not run as DEC-10 Prolog did. `?-` infix and `~~`
+are read only in that context: they are not in the program's operator table.
+This is the native front end's; `CLAUSAL_PL_FRONTEND=translator` still refuses
+a query.
 
 ## Running goals: `-g`
 

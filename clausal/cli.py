@@ -214,9 +214,7 @@ def _read_goal(text: str, op_table):
     """``text`` -> ``(goal_cell, [(name, Var), ...])``: the named variables
     in first-occurrence order, ``_``-led names left out (a toplevel does not
     report them).  A syntax error raises ``SyntaxError``."""
-    from clausal.pythonic_ast.nodes import StarUnpack  # noqa: PLC0415
-    from clausal.logic.variables import Var  # noqa: PLC0415
-    from clausal.tools.prolog_reader import PrologReader, VarRef  # noqa: PLC0415
+    from clausal.tools.prolog_reader import PrologReader  # noqa: PLC0415
     from clausal.tools.prolog_tokenizer import PL_SOURCE_NESTED_COMMENTS  # noqa: PLC0415
     from clausal.tools.toklex import EOF  # noqa: PLC0415
 
@@ -519,9 +517,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.toplevel and (args.goal or args.test or args.python):
         parser.error("--toplevel opens ?-; it takes no -g, --test "
                      "or --python")
+    if args.quads and args.toplevel:
+        parser.error("--quads runs the file's quads; it takes no --toplevel")
     if args.file is None:
-        if args.goal or args.test or args.once or program_args:
-            parser.error("-g, --once, --test and -- ARGS need a FILE")
+        if args.goal or args.test or args.once or args.quads or program_args:
+            parser.error("-g, --once, --test, --quads and -- ARGS need a FILE")
         if args.python:
             from clausal.python_repl import main as repl  # noqa: PLC0415
             repl()
