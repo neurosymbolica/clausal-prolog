@@ -73,7 +73,7 @@ static PyObject *VAR_sentinel = NULL;
  * which re-enters _normalize_for_key for its elements.  The re-entry
  * resumes counting from here, so MAX_DEPTH bounds the WHOLE term and not
  * each partial-list layer.  Per thread: the callback runs Python code. */
-static _Thread_local int seg_depth_base = 0;
+static CLAUSAL_THREAD_LOCAL int seg_depth_base = 0;
 
 /* _seg_key walks its Seg* (the engine's own deep C walk) before keying it.
  * Started under thousands of do_normalize frames, that walk overflowed the
@@ -134,7 +134,7 @@ typedef struct {
     PyObject *overflow;          /* Var -> number, past VM_INLINE (or NULL) */
 } VarMap;
 /* The numbering of the walk in progress on this thread, or NULL. */
-static _Thread_local VarMap *vm_cur = NULL;
+static CLAUSAL_THREAD_LOCAL VarMap *vm_cur = NULL;
 
 static inline void
 vm_init(VarMap *m)

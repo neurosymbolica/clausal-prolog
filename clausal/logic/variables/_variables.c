@@ -2528,7 +2528,7 @@ fire_wakeups_dispatch(PyObject *wakeup_list, TrailObject *trail)
  * and calls a library on it sees 0 there, and this is what it sees instead.
  * Thread-local, so a hook running in another thread does not count here
  * (Trail objects are per-thread too). */
-static _Thread_local int g_hook_dispatch_depth = 0;
+static CLAUSAL_THREAD_LOCAL int g_hook_dispatch_depth = 0;
 
 /* fire_wakeups: the dispatch, counted on trail->hooks_running and on the
  * thread's g_hook_dispatch_depth while it runs (every exit path: success,
@@ -4685,7 +4685,7 @@ py_hook_dispatch_depth(PyObject *Py_UNUSED(mod), PyObject *Py_UNUSED(arg))
  * meant to stop runs on.  A C function runs no bytecode, so no handler runs
  * here; the pending signal is handled at the next bytecode boundary of the
  * code the collection interrupted, where its exception propagates. */
-static _Thread_local int g_gc_collecting = 0;
+static CLAUSAL_THREAD_LOCAL int g_gc_collecting = 0;
 
 static PyObject *
 py_gc_phase_note(PyObject *Py_UNUSED(mod), PyObject *const *args,

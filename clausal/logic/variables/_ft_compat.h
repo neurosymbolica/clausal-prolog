@@ -3,6 +3,16 @@
 
 #include <Python.h>
 
+/* Per-thread storage.  MSVC's C compiler, without /std:c11, rejects C11's
+ * `_Thread_local` (error C2054) and spells it `__declspec(thread)`; every
+ * other compiler the wheels are built with takes the C11 keyword.  Use this
+ * for every thread-local in the C extensions. */
+#if defined(_MSC_VER) && !defined(__clang__)
+#  define CLAUSAL_THREAD_LOCAL __declspec(thread)
+#else
+#  define CLAUSAL_THREAD_LOCAL _Thread_local
+#endif
+
 /*
  * Free-threaded compatibility macros.
  *

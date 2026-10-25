@@ -143,6 +143,16 @@ trees, Scryer's syntax-error terms, the stream and `read_term` builtins and
 
 ### Fixed
 
+- **The C extensions build with MSVC again, so there is a Windows wheel**
+  (2026-10-25).  Four per-thread counters (the attribute-hook dispatch
+  depth, the garbage-collector flag, and two in the tabling key walker)
+  were declared with C11's `_Thread_local`, which MSVC's C compiler rejects
+  without `/std:c11` (error C2054), so `pip install` had no Windows wheel
+  to fall back on and the release build failed.  They now use
+  `CLAUSAL_THREAD_LOCAL` (`__declspec(thread)` under MSVC,
+  `clausal/logic/variables/_ft_compat.h`); `tests/test_c_portability.py`
+  refuses a bare `_Thread_local` in any C source.
+
 - **A Ctrl-C or a signal handler's exception during a search reaches the
   caller; it is no longer lost, nor turned into a type error**
   (2026-10-25).  Once `clausal.aio` was imported (the library facades
