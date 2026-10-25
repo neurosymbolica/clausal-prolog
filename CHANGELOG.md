@@ -154,10 +154,15 @@ trees, Scryer's syntax-error terms, the stream and `read_term` builtins and
   elements, so the copy kept the live variable `X`, unbound again once
   findall backtracked.  Every element is walked again, whichever way it
   reached the list.  The iterative, cycle-aware `_deref_walk`
-  (`clausal/logic/rational_walk.py`) now walks a partial list's elements
-  itself instead of through the recursive `__walk__`, so a cyclic element
-  (`L = [Y|T], Y = f(Y), T = []`) is copied as the cyclic term instead of
-  raising `resource_error(stack)`.  Pinned by
+  (`clausal/logic/rational_walk.py`) now walks the elements of a partial
+  list, and of the window a long list's rest is (a `SegListView`, the rest
+  of 64 or more elements that `append/3` or a `[_|R]` head hands out),
+  itself instead of through the recursive `__walk__`; and unification and
+  `==/2` read a partial list's elements without walking them first.  So a
+  cyclic or 100,000-deep element in a partial list or a long rest
+  (`L = [Y|T], Y = f(Y), T = []`) is copied by findall/3 and copy_term/2,
+  unifies and compares, instead of raising `resource_error(stack)`.
+  Pinned by
   `tests/iso/test_findall_partial_list_scryer.py` (each row against Scryer)
   and `tests/test_findall_partial_list_snapshot.py` (`.pl` and `.clausal`,
   the C and the Python trampoline, the Python `solve` entry).

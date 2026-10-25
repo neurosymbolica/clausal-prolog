@@ -594,7 +594,9 @@ def _seg_list_parts(x):
     tail's unbound variable, or None for a proper list.  None when *x* is
     any other shape -- an improper or cyclic list, a hole that is not the
     tail, a SegList out of contract -- which the general path answers."""
-    w = x._walk_once()
+    # Shallow: the elements are compared below, through their bindings;
+    # walking them first raised on a cyclic or very deep element.
+    w = x._walk_once(False)
     if isinstance(w, list):
         return w, None
     if type(w) is not SegList:

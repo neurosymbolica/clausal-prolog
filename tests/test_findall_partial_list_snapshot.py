@@ -53,6 +53,31 @@ r_aggregate_bag(R) :- aggregate_all(bag(L), g(L), R).
 r_aggregate_set(R) :- aggregate_all(set(L), (kk(_, X), L = [a|T], T = [c(X)]), R).
 r_cyclic_tail(R) :- findall(L, (L = [a|T], Y = f(Y), T = [Y]), [[a,Z]]), Z = f(W), functor(W, R, _).
 r_cyclic_head(R) :- findall(L, (L = [Y|T], Y = f(Y), T = []), [[Z]]), Z = f(W), functor(W, R, _).
+
+nest(0, T, T).
+nest(N, T, f(R)) :- N > 0, N1 is N-1, nest(N1, T, R).
+yn(G, R) :- catch((G, R = yes), E, R = error(E)).
+rest([_|R], R).
+view(R) :- length(L0, 70), append([_], R, L0).
+view_head(R) :- length(L0, 70), rest(L0, R).
+cyc(Z) :- Z = f(W), nonvar(W).
+deep(Z) :- Z = f(_).
+
+v_late_direct(Y) :- yn((findall(R, (view(R), R = [X|_], X = yes), [[F|_]]), F == yes), Y).
+v_late_hole(Y) :- yn((findall(L, (view(R), L = [a|T], T = R, R = [X|_], X = yes), [[_,F|_]]), F == yes), Y).
+v_late_head(Y) :- yn((findall(L, (view_head(R), L = [a|T], T = R, R = [X|_], X = yes), [[_,F|_]]), F == yes), Y).
+v_cyclic_findall(Y) :- yn((view(R), R = [X|_], X = f(X), findall(R, true, [[Z|_]]), cyc(Z)), Y).
+v_cyclic_findall_hole(Y) :- yn((view(R), R = [X|_], X = f(X), L = [a|T], T = R, findall(L, true, [[_,Z|_]]), cyc(Z)), Y).
+v_cyclic_copy(Y) :- yn((view(R), R = [X|_], X = f(X), copy_term(R, [Z|_]), cyc(Z)), Y).
+v_cyclic_copy_hole(Y) :- yn((view(R), R = [X|_], X = f(X), L = [a|T], T = R, copy_term(L, [_,Z|_]), cyc(Z)), Y).
+v_deep_findall(Y) :- yn((view(R), R = [X|_], nest(100000, z, X), findall(R, true, [[Z|_]]), deep(Z)), Y).
+v_deep_findall_hole(Y) :- yn((view(R), R = [X|_], nest(100000, z, X), L = [a|T], T = R, findall(L, true, [[_,Z|_]]), deep(Z)), Y).
+v_deep_copy(Y) :- yn((view(R), R = [X|_], nest(100000, z, X), copy_term(R, [Z|_]), deep(Z)), Y).
+v_deep_copy_hole(Y) :- yn((view(R), R = [X|_], nest(100000, z, X), L = [a|T], T = R, copy_term(L, [_,Z|_]), deep(Z)), Y).
+u_cyclic_tail(Y) :- yn((L = [a|T], X = f(X), T = [X], L = [_,f(f(_))]), Y).
+u_cyclic_head(Y) :- yn((L = [X|T], X = f(X), T = [], L = [f(f(_))]), Y).
+e_cyclic_tail(Y) :- yn((L = [a|T], X = f(X), T = [X], M = [a|U], U = [X], L == M), Y).
+e_cyclic_head(Y) :- yn((L = [X|T], X = f(X), T = [], M = [X|U], U = [], L == M), Y).
 """
 
 ROWS = [
@@ -70,6 +95,25 @@ ROWS = [
     # A cyclic element: copied as the cyclic term (the iterative walk).
     ("r_cyclic_tail", "f"),
     ("r_cyclic_head", "f"),
+    # The rest of a list of 64 or more elements is a window of it (a
+    # SegListView): bound late, cyclic, or deep, read through findall/3 and
+    # copy_term/2, alone or in the hole of a partial list.
+    ("v_late_direct", "yes"),
+    ("v_late_hole", "yes"),
+    ("v_late_head", "yes"),
+    ("v_cyclic_findall", "yes"),
+    ("v_cyclic_findall_hole", "yes"),
+    ("v_cyclic_copy", "yes"),
+    ("v_cyclic_copy_hole", "yes"),
+    ("v_deep_findall", "yes"),
+    ("v_deep_findall_hole", "yes"),
+    ("v_deep_copy", "yes"),
+    ("v_deep_copy_hole", "yes"),
+    # A partial list holding a cyclic element unifies and compares.
+    ("u_cyclic_tail", "yes"),
+    ("u_cyclic_head", "yes"),
+    ("e_cyclic_tail", "yes"),
+    ("e_cyclic_head", "yes"),
 ]
 
 _SUFFIXES = [".pl", ".clausal"]

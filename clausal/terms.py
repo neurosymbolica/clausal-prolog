@@ -725,7 +725,7 @@ def _rational_eq(a, b) -> bool:
     def walk_once(s):
         entry = walked.get(id(s))
         if entry is None:
-            entry = walked[id(s)] = (s, s._walk_once())
+            entry = walked[id(s)] = (s, s._walk_once(False))   # its leaves are compared below
         return entry[1]
 
     while todo:
@@ -865,9 +865,11 @@ class SegList:
         variable that ``findall/3``'s copy (``_deref_walk`` through
         ``__walk__``) then held live, unbound again on backtracking:
         ``[[a,c(_),d]]`` (2026-10-25).  *deep* False leaves the elements as
-        they are, for a caller that walks them itself: the iterative,
-        cycle-aware ``_deref_walk`` (``clausal.logic.rational_walk``), for
-        an element too deep or cyclic for ``walk``."""
+        they are, for a caller that reads them through their bindings
+        itself -- ``__unify__``, ``==/2``, the bisimulation, and the
+        iterative, cycle-aware ``_deref_walk``
+        (``clausal.logic.rational_walk``) -- so an element too deep or
+        cyclic for ``walk`` never meets it."""
         # Iterative, with one flat accumulator: a partial list built forward
         # through its open tail (a DCG, ``Hole = [a|Hole1]`` in a loop) is a
         # chain of SegLists, one link per step, and walking it recursively
@@ -923,6 +925,12 @@ class SegList:
                 continue
             elif tv is SegListView:
                 v = v.elements()           # its elements, walked below as a list's
+                if not deep:               # ... or left as they are, as a list's are
+                    if v:
+                        if tail is not _NO_TAIL:
+                            raise _not_a_list(culprit)
+                        run.extend(v)
+                    continue
             elif _hole_is_nil(v):
                 continue                   # nothing, in any spelling
             elif _is_improper_tail(v):
@@ -996,15 +1004,15 @@ class SegList:
             segs.append(ConcreteSeg(run))
         return SegList(segs)
 
-    def _walk_once(self):
+    def _walk_once(self, deep: bool = True):
         """:meth:`_walk_raw`, for ``__unify__``/``__eq__`` to read ONCE and
         reuse in every arm -- or None when the arms must decide alone: a
         SegList not built of ConcreteSeg/VarSeg, or one out of contract
-        (their own walk reports it)."""
+        (their own walk reports it).  *deep* as for :meth:`_walk_raw`."""
         if not all(isinstance(g, (ConcreteSeg, VarSeg)) for g in self._segments):
             return None
         try:
-            return self._walk_raw()
+            return self._walk_raw(deep)
         except (PartialTermError, _CyclicPartialList):
             return None
 
@@ -1099,14 +1107,17 @@ class SegList:
                 active.discard(key)
                 if token is not None:
                     _SEG_UNIFY_ACTIVE.reset(token)
-        walked = self._walk_once()
+        # Shallow (``deep=False``): every arm below unifies the elements,
+        # which reads them through their bindings, so walking them first
+        # only cost a copy -- and raised on a cyclic or very deep element.
+        walked = self._walk_once(False)
         if walked is not None and not isinstance(walked, (list, SegList)):
             # An IMPROPER list (D50): unify the cons cells it denotes.
             return _seg_unifier(trail)(walked, other, trail)
         # An EMPTY Seg IS the empty list, in every spelling (fix round 4,
         # item 5).  See ``_EMPTY_SEG_IS_NIL`` above this class for why this
         # sits ahead of the ``()`` rewrite and why it leaves VarSeg alone.
-        if _is_nil(other) and _walked_nil((walked if walked is not None else self._walk_raw())):
+        if _is_nil(other) and _walked_nil((walked if walked is not None else self._walk_raw(False))):
             return True
         # The empty TUPLE is the empty LIST (fix round 3, item 3): it is the
         # hashable nil spelling ``atoms.NIL_KEY`` uses, and the arms below
@@ -1131,7 +1142,7 @@ class SegList:
         if isinstance(other, list) or other_text or type(other) is SegListView:
             # (A view is read in place, as the list it is: indexed and
             # sliced, never walked.)
-            walked = (walked if walked is not None else self._walk_raw())
+            walked = (walked if walked is not None else self._walk_raw(False))
             if isinstance(walked, list):
                 # No unbound *VarSeg* remains, but ConcreteSeg *element* Vars
                 # can still be present (``_walk_raw`` returns a plain list as
@@ -1156,14 +1167,14 @@ class SegList:
             if not all(isinstance(g, (ConcreteSeg, VarSeg))
                        for g in (*self._segments, *other._segments)):
                 return NotImplemented   # not a SegList this class builds
-            walked = (walked if walked is not None else self._walk_raw())
-            other_walked = other._walk_raw()
+            walked = (walked if walked is not None else self._walk_raw(False))
+            other_walked = other._walk_raw(False)
             if not isinstance(walked, SegList) or not isinstance(other_walked, SegList):
                 # One side walks to a plain list: the list arm above decides.
                 return _seg_unifier(trail)(walked, other_walked, trail)
             return _unify_open_seglists(walked, other_walked, trail)
         if _is_cons_cell(other):
-            return _unify_seglist_cons((walked if walked is not None else self._walk_raw()), other, trail)
+            return _unify_seglist_cons((walked if walked is not None else self._walk_raw(False)), other, trail)
         return NotImplemented
 
     # ── sequence protocol (partial-aware) ────────────────────────────────────
@@ -1471,7 +1482,9 @@ class SegListView(SegList):
             raise PartialTermError("the list under a SegListView shrank")
         return self._base[self._lo:self._hi]
 
-    def _walk_raw(self):
+    def _walk_raw(self, deep: bool = True):
+        if not deep:
+            return self.elements()
         from .logic.variables import walk
         return walk(self.elements())
 

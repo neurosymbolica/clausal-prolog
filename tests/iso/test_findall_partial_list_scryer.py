@@ -80,6 +80,20 @@ ROWS = [
     ("cyclic_element_in_head",
      "findall(L, (L = [Y|T], Y = f(Y), T = []), [[Z]]), Z = f(W), (nonvar(W) -> R = yes ; R = no)",
      "yes"),
+    # The rest of a list of 64 or more elements is a window of it here.
+    ("view_cyclic_findall",
+     "length(L0, 70), append([_], V, L0), V = [X|_], X = f(X), findall(V, true, [[Z|_]]), Z = f(W), (nonvar(W) -> R = yes ; R = no)",
+     "yes"),
+    ("view_cyclic_copy",
+     "length(L0, 70), append([_], V, L0), V = [X|_], X = f(X), L = [a|T], T = V, copy_term(L, [_,Z|_]), Z = f(W), (nonvar(W) -> R = yes ; R = no)",
+     "yes"),
+    # A partial list holding a cyclic element unifies and compares.
+    ("unify_cyclic_tail",
+     "L = [a|T], X = f(X), T = [X], (L = [_,f(f(_))] -> R = yes ; R = no)", "yes"),
+    ("compare_cyclic_tail",
+     "L = [a|T], X = f(X), T = [X], M = [a|U], U = [X], (L == M -> R = yes ; R = no)", "yes"),
+    ("compare_cyclic_head",
+     "L = [X|T], X = f(X), T = [], M = [X|U], U = [], (L == M -> R = yes ; R = no)", "yes"),
 ]
 
 _PROGRAM = _PRELUDE + "".join(f"{n}(R) :- {b}.\n" for n, b, _ in ROWS)

@@ -36,7 +36,8 @@ from typing import Any
 from clausal.logic.cells import is_chars, flat_carrier
 from clausal.logic.predicate import field_names_for, is_term_instance, term_field_names
 from clausal.logic.variables import Trail, Var, deref, is_var, unify
-from clausal.terms import ConcreteSeg, DictTerm, SegBytes, SegList, SegString, VarSeg
+from clausal.terms import (ConcreteSeg, DictTerm, SegBytes, SegList, SegListView,
+                           SegString, VarSeg)
 
 #: The leaves every walker returns as they are (``_deref_walk_py`` adds
 #: ``complex``; ``None`` is tested separately, it is not a type).
@@ -151,6 +152,10 @@ def _open_walk(d: Any):
         if isinstance(shallow, SegList):
             return (_FRAME, list(shallow.segments), SegList)
         return _open_walk(shallow)          # an improper list's cons cells
+    if type(d) is SegListView:
+        # The rest of a long list, as a window of it: its elements, walked
+        # here (its ``__walk__`` walks them recursively), to a plain list.
+        return (_FRAME, d.elements(), _as_list)
     hook = getattr(d, "__walk__", None)
     if hook is not None:
         return (_LEAF, hook())
