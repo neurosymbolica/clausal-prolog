@@ -36,14 +36,16 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ### Changed
 
-- **A search whose last answer is known is not resumed after it**
-  (2026-10-24). `solve`, `call` and the engine's inner drives stop at an
-  answer that reached them as `FINAL` instead of pulling once more to see
-  the search fail; the bindings are undone when the iterator is advanced,
-  as before. Nothing a program can observe runs in that skipped pull (the
-  compiler marks an answer final only when what would follow is a trail
-  undo), so answers, their order and side effects are unchanged; the
-  generated code differs (`tests/golden/*.codegen.txt` regenerated).
+- **A goal whose last answer is known is not resumed after it**
+  (2026-10-24). `solve`, `call`, the engine's inner drives and a compiled
+  clause's loop over a sub-goal's answers stop at an answer that reached
+  them as `FINAL` instead of pulling once more to hear the goal fail (the
+  hop the "commit" yield was designed to save); its bindings are undone by
+  the next backtrack point out, or when the iterator is advanced, as
+  before. Nothing a program can observe runs in that skipped pull (an
+  answer is marked final only when what would follow is a trail undo), so
+  answers, their order and side effects are unchanged; the generated code
+  differs (`tests/golden/*.codegen.txt` regenerated).
 
 ## 1.2.0 (2026-10-25)
 

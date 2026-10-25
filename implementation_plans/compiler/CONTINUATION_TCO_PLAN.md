@@ -466,9 +466,13 @@ signal (`solve_with_last` / `call_with_last`: "this answer is the last"):
 - The root drivers (`solve._drive_trampoline`, `_tramp_call`) report
   retirement and undo a retired root's bindings themselves.
 
-Not taken: the mid-chain hop saving (a consumer that breaks out of its
-sub-call loop on FINAL) -- a broken-out child never undoes its own
-bindings, and the enclosing marks are not uniformly placed to do it.  Open
-coverage gaps are in
+- The hop saving: a compiled loop over a direct child's answers ends with
+  `if _st is $FINAL: break` before its re-pull.  The abandoned child's
+  bindings are undone by the next backtrack point out (every frame and
+  builtin undoes to its own, earlier, mark before another answer; the
+  arm's `finally` undoes to the clause mark).  Tail-call loops cannot take
+  it: the callee's FINAL does not come back through them.
+
+Open coverage gaps are in
 `todo/final-answer-not-known-through-catch-ite-else-and-cleanup-2026-10-24.md`.
 Phase 5 (LLVM alignment) waits on the LLVM-backend design resuming.

@@ -110,7 +110,8 @@ emitted by builtins and by compiled predicates (structural, plus the
 dynamic `_st is FINAL` / goal-boundary / first-argument tests), held
 across tail calls by `StepGenerator.tail_final`, and reported to callers
 by `solve_with_last` / `call_with_last`.  The consumer-side break (the
-saved hop) is taken only at the root drivers; see §10 for why.
+saved hop) is taken by the root drivers and by a compiled frame's loop over
+a direct child (not across a tail call); see §10.
 
 The history below is kept as written.
 
