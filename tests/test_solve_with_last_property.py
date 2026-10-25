@@ -34,7 +34,7 @@ import clausal.import_hook  # noqa: F401 -- installs the meta-path finder
 from clausal.import_hook import _load_module
 from clausal.logic.solve import solve_with_last, module_signatures
 from clausal.logic.trampoline import set_final_enabled
-from clausal.logic.variables import Var, deref
+from clausal.logic.variables import Var, deref, is_var
 from clausal.terms import term_writeq
 from clausal._suffixes import SOURCE_SUFFIXES
 
@@ -52,11 +52,16 @@ def _alarm(_signum, _frame):
     raise _Timeout
 
 
+#: Programs whose answers are not repeatable (py.random).
+_NOT_REPEATABLE = {"call_special_forms_re.seam"}
+
+
 def _programs():
     files = []
     for d in (_ROOT / "tests" / "fixtures", _ROOT / "clausal" / "examples"):
         for p in sorted(d.iterdir()):
-            if p.suffix in SOURCE_SUFFIXES and p.is_file():
+            if (p.suffix in SOURCE_SUFFIXES and p.is_file()
+                    and p.name not in _NOT_REPEATABLE):
                 head = p.read_text(errors="replace").splitlines()[:30]
                 if any("clausal: no-collect" in line for line in head):
                     continue
@@ -65,14 +70,18 @@ def _programs():
 
 
 def _answers(module, name, arity):
-    """``[(answer, last)]`` of ``name(_, ..., _)``, at most LIMIT."""
+    """``([(answer, last)], residue)`` of ``name(_, ..., _)``, at most LIMIT
+    answers.  *residue* is None when the search was cut at LIMIT, else
+    whether every query variable is unbound once it is exhausted."""
     vs = [Var() for _ in range(arity)]
     goal = (name, *vs) if vs else name
     out = []
-    for _t, last in itertools.islice(solve_with_last(goal, module), LIMIT):
+    for _t, last in itertools.islice(solve_with_last(goal, module), LIMIT + 1):
         out.append((tuple(term_writeq(deref(v), local_vars=True)
                           for v in vs), last))
-    return out
+    if len(out) > LIMIT:
+        return out[:LIMIT], None
+    return out, all(is_var(deref(v)) for v in vs)
 
 
 def _run(module, name, arity, enabled):
@@ -119,6 +128,11 @@ def _check_program(path):
             if plain != again:
                 continue                    # global state: not comparable
             checked += 1
+            (marked, m_unbound), (plain, p_unbound) = marked, plain
+            if m_unbound is False and p_unbound is not False:
+                failures.append(
+                    f"{path.name}: {name}/{arity}: a query variable is still "
+                    f"bound after the search is exhausted")
             got = [a for a, _last in marked]
             want = [a for a, _last in plain]
             lasts = [last for _a, last in marked]

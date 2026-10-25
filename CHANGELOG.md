@@ -12,40 +12,41 @@ surface described in [docs/public-api.md](docs/public-api.md).
 - **`solve_with_last` / `call_with_last`: knowing an answer is the last**
   (2026-10-24), an addition to the 1.x API surface
   (`docs/public-api.md` 1.3). Each yields `(trail, last)`: `last` is True
-  only when the engine knows no choice point is left, so a caller -- an
+  only when the engine knows no other answer can follow, so a caller -- an
   interactive top-level -- can print `X = c.` for `member(X, [a,b,c])` and
   `X = 1.` for `X = 1` without asking for, or computing, another answer;
-  False means it does not know (never a false True). The engine side is
-  CONTINUATION_TCO_PLAN Phase 4 (the "commit" yield): producers now answer
-  `FINAL` on an answer they know is their last -- the builtins with one
-  answer, `member/2`, `between/3`, `select/3`, `nth0/3`, `nth1/3`,
-  `append/3`, `length/2` at theirs, and compiled clauses whose answer
-  leaves no choice in the frame (a new pass, `compiler/final_yields.py`,
-  including a runtime first-argument test for a predicate too small to be
-  indexed). A FINAL holds past a tail call only when every skipped frame
-  set its new `tail_final` slot, and a goal woken at that answer, a catch
-  frame, a tabled call, an if-then-else with an else branch make it a
-  plain answer. `CLAUSAL_DISABLE_OPT=final_yield` (or
+  False means it does not know (never a false True). Known last: the
+  builtins with one answer (`=/2`, `is/2`, comparisons, type checks,
+  `dif/2`, ...); `member/2`, `between/3`, `select/3`, `nth0/3`, `nth1/3`,
+  `append/3`, `length/2` at their last answer; `once/1`, `\+`,
+  `findall/3`, `forall/2`, `call/N`; a conjunction whose earlier goals had
+  given their last answer; the last arm of a disjunction; and a user
+  predicate's answer from a clause with no choice left in its body when no
+  later clause can match (the last clause, first-argument indexing, or a
+  small table whose later first arguments cannot match the call's:
+  `q(1). q(2).` called as `q(1)`). Not yet known (answers False):
+  `catch/3`, an if-then-else with an else branch, `setup_call_cleanup/3`,
+  tabled predicates, a goal woken by a constraint at that answer.
+  `CLAUSAL_DISABLE_OPT=final_yield` (or
   `clausal.logic.trampoline.set_final_enabled(False)`) turns it all off.
   Pinned by `tests/test_solve_with_last.py`,
   `tests/iso/test_last_answer_scryer.py` (each query against Scryer's
-  top-level determinism, `setup_call_cleanup/3`'s `Det`) and
-  `tests/test_solve_with_last_property.py` (over the test programs: an
-  answer reported last is the last one, compared with a run with FINAL
-  off).
+  top-level, which prints the full stop only after an answer it knows is
+  the last), `tests/test_solve_with_last_property.py` (over the test
+  programs: an answer reported last is the last one, compared with a run
+  with it off) and `tests/test_final_leaves_no_bindings.py`.
 
 ### Changed
 
 - **A goal whose last answer is known is not resumed after it**
   (2026-10-24). `solve`, `call`, the engine's inner drives and a compiled
-  clause's loop over a sub-goal's answers stop at an answer that reached
-  them as `FINAL` instead of pulling once more to hear the goal fail (the
-  hop the "commit" yield was designed to save); its bindings are undone by
-  the next backtrack point out, or when the iterator is advanced, as
-  before. Nothing a program can observe runs in that skipped pull (an
-  answer is marked final only when what would follow is a trail undo), so
-  answers, their order and side effects are unchanged; the generated code
-  differs (`tests/golden/*.codegen.txt` regenerated).
+  clause stop at an answer known to be a goal's last instead of asking the
+  goal once more only to hear it fail. Answers, their order and side
+  effects are unchanged (an answer is marked last only when nothing but
+  undoing bindings would follow it), and a search that ends undoes what it
+  bound: the query's variables are unbound after the iterator is
+  exhausted, and can be reused. The generated code differs
+  (`tests/golden/*.codegen.txt` regenerated).
 
 ## 1.2.0 (2026-10-25)
 
