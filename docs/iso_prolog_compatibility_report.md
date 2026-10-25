@@ -321,6 +321,10 @@ row against Scryer in `tests/iso/test_cyclic_terms_scryer.py`.  The same
 holds at the Python entry: a cyclic or deep term handed to `solve()` works
 as inside a program, and `to_python`/`term_key` raise those two errors
 (`tests/test_python_entry_cyclic_deep.py`).
+Running out of memory is `resource_error(memory)` (7.12.2 h): in `is/2`
+and the arithmetic comparisons, which used to report it as
+`type_error(evaluable, F/N)`, and to a `catch/3`
+(`tests/test_async_exception_propagation.py`).
 
 One standard-order difference from Scryer: with `X = [a|X]`,
 `compare(R, [a|foo], X)` gives `<` here and `>` in Scryer.  This engine
