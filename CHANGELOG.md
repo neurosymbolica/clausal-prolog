@@ -76,8 +76,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
   (`?- dynamic(f/1).`) is skipped with a warning. `label ?- Query.` and
   `X ~~ '14.2000'` are read only in that context; the program's operator
   table is unchanged. `clausal --quads FILE` runs each quad as a test
-  (`clausal/quad_runner.py`, `tests/test_quads.py`), following Trealla's
-  `library/quads.pl`. The translator front end still refuses a query.
+  (`clausal/quad_runner.py`, `tests/test_quads.py`), modelled on Trealla's
+  `library/quads.pl` (not equal to it: `sto` is not checked, cyclic answers
+  are not matched, a label is an atom). The translator front end still refuses a query.
 
 ### Changed
 

@@ -517,8 +517,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.toplevel and (args.goal or args.test or args.python):
         parser.error("--toplevel opens ?-; it takes no -g, --test "
                      "or --python")
-    if args.quads and args.toplevel:
-        parser.error("--quads runs the file's quads; it takes no --toplevel")
+    if args.quads and (args.toplevel or program_args):
+        parser.error("--quads runs the file's quads; it takes no --toplevel "
+                     "and no -- ARGS")
     if args.file is None:
         if args.goal or args.test or args.once or args.quads or program_args:
             parser.error("-g, --once, --test, --quads and -- ARGS need a FILE")

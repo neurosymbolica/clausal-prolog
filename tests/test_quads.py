@@ -357,3 +357,23 @@ def test_a_clausal_file_quad_with_control_is_refused_clearly(tmp_path, query):
                        timeout=120)
     assert r.returncode == 1
     assert "not Clausal Prolog" in r.stdout and "existence_error" not in r.stdout
+
+
+def test_the_directive_warning_names_the_file_and_line(tmp_path):
+    r = _g(tmp_path, "p(1).\n?- dynamic(foo/1).\n?- initialization(main).\n",
+           "p(X)")
+    assert r.returncode == 0
+    assert "g.pl:2" in r.stderr and "g.pl:3" in r.stderr, r.stderr
+    assert "iso_l3.py" not in r.stderr and "warnings.warn" not in r.stderr
+    assert "initialization/1 is refused" in r.stderr
+    assert "write `:- initialization" not in r.stderr
+
+
+def test_quads_takes_no_program_args(tmp_path):
+    (tmp_path / "t.pl").write_text(PROGRAM)
+    r = subprocess.run(
+        [sys.executable, "-m", "clausal", "t.pl", "--quads", "--", "a", "b"],
+        cwd=tmp_path,
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
+        capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
+    assert r.returncode == 2, r.stderr

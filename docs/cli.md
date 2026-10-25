@@ -163,7 +163,9 @@ or `ad_infinitum` for any further answers.
   per quad; it needs the main thread and a platform with `SIGALRM`, else a
   quad runs without one).
 
-The semantics follow Trealla's `library/quads.pl` (v3.14).
+Modelled on Trealla's `library/quads.pl` (v3.14), with differences: `sto` is
+accepted but not checked, a cyclic answer is not matched, and a label is an
+atom.
 
 What the loader skips, exactly: a `?- Query.` (or `label ?- Query.`) and then
 each following clause-shaped item that is an answer description, up to the

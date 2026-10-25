@@ -1553,7 +1553,7 @@ def lower_arg(t: Any, span=None) -> ast.expr:
 from clausal.tools.quads import is_answer_description, is_labelled_query  # noqa: E402
 
 
-def _warn_if_directive(item, where_text: str) -> None:
+def _warn_if_directive(item, filename: str, line: "int | None") -> None:
     """A skipped query that is a directive's goal (``?- dynamic(f/1).``):
     DEC-10 Prolog ran those, this loader does not."""
     from clausal.tools.quads import directive_lookalike  # noqa: PLC0415
@@ -1564,10 +1564,13 @@ def _warn_if_directive(item, where_text: str) -> None:
     if name:
         import warnings  # noqa: PLC0415
         from clausal.lint_warnings import ClausalLintWarning  # noqa: PLC0415
-        warnings.warn(
-            f"{where_text}?- {name}(...) is a query, skipped (a quad), not "
-            f"run as a directive; write `:- {name}(...)`.",
-            ClausalLintWarning, stacklevel=2)
+        advice = ("initialization/1 is refused in this loader"
+                  if name == "initialization" else
+                  f"write `:- {name}(...)` for a directive")
+        warnings.warn_explicit(
+            f"?- {name}(...) is a query, skipped (a quad), not run as a "
+            f"directive; {advice}",
+            ClausalLintWarning, filename, line or 1)
 
 
 def _item_span(it):
@@ -1678,7 +1681,7 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
             after_query = True
             stats["read"] -= 1
             stats["quads"] = stats.get("quads", 0) + 1
-            _warn_if_directive(it, where(span))
+            _warn_if_directive(it, where_file, positions.line(span))
             continue
         if (after_query and kind == "Clause"
                 and is_answer_description(it.term)):
@@ -1718,9 +1721,9 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
                 refuse(str(e), e.span or span)
                 continue
             kind = "Clause"
-        if kind != "Clause":
-            refuse(f"{kind} is not lowered: {it.term!r}", span)
-            continue
+        # Every other kind is handled above (a Query and a SyntaxIssue
+        # before here, a Directive and a DCGRule just above).
+        assert kind == "Clause", kind
         defined.add(_head_indicator(it.term))
         uses.reif = ctx.reif
         uses.clause(it.term)

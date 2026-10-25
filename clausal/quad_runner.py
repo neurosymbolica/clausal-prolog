@@ -27,7 +27,9 @@ answers, one at a time, are compared with the description:
 
 ``loops``, ``other_answer_sequence``, ``waits``, ``inputs/1`` and ``peeks/1``
 are not checked: such a quad is *skipped*, and so is one with no description.
-The semantics follow Trealla's ``library/quads.pl`` (v3.14).
+Modelled on Trealla's ``library/quads.pl`` (v3.14), which it differs from:
+``sto`` is accepted but not checked, a cyclic answer is not matched, and a
+label is an atom.
 """
 from __future__ import annotations
 
