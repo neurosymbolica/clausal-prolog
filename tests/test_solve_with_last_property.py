@@ -172,5 +172,7 @@ def test_the_property_was_not_vacuous():
     reported a last answer."""
     if _TOTALS["checked"] == 0:
         pytest.skip("run with the per-program cases")
+    print(f"goals checked: {_TOTALS['checked']}, "
+          f"with a last answer: {_TOTALS['last']}")
     assert _TOTALS["checked"] > 300, _TOTALS
     assert _TOTALS["last"] > 100, _TOTALS

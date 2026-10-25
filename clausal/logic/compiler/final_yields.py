@@ -43,11 +43,13 @@ _GOAL_BOUNDARY_ITERS = frozenset({"$unify_iter", "$pending"})
 
 class _Names:
     __slots__ = ("self_name", "proceed", "fail", "fresh", "later_excluded",
-                 "later_excluded_arms")
+                 "later_excluded_arms", "child_loops")
 
     def __init__(self, self_name, proceed, fail, later_excluded=None):
         self.self_name, self.proceed, self.fail = self_name, proceed, fail
         self.fresh = 0
+        # The loops over a direct child's answers: ``(loop, status)``.
+        self.child_loops = []
         # ({id(clause arm Match): test that no later arm can match the
         # call}, {id(every clause arm Match)})
         self.later_excluded, self.later_excluded_arms = (
@@ -226,6 +228,7 @@ def _walk_block(stmts, conds, ok, n: _Names, out: list, end=None) -> None:
                 if here:
                     out.append(_Site("tail", stmts, st, conds))
             elif _is_name(args[1], n.self_name):
+                n.child_loops.append((loop, status))
                 # The continuation runs once per child answer; it is final
                 # only after the child's own last answer.
                 cond = ast.Compare(left=_name(status), ops=[ast.Is()],
@@ -382,6 +385,17 @@ def mark_final_yields(func_def: ast.FunctionDef, *, self_name: str,
                 mark = ast.If(test=_cond_expr(site.conds), body=[mark], orelse=[])
             ast.copy_location(mark, site.stmt)
             site.block.insert(idx, mark)
+    for loop, status in n.child_loops:
+        # The hop FINAL saves: after the child's last answer, do not pull
+        # it again to hear it fail.  The bindings it leaves are undone by
+        # the next backtrack point out (an earlier goal's own undo, the
+        # arm's mark), as every compiled frame undoes to its mark first.
+        stop = ast.If(
+            test=ast.Compare(left=_name(status), ops=[ast.Is()],
+                             comparators=[_name(_FINAL)]),
+            body=[ast.Break()], orelse=[])
+        loop.body.insert(len(loop.body) - 1,
+                         ast.copy_location(stop, loop.body[-1]))
     _NameIters().visit(func_def)
     ast.fix_missing_locations(func_def)
     return len(sites)
