@@ -66,6 +66,19 @@ surface described in [docs/public-api.md](docs/public-api.md).
   as a list. Pinned in `tests/iso/test_freeze_when_residuals_scryer.py` and
   `tests/test_freeze_when_residual_goals.py`.
 
+- **Quads** (2026-10-24): on the native front end, a `?- Query.` in a `.pl`
+  or `.clausal` file and the answer descriptions after it (`X = 1 ; X = 2.`,
+  `type_error(atom, 1).`, `..., ad_infinitum.`, pending `dif(X, a)`) no longer
+  refuse the load: the loader skips them (Neumerkel; Trealla #1063). The
+  skip is exactly: the query, then each following clause-shaped item that is
+  an answer description, up to the first that is not (a fact of that shape
+  written right after a query is dropped); a query that is a directive's goal
+  (`?- dynamic(f/1).`) is skipped with a warning. `label ?- Query.` and
+  `X ~~ '14.2000'` are read only in that context; the program's operator
+  table is unchanged. `clausal --quads FILE` runs each quad as a test
+  (`clausal/quad_runner.py`, `tests/test_quads.py`), following Trealla's
+  `library/quads.pl`. The translator front end still refuses a query.
+
 ### Changed
 
 - **The `?-` top-level ends an answer it knows is the last with `.`**
@@ -129,7 +142,6 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `tests/iso/test_freeze_alias_merge_scryer.py` (Scryer oracle rows; `.pl`
   and `.clausal`, C and Python trampolines) and
   `tests/test_coroutining.py::TestFreeze::test_bare_unify_of_two_frozen_vars_merges`.
-
 
 - `dif/2` on a cyclic or very deep term answers as Scryer does instead of
   raising `error(resource_error(stack), _)` ("_collect_free_vars: term
