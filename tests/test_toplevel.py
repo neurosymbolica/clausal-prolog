@@ -88,12 +88,20 @@ class Pty:
         self.send(q + "\n")
         self.expect(wait)
 
-    def finish(self, timeout=30):
+    def finish(self, timeout=10):
         end = time.time() + timeout
         while time.time() < end:
             if self._read(0.2) is False:
                 break
-        _, st = os.waitpid(self.pid, 0)
+        for _ in range(20):
+            done, st = os.waitpid(self.pid, os.WNOHANG)
+            if done:
+                break
+            time.sleep(0.05)
+        if not done:                    # still running: it did not exit
+            self.close()
+            self.status = -signal.SIGKILL
+            return self.status
         self.status = os.waitstatus_to_exitcode(st)
         return self.status
 
