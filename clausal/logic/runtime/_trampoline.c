@@ -20,6 +20,7 @@
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+#include <stddef.h>     /* offsetof */
 
 /* The Trail layout, for the pending-goal check on a solution step. */
 #define VARIABLES_CAPI_CONSUMER
@@ -123,7 +124,7 @@ typedef struct {
     int       retired;      /* 1 = a pull-driver saw this root yield FINAL
                              * ("solution AND retiring"): later pulls answer
                              * exhaustion without resuming the generator. */
-    int       tail_final;   /* 1 = set by the frame itself: it has no
+    char      tail_final;   /* 1 = set by the frame itself: it has no
                              * alternative of its own left, so once the
                              * child it waits on is exhausted, so is it
                              * (read by final_holds). */
@@ -540,26 +541,6 @@ StepGen_get_retired(StepGenObject *self, void *Py_UNUSED(closure))
     return PyBool_FromLong(self->retired);
 }
 
-static PyObject *
-StepGen_get_tail_final(StepGenObject *self, void *Py_UNUSED(closure))
-{
-    return PyBool_FromLong(self->tail_final);
-}
-
-static int
-StepGen_set_tail_final(StepGenObject *self, PyObject *value,
-                       void *Py_UNUSED(closure))
-{
-    if (!value) {
-        PyErr_SetString(PyExc_TypeError, "cannot delete tail_final");
-        return -1;
-    }
-    int truth = PyObject_IsTrue(value);
-    if (truth < 0) return -1;
-    self->tail_final = truth;
-    return 0;
-}
-
 static int
 StepGen_set_retired(StepGenObject *self, PyObject *value,
                     void *Py_UNUSED(closure))
@@ -584,14 +565,19 @@ static PyGetSetDef StepGen_getset[] = {
     {"retired", (getter)StepGen_get_retired, (setter)StepGen_set_retired,
      "True once a root-level FINAL was delivered: pull-drivers answer\n"
      "exhaustion without resuming the generator (policy Q3).", NULL},
-    {"tail_final", (getter)StepGen_get_tail_final,
-     (setter)StepGen_set_tail_final,
-     "Set by the frame itself when it has no alternative of its own left:\n"
-     "a FINAL from a tail-called child that skips this frame stays FINAL\n"
-     "only if this is True.", NULL},
     {NULL}
 };
 
+
+/* A plain member, not a getset: compiled code stores it at every tail
+ * call that has no alternative left, so the store is kept cheap. */
+static PyMemberDef StepGen_members[] = {
+    {"tail_final", Py_T_BOOL, offsetof(StepGenObject, tail_final), 0,
+     "Set by the frame itself when it has no alternative of its own left:\n"
+     "a FINAL from a tail-called child that skips this frame stays FINAL\n"
+     "only if this is True."},
+    {NULL}
+};
 
 /* ── StepGenerator type spec (heap type — allows __init__ override) ──── */
 
@@ -604,6 +590,7 @@ static PyType_Slot StepGen_slots[] = {
     {Py_tp_clear,    StepGen_clear},
     {Py_tp_methods,  StepGen_methods},
     {Py_tp_getset,   StepGen_getset},
+    {Py_tp_members,  StepGen_members},
     {0, NULL}
 };
 
