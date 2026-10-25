@@ -150,8 +150,7 @@ def _goal_reader_ops(source: str):
 def _lower_term(term):
     """A reader term -> ``(goal, {index: Var})``: ``VarRef`` s become fresh
     ``Var`` s and a list spelled with cons cells becomes a Python list
-    (as the native front end lowers it).  Shared by ``-g``, the top-level
-    and the quad runner."""
+    (as the native front end lowers it).  Shared by ``-g`` and the top-level."""
     from clausal.pythonic_ast.nodes import StarUnpack  # noqa: PLC0415
     from clausal.logic.variables import Var  # noqa: PLC0415
     from clausal.tools.prolog_reader import VarRef  # noqa: PLC0415
@@ -423,8 +422,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(options)
 
-    if args.toplevel and (args.goal or args.test or args.quads or args.python):
-        parser.error("--toplevel opens ?-; it takes no -g, --test, --quads "
+    if args.toplevel and (args.goal or args.test or args.python):
+        parser.error("--toplevel opens ?-; it takes no -g, --test "
                      "or --python")
     if args.file is None:
         if args.goal or args.test or args.once or program_args:

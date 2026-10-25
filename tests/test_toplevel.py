@@ -477,7 +477,7 @@ def test_a_cut_commits_only_the_goals_before_it(tl):
     s.expect(";  X = 1, Y = q")
 
 
-# ── review fixes (engine-lane, 2026-10-24) ───────────────────────────────
+# ── review fixes (2026-10-24) ─────────────────────────────────────────
 
 
 def test_ctrl_c_at_the_prompt_drops_the_line_and_stays(tl):
