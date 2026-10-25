@@ -92,6 +92,22 @@ def test_a_directive_after_end_module_is_refused(native, fe):
     assert f"permission_error(modify, module, em_trd_{fe})" in msg
 
 
+@pytest.mark.parametrize("n, quad", [(0, "?- p(X)."),
+                                    (1, "lab ?- p(X).\n   X = 1.")])
+def test_a_quad_after_end_module_is_refused(native, n, quad):
+    # a quad is skipped (native front end), but still an item: nothing but
+    # comments may follow end_module/1
+    fe = "native"
+    tag = f"em_q{n}"
+    msg = _refused(native, fe, tag, f"""\
+        :- module({tag}, [p/1]).
+        p(1).
+        :- end_module({tag}).
+        {quad}
+        """)
+    assert f"permission_error(modify, module, {tag})" in msg
+
+
 @pytest.mark.parametrize("fe", FRONTENDS)
 def test_end_module_without_module_2_is_an_existence_error(native, fe):
     msg = _refused(native, fe, f"em_nm_{fe}", f"""\

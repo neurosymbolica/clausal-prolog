@@ -377,3 +377,11 @@ def test_quads_takes_no_program_args(tmp_path):
         env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
         capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
     assert r.returncode == 2, r.stderr
+
+
+def test_an_unchecked_alternative_does_not_leak_its_internal_tag(tmp_path):
+    r = _run(tmp_path, ":- use_module(library(dcgs)).\n"
+                       "?- p(X).\n   X = 5 | loops.\n")
+    assert r.returncode == 1, r.stdout
+    assert "unsupported:" not in r.stdout
+    assert "loops is not checked" in r.stdout

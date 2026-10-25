@@ -462,7 +462,9 @@ def _run_quad(module, quad: Quad, timeout: float) -> Result:
             if all(r.startswith("unsupported:") for r in reasons):
                 skipped = reasons[0].split(":", 1)[1] + " is not checked"
                 continue
-            return Result(quad, "failed", " | ".join(reasons))
+            return Result(quad, "failed", " | ".join(
+                r.split(":", 1)[1] + " is not checked"
+                if r.startswith("unsupported:") else r for r in reasons))
         if skipped:
             return Result(quad, "skipped", skipped)
         return Result(quad, "passed")

@@ -1678,6 +1678,11 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
         # are documentation (Neumerkel; Trealla #1063), not clauses.
         # (Not counted in ``read``, which is the denominator of program items.)
         if kind == "Query" or is_labelled_query(it):
+            try:                # still an item: nothing may follow end_module/1
+                ctx.end_module.item(_item_shown(kind, it.term))
+            except EndModuleError as e:
+                refuse(str(e), span)
+                continue
             after_query = True
             stats["read"] -= 1
             stats["quads"] = stats.get("quads", 0) + 1
@@ -1685,6 +1690,11 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
             continue
         if (after_query and kind == "Clause"
                 and is_answer_description(it.term)):
+            try:
+                ctx.end_module.item(_item_shown(kind, it.term))
+            except EndModuleError as e:
+                refuse(str(e), span)
+                continue
             stats["read"] -= 1
             continue
         after_query = False
