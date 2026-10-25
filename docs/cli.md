@@ -78,7 +78,8 @@ under [`solve_with_last`](python_integration.md#solve_with_last-call_with_last-k
 (the goals after a top-level `!` also count). Knowing this never runs the
 goal further. For any other answer the top-level asks, and a requested next
 solution that does not exist prints `false.` Residual `dif/2` and CLP(FD) domain
-constraints print in plain form (`dif(X,a)`, `X in 4..5`).
+constraints print in plain form (`dif(X,a)`, `X in 4..5`), and a pending
+`freeze/2` or `when/2` as its goal (`freeze(X,write(hi))`).
 
 An error is one line, `error(Formal,Context).`; Ctrl-C during a search
 returns to `?-`. `consult(File)` and `[File]` load a `.clausal` or `.pl` file

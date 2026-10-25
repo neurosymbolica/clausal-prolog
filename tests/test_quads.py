@@ -385,3 +385,23 @@ def test_an_unchecked_alternative_does_not_leak_its_internal_tag(tmp_path):
     assert r.returncode == 1, r.stdout
     assert "unsupported:" not in r.stdout
     assert "loops is not checked" in r.stdout
+
+
+@pytest.mark.parametrize("goal", ["freeze(X, true)", "when(nonvar(X), true)",
+                                  "when(ground(f(X, Y)), true)"])
+def test_freeze_and_when_leave_something_pending(tmp_path, goal):
+    # coroutines are pending goals too: `maybe` (or the goal itself) is needed
+    no = _run(tmp_path, f"?- {goal}.\n   true.\n")
+    assert no.returncode == 1 and "maybe" in no.stdout, no.stdout
+    yes = _run(tmp_path, f"?- {goal}.\n   maybe.\n")
+    assert yes.returncode == 0, yes.stdout
+    cited = _run(tmp_path, f"?- {goal}.\n   {goal}.\n")
+    assert cited.returncode == 0, cited.stdout
+
+
+def test_g_prints_a_pending_coroutine(tmp_path):
+    r = _g(tmp_path, "p(1).\n", "freeze(X, true)", "X = 1, freeze(Y, true)")
+    assert r.returncode == 0
+    lines = r.stdout.splitlines()
+    assert lines[0] == "freeze(X,true).", lines
+    assert lines[1] == "X = 1, freeze(Y,true).", lines

@@ -225,7 +225,9 @@ def _has_residual(shown) -> bool:
     free: dict = {}
     for _, v in shown:
         cli._term_vars(_deref_walk(v), free)
-    return bool(cli._fd_dif_residuals(list(free.values()), str))
+    variables = list(free.values())
+    return bool(cli._fd_dif_residuals(variables, str)
+                or cli._coroutine_residuals(variables, str))
 
 
 # ── comparing ─────────────────────────────────────────────────────────────

@@ -78,7 +78,8 @@ surface described in [docs/public-api.md](docs/public-api.md).
   table is unchanged. `clausal --quads FILE` runs each quad as a test
   (`clausal/quad_runner.py`, `tests/test_quads.py`), modelled on Trealla's
   `library/quads.pl` (not equal to it: `sto` is not checked, cyclic answers
-  are not matched, a label is an atom). The translator front end still refuses a query.
+  are not matched, a label is an atom). A pending `freeze/2` or `when/2` now
+  counts as pending (`maybe`) in a quad. The translator front end still refuses a query.
 
 ### Changed
 
