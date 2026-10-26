@@ -376,6 +376,23 @@ def test_residual_dif_and_clpz(tl):
     s.query("X #> 3, X #< 6.", "   X in 4..5.")
 
 
+def test_residual_freeze_and_when(tl):
+    """A pending freeze/2 or when/2 is printed as the goal, plain form
+    (operator ruling 2026-10-26), not hidden behind ``true``.  (Neither is
+    known to leave no choice, so each answer waits for a key.)"""
+    s = tl()
+    for q, answer in [
+            ("freeze(X, write(hi)).", "   freeze(X,write(hi))"),
+            ("freeze(X, true), freeze(X, fail).", "   freeze(X,(true,fail))"),
+            ("when((nonvar(X);ground(Y)), true).",
+             "   when((nonvar(X);ground(Y)),true)"),
+            ("dif(X, a), freeze(X, true).", "   dif(X,a), freeze(X,true)"),
+            ("freeze(X, true), X = 1.", "   X = 1")]:
+        s.query(q, answer)
+        s.send("\r")
+        s.expect(";  ... .")
+
+
 def test_long_list_is_elided_and_w_prints_in_full(tl):
     s = tl()
     s.send("numlist(1, 150, L).\n")

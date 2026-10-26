@@ -56,6 +56,16 @@ surface described in [docs/public-api.md](docs/public-api.md).
   longer answers `true.` (`clausal/toplevel_input.py`,
   `clausal/toplevel_complete.py`).
 
+- **`frozen/2`** (2026-10-26, operator ruling 2026-10-26): `frozen(Term,
+  Goal)` unifies `Goal` with the `freeze/2` and `when/2` goals pending on the
+  variables of `Term`, as one conjunction (`freeze(X,g)`,
+  `(freeze(X,g),when(nonvar(Y),h))`), or `true` when there are none -- SWI's
+  `frozen/2` (Scryer has none), in plain form, and limited to `freeze/2` and
+  `when/2` (SWI also lists `dif/2` and other attribute goals). From Python,
+  `clausal.logic.coroutining.pending_goals(variables)` gives the same goals
+  as a list. Pinned in `tests/iso/test_freeze_when_residuals_scryer.py` and
+  `tests/test_freeze_when_residual_goals.py`.
+
 ### Changed
 
 - **The `?-` top-level ends an answer it knows is the last with `.`**
@@ -72,6 +82,24 @@ surface described in [docs/public-api.md](docs/public-api.md).
   side effect or binding left after a search changes (the search is still
   pulled to its end after a last answer). The generated code differs
   (`tests/golden/*.codegen.txt` regenerated).
+
+- **`-g` and `?-` print a pending `freeze/2` or `when/2` as its goal**
+  (2026-10-26, operator ruling 2026-10-26), where they printed `true.`:
+  `freeze(X,write(hi))`, `when((nonvar(X);ground(Y)),g)`, as Scryer prints
+  them, in plain form like `dif(X,a)` (no `freeze:` or `user:` qualifier).
+  Several freezes on one variable print as one `freeze/2` of their
+  conjunction (`freeze(X,((g,h),i))`); a `when/2` keeps its whole condition,
+  with what was bound since (`X = 1, when(ground(f(1,Y)),g)`); `when/2` goals
+  on one variable come newest first; a goal whose variable is bound since,
+  or a disjunction whose goal ran, is gone. The goal is not stored: the
+  delayed goal's thunk builds it from its own variables when asked, so
+  installing and waking a delay cost what they did (a freeze/when
+  microbenchmark within 5% of 1.2.0). A compiled
+  `when((C1, C2), G)` is now installed by the run-time `when/2` (as a cell
+  condition already was), so its residual keeps the whole condition.
+  Every row is checked against Scryer's toplevel in
+  `tests/iso/test_freeze_when_residuals_scryer.py` (`.pl` and `.clausal`, C
+  and Python trampolines); `tests/test_toplevel.py::test_residual_freeze_and_when`.
 
 ## 1.2.0 (2026-10-25)
 

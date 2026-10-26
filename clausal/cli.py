@@ -358,6 +358,15 @@ def _fresh_names(taken):
             yield "_" + name
 
 
+def _coroutine_residuals(variables, spell) -> list[str]:
+    """The freeze/2 and when/2 goals pending on *variables*, as goals in
+    plain form (``freeze(X,write(hi))``, ``when((nonvar(X);ground(Y)),g)``):
+    what Scryer prints for them, without its module qualifiers (operator
+    ruling 2026-10-26).  A goal whose variable is bound since is gone."""
+    from clausal.logic.coroutining import pending_goals  # noqa: PLC0415
+    return [spell(g) for g in pending_goals(variables)]
+
+
 def _answer(shown, trail) -> str:
     """One answer as a toplevel prints it: ``Name = Value`` for each bound
     answer variable, an unbound one by its own name (``S = f(X)``), then
@@ -416,8 +425,9 @@ def _answer(shown, trail) -> str:
         def spell(x):
             from clausal.logic.solve import _deref_walk as walk  # noqa: PLC0415
             return term_writeq(walk(x), var_names=names, priority=699, ops=ops)
-        parts += _fd_dif_residuals(
-            list(free.values()) + list(hidden_residue.values()), spell)
+        residue_vars = list(free.values()) + list(hidden_residue.values())
+        parts += _fd_dif_residuals(residue_vars, spell)
+        parts += _coroutine_residuals(residue_vars, spell)
         parts += clpq.residual_q(
             list(free.values()), trail,
             lambda v: names.get(id(v)) or term_writeq(v))

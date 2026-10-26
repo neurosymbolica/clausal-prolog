@@ -162,7 +162,25 @@ false.
   a value that the constraints force is shown as constraints, not as a
   binding.
 
-  Other constraints (`clpz`, `freeze/2`, `dif/2`) are not printed yet.
+  `dif/2` and CLP(FD) constraints are printed as goals too (`dif(X,a)`,
+  `X in 4..5`), and so is a pending `freeze/2` or `when/2`, as Scryer
+  prints it (operator ruling 2026-10-26):
+
+  ```bash
+  $ clausal prog.pl -g "freeze(X, write(hi))"
+  freeze(X,write(hi)).
+  $ clausal prog.pl -g "freeze(X, g), freeze(X, h), Y = f(X)"
+  Y = f(X), freeze(X,(g,h)).
+  $ clausal prog.pl -g "when(ground(f(X,Y)), g), X = 1"
+  X = 1, when(ground(f(1,Y)),g).
+  ```
+
+  Residuals are printed in **plain form**: Scryer qualifies them
+  (`dif:dif(X,a)`, `freeze:freeze(X,user:g)`), Clausal does not (operator
+  rulings 2026-10-24 and 2026-10-26). Several freezes on one variable are
+  one `freeze/2` of their conjunction; `when/2` goals on one variable are
+  listed newest first, as Scryer lists them. `frozen/2` reads the same
+  goals back as a term.
 - A goal can use the operators the program has: its own `op/3` directives
   and those of the libraries it imports, such as `#=` after
   `:- use_module(library(clpz)).`
