@@ -208,8 +208,9 @@ it says so:
 
 Tabled predicates, `catch/3`, `setup_call_cleanup/3`, `time_goal/1`, and
 every goal the engine has no proof for answer `False`. For an if-then-else
-with an else branch the last answer is not always known (the then-branch's
-answer never is; `( fail -> true ; member(X, [a,b]) )` ends `True`). An
+with an else branch the last answer is not always known; when it is, either
+branch can report it (`( true -> X = a ; fail )` and
+`( fail -> true ; member(X, [a,b]) )` both end `True`). An
 answer at which a constraint woke a goal may answer `False`, since the woken
 goal may have answers of its own; a check that runs inside the unification,
 such as `dif/2`'s, keeps the answer last (`dif(X, a), member(X, [a,b])` ends
