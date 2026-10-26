@@ -25,6 +25,11 @@ wakeup would bind the original's variables).
 Design questions (need a ruling):
 1. freeze/2: store the goal TERM alongside the thunk so a copier can
    re-post `freeze(V', Goal')`?  Or raise on copy_term of a frozen var?
+   (2026-10-26: the term is now recoverable without storing it --
+   `clausal.logic.coroutining.pending_goals([V])` gives `freeze(V, Goal)` /
+   `when(Cond, Goal)` terms, which `-g`, `?-` and `frozen/2` use.  A
+   `"freeze"` copier could copy those terms with the same var_map and call
+   them on the copy; copy_term/2 is unchanged until that is ruled.)
 2. clpz: re-post via attribute_goals-style residual goals (needs a
    residual-goal projection per CLP library -- the same thing copy_term/3
    needs), or refuse loudly?
