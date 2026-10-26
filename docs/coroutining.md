@@ -75,15 +75,48 @@ Generalized coroutining: delay `Goal` until `Condition` is satisfied.
 ### How conditions decompose
 
 - `when(nonvar(X), Goal)` compiles directly as `freeze(X, Goal)` — zero overhead.
-- `when((C1, C2), Goal)` decomposes to `when(C1, when(C2, Goal))` — the inner when is installed when C1 is satisfied.
+- `when((C1, C2), Goal)` decomposes to `when(C1, when(C2, Goal))` at run time — the inner when is installed when C1 is satisfied.
 - `when(ground(X), Goal)` freezes on every unbound variable in X. when any is bound, groundness is re-checked. The goal fires when X is fully ground.
 - `when((C1 ; C2), Goal)` attaches to variables in both conditions. Whichever fires first runs the goal (at most once).
 - A goal whose condition already holds runs at once, with every answer, like a woken `freeze` goal; if it has none, `when/2` fails.
 
 ??? info "Implementation"
-    Compile-time dispatch handles `nonvar` and conjunction. Runtime helpers in `clausal/logic/coroutining.py` handle `ground` and disjunction.
+    Compile-time dispatch handles `nonvar`. Runtime helpers in `clausal/logic/coroutining.py` handle `ground`, conjunction and disjunction.
 
-    **Implementation:** `clausal/logic/compiler.py` (`_compile_when`), `clausal/logic/coroutining.py` (`_install_when_ground`, `_install_when_disjunction`, `_install_when_condition`)
+    **Implementation:** `clausal/logic/compiler/control_constructs.py` (`_compile_when`), `clausal/logic/coroutining.py` (`_install_when_ground`, `_install_when_disjunction`, `_install_when_condition`)
+
+---
+
+## Pending goals: printing them, frozen/2
+
+A `freeze/2` or `when/2` still waiting when an answer is printed is shown as its goal, as Scryer shows it (operator ruling 2026-10-26), by `clausal FILE -g GOAL` and the `?-` top level:
+
+```text
+?- freeze(X, write(hi)).
+   freeze(X,write(hi)).
+?- freeze(X, g), freeze(X, h).
+   freeze(X,(g,h)).
+?- when((nonvar(X) ; ground(Y)), g).
+   when((nonvar(X);ground(Y)),g).
+?- when(ground(f(X, Y)), g), X = 1.
+   X = 1, when(ground(f(1,Y)),g).
+```
+
+The form is plain: Scryer prints `freeze:freeze(X,user:g)`, Clausal `freeze(X,g)`, as it prints `dif(X,a)`. Several freezes on one variable are one `freeze/2` of their conjunction, in the order they were posted; a `when/2` keeps its whole condition; `when/2` goals on one variable come newest first. A delay whose variable is bound since, or a disjunction whose goal ran, is not shown.
+
+`frozen(@Term, -Goal)` reads the same goals back as a term: the goals pending on the variables of `Term`, as one conjunction, or `true` when there are none (SWI's `frozen/2`; Scryer has none). Only `freeze/2` and `when/2` goals are listed, not `dif/2` or CLP constraints.
+
+```text
+?- freeze(X, g), frozen(X, G).
+   G = freeze(X,g), freeze(X,g).
+?- frozen(X, G).
+   G = true.
+```
+
+From Python, `clausal.logic.coroutining.pending_goals(variables)` returns the list of goal terms.
+
+??? info "Implementation"
+    The goal term is not stored. Every delayed goal's thunk takes one optional argument: called with a true one, it returns its residual, `("freeze", key, Goal)` or `("when", key, when(Cond, Goal))`, built from the very variables it would run the goal over, and runs nothing (`compiler/control_constructs._residual_goal_ast`, `coroutining.residual_of`). The thunk is in the attribute, so the goal is trailed and undone with it, and installing or waking a delay costs what it did. `copy_term/2` still does not copy a `freeze` attribute (`todo/copy-term-attributes-freeze-clpz-and-copy-term-3-2026-09-30.md`); the residual is what a copier or `copy_term/3` would re-post.
 
 ---
 

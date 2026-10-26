@@ -82,7 +82,7 @@ may define its own. A seam module is not ISO text and is not checked.
 | Category | Predicates |
 |---|---|
 | [Control Flow](#control-flow) | once/1, `\+` (seam `not`), if_/3, throw/1, catch_recover/3, catch/3, halt/0,1, repeat/0, setup_call_cleanup/3, call_cleanup/2 |
-| [Coroutining](#coroutining) | freeze/2, when/2 |
+| [Coroutining](#coroutining) | freeze/2, when/2, frozen/2 |
 | [Meta-Predicates](#meta-predicates) | findall/3,4, bagof/3, setof/3, forall/2, call_nth/2, count_all/2 |
 | [Higher-Order Call](#higher-order-call) | call/1..8, call_goal/1..8 |
 | [DCG (Definite Clause Grammars)](#dcg-definite-clause-grammars) | phrase/2, phrase/3 |
@@ -265,6 +265,17 @@ Generalized coroutining: delay `Goal` until `Condition` is satisfied. Supported 
     **Python tests:** `tests/test_coroutining.py::TestWhen`
     **Seam tests:** `tests/fixtures/coroutining.seam`
 
+
+---
+
+### `frozen/2`
+```text
+--8<-- "tests/fixtures/docs/builtins_sigs.txt:frozen_2"
+```
+`Goal` is the `freeze/2` and `when/2` goals pending on the variables of `Term`, as one conjunction, or `true` when there are none: `freeze(X, g), frozen(X, G)` gives `G = freeze(X,g)`. SWI's `frozen/2`, in plain form (no module qualifiers), and listing only `freeze/2` and `when/2` goals. The same goals are what `-g` and `?-` print for an answer.
+
+??? info "Implementation & tests"
+    **Python tests:** `tests/test_freeze_when_residual_goals.py`, `tests/iso/test_freeze_when_residuals_scryer.py`
 ---
 
 ## Meta-Predicates

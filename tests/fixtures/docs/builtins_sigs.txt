@@ -57,6 +57,10 @@ freeze(?X, +Goal)
 when(+Condition, +Goal)
 --8<-- [end:when_2]
 
+--8<-- [start:frozen_2]
+frozen(@Term, -Goal)
+--8<-- [end:frozen_2]
+
 
 % === Meta-Predicates ===
 

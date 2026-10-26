@@ -49,7 +49,7 @@ from ._ast_helpers import (
 )
 from ._vars import _var_python_name, _collect_vars, _collect_bound_vars
 from .globals_env import _preallocate_body_vars
-from .terms_to_ast import term_to_ast_expr, arith_to_ast_expr
+from .terms_to_ast import term_to_ast_expr, arith_to_ast_expr, cell_literal_ast
 from .compile_ctx import CompilationContext
 from clausal.pythonic_ast.nodes import Keyword as KWNode  # noqa: E402
 
@@ -461,8 +461,149 @@ def _compile_setup_call_cleanup(ctx: CompilationContext, setup, call, cleanup, k
     ]
 
 
-def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts):
-    """Compile freeze(X, Goal) — delay Goal until X is bound."""
+# ── the goal a delay keeps, as a term (operator ruling 2026-10-26) ─────────
+#
+# A pending freeze/2 or when/2 is printed as the goal (``freeze(X,g)``), and
+# frozen/2 reads it back, so the goal TERM must be recoverable from the
+# delay.  It is not stored: the goal thunk itself answers for it.  Every
+# thunk takes one optional argument; called with a true one it RETURNS (from
+# the generator: ``StopIteration.value``) its residual, without running
+# anything -- ``("freeze", None, Goal)`` for freeze/2, ``("when", None,
+# when(Cond, Goal))`` for a compiled ``when(nonvar(X), Goal)``.  The term is
+# built from the very locals the thunk would run the goal over, so it shows
+# exactly what would run; installing a delay costs nothing more, and waking
+# one costs a default argument.  ``coroutining.residual_of`` reads it.
+
+
+def _residual_goal_ast(goal, var_context) -> ast.expr:
+    """The expression that builds *goal* (a lowered body goal) as the ISO
+    term it is: ``write(hi)``, ``(g, h)``, ``(g ; h)``, ``\\+ g``, ``(C -> T ;
+    E)``.  Goal positions (a control construct's, a special form's, a
+    goal-taking builtin's) are rebuilt as goals; every other argument is
+    built as the data it is (``term_to_ast_expr``), as the program sees it.
+    ``call(V)`` of a variable -- ISO's body conversion of a variable goal --
+    is the variable itself, as Scryer prints ``G = g, freeze(X, G)``."""
+    from clausal.logic.special_forms import (  # noqa: PLC0415
+        GOAL_BUILTINS, GOAL_CONTROLS, GOAL_POSITIONS,
+    )
+    from clausal.pythonic_ast import nodes as _n  # noqa: PLC0415
+
+    def data(t):
+        return term_to_ast_expr(t, var_context, eval_arith=False)
+
+    def cell(name, *args):
+        return cell_literal_ast(name, list(args))
+
+    def conj(goals):
+        out = goal_ast(goals[-1])
+        for g in reversed(goals[:-1]):
+            out = cell(",", goal_ast(g), out)
+        return out
+
+    def goal_ast(g):
+        if g is True:
+            return cell("true")
+        if g is False:
+            return cell("false")
+        t = type(g)
+        if t is _n.Cut:
+            return cell("!")
+        if t is And:
+            return cell(",", goal_ast(g.left), goal_ast(g.right))
+        if t is Or:
+            return cell(";", goal_ast(g.left), goal_ast(g.right))
+        if t is Not:
+            return cell("\\+", goal_ast(g.operand))
+        if t is _n.IfThenElse:
+            ite = cell("->", goal_ast(g.test), goal_ast(g.body))
+            if g.orelse is None:
+                return ite
+            return cell(";", ite, goal_ast(g.orelse))
+        if t is _n.TupleLiteral and g.elements:
+            els = g.elements
+            if len(els) == 2 and els[0] == "++" and type(els[1]) is list:
+                return data(g)          # an escape run as a goal, unevaluated
+            return conj(list(els))
+        if (t is Call and type(g.func) is LoadName and not g.kwargs):
+            name, args = g.func.name, list(g.args)
+            if name == "call" and len(args) == 1 and is_var(deref(args[0])):
+                return data(args[0])
+            n = len(args)
+            positions = set(GOAL_POSITIONS.get((name, n), ()))
+            roles = (GOAL_BUILTINS.get((name, n))
+                     or GOAL_CONTROLS.get((name, n)) or "")
+            positions |= {i for i, r in enumerate(roles) if r == "G"}
+            return cell(name, *(goal_ast(a) if i in positions else data(a)
+                                for i, a in enumerate(args)))
+        return data(g)
+
+    return goal_ast(_unevaluated_escapes(goal))
+
+
+def _unevaluated_escapes(t):
+    """*t* with each Python escape (``++expr``, a seam f-string: a
+    ``PyThunk``) replaced by the term ``++Vars``, the list of the variables
+    it reads: a residual is built when it is printed, and printing must not
+    run Python code.  The same object when there is none."""
+    import dataclasses  # noqa: PLC0415
+    from clausal.terms import PyThunk  # noqa: PLC0415
+    from clausal.pythonic_ast import nodes as _n  # noqa: PLC0415
+    if isinstance(t, PyThunk):
+        return _n.TupleLiteral(elements=["++", list(t.var_objects)])
+    if type(t) is list:
+        new = [_unevaluated_escapes(e) for e in t]
+        return t if all(a is b for a, b in zip(new, t)) else new
+    if type(t) is tuple:
+        new = tuple(_unevaluated_escapes(e) for e in t)
+        return t if all(a is b for a, b in zip(new, t)) else new
+    if not isinstance(t, _n.Node) or not dataclasses.is_dataclass(t):
+        return t
+    changed = {}
+    for f in dataclasses.fields(t):
+        v = getattr(t, f.name)
+        nv = _unevaluated_escapes(v)
+        if nv is not v:
+            changed[f.name] = nv
+    return dataclasses.replace(t, **changed) if changed else t
+
+
+def _residual_or_none(build) -> ast.expr:
+    """``build()``, or the constant None (no residual to show) for a goal
+    whose term the lowering cannot build: the delay itself compiles as it
+    always did."""
+    try:
+        return build()
+    except Exception:  # noqa: BLE001 -- printing only; never fail the compile
+        return ast.Constant(value=None)
+
+
+def _residual_thunk_args(ctx: CompilationContext, residual) -> tuple:
+    """The parameter list of a delayed goal's thunk and the statement that
+    answers for its residual (see above): ``(arguments, [stmt])``.
+    *residual* is the ``(kind, term_expr)`` the thunk returns."""
+    flag = ctx.fresh("_fz_r")
+    kind, term_expr = residual
+    answer = ast.If(
+        test=_name(flag),
+        body=[ast.Return(value=ast.Tuple(
+            elts=[ast.Constant(value=kind), ast.Constant(value=None), term_expr],
+            ctx=ast.Load()))],
+        orelse=[],
+    )
+    args = ast.arguments(
+        posonlyargs=[], args=[ast.arg(arg=flag)], vararg=None,
+        kwonlyargs=[], kw_defaults=[], kwarg=None,
+        defaults=[ast.Constant(value=False)],
+    )
+    return args, [answer]
+
+
+def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts,
+                    when_cond=None):
+    """Compile freeze(X, Goal) — delay Goal until X is bound.
+
+    *when_cond* (the ``nonvar(X)`` node) when this is ``when(nonvar(X),
+    Goal)``: the delay is the same, its residual is the when/2 goal."""
     var_context = ctx.var_context
     trail_name = ctx.trail_name
     x_var = ctx.fresh("_fz_x")
@@ -475,16 +616,21 @@ def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts):
     bound_stmts = _lower_inner(ctx, goal, k_stmts)
 
     deferred_stmts = _lower_inner(ctx, goal, [_yield_none_stmt()])
-    thunk_body = deferred_stmts + [
+    if when_cond is None:
+        residual = ("freeze", _residual_or_none(
+            lambda: _residual_goal_ast(goal, var_context)))
+    else:
+        residual = ("when", _residual_or_none(lambda: cell_literal_ast(
+            "when", [_residual_goal_ast(when_cond, var_context),
+                     _residual_goal_ast(goal, var_context)])))
+    thunk_args, answer = _residual_thunk_args(ctx, residual)
+    thunk_body = answer + deferred_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
     ]
     thunk_fn = ast.FunctionDef(
         name=thunk_name,
-        args=ast.arguments(
-            posonlyargs=[], args=[], vararg=None,
-            kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
-        ),
+        args=thunk_args,
         body=thunk_body,
         decorator_list=[], returns=None, type_comment=None,
         **_EXTRA_FUNCDEF,
@@ -552,29 +698,31 @@ def _compile_when(ctx: CompilationContext, cond, goal, k_stmts):
             and isinstance(cond.func, AstLoadName)
             and cond.func.name == "nonvar"
             and len(cond.args) == 1):
-        return _compile_freeze(ctx, cond.args[0], goal, k_stmts)
+        return _compile_freeze(ctx, cond.args[0], goal, k_stmts,
+                               when_cond=cond)
 
-    # when((C1, C2), Goal) → when(C1, when(C2, Goal))
-    if isinstance(cond, And):
-        inner_when = AstCall(
-            func=AstLoadName(name="when"),
-            args=[cond.right, goal],
-            kwargs=[],
-        )
-        return _compile_when(ctx, cond.left, inner_when, k_stmts)
+    # when((C1, C2), Goal) is installed at run time as when(C1, when(C2,
+    # Goal)) (``coroutining._install_tree``), which keeps the WHOLE
+    # condition for its residual, as Scryer prints it.
 
     thunk_name = ctx.fresh("_when_thunk")
     deferred_stmts = _lower_inner(ctx, goal, [_yield_none_stmt()])
-    thunk_body = deferred_stmts + [
+    # Its residual is the whole when/2 goal, the condition as the ISO term
+    # (``$when_cond_term`` reads a cell or the seam ``Or``/``And`` nodes);
+    # built only when asked, from the same locals the install reads.
+    thunk_args, answer = _residual_thunk_args(ctx, ("when", _residual_or_none(
+        lambda: cell_literal_ast("when", [
+            _call(_name("$when_cond_term"),
+                  term_to_ast_expr(_unevaluated_escapes(cond), var_context,
+                                   eval_arith=False)),
+            _residual_goal_ast(goal, var_context)]))))
+    thunk_body = answer + deferred_stmts + [
         ast.Return(value=ast.Constant(value=None)),
         ast.Expr(value=ast.Yield(value=ast.Constant(value=None))),
     ]
     thunk_fn = ast.FunctionDef(
         name=thunk_name,
-        args=ast.arguments(
-            posonlyargs=[], args=[], vararg=None,
-            kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[],
-        ),
+        args=thunk_args,
         body=thunk_body,
         decorator_list=[], returns=None, type_comment=None,
         **_EXTRA_FUNCDEF,

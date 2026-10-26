@@ -36,6 +36,20 @@ _BUILTIN_FIELDS[("freeze", 2)] = ("variable", "goal")
 _BUILTIN_FIELDS[("when", 2)] = ("condition", "goal")
 
 
+@_builtin("frozen", 2)
+def _frozen__2(term, goal, trail, k):
+    """frozen(Term, Goal) -- Goal is the freeze/2 and when/2 goals pending on
+    the variables of Term, as one conjunction (``freeze(X,g)``,
+    ``(freeze(X,g),when(nonvar(Y),h))``), or ``true`` when there are none.
+    SWI's frozen/2, in the plain form the answer printers use (operator
+    ruling 2026-10-26): no module qualifiers."""
+    from clausal.logic.coroutining import frozen_goal  # noqa: PLC0415
+    mark = trail.mark()
+    if unify(goal, frozen_goal(term), trail):
+        yield None
+    trail.undo(mark)
+
+
 def _goal_dispatch_and_args(goal_val, db=None, context="time_goal/1"):
     """Return (dispatch_fn, args_tuple) for a goal value, or (None, None) when
     the goal is no goal shape at all -- which time_goal turns into a silent

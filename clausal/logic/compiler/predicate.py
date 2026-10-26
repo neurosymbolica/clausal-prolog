@@ -315,10 +315,12 @@ from clausal.logic.coroutining import (  # noqa: F401
     _install_when_ground as _install_when_ground_fn,
     _install_when_disjunction as _install_when_disjunction_fn,
     _install_when_condition as _install_when_condition_fn,
+    _when_condition_term as _when_cond_term_fn,
 )
 _install_when_ground_fn_s = _install_when_ground_fn
 _install_when_disjunction_fn_s = _install_when_disjunction_fn
 _install_when_condition_fn_s = _install_when_condition_fn
+_when_cond_term_fn_s = _when_cond_term_fn
 
 from clausal.logic.builtins.control import (  # noqa: E402
     META_BODY_CHECK as _META_BODY_CHECK,
@@ -1439,6 +1441,7 @@ def _compile_predicate_trampoline_impl(
     base_globals["$install_when_ground"] = _install_when_ground_fn
     base_globals["$install_when_disjunction"] = _install_when_disjunction_fn
     base_globals["$install_when_condition"] = _install_when_condition_fn
+    base_globals["$when_cond_term"] = _when_cond_term_fn
     # The internal goal a ``.clausal`` meta-argument is checked by
     # (``iso_l3._checked_in_place``); bound here, never registered as a
     # builtin.
@@ -2348,6 +2351,7 @@ def _compile_predicate_shallow_impl(
     base_globals["$install_when_ground"] = _install_when_ground_fn_s
     base_globals["$install_when_disjunction"] = _install_when_disjunction_fn_s
     base_globals["$install_when_condition"] = _install_when_condition_fn_s
+    base_globals["$when_cond_term"] = _when_cond_term_fn_s
     # WFS: inject $naf_tabled and $table_store for tabled NAF
     if db is not None:
         base_globals["$naf_tabled"] = _naf_tabled_fn_s
