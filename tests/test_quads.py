@@ -405,3 +405,34 @@ def test_g_prints_a_pending_coroutine(tmp_path):
     lines = r.stdout.splitlines()
     assert lines[0] == "freeze(X,true).", lines
     assert lines[1] == "X = 1, freeze(Y,true).", lines
+
+
+@pytest.mark.parametrize("text", [
+    # two labelled queries in a row, neither with a description
+    "l1 ?- p(1).\nl2 ?- p(2).\nq(3).\n",
+    # one, then a description-less one at the end
+    "l1 ?- p(1).\nq(3).\nl2 ?- p(2).\n",
+    # the first has a description, the second has none
+    "l1 ?- p(1).\n   true.\nl2 ?- p(2).\nq(3).\n",
+])
+def test_labelled_queries_without_a_description_are_refused(tmp_path, text):
+    r = _g(tmp_path, "p(1).\n?- p(1).\n   true.\n" + text, "q(X)")
+    assert r.returncode != 0 and "syntax" in (r.stderr + r.stdout).lower(), r.stderr
+
+
+def test_a_labelled_query_after_a_labelled_query_with_a_description(tmp_path):
+    r = _g(tmp_path, "p(1).\nl1 ?- p(1).\n   true.\nl2 ?- p(1).\n   true.\n"
+                     "q(3).\n", "q(X)")
+    assert (r.returncode, r.stdout) == (0, "X = 3.\n"), r.stderr
+
+
+@pytest.mark.parametrize("text, labels", [
+    ("l1 ?- p(1).\nl2 ?- p(2).\nq(3).\n", []),
+    ("l1 ?- p(1).\nl2 ?- p(2).\n   true.\nq(3).\n", ["l2"]),
+    ("l1 ?- p(1).\n   true.\nl2 ?- p(2).\nq(3).\n", ["l1"]),
+    ("l1 ?- p(1).\n   true.\nl2 ?- p(2).\n   true.\n", ["l1", "l2"]),
+])
+def test_extract_quads_counts_a_labelled_query_only_with_a_description(
+        text, labels):
+    # the peek that decides on one labelled query must not vouch for the next
+    assert [q.label for q in extract_quads("p(1).\n" + text)] == labels

@@ -1731,9 +1731,11 @@ def lower_items(items, *, strict: bool = True, source: "str | None" = None,
                 refuse(str(e), e.span or span)
                 continue
             kind = "Clause"
-        # Every other kind is handled above (a Query and a SyntaxIssue
-        # before here, a Directive and a DCGRule just above).
-        assert kind == "Clause", kind
+        if kind != "Clause":
+            # Every kind the reader gives is handled above; a new one is
+            # refused, not half-handled (assert would vanish under -O).
+            refuse(f"{kind} is not lowered", span)
+            continue
         defined.add(_head_indicator(it.term))
         uses.reif = ctx.reif
         uses.clause(it.term)
@@ -1981,10 +1983,13 @@ def iter_iso(source: str, op_table=None):
             buf.append(reader.read_term())
         nxt = buf[0]
         if type(nxt).__name__ == "SyntaxIssue":
-            nxt = _read_as_quad_text(source, nxt, table, True)
-            if nxt is None:
+            alt = _read_as_quad_text(source, nxt, table, True)
+            # Only a description is put back re-read.  A labelled query stays
+            # the SyntaxIssue it is until its own turn, where it has to show
+            # a description after it too.
+            if alt is None or is_labelled_query(alt):
                 return False
-            buf[0] = nxt
+            buf[0] = nxt = alt
         return (type(nxt).__name__ == "Clause"
                 and is_answer_description(nxt.term))
 
