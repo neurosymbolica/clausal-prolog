@@ -25,8 +25,9 @@ surface described in [docs/public-api.md](docs/public-api.md).
   later clause can match (the last clause, first-argument indexing, or a
   small table whose later first arguments cannot match the call's:
   `q(1). q(2).` called as `q(1)`). Not yet known (answers False):
-  `catch/3`, an if-then-else with an else branch, `setup_call_cleanup/3`,
-  tabled predicates, a goal woken by a constraint at that answer.
+  `catch/3`, `setup_call_cleanup/3`, tabled predicates. Not always known:
+  an if-then-else with an else branch, and an answer at which a constraint
+  woke a goal (which may answer False).
   `CLAUSAL_DISABLE_OPT=final_yield` (or
   `clausal.logic.trampoline.set_final_enabled(False)`) turns it all off.
   Pinned by `tests/test_solve_with_last.py`,

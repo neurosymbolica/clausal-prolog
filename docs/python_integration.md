@@ -206,10 +206,14 @@ it says so:
   indexing ruled the others out, or the later clauses' first arguments
   (`q(1). q(2).` called as `q(1)`) cannot match the call's.
 
-Tabled predicates, a goal woken by a constraint at that answer (it may have
-answers of its own), `catch/3`, an if-then-else with an else branch,
-`setup_call_cleanup/3`, `time_goal/1`, and every goal the engine has no
-proof for answer `False`.
+Tabled predicates, `catch/3`, `setup_call_cleanup/3`, `time_goal/1`, and
+every goal the engine has no proof for answer `False`. For an if-then-else
+with an else branch the last answer is not always known (the then-branch's
+answer never is; `( fail -> true ; member(X, [a,b]) )` ends `True`). An
+answer at which a constraint woke a goal may answer `False`, since the woken
+goal may have answers of its own; a check that runs inside the unification,
+such as `dif/2`'s, keeps the answer last (`dif(X, a), member(X, [a,b])` ends
+`True`).
 After the last solution the bindings are undone when the iterator is
 advanced again, as after any exhausted search.
 
