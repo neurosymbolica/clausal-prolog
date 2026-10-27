@@ -44,7 +44,30 @@ def _freeze_hook(goals, bound_to, trail):
     had their hooks run yet: under a driver they run at the next goal
     boundary with every answer (``clausal.logic.pending``); a bare
     ``unify`` runs them after all its hooks, to their first answer.
+
+    Bound to another unbound variable (``X = Y``, both free), nothing is
+    woken: no condition a freeze/2 or when/2 waits for (``nonvar/1``, or
+    ``ground/1`` of a term) holds yet.  The goals move onto the variable
+    that survives, after its own, as Scryer's ``verify_attributes`` merges
+    two delays; one already there (a when/2 waiting on both variables) is
+    not added twice.  ``put_attr`` is trailed, so backtracking past the
+    alias undoes the merge.
     """
+    if is_var(bound_to):
+        existing = get_attr(bound_to, FREEZE_KEY)
+        if not existing:
+            put_attr(bound_to, FREEZE_KEY, list(goals), trail)
+            return True
+        merged = list(existing)
+        for goal_fn in goals:
+            for g in existing:
+                if g is goal_fn:
+                    break
+            else:
+                merged.append(goal_fn)
+        if len(merged) != len(existing):
+            put_attr(bound_to, FREEZE_KEY, merged, trail)
+        return True
     for goal_fn in goals:
         trail.push_pending(goal_fn)
     return True
@@ -57,8 +80,15 @@ register_attr_hook(FREEZE_KEY, _freeze_hook)
 
 
 def _freeze_var(var, goal_thunk, trail):
-    """Attach a freeze goal to an unbound variable."""
+    """Attach a freeze goal to an unbound variable, unless it is already
+    there: a when(ground(T), G) re-check re-installs itself on the variables
+    of T still free, where it was put at the start (twice there, it ran G
+    twice once T was ground)."""
     existing = get_attr(var, FREEZE_KEY)
+    if existing:
+        for g in existing:
+            if g is goal_thunk:
+                return
     goals = list(existing) if existing else []
     goals.append(goal_thunk)
     put_attr(var, FREEZE_KEY, goals, trail)

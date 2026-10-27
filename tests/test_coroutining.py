@@ -464,8 +464,38 @@ class TestFreeze:
         # Second branch: true, X=-1 → succeeds
         assert len(results) == 1
 
+    def test_bare_unify_of_two_frozen_vars_merges(self):
+        """A bare ``unify`` of two frozen variables runs nothing: the bound
+        one's goals move onto the survivor, after its own; binding it runs
+        them all, and undoing the alias undoes the merge."""
+        from clausal.logic.coroutining import _freeze_var, FREEZE_KEY
+        from clausal.logic.variables import get_attr
+        ran = []
 
-# ── when/2 ───────────────────────────────────────────────────────────────────
+        def goal(tag):
+            def g():
+                ran.append(tag)
+                yield None
+            g.tag = tag
+            return g
+
+        trail = Trail()
+        x, y = Var(), Var()
+        _freeze_var(x, goal("a"), trail)
+        _freeze_var(y, goal("b"), trail)
+        mark = trail.mark()
+        assert unify(x, y, trail)
+        assert ran == []
+        survivor = deref(x)
+        assert [g.tag for g in get_attr(survivor, FREEZE_KEY)] == ["a", "b"]
+        assert unify(y, 1, trail)
+        assert ran == ["a", "b"]
+        trail.undo(mark)
+        assert len(get_attr(x, FREEZE_KEY)) == 1
+        assert len(get_attr(y, FREEZE_KEY)) == 1
+
+
+# ── when/2───────────────────────────────────────────────────────────────────
 
 
 def _when_goal(cond, goal):

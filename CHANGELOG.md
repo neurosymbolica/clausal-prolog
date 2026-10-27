@@ -101,6 +101,22 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `tests/iso/test_freeze_when_residuals_scryer.py` (`.pl` and `.clausal`, C
   and Python trampolines); `tests/test_toplevel.py::test_residual_freeze_and_when`.
 
+### Fixed
+
+- **Unifying two frozen variables merges their delays** (2026-10-27,
+  operator ruling 2026-10-24: a non-conformity is a bug). `X = Y` with both
+  unbound and both carrying `freeze/2` or `when/2` goals ran the bound
+  side's goals at once, with the variable still unbound (`woke2(_37)`), so a
+  goal that binds its own variable produced answers that do not exist. Now
+  nothing runs: the goals move onto the surviving variable after its own
+  (trailed, undone on backtracking), print as one residual
+  (`X = Y, freeze(X,(g,h))`), and all run when it gets a value, as in
+  Scryer. A `when(ground(T), G)` re-check no longer re-installs itself on a
+  variable it already waits on, which ran `G` twice. Pinned in
+  `tests/iso/test_freeze_alias_merge_scryer.py` (Scryer oracle rows; `.pl`
+  and `.clausal`, C and Python trampolines) and
+  `tests/test_coroutining.py::TestFreeze::test_bare_unify_of_two_frozen_vars_merges`.
+
 ## 1.2.0 (2026-10-25)
 
 A minor release (operator ruling 2026-10-25): the interactive ISO `?-`
