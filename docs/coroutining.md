@@ -104,6 +104,8 @@ A `freeze/2` or `when/2` still waiting when an answer is printed is shown as its
 
 The form is plain: Scryer prints `freeze:freeze(X,user:g)`, Clausal `freeze(X,g)`, as it prints `dif(X,a)`. Several freezes on one variable are one `freeze/2` of their conjunction, in the order they were posted; a `when/2` keeps its whole condition; `when/2` goals on one variable come newest first. A delay whose variable is bound since, or a disjunction whose goal ran, is not shown.
 
+**Wake order** follows Scryer's. When a variable is bound, its constraint hooks (`dif/2`, CLP) decide first; then its `freeze/2` goals run, in posting order, and then its `when/2` goals, newest first. Unifying two variables that both carry delays runs nothing: the goals are merged onto the surviving variable, those of the variable that got its first attribute first coming first, and run when it is bound. A variable aliased to one bound later in the same unification (`f(X,Y) = f(Y,1)`) has its goals run with that one's, after them.
+
 `frozen(@Term, -Goal)` reads the same goals back as a term: the goals pending on the variables of `Term`, as one conjunction, or `true` when there are none (SWI's `frozen/2`; Scryer has none). Only `freeze/2` and `when/2` goals are listed, not `dif/2` or CLP constraints.
 
 ```text

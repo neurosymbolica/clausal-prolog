@@ -112,7 +112,17 @@ surface described in [docs/public-api.md](docs/public-api.md).
   (trailed, undone on backtracking), print as one residual
   (`X = Y, freeze(X,(g,h))`), and all run when it gets a value, as in
   Scryer. A `when(ground(T), G)` re-check no longer re-installs itself on a
-  variable it already waits on, which ran `G` twice. Pinned in
+  variable it already waits on, which ran `G` twice. Woken goals now run
+  in Scryer's order (operator ruling 2026-10-27: Scryer is the reference):
+  a variable's `freeze/2` goals, in posting order, before its `when/2`
+  goals, newest first, whatever order they were posted in (they ran in
+  posting order, mixed); of two aliased variables, the one that got its
+  first attribute first has its goals first, whichever way the alias is
+  written; and a variable aliased to one bound later in the same
+  unification wakes with it, after its goals (`f(X,Y) = f(Y,1)`, both
+  frozen, ran Y's goals first). `register_attr_hook(key, fn, merge=True)`
+  marks a key whose attribute is a list of delayed goals the engine merges
+  on an alias. Pinned in
   `tests/iso/test_freeze_alias_merge_scryer.py` (Scryer oracle rows; `.pl`
   and `.clausal`, C and Python trampolines) and
   `tests/test_coroutining.py::TestFreeze::test_bare_unify_of_two_frozen_vars_merges`.

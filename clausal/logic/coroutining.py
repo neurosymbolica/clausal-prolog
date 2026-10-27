@@ -33,6 +33,10 @@ from clausal.pythonic_ast import nodes as _nodes
 import clausal.logic.pending  # noqa: F401  -- registers the drain a bare unify runs
 
 FREEZE_KEY = "freeze"
+#: when/2's goals, kept apart from freeze/2's: Scryer wakes a variable's
+#: freeze goals (in posting order) before its when goals (newest first),
+#: one module after the other in sorted order.
+WHEN_KEY = "when"
 
 
 def _freeze_hook(goals, bound_to, trail):
@@ -47,51 +51,70 @@ def _freeze_hook(goals, bound_to, trail):
 
     Bound to another unbound variable (``X = Y``, both free), nothing is
     woken: no condition a freeze/2 or when/2 waits for (``nonvar/1``, or
-    ``ground/1`` of a term) holds yet.  The goals move onto the variable
-    that survives, after its own, as Scryer's ``verify_attributes`` merges
-    two delays; one already there (a when/2 waiting on both variables) is
-    not added twice.  ``put_attr`` is trailed, so backtracking past the
-    alias undoes the merge.
+    ``ground/1`` of a term) holds yet.  The engine moves the goals onto the
+    variable that survives (or onto one bound later in the same
+    unification) instead of calling this hook, as Scryer's
+    ``verify_attributes`` merges two delays -- the older attributed
+    variable's goals first, trailed (``register_attr_hook(...,
+    merge=True)``).  What is below is that merge for a hook called
+    directly.
     """
     if is_var(bound_to):
-        existing = get_attr(bound_to, FREEZE_KEY)
-        if not existing:
-            put_attr(bound_to, FREEZE_KEY, list(goals), trail)
-            return True
-        merged = list(existing)
-        for goal_fn in goals:
-            for g in existing:
-                if g is goal_fn:
-                    break
-            else:
-                merged.append(goal_fn)
-        if len(merged) != len(existing):
-            put_attr(bound_to, FREEZE_KEY, merged, trail)
-        return True
+        return _merge_into(FREEZE_KEY, goals, bound_to, trail)
     for goal_fn in goals:
         trail.push_pending(goal_fn)
     return True
 
 
-register_attr_hook(FREEZE_KEY, _freeze_hook)
+def _when_hook(goals, bound_to, trail):
+    """when/2's goals wake like freeze/2's (:func:`_freeze_hook`), newest
+    first, as Scryer runs its ``when_list``."""
+    if is_var(bound_to):
+        return _merge_into(WHEN_KEY, goals, bound_to, trail)
+    for goal_fn in reversed(goals):
+        trail.push_pending(goal_fn)
+    return True
+
+
+def _merge_into(key, goals, var, trail):
+    """The merge the engine makes on an alias, for a hook called directly:
+    *goals* after *var*'s own, a goal already there not added twice."""
+    existing = get_attr(var, key)
+    if not existing:
+        put_attr(var, key, list(goals), trail)
+        return True
+    merged = list(existing)
+    for goal_fn in goals:
+        for g in existing:
+            if g is goal_fn:
+                break
+        else:
+            merged.append(goal_fn)
+    if len(merged) != len(existing):
+        put_attr(var, key, merged, trail)
+    return True
+
+
+register_attr_hook(FREEZE_KEY, _freeze_hook, True)
+register_attr_hook(WHEN_KEY, _when_hook, True)
 
 
 # ── when/2 runtime helpers ───────────────────────────────────────────────────
 
 
 def _freeze_var(var, goal_thunk, trail):
-    """Attach a freeze goal to an unbound variable, unless it is already
+    """Attach a when/2 goal to an unbound variable, unless it is already
     there: a when(ground(T), G) re-check re-installs itself on the variables
     of T still free, where it was put at the start (twice there, it ran G
     twice once T was ground)."""
-    existing = get_attr(var, FREEZE_KEY)
+    existing = get_attr(var, WHEN_KEY)
     if existing:
         for g in existing:
             if g is goal_thunk:
                 return
     goals = list(existing) if existing else []
     goals.append(goal_thunk)
-    put_attr(var, FREEZE_KEY, goals, trail)
+    put_attr(var, WHEN_KEY, goals, trail)
 
 
 def _run_now(goal_thunk, trail):
@@ -440,7 +463,8 @@ def pending_goals(variables) -> list:
         v = deref(v)
         if not is_var(v):
             continue
-        entries = get_attr(v, FREEZE_KEY)
+        entries = (get_attr(v, FREEZE_KEY) or []) + (get_attr(v, WHEN_KEY)
+                                                      or [])
         if not entries:
             continue
         frozen: list = []

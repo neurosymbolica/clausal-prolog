@@ -468,8 +468,12 @@ class TestFreeze:
         """A bare ``unify`` of two frozen variables runs nothing: the bound
         one's goals move onto the survivor, after its own; binding it runs
         them all, and undoing the alias undoes the merge."""
-        from clausal.logic.coroutining import _freeze_var, FREEZE_KEY
-        from clausal.logic.variables import get_attr
+        from clausal.logic.coroutining import FREEZE_KEY
+        from clausal.logic.variables import get_attr, put_attr
+
+        def _freeze_var(v, g, trail):
+            put_attr(v, FREEZE_KEY, (get_attr(v, FREEZE_KEY) or []) + [g],
+                     trail)
         ran = []
 
         def goal(tag):

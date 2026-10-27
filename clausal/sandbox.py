@@ -274,6 +274,7 @@ DENIED_BUILTINS: "dict[str, str]" = {
 #: import an optional solver).
 ENGINE_ATTR_KEYS = (
     ("clausal.logic.coroutining", "FREEZE_KEY"),
+    ("clausal.logic.coroutining", "WHEN_KEY"),
     ("clausal.logic.constraints", "DIF_KEY"),
     ("clausal.logic.clpfd", "FD_KEY"),
     ("clausal.logic.clpfd", "ZCMP_KEY"),

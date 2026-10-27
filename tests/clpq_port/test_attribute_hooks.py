@@ -904,6 +904,7 @@ _KNOWN_HOOKS = {
     ("clausal.logic.clpr", "REAL_KEY"),
     ("clausal.logic.constraints", "DIF_KEY"),
     ("clausal.logic.coroutining", "FREEZE_KEY"),
+    ("clausal.logic.coroutining", "WHEN_KEY"),
     ("clausal.logic.units_clp", "LINK_KEY"),
     ("clausal.logic.units_constraint", "UNITS_KEY"),
 }

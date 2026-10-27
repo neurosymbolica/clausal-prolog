@@ -67,7 +67,7 @@ def test_a_failing_woken_goal_fails_the_unify_and_binds_nothing():
     assert unify((z, w), (1, 2), t) is False
     assert is_var(deref(z)) and is_var(deref(w))
     assert t.mark() == mark and t.pending is None and t.defer is False
-    assert get_attr(z, "freeze")      # still frozen
+    assert get_attr(z, "when")        # still delayed (_freeze_var: when/2's key)
 
 
 def test_a_raising_woken_goal_propagates_and_binds_nothing():

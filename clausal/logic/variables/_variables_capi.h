@@ -48,6 +48,7 @@ typedef struct VarObject {
 typedef struct AttVarObject {
     VarObject  base;     /* IS-A Var */
     PyObject  *attrs;    /* PyDict or NULL */
+    uint64_t   attr_age; /* when it got its first attribute (provider-owned) */
 } AttVarObject;
 
 typedef enum { TRAIL_BINDING = 0, TRAIL_ATTR = 1, TRAIL_CALLBACK = 2,

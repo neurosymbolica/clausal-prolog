@@ -610,6 +610,8 @@ def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts,
     thunk_name = ctx.fresh("_fz_thunk")
     old_var = ctx.fresh("_fz_old")
     goals_var = ctx.fresh("_fz_goals")
+    # when(nonvar(X), G) keeps its goal with when/2's (coroutining.WHEN_KEY)
+    key = "freeze" if when_cond is None else "when"
 
     x_expr = term_to_ast_expr(x_arg, var_context, eval_arith=False)
 
@@ -638,7 +640,7 @@ def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts,
 
     get_old = _assign(
         old_var,
-        _call(_name("$get_attr"), _name(x_var), ast.Constant(value="freeze")),
+        _call(_name("$get_attr"), _name(x_var), ast.Constant(value=key)),
     )
 
     make_goals = _assign(
@@ -661,7 +663,7 @@ def _compile_freeze(ctx: CompilationContext, x_arg, goal, k_stmts,
         value=_call(
             _name("$put_attr"),
             _name(x_var),
-            ast.Constant(value="freeze"),
+            ast.Constant(value=key),
             _name(goals_var),
             _name(trail_name),
         ),

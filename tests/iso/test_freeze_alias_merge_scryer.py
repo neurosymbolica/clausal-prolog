@@ -114,6 +114,73 @@ ROWS = [
     # an alias made inside one unification of compound terms
     ("f(X,Y) = f(Y,Z), freeze(X, w(a)), freeze(Z, w(b)), Z = 1",
      ["a", "b", "X = 1, Y = 1, Z = 1."]),
+] + [
+    # -- Scryer's wake order (operator ruling 2026-10-27: Scryer is the
+    # reference).  Each variable's freeze goals run as one conjunction, the
+    # older attributed variable's (the one frozen first) before the other's,
+    # whichever way the alias is written:
+    ("freeze(A,w(a1)), freeze(B,w(b1)), freeze(A,w(a2)), B = A, A = 1",
+     ["a1", "a2", "b1", "A = 1, B = 1."]),
+    ("freeze(A,w(a1)), freeze(B,w(b1)), freeze(A,w(a2)), A = B, A = 1",
+     ["a1", "a2", "b1", "A = 1, B = 1."]),
+    ("freeze(A,w(a1)), freeze(B,w(b1)), freeze(A,w(a2)), B = A",
+     ["A = B, freeze(A,((w(a1),w(a2)),w(b1)))."]),
+    ("freeze(B,w(b1)), freeze(A,w(a1)), freeze(B,w(b2)), A = B, A = 1",
+     ["b1", "b2", "a1", "B = 1, A = 1."]),
+    ("freeze(B,w(b1)), freeze(A,w(a1)), freeze(B,w(b2)), A = B",
+     ["A = B, freeze(B,((w(b1),w(b2)),w(a1)))."]),
+    # older by its first attribute, not by when it was made
+    ("X = X, Y = Y, freeze(Y,w(b)), freeze(X,w(a)), X = Y, X = 1",
+     ["b", "a", "X = 1, Y = 1."]),
+    ("X = X, Y = Y, freeze(Y,w(b)), freeze(X,w(a)), X = Y",
+     ["X = Y, freeze(X,(w(b),w(a)))."]),
+    ("X = X, Y = Y, when(nonvar(Y),w(b)), when(nonvar(X),w(a)), X = Y,"
+     " X = 1", ["a", "b", "X = 1, Y = 1."]),
+    # an alias and a binding in one unification: the goals of a variable
+    # bound to one bound later wake with that one's, after them
+    ("freeze(X, w(a)), freeze(Y, w(b)), f(X,Y) = f(Y,1)",
+     ["a", "b", "X = 1, Y = 1."]),
+    ("freeze(X, w(a)), freeze(Y, w(b)), f(Y,X) = f(1,Y)",
+     ["b", "a", "X = 1, Y = 1."]),
+    ("freeze(X, w(a)), freeze(Y, w(b)), f(X,Y) = f(1,X)",
+     ["a", "b", "X = 1, Y = 1."]),
+    ("freeze(X, w(a)), freeze(Y, w(b)), freeze(Z, w(c)),"
+     " f(X,Y,Z) = f(Y,Z,1)", ["a", "b", "c", "X = 1, Y = 1, Z = 1."]),
+    ("freeze(X, w(a)), freeze(Y, w(b)), freeze(Z, w(c)),"
+     " f(Z,Y,X) = f(Y,X,1)", ["a", "b", "c", "X = 1, Y = 1, Z = 1."]),
+    ("freeze(X,(w(a),freeze(Y,w(inner)))), freeze(Y,w(b)),"
+     " f(X,Y) = f(1,2)", ["a", "inner", "b", "X = 1, Y = 2."]),
+    # on one variable, its freeze goals (posting order) before its when
+    # goals (newest first), whatever the posting order
+    ("when(nonvar(X),w(a)), freeze(X,w(b)), X = 1", ["b", "a", "X = 1."]),
+    ("freeze(X,w(b)), when(nonvar(X),w(a)), X = 1", ["b", "a", "X = 1."]),
+    ("when(nonvar(X),w(w1)), freeze(X,w(f1)), when(nonvar(X),w(w2)),"
+     " freeze(X,w(f2)), X = 1", ["f1", "f2", "w2", "w1", "X = 1."]),
+    ("when(ground(X),w(w1)), freeze(X,w(f1)), when(nonvar(X),w(w2)), X = 1",
+     ["f1", "w2", "w1", "X = 1."]),
+    ("when(nonvar(X),w(w1)), freeze(X,w(f1)), X = f(Y)",
+     ["f1", "w1", "X = f(Y)."]),
+    ("when(nonvar(X),w(w1)), freeze(X,w(f1)), when(nonvar(X),w(w2)),"
+     " freeze(X,w(f2))",
+     ["freeze(X,(w(f1),w(f2))), when(nonvar(X),w(w2)),"
+      " when(nonvar(X),w(w1))."]),
+    # ... and after an alias: freeze goals of both, then when goals of both
+    ("when(nonvar(X),w(w1)), freeze(X,w(f1)), when(nonvar(Y),w(w2)),"
+     " freeze(Y,w(f2)), X = Y, X = 1",
+     ["f1", "f2", "w2", "w1", "X = 1, Y = 1."]),
+    ("when(nonvar(Y),w(w2)), freeze(Y,w(f2)), when(nonvar(X),w(w1)),"
+     " freeze(X,w(f1)), X = Y, X = 1",
+     ["f2", "f1", "w1", "w2", "Y = 1, X = 1."]),
+    ("when(nonvar(X),w(w1)), freeze(Y,w(f2)), X = Y, X = 1",
+     ["f2", "w1", "X = 1, Y = 1."]),
+    ("when(nonvar(X),w(w1)), when(nonvar(Y),w(w2)), X = Y, X = 1",
+     ["w2", "w1", "X = 1, Y = 1."]),
+    ("when(nonvar(X),w(w1)), when(nonvar(Y),w(w2)), Y = X, X = 1",
+     ["w2", "w1", "X = 1, Y = 1."]),
+    ("when(nonvar(X),w(w1)), when(nonvar(Y),w(w2)), X = Y",
+     ["X = Y, when(nonvar(X),w(w2)), when(nonvar(X),w(w1))."]),
+    # a constraint decides before the frozen goals run
+    ("dif(X,2), freeze(X,w(a)), X = 1", ["a", "X = 1."]),
 ]
 
 #: Rows Scryer answers differently; Clausal's answer is the one asserted.
@@ -125,6 +192,8 @@ ROWS = [
 #:   aliases (``(a,(b,c))`` for ``Z = Y, Y = X``); the goals are the same and
 #:   run in the same order.
 CLAUSAL_ONLY_ROWS = [
+    # Scryer prints a twice here (dif/2 re-posting wakes the freeze again)
+    ("freeze(X,w(a)), dif(X,2), X = 1", ["a", "X = 1."]),
     ("when(ground(f(X,Y)), w(g)), X = Y",
      ["X = Y, when(ground(f(X,X)),w(g))."]),
     ("when(ground(f(X,Y)), w(g)), X = Y, X = 1", ["g", "X = 1, Y = 1."]),

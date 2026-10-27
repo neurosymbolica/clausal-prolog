@@ -65,6 +65,16 @@ static FT_ATOMIC_UINT64_T g_next_var_id = 0;
  * Mirrors the Prolog model where verify_attributes/3 is a module predicate. */
 static PyObject *g_attr_hooks = NULL;
 
+/* The keys whose hooks were registered with merge=True (freeze, when):
+ * {key: True}.  Their attributes are lists of delayed goals that an alias
+ * merges (merge_delayed_goals) instead of waking, and their hooks run after
+ * every other hook of the variable, in key order (Scryer runs each
+ * variable's verify_attributes/3 in sorted module order). */
+static PyObject *g_merge_keys = NULL;
+
+/* The source of attr_age (AttVarObject). */
+static FT_ATOMIC_UINT64_T g_next_attr_age = 1;
+
 /* ================================================================
  * Var type
  *
@@ -341,6 +351,12 @@ static PyTypeObject VarType = {
 struct AttVarObject {
     VarObject  base;   /* MUST be first — AttVar IS-A Var */
     PyObject  *attrs;  /* PyDict {key: value} or NULL (no attrs yet) */
+    /* When the variable got its first attribute (g_next_attr_age), lowered
+     * when an alias merges an older variable's delayed goals onto it: the
+     * age of a Scryer attributed variable, whose heap cell is made by its
+     * first put_atts.  Of two aliased variables the older one's goals come
+     * first (merge_delayed_goals).  0 until the attrs dict exists. */
+    uint64_t   attr_age;
 };
 
 static PyObject *
@@ -354,6 +370,7 @@ AttVar_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         self->base.binding = NULL;
         self->base.var_id  = FT_ATOMIC_FETCH_ADD(g_next_var_id, 1);
         self->attrs        = NULL;
+        self->attr_age     = 0;
     }
     PyObject_GC_Track(self);
     return (PyObject *)self;
@@ -2486,6 +2503,130 @@ hooks:
  * sequence in machine/attributed_variables.pl.
  * ================================================================ */
 
+/* Call the hook registered for *key* (none: nothing to do).  1 success,
+ * 0 the hook failed, -1 exception. */
+static int
+call_attr_hook(PyObject *key, PyObject *attr_val, PyObject *bound_to,
+               TrailObject *trail)
+{
+#if PY_VERSION_HEX >= 0x030D0000
+    PyObject *hook = NULL;
+    int has = PyDict_GetItemRef(g_attr_hooks, key, &hook);
+    if (has < 0)
+        return -1;
+    if (has == 0)
+        return 1;   /* no hook registered for this key */
+#else
+    PyObject *hook = PyDict_GetItemWithError(g_attr_hooks, key);
+    if (!hook)
+        return PyErr_Occurred() ? -1 : 1;
+    Py_INCREF(hook);
+#endif
+    PyObject *result = PyObject_CallFunctionObjArgs(
+        hook, attr_val, bound_to, (PyObject *)trail, NULL);
+    Py_DECREF(hook);
+    if (!result)
+        return -1;
+    int truthy = PyObject_IsTrue(result);
+    Py_DECREF(result);
+    if (truthy < 0)
+        return -1;
+    return truthy ? 1 : 0;
+}
+
+/* Is *t* the variable of a wakeup after index *i* of *wakeup_list*? */
+static int
+has_later_wakeup(PyObject *wakeup_list, Py_ssize_t i, PyObject *t)
+{
+    Py_ssize_t n = PyList_GET_SIZE(wakeup_list);
+    for (Py_ssize_t j = i + 1; j < n; j++)
+        if (PyTuple_GET_ITEM(PyList_GET_ITEM(wakeup_list, j), 0) == t)
+            return 1;
+    return 0;
+}
+
+/* Where the delayed goals of the variable of wakeup *i*, bound to *raw*,
+ * go instead of waking (borrowed), or NULL: they wake.
+ *
+ * Scryer replays the bindings of a unification one at a time, each
+ * variable's verify_attributes/3 seeing the ones after it undone: bound to
+ * a variable, the goals move onto it (freeze's "rescue conjunction"), and
+ * run if and when that variable's own binding wakes it.  Here every binding
+ * is made before any hook runs, so a variable bound later in the same
+ * unification still has its wakeup to come: the goals go onto it, and that
+ * wakeup runs them (``f(X,Y) = f(Y,1)``, both frozen: X's goals, then Y's).
+ * A variable bound with no wakeup to come (it had no attributes) is
+ * followed to what it is bound to. */
+static PyObject *
+delayed_goals_target(PyObject *wakeup_list, Py_ssize_t i, PyObject *raw)
+{
+    PyObject *t = raw;
+    while (Var_Check(t)) {
+        PyObject *b = FT_ATOMIC_LOAD_PTR(Var_CAST(t)->binding);
+        if (b == NULL)
+            return AttVar_Check(t) ? t : NULL;
+        if (AttVar_Check(t) && AttVar_CAST(t)->attrs != NULL
+                && has_later_wakeup(wakeup_list, i, t))
+            return t;
+        t = b;
+    }
+    return NULL;
+}
+
+/* Merge the delayed goals *goals* (a list) of *from*, under *key*, onto
+ * *to*: the goals of the variable that got its first attribute first come
+ * first (Scryer keeps the older attributed variable of an alias and puts
+ * its goals first: ``freeze(X,(Fx,Fy))``, and when/2's newest-first list,
+ * ``Wy ++ Wx``, is the reverse of the posting-order list ``Lx ++ Ly`` kept
+ * here).  A goal already there (one when/2 waiting on both) is not added
+ * twice.  Trailed.  1 merged, 0 not a list (the hook wakes the goals
+ * instead), -1 exception. */
+static int
+merge_delayed_goals(AttVarObject *from, AttVarObject *to, PyObject *key,
+                    PyObject *goals, TrailObject *trail)
+{
+    if (!PyList_Check(goals))
+        return 0;
+    if (!to->attrs) {
+        to->attrs = PyDict_New();
+        if (!to->attrs) return -1;
+        to->attr_age = FT_ATOMIC_FETCH_ADD(g_next_attr_age, 1);
+    }
+    PyObject *existing = PyDict_GetItemWithError(to->attrs, key);
+    if (!existing && PyErr_Occurred()) return -1;
+    if (existing && !PyList_Check(existing))
+        return 0;
+    int from_first = from->attr_age < to->attr_age;
+    PyObject *first  = from_first ? goals : existing;
+    PyObject *second = from_first ? existing : goals;
+    PyObject *merged = first ? PyList_GetSlice(first, 0, PyList_GET_SIZE(first))
+                             : PyList_New(0);
+    if (!merged) return -1;
+    if (second) {
+        Py_ssize_t n2 = PyList_GET_SIZE(second);
+        for (Py_ssize_t k = 0; k < n2; k++) {
+            PyObject *g = PyList_GET_ITEM(second, k);
+            Py_ssize_t m = PyList_GET_SIZE(merged), q;
+            for (q = 0; q < m; q++)
+                if (PyList_GET_ITEM(merged, q) == g)
+                    break;
+            if (q == m && PyList_Append(merged, g) < 0) {
+                Py_DECREF(merged);
+                return -1;
+            }
+        }
+    }
+    if (trail_push_attr(trail, to, key, existing) < 0
+            || PyDict_SetItem(to->attrs, key, merged) < 0) {
+        Py_DECREF(merged);
+        return -1;
+    }
+    Py_DECREF(merged);
+    if (from_first)
+        to->attr_age = from->attr_age;
+    return 1;
+}
+
 static int
 fire_wakeups_dispatch(PyObject *wakeup_list, TrailObject *trail)
 {
@@ -2493,10 +2634,10 @@ fire_wakeups_dispatch(PyObject *wakeup_list, TrailObject *trail)
     for (Py_ssize_t i = 0; i < n; i++) {
         PyObject *pair     = PyList_GET_ITEM(wakeup_list, i);
         PyObject *attvar   = PyTuple_GET_ITEM(pair, 0);
-        PyObject *bound_to = PyTuple_GET_ITEM(pair, 1);
+        PyObject *raw      = PyTuple_GET_ITEM(pair, 1);
 
         /* Follow any further bindings made after the initial bind */
-        bound_to = var_deref(bound_to);
+        PyObject *bound_to = var_deref(raw);
 
         AttVarObject *av = AttVar_CAST(attvar);
         if (!av->attrs)
@@ -2510,57 +2651,73 @@ fire_wakeups_dispatch(PyObject *wakeup_list, TrailObject *trail)
         PyObject *items = PyDict_Items(av->attrs);
         if (!items) return -1;
 
+        /* Every other hook first, in attribute order; then the delayed
+         * goals' (merge keys), in key order: freeze/2's before when/2's.
+         * (At most MAX_DELAYED merge keys are ordered; only two exist.) */
+        enum { MAX_DELAYED = 8 };
+        Py_ssize_t didx[MAX_DELAYED];
+        int nd = 0;
         Py_ssize_t nitems = PyList_GET_SIZE(items);
         for (Py_ssize_t j = 0; j < nitems; j++) {
-            PyObject *kv       = PyList_GET_ITEM(items, j);
-            PyObject *key      = PyTuple_GET_ITEM(kv, 0);
-            PyObject *attr_val = PyTuple_GET_ITEM(kv, 1);
-
-            /* PyDict_GetItemRef returns a strong ref (3.13+).
-             * Fall back to PyDict_GetItemWithError + Py_XINCREF on older builds. */
-#if PY_VERSION_HEX >= 0x030D0000
-            PyObject *hook = NULL;
-            int has = PyDict_GetItemRef(g_attr_hooks, key, &hook);
-            if (has < 0) {
-                Py_DECREF(items);
-                return -1;
-            }
-            if (has == 0)
-                continue;   /* no hook registered for this key */
-#else
-            PyObject *hook = PyDict_GetItemWithError(g_attr_hooks, key);
-            if (!hook) {
-                if (PyErr_Occurred()) {
-                    Py_DECREF(items);
-                    return -1;
+            PyObject *kv  = PyList_GET_ITEM(items, j);
+            PyObject *key = PyTuple_GET_ITEM(kv, 0);
+            if (PyDict_GET_SIZE(g_merge_keys) && nd < MAX_DELAYED) {
+                int is_merge = PyDict_Contains(g_merge_keys, key);
+                if (is_merge < 0) goto error;
+                if (is_merge) {
+                    didx[nd++] = j;
+                    continue;
                 }
-                continue;   /* no hook registered for this key */
             }
-            Py_INCREF(hook);
-#endif
-
-            PyObject *result = PyObject_CallFunctionObjArgs(
-                hook, attr_val, bound_to, (PyObject *)trail, NULL);
-            if (!result) {
-                Py_DECREF(hook);
+            int r = call_attr_hook(key, PyTuple_GET_ITEM(kv, 1), bound_to,
+                                   trail);
+            if (r <= 0) {
                 Py_DECREF(items);
-                return -1;
+                return r;
             }
-            int truthy = PyObject_IsTrue(result);
-            Py_DECREF(result);
-            if (truthy < 0) {
-                Py_DECREF(hook);
-                Py_DECREF(items);
-                return -1;
+        }
+        /* insertion sort of the merge keys */
+        for (int a = 1; a < nd; a++) {
+            Py_ssize_t cur = didx[a];
+            PyObject *ck = PyTuple_GET_ITEM(PyList_GET_ITEM(items, cur), 0);
+            int b = a - 1;
+            while (b >= 0) {
+                PyObject *bk = PyTuple_GET_ITEM(
+                    PyList_GET_ITEM(items, didx[b]), 0);
+                int lt = PyObject_RichCompareBool(ck, bk, Py_LT);
+                if (lt < 0) goto error;
+                if (!lt) break;
+                didx[b + 1] = didx[b];
+                b--;
             }
-            if (!truthy) {
-                Py_DECREF(hook);
-                Py_DECREF(items);
-                return 0;   /* hook rejected the unification */
+            didx[b + 1] = cur;
+        }
+        if (nd) {
+            PyObject *target = delayed_goals_target(wakeup_list, i, raw);
+            for (int d = 0; d < nd; d++) {
+                PyObject *kv  = PyList_GET_ITEM(items, didx[d]);
+                PyObject *key = PyTuple_GET_ITEM(kv, 0);
+                PyObject *val = PyTuple_GET_ITEM(kv, 1);
+                int r = 0;
+                if (target) {
+                    r = merge_delayed_goals(av, AttVar_CAST(target), key,
+                                            val, trail);
+                    if (r < 0) goto error;
+                }
+                if (r == 0) {
+                    r = call_attr_hook(key, val, bound_to, trail);
+                    if (r <= 0) {
+                        Py_DECREF(items);
+                        return r;
+                    }
+                }
             }
-            Py_DECREF(hook);
         }
         Py_DECREF(items);
+        continue;
+    error:
+        Py_DECREF(items);
+        return -1;
     }
     return 1;
 }
@@ -2985,6 +3142,7 @@ py_put_attr(PyObject *Py_UNUSED(module), PyObject *args)
     if (!av->attrs) {
         av->attrs = PyDict_New();
         if (!av->attrs) return NULL;
+        av->attr_age = FT_ATOMIC_FETCH_ADD(g_next_attr_age, 1);
     }
 
     /* Get current value (borrowed ref, NULL if absent) */
@@ -3107,11 +3265,25 @@ static PyObject *
 py_register_attr_hook(PyObject *Py_UNUSED(module), PyObject *args)
 {
     PyObject *key, *callable;
-    if (!PyArg_ParseTuple(args, "OO", &key, &callable))
+    int merge = 0;
+    if (!PyArg_ParseTuple(args, "OO|p", &key, &callable, &merge))
         return NULL;
 
     FtCriticalSection cs;
     FT_CS_BEGIN(&cs, g_attr_hooks);
+    if (callable == Py_None || !merge) {
+        if (PyDict_DelItem(g_merge_keys, key) < 0) {
+            if (PyErr_ExceptionMatches(PyExc_KeyError))
+                PyErr_Clear();
+            else {
+                FT_CS_END(&cs);
+                return NULL;
+            }
+        }
+    } else if (PyDict_SetItem(g_merge_keys, key, Py_True) < 0) {
+        FT_CS_END(&cs);
+        return NULL;
+    }
     if (callable == Py_None) {
         if (PyDict_DelItem(g_attr_hooks, key) < 0) {
             if (PyErr_ExceptionMatches(PyExc_KeyError))
@@ -4415,6 +4587,7 @@ capi_put_attr(PyObject *var_obj, PyObject *key, PyObject *value,
     if (!av->attrs) {
         av->attrs = PyDict_New();
         if (!av->attrs) return -1;
+        av->attr_age = FT_ATOMIC_FETCH_ADD(g_next_attr_age, 1);
     }
 
     PyObject *old_attr = PyDict_GetItemWithError(av->attrs, key);
@@ -4854,7 +5027,7 @@ static PyMethodDef module_methods[] = {
      "Delete attribute *key* from AttVar *var*.\n"
      "The deletion is recorded on *trail* and reversed on backtrack."},
     {"register_attr_hook", py_register_attr_hook, METH_VARARGS,
-     "register_attr_hook(key, callable)\n"
+     "register_attr_hook(key, callable, merge=False)\n"
      "\n"
      "Register a hook called when an AttVar with attribute *key* is unified.\n"
      "\n"
@@ -4863,6 +5036,11 @@ static PyMethodDef module_methods[] = {
      "Returning False fails the unification and rolls back all bindings.\n"
      "The hook may call unify() or put_attr() to propagate constraints.\n"
      "Pass callable=None to unregister.\n"
+     "\n"
+     "merge=True (freeze/2, when/2): the attribute is a list of delayed\n"
+     "goals.  Bound to a variable (or to one bound later in the same\n"
+     "unification) the list is merged onto it, trailed, and the hook is not\n"
+     "called; the hook runs after the variable's other hooks, in key order.\n"
      "\n"
      "Analogous to SWI/Scryer's attr_unify_hook/2 (per module key) and\n"
      "SICStus's verify_attributes/3."},
@@ -4942,6 +5120,8 @@ PyInit__variables(void)
 
     g_attr_hooks = PyDict_New();
     if (!g_attr_hooks) return NULL;
+    g_merge_keys = PyDict_New();
+    if (!g_merge_keys) return NULL;
 
     /* Interned before any unify can run — do_unify's hook probe uses it. */
     str_dunder_unify = PyUnicode_InternFromString("__unify__");
