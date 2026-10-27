@@ -127,6 +127,23 @@ surface described in [docs/public-api.md](docs/public-api.md).
   and `.clausal`, C and Python trampolines) and
   `tests/test_coroutining.py::TestFreeze::test_bare_unify_of_two_frozen_vars_merges`.
 
+
+- `dif/2` on a cyclic or very deep term answers as Scryer does instead of
+  raising `error(resource_error(stack), _)` ("_collect_free_vars: term
+  nesting too deep"): `X = f(X), dif(Y, X)` suspends on `Y` (the answer
+  shows `dif(Y,f(...))`), `X = f(X, V), Y = f(Y, a), dif(X, Y)` suspends
+  on `V`, two 100k-deep terms suspend, and a goal woken by `freeze/2` that
+  posts such a `dif` no longer raises.  The walk that collects the
+  variables to suspend on (C and Python) is iterative past a depth
+  threshold, with a visited set, as `term_variables/2`'s is.  And the
+  trial unify of `dif/2`, its wake-up hook and the reified `=/3` /
+  `dif/3` no longer runs the occurs check, which answered for finite
+  trees: `dif(X, f(X))` succeeded with nothing to wait on, so a later
+  `X = f(X)` made both sides one rational tree.  It now suspends, as in
+  Scryer and SICStus, and `=(X, f(X), T)` gives `T = true` then
+  `T = false` (operator ruling 2026-10-24: a non-conformity is a bug).
+  Rows against Scryer in `tests/iso/test_dif_cyclic_scryer.py`.
+
 ## 1.2.0 (2026-10-25)
 
 A minor release (operator ruling 2026-10-25): the interactive ISO `?-`

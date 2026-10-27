@@ -332,11 +332,14 @@ One standard-order difference from Scryer: with `X = [a|X]`,
 reads the cyclic list as the cons cells it is -- `'.'(a, X)`, whose tail
 is a compound, after the atom `foo` -- consistently with `f(a, foo)`
 against `X = f(a, X)`, where both engines say `<`; Scryer appears to
-flatten the cyclic list before ordering it.  Two open gaps are filed:
-`dif/2` that must SUSPEND on a cyclic or 100k-deep pair raises
-`resource_error(stack)` where Scryer suspends
-(todo/dif-on-a-cyclic-or-deep-pair-that-must-suspend-raises-2026-10-24.md),
-and `=`/2 and `==`/2 on two hole-built lists are quadratic
+flatten the cyclic list before ordering it.  `dif/2` on a cyclic or
+100k-deep pair answers as Scryer does: it fails on one rational tree,
+succeeds on a ground difference, and otherwise suspends (`X = f(X),
+dif(Y, X)` leaves `dif(Y,f(...))`; a goal woken by `freeze/2` that posts
+such a `dif` too), and since its trial unify has no occurs check
+`dif(X, f(X))` suspends and a later `X = f(X)` fails
+(`tests/iso/test_dif_cyclic_scryer.py`).  One open gap is filed:
+`=`/2 and `==`/2 on two hole-built lists are quadratic
 (todo/hole-built-list-unify-and-eq-are-quadratic-2026-10-24.md).
 
 ---

@@ -1,5 +1,21 @@
 # `dif/2` that must SUSPEND on a cyclic or very deep pair raises `resource_error(stack)`
 
+**Status: FIXED 2026-10-26 (branch fix/dif-cyclic-free-vars-2026-10-26).**
+Wider than filed: ANY `dif/2` that had to suspend on a pair holding a
+cyclic term raised, even one suspending on a plain variable
+(`X = f(X), dif(Y, X)`), and so did a goal woken by `freeze/2` that posts
+one.  The variable walk is now `collect_root` in `_constraints_dif.c`: the
+recursive `collect_walk` up to `COLLECT_DEEP` (1000), then the iterative,
+visited-set `collect_iterative` on the root; the Python twin is
+`rational_walk.collect_free_vars_iterative`.  Also: the trial unify of
+`dif/2`, its hook and `reify_eq` dropped the occurs check
+(`_structural_unify`), so `dif(X, f(X))` suspends and a later
+`X = f(X)` fails, as in Scryer.  Pinned by `r1`/`r2` (with `r1a`, `r1b`,
+`r2a`, `r2b`) and the other rows of `tests/iso/test_dif_cyclic_scryer.py`
+(engine and Scryer columns, both trampolines and the Python twin, the
+residual text), `TestCollectFreeVarsCyclic` / `TestDifCyclic` in
+`tests/test_dif.py`.
+
 Filed 2026-10-24 by the review of `fix/cyclic-terms-2026-10-24`
 (d8d1693f).  Scryer suspends the constraint; this engine raises
 `error(resource_error(stack), _)`.  Before that branch it raised a raw

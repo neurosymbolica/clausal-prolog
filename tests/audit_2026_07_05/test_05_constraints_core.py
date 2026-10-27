@@ -447,18 +447,24 @@ class TestF005HasUnitsErrorPath:
 
 
 class TestF006DifOccursCheckCompound:
+    # Superseded 2026-10-26: dif/2's trial unify has no occurs check (as
+    # =/2), so X = f(X) is a solution (a rational tree) and dif(X, f(X))
+    # SUSPENDS, as in Scryer and SICStus -- a later X = f(X) must fail.
+    # tests/iso/test_dif_cyclic_scryer.py holds the Scryer rows.
 
-    def test_dif_x_fx_immediately_satisfied(self):
+    def test_dif_x_fx_suspends(self):
         t = Trail()
         x = Var()
         assert dif(x, ("f", x), t) is True
-        assert get_attr(x, DIF_KEY) is None   # docs: no pending constraint
+        assert get_attr(x, DIF_KEY) is not None
+        assert unify(x, ("f", x), t) is False
 
-    def test_control_dif_x_listx_immediately_satisfied(self):
+    def test_control_dif_x_listx_suspends(self):
         t = Trail()
         x = Var()
         assert dif(x, [x], t) is True
-        assert get_attr(x, DIF_KEY) is None
+        assert get_attr(x, DIF_KEY) is not None
+        assert unify(x, [x], t) is False
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -541,14 +547,17 @@ class TestDifCoreRegression:
         assert dif(x, 1, t) is False
         assert dif(x, 2, t) is True
 
-    def test_deep_nesting_clean_recursion_error(self):
-        # MAX_DEPTH (50k) guard raises a clean RecursionError, no crash.
+    def test_deep_nesting_suspends(self):
+        # Past the old MAX_DEPTH (50k) guard, which raised RecursionError:
+        # the variable walk falls back to an iterative one (2026-10-26).
         x, y = Var(), Var()
         t1, t2 = x, y
         for _ in range(51000):
             t1, t2 = [t1], [t2]
-        with pytest.raises(RecursionError):
-            dif(t1, t2, Trail())
+        t = Trail()
+        assert dif(t1, t2, t) is True
+        assert get_attr(x, DIF_KEY) is not None
+        assert unify(x, y, t) is False
 
     def test_deep_nesting_below_limit_ok(self):
         x, y = Var(), Var()

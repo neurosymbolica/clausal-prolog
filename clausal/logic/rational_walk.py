@@ -36,8 +36,8 @@ from typing import Any
 from clausal.logic.cells import is_chars, flat_carrier
 from clausal.logic.predicate import field_names_for, is_term_instance, term_field_names
 from clausal.logic.variables import Trail, Var, deref, is_var, unify
-from clausal.terms import (ConcreteSeg, DictTerm, SegBytes, SegList, SegListView,
-                           SegString, VarSeg)
+from clausal.terms import (ConcreteSeg, DictTerm, Quantity, SegBytes, SegList,
+                           SegListView, SegString, VarSeg)
 
 #: The leaves every walker returns as they are (``_deref_walk_py`` adds
 #: ``complex``; ``None`` is tested separately, it is not a type).
@@ -339,6 +339,60 @@ def collect_vars_iterative(term: Any, result: list) -> None:
         visited.add(id(d))
         keep.append(d)
         children = _children(d)
+        if children:
+            stack.extend(reversed(children))
+
+
+def _dif_children(d: Any) -> list | None:
+    """The sub-terms ``dif/2``'s variable walk descends into, shape for
+    shape (the C ``collect_children`` in ``_constraints_dif.c``): what the
+    unifier can bind through.  A SetTerm is a leaf (the unifier refuses
+    var-element set unification)."""
+    if isinstance(d, (tuple, list)):
+        return list(d)
+    if isinstance(d, DictTerm):
+        return list(d.data.values())
+    if isinstance(d, dict):
+        return list(d.values())
+    if isinstance(d, (SegList, SegString, SegBytes)):
+        out: list = []
+        for seg in d.segments:
+            if isinstance(seg, VarSeg):
+                out.append(seg.var)
+            elif isinstance(seg, ConcreteSeg):
+                out.extend(seg.elements)
+            # a plain str/bytes segment is ground
+        return out
+    if isinstance(d, Quantity):
+        return [d.value]
+    if is_term_instance(d):
+        return [getattr(d, n) for n in term_field_names(d)]
+    return None
+
+
+def collect_free_vars_iterative(term: Any, result: list, seen_ids: set) -> None:
+    """``dif/2``'s variable walk (``constraints._collect_free_vars``): every
+    unbound variable reachable from *term* through what the unifier binds
+    through, once (*seen_ids* holds the ids already in *result*), in order
+    of first appearance left to right.  Iterative with a visited set, so a
+    cyclic term or one nested past the recursion limit ends."""
+    stack = [term]
+    visited: set = set()
+    keep: list = []
+    while stack:
+        d = deref(stack.pop())
+        if is_var(d):
+            if id(d) not in seen_ids:
+                seen_ids.add(id(d))
+                result.append(d)
+            continue
+        if d is None or isinstance(d, (bool, int, float, str, bytes)):
+            continue
+        if id(d) in visited:
+            continue
+        visited.add(id(d))
+        keep.append(d)
+        children = _dif_children(d)
         if children:
             stack.extend(reversed(children))
 

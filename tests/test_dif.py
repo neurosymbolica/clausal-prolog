@@ -185,17 +185,106 @@ class TestDifDirect:
         assert dif(("f", 1), ("f", 1), t) is False
 
 
-# ── Occurs check ─────────────────────────────────────────────────────────────
+# ── No occurs check: a rational tree is a solution ──────────────────────────
 
 
 class TestDifOccursCheck:
 
     def test_var_vs_compound_containing_it(self):
-        """dif(X, f(X)) → True — X can never equal f(X)."""
+        """dif(X, f(X)) suspends: X = f(X) (a rational tree, ISO 7.3.2) makes
+        the two sides one term, so the later binding must fail (Scryer,
+        SICStus).  Until 2026-10-26 the trial unify was occurs-checked and
+        dif succeeded with nothing to wait on."""
         # nv
         t = fresh_trail()
         x = Var()
         assert dif(x, ("f", x), t) is True
+        assert get_attr(x, DIF_KEY) is not None
+        assert unify(x, ("f", x), t) is False
+
+
+# ── Cyclic and very deep terms ───────────────────────────────────────────────
+
+
+def _cyclic(trail, make):
+    """A variable bound to make(itself), no occurs check: X = f(X)."""
+    x = Var()
+    assert unify(x, make(x), trail) is True
+    return x
+
+
+@pytest.fixture(params=["c", "python"])
+def collect(request):
+    """The C collector and its pure-Python twin."""
+    import clausal.logic.constraints as C
+    from clausal.logic.rational_walk import collect_free_vars_iterative
+    if request.param == "c":
+        if not C._USE_C_DIF:
+            pytest.skip("C dif extension not built")
+        return C._collect_free_vars
+
+    def py(term):
+        out: list = []
+        collect_free_vars_iterative(term, out, set())
+        return out
+    return py
+
+
+class TestCollectFreeVarsCyclic:
+
+    def test_cyclic_ground(self, collect):
+        t = fresh_trail()
+        x = _cyclic(t, lambda v: ("f", v))
+        assert collect(x) == []
+
+    def test_cyclic_with_a_variable(self, collect):
+        t = fresh_trail()
+        v = Var()
+        x = _cyclic(t, lambda s: ("f", s, v))
+        assert collect(("g", x, x)) == [v]
+
+    def test_cyclic_list(self, collect):
+        t = fresh_trail()
+        v = Var()
+        x = _cyclic(t, lambda s: [v, s])
+        assert collect(x) == [v]
+
+    def test_deep_order_is_left_to_right(self, collect):
+        a, b, c = Var(), Var(), Var()
+        term = ("leaf", b)
+        for _ in range(5000):
+            term = ("f", term)
+        got = collect(("g", a, term, c, a))
+        assert got == [a, b, c]
+
+
+class TestDifCyclic:
+
+    def test_suspends_on_a_plain_variable(self):
+        t = fresh_trail()
+        x = _cyclic(t, lambda v: ("f", v))
+        y = Var()
+        assert dif(y, x, t) is True
+        assert get_attr(y, DIF_KEY) is not None
+        mark = t.mark()
+        assert unify(y, ("f", y), t) is False     # one rational tree
+        t.undo(mark)
+        assert unify(y, ("f", "a"), t) is True
+
+    def test_two_rational_trees(self):
+        t = fresh_trail()
+        x = _cyclic(t, lambda v: ("f", v))
+        y = _cyclic(t, lambda v: ("f", ("f", v)))
+        assert dif(x, y, t) is False
+
+    def test_deep_pair_suspends(self):
+        t = fresh_trail()
+        v = Var()
+        t1, t2 = v, "a"
+        for _ in range(100_000):
+            t1, t2 = ("f", t1), ("f", t2)
+        assert dif(t1, t2, t) is True
+        assert unify(v, "a", t) is False
 
 
 # ── Constraint propagation ───────────────────────────────────────────────────

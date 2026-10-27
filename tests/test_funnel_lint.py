@@ -144,7 +144,10 @@ ALLOWLIST: tuple[AllowEntry, ...] = (
     AllowEntry("clausal/logic/builtins/inspection.py", (92, 188),
                "plan exclusion #3: _collect_vars_py, synced with its C arm"),
     # 4. unify inner loop, already funneled.
-    AllowEntry("clausal/logic/constraints.py", (161, 205),
+    # (158-258 since 2026-10-26: the walk gained its no-occurs-check twin
+    #  entry, _structural_unify, and the free-variable collector before it
+    #  moved to rational_walk.)
+    AllowEntry("clausal/logic/constraints.py", (158, 258),
                "plan exclusion #4: _structural_unify_oc, unify inner loop"),
     # 5. deliberately narrower than term_field_names (drops compare=False
     #    dataclass fields) -- must stay hand-rolled, not funneled.

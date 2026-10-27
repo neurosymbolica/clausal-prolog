@@ -8,7 +8,8 @@
  *
  * Provides:
  *   _collect_free_vars(term)              → list of unbound Vars
- *   _structural_unify_oc(t1, t2, trail)   → bool
+ *   _structural_unify_oc(t1, t2, trail)   → bool (occurs-checked)
+ *   _structural_unify(t1, t2, trail)      → bool (as =/2: rational trees)
  *   dif(x, y, trail)                      → bool
  *   _dif_hook(attr_value, bound_to, trail) → bool
  *   reify_eq(x, y, trail)                → True / False / None
@@ -21,7 +22,15 @@
 #define VARIABLES_CAPI_CONSUMER
 #include "variables/_variables_capi.h"
 
-#define MAX_DEPTH 50000
+/* The depth past which collect_walk stops descending and answers
+ * COLLECT_DEEP_CODE, which unwinds to its depth-0 entry (collect_root);
+ * that entry then runs collect_iterative on the ROOT term: an explicit
+ * stack and a visited set over compounds, so a CYCLIC term (X = f(X))
+ * and a term nested past any C stack are walked to the end.  The
+ * variables found and their order are the recursive walk's.  Twin:
+ * rational_walk.collect_free_vars_iterative. */
+#define COLLECT_DEEP 1000
+#define COLLECT_DEEP_CODE 2
 /* The depth past which c_structural_unify_oc stops descending and answers
  * STRUCTURAL_DEEP_CODE, which unwinds to the depth-0 entry
  * (structural_unify_oc_root); that entry then hands the ROOT pair to the
@@ -75,16 +84,14 @@ call_term_field_names(PyObject *term)
 
 /*
  * Recursive walk collecting unbound Vars.
- * Returns 0 on success, -1 on error.
+ * Returns 0 on success, -1 on error, COLLECT_DEEP_CODE past COLLECT_DEEP
+ * levels (the caller is collect_root, which then walks iteratively).
  */
 static int
 collect_walk(PyObject *term, PyObject *seen, PyObject *result, int depth)
 {
-    if (depth > MAX_DEPTH) {
-        PyErr_SetString(PyExc_RecursionError,
-                        "_collect_free_vars: term nesting too deep");
-        return -1;
-    }
+    if (depth > COLLECT_DEEP)
+        return COLLECT_DEEP_CODE;
 
     /* Direct C deref — borrowed ref, no refcount overhead */
     PyObject *t = VarAPI->deref(term);
@@ -107,8 +114,8 @@ collect_walk(PyObject *term, PyObject *seen, PyObject *result, int depth)
     if (PyTuple_Check(t)) {
         Py_ssize_t n = PyTuple_GET_SIZE(t);
         for (Py_ssize_t i = 0; i < n; i++) {
-            if (collect_walk(PyTuple_GET_ITEM(t, i), seen, result, depth + 1) < 0)
-                return -1;
+            int rc = collect_walk(PyTuple_GET_ITEM(t, i), seen, result, depth + 1);
+            if (rc != 0) return rc;
         }
         return 0;
     }
@@ -117,8 +124,8 @@ collect_walk(PyObject *term, PyObject *seen, PyObject *result, int depth)
     if (PyList_Check(t)) {
         Py_ssize_t n = PyList_GET_SIZE(t);
         for (Py_ssize_t i = 0; i < n; i++) {
-            if (collect_walk(PyList_GET_ITEM(t, i), seen, result, depth + 1) < 0)
-                return -1;
+            int rc = collect_walk(PyList_GET_ITEM(t, i), seen, result, depth + 1);
+            if (rc != 0) return rc;
         }
         return 0;
     }
@@ -139,9 +146,10 @@ collect_walk(PyObject *term, PyObject *seen, PyObject *result, int depth)
             PyObject *key, *val;
             Py_ssize_t pos = 0;
             while (PyDict_Next(data, &pos, &key, &val)) {
-                if (collect_walk(val, seen, result, depth + 1) < 0) {
+                int rc = collect_walk(val, seen, result, depth + 1);
+                if (rc != 0) {
                     Py_DECREF(data);
-                    return -1;
+                    return rc;
                 }
             }
         }
@@ -154,8 +162,8 @@ collect_walk(PyObject *term, PyObject *seen, PyObject *result, int depth)
         PyObject *key, *val;
         Py_ssize_t pos = 0;
         while (PyDict_Next(t, &pos, &key, &val)) {
-            if (collect_walk(val, seen, result, depth + 1) < 0)
-                return -1;
+            int rc = collect_walk(val, seen, result, depth + 1);
+            if (rc != 0) return rc;
         }
         return 0;
     }
@@ -179,7 +187,7 @@ collect_walk(PyObject *term, PyObject *seen, PyObject *result, int depth)
                 if (!var) { Py_DECREF(seq); return -1; }
                 int rc = collect_walk(var, seen, result, depth + 1);
                 Py_DECREF(var);
-                if (rc < 0) { Py_DECREF(seq); return -1; }
+                if (rc != 0) { Py_DECREF(seq); return rc; }
                 continue;
             }
             int ics = PyObject_IsInstance(seg, ConcreteSeg_type);
@@ -192,9 +200,10 @@ collect_walk(PyObject *term, PyObject *seen, PyObject *result, int depth)
                 if (!eseq) { Py_DECREF(seq); return -1; }
                 Py_ssize_t ne = PySequence_Fast_GET_SIZE(eseq);
                 for (Py_ssize_t j = 0; j < ne; j++) {
-                    if (collect_walk(PySequence_Fast_GET_ITEM(eseq, j),
-                                     seen, result, depth + 1) < 0) {
-                        Py_DECREF(eseq); Py_DECREF(seq); return -1;
+                    int rc = collect_walk(PySequence_Fast_GET_ITEM(eseq, j),
+                                          seen, result, depth + 1);
+                    if (rc != 0) {
+                        Py_DECREF(eseq); Py_DECREF(seq); return rc;
                     }
                 }
                 Py_DECREF(eseq);
@@ -228,7 +237,7 @@ collect_walk(PyObject *term, PyObject *seen, PyObject *result, int depth)
             if (!val) { Py_DECREF(fields); return -1; }
             int rc = collect_walk(val, seen, result, depth + 1);
             Py_DECREF(val);
-            if (rc < 0) { Py_DECREF(fields); return -1; }
+            if (rc != 0) { Py_DECREF(fields); return rc; }
         }
         Py_DECREF(fields);
         return 0;
@@ -236,6 +245,202 @@ collect_walk(PyObject *term, PyObject *seen, PyObject *result, int depth)
 
     /* Scalar — skip */
     return 0;
+}
+
+/*
+ * The sub-terms collect_walk descends into, shape for shape, left to right:
+ * a new list, or Py_None (new ref) for a leaf, or NULL on error.
+ */
+static PyObject *
+collect_children(PyObject *t)
+{
+    if (PyTuple_Check(t) || PyList_Check(t))
+        return PySequence_List(t);
+
+    int idt = PyObject_IsInstance(t, DictTerm_type);
+    if (idt < 0) return NULL;
+    if (idt) {
+        PyObject *data = PyObject_GetAttr(t, str_data);
+        if (!data) return NULL;
+        PyObject *out = PyDict_Check(data) ? PyDict_Values(data) : PyList_New(0);
+        Py_DECREF(data);
+        return out;
+    }
+    if (PyDict_Check(t))
+        return PyDict_Values(t);
+
+    int iseg = PyObject_IsInstance(t, Seg_types);
+    if (iseg < 0) return NULL;
+    if (iseg) {
+        PyObject *out = PyList_New(0);
+        if (!out) return NULL;
+        PyObject *segments = PyObject_GetAttr(t, str_segments);
+        if (!segments) { Py_DECREF(out); return NULL; }
+        PyObject *seq = PySequence_Fast(segments, "segments not iterable");
+        Py_DECREF(segments);
+        if (!seq) { Py_DECREF(out); return NULL; }
+        Py_ssize_t ns = PySequence_Fast_GET_SIZE(seq);
+        for (Py_ssize_t i = 0; i < ns; i++) {
+            PyObject *seg = PySequence_Fast_GET_ITEM(seq, i);  /* borrowed */
+            int ivs = PyObject_IsInstance(seg, VarSeg_type);
+            if (ivs < 0) goto seg_error;
+            if (ivs) {
+                PyObject *var = PyObject_GetAttr(seg, str_var);
+                if (!var) goto seg_error;
+                int rc = PyList_Append(out, var);
+                Py_DECREF(var);
+                if (rc < 0) goto seg_error;
+                continue;
+            }
+            int ics = PyObject_IsInstance(seg, ConcreteSeg_type);
+            if (ics < 0) goto seg_error;
+            if (ics) {
+                PyObject *elements = PyObject_GetAttr(seg, str_elements);
+                if (!elements) goto seg_error;
+                PyObject *eseq = PySequence_Fast(elements, "elements not iterable");
+                Py_DECREF(elements);
+                if (!eseq) goto seg_error;
+                Py_ssize_t ne = PySequence_Fast_GET_SIZE(eseq);
+                for (Py_ssize_t j = 0; j < ne; j++) {
+                    if (PyList_Append(out, PySequence_Fast_GET_ITEM(eseq, j)) < 0) {
+                        Py_DECREF(eseq);
+                        goto seg_error;
+                    }
+                }
+                Py_DECREF(eseq);
+            }
+            /* plain str/bytes segment — ground */
+        }
+        Py_DECREF(seq);
+        return out;
+    seg_error:
+        Py_DECREF(seq);
+        Py_DECREF(out);
+        return NULL;
+    }
+
+    int iq = PyObject_IsInstance(t, Quantity_type);
+    if (iq < 0) return NULL;
+    if (iq) {
+        PyObject *value = PyObject_GetAttr(t, str_value);
+        if (!value) return NULL;
+        PyObject *out = PyList_New(1);
+        if (!out) { Py_DECREF(value); return NULL; }
+        PyList_SET_ITEM(out, 0, value);   /* steals */
+        return out;
+    }
+
+    int iti = call_is_term_instance(t);
+    if (iti < 0) return NULL;
+    if (iti) {
+        PyObject *fields = call_term_field_names(t);
+        if (!fields) return NULL;
+        Py_ssize_t n = PyTuple_GET_SIZE(fields);
+        PyObject *out = PyList_New(n);
+        if (!out) { Py_DECREF(fields); return NULL; }
+        for (Py_ssize_t i = 0; i < n; i++) {
+            PyObject *val = PyObject_GetAttr(t, PyTuple_GET_ITEM(fields, i));
+            if (!val) { Py_DECREF(out); Py_DECREF(fields); return NULL; }
+            PyList_SET_ITEM(out, i, val);   /* steals */
+        }
+        Py_DECREF(fields);
+        return out;
+    }
+
+    Py_RETURN_NONE;
+}
+
+/*
+ * collect_walk for a term too deep or CYCLIC for it: an explicit stack
+ * (depth costs no C frames) and a set of the compounds already walked (a
+ * cycle passes through a bound Var back into one of them; a shared
+ * sub-term is walked once).  Pre-order, left to right, as collect_walk, so
+ * the variables come out in the same order; *seen* / *result* may already
+ * hold what an abandoned recursive attempt found (a prefix of that order).
+ * `keep` holds every walked compound so its address stays its own.
+ */
+static int
+collect_iterative(PyObject *root, PyObject *seen, PyObject *result)
+{
+    int status = -1;
+    PyObject *stack = PyList_New(0);
+    PyObject *visited = PySet_New(NULL);
+    PyObject *keep = PyList_New(0);
+    if (!stack || !visited || !keep) goto done;
+    if (PyList_Append(stack, root) < 0) goto done;
+
+    while (PyList_GET_SIZE(stack) > 0) {
+        Py_ssize_t top = PyList_GET_SIZE(stack) - 1;
+        PyObject *item = PyList_GET_ITEM(stack, top);
+        Py_INCREF(item);
+        if (PyList_SetSlice(stack, top, top + 1, NULL) < 0) {
+            Py_DECREF(item);
+            goto done;
+        }
+        PyObject *t = VarAPI->deref(item);   /* borrowed from item's chain */
+        Py_INCREF(t);
+        Py_DECREF(item);
+
+        if (Var_Check(t)) {
+            PyObject *tid = PyLong_FromVoidPtr(t);
+            if (!tid) { Py_DECREF(t); goto done; }
+            int contains = PySet_Contains(seen, tid);
+            int rc = contains;
+            if (contains == 0) {
+                rc = PySet_Add(seen, tid);
+                if (rc == 0) rc = PyList_Append(result, t);
+            }
+            Py_DECREF(tid);
+            Py_DECREF(t);
+            if (rc < 0) goto done;
+            continue;
+        }
+        if (t == Py_None || PyLong_Check(t) || PyFloat_Check(t)
+            || PyUnicode_Check(t) || PyBytes_Check(t)) {
+            Py_DECREF(t);
+            continue;
+        }
+        PyObject *tid = PyLong_FromVoidPtr(t);
+        if (!tid) { Py_DECREF(t); goto done; }
+        int was = PySet_Contains(visited, tid);
+        if (was == 0) was = PySet_Add(visited, tid) < 0 ? -1 : 0;
+        else if (was > 0) was = 1;
+        Py_DECREF(tid);
+        if (was != 0) {
+            Py_DECREF(t);
+            if (was < 0) goto done;
+            continue;
+        }
+        if (PyList_Append(keep, t) < 0) { Py_DECREF(t); goto done; }
+        PyObject *kids = collect_children(t);
+        Py_DECREF(t);
+        if (!kids) goto done;
+        if (kids != Py_None) {
+            for (Py_ssize_t i = PyList_GET_SIZE(kids) - 1; i >= 0; i--) {
+                if (PyList_Append(stack, PyList_GET_ITEM(kids, i)) < 0) {
+                    Py_DECREF(kids);
+                    goto done;
+                }
+            }
+        }
+        Py_DECREF(kids);
+    }
+    status = 0;
+done:
+    Py_XDECREF(stack);
+    Py_XDECREF(visited);
+    Py_XDECREF(keep);
+    return status;
+}
+
+/* The depth-0 entry: the recursive walk, and past COLLECT_DEEP the
+ * iterative one on the ROOT term.  Returns 0 / -1. */
+static int
+collect_root(PyObject *term, PyObject *seen, PyObject *result)
+{
+    int rc = collect_walk(term, seen, result, 0);
+    if (rc != COLLECT_DEEP_CODE) return rc;
+    return collect_iterative(term, seen, result);
 }
 
 /*
@@ -249,7 +454,7 @@ py_collect_free_vars(PyObject *Py_UNUSED(module), PyObject *term)
     PyObject *result = PyList_New(0);
     if (!result) { Py_DECREF(seen); return NULL; }
 
-    if (collect_walk(term, seen, result, 0) < 0) {
+    if (collect_root(term, seen, result) < 0) {
         Py_DECREF(seen);
         Py_DECREF(result);
         return NULL;
@@ -262,7 +467,7 @@ py_collect_free_vars(PyObject *Py_UNUSED(module), PyObject *term)
 /* ── _structural_unify_oc ────────────────────────────────────────────── */
 
 static int c_structural_unify_oc(PyObject *t1, PyObject *t2,
-                                 TrailObject *trail, int depth);
+                                 TrailObject *trail, int oc, int depth);
 
 /*
  * Unify d1 and d2 as lists [E1, ..., En|Tail] (terms._partial_list_parts
@@ -275,7 +480,7 @@ static int c_structural_unify_oc(PyObject *t1, PyObject *t2,
  */
 static int
 unify_partial_lists_oc(PyObject *d1, PyObject *d2, TrailObject *trail,
-                       int depth)
+                       int oc, int depth)
 {
     /* Only a list-shaped pair can be read (a SegList, a list, a bytes, or a
      * tuple -- the chars carrier or the nil ()): anything else falls through
@@ -312,7 +517,7 @@ unify_partial_lists_oc(PyObject *d1, PyObject *d2, TrailObject *trail,
     for (Py_ssize_t i = 0; i < n; i++) {
         int r = c_structural_unify_oc(PySequence_Fast_GET_ITEM(e1, i),
                                       PySequence_Fast_GET_ITEM(e2, i),
-                                      trail, depth + 1);
+                                      trail, oc, depth + 1);
         if (r != 1) { result = r; goto done; }
     }
     if (n1 != n2) {
@@ -331,7 +536,7 @@ unify_partial_lists_oc(PyObject *d1, PyObject *d2, TrailObject *trail,
         build = PyObject_CallFunctionObjArgs(partial_list_build_fn, rest,
                                              long_t, NULL);
         if (!build) goto done;
-        result = c_structural_unify_oc(short_t, build, trail, depth + 1);
+        result = c_structural_unify_oc(short_t, build, trail, oc, depth + 1);
         goto done;
     }
     if (t1 == Py_None && t2 == Py_None) { result = 1; goto done; }
@@ -344,7 +549,7 @@ unify_partial_lists_oc(PyObject *d1, PyObject *d2, TrailObject *trail,
         }
         result = c_structural_unify_oc(t1 == Py_None ? nil : t1,
                                        t2 == Py_None ? nil : t2,
-                                       trail, depth + 1);
+                                       trail, oc, depth + 1);
         Py_XDECREF(nil);
     }
 done:
@@ -358,11 +563,15 @@ done:
 }
 
 /*
- * Structural unify with occurs check.
- * Returns 1 (unified), 0 (failed), -1 (error).
+ * Structural unify, with the occurs check when *oc* is set (subsumes_term/2
+ * and unify_with_occurs_check/2) and without it, as =/2 unifies, when it
+ * is not (dif/2, its hook, reify_eq: a rational tree is a solution of
+ * X = f(X), so dif(X, f(X)) must suspend, not succeed outright).
+ * Returns 1 (unified), 0 (failed), -1 (error), STRUCTURAL_DEEP_CODE.
  */
 static int
-c_structural_unify_oc(PyObject *t1, PyObject *t2, TrailObject *trail, int depth)
+c_structural_unify_oc(PyObject *t1, PyObject *t2, TrailObject *trail, int oc,
+                      int depth)
 {
     PyObject *d1 = VarAPI->deref(t1);  /* borrowed */
     PyObject *d2 = VarAPI->deref(t2);  /* borrowed */
@@ -388,7 +597,7 @@ c_structural_unify_oc(PyObject *t1, PyObject *t2, TrailObject *trail, int depth)
             if (!v1) { Py_DECREF(fields); return -1; }
             PyObject *v2 = PyObject_GetAttr(d2, fname);
             if (!v2) { Py_DECREF(v1); Py_DECREF(fields); return -1; }
-            int r = c_structural_unify_oc(v1, v2, trail, depth + 1);
+            int r = c_structural_unify_oc(v1, v2, trail, oc, depth + 1);
             Py_DECREF(v1);
             Py_DECREF(v2);
             if (r != 1) { Py_DECREF(fields); return r; }
@@ -405,7 +614,7 @@ c_structural_unify_oc(PyObject *t1, PyObject *t2, TrailObject *trail, int depth)
         for (Py_ssize_t i = 0; i < n1; i++) {
             int r = c_structural_unify_oc(
                 PyList_GET_ITEM(d1, i), PyList_GET_ITEM(d2, i),
-                trail, depth + 1);
+                trail, oc, depth + 1);
             if (r != 1) return r;
         }
         return 1;
@@ -420,13 +629,14 @@ c_structural_unify_oc(PyObject *t1, PyObject *t2, TrailObject *trail, int depth)
     if ((Py_TYPE(d1) == (PyTypeObject *)SegList_type
          || Py_TYPE(d2) == (PyTypeObject *)SegList_type)
         && !Var_Check(d1) && !Var_Check(d2)) {
-        int r = unify_partial_lists_oc(d1, d2, trail, depth);
+        int r = unify_partial_lists_oc(d1, d2, trail, oc, depth);
         if (r != 2) return r;
     }
 
-    /* Fall through to unify_with_occurs_check (direct C call) */
+    /* Fall through to the engine's unify (direct C call) */
     {
-        PyObject *r = VarAPI->unify_oc(d1, d2, trail);
+        PyObject *r = oc ? VarAPI->unify_oc(d1, d2, trail)
+                         : VarAPI->unify(d1, d2, trail);
         if (!r) return -1;
         int truthy = PyObject_IsTrue(r);
         Py_DECREF(r);
@@ -437,11 +647,12 @@ c_structural_unify_oc(PyObject *t1, PyObject *t2, TrailObject *trail, int depth)
 /* The depth-0 entry: the recursion, and past STRUCTURAL_DEEP the engine's
  * unify on the ROOT pair.  Returns 1 / 0 / -1. */
 static int
-structural_unify_oc_root(PyObject *t1, PyObject *t2, TrailObject *trail)
+structural_unify_oc_root(PyObject *t1, PyObject *t2, TrailObject *trail, int oc)
 {
-    int r = c_structural_unify_oc(t1, t2, trail, 0);
+    int r = c_structural_unify_oc(t1, t2, trail, oc, 0);
     if (r != STRUCTURAL_DEEP_CODE) return r;
-    PyObject *res = VarAPI->unify_oc(t1, t2, trail);
+    PyObject *res = oc ? VarAPI->unify_oc(t1, t2, trail)
+                       : VarAPI->unify(t1, t2, trail);
     if (!res) return -1;
     int truthy = PyObject_IsTrue(res);
     Py_DECREF(res);
@@ -461,7 +672,26 @@ py_structural_unify_oc(PyObject *Py_UNUSED(module), PyObject *args)
         PyErr_SetString(PyExc_TypeError, "_structural_unify_oc: third arg must be a Trail");
         return NULL;
     }
-    int r = structural_unify_oc_root(t1, t2, Trail_CAST(trail));
+    int r = structural_unify_oc_root(t1, t2, Trail_CAST(trail), 1);
+    if (r < 0) return NULL;
+    return PyBool_FromLong(r);
+}
+
+/*
+ * py_structural_unify(t1, t2, trail) → bool: as _structural_unify_oc, no
+ * occurs check (dif/2's trial unify).
+ */
+static PyObject *
+py_structural_unify(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *t1, *t2, *trail;
+    if (!PyArg_ParseTuple(args, "OOO", &t1, &t2, &trail))
+        return NULL;
+    if (!Trail_Check(trail)) {
+        PyErr_SetString(PyExc_TypeError, "_structural_unify: third arg must be a Trail");
+        return NULL;
+    }
+    int r = structural_unify_oc_root(t1, t2, Trail_CAST(trail), 0);
     if (r < 0) return NULL;
     return PyBool_FromLong(r);
 }
@@ -485,9 +715,9 @@ attach_dif_pair(PyObject *x, PyObject *y, PyObject *pair,
     PyObject *unique = PyList_New(0);
     if (!unique) { Py_DECREF(seen); return -1; }
 
-    if (collect_walk(x, seen, unique, 0) < 0)
+    if (collect_root(x, seen, unique) < 0)
         goto error;
-    if (collect_walk(y, seen, unique, 0) < 0)
+    if (collect_root(y, seen, unique) < 0)
         goto error;
 
     Py_DECREF(seen);
@@ -584,7 +814,7 @@ py_dif(PyObject *Py_UNUSED(module), PyObject *args)
 
     Py_ssize_t mark = VarAPI->trail_mark(trail);
 
-    int unified = structural_unify_oc_root(dx, dy, trail);
+    int unified = structural_unify_oc_root(dx, dy, trail, 0);
     if (unified < 0) return NULL;
 
     if (!unified) {
@@ -653,7 +883,7 @@ py_dif_hook(PyObject *Py_UNUSED(module), PyObject *args)
 
         Py_ssize_t mark = VarAPI->trail_mark(trail);
 
-        int unified = structural_unify_oc_root(dx, dy, trail);
+        int unified = structural_unify_oc_root(dx, dy, trail, 0);
         if (unified < 0) return NULL;
 
         if (!unified) {
@@ -706,7 +936,7 @@ py_reify_eq(PyObject *Py_UNUSED(module), PyObject *args)
 
     Py_ssize_t mark = VarAPI->trail_mark(trail);
 
-    int unified = structural_unify_oc_root(dx, dy, trail);
+    int unified = structural_unify_oc_root(dx, dy, trail, 0);
     if (unified < 0) return NULL;
 
     int grew = 0;
@@ -728,6 +958,7 @@ py_reify_eq(PyObject *Py_UNUSED(module), PyObject *args)
 static PyMethodDef module_methods[] = {
     {"_collect_free_vars",   py_collect_free_vars,   METH_O,       NULL},
     {"_structural_unify_oc", py_structural_unify_oc, METH_VARARGS, NULL},
+    {"_structural_unify",    py_structural_unify,    METH_VARARGS, NULL},
     {"dif",                  py_dif,                 METH_VARARGS, NULL},
     {"_dif_hook",            py_dif_hook,            METH_VARARGS, NULL},
     {"reify_eq",             py_reify_eq,            METH_VARARGS, NULL},

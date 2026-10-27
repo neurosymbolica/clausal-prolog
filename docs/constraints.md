@@ -88,12 +88,12 @@ further; ISO `\=` is the immediate check, negation-as-failure of unification.
     when `dif(x, y, trail)` is called:
 
     1. Deref both arguments.
-    2. Sandbox-unify with occurs check (`_structural_unify_oc`).
+    2. Sandbox-unify as `=/2` does, with no occurs check (`_structural_unify`): a rational tree is a solution, so `dif(X, f(X))` suspends and a later `X = f(X)` fails, as in Scryer and SICStus.
     3. **Unify fails** → structurally incompatible (e.g. `dif(1, 2)`) → return True immediately.
     4. **Unify succeeds, no trail growth** → terms already identical (e.g. `dif(X, X)`) → return False.
     5. **Unify succeeds with trail growth** → terms could become equal → undo sandbox, collect all free variables in both terms, attach `(x, y)` constraint pair to each via `put_attr`, return True.
 
-    `_structural_unify_oc` extends the C extension's `unify_with_occurs_check` to walk compound cells (tuples such as `('f', X)`) and lists.
+    `_structural_unify` (and its occurs-checked sibling `_structural_unify_oc`, behind `subsumes_term/2` and `unify_with_occurs_check/2`) walks term instances and partial lists itself and hands everything else to the engine's unify, whose rational-tree walk terminates on a cyclic term. The variable collection of step 5 is iterative past a depth threshold, with a visited set, so a cyclic or very deep pair suspends instead of raising.
 
     ### Attribute hook
 
@@ -157,7 +157,7 @@ further; ISO `\=` is the immediate check, negation-as-failure of unification.
 
     - **`_collect_free_vars`**: scalars, Vars, bound vars, compound cells, lists, nested structures, deduplication
     - **Direct `dif`**: ground equal/different, same var, one var, both vars, compound terms
-    - **Occurs check**: `dif(X, f(X))` → succeed (can never be equal)
+    - **Rational trees**: `dif(X, f(X))` suspends (`X = f(X)` is a solution); a pair holding a cyclic or 100k-deep term suspends or decides as in Scryer (`tests/iso/test_dif_cyclic_scryer.py`)
     - **Constraint propagation**: same/different values, multiple constraints, compound args, transitive via shared var
     - **Backtracking**: constraint undone on trail undo, binding failure doesn't corrupt trail
     - **Compiled integration** (seam): `is not` with later binding (succeed/fail), ground terms, same var, `not (X is Y)` still works, multiple constraints

@@ -17,6 +17,7 @@ from clausal.logic.variables import (
     Var,
     deref,
     is_var,
+    unify,
     unify_with_occurs_check,
     put_attr,
     get_attr,
@@ -25,6 +26,8 @@ from clausal.logic.variables import (
 )
 from clausal.logic.atoms import truth_spelling as _truth_spelling
 from clausal.logic.number_kinds import same_number
+from clausal.logic.rational_walk import (
+    collect_free_vars_iterative as _collect_free_vars_iterative)
 from clausal.logic.predicate import is_term_instance, term_field_names
 from clausal.terms import (
     SegList,
@@ -123,55 +126,15 @@ def structural_neq(left: Any, right: Any) -> bool:
 def _collect_free_vars(term: Any) -> list:
     """Collect all unbound Vars reachable from *term*.
 
-    Returns a list of unique Var objects (deduplicated by identity).
+    Returns a list of unique Var objects (deduplicated by identity), in
+    order of first appearance left to right.  The walk is iterative and
+    cycle-aware (``rational_walk.collect_free_vars_iterative``): a cyclic
+    term (``X = f(X)``) or one nested past any recursion limit is walked
+    to the end, never a ``resource_error``.  The C twin is ``collect_root``
+    in ``_constraints_dif.c``.
     """
-    seen_ids: set[int] = set()
     result: list = []
-
-    def _walk(t: Any) -> None:
-        t = deref(t)
-        if is_var(t):
-            tid = id(t)
-            if tid not in seen_ids:
-                seen_ids.add(tid)
-                result.append(t)
-            return
-        if isinstance(t, (tuple, list)):
-            for elem in t:
-                _walk(elem)
-            return
-        # Containers the unifier can bind through via their __unify__ hook.
-        # Kept in lockstep with what unify() descends into: a var reachable
-        # only through one of these must still receive the dif constraint,
-        # else dif silently drops it (A05-F001).  SetTerm is intentionally
-        # absent — the unifier refuses var-element set unification, so a var
-        # inside a SetTerm cannot become equal and needs no constraint.
-        if isinstance(t, DictTerm):
-            for elem in t.data.values():
-                _walk(elem)
-            return
-        if isinstance(t, dict):
-            for elem in t.values():
-                _walk(elem)
-            return
-        if isinstance(t, (SegList, SegString, SegBytes)):
-            for seg in t.segments:
-                if isinstance(seg, VarSeg):
-                    _walk(seg.var)
-                elif isinstance(seg, ConcreteSeg):
-                    for elem in seg.elements:
-                        _walk(elem)
-                # plain str/bytes segments are ground — nothing to collect
-            return
-        if isinstance(t, Quantity):
-            _walk(t.value)
-            return
-        if is_term_instance(t):
-            for fname in term_field_names(t):
-                _walk(getattr(t, fname))
-            return
-
-    _walk(term)
+    _collect_free_vars_iterative(term, result, set())
     return result
 
 
@@ -193,18 +156,33 @@ class _StructuralDeep(Exception):
 
 
 def _structural_unify_oc(t1: Any, t2: Any, trail: Trail) -> bool:
-    """Unify t1 and t2 structurally with occurs check.
+    """Unify t1 and t2 structurally with occurs check (subsumes_term/2,
+    unify_with_occurs_check/2).
 
     Handles term (dataclass) instances that the C extension's
     ``unify_with_occurs_check`` does not (it falls through to ``==``).
     """
     try:
-        return _structural_unify_oc_walk(t1, t2, trail, 0)
-    except _StructuralDeep:
+        return _structural_unify_oc_walk(t1, t2, trail, 0, True)
+    except (_StructuralDeep, RecursionError):
+        # RecursionError: the Python stack ran out before the threshold
+        # (the walk runs under the solver's own frames).
         return unify_with_occurs_check(t1, t2, trail)
 
 
-def _structural_unify_oc_walk(t1: Any, t2: Any, trail: Trail, _depth: int) -> bool:
+def _structural_unify(t1: Any, t2: Any, trail: Trail) -> bool:
+    """``_structural_unify_oc`` with no occurs check, as ``=/2`` unifies:
+    the trial unify of ``dif/2``, its hook and ``reify_eq``.  A rational
+    tree is a solution of ``X = f(X)`` (ISO 7.3.2), so ``dif(X, f(X))``
+    must suspend (Scryer, SICStus), not succeed with nothing to wait on."""
+    try:
+        return _structural_unify_oc_walk(t1, t2, trail, 0, False)
+    except (_StructuralDeep, RecursionError):
+        return unify(t1, t2, trail)
+
+
+def _structural_unify_oc_walk(t1: Any, t2: Any, trail: Trail, _depth: int,
+                              oc: bool = True) -> bool:
     t1 = deref(t1)
     t2 = deref(t2)
 
@@ -222,7 +200,7 @@ def _structural_unify_oc_walk(t1: Any, t2: Any, trail: Trail, _depth: int) -> bo
         fields = term_field_names(t1)
         for fname in fields:
             if not _structural_unify_oc_walk(getattr(t1, fname), getattr(t2, fname),
-                                             trail, _depth + 1):
+                                             trail, _depth + 1, oc):
                 return False
         return True
 
@@ -230,7 +208,7 @@ def _structural_unify_oc_walk(t1: Any, t2: Any, trail: Trail, _depth: int) -> bo
         if len(t1) != len(t2):
             return False
         for e1, e2 in zip(t1, t2):
-            if not _structural_unify_oc_walk(e1, e2, trail, _depth + 1):
+            if not _structural_unify_oc_walk(e1, e2, trail, _depth + 1, oc):
                 return False
         return True
 
@@ -242,13 +220,16 @@ def _structural_unify_oc_walk(t1: Any, t2: Any, trail: Trail, _depth: int) -> bo
         if p1 is not None:
             p2 = _partial_list_parts(t2)
             if p2 is not None:
-                return _unify_partial_lists_oc(p1, p2, trail, _depth)
+                return _unify_partial_lists_oc(p1, p2, trail, _depth, oc)
 
     # Fall through to C extension for Var/scalar/tuple.
-    return unify_with_occurs_check(t1, t2, trail)
+    if oc:
+        return unify_with_occurs_check(t1, t2, trail)
+    return unify(t1, t2, trail)
 
 
-def _unify_partial_lists_oc(p1, p2, trail: Trail, _depth: int = 0) -> bool:
+def _unify_partial_lists_oc(p1, p2, trail: Trail, _depth: int = 0,
+                            oc: bool = True) -> bool:
     """Unify two lists read by ``_partial_list_parts`` (``(elements, tail)``,
     tail an unbound Var or None for ``[]``), as ISO unifies ``[E1..En|T]``:
     pair the elements, then the shorter side's tail takes the rest of the
@@ -257,20 +238,22 @@ def _unify_partial_lists_oc(p1, p2, trail: Trail, _depth: int = 0) -> bool:
     (e1, t1), (e2, t2) = p1, p2
     n = min(len(e1), len(e2))
     for i in range(n):
-        if not _structural_unify_oc_walk(e1[i], e2[i], trail, _depth + 1):
+        if not _structural_unify_oc_walk(e1[i], e2[i], trail, _depth + 1, oc):
             return False
     if len(e1) > n:
         if t2 is None:
             return False
-        return _structural_unify_oc_walk(t2, _partial_list_build(e1[n:], t1), trail, _depth + 1)
+        return _structural_unify_oc_walk(t2, _partial_list_build(e1[n:], t1), trail,
+                                         _depth + 1, oc)
     if len(e2) > n:
         if t1 is None:
             return False
-        return _structural_unify_oc_walk(t1, _partial_list_build(e2[n:], t2), trail, _depth + 1)
+        return _structural_unify_oc_walk(t1, _partial_list_build(e2[n:], t2), trail,
+                                         _depth + 1, oc)
     if t1 is None and t2 is None:
         return True
     return _structural_unify_oc_walk([] if t1 is None else t1,
-                                     [] if t2 is None else t2, trail, _depth + 1)
+                                     [] if t2 is None else t2, trail, _depth + 1, oc)
 
 
 # ── Core dif ─────────────────────────────────────────────────────────────────
@@ -287,7 +270,7 @@ def dif(x: Any, y: Any, trail: Trail) -> bool:
     y = deref(y)
 
     mark = trail.mark()
-    unified = _structural_unify_oc(x, y, trail)
+    unified = _structural_unify(x, y, trail)
 
     if not unified:
         trail.undo(mark)
@@ -343,7 +326,7 @@ def _dif_hook(attr_value: Any, bound_to: Any, trail: Trail) -> bool:
         y = deref(y)
 
         mark = trail.mark()
-        unified = _structural_unify_oc(x, y, trail)
+        unified = _structural_unify(x, y, trail)
 
         if not unified:
             trail.undo(mark)
@@ -399,7 +382,7 @@ def reify_eq(x: Any, y: Any, trail: Trail) -> bool | None:
         return True
 
     mark = trail.mark()
-    unified = _structural_unify_oc(x, y, trail)
+    unified = _structural_unify(x, y, trail)
     grew = (len(trail) != mark) if unified else False
     trail.undo(mark)
 
@@ -419,6 +402,7 @@ try:
     from clausal.logic._constraints_dif import (
         _collect_free_vars as _c_collect_free_vars,
         _structural_unify_oc as _c_structural_unify_oc,
+        _structural_unify as _c_structural_unify,
         dif as _c_dif,
         _dif_hook as _c_dif_hook,
         reify_eq as _c_reify_eq,
@@ -430,6 +414,7 @@ except ImportError:
 if _USE_C_DIF:
     _collect_free_vars = _c_collect_free_vars
     _structural_unify_oc = _c_structural_unify_oc
+    _structural_unify = _c_structural_unify
     dif = _c_dif
     _dif_hook = _c_dif_hook
     reify_eq = _c_reify_eq
