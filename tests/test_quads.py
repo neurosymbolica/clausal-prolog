@@ -436,3 +436,24 @@ def test_extract_quads_counts_a_labelled_query_only_with_a_description(
         text, labels):
     # the peek that decides on one labelled query must not vouch for the next
     assert [q.label for q in extract_quads("p(1).\n" + text)] == labels
+
+
+def test_maybe_sees_a_constraint_on_a_variable_the_query_does_not_name(tmp_path):
+    # f leaves X #> Y, X #< Y on variables no answer reaches
+    body = (":- use_module(library(clpz)).\n"
+            "f :- X #> Y, X #< Y.\n"
+            "?- f.\n   maybe.\n")
+    ok = _run(tmp_path, body)
+    assert ok.returncode == 0, ok.stdout
+    no = _run(tmp_path, body.replace("maybe", "true"))
+    assert no.returncode == 1 and "maybe" in no.stdout, no.stdout
+    anon = _run(tmp_path, ":- use_module(library(clpz)).\n"
+                          "?- _ #> 3.\n   maybe.\n")
+    assert anon.returncode == 0, anon.stdout
+
+
+def test_g_and_quads_agree_on_what_is_pending(tmp_path):
+    # a variable unreachable from the query and constrained by freeze/2
+    body = "g :- freeze(_, true).\n?- g.\n   maybe.\n"
+    r = _run(tmp_path, body)
+    assert r.returncode == 0, r.stdout
