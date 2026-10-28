@@ -876,3 +876,22 @@ def test_tab_completes_a_zero_arity_name_without_a_bracket(tl):
     time.sleep(0.5)
     s.send(".\n")
     assert s.finish() == 0
+
+
+def test_clausal_page_shows_that_many_answers_before_asking(tmp_path):
+    (tmp_path / "prog.pl").write_text(PROG + "n(1). n(2). n(3). n(4). n(5).\n")
+    old = dict(os.environ)
+    os.environ["CLAUSAL_PAGE"] = "3"
+    try:
+        s = Pty(tmp_path, "prog.pl", "--toplevel")
+        s.expect("?- ")
+        s.send("n(X).\n")
+        s.expect(";  X = 3")           # three answers, no key pressed
+        time.sleep(0.5)
+        assert "X = 4" not in s.text
+        s.send(" ")
+        s.expect(";  X = 5")           # the next page
+        s.close()
+    finally:
+        os.environ.clear()
+        os.environ.update(old)

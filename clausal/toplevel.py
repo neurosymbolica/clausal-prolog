@@ -301,6 +301,10 @@ class TopLevel:
         self._prefill = ""
         self._bound = False
         self._typeahead = bytearray()   # keys typed while a query ran
+        try:
+            self.page = max(int(os.environ.get("CLAUSAL_PAGE", "1")), 1)
+        except ValueError:
+            self.page = 1
         self.colour = toplevel_colour.scheme_named(
             os.environ.get("CLAUSAL_COLOUR", "off"))
         self.elide = True
@@ -613,18 +617,22 @@ class TopLevel:
         last, or when the goal can have at most one (*det*)."""
         it = iter(solutions)
         n = 0                           # answers shown so far
-        want = 1                        # answers to show before asking
+        want = self.page                # answers to show before asking
         eager = False
         while True:
+            if n:
+                # the semicolon says at once that the search for the next
+                # answer is on (Markus Triska: no user input is needed now)
+                self._write(";")
             try:
                 with self._watching():
                     trail, last = next(it)
             except StopIteration:
-                self._write((";  " if n else INDENT) + "false.\n")
+                self._write(("  " if n else INDENT) + "false.\n")
                 return
             text = format_answer(shown, trail, self.elide)
             prefix = ";  " if n else INDENT
-            self._write(prefix + self._paint(text))
+            self._write(("  " if n else INDENT) + self._paint(text))
             n += 1
             if last or det or not self.interactive:
                 self._write(_dot(text) + "\n")
@@ -645,7 +653,7 @@ class TopLevel:
                     return
                 if k in (";", " ", "n"):
                     self._write("\n")
-                    want = 1
+                    want = self.page
                     break
                 if k == "f":
                     self._write("\n")
