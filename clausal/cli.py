@@ -343,6 +343,21 @@ def _fd_dif_residuals(variables, spell) -> list[str]:
     return goals
 
 
+def _fresh_names(taken):
+    """``_A``, ``_B``, ... ``_Z``, ``_AA``, ... without the names in *taken*."""
+    n = 0
+    while True:
+        i, name = n, ""
+        while True:
+            name = chr(ord("A") + i % 26) + name
+            i = i // 26 - 1
+            if i < 0:
+                break
+        n += 1
+        if "_" + name not in taken:
+            yield "_" + name
+
+
 def _answer(shown, trail) -> str:
     """One answer as a toplevel prints it: ``Name = Value`` for each bound
     answer variable, an unbound one by its own name (``S = f(X)``), then
@@ -358,6 +373,33 @@ def _answer(shown, trail) -> str:
     for name, w in values:
         if isinstance(w, Var):
             names.setdefault(id(w), name)
+    free: dict = {}
+    for _, w in values:
+        _term_vars(w, free)
+    for name, v in getattr(shown, "hidden", ()):
+        w = _deref_walk(v)
+        if isinstance(w, Var) and name != "_":     # `_` has no name to keep
+            names.setdefault(id(w), name)
+        _term_vars(w, free)
+    # The variables the goal left constraints on that no answer variable
+    # reaches (call_residue_vars/2): a constraint the incomplete solvers
+    # (CLP(FD), dif/2, coroutines) cannot yet refute must still show, not
+    # vanish into `true`.  (CLP(Q) is complete and projects onto the answer
+    # variables, so these take no part in that.)
+    from clausal.logic.variables import deref  # noqa: PLC0415
+    hidden_residue: dict = {}
+    for av in trail.attvars_since(0):
+        d = deref(av)
+        if isinstance(d, Var) and getattr(d, "attrs", None) \
+                and id(d) not in free:
+            hidden_residue[id(d)] = d
+    # The remaining unbound variables get the names _A, _B, ... in order of
+    # appearance (not the engine's _123), skipping any the query uses.
+    taken = {n for n, _ in shown} | {n for n, _ in getattr(shown, "hidden", ())}
+    fresh = _fresh_names(taken)
+    for key in (*free, *hidden_residue):
+        if key not in names:
+            names[key] = next(fresh)
     # The operators in force now (op/3 run by the program or the goal), as
     # writeq/1 writes with them.
     ops = writer_op_table()
@@ -370,19 +412,12 @@ def _answer(shown, trail) -> str:
         # operator atom such as (-) are bracketed, as Scryer prints them.
         parts.append(f"{name} = "
                      f"{term_writeq(w, var_names=names, priority=699, ops=ops)}")
-    free: dict = {}
-    for _, w in values:
-        _term_vars(w, free)
-    for name, v in getattr(shown, "hidden", ()):
-        w = _deref_walk(v)
-        if isinstance(w, Var):
-            names.setdefault(id(w), name)
-        _term_vars(w, free)
-    if free:
+    if free or hidden_residue:
         def spell(x):
             from clausal.logic.solve import _deref_walk as walk  # noqa: PLC0415
             return term_writeq(walk(x), var_names=names, priority=699, ops=ops)
-        parts += _fd_dif_residuals(list(free.values()), spell)
+        parts += _fd_dif_residuals(
+            list(free.values()) + list(hidden_residue.values()), spell)
         parts += clpq.residual_q(
             list(free.values()), trail,
             lambda v: names.get(id(v)) or term_writeq(v))

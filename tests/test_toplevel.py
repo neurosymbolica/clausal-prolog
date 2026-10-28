@@ -895,3 +895,19 @@ def test_clausal_page_shows_that_many_answers_before_asking(tmp_path):
     finally:
         os.environ.clear()
         os.environ.update(old)
+
+
+def test_a_constraint_on_a_hidden_variable_is_shown(tmp_path):
+    (tmp_path / "f.pl").write_text(
+        ":- use_module(library(clpz)).\nf :- X #> Y, X #< Y.\n")
+    s = Pty(tmp_path, "f.pl", "--toplevel")
+    try:
+        s.expect("?- ")
+        s.query("f.", "   _A #< _B, _B #< _A")     # not `true.`
+    finally:
+        s.close()
+
+
+def test_fresh_variables_are_named_a_b_c(tl):
+    s = tl()
+    s.query("X = f(_, _, Y).", "   X = f(_A,_B,Y).")

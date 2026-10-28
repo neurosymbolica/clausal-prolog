@@ -992,6 +992,43 @@ Trail_record(TrailObject *self, PyObject *fn)
 }
 
 static PyObject *
+Trail_attvars_since(TrailObject *self, PyObject *arg)
+{
+    /* trail.attvars_since(mark) -> list
+     *
+     * The attributed variables whose attributes were put or deleted by an
+     * entry recorded after *mark*, each once, in the order of the first such
+     * entry.  They may since have been bound or lost every attribute: the
+     * caller dereferences and checks.  This is what call_residue_vars/2
+     * needs (the variables a goal left constraints on, also those no
+     * argument of it reaches). */
+    Py_ssize_t mark = PyLong_AsSsize_t(arg);
+    if (mark == -1 && PyErr_Occurred()) return NULL;
+    if (mark < 0) {
+        PyErr_SetString(PyExc_ValueError, "trail mark out of range");
+        return NULL;
+    }
+    PyObject *out = PyList_New(0);
+    if (out == NULL) return NULL;
+    PyObject *seen = PySet_New(NULL);
+    if (seen == NULL) { Py_DECREF(out); return NULL; }
+    for (Py_ssize_t i = mark; i < self->length; i++) {
+        if (self->entries[i].kind != TRAIL_ATTR) continue;
+        PyObject *v = self->entries[i].u.attr.attvar;
+        int has = PySet_Contains(seen, v);
+        if (has < 0) goto fail;
+        if (has) continue;
+        if (PySet_Add(seen, v) < 0 || PyList_Append(out, v) < 0) goto fail;
+    }
+    Py_DECREF(seen);
+    return out;
+fail:
+    Py_DECREF(seen);
+    Py_DECREF(out);
+    return NULL;
+}
+
+static PyObject *
 Trail_var_floor(TrailObject *Py_UNUSED(self), PyObject *Py_UNUSED(args))
 {
     /* Every Var / AttVar created after this call has var_id >= the result. */
@@ -1218,6 +1255,11 @@ static PyMethodDef Trail_methods[] = {
      "reset()\n"
      "\n"
      "Undo every binding and attribute change on this trail (undo(0))."},
+    {"attvars_since", (PyCFunction)Trail_attvars_since, METH_O,
+     "attvars_since(mark) -> list\n"
+     "\n"
+     "The attributed variables an attribute change after *mark* touched,\n"
+     "each once, oldest first (they may have been bound since)."},
     {"var_floor", (PyCFunction)Trail_var_floor, METH_NOARGS,
      "var_floor() -> int\n"
      "\n"

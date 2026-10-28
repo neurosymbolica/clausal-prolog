@@ -292,3 +292,17 @@ def test_a_pl_program_imports_library_clpq(tmp_path, frontend):
                  "lin.pl", CLAUSAL_PL_FRONTEND=frontend)
     assert (r.returncode, r.stdout) == (
         0, DEPENDENT + "\n{X > 1}, {X < 3}.\n"), r.stderr
+
+
+def test_g_names_fresh_variables_a_b_not_by_number(prog):
+    r = _clausal(prog, "-g", "X = f(_, _, Y), Z = [Y|_]", "-1", "prog.clausal")
+    assert r.returncode == 0, r.stderr
+    assert r.stdout == "X = f(_A,_B,Y), Z = [Y|_C].\n", r.stdout
+
+
+def test_g_shows_a_constraint_on_a_variable_no_answer_reaches(tmp_path):
+    (tmp_path / "c.pl").write_text(
+        ":- use_module(library(clpz)).\nf :- X #> Y, X #< Y.\n")
+    r = _clausal(tmp_path, "-g", "f", "c.pl")
+    assert r.returncode == 0, r.stderr
+    assert r.stdout == "_A #< _B, _B #< _A.\n", r.stdout
