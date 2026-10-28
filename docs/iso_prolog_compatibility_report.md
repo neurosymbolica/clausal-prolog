@@ -343,8 +343,12 @@ cell already being written as `...`, and where that falls depends on
 where the cycle is closed in memory -- a copy (`copy_term/2`,
 `findall/3`) or a cell built through a partial list closes it one cell
 further on in one system than in the other (`[[_A|...]]` in Scryer,
-`[[_A,_A|...]]` here, for one rational tree).  The differential fuzzer
-compares terms unfolded to a fixed depth, which do agree.  `dif/2` on a cyclic or
+`[[_A,_A|...]]` here, for one rational tree).  Scryer also writes `...`
+for a shared subterm that closes no cycle (`[B|g(B)] = A, A = [g(D)|C],
+writeq(A)` gives `[g(_A)|g(...)]`), and writes a list whose tail is a
+list of characters with the tail as a string (`[C|"a"]` for `[C,a]`).
+The differential fuzzer (`tests/fuzz/scryer_diff.py`) compares terms
+unfolded to a fixed depth, which do agree.  `dif/2` on a cyclic or
 100k-deep pair answers as Scryer does: it fails on one rational tree,
 succeeds on a ground difference, and otherwise suspends (`X = f(X),
 dif(Y, X)` leaves `dif(Y,f(...))`; a goal woken by `freeze/2` that posts

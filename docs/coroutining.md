@@ -117,6 +117,17 @@ The form is plain: Scryer prints `freeze:freeze(X,user:g)`, Clausal `freeze(X,g)
 
 From Python, `clausal.logic.coroutining.pending_goals(variables)` returns the list of goal terms.
 
+### Where Scryer answers differently
+
+The differential fuzzer (`tests/fuzz/scryer_diff.py`, run under pytest from `tests/fuzz/test_scryer_diff.py`) runs random small goals over `=/2`, `dif/2`, `freeze/2`, `when/2` and their neighbours in Clausal and in Scryer and compares every answer, residual and line of output. These differences are known, and the fuzzer accepts them:
+
+- **The order of the residual goals.** Clausal prints an answer's `dif/2` goals, then its `freeze/2` and `when/2` goals, each in the order of the answer's variables. Scryer's order follows its own attribute bookkeeping (`freeze(B,g), dif(A,b)` for the goal `dif(A,b), freeze(B,g)`). The goals are the same.
+- **Scryer's `dif/2` tries its unification with the frozen goals running.** It binds the pair's variables to see whether they can be equal, and a `freeze/2` or `when/2` goal on one of them wakes during the try: `freeze(A, write(a)), dif(A, f(B))` prints `a` in Scryer and nothing here; and a frozen goal that fails in the try makes Scryer drop the `dif` (`freeze(A, A = 1), dif(A, f(B))` shows no `dif`). Clausal's try wakes nothing; its answers are the same, with the `dif` kept until a binding decides it.
+- **A `when/2` on two variables that are then aliased** is one delay here, and runs once, as in SWI-Prolog and SICStus; Scryer keeps a copy per variable and prints and runs it twice. Three aliased variables' `freeze/2` goals print as one conjunction nested to the left (`((a,b),c)`), whichever way the aliases are made.
+- **Errors of `when/2`** name `when/2` as their context (`error(domain_error(when_condition, C), when/2)`); Scryer leaves the context unbound. ISO leaves the context implementation-defined. Neither system takes `?=/2` as a condition (SWI-Prolog does).
+- **Scryer's `writeq/1` of a term holding a `dif/2` variable** can name one variable two ways (`f([_A|_B],_)` for `f([X|X],_)`; `==/2` says they are one).
+- **`copy_term/2` and `findall/3` do not copy `freeze/2` and `when/2` goals** (Scryer copies every attribute): `todo/copy-term-attributes-freeze-clpz-and-copy-term-3-2026-09-30.md`.
+
 ??? info "Implementation"
     The goal term is not stored. Every delayed goal's thunk takes one optional argument: called with a true one, it returns its residual, `("freeze", key, Goal)` or `("when", key, when(Cond, Goal))`, built from the very variables it would run the goal over, and runs nothing (`compiler/control_constructs._residual_goal_ast`, `coroutining.residual_of`). The thunk is in the attribute, so the goal is trailed and undone with it, and installing or waking a delay costs what it did. `copy_term/2` still does not copy a `freeze` attribute (`todo/copy-term-attributes-freeze-clpz-and-copy-term-3-2026-09-30.md`); the residual is what a copier or `copy_term/3` would re-post.
 

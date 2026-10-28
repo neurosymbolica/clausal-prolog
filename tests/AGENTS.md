@@ -51,6 +51,7 @@ The `test/1` convention itself: [../docs/testing.md](../docs/testing.md).
 | `iso/` | ISO answers checked against Scryer (`*_scryer.py`) and engine-only twins. Its `conftest.py` `scryer` fixture FAILS (not skips) when the binary is missing unless `CLAUSAL_ISO_ALLOW_NO_SCRYER=1`. |
 | [iso_l3/](iso_l3/AGENTS.md) | The native `.pl` front end (`CLAUSAL_PL_FRONTEND=native`, `clausal/tools/iso_l3.py`), slice by slice. |
 | `iso_diff/` | Differential sweep: area `.pl` files run under the native front end and under Scryer; `KNOWN` table of accepted divergences in `test_iso_diff.py`. Skips without Scryer. |
+| `fuzz/` | The differential fuzzer against Scryer: `scryer_diff.py` (seeded generator of small pure goals over `=`, `dif`, `freeze`, `when`, cycles; runner; comparer; shrinker; the table of known differences) and `test_scryer_diff.py` (a fixed seed set; `CLAUSAL_FUZZ_SEEDS=N` for N seeds). `python -m tests.fuzz.scryer_diff --help`. |
 | `golden/` | Pinned generated Python (`*.codegen.txt`) for `test_tagged_terms.py`; regenerate with `CLAUSAL_REGEN_GOLDEN=1 pytest tests/test_tagged_terms.py -k golden`. |
 | `audit_2026_05_25/` | String-audit findings, each `xfail(strict=True)`; a pass means the fix landed, so remove the marker. |
 | `audit_2026_07_05/` | Partition-audit suite (`test_00_smoke.py` … `test_12_seams.py`) with leak/refcount fixtures in its `conftest.py`. |
