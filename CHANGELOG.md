@@ -147,6 +147,51 @@ surface described in [docs/public-api.md](docs/public-api.md).
   `T = false` (operator ruling 2026-10-24: a non-conformity is a bug).
   Rows against Scryer in `tests/iso/test_dif_cyclic_scryer.py`.
 
+- **A partial list is the compound `'.'/2`** (2026-10-28, operator ruling
+  2026-10-24: a non-conformity is a bug; found by the differential fuzzer,
+  `tests/fuzz/scryer_diff.py`). `functor/3`, `arg/3` and `=..` failed on
+  `[B|A]`; they now answer `'.'/2`, `B`, `A` and `['.',B,A]`. The standard
+  order keyed a partial list in the opaque band, after every term, so
+  `compare(R, [B|A], [1|A])` gave `>` and `compare(R, [a|A], f(a,b))` gave
+  `>`; both are `<`. A proper list against an improper one compared an
+  element with the other's tail: `compare(R, [a,b], [a|c])` gave `<`
+  (ISO 7.2.1, `'.'(b,[])` against `c`: `>`) and `[a|T]` sorted after
+  `[a]`. Lists now key as their spine, cell by cell, with what the spine
+  ends in (`[]` or the tail) as its last slot. Scryer orders some of these
+  pairs otherwise (`[a|T]` against `[a]`: `>`); Trealla agrees with ISO
+  and with Clausal. Rows in `tests/iso/test_fuzz_findings_scryer.py`
+  (Scryer oracle rows, and Trealla for the list-order rows).
+
+- **A cycle through a partial list no longer overflows the stack**
+  (2026-10-28, operator ruling 2026-10-24). `B = g([B|A]), writeq(B)`,
+  `X = [a|T], T = [X|T], X =.. L` (also `functor/3`, `arg/3`),
+  `B = [B|E], dif(1, B)` and `dif(A, g(B)), A = B, B = [A|B]` raised
+  `error(resource_error(stack), _)`: walking the list walked every
+  element, and the element led back to the list. The writer, the
+  decomposition builtins, the unifier's partial-list pairing and a
+  partial list compared with a number or an atom now read the elements
+  as they are. They answer as Scryer does (`g([...|_A])`, `'.'`, `true`).
+
+- **A `dif/2` on two variables no longer vanishes when one is bound to a
+  plain variable** (2026-10-28, operator ruling 2026-10-24). The wake-up
+  hook tries a pair's unification to see whether it is still possible; the
+  try binds the pair's own variables, so their `dif/2` hooks ran inside it,
+  met the same pair with its two sides made one, and called it violated.
+  The try failed and the hook dropped the pair as if it could never be
+  violated: `dif(A, E1), copy_term(E1, E2)` left no `dif` on `E2`. A hook
+  now skips a pair whose own try is running further out (C and Python
+  twins, per thread). Answers show `dif(A,E1), dif(_A,E2)`, as Scryer.
+
+- **The `dif/2` goals an answer shows are Scryer's** (2026-10-28, operator
+  ruling 2026-10-24). A pair that a binding made true for good is no
+  longer shown (`dif(C, [a|B]), C = 1` printed `C = 1, dif(1,[a|B])`;
+  now `C = 1`); the variables of a partial list in the answer are seen
+  (`dif(A, b), copy_term([A|B], E)` showed no `dif` on `E`'s first
+  element); constraints on variables reached only through another
+  constraint are shown (`dif(_B,_A)`, as Scryer projects them); and an
+  operator atom argument is written as an argument, `dif(A,=)` (it was
+  `dif(A,(=))`). The rows are in `tests/iso/test_fuzz_findings_scryer.py`.
+
 ## 1.2.0 (2026-10-25)
 
 A minor release (operator ruling 2026-10-25): the interactive ISO `?-`

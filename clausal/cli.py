@@ -258,15 +258,45 @@ def _read_goal(text: str, op_table):
 
 
 def _term_vars(t, out: dict) -> None:
-    """The unbound variables of a walked answer, in first-occurrence order."""
-    from clausal.logic.variables import Var  # noqa: PLC0415
-    stack = [t]
-    while stack:
-        x = stack.pop()
-        if isinstance(x, Var):
-            out.setdefault(id(x), x)
-        elif type(x) in (tuple, list):
-            stack.extend(reversed(x))
+    """The unbound variables of a walked answer, in first-occurrence order:
+    ``term_variables/2``'s walk, which reads a partial list's elements
+    (``E = [_7|_8]``: the tuple-and-list walk this was skipped them, and a
+    constraint on ``_7`` went unprinted) and stops on a cycle."""
+    from clausal.logic.builtins.inspection import _collect_vars_impl  # noqa: PLC0415
+    found: list = []
+    _collect_vars_impl(t, found)
+    for x in found:
+        out.setdefault(id(x), x)
+
+
+def _attribute_closure(variables) -> list:
+    """*variables*, and the variables their ``dif/2`` pairs and pending
+    ``freeze/2``/``when/2`` goals reach, and so on: the variables whose
+    constraints an answer shows, as Scryer's projection reaches them.
+    ``dif(A, E), copy_term(E, F)`` leaves ``dif(_1, F)``, and ``_1`` may
+    carry constraints of its own."""
+    from clausal.logic.builtins.inspection import _collect_vars_impl  # noqa: PLC0415
+    from clausal.logic.constraints import DIF_KEY  # noqa: PLC0415
+    from clausal.logic.coroutining import pending_goals  # noqa: PLC0415
+    from clausal.logic.variables import get_attr  # noqa: PLC0415
+    out: list = []
+    seen: set = set()
+    queue = list(variables)
+    i = 0
+    while i < len(queue):
+        v = queue[i]
+        i += 1
+        if id(v) in seen:
+            continue
+        seen.add(id(v))
+        out.append(v)
+        reached: list = []
+        for pair in get_attr(v, DIF_KEY) or ():
+            _collect_vars_impl(pair, reached)
+        for goal in pending_goals([v]):
+            _collect_vars_impl(goal, reached)
+        queue.extend(x for x in reached if id(x) not in seen)
+    return out
 
 
 def _fd_domain_text(domain) -> str:
@@ -311,8 +341,9 @@ def _fd_dif_residuals(variables, spell) -> list[str]:
     (``dif(X,a)``, ``X in 4..5``, ``Y #< X``): what a toplevel prints for a
     constraint left on an answer (operator ruling 2026-10-24: not
     module-qualified).  A domain with no bound is not printed."""
-    from clausal.logic.constraints import DIF_KEY  # noqa: PLC0415
-    from clausal.logic.variables import deref, get_attr, is_var  # noqa: PLC0415
+    from clausal.logic.constraints import DIF_KEY, reify_eq  # noqa: PLC0415
+    from clausal.logic.builtins.inspection import _copy_term_impl  # noqa: PLC0415
+    from clausal.logic.variables import Trail, deref, get_attr, is_var  # noqa: PLC0415
 
     goals: list[str] = []
     seen: set[int] = set()
@@ -321,7 +352,21 @@ def _fd_dif_residuals(variables, spell) -> list[str]:
             if id(pair) in seen:
                 continue
             seen.add(id(pair))
-            goals.append(f"dif({spell(pair[0])},{spell(pair[1])})")
+            # A pair a later binding made true for good stays in the
+            # attribute of its other variables (the wake-up hook only
+            # re-checks it): ``dif(C, [a|B]), C = 1`` leaves it on B.  It
+            # constrains nothing, and Scryer does not show it.
+            # (Tried on a copy with plain variables: on the pair itself the
+            # trial binding would run its own dif hook.)
+            var_map: dict = {}
+            if reify_eq(_copy_term_impl(pair[0], var_map, []),
+                        _copy_term_impl(pair[1], var_map, []),
+                        Trail()) is False:
+                continue
+            # One term, so an argument is written as an argument
+            # (``dif(A,=)``, as Scryer writes it), not as the right side of
+            # ``=`` (``(=)``).
+            goals.append(spell(("dif", pair[0], pair[1])))
     inf = float("inf")
     for v in variables:
         state = get_attr(v, "fd")
@@ -425,9 +470,10 @@ def _answer(shown, trail) -> str:
         def spell(x):
             from clausal.logic.solve import _deref_walk as walk  # noqa: PLC0415
             return term_writeq(walk(x), var_names=names, priority=699, ops=ops)
-        residue_vars = list(free.values()) + list(hidden_residue.values())
-        parts += _fd_dif_residuals(residue_vars, spell)
-        parts += _coroutine_residuals(residue_vars, spell)
+        reached = _attribute_closure(
+            list(free.values()) + list(hidden_residue.values()))
+        parts += _fd_dif_residuals(reached, spell)
+        parts += _coroutine_residuals(reached, spell)
         parts += clpq.residual_q(
             list(free.values()), trail,
             lambda v: names.get(id(v)) or term_writeq(v))

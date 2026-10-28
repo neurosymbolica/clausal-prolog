@@ -327,12 +327,24 @@ and the arithmetic comparisons, which used to report it as
 `type_error(evaluable, F/N)`, and to a `catch/3`
 (`tests/test_async_exception_propagation.py`).
 
-One standard-order difference from Scryer: with `X = [a|X]`,
-`compare(R, [a|foo], X)` gives `<` here and `>` in Scryer.  This engine
-reads the cyclic list as the cons cells it is -- `'.'(a, X)`, whose tail
-is a compound, after the atom `foo` -- consistently with `f(a, foo)`
-against `X = f(a, X)`, where both engines say `<`; Scryer appears to
-flatten the cyclic list before ordering it.  `dif/2` on a cyclic or
+One standard-order difference from Scryer: a list against a list with
+another tail.  This engine reads every list as the cons cells it is
+(ISO 7.2.1, each `'.'/2`, compared argument by argument), so
+`compare(R, [a|T], [a])` is `<` (a variable before `[]`),
+`compare(R, [a,b], [a|c])` is `>` (`'.'(b,[])` after the atom `c`), and,
+with `X = [a|X]`, `compare(R, [a|foo], X)` is `<`; Scryer says `>`, `<`
+and `>`, as if it ordered a list's elements before its tail.  Trealla
+agrees with this engine (`tests/iso/test_fuzz_findings_scryer.py`).
+A partial list `[B|A]` is the compound `'.'(B, A)` to `functor/3`,
+`arg/3`, `=..` and the standard order, as in Scryer.
+
+The printing of a cyclic term is not fixed by ISO: `writeq/1` writes a
+cell already being written as `...`, and where that falls depends on
+where the cycle is closed in memory -- a copy (`copy_term/2`,
+`findall/3`) or a cell built through a partial list closes it one cell
+further on in one system than in the other (`[[_A|...]]` in Scryer,
+`[[_A,_A|...]]` here, for one rational tree).  The differential fuzzer
+compares terms unfolded to a fixed depth, which do agree.  `dif/2` on a cyclic or
 100k-deep pair answers as Scryer does: it fails on one rational tree,
 succeeds on a ground difference, and otherwise suspends (`X = f(X),
 dif(Y, X)` leaves `dif(Y,f(...))`; a goal woken by `freeze/2` that posts

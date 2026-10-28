@@ -180,7 +180,10 @@ false.
   rulings 2026-10-24 and 2026-10-26). Several freezes on one variable are
   one `freeze/2` of their conjunction; `when/2` goals on one variable are
   listed newest first, as Scryer lists them. `frozen/2` reads the same
-  goals back as a term.
+  goals back as a term. A variable reached only through another
+  constraint has its constraints shown too (`dif(A,E), copy_term(E,F)`
+  answers `dif(A,E), dif(_A,F)`), and a `dif/2` that a binding has made
+  true for good is not shown.
 - A goal can use the operators the program has: its own `op/3` directives
   and those of the libraries it imports, such as `#=` after
   `:- use_module(library(clpz)).`
