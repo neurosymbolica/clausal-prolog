@@ -268,6 +268,35 @@ surface described in [docs/public-api.md](docs/public-api.md).
   propagation reported with it (`X in 0..20, Q #= X//4, Q #>= 3` gives
   `X in 12..20`); the matrix has solution-count rows for the class.
 
+- **The default CLP(Q) solver decides strict inequalities on every post**
+  (2026-10-28, soundness).  Legacy kept `l < r` as `l =< r` plus a passive
+  `l =\= r`, checked only once its variables were fixed or after a binding
+  or an equality, so a strict bound closed by inequalities alone was
+  accepted: `{X >= 0}, {Y >= 0}, {S = X + Y}, {S < 0}` succeeded in 18 of
+  its 24 posting orders, and `{X < Y}, {Y < X}`, `{X < Y, X >= 3, Y =< 3}`
+  and `{X < Y}, in_q(X, 3, 10), in_q(Y, 0, 3)` all succeeded.  The simplex
+  now keeps each bound's strictness and reads a strict bound as a
+  delta-rational (`X < 3` is `3 - d` for an infinitesimal `d`; Dutertre
+  and de Moura), so feasibility decides strictness with no extra LP; only
+  `=\=` stays a passive disequality.  Answers as the port
+  (`CLAUSAL_CLPQ=holzbaur`) gives them: `sup/2` and `inf/2` give the bound
+  whether attained or not; `maximize/2` and `minimize/2` fail on an
+  optimum that is not attained, and no longer bind another variable onto
+  its strict bound (`{X =< 3, 0 < Y, Y < 1}, maximize(X)` failed);
+  `bb_inf/3` respects strict bounds (`{X > 0, X =< 2}, bb_inf([X], X, I)`
+  failed, now `I = 1`).  A residual keeps a strictness that a projected-away
+  variable carried: `{X < Y, Y < 3}` onto `X` printed `{X =< 3}`, now
+  `{X < 3}`; other residual text is unchanged.  Also fixed, found by the
+  differential below: a `=\=` posted after an equality that already decides
+  it (`{X + Y = 1}, {X + Y =\= 1}`) was accepted.  Cost: a chain of 200
+  `<` posts still takes about 0.05 s, and labeling it about 6 s instead of
+  21 s.
+  Pinned in `tests/test_clpq_legacy_strict_bounds.py` (both solvers, plus a
+  seeded differential of legacy against the port over 400 random stores;
+  a sweep of 13,400 found no other difference) and
+  `tests/audit_2026_07_05/test_08_clpqr_z3.py::TestClpqSoundness::test_strict_cycle_fails`
+  (its xfail is gone).
+
 ## 1.2.0 (2026-10-25)
 
 A minor release (operator ruling 2026-10-25): the interactive ISO `?-`
