@@ -246,8 +246,10 @@ def test_a_last_answer_runs_no_side_effect_early(tl):
     time.sleep(0.3)
     assert "side(b)" not in s.text
     s.send(";")
-    s.expect(";  X = b.\n")
-    assert s.text.index("side(b)") < s.text.index(";  X = b.")
+    s.expect("  X = b.\n")
+    # the semicolon is written as the search for b starts, so side(b)
+    # comes after it and before b's answer
+    assert s.text.index(";side(b)") < s.text.index("  X = b.")
 
 
 def test_space_and_n_are_next(tl):
@@ -378,19 +380,21 @@ def test_residual_dif_and_clpz(tl):
 
 def test_residual_freeze_and_when(tl):
     """A pending freeze/2 or when/2 is printed as the goal, plain form
-    (operator ruling 2026-10-26), not hidden behind ``true``.  (Neither is
-    known to leave no choice, so each answer waits for a key.)"""
+    (operator ruling 2026-10-26), not hidden behind ``true``.  Posting one
+    leaves no choice, so the answer ends with its full stop; an answer at
+    which a goal woke is not known last, so it waits for a key."""
     s = tl()
     for q, answer in [
-            ("freeze(X, write(hi)).", "   freeze(X,write(hi))"),
-            ("freeze(X, true), freeze(X, fail).", "   freeze(X,(true,fail))"),
+            ("freeze(X, write(hi)).", "   freeze(X,write(hi)).\n"),
+            ("freeze(X, true), freeze(X, fail).",
+             "   freeze(X,(true,fail)).\n"),
             ("when((nonvar(X);ground(Y)), true).",
-             "   when((nonvar(X);ground(Y)),true)"),
-            ("dif(X, a), freeze(X, true).", "   dif(X,a), freeze(X,true)"),
-            ("freeze(X, true), X = 1.", "   X = 1")]:
+             "   when((nonvar(X);ground(Y)),true).\n"),
+            ("dif(X, a), freeze(X, true).", "   dif(X,a), freeze(X,true).\n")]:
         s.query(q, answer)
-        s.send("\r")
-        s.expect(";  ... .")
+    s.query("freeze(X, true), X = 1.", "   X = 1")
+    s.send("\r")
+    s.expect(";  ... .")
 
 
 def test_long_list_is_elided_and_w_prints_in_full(tl):
