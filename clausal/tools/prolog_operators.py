@@ -122,16 +122,19 @@ class OperatorTable:
 
     @classmethod
     def scryer_default(cls) -> OperatorTable:
+        """Scryer's table once a file has loaded library(clpz): the
+        built-in table below plus clpz's operators."""
         t = cls()
         _load_iso(t)
+        _load_scryer_builtin(t)
         _load_scryer(t)
         return t
 
     @classmethod
     def scryer_builtin_default(cls) -> OperatorTable:
         """What Scryer's toplevel has with NO library loaded: ISO plus
-        ``+`` fy 200, ``div`` and ``rdiv`` yfx 400 (each verified against
-        Scryer).  ``scryer_default`` adds library(clpz)'s operators, which a
+        ``+`` fy 200 and ``rdiv`` yfx 400 (``div`` is ISO's; each verified
+        against Scryer).  ``scryer_default`` adds library(clpz)'s operators, which a
         consulted file imports; this table is what an uncaught error prints
         with, so it has none of them."""
         t = cls()
@@ -247,6 +250,7 @@ def _load_iso(t: OperatorTable) -> None:
     d(400, "yfx", "//")
     d(400, "yfx", "rem")
     d(400, "yfx", "mod")
+    d(400, "yfx", "div")    # floored integer division (ISO Cor.2)
     d(400, "yfx", "<<")
     d(400, "yfx", ">>")
     d(200, "xfx", "**")
@@ -280,20 +284,34 @@ def _load_swi(t: OperatorTable) -> None:
 # ── Scryer additions ────────────────────────────────────────────────
 
 def _load_scryer(t: OperatorTable) -> None:
+    """library(clpz)'s operators, as Scryer's ``current_op/3`` lists them
+    after ``:- use_module(library(clpz))`` (pinned in
+    tests/test_operator_tables_vs_scryer.py)."""
     d = t._define_default
-    # CLP(Z) operators (loaded via library(clpz))
     d(700, "xfx", "#=")
     d(700, "xfx", "#\\=")
     d(700, "xfx", "#<")
     d(700, "xfx", "#>")
     d(700, "xfx", "#=<")
     d(700, "xfx", "#>=")
+    d(700, "xfx", "in")
+    d(700, "xfx", "ins")
+    d(450, "xfx", "..")
+    d(150, "fx", "#")
+    d(710, "fy", "#\\")
+    d(720, "yfx", "#/\\")
+    d(730, "yfx", "#\\")
+    d(740, "yfx", "#\\/")
+    d(750, "xfy", "#==>")
+    d(750, "yfx", "#<==")
+    d(760, "yfx", "#<==>")
 
 
 def _load_scryer_builtin(t: OperatorTable) -> None:
+    # Scryer also has ``non_counted_backtracking`` (700 fx), an internal
+    # left out: this table is the engine's writeq table too.
     d = t._define_default
     d(200, "fy", "+")
-    d(400, "yfx", "div")
     d(400, "yfx", "rdiv")
 
 

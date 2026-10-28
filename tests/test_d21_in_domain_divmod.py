@@ -156,26 +156,26 @@ def _body(src, dialect=None):
 
 def test_a_list_literal_becomes_ins():
     out = _body("p(A, B) <- (in_domain([A, B], 0, 3))\n")
-    assert "ins([A, B], ..(0, 3))" in out
+    assert "[A, B] ins 0 .. 3" in out    # clpz's operators
     assert "ins([A, B], 0, 3)" not in out
 
 
 def test_an_integer_literal_becomes_in():
-    assert "in(5, ..(1, 9))" in _body("p() <- (in_domain(5, 1, 9))\n")
+    assert "5 in 1 .. 9" in _body("p() <- (in_domain(5, 1, 9))\n")
 
 
 def test_a_variable_gets_the_type_dispatch():
     out = _body("p(V) <- (in_domain(V, 1, 9))\n")
     # The dispatch is the clause's whole body here, so it carries no outer
     # brackets (`;` binds looser than `,` but tighter than `:-`).
-    assert ("(var(V) ; integer(V)), in(V, ..(1, 9)) ; "
-            "nonvar(V), (V == [] ; V = [_|_], ins(V, ..(1, 9)))") in out
+    assert ("(var(V) ; integer(V)), V in 1 .. 9 ; "
+            "nonvar(V), (V == [] ; V = [_|_], V ins 1 .. 9)") in out
 
 
 def test_divmod_expands_to_floor_division():
     out = _body("p(Q, R) <- (divmod_(17, 5, Q, R))\n")
     for goal in ("integer(17)", "integer(5)", "5 =\\= 0",
-                 "Q is div(17, 5)", "R is 17 mod 5"):
+                 "Q is 17 div 5", "R is 17 mod 5"):
         assert goal in out
     assert "divmod(" not in out and "divmod_(" not in out
 

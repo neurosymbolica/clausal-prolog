@@ -9,7 +9,7 @@ square(X, Y) :-
     #=(Y, X * X).
 
 triangle_number(N, T) :-
-    #=(T, div(N * (N + 1), 2)).
+    #=(T, N * (N + 1) div 2).
 
 test('addition: 1+2=3') :-
     #=(1 + 2, 3).
@@ -21,7 +21,7 @@ test('multiplication: 3*4=12') :-
     #=(3 * 4, 12).
 
 test('integer division: 7//2=3') :-
-    #=(div(7, 2), 3).
+    #=(7 div 2, 3).
 
 test('modulo: 7%2=1') :-
     #=(7 mod 2, 1).
@@ -45,7 +45,7 @@ test('subtraction negative: 3-5=-2') :-
     #=(3 - 5, -2).
 
 test('negative floor div: -7//2=-4') :-
-    #=(div(-7, 2), -4).
+    #=(-7 div 2, -4).
 
 test('negative mod: -7%2=1') :-
     #=(-7 mod 2, 1).
@@ -228,7 +228,7 @@ test('divmod 17 5 = (3, 2)') :-
     integer(17),
     integer(5),
     5 =\= 0,
-    Q is div(17, 5),
+    Q is 17 div 5,
     R is 17 mod 5,
     #=(Q, 3),
     #=(R, 2).
@@ -237,32 +237,32 @@ test('divmod exact 10 5 = (2, 0)') :-
     integer(10),
     integer(5),
     5 =\= 0,
-    Q is div(10, 5),
+    Q is 10 div 5,
     R is 10 mod 5,
     #=(Q, 2),
     #=(R, 0).
 
 test('divmod by zero fails') :-
-    \+ (integer(10), integer(0), 0 =\= 0, _ is div(10, 0), _ is 10 mod 0).
+    \+ (integer(10), integer(0), 0 =\= 0, _ is 10 div 0, _ is 10 mod 0).
 
 test('divmod negative: -7 // 2 = -4, -7 % 2 = 1 (Python floor)') :-
     integer(-7),
     integer(2),
     2 =\= 0,
-    Q is div(-7, 2),
+    Q is -7 div 2,
     R is -7 mod 2,
     #=(Q, -4),
     #=(R, 1).
 
 test('divmod unbound fails') :-
-    \+ (integer(_x_UNUSED), integer(5), 5 =\= 0, _ is div(_x_UNUSED, 5), _ is _x_UNUSED mod 5).
+    \+ (integer(_x_UNUSED), integer(5), 5 =\= 0, _ is _x_UNUSED div 5, _ is _x_UNUSED mod 5).
 
 test('divmod check mode: correct') :-
     integer(17),
     integer(5),
     5 =\= 0,
-    3 is div(17, 5),
+    3 is 17 div 5,
     2 is 17 mod 5.
 
 test('divmod check mode: wrong r fails') :-
-    \+ (integer(17), integer(5), 5 =\= 0, 3 is div(17, 5), 99 is 17 mod 5).
+    \+ (integer(17), integer(5), 5 =\= 0, 3 is 17 div 5, 99 is 17 mod 5).

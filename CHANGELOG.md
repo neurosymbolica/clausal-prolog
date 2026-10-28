@@ -7,6 +7,21 @@ surface described in [docs/public-api.md](docs/public-api.md).
 
 ## Unreleased
 
+### Fixed
+
+- **The tooling's operator tables match Scryer's** (2026-10-28). The ISO
+  table lacked `div` (400 yfx, ISO Cor.2). The `scryer` dialect (Scryer
+  with library(clpz) loaded) lacked Scryer's built-in `+` (fy 200), `div`
+  and `rdiv`, and of clpz's operators it had only the six `#` comparisons,
+  without `in`, `ins`, `..`, `#` and the reified connectives (`#\`,
+  `#/\`, `#\/`, `#==>`, `#<==`, `#<==>`). A `.pl` file read in that dialect
+  now parses them, and the `.seam`-to-Prolog exporter writes them as
+  operators: `[A, B] ins 0 .. 3` and `Q is 17 div 5`, where it wrote
+  `ins([A, B], ..(0, 3))` and `div(17, 5)`; Scryer and Trealla consult the
+  new output with the same answers. Scryer's internal
+  `non_counted_backtracking` (700 fx) is left out. Pinned against Scryer's
+  `current_op/3` in `tests/test_operator_tables_vs_scryer.py`.
+
 ## 1.3.0 (2026-10-29)
 
 A minor release. The engine reports when an answer is the last
