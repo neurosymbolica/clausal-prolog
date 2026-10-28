@@ -484,6 +484,8 @@ static PyTypeObject AttVarType = {
  *   TRAIL_ATTR — an attribute mutation via put_attr / del_attr.
  *     Stores (attvar, key, old_attr); undo restores attrs[key].
  *     old_attr == NULL means the key was absent before put_attr.
+ *     key == NULL: a change of the attvar's attr_age instead; old_attr is
+ *     the age before (a PyLong, NULL for 0) -- trail_set_attr_age.
  *
  * The wakeup_list field is NULL by default and is set to a fresh
  * Python list by py_unify / py_unify_with_occurs_check before calling
@@ -617,7 +619,7 @@ Trail_dealloc(TrailObject *self)
             Py_XDECREF(e->u.binding.old_value);
         } else if (e->kind == TRAIL_ATTR) {
             Py_DECREF(e->u.attr.attvar);
-            Py_DECREF(e->u.attr.key);
+            Py_XDECREF(e->u.attr.key);
             Py_XDECREF(e->u.attr.old_attr);
         } else {
             /* TRAIL_CALLBACK; TRAIL_PENDING (fn may be NULL) */
@@ -661,7 +663,7 @@ trail_entry_release(TrailEntry *e)
         Py_XDECREF(e->u.binding.old_value);
     } else if (e->kind == TRAIL_ATTR) {
         Py_DECREF(e->u.attr.attvar);
-        Py_DECREF(e->u.attr.key);
+        Py_XDECREF(e->u.attr.key);
         Py_XDECREF(e->u.attr.old_attr);
     } else {
         /* TRAIL_CALLBACK; TRAIL_PENDING (fn may be NULL) */
@@ -763,6 +765,44 @@ trail_push_attr(TrailObject *trail, AttVarObject *attvar,
     e->u.attr.key       = key;
     e->u.attr.old_attr  = old_attr;
     return 0;
+}
+
+/*
+ * trail_set_attr_age — set *attvar*'s attr_age, trailed (a TRAIL_ATTR entry
+ * with key NULL), so backtracking past it puts the age back: past the
+ * variable's first attribute, to 0, and the next first attribute on the
+ * surviving path stamps it afresh.
+ */
+static int
+trail_set_attr_age(TrailObject *trail, AttVarObject *attvar, uint64_t age)
+{
+    PyObject *old = NULL;
+    if (attvar->attr_age != 0) {
+        old = PyLong_FromUnsignedLongLong(attvar->attr_age);
+        if (!old) return -1;
+    }
+    if (trail_check_owner(trail) < 0 || trail_grow(trail) < 0) {
+        Py_XDECREF(old);
+        return -1;
+    }
+    TrailEntry *e = &trail->entries[trail->length++];
+    e->kind = TRAIL_ATTR;
+    Py_INCREF(attvar);
+    e->u.attr.attvar   = (PyObject *)attvar;
+    e->u.attr.key      = NULL;
+    e->u.attr.old_attr = old;
+    attvar->attr_age = age;
+    return 0;
+}
+
+/* Stamp *attvar*'s first attribute on this path (attr_age 0: none yet). */
+static inline int
+stamp_first_attr(TrailObject *trail, AttVarObject *attvar)
+{
+    if (attvar->attr_age != 0)
+        return 0;
+    return trail_set_attr_age(trail, attvar,
+                              FT_ATOMIC_FETCH_ADD(g_next_attr_age, 1));
 }
 
 /*
@@ -901,7 +941,12 @@ trail_undo_to(TrailObject *trail, Py_ssize_t mark)
             AttVarObject *av  = (AttVarObject *)e->u.attr.attvar;
             PyObject     *key = e->u.attr.key;
             PyObject     *old = e->u.attr.old_attr;
-            if (av->attrs) {
+            if (key == NULL) {
+                /* attr_age (trail_set_attr_age) */
+                av->attr_age = old ? (uint64_t)PyLong_AsUnsignedLongLong(old)
+                                   : 0;
+                PyErr_Clear();
+            } else if (av->attrs) {
                 if (old == NULL) {
                     /* Key was absent before put_attr — delete it again */
                     PyDict_DelItem(av->attrs, key);  /* ignore errors */
@@ -913,7 +958,7 @@ trail_undo_to(TrailObject *trail, Py_ssize_t mark)
                 }
             }
             Py_DECREF(e->u.attr.attvar);
-            Py_DECREF(key);
+            Py_XDECREF(key);
             Py_XDECREF(old);    /* release trail's owned ref */
         } else if (e->kind == TRAIL_PENDING) {
             /* Put the queue back as it was (ownership: trail -> trail). */
@@ -2590,8 +2635,8 @@ merge_delayed_goals(AttVarObject *from, AttVarObject *to, PyObject *key,
     if (!to->attrs) {
         to->attrs = PyDict_New();
         if (!to->attrs) return -1;
-        to->attr_age = FT_ATOMIC_FETCH_ADD(g_next_attr_age, 1);
     }
+    if (stamp_first_attr(trail, to) < 0) return -1;
     PyObject *existing = PyDict_GetItemWithError(to->attrs, key);
     if (!existing && PyErr_Occurred()) return -1;
     if (existing && !PyList_Check(existing))
@@ -2622,8 +2667,8 @@ merge_delayed_goals(AttVarObject *from, AttVarObject *to, PyObject *key,
         return -1;
     }
     Py_DECREF(merged);
-    if (from_first)
-        to->attr_age = from->attr_age;
+    if (from_first && trail_set_attr_age(trail, to, from->attr_age) < 0)
+        return -1;
     return 1;
 }
 
@@ -3142,8 +3187,8 @@ py_put_attr(PyObject *Py_UNUSED(module), PyObject *args)
     if (!av->attrs) {
         av->attrs = PyDict_New();
         if (!av->attrs) return NULL;
-        av->attr_age = FT_ATOMIC_FETCH_ADD(g_next_attr_age, 1);
     }
+    if (stamp_first_attr(trail, av) < 0) return NULL;
 
     /* Get current value (borrowed ref, NULL if absent) */
     PyObject *old_attr = PyDict_GetItemWithError(av->attrs, key);
@@ -4587,8 +4632,8 @@ capi_put_attr(PyObject *var_obj, PyObject *key, PyObject *value,
     if (!av->attrs) {
         av->attrs = PyDict_New();
         if (!av->attrs) return -1;
-        av->attr_age = FT_ATOMIC_FETCH_ADD(g_next_attr_age, 1);
     }
+    if (stamp_first_attr(trail, av) < 0) return -1;
 
     PyObject *old_attr = PyDict_GetItemWithError(av->attrs, key);
     if (!old_attr && PyErr_Occurred()) return -1;

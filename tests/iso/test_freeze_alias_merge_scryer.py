@@ -181,6 +181,24 @@ ROWS = [
      ["X = Y, when(nonvar(X),w(w2)), when(nonvar(X),w(w1))."]),
     # a constraint decides before the frozen goals run
     ("dif(X,2), freeze(X,w(a)), X = 1", ["a", "X = 1."]),
+    # an attribute undone by backtracking does not make its variable older:
+    # Y, attributed first on the surviving path, has its goals first
+    ("(dif(X,1), fail ; true), freeze(Y,w(g)), freeze(X,w(h)), X = Y,"
+     " X = 1", ["g", "h", "X = 1, Y = 1."]),
+    ("(freeze(X,w(z)), fail ; true), freeze(Y,w(g)), freeze(X,w(h)),"
+     " X = Y, X = 1", ["g", "h", "X = 1, Y = 1."]),
+    ("\\+ \\+ dif(X,1), freeze(Y,w(g)), freeze(X,w(h)), X = Y, X = 1",
+     ["g", "h", "X = 1, Y = 1."]),
+    ("\\+ (freeze(X,w(z)), fail), freeze(Y,w(g)), freeze(X,w(h)), X = Y,"
+     " X = 1", ["g", "h", "X = 1, Y = 1."]),
+    ("findall(t, freeze(X,w(z)), _), freeze(Y,w(g)), freeze(X,w(h)),"
+     " X = Y, X = 1", ["g", "h", "X = 1, Y = 1."]),
+    ("(dif(X,1), fail ; true), freeze(Y,w(g)), freeze(X,w(h)), X = Y",
+     ["X = Y, freeze(X,(w(g),w(h)))."]),
+    # ... nor does an alias undone by backtracking
+    ("X = X, Y = Y, W = W, freeze(Y,w(b)), freeze(W,w(w)), freeze(X,w(a)),"
+     " (X = Y, fail ; true), X = W, X = 1",
+     ["w", "a", "X = 1, W = 1, freeze(Y,w(b))."]),
 ]
 
 #: Rows Scryer answers differently; Clausal's answer is the one asserted.

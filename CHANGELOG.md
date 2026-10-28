@@ -122,7 +122,10 @@ surface described in [docs/public-api.md](docs/public-api.md).
   unification wakes with it, after its goals (`f(X,Y) = f(Y,1)`, both
   frozen, ran Y's goals first). `register_attr_hook(key, fn, merge=True)`
   marks a key whose attribute is a list of delayed goals the engine merges
-  on an alias. Pinned in
+  on an alias. Which variable counts as attributed first is trailed: an
+  attribute (or an alias) undone by backtracking does not make a variable
+  older (`(dif(X,1), fail ; true), freeze(Y,g), freeze(X,h), X = Y, X = 1`
+  runs g first, as Scryer). Pinned in
   `tests/iso/test_freeze_alias_merge_scryer.py` (Scryer oracle rows; `.pl`
   and `.clausal`, C and Python trampolines) and
   `tests/test_coroutining.py::TestFreeze::test_bare_unify_of_two_frozen_vars_merges`.
