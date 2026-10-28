@@ -118,7 +118,7 @@
     "which_fib_is_55": "pass"
    }
   },
-  "docs/cli.md#L178": {
+  "docs/cli.md#L18": {
    "collect_error": null,
    "error": null,
    "load": "ok",
@@ -129,7 +129,7 @@
    },
    "tests": null
   },
-  "docs/cli.md#L17": {
+  "docs/cli.md#L271": {
    "collect_error": null,
    "error": null,
    "load": "ok",
@@ -448,14 +448,14 @@
    },
    "tests": null
   },
-  "docs/python_integration.md#L560": {
+  "docs/python_integration.md#L615": {
    "collect_error": null,
    "error": null,
    "load": "ok",
    "preds": {
     "name_of/1": {
      "after": [],
-     "error": "LogicException: Uncaught logic exception: error(existence_error(procedure,greeting/2),greeting/2): phrase/2: no procedure greeting/2 is defined in module _clausal_test_doc_python_integration_L560"
+     "error": "LogicException: Uncaught logic exception: error(existence_error(procedure,greeting/2),greeting/2): phrase/2: no procedure greeting/2 is defined in module _clausal_test_doc_python_integration_L615"
     }
    },
    "tests": null
@@ -1591,6 +1591,13 @@
     "squares": "pass",
     "unique members": "pass"
    }
+  },
+  "tests/fuzz/_scryer_fz_top.pl": {
+   "collect_error": null,
+   "error": "SyntaxError: Cannot import <root>/tests/fuzz/_scryer_fz_top.pl: _scryer_fz_top.pl:17: directive: use_module(library(charsio)): library(charsio) is not a library the native front end knows (built in: apply, between, dcgs, dif, error, freeze, iso_ext, lists, pairs, when; mapped: clpfd, clpq, clpz, lambda, reif, tabling; facades: library(L) for each L in clausal._py_facades.PY_FACADE_LIBS) (_scryer_fz_top.pl, line 17)",
+   "load": "refused",
+   "preds": null,
+   "tests": null
   },
   "tests/iso_diff/allsol.pl": {
    "collect_error": null,
@@ -2866,8 +2873,8 @@
   "docs/clausal_prolog.md#L170": "421f52234df0668b",
   "docs/clausal_prolog.md#L226": "d0aaa6c6f92eac22",
   "docs/clausal_prolog.md#L36": "45fdef1759218870",
-  "docs/cli.md#L178": "c1230bf772c2d31b",
-  "docs/cli.md#L17": "c1230bf772c2d31b",
+  "docs/cli.md#L18": "c1230bf772c2d31b",
+  "docs/cli.md#L271": "c1230bf772c2d31b",
   "docs/coroutining.md#L26": "0d3d867f596c51b2",
   "docs/for_prolog_programmers.md#L119": "cc7da0876c8fc29b",
   "docs/for_prolog_programmers.md#L144": "3400eba0608f2e2b",
@@ -2892,7 +2899,7 @@
   "docs/importing_prolog.md#L916": "c9153ed0660c0d7b",
   "docs/index.md#L94": "40946e3752c3cd9a",
   "docs/prolog_translation.md#L33": "8848f32154e44b13",
-  "docs/python_integration.md#L560": "25bd7948ff849051",
+  "docs/python_integration.md#L615": "3bd12e93cbef52d9",
   "docs/reified_ite.md#L362": "4d7ea54cae7f00d3",
   "docs/testing.md#L92": "6ece34f4b33a3ac9",
   "docs/tutorial.md#L114": "5b617cd00de4c21f",
@@ -2933,6 +2940,7 @@
   "tests/fixtures/prolog_golden/iso_type_checking.pl": "6665a46b7bd03131",
   "tests/fixtures/prolog_golden/iso_unification.pl": "f3b1a949fe56e0e8",
   "tests/fixtures/prolog_golden/meta_test.pl": "302440ea3baab24b",
+  "tests/fuzz/_scryer_fz_top.pl": "02951cd9148a9404",
   "tests/iso_diff/allsol.pl": "c43fc8370f03ff9c",
   "tests/iso_diff/arith.pl": "c4fe5264a522e8a3",
   "tests/iso_diff/atoms.pl": "53ca738d8b66fff7",
